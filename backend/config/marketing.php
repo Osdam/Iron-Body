@@ -84,6 +84,24 @@ return [
             || trim((string) $canario) === ''
                 ? null
                 : (int) $canario,
+        /*
+         * EL SELLO DE LA PUBLICACIÓN DEL STUDIO (contrato H5 §A4 y §A13).
+         *
+         * `off` (el defecto): el motor no consulta nada del Studio y cada turno
+         * queda exactamente como antes del Hito 5. `canary`: cada commit lee la
+         * cabeza firmada de la cadena de publicaciones y sella el turno; solo la
+         * conversación canaria recibe una parte, el resto sale `out_of_scope`.
+         * `all`: también el resto. Es TRAZABILIDAD y nada más: ningún valor
+         * cambia lo que ULTRON dice o hace (§A1). Lo lee UltronPublishedConfig.
+         *
+         * Cualquier otro valor, vacío incluido, es `off` (sin distinguir
+         * mayúsculas ni espacios alrededor): una errata no puede encender una
+         * lectura. La llave va con `config:cache` (los workers la ven al
+         * reiniciarse); la publicación en sí no tiene caché.
+         */
+        'studio_config' => in_array($alcance = strtolower(trim((string) env('MARKETING_ULTRON_STUDIO_CONFIG', 'off'))), ['canary', 'all'], true)
+            ? $alcance
+            : 'off',
     ],
 
     // Seguimientos automáticos (marketing:dispatch-followups).

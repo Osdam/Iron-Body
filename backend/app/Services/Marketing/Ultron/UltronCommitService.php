@@ -159,6 +159,7 @@ class UltronCommitService
         private readonly CourtesyRequestService $courtesy = new CourtesyRequestService,
         private readonly GymFactsProvider $gym = new GymFactsProvider,
         private readonly LeadProfileService $leadProfile = new LeadProfileService,
+        private readonly UltronPublishedConfig $publishedConfig = new UltronPublishedConfig,
     ) {}
 
     /**
@@ -301,15 +302,36 @@ class UltronCommitService
             );
         }
 
+        /*
+         * EL SELLO DE LA PUBLICACIÓN DEL STUDIO (contrato H5 §A4.6).
+         *
+         * Una lectura por commit, aquí: después de las tres puertas —lo que el
+         * interruptor, el freno o el canario rechazan no deja fila, así que no
+         * hay nada que sellar— y antes de la elegibilidad, que es el primer
+         * camino que escribe. Fuera de toda transacción: este servicio no abre
+         * ninguna antes de `persist()`.
+         *
+         * NO ES UNA PUERTA. El lector nunca lanza y nada de lo que devuelve
+         * cambia lo que hace este commit: en este hito el motor solo SELLA.
+         * Con `MARKETING_ULTRON_STUDIO_CONFIG=off` devuelve null sin consultar
+         * nada, y la fila queda idéntica a la de antes del Hito 5.
+         *
+         * Viaja hasta `persist()` como argumento, no en una propiedad: dos
+         * commits seguidos no pueden compartir sello, y lo lleva TODA fila que
+         * cree este commit (ejecutada, bloqueada, crítico fallido, rendición o
+         * la hora de la visita).
+         */
+        $studio = $this->publishedConfig->forConversation((int) $conversation->id);
+
         // 4) Los hechos duros ganan a cualquier propuesta.
         if ($reason = $this->decide->ineligibleReason($conversation, $message)) {
-            return $this->blocked($conversation, $message, $payload, $reason);
+            return $this->blocked($conversation, $message, $payload, $reason, $studio);
         }
 
         // 5) Alguien escribió después. Esta respuesta contesta a una pregunta
         // que la persona ya superó: no sale.
         if ($newer = $this->decide->supersededBy($conversation, $message)) {
-            return $this->blocked($conversation, $message, $payload, 'superseded', ['superseded_by' => $newer]);
+            return $this->blocked($conversation, $message, $payload, 'superseded', $studio, ['superseded_by' => $newer]);
         }
 
         // 6) Transiciones legales recalculadas con los hechos de ahora.
@@ -355,7 +377,7 @@ class UltronCommitService
          * token, del relevo y de la elegibilidad: no es un salvoconducto.
          */
         if ($horaDeLaVisita = $this->horaDeLaVisita($conversation, $message, $proposal)) {
-            return $this->contestarLaHoraDeLaVisita($conversation, $message, $payload, $currentPhase, $horaDeLaVisita);
+            return $this->contestarLaHoraDeLaVisita($conversation, $message, $payload, $currentPhase, $horaDeLaVisita, $studio);
         }
 
         /*
@@ -372,12 +394,12 @@ class UltronCommitService
          * bloquea exactamente igual que cualquier otro commit.
          */
         if ($rendicion = $this->recoveryReason($payload)) {
-            return $this->handleRecovery($conversation, $message, $payload, $currentPhase, $rendicion);
+            return $this->handleRecovery($conversation, $message, $payload, $currentPhase, $rendicion, $studio);
         }
 
         // ── Camino del critic fallido ─────────────────────────────────────────
         if (CriticContract::isFail($critic)) {
-            return $this->handleCriticFailure($conversation, $message, $payload, $currentPhase);
+            return $this->handleCriticFailure($conversation, $message, $payload, $currentPhase, $studio);
         }
 
         // 8) La propuesta se convierte en el objeto de decisión canónico. Un
@@ -1211,7 +1233,7 @@ class UltronCommitService
             $decision['risk_flags'] = array_values(array_unique(array_merge((array) ($decision['risk_flags'] ?? []), array_map(fn ($s) => 'style:'.$s, $estilo['soft']))));
         }
 
-        $action = $this->persist($conversation, $message, $payload, $decision, $nextState, $plan, [
+        $action = $this->persist($conversation, $message, $payload, $decision, $nextState, $plan, $studio, [
             'source' => 'external_draft',
             /*
              * Si la derivación de este turno la AUTORIZÓ Laravel. Se guarda
@@ -1741,8 +1763,9 @@ class UltronCommitService
         MarketingMessage $message,
         array $payload,
         string $currentPhase,
+        ?array $studio,
     ): array {
-        return $this->safeFallback($conversation, $message, $payload, $currentPhase, [
+        return $this->safeFallback($conversation, $message, $payload, $currentPhase, $studio, [
             'flag' => 'critic_failed',
             'origin' => 'ultron_curated_fallback',
             'log' => 'ultron.commit.critic_failed',
@@ -1784,6 +1807,7 @@ class UltronCommitService
         array $payload,
         string $currentPhase,
         array $rendicion,
+        ?array $studio,
     ): array {
         ChannelLog::warning('ultron.commit.recovery', [
             'conversation_id' => (int) $conversation->id,
@@ -1792,7 +1816,7 @@ class UltronCommitService
             'attempt' => $rendicion['attempt'],
         ]);
 
-        return $this->safeFallback($conversation, $message, $payload, $currentPhase, [
+        return $this->safeFallback($conversation, $message, $payload, $currentPhase, $studio, [
             'flag' => 'commit_rejected',
             'origin' => 'ultron_recovery_fallback',
             'log' => 'ultron.commit.recovered',
@@ -1808,6 +1832,7 @@ class UltronCommitService
      * no se responde y se marca para el equipo. La existencia del texto curado
      * ES el discriminante, y ya estaba escrita.
      *
+     * @param  array<string,mixed>|null  $studio  el sello de la publicación ({@see UltronPublishedConfig})
      * @param  array{flag:string,origin:string,log:string,metadata:array<string,mixed>}  $causa
      * @return array<string,mixed>
      */
@@ -1816,6 +1841,7 @@ class UltronCommitService
         MarketingMessage $message,
         array $payload,
         string $currentPhase,
+        ?array $studio,
         array $causa,
     ): array {
         $proposal = (array) ($payload['proposal'] ?? []);
@@ -2008,6 +2034,7 @@ class UltronCommitService
             // que la conversación no ha progresado.
             $currentPhase,
             null,
+            $studio,
             array_merge(array_filter([
                 'fallback_mode' => $modo,
                 // Evidencia de lo que se descartó, para poder revisarlo. No sale.
@@ -2209,6 +2236,7 @@ class UltronCommitService
         array $payload,
         string $currentPhase,
         array $turno,
+        ?array $studio,
     ): array {
         $proposal = (array) ($payload['proposal'] ?? []);
         $lead = $conversation->lead;
@@ -2228,7 +2256,7 @@ class UltronCommitService
         ];
         $memoriaPrevia = $this->memoryService->load($conversation);
 
-        $action = $this->persist($conversation, $message, $payload, $decision, $currentPhase, null, array_filter([
+        $action = $this->persist($conversation, $message, $payload, $decision, $currentPhase, null, $studio, array_filter([
             'visit_hour' => array_filter([
                 'mode' => $resolver ? 'resolve' : 'ask',
                 'date' => $turno['fecha'],
@@ -2409,6 +2437,12 @@ class UltronCommitService
         return $plan;
     }
 
+    /**
+     * @param  array<string,mixed>|null  $studio  el sello de la publicación del Studio, leído UNA vez
+     *                                            al principio del commit ({@see UltronPublishedConfig});
+     *                                            null con la llave en `off`. Obligatorio a propósito: un
+     *                                            camino nuevo que cree filas tiene que decidir qué sella.
+     */
     private function persist(
         MarketingConversation $conversation,
         MarketingMessage $message,
@@ -2416,6 +2450,7 @@ class UltronCommitService
         array $decision,
         string $nextState,
         ?Plan $plan,
+        ?array $studio,
         array $extraMetadata = [],
     ): MarketingAiAction {
         $proposal = (array) ($payload['proposal'] ?? []);
@@ -2434,6 +2469,9 @@ class UltronCommitService
             'tools_requested' => $decision['tools_requested'] ?? [],
             'needs_staff_review' => $decision['needs_staff_review'] ?? false,
             'knowledge_version' => $this->knowledge->version(),
+            // Contrato H5 §A4.5. Con la llave en `off` es null y el filtro de
+            // nulos de abajo lo quita: la fila queda como antes del Hito 5.
+            'studio' => $studio,
         ], $extraMetadata);
 
         try {
@@ -3807,6 +3845,7 @@ class UltronCommitService
         MarketingMessage $message,
         array $payload,
         string $reason,
+        ?array $studio,
         array $extra = [],
     ): array {
         $action = $this->persist(
@@ -3821,6 +3860,7 @@ class UltronCommitService
             ],
             $this->decide->currentPhase($conversation),
             null,
+            $studio,
             array_merge(['blocked_reason' => $reason], $extra),
         );
 

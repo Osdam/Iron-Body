@@ -176,7 +176,8 @@ class UltronStudioImmutabilityTest extends TestCase
             $this->assertRejectedByDatabase(fn () => DB::statement("TRUNCATE {$tabla} CASCADE"), 'P0001');
         }
         $this->assertRejectedByDatabase(
-            fn () => DB::table('ultron_studio_versions')->where('id', $this->version->id)->update(['status' => 'PUBLISHED']),
+            // VALIDATING sigue siendo inalcanzable: el CHECK de H5 admite 9 estados (PUBLISHED entre ellos) y lo excluye.
+            fn () => DB::table('ultron_studio_versions')->where('id', $this->version->id)->update(['status' => 'VALIDATING']),
             '23514',
         );
         $this->assertRejectedByDatabase(

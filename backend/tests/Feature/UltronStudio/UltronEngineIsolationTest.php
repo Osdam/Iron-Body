@@ -9,7 +9,7 @@ use RecursiveIteratorIterator;
 use Tests\TestCase;
 
 /**
- * EL MOTOR NO LEE EL STUDIO (contrato §A8).
+ * EL MOTOR NO LEE EL STUDIO (contrato §A8), SALVO UNA TABLA (contrato H5 §A9).
  *
  * El Studio describe al agente; no lo gobierna. Esa frontera tiene que poder
  * comprobarse sin leer todo el código: ningún fichero fuera de los del Studio
@@ -18,9 +18,18 @@ use Tests\TestCase;
  * como `PaymentMintAuthorityTest`: los comentarios no cuentan, el código sí
  * (nombres de clase, `use`, cadenas con nombres de tabla o claves de config).
  *
- * Si mañana el motor necesita leer una versión aprobada, esta prueba falla a
- * propósito: esa fase tiene que cambiar `StudioPublishing::ENGINE_READS_VERSIONS`
- * y esta lista en el mismo commit que el motor, a conciencia.
+ * HITO 5, PASO 1c (mismo commit que el lector): el motor lee UNA tabla del
+ * Studio (`ultron_studio_publications`) desde UNA clase
+ * (`UltronPublishedConfig`). Esa clase no entra en la lista blanca: tiene su
+ * propia aserción, y su referencia al Studio tiene que ser EXACTAMENTE esa
+ * cadena, sin escrituras; solo la nombra, fuera del Studio, `UltronCommitService`
+ * (que sella). La prueba de comportamiento —una sola SELECT por commit, y
+ * ninguna con la llave en `off`— vive en
+ * `Tests\Feature\Marketing\UltronCommitStudioStampTest` (§A9, prueba 2).
+ *
+ * `StudioPublishing::ENGINE_READS_VERSIONS` sigue en false, y las rutas en 33,
+ * hasta el commit que implementa publicar (paso 3 del plan): girarla antes solo
+ * cambiaría `engineReads` sin que nadie pudiera publicar.
  */
 class UltronEngineIsolationTest extends TestCase
 {
@@ -40,15 +49,42 @@ class UltronEngineIsolationTest extends TestCase
         // Hito 4 (contrato H4 §A8): el laboratorio.
         'database/migrations/2026_10_19_100002_create_ultron_studio_lab_tables.php',
         'database/migrations/2026_10_19_100003_add_ultron_studio_lab_guards.php',
+        // Hito 5 (contrato H5 §A3): la cadena de publicaciones y sus guardas.
+        'database/migrations/2026_10_25_100001_create_ultron_studio_publications_table.php',
+        'database/migrations/2026_10_25_100002_add_ultron_studio_publication_guards.php',
     ];
+
+    /**
+     * El lector del motor (contrato H5 §A4). No está en la lista blanca: lo único
+     * que puede nombrar del Studio es la tabla de la cadena, una vez, como cadena.
+     * Un `use` de una clase del Studio, otra tabla o su configuración lo delatan.
+     */
+    private const ENGINE_READER = 'app/Services/Marketing/Ultron/UltronPublishedConfig.php';
+
+    private const ENGINE_READER_REFERENCES = ["T_CONSTANT_ENCAPSED_STRING 'ultron_studio_publications'"];
+
+    /** Fuera del Studio, los únicos que nombran al lector: él mismo y el commit, que sella (§A9). */
+    private const ENGINE_READER_NAMERS = [
+        'app/Services/Marketing/Ultron/UltronCommitService.php',
+        self::ENGINE_READER,
+    ];
+
+    /** Lo que sería escribir o bloquear: ninguna de estas llamadas aparece en el lector. */
+    private const WRITE_CALLS = ['insert', 'insertorignore', 'insertgetid', 'insertusing', 'update', 'updateorinsert', 'upsert',
+        'delete', 'truncate', 'statement', 'unprepared', 'affectingstatement', 'increment', 'decrement', 'create', 'forcecreate',
+        'save', 'fill', 'forcefill', 'push', 'touch', 'destroy', 'lockforupdate', 'sharedlock'];
 
     /** Lo que se rastrea: todo el PHP de la aplicación que corre en producción. */
     private const SCANNED = ['app', 'routes', 'config', 'database', 'bootstrap'];
+
+    /** Las zonas del motor: limpias del Studio salvo el lector. */
+    private const ENGINE_ZONES = ['app/Services/Marketing', 'app/Jobs', 'app/Http/Controllers/Api/Internal', 'routes/marketing.php', 'routes/api.php', 'config/marketing.php'];
 
     public function test_fuera_del_studio_nadie_nombra_sus_clases_sus_tablas_ni_su_configuracion(): void
     {
         $fuera = [];
         $dentro = 0;
+        $lectorVisto = false;
 
         foreach ($this->phpFiles() as $relativa) {
             $hallazgos = $this->references(base_path($relativa));
@@ -60,27 +96,91 @@ class UltronEngineIsolationTest extends TestCase
 
                 continue;
             }
+            if ($relativa === self::ENGINE_READER && $this->sinLinea($hallazgos) === self::ENGINE_READER_REFERENCES) {
+                $lectorVisto = true;
+
+                continue;
+            }
             $fuera[$relativa] = $hallazgos;
         }
 
-        $this->assertSame([], $fuera, "Código fuera del Studio que lo nombra (el motor no puede leer el Studio):\n".json_encode($fuera, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        $this->assertSame([], $fuera, "Código fuera del Studio que lo nombra (el motor solo puede leer ultron_studio_publications, desde UltronPublishedConfig):\n".json_encode($fuera, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
         // La prueba ve lo que tiene que ver: si el rastreo dejara de encontrar
         // las referencias legítimas, no estaría comprobando nada.
-        $this->assertGreaterThanOrEqual(15, $dentro);
+        $this->assertGreaterThanOrEqual(17, $dentro);
+        $this->assertTrue($lectorVisto, 'El rastreo no vio la única lectura del motor sobre el Studio.');
     }
 
     public function test_las_zonas_del_motor_estan_limpias_y_la_lista_blanca_no_esta_vieja(): void
     {
-        foreach (['app/Services/Marketing', 'app/Jobs', 'app/Http/Controllers/Api/Internal', 'routes/marketing.php', 'routes/api.php', 'config/marketing.php'] as $zona) {
+        foreach (self::ENGINE_ZONES as $zona) {
             $this->assertFileExists(base_path($zona));
             foreach ($this->phpFiles([$zona]) as $relativa) {
-                $this->assertSame([], $this->references(base_path($relativa)), "{$relativa} nombra el Studio.");
+                $esperado = $relativa === self::ENGINE_READER ? self::ENGINE_READER_REFERENCES : [];
+                $this->assertSame($esperado, $this->sinLinea($this->references(base_path($relativa))), "{$relativa} nombra el Studio.");
             }
         }
 
         foreach (self::ALLOWED as $permitido) {
             $this->assertFileExists(base_path(rtrim($permitido, '/')), "La lista blanca nombra algo que no existe: {$permitido}");
         }
+    }
+
+    /**
+     * El lector, por dentro (contrato H5 §A9): la tabla una sola vez, nada del
+     * Studio importado, ninguna llamada que escriba o bloquee, y solo lo nombra
+     * el commit.
+     */
+    public function test_la_unica_lectura_del_motor_es_de_solo_lectura_y_solo_la_usa_el_commit(): void
+    {
+        $lector = base_path(self::ENGINE_READER);
+        $this->assertFileExists($lector);
+
+        $codigo = $this->codeOnly($lector);
+        $this->assertSame(1, substr_count($codigo, 'ultron_studio_'), 'La tabla del Studio se nombra una sola vez en el lector.');
+        $this->assertStringNotContainsString('UltronStudio', $codigo);
+        $this->assertSame([], array_values(array_intersect($this->calledMethods($lector), self::WRITE_CALLS)), 'El lector escribe o bloquea.');
+
+        $nombran = [];
+        foreach ($this->phpFiles() as $relativa) {
+            if ($this->allowed($relativa)) {
+                continue;
+            }
+            if (str_contains($this->codeOnly(base_path($relativa)), 'UltronPublishedConfig')) {
+                $nombran[] = $relativa;
+            }
+        }
+        $this->assertSame(self::ENGINE_READER_NAMERS, $nombran, 'Fuera del Studio, solo el commit invoca al lector.');
+    }
+
+    /**
+     * La llave del motor (contrato H5 §A13) nace apagada: se evalúa
+     * config/marketing.php SIN la variable en el entorno, sea cual sea el
+     * entorno con el que corra la suite.
+     */
+    public function test_la_llave_del_motor_vale_off_por_defecto(): void
+    {
+        $nombre = 'MARKETING_ULTRON_STUDIO_CONFIG';
+        $antes = [$_SERVER[$nombre] ?? null, $_ENV[$nombre] ?? null, getenv($nombre)];
+
+        try {
+            unset($_SERVER[$nombre], $_ENV[$nombre]);
+            putenv($nombre);
+            $config = require base_path('config/marketing.php');
+        } finally {
+            [$servidor, $entorno, $proceso] = $antes;
+            if ($servidor !== null) {
+                $_SERVER[$nombre] = $servidor;
+            }
+            if ($entorno !== null) {
+                $_ENV[$nombre] = $entorno;
+            }
+            if ($proceso !== false) {
+                putenv("{$nombre}={$proceso}");
+            }
+        }
+
+        $this->assertSame('off', $config['ultron']['studio_config']);
     }
 
     public function test_ninguna_ruta_del_studio_cuelga_de_internal_ni_lleva_la_firma_de_n8n(): void
@@ -139,6 +239,55 @@ class UltronEngineIsolationTest extends TestCase
         }
 
         return $out;
+    }
+
+    /**
+     * Las referencias sin su número de línea, para comparar QUÉ se nombra.
+     *
+     * @param  list<string>  $referencias
+     * @return list<string>
+     */
+    private function sinLinea(array $referencias): array
+    {
+        return array_map(fn (string $r) => (string) preg_replace('/ \(línea \d+\)$/u', '', $r), $referencias);
+    }
+
+    /** El código de un fichero sin comentarios ni docblocks. */
+    private function codeOnly(string $ruta): string
+    {
+        $out = '';
+        foreach (token_get_all((string) file_get_contents($ruta)) as $t) {
+            if (is_array($t) && in_array($t[0], [T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+            $out .= is_array($t) ? $t[1] : $t;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Los nombres de método que se llaman en un fichero (`->x(`, `?->x(` o `::x(`), en minúscula.
+     *
+     * @return list<string>
+     */
+    private function calledMethods(string $ruta): array
+    {
+        $tokens = array_values(array_filter(
+            token_get_all((string) file_get_contents($ruta)),
+            fn ($t) => ! is_array($t) || ! in_array($t[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true),
+        ));
+        $out = [];
+        foreach ($tokens as $i => $t) {
+            $esFlecha = is_array($t) && in_array($t[0], [T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR, T_DOUBLE_COLON], true);
+            $nombre = $tokens[$i + 1] ?? null;
+            $parentesis = $tokens[$i + 2] ?? null;
+            if ($esFlecha && is_array($nombre) && $nombre[0] === T_STRING && $parentesis === '(') {
+                $out[] = strtolower($nombre[1]);
+            }
+        }
+
+        return array_values(array_unique($out));
     }
 
     private function allowed(string $relativa): bool

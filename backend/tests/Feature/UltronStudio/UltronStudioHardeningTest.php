@@ -225,7 +225,9 @@ class UltronStudioHardeningTest extends TestCase
 
             $r->assertStatus(422);
             $this->assertSame([$clave], array_keys($r->json('errors')), "{$caso}: el 422 trae errores por elemento, así que se recorrió la lista.");
-            $this->assertLessThan(50, $ms, sprintf('%s tardó %.1f ms en rechazarse.', $caso, $ms));
+            // Umbral de 150 ms (antes 50): en esta máquina el rechazo por tope tarda ~52 ms también sin cambios; la vía
+            // que se vigila (recorrer los elementos antes del tope) tardaba segundos, así que 150 sigue separándolas.
+            $this->assertLessThan(150, $ms, sprintf('%s tardó %.1f ms en rechazarse.', $caso, $ms));
         }
 
         // El cuerpo de 20 KB que pide la revisión.
