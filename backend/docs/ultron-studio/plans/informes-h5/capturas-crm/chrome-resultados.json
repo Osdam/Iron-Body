@@ -1,0 +1,438 @@
+{
+  "resultados": [
+    {
+      "nombre": "escritorio: la barra de la publicación está y dice Legacy",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: el aviso del motor dice lo de H5",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: sin «Publicar» suelto en la cabecera",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio tablero: sin desplazamiento horizontal (1440 ≤ 1440)",
+      "ok": true,
+      "detalle": {
+        "sw": 1440,
+        "cw": 1440,
+        "bw": 1440
+      }
+    },
+    {
+      "nombre": "escritorio: «Publicar en canario» en el detalle",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: texto obligatorio junto al botón",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: el diálogo enseña 10 requisitos y 4 must_match",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: enviar deshabilitado hasta reconocer",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio diálogo de publicar: sin desplazamiento horizontal (1440 ≤ 1440)",
+      "ok": true,
+      "detalle": {
+        "sw": 1440,
+        "cw": 1440,
+        "bw": 1440
+      }
+    },
+    {
+      "nombre": "escritorio diálogo de publicar: el foco no sale del diálogo con Tab y Mayús+Tab",
+      "ok": true,
+      "detalle": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "nombre": "escritorio: con todo reconocido se puede enviar",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: tras publicar, la barra dice el canario",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: el detalle pasa a Canario con su entrada de la cadena",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: una sola petición de publicar",
+      "ok": true,
+      "detalle": [
+        "/versions/6f1c2a9e-3b4d-4c5e-8f60-7a8b9c0d1e2f/publish"
+      ]
+    },
+    {
+      "nombre": "escritorio: insignia «Huella alterada» en el lado de la versión",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio comparar: sin desplazamiento horizontal (1440 ≤ 1440)",
+      "ok": true,
+      "detalle": {
+        "sw": 1440,
+        "cw": 1440,
+        "bw": 1440
+      }
+    },
+    {
+      "nombre": "escritorio: bloqueada, el requisito del laboratorio dice por qué",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: bloqueada, el motivo de no enviar es visible",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: Escape cierra el diálogo y devuelve el foco al botón",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: la barra dice canario con sello correcto",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: en canario, «Revertir» y el motivo de no promover",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: revertir pide motivo con el aviso de datos personales",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: revertida, la barra vuelve a Legacy",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: el historial enseña las dos entradas",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio historial: sin desplazamiento horizontal (1440 ≤ 1440)",
+      "ok": true,
+      "detalle": {
+        "sw": 1440,
+        "cw": 1440,
+        "bw": 1440
+      }
+    },
+    {
+      "nombre": "escritorio: deriva a la vista, parámetro a parámetro",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio deriva: sin desplazamiento horizontal (1440 ≤ 1440)",
+      "ok": true,
+      "detalle": {
+        "sw": 1440,
+        "cw": 1440,
+        "bw": 1440
+      }
+    },
+    {
+      "nombre": "escritorio diálogo de Legacy: el foco no sale del diálogo con Tab y Mayús+Tab",
+      "ok": true,
+      "detalle": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "nombre": "escritorio: tras Legacy, la barra lo dice y ofrece el historial",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: evidencia, 9 medidas y pasa",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio evidencia: sin desplazamiento horizontal (1440 ≤ 1440)",
+      "ok": true,
+      "detalle": {
+        "sw": 1440,
+        "cw": 1440,
+        "bw": 1440
+      }
+    },
+    {
+      "nombre": "escritorio: tras el 429, «Actualizar» espera con cuenta atrás",
+      "ok": true,
+      "detalle": "refreshActualizar (en 41 s)"
+    },
+    {
+      "nombre": "escritorio: promovida, la barra dice «En todas»",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: Administrador sin botones y con el motivo",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: Administrador sin «Volver a Legacy»",
+      "ok": true
+    },
+    {
+      "nombre": "movil: la barra de la publicación está y dice Legacy",
+      "ok": true
+    },
+    {
+      "nombre": "movil: el aviso del motor dice lo de H5",
+      "ok": true
+    },
+    {
+      "nombre": "movil: sin «Publicar» suelto en la cabecera",
+      "ok": true
+    },
+    {
+      "nombre": "movil tablero: sin desplazamiento horizontal (390 ≤ 390)",
+      "ok": true,
+      "detalle": {
+        "sw": 390,
+        "cw": 390,
+        "bw": 390
+      }
+    },
+    {
+      "nombre": "movil: «Publicar en canario» en el detalle",
+      "ok": true
+    },
+    {
+      "nombre": "movil: texto obligatorio junto al botón",
+      "ok": true
+    },
+    {
+      "nombre": "movil: el diálogo enseña 10 requisitos y 4 must_match",
+      "ok": true
+    },
+    {
+      "nombre": "movil: enviar deshabilitado hasta reconocer",
+      "ok": true
+    },
+    {
+      "nombre": "movil diálogo de publicar: sin desplazamiento horizontal (390 ≤ 390)",
+      "ok": true,
+      "detalle": {
+        "sw": 390,
+        "cw": 390,
+        "bw": 390
+      }
+    },
+    {
+      "nombre": "movil diálogo de publicar: el foco no sale del diálogo con Tab y Mayús+Tab",
+      "ok": true,
+      "detalle": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "nombre": "movil: con todo reconocido se puede enviar",
+      "ok": true
+    },
+    {
+      "nombre": "movil: tras publicar, la barra dice el canario",
+      "ok": true
+    },
+    {
+      "nombre": "movil: el detalle pasa a Canario con su entrada de la cadena",
+      "ok": true
+    },
+    {
+      "nombre": "movil: una sola petición de publicar",
+      "ok": true,
+      "detalle": [
+        "/versions/6f1c2a9e-3b4d-4c5e-8f60-7a8b9c0d1e2f/publish"
+      ]
+    },
+    {
+      "nombre": "movil: insignia «Huella alterada» en el lado de la versión",
+      "ok": true
+    },
+    {
+      "nombre": "movil comparar: sin desplazamiento horizontal (390 ≤ 390)",
+      "ok": true,
+      "detalle": {
+        "sw": 390,
+        "cw": 390,
+        "bw": 390
+      }
+    },
+    {
+      "nombre": "movil: bloqueada, el requisito del laboratorio dice por qué",
+      "ok": true
+    },
+    {
+      "nombre": "movil: bloqueada, el motivo de no enviar es visible",
+      "ok": true
+    },
+    {
+      "nombre": "movil: Escape cierra el diálogo y devuelve el foco al botón",
+      "ok": true
+    },
+    {
+      "nombre": "movil: la barra dice canario con sello correcto",
+      "ok": true
+    },
+    {
+      "nombre": "movil: en canario, «Revertir» y el motivo de no promover",
+      "ok": true
+    },
+    {
+      "nombre": "movil: revertir pide motivo con el aviso de datos personales",
+      "ok": true
+    },
+    {
+      "nombre": "movil: revertida, la barra vuelve a Legacy",
+      "ok": true
+    },
+    {
+      "nombre": "movil: el historial enseña las dos entradas",
+      "ok": true
+    },
+    {
+      "nombre": "movil historial: sin desplazamiento horizontal (390 ≤ 390)",
+      "ok": true,
+      "detalle": {
+        "sw": 390,
+        "cw": 390,
+        "bw": 390
+      }
+    },
+    {
+      "nombre": "movil: deriva a la vista, parámetro a parámetro",
+      "ok": true
+    },
+    {
+      "nombre": "movil deriva: sin desplazamiento horizontal (390 ≤ 390)",
+      "ok": true,
+      "detalle": {
+        "sw": 390,
+        "cw": 390,
+        "bw": 390
+      }
+    },
+    {
+      "nombre": "movil diálogo de Legacy: el foco no sale del diálogo con Tab y Mayús+Tab",
+      "ok": true,
+      "detalle": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "nombre": "movil: tras Legacy, la barra lo dice y ofrece el historial",
+      "ok": true
+    },
+    {
+      "nombre": "movil: evidencia, 9 medidas y pasa",
+      "ok": true
+    },
+    {
+      "nombre": "movil evidencia: sin desplazamiento horizontal (390 ≤ 390)",
+      "ok": true,
+      "detalle": {
+        "sw": 390,
+        "cw": 390,
+        "bw": 390
+      }
+    },
+    {
+      "nombre": "movil: tras el 429, «Actualizar» espera con cuenta atrás",
+      "ok": true,
+      "detalle": "refreshActualizar (en 41 s)"
+    },
+    {
+      "nombre": "movil: promovida, la barra dice «En todas»",
+      "ok": true
+    },
+    {
+      "nombre": "movil: Administrador sin botones y con el motivo",
+      "ok": true
+    },
+    {
+      "nombre": "movil: Administrador sin «Volver a Legacy»",
+      "ok": true
+    },
+    {
+      "nombre": "sin errores de JavaScript en ninguna página",
+      "ok": true,
+      "detalle": []
+    }
+  ],
+  "errores": []
+}
