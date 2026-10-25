@@ -185,7 +185,7 @@ sudo -u www-data php backend/artisan queue:restart
 
 **Vuelta atrás:** `ULTRON_STUDIO_ROLLBACK.md`, «Hito G».
 
-## Hito 4 (laboratorio de IA): runbook por fases — PENDIENTE DE EJECUCIÓN
+## Hito 4 (laboratorio de IA): runbook por fases — EJECUTADO en fases 1 y 2 el 25-10-2026 (ver `ULTRON_STUDIO_FINAL_REPORT.md`, «Despliegue y verificación» del Hito 4; scripts en `ops/`)
 
 **Estado: PENDIENTE DE EJECUCIÓN.** Ningún paso de esta sección se ha ejecutado en producción. Parte del borrador del lead (`scratchpad/hito-4/deploy-h4.md`), corregido con la Enmienda 4.8 (las variables antes de migrar) y contrastado con el código de `6dbf485`: las claves de configuración, `ironbody-lab.conf`, los comandos y el número de rutas. Las comprobaciones de la configuración efectiva y la sonda de PCRE se probaron en local sobre una instantánea de `6dbf485`; en producción, no.
 
