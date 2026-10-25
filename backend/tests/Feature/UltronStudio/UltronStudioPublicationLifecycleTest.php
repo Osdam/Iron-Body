@@ -8,6 +8,7 @@ use App\Models\UltronStudio\StudioAuditEvent;
 use App\Models\UltronStudio\StudioPublication;
 use App\Models\UltronStudio\StudioVersion;
 use App\Services\Marketing\Ultron\UltronPublishedConfig;
+use App\Services\UltronStudio\StudioCatalog;
 use App\Services\UltronStudio\StudioContentHasher;
 use App\Services\UltronStudio\StudioLabPrompts;
 use App\Services\UltronStudio\StudioPublicationDeclaration as D;
@@ -371,6 +372,96 @@ class UltronStudioPublicationLifecycleTest extends TestCase
         $this->assertSame('legacy', $this->engineStamp(self::CANARY_ID)['state']);
         $this->publishAs($root, $v->uuid)->assertCreated();
         $this->assertSame('applied', $this->engineStamp(self::CANARY_ID)['state']);
+    }
+
+    /**
+     * B-1 del tester de backend (mutación C2, 25-10): una cabeza con la firma
+     * buena sobre sus bytes y la columna de la HUELLA tocada a mano (DML sin la
+     * APP_KEY) la rechaza el motor (fallback/hash_mismatch) y el Studio no
+     * compone encima: publicar es 409 publication_head_invalid y Legacy es la
+     * salida.
+     */
+    public function test_una_cabeza_con_la_huella_tocada_a_mano_no_se_copia_aunque_su_firma_verifique(): void
+    {
+        $this->importBaseline();
+        $this->openKeys();
+        $ana = $this->person(Admin::ROLE_ADMINISTRADOR, 'Ana');
+        $root = $this->person(Admin::ROLE_SUPER_ADMIN, 'Root');
+        $v = $this->approvedVersion($ana, $root);
+        $this->seedEntry(D::ACTION_LEGACY, null, null, null, ['effective_hash' => str_repeat('0', 64)]);
+
+        $sello = $this->engineStamp(self::CANARY_ID);
+        $this->assertSame(['fallback', 'hash_mismatch'], [$sello['state'] ?? null, $sello['reason'] ?? null], json_encode($sello));
+        $this->publishAs($root, $v->uuid)->assertStatus(409)->assertJsonPath('code', 'publication_head_invalid');
+        $this->assertSame('APPROVED', $v->fresh()->status);
+        $this->assertSame('fallback', $this->studio('GET', 'status', $root)->json('data.engine.publication.state'));
+        $this->legacyAs($root)->assertCreated();
+    }
+
+    /**
+     * B-3 del tester de backend (mutación J1, 25-10): el Studio lee el texto
+     * firmado de la cabeza acotado a MAX_EFFECTIVE_JSON + 1, como el motor. Una
+     * cabeza de más de 16 384 caracteres con su huella y su firma de los bytes
+     * ENTEROS la ve el motor como hash_mismatch, y el Studio tiene que verla
+     * igual: sin el tope compondría encima de una cabeza que el motor no aplica.
+     */
+    public function test_una_cabeza_de_mas_de_16384_caracteres_se_lee_acotada_como_la_lee_el_motor(): void
+    {
+        $this->importBaseline();
+        $this->openKeys();
+        $ana = $this->person(Admin::ROLE_ADMINISTRADOR, 'Ana');
+        $root = $this->person(Admin::ROLE_SUPER_ADMIN, 'Root');
+        $v = $this->approvedVersion($ana, $root);
+
+        $uuid = strtolower((string) Str::uuid());
+        $cuerpo = json_decode(D::effectiveJson($uuid, 1, now(), null, null), true);
+        $cuerpo['issuedAt'] = str_repeat('x', 20000);   // mismas claves y tipos; más de 16 384 caracteres
+        $enorme = (string) json_encode($cuerpo, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $this->assertGreaterThan(D::MAX_EFFECTIVE_JSON, strlen($enorme));
+        $this->seedEntry(D::ACTION_LEGACY, null, null, null, [
+            'uuid' => $uuid, 'seq' => 1, 'previous_publication_id' => null,
+            'effective_json' => $enorme,
+            'effective_hash' => D::effectiveHash($enorme),
+            'signature' => UltronPublishedConfig::signatureFor($enorme),
+        ]);
+
+        $sello = $this->engineStamp(self::CANARY_ID);
+        $this->assertSame(['fallback', 'hash_mismatch'], [$sello['state'] ?? null, $sello['reason'] ?? null], json_encode($sello));
+        $this->publishAs($root, $v->uuid)->assertStatus(409)->assertJsonPath('code', 'publication_head_invalid');
+        $this->assertSame('fallback', $this->studio('GET', 'status', $root)->json('data.engine.publication.state'));
+        $this->legacyAs($root)->assertCreated();
+    }
+
+    /**
+     * B-2 del tester de backend (mutación I1, 25-10): `previewHash` lleva el
+     * catálogo DE LA VERSIÓN (Q-4), no el de hoy. Con una versión de F
+     * (catálogo 2026-10-18.1) la huella de la vista previa es la de su catálogo
+     * y no la que saldría con el vigente.
+     */
+    public function test_la_vista_previa_lleva_el_catalogo_de_la_version_en_su_huella(): void
+    {
+        $this->importBaseline();
+        $this->openKeys();
+        $ana = $this->person(Admin::ROLE_ADMINISTRADOR, 'Ana');
+        $root = $this->person(Admin::ROLE_SUPER_ADMIN, 'Root');
+        $v = $this->seedFormat1Version($ana, 'APPROVED');
+        $vista = $this->previewOf($root, $v->uuid);
+
+        $clasificacion = ['mustMatch' => [], 'matches' => [], 'noEffect' => []];
+        foreach ($vista['params'] as $p) {
+            $id = $p['layer'].'.'.$p['key'];
+            if ($p['class'] === 'must_match') {
+                $clasificacion['mustMatch'][] = ['param' => $id, 'versionValue' => $p['versionValue'], 'engineValue' => $p['engineValue'], 'ok' => $p['ok']];
+            } elseif ($p['class'] === 'matches') {
+                $clasificacion['matches'][] = $id;
+            } else {
+                $clasificacion['noEffect'][] = $id;
+            }
+        }
+        $puerta = ['mode' => $vista['requirements']['labGate']['mode'], 'latest' => $vista['requirements']['labGate']['latest']];
+        $this->assertSame(self::CATALOG_F, (string) $v->catalog_version);
+        $this->assertSame(D::previewHash($v->uuid, $v->content_hash, self::CATALOG_F, $clasificacion, $puerta), $vista['previewHash'], 'la huella es la del catálogo de la versión');
+        $this->assertNotSame(D::previewHash($v->uuid, $v->content_hash, StudioCatalog::VERSION, $clasificacion, $puerta), $vista['previewHash'], 'con el catálogo de hoy saldría otra');
     }
 
     public function test_el_historial_va_de_la_cabeza_hacia_atras_y_el_tope_de_la_pagina_es_del_servidor(): void

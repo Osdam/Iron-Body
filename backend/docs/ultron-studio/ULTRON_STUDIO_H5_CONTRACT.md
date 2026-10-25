@@ -334,3 +334,60 @@ Mismo patrón que `config/ultron_studio.php` (`$entero`): una línea vacía nunc
 - **Q-3 Identidades al promover:** la parte es el mismo objeto copiado: `publishedBy` y `approvedBy` siguen siendo los de la publicación en canario; quien promueve queda en la fila de la cadena (`actor_*`) y en el evento del libro.
 - **Q-4 `previewHash`:** `StudioContentHasher::hash({versionUuid, contentHash, catalogVersion, mustMatch, matches, noEffect, labGate: {mode, latest}})`, sin ventana ni hora (tienen su propia puerta). `evidenceHash` como en A6.
 - **Q-5 Lectura caída en la deriva:** cuenta como deriva con `engine: null` (falla cerrado y bloquea la promoción), igual que al publicar (`engine_reading_unavailable`).
+
+---
+
+## Enmienda 2 (25-10-2026): desviaciones aceptadas durante la implementación y lo diferido al Hito 7
+
+**Fuentes:** `plans/informes-h5/decisiones-lead-h5.md` (decisiones del lead), `informe-api.md` §5 (D-1…D-18), `informe-front-integracion.md` §3 (D-F1…D-F9), `informe-security.md` y `informe-api-security.md`. Cada punto se contrastó con el código de la rama `fix/h5-lead` (HEAD `5772bdf`). No se reescribe nada de lo anterior: donde esta enmienda contradice A1–A13 o la Enmienda 1, manda esta.
+
+### E2.1 API, cadena y libro
+
+| # | Qué queda fijado | Artículo | Motivo | Dónde |
+|---|---|---|---|---|
+| D-1 | **409 nuevo `publication_head_invalid`**: la cabeza de la cadena no verifica (contrato, huella, firma o decodificación atada a `uuid`/`seq`) y publicar, promover o revertir tendrían que componer encima. La salida es volver a Legacy, que no verifica la cabeza (A5.4) | A7 (errores) | `publication_moved` invita a recargar y repetir, y eso no arregla una cabeza rota; `integrity_mismatch` habla de la versión | `UltronStudioException::publicationHeadInvalid()`; el CRM lo conoce desde `24a691d` |
+| D-2 | `acknowledged` = `{noEffect, previewHash}`. `noEffect` es el conjunto EXIGIDO (el que se reconoció exacto) | A3.1 | Sin `previewHash`, el reintento no puede comparar el cuerpo sin guardar la petición | `StudioPublications::publishGated()` |
+| D-3 | `lab_gate` = `{"mode": null}` en promover, revertir y Legacy; en el DTO, `labGate: null` | A3.1, A7 | La columna es NOT NULL y la puerta del laboratorio solo existe al publicar | `StudioPublications::notApplicableLabGate()` |
+| D-4 | La nota opcional de publicar y promover se guarda en `reason` y el DTO la devuelve en `reason`. `uspub_reason_chk` sigue exigiéndolo en revertir y Legacy | A3.1 | A3 no tiene columna `note` | `StudioPublications::insertEntry()` |
+| D-5 | `governance.studioPublication` es un extra de `GET engine/readings` y **no** entra en `catalog.readings`; su descriptor (etiqueta, origen, efecto) vive en el CRM (D-F6) | A4.9, A7 | Meterla en el catálogo obliga a subir `StudioCatalog::VERSION`, y el fixture fija `2026-10-19.1` | `StudioEngineReadings`; CRM `studio-engine-text.ts` |
+| D-6 | **Rechazos auditados:** `version.{publish\|promote\|rollback}_refused {code}` solo para `publishing_disabled`, `engine_not_reading_versions`, `scope_not_allowed` y `restore_integrity_mismatch`, deduplicados, y solo si la versión existe (un uuid inventado no escribe en el libro). El 403 `forbidden` no se audita, como en F; los cuatro ojos van como `version.four_eyes_denied {action}`. Las puertas que dependen de hechos (ventana, freno, evidencia…) no se auditan | A5.1, A8 | El libro no se puede vaciar: una fila por cada clic fuera de hora lo llenaría | `StudioPublications::assertKeys()`, `recordRefused()` |
+| D-7 | `blocking` de la vista previa incluye `forbidden` y `four_eyes_required` (dependen de quien mira, igual que `requirements.fourEyes`) y los códigos de las llaves (`publishing_disabled`, `engine_not_reading_versions`). `previewHash` **no** depende de quien mira (Q-4) | A7 | La vista previa tiene que explicar por qué esa persona no puede publicar | `StudioPublications`, armado de `blocking` en la vista previa |
+| D-9 | `GET versions/{uuid}/canary-evidence` de una versión que no está en `CANARY` → 409 `invalid_transition` con `currentStatus` y `allowedFrom: ["CANARY"]` | A6, A7 | El mismo cuerpo que las transiciones | `StudioPublications::evidence()` |
+| D-10 | `engine_has_no_canary` no se alcanza por HTTP con el catálogo actual: `governance.canaryOnly` es `must_match` y su lectura es «canario configurado», así que sin canario falla antes `engine_value_mismatch`. La puerta existe y la prueban la paridad unitaria (`StudioPublicationGatesParityTest`) y la mutación M13; el E2E con la pila real lo confirmó | A5.1 paso 10 | Orden de A5.1 | `UltronStudioPublicationLifecycleTest::httpExpectation()` |
+| D-13 | **422 antes que las llaves:** la forma del cuerpo se valida en el controlador, antes del servicio. `POST publish` con el cuerpo vacío responde 422, no 409 `publishing_disabled` | A5.1 (orden) | Validar la forma no revela nada ni escribe nada | `UltronStudioVersionController::publish()` |
+| D-18 | **Ventana:** la etiqueta lleva raya (`07:00–19:00`: `requirements.window.window` y el mensaje de `outside_publication_window`) y la variable de entorno, guion (`07:00-19:00`). Mal escrita, con inicio ≥ fin o cruzando la medianoche → `07:00-19:00`; vacía (`ULTRON_STUDIO_PUBLISH_WINDOW=`) → sin ventana. Intervalo `[inicio, fin)` por minutos, hora de Bogotá | A13 | Un error de escritura no abre la puerta sin que nadie lo decida | `config/ultron_studio.php` (`$ventana`), `StudioPublishing::windowFor()` |
+| AS-8 | **Paginación** de `GET publications` y de `GET rules?status=archived`: la API lee `per_page` (como `GET versions`), no `perPage` como escribe A7; `perPage` se ignora. `page` y `per_page` se validan enteros ≥ 1: `0`, negativos o no enteros → **422** (no se convierten en 20, como decía `informe-api.md` §1). Por encima de 50 → 50; por defecto, 20 | A7, A10.2 | Coherencia con el resto del Studio | `UltronStudioPublicationController::index()`, `UltronStudioRuleController`, `ResolvesPagination::resolvePerPage()` |
+
+D-8 (ayuda de `ultron.rollback`), D-11, D-12, D-14, D-15, D-16 y D-17 son de implementación dentro del contrato y están descritas en `informe-api.md` §5.
+
+### E2.2 Configuración y limitadores
+
+- **M-1 (= AS-1) · A13.** `ULTRON_STUDIO_PUBLISHING_ENABLED` se lee con `filter_var(…, FILTER_VALIDATE_BOOLEAN)` y `StudioPublishing::flagEnabled()` exige `=== true`. **Solo `true` (y `1`, `on`, `yes`) la enciende**; `false`, `off`, `no`, vacío o cualquier otro texto la dejan apagada. Con `2bc053b`, `(bool) env()` daba por encendidos `off`, `no` o `disabled`; corregido en `d24c512`, con prueba negativa. El mismo arreglo se aplicó a `ULTRON_STUDIO_LAB_ENABLED` (Hito 4). Con esto, la fila «Valor inválido: `false`» de A13 es cierta para esta llave.
+- **AS-2 · A6.** `POST versions/{uuid}/promote` lleva también `throttle:ultron-studio-evidence`: promover calcula la evidencia entera (acta incluida) y comparte el cubo de `GET canary-evidence`, **10/min por persona y 30/min por red** (el de red es D-16). Antes, una persona con dos sesiones llegaba a 68 actas por minuto. Corregido en `602c4b9`, con prueba negativa.
+
+### E2.3 Decisiones del CRM fuera del contrato (A11)
+
+Detalle y motivos en `informe-front-integracion.md` §3:
+- **D-F1.** Sin la llave o con el servidor negando, no hay botón y el motivo se lee en texto visible, solo en el estado en que la acción aplicaría.
+- **D-F2.** Con backend H5, «Publicar» sale de cada versión y no de la cabecera; con backend F sigue el de la cabecera, deshabilitado.
+- **D-F3.** «Volver a Legacy» y el historial viven en la barra de la publicación (son de la cadena, no de una versión), solo en la fase `ready`.
+- **D-F4.** El detalle abierto se relee cuando se mueve la cabeza de la cadena.
+- **D-F5.** Lo reconocido se borra con cualquier `previewHash` nuevo; tras `no_effect_not_acknowledged` se marca lo que faltaba.
+- **D-F6.** Descriptor del CRM para `governance.studioPublication` (consecuencia de D-5).
+- **D-F7.** Aviso de datos personales en la nota de publicar y de promover: va a `reason`, en una cadena que no se borra.
+- **D-F8.** Espacios entre elementos en línea con `&ngsp;`.
+- **D-F9.** Margen en el pie de los dos diálogos nuevos a 390 px por el asistente flotante del shell; `ib-reason-dialog` (compartido) no se tocó.
+
+### E2.4 Corrección de la documentación de apoyo (B-3)
+
+El riesgo R6 del plan (`plans/ULTRON_STUDIO_H5_PLAN.md` §9) dice que, tras rotar la `APP_KEY`, basta con «volver a publicar». **No es posible:** con la cabeza firmada con la clave vieja, publicar, promover y revertir responden 409 `publication_head_invalid`; la única escritura posible es volver a Legacy, y recuperar la declaración exige una versión nueva con su ciclo completo (aprobación de otra persona, laboratorio, ventana, canario y promoción). Las versiones que pasan a `ROLLED_BACK` o `RETIRED` no vuelven. El procedimiento está en `ULTRON_STUDIO_ROLLBACK.md` («Hito 5»). La `APP_KEY` alimenta otros mecanismos (por ejemplo, el `decide_token`): rotarla es un evento de todo el sistema y H5 no lo justifica por sí solo.
+
+### E2.5 Diferido al Hito 7 (no implementado en H5)
+
+- **B-2 · `verified` por entrada del historial.** `GET publications` y el detalle de la versión enseñan cada entrada sin verificar su huella ni su firma; solo se verifica la cabeza. Explotarlo exige DML directo en la base de producción y solo falsea lo que se enseña: el motor y el Studio verifican la cabeza, y la restauración verifica su entrada.
+- **AS-3 / N-3 · `seq` envenenado con DML.** Una fila insertada con `seq = 2147483647` se convierte en la cabeza y no verifica: volver a Legacy responde 500 (22003), revertir 409, y la fila no se puede borrar con el rol de la aplicación. Corrección propuesta: un disparador que obligue a `seq` = siguiente (y a encadenar con la cabeza), en una migración aditiva con su recuento. **Mientras tanto** (runbook): salida inmediata con `h5-engine-scope.sh off <alcance actual>` y reparación solo con el rol dueño y la autorización del propietario.
+- **`CHECK (seq >= 1)`**, aditivo, junto con lo anterior.
+- **El envoltorio de migración como root.** `/usr/local/bin/ironbody-migrate` ejecuta `php artisan migrate` como root sobre un árbol de `www-data` (la clase de riesgo de M-3), y su `config:cache` nace con la umask de `www-data` antes del `chmod 600` (N-7). Pendiente del propietario.
+- **Caracteres invisibles (AS-5).** `PlainText` deja pasar invisibles que no están en su lista (U+00AD, U+061C, U+180E, U+2028, U+2060 y las etiquetas U+E0000–E007F, entre otros). Desde H5 acaban en `ultron_studio_publications.reason`, que no se puede editar ni borrar. Decisión del propietario; mejor antes de la fase 2.
+
+**Fuera de esta enmienda:** el doble envío intercalado con la misma `clientRequestId` (AS-4 de `api-security-specialist`, H-1 del tester de backend) está en revisión al escribir esto; su estado lo fija el lead con el informe del tester de backend.

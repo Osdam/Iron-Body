@@ -139,6 +139,19 @@ final class StudioPublications
             return ['entry' => $previa, 'replayed' => true];
         }
 
+        // 4–12, volviendo a mirar el reintento ante cualquier rechazo (H-1).
+        return $this->orReplayed(fn (): array => $this->publishGated($access, $request, $uuid, $clientRequestId, $previewHash, $acknowledgedNoEffect, $note, $cuerpo), $access, D::ACTION_PUBLISH, $uuid, $clientRequestId, $cuerpo);
+    }
+
+    /**
+     * Publicar, de los cuatro ojos a la transacción (pasos 4–12 de §A5.1).
+     *
+     * @param  list<string>  $acknowledgedNoEffect
+     * @param  array<string,mixed>  $cuerpo
+     * @return array{entry:array<string,mixed>,replayed:bool}
+     */
+    private function publishGated(StudioAccess $access, Request $request, string $uuid, string $clientRequestId, string $previewHash, array $acknowledgedNoEffect, ?string $note, array $cuerpo): array
+    {
         // 4: la versión y los cuatro ojos.
         $version = $this->versions->findByUuid($uuid);
         $this->assertFourEyes($access, $request, $version, D::ACTION_PUBLISH);
@@ -238,6 +251,18 @@ final class StudioPublications
             return ['entry' => $previa, 'replayed' => true];
         }
 
+        // De aquí en adelante, volviendo a mirar el reintento ante cualquier rechazo (H-1).
+        return $this->orReplayed(fn (): array => $this->promoteGated($access, $request, $uuid, $clientRequestId, $evidenceHash, $note, $cuerpo), $access, D::ACTION_PROMOTE, $uuid, $clientRequestId, $cuerpo);
+    }
+
+    /**
+     * Promover, de los cuatro ojos a la transacción (§A5.2).
+     *
+     * @param  array<string,mixed>  $cuerpo
+     * @return array{entry:array<string,mixed>,replayed:bool}
+     */
+    private function promoteGated(StudioAccess $access, Request $request, string $uuid, string $clientRequestId, string $evidenceHash, ?string $note, array $cuerpo): array
+    {
         $version = $this->versions->findByUuid($uuid);
         $this->assertFourEyes($access, $request, $version, D::ACTION_PROMOTE);
 
@@ -337,6 +362,18 @@ final class StudioPublications
             return ['entry' => $previa, 'replayed' => true];
         }
 
+        // De aquí en adelante, volviendo a mirar el reintento ante cualquier rechazo (H-1).
+        return $this->orReplayed(fn (): array => $this->rollbackGated($access, $request, $uuid, $clientRequestId, $reason, $cuerpo), $access, D::ACTION_ROLLBACK, $uuid, $clientRequestId, $cuerpo);
+    }
+
+    /**
+     * Revertir, del estado de la versión a la transacción (§A5.3).
+     *
+     * @param  array<string,mixed>  $cuerpo
+     * @return array{entry:array<string,mixed>,replayed:bool}
+     */
+    private function rollbackGated(StudioAccess $access, Request $request, string $uuid, string $clientRequestId, string $reason, array $cuerpo): array
+    {
         $version = $this->versions->findByUuid($uuid);
         $estado = $version->statusEnum();
         if ($rechazo = self::rollbackStateRefusal($estado)) {
@@ -427,6 +464,18 @@ final class StudioPublications
             return ['entry' => $previa, 'replayed' => true];
         }
 
+        // De aquí en adelante, volviendo a mirar el reintento ante cualquier rechazo (H-1).
+        return $this->orReplayed(fn (): array => $this->legacyGated($access, $request, $clientRequestId, $reason, $cuerpo), $access, D::ACTION_LEGACY, null, $clientRequestId, $cuerpo);
+    }
+
+    /**
+     * Volver a Legacy, de la cabeza a la transacción (§A5.4).
+     *
+     * @param  array<string,mixed>  $cuerpo
+     * @return array{entry:array<string,mixed>,replayed:bool}
+     */
+    private function legacyGated(StudioAccess $access, Request $request, string $clientRequestId, string $reason, array $cuerpo): array
+    {
         $this->assertDeclaring($this->head());
 
         try {
@@ -1318,6 +1367,33 @@ final class StudioPublications
         }
 
         return self::entryDto($previa);
+    }
+
+    /**
+     * H-1 (carreras con dos sesiones, 25-10): la MISMA petición repetida (misma
+     * persona, mismo `clientRequestId`, mismo cuerpo) puede pasar el paso 3 sin
+     * ver nada y tropezar después con el estado que su gemela acaba de dejar
+     * (`invalid_transition`, `not_active_publication`, `already_legacy`,
+     * `canary_in_progress`, `publication_moved`…). Antes de rechazar se vuelve a
+     * mirar el reintento FUERA de la transacción, igual que tras el 23505: si ya
+     * hay entrada, es 200 `replayed` (§A5.1 paso 3). Una llave reutilizada con
+     * otro cuerpo o por otra persona sigue siendo `client_request_reused`.
+     *
+     * @param  callable():array{entry:array<string,mixed>,replayed:bool}  $accion
+     * @param  array<string,mixed>  $cuerpo
+     * @return array{entry:array<string,mixed>,replayed:bool}
+     */
+    private function orReplayed(callable $accion, StudioAccess $access, string $action, ?string $versionUuid, string $clientRequestId, array $cuerpo): array
+    {
+        try {
+            return $accion();
+        } catch (UltronStudioException $e) {
+            if ($previa = $this->replay($access, $action, $versionUuid, $clientRequestId, $cuerpo)) {
+                return ['entry' => $previa, 'replayed' => true];
+            }
+
+            throw $e;
+        }
     }
 
     /**
