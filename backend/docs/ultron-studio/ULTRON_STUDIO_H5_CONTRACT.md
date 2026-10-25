@@ -323,3 +323,14 @@ Sin sujetos nuevos (no se amplía `usae_subject_type_chk`). El motor no escribe 
 Mismo patrón que `config/ultron_studio.php` (`$entero`): una línea vacía nunca deja un tope en cero sin que nadie lo decida.
 
 ---
+
+## Enmienda 1 (25-10-2026): lo que fija el fixture de publicación y decisiones del lead
+
+`tests/fixtures/ultron-studio/publication-cases.json` (231 casos escritos a mano desde este contrato: `classify` 34, `effectiveJson` 21, `signature` 24, `scope` 63, `gates` 71, `evidence` 18; ruta en minúsculas junto a los fixtures de F, G y H4 porque el disco de macOS no distingue mayúsculas) y su `publication-cases.README.md` forman parte del contrato: **todas las decisiones que el README declara que el contrato no fijaba quedan congeladas**. Si PHP o TS discrepan, se corrige la implementación, nunca el fixture. Verificado por el tester con una segunda derivación independiente (openssl) y contra `StudioContentHasher::canonicalJson`, `StudioCatalog::bindings()` y `hash_hmac` reales: 0 discrepancias; 29 implementaciones erróneas lo tumban.
+
+**Decisiones del lead sobre las preguntas del tester:**
+- **Q-1 Subclave:** `k = hash_hmac('sha256', 'ultron-studio-publication', <APP_KEY decodificada de base64 cuando lleva el prefijo `base64:`>, true)`: la `APP_KEY` es la **clave** y la etiqueta el **dato** (lectura de derivación de clave); subclave en bytes crudos. `signature = hash_hmac('sha256', "ultron-engine-config/1\n" . effective_json, k)` en hexadecimal. Una sola implementación: `UltronPublishedConfig::signatureFor()`.
+- **Q-2 Revertir la `PUBLISHED` con otra versión en `CANARY`:** opción (a): se **conserva la parte canaria** (`{canary: B, rest: R}`); deshacer no depende de otro estado.
+- **Q-3 Identidades al promover:** la parte es el mismo objeto copiado: `publishedBy` y `approvedBy` siguen siendo los de la publicación en canario; quien promueve queda en la fila de la cadena (`actor_*`) y en el evento del libro.
+- **Q-4 `previewHash`:** `StudioContentHasher::hash({versionUuid, contentHash, catalogVersion, mustMatch, matches, noEffect, labGate: {mode, latest}})`, sin ventana ni hora (tienen su propia puerta). `evidenceHash` como en A6.
+- **Q-5 Lectura caída en la deriva:** cuenta como deriva con `engine: null` (falla cerrado y bloquea la promoción), igual que al publicar (`engine_reading_unavailable`).
