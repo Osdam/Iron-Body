@@ -21,6 +21,10 @@ echo "2. variables (todo apagado):"
 add_var MARKETING_ULTRON_STUDIO_CONFIG off
 add_var ULTRON_STUDIO_PUBLISHING_ENABLED false
 add_var ULTRON_STUDIO_PUBLISH_LAB_GATE required
+add_var ULTRON_STUDIO_CANARY_MIN_HOURS 24
+add_var ULTRON_STUDIO_CANARY_MIN_TURNS 3
+add_var ULTRON_STUDIO_PUBLISH_WINDOW 07:00-19:00
+add_var QUEUE_STUDIO_LAB_UNATTENDED_AFTER_SECONDS 300
 echo "   permisos del fichero: $(stat -c '%U %a' $ENVF)"
 echo "3. migración (rol dueño, lock_timeout 5 s):"
 sudo env PGOPTIONS="-c lock_timeout=5s" /usr/local/bin/ironbody-migrate 2>&1 | sed 's/^/   /'
@@ -34,7 +38,7 @@ sudo -u postgres psql -Atd ironbody -c "SELECT 'CHECK studio: '||count(*) FROM p
 sudo -u postgres psql -Atd ironbody -c "SELECT 'cadena: '||count(*)||' filas · índices parciales: '||(SELECT count(*) FROM pg_indexes WHERE tablename='ultron_studio_versions' AND indexname IN ('usv_one_canary','usv_one_published')) FROM ultron_studio_publications;" | sed 's/^/   /'
 echo "5. rutas studio: $(sudo -u www-data php artisan route:list --path=admin/ultron-studio 2>/dev/null | grep -c ultron-studio) · auth:coverage --unmapped → [$(sudo -u www-data php artisan auth:coverage --unmapped 2>&1 | tr -d '\n' | cut -c1-40)]"
 echo "6. configuración efectiva:"
-sudo -u www-data php artisan tinker --execute='echo json_encode(["engine_scope" => config("marketing.ultron.studio_config"), "publishing_enabled" => (bool) config("ultron_studio.publishing_enabled"), "lab_gate" => config("ultron_studio.publishing.lab_gate"), "lab_enabled" => (bool) config("ultron_studio.lab.enabled"), "lab_driver" => config("ultron_studio.lab.driver")]), PHP_EOL;' 2>&1 | tail -1 | sed 's/^/   /'
+sudo -u www-data php artisan tinker --execute='echo json_encode(["engine_scope" => config("marketing.ultron.studio_config"), "publishing_enabled" => (bool) config("ultron_studio.publishing_enabled"), "lab_gate" => config("ultron_studio.publishing.lab_gate"), "canary_min" => [config("ultron_studio.publishing.canary_min_hours"), config("ultron_studio.publishing.canary_min_turns")], "window" => config("ultron_studio.publishing.window"), "lab_unattended_s" => config("queue.lanes.lab.unattended_after_seconds"), "lab_enabled" => (bool) config("ultron_studio.lab.enabled"), "lab_driver" => config("ultron_studio.lab.driver")]), PHP_EOL;' 2>&1 | tail -1 | sed 's/^/   /'
 sleep 6
 echo "7. workers RUNNING: $(supervisorctl status | grep -c RUNNING) · BACKOFF/FATAL: $(supervisorctl status | grep -c 'BACKOFF\|FATAL')"
 echo "8. sanidad:"
