@@ -880,6 +880,13 @@ Route::middleware('auth.member')->group(function (): void {
     Route::post('member/account/delete-confirm', [\App\Http\Controllers\Api\MemberAccountController::class, 'deleteConfirm'])
         ->middleware('throttle:6,1');
 
+    // ── Perfil → Registro facial: el PRIMER rostro, con la sesión del socio
+    // (equipo vinculado con OTP) y su autorización biométrica. No reabre
+    // members/{id}/biometric, que solo lleva el token de la APK.
+    Route::get('member/face-enrollment', [\App\Http\Controllers\Api\MemberFaceEnrollmentController::class, 'show']);
+    Route::post('member/face-enrollment', [\App\Http\Controllers\Api\MemberFaceEnrollmentController::class, 'store'])
+        ->middleware('throttle:10,1');
+
     // ── Seguridad: sesiones / dispositivos del miembro ────────────────────────
     Route::get('members/devices', [AuthController::class, 'devices']);
     Route::post('members/devices/{uuid}/revoke', [AuthController::class, 'revokeDevice']);
@@ -1648,6 +1655,20 @@ Route::get('admin/electronic-invoices/config',        [ElectronicInvoiceControll
 // billing.manage— se podía emitir una factura real de cualquier venta, y
 // además no poder anularla después (creditNote sí comprobaba rol).
 Route::post('admin/electronic-invoices/manual-emit',  [ElectronicInvoiceController::class, 'manualEmit'])
+    ->middleware('admin.can:billing.manage');
+// Emitir manual MULTICONCEPTO: varias operaciones cobradas de un cliente en
+// una sola factura. Vista previa (no escribe) y emisión (exige la huella de esa
+// vista previa) son rutas distintas; las dos, solo con billing.manage.
+// Las dos lecturas existen solo para emitir: exponen documento, perfil fiscal
+// y cobros del socio, así que piden lo mismo que emitir (y una persona, en el
+// controlador), no el `billing.view` que tiene el token de automatizaciones.
+Route::get('admin/electronic-invoices/bundles/customers', [\App\Http\Controllers\Api\Admin\ManualInvoiceBundleController::class, 'customers'])
+    ->middleware('admin.can:billing.manage');
+Route::get('admin/electronic-invoices/bundles/members/{member}/candidates', [\App\Http\Controllers\Api\Admin\ManualInvoiceBundleController::class, 'candidates'])
+    ->whereNumber('member')->middleware('admin.can:billing.manage');
+Route::post('admin/electronic-invoices/bundles/preview', [\App\Http\Controllers\Api\Admin\ManualInvoiceBundleController::class, 'preview'])
+    ->middleware('admin.can:billing.manage');
+Route::post('admin/electronic-invoices/bundles', [\App\Http\Controllers\Api\Admin\ManualInvoiceBundleController::class, 'store'])
     ->middleware('admin.can:billing.manage');
 Route::get('admin/electronic-invoices/{invoice}',             [ElectronicInvoiceController::class, 'show'])->whereNumber('invoice');
 Route::post('admin/electronic-invoices/{invoice}/retry',      [ElectronicInvoiceController::class, 'retry'])->whereNumber('invoice')

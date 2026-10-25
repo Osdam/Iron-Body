@@ -102,12 +102,31 @@ class Product extends Model
             ->where('stock', '>', 0);
     }
 
+    /**
+     * EL SUELO DEL AVISO: con tres o menos, queda poco.
+     *
+     * Antes el aviso dependía solo de `min_stock`, y ese campo nace en 0 si
+     * nadie lo llena: con 0, la condición `min_stock > 0` no se cumplía nunca
+     * y el producto pasaba de «ok» a AGOTADO sin paso intermedio. El único
+     * momento en que alguien se enteraba era con el cliente delante pidiendo
+     * algo que ya no había.
+     *
+     * Así que hay un suelo para todos. Quien tenga un mínimo mayor conserva el
+     * suyo —de una proteína que se vende a diario, tres unidades ya es tarde—:
+     * manda el más alto de los dos.
+     */
+    public const LOW_STOCK_FLOOR = 3;
+
     public function getStockStatusAttribute(): string
     {
         if ($this->stock <= 0) {
+            // Incluye los NEGATIVOS, que existen a propósito: un ajuste manual
+            // puede dejar el stock por debajo de cero y eso tiene que verse,
+            // no recortarse en silencio.
             return 'out';
         }
-        if ($this->min_stock > 0 && $this->stock <= $this->min_stock) {
+
+        if ($this->stock <= max((int) $this->min_stock, self::LOW_STOCK_FLOOR)) {
             return 'low';
         }
 

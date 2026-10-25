@@ -3,6 +3,10 @@
 namespace App\Services\Billing;
 
 use App\Models\ElectronicInvoice;
+use App\Models\InvoiceBundle;
+use App\Models\InvoiceBundleItem;
+use App\Models\Payment;
+use App\Models\ProductSale;
 use App\Services\Billing\Factus\FactusClient;
 use RuntimeException;
 
@@ -174,6 +178,63 @@ class InvoiceEmissionGuard
             throw $this->reject(sprintf(
                 'el pago %s ya fue facturado en el documento %s (solicitud #%d).',
                 $invoice->source_id, $duplicate->full_number, $duplicate->id,
+            ));
+        }
+
+        $this->assertNoBundleOverlap($invoice);
+    }
+
+    /**
+     * Factura individual vs. multiconcepto: una operación respalda una sola.
+     *
+     *  - Individual: no sale si su operación está reservada por un lote activo.
+     *  - Multiconcepto: no sale si alguna de sus operaciones ya tiene documento
+     *    fiscal propio.
+     */
+    private function assertNoBundleOverlap(ElectronicInvoice $invoice): void
+    {
+        $source = $invoice->source;
+
+        if ($source instanceof InvoiceBundle) {
+            foreach ($source->items()->get() as $item) {
+                // Otro lote cuya factura sigue viva (no anulada por nota
+                // crédito validada) respalda la misma operación.
+                if ($otra = ManualInvoiceBundleService::conflictingInvoiceFor($item->origin_type, (int) $item->origin_id, (int) $source->id)) {
+                    throw $this->reject(sprintf(
+                        'la operación %s de la factura multiconcepto #%d ya respalda la factura %s (solicitud #%d), que no está anulada por una nota crédito validada.',
+                        $item->key(), $invoice->id, $otra->full_number ?: 'sin número', $otra->id,
+                    ));
+                }
+
+                $class = match ($item->origin_type) {
+                    InvoiceBundleItem::ORIGIN_PAYMENT => Payment::class,
+                    InvoiceBundleItem::ORIGIN_PRODUCT_SALE => ProductSale::class,
+                    default => null,
+                };
+                if ($class === null) {
+                    continue;
+                }
+                $individual = ElectronicInvoice::where('source_type', (new $class)->getMorphClass())
+                    ->where('source_id', $item->origin_id)
+                    ->where('type', $invoice->type)
+                    ->where(fn ($q) => $q->whereNotNull('full_number')->orWhereNotNull('cufe'))
+                    ->first();
+                if ($individual !== null) {
+                    throw $this->reject(sprintf(
+                        'la operación %s de la factura multiconcepto #%d ya fue facturada en el documento %s (solicitud #%d).',
+                        $item->key(), $invoice->id, $individual->full_number ?: 'con CUFE', $individual->id,
+                    ));
+                }
+            }
+
+            return;
+        }
+
+        $tipo = ManualInvoiceBundleService::originTypeOf($source);
+        if ($tipo !== null && ($claim = ManualInvoiceBundleService::activeClaimFor($tipo, (int) $invoice->source_id))) {
+            throw $this->reject(sprintf(
+                'la operación de la solicitud #%d está incluida en una factura multiconcepto (lote %s).',
+                $invoice->id, $claim->bundle?->uuid ?? '#'.$claim->invoice_bundle_id,
             ));
         }
     }

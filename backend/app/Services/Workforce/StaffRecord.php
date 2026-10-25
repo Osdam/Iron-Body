@@ -143,6 +143,7 @@ class StaffRecord
             'capabilities' => $p->capabilities(),
             'biometric' => [
                 'status' => $this->faces->status($ref),
+                'verifiable' => $this->faces->verifiable($ref),
                 'enrolled_at' => $ref?->enrolled_at?->toIso8601String(),
                 'updated_at' => $ref?->updated_at?->toIso8601String(),
             ],

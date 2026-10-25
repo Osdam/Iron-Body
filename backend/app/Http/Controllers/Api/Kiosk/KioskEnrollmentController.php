@@ -146,7 +146,7 @@ class KioskEnrollmentController extends Controller
 
         return response()->json([
             'ok' => true,
-            'biometric' => ['status' => $this->faces->status($ref), 'enrolled_at' => $ref?->enrolled_at?->toIso8601String()],
+            'biometric' => ['status' => $this->faces->status($ref), 'verifiable' => $this->faces->verifiable($ref), 'enrolled_at' => $ref?->enrolled_at?->toIso8601String()],
             'verification' => [
                 'token' => $verification['token'],
                 'expires_at' => $verification['expires_at']->toIso8601String(),

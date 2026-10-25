@@ -235,6 +235,11 @@ class WorkforceStaffController extends Controller
         // Un código de clases abre también el portal del entrenador (sus socios):
         // emitirlo es suplantar a un entrenador, así que exige además
         // `trainers.manage`, no solo gestionar personal (revisión 2026-10-11, F5).
+        // No se emite un código que el servidor va a rechazar (las clases se
+        // operan con rostro): el 19-10-2026 se emitían para «iniciar clase».
+        if ($data['purpose'] === 'class' && ! (bool) config('workforce.classes.fallback_code', false)) {
+            throw WorkforceException::classFallbackDisabled();
+        }
         if ($data['purpose'] === 'class' && ! CrmPermission::allows(AdminActor::from($request), 'trainers.manage')) {
             return response()->json([
                 'ok' => false,

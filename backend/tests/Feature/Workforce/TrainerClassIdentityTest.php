@@ -9,6 +9,7 @@ use App\Models\TrainerDeviceSession;
 use App\Models\TrainerFaceReference;
 use App\Models\TrainerRole;
 use App\Models\Workday;
+use App\Models\WorkforceAuthorizationCode;
 use App\Services\Trainer\TrainerSessionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -118,23 +119,137 @@ class TrainerClassIdentityTest extends TestCase
         $this->assertIsInt($fila->json('events_cursor'));
     }
 
+    public function test_un_codigo_de_enrolamiento_vivo_no_bloquea_el_rostro_valido_en_clase(): void
+    {
+        // Caso real del 19-10-2026: un código de enrolamiento emitido «para la
+        // clase» dejaba el rostro bueno en renovación y la clase solo entraba
+        // con el código de respaldo.
+        $this->enrollCoach();
+        $tablet = $this->tablet();
+        $this->postJson("/api/admin/biometrics/identities/{$this->coach->identity->uuid}/enrollment-code", ['reason' => 'Clase'], $this->adminWithPermissions(['biometrics.manage']))
+            ->assertCreated();
+        $this->identify('1075000010', $tablet)->assertJsonPath('employee.biometric.status', 'renewal_pending')
+            ->assertJsonPath('employee.biometric.verifiable', true);
+
+        $this->signed('POST', "/api/trainer/classes/{$this->clase->id}/start", ['session_date' => self::LUNES, 'embedding' => $this->capture($this->face(20), 3)], $tablet, ['Authorization' => 'Bearer '.$this->token])
+            ->assertOk()->assertJsonPath('session.start_identity_method', 'face');
+        Carbon::setTestNow(Carbon::parse(self::LUNES.' 10:02', 'America/Bogota')->utc());
+        $this->signed('POST', "/api/trainer/classes/{$this->clase->id}/end", ['session_date' => self::LUNES, 'embedding' => $this->capture($this->face(20), 4)], $tablet, ['Authorization' => 'Bearer '.$this->token])
+            ->assertOk()->assertJsonPath('session.end_identity_method', 'face');
+
+        // Y un rostro ajeno sigue sin pasar aunque haya renovación autorizada.
+        $this->signed('POST', "/api/trainer/classes/{$this->clase->id}/start", ['session_date' => self::LUNES, 'embedding' => $this->face(21)], $tablet, $this->bearer())
+            ->assertStatus(422)->assertJsonPath('code', 'face_no_match');
+    }
+
+    // ── Solo la tablet opera clases, y solo con rostro (regla 2026-10-20)
+
+    public function test_un_telefono_no_puede_presentarse_como_tablet_mandando_un_rostro(): void
+    {
+        $this->enrollCoach();
+
+        // El vector del rostro correcto, pero sin la firma de un equipo autorizado.
+        $this->postJson("/api/trainer/classes/{$this->clase->id}/start", ['session_date' => self::LUNES, 'embedding' => $this->capture($this->face(20), 3)], $this->bearer())
+            ->assertStatus(403)->assertJsonPath('code', 'device_not_authorized');
+        $this->assertSame(0, ClassSession::count());
+    }
+
+    public function test_por_defecto_ninguna_clase_se_opera_con_codigo(): void
+    {
+        $admin = $this->adminWithPermissions(['workforce.manage', 'trainers.manage']);
+        $tablet = $this->tablet();
+
+        // El CRM no emite un código que el servidor rechazaría…
+        $this->postJson("/api/admin/workforce/staff/{$this->coach->identity->uuid}/fallback-code", ['purpose' => 'class', 'reason' => 'La cámara no enfoca hoy'], $admin)
+            ->assertStatus(422)->assertJsonPath('code', 'class_fallback_disabled');
+        // …ni la clase ni el portal de la tablet aceptan uno.
+        $this->signed('POST', "/api/trainer/classes/{$this->clase->id}/start", ['session_date' => self::LUNES, 'fallback_code' => '12345678'], $tablet, $this->bearer())
+            ->assertStatus(422)->assertJsonPath('code', 'class_fallback_disabled');
+        $this->signed('POST', '/api/kiosk/verify-code', ['employee_ref' => $this->ref('1075000010', $tablet), 'purpose' => 'trainer_session', 'code' => '12345678'], $tablet)
+            ->assertStatus(422)->assertJsonPath('code', 'class_fallback_disabled');
+        $this->assertSame(0, ClassSession::count());
+        $this->assertSame(0, WorkforceAuthorizationCode::query()->where('purpose', WorkforceAuthorizationCode::PURPOSE_FALLBACK_CLASS)->count());
+
+        // La contingencia de la jornada sigue existiendo (supervisada y auditada).
+        $this->postJson("/api/admin/workforce/staff/{$this->coach->identity->uuid}/fallback-code", ['purpose' => 'workday', 'reason' => 'La cámara no enfoca hoy'], $admin)
+            ->assertCreated();
+    }
+
+    public function test_quien_ya_tiene_rostro_no_puede_declararlo_desde_el_telefono(): void
+    {
+        $this->enrollCoach();
+
+        $this->postJson("/api/trainer/classes/{$this->clase->id}/start", ['session_date' => self::LUNES, 'face_verified' => true], $this->bearer())
+            ->assertStatus(422)->assertJsonPath('code', 'face_required');
+        $this->assertSame(0, ClassSession::count());
+    }
+
+    public function test_el_rostro_declarado_caduca_en_la_fecha_limite(): void
+    {
+        config(['workforce.legacy.face_claim_until' => '2026-10-12']);
+        $this->postJson("/api/trainer/classes/{$this->clase->id}/start", ['session_date' => self::LUNES, 'face_verified' => true], $this->bearer())
+            ->assertOk()->assertJsonPath('session.start_identity_method', 'legacy_claim');
+
+        config(['workforce.legacy.face_claim_until' => '2026-10-11']);
+        Carbon::setTestNow(Carbon::parse(self::LUNES.' 10:02', 'America/Bogota')->utc());
+        $this->postJson("/api/trainer/classes/{$this->clase->id}/end", ['session_date' => self::LUNES, 'face_verified' => true], $this->bearer())
+            ->assertStatus(422)->assertJsonPath('code', 'face_required');
+        // El inicio declarado se conserva tal cual: no se convierte en verificado.
+        $this->assertSame('legacy_claim', ClassSession::query()->firstOrFail()->start_identity_method);
+    }
+
+    public function test_el_documento_sin_otp_solo_entra_desde_un_equipo_que_ya_usaba(): void
+    {
+        config(['trainer.otp_dev_bypass' => true]);
+        $login = fn (string $device) => $this->postJson('/api/trainer/auth/dev-login', ['document' => '1075000010', 'device_id' => $device]);
+
+        // Quien sabe la cédula, en otro teléfono: no entra (ni se revela si existe).
+        $login('telefono-ajeno')->assertStatus(403)->assertJsonPath('code', 'device_not_recognized');
+        $this->postJson('/api/trainer/auth/dev-login', ['document' => '9999999999', 'device_id' => 'telefono-ajeno'])
+            ->assertStatus(403)->assertJsonPath('code', 'device_not_recognized');
+
+        // Su propio teléfono (ya tenía sesión, aunque la cerrara): entra.
+        $propio = app(TrainerSessionService::class)->issueSession($this->coach, ['device_id' => 'telefono-propio'])['session'];
+        app(TrainerSessionService::class)->revoke($propio, 'logout');
+        $login('telefono-propio')->assertOk();
+
+        // Un equipo que administración cortó no vuelve a entrar por documento.
+        app(TrainerSessionService::class)->revokeAll($this->coach, 'revoked_by_admin');
+        $login('telefono-propio')->assertStatus(403)->assertJsonPath('code', 'device_not_recognized');
+    }
+
+    public function test_la_confianza_anterior_al_corte_exige_confirmar_por_sms(): void
+    {
+        app(TrainerSessionService::class)->issueSession($this->coach, ['device_id' => 'telefono-propio']);
+        $access = fn () => $this->postJson('/api/trainer/auth/access', ['document' => '1075000010', 'device_id' => 'telefono-propio']);
+
+        $access()->assertOk()->assertJsonPath('trusted', true);
+
+        config(['trainer.trusted_device.not_before' => '2026-10-13']);
+        $r = $access()->assertOk();
+        $this->assertNull($r->json('token'));
+        $this->assertNotEmpty($r->json('challenge_id'));
+    }
+
     public function test_un_rostro_que_no_es_el_suyo_no_inicia_la_clase(): void
     {
         $this->enrollCoach();
 
-        $this->postJson("/api/trainer/classes/{$this->clase->id}/start", ['session_date' => self::LUNES, 'embedding' => $this->face(21), 'face_verified' => true], $this->bearer())
+        $this->signed('POST', "/api/trainer/classes/{$this->clase->id}/start", ['session_date' => self::LUNES, 'embedding' => $this->face(21), 'face_verified' => true], $this->tablet(), $this->bearer())
             ->assertStatus(422)->assertJsonPath('code', 'face_no_match');
         $this->assertSame(0, ClassSession::count());
     }
 
     public function test_sin_plantilla_el_rostro_real_no_puede_comprobarse(): void
     {
-        $this->postJson("/api/trainer/classes/{$this->clase->id}/start", ['session_date' => self::LUNES, 'embedding' => $this->face(20)], $this->bearer())
+        $this->signed('POST', "/api/trainer/classes/{$this->clase->id}/start", ['session_date' => self::LUNES, 'embedding' => $this->face(20)], $this->tablet(), $this->bearer())
             ->assertStatus(409)->assertJsonPath('code', 'biometric_not_enrolled');
     }
 
     public function test_respaldo_con_codigo_de_administrador(): void
     {
+        // Solo si el propietario enciende la contingencia (apagada por defecto).
+        config(['workforce.classes.fallback_code' => true]);
         $code = $this->postJson("/api/admin/workforce/staff/{$this->coach->identity->uuid}/fallback-code", ['purpose' => 'class', 'reason' => 'Cámara dañada en el salón'], $this->adminWithPermissions(['workforce.manage', 'trainers.manage']))
             ->assertCreated()->json('code');
 
@@ -252,10 +367,12 @@ class TrainerClassIdentityTest extends TestCase
         $this->postJson('/api/trainer/auth/face/enroll', ['embedding' => $this->face(20)], $this->bearer())->assertOk();
         $tablet = $this->tablet();
 
-        $this->identify('1075000010', $tablet)->assertJsonPath('employee.biometric.status', 'renewal_pending');
+        $this->identify('1075000010', $tablet)->assertJsonPath('employee.biometric.status', 'renewal_pending')
+            ->assertJsonPath('employee.biometric.verifiable', false);
         $this->verifyFace('1075000010', $this->face(20), $tablet)
-            ->assertStatus(409)->assertJsonPath('code', 'biometric_not_enrolled')->assertJsonPath('biometric.status', 'renewal_pending');
-        $this->postJson("/api/trainer/classes/{$this->clase->id}/start", ['session_date' => self::LUNES, 'embedding' => $this->face(20)], $this->bearer())
+            ->assertStatus(409)->assertJsonPath('code', 'biometric_not_enrolled')->assertJsonPath('biometric.status', 'renewal_pending')
+            ->assertJsonPath('biometric.verifiable', false);
+        $this->signed('POST', "/api/trainer/classes/{$this->clase->id}/start", ['session_date' => self::LUNES, 'embedding' => $this->face(20)], $tablet, $this->bearer())
             ->assertStatus(409);
         $this->postJson('/api/trainer/auth/face/login', ['trainer_id' => $this->coach->id, 'embedding' => $this->face(20)])->assertStatus(422);
         $this->getJson('/api/trainer/auth/face/roster')->assertJsonCount(0, 'data');
@@ -323,6 +440,8 @@ class TrainerClassIdentityTest extends TestCase
     public function test_un_id_declarado_no_puede_hacerse_pasar_por_la_sesion_de_una_tablet(): void
     {
         config(['trainer.otp_dev_bypass' => true]);
+        // Equipo que ese entrenador ya usaba (transición: solo así entra por documento).
+        app(TrainerSessionService::class)->issueSession($this->coach, ['device_id' => 'client:kiosk:cualquiera']);
         $this->postJson('/api/trainer/auth/dev-login', ['document' => '1075000010', 'device_id' => 'kiosk:cualquiera'])->assertOk();
 
         $this->assertSame(0, TrainerDeviceSession::query()->where('device_id', 'kiosk:cualquiera')->count());
@@ -359,16 +478,19 @@ class TrainerClassIdentityTest extends TestCase
         $this->getJson('/api/trainer/auth/me', $this->bearer())->assertOk();
     }
 
-    public function test_el_interruptor_del_login_facial_apaga_tambien_el_rostro_al_portal_en_el_kiosko(): void
+    public function test_el_rostro_al_portal_en_el_kiosko_tiene_su_propio_interruptor(): void
     {
-        // I2: TRAINER_FACE_LOGIN_ENABLED=false (mitigación de incidente) no deja
-        // abierta la vía nueva rostro → portal.
+        // El login facial PÚBLICO (roster sin firma) apagado, como en producción,
+        // no cierra la entrada segura de la tablet: es la única al portal ahí.
         $this->enrollCoach();
         config(['trainer.face.login_enabled' => false]);
+        $this->getJson('/api/trainer/auth/face/roster')->assertNotFound();
+        $this->verifyFace('1075000010', $this->face(20), $this->tablet(), 'trainer_session')->assertOk();
 
+        // I2: ante un incidente se corta con su interruptor; la jornada no depende de él.
+        config(['workforce.kiosk.trainer_portal_face' => false]);
         $this->verifyFace('1075000010', $this->face(20), $this->tablet(), 'trainer_session')
             ->assertStatus(403)->assertJsonPath('code', 'trainer_face_login_disabled');
-        // La jornada no depende de ese interruptor.
         $this->verifyFace('1075000010', $this->face(20), $this->tablet())->assertOk();
     }
 }

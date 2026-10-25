@@ -81,6 +81,28 @@ class FiscalProfileResolver
     }
 
     /**
+     * Adquiriente de una factura MULTICONCEPTO: el socio dueño de todas las
+     * operaciones del lote. Misma política que pagos y ventas.
+     *
+     * @return array<string,mixed>
+     */
+    public function resolveForMember(Member $member, ?bool $finalConsumer = null): array
+    {
+        $user = $member->user_id ? User::find($member->user_id) : null;
+        $profile = $this->findProfile($user?->id, $member->id, $member->identity_id);
+
+        if ($finalConsumer !== true && $this->esUtilizable($profile, $finalConsumer)) {
+            return $this->fromProfile($profile);
+        }
+
+        return $this->consumerFinal(
+            contactName: $member->full_name ?? $user?->name,
+            contactEmail: InvoiceEmail::primeroEntregable($member->email, $user?->email),
+            contactPhone: $member->phone ?? $user?->phone,
+        );
+    }
+
+    /**
      * ¿Se puede facturar NOMINATIVAMENTE con este perfil?
      *
      * `isComplete()` sólo mira que los campos no estén vacíos, y eso deja pasar
@@ -140,6 +162,13 @@ class FiscalProfileResolver
 
         if (blank($profile->legal_name ?: ($profile->user?->name ?? $profile->member?->full_name))) {
             $faltantes[] = 'falta la razón social o el nombre del cliente';
+        }
+
+        // Factus V2 exige el código DIVIPOLA del municipio (5 dígitos; Neiva
+        // 41001). «410001» llegó a la DIAN y volvió como 422.
+        $municipio = trim((string) $profile->city_code);
+        if ($municipio !== '' && preg_match('/^\d{5}$/', $municipio) !== 1) {
+            $faltantes[] = 'el código de municipio «'.$municipio.'» no es un código DIVIPOLA válido (5 dígitos; Neiva = 41001)';
         }
 
         return $faltantes;

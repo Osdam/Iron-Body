@@ -5,6 +5,7 @@ namespace App\Services\Trainer;
 use App\Models\Trainer;
 use App\Models\TrainerDeviceSession;
 use App\Services\DeviceSessionService;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 /**
@@ -99,8 +100,33 @@ class TrainerSessionService
         if ($ttlDays > 0) {
             $query->where('trusted_at', '>=', now()->subDays($ttlDays));
         }
+        $notBefore = trim((string) config('trainer.trusted_device.not_before', ''));
+        if ($notBefore !== '') {
+            $query->where('trusted_at', '>=', Carbon::parse($notBefore, 'America/Bogota')->startOfDay()->utc());
+        }
 
         return $query->latest('trusted_at')->first();
+    }
+
+    /**
+     * ¿Este equipo ya tuvo una sesión de ESTE entrenador? (acceso por documento
+     * durante la transición al OTP). Ni un id de kiosko (público) ni uno
+     * generado por el servidor (`auto-`) cuentan, ni un equipo cuya sesión
+     * cortó administración (revocada o entrenador desactivado): solo la que
+     * sigue viva, la que cerró el propio entrenador o la que caducó.
+     */
+    public function knownDevice(Trainer $trainer, ?string $deviceId): bool
+    {
+        $deviceId = $deviceId !== null ? trim($deviceId) : '';
+        if ($deviceId === '' || str_starts_with($deviceId, 'kiosk:') || str_starts_with($deviceId, 'auto-')) {
+            return false;
+        }
+
+        return TrainerDeviceSession::query()
+            ->where('trainer_id', $trainer->id)
+            ->where('device_id', $deviceId)
+            ->where(fn ($q) => $q->whereNull('revoked_at')->orWhereIn('revoked_reason', ['logout', 'expired']))
+            ->exists();
     }
 
     /** Sesión activa de un dispositivo concreto (para el desbloqueo biométrico). */

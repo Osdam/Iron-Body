@@ -86,10 +86,26 @@ return [
         'classes_policy' => env('WORKFORCE_DEVICE_POLICY_CLASSES', 'monitor'),
     ],
 
+    'classes' => [
+        // Iniciar o finalizar una clase con un código de administrador en vez
+        // del rostro. Apagado (regla del propietario, 2026-10-20): una clase
+        // solo se opera con verificación facial real en la tablet; si el
+        // rostro no pasa, administración revisa el registro facial. El
+        // historial de clases ya operadas con código se conserva tal cual.
+        'fallback_code' => filter_var(env('WORKFORCE_CLASS_FALLBACK_CODE', false), FILTER_VALIDATE_BOOLEAN),
+    ],
+
     'kiosk' => [
         // Sesión del portal del entrenador abierta en una tablet compartida.
         'trainer_session_hours' => 12,
         'trainer_session_idle_minutes' => 15,
+        // Abrir el portal del entrenador en la tablet con el rostro (equipo
+        // firmado + rostro comparado aquí). Es la ÚNICA entrada al portal en la
+        // tablet desde la app 2.0.7 y el camino para operar clases. Interruptor
+        // propio para cortarlo ante un incidente: hasta 2026-10-20 lo cortaba
+        // TRAINER_FACE_LOGIN_ENABLED, que también abre el login facial PÚBLICO
+        // (roster sin firma) y debe seguir apagado.
+        'trainer_portal_face' => filter_var(env('WORKFORCE_KIOSK_TRAINER_PORTAL_FACE', true), FILTER_VALIDATE_BOOLEAN),
     ],
 
     'legacy' => [
@@ -97,6 +113,11 @@ return [
         // comparar nada. Se acepta (y queda como `legacy_claim`) hasta que la
         // app nueva esté en todas las tablets.
         'face_claim' => filter_var(env('WORKFORCE_LEGACY_FACE_CLAIM', true), FILTER_VALIDATE_BOOLEAN),
+        // Último día (Bogotá, AAAA-MM-DD) en que se acepta el rostro declarado.
+        // Pasado ese día se rechaza aunque `face_claim` siga en true: la
+        // transición no puede quedar abierta para siempre. Además, quien ya
+        // tiene un rostro que verifica nunca puede declararlo (ClassIdentityVerifier).
+        'face_claim_until' => env('WORKFORCE_LEGACY_FACE_CLAIM_UNTIL'),
         // Autoenrolamiento desde el portal del entrenador. `deny` (defecto):
         // registrar un rostro exige el código de un administrador en el
         // kiosko. `first_only` permitiría el primer registro desde el portal,

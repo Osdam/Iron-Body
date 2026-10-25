@@ -207,6 +207,7 @@ final class AuthorizationMap
 
         // ── Facturación electrónica ─────────────────────────────────────────
         'ElectronicInvoiceController' => 'billing',
+        'ManualInvoiceBundleController' => 'billing',
         'BillingTaxController' => 'billing',
         'BillingQuoteController' => 'billing',
 
@@ -801,6 +802,17 @@ final class AuthorizationMap
      */
     private const CONTROLLER_ENFORCED = [
         'payments.backdate',
+        // Ver CUÁNTAS unidades quedan. No es una ruta aparte: viaja dentro del
+        // mismo catálogo que usa el mostrador para vender, y el mostrador lo
+        // necesita aunque no pueda ver la cifra.
+        'inventory.stock',
+        // Ver el COSTO de compra. Tampoco es una ruta: el costo viaja en la
+        // misma ficha que el precio de venta, en el valor del inventario, en
+        // cada movimiento de existencias y en la utilidad de cafetería. Lo
+        // recorta App\Support\Access\InventoryCosts en la respuesta, campo a
+        // campo, porque negar la ruta entera dejaría sin catálogo a quien solo
+        // no puede ver lo que costó.
+        'inventory.cost',
         'receipts.print_optional',
         'cash.products.view',
         'cash.products.operate',

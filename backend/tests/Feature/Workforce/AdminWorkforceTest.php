@@ -263,19 +263,29 @@ class AdminWorkforceTest extends TestCase
             ->assertStatus(409)->assertJsonPath('code', 'biometric_not_active');
     }
 
-    public function test_autorizar_un_registro_con_plantilla_activa_lo_deja_pendiente_de_renovacion(): void
+    public function test_autorizar_un_registro_con_plantilla_activa_ofrece_renovarla_sin_invalidarla(): void
     {
         $ana = $this->receptionist('1075000001');
         $tablet = $this->tablet();
         $this->enroll($ana, '1075000001', $this->face(1), $tablet)->assertCreated();
 
         $this->postJson("/api/admin/biometrics/identities/{$ana->uuid}/enrollment-code", ['reason' => 'Cambio de aspecto'], $this->adminWithPermissions(['biometrics.manage']))->assertCreated();
-        $this->identify('1075000001', $tablet)->assertJsonPath('employee.biometric.status', 'renewal_pending');
-        // Pendiente de renovación NO verifica: la persona usa su código para renovarla.
-        $this->verifyFace('1075000001', $this->face(1), $tablet)
-            ->assertStatus(409)->assertJsonPath('code', 'biometric_not_enrolled')->assertJsonPath('biometric.status', 'renewal_pending');
-        $this->enroll($ana, '1075000001', $this->face(1), $tablet)->assertCreated();
+        // La tablet ofrece «Registrar mi rostro»…
+        $this->identify('1075000001', $tablet)->assertJsonPath('employee.biometric.status', 'renewal_pending')
+            ->assertJsonPath('employee.biometric.verifiable', true);
+        $this->getJson("/api/admin/biometrics/identities/{$ana->uuid}", $this->adminWithPermissions(['biometrics.view']))
+            ->assertOk()->assertJsonPath('data.status', 'renewal_pending')->assertJsonPath('data.verifiable', true);
+        // …pero la plantilla válida sigue verificando la jornada hasta que la
+        // nueva la sustituya: la renovación no deja a la persona sin rostro.
         $this->verifyFace('1075000001', $this->face(1), $tablet)->assertOk();
+        $this->verifyFace('1075000001', $this->face(2), $tablet)
+            ->assertStatus(422)->assertJsonPath('code', 'face_no_match');
+        $this->enroll($ana, '1075000001', $this->face(3), $tablet)->assertCreated();
+        // Sustituida: verifica la nueva, ya no la anterior.
+        $this->verifyFace('1075000001', $this->face(3), $tablet)->assertOk();
+        $this->verifyFace('1075000001', $this->face(1), $tablet)
+            ->assertStatus(422)->assertJsonPath('code', 'face_no_match');
+        $this->identify('1075000001', $tablet)->assertJsonPath('employee.biometric.status', 'active');
     }
 
     // ── Supervisión de jornadas
@@ -363,6 +373,7 @@ class AdminWorkforceTest extends TestCase
 
     public function test_un_codigo_de_clases_exige_tambien_administrar_entrenadores(): void
     {
+        config(['workforce.classes.fallback_code' => true]);
         // F5: el código de clases abre el portal del entrenador.
         $coach = $this->trainerPerson('1075000010', [TrainerRole::FUNCTIONAL]);
         $uuid = $coach->identity->uuid;

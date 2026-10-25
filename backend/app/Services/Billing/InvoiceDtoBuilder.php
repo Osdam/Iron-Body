@@ -47,6 +47,14 @@ class InvoiceDtoBuilder
      */
     public function forPayment(Payment $payment, array $customer): array
     {
+        $line = $this->paymentLine($payment);
+
+        return $this->assemble($customer, [$line], $line['name']);
+    }
+
+    /** Línea de un pago de plan. La comparten la factura individual y la multiconcepto. */
+    private function paymentLine(Payment $payment): array
+    {
         $plan = $payment->plan_id ? Plan::with('taxRate')->find($payment->plan_id) : null;
         $name = $plan ? 'Membresía '.$plan->name.' - Iron Body' : 'Pago Iron Body';
         $codeReference = $plan ? 'PLAN-'.$plan->id : 'PAGO';
@@ -55,15 +63,13 @@ class InvoiceDtoBuilder
             ? $this->quoteFromPaymentSnapshot($payment)
             : $this->legacyQuoteForPayment($payment, $plan);
 
-        $line = $this->line(
+        return $this->line(
             codeReference: $codeReference,
             name: $name,
             quote: $quote,
             taxCode: $plan?->taxRate?->factus_tribute_id,
             unspsc: $plan?->unspsc_code,
         );
-
-        return $this->assemble($customer, [$line], $name);
     }
 
     /**
@@ -71,6 +77,45 @@ class InvoiceDtoBuilder
      * @return array{snapshot: array<string,mixed>, payload: array<string,mixed>, line_items: array<int,array<string,mixed>>}
      */
     public function forSale(ProductSale $sale, array $customer): array
+    {
+        return $this->assemble($customer, $this->saleLines($sale), 'Venta Iron Body');
+    }
+
+    /**
+     * Factura MULTICONCEPTO: varias operaciones cobradas de un mismo cliente.
+     *
+     * Cada línea se calcula exactamente igual que en su factura individual
+     * (pago → paymentLine, venta → saleLines), así que consolidar no cambia
+     * ningún importe. El piso de entrenamiento personalizado no tiene catálogo:
+     * su importe es lo cobrado y su tratamiento es el del emisor (TaxPolicy).
+     *
+     * @param  list<array{type: string, model: \Illuminate\Database\Eloquent\Model, description?: string}>  $origins
+     * @param  array<string,mixed>  $customer
+     * @param  list<array{payment_method_code: string, amount: string}>  $paymentDetails  Medios reales, ya agrupados.
+     * @return array{snapshot: array<string,mixed>, payload: array<string,mixed>, line_items: array<int,array<string,mixed>>}
+     */
+    public function forBundle(array $origins, array $customer, array $paymentDetails, string $observation): array
+    {
+        $lines = [];
+        foreach ($origins as $origin) {
+            $lines = match ($origin['type']) {
+                'payment' => [...$lines, $this->paymentLine($origin['model'])],
+                'product_sale' => [...$lines, ...$this->saleLines($origin['model'])],
+                'commission_charge' => [...$lines, $this->line(
+                    codeReference: 'PISO-'.$origin['model']->getKey(),
+                    name: (string) $origin['description'],
+                    quote: $this->pricing->quoteLegacyInclusive(Money::fromAmount($origin['model']->amount), null),
+                    taxCode: null,
+                    unspsc: null,
+                )],
+            };
+        }
+
+        return $this->assemble($customer, $lines, $observation, $paymentDetails);
+    }
+
+    /** Líneas de una venta POS. Las comparten la factura individual y la multiconcepto. */
+    private function saleLines(ProductSale $sale): array
     {
         $sale->loadMissing('items.product.taxRate');
         $lines = [];
@@ -91,7 +136,7 @@ class InvoiceDtoBuilder
             );
         }
 
-        return $this->assemble($customer, $lines, 'Venta Iron Body');
+        return $lines;
     }
 
     // ── Origen de los importes ──────────────────────────────────────────────
@@ -271,7 +316,7 @@ class InvoiceDtoBuilder
      * @param  array<int,array<string,mixed>>  $lines
      * @return array{snapshot: array<string,mixed>, payload: array<string,mixed>, line_items: array<int,array<string,mixed>>}
      */
-    private function assemble(array $customer, array $lines, string $observation): array
+    private function assemble(array $customer, array $lines, string $observation, ?array $paymentDetails = null): array
     {
         $d = (array) config('billing.defaults');
 
@@ -326,12 +371,14 @@ class InvoiceDtoBuilder
             'send_email' => $this->shouldSendEmail($customer),
             'observation' => $observation,
             'cash_rounding_amount' => '0.00',
-            'payment_details' => [[
-                'payment_form' => (int) ($d['payment_form'] ?? 1),
-                'payment_method_code' => (string) ($d['payment_method_code'] ?? '10'),
-                // Debe coincidir exactamente con el total del comprobante.
-                'amount' => $total->toDecimalString(),
-            ]],
+            'payment_details' => $paymentDetails !== null
+                ? $this->paymentDetails($paymentDetails, $total, (int) ($d['payment_form'] ?? 1))
+                : [[
+                    'payment_form' => (int) ($d['payment_form'] ?? 1),
+                    'payment_method_code' => (string) ($d['payment_method_code'] ?? '10'),
+                    // Debe coincidir exactamente con el total del comprobante.
+                    'amount' => $total->toDecimalString(),
+                ]],
             'customer' => $this->customer($customer, $d),
             'items' => array_map(static fn ($l) => $l['payload'], $lines),
         ];
@@ -350,6 +397,37 @@ class InvoiceDtoBuilder
         ], $lines);
 
         return ['snapshot' => $snapshot, 'payload' => $payload, 'line_items' => $lineItems];
+    }
+
+    /**
+     * Medios de pago REALES de una factura multiconcepto (contado). La suma
+     * tiene que ser el total del comprobante: si no cuadra, no se construye.
+     *
+     * @param  list<array{payment_method_code: string, amount: string}>  $details
+     * @return list<array<string,mixed>>
+     */
+    private function paymentDetails(array $details, Money $total, int $paymentForm): array
+    {
+        $sum = Money::zero();
+        $out = [];
+        foreach ($details as $detail) {
+            $amount = Money::fromAmount($detail['amount']);
+            $sum = $sum->plus($amount);
+            $out[] = [
+                'payment_form' => $paymentForm,
+                'payment_method_code' => (string) $detail['payment_method_code'],
+                'amount' => $amount->toDecimalString(),
+            ];
+        }
+
+        if ($out === [] || $sum->cents() !== $total->cents()) {
+            throw new \InvalidArgumentException(sprintf(
+                'Los medios de pago suman %s y el comprobante %s. No se construye una factura que no cuadra.',
+                $sum->toDecimalString(), $total->toDecimalString(),
+            ));
+        }
+
+        return $out;
     }
 
     /**

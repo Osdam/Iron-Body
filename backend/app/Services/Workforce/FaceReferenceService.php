@@ -83,7 +83,9 @@ class FaceReferenceService
             return self::STATUS_REVOKED;
         }
         // Sin consentimiento ni autorización (registro anterior al kiosko) o
-        // con un registro nuevo ya autorizado: hay que renovarla.
+        // con un registro nuevo ya autorizado: hay que renovarla. Lo segundo
+        // solo ofrece «Registrar mi rostro» en la tablet: la plantilla válida
+        // sigue verificando hasta que la nueva la sustituya (ver verify()).
         if (! $ref->isValidated()
             || ($ref->identity_id !== null && $this->pendingEnrollmentCode((int) $ref->identity_id))) {
             return self::STATUS_RENEWAL_PENDING;
@@ -95,6 +97,16 @@ class FaceReferenceService
     public function statusForIdentity(Identity $identity): string
     {
         return $this->status($this->referenceForIdentity($identity));
+    }
+
+    /**
+     * ¿Verifica esta plantilla? Con consentimiento y sin revocar. Puede ser
+     * cierto en `renewal_pending` (renovación autorizada): la tablet y el CRM
+     * lo usan para no tratar como inservible un rostro que funciona.
+     */
+    public function verifiable(?TrainerFaceReference $ref): bool
+    {
+        return $ref !== null && $ref->isValidated();
     }
 
     // ── Comparación ─────────────────────────────────────────────────────────
@@ -123,12 +135,14 @@ class FaceReferenceService
 
         $this->assertValidEmbedding($embedding);
 
-        // Solo una plantilla en estado `active` verifica: ni heredada sin
-        // consentimiento, ni con un registro nuevo ya autorizado (la persona
-        // tiene el código para renovarla), ni revocada (contrato §7.3).
-        $status = $this->status($ref);
-        if ($ref === null || $status !== self::STATUS_ACTIVE) {
-            throw WorkforceException::biometricNotEnrolled($status);
+        // Verifica toda plantilla registrada con consentimiento y autorización
+        // que no esté revocada; nunca una heredada sin consentimiento ni una
+        // revocada (contrato §7.3). Un código de enrolamiento vivo NO la
+        // invalida: hasta 2026-10-19 la dejaba sin verificar mientras el código
+        // vivía, y un código emitido por error («para la clase») bloqueaba un
+        // rostro bueno y obligaba a pedir el código de respaldo.
+        if ($ref === null || ! $this->verifiable($ref)) {
+            throw WorkforceException::biometricNotEnrolled($this->status($ref));
         }
 
         // El intento se cuenta ANTES de comparar (incremento atómico): varias

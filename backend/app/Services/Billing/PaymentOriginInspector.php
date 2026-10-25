@@ -3,6 +3,7 @@
 namespace App\Services\Billing;
 
 use App\Models\ElectronicInvoice;
+use App\Models\InvoiceBundle;
 use App\Models\PaymentTransaction;
 
 /**
@@ -71,7 +72,14 @@ class PaymentOriginInspector
      */
     public function inspect(ElectronicInvoice $invoice): array
     {
-        return $this->inspectSource($invoice->source);
+        $source = $invoice->source;
+
+        // Factura multiconcepto: la radiografía conjunta de sus operaciones.
+        if ($source instanceof InvoiceBundle) {
+            return app(ManualInvoiceBundleService::class)->inspectBundle($source);
+        }
+
+        return $this->inspectSource($source);
     }
 
     /**

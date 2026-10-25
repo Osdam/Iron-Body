@@ -9,6 +9,7 @@ use App\Models\Identity;
 use App\Models\Trainer;
 use App\Models\TrainerDeviceSession;
 use App\Models\WorkforceAuthorizationCode;
+use App\Services\Classes\ClassBookingService;
 use Illuminate\Http\Request;
 
 /**
@@ -17,14 +18,18 @@ use Illuminate\Http\Request;
  * Hasta ahora la app mandaba `face_verified: true` y el servidor se lo creía:
  * la app solo comprobaba que la cámara había devuelto una foto. Ahora:
  *
- *  · `embedding` → el rostro se compara aquí contra la plantilla de la persona.
- *  · `fallback_code` → código de respaldo que generó un administrador.
- *  · solo `face_verified: true` (app publicada) → se acepta mientras dure la
- *    transición y queda registrado como `legacy_claim`, distinguible en el CRM.
+ *  · `embedding` → el rostro se compara aquí contra la plantilla de la persona,
+ *    y SOLO desde un equipo autorizado que firma la petición (la tablet): un
+ *    teléfono no puede presentarse como tablet mandando un vector.
+ *  · `fallback_code` → código de respaldo de un administrador. Apagado por
+ *    defecto (`workforce.classes.fallback_code`): una clase se opera con rostro.
+ *  · solo `face_verified: true` (app publicada) → transición, registrado como
+ *    `legacy_claim` (declarado, no verificado). Nunca para quien ya tiene un
+ *    rostro que verifica, y nunca pasado `legacy.face_claim_until`.
  *
  * Dispositivo: si la petición viene firmada se verifica (y un fallo es error).
  * Sin firma, según la política: `monitor` guarda lo que DECLARA la sesión y
- * deja pasar; `enforce` lo rechaza.
+ * deja pasar (solo el rostro declarado, en transición); `enforce` lo rechaza.
  */
 class ClassIdentityVerifier
 {
@@ -50,6 +55,11 @@ class ClassIdentityVerifier
         $identity = $trainer->identity_id ? Identity::find($trainer->identity_id) : null;
 
         if (array_key_exists('embedding', $data) && $data['embedding'] !== null) {
+            if ($device === null) {
+                $this->devices->securityEvent(DeviceSecurityEvent::SIGNATURE_REQUIRED, null, null, $request);
+
+                throw WorkforceException::deviceNotAuthorized();
+            }
             $ref = $this->faces->referenceForTrainer($trainer);
             // Contador de esta vía (exige la sesión del propio entrenador),
             // separado del kiosko y del login público.
@@ -60,6 +70,9 @@ class ClassIdentityVerifier
         }
 
         if (! empty($data['fallback_code'])) {
+            if (! (bool) config('workforce.classes.fallback_code', false)) {
+                throw WorkforceException::classFallbackDisabled();
+            }
             if ($identity === null) {
                 throw WorkforceException::authorizationCodeInvalid();
             }
@@ -68,11 +81,35 @@ class ClassIdentityVerifier
             return ['method' => self::METHOD_ADMIN_CODE, 'face_verified' => false, 'device_id' => $device?->getKey(), 'declared_device' => $declared];
         }
 
-        if (($data['face_verified'] ?? false) === true && (bool) config('workforce.legacy.face_claim', true)) {
+        if (($data['face_verified'] ?? false) === true && $this->legacyClaimAllowed($trainer)) {
             return ['method' => self::METHOD_LEGACY_CLAIM, 'face_verified' => true, 'device_id' => $device?->getKey(), 'declared_device' => $declared];
         }
 
-        throw new WorkforceException('Debes verificar tu rostro para esta operación.', 'face_required', 422);
+        throw new WorkforceException('Las clases se inician y finalizan con tu rostro en la tablet del gimnasio.', 'face_required', 422);
+    }
+
+    /**
+     * El rostro declarado (app publicada, sin comparar nada) solo vale en la
+     * transición: con el interruptor encendido, antes de la fecha límite y
+     * para quien todavía NO tiene un rostro que verifique. Quien ya lo tiene
+     * opera en la tablet: su cédula en un teléfono no basta para fingirlo.
+     */
+    private function legacyClaimAllowed(Trainer $trainer): bool
+    {
+        if (! (bool) config('workforce.legacy.face_claim', true)) {
+            return false;
+        }
+        $until = trim((string) config('workforce.legacy.face_claim_until', ''));
+        if ($until !== '' && $this->today() > $until) {
+            return false;
+        }
+
+        return ! $this->faces->verifiable($this->faces->referenceForTrainer($trainer));
+    }
+
+    private function today(): string
+    {
+        return now()->setTimezone(ClassBookingService::TZ)->toDateString();
     }
 
     /** @return array{0: ?AuthorizedDevice, 1: ?string} */

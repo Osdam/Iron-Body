@@ -47,6 +47,10 @@ class AuthorizationCodePurposeTest extends TestCase
         config([
             'trainer.flags.trainer_auth_enabled' => true,
             'trainer.flags.trainer_classes_enabled' => true,
+            // Estas pruebas fijan la mecánica de los códigos de clase para
+            // cuando el propietario encienda la contingencia; por defecto está
+            // apagada (TrainerClassIdentityTest lo prueba).
+            'workforce.classes.fallback_code' => true,
         ]);
         Carbon::setTestNow(Carbon::parse(self::LUNES.' 08:55', 'America/Bogota')->utc());
         $this->coach = $this->trainerPerson(self::DOC, [TrainerRole::FLOOR, TrainerRole::FUNCTIONAL], 'Entrenador Sintético');
@@ -83,14 +87,15 @@ class AuthorizationCodePurposeTest extends TestCase
             ->assertCreated()->json('code');
     }
 
+    // Desde la tablet autorizada (firmado): el único equipo que opera clases.
     private function start(array $body)
     {
-        return $this->postJson("/api/trainer/classes/{$this->clase->id}/start", ['session_date' => self::LUNES] + $body, $this->bearer());
+        return $this->signed('POST', "/api/trainer/classes/{$this->clase->id}/start", ['session_date' => self::LUNES] + $body, $this->tablet(), $this->bearer());
     }
 
     private function end(array $body)
     {
-        return $this->postJson("/api/trainer/classes/{$this->clase->id}/end", ['session_date' => self::LUNES] + $body, $this->bearer());
+        return $this->signed('POST', "/api/trainer/classes/{$this->clase->id}/end", ['session_date' => self::LUNES] + $body, $this->tablet(), $this->bearer());
     }
 
     /** @return array<string,int> propósito => intentos del código vivo */

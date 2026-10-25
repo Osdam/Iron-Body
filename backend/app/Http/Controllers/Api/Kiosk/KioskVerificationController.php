@@ -52,10 +52,11 @@ class KioskVerificationController extends Controller
         $device = $request->attributes->get('auth_device');
         [$identity, $profile] = $this->person($data['employee_ref'], $device);
 
-        // El interruptor de incidente del login facial de entrenadores apaga
-        // también esta vía (rostro → portal); la jornada no depende de él (I2).
-        if ($data['purpose'] === 'trainer_session' && ! (bool) config('trainer.face.login_enabled', false)) {
-            throw new WorkforceException('El acceso con rostro al portal está desactivado. Entra con tu documento.', 'trainer_face_login_disabled', 403);
+        // Interruptor de incidente de esta vía (rostro → portal), propio desde
+        // 2026-10-20: el del login facial público ya no la apaga. La jornada no
+        // depende de él (I2).
+        if ($data['purpose'] === 'trainer_session' && ! (bool) config('workforce.kiosk.trainer_portal_face', true)) {
+            throw new WorkforceException('El acceso de entrenadores en esta tablet está desactivado por administración. Puedes consultar tus clases en tu teléfono.', 'trainer_face_login_disabled', 403);
         }
 
         $distance = $this->faces->verify(
@@ -80,6 +81,12 @@ class KioskVerificationController extends Controller
         /** @var AuthorizedDevice $device */
         $device = $request->attributes->get('auth_device');
         [$identity, $profile] = $this->person($data['employee_ref'], $device);
+
+        // El portal del entrenador en la tablet existe para operar clases, y
+        // una clase solo se opera con rostro: el código de clases no abre nada.
+        if ($data['purpose'] === 'trainer_session' && ! (bool) config('workforce.classes.fallback_code', false)) {
+            throw WorkforceException::classFallbackDisabled();
+        }
 
         $code = $this->codes->consume(
             $identity,

@@ -114,19 +114,38 @@ class WorkforceException extends RuntimeException
         return new self("Demasiados intentos. Espera {$minutes} minutos o usa un código de administrador.", 'face_attempts_exceeded', 429);
     }
 
+    /**
+     * El mensaje dice lo que pasa de verdad: antes decía «no tiene un rostro
+     * registrado» también con la plantilla en renovación, y eso llevaba a
+     * emitir códigos de enrolamiento para iniciar una clase.
+     */
     public static function biometricNotEnrolled(string $status): self
     {
         return new self(
-            'Esta persona no tiene un rostro registrado. Un administrador debe autorizar el registro.',
+            match ($status) {
+                'renewal_pending' => 'El rostro registrado debe renovarse: regístralo de nuevo en la tablet («Registrar mi rostro») con la autorización de un administrador.',
+                'revoked' => 'El rostro registrado fue revocado. Un administrador debe autorizar un registro nuevo.',
+                default => 'Esta persona no tiene un rostro registrado. Un administrador debe autorizar el registro.',
+            },
             'biometric_not_enrolled',
             409,
-            ['biometric' => ['status' => $status]],
+            ['biometric' => ['status' => $status, 'verifiable' => false]],
         );
     }
 
     public static function notATrainer(): self
     {
         return new self('Esta persona no tiene acceso al portal de entrenadores.', 'not_a_trainer', 403);
+    }
+
+    /** Regla del propietario (2026-10-20): una clase se opera con rostro, no con código. */
+    public static function classFallbackDisabled(): self
+    {
+        return new self(
+            'Las clases se inician y finalizan solo con tu rostro en la tablet del gimnasio. Si no te reconoce, pide a administración que revise tu registro facial.',
+            'class_fallback_disabled',
+            422,
+        );
     }
 
     public static function authorizationCodeInvalid(): self
