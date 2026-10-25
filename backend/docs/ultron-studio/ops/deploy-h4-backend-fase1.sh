@@ -12,7 +12,9 @@ git fetch -q origin
 git merge -q --ff-only origin/main
 HEAD=$(git rev-parse --short HEAD)
 [ "$HEAD" = "$ESPERADO" ] || { echo "HEAD $HEAD no es $ESPERADO"; exit 1; }
-echo "1. código: HEAD=$HEAD modificados=$(git status --porcelain | grep -v '^??' | wc -l | tr -d ' ')"
+MODIFICADOS=$(git status --porcelain | grep -v '^??' | wc -l | tr -d ' ')
+echo "1. código: HEAD=$HEAD modificados=$MODIFICADOS"
+[ "$MODIFICADOS" = "0" ] || { echo "el checkout de producción tiene cambios locales: no se despliega"; exit 1; }
 cd backend
 ENVF=.env
 add_var() { # añade la clave con la sangría de dos espacios del fichero si no existe
@@ -39,7 +41,9 @@ echo "6. configuración efectiva (sin valores sensibles):"
 sudo -u www-data php artisan tinker --execute='echo json_encode(["enabled" => config("ultron_studio.lab.enabled"), "driver" => config("ultron_studio.lab.driver"), "daily_budget" => config("ultron_studio.lab.daily_budget_usd") ?? config("ultron_studio.lab.budget.daily_usd"), "key_present" => (bool) (config("ultron_studio.lab.openai.api_key") ?? config("ultron_studio.lab.openai_api_key")), "queue" => config("queue.lanes.lab.queue")]), PHP_EOL;' 2>&1 | tail -1 | sed 's/^/   /'
 echo "7. worker ironbody-lab:"
 UP_BEFORE=$(supervisorctl status | grep -v ironbody-lab | awk '{print $NF}' | sort | head -1)
-cp docs/ops/supervisor/ironbody-lab.conf /etc/supervisor/conf.d/ironbody-lab.conf
+git show "HEAD:backend/docs/ops/supervisor/ironbody-lab.conf" > /tmp/ironbody-lab.conf   # desde git, no del árbol de trabajo
+grep -q '^user=www-data' /tmp/ironbody-lab.conf && ! grep -q '^user=root' /tmp/ironbody-lab.conf || { echo "la configuración del worker no corre como www-data"; exit 1; }
+install -o root -g root -m 644 /tmp/ironbody-lab.conf /etc/supervisor/conf.d/ironbody-lab.conf && rm /tmp/ironbody-lab.conf
 supervisorctl reread | sed 's/^/   /'; supervisorctl update | sed 's/^/   /'
 sleep 6
 echo "   RUNNING: $(supervisorctl status | grep -c RUNNING) · BACKOFF/FATAL: $(supervisorctl status | grep -c 'BACKOFF\|FATAL') · lab: $(supervisorctl status | grep ironbody-lab | awk '{print $2}' | tr '\n' ' ')"
