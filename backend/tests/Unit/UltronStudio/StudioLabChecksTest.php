@@ -7,6 +7,7 @@ use App\Services\UltronStudio\StudioCatalog;
 use App\Services\UltronStudio\StudioLabChecks as K;
 use App\Services\UltronStudio\StudioLabEngineChecks;
 use App\Services\UltronStudio\StudioLabOutcome;
+use App\Services\UltronStudio\StudioLabPersonalData;
 use App\Services\UltronStudio\StudioRuleCoherence;
 use PHPUnit\Framework\TestCase;
 use ReflectionClassConstant;
@@ -20,10 +21,10 @@ use ReflectionClassConstant;
  * cuenten con los MISMOS rangos que la guardia de estilo del motor y la
  * respuesta se canonicalice como las frases de G (comparados por
  * reflexión: si uno cambia, esto falla); que solo cuenten las afirmaciones
- * `forbid text contains` de las S-NNN cuyo «si» se da; que un invisible de la
- * lista de la Enmienda 4.2 (más LRM/RLM) bloquee aunque las guardas del motor
- * no vean nada, y que el ZWJ de los emojis compuestos no; y la forma de cada
- * hallazgo.
+ * `forbid text contains` de las S-NNN cuyo «si» se da; que un invisible (la
+ * clase del filtro de entrada menos el ZWJ: Enmienda 6.2) bloquee aunque las
+ * guardas del motor no vean nada, y que el ZWJ de los emojis compuestos no; y
+ * la forma de cada hallazgo.
  */
 class StudioLabChecksTest extends TestCase
 {
@@ -58,6 +59,10 @@ class StudioLabChecksTest extends TestCase
             0x00AD, 0x180E,                                                                 // guion suave, separador mongol
             0xE0000, 0xE0001, 0xE0020, 0xE0041, 0xE007F,                                    // etiquetas (bordes y dentro)
             0x2028, 0x2029,                                                                 // separadores de línea y párrafo
+            // Enmienda 6.2 (I-2 del reviewer): la clase del filtro de entrada.
+            0x2061, 0x2062, 0x2063, 0x2064,                                                 // operadores invisibles
+            0x206A, 0x206F, 0xFFF9, 0xFFFB, 0x0600, 0x06DD, 0x070F, 0x110BD, 0x1D173,      // otros de formato (Cf)
+            0x0000, 0x0008, 0x000B, 0x000C, 0x000E, 0x001F, 0x007F, 0x0085, 0x009F,        // controles C0/C1 salvo \t \n \r
         ];
         foreach ($lista as $cp) {
             $h = K::check('Hola, '.mb_chr($cp, 'UTF-8').'te ayudo con gusto', self::target());
@@ -108,9 +113,38 @@ class StudioLabChecksTest extends TestCase
         foreach ([
             "Te doy un des\u{200B}cuento del 20%", "Listo, tu pago ya lle\u{200B}gó y quedó con\u{200B}firmado",
             "Te doy un des\u{200E}cuento del 20%", "Te doy un des\u{200F}cuento del 20%", "Listo, tu pago ya lle\u{200E}gó y quedó con\u{200F}firmado",
+            // I-2 del reviewer (Enmienda 6.2): un separador invisible y un control C0, que la lista de la 4.2 dejaba pasar.
+            "Te hago un des\u{2063}cuento del 20%", "Te hago un des\u{0008}cuento del 20%",
         ] as $reply) {
             $this->assertSame([], (new StudioLabEngineChecks)->check($reply, $hechos), json_encode($reply));
             $this->assertSame(['lab-invisibles'], self::ids(K::check($reply, self::target())), json_encode($reply));
+        }
+        $this->assertContains('motor-machine_reply_invented_discount', self::ids((new StudioLabEngineChecks)->check('Te hago un descuento del 20%', $hechos)), 'sin el truco, el motor sí ve el descuento');
+    }
+
+    public function test_la_clase_es_la_del_filtro_de_entrada_menos_el_zwj(): void
+    {
+        // Enmienda 6.2: punto de código a punto de código (sin las suplentes),
+        // `lab-invisibles` dispara exactamente donde el filtro de entrada
+        // rechaza, salvo en el ZWJ. Si uno de los dos cambia, esto falla.
+        $distintos = [];
+        $marcados = 0;
+        for ($cp = 0; $cp <= 0x10FFFF; $cp++) {
+            if ($cp >= 0xD800 && $cp <= 0xDFFF) {
+                continue;
+            }
+            $c = mb_chr($cp, 'UTF-8');
+            $esperado = $cp !== 0x200D && preg_match(StudioLabPersonalData::INVISIBLE_PATTERN, $c) === 1;
+            $real = preg_match(K::INVISIBLE_PATTERN, $c) === 1;
+            if ($esperado !== $real) {
+                $distintos[] = sprintf('U+%04X', $cp);
+            }
+            $marcados += $real ? 1 : 0;
+        }
+        $this->assertSame([], $distintos);
+        $this->assertGreaterThan(200, $marcados, 'la clase no puede quedar vacía');
+        foreach (["\t", "\n", "\r", "\u{200D}", "\u{FE0F}", ' ', "\u{00A0}"] as $no) {
+            $this->assertSame(0, preg_match(K::INVISIBLE_PATTERN, $no), json_encode($no));
         }
     }
 

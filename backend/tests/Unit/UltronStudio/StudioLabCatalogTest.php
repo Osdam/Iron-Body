@@ -11,8 +11,8 @@ use PHPUnit\Framework\TestCase;
 /**
  * El catálogo de escenarios del laboratorio (contrato H4 §A2).
  *
- * LO QUE SE PROTEGE. Los doce escenarios de la tabla del contrato, en su
- * orden y con sus hechos; que cumplan los límites que se le exigen al
+ * LO QUE SE PROTEGE. Los once escenarios de la tabla del contrato (C-11 se
+ * retiró en 2026-10-20.1: Enmienda 6.1), en su orden y con sus hechos; que cumplan los límites que se le exigen al
  * personal; que no lleven datos personales (ni nombres, ni teléfonos, ni
  * cifras de 7 dígitos, ni correos, ni invisibles); que solo citen reglas que
  * existen; y que nadie cambie un texto sin subir la versión.
@@ -26,6 +26,7 @@ class StudioLabCatalogTest extends TestCase
      */
     private const HUELLAS = [
         '2026-10-19.1' => 'b1ba17529c01c55713ba9e2d62f40d81fc8a07b8b4cf4ce677f8fc30afb79916',
+        '2026-10-20.1' => '9dfdd4f741f1d22ca06baba739d897f78315c81a996371e01e70134a0dc44cbc',
     ];
 
     /** La tabla del contrato: código → categoría y hechos. */
@@ -40,14 +41,13 @@ class StudioLabCatalogTest extends TestCase
         'C-08' => ['cortesia', 'none', false],
         'C-09' => ['hechos', 'none', false],
         'C-10' => ['estilo', 'none', false],
-        'C-11' => ['consentimiento', 'none', false],
         'C-12' => ['membresia', 'none', false],
     ];
 
     /** Las reglas que cita cada escenario en sus criterios `must`/`must_not` (la columna «Criterios principales»). */
     private const REGLAS_PRINCIPALES = [
         'C-01' => ['R-08'], 'C-02' => ['R-01'], 'C-03' => ['R-02'], 'C-04' => ['R-04'], 'C-05' => ['R-03'], 'C-06' => ['R-07'],
-        'C-07' => ['R-07'], 'C-08' => ['R-06'], 'C-09' => ['R-06'], 'C-10' => ['R-10'], 'C-11' => ['R-11'], 'C-12' => ['R-05'],
+        'C-07' => ['R-07'], 'C-08' => ['R-06'], 'C-09' => ['R-06'], 'C-10' => ['R-10'], 'C-12' => ['R-05'],
     ];
 
     /** Nombres de pila frecuentes, por si alguno se colara en un guion. */
@@ -55,15 +55,18 @@ class StudioLabCatalogTest extends TestCase
 
     public function test_la_version_y_su_huella_estan_fijadas(): void
     {
-        $this->assertSame('2026-10-19.1', L::VERSION);
+        $this->assertSame('2026-10-20.1', L::VERSION);
         $this->assertArrayHasKey(L::VERSION, self::HUELLAS, 'Versión nueva del catálogo de escenarios: añade su huella.');
         $this->assertSame(self::HUELLAS[L::VERSION], L::hash(), 'Cambió un escenario sin subir StudioLabCatalog::VERSION.');
         $this->assertSame(StudioContentHasher::hash(['version' => L::VERSION, 'scenarios' => L::scenarios()]), L::hash());
     }
 
-    public function test_son_los_doce_escenarios_de_la_tabla_del_contrato(): void
+    public function test_son_los_once_escenarios_de_la_tabla_del_contrato(): void
     {
         $this->assertSame(array_keys(self::TABLA), L::codes());
+        // C-11 («no me escriban más») no vuelve: el motor no contesta a un
+        // opt-out (R-11) y el laboratorio no puede simular un silencio.
+        $this->assertNull(L::byCode('C-11'), 'C-11 se retiró del catálogo (Enmienda 6.1)');
         foreach (L::scenarios() as $s) {
             [$categoria, $pago, $traspaso] = self::TABLA[$s['code']];
             $this->assertSame($categoria, $s['category'], $s['code']);
@@ -168,7 +171,7 @@ class StudioLabCatalogTest extends TestCase
         $this->assertNotSame(L::scenarioHash($s), L::scenarioHash($otro));
 
         $todas = array_map(L::scenarioHash(...), L::scenarios());
-        $this->assertCount(12, array_unique($todas), 'dos escenarios del catálogo comparten huella');
+        $this->assertCount(11, array_unique($todas), 'dos escenarios del catálogo comparten huella');
     }
 
     public function test_lo_que_se_exporta_lleva_la_huella_de_cada_escenario(): void

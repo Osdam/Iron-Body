@@ -517,12 +517,12 @@ class UltronStudioLabRunsTest extends TestCase
 
         $resumen = $this->lab('GET', 'runs', $this->ana)->json('data.data.0');
         $this->assertSame([
-            'uuid', 'status', 'statusLabel', 'stopReason', 'expired', 'cancelRequested', 'target', 'mode', 'model', 'promptVersion',
+            'uuid', 'status', 'statusLabel', 'stopReason', 'budgetCap', 'expired', 'cancelRequested', 'target', 'mode', 'model', 'promptVersion',
             'caseCount', 'progress', 'outcomes', 'aiRecommendation', 'cost', 'createdBy', 'mine', 'createdAt', 'startedAt', 'finishedAt', 'verdict',
         ], array_keys($resumen));
         $this->assertSame(['done' => 0, 'error' => 0, 'skipped' => 0, 'pending' => 1], $resumen['progress']);
         $this->assertSame(['pass' => 0, 'review' => 0, 'fail' => 0], $resumen['outcomes']);
-        $this->assertSame(['queued', 'En cola', null, 'fake'], [$resumen['status'], $resumen['statusLabel'], $resumen['model'], $resumen['mode']]);
+        $this->assertSame(['queued', 'En cola', null, 'fake', null], [$resumen['status'], $resumen['statusLabel'], $resumen['model'], $resumen['mode'], $resumen['budgetCap']]);
     }
 
     /**

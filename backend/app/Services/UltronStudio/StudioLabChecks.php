@@ -10,7 +10,7 @@ namespace App\Services\UltronStudio;
  *
  * | id                  | nivel    | cuándo                                                          |
  * |---------------------|----------|-----------------------------------------------------------------|
- * | `lab-invisibles`    | blocking | lleva caracteres de control o invisibles (Enmienda 4.2)         |
+ * | `lab-invisibles`    | blocking | lleva caracteres de control o invisibles (Enmiendas 4.2 y 6.2)  |
  * | `lab-vacia`         | blocking | la respuesta queda vacía tras recortarla                        |
  * | `lab-longitud`      | warning  | tiene más caracteres que `persona.maxChars` del objetivo        |
  * | `lab-emojis`        | warning  | lleva algún emoji y `persona.emojis` es `false`                 |
@@ -33,8 +33,9 @@ namespace App\Services\UltronStudio;
  * («des\u{200B}cuento» no es «descuento»), y quien emite el veredicto lo
  * vería distinto de lo evaluado (`\u{202E}000.08$\u{202C}` se pinta
  * «$80.000»). La respuesta se guarda tal cual y el CRM la interpola: el
- * hallazgo bloqueante es lo que impide que pase por limpia. También con
- * rangos explícitos. Este fichero no lleva ningún invisible literal.
+ * hallazgo bloqueante es lo que impide que pase por limpia. La clase es la
+ * del filtro de entrada, menos el ZWJ (Enmienda 6.2). Este fichero no lleva
+ * ningún invisible literal.
  *
  * Cada hallazgo: `{id, source: studio, level, title, detail, quote?}`, con
  * `quote` de 120 caracteres como mucho, sacado del texto del actor.
@@ -78,15 +79,17 @@ final class StudioLabChecks
     public const EMOJI_PATTERN = '/(?:[\x{1F1E6}-\x{1F1FF}]{2}|'.self::PICTO.'\x{FE0F}?(?:[\x{1F3FB}-\x{1F3FF}])?(?:\x{200D}'.self::PICTO.'\x{FE0F}?(?:[\x{1F3FB}-\x{1F3FF}])?)*)/u';
 
     /**
-     * Lo que dispara `lab-invisibles`: la lista de la Enmienda 4.2 más las
-     * marcas LRM/RLM (decisión del lead tras la revisión: son invisibles y
-     * parten una palabra o una cifra igual que un ZWSP). Controles bidi
-     * (U+202A–U+202E, U+2066–U+2069, U+061C, U+200E, U+200F), espacios de
-     * anchura cero (U+200B, U+200C, U+2060, U+FEFF), el guion suave U+00AD,
-     * U+180E, las etiquetas U+E0000–U+E007F y los separadores U+2028/U+2029.
-     * El ZWJ U+200D NO está: lo usan los emojis compuestos (U+1F3CB U+FE0F U+200D U+2640).
+     * Lo que dispara `lab-invisibles` (Enmienda 6.2, I-2 del reviewer): la
+     * MISMA clase que el filtro de entrada
+     * ({@see StudioLabPersonalData::INVISIBLE_CLASS}: `\p{Cf}` —bidi, LRM/RLM,
+     * anchura cero, guion suave, separadores invisibles como U+2063…—, las
+     * etiquetas U+E0000–U+E007F, U+2028/U+2029 y los controles C0/C1 salvo
+     * \t \n \r) MENOS el ZWJ U+200D, que usan los emojis compuestos (U+1F3CB
+     * U+FE0F U+200D U+2640). La lista explícita de la Enmienda 4.2 dejaba
+     * pasar, p. ej., U+2063 o U+0008 en medio de «descuento». `\p{Cf}` compila
+     * en el PCRE 10.39 de producción (sonda de la Enmienda 3.5).
      */
-    public const INVISIBLE_PATTERN = '/[\x{202A}-\x{202E}\x{2066}-\x{2069}\x{061C}\x{200E}\x{200F}\x{200B}\x{200C}\x{2060}\x{FEFF}\x{00AD}\x{180E}\x{E0000}-\x{E007F}\x{2028}\x{2029}]/u';
+    public const INVISIBLE_PATTERN = '/(?!\x{200D})'.StudioLabPersonalData::INVISIBLE_CLASS.'/u';
 
     /**
      * Los espacios de `String.prototype.trim()`, como `StudioRuleCoherence`

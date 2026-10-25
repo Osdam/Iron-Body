@@ -47,8 +47,16 @@ final class StudioLabPersonalData
 
     public const REASON_DIGITS = 'digits';
 
-    /** Formato (bidi, anchura cero, guion blando…), el bloque de etiquetas entero, separadores de línea y párrafo, y controles salvo \t \n \r. */
-    public const INVISIBLE_PATTERN = '/[\p{Cf}\x{E0000}-\x{E007F}\x{2028}\x{2029}\x{0000}-\x{0008}\x{000B}\x{000C}\x{000E}-\x{001F}\x{007F}-\x{009F}]/u';
+    /**
+     * Formato (bidi, anchura cero, guion blando…), el bloque de etiquetas
+     * entero, separadores de línea y párrafo, y controles salvo \t \n \r. La
+     * clase sola: `lab-invisibles` ({@see StudioLabChecks::INVISIBLE_PATTERN})
+     * usa la misma, menos el ZWJ (Enmienda 6.2).
+     */
+    public const INVISIBLE_CLASS = '[\p{Cf}\x{E0000}-\x{E007F}\x{2028}\x{2029}\x{0000}-\x{0008}\x{000B}\x{000C}\x{000E}-\x{001F}\x{007F}-\x{009F}]';
+
+    /** Un carácter de {@see INVISIBLE_CLASS}. */
+    public const INVISIBLE_PATTERN = '/'.self::INVISIBLE_CLASS.'/u';
 
     /** Una dirección de correo (`algo@dominio.algo`), con la arroba normal o la de anchura completa. */
     public const EMAIL_PATTERN = '/[\p{L}\p{N}._%+\-]+[@\x{FF20}\x{FE6B}][\p{L}\p{N}\-]+(?:\.[\p{L}\p{N}\-]+)+/u';

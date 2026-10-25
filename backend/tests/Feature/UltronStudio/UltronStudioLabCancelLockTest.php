@@ -53,8 +53,18 @@ class UltronStudioLabCancelLockTest extends TestCase
     use RefreshDatabase;
     use StudioFixtures;
 
-    /** @var list<string> sin transacción envolvente: la otra sesión ve lo confirmado */
-    protected array $connectionsToTransact = [];
+    /**
+     * Sin transacción envolvente en PostgreSQL: la otra sesión tiene que ver
+     * lo confirmado. Fuera de PG (donde la clase se omite), la de siempre:
+     * vaciarla dejaba la base en memoria de SQLite sin guardar y la clase
+     * siguiente, sin esquema (m-2 del reviewer).
+     *
+     * @return list<string|null>
+     */
+    protected function connectionsToTransact(): array
+    {
+        return $this->isPostgres() ? [] : [config('database.default')];
+    }
 
     private const ACTOR_OK = ['reply' => 'Hola, ¿en qué te puedo ayudar hoy?', 'usage' => [900, 40]];
 

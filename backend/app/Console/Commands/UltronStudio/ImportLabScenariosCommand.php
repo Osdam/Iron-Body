@@ -9,11 +9,11 @@ use Illuminate\Console\Command;
 use Illuminate\Database\UniqueConstraintViolationException;
 
 /**
- * Copia el catálogo de escenarios del laboratorio (C-01…C-12, contrato H4
- * §A2) a la tabla `ultron_studio_lab_scenarios`, como escenarios del catálogo
- * de solo lectura.
+ * Copia el catálogo de escenarios del laboratorio (C-01…C-10 y C-12; C-11 se
+ * retiró en `2026-10-20.1`, contrato H4 §A2 y Enmienda 6.1) a la tabla
+ * `ultron_studio_lab_scenarios`, como escenarios del catálogo de solo lectura.
  *
- * IDEMPOTENTE. La primera vez crea los doce; las siguientes no cambian nada,
+ * IDEMPOTENTE. La primera vez crea los once; las siguientes no cambian nada,
  * salvo que el código haya cambiado un escenario (o alguien lo alterase a
  * mano): entonces lo SINCRONIZA con la revisión +1, y ARCHIVA los que el código
  * retiró. Lo deja todo en el libro del laboratorio, con su antes y su después.

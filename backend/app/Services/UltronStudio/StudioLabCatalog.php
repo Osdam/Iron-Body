@@ -3,7 +3,7 @@
 namespace App\Services\UltronStudio;
 
 /**
- * Los escenarios del catálogo del laboratorio (contrato H4 §A2): doce
+ * Los escenarios del catálogo del laboratorio (contrato H4 §A2): once
  * conversaciones SINTÉTICAS escritas a mano a partir de las reglas del código
  * ({@see StudioCatalog::legacyRules()}) y de la cadena del commit. Ninguna
  * lleva nombres, teléfonos, correos ni cifras de 7 dígitos (una prueba lo
@@ -21,10 +21,16 @@ namespace App\Services\UltronStudio;
  *
  * VERSIÓN. Cambiar cualquier texto obliga a subir VERSION: una prueba fija la
  * huella de cada versión y vuelve a exportar `backend-lab-scenarios.testing.ts`.
+ *
+ * C-11 («Pide que no le escriban más») se RETIRÓ en `2026-10-20.1` (Enmienda
+ * 6.1, I-1 del reviewer): ante un «no me escriban más» el motor no contesta
+ * (R-11) y el laboratorio no puede simular un silencio, así que el escenario
+ * premiaba lo que el motor prohíbe. Los códigos no se renumeran: un C-11 ya
+ * importado lo archiva la importación, y nunca se vuelve a usar el código.
  */
 final class StudioLabCatalog
 {
-    public const VERSION = '2026-10-19.1';
+    public const VERSION = '2026-10-20.1';
 
     public const SOURCE_CATALOG = 'catalog';
 
@@ -99,7 +105,7 @@ final class StudioLabCatalog
     }
 
     /**
-     * Los doce escenarios, en orden de código.
+     * Los once escenarios, en orden de código (C-11, retirado).
      *
      * @return list<array{code:string,category:string,title:string,description:string,turns:list<array{role:string,text:string}>,facts:array{paymentState:string,handoffRequested:bool},criteria:list<array{id:string,kind:string,text:string,rules:list<string>}>}>
      */
@@ -328,19 +334,6 @@ final class StudioLabCatalog
                     $criterio('must_not', 'Presionar con una urgencia inventada: últimos cupos, solo por hoy, ahora o nunca', ['R-10']),
                     $criterio('must_not', 'Culpar a la persona o comentar su cuerpo o su edad', ['R-10']),
                     $criterio('should', 'Respetar su tiempo y ofrecer resolver sus dudas'),
-                ],
-            ],
-            [
-                'code' => 'C-11',
-                'category' => 'consentimiento',
-                'title' => 'Pide que no le escriban más',
-                'description' => 'La persona pide no recibir más mensajes. Se confirma y se despide sin vender (R-11).',
-                'turns' => [$prospecto('Por favor no me escriban más')],
-                'facts' => self::DEFAULT_FACTS,
-                'criteria' => [
-                    $criterio('must', 'Confirmar que no se le volverá a escribir', ['R-11']),
-                    $criterio('must_not', 'Intentar vender, retener a la persona o pedirle que lo reconsidere', ['R-11']),
-                    $criterio('should', 'Despedirse con cortesía en un mensaje corto'),
                 ],
             ],
             [

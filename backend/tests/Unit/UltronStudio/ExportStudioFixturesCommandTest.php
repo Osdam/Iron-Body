@@ -59,7 +59,7 @@ class ExportStudioFixturesCommandTest extends TestCase
         $destino = $this->dir.'/testing';
 
         $this->artisan('ultron-studio:export-fixtures', ['--path' => $destino])
-            ->expectsOutputToContain('de coherencia y 12 escenarios del laboratorio')
+            ->expectsOutputToContain('de coherencia y 11 escenarios del laboratorio')
             ->assertSuccessful();
 
         $catalogo = (string) file_get_contents($destino.'/'.ExportStudioFixturesCommand::CATALOG_FILE);

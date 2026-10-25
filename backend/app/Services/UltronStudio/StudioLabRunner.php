@@ -97,11 +97,15 @@ final class StudioLabRunner
     ];
 
     /**
-     * La marca de un paso de rescate en el `summary` de una ejecución viva
-     * (H-P2-1 del tester, Enmienda 5; {@see recoverStep()}): `{at, class,
-     * startedCases}`. El cierre la sustituye por el resumen.
+     * El intento de rescate en el `summary` de una ejecución viva (Enmienda
+     * 5.1(c); {@see recoverStep()}): `{attempts, at, class}`. Si la ejecución
+     * para por un segundo fallo, el cierre lo conserva con `reason` y
+     * `lastClass`; cualquier otro cierre lo sustituye por el resumen.
      */
     public const RECOVERY_KEY = 'recovery';
+
+    /** Por qué paró una ejecución cuyo paso falló dos veces sin reclamar (`summary.recovery.reason`). */
+    public const RECOVERY_REASON = 'step_failed_before_claim';
 
     /** Lo que dice `run.finished` cuando para un paso que falló dos veces antes de reclamar. */
     public const STEP_FAILURE_SUMMARY = 'el paso falló dos veces sin llegar a reclamar un caso';
@@ -272,16 +276,16 @@ final class StudioLabRunner
      * @param  list<string>  $from
      * @param  array<string, mixed>  $extra  columnas mutables que van en el mismo UPDATE (la petición de cancelar)
      * @param  array{kind:string,capMicros:int}|null  $budgetCap  qué tope paró la ejecución (solo `budget_exhausted`)
-     * @param  array<string, mixed>|null  $stepFailure  por qué para un paso que falló dos veces antes de reclamar ({@see recoverStep()})
+     * @param  array<string, mixed>|null  $recovery  el rescate que no bastó: un paso que falló dos veces antes de reclamar ({@see recoverStep()})
      */
-    public function close(StudioLabRun $run, string $status, ?string $stopReason, ?Admin $actor = null, array $from = StudioLabRun::LIVE_STATUSES, array $extra = [], ?array $budgetCap = null, ?array $stepFailure = null): bool
+    public function close(StudioLabRun $run, string $status, ?string $stopReason, ?Admin $actor = null, array $from = StudioLabRun::LIVE_STATUSES, array $extra = [], ?array $budgetCap = null, ?array $recovery = null): bool
     {
         if (! in_array($status, StudioLabRun::TERMINAL_STATUSES, true)) {
             throw new LogicException('ultron_studio_lab: solo se cierra en un estado terminal.');
         }
-        $explica = ($budgetCap !== null ? ['budgetCap' => $budgetCap] : []) + ($stepFailure !== null ? ['stepFailure' => $stepFailure] : []);
+        $explica = ($budgetCap !== null ? ['budgetCap' => $budgetCap] : []) + ($recovery !== null ? [self::RECOVERY_KEY => $recovery] : []);
 
-        return DB::transaction(function () use ($run, $status, $stopReason, $actor, $from, $extra, $budgetCap, $stepFailure, $explica): bool {
+        return DB::transaction(function () use ($run, $status, $stopReason, $actor, $from, $extra, $budgetCap, $recovery, $explica): bool {
             $this->serializeClaims();
             $desde = StudioLabRun::query()->whereKey($run->id)->value('status');
             if (! in_array($desde, $from, true)
@@ -305,7 +309,7 @@ final class StudioLabRunner
             if (! StudioLabRun::advance($run->id, $from, $extra + [
                 'status' => $status,
                 'stop_reason' => $stopReason,
-                // Sustituye también la marca de un rescate ({@see recoverStep()}).
+                // Sustituye también la marca de un rescate, salvo que pare por él ({@see recoverStep()}).
                 'summary' => $resumen + $explica,
                 'ai_recommendation' => $propuesta,
                 'results_hash' => StudioLabRuns::resultsHash($run, $casos),
@@ -326,7 +330,7 @@ final class StudioLabRunner
             }
 
             $this->events->record($actor, 'run.finished', StudioLabEvent::SUBJECT_RUN, $run->uuid,
-                self::finishedSummary($status, $stopReason, $budgetCap, $stepFailure), [
+                self::finishedSummary($status, $stopReason, $budgetCap, $recovery), [
                     'fromStatus' => $desde,
                     'toStatus' => $status,
                     'diff' => [
@@ -572,22 +576,20 @@ final class StudioLabRunner
     }
 
     /**
-     * Un paso que falló SIN caso en curso (H-P2-1 del tester, Enmienda 5):
-     * antes de reclamar (p. ej. la conexión con la base se cortó mientras
-     * esperaba el cerrojo) o entre liquidar un caso y encolar el siguiente. La
-     * ejecución sigue viva y ya no queda ningún paso que la mueva. Se hace lo
-     * que haría el siguiente paso, sin esperarlo:
-     *  - con la cancelación pedida, `cancelled`;
-     *  - pasado su tiempo (en cola, la caducidad: `expired`; en curso, el
-     *    plazo: `deadline`, el mismo motivo con el que la presenta la lectura),
-     *    `stopped` con ese motivo;
-     *  - si no, UN paso de rescate a los 30 s. La marca va en el `summary` de
-     *    la ejecución (mutable y vacío mientras vive; el cierre lo sustituye),
-     *    con cuántos casos habían empezado. Si otro paso vuelve a fallar sin
-     *    que se haya reclamado ningún caso desde la marca, la ejecución para
-     *    con `provider_errors` y el resumen lo explica (`stepFailure`). Si el
-     *    rescate llegó a reclamar, un fallo posterior tiene su propio rescate.
-     *    Un fallo que se repite no gira en bucle.
+     * Un paso que falló SIN caso en curso (H-P2-1 del tester; Enmienda
+     * 5.1(c)): antes de reclamar (p. ej. la conexión con la base se cortó
+     * mientras esperaba el cerrojo) o entre liquidar un caso y encolar el
+     * siguiente. La ejecución sigue viva y ya no queda ningún paso que la mueva.
+     *  - Con el plazo vencido (`started_at` + 30 min): `stopped` con
+     *    `deadline`, el mismo motivo con el que ya la presenta la lectura.
+     *  - Si no, UN paso de rescate a los 30 s, y el intento queda en el
+     *    `summary` de la ejecución (columna mutable, vacía mientras vive):
+     *    `recovery = {attempts: 1, at, class}`. El rescate es un paso normal:
+     *    la cancelación pedida, la caducidad en cola o el plazo los aplica él.
+     *  - Si `failed()` vuelve a llegar sin caso reclamado con ese intento ya
+     *    anotado: `stopped` con `provider_errors`, y el `summary` lo conserva
+     *    con `reason: step_failed_before_claim`. Una vez por ejecución: un
+     *    fallo que se repite no gira en bucle.
      *
      * Sin lectura previa bajo el cerrojo a propósito: dos `failed()` a la vez
      * dejan, como mucho, dos pasos de rescate, y dos pasos duplicados nunca
@@ -598,17 +600,6 @@ final class StudioLabRunner
     private function recoverStep(StudioLabRun $run, string $clase): void
     {
         $ahora = now();
-        if ($run->cancel_requested_at !== null) {
-            $this->closeOrRetry($run, StudioLabRun::STATUS_CANCELLED, null);
-
-            return;
-        }
-        if ($run->status === StudioLabRun::STATUS_QUEUED && $run->created_at !== null
-            && $run->created_at->lt($ahora->copy()->subMinutes(StudioLabConfig::QUEUED_EXPIRY_MINUTES))) {
-            $this->closeOrRetry($run, StudioLabRun::STATUS_STOPPED, StudioLabRun::STOP_EXPIRED);
-
-            return;
-        }
         if ($run->status === StudioLabRun::STATUS_RUNNING && $run->started_at !== null
             && $run->started_at->lt($ahora->copy()->subMinutes(StudioLabConfig::RUN_DEADLINE_MINUTES))) {
             $this->closeOrRetry($run, StudioLabRun::STATUS_STOPPED, StudioLabRun::STOP_DEADLINE);
@@ -616,26 +607,21 @@ final class StudioLabRunner
             return;
         }
 
-        $empezados = StudioLabRunCase::query()->where('run_id', $run->id)->where('status', '<>', StudioLabRunCase::STATUS_PENDING)->count();
-        $marca = is_array($run->summary) && is_array($run->summary[self::RECOVERY_KEY] ?? null) ? $run->summary[self::RECOVERY_KEY] : null;
-        if ($marca !== null && (int) ($marca['startedCases'] ?? -1) === $empezados) {
+        $intento = is_array($run->summary) && is_array($run->summary[self::RECOVERY_KEY] ?? null) ? $run->summary[self::RECOVERY_KEY] : null;
+        if ($intento !== null && (int) ($intento['attempts'] ?? 0) >= 1) {
             Log::warning('ultron_studio.lab.step_recovery_failed', ['run' => $run->uuid, 'class' => $clase]);
-            $this->closeOrRetry($run, StudioLabRun::STATUS_STOPPED, StudioLabOutcome::STOP_PROVIDER_ERRORS, stepFailure: [
-                'failures' => 2,
-                'class' => $clase,
-                'firstClass' => is_string($marca['class'] ?? null) ? $marca['class'] : null,
-                'firstAt' => is_string($marca['at'] ?? null) ? $marca['at'] : null,
-            ]);
+            $this->closeOrRetry($run, StudioLabRun::STATUS_STOPPED, StudioLabOutcome::STOP_PROVIDER_ERRORS,
+                recovery: $intento + ['reason' => self::RECOVERY_REASON, 'lastClass' => $clase]);
 
             return;
         }
 
-        $marcada = StudioLabRun::advance((int) $run->id, StudioLabRun::LIVE_STATUSES, ['summary' => [self::RECOVERY_KEY => [
+        $anotado = StudioLabRun::advance((int) $run->id, StudioLabRun::LIVE_STATUSES, ['summary' => [self::RECOVERY_KEY => [
+            'attempts' => 1,
             'at' => $ahora->toIso8601String(),
             'class' => $clase,
-            'startedCases' => $empezados,
         ]]]);
-        if ($marcada) {
+        if ($anotado) {
             Log::warning('ultron_studio.lab.step_recovery', ['run' => $run->uuid, 'class' => $clase]);
             $this->requeue((int) $run->id, self::REQUEUE_DELAY_SECONDS);
         }
@@ -758,11 +744,11 @@ final class StudioLabRunner
      * Cierra o, si no se puede ahora (un caso en curso), vuelve a intentarlo en 30 s.
      *
      * @param  array{kind:string,capMicros:int}|null  $budgetCap
-     * @param  array<string, mixed>|null  $stepFailure
+     * @param  array<string, mixed>|null  $recovery
      */
-    private function closeOrRetry(StudioLabRun $run, string $status, ?string $stopReason, ?array $budgetCap = null, ?array $stepFailure = null): string
+    private function closeOrRetry(StudioLabRun $run, string $status, ?string $stopReason, ?array $budgetCap = null, ?array $recovery = null): string
     {
-        if ($this->close($run, $status, $stopReason, budgetCap: $budgetCap, stepFailure: $stepFailure)) {
+        if ($this->close($run, $status, $stopReason, budgetCap: $budgetCap, recovery: $recovery)) {
             return 'closed';
         }
         if (StudioLabRun::query()->whereKey($run->id)->whereIn('status', StudioLabRun::LIVE_STATUSES)->exists()) {
@@ -801,12 +787,12 @@ final class StudioLabRunner
 
     /**
      * @param  array{kind:string,capMicros:int}|null  $budgetCap
-     * @param  array<string, mixed>|null  $stepFailure
+     * @param  array<string, mixed>|null  $recovery
      */
-    private static function finishedSummary(string $status, ?string $stopReason, ?array $budgetCap = null, ?array $stepFailure = null): string
+    private static function finishedSummary(string $status, ?string $stopReason, ?array $budgetCap = null, ?array $recovery = null): string
     {
         $tope = $budgetCap !== null && isset(self::BUDGET_CAP_SUMMARIES[$budgetCap['kind']]) ? ': '.self::BUDGET_CAP_SUMMARIES[$budgetCap['kind']] : '';
-        $paso = $stepFailure !== null ? ': '.self::STEP_FAILURE_SUMMARY : '';
+        $paso = $recovery !== null ? ': '.self::STEP_FAILURE_SUMMARY : '';
 
         return match ($status) {
             StudioLabRun::STATUS_COMPLETED => 'La ejecución terminó todos sus casos',

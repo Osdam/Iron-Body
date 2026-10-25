@@ -80,7 +80,7 @@ final class StudioLabRuns
         'id', 'uuid', 'target_kind', 'target_version_id', 'target_draft_admin_id', 'target_label', 'target_content_hash',
         'mode', 'model', 'prompt_version', 'status', 'stop_reason', 'case_count', 'estimate_max_micros', 'cost_micros',
         'ai_recommendation', 'created_by_admin_id', 'created_by_name', 'created_by_role', 'cancel_requested_at',
-        'started_at', 'finished_at', 'created_at',
+        'started_at', 'finished_at', 'created_at', 'summary',
     ];
 
     public function __construct(
@@ -429,6 +429,7 @@ final class StudioLabRuns
             'status' => $estado,
             'statusLabel' => self::STATUS_LABELS[$estado] ?? $estado,
             'stopReason' => $huerfana ? StudioLabRun::STOP_DEADLINE : $run->stop_reason,
+            'budgetCap' => $huerfana ? null : self::budgetCapOf($run),
             'expired' => $huerfana || self::isExpired($run),
             'cancelRequested' => $run->cancel_requested_at !== null,
             'target' => [
@@ -504,6 +505,23 @@ final class StudioLabRuns
         return $run->status === StudioLabRun::STATUS_QUEUED
             && $run->created_at !== null
             && $run->created_at->lt(now()->subMinutes(StudioLabConfig::QUEUED_EXPIRY_MINUTES));
+    }
+
+    /**
+     * Qué tope paró la ejecución con `budget_exhausted` (Enmienda 6.3, I-3 del
+     * reviewer): `{kind: daily|run|accepted, capMicros}`, leído del `summary`
+     * que escribió el cierre; null en cualquier otro caso.
+     *
+     * @return array{kind:string,capMicros:int}|null
+     */
+    public static function budgetCapOf(StudioLabRun $run): ?array
+    {
+        $tope = is_array($run->summary) ? ($run->summary['budgetCap'] ?? null) : null;
+        if (! is_array($tope) || ! is_string($tope['kind'] ?? null) || ! is_int($tope['capMicros'] ?? null)) {
+            return null;
+        }
+
+        return ['kind' => $tope['kind'], 'capMicros' => $tope['capMicros']];
     }
 
     /**

@@ -35,7 +35,7 @@ use Tests\TestCase;
  * respuesta que bloquea (4.2), `failed()` cobrando la reserva, dos pasos a la
  * vez que nunca procesan el mismo caso, una cancelación confirmada después de
  * cargar el paso que no deja reclamar otro (4.5) y un paso que falla ANTES de
- * reclamar: un rescate a los 30 s por punto de avance, o la parada (Enmienda 5).
+ * reclamar: un rescate a los 30 s, uno por ejecución, o la parada (Enmienda 5).
  *
  * Precios de las pruebas: 0,40 y 1,60 US$ por millón (400 000 y 1 600 000
  * micro-US$). Un caso con actor [900, 40] y juez [1500, 300] cuesta
@@ -50,8 +50,8 @@ class UltronStudioLabRunnerTest extends TestCase
 
     private const ACTOR_OK = ['reply' => 'Hola, ¿en qué te puedo ayudar hoy?', 'usage' => [900, 40]];
 
-    /** Los doce escenarios del catálogo: la ejecución de la sonda P08. */
-    private const DOCE = ['C-01', 'C-02', 'C-03', 'C-04', 'C-05', 'C-06', 'C-07', 'C-08', 'C-09', 'C-10', 'C-11', 'C-12'];
+    /** Los once escenarios del catálogo (C-11 se retiró: Enmienda 6.1): la ejecución de la sonda P08. */
+    private const CATALOGO = ['C-01', 'C-02', 'C-03', 'C-04', 'C-05', 'C-06', 'C-07', 'C-08', 'C-09', 'C-10', 'C-12'];
 
     private const JUDGE_PASS = ['judge' => 'pass', 'usage' => [1500, 300]];
 
@@ -256,16 +256,17 @@ class UltronStudioLabRunnerTest extends TestCase
 
     public function test_el_tope_de_la_ejecucion_se_aplica_al_coste_real_y_salta_el_resto(): void
     {
-        // La sonda P08 de api-security, tal cual: tope por ejecución de 0,05
-        // US$, doce casos cuya estimación cabe (47 824 micro-US$, y la persona
-        // acepta ese máximo) y un proveedor que factura el TRIPLE de la entrada
-        // estimada (texto denso en tokens) y toda la salida. Antes la ejecución
-        // terminaba `completed` con 93 530 (1,87 veces el tope). Ahora el tope
+        // La sonda P08 de api-security: tope por ejecución de 0,05 US$, los
+        // casos del catálogo con una estimación que cabe (con doce casos eran
+        // 47 824 micro-US$; con los once de 2026-10-20.1, algo menos), la
+        // persona acepta ese máximo y un proveedor factura el TRIPLE de la
+        // entrada estimada (texto denso en tokens) y toda la salida. Antes la
+        // ejecución terminaba `completed` con 1,87 veces el tope. Ahora el tope
         // es el menor entre el del servidor y el aceptado (aquí, el aceptado) y
         // la ejecución para justo después del caso que lo supera.
         Queue::fake();
         $this->labOpenAi(['ultron_studio.lab.run_budget_usd' => '0.05']);
-        $d = $this->launch($this->root, ['kind' => 'baseline'], self::DOCE)->assertCreated()->json('data');
+        $d = $this->launch($this->root, ['kind' => 'baseline'], self::CATALOGO)->assertCreated()->json('data');
         $aceptado = (int) StudioLabRun::query()->where('uuid', $d['uuid'])->value('accepted_max_micros');
         $this->assertSame($d['cost']['estimateMaxMicros'], $aceptado);
         $this->assertLessThan(50000, $aceptado, 'la estimación cabe en el tope: se admite');
@@ -275,13 +276,16 @@ class UltronStudioLabRunnerTest extends TestCase
 
         $this->assertSame(['stopped', 'budget_exhausted'], [$run->status, $run->stop_reason]);
         $hechos = $this->assertStoppedRightAfterCrossing($run, $aceptado);
-        $this->assertSame(2 * (12 - $hechos), $guion->remaining(), 'ningún caso saltado llegó al proveedor');
+        $this->assertSame(2 * (count(self::CATALOGO) - $hechos), $guion->remaining(), 'ningún caso saltado llegó al proveedor');
         $fin = StudioLabEvent::query()->where('event', 'run.finished')->where('subject_uuid', $d['uuid'])->sole();
         $this->assertSame('La ejecución se detuvo (budget_exhausted): el coste real superó el máximo aceptado al lanzarla', $fin->summary);
         $this->assertSame(['kind' => 'accepted', 'capMicros' => $aceptado], $fin->diff['budgetCap']);
         $this->assertSame(['kind' => 'accepted', 'capMicros' => $aceptado], $run->summary['budgetCap']);
         $vista = $this->lab('GET', "runs/{$d['uuid']}", $this->root)->assertOk()->json('data');
         $this->assertSame(['stopped', 'budget_exhausted', null, (int) $run->cost_micros], [$vista['status'], $vista['stopReason'], $vista['aiRecommendation'], $vista['cost']['actualMicros']]);
+        // Enmienda 6.3 (I-3): el detalle y la lista dicen qué tope la paró.
+        $this->assertSame(['kind' => 'accepted', 'capMicros' => $aceptado], $vista['budgetCap']);
+        $this->assertSame(['kind' => 'accepted', 'capMicros' => $aceptado], collect($this->lab('GET', 'runs', $this->root)->json('data.data'))->firstWhere('uuid', $d['uuid'])['budgetCap']);
     }
 
     public function test_con_un_maximo_aceptado_holgado_manda_el_tope_por_ejecucion(): void
@@ -292,7 +296,7 @@ class UltronStudioLabRunnerTest extends TestCase
         $this->labOpenAi(['ultron_studio.lab.run_budget_usd' => '0.05']);
         $d = $this->lab('POST', 'runs', $this->root, [
             'target' => ['kind' => 'baseline'],
-            'scenarioUuids' => array_map(fn (string $c): string => $this->scenarioUuid($c), self::DOCE),
+            'scenarioUuids' => array_map(fn (string $c): string => $this->scenarioUuid($c), self::CATALOGO),
             'acceptedMaxCostMicros' => 60000,
             'clientRequestId' => (string) Str::uuid(),
         ])->assertCreated()->json('data');
@@ -447,7 +451,7 @@ class UltronStudioLabRunnerTest extends TestCase
 
     public function test_un_paso_que_falla_antes_de_reclamar_se_reencola_una_vez_y_si_vuelve_a_fallar_para(): void
     {
-        // H-P2-1 del tester (Enmienda 5): el paso del caso 2 falla antes de
+        // H-P2-1 del tester (Enmienda 5.1(c)): el paso del caso 2 falla antes de
         // reclamar (la base se cae mientras espera el cerrojo). Antes, `failed()`
         // no hacía nada y la ejecución quedaba en curso para siempre, sin paso.
         Queue::fake();
@@ -462,15 +466,16 @@ class UltronStudioLabRunnerTest extends TestCase
         $this->assertCount($antes, Queue::pushed(StudioLabStepJob::class), 'el paso que falla no encola nada');
         (new StudioLabStepJob($id))->failed($e);
 
-        // Un paso de rescate a los 30 s, y la marca en el resumen de la ejecución viva.
+        // Un paso de rescate a los 30 s, y el intento en el resumen de la ejecución viva.
         $rescates = Queue::pushed(StudioLabStepJob::class)->slice($antes)->values();
         $this->assertCount(1, $rescates);
         $this->assertSame($id, $rescates[0]->runId);
         $this->assertEqualsWithDelta(StudioLabRunner::REQUEUE_DELAY_SECONDS, now()->diffInSeconds($rescates[0]->delay), 2);
         $run = StudioLabRun::query()->findOrFail($id);
         $this->assertSame('running', $run->status);
-        $marca = $run->summary['recovery'];
-        $this->assertSame(['class' => 'internal_error', 'startedCases' => 1], array_intersect_key($marca, ['class' => 0, 'startedCases' => 0]));
+        $intento = $run->summary['recovery'];
+        $this->assertSame(['attempts', 'at', 'class'], array_keys($intento));
+        $this->assertSame([1, 'internal_error'], [$intento['attempts'], $intento['class']]);
 
         // El paso de rescate TAMBIÉN falla antes de reclamar: para con
         // `provider_errors`, los pendientes se saltan y el resumen lo explica.
@@ -479,21 +484,20 @@ class UltronStudioLabRunnerTest extends TestCase
         $run->refresh();
         $this->assertSame(['stopped', 'provider_errors'], [$run->status, $run->stop_reason]);
         $this->assertSame(['done', 'skipped', 'skipped'], $run->cases()->pluck('status')->all());
-        $this->assertSame(['failures' => 2, 'class' => 'internal_error', 'firstClass' => 'internal_error'], array_diff_key($run->summary['stepFailure'], ['firstAt' => 0]));
-        $this->assertSame($marca['at'], $run->summary['stepFailure']['firstAt'], 'cuándo falló la primera vez');
-        $this->assertArrayNotHasKey('recovery', $run->summary, 'el cierre sustituye la marca');
+        $this->assertSame(['attempts' => 1, 'at' => $intento['at'], 'class' => 'internal_error', 'reason' => 'step_failed_before_claim', 'lastClass' => 'internal_error'],
+            $run->summary['recovery'], 'el resumen conserva el intento y dice por qué paró');
         $this->assertSame($run->results_hash, StudioLabRuns::resultsHash($run, $run->cases()->get()));
         $this->assertCount($antes + 1, Queue::pushed(StudioLabStepJob::class), 'no hay un segundo rescate');
         $fin = StudioLabEvent::query()->where('event', 'run.finished')->where('subject_uuid', $uuid)->sole();
         $this->assertSame('La ejecución se detuvo (provider_errors): el paso falló dos veces sin llegar a reclamar un caso', $fin->summary);
-        $this->assertSame(['failures' => 2, 'class' => 'internal_error'], array_intersect_key($fin->diff['stepFailure'], ['failures' => 0, 'class' => 0]));
+        $this->assertSame('step_failed_before_claim', $fin->diff['recovery']['reason']);
         $this->assertCount(2, $guion->calls, 'nadie llamó al proveedor por los casos saltados');
     }
 
-    public function test_si_el_rescate_reclama_un_caso_un_fallo_posterior_tiene_su_propio_rescate(): void
+    public function test_el_rescate_es_uno_por_ejecucion_aunque_el_rescate_haya_avanzado(): void
     {
-        // «Una sola vez» es por punto de avance: si el rescate llegó a reclamar
-        // (y liquidar) un caso, el siguiente fallo antes de reclamar no para.
+        // Una vez por ejecución (Enmienda 5.1(c)): el rescate procesó el caso 2,
+        // pero el intento sigue anotado; el siguiente fallo antes de reclamar para.
         Queue::fake();
         $this->labOpenAi();
         $this->script([self::ACTOR_OK, self::JUDGE_PASS, self::ACTOR_OK, self::JUDGE_PASS]);
@@ -501,37 +505,27 @@ class UltronStudioLabRunnerTest extends TestCase
         $id = (int) StudioLabRun::query()->where('uuid', $uuid)->value('id');
         $this->assertSame('case', app(StudioLabRunner::class)->step($id));
         (new StudioLabStepJob($id))->failed($this->stepFailsBeforeClaiming($id));
-        $this->assertSame(1, StudioLabRun::query()->findOrFail($id)->summary['recovery']['startedCases']);
+        $this->assertSame(1, StudioLabRun::query()->findOrFail($id)->summary['recovery']['attempts']);
 
         // El rescate llega y procesa el caso 2; el paso del 3 vuelve a fallar antes de reclamar.
         $this->assertSame('case', app(StudioLabRunner::class)->step($id));
+        $this->assertSame(1, StudioLabRun::query()->findOrFail($id)->summary['recovery']['attempts'], 'liquidar un caso no borra el intento');
         $antes = count(Queue::pushed(StudioLabStepJob::class));
         (new StudioLabStepJob($id))->failed($this->stepFailsBeforeClaiming($id));
 
         $run = StudioLabRun::query()->findOrFail($id);
-        $this->assertSame(['running', 2], [$run->status, $run->summary['recovery']['startedCases']]);
-        $this->assertCount($antes + 1, Queue::pushed(StudioLabStepJob::class), 'su propio rescate');
-        $this->assertSame(['done', 'done', 'pending', 'pending'], $run->cases()->pluck('status')->all());
+        $this->assertSame(['stopped', 'provider_errors', 'step_failed_before_claim'], [$run->status, $run->stop_reason, $run->summary['recovery']['reason']]);
+        $this->assertSame(['done', 'done', 'skipped', 'skipped'], $run->cases()->pluck('status')->all());
+        $this->assertCount($antes, Queue::pushed(StudioLabStepJob::class), 'sin segundo rescate');
     }
 
-    public function test_sin_caso_en_curso_failed_aplica_la_caducidad_el_plazo_y_la_cancelacion_pedida(): void
+    public function test_sin_caso_en_curso_failed_aplica_el_plazo_y_el_rescate_aplica_la_caducidad_y_la_cancelacion(): void
     {
         Queue::fake();
         $this->labFake();
 
-        // En cola desde hace más de 30 min (su primer paso falló antes de
-        // reclamar): `expired`, como haría el paso.
-        $enCola = (int) StudioLabRun::query()->where('uuid', $this->launch($this->root, ['kind' => 'baseline'], ['C-01'])->assertCreated()->json('data.uuid'))->value('id');
-        $e = $this->stepFailsBeforeClaiming($enCola);
-        $this->travel(StudioLabConfig::QUEUED_EXPIRY_MINUTES + 1)->minutes();
-        $antes = count(Queue::pushed(StudioLabStepJob::class));
-        (new StudioLabStepJob($enCola))->failed($e);
-        $run = StudioLabRun::query()->findOrFail($enCola);
-        $this->assertSame(['stopped', 'expired', ['skipped']], [$run->status, $run->stop_reason, $run->cases()->pluck('status')->all()]);
-        $this->assertCount($antes, Queue::pushed(StudioLabStepJob::class), 'sin rescate');
-        $this->travelBack();
-
-        // En curso con el plazo vencido: `deadline`, el motivo con el que ya la presentaba la lectura.
+        // En curso con el plazo vencido: `deadline` en el acto, el motivo con
+        // el que ya la presentaba la lectura; sin rescate.
         $enCurso = (int) StudioLabRun::query()->where('uuid', $this->launch($this->root, ['kind' => 'baseline'], ['C-02', 'C-03'])->assertCreated()->json('data.uuid'))->value('id');
         $this->assertSame('case', app(StudioLabRunner::class)->step($enCurso));
         $e = $this->stepFailsBeforeClaiming($enCurso);
@@ -543,7 +537,21 @@ class UltronStudioLabRunnerTest extends TestCase
         $this->assertCount($antes, Queue::pushed(StudioLabStepJob::class), 'sin rescate');
         $this->travelBack();
 
-        // Con la cancelación pedida (llegó con el caso 1 en vuelo): `cancelled`, sin rescate.
+        // En cola desde hace más de 30 min (su primer paso falló antes de
+        // reclamar): no tiene plazo (nunca empezó), así que va el rescate, y
+        // el rescate la para con `expired` como cualquier paso.
+        $enCola = (int) StudioLabRun::query()->where('uuid', $this->launch($this->root, ['kind' => 'baseline'], ['C-01'])->assertCreated()->json('data.uuid'))->value('id');
+        $e = $this->stepFailsBeforeClaiming($enCola);
+        $this->travel(StudioLabConfig::QUEUED_EXPIRY_MINUTES + 1)->minutes();
+        $antes = count(Queue::pushed(StudioLabStepJob::class));
+        (new StudioLabStepJob($enCola))->failed($e);
+        $this->assertCount($antes + 1, Queue::pushed(StudioLabStepJob::class), 'el rescate');
+        $this->assertSame('closed', app(StudioLabRunner::class)->step($enCola));
+        $run = StudioLabRun::query()->findOrFail($enCola);
+        $this->assertSame(['stopped', 'expired', ['skipped']], [$run->status, $run->stop_reason, $run->cases()->pluck('status')->all()]);
+        $this->travelBack();
+
+        // Con la cancelación pedida (llegó con el caso 1 en vuelo): el rescate la cierra `cancelled`.
         $this->labOpenAi();
         $guion = $this->script([self::ACTOR_OK, self::JUDGE_PASS]);
         $pedida = (int) StudioLabRun::query()->where('uuid', $this->launch($this->root, ['kind' => 'baseline'], ['C-04', 'C-05'])->assertCreated()->json('data.uuid'))->value('id');
@@ -557,9 +565,11 @@ class UltronStudioLabRunnerTest extends TestCase
         $e = $this->stepFailsBeforeClaiming($pedida);
         $antes = count(Queue::pushed(StudioLabStepJob::class));
         (new StudioLabStepJob($pedida))->failed($e);
+        $this->assertCount($antes + 1, Queue::pushed(StudioLabStepJob::class), 'el rescate');
+        $this->assertSame('closed', app(StudioLabRunner::class)->step($pedida));
         $run = StudioLabRun::query()->findOrFail($pedida);
         $this->assertSame(['cancelled', null, ['done', 'skipped']], [$run->status, $run->stop_reason, $run->cases()->pluck('status')->all()]);
-        $this->assertCount($antes, Queue::pushed(StudioLabStepJob::class), 'sin rescate');
+        $this->assertCount(2, $guion->calls);
     }
 
     public function test_un_timeout_del_job_tras_un_error_del_proveedor_para_la_ejecucion(): void

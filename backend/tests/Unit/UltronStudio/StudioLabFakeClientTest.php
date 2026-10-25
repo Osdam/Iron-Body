@@ -28,7 +28,7 @@ class StudioLabFakeClientTest extends TestCase
         return ['configs' => StudioCatalog::baseline()['configs'], 'edgeIds' => StudioCatalog::baseline()['edgeIds'], 'rules' => $sel['included']];
     }
 
-    public function test_los_doce_escenarios_en_fake_sin_red_sin_coste_y_como_mucho_en_review(): void
+    public function test_los_escenarios_del_catalogo_en_fake_sin_red_sin_coste_y_como_mucho_en_review(): void
     {
         Http::fake();
         $objetivo = self::linea();

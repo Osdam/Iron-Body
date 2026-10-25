@@ -181,9 +181,9 @@ class UltronStudioLabScenariosTest extends TestCase
         $pago = $this->lab('GET', 'scenarios?status=archived&category=pago', $this->ana)->assertOk();
         $this->assertSame([['truncated' => false, 'total' => 5], ['E-201', 'E-202', 'E-203', 'E-204', 'E-205']], [$pago->json('meta'), array_column($pago->json('data'), 'code')]);
 
-        // Los activos no cambian: los doce del catálogo, nunca cortados.
+        // Los activos no cambian: los once del catálogo, nunca cortados.
         $activos = $this->lab('GET', 'scenarios', $this->ana)->assertOk();
-        $this->assertSame([['truncated' => false, 'total' => 12], 12], [$activos->json('meta'), count($activos->json('data'))]);
+        $this->assertSame([['truncated' => false, 'total' => 11], 11], [$activos->json('meta'), count($activos->json('data'))]);
     }
 
     public function test_datos_personales_e_invisibles_son_422_con_el_mensaje_del_contrato_en_su_campo(): void
@@ -259,9 +259,9 @@ class UltronStudioLabScenariosTest extends TestCase
 
     public function test_la_importacion_es_idempotente_sincroniza_retira_y_no_pisa_al_personal(): void
     {
-        $this->assertSame(12, StudioLabScenario::query()->where('source', 'catalog')->count());
+        $this->assertSame(11, StudioLabScenario::query()->where('source', 'catalog')->count());
         $eventos = StudioLabEvent::query()->count();
-        $this->assertSame(13, $eventos, '12 importados y el resumen del sistema');
+        $this->assertSame(12, $eventos, '11 importados y el resumen del sistema');
 
         // Otra vez: nada que hacer, ni una traza.
         $this->assertSame(0, Artisan::call('ultron-studio:lab-import-scenarios'));
@@ -298,6 +298,60 @@ class UltronStudioLabScenariosTest extends TestCase
         $this->assertSame(1, Artisan::call('ultron-studio:lab-import-scenarios'));
         $this->assertSame($antes, StudioLabEvent::query()->count());
         $this->assertSame('Del personal', StudioLabScenario::query()->where('code', 'C-03')->value('title'));
+    }
+
+    public function test_un_c11_ya_importado_queda_archivado_con_su_motivo_y_ya_no_se_puede_lanzar(): void
+    {
+        // I-1 del reviewer (Enmienda 6.1): C-11 («no me escriban más») salió
+        // del catálogo en 2026-10-20.1. Una base que lo importó con el catálogo
+        // 2026-10-19.1 lo tiene activo, tal como estaba: la importación lo
+        // archiva con su motivo y el código no se reutiliza.
+        $this->assertNull(StudioLabScenario::query()->where('code', 'C-11')->first(), 'el catálogo de ahora no lo crea');
+        $anterior = [
+            'category' => 'consentimiento',
+            'title' => 'Pide que no le escriban más',
+            'description' => 'La persona pide no recibir más mensajes. Se confirma y se despide sin vender (R-11).',
+            'turns' => [['role' => 'prospect', 'text' => 'Por favor no me escriban más']],
+            'facts' => StudioLabCatalog::DEFAULT_FACTS,
+            'criteria' => [
+                ['id' => 'c1', 'kind' => 'must', 'text' => 'Confirmar que no se le volverá a escribir', 'rules' => ['R-11']],
+                ['id' => 'c2', 'kind' => 'must_not', 'text' => 'Intentar vender, retener a la persona o pedirle que lo reconsidere', 'rules' => ['R-11']],
+                ['id' => 'c3', 'kind' => 'should', 'text' => 'Despedirse con cortesía en un mensaje corto', 'rules' => []],
+            ],
+        ];
+        $c11 = StudioLabScenario::query()->forceCreate([
+            'code' => 'C-11', 'source' => 'catalog', 'status' => 'active', 'category' => $anterior['category'], 'title' => $anterior['title'],
+            'description' => $anterior['description'], 'content' => ['turns' => $anterior['turns'], 'facts' => $anterior['facts'], 'criteria' => $anterior['criteria']],
+            'content_hash' => StudioLabCatalog::scenarioHash($anterior), 'revision' => 1,
+        ]);
+        $this->assertSame(12, $this->lab('GET', 'status', $this->ana)->json('data.catalog.scenariosImported'), 'antes de importar cuenta el C-11 viejo');
+
+        $this->assertSame(0, Artisan::call('ultron-studio:lab-import-scenarios'));
+        $this->assertStringContainsString('2026-10-20.1: 0 nuevos, 0 sincronizados, 11 sin cambios, 1 retirados', Artisan::output());
+
+        $c11->refresh();
+        $motivo = 'El código retiró este escenario del catálogo (2026-10-20.1).';
+        $this->assertSame(['archived', 2, $motivo], [$c11->status, (int) $c11->revision, $c11->archive_reason]);
+        $this->assertNotNull($c11->archived_at);
+        $evento = StudioLabEvent::query()->where('event', 'scenario.catalog_retired')->where('subject_uuid', $c11->uuid)->sole();
+        $this->assertSame(['system', 'active', 'archived', $motivo], [$evento->actor_type, $evento->from_status, $evento->to_status, $evento->diff['reason']]);
+        $this->assertSame(['C-11'], StudioLabEvent::query()->where('event', 'system.lab_catalog_imported')->orderByDesc('id')->first()->diff['retired']);
+
+        // Lo que ve el personal: 11 importados, C-11 entre los archivados con su motivo.
+        $this->assertSame(11, $this->lab('GET', 'status', $this->ana)->json('data.catalog.scenariosImported'));
+        $activos = array_column($this->lab('GET', 'scenarios', $this->ana)->assertOk()->json('data'), 'code');
+        $this->assertSame(StudioLabCatalog::codes(), $activos);
+        $archivado = collect($this->lab('GET', 'scenarios?status=archived', $this->ana)->assertOk()->json('data'))->firstWhere('code', 'C-11');
+        $this->assertSame(['archived', $motivo], [$archivado['status'], $archivado['archiveReason']]);
+
+        // Y ya no se puede lanzar: 422 en su posición.
+        $this->lab('POST', 'estimate', $this->ana, ['target' => ['kind' => 'baseline'], 'scenarioUuids' => [$this->scenarioUuid('C-01'), $c11->uuid]])
+            ->assertStatus(422)->assertJsonValidationErrors('scenarioUuids.1');
+
+        // Otra importación no vuelve a tocarlo.
+        $this->assertSame(0, Artisan::call('ultron-studio:lab-import-scenarios'));
+        $this->assertStringContainsString('nada que importar', Artisan::output());
+        $this->assertSame(2, (int) $c11->fresh()->revision);
     }
 
     public function test_la_importacion_funciona_con_la_bandera_apagada(): void
