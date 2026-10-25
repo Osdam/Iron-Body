@@ -7,6 +7,7 @@ use App\Services\Observability\QueueHealthService;
 use App\Services\UltronStudio\StudioLabRunner;
 use App\Services\UltronStudio\StudioLabStepJob;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -36,7 +37,7 @@ class UltronStudioLabLaneTest extends TestCase
 
     public function test_la_conexion_del_carril_y_retry_after_mayor_que_el_timeout(): void
     {
-        $this->assertSame(['connection' => 'lab', 'queue' => 'studio-lab', 'priority' => 5, 'slo_wait_ms' => 600000], config('queue.lanes.lab'));
+        $this->assertSame(['connection' => 'lab', 'queue' => 'studio-lab', 'priority' => 5, 'slo_wait_ms' => 600000, 'unattended_after_seconds' => 300], config('queue.lanes.lab'));
         $conexion = config('queue.connections.lab');
         $this->assertSame(['database', 'studio-lab', 300, false], [$conexion['driver'], $conexion['queue'], $conexion['retry_after'], $conexion['after_commit']]);
         $this->assertSame(config('queue.connections.database.table'), $conexion['table'], 'la misma tabla jobs');
@@ -120,5 +121,69 @@ class UltronStudioLabLaneTest extends TestCase
         $foto = app(QueueHealthService::class)->snapshot();
         $this->assertArrayHasKey('lab', $foto);
         $this->assertSame(['studio-lab', 5, 600000], [$foto['lab']['queue'], $foto['lab']['priority'], $foto['lab']['slo_wait_ms']]);
+    }
+
+    /**
+     * ULTRON STUDIO H5 §A10.4 (m-3 del Hito 4): el umbral de desatención es por
+     * carril. El laboratorio tolera 300 s sin latido (un paso tarda hasta 150 s
+     * y su worker es uno); un carril sin la clave sigue en el global de 120 s.
+     */
+    public function test_el_laboratorio_tiene_su_propio_umbral_de_desatencion_y_los_demas_siguen_en_120(): void
+    {
+        $encolar = static function (string $cola, int $segundos): void {
+            $cuando = now()->subSeconds($segundos)->timestamp;
+            DB::table('jobs')->insert(['queue' => $cola, 'payload' => '{}', 'attempts' => 0, 'reserved_at' => null, 'available_at' => $cuando, 'created_at' => $cuando]);
+        };
+        $salud = app(QueueHealthService::class);
+        $carril = static fn (string $nombre): array => (array) config("queue.lanes.{$nombre}");
+        $this->assertSame(120, (int) config('observability.queues.unattended_after_seconds'));
+        $this->assertArrayNotHasKey('unattended_after_seconds', $carril('whatsapp'));
+
+        // 200 s esperando sin latido: el de WhatsApp parece desatendido; el laboratorio, todavía no.
+        $encolar('whatsapp-high', 200);
+        $encolar('studio-lab', 200);
+        $this->assertTrue($salud->laneSnapshot('whatsapp', $carril('whatsapp'))['looks_unattended']);
+        $this->assertFalse($salud->laneSnapshot('lab', $carril('lab'))['looks_unattended']);
+
+        // Pasados los 300 s, el laboratorio también.
+        DB::table('jobs')->where('queue', 'studio-lab')->delete();
+        $encolar('studio-lab', 301);
+        $this->assertTrue($salud->laneSnapshot('lab', $carril('lab'))['looks_unattended']);
+
+        // Con un latido reciente, ninguno.
+        $salud->heartbeat('studio-lab');
+        $this->assertFalse($salud->laneSnapshot('lab', $carril('lab'))['looks_unattended']);
+    }
+
+    public function test_el_umbral_del_laboratorio_sale_del_entorno_acotado(): void
+    {
+        $leer = static function (?string $valor): int {
+            $nombre = 'QUEUE_STUDIO_LAB_UNATTENDED_AFTER_SECONDS';
+            $antes = [$_SERVER[$nombre] ?? null, $_ENV[$nombre] ?? null, getenv($nombre)];
+            unset($_SERVER[$nombre], $_ENV[$nombre]);
+            putenv($nombre);
+            if ($valor !== null) {
+                $_SERVER[$nombre] = $_ENV[$nombre] = $valor;
+                putenv("{$nombre}={$valor}");
+            }
+            try {
+                return (require base_path('config/queue.php'))['lanes']['lab']['unattended_after_seconds'];
+            } finally {
+                unset($_SERVER[$nombre], $_ENV[$nombre]);
+                putenv($nombre);
+                [$servidor, $entorno, $proceso] = $antes;
+                if ($servidor !== null) {
+                    $_SERVER[$nombre] = $servidor;
+                }
+                if ($entorno !== null) {
+                    $_ENV[$nombre] = $entorno;
+                }
+                if ($proceso !== false) {
+                    putenv("{$nombre}={$proceso}");
+                }
+            }
+        };
+
+        $this->assertSame([300, 300, 300, 60, 3600, 900], [$leer(null), $leer(''), $leer('mucho'), $leer('5'), $leer('99999'), $leer('900')]);
     }
 }

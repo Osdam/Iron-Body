@@ -108,9 +108,25 @@ class QueueHealthService
             'last_processed_seconds_ago' => $lastSeenSeconds,
             'jobs_last_minute' => (int) (Cache::get(self::RATE_KEY.$queue.':'.now()->subMinute()->format('YmdHi')) ?? 0),
             'failed_last_hour' => $failedLastHour,
-            'looks_unattended' => $this->looksUnattended($backlog, $oldestSeconds, $lastSeenSeconds),
+            'looks_unattended' => $this->looksUnattended($backlog, $oldestSeconds, $lastSeenSeconds, $this->unattendedAfter($lane)),
             'breaching_slo' => $this->breachingSlo($oldestSeconds, (int) ($lane['slo_wait_ms'] ?? 0)),
         ];
+    }
+
+    /**
+     * Cuánto se tolera sin latido en ESTE carril: su `unattended_after_seconds`
+     * si lo declara (un entero positivo; el del laboratorio, 300 s), y si no el
+     * global de `observability.queues.unattended_after_seconds` (120 s).
+     *
+     * @param  array<string, mixed>  $lane
+     */
+    private function unattendedAfter(array $lane): int
+    {
+        $propio = $lane['unattended_after_seconds'] ?? null;
+
+        return is_int($propio) && $propio > 0
+            ? $propio
+            : (int) config('observability.queues.unattended_after_seconds', 120);
     }
 
     /**
@@ -126,10 +142,8 @@ class QueueHealthService
      * esperando, lleva esperando más de lo tolerable, y nadie ha terminado nada
      * en ese carril desde antes de que empezara a acumularse.
      */
-    private function looksUnattended(int $backlog, int $oldestSeconds, ?int $lastSeenSeconds): bool
+    private function looksUnattended(int $backlog, int $oldestSeconds, ?int $lastSeenSeconds, int $graceSeconds): bool
     {
-        $graceSeconds = (int) config('observability.queues.unattended_after_seconds', 120);
-
         if ($backlog === 0 || $oldestSeconds < $graceSeconds) {
             return false;
         }

@@ -203,6 +203,12 @@ return [
     | de en el detector porque es una decisión de negocio, no de vigilancia:
     | medio segundo para el mensaje de un cliente, y todo el tiempo del mundo
     | para recalcular una analítica.
+    |
+    | `unattended_after_seconds` (opcional, ULTRON STUDIO H5 §A10.4): cuánto
+    | puede esperar el trabajo más viejo sin latido antes de que el carril
+    | parezca desatendido. Sin la clave, el global de
+    | `observability.queues.unattended_after_seconds` (120 s). El laboratorio
+    | declara el suyo: un paso tarda hasta 150 s y su worker es uno solo.
     */
 
     'lanes' => [
@@ -212,7 +218,20 @@ return [
         'commercial' => ['connection' => 'commercial', 'queue' => env('QUEUE_COMMERCIAL', 'commercial'), 'priority' => 4, 'slo_wait_ms' => 300000],
         'billing' => ['connection' => 'billing', 'queue' => env('FACTUS_QUEUE', 'billing'), 'priority' => 4, 'slo_wait_ms' => 300000],
         // Nadie espera al laboratorio con un cliente al otro lado: diez minutos.
-        'lab' => ['connection' => 'lab', 'queue' => env('QUEUE_STUDIO_LAB', 'studio-lab'), 'priority' => 5, 'slo_wait_ms' => 600000],
+        // Desatendido a partir de 300 s sin latido (60–3600; vacío o no
+        // entero, 300): con un worker y pasos de hasta 150 s, el global de
+        // 120 s daba avisos falsos (m-3 del Hito 4).
+        'lab' => [
+            'connection' => 'lab',
+            'queue' => env('QUEUE_STUDIO_LAB', 'studio-lab'),
+            'priority' => 5,
+            'slo_wait_ms' => 600000,
+            'unattended_after_seconds' => (static function (): int {
+                $valor = trim((string) env('QUEUE_STUDIO_LAB_UNATTENDED_AFTER_SECONDS', ''));
+
+                return preg_match('/^-?\d+$/', $valor) === 1 ? min(3600, max(60, (int) $valor)) : 300;
+            })(),
+        ],
     ],
 
     /*
