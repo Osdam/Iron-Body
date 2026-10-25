@@ -2,13 +2,14 @@
 """Smoke del Hito 4 (laboratorio de IA) en producción, fase 1 (bandera apagada) o fase 2 (fake).
 Política: SIN filas positivas: no crea escenarios, ejecuciones ni veredictos. Solo lecturas, 409 con la
 bandera apagada, 403 sin llave, 422/409 sin fila y 401 sin token.
-Uso: smoke-h4.py <email super admin> <password> [<email cuenta sin llave> <password>]
+Uso: smoke-h4.py <email super admin> [<password>|"" con SMOKE_PW en el entorno] [<email cuenta sin llave> <password>]
 Variables: SMOKE_API (por defecto producción), SMOKE_LAB_EXPECT_ENABLED=0|1 (por defecto 0)."""
 import json, os, sys, urllib.request, urllib.error
 
 API = os.environ.get('SMOKE_API', 'https://api.ironbodyneiva.cloud/api')
 EXPECT_ENABLED = os.environ.get('SMOKE_LAB_EXPECT_ENABLED', '0') == '1'
-email, password = sys.argv[1], sys.argv[2]
+email = sys.argv[1]
+password = sys.argv[2] if len(sys.argv) >= 3 and sys.argv[2] else os.environ.get('SMOKE_PW', '')  # preferible por entorno
 email2, password2 = (sys.argv[3], sys.argv[4]) if len(sys.argv) >= 5 else (None, None)
 results = []
 
