@@ -41,9 +41,10 @@ echo "6. configuración efectiva (sin valores sensibles):"
 sudo -u www-data php artisan tinker --execute='echo json_encode(["enabled" => config("ultron_studio.lab.enabled"), "driver" => config("ultron_studio.lab.driver"), "daily_budget" => config("ultron_studio.lab.daily_budget_usd") ?? config("ultron_studio.lab.budget.daily_usd"), "key_present" => (bool) (config("ultron_studio.lab.openai.api_key") ?? config("ultron_studio.lab.openai_api_key")), "queue" => config("queue.lanes.lab.queue")]), PHP_EOL;' 2>&1 | tail -1 | sed 's/^/   /'
 echo "7. worker ironbody-lab:"
 UP_BEFORE=$(supervisorctl status | grep -v ironbody-lab | awk '{print $NF}' | sort | head -1)
-git show "HEAD:backend/docs/ops/supervisor/ironbody-lab.conf" > /tmp/ironbody-lab.conf   # desde git, no del árbol de trabajo
-grep -q '^user=www-data' /tmp/ironbody-lab.conf && ! grep -q '^user=root' /tmp/ironbody-lab.conf || { echo "la configuración del worker no corre como www-data"; exit 1; }
-install -o root -g root -m 644 /tmp/ironbody-lab.conf /etc/supervisor/conf.d/ironbody-lab.conf && rm /tmp/ironbody-lab.conf
+TMPCONF=$(mktemp /root/.ironbody-lab.conf.XXXXXX); trap 'rm "$TMPCONF" 2>/dev/null' EXIT   # temporal privado de root, nunca /tmp
+git show "HEAD:backend/docs/ops/supervisor/ironbody-lab.conf" > "$TMPCONF"   # desde git, no del árbol de trabajo
+grep -q '^user=www-data' "$TMPCONF" && ! grep -q '^user=root' "$TMPCONF" || { echo "la configuración del worker no corre como www-data"; exit 1; }
+install -o root -g root -m 644 "$TMPCONF" /etc/supervisor/conf.d/ironbody-lab.conf
 supervisorctl reread | sed 's/^/   /'; supervisorctl update | sed 's/^/   /'
 sleep 6
 echo "   RUNNING: $(supervisorctl status | grep -c RUNNING) · BACKOFF/FATAL: $(supervisorctl status | grep -c 'BACKOFF\|FATAL') · lab: $(supervisorctl status | grep ironbody-lab | awk '{print $2}' | tr '\n' ' ')"
