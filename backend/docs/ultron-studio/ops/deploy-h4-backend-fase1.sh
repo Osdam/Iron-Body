@@ -1,4 +1,8 @@
 #!/bin/bash
+# OBSOLETO (25-10-2026): NO REUTILIZAR TAL CUAL. La comprobación de cambios locales (grep -v con pipefail) aborta con
+# el checkout limpio y, al ir DESPUÉS del merge, dejaría el código fusionado sin variables, migraciones ni cachés. El
+# recuento de colas fallidas por `queue:failed` cuenta siempre 0 en Laravel 12. Se conserva como registro del Hito 4;
+# el modelo vigente es deploy-h5-backend-fase1.sh (comprobaciones previas, aserciones, git como www-data).
 # Fase 1 del Hito 4 en producción (laboratorio APAGADO). Se ejecuta EN EL SERVIDOR como root tras el respaldo.
 # Orden del runbook (ULTRON_STUDIO_DEPLOYMENT_PLAN.md): código → variables → ironbody-migrate (regenera la caché de
 # configuración como www-data) → route:cache → queue:restart → comprobaciones SQL/rutas/config → worker ironbody-lab →
