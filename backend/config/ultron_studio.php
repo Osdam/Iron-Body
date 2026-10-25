@@ -4,11 +4,14 @@
 |--------------------------------------------------------------------------
 | ULTRON STUDIO (borradores, versiones, reglas y aprobaciones del agente)
 |--------------------------------------------------------------------------
-| Contrato: docs/ultron-studio/ULTRON_STUDIO_F_CONTRACT.md.
+| Contrato: docs/ultron-studio/ULTRON_STUDIO_F_CONTRACT.md (y H5 §A13).
 |
-| EL MOTOR DE ULTRON NO LEE NADA DE ESTO. Ninguna clase de app/Services/Marketing,
-| app/Jobs ni de las rutas internas consulta esta configuración ni las tablas
-| `ultron_studio_*`; UltronEngineIsolationTest lo vigila con un grep.
+| EL MOTOR DE ULTRON NO LEE ESTA CONFIGURACIÓN. Desde el Hito 5 lee UNA tabla
+| del Studio, la cadena `ultron_studio_publications`, desde UNA clase
+| (`UltronPublishedConfig`) y solo con SU llave (`MARKETING_ULTRON_STUDIO_CONFIG`
+| distinta de `off`, en config/marketing.php); ninguna otra clase de
+| app/Services/Marketing, app/Jobs ni de las rutas internas consulta esto ni
+| las tablas `ultron_studio_*`. UltronEngineIsolationTest lo vigila por tokens.
 */
 
 /*
@@ -21,16 +24,71 @@ $entero = static function (string $clave, int $defecto): int {
     return preg_match('/^-?\d+$/', $valor) === 1 ? (int) $valor : $defecto;
 };
 
+/*
+ * La ventana de publicación (contrato H5 §A13): `HH:MM-HH:MM`, en hora de
+ * Bogotá, con el inicio antes del fin. Sin la variable, la del contrato;
+ * VACÍA a propósito (`X=`), sin ventana; cualquier otro valor (mal escrito,
+ * `false`, una ventana que cruza la medianoche o vacía por dentro), la del
+ * contrato: un error de escritura no abre la puerta sin que nadie lo decida.
+ */
+$ventana = static function (): string {
+    $defecto = '07:00-19:00';
+    $valor = env('ULTRON_STUDIO_PUBLISH_WINDOW');
+    if (! is_string($valor)) {
+        return $defecto;
+    }
+    $valor = trim($valor);
+    if ($valor === '') {
+        return '';
+    }
+    if (preg_match('/^([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-3]):([0-5]\d)$/', $valor, $m) === 1
+        && (int) $m[1] * 60 + (int) $m[2] < (int) $m[3] * 60 + (int) $m[4]) {
+        return $valor;
+    }
+
+    return $defecto;
+};
+
 return [
 
     /*
-    | Bandera de publicación. APAGADA. Aunque se encienda, publicar y revertir
-    | siguen respondiendo 409 mientras StudioPublishing::ENGINE_READS_VERSIONS
-    | sea false (`engine_not_reading_versions`): marcar «publicada» una versión
-    | que el motor no lee sería mentir. La fase que conecte el motor cambia esa
-    | constante en el mismo commit que el motor.
+    | Llave del Studio para PUBLICAR y PROMOVER (contrato H5 §A5). APAGADA: con
+    | ella apagada, las dos rutas responden 409 `publishing_disabled`. Revertir y
+    | volver a Legacy NO dependen de ella (deshacer no puede depender de la
+    | llave que permite cambiar). La otra llave es la del motor
+    | (`MARKETING_ULTRON_STUDIO_CONFIG`): en `off`, publicar y promover responden
+    | 409 `engine_not_reading_versions`, porque declarar algo que el motor no
+    | lee no tendría efecto.
     */
     'publishing_enabled' => (bool) env('ULTRON_STUDIO_PUBLISHING_ENABLED', false),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gobierno y versionado (Hito 5)
+    |--------------------------------------------------------------------------
+    | Contrato: docs/ultron-studio/ULTRON_STUDIO_H5_CONTRACT.md, §A5, §A6 y
+    | §A13. Los valores se recortan aquí, al leer el entorno, para que la caché
+    | de configuración ya los lleve; StudioPublishing los vuelve a acotar.
+    */
+    'publishing' => [
+
+        // `required` (defecto): para publicar hace falta un veredicto
+        // `approved` del laboratorio sobre esta misma huella y la versión de
+        // prompts vigente. `waived` lo decide el propietario y queda escrito en
+        // cada publicación. Cualquier otro valor, `required`.
+        'lab_gate' => strtolower(trim((string) env('ULTRON_STUDIO_PUBLISH_LAB_GATE', 'required'))) === 'waived' ? 'waived' : 'required',
+
+        // La evidencia mínima del canario para promover: horas desde la
+        // publicación (1–168) y turnos sellados (1–100). Fuera del rango, se
+        // recorta; vacío o no entero, el defecto.
+        'canary_min_hours' => min(168, max(1, $entero('ULTRON_STUDIO_CANARY_MIN_HOURS', 24))),
+        'canary_min_turns' => min(100, max(1, $entero('ULTRON_STUDIO_CANARY_MIN_TURNS', 3))),
+
+        // Publicar y promover solo dentro de esta ventana (hora de Bogotá,
+        // [inicio, fin)); revertir y Legacy, siempre. '' = sin ventana.
+        'window' => $ventana(),
+
+    ],
 
     /*
     |--------------------------------------------------------------------------

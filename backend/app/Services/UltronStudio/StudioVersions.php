@@ -20,9 +20,10 @@ use InvalidArgumentException;
  *   VALIDATED | REVIEW_REQUIRED ─ aprobar (OTRA persona, reconociendo los avisos) ─▶ APPROVED
  *                               └ rechazar (OTRA persona, con motivo) ─────────────▶ REJECTED
  *
- * No hay transiciones hacia atrás y REJECTED es terminal. Publicar y revertir
- * responden 409 SIEMPRE en esta fase ({@see StudioPublishing}), y el intento
- * queda auditado.
+ * No hay transiciones hacia atrás y REJECTED es terminal. Desde el Hito 5, lo
+ * que viene después de APPROVED (publicar en canario, promover, revertir y
+ * volver a Legacy) lo hace {@see StudioPublications}, con sus llaves
+ * ({@see StudioPublishing}); aquí solo se enseñan sus acciones y sus entradas.
  *
  * EL SERVIDOR NO SE FÍA DEL NAVEGADOR: cada transición revalida contra el
  * catálogo ACTUAL y recalcula la huella. Los avisos los tiene que reconocer al
@@ -34,7 +35,8 @@ use InvalidArgumentException;
  * misma transacción. Sin `FOR UPDATE`, así que no hay interbloqueos: de dos
  * aprobaciones simultáneas, una gana y la otra recibe 409 `invalid_transition`.
  *
- * Aprobar aquí no cambia al agente: el motor no lee versiones del Studio.
+ * Aprobar aquí no cambia al agente: el motor solo lee la cadena de
+ * publicaciones, y ni siquiera eso cambia lo que dice o hace (contrato H5 §A1).
  *
  * FORMATO (Hito G, contrato G §A7). Las versiones nuevas son de formato 2
  * (`content.format = 2`): sus reglas copiadas llevan `conditions` y su huella
@@ -341,26 +343,6 @@ final class StudioVersions
     }
 
     /**
-     * POST versions/{uuid}/publish | rollback: 409 SIEMPRE en esta fase. El
-     * intento queda auditado aparte (la operación falla, no hay transacción
-     * que confirmar) y se devuelve el rechazo para que el controlador lo lance.
-     */
-    public function refuse(StudioAccess $access, Request $request, StudioVersion $version, string $action): UltronStudioException
-    {
-        $access->require($action === 'rollback' ? StudioAccess::ROLLBACK : StudioAccess::PUBLISH);
-        $rechazo = StudioPublishing::refusal($action);
-
-        $this->audit->recordDenied($request, $access->actor, "version.{$action}_refused", StudioAuditEvent::SUBJECT_VERSION, $version->uuid,
-            ($action === 'rollback' ? 'Pidió revertir' : 'Pidió publicar')." «{$version->label}»: rechazado ({$rechazo['code']})", [
-                'fromStatus' => $version->status,
-                'contentHash' => $version->content_hash,
-                'diff' => ['code' => $rechazo['code']],
-            ]);
-
-        return UltronStudioException::publishingRefused($rechazo['code'], $rechazo['message']);
-    }
-
-    /**
      * VersionSummary (contrato §A3).
      *
      * @return array<string, mixed>
@@ -404,7 +386,9 @@ final class StudioVersions
 
     /**
      * VersionDetail: el resumen más la nota, el contenido, la última
-     * validación, la integridad recalculada y qué puede hacer quien mira.
+     * validación, la integridad recalculada, qué puede hacer quien mira y,
+     * desde el Hito 5, las entradas de la cadena que la nombran (contrato H5
+     * §A7), de la más reciente a la más antigua.
      *
      * @return array<string, mixed>
      */
@@ -425,6 +409,7 @@ final class StudioVersions
             'lastValidation' => $v->last_validation,
             'integrityOk' => self::integrityOk($v),
             'actions' => $this->actions($access, $v),
+            'publications' => StudioPublications::forVersion($v),
         ];
     }
 
@@ -499,16 +484,13 @@ final class StudioVersions
             default => ['allowed' => true],
         };
 
-        $publicar = StudioPublishing::refusal('publish');
-        $revertir = StudioPublishing::refusal('rollback');
-
+        // Hito 5: publicar, promover y revertir, con sus puertas que se saben
+        // sin leer nada más (contrato H5 §A7).
         return [
             'submit' => $enviar,
             'approve' => $revisar,
             'reject' => $revisar,
-            'publish' => $no($publicar['code'], $publicar['message']),
-            'rollback' => $no($revertir['code'], $revertir['message']),
-        ];
+        ] + StudioPublishing::actions($access, $v);
     }
 
     /**
@@ -615,14 +597,16 @@ final class StudioVersions
      * Valida el contenido de una versión contra el catálogo actual: los
      * hallazgos de F y, desde el formato 2, al final los de SUS reglas
      * copiadas. Una versión de formato 1 (F) se valida exactamente como en F.
-     * Un formato desconocido no se interpreta: la versión no es íntegra.
+     * Un formato desconocido no se interpreta: la versión no es íntegra. Desde
+     * el Hito 5 lo usa también la revalidación al publicar
+     * ({@see StudioPublications}).
      *
      * @param  array<string, mixed>  $content
      * @return list<array<string, mixed>>
      *
      * @throws UltronStudioException 409 `integrity_mismatch` con un formato desconocido
      */
-    private static function findings(array $content): array
+    public static function findings(array $content): array
     {
         $formato = self::formatOf($content);
         $reglas = is_array($content['rules'] ?? null) ? array_values(array_filter($content['rules'], 'is_array')) : [];
@@ -653,15 +637,18 @@ final class StudioVersions
 
     /**
      * Un lado de `GET compare`: su descripción (`CompareSide` del CRM) y el
-     * contenido que compara {@see StudioContentDiff}.
+     * contenido que compara {@see StudioContentDiff}. Desde el Hito 5 (contrato
+     * H5 §A10.1, I-2 de G), `integrityOk`: la huella recalculada de una versión
+     * (`bool`), y null en la línea base y el borrador, que no tienen huella
+     * guardada. El diff no cambia: el CRM pinta una insignia.
      *
-     * @return array{0:array{kind:string,uuid:string|null,label:string,catalogVersion:string,format:int},1:array<string,mixed>}
+     * @return array{0:array{kind:string,uuid:string|null,label:string,catalogVersion:string,format:int,integrityOk:bool|null},1:array<string,mixed>}
      */
     private function side(StudioAccess $access, string $side): array
     {
         if ($side === 'baseline') {
             return [
-                ['kind' => 'baseline', 'uuid' => null, 'label' => self::BASELINE_SIDE_LABEL, 'catalogVersion' => StudioCatalog::VERSION, 'format' => StudioContentHasher::LATEST_FORMAT],
+                ['kind' => 'baseline', 'uuid' => null, 'label' => self::BASELINE_SIDE_LABEL, 'catalogVersion' => StudioCatalog::VERSION, 'format' => StudioContentHasher::LATEST_FORMAT, 'integrityOk' => null],
                 ['catalogVersion' => StudioCatalog::VERSION, 'format' => StudioContentHasher::LATEST_FORMAT]
                 + StudioDrafts::baselineContent()
                 + ['rules' => StudioRules::baselineSnapshot()],
@@ -674,7 +661,7 @@ final class StudioVersions
             $catalogo = $draft !== null ? $draft->catalog_version : StudioCatalog::VERSION;
 
             return [
-                ['kind' => 'draft', 'uuid' => null, 'label' => self::DRAFT_SIDE_LABEL, 'catalogVersion' => $catalogo, 'format' => StudioContentHasher::LATEST_FORMAT],
+                ['kind' => 'draft', 'uuid' => null, 'label' => self::DRAFT_SIDE_LABEL, 'catalogVersion' => $catalogo, 'format' => StudioContentHasher::LATEST_FORMAT, 'integrityOk' => null],
                 ['catalogVersion' => $catalogo, 'format' => StudioContentHasher::LATEST_FORMAT]
                 + ($draft !== null ? $draft->content : StudioDrafts::baselineContent())
                 + ['rules' => StudioRules::snapshotForVersion(StudioContentHasher::LATEST_FORMAT)],
@@ -684,7 +671,7 @@ final class StudioVersions
         $version = $this->findByUuid($side);
 
         return [
-            ['kind' => 'version', 'uuid' => $version->uuid, 'label' => $version->label, 'catalogVersion' => $version->catalog_version, 'format' => self::formatOf($version->content)],
+            ['kind' => 'version', 'uuid' => $version->uuid, 'label' => $version->label, 'catalogVersion' => $version->catalog_version, 'format' => self::formatOf($version->content), 'integrityOk' => self::integrityOk($version)],
             $version->content,
         ];
     }

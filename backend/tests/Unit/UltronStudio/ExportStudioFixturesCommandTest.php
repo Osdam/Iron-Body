@@ -5,11 +5,13 @@ namespace Tests\Unit\UltronStudio;
 use App\Console\Commands\UltronStudio\ExportStudioFixturesCommand;
 use App\Services\UltronStudio\StudioCatalog;
 use App\Services\UltronStudio\StudioLabCatalog;
+use App\Services\UltronStudio\StudioPublicationExport;
+use App\Services\UltronStudio\StudioVersionStatus;
 use Tests\TestCase;
 
 /**
- * El comando que lleva el catálogo, los casos de paridad y los escenarios del
- * laboratorio al CRM.
+ * El comando que lleva el catálogo, los casos de paridad, los escenarios del
+ * laboratorio y, desde el Hito 5, las formas de la publicación al CRM.
  *
  * LO QUE SE PROTEGE. Que lo exportado sea exactamente lo que el servidor usa
  * (el catálogo de `GET catalog`, los casos tal cual, sin pasar un `{}` a `[]`,
@@ -54,12 +56,12 @@ class ExportStudioFixturesCommandTest extends TestCase
         return substr($ts, $inicio, $fin - $inicio);
     }
 
-    public function test_it_writes_the_four_files_and_creates_the_testing_folder_inside_an_existing_one(): void
+    public function test_it_writes_the_five_files_and_creates_the_testing_folder_inside_an_existing_one(): void
     {
         $destino = $this->dir.'/testing';
 
         $this->artisan('ultron-studio:export-fixtures', ['--path' => $destino])
-            ->expectsOutputToContain('de coherencia y 11 escenarios del laboratorio')
+            ->expectsOutputToContain('de coherencia, 11 escenarios del laboratorio ('.StudioLabCatalog::VERSION.') y las formas de la publicación')
             ->assertSuccessful();
 
         $catalogo = (string) file_get_contents($destino.'/'.ExportStudioFixturesCommand::CATALOG_FILE);
@@ -100,6 +102,24 @@ class ExportStudioFixturesCommandTest extends TestCase
         $this->assertSame(StudioLabCatalog::CATEGORIES, $lab['categories']);
         $this->assertSame(100, $lab['limits']['maxLiveScenarios']);
         $this->assertStringContainsString("\n  \"version\": ", self::literal($laboratorio, 'BACKEND_LAB_SCENARIOS'), 'sangría de dos espacios, como el CRM');
+
+        // Hito 5: las formas de la publicación, con los presentadores reales.
+        $publicacion = (string) file_get_contents($destino.'/'.ExportStudioFixturesCommand::PUBLICATION_FILE);
+        $this->assertStringStartsWith('// Formas de la publicación de ULTRON STUDIO', $publicacion);
+        $this->assertStringContainsString('GENERADO — no editar a mano.', $publicacion);
+        $this->assertStringEndsWith(" as const;\n", $publicacion);
+        $formas = json_decode(self::literal($publicacion, 'BACKEND_PUBLICATION'), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame(json_decode((string) json_encode(StudioPublicationExport::shapes()), true), $formas, 'lo mismo que el servidor, en el mismo orden');
+        $this->assertSame(StudioVersionStatus::lifecycle(), $formas['lifecycle']);
+        $this->assertSame(['publish', 'promote', 'rollback', 'legacy'], array_keys($formas['examples']['entries']));
+        $this->assertSame(['versionUuid', 'contentHash', 'previewHash', 'publishable', 'params', 'noEffect', 'requirements', 'blocking'], array_keys($formas['examples']['preview']));
+        $this->assertTrue($formas['examples']['preview']['publishable']);
+        $this->assertSame(['publishing_disabled', 'lab_verdict_required'], $formas['examples']['previewBlocked']['blocking']);
+        $this->assertTrue($formas['examples']['evidence']['passes']);
+        $this->assertSame(['turns'], $formas['examples']['evidenceInsufficient']['failing']);
+        $this->assertSame(403, $formas['errors']['four_eyes_required']);
+        $this->assertCount(21, $formas['errors'], 'los 19 códigos de §A7, publishing_disabled (de F) y publication_head_invalid');
+        $this->assertStringContainsString("\n  \"version\": ", self::literal($publicacion, 'BACKEND_PUBLICATION'), 'sangría de dos espacios, como el CRM');
     }
 
     public function test_it_refuses_a_path_whose_parent_does_not_exist(): void
@@ -123,5 +143,6 @@ class ExportStudioFixturesCommandTest extends TestCase
         $this->assertFileExists($this->dir.'/'.ExportStudioFixturesCommand::CASES_FILE);
         $this->assertFileExists($this->dir.'/'.ExportStudioFixturesCommand::COHERENCE_FILE);
         $this->assertFileExists($this->dir.'/'.ExportStudioFixturesCommand::LAB_SCENARIOS_FILE);
+        $this->assertFileExists($this->dir.'/'.ExportStudioFixturesCommand::PUBLICATION_FILE);
     }
 }

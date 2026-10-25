@@ -7,6 +7,7 @@ use App\Support\Access\AuthorizationMap;
 use App\Support\Access\CrmPermission;
 use App\Support\Access\PermissionCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
@@ -17,7 +18,8 @@ use Tests\TestCase;
  * contrato G §A6 para las dos rutas de lectura del Hito G; y contrato H4 §A7
  * para las 12 del laboratorio).
  *
- * Las 33 rutas, una a una, con cada perfil: sin sesión, token compartido, los
+ * Las 38 rutas (desde el Hito 5, contrato H5 §A7, las cinco de la publicación),
+ * una a una, con cada perfil: sin sesión, token compartido, los
  * roles sin Studio, un rol con TODO Mercadeo (incluido pausar el agente), el
  * Administrador y el Super Admin. «Permitido» quiere decir que la puerta deja
  * pasar: la respuesta puede ser 200, 404, 409 o 422 según el cuerpo, pero
@@ -34,7 +36,7 @@ class UltronStudioPermissionsTest extends TestCase
     use RefreshDatabase;
     use StudioFixtures;
 
-    /** Las 19 rutas del contrato §A3, las 2 del contrato G §A6 y las 12 del H4 §A7, con su permiso. */
+    /** Las 19 rutas del contrato §A3, las 2 del contrato G §A6, las 12 del H4 §A7 y las 5 del H5 §A7, con su permiso. */
     private const ROUTES = [
         ['GET', 'status', 'ultron.view'],
         ['GET', 'catalog', 'ultron.view'],
@@ -69,6 +71,11 @@ class UltronStudioPermissionsTest extends TestCase
         ['POST', 'lab/runs', 'ultron.lab_run'],
         ['POST', 'lab/runs/{uuid}/cancel', 'ultron.lab_run'],
         ['POST', 'lab/runs/{uuid}/verdict', 'ultron.approve'],
+        ['GET', 'versions/{uuid}/publication-preview', 'ultron.view'],
+        ['GET', 'versions/{uuid}/canary-evidence', 'ultron.view'],
+        ['POST', 'versions/{uuid}/promote', 'ultron.publish'],
+        ['GET', 'publications', 'ultron.view'],
+        ['POST', 'publications/legacy', 'ultron.rollback'],
     ];
 
     /** Las ocho llaves del Studio, en el orden del catálogo. */
@@ -106,7 +113,7 @@ class UltronStudioPermissionsTest extends TestCase
         $this->run = (string) $this->launch($autora, self::versionTarget($this->version), ['C-01'])->assertCreated()->json('data.uuid');
     }
 
-    public function test_el_mapa_resuelve_exactamente_las_33_rutas_del_contrato(): void
+    public function test_el_mapa_resuelve_exactamente_las_38_rutas_del_contrato(): void
     {
         $esperado = [];
         foreach (self::ROUTES as [$metodo, $ruta, $permiso]) {
@@ -125,7 +132,7 @@ class UltronStudioPermissionsTest extends TestCase
         $this->assertSame($esperado, $real);
     }
 
-    public function test_sin_sesion_es_401_en_las_33(): void
+    public function test_sin_sesion_es_401_en_las_38(): void
     {
         foreach (self::ROUTES as [$metodo, $ruta]) {
             $this->json($metodo, $this->url($ruta), $this->body($ruta, $metodo))
@@ -183,8 +190,18 @@ class UltronStudioPermissionsTest extends TestCase
         foreach (self::ROUTES as [$metodo, $ruta, $permiso]) {
             $r = $this->studio($metodo, $this->path($ruta), $root, $this->body($ruta, $metodo));
             $this->assertAllowed($r, "Super Admin · {$metodo} {$ruta}");
-            if (in_array($permiso, ['ultron.publish', 'ultron.rollback'], true)) {
-                $r->assertStatus(409)->assertJsonPath('code', 'publishing_disabled');
+            // Hito 5: publicar y promover, con la llave del Studio apagada (el
+            // defecto), 409 `publishing_disabled`. Revertir y Legacy no miran
+            // llaves: la versión de la matriz (un borrador) no está publicada y
+            // la cadena está vacía.
+            $esperado = match ($ruta) {
+                'versions/{uuid}/publish', 'versions/{uuid}/promote' => 'publishing_disabled',
+                'versions/{uuid}/rollback' => 'not_active_publication',
+                'publications/legacy' => 'already_legacy',
+                default => null,
+            };
+            if ($esperado !== null) {
+                $r->assertStatus(409)->assertJsonPath('code', $esperado);
             }
         }
     }
@@ -195,6 +212,12 @@ class UltronStudioPermissionsTest extends TestCase
 
         foreach (self::ROUTES as [$metodo, $ruta, $permiso]) {
             $r = $this->json($metodo, $this->url($ruta), $this->body($ruta, $metodo), $headers);
+            if ($ruta === 'versions/{uuid}/canary-evidence') {
+                // La evidencia es solo de la versión en canario (Hito 5): la puerta deja pasar.
+                $r->assertStatus(409)->assertJsonPath('code', 'invalid_transition')->assertJsonPath('allowedFrom', ['CANARY']);
+
+                continue;
+            }
             if ($permiso === 'ultron.view') {
                 $r->assertOk();
 
@@ -206,9 +229,13 @@ class UltronStudioPermissionsTest extends TestCase
 
     public function test_cada_escritura_pide_su_llave_y_basta_con_ella(): void
     {
+        // Siete llaves por todas las escrituras superan el techo de red del
+        // cupo de escritura (120/min), que aquí no es lo que se prueba (lo
+        // prueba `test_los_cupos_responden_429_con_retry_after_y_no_se_mezclan`).
+        $this->withoutMiddleware(ThrottleRequests::class);
         // Con `ultron.view` + la llave de la ruta, la puerta deja pasar; con
         // `ultron.view` + OTRA llave del Studio, no.
-        foreach (['ultron.edit_draft', 'ultron.manage_rules', 'ultron.approve', 'ultron.lab_manage', 'ultron.lab_run'] as $llave) {
+        foreach (['ultron.edit_draft', 'ultron.manage_rules', 'ultron.approve', 'ultron.lab_manage', 'ultron.lab_run', 'ultron.publish', 'ultron.rollback'] as $llave) {
             $headers = $this->adminWithPermissions(['ultron.view', $llave]);
             foreach (self::ROUTES as [$metodo, $ruta, $permiso]) {
                 if ($permiso === 'ultron.view') {
@@ -265,8 +292,12 @@ class UltronStudioPermissionsTest extends TestCase
         $this->assertSame('Administrar escenarios del laboratorio', $porLlave['ultron.lab_manage']['label']);
         $this->assertSame('Lanzar ejecuciones del laboratorio (consume presupuesto)', $porLlave['ultron.lab_run']['label']);
         $this->assertStringContainsString('No llega por defecto al Administrador', (string) $porLlave['ultron.lab_run']['help']);
+        // Hito 5 (contrato H5 §A11): el texto obligatorio, en la ayuda de publicar.
+        $this->assertStringStartsWith('Publicar registra esta versión como la configuración oficial de ULTRON y el motor la anota en cada turno. En este hito no cambia lo que ULTRON dice ni hace.', (string) $porLlave['ultron.publish']['help']);
+        $this->assertStringContainsString('En este hito no cambia lo que ULTRON dice ni hace.', (string) $porLlave['ultron.rollback']['help']);
+        $this->assertStringContainsString('No depende de las llaves que permiten publicar', (string) $porLlave['ultron.rollback']['help']);
         foreach (['ultron.publish', 'ultron.rollback'] as $llave) {
-            $this->assertStringContainsString('desactivado en el servidor; no llega por defecto al Administrador', (string) $porLlave[$llave]['help']);
+            $this->assertStringContainsString('No llega por defecto al Administrador', (string) $porLlave[$llave]['help']);
         }
         foreach ($filas as $f) {
             $this->assertNotSame('', $f['label']);
@@ -342,6 +373,10 @@ class UltronStudioPermissionsTest extends TestCase
             'lab/scenarios/{uuid}/archive' => ['reason' => 'Archivado desde la matriz'],
             'lab/runs' => ['target' => ['kind' => 'baseline'], 'scenarioUuids' => [$this->scenarioUuid('C-02')], 'acceptedMaxCostMicros' => 0, 'clientRequestId' => (string) Str::uuid()],
             'lab/runs/{uuid}/verdict' => ['decision' => 'needs_changes', 'note' => 'Nota desde la matriz', 'resultsHash' => str_repeat('0', 64)],
+            // Hito 5: los cuerpos de la publicación.
+            'versions/{uuid}/publish' => ['clientRequestId' => (string) Str::uuid(), 'previewHash' => str_repeat('0', 64), 'acknowledgedNoEffect' => []],
+            'versions/{uuid}/promote' => ['clientRequestId' => (string) Str::uuid(), 'evidenceHash' => str_repeat('0', 64)],
+            'versions/{uuid}/rollback', 'publications/legacy' => ['clientRequestId' => (string) Str::uuid(), 'reason' => 'Motivo desde la matriz'],
             default => [],
         };
     }

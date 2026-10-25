@@ -7,7 +7,9 @@ use App\Models\UltronStudio\StudioAuditEvent;
 use App\Models\UltronStudio\StudioDraft;
 use App\Services\UltronStudio\StudioAudit;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -174,5 +176,51 @@ class UltronStudioAuditTest extends TestCase
 
         $this->assertSame('Ana Pérez', StudioAuditEvent::query()->sole()->actor_name);
         $this->assertSame('Ana Pérez', $this->studio('GET', 'audit', $this->root)->assertOk()->json('data.data.0.actor.name'));
+    }
+
+    /**
+     * Contrato H5 §A10.6 (la lección B-2 de G y la Enmienda 4.6 de H4): la
+     * deduplicación de los intentos denegados toma su cerrojo en READ
+     * COMMITTED aunque la sesión vaya en REPEATABLE READ. Si no, la instantánea
+     * la tomaría la propia sentencia del cerrojo, ANTES de esperar, y dos
+     * intentos simultáneos de la misma persona dejarían dos filas en un libro
+     * que no se puede vaciar. Una sesión PROPIA con REPEATABLE READ por
+     * defecto; justo antes del cerrojo se lee el nivel y se corta: nada se
+     * escribe y nadie espera.
+     */
+    public function test_la_deduplicacion_de_los_denegados_fija_read_committed_aunque_la_sesion_vaya_en_repeatable_read(): void
+    {
+        if (! $this->isPostgres()) {
+            $this->markTestSkipped('Niveles de aislamiento y cerrojo consultivo: solo PostgreSQL (SQLite escribe en serie).');
+        }
+        config(['database.connections.studio_rr' => config('database.connections.'.DB::getDefaultConnection())]);
+        $rr = DB::connection('studio_rr');
+        $rr->statement('SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+        $rr->statement("SET lock_timeout = '5s'");
+        $this->assertSame('repeatable read', $rr->transaction(static fn () => $rr->selectOne('SHOW transaction_isolation')->transaction_isolation), 'la sesión de la prueba no arranca en REPEATABLE READ');
+
+        $niveles = [];
+        $rr->beforeExecuting(function (string $sql) use ($rr, &$niveles): void {
+            if (str_contains($sql, 'pg_advisory_xact_lock')) {
+                $niveles[] = $rr->selectOne('SHOW transaction_isolation')->transaction_isolation;
+
+                throw new RuntimeException('corte de la prueba antes del cerrojo');
+            }
+        });
+
+        $porDefecto = DB::getDefaultConnection();
+        DB::setDefaultConnection('studio_rr');
+        try {
+            app(StudioAudit::class)->recordDenied(null, $this->root, 'version.publish_refused', StudioAuditEvent::SUBJECT_VERSION, (string) Str::uuid(),
+                'Pidió publicar «X»: rechazado (publishing_disabled)', ['diff' => ['code' => 'publishing_disabled']]);
+            $this->fail('recordDenied no llegó al cerrojo.');
+        } catch (RuntimeException $e) {
+            $this->assertSame('corte de la prueba antes del cerrojo', $e->getMessage());
+        } finally {
+            DB::setDefaultConnection($porDefecto);
+            DB::purge('studio_rr');
+        }
+
+        $this->assertSame(['read committed'], $niveles, 'La deduplicación de los intentos denegados toma su cerrojo sin READ COMMITTED.');
     }
 }

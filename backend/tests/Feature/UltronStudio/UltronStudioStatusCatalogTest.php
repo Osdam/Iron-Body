@@ -26,16 +26,20 @@ class UltronStudioStatusCatalogTest extends TestCase
 
         $r = $this->studio('GET', 'status', $root)->assertOk();
 
+        // Hito 5 (contrato H5 §A7): el motor lee versiones (la constante está
+        // girada) y `engine.publication` dice qué declara la cadena; con las
+        // llaves por defecto, el motor no la lee y publicar está desactivado.
         $r->assertJsonPath('ok', true)
             ->assertJsonPath('data.engine', [
-                'readsVersions' => false,
+                'readsVersions' => true,
                 'activeVersion' => null,
-                'message' => 'El motor de ULTRON no lee versiones del Studio: aprobar aquí no cambia al agente.',
+                'message' => 'El motor de ULTRON no lee la cadena de publicaciones (su llave está apagada): publicar aquí no cambia nada en el agente.',
+                'publication' => ['envScope' => 'off', 'head' => null, 'canary' => null, 'rest' => null, 'drift' => [], 'state' => 'off'],
             ])
             ->assertJsonPath('data.publishing', [
                 'available' => false,
                 'code' => 'publishing_disabled',
-                'message' => 'Publicar está desactivado: el motor de ULTRON aún no lee versiones del Studio.',
+                'message' => 'Publicar está desactivado en el servidor: lo enciende quien administra el sistema.',
             ])
             ->assertJsonPath('data.can', ['view' => true, 'editDraft' => true, 'manageRules' => true, 'approve' => true, 'publish' => true, 'rollback' => true])
             ->assertJsonPath('data.catalog', ['version' => StudioCatalog::VERSION, 'hash' => StudioCatalog::hash()])
@@ -51,6 +55,14 @@ class UltronStudioStatusCatalogTest extends TestCase
         foreach ($pasos as $p) {
             $this->assertSame(! $p['reachable'], array_key_exists('reason', $p), $p['status']);
         }
+        // Hito 5: los cuatro de la publicación son alcanzables; RETIRED es «Sustituida».
+        $this->assertSame(['VALIDATING'], array_column(array_filter($pasos, static fn (array $p): bool => ! $p['reachable']), 'status'));
+        $this->assertSame([
+            ['status' => 'CANARY', 'label' => 'Canario', 'reachable' => true],
+            ['status' => 'PUBLISHED', 'label' => 'Publicada', 'reachable' => true],
+            ['status' => 'RETIRED', 'label' => 'Sustituida', 'reachable' => true],
+            ['status' => 'ROLLED_BACK', 'label' => 'Revertida', 'reachable' => true],
+        ], array_slice($pasos, 6));
 
         $this->importBaseline();
         $this->studio('GET', 'status', $root)->assertOk()->assertJsonPath('data.legacyBaseline.rulesImported', 12);
@@ -102,7 +114,10 @@ class UltronStudioStatusCatalogTest extends TestCase
             $cuerpos .= $this->studio('GET', $ruta, $root)->assertOk()->getContent();
         }
         $cuerpos .= $this->studio('POST', "versions/{$uuid}/validate", $root)->assertOk()->getContent();
-        $cuerpos .= $this->studio('POST', "versions/{$uuid}/publish", $root)->assertStatus(409)->getContent();
+        $cuerpos .= $this->studio('POST', "versions/{$uuid}/publish", $root, ['clientRequestId' => (string) Str::uuid(), 'previewHash' => str_repeat('0', 64), 'acknowledgedNoEffect' => []])->assertStatus(409)->getContent();
+        // Hito 5: la vista previa y el historial de la cadena.
+        $cuerpos .= $this->studio('GET', "versions/{$uuid}/publication-preview", $root)->assertOk()->getContent();
+        $cuerpos .= $this->studio('GET', 'publications', $root)->assertOk()->getContent();
 
         foreach (['3150536026', '573150536026', 'Prospecto Secreto', 'Bearer', 'sk-', 'wamid', 'HMAC', 'secret-password'] as $prohibido) {
             $this->assertStringNotContainsString($prohibido, $cuerpos, "Una respuesta del Studio contiene «{$prohibido}».");

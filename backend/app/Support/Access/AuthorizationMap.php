@@ -656,9 +656,10 @@ final class AuthorizationMap
          * `marketing.view` y `marketing.agent.manage` no abren nada de esto. Los
          * controladores exigen además una PERSONA (el token compartido no
          * recibe nada de `ultron`, ver CrmPermission) y los CUATRO OJOS por
-         * identidad: `ultron.approve` no deja aprobar lo propio. Publicar y
-         * revertir responden 409 siempre en esta fase: el motor no lee
-         * versiones del Studio.
+         * identidad: `ultron.approve` no deja aprobar lo propio, y desde el
+         * Hito 5 `ultron.publish` no deja publicar ni promover lo propio.
+         * Publicar y promover dependen además de dos llaves de entorno (409
+         * con ellas apagadas, como hoy); revertir y volver a Legacy, no.
          */
         'GET api/admin/ultron-studio/status' => 'ultron.view',
         'GET api/admin/ultron-studio/catalog' => 'ultron.view',
@@ -709,6 +710,17 @@ final class AuthorizationMap
         'POST api/admin/ultron-studio/lab/runs' => 'ultron.lab_run',
         'POST api/admin/ultron-studio/lab/runs/{uuid}/cancel' => 'ultron.lab_run',
         'POST api/admin/ultron-studio/lab/runs/{uuid}/verdict' => 'ultron.approve',
+        // Hito 5 (contrato docs/ultron-studio/ULTRON_STUDIO_H5_CONTRACT.md §A7):
+        // la cadena de publicaciones. La vista previa, la evidencia del canario
+        // (con su propio limitador) y el historial solo leen, con `ultron.view`;
+        // promover es publicar para todas (`ultron.publish`, cuatro ojos y las
+        // dos llaves); volver a Legacy es el sentido seguro, como revertir
+        // (`ultron.rollback`, sin llaves). Sin llaves nuevas.
+        'GET api/admin/ultron-studio/versions/{uuid}/publication-preview' => 'ultron.view',
+        'GET api/admin/ultron-studio/versions/{uuid}/canary-evidence' => 'ultron.view',
+        'POST api/admin/ultron-studio/versions/{uuid}/promote' => 'ultron.publish',
+        'GET api/admin/ultron-studio/publications' => 'ultron.view',
+        'POST api/admin/ultron-studio/publications/legacy' => 'ultron.rollback',
 
         // Ver el catálogo de roles ya revela el organigrama y qué puede cada
         // uno. Se exige el mismo permiso que para tocarlo: un dominio con una

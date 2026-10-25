@@ -304,16 +304,34 @@ class UltronStudioLabNoEngineEffectsTest extends TestCase
             'GET api/admin/ultron-studio/engine/readings' => 'ultron.view',
             'GET api/admin/ultron-studio/compare' => 'ultron.view',
         ];
+        // Las cinco del Hito 5 (contrato H5 §A7) son de la publicación, no del
+        // laboratorio: van aparte, y las 21 de F y G siguen idénticas.
+        $h5 = [
+            'GET api/admin/ultron-studio/versions/{uuid}/publication-preview' => 'ultron.view',
+            'GET api/admin/ultron-studio/versions/{uuid}/canary-evidence' => 'ultron.view',
+            'POST api/admin/ultron-studio/versions/{uuid}/promote' => 'ultron.publish',
+            'GET api/admin/ultron-studio/publications' => 'ultron.view',
+            'POST api/admin/ultron-studio/publications/legacy' => 'ultron.rollback',
+        ];
         $real = [];
+        $deH5 = [];
         foreach (Route::getRoutes() as $route) {
             if (str_starts_with($route->uri(), 'api/admin/ultron-studio') && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/lab/')) {
-                $real[AuthorizationMap::routeKey($route)] = AuthorizationMap::resolve($route);
+                $clave = AuthorizationMap::routeKey($route);
+                if (array_key_exists($clave, $h5)) {
+                    $deH5[$clave] = AuthorizationMap::resolve($route);
+                } else {
+                    $real[$clave] = AuthorizationMap::resolve($route);
+                }
                 $this->assertStringNotContainsString('ultron-studio-lab-run', implode(',', $route->gatherMiddleware()), $route->uri());
             }
         }
         ksort($real);
         ksort($fg);
         $this->assertSame($fg, $real);
+        ksort($deH5);
+        ksort($h5);
+        $this->assertSame($h5, $deH5);
 
         // Las respuestas de F no ganan claves del laboratorio.
         $ana = $this->person(Admin::ROLE_ADMINISTRADOR, 'Ana');
@@ -321,7 +339,8 @@ class UltronStudioLabNoEngineEffectsTest extends TestCase
         $this->assertSame(['engine', 'publishing', 'can', 'catalog', 'lifecycle', 'legacyBaseline'], array_keys($estado));
         $this->assertSame(['view', 'editDraft', 'manageRules', 'approve', 'publish', 'rollback'], array_keys($estado['can']));
         $version = $this->createVersion($ana)->assertCreated()->json('data');
-        $this->assertSame(['submit', 'approve', 'reject', 'publish', 'rollback'], array_keys($version['actions']));
+        // Hito 5: `promote`, junto a publicar y revertir.
+        $this->assertSame(['submit', 'approve', 'reject', 'publish', 'promote', 'rollback'], array_keys($version['actions']));
     }
 
     // ────────────────────────────────────────────────────────────────────────

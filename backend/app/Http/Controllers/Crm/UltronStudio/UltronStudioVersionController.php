@@ -7,6 +7,7 @@ use App\Http\Controllers\Concerns\ValidatesListSizesFirst;
 use App\Http\Controllers\Controller;
 use App\Rules\PlainText;
 use App\Services\UltronStudio\StudioAccess;
+use App\Services\UltronStudio\StudioPublications;
 use App\Services\UltronStudio\StudioVersions;
 use App\Services\UltronStudio\StudioVersionStatus;
 use Illuminate\Http\JsonResponse;
@@ -22,9 +23,17 @@ use Illuminate\Validation\ValidationException;
  * Sin route-model binding: el uuid llega como texto (la ruta ya exige su
  * formato) y lo resuelve el servicio, con 404 `version_not_found`.
  *
- * Aprobar aquí no cambia al agente; publicar y revertir son 409 siempre.
+ * Aprobar aquí no cambia al agente.
  *
  * Desde el Hito G, también la comparación (ruta 21, contrato G §A4).
+ *
+ * Desde el Hito 5 (contrato H5 §A5 y §A7), publicar en canario, promover y
+ * revertir de verdad, más la vista previa y la evidencia del canario (rutas 13,
+ * 14, 34, 35 y 36), con {@see StudioPublications}. Ese servicio lee el motor y
+ * se resuelve en cada acción, no en el constructor: las demás rutas de
+ * versiones no tocan ninguna clase del motor. Las cuatro escrituras responden
+ * 201 con la entrada creada (`PublicationEntryDto`) y 200 `replayed` con la de
+ * la primera vez si la petición se repite.
  */
 class UltronStudioVersionController extends Controller
 {
@@ -33,6 +42,9 @@ class UltronStudioVersionController extends Controller
 
     /** Un lado de `GET compare`: `baseline`, `draft` o el uuid de una versión. */
     private const COMPARE_SIDE = '/^(baseline|draft|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$/';
+
+    /** `previewHash` y `evidenceHash`: sha256 en hexadecimal en minúsculas, como los calcula el servidor (se comparan exactos). */
+    private const SHA256 = '/^[0-9a-f]{64}$/';
 
     public function __construct(private readonly StudioVersions $versions) {}
 
@@ -175,20 +187,110 @@ class UltronStudioVersionController extends Controller
         return response()->json(['ok' => true, 'data' => $this->versions->detail($access, $version)]);
     }
 
-    /** POST /api/admin/ultron-studio/versions/{uuid}/publish — 409 siempre en esta fase (queda auditado). */
-    public function publish(Request $request, string $uuid): JsonResponse
+    /**
+     * POST /api/admin/ultron-studio/versions/{uuid}/publish
+     *   {clientRequestId, previewHash, acknowledgedNoEffect[≤64], note?≤500}
+     *
+     * Siempre en canario (contrato H5 §A5.1). En dos fases: una lista de miles
+     * de elementos se rechaza por su tope sin recorrerla.
+     */
+    public function publish(Request $request, string $uuid, StudioPublications $publications): JsonResponse
     {
         $access = StudioAccess::requirePerson($request);
+        $data = $this->validateListSizesFirst($request, [
+            'clientRequestId' => ['required', 'uuid'],
+            'previewHash' => ['required', 'string', 'regex:'.self::SHA256],
+            // `present`: reconocer nada (una versión sin nada sin efecto) es
+            // decirlo, no callarlo.
+            'acknowledgedNoEffect' => ['present', 'array', 'list', 'max:'.StudioPublications::MAX_ACKNOWLEDGED],
+            'acknowledgedNoEffect.*' => ['string', 'max:80', 'regex:/^[A-Za-z0-9_.:\-]+$/', 'distinct'],
+            'note' => ['sometimes', 'nullable', 'string', 'max:'.StudioPublications::NOTE_MAX, new PlainText(multiline: true)],
+        ]);
 
-        throw $this->versions->refuse($access, $request, $this->versions->findByUuid($uuid), 'publish');
+        return self::written($publications->publish(
+            $access,
+            $request,
+            $uuid,
+            strtolower($data['clientRequestId']),
+            $data['previewHash'],
+            array_values($data['acknowledgedNoEffect']),
+            $data['note'] ?? null,
+        ));
     }
 
-    /** POST /api/admin/ultron-studio/versions/{uuid}/rollback — 409 siempre en esta fase (queda auditado). */
-    public function rollback(Request $request, string $uuid): JsonResponse
+    /**
+     * POST /api/admin/ultron-studio/versions/{uuid}/promote   {clientRequestId, evidenceHash, note?≤500}
+     *
+     * De canario a todas (contrato H5 §A5.2).
+     */
+    public function promote(Request $request, string $uuid, StudioPublications $publications): JsonResponse
+    {
+        $access = StudioAccess::requirePerson($request);
+        $data = $request->validate([
+            'clientRequestId' => ['required', 'uuid'],
+            'evidenceHash' => ['required', 'string', 'regex:'.self::SHA256],
+            'note' => ['sometimes', 'nullable', 'string', 'max:'.StudioPublications::NOTE_MAX, new PlainText(multiline: true)],
+        ]);
+
+        return self::written($publications->promote(
+            $access,
+            $request,
+            $uuid,
+            strtolower($data['clientRequestId']),
+            $data['evidenceHash'],
+            $data['note'] ?? null,
+        ));
+    }
+
+    /**
+     * POST /api/admin/ultron-studio/versions/{uuid}/rollback   {clientRequestId, reason 5–500}
+     *
+     * Sin llaves, sin cuatro ojos y sin ventana (contrato H5 §A5.3).
+     */
+    public function rollback(Request $request, string $uuid, StudioPublications $publications): JsonResponse
+    {
+        $access = StudioAccess::requirePerson($request);
+        $data = $request->validate([
+            'clientRequestId' => ['required', 'uuid'],
+            'reason' => ['required', 'string', 'min:'.StudioPublications::REASON_MIN, 'max:'.StudioPublications::REASON_MAX, new PlainText(multiline: true)],
+        ]);
+
+        return self::written($publications->rollback($access, $request, $uuid, strtolower($data['clientRequestId']), $data['reason']));
+    }
+
+    /** GET /api/admin/ultron-studio/versions/{uuid}/publication-preview — solo lee (`PublicationPreviewDto`). */
+    public function preview(Request $request, string $uuid, StudioPublications $publications): JsonResponse
     {
         $access = StudioAccess::requirePerson($request);
 
-        throw $this->versions->refuse($access, $request, $this->versions->findByUuid($uuid), 'rollback');
+        return response()->json(['ok' => true, 'data' => $publications->preview($access, $this->versions->findByUuid($uuid))]);
+    }
+
+    /**
+     * GET /api/admin/ultron-studio/versions/{uuid}/canary-evidence — solo lee
+     * (`CanaryEvidenceDto`), y solo de la versión en canario. Es la lectura más
+     * cara (cuenta los turnos del canario y ejecuta el acta): tiene su propio
+     * limitador además del de lectura.
+     */
+    public function evidence(Request $request, string $uuid, StudioPublications $publications): JsonResponse
+    {
+        StudioAccess::requirePerson($request);
+
+        return response()->json(['ok' => true, 'data' => $publications->evidence($this->versions->findByUuid($uuid))]);
+    }
+
+    /**
+     * 201 con la entrada creada; 200 `replayed` con la de la primera vez.
+     *
+     * @param  array{entry:array<string,mixed>,replayed:bool}  $resultado
+     */
+    private static function written(array $resultado): JsonResponse
+    {
+        if ($resultado['replayed']) {
+            return response()->json(['ok' => true, 'replayed' => true, 'data' => $resultado['entry']]);
+        }
+
+        return response()->json(['ok' => true, 'data' => $resultado['entry']], 201);
     }
 
     /**

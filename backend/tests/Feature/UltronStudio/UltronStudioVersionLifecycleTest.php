@@ -18,8 +18,10 @@ use Tests\TestCase;
 /**
  * La máquina de estados de las versiones (contrato §A2 y §A8): cada fila de la
  * tabla, la idempotencia, la copia de las reglas, la integridad, los cuatro
- * ojos por identidad, el reconocimiento exacto de los avisos, publicar y
- * revertir siempre en 409, y que ningún estado inalcanzable aparezca nunca.
+ * ojos por identidad, el reconocimiento exacto de los avisos, publicar en 409
+ * con las llaves por defecto (revertir ya no mira llaves desde el Hito 5) y
+ * que VALIDATING no aparezca nunca. El ciclo de la publicación lo prueban
+ * `UltronStudioPublication*Test`.
  */
 class UltronStudioVersionLifecycleTest extends TestCase
 {
@@ -52,11 +54,16 @@ class UltronStudioVersionLifecycleTest extends TestCase
             ->assertJsonPath('data.warnings', ['opcional-E14', 'opcional-E16'])
             ->assertJsonPath('data.blocking', 0)
             ->assertJsonPath('data.review', null)
-            ->assertJsonPath('data.engineReads', false)
+            // Hito 5: la constante está girada (hay código que publica y código que lee).
+            ->assertJsonPath('data.engineReads', true)
             ->assertJsonPath('data.integrityOk', true)
             ->assertJsonPath('data.actions.submit.allowed', true)
             ->assertJsonPath('data.actions.approve', ['allowed' => false, 'code' => 'four_eyes', 'message' => 'Nadie aprueba ni rechaza lo que creó: tiene que revisarla otra persona.'])
-            ->assertJsonPath('data.actions.publish.code', 'publishing_disabled');
+            // Las acciones de la publicación, reales: el Administrador no tiene las llaves.
+            ->assertJsonPath('data.actions.publish.code', 'forbidden')
+            ->assertJsonPath('data.actions.promote.code', 'forbidden')
+            ->assertJsonPath('data.actions.rollback.code', 'forbidden')
+            ->assertJsonPath('data.publications', []);
         $this->assertSame(substr((string) $r->json('data.contentHash'), 0, 8), $r->json('data.shortHash'));
 
         $v = StudioVersion::query()->sole();
@@ -324,47 +331,57 @@ class UltronStudioVersionLifecycleTest extends TestCase
         $this->studio('GET', "versions/{$sana->uuid}", $this->root)->assertOk()->assertJsonPath('data.integrityOk', true);
     }
 
-    public function test_publicar_y_revertir_responden_409_siempre_y_queda_auditado(): void
+    /**
+     * Hito 5 (contrato H5 §A5): con las llaves por defecto publicar sigue en
+     * 409 (`publishing_disabled`; con la del Studio encendida y la del motor en
+     * `off`, `engine_not_reading_versions`), y el intento queda auditado como
+     * en F. Revertir YA NO depende de ninguna llave: sobre una versión
+     * aprobada (que no está publicada) es `not_active_publication`.
+     */
+    public function test_con_las_llaves_por_defecto_publicar_es_409_auditado_y_revertir_no_mira_llaves(): void
     {
         $uuid = $this->submittedVersion($this->ana);
         $this->studio('POST', "versions/{$uuid}/approve", $this->root, ['acknowledgedWarnings' => ['opcional-E14', 'opcional-E16']])->assertOk();
+        $publicar = fn () => $this->studio('POST', "versions/{$uuid}/publish", $this->root, ['clientRequestId' => (string) Str::uuid(), 'previewHash' => str_repeat('0', 64), 'acknowledgedNoEffect' => []]);
 
-        $this->studio('POST', "versions/{$uuid}/publish", $this->root)
+        $publicar()
             ->assertStatus(409)
             ->assertJsonPath('ok', false)
             ->assertJsonPath('code', 'publishing_disabled')
-            ->assertJsonPath('message', 'Publicar está desactivado: el motor de ULTRON aún no lee versiones del Studio.');
-        $this->studio('POST', "versions/{$uuid}/rollback", $this->root)
+            ->assertJsonPath('message', 'Publicar está desactivado en el servidor: lo enciende quien administra el sistema.');
+        $this->studio('POST', "versions/{$uuid}/rollback", $this->root, ['clientRequestId' => (string) Str::uuid(), 'reason' => 'Probar que no mira las llaves'])
             ->assertStatus(409)
-            ->assertJsonPath('code', 'publishing_disabled')
-            ->assertJsonPath('message', 'Revertir está desactivado: el motor de ULTRON aún no lee versiones del Studio.');
+            ->assertJsonPath('code', 'not_active_publication')
+            ->assertJsonPath('currentStatus', 'APPROVED');
 
-        // Con la bandera encendida, el motor sigue sin leer versiones.
+        // Con la llave del Studio encendida, el motor sigue sin leer la cadena.
         config(['ultron_studio.publishing_enabled' => true]);
-        $this->studio('POST', "versions/{$uuid}/publish", $this->root)
-            ->assertStatus(409)->assertJsonPath('code', 'engine_not_reading_versions');
+        $publicar()->assertStatus(409)->assertJsonPath('code', 'engine_not_reading_versions');
         $this->studio('GET', 'status', $this->root)->assertOk()
             ->assertJsonPath('data.publishing.available', false)
             ->assertJsonPath('data.publishing.code', 'engine_not_reading_versions');
 
         $this->assertSame('APPROVED', StudioVersion::query()->sole()->status);
+        $this->assertSame(0, DB::table('ultron_studio_publications')->count());
         $this->assertSame(
             [['code' => 'publishing_disabled'], ['code' => 'engine_not_reading_versions']],
             StudioAuditEvent::query()->where('event', 'version.publish_refused')->orderBy('id')->pluck('diff')->all(),
         );
-        $this->assertSame(1, StudioAuditEvent::query()->where('event', 'version.rollback_refused')->count());
+        // `not_active_publication` es un 409 de estado, no de llave: no se audita.
+        $this->assertSame(0, StudioAuditEvent::query()->where('event', 'version.rollback_refused')->count());
     }
 
     public function test_ningun_estado_inalcanzable_aparece_nunca(): void
     {
         $uuid = $this->submittedVersion($this->ana);
         $this->studio('POST', "versions/{$uuid}/approve", $this->root, ['acknowledgedWarnings' => ['opcional-E14', 'opcional-E16']])->assertOk();
-        $this->studio('POST', "versions/{$uuid}/publish", $this->root)->assertStatus(409);
+        $this->studio('POST', "versions/{$uuid}/publish", $this->root, ['clientRequestId' => (string) Str::uuid(), 'previewHash' => str_repeat('0', 64), 'acknowledgedNoEffect' => []])->assertStatus(409);
         $rechazada = $this->submittedVersion($this->ana, 'Otra');
         $this->studio('POST', "versions/{$rechazada}/reject", $this->root, ['reason' => 'No convence'])->assertOk();
 
+        // Hito 5: los cuatro estados de la publicación son alcanzables; VALIDATING, no.
         $alcanzables = StudioVersionStatus::reachableValues();
-        $this->assertSame(['DRAFT', 'VALIDATED', 'REVIEW_REQUIRED', 'APPROVED', 'REJECTED'], $alcanzables);
+        $this->assertSame(['DRAFT', 'VALIDATED', 'REVIEW_REQUIRED', 'APPROVED', 'REJECTED', 'CANARY', 'PUBLISHED', 'RETIRED', 'ROLLED_BACK'], $alcanzables);
         foreach (StudioVersion::query()->pluck('status') as $estado) {
             $this->assertContains($estado, $alcanzables);
         }
@@ -372,15 +389,15 @@ class UltronStudioVersionLifecycleTest extends TestCase
             $this->assertContains($estado, $alcanzables);
         }
 
-        // Y el modelo no deja escribirlos, tampoco en SQLite (sin CHECK).
+        // Y el modelo no deja escribir VALIDATING, tampoco en SQLite (sin CHECK).
         try {
-            $this->seedVersion($this->ana, $this->baseline(), 'PUBLISHED');
-            $this->fail('Una versión PUBLISHED no puede crearse.');
+            $this->seedVersion($this->ana, $this->baseline(), 'VALIDATING');
+            $this->fail('Una versión VALIDATING no puede crearse.');
         } catch (LogicException $e) {
             $this->assertStringContainsString('no alcanzable', $e->getMessage());
         }
         $this->expectException(LogicException::class);
-        StudioVersion::transition(StudioVersion::query()->value('id'), ['APPROVED'], ['status' => 'CANARY']);
+        StudioVersion::transition(StudioVersion::query()->value('id'), ['APPROVED'], ['status' => 'VALIDATING']);
     }
 
     public function test_la_version_copia_las_reglas_no_archivadas(): void
@@ -472,7 +489,12 @@ class UltronStudioVersionLifecycleTest extends TestCase
         $nadie = (string) Str::uuid();
         $this->studio('GET', "versions/{$nadie}", $this->root)->assertStatus(404)->assertJsonPath('code', 'version_not_found');
         $this->studio('POST', "versions/{$nadie}/approve", $this->root, ['acknowledgedWarnings' => []])->assertStatus(404)->assertJsonPath('code', 'version_not_found');
-        $this->studio('POST', "versions/{$nadie}/publish", $this->root)->assertStatus(404)->assertJsonPath('code', 'version_not_found');
+        // Hito 5: con las llaves abiertas (si no, publicar responde antes con su 409).
+        config(['ultron_studio.publishing_enabled' => true, 'marketing.ultron.studio_config' => 'canary']);
+        $this->studio('POST', "versions/{$nadie}/publish", $this->root, ['clientRequestId' => (string) Str::uuid(), 'previewHash' => str_repeat('0', 64), 'acknowledgedNoEffect' => []])
+            ->assertStatus(404)->assertJsonPath('code', 'version_not_found');
+        $this->studio('POST', "versions/{$nadie}/rollback", $this->root, ['clientRequestId' => (string) Str::uuid(), 'reason' => 'No existe la versión'])
+            ->assertStatus(404)->assertJsonPath('code', 'version_not_found');
         $this->studio('GET', 'versions/no-es-un-uuid', $this->root)->assertStatus(404);
     }
 }

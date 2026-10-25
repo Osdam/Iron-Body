@@ -46,8 +46,8 @@ class UltronStudioCompareTest extends TestCase
         $r = $this->compare($this->ana, 'baseline', 'draft')->assertOk();
 
         $this->assertSame(['ok' => true, 'data' => [
-            'from' => ['kind' => 'baseline', 'uuid' => null, 'label' => 'Línea base del código', 'catalogVersion' => StudioCatalog::VERSION, 'format' => 2],
-            'to' => ['kind' => 'draft', 'uuid' => null, 'label' => 'Mi borrador', 'catalogVersion' => StudioCatalog::VERSION, 'format' => 2],
+            'from' => ['kind' => 'baseline', 'uuid' => null, 'label' => 'Línea base del código', 'catalogVersion' => StudioCatalog::VERSION, 'format' => 2, 'integrityOk' => null],
+            'to' => ['kind' => 'draft', 'uuid' => null, 'label' => 'Mi borrador', 'catalogVersion' => StudioCatalog::VERSION, 'format' => 2, 'integrityOk' => null],
             'same' => true,
             'edges' => ['added' => [], 'removed' => []],
             'configs' => [],
@@ -104,7 +104,7 @@ class UltronStudioCompareTest extends TestCase
         $v2 = (string) $this->createVersion($this->ana, 'Segunda', null, $this->contentWith(['persona' => ['maxChars' => 360], 'strategy' => ['goal' => 'venta']]))->assertCreated()->json('data.uuid');
 
         $r = $this->compare($this->bea, $v1, $v2)->assertOk();
-        $r->assertJsonPath('data.from', ['kind' => 'version', 'uuid' => $v1, 'label' => 'Primera', 'catalogVersion' => StudioCatalog::VERSION, 'format' => 2])
+        $r->assertJsonPath('data.from', ['kind' => 'version', 'uuid' => $v1, 'label' => 'Primera', 'catalogVersion' => StudioCatalog::VERSION, 'format' => 2, 'integrityOk' => true])
             ->assertJsonPath('data.to.label', 'Segunda')
             ->assertJsonPath('data.same', false)
             ->assertJsonPath('data.catalogChanged', false)
@@ -126,7 +126,7 @@ class UltronStudioCompareTest extends TestCase
 
         $data = $this->compare($this->ana, $f->uuid, 'draft')->assertOk()->json('data');
 
-        $this->assertSame(['kind' => 'version', 'uuid' => $f->uuid, 'label' => $f->label, 'catalogVersion' => self::CATALOG_F, 'format' => 1], $data['from']);
+        $this->assertSame(['kind' => 'version', 'uuid' => $f->uuid, 'label' => $f->label, 'catalogVersion' => self::CATALOG_F, 'format' => 1, 'integrityOk' => true], $data['from']);
         $this->assertTrue($data['catalogChanged']);
         // Las reglas del código ganaron condiciones y aristas en G.
         $cambiadas = collect($data['rules']['changed'])->keyBy('code');
@@ -139,6 +139,33 @@ class UltronStudioCompareTest extends TestCase
         $this->assertSame([], $data['configs']);
         $this->assertSame(['added' => [], 'removed' => []], $data['edges']);
         $this->assertFalse($data['same']);
+    }
+
+    /**
+     * Hito 5 (contrato H5 §A10.1, I-2 de G): cada lado dice si su huella
+     * cuadra; `null` en la línea base y en el borrador, que no tienen huella
+     * guardada. El diff no cambia: una versión alterada se compara igual (el
+     * CRM pinta una insignia «Huella alterada»).
+     */
+    public function test_cada_lado_dice_si_su_huella_cuadra_y_el_diff_no_cambia(): void
+    {
+        $sana = $this->seedVersion($this->ana, $this->baseline());
+        $alterada = $this->seedVersion($this->ana, $this->baseline(), 'DRAFT', str_repeat('f', 64));
+
+        $r = $this->compare($this->bea, $alterada->uuid, $sana->uuid)->assertOk();
+        $r->assertJsonPath('data.from.integrityOk', false)
+            ->assertJsonPath('data.to.integrityOk', true)
+            ->assertJsonPath('data.same', true);
+        $this->assertSame([], $r->json('data.configs'));
+
+        $this->compare($this->bea, 'baseline', $alterada->uuid)->assertOk()
+            ->assertJsonPath('data.from.integrityOk', null)
+            ->assertJsonPath('data.to.integrityOk', false);
+        $this->compare($this->ana, 'draft', 'baseline')->assertOk()
+            ->assertJsonPath('data.from.integrityOk', null)
+            ->assertJsonPath('data.to.integrityOk', null);
+        // Booleano de verdad en las versiones, null de verdad en los otros lados.
+        $this->assertIsBool($this->compare($this->bea, $sana->uuid, 'baseline')->json('data.from.integrityOk'));
     }
 
     public function test_la_revision_de_la_linea_base_es_la_que_dejaria_la_importacion(): void

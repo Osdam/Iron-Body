@@ -113,6 +113,44 @@ final class StudioLabVerdicts
         return $run->fresh() ?? $run;
     }
 
+    /**
+     * SOLO LEE (Hito 5, contrato H5 §A5.1, paso 7: la puerta del laboratorio
+     * al publicar). El veredicto MÁS RECIENTE sobre una ejecución de esta
+     * versión con esta misma huella de contenido y la versión de prompts dada:
+     * su decisión, su ejecución y su id. Si no hay ninguno con esos prompts pero
+     * sí con otros, `stale_prompts`; sin ninguno, `latest` null. Vive aquí, en
+     * el único servicio que nombra el veredicto: publicar no lo nombra.
+     *
+     * @return array{latest:string|null,runUuid:string|null,verdictId:int|null,promptVersion:string|null}
+     */
+    public static function latestFor(StudioVersion $version, string $promptVersion): array
+    {
+        $sobreEstaHuella = static fn () => StudioLabVerdict::query()
+            ->join('ultron_studio_lab_runs as lab_run', 'lab_run.id', '=', 'ultron_studio_lab_verdicts.run_id')
+            ->where('ultron_studio_lab_verdicts.version_id', $version->id)
+            ->where('ultron_studio_lab_verdicts.version_content_hash', $version->content_hash);
+
+        $ultimo = $sobreEstaHuella()
+            ->where('lab_run.prompt_version', $promptVersion)
+            ->orderByDesc('ultron_studio_lab_verdicts.id')
+            ->first(['ultron_studio_lab_verdicts.id', 'ultron_studio_lab_verdicts.decision', 'lab_run.uuid as run_uuid', 'lab_run.prompt_version as run_prompt_version']);
+        if ($ultimo !== null) {
+            return [
+                'latest' => (string) $ultimo->decision,
+                'runUuid' => (string) $ultimo->run_uuid,
+                'verdictId' => (int) $ultimo->id,
+                'promptVersion' => (string) $ultimo->run_prompt_version,
+            ];
+        }
+
+        return [
+            'latest' => $sobreEstaHuella()->exists() ? 'stale_prompts' : null,
+            'runUuid' => null,
+            'verdictId' => null,
+            'promptVersion' => null,
+        ];
+    }
+
     private static function label(string $decision): string
     {
         return match ($decision) {

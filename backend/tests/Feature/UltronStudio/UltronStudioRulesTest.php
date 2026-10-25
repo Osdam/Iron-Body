@@ -246,7 +246,8 @@ class UltronStudioRulesTest extends TestCase
             ->assertStatus(409)->assertJsonPath('code', 'rule_archived');
 
         $this->assertNotContains($uuid, array_column($this->studio('GET', 'rules', $this->ana)->json('data'), 'uuid'));
-        $this->assertSame([$uuid], array_column($this->studio('GET', 'rules?status=archived', $this->ana)->assertOk()->json('data'), 'uuid'));
+        // Las archivadas, paginadas desde el Hito 5 (contrato H5 §A10.2).
+        $this->assertSame([$uuid], array_column($this->studio('GET', 'rules?status=archived', $this->ana)->assertOk()->json('data.data'), 'uuid'));
         $this->studio('GET', 'rules?status=borrada', $this->ana)->assertStatus(422)->assertJsonValidationErrors(['status']);
         $this->assertSame(1, StudioRule::query()->where('uuid', $uuid)->count());
     }

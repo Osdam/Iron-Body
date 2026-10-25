@@ -46,7 +46,7 @@ final class PermissionCatalog
         'equipment' => ['label' => 'Equipos', 'icon' => 'fitness_center', 'hint' => 'Maquinaria del gimnasio'],
         'billing' => ['label' => 'Facturación electrónica', 'icon' => 'receipt_long', 'hint' => 'Comprobantes DIAN y tarifas fiscales'],
         'marketing' => ['label' => 'Mercadeo', 'icon' => 'campaign', 'hint' => 'Bandeja, campañas, citas y agente comercial'],
-        'ultron' => ['label' => 'ULTRON Studio', 'icon' => 'account_tree', 'hint' => 'Borradores, versiones, reglas y aprobaciones del agente comercial. El motor no lee nada de esto todavía'],
+        'ultron' => ['label' => 'ULTRON Studio', 'icon' => 'account_tree', 'hint' => 'Borradores, versiones, reglas, aprobaciones y publicaciones del agente comercial. El motor solo anota la versión publicada: no cambia lo que dice ni hace'],
         'content' => ['label' => 'Contenido de la app', 'icon' => 'smartphone', 'hint' => 'Eventos, anuncios, rachas y notificaciones push'],
         'moderation' => ['label' => 'Moderación', 'icon' => 'gavel', 'hint' => 'Historias, lives y sanciones de comunidad'],
         'nutrition' => ['label' => 'Nutrición', 'icon' => 'nutrition', 'hint' => 'Catálogo de alimentos'],
@@ -190,14 +190,14 @@ final class PermissionCatalog
         'valuations.manage_availability' => 'Definir las franjas semanales de cada entrenador y sus bloqueos (descansos, ausencias, días libres). Un bloqueo no cancela las citas que ya existen.',
         'valuations.manage_settings' => 'Duración, intervalos, márgenes, avisos y canales de la agenda, y agendar una cita en el pasado con motivo. No llega por defecto al Administrador.',
         'plans.transfer' => 'Cambiar de plan a un grupo de socios sin cobrar nada: conserva sus fechas, sus pagos y sus entradas usadas. Exige una simulación previa, queda auditado por lote y por socio, y se puede revertir mientras el socio no haya cambiado después.',
-        'ultron.view' => 'Abrir el tablero del agente comercial: el catálogo, las versiones, las reglas y la auditoría del Studio. El motor de ULTRON no lee nada de esto todavía: ver o cambiar cosas aquí no cambia al agente.',
+        'ultron.view' => 'Abrir el tablero del agente comercial: el catálogo, las versiones, las reglas, las publicaciones y la auditoría del Studio. El motor de ULTRON solo anota en cada turno la versión publicada: ver o cambiar cosas aquí no cambia lo que dice ni hace.',
         'ultron.edit_draft' => 'Guardar el propio borrador del tablero y crear versiones a partir de él, y enviarlas a revisión. Cada guardado queda en la auditoría.',
         'ultron.manage_rules' => 'Proponer reglas comerciales nuevas, editarlas y archivarlas. Nacen en borrador y el motor no las aplica; las reglas del código no se tocan desde aquí.',
         'ultron.lab_manage' => 'Crear, editar y archivar los escenarios sintéticos del laboratorio de IA. Los del catálogo son de solo lectura; nada se borra y cada cambio queda en el libro del laboratorio. Los escenarios se envían a un proveedor externo: nunca llevan datos de personas reales.',
         'ultron.lab_run' => 'Lanzar y cancelar ejecuciones del laboratorio de IA: un modelo externo interpreta una versión sobre escenarios sintéticos y cada ejecución gasta presupuesto del proveedor. Es una simulación del Studio, no ULTRON. No llega por defecto al Administrador: se concede a mano.',
         'ultron.approve' => 'Aprobar o rechazar versiones enviadas a revisión, reconociendo sus avisos, y emitir el veredicto del laboratorio sobre ejecuciones de versiones ajenas. Nadie aprueba lo que creó: la versión tiene que ser de otra persona.',
-        'ultron.publish' => 'Publicar una versión aprobada para que la use el agente. Hoy desactivado en el servidor; no llega por defecto al Administrador.',
-        'ultron.rollback' => 'Volver a una versión publicada anterior. Hoy desactivado en el servidor; no llega por defecto al Administrador.',
+        'ultron.publish' => 'Publicar registra esta versión como la configuración oficial de ULTRON y el motor la anota en cada turno. En este hito no cambia lo que ULTRON dice ni hace. Publicar (siempre en canario) y promover a todas exigen las llaves del servidor, y nadie publica lo que creó. No llega por defecto al Administrador.',
+        'ultron.rollback' => 'Revertir la versión en canario o la publicada, o volver a Legacy (que la cadena no declare ninguna). En este hito no cambia lo que ULTRON dice ni hace. No depende de las llaves que permiten publicar. No llega por defecto al Administrador.',
     ];
 
     /**

@@ -639,6 +639,17 @@ class AppServiceProvider extends ServiceProvider
             Limit::perHour(10)->by($persona($request))->response($lanzar),
             Limit::perHour(30)->by('ultron-studio-net:'.ClientNetwork::of($request->ip()))->response($lanzar),
         ]);
+
+        // Hito 5 (contrato H5 §A6): la evidencia del canario es la lectura más
+        // cara del Studio (cuenta los turnos del canario y ejecuta el acta).
+        // Además del cupo de lectura, 10 por minuto y PERSONA (como el de
+        // lanzar: otra pestaña u otra sesión no dan más) y 30 por red, en su
+        // propio cubo.
+        $evidencia = $demasiadas('Demasiadas consultas seguidas a la evidencia del canario. Espera un minuto.');
+        RateLimiter::for('ultron-studio-evidence', fn (Request $request) => [
+            Limit::perMinute(10)->by($persona($request))->response($evidencia),
+            Limit::perMinute(30)->by('ultron-studio-net:'.ClientNetwork::of($request->ip()))->response($evidencia),
+        ]);
     }
 
     /**

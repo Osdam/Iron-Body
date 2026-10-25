@@ -330,7 +330,8 @@ class UltronStudioRuleConditionsTest extends TestCase
         $s004 = StudioRule::query()->where('code', 'S-004')->sole();
         $this->studio('POST', "rules/{$s004->uuid}/archive", $this->ana, ['baseRevision' => 1, 'reason' => 'Contradice a S-003'])->assertOk()
             ->assertJsonPath('data.analysis', ['verification' => 'studio', 'issues' => []]);
-        $archivadas = collect($this->studio('GET', 'rules?status=archived', $this->ana)->assertOk()->json('data'))->keyBy('code');
+        // Las archivadas se paginan desde el Hito 5 (contrato H5 §A10.2): la forma de `GET versions`.
+        $archivadas = collect($this->studio('GET', 'rules?status=archived', $this->ana)->assertOk()->json('data.data'))->keyBy('code');
         $this->assertSame(['verification' => 'studio', 'issues' => []], $archivadas['S-004']['analysis']);
         $this->assertSame([], collect($this->studio('GET', 'rules', $this->ana)->json('data'))->firstWhere('code', 'S-003')['analysis']['issues']);
     }
@@ -346,25 +347,32 @@ class UltronStudioRuleConditionsTest extends TestCase
         $this->seedMany(10, 101, 'archived', $pesadas, $capas);
         $this->studio('GET', 'rules?status=archived', $this->ana)->assertOk(); // abre la sesión fuera de la cuenta
 
+        // Desde el Hito 5 (contrato H5 §A10.2) las archivadas se paginan, con
+        // `per_page` como mucho 50: se pide la página más grande.
         $consultas = function (): array {
             DB::flushQueryLog();
             DB::enableQueryLog();
             $inicio = hrtime(true);
-            $r = $this->studio('GET', 'rules?status=archived', $this->ana)->assertOk();
+            $r = $this->studio('GET', 'rules?status=archived&per_page=50', $this->ana)->assertOk();
             $ms = (hrtime(true) - $inicio) / 1e6;
             // Solo las de datos: la sesión del personal se toca o no según
             // cambie de segundo `last_seen_at` (AdminSessionService::touch).
             $sql = array_values(array_filter(array_column(DB::getQueryLog(), 'query'), static fn (string $q): bool => str_contains($q, '"ultron_studio_') || str_contains($q, '"marketing_knowledge_items"')));
             DB::disableQueryLog();
 
-            return [$r->json('data'), $sql, $ms];
+            return [$r->json('data.data'), $sql, $ms, $r->json('data.total')];
         };
-        [$diez, $sqlDiez] = $consultas();
+        [$diez, $sqlDiez, , $totalDiez] = $consultas();
         $this->seedMany(290, 111, 'archived', $pesadas, $capas);
-        [$trescientas, $sqlTrescientas, $ms] = $consultas();
+        [$trescientas, $sqlTrescientas, $ms, $totalTrescientas] = $consultas();
 
         $this->assertCount(10, $diez);
-        $this->assertCount(300, $trescientas);
+        $this->assertSame(10, $totalDiez);
+        $this->assertCount(50, $trescientas, 'una página de 50');
+        // El tope es del servidor: pedir 1000 da 50.
+        $tope = $this->studio('GET', 'rules?status=archived&per_page=1000', $this->ana)->assertOk();
+        $this->assertSame([50, 50, 6], [count($tope->json('data.data')), $tope->json('data.per_page'), $tope->json('data.last_page')]);
+        $this->assertSame(300, $totalTrescientas);
         // Las consultas no crecen con las archivadas, y ninguna lee las vivas.
         $this->assertNotSame([], $sqlDiez);
         $this->assertSame($sqlDiez, $sqlTrescientas, 'Con más archivadas, otras consultas.');
@@ -376,7 +384,7 @@ class UltronStudioRuleConditionsTest extends TestCase
         // Y el tiempo queda acotado: antes, cada archivada volvía a analizar las
         // cien vivas (unos 2,6 s aquí con 300; 7,7 s con 1000 en la medida de
         // api-security). Ahora es solo serializar.
-        $this->assertLessThan(1000, $ms, sprintf('GET rules?status=archived con 300 archivadas y 100 vivas pesadas tardó %.0f ms.', $ms));
+        $this->assertLessThan(1000, $ms, sprintf('GET rules?status=archived (una página de 50) con 300 archivadas y 100 vivas pesadas tardó %.0f ms.', $ms));
     }
 
     public function test_crear_editar_e_importar_toman_el_mismo_cerrojo_antes_de_leer_las_reglas_vivas(): void

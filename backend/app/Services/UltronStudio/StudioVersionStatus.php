@@ -3,18 +3,23 @@
 namespace App\Services\UltronStudio;
 
 /**
- * Los diez estados de una versión del Studio (contrato §A2), con su etiqueta y,
- * si no se pueden alcanzar, el motivo.
+ * Los diez estados de una versión del Studio (contrato F §A2 y H5 §A2), con su
+ * etiqueta y, si no se pueden alcanzar, el motivo.
  *
- * En esta fase solo se alcanzan DRAFT, VALIDATED, REVIEW_REQUIRED, APPROVED y
- * REJECTED (terminal). Los demás siguen aquí porque `GET status` los devuelve
- * con `reachable: false` para que el CRM pinte la tubería completa en gris sin
- * inventarse textos. Que no se puedan guardar lo garantizan tres capas: no hay
- * transición que lleve a ellos, el modelo los rechaza y, en PostgreSQL, el
- * CHECK `usv_status_chk`.
+ * Desde el Hito 5 se alcanzan nueve: los cinco de F (DRAFT, VALIDATED,
+ * REVIEW_REQUIRED, APPROVED y REJECTED, terminal) y los cuatro de la
+ * publicación ({@see StudioPublications}):
  *
- * `VALIDATING` no existe como estado guardado: la validación es pura e
- * inmediata.
+ *   APPROVED ─ publicar ─▶ CANARY ─ promover ─▶ PUBLISHED ─ (otra se promueve,
+ *   o Legacy) ─▶ RETIRED («Sustituida»); CANARY | PUBLISHED ─ revertir ─▶
+ *   ROLLED_BACK (terminal); RETIRED ─ revertir la que la sustituyó ─▶ PUBLISHED.
+ *
+ * `VALIDATING` sigue sin poder guardarse: la validación es pura e inmediata.
+ * Lo garantizan tres capas: no hay transición que lleve a él, el modelo lo
+ * rechaza y, en PostgreSQL, el CHECK `usv_status_chk` (que desde la migración
+ * 2026_10_25_100002 admite los otros nueve). Como mucho una versión en CANARY y
+ * una en PUBLISHED a la vez: lo garantizan los índices únicos parciales
+ * `usv_one_canary` y `usv_one_published`, en los dos motores.
  */
 enum StudioVersionStatus: string
 {
@@ -32,12 +37,12 @@ enum StudioVersionStatus: string
     /** Los estados desde los que otra persona puede aprobar o rechazar. */
     public const REVIEWABLE = [self::Validated, self::ReviewRequired];
 
+    /** Las versiones que declara la cadena de publicaciones: las únicas que se revierten (contrato H5 §A5.3). */
+    public const ACTIVE_PUBLICATION = [self::Canary, self::Published];
+
     public function reachable(): bool
     {
-        return match ($this) {
-            self::Draft, self::Validated, self::ReviewRequired, self::Approved, self::Rejected => true,
-            default => false,
-        };
+        return $this !== self::Validating;
     }
 
     public function label(): string
@@ -51,7 +56,9 @@ enum StudioVersionStatus: string
             self::Rejected => 'Rechazada',
             self::Canary => 'Canario',
             self::Published => 'Publicada',
-            self::Retired => 'Retirada',
+            // Sustituida por una publicación posterior (o por volver a Legacy):
+            // se reutiliza el valor de F en vez de añadir SUPERSEDED (decisión 5 del lead).
+            self::Retired => 'Sustituida',
             self::RolledBack => 'Revertida',
         };
     }
@@ -61,7 +68,6 @@ enum StudioVersionStatus: string
     {
         return match ($this) {
             self::Validating => 'La validación es inmediata: ninguna versión queda en este estado.',
-            self::Canary, self::Published, self::Retired, self::RolledBack => 'El motor aún no lee versiones.',
             default => null,
         };
     }
@@ -69,6 +75,12 @@ enum StudioVersionStatus: string
     public function isReviewable(): bool
     {
         return in_array($this, self::REVIEWABLE, true);
+    }
+
+    /** ¿La declara la cadena (la de canario o la publicada)? */
+    public function isActivePublication(): bool
+    {
+        return in_array($this, self::ACTIVE_PUBLICATION, true);
     }
 
     /**

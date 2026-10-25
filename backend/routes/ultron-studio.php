@@ -3,6 +3,7 @@
 use App\Http\Controllers\Crm\UltronStudio\UltronStudioController;
 use App\Http\Controllers\Crm\UltronStudio\UltronStudioLabController;
 use App\Http\Controllers\Crm\UltronStudio\UltronStudioLabScenarioController;
+use App\Http\Controllers\Crm\UltronStudio\UltronStudioPublicationController;
 use App\Http\Controllers\Crm\UltronStudio\UltronStudioRuleController;
 use App\Http\Controllers\Crm\UltronStudio\UltronStudioVersionController;
 use App\Http\Middleware\LimitRequestBodySize;
@@ -43,7 +44,18 @@ use Illuminate\Support\Facades\Route;
 | red). El cuerpo más grande del laboratorio (un escenario) cabe de sobra en los
 | 64 KB: su contenido codificado no pasa de 16 KB.
 |
-| Tope de CUERPO de 64 KB (65 536 bytes) en las 33 rutas: por encima, 413
+| Hito 5 (docs/ultron-studio/ULTRON_STUDIO_H5_CONTRACT.md §A7): publicar,
+| promover, revertir y volver a Legacy DE VERDAD sobre la cadena de
+| publicaciones, más la vista previa, la evidencia del canario y el historial:
+| 5 rutas más (38 en total). Cerraduras: la puerta (`ultron.view`,
+| `ultron.publish` o `ultron.rollback`, una a una en AuthorizationMap) → una
+| persona → la llave → las llaves de entorno (solo publicar y promover). La
+| vista previa y el historial no escriben: van con las lecturas. La evidencia
+| es la lectura más cara (cuenta los turnos del canario y ejecuta el acta):
+| además del cupo de lectura, su propio limitador `ultron-studio-evidence`
+| (10/min por persona, 30/min por red).
+|
+| Tope de CUERPO de 64 KB (65 536 bytes) en las 38 rutas: por encima, 413
 | `payload_too_large` antes del controlador (revisión de seguridad de la API
 | del Hito G, M-2). Es defensa en profundidad: la validación en dos fases de
 | los controladores ya rechaza una lista enorme sin recorrerla. Por qué 64 KB:
@@ -78,6 +90,11 @@ Route::prefix('admin/ultron-studio')->middleware(LimitRequestBodySize::class.':6
         Route::get('lab/runs/{uuid}', [UltronStudioLabController::class, 'show'])->whereUuid('uuid');
         Route::post('lab/estimate', [UltronStudioLabController::class, 'estimate']);
         Route::get('lab/events', [UltronStudioLabController::class, 'events']);
+
+        // Hito 5: la vista previa, la evidencia del canario (con su limitador) y el historial.
+        Route::get('versions/{uuid}/publication-preview', [UltronStudioVersionController::class, 'preview'])->whereUuid('uuid');
+        Route::get('versions/{uuid}/canary-evidence', [UltronStudioVersionController::class, 'evidence'])->whereUuid('uuid')->middleware('throttle:ultron-studio-evidence');
+        Route::get('publications', [UltronStudioPublicationController::class, 'index']);
     });
 
     Route::middleware('throttle:ultron-studio-write')->group(function (): void {
@@ -100,5 +117,9 @@ Route::prefix('admin/ultron-studio')->middleware(LimitRequestBodySize::class.':6
         Route::post('lab/runs', [UltronStudioLabController::class, 'store'])->middleware('throttle:ultron-studio-lab-run');
         Route::post('lab/runs/{uuid}/cancel', [UltronStudioLabController::class, 'cancel'])->whereUuid('uuid');
         Route::post('lab/runs/{uuid}/verdict', [UltronStudioLabController::class, 'verdict'])->whereUuid('uuid');
+
+        // Hito 5: promover y volver a Legacy (publicar y revertir, arriba).
+        Route::post('versions/{uuid}/promote', [UltronStudioVersionController::class, 'promote'])->whereUuid('uuid');
+        Route::post('publications/legacy', [UltronStudioPublicationController::class, 'legacy']);
     });
 });

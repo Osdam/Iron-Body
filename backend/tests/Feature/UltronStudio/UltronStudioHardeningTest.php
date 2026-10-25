@@ -79,19 +79,21 @@ class UltronStudioHardeningTest extends TestCase
         $ana = $this->person(Admin::ROLE_ADMINISTRADOR, 'Ana');
         $root = $this->person(Admin::ROLE_SUPER_ADMIN, 'Root');
         $uuid = $this->submittedVersion($ana);
+        // Hito 5: publicar lleva cuerpo (una petición nueva cada vez: el reintento no es lo que se prueba).
+        $publicar = fn () => $this->studio('POST', "versions/{$uuid}/publish", $root, ['clientRequestId' => (string) Str::uuid(), 'previewHash' => str_repeat('0', 64), 'acknowledgedNoEffect' => []]);
 
         for ($i = 0; $i < 5; $i++) {
             $this->studio('POST', "versions/{$uuid}/approve", $ana, ['acknowledgedWarnings' => [], 'note' => null])
                 ->assertStatus(403)->assertJsonPath('code', 'four_eyes_required');
-            $this->studio('POST', "versions/{$uuid}/publish", $root)->assertStatus(409)->assertJsonPath('code', 'publishing_disabled');
+            $publicar()->assertStatus(409)->assertJsonPath('code', 'publishing_disabled');
         }
         $this->assertSame(1, StudioAuditEvent::query()->where('event', 'version.four_eyes_denied')->count());
         $this->assertSame(1, StudioAuditEvent::query()->where('event', 'version.publish_refused')->count());
 
         // Pasada la ventana se vuelve a anotar: el libro sigue contando intentos, pero no por segundo.
         $this->travel(StudioAudit::DENIED_WINDOW_MINUTES + 1)->minutes();
-        $this->studio('POST', "versions/{$uuid}/publish", $root)->assertStatus(409);
-        $this->studio('POST', "versions/{$uuid}/publish", $root)->assertStatus(409);
+        $publicar()->assertStatus(409);
+        $publicar()->assertStatus(409);
         $this->assertSame(2, StudioAuditEvent::query()->where('event', 'version.publish_refused')->count());
     }
 

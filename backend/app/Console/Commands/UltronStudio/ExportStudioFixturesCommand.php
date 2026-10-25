@@ -4,13 +4,15 @@ namespace App\Console\Commands\UltronStudio;
 
 use App\Services\UltronStudio\StudioCatalog;
 use App\Services\UltronStudio\StudioLabCatalog;
+use App\Services\UltronStudio\StudioPublicationDeclaration as D;
+use App\Services\UltronStudio\StudioPublicationExport;
 use Illuminate\Console\Command;
 use JsonException;
 
 /**
- * Vuelca el catálogo de ULTRON STUDIO, los casos de paridad y el catálogo de
- * escenarios del laboratorio a cuatro ficheros que las pruebas del CRM puedan
- * importar.
+ * Vuelca el catálogo de ULTRON STUDIO, los casos de paridad, el catálogo de
+ * escenarios del laboratorio y, desde el Hito 5, las formas de la publicación
+ * a cinco ficheros que las pruebas del CRM puedan importar.
  *
  * Existe porque el CRM valida el borrador en vivo mientras se edita y el
  * servidor repite la validación y manda él. Si los dos lados no pintan y no
@@ -34,15 +36,23 @@ use JsonException;
  *    los límites de un escenario. No hay paridad de lógica con el CRM (pinta
  *    lo que calcula el servidor): sirve para que sus pruebas lean escenarios
  *    reales y comparen sus listas con las del servidor.
+ *  - `backend-publication.testing.ts` (Hito 5, contrato H5 §A7): la tubería
+ *    con sus etiquetas, los vocabularios, los códigos de error con su estado
+ *    HTTP, los topes de los cuerpos y EJEMPLOS de cada DTO de la publicación
+ *    (`status.engine`/`publishing`, `PublicationStateDto`,
+ *    `PublicationEntryDto`, `PublicationPreviewDto` y `CanaryEvidenceDto`)
+ *    producidos por los MISMOS presentadores que las respuestas, con datos
+ *    sintéticos fijos (sin base de datos): el CRM compara con ellos sus
+ *    fixtures escritos a mano y sus lectores estrictos.
  *
  * No autoriza nada ni se usa en tiempo de ejecución: es un contrato
  * comprobable entre dos repositorios.
  */
 class ExportStudioFixturesCommand extends Command
 {
-    protected $signature = 'ultron-studio:export-fixtures {--path= : directorio donde escribir los cuatro .ts}';
+    protected $signature = 'ultron-studio:export-fixtures {--path= : directorio donde escribir los cinco .ts}';
 
-    protected $description = 'Exporta el catálogo de ULTRON STUDIO, los casos de paridad y los escenarios del laboratorio para las pruebas del CRM';
+    protected $description = 'Exporta el catálogo de ULTRON STUDIO, los casos de paridad, los escenarios del laboratorio y las formas de la publicación para las pruebas del CRM';
 
     public const CATALOG_FILE = 'backend-studio-catalog.testing.ts';
 
@@ -51,6 +61,8 @@ class ExportStudioFixturesCommand extends Command
     public const COHERENCE_FILE = 'backend-coherence-cases.testing.ts';
 
     public const LAB_SCENARIOS_FILE = 'backend-lab-scenarios.testing.ts';
+
+    public const PUBLICATION_FILE = 'backend-publication.testing.ts';
 
     /** Las listas que tiene que traer el fixture de coherencia (versión 1). */
     public const COHERENCE_SECTIONS = ['canonicalize', 'analyze', 'conflicts', 'evaluate'];
@@ -201,12 +213,34 @@ class ExportStudioFixturesCommand extends Command
 
         TS;
 
+        $publicacion = StudioPublicationExport::shapes();
+        $jsonPublicacion = self::twoSpaces(json_encode($publicacion, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+        $contrato = D::CONTRACT;
+
+        $contenidoPublicacion = <<<TS
+        // Formas de la publicación de ULTRON STUDIO (Hito 5, contrato H5 §A7).
+        //
+        // GENERADO — no editar a mano. Lo produce el comando de artisan
+        // `ultron-studio:export-fixtures` con los MISMOS presentadores que las
+        // respuestas del servidor (StudioPublications, StudioPublishing,
+        // StudioCanaryEvidence) sobre datos sintéticos fijos: uuids, huellas e
+        // instantes inventados, sin base de datos, sin ids de conversación y sin
+        // textos del canario.
+        //
+        // Solo lo importan las pruebas del CRM: comparan sus fixtures escritos a
+        // mano y sus lectores estrictos con lo que de verdad responde el servidor.
+        // Contrato {$contrato} · catálogo {$version}.
+        export const BACKEND_PUBLICATION = {$jsonPublicacion} as const;
+
+        TS;
+
         file_put_contents($destino.'/'.self::CATALOG_FILE, $contenidoCatalogo);
         file_put_contents($destino.'/'.self::CASES_FILE, $contenidoCasos);
         file_put_contents($destino.'/'.self::COHERENCE_FILE, $contenidoCoherencia);
         file_put_contents($destino.'/'.self::LAB_SCENARIOS_FILE, $contenidoLaboratorio);
+        file_put_contents($destino.'/'.self::PUBLICATION_FILE, $contenidoPublicacion);
 
-        $this->info("Catálogo {$version}, {$total} casos de paridad, {$totalCoherencia} de coherencia y {$totalLab} escenarios del laboratorio ({$versionLab}) exportados a {$destino}");
+        $this->info("Catálogo {$version}, {$total} casos de paridad, {$totalCoherencia} de coherencia, {$totalLab} escenarios del laboratorio ({$versionLab}) y las formas de la publicación exportados a {$destino}");
 
         return self::SUCCESS;
     }

@@ -134,22 +134,14 @@ class UltronStudioException extends RuntimeException
     }
 
     /** @param  list<array<string, mixed>>  $findings */
-    public static function revalidationBlocked(array $findings): self
+    public static function revalidationBlocked(array $findings, string $message = 'La versión ya no pasa la validación con el catálogo actual: tiene bloqueos y no se puede aprobar.'): self
     {
-        return new self(
-            'La versión ya no pasa la validación con el catálogo actual: tiene bloqueos y no se puede aprobar.',
-            'revalidation_blocked',
-            409,
-            ['findings' => $findings],
-        );
+        return new self($message, 'revalidation_blocked', 409, ['findings' => $findings]);
     }
 
-    public static function integrityMismatch(): self
+    public static function integrityMismatch(string $message = 'La huella de la versión no coincide con su contenido. No se puede enviar ni aprobar: avisa a quien administra el sistema.'): self
     {
-        return new self(
-            'La huella de la versión no coincide con su contenido. No se puede enviar ni aprobar: avisa a quien administra el sistema.',
-            'integrity_mismatch',
-        );
+        return new self($message, 'integrity_mismatch');
     }
 
     public static function publishingRefused(string $code, string $message): self
@@ -200,6 +192,206 @@ class UltronStudioException extends RuntimeException
         return new self(
             'Ese identificador de petición ya se usó para otra operación. Vuelve a intentarlo desde el Studio.',
             'client_request_reused',
+        );
+    }
+
+    // ── Publicación (Hito 5, contrato H5 §A5 y §A7) ─────────────────────────
+    //
+    // Las cargas son las que lee el CRM (informe-front-datos §4.2): la vista
+    // previa nueva en `preview`, la evidencia en `evidence`, y las listas de
+    // §A1 por su nombre. Ninguna lleva ids de conversación, textos ni secretos.
+
+    /** Los cuatro ojos al publicar y al promover: mismo código que F, con su texto. */
+    public static function publicationFourEyesRequired(string $action): self
+    {
+        $verbo = $action === 'promote' ? 'promueve' : 'publica';
+
+        return new self(
+            "Nadie {$verbo} lo que creó: pide a otra persona con permiso que lo haga.",
+            'four_eyes_required',
+            403,
+        );
+    }
+
+    /** @param  list<string>  $warnings  los avisos actuales, que la reseña no reconoció */
+    public static function revalidationChanged(array $warnings): self
+    {
+        return new self(
+            'El catálogo cambió después de aprobar: los avisos de la versión ya no son los que se reconocieron. Crea una versión nueva y vuelve a aprobarla.',
+            'revalidation_changed',
+            409,
+            ['warnings' => array_values($warnings)],
+        );
+    }
+
+    /** @param  string|null  $latest  null | rejected | needs_changes | stale_prompts */
+    public static function labVerdictRequired(?string $latest): self
+    {
+        $porque = match ($latest) {
+            null => 'no tiene ningún veredicto del laboratorio',
+            'rejected' => 'su último veredicto del laboratorio la rechazó',
+            'needs_changes' => 'su último veredicto del laboratorio pide cambios',
+            default => 'su veredicto del laboratorio es de una versión anterior de los prompts',
+        };
+
+        return new self(
+            "No se puede publicar: esta versión {$porque}. Hace falta un veredicto «aprobada» sobre esta misma huella.",
+            'lab_verdict_required',
+            409,
+            ['latest' => $latest],
+        );
+    }
+
+    /** @param  list<array{param:string,versionValue:mixed,engineValue:mixed}>  $mismatches */
+    public static function engineValueMismatch(array $mismatches): self
+    {
+        return new self(
+            'La versión declara valores distintos de los que lee hoy el motor. Una declaración que contradice al motor sería falsa: crea una versión que refleje el motor.',
+            'engine_value_mismatch',
+            409,
+            ['mismatches' => array_values($mismatches)],
+        );
+    }
+
+    /** @param  list<string>  $params  `capa.clave` */
+    public static function engineReadingUnavailable(array $params): self
+    {
+        return new self(
+            'No se pudo leer lo que tiene hoy el motor en algún interruptor: sin esa lectura no se publica. Vuelve a intentarlo en un momento.',
+            'engine_reading_unavailable',
+            409,
+            ['engineReadingUnavailable' => array_values($params)],
+        );
+    }
+
+    /** @param  list<string>  $noEffect  el conjunto que hay que reconocer, en su orden */
+    public static function noEffectNotAcknowledged(array $noEffect): self
+    {
+        return new self(
+            'Para publicar hay que reconocer exactamente lo que no tendrá efecto en el motor, ni uno más ni uno menos.',
+            'no_effect_not_acknowledged',
+            409,
+            ['noEffect' => array_values($noEffect)],
+        );
+    }
+
+    /** @param  array<string, mixed>  $preview  la vista previa nueva (PublicationPreviewDto) */
+    public static function previewStale(array $preview): self
+    {
+        return new self(
+            'La vista previa cambió desde que la viste: revísala y vuelve a confirmar.',
+            'preview_stale',
+            409,
+            ['preview' => $preview],
+        );
+    }
+
+    public static function engineHasNoCanary(): self
+    {
+        return new self(
+            'El motor no tiene configurada la conversación canaria: sin ella no se publica (toda publicación empieza en canario).',
+            'engine_has_no_canary',
+        );
+    }
+
+    public static function engineBraked(?string $message = null): self
+    {
+        return new self(
+            $message ?? 'El freno de ULTRON está echado: no se publica ni se promueve hasta que alguien lo suelte.',
+            'engine_braked',
+        );
+    }
+
+    public static function canaryInProgress(): self
+    {
+        return new self(
+            'Ya hay otra versión en canario. Promuévela o revértela antes de publicar otra.',
+            'canary_in_progress',
+        );
+    }
+
+    public static function outsidePublicationWindow(?string $window): self
+    {
+        return new self(
+            "Fuera de la ventana de publicación ({$window}, hora de Bogotá). Revertir y volver a Legacy se pueden hacer siempre.",
+            'outside_publication_window',
+            409,
+            ['window' => $window],
+        );
+    }
+
+    public static function scopeNotAllowed(): self
+    {
+        return new self(
+            'Promover exige que el motor lea la cadena en todas las conversaciones (su llave en «all»). Hoy solo la lee en la canaria.',
+            'scope_not_allowed',
+        );
+    }
+
+    /** @param  array<string, mixed>  $evidence  la evidencia de ahora (CanaryEvidenceDto) */
+    public static function canaryEvidenceInsufficient(array $evidence): self
+    {
+        return new self(
+            'La evidencia del canario todavía no basta para promover. Revisa qué falta.',
+            'canary_evidence_insufficient',
+            409,
+            ['evidence' => $evidence],
+        );
+    }
+
+    /** @param  array<string, mixed>  $evidence  la evidencia de ahora (CanaryEvidenceDto) */
+    public static function evidenceChanged(array $evidence): self
+    {
+        return new self(
+            'La evidencia del canario cambió desde que la viste: revísala y vuelve a confirmar.',
+            'evidence_changed',
+            409,
+            ['evidence' => $evidence],
+        );
+    }
+
+    public static function notActivePublication(string $currentStatus): self
+    {
+        return new self(
+            'Solo se revierte la versión en canario o la publicada vigente.',
+            'not_active_publication',
+            409,
+            ['currentStatus' => $currentStatus],
+        );
+    }
+
+    public static function restoreIntegrityMismatch(): self
+    {
+        return new self(
+            'La versión anterior que volvería no pasa la verificación (huella o firma alterada): no se restaura. La salida segura es volver a Legacy, y avisa a quien administra el sistema.',
+            'restore_integrity_mismatch',
+        );
+    }
+
+    public static function alreadyLegacy(): self
+    {
+        return new self('La cadena ya está en Legacy: no declara ninguna versión.', 'already_legacy');
+    }
+
+    public static function publicationMoved(): self
+    {
+        return new self(
+            'La cadena de publicaciones cambió mientras tanto (otra persona publicó, promovió o revirtió). Vuelve a cargar y repite si sigue teniendo sentido.',
+            'publication_moved',
+        );
+    }
+
+    /**
+     * La cabeza de la cadena no pasa su verificación (huella, firma o forma):
+     * nada se compone encima, porque se copiaría a una entrada firmada nueva.
+     * Volver a Legacy no copia nada y sigue disponible. (Desviación del informe
+     * del paquete B-S: el contrato no lo fijaba.)
+     */
+    public static function publicationHeadInvalid(): self
+    {
+        return new self(
+            'La última entrada de la cadena de publicaciones no pasa la verificación (huella o firma): no se compone nada encima. Vuelve a Legacy para empezar una cadena limpia y avisa a quien administra el sistema.',
+            'publication_head_invalid',
         );
     }
 

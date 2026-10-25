@@ -4,12 +4,14 @@ namespace Tests\Feature\UltronStudio;
 
 use App\Models\Admin;
 use App\Models\MarketingAgentSetting;
+use App\Models\MarketingAiAction;
 use App\Models\MarketingConversation;
 use App\Models\MarketingKnowledgeItem;
 use App\Models\MarketingLead;
 use App\Models\Plan;
 use App\Models\UltronAbort;
 use App\Services\Marketing\MarketingAgentSwitch;
+use App\Services\UltronStudio\StudioCanaryMeasures;
 use App\Services\UltronStudio\StudioLabStepJob;
 use App\Support\Access\AuthorizationMap;
 use Illuminate\Database\Events\QueryExecuted;
@@ -68,6 +70,17 @@ use Tests\TestCase;
  * ENCENDIDO en `fake` (escenarios, estimación, ejecuciones procesadas en
  * línea, cancelación, veredicto rechazado y libro), sus tablas entre las del
  * Studio, y lo único que se encola es el paso del laboratorio en su carril.
+ *
+ * Hito 5 (contrato H5 §A9, prueba 3): el recorrido son 38 rutas (con el freno
+ * echado y las llaves por defecto, publicar y promover son 409 y revertir y
+ * Legacy no tienen nada que deshacer), y una segunda prueba recorre de VERDAD
+ * publicar, promover, revertir (la CANARY y la PUBLISHED) y volver a Legacy, con
+ * las llaves abiertas y el freno suelto, más la vista previa, la evidencia del
+ * canario (con su acta) y el historial: solo escriben en `ultron_studio_*`, y
+ * la evidencia y la vista previa no escriben nada. En los servicios, los
+ * ficheros que llaman al lector del motor (`signatureFor()` y `describe()`) y
+ * los que cuentan el canario entran en la lista de los que nombran el motor,
+ * con su aserción de solo lectura.
  */
 class UltronStudioEngineReadOnlyTest extends TestCase
 {
@@ -75,8 +88,12 @@ class UltronStudioEngineReadOnlyTest extends TestCase
     use RefreshDatabase;
     use StudioFixtures;
 
-    /** Los únicos ficheros del Studio que pueden nombrar clases del motor. */
-    private const ENGINE_READERS = ['StudioEngineReadings.php', 'StudioLabEngineChecks.php', 'StudioRules.php'];
+    /**
+     * Los únicos ficheros del Studio que pueden nombrar clases del motor. Hito
+     * 5: `StudioPublications` (la firma del motor, pura) y `StudioCanaryMeasures`
+     * (los recuentos del canario y su acta, de lectura).
+     */
+    private const ENGINE_READERS = ['StudioCanaryMeasures.php', 'StudioEngineReadings.php', 'StudioLabEngineChecks.php', 'StudioPublications.php', 'StudioRules.php'];
 
     /** Lo que es escribir (contrato G §A9): no puede aparecer en esos ficheros sobre el motor. */
     private const WRITE_CALLS = ['set', 'engage', 'release', 'save', 'update', 'delete', 'create', 'forcecreate', 'forcefill', 'fill',
@@ -126,7 +143,7 @@ class UltronStudioEngineReadOnlyTest extends TestCase
             }
         }
         sort($nombran);
-        $this->assertSame(self::ENGINE_READERS, $nombran, 'Solo el adaptador de lecturas, el de las guardas del laboratorio y las reglas pueden nombrar clases del motor.');
+        $this->assertSame(self::ENGINE_READERS, $nombran, 'Solo el adaptador de lecturas, el de las guardas del laboratorio, las reglas y, desde el Hito 5, la publicación y los recuentos del canario pueden nombrar clases del motor.');
 
         // El adaptador: ni una llamada de escritura, ni fachadas que escriban, ni `config([...])`.
         $lector = app_path('Services/UltronStudio/StudioEngineReadings.php');
@@ -163,6 +180,31 @@ class UltronStudioEngineReadOnlyTest extends TestCase
             }
         }
         $this->assertSame([], $this->configWrites($reglas));
+
+        // Hito 5 (contrato H5 §A9): la publicación nombra del motor SOLO su
+        // lector, y solo para la firma (pura) en dos sitios: al firmar y al
+        // verificar una fila. Ninguna sentencia que lo nombre escribe.
+        $publicacion = app_path('Services/UltronStudio/StudioPublications.php');
+        $this->assertSame(['App\\Services\\Marketing\\Ultron\\UltronPublishedConfig'], $this->engineReferences($publicacion), 'StudioPublications solo nombra del motor su lector.');
+        $conElLector = $this->statementsNaming($publicacion, 'UltronPublishedConfig');
+        $this->assertCount(2, $conElLector, 'firmar una entrada y verificar una fila');
+        foreach ($conElLector as $sentencia) {
+            $this->assertStringContainsString('UltronPublishedConfig::signatureFor(', $sentencia, "StudioPublications usa del lector algo que no es la firma: {$sentencia}");
+            foreach (self::WRITE_CALLS as $metodo) {
+                $this->assertDoesNotMatchRegularExpression('/(->|::)'.preg_quote($metodo, '/').'\s*\(/i', $sentencia, "StudioPublications escribe con el lector del motor: {$sentencia}");
+            }
+        }
+        $this->assertSame([], $this->configWrites($publicacion));
+
+        // Los recuentos del canario: ni una escritura, la única fachada es el
+        // acta (`Artisan::call` del comando de lectura), y nada de configuración.
+        $recuentos = app_path('Services/UltronStudio/StudioCanaryMeasures.php');
+        $this->assertSame([], $this->writeCalls($recuentos), 'StudioCanaryMeasures escribe.');
+        $this->assertSame(['Artisan'], $this->forbiddenNames($recuentos), 'StudioCanaryMeasures usa algo que escribe, o más de una llamada a Artisan.');
+        $this->assertSame(["\$codigo = Artisan::call(self::ACTA_COMMAND, [ 'conversation' => \$conversacion, '--since' => StudioPublicationDeclaration::utc(\$since), '--turns' => \$turnos, '--json' => true, ], \$salida);"],
+            $this->statementsNaming($recuentos, 'Artisan'));
+        $this->assertSame('ultron:canary-report', StudioCanaryMeasures::ACTA_COMMAND);
+        $this->assertSame([], $this->configWrites($recuentos), 'StudioCanaryMeasures cambia la configuración.');
     }
 
     public function test_controladores_modelos_y_comandos_del_studio_no_escriben_el_motor(): void
@@ -264,7 +306,168 @@ class UltronStudioEngineReadOnlyTest extends TestCase
         $recorridas = array_values(array_unique($this->walked));
         sort($recorridas);
         $this->assertSame($todas, $recorridas);
-        $this->assertCount(33, $recorridas);
+        $this->assertCount(38, $recorridas);
+    }
+
+    /**
+     * Hito 5 (contrato H5 §A9, prueba 3): publicar, promover, revertir (la
+     * CANARY y la PUBLISHED) y volver a Legacy DE VERDAD, con las llaves
+     * abiertas y el freno suelto, escriben solo en `ultron_studio_*`; la vista
+     * previa, la evidencia del canario (con su acta) y el historial no escriben
+     * nada. El motor «vivo» (pausa puesta, una parada antigua ya soltada,
+     * conocimiento, planes, la conversación canaria y sus turnos sellados)
+     * queda idéntico; no se encola nada y no sale ninguna petición.
+     */
+    public function test_publicar_promover_revertir_y_legacy_escriben_solo_en_el_studio(): void
+    {
+        $this->withoutMiddleware(ThrottleRequests::class);
+        $this->importBaseline();
+        $ana = $this->person(Admin::ROLE_ADMINISTRADOR, 'Ana Pérez');
+        $root = $this->person(Admin::ROLE_SUPER_ADMIN, 'Root');
+        $this->as($ana);
+        $this->as($root);
+
+        // El motor como en producción: encendido, la conversación canaria, el
+        // cobro apagado; las dos llaves abiertas; sin ventana; la puerta del
+        // laboratorio dispensada (la decide el propietario) y el umbral mínimo.
+        MarketingAgentSetting::query()->whereKey(MarketingAgentSwitch::ROW_ID)->update(['paused' => true, 'paused_at' => now(), 'version' => 3]);
+        UltronAbort::query()->create(['reason' => UltronAbort::REASON_MANUAL, 'engaged_by' => 'Consola de prueba', 'engaged_at' => now()->subDays(3), 'released_at' => now()->subDays(2), 'released_by' => 'Consola de prueba']);
+        MarketingKnowledgeItem::create(['category' => 'tone', 'key' => 'tone.cercano', 'title' => 'Tono', 'content' => 'Cercano y claro.', 'is_active' => true, 'origin' => MarketingKnowledgeItem::ORIGIN_SERVER]);
+        Plan::create(['name' => 'Mensualidad', 'price' => 98765, 'duration_days' => 30, 'active' => true, 'is_recommended' => true, 'sort_order' => 1]);
+        $lead = MarketingLead::create(['channel' => 'whatsapp', 'source' => 'inbound', 'phone' => '3001234567', 'name' => 'Prospecto']);
+        $canario = MarketingConversation::create(['lead_id' => $lead->id, 'channel' => 'whatsapp', 'status' => 'open']);
+        config([
+            'marketing.ultron.enabled' => true,
+            'marketing.ultron.payment_links_enabled' => false,
+            'marketing.ultron.canary_conversation_id' => $canario->id,
+            'marketing.ultron.studio_config' => 'all',
+            'ultron_studio.publishing_enabled' => true,
+            'ultron_studio.publishing.lab_gate' => 'waived',
+            'ultron_studio.publishing.window' => '',
+            'ultron_studio.publishing.canary_min_hours' => 1,
+            'ultron_studio.publishing.canary_min_turns' => 1,
+        ]);
+
+        // Tres versiones aprobadas, de Ana, con la línea base (dice lo que lee el motor).
+        $aprobada = function (string $etiqueta) use ($ana, $root): string {
+            $uuid = (string) $this->createVersion($ana, $etiqueta)->assertCreated()->json('data.uuid');
+            $avisos = $this->studio('POST', "versions/{$uuid}/submit", $ana)->assertOk()->json('data.warnings');
+            $this->studio('POST', "versions/{$uuid}/approve", $root, ['acknowledgedWarnings' => $avisos])->assertOk();
+
+            return $uuid;
+        };
+        $v1 = $aprobada('Primera');
+        $v2 = $aprobada('Segunda');
+        $v3 = $aprobada('Tercera');
+
+        // Dos turnos del canario sellados con V1, dentro de media hora (después
+        // de publicarla): los escribe la prueba ANTES de la huella, como el motor.
+        foreach ([1, 2] as $i) {
+            MarketingAiAction::create([
+                'lead_id' => $lead->id, 'conversation_id' => $canario->id, 'action_type' => 'reply', 'status' => 'executed',
+                'source_type' => 'inbound_message', 'source_event_id' => 9000 + $i, 'idempotency_key' => "recorrido-h5-{$i}",
+                'metadata' => ['origin' => 'ultron', 'studio' => ['v' => 1, 'env' => 'all', 'state' => 'applied', 'entry' => null, 'seq' => 1, 'part' => 'canary', 'version' => $v1, 'contentHash' => str_repeat('a', 64), 'reason' => null]],
+            ])->forceFill(['created_at' => now()->addMinutes(30)])->saveQuietly();
+        }
+
+        Queue::fake();
+        Http::fake();
+        Mail::fake();
+        Notification::fake();
+        $antes = $this->fingerprint();
+        DB::listen(function (QueryExecuted $q): void {
+            if (preg_match(self::WRITE_SQL, $q->sql, $m) === 1) {
+                $this->writes[] = ['table' => strtolower((string) preg_replace('/^.*\./', '', str_replace('"', '', $m[1]))), 'sql' => $q->sql];
+            } elseif (preg_match(self::DDL_SQL, $q->sql) === 1) {
+                $this->writes[] = ['table' => '(ddl)', 'sql' => $q->sql];
+            }
+        });
+
+        $publicar = function (string $uuid) use ($root): void {
+            $vista = $this->studio('GET', "versions/{$uuid}/publication-preview", $root)->assertOk()->json('data');
+            $this->assertTrue($vista['publishable'], json_encode($vista['blocking']));
+            $this->studio('POST', "versions/{$uuid}/publish", $root, ['clientRequestId' => (string) Str::uuid(), 'previewHash' => $vista['previewHash'], 'acknowledgedNoEffect' => $vista['noEffect']])
+                ->assertCreated()->assertJsonPath('data.action', 'publish');
+        };
+        $revertir = fn (string $uuid) => $this->studio('POST', "versions/{$uuid}/rollback", $root, ['clientRequestId' => (string) Str::uuid(), 'reason' => 'Recorrido de la publicación'])
+            ->assertCreated()->assertJsonPath('data.action', 'rollback');
+
+        // V1 en canario, su evidencia (con el acta) y promovida.
+        $publicar($v1);
+        $this->travel(2)->hours();
+        $evidencia = $this->studio('GET', "versions/{$v1}/canary-evidence", $root)->assertOk()->json('data');
+        $this->assertTrue($evidencia['passes'], json_encode($evidencia['failing']));
+        $this->assertSame(2, $evidencia['turns']);
+        $this->studio('POST', "versions/{$v1}/promote", $root, ['clientRequestId' => (string) Str::uuid(), 'evidenceHash' => $evidencia['evidenceHash']])
+            ->assertCreated()->assertJsonPath('data.action', 'promote');
+        // V2 en canario y revertida (la CANARY); V3 en canario y V1 revertida (la PUBLISHED, con V3 todavía en canario).
+        $publicar($v2);
+        $revertir($v2);
+        $publicar($v3);
+        $revertir($v1);
+        // Y vuelta a Legacy.
+        $this->studio('POST', 'publications/legacy', $root, ['clientRequestId' => (string) Str::uuid(), 'reason' => 'Fin del recorrido'])
+            ->assertCreated()->assertJsonPath('data.action', 'legacy');
+        foreach (['publications', "versions/{$v1}", 'status', 'engine/readings', 'audit'] as $lectura) {
+            $this->studio('GET', $lectura, $root)->assertOk();
+        }
+
+        $ajenas = array_values(array_filter($this->writes, static fn (array $e): bool => ! str_starts_with($e['table'], 'ultron_studio_') && $e['table'] !== 'admin_sessions'));
+        $this->assertSame([], $ajenas, 'La publicación mandó escrituras fuera de las tablas del Studio (aunque su efecto se deshaga).');
+        foreach (['ultron_studio_publications', 'ultron_studio_versions', 'ultron_studio_audit_events'] as $tabla) {
+            $this->assertContains($tabla, array_column($this->writes, 'table'), "No se vio ninguna escritura en {$tabla}: el recorrido o el oído fallan.");
+        }
+        $this->assertSame(7, DB::table('ultron_studio_publications')->count(), 'tres publicaciones, una promoción, dos reversiones y Legacy');
+
+        $despues = $this->fingerprint();
+        foreach ($antes['tables'] as $tabla => $filas) {
+            $this->assertSame($filas, $despues['tables'][$tabla], "La publicación cambió la tabla {$tabla}.");
+        }
+        $this->assertSame(array_keys($antes['tables']), array_keys($despues['tables']));
+        $this->assertSame($antes['config'], $despues['config'], 'La publicación cambió la configuración.');
+        Queue::assertNothingPushed();
+        Http::assertNothingSent();
+        Mail::assertNothingSent();
+        Notification::assertNothingSent();
+    }
+
+    /**
+     * Hito 5 (contrato H5 §A9, prueba 3): la vista previa y la evidencia del
+     * canario NO escriben nada, en ninguna tabla (tampoco en las del Studio:
+     * no se auditan), aunque la evidencia ejecute el acta.
+     */
+    public function test_la_vista_previa_y_la_evidencia_no_escriben_nada(): void
+    {
+        $this->importBaseline();
+        $ana = $this->person(Admin::ROLE_ADMINISTRADOR, 'Ana Pérez');
+        $root = $this->person(Admin::ROLE_SUPER_ADMIN, 'Root');
+        $lead = MarketingLead::create(['channel' => 'whatsapp', 'source' => 'inbound', 'phone' => '3001234567', 'name' => 'Prospecto']);
+        $canario = MarketingConversation::create(['lead_id' => $lead->id, 'channel' => 'whatsapp', 'status' => 'open']);
+        config([
+            'marketing.ultron.enabled' => true,
+            'marketing.ultron.payment_links_enabled' => false,
+            'marketing.ultron.canary_conversation_id' => $canario->id,
+            'marketing.ultron.studio_config' => 'canary',
+            'ultron_studio.publishing_enabled' => true,
+            'ultron_studio.publishing.lab_gate' => 'waived',
+            'ultron_studio.publishing.window' => '',
+        ]);
+        $uuid = (string) $this->createVersion($ana)->assertCreated()->json('data.uuid');
+        $avisos = $this->studio('POST', "versions/{$uuid}/submit", $ana)->assertOk()->json('data.warnings');
+        $this->studio('POST', "versions/{$uuid}/approve", $root, ['acknowledgedWarnings' => $avisos])->assertOk();
+        $vista = $this->studio('GET', "versions/{$uuid}/publication-preview", $root)->assertOk()->json('data');
+        $this->studio('POST', "versions/{$uuid}/publish", $root, ['clientRequestId' => (string) Str::uuid(), 'previewHash' => $vista['previewHash'], 'acknowledgedNoEffect' => $vista['noEffect']])->assertCreated();
+        $this->as($root);
+
+        DB::listen(function (QueryExecuted $q): void {
+            if (preg_match(self::WRITE_SQL, $q->sql, $m) === 1) {
+                $this->writes[] = ['table' => strtolower((string) preg_replace('/^.*\./', '', str_replace('"', '', $m[1]))), 'sql' => $q->sql];
+            }
+        });
+        $this->studio('GET', "versions/{$uuid}/publication-preview", $root)->assertOk();
+        $this->studio('GET', "versions/{$uuid}/canary-evidence", $root)->assertOk();
+
+        $this->assertSame([], array_values(array_filter($this->writes, static fn (array $e): bool => $e['table'] !== 'admin_sessions')), 'La vista previa o la evidencia escribieron algo.');
     }
 
     /** @var list<string> */
@@ -353,8 +556,21 @@ class UltronStudioEngineReadOnlyTest extends TestCase
         $v2 = $nueva('Rechazada');
         $this->walk('POST', "versions/{$v2}/submit", $ana)->assertOk();
         $this->walk('POST', "versions/{$v2}/reject", $root, ['reason' => 'Rechazada en la prueba'])->assertOk();
-        $this->walk('POST', "versions/{$v1}/publish", $root)->assertStatus(409);
-        $this->walk('POST', "versions/{$v1}/rollback", $root)->assertStatus(409);
+        // Hito 5: con las llaves por defecto, publicar y promover son 409;
+        // revertir y Legacy no miran llaves, pero no hay nada que deshacer. La
+        // vista previa, la evidencia (de una versión que no está en canario) y
+        // el historial solo leen.
+        $this->walk('GET', "versions/{$v1}/publication-preview", $root)->assertOk()->assertJsonPath('data.publishable', false);
+        $this->walk('GET', "versions/{$v1}/canary-evidence", $root)->assertStatus(409)->assertJsonPath('code', 'invalid_transition');
+        $this->walk('POST', "versions/{$v1}/publish", $root, ['clientRequestId' => (string) Str::uuid(), 'previewHash' => str_repeat('0', 64), 'acknowledgedNoEffect' => []])
+            ->assertStatus(409)->assertJsonPath('code', 'publishing_disabled');
+        $this->walk('POST', "versions/{$v1}/promote", $root, ['clientRequestId' => (string) Str::uuid(), 'evidenceHash' => str_repeat('0', 64)])
+            ->assertStatus(409)->assertJsonPath('code', 'publishing_disabled');
+        $this->walk('POST', "versions/{$v1}/rollback", $root, ['clientRequestId' => (string) Str::uuid(), 'reason' => 'Recorrido del motor'])
+            ->assertStatus(409)->assertJsonPath('code', 'not_active_publication');
+        $this->walk('POST', 'publications/legacy', $root, ['clientRequestId' => (string) Str::uuid(), 'reason' => 'Recorrido del motor'])
+            ->assertStatus(409)->assertJsonPath('code', 'already_legacy');
+        $this->walk('GET', 'publications', $root)->assertOk();
 
         // Lecturas y comparaciones con todo eso dentro.
         foreach (["compare?from={$v1}&to={$v2}", "compare?from=baseline&to={$v1}", "compare?from={$v1}&to=draft", 'engine/readings', 'audit', 'rules', 'versions', 'status'] as $lectura) {

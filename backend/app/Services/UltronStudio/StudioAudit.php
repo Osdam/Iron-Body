@@ -61,6 +61,14 @@ final class StudioAudit
         'version.four_eyes_denied',
         'version.publish_refused',
         'version.rollback_refused',
+        // Hito 5 (contrato H5 §A8): la cadena de publicaciones.
+        'version.published',
+        'version.promoted',
+        'version.retired',
+        'version.rolled_back',
+        'version.restored',
+        'version.promote_refused',
+        'system.publication_legacy',
         'rule.created',
         'rule.updated',
         'rule.archived',
@@ -86,9 +94,14 @@ final class StudioAudit
         // Comprobar y escribir dentro de una transacción con un cerrojo consultivo
         // (PostgreSQL): sin él, cuatro intentos simultáneos pasaban todos el
         // `exists()` y dejaban cuatro filas (hallazgo del tester). SQLite escribe
-        // en serie por sí mismo.
+        // en serie por sí mismo. READ COMMITTED PRIMERO (contrato H5 §A10.6, la
+        // lección B-2 de G y la Enmienda 4.6 de H4): en REPEATABLE READ la
+        // instantánea la tomaría la propia sentencia del cerrojo, ANTES de
+        // esperar, y quien esperó no vería la fila del otro. PostgreSQL acepta
+        // repetir el nivel que ya tiene la transacción en cualquier momento.
         return DB::transaction(function () use ($request, $actor, $event, $subjectType, $subjectUuid, $summary, $extra): ?StudioAuditEvent {
             if (DB::connection()->getDriverName() === 'pgsql') {
+                DB::statement('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
                 DB::statement('SELECT pg_advisory_xact_lock(?)', [crc32("ultron_studio_audit:{$event}:{$subjectUuid}:{$actor?->id}")]);
             }
 

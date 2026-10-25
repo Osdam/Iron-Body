@@ -62,6 +62,8 @@ class UltronStudioEngineReadingsTest extends TestCase
             'marketing.ai.openai.enabled' => true,
             'marketing.ai.openai.model' => 'gpt-prueba',
             'services.openai.api_key' => 'sk-prueba-que-no-sale-nunca',
+            // La llave del motor sobre la cadena del Studio (Hito 5), apagada salvo que se pida.
+            'marketing.ultron.studio_config' => 'off',
         ]);
     }
 
@@ -125,6 +127,15 @@ class UltronStudioEngineReadingsTest extends TestCase
             'knowledge.base' => ['available' => true, 'value' => ['version' => $version, 'activeByCategory' => $porCategoria, 'pendingReview' => 1]],
             // Por `sort_order`, con la insignia marcada.
             'strategy.plans' => ['available' => true, 'value' => [['name' => 'Trimestral', 'recommended' => false], ['name' => 'Mensualidad', 'recommended' => true]]],
+            // Hito 5 (contrato H5 §A4.9): `describe()` del lector del motor, con la
+            // llave en `off` (la de la suite) y sin ninguna publicación. Del
+            // canario, solo que existe.
+            'governance.studioPublication' => ['available' => true, 'value' => [
+                'env' => 'off',
+                'head' => null,
+                'parts' => ['canary' => false, 'rest' => false],
+                'canaryConfigured' => true,
+            ]],
         ], $data['extras']);
         $this->assertCount(14, $data['extras']['knowledge.base']['value']['activeByCategory']);
         $this->assertStringStartsWith('5:', $version);
@@ -307,7 +318,30 @@ class UltronStudioEngineReadingsTest extends TestCase
 
         $data = $this->studio('GET', 'engine/readings', $this->ana)->assertOk()->json('data');
         $this->assertSame(StudioEngineReadings::PARAMS, array_keys($data['params']));
-        $this->assertSame(StudioEngineReadings::EXTRAS, array_keys($data['extras']));
+        // Más, al final, la de la cadena de publicaciones (Hito 5, §A4.9), que no
+        // está en el catálogo: añadirla obligaría a subir su versión y a
+        // enmendar el fixture de publicación.
+        $this->assertSame([...StudioEngineReadings::EXTRAS, StudioEngineReadings::PUBLICATION_EXTRA], array_keys($data['extras']));
+        $this->assertNotContains(StudioEngineReadings::PUBLICATION_EXTRA, array_column(StudioCatalog::readings(), 'id'));
+    }
+
+    /**
+     * Hito 5 (contrato H5 §A4.9): `describe()` propaga a propósito un fallo de
+     * lectura; aquí sale `{available:false}` (nunca «sin publicaciones») y las
+     * demás lecturas siguen. Y con una publicación, la cabeza con cada
+     * comprobación por su lado, sin el id del canario.
+     */
+    public function test_la_lectura_de_la_cadena_de_publicaciones_cae_suave_y_no_lleva_el_canario(): void
+    {
+        $this->engineConfig(['marketing.ultron.studio_config' => 'canary']);
+        Log::spy();
+        $this->failQueriesOn('"ultron_studio_publications"', '08006', 'could not connect to server: host=db.interno');
+
+        $r = $this->studio('GET', 'engine/readings', $this->ana)->assertOk();
+        $this->assertSame(['available' => false], $r->json('data.extras')[StudioEngineReadings::PUBLICATION_EXTRA]);
+        $this->assertTrue($r->json('data.extras')['governance.brake']['available']);
+        $this->assertStringNotContainsString('db.interno', $r->getContent());
+        Log::shouldHaveReceived('warning')->with('ultron_studio.engine_reading_unavailable', ['reading' => StudioEngineReadings::PUBLICATION_EXTRA, 'error_class' => 'QueryException'])->once();
     }
 
     public function test_quien_no_tiene_ultron_view_no_lee_el_motor(): void

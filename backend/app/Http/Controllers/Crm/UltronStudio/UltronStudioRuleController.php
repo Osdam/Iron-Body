@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Crm\UltronStudio;
 
+use App\Http\Controllers\Concerns\ResolvesPagination;
 use App\Http\Controllers\Concerns\ValidatesListSizesFirst;
 use App\Http\Controllers\Controller;
 use App\Models\MarketingKnowledgeItem;
@@ -38,15 +39,26 @@ use Illuminate\Validation\ValidationException;
  */
 class UltronStudioRuleController extends Controller
 {
+    use ResolvesPagination;
     use ValidatesListSizesFirst;
 
     public function __construct(private readonly StudioRules $rules) {}
 
-    /** GET /api/admin/ultron-studio/rules?status=active,draft (por defecto, sin archivadas) */
+    /**
+     * GET /api/admin/ultron-studio/rules?status=active,draft (por defecto, sin archivadas)
+     *
+     * Con `archived` entre los estados (contrato H5 §A10.2) la respuesta se
+     * PAGINA (`page`, `per_page` ≤ 50, la forma de `GET versions`): las
+     * archivadas no tienen tope. Sin ella, la lista de siempre.
+     */
     public function index(Request $request): JsonResponse
     {
         StudioAccess::requirePerson($request);
-        $data = $request->validate(['status' => ['sometimes', 'nullable', 'string', 'max:60']]);
+        $data = $request->validate([
+            'status' => ['sometimes', 'nullable', 'string', 'max:60'],
+            'page' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'nullable', 'integer', 'min:1'],
+        ]);
 
         $estados = [];
         if (isset($data['status']) && trim($data['status']) !== '') {
@@ -54,6 +66,13 @@ class UltronStudioRuleController extends Controller
             if (array_diff($estados, StudioRule::STATUSES) !== []) {
                 throw ValidationException::withMessages(['status' => ['Hay estados de regla que no existen.']]);
             }
+        }
+
+        if (in_array(StudioRule::STATUS_ARCHIVED, $estados, true)) {
+            return response()->json(['ok' => true, 'data' => $this->rules->page(
+                $estados,
+                $this->resolvePerPage($request, 20, StudioRules::ARCHIVED_PER_PAGE_MAX),
+            )]);
         }
 
         return response()->json(['ok' => true, 'data' => $this->rules->list($estados)]);

@@ -27,9 +27,13 @@ use Tests\TestCase;
  * ninguna con la llave en `off`— vive en
  * `Tests\Feature\Marketing\UltronCommitStudioStampTest` (§A9, prueba 2).
  *
- * `StudioPublishing::ENGINE_READS_VERSIONS` sigue en false, y las rutas en 33,
- * hasta el commit que implementa publicar (paso 3 del plan): girarla antes solo
- * cambiaría `engineReads` sin que nadie pudiera publicar.
+ * HITO 5, PASO 3 (mismo commit que publicar): `StudioPublishing::
+ * ENGINE_READS_VERSIONS` está girada (hay código que publica y código que lee)
+ * y las rutas son 38. Lo que sigue apagado POR DEFECTO son las dos llaves de
+ * entorno: la del motor (`MARKETING_ULTRON_STUDIO_CONFIG=off`: no consulta
+ * nada) y la del Studio (`ULTRON_STUDIO_PUBLISHING_ENABLED=false`: publicar y
+ * promover, 409). Se evalúan los dos ficheros de configuración sin las
+ * variables en el entorno.
  */
 class UltronEngineIsolationTest extends TestCase
 {
@@ -203,16 +207,61 @@ class UltronEngineIsolationTest extends TestCase
             $this->assertNotContains('automation.internal', $route->gatherMiddleware(), $route->uri());
         }
 
-        // Las 19 de F, las dos de lectura del Hito G (engine/readings y compare)
-        // y las 12 del laboratorio del Hito 4 (`lab/*`, contrato H4 §A7).
-        $this->assertSame(33, $delStudio);
+        // Las 19 de F, las dos de lectura del Hito G (engine/readings y compare),
+        // las 12 del laboratorio del Hito 4 (`lab/*`, contrato H4 §A7) y las 5
+        // de la publicación del Hito 5 (contrato H5 §A7).
+        $this->assertSame(38, $delStudio);
     }
 
-    public function test_el_motor_no_lee_versiones_y_publicar_esta_apagado(): void
+    /**
+     * Hito 5 (contrato H5 §A9, prueba 1, paso 3): hay código que publica y
+     * código que lee, pero el motor solo lee con SU llave y publicar nace
+     * apagado. Los dos ficheros de configuración se evalúan SIN las variables
+     * en el entorno, sea cual sea el entorno con el que corra la suite.
+     */
+    public function test_el_motor_lee_solo_con_su_llave_y_publicar_esta_apagado_por_defecto(): void
     {
-        $this->assertFalse(StudioPublishing::ENGINE_READS_VERSIONS);
+        $this->assertTrue(StudioPublishing::ENGINE_READS_VERSIONS);
+
+        $marketing = $this->configWithout('config/marketing.php', 'MARKETING_ULTRON_STUDIO_CONFIG');
+        $studio = $this->configWithout('config/ultron_studio.php', 'ULTRON_STUDIO_PUBLISHING_ENABLED');
+        $this->assertSame('off', $marketing['ultron']['studio_config']);
+        $this->assertFalse($studio['publishing_enabled']);
+
+        // Con esos valores, ninguna llave abre publicar ni promover.
+        config(['marketing.ultron.studio_config' => $marketing['ultron']['studio_config'], 'ultron_studio.publishing_enabled' => $studio['publishing_enabled']]);
         $this->assertFalse(StudioPublishing::available());
-        $this->assertFalse((bool) config('ultron_studio.publishing_enabled'));
+        $this->assertSame('publishing_disabled', StudioPublishing::keyRefusal('publish')['code']);
+        $this->assertSame('publishing_disabled', StudioPublishing::keyRefusal('promote')['code']);
+        $this->assertSame(StudioPublishing::SCOPE_OFF, StudioPublishing::engineScope());
+    }
+
+    /**
+     * Un fichero de configuración evaluado sin una variable en el entorno.
+     *
+     * @return array<string, mixed>
+     */
+    private function configWithout(string $fichero, string $nombre): array
+    {
+        $antes = [$_SERVER[$nombre] ?? null, $_ENV[$nombre] ?? null, getenv($nombre)];
+
+        try {
+            unset($_SERVER[$nombre], $_ENV[$nombre]);
+            putenv($nombre);
+
+            return require base_path($fichero);
+        } finally {
+            [$servidor, $entorno, $proceso] = $antes;
+            if ($servidor !== null) {
+                $_SERVER[$nombre] = $servidor;
+            }
+            if ($entorno !== null) {
+                $_ENV[$nombre] = $entorno;
+            }
+            if ($proceso !== false) {
+                putenv("{$nombre}={$proceso}");
+            }
+        }
     }
 
     // ────────────────────────────────────────────────────────────────────────

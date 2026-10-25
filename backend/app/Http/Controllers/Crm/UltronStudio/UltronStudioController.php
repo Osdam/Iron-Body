@@ -10,6 +10,7 @@ use App\Services\UltronStudio\StudioAudit;
 use App\Services\UltronStudio\StudioCatalog;
 use App\Services\UltronStudio\StudioDrafts;
 use App\Services\UltronStudio\StudioEngineReadings;
+use App\Services\UltronStudio\StudioPublications;
 use App\Services\UltronStudio\StudioPublishing;
 use App\Services\UltronStudio\StudioRules;
 use App\Services\UltronStudio\StudioVersionStatus;
@@ -34,7 +35,9 @@ use Illuminate\Validation\Rule;
  * `UltronStudioException` (`{ok:false, code, message, …}`); la validación de
  * formato, con el 422 estándar de Laravel (`{message, errors}`).
  *
- * El motor de ULTRON no lee nada de esto.
+ * El motor de ULTRON no lee nada de esto. Desde el Hito 5 lee la cabeza de la
+ * cadena de publicaciones, y solo con su llave: `status.engine.publication`
+ * dice cuál, con su firma y su deriva (contrato H5 §A7).
  */
 class UltronStudioController extends Controller
 {
@@ -46,13 +49,17 @@ class UltronStudioController extends Controller
         private readonly StudioAudit $audit,
     ) {}
 
-    /** GET /api/admin/ultron-studio/status */
-    public function status(Request $request): JsonResponse
+    /**
+     * GET /api/admin/ultron-studio/status. El bloque `engine` (Hito 5) lo da
+     * {@see StudioPublications}, que lee el motor: se resuelve aquí y no en el
+     * constructor, como las lecturas del motor.
+     */
+    public function status(Request $request, StudioPublications $publications): JsonResponse
     {
         $access = StudioAccess::requirePerson($request);
 
         return response()->json(['ok' => true, 'data' => [
-            'engine' => StudioPublishing::engine(),
+            'engine' => $publications->engineBlock(),
             'publishing' => StudioPublishing::status(),
             'can' => $access->capabilities(),
             'catalog' => ['version' => StudioCatalog::VERSION, 'hash' => StudioCatalog::hash()],

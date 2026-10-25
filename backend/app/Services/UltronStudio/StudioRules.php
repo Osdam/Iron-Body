@@ -6,6 +6,7 @@ use App\Exceptions\UltronStudioException;
 use App\Models\MarketingKnowledgeItem;
 use App\Models\UltronStudio\StudioAuditEvent;
 use App\Models\UltronStudio\StudioRule;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
@@ -62,6 +63,9 @@ final class StudioRules
     /** Campos que se pueden editar de una regla del Studio. `conditions` desde el Hito G. */
     public const EDITABLE = ['description', 'type', 'priority', 'layers', 'refs', 'conditions'];
 
+    /** Tope de `per_page` de las archivadas (contrato H5 §A10.2). */
+    public const ARCHIVED_PER_PAGE_MAX = 50;
+
     private const CODE_ATTEMPTS = 3;
 
     public function __construct(private readonly StudioAudit $audit) {}
@@ -77,6 +81,22 @@ final class StudioRules
         $reglas = StudioRule::query()->whereIn('status', $statuses ?: self::DEFAULT_STATUSES)->orderBy('code')->get();
 
         return $this->present($reglas->all());
+    }
+
+    /**
+     * GET rules?status=archived (contrato H5 §A10.2, I-5 de G): las archivadas
+     * no tienen tope, así que se PAGINAN con la forma de `GET versions` (el
+     * paginador de Laravel; `per_page` ≤ {@see ARCHIVED_PER_PAGE_MAX}). Las
+     * vivas siguen siendo una lista, con su tope de
+     * {@see MAX_LIVE_STUDIO_RULES} más las del código.
+     *
+     * @param  list<string>  $statuses  incluye `archived`
+     */
+    public function page(array $statuses, int $perPage): LengthAwarePaginator
+    {
+        $pagina = StudioRule::query()->whereIn('status', $statuses)->orderBy('code')->paginate($perPage);
+
+        return $pagina->setCollection(collect($this->present($pagina->getCollection()->all())));
     }
 
     /**
