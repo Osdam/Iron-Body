@@ -59,6 +59,10 @@ return [
         'lockout_minutes' => 15,
         // Versión de la plantilla: modelo + normalizador de la app.
         'template_version' => 'mobilefacenet-192/face_norm_v1',
+        // Días que se guarda con qué plantilla chocó un registro rechazado por
+        // «rostro de otra persona» (face_duplicate_matches). Es un diagnóstico,
+        // no historial: la traza del rechazo sigue en la bitácora.
+        'duplicate_match_retention_days' => 30,
     ],
 
     'tokens' => [

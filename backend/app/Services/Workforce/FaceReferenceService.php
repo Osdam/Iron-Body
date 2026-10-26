@@ -3,14 +3,18 @@
 namespace App\Services\Workforce;
 
 use App\Exceptions\WorkforceException;
+use App\Models\FaceDuplicateMatch;
 use App\Models\Identity;
 use App\Models\Trainer;
 use App\Models\TrainerAuditLog;
 use App\Models\TrainerFaceReference;
 use App\Models\WorkforceAuthorizationCode;
 use App\Support\Workforce\FaceVector;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
+use Throwable;
 
 /**
  * La plantilla facial de una persona: registrarla, compararla, revocarla.
@@ -310,6 +314,8 @@ class FaceReferenceService
         ]);
         $ref->eraseVector();
         $ref->save();
+        // Las distancias guardadas contra esta plantilla salen de ella: se van con ella.
+        FaceDuplicateMatch::query()->where('face_reference_id', $ref->getKey())->delete();
 
         $this->audit(self::EVENT_REVOKED, $ref, ['reason' => $reason, 'by' => $actorName], $request, $adminId);
         if ($ref->identity_id !== null) {
@@ -330,6 +336,11 @@ class FaceReferenceService
     /**
      * 1:N: ningún OTRO rostro activo puede estar dentro del umbral.
      *
+     * Compara contra todas antes de rechazar (antes paraba en la primera) para
+     * dejar en `face_duplicate_matches` CADA plantilla que coincide y su
+     * distancia. La respuesta no lo dice: quien registra un rostro no debe
+     * saber con quién se parece.
+     *
      * @param  list<float>  $template
      */
     private function assertNotLinkedToSomeoneElse(array $template, ?Identity $identity, ?TrainerFaceReference $own, ?Request $request, ?Trainer $trainer = null): void
@@ -340,13 +351,49 @@ class FaceReferenceService
             ->when($trainer !== null, fn ($q) => $q->where(fn ($q) => $q->whereNull('trainer_id')->orWhere('trainer_id', '!=', $trainer->getKey())))
             ->get();
 
+        $threshold = $this->threshold();
+        $matches = [];
         foreach ($others as $other) {
             $d = FaceVector::distance((array) $other->vector(), $template);
-            if ($d !== null && $d <= $this->threshold()) {
-                $this->audit(self::EVENT_DUPLICATE_REJECTED, null, ['identity_id' => $identity?->getKey(), 'trainer_id' => $trainer?->getKey()], $request);
-
-                throw WorkforceException::faceAlreadyLinked();
+            if ($d !== null && $d <= $threshold) {
+                $matches[(int) $other->getKey()] = $d;
             }
+        }
+        if ($matches === []) {
+            return;
+        }
+
+        $log = $this->audit(self::EVENT_DUPLICATE_REJECTED, null, ['identity_id' => $identity?->getKey(), 'trainer_id' => $trainer?->getKey()], $request);
+        $this->recordDuplicateMatches($log, $matches);
+
+        throw WorkforceException::faceAlreadyLinked();
+    }
+
+    /**
+     * El diagnóstico es auxiliar: si no se puede guardar, el rostro se rechaza
+     * igual y con el mismo mensaje, y el fallo queda en el log.
+     *
+     * @param  array<int, float>  $matches  id de la plantilla => distancia
+     */
+    private function recordDuplicateMatches(TrainerAuditLog $log, array $matches): void
+    {
+        asort($matches);
+        try {
+            foreach ($matches as $referenceId => $distance) {
+                FaceDuplicateMatch::create([
+                    'audit_log_id' => $log->getKey(),
+                    'face_reference_id' => $referenceId,
+                    'distance' => round($distance, 4),
+                    'created_at' => now(),
+                ]);
+            }
+        } catch (Throwable $e) {
+            // Solo la clase y el SQLSTATE: el mensaje de una QueryException lleva
+            // los valores del INSERT (plantilla y distancia) y el log no caduca.
+            Log::warning('biometric.duplicate_match_record_failed', [
+                'audit_log_id' => $log->getKey(),
+                'error' => class_basename($e).($e instanceof QueryException ? ' '.($e->errorInfo[0] ?? '') : ''),
+            ]);
         }
     }
 
@@ -367,10 +414,11 @@ class FaceReferenceService
      *
      * @param  array<string, mixed>  $metadata
      */
-    public function audit(string $event, ?TrainerFaceReference $ref, array $metadata, ?Request $request = null, ?int $adminId = null): void
+    public function audit(string $event, ?TrainerFaceReference $ref, array $metadata, ?Request $request = null, ?int $adminId = null): TrainerAuditLog
     {
         $request ??= request();
-        TrainerAuditLog::create([
+
+        return TrainerAuditLog::create([
             'actor_type' => $adminId !== null ? TrainerAuditLog::ACTOR_ADMIN : TrainerAuditLog::ACTOR_SYSTEM,
             'actor_id' => $adminId,
             'trainer_id' => $ref?->trainer_id,
