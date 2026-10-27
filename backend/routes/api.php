@@ -237,6 +237,8 @@ Route::prefix('kiosk')->middleware('throttle:kiosk')->group(function (): void {
         Route::post('workday/clock-out', [\App\Http\Controllers\Api\Kiosk\KioskWorkdayController::class, 'clockOut']);
         Route::post('enrollment/start', [\App\Http\Controllers\Api\Kiosk\KioskEnrollmentController::class, 'start']);
         Route::post('enrollment/complete', [\App\Http\Controllers\Api\Kiosk\KioskEnrollmentController::class, 'complete']);
+        // PIN personal: segundo factor cuando el rostro no basta (contrato §10.2).
+        Route::post('pin/setup', [\App\Http\Controllers\Api\Kiosk\KioskPinController::class, 'setup']);
     });
 });
 
@@ -1193,6 +1195,9 @@ Route::post('admin/workforce/staff/{identity}/fallback-code', [\App\Http\Control
 Route::get('admin/biometrics/identities/{identity}', [\App\Http\Controllers\Api\Admin\BiometricAdminController::class, 'show'])->whereUuid('identity');
 Route::post('admin/biometrics/identities/{identity}/enrollment-code', [\App\Http\Controllers\Api\Admin\BiometricAdminController::class, 'enrollmentCode'])->whereUuid('identity');
 Route::post('admin/biometrics/identities/{identity}/revoke', [\App\Http\Controllers\Api\Admin\BiometricAdminController::class, 'revoke'])->whereUuid('identity');
+Route::post('admin/biometrics/identities/{identity}/pin-code', [\App\Http\Controllers\Api\Admin\BiometricAdminController::class, 'pinCode'])->whereUuid('identity');
+Route::post('admin/biometrics/identities/{identity}/pin/revoke', [\App\Http\Controllers\Api\Admin\BiometricAdminController::class, 'revokePin'])->whereUuid('identity');
+Route::post('admin/biometrics/identities/{identity}/lookalike-exception', [\App\Http\Controllers\Api\Admin\BiometricAdminController::class, 'lookalikeException'])->whereUuid('identity');
 Route::get('admin/devices', [\App\Http\Controllers\Api\Admin\DeviceAdminController::class, 'index']);
 Route::post('admin/devices/pairing-codes', [\App\Http\Controllers\Api\Admin\DeviceAdminController::class, 'pairingCode']);
 Route::get('admin/devices/security-events', [\App\Http\Controllers\Api\Admin\DeviceAdminController::class, 'securityEvents']);

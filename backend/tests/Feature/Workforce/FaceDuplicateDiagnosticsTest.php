@@ -308,8 +308,11 @@ class FaceDuplicateDiagnosticsTest extends TestCase
 
         // Claves EXACTAS del perfil biométrico del CRM: un campo nuevo (p. ej.
         // «parecidos») tiene que pasar por aquí.
+        // 2026-10-27: + pin, second_factor_always y lookalikes (contrato §10.4;
+        // los parecidos dicen con quién, nunca a qué distancia).
         $dataKeys = ['status', 'verifiable', 'enrolled_at', 'updated_at', 'enrolled_via', 'enrolled_by', 'enrolled_device',
-            'template_version', 'consent_version', 'consent_accepted_at', 'last_verified_at', 'revoked', 'pending_codes', 'history'];
+            'template_version', 'consent_version', 'consent_accepted_at', 'last_verified_at', 'revoked', 'pending_codes', 'history',
+            'pin', 'second_factor_always', 'lookalikes'];
         $leaks = ['distance', 'face_reference_id', 'audit_log_id', 'face_duplicate_matches', number_format($match->distance, 4)];
         foreach ([['biometrics.view'], ['biometrics.view', 'biometrics.manage']] as $permissions) {
             $response = $this->getJson("/api/admin/biometrics/identities/{$coach->identity->uuid}", $this->adminWithPermissions($permissions))->assertOk();

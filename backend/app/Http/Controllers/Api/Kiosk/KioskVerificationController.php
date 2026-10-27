@@ -47,6 +47,8 @@ class KioskVerificationController extends Controller
             'employee_ref' => ['required', 'string', 'max:2000'],
             'purpose' => ['required', 'string', 'in:workday,trainer_session'],
             'embedding' => ['required', 'array'],
+            // Segundo factor cuando el rostro no basta (contrato §10.1).
+            'pin' => ['nullable', 'string', 'regex:/^\d{6}$/'],
         ]);
         /** @var AuthorizedDevice $device */
         $device = $request->attributes->get('auth_device');
@@ -59,16 +61,17 @@ class KioskVerificationController extends Controller
             throw new WorkforceException('El acceso de entrenadores en esta tablet está desactivado por administración. Puedes consultar tus clases en tu teléfono.', 'trainer_face_login_disabled', 403);
         }
 
-        $distance = $this->faces->verify(
+        $match = $this->faces->verify(
             $this->faces->referenceForIdentity($identity),
             $data['embedding'],
             // Contador propio del kiosko (solo lo alcanza una tablet vinculada):
             // fallar en el login público o en el teléfono no lo agota.
             'kiosk:identity:'.$identity->getKey(),
             $request,
+            $data['pin'] ?? null,
         );
 
-        return $this->verified($request, $identity, $profile, $device, $data['purpose'], 'face', $distance, null);
+        return $this->verified($request, $identity, $profile, $device, $data['purpose'], $match->method(), $match->distance, null);
     }
 
     public function verifyCode(Request $request): JsonResponse

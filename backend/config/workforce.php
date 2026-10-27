@@ -63,6 +63,29 @@ return [
         // «rostro de otra persona» (face_duplicate_matches). Es un diagnóstico,
         // no historial: la traza del rechazo sigue en la bitácora.
         'duplicate_match_retention_days' => 30,
+        // Separación mínima entre la plantilla propia y la de otra persona más
+        // cercana para que el rostro baste solo (contrato §10.1). Calibrado el
+        // 2026-10-26 sobre la galería de producción (simulación con las
+        // distancias genuinas reales): con 0,20 ningún intento genuino queda
+        // ambiguo; con 0,30, el 1,6 %.
+        'ambiguity_margin' => (float) env('WORKFORCE_FACE_AMBIGUITY_MARGIN', 0.20),
+        // Con una excepción de parecido (§10.5), la plantilla de la otra persona
+        // solo se ignora a esta distancia o más: más cerca es la misma cara (las
+        // verificaciones genuinas del entrenador afectado promedian 0,64).
+        'lookalike_exception_min_distance' => (float) env('WORKFORCE_FACE_LOOKALIKE_EXCEPTION_MIN_DISTANCE', 0.70),
+    ],
+
+    // PIN personal: segundo factor del rostro cuando el modelo no basta (§10).
+    'pin' => [
+        // Fallos dentro de la ventana antes de bloquearlo. Acertar no borra los
+        // fallos: la ventana solo caduca con el tiempo.
+        'max_attempts' => 5,
+        'failure_window_hours' => 24,
+        // Bloqueos sucesivos, en minutos: escalan y vuelven al primero tras
+        // `lock_decay_days` sin bloqueo. Un administrador lo libera antes
+        // autorizando un PIN nuevo.
+        'lockout_minutes' => [15, 60, 240, 1440],
+        'lock_decay_days' => 7,
     ],
 
     'tokens' => [

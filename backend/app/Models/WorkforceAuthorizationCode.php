@@ -17,6 +17,9 @@ class WorkforceAuthorizationCode extends Model
 
     public const PURPOSE_FALLBACK_CLASS = 'fallback_class';
 
+    /** Crear o cambiar el PIN personal (contrato §10.2). */
+    public const PURPOSE_PIN_SETUP = 'pin_setup';
+
     protected $fillable = [
         'identity_id', 'purpose', 'code_hash', 'reason',
         'created_by_admin_id', 'created_by_name',

@@ -14,6 +14,7 @@ use App\Services\Workforce\EmployeeDirectory;
 use App\Services\Workforce\FaceReferenceService;
 use App\Services\Workforce\KioskTokens;
 use App\Services\Workforce\WorkdayService;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -102,15 +103,22 @@ class KioskEnrollmentController extends Controller
         // Fuera de la transacción: un rechazo por rostro ajeno deja su traza.
         $this->faces->precheckEnrollment($identity, array_values($data['embeddings']), $request);
 
-        DB::transaction(function () use ($data, $device, $identity, $code, $request): void {
-            $this->tokens->consume($data['enrollment_token'], WorkforceKioskToken::KIND_ENROLLMENT, 'enrollment', $device);
-            $this->faces->enroll($identity, array_values($data['embeddings']), [
-                'device_id' => $device->getKey(),
-                'admin_id' => $code?->created_by_admin_id,
-                'admin_name' => $code?->created_by_name,
-                'consent_version' => (string) $data['consent_version'],
-            ], $request);
-        });
+        try {
+            DB::transaction(function () use ($data, $device, $identity, $code, $request): void {
+                $this->tokens->consume($data['enrollment_token'], WorkforceKioskToken::KIND_ENROLLMENT, 'enrollment', $device);
+                $this->faces->enroll($identity, array_values($data['embeddings']), [
+                    'device_id' => $device->getKey(),
+                    'admin_id' => $code?->created_by_admin_id,
+                    'admin_name' => $code?->created_by_name,
+                    'consent_version' => (string) $data['consent_version'],
+                ], $request);
+            });
+        } catch (UniqueConstraintViolationException) {
+            // Dos primeros registros de la misma persona a la vez: el otro ganó
+            // (una plantilla por identidad). Un 409, no un 500 con el INSERT
+            // —y la plantilla cifrada— en el log (tester 2026-10-27, D-3).
+            throw WorkforceException::faceAlreadyEnrolled();
+        }
 
         return $this->enrolled($identity, $device, 201);
     }

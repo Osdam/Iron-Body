@@ -9,9 +9,12 @@ use App\Models\Trainer;
 use App\Models\TrainerAuditLog;
 use App\Models\TrainerFaceReference;
 use App\Models\WorkforceAuthorizationCode;
+use App\Models\WorkforcePin;
+use App\Support\Workforce\FaceMatch;
 use App\Support\Workforce\FaceVector;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Throwable;
@@ -22,11 +25,14 @@ use Throwable;
  * El rostro se compara AQUÍ, nunca en el teléfono: la app manda el embedding de
  * la captura y el servidor decide. La plantilla no sale nunca del servidor.
  *
- * Tres defensas que antes no existían:
+ * Defensas:
  *  · norma del vector: un vector casi nulo coincidía con cualquiera;
  *  · nunca se sobrescribe una plantilla activa: cambiarla exige que un
  *    administrador lo autorice;
- *  · 1:N al registrar: un rostro que ya es de otra persona no se vincula.
+ *  · 1:N al registrar: un rostro que ya es de otra persona no se vincula;
+ *  · 1:N al verificar (contrato §10.1): si el rostro no separa a la persona de
+ *    otra (par de parecidos, coincidencia o margen), el rostro solo no
+ *    autoriza: hace falta su PIN.
  */
 class FaceReferenceService
 {
@@ -51,7 +57,33 @@ class FaceReferenceService
     /** Un código de autorización rechazado: sin el código ni su huella, solo el motivo. */
     public const EVENT_CODE_REJECTED = 'biometric.code_rejected';
 
-    public function __construct(private readonly WorkforceEvents $events) {}
+    /** El rostro coincidió pero no basta: pidió el PIN. Sin con quién ni a qué distancia. */
+    public const EVENT_VERIFY_AMBIGUOUS = 'biometric.verify_ambiguous';
+
+    public const EVENT_PIN_SET = 'biometric.pin_set';
+
+    public const EVENT_PIN_FAILED = 'biometric.pin_failed';
+
+    public const EVENT_PIN_LOCKED = 'biometric.pin_locked';
+
+    public const EVENT_PIN_REVOKED = 'biometric.pin_revoked';
+
+    public const EVENT_LOOKALIKE_DETECTED = 'biometric.lookalike_detected';
+
+    public const EVENT_LOOKALIKE_EXCEPTION_GRANTED = 'biometric.lookalike_exception_granted';
+
+    /** Por qué un rostro que coincide no basta (contrato §10.1). */
+    public const AMBIGUITY_PAIR = 'pair';
+
+    public const AMBIGUITY_COINCIDENCE = 'coincidence';
+
+    public const AMBIGUITY_MARGIN = 'margin';
+
+    public function __construct(
+        private readonly WorkforceEvents $events,
+        private readonly LookalikeRegistry $lookalikes,
+        private readonly WorkforcePins $pins,
+    ) {}
 
     // ── Consulta ────────────────────────────────────────────────────────────
 
@@ -124,10 +156,62 @@ class FaceReferenceService
     }
 
     /**
-     * Verifica que el rostro es el de la persona. Devuelve la distancia.
-     * Lanza: no enrolada, bloqueada por intentos o no coincide (uniforme).
+     * Verifica que el rostro es el de la persona y que la distingue de las
+     * demás. Lanza: no enrolada, bloqueada por intentos, no coincide
+     * (uniforme) o, si el rostro no basta, pide el PIN (contrato §10.1).
+     *
+     * Un PIN que llega sin hacer falta se comprueba igual: un PIN equivocado
+     * nunca pasa.
      */
-    public function verify(?TrainerFaceReference $ref, mixed $embedding, string $attemptKey, ?Request $request = null): float
+    public function verify(?TrainerFaceReference $ref, mixed $embedding, string $attemptKey, ?Request $request = null, ?string $pin = null): FaceMatch
+    {
+        [$ref, $distance, $limiterKey] = $this->matchOwn($ref, $embedding, $attemptKey, $request);
+
+        // El rostro coincide; ¿lo separa de las demás personas? Si no, el
+        // intento cuenta (no se limpia el contador) y hace falta el PIN.
+        $ambiguity = $this->ambiguity($ref, $embedding, $distance);
+        if ($ambiguity !== null || $pin !== null) {
+            $identityId = $ref->identity_id !== null ? (int) $ref->identity_id : null;
+            if ($pin === null) {
+                $this->audit(self::EVENT_VERIFY_AMBIGUOUS, $ref, ['distance' => round($distance, 4), 'cause' => $ambiguity], $request);
+                $current = $identityId !== null ? $this->pins->find($identityId) : null;
+
+                throw WorkforceException::faceSecondFactorRequired($current?->status() ?? WorkforcePin::STATUS_NOT_SET, $current?->locked_until);
+            }
+            $this->assertPin($ref, $identityId, $pin, $request);
+        }
+
+        RateLimiter::clear($limiterKey);
+        $ref->forceFill(['last_verified_at' => now()])->saveQuietly();
+
+        return new FaceMatch($distance, $pin !== null);
+    }
+
+    /**
+     * «El rostro coincide con su plantilla validada y ninguna otra está más
+     * cerca», sin PIN: para crear el PIN, donde el factor presencial es el
+     * código del administrador (contrato §10.2). Lo segundo frena a la otra
+     * persona de un par que ya tiene rostro registrado (revisión 2026-10-27,
+     * B-1). Mismos intentos limitados. NO autoriza ninguna operación sola.
+     */
+    public function assertWithinThreshold(?TrainerFaceReference $ref, mixed $embedding, string $attemptKey, ?Request $request = null): float
+    {
+        [$ref, $distance, $limiterKey] = $this->matchOwn($ref, $embedding, $attemptKey, $request);
+        if ($this->nearestOther($ref, $embedding) < $distance) {
+            throw WorkforceException::faceNoMatch();
+        }
+        RateLimiter::clear($limiterKey);
+
+        return $distance;
+    }
+
+    /**
+     * Rostro válido, plantilla que verifica, intentos limitados y distancia
+     * dentro del umbral; si no, lanza (y el fallo queda en la traza).
+     *
+     * @return array{0: TrainerFaceReference, 1: float, 2: string}
+     */
+    private function matchOwn(?TrainerFaceReference $ref, mixed $embedding, string $attemptKey, ?Request $request): array
     {
         $max = (int) config('workforce.face.max_failed_attempts', 5);
         $lockMinutes = (int) config('workforce.face.lockout_minutes', 15);
@@ -163,10 +247,103 @@ class FaceReferenceService
             throw WorkforceException::faceNoMatch();
         }
 
-        RateLimiter::clear($limiterKey);
-        $ref->forceFill(['last_verified_at' => now()])->saveQuietly();
+        return [$ref, $distance, $limiterKey];
+    }
 
-        return $distance;
+    /**
+     * ¿Por qué este rostro, que coincide con su plantilla, no basta? Null si
+     * basta. Se compara contra TODAS las plantillas activas de otras personas
+     * (también las heredadas: más conservador), nunca contra las revocadas.
+     */
+    private function ambiguity(TrainerFaceReference $ref, array $embedding, float $distance): ?string
+    {
+        if ($ref->identity_id !== null && $this->lookalikes->isPaired((int) $ref->identity_id)) {
+            return self::AMBIGUITY_PAIR;
+        }
+
+        $nearest = $this->nearestOther($ref, $embedding);
+        if ($nearest <= $this->threshold()) {
+            return self::AMBIGUITY_COINCIDENCE;
+        }
+        if ($nearest - $distance < (float) config('workforce.face.ambiguity_margin', 0.20)) {
+            return self::AMBIGUITY_MARGIN;
+        }
+
+        return null;
+    }
+
+    /**
+     * Distancia de la captura a la plantilla activa más cercana de OTRA
+     * persona (INF si no hay ninguna). No cuentan las de la misma persona,
+     * tampoco una heredada solo con su ficha de entrenador.
+     */
+    private function nearestOther(TrainerFaceReference $ref, array $embedding): float
+    {
+        $ownTrainers = $ref->identity_id !== null
+            ? Trainer::query()->where('identity_id', $ref->identity_id)->pluck('id')->push($ref->trainer_id)->filter()->all()
+            : array_filter([$ref->trainer_id]);
+        $others = TrainerFaceReference::query()->active()
+            ->whereKeyNot($ref->getKey())
+            ->when($ref->identity_id !== null, fn ($q) => $q->where(fn ($q) => $q->whereNull('identity_id')->orWhere('identity_id', '!=', $ref->identity_id)))
+            ->where(fn ($q) => $q->whereNotNull('identity_id')->orWhereNull('trainer_id')->orWhereNotIn('trainer_id', $ownTrainers ?: [0]))
+            ->get();
+
+        $nearest = INF;
+        foreach ($others as $other) {
+            $d = FaceVector::distance((array) $other->vector(), $embedding);
+            if ($d !== null) {
+                $nearest = min($nearest, $d);
+            }
+        }
+
+        return $nearest;
+    }
+
+    /** Comprueba el PIN que acompaña al rostro; deja la traza y lanza si no vale. */
+    private function assertPin(TrainerFaceReference $ref, ?int $identityId, string $pin, ?Request $request): void
+    {
+        if ($identityId === null) {
+            throw WorkforceException::pinNotSet();
+        }
+        $outcome = $this->pins->check($identityId, $pin);
+
+        match ($outcome['result']) {
+            WorkforcePins::OK => null,
+            WorkforcePins::NOT_SET => throw WorkforceException::pinNotSet(),
+            WorkforcePins::LOCKED => $this->pinLocked($ref, $outcome, $request),
+            default => $this->pinFailed($ref, $request),
+        };
+    }
+
+    /**
+     * Quien prueba un PIN ajeno es quien se parece al titular: cada fallo
+     * queda en su historial y avisa al CRM abierto (revisión 2026-10-27, M-1).
+     */
+    private function pinFailed(TrainerFaceReference $ref, ?Request $request): never
+    {
+        $this->audit(self::EVENT_PIN_FAILED, $ref, [], $request);
+        $this->publishPinEvent($ref, 'pin_failed');
+
+        throw WorkforceException::pinInvalid();
+    }
+
+    /** @param array{locked_until:?Carbon, just_locked:bool} $outcome */
+    private function pinLocked(TrainerFaceReference $ref, array $outcome, ?Request $request): never
+    {
+        if ($outcome['just_locked']) {
+            $this->audit(self::EVENT_PIN_LOCKED, $ref, ['until' => $outcome['locked_until']?->toIso8601String()], $request);
+            $this->publishPinEvent($ref, 'pin_locked');
+        }
+
+        throw WorkforceException::pinLocked($outcome['locked_until'] ?? now());
+    }
+
+    private function publishPinEvent(TrainerFaceReference $ref, string $reason): void
+    {
+        if ($ref->identity_id !== null) {
+            $uuid = (string) Identity::query()->whereKey($ref->identity_id)->value('uuid');
+            $this->events->publish(WorkforceEvents::BIOMETRIC_UPDATED, $reason, $uuid, WorkforceEvents::SOURCE_KIOSK);
+        }
     }
 
     // ── Registro ────────────────────────────────────────────────────────────
@@ -182,7 +359,7 @@ class FaceReferenceService
      */
     public function enroll(Identity $identity, array $embeddings, array $context, ?Request $request = null): TrainerFaceReference
     {
-        $template = $this->precheckEnrollment($identity, $embeddings, $request);
+        [$template, $exceptions] = $this->checkEnrollment($identity, $embeddings, $request);
         $existing = $this->referenceForIdentity($identity);
 
         $trainerId = $existing?->trainer_id
@@ -211,15 +388,22 @@ class FaceReferenceService
         ]);
         $ref->storeVector($template);
         $ref->save();
+        // Dentro de la transacción del kiosko: si la excepción ya no está viva,
+        // se deshace también la plantilla.
+        $this->lookalikes->consumeExceptions($exceptions, (int) $ref->getKey());
 
-        $this->audit(self::EVENT_ENROLLED, $ref, [
+        $metadata = [
             'via' => TrainerFaceReference::VIA_KIOSK,
             'device_id' => $context['device_id'],
             'authorized_by' => $context['admin_name'],
             'consent_version' => $context['consent_version'],
             'replaced_previous' => $existing !== null,
             'captures' => count($embeddings),
-        ], $request);
+        ];
+        if ($exceptions !== []) {
+            $metadata['lookalike_exceptions'] = $exceptions;
+        }
+        $this->audit(self::EVENT_ENROLLED, $ref, $metadata, $request);
         $this->events->publish(WorkforceEvents::BIOMETRIC_UPDATED, 'enrolled', (string) $identity->uuid, WorkforceEvents::SOURCE_KIOSK);
 
         return $ref;
@@ -239,6 +423,15 @@ class FaceReferenceService
      */
     public function precheckEnrollment(Identity $identity, array $embeddings, ?Request $request = null): array
     {
+        return $this->checkEnrollment($identity, $embeddings, $request)[0];
+    }
+
+    /**
+     * @param  list<mixed>  $embeddings
+     * @return array{0: list<float>, 1: list<int>} la plantilla y las excepciones de parecido usadas
+     */
+    private function checkEnrollment(Identity $identity, array $embeddings, ?Request $request): array
+    {
         if (count($embeddings) < 3 || count($embeddings) > 5) {
             throw WorkforceException::embeddingInvalid();
         }
@@ -250,9 +443,9 @@ class FaceReferenceService
         }
 
         $template = FaceVector::template($embeddings);
-        $this->assertNotLinkedToSomeoneElse($template, $identity, $this->referenceForIdentity($identity), $request);
+        $exceptions = $this->assertNotLinkedToSomeoneElse($template, $identity, $this->referenceForIdentity($identity), $request);
 
-        return $template;
+        return [$template, $exceptions];
     }
 
     /**
@@ -272,7 +465,8 @@ class FaceReferenceService
         $this->assertValidEmbedding($embedding);
         $template = FaceVector::template([$embedding]);
         $identity = $trainer->identity_id ? Identity::find($trainer->identity_id) : null;
-        $this->assertNotLinkedToSomeoneElse($template, $identity, null, $request, $trainer);
+        // Sin excepciones de parecido: solo valen en el kiosko, con código y consentimiento.
+        $this->assertNotLinkedToSomeoneElse($template, $identity, null, $request, $trainer, allowExceptions: false);
 
         $ref = new TrainerFaceReference([
             'trainer_id' => $trainer->getKey(),
@@ -341,9 +535,16 @@ class FaceReferenceService
      * distancia. La respuesta no lo dice: quien registra un rostro no debe
      * saber con quién se parece.
      *
+     * Cada persona con la que coincide queda en un par de parecidos (§10.5):
+     * desde ahí, las dos necesitan rostro + PIN. Con una excepción presencial
+     * viva para ese par se ignora SOLO la plantilla de la otra persona, y solo
+     * si la distancia es al menos la mínima (más cerca es la misma cara).
+     * Devuelve las excepciones que se usaron, para consumirlas al guardar.
+     *
      * @param  list<float>  $template
+     * @return list<int>
      */
-    private function assertNotLinkedToSomeoneElse(array $template, ?Identity $identity, ?TrainerFaceReference $own, ?Request $request, ?Trainer $trainer = null): void
+    private function assertNotLinkedToSomeoneElse(array $template, ?Identity $identity, ?TrainerFaceReference $own, ?Request $request, ?Trainer $trainer = null, bool $allowExceptions = true): array
     {
         $others = TrainerFaceReference::query()->active()
             ->when($own !== null, fn ($q) => $q->whereKeyNot($own->getKey()))
@@ -352,18 +553,45 @@ class FaceReferenceService
             ->get();
 
         $threshold = $this->threshold();
+        $exceptions = $allowExceptions && $identity !== null ? $this->lookalikes->liveExceptions((int) $identity->getKey()) : [];
+        $floor = (float) config('workforce.face.lookalike_exception_min_distance', 0.70);
         $matches = [];
+        $matchedPeople = [];
+        $used = [];
         foreach ($others as $other) {
             $d = FaceVector::distance((array) $other->vector(), $template);
-            if ($d !== null && $d <= $threshold) {
-                $matches[(int) $other->getKey()] = $d;
+            if ($d === null || $d > $threshold) {
+                continue;
+            }
+            // Una plantilla heredada puede tener solo la ficha de entrenador: su
+            // dueño es la identidad de esa ficha (prueba del tester 2026-10-27, D-1).
+            $owner = $other->identity_id ?? Trainer::query()->whereKey($other->trainer_id)->value('identity_id');
+            $owner = $owner !== null ? (int) $owner : null;
+            if ($owner !== null && isset($exceptions[$owner]) && $d >= $floor) {
+                $used[$exceptions[$owner]] = true;
+
+                continue;
+            }
+            $matches[(int) $other->getKey()] = $d;
+            if ($owner !== null) {
+                $matchedPeople[$owner] = true;
             }
         }
         if ($matches === []) {
-            return;
+            return array_keys($used);
         }
 
         $log = $this->audit(self::EVENT_DUPLICATE_REJECTED, null, ['identity_id' => $identity?->getKey(), 'trainer_id' => $trainer?->getKey()], $request);
+        // El par es un control de seguridad: si no se puede guardar, que falle
+        // la petición (el rostro tampoco se registra) en vez de seguir sin él.
+        if ($identity !== null) {
+            foreach (array_keys($matchedPeople) as $owner) {
+                if ($this->lookalikes->record((int) $identity->getKey(), $owner)) {
+                    $this->audit(self::EVENT_LOOKALIKE_DETECTED, null, ['identity_id' => $identity->getKey()], $request);
+                    $this->audit(self::EVENT_LOOKALIKE_DETECTED, null, ['identity_id' => $owner], $request);
+                }
+            }
+        }
         $this->recordDuplicateMatches($log, $matches);
 
         throw WorkforceException::faceAlreadyLinked();
