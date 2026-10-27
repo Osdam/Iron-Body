@@ -145,7 +145,46 @@ class MixedPaymentInSalesAndUpgradesTest extends TestCase
         $this->assertSame('0.00', $totales['card_total']);
     }
 
+    /**
+     * `receivable` marca el devengo de un plan a plazos, no un medio: como
+     * parte de un desglose caería en «Otros» y contaría como dinero que entró,
+     * sin deuda que cobrar.
+     */
+    public function test_una_parte_del_desglose_no_puede_ser_receivable(): void
+    {
+        app(CashShiftService::class)->open($this->cajero, CashShiftType::PRODUCTS);
+        $p = $this->producto(50000);
+
+        $this->postJson('/api/admin/caja/sales', [
+            'items' => [['product_id' => $p->id, 'quantity' => 1]],
+            'payment_method' => 'cash',
+            'splits' => [
+                ['method' => 'cash', 'amount' => 20000],
+                ['method' => 'Receivable', 'amount' => 30000],
+            ],
+        ], $this->h)->assertStatus(422)->assertJsonValidationErrors('splits.1.method');
+
+        $this->assertSame(0, ProductSale::count());
+    }
+
     // ── Mejora de plan ──────────────────────────────────────────────────────
+
+    public function test_la_diferencia_de_una_mejora_no_se_reparte_con_receivable(): void
+    {
+        app(CashShiftService::class)->open($this->cajero, CashShiftType::GYM);
+        [$user, $mensual, $total] = $this->socioConMensual();
+
+        $this->postJson("/api/users/{$user->id}/plan-upgrade", [
+            'plan_id' => $total->id,
+            'method' => 'cash',
+            'splits' => [
+                ['method' => 'cash', 'amount' => 50000],
+                ['method' => 'receivable', 'amount' => 20000],
+            ],
+        ], $this->h)->assertStatus(422)->assertJsonValidationErrors('splits.1.method');
+
+        $this->assertSame($mensual->name, $user->fresh()->plan);
+    }
 
     public function test_la_diferencia_de_una_mejora_tambien_se_reparte(): void
     {

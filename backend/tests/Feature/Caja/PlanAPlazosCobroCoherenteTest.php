@@ -320,4 +320,142 @@ class PlanAPlazosCobroCoherenteTest extends TestCase
         $this->assertSame('524000.00', $deuda->balance()->toDatabase());
         $this->assertSame('2027-10-27', $socio->fresh()->membership_end_date);
     }
+
+    // ── 4 · El medio de pago no cruza la marca de devengo ───────────────────
+
+    /** @return array<string, array{0: array<string, mixed>}> */
+    public static function cambiosDeMedio(): array
+    {
+        return [
+            'a efectivo' => [['method' => 'cash']],
+            'a transferencia' => [['method' => 'transfer']],
+            // `null` también quita la marca: CashReceipts cuenta como dinero lo que no la lleva.
+            'a vacío' => [['method' => null]],
+            'con desglose' => [['splits' => [
+                ['method' => 'cash', 'amount' => 312000],
+                ['method' => 'transfer', 'amount' => 312000],
+            ]]],
+        ];
+    }
+
+    /**
+     * El cobro de un plan a plazos es el contrato, no dinero: pasado a efectivo,
+     * los informes de lo recibido contarían los 624.000 además de los abonos.
+     */
+    #[DataProvider('cambiosDeMedio')]
+    public function test_el_cobro_de_un_plan_a_plazos_no_cambia_de_medio(array $cambio): void
+    {
+        [, $cobro] = $this->venderAPlazos();
+
+        $this->patchJson("/api/payments/{$cobro->id}", $cambio, $this->h())
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('method');
+
+        $this->assertSame('receivable', $cobro->fresh()->method);
+        $this->assertSame(0, \App\Models\PaymentSplit::where('payment_id', $cobro->id)->count());
+    }
+
+    /** Reenviar el mismo medio —un cliente que manda el cobro entero— no es un cambio. */
+    public function test_reenviar_el_mismo_medio_no_es_un_cambio(): void
+    {
+        [, $cobro] = $this->venderAPlazos();
+
+        $this->patchJson("/api/payments/{$cobro->id}", ['method' => 'receivable', 'reference' => 'PLAZOS-1'], $this->h())
+            ->assertOk();
+        $this->assertSame('PLAZOS-1', $cobro->fresh()->reference);
+
+        // Ni con otra grafía: la marca se queda como la escribió la venta.
+        $this->patchJson("/api/payments/{$cobro->id}", ['method' => 'Receivable'], $this->h())->assertOk();
+        $this->assertSame('receivable', $cobro->fresh()->method);
+    }
+
+    /**
+     * Y al revés: un cobro en efectivo marcado como devengo saldría del arqueo
+     * de su turno con el dinero en el cajón.
+     */
+    public function test_un_cobro_normal_no_se_convierte_en_devengo(): void
+    {
+        $socio = $this->socio();
+        $plan = Plan::create(['name' => 'Mensual', 'price' => 80000, 'duration_days' => 30, 'active' => true]);
+        $id = $this->postJson('/api/payments', [
+            'user_id' => $socio->id, 'plan_id' => $plan->id, 'amount' => 80000,
+            'method' => 'cash', 'status' => 'paid',
+        ], $this->h())->assertStatus(201)->json('id');
+        $turno = \App\Models\CashShift::findOrFail(Payment::find($id)->cash_shift_id);
+        $esperado = app(\App\Services\Caja\CashShiftTotalsService::class)->for($turno)['expected_cash'];
+
+        $this->patchJson("/api/payments/{$id}", ['method' => 'Receivable'], $this->h())
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('method');
+
+        $this->assertSame('cash', Payment::find($id)->method);
+        $this->assertSame($esperado, app(\App\Services\Caja\CashShiftTotalsService::class)->for($turno->fresh())['expected_cash']);
+    }
+
+    /** @return array<string, array{0: string}> */
+    public static function grafiasDelDevengo(): array
+    {
+        return ['tal cual' => ['receivable'], 'con mayúsculas y espacios' => [' Receivable ']];
+    }
+
+    /**
+     * Crear el cobro ya marcado como devengo activaría la membresía sin dinero
+     * en ningún arqueo y sin deuda que cobrar: un plan gratis que no se ve.
+     */
+    #[DataProvider('grafiasDelDevengo')]
+    public function test_un_cobro_no_se_crea_como_devengo(string $medio): void
+    {
+        $socio = $this->socio();
+        $plan = Plan::create(['name' => 'Mensual', 'price' => 80000, 'duration_days' => 30, 'active' => true]);
+
+        $this->postJson('/api/payments', [
+            'user_id' => $socio->id, 'plan_id' => $plan->id, 'amount' => 80000,
+            'method' => $medio, 'status' => 'paid',
+        ], $this->h())->assertStatus(422)->assertJsonValidationErrors('method');
+
+        $this->assertSame(0, Payment::where('user_id', $socio->id)->count());
+        $this->assertNull($socio->fresh()->membership_end_date, 'sin cobro no hay membresía');
+    }
+
+    /**
+     * Tampoco como parte de un desglose: el cobro queda `mixed`, cuenta entero
+     * como dinero recibido y esa parte cae en «Otros» del arqueo, sin deuda.
+     */
+    public function test_una_parte_del_desglose_no_puede_ser_receivable(): void
+    {
+        $socio = $this->socio();
+        $plan = Plan::create(['name' => 'Mensual', 'price' => 80000, 'duration_days' => 30, 'active' => true]);
+        $desglose = [['method' => 'cash', 'amount' => 40000], ['method' => 'receivable', 'amount' => 40000]];
+
+        $this->postJson('/api/payments', [
+            'user_id' => $socio->id, 'plan_id' => $plan->id, 'amount' => 80000,
+            'method' => 'cash', 'status' => 'paid', 'splits' => $desglose,
+        ], $this->h())->assertStatus(422)->assertJsonValidationErrors('splits.1.method');
+        $this->assertSame(0, Payment::where('user_id', $socio->id)->count());
+
+        $id = $this->postJson('/api/payments', [
+            'user_id' => $socio->id, 'plan_id' => $plan->id, 'amount' => 80000,
+            'method' => 'cash', 'status' => 'paid',
+        ], $this->h())->assertStatus(201)->json('id');
+
+        $this->patchJson("/api/payments/{$id}", ['splits' => $desglose], $this->h())
+            ->assertStatus(422)->assertJsonValidationErrors('splits.1.method');
+        $this->assertSame('cash', Payment::find($id)->method);
+        $this->assertSame(0, \App\Models\PaymentSplit::where('payment_id', $id)->count());
+    }
+
+    /** Entre medios de dinero se sigue corrigiendo como siempre. */
+    public function test_un_cobro_normal_sigue_cambiando_de_medio(): void
+    {
+        $socio = $this->socio();
+        $plan = Plan::create(['name' => 'Mensual', 'price' => 80000, 'duration_days' => 30, 'active' => true]);
+        $id = $this->postJson('/api/payments', [
+            'user_id' => $socio->id, 'plan_id' => $plan->id, 'amount' => 80000,
+            'method' => 'cash', 'status' => 'paid',
+        ], $this->h())->assertStatus(201)->json('id');
+
+        $this->patchJson("/api/payments/{$id}", ['method' => 'transfer'], $this->h())->assertOk();
+
+        $this->assertSame('transfer', Payment::find($id)->method);
+    }
 }

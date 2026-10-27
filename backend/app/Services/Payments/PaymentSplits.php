@@ -3,6 +3,7 @@
 namespace App\Services\Payments;
 
 use App\Models\ProductSale;
+use App\Services\Caja\CashReceipts;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Validation\ValidationException;
 
@@ -40,10 +41,26 @@ class PaymentSplits
     {
         return [
             $campo => 'nullable|array|min:2|max:'.self::MAX,
-            $campo.'.*.method' => 'required|string|max:80',
+            $campo.'.*.method' => self::methodRules(),
             $campo.'.*.amount' => 'required|numeric|min:0.01',
             $campo.'.*.reference' => 'nullable|string|max:120',
         ];
+    }
+
+    /**
+     * El medio de una parte. Una parte es dinero que entró, así que nunca
+     * `receivable`: esa marca es el devengo de un plan a plazos, y como parte
+     * caería en «Otros» del arqueo y contaría como recibido sin deuda detrás.
+     *
+     * @return array<int, mixed>
+     */
+    public static function methodRules(): array
+    {
+        return ['required', 'string', 'max:80', function (string $attribute, mixed $value, \Closure $fail): void {
+            if (is_string($value) && app(CashReceipts::class)->isAccrual($value)) {
+                $fail('«receivable» no es un medio de pago: el desglose reparte el dinero que entró entre medios reales.');
+            }
+        }];
     }
 
     /**

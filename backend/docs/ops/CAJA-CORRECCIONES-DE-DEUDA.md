@@ -77,6 +77,15 @@ otro (cubierto por `tests/Feature/Caja/PlanAPlazosCobroCoherenteTest.php`):
   se reconfirma el cobro y después se reabre la deuda. Esta regla depende de otro
   registro, así que `can_reopen` no la refleja: se decide al reabrir, y el CRM
   enseña el motivo.
+- **El medio de pago no entra ni sale de `receivable`** (422 en
+  `PATCH /payments/{id}`, también con un desglose o con `null`, y en
+  `POST /payments`): esa marca dice «contrato, no dinero». Quitársela al cobro
+  del plan contaría los 624.000 como recibidos además de los abonos; ponérsela a
+  un cobro en efectivo lo sacaría del arqueo con el dinero en el cajón; y crear
+  un cobro con ella activaría la membresía sin dinero en ningún arqueo y sin
+  deuda. Tampoco vale como parte de un desglose (Pagos, ventas de Caja y mejoras
+  de plan, `PaymentSplits::methodRules()`): caería en «Otros» del arqueo como
+  dinero recibido. Solo la escribe la venta a plazos.
 
 ---
 

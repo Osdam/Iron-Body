@@ -27,6 +27,7 @@ use App\Services\Billing\PriceQuote;
 use App\Services\Billing\PricingException;
 use App\Services\Billing\PricingService;
 use App\Services\Payments\MembershipPeriod;
+use App\Services\Payments\PaymentSplits;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -343,7 +344,7 @@ class PaymentController extends Controller
     {
         return [
             'splits' => 'nullable|array|min:2|max:'.self::MAX_SPLITS,
-            'splits.*.method' => 'required|string|max:80',
+            'splits.*.method' => PaymentSplits::methodRules(),
             'splits.*.amount' => 'required|numeric|min:0.01',
             'splits.*.reference' => 'nullable|string|max:120',
         ];
@@ -442,6 +443,8 @@ class PaymentController extends Controller
             'invoice_email' => ['nullable', 'email', 'max:160', new DeliverableInvoiceEmail],
             ...$this->splitRules(),
         ]);
+
+        $this->assertMedioSinCruzarElDevengo(null, $data);
 
         // El desglose no es una columna de payments: se guarda aparte, después
         // de crear el cobro, así que sale del payload antes de Payment::create.
@@ -570,6 +573,14 @@ class PaymentController extends Controller
             'invoice_email' => ['nullable', 'email', 'max:160', new DeliverableInvoiceEmail],
             ...$this->splitRules(),
         ]);
+
+        $this->assertMedioSinCruzarElDevengo($payment, $data);
+        // El devengo conserva su marca tal como la escribió storePlan: un
+        // 'Receivable' reenviado sigue siendo devengo para los informes, pero
+        // ReceiptSourceResolver la compara exacta.
+        if (app(CashReceipts::class)->isAccrual($payment->method)) {
+            unset($data['method']);
+        }
 
         $splits = $data['splits'] ?? null;
         unset($data['splits']);
@@ -727,6 +738,35 @@ class PaymentController extends Controller
         }
 
         return response()->json($payment->fresh()->load(['user:id,name,email', 'plan:id,name', 'splits']));
+    }
+
+    /**
+     * El medio de pago no cruza la marca de devengo, en ningún sentido.
+     *
+     * `receivable` no es un medio de pago: marca el cobro que activa un plan a
+     * plazos, cuyo dinero entra por los abonos (ver CashReceipts). Quitársela
+     * —con otro medio, con `null` o con un desglose, que lo vuelve `mixed`—
+     * haría contar el plan entero como dinero recibido, además de los abonos.
+     * Ponérsela a un cobro normal lo sacaría del arqueo de su turno con el
+     * dinero en el cajón; y crearlo ya con ella (`$payment` null, desde
+     * `store()`) activaría la membresía sin dinero en ningún arqueo y sin deuda
+     * que cobrar. Esa marca solo la escribe la venta a plazos
+     * (ReceivableController::storePlan).
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function assertMedioSinCruzarElDevengo(?Payment $payment, array $data): void
+    {
+        $recibos = app(CashReceipts::class);
+        $esDevengo = $payment !== null && $recibos->isAccrual($payment->method);
+        $cruza = array_key_exists('method', $data) && $recibos->isAccrual($data['method']) !== $esDevengo;
+
+        if ($cruza || ($esDevengo && ! empty($data['splits']))) {
+            throw ValidationException::withMessages(['method' => [$esDevengo
+                ? 'Este cobro es la venta de un plan a plazos: su medio de pago no se cambia. El dinero entra por los abonos, en Cuentas por cobrar.'
+                : '«receivable» no es un medio de pago: las ventas a plazos se registran desde «Pago parcial», en Pagos, con su cuenta por cobrar.',
+            ]]);
+        }
     }
 
     /**
