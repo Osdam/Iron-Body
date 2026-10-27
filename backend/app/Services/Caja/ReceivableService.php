@@ -5,8 +5,10 @@ namespace App\Services\Caja;
 use App\Enums\CashShiftType;
 use App\Enums\DebtorType;
 use App\Exceptions\ReceivableException;
+use App\Http\Controllers\Api\PaymentController;
 use App\Models\Admin;
 use App\Models\Member;
+use App\Models\Payment;
 use App\Models\Receivable;
 use App\Models\ReceivablePayment;
 use App\Services\Audit\FinancialAudit;
@@ -354,6 +356,21 @@ class ReceivableService
 
             if (! $fresca->isCancelled()) {
                 return $fresca;
+            }
+
+            // La deuda de un plan a plazos y su cobro cuentan la misma venta. Con
+            // el cobro anulado el socio ya no tiene el plan: primero se
+            // reconfirma el cobro, después se reabre la deuda.
+            //
+            // El cobro se lee SIN bloquearlo: anularlo bloquea socio → pago →
+            // deuda, y bloquearlo aquí, después de la deuda, invertiría el
+            // orden. Leído tras tomar la deuda, ve ya confirmada cualquier
+            // anulación que la tuviera bloqueada.
+            if ($fresca->source_type === (new Payment)->getMorphClass()) {
+                $cobro = Payment::find($fresca->source_id);
+                if ($cobro && ! in_array(strtolower((string) $cobro->status), PaymentController::PAID_STATUSES, true)) {
+                    throw ReceivableException::saleCancelled($cobro->id);
+                }
             }
 
             // El estado se saca de `cancelled` ANTES de recalcularlo: mientras

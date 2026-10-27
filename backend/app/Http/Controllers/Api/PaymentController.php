@@ -10,6 +10,7 @@ use App\Services\Caja\CashShiftService;
 use App\Support\Caja\PaymentOrigin;
 use App\Models\AuditLog;
 use App\Models\Payment;
+use App\Models\Receivable;
 use App\Services\Caja\CashReceipts;
 use App\Services\Audit\FinancialAudit;
 use App\Services\Audit\AuditTrail;
@@ -595,8 +596,16 @@ class PaymentController extends Controller
             }
         }
 
+        // Solo se fecha lo que nunca se cobró. Un cobro anulado que se
+        // reconfirma se cobró cuando se cobró, y en el turno de entonces, que
+        // conserva: ponerle la fecha de hoy movía el ingreso de día y, si el
+        // día era otro, `confirmadoMasTarde` corría el inicio del periodo.
         if (isset($data['status']) && $data['status'] === 'paid' && empty($data['paid_at'])) {
-            $data['paid_at'] = now();
+            if ($payment->paid_at) {
+                unset($data['paid_at']); // un `paid_at` vacío no borra la fecha que ya tenía
+            } else {
+                $data['paid_at'] = now();
+            }
         }
 
         // El estado ANTERIOR, antes de tocarlo: sin él la traza diría a qué
@@ -633,6 +642,9 @@ class PaymentController extends Controller
                     }
                 }
                 $estadoPrevio = $payment->status;
+            }
+            if ($cancellingCoverage && in_array(strtolower((string) $payment->status), self::PAID_STATUSES, true)) {
+                $this->assertSinDeudaViva($payment);
             }
             $payment->update($data);
             if ($splits) {
@@ -682,10 +694,14 @@ class PaymentController extends Controller
                 app(MembershipPeriod::class)->apply($payment);
             }
             // Facturación electrónica al confirmar (correcciones / histórico).
-            app(InvoicingService::class)->enqueueForPayment(
-                $payment,
-                force: (bool) $payment->fresh()->invoice_requested,
-            );
+            // El cobro de un plan a plazos no factura aquí: tampoco lo hizo al
+            // venderse (storePlan), y reconfirmarlo deshace una anulación.
+            if (! app(CashReceipts::class)->isAccrual($payment->method)) {
+                app(InvoicingService::class)->enqueueForPayment(
+                    $payment,
+                    force: (bool) $payment->fresh()->invoice_requested,
+                );
+            }
         }
 
         // ANULAR UN COBRO LE DEVUELVE LOS DÍAS. Sin esto, anular sólo cambiaba
@@ -711,6 +727,37 @@ class PaymentController extends Controller
         }
 
         return response()->json($payment->fresh()->load(['user:id,name,email', 'plan:id,name', 'splits']));
+    }
+
+    /**
+     * El cobro de un plan a plazos no se anula mientras su deuda siga en pie.
+     *
+     * Ese cobro y su cuenta por cobrar cuentan la MISMA venta. Anular solo el
+     * cobro le quitaba al socio la membresía y dejaba la deuda viva —cobrable,
+     * o «pagada» por una venta que ya no existía— con sus abonos en el arqueo.
+     * Pasó el 27-10-2026: para deshacer un abono mal registrado se anuló el
+     * cobro del plan, que era la puerta equivocada.
+     *
+     * Aquí solo se señala la buena. Un abono mal hecho se anula en Cuentas por
+     * cobrar; deshacer la venta es anular allí la deuda y después este cobro.
+     * Las deudas se bloquean todas, también las anuladas, después del socio y
+     * del pago: el mismo orden que el resto de esta transacción.
+     */
+    private function assertSinDeudaViva(Payment $payment): void
+    {
+        $viva = Receivable::where('source_type', $payment->getMorphClass())
+            ->where('source_id', $payment->id)
+            ->lockForUpdate()
+            ->get()
+            ->first(fn (Receivable $deuda) => ! $deuda->isCancelled());
+
+        if ($viva) {
+            throw ValidationException::withMessages(['status' => [
+                "Este cobro es un plan vendido a plazos y su cuenta por cobrar #{$viva->id} sigue vigente. "
+                .'Si un abono se registró mal, anula ese abono en Cuentas por cobrar. '
+                .'Para deshacer la venta, anula primero la cuenta por cobrar.',
+            ]]);
+        }
     }
 
     /**

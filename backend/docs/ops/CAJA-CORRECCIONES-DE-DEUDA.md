@@ -54,10 +54,29 @@ ofrecer un botón que la API va a rechazar es peor que no ofrecerlo.
 |---|---|---|---|
 | Pendiente / Abonada | sí | — | sí |
 | **Pagada** | **no** (`receivable_already_paid`, 422) | — | no |
-| **Anulada** | ya lo está | sí | no (`receivable_cancelled`, 422) |
+| **Anulada** | ya lo está | sí, salvo la de un plan cuyo cobro no está pagado (ver abajo) | no (`receivable_cancelled`, 422) |
 
 Una obligación **pagada** es historia financiera cerrada: para corregirla hay que
 revertir sus abonos primero; si entonces vuelve a quedar abierta, se podrá anular.
+
+### Plan a plazos: el cobro y la deuda van juntos
+
+Vender un plan a plazos crea un cobro (`method = receivable`, el que activa la
+membresía) y su deuda. Cuentan la misma venta, y ninguno se mueve por debajo del
+otro (cubierto por `tests/Feature/Caja/PlanAPlazosCobroCoherenteTest.php`):
+
+- **El cobro no se anula desde Pagos mientras su deuda siga vigente** (422 en
+  `PATCH /payments/{id}`). Un abono mal registrado se anula aquí, en su
+  historial; anular el cobro le quitaba al socio la membresía y dejaba la deuda
+  viva. Pasó el 27-10-2026.
+- **Para deshacer la venta**: revertir primero los abonos que haya que devolver
+  (obligatorio si la deuda está pagada), después anular la deuda y por último el
+  cobro, que devuelve los días.
+- **La deuda de un cobro no pagado no se reabre** (`receivable_source_cancelled`,
+  422): cobraría un plan que el socio ya no tiene. Para rehacer la venta, primero
+  se reconfirma el cobro y después se reabre la deuda. Esta regla depende de otro
+  registro, así que `can_reopen` no la refleja: se decide al reabrir, y el CRM
+  enseña el motivo.
 
 ---
 
