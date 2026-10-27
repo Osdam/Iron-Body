@@ -74,6 +74,20 @@ class MediosDePagoReconocidosTest extends TestCase
         ], $extra), $this->h());
     }
 
+    private function producto(): Product
+    {
+        $iva = TaxRate::firstOrCreate(
+            ['code' => 'IVA_19_INCL'],
+            ['name' => 'IVA 19% incluido', 'rate' => 19.00, 'active' => true, 'price_includes_tax' => true],
+        );
+
+        return Product::create([
+            'name' => 'Proteína', 'category' => 'Suplementos', 'sale_price' => 50000, 'cost_price' => 25000,
+            'stock' => 50, 'min_stock' => 0, 'active' => true, 'visible_in_app' => true,
+            'tax_rate_id' => $iva->id, 'pricing_mode' => 'legacy_inclusive',
+        ]);
+    }
+
     // ── El medio de un cobro ────────────────────────────────────────────────
 
     /** @return array<string, array{0: string}> */
@@ -180,15 +194,7 @@ class MediosDePagoReconocidosTest extends TestCase
     public function test_una_venta_de_caja_no_reparte_con_un_medio_desconocido(): void
     {
         app(CashShiftService::class)->open($this->admin, CashShiftType::PRODUCTS);
-        $iva = TaxRate::firstOrCreate(
-            ['code' => 'IVA_19_INCL'],
-            ['name' => 'IVA 19% incluido', 'rate' => 19.00, 'active' => true, 'price_includes_tax' => true],
-        );
-        $p = Product::create([
-            'name' => 'Proteína', 'category' => 'Suplementos', 'sale_price' => 50000, 'cost_price' => 25000,
-            'stock' => 50, 'min_stock' => 0, 'active' => true, 'visible_in_app' => true,
-            'tax_rate_id' => $iva->id, 'pricing_mode' => 'legacy_inclusive',
-        ]);
+        $p = $this->producto();
 
         $this->postJson('/api/admin/caja/sales', [
             'items' => [['product_id' => $p->id, 'quantity' => 1]],
@@ -197,6 +203,70 @@ class MediosDePagoReconocidosTest extends TestCase
         ], $this->h())->assertStatus(422)->assertJsonValidationErrors('splits.1.method');
 
         $this->assertSame(0, ProductSale::count());
+    }
+
+    // ── La pasarela no se cobra en mostrador ────────────────────────────────
+
+    /** @return array<string, array{0: string}> */
+    public static function mediosDePasarela(): array
+    {
+        return ['wompi' => ['wompi'], 'online' => ['online'], 'epayco' => ['ePayco']];
+    }
+
+    /**
+     * Un cobro de pasarela lo registra la pasarela al aprobarse. Escrito a mano
+     * en mostrador, contaría como Wompi en el arqueo sin transacción detrás.
+     */
+    #[DataProvider('mediosDePasarela')]
+    public function test_un_cobro_de_mostrador_no_se_registra_como_pasarela(string $medio): void
+    {
+        $u = $this->socio();
+
+        $this->cobro($u, ['method' => $medio])->assertStatus(422)->assertJsonValidationErrors('method');
+        $this->assertSame(0, Payment::where('user_id', $u->id)->count());
+
+        $id = $this->cobro($u)->assertStatus(201)->json('id');
+        $this->patchJson("/api/payments/{$id}", ['method' => $medio], $this->h())
+            ->assertStatus(422)->assertJsonValidationErrors('method');
+        $this->assertSame('cash', Payment::find($id)->method);
+
+        $this->patchJson("/api/payments/{$id}", ['splits' => [
+            ['method' => 'cash', 'amount' => 40000], ['method' => $medio, 'amount' => 40000],
+        ]], $this->h())->assertStatus(422)->assertJsonValidationErrors('splits.1.method');
+    }
+
+    /** El de la pasarela se sigue editando: reenviar `wompi` no es cambiarlo. */
+    public function test_un_cobro_de_pasarela_se_sigue_editando(): void
+    {
+        $wompi = Payment::create([
+            'user_id' => $this->socio()->id, 'amount' => 80000, 'method' => 'wompi',
+            'origin' => 'gateway', 'status' => 'paid', 'paid_at' => now(),
+        ]);
+
+        $this->patchJson("/api/payments/{$wompi->id}", ['method' => 'wompi', 'reference' => 'WMP-1'], $this->h())
+            ->assertOk();
+        $this->assertSame('WMP-1', $wompi->fresh()->reference);
+    }
+
+    public function test_una_venta_de_caja_no_se_cobra_online_en_mostrador(): void
+    {
+        app(CashShiftService::class)->open($this->admin, CashShiftType::PRODUCTS);
+        $p = $this->producto();
+
+        $this->postJson('/api/admin/caja/sales', [
+            'items' => [['product_id' => $p->id, 'quantity' => 1]],
+            'payment_method' => 'online',
+        ], $this->h())->assertStatus(422)->assertJsonValidationErrors('payment_method');
+        $this->assertSame(0, ProductSale::count());
+
+        // Y al cobrar en caja un pedido, tampoco se puede elegir `online`.
+        $venta = $this->postJson('/api/admin/caja/sales', [
+            'items' => [['product_id' => $p->id, 'quantity' => 1]],
+            'payment_method' => 'nequi',
+        ], $this->h())->assertStatus(201)->json('data.id');
+        $this->postJson("/api/admin/caja/sales/{$venta}/pay", ['payment_method' => 'online'], $this->h())
+            ->assertStatus(422)->assertJsonValidationErrors('payment_method');
+        $this->assertSame('nequi', ProductSale::find($venta)->payment_method);
     }
 
     // ── La mejora de plan ───────────────────────────────────────────────────
@@ -212,9 +282,10 @@ class MediosDePagoReconocidosTest extends TestCase
             'membership_end_date' => $inicio->addDays(30)->toDateString(),
         ]);
 
-        // Tampoco `receivable`: aquí no hay quien lo juzgue después y
-        // normalize() lo dejaría en «Otros» como dinero recibido.
-        foreach (['fiado', 'receivable'] as $medio) {
+        // Tampoco `receivable` (aquí no hay quien lo juzgue después y
+        // normalize() lo dejaría en «Otros») ni la pasarela: la mejora se cobra
+        // en la caja del gimnasio.
+        foreach (['fiado', 'receivable', 'wompi'] as $medio) {
             $this->postJson("/api/users/{$u->id}/plan-upgrade", ['plan_id' => $total->id, 'method' => $medio], $this->h())
                 ->assertStatus(422)->assertJsonValidationErrors('method');
         }

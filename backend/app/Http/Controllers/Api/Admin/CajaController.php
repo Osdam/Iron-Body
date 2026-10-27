@@ -56,6 +56,29 @@ use Illuminate\Validation\ValidationException;
  */
 class CajaController extends Controller
 {
+    /** @var array<string, string> */
+    private const MENSAJE_MEDIO = [
+        'payment_method.in' => 'Ese medio no se cobra en la caja de productos: usa efectivo, tarjeta, Nequi, transferencia o mixto.',
+    ];
+
+    /** Al cobrar un pedido no hay desglose: «mixto» no se puede indicar ahí. */
+    private const MENSAJE_MEDIO_AL_COBRAR = [
+        'payment_method.in' => 'Ese medio no se cobra en la caja de productos: usa efectivo, tarjeta, Nequi o transferencia.',
+    ];
+
+    /**
+     * Los medios de ProductSale menos `online`, que es pasarela: en mostrador
+     * contaría como Wompi en el arqueo sin transacción detrás. La tienda de la
+     * app lo sigue aceptando (AppStoreController): ahí es lo que el socio dice
+     * que hará, no un cobro.
+     *
+     * @return list<string>
+     */
+    private static function metodosDeMostrador(): array
+    {
+        return array_values(array_diff(ProductSale::PAYMENT_METHODS, ['online']));
+    }
+
     /**
      * GET /api/admin/caja/sales — listado paginado.
      *
@@ -196,7 +219,7 @@ class CajaController extends Controller
             'payment_method' => [
                 Rule::requiredIf(fn () => ! $request->boolean('credit')),
                 'nullable',
-                Rule::in(ProductSale::PAYMENT_METHODS),
+                Rule::in(self::metodosDeMostrador()),
             ],
             'customer_name' => ['nullable', 'string', 'max:255'],
             'discount' => ['nullable', 'numeric', 'min:0'],
@@ -207,7 +230,7 @@ class CajaController extends Controller
             // cobrada. Nunca se activa por defecto.
             'request_invoice' => ['nullable', 'boolean'],
             'invoice_email' => ['nullable', 'email', 'max:160', new DeliverableInvoiceEmail],
-        ] + PaymentSplits::rules());
+        ] + PaymentSplits::rules(), self::MENSAJE_MEDIO);
 
         $this->assertInvoiceRequestIsComplete($data);
 
@@ -339,13 +362,13 @@ class CajaController extends Controller
     public function pay(Request $request, ProductSale $sale): JsonResponse
     {
         $data = $request->validate([
-            'payment_method' => ['nullable', Rule::in(ProductSale::PAYMENT_METHODS)],
+            'payment_method' => ['nullable', Rule::in(self::metodosDeMostrador())],
             'payment_reference' => ['nullable', 'string', 'max:255'],
             // El cliente puede pedir la factura al pagar, aunque no la pidiera
             // al crear la venta.
             'request_invoice' => ['nullable', 'boolean'],
             'invoice_email' => ['nullable', 'email', 'max:160', new DeliverableInvoiceEmail],
-        ]);
+        ], self::MENSAJE_MEDIO_AL_COBRAR);
 
         $this->assertInvoiceRequestIsComplete($data);
         $this->persistInvoiceRequest($sale, $data);

@@ -22,6 +22,11 @@ use Illuminate\Contracts\Validation\ValidationRule;
  * (`$devengoLoDecideElCobro`, solo en el alta y la edición de cobros). En una
  * mejora de plan nadie más lo miraría y `normalize()` lo dejaría en «Otros».
  *
+ * La pasarela (`wompi`, `online`, `epayco`) tampoco entra: todo lo que llega
+ * por aquí lo escribe una persona en mostrador —el token compartido no puede
+ * cobrar—, y un cobro de pasarela lo registra la propia pasarela al aprobarse.
+ * Escrito a mano contaría como Wompi en el arqueo sin transacción detrás.
+ *
  * Se aplica en todos los sitios que aceptan un medio libre (cobros, partes de
  * un desglose, mejoras de plan) para que la regla sea una sola.
  */
@@ -87,6 +92,8 @@ class PaymentMethodInput implements DataAwareRule, ValidationRule
 
         if (! PaymentMethodKind::isKnown($medio)) {
             $fail('Ese medio de pago no lo sabe contar la caja: usa efectivo, transferencia, tarjeta, Nequi, Daviplata, PSE u «other».');
+        } elseif (PaymentMethodKind::normalize($medio) === PaymentMethodKind::WOMPI) {
+            $fail('Wompi no se cobra en mostrador: ese dinero lo registra la propia pasarela cuando aprueba el pago.');
         }
     }
 }
