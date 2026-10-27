@@ -20,6 +20,7 @@ use App\Support\Access\CrmPermission;
 use App\Models\Plan;
 use App\Models\User;
 use App\Rules\DeliverableInvoiceEmail;
+use App\Rules\PaymentMethodInput;
 use App\Services\Billing\InvoiceEmail;
 use App\Services\Billing\InvoicingService;
 use App\Services\Billing\Money;
@@ -424,7 +425,7 @@ class PaymentController extends Controller
             'user_id' => 'required|exists:users,id',
             'plan_id' => 'nullable|exists:plans,id',
             'amount' => 'required|numeric|min:0',
-            'method' => 'nullable|string|max:80',
+            'method' => ['nullable', 'string', 'max:80', new PaymentMethodInput(devengoLoDecideElCobro: true)],
             'reference' => 'nullable|string|max:120',
             'status' => 'nullable|string|in:pending,paid,failed,refunded,cancelled',
             'paid_at' => 'nullable|date',
@@ -565,7 +566,7 @@ class PaymentController extends Controller
             'status' => 'nullable|string|in:pending,paid,failed,refunded,cancelled',
             'paid_at' => 'nullable|date',
             'starts_on' => 'nullable|date_format:Y-m-d',
-            'method' => 'nullable|string|max:80',
+            'method' => ['nullable', 'string', 'max:80', new PaymentMethodInput(actual: $payment->method, devengoLoDecideElCobro: true)],
             'reference' => 'nullable|string|max:120',
             'amount' => 'nullable|numeric|min:0',
             // El cliente puede pedir la factura al confirmar el pago.

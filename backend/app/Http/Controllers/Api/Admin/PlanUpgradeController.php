@@ -7,6 +7,7 @@ use App\Exceptions\CashShiftException;
 use App\Http\Controllers\Controller;
 use App\Models\Plan;
 use App\Models\User;
+use App\Rules\PaymentMethodInput;
 use App\Services\Audit\AuditTrail;
 use App\Services\Caja\CashShiftService;
 use App\Services\Payments\PaymentSplits;
@@ -54,7 +55,7 @@ class PlanUpgradeController extends Controller
     {
         $data = $request->validate([
             'plan_id' => ['required', 'integer', 'exists:plans,id'],
-            'method' => ['required', 'string', 'max:30'],
+            'method' => ['required', 'string', 'max:30', new PaymentMethodInput],
         ] + PaymentSplits::rules());
 
         $nuevo = Plan::findOrFail($data['plan_id']);
