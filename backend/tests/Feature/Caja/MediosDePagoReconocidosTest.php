@@ -269,6 +269,63 @@ class MediosDePagoReconocidosTest extends TestCase
         $this->assertSame('nequi', ProductSale::find($venta)->payment_method);
     }
 
+    /** Un cobro de pasarela no se reetiqueta a mano, ni entero ni repartido. */
+    public function test_un_cobro_de_pasarela_conserva_su_medio(): void
+    {
+        $wompi = Payment::create([
+            'user_id' => $this->socio()->id, 'amount' => 80000, 'method' => 'wompi',
+            'origin' => 'gateway', 'status' => 'paid', 'paid_at' => now(),
+        ]);
+
+        $this->patchJson("/api/payments/{$wompi->id}", ['method' => 'cash'], $this->h())
+            ->assertStatus(422)->assertJsonValidationErrors('method');
+        $this->patchJson("/api/payments/{$wompi->id}", ['splits' => [
+            ['method' => 'cash', 'amount' => 40000], ['method' => 'card', 'amount' => 40000],
+        ]], $this->h())->assertStatus(422)->assertJsonValidationErrors('method');
+
+        $this->assertSame('wompi', $wompi->fresh()->method);
+    }
+
+    /** En Caja, «mixto» va con su desglose; al cobrar un pedido no lo hay. */
+    public function test_caja_no_acepta_mixto_sin_desglose(): void
+    {
+        app(CashShiftService::class)->open($this->admin, CashShiftType::PRODUCTS);
+        $p = $this->producto();
+
+        $this->postJson('/api/admin/caja/sales', [
+            'items' => [['product_id' => $p->id, 'quantity' => 1]], 'payment_method' => 'mixed',
+        ], $this->h())->assertStatus(422)->assertJsonValidationErrors('payment_method');
+        $this->assertSame(0, ProductSale::count());
+
+        $venta = $this->postJson('/api/admin/caja/sales', [
+            'items' => [['product_id' => $p->id, 'quantity' => 1]], 'payment_method' => 'cash',
+        ], $this->h())->assertStatus(201)->json('data.id');
+        $this->postJson("/api/admin/caja/sales/{$venta}/pay", ['payment_method' => 'mixed'], $this->h())
+            ->assertStatus(422)->assertJsonValidationErrors('payment_method');
+    }
+
+    /**
+     * Un pedido «online» de la app se cobra en caja (la tienda no tiene
+     * pasarela): sin decir el medio conservaría «online» y contaría como Wompi.
+     */
+    public function test_un_pedido_online_de_la_app_se_cobra_con_un_medio_de_caja(): void
+    {
+        app(CashShiftService::class)->open($this->admin, CashShiftType::PRODUCTS);
+        $id = $this->postJson('/api/admin/caja/sales', [
+            'items' => [['product_id' => $this->producto()->id, 'quantity' => 1]],
+            'payment_method' => 'cash', 'paid' => false,
+        ], $this->h())->assertStatus(201)->json('data.id');
+        // Como lo deja la tienda de la app: pendiente y «online».
+        ProductSale::whereKey($id)->update(['payment_method' => 'online', 'status' => 'pending', 'payment_status' => 'pending']);
+
+        $this->postJson("/api/admin/caja/sales/{$id}/pay", [], $this->h())
+            ->assertStatus(422)->assertJsonValidationErrors('payment_method');
+        $this->assertSame('online', ProductSale::find($id)->payment_method);
+
+        $this->postJson("/api/admin/caja/sales/{$id}/pay", ['payment_method' => 'nequi'], $this->h())->assertSuccessful();
+        $this->assertSame('nequi', ProductSale::find($id)->payment_method);
+    }
+
     // ── La mejora de plan ───────────────────────────────────────────────────
 
     public function test_la_diferencia_de_una_mejora_no_se_cobra_con_un_medio_desconocido(): void

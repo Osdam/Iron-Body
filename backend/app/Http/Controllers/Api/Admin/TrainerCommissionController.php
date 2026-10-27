@@ -13,6 +13,7 @@ use App\Exceptions\ReceivableException;
 use App\Services\Commissions\TrainerCommissionAccess;
 use App\Services\Commissions\TrainerCommissions;
 use App\Support\Access\AdminActor;
+use App\Rules\PaymentMethodInput;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -169,7 +170,7 @@ class TrainerCommissionController extends Controller
     {
         $data = $request->validate([
             'period' => ['nullable', 'date_format:Y-m'],
-            'method' => ['nullable', 'string', 'max:30'],
+            'method' => ['nullable', 'string', 'max:30', new PaymentMethodInput],
             'due_at' => ['nullable', 'date_format:Y-m-d'],
             // Un mes a medias o un descuento puntual. No toca el acuerdo.
             'amount' => ['nullable', 'numeric', 'min:1', 'max:99999999'],

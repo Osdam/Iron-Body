@@ -7,6 +7,7 @@ use App\Enums\CashShiftType;
 use App\Exceptions\CashShiftException;
 use App\Http\Controllers\Controller;
 use App\Services\Caja\CashShiftService;
+use App\Support\Caja\PaymentMethodKind;
 use App\Support\Caja\PaymentOrigin;
 use App\Models\AuditLog;
 use App\Models\Payment;
@@ -576,6 +577,13 @@ class PaymentController extends Controller
         ]);
 
         $this->assertMedioSinCruzarElDevengo($payment, $data);
+        // Un cobro de pasarela lo registró la pasarela: su medio no se reetiqueta
+        // a mano (los informes por medio lo contarían como otro dinero).
+        if (PaymentMethodKind::normalize($payment->method) === PaymentMethodKind::WOMPI
+            && (! empty($data['splits']) || (array_key_exists('method', $data)
+                && strtolower(trim((string) $data['method'])) !== strtolower(trim((string) $payment->method))))) {
+            throw ValidationException::withMessages(['method' => ['Un cobro de pasarela conserva su medio: lo registró la pasarela al aprobarlo.']]);
+        }
         // El devengo conserva su marca tal como la escribió storePlan: un
         // 'Receivable' reenviado sigue siendo devengo para los informes, pero
         // ReceiptSourceResolver la compara exacta.

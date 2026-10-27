@@ -11,6 +11,7 @@ use App\Models\Product;
 use App\Models\ProductSale;
 use App\Models\Receivable;
 use App\Rules\DeliverableInvoiceEmail;
+use App\Rules\PaymentMethodInput;
 use App\Services\Billing\InvoiceEmail;
 use App\Services\Billing\InvoicingService;
 use App\Services\Billing\Money;
@@ -220,6 +221,7 @@ class CajaController extends Controller
                 Rule::requiredIf(fn () => ! $request->boolean('credit')),
                 'nullable',
                 Rule::in(self::metodosDeMostrador()),
+                new PaymentMethodInput,
             ],
             'customer_name' => ['nullable', 'string', 'max:255'],
             'discount' => ['nullable', 'numeric', 'min:0'],
@@ -362,13 +364,21 @@ class CajaController extends Controller
     public function pay(Request $request, ProductSale $sale): JsonResponse
     {
         $data = $request->validate([
-            'payment_method' => ['nullable', Rule::in(self::metodosDeMostrador())],
+            'payment_method' => ['nullable', Rule::in(array_values(array_diff(self::metodosDeMostrador(), [PaymentSplits::MIXED])))],
             'payment_reference' => ['nullable', 'string', 'max:255'],
             // El cliente puede pedir la factura al pagar, aunque no la pidiera
             // al crear la venta.
             'request_invoice' => ['nullable', 'boolean'],
             'invoice_email' => ['nullable', 'email', 'max:160', new DeliverableInvoiceEmail],
         ], self::MENSAJE_MEDIO_AL_COBRAR);
+
+        // Un pedido «online» de la app no se pagó en línea —la tienda no tiene
+        // pasarela—: cobrarlo aquí conservando ese medio lo contaría como Wompi.
+        if (empty($data['payment_method']) && strtolower((string) $sale->payment_method) === 'online') {
+            throw ValidationException::withMessages(['payment_method' => [
+                'Este pedido se pidió «online» en la app, pero se cobra en caja: indica con qué medio.',
+            ]]);
+        }
 
         $this->assertInvoiceRequestIsComplete($data);
         $this->persistInvoiceRequest($sale, $data);

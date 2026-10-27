@@ -361,6 +361,20 @@ class TrainerCommissionTest extends TestCase
         $this->assertSame(['paid', 'paid', 'paid'], array_column($historial, 'state'));
     }
 
+    /** El medio del abono es un medio de caja: ni texto libre ni pasarela. */
+    public function test_el_piso_se_cobra_con_un_medio_de_caja(): void
+    {
+        app(\App\Services\Caja\CashShiftService::class)->open($this->admin, \App\Enums\CashShiftType::GYM);
+        [$acuerdo] = $this->acuerdo();
+
+        foreach (['fiado', 'wompi'] as $medio) {
+            $this->cobrar($acuerdo, ['method' => $medio])->assertStatus(422)->assertJsonValidationErrors('method');
+        }
+        $this->assertSame(0, \App\Models\ReceivablePayment::count());
+
+        $this->cobrar($acuerdo, ['method' => 'nequi'])->assertStatus(201);
+    }
+
     // ── Dónde se ve el dinero ───────────────────────────────────────────────
 
     public function test_el_piso_cobrado_sale_en_el_arqueo_del_turno_y_cuadra(): void
