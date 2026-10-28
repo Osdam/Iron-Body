@@ -591,7 +591,9 @@ class SaleCorrections
                     'closed_at' => optional($turno->closed_at)->toIso8601String(),
                 ],
                 'membership' => null,
-                'receivable' => $deuda === null ? null : [
+                // La deuda de una venta fiada es de Créditos: solo con
+                // `receivables.view`, igual que en la vista previa de un cobro.
+                'receivable' => ($deuda === null || ! CrmPermission::allows($actor, 'receivables.view')) ? null : [
                     'id' => $deuda->id,
                     'status' => $deuda->status,
                     'balance' => $deuda->balance()->toFloat(),

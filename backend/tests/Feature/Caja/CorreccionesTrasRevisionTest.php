@@ -536,6 +536,12 @@ class CorreccionesTrasRevisionTest extends TestCase
         $conCreditos = $this->getJson("/api/admin/caja/sales/{$fiada->id}/history", $this->adminWithPermissions(['cash.products.view', 'receivables.view']))
             ->assertOk()->json('data');
         $this->assertEqualsCanonicalizing(['venta', 'cuenta por cobrar', 'abono'], array_values(array_unique(array_column($conCreditos, 'entity'))));
+
+        // Y la vista previa de la venta tampoco enseña la deuda sin Créditos.
+        $this->assertNull($this->getJson("/api/admin/caja/sales/{$fiada->id}/correction-preview?action=cancel", $this->adminWithPermissions(['cash.products.view']))
+            ->assertOk()->json('effects.receivable'));
+        $this->assertSame($deuda->id, $this->getJson("/api/admin/caja/sales/{$fiada->id}/correction-preview?action=cancel", $this->adminWithPermissions(['cash.products.view', 'receivables.view']))
+            ->assertOk()->json('effects.receivable.id'));
     }
 
     /**
