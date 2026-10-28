@@ -208,9 +208,9 @@ class PlanUpgrades
     }
 
     /** @return array{end: string, previous_end: string, days: int, upgrade: bool}|null */
-    public function revert(Payment $payment): ?array
+    public function revert(Payment $payment, bool $simulacion = false): ?array
     {
-        return DB::transaction(function () use ($payment): ?array {
+        return DB::transaction(function () use ($payment, $simulacion): ?array {
             $user = User::whereKey($payment->user_id)->lockForUpdate()->first();
             $payment = Payment::whereKey($payment->id)->lockForUpdate()->firstOrFail();
             if (! $user || ! $payment->period_end || ! $user->membershipEndDate) {
@@ -227,8 +227,11 @@ class PlanUpgrades
                 ->where('id', '>', $payment->id)->exists();
             $cierre = $posteriores->last()?->period_end?->toDateString() ?? $fin->toDateString();
             if ($otraMejora || $cierre !== $finActual->toDateString()) {
-                Log::warning('Anulación de mejora: otros cambios impiden restaurar el periodo con seguridad',
-                    ['payment_id' => $payment->id, 'user_id' => $user->id]);
+                // Una vista previa no registra avisos de lo que no ocurrió.
+                if (! $simulacion) {
+                    Log::warning('Anulación de mejora: otros cambios impiden restaurar el periodo con seguridad',
+                        ['payment_id' => $payment->id, 'user_id' => $user->id]);
+                }
 
                 throw ValidationException::withMessages(['status' => [
                     'La membresía tiene cambios posteriores. Revisa sus periodos antes de anular esta mejora.',

@@ -3,6 +3,8 @@
 namespace App\Services\Caja;
 
 use App\Enums\CashShiftType;
+use App\Models\AuditLog;
+use App\Models\CashRefund;
 use App\Models\CashShift;
 use App\Models\Payment;
 use App\Models\ReceivablePayment;
@@ -38,12 +40,99 @@ class CashShiftReport
         $transacciones = $shift->type === CashShiftType::PRODUCTS
             ? $this->ventas($shift)
             : $this->cobros($shift);
+        $devoluciones = $this->devoluciones($shift);
 
         return [
-            'shift' => $this->cabecera($shift),
+            'shift' => $this->cabecera($shift) + [
+                // Ya restado de los totales por medio; aquí, para enseñarlo.
+                'refunds_total' => round(array_sum(array_column($devoluciones, 'amount')), 2),
+            ],
             'transactions' => $transacciones,
-            'consistency' => $this->contraste($shift, $transacciones),
+            // Dinero que SALIÓ de este turno: devoluciones de cobros o ventas
+            // (de este turno o de otros). Ya están restadas de los totales.
+            'refunds' => $devoluciones,
+            // Correcciones hechas DESPUÉS de cerrar sobre operaciones de este
+            // turno. El cierre firmado no cambia: aquí se ve qué pasó después.
+            'post_close_corrections' => $this->correccionesPosteriores($shift, $transacciones),
+            'consistency' => $this->contraste($shift, $transacciones, $devoluciones),
         ];
+    }
+
+    /**
+     * Devoluciones pagadas desde este turno.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function devoluciones(CashShift $shift): array
+    {
+        return CashRefund::query()
+            ->where('cash_shift_id', $shift->id)
+            ->orderBy('id')
+            ->get()
+            ->map(fn (CashRefund $r) => $r->toCrmArray() + [
+                'source_type' => 'cash_refund',
+                'source_id' => $r->id,
+            ])
+            ->all();
+    }
+
+    /**
+     * Las correcciones (anular, devolver, cambiar medio o importe) registradas
+     * en `audit_logs` DESPUÉS del cierre sobre cobros, ventas o abonos de este
+     * turno.
+     *
+     * Se buscan por la operación —entidad + id— y no consultando el JSON de
+     * `metadata`: la misma consulta tiene que funcionar en PostgreSQL y en las
+     * pruebas sobre SQLite, y el JSON se compara distinto en cada uno.
+     *
+     * @param  list<array<string, mixed>>  $transacciones
+     * @return list<array<string, mixed>>
+     */
+    private function correccionesPosteriores(CashShift $shift, array $transacciones): array
+    {
+        if ($shift->isOpen() || $shift->closed_at === null) {
+            return [];
+        }
+
+        $porEntidad = ['pago' => [], 'venta' => [], 'abono' => []];
+        foreach ($transacciones as $t) {
+            $entidad = match ($t['source_type']) {
+                'payment' => 'pago',
+                'product_sale' => 'venta',
+                'receivable_payment' => 'abono',
+                default => null,
+            };
+            if ($entidad !== null) {
+                $porEntidad[$entidad][] = (string) $t['source_id'];
+            }
+        }
+        $porEntidad = array_filter($porEntidad);
+        if ($porEntidad === []) {
+            return [];
+        }
+
+        return AuditLog::query()
+            ->where('created_at', '>', $shift->closed_at)
+            ->whereIn('action', ['status', 'update', 'refund'])
+            ->where(function ($q) use ($porEntidad): void {
+                foreach ($porEntidad as $entidad => $ids) {
+                    $q->orWhere(fn ($e) => $e->where('entity', $entidad)->whereIn('entity_id', $ids));
+                }
+            })
+            ->orderBy('id')
+            ->get()
+            ->map(fn (AuditLog $l) => [
+                'id' => $l->id,
+                'at' => optional($l->created_at)->toIso8601String(),
+                'action' => $l->action,
+                'entity' => $l->entity,
+                'entity_id' => $l->entity_id,
+                'summary' => $l->summary,
+                'actor_name' => $l->actor_name,
+                'reason' => $l->metadata['reason'] ?? null,
+                'changes' => $l->changes,
+            ])
+            ->all();
     }
 
     /**
@@ -78,10 +167,10 @@ class CashShiftReport
      */
     private function ventas(CashShift $shift): array
     {
-        return ProductSale::query()
+        $ventas = ProductSale::query()
             ->where('cash_shift_id', $shift->id)
             // Sin esto, una venta de veinte líneas dispara veinte consultas.
-            ->with(['items:id,product_sale_id,name,quantity,unit_price,subtotal'])
+            ->with(['items:id,product_sale_id,name,quantity,unit_price,subtotal,refunded_quantity'])
             ->orderBy('id')
             ->get()
             ->map(fn (ProductSale $v) => [
@@ -102,9 +191,16 @@ class CashShiftReport
                     'quantity' => (int) $i->quantity,
                     'unit_price' => (float) $i->unit_price,
                     'subtotal' => (float) $i->subtotal,
+                    'refunded_quantity' => (int) ($i->refunded_quantity ?? 0),
                 ])->all(),
             ])
             ->all();
+
+        // LOS ABONOS TAMBIÉN (hallazgo H9): el total congelado de la caja de
+        // cafetería ya los sumaba —CashShiftTotalsService— y el detalle no los
+        // listaba, así que un turno con un crédito cobrado salía «descuadrado»
+        // contra sus propias líneas sin que nada estuviera mal.
+        return array_merge($ventas, $this->abonos($shift));
     }
 
     /**
@@ -202,13 +298,16 @@ class CashShiftReport
      * @param  list<array<string, mixed>>  $transacciones
      * @return array<string, mixed>
      */
-    private function contraste(CashShift $shift, array $transacciones): array
+    private function contraste(CashShift $shift, array $transacciones, array $devoluciones = []): array
     {
+        // `refunded` cuenta: el dinero entró en este turno y salió por una
+        // devolución, que se resta aparte (la lista `refunds`).
         $computables = array_filter(
             $transacciones,
-            fn (array $t) => in_array($t['status'], ['paid', 'delivered'], true),
+            fn (array $t) => in_array($t['status'], ['paid', 'delivered', 'refunded'], true),
         );
-        $sumaDetalle = round(array_sum(array_column($computables, 'total')), 2);
+        $salidas = round(array_sum(array_column($devoluciones, 'amount')), 2);
+        $sumaDetalle = round(array_sum(array_column($computables, 'total')) - $salidas, 2);
         $congelado = $shift->sales_total !== null ? round((float) $shift->sales_total, 2) : null;
 
         return [
@@ -216,6 +315,7 @@ class CashShiftReport
             'detail_total' => $sumaDetalle,
             'detail_count' => count($computables),
             'listed_count' => count($transacciones),
+            'refunds_total' => $salidas,
             'matches' => $congelado === null || abs($congelado - $sumaDetalle) < 0.01,
         ];
     }

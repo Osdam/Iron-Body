@@ -153,7 +153,7 @@ class MediosDePagoReconocidosTest extends TestCase
         $this->assertSame('MIGR-1-B', $migrado->fresh()->reference);
 
         // Y se le puede poner el medio de verdad cuando se sepa.
-        $this->patchJson("/api/payments/{$migrado->id}", ['method' => 'transfer'], $this->h())->assertOk();
+        $this->patchJson("/api/payments/{$migrado->id}", ['method' => 'transfer', 'reason' => 'Ya se sabe cómo pagó'], $this->h())->assertOk();
         $this->assertSame('transfer', $migrado->fresh()->method);
     }
 

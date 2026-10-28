@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\InvoiceType;
+use App\Exceptions\CorrectionException;
 use App\Exceptions\InsufficientStockException;
 use App\Services\Billing\InvoiceEmail;
 use App\Services\Inventory\InventoryService;
@@ -35,7 +36,15 @@ class ProductSale extends Model
      */
     public const STATUS_CREDIT = 'credit';
 
-    public const STATUSES = ['pending', 'paid', 'delivered', 'cancelled', self::STATUS_CREDIT];
+    /**
+     * Devuelta ENTERA: el dinero entró en su turno —y ahí sigue contando— y
+     * salió por una devolución (`cash_refunds`) del turno en que se devolvió.
+     * Una devolución parcial deja la venta en su estado y anota lo devuelto en
+     * cada línea. Ver docs/ops/CORRECCIONES-ADMINISTRATIVAS.md §1.
+     */
+    public const STATUS_REFUNDED = 'refunded';
+
+    public const STATUSES = ['pending', 'paid', 'delivered', 'cancelled', self::STATUS_CREDIT, self::STATUS_REFUNDED];
 
     /**
      * `mixed` no es un medio de pago: nadie paga «con mixto». Es la marca de
@@ -78,12 +87,18 @@ class ProductSale extends Model
         // 2026_07_29_000003). Una venta de mostrador no crea transacción de
         // pasarela, así que la intención de facturar se guarda aquí.
         'invoice_requested', 'invoice_email', 'invoice_requested_at',
+        // Idempotencia del alta: la misma petición del CRM dos veces es UNA
+        // venta (índice único en la base).
+        'client_request_id',
+        // Lo devuelto, acumulado (lo mantiene SaleCorrections::refund).
+        'refunded_total',
     ];
 
     protected $casts = [
         'subtotal' => 'decimal:2',
         'discount' => 'decimal:2',
         'total' => 'decimal:2',
+        'refunded_total' => 'decimal:2',
         'paid_at' => 'datetime',
         'delivered_at' => 'datetime',
         'cancelled_at' => 'datetime',
@@ -129,15 +144,35 @@ class ProductSale extends Model
      */
     public function grossAmountValue(): float
     {
-        return (float) ($this->gross_amount ?? $this->total);
+        // Menos lo DEVUELTO: es contra lo que se concilia la factura antes de
+        // emitirla, y tras una devolución parcial se factura lo que quedó.
+        return (float) ($this->gross_amount ?? $this->total) - (float) ($this->refunded_total ?? 0);
     }
 
     protected static function booted(): void
     {
         static::creating(function (ProductSale $s): void {
             $s->uuid ??= (string) Str::uuid();
-            $s->code ??= self::nextCode();
+            // Provisional y única: el código definitivo sale del id (ver
+            // `created`). `max(id) + 1` daba el mismo número a dos ventas
+            // simultáneas y la segunda chocaba contra el índice único.
+            $s->code ??= self::PROVISIONAL_CODE_PREFIX.$s->uuid;
         });
+
+        static::created(function (ProductSale $s): void {
+            if (str_starts_with((string) $s->code, self::PROVISIONAL_CODE_PREFIX)) {
+                $s->code = self::codeFor((int) $s->id);
+                $s->saveQuietly();
+            }
+        });
+    }
+
+    private const PROVISIONAL_CODE_PREFIX = 'V-TMP-';
+
+    /** V-000123, a partir del id: único porque el id lo es. */
+    public static function codeFor(int $id): string
+    {
+        return 'V-'.str_pad((string) $id, 6, '0', STR_PAD_LEFT);
     }
 
     /** Las partes, si la venta se cobró entre varios medios. */
@@ -212,13 +247,6 @@ class ProductSale extends Model
         return $q->where('channel', 'app');
     }
 
-    /** Código de comprobante legible y secuencial: V-000123. */
-    public static function nextCode(): string
-    {
-        $n = (int) (self::max('id') ?? 0) + 1;
-
-        return 'V-'.str_pad((string) $n, 6, '0', STR_PAD_LEFT);
-    }
 
     /**
      * Entrega el producto a crédito: mueve existencias y NO cobra.
@@ -233,65 +261,109 @@ class ProductSale extends Model
      */
     public function markCredit(?Admin $actor = null): void
     {
-        if (in_array($this->status, ['paid', 'delivered', self::STATUS_CREDIT], true)) {
-            return;
-        }
-
         DB::transaction(function () use ($actor): void {
-            app(InventoryService::class)->registerSaleExit($this, $actor);
+            $fresca = $this->lockFresh();
+            if (in_array($fresca->status, ['paid', 'delivered', self::STATUS_CREDIT], true)) {
+                $this->setRawAttributes($fresca->getAttributes(), true);
 
-            $this->update([
+                return;
+            }
+            if ($fresca->status !== 'pending') {
+                throw CorrectionException::saleNotPayable($fresca->status);
+            }
+
+            app(InventoryService::class)->registerSaleExit($fresca, $actor);
+
+            $fresca->update([
                 'status' => self::STATUS_CREDIT,
                 // Sigue SIN cobrar: es justo lo que significa un crédito.
                 'payment_status' => 'pending',
                 'paid_at' => null,
                 'delivered_at' => now(),
             ]);
-        });
+            $this->setRawAttributes($fresca->getAttributes(), true);
+        }, 3);
     }
 
     /**
      * Confirma el pago y descuenta el stock de cada ítem (transacción).
      * Idempotente: si ya está `paid`/`delivered` no vuelve a descontar.
      *
+     * El estado se lee CON LA VENTA BLOQUEADA. Antes se miraba el objeto en
+     * memoria: dos «Cobrar» seguidos leían los dos `pending` y descontaban el
+     * stock dos veces. Ahora el segundo espera, relee y ve la venta cobrada.
+     * Una venta anulada, fiada o devuelta no se cobra (409).
+     *
      * El descuento pasa por InventoryService, que bloquea la fila del producto,
      * valida existencias y deja el movimiento en `inventory_movements`. Si una
      * línea no alcanza, la excepción tumba la transacción entera y la venta NO
-     * queda cobrada: antes se descartaba el fallo en silencio y quedaba una
-     * venta pagada con el stock intacto.
+     * queda cobrada.
+     *
+     * @param  int|null  $cashShiftId  Turno abierto en que se cobra: el dinero
+     *                                 entra en ESTE arqueo, no en el del día en
+     *                                 que se hizo el pedido.
      *
      * @throws InsufficientStockException
      */
-    public function markPaid(?string $method = null, ?string $reference = null, ?Admin $actor = null): void
+    public function markPaid(?string $method = null, ?string $reference = null, ?Admin $actor = null, ?int $cashShiftId = null): void
     {
-        if (in_array($this->status, ['paid', 'delivered'], true)) {
-            return;
-        }
+        DB::transaction(function () use ($method, $reference, $actor, $cashShiftId): void {
+            $fresca = $this->lockFresh();
+            if (in_array($fresca->status, ['paid', 'delivered'], true)) {
+                $this->setRawAttributes($fresca->getAttributes(), true);
 
-        DB::transaction(function () use ($method, $reference, $actor): void {
-            app(InventoryService::class)->registerSaleExit($this, $actor);
+                return;
+            }
+            if ($fresca->status !== 'pending') {
+                throw CorrectionException::saleNotPayable($fresca->status);
+            }
 
-            $this->update([
+            app(InventoryService::class)->registerSaleExit($fresca, $actor);
+
+            $fresca->update([
                 'status' => 'paid',
                 'payment_status' => 'paid',
-                'payment_method' => $method ?? $this->payment_method,
-                'payment_reference' => $reference ?? $this->payment_reference,
+                'payment_method' => $method ?? $fresca->payment_method,
+                'payment_reference' => $reference ?? $fresca->payment_reference,
                 'paid_at' => now(),
+                'cash_shift_id' => $cashShiftId ?? $fresca->cash_shift_id,
             ]);
-        });
+            $this->setRawAttributes($fresca->getAttributes(), true);
+        }, 3);
     }
 
+    /**
+     * Entrega lo cobrado. Solo desde `paid`: `pending` → `delivered` contaba en
+     * el arqueo una venta que nadie cobró y sin mover stock, y una anulada
+     * volvía a la vida. Una venta fiada ya se entregó al fiarla (markCredit):
+     * entregarla otra vez no cambia nada —pasarla a `delivered` la haría contar
+     * como dinero en el arqueo—.
+     */
     public function markDelivered(): void
     {
-        $this->update(['status' => 'delivered', 'delivered_at' => now()]);
+        DB::transaction(function (): void {
+            $fresca = $this->lockFresh();
+            if (in_array($fresca->status, ['delivered', self::STATUS_CREDIT], true)) {
+                $this->setRawAttributes($fresca->getAttributes(), true);
+
+                return;
+            }
+            if ($fresca->status !== 'paid') {
+                throw CorrectionException::saleNotDeliverable($fresca->status);
+            }
+
+            $fresca->update(['status' => 'delivered', 'delivered_at' => now()]);
+            $this->setRawAttributes($fresca->getAttributes(), true);
+        }, 3);
     }
 
-    public function cancel(): void
+    /** La venta releída con su fila bloqueada, con sus líneas. */
+    public function lockFresh(): self
     {
-        if ($this->status === 'delivered') {
-            return;
-        }
-        $this->update(['status' => 'cancelled', 'cancelled_at' => now()]);
+        $fresca = self::whereKey($this->getKey())->lockForUpdate()->firstOrFail();
+        $fresca->load('items');
+
+        return $fresca;
     }
 
     public function toReceiptArray(): array

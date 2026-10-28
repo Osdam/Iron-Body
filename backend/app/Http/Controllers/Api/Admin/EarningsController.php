@@ -7,6 +7,7 @@ use App\Enums\CashShiftType;
 use App\Http\Controllers\Controller;
 use App\Models\CashShift;
 use App\Models\Payment;
+use App\Models\CashRefund;
 use App\Models\ProductSale;
 use App\Models\ProductSaleItem;
 use App\Models\Receivable;
@@ -32,10 +33,22 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class EarningsController extends Controller
 {
-    /** Estados que cuentan como dinero recibido. */
-    private const GYM_PAID = ['paid', 'approved'];
+    /**
+     * Estados que cuentan como dinero recibido.
+     *
+     * BASE DE CAJA. `refunded` cuenta, en la fecha en que entró el dinero: se
+     * cobró de verdad. Lo que salió al devolverlo se resta en la fecha de la
+     * devolución (`cash_refunds`), por su caja y su medio.
+     *
+     * `refunded` solo lo escribe la devolución, que siempre deja su fila en
+     * `cash_refunds`: el alta (POST /payments) y la edición (PATCH) lo rechazan
+     * con 422. Y el pasado no cambia: comprobado en producción el 27-10-2026,
+     * `payments` solo tiene `paid`, `pending` y `cancelled` (ningún `refunded`),
+     * y las ventas no tenían ese estado (docs/ops/CORRECCIONES-ADMINISTRATIVAS.md §6).
+     */
+    private const GYM_PAID = ['paid', 'approved', 'refunded'];
 
-    private const CAFE_PAID = ['paid', 'delivered'];
+    private const CAFE_PAID = ['paid', 'delivered', ProductSale::STATUS_REFUNDED];
 
     /**
      * El `Payment` que deja una venta a plazos NO es dinero recibido.
@@ -85,7 +98,8 @@ class EarningsController extends Controller
         if ($includeGym) {
             $gymRevenue = (float) $this->cashPayments()
                 ->whereBetween('paid_at', [$from, $to])->sum('amount')
-                + (float) $this->receivedQuery(CashShiftType::GYM, $from, $to)->sum('amount');
+                + (float) $this->receivedQuery(CashShiftType::GYM, $from, $to)->sum('amount')
+                - (float) $this->refundsQuery(Payment::class, $from, $to)->sum('amount');
             $gymCount = $this->cashPayments()
                 ->whereBetween('paid_at', [$from, $to])->count()
                 + $this->receivedQuery(CashShiftType::GYM, $from, $to)->count();
@@ -103,13 +117,14 @@ class EarningsController extends Controller
         if ($includeCafe) {
             $cafeRevenue = (float) ProductSale::whereIn('status', self::CAFE_PAID)
                 ->whereBetween('paid_at', [$from, $to])->sum('total')
-                + (float) $this->receivedQuery(CashShiftType::PRODUCTS, $from, $to)->sum('amount');
+                + (float) $this->receivedQuery(CashShiftType::PRODUCTS, $from, $to)->sum('amount')
+                - (float) $this->refundsQuery(ProductSale::class, $from, $to)->sum('amount');
             $cafeCount = ProductSale::whereIn('status', self::CAFE_PAID)
                 ->whereBetween('paid_at', [$from, $to])->count()
                 + $this->receivedQuery(CashShiftType::PRODUCTS, $from, $to)->count();
             $cafeProfit = $verCosto
                 ? (float) $this->cafeProfitQuery($from, $to)
-                    ->selectRaw('SUM((product_sale_items.unit_price - products.cost_price) * product_sale_items.quantity) as profit')
+                    ->selectRaw('SUM((product_sale_items.unit_price - products.cost_price) * (product_sale_items.quantity - product_sale_items.refunded_quantity)) as profit')
                     ->value('profit')
                 : 0.0;
         }
@@ -162,6 +177,10 @@ class EarningsController extends Controller
                 $clave = $row->method ?: 'otro';
                 $acumulado[$clave] = ($acumulado[$clave] ?? 0) + (float) $row->amount;
             }
+            // Lo devuelto sale por el medio por el que se devolvió.
+            foreach ($this->refundsByMethod(Payment::class, $from, $to) as $metodo => $importe) {
+                $acumulado[$metodo] = ($acumulado[$metodo] ?? 0) - $importe;
+            }
             foreach ($acumulado as $metodo => $importe) {
                 $byMethod[] = ['source' => 'gym', 'method' => $metodo, 'amount' => round($importe, 2)];
             }
@@ -174,6 +193,11 @@ class EarningsController extends Controller
             foreach ($this->receivedQuery(CashShiftType::PRODUCTS, $from, $to)
                 ->groupBy('method')->selectRaw('method, SUM(amount) as amount')->get() as $row) {
                 $byMethod[] = ['source' => 'cafeteria', 'method' => $row->method ?: 'otro', 'amount' => (float) $row->amount];
+            }
+            // Las devoluciones, en negativo y por su medio: filas aparte, como
+            // ya van aparte las ventas y los abonos de cafetería.
+            foreach ($this->refundsByMethod(ProductSale::class, $from, $to) as $metodo => $importe) {
+                $byMethod[] = ['source' => 'cafeteria', 'method' => $metodo, 'amount' => round(-$importe, 2)];
             }
         }
 
@@ -331,7 +355,10 @@ class EarningsController extends Controller
             ->pluck('total', 'period')
             ->map(fn ($v) => (float) $v)->all();
 
-        return $this->mergePeriods($pagos, $this->receivedSeries(CashShiftType::GYM, $from, $to, $groupBy));
+        return $this->mergePeriods(
+            $this->mergePeriods($pagos, $this->receivedSeries(CashShiftType::GYM, $from, $to, $groupBy)),
+            $this->refundSeries(Payment::class, $from, $to, $groupBy),
+        );
     }
 
     /** Ingresos de cafetería agrupados por periodo → [periodo => total]. */
@@ -346,7 +373,10 @@ class EarningsController extends Controller
             ->pluck('total', 'period')
             ->map(fn ($v) => (float) $v)->all();
 
-        return $this->mergePeriods($ventas, $this->receivedSeries(CashShiftType::PRODUCTS, $from, $to, $groupBy));
+        return $this->mergePeriods(
+            $this->mergePeriods($ventas, $this->receivedSeries(CashShiftType::PRODUCTS, $from, $to, $groupBy)),
+            $this->refundSeries(ProductSale::class, $from, $to, $groupBy),
+        );
     }
 
     /** Utilidad de cafetería (venta − costo) agrupada por periodo. */
@@ -355,7 +385,7 @@ class EarningsController extends Controller
         $expr = $this->periodExpr('product_sales.paid_at', $groupBy);
 
         return $this->cafeProfitQuery($from, $to)
-            ->selectRaw("$expr as period, SUM((product_sale_items.unit_price - products.cost_price) * product_sale_items.quantity) as profit")
+            ->selectRaw("$expr as period, SUM((product_sale_items.unit_price - products.cost_price) * (product_sale_items.quantity - product_sale_items.refunded_quantity)) as profit")
             ->groupBy('period')->orderBy('period')
             ->pluck('profit', 'period')
             ->map(fn ($v) => (float) $v)->all();
@@ -423,6 +453,39 @@ class EarningsController extends Controller
      * @param  array<string, float>  $b
      * @return array<string, float>
      */
+    /**
+     * Devoluciones de cobros (`Payment`) o de ventas (`ProductSale`) por la
+     * fecha en que SALIÓ el dinero. Incluye las de pasarela: también es dinero
+     * que el negocio devolvió, aunque no saliera del cajón.
+     */
+    private function refundsQuery(string $refundableType, Carbon $from, Carbon $to): Builder
+    {
+        return CashRefund::query()
+            ->where('refundable_type', $refundableType)
+            ->whereBetween('cash_refunds.created_at', [$from, $to]);
+    }
+
+    /** @return array<string, float> medio → importe devuelto (positivo) */
+    private function refundsByMethod(string $refundableType, Carbon $from, Carbon $to): array
+    {
+        return $this->refundsQuery($refundableType, $from, $to)
+            ->groupBy('method')->selectRaw('method, SUM(amount) as amount')
+            ->pluck('amount', 'method')
+            ->mapWithKeys(fn ($v, $k) => [($k ?: 'otro') => (float) $v])->all();
+    }
+
+    /** @return array<string, float> periodo → importe devuelto, en NEGATIVO */
+    private function refundSeries(string $refundableType, Carbon $from, Carbon $to, string $groupBy): array
+    {
+        $expr = $this->periodExpr('cash_refunds.created_at', $groupBy);
+
+        return $this->refundsQuery($refundableType, $from, $to)
+            ->selectRaw("$expr as period, SUM(amount) as total")
+            ->groupBy('period')->orderBy('period')
+            ->pluck('total', 'period')
+            ->map(fn ($v) => -(float) $v)->all();
+    }
+
     private function mergePeriods(array $a, array $b): array
     {
         foreach ($b as $periodo => $importe) {

@@ -655,7 +655,9 @@ class ReceiptTextLayoutTest extends TestCase
             $lineas = $this->layout->lines($this->layout->thermal($recibo, 'REINTENTO 12'), $cols);
             $this->assertContrato($lineas, $cols, "veinte productos a {$cols}");
             $texto = implode("\n", array_column($lineas, 'text'));
-            $this->assertStringContainsString('OPERACIÓN ANULADA', $texto);
+            // Una operación DEVUELTA lo dice así, no «anulada» (el dinero entró y salió).
+            $this->assertStringContainsString('OPERACIÓN DEVUELTA', $texto);
+            $this->assertStringNotContainsString('ANULADA', $texto);
             $this->assertStringContainsString('Ref. factura', $texto);
             $this->assertStringContainsString('*** REINTENTO 12 ***', $lineas[0]['text']);
             $this->assertSame(20, substr_count($texto, 'Producto '));

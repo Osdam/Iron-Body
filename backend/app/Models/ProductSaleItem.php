@@ -20,12 +20,16 @@ class ProductSaleItem extends Model
         'base_unit_amount', 'tax_unit_amount', 'gross_unit_amount',
         'base_amount', 'tax_amount', 'gross_amount',
         'tax_rate_id', 'tax_rate', 'pricing_mode', 'pricing_rules_version',
+        // Lo devuelto de la línea: nunca más que `quantity`. Ver SaleCorrections.
+        'refunded_quantity', 'refunded_amount',
     ];
 
     protected $casts = [
         'unit_price' => 'decimal:2',
         'quantity' => 'integer',
         'subtotal' => 'decimal:2',
+        'refunded_quantity' => 'integer',
+        'refunded_amount' => 'decimal:2',
     ];
 
     /** ¿La línea trae el snapshot fiscal congelado? */

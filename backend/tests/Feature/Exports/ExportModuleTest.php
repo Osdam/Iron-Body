@@ -382,7 +382,9 @@ class ExportModuleTest extends TestCase
         // matriz de Configuración → Usuarios y roles.
         $filas = collect(\App\Support\Access\PermissionCatalog::rows())->keyBy('key');
 
-        foreach (['members.export' => 'Miembros', 'payments.export' => 'Pagos'] as $clave => $etiqueta) {
+        // «Pagos» se llama ahora «Caja de Gimnasio» en la matriz (decisión del
+        // propietario, docs/ops/CORRECCIONES-ADMINISTRATIVAS.md §3); la clave no cambia.
+        foreach (['members.export' => 'Miembros', 'payments.export' => 'Caja de Gimnasio'] as $clave => $etiqueta) {
             $this->assertSame('exports', $filas[$clave]['domain'], "{$clave} fuera de Exportaciones");
             $this->assertSame('Exportaciones', $filas[$clave]['domain_label']);
             $this->assertSame($etiqueta, $filas[$clave]['label']);

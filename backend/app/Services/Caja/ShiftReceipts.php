@@ -63,10 +63,11 @@ final class ShiftReceipts
 
             $salida[] = [
                 'row_id' => $fila['row_id'],
-                // ¿Sale esta fila en «Operaciones del turno»? Los abonos de la
-                // caja de productos no (el informe solo lista ventas): el CRM los
-                // muestra aparte para que también se puedan reimprimir.
-                'in_report' => ! ($shift->type === CashShiftType::PRODUCTS && $fila['source_type'] === ReceiptSource::TYPE_RECEIVABLE_PAYMENT),
+                // ¿Sale esta fila en «Operaciones del turno»? Desde las
+                // correcciones administrativas (H9) el informe de la caja de
+                // productos lista también sus abonos —su total ya los sumaba—,
+                // así que todas salen. Se conserva el campo para el CRM.
+                'in_report' => true,
                 'display' => $fila['display'] ?? null,
                 'source_type' => $fila['source_type'],
                 'source_id' => $fila['source_id'],

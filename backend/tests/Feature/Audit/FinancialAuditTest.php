@@ -158,7 +158,7 @@ class FinancialAuditTest extends TestCase
         $this->cobrar($headers)->assertSuccessful();
         $payment = Payment::query()->firstOrFail();
 
-        $this->patchJson("/api/payments/{$payment->id}", ['status' => 'cancelled'], $headers)
+        $this->patchJson("/api/payments/{$payment->id}", ['status' => 'cancelled', 'reason' => 'Corrección administrativa de prueba'], $headers)
             ->assertStatus(403);
 
         $this->assertSame('paid', $payment->fresh()->status);

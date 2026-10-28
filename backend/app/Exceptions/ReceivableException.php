@@ -85,6 +85,15 @@ class ReceivableException extends RuntimeException
         );
     }
 
+    /** La deuda es de una venta de cafetería que se anuló o se devolvió. */
+    public static function creditSaleCancelled(string $code): self
+    {
+        return new self(
+            "Esta deuda es de la venta {$code}, que está anulada o devuelta: reabrirla haría cobrar algo que la venta ya no reconoce.",
+            'receivable_source_cancelled',
+        );
+    }
+
     public static function dueDateReasonRequired(): self
     {
         return new self(

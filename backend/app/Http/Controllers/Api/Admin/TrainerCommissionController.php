@@ -9,6 +9,7 @@ use App\Models\TrainerCommissionAgreement;
 use App\Models\TrainerCommissionCharge;
 use App\Services\Audit\AuditTrail;
 use App\Exceptions\CashShiftException;
+use App\Exceptions\CorrectionException;
 use App\Exceptions\ReceivableException;
 use App\Services\Commissions\TrainerCommissionAccess;
 use App\Services\Commissions\TrainerCommissions;
@@ -294,6 +295,10 @@ class TrainerCommissionController extends Controller
 
         try {
             $resultado = $servicio->cancelCharge($charge, $data['reason'], AdminActor::from($request));
+        } catch (CorrectionException $e) {
+            // Turno cerrado sin permiso de administrar la caja: se conservan su
+            // 403 y su `code` (closed_shift_requires_manage), no un 422 genérico.
+            return $e->render();
         } catch (ReceivableException|RuntimeException $e) {
             return response()->json(['ok' => false, 'message' => $e->getMessage()], 422);
         }

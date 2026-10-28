@@ -405,6 +405,80 @@ class TrainerCommissionTest extends TestCase
         $this->assertSame(50000.0, (float) $informe['consistency']['detail_total']);
     }
 
+    /**
+     * Anular un mes cuyo abono entró en un turno YA CERRADO exige administrar la
+     * caja: 403 con su `code` (antes se convertía en un 422 sin código), y no
+     * queda nada a medias.
+     */
+    public function test_anular_un_mes_de_un_turno_cerrado_exige_administrar_la_caja(): void
+    {
+        $this->abrirCajaDelGimnasio();
+        [$acuerdo] = $this->acuerdo();
+        $cobroId = $this->cobrar($acuerdo, ['method' => 'cash'])->assertStatus(201)->json('charge.id');
+        app(CashShiftService::class)->close($this->admin, CashShiftType::GYM);
+
+        $this->postJson("/api/admin/commissions/charges/{$cobroId}/cancel", ['reason' => 'Se cobró de más'],
+            $this->adminWithPermissions(['commissions.view', 'commissions.cancel']))
+            ->assertStatus(403)->assertJsonPath('code', 'closed_shift_requires_manage');
+        $deuda = TrainerCommissionCharge::findOrFail($cobroId)->receivable;
+        $this->assertFalse($deuda->fresh()->isCancelled());
+        $this->assertSame(1, $deuda->appliedPayments()->count());
+
+        $this->postJson("/api/admin/commissions/charges/{$cobroId}/cancel", ['reason' => 'Se cobró de más'],
+            $this->adminWithPermissions(['commissions.view', 'commissions.cancel', 'cash.gym.manage']))
+            ->assertOk();
+    }
+
+    /**
+     * Anular un mes con DOS abonos es todo o nada: si algo falla después de
+     * anular el primero —el segundo abono o la deuda—, los dos abonos siguen
+     * aplicados y la deuda viva. Antes cada paso se confirmaba por su cuenta.
+     */
+    public function test_anular_un_mes_con_dos_abonos_es_todo_o_nada(): void
+    {
+        $this->abrirCajaDelGimnasio();
+        [$acuerdo] = $this->acuerdo(50000);
+        $cobroId = $this->cobrar($acuerdo)->assertStatus(201)->json('charge.id');
+        $deuda = TrainerCommissionCharge::findOrFail($cobroId)->receivable;
+        foreach ([20000, 10000] as $importe) {
+            $this->postJson("/api/admin/receivables/{$deuda->id}/payments", ['amount' => $importe, 'method' => 'cash'], $this->h)->assertStatus(201);
+        }
+
+        foreach (['reverse', 'cancel'] as $falla) {
+            // Falla el SEGUNDO abono (tras anular el primero) o la deuda (tras los dos).
+            $this->app->instance(\App\Services\Caja\ReceivableService::class, new class(app(CashShiftService::class), $falla) extends \App\Services\Caja\ReceivableService
+            {
+                private int $anulados = 0;
+
+                public function __construct(CashShiftService $turnos, private readonly string $falla)
+                {
+                    parent::__construct($turnos);
+                }
+
+                public function reverse(\App\Models\ReceivablePayment $payment, string $reason, ?Admin $actor = null): \App\Models\ReceivablePayment
+                {
+                    if ($this->falla === 'reverse' && ++$this->anulados === 2) {
+                        throw new \RuntimeException('Fallo provocado en el segundo abono.');
+                    }
+
+                    return parent::reverse($payment, $reason, $actor);
+                }
+
+                public function cancel(Receivable $receivable, string $reason, ?Admin $actor = null): Receivable
+                {
+                    throw new \RuntimeException('Fallo provocado al anular la deuda.');
+                }
+            });
+
+            $this->postJson("/api/admin/commissions/charges/{$cobroId}/cancel", ['reason' => 'Se cobró de más'], $this->h)
+                ->assertStatus(422);
+
+            $this->assertSame(2, $deuda->appliedPayments()->count(), "fallo en {$falla}: los dos abonos siguen aplicados");
+            $this->assertFalse($deuda->fresh()->isCancelled());
+            $this->assertEquals(20000, $deuda->fresh()->balance()->toFloat());
+        }
+    }
+
     public function test_un_abono_anulado_deja_de_contar_en_el_arqueo(): void
     {
         $turno = app(\App\Services\Caja\CashShiftService::class)

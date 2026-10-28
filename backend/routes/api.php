@@ -778,6 +778,17 @@ Route::get('app/version-policy', [\App\Http\Controllers\Api\AppVersionPolicyCont
 Route::get('membership-plans', [MembershipPlanController::class, 'index']);
 Route::get('membership-plans/{plan}', [MembershipPlanController::class, 'show']);
 Route::apiResource('payments', PaymentController::class)->only(['index','show','store','update']);
+// Correcciones administrativas de un cobro (docs/ops/CORRECCIONES-ADMINISTRATIVAS.md):
+// vista previa sin efectos, historial, corregir medio/importe y devolver dinero.
+// El permiso lo fija AuthorizationMap; `admin.can` lo repite en la ruta.
+Route::get('payments/{payment}/correction-preview', [PaymentController::class, 'correctionPreview'])
+    ->whereNumber('payment')->middleware('admin.can:payments.view');
+Route::get('payments/{payment}/history', [PaymentController::class, 'history'])
+    ->whereNumber('payment')->middleware('admin.can:payments.view');
+Route::post('payments/{payment}/method', [PaymentController::class, 'correctMethod'])
+    ->whereNumber('payment')->middleware('admin.can:payments.correct');
+Route::post('payments/{payment}/refund', [PaymentController::class, 'refund'])
+    ->whereNumber('payment')->middleware('admin.can:payments.refund');
 // Escritura del catálogo de clases + listado de reservas: solo administración.
 Route::middleware('auth.admin')->group(function (): void {
     Route::apiResource('classes', ClassController::class)
@@ -1557,6 +1568,18 @@ Route::post('admin/caja/sales/{sale}/deliver',  [CajaController::class, 'deliver
     ->middleware('admin.can:caja.sell');
 Route::post('admin/caja/sales/{sale}/cancel',   [CajaController::class, 'cancel'])
     ->middleware('admin.can:caja.manage');
+// Correcciones de una venta (docs/ops/CORRECCIONES-ADMINISTRATIVAS.md): vista
+// previa sin efectos, devolver (dinero que sale del turno abierto) y corregir el
+// medio de pago (supervisión, como anular).
+Route::get('admin/caja/sales/{sale}/correction-preview', [CajaController::class, 'correctionPreview'])
+    ->middleware('admin.can:caja.view');
+// Historial de la venta (audit_logs). `caja.view` y una persona (el controlador).
+Route::get('admin/caja/sales/{sale}/history', [CajaController::class, 'history'])
+    ->middleware('admin.can:caja.view');
+Route::post('admin/caja/sales/{sale}/refund',   [CajaController::class, 'refund'])
+    ->middleware('admin.can:cash.products.refund');
+Route::post('admin/caja/sales/{sale}/method',   [CajaController::class, 'correctMethod'])
+    ->middleware('admin.can:caja.manage');
 
 // ── Cuentas por cobrar: créditos y abonos ────────────────────────────────────
 // Quien consulta saldos no es necesariamente quien cobra, y quien cobra no
@@ -1597,6 +1620,11 @@ Route::post('admin/receivables/{receivable}/payments', [ReceivableController::cl
 // poder deshacerlo sin que lo vea nadie más.
 Route::post('admin/receivables/payments/{payment}/reverse', [ReceivableController::class, 'reversePayment'])
     ->middleware('admin.can:receivables.manage');
+// Corregir el medio de un abono aplicado: supervisión, igual que anularlo.
+Route::post('admin/receivables/payments/{payment}/method', [ReceivableController::class, 'correctPaymentMethod'])
+    ->middleware('admin.can:receivables.manage');
+Route::get('admin/receivables/{receivable}/history', [ReceivableController::class, 'history'])
+    ->whereNumber('receivable')->middleware('admin.can:receivables.view');
 
 // Correcciones administrativas sobre la deuda. Tres llaves distintas porque son
 // tres decisiones de distinto peso: pactar un plazo nuevo lo hace quien atiende;

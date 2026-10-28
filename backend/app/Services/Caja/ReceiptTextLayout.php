@@ -81,6 +81,9 @@ final class ReceiptTextLayout
      */
     private const VOIDED_STATUSES = ['cancelled', 'refunded', 'reversed', 'failed', 'voided', 'annulled'];
 
+    /** De los anteriores, los que son una DEVOLUCIÓN (se imprimen «DEVUELTA»). */
+    private const REFUNDED_STATUSES = ['refunded'];
+
     /**
      * Marcas combinantes: diacríticos (U+0300–U+036F) y sus extensiones
      * (U+1AB0–U+1AFF, U+1DC0–U+1DFF), las de símbolos (U+20D0–U+20FF) y las
@@ -319,6 +322,9 @@ final class ReceiptTextLayout
             'legend' => $this->text($s['legend'] ?? null),
             'copyLabel' => $this->text($copyLabel),
             'voided' => in_array(mb_strtolower($this->jsString($live['operation_status'] ?? null)), self::VOIDED_STATUSES, true),
+            // Devolver no es anular: el dinero entró y salió por una devolución.
+            // El papel tiene que decir cuál de las dos pasó.
+            'refunded' => in_array(mb_strtolower($this->jsString($live['operation_status'] ?? null)), self::REFUNDED_STATUSES, true),
         ];
     }
 
@@ -384,7 +390,7 @@ final class ReceiptTextLayout
             $add($this->pair('Cliente', $r['customer'], $cols));
         }
         if ($this->truthy($r['voided'] ?? null)) {
-            $add($this->center('*** OPERACIÓN ANULADA ***', $cols), self::STYLE_BOLD);
+            $add($this->center($this->truthy($r['refunded'] ?? null) ? '*** OPERACIÓN DEVUELTA ***' : '*** OPERACIÓN ANULADA ***', $cols), self::STYLE_BOLD);
         }
         $regla();
 

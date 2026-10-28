@@ -413,7 +413,7 @@ class ThermalReceiptPrintTest extends TestCase
         $fallido = $this->cobrar($this->socio('Fallido'), $plan);
         $sinRecibo = $this->cobrar($this->socio('Sin recibo'), $plan);
         $anulado = $this->cobrar($this->socio('Anulado'), $plan);
-        $this->putJson("/api/payments/{$anulado->id}", ['status' => 'cancelled'], $super)->assertOk();
+        $this->putJson("/api/payments/{$anulado->id}", ['status' => 'cancelled', 'reason' => 'Corrección administrativa de prueba'], $super)->assertOk();
         [$devengo, $primerAbono] = $this->venderAPlazos($this->socio('Plazos'), $this->plan('Anual', 200000), 50000);
 
         $r = fn (Payment $p) => $this->emitir('payment', $p->id)->assertStatus(201)->json('data.0.uuid');
@@ -477,7 +477,7 @@ class ThermalReceiptPrintTest extends TestCase
         );
     }
 
-    public function test_la_vista_de_productos_incluye_los_abonos_que_el_informe_no_lista(): void
+    public function test_la_vista_de_productos_y_el_informe_listan_los_abonos(): void
     {
         $socio = $this->socio('Fiado');
         $agua = $this->producto();
@@ -496,17 +496,18 @@ class ThermalReceiptPrintTest extends TestCase
         $this->assertSame('product_sale', $filas[(string) $venta->id]['source_type']);
         $this->assertTrue($filas[(string) $credito->id]['eligible'], 'la entrega a crédito lleva comprobante');
         $this->assertSame('receivable_payment', $filas['abono-'.$abono->id]['source_type']);
-        // No sale en el informe de productos: llega marcado y con lo necesario
-        // para que el CRM lo liste aparte y se pueda reimprimir.
-        $this->assertFalse($filas['abono-'.$abono->id]['in_report']);
+        // Desde H9 el informe de productos SÍ lista sus abonos (su total ya los
+        // sumaba): la fila llega marcada como incluida y con lo necesario para
+        // reimprimir.
+        $this->assertTrue($filas['abono-'.$abono->id]['in_report']);
         $this->assertTrue($filas[(string) $venta->id]['in_report']);
         $this->assertSame('Fiado', $filas['abono-'.$abono->id]['display']['customer']);
         $this->assertEquals((float) $abono->amount, $filas['abono-'.$abono->id]['display']['total']);
         $this->assertNotNull($filas['abono-'.$abono->id]['display']['at']);
 
         $informe = $this->getJson("/api/admin/caja/shifts/{$turno}", $this->h)->assertOk()->json('transactions');
-        $this->assertNotContains('abono-'.$abono->id, array_column($informe, 'id'),
-            'el informe de productos sigue sin listar abonos: esto es aditivo');
+        $this->assertContains('abono-'.$abono->id, array_column($informe, 'id'),
+            'el informe de productos lista los abonos que su total ya sumaba (H9)');
         $this->assertSame('product_sale', $informe[0]['source_type']);
         $this->assertSame($venta->id, $informe[0]['source_id']);
     }

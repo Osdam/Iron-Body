@@ -207,14 +207,14 @@ class ThermalReceiptIssueTest extends TestCase
         $this->assertSame($turnoGym->id, $pendiente->cash_shift_id, 'el pendiente sí es de mostrador');
 
         $anulado = $this->cobrar($this->socio('Anulado'), $plan);
-        $this->putJson("/api/payments/{$anulado->id}", ['status' => 'cancelled'], $super)->assertOk();
+        $this->putJson("/api/payments/{$anulado->id}", ['status' => 'cancelled', 'reason' => 'Corrección administrativa de prueba'], $super)->assertOk();
 
         [$devengo] = $this->venderAPlazos($this->socio('Plazos'), $this->plan('Anual', 200000), 80000);
 
         $agua = $this->producto();
         $ventaPendiente = $this->vender([['product_id' => $agua->id, 'quantity' => 1]], ['paid' => false]);
         $ventaAnulada = $this->vender([['product_id' => $agua->id, 'quantity' => 1]], ['paid' => false]);
-        $this->postJson("/api/admin/caja/sales/{$ventaAnulada->id}/cancel", [], $super)->assertOk();
+        $this->postJson("/api/admin/caja/sales/{$ventaAnulada->id}/cancel", ['reason' => 'Venta registrada por error'], $super)->assertOk();
 
         $deuda = Receivable::where('source_type', Payment::class)->firstOrFail();
         $this->postJson("/api/admin/receivables/{$deuda->id}/payments", [
@@ -281,7 +281,15 @@ class ThermalReceiptIssueTest extends TestCase
         $this->assertSame(['status' => 'validated', 'full_number' => 'IBFE77'], $leido['live']['invoice']);
         $this->assertSame([], $leido['prints']);
 
-        $this->putJson("/api/payments/{$pago->id}", ['status' => 'cancelled'], $this->adminHeaders())->assertOk();
+        // Con la factura validada, anular exige antes la nota crédito
+        // (docs/ops/CORRECCIONES-ADMINISTRATIVAS.md §2): se emite y se repite.
+        $this->putJson("/api/payments/{$pago->id}", ['status' => 'cancelled', 'reason' => 'Corrección administrativa de prueba'], $this->adminHeaders())
+            ->assertStatus(409)->assertJsonPath('code', 'invoice_validated');
+        ElectronicInvoice::updateOrCreate(
+            ['source_type' => $pago->getMorphClass(), 'source_id' => $pago->id, 'type' => 'credit_note'],
+            ['status' => 'credit_note_validated', 'full_number' => 'IBNC1', 'total' => '120000.00'],
+        );
+        $this->putJson("/api/payments/{$pago->id}", ['status' => 'cancelled', 'reason' => 'Corrección administrativa de prueba'], $this->adminHeaders())->assertOk();
         $otraVez = $this->getJson("/api/admin/receipts/{$uuid}", $this->h)->assertOk()->json('data');
         $this->assertSame('cancelled', $otraVez['live']['operation_status']);
         $this->assertSame($leido['snapshot'], $otraVez['snapshot']);
@@ -461,11 +469,13 @@ class ThermalReceiptIssueTest extends TestCase
         $this->assertSame('credit', $r['live']['operation_status']);
     }
 
-    public function test_un_pedido_de_la_app_cobrado_en_mostrador_sin_turno_tambien_saca_tirilla(): void
+    public function test_un_pedido_de_la_app_cobrado_en_mostrador_saca_tirilla_en_su_turno(): void
     {
         // Toda venta confirmada saca tirilla. Un pedido de la app se cobra en el
-        // mostrador por `pay()`, que NO le asigna turno: el recibo nace en la
-        // caja de productos y sin turno, y aun así se entrega.
+        // mostrador por `pay()`, que desde las correcciones administrativas
+        // (hallazgo H1) EXIGE el turno de cafetería abierto y le asigna ese
+        // turno: el recibo nace en la caja de productos y en ese turno.
+        $turno = $this->openCashShift(null, \App\Enums\CashShiftType::PRODUCTS);
         $socio = $this->socio('Pedido App');
         $agua = $this->producto('Agua 600 ml', 3000);
 
@@ -488,7 +498,7 @@ class ThermalReceiptIssueTest extends TestCase
         $this->postJson("/api/admin/caja/sales/{$pedido->id}/pay", ['payment_reference' => 'TRF-5531'], $this->h)->assertOk();
         $pedido->refresh();
         $this->assertSame('paid', $pedido->status);
-        $this->assertNull($pedido->cash_shift_id, 'pay() no asigna turno: el hallazgo sigue ahí');
+        $this->assertSame($turno->id, $pedido->cash_shift_id, 'pay() apunta el cobro al turno abierto (H1)');
 
         $antes = $this->conteosDeNegocio();
         $r = $this->emitir('product_sale', $pedido->id)->assertStatus(201)->json('data.0');
@@ -497,7 +507,7 @@ class ThermalReceiptIssueTest extends TestCase
         $this->assertSame('products', $r['cash_type']);
         $this->assertSame(Receipt::KIND_PRODUCT_SALE, $r['kind']);
         $this->assertSame($pedido->code, $r['operation_ref']);
-        $this->assertNull(Receipt::where('uuid', $r['uuid'])->value('cash_shift_id'));
+        $this->assertSame($turno->id, Receipt::where('uuid', $r['uuid'])->value('cash_shift_id'));
         $this->assertSame('Caja de productos', $r['snapshot']['cash_label']);
         $this->assertSame('Pedido App', $r['snapshot']['customer']);
         $this->assertEquals(6000, $r['snapshot']['totals']['total']);

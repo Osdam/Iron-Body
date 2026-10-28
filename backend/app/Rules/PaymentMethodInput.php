@@ -47,6 +47,13 @@ class PaymentMethodInput implements DataAwareRule, ValidationRule
         private readonly bool $esParte = false,
         private readonly ?string $actual = null,
         private readonly bool $devengoLoDecideElCobro = false,
+        /**
+         * Donde solo cabe UN medio real —por dónde sale una devolución, el
+         * medio de un abono—: ahí no hay desglose ni venta a plazos, y los
+         * mensajes de esos casos dicen que ese medio no se admite ahí en vez de
+         * mandar a un desglose o a una pantalla que no vienen al caso.
+         */
+        private readonly bool $soloUnMedio = false,
     ) {}
 
     /** @param  array<string, mixed>  $data */
@@ -71,17 +78,21 @@ class PaymentMethodInput implements DataAwareRule, ValidationRule
         }
 
         if (app(CashReceipts::class)->isAccrual($medio)) {
-            if ($this->esParte) {
+            if ($this->soloUnMedio) {
+                $fail('Aquí no se admite «receivable»: no es un medio de pago. Indica por dónde se movió el dinero: efectivo, transferencia, tarjeta, Nequi, Daviplata…');
+            } elseif ($this->esParte) {
                 $fail('«receivable» no es un medio de pago: el desglose reparte el dinero que entró entre medios reales.');
             } elseif (! $this->devengoLoDecideElCobro) {
-                $fail('«receivable» no es un medio de pago: las ventas a plazos se registran desde «Pago parcial», en Pagos.');
+                $fail('«receivable» no es un medio de pago: las ventas a plazos se registran desde «Pago parcial», en Caja de Gimnasio.');
             }
 
             return;
         }
 
         if ($medio === PaymentSplits::MIXED) {
-            if ($this->esParte) {
+            if ($this->soloUnMedio) {
+                $fail('Aquí no se admite «mixto»: indica un solo medio (efectivo, transferencia, tarjeta, Nequi, Daviplata…).');
+            } elseif ($this->esParte) {
                 $fail('Una parte del desglose no puede ser a su vez «mixto».');
             } elseif (empty($this->data['splits'])) {
                 $fail('«mixed» necesita el desglose: indica cuánto entró por cada medio.');

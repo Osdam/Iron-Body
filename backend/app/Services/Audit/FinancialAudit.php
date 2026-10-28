@@ -4,6 +4,7 @@ namespace App\Services\Audit;
 
 use App\Models\Admin;
 use App\Models\AuditLog;
+use App\Models\CashRefund;
 use App\Models\Payment;
 use App\Models\ProductSale;
 use App\Models\Receivable;
@@ -85,10 +86,36 @@ class FinancialAudit
      * precisamente el salto —de pendiente a pagado entra dinero, y al revés
      * sale—. Se distingue `status` de `update` para que un cambio de importe no
      * se confunda con una confirmación de cobro.
+     *
+     * `$antes` lleva medio, importe, fecha y desglose ANTES del cambio: una
+     * corrección de medio que solo dejara el valor nuevo no permitiría
+     * reconstruir el arqueo que ese turno tenía. Cada campo que cambió va en
+     * `changes` con sus dos lados; `$reason` y `$extra` (turno, si estaba
+     * cerrado, días devueltos, deuda vinculada) van en los metadatos.
+     *
+     * @param  array<string, mixed>  $antes
+     * @param  array<string, mixed>  $extra
      */
-    public function paymentUpdated(Payment $payment, ?string $estadoPrevio, ?Admin $actor, Request $request): void
-    {
+    public function paymentUpdated(
+        Payment $payment,
+        ?string $estadoPrevio,
+        ?Admin $actor,
+        Request $request,
+        array $antes = [],
+        ?string $reason = null,
+        array $extra = [],
+    ): void {
         $cambioDeEstado = $estadoPrevio !== null && $estadoPrevio !== $payment->status;
+
+        $despues = self::paymentSnapshot($payment);
+        $cambios = $cambioDeEstado
+            ? [['field' => 'status', 'before' => $estadoPrevio, 'after' => $payment->status]]
+            : [];
+        foreach (['method', 'amount', 'paid_at', 'splits'] as $campo) {
+            if (array_key_exists($campo, $antes) && $antes[$campo] !== $despues[$campo]) {
+                $cambios[] = ['field' => $campo, 'before' => $antes[$campo], 'after' => $despues[$campo]];
+            }
+        }
 
         $this->write($actor, $request, [
             'action' => $cambioDeEstado ? 'status' : 'update',
@@ -98,15 +125,176 @@ class FinancialAudit
             'target_name' => $payment->reference,
             'summary' => $cambioDeEstado
                 ? "Cambió el cobro de {$estadoPrevio} a {$payment->status}"
-                : 'Modificó los datos de un cobro',
-            'changes' => $cambioDeEstado
-                ? [['field' => 'status', 'before' => $estadoPrevio, 'after' => $payment->status]]
-                : null,
-            'metadata' => [
+                : (count($cambios) > 0 ? 'Corrigió '.implode(', ', array_column($cambios, 'field')).' de un cobro' : 'Modificó los datos de un cobro'),
+            'changes' => $cambios ?: null,
+            'metadata' => array_filter([
                 'amount' => (string) $payment->amount,
                 'method' => $payment->method,
                 'status' => $payment->status,
+                'cash_shift_id' => $payment->cash_shift_id,
+                'reason' => $reason,
+            ], static fn ($v) => $v !== null) + $extra,
+        ]);
+    }
+
+    /**
+     * Foto de lo que un cobro dice del dinero: lo que una corrección puede
+     * cambiar y la traza tiene que poder enseñar antes y después.
+     *
+     * @return array{method: ?string, amount: string, paid_at: ?string, splits: list<array{method: string, amount: string}>}
+     */
+    public static function paymentSnapshot(Payment $payment): array
+    {
+        return [
+            'method' => $payment->method,
+            'amount' => number_format((float) $payment->amount, 2, '.', ''),
+            'paid_at' => optional($payment->paid_at)->toIso8601String(),
+            'splits' => $payment->splits()->orderBy('id')->get(['method', 'amount'])
+                ->map(fn ($p) => ['method' => (string) $p->method, 'amount' => number_format((float) $p->amount, 2, '.', '')])
+                ->all(),
+        ];
+    }
+
+    /**
+     * Se devolvió el dinero de un cobro.
+     *
+     * Dos turnos en la misma traza a propósito: el del cobro (donde el dinero
+     * ENTRÓ y sigue contando) y el de la devolución (de donde SALE). Sin los
+     * dos, quien revise un arqueo no puede casar la salida con su entrada.
+     *
+     * @param  array<string, mixed>  $extra
+     */
+    public function paymentRefunded(Payment $payment, CashRefund $refund, string $estadoPrevio, ?Admin $actor, Request $request, array $extra = []): void
+    {
+        $this->write($actor, $request, [
+            'action' => 'refund',
+            'module' => 'Pagos',
+            'entity' => 'pago',
+            'entity_id' => (string) $payment->id,
+            'target_name' => $payment->reference,
+            'summary' => 'Devolvió $'.number_format((float) $refund->amount, 0, ',', '.').' de un cobro',
+            'changes' => [['field' => 'status', 'before' => $estadoPrevio, 'after' => $payment->status]],
+            'metadata' => array_filter([
+                'amount' => (string) $refund->amount,
+                'method' => $refund->method,
+                'refund_id' => $refund->id,
+                'refund_cash_shift_id' => $refund->cash_shift_id,
+                'external_reference' => $refund->external_reference,
+                'cash_shift_id' => $payment->cash_shift_id,
+                'reason' => $refund->reason,
+            ], static fn ($v) => $v !== null) + $extra,
+        ]);
+    }
+
+    /**
+     * Se anuló o canceló una venta de cafetería.
+     *
+     * @param  array<string, mixed>  $extra
+     */
+    public function saleCancelled(ProductSale $sale, string $estadoPrevio, string $reason, bool $restocked, ?Admin $actor, Request $request, array $extra = []): void
+    {
+        $this->write($actor, $request, [
+            'action' => 'status',
+            'module' => 'Caja',
+            'entity' => 'venta',
+            'entity_id' => (string) $sale->id,
+            'target_name' => $sale->code,
+            'summary' => $estadoPrevio === 'pending'
+                ? "Canceló el pedido {$sale->code}"
+                : "Anuló la venta {$sale->code}".($restocked ? ' y reingresó el producto' : ''),
+            'changes' => [['field' => 'status', 'before' => $estadoPrevio, 'after' => $sale->status]],
+            'metadata' => array_filter([
+                'total' => (string) $sale->total,
+                'payment_method' => $sale->payment_method,
+                'cash_shift_id' => $sale->cash_shift_id,
+                'restocked' => $restocked,
+                'reason' => $reason,
+            ], static fn ($v) => $v !== null) + $extra,
+        ]);
+    }
+
+    /**
+     * Se devolvió (total o parcialmente) el dinero de una venta.
+     *
+     * @param  array<string, mixed>  $extra
+     */
+    public function saleRefunded(ProductSale $sale, CashRefund $refund, string $estadoPrevio, ?Admin $actor, Request $request, array $extra = []): void
+    {
+        $this->write($actor, $request, [
+            'action' => 'refund',
+            'module' => 'Caja',
+            'entity' => 'venta',
+            'entity_id' => (string) $sale->id,
+            'target_name' => $sale->code,
+            'summary' => ($sale->status === ProductSale::STATUS_REFUNDED ? 'Devolvió la venta ' : 'Devolvió parte de la venta ')
+                .$sale->code.' ($'.number_format((float) $refund->amount, 0, ',', '.').')',
+            'changes' => $estadoPrevio !== $sale->status
+                ? [['field' => 'status', 'before' => $estadoPrevio, 'after' => $sale->status]]
+                : null,
+            'metadata' => array_filter([
+                'amount' => (string) $refund->amount,
+                'method' => $refund->method,
+                'refund_id' => $refund->id,
+                'refund_cash_shift_id' => $refund->cash_shift_id,
+                'items' => $refund->items,
+                'restocked' => (bool) $refund->restocked,
+                'cash_shift_id' => $sale->cash_shift_id,
+                'reason' => $refund->reason,
+            ], static fn ($v) => $v !== null) + $extra,
+        ]);
+    }
+
+    /**
+     * Se corrigió el medio de pago de una venta.
+     *
+     * @param  array{method: ?string, splits: list<array{method: string, amount: string}>}  $antes
+     * @param  array{method: ?string, splits: list<array{method: string, amount: string}>}  $despues
+     * @param  array<string, mixed>  $extra
+     */
+    public function saleMethodChanged(ProductSale $sale, array $antes, array $despues, string $reason, ?Admin $actor, Request $request, array $extra = []): void
+    {
+        $this->write($actor, $request, [
+            'action' => 'update',
+            'module' => 'Caja',
+            'entity' => 'venta',
+            'entity_id' => (string) $sale->id,
+            'target_name' => $sale->code,
+            'summary' => "Corrigió el medio de pago de la venta {$sale->code}",
+            'changes' => [
+                ['field' => 'payment_method', 'before' => $antes['method'], 'after' => $despues['method']],
+                ['field' => 'splits', 'before' => $antes['splits'], 'after' => $despues['splits']],
             ],
+            'metadata' => array_filter([
+                'total' => (string) $sale->total,
+                'cash_shift_id' => $sale->cash_shift_id,
+                'reason' => $reason,
+            ], static fn ($v) => $v !== null) + $extra,
+        ]);
+    }
+
+    /**
+     * Se corrigió el medio de pago de un abono.
+     *
+     * @param  array<string, mixed>  $extra
+     */
+    public function receivablePaymentMethodChanged(ReceivablePayment $payment, Receivable $receivable, string $antes, string $reason, ?Admin $actor, Request $request, array $extra = []): void
+    {
+        $this->write($actor, $request, [
+            'action' => 'update',
+            'module' => 'Caja',
+            'entity' => 'abono',
+            'entity_id' => (string) $payment->id,
+            'target_name' => $receivable->concept,
+            'summary' => "Corrigió el medio de pago de un abono de {$receivable->concept}",
+            'changes' => [['field' => 'method', 'before' => $antes, 'after' => $payment->method]],
+            'metadata' => array_filter([
+                'receivable_id' => $receivable->id,
+                'amount' => (string) $payment->amount,
+                'cash' => $receivable->type->value,
+                'cash_shift_id' => $payment->cash_shift_id,
+                'reason' => $reason,
+                'member_id' => $receivable->member_id,
+            ], static fn ($v) => $v !== null) + $extra,
         ]);
     }
 

@@ -9,6 +9,7 @@ use App\Exceptions\ReceivableException;
 use App\Exceptions\PlanReplayException;
 use App\Http\Controllers\Concerns\ResolvesPagination;
 use App\Http\Controllers\Controller;
+use App\Models\AuditLog;
 use App\Models\Member;
 use App\Models\Payment;
 use App\Models\Plan;
@@ -109,7 +110,9 @@ class ReceivableController extends Controller
             ->orderByDesc('receivables.id')
             ->paginate($this->resolvePerPage($request, self::DEFAULT_PER_PAGE, self::MAX_PER_PAGE));
 
-        $cuentas = $pagina->getCollection();
+        // El origen (cobro o venta) de una vez y agrupado por tipo: `source` y
+        // `can_reopen` lo leen, y uno a uno sería una consulta por fila.
+        $cuentas = $pagina->getCollection()->load('source');
 
         // Los deudores se resuelven de una vez, agrupados por tabla: uno a uno
         // serían veinticinco consultas para pintar una pantalla.
@@ -352,7 +355,7 @@ class ReceivableController extends Controller
     /** GET /api/admin/receivables/{receivable} — estado de cuenta. */
     public function show(Receivable $receivable): JsonResponse
     {
-        $receivable->load('member:id,full_name,document_number,is_staff', 'cancelledBy:id,name');
+        $receivable->load('member:id,full_name,document_number,is_staff', 'cancelledBy:id,name', 'source');
 
         return response()->json([
             'ok' => true,
@@ -763,7 +766,7 @@ class ReceivableController extends Controller
                 // Por qué está retenido y desde cuándo: es lo que recepción
                 // necesita para cobrar, no solo para negar el paso.
                 'financial_standing' => app(MembershipFinancialStanding::class)->summary($member),
-                'obligations' => $obligaciones
+                'obligations' => $obligaciones->load('source')
                     ->map(fn (Receivable $r) => $r->toCrmArray())
                     ->all(),
                 'obligations_truncated' => $obligaciones->count() >= $limite,
@@ -983,6 +986,83 @@ class ReceivableController extends Controller
             'data' => $abono->fresh()->toCrmArray(),
             'receivable' => $abono->receivable()->first()?->load('member')->toCrmArray(),
         ]);
+    }
+
+    /**
+     * POST /api/admin/receivables/payments/{payment}/method — corregir el medio
+     * de un abono (se tecleó «efectivo» y fue una transferencia).
+     *
+     * `receivables.manage`, como anularlo: mueve dinero entre medios del arqueo.
+     * Si el turno del abono ya cerró, exige además administrar esa caja; el
+     * cierre firmado no cambia y el informe lo enseña como posterior al cierre.
+     */
+    public function correctPaymentMethod(Request $request, ReceivablePayment $payment): JsonResponse
+    {
+        $data = $request->validate([
+            // Cualquier medio de mostrador reconocido (Nequi y Daviplata se
+            // guardan como transferencia, igual que al abonar), nunca pasarela,
+            // `receivable` ni `mixed`. La regla da el mensaje en español.
+            'method' => ['required', 'string', 'max:80', new \App\Rules\PaymentMethodInput(soloUnMedio: true)],
+            'reason' => ['required', 'string', 'min:5', 'max:500'],
+        ]);
+
+        $resultado = app(ReceivableService::class)->changePaymentMethod(
+            $payment, $data['method'], $data['reason'], AdminActor::from($request),
+        );
+
+        return response()->json([
+            'ok' => true,
+            'already' => $resultado['already'],
+            'data' => $resultado['payment']->fresh()->toCrmArray(),
+            'receivable' => $resultado['payment']->receivable()->first()?->load('member', 'source')->toCrmArray(),
+        ]);
+    }
+
+    /**
+     * GET /api/admin/receivables/{receivable}/history — la traza de la deuda y
+     * de cada uno de sus abonos, en orden. Solo lectura de `audit_logs`.
+     */
+    public function history(Request $request, Receivable $receivable): JsonResponse
+    {
+        // Solo una persona (B-3): el token compartido no lee trazas de dinero.
+        if ($sinPersona = \App\Http\Controllers\Api\PaymentController::requirePerson($request)) {
+            return $sinPersona;
+        }
+        $abonos = $receivable->payments()->pluck('id')->map(fn ($id) => (string) $id)->all();
+
+        $filas = AuditLog::query()
+            ->where(function ($q) use ($receivable, $abonos): void {
+                $q->where(fn ($d) => $d->where('entity', 'cuenta por cobrar')->where('entity_id', (string) $receivable->id));
+                if ($abonos !== []) {
+                    $q->orWhere(fn ($a) => $a->where('entity', 'abono')->whereIn('entity_id', $abonos));
+                }
+            })
+            ->orderBy('id')
+            ->limit(500)
+            ->get();
+
+        return response()->json([
+            'ok' => true,
+            'data' => $filas->map(fn (AuditLog $l) => self::historyRow($l))->all(),
+        ]);
+    }
+
+    /** @return array<string, mixed> */
+    public static function historyRow(AuditLog $l): array
+    {
+        return [
+            'id' => $l->id,
+            'at' => optional($l->created_at)->toIso8601String(),
+            'action' => $l->action,
+            'entity' => $l->entity,
+            'entity_id' => $l->entity_id,
+            'summary' => $l->summary,
+            'actor_name' => $l->actor_name,
+            'actor_role' => $l->actor_role,
+            'changes' => $l->changes,
+            'reason' => $l->metadata['reason'] ?? null,
+            'metadata' => $l->metadata,
+        ];
     }
 
     /**

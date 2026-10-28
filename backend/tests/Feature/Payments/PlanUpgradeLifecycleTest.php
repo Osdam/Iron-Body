@@ -62,7 +62,8 @@ class PlanUpgradeLifecycleTest extends TestCase
 
     private function update(array $data)
     {
-        return $this->patchJson("/api/payments/{$this->upgrade->id}", $data, $this->headers);
+        // Anular o reconfirmar exige motivo (docs/ops/CORRECCIONES-ADMINISTRATIVAS.md §2).
+        return $this->patchJson("/api/payments/{$this->upgrade->id}", $data + ['reason' => 'Corrección administrativa de prueba'], $this->headers);
     }
 
     public function test_repetir_la_anulacion_no_publica_otra_mutacion(): void
@@ -107,7 +108,7 @@ class PlanUpgradeLifecycleTest extends TestCase
     public function test_no_se_anula_el_mensual_que_sostiene_una_mejora_pagada(): void
     {
         $source = Payment::findOrFail($this->upgrade->upgrade_snapshot['source_payment_id']);
-        $this->patchJson("/api/payments/{$source->id}", ['status' => 'cancelled'], $this->headers)
+        $this->patchJson("/api/payments/{$source->id}", ['status' => 'cancelled', 'reason' => 'Corrección administrativa de prueba'], $this->headers)
             ->assertUnprocessable()->assertJsonValidationErrors('status');
         $this->assertSame('paid', $source->refresh()->status);
         $this->assertSame('paid', $this->upgrade->refresh()->status);
@@ -209,7 +210,7 @@ class PlanUpgradeLifecycleTest extends TestCase
         $secondId = $this->postJson("/api/users/{$this->user->id}/plan-upgrade", [
             'plan_id' => $semester->id, 'method' => 'cash',
         ], $this->headers)->assertCreated()->json('payment_id');
-        $this->patchJson("/api/payments/{$secondId}", ['status' => 'cancelled'], $this->headers)->assertOk();
+        $this->patchJson("/api/payments/{$secondId}", ['status' => 'cancelled', 'reason' => 'Corrección administrativa de prueba'], $this->headers)->assertOk();
         $this->patchJson("/api/payments/{$secondId}", ['status' => 'paid'], $this->headers)->assertOk();
 
         $this->assertSame('paid', $this->upgrade->refresh()->status);

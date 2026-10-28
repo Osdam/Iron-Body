@@ -4,11 +4,14 @@ namespace App\Services\Caja;
 
 use App\Enums\CashShiftType;
 use App\Enums\DebtorType;
+use App\Exceptions\CorrectionException;
 use App\Exceptions\ReceivableException;
 use App\Http\Controllers\Api\PaymentController;
 use App\Models\Admin;
+use App\Models\CashShift;
 use App\Models\Member;
 use App\Models\Payment;
+use App\Models\ProductSale;
 use App\Models\Receivable;
 use App\Models\ReceivablePayment;
 use App\Services\Audit\FinancialAudit;
@@ -168,6 +171,11 @@ class ReceivableService
             return DB::transaction(function () use (
                 $receivable, $amount, $method, $actor, $clientRequestId, $reference, $notes, $shift
             ) {
+                // El turno se relee aquí con bloqueo compartido (turno → deuda):
+                // si alguien lo cerró entre la comprobación de fuera y ahora, el
+                // abono no queda apuntado a un cierre que no lo cuenta.
+                $shift = $this->shifts->lockOpen($receivable->type);
+
                 // El saldo se lee CON LA FILA BLOQUEADA. Leerlo antes sería leer
                 // un saldo que otro cajero puede estar cambiando ahora mismo.
                 $fresca = Receivable::whereKey($receivable->id)->lockForUpdate()->firstOrFail();
@@ -247,11 +255,26 @@ class ReceivableService
             // Bajo bloqueo, igual que al abonar: dos supervisores anulando a la
             // vez leerían el mismo estado y lo revertirían dos veces. El
             // segundo espera, relee y se encuentra con que ya está hecho.
+            //
+            // ORDEN: deuda → abono, el mismo que abonar, anular la deuda o
+            // anular el cobro de origen (docs/ops/CORRECCIONES-ADMINISTRATIVAS.md
+            // §2). Antes se tomaba el abono primero, y una anulación de la
+            // deuda en paralelo podía esperar en sentido contrario.
+            $this->lockShiftOfPayment($payment);
+            $cuentaId = ReceivablePayment::whereKey($payment->id)->value('receivable_id') ?? $payment->receivable_id;
+            $cuenta = Receivable::whereKey($cuentaId)->lockForUpdate()->firstOrFail();
             $fresco = ReceivablePayment::whereKey($payment->id)->lockForUpdate()->firstOrFail();
 
             if (! $fresco->isApplied()) {
                 throw ReceivableException::alreadyReversed();
             }
+
+            // Si el turno del abono ya cerró, anularlo es corregir un arqueo
+            // firmado: exige además administrar esa caja (contrato §2, igual que
+            // corregir su medio). El cierre no cambia; el informe lo enseña como
+            // corrección posterior al cierre.
+            $turno = $fresco->cash_shift_id ? CashShift::find($fresco->cash_shift_id) : null;
+            app(CorrectionGuards::class)->assertShiftAllows($turno, $actor);
 
             $fresco->update([
                 'status' => ReceivablePayment::STATUS_REVERSED,
@@ -260,7 +283,7 @@ class ReceivableService
                 'reversal_reason' => $motivo,
             ]);
 
-            $cuenta = Receivable::whereKey($fresco->receivable_id)->lockForUpdate()->firstOrFail();
+            $cuenta->refresh();
             $cuenta->update(['status' => $cuenta->statusForBalance()]);
 
             $this->audit()->receivableReversed($fresco, $cuenta, $motivo, $actor, request());
@@ -273,7 +296,56 @@ class ReceivableService
             // silencio. Si de verdad hay que darlo de baja, eso es una decisión
             // aparte y tiene su propia pantalla.
             return $fresco;
-        });
+        }, 3);
+    }
+
+    /**
+     * Corrige el MEDIO de un abono ya cobrado: se tecleó «efectivo» y fue una
+     * transferencia.
+     *
+     * No cambia el importe, ni el saldo, ni el estado de la deuda: solo a qué
+     * medio del arqueo pertenece ese dinero. Si el turno del abono ya cerró, su
+     * cierre firmado no se reescribe —el informe lo enseña como corrección
+     * posterior al cierre— y por eso exige además administrar esa caja.
+     *
+     * Idempotente: pedir el medio que ya tiene devuelve `already = true`.
+     *
+     * @return array{payment: ReceivablePayment, already: bool}
+     */
+    public function changePaymentMethod(ReceivablePayment $payment, string $method, string $reason, ?Admin $actor = null): array
+    {
+        $motivo = trim($reason);
+        if ($motivo === '') {
+            throw ReceivableException::reversalReasonRequired();
+        }
+
+        return DB::transaction(function () use ($payment, $method, $motivo, $actor) {
+            $this->lockShiftOfPayment($payment);
+            $cuentaId = ReceivablePayment::whereKey($payment->id)->value('receivable_id') ?? $payment->receivable_id;
+            $cuenta = Receivable::whereKey($cuentaId)->lockForUpdate()->firstOrFail();
+            $fresco = ReceivablePayment::whereKey($payment->id)->lockForUpdate()->firstOrFail();
+
+            if (! $fresco->isApplied()) {
+                throw CorrectionException::receivablePaymentNotApplied();
+            }
+
+            $nuevo = PaymentMethodKind::normalize($method)->value;
+            $antes = (string) $fresco->method;
+            if (PaymentMethodKind::normalize($antes)->value === $nuevo) {
+                return ['payment' => $fresco, 'already' => true];
+            }
+
+            $turno = $fresco->cash_shift_id ? CashShift::find($fresco->cash_shift_id) : null;
+            app(CorrectionGuards::class)->assertShiftAllows($turno, $actor);
+
+            $fresco->update(['method' => $nuevo]);
+
+            $this->audit()->receivablePaymentMethodChanged($fresco, $cuenta, $antes, $motivo, $actor, request(), [
+                'shift_closed' => $turno !== null && ! $turno->isOpen(),
+            ]);
+
+            return ['payment' => $fresco, 'already' => false];
+        }, 3);
     }
 
 
@@ -372,6 +444,14 @@ class ReceivableService
                     throw ReceivableException::saleCancelled($cobro->id);
                 }
             }
+            // Lo mismo con una venta fiada de cafetería que se anuló: reabrir su
+            // deuda haría cobrar un producto que la venta ya no reconoce.
+            if ($fresca->source_type === ProductSale::class) {
+                $venta = ProductSale::find($fresca->source_id);
+                if ($venta && in_array($venta->status, ['cancelled', ProductSale::STATUS_REFUNDED], true)) {
+                    throw ReceivableException::creditSaleCancelled($venta->code);
+                }
+            }
 
             // El estado se saca de `cancelled` ANTES de recalcularlo: mientras
             // siga ahí, `statusForBalance()` mira `isCancelled()` y devuelve
@@ -454,6 +534,19 @@ class ReceivableService
     private function audit(): FinancialAudit
     {
         return app(FinancialAudit::class);
+    }
+
+    /**
+     * Bloqueo COMPARTIDO del turno en que entró el abono, ANTES de la deuda:
+     * un cierre en paralelo espera a la corrección y congela totales que ya la
+     * incluyen (o ya cerró, y la corrección es posterior al cierre).
+     */
+    private function lockShiftOfPayment(ReceivablePayment $payment): void
+    {
+        $turnoId = ReceivablePayment::whereKey($payment->id)->value('cash_shift_id');
+        if ($turnoId) {
+            CashShift::whereKey($turnoId)->sharedLock()->first();
+        }
     }
 
     private function findByRequestId(string $clientRequestId): ?ReceivablePayment

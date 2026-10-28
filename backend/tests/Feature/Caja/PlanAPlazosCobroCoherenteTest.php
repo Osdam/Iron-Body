@@ -148,7 +148,7 @@ class PlanAPlazosCobroCoherenteTest extends TestCase
         app(ReceivableService::class)->settle($deuda, \App\Services\Billing\Money::fromAmount(524000), 'cash', $this->admin);
         $this->assertSame(Receivable::STATUS_PAID, $deuda->fresh()->status);
 
-        $this->patchJson("/api/payments/{$cobro->id}", ['status' => 'cancelled'], $this->h())->assertStatus(422);
+        $this->patchJson("/api/payments/{$cobro->id}", ['status' => 'cancelled', 'reason' => 'Corrección administrativa de prueba'], $this->h())->assertStatus(422);
 
         $this->assertSame('paid', $cobro->fresh()->status);
         $this->assertSame('2027-10-27', $socio->fresh()->membership_end_date);
@@ -163,7 +163,7 @@ class PlanAPlazosCobroCoherenteTest extends TestCase
         [$socio, $cobro, $deuda] = $this->venderAPlazos();
         app(ReceivableService::class)->cancel($deuda, 'La venta se registró al socio equivocado', $this->admin);
 
-        $this->patchJson("/api/payments/{$cobro->id}", ['status' => 'cancelled'], $this->h())->assertOk();
+        $this->patchJson("/api/payments/{$cobro->id}", ['status' => 'cancelled', 'reason' => 'Corrección administrativa de prueba'], $this->h())->assertOk();
 
         $this->assertSame('cancelled', $cobro->fresh()->status);
         $this->assertSame($this->hoy(), $socio->fresh()->membership_end_date, 'los 365 días vuelven');
@@ -181,7 +181,7 @@ class PlanAPlazosCobroCoherenteTest extends TestCase
             'method' => 'cash', 'status' => 'paid',
         ], $this->h())->assertStatus(201)->json('id');
 
-        $this->patchJson("/api/payments/{$id}", ['status' => 'cancelled'], $this->h())->assertOk();
+        $this->patchJson("/api/payments/{$id}", ['status' => 'cancelled', 'reason' => 'Corrección administrativa de prueba'], $this->h())->assertOk();
 
         $this->assertSame('cancelled', Payment::find($id)->status);
     }
@@ -205,7 +205,7 @@ class PlanAPlazosCobroCoherenteTest extends TestCase
         $finOriginal = $socio->fresh()->membership_end_date;
         $turno = Payment::find($id)->cash_shift_id;
 
-        $this->patchJson("/api/payments/{$id}", ['status' => 'cancelled'], $this->h())->assertOk();
+        $this->patchJson("/api/payments/{$id}", ['status' => 'cancelled', 'reason' => 'Corrección administrativa de prueba'], $this->h())->assertOk();
         $this->assertSame($this->hoy(), $socio->fresh()->membership_end_date);
 
         $this->travel(1)->days();
@@ -235,7 +235,7 @@ class PlanAPlazosCobroCoherenteTest extends TestCase
         $this->patchJson("/api/payments/{$id}", ['status' => 'paid', 'reference' => 'REC-9'], $this->h())->assertOk();
         $this->assertSame($cobradoEl, Payment::find($id)->getRawOriginal('paid_at'), 'editar un cobro pagado');
 
-        $this->patchJson("/api/payments/{$id}", ['status' => 'cancelled'], $this->h())->assertOk();
+        $this->patchJson("/api/payments/{$id}", ['status' => 'cancelled', 'reason' => 'Corrección administrativa de prueba'], $this->h())->assertOk();
         $this->patchJson("/api/payments/{$id}", ['status' => 'paid', 'paid_at' => null], $this->h())->assertOk();
         $this->assertSame($cobradoEl, Payment::find($id)->getRawOriginal('paid_at'), 'reconfirmar con paid_at vacío');
     }
@@ -268,7 +268,7 @@ class PlanAPlazosCobroCoherenteTest extends TestCase
         $this->assertSame(0, ElectronicInvoice::where('source_type', $cobro->getMorphClass())->where('source_id', $cobro->id)->count());
 
         app(ReceivableService::class)->cancel($deuda, 'Se anuló la venta para revisarla', $this->admin);
-        $this->patchJson("/api/payments/{$cobro->id}", ['status' => 'cancelled'], $this->h())->assertOk();
+        $this->patchJson("/api/payments/{$cobro->id}", ['status' => 'cancelled', 'reason' => 'Corrección administrativa de prueba'], $this->h())->assertOk();
 
         $this->travel(1)->days();
         $this->patchJson("/api/payments/{$cobro->id}", ['status' => 'paid'], $this->h())->assertOk();
@@ -292,7 +292,7 @@ class PlanAPlazosCobroCoherenteTest extends TestCase
     {
         [$socio, $cobro, $deuda] = $this->venderAPlazos();
         app(ReceivableService::class)->cancel($deuda, 'La venta se registró al socio equivocado', $this->admin);
-        $this->patchJson("/api/payments/{$cobro->id}", ['status' => 'cancelled'], $this->h())->assertOk();
+        $this->patchJson("/api/payments/{$cobro->id}", ['status' => 'cancelled', 'reason' => 'Corrección administrativa de prueba'], $this->h())->assertOk();
 
         $r = $this->postJson("/api/admin/receivables/{$deuda->id}/reopen", [
             'reason' => 'Se anuló por error, hay que cobrarla',
@@ -308,7 +308,7 @@ class PlanAPlazosCobroCoherenteTest extends TestCase
     {
         [$socio, $cobro, $deuda] = $this->venderAPlazos();
         app(ReceivableService::class)->cancel($deuda, 'La venta se registró al socio equivocado', $this->admin);
-        $this->patchJson("/api/payments/{$cobro->id}", ['status' => 'cancelled'], $this->h())->assertOk();
+        $this->patchJson("/api/payments/{$cobro->id}", ['status' => 'cancelled', 'reason' => 'Corrección administrativa de prueba'], $this->h())->assertOk();
 
         $this->patchJson("/api/payments/{$cobro->id}", ['status' => 'paid'], $this->h())->assertOk();
         $this->postJson("/api/admin/receivables/{$deuda->id}/reopen", [
@@ -454,7 +454,7 @@ class PlanAPlazosCobroCoherenteTest extends TestCase
             'method' => 'cash', 'status' => 'paid',
         ], $this->h())->assertStatus(201)->json('id');
 
-        $this->patchJson("/api/payments/{$id}", ['method' => 'transfer'], $this->h())->assertOk();
+        $this->patchJson("/api/payments/{$id}", ['method' => 'transfer', 'reason' => 'Se marcó efectivo y fue transferencia'], $this->h())->assertOk();
 
         $this->assertSame('transfer', Payment::find($id)->method);
     }

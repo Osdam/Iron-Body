@@ -26,10 +26,16 @@ final class PermissionCatalog
      */
     private const DOMAINS = [
         'members' => ['label' => 'Miembros', 'icon' => 'group', 'hint' => 'Fichas de socios, membresías y contratos'],
-        'payments' => ['label' => 'Pagos', 'icon' => 'payments', 'hint' => 'Cobros de membresías y suscripciones'],
+        // «Caja de Gimnasio» es como el negocio llama hoy a esta pantalla. Solo
+        // cambia la etiqueta: la clave `payments`, las rutas y el `module` de
+        // audit_logs ('Pagos') se quedan como estaban.
+        'payments' => ['label' => 'Caja de Gimnasio', 'icon' => 'payments', 'hint' => 'Cobros de membresías y suscripciones'],
         'exports' => ['label' => 'Exportaciones', 'icon' => 'file_export', 'hint' => 'Descargar datos a Excel o CSV. Cada descarga queda auditada'],
-        'cash.products' => ['label' => 'Caja de productos', 'icon' => 'storefront', 'hint' => 'Mostrador y venta de productos'],
-        'cash.gym' => ['label' => 'Caja del gimnasio', 'icon' => 'fitness_center', 'hint' => 'Turno de caja de membresías'],
+        'cash.products' => ['label' => 'Caja de Cafetería', 'icon' => 'storefront', 'hint' => 'Mostrador, venta de productos y turnos de la cafetería'],
+        // Distinto de «Caja de Gimnasio» (los cobros): esto son los TURNOS de
+        // esa caja —abrir, cerrar, arquear—. Dos dominios con el mismo nombre
+        // en la matriz no se podrían distinguir.
+        'cash.gym' => ['label' => 'Turnos de la Caja de Gimnasio', 'icon' => 'fitness_center', 'hint' => 'Abrir, cerrar y arquear el turno de caja de membresías'],
         'receivables' => ['label' => 'Cuentas por cobrar', 'icon' => 'request_quote', 'hint' => 'Saldos pendientes, créditos y abonos'],
         'commissions' => ['label' => 'Comisiones', 'icon' => 'handshake', 'hint' => 'El piso que pagan los entrenadores por cada cliente personalizado'],
         'receipts' => ['label' => 'Recibos de caja', 'icon' => 'receipt', 'hint' => 'La tirilla impresa de cada cobro de mostrador'],
@@ -92,6 +98,8 @@ final class PermissionCatalog
         'stock' => 'Ver existencias',
         'cost' => 'Ver costo de compra',
         'transfer' => 'Trasladar socios',
+        'correct' => 'Corregir',
+        'refund' => 'Devolver',
     ];
 
     /**
@@ -122,9 +130,12 @@ final class PermissionCatalog
      */
     private const LABELS = [
         'members.export' => 'Miembros',
-        'payments.export' => 'Pagos',
+        'payments.export' => 'Caja de Gimnasio',
         'marketing.agent.manage' => 'Pausar o reactivar el agente IA',
         'receipts.print_optional' => 'Permitir omitir la impresión de recibos',
+        'payments.correct' => 'Corregir medio o importe',
+        'payments.refund' => 'Devolver dinero',
+        'cash.products.refund' => 'Devolver ventas',
         'valuations.view' => 'Ver la agenda',
         'valuations.view_all' => 'Ver las citas de todos los entrenadores',
         'valuations.create' => 'Agendar',
@@ -150,9 +161,9 @@ final class PermissionCatalog
      */
     private const HELP = [
         'cash.products.operate' => 'Abrir y cerrar el turno de productos, y registrar ventas.',
-        'cash.products.manage' => 'Cerrar turnos de otra persona y registrar el arqueo físico.',
+        'cash.products.manage' => 'Cerrar turnos de otra persona y registrar el arqueo físico. Cancelar pedidos, anular ventas y corregir su medio de pago, también de turnos ya cerrados.',
         'cash.gym.operate' => 'Abrir y cerrar el turno del gimnasio, y cobrar membresías en mostrador.',
-        'cash.gym.manage' => 'Cerrar turnos de otra persona y registrar el arqueo físico.',
+        'cash.gym.manage' => 'Cerrar turnos de otra persona y registrar el arqueo físico. Necesario además para corregir cobros o abonos de un turno ya cerrado.',
         'receivables.view' => 'Consultar quién debe, cuánto y sus abonos.',
         'receivables.create' => 'Registrar una deuda nueva: un consumo a crédito o un saldo acordado.',
         'receivables.operate' => 'Registrar el dinero que alguien abona sobre su saldo y pactar una fecha de pago nueva.',
@@ -163,10 +174,13 @@ final class PermissionCatalog
         'inventory.stock' => 'Ver CUÁNTAS unidades quedan de cada producto. Sin esto, el mostrador sigue pudiendo vender y sigue viendo cuáles están agotados —no podría trabajar si no—, pero no ve la cifra en el punto de venta. El módulo de Inventario se sigue gobernando con «Ver».',
         'members.employee' => 'Dar y retirar el acceso de empleado: entrar a entrenar porque trabaja aquí, sin comprar un plan y sin que entre dinero en caja. Se le pueden poner días y franjas horarias, igual que a las horas valle de un plan, y se apaga el día que la persona deja de trabajar en el gimnasio. Convive con una membresía pagada: un entrenador puede ser empleado y además socio.',
         'members.freeze' => 'Pausar la membresía de un socio y devolverle después los días que le quedaban. Mientras está congelada no puede entrar, y queda registrado quién la pausó y por qué.',
-        'payments.cancel' => 'Anular un pago ya registrado.',
+        'payments.cancel' => 'Anular un cobro que no debió existir (error, duplicado, dinero que nunca entró) y reconfirmar uno pendiente. Exige motivo y devuelve los días de membresía que dio. No devuelve dinero: para eso está «Devolver dinero». Un cobro de pasarela no se anula.',
+        'payments.correct' => 'Corregir el medio de pago o el importe de un cobro ya registrado (se marcó efectivo y fue transferencia). Exige motivo y queda con el antes y el después. Si el turno ya cerró, hace falta además administrar la caja del gimnasio. No llega por defecto a ningún rol.',
+        'payments.refund' => 'Devolverle a un socio el dinero de un cobro: sale de la caja del gimnasio ABIERTA, el cobro queda devuelto y se le quitan los días. Una devolución por pasarela se hace en su panel y aquí se registra con su referencia. No llega por defecto a ningún rol.',
+        'cash.products.refund' => 'Devolver una venta de cafetería entera o algunas de sus líneas: el dinero sale del turno de cafetería abierto y, si se elige, el producto vuelve al inventario. Nunca más de lo vendido. No llega por defecto a ningún rol.',
         'commissions.view' => 'Ver el panel del mes y el histórico de los pisos: quién pagó, quién debe y a quién no se le ha registrado todavía.',
         'commissions.charge' => 'Registrar que alguien pagó el piso del mes, o abrirle la deuda. El dinero entra en la caja del gimnasio, así que hace falta tenerla abierta para cobrar en el acto.',
-        'commissions.cancel' => 'Anular un mes ya cobrado: devuelve el dinero al estado anterior —el abono se revierte y sale del arqueo del turno en que entró— y deja la deuda anulada con motivo y autor. Nada se borra. Si ese mes era el que le tenía la puerta abierta al entrenador, deja de tenerla.',
+        'commissions.cancel' => 'Anular un mes ya cobrado: el abono se revierte y deja la deuda anulada con motivo y autor. Si el turno en que entró el dinero sigue abierto, sale de su arqueo; si ya cerró, el cierre firmado no cambia (la anulación aparece en su informe como corrección posterior) y hace falta además administrar la caja del gimnasio. Nada se borra. Si ese mes era el que le tenía la puerta abierta al entrenador, deja de tenerla.',
         'commissions.manage' => 'Pactar con qué entrenador y por qué cliente se cobra piso, cuánto cuesta y quién lo asume. Es decidir un precio, no cobrarlo.',
         'payments.backdate' => 'Registrar un cobro con fecha de inicio ANTERIOR a hoy, para el socio que pagó hace días y se está registrando ahora. El dinero no se mueve: el cobro sigue entrando en la caja de hoy. Lo que retrocede es la vigencia, y con ella el vencimiento, así que puede dejar al socio vencido en el mismo momento del registro. Programar un inicio futuro no necesita este permiso.',
         'classes.enroll' => 'Inscribir socios en una clase y quitarlos, desde el mostrador. Aplica las mismas reglas que la app: plan con clases, cuenta al día y cupo. No permite crear ni editar horarios. Para buscar al socio hace falta también «Ver» en Miembros.',
@@ -298,7 +312,7 @@ final class PermissionCatalog
      */
     private static function sortActions(array $permisos): array
     {
-        $orden = ['view' => 0, 'view_all' => 0.5, 'stock' => 0.6, 'cost' => 0.7, 'use' => 1, 'create' => 2, 'operate' => 2, 'edit' => 3, 'update' => 3, 'edit_draft' => 3, 'cancel' => 4, 'complete' => 4.5, 'archive' => 5, 'delete' => 5, 'manage_rules' => 6, 'lab_manage' => 6.4, 'lab_run' => 6.6, 'approve' => 7, 'publish' => 8, 'rollback' => 8.2, 'manage_availability' => 8, 'manage_settings' => 8.5, 'manage' => 9];
+        $orden = ['view' => 0, 'view_all' => 0.5, 'stock' => 0.6, 'cost' => 0.7, 'use' => 1, 'create' => 2, 'operate' => 2, 'edit' => 3, 'update' => 3, 'edit_draft' => 3, 'cancel' => 4, 'correct' => 4.2, 'refund' => 4.4, 'complete' => 4.5, 'archive' => 5, 'delete' => 5, 'manage_rules' => 6, 'lab_manage' => 6.4, 'lab_run' => 6.6, 'approve' => 7, 'publish' => 8, 'rollback' => 8.2, 'manage_availability' => 8, 'manage_settings' => 8.5, 'manage' => 9];
         usort($permisos, fn ($a, $b) => ($orden[$a['action']] ?? 5) <=> ($orden[$b['action']] ?? 5));
 
         return $permisos;

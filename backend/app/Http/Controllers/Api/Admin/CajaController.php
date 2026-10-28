@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Exceptions\CashShiftException;
+use App\Exceptions\CorrectionException;
 use App\Exceptions\InsufficientStockException;
 use App\Http\Controllers\Controller;
+use App\Models\CashRefund;
 use App\Models\CashShift;
 use App\Models\Member;
 use App\Models\Product;
@@ -23,11 +25,13 @@ use App\Services\Caja\CashShiftService;
 use App\Services\Caja\DebtorDirectory;
 use App\Services\Caja\CashReceipts;
 use App\Services\Caja\ReceivableService;
+use App\Services\Caja\SaleCorrections;
 use App\Services\Inventory\InventoryService;
 use App\Services\Audit\FinancialAudit;
 use App\Services\Payments\PaymentSplits;
 use App\Support\Access\AdminActor;
 use App\Support\Caja\PaymentTerm;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -175,9 +179,17 @@ class CajaController extends Controller
             ->whereBetween('receivable_payments.created_at', [$desde, $hasta])
             ->sum('receivable_payments.amount');
 
+        // Y lo que SALIÓ hoy por devoluciones de ventas. La venta devuelta sigue
+        // contando el día que se cobró (base de caja); la salida, el día que se
+        // devolvió. Ver CORRECCIONES-ADMINISTRATIVAS §6.
+        $devuelto = (float) CashRefund::query()
+            ->where('refundable_type', ProductSale::class)
+            ->whereBetween('created_at', [$desde, $hasta])
+            ->sum('amount');
+
         return response()->json([
             'sales_today' => (clone $today)->where('status', '!=', 'cancelled')->count(),
-            'revenue_today' => (float) (clone $today)->whereIn('status', ['paid', 'delivered'])->sum('total') + $abonos,
+            'revenue_today' => (float) (clone $today)->whereIn('status', ['paid', 'delivered', ProductSale::STATUS_REFUNDED])->sum('total') + $abonos - $devuelto,
             'pending_app' => ProductSale::app()->where('status', 'pending')->count(),
             'to_deliver' => ProductSale::where('status', 'paid')->count(),
         ]);
@@ -232,6 +244,8 @@ class CajaController extends Controller
             // cobrada. Nunca se activa por defecto.
             'request_invoice' => ['nullable', 'boolean'],
             'invoice_email' => ['nullable', 'email', 'max:160', new DeliverableInvoiceEmail],
+            // Uno por intento, reutilizado si el CRM reintenta: UNA venta.
+            'client_request_id' => ['nullable', 'string', 'max:100'],
         ] + PaymentSplits::rules(), self::MENSAJE_MEDIO);
 
         $this->assertInvoiceRequestIsComplete($data);
@@ -247,6 +261,13 @@ class CajaController extends Controller
             }
         }
 
+        // La misma petición otra vez (doble clic, reintento de red): la venta
+        // que ya existe, sin volver a cobrar ni a mover existencias.
+        $llave = $data['client_request_id'] ?? null;
+        if ($llave !== null && $previa = ProductSale::where('client_request_id', $llave)->first()) {
+            return $this->ventaYaRegistrada($previa, $data, $deudor);
+        }
+
         // Existencias ANTES de crear nada: cobrar lo que no hay deja el
         // inventario y la caja contando historias distintas. La comprobación
         // definitiva la repite InventoryService con la fila bloqueada; esta
@@ -259,105 +280,137 @@ class CajaController extends Controller
         }
 
         // Sin turno abierto no se cobra: ese dinero no tendría dónde cuadrar al
-        // arquear ni a quién atribuirse. La comprobación es de backend; el
-        // frontend solo la refleja.
+        // arquear ni a quién atribuirse. Aquí se responde rápido; dentro de la
+        // transacción se vuelve a exigir con bloqueo (ver lockOpen).
         try {
-            $shift = app(CashShiftService::class)->requireOpen(CashShiftType::PRODUCTS);
+            app(CashShiftService::class)->requireOpen(CashShiftType::PRODUCTS);
         } catch (CashShiftException $e) {
             return $this->cashShiftError($e);
         }
 
+        $actor = AdminActor::from($request);
+        $credito = $request->boolean('credit');
+        $cobrada = ! $credito && ($data['paid'] ?? true);
+
+        // UNA SOLA TRANSACCIÓN. Antes la venta se confirmaba sola y el cobro, el
+        // desglose y la deuda iban detrás, sueltos: un fallo entre medias dejaba
+        // una venta sin su deuda, o cobrada sin su desglose, y un reintento
+        // creaba otra. Ahora o existe todo o no existe nada.
         try {
-            $sale = DB::transaction(function () use ($data, $request, $shift, $deudor) {
+            [$sale, $cuenta] = DB::transaction(function () use ($data, $request, $deudor, $actor, $credito, $cobrada) {
+                $shift = app(CashShiftService::class)->lockOpen(CashShiftType::PRODUCTS);
                 $venta = $this->buildSale($data, $request, $shift, $deudor);
 
-                // EL DESGLOSE SE COMPRUEBA DENTRO DE LA TRANSACCIÓN, contra el
-                // total que acaba de calcular el servidor. Si no cuadra, la
-                // venta entera se deshace: validarlo después dejaría una venta
-                // creada que nadie pagó, y el cajero la encontraría pendiente
-                // sin saber por qué.
-                if ($partes = ($data['splits'] ?? null)) {
+                // EL DESGLOSE SE COMPRUEBA contra el total que acaba de calcular
+                // el servidor. Si no cuadra, la venta entera se deshace.
+                $partes = $data['splits'] ?? null;
+                if ($partes) {
                     app(PaymentSplits::class)->assertMatchesTotal($partes, (float) $venta->total);
                 }
 
                 // La traza se escribe AQUÍ, no en una segunda petición del
                 // navegador: si la venta se deshace, la auditoría se deshace
                 // con ella, y si la venta queda, su traza también.
-                app(FinancialAudit::class)->saleCreated($venta, AdminActor::from($request), $request);
+                app(FinancialAudit::class)->saleCreated($venta, $actor, $request);
 
-                return $venta;
-            });
+                // La solicitud de factura queda con la venta, aunque el cobro
+                // se confirme después o el encolado falle.
+                $this->persistInvoiceRequest($venta, $data);
+
+                $cuenta = null;
+                if ($credito) {
+                    // A CRÉDITO: sale el producto, NO entra dinero. El estado
+                    // `credit` está fuera del arqueo; la deuda nace aquí mismo.
+                    $venta->markCredit($actor);
+                    $venta->load('items');
+                    $cuenta = app(ReceivableService::class)->create(
+                        debtorType: $deudor['type'],
+                        debtorId: $deudor['id'],
+                        type: CashShiftType::PRODUCTS,
+                        concept: $this->creditConcept($venta),
+                        total: Money::fromAmount($venta->total),
+                        actor: $actor,
+                        source: $venta,
+                        notes: $data['notes'] ?? null,
+                        dueAt: PaymentTerm::resolve($data['due_at'] ?? null, CashShiftType::PRODUCTS),
+                    );
+                } elseif ($cobrada) {
+                    // COBRO MIXTO: cada parte a su medio en el arqueo.
+                    $venta->markPaid(
+                        $partes ? PaymentSplits::MIXED : $data['payment_method'],
+                        null,
+                        $actor,
+                        $shift->id,
+                    );
+                    if ($partes) {
+                        app(PaymentSplits::class)->sync($venta, $partes);
+                    }
+                }
+
+                return [$venta, $cuenta];
+            }, 3);
         } catch (PricingException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
+        } catch (InsufficientStockException $e) {
+            // Nada quedó a medias: ni la venta, ni su deuda, ni su stock.
+            return $this->insufficientStockResponse($e);
+        } catch (CashShiftException $e) {
+            return $this->cashShiftError($e);
+        } catch (UniqueConstraintViolationException $e) {
+            if ($llave !== null && $previa = ProductSale::where('client_request_id', $llave)->first()) {
+                return $this->ventaYaRegistrada($previa, $data, $deudor);
+            }
+
+            throw $e;
         }
 
-        // La solicitud se guarda ANTES de cobrar: si el cajero la marcó, debe
-        // quedar registrada aunque el cobro se confirme después (venta a
-        // crédito, entrega diferida) o aunque el encolado falle.
-        $this->persistInvoiceRequest($sale, $data);
-
-        // A CRÉDITO: sale el producto, NO entra dinero. El inventario se mueve
-        // una sola vez —aquí— y la deuda queda registrada. El estado `credit`
-        // está fuera del filtro del arqueo, así que el cierre de hoy no cuenta
-        // un peso que nadie ha pagado.
-        if ($request->boolean('credit')) {
-            $sale->load('items');
-            try {
-                $sale->markCredit(AdminActor::from($request));
-            } catch (InsufficientStockException $e) {
-                return $this->insufficientStockResponse($e, $sale);
-            }
-
-            $cuenta = app(ReceivableService::class)->create(
-                debtorType: $deudor['type'],
-                debtorId: $deudor['id'],
-                type: CashShiftType::PRODUCTS,
-                concept: $this->creditConcept($sale),
-                total: Money::fromAmount($sale->total),
-                actor: AdminActor::from($request),
-                source: $sale,
-                notes: $data['notes'] ?? null,
-                dueAt: PaymentTerm::resolve($data['due_at'] ?? null, CashShiftType::PRODUCTS),
-            );
-
-            return response()->json([
-                'data' => $this->serialize($sale->fresh(['items', 'member:id,full_name'])),
-                'receivable' => $cuenta->fresh()->load('member')->toCrmArray(),
-            ], 201);
-        }
-
-        // En POS normalmente se cobra al instante → descuenta stock y deja el
-        // movimiento de inventario (origen: venta de cafetería).
-        if ($data['paid'] ?? true) {
-            $sale->load('items');
-
-            // COBRO MIXTO: «10.000 en efectivo y el resto con tarjeta». Antes
-            // había que elegir UNO y el otro se perdía: el cajón cuadraba en
-            // total pero no por medio, y el arqueo daba por faltante un
-            // efectivo que sí estaba. La suma se comprueba contra el total de
-            // la venta —no contra lo que diga el formulario— porque es lo que
-            // va a tener que cuadrar en el cierre.
-            $partes = $data['splits'] ?? null;
-
-            try {
-                $sale->markPaid(
-                    $partes ? PaymentSplits::MIXED : $data['payment_method'],
-                    null,
-                    AdminActor::from($request),
-                );
-            } catch (InsufficientStockException $e) {
-                // La venta queda `pending`, sin stock movido: el cajero puede
-                // corregirla o cancelarla, y nada se cobró a medias.
-                return $this->insufficientStockResponse($e, $sale);
-            }
-            if ($partes) {
-                app(PaymentSplits::class)->sync($sale, $partes);
-            }
-
+        // Después del commit: la factura (si se cobró) nunca rompe la venta.
+        if ($cobrada) {
             $this->enqueueInvoice($sale);
         }
 
-        return response()->json(['data' => $this->serialize($sale->fresh(['items', 'member:id,full_name']))], 201);
+        return response()->json(array_filter([
+            'data' => $this->serialize($sale->fresh(['items', 'member:id,full_name'])),
+            'receivable' => $cuenta?->fresh()->load('member')->toCrmArray(),
+        ], static fn ($v) => $v !== null), 201);
+    }
+
+    /**
+     * La misma venta pedida otra vez con el mismo `client_request_id`.
+     *
+     * Solo si ES la misma venta: mismas líneas (producto y cantidad) y mismo
+     * descuento —que es lo que fija el total— y mismo cliente o socio, fiada o
+     * no igual que la primera. Una llave reutilizada para otra venta no
+     * devuelve —ni enseña— la ajena: 422 `client_request_id_conflict` (B-2).
+     *
+     * @param  array<string, mixed>  $data
+     * @param  array{type: DebtorType, id: int, name: string}|null  $deudor
+     */
+    private function ventaYaRegistrada(ProductSale $previa, array $data, ?array $deudor): JsonResponse
+    {
+        $huella = fn (iterable $lineas) => collect($lineas)
+            ->map(fn ($l) => (int) ($l['product_id'] ?? 0).'x'.(int) ($l['quantity'] ?? 0))
+            ->sort()->values()->all();
+        $socio = ($deudor !== null && $deudor['type'] === DebtorType::MEMBER) ? $deudor['id'] : ($data['member_id'] ?? null);
+        $cliente = trim((string) ($data['customer_name'] ?? $deudor['name'] ?? ''));
+        $fiada = Receivable::where('source_type', ProductSale::class)->where('source_id', $previa->id)->exists();
+
+        $misma = $huella($data['items'] ?? []) === $huella($previa->items()->get(['product_id', 'quantity'])->map(fn ($i) => ['product_id' => $i->product_id, 'quantity' => $i->quantity]))
+            && Money::fromAmount($data['discount'] ?? 0)->cents() === Money::fromAmount($previa->discount ?? 0)->cents()
+            && (int) ($socio ?? 0) === (int) ($previa->member_id ?? 0)
+            && $cliente === trim((string) ($previa->customer_name ?? ''))
+            && (bool) ($data['credit'] ?? false) === $fiada;
+        if (! $misma) {
+            throw CorrectionException::requestIdConflict();
+        }
+
+        $cuenta = Receivable::where('source_type', ProductSale::class)->where('source_id', $previa->id)->latest('id')->first();
+
+        return response()->json(array_filter([
+            'data' => $this->serialize($previa->fresh(['items', 'member:id,full_name'])),
+            'receivable' => $cuenta?->load('member')->toCrmArray(),
+            'idempotent_replay' => true,
+        ], static fn ($v) => $v !== null), 200);
     }
 
     // POST /api/admin/caja/sales/{sale}/pay   { payment_method?, payment_reference? }
@@ -381,16 +434,33 @@ class CajaController extends Controller
         }
 
         $this->assertInvoiceRequestIsComplete($data);
-        $this->persistInvoiceRequest($sale, $data);
 
-        $sale->load('items');
+        // Ya cobrada (doble clic que llega tarde): se responde lo que hay, sin
+        // exigir turno ni tocar nada. La carrera de verdad la resuelve el
+        // bloqueo de markPaid(); esto solo evita un 409 engañoso.
+        if (in_array($sale->status, ['paid', 'delivered'], true)) {
+            $this->persistInvoiceRequest($sale, $data);
+            $this->enqueueInvoice($sale);
 
+            return response()->json(['data' => $this->serialize($sale->fresh(['items', 'member:id,full_name']))]);
+        }
+
+        // El cobro entra en el turno de cafetería ABIERTO —el de ahora, no el
+        // del día en que se hizo el pedido— y sin él no se cobra (409). La venta
+        // se relee bloqueada: dos «Cobrar» seguidos no descuentan dos veces.
         try {
-            $sale->markPaid(
-                $data['payment_method'] ?? null,
-                $data['payment_reference'] ?? null,
-                AdminActor::from($request),
-            );
+            DB::transaction(function () use ($sale, $data, $request) {
+                $shift = app(CashShiftService::class)->lockOpen(CashShiftType::PRODUCTS);
+                $sale->markPaid(
+                    $data['payment_method'] ?? null,
+                    $data['payment_reference'] ?? null,
+                    AdminActor::from($request),
+                    $shift->id,
+                );
+                $this->persistInvoiceRequest($sale, $data);
+            }, 3);
+        } catch (CashShiftException $e) {
+            return $this->cashShiftError($e);
         } catch (InsufficientStockException $e) {
             // Un pedido de la app puede haberse quedado sin stock entre que se
             // reservó y se cobra en mostrador. Se rechaza el cobro en vez de
@@ -403,7 +473,7 @@ class CajaController extends Controller
         return response()->json(['data' => $this->serialize($sale->fresh(['items', 'member:id,full_name']))]);
     }
 
-    // POST /api/admin/caja/sales/{sale}/deliver
+    // POST /api/admin/caja/sales/{sale}/deliver — solo lo cobrado (o fiado), con bloqueo.
     public function deliver(ProductSale $sale): JsonResponse
     {
         $sale->markDelivered();
@@ -411,12 +481,141 @@ class CajaController extends Controller
         return response()->json(['data' => $this->serialize($sale->fresh('items'))]);
     }
 
-    // POST /api/admin/caja/sales/{sale}/cancel
-    public function cancel(ProductSale $sale): JsonResponse
+    /**
+     * POST /api/admin/caja/sales/{sale}/cancel  { reason, restock? }
+     *
+     * Cancela un pedido pendiente o anula una venta cobrada, fiada o entregada
+     * (`cash.products.manage`). Idempotente; el producto vuelve al inventario
+     * una sola vez y por defecto, salvo lo entregado. Ver SaleCorrections.
+     */
+    public function cancel(Request $request, ProductSale $sale): JsonResponse
     {
-        $sale->cancel();
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'min:5', 'max:500'],
+            'restock' => ['nullable', 'boolean'],
+        ]);
 
-        return response()->json(['data' => $this->serialize($sale->fresh('items'))]);
+        $r = app(SaleCorrections::class)->cancel(
+            $sale,
+            trim($data['reason']),
+            array_key_exists('restock', $data) ? (bool) $data['restock'] : null,
+            AdminActor::from($request),
+            $request,
+        );
+
+        return response()->json([
+            'ok' => true,
+            'already' => $r['already'],
+            'restocked' => $r['restocked'],
+            'receivable_id' => $r['receivable_id'],
+            'data' => $this->serialize($sale->fresh(['items', 'member:id,full_name'])),
+        ]);
+    }
+
+    /**
+     * POST /api/admin/caja/sales/{sale}/refund
+     *   { reason, items?: [{item_id, quantity}], restock?, method?, client_request_id? }
+     *
+     * Devuelve el dinero (total o por líneas) desde el turno de cafetería
+     * abierto (`cash.products.refund`). Nunca más de lo vendido.
+     */
+    public function refund(Request $request, ProductSale $sale): JsonResponse
+    {
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'min:5', 'max:500'],
+            'items' => ['nullable', 'array', 'min:1'],
+            'items.*.item_id' => ['required', 'integer'],
+            'items.*.quantity' => ['required', 'integer', 'min:1', 'max:10000'],
+            'restock' => ['nullable', 'boolean'],
+            // Por dónde sale el dinero: cualquier medio de mostrador que la caja
+            // sabe contar (también Nequi o Daviplata), nunca pasarela ni mixto.
+            'method' => ['nullable', 'string', 'max:80', new PaymentMethodInput(soloUnMedio: true)],
+            'client_request_id' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $r = app(SaleCorrections::class)->refund($sale, $data, AdminActor::from($request), $request);
+
+        return response()->json([
+            'ok' => true,
+            'already' => $r['already'],
+            'idempotent_replay' => $r['replay'],
+            'data' => $this->serialize($sale->fresh(['items', 'member:id,full_name'])),
+            'refund' => $r['refund']?->toCrmArray(),
+        ], ($r['already'] || $r['replay']) ? 200 : 201);
+    }
+
+    /**
+     * POST /api/admin/caja/sales/{sale}/method  { method, splits?, reason }
+     *
+     * Corrige el medio de una venta cobrada (`cash.products.manage`).
+     */
+    public function correctMethod(Request $request, ProductSale $sale): JsonResponse
+    {
+        $data = $request->validate([
+            'method' => ['required', Rule::in(self::metodosDeMostrador()), new PaymentMethodInput],
+            'reason' => ['required', 'string', 'min:5', 'max:500'],
+        ] + PaymentSplits::rules(), self::MENSAJE_MEDIO);
+
+        $r = app(SaleCorrections::class)->correctMethod(
+            $sale, $data['method'], $data['splits'] ?? null, trim($data['reason']), AdminActor::from($request), $request,
+        );
+
+        return response()->json([
+            'ok' => true,
+            'already' => $r['already'],
+            'data' => $this->serialize($sale->fresh(['items', 'member:id,full_name'])),
+        ]);
+    }
+
+    /**
+     * GET /api/admin/caja/sales/{sale}/history — la traza de la venta: alta,
+     * cancelación o anulación, devoluciones y correcciones de medio, con su
+     * antes y después y su motivo. Si fue fiada, también la de su deuda y sus
+     * abonos. Mismo formato de filas que el historial de un cobro.
+     *
+     * `caja.view` y una PERSONA: el token compartido no lee trazas de dinero.
+     */
+    public function history(Request $request, ProductSale $sale): JsonResponse
+    {
+        if ($sinPersona = \App\Http\Controllers\Api\PaymentController::requirePerson($request)) {
+            return $sinPersona;
+        }
+
+        $deudas = Receivable::where('source_type', ProductSale::class)->where('source_id', $sale->id)->pluck('id');
+        $abonos = \App\Models\ReceivablePayment::whereIn('receivable_id', $deudas)->pluck('id');
+
+        $filas = \App\Models\AuditLog::query()
+            ->where(function ($q) use ($sale, $deudas, $abonos): void {
+                $q->where(fn ($v) => $v->where('entity', 'venta')->where('entity_id', (string) $sale->id));
+                if ($deudas->isNotEmpty()) {
+                    $q->orWhere(fn ($d) => $d->where('entity', 'cuenta por cobrar')->whereIn('entity_id', $deudas->map(fn ($id) => (string) $id)->all()));
+                }
+                if ($abonos->isNotEmpty()) {
+                    $q->orWhere(fn ($a) => $a->where('entity', 'abono')->whereIn('entity_id', $abonos->map(fn ($id) => (string) $id)->all()));
+                }
+            })
+            ->orderBy('id')
+            ->limit(500)
+            ->get();
+
+        return response()->json([
+            'ok' => true,
+            'data' => $filas->map(fn ($l) => ReceivableController::historyRow($l))->all(),
+        ]);
+    }
+
+    /** GET /api/admin/caja/sales/{sale}/correction-preview?action=cancel|refund */
+    public function correctionPreview(Request $request, ProductSale $sale): JsonResponse
+    {
+        // Solo una persona (B-4): el token compartido no anticipa correcciones.
+        if ($sinPersona = \App\Http\Controllers\Api\PaymentController::requirePerson($request)) {
+            return $sinPersona;
+        }
+        $data = $request->validate(['action' => ['required', Rule::in(['cancel', 'refund'])]]);
+
+        return response()->json(
+            app(SaleCorrections::class)->preview($sale, $data['action'], AdminActor::from($request))
+        );
     }
 
     /** El socio al que se le fía, venga su id o el de su cuenta de la app. */
@@ -552,6 +751,7 @@ class CajaController extends Controller
             'payment_method' => $data['payment_method'] ?? null,
             'discount' => $discount->toDatabase(),
             'notes' => $data['notes'] ?? null,
+            'client_request_id' => $data['client_request_id'] ?? null,
         ]);
 
         $subtotal = Money::zero();   // bruto de mostrador (semántica histórica)
@@ -727,6 +927,17 @@ class CajaController extends Controller
             'invoice_requested' => (bool) $sale->invoice_requested,
             'invoice_email' => $sale->invoice_email,
             'invoice_requested_at' => optional($sale->invoice_requested_at)->toIso8601String(),
+            'cancelled_at' => optional($sale->cancelled_at)->toIso8601String(),
+            // Lo devuelto por línea: el CRM ofrece devolver solo lo que queda.
+            'refund_lines' => $sale->items->map(fn ($i) => [
+                'item_id' => $i->id,
+                'product_id' => $i->product_id,
+                'name' => $i->name,
+                'quantity' => (int) $i->quantity,
+                'refunded_quantity' => (int) ($i->refunded_quantity ?? 0),
+                'refunded_amount' => (float) ($i->refunded_amount ?? 0),
+            ])->all(),
+            'refunded_total' => (float) ($sale->refunded_total ?? 0),
         ]);
     }
 }

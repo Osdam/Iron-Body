@@ -54,6 +54,33 @@ class ReceivablePayment extends Model
         return $this->belongsTo(Admin::class, 'created_by');
     }
 
+    /** Quién lo anuló. */
+    public function reversedBy(): BelongsTo
+    {
+        return $this->belongsTo(Admin::class, 'reversed_by');
+    }
+
+    /**
+     * Número del recibo térmico de cada abono, si se emitió.
+     *
+     * @param  list<int>  $ids
+     * @return array<int, string>
+     */
+    public static function receiptNumbersFor(array $ids): array
+    {
+        if ($ids === []) {
+            return [];
+        }
+
+        return \Illuminate\Support\Facades\DB::table('receipt_sources')
+            ->join('receipts', 'receipts.id', '=', 'receipt_sources.receipt_id')
+            ->where('receipt_sources.source_type', ReceiptSource::TYPE_RECEIVABLE_PAYMENT)
+            ->whereIn('receipt_sources.source_id', $ids)
+            ->pluck('receipts.number', 'receipt_sources.source_id')
+            ->mapWithKeys(fn ($numero, $id) => [(int) $id => (string) $numero])
+            ->all();
+    }
+
     public function scopeApplied(Builder $q): Builder
     {
         return $q->where('status', self::STATUS_APPLIED);
@@ -75,9 +102,15 @@ class ReceivablePayment extends Model
         return $this->status === self::STATUS_APPLIED;
     }
 
-    /** @return array<string,mixed> */
-    public function toCrmArray(): array
+    /**
+     * @param  string|null  $receiptNumber  Ya resuelto por quien pinta la lista
+     *   (ver receiptNumbersFor()); si no llega, se busca este solo.
+     * @return array<string,mixed>
+     */
+    public function toCrmArray(?string $receiptNumber = null): array
     {
+        $turno = $this->relationLoaded('cashShift') ? $this->cashShift : null;
+
         return [
             'id' => $this->id,
             'receivable_id' => $this->receivable_id,
@@ -94,6 +127,13 @@ class ReceivablePayment extends Model
             'created_at' => optional($this->created_at)->toIso8601String(),
             'reversed_at' => optional($this->reversed_at)->toIso8601String(),
             'reversal_reason' => $this->reversal_reason,
+            'reversed_by_name' => $this->reversed_by === null ? null
+                : ($this->relationLoaded('reversedBy') ? $this->reversedBy?->name : $this->reversedBy()->value('name')),
+            'cash_shift' => $this->cash_shift_id === null ? null : [
+                'id' => $this->cash_shift_id,
+                'status' => ($turno ?? $this->cashShift()->first(['id', 'status']))?->status?->value,
+            ],
+            'receipt_number' => $receiptNumber ?? (self::receiptNumbersFor([(int) $this->id])[(int) $this->id] ?? null),
         ];
     }
 }

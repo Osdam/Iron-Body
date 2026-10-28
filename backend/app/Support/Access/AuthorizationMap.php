@@ -342,6 +342,8 @@ final class AuthorizationMap
         // recibiendo dinero no tiene por qué poder fiar.
         'POST api/admin/receivables/{receivable}/payments' => 'receivables.operate',
         'POST api/admin/receivables/payments/{payment}/reverse' => 'receivables.manage',
+        // Corregir el medio de un abono: mueve dinero entre medios del arqueo.
+        'POST api/admin/receivables/payments/{payment}/method' => 'receivables.manage',
 
         // Correcciones administrativas. Pactar otro plazo es mostrador; decidir
         // que una deuda deja de cobrarse —o dejarla sin fecha, que levanta la
@@ -467,6 +469,13 @@ final class AuthorizationMap
         'POST api/payments' => 'cash.gym.operate',
         'PUT api/payments/{payment}' => 'payments.cancel',
         'PATCH api/payments/{payment}' => 'payments.cancel',
+        // Correcciones administrativas (docs/ops/CORRECCIONES-ADMINISTRATIVAS.md).
+        // Corregir el medio o el importe y devolver dinero son llaves propias:
+        // no se reparten por defecto (ver CrmPermission::SUPER_ADMIN_ONLY_BY_DEFAULT).
+        // Por PATCH, cambiar medio o importe exige además `payments.correct`,
+        // y eso lo comprueba PaymentController al ver qué cambia.
+        'POST api/payments/{payment}/method' => 'payments.correct',
+        'POST api/payments/{payment}/refund' => 'payments.refund',
 
         // Liberar el vínculo de un equipo es soporte de acceso, no "auth".
         'POST api/admin/devices/{deviceId}/release' => 'support.manage',
@@ -605,6 +614,10 @@ final class AuthorizationMap
 
         // Anular una venta ya cobrada es supervisión, no operación de mostrador.
         'POST api/admin/caja/sales/{sale}/cancel' => 'cash.products.manage',
+        // Corregir el medio de una venta: supervisión, igual que anularla.
+        'POST api/admin/caja/sales/{sale}/method' => 'cash.products.manage',
+        // Devolver una venta: sale dinero del cajón. Llave propia, no por defecto.
+        'POST api/admin/caja/sales/{sale}/refund' => 'cash.products.refund',
 
         // Registrar que un entrenador pagó su piso —o abrirle la deuda— es
         // trabajo de mostrador. Decidir CUÁNTO cuesta, no: eso es precio, y el
