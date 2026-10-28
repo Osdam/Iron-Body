@@ -15,6 +15,7 @@ use App\Models\Plan;
 use App\Models\Product;
 use App\Models\ProductSale;
 use App\Models\ProductSaleItem;
+use App\Models\Receivable;
 use App\Models\TaxRate;
 use App\Models\User;
 use App\Services\Caja\CashShiftService;
@@ -483,6 +484,58 @@ class CorreccionesTrasRevisionTest extends TestCase
         $this->assertSame(0, (int) $venta->items->first()->fresh()->refunded_quantity);
         $this->assertSame(48, $batido->fresh()->stock);
         $this->assertEquals(10000, $factura->fresh()->total);
+    }
+
+    // ── Fugas de datos (revisión automática tras eea3134) ───────────────────
+
+    /**
+     * El token compartido (con `payments.view` y `cash.gym.view` por ser
+     * lectura) no recibe los enlaces del cobro —devoluciones con motivo, autor
+     * y referencia; recibos; posibles duplicados— ni el informe del turno.
+     */
+    public function test_el_token_no_recibe_enlaces_ni_detalle_de_correcciones(): void
+    {
+        $socio = $this->socio();
+        $devuelto = $this->cobrar($socio);
+        $anulado = $this->cobrar();
+        $this->postJson("/api/payments/{$devuelto->id}/refund", ['reason' => 'Motivo privado de la devolución'], $this->h())->assertStatus(201);
+        $turno = CashShift::currentOfType(CashShiftType::GYM);
+        app(CashShiftService::class)->close($this->super, CashShiftType::GYM);
+        $this->travel(5)->minutes();
+        $this->patchJson("/api/payments/{$anulado->id}", ['status' => 'cancelled', 'reason' => 'Motivo privado de la anulación'], $this->h())->assertOk();
+        $token = $this->sharedTokenHeaders();
+
+        $this->getJson("/api/payments/{$devuelto->id}", $token)->assertOk()->assertJsonMissingPath('links');
+        $persona = $this->getJson("/api/payments/{$devuelto->id}", $this->h())->assertOk();
+        $this->assertSame('Motivo privado de la devolución', $persona->json('links.refunds.0.reason'));
+        $sinCreditos = $this->getJson("/api/payments/{$devuelto->id}", $this->adminWithPermissions(['payments.view']))->assertOk()->json('links');
+        $this->assertArrayNotHasKey('receivable', $sinCreditos);
+        $this->assertArrayHasKey('receivable', $persona->json('links'));
+
+        // El informe del turno (pantalla y PDF), con sus devoluciones y sus
+        // correcciones posteriores, ya exige una PERSONA: el token recibe 403.
+        $this->getJson("/api/admin/caja/shifts/{$turno->id}", $token)->assertStatus(403);
+        $this->get("/api/admin/caja/shifts/{$turno->id}/pdf", $token)->assertStatus(403);
+        $dePersona = $this->getJson("/api/admin/caja/shifts/{$turno->id}", $this->h())->assertOk()->json();
+        $this->assertSame('Motivo privado de la devolución', $dePersona['refunds'][0]['reason']);
+        $this->assertSame('Motivo privado de la anulación', $dePersona['post_close_corrections'][0]['reason']);
+    }
+
+    /** Historial de una venta fiada: las filas de deuda y abono, solo con `receivables.view`. */
+    public function test_el_historial_de_la_venta_sin_creditos_no_ve_deuda_ni_abonos(): void
+    {
+        $socio = Member::where('user_id', $this->socio()->id)->firstOrFail();
+        $fiada = $this->vender($this->producto(), 1, ['credit' => true, 'payment_method' => null, 'member_id' => $socio->id]);
+        $deuda = Receivable::where('source_type', ProductSale::class)->where('source_id', $fiada->id)->firstOrFail();
+        $this->postJson("/api/admin/receivables/{$deuda->id}/payments", ['amount' => 1000, 'method' => 'cash'], $this->h())->assertStatus(201);
+
+        $soloCaja = $this->getJson("/api/admin/caja/sales/{$fiada->id}/history", $this->adminWithPermissions(['cash.products.view']))
+            ->assertOk()->json('data');
+        $this->assertSame(['venta'], array_values(array_unique(array_column($soloCaja, 'entity'))));
+
+        $conCreditos = $this->getJson("/api/admin/caja/sales/{$fiada->id}/history", $this->adminWithPermissions(['cash.products.view', 'receivables.view']))
+            ->assertOk()->json('data');
+        $this->assertEqualsCanonicalizing(['venta', 'cuenta por cobrar', 'abono'], array_values(array_unique(array_column($conCreditos, 'entity'))));
     }
 
     /**

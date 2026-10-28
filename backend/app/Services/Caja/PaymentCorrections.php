@@ -375,7 +375,8 @@ class PaymentCorrections
                     'closed_at' => optional($turno->closed_at)->toIso8601String(),
                 ],
                 'membership' => $membresia,
-                'receivable' => $deuda === null ? null : [
+                // Igual que en los enlaces: la deuda, solo con `receivables.view`.
+                'receivable' => ($deuda === null || ! CrmPermission::allows($actor, 'receivables.view')) ? null : [
                     'id' => $deuda->id,
                     'status' => $deuda->status,
                     'balance' => $deuda->balance()->toFloat(),
@@ -438,13 +439,13 @@ class PaymentCorrections
      *
      * @return array<string, mixed>
      */
-    public function links(Payment $payment): array
+    public function links(Payment $payment, ?Admin $actor = null): array
     {
         $deuda = Receivable::where('source_type', $payment->getMorphClass())->where('source_id', $payment->id)
             ->latest('id')->first();
         $turno = $payment->cash_shift_id ? CashShift::find($payment->cash_shift_id) : null;
 
-        return [
+        $enlaces = [
             'receivable' => $deuda === null ? null : [
                 'id' => $deuda->id,
                 'status' => $deuda->status,
@@ -463,6 +464,13 @@ class PaymentCorrections
                 ->map(fn (CashRefund $r) => $r->toCrmArray())->all(),
             'possible_duplicates' => $this->possibleDuplicates($payment),
         ];
+
+        // La deuda vinculada es de Créditos: solo con `receivables.view`.
+        if (! CrmPermission::allows($actor, 'receivables.view')) {
+            unset($enlaces['receivable']);
+        }
+
+        return $enlaces;
     }
 
     /**

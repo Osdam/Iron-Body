@@ -419,7 +419,7 @@ class PaymentController extends Controller
         return implode(', ', array_fill(0, count($statuses), '?'));
     }
 
-    public function show(Payment $payment)
+    public function show(Request $request, Payment $payment)
     {
         $cobro = $payment->load([
             'user:id,name,email',
@@ -429,9 +429,17 @@ class PaymentController extends Controller
         ])->append('invoice_summary')->makeHidden('electronicInvoice');
 
         // Lo que cuelga del cobro: deuda, turno, factura, recibos, devoluciones
-        // y posibles duplicados. Se AÑADE al cuerpo de siempre.
+        // y posibles duplicados. Se AÑADE al cuerpo de siempre, y SOLO para una
+        // persona: lleva motivos, autores y referencias externas de las
+        // devoluciones, y el token compartido de automatizaciones (que tiene
+        // `payments.view` por ser lectura) no lee nada de eso.
+        $actor = AdminActor::from($request);
+        if ($actor === null) {
+            return $cobro->toArray();
+        }
+
         return array_merge($cobro->toArray(), [
-            'links' => app(PaymentCorrections::class)->links($payment),
+            'links' => app(PaymentCorrections::class)->links($payment, $actor),
         ]);
     }
 

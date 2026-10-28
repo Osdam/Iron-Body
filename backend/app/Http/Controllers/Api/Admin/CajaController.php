@@ -30,6 +30,7 @@ use App\Services\Inventory\InventoryService;
 use App\Services\Audit\FinancialAudit;
 use App\Services\Payments\PaymentSplits;
 use App\Support\Access\AdminActor;
+use App\Support\Access\CrmPermission;
 use App\Support\Caja\PaymentTerm;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
@@ -581,8 +582,12 @@ class CajaController extends Controller
             return $sinPersona;
         }
 
-        $deudas = Receivable::where('source_type', ProductSale::class)->where('source_id', $sale->id)->pluck('id');
-        $abonos = \App\Models\ReceivablePayment::whereIn('receivable_id', $deudas)->pluck('id');
+        // La deuda de una venta fiada y sus abonos son de Créditos: sus filas
+        // solo para quien puede ver Créditos (`receivables.view`).
+        $deudas = CrmPermission::allows(AdminActor::from($request), 'receivables.view')
+            ? Receivable::where('source_type', ProductSale::class)->where('source_id', $sale->id)->pluck('id')
+            : collect();
+        $abonos = $deudas->isEmpty() ? collect() : \App\Models\ReceivablePayment::whereIn('receivable_id', $deudas)->pluck('id');
 
         $filas = \App\Models\AuditLog::query()
             ->where(function ($q) use ($sale, $deudas, $abonos): void {
