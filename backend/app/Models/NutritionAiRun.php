@@ -38,12 +38,22 @@ class NutritionAiRun extends Model
         'uuid', 'member_id', 'food_id', 'barcode', 'mode', 'provider', 'model',
         'input_hash', 'confidence_score', 'status', 'error_code', 'prompt_version',
         'response_json', 'warnings',
+        // Potencias de Iron IA: nivel, coste y latencia de cada generación.
+        'nutrition_power', 'routine_power', 'prompt_tokens', 'completion_tokens',
+        'total_tokens', 'latency_ms', 'usage_json',
     ];
 
     protected $casts = [
         'response_json' => 'array',
         'warnings' => 'array',
         'confidence_score' => 'float',
+        'usage_json' => 'array',
+        'nutrition_power' => 'integer',
+        'routine_power' => 'integer',
+        'prompt_tokens' => 'integer',
+        'completion_tokens' => 'integer',
+        'total_tokens' => 'integer',
+        'latency_ms' => 'integer',
     ];
 
     protected static function booted(): void

@@ -631,14 +631,17 @@ class IntegralPlanTest extends TestCase
     /** El guardián de coste es el que ya existe; no se monta otro. */
     public function test_el_limite_diario_corta_la_generacion(): void
     {
-        config(['nutrition.ai.rate_limit_per_user' => 1]);
+        // Desde las potencias (A1) el plan integral tiene su PROPIO tope por
+        // socio y día, separado de la cuota de nutrición del socio: el mismo
+        // corte, con el mismo mensaje, y otro código.
+        config(['iron_ai.plan_powers.member_daily_generations' => 1]);
         $this->assessment();
         $this->fakeAi($this->goodPlan());
 
         $this->generate()->assertStatus(201);
         $r = $this->generate()->assertStatus(422);
 
-        $this->assertSame('rate_limit_per_user', $r->json('code'));
+        $this->assertSame('integral_plan_member_limit', $r->json('code'));
         $this->assertSame(1, Routine::count(), 'la segunda no creó nada');
     }
 

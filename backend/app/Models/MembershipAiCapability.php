@@ -30,6 +30,9 @@ class MembershipAiCapability extends Model
         'ai_image_monthly_limit',
         'ai_max_audio_seconds',
         'ai_max_image_size_mb',
+        // Potencias de Iron IA (1..5). Ver docs/iron-ia/POTENCIAS-IRON-IA.md.
+        'nutrition_power',
+        'routine_power',
         'is_active',
     ];
 
@@ -55,6 +58,8 @@ class MembershipAiCapability extends Model
             'ai_image_monthly_limit' => 'integer',
             'ai_max_audio_seconds' => 'integer',
             'ai_max_image_size_mb' => 'integer',
+            'nutrition_power' => 'integer',
+            'routine_power' => 'integer',
             'is_active' => 'boolean',
         ];
     }
@@ -89,5 +94,37 @@ class MembershipAiCapability extends Model
             'ai_max_audio_seconds' => (int) ($this->ai_max_audio_seconds ?: 60),
             'ai_max_image_size_mb' => (int) ($this->ai_max_image_size_mb ?: 5),
         ];
+    }
+
+    /**
+     * Potencias de Iron IA de esta fila (docs/iron-ia/POTENCIAS-IRON-IA.md).
+     *
+     * Van APARTE de {@see toCapabilities()} a propósito: ese arreglo entra
+     * entero en las condiciones del plan que comparan y firman los traslados
+     * entre planes (PlanConditions → huella de la simulación). Meter aquí dos
+     * claves nuevas cambiaría esa huella y lo que enseña la simulación sin que
+     * nadie lo haya pedido.
+     *
+     * @return array{nutrition: int, routine: int}
+     */
+    public function toPowers(): array
+    {
+        return [
+            'nutrition' => self::power($this->nutrition_power),
+            'routine' => self::power($this->routine_power),
+        ];
+    }
+
+    /**
+     * Nivel de potencia legible: 1..5. Cualquier otro valor —null en una fila
+     * leída antes de migrar, o algo fuera de rango escrito a mano en SQLite,
+     * donde no hay CHECK— es el nivel 1, que es lo que se generaba antes de
+     * que existieran las potencias. Nunca sube un nivel por error.
+     */
+    public static function power(mixed $value): int
+    {
+        $n = is_numeric($value) ? (int) $value : 1;
+
+        return ($n >= 1 && $n <= 5) ? $n : 1;
     }
 }

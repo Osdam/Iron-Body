@@ -32,6 +32,40 @@ class IntegralPlanValidator
 
     private const MAX_MEALS = 10;
 
+    /**
+     * Límites del modo AMPLIADO (potencias 2..5, docs/iron-ia/POTENCIAS-IRON-IA.md §5):
+     * una semana de 7 días con hasta 6 comidas, la lista de mercado y los
+     * totales. Van en sintonía con StoreNutritionGuideRequest, para que lo que
+     * se genera se pueda volver a guardar al editarlo sin un 422.
+     */
+    public const EXTENDED_LIMITS = [
+        'meals' => 42,
+        'meal_description' => 2000,
+        'objective_description' => 2000,
+        'recommendations' => 9000,
+        'restrictions' => 3000,
+        'supplements' => 2000,
+        'notes' => 9000,
+        'routine_description' => 2000,
+        'day_objective' => 300,
+    ];
+
+    /** Límites de siempre (nivel 1). */
+    private const BASE_LIMITS = [
+        'meals' => self::MAX_MEALS,
+        'meal_description' => 2000,
+        'objective_description' => 2000,
+        'recommendations' => 4000,
+        'restrictions' => 2000,
+        'supplements' => 2000,
+        'notes' => 4000,
+        'routine_description' => 2000,
+        'day_objective' => null,
+    ];
+
+    /** @var array<string, int|null> */
+    private array $limits = self::BASE_LIMITS;
+
     public function __construct(private readonly ExerciseCatalogResolver $catalog) {}
 
     /**
@@ -39,13 +73,19 @@ class IntegralPlanValidator
      * modelo real; lo que el modelo se invente de más se descarta en silencio,
      * porque no hay dónde guardarlo.
      *
+     * `$extended` (potencias 2..5) sube los límites a {@see EXTENDED_LIMITS} y
+     * conserva el objetivo de cada día de la rutina. Sin él, todo es como
+     * siempre: es lo que usa el nivel 1.
+     *
      * @param  array<string,mixed>|null  $raw
      * @return array{nutrition: array<string,mixed>, routine: array<string,mixed>}
      *
      * @throws IntegralPlanException
      */
-    public function validate(?array $raw): array
+    public function validate(?array $raw, bool $extended = false): array
     {
+        $this->limits = $extended ? self::EXTENDED_LIMITS : self::BASE_LIMITS;
+
         if (! is_array($raw)) {
             throw IntegralPlanException::malformed('la respuesta no es un objeto JSON');
         }
@@ -125,13 +165,13 @@ class IntegralPlanValidator
 
         return array_filter([
             'objective' => $objetivo,
-            'objective_description' => $this->str($in['objective_description'] ?? null, 2000),
+            'objective_description' => $this->str($in['objective_description'] ?? null, $this->limits['objective_description']),
             'training_stage' => $this->str($in['training_stage'] ?? null, 160),
             'meals' => $comidas,
-            'recommendations' => $this->str($in['recommendations'] ?? null, 4000),
-            'restrictions' => $this->str($in['restrictions'] ?? null, 2000),
-            'supplements' => $this->str($in['supplements'] ?? null, 2000),
-            'notes' => $this->str($in['notes'] ?? null, 4000),
+            'recommendations' => $this->str($in['recommendations'] ?? null, $this->limits['recommendations']),
+            'restrictions' => $this->str($in['restrictions'] ?? null, $this->limits['restrictions']),
+            'supplements' => $this->str($in['supplements'] ?? null, $this->limits['supplements']),
+            'notes' => $this->str($in['notes'] ?? null, $this->limits['notes']),
         ], fn ($v) => $v !== null);
     }
 
@@ -145,13 +185,13 @@ class IntegralPlanValidator
         }
 
         $out = [];
-        foreach (array_slice($in, 0, self::MAX_MEALS) as $i => $m) {
+        foreach (array_slice($in, 0, $this->limits['meals']) as $i => $m) {
             if (! is_array($m)) {
                 continue;
             }
 
             $etiqueta = $this->str($m['label'] ?? null, 80);
-            $descripcion = $this->str($m['description'] ?? null, 2000);
+            $descripcion = $this->str($m['description'] ?? null, $this->limits['meal_description']);
 
             // Una comida sin nombre ni contenido no le dice nada al socio.
             if ($etiqueta === null || $descripcion === null) {
@@ -194,7 +234,7 @@ class IntegralPlanValidator
             'objective' => $this->str($in['objective'] ?? null, 160),
             'level' => $this->str($in['level'] ?? null, 60),
             'days_per_week' => count($dias),
-            'description' => $this->str($in['description'] ?? null, 2000),
+            'description' => $this->str($in['description'] ?? null, $this->limits['routine_description']),
             'days' => $dias,
         ], fn ($v) => $v !== null);
     }
@@ -220,11 +260,21 @@ class IntegralPlanValidator
                 continue;
             }
 
-            $out[] = [
+            $dia = [
                 'name' => $this->str($d['name'] ?? null, 80) ?? 'Día '.($i + 1),
                 'order' => $i,
-                'exercises' => $ejercicios,
             ];
+            // El objetivo del día es un campo que la app YA pinta
+            // (RoutineResource::serializeDays lo lee como texto); solo el modo
+            // ampliado lo pide, y por eso solo él lo conserva.
+            if ($this->limits['day_objective'] !== null) {
+                $objetivo = $this->str($d['objective'] ?? null, $this->limits['day_objective']);
+                if ($objetivo !== null) {
+                    $dia['objective'] = $objetivo;
+                }
+            }
+            $dia['exercises'] = $ejercicios;
+            $out[] = $dia;
         }
 
         return $out;
@@ -292,7 +342,7 @@ class IntegralPlanValidator
     {
         $s = trim((string) ($v ?? ''));
 
-        return $s === '' ? '10' : mb_substr($s, 0, 20);
+        return $s === '' ? '10' : self::clip($s, 20);
     }
 
     // ── Utilidades ──────────────────────────────────────────────────────────
@@ -305,7 +355,39 @@ class IntegralPlanValidator
 
         $s = trim((string) $v);
 
-        return $s === '' ? null : mb_substr($s, 0, $max);
+        return $s === '' ? null : self::clip($s, $max);
+    }
+
+    /**
+     * Acota un texto SIN partirlo a la mitad.
+     *
+     * Antes era `mb_substr`: un texto largo llegaba al socio cortado en mitad
+     * de una palabra («…200 g de pe»). Ahora, si sobra, se corta en el último
+     * final de frase o de línea que cabe y, si no lo hay en una distancia
+     * razonable, en el último espacio, y se marca con «…». Lo que cabe no se
+     * toca: en un texto dentro del límite el resultado es idéntico al de antes.
+     */
+    public static function clip(string $s, int $max): string
+    {
+        if (mb_strlen($s) <= $max) {
+            return $s;
+        }
+
+        $corte = mb_substr($s, 0, max(1, $max - 1));
+        $minimo = (int) floor($max * 0.6);
+
+        $fin = max((int) mb_strrpos($corte, '. '), (int) mb_strrpos($corte, "\n"));
+        if ($fin >= $minimo) {
+            return rtrim(mb_substr($corte, 0, $fin + 1));
+        }
+
+        $espacio = mb_strrpos($corte, ' ');
+        if ($espacio !== false && $espacio >= $minimo) {
+            return rtrim(mb_substr($corte, 0, $espacio), ' ,;:').'…';
+        }
+
+        // Una sola «palabra» más larga que el límite (p. ej. «8-10-12-15-20…»).
+        return $corte.'…';
     }
 
     private function int(mixed $v): ?int

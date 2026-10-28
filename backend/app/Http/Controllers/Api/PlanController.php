@@ -270,18 +270,23 @@ class PlanController extends Controller
      */
     public function aiCapabilities(Plan $plan)
     {
-        $caps = $this->aiAccess->getAiCapabilities([
+        $membresia = [
             'active' => true,
             'plan_id' => $plan->id,
             'plan_name' => $plan->name,
             'plan' => $plan,
             'end_date' => null,
-        ]);
+        ];
+        $caps = $this->aiAccess->getAiCapabilities($membresia);
+        // Lo GUARDADO, no lo aplicado: si Iron IA está apagada para el plan se
+        // aplica el nivel 1, pero el CRM tiene que volver a enseñar lo que el
+        // administrador eligió o lo perdería al guardar otra cosa.
+        $potencias = $this->aiAccess->getPlanPowers($membresia)['configured'];
 
         return response()->json([
             'planId' => (string) $plan->id,
             'planName' => $plan->name,
-            'capabilities' => $this->capabilitiesToApi($caps),
+            'capabilities' => $this->capabilitiesToApi($caps, $potencias),
         ]);
     }
 
@@ -309,6 +314,12 @@ class PlanController extends Controller
             'ai_max_audio_seconds' => ['sometimes', 'integer', 'min:5', 'max:600'],
             'ai_max_image_size_mb' => ['sometimes', 'integer', 'min:1', 'max:50'],
             'ai_context_level' => ['sometimes', 'string', 'in:basic,personalized,full'],
+            // Potencias de Iron IA (docs/iron-ia/POTENCIAS-IRON-IA.md §3): un
+            // entero de 1 a 5. Ni null, ni 3.5, ni `true` (que `integer` solo
+            // daría por un 1; `numeric` lo rechaza): un nivel que no existe no
+            // tiene estrategia detrás.
+            'ai_nutrition_power' => ['sometimes', 'numeric', 'integer', 'min:1', 'max:5'],
+            'ai_routine_power' => ['sometimes', 'numeric', 'integer', 'min:1', 'max:5'],
         ]);
 
         // Mapea el contrato del CRM (ai_*) a las columnas reales.
@@ -329,6 +340,8 @@ class PlanController extends Controller
             'ai_max_audio_seconds' => 'ai_max_audio_seconds',
             'ai_max_image_size_mb' => 'ai_max_image_size_mb',
             'ai_context_level' => 'context_level',
+            'ai_nutrition_power' => 'nutrition_power',
+            'ai_routine_power' => 'routine_power',
         ];
 
         $columns = [];
@@ -364,7 +377,7 @@ class PlanController extends Controller
         return response()->json([
             'planId' => (string) $plan->id,
             'planName' => $plan->name,
-            'capabilities' => $this->capabilitiesToApi($row->toCapabilities()),
+            'capabilities' => $this->capabilitiesToApi($row->toCapabilities(), $row->toPowers()),
         ]);
     }
 
@@ -374,8 +387,12 @@ class PlanController extends Controller
         return ['event' => $type, 'plan_id' => (int) $plan->id, 'changed' => ['plans', 'features']];
     }
 
-    /** Convierte capacidades internas (config/fila) al contrato del CRM (ai_*). */
-    private function capabilitiesToApi(array $c): array
+    /**
+     * Convierte capacidades internas (config/fila) al contrato del CRM (ai_*).
+     *
+     * @param  array{nutrition?: int, routine?: int}  $powers  lo guardado en la fila
+     */
+    private function capabilitiesToApi(array $c, array $powers = []): array
     {
         return [
             'ai_enabled' => (bool) ($c['ai_enabled'] ?? true),
@@ -394,6 +411,8 @@ class PlanController extends Controller
             'ai_max_audio_seconds' => (int) ($c['ai_max_audio_seconds'] ?? 60),
             'ai_max_image_size_mb' => (int) ($c['ai_max_image_size_mb'] ?? 5),
             'ai_context_level' => $c['context_level'] ?? 'basic',
+            'ai_nutrition_power' => MembershipAiCapability::power($powers['nutrition'] ?? 1),
+            'ai_routine_power' => MembershipAiCapability::power($powers['routine'] ?? 1),
         ];
     }
 

@@ -9,10 +9,13 @@ use App\Models\NutritionGuide;
 use App\Models\Routine;
 use App\Models\RoutineExercise;
 use App\Models\Trainer;
+use App\Services\IronAiMembershipAccessService;
 use App\Services\Nutrition\Ai\NutritionAiClient;
 use App\Services\Nutrition\Ai\NutritionAiCostGuard;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 
 /**
@@ -32,6 +35,12 @@ use Illuminate\Support\Str;
  * LA IA NO ES LA AUTORIDAD. Lo que devuelve pasa por
  * {@see IntegralPlanValidator}, y cada ejercicio se resuelve contra el catálogo
  * real. Lo que no existe, no entra.
+ *
+ * POTENCIAS (docs/iron-ia/POTENCIAS-IRON-IA.md). Cuánto se planifica lo decide
+ * el PLAN VIGENTE del socio, nunca la petición: con las dos potencias a 1 se
+ * genera exactamente como siempre (una llamada, prompt v1); con alguna por
+ * encima, {@see IntegralPlanPowerEngine} genera por secciones. La respuesta a
+ * la app, los borradores y la regla de «los dos o ninguno» son los mismos.
  */
 class IntegralPlanGenerationService
 {
@@ -47,7 +56,15 @@ class IntegralPlanGenerationService
         private readonly NutritionGuideService $guides,
         private readonly NutritionAiClient $ai,
         private readonly NutritionAiCostGuard $costGuard,
+        private readonly IronAiMembershipAccessService $access,
+        private readonly IntegralPlanPowerEngine $engine,
+        private readonly IntegralPlanEvaluator $evaluator,
+        private readonly IntegralPlanAssembler $assembler,
+        private readonly PlanSafetyLexicon $lexicon,
     ) {}
+
+    /** Lo que puede durar una generación como mucho (30 s del nivel 1 + guardar), con margen. */
+    private const LOCK_SECONDS = 90;
 
     /**
      * @return array{guide: NutritionGuide, routine: Routine, run: NutritionAiRun}
@@ -58,17 +75,243 @@ class IntegralPlanGenerationService
     {
         $this->assertEnabled();
 
-        $guard = $this->costGuard->check($member);
-        if (! ($guard['allowed'] ?? false)) {
-            throw IntegralPlanException::costGuard((string) ($guard['reason'] ?? 'cost_guard'));
+        // A1: UNA generación a la vez por socio. Dos toques seguidos en la app
+        // (o dos entrenadores) pagarían dos veces y dejarían dos borradores.
+        $cerrojo = Cache::lock('integral-plan:'.$member->getKey(), self::LOCK_SECONDS);
+        if (! $cerrojo->get()) {
+            throw IntegralPlanException::busy();
         }
 
-        $catalogo = $this->catalog->forPrompt();
-        if ($catalogo === []) {
-            throw IntegralPlanException::emptyCatalog();
+        try {
+            $this->throttleTrainer($trainer);
+
+            // Presupuesto PROPIO del plan integral (tokens del día y
+            // generaciones por socio), separado del de nutrición de los socios.
+            $guard = $this->costGuard->checkIntegralPlan($member);
+            if (! ($guard['allowed'] ?? false)) {
+                throw IntegralPlanException::costGuard((string) ($guard['reason'] ?? 'cost_guard'));
+            }
+
+            $catalogo = $this->catalog->forPrompt();
+            if ($catalogo === []) {
+                throw IntegralPlanException::emptyCatalog();
+            }
+
+            $contexto = $this->context->for($member);
+            $potencias = $this->powersFor($member);
+            $v1 = $potencias['nutrition'] === 1 && $potencias['routine'] === 1;
+
+            // A1: la corrida existe ANTES de llamar (cuenta para el guardián
+            // desde el primer segundo) y se cierra pase lo que pase.
+            $run = $this->openRun(
+                $member, $potencias,
+                $v1 ? (string) config('services.openai.model', 'gpt-4.1-mini') : $this->poweredModel(),
+                $v1 ? self::PROMPT_VERSION : IntegralPlanStrategy::PROMPT_VERSION,
+            );
+
+            try {
+                return $v1
+                    ? $this->generateV1($trainer, $member, $contexto, $catalogo, $run)
+                    : $this->generatePowered($trainer, $member, $contexto, $catalogo, $potencias, $run);
+            } finally {
+                if ($run->refresh()->status === 'running') {
+                    // Una excepción no prevista: la corrida no se queda colgada.
+                    $run->update(['status' => 'failed', 'error_code' => 'exception']);
+                }
+            }
+        } finally {
+            $cerrojo->release();
+        }
+    }
+
+    /**
+     * A1: tope de generaciones por entrenador y ventana (configurable). Lo que
+     * se rechaza aquí no llega a OpenAI ni crea corrida.
+     *
+     * @throws IntegralPlanException
+     */
+    private function throttleTrainer(Trainer $trainer): void
+    {
+        $max = (int) config('iron_ai.plan_powers.trainer_max_per_window', 10);
+        if ($max <= 0) {
+            return;
+        }
+        $clave = 'integral-plan:trainer:'.$trainer->getKey();
+        if (RateLimiter::tooManyAttempts($clave, $max)) {
+            throw IntegralPlanException::trainerRateLimited(RateLimiter::availableIn($clave));
+        }
+        RateLimiter::hit($clave, (int) config('iron_ai.plan_powers.trainer_window_seconds', 600));
+    }
+
+    /**
+     * Las potencias que se APLICAN a este socio: las de su plan vigente
+     * (`users.plan`, que tras una transferencia de membresía es el que
+     * recibió el beneficiario). Sin plan vigente, nivel 1.
+     *
+     * @return array{nutrition: int, routine: int, source: string, plan_id: ?int, plan_name: ?string}
+     */
+    public function powersFor(Member $member): array
+    {
+        $member->loadMissing('user');
+        $membresia = $this->access->getCurrentMembership($member, $member->user);
+
+        return $this->access->getPlanPowers($membresia);
+    }
+
+    /**
+     * Genera SIN GUARDAR NADA: ni borradores ni registro de la corrida. Lo
+     * usa `php artisan iron-ia:evaluate` con perfiles ficticios para medir
+     * calidad, tokens y latencia por nivel sin tocar datos de socios.
+     *
+     * @param  array<string,mixed>  $contexto  con la forma de MemberContextAssembler::for()
+     * @param  array<string,mixed>  $brief  MemberContextAssembler::buildBrief()
+     * @param  list<array<string,mixed>>  $catalogo
+     * @return array{status: string, error_code: ?string, message: ?string, plan: ?array, usage: array<string,mixed>, latency_ms: int, evaluation: ?array, structured: array<string,mixed>}
+     */
+    public function preview(array $contexto, array $brief, array $catalogo, int $nutritionLevel, int $routineLevel): array
+    {
+        $this->assertEnabled();
+        $inicio = microtime(true);
+
+        if ($nutritionLevel === 1 && $routineLevel === 1) {
+            $llamada = $this->callV1($contexto, $catalogo);
+            $latencia = (int) round((microtime(true) - $inicio) * 1000);
+            $uso = $this->v1Usage($llamada['respuesta']);
+
+            try {
+                $plan = $this->v1Safety($this->validateV1($llamada['respuesta']), $contexto);
+                if (($riesgo = $this->riskInPlan($plan)) !== null) {
+                    throw IntegralPlanException::malformed("el plan menciona «{$riesgo['found']}», que no se puede recomendar");
+                }
+            } catch (IntegralPlanException $e) {
+                return ['status' => 'failed', 'error_code' => $e->code_, 'message' => $e->getMessage(), 'plan' => null,
+                    'usage' => $uso, 'latency_ms' => $latencia, 'evaluation' => null, 'structured' => []];
+            }
+
+            return ['status' => 'ok', 'error_code' => null, 'message' => null, 'plan' => $plan, 'usage' => $uso,
+                'latency_ms' => $latencia, 'evaluation' => $this->evaluator->evaluate($plan, [], $brief, 1, 1), 'structured' => []];
         }
 
-        $contexto = $this->context->for($member);
+        $res = $this->engine->generate($contexto, $brief, $catalogo, $nutritionLevel, $routineLevel, $this->poweredModel());
+        $latencia = (int) round((microtime(true) - $inicio) * 1000);
+
+        return [
+            'status' => $res['status'],
+            'error_code' => $res['error_code'],
+            'message' => $res['error']?->getMessage(),
+            'plan' => $res['plan'],
+            'usage' => $res['usage'],
+            'latency_ms' => $latencia,
+            'evaluation' => $res['payload']['quality']['evaluation'] ?? null,
+            'structured' => $res['payload']['structured'] ?? [],
+            'repairs_skipped_reason' => $res['payload']['repairs_skipped_reason'] ?? null,
+        ];
+    }
+
+    // ── Nivel 1: el de siempre ──────────────────────────────────────────────
+
+    /**
+     * Las dos potencias a 1. El prompt, los parámetros y la salida son los de
+     * antes de las potencias, byte a byte (lo fija
+     * IntegralPlanPowersTest::test_nivel_1_envia_el_mismo_payload_que_produccion).
+     * Solo se añadió robustez que no cambia una generación correcta: se lee
+     * `finish_reason`, se guardan `usage` y latencia, y un texto largo ya no
+     * se corta a mitad de palabra.
+     *
+     * @param  array<string,mixed>  $contexto
+     * @param  list<array<string,mixed>>  $catalogo
+     * @return array{guide: NutritionGuide, routine: Routine, run: NutritionAiRun, analysis: ?array}
+     */
+    private function generateV1(Trainer $trainer, Member $member, array $contexto, array $catalogo, NutritionAiRun $run): array
+    {
+        $inicio = microtime(true);
+        $llamada = $this->callV1($contexto, $catalogo);
+        $respuesta = $llamada['respuesta'];
+        $hash = $llamada['hash'];
+
+        $extra = $this->runMetrics(1, 1, $this->v1Usage($respuesta), (int) round((microtime(true) - $inicio) * 1000));
+
+        if (($respuesta['status'] ?? '') !== NutritionAiClient::STATUS_SUCCESS) {
+            $this->closeRun($run, $hash, 'failed', $respuesta['error_code'] ?? 'upstream', null, $extra);
+            throw IntegralPlanException::upstream($respuesta['error_code'] ?? null);
+        }
+
+        // Validación COMPLETA antes de tocar la base. Si algo falla aquí, no hay
+        // nada que deshacer porque no se ha escrito nada todavía.
+        try {
+            $plan = $this->validateV1($respuesta);
+        } catch (IntegralPlanException $e) {
+            // Una respuesta cortada por longitud se guarda tal cual llegó (antes
+            // se perdía): es lo único que permite saber qué se estaba pidiendo.
+            $cortada = ($respuesta['finish_reason'] ?? null) === 'length';
+            $this->closeRun(
+                $run, $hash, 'invalid',
+                $cortada ? 'ai_truncated' : $e->code_,
+                $cortada && ($respuesta['json'] ?? null) === null
+                    ? ['truncated_content' => $respuesta['content'] ?? null]
+                    : ($respuesta['json'] ?? null),
+                $extra,
+            );
+            throw $e;
+        }
+
+        $plan = $this->v1Safety($plan, $contexto);
+
+        // M2: un plan que nombra fármacos, purgas o ayunos prolongados no se
+        // guarda. El nivel 1 no repara (es una llamada): se rechaza, reintentable.
+        if (($riesgo = $this->riskInPlan($plan)) !== null) {
+            $this->closeRun($run, $hash, 'invalid', 'risk_content', $plan, $extra);
+            throw IntegralPlanException::malformed("el plan menciona «{$riesgo['found']}», que no se puede recomendar");
+        }
+
+        $resultado = $this->persist($trainer, $member, $plan, $contexto, $run);
+        $this->closeRun($run, $hash, 'ok', null, $plan, $extra);
+
+        return ['run' => $run->fresh()] + $resultado;
+    }
+
+    /**
+     * Seguridad clínica del nivel 1 (autorizada por el propietario tras la
+     * corrida 1). POSPROCESO, no prompt: lo que se envía a OpenAI no cambia y,
+     * sin señales de riesgo, el plan sale INTACTO (lo fija la prueba de
+     * paridad). Ver {@see IntegralPlanAssembler::clinicalNotice()}.
+     *
+     * @param  array<string,mixed>  $plan
+     * @param  array<string,mixed>  $contexto
+     * @return array<string,mixed>
+     */
+    private function v1Safety(array $plan, array $contexto): array
+    {
+        return $this->assembler->clinicalNotice($plan, $this->context->riskSignals($contexto));
+    }
+
+    /**
+     * El primer término de riesgo en cualquier texto del plan (guía, rutina,
+     * síntesis), o null.
+     *
+     * @return array{term: string, found: string, snippet: string}|null
+     */
+    private function riskInPlan(mixed $v): ?array
+    {
+        if (is_string($v)) {
+            return $this->lexicon->riskIn($v);
+        }
+        foreach (is_array($v) ? $v : [] as $x) {
+            if (($r = $this->riskInPlan($x)) !== null) {
+                return $r;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string,mixed>  $contexto
+     * @param  list<array<string,mixed>>  $catalogo
+     * @return array{respuesta: array<string,mixed>, modelo: string, hash: string}
+     */
+    private function callV1(array $contexto, array $catalogo): array
+    {
         $mensajes = $this->messages($contexto, $catalogo);
 
         $modelo = (string) config('services.openai.model', 'gpt-4.1-mini');
@@ -76,22 +319,77 @@ class IntegralPlanGenerationService
 
         $respuesta = $this->ai->complete($modelo, $mensajes, json: true, maxTokens: 3000);
 
+        return ['respuesta' => $respuesta, 'modelo' => $modelo, 'hash' => $hash];
+    }
+
+    /**
+     * @param  array<string,mixed>  $respuesta
+     * @return array<string,mixed>
+     *
+     * @throws IntegralPlanException
+     */
+    private function validateV1(array $respuesta): array
+    {
         if (($respuesta['status'] ?? '') !== NutritionAiClient::STATUS_SUCCESS) {
-            $this->recordRun($member, $modelo, $hash, 'failed', $respuesta['error_code'] ?? 'upstream');
             throw IntegralPlanException::upstream($respuesta['error_code'] ?? null);
         }
 
-        // Validación COMPLETA antes de tocar la base. Si algo falla aquí, no hay
-        // nada que deshacer porque no se ha escrito nada todavía.
-        try {
-            $plan = $this->validator->validate($respuesta['json'] ?? null);
-        } catch (IntegralPlanException $e) {
-            $this->recordRun($member, $modelo, $hash, 'invalid', $e->code_, $respuesta['json'] ?? null);
-            throw $e;
+        // Cortada por el tope de tokens: el JSON no está completo aunque a
+        // veces llegue a decodificar. Se dice qué pasó en vez de «mal formada».
+        if (($respuesta['finish_reason'] ?? null) === 'length') {
+            throw IntegralPlanException::malformed('la respuesta se cortó por longitud');
         }
 
-        $run = $this->recordRun($member, $modelo, $hash, 'ok', null, $plan);
+        return $this->validator->validate($respuesta['json'] ?? null);
+    }
 
+    // ── Niveles 2..5 ────────────────────────────────────────────────────────
+
+    /**
+     * @param  array<string,mixed>  $contexto
+     * @param  list<array<string,mixed>>  $catalogo
+     * @param  array{nutrition: int, routine: int}  $potencias
+     * @return array{guide: NutritionGuide, routine: Routine, run: NutritionAiRun, analysis: ?array}
+     */
+    private function generatePowered(Trainer $trainer, Member $member, array $contexto, array $catalogo, array $potencias, NutritionAiRun $run): array
+    {
+        $brief = $this->context->planBrief($member, $contexto);
+        $modelo = $this->poweredModel();
+
+        $inicio = microtime(true);
+        $res = $this->engine->generate($contexto, $brief, $catalogo, $potencias['nutrition'], $potencias['routine'], $modelo);
+        $extra = $this->runMetrics(
+            $potencias['nutrition'], $potencias['routine'], $res['usage'],
+            (int) round((microtime(true) - $inicio) * 1000),
+        );
+
+        // UNA fila por generación, salga bien o mal: el guardián de coste
+        // cuenta filas, y una generación por secciones sigue siendo una.
+        if ($res['status'] !== 'ok') {
+            $this->closeRun($run, $res['hash'], $res['status'], $res['error_code'], $res['payload'], $extra);
+            throw $res['error'];
+        }
+
+        $resultado = $this->persist($trainer, $member, $res['plan'], $contexto, $run);
+        $this->closeRun($run, $res['hash'], 'ok', null, $res['payload'], $extra);
+
+        return ['run' => $run->fresh()] + $resultado;
+    }
+
+    private function poweredModel(): string
+    {
+        return (string) (config('iron_ai.plan_powers.model') ?: config('services.openai.model', 'gpt-4.1-mini'));
+    }
+
+    // ── Persistencia: la misma para todos los niveles ───────────────────────
+
+    /**
+     * @param  array<string,mixed>  $plan
+     * @param  array<string,mixed>  $contexto
+     * @return array{guide: NutritionGuide, routine: Routine, run: NutritionAiRun, analysis: ?array}
+     */
+    private function persist(Trainer $trainer, Member $member, array $plan, array $contexto, NutritionAiRun $run): array
+    {
         return DB::transaction(function () use ($trainer, $member, $plan, $contexto, $run) {
             $guia = $this->guides->createDraft(
                 $trainer,
@@ -115,6 +413,43 @@ class IntegralPlanGenerationService
                 'analysis' => $plan['analysis'] ?? null,
             ];
         });
+    }
+
+    /**
+     * @param  array<string,mixed>  $uso
+     * @return array<string,mixed>
+     */
+    private function runMetrics(int $nutrition, int $routine, array $uso, int $latencia): array
+    {
+        $sinMedir = ! isset($uso['total_tokens']) && ! isset($uso['prompt_tokens']);
+
+        return [
+            'nutrition_power' => $nutrition,
+            'routine_power' => $routine,
+            'prompt_tokens' => $sinMedir ? null : (int) ($uso['prompt_tokens'] ?? 0),
+            'completion_tokens' => $sinMedir ? null : (int) ($uso['completion_tokens'] ?? 0),
+            'total_tokens' => $sinMedir ? null : (int) ($uso['total_tokens'] ?? 0),
+            'latency_ms' => $latencia,
+            'usage_json' => $sinMedir ? null : $uso,
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    private function v1Usage(array $respuesta): array
+    {
+        $u = is_array($respuesta['usage'] ?? null) ? $respuesta['usage'] : [];
+        if ($u === []) {
+            return [];
+        }
+
+        return [
+            'prompt_tokens' => (int) ($u['prompt_tokens'] ?? 0),
+            'completion_tokens' => (int) ($u['completion_tokens'] ?? 0),
+            'total_tokens' => (int) ($u['total_tokens'] ?? 0),
+            'calls' => 1,
+            'repairs' => 0,
+            'finish_reason' => $respuesta['finish_reason'] ?? null,
+        ];
     }
 
     // ── Rutina en borrador ──────────────────────────────────────────────────
@@ -272,35 +607,48 @@ class IntegralPlanGenerationService
 
     /**
      * Deja constancia de cada intento en `nutrition_ai_runs`, que es donde ya
-     * viven los del módulo de nutrición. No se crea otra tabla de auditoría:
-     * el guardián de coste cuenta sobre ésta, y una tabla aparte lo dejaría
-     * ciego a las generaciones de planes.
+     * viven los del módulo de nutrición. No se crea otra tabla de auditoría.
+     *
+     * Se ABRE en `running` antes de llamar a OpenAI (A1: así cuenta para el
+     * guardián desde el primer segundo y una caída a mitad deja rastro) y se
+     * cierra con {@see closeRun()}; si nada la cierra, lo hace el `finally`
+     * de {@see generate()} como `failed`/`exception`.
      *
      * El entrenador no está en el esquema de esa tabla; la trazabilidad de
      * quién generó queda en los borradores, que sí llevan `trainer_id`.
      *
-     * @param  array<string,mixed>|null  $payload
+     * @param  array{nutrition: int, routine: int}  $potencias
      */
-    private function recordRun(
-        Member $member,
-        string $model,
-        string $hash,
-        string $status,
-        ?string $errorCode = null,
-        ?array $payload = null,
-    ): NutritionAiRun {
+    private function openRun(Member $member, array $potencias, string $model, string $promptVersion): NutritionAiRun
+    {
         return NutritionAiRun::create([
             'uuid' => (string) Str::uuid(),
             'member_id' => $member->getKey(),
             'mode' => self::RUN_MODE,
             'provider' => 'openai',
             'model' => $model,
+            'status' => 'running',
+            'prompt_version' => $promptVersion,
+            'nutrition_power' => $potencias['nutrition'],
+            'routine_power' => $potencias['routine'],
+        ]);
+    }
+
+    /**
+     * `$extra`: nivel de potencia, tokens, latencia y detalle por sección
+     * (columnas nulables: null es «no se midió»).
+     *
+     * @param  array<string,mixed>|null  $payload
+     * @param  array<string,mixed>  $extra
+     */
+    private function closeRun(NutritionAiRun $run, string $hash, string $status, ?string $errorCode, ?array $payload, array $extra): void
+    {
+        $run->update(array_merge([
             'input_hash' => $hash,
             'status' => $status,
             'error_code' => $errorCode,
-            'prompt_version' => self::PROMPT_VERSION,
             'response_json' => $payload,
-        ]);
+        ], $extra));
     }
 
     private function assertEnabled(): void

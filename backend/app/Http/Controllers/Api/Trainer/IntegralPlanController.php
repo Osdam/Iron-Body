@@ -40,7 +40,13 @@ class IntegralPlanController extends Controller
         try {
             $plan = app(IntegralPlanGenerationService::class)->generate($trainer, $member);
         } catch (IntegralPlanException $e) {
-            return $this->planError($e);
+            // A1: otra generación en curso (409) o tope del entrenador (429).
+            // El resto, como siempre: 422 con su código y `retryable`.
+            return $this->planError($e, match ($e->code_) {
+                'generation_in_progress' => 409,
+                'trainer_rate_limited' => 429,
+                default => 422,
+            });
         }
 
         return response()->json([

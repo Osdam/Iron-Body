@@ -44,18 +44,22 @@ class StoreNutritionGuideRequest extends FormRequest
             'basal_kcal' => ['nullable', 'integer', 'min:0', 'max:10000'],
             'age_years' => ['nullable', 'integer', 'min:0', 'max:120'],
 
-            // Tope de 20 comidas: por encima no es un plan, es un error de
-            // cliente repitiendo el envío.
-            'meals' => ['nullable', 'array', 'max:20'],
+            // Tope de 50 comidas: una semana de Iron IA MAX son 7 días × hasta
+            // 6 comidas (42), y el entrenador tiene que poder guardarla al
+            // editarla. Por encima no es un plan, es un cliente repitiendo el
+            // envío. Los textos, igual: caben la lista de mercado y los
+            // totales de la semana con margen para lo que añada a mano
+            // (IntegralPlanValidator::EXTENDED_LIMITS genera por debajo).
+            'meals' => ['nullable', 'array', 'max:50'],
             'meals.*.label' => ['required_with:meals', 'string', 'max:80'],
             'meals.*.time' => ['nullable', 'string', 'max:20'],
-            'meals.*.description' => ['nullable', 'string', 'max:2000'],
+            'meals.*.description' => ['nullable', 'string', 'max:2500'],
             'meals.*.order' => ['nullable', 'integer', 'min:0', 'max:100'],
 
-            'recommendations' => ['nullable', 'string', 'max:5000'],
+            'recommendations' => ['nullable', 'string', 'max:10000'],
             'restrictions' => ['nullable', 'string', 'max:5000'],
             'supplements' => ['nullable', 'string', 'max:5000'],
-            'notes' => ['nullable', 'string', 'max:5000'],
+            'notes' => ['nullable', 'string', 'max:10000'],
 
             'amendment_reason' => ['nullable', 'string', 'max:500'],
         ];

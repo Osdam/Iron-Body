@@ -142,12 +142,88 @@ class IronAiMembershipAccessService
             return $this->getFreeTrialCapabilities();
         }
 
+        $fuente = $this->capabilitySource($membership);
+
+        return $fuente['row'] ? $fuente['row']->toCapabilities() : $fuente['config'];
+    }
+
+    /**
+     * Potencias de Iron IA de una membresía (docs/iron-ia/POTENCIAS-IRON-IA.md §3).
+     *
+     * Misma fila que {@see getAiCapabilities()}, por el mismo orden de
+     * búsqueda: lo que el CRM edita en un plan es lo que se aplica. Tres reglas
+     * que no dependen de la fila:
+     *  - sin membresía vigente, nivel 1 (la prueba gratuita no da potencia);
+     *  - si la fila viene de config (no hay fila en la tabla), nivel 1: la
+     *    config no tiene potencias y no se inventan;
+     *  - con Iron IA apagada para el plan, nivel 1. La potencia nunca enciende
+     *    algo que el plan tiene apagado: decide CÓMO se genera, no SI se puede;
+     *  - la de nutrición, solo con los módulos Iron IA y Nutrición del plan; la
+     *    de rutina, solo con Iron IA y Entrenar. Si no, 1 (la generación sigue).
+     *
+     * `configured` es lo GUARDADO en la fila, sin esas reglas: es lo que el
+     * CRM tiene que volver a enseñar al reabrir el plan. `nutrition`/`routine`
+     * son lo que se APLICA.
+     *
+     * @return array{nutrition: int, routine: int, source: string, plan_id: ?int, plan_name: ?string, configured: array{nutrition: int, routine: int}}
+     */
+    public function getPlanPowers(array $membership): array
+    {
+        $base = [
+            'nutrition' => 1,
+            'routine' => 1,
+            'source' => 'no_membership',
+            'plan_id' => $membership['plan_id'] ?? null,
+            'plan_name' => $membership['plan_name'] ?? null,
+            'configured' => ['nutrition' => 1, 'routine' => 1],
+        ];
+
+        if (! ($membership['active'] ?? false)) {
+            return $base;
+        }
+
+        $fila = $this->capabilitySource($membership)['row'];
+        if ($fila === null) {
+            return array_merge($base, ['source' => 'config']);
+        }
+
+        $guardadas = $fila->toPowers();
+        $base['configured'] = $guardadas;
+
+        if (! $fila->ai_enabled) {
+            return array_merge($base, ['source' => 'ai_disabled']);
+        }
+
+        // M1 (decisión del propietario): cada potencia exige Iron IA y SU
+        // módulo en el plan (nutrición → «nutrition»; rutina → «workouts»).
+        // Sin plan del catálogo no hay módulos que leer: nivel 1.
+        $modulos = ($membership['plan'] ?? null) instanceof Plan ? $membership['plan']->resolvedFeatures() : [];
+        $ia = (bool) ($modulos['iron_ia'] ?? false);
+
+        return array_merge($base, [
+            'nutrition' => $ia && ($modulos['nutrition'] ?? false) ? $guardadas['nutrition'] : 1,
+            'routine' => $ia && ($modulos['workouts'] ?? false) ? $guardadas['routine'] : 1,
+            'source' => 'plan',
+        ]);
+    }
+
+    /**
+     * Dónde están las capacidades de una membresía ACTIVA. Orden de resolución:
+     *  1) fila por membership_plan_id (plan del catálogo).
+     *  2) fila por plan_code == users.plan exacto.
+     *  3) tier inferido por palabras clave → fila/cfg del tier.
+     *  4) default_membership (fila o config).
+     *
+     * @return array{row: ?MembershipAiCapability, config: ?array}
+     */
+    private function capabilitySource(array $membership): array
+    {
         // 1) por plan del catálogo.
         if (! empty($membership['plan_id'])) {
             $row = MembershipAiCapability::where('membership_plan_id', $membership['plan_id'])
                 ->where('is_active', true)->first();
             if ($row) {
-                return $row->toCapabilities();
+                return ['row' => $row, 'config' => null];
             }
         }
 
@@ -157,7 +233,7 @@ class IronAiMembershipAccessService
             $row = MembershipAiCapability::whereRaw('lower(plan_code) = ?', [$code])
                 ->where('is_active', true)->first();
             if ($row) {
-                return $row->toCapabilities();
+                return ['row' => $row, 'config' => null];
             }
         }
 
@@ -167,11 +243,11 @@ class IronAiMembershipAccessService
             $row = MembershipAiCapability::whereRaw('lower(plan_code) = ?', [$tier])
                 ->where('is_active', true)->first();
             if ($row) {
-                return $row->toCapabilities();
+                return ['row' => $row, 'config' => null];
             }
             $cfg = config("iron_ai.tiers.$tier");
             if (is_array($cfg)) {
-                return $cfg;
+                return ['row' => null, 'config' => $cfg];
             }
         }
 
@@ -179,7 +255,9 @@ class IronAiMembershipAccessService
         $row = MembershipAiCapability::whereRaw("lower(plan_code) = 'default_membership'")
             ->where('is_active', true)->first();
 
-        return $row ? $row->toCapabilities() : config('iron_ai.default_membership');
+        return $row
+            ? ['row' => $row, 'config' => null]
+            : ['row' => null, 'config' => config('iron_ai.default_membership')];
     }
 
     public function getFreeTrialCapabilities(): array
