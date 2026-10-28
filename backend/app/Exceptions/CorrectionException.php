@@ -55,6 +55,23 @@ class CorrectionException extends RuntimeException
         );
     }
 
+    /**
+     * El periodo de este cobro se cedió a otra persona y el traspaso sigue en
+     * pie. Anularlo o devolverlo le quitaría la vigencia a quien la está
+     * usando sin que nadie lo decidiera, o dejaría su dinero devuelto con la
+     * membresía funcionando. Primero se revierte el traspaso desde la ficha.
+     */
+    public static function membershipTransferred(int $transferId, ?int $beneficiaryUserId): self
+    {
+        return new self(
+            'El periodo de este cobro se cedió a otra persona (traspaso de membresía #'.$transferId.'). '
+            .'Revierte primero el traspaso desde la ficha del socio y repite la corrección.',
+            'membership_transferred',
+            409,
+            array_filter(['transfer_id' => $transferId, 'beneficiary_user_id' => $beneficiaryUserId]),
+        );
+    }
+
     public static function invoiceValidated(int $invoiceId): self
     {
         return new self(

@@ -11,6 +11,7 @@ use App\Models\ElectronicInvoice;
 use App\Models\InvoiceBundleItem;
 use App\Models\Payment;
 use App\Models\ProductSale;
+use App\Services\Membership\MembershipTransfers;
 use App\Support\Access\CrmPermission;
 use App\Support\Caja\PaymentMethodKind;
 use App\Support\Caja\PaymentOrigin;
@@ -177,6 +178,28 @@ class CorrectionGuards
     public function assertShiftAllows(?CashShift $shift, ?Admin $actor): void
     {
         if ($bloqueo = $this->shiftBlocker($shift, $actor)) {
+            throw $bloqueo;
+        }
+    }
+
+    /**
+     * Un cobro cuyo periodo se CEDIÓ a otra persona y el traspaso sigue vivo
+     * (docs/ops/TRANSFERENCIA-DE-MEMBRESIAS.md §4): no se anula ni se devuelve
+     * hasta revertir el traspaso. Se llama con el cobro ya bloqueado; la
+     * vista previa la usa también.
+     */
+    public function transferBlocker(Payment $payment): ?CorrectionException
+    {
+        $traspaso = MembershipTransfers::liveFromPayment((int) $payment->id);
+
+        return $traspaso === null
+            ? null
+            : CorrectionException::membershipTransferred((int) $traspaso->id, $traspaso->beneficiary_user_id);
+    }
+
+    public function assertNotTransferred(Payment $payment): void
+    {
+        if ($bloqueo = $this->transferBlocker($payment)) {
             throw $bloqueo;
         }
     }

@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\PaymentController;
 use App\Models\Payment;
 use App\Models\Plan;
 use App\Models\User;
+use App\Services\Membership\MembershipTransfers;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 
@@ -167,6 +168,15 @@ class MembershipRebuilder
      */
     private function refusal(User $user, Collection $pagos): ?string
     {
+        // TRASPASOS DE MEMBRESÍA vivos: la vigencia de la titular terminó ayer
+        // aunque su cobro diga otra cosa, y la del beneficiario no sale de
+        // ningún pago suyo. Reconstruir a cualquiera de los dos desde sus
+        // pagos le devolvería a la titular lo que cedió, o le quitaría al
+        // beneficiario lo que recibió (TRANSFERENCIA-DE-MEMBRESIAS.md §4).
+        if ($traspaso = MembershipTransfers::involvedInLive((int) $user->id)) {
+            return "tiene un traspaso de membresía vivo (#{$traspaso->id}): su vigencia no sale solo de sus pagos";
+        }
+
         // SIN NINGÚN PAGO DE PLAN NO HAY NADA QUE REHACER, y esto no es un
         // detalle: el gimnasio otorga vigencias por fuera de la caja —demos de
         // tester, cortesías del personal, cuentas de revisión, accesos de un

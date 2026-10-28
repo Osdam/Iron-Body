@@ -242,6 +242,75 @@ class MembershipRealtimeTest extends TestCase
         $this->assertSame('Élite', $user->refresh()->plan);
     }
 
+    public function test_a_real_membership_transfer_and_its_reversal_reach_the_already_open_stream_for_both_members(): void
+    {
+        $plan = Plan::create(['name' => 'Anualidad', 'price' => 624000, 'duration_days' => 365, 'active' => true])->refresh();
+        $a = $this->user();
+        $b = $this->user();
+        $start = MembershipPeriod::today()->subDays(10);
+        $a->forceFill(['plan' => $plan->name, 'status' => 'active',
+            'membership_start_date' => $start->toDateString(), 'membership_end_date' => $start->addDays(365)->toDateString()])->save();
+        \App\Models\Payment::create(['user_id' => $a->id, 'plan_id' => $plan->id, 'amount' => 624000, 'method' => 'cash',
+            'status' => 'paid', 'paid_at' => $start->setTime(9, 0)->utc(), 'starts_on' => $start->toDateString(),
+            'period_start' => $start->toDateString(), 'period_end' => $start->addDays(365)->toDateString()]);
+        foreach ([$a, $b] as $socio) {
+            Member::create(['user_id' => $socio->id, 'full_name' => 'Socio '.$socio->id,
+                'document_number' => (string) (61000000 + $socio->id), 'status' => Member::STATUS_ACTIVE]);
+        }
+        $headers = $this->adminHeaders();
+        $this->stream->betweenTicks = function () use ($a, $b, $headers): void {
+            $id = $this->postJson("/api/users/{$a->id}/membership-transfer", [
+                'beneficiary_id' => $b->id, 'reason' => 'Cede su anualidad', 'holder_consent' => true,
+                'beneficiary_acceptance' => true, 'client_request_id' => 'sse-membership-transfer-1',
+            ], $headers)->assertCreated()->json('transfer.id');
+            $this->postJson("/api/membership-transfers/{$id}/revert", ['reason' => 'Beneficiario equivocado'], $headers)->assertOk();
+        };
+
+        $events = $this->events($this->get(self::URL, $headers)->assertOk()->streamedContent());
+
+        $this->assertSame(
+            ['membership.transferred', 'membership.transferred', 'membership.transfer.reverted', 'membership.transfer.reverted'],
+            array_column($events, 'type'),
+        );
+        $this->assertSame([$a->id, $b->id, $a->id, $b->id], array_column($events, 'user_id'));
+        $this->assertSame([$plan->id, $plan->id, $plan->id, $plan->id], array_column($events, 'plan_id'));
+        $this->assertSame(['membership', 'features', 'history'], $events[0]['changed']);
+        // Lista blanca: ni el motivo, ni la evidencia, ni el cobro viajan por el canal.
+        $this->assertSame(['type', 'user_id', 'plan_id', 'changed', 'event_id', 'timestamp'], array_keys($events[0]));
+    }
+
+    public function test_the_reversal_of_a_membership_transfer_still_reaches_the_stream_when_its_plan_was_deleted(): void
+    {
+        $plan = Plan::create(['name' => 'Anualidad', 'price' => 624000, 'duration_days' => 365, 'active' => true])->refresh();
+        $a = $this->user();
+        $b = $this->user();
+        $start = MembershipPeriod::today()->subDays(10);
+        $a->forceFill(['plan' => $plan->name, 'status' => 'active',
+            'membership_start_date' => $start->toDateString(), 'membership_end_date' => $start->addDays(365)->toDateString()])->save();
+        \App\Models\Payment::create(['user_id' => $a->id, 'plan_id' => $plan->id, 'amount' => 624000, 'method' => 'cash',
+            'status' => 'paid', 'paid_at' => $start->setTime(9, 0)->utc(), 'starts_on' => $start->toDateString(),
+            'period_start' => $start->toDateString(), 'period_end' => $start->addDays(365)->toDateString()]);
+        foreach ([$a, $b] as $socio) {
+            Member::create(['user_id' => $socio->id, 'full_name' => 'Socio '.$socio->id,
+                'document_number' => (string) (62000000 + $socio->id), 'status' => Member::STATUS_ACTIVE]);
+        }
+        $headers = $this->adminHeaders();
+        $id = $this->postJson("/api/users/{$a->id}/membership-transfer", [
+            'beneficiary_id' => $b->id, 'reason' => 'Cede su anualidad', 'holder_consent' => true,
+            'beneficiary_acceptance' => true, 'client_request_id' => 'sse-plan-borrado',
+        ], $headers)->assertCreated()->json('transfer.id');
+        $cursor = (int) AuditLog::max('id');
+        // Se borra el plan del catálogo: el traspaso y el cobro se quedan sin él.
+        DB::table('plans')->where('id', $plan->id)->delete();
+        $this->postJson("/api/membership-transfers/{$id}/revert", ['reason' => 'Beneficiario equivocado'], $headers)->assertOk();
+
+        $events = $this->events($this->get(self::URL.'?after_id='.$cursor, $headers)->assertOk()->streamedContent());
+
+        $this->assertSame(['membership.transfer.reverted', 'membership.transfer.reverted'], array_column($events, 'type'));
+        $this->assertSame([$a->id, $b->id], array_column($events, 'user_id'));
+        $this->assertSame([null, null], array_column($events, 'plan_id'));
+    }
+
     public function test_invalid_cursor_is_rejected_and_a_future_cursor_requests_resynchronization(): void
     {
         $headers = $this->adminHeaders();

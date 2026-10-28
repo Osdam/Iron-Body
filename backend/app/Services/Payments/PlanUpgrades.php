@@ -11,6 +11,7 @@ use App\Models\Payment;
 use App\Models\Plan;
 use App\Models\User;
 use App\Services\Membership\MembershipFreeze;
+use App\Services\Membership\MembershipTransfers;
 use App\Services\RealtimeEvents;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -271,6 +272,18 @@ class PlanUpgrades
      */
     private function blocker(User $user, ?Plan $actual, Plan $nuevo, ?CarbonImmutable $fin): ?string
     {
+        // TRASPASO DE MEMBRESÍA VIVO (docs/ops/TRANSFERENCIA-DE-MEMBRESIAS.md
+        // §8.3). El beneficiario no tiene cobro: su periodo empezaría hoy y la
+        // mejora le sumaría la duración entera del plan nuevo sobre días que
+        // pagó otra persona. Hasta que haya política, ni la titular ni el
+        // beneficiario mejoran mientras el traspaso siga en pie.
+        if ($traspaso = MembershipTransfers::involvedInLive((int) $user->id)) {
+            return (int) $traspaso->beneficiary_user_id === (int) $user->id
+                ? 'Su membresía la recibió por un traspaso (#'.$traspaso->id.'): una membresía transferida no se mejora. '
+                    .'Cóbrale el plan nuevo cuando venza, o revierte el traspaso.'
+                : 'Cedió su membresía en un traspaso (#'.$traspaso->id.'): no tiene membresía que mejorar.';
+        }
+
         if (! $actual) {
             return 'No tiene un plan vigente que mejorar. Véndele el plan nuevo normalmente.';
         }

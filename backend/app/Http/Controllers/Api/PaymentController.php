@@ -951,6 +951,9 @@ class PaymentController extends Controller
             }
             if ($quita) {
                 $correcciones->assertNoDependentUpgrade($payment);
+                // Su periodo se cedió a otra persona: primero se revierte el
+                // traspaso (TRANSFERENCIA-DE-MEMBRESIAS.md §4).
+                $guards->assertNotTransferred($payment);
                 $this->assertSinDeudaViva($payment);
             }
             foreach (['user_id', 'plan_id', 'amount'] as $field) {

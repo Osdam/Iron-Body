@@ -541,6 +541,20 @@ final class AuthorizationMap
         'POST api/users/{user}/freeze' => 'members.freeze',
         'POST api/users/{user}/resume' => 'members.freeze',
 
+        /*
+         * TRANSFERIR MEMBRESÍA: quitarle la vigencia a un socio y dársela a
+         * otro, sin cobro. Permiso propio y NO «editar miembros» ni `transfer`
+         * de planes (que es «Trasladar socios» entre planes). La vista previa
+         * también: enseña el cobro, la deuda y la vigencia de dos personas, y
+         * por controlador resolvería a `members.view`, que tiene el token
+         * compartido. El historial de la ficha sí va con `members.view`: es
+         * donde el Administrador, sin `audit.view`, ve la traza.
+         */
+        'GET api/users/{user}/membership-transfer/preview' => 'members.transfer_membership',
+        'POST api/users/{user}/membership-transfer' => 'members.transfer_membership',
+        'POST api/membership-transfers/{transfer}/revert' => 'members.transfer_membership',
+        'GET api/users/{user}/membership-transfers' => 'members.view',
+
         // Consultar el acceso es parte de atender en el mostrador: quien ve la
         // ficha tiene que poder ver si hoy puede entrar y cuántas entradas le
         // quedan. Sumarle días o entradas NO: eso es regalar lo que se vende, y

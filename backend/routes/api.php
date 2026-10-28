@@ -158,6 +158,19 @@ Route::middleware('auth.admin')->group(function (): void {
         ->whereNumber('user');
     Route::post('users/{user}/resume', [\App\Http\Controllers\Api\Admin\MembershipFreezeController::class, 'resume'])
         ->whereNumber('user');
+    // TRANSFERIR la membresía a otra persona: la titular cede lo que le queda
+    // del periodo de un cobro, sin cobro nuevo. Permiso propio
+    // (`members.transfer_membership`), también para la vista previa; el
+    // historial de la ficha, con `members.view`. Ver
+    // docs/ops/TRANSFERENCIA-DE-MEMBRESIAS.md.
+    Route::get('users/{user}/membership-transfer/preview', [\App\Http\Controllers\Api\Admin\MembershipTransferController::class, 'preview'])
+        ->whereNumber('user');
+    Route::post('users/{user}/membership-transfer', [\App\Http\Controllers\Api\Admin\MembershipTransferController::class, 'store'])
+        ->whereNumber('user');
+    Route::get('users/{user}/membership-transfers', [\App\Http\Controllers\Api\Admin\MembershipTransferController::class, 'index'])
+        ->whereNumber('user');
+    Route::post('membership-transfers/{transfer}/revert', [\App\Http\Controllers\Api\Admin\MembershipTransferController::class, 'revert'])
+        ->whereNumber('transfer');
     // ACCESO del socio: si puede entrar ahora y cuántas entradas le quedan en un
     // plan por consumo. Es la misma respuesta que usa el terminal de recepción,
     // para que el mostrador y la puerta no puedan decir cosas distintas.

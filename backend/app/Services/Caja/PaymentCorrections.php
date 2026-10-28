@@ -125,6 +125,7 @@ class PaymentCorrections
         }
 
         $this->assertNoDependentUpgrade($cobro);
+        $this->guards->assertNotTransferred($cobro);
         $this->guards->assertInvoiceAllows($cobro);
 
         $pasarela = CorrectionGuards::isGatewayPayment($cobro);
@@ -302,6 +303,7 @@ class PaymentCorrections
                 $bloquea(CorrectionException::gatewayPayment());
             }
             if ($pagado) {
+                $bloquea($this->guards->transferBlocker($payment));
                 $bloquea($this->guards->invoiceBlocker($payment));
                 if ($deuda !== null && ! $deuda->isCancelled()) {
                     $bloqueos[] = [
@@ -325,6 +327,7 @@ class PaymentCorrections
                 $bloquea(CorrectionException::useReceivableFlow($deuda?->id));
             }
             if ($pagado) {
+                $bloquea($this->guards->transferBlocker($payment));
                 $bloquea($this->guards->invoiceBlocker($payment));
                 if ($this->dependentUpgradeExists($payment)) {
                     $bloqueos[] = ['code' => 'upgrade_depends', 'message' => 'Primero anula la mejora que depende de este cobro.'];
