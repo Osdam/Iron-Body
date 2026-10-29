@@ -1,0 +1,48 @@
+{
+  "source": "/var/backups/ironbody/pre-endurecimiento-2-20261016T155026Z/ironbody.dump",
+  "dump_sha256": "29628f7ffae928eee829252c30f0e28859d0e68e2bfe58e9ff668f625ef7a290",
+  "dump_sha256_matches_SHA256SUMS": true,
+  "table": "plans",
+  "row": {
+    "id": 22,
+    "name": "TOTAL ACCESS - ELITE",
+    "price": "180000.00",
+    "duration_days": 30,
+    "benefits": [
+      "Acceso al gimnasio durante la vigencia del plan",
+      "Plan heredado del sistema anterior"
+    ],
+    "access_classes": true,
+    "reservations_limit": null,
+    "access_locations": null,
+    "restrictions": null,
+    "active": true,
+    "created_at": "2026-09-01 04:56:25",
+    "updated_at": "2026-10-08 23:05:39",
+    "original_price": null,
+    "is_recommended": true,
+    "badge": null,
+    "sort_order": 108,
+    "features": {
+      "iron_ia": true,
+      "workouts": true,
+      "custom_routines": true,
+      "ranking": true,
+      "classes": true,
+      "progress": true,
+      "nutrition": true
+    },
+    "tier": "lite",
+    "tax_rate_id": 4,
+    "price_includes_tax": true,
+    "unspsc_code": null,
+    "pricing_mode": "legacy_inclusive",
+    "billing_enabled": true,
+    "sellable": true,
+    "access_mode": "unlimited",
+    "entry_credits": null,
+    "access_days": null,
+    "access_windows": null,
+    "visible_in_app": true
+  }
+}

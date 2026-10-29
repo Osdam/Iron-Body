@@ -9,7 +9,9 @@ use App\Http\Requests\Wompi\WompiNequiPaymentRequest;
 use App\Http\Requests\Wompi\WompiPsePaymentRequest;
 use App\Models\Member;
 use App\Models\PaymentTransaction;
+use App\Models\Plan;
 use App\Models\User;
+use App\Rules\PlanNotArchived;
 use App\Services\Members\MemberUserResolver;
 use App\Services\MembershipService;
 use App\Services\Wompi\WompiAcceptanceService;
@@ -262,6 +264,13 @@ class WompiPaymentController extends Controller
             throw ValidationException::withMessages([
                 'plan_id' => ['El plan de membresía es obligatorio para procesar el pago.'],
             ]);
+        }
+        // Un plan archivado no se vende por ninguna vía, tampoco por la app
+        // (PlanArchive). Se comprueba al CREAR el cobro: el webhook de uno ya
+        // pagado sigue activando la membresía, porque ese dinero es real.
+        if (! $isStore && is_numeric($data['plan_id']) && ($plan = Plan::query()->find((int) $data['plan_id'])) !== null
+            && $plan->isArchived()) {
+            throw ValidationException::withMessages(['plan_id' => [PlanNotArchived::message($plan)]]);
         }
 
         $user = $this->ensureUserForMember($member);

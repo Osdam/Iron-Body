@@ -300,6 +300,10 @@ class PlanUpgrades
             return 'Ya tiene ese plan.';
         }
 
+        if ($nuevo->isArchived()) {
+            return 'Ese plan está archivado: ya no se vende.';
+        }
+
         if (! $nuevo->active) {
             return 'Ese plan está inactivo.';
         }

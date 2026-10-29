@@ -15,6 +15,7 @@ use App\Services\Payments\MembershipPeriod;
 use Carbon\Carbon;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -156,7 +157,12 @@ class PlanUpgradeLifecycleTest extends TestCase
     public function test_reconfirmar_no_cobra_si_el_plan_destino_fue_eliminado(): void
     {
         $this->update(['status' => 'cancelled'])->assertOk();
-        Plan::findOrFail($this->upgrade->plan_id)->delete();
+        // Estado HEREDADO de antes de la llave RESTRICT (2026_10_31_100001): lo
+        // que hacía ON DELETE SET NULL. Hoy PostgreSQL ya no deja borrar un
+        // plan con cobros; los que se borraron antes siguen así en la base.
+        $destino = Plan::findOrFail($this->upgrade->plan_id);
+        DB::table('payments')->where('plan_id', $destino->id)->update(['plan_id' => null]);
+        $destino->delete();
         $this->update(['status' => 'paid'])->assertUnprocessable()->assertJsonValidationErrors('status');
         $this->assertSame('cancelled', $this->upgrade->refresh()->status);
         $this->assertSame('Mensual', $this->user->refresh()->plan);

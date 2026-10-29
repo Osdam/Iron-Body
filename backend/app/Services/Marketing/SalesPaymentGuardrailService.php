@@ -108,6 +108,7 @@ class SalesPaymentGuardrailService
          */
         if (! $plan->isSellable()) {
             [$code, $message] = match (true) {
+                $plan->isArchived() => ['plan_archived', 'Ese plan está archivado: ya no se vende.'],
                 ! (bool) $plan->active => ['plan_inactive', 'El plan seleccionado no está activo.'],
                 (float) $plan->price <= 0 => ['plan_price_invalid', 'El plan no tiene un precio válido para cobrar.'],
                 (int) $plan->duration_days <= 0 => ['plan_duration_invalid', 'El plan no tiene una duración válida.'],

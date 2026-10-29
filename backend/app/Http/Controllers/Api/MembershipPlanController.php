@@ -12,6 +12,7 @@ class MembershipPlanController extends Controller
     {
         $plans = Plan::query()
             ->where('active', true)
+            ->whereNull('archived_at')
             // Oculto en la app NO es lo mismo que inactivo: el plan se sigue
             // cobrando en el mostrador, pero el socio no lo ve en su teléfono.
             // Ver la migración de `visible_in_app`.

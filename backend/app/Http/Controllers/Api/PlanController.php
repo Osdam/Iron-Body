@@ -2,16 +2,22 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exceptions\PlanArchiveException;
 use App\Http\Controllers\Concerns\ResolvesPagination;
 use App\Http\Controllers\Controller;
+use App\Models\Admin;
 use App\Models\MembershipAiCapability;
 use App\Models\Payment;
 use App\Models\Plan;
 use App\Services\Audit\AuditTrail;
+use App\Services\Admin\AdminSessionService;
 use App\Services\Membership\PlanAccessRules;
+use App\Services\Membership\PlanArchive;
 use App\Models\User;
 use App\Services\IronAiMembershipAccessService;
 use App\Services\RealtimeEvents;
+use App\Support\Access\CrmPermission;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -25,25 +31,65 @@ class PlanController extends Controller
 
     public function __construct(private readonly IronAiMembershipAccessService $aiAccess) {}
 
+    /**
+     * GET /api/plans — PÚBLICA (la app la lee sin sesión).
+     *
+     * `archived=include` (por defecto) es lo de siempre: todos los planes,
+     * archivados incluidos, como los ha listado siempre. `exclude` deja fuera
+     * los archivados (los selectores para vender) y `only` deja solo esos.
+     */
     public function index(Request $request)
     {
+        $data = $request->validate(['archived' => ['sometimes', 'string', 'in:exclude,only,include']]);
+        $admin = $this->adminViewer($request);
+
         // `access` va junto a las columnas: son las reglas ya normalizadas, que
         // es lo que el CRM pinta. Sin esto cada pantalla tendría que volver a
         // interpretar el JSON de días y franjas, y acabarían discrepando.
         return Plan::query()
+            ->when(($data['archived'] ?? 'include') === 'exclude', fn ($q) => $q->notArchived())
+            ->when(($data['archived'] ?? 'include') === 'only', fn ($q) => $q->archived())
+            ->when($admin, fn ($q) => $q->with('archiver:id,name'))
             ->paginate($this->resolvePerPage($request))
-            ->through(fn (Plan $plan): array => $this->payload($plan));
+            ->through(fn (Plan $plan): array => $this->payload($plan, $admin));
     }
 
     /**
      * Un plan como lo lee el CRM: sus columnas más las reglas de acceso ya
-     * interpretadas.
+     * interpretadas y el archivo.
+     *
+     * Quién lo archivó y por qué solo van con sesión de administrador: el
+     * listado es público. Sin ella las dos claves llegan, en null.
      *
      * @return array<string, mixed>
      */
-    private function payload(Plan $plan): array
+    private function payload(Plan $plan, bool $admin = true): array
     {
-        return array_merge($plan->toArray(), ['access' => $plan->accessRules()->toArray()]);
+        if ($admin && $plan->archived_by !== null && ! $plan->relationLoaded('archiver')) {
+            $plan->load('archiver:id,name');
+        }
+
+        return array_merge($plan->toArray(), [
+            'access' => $plan->accessRules()->toArray(),
+            'is_archived' => $plan->isArchived(),
+            'archived_by_name' => $admin ? $plan->archiver?->name : null,
+            'archive_reason' => $admin ? $plan->archive_reason : null,
+        ]);
+    }
+
+    /**
+     * ¿Lo pide una persona del CRM que puede ver planes? En las rutas con
+     * `auth.admin` ya está resuelta; en las públicas se mira la credencial sin
+     * exigirla (y sin tocar la sesión). El token compartido no es nadie.
+     */
+    private function adminViewer(Request $request): bool
+    {
+        $admin = $request->attributes->get('auth_admin');
+        if (! $admin instanceof Admin && is_string($token = $request->bearerToken()) && $token !== '') {
+            $admin = app(AdminSessionService::class)->resolveByToken($token)?->admin;
+        }
+
+        return $admin instanceof Admin && $admin->isActive() && CrmPermission::allows($admin, 'plans.view');
     }
 
     /**
@@ -131,9 +177,9 @@ class PlanController extends Controller
         ]);
     }
 
-    public function show(Plan $plan)
+    public function show(Request $request, Plan $plan)
     {
-        return response()->json($this->payload($plan));
+        return response()->json($this->payload($plan, $this->adminViewer($request)));
     }
 
     public function store(Request $request)
@@ -161,6 +207,12 @@ class PlanController extends Controller
     public function update(Request $request, Plan $plan)
     {
         $data = $this->validatedData($request, true, $plan);
+
+        // Un plan archivado no vuelve a la venta ni a la app por la edición:
+        // eso es «Reactivar», que comprueba que se pueda vender y lo audita.
+        if ($plan->isArchived() && (($data['active'] ?? false) || ($data['visible_in_app'] ?? false))) {
+            throw PlanArchiveException::archivedEdit();
+        }
 
         if (array_key_exists('features', $data)) {
             $data['features'] = array_merge(
@@ -195,22 +247,175 @@ class PlanController extends Controller
         return response()->json($this->payload($plan));
     }
 
+    /**
+     * Borra un plan SOLO si nada lo referencia. Si algo lo hace, 409
+     * `plan_has_history` con lo que lo usa y la alternativa: archivarlo
+     * ({@see archive()}).
+     *
+     * Antes borraba sin mirar, y la llave de `payments.plan_id` era ON DELETE
+     * SET NULL: el 16-10-2026 se borró «TOTAL ACCESS - ELITE» y sus 31 cobros
+     * se quedaron «sin plan», con la transferencia de membresía rota encima.
+     *
+     * Bajo cerrojo de la fila: un cobro que se registre a la vez con este plan
+     * espera (su llave foránea pide FOR KEY SHARE sobre ella) y llega cuando el
+     * plan ya no está, o llega antes y se cuenta aquí. En PostgreSQL la llave es
+     * además RESTRICT; si algo se cuela, su 23503 también responde 409.
+     */
     public function destroy(Request $request, Plan $plan)
     {
-        DB::transaction(function () use ($request, $plan): void {
-            $nombre = $plan->name;
-            $id = $plan->id;
-            $plan->delete();
+        try {
+            $dependencias = DB::transaction(function () use ($request, $plan): ?array {
+                $bloqueado = Plan::query()->whereKey($plan->id)->lockForUpdate()->first();
+                if ($bloqueado === null) {
+                    return null;
+                }
 
-            app(AuditTrail::class)->record($request, [
-                'action' => 'delete', 'module' => 'Planes', 'entity' => 'plan',
-                'entity_id' => $id, 'target_name' => $nombre,
-                'summary' => "Eliminó el plan {$nombre}",
-                'metadata' => $this->eventMetadata($plan, 'plan.deleted'),
-            ]);
-        });
+                $dependencias = $this->dependenciesOf($bloqueado);
+                if (array_sum($dependencias) > 0) {
+                    return $dependencias;
+                }
+
+                $nombre = $bloqueado->name;
+                $id = $bloqueado->id;
+                $bloqueado->delete();
+
+                app(AuditTrail::class)->record($request, [
+                    'action' => 'delete', 'module' => 'Planes', 'entity' => 'plan',
+                    'entity_id' => $id, 'target_name' => $nombre,
+                    'summary' => "Eliminó el plan {$nombre}",
+                    'metadata' => $this->eventMetadata($bloqueado, 'plan.deleted'),
+                ]);
+
+                return [];
+            });
+        } catch (QueryException $e) {
+            // 23503: una fila que lo referencia con llave RESTRICT (PostgreSQL).
+            if ((string) ($e->errorInfo[0] ?? '') !== '23503') {
+                throw $e;
+            }
+            $dependencias = $this->dependenciesOf($plan) + ['other' => 1];
+        }
+
+        if ($dependencias === null) {
+            return response()->json(['ok' => false, 'message' => 'El plan ya no existe.'], 404);
+        }
+        if ($dependencias !== []) {
+            return response()->json([
+                'ok' => false,
+                'code' => 'plan_has_history',
+                'message' => 'No se puede eliminar «'.$plan->name.'»: '.$this->describeDependencies($dependencias).
+                    '. Borrarlo los dejaría sin plan. Archívalo en su lugar: deja de venderse y de verse en la app, '.
+                    'y su historial se conserva.',
+                'can_archive' => true,
+                'is_archived' => $plan->isArchived(),
+                'dependencies' => $dependencias,
+                // La alternativa: POST con `{reason}` (5–500).
+                'archive' => ['method' => 'POST', 'path' => '/api/plans/'.$plan->id.'/archive'],
+            ], 409);
+        }
 
         return response()->json(null, 204);
+    }
+
+    /**
+     * Lo que referencia al plan y se quedaría huérfano si se borrara, con
+     * todas las claves (cero incluido). Con DB::table: el scope del entrenador
+     * sobre User no puede esconder socios aquí, o el plan se borraría con gente
+     * dentro.
+     *
+     * @return array{payments: int, members: int, plan_transfers: int, membership_transfers: int, gateway_transactions: int, subscriptions: int}
+     */
+    private function dependenciesOf(Plan $plan): array
+    {
+        $id = (int) $plan->id;
+
+        return [
+            // Cualquier estado: un cobro anulado también es historia.
+            'payments' => DB::table('payments')
+                ->where(fn ($q) => $q->where('plan_id', $id)->orWhere('upgraded_from_plan_id', $id))
+                ->count(),
+            // `users.plan` guarda el NOMBRE; se compara como lo lee la puerta.
+            'members' => PlanArchive::membersNamed((string) $plan->name),
+            'plan_transfers' => DB::table('plan_transfer_batches')
+                ->where(fn ($q) => $q->where('from_plan_id', $id)->orWhere('to_plan_id', $id))
+                ->count(),
+            'membership_transfers' => DB::table('membership_transfers')
+                ->where(fn ($q) => $q->where('plan_id', $id)->orWhere('source_plan_id', $id))
+                ->count(),
+            'gateway_transactions' => DB::table('payment_transactions')->where('plan_id', $id)->count(),
+            'subscriptions' => DB::table('membership_subscriptions')->where('plan_id', $id)->count(),
+        ];
+    }
+
+    /**
+     * POST /api/plans/{plan}/archive — `plans.manage`. Cuerpo `{reason}`.
+     *
+     * Lo saca de la venta y de la app sin tocar a nadie que lo tenga
+     * ({@see PlanArchive}). Idempotente: si ya estaba archivado, 200 con
+     * `already: true` y nada escrito.
+     */
+    public function archive(Request $request, Plan $plan, PlanArchive $archive)
+    {
+        $data = $request->validate(['reason' => ['required', 'string', 'min:5', 'max:500']]);
+
+        $r = $archive->archive($request, $plan, trim($data['reason']));
+
+        return response()->json([
+            'ok' => true,
+            'already' => $r['already'],
+            'plan' => $this->payload($r['plan']->refresh()),
+            ...$archive->effects($r['plan']),
+        ]);
+    }
+
+    /**
+     * POST /api/plans/{plan}/reactivate — `plans.manage`. Cuerpo
+     * `{reason, visible_in_app?}` (por defecto visible).
+     *
+     * Solo si se puede volver a vender (422 `plan_not_reactivable` con los
+     * motivos). No toca membresías, vencidas ni vigentes. Si ya estaba activo,
+     * vendible y sin archivar, 200 con `already: true`.
+     */
+    public function reactivate(Request $request, Plan $plan, PlanArchive $archive)
+    {
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'min:5', 'max:500'],
+            'visible_in_app' => ['sometimes', 'boolean'],
+        ]);
+
+        $r = $archive->reactivate($request, $plan, trim($data['reason']), array_key_exists('visible_in_app', $data)
+            ? (bool) $data['visible_in_app'] : null);
+
+        return response()->json([
+            'ok' => true,
+            'already' => $r['already'],
+            'plan' => $this->payload($r['plan']->refresh()),
+        ]);
+    }
+
+    /** @param  array<string, int>  $dependencias */
+    private function describeDependencies(array $dependencias): string
+    {
+        $nombres = [
+            'payments' => ['cobro', 'cobros'],
+            'members' => ['socio con este plan', 'socios con este plan'],
+            'plan_transfers' => ['traslado de plan', 'traslados de plan'],
+            'membership_transfers' => ['traspaso de membresía', 'traspasos de membresía'],
+            'gateway_transactions' => ['transacción de pasarela', 'transacciones de pasarela'],
+            'subscriptions' => ['suscripción automática', 'suscripciones automáticas'],
+        ];
+        $partes = [];
+        foreach ($dependencias as $clave => $n) {
+            if (isset($nombres[$clave]) && $n > 0) {
+                $partes[] = $n.' '.$nombres[$clave][$n === 1 ? 0 : 1];
+            }
+        }
+        if ($partes === []) {
+            return 'hay registros que lo referencian';
+        }
+        $ultima = array_pop($partes);
+
+        return 'lo usan '.($partes === [] ? $ultima : implode(', ', $partes).' y '.$ultima);
     }
 
     /** GET /api/plans/features — todos los planes con sus feature flags. */

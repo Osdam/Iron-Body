@@ -301,6 +301,10 @@ class MembershipRealtimeTest extends TestCase
         ], $headers)->assertCreated()->json('transfer.id');
         $cursor = (int) AuditLog::max('id');
         // Se borra el plan del catálogo: el traspaso y el cobro se quedan sin él.
+        // Es el estado HEREDADO de antes de la llave RESTRICT (2026_10_31_100001):
+        // se reproduce lo que hacía ON DELETE SET NULL, porque hoy PostgreSQL ya
+        // no deja borrar un plan con cobros.
+        DB::table('payments')->where('plan_id', $plan->id)->update(['plan_id' => null]);
         DB::table('plans')->where('id', $plan->id)->delete();
         $this->postJson("/api/membership-transfers/{$id}/revert", ['reason' => 'Beneficiario equivocado'], $headers)->assertOk();
 

@@ -26,6 +26,7 @@ use App\Models\Plan;
 use App\Models\User;
 use App\Rules\DeliverableInvoiceEmail;
 use App\Rules\PaymentMethodInput;
+use App\Rules\PlanNotArchived;
 use App\Services\Billing\InvoiceEmail;
 use App\Services\Billing\InvoicingService;
 use App\Services\Billing\Money;
@@ -81,7 +82,7 @@ class PaymentController extends Controller
 
     public function index(Request $request)
     {
-        $query = Payment::query()->with(['user:id,name,email', 'plan:id,name', 'electronicInvoice', 'splits'])->latest();
+        $query = Payment::query()->with(['user:id,name,email', 'plan:id,name,active', 'electronicInvoice', 'splits'])->latest();
 
         $this->applyCrmFilters($query, $request);
 
@@ -220,7 +221,7 @@ class PaymentController extends Controller
                 $join->on('latest.user_id', '=', 'payments.user_id')
                     ->whereRaw("{$effective} = latest.last_at");
             })
-            ->with(['user:id,name', 'plan:id,name'])
+            ->with(['user:id,name', 'plan:id,name,active'])
             ->orderBy('payments.id')
             ->get([
                 'payments.id', 'payments.user_id', 'payments.plan_id', 'payments.amount',
@@ -423,7 +424,7 @@ class PaymentController extends Controller
     {
         $cobro = $payment->load([
             'user:id,name,email',
-            'plan:id,name',
+            'plan:id,name,active',
             'electronicInvoice',
             'splits',
         ])->append('invoice_summary')->makeHidden('electronicInvoice');
@@ -483,7 +484,7 @@ class PaymentController extends Controller
         }
 
         return response()->json(array_merge(
-            $previo->fresh()->load(['user:id,name,email', 'plan:id,name', 'splits'])->toArray(),
+            $previo->fresh()->load(['user:id,name,email', 'plan:id,name,active', 'splits'])->toArray(),
             ['idempotent_replay' => true],
         ), 200);
     }
@@ -492,7 +493,8 @@ class PaymentController extends Controller
     {
         $data = $request->validate([
             'user_id' => 'required|exists:users,id',
-            'plan_id' => 'nullable|exists:plans,id',
+            // Un plan archivado no se vende (PlanArchive): ni en mostrador.
+            'plan_id' => ['nullable', 'exists:plans,id', new PlanNotArchived],
             'amount' => 'required|numeric|min:0',
             'method' => ['nullable', 'string', 'max:80', new PaymentMethodInput(devengoLoDecideElCobro: true)],
             'reference' => 'nullable|string|max:120',
@@ -664,7 +666,7 @@ class PaymentController extends Controller
             );
         }
 
-        return response()->json($payment->fresh()->load(['user:id,name,email', 'plan:id,name', 'splits']), 201);
+        return response()->json($payment->fresh()->load(['user:id,name,email', 'plan:id,name,active', 'splits']), 201);
     }
 
     public function update(Request $request, Payment $payment)
@@ -688,7 +690,7 @@ class PaymentController extends Controller
 
         $resultado = $this->applyUpdate($request, $payment, $data);
 
-        $cuerpo = $payment->fresh()->load(['user:id,name,email', 'plan:id,name', 'splits'])->toArray();
+        $cuerpo = $payment->fresh()->load(['user:id,name,email', 'plan:id,name,active', 'splits'])->toArray();
         if ($resultado['already']) {
             $cuerpo['already'] = true;
         }
@@ -718,7 +720,7 @@ class PaymentController extends Controller
         return response()->json([
             'ok' => true,
             'already' => $resultado['already'],
-            'data' => $payment->fresh()->load(['user:id,name,email', 'plan:id,name', 'splits']),
+            'data' => $payment->fresh()->load(['user:id,name,email', 'plan:id,name,active', 'splits']),
         ]);
     }
 
@@ -747,7 +749,7 @@ class PaymentController extends Controller
             'ok' => true,
             'already' => $r['already'],
             'idempotent_replay' => $r['replay'],
-            'data' => $r['payment']->fresh()->load(['user:id,name,email', 'plan:id,name', 'splits']),
+            'data' => $r['payment']->fresh()->load(['user:id,name,email', 'plan:id,name,active', 'splits']),
             'refund' => $r['refund']?->toCrmArray(),
         ], ($r['already'] || $r['replay']) ? 200 : 201);
     }

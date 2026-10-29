@@ -34,7 +34,10 @@ Se bloquea todo lo que no tiene política comercial definida:
   cuyo `period_end` sea el fin de A. Esto deja fuera ajustes manuales, cortesías, `MIGR-*`,
   renovaciones encadenadas y cobros anulados.
 - **El cobro de origen es una mejora de plan** (`upgraded_from_plan_id`).
-- **`users.plan` de A no coincide con el plan del cobro.**
+- **`users.plan` de A no coincide con el plan del cobro**, salvo que lo explique un traslado de plan vivo
+  (§8.4): entonces B recibe el plan actual de A.
+- **El plan del cobro se borró del catálogo** (`source_plan_deleted`): hay que restaurarlo como histórico
+  antes de ceder (`plans:restore-deleted`).
 - **Plan por entradas.**
 - **Cancelación solicitada, suscripción activa o cobro pendiente o en curso de A.** Se reutilizan los
   hechos de `PlanTransferEvaluator`.
@@ -174,7 +177,8 @@ Todas exigen sesión de **persona** (el token compartido recibe 403; además no 
   holder: {id, name, plan, start, end, status, frozen, days, has_member_profile},
   beneficiary: {id, name, plan, start, end, status, frozen, has_member_profile, member_status, has_face} | null,
   effects: { effective_date, end_date, days,
-             source_payment: {id, plan_id, plan_name, period_start, period_end, paid_at} | null,
+             source_payment: {id, plan_id, plan_name, plan_active, plan_transfer_item_id,
+                              period_start, period_end, paid_at} | null,
              holder: {end_before, end_after, start_after, plan_after, status_after} | null,
              beneficiary: {plan_after, start_after, end_after, status_after} | null,
              creates_payment: false, creates_invoice: false } }
@@ -204,7 +208,7 @@ vacíos (`null`) su `{id, name}`, sus valores previos, `source_payment_id` (si e
 `evidence` y `revert_reason`.
 
 **Códigos de bloqueo.** A: `holder_suspended`, `holder_deleted`, `holder_frozen`, `holder_no_membership`, `holder_not_started`, `holder_expired`,
-`holder_account_inactive`, `holder_received_by_transfer`, `no_source_payment`, `source_not_unique`,
+`holder_account_inactive`, `holder_received_by_transfer`, `no_source_payment`, `source_plan_deleted`, `source_not_unique`,
 `source_mismatch`, `source_migrated`, `source_is_upgrade`, `source_plan_missing`, `plan_mismatch`, `entries_plan`,
 `plan_name_too_long`, `source_already_transferred`, `source_receivable_unpaid`, `holder_cancellation_requested`,
 `holder_pending_payment`, `holder_live_subscription`, `holder_overdue`, `holder_upcoming_reservations`.
@@ -236,3 +240,18 @@ resto sigue exigiendo plan).
   permitirla, hay que decidir cómo se cuenta el periodo de B (desde D, sin cobro propio) antes de abrirla.
 - **Anular un abono** de la deuda ya saldada del cobro de origen después del traspaso reabre la deuda de A (y
   su mora) sin afectar a B. No se bloquea.
+
+### 8.4 Plan del cobro borrado o cambiado por un traslado (28-10-2026)
+
+- **`source_plan_deleted`**: A está cubierta por un cobro pagado con `plan_id` nulo cuya traza de creación
+  (`audit_logs` `pago/create`, `metadata.plan_id`) apunta a un plan que ya no existe. Va antes que el resto
+  de comprobaciones del cobro. `no_source_payment` queda para cuando de verdad no hay cobro.
+- **Traslado vivo**: si el plan del cobro ≠ `users.plan`, se acepta solo con un `plan_transfer_items` de A,
+  de un lote `transfer`, `applied`, sin revertir, con `before.plan_id` = plan del cobro, `after.plan_id` y
+  `after.plan` = su plan actual, y lote ejecutado DESPUÉS de crear el cobro. Sin él, `plan_mismatch`.
+  El plan del cobro archivado (`active=false`) no bloquea.
+- Con traslado, B recibe el plan ACTUAL de A: `membership_transfers.plan_id/plan_name` y el `plan_id` de la
+  traza y del canal son ese plan. La traza añade `source_plan_id` (el del cobro) y `plan_transfer_item_id`.
+- Vista previa: `source_payment.plan_name` es el plan DEL COBRO; `plan_active` (false = histórico) y
+  `plan_transfer_item_id` (null sin traslado). Lo que recibe B sigue en `effects.beneficiary.plan_after`.
+- Los demás bloqueos (deuda, congelación, reservas…) no cambian.

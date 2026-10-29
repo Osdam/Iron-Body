@@ -34,6 +34,11 @@ class PlanTransferException extends RuntimeException
         return new self('El plan origen y el plan destino son el mismo.', 'same_plan');
     }
 
+    public static function destinationArchived(): self
+    {
+        return new self('El plan destino está archivado: no se traslada a nadie a un plan que ya no se vende.', 'to_plan_archived');
+    }
+
     public static function destinationInactive(): self
     {
         return new self('El plan destino está inactivo. Actívalo antes de trasladar socios a él.', 'to_plan_inactive');

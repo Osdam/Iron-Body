@@ -102,6 +102,11 @@ class PlanTransferEvaluator
         if ((int) $from->id === (int) $to->id) {
             throw PlanTransferException::samePlan();
         }
+        // Hacia un plan archivado no se traslada a nadie; DESDE uno sí (es la
+        // forma de vaciarlo).
+        if ($to->isArchived()) {
+            throw PlanTransferException::destinationArchived();
+        }
         if (! $to->active) {
             throw PlanTransferException::destinationInactive();
         }

@@ -720,6 +720,10 @@ Route::middleware('auth.admin')->group(function (): void {
     // IRON IA — capacidades detalladas por plan (CRM ↔ membership_ai_capabilities).
     Route::get('plans/{plan}/ai-capabilities', [PlanController::class, 'aiCapabilities']);
     Route::put('plans/{plan}/ai-capabilities', [PlanController::class, 'updateAiCapabilities']);
+    // Archivar en vez de borrar un plan con historia, y volver a venderlo.
+    // `plans.manage` (AuthorizationMap: escritura del dominio `plans`).
+    Route::post('plans/{plan}/archive', [PlanController::class, 'archive'])->whereNumber('plan');
+    Route::post('plans/{plan}/reactivate', [PlanController::class, 'reactivate'])->whereNumber('plan');
     Route::apiResource('plans', PlanController::class)->only(['store','update','destroy']);
 });
 // TRASLADAR SOCIOS ENTRE PLANES: cambiar el plan de un grupo sin cobrar nada,

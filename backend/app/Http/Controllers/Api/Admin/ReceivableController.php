@@ -33,6 +33,7 @@ use App\Support\Access\AdminActor;
 use App\Support\Caja\PaymentMethodKind;
 use App\Support\Caja\PaymentOrigin;
 use App\Support\Caja\PaymentTerm;
+use App\Rules\PlanNotArchived;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
@@ -793,7 +794,7 @@ class ReceivableController extends Controller
     {
         $data = $request->validate([
             'user_id' => ['required', 'integer', 'exists:users,id'],
-            'plan_id' => ['required', 'integer', 'exists:plans,id'],
+            'plan_id' => ['required', 'integer', 'exists:plans,id', new PlanNotArchived],
             'first_payment' => ['required', 'numeric', 'min:0.01'],
             'method' => ['required', Rule::in(PaymentMethodKind::selectableAtCounter())],
             'client_request_id' => ['nullable', 'string', 'max:100'],

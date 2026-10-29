@@ -20,6 +20,11 @@ class MembershipTransfer extends Model
         'source_payment_id',
         'plan_id',
         'plan_name',
+        // El plan COMPRADO (el del cobro) y el ítem de traslado que explica
+        // que B reciba otro. Ver add_source_plan_to_membership_transfers_table.
+        'source_plan_id',
+        'source_plan_name',
+        'plan_transfer_item_id',
         'effective_date',
         'end_date',
         'days',
@@ -51,6 +56,8 @@ class MembershipTransfer extends Model
             'beneficiary_user_id' => 'integer',
             'source_payment_id' => 'integer',
             'plan_id' => 'integer',
+            'source_plan_id' => 'integer',
+            'plan_transfer_item_id' => 'integer',
             'days' => 'integer',
             'effective_date' => 'date:Y-m-d',
             'end_date' => 'date:Y-m-d',

@@ -12,9 +12,12 @@ use App\Models\MembershipAdjustment;
 use App\Models\MembershipTransfer;
 use App\Models\Payment;
 use App\Models\Plan;
+use App\Models\PlanTransferBatch;
+use App\Models\PlanTransferItem;
 use App\Models\Receivable;
 use App\Models\User;
 use App\Services\Audit\AuditTrail;
+use App\Services\Audit\PaymentCreationAudit;
 use App\Services\Caja\MembershipFinancialStanding;
 use App\Services\Classes\ClassBookingService;
 use App\Services\Payments\MembershipPeriod;
@@ -189,6 +192,8 @@ class MembershipTransfers
         $origen = $ev['source'];
         /** @var Plan $plan */
         $plan = $ev['plan'];
+        /** @var Plan|null $planCobro */
+        $planCobro = $ev['source_plan'];
         $hoy = $ev['today'];
         $fin = $ev['end'];
         $ayer = $hoy->subDay();
@@ -218,6 +223,9 @@ class MembershipTransfers
             'source_payment_id' => $origen->id,
             'plan_id' => $plan->id,
             'plan_name' => $plan->name,
+            'source_plan_id' => $planCobro?->id,
+            'source_plan_name' => $planCobro?->name,
+            'plan_transfer_item_id' => $ev['plan_transfer_item']?->id,
             'effective_date' => $hoy->toDateString(),
             'end_date' => $fin->toDateString(),
             'days' => $ev['days'],
@@ -248,6 +256,11 @@ class MembershipTransfers
             'payment_id' => (int) $origen->id,
             'plan_id' => (int) $plan->id,
             'plan_name' => $plan->name,
+            // El plan comprado (el del cobro) y, si no es el que recibe B, el
+            // ítem del traslado de plan que lo explica.
+            'source_plan_id' => $planCobro !== null ? (int) $planCobro->id : null,
+            'source_plan_name' => $planCobro?->name,
+            'plan_transfer_item_id' => $ev['plan_transfer_item']?->id,
             'effective_date' => $hoy->toDateString(),
             'end_date' => $fin->toDateString(),
             'days' => $ev['days'],
@@ -533,6 +546,9 @@ class MembershipTransfers
             // El cobro es de la titular.
             'source_payment_id' => $titularOculta ? null : $t->source_payment_id,
             'plan' => ['id' => $t->plan_id, 'name' => $t->plan_name],
+            // El plan comprado; null en los traspasos anteriores a guardarlo.
+            'source_plan' => $t->source_plan_name === null ? null : ['id' => $t->source_plan_id, 'name' => $t->source_plan_name],
+            'plan_transfer_item_id' => $t->plan_transfer_item_id,
             'effective_date' => $t->day('effective_date'),
             'end_date' => $t->day('end_date'),
             'days' => (int) $t->days,
@@ -588,7 +604,7 @@ class MembershipTransfers
      * la transacción y con `$lock`, que bloquea el cobro de origen y sus deudas
      * (los socios ya los bloqueó quien llama).
      *
-     * @return array{blockers: list<array{code: string, message: string}>, warnings: list<array{code: string, severity: string, message: string}>, source: ?Payment, plan: ?Plan, today: CarbonImmutable, end: ?CarbonImmutable, days: ?int, holder: User, beneficiary: ?User, holder_member: ?Member, beneficiary_member: ?Member}
+     * @return array{blockers: list<array{code: string, message: string}>, warnings: list<array{code: string, severity: string, message: string}>, source: ?Payment, plan: ?Plan, source_plan: ?Plan, plan_transfer_item: ?PlanTransferItem, today: CarbonImmutable, end: ?CarbonImmutable, days: ?int, holder: User, beneficiary: ?User, holder_member: ?Member, beneficiary_member: ?Member}
      */
     public function evaluate(User $a, ?User $b, bool $lock = false): array
     {
@@ -628,7 +644,12 @@ class MembershipTransfers
         }
 
         // ── A: el cobro que explica su vigencia ────────────────────────────
-        [$origen, $plan, $bloqueosCobro] = $vigente ? $this->sourceOf($a, $hoy, $fin, $lock) : [null, null, []];
+        // `$plan` es el que recibiría B: el del cobro o, si un traslado de
+        // plan vivo lo cambió después, el actual de A. `$planCobro` es el del
+        // cobro, tal cual.
+        [$origen, $plan, $bloqueosCobro, $planCobro, $traslado] = $vigente
+            ? $this->sourceOf($a, $hoy, $fin, $lock)
+            : [null, null, [], null, null];
         array_push($bloqueos, ...$bloqueosCobro);
 
         // ── A: lo que dejaría algo colgando ────────────────────────────────
@@ -675,6 +696,8 @@ class MembershipTransfers
             'warnings' => $avisos,
             'source' => $origen,
             'plan' => $plan,
+            'source_plan' => $planCobro,
+            'plan_transfer_item' => $traslado,
             'today' => $hoy,
             'end' => $vigente ? $fin : null,
             'days' => $dias,
@@ -691,10 +714,23 @@ class MembershipTransfers
      * importación, renovación encadenada, mejora, cobro anulado— no tiene
      * política de traspaso y se bloquea.
      *
-     * @return array{0: ?Payment, 1: ?Plan, 2: list<array{code: string, message: string}>}
+     * EL PLAN QUE RECIBE B. El del cobro, salvo que un TRASLADO DE PLAN vivo
+     * de esta misma socia lo haya cambiado después: entonces su plan actual,
+     * que es el que el gimnasio decidió que tiene. Solo con el ítem de traslado
+     * como prueba ({@see liveTransferItemFor()}); nunca por parecido de nombre.
+     *
+     * @return array{0: ?Payment, 1: ?Plan, 2: list<array{code: string, message: string}>, 3: ?Plan, 4: ?PlanTransferItem}
      */
     private function sourceOf(User $a, CarbonImmutable $hoy, CarbonImmutable $fin, bool $lock): array
     {
+        // Un cobro pagado que cubre la vigencia pero perdió su plan porque se
+        // borró del catálogo (la llave era ON DELETE SET NULL): no es «sin
+        // cobro», y decirlo así manda a buscar un ajuste que no existe.
+        if ($this->coveredByDeletedPlan($a, $hoy)) {
+            return [null, null, [$this->blocker('source_plan_deleted',
+                'El plan de su cobro se eliminó del catálogo; hay que restaurarlo como histórico antes de ceder.')], null, null];
+        }
+
         $candidatos = Payment::query()
             ->where('user_id', $a->id)
             ->whereNotNull('plan_id')
@@ -709,16 +745,16 @@ class MembershipTransfers
 
         if ($candidatos->isEmpty()) {
             return [null, null, [$this->blocker('no_source_payment',
-                'Su vigencia no la explica un cobro pagado (ajuste manual, cortesía, importación o cobro anulado). No se puede ceder.')]];
+                'Su vigencia no la explica un cobro pagado (ajuste manual, cortesía, importación o cobro anulado). No se puede ceder.')], null, null];
         }
         // Una mejora de plan sustituye el periodo de su cobro origen: los dos
         // siguen «cubriendo» hoy y ninguno lo explica solo. Se dice qué es.
         if ($candidatos->contains(fn (Payment $p): bool => (bool) $p->upgraded_from_plan_id)) {
-            return [null, null, [$this->blocker('source_is_upgrade', 'Su periodo actual viene de una mejora de plan: una mejora no se cede.')]];
+            return [null, null, [$this->blocker('source_is_upgrade', 'Su periodo actual viene de una mejora de plan: una mejora no se cede.')], null, null];
         }
         if ($candidatos->count() > 1) {
             return [null, null, [$this->blocker('source_not_unique',
-                'Su vigencia la forman varios cobros (una renovación encadenada o un periodo futuro ya pagado). Solo se cede el periodo de un único cobro.')]];
+                'Su vigencia la forman varios cobros (una renovación encadenada o un periodo futuro ya pagado). Solo se cede el periodo de un único cobro.')], null, null];
         }
 
         /** @var Payment $origen */
@@ -730,20 +766,26 @@ class MembershipTransfers
         if ($desde->greaterThan($hoy) || ! $hasta->equalTo($fin)) {
             return [null, null, [$this->blocker('source_mismatch',
                 'El fin de su membresía ('.$fin->toDateString().') no coincide con el periodo de su cobro #'.$origen->id.
-                ' ('.$desde->toDateString().' → '.$hasta->toDateString().'). Tiene ajustes u otros periodos: revísalo antes.')]];
+                ' ('.$desde->toDateString().' → '.$hasta->toDateString().'). Tiene ajustes u otros periodos: revísalo antes.')], null, null];
         }
         if (str_starts_with(strtoupper((string) $origen->reference), 'MIGR-')) {
             $bloqueos[] = $this->blocker('source_migrated', 'Su cobro viene del sistema anterior (importado): no se cede.');
         }
 
-        $plan = Plan::find($origen->plan_id);
-        if ($plan === null) {
+        $planCobro = Plan::find($origen->plan_id);
+        $plan = $planCobro;
+        $traslado = null;
+        if ($planCobro === null) {
             $bloqueos[] = $this->blocker('source_plan_missing', 'El plan de su cobro ya no existe en el catálogo.');
         } else {
-            if (MembershipAccess::planKey((string) ($a->plan ?? '')) !== MembershipAccess::planKey((string) $plan->name)) {
-                $bloqueos[] = $this->blocker('plan_mismatch',
-                    'Su plan («'.($a->plan ?? 'ninguno').'») no es el del cobro («'.$plan->name.'»). Revísalo antes de ceder.');
+            if (MembershipAccess::planKey((string) ($a->plan ?? '')) !== MembershipAccess::planKey((string) $planCobro->name)) {
+                [$traslado, $plan] = $this->liveTransferItemFor($a, $origen, $planCobro) ?? [null, $planCobro];
+                if ($traslado === null) {
+                    $bloqueos[] = $this->blocker('plan_mismatch',
+                        'Su plan («'.($a->plan ?? 'ninguno').'») no es el del cobro («'.$planCobro->name.'»). Revísalo antes de ceder.');
+                }
             }
+            // Las reglas del plan valen para el que recibe B.
             if (PlanAccessRules::fromPlan($plan)->isByEntries()) {
                 $bloqueos[] = $this->blocker('entries_plan', '«'.$plan->name.'» es un plan por entradas: no se cede.');
             }
@@ -770,7 +812,88 @@ class MembershipTransfers
                 'Su cobro es un plan a plazos y la cuenta por cobrar no está pagada. Se cede cuando esté saldada.');
         }
 
-        return [$origen, $plan, $bloqueos];
+        return [$origen, $plan, $bloqueos, $planCobro, $traslado];
+    }
+
+    /**
+     * El traslado de plan que explica por qué el plan de A no es el de su
+     * cobro, con el plan al que la llevó. Todo tiene que cumplirse:
+     *   · es un ítem de A, de un lote de TRASLADO (no de una reversión), sigue
+     *     aplicado y no se revirtió;
+     *   · salió del plan del cobro (`before.plan_id`);
+     *   · llegó al plan que A tiene hoy (`after.plan_id` existe y su nombre,
+     *     como el de `after.plan`, es `users.plan` de A);
+     *   · se ejecutó DESPUÉS del cobro: un traslado anterior no habla de él.
+     * Si hay varios, vale el más reciente que cumpla. Nada por nombre suelto,
+     * fecha ni importe: sin ítem, `plan_mismatch` como siempre.
+     *
+     * @return array{0: PlanTransferItem, 1: Plan}|null
+     */
+    private function liveTransferItemFor(User $a, Payment $origen, Plan $planCobro): ?array
+    {
+        $momentoCobro = $origen->created_at ?? $origen->paid_at;
+        if ($momentoCobro === null) {
+            return null;
+        }
+        $actual = MembershipAccess::planKey((string) ($a->plan ?? ''));
+
+        $items = PlanTransferItem::query()
+            ->where('user_id', $a->id)
+            ->where('status', PlanTransferItem::STATUS_APPLIED)
+            ->whereNull('reverted_at')
+            ->whereNull('reverts_item_id')
+            ->whereHas('batch', fn ($q) => $q->where('kind', PlanTransferBatch::KIND_TRANSFER)
+                ->where('executed_at', '>', $momentoCobro))
+            ->orderByDesc('id')
+            ->get();
+
+        foreach ($items as $item) {
+            $antes = is_array($item->before) ? $item->before : [];
+            $despues = is_array($item->after) ? $item->after : [];
+            if ((int) ($antes['plan_id'] ?? 0) !== (int) $planCobro->id || ! isset($despues['plan_id'])) {
+                continue;
+            }
+            $destino = Plan::find((int) $despues['plan_id']);
+            if ($destino !== null
+                && MembershipAccess::planKey((string) $destino->name) === $actual
+                && MembershipAccess::planKey((string) ($despues['plan'] ?? '')) === $actual) {
+                return [$item, $destino];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * ¿La cubre hoy un cobro pagado que perdió su plan porque se borró del
+     * catálogo? Pagado, con periodo vigente, `plan_id` nulo y una traza de
+     * creación que declara un plan que ya no existe.
+     */
+    private function coveredByDeletedPlan(User $a, CarbonImmutable $hoy): bool
+    {
+        $huerfanos = Payment::query()
+            ->where('user_id', $a->id)
+            ->whereNull('plan_id')
+            ->whereNotNull('period_start')
+            ->whereNotNull('period_end')
+            ->whereRaw('LOWER(status) IN ('.implode(',', array_fill(0, count(PaymentController::PAID_STATUSES), '?')).')',
+                PaymentController::PAID_STATUSES)
+            ->whereDate('period_end', '>=', $hoy->toDateString())
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+        if ($huerfanos === []) {
+            return false;
+        }
+
+        $declarados = collect(app(PaymentCreationAudit::class)->declaredPlans($huerfanos))
+            ->flatMap(fn (array $d): array => $d['plan_ids'])
+            ->filter()
+            ->unique()
+            ->values();
+
+        return $declarados->isNotEmpty()
+            && Plan::query()->whereKey($declarados->all())->count() < $declarados->count();
     }
 
     /**
@@ -890,7 +1013,12 @@ class MembershipTransfers
                 'source_payment' => $origen === null ? null : [
                     'id' => (int) $origen->id,
                     'plan_id' => (int) $origen->plan_id,
-                    'plan_name' => $plan?->name,
+                    // El plan DEL COBRO (con un traslado vivo, no es el que
+                    // recibe B: ese es `beneficiary.plan_after`).
+                    'plan_name' => $ev['source_plan']?->name,
+                    // false = archivado (histórico); el CRM lo enseña así.
+                    'plan_active' => $ev['source_plan'] !== null ? (bool) $ev['source_plan']->active : null,
+                    'plan_transfer_item_id' => $ev['plan_transfer_item']?->id,
                     'period_start' => $origen->period_start?->format('Y-m-d'),
                     'period_end' => $origen->period_end?->format('Y-m-d'),
                     'paid_at' => $origen->paid_at?->toIso8601String(),
