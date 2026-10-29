@@ -41,6 +41,10 @@ class PlanArchiveTest extends TestCase
         Carbon::setTestNow(Carbon::parse('2026-10-28 10:00', 'America/Bogota')->utc());
         $this->admin = Admin::create(['name' => 'Ana Administra', 'email' => 'ana-'.uniqid().'@ironbody.test',
             'password' => 'secret-password', 'role' => Admin::ROLE_ADMINISTRADOR, 'status' => 'active']);
+        // Archivar no llega por defecto al Administrador: se le concede como lo
+        // haría el propietario, desde la matriz de Usuarios y roles.
+        $this->putJson('/api/admin/roles/permissions', ['role' => Admin::ROLE_ADMINISTRADOR,
+            'permission' => 'plans.archive', 'granted' => true], $this->adminAs(Admin::ROLE_SUPER_ADMIN))->assertOk();
         $this->h = $this->actingAsAdmin($this->admin);
         $this->plan = Plan::create(['name' => 'Trimestral Élite', 'price' => 210000, 'duration_days' => 90,
             'active' => true, 'sellable' => true, 'visible_in_app' => true,
@@ -117,9 +121,38 @@ class PlanArchiveTest extends TestCase
         $this->postJson("/api/plans/{$this->plan->id}/archive", ['reason' => 'Motivo válido'])->assertUnauthorized();
 
         $this->assertFalse($this->plan->fresh()->isArchived());
-        // Con `plans.manage` basta.
-        $this->postJson("/api/plans/{$this->plan->id}/archive", ['reason' => 'Motivo válido'], $this->adminWithPermissions(['plans.view', 'plans.manage']))
-            ->assertOk();
+        // Editar planes (`plans.manage`) NO basta: archivar y reactivar tienen su llave.
+        $soloEdita = $this->adminWithPermissions(['plans.view', 'plans.manage']);
+        $this->postJson("/api/plans/{$this->plan->id}/archive", ['reason' => 'Motivo válido'], $soloEdita)->assertForbidden();
+        $this->postJson("/api/plans/{$this->plan->id}/reactivate", ['reason' => 'Motivo válido'], $soloEdita)->assertForbidden();
+        $this->assertFalse($this->plan->fresh()->isArchived());
+
+        // Con `plans.archive` sí, sin necesitar `plans.manage`.
+        $archiva = $this->adminWithPermissions(['plans.view', 'plans.archive']);
+        $this->postJson("/api/plans/{$this->plan->id}/archive", ['reason' => 'Motivo válido'], $archiva)->assertOk();
+        $this->assertTrue($this->plan->fresh()->isArchived());
+        $this->postJson("/api/plans/{$this->plan->id}/reactivate", ['reason' => 'Motivo válido'], $archiva)->assertOk();
+        $this->assertFalse($this->plan->fresh()->isArchived());
+    }
+
+    public function test_retirar_el_permiso_desde_la_matriz_cierra_archivar_y_reactivar(): void
+    {
+        $this->putJson('/api/admin/roles/permissions', ['role' => Admin::ROLE_ADMINISTRADOR,
+            'permission' => 'plans.archive', 'granted' => false], $this->adminAs(Admin::ROLE_SUPER_ADMIN))->assertOk();
+        \Illuminate\Support\Facades\Cache::flush();
+
+        $this->archivar()->assertForbidden();
+        $this->postJson("/api/plans/{$this->plan->id}/reactivate", ['reason' => 'Motivo válido'], $this->h)->assertForbidden();
+        $this->assertFalse($this->plan->fresh()->isArchived());
+    }
+
+    public function test_archivar_y_reactivar_no_llega_por_defecto_mas_que_a_super_admin(): void
+    {
+        $roles = \App\Support\Access\CrmPermission::byRole();
+        foreach ($roles as $rol => $permisos) {
+            $this->assertSame($rol === \App\Models\Admin::ROLE_SUPER_ADMIN, in_array('plans.archive', $permisos, true), "Rol {$rol}");
+        }
+        $this->assertContains('plans.archive', \App\Support\Access\PermissionCatalog::all());
     }
 
     public function test_quien_ya_tiene_el_plan_conserva_membresia_acceso_funciones_cobros_y_facturas(): void
@@ -189,8 +222,9 @@ class PlanArchiveTest extends TestCase
 
     public function test_reactivar_uno_ya_activo_responde_already(): void
     {
+        $trazas = AuditLog::count(); // la concesión del permiso en setUp ya dejó la suya
         $this->reactivar()->assertOk()->assertJsonPath('already', true);
-        $this->assertSame(0, AuditLog::count());
+        $this->assertSame($trazas, AuditLog::count());
     }
 
     public static function invalidos(): array

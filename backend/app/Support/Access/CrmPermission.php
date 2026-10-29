@@ -86,6 +86,9 @@ final class CrmPermission
      */
     public const MEMBERS_TRANSFER_MEMBERSHIP = 'members.transfer_membership';
 
+    /** Archivar un plan (retirarlo de la venta sin borrar su historia) y reactivarlo. */
+    public const PLANS_ARCHIVE = 'plans.archive';
+
     // ── Pagos ───────────────────────────────────────────────────────────────
     //
     // Cobrar es una cosa y fechar el cobro hacia atrás es otra: lo primero lo
@@ -283,6 +286,9 @@ final class CrmPermission
             // a otra. Solo Super Admin por defecto; el propietario la asigna
             // por rol desde Configuración → Usuarios y roles.
             self::MEMBERS_TRANSFER_MEMBERSHIP,
+            // Archivar y reactivar planes: retira o devuelve un plan a la venta.
+            // Solo Super Admin por defecto; el propietario decide a quién darla.
+            self::PLANS_ARCHIVE,
         ]));
 
         /*

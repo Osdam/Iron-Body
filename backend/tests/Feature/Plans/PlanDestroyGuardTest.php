@@ -122,7 +122,9 @@ class PlanDestroyGuardTest extends TestCase
         $this->pago($this->socio(null));
         $alternativa = $this->borrar()->assertStatus(409)->json('archive');
 
-        $this->postJson($alternativa['path'], ['reason' => 'Ya no se vende; tiene cobros'], $this->h)->assertOk()
+        // Archivar exige su propia llave (`plans.archive`), que solo tiene Super Admin por defecto.
+        $this->postJson($alternativa['path'], ['reason' => 'Ya no se vende; tiene cobros'], $this->h)->assertForbidden();
+        $this->postJson($alternativa['path'], ['reason' => 'Ya no se vende; tiene cobros'], $this->adminAs(Admin::ROLE_SUPER_ADMIN))->assertOk()
             ->assertJsonPath('plan.is_archived', true);
 
         $plan = $this->plan->fresh();

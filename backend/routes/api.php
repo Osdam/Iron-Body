@@ -721,7 +721,7 @@ Route::middleware('auth.admin')->group(function (): void {
     Route::get('plans/{plan}/ai-capabilities', [PlanController::class, 'aiCapabilities']);
     Route::put('plans/{plan}/ai-capabilities', [PlanController::class, 'updateAiCapabilities']);
     // Archivar en vez de borrar un plan con historia, y volver a venderlo.
-    // `plans.manage` (AuthorizationMap: escritura del dominio `plans`).
+    // `plans.archive` (AuthorizationMap: llave propia, solo Super Admin por defecto).
     Route::post('plans/{plan}/archive', [PlanController::class, 'archive'])->whereNumber('plan');
     Route::post('plans/{plan}/reactivate', [PlanController::class, 'reactivate'])->whereNumber('plan');
     Route::apiResource('plans', PlanController::class)->only(['store','update','destroy']);

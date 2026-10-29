@@ -583,6 +583,11 @@ final class AuthorizationMap
         'POST api/admin/plan-transfers/{batch}/revert/dry-run' => 'plans.transfer',
         'POST api/admin/plan-transfers/{batch}/revert' => 'plans.transfer',
 
+        // Archivar un plan (sale de la venta y conserva cobros, socios y
+        // traslados) y reactivarlo: su propia llave, no la edición del plan.
+        'POST api/plans/{plan}/archive' => 'plans.archive',
+        'POST api/plans/{plan}/reactivate' => 'plans.archive',
+
         /*
          * El canal del CRM lleva ahora también los hechos de personal,
          * biometría y dispositivos (outbox `class_events`, un solo stream por
