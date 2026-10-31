@@ -29,6 +29,8 @@ SELECT to_regclass('public.ultron_studio_publications') IS NOT NULL AS hay_caden
 \if :hay_cadena
 SELECT has_table_privilege(:'app', 'public.ultron_studio_publications', 'SELECT')                      AS app_select,    -- t  (m-5: por separado; una lista responde t con CUALQUIERA)
        has_table_privilege(:'app', 'public.ultron_studio_publications', 'INSERT')                      AS app_insert,    -- t
+       has_table_privilege(:'app', 'public.ultron_studio_publications', 'UPDATE')                      AS app_update,    -- informativo: t por los privilegios por defecto (arwd); modificar lo impide el disparador uspub_*
+       has_table_privilege(:'app', 'public.ultron_studio_publications', 'DELETE')                      AS app_delete,    -- informativo: idem (borrar lo impide el disparador). Revocarlos: candidato del Hito 7
        has_table_privilege(:'app', 'public.ultron_studio_publications', 'TRUNCATE')                    AS app_truncate,  -- f
        has_sequence_privilege(:'app', 'public.ultron_studio_publications_id_seq', 'USAGE')             AS app_secuencia, -- t
        (SELECT tableowner FROM pg_tables WHERE schemaname = 'public' AND tablename = 'ultron_studio_publications') AS dueno_cadena, -- iron

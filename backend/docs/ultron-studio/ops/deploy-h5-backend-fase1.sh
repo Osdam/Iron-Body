@@ -126,6 +126,11 @@ echo "   disparadores · CHECK · uspub disp. · uspub CHECK · parciales · 9 e
 PRIV=$($PSQL -c "SELECT has_table_privilege('iron_app', 'public.ultron_studio_publications', 'SELECT')||' '||has_table_privilege('iron_app', 'public.ultron_studio_publications', 'INSERT')||' '||has_table_privilege('iron_app', 'public.ultron_studio_publications', 'TRUNCATE')||' '||has_sequence_privilege('iron_app', 'public.ultron_studio_publications_id_seq', 'USAGE');")
 echo "   iron_app sobre la cadena (SELECT · INSERT · TRUNCATE · secuencia): $PRIV"
 [ "$PRIV" = "true true false true" ] || desvio "privilegios de iron_app sobre la cadena [$PRIV], esperado [true true false true]"
+# UPDATE y DELETE los tiene iron_app por los privilegios por defecto del esquema; lo que hace la cadena de solo
+# inserción son los disparadores uspub_* (3/3, afirmados arriba). Se enseñan como información; revocarlos es un
+# refuerzo candidato del Hito 7 (migración aditiva del rol dueño).
+MODIF=$($PSQL -c "SELECT has_table_privilege('iron_app', 'public.ultron_studio_publications', 'UPDATE')||' '||has_table_privilege('iron_app', 'public.ultron_studio_publications', 'DELETE');")
+echo "   iron_app UPDATE · DELETE sobre la cadena (informativo; los paran los disparadores): $MODIF"
 RUTAS=$(sudo -u www-data php artisan route:list --path=admin/ultron-studio --json 2>/dev/null | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))' || echo '?')
 COBERTURA=$(sudo -u www-data php artisan auth:coverage --unmapped 2>&1 | tr -d '\n' | cut -c1-80 || true)
 echo "5. rutas studio: $RUTAS · auth:coverage --unmapped → [$COBERTURA]"
