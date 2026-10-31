@@ -146,7 +146,7 @@ Consecuencia: con 24 workers de FPM compartidos por todo el CRM (caja, ingreso y
 
 ## Hito 4 (laboratorio de IA): revisiones de seguridad
 
-**Estado:** implementado en la rama `feat/ultron-studio-h4` (backend `6dbf485`, CRM `3e630eb`), **no desplegado**. Fecha de las revisiones: 19-10-2026. La Enmienda 5 del contrato (`403a12b`: ejecuciones huérfanas y cobertura) está pendiente de implementar.
+**Estado:** implementado en la rama `feat/ultron-studio-h4` (backend `6dbf485`, CRM `3e630eb`), **no desplegado**. Fecha de las revisiones: 19-10-2026. La Enmienda 5 del contrato (`403a12b`: ejecuciones huérfanas y cobertura) está pendiente de implementar. *(Así se escribió. **Actualización del 31-10-2026:** la Enmienda 5 se implementó en `7113f9f` y la 6 en `bc662b0`, y el Hito 4 está desplegado en las fases 1 y 2 desde el 25-10-2026, 01:15–01:25 UTC (backend `fef7c87`, CRM `5c1dbd7`), con el laboratorio en `fake`, presupuesto 0 y sin clave; ver `ULTRON_STUDIO_FINAL_REPORT.md`.)*
 
 **Superficie nueva:**
 - 12 rutas `lab/*` (33 en el Studio), con dos llaves nuevas (`ultron.lab_manage` y `ultron.lab_run`) y el veredicto con `ultron.approve`;
@@ -248,6 +248,119 @@ Sigue vigente y cubre ahora el laboratorio: antes del despliegue, `tests/Feature
 - Invisibles en el borrador de respuesta del motor: api-security lo apunta como **hipótesis** sobre producción (depende de lo que haga n8n antes del commit); security sondeó la guarda del motor y no encontró un hueco nuevo. Revisión del motor en el Hito 7.
 
 **Secretos:** ninguna revisión encontró secretos expuestos; no hay nada que rotar.
+
+## Hito 5 (gobierno y versionado): revisiones de seguridad
+
+**Estado:** implementado en la rama `feat/ultron-studio-h5` (backend `96397ea`, CRM `a29bcc8`; fusionados con `origin/main` el 31-10-2026 en `cdb9dc8` y `9fe1817`, más `cf59cef` en el backend), **no desplegado**. Revisiones del 25-10-2026: `plans/informes-h5/informe-security.md` e `informe-api-security.md`, más los hallazgos de seguridad del tester de backend, del E2E y de DevOps. Las protecciones de esta sección **rigen en producción cuando se despliegue**.
+
+**Superficie nueva:**
+- 5 rutas nuevas (38 en el Studio) y 2 que dejan de responder 409 siempre (`publish` y `rollback`). Ninguna llave nueva: publicar y promover van con `ultron.publish`; revertir y Legacy, con `ultron.rollback`. Lo demás, con `ultron.view`;
+- la tabla `ultron_studio_publications`, de solo inserción, con texto libre del personal (la nota de publicar o promover y el motivo de revertir o de Legacy van a `reason`) y el nombre y el rol de quien actúa;
+- **el motor lee por primera vez una tabla del Studio:** una sentencia por commit, desde una sola clase (`UltronPublishedConfig`) y solo con `MARKETING_ULTRON_STUDIO_CONFIG` distinta de `off`;
+- una firma HMAC con una subclave derivada de la `APP_KEY`;
+- el acta del canario (`ultron:canary-report`) ejecutada dentro del proceso web, con los textos de una conversación real en memoria;
+- 7 variables de entorno nuevas y dos scripts que las escriben en producción.
+
+**Lo que no cambia:** lo que ULTRON dice o hace (opción A); el motor no escribe en `ultron_studio_*` ni importa clases del Studio, y el Studio no escribe en el motor; las dependencias (`composer.*` y `package*.json` sin cambios en las dos ramas, `security` §3).
+
+### Las llaves y el registro
+
+Publicar exige que las tres llaves estén abiertas, y lo que rige lo dice la cabeza firmada de la cadena (contrato A5):
+
+| Llave | Dónde | Qué abre | Quién la gira |
+|---|---|---|---|
+| Código | `StudioPublishing::ENGINE_READS_VERSIONS = true` (desde `2bc053b`) | Que exista código que publique y código que lea | El commit; sola no abre nada |
+| Entorno del motor | `MARKETING_ULTRON_STUDIO_CONFIG = off \| canary \| all` (`off` por defecto; cualquier otro valor es `off`) | Que el motor consulte la cadena y hasta dónde | El propietario (fases 2 y 3) |
+| Entorno del Studio | `ULTRON_STUDIO_PUBLISHING_ENABLED` (apagada por defecto; solo `true`, `1`, `on` o `yes` la encienden desde `d24c512`) | Las rutas de publicar y promover | El propietario |
+| **Registro** | La cabeza firmada de `ultron_studio_publications` | Qué declaración rige y para quién (`canary` / `rest`) | El Studio, con cuatro ojos |
+
+Revertir y volver a Legacy no dependen de ninguna de las dos llaves de entorno ni exigen cuatro ojos o ventana: deshacer no puede depender de la llave que permite cambiar (decisión 8 del contrato).
+
+### Revisores y veredictos
+
+| Revisión | Sobre | Veredicto |
+|---|---|---|
+| `security` (transversal) | Backend `61048ff` y CRM `24a691d` | Sin bloqueantes ni altos: 3 medios (M-1; M-2, operativo; M-3, condicional y después confirmado), 3 bajos (B-1 a B-3) y 10 notas (N-1 a N-10) |
+| `api-security-specialist` | Backend `d98bbf9` (el código es el de `61048ff`) | Sin bloqueantes ni altos: 1 medio (AS-1, = M-1), 2 bajos (AS-2 y AS-3) y 5 notas (AS-4 a AS-8) |
+| `tester` de backend | `61048ff`/`d98bbf9`, con dos sesiones reales de PostgreSQL 14 por carrera | H-1, medio (de contrato, sin daño a datos), y B-1 a B-3, bajos (cobertura) |
+| `tester` del E2E | Backend `2bc053b` y CRM `e7ba41b`, con la pila real | 404/408: B-1 (= M-1) tres veces y C-1, menor, del CRM |
+| DevOps | Los scripts y el runbook | D-1 bloqueante (= M-2) y D-2 a D-12; todos corregidos en los scripts de `5772bdf` |
+| `reviewer` | Backend `cf59cef` y CRM `9fe1817` (31-10-2026) | **APROBADO CON OBSERVACIONES**, sin bloqueantes en el código: I-2 e I-3 (los scripts) e I-4 (la vuelta atrás del código) antes de la fase 1, cerradas; I-1 (CRM) antes de la fase 2, abierta. [PENDIENTE: segunda pasada sobre la documentación.] |
+
+### Hallazgos y estado
+
+Los códigos se repiten entre revisiones, así que cada uno lleva su origen.
+
+| Origen · # | Gravedad | Hallazgo | Estado |
+|---|---|---|---|
+| security · M-1 = api-security · AS-1 = E2E · B-1 | Media | `ULTRON_STUDIO_PUBLISHING_ENABLED=off` (o `no`, `disabled`, cualquier texto no booleano) **abría** publicar: `(bool) env()` da `true` con cualquier cadena no vacía. Quien quisiera congelar las publicaciones dejando el sello las habría abierto. Confirmado en la pila real: `status.publishing.available: true` y `POST publish` pasaba la llave | **Corregido en `d24c512`:** `filter_var(…, FILTER_VALIDATE_BOOLEAN)` en `config/ultron_studio.php` y `flagEnabled()` exige `=== true`, con prueba negativa en `UltronStudioPublicationConfigTest`. El mismo arreglo en `ULTRON_STUDIO_LAB_ENABLED` (Hito 4). Siguen encendiendo `1`, `on` y `yes`, además de `true` (Enmienda 2 §E2.2). El E2E no se ha repetido sobre la corrección |
+| security · M-2 = DevOps · D-1 | Media (operativa) | `deploy-h5-backend-fase1.sh` moría en silencio en la línea 11 con el checkout limpio (`grep -v` sin coincidencias y `pipefail`): la fase 1 no se podía ejecutar. `deploy-h4-backend-fase1.sh` tiene la misma línea **después** del `merge` | **Corregido** (`git status --porcelain --untracked-files=no \| wc -l`). El script del Hito 4 queda marcado obsoleto en su cabecera |
+| security · M-3 | Media (condicional) | root ejecuta `git` sobre un checkout de `www-data`: si `.git` es escribible por `www-data`, un compromiso de la aplicación pasaría a root en el siguiente despliegue (hooks o configuración del repo). El 25-10 se leyó en el servidor que `.git`, `.git/config` y `hooks/` eran de `www-data`, y root tiene `safe.directory` para esa ruta | Primero, los scripts pasaron a `sudo -u www-data -H git` (`d24c512`). **El 31-10-2026 se resolvió de otra forma** (I-3 del reviewer, comprobado en el servidor según el comentario del script): el árbol del código y casi todo `.git` son de root desde el 25-10, sin hooks ni `core.hooksPath`, así que la M-3 original ya no se da, y un `merge` como `www-data` habría fallado a medias. Los scripts ejecutan `git` como root con `umask 022` y comprueban que `www-data` lee lo que cambia; se copian desde el Mac con sus huellas. **Pendiente del propietario (Hito 7):** `/usr/local/bin/ironbody-migrate` ejecuta `php artisan migrate` como root (Enmienda 2 §E2.5) |
+| security · B-1 | Baja | Añadir una clave a un fichero de entorno sin salto final pegaba la línea a la anterior: el fichero entero dejaba de parsear (500 en toda la API tras `ironbody-migrate`) y el error imprimía el valor de la última clave | **Corregido en los dos scripts:** salto final asegurado, copia previa del fichero (root, 600) y comprobación de que parsea **antes** de tocar las cachés, imprimiendo solo la clase del error |
+| security · B-2 | Baja | El historial (`GET publications` y el detalle de la versión) enseña cada entrada sin verificar su huella ni su firma: una fila insertada con DML aparecería como legítima | **Diferido al Hito 7** (Enmienda 2 §E2.5): exige DML directo en producción y solo falsea lo que se enseña; el motor y el Studio verifican la cabeza, y la restauración verifica su entrada |
+| security · B-3 | Baja (documentación) | El riesgo R6 del plan decía que, tras rotar la `APP_KEY`, bastaba con «volver a publicar». No se puede: la única escritura posible es Legacy | **Corregido en la documentación:** Enmienda 2 §E2.4 y el procedimiento de `ULTRON_STUDIO_ROLLBACK.md` («Hito 5») |
+| api-security · AS-2 = security · N-6 | Baja | `POST promote` calculaba la evidencia entera, acta incluida, con el cupo de escritura (30/min por token): una persona con dos sesiones llegó a 68 actas por minuto | **Corregido en `602c4b9`:** promover comparte con `GET canary-evidence` el limitador de 10/min por persona y 30/min por red, con prueba negativa |
+| api-security · AS-3 = security · N-3 | Baja | Una fila cruda con `seq = 2147483647` (DML del rol de la aplicación, sin `APP_KEY`) deja la cadena sin salida: Legacy responde 500 (22003), revertir 409, y la fila no se puede borrar con `iron_app`. El motor sella `fallback/signature_invalid` | **Diferido al Hito 7** (Enmienda 2 §E2.5): disparador que obligue a `seq` = siguiente y a encadenar con la cabeza, y `CHECK (seq >= 1)`, en una migración aditiva; traducir el 22003 a un 409. **Mientras tanto,** salida inmediata con `h5-engine-scope.sh off <alcance actual>` y reparación solo con el rol dueño y la autorización del propietario (runbook) |
+| api-security · AS-4 = tester · H-1 | Media para el tester (de contrato); nota para api-security | El reintento de la misma petición que cruzaba la confirmación de la primera recibía 409 en vez de 200 `replayed`, en las cuatro escrituras. Sin doble efecto ni daño a datos | **Corregido por el lead en `96397ea`:** ante cualquier rechazo se vuelve a mirar el reintento fuera de la transacción; las 38 carreras del tester pasan contra el arreglo |
+| api-security · AS-5 | Nota (heredada) | `PlainText` deja pasar invisibles que no están en su lista (U+00AD, U+061C, U+180E, U+2028, U+2060 y las etiquetas U+E0000–E007F, entre otros). Desde el Hito 5 acaban en `ultron_studio_publications.reason`, que no se puede editar ni borrar | **Pendiente del propietario (Hito 7)**, mejor antes de la fase 2 |
+| api-security · AS-6 | Nota (diseño) | La subclave de firma comparte la clave HMAC con `Workforce\Secrets::hash()`; la separación depende de que todos sus mensajes lleven `\|`. Hoy no es explotable | Sin cambio en H5 (el fixture congela la derivación). Para un contrato `/2`: HKDF o una subclave propia para `Secrets` (`security` y architect) |
+| api-security · AS-7 | Nota (para `/2`) | Revertir la publicada restaura sin volver a mirar `must_match`, el laboratorio ni la revalidación; el freno y la evidencia se miran fuera de la transacción | Correcto en la opción A. Antes de un contrato con mandos aplicados, lo revisa el architect |
+| api-security · AS-8 | Nota (documentación) | La paginación no era la que decían el informe de la API y A7 | Fijada en la Enmienda 2: `per_page` (no `perPage`); 0, negativos o no enteros → 422; más de 50 → 50; 20 por defecto |
+| security · N-1, N-2 y N-4 | Notas | Una clave muy corta se acepta; la firma no ata el entorno (con la misma `APP_KEY`, una entrada firmada en un entorno vale en otro); un UNIQUE no reconocido acaba en `laravel.log` con sus valores | Sin cambio en H5. N-2: conviene una `APP_KEY` distinta por entorno, comprobada sin imprimirla. Comprobado por el lead el 31-10-2026 sin imprimir valores: `.env.example` del repo no lleva `APP_KEY`; cada instantánea del E2E genera la suya; el worktree de desarrollo no tiene `.env`; la huella sha256 de la `APP_KEY` de producción no coincide con ninguna del repo. Una clave por entorno, como pide N-2. |
+| security · N-5, N-7 y N-8 | Notas | Etiquetas con marcado en `publication-check`; la caché de configuración nace con la umask de `www-data` antes del `chmod 600`; los scripts imprimían la configuración sin compararla | **Corregidos:** salida en crudo con `--json` y etiquetas escapadas en modo texto; `config:cache` con `umask 077` en `h5-engine-scope.sh` (en `ironbody-migrate`, pendiente del propietario); los scripts comparan y salen con 1 |
+| security · N-9 y N-10 | Notas | `canary` abre también la llave de publicar; `lock_timeout` llega por `PGOPTIONS` solo si el envoltorio conserva el entorno | N-9, documentado (es el contrato). N-10, no verificado: lo recuenta el paso 2 del runbook sin imprimir el envoltorio |
+| tester · B-1, B-2 y B-3 | Baja (cobertura) | Nada fijaba que el Studio comparara la huella de la cabeza, que `previewHash` usara el catálogo de la versión ni el tope de lectura de 16 385 caracteres en el Studio | **Cerrados en `96397ea`** con tres pruebas nuevas |
+| E2E · C-1 | Menor (CRM) | Con la puerta `waived`, el diálogo decía dos veces que estaba dispensada | **Corregido en el CRM `33821e4`** |
+| reviewer · I-1 | Importante (antes de la fase 2) | El CRM reutiliza la `clientRequestId` de una escritura de la cadena también después de un éxito. Para «Volver a Legacy», cuyo cuerpo es solo el motivo, un segundo intento en la misma pestaña con el mismo motivo recibe 200 `replayed` con la entrada vieja: si entretanto otra persona publicó, **la salida del Studio falla en silencio** y la barra dice que ya estaba en Legacy | **Abierto** (frontend): olvidar la clave tras un 2xx legible o un 4xx definitivo. No afecta a la fase 1 (publicar cerrado; con la cadena vacía, Legacy responde `already_legacy`). [PENDIENTE: corrección de I-1, con su spec.] |
+| reviewer · I-2 | Importante (antes de la fase 1) | Un tercer argumento mal escrito del script de la fase 1 (por ejemplo, `--solo-comprobr`) ejecutaba el despliegue entero en vez del ensayo | **Corregido en `db1d8f6`:** cualquier otro valor sale con 2 sin tocar nada |
+
+### Verificado sin hallazgo
+
+(`security`, leyendo el código y con scripts mínimos sin arrancar la aplicación; `api-security-specialist`, con 12 pruebas de concepto en SQLite y una en PostgreSQL 14; el tester del E2E, con la pila real.)
+- **La firma.** La derivación real coincide byte a byte con una derivación independiente con `openssl`. Compara en tiempo constante (`hash_equals`) en el motor y en el Studio. Sin `APP_KEY` (vacía, nula, solo `base64:` o base64 inválido) lanza en vez de firmar con una clave vacía. Va sobre los bytes guardados (columna `text`, solo ASCII, el mismo tope de 16 385 caracteres al leer en los dos lados) y ata `entry` y `seq` a la fila. Su dominio está separado del `decide_token`. El E2E recalculó en Node la firma de cada entrada con la `APP_KEY` de la pila: 7/7.
+- **Autorización.** Las 38 rutas están mapeadas y llevan la segunda puerta (`requirePerson()` exige persona y `ultron.view`). El Administrador recibe 403 en publicar, promover, revertir y Legacy; una llave de escritura sin `ultron.view`, 403 sin escribir nada; un uuid inventado no da oráculo. Cuatro ojos por identidad (`created_by_admin_id`), no por rol.
+- **`clientRequestId`** atado a persona, acción, versión y cuerpo: otra persona con la misma llave recibe 409 `client_request_reused` sin la entrada.
+- **Entrada:** 422 en los 19 cuerpos inválidos probados de `publish`, 413 por encima de 64 KB y 422 con un JSON anidado 600 niveles. Los campos de más del cuerpo se ignoran: la fila sale con los valores del servidor.
+- **Exposición:** 21 respuestas del ciclo entero y el log, sin el id del canario, firmas, el texto firmado, `client_request_id`, `actor_admin_id` ni `SQLSTATE`; el E2E barrió 230 respuestas más con el mismo resultado. Las líneas de log nuevas llevan solo la clase del error. El texto del acta no sale del búfer propio de `Artisan::call` ni se guarda, se registra o se devuelve.
+- **El lector del motor nunca lanza:** con una fila cruda de 20 000 caracteres sale `fallback/hash_mismatch`; con la `APP_KEY` rotada, `fallback/signature_invalid`; con la `APP_KEY` vacía, `fallback/read_failed`.
+- **Limitadores:** el de la evidencia va por persona y por red, y `X-Forwarded-For` no lo esquiva (sin `TrustProxies`, cuenta la dirección del par TCP).
+- **El sello no se puede falsificar desde n8n:** `metadata.studio` lo pone `persist()` en su base, y las llamadas que añaden metadatos construyen ese array en el código, sin claves del cuerpo.
+- **Base de datos:** disparadores de UPDATE y DELETE (en los dos motores) y de TRUNCATE (en PostgreSQL) sobre la cadena, los CHECK, los índices únicos parciales y `down()` que se niega con datos de H5. Los privilegios por defecto de `iron` hacia `iron_app` (`arwd` en tablas y `rwU` en secuencias, sin TRUNCATE) bastan para el código sin ningún GRANT nuevo (reproducido en local por el database-specialist); en producción lo comprueba el paso 4 del script de la fase 1. Sobre la cadena incluyen UPDATE y DELETE, que la cadena no necesita y que paran los disparadores `uspub_*`: el script los enseña como información, y revocarlos es un refuerzo candidato del Hito 7 (`940b0c2`).
+- **CRM:** 0 `innerHTML`, `bypassSecurityTrust` o equivalentes en el módulo; nada nuevo en el almacenamiento del navegador; el 429 se lee del cuerpo; los botones salen de `actions.*.allowed` del servidor; `previewHash`, `evidenceHash` y lo reconocido los recalcula el servidor, así que el cliente solo puede provocar un 409.
+- **Arnés E2E:** secretos aleatorios en cada ejecución y su propia `APP_KEY`; se niega a correr si la API no es local o si `APP_ENV=production`.
+
+### Protecciones del Hito 5 (rigen en producción cuando se despliegue)
+
+- **Tres llaves y un registro** (arriba). Con las llaves por defecto, publicar y promover responden 409 `publishing_disabled` o `engine_not_reading_versions`, y el motor no hace ninguna consulta.
+- **Registro firmado:** cada entrada de la cadena lleva la huella y la firma de los bytes exactos que lee el motor. Una cabeza que no verifica sale `fallback` en el motor y bloquea publicar, promover y revertir (409 `publication_head_invalid`); la única salida es volver a Legacy.
+- **Cuatro ojos:** nadie publica ni promueve lo que creó (por identidad de la cuenta, no por rol).
+- **Ventana:** publicar y promover, solo dentro de la ventana (por defecto, de 07:00 a 19:00, hora de Bogotá; mal escrita, vuelve a esa). Revertir y Legacy, siempre.
+- **Libro de solo inserción:** la cadena y el libro de auditoría no admiten UPDATE, DELETE ni TRUNCATE con el rol de la aplicación, y cada escritura deja su evento en la misma transacción.
+- **`effective_json` acotado:** el motor y el Studio leen como mucho 16 385 caracteres; una fila más larga sale `hash_mismatch` en vez de agotar la memoria del proceso.
+- **El lector nunca lanza:** cualquier fallo sale como `fallback` y el turno sigue. El vigía y el freno no cambian.
+- **La evidencia del canario** tiene su propio limitador, compartido con promover.
+
+**Cuatro ojos por cuenta, no por persona** (riesgo residual de `api-security-specialist`): un Super Admin puede crearse una segunda cuenta con `ultron.publish` y publicar su propia versión. Es un control organizativo: decisión del propietario.
+
+### Rotación de la `APP_KEY` con la cadena viva
+
+La firma solo usa la clave vigente (`APP_PREVIOUS_KEYS` no la salva): tras rotar, ninguna entrada vuelve a verificar, el motor sella `fallback/signature_invalid` y `publication-check` sale con 1 (`head_invalid`), que es la alarma. La salida es volver a Legacy y recuperar la declaración con un ciclo completo nuevo. Fuera del Hito 5, la `APP_KEY` alimenta el `decide_token`, otras HMAC (`access_hash`, códigos y tokens del kiosco) y lo cifrado (sesiones, cookies, columnas cifradas): **rotarla es un evento de todo el sistema y el Hito 5 no lo justifica por sí solo.** Procedimiento en `ULTRON_STUDIO_ROLLBACK.md` («Hito 5»).
+
+### Puerta PostgreSQL obligatoria
+
+Sigue vigente y cubre ahora la cadena: antes del despliegue, `tests/Feature/UltronStudio tests/Unit/UltronStudio` en verde en un PostgreSQL 14 desechable (`docs/ultron-studio/ops/pgunit.sh`). Solo PostgreSQL ejecuta los CHECK, el disparador de TRUNCATE, los índices parciales con dos sesiones, las 38 carreras reales del tester y el READ COMMITTED de `recordDenied`. Con las carreras tarda de 3 a 8 minutos. **Hecho (lead, 31-10-2026):** Puertas completas del lead (31-10-2026, tras la fusión): Studio + Access + Chaos en SQLite **1697 OK** (56 omitidas, de solo PostgreSQL) sobre `cdb9dc8`; puerta PostgreSQL **1446 OK** sobre `cdb9dc8` y **1447 OK** sobre `cf59cef` (con las 38 carreras); Studio SQLite **1447 OK** sobre `cf59cef`; Marketing (Feature + Unit) **4977 OK**; `auth:coverage --unmapped` vacío; **38 rutas**.
+
+### Pendiente del propietario (Hito 7)
+
+- Marcar en el historial las entradas que no verifican (B-2).
+- El `seq` contiguo y `CHECK (seq >= 1)` (AS-3/N-3), en una migración aditiva.
+- `ironbody-migrate`, que corre como root sobre un árbol de `www-data` (M-3) y escribe la caché con la umask de `www-data` antes del `chmod 600` (N-7).
+- Los caracteres invisibles que acaban en la cadena (AS-5), mejor antes de la fase 2.
+- El procedimiento de redacción del libro con el rol dueño, que tiene que cubrir también `ultron_studio_publications` (nombre y rol del personal, y `reason`).
+- Revocar UPDATE y DELETE de `iron_app` sobre la cadena (refuerzo candidato, en una migración aditiva del rol dueño; hoy los paran los disparadores).
+- Los respaldos de G y del Hito 4 se crearon sin `umask 077`, y sus directorios están en 755 (comprobado por el lead el 31-10-2026); el modo de sus volcados no consta. Endurecerlos durante la fase 1 del Hito 5, con autorización (runbook, paso 9), y nunca borrarlos.
+
+**Secretos:** ninguna revisión encontró secretos expuestos (en los diffs solo aparecen claves de prueba de los fixtures); no hay nada que rotar.
 
 ## Requisitos para las fases siguientes (recogidos de las revisiones y la auditoría)
 

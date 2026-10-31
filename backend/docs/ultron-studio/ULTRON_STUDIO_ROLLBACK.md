@@ -47,9 +47,9 @@ La vista previa es solo frontend y no guarda nada en el servidor: revertirla no 
 - con el CRM de F, el Studio abre en fase `ready`, no en `error`;
 - 12 workers RUNNING, ninguno en BACKOFF.
 
-## Hito 4 (laboratorio de IA) — PENDIENTE DE DESPLIEGUE; respaldo `/var/backups/ironbody/ultron-studio-h4-<fecha UTC>/` (lo crea el paso 2 del runbook)
+## Hito 4 (laboratorio de IA) — desplegado en fases 1–2 el 25-10-2026 (01:15–01:25 UTC); respaldo `/var/backups/ironbody/ultron-studio-h4-20261025-011511/`
 
-**Estado:** el Hito 4 no está desplegado y ningún paso de esta sección se ha ejecutado, ni en local. Es el plan, a partir del borrador del lead (`scratchpad/hito-4/deploy-h4.md`) y del informe del database-specialist. El respaldo guarda el commit del backend (`api-commit.txt`), el volcado de la base, el CRM publicado (`app-crm.tgz` y `crm-main.txt`), el `.env` (modo 600), la caché de `bootstrap/cache` y una copia de `/etc/supervisor/conf.d/`.
+**Estado:** el Hito 4 no está desplegado y ningún paso de esta sección se ha ejecutado, ni en local. *(Así se escribió. **Actualización del 31-10-2026:** el Hito 4 se desplegó en las fases 1 y 2 el 25-10-2026, entre las 01:15 y las 01:25 UTC: backend `fef7c87`, CRM `5c1dbd7`, laboratorio en `fake` con presupuesto 0 y sin clave; la fase 3 no se ha ejecutado. Sus respaldos reales están al final de este documento. No consta que se haya ejecutado ninguna vuelta atrás de esta sección. **Ojo:** desde entonces producción avanzó con trabajo de otros módulos (API en `7318122` el 31-10-2026), así que volver el backend a G con `git checkout e651dd9` (o a `d86a2b5`, como dice el registro del final) desharía también ese trabajo, sin deshacer sus migraciones. Si alguna vez hace falta, se decide con `devops`: no está ensayado.)* Es el plan, a partir del borrador del lead (`scratchpad/hito-4/deploy-h4.md`) y del informe del database-specialist. El respaldo guarda el commit del backend (`api-commit.txt`), el volcado de la base, el CRM publicado (`app-crm.tgz` y `crm-main.txt`), el `.env` (modo 600), la caché de `bootstrap/cache` y una copia de `/etc/supervisor/conf.d/`.
 
 **Regla que no cambia: nunca `migrate:rollback` (`down()`) en producción.** El `down()` de las dos migraciones borra escenarios, ejecuciones, veredictos y libro: `DROP` no pasa por los disparadores de fila. Las tablas se quedan aunque el código vuelva a G: el código de G no las nombra (frontera de aislamiento) y vacías no cuestan nada. Retirar el laboratorio es apagar la bandera.
 
@@ -75,9 +75,9 @@ La vista previa es solo frontend y no guarda nada en el servidor: revertirla no 
 - el `version.json` público trae el commit esperado y el Studio abre en fase `ready`;
 - 12 workers RUNNING (13 si `ironbody-lab` sigue instalado), ninguno en BACKOFF.
 
-## Hito 5 (gobierno y versionado) — PENDIENTE DE DESPLIEGUE; respaldo `/var/backups/ironbody/ultron-studio-h5-<fecha UTC>/` (lo crea §4.2 del runbook)
+## Hito 5 (gobierno y versionado) — PENDIENTE DE DESPLIEGUE; respaldo `/var/backups/ironbody/ultron-studio-h5-<fecha UTC>/` (lo crea el paso 3 del runbook del Hito 5, en `ULTRON_STUDIO_DEPLOYMENT_PLAN.md`)
 
-**Estado (25-10-2026):** el Hito 5 no está desplegado y ningún paso de esta sección se ha ejecutado en producción. La vuelta del código a `fef7c87` con datos de H5 y la rotación de la `APP_KEY` se ensayaron en local (DevOps, `plans/informes-h5/informe-devops-h5.md` §7.2 y §8); el resto se deduce del código y de las pruebas. Para quien opera, con o sin acceso al código.
+**Estado (31-10-2026):** el Hito 5 no está desplegado ni en `origin/main`, y ningún paso de esta sección se ha ejecutado en producción. Producción sirve la API en `7318122` (el código del Hito 4 más trabajo de otros módulos) y el CRM en `4105016`. DevOps ensayó en local la vuelta del código a `fef7c87` con datos de H5 y la rotación de la `APP_KEY` (`plans/informes-h5/informe-devops-h5.md` §7.2 y §8). La vuelta a `7318122` no se ha ensayado; el código del Studio de los dos commits es el mismo (diff vacío en sus ficheros, comprobado el 31-10-2026). El resto se deduce del código y de las pruebas. Para quien opera, con o sin acceso al código.
 
 **Reglas que no cambian:**
 - **Nunca `migrate:rollback` / `down()` en producción.** Con filas de H5 se niega (contrato §A3.4) y, sin ellas, borraría la estructura de la cadena. Volver al código de H4 no lo necesita (§A3.5).
@@ -93,15 +93,16 @@ La vista previa es solo frontend y no guarda nada en el servidor: revertirla no 
 | Fase 3 → 2 | `bash /root/h5-engine-scope.sh canary all` | La canaria sigue sellando; el resto sale `out_of_scope`. La cadena sigue declarando lo publicado |
 | Fase 2 o 3 → 1 (**parar de leer**) | `bash /root/h5-engine-scope.sh off canary` (o `off all`) | El motor deja de consultar la cadena y de sellar (Legacy exacto). Publicar y promover responden 409. La cadena queda como estaba: una versión en `CANARY` sigue en `CANARY` |
 | **Parar de declarar** | CRM, barra de la publicación: «Volver a Legacy» (`POST /api/admin/ultron-studio/publications/legacy`, llave `ultron.rollback`, motivo de 5 a 500 caracteres) | La `CANARY` pasa a `ROLLED_BACK` y la `PUBLISHED`, a `RETIRED`. Funciona sin las llaves de entorno, con cualquier alcance del motor y con una cabeza que no verifica |
-| Una versión concreta | CRM, detalle de la versión: «Revertir» (llave `ultron.rollback`, motivo) | `CANARY` → `ROLLED_BACK`. `PUBLISHED` → `ROLLED_BACK`, y vuelve la anterior `RETIRED` si es íntegra; si no, 409 `restore_integrity_mismatch` y la salida es «Volver a Legacy». Sin llaves de entorno, sin cuatro ojos y sin ventana |
+| Una versión concreta | CRM, detalle de la versión: «Revertir» (`POST /api/admin/ultron-studio/versions/{uuid}/rollback`, llave `ultron.rollback`, motivo de 5 a 500 caracteres) | `CANARY` → `ROLLED_BACK`: el canario vuelve a lo que tenga el resto. `PUBLISHED` → `ROLLED_BACK`, y vuelve la anterior `RETIRED` si su entrada y su huella verifican; si no había anterior, la cadena queda en Legacy; si no verifica, 409 `restore_integrity_mismatch` y la salida es «Volver a Legacy». Una versión que esté a la vez en `CANARY` conserva su parte (Q-2 de la Enmienda 1). Sin llaves de entorno, sin cuatro ojos y sin ventana |
 
 `off → all` directo no se admite, y `canary`/`all` exigen el canario del motor configurado. **`canary` y `all` abren también la llave de publicar** (N-9): para que el motor selle sin publicaciones nuevas hay que poner a mano `ULTRON_STUDIO_PUBLISHING_ENABLED=false` y regenerar la caché como hace el script.
 
-**Verificación:** el script termina en `ALCANCE <alcance> APLICADO` (código 0) tras comprobar la configuración efectiva, 13 workers RUNNING y 0 en BACKOFF/FATAL, `status` sin token → 401 y `ultron-studio:publication-check` con código 0. Después, `SMOKE_PHASE=<fase> bash /root/smoke-run-h5.sh` (ver `ops/README.md`).
+**Verificación:** el script termina en `ALCANCE <alcance> APLICADO (copia previa: …)` (código 0) tras comprobar la configuración efectiva, 13 workers RUNNING y 0 en BACKOFF/FATAL, `status` sin token → 401 y `ultron-studio:publication-check` con código 0. Después, `SMOKE_PHASE=<fase> bash /root/smoke-run-h5.sh` (ver `ops/README.md`), copiando antes `smoke-h5.py` y `smoke-run-h5.sh` a `/root/`: el lanzador los borra al terminar cada ejecución.
+- **Al volver a la fase 1 con la cadena ya escrita, el smoke de la fase 1 no sirve:** espera la cadena vacía, ninguna versión en `CANARY`, `PUBLISHED`, `RETIRED` o `ROLLED_BACK` y ninguna cabeza, así que da 4 FALLO por diseño y omite Legacy (ensayo de DevOps §10, «Fase 1 con la cadena no vacía»). En ese caso se verifica con la salida del script, `publication-check` y la consulta de DevOps §5, `SELECT count(*) FROM marketing_ai_actions WHERE metadata ? 'studio';`, que con la llave en `off` no crece aunque haya turnos nuevos (contrato A4.3: sin consulta y sin sello).
 
-### Vuelta atrás del código: backend de H5 → `fef7c87`, con las tablas en su sitio
+### Vuelta atrás del código: backend de H5 → el commit anterior (`api-commit.txt` del respaldo; hoy, `7318122`), con las tablas en su sitio
 
-Solo si el código de H5 se porta mal (por ejemplo, errores en la ruta del commit del motor). **Volver el código no es volver los datos.** Ensayado por DevOps en un banco local (sin `sudo` real): 33 rutas, `GET publications` 404, tabla intacta, y el smoke de H4 sin modificar 17/17 sobre datos de H5.
+Solo si el código de H5 se porta mal (por ejemplo, errores en la ruta del commit del motor). **Volver el código no es volver los datos.** El destino es lo que servía producción justo antes del Hito 5: el commit que guardó el respaldo de la fase 1 en `api-commit.txt`, que hoy empieza por `7318122` (el `PREVIO` de `deploy-h5-backend-fase1.sh`; hasta el 29-10-2026 era `fef7c87`). **Se lee del respaldo, nunca de un literal** (I-4 del reviewer). Hasta el 31-10-2026 este procedimiento mandaba volver a `fef7c87`, y eso dejaría aplicadas las 9 migraciones de `origin/main` sin el código que las usa y quitaría de producción sus funciones: correcciones de caja, planes archivados (sin la guarda `plan_archived`, un plan archivado volvería a poder cobrarse por enlace), segundo factor biométrico, transferencias de membresía y potencias de IRON IA. Entre `fef7c87` y `7318122` entraron 19 commits: 14 de esos módulos y 5 del Studio que solo son documentación y scripts de `ops/`. **El código del Studio es idéntico en los dos** (diff vacío en sus ficheros, comprobado el 31-10-2026; en las zonas del motor cambia una línea, la de `plan_archived` en `SalesPaymentGuardrailService`), así que el ensayo de DevOps sigue valiendo con el destino corregido: en un banco local (sin `sudo` real) y sobre `fef7c87`, 33 rutas, `GET publications` 404, la tabla intacta y el smoke de H4 sin modificar, 17/17 sobre datos de H5. La vuelta a `7318122` en sí no se ha ejecutado.
 
 ```bash
 # 0. (fases 2–3) Antes, parar de leer y de declarar: el código de H4 no sabe mover versiones de H5.
@@ -109,9 +110,10 @@ bash /root/h5-engine-scope.sh off <alcance actual>          # si no está ya en 
 #    y «Volver a Legacy» desde el CRM si la cadena declara algo.
 # 1. CRM anterior (opcional: cada CRM lee los dos backends; mantiene la pareja coherente)
 cp /var/backups/ironbody/crm-pre-<build-crm>-<ts>/index.html /var/backups/ironbody/crm-pre-<build-crm>-<ts>/version.json /var/www/app/ && chown root:root /var/www/app/index.html /var/www/app/version.json
-# 2. Backend (git como el dueño del árbol, M-3)
-cd /var/www/api && sudo -u www-data -H git checkout -q --detach fef7c87
-cd backend && sudo -u www-data sh -c 'umask 077; php artisan config:cache -q && php artisan route:cache -q' && chmod 600 bootstrap/cache/config.php bootstrap/cache/routes-v7.php
+# 2. Backend: git como root (dueño del árbol y de .git, I-3 del reviewer) y con umask 022, para que www-data lea lo que reescriba
+BK=/var/backups/ironbody/ultron-studio-h5-<fecha UTC>                                     # el respaldo del paso 3 de la fase 1
+( cd /var/www/api && umask 022 && git checkout -q --detach "$(cat "$BK/api-commit.txt")" )   # hoy, 7318122
+cd /var/www/api/backend && sudo -u www-data sh -c 'umask 077; php artisan config:cache -q && php artisan route:cache -q' && chmod 600 bootstrap/cache/config.php bootstrap/cache/routes-v7.php
 sudo -u www-data php artisan queue:restart
 sudo -u www-data php artisan route:list --path=admin/ultron-studio --json | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))'   # 33
 sudo -u www-data php artisan auth:coverage --unmapped                                   # vacío
@@ -121,11 +123,13 @@ SMOKE_LAB_EXPECT_ENABLED=1 bash /root/smoke-run-h4.sh
 ```
 
 - **Qué queda:** la tabla `ultron_studio_publications`, sus 3 disparadores y 3 CHECK, `usv_status_chk` con 9 estados y los dos índices parciales. El código de H4 enseña las versiones de H5 con `reachable: false` y sus acciones deshabilitadas; revertir una responde el 409 provisional de F/G y `GET publications`, 404. Lo publicado, promovido o revertido queda en el historial.
-- **Volver a H5:** `cd /var/www/api && sudo -u www-data -H git checkout -q main` (la rama local sigue en el commit de H5), las mismas cachés y `queue:restart` → 38 rutas y 0 migraciones pendientes (ensayado).
+- **Volver a H5:** `( cd /var/www/api && umask 022 && git checkout -q main )` (la rama local sigue en el commit de H5), las mismas cachés y `queue:restart` → 38 rutas y 0 migraciones pendientes (ensayado por DevOps en su banco local, sobre `fef7c87`).
+- **`api-commit.txt` tiene que ser el `PREVIO`** (reanudación tardía; decisión del lead, 31-10-2026). Si la fase 1 se corta y se relanza más de 2 horas después del respaldo, hay que rehacer el respaldo, y su `api-commit.txt` tiene que seguir siendo el `PREVIO` (`7318122`), no el HEAD de ese momento. Si no, el script aborta en el paso 0 (falla cerrado) y esta vuelta atrás leería un destino equivocado. El procedimiento, en el paso 5 del runbook.
+- **Por qué `git` como root** (I-3; decisión del lead, comprobada en el servidor en solo lectura el 31-10-2026): desde el 25-10, el árbol de `/var/www/api` (2.493 entradas, entre ellas todo lo que cambia el Hito 5) y `.git` (5.089 de sus 5.131 entradas) son de root, y `www-data` los lee pero no puede escribir ni en `objects/` ni en los directorios del código. Hasta ese día este procedimiento decía `sudo -u www-data -H git` (M-3), que fallaría a medias. Con `umask 077` en la sesión, lo que `git` reescribe quedaría ilegible para `www-data`: de ahí la subshell con `umask 022`.
 
 ### Vuelta atrás de datos (último recurso)
 
-Solo ante corrupción de datos, con **autorización expresa** y coordinado por `database-specialist`, siguiendo `docs/ops/BACKUPS.md` («Restauración real»): primero a una base aparte, **nunca encima de la viva**, y sabiendo que se pierde todo lo escrito desde el volcado (`ironbody.dump` del respaldo §4.2). Nada de la fase 1 lo justifica: sus dos migraciones son aditivas y no tocan datos.
+Solo ante corrupción de datos, con **autorización expresa** y coordinado por `database-specialist`, siguiendo `docs/ops/BACKUPS.md` («Restauración real»): primero a una base aparte, **nunca encima de la viva**, y sabiendo que se pierde todo lo escrito desde el volcado (`ironbody.dump` del respaldo del paso 3 del runbook; §4.2 del informe de DevOps). Nada de la fase 1 lo justifica: sus dos migraciones son aditivas y no tocan datos.
 
 ### Incidencia: la cabeza no verifica y no hubo rotación de clave
 
@@ -147,7 +151,7 @@ Solo ante corrupción de datos, con **autorización expresa** y coordinado por `
 4. **Rotar** (procedimiento global): `sudo -u www-data php artisan key:generate --force` (**nunca** `--show`); la clave vieja, en `APP_PREVIOUS_KEYS`; `config:cache` como `www-data` con `umask 077` y `chmod 600`; `queue:restart` y `supervisorctl restart 'ironbody-lab:*'`.
 5. **Comprobar la alarma:** `publication-check` con 1 y `head_invalid` si la cadena tenía entradas. Con la cadena vacía sale 0 y no hay nada más que hacer.
 6. **Salida:** CRM «Volver a Legacy» (o `POST /api/admin/ultron-studio/publications/legacy`), con el motivo «Rotación de la APP_KEY del <fecha>, autorizada por <quién>». Es la única escritura que acepta una cabeza que no verifica, y firma `{canary: null, rest: null}` con la clave nueva. La `CANARY` pasa a `ROLLED_BACK` y la `PUBLISHED`, a `RETIRED`.
-7. **Comprobar:** `publication-check` con 0, `state: legacy` (u `off`) y `head.signatureOk: true`; `SMOKE_PHASE=<fase actual> bash /root/smoke-run-h5.sh` con código 0.
+7. **Comprobar:** `publication-check` con 0, `state: legacy` (u `off`) y `head.signatureOk: true`; `SMOKE_PHASE=<fase actual> bash /root/smoke-run-h5.sh` con código 0. Si en el paso 3 se apagó la llave del motor, la configuración es la de la fase 1 con la cadena ya escrita, y el smoke de la fase 1 da FALLO por diseño (ver «Vuelta atrás por fase»): el smoke se pasa después del paso 8.
 8. Si en el paso 3 se apagó la llave del motor, volver al alcance anterior **con la autorización de esa fase**.
 9. **Recuperar la declaración:** versión nueva con el mismo contenido → aprobación de otra persona → laboratorio → publicar en la ventana → canario (24 h y 3 turnos sellados por defecto) → promover. Las versiones `ROLLED_BACK` y `RETIRED` no vuelven, y las entradas viejas siguen en el historial sin verificar ni servir de origen de una restauración: dejarlo escrito en el acta de la rotación.
 
@@ -160,3 +164,5 @@ Solo ante corrupción de datos, con **autorización expresa** y coordinado por `
 **Respaldos reales del despliegue de G (19-10-2026):** backend y base `/var/backups/ironbody/ultron-studio-g-20261019-060047/` (`ironbody.dump` 209 tablas, `env.backup`, `bootstrap-cache/`, `api-commit.txt` = `9acddc3`); CRM `/var/backups/ironbody/ultron-studio-g-crm-20261019-060251/` (`index.html` y `version.json` de `020db86`, bundle `main-7A6NMSXZ.js`, que sigue en disco porque no se usó `--delete`).
 
 **Respaldos reales del despliegue del Hito 4 (25-10-2026):** `/var/backups/ironbody/ultron-studio-h4-20261025-011511/` (dump de 211 tablas, `env.backup`, `bootstrap-cache/`, `supervisor-conf.d/` antes de añadir `ironbody-lab.conf`, `api-commit.txt` = `d86a2b5`) y CRM `/var/backups/ironbody/crm-pre-5c1dbd7-20261025-012110/`. Vuelta atrás inmediata del laboratorio: `bash docs/ultron-studio/ops/deploy-h4-fase2.sh off` (bandera apagada, caché y reinicio del worker). De código: bandera apagada → `supervisorctl stop 'ironbody-lab:*'` y retirar `/etc/supervisor/conf.d/ironbody-lab.conf` (`reread && update`) → `git checkout d86a2b5` → cachés como www-data → `queue:restart` → `index.html`/`version.json` del respaldo del CRM. Las tablas se quedan; **nunca `migrate:rollback` en producción**.
+
+**Respaldos reales del despliegue del Hito 5:** [PENDIENTE: se anotan al ejecutar la fase 1: el directorio `$BK` del paso 3 del runbook y el respaldo del CRM que imprime `deploy-crm.sh` (lead o documentation-specialist).]

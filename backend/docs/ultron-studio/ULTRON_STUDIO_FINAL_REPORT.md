@@ -1,6 +1,6 @@
 # ULTRON STUDIO: informe de avance
 
-**Fecha:** 17-10-2026 (se actualiza con cada fase; última actualización: 19-10-2026, noche en hora de Bogotá: Hito 4 implementado en rama y sin desplegar). **Rama:** `feat/ultron-studio` en el CRM (`Iron-Body_Front`) y en el backend (`Iron-Body`, solo documentación); el Hito G, en `feat/ultron-studio-g` de los dos repos; el Hito 4, en `feat/ultron-studio-h4` de los dos repos.
+**Fecha:** 17-10-2026 (se actualiza con cada fase; última actualización: 31-10-2026: Hito 4 desplegado en fases 1–2 el 25-10-2026, e Hito 5 implementado en rama, fusionado con `origin/main` y sin desplegar). **Rama:** `feat/ultron-studio` en el CRM (`Iron-Body_Front`) y en el backend (`Iron-Body`, solo documentación); el Hito G, en `feat/ultron-studio-g` de los dos repos; el Hito 4, en `feat/ultron-studio-h4` de los dos repos; el Hito 5, en `feat/ultron-studio-h5` de los dos repos.
 
 ## Estado
 
@@ -12,12 +12,13 @@
 | D. Vista previa protegida publicada | **PUBLICADA** el 18-10-2026 a las 02:56 UTC (ver «Publicación» al final) → `ULTRON_VISUAL_PREVIEW_READY` |
 | F. Persistencia (borradores, versiones con estados, reglas, aprobaciones, auditoría, permisos `ultron.*`, catálogo servido por el backend) | **DESPLEGADO Y VERIFICADO** (18-10-2026, 15:24–15:28 UTC; backend `9acddc3`, CRM `020db86`): ver «Hito F» más abajo, `ULTRON_STUDIO_BACKEND_REPORT.md` y `ULTRON_STUDIO_SECURITY_REPORT.md` |
 | G. Control funcional de las diez capas (configuración real por capa, lecturas del motor, reglas con condiciones, historial y comparación) | **DESPLEGADO Y VERIFICADO** (19-10-2026 06:00–06:04 UTC; backend `e651dd9`, código `dfb30f5`; CRM `44c0e8c`). Revisiones de seguridad, de pruebas y final (APROBADO CON OBSERVACIONES, todas cerradas); E2E con la pila real 126/126; smoke en producción 29/29. Detalle en «Hito G» más abajo. **`HITO_3_COMPLETED`** |
-| Hito 4. Laboratorio de IA (escenarios sintéticos, simulaciones del Studio, evaluación asistida con OpenAI y clave propia, veredicto humano) | **IMPLEMENTADO Y VERIFICADO EN RAMA, NO DESPLEGADO** (19-10-2026; backend `6dbf485`, CRM `3e630eb`). Revisiones de `security`, `api-security-specialist` y `tester` cerradas; E2E con la pila real 122/122; pendientes: la Enmienda 5 (ejecuciones huérfanas y cobertura, sin implementar), la revisión final del `reviewer` y el despliegue por fases. Detalle en «Hito 4» más abajo |
-| Siguientes (rotuladas «G–R» antes de que G pasara a ser el control funcional): Meta, Twilio, canarios, ElevenLabs, vínculo versión↔conversación (el laboratorio y la evaluación con IA son el Hito 4) | **NO EMPEZADOS** (autorizados como construcción, no como activación) |
+| Hito 4. Laboratorio de IA (escenarios sintéticos, simulaciones del Studio, evaluación asistida con OpenAI y clave propia, veredicto humano) | **DESPLEGADO EN FASES 1–2** (25-10-2026, 01:15–01:25 UTC; backend `fef7c87`, código `18dae99`; CRM `5c1dbd7`): laboratorio encendido en ensayo sin IA, presupuesto 0 y sin clave. **`HITO_4_IMPLEMENTED_WITH_EXTERNAL_DEPENDENCY`**: la fase 3 espera la clave y el proyecto de OpenAI del propietario. Revisiones cerradas (`reviewer`: APROBADO CON OBSERVACIONES, cerradas en las Enmiendas 4–6); E2E con la pila real 122/122; smoke en producción 20/20 y 17/17. Detalle en «Hito 4» más abajo. *(Antes del despliegue decía «implementado y verificado en rama, no desplegado».)* |
+| Hito 5. Gobierno y versionado (publicación firmada como declaración, sello por turno en el motor, canario, promoción, reversión y Legacy) | **IMPLEMENTADO EN RAMA, PENDIENTE DE DESPLIEGUE** (24/25-10-2026; backend `96397ea`, CRM `a29bcc8`; fusionados con `origin/main` el 31-10-2026 en `cdb9dc8` y `9fe1817`, y en el backend, `cf59cef` con m-2 del reviewer). No está en `origin/main` ni en producción. Revisiones de `security`, `api-security-specialist`, `tester` (backend y E2E) y DevOps hechas, sin bloqueantes; sus hallazgos medios, corregidos. Revisión final del `reviewer` (31-10-2026): **APROBADO CON OBSERVACIONES**; queda abierta I-1 (CRM) antes de la fase 2. [PENDIENTE: segunda pasada del reviewer sobre esta documentación.] Detalle en «Hito 5» más abajo |
+| Siguientes (rotuladas «G–R» antes de que G pasara a ser el control funcional): Meta, Twilio, canarios, ElevenLabs, vínculo versión↔conversación (el laboratorio y la evaluación con IA son el Hito 4; el sello de la versión declarada en cada turno, el Hito 5) | **NO EMPEZADOS** (autorizados como construcción, no como activación) |
 
 ## Qué hay (clasificación honesta)
 
-*Clasificación del 17-10-2026, de la vista previa visual. Lo implementado después está en las secciones de F, de G y del Hito 4.*
+*Clasificación del 17-10-2026, de la vista previa visual. Lo implementado después está en las secciones de F, de G, del Hito 4 y del Hito 5 (la publicación, el canario y la reversión de versiones, que abajo figuran como no implementados, existen desde el Hito 5 en la rama `feat/ultron-studio-h5`, sin desplegar).*
 
 **IMPLEMENTADA Y PROBADA** (en el CRM, con pruebas unitarias y E2E en Chrome real):
 - Navegación: submenú **Mercadeo › ULTRON Studio** (etiqueta «preview», orbe iridiscente) y ruta propia `/marketing/ultron-studio`, ambas tras la bandera `ultronStudioPreviewEnabled` y el permiso `marketing.agent.manage`.
@@ -308,7 +309,7 @@ El E2E detectó las 4 mutaciones que se le probaron sobre `4fbce0a` (`store: tru
 
 ### Hito 4: despliegue por fases
 
-El runbook está en `ULTRON_STUDIO_DEPLOYMENT_PLAN.md` («Hito 4: runbook por fases») y la vuelta atrás en `ULTRON_STUDIO_ROLLBACK.md` («Hito 4»). **Ninguna fase se ha ejecutado.**
+El runbook está en `ULTRON_STUDIO_DEPLOYMENT_PLAN.md` («Hito 4: runbook por fases») y la vuelta atrás en `ULTRON_STUDIO_ROLLBACK.md` («Hito 4»). **Ninguna fase se ha ejecutado.** *(Así se escribió. **Actualización del 31-10-2026:** las fases 1 y 2 se ejecutaron el 25-10-2026; la 3, no. Ver «Hito 4: despliegue y verificación».)*
 
 | Fase | Qué queda en producción | Coste | Quién decide |
 |---|---|---|---|
@@ -335,7 +336,160 @@ El runbook está en `ULTRON_STUDIO_DEPLOYMENT_PLAN.md` («Hito 4: runbook por fa
 - **Después:** `git diff HEAD` vacío; el fichero de entorno solo difiere del respaldo en las 4 variables del laboratorio; sin clave de OpenAI; 13 workers RUNNING y `ironbody-lab` RUNNING; 0 colas fallidas; 0 errores en `laravel.log`; libro del laboratorio con `system.lab_catalog_imported` 1 y `scenario.catalog_imported` 11; 0 ejecuciones. El motor no lee nada del Studio; publicar sigue en 409.
 
 **Estado: `HITO_4_IMPLEMENTED_WITH_EXTERNAL_DEPENDENCY`.** El laboratorio está desplegado y operativo en modo de ensayo sin IA. `HITO_4_COMPLETED` exige la fase 3: el propietario crea un proyecto dedicado en OpenAI con presupuesto, confirma la retención de datos con `store:false`, fija modelo y precios oficiales, escribe `ULTRON_STUDIO_LAB_OPENAI_API_KEY`, `…_MODEL`, `…_PRICE_INPUT_USD_PER_MTOK`, `…_PRICE_OUTPUT_USD_PER_MTOK`, `…_DAILY_BUDGET_USD=2` y `ULTRON_STUDIO_LAB_DRIVER=openai` en el servidor (nunca por chat), se regenera la caché y se reinicia `ironbody-lab`; después, 2 escenarios sobre la línea base (coste real ≈ panel de uso), una versión y un veredicto de una segunda persona.
-**No ejecutado.** Esta sección se rellena con la evidencia de cada fase cuando se despliegue (fecha UTC, commits, respaldo, recuentos, smoke y estado final).
+*(Marcador anterior al despliegue, obsoleto desde el 25-10-2026: «**No ejecutado.** Esta sección se rellena con la evidencia de cada fase cuando se despliegue». La evidencia de las fases 1 y 2 es la de arriba; la fase 3 no se ha ejecutado.)*
+
+## Hito 5: gobierno y versionado (24/25-10-2026, implementado en rama; fusionado con origin/main el 31-10-2026; pendiente de despliegue)
+
+**Resumen ejecutivo.** Hasta el Hito 4, una versión aprobada no salía del Studio: publicar respondía 409 siempre. El Hito 5 cierra el ciclo (borrador → validación → laboratorio → revisión → aprobación → canario → publicación) sin tocar al agente:
+- **publicar** convierte la versión aprobada en la **declaración oficial y firmada** de cómo está configurado ULTRON: una entrada nueva en una cadena de solo inserción, firmada con una subclave derivada de la `APP_KEY`;
+- el **motor** lee la cabeza de esa cadena con una sola clase de solo lectura, detrás de su propia llave de entorno (`off` por defecto), y **anota en cada turno** qué declaración regía (`marketing_ai_actions.metadata.studio`);
+- toda publicación empieza en el **canario** (la conversación canaria del motor) y solo se **promueve** a todas con evidencia medida en el servidor: 24 horas, 3 turnos sellados con esa versión, ningún freno, el acta del canario a cero y sin deriva;
+- **revertir** y **volver a Legacy** son inmediatos (una entrada nueva; el lector no tiene caché) y no dependen de las llaves que permiten publicar.
+
+**El hecho incómodo (opción A del contrato): publicar no cambia lo que ULTRON dice ni hace.** De los 21 parámetros del catálogo, los 4 con mando real son banderas de entorno del propietario, y la versión tiene que declarar exactamente lo que lee hoy el motor para poder publicarse (`must_match`): una declaración que contradijera al motor sería falsa. El resto se reconoce de forma explícita como «sin efecto», y las reglas S-NNN siguen sin aplicarse. Lo que el Studio sí hace es vigilar la **deriva** entre lo declarado y lo que el motor tiene de verdad.
+
+**Dónde está:** la rama `feat/ultron-studio-h5` de los dos repos. **No está en `origin/main` ni en producción.** El 31-10-2026 se fusionó en las dos ramas el `origin/main` de ese día: backend `7318122` (fusión `cdb9dc8`) y CRM `4105016` (fusión `9fe1817`); las dos fusiones solo traen trabajo de otros módulos (caja, pagos, biometría, miembros, planes e IRON IA) y no tocan el código del Studio (en el CRM cambian el catálogo de permisos y su enumeración, fuera del módulo). Encima, en el backend, `cf59cef` corrige m-2 del reviewer y fija `PREVIO=7318122` en el script de la fase 1. Contrato: `ULTRON_STUDIO_H5_CONTRACT.md` (A1–A13 y Enmiendas 1 y 2). Plan del architect: `plans/ULTRON_STUDIO_H5_PLAN.md`. Informes de los agentes y decisiones del lead: `plans/informes-h5/`.
+
+| Repo | Commit | Qué |
+|---|---|---|
+| Backend | `3735b58` | Hoja de ruta: Hito 5 en desarrollo |
+| | `f4d64b8` | Migraciones: la cadena de publicaciones y sus guardas (`database-specialist`) |
+| | `02d1cf5` | Fixture de publicación (231 casos escritos a mano) y Enmienda 1 |
+| | `ea04d3f` | El lector del motor con el sello por turno y el núcleo puro de publicación |
+| | `044f70b` | Scripts de operación (fase 1 y alcance del motor) |
+| | `5df1b1d` | m-3 del Hito 4: umbral de desatención por carril |
+| | `2bc053b` | La API de publicación: 38 rutas; el motor ya lee versiones |
+| | `61048ff` | La fase 1 escribe explícitas las variables A13; decisiones del lead del paso 3 |
+| | `d98bbf9` | Informe del paso 4 (CRM), con capturas |
+| | `d24c512` | Revisión de seguridad: la llave de publicar solo se enciende con `true` (M-1) y scripts endurecidos (M-2, M-3, B-1, N-5, N-7, N-8) |
+| | `602c4b9` | Revisión de la API: promover comparte el limitador de la evidencia (AS-2) |
+| | `5772bdf` | Scripts reconstruidos sobre las propuestas de DevOps, smoke de la fase 1 e informes de las revisiones |
+| | `96397ea` | H-1 del tester (el reintento recibe 200 `replayed`), carreras reales en PostgreSQL, pruebas de cobertura y Enmienda 2 |
+| | `cdb9dc8` | Fusión de `origin/main` (`7318122`), 31-10-2026 |
+| | `cf59cef` | m-2 del reviewer: un contenido que el catálogo actual no sabe leer se rechaza con el hallazgo `contenido-ilegible` (con su prueba), y la fase 1 parte de `PREVIO=7318122`; 31-10-2026 |
+| | `db1d8f6` | Revisión final del reviewer (APROBADO CON OBSERVACIONES) y cierre de I-2, I-3, m-3 a m-6 y m-8 a m-10 en los scripts y la documentación de apoyo; 31-10-2026 |
+| | `940b0c2` | La comprobación de privilegios de la cadena enseña también UPDATE y DELETE de `iron_app`, como información; 31-10-2026 |
+| CRM | `3989f90` | Arnés E2E con la pila real como activo del repo (A10.5) |
+| | `9b70337` | Capa de datos de la publicación y arreglo de la carrera de «Validar en el servidor» (A10.3) |
+| | `e7ba41b` | Integración de la publicación en el CRM (A11) |
+| | `33821e4` | Vista previa con las formas reales del paso 3 (puerta dispensada y bloqueos sin fila) |
+| | `24a691d` | D-1 (`publication_head_invalid`) y paridad con las formas exportadas por el backend |
+| | `a29bcc8` | E2E del Hito 5 con la pila real (`h5-governance`, 276 comprobaciones) y arreglos del arnés |
+| | `9fe1817` | Fusión de `origin/main` (`4105016`), 31-10-2026 |
+
+**IMPLEMENTADO Y PROBADO** (en rama):
+- **La cadena de publicaciones** (`ultron_studio_publications`): de solo inserción (disparadores en PostgreSQL y SQLite, y el modelo), con `seq` único (una carrera la gana una sola escritura), firma HMAC sobre los bytes exactos que lee el motor (contrato `ultron-engine-config/1`) e idempotencia por `clientRequestId`, atada a persona, acción, versión y cuerpo.
+- **La máquina de estados de F más H5:** `APPROVED → CANARY → PUBLISHED`, con `ROLLED_BACK` y `RETIRED` («Sustituida»). Como mucho una versión en `CANARY` y una en `PUBLISHED` (índices únicos parciales en la base), y la cabeza de la cadena coincide con ellas.
+- **Las cuatro escrituras y sus puertas (A5):** publicar (siempre en canario), promover, revertir y volver a Legacy. Publicar y promover exigen cuatro ojos por identidad (nadie publica ni promueve lo que creó), la ventana de 07:00 a 19:00 de Bogotá y el freno suelto; publicar exige además la puerta del laboratorio, los 4 `must_match`, el reconocimiento exacto de lo «sin efecto» y la misma vista previa que vio la persona (`previewHash`).
+- **El lector del motor** (`UltronPublishedConfig`): una sentencia por commit, solo con su llave distinta de `off`; nunca lanza (cualquier fallo sale como `fallback` y el turno sigue) y sella todas las filas que crea el commit. Con `off`, el motor es Legacy exacto: ninguna consulta y ningún sello.
+- **La evidencia del canario** (A6), calculada en el servidor con su propio limitador, y el comando `ultron-studio:publication-check`, que sale con 1 ante deriva, una cabeza que no verifica o una lectura fallida.
+- **Lecturas:** la vista previa (`publication-preview`), el historial paginado (`publications`), `engine.publication` en `status` y la lectura `governance.studioPublication`.
+- **Heredados que absorbe** (A10): `integrityOk` por lado en `compare` (I-2 de G), las reglas archivadas paginadas (I-5 de G), la carrera de «Validar en el servidor» (CRM), el umbral de desatención por carril (m-3 del Hito 4) y READ COMMITTED en `StudioAudit::recordDenied`.
+- **CRM:** botones según `actions` del servidor, los diálogos de publicar (con la vista previa) y de promover (con la evidencia), la barra de la publicación con Legacy y el historial, la insignia «Huella alterada» al comparar y el texto obligatorio de A11.
+- **El arnés E2E con la pila real**, como activo del repo (`Iron-Body_Front/e2e/ultron-studio/`), con un simulador de n8n y turnos reales firmados.
+- **Correcciones de las revisiones:** M-1/AS-1 (`d24c512`), AS-2 (`602c4b9`), H-1 del tester (`96397ea`) y los scripts de operación endurecidos (M-2, M-3, B-1, N-5, N-7 y N-8).
+
+**QUÉ NO HACE** (por diseño):
+- **No cambia lo que ULTRON dice ni hace.** No enciende ni apaga ULTRON, no mueve el canario ni toca el cobro, la pausa, el freno, los planes, la base de conocimiento ni n8n. Ninguna regla S-NNN se aplica.
+- **El motor lee una tabla del Studio, con una clase y una sentencia por commit, y solo con `MARKETING_ULTRON_STUDIO_CONFIG` distinta de `off`.** No escribe en `ultron_studio_*` ni importa clases del Studio, y el Studio no escribe en el motor. El diff del motor frente a `origin/main` son 3 ficheros (`UltronPublishedConfig.php`, nuevo; `UltronCommitService.php` y `config/marketing.php`), comprobado el 31-10-2026 frente a `7318122`.
+- **El Studio no frena ni revierte solo** por deriva o por un sello que falta: lo enseña, bloquea la promoción y `publication-check` sale con 1. El incidente de IRON GUARD por deriva es del Hito 7.
+- **Sin llamadas, sin Meta, sin ElevenLabs y sin gasto.**
+- **Diferido al Hito 7** (Enmienda 2 §E2.5): marcar en el historial las entradas que no verifican (B-2), el `seq` envenenado con DML (AS-3/N-3) y `CHECK (seq >= 1)`, el envoltorio de migración que corre como root y los caracteres invisibles que acaban en la cadena (AS-5).
+
+**Evidencia.** Cada cifra lleva su informe. **Las de la lista son anteriores a la fusión del 31-10-2026 y a `cf59cef`.** Tras la fusión, el reviewer comprobó (31-10-2026, `informe-reviewer.md`): en el backend `cf59cef`, 103/103 pruebas en SQLite (`UltronStudioPublicationLifecycleTest`, `UltronStudioPublicationRollbackTest` y `UltronEngineIsolationTest`), 9/9 carreras en PostgreSQL, 38 rutas, `auth:coverage --unmapped` vacío, las 5 exportaciones idénticas a las del CRM y `permissions:export` idéntico al catálogo del CRM `9fe1817`, con **101 permisos** (96 en el hito; la fusión añade `cash.products.refund`, `members.transfer_membership`, `payments.correct`, `payments.refund` y `plans.archive`); en el CRM `9fe1817`, módulo 878/878, `tsc` y `check:literals` limpios, y la suite completa con 3131 pruebas y los mismos 16 fallos de la línea base. [PENDIENTE: puerta PostgreSQL completa (con las 38 carreras), Studio + Access + Chaos en SQLite, Marketing y el build de producción del CRM sobre los commits finales (lead; en marcha el 31-10 según el informe de recuperación).]
+- **Backend:**
+  - API (`informe-api.md` §0 y §6, verificado de primera mano por el lead): Studio + Unit + Access + Chaos en SQLite, 1654 pruebas y 20 038 aserciones, con 18 omitidas que solo corren en PostgreSQL; Studio + Unit en PostgreSQL 14, 1403/1403; Marketing, 4977/4977; `auth:coverage --unmapped` vacío; 38 rutas; `permissions:export` idéntico al catálogo del CRM (96 permisos, sha256 `aeb9699c…`); 15 mutaciones, todas con el resultado esperado.
+  - Motor (`informe-motor.md`): las suites de ULTRON, 4977/4977 con la llave en `off` y otra vez en `all`; la prueba del lector, 217/217 en SQLite y en PostgreSQL; los 87 casos del fixture de firma y alcance; 12 mutaciones cazadas.
+  - Núcleo (`informe-nucleo.md`): paridad estricta con el fixture (classify 34/34, effectiveJson 11/11, compose 10/10, evidence 18/18 y las puertas puras 30/30); 53 mutaciones cazadas.
+  - Migraciones (`informe-db.md`): en PostgreSQL 14.24, de 27 a 30 disparadores y de 24 a 27 CHECK; en SQLite, de 18 a 20 disparadores. `migrate:rollback --step=2` deja el esquema idéntico, `down()` se niega con datos de H5 y un rol dueño sin superusuario migra sin ningún GRANT nuevo.
+  - Fixture (`informe-fixture.md`): 231 casos escritos a mano desde el contrato; una segunda derivación independiente da 0 discrepancias y 29 implementaciones erróneas lo tumban.
+- **CRM** (`informe-front-integracion.md`): módulo 878/878 en `24a691d`; suite completa de 2920 pruebas con los mismos 16 fallos de la línea base, nombre a nombre; `tsc` y `check:literals` limpios; build de producción sin avisos de las hojas nuevas; 18 mutaciones, todas tumbadas; Chrome con la API simulada, 71/71 a 1440 y 390 px; `ultron-studio.scss` sin un byte más (sha256 `fc558002…`).
+- **E2E con la pila real:** **404/408** en la ejecución definitiva sobre `2bc053b` + `e7ba41b`, y 405/408 con el CRM `33821e4` (ver abajo).
+
+**Decisiones del lead** (contrato, Enmiendas 1 y 2 y `decisiones-lead-h5.md`):
+1. **Opción A:** declaración verificada y sello por turno. Un «apagado» aplicado (opción B) queda para un contrato futuro `ultron-engine-config/2`, si el propietario lo pide.
+2. **Puerta del laboratorio `required` por defecto**: hace falta un veredicto `approved` sobre la misma huella y con la versión de prompts vigente. El propietario puede poner `waived` en el entorno; queda escrito en cada publicación. Camino recomendado: cerrar la fase 3 del Hito 4 antes de la fase 2 de este hito.
+3. **Canario obligatorio:** 24 horas y 3 turnos sellados por defecto, configurables con mínimos duros de 1 hora y 1 turno.
+4. **Criterio de cierre:** `HITO_5_COMPLETED` solo con las fases 1–3 ejecutadas y su evidencia; si lo impide una dependencia externa, `HITO_5_IMPLEMENTED_WITH_EXTERNAL_DEPENDENCY`.
+5. **`RETIRED` se reutiliza** con la etiqueta «Sustituida»; no se añade `SUPERSEDED`.
+6. **Dos personas bastan:** quien publica tiene que ser distinto del autor, no también de quien aprobó.
+7. **Ventana de 07:00 a 19:00 (Bogotá)** para publicar y promover; revertir y Legacy, siempre.
+8. **Revertir no depende de `ULTRON_STUDIO_PUBLISHING_ENABLED`:** deshacer no puede depender de la llave que permite cambiar.
+9. **READ COMMITTED en `StudioAudit::recordDenied`**, con su prueba en PostgreSQL (pendiente de F).
+10. **Estado del motor** leído por el lead en producción (25-10-2026, 02:05 UTC, solo lectura): ULTRON encendido, cobro apagado, canario de conversación y canario del cobro configurados, driver `openai` y 3 turnos de ULTRON en 7 días. La primera versión publicable declarará `governance.enabled: true`, `governance.canaryOnly: true`, `rules.paymentLinksEnabled: false` e `intent.driver: entorno`.
+- **Enmienda 1:** la subclave de firma (Q-1: la `APP_KEY` es la clave del HMAC y la etiqueta, el dato); revertir la publicada con otra versión en canario conserva el canario (Q-2); al promover, la parte se copia igual (Q-3); qué entra en `previewHash` (Q-4); y una lectura caída cuenta como deriva (Q-5).
+- **Enmienda 2:** el 409 nuevo `publication_head_invalid` (D-1), las formas de la cadena (D-2 a D-5), qué rechazos se auditan (D-6), el 422 antes que las llaves (D-13), la ventana (D-18), la paginación (AS-8), M-1 y AS-2, las decisiones del CRM (D-F1 a D-F9), la corrección del riesgo R6 del plan sobre la rotación de la `APP_KEY` (B-3) y lo diferido al Hito 7.
+- **Durante la implementación:** H-1 del tester, corregido por el lead; B-2 y AS-3, diferidos al Hito 7; `deploy-h4-backend-fase1.sh`, marcado obsoleto; y dos ajustes de pruebas de F y G (la sonda de inmutabilidad pasa de `PUBLISHED` a `VALIDATING`, porque el CHECK de 9 estados admite `PUBLISHED`, y el umbral de `UltronStudioHardeningTest` sube de 50 a 150 ms, porque fallaba también sobre la base).
+
+### Hito 5: revisiones de seguridad y de la API
+
+Detalle en `ULTRON_STUDIO_SECURITY_REPORT.md` («Hito 5»).
+- **`security`** (sobre el backend `61048ff` y el CRM `24a691d`): sin bloqueantes ni altos. M-1 (la llave de publicar se abría con `off`), corregido en `d24c512`; M-2 (el script de la fase 1 no pasaba de la línea 11) y B-1 (añadir al fichero de entorno sin salto final), corregidos en los scripts; M-3 (git como root sobre un `.git` de `www-data`), primero con `git` como `www-data` y, desde el 31-10-2026, resuelto de otra forma: el árbol y `.git` resultaron ser de root desde el 25-10 (I-3 del reviewer) y los scripts ejecutan `git` como root con `umask 022`; B-2 (el historial no verifica cada entrada), diferido al Hito 7; B-3 (la rotación de la `APP_KEY`), llevado al runbook.
+- **`api-security-specialist`** (sobre `d98bbf9`): sin bloqueantes ni altos. AS-1 (= M-1) y AS-2 (promover sin el limitador de la evidencia), corregidos; AS-3 (`seq` envenenado con DML deja Legacy en 500), diferido al Hito 7 con su salida operativa en el runbook; AS-4 (= H-1 del tester), corregido; AS-5 a AS-8, notas.
+
+### Hito 5: validación del backend por el tester
+
+**Hecha el 25-10-2026** sobre `61048ff`/`d98bbf9`, con dos sesiones reales de PostgreSQL 14 por carrera (`informe-tester-backend.md`).
+- **38 carreras:** 29 verdes desde el principio (20 publicaciones a la vez, la «tormenta» de 19 transacciones abortadas por el 23505, promover contra revertir, publicar contra Legacy, `recordDenied` en REPEATABLE READ…) y 9 rojas, todas de **H-1** (media, de contrato): el reintento de la misma petición que cruzaba la confirmación de la primera recibía 409 en vez de 200 `replayed`, en las cuatro escrituras. Sin daño a datos. **Corregido por el lead en `96397ea`:** las 38 pasan contra el arreglo (`decisiones-lead-h5.md`). En ninguna carrera una transacción abortada dejó nada a medias, y con todas las sesiones en REPEATABLE READ el resultado fue el mismo.
+- **Suite completa en SQLite frente a `origin/main` (`0366009`), el mismo día:** 10 841 pruebas frente a 10 137, con 57 rojos de nombres idénticos en los dos lados (55 en `tests/baseline-failures.txt` y 2 del entorno) y **0 nuevos**. En PostgreSQL: Studio, 1441 pruebas con 9 rojas, las de H-1; Marketing, los mismos 10 rojos por nombre en los dos lados.
+- **Mutaciones:** 22; 19 caen y 3 sobreviven (C2, I1 y J1: huecos de cobertura de severidad baja, B-1 a B-3), que `96397ea` cierra con tres pruebas nuevas.
+- **No verificado por el tester:** un servidor web real entre las sesiones (lo cubre el E2E), el rol `iron_app` de producción (lo comprueba el script de la fase 1) y SERIALIZABLE.
+
+### Hito 5: E2E con la pila real
+
+**Hecho por el tester el 25-10-2026, de 14:45 a 17:00 UTC, en local. Nada de producción** (`informe-tester-e2e.md`). La pila: instantánea del backend con 315 migraciones y PostgreSQL 14 desechable; `artisan serve` y los tres workers reales (laboratorio, WhatsApp y comercial); simuladores de OpenAI y de n8n; una valla de red; `ng serve`; Chrome con login real. Los turnos son reales: entrante firmado como Meta → worker de WhatsApp → worker comercial → simulador de n8n → `ai/decide` → `ai/commit`.
+
+| Ejecución | Refs | Resultado |
+|---|---|---|
+| R1″, definitiva | backend `2bc053b` + CRM `e7ba41b` | **404/408**: F 40/40, G 25/25, H4 27/27, turno 30/30, `h5-governance` 272/276 y cierre 10/10 |
+| R4 | `2bc053b` + `33821e4` | 405/408 |
+| R2, línea base | `0366009` + `5c1dbd7` | 131/131 |
+| R3, el CRM nuevo con el backend anterior | `0366009` + `e7ba41b` | 131/131: desplegar el CRM antes que el backend no rompe F, G ni H4 |
+| Mutaciones (`mutations.sh`) | `2bc053b` + `e7ba41b` | 9/9 tumbadas |
+
+- **Los escenarios del encargo, en verde:** sellos `applied`, `legacy` y `out_of_scope` en turnos reales; la evidencia del canario; publicar, promover, revertir y Legacy desde el CRM; cuatro ojos y el Administrador sin botones; la deriva con `publication-check` a 1; un oráculo independiente de la firma (7/7 entradas); y 230 respuestas barridas sin el id del canario ni firmas.
+- **Los 4 rojos:** 3 de **B-1** (= M-1/AS-1: `ULTRON_STUDIO_PUBLISHING_ENABLED=off|no|disabled` abría publicar), corregido en `d24c512`; y **C-1** (el CRM decía dos veces que la puerta del laboratorio estaba dispensada), corregido en `33821e4`. **E2E de cierre ejecutado por el lead el 31-10-2026 (21:26–21:30 UTC) sobre `cf59cef` + `9fe1817`: 408/408** (f-versions 40, g-inspector-compare 25, h4-lab-fake 27, ultron-turn 30, h5-governance 276, cierre 10; 257 s; sin 5xx en 465 peticiones del CRM, `laravel.log` sin ERROR, colas vacías, 0 violaciones de los simuladores de OpenAI y n8n, valla de red vacía, ninguno de los 4 secretos en 19 registros ni en 9 tablas). Es la mejor pasada registrada del arnés.
+- **El arnés:** 6 defectos propios, corregidos (`mutations.sh` no había corrido nunca), y la huella de 17 tablas del motor y de las colas, comprobada.
+- **Desviaciones documentadas:** un veredicto `approved` no existe en `fake` (Hito 4, §A6), así que la puerta `required` se cerró con una ejecución `openai` contra el simulador; y, con el canario del motor puesto, las demás conversaciones no llegan al commit (O-3), así que `rest` y `out_of_scope` solo se ven quitando el canario del entorno de la pila desechable.
+- **Qué no cubre:** revertir una `PUBLISHED` que restaura otra `RETIRED`, `restore_integrity_mismatch` y `publication_head_invalid` provocados (lo cubre PHPUnit), las carreras de dos sesiones (las cubre el tester de backend), el 429 de la evidencia (`CACHE_STORE=array`), la pila de producción con `config:cache`, un p95 del commit con muestra suficiente y el teclado y los 390 px de los diálogos nuevos (los probó el CRM con la API simulada).
+
+### Hito 5: operación (DevOps)
+
+**Hecho el 25-10-2026, todo en local**, sin SSH ni peticiones a producción (`informe-devops-h5.md`).
+- **Smoke de solo lectura** para las tres fases (`ops/smoke-h5.py` y `ops/smoke-run-h5.sh`). Contra la API real en local: fase 1, 35 + 14 OK (36 + 14 con una versión aprobada); fases 2 y 3, 34 + 14 cada una; las 217 tablas de la base, idénticas antes y después. Se niega a correr con la configuración de otra fase. El detector de fugas pasa 22/22 casos sin red.
+- **Hallazgos en los scripts:** D-1 (bloqueante, = M-2: el script de la fase 1 no pasaba de la línea 11) y D-2 (el recuento de colas fallidas por `queue:failed` daba siempre 0 en Laravel 12, también en el registro del despliegue del Hito 4), más D-3 a D-12. Todos corregidos en los scripts que reconstruyó el lead (`5772bdf`). DevOps ensayó sus propuestas en un banco local sobre `fef7c87`: el ensayo, el despliegue, la reanudación y tres negativas. El 31-10-2026 el lead aplicó a los scripts las observaciones de operación del reviewer (I-2, I-3 y m-3 a m-6) en `db1d8f6` y `940b0c2`.
+- **Ensayado en local:** la rotación de la `APP_KEY` con la cadena viva (`fallback` → revertir da 409 `publication_head_invalid` → Legacy 201 → `publication-check` 0) y la vuelta del código a `fef7c87` con datos de H5 (smoke de H4 17/17, 33 rutas y las tablas en su sitio).
+- **Runbook:** `ULTRON_STUDIO_DEPLOYMENT_PLAN.md` («Hito 5») y `ULTRON_STUDIO_ROLLBACK.md` («Hito 5»).
+
+### Hito 5: veredicto del reviewer
+
+**APROBADO CON OBSERVACIONES** (31-10-2026, hacia las 21:30 UTC, sobre el backend `cf59cef` y el CRM `9fe1817`; `plans/informes-h5/informe-reviewer.md`, confirmado en `db1d8f6`). Sin bloqueantes en el código del backend ni del CRM: cumplen los criterios 1 a 6 y 9 en todo lo que pudo ejecutar; los scripts (criterio 7) y la documentación (criterio 8) quedaron parciales, con estas observaciones:
+- **Antes de la fase 1:** I-2 (un tercer argumento mal escrito convertía el ensayo en el despliegue real) e I-3 (el `merge` como `www-data` podía fallar a medias), cerradas por el lead en los scripts (`db1d8f6`); e I-4 (la vuelta atrás del código apuntaba a `fef7c87` y habría deshecho en producción el trabajo de otros módulos), corregida en `ULTRON_STUDIO_ROLLBACK.md` el 31-10-2026.
+- **Antes de la fase 2: I-1 (CRM).** En la misma pestaña, un segundo «Volver a Legacy» con el mismo motivo reenvía la misma `clientRequestId` y recibe la entrada vieja: si entretanto otra persona publicó, la salida no se ejecuta y la barra dice que ya estaba en Legacy. No afecta a la fase 1. [PENDIENTE: corrección de I-1, con su spec y su build (frontend).]
+- **Menores:** m-2 (cerrada en `cf59cef`), m-3 a m-6 y m-8 a m-10 (cerradas en `db1d8f6`, salvo la parte de m-8 sobre `ops/README.md` y m-7, cerradas en la documentación del 31-10), y m-1 (decidida: `true`, `1`, `on` o `yes` encienden la llave de publicar).
+- Puertas completas del lead (31-10-2026, tras la fusión): Studio + Access + Chaos en SQLite **1697 OK** (56 omitidas, de solo PostgreSQL) sobre `cdb9dc8`; puerta PostgreSQL **1446 OK** sobre `cdb9dc8` y **1447 OK** sobre `cf59cef` (con las 38 carreras); Studio SQLite **1447 OK** sobre `cf59cef`; Marketing (Feature + Unit) **4977 OK**; `auth:coverage --unmapped` vacío; **38 rutas**. [PENDIENTE: segunda pasada del reviewer sobre la documentación del Hito 5 (las secciones de este informe, del runbook, de la reversión, de seguridad, del backend, del CRM y de la hoja de ruta).]
+
+Mientras mantenga un hallazgo bloqueante, el hito no se despliega.
+
+### Hito 5: despliegue por fases
+
+El runbook está en `ULTRON_STUDIO_DEPLOYMENT_PLAN.md` («Hito 5: runbook por fases») y la vuelta atrás, en `ULTRON_STUDIO_ROLLBACK.md` («Hito 5»). **Ninguna fase se ha ejecutado.**
+
+| Fase | Qué queda en producción | Coste | Quién decide |
+|---|---|---|---|
+| 1. Código desplegado con todo apagado | 38 rutas, la cadena vacía y sus guardas, las 7 variables apagadas y el CRM nuevo. El motor no consulta la cadena y publicar responde 409 | 0 | El usuario autoriza el despliegue |
+| 2. Motor en `canary` | El motor sella los turnos de la conversación canaria y se puede publicar, siempre en canario. La primera publicación es una versión que refleja el motor tal como está | 0 | El propietario, con su decisión escrita sobre la puerta del laboratorio |
+| 3. Motor en `all` y promoción | La versión del canario pasa a regir en todas las conversaciones, con la evidencia del canario suficiente | 0 | El propietario |
+
+- **La puerta del laboratorio, antes de la fase 2.** Con `required`, publicar exige un veredicto `approved`, y un veredicto solo existe sobre una ejecución del laboratorio en modo `openai`. Mientras el laboratorio siga en `fake` y sin clave (el 31-10-2026), toda publicación responde 409 `lab_verdict_required`. Las salidas: cerrar antes la fase 3 del Hito 4 o que el propietario decida `waived` por escrito. Con `waived`, cada publicación lo lleva escrito en la cadena (`lab_gate.mode = waived`) y el CRM lo pinta en rojo. **Decisión del lead (31-10-2026, al amparo de la autorización completa del propietario del 25-10-2026, que permite tomar las decisiones de gobierno reservadas al propietario documentándolas por escrito):** la fase 2 arranca con `ULTRON_STUDIO_PUBLISH_LAB_GATE=waived` escrito explícitamente en el entorno, porque el laboratorio sigue en `fake` y sin clave de OpenAI y con `required` ninguna publicación sería posible. Queda escrito en cada publicación (`lab_gate.mode = waived`, que el CRM pinta en rojo) y en este informe. Vuelve a `required` en cuanto el propietario cierre la fase 3 del Hito 4 (clave y proyecto de OpenAI); el propietario puede revertirla en cualquier momento escribiendo `required` y regenerando la caché de configuración.
+- **Poco tráfico.** Con unos 3 turnos de ULTRON por semana (decisión 10 del contrato), la evidencia del canario tardará días en reunirse, y sin turnos no hay promoción: es lo correcto.
+- **Criterio de cierre:** **`HITO_5_COMPLETED`** solo con las tres fases y su evidencia; si lo impide una dependencia externa (autorización, tráfico del canario o puerta del laboratorio), **`HITO_5_IMPLEMENTED_WITH_EXTERNAL_DEPENDENCY`**.
+
+### Hito 5: despliegue y verificación
+
+[PENDIENTE: fase 1.] Sin ejecutar. Se rellena al desplegar: fecha UTC, commits, respaldo de la base y del CRM, salida de `deploy-h5-backend-fase1.sh` y del smoke, verificación a los 15 minutos y a las 24 horas, y estado.
+
+**Producción de partida** (lectura del lead por SSH, solo lectura, 31-10-2026): API en `7318122` y CRM en `4105016` (build del 29-10). El Studio, en el estado del Hito 4: 33 rutas, 27 disparadores y 24 CHECK, 10 tablas `ultron_studio_*`, el worker `ironbody-lab` en marcha (13 workers RUNNING) y el laboratorio encendido en `fake`, con presupuesto 0 y sin clave. Ninguna de las 7 variables del Hito 5 en el entorno; 1 borrador, 0 versiones y 0 ejecuciones del laboratorio. ULTRON, encendido con el canario configurado y el cobro apagado.
 
 ## Decisiones tomadas (y por qué)
 
@@ -352,8 +506,21 @@ Las de `ULTRON_STUDIO_ARCHITECTURE_AUDIT.md` §14: versionado de cada turno en e
 
 ## Autorizaciones
 
+*Así se escribió el 17/18-10-2026, para la vista previa:*
 - **Usadas:** auditoría, diseño, implementación, dependencias compatibles, pruebas, documentación, construcción del frontend, commits locales, publicación protegida de la vista previa.
-- **No usadas (y no se usarán sin orden expresa):** cambiar ULTRON en producción, llamadas reales, campañas o presupuestos Meta, publicar reglas, reemplazar el motor, Python, ElevenLabs, APIs de pago, migraciones en producción, **push a `main`**.
+- **No usadas (y no se usarán sin orden expresa):** cambiar ULTRON en producción, llamadas reales, campañas o presupuestos Meta, publicar reglas, reemplazar el motor, Python, ElevenLabs, APIs de pago, migraciones en producción, **push a `main`**. *(Después, el push a `main` y las migraciones en producción se usaron, con la autorización del usuario, en los despliegues de F (18-10), G (19-10) y el Hito 4 (25-10).)*
+
+**Desde el 25-10-2026:** el propietario concedió autorización completa para commits, push, despliegues por fases y cierre de agentes de ULTRON STUDIO. Los límites absolutos siguen intactos:
+- sin llamadas reales;
+- sin Meta;
+- sin ElevenLabs;
+- sin gasto sin control;
+- sin sustituir Legacy;
+- sin publicar reglas sin validación;
+- sin `down()` en producción;
+- sin `push --force`, `reset --hard` ni `clean`.
+
+El contrato del Hito 5 pide además una orden expresa para cada fase de despliegue y la autorización del propietario para levantar el 409 de publicar (fase 2) y para la fase 3 («Protecciones intocables»). Según el informe de recuperación del lead (`plans/informes-h5/informe-recuperacion-2026-10-31.md` §6), esa autorización permite decidir `waived` para la puerta del laboratorio si queda documentado por escrito en cada publicación y en este informe. **Confirmado por el lead (31-10-2026):** la autorización del 25-10-2026 («no me pidas permisos, te los concedo completos») cubre las fases 2 y 3 del Hito 5 cuando cumplan sus criterios (fase 2: fase 1 verificada y smoke en verde; fase 3: evidencia del canario con al menos 24 h y 3 turnos sellados), documentando cada paso en este informe; siguen exigiendo autorización expresa aparte: llamadas reales, escribir en Meta, ElevenLabs, gasto, sustituir Legacy y `down()` en producción.
 
 ## Publicación
 
@@ -373,3 +540,5 @@ Vista previa protegida publicada el **18-10-2026 02:56 UTC** siguiendo `ULTRON_S
 **Limitaciones conocidas:** datos de demostración; el borrador vive en `localStorage` de cada persona; sin backend del Studio (llega con la fase de persistencia); probado en Chrome (escritorio y emulación móvil), no en Safari/Firefox ni con gestos táctiles reales; el asistente IRON del CRM flota en la esquina inferior derecha también aquí.
 
 **Push a `main`:** autorizado y hecho el 18-10-2026 (`origin/main` del CRM en `4f7d774`; del backend, en los commits de esta documentación). Publicar el CRM desde `origin/main` conserva el Studio.
+
+**Estado del 31-10-2026** (lectura del lead por SSH, solo lectura): la URL es la misma. Producción sirve el CRM `4105016` y la API `7318122`, con el Studio en el estado del Hito 4 (fases 1–2). El Hito 5 no está publicado ni en `origin/main`.

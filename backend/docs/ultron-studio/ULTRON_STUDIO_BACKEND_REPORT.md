@@ -5,6 +5,8 @@
 > **Actualización (19-10-2026).** Todo lo que va hasta «Despliegue (pendiente de autorización)» es el Hito F tal como se escribió antes de desplegarlo. **F está desplegado y verificado desde el 18-10-2026 (15:24–15:28 UTC, backend `9acddc3`)**: ver `ULTRON_STUDIO_FINAL_REPORT.md`. El **Hito G** está en la última sección de este informe: implementado en la rama `feat/ultron-studio-g`, **no desplegado**.
 >
 > **Actualización (19-10-2026, noche, hora de Bogotá).** **G está desplegado y verificado desde el 19-10-2026 (06:00–06:04 UTC, backend `e651dd9`, código `dfb30f5`)**; su sección conserva el estado con el que se escribió. El **Hito 4** (laboratorio de IA) está al final: implementado en la rama `feat/ultron-studio-h4`, **no desplegado**.
+>
+> **Actualización (31-10-2026).** **El Hito 4 está desplegado en las fases 1 y 2 desde el 25-10-2026 (01:15–01:25 UTC, backend `fef7c87`, código `18dae99`)**, con el laboratorio en `fake`, presupuesto 0 y sin clave; su sección conserva el estado con el que se escribió (las Enmiendas 5 y 6 se implementaron después, en `7113f9f` y `bc662b0`). El **Hito 5** (gobierno y versionado) está al final: implementado en la rama `feat/ultron-studio-h5`, fusionado con `origin/main` el 31-10-2026 y **no desplegado**.
 
 ## Principios que se cumplen
 
@@ -371,7 +373,7 @@ Ninguna quedó aplicada: en `391cffb` el árbol está limpio y los tres puntos d
 
 ## Hito 4: laboratorio de IA
 
-**Fecha:** 19-10-2026 (hora de Bogotá). **Estado: IMPLEMENTADO Y VERIFICADO EN RAMA, NO DESPLEGADO.** Rama `feat/ultron-studio-h4` del backend, sobre `9cceca0` (= `origin/main`; el código en producción es `e651dd9`). Contrato: `ULTRON_STUDIO_H4_CONTRACT.md` (decisiones del lead, A1–A10, Enmiendas 1–5 y sus precisiones). Este apartado describe el código de `6dbf485`, que implementa hasta la Enmienda 4; **la Enmienda 5 (`403a12b`, ejecuciones huérfanas y cobertura) está pendiente de implementar**. Las formas exactas de cada DTO y de cada error están en el contrato y no se repiten aquí.
+**Fecha:** 19-10-2026 (hora de Bogotá). **Estado: IMPLEMENTADO Y VERIFICADO EN RAMA, NO DESPLEGADO** *(así se escribió; desplegado en las fases 1 y 2 el 25-10-2026, 01:15–01:25 UTC: ver la nota del principio)*. Rama `feat/ultron-studio-h4` del backend, sobre `9cceca0` (= `origin/main`; el código en producción es `e651dd9`). Contrato: `ULTRON_STUDIO_H4_CONTRACT.md` (decisiones del lead, A1–A10, Enmiendas 1–5 y sus precisiones). Este apartado describe el código de `6dbf485`, que implementa hasta la Enmienda 4; **la Enmienda 5 (`403a12b`, ejecuciones huérfanas y cobertura) está pendiente de implementar**. Las formas exactas de cada DTO y de cada error están en el contrato y no se repiten aquí.
 
 | Commit | Qué |
 |---|---|
@@ -671,3 +673,170 @@ Las 9 mutaciones de las correcciones (M1–M9, incluida quitar LRM/RLM del patr�
 - las carreras de creación sobre `6dbf485` (se hicieron sobre `4fbce0a`), y `maxruns` en REPEATABLE READ con sus 20 forzadas;
 - `excludedRules` no vacío con la pila real (hace falta una versión con más de 20 S-NNN; lo cubren Feature y la revisión del CRM con la API simulada);
 - el patrón de `lab-invisibles` con el PCRE 10.39 de producción: la sonda del 19-10-2026 compiló las expresiones del filtro y de los emojis, pero es anterior a `6dbf485`. Usa solo puntos de código explícitos; se sondea tras desplegar.
+
+## Hito 5: gobierno y versionado
+
+**Fecha:** 24/25-10-2026 (noche y mañana de Bogotá). **Estado: IMPLEMENTADO EN RAMA, PENDIENTE DE DESPLIEGUE.** Rama `feat/ultron-studio-h5` del backend, sobre `0366009` (el contrato congelado, encima de `fef7c87`, que entonces era producción); el 31-10-2026 se fusionó `origin/main` (`7318122`, lo que sirve producción ese día) en `cdb9dc8`, sin cambios en el código del Studio, y encima entró `cf59cef` (m-2 del reviewer). **No está en `origin/main` ni en producción.** Contrato: `ULTRON_STUDIO_H5_CONTRACT.md` (decisiones del lead, A1–A13 y Enmiendas 1 y 2). Las formas exactas de cada DTO y de cada error están en el contrato y en `plans/informes-h5/informe-api.md` §3, y no se repiten aquí. Sin dependencias nuevas: `composer.json` y `composer.lock` no cambian.
+
+| Commit | Qué |
+|---|---|
+| `3735b58` | Hoja de ruta: Hito 5 en desarrollo |
+| `f4d64b8` | Migraciones: la cadena de publicaciones y sus guardas (database-specialist) |
+| `02d1cf5` | Fixture del tester (`publication-cases.json`, 231 casos) y Enmienda 1 |
+| `ea04d3f` | El lector del motor con el sello por turno (paquete B-M) y el núcleo puro de publicación (paquete B-S, paso 2) |
+| `044f70b` | Scripts de operación (fase 1 y alcance del motor) |
+| `5df1b1d` | m-3 del Hito 4: umbral de desatención por carril (A10.4) |
+| `2bc053b` | La API de publicación (paquete B-S, paso 3): 38 rutas; `StudioPublishing::ENGINE_READS_VERSIONS = true` |
+| `61048ff` | La fase 1 escribe explícitas las variables A13; decisiones del lead del paso 3 |
+| `d24c512` | M-1: la llave de publicar solo se enciende con `true`; scripts endurecidos (M-2, M-3, B-1, N-5, N-7, N-8) |
+| `602c4b9` | AS-2: promover comparte el limitador de la evidencia |
+| `5772bdf` | Scripts reconstruidos sobre las propuestas de DevOps, smoke de la fase 1 e informes de las revisiones |
+| `96397ea` | H-1 del tester: el reintento que cruza la confirmación de su gemela recibe 200 `replayed`; carreras reales en PostgreSQL, pruebas de cobertura y Enmienda 2 |
+| `cdb9dc8` | Fusión de `origin/main` (`7318122`), 31-10-2026 |
+| `cf59cef` | m-2 del reviewer: si el catálogo actual no sabe leer el contenido de la versión, el 409 `revalidation_blocked` lleva un hallazgo bloqueante propio, `contenido-ilegible`, en vez de una lista vacía (con su prueba en `UltronStudioPublicationLifecycleTest`); y la fase 1 parte de `PREVIO=7318122`. 31-10-2026 |
+| `db1d8f6` | Revisión final del reviewer (APROBADO CON OBSERVACIONES) y cierre de I-2, I-3, m-3 a m-6 y m-8 a m-10 en los scripts y la documentación de apoyo. 31-10-2026 |
+| `940b0c2` | La comprobación de privilegios de la cadena enseña también UPDATE y DELETE de `iron_app`, como información. 31-10-2026 |
+
+**Qué añade.** Publicar convierte una versión aprobada en la **declaración oficial y firmada** de cómo está configurado ULTRON: una entrada nueva en una cadena de solo inserción (`ultron_studio_publications`). El motor lee la cabeza de esa cadena en cada commit, solo con su llave de entorno distinta de `off`, y **sella** cada turno con la declaración que regía. Toda publicación empieza en el canario; se promueve a todas con evidencia medida en el servidor; se revierte o se vuelve a Legacy con una entrada nueva. **Nada de esto cambia lo que ULTRON dice o hace** (opción A): el sello no cambia el camino del commit.
+
+### Migraciones `2026_10_25_100001` y `2026_10_25_100002` (`f4d64b8`)
+
+**`ultron_studio_publications`** (A3.1), de solo inserción y sin `updated_at`:
+
+| Columna | Qué guarda |
+|---|---|
+| `uuid`, `seq`, `client_request_id` | Tres UNIQUE. `seq` = 1, 2, 3…; la cabeza es `max(seq)`, y dos escrituras que leen la misma cabeza chocan en el 23505 (una gana). `client_request_id`, la idempotencia |
+| `action` | `publish`, `promote`, `rollback` o `legacy` (CHECK en PostgreSQL) |
+| `version_id` | FK a `ultron_studio_versions`, `ON DELETE RESTRICT`; NULL en Legacy |
+| `restores_publication_id`, `previous_publication_id` | FK a la propia tabla, RESTRICT: la entrada cuya parte resto vuelve al revertir, y la cabeza anterior (NULL solo en `seq` = 1) |
+| `engine_contract` | `ultron-engine-config/1` (CHECK en PostgreSQL) |
+| `effective_json`, `effective_hash`, `signature` | Los **bytes exactos** que lee y firma el motor, en una columna `text` (nunca json ni jsonb, que reordenarían); su sha256; y su firma |
+| `catalog_version`, `lab_gate`, `acknowledged`, `evidence` | El catálogo de la versión; la puerta del laboratorio al publicar; lo reconocido como «sin efecto» y el `previewHash`; los recuentos del canario al promover, sin ids ni textos |
+| `reason` | Hasta 500 caracteres. Obligatorio en revertir y Legacy (`uspub_reason_chk`), y opcional en publicar y promover, donde guarda la nota (Enmienda 2, D-4) |
+| `actor_admin_id`, `actor_name`, `actor_role`, `created_at` | Quién actuó, como instantánea sin FK (como en F), y cuándo |
+
+**Guardas** (A3.2): `uspub_forbid_update` y `uspub_forbid_delete` en los dos motores y `uspub_forbid_truncate` en PostgreSQL, con la función de F `ultron_studio_forbid()` redeclarada con el mismo cuerpo (md5 de su definición, `4ad748b5…`, igual antes y después); `uspub_action_chk`, `uspub_engine_contract_chk` y `uspub_reason_chk` en PostgreSQL; `usv_status_chk` ampliado a los 9 estados (`DRAFT`, `VALIDATED`, `REVIEW_REQUIRED`, `APPROVED`, `REJECTED`, `CANARY`, `PUBLISHED`, `RETIRED` y `ROLLED_BACK`) con DROP y ADD en un solo `ALTER TABLE`; y los índices únicos parciales `usv_one_canary` y `usv_one_published` (como mucho una versión en cada estado). `ultron_studio_versions` no gana columnas ni se reconstruye en SQLite: los dos índices conservan su `WHERE` en los dos motores (lo prueba la migración).
+
+| Recuentos (database-specialist, PostgreSQL 14.24 y SQLite 3.53.4) | Base (H4, producción) | Con H5 | Tras `migrate:rollback --step=2` |
+|---|---|---|---|
+| PostgreSQL: disparadores del Studio | 27 | **30** | 27 |
+| PostgreSQL: CHECK del Studio | 24 | **27** (`usv_status_chk` se sustituye, no suma) | 24 |
+| SQLite: disparadores del Studio | 18 | **20** | 18 |
+| Tablas `ultron_studio_*` | 10 | 11 | 10 |
+| Índices de `ultron_studio_versions` | PostgreSQL 6 · SQLite 5 | 8 · 7 | 6 · 5 |
+
+- **`down()` se niega** (las dos migraciones) si existe alguna publicación o alguna versión en `CANARY`, `PUBLISHED`, `RETIRED` o `ROLLED_BACK`: código de salida 1 y nada deshecho. En PostgreSQL comprueba y deshace bajo `LOCK TABLE … IN ACCESS EXCLUSIVE MODE`. Sin datos de H5, el esquema vuelve a ser idéntico al de la base. **Nunca se ejecuta en producción;** volver al código del Hito 4 no lo necesita (A3.5).
+- **Roles:** un dueño sin superusuario migró las 315 migraciones, y la aplicación solo-DML inserta y transiciona sin ningún GRANT nuevo. Con el rol de la aplicación: UPDATE y DELETE de la cadena → P0001; TRUNCATE → 42501; desactivar o borrar disparadores, CHECK o índices → 42501.
+- **Contención en el despliegue:** la FK de la 100001 pide `ShareRowExclusiveLock` sobre `ultron_studio_versions`, que no choca con los lectores; el `ALTER` de la 100002 pide `AccessExclusiveLock`, que choca también con un `SELECT` abierto. Con `lock_timeout` de 5 s, la migración falla limpia (55P03 a los 5,24 s) y se reintenta; si cae la 100002, la tabla queda sin guardas hasta el reintento. En local tardaron 15,61 ms y 6,36 ms.
+- **El orden de las transiciones importa:** los índices únicos se comprueban fila a fila. Dentro de una transacción, primero sale la versión de `CANARY` o `PUBLISHED` y después entra la otra, nunca en una sola sentencia.
+- **Propuestas no implementadas** (decisión del lead): `CHECK (seq >= 1)` y otras cuatro invariantes de la cadena. `CHECK (seq >= 1)`, junto con un disparador de contigüidad de `seq`, queda para el Hito 7 (Enmienda 2 §E2.5).
+
+### El lector del motor: `UltronPublishedConfig` (`ea04d3f`, paquete B-M)
+
+`app/Services/Marketing/Ultron/UltronPublishedConfig.php` es la única clase del motor que nombra una tabla del Studio (la cadena `'ultron_studio_publications'`, una sola vez); no importa nada del Studio, y su nombre no contiene `UltronStudio`, para que el rastreo de `UltronEngineIsolationTest` siga vigilando al commit.
+
+- **`forConversation(int $conversationId)`**, solo para `UltronCommitService` (A4.3):
+  1. con `marketing.ultron.studio_config` en `off`, devuelve `null`: **ninguna consulta y ningún sello** (Legacy exacto);
+  2. si no, **una** sentencia: la fila de `max(seq)`, con `effective_json` leído acotado en la propia consulta (`substr(effective_json, 1, 16385)`), y dentro de un punto de guardado si hubiera una transacción abierta;
+  3. sin fila, `legacy`. Si la hay, la escalera de verificación: contrato conocido → `sha256(effective_json) = effective_hash` → firma (`hash_equals`) → decodificación estricta (claves y tipos exactos, y `entry` y `seq` iguales a los de la fila);
+  4. la parte: en la conversación canaria del motor, `canary` (y si es `null`, `rest`); en otra, `rest` solo con la llave en `all`, y `out_of_scope` con `canary`. Una parte `null` es `legacy`; si no, `applied`;
+  5. **cualquier `Throwable`** sale como `fallback/read_failed` (o `fallback/table_missing`), y al log van el motivo y la clase del error, nunca el mensaje. **El lector nunca lanza.**
+- **`describe()`** (A4.9), para el Studio: `{env, head: {entry, seq, contract, hashOk, signatureOk, parseOk}, parts: {canary, rest}, canaryConfigured}`, nunca el id del canario. Lee con cualquier llave y **propaga** los fallos: `StudioEngineReadings` la envuelve para que una lectura caída salga como no disponible.
+- **`signatureFor(string $effectiveJson)`**, la **única** implementación de la firma (A4.1 y Q-1 de la Enmienda 1): `k = hash_hmac('sha256', 'ultron-studio-publication', <APP_KEY decodificada si lleva el prefijo base64:>, true)` y `signature = hash_hmac('sha256', "ultron-engine-config/1\n" . effective_json, k)`, en hexadecimal. Es una subclave separada de la del `decide_token`. Sin `APP_KEY`, lanza en vez de firmar con una clave vacía.
+- **El sello** (A4.5), en `marketing_ai_actions.metadata.studio`, solo con la llave distinta de `off`: siempre las nueve claves `{v: 1, env, state, entry, seq, part, version, contentHash, reason}`. Estados: `applied`, `legacy`, `out_of_scope` y `fallback`, con `reason` `contract_unknown`, `hash_mismatch`, `signature_invalid`, `malformed`, `table_missing` o `read_failed`. Un `fallback` con fila nombra la fila leída, para el diagnóstico. En PostgreSQL `metadata` es `jsonb`: se lee por clave (`metadata->'studio'->>'state'`), nunca por posición. Sin etiquetas, nombres ni ids de conversación.
+- **Dónde se sella** (A4.6): una lectura por commit en `UltronCommitService::execute()`, después de las puertas del interruptor, del freno y del canario y antes de la elegibilidad, fuera de toda transacción. El sello viaja como argumento **obligatorio** de `persist()`, y lo llevan todas las filas que crea ese commit: la ejecutada, las bloqueadas, la del crítico fallido, las rendiciones y la de la hora de la visita. Dos commits seguidos, incluso con la misma instancia del servicio, no lo comparten. La entrada y la respuesta del commit no cambian (prueba de instantánea).
+- **Configuración:** `config/marketing.php`, `ultron.studio_config` ← `MARKETING_ULTRON_STUDIO_CONFIG`; solo `canary` o `all` (sin distinguir mayúsculas ni espacios alrededor) encienden la lectura, y todo lo demás es `off`. La llave va con `config:cache`; la publicación no tiene caché, a propósito: revertir tiene que ser inmediato.
+
+### El núcleo puro (`ea04d3f`, paquete B-S, paso 2)
+
+`StudioPublicationDeclaration` y `StudioCanaryEvidence`, en `app/Services/UltronStudio/`, estáticos y puros:
+- **Clasificación de cada parámetro al publicar (A1):** `must_match`, los 4 `env_flag` (`governance.enabled`, `governance.canaryOnly`, `rules.paymentLinksEnabled` e `intent.driver`), que tienen que coincidir con lo que lee hoy el motor (en `intent.driver`, `entorno` coincide siempre); `matches`, los fijos con el mismo valor declarado; `no_effect`, los fijos con otro valor, los que no tienen equivalente o solo son propuesta cuando difieren de la línea base, y cada regla S-NNN copiada (`rule:S-NNN`), que quien publica reconoce como conjunto exacto. Las R-xx, las aristas y la disposición no tienen clase. En la declaración firmada entran las identidades (versión, huella, catálogo, quién aprobó y quién publica) y los 4 valores `must_match`; **nunca** etiquetas, notas, motivos, ids de conversación ni secretos.
+- **`effective_json`** (A4.2): `{canary, contract, entry, issuedAt, rest, seq}`, donde `canary` y `rest` son una «parte» o `null`. Publicar B en canario escribe `{canary: B, rest: <lo que hubiera>}`; promover, `{canary: B, rest: B}` con la misma parte (Q-3); Legacy, `{canary: null, rest: null}`. `compose()` se niega a romper la invariante de A2 (por ejemplo, publicar encima de un canario en curso).
+- **Lo que fijan las decisiones del núcleo:** la firma entra como `Closure`, así que el núcleo no nombra al motor; al escribir valida más estricto que el lector (uuid y huellas en minúscula, ids ≥ 1, como mucho 16 384 caracteres; una entrada real no llega a 2 048), así que nada de lo que escribe el Studio puede salir `malformed`; una forma inesperada lanza, nunca toma un valor por defecto; y una evidencia incoherente lanza, así que `turns` y `byState` salen de una sola consulta.
+- **`previewHash`** (Q-4): la huella canónica de `{versionUuid, contentHash, catalogVersion de la versión, mustMatch, matches, noEffect, labGate: {mode, latest}}`, sin la ventana ni la hora. **`evidenceHash`**: la de los recuentos, los umbrales y la marca de inicio.
+
+### API: 38 rutas (`2bc053b`)
+
+Bajo `/api/admin/ultron-studio/`, con el tope de cuerpo de 64 KB del grupo. Las 5 nuevas y las 2 que pasan a ser reales:
+
+| # | Ruta | Llave | Cupo | Respuestas principales |
+|---|---|---|---|---|
+| 13 | `POST versions/{uuid}/publish` | publish | escritura | 201 `{ok, data: PublicationEntryDto}`; 200 `replayed`; 403 `forbidden` o `four_eyes_required`; 404; 409 (los de A5.1, `publication_moved` y `publication_head_invalid`); 422 |
+| 14 | `POST versions/{uuid}/rollback` | rollback | escritura | 201; 200 `replayed`; 403; 404; 409 `client_request_reused`, `not_active_publication`, `restore_integrity_mismatch`, `publication_head_invalid`, `publication_moved` o `invalid_transition`; 422 |
+| 34 | `GET versions/{uuid}/publication-preview` | view | lectura | 200 `PublicationPreviewDto`; 404 |
+| 35 | `GET versions/{uuid}/canary-evidence` | view | lectura + `ultron-studio-evidence` (10/min por persona y 30/min por red) | 200 `CanaryEvidenceDto`; 404; 409 `invalid_transition` (`allowedFrom: ["CANARY"]`); 429 con `retry_after` |
+| 36 | `POST versions/{uuid}/promote` | publish | escritura + `ultron-studio-evidence` (desde `602c4b9`, AS-2) | 201; 200 `replayed`; 403; 404; 409 (los de A5.2, `publication_moved` y `publication_head_invalid`); 422 |
+| 37 | `GET publications` | view | lectura | 200 con el paginador de Laravel, de la cabeza hacia atrás |
+| 38 | `POST publications/legacy` | rollback | escritura | 201; 200 `replayed`; 403; 409 `client_request_reused`, `already_legacy` o `publication_moved`; 422 |
+
+**Lo que cambia en rutas que ya existían:** `GET status` gana `engine.publication` (`PublicationStateDto`), `engine.activeVersion` (la versión de la parte resto) y los códigos de A5 en `publishing`, y su tubería tiene los 9 estados alcanzables (`VALIDATING` sigue inalcanzable; `RETIRED` se lee «Sustituida»); `GET versions/{uuid}` gana `actions.publish`, `actions.promote` y `actions.rollback` reales y `publications[]`; `GET rules?status=archived` se pagina; `GET engine/readings` gana el extra `governance.studioPublication` (fuera del catálogo de lecturas, D-5); y `GET compare` lleva `integrityOk` en cada lado.
+
+**Cuerpos** (validados en el controlador **antes** que las llaves, D-13: un cuerpo vacío da 422, no 409): publicar, `{clientRequestId, previewHash, acknowledgedNoEffect (como mucho 64, cada uno de hasta 80 caracteres de [A-Za-z0-9_.:-], sin repetir), note? (≤ 500)}`; promover, `{clientRequestId, evidenceHash, note? (≤ 500)}`; revertir y Legacy, `{clientRequestId, reason (5–500)}`. Paginación de `publications` y de las reglas archivadas: `page` y `per_page` enteros ≥ 1 (si no, 422), con `per_page` hasta 50 (por encima, 50) y 20 por defecto; `perPage` se ignora (AS-8, Enmienda 2).
+
+**Las puertas, en el orden en que se comprueban** (A5 y `informe-api.md` §2):
+- **Publicar:** permiso (`ultron.view` y `ultron.publish`) → llaves (`publishing_disabled`, `engine_not_reading_versions`) → reintento por `clientRequestId` → versión (404) → cuatro ojos por identidad (`four_eyes_required`) → estado `APPROVED` (`invalid_transition`) → integridad → revalidación con el catálogo actual (`revalidation_blocked`, `revalidation_changed`) → laboratorio (`lab_verdict_required`, con `latest`) → `must_match` (`engine_value_mismatch` o `engine_reading_unavailable`) → reconocimiento exacto (`no_effect_not_acknowledged`) → `preview_stale` → canario del motor (`engine_has_no_canary`) → freno (`engine_braked`) → ningún otro canario (`canary_in_progress`) → ventana (`outside_publication_window`) → transacción: la cabeza tiene que verificar (`publication_head_invalid`), se firma, se inserta con `seq` = cabeza + 1, `APPROVED → CANARY` condicionado y el evento del libro.
+- **Promover:** lo mismo hasta los cuatro ojos → llave del motor en `all` (`scope_not_allowed`) → estado `CANARY` → integridad → evidencia (`canary_evidence_insufficient`, con la evidencia) → `evidenceHash` (`evidence_changed`) → freno → ventana → transacción (`CANARY → PUBLISHED` y la `PUBLISHED` anterior → `RETIRED`).
+- **Revertir:** `ultron.rollback` → reintento → 404 → solo la `CANARY` o la `PUBLISHED` vigente (`not_active_publication`) → si es la publicada, la entrada anterior a su promoción y la versión que vuelve tienen que verificar enteras (`restore_integrity_mismatch`) → transacción. Sin llaves de entorno, sin cuatro ojos y sin ventana.
+- **Legacy:** `ultron.rollback` → reintento → la cadena ya en Legacy (`already_legacy`) → transacción. **No verifica la cabeza:** es la salida de una cabeza rota.
+- `engine_has_no_canary` no se alcanza por HTTP con el catálogo actual: sin canario falla antes `engine_value_mismatch` en `governance.canaryOnly` (D-10). La puerta existe y la prueban la paridad unitaria, una mutación y el E2E.
+
+**Códigos nuevos** (409 salvo que se diga): `revalidation_changed`, `lab_verdict_required`, `engine_value_mismatch`, `engine_reading_unavailable`, `no_effect_not_acknowledged`, `preview_stale`, `engine_has_no_canary`, `engine_braked`, `canary_in_progress`, `outside_publication_window`, `scope_not_allowed`, `canary_evidence_insufficient`, `evidence_changed`, `not_active_publication`, `restore_integrity_mismatch`, `already_legacy`, `publication_moved` y `publication_head_invalid` (D-1, Enmienda 2: la cabeza no verifica; la salida es Legacy). Se reutilizan 403 `four_eyes_required` y 409 `engine_not_reading_versions`. Las cargas de cada uno (`latest`, `mismatches`, `noEffect`, la vista previa o la evidencia nuevas…) están en el contrato.
+
+**Idempotencia y reintento.** `clientRequestId` es único en toda la cadena y queda atado a la persona, la acción, la versión y el cuerpo: el mismo, con el mismo cuerpo, devuelve 200 `replayed` con la entrada de la primera vez; cualquier otra cosa, 409 `client_request_reused` (a otra persona, sin la entrada). Un 23505 se resuelve **fuera** de la transacción abortada (en PostgreSQL la deja inservible): si es de `client_request_id`, es el reintento; si es de `seq`, `publication_moved`; si es de `usv_one_canary`, `canary_in_progress`. Desde `96397ea`, ante cualquier rechazo posterior al paso del reintento se vuelve a mirar el reintento fuera de la transacción: así la misma petición que cruza la confirmación de su gemela recibe su entrada (H-1 del tester).
+
+**Libro** (A8, en la misma transacción que el cambio): `version.published`, `version.promoted`, `version.retired` (`{by: promote | legacy}`), `version.rolled_back`, `version.restored` y `system.publication_legacy`. Los rechazos solo se auditan, deduplicados y solo si la versión existe, para las llaves, `scope_not_allowed` y `restore_integrity_mismatch` (`version.*_refused`), y los cuatro ojos como `version.four_eyes_denied`; las puertas de hechos (ventana, freno, evidencia…) no se auditan, para no llenar un libro que no se puede vaciar (D-6).
+
+**La evidencia del canario** (`StudioCanaryMeasures` y `StudioCanaryEvidence`, A6): una sola consulta sobre `marketing_ai_actions` de la conversación canaria del motor (`source_type = inbound_message`, desde la entrada) da los turnos, el reparto por estado del sello, los sellados con esta versión y las recuperaciones; los frenos accionados desde la entrada o echados ahora; el acta (`ultron:canary-report … --json`) se ejecuta con `Artisan::call` dentro del proceso, y de ella solo se leen el código de salida, el total y los 7 recuentos (si falla o su JSON no cuadra, falla cerrado); la deriva de los 4 `must_match`, con una lectura caída como deriva (Q-5); y `signatureOk` de la cabeza. El texto del acta nunca se guarda, se registra ni se devuelve. Sin canario configurado, cero turnos y deriva en `governance.canaryOnly`.
+
+**Comando `ultron-studio:publication-check {--json}`:** sale con 1 ante deriva, una cabeza que no verifica o una lectura fallida, y con 0 si cuadra («cadena vacía» incluida). Sin ids ni textos; con `--json` escribe en crudo y en modo texto escapa las etiquetas (N-5).
+
+**Configuración:** las 7 variables de A13, con su defecto y su valor inválido, están en `ULTRON_STUDIO_DEPLOYMENT_PLAN.md` («Hito 5») y en `.env.example`. `ULTRON_STUDIO_PUBLISHING_ENABLED` se lee con `filter_var(…, FILTER_VALIDATE_BOOLEAN)` y `StudioPublishing::flagEnabled()` exige `=== true` desde `d24c512` (M-1).
+
+**Permisos:** ninguna llave nueva. La ayuda de `ultron.publish` lleva el texto obligatorio de A11 («Publicar registra esta versión como la configuración oficial de ULTRON y el motor la anota en cada turno. En este hito no cambia lo que ULTRON dice ni hace.»), y la de `ultron.rollback`, su variante (D-8). Matriz de las 38 rutas: sin sesión 401; token compartido 403; Recepción, Entrenador y Administrativo, 403; el Administrador lee todo y recibe 403 en publicar, promover, revertir y Legacy; el Super Admin, permitido.
+
+**Heredados** (A10): `integrityOk` por lado en `compare` (A10.1, I-2 de G); las reglas archivadas paginadas (A10.2, I-5 de G); el umbral de desatención por carril, 300 s para `lab` con el global de 120 s por defecto (A10.4, m-3 del Hito 4, en `5df1b1d`); y READ COMMITTED antes del cerrojo de `StudioAudit::recordDenied` (A10.6, con su prueba en PostgreSQL).
+
+**Decisiones del backend dentro del contrato:** D-6 a D-18 de `informe-api.md` §5; las que lo tocan (D-1, D-2 a D-5, D-6, D-7, D-9, D-10, D-13, D-18 y AS-8) están congeladas en la Enmienda 2.
+
+### Concurrencia: carreras reales en PostgreSQL (tester de backend, `96397ea`)
+
+`UltronStudioPublicationRaceTest` (38 casos, solo PostgreSQL) y su ayudante `PublicationRaceSessions`: cada lado de una carrera es un proceso hijo con su propia conexión que manda la petición por el kernel HTTP (middleware, sesión, controlador, servicio y transacción reales). Naturales (todos sueltos a la vez) y forzadas (pausas hasta que otra sesión espera un cerrojo, con `pg_blocking_pids` y un escalón de 40 ms). Después de cada una se comprueba que nada queda a medias, la invariante de A2, que toda la cadena verifica y que el lector real del motor la aplica.
+- **29 verdes desde el principio:** 20 publicaciones a la vez de la misma versión y de 20 distintas, la «tormenta» de 19 transacciones abortadas por el 23505 a la vez, el índice `usv_one_canary` entre sesiones, promover contra revertir, doble promoción, publicar contra Legacy, revertir la publicada contra promover otra y `recordDenied` en REPEATABLE READ.
+- **9 rojas a propósito, todas de H-1**, que pasan contra el arreglo de `96397ea` (`decisiones-lead-h5.md`).
+- **Con todas las sesiones en REPEATABLE READ** (184 sesiones), el mismo resultado: el primer choque de dos escrituras es siempre el 23505 de su inserción.
+- En `ops/`: `suite-compare.sh` (la suite de la rama contra su base, el mismo día, comparada por nombre) y `h5-mutations.php` (las 22 mutaciones; se niega a correr sobre un árbol de git).
+
+### Aislamiento del motor
+
+- **El diff del motor frente a `origin/main`** son 3 ficheros: `UltronPublishedConfig.php` (nuevo, 501 líneas), `UltronCommitService.php` (+58/−9) y `config/marketing.php` (+18). Comprobado el 31-10-2026 frente a `7318122` sobre `app/Services/Marketing`, `app/Jobs`, `app/Http/Controllers/Api/Internal`, `routes/marketing.php`, `routes/api.php` y `config/marketing.php`.
+- **`UltronEngineIsolationTest`:** 38 rutas; «el motor no lee versiones» pasa a «el motor lee solo con su llave y publicar está apagado por defecto»; las referencias del lector al Studio son exactamente `'ultron_studio_publications'`; fuera del Studio, solo `UltronCommitService` nombra al lector.
+- **Prueba de comportamiento con `DB::listen` sobre un commit completo** (A9.2, en `UltronCommitStudioStampTest`): con la llave en `off`, cero sentencias que nombren `ultron_studio_`; con `canary` o `all`, exactamente una `select` sobre `ultron_studio_publications` y ninguna escritura en `ultron_studio_*`.
+- **`UltronStudioEngineReadOnlyTest`:** recorre las 38 rutas; publicar, promover, revertir y Legacy escriben solo en `ultron_studio_*`, y la vista previa y la evidencia no escriben nada.
+
+### Pruebas
+
+Las cifras de la tabla son de antes de la fusión del 31-10-2026 y de `cf59cef`. Después, el reviewer comprobó en `cf59cef`: 103/103 pruebas en SQLite (`UltronStudioPublicationLifecycleTest`, `UltronStudioPublicationRollbackTest` y `UltronEngineIsolationTest`, con las de cobertura de `96397ea` y la de m-2), 9/9 carreras en PostgreSQL (el doble clic y las 8 de H-1), 38 rutas, `auth:coverage --unmapped` vacío, las 5 exportaciones idénticas a las del CRM y `permissions:export` idéntico al catálogo del CRM `9fe1817`, con 101 permisos (la fusión añade 5). **Hecho:** Puertas completas del lead (31-10-2026, tras la fusión): Studio + Access + Chaos en SQLite **1697 OK** (56 omitidas, de solo PostgreSQL) sobre `cdb9dc8`; puerta PostgreSQL **1446 OK** sobre `cdb9dc8` y **1447 OK** sobre `cf59cef` (con las 38 carreras); Studio SQLite **1447 OK** sobre `cf59cef`; Marketing (Feature + Unit) **4977 OK**; `auth:coverage --unmapped` vacío; **38 rutas**.
+
+| Ejecución | Resultado | Fuente |
+|---|---|---|
+| Migraciones: `UltronStudioPublicationSchemaTest` | 13 pruebas: en PostgreSQL 14, 162 aserciones; en SQLite, 98 con 3 omitidas (solo PostgreSQL) | `informe-db.md` §5 |
+| Lector y sello: `UltronPublishedConfigTest`, `UltronCommitStudioStampTest` y `UltronEngineIsolationTest` | 253 pruebas en SQLite y en PostgreSQL; la unitaria del lector, 217/217, con los 87 casos de firma y alcance del fixture | `informe-motor.md` §4 |
+| Suites de ULTRON (`tests/Feature/Marketing tests/Unit/Marketing`) | 4977/4977 con la llave en `off` y 4977/4977 con `all` | `informe-motor.md` §4 |
+| Núcleo: paridad con el fixture | classify 34/34, effectiveJson 11/11, compose 10/10, evidence 18/18 y puertas puras 30/30; 236 pruebas nuevas | `informe-nucleo.md` |
+| Studio + Unit + Access + Chaos en SQLite | 1654 pruebas, 20 038 aserciones, 18 omitidas (todas de solo PostgreSQL) | `informe-api.md` §6, repetido por el lead |
+| Studio + Unit en PostgreSQL 14 | 1403/1403, 0 omitidas | `informe-api.md` §6, repetido por el lead |
+| Suite completa en SQLite contra `origin/main` (`0366009`), el mismo día | 10 841 pruebas frente a 10 137: 57 rojos con nombres idénticos en los dos lados, 0 nuevos | `informe-tester-backend.md` §4 |
+| Studio en PostgreSQL con las carreras | 1441 pruebas: 9 rojas, las de H-1 (corregido en `96397ea`) | `informe-tester-backend.md` §5 |
+| Marketing en PostgreSQL contra `origin/main` | 4977 frente a 4730: los mismos 10 rojos por nombre, 0 nuevos | `informe-tester-backend.md` §5 |
+| `auth:coverage --unmapped` y rutas | Vacío; 38 rutas | `informe-api.md` §6 |
+| `permissions:export` frente al catálogo del CRM | Idéntico: 96 permisos, sha256 `aeb9699c…` (antes de la fusión; tras ella, 101, también idéntico) | `informe-api.md` §6; `informe-reviewer.md` |
+| E2E con la pila real | 404/408 sobre `2bc053b` + `e7ba41b` (B-1 = M-1, tres veces, y C-1 del CRM, los dos corregidos después) | `informe-tester-e2e.md` |
+
+**Mutaciones:** 12 en el motor (entre ellas quitar el `try` del lector, sellar solo las filas ejecutadas, leer con la llave en `off` y recanonicalizar antes de firmar), todas cazadas; 53 en el núcleo, todas cazadas; 15 en la API, con el resultado esperado (M5, releer la cabeza dentro de la transacción abortada, solo la caza PostgreSQL; M12 y M13 sobreviven donde deben: defensa doble y una puerta que solo ve la paridad unitaria); y 22 del tester sobre la cadena, de las que caen 19 y sobreviven 3 (C2, I1 y J1: huecos de cobertura que `96397ea` cierra con tres pruebas).
+
+**Lo que no se verificó:**
+- nada en producción: ni migraciones, ni el lector, ni tiempos;
+- la puerta PostgreSQL y las suites después de la fusión del 31-10-2026 y de `cf59cef`, y una pasada completa de la puerta sobre `96397ea` registrada en los informes;
+- un servidor web real entre las sesiones de las carreras (lo cubre el E2E), el rol `iron_app` de producción (lo comprueba el script de la fase 1) y SERIALIZABLE;
+- el p95 del commit con la llave en `off` y en `all` con una muestra suficiente: el E2E solo da medianas indicativas, en las mismas centenas de milisegundos;
+- el E2E sobre el código corregido (`d24c512`, `96397ea`).

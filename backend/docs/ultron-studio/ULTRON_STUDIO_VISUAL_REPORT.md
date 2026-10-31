@@ -284,7 +284,7 @@ El E2E detecta las 6 mutaciones que se le probaron, todas en copias:
 
 ## Hito 4: el laboratorio de IA en el CRM
 
-**Estado:** implementado en la rama `feat/ultron-studio-h4` del CRM (HEAD `3e630eb`), **no desplegado**. Commits sobre `44c0e8c` (= producción):
+**Estado:** implementado en la rama `feat/ultron-studio-h4` del CRM (HEAD `3e630eb`), **no desplegado** *(así se escribió. **Actualización del 31-10-2026:** desplegado el 25-10-2026 con el CRM `5c1dbd7`, posterior a `3e630eb`: lleva el segundo lote de correcciones (entre ellas, los textos por tipo de tope, `2b6375b`) y la fusión con `origin/main`; ver `ULTRON_STUDIO_FINAL_REPORT.md`, «Hito 4: despliegue y verificación»)*. Commits sobre `44c0e8c` (= producción):
 
 | Commit | Qué |
 |---|---|
@@ -399,6 +399,148 @@ Todos los de A9 del contrato, más algunos de apoyo:
 - **El asistente flotante del shell** tapa a 390 px parte de «Archivar la regla» en G, y en el laboratorio flota sobre la esquina inferior derecha. Ya ocurría; no se comprobó si intercepta toques.
 - **Riesgo previo más visible:** el tablero no tiene guarda de salida para cambios sin guardar del borrador; ir al laboratorio por el enlace nuevo, igual que por el menú, abandona lo no guardado.
 - **No verificado:** Safari (`overflow: clip` necesita Safari 16 o posterior), Firefox, Windows, lectores de pantalla reales, gestos táctiles y el CRM del laboratorio sobre la pila de producción.
+
+## Hito 5: la publicación en el CRM
+
+**Estado:** implementado en la rama `feat/ultron-studio-h5` del CRM (HEAD `a29bcc8`, fusionada con `origin/main`, `4105016`, el 31-10-2026 en `9fe1817`), **no desplegado**. Producción sirve `4105016`, cuyo módulo del Studio es el de `5c1dbd7`. Commits sobre `5c1dbd7`:
+
+| Commit | Qué |
+|---|---|
+| `3989f90` | Arnés E2E con la pila real como activo del repo (`e2e/ultron-studio/`, A10.5) |
+| `9b70337` | Capa de datos de la publicación (tipos, lectores, servicio y sesión) y la carrera de «Validar en el servidor» (A10.3) |
+| `e7ba41b` | La integración (A11): panel de versiones, los dos diálogos, la barra, el historial, comparar y las lecturas del motor |
+| `33821e4` | Ajustes tras el informe de la API: la puerta dispensada con el mensaje del servidor, una sola vez (C-1 del E2E), y los bloqueos sin fila propia |
+| `24a691d` | D-1 (`publication_head_invalid`) y paridad con `backend-publication.testing.ts`, copiado byte a byte del backend |
+| `a29bcc8` | E2E del Hito 5 con la pila real (`specs/h5-governance.cjs`, 276 comprobaciones) y arreglos del arnés |
+| `9fe1817` | Fusión de `origin/main` (`4105016`), 31-10-2026: otros módulos (caja, pagos, biometría, miembros, planes e IRON IA); fuera del módulo cambian el catálogo de permisos y su enumeración |
+
+Todo queda dentro de `src/app/modules/ultron-studio/`, salvo los comentarios de `ULTRON_PUBLISH` y `ULTRON_ROLLBACK` en `permissions.enum.ts` (la ayuda que ven los Roles la sirve el backend) y el arnés de `e2e/`. **`ultron-studio.scss` no gana ni un byte** (sha256 `fc558002…`, fijado por `studio-h5-sheets.spec.ts`) y no hay dependencias nuevas.
+
+**Qué cambia para quien lo usa**, con un backend del Hito 5 (`engine.readsVersions: true`):
+- la **barra de la publicación**, bajo el aviso del motor: qué rige (en el canario, en todas o Legacy), la llave del motor y si el sello está bien o hay deriva; desde ella, el historial y «Volver a Legacy»;
+- el **detalle de cada versión** ofrece «Publicar en canario», «Promover a todas» y «Revertir» según `actions` del servidor; si no se puede, no hay botón y el motivo se lee en el panel;
+- dos **diálogos** nuevos: publicar, con la vista previa, y promover, con la evidencia del canario;
+- el **historial** de la cadena, paginado;
+- la insignia **«Huella alterada»** al comparar;
+- la lectura del motor **`governance.studioPublication`**, con su texto;
+- «Volver a preguntar al servidor»: ante `validation_stale`, un aviso informativo en vez de un error.
+
+Con un backend anterior (`readsVersions: false`), todo sigue como en F/G: «Publicar» deshabilitado con el motivo del servidor, sin barra y con el aviso «El motor de ULTRON no lee nada de esto». Lo comprobó el E2E con la pila real: el CRM nuevo con el backend anterior da lo mismo que la línea base, 131/131.
+
+### Componentes nuevos
+
+Cada componente es standalone y `OnPush`, con su hoja y su spec.
+
+| Pieza | Selector | Qué hace |
+|---|---|---|
+| `studio-publication-dialog.ts` (+ `.scss`) | `us-publication-dialog` | «Publicar en canario»: la vista previa y el envío con `previewHash` |
+| `studio-canary-evidence.ts` (+ `.scss`) | `us-canary-evidence` | «Promover a todas»: la evidencia de A6, la cuenta atrás del 429 y el envío con `evidenceHash` |
+| `studio-publication-history.ts` (+ `.scss`) | `us-publication-history` | La cadena paginada, o una lista fija en el detalle de una versión |
+| `studio-publication-bar.ts` (+ `.scss`) | `us-publication-bar` | La barra de estado, «Volver a Legacy» con motivo y el historial en un diálogo |
+| `studio-publication-text.ts` (puro) | — | El texto obligatorio de A11 y los nombres de llaves, acciones, puertas, clases y veredictos; las filas de requisitos y de evidencia; el sello; la deriva en llano |
+
+**Ficheros que cambian:** `studio-versions-panel.ts` (botones, motivos, texto obligatorio, entradas de la cadena, los diálogos y el color de los cuatro estados nuevos); `studio-compare-view.ts` (la insignia de huella); `studio-engine-text.ts` (la lectura nueva y su descriptor); `ultron-studio-page.ts` (solo plantilla, más una línea de lógica en `releerServidor()`); y la capa de datos (`studio-api.types.ts`, `studio-parse.ts`, `studio-api.service.ts` y `studio-session.ts`).
+
+**Tamaño de las hojas** (bytes de fuente; un spec exige menos de 8000): `studio-publication-dialog.scss` 6289, `studio-canary-evidence.scss` 3311, `studio-publication-history.scss` 2516, `studio-publication-bar.scss` 3467, `studio-versions-panel.scss` 7208 (era 6200) y `studio-compare-view.scss` 2761 (era 2329). Ninguna da aviso de presupuesto compilada.
+
+### La capa de datos (`9b70337`)
+
+- **Lo que no existe en el backend de hoy es opcional en los tipos y no se inventa al leer.** `status.engine.publication` se lee tolerante (si falta o llega roto, el Studio arranca igual y `publicationUnreadable` dice por qué); `actions.promote` es opcional; las entradas ilegibles de `version.publications` se descartan y se cuentan; `governance.studioPublication` falla suave. Las llaves que el CRM no conoce se ignoran. Lo prueba `studio-publication-compat.spec.ts` con los DTO de hoy y con los del Hito 5 con llaves inventadas en cada nivel.
+- **Las cuatro escrituras** (publicar, promover, revertir y Legacy) envían un cuerpo canónico y reutilizan el `clientRequestId` en los reintentos. Tras responder, se releen versiones, `status`, la versión abierta y el historial; sin red, con un 5xx o con un 429, no cambia nada. Un `preview_stale` trae la vista previa nueva en el propio error.
+- **La evidencia respeta su limitador:** nunca dos peticiones a la vez y, tras un 429, no se vuelve a pedir hasta que pasa su `retry_after` (60 s si no lo dice).
+- **La carrera de «Validar en el servidor» (A10.3):** antes, con el orden «GET enviado → guardado confirmado (revisión 8) → GET respondido (revisión 7)», el CRM cargaba la 7 encima de lo recién guardado. Ahora (a) con un guardado en curso responde `busy` sin pedir nada; (b) una respuesta con una revisión anterior no se aplica y avisa «Se guardó mientras validabas: vuelve a validar.»; y (b′) tampoco se aplica la que llega con un guardado en vuelo. Con el cuerpo anterior, los cuatro casos del spec fallan.
+
+### Lo que se ve
+
+- **Panel de versiones.** Los botones salen de `actions` del servidor. Sin la llave (como el Administrador) o con el servidor negando, no hay botón y el motivo va en texto visible, solo en el estado en que la acción tendría sentido: publicar en `APPROVED`, promover en `CANARY` y revertir en `CANARY` o `PUBLISHED` (D-F1). El detalle enseña el **texto obligatorio** («Publicar registra esta versión como la configuración oficial de ULTRON y el motor la anota en cada turno. En este hito no cambia lo que ULTRON dice ni hace.»), las entradas de la cadena que nombran la versión y la tubería con las etiquetas del servidor: `CANARY` en cian, `PUBLISHED` iridiscente, `RETIRED` («Sustituida») en gris y `ROLLED_BACK` en rosa, siempre con texto.
+- **Publicar en canario.** Al abrirse pide la vista previa y lo anuncia mientras llega. Enseña los diez requisitos en el orden del servidor, con su motivo (icono, palabra y texto oculto «se cumple / no se cumple»); la puerta del laboratorio dice su modo, y **dispensada sale como alerta en rojo aunque deje publicar**. Después, «Lo que declara frente a lo que lee el motor» (los cuatro `must_match`, con la versión en violeta y el motor en cian), lo que coincide con el código (plegable) y «Sin efecto en este hito», con una casilla por elemento (las reglas S-NNN, en magenta, con su descripción). El envío se deshabilita con el motivo en texto visible (faltan N por reconocer, bloqueada, sin llave o esperando la vista previa) y lleva `previewHash` y el conjunto reconocido. Una vista previa nueva borra lo reconocido (D-F5); `preview_stale` la trae y obliga a reconocer otra vez; `no_effect_not_acknowledged` marca lo que faltaba. La nota opcional lleva aviso de datos personales, porque va a una cadena que no se borra (D-F7).
+- **Promover a todas.** Desde cuándo cuenta, los umbrales y un veredicto en una línea («Alcanza para promover.» o «Aún no alcanza: horas en canario, turnos del canario.»), con la tabla de A6: horas, turnos, sellados, reparto por estado del sello, frenos, acta, recuperaciones, deriva y firma; cada medida, con lo que exige su puerta y si pasa. Tras un 429, «Actualizar» se deshabilita con cuenta atrás («Actualizar (en 41 s)») y se conserva la evidencia que ya se veía. `scope_not_allowed` añade que promover exige la llave del motor en todo el tráfico.
+- **Revertir y Volver a Legacy** usan `ib-reason-dialog` (de 5 a 500 caracteres) con su ranura de aviso de datos personales. Ante `restore_integrity_mismatch`, el CRM dice que la salida es «Volver a Legacy», en la barra.
+- **La barra de la publicación** (solo en la fase `ready`, D-F3): «En el canario: «X»; fuera de él: Legacy», «En todas: «X»» o «Legacy: el Studio no declara ninguna versión»; la llave del motor, por su efecto; y el sello («Correcto: firma verificada y sin deriva», «Deriva en N parámetros», «La firma de la cabeza no se verifica…», el motor sella Legacy o «Ninguno: la llave del motor está apagada»), con el número de la cabeza. El anillo del sello es el único gesto visual: iridiscente y quieto si está bien, rosa discontinuo con un problema y gris sin sello. La deriva se enseña parámetro a parámetro («No se revierte sola: se enseña aquí y bloquea promover»). «Volver a Legacy» solo aparece con `ultron.rollback` y si algo rige. Sin `engine.publication` (backend anterior) no pinta nada.
+- **Comparar** lleva «Huella alterada» (icono y palabra) en el lado con `integrityOk === false`; el diff no cambia. **`governance.studioPublication`** se lee en frases («Llave: solo la conversación canaria. Cabeza n.º 1, firma correcta. Partes: canario con versión, resto en Legacy. Canario del motor configurado: sí.»); lo no comprobado dice «sin comprobar», nunca «correcta», y nunca se nombra la conversación canaria. El aviso del motor pasa a «El motor de ULTRON solo anota la versión publicada: guardar, crear, aprobar o publicar versiones no cambia lo que ULTRON dice ni hace.».
+
+**Capturas** (Chrome con la API simulada, no la pila real; `plans/informes-h5/capturas-crm/`, a 1440 y 390 px):
+
+| N.º | Qué enseña | Escritorio | Móvil |
+|---|---|---|---|
+| 01 | Tablero con la barra en Legacy | [01](plans/informes-h5/capturas-crm/escritorio-01-tablero-barra-legacy.png) | [01](plans/informes-h5/capturas-crm/movil-01-tablero-barra-legacy.png) |
+| 02 | Detalle de una versión aprobada | [02](plans/informes-h5/capturas-crm/escritorio-02-detalle-aprobada.png) | [02](plans/informes-h5/capturas-crm/movil-02-detalle-aprobada.png) |
+| 03–04 | Vista previa de publicar, y con todo reconocido | [03](plans/informes-h5/capturas-crm/escritorio-03-publicar-vista-previa.png) · [04](plans/informes-h5/capturas-crm/escritorio-04-publicar-reconocido.png) | [03](plans/informes-h5/capturas-crm/movil-03-publicar-vista-previa.png) · [04](plans/informes-h5/capturas-crm/movil-04-publicar-reconocido.png) |
+| 05 | Publicada en canario | [05](plans/informes-h5/capturas-crm/escritorio-05-publicada-en-canario.png) | [05](plans/informes-h5/capturas-crm/movil-05-publicada-en-canario.png) |
+| 06 | Comparar con la huella alterada | [06](plans/informes-h5/capturas-crm/escritorio-06-comparar-huella-alterada.png) | [06](plans/informes-h5/capturas-crm/movil-06-comparar-huella-alterada.png) |
+| 07 | Publicar bloqueada | [07](plans/informes-h5/capturas-crm/escritorio-07-publicar-bloqueada.png) | [07](plans/informes-h5/capturas-crm/movil-07-publicar-bloqueada.png) |
+| 08–09 | Barra y detalle en canario | [08](plans/informes-h5/capturas-crm/escritorio-08-tablero-barra-canario.png) · [09](plans/informes-h5/capturas-crm/escritorio-09-detalle-canario.png) | [08](plans/informes-h5/capturas-crm/movil-08-tablero-barra-canario.png) · [09](plans/informes-h5/capturas-crm/movil-09-detalle-canario.png) |
+| 10 | Motivo de revertir | [10](plans/informes-h5/capturas-crm/escritorio-10-revertir-motivo.png) | [10](plans/informes-h5/capturas-crm/movil-10-revertir-motivo.png) |
+| 11 | Historial | [11](plans/informes-h5/capturas-crm/escritorio-11-historial.png) | [11](plans/informes-h5/capturas-crm/movil-11-historial.png) |
+| 12 | Barra con deriva | [12](plans/informes-h5/capturas-crm/escritorio-12-barra-deriva.png) | [12](plans/informes-h5/capturas-crm/movil-12-barra-deriva.png) |
+| 13 | Motivo de Legacy | [13](plans/informes-h5/capturas-crm/escritorio-13-legacy-motivo.png) | [13](plans/informes-h5/capturas-crm/movil-13-legacy-motivo.png) |
+| 14–15 | Evidencia que pasa, y con el 429 | [14](plans/informes-h5/capturas-crm/escritorio-14-evidencia-pasa.png) · [15](plans/informes-h5/capturas-crm/escritorio-15-evidencia-429.png) | [14](plans/informes-h5/capturas-crm/movil-14-evidencia-pasa.png) · [15](plans/informes-h5/capturas-crm/movil-15-evidencia-429.png) |
+| 16 | Promovida | [16](plans/informes-h5/capturas-crm/escritorio-16-promovida.png) | [16](plans/informes-h5/capturas-crm/movil-16-promovida.png) |
+| 17 | Administrador, sin botones y con el motivo | [17](plans/informes-h5/capturas-crm/escritorio-17-administrador.png) | [17](plans/informes-h5/capturas-crm/movil-17-administrador.png) |
+
+### Accesibilidad y 390 px
+
+- El foco no sale de los diálogos de publicar y de Legacy con Tab y Mayús+Tab, y Escape cierra y devuelve el foco al botón que abrió (Chrome con la API simulada).
+- Mientras llega la vista previa, el diálogo lo dice en `role=status`; cada requisito lleva icono, palabra y un texto oculto «se cumple / no se cumple»; ningún estado es solo color.
+- Los avisos de datos personales de la nota y del motivo van enlazados al campo con `aria-describedby`.
+- Los espacios entre elementos en línea se escriben con `&ngsp;`: Angular quitaba los nodos que solo tienen espacios y «Sello correcto(cabeza n.º 1)» salía pegado, también para el lector de pantalla (D-F8).
+- A 390 px, la columna de la puerta de la evidencia se pliega bajo el valor, y ni el tablero, ni los dos diálogos, ni el historial, ni comparar, ni la deriva se desplazan en horizontal. El pie de los dos diálogos nuevos deja libre la esquina del asistente flotante del shell (`padding-right: 68px`); el de `ib-reason-dialog`, compartido, no se tocó (D-F9).
+
+### Atributos `data-*` para el E2E
+
+Los de A11 y los de apoyo (detalle en `informe-front-integracion.md` §4):
+- **Panel:** `[data-publicar]`, `[data-promover]` y `[data-revertir]` (solo si la acción está permitida); `[data-motivo-accion="publish|promote|rollback"]`; `[data-ayuda-publicar]`; `[data-publicaciones]` > `[data-publicacion-entrada="<uuid>"]` con `data-accion` y `[data-publicacion-puerta="required|waived"]`. Con un backend de F, `[data-publicar-version]`, deshabilitado.
+- **Publicar:** `[data-publicacion-dialogo]` con `data-publicacion-estado="cargando|publicable|bloqueada|error"`; `[data-publicacion-requisito="<id>"][data-ok]`; `[data-publicacion-param="layer.key"][data-publicacion-clase="must_match|matches|no_effect"]`; `[data-publicacion-sin-efecto="<id>"]` y su fila, con `data-falta`; `[data-publicacion-enviar]`, `[data-publicacion-falta]`, `[data-publicacion-cambio]`, `[data-publicacion-error]`, `[data-publicacion-recalcular]`, `[data-publicacion-otros-bloqueos] [data-bloqueo]` y `[data-publicacion-nota]`.
+- **Evidencia:** `[data-evidencia]` con `data-evidencia-estado="cargando|pasa|no-pasa|error"` y `data-evidencia-pasa`; `[data-evidencia-medida="<id>"]` con `data-ok` (las informativas no lo llevan); `[data-evidencia-veredicto]`, `[data-evidencia-actualizar]`, `[data-evidencia-espera]`, `[data-evidencia-enviar]`, `[data-evidencia-falta]`, `[data-evidencia-cambio]` y `[data-evidencia-error]`.
+- **Revertir:** `[data-revertir-dialogo]` (aviso `#vp-revertir-datos`).
+- **Barra:** `[data-estado-publicacion]` con `data-estado-publicacion-sello="applied|legacy|off|fallback"` (o `ilegible`); `[data-estado-publicacion-vigente][data-vigente="legacy|all|split"]`; `[data-estado-publicacion-llave][data-llave]`; `[data-estado-publicacion-deriva][data-deriva=N]`; `[data-legacy]` → `[data-legacy-dialogo]` (aviso `#pb-legacy-datos`); `[data-publicaciones-abrir]` → `[data-publicaciones-dialogo]`; `[data-estado-publicacion-releer]` y `[data-estado-publicacion-aviso]`.
+- **Comparar:** `[data-integridad-lado="from|to"]` y `[data-integridad-nota]`.
+
+El host de `ib-dialog` mide 0×0 (su contenido es `position: fixed`): para esperar a que un diálogo se cierre, se comprueba que el selector ya no está en el DOM, no `waitForSelector({hidden: true})`.
+
+### Decisiones fuera del contrato
+
+Congeladas en la Enmienda 2 (§E2.3) del contrato:
+1. **D-F1.** Sin la llave o con el servidor negando, no hay botón y el motivo se lee en texto visible, solo en el estado en que la acción aplicaría.
+2. **D-F2.** Con un backend del Hito 5, «Publicar» sale de cada versión y no de la cabecera; con uno de F, sigue el de la cabecera, deshabilitado. Si siguieran los dos, `[data-publicar]` sería ambiguo para el E2E.
+3. **D-F3.** «Volver a Legacy» y el historial viven en la barra: son de la cadena, no de una versión. La barra solo se pinta en la fase `ready`.
+4. **D-F4.** El detalle abierto se relee cuando se mueve la cabeza de la cadena (una versión solo cambia de estado con una entrada nueva), y una sola vez tras escribir.
+5. **D-F5.** Lo reconocido se borra con cualquier `previewHash` nuevo, como al aprobar en F; tras `no_effect_not_acknowledged` se marca lo que faltaba.
+6. **D-F6.** Descriptor del CRM para `governance.studioPublication`: el backend no la mete en el catálogo de lecturas (D-5), y sin descriptor el «Motor ahora» no la enseñaría. Si el catálogo la declara algún día, manda el suyo.
+7. **D-F7.** Aviso de datos personales en la nota de publicar y de promover: va a `reason`, en una cadena que no se borra.
+8. **D-F8.** Espacios entre elementos en línea con `&ngsp;`.
+9. **D-F9.** Margen en el pie de los dos diálogos nuevos a 390 px por el asistente flotante del shell; `ib-reason-dialog`, compartido, no se tocó.
+
+### Pruebas y medidas
+
+| Comprobación | Resultado |
+|---|---|
+| Specs del módulo (`ng test --include='src/app/modules/ultron-studio/*.spec.ts'`) | 801 con la capa de datos (`9b70337`) → 871/871 en `33821e4` (70 nuevas) → **878/878 en `24a691d`** (D-1 y la paridad), 54 ficheros |
+| Suite completa (`ng test --watch=false`) | 2920 pruebas con **16 fallos idénticos nombre a nombre** a los de `9b70337` limpio, el mismo día (moderación ×14, `financial-realtime.integration` y `receivables-pagination`); ninguno nuevo |
+| `tsc` de la aplicación y de los specs | Limpio |
+| `check:literals` | 321 ficheros en `24a691d`, correcto |
+| Build de producción | Exit 0, los mismos 29 avisos de presupuesto de siempre, ninguno de las hojas nuevas |
+| Chunk `ultron-studio-page` | De 645,36 kB en bruto y 134,72 kB transferidos (`9b70337`) a 719,05 kB y 148,30 kB (`33821e4`): +73,7 kB y +13,6 kB. El inicial no cambia (817,83 kB). 0 `innerHTML` y `bypassSecurityTrust` en los ficheros nuevos |
+| `ultron-studio.scss` | 0 bytes de diff (sha256 `fc558002…`) |
+| Catálogo de permisos | `backend-permission-catalog.ts` idéntico al que exporta el backend en el paso 3 (sha256 `aeb9699c…`, 96 permisos, ninguna llave nueva); antes de la fusión del 31-10-2026 |
+| Paridad con `backend-publication.testing.ts` | 6/6, sin ningún código de error desconocido desde `24a691d` |
+| Mutaciones | **18, todas tumbadas** (entre ellas: enviar sin reconocer todo, enviar `contentHash` en vez de `previewHash`, ignorar la cuenta atrás del 429, el botón sin mirar `actions`, Legacy sin `ultron.rollback`, la deriva que no manda sobre el sello, el motivo de la cadena como `[innerHTML]`, la puerta dispensada sin rojo y la lectura que dice «correcta» de lo no comprobado). Cada restauración, idéntica (`cmp`) |
+| Chrome real con la API simulada (no es el E2E con la pila real) | **71/71** sobre `33821e4`, a 1440 y 390 px, sin errores de JavaScript; 34 capturas |
+
+**Tras la fusión** (el reviewer, 31-10-2026, sobre `9fe1817`): módulo **878/878** (54 ficheros); `tsc` limpio; `check:literals`, 332 ficheros, correcto; suite completa con 3131 pruebas y **16 rojas**, las de la línea base (moderación ×14, `financial-realtime.integration` y `receivables-pagination`), ninguna nueva; el catálogo de permisos, idéntico al que exporta el backend fusionado (101 permisos); y `ultron-studio.scss` sin cambios. [PENDIENTE: build de producción del CRM y presupuestos de chunk sobre el commit final (lead; el reviewer no lo ejecutó).]
+
+### E2E con la pila real (25-10-2026)
+
+**404/408** en la ejecución definitiva sobre el backend `2bc053b` y el CRM `e7ba41b`, con turnos reales y Chrome con login real (`Iron-Body_Front/e2e/ultron-studio/run.sh`; `informe-tester-e2e.md`). Del lado del CRM: publicar, promover y revertir desde el detalle, Legacy desde la barra, el Administrador sin botones y con el motivo, la barra en cada estado y 116 respuestas del CRM sin el id del canario ni firmas. Su único hallazgo del CRM, **C-1** (con la puerta dispensada, el diálogo lo decía dos veces), está corregido en `33821e4`: con ese CRM, 405/408, y los tres rojos restantes son de B-1 del backend (= M-1, corregido en `d24c512`). El CRM nuevo con el backend anterior da 131/131, igual que la línea base. La regresión `f-versions.cjs` se adaptó al modo del Hito 5 (el aviso del motor, la revisora sin botón y el 422 con el cuerpo vacío), con los ids de F intactos. Detalle en `ULTRON_STUDIO_FINAL_REPORT.md` («Hito 5: E2E con la pila real»).
+
+### Pendiente y no verificado
+
+- **I-1 del reviewer** (importante, antes de la fase 2): la sesión reutiliza la `clientRequestId` de una escritura de la cadena también después de un éxito (`studio-session.ts`). Un segundo «Volver a Legacy» con el mismo motivo en la misma pestaña recibe la entrada vieja: si entretanto otra persona publicó, la salida no se ejecuta y la barra dice «Ya estaba en Legacy con esta misma petición». Corrección propuesta: olvidar la clave tras un 2xx legible o un 4xx definitivo, y conservarla solo para reintentar sin red, tras un 5xx, un 429 o un 2xx ilegible. [PENDIENTE: corrección de I-1, con su spec y su build (frontend).]
+- **El E2E sobre el CRM final** (`9fe1817`) y sobre el backend corregido (`cf59cef`): **E2E de cierre ejecutado por el lead el 31-10-2026 (21:26–21:30 UTC) sobre `cf59cef` + `9fe1817`: 408/408** (f-versions 40, g-inspector-compare 25, h4-lab-fake 27, ultron-turn 30, h5-governance 276, cierre 10; 257 s; sin 5xx en 465 peticiones del CRM, `laravel.log` sin ERROR, colas vacías, 0 violaciones de los simuladores de OpenAI y n8n, valla de red vacía, ninguno de los 4 secretos en 19 registros ni en 9 tablas). Es la mejor pasada registrada del arnés.
+- **Teclado, lectores de pantalla y 390 px de los diálogos nuevos con la pila real:** el E2E solo usó Escape para cerrar dos diálogos; lo demás se probó con la API simulada.
+- **`ib-reason-dialog` y el asistente flotante a 390 px** (D-F9): ya ocurría; no se comprobó si el asistente intercepta toques.
+- **Carga diferida (`@defer`) de los diálogos:** no se hizo; +13,6 kB transferidos en un chunk diferido que usan pocas personas no la justifican, y complicaría el foco al abrir.
+- **No verificado:** Safari, Firefox, Windows y el CRM del Hito 5 sobre la pila de producción.
 
 ## Revisión final independiente (`reviewer`) de la vista previa (Hito C)
 
