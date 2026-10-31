@@ -815,7 +815,7 @@ Bajo `/api/admin/ultron-studio/`, con el tope de cuerpo de 64 KB del grupo. Las 
 
 ### Pruebas
 
-Las cifras de la tabla son de antes de la fusión del 31-10-2026 y de `cf59cef`. Después, el reviewer comprobó en `cf59cef`: 103/103 pruebas en SQLite (`UltronStudioPublicationLifecycleTest`, `UltronStudioPublicationRollbackTest` y `UltronEngineIsolationTest`, con las de cobertura de `96397ea` y la de m-2), 9/9 carreras en PostgreSQL (el doble clic y las 8 de H-1), 38 rutas, `auth:coverage --unmapped` vacío, las 5 exportaciones idénticas a las del CRM y `permissions:export` idéntico al catálogo del CRM `9fe1817`, con 101 permisos (la fusión añade 5). **Hecho:** Puertas completas del lead (31-10-2026, tras la fusión): Studio + Access + Chaos en SQLite **1697 OK** (56 omitidas, de solo PostgreSQL) sobre `cdb9dc8`; puerta PostgreSQL **1446 OK** sobre `cdb9dc8` y **1447 OK** sobre `cf59cef` (con las 38 carreras); Studio SQLite **1447 OK** sobre `cf59cef`; Marketing (Feature + Unit) **4977 OK**; `auth:coverage --unmapped` vacío; **38 rutas**.
+Las cifras de la tabla son de antes de la fusión del 31-10-2026 y de `cf59cef`. Después, el reviewer comprobó en `cf59cef`: 103/103 pruebas en SQLite (`UltronStudioPublicationLifecycleTest`, `UltronStudioPublicationRollbackTest` y `UltronEngineIsolationTest`, con las de cobertura de `96397ea` y la de m-2), 9/9 carreras en PostgreSQL (el doble clic y las 8 de H-1), 38 rutas, `auth:coverage --unmapped` vacío, las 5 exportaciones idénticas a las del CRM y `permissions:export` idéntico al catálogo del CRM `9fe1817`, con 101 permisos (la fusión añade 5). **Y las puertas completas, del lead (31-10-2026), tras la fusión:** Studio + Access + Chaos en SQLite, **1697 OK** (56 omitidas, las de solo PostgreSQL) sobre `cdb9dc8`; la puerta PostgreSQL, **1446 OK** sobre `cdb9dc8` y **1447 OK** sobre `cf59cef`, con las 38 carreras; el Studio en SQLite, **1447 OK** sobre `cf59cef`; Marketing (Feature + Unit), **4977 OK**; `auth:coverage --unmapped` vacío y **38 rutas**. El E2E con la pila real, **408/408** sobre `cf59cef` + `9fe1817` (lead, 31-10-2026).
 
 | Ejecución | Resultado | Fuente |
 |---|---|---|
@@ -836,7 +836,7 @@ Las cifras de la tabla son de antes de la fusión del 31-10-2026 y de `cf59cef`.
 
 **Lo que no se verificó:**
 - nada en producción: ni migraciones, ni el lector, ni tiempos;
-- la puerta PostgreSQL y las suites después de la fusión del 31-10-2026 y de `cf59cef`, y una pasada completa de la puerta sobre `96397ea` registrada en los informes;
+- una pasada completa de la puerta sobre `96397ea` registrada en los informes (sí la hay sobre `cdb9dc8` y `cf59cef`, del lead, arriba);
 - un servidor web real entre las sesiones de las carreras (lo cubre el E2E), el rol `iron_app` de producción (lo comprueba el script de la fase 1) y SERIALIZABLE;
 - el p95 del commit con la llave en `off` y en `all` con una muestra suficiente: el E2E solo da medianas indicativas, en las mismas centenas de milisegundos;
-- el E2E sobre el código corregido (`d24c512`, `96397ea`).
+- la comparación de la suite completa contra `origin/main` después de la fusión (la última es la del tester, del 25-10).
