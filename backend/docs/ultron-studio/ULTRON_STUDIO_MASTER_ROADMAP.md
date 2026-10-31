@@ -76,12 +76,7 @@ Ninguno bloquea las fases 1 (apagado) y 2 (`fake`). Los cuatro primeros son cond
 - **Colores globales de los avisos:** una regla global del CRM (`p, small, … { color: … !important }`) pisa el color de acento de todos los avisos de datos personales, los de G incluidos. Se leen con buen contraste; recuperar el color exige un selector que gane en las hojas del Studio, nunca en `ultron-studio.scss`.
 - **Asistente flotante en móvil:** a 390 px, el asistente del shell tapa parte de «Archivar la regla» en G y flota sobre la esquina inferior derecha del laboratorio. Ya ocurría antes del Hito 4; no se comprobó si intercepta toques.
 
-**Pendiente de implementar (Enmienda 5, `403a12b`):**
-- **H-P2-1, ejecución huérfana** (tester, media-baja): si un paso falla antes de reclamar un caso, la ejecución queda en curso sin ningún paso y cancelar no la cierra. No gasta dinero ni bloquea otras; hay una salida operativa en el runbook. Decidido: que cancelar la cierre en el acto, que el plazo vencido se presente como `stopped: deadline` y que `failed()` sin caso reclamado reencole un paso acotado.
-- **H-P2-2 y H-P2-3** (cobertura): la prueba estática vigilará también las escrituras crudas en la tabla de veredictos, y una prueba de dos sesiones cubrirá el «ocupado» dentro del reclamo.
-
-**Decisión pendiente del lead:**
-- **La etiqueta de `budget_exhausted` en el CRM** sigue diciendo «Se agotó el presupuesto del día», pero desde la Enmienda 4.1 la parada también puede venir del tope por ejecución o del máximo aceptado (el motivo exacto va en el libro, `budgetCap`).
+**Resueltos antes del despliegue del Hito 4 (anotado el 31-10-2026):** la Enmienda 5 (`403a12b`: H-P2-1 ejecución huérfana, H-P2-2 y H-P2-3 de cobertura) quedó implementada en el backend `7113f9f` (cancelar cierra en el acto, plazo vencido como `stopped: deadline`, `failed()` sin caso reclamado reencola un paso acotado, escáner de veredictos y pasos duplicados en PG), y la etiqueta de `budget_exhausted` del CRM distingue el motivo por `budgetCap` desde `2b6375b`; los dos están en producción desde el 25-10-2026 (`fef7c87` / `5c1dbd7`).
 
 ## Registro de despliegues
 
