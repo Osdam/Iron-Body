@@ -12,6 +12,7 @@ use App\Services\UltronStudio\StudioCatalog;
 use App\Services\UltronStudio\StudioContentHasher;
 use App\Services\UltronStudio\StudioLabPrompts;
 use App\Services\UltronStudio\StudioPublicationDeclaration as D;
+use App\Services\UltronStudio\StudioPublications;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Middleware\ThrottleRequests;
@@ -430,6 +431,37 @@ class UltronStudioPublicationLifecycleTest extends TestCase
         $this->publishAs($root, $v->uuid)->assertStatus(409)->assertJsonPath('code', 'publication_head_invalid');
         $this->assertSame('fallback', $this->studio('GET', 'status', $root)->json('data.engine.publication.state'));
         $this->legacyAs($root)->assertCreated();
+    }
+
+    /**
+     * m-2 del reviewer del Hito 5 (31-10): una versión APROBADA cuyo contenido
+     * el catálogo actual no sabe leer (aquí, un parámetro que no existe en una
+     * capa real) no se publica, y el 409 revalidation_blocked tiene que decir
+     * POR QUÉ: la validación del grafo no produce ningún bloqueo, así que sin
+     * un hallazgo propio la respuesta diría «tiene bloqueos» con la lista vacía.
+     */
+    public function test_un_contenido_que_el_catalogo_no_sabe_leer_se_rechaza_con_un_hallazgo_que_lo_explica(): void
+    {
+        $this->importBaseline();
+        $this->openKeys();
+        $ana = $this->person(Admin::ROLE_ADMINISTRADOR, 'Ana');
+        $root = $this->person(Admin::ROLE_SUPER_ADMIN, 'Root');
+        $contenido = $this->baseline();
+        $contenido['configs']['persona']['parametro-fantasma'] = true;
+        $v = $this->seededVersion($ana, $root, $contenido);
+
+        $vista = $this->previewOf($root, $v->uuid);
+        $this->assertFalse($vista['publishable']);
+        $this->assertContains('revalidation_blocked', $vista['blocking']);
+
+        $r = $this->studio('POST', "versions/{$v->uuid}/publish", $root, ['clientRequestId' => (string) Str::uuid(), 'previewHash' => $vista['previewHash'], 'acknowledgedNoEffect' => []])
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'revalidation_blocked');
+        $bloqueos = collect($r->json('findings'))->where('level', 'blocking');
+        $this->assertNotEmpty($bloqueos->all(), 'el 409 tiene que enseñar al menos un bloqueo: '.json_encode($r->json('findings')));
+        $this->assertContains(StudioPublications::FINDING_UNREADABLE, $bloqueos->pluck('id')->all());
+        $this->assertSame('APPROVED', $v->fresh()->status);
+        $this->assertSame(0, StudioPublication::query()->count());
     }
 
     /**

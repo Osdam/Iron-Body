@@ -82,6 +82,9 @@ final class StudioPublications
     /** Tope de `per_page` del historial (`GET publications`). */
     public const PER_PAGE_MAX = 50;
 
+    /** Hallazgo bloqueante propio de la revalidación cuando el catálogo actual no sabe leer el contenido (m-2 del reviewer del Hito 5). */
+    public const FINDING_UNREADABLE = 'contenido-ilegible';
+
     /**
      * El limitador propio de la evidencia (`ultron-studio-evidence`, en
      * AppServiceProvider): por minuto y persona. Aquí para la exportación de
@@ -1015,8 +1018,11 @@ final class StudioPublications
                 $revalidacion = 'changed';
             }
         } catch (UltronStudioException|InvalidArgumentException) {
-            // Un contenido que el catálogo actual no sabe leer no se publica.
+            // Un contenido que el catálogo actual no sabe leer no se publica,
+            // y el 409 dice POR QUÉ (m-2 del reviewer del Hito 5): un hallazgo
+            // bloqueante propio, no «tiene bloqueos» con la lista vacía.
             $revalidacion = 'blocked';
+            $hallazgos = self::withUnreadableFinding($hallazgos);
         }
 
         $lecturas = $this->engine->only(StudioEngineReadings::MUST_MATCH, ['governance.brake']);
@@ -1039,6 +1045,7 @@ final class StudioPublications
             // forma: los cuatro `must_match`, sin coincidir.
             $clasificable = false;
             $revalidacion = 'blocked';
+            $hallazgos = self::withUnreadableFinding($hallazgos);
             $clasificacion = self::unclassified($lecturas['params']);
         }
 
@@ -1569,6 +1576,31 @@ final class StudioPublications
         }
 
         return ['mustMatch' => $mustMatch, 'matches' => [], 'noEffect' => [], 'mismatches' => [], 'engineReadingUnavailable' => []];
+    }
+
+    /**
+     * m-2 del reviewer del Hito 5: cuando el catálogo actual no sabe leer el
+     * contenido (una capa, un parámetro o una regla que ya no existen, unas
+     * condiciones que no casan), la revalidación queda `blocked` sin que la
+     * validación del grafo haya producido ningún bloqueo. El 409
+     * `revalidation_blocked` enseña entonces este hallazgo, con la forma de
+     * los demás, para que quien publica sepa qué hacer: una versión nueva.
+     *
+     * @param  list<array<string,mixed>>  $findings
+     * @return list<array<string,mixed>>
+     */
+    private static function withUnreadableFinding(array $findings): array
+    {
+        if (StudioGraphValidator::isPublishable($findings)) {
+            $findings[] = [
+                'id' => self::FINDING_UNREADABLE,
+                'level' => 'blocking',
+                'title' => 'El catálogo actual no sabe leer este contenido',
+                'detail' => 'Una capa, un parámetro, una regla o unas condiciones de esta versión ya no existen en el catálogo vigente. Hace falta una versión nueva, validada y aprobada con el catálogo de hoy.',
+            ];
+        }
+
+        return $findings;
     }
 
     /**

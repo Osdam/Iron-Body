@@ -12,7 +12,7 @@ g() { sudo -u www-data -H git "$@"; }   # git como www-data, el dueño del check
 ESPERADO="${1:?commit esperado en origin/main}"
 BK="${2:?directorio del respaldo de hoy (/var/backups/ironbody/ultron-studio-h5-<fecha UTC>)}"
 SOLO_COMPROBAR="${3:-}"
-PREVIO=fef7c87                                   # lo que sirve producción antes del Hito 5
+PREVIO=7318122                                   # lo que sirve producción antes del Hito 5 (origin/main del 29-10-2026; antes fef7c87)
 PSQL="sudo -u postgres psql -X -Atq -v ON_ERROR_STOP=1 -d ironbody"
 aborta() { echo "ABORTA: $*"; exit 1; }
 DESVIOS=0
