@@ -5,6 +5,7 @@
 #   - Cada lado es una instantánea `git archive` con vendor/ COPIADO (no enlazado: memoria del worktree con vendor
 #     enlazado) y `.env.testing`, con su propio storage/ (dos PHPUnit de Marketing en el mismo árbol se pisan el
 #     disco `whatsapp`). Primero la rama y después la base, nunca a la vez.
+# (bash 3.2 de macOS: un array vacío con set -u es «unbound variable»; de ahí ${RUTAS[@]+"${RUTAS[@]}"}.)
 # Uso:   docs/ultron-studio/ops/suite-compare.sh <dir-de-trabajo-vacío> <ref-base> [<ref-rama>=HEAD] [-- <rutas de phpunit>]
 #        Sin rutas, la suite completa en SQLite.
 # PG:    SUITE_PG_DB_HEAD=ultron_studio_… SUITE_PG_DB_BASE=ultron_studio_… (bases desechables que ya existen) → con ops/pgunit.sh.
@@ -43,10 +44,10 @@ lado() { # <nombre> <ref> <base PG o vacío>
   echo "[$nombre] $(git -C "$REPO" rev-parse --short "$ref") inicio $(date -u +%FT%TZ)" | tee -a "$L/timeline.txt"
   local rc
   if [ -n "$db" ]; then
-    (cd "$dir/backend" && PGGSSENCMODE=disable UNIT_DB="$db" bash docs/ultron-studio/ops/pgunit.sh --do-not-cache-result --log-junit "$L/junit-$nombre.xml" "${RUTAS[@]}") > "$L/$nombre.txt" 2>&1
+    (cd "$dir/backend" && PGGSSENCMODE=disable UNIT_DB="$db" bash docs/ultron-studio/ops/pgunit.sh --do-not-cache-result --log-junit "$L/junit-$nombre.xml" ${RUTAS[@]+"${RUTAS[@]}"}) > "$L/$nombre.txt" 2>&1
     rc=$?
   else
-    (cd "$dir/backend" && php -d memory_limit=2G vendor/bin/phpunit --do-not-cache-result --log-junit "$L/junit-$nombre.xml" "${RUTAS[@]}") > "$L/$nombre.txt" 2>&1
+    (cd "$dir/backend" && php -d memory_limit=2G vendor/bin/phpunit --do-not-cache-result --log-junit "$L/junit-$nombre.xml" ${RUTAS[@]+"${RUTAS[@]}"}) > "$L/$nombre.txt" 2>&1
     rc=$?
   fi
   echo "[$nombre] fin $(date -u +%FT%TZ) exit=$rc" | tee -a "$L/timeline.txt"
