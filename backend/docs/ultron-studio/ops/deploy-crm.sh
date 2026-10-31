@@ -32,8 +32,17 @@ ssh -o BatchMode=yes ironbody-vps "chown -R root:root /var/www/app"
 
 echo "== 5. Verificación pública"
 sleep 2
-curl -fsS https://ironbodyneiva.cloud/version.json; echo
-curl -fsS https://ironbodyneiva.cloud/ | grep -o 'main-[A-Z0-9]*\.js' | head -1 | grep -q "$MAIN_NUEVO" && echo "index.html → $MAIN_NUEVO OK"
-for f in "$MAIN_NUEVO" "$MAIN_VIEJO"; do printf "%-22s %s\n" "$f" "$(curl -s -o /dev/null -w '%{http_code}' https://ironbodyneiva.cloud/$f)"; done
-printf "%-22s %s\n" "/marketing/ultron-studio" "$(curl -s -o /dev/null -w '%{http_code}' https://ironbodyneiva.cloud/marketing/ultron-studio)"
+# m-4 del reviewer H5: cada comprobación falla en voz alta (antes solo imprimía y salía con 0).
+FALLOS=0
+PUBV=$(curl -fsS https://ironbodyneiva.cloud/version.json) || { echo "FALLO: no se pudo leer version.json"; FALLOS=$((FALLOS + 1)); }
+echo "$PUBV"
+echo "$PUBV" | grep -Eq "\"commit\": *\"$ESPERADO\"" || { echo "FALLO: version.json publicado no lleva $ESPERADO"; FALLOS=$((FALLOS + 1)); }
+if curl -fsS https://ironbodyneiva.cloud/ | grep -o 'main-[A-Z0-9]*\.js' | head -1 | grep -q "$MAIN_NUEVO"; then echo "index.html → $MAIN_NUEVO OK"; else echo "FALLO: index.html publicado no apunta a $MAIN_NUEVO"; FALLOS=$((FALLOS + 1)); fi
+for f in "$MAIN_NUEVO" "$MAIN_VIEJO"; do
+  c=$(curl -s -o /dev/null -w '%{http_code}' "https://ironbodyneiva.cloud/$f"); printf "%-22s %s\n" "$f" "$c"
+  [ "$c" = 200 ] || { echo "FALLO: $f responde $c (esperado 200)"; FALLOS=$((FALLOS + 1)); }
+done
+c=$(curl -s -o /dev/null -w '%{http_code}' https://ironbodyneiva.cloud/marketing/ultron-studio); printf "%-22s %s\n" "/marketing/ultron-studio" "$c"
+[ "$c" = 200 ] || { echo "FALLO: /marketing/ultron-studio responde $c (esperado 200)"; FALLOS=$((FALLOS + 1)); }
 echo "RESPALDO: $BK"
+[ "$FALLOS" = 0 ] && echo "CRM PUBLICADO Y VERIFICADO" || { echo "CRM PUBLICADO CON $FALLOS FALLOS DE VERIFICACIÓN: revisar antes de seguir (respaldo en $BK)"; exit 1; }

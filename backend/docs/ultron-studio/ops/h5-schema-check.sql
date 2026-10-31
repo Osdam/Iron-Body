@@ -27,7 +27,8 @@ SELECT a.pid, a.state, now() - a.xact_start AS en_transaccion, l.mode
  WHERE c.relname IN ('ultron_studio_versions', 'ultron_studio_publications') AND a.pid <> pg_backend_pid();
 SELECT to_regclass('public.ultron_studio_publications') IS NOT NULL AS hay_cadena \gset
 \if :hay_cadena
-SELECT has_table_privilege(:'app', 'public.ultron_studio_publications', 'SELECT,INSERT,UPDATE,DELETE') AS app_dml,       -- t
+SELECT has_table_privilege(:'app', 'public.ultron_studio_publications', 'SELECT')                      AS app_select,    -- t  (m-5: por separado; una lista responde t con CUALQUIERA)
+       has_table_privilege(:'app', 'public.ultron_studio_publications', 'INSERT')                      AS app_insert,    -- t
        has_table_privilege(:'app', 'public.ultron_studio_publications', 'TRUNCATE')                    AS app_truncate,  -- f
        has_sequence_privilege(:'app', 'public.ultron_studio_publications_id_seq', 'USAGE')             AS app_secuencia, -- t
        (SELECT tableowner FROM pg_tables WHERE schemaname = 'public' AND tablename = 'ultron_studio_publications') AS dueno_cadena, -- iron

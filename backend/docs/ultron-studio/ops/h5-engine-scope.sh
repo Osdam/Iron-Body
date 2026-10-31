@@ -88,4 +88,4 @@ echo "3. workers RUNNING: $RUNNING · BACKOFF/FATAL: $MAL"
 c=$(curl -s -o /dev/null -w '%{http_code}' https://api.ironbodyneiva.cloud/api/admin/ultron-studio/status)
 echo "4. status sin token → $c"; [ "$c" = 401 ] || desvio "status sin token respondió $c"
 if sudo -u www-data php artisan ultron-studio:publication-check > /dev/null 2>&1; then echo "5. publication-check: 0 (cuadra)"; else desvio "publication-check no sale con 0: ver «sudo -u www-data php artisan ultron-studio:publication-check»"; fi
-if [ "$DESVIOS" = 0 ]; then echo "ALCANCE $ALCANCE APLICADO (copia previa: $COPIA)"; else echo "ALCANCE $ALCANCE APLICADO CON $DESVIOS DESVÍOS (copia previa: $COPIA)"; exit 1; fi
+if [ "$DESVIOS" = 0 ]; then echo "ALCANCE $ALCANCE APLICADO (copia previa: $COPIA)"; else echo "ALCANCE $ALCANCE ESCRITO CON $DESVIOS DESVÍOS: no seguir con el smoke ni publicar hasta aclararlos (copia previa: $COPIA)"; exit 1; fi   # m-3: la palabra APLICADO solo sale en verde

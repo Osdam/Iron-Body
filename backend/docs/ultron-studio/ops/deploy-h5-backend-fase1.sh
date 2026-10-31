@@ -8,10 +8,19 @@
 #   --solo-comprobar: ejecuta solo el paso 0 (lecturas y git fetch) y sale; es el ensayo en el servidor.
 set -euo pipefail
 export LC_ALL=C
-g() { sudo -u www-data -H git "$@"; }   # git como www-data, el dueño del checkout (M-3 de la revisión de seguridad): root no ejecuta hooks ni la configuración de un .git ajeno
+# git como ROOT (I-3 del reviewer, comprobado en el servidor el 31-10-2026): desde el 25-10 el árbol de /var/www/api
+# (2.493 entradas, entre ellas todo lo que H5 cambia) y .git (5.089 de 5.131 entradas) son de root, y www-data no
+# puede escribir ni en objects/ ni en los directorios del código; un merge como www-data fallaría a medias. Código y
+# .git de root, legibles por www-data, es la postura más segura (PHP-FPM no puede reescribir el código); la M-3
+# original (hooks/config de un .git de www-data ejecutados por root) ya no se da: .git/config y hooks/ no tienen
+# hooks ni core.hooksPath, y root tiene safe.directory=/var/www/api. umask 022 para que lo que git reescriba quede
+# 644/755 (memoria «umask 077 y git merge en el VPS»), y tras el merge se comprueba que www-data lee cada fichero.
+umask 022
+g() { git "$@"; }
 ESPERADO="${1:?commit esperado en origin/main}"
 BK="${2:?directorio del respaldo de hoy (/var/backups/ironbody/ultron-studio-h5-<fecha UTC>)}"
 SOLO_COMPROBAR="${3:-}"
+case "$SOLO_COMPROBAR" in ""|--solo-comprobar) ;; *) echo "tercer argumento desconocido: $SOLO_COMPROBAR (solo se admite --solo-comprobar); no se ha tocado nada"; exit 2 ;; esac   # I-2 del reviewer: un flag mal escrito no puede convertirse en el despliegue entero
 PREVIO=7318122                                   # lo que sirve producción antes del Hito 5 (origin/main del 29-10-2026; antes fef7c87)
 PSQL="sudo -u postgres psql -X -Atq -v ON_ERROR_STOP=1 -d ironbody"
 aborta() { echo "ABORTA: $*"; exit 1; }
@@ -33,7 +42,7 @@ lineas_log() { local f; for f in "$LOGS"/laravel*.log; do [ -f "$f" ] && echo "$
 echo "0. comprobaciones previas (solo lectura; si algo falla, no se toca nada):"
 cd /var/www/api
 g fetch -q origin
-ACTUAL=$(g rev-parse --short HEAD)
+ACTUAL=$(g rev-parse --short=7 HEAD)                 # --short=7 (m-6): la abreviatura automática crece con el número de objetos
 case "$ACTUAL" in
   "$PREVIO")   REANUDA=0 ;;
   "$ESPERADO") REANUDA=1; echo "   reanudación: el código ya está en $ESPERADO (una ejecución anterior se cortó); se repiten variables, migración y comprobaciones" ;;
@@ -41,7 +50,7 @@ case "$ACTUAL" in
 esac
 MODIFICADOS=$(g status --porcelain --untracked-files=no | wc -l | tr -d ' ')   # sin grep: con pipefail, un grep sin coincidencias mataría el script
 [ "$MODIFICADOS" = 0 ] || aborta "el checkout de producción tiene $MODIFICADOS cambios locales"
-[ "$(g rev-parse --short origin/main)" = "$ESPERADO" ] || aborta "origin/main es $(g rev-parse --short origin/main), no $ESPERADO"
+[ "$(g rev-parse --short=7 origin/main)" = "$ESPERADO" ] || aborta "origin/main es $(g rev-parse --short=7 origin/main), no $ESPERADO"
 g merge-base --is-ancestor "$PREVIO" origin/main || aborta "origin/main no es avance rápido desde $PREVIO"
 NUEVAS=$(g diff --name-only --diff-filter=AMDR "$PREVIO" origin/main -- backend/database/migrations | sort | tr '\n' ' ')
 [ "$NUEVAS" = "backend/database/migrations/2026_10_25_100001_create_ultron_studio_publications_table.php backend/database/migrations/2026_10_25_100002_add_ultron_studio_publication_guards.php " ] \
@@ -75,9 +84,18 @@ echo "   HEAD $ACTUAL limpio · $ESQUEMA · sin cerrojos · claves del Hito 5 au
 [ "$SOLO_COMPROBAR" != --solo-comprobar ] || { echo "COMPROBACIONES PREVIAS EN VERDE (no se ha tocado nada)"; exit 0; }
 
 g merge -q --ff-only origin/main
-HEAD=$(g rev-parse --short HEAD)
+HEAD=$(g rev-parse --short=7 HEAD)
 [ "$HEAD" = "$ESPERADO" ] || aborta "HEAD $HEAD no es $ESPERADO"
 echo "1. código: HEAD=$HEAD"
+# Lo que el merge reescribió lo tiene que poder leer www-data (PHP-FPM y los workers); un fichero 600 de root
+# dejaría un 500 silencioso. Se comprueba fichero a fichero sobre el diff real, no sobre todo el árbol.
+ILEGIBLES=0
+while IFS= read -r f; do
+  [ -e "$f" ] || continue                                     # borrado por el merge
+  sudo -u www-data test -r "$f" || { echo "   ✗ www-data no puede leer $f ($(stat -c '%U:%G %a' "$f"))"; ILEGIBLES=$((ILEGIBLES + 1)); }
+done < <(g diff --name-only "$PREVIO" HEAD)
+[ "$ILEGIBLES" = 0 ] || aborta "$ILEGIBLES ficheros del merge no los lee www-data: chmod 644 (ficheros) / 755 (directorios) sobre git diff --name-only $PREVIO HEAD antes de seguir"
+echo "   todos los ficheros del merge son legibles por www-data"
 cd backend
 echo "2. variables (todo apagado):"
 [ -z "$(tail -c1 "$ENVF")" ] || printf '\n' >> "$ENVF"
@@ -104,9 +122,10 @@ POST=$($PSQL -c "SELECT (SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.
 echo "   disparadores · CHECK · uspub disp. · uspub CHECK · parciales · 9 estados · dueño función · dueño cadena · filas: $POST"
 [ "$POST" = "30 27 3 3 2 true iron iron 0" ] || desvio "esquema tras migrar [$POST], esperado [30 27 3 3 2 true iron iron 0] (si la 100002 cayó por 55P03, relanzar este mismo script: reanuda)"
 [ "$($PSQL -c "SELECT md5(pg_get_functiondef(oid)) FROM pg_proc WHERE proname = 'ultron_studio_forbid';")" = "$HUELLA" ] || desvio "la función ultron_studio_forbid cambió de cuerpo"
-PRIV=$($PSQL -c "SELECT has_table_privilege('iron_app', 'public.ultron_studio_publications', 'SELECT,INSERT,UPDATE,DELETE')||' '||has_table_privilege('iron_app', 'public.ultron_studio_publications', 'TRUNCATE')||' '||has_sequence_privilege('iron_app', 'public.ultron_studio_publications_id_seq', 'USAGE');")
-echo "   iron_app sobre la cadena (DML · TRUNCATE · secuencia): $PRIV"
-[ "$PRIV" = "true false true" ] || desvio "privilegios de iron_app sobre la cadena [$PRIV], esperado [true false true]"
+# m-5: has_table_privilege con una lista responde true si se tiene CUALQUIERA de los privilegios; SELECT e INSERT se preguntan por separado.
+PRIV=$($PSQL -c "SELECT has_table_privilege('iron_app', 'public.ultron_studio_publications', 'SELECT')||' '||has_table_privilege('iron_app', 'public.ultron_studio_publications', 'INSERT')||' '||has_table_privilege('iron_app', 'public.ultron_studio_publications', 'TRUNCATE')||' '||has_sequence_privilege('iron_app', 'public.ultron_studio_publications_id_seq', 'USAGE');")
+echo "   iron_app sobre la cadena (SELECT · INSERT · TRUNCATE · secuencia): $PRIV"
+[ "$PRIV" = "true true false true" ] || desvio "privilegios de iron_app sobre la cadena [$PRIV], esperado [true true false true]"
 RUTAS=$(sudo -u www-data php artisan route:list --path=admin/ultron-studio --json 2>/dev/null | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))' || echo '?')
 COBERTURA=$(sudo -u www-data php artisan auth:coverage --unmapped 2>&1 | tr -d '\n' | cut -c1-80 || true)
 echo "5. rutas studio: $RUTAS · auth:coverage --unmapped → [$COBERTURA]"
