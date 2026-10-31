@@ -525,7 +525,7 @@ tail -c1 backend/.env | od -An -c                                               
 for k in MARKETING_ULTRON_STUDIO_CONFIG ULTRON_STUDIO_PUBLISHING_ENABLED ULTRON_STUDIO_PUBLISH_LAB_GATE ULTRON_STUDIO_CANARY_MIN_HOURS ULTRON_STUDIO_CANARY_MIN_TURNS ULTRON_STUDIO_PUBLISH_WINDOW QUEUE_STUDIO_LAB_UNATTENDED_AFTER_SECONDS; do printf '%s %s\n' "$k" "$(grep -Ec "^[[:space:]]*(export[[:space:]]+)?$k[[:space:]]*=" backend/.env)"; done   # las 7 en 0
 for p in umask 'PGOPTIONS|lock_timeout' 'config:cache' 'chmod' 'sudo -u|runuser|su -'; do printf '%-26s %s\n' "$p" "$(grep -cE "$p" /usr/local/bin/ironbody-migrate)"; done   # N-7/N-10: solo recuentos; el fichero puede llevar credenciales y no se imprime
 grep -c 'production.ERROR' backend/storage/logs/laravel.log                          # anotar: línea base de la verificación posterior (si el log es diario, el fichero del día)
-sudo -u postgres psql -X -v ON_ERROR_STOP=1 -v owner=iron -v app=iron_app -x -d ironbody -f /root/h5-schema-check.sql
+sudo -u postgres psql -X -v ON_ERROR_STOP=1 -v owner=iron -v app=iron_app -x -d ironbody < /root/h5-schema-check.sql
 ```
 
 - **`git` sobre `/var/www/api` va como root, con `umask 022`, igual que en los scripts** (I-3; decisión del lead, comprobada en el servidor en solo lectura el 31-10-2026). Desde el 25-10, el árbol de `/var/www/api` (2.493 entradas, entre ellas todo lo que cambia el Hito 5) y `.git` (5.089 de sus 5.131 entradas) son de root: `www-data` los lee, pero no puede escribir ni en `objects/` ni en los directorios del código, así que un `merge` como `www-data` fallaría a medias. Código y `.git` de root, legibles por `www-data`, es la postura más segura (PHP-FPM no puede reescribir el código), y la M-3 original ya no se da: no hay hooks ni `core.hooksPath`, y root tiene `safe.directory=/var/www/api`. Tras el `merge`, el script comprueba fichero a fichero (`git diff --name-only 7318122 HEAD`, con `sudo -u www-data test -r`) que `www-data` lee cada uno, y aborta si no. *(El 25-10 se leyó `.git` como de `www-data` y los scripts pasaron a `sudo -u www-data -H git`; esa lectura ya no es la de hoy. Si el `stat` de arriba no da root, no seguir y avisar al lead.)*
@@ -620,7 +620,7 @@ FASE 1 (H5) COMPLETADA
 
 ```bash
 cd /var/www/api/backend
-sudo -u postgres psql -X -v ON_ERROR_STOP=1 -v owner=iron -v app=iron_app -x -d ironbody -f /root/h5-schema-check.sql
+sudo -u postgres psql -X -v ON_ERROR_STOP=1 -v owner=iron -v app=iron_app -x -d ironbody < /root/h5-schema-check.sql
 P='^[[:space:]]*(MARKETING_ULTRON_STUDIO_CONFIG|ULTRON_STUDIO_PUBLISH|ULTRON_STUDIO_CANARY_MIN_|QUEUE_STUDIO_LAB_UNATTENDED_AFTER_SECONDS)'
 cmp -s <(grep -vE "$P" .env | sed '/^$/d') <(grep -vE "$P" "$BK/env.backup" | sed '/^$/d') && echo "igual al respaldo salvo las 7 del Hito 5"
 grep -cE "$P" .env                                                            # 7

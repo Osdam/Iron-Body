@@ -1,5 +1,5 @@
 -- h5-schema-check.sql · SOLO LECTURA · Hito 5, antes y después de ironbody-migrate.
--- Producción (como root): sudo -u postgres psql -X -v ON_ERROR_STOP=1 -v owner=iron -v app=iron_app -x -d ironbody -f /root/h5-schema-check.sql
+-- Producción (como root; por la ENTRADA ESTÁNDAR, porque el usuario postgres no puede leer /root ni un fichero 600 de root): sudo -u postgres psql -X -v ON_ERROR_STOP=1 -v owner=iron -v app=iron_app -x -d ironbody < /root/h5-schema-check.sql
 -- Ensayo local:           psql -X -v ON_ERROR_STOP=1 -v owner=ironbody -v app=ironbody -x -h 127.0.0.1 -p 55432 -U ironbody -d ultron_studio_smoke_h5 -f h5-schema-check.sql
 -- Basada en informe-db.md §13; se ejecuta como postgres, así que el rol dueño y el de la aplicación se nombran
 -- explícitamente (current_user sería postgres y siempre daría «t»).

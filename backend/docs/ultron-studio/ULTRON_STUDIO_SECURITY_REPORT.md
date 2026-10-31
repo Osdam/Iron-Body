@@ -354,7 +354,7 @@ Sigue vigente y cubre ahora la cadena: antes del despliegue, `tests/Feature/Ultr
 
 - Marcar en el historial las entradas que no verifican (B-2).
 - El `seq` contiguo y `CHECK (seq >= 1)` (AS-3/N-3), en una migración aditiva.
-- `ironbody-migrate`, que corre como root sobre un árbol de `www-data` (M-3) y escribe la caché con la umask de `www-data` antes del `chmod 600` (N-7).
+- `ironbody-migrate`, que corre como root: desde el 25-10 el árbol y `vendor/` son de root, pero al migrar root ejecuta `bootstrap/cache/*.php`, que son de `www-data` (la clase de riesgo de M-3 persiste por la caché; D2-3 del reviewer, visto en el código y no comprobado en el servidor), y su `config:cache` nace con la umask de `www-data` antes del `chmod 600` (N-7).
 - Los caracteres invisibles que acaban en la cadena (AS-5), mejor antes de la fase 2.
 - El procedimiento de redacción del libro con el rol dueño, que tiene que cubrir también `ultron_studio_publications` (nombre y rol del personal, y `reason`).
 - Revocar UPDATE y DELETE de `iron_app` sobre la cadena (refuerzo candidato, en una migración aditiva del rol dueño; hoy los paran los disparadores).

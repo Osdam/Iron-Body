@@ -112,6 +112,13 @@ bash /root/h5-engine-scope.sh off <alcance actual>          # si no está ya en 
 cp /var/backups/ironbody/crm-pre-<build-crm>-<ts>/index.html /var/backups/ironbody/crm-pre-<build-crm>-<ts>/version.json /var/www/app/ && chown root:root /var/www/app/index.html /var/www/app/version.json
 # 2. Backend: git como root (dueño del árbol y de .git, I-3 del reviewer) y con umask 022, para que www-data lea lo que reescriba
 BK=/var/backups/ironbody/ultron-studio-h5-<fecha UTC>                                     # el respaldo del paso 3 de la fase 1
+FASE1=<commit desplegado en la fase 1 del Hito 5>                                          # el ESPERADO del script de la fase 1 (registro de despliegues de la hoja de ruta)
+# 2a. SOLO si producción sigue en el commit de la fase 1 (D2-1 del reviewer): si main se desplegó después durante el
+#     canario, este checkout borraría ese trabajo y dejaría sus migraciones sin el código que las usa (el mismo fallo
+#     que I-4, en el futuro). En ese caso NO se hace checkout: se sale por fase (paso 0) y se decide con devops un
+#     revert de los commits del Hito 5 sobre main.
+[ "$(git -C /var/www/api rev-parse HEAD)" = "$(git -C /var/www/api rev-parse "$FASE1")" ] \
+  || { echo "producción ($(git -C /var/www/api rev-parse --short=7 HEAD)) ya no está en el commit de la fase 1: no hacer checkout; salir por fase y planear un revert"; exit 1; }
 ( cd /var/www/api && umask 022 && git checkout -q --detach "$(cat "$BK/api-commit.txt")" )   # hoy, 7318122
 cd /var/www/api/backend && sudo -u www-data sh -c 'umask 077; php artisan config:cache -q && php artisan route:cache -q' && chmod 600 bootstrap/cache/config.php bootstrap/cache/routes-v7.php
 sudo -u www-data php artisan queue:restart
@@ -123,6 +130,7 @@ SMOKE_LAB_EXPECT_ENABLED=1 bash /root/smoke-run-h4.sh
 ```
 
 - **Qué queda:** la tabla `ultron_studio_publications`, sus 3 disparadores y 3 CHECK, `usv_status_chk` con 9 estados y los dos índices parciales. El código de H4 enseña las versiones de H5 con `reachable: false` y sus acciones deshabilitadas; revertir una responde el 409 provisional de F/G y `GET publications`, 404. Lo publicado, promovido o revertido queda en el historial.
+- **Mientras el árbol esté en `--detach`, nadie despliega:** el siguiente `git pull`/`merge --ff-only` de otro equipo fallaría; se vuelve a `main` (abajo) o se decide el revert antes de cualquier otro despliegue.
 - **Volver a H5:** `( cd /var/www/api && umask 022 && git checkout -q main )` (la rama local sigue en el commit de H5), las mismas cachés y `queue:restart` → 38 rutas y 0 migraciones pendientes (ensayado por DevOps en su banco local, sobre `fef7c87`).
 - **`api-commit.txt` tiene que ser el `PREVIO`** (reanudación tardía; decisión del lead, 31-10-2026). Si la fase 1 se corta y se relanza más de 2 horas después del respaldo, hay que rehacer el respaldo, y su `api-commit.txt` tiene que seguir siendo el `PREVIO` (`7318122`), no el HEAD de ese momento. Si no, el script aborta en el paso 0 (falla cerrado) y esta vuelta atrás leería un destino equivocado. El procedimiento, en el paso 5 del runbook.
 - **Por qué `git` como root** (I-3; decisión del lead, comprobada en el servidor en solo lectura el 31-10-2026): desde el 25-10, el árbol de `/var/www/api` (2.493 entradas, entre ellas todo lo que cambia el Hito 5) y `.git` (5.089 de sus 5.131 entradas) son de root, y `www-data` los lee pero no puede escribir ni en `objects/` ni en los directorios del código. Hasta ese día este procedimiento decía `sudo -u www-data -H git` (M-3), que fallaría a medias. Con `umask 077` en la sesión, lo que `git` reescribe quedaría ilegible para `www-data`: de ahí la subshell con `umask 022`.

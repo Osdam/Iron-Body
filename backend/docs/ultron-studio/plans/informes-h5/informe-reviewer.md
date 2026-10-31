@@ -265,3 +265,75 @@ Hallazgos del criterio: I-2, I-3, m-3, m-4, m-5 y m-6.
   - el recuento de ERROR desde el inicio por fichero de log, que tolera la rotación diaria;
   - las colas fallidas por SQL;
   - la ausencia de sellos con el motor en `off`.
+
+## Segunda pasada (documentación)
+
+**Fecha:** 31-10-2026, ~22:00 UTC. **Sobre:** backend HEAD `70fda56`, que contiene la documentación de `2b20449` y su segunda ronda, `e2950aa`, con los scripts de `db1d8f6` y `940b0c2`. CRM `9fe1817`, para las cifras.
+
+**Revisado:**
+- `ULTRON_STUDIO_DEPLOYMENT_PLAN.md`: el runbook del Hito 5, fases 1–3 e incidencias;
+- `ULTRON_STUDIO_ROLLBACK.md`: «Hito 5» y la cabecera del Hito 4;
+- `ULTRON_STUDIO_FINAL_REPORT.md`, `ULTRON_STUDIO_SECURITY_REPORT.md`, `ULTRON_STUDIO_BACKEND_REPORT.md` y `ULTRON_STUDIO_VISUAL_REPORT.md`, en sus secciones del Hito 5;
+- `ULTRON_STUDIO_MASTER_ROADMAP.md` y `ops/README.md`.
+
+Solo lectura. Este apartado es lo único añadido; sin commit.
+
+**No son hallazgos** (decisiones del lead ya escritas):
+- `git` como root con `umask 022` y la comprobación de lectura por `www-data` (I-3);
+- `ULTRON_STUDIO_PUBLISH_LAB_GATE=waived`, escrito en la fase 2;
+- el alcance de la autorización del 25-10-2026 sobre las fases 2 y 3.
+
+### Veredicto de la segunda pasada
+
+**APROBADO CON OBSERVACIONES.** No hay bloqueantes.
+
+- **Runbook:** es ejecutable con los scripts actuales. Argumentos, orden, nombres de variables, rutas y cada línea de la salida esperada coinciden con lo que imprimen.
+- **Vuelta atrás:** ya no deshace el trabajo de main en el caso de hoy (I-4 cerrado).
+- **Cifras:** cuadran con los informes de `plans/informes-h5/`, con el mío y con las del lead.
+- **Secretos e ids:** no hay secretos ni ids de conversación.
+
+Quedan cinco observaciones:
+- **D2-1 (importante):** la vuelta atrás del código no avisa de que solo vale mientras producción siga en el commit de la fase 1. Corregirlo antes de la fase 1 cuesta una frase y una comprobación, y es obligado antes del primer despliegue de main posterior a la fase 1.
+- **Cuatro menores** (D2-2 a D2-5).
+
+`e2950aa` ya corrigió las frases desfasadas que había anotado sobre `2b20449`:
+- `FINAL_REPORT:399` daba por pendientes las puertas del lead ya hechas;
+- `BACKEND_REPORT:839` y `:842` decían que no se habían verificado las puertas tras la fusión ni el E2E sobre el código corregido;
+- `SECURITY_REPORT:296` y el runbook decían que el E2E «no se ha repetido»;
+- `ROLLBACK:127` remitía a un procedimiento de reanudación tardía que el runbook aún no tenía.
+
+### Verificado en esta pasada
+
+| Comprobación | Resultado |
+|---|---|
+| Fase 1 del runbook frente a `deploy-h5-backend-fase1.sh` actual | Coinciden la línea de uso, `--short=7`, la salida 2 con un tercer argumento desconocido y el orden (`merge` como root → lectura por `www-data` → claves → Dotenv → `ironbody-migrate` → `route:cache` → cachés → `queue:restart` → aserciones). La salida esperada del paso 5 es, línea a línea, lo que imprime el script, incluidas las líneas nuevas de lectura por `www-data` y de privilegios (`true true false true` e informativo `true true`) |
+| Smoke esperado del runbook (35 OK, o 36 con una versión APPROVED, + 14) frente a `smoke-h5.py` | Contando las comprobaciones del código: Super Admin en la fase 1 con canario configurado, 35 (+1 con una APPROVED); Administrador, 14. Coincide con `informe-devops-h5.md:639-640` |
+| Fases 2 y 3, y vuelta por fase, frente a `h5-engine-scope.sh` | Coinciden los argumentos (`canary off`, `all canary`, `off <actual>`), `APLICADO` / `ESCRITO CON N DESVÍOS` (m-3), la copia `/root/env-pre-scope-<alcance>-<fecha>` y `lab_gate` en la lectura. El `sed` de `waived` casa con la línea sangrada que escribe la fase 1 |
+| `deploy-crm.sh` frente al paso 7 | `CRM PUBLICADO Y VERIFICADO`, o código 1 con los fallos (m-4); el respaldo `crm-pre-<build>-<ts>` es el que restaura `ROLLBACK.md` |
+| Lo que lee la verificación posterior | Existen las claves de log `ultron_studio.publication_state_unavailable` (`StudioPublications.php:624`), `auth:admin:unmapped_route` (`EnforceAdminAuthorization.php:78`) y `ultron_studio.canary_acta_unavailable` (`StudioCanaryMeasures.php:180`), y la columna `ultron_aborts.released_at` |
+| I-4 en `ROLLBACK.md:103-128` | El destino sale de `$BK/api-commit.txt`, en una subshell con `umask 022`. La reanudación tardía conserva `api-commit.txt` = `PREVIO` (`DEPLOYMENT_PLAN:616`) |
+| Afirmaciones de `ROLLBACK.md:105` | Entre `fef7c87` y `7318122` hay 19 commits: 14 de otros módulos y 5 del Studio, solo docs y `ops/`. En las zonas del motor cambia 1 línea (`SalesPaymentGuardrailService.php`). El código del Studio es idéntico en los dos commits (`git diff --stat` vacío) |
+| `smoke-run-h4.sh`, que usa la vuelta atrás | Acepta `SMOKE_LAB_EXPECT_ENABLED` y su smoke exige `readsVersions: false`, así que solo vale con el código de H4 (lo dice el runbook) |
+| Cifras de los informes frente a sus fuentes | Coinciden todas: `informe-api` (1654 / 20 038 / `aeb9699c` / 15 mutaciones), `informe-motor` (217/217, 4977, 87, 12), `informe-nucleo` (236), `informe-db` (`4ad748b5`, índices 6·5 → 8·7, 55P03 a 5,24 s, 15,61 / 6,36 ms), `informe-front-integracion` (2920, 18, 71/71, `fc558002`), `informe-tester-backend` (10 841 / 10 137 / 57, 4730, 184), `informe-tester-e2e` (315, 230, 116), `informe-devops-h5` (35/36 + 14, 34 + 14, 217 tablas). Hojas anteriores: 6200 y 2329 B en `5c1dbd7`. Mis cifras (103/103, 9/9, 878/878, 3131 / 16, 101 permisos) y las del lead (1697, 1446/1447, 1447, 4977, 408/408) están citadas igual en todos los documentos. La única discrepancia es D2-4 |
+| `git diff --stat cf59cef HEAD` sobre `app`, `config`, `routes`, `database`, `tests`, `bootstrap` y `composer.*` | Vacío: después de `cf59cef` solo cambian la documentación y un comentario de `.env.example`. Las puertas del lead sobre `cf59cef` valen para HEAD, como dice `DEPLOYMENT_PLAN:486` |
+| CRM: módulo del Studio de `4105016` frente a `5c1dbd7` (`DEPLOYMENT_PLAN:472`) | `git diff --stat` vacío |
+| Cierre de mis menores en `db1d8f6` | m-8 (`.env.example`: «true, 1, on o yes»), m-9 (Enmienda 2: AS-4/H-1 corregido en `96397ea`) y m-10 (rutas reales de las copias del entorno) cerrados. m-5 también en `h5-schema-check.sql` (`app_select` y `app_insert` por separado) |
+| Secretos e ids en los 8 documentos | Busqué claves (`sk-…`, `base64:…`, `Bearer …`, `*_KEY=`/`*_SECRET=`/`*_TOKEN=` con valor), ids de conversación, teléfonos, correos y hex largos: 0. Solo aparecen cadenas sintéticas de prueba en la sección del Hito 4 (`prueba 300 123 4567 correo@x.co`) |
+| `[PENDIENTE]` que quedan | Todos legítimos: I-1, el build del CRM, la fase 1 (y su registro) y esta segunda pasada |
+
+### Hallazgos de la segunda pasada
+
+| # | Sev. | Dónde | Qué y escenario de fallo | Corrección propuesta → agente |
+|---|---|---|---|---|
+| D2-1 | **importante** (antes de la fase 1, porque es barato; como muy tarde, antes del primer despliegue de main posterior a la fase 1) | `ULTRON_STUDIO_ROLLBACK.md:103-128` | **Qué:** la vuelta atrás del código hace `git checkout -q --detach "$(cat "$BK/api-commit.txt")"` sin comprobar que producción siga en el commit que desplegó la fase 1. Solo es correcta mientras nadie haya desplegado main después; el canario dura días (unos 3 turnos por semana) y main se despliega a menudo (19 commits entre el 24 y el 29-10). **Escenario:** el día D, la fase 1 deja HEAD = X (`7318122` + H5). Durante el canario, otro equipo despliega main Y = X + trabajo de caja o biometría. En la fase 2 el código de H5 da problemas, y quien opera sigue el runbook: checkout a `7318122`. Desaparece de producción el trabajo de Y y sus migraciones quedan aplicadas sin el código que las usa (la misma clase que I-4). Además, `--detach` deja el árbol sin rama, y el siguiente `git pull` de otro equipo falla | Antes del checkout, comprobar `[ "$(git -C /var/www/api rev-parse HEAD)" = "<commit desplegado por la fase 1>" ]`. Si no coincide, no usar checkout: la salida inmediata es la vuelta por fase (`h5-engine-scope.sh off` + «Volver a Legacy», que no tocan código), y la vuelta del código se decide con devops (revert de los commits del Hito 5 sobre el main de ese momento). Avisar de que `--detach` deja el árbol sin rama. Anotar el commit de la fase 1 en el registro de respaldos (`ROLLBACK:168`) → **documentation-specialist** / **devops** |
+| D2-2 | menor | `ULTRON_STUDIO_DEPLOYMENT_PLAN.md:528` y `:623`; `ops/README.md:23`; cabecera de `ops/h5-schema-check.sql:2` | **Qué:** el paso 1 deja `/root/h5-schema-check.sql` en 600 de root, y los pasos 2 y 6 lo abren con `sudo -u postgres psql … -f /root/h5-schema-check.sql`. `postgres` no puede leer un fichero 600 de root (ni atravesar `/root`, 700), así que falla siempre, no solo «si `/root` no es legible», como dice la nota de `:536`. **Escenario:** la primera comprobación de solo lectura del día sale con `Permission denied`. No se toca nada y la nota da la alternativa, pero el runbook no es ejecutable tal cual en ese punto | La orden principal tiene que ser la de la entrada estándar (`sudo -u postgres psql -X -v ON_ERROR_STOP=1 -v owner=iron -v app=iron_app -x -d ironbody < /root/h5-schema-check.sql`) en los pasos 2 y 6, en `ops/README.md:23` y en la cabecera del fichero, sin el «no verificado» → **documentation-specialist** / **devops** |
+| D2-3 | menor; el riesgo, a confirmar por **security** | `ULTRON_STUDIO_SECURITY_REPORT.md:357`; `ULTRON_STUDIO_MASTER_ROADMAP.md:56` | **Qué:** describen el pendiente de `ironbody-migrate` como «root sobre un árbol de `www-data`» (M-3). Desde I-3 el árbol es de root, como dicen `SECURITY_REPORT:298` y el runbook, así que esa justificación ya no vale. El riesgo sigue por otra vía: `php artisan migrate` como root arranca Laravel y ejecuta con `require` `bootstrap/cache/config.php` (y `services.php`/`packages.php`), que son de `www-data` (el script de la fase 1 lo exige). **Escenario:** quien consiga ejecutar código como `www-data` reescribe `config.php`, y el siguiente `ironbody-migrate` lo ejecuta como root. Es lectura de código; no lo comprobé en el servidor | Reescribir el pendiente: «ejecuta como root PHP que `www-data` puede escribir (`bootstrap/cache/*.php`)». Que `security` valore la mitigación (vaciar la caché como root antes de migrar, o migrar sin cargar la de `www-data`) → **security** / **documentation-specialist** |
+| D2-4 | menor | `ULTRON_STUDIO_BACKEND_REPORT.md:811` (y su fuente, `plans/informes-h5/informe-motor.md:20`) | Dice `UltronCommitService.php` (+58/−9). `git diff --numstat` da **+49/−9** en todos los commits desde `ea04d3f` (58 es el total de líneas cambiadas) | Escribir +49/−9 en los dos sitios → **documentation-specialist** |
+| D2-5 | menor | `ULTRON_STUDIO_MASTER_ROADMAP.md:63` | N-2 (una `APP_KEY` por entorno) sigue en los pendientes del Hito 7 («comprobarlo comparando el sha256…»), pero `SECURITY_REPORT:309` dice que el lead ya lo comprobó el 31-10: la huella de producción no coincide con ninguna del repo ni del E2E | Marcarlo como comprobado el 31-10 (o dejar solo lo que falte, si se añade otro entorno) → **documentation-specialist** |
+
+### Notas de la segunda pasada (sin hallazgo)
+
+- **Defensa en profundidad de I-3, para `security`.** El runbook comprueba el dueño de `.git`, `.git/config` y `.git/hooks`, y para si no es root. El día de la fase 1 conviene listar también, en solo lectura, las 42 entradas de `.git` que no son de root (`find /var/www/api/.git ! -user root`) y confirmar que ninguna es `config`, `hooks/*`, `refs/*` ni `packed-refs`, y que `hooks/` solo tiene `*.sample`.
+- **La comprobación de lectura tras el `merge`** recorre `git diff --name-only` por sustitución de proceso. Si ese `git diff` fallara, no comprobaría nada y diría «todos legibles». Es improbable, porque el `merge` acaba de salir bien. Contar las líneas y exigir más de 0 lo cerraría.
+- **«Comparación de suites del mismo día»** (`DEPLOYMENT_PLAN`, condición previa) sigue sin resultado escrito. El lead la está preparando (`70fda56` arregla `suite-compare.sh` en el bash de macOS); es un pendiente legítimo.
+- **`ops/README.md:25`** dice «siempre `sudo /usr/local/bin/ironbody-migrate` (… `lock_timeout` 5 s …)». El `lock_timeout` lo pone quien llama con `PGOPTIONS`, como hace el script de la fase 1, no el envoltorio. Quien lo lance a mano no lo tiene; ver N-10.
