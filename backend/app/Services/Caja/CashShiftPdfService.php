@@ -58,6 +58,8 @@ class CashShiftPdfService
         $this->metodos($pdf, $s);
         $this->arqueo($pdf, $s);
         $this->operaciones($pdf, $shift, $datos['transactions']);
+        $this->devoluciones($pdf, $datos['refunds'] ?? []);
+        $this->correccionesPosteriores($pdf, $datos['post_close_corrections'] ?? []);
         $this->observaciones($pdf, $s);
         $this->pie($pdf);
 
@@ -179,6 +181,19 @@ class CashShiftPdfService
     private function tablaVentas(TCPDF $pdf, array $ops): void
     {
         foreach ($ops as $v) {
+            // Un abono a un crédito de cafetería: dinero de este turno sin
+            // venta propia (la venta fue fiada otro día).
+            if (($v['source_type'] ?? null) === 'receivable_payment') {
+                $pdf->SetFont('helvetica', '', 9);
+                $pdf->Cell(30, 5.5, 'Abono', 0, 0, 'L');
+                $pdf->Cell(32, 5.5, $this->hora($v['at']), 0, 0, 'L');
+                $pdf->Cell(70, 5.5, mb_strimwidth((string) ($v['plan'] ?? '—'), 0, 40, '…'), 0, 0, 'L');
+                $pdf->Cell(0, 5.5, $this->dinero($v['total']).'  '.$this->metodo($v['payment_method']).($v['status'] === 'paid' ? '' : '  (ANULADO)'), 0, 1, 'R');
+                $pdf->Ln(1.5);
+
+                continue;
+            }
+
             $pdf->SetFont('helvetica', 'B', 9.5);
             $pdf->SetFillColor(...self::GRIS);
             $pdf->Cell(30, 6, (string) $v['code'], 0, 0, 'L', true);
@@ -218,6 +233,56 @@ class CashShiftPdfService
             $pdf->Cell(30, 5.5, mb_strimwidth((string) ($p['plan'] ?? '—'), 0, 18, '…'), 0, 0, 'L');
             $pdf->Cell(0, 5.5, $this->dinero($p['total']).'  '.$this->metodo($p['payment_method']), 0, 1, 'R');
         }
+    }
+
+    /**
+     * Dinero que salió del turno por devoluciones. Ya está restado de los
+     * totales de arriba: aquí se explica.
+     *
+     * @param  list<array<string,mixed>>  $devoluciones
+     */
+    private function devoluciones(TCPDF $pdf, array $devoluciones): void
+    {
+        if ($devoluciones === []) {
+            return;
+        }
+
+        $this->titulo($pdf, 'Devoluciones pagadas desde este turno');
+        $pdf->SetFont('helvetica', '', 9);
+        foreach ($devoluciones as $d) {
+            $origen = ($d['refundable_type'] === 'product_sale' ? 'Venta #' : 'Cobro #').$d['refundable_id'];
+            $pdf->Cell(30, 5.5, $origen, 0, 0, 'L');
+            $pdf->Cell(28, 5.5, $this->hora($d['created_at']), 0, 0, 'L');
+            $pdf->Cell(76, 5.5, mb_strimwidth((string) $d['reason'], 0, 44, '…'), 0, 0, 'L');
+            $pdf->Cell(0, 5.5, '-'.$this->dinero($d['amount']).'  '.$this->metodo($d['method']), 0, 1, 'R');
+        }
+        $this->separador($pdf);
+    }
+
+    /**
+     * Correcciones hechas después de cerrar sobre operaciones de este turno. El
+     * cierre de arriba es el firmado y no cambia.
+     *
+     * @param  list<array<string,mixed>>  $correcciones
+     */
+    private function correccionesPosteriores(TCPDF $pdf, array $correcciones): void
+    {
+        if ($correcciones === []) {
+            return;
+        }
+
+        $this->titulo($pdf, 'Correcciones posteriores al cierre');
+        $pdf->SetFont('helvetica', '', 9);
+        foreach ($correcciones as $c) {
+            $pdf->MultiCell(0, 5, sprintf(
+                '%s · %s · %s%s',
+                $this->fechaHora($c['at']),
+                (string) $c['actor_name'],
+                (string) $c['summary'],
+                $c['reason'] ? ' — Motivo: '.$c['reason'] : '',
+            ), 0, 'L');
+        }
+        $this->separador($pdf);
     }
 
     /** @param array<string,mixed> $s */
@@ -322,6 +387,8 @@ class CashShiftPdfService
             'paid' => '(pagada)',
             'delivered' => '(entregada)',
             'cancelled' => '(ANULADA)',
+            'refunded' => '(DEVUELTA)',
+            'credit' => '(fiada)',
             'pending' => '(pendiente)',
             null => '',
             default => '('.$e.')',

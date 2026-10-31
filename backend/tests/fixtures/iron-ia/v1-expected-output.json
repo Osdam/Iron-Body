@@ -1,0 +1,355 @@
+{
+    "response": {
+        "ok": true,
+        "data": {
+            "status": "draft",
+            "nutrition_guide": {
+                "status": "draft",
+                "objective": "Bajar grasa",
+                "meals_count": 4
+            },
+            "routine": {
+                "id": 1,
+                "name": "Full body 3 días",
+                "objective": "Bajar grasa conservando músculo",
+                "level": "intermedio",
+                "days_per_week": 2,
+                "status": "Borrador",
+                "is_assigned": false,
+                "published": false,
+                "generated_by_ai": true,
+                "source_assessment_id": 1,
+                "exercises_count": 5,
+                "days": [
+                    {
+                        "name": "Día 1",
+                        "order": 0,
+                        "exercises": [
+                            {
+                                "exercise_id": 1,
+                                "name": "Sentadilla",
+                                "sets": 4,
+                                "reps": "8-10",
+                                "rest_seconds": 90,
+                                "notes": "Controla la bajada."
+                            },
+                            {
+                                "exercise_id": 2,
+                                "name": "Press banca",
+                                "sets": 3,
+                                "reps": "10",
+                                "rest_seconds": 90
+                            },
+                            {
+                                "exercise_id": 3,
+                                "name": "Remo con barra",
+                                "sets": 3,
+                                "reps": "10-12",
+                                "rest_seconds": 75,
+                                "notes": "Espalda neutra."
+                            }
+                        ]
+                    },
+                    {
+                        "name": "Día 2",
+                        "order": 1,
+                        "exercises": [
+                            {
+                                "exercise_id": 2,
+                                "name": "Press banca",
+                                "sets": 4,
+                                "reps": "8",
+                                "rest_seconds": 120
+                            },
+                            {
+                                "exercise_id": 3,
+                                "name": "Remo con barra",
+                                "sets": 3,
+                                "reps": "12",
+                                "rest_seconds": 75
+                            }
+                        ]
+                    }
+                ]
+            },
+            "analysis": {
+                "profile": "Hombre de 30 años, nivel intermedio, objetivo bajar grasa; disponibilidad no consta.",
+                "priorities": [
+                    "Reducir grasa conservando músculo",
+                    "Cuidar la zona lumbar"
+                ],
+                "approach": "Déficit calórico moderado con proteína suficiente. Entrenamiento de fuerza de cuerpo completo evitando carga axial pesada.",
+                "limitations": "Lumbar sensible: se evitan cargas pesadas sobre la columna.",
+                "strategy": "Tres sesiones de fuerza por semana y alimentación basada en comida casera colombiana."
+            },
+            "source_assessment_id": 1
+        }
+    },
+    "guide": {
+        "weight_kg": "82.00",
+        "height_cm": "178.00",
+        "body_fat_pct": "20.00",
+        "muscle_mass_pct": null,
+        "visceral_fat": null,
+        "basal_kcal": null,
+        "age_years": null,
+        "objective": "Bajar grasa",
+        "objective_description": "Reducir grasa corporal de forma gradual manteniendo la masa muscular.",
+        "training_stage": "Adaptación",
+        "meals": [
+            {
+                "label": "Desayuno",
+                "time": "07:00",
+                "description": "Huevos revueltos con arepa pequeña y fruta.",
+                "order": 0
+            },
+            {
+                "label": "Almuerzo",
+                "time": "12:30",
+                "description": "Pechuga de pollo a la plancha, arroz, ensalada y fríjoles.",
+                "order": 1
+            },
+            {
+                "label": "Algo",
+                "time": "16:00",
+                "description": "Yogur natural con avena.",
+                "order": 2
+            },
+            {
+                "label": "Cena",
+                "time": "19:30",
+                "description": "Pescado al horno con verduras salteadas.",
+                "order": 3
+            }
+        ],
+        "recommendations": "Beber de 2 a 3 litros de agua al día y repartir la proteína en todas las comidas.",
+        "restrictions": "No constan restricciones registradas.",
+        "supplements": "No se recomiendan suplementos sin valoración profesional.",
+        "notes": "Revisar con el socio sus horarios y preferencias.",
+        "status": "draft",
+        "version": 1,
+        "generated_by_ai": 1,
+        "source_assessment_id": 1,
+        "trainer_type": "trainer_floor"
+    },
+    "routine": {
+        "name": "Full body 3 días",
+        "objective": "Bajar grasa conservando músculo",
+        "level": "intermedio",
+        "description": null,
+        "days_per_week": 2,
+        "is_assigned": false,
+        "is_template": false,
+        "created_by_admin": false,
+        "status": "Borrador",
+        "source_assessment_id": 1,
+        "generated_by_ai": true,
+        "days": [
+            {
+                "name": "Día 1",
+                "order": 0,
+                "exercises": [
+                    {
+                        "exercise_id": 1,
+                        "name": "Sentadilla",
+                        "sets": 4,
+                        "reps": "8-10",
+                        "rest_seconds": 90,
+                        "notes": "Controla la bajada."
+                    },
+                    {
+                        "exercise_id": 2,
+                        "name": "Press banca",
+                        "sets": 3,
+                        "reps": "10",
+                        "rest_seconds": 90
+                    },
+                    {
+                        "exercise_id": 3,
+                        "name": "Remo con barra",
+                        "sets": 3,
+                        "reps": "10-12",
+                        "rest_seconds": 75,
+                        "notes": "Espalda neutra."
+                    }
+                ]
+            },
+            {
+                "name": "Día 2",
+                "order": 1,
+                "exercises": [
+                    {
+                        "exercise_id": 2,
+                        "name": "Press banca",
+                        "sets": 4,
+                        "reps": "8",
+                        "rest_seconds": 120
+                    },
+                    {
+                        "exercise_id": 3,
+                        "name": "Remo con barra",
+                        "sets": 3,
+                        "reps": "12",
+                        "rest_seconds": 75
+                    }
+                ]
+            }
+        ],
+        "notes": null
+    },
+    "routine_exercises": [
+        {
+            "exercise_id": 1,
+            "sets": 4,
+            "reps": "8-10",
+            "weight": null,
+            "notes": "Controla la bajada.",
+            "sort_order": 0
+        },
+        {
+            "exercise_id": 2,
+            "sets": 3,
+            "reps": "10",
+            "weight": null,
+            "notes": null,
+            "sort_order": 1
+        },
+        {
+            "exercise_id": 3,
+            "sets": 3,
+            "reps": "10-12",
+            "weight": null,
+            "notes": "Espalda neutra.",
+            "sort_order": 2
+        },
+        {
+            "exercise_id": 2,
+            "sets": 4,
+            "reps": "8",
+            "weight": null,
+            "notes": null,
+            "sort_order": 3
+        },
+        {
+            "exercise_id": 3,
+            "sets": 3,
+            "reps": "12",
+            "weight": null,
+            "notes": null,
+            "sort_order": 4
+        }
+    ],
+    "run": {
+        "mode": "integral_plan",
+        "provider": "openai",
+        "model": "gpt-4.1-mini",
+        "input_hash": "ff7860d60558c1add947502c6dd4f04e01305ab63f046c2f190f1df14d9ca9ab",
+        "status": "ok",
+        "error_code": null,
+        "prompt_version": "v1",
+        "response_json": {
+            "analysis": {
+                "profile": "Hombre de 30 años, nivel intermedio, objetivo bajar grasa; disponibilidad no consta.",
+                "priorities": [
+                    "Reducir grasa conservando músculo",
+                    "Cuidar la zona lumbar"
+                ],
+                "approach": "Déficit calórico moderado con proteína suficiente. Entrenamiento de fuerza de cuerpo completo evitando carga axial pesada.",
+                "limitations": "Lumbar sensible: se evitan cargas pesadas sobre la columna.",
+                "strategy": "Tres sesiones de fuerza por semana y alimentación basada en comida casera colombiana."
+            },
+            "nutrition": {
+                "objective": "Bajar grasa",
+                "objective_description": "Reducir grasa corporal de forma gradual manteniendo la masa muscular.",
+                "training_stage": "Adaptación",
+                "meals": [
+                    {
+                        "label": "Desayuno",
+                        "time": "07:00",
+                        "description": "Huevos revueltos con arepa pequeña y fruta.",
+                        "order": 0
+                    },
+                    {
+                        "label": "Almuerzo",
+                        "time": "12:30",
+                        "description": "Pechuga de pollo a la plancha, arroz, ensalada y fríjoles.",
+                        "order": 1
+                    },
+                    {
+                        "label": "Algo",
+                        "time": "16:00",
+                        "description": "Yogur natural con avena.",
+                        "order": 2
+                    },
+                    {
+                        "label": "Cena",
+                        "time": "19:30",
+                        "description": "Pescado al horno con verduras salteadas.",
+                        "order": 3
+                    }
+                ],
+                "recommendations": "Beber de 2 a 3 litros de agua al día y repartir la proteína en todas las comidas.",
+                "restrictions": "No constan restricciones registradas.",
+                "supplements": "No se recomiendan suplementos sin valoración profesional.",
+                "notes": "Revisar con el socio sus horarios y preferencias."
+            },
+            "routine": {
+                "name": "Full body 3 días",
+                "objective": "Bajar grasa conservando músculo",
+                "level": "intermedio",
+                "days_per_week": 2,
+                "days": [
+                    {
+                        "name": "Día 1",
+                        "order": 0,
+                        "exercises": [
+                            {
+                                "exercise_id": 1,
+                                "name": "Sentadilla",
+                                "sets": 4,
+                                "reps": "8-10",
+                                "rest_seconds": 90,
+                                "notes": "Controla la bajada."
+                            },
+                            {
+                                "exercise_id": 2,
+                                "name": "Press banca",
+                                "sets": 3,
+                                "reps": "10",
+                                "rest_seconds": 90
+                            },
+                            {
+                                "exercise_id": 3,
+                                "name": "Remo con barra",
+                                "sets": 3,
+                                "reps": "10-12",
+                                "rest_seconds": 75,
+                                "notes": "Espalda neutra."
+                            }
+                        ]
+                    },
+                    {
+                        "name": "Día 2",
+                        "order": 1,
+                        "exercises": [
+                            {
+                                "exercise_id": 2,
+                                "name": "Press banca",
+                                "sets": 4,
+                                "reps": "8",
+                                "rest_seconds": 120
+                            },
+                            {
+                                "exercise_id": 3,
+                                "name": "Remo con barra",
+                                "sets": 3,
+                                "reps": "12",
+                                "rest_seconds": 75
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    }
+}

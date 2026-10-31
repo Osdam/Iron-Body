@@ -3,6 +3,7 @@
 namespace Tests\Feature\Workforce;
 
 use App\Models\ClassSession;
+use App\Models\FaceDuplicateMatch;
 use App\Models\MyClass;
 use App\Models\Trainer;
 use App\Models\TrainerDeviceSession;
@@ -345,6 +346,12 @@ class TrainerClassIdentityTest extends TestCase
 
         $this->postJson('/api/trainer/auth/face/enroll', ['embedding' => $this->face(20)], $this->bearer())
             ->assertStatus(409)->assertJsonPath('code', 'face_already_linked');
+
+        // El portal comparte el 1:N del kiosko: también deja con qué plantilla chocó.
+        $this->assertSame(
+            TrainerFaceReference::query()->where('identity_id', $otro->id)->sole()->id,
+            (int) FaceDuplicateMatch::query()->sole()->face_reference_id,
+        );
     }
 
     public function test_el_login_facial_antiguo_no_acepta_una_plantilla_revocada(): void

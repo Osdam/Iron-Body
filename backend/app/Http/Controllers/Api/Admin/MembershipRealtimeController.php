@@ -20,13 +20,23 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class MembershipRealtimeController extends Controller
 {
     /**
-     * Cambios de plan que nacen de un TRASLADO entre planes (sin cobro). Los
-     * escribe el módulo de Miembros, no el de Pagos, y solo ellos pueden
-     * venir de allí.
+     * Cambios de plan que nacen de un TRASLADO entre planes, o de una
+     * TRANSFERENCIA de membresía entre dos socios (sin cobro). Los escribe el
+     * módulo de Miembros, no el de Pagos, y solo ellos pueden venir de allí.
      */
     private const TRANSFER_EVENTS = [
         'membership.plan.transferred',
         'membership.plan.transfer.reverted',
+        // Transferir membresía a otra persona (MembershipTransfers): una
+        // traza por socio, con el plan del cobro cedido.
+        'membership.transferred',
+        'membership.transfer.reverted',
+    ];
+
+    /** Transferir membresía entre dos socios (MembershipTransfers). */
+    private const MEMBER_TO_MEMBER_EVENTS = [
+        'membership.transferred',
+        'membership.transfer.reverted',
     ];
 
     private const MEMBERSHIP_EVENTS = [
@@ -124,9 +134,13 @@ class MembershipRealtimeController extends Controller
         }
 
         $planId = filter_var($meta['plan_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
-        if (! $planId) {
+        // Un traspaso entre socios cuyo plan ya no existe en el catálogo sigue
+        // siendo un cambio de membresía de dos personas: viaja sin plan. El
+        // resto de eventos sigue exigiéndolo.
+        if (! $planId && ! in_array($type, self::MEMBER_TO_MEMBER_EVENTS, true)) {
             return null;
         }
+        $planId = $planId ?: null;
         $changed = array_values(array_intersect(
             is_array($meta['changed'] ?? null) ? array_filter($meta['changed'], 'is_string') : [],
             self::CHANGED,

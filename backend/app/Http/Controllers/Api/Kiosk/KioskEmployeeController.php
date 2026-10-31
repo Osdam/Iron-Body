@@ -9,6 +9,7 @@ use App\Services\Workforce\EmployeeDirectory;
 use App\Services\Workforce\EmployeeProfile;
 use App\Services\Workforce\FaceReferenceService;
 use App\Services\Workforce\KioskTokens;
+use App\Services\Workforce\WorkforcePins;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -24,6 +25,7 @@ class KioskEmployeeController extends Controller
         private readonly EmployeeDirectory $directory,
         private readonly FaceReferenceService $faces,
         private readonly KioskTokens $tokens,
+        private readonly WorkforcePins $pins,
     ) {}
 
     public function identify(Request $request): JsonResponse
@@ -57,6 +59,8 @@ class KioskEmployeeController extends Controller
             'positions' => array_map(fn (array $p) => ['key' => $p['key'], 'label' => $p['label']], $profile->describedPositions()),
             'capabilities' => $profile->capabilities(),
             'biometric' => ['status' => $this->faces->status($ref), 'verifiable' => $this->faces->verifiable($ref)],
+            // Para que la tablet ofrezca «Crear mi PIN» (contrato §10.2).
+            'pin' => ['status' => $this->pins->status((int) $profile->identity->getKey())],
         ];
     }
 }

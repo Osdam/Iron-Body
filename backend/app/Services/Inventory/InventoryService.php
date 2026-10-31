@@ -93,7 +93,11 @@ class InventoryService
     {
         $movements = [];
 
-        foreach ($sale->items as $item) {
+        // Los productos se bloquean SIEMPRE en orden de id, no en el orden de
+        // las líneas: dos ventas con los mismos productos en distinto orden se
+        // esperaban la una a la otra en sentido contrario y PostgreSQL tenía que
+        // matar a una por interbloqueo.
+        foreach ($sale->items->sortBy(fn ($i) => [(int) $i->product_id, (int) $i->id]) as $item) {
             if ($item->product_id === null || $item->quantity <= 0) {
                 continue;
             }
@@ -115,6 +119,50 @@ class InventoryService
                 user: $user,
                 unitAmount: $this->floatOrNull($item->unit_price),
                 notes: null,
+                reference: $sale,
+            );
+        }
+
+        return $movements;
+    }
+
+    /**
+     * Reingresa al inventario lo que vuelve de una venta anulada o devuelta.
+     *
+     * Entrada de origen «Devolución de cliente» con la venta como referencia,
+     * línea a línea y en orden de producto (el mismo que la salida). Se llama
+     * DENTRO de la transacción de la anulación o la devolución: si la corrección
+     * se deshace, el producto tampoco vuelve.
+     *
+     * @param  array<int, int>  $quantitiesByItem  id de línea → unidades que vuelven
+     * @return InventoryMovement[]
+     */
+    public function registerSaleReturn(ProductSale $sale, array $quantitiesByItem, string $reason, ?Admin $user = null): array
+    {
+        $movements = [];
+
+        foreach ($sale->items->sortBy(fn ($i) => [(int) $i->product_id, (int) $i->id]) as $item) {
+            $cantidad = (int) ($quantitiesByItem[$item->id] ?? 0);
+            if ($item->product_id === null || $cantidad <= 0) {
+                continue;
+            }
+
+            $product = Product::find($item->product_id);
+            if (! $product) {
+                // Producto borrado después de la venta: no hay existencias a las
+                // que volver. La devolución del dinero sigue adelante.
+                continue;
+            }
+
+            $movements[] = $this->apply(
+                product: $product,
+                type: InventoryMovementType::IN,
+                quantity: $cantidad,
+                origin: InventoryMovementOrigin::RETURN_IN,
+                reason: mb_substr($reason, 0, 255),
+                user: $user,
+                unitAmount: $this->floatOrNull($product->cost_price),
+                notes: 'Reingreso de la venta '.$sale->code,
                 reference: $sale,
             );
         }

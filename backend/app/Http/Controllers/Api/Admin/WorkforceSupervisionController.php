@@ -38,7 +38,7 @@ class WorkforceSupervisionController extends Controller
             'position' => ['nullable', 'string', 'max:40'],
             'status' => ['nullable', 'in:open,closed,incident'],
             'device' => ['nullable', 'uuid'],
-            'method' => ['nullable', 'in:face,enrollment,admin_code,admin'],
+            'method' => ['nullable', 'in:face,face_pin,enrollment,admin_code,admin'],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);

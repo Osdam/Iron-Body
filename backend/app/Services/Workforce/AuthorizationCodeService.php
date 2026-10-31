@@ -28,6 +28,7 @@ class AuthorizationCodeService
         WorkforceAuthorizationCode::PURPOSE_ENROLLMENT => 'registrar el rostro',
         WorkforceAuthorizationCode::PURPOSE_FALLBACK_WORKDAY => 'registrar la jornada',
         WorkforceAuthorizationCode::PURPOSE_FALLBACK_CLASS => 'iniciar o finalizar clases',
+        WorkforceAuthorizationCode::PURPOSE_PIN_SETUP => 'crear el PIN',
     ];
 
     /** Dónde se escribe cada código en la tablet. */
@@ -35,6 +36,7 @@ class AuthorizationCodeService
         WorkforceAuthorizationCode::PURPOSE_ENROLLMENT => 'se escribe en «Acceso para empleados» → identifícate → «Registrar mi rostro»',
         WorkforceAuthorizationCode::PURPOSE_FALLBACK_WORKDAY => 'se escribe en «Acceso para empleados» → «Registrar entrada y salida» → «Usar código de administrador»',
         WorkforceAuthorizationCode::PURPOSE_FALLBACK_CLASS => 'se escribe al iniciar o finalizar la clase, en «Usar código de administrador»',
+        WorkforceAuthorizationCode::PURPOSE_PIN_SETUP => 'se escribe en «Acceso para empleados» → identifícate → «Crear mi PIN»',
     ];
 
     /** Cómo se pide en el CRM el código que hace falta. */
@@ -42,6 +44,7 @@ class AuthorizationCodeService
         WorkforceAuthorizationCode::PURPOSE_ENROLLMENT => 'Pídelo en el CRM: Personal → la persona → «Abrir biometría» → «Autorizar enrolamiento».',
         WorkforceAuthorizationCode::PURPOSE_FALLBACK_WORKDAY => 'Pídelo en el CRM: Personal → la persona → «Código de respaldo» → «Registrar la jornada».',
         WorkforceAuthorizationCode::PURPOSE_FALLBACK_CLASS => 'Pídelo en el CRM: Personal → la persona → «Código de respaldo» → «Iniciar o finalizar una clase».',
+        WorkforceAuthorizationCode::PURPOSE_PIN_SETUP => 'Pídelo en el CRM: Personal → la persona → «Abrir biometría» → «Autorizar PIN».',
     ];
 
     /**
@@ -138,6 +141,32 @@ class AuthorizationCodeService
         }
 
         return $live;
+    }
+
+    /**
+     * Hay un código vivo de esa operación, sin consumirlo ni contar intento:
+     * para no comparar un rostro (ni gastar sus intentos) cuando ningún código
+     * podría pasar después. Sin código vivo, el mismo rechazo que `consume()`.
+     */
+    public function assertLive(Identity $identity, string $purpose): void
+    {
+        $max = (int) config('workforce.codes.max_attempts', 5);
+        /** @var WorkforceAuthorizationCode|null $live */
+        $live = WorkforceAuthorizationCode::query()
+            ->where('identity_id', $identity->getKey())
+            ->where('purpose', $purpose)
+            ->whereNull('consumed_at')
+            ->whereNull('revoked_at')
+            ->where('expires_at', '>', now())
+            ->orderByDesc('id')
+            ->first();
+        if ($live === null || $live->attempts >= $max) {
+            // Con el código vivo pero sin intentos, el motivo es ese, no «no hay código».
+            [$outcome, $exception] = $this->rejection($identity, $purpose, $live, $max);
+            $this->recordRejection($identity, $purpose, $outcome, null);
+
+            throw $exception;
+        }
     }
 
     /** @return array{0: string, 1: WorkforceException} */

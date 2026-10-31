@@ -227,6 +227,8 @@ class TrainerClassController extends Controller
             'session_date' => ['nullable', 'date'],
             'face_verified' => ['nullable', 'boolean'],
             'embedding' => ['nullable', 'array'],
+            // Segundo factor cuando el rostro no basta (contrato §10.3).
+            'pin' => ['nullable', 'string', 'regex:/^\d{6}$/'],
             'fallback_code' => ['nullable', 'string', 'max:20'],
         ]);
     }

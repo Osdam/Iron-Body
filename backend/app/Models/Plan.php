@@ -59,7 +59,18 @@ class Plan extends Model
         'access_windows' => 'array',
         'price_includes_tax' => 'boolean',
         'billing_enabled' => 'boolean',
+        // Archivo (ver la migración add_archive_to_plans_table). No son
+        // asignables en masa: solo los escribe PlanArchive.
+        'archived_at' => 'datetime',
+        'archived_by' => 'integer',
     ];
+
+    /**
+     * Quién lo archivó y por qué NO salen en `toArray()`: el listado de planes
+     * es PÚBLICO (la app lo lee sin sesión). El CRM los recibe aparte, solo con
+     * sesión de administrador ({@see \App\Http\Controllers\Api\PlanController}).
+     */
+    protected $hidden = ['archived_by', 'archive_reason', 'archiver'];
 
     /** Segmentos comerciales disponibles para un plan. */
     public const TIERS = ['lite', 'pro', 'premium'];
@@ -119,6 +130,31 @@ class Plan extends Model
     public function taxRate(): BelongsTo
     {
         return $this->belongsTo(TaxRate::class);
+    }
+
+    /** La persona que lo archivó (nula si la cuenta se eliminó). Oculta en `toArray()`. */
+    public function archiver(): BelongsTo
+    {
+        return $this->belongsTo(Admin::class, 'archived_by');
+    }
+
+    /**
+     * ¿Está archivado? Un plan archivado existe para su historia (cobros,
+     * traslados, socios que lo tienen) y no se vende por ninguna vía.
+     */
+    public function isArchived(): bool
+    {
+        return $this->archived_at !== null;
+    }
+
+    public function scopeArchived($query)
+    {
+        return $query->whereNotNull('archived_at');
+    }
+
+    public function scopeNotArchived($query)
+    {
+        return $query->whereNull('archived_at');
     }
 
     /**
@@ -228,6 +264,9 @@ class Plan extends Model
     {
         return $query->where('active', true)
             ->where('sellable', true)
+            // Archivado ⇒ ya está inactivo y no vendible; esto es la red por si
+            // alguien tocara las banderas por debajo.
+            ->whereNull('archived_at')
             ->where('price', '>', 0)
             ->where('duration_days', '>', 0);
     }
@@ -249,6 +288,7 @@ class Plan extends Model
     {
         return (bool) $this->active
             && (bool) $this->sellable
+            && ! $this->isArchived()
             && (float) $this->price > 0
             && (int) $this->duration_days > 0;
     }

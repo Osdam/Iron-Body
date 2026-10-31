@@ -326,13 +326,20 @@ class TrainerCommissions
 
         // El dinero primero. Revertir después de anular la deuda dejaría un
         // abono aplicado sobre algo que ya no se debe.
-        foreach ($deuda->payments()->get() as $abono) {
-            if ($abono->isApplied()) {
-                $this->receivables->reverse($abono, $motivo, $actor);
+        //
+        // Todo o nada: anular un abono de un turno ya cerrado exige además
+        // administrar la caja (403 closed_shift_requires_manage), y sin esta
+        // transacción un mes con dos abonos podía quedar con uno anulado y el
+        // otro no.
+        DB::transaction(function () use ($deuda, $motivo, $actor): void {
+            foreach ($deuda->payments()->get() as $abono) {
+                if ($abono->isApplied()) {
+                    $this->receivables->reverse($abono, $motivo, $actor);
+                }
             }
-        }
 
-        $this->receivables->cancel($deuda->fresh(), $motivo, $actor);
+            $this->receivables->cancel($deuda->fresh(), $motivo, $actor);
+        }, 3);
 
         if ($cobro->agreement?->trainer) {
             $this->access->sync($cobro->agreement->trainer);

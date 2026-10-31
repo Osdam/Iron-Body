@@ -78,11 +78,47 @@ final class CrmPermission
     // quién entra sin pagar. Va aparte, como `members.adjust`.
     public const MEMBERS_EMPLOYEE = 'members.employee';
 
+    /**
+     * Ceder la membresía de un socio a otra persona: le quita la vigencia a
+     * uno y se la da a otro sin que entre dinero. No es `plans.transfer`
+     * («Trasladar socios» de un plan a otro). Ver
+     * docs/ops/TRANSFERENCIA-DE-MEMBRESIAS.md §3.
+     */
+    public const MEMBERS_TRANSFER_MEMBERSHIP = 'members.transfer_membership';
+
+    /** Archivar un plan (retirarlo de la venta sin borrar su historia) y reactivarlo. */
+    public const PLANS_ARCHIVE = 'plans.archive';
+
     // ── Pagos ───────────────────────────────────────────────────────────────
     //
     // Cobrar es una cosa y fechar el cobro hacia atrás es otra: lo primero lo
     // hace el mostrador todo el día, lo segundo mueve una vigencia al pasado.
     public const PAYMENTS_BACKDATE = 'payments.backdate';
+
+    /**
+     * Corregir el MEDIO o el IMPORTE de un cobro ya registrado. Anular es
+     * `payments.cancel`; esto es otra cosa: el cobro sigue en pie, pero cambia
+     * a qué medio del arqueo pertenece su dinero, o cuánto fue.
+     */
+    public const PAYMENTS_CORRECT = 'payments.correct';
+
+    /** Devolverle a un socio el dinero de un cobro: sale dinero de la caja. */
+    public const PAYMENTS_REFUND = 'payments.refund';
+
+    /** Devolver (total o parcialmente) una venta de cafetería. */
+    public const CASH_PRODUCTS_REFUND = 'cash.products.refund';
+
+    /**
+     * Llaves que mueven dinero hacia FUERA de la caja o reescriben cómo entró.
+     * Llegan nuevas y NO se reparten por defecto a ningún rol fuera de Super
+     * Admin: el propietario las activa por rol desde Configuración → Roles,
+     * donde queda quién las dio. Ver docs/ops/CORRECCIONES-ADMINISTRATIVAS.md §3.
+     */
+    public const SUPER_ADMIN_ONLY_BY_DEFAULT = [
+        self::PAYMENTS_CORRECT,
+        self::PAYMENTS_REFUND,
+        self::CASH_PRODUCTS_REFUND,
+    ];
 
     // ── Comisiones (piso de entrenadores) ───────────────────────────────────
     public const COMMISSIONS_VIEW = 'commissions.view';
@@ -242,6 +278,17 @@ final class CrmPermission
             // proveedor externo. Solo Super Admin por defecto; se concede a mano
             // desde Roles (contrato H4, decisión 2). Escenarios y veredicto, sí.
             'ultron.lab_run',
+            // Corregir medio o importe de un cobro y devolver dinero (de un
+            // cobro o de una venta): dinero que sale de la caja o que cambia de
+            // medio en un arqueo. Llegan nuevas y se reparten a mano.
+            ...self::SUPER_ADMIN_ONLY_BY_DEFAULT,
+            // Transferir membresías: mueve una vigencia pagada de una persona
+            // a otra. Solo Super Admin por defecto; el propietario la asigna
+            // por rol desde Configuración → Usuarios y roles.
+            self::MEMBERS_TRANSFER_MEMBERSHIP,
+            // Archivar y reactivar planes: retira o devuelve un plan a la venta.
+            // Solo Super Admin por defecto; el propietario decide a quién darla.
+            self::PLANS_ARCHIVE,
         ]));
 
         /*

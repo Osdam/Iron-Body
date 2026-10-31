@@ -17,6 +17,7 @@ use App\Services\Trainer\TrainerSessionService;
 use App\Services\Workforce\FaceReferenceService;
 use App\Services\Workforce\WorkforceEvents;
 use App\Support\Access\AdminActor;
+use App\Support\Access\CrmPermission;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -362,8 +363,13 @@ class TrainerAdminController extends Controller
 
     public function audit(Request $request, Trainer $trainer): JsonResponse
     {
+        // El metadata va en crudo: los eventos biométricos (distancias, PIN
+        // fallidos, parecidos) solo para quien puede ver la biometría
+        // (revisión de seguridad 2026-10-27, B-4).
+        $biometrics = CrmPermission::allows(AdminActor::from($request), 'biometrics.view');
         $logs = TrainerAuditLog::query()
             ->where('trainer_id', $trainer->getKey())
+            ->when(! $biometrics, fn ($q) => $q->where('event', 'not like', 'biometric.%'))
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->limit((int) min(200, max(1, $request->integer('limit', 50))))

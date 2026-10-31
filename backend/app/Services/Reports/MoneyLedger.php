@@ -5,6 +5,7 @@ namespace App\Services\Reports;
 use App\Enums\CashShiftType;
 use App\Http\Controllers\Api\PaymentController;
 use App\Models\Admin;
+use App\Models\CashRefund;
 use App\Models\Payment;
 use App\Models\ProductSale;
 use App\Models\Receivable;
@@ -123,7 +124,7 @@ final class MoneyLedger
             self::SOURCE_INSTALLMENT => $this->installments()
                 ->selectRaw('COALESCE(SUM(receivable_payments.amount), 0) as suma, COUNT(*) as n')->first(),
             self::SOURCE_PRODUCT => $this->productSales()
-                ->selectRaw('COALESCE(SUM(product_sales.total), 0) as suma, COUNT(*) as n')->first(),
+                ->selectRaw('COALESCE(SUM(product_sales.total - product_sales.refunded_total), 0) as suma, COUNT(*) as n')->first(),
         };
 
         return [(float) ($fila->suma ?? 0), (int) ($fila->n ?? 0)];
@@ -178,7 +179,7 @@ final class MoneyLedger
         if ($this->includes(self::SOURCE_PRODUCT)) {
             foreach ($this->productSales()
                 ->groupBy('product_sales.payment_method')
-                ->selectRaw('product_sales.payment_method as metodo, COALESCE(SUM(product_sales.total), 0) as suma')
+                ->selectRaw('product_sales.payment_method as metodo, COALESCE(SUM(product_sales.total - product_sales.refunded_total), 0) as suma')
                 ->get() as $fila) {
                 $suma($fila->metodo, (float) $fila->suma);
             }
@@ -247,7 +248,7 @@ final class MoneyLedger
         [$query, $fecha, $importe] = match ($source) {
             self::SOURCE_MEMBERSHIP => [$this->membershipPayments(), self::PAYMENT_DATE, 'payments.amount'],
             self::SOURCE_INSTALLMENT => [$this->installments(), 'receivable_payments.created_at', 'receivable_payments.amount'],
-            self::SOURCE_PRODUCT => [$this->productSales(), self::SALE_DATE, 'product_sales.total'],
+            self::SOURCE_PRODUCT => [$this->productSales(), self::SALE_DATE, self::SALE_NET],
         };
 
         // Siempre por día en la base, y las semanas o meses se pliegan después:
@@ -317,7 +318,7 @@ final class MoneyLedger
                 ->where('product_sales.channel', 'pos')
                 ->groupBy('product_sales.cashier_admin_id', 'product_sales.cashier_name')
                 ->selectRaw('product_sales.cashier_admin_id as id, product_sales.cashier_name as nombre,'
-                    .' COALESCE(SUM(product_sales.total), 0) as suma, COUNT(*) as n')
+                    .' COALESCE(SUM(product_sales.total - product_sales.refunded_total), 0) as suma, COUNT(*) as n')
                 ->get() as $f) {
                 $sumar($f->id ? (int) $f->id : null, $f->nombre, null, (float) $f->suma, (int) $f->n, self::SOURCE_PRODUCT);
             }
@@ -477,7 +478,7 @@ final class MoneyLedger
                     'source_label' => self::sourceLabel(self::SOURCE_PRODUCT),
                     'id' => $v->id,
                     'date' => ($v->paid_at ?? $v->created_at)?->toIso8601String(),
-                    'amount' => (float) $v->total,
+                    'amount' => round((float) $v->total - (float) ($v->refunded_total ?? 0), 2),
                     'method' => $v->payment_method,
                     'method_label' => PaymentMethodKind::normalize($v->payment_method)->label(),
                     'splits' => [],
@@ -534,11 +535,18 @@ final class MoneyLedger
             ->whereBetween('cancelled_at', [$desde, $hasta])
             ->selectRaw('COALESCE(SUM(total), 0) as suma, COUNT(*) as n')->first();
 
+        // Las devoluciones de dinero (cobros y ventas, totales o parciales) por
+        // la fecha en que SALIÓ el dinero.
+        $devoluciones = CashRefund::query()
+            ->whereBetween('created_at', [$desde, $hasta])
+            ->selectRaw('COALESCE(SUM(amount), 0) as suma, COUNT(*) as n')->first();
+
         return [
             'refunded' => ['amount' => round((float) $devueltos->suma, 2), 'count' => (int) $devueltos->n],
             'cancelled_payments' => ['amount' => round((float) $anulados->suma, 2), 'count' => (int) $anulados->n],
             'reversed_installments' => ['amount' => round((float) $abonosAnulados->suma, 2), 'count' => (int) $abonosAnulados->n],
             'cancelled_sales' => ['amount' => round((float) $ventasAnuladas->suma, 2), 'count' => (int) $ventasAnuladas->n],
+            'refunds' => ['amount' => round((float) $devoluciones->suma, 2), 'count' => (int) $devoluciones->n],
         ];
     }
 
@@ -574,6 +582,15 @@ final class MoneyLedger
     private const PAYMENT_DATE = 'COALESCE(payments.paid_at, payments.created_at)';
 
     private const SALE_DATE = 'COALESCE(product_sales.paid_at, product_sales.created_at)';
+
+    /**
+     * Lo que dejó una venta: su total menos lo devuelto de ella. Este informe
+     * ya descontaba lo devuelto EN LA FECHA de la operación —un cobro o una
+     * venta devueltos enteros quedan fuera por su estado—; una devolución
+     * parcial se descuenta igual, de la venta, en su fecha. Lo que salió y
+     * cuándo salió se enseña aparte, en reversals()['refunds'].
+     */
+    private const SALE_NET = '(product_sales.total - product_sales.refunded_total)';
 
     /** Cobros de membresía que son dinero de verdad, dentro del periodo. */
     public function membershipPayments(): Builder

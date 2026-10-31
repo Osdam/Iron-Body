@@ -123,8 +123,16 @@ class InvoiceDtoBuilder
         foreach ($sale->items as $item) {
             $product = $item->product;
 
+            // LO QUE QUEDÓ VENDIDO. Una devolución parcial deja la línea con
+            // menos unidades (y una devuelta entera, fuera): la factura se emite
+            // por lo que el cliente se quedó, no por lo que se cobró primero.
+            // Ver docs/ops/CORRECCIONES-ADMINISTRATIVAS.md §6.
+            if ((int) $item->refunded_quantity >= (int) $item->quantity && (int) $item->refunded_quantity > 0) {
+                continue;
+            }
+
             $quote = $item->hasFinancialSnapshot()
-                ? $this->quoteFromItemSnapshot($item)
+                ? ((int) $item->refunded_quantity > 0 ? $this->netQuoteFromItemSnapshot($item) : $this->quoteFromItemSnapshot($item))
                 : $this->legacyQuoteForItem($item, $sale);
 
             $lines[] = $this->line(
@@ -174,6 +182,41 @@ class InvoiceDtoBuilder
             'currency' => 'COP',
             'quantity' => max(1, (int) $item->quantity),
         ], max(1, (int) $item->quantity));
+    }
+
+    /**
+     * La línea NETA tras una devolución parcial, desde su propio snapshot.
+     *
+     * El bruto manda —es dinero—: el que queda es el congelado menos lo
+     * devuelto de esa línea (`refunded_amount`, que ya absorbe el redondeo). El
+     * impuesto y el descuento se reparten en proporción a las unidades que
+     * quedan, y la base se deriva para que base + impuesto − descuento siga
+     * cuadrando al centavo con el bruto.
+     */
+    private function netQuoteFromItemSnapshot(ProductSaleItem $item): PriceQuote
+    {
+        $qty = max(1, (int) $item->quantity);
+        $devueltas = min($qty, (int) $item->refunded_quantity);
+        $quedan = $qty - $devueltas;
+
+        $proporcion = fn (Money $m) => Money::fromCents($m->cents() - intdiv($m->cents() * $devueltas, $qty));
+        $bruto = Money::fromAmount($item->gross_amount)->minus(Money::fromAmount($item->refunded_amount ?? 0));
+        $impuesto = $proporcion(Money::fromAmount($item->tax_amount));
+        $descuento = $proporcion(Money::fromAmount($this->itemDiscount($item)));
+        $base = $bruto->minus($impuesto)->plus($descuento);
+
+        return $this->pricing->fromSnapshot([
+            'base_amount' => $base->toDatabase(),
+            'tax_amount' => $impuesto->toDatabase(),
+            'gross_amount' => $bruto->toDatabase(),
+            'discount_amount' => $descuento->toDatabase(),
+            'tax_rate_id' => $item->tax_rate_id,
+            'tax_rate' => $item->tax_rate,
+            'pricing_mode' => $item->pricing_mode,
+            'pricing_rules_version' => $item->pricing_rules_version,
+            'currency' => 'COP',
+            'quantity' => $quedan,
+        ], $quedan);
     }
 
     /**

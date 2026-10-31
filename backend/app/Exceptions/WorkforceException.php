@@ -115,6 +115,68 @@ class WorkforceException extends RuntimeException
     }
 
     /**
+     * El rostro coincide pero no basta (contrato §10.1): hace falta el PIN.
+     * Código `face_no_match` a propósito: la app publicada lo entiende y en
+     * jornada ofrece el código de administrador; la nueva lee `second_factor`.
+     */
+    public static function faceSecondFactorRequired(string $pinStatus, ?\DateTimeInterface $lockedUntil): self
+    {
+        $status = $pinStatus === 'revoked' ? 'not_set' : $pinStatus;
+
+        return new self(
+            match ($status) {
+                'active' => 'Tu rostro no basta por sí solo para confirmar quién eres: confirma con tu PIN.',
+                'locked' => 'Tu rostro no basta por sí solo y tu PIN está bloqueado por demasiados intentos. Espera unos minutos.',
+                default => 'Tu rostro no basta por sí solo para confirmar quién eres y aún no tienes PIN. Pide a un administrador que autorice tu PIN.',
+            },
+            'face_no_match',
+            422,
+            ['second_factor' => [
+                'required' => true,
+                'type' => 'pin',
+                'status' => $status,
+                'locked_until' => $lockedUntil?->format(DATE_ATOM),
+            ]],
+        );
+    }
+
+    /** Sin los intentos que quedan: le dirían a quien prueba cuándo parar (revisión 2026-10-27, M-1). */
+    public static function pinInvalid(): self
+    {
+        return new self('El PIN no es correcto.', 'pin_invalid', 422);
+    }
+
+    public static function pinLocked(\DateTimeInterface $until): self
+    {
+        return new self('Demasiados intentos con el PIN. Espera unos minutos.', 'pin_locked', 429, ['second_factor' => ['locked_until' => $until->format(DATE_ATOM)]]);
+    }
+
+    public static function pinNotSet(): self
+    {
+        return new self('Aún no tienes PIN. Pide a un administrador que autorice tu PIN y créalo en la tablet.', 'pin_not_set', 409);
+    }
+
+    public static function pinWeak(): self
+    {
+        return new self('Ese PIN es fácil de adivinar. Evita dígitos repetidos o seguidos (111111, 123456), patrones (121212, 112233, 123321), recorridos del teclado (147258), fechas y números de tu documento.', 'pin_weak', 422);
+    }
+
+    public static function pinNotActive(): self
+    {
+        return new self('Esta persona no tiene un PIN activo.', 'pin_not_active', 409);
+    }
+
+    public static function lookalikeNotRegistered(): self
+    {
+        return new self('Estas dos personas no tienen un parecido biométrico registrado.', 'lookalike_not_registered', 409);
+    }
+
+    public static function lookalikeOtherNotEnrolled(): self
+    {
+        return new self('La otra persona no tiene un rostro registrado y validado: no hay con quién hacer la excepción.', 'lookalike_other_not_enrolled', 409);
+    }
+
+    /**
      * El mensaje dice lo que pasa de verdad: antes decía «no tiene un rostro
      * registrado» también con la plantilla en renovación, y eso llevaba a
      * emitir códigos de enrolamiento para iniciar una clase.

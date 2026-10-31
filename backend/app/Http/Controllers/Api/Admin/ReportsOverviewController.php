@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Controller;
+use App\Models\CashRefund;
 use App\Models\Payment;
 use App\Services\Caja\CashReceipts;
 use App\Models\Plan;
@@ -79,9 +80,27 @@ class ReportsOverviewController extends Controller
     }
 
     /** Ingresos totales, del período y pagos pendientes. */
+    /**
+     * Estados de un cobro que son dinero que ENTRÓ (base de caja): los pagados
+     * y los devueltos, que también entraron. Lo devuelto se resta aparte, en la
+     * fecha en que salió (`cash_refunds`). Ver CORRECCIONES-ADMINISTRATIVAS §6.
+     *
+     * @return list<string>
+     */
+    private function moneyInStatuses(): array
+    {
+        return [...PaymentController::PAID_STATUSES, 'refunded', 'reembolsado', 'reembolsada'];
+    }
+
+    /** Devoluciones de COBROS (no de ventas: este panel no cuenta cafetería). */
+    private function paymentRefunds()
+    {
+        return CashRefund::query()->where('refundable_type', Payment::class);
+    }
+
     private function paymentKpis(CarbonImmutable $from, CarbonImmutable $to): array
     {
-        $paid = PaymentController::PAID_STATUSES;
+        $paid = $this->moneyInStatuses();
         $pending = PaymentController::PENDING_STATUSES;
         $date = $this->paymentDateExpr();
 
@@ -106,9 +125,13 @@ class ReportsOverviewController extends Controller
             ->whereBetween('receivable_payments.created_at', [$from, $to])
             ->sum('receivable_payments.amount');
 
+        // Y lo que SALIÓ por devoluciones, en la fecha en que salió.
+        $devueltoHistorico = (float) $this->paymentRefunds()->sum('amount');
+        $devueltoPeriodo = (float) $this->paymentRefunds()->whereBetween('created_at', [$from, $to])->sum('amount');
+
         return [
-            'total_revenue' => round((float) ($row->total_revenue ?? 0) + $historico, 2),
-            'period_revenue' => round((float) ($row->period_revenue ?? 0) + $periodo, 2),
+            'total_revenue' => round((float) ($row->total_revenue ?? 0) + $historico - $devueltoHistorico, 2),
+            'period_revenue' => round((float) ($row->period_revenue ?? 0) + $periodo - $devueltoPeriodo, 2),
             'pending_payments' => (int) ($row->pending_payments ?? 0),
         ];
     }
@@ -200,7 +223,7 @@ class ReportsOverviewController extends Controller
     {
         $end = CarbonImmutable::now()->endOfDay();
         $start = $end->subDays(self::SERIES_DAYS - 1)->startOfDay();
-        $paid = PaymentController::PAID_STATUSES;
+        $paid = $this->moneyInStatuses();
         $date = $this->paymentDateExpr();
 
         $recibos = app(CashReceipts::class);
@@ -221,11 +244,18 @@ class ReportsOverviewController extends Controller
             ->groupByRaw('DATE(receivable_payments.created_at)')
             ->pluck('revenue', 'day');
 
+        // Lo devuelto, por el día en que salió.
+        $devoluciones = $this->paymentRefunds()
+            ->whereBetween('created_at', [$start, $end])
+            ->selectRaw('DATE(created_at) as day, COALESCE(SUM(amount), 0) as revenue')
+            ->groupByRaw('DATE(created_at)')
+            ->pluck('revenue', 'day');
+
         $series = [];
         for ($day = $start; $day->lessThanOrEqualTo($end); $day = $day->addDay()) {
             $key = $day->toDateString();
             $series[] = ['date' => $key, 'revenue' => (int) round(
-                (float) ($rows[$key] ?? 0) + (float) ($abonos[$key] ?? 0),
+                (float) ($rows[$key] ?? 0) + (float) ($abonos[$key] ?? 0) - (float) ($devoluciones[$key] ?? 0),
             )];
         }
 

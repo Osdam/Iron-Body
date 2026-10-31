@@ -45,9 +45,19 @@ class CashShiftTotalsService
         // exactamente como estaban.
         $porMedio = $this->mergeTotals($porMedio, $this->receivablePaymentsByMethod($shift));
 
+        // LO QUE SALIÓ: devoluciones pagadas desde ESTE turno. El cobro o la
+        // venta devueltos siguen contando en el turno en que entraron —ese
+        // dinero entró de verdad—, y la salida se resta aquí, del medio por el
+        // que salió. Restarla en el turno original reescribiría un arqueo que
+        // pudo cerrarse y firmarse hace días.
+        $devoluciones = $this->refundsByMethod($shift);
+
         $totales = [];
         foreach (PaymentMethodKind::cases() as $medio) {
-            $totales[$medio->value] = $porMedio['totals'][$medio->value] ?? '0.00';
+            $totales[$medio->value] = $this->sumStrings([
+                $porMedio['totals'][$medio->value] ?? '0.00',
+                '-'.($devoluciones['totals'][$medio->value] ?? '0.00'),
+            ]);
         }
 
         $bruto = $this->sumStrings(array_values($totales));
@@ -66,7 +76,37 @@ class CashShiftTotalsService
                 $totales[PaymentMethodKind::CASH->value],
             ]),
             'operations_count' => $porMedio['count'],
+            // Informativos: ya están restados de los totales por medio.
+            'refunds_total' => $this->sumStrings(array_values($devoluciones['totals'])),
+            'refunds_count' => $devoluciones['count'],
         ];
+    }
+
+    /**
+     * Estados de un cobro o una venta que SÍ son dinero que entró en su turno.
+     *
+     * `refunded` cuenta: el dinero entró en ese turno y sale por una devolución
+     * (`cash_refunds`) en el turno en que se devuelve. Sacarlo del turno
+     * original al devolverlo cambiaría un arqueo pasado.
+     */
+    public const GYM_COUNTED_STATUSES = ['paid', 'refunded'];
+
+    public const PRODUCT_COUNTED_STATUSES = ['paid', 'delivered', 'refunded'];
+
+    /**
+     * Devoluciones pagadas desde este turno, por medio.
+     *
+     * @return array{totals: array<string,string>, count: int}
+     */
+    private function refundsByMethod(CashShift $shift): array
+    {
+        $filas = DB::table('cash_refunds')
+            ->where('cash_shift_id', $shift->id)
+            ->groupBy('method')
+            ->select('method', DB::raw('SUM(amount) AS suma'), DB::raw('COUNT(*) AS n'))
+            ->get();
+
+        return $this->fold($filas, 'method');
     }
 
     /**
@@ -85,7 +125,7 @@ class CashShiftTotalsService
         // el cajón. Es lo mismo que ya se hacía con los cobros del gimnasio.
         $filas = DB::table('product_sales')
             ->where('cash_shift_id', $shift->id)
-            ->whereIn('status', ['paid', 'delivered'])
+            ->whereIn('status', self::PRODUCT_COUNTED_STATUSES)
             ->whereRaw('(payment_method IS NULL OR LOWER(payment_method) <> ?)', [PaymentSplits::MIXED])
             ->groupBy('payment_method')
             ->select('payment_method', DB::raw('SUM(total) AS suma'), DB::raw('COUNT(*) AS n'))
@@ -100,7 +140,7 @@ class CashShiftTotalsService
         // que ya usaba la caja del gimnasio.
         $porMedio['count'] = (int) DB::table('product_sales')
             ->where('cash_shift_id', $shift->id)
-            ->whereIn('status', ['paid', 'delivered'])
+            ->whereIn('status', self::PRODUCT_COUNTED_STATUSES)
             ->count();
 
         return $porMedio;
@@ -126,7 +166,7 @@ class CashShiftTotalsService
         // 1) Cobros de un solo medio: como siempre.
         $simples = DB::table('payments')
             ->where('cash_shift_id', $shift->id)
-            ->where('status', 'paid')
+            ->whereIn('status', self::GYM_COUNTED_STATUSES)
             // El asiento de devengo de un plan a plazos nunca lleva turno, así
             // que hoy ya quedaba fuera por construcción. Se dice en voz alta
             // porque depender de eso es depender de un accidente: el día que
@@ -145,7 +185,7 @@ class CashShiftTotalsService
         $partes = DB::table('payment_splits')
             ->join('payments', 'payments.id', '=', 'payment_splits.payment_id')
             ->where('payments.cash_shift_id', $shift->id)
-            ->where('payments.status', 'paid')
+            ->whereIn('payments.status', self::GYM_COUNTED_STATUSES)
             ->whereRaw('(payments.method IS NULL OR LOWER(payments.method) <> ?)', [CashReceipts::ACCRUAL_METHOD])
             ->groupBy('payment_splits.method')
             ->select(
@@ -171,7 +211,7 @@ class CashShiftTotalsService
     {
         return DB::table('payments')
             ->where('cash_shift_id', $shift->id)
-            ->where('status', 'paid')
+            ->whereIn('status', self::GYM_COUNTED_STATUSES)
             ->whereRaw('(method IS NULL OR LOWER(method) <> ?)', [CashReceipts::ACCRUAL_METHOD])
             ->count();
     }
@@ -207,7 +247,7 @@ class CashShiftTotalsService
             // LOS MISMOS ESTADOS que la consulta de arriba. Si aquí entrara un
             // estado distinto, una venta mixta contaría de más o de menos y el
             // descuadre sería de los que no se encuentran mirando el cajón.
-            ->whereIn('product_sales.status', ['paid', 'delivered'])
+            ->whereIn('product_sales.status', self::PRODUCT_COUNTED_STATUSES)
             ->groupBy('product_sale_splits.method')
             ->select(
                 'product_sale_splits.method',
@@ -300,6 +340,12 @@ class CashShiftTotalsService
     {
         $money = static fn (string $v): string => '$'.number_format((float) $v, 0, ',', '.');
 
+        // Las devoluciones solo se mencionan si las hubo: el texto de un cierre
+        // sin devoluciones queda exactamente como siempre.
+        $devoluciones = (float) ($t['refunds_total'] ?? 0) > 0
+            ? sprintf(' Devoluciones pagadas desde este turno: %s (ya restadas).', $money((string) $t['refunds_total']))
+            : '';
+
         return sprintf(
             'Cierre automático de caja %s. Operaciones: %d. Total generado: %s. '.
             'Efectivo esperado: %s. Transferencias: %s. Tarjeta: %s. Wompi: %s. Otros: %s.',
@@ -311,6 +357,6 @@ class CashShiftTotalsService
             $money($t['card_total']),
             $money($t['wompi_total']),
             $money($t['other_total']),
-        );
+        ).$devoluciones;
     }
 }

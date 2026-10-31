@@ -5,6 +5,7 @@ namespace App\Services\Billing;
 use App\Enums\InvoiceLogAction;
 use App\Enums\InvoiceStatus;
 use App\Enums\InvoiceType;
+use App\Exceptions\CorrectionException;
 use App\Exceptions\ManualEmissionRejectedException;
 use App\Jobs\EmitCreditNoteJob;
 use App\Jobs\EmitElectronicInvoiceJob;
@@ -63,6 +64,71 @@ class InvoicingService
             $sale,
             $this->resolver->resolveForSale($sale)
         ), $force);
+    }
+
+    /**
+     * Rehace la factura AÚN NO EMITIDA de una venta tras una devolución parcial,
+     * para que salga por lo que el cliente se quedó (cantidades netas).
+     *
+     * Solo toca una solicitud propia de la venta en `pending`, `error` o
+     * `rejected` sin CUFE: lo que llegó a la DIAN no se reescribe (para eso está
+     * la nota crédito) y lo que está en proceso lo bloquea la devolución antes.
+     * Se reconstruyen las líneas, los importes y los medios de pago con el mismo
+     * constructor que la creó; el adquiriente, la observación y el resto del
+     * payload congelado se conservan tal cual (una decisión expresa de
+     * consumidor final no se pierde). Se llama DENTRO de la transacción de la
+     * devolución: si la devolución se deshace, la factura también.
+     *
+     * No hace nada si la venta no tiene factura viva. Si la tiene y no se puede
+     * rehacer (con CUFE, o en un estado que no es pendiente/error/rechazada),
+     * lanza 409 `invoice_not_recalculable` y la devolución entera se deshace:
+     * una factura que dijera el total original después de devolver una parte
+     * sería peor.
+     */
+    public function refreshPendingSaleInvoice(ProductSale $sale): ?ElectronicInvoice
+    {
+        $invoice = ElectronicInvoice::query()
+            ->where('source_type', $sale->getMorphClass())
+            ->where('source_id', $sale->getKey())
+            ->where('type', InvoiceType::INVOICE->value)
+            ->where('status', '!=', InvoiceStatus::CANCELLED->value)
+            ->orderByDesc('id')
+            ->lockForUpdate()
+            ->first();
+
+        // Sin factura viva no hay nada que rehacer.
+        if ($invoice === null) {
+            return null;
+        }
+
+        // Una factura que llegó a la DIAN (con CUFE) o en cualquier estado que
+        // no sea rehacible NO se deja atrás: la devolución parcial se deshace
+        // entera (409) en vez de seguir con una factura por el total original.
+        $reescribible = [InvoiceStatus::PENDING, InvoiceStatus::ERROR, InvoiceStatus::REJECTED];
+        if (! in_array($invoice->status, $reescribible, true) || filled($invoice->cufe)) {
+            throw CorrectionException::invoiceNotRecalculable($invoice->id, $invoice->status->value);
+        }
+
+        $venta = $sale->fresh(['items.product.taxRate']);
+        $built = $this->builder->forSale($venta, $this->resolver->resolveForSale($venta));
+
+        $payload = $invoice->payload_snapshot ?: $built['payload'];
+        $payload['items'] = $built['payload']['items'];
+        $payload['payment_details'] = $built['payload']['payment_details'];
+
+        $invoice->update([
+            'subtotal' => $built['snapshot']['subtotal'],
+            'discount' => $built['snapshot']['discount'],
+            'tax_total' => $built['snapshot']['tax_total'],
+            'total' => $built['snapshot']['total'],
+            'payload_snapshot' => $payload,
+            'line_items_snapshot' => $built['line_items'] ?? null,
+            'source_amount_snapshot' => self::sourceGrossAmount($venta),
+        ]);
+        $this->recordLog($invoice, InvoiceLogAction::ENQUEUE, 'ok',
+            'Recalculada por devolución parcial: se emitirá por '.$built['snapshot']['total'].' (cantidades netas).');
+
+        return $invoice;
     }
 
     /**

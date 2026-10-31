@@ -11,6 +11,7 @@ use App\Models\Payment;
 use App\Models\Plan;
 use App\Models\User;
 use App\Services\Membership\MembershipFreeze;
+use App\Services\Membership\MembershipTransfers;
 use App\Services\RealtimeEvents;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -208,9 +209,9 @@ class PlanUpgrades
     }
 
     /** @return array{end: string, previous_end: string, days: int, upgrade: bool}|null */
-    public function revert(Payment $payment): ?array
+    public function revert(Payment $payment, bool $simulacion = false): ?array
     {
-        return DB::transaction(function () use ($payment): ?array {
+        return DB::transaction(function () use ($payment, $simulacion): ?array {
             $user = User::whereKey($payment->user_id)->lockForUpdate()->first();
             $payment = Payment::whereKey($payment->id)->lockForUpdate()->firstOrFail();
             if (! $user || ! $payment->period_end || ! $user->membershipEndDate) {
@@ -227,8 +228,11 @@ class PlanUpgrades
                 ->where('id', '>', $payment->id)->exists();
             $cierre = $posteriores->last()?->period_end?->toDateString() ?? $fin->toDateString();
             if ($otraMejora || $cierre !== $finActual->toDateString()) {
-                Log::warning('Anulación de mejora: otros cambios impiden restaurar el periodo con seguridad',
-                    ['payment_id' => $payment->id, 'user_id' => $user->id]);
+                // Una vista previa no registra avisos de lo que no ocurrió.
+                if (! $simulacion) {
+                    Log::warning('Anulación de mejora: otros cambios impiden restaurar el periodo con seguridad',
+                        ['payment_id' => $payment->id, 'user_id' => $user->id]);
+                }
 
                 throw ValidationException::withMessages(['status' => [
                     'La membresía tiene cambios posteriores. Revisa sus periodos antes de anular esta mejora.',
@@ -268,6 +272,18 @@ class PlanUpgrades
      */
     private function blocker(User $user, ?Plan $actual, Plan $nuevo, ?CarbonImmutable $fin): ?string
     {
+        // TRASPASO DE MEMBRESÍA VIVO (docs/ops/TRANSFERENCIA-DE-MEMBRESIAS.md
+        // §8.3). El beneficiario no tiene cobro: su periodo empezaría hoy y la
+        // mejora le sumaría la duración entera del plan nuevo sobre días que
+        // pagó otra persona. Hasta que haya política, ni la titular ni el
+        // beneficiario mejoran mientras el traspaso siga en pie.
+        if ($traspaso = MembershipTransfers::involvedInLive((int) $user->id)) {
+            return (int) $traspaso->beneficiary_user_id === (int) $user->id
+                ? 'Su membresía la recibió por un traspaso (#'.$traspaso->id.'): una membresía transferida no se mejora. '
+                    .'Cóbrale el plan nuevo cuando venza, o revierte el traspaso.'
+                : 'Cedió su membresía en un traspaso (#'.$traspaso->id.'): no tiene membresía que mejorar.';
+        }
+
         if (! $actual) {
             return 'No tiene un plan vigente que mejorar. Véndele el plan nuevo normalmente.';
         }
@@ -282,6 +298,10 @@ class PlanUpgrades
 
         if ($nuevo->id === $actual->id) {
             return 'Ya tiene ese plan.';
+        }
+
+        if ($nuevo->isArchived()) {
+            return 'Ese plan está archivado: ya no se vende.';
         }
 
         if (! $nuevo->active) {

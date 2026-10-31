@@ -82,7 +82,16 @@ class CancelledPaymentReturnsMembershipDaysTest extends TestCase
 
     private function anular(Payment $pago, string $estado = 'cancelled'): void
     {
-        $this->putJson("/api/payments/{$pago->id}", ['status' => $estado], $this->actingAsAdmin($this->recepcion))
+        // Devolver ya no es poner `refunded` a mano: tiene su endpoint, que
+        // además registra la salida de caja (docs/ops/CORRECCIONES-ADMINISTRATIVAS.md).
+        if ($estado === 'refunded') {
+            $this->postJson("/api/payments/{$pago->id}/refund", ['reason' => 'El socio no pudo empezar'], $this->actingAsAdmin($this->recepcion))
+                ->assertStatus(201);
+
+            return;
+        }
+
+        $this->putJson("/api/payments/{$pago->id}", ['status' => $estado, 'reason' => 'Corrección administrativa de prueba'], $this->actingAsAdmin($this->recepcion))
             ->assertOk();
     }
 

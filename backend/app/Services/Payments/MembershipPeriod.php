@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\Membership\MembershipFreeze;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -134,6 +135,37 @@ class MembershipPeriod
             return app(PlanUpgrades::class)->apply($payment);
         }
 
+        // UNA SOLA VEZ, BAJO BLOQUEO. Reconfirmar un cobro con doble clic, o la
+        // misma activación desde dos sitios, leían los dos «sin periodo» y
+        // encadenaban el plan dos veces: un mes pagado, dos de membresía. El
+        // periodo congelado en el pago es la marca de que ya se aplicó —revert()
+        // lo vacía al devolverlo—, y se lee con socio y cobro bloqueados, en el
+        // mismo orden que el resto de correcciones (socio → cobro).
+        return DB::transaction(function () use ($payment): ?array {
+            User::whereKey($payment->user_id)->lockForUpdate()->first();
+            $fresco = Payment::whereKey($payment->getKey())->lockForUpdate()->first() ?? $payment;
+
+            if ($fresco->period_start && $fresco->period_end) {
+                $payment->setRawAttributes($fresco->getAttributes(), true);
+
+                return [
+                    'start' => $fresco->period_start->format('Y-m-d'),
+                    'end' => $fresco->period_end->format('Y-m-d'),
+                    'chained' => false,
+                    'already' => true,
+                ];
+            }
+
+            $resultado = $this->applyLocked($fresco);
+            $payment->setRawAttributes($fresco->getAttributes(), true);
+
+            return $resultado;
+        }, 3);
+    }
+
+    /** @return array{start: string, end: string, chained: bool}|null */
+    private function applyLocked(Payment $payment): ?array
+    {
         /** @var User|null $user */
         $user = User::find($payment->user_id);
 
@@ -228,11 +260,28 @@ class MembershipPeriod
      *
      * @return array{end: string, previous_end: string, days: int}|null  null si no hubo nada que devolver
      */
-    public function revert(Payment $payment): ?array
+    public function revert(Payment $payment, bool $simulacion = false): ?array
     {
         if ($payment->upgraded_from_plan_id) {
-            return app(PlanUpgrades::class)->revert($payment);
+            return app(PlanUpgrades::class)->revert($payment, $simulacion);
         }
+
+        // Bajo bloqueo y releyendo el periodo: dos anulaciones a la vez del
+        // mismo cobro lo leían las dos con periodo y devolvían los días dos
+        // veces. La primera lo vacía; la segunda ya no encuentra nada.
+        return DB::transaction(function () use ($payment, $simulacion): ?array {
+            User::whereKey($payment->user_id)->lockForUpdate()->first();
+            $fresco = Payment::whereKey($payment->getKey())->lockForUpdate()->first() ?? $payment;
+            $resultado = $this->revertLocked($fresco, $simulacion);
+            $payment->setRawAttributes($fresco->getAttributes(), true);
+
+            return $resultado;
+        }, 3);
+    }
+
+    /** @return array{end: string, previous_end: string, days: int}|null */
+    private function revertLocked(Payment $payment, bool $simulacion = false): ?array
+    {
         if (! $payment->plan_id || ! $payment->period_start || ! $payment->period_end) {
             return null; // nunca activó membresía (o es anterior al periodo congelado)
         }
@@ -262,13 +311,17 @@ class MembershipPeriod
             $fin
         );
         if (! $cierre->equalTo($finActual)) {
-            Log::warning('Anulación de pago: la cadena de periodos no explica el vencimiento vigente; se deja intacto', [
-                'payment_id' => $payment->id,
-                'user_id' => $user->id,
-                'period' => [$inicio->toDateString(), $fin->toDateString()],
-                'membership_end_date' => $finActual->toDateString(),
-                'chain_end' => $cierre->toDateString(),
-            ]);
+            // En una vista previa (`$simulacion`) no se registra: la anulación
+            // no ha ocurrido y el aviso mandaría a revisar algo que no pasó.
+            if (! $simulacion) {
+                Log::warning('Anulación de pago: la cadena de periodos no explica el vencimiento vigente; se deja intacto', [
+                    'payment_id' => $payment->id,
+                    'user_id' => $user->id,
+                    'period' => [$inicio->toDateString(), $fin->toDateString()],
+                    'membership_end_date' => $finActual->toDateString(),
+                    'chain_end' => $cierre->toDateString(),
+                ]);
+            }
 
             return null;
         }

@@ -50,6 +50,50 @@ class IntegralPlanException extends RuntimeException
     }
 
     /**
+     * Ya hay una generación en curso para este socio (A1). Reintentable: en
+     * cuanto termine la otra, ésta puede ir. HTTP 409.
+     */
+    public static function busy(): self
+    {
+        return new self(
+            'Iron IA ya está preparando un plan para este socio. Espera a que termine y vuelve a intentarlo.',
+            'generation_in_progress',
+            retryable: true,
+        );
+    }
+
+    /**
+     * El entrenador superó su tope de generaciones por ventana (A1). No es
+     * reintentable YA: reintentar en seguida vuelve a chocar. HTTP 429.
+     */
+    public static function trainerRateLimited(int $seconds): self
+    {
+        $minutos = max(1, (int) ceil($seconds / 60));
+
+        return new self(
+            "Generaste muchos planes seguidos con Iron IA. Inténtalo de nuevo en {$minutos} min.",
+            'trainer_rate_limited',
+        );
+    }
+
+    /**
+     * La generación no cupo en su plazo (potencias 2..5). La app corta a los
+     * 20 s; un plan que llega después nadie lo ve, así que se falla antes y
+     * sin guardar nada. Reintentable: la siguiente puede caber.
+     *
+     * El mensaje nombra a Iron IA a propósito: la app clasifica el error por
+     * el texto y así lo enseña como fallo de la IA, con su «reintentar».
+     */
+    public static function deadline(): self
+    {
+        return new self(
+            'Iron IA no alcanzó a preparar el plan a tiempo. Vuelve a intentarlo.',
+            'ai_deadline',
+            retryable: true,
+        );
+    }
+
+    /**
      * Lo que llegó no cumple el contrato. Es reintentable porque el modelo
      * puede acertar a la siguiente, pero NO se guarda nada de lo que mandó.
      */

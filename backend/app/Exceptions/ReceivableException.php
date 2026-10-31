@@ -71,6 +71,29 @@ class ReceivableException extends RuntimeException
         );
     }
 
+    /**
+     * La deuda es de un plan cuyo cobro no está pagado (anulado, devuelto…): el socio ya no tiene ese
+     * plan, y reabrirla le cobraría —y, vencida, lo retendría— por algo que no
+     * tiene.
+     */
+    public static function saleCancelled(int $paymentId): self
+    {
+        return new self(
+            "Esta deuda es de un plan cuyo cobro #{$paymentId} no está pagado: reabrirla haría cobrar un plan que el socio ya no tiene. "
+            .'Si la venta sigue en pie, primero hay que reconfirmar ese cobro.',
+            'receivable_source_cancelled',
+        );
+    }
+
+    /** La deuda es de una venta de cafetería que se anuló o se devolvió. */
+    public static function creditSaleCancelled(string $code): self
+    {
+        return new self(
+            "Esta deuda es de la venta {$code}, que está anulada o devuelta: reabrirla haría cobrar algo que la venta ya no reconoce.",
+            'receivable_source_cancelled',
+        );
+    }
+
     public static function dueDateReasonRequired(): self
     {
         return new self(

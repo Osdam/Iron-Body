@@ -706,6 +706,13 @@ class ManualInvoiceBundleService
             return 'la venta está anulada';
         }
 
+        // Una venta devuelta en parte se factura SOLA, por lo que quedó: su
+        // factura propia se recalcula con cantidades netas al devolver, y un
+        // lote no puede seguir esos cambios (CORRECCIONES-ADMINISTRATIVAS §6).
+        if ($type === InvoiceBundleItem::ORIGIN_PRODUCT_SALE && (float) ($model->refunded_total ?? 0) > 0) {
+            return 'tiene devoluciones; se factura sola, por lo que quedó';
+        }
+
         $estado = $model->payment_status ?? $model->status ?? null;
         $estado = $estado instanceof \BackedEnum ? (string) $estado->value : (string) $estado;
 

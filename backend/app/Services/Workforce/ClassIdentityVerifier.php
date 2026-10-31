@@ -46,7 +46,7 @@ class ClassIdentityVerifier
     ) {}
 
     /**
-     * @param  array{embedding?:mixed, fallback_code?:?string, face_verified?:?bool}  $data
+     * @param  array{embedding?:mixed, pin?:?string, fallback_code?:?string, face_verified?:?bool}  $data
      * @return array{method:string, face_verified:bool, device_id:?int, declared_device:?string}
      */
     public function verify(Request $request, Trainer $trainer, array $data): array
@@ -64,9 +64,9 @@ class ClassIdentityVerifier
             // Contador de esta vía (exige la sesión del propio entrenador),
             // separado del kiosko y del login público.
             $key = 'class:'.($identity ? 'identity:'.$identity->getKey() : 'trainer:'.$trainer->getKey());
-            $this->faces->verify($ref, $data['embedding'], $key, $request);
+            $match = $this->faces->verify($ref, $data['embedding'], $key, $request, $data['pin'] ?? null);
 
-            return ['method' => self::METHOD_FACE, 'face_verified' => true, 'device_id' => $device?->getKey(), 'declared_device' => $declared];
+            return ['method' => $match->method(), 'face_verified' => true, 'device_id' => $device?->getKey(), 'declared_device' => $declared];
         }
 
         if (! empty($data['fallback_code'])) {

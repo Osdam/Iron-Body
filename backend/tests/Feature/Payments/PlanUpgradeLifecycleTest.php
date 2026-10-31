@@ -15,6 +15,7 @@ use App\Services\Payments\MembershipPeriod;
 use Carbon\Carbon;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -62,7 +63,8 @@ class PlanUpgradeLifecycleTest extends TestCase
 
     private function update(array $data)
     {
-        return $this->patchJson("/api/payments/{$this->upgrade->id}", $data, $this->headers);
+        // Anular o reconfirmar exige motivo (docs/ops/CORRECCIONES-ADMINISTRATIVAS.md §2).
+        return $this->patchJson("/api/payments/{$this->upgrade->id}", $data + ['reason' => 'Corrección administrativa de prueba'], $this->headers);
     }
 
     public function test_repetir_la_anulacion_no_publica_otra_mutacion(): void
@@ -107,7 +109,7 @@ class PlanUpgradeLifecycleTest extends TestCase
     public function test_no_se_anula_el_mensual_que_sostiene_una_mejora_pagada(): void
     {
         $source = Payment::findOrFail($this->upgrade->upgrade_snapshot['source_payment_id']);
-        $this->patchJson("/api/payments/{$source->id}", ['status' => 'cancelled'], $this->headers)
+        $this->patchJson("/api/payments/{$source->id}", ['status' => 'cancelled', 'reason' => 'Corrección administrativa de prueba'], $this->headers)
             ->assertUnprocessable()->assertJsonValidationErrors('status');
         $this->assertSame('paid', $source->refresh()->status);
         $this->assertSame('paid', $this->upgrade->refresh()->status);
@@ -155,7 +157,12 @@ class PlanUpgradeLifecycleTest extends TestCase
     public function test_reconfirmar_no_cobra_si_el_plan_destino_fue_eliminado(): void
     {
         $this->update(['status' => 'cancelled'])->assertOk();
-        Plan::findOrFail($this->upgrade->plan_id)->delete();
+        // Estado HEREDADO de antes de la llave RESTRICT (2026_10_31_100001): lo
+        // que hacía ON DELETE SET NULL. Hoy PostgreSQL ya no deja borrar un
+        // plan con cobros; los que se borraron antes siguen así en la base.
+        $destino = Plan::findOrFail($this->upgrade->plan_id);
+        DB::table('payments')->where('plan_id', $destino->id)->update(['plan_id' => null]);
+        $destino->delete();
         $this->update(['status' => 'paid'])->assertUnprocessable()->assertJsonValidationErrors('status');
         $this->assertSame('cancelled', $this->upgrade->refresh()->status);
         $this->assertSame('Mensual', $this->user->refresh()->plan);
@@ -209,7 +216,7 @@ class PlanUpgradeLifecycleTest extends TestCase
         $secondId = $this->postJson("/api/users/{$this->user->id}/plan-upgrade", [
             'plan_id' => $semester->id, 'method' => 'cash',
         ], $this->headers)->assertCreated()->json('payment_id');
-        $this->patchJson("/api/payments/{$secondId}", ['status' => 'cancelled'], $this->headers)->assertOk();
+        $this->patchJson("/api/payments/{$secondId}", ['status' => 'cancelled', 'reason' => 'Corrección administrativa de prueba'], $this->headers)->assertOk();
         $this->patchJson("/api/payments/{$secondId}", ['status' => 'paid'], $this->headers)->assertOk();
 
         $this->assertSame('paid', $this->upgrade->refresh()->status);

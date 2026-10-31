@@ -2,6 +2,7 @@
 
 namespace App\Services\Workforce;
 
+use App\Models\Identity;
 use App\Models\StaffProfile;
 use App\Models\Trainer;
 use App\Models\TrainerFaceReference;
@@ -21,6 +22,7 @@ class BiometricRetention
     public function __construct(
         private readonly FaceReferenceService $faces,
         private readonly EmployeeDirectory $directory,
+        private readonly WorkforcePins $pins,
     ) {}
 
     public function afterTrainerDeactivated(Trainer $trainer): void
@@ -31,6 +33,7 @@ class BiometricRetention
                 return;
             }
             $ref = $this->faces->referenceForIdentity($identity);
+            $this->revokePin($identity, 'Perfil de entrenador desactivado');
         } else {
             $ref = TrainerFaceReference::query()->where('trainer_id', $trainer->getKey())->first();
         }
@@ -46,6 +49,22 @@ class BiometricRetention
         }
 
         $this->revoke($this->faces->referenceForIdentity($identity), 'Perfil de personal desactivado');
+        $this->revokePin($identity, 'Perfil de personal desactivado');
+    }
+
+    /** El PIN tampoco se conserva sin finalidad (contrato §10). */
+    private function revokePin(Identity $identity, string $reason): void
+    {
+        $request = request();
+        $by = ($request ? AdminActor::name($request) : null) ?? 'Sistema';
+        $reason .= ' (retención de datos biométricos)';
+        if ($this->pins->revoke((int) $identity->getKey(), $reason, $request ? AdminActor::id($request) : null, $by)) {
+            $this->faces->audit(FaceReferenceService::EVENT_PIN_REVOKED, null, [
+                'identity_id' => $identity->getKey(),
+                'reason' => $reason,
+                'by' => $by,
+            ], $request);
+        }
     }
 
     private function revoke(?TrainerFaceReference $ref, string $reason): void

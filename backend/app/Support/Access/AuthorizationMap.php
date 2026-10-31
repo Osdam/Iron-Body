@@ -342,6 +342,8 @@ final class AuthorizationMap
         // recibiendo dinero no tiene por qué poder fiar.
         'POST api/admin/receivables/{receivable}/payments' => 'receivables.operate',
         'POST api/admin/receivables/payments/{payment}/reverse' => 'receivables.manage',
+        // Corregir el medio de un abono: mueve dinero entre medios del arqueo.
+        'POST api/admin/receivables/payments/{payment}/method' => 'receivables.manage',
 
         // Correcciones administrativas. Pactar otro plazo es mostrador; decidir
         // que una deuda deja de cobrarse —o dejarla sin fecha, que levanta la
@@ -467,6 +469,13 @@ final class AuthorizationMap
         'POST api/payments' => 'cash.gym.operate',
         'PUT api/payments/{payment}' => 'payments.cancel',
         'PATCH api/payments/{payment}' => 'payments.cancel',
+        // Correcciones administrativas (docs/ops/CORRECCIONES-ADMINISTRATIVAS.md).
+        // Corregir el medio o el importe y devolver dinero son llaves propias:
+        // no se reparten por defecto (ver CrmPermission::SUPER_ADMIN_ONLY_BY_DEFAULT).
+        // Por PATCH, cambiar medio o importe exige además `payments.correct`,
+        // y eso lo comprueba PaymentController al ver qué cambia.
+        'POST api/payments/{payment}/method' => 'payments.correct',
+        'POST api/payments/{payment}/refund' => 'payments.refund',
 
         // Liberar el vínculo de un equipo es soporte de acceso, no "auth".
         'POST api/admin/devices/{deviceId}/release' => 'support.manage',
@@ -532,6 +541,20 @@ final class AuthorizationMap
         'POST api/users/{user}/freeze' => 'members.freeze',
         'POST api/users/{user}/resume' => 'members.freeze',
 
+        /*
+         * TRANSFERIR MEMBRESÍA: quitarle la vigencia a un socio y dársela a
+         * otro, sin cobro. Permiso propio y NO «editar miembros» ni `transfer`
+         * de planes (que es «Trasladar socios» entre planes). La vista previa
+         * también: enseña el cobro, la deuda y la vigencia de dos personas, y
+         * por controlador resolvería a `members.view`, que tiene el token
+         * compartido. El historial de la ficha sí va con `members.view`: es
+         * donde el Administrador, sin `audit.view`, ve la traza.
+         */
+        'GET api/users/{user}/membership-transfer/preview' => 'members.transfer_membership',
+        'POST api/users/{user}/membership-transfer' => 'members.transfer_membership',
+        'POST api/membership-transfers/{transfer}/revert' => 'members.transfer_membership',
+        'GET api/users/{user}/membership-transfers' => 'members.view',
+
         // Consultar el acceso es parte de atender en el mostrador: quien ve la
         // ficha tiene que poder ver si hoy puede entrar y cuántas entradas le
         // quedan. Sumarle días o entradas NO: eso es regalar lo que se vende, y
@@ -559,6 +582,11 @@ final class AuthorizationMap
         'GET api/admin/plan-transfers/{batch}' => 'plans.transfer',
         'POST api/admin/plan-transfers/{batch}/revert/dry-run' => 'plans.transfer',
         'POST api/admin/plan-transfers/{batch}/revert' => 'plans.transfer',
+
+        // Archivar un plan (sale de la venta y conserva cobros, socios y
+        // traslados) y reactivarlo: su propia llave, no la edición del plan.
+        'POST api/plans/{plan}/archive' => 'plans.archive',
+        'POST api/plans/{plan}/reactivate' => 'plans.archive',
 
         /*
          * El canal del CRM lleva ahora también los hechos de personal,
@@ -605,6 +633,10 @@ final class AuthorizationMap
 
         // Anular una venta ya cobrada es supervisión, no operación de mostrador.
         'POST api/admin/caja/sales/{sale}/cancel' => 'cash.products.manage',
+        // Corregir el medio de una venta: supervisión, igual que anularla.
+        'POST api/admin/caja/sales/{sale}/method' => 'cash.products.manage',
+        // Devolver una venta: sale dinero del cajón. Llave propia, no por defecto.
+        'POST api/admin/caja/sales/{sale}/refund' => 'cash.products.refund',
 
         // Registrar que un entrenador pagó su piso —o abrirle la deuda— es
         // trabajo de mostrador. Decidir CUÁNTO cuesta, no: eso es precio, y el

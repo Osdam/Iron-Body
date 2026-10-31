@@ -287,7 +287,7 @@ class ReceiptAgentFlowTest extends TestCase
         $uuid = $this->emitir('payment', $pago->id)->assertStatus(201)->json('data.0.uuid');
         $snapshot = Receipt::where('uuid', $uuid)->value('snapshot');
 
-        $this->putJson("/api/payments/{$pago->id}", ['status' => 'cancelled'], $this->adminHeaders())->assertOk();
+        $this->putJson("/api/payments/{$pago->id}", ['status' => 'cancelled', 'reason' => 'Corrección administrativa de prueba'], $this->adminHeaders())->assertOk();
         $r = $this->imprimir($uuid);
 
         $this->assertSame('reprint', $r['job']['kind'], 'algo anulado nunca sale como original');

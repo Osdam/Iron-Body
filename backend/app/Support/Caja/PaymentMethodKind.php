@@ -97,6 +97,31 @@ enum PaymentMethodKind: string
     }
 
     /**
+     * ¿Es una grafía que {@see normalize()} reconoce, u `other` dicho a propósito?
+     *
+     * normalize() manda a OTHER lo desconocido para que nunca infle el
+     * efectivo; en la ENTRADA eso convertiría cualquier texto («fiado») en
+     * dinero recibido en «Otros». Lo que entra por la API tiene que pasar por
+     * aquí. `manual` no: solo lo produce la importación del sistema anterior.
+     */
+    public static function isKnown(?string $raw): bool
+    {
+        $key = strtolower(trim((string) $raw));
+
+        if ($key === self::OTHER->value) {
+            return true;
+        }
+
+        foreach (self::cases() as $medio) {
+            if (in_array($key, $medio->aliases(), true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Medios que un empleado puede seleccionar al cobrar en mostrador.
      *
      * `manual` queda deliberadamente fuera: un cobro operativo nuevo no puede

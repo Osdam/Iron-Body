@@ -3,6 +3,7 @@
 namespace App\Services\Payments;
 
 use App\Models\ProductSale;
+use App\Rules\PaymentMethodInput;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Validation\ValidationException;
 
@@ -40,10 +41,21 @@ class PaymentSplits
     {
         return [
             $campo => 'nullable|array|min:2|max:'.self::MAX,
-            $campo.'.*.method' => 'required|string|max:80',
+            $campo.'.*.method' => self::methodRules(),
             $campo.'.*.amount' => 'required|numeric|min:0.01',
             $campo.'.*.reference' => 'nullable|string|max:120',
         ];
+    }
+
+    /**
+     * El medio de una parte: un medio que la caja sabe contar, nunca `mixed`
+     * ni `receivable` ({@see PaymentMethodInput}).
+     *
+     * @return array<int, mixed>
+     */
+    public static function methodRules(): array
+    {
+        return ['required', 'string', 'max:80', new PaymentMethodInput(esParte: true)];
     }
 
     /**

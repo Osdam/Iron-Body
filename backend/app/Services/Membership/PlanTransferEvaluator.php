@@ -102,6 +102,11 @@ class PlanTransferEvaluator
         if ((int) $from->id === (int) $to->id) {
             throw PlanTransferException::samePlan();
         }
+        // Hacia un plan archivado no se traslada a nadie; DESDE uno sí (es la
+        // forma de vaciarlo).
+        if ($to->isArchived()) {
+            throw PlanTransferException::destinationArchived();
+        }
         if (! $to->active) {
             throw PlanTransferException::destinationInactive();
         }
@@ -525,10 +530,14 @@ class PlanTransferEvaluator
      * confirmarse, lo devolvería a ese plan, y una suscripción automática que
      * lo cobraría de nuevo.
      *
+     * Sin `$planId`, de CUALQUIER plan: es la pregunta de la transferencia de
+     * membresía (MembershipTransfers), que reutiliza estos mismos hechos. El
+     * traslado siempre pasa su plan y obtiene exactamente lo de antes.
+     *
      * @param  Collection<int, User>  $users
      * @return array{pending: array<int, true>, subscription: array<int, true>}
      */
-    private function blockingFacts(Collection $users, int $planId): array
+    public function blockingFacts(Collection $users, ?int $planId): array
     {
         $ids = $users->pluck('id')->map(fn ($id): int => (int) $id)->all();
         $miembros = Member::query()->whereIn('user_id', $ids)->pluck('user_id', 'id');
@@ -539,7 +548,7 @@ class PlanTransferEvaluator
         $pendientes = [];
         Payment::query()
             ->whereIn('user_id', $ids)
-            ->where('plan_id', $planId)
+            ->when($planId !== null, fn ($q) => $q->where('plan_id', $planId), fn ($q) => $q->whereNotNull('plan_id'))
             ->whereRaw('LOWER(status) IN ('.implode(',', array_fill(0, count(PaymentController::PENDING_STATUSES), '?')).')',
                 PaymentController::PENDING_STATUSES)
             ->pluck('user_id')
@@ -550,7 +559,7 @@ class PlanTransferEvaluator
         // Un pago de pasarela en vuelo es el mismo riesgo: si se aprueba, el
         // activador de membresía aplica el plan que pagó.
         PaymentTransaction::query()
-            ->where('plan_id', $planId)
+            ->when($planId !== null, fn ($q) => $q->where('plan_id', $planId), fn ($q) => $q->whereNotNull('plan_id'))
             ->whereIn('status', PaymentStateMachine::IN_FLIGHT)
             ->where(fn ($q) => $q->whereIn('user_id', $ids)->orWhereIn('member_id', $miembros->keys()->all()))
             ->get(['user_id', 'member_id'])
@@ -562,7 +571,7 @@ class PlanTransferEvaluator
 
         $suscripciones = [];
         MembershipSubscription::query()
-            ->where('plan_id', $planId)
+            ->when($planId !== null, fn ($q) => $q->where('plan_id', $planId))
             ->whereIn('status', MembershipSubscription::LIVE_STATUSES)
             ->where(fn ($q) => $q->whereIn('user_id', $ids)->orWhereIn('member_id', $miembros->keys()->all()))
             ->get(['user_id', 'member_id'])

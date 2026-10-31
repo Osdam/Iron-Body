@@ -66,38 +66,46 @@ class MembershipFreeze
      */
     public function freeze(User $user, int $days, ?string $reason = null, ?Admin $actor = null): array
     {
-        if ($this->isFrozen($user)) {
-            throw new RuntimeException('Esta membresía ya está congelada.');
-        }
+        // BAJO BLOQUEO Y SOBRE LA FILA RELEÍDA (TRANSFERENCIA-DE-MEMBRESIAS.md
+        // §8.1, revisión de seguridad M2). Antes se calculaba con el socio que
+        // cargó la ruta: si un traspaso le cortaba la vigencia mientras tanto,
+        // el congelamiento guardaba los días que ya había cedido y se los
+        // devolvía al reanudar. Las reglas y los valores son los mismos; solo
+        // cambia de qué fila se leen.
+        DB::transaction(function () use ($user, $days, $reason, $actor): void {
+            $socio = User::whereKey($user->getKey())->lockForUpdate()->firstOrFail();
 
-        if ($days < self::MIN_DAYS || $days > self::MAX_DAYS) {
-            throw new RuntimeException('El congelamiento va de '.self::MIN_DAYS.' a '.self::MAX_DAYS.' días.');
-        }
+            if ($this->isFrozen($socio)) {
+                throw new RuntimeException('Esta membresía ya está congelada.');
+            }
 
-        $hoy = self::today();
-        $fin = $user->membership_end_date
-            ? CarbonImmutable::parse($user->membership_end_date, MembershipPeriod::TZ)->startOfDay()
-            : null;
+            if ($days < self::MIN_DAYS || $days > self::MAX_DAYS) {
+                throw new RuntimeException('El congelamiento va de '.self::MIN_DAYS.' a '.self::MAX_DAYS.' días.');
+            }
 
-        if ($fin === null) {
-            throw new RuntimeException('Este socio no tiene una membresía que congelar.');
-        }
+            $hoy = self::today();
+            $fin = $socio->membership_end_date
+                ? CarbonImmutable::parse($socio->membership_end_date, MembershipPeriod::TZ)->startOfDay()
+                : null;
 
-        if ($fin->lessThan($hoy)) {
-            throw new RuntimeException('Su membresía ya está vencida: no hay días que guardar. Cóbrale una nueva.');
-        }
+            if ($fin === null) {
+                throw new RuntimeException('Este socio no tiene una membresía que congelar.');
+            }
 
-        // Los días que se apartan. Es LO ÚNICO que hay que conservar: la fecha
-        // de vencimiento se va a mover al pasado para que los otros sistemas
-        // denieguen el paso, y con ella se perdería la cuenta.
-        $diasGuardados = (int) $hoy->diffInDays($fin);
+            if ($fin->lessThan($hoy)) {
+                throw new RuntimeException('Su membresía ya está vencida: no hay días que guardar. Cóbrale una nueva.');
+            }
 
-        DB::transaction(function () use ($user, $days, $reason, $actor, $hoy, $diasGuardados): void {
-            $user->forceFill([
+            // Los días que se apartan. Es LO ÚNICO que hay que conservar: la fecha
+            // de vencimiento se va a mover al pasado para que los otros sistemas
+            // denieguen el paso, y con ella se perdería la cuenta.
+            $diasGuardados = (int) $hoy->diffInDays($fin);
+
+            $socio->forceFill([
                 'membership_frozen_at' => $hoy->toDateString(),
                 'membership_frozen_until' => $hoy->addDays($days)->toDateString(),
                 'membership_frozen_days_left' => $diasGuardados,
-                'membership_status_before_freeze' => $user->status,
+                'membership_status_before_freeze' => $socio->status,
                 'membership_frozen_reason' => $reason,
                 'membership_frozen_by' => $actor?->id,
                 'membership_frozen_by_name' => $actor?->name,
@@ -127,25 +135,29 @@ class MembershipFreeze
      */
     public function resume(User $user, ?Admin $actor = null, string $trigger = 'manual'): array
     {
-        if (! $this->isFrozen($user)) {
-            throw new RuntimeException('Esta membresía no está congelada.');
-        }
+        // Bajo bloqueo y sobre la fila releída, como freeze(): los días que se
+        // devuelven y la vigencia que se respeta son los de la base AHORA.
+        $guardados = DB::transaction(function () use ($user): int {
+            $socio = User::whereKey($user->getKey())->lockForUpdate()->firstOrFail();
 
-        $hoy = self::today();
-        $guardados = (int) ($user->membership_frozen_days_left ?? 0);
-        $actual = $user->membership_end_date
-            ? CarbonImmutable::parse($user->membership_end_date, MembershipPeriod::TZ)->startOfDay()
-            : null;
+            if (! $this->isFrozen($socio)) {
+                throw new RuntimeException('Esta membresía no está congelada.');
+            }
 
-        // Si renovó durante el congelamiento, ese periodo se RESPETA y los días
-        // guardados se suman detrás. Pisarlo con «hoy + guardados» le quitaría
-        // lo que acaba de pagar.
-        $base = $actual && $actual->greaterThanOrEqualTo($hoy) ? $actual : $hoy;
+            $hoy = self::today();
+            $guardados = (int) ($socio->membership_frozen_days_left ?? 0);
+            $actual = $socio->membership_end_date
+                ? CarbonImmutable::parse($socio->membership_end_date, MembershipPeriod::TZ)->startOfDay()
+                : null;
 
-        DB::transaction(function () use ($user, $base, $guardados): void {
-            $user->forceFill([
+            // Si renovó durante el congelamiento, ese periodo se RESPETA y los días
+            // guardados se suman detrás. Pisarlo con «hoy + guardados» le quitaría
+            // lo que acaba de pagar.
+            $base = $actual && $actual->greaterThanOrEqualTo($hoy) ? $actual : $hoy;
+
+            $socio->forceFill([
                 'membership_end_date' => $base->addDays($guardados)->toDateString(),
-                'status' => $user->membership_status_before_freeze ?: 'active',
+                'status' => $socio->membership_status_before_freeze ?: 'active',
                 'membership_frozen_at' => null,
                 'membership_frozen_until' => null,
                 'membership_frozen_days_left' => null,
@@ -154,6 +166,8 @@ class MembershipFreeze
                 'membership_frozen_by' => null,
                 'membership_frozen_by_name' => null,
             ])->save();
+
+            return $guardados;
         });
 
         return array_merge($this->state($user->refresh()), [

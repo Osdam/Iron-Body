@@ -80,7 +80,7 @@ class MembershipSubscriptionService
         $userId = $data['user_id'] ?? null;
 
         $plan = ! empty($data['plan_id']) ? Plan::find($data['plan_id']) : null;
-        if (! $plan || ! $plan->active || (float) $plan->price <= 0 || (int) $plan->duration_days <= 0) {
+        if (! $plan || ! $plan->active || $plan->isArchived() || (float) $plan->price <= 0 || (int) $plan->duration_days <= 0) {
             throw SubscriptionException::invalidPlan();
         }
 

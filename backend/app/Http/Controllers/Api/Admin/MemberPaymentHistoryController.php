@@ -39,7 +39,7 @@ class MemberPaymentHistoryController extends Controller
     {
         $pagos = Payment::query()
             ->where('user_id', $user->id)
-            ->with(['plan:id,name,duration_days', 'upgradedFrom:id,name', 'splits', 'cashShift'])
+            ->with(['plan:id,name,duration_days,active', 'upgradedFrom:id,name', 'splits', 'cashShift'])
             ->orderByRaw('COALESCE(paid_at, created_at) DESC')
             ->orderByDesc('id')
             ->limit(self::LIMIT)
@@ -184,6 +184,9 @@ class MemberPaymentHistoryController extends Controller
                 'id' => $p->plan->id,
                 'name' => $p->plan->name,
                 'duration_days' => (int) $p->plan->duration_days,
+                // false = plan archivado (fuera del catálogo, conservado por su
+                // historia): el CRM lo pinta como «(histórico)».
+                'active' => (bool) $p->plan->active,
             ] : null,
 
             'is_upgrade' => $p->upgraded_from_plan_id !== null,

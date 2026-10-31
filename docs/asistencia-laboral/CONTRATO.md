@@ -268,6 +268,8 @@ Errores: 422 `authorization_code_invalid` (uniforme), 429 `authorization_code_at
 - Tres capturas de la MISMA sesión de cámara; deben ser coherentes entre sí.
 - El servidor compara 1:N contra las demás personas: un rostro ya vinculado a otra
   identidad se rechaza (409 `face_already_linked`, con traza aunque se rechace).
+- Dos primeros registros de la misma persona a la vez: uno gana y el otro recibe 409
+  `face_already_enrolled` (nunca un 500).
 - `operation_id` es opcional y no se usa: el reintento de un enrolamiento completado lo
   reconoce el propio `enrollment_token` (mismo dispositivo, sin caducar).
 
@@ -637,3 +639,138 @@ cambio (outbox `class_events`): no se anuncia nada que luego se revierta.
 
 Una persona = una identidad. Sus cargos son la unión de sus roles de entrenador
 activos y los de su perfil de personal activo.
+
+## 10. Rostros que el modelo no separa: ambigüedad, PIN y excepción de enrolamiento
+
+Caso 2026-10-26: dos entrenadores distintos a 0,91 (umbral 1,0). El modelo (MobileFaceNet
+en la tablet) no los separa: el rostro solo no puede decidir entre ellos. Decisión del
+propietario (2026-10-26): para quien tiene un parecido registrado, SIEMPRE rostro + PIN
+personal; para el resto, rostro solo salvo que el intento sea ambiguo. El umbral global
+(1,0) no cambia.
+
+### 10.1 Regla del servidor (toda verificación facial)
+
+Aplica en `kiosk/verify` (`workday` y `trainer_session`), en `trainer/classes/{id}/start|end`
+con `embedding` y en el login facial público (apagado en producción).
+
+1. Distancia a la plantilla propia ≤ 1,0; si no, 422 `face_no_match` (como siempre).
+2. El intento es **ambiguo** si se cumple cualquiera:
+   - `pair`: la persona está en un par de parecidos registrado (§10.5). Siempre.
+   - `coincidence`: otra plantilla activa de otra persona (con o sin consentimiento: más
+     conservador) queda a ≤ 1,0 de la captura: la captura «es» de dos personas.
+   - `margin`: (otra plantilla más cercana) − (propia) < 0,20
+     (`WORKFORCE_FACE_AMBIGUITY_MARGIN`; calibrado sobre la galería de producción: con
+     0,20 ningún intento genuino simulado queda ambiguo, con 0,30 el 1,6 %).
+3. Ambiguo → el rostro solo NO autoriza. La MISMA petición debe traer `pin` (6 dígitos)
+   de esa persona:
+   - sin `pin` → **422 `face_no_match`** (código existente: la app publicada lo entiende y
+     en jornada ofrece el código de administrador) con el campo extra
+     `"second_factor": { "required": true, "type": "pin", "status": "active | not_set | locked",
+     "locked_until": "…" | null }`;
+   - `pin` equivocado → 422 `pin_invalid` (sin los intentos que quedan: le dirían a quien
+     prueba cuándo parar);
+   - 5 fallos en 24 h → 429 `pin_locked` con `"second_factor": { "locked_until": "…" }`. Acertar
+     NO borra los fallos (la ventana caduca sola) y los bloqueos escalan: 15 min → 1 h → 4 h →
+     24 h; vuelven al primero tras 7 días sin bloqueo. Un administrador lo libera antes
+     autorizando un PIN nuevo (§10.2). Cada fallo queda en el historial y avisa al CRM;
+   - la persona no tiene PIN → 409 `pin_not_set`;
+   - correcto → éxito con método `face_pin`.
+4. Si llega `pin` sin hacer falta, se comprueba igual (un PIN equivocado nunca pasa).
+5. Un intento ambiguo cuenta como intento de rostro (no limpia el contador); el éxito sí.
+6. Traza `biometric.verify_ambiguous` con la distancia propia y el motivo (`pair`,
+   `coincidence`, `margin`). Nunca con qué otra plantilla ni a qué distancia.
+
+Método nuevo en todas partes (`verification.method`, `workday_events.method`,
+`*_identity_method` de las sesiones de clase, `trainer.login`): `face_pin`.
+
+Respaldo sin rostro: sin cambios. En jornada, `kiosk/verify-code` con el código de
+administrador sigue valiendo solo (el administrador tiene a la persona delante). En clases
+el código sigue apagado (`WORKFORCE_CLASS_FALLBACK_CODE=false`).
+
+### 10.2 `POST kiosk/pin/setup` [firmada] — crear o cambiar el PIN
+
+```json
+{ "employee_ref": "…", "authorization_code": "48213907", "embedding": [192], "pin": "482913" }
+```
+- `authorization_code`: propósito `pin_setup`, emitido en el CRM (§10.4). Un uso, 30 min.
+- Primero se comprueba que hay un código `pin_setup` vivo (sin gastarlo): sin él, el rechazo
+  del código, y ni la fortaleza del PIN ni la cara se miran (la fortaleza consulta el
+  documento de quien se le parece y delataría el parecido).
+- `embedding`: la captura debe estar a ≤ 1,0 de la plantilla validada de la persona y
+  ninguna otra plantilla puede estar más cerca (con el código de uno, el otro del par no le
+  cambia el PIN). Sin el resto de la regla de ambigüedad: el código del administrador es el
+  factor presencial.
+- `pin`: exactamente 6 dígitos. 422 `pin_weak` si es un dígito repetido, una serie de paso
+  constante (`123456`, `654321`, `135791`…), un patrón (`121212`, `112233`, `111222`,
+  `123123`, capicúas como `123321`), un recorrido del teclado (`147258`, `159753`), algo con
+  forma de fecha (DDMMAA, MMDDAA, AAMMDD, AAAAMM, MMAAAA), uno de los más comunes, o los
+  6 primeros o últimos dígitos del documento de la persona o de quien se le parece.
+- El código se consume SOLO cuando PIN y rostro pasan. Reemplaza el PIN anterior y
+  pone a cero sus intentos.
+
+→ 201 `{ "ok": true, "pin": { "status": "active", "set_at": "…" } }`
+Errores: 422 `pin_weak`, 422 `face_no_match`, 409 `biometric_not_enrolled`, 422
+`embedding_invalid`, los de código de §3.2 (`authorization_code_*`), 401 `employee_ref_invalid`.
+
+El PIN se guarda como HMAC (APP_KEY) + bcrypt y nunca sale del servidor.
+
+`POST kiosk/employees/identify` (§2.1) añade `employee.pin: { "status": "not_set | active |
+locked | revoked" }` para que la tablet ofrezca «Crear mi PIN».
+
+### 10.3 Clases
+
+`trainer/classes/{id}/start|end` acepta `pin` junto a `embedding`, con la regla de §10.1.
+
+### 10.4 CRM — `biometrics.view` / `biometrics.manage`
+
+`GET admin/biometrics/identities/{id}` añade a `data`:
+```json
+"pin": { "status": "not_set | active | locked | revoked", "set_at": "…" | null, "locked_until": "…" | null },
+"second_factor_always": true,
+"lookalikes": [ { "identity": "<uuid>", "name": "…", "since": "…", "exception_expires_at": "…" | null } ]
+```
+`lookalikes` solo con `biometrics.manage`; con `biometrics.view` llega `[]` (el par existe:
+`second_factor_always` lo dice, pero no con quién). Por lo mismo, sin `biometrics.manage` el
+historial no incluye `biometric.lookalike_detected` ni `biometric.lookalike_exception_granted`:
+se escriben en el mismo segundo en las dos personas y su hora delataría la pareja (y el motivo
+de la excepción suele nombrarla).
+
+`GET admin/trainers/{trainer}/audit` (metadata en crudo, permiso `trainers.view`) ya no
+incluye los eventos `biometric.*` a quien no tiene `biometrics.view`.
+
+`POST admin/biometrics/identities/{id}/pin-code` — `biometrics.manage`
+`{ "reason": "…" }` → 201 `{ "ok": true, "code": "…", "expires_at": "…" }` (propósito `pin_setup`;
+aparece en `pending_codes`).
+
+`POST admin/biometrics/identities/{id}/pin/revoke` — `biometrics.manage`
+`{ "reason": "motivo (5-500)" }` → 200 `{ "ok": true, "data": { "status": "revoked" } }`; 409
+`pin_not_active`.
+
+`POST admin/biometrics/identities/{id}/lookalike-exception` — `biometrics.manage`
+```json
+{ "other_identity": "<uuid>", "subject_verified_in_person": true,
+  "other_verified_in_person": true, "reason": "10-500" }
+```
+→ 201 `{ "ok": true, "exception": { "expires_at": "…" } }`. Las dos confirmaciones deben ser
+exactamente `true` (ni `"yes"` ni `1`; si no, 422). 409 `lookalike_not_registered` si esas dos personas no forman un par; 409
+`lookalike_other_not_enrolled` si la otra persona no tiene plantilla validada. Una sola
+excepción viva por par: emitir otra anula la anterior.
+
+Historial (`history[].event`): `biometric.verify_ambiguous`, `biometric.pin_set`,
+`biometric.pin_failed`, `biometric.pin_locked`, `biometric.pin_revoked`,
+`biometric.lookalike_detected`, `biometric.lookalike_exception_granted`.
+
+### 10.5 Pares de parecidos y excepción de enrolamiento
+
+- Un par se registra solo, cuando un enrolamiento se rechaza porque el rostro coincide
+  con la plantilla de otra persona (una fila por persona con la que coincide). Los
+  rechazos ya diagnosticados se cargan al migrar. Se borra solo cuando ninguna de las dos
+  personas tiene perfil laboral activo (`workforce:maintenance`, cada hora).
+- Excepción (§10.4): 30 min, un solo uso, solo para el par indicado. En el enrolamiento
+  (§5.2) la comprobación 1:N ignora ÚNICAMENTE la plantilla de la otra persona del par, y
+  solo si la distancia es ≥ 0,70 (`WORKFORCE_FACE_LOOKALIKE_EXCEPTION_MIN_DISTANCE`: más
+  cerca es la misma cara, no un parecido; valor de plantilla a plantilla aún sin medir con
+  datos reales). Cualquier otra coincidencia rechaza como siempre.
+  Se consume al completar el enrolamiento.
+- La excepción NUNCA interviene al verificar (§10.1): después del enrolamiento las dos
+  personas quedan en el par y necesitan rostro + PIN siempre.

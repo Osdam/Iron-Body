@@ -370,19 +370,77 @@ class Receivable extends Model
             // reimplemente estas reglas y acabe ofreciendo un botón que la API
             // rechaza.
             'can_cancel' => ! $this->isCancelled() && $saldo->isPositive(),
-            'can_reopen' => $this->isCancelled(),
+            // Reabrir una deuda cuyo cobro o venta de origen ya no está en pie
+            // la rechaza el servidor (ReceivableService::reopen): el botón no
+            // se ofrece si lo va a rechazar.
+            'can_reopen' => $this->isCancelled() && $this->sourceStillStands(),
             'can_edit_due_date' => ! $this->isCancelled() && $saldo->isPositive(),
+            'source' => $this->sourceSummary(),
         ];
 
         if ($withPayments) {
-            $data['payments'] = $this->payments()
+            $abonos = $this->payments()
+                ->with(['reversedBy:id,name', 'cashShift:id,status,type,closed_at'])
                 ->orderBy('id')
-                ->get()
-                ->map(fn (ReceivablePayment $p) => $p->toCrmArray())
+                ->get();
+            // El número de recibo, de una vez para todos los abonos: uno a uno
+            // sería una consulta por fila.
+            $recibos = ReceivablePayment::receiptNumbersFor($abonos->pluck('id')->all());
+            $data['payments'] = $abonos
+                ->map(fn (ReceivablePayment $p) => $p->toCrmArray($recibos[$p->id] ?? null))
                 ->all();
         }
 
         return $data;
+    }
+
+    /**
+     * El cobro o la venta que originó la deuda, dicho como lo reconoce quien la
+     * mira: `{type, id, label}`. Nulo si nació sin operación detrás.
+     *
+     * @return array{type: string, id: int, label: string, status: ?string}|null
+     */
+    public function sourceSummary(): ?array
+    {
+        if ($this->source_type === null || $this->source_id === null) {
+            return null;
+        }
+
+        $origen = $this->relationLoaded('source') ? $this->source : $this->source()->first();
+
+        return match ($this->source_type) {
+            ProductSale::class => [
+                'type' => 'product_sale',
+                'id' => (int) $this->source_id,
+                'label' => 'Venta '.($origen?->code ?? '#'.$this->source_id),
+                'status' => $origen?->status,
+            ],
+            Payment::class => [
+                'type' => 'payment',
+                'id' => (int) $this->source_id,
+                'label' => 'Cobro #'.$this->source_id,
+                'status' => $origen?->status,
+            ],
+            default => [
+                'type' => class_basename($this->source_type),
+                'id' => (int) $this->source_id,
+                'label' => class_basename($this->source_type).' #'.$this->source_id,
+                'status' => null,
+            ],
+        };
+    }
+
+    /** ¿La operación que originó la deuda sigue en pie? Sin origen, sí. */
+    private function sourceStillStands(): bool
+    {
+        $estado = $this->sourceSummary()['status'] ?? null;
+        if ($estado === null) {
+            return true;
+        }
+
+        return $this->source_type === Payment::class
+            ? in_array(strtolower($estado), \App\Http\Controllers\Api\PaymentController::PAID_STATUSES, true)
+            : ! in_array($estado, ['cancelled', ProductSale::STATUS_REFUNDED], true);
     }
 
     public static function statusLabel(string $status): string

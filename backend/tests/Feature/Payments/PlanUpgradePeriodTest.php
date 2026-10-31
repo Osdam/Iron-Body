@@ -216,7 +216,7 @@ class PlanUpgradePeriodTest extends TestCase
         $this->upgrade($user)->assertCreated();
         $payment = Payment::whereNotNull('upgraded_from_plan_id')->firstOrFail();
         $this->assertSame('2026-12-30', app(MembershipRebuilder::class)->preview($user->refresh())['end']);
-        $this->patchJson("/api/payments/{$payment->id}", ['status' => 'cancelled'], $this->headers)->assertOk();
+        $this->patchJson("/api/payments/{$payment->id}", ['status' => 'cancelled', 'reason' => 'Corrección administrativa de prueba'], $this->headers)->assertOk();
         $this->assertSame('Mensual', $user->refresh()->plan);
         $this->assertSame('2026-10-31', $user->membershipEndDate);
         $this->assertSame('paid', $original->refresh()->status);
@@ -253,7 +253,7 @@ class PlanUpgradePeriodTest extends TestCase
             'period_start' => '2026-10-10', 'period_end' => '2026-10-31', 'origin' => 'counter']);
         $user->forceFill(['plan' => 'Trimestre'])->save();
         $this->assertSame('2026-10-31', app(MembershipRebuilder::class)->preview($user)['end']);
-        $this->patchJson("/api/payments/{$legacy->id}", ['status' => 'cancelled'], $this->headers)->assertOk();
+        $this->patchJson("/api/payments/{$legacy->id}", ['status' => 'cancelled', 'reason' => 'Corrección administrativa de prueba'], $this->headers)->assertOk();
         $this->assertSame('2026-10-31', $user->refresh()->membershipEndDate);
         $this->assertSame('Mensual', $user->plan);
     }
@@ -266,7 +266,7 @@ class PlanUpgradePeriodTest extends TestCase
         $renewal = $this->payment($user, $this->quarterly, '2026-12-30', '2027-03-30');
         $renewal->forceFill(['starts_on' => '2026-10-10', 'paid_at' => now()])->save();
         $user->forceFill(['membership_end_date' => '2027-03-30'])->save();
-        $this->patchJson("/api/payments/{$upgrade->id}", ['status' => 'cancelled'], $this->headers)->assertOk();
+        $this->patchJson("/api/payments/{$upgrade->id}", ['status' => 'cancelled', 'reason' => 'Corrección administrativa de prueba'], $this->headers)->assertOk();
         $this->assertSame('2026-10-31', $renewal->refresh()->period_start->toDateString());
         $this->assertSame('2027-01-29', $renewal->period_end->toDateString());
         $this->assertSame('2027-01-29', $user->refresh()->membershipEndDate);

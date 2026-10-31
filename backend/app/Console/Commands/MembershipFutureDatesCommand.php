@@ -7,6 +7,7 @@ use App\Models\Payment;
 use App\Models\Plan;
 use App\Models\User;
 use App\Services\Membership\MembershipAccess;
+use App\Services\Membership\MembershipTransfers;
 use App\Services\Payments\MembershipPeriod;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
@@ -93,12 +94,30 @@ class MembershipFutureDatesCommand extends Command
         $planes = Plan::query()->get(['id', 'name', 'duration_days'])
             ->keyBy(fn (Plan $p) => MembershipAccess::planKey((string) $p->name));
 
+        // TRASPASOS DE MEMBRESÍA vivos: la vigencia de la titular y la del
+        // beneficiario no salen de sus pagos (TRANSFERENCIA-DE-MEMBRESIAS.md
+        // §4). Se listan para que se vean, pero `--fix` no los toca: escribir
+        // «la vigencia del último pago real» le devolvería a la titular lo que
+        // cedió y le quitaría al beneficiario lo que recibió.
+        $conTraspaso = [];
+        foreach ($socios as $socio) {
+            if ($traspaso = MembershipTransfers::involvedInLive((int) $socio->id)) {
+                $conTraspaso[$socio->id] = (int) $traspaso->id;
+            }
+        }
+        if ($this->manual() !== null && $conTraspaso !== []) {
+            $this->error('El socio tiene un traspaso de membresía vivo (#'.reset($conTraspaso).'): sus fechas no se escriben a mano. Revierte el traspaso antes.');
+
+            return self::FAILURE;
+        }
+
         $filas = [];
         $arreglados = 0;
 
         foreach ($socios as $socio) {
             $real = $this->pagoQueMasCubre($socio, $planes);
-            $sugerida = $this->manual() ?? $this->vigenciaDe($real, $planes);
+            $traspaso = $conTraspaso[$socio->id] ?? null;
+            $sugerida = $traspaso !== null ? null : ($this->manual() ?? $this->vigenciaDe($real, $planes));
 
             $filas[] = [
                 $socio->id,
@@ -106,7 +125,7 @@ class MembershipFutureDatesCommand extends Command
                 mb_strimwidth((string) $socio->plan, 0, 24, '…'),
                 substr((string) $socio->membership_start_date, 0, 10) ?: '—',
                 substr((string) $socio->membership_end_date, 0, 10) ?: '—',
-                $this->motivo($socio, $hoy, $tope),
+                $this->motivo($socio, $hoy, $tope).($traspaso !== null ? ' + traspaso #'.$traspaso.' (no se toca)' : ''),
                 $real ? mb_strimwidth((string) ($real->plan?->name ?? 'sin plan'), 0, 22, '…') : '—',
                 $sugerida ? $sugerida['start'].' → '.$sugerida['end'] : '—',
             ];

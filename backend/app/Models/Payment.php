@@ -60,6 +60,9 @@ class Payment extends Model
         'starts_on', 'period_start', 'period_end',
         // Por dónde entró (PaymentOrigin) y quién lo registró, congelado.
         'origin', 'registered_by', 'registered_by_name', 'registered_by_role',
+        // Idempotencia del alta (único en la base): la misma petición del CRM
+        // dos veces es UN cobro. Ver PaymentController::store().
+        'client_request_id',
     ];
 
     protected $casts = [

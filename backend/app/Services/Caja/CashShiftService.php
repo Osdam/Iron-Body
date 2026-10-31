@@ -84,6 +84,9 @@ class CashShiftService
         ?string $forcedReason = null,
     ): CashShift {
         return DB::transaction(function () use ($admin, $type, $note, $canManage, $forcedReason) {
+            // En exclusiva: las operaciones que apuntan dinero a este turno lo
+            // leen con bloqueo compartido (lockOpen), así que el cierre espera a
+            // que terminen y congela totales que ya las incluyen.
             $shift = CashShift::openOfType($type)->lockForUpdate()->first();
             if ($shift === null) {
                 throw CashShiftException::noOpenShift();
@@ -175,6 +178,29 @@ class CashShiftService
     public function requireOpen(CashShiftType $type): CashShift
     {
         $shift = CashShift::currentOfType($type);
+        if ($shift === null) {
+            throw CashShiftException::noOpenShift();
+        }
+
+        return $shift;
+    }
+
+    /**
+     * El turno abierto, leído DENTRO de la transacción que va a apuntarle dinero
+     * y con un bloqueo COMPARTIDO sobre su fila.
+     *
+     * `requireOpen()` lo mira fuera: entre esa lectura y el commit, otra persona
+     * podía cerrar el turno, congelar sus totales sin esta operación y dejarla
+     * apuntada a un cierre que no la cuenta. Con el bloqueo compartido varias
+     * ventas pueden escribir a la vez sobre el mismo turno, pero el cierre —que
+     * lo bloquea en exclusiva, ver close()— espera a que terminen y las cuenta;
+     * y si el cierre entró primero, aquí ya no aparece abierto.
+     *
+     * @throws CashShiftException
+     */
+    public function lockOpen(CashShiftType $type): CashShift
+    {
+        $shift = CashShift::openOfType($type)->latest('id')->sharedLock()->first();
         if ($shift === null) {
             throw CashShiftException::noOpenShift();
         }

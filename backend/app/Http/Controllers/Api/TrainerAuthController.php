@@ -139,7 +139,9 @@ class TrainerAuthController extends Controller
         // un rato; sigue entrando con su documento y la tablet no se entera.
         try {
             $key = 'portal-login:'.($trainer->identity_id ? 'identity:'.$trainer->identity_id : 'trainer:'.$trainer->getKey());
-            $distance = $this->faceReferences->verify($this->faceReferences->referenceForTrainer($trainer), $data['embedding'], $key, $request);
+            // Sin PIN en esta vía: si el rostro no basta (contrato §10.1), el
+            // rechazo es el genérico y no dice por qué.
+            $distance = $this->faceReferences->verify($this->faceReferences->referenceForTrainer($trainer), $data['embedding'], $key, $request)->distance;
         } catch (WorkforceException $e) {
             $this->audit->record(
                 TrainerAuditLog::EVENT_LOGIN,

@@ -158,6 +158,19 @@ Route::middleware('auth.admin')->group(function (): void {
         ->whereNumber('user');
     Route::post('users/{user}/resume', [\App\Http\Controllers\Api\Admin\MembershipFreezeController::class, 'resume'])
         ->whereNumber('user');
+    // TRANSFERIR la membresía a otra persona: la titular cede lo que le queda
+    // del periodo de un cobro, sin cobro nuevo. Permiso propio
+    // (`members.transfer_membership`), también para la vista previa; el
+    // historial de la ficha, con `members.view`. Ver
+    // docs/ops/TRANSFERENCIA-DE-MEMBRESIAS.md.
+    Route::get('users/{user}/membership-transfer/preview', [\App\Http\Controllers\Api\Admin\MembershipTransferController::class, 'preview'])
+        ->whereNumber('user');
+    Route::post('users/{user}/membership-transfer', [\App\Http\Controllers\Api\Admin\MembershipTransferController::class, 'store'])
+        ->whereNumber('user');
+    Route::get('users/{user}/membership-transfers', [\App\Http\Controllers\Api\Admin\MembershipTransferController::class, 'index'])
+        ->whereNumber('user');
+    Route::post('membership-transfers/{transfer}/revert', [\App\Http\Controllers\Api\Admin\MembershipTransferController::class, 'revert'])
+        ->whereNumber('transfer');
     // ACCESO del socio: si puede entrar ahora y cuántas entradas le quedan en un
     // plan por consumo. Es la misma respuesta que usa el terminal de recepción,
     // para que el mostrador y la puerta no puedan decir cosas distintas.
@@ -237,6 +250,8 @@ Route::prefix('kiosk')->middleware('throttle:kiosk')->group(function (): void {
         Route::post('workday/clock-out', [\App\Http\Controllers\Api\Kiosk\KioskWorkdayController::class, 'clockOut']);
         Route::post('enrollment/start', [\App\Http\Controllers\Api\Kiosk\KioskEnrollmentController::class, 'start']);
         Route::post('enrollment/complete', [\App\Http\Controllers\Api\Kiosk\KioskEnrollmentController::class, 'complete']);
+        // PIN personal: segundo factor cuando el rostro no basta (contrato §10.2).
+        Route::post('pin/setup', [\App\Http\Controllers\Api\Kiosk\KioskPinController::class, 'setup']);
     });
 });
 
@@ -705,6 +720,10 @@ Route::middleware('auth.admin')->group(function (): void {
     // IRON IA — capacidades detalladas por plan (CRM ↔ membership_ai_capabilities).
     Route::get('plans/{plan}/ai-capabilities', [PlanController::class, 'aiCapabilities']);
     Route::put('plans/{plan}/ai-capabilities', [PlanController::class, 'updateAiCapabilities']);
+    // Archivar en vez de borrar un plan con historia, y volver a venderlo.
+    // `plans.archive` (AuthorizationMap: llave propia, solo Super Admin por defecto).
+    Route::post('plans/{plan}/archive', [PlanController::class, 'archive'])->whereNumber('plan');
+    Route::post('plans/{plan}/reactivate', [PlanController::class, 'reactivate'])->whereNumber('plan');
     Route::apiResource('plans', PlanController::class)->only(['store','update','destroy']);
 });
 // TRASLADAR SOCIOS ENTRE PLANES: cambiar el plan de un grupo sin cobrar nada,
@@ -776,6 +795,17 @@ Route::get('app/version-policy', [\App\Http\Controllers\Api\AppVersionPolicyCont
 Route::get('membership-plans', [MembershipPlanController::class, 'index']);
 Route::get('membership-plans/{plan}', [MembershipPlanController::class, 'show']);
 Route::apiResource('payments', PaymentController::class)->only(['index','show','store','update']);
+// Correcciones administrativas de un cobro (docs/ops/CORRECCIONES-ADMINISTRATIVAS.md):
+// vista previa sin efectos, historial, corregir medio/importe y devolver dinero.
+// El permiso lo fija AuthorizationMap; `admin.can` lo repite en la ruta.
+Route::get('payments/{payment}/correction-preview', [PaymentController::class, 'correctionPreview'])
+    ->whereNumber('payment')->middleware('admin.can:payments.view');
+Route::get('payments/{payment}/history', [PaymentController::class, 'history'])
+    ->whereNumber('payment')->middleware('admin.can:payments.view');
+Route::post('payments/{payment}/method', [PaymentController::class, 'correctMethod'])
+    ->whereNumber('payment')->middleware('admin.can:payments.correct');
+Route::post('payments/{payment}/refund', [PaymentController::class, 'refund'])
+    ->whereNumber('payment')->middleware('admin.can:payments.refund');
 // Escritura del catálogo de clases + listado de reservas: solo administración.
 Route::middleware('auth.admin')->group(function (): void {
     Route::apiResource('classes', ClassController::class)
@@ -1193,6 +1223,9 @@ Route::post('admin/workforce/staff/{identity}/fallback-code', [\App\Http\Control
 Route::get('admin/biometrics/identities/{identity}', [\App\Http\Controllers\Api\Admin\BiometricAdminController::class, 'show'])->whereUuid('identity');
 Route::post('admin/biometrics/identities/{identity}/enrollment-code', [\App\Http\Controllers\Api\Admin\BiometricAdminController::class, 'enrollmentCode'])->whereUuid('identity');
 Route::post('admin/biometrics/identities/{identity}/revoke', [\App\Http\Controllers\Api\Admin\BiometricAdminController::class, 'revoke'])->whereUuid('identity');
+Route::post('admin/biometrics/identities/{identity}/pin-code', [\App\Http\Controllers\Api\Admin\BiometricAdminController::class, 'pinCode'])->whereUuid('identity');
+Route::post('admin/biometrics/identities/{identity}/pin/revoke', [\App\Http\Controllers\Api\Admin\BiometricAdminController::class, 'revokePin'])->whereUuid('identity');
+Route::post('admin/biometrics/identities/{identity}/lookalike-exception', [\App\Http\Controllers\Api\Admin\BiometricAdminController::class, 'lookalikeException'])->whereUuid('identity');
 Route::get('admin/devices', [\App\Http\Controllers\Api\Admin\DeviceAdminController::class, 'index']);
 Route::post('admin/devices/pairing-codes', [\App\Http\Controllers\Api\Admin\DeviceAdminController::class, 'pairingCode']);
 Route::get('admin/devices/security-events', [\App\Http\Controllers\Api\Admin\DeviceAdminController::class, 'securityEvents']);
@@ -1552,6 +1585,18 @@ Route::post('admin/caja/sales/{sale}/deliver',  [CajaController::class, 'deliver
     ->middleware('admin.can:caja.sell');
 Route::post('admin/caja/sales/{sale}/cancel',   [CajaController::class, 'cancel'])
     ->middleware('admin.can:caja.manage');
+// Correcciones de una venta (docs/ops/CORRECCIONES-ADMINISTRATIVAS.md): vista
+// previa sin efectos, devolver (dinero que sale del turno abierto) y corregir el
+// medio de pago (supervisión, como anular).
+Route::get('admin/caja/sales/{sale}/correction-preview', [CajaController::class, 'correctionPreview'])
+    ->middleware('admin.can:caja.view');
+// Historial de la venta (audit_logs). `caja.view` y una persona (el controlador).
+Route::get('admin/caja/sales/{sale}/history', [CajaController::class, 'history'])
+    ->middleware('admin.can:caja.view');
+Route::post('admin/caja/sales/{sale}/refund',   [CajaController::class, 'refund'])
+    ->middleware('admin.can:cash.products.refund');
+Route::post('admin/caja/sales/{sale}/method',   [CajaController::class, 'correctMethod'])
+    ->middleware('admin.can:caja.manage');
 
 // ── Cuentas por cobrar: créditos y abonos ────────────────────────────────────
 // Quien consulta saldos no es necesariamente quien cobra, y quien cobra no
@@ -1592,6 +1637,11 @@ Route::post('admin/receivables/{receivable}/payments', [ReceivableController::cl
 // poder deshacerlo sin que lo vea nadie más.
 Route::post('admin/receivables/payments/{payment}/reverse', [ReceivableController::class, 'reversePayment'])
     ->middleware('admin.can:receivables.manage');
+// Corregir el medio de un abono aplicado: supervisión, igual que anularlo.
+Route::post('admin/receivables/payments/{payment}/method', [ReceivableController::class, 'correctPaymentMethod'])
+    ->middleware('admin.can:receivables.manage');
+Route::get('admin/receivables/{receivable}/history', [ReceivableController::class, 'history'])
+    ->whereNumber('receivable')->middleware('admin.can:receivables.view');
 
 // Correcciones administrativas sobre la deuda. Tres llaves distintas porque son
 // tres decisiones de distinto peso: pactar un plazo nuevo lo hace quien atiende;
