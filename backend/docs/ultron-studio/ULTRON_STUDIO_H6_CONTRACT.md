@@ -1390,3 +1390,26 @@ Fuentes: `plans/informes-h6/informe-db.md` (§6, §10), `informe-voz.md`, `infor
 - `OtpCostGuard::snapshot()` devuelve claves en `snake_case` (y `send_enabled`): S las convierte a la forma `camelCase` de I5.2.
 - `lastVerification.outcome` de voz usa el conjunto de verificación de voz (`credentials_ok`…), no el de la sonda.
 - Para `applied` con las dos partes vacías el CRM acepta `part: null` y `state: 'legacy'`.
+
+---
+
+## Enmienda 2 (01-11-2026): lo que fija el fixture `integrations-cases.json` (704 casos, 22 secciones) y decisiones del lead sobre sus preguntas
+
+`backend/tests/fixtures/ultron-studio/integrations-cases.json` y su `integrations-cases.README.md` forman parte del contrato, como el fixture del Hito 5: **todas las decisiones que el README declara que el contrato no fijaba quedan congeladas; si PHP o TS discrepan, se corrige la implementación, nunca el fixture.** Verificado por el tester con una derivación independiente (openssl, 686 casos sin discrepancias), 106 implementaciones equivocadas simuladas (todas caen), cruce con `StudioContentHasher::canonicalJson`, `hash_hmac` y `number_format` de PHP 8.3, y los 6 vectores oficiales de firma de Twilio. Repetir: `python3 -I tests/fixtures/ultron-studio/tools/integrations-cases-check.py --php`.
+
+**Decisiones del lead (todas las recomendaciones del fixture se aceptan):**
+- **Q-4** `ELEVENLABS_VERIFIED` exige que la **última** sonda de verificación sea `ok` y de menos de 30 días (una clave revocada deja de estar «verificada» en la siguiente sonda).
+- **Q-5** Firma de ElevenLabs en estricto: `trim` de PHP sobre la cabecera entera, sin recortar clave ni valor; claves en minúsculas; `v0` mal formado junto a otro válido → `malformed_signature` (E1.2).
+- **Q-6** `isEngineCanary` es `false` en una fila revocada aunque su huella coincida con la del motor; `activeWhatsapp` con el teléfono del lead canario ilegible (`unreadable`) lo decide S y lo documenta en `informe-api.md`.
+- **Q-7** Sin versión esperada y con `effectiveVersion.source = none`, `expectation` = `none` (no `not_applicable`).
+- **Q-8** `baseUrl()` con una región inválida, o `base_url` fuera de `production` sin valor, → `null`.
+- **Q-9** `aliasError()` no recorta (en HTTP recorta `TrimStrings`); el alias con tildes descompuestas (NFD) se rechaza: el CRM normaliza a NFC antes de enviar (O-3).
+- **Q-10** En `facts`: un valor ausente es solo `{present:false}`; el host se compara exacto; la región de voz va tal cual.
+- **Q-11** Ruta 56: el SID mal formado responde `missing_account_sid`; el reintento de otra persona con la misma `clientRequestId` → `client_request_reused`.
+- **Q-12** Convenciones D-10 del saneador confirmadas: ficha sin `sid` válido, recorte de la página y sobres raros, tal como las cumplen el fixture, los casos de TW y la clase (E1.4).
+- **Q-13** `last4` usa el E.164 del contrato (**8 a 15 cifras**); el paquete TW (`TwilioProbeSanitizer`, hoy 7 a 15) se alinea al fixture.
+- **O-2** (S y FE): `not_allowed_for_channel` también sale con un número colombiano de longitud equivocada y en voz; el texto del CRM se generaliza («Ese número no sirve para este canal.») con la pista de WhatsApp solo cuando el canal es `whatsapp` y el número no es móvil.
+- **O-4** (FE): PHP escribe `[]` para un mapa vacío; el CRM acepta `[]` y `{}` en `byStatus`, `byCode`, `byLevel` y en `calls.byStatus` / `calls.byDirection` (ruta 43).
+- **O-1** (security, nota): `\d{4,}` no detecta un teléfono escrito en grupos de 2 o 3 dígitos; es la regla literal y se revisa en el Hito 7.
+- **O-5** (nota): el validador privado de `usage-trigger` no reproduciría el vector `duplicateKeys` de Twilio; solo importa el día que se extraiga (fuera de alcance).
+- **O-6**: los fixtures propios de V y TW no sustituyen al oráculo: la paridad de `StudioIntegrationsParityTest` (paquete S) recorre las 22 secciones, incluidas `voiceDoctor`, `voiceVerify`, `voiceCallPolicy`, `elevenlabsSignature`, `elevenlabsEnvelope`, `twilioProbeSanitize` y `twilioSignatureOfficial`, llamando a las clases reales de V y TW.
