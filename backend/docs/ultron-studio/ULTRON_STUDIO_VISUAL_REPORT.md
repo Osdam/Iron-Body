@@ -543,6 +543,126 @@ Congeladas en la Enmienda 2 (§E2.3) del contrato:
 - **Carga diferida (`@defer`) de los diálogos:** no se hizo; +13,6 kB transferidos en un chunk diferido que usan pocas personas no la justifican, y complicaría el foco al abrir.
 - **No verificado:** Safari, Firefox, Windows y el CRM del Hito 5 sobre la pila de producción.
 
+## Hito 6: las integraciones comerciales en el CRM
+
+**Estado:** implementado en la rama `feat/ultron-studio-h6` del CRM, **no desplegado**. La capa de datos está terminada (`0a83d74` → `ede716b`, `plans/informes-h6/informe-front-datos.md`). La página «Integraciones» está **terminada y verificada en `f38699d`**: el lead la confirmó como WIP («en curso, sin verificar») cuando se cortó la sesión de `frontend`, y después `frontend` la verificó sin cambiarla (`plans/informes-h6/informe-front-integracion.md`, confirmado en el backend en `7d2c6d8`). Producción sirve `ab78a6a` (Hito 5). El arnés E2E del Hito 6 (`037a2cd` → `e8386dc`) es del tester (ver «E2E con la pila real», abajo).
+
+| Commit | Qué |
+|---|---|
+| `0a83d74` → `ede716b` | Capa de datos: tipos, lectores, textos, el servicio de las 18 rutas, el fixture con el formato del exportador, 101 specs nuevas y los 4 permisos |
+| `037a2cd` → `e8386dc` | Infraestructura del E2E del Hito 6 (tester) |
+| `f38699d` | La página, la sesión, los ocho componentes, sus hojas y sus specs |
+
+Todo queda dentro de `src/app/modules/ultron-studio/`, salvo una entrada en `src/app/app.routes.ts`, los 4 permisos en `permissions.enum.ts`, el catálogo regenerado (`backend-permission-catalog.ts`, idéntico al `permissions:export` del backend), `access-control.service.ts` y su spec de contrato. **`ultron-studio.scss` y `studio-inspector.scss` no cambian** (su sha256 lo fija una spec) y no hay dependencias nuevas.
+
+### Página hija y entradas
+
+- **`marketing/ultron-studio/integraciones`**: ruta hija diferida, en su propio chunk (`studio-integrations-page`, 162,46 kB; 38,03 kB transferidos), con `AuthGuard` y `ultron.view`, tras `ultronStudioPreviewEnabled`, como el laboratorio. `StudioIntegrationsSession` se provee en la página.
+- **Enlace «Integraciones»** junto a «Laboratorio» en la barra del tablero (solo la plantilla de `ultron-studio-page.ts`).
+- **Siempre a la vista:** «Registro del Studio: no cambia lo que ULTRON dice o hace».
+- **Con un backend del Hito 5** (404 sin código en `integrations/*`): «El servidor todavía no tiene integraciones (Hito 6)», y el resto del Studio no cambia. En el libro, filtrar por uno de los 3 sujetos nuevos contra ese backend da un 422, que el panel dice como «este filtro todavía no existe en el servidor», sin parecer un fallo (D-F12).
+
+### Componentes
+
+Cada componente es standalone y `OnPush`, con su hoja y su spec.
+
+| Pieza | Selector | Qué hace |
+|---|---|---|
+| `studio-integrations-page.ts` | `app-ultron-studio-integrations` | Fases (cargando, `unavailable`, sin permiso, error), cabecera y pestañas con teclado y `?pestana=` |
+| `studio-integrations-session.ts` | — | Lecturas por pestaña (una vez cada una), bloqueos por llave y bandera, escrituras con la regla I-1 del H5 y relecturas |
+| `studio-integrations-status.ts` | `us-integrations-status` | Las banderas del proceso web, cada área con su clasificación en texto y su evidencia, y lo que puede hacer la cuenta |
+| `studio-meta-campaigns.ts` | `us-meta-campaigns` | El espejo y sus cuentas, los filtros, la lista de dos carriles, las acciones, el historial y la configuración de Meta |
+| `studio-campaign-link-dialog.ts` | `us-campaign-link-dialog` | Asociar o sustituir; `campaign_already_linked` y `campaign_link_moved` |
+| `studio-canary-numbers.ts` | `us-canary-numbers` | La coherencia, los topes, la lista enmascarada, las acciones según `actions`, el motivo y la versión esperada |
+| `studio-canary-register-dialog.ts` | `us-canary-register-dialog` | El formulario del registro: el teléfono solo vive aquí |
+| `studio-twilio-panel.ts` | `us-twilio-panel` | OTP, coste, credenciales, el aviso `usage-trigger`, las llamadas, la sonda con su 429 y la configuración de Twilio |
+| `studio-voice-panel.ts` | `us-voice-panel` | El estado, las piezas que faltan, la política y los tres niveles. Ningún botón |
+| `studio-config-drift.ts` | `us-config-drift` | La configuración autorizada: estado, huellas, deriva y «Reconocer como autorizada» |
+
+**Ficheros que cambian:** `studio-audit-panel.ts` (los 3 sujetos nuevos en el filtro), `ultron-studio-page.ts` (solo la plantilla del enlace), la capa de datos (Q-6 y O-2) y el fixture del backend, regenerado.
+
+**Tamaño de las hojas** (bytes de fuente; el límite es 8000): la mayor, `studio-integrations-kit.scss`, 4826 (3109 comprimida), y `studio-integrations-page.scss`, 4824 (3769 comprimida); las otras ocho, entre 914 y 1856. Ninguna da aviso de presupuesto. La página carga también `studio-lab-kit.scss` y declara los 24 tokens `--us-*`, comprobados contra `ultron-studio.scss` por una spec (D-F4).
+
+### La capa de datos (`ede716b`)
+
+- **Estricto** en la estructura obligatoria, los conjuntos cerrados del contrato y los formatos de privacidad, y en las invariantes de las que depende lo que se ofrece o se afirma (por ejemplo, `in_sync` ⇒ exactamente un WhatsApp activo; una acción permitida ⇔ sin motivo; `ELEVENLABS_VERIFIED` ⇒ una verificación `credentials_ok`). **Tolerante** con las claves desconocidas y con un elemento ilegible de una lista (se descarta y se cuenta). **Suave** con la evidencia, los hechos de la sonda, el coste y el webhook: `null` si no se puede creer, nunca un valor inventado.
+- **Privacidad:** el motivo de un fallo en `masked`, `ref`, `fp` o `last4` no repite el valor; las claves que no son del contrato nunca se copian; dentro de una credencial solo se aceptan `present`, `source`, `ref`, `fp` y `last4`. Si un proveedor de la configuración no cumple esas reglas, no se enseña y no se puede reconocer a ciegas.
+- **Cada escritura** construye su cuerpo campo a campo, y una respuesta que no es la de esa petición sale como ilegible. **El teléfono solo viaja en `POST integrations/canaries`.** Un uuid de ruta que no está en minúsculas no se pide.
+- **Hallazgo en el código del H5, corregido aquí:** el panel del libro solo aceptaba 4 sujetos y habría descartado como ilegibles los eventos del Hito 6. El CRM del H6 los pinta en genérico; **el CRM del H5 (`ab78a6a`) sigue descartándolos** (`ULTRON_STUDIO_ROLLBACK.md`, «Hito 6», nivel 3).
+
+### Lo que se ve
+
+- **Estado:** las banderas en texto con la nota del servidor; cada área en el orden del servidor, con su nombre, su «cable», la clasificación en texto, el código de ElevenLabs y el motivo, y la evidencia en pares etiqueta / valor. Un área `available: false` dice «No se pudo leer en el servidor», sin valores.
+- **Campañas de Meta:** cada campaña con dos carriles que nunca se mezclan, en columnas separadas: «En Meta…» (borde cian: «Activa · hace 42 min», «Posiblemente eliminada», «Dato viejo») y «En ULTRON Studio…» (borde violeta). Asociar (a la línea base o a una versión `APPROVED`, `CANARY` o `PUBLISHED`), sustituir y desactivar con motivo; el historial paginado. Texto obligatorio bajo el título: «La asociación queda registrada en el Studio. No cambia nada en Meta ni en lo que ULTRON dice o hace.»
+- **Números canarios:** la coherencia siempre a la vista con el texto obligatorio («Este registro no cambia a quién responde ULTRON: el motor sigue atendiendo solo la conversación canaria configurada en el servidor.»); la lista enmascarada con la etiqueta del servidor; «Es el teléfono de la conversación canaria del motor» si lo es; la versión esperada frente a la que rige. Registrar: canal, teléfono (`type=tel`, `autocomplete=off`), alias por función (enviado en NFC, O-3) con «Usa una función, no el nombre de una persona (p. ej., «Móvil de pruebas 1»).», la casilla del consentimiento con su texto literal y la vista previa solo enmascarada. Al registrarse, el diálogo se cierra con el teléfono: no queda en la pantalla. Autorizar y activar son un clic (el contrato no les da cuerpo, D-F9); desactivar y revocar llevan `ib-reason-dialog` con aviso de datos personales, y revocar uno de voz dice que su cifrado se borra.
+- **Twilio:** OTP, el coste del día en grande, credenciales con `ref` y huellas cortas y de qué variable salen, el aviso `usage-trigger` tal como lo describe el servidor y las llamadas en recuentos. La comprobación de solo lectura con su texto obligatorio («Solo lee: no envía mensajes ni hace llamadas. Puede tardar unos segundos.»), el botón solo con `can.integrationsManage` y `flags.twilioProbeEnabled`, el enfriamiento en llano y, tras un 429, «Comprobar (en N s)» deshabilitado. La última comprobación en llano («3: 1 de error, 2 de aviso; códigos 60200 (3)»).
+- **Voz:** `ELEVENLABS_NOT_CONFIGURED` en grande, con «En este hito no se hace ninguna llamada.»; las piezas que faltan por su nombre; la política («No permite llamar») con sus motivos numerados en orden; los tres niveles. **Ni un botón.**
+- **Configuración autorizada**, en las pestañas de Meta, Twilio y Voz (D-F10): «Aquí no se ven ni se editan secretos: solo huellas. Las credenciales se cambian en el servidor.»; la huella vigente; quién autorizó, cuándo y con qué nota; lo observado por el sistema; la deriva clave a clave. Un 409 `config_changed` enseña lo nuevo y la siguiente confirmación envía la huella nueva.
+- **Botones:** solo salen de `can`, `flags` y `actions` del servidor; si no hay botón, el motivo se lee en texto (`[data-motivo-accion]`). La bandera de escrituras apagada se dice una vez arriba, no en cada número (D-F8).
+
+### Accesibilidad y 390 px
+
+Pestañas con teclado (flechas, Inicio y Fin), foco atrapado en los cuatro diálogos (Tab y Mayús+Tab) y devuelto al botón que los abrió con Escape, `role=alert` en los errores, insignias con texto y no solo color, y tarjetas en lugar de tablas a 390 px. La página deja 96–104 px abajo y los pies de sus diálogos dejan su esquina al asistente flotante (D-F16). **Dos cosas visibles:**
+- **D-F14:** a 390 px, el quinto icono de la barra del tablero («Integraciones») añade una fila a la cabecera (captura `movil-16`). Arreglarlo exige tocar `ultron-studio.scss`, que no se toca. [PENDIENTE: decisión del lead (Q-3 de `informe-front-integracion.md`); `frontend` propone dejarlo así.]
+- **D-F5:** la regla global del CRM `p, small { color: … !important }` pisaba el color de los errores, las alertas y los textos obligatorios; los textos con color propio van ahora en `div` y `span`, comprobado en Chrome por el color calculado. **El laboratorio tiene el mismo problema latente** (`<p class="lab-alert">`), y también el degradado perdido de su botón principal con el ratón encima (D-F6); los dos quedan fuera (Q-5).
+
+### Atributos `data-*` para el E2E
+
+Los enumera `informe-front-integracion.md` §4, pieza a pieza: la página (`[data-integraciones-pagina][data-integraciones-fase]`, `[data-integraciones-pestana]`), el estado (`[data-proveedor][data-clasificacion]`, `[data-cable]`), las campañas (`[data-campana]`, `[data-campana-meta]`, `[data-campana-ultron][data-asociada]`), los canarios (`[data-coherencia][data-veredicto]`, `[data-canario][data-estado][data-canal]`, `[data-canario-accion]`), el registro (`[data-registrar-*]`), Twilio (`[data-sonda]`, `[data-sonda-lanzar]`, `[data-sonda-ultima][data-resultado]`), la voz (`[data-voz-estado]`, `[data-voz-politica][data-permitida]`) y la configuración (`[data-config][data-config-estado]`, `[data-config-reconocer]`). Como en el H5, `waitForSelector({hidden:true})` no sirve con `ib-dialog` (su host mide 0×0): se comprueba que el selector ya no está en el DOM.
+
+### Pruebas y medidas
+
+Sobre `f38699d`, con el árbol limpio (`informe-front-integracion.md` §5):
+
+| Comprobación | Resultado |
+|---|---|
+| Módulo del Studio y modelos (`ng test` con `ultron-studio/**` y `models/**`) | **70 ficheros, 1096/1096** (antes, 60 y 1005 en `ede716b`): 80 pruebas en los 10 specs nuevos y 11 en specs ampliados |
+| `tsc` de la aplicación y de las specs | Salida 0 y 0 |
+| `check:literals` | 350 ficheros, literales correctos |
+| `npm run build:prod` | Salida 0; **36 avisos de presupuesto, nombre a nombre los mismos que en `ede716b`**, ninguno de una hoja nueva; el único del Studio sigue siendo el de `ultron-studio.scss`, que ya existía |
+| Mutaciones | **12/12 tumbadas** (botones sin `actions`, la clave I-1 siempre gastada, el alias sin NFC, el backend del H5 como error, el alias como `[innerHTML]`, la sonda sin respetar el 429, el reconocimiento con la huella vieja tras `config_changed`, el texto obligatorio alterado…) |
+| Paridad con el export de S | `backend-integrations.testing.ts` es **byte a byte** el export de `4e6f5fe` (sha256 `23b4de10…`); los 16 ejemplos reales se leen con los lectores estrictos |
+| Chrome con la API simulada (no es el E2E con la pila real), a 1440 y 390 px | **93/93**, sin errores de JavaScript (`capturas-crm/chrome-resultados.json`): la fase 1 de producción sin ninguna escritura; asociar con una sola petición; el teléfono completo nunca en pantalla; cuatro ojos sobre el número propio; el Administrador sin «Autorizar»; la sonda (201 y después 429 con cuenta atrás); reconocer tras `config_changed`; el backend del H5; sin desplazamiento horizontal |
+
+**Capturas** (en `plans/informes-h6/capturas-crm/`, `escritorio-NN-…` a 1440 px y `movil-NN-…` a 390 px; 32 en total, confirmadas en `d5da123`):
+
+| N.º | Qué enseña |
+|---|---|
+| 01 | Estado (fase 1: banderas apagadas) |
+| 02 | Campañas en solo lectura |
+| 03 | Canarios en solo lectura |
+| 04 | Twilio en solo lectura |
+| 05 | Voz |
+| 06 | Diálogo de asociar a una versión |
+| 07 | Motivo de desactivar |
+| 08 | Campañas tras escribir |
+| 09 | Registrar con errores por campo |
+| 10 | Canarios del Super Admin |
+| 11 | Motivo de revocar (voz) |
+| 12 | Administrador |
+| 13 | Sonda con 429 |
+| 14 | Reconocer tras `config_changed` |
+| 15 | Backend del H5 |
+| 16 | Tablero con el enlace |
+
+### Decisiones fuera del contrato
+
+D-F1 a D-F16 de `informe-front-integracion.md` §3 (y D-F1 a D-F11 de la capa de datos, `informe-front-datos.md` §8). Las que cambian lo que se ve: el fixture del servidor byte a byte y los ejemplos escritos a mano aparte (D-F1); `activeWhatsapp: null` aceptado solo con `unreadable` y `no_engine_canary`, para que la pestaña no quede ilegible justo cuando la coherencia falla (D-F2); O-2 en el cliente (D-F3); la configuración autorizada en las tres pestañas (D-F10); activar sin motivo (D-F9); y la fila de más en la cabecera a 390 px (D-F14).
+
+### E2E con la pila real
+
+[PENDIENTE: los 15 escenarios de `specs/h6-integrations.cjs` con la página del CRM (`f38699d` o el commit final), entre ellos registrar como Administrador → autorizar y activar como Super Admin → `in_sync`, un segundo WhatsApp activo → `registry_has_extra_active`, revocar, asociar → sustituir → desactivar, la sonda con `reused` y su 429, reconocer frente a un cambio de configuración, la voz sin botones, la página con un backend del H5 y el teclado en los cuatro diálogos.] Ni las specs ni la prueba en Chrome usan el backend real: usan su export y un simulador con sus formas.
+
+### Pendiente y no verificado
+
+- **El fixture del CRM es el export de `4e6f5fe`, anterior a la tanda final de S** (`3e1ee20`). En el backend actual, `phoneNotAllowedForChannel` es el texto general («Ese número no sirve para este canal.»), hay claves nuevas (`phoneNotMobileForWhatsapp` y `contactData`) y el ejemplo `unreadable` lleva `activeWhatsapp: 1` (comprobado el 01-11-2026 sobre `e3a0fdd` y en la copia del CRM). La paridad del CRM tolera los dos textos de O-2. [PENDIENTE: volver a exportar `backend-integrations.testing.ts` desde el backend final, copiarlo byte a byte y repetir la paridad (`frontend`).] La Q-1 de `informe-front-integracion.md` («el servidor todavía manda la pista siempre») es cierta para `4e6f5fe` y ya no para `3e1ee20`.
+- **La suite completa del CRM** fuera de `ultron-studio` y `models`: no se corrió esta vez.
+- **La segunda pasada de `security` sobre la página** (contrato, «Orden», paso 5). [PENDIENTE: veredicto de la segunda pasada; la rellena el lead.]
+- **Los avisos locales del formulario** son anteriores a AS-1 (`3e1ee20`): `checkCanaryAlias` solo mira la longitud, los caracteres, `\d{4,}` y `@`, y `checkIntegrationReason` solo la longitud (`studio-integrations-parse.ts:1414-1426` del CRM, leído el 01-11-2026). Un alias o un motivo con un teléfono escrito en grupos o con un correo pasa el aviso local, y el servidor lo rechaza con 422 junto al campo, sin perder lo escrito. [PENDIENTE: alinear los avisos locales con AS-1 al volver a exportar el fixture (`frontend`).]
+- **Lectores de pantalla reales;** la semántica se comprobó en las specs y el teclado, en Chrome.
+- **El pie de `ib-reason-dialog` a 390 px frente al asistente flotante:** es compartido y no se tocó, como en el H5.
+- **No verificado:** Safari, Firefox, Windows y el CRM del Hito 6 sobre la pila de producción.
+
 ## Revisión final independiente (`reviewer`) de la vista previa (Hito C)
 
 Veredicto inicial **BLOQUEADO** por un hallazgo confirmado en Chrome; todo lo que sigue quedó corregido y cubierto por pruebas antes de publicar.

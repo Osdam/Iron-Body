@@ -773,6 +773,301 @@ Del informe de DevOps (§9); ninguna se ha visto en producción.
 
 **Rotación de la `APP_KEY` con la cadena viva:** no forma parte de ninguna fase. Si el propietario la autoriza por otro motivo, el procedimiento está en `ULTRON_STUDIO_ROLLBACK.md` («Hito 5»).
 
+## Hito 6 (integraciones comerciales): runbook por fases — PENDIENTE DE EJECUCIÓN
+
+**Estado (01-11-2026): no se ha ejecutado nada en el servidor, ni siquiera el ensayo `--solo-comprobar`.** El Hito 6 está implementado en la rama `feat/ultron-studio-h6` de los dos repos (backend `e3a0fdd`, con las puertas del lead en verde; CRM `f38699d`, con la página «Integraciones» terminada y verificada), **sin empujar ni desplegar**. Antes de la fase 1 faltan el E2E de los 15 escenarios, la segunda pasada de `security` sobre la página, la revisión final del `reviewer` y el cierre del CRM (el fixture del backend vuelto a exportar, la suite completa y el build sobre el commit final) (ver «Condiciones previas»). Esta sección sale del runbook de DevOps (`plans/informes-h6/informe-devops-h6.md`, §1–§7), del contrato (`ULTRON_STUDIO_H6_CONTRACT.md`, «Despliegue por fases» y Enmiendas 1–4) y de los scripts de `ops/` (`ops/README.md`, «Hito 6»). **Donde no coinciden, mandan los scripts**, en la versión confirmada en el commit que se despliega. DevOps los ensayó en un banco local (`ops/banco-h6/`, sobre el código de S confirmado en `d2c04a0`) y contra el arnés E2E del CRM (§8 de su informe). Vuelta atrás: `ULTRON_STUDIO_ROLLBACK.md`, «Hito 6». Scripts: `ops/README.md`.
+
+**Producción de partida** (la que dejó la fase 1 del Hito 5, 01-11-2026 01:12–01:16 UTC; ver «Hito 5» y `ULTRON_STUDIO_FINAL_REPORT.md`): API `7ba0ce8`, CRM `ab78a6a`, 38 rutas del Studio, 30 disparadores y 27 CHECK en `ultron_studio_%`, 2 índices parciales, 11 tablas `ultron_studio_*`, 13 workers RUNNING y `failed_jobs` en 2. Según el lead (01-11-2026), la fase 1 del H5 sigue estable a las 12 horas; en este repositorio solo consta por escrito la verificación de los 15 minutos. [PENDIENTE: evidencia escrita de la verificación de la fase 1 del H5 a las 24 horas (lead o `devops`).]
+
+**Hechos de producción al congelar el contrato** (lead, 31-10-2026, solo lectura y sin imprimir valores; la matriz de credenciales del 01-11-2026, `plans/informes-h6/matriz-credenciales-vps.md`, los repite): `OTP_DRIVER=twilio`; `CACHE_STORE=database`; `TWILIO_SID` y `TWILIO_ACCOUNT_SID`, y `TWILIO_TOKEN` y `TWILIO_AUTH_TOKEN`, con huellas iguales (la misma credencial con dos nombres); ninguna variable `TWILIO_VOICE_*` y 0 filas en `marketing_calls`; `META_AD_ACCOUNT_IDS` con 3 cuentas y `META_ADS_SYNC_ENABLED=true`; ninguna referencia a ElevenLabs.
+
+**Qué es este hito en producción.** El Studio lee, sin escribirlos, el espejo local de Meta Ads (`meta_ad_entities`, `meta_sync_runs`), los retos del OTP, `marketing_calls` y la conversación canaria del motor, y guarda tres registros propios: las asociaciones campaña ↔ línea base o versión, los números canarios y las instantáneas de configuración. **Nada de eso cambia lo que ULTRON dice o hace:** el motor no lee nada nuevo (T0 y T1 del contrato, I4.7).
+
+| Fase | Qué cambia | Coste | Autoriza |
+|---|---|---|---|
+| 1 | Código (18 rutas nuevas; 56 en el Studio), 2 migraciones aditivas (3 tablas, sus guardas y el CHECK del libro de 4 a 7 sujetos), 8 variables (escrituras, sonda y voz apagadas), cachés, `queue:restart`, el CRM y 3 instantáneas de sistema. Las escrituras 47–54 responden 409 `integrations_writes_disabled` y la sonda, 409 `probe_disabled` | 0 | La autorización del 25-10-2026 (contrato, «Autorizaciones»), con la puerta en verde y el H5 en su fase 1 |
+| 2 | `writes on`; T1 (una persona registra el número de la conversación canaria y otra lo autoriza y lo activa); `probe on` y una pulsación de la sonda; reconocimiento de la configuración de los 3 proveedores | 0: la sonda son 5 GET a la API de Twilio, con enfriamiento de 300 s y cupo | La misma, con la fase 1 verificada y **dos personas** disponibles |
+
+**Qué NO toca ninguna fase:** el motor (cero líneas en `app/Services/Marketing/**`, `app/Jobs/**`, `app/Http/Controllers/Api/Internal/**`, `routes/marketing.php` y `config/marketing.php`), `MARKETING_ULTRON_ENABLED`, la pausa, el freno, el id de la conversación canaria del entorno (el T1 no lo toca), el cobro, n8n, el OTP y su configuración (`app/Services/Sms/**`, `app/Services/Otp/**`, `config/otp.php`, `config/meta.php`), Meta (ninguna escritura), ElevenLabs (se queda en `ELEVENLABS_NOT_CONFIGURED`) y las llamadas (`VoiceCallPolicy::CALLS_ENABLED_IN_CODE = false`). Tampoco FPM, supervisor, DNS, TLS ni el firewall. **Fuera de este runbook, con autorización expresa aparte:** T2 y T3 (que el motor lea el registro), cualquier llamada, cualquier escritura en Meta y encender ElevenLabs.
+
+**Variables del Hito 6** (contrato I12 e I6.2; defectos en `config/ultron_studio.php` y `config/voice.php`; `.env.example` las lleva todas con su defecto seguro). La fase 1 escribe **8**, explícitas aunque coincidan con el defecto, para que la configuración real quede a la vista. *(El contrato, «Fase 1» paso 2, enumera 6, y el informe de DevOps habla de «las 10 variables» y escribe 8; manda el script: la lista `VARS` de `deploy-h6-backend-fase1.sh`.)*
+
+| Variable | Fase 1 | Fase 2 | Si falta, está vacía o no es válida |
+|---|---|---|---|
+| `ULTRON_STUDIO_INTEGRATIONS_WRITES_ENABLED` | `false` | `true` (`h6-integrations-scope.sh writes on off`) | `false` |
+| `ULTRON_STUDIO_TWILIO_PROBE_ENABLED` | `false` | `true` (`… probe on off`); puede quedarse encendida | `false` |
+| `ULTRON_STUDIO_CANARY_MAX_ACTIVE` | `3` | `3` | 3; un entero se recorta a 1–10 |
+| `ULTRON_STUDIO_CANARY_COUNTRY_CODES` | `57` | `57` | `['57']` si queda vacía; lista separada por comas de prefijos `^[1-9]\d{0,2}$` |
+| `ULTRON_STUDIO_CAMPAIGN_LINKS_MAX_ACTIVE` | `50` | `50` | 50; un entero se recorta a 1–200 |
+| `ELEVENLABS_ENABLED` | `false` | `false` | `false` |
+| `TWILIO_VOICE_ENABLED` | `false` | `false` | `false` |
+| `TWILIO_VOICE_DAILY_CALL_CAP` | `0` | `0` | 0; un entero se recorta a 0–20 |
+
+- **No se escriben nunca:** `ULTRON_STUDIO_TWILIO_PROBE_KEY_SID` y `ULTRON_STUDIO_TWILIO_PROBE_KEY_SECRET` son del propietario (la API key restringida de solo lectura, opcional). Sin las dos, la sonda usa la credencial del OTP (`probe_credential: otp`). Con solo una, el script avisa y la sonda usa también la del OTP.
+- **Se ignoran en `production`** (el script avisa si están): `ULTRON_STUDIO_TWILIO_PROBE_BASE` y `ELEVENLABS_BASE_URL`. La sonda y la verificación de voz usan siempre los hosts oficiales.
+- **Tienen que estar ausentes o vacías** (si no, el paso 0 aborta: el hito se cierra en `ELEVENLABS_NOT_CONFIGURED` y sin número de voz): `ELEVENLABS_API_KEY`, `ELEVENLABS_AGENT_ID`, `ELEVENLABS_WEBHOOK_SECRET`, `ELEVENLABS_TOOL_SECRET`, `ELEVENLABS_AGENT_PHONE_NUMBER_ID` y `TWILIO_VOICE_FROM`. `ELEVENLABS_REGION`, ausente o `default`.
+- **Las cuatro banderas** (escrituras, sonda, `ELEVENLABS_ENABLED` y `TWILIO_VOICE_ENABLED`) se leen con `filter_var(…, FILTER_VALIDATE_BOOLEAN)`: solo `true`, `1`, `on` o `yes` las encienden; cualquier otro valor las deja apagadas. Quien edite a mano para cerrar escribe `false`.
+
+**Orden y ventanas de compatibilidad:**
+- **Backend → CRM.** Cada uno se revierte por separado.
+- **CRM del Hito 6 con el backend del Hito 5:** las 18 rutas `integrations/*` responden 404 y la página dice «El servidor todavía no tiene integraciones (Hito 6)»; el resto del Studio no pide ninguna. Lo prueban `studio-integrations-compat.spec.ts` (`plans/informes-h6/informe-front-datos.md` §5.1) y el esqueleto del E2E con `7ba0ce8` (las 8 lecturas, 404; `informe-e2e-arnes.md`). [PENDIENTE: comprobarlo con la página del CRM en el escenario «CRM↔H5» del E2E con la pila real; con la API simulada ya lo comprobó `frontend` en Chrome (`informe-front-integracion.md` §5.4).]
+- **CRM del Hito 5 con el backend del Hito 6:** no pide `integrations/*`. Su panel del libro solo conoce 4 sujetos y descarta como ilegibles los eventos `campaign_link`, `canary_number` e `integration` (`informe-front-datos.md` §5.3, leído en el código). En la fase 1 no hay ninguno: la instantánea de sistema no escribe en el libro (solo lo hacen reconocer y la sonda).
+- **Barrera doble** (DevOps §1): las 18 rutas no se sirven hasta `route:cache`, y el script solo lo ejecuta con el esquema completo (43/49/4/14). Aun servidas, las escrituras y la sonda están tras sus banderas.
+- **Socios, caja y ULTRON no notan nada:** el motor no lee nada nuevo y las tablas nuevas solo las usa el Studio.
+- **No usar el Studio durante el despliegue:** la 100002 pide ACCESS EXCLUSIVE sobre el libro, y una pestaña del Studio con una lectura abierta basta para provocar el 55P03 (`informe-db.md` §7.5 y R-1).
+
+### Fase 1: código desplegado con escrituras, sonda y voz apagadas
+
+**Qué cambia:** el código (18 rutas nuevas: 8 GET y 10 POST; 56 en el Studio); las migraciones `2026_11_01_100001_create_ultron_studio_integration_tables` y `2026_11_01_100002_add_ultron_studio_integration_guards` (3 tablas, 13 disparadores, 22 CHECK, los índices únicos parciales `uscl_one_active` y `uscn_one_live`, y `usae_subject_type_chk` de 4 a 7 sujetos); las 8 variables; las cachés y `queue:restart`; los estáticos del CRM; y la primera instantánea «observada» de `meta_ads`, `twilio` y `voice`. No reinicia FPM ni toca supervisor, DNS, TLS ni el firewall.
+
+**Lo que se queda:** las dos migraciones (**nunca `down()` en producción**) y las instantáneas de sistema (solo inserción). El smoke deja la fila 32 de `admins` en reposo, 2 sesiones borradas y líneas INFO y WARNING en el log.
+
+**Condiciones previas:**
+- [x] **El Hito 5 en su fase 1** (requisito previo del contrato): desplegado el 01-11-2026.
+- [ ] **Revisión final del `reviewer` sin bloqueantes.** [PENDIENTE: revisión del `reviewer` sobre el backend y el CRM del Hito 6 (contrato, «Orden», paso 7).] `security` y `api-security-specialist` ya revisaron, sin bloqueantes (Enmienda 3), y sus correcciones están confirmadas (`3e1ee20`, `bd1c7af`, `6241758` y `4e2e8cf`). [PENDIENTE: la segunda pasada de `security` sobre la página del CRM (contrato, «Orden», paso 5); la rellena el lead.]
+- [ ] **La puerta del contrato en verde sobre el commit que se despliega** («Puerta antes de cada fase»): Studio + Access + Chaos en SQLite; el grupo del Studio en PostgreSQL con `docs/ultron-studio/ops/pgunit.sh`, carreras del tester incluidas; las suites de ULTRON, Marketing y OTP iguales a la base; `auth:coverage --unmapped` vacío y 56 rutas; Pint en lo tocado; el módulo del CRM y su build; el E2E `h6-integrations` y la regresión del H5 en verde con la valla vacía; y la puerta de diff vacía. **Hecho por el lead sobre `e3a0fdd`** (el código final del backend, igual que `4e2e8cf`; 01-11-2026, 18:43–18:49 UTC): Studio + Access + Chaos + Voice + Twilio + OTP en SQLite, **2879 OK** (102 omitidas, las de solo PostgreSQL); la puerta PostgreSQL, **2455 OK** en 4 minutos (base `ultron_studio_h6_lead`); **56 rutas**, `auth:coverage --unmapped` vacío y la puerta de diff del motor vacía; Marketing, **4977 OK** sobre `d2c04a0`. [PENDIENTE: la línea base por nombre contra `origin/main`, que quedó corriendo al cortarse la sesión del tester (`informe-tester-backend.md` §7); el E2E y el build del CRM, en sus puntos.] **Sin esta puerta no se despliega:** se repite si el backend cambia de código antes de la fase 1.
+- [ ] **E2E con la pila real.** [PENDIENTE: los 15 escenarios E1–E15 de `specs/h6-integrations.cjs`, hoy un esqueleto que falla a propósito en cuanto la instantánea trae las rutas del H6, y la regresión del H5 sobre el commit final. La última regresión es 410/410 con `7ba0ce8` + `ab78a6a` (`informe-e2e-arnes.md`).]
+- [ ] **La puerta de diff vacía** (contrato), desde `backend/`: `git diff 7ba0ce8 --stat -- app/Services/Marketing app/Jobs app/Http/Controllers/Api app/Services/Sms app/Services/Otp routes/api.php routes/marketing.php routes/console.php config/marketing.php config/meta.php config/otp.php app/Services/UltronStudio/StudioCatalog.php composer.json composer.lock`. **Comprobado en `e3a0fdd` (01-11-2026):** vacía, también desde `e1b1d26`; `7ba0ce8` es ancestro de HEAD, y entre los dos solo hay las 2 migraciones del Hito 6. El script la repite en su paso 0.
+- [ ] **Build de producción del CRM** sobre el commit final, con la página. **Hecho sobre `f38699d`** (`plans/informes-h6/informe-front-integracion.md` §5.2): salida 0, los mismos 36 avisos de presupuesto que en `ede716b`, nombre a nombre, y el chunk nuevo `studio-integrations-page` de 162,46 kB (38,03 kB transferidos); módulo y modelos 1096/1096. [PENDIENTE: volver a exportar `backend-integrations.testing.ts` desde el backend final (la copia del CRM es el export de `4e6f5fe`, anterior a `3e1ee20`), repetir la paridad, correr la suite completa del CRM y rehacer el build sobre el commit que se despliega (`frontend`).]
+- [ ] **`PREVIO` = el HEAD de producción el día del despliegue.** Hoy, `7ba0ce8`. Si producción se mueve antes (otro equipo despliega después del H5), el paso 0 aborta («producción no está en … ni en …»): se revisa qué entró, se actualiza `PREVIO` en un commit y se vuelve a copiar el script.
+- [ ] **Push con avance rápido de los dos repos** (autorización del 25-10-2026): `git push origin feat/ultron-studio-h6:main` en cada uno, solo si es avance rápido sobre `origin/main`. **Nunca `--force`.** La rama del backend ya trae `origin/main` fusionado (`d2c04a0`, H-2 de DevOps).
+- [ ] Unos 15 minutos sin nadie en el Studio.
+- [ ] Anotados a mano:
+  - `<commit-backend>`: `git rev-parse --short=7 origin/main` del backend tras el push (siete cifras: el script compara con `--short=7`);
+  - `<build-crm>`: el commit de `origin/main` del CRM;
+  - `<crm-prod>`: el `commit` de `https://ironbodyneiva.cloud/version.json` (esperado `ab78a6a`; comprobarlo).
+
+**1. Respaldo** (en el servidor, como root, menos de 2 horas antes del paso 5: el script lo exige)
+
+```bash
+TS=$(date -u +%Y%m%d-%H%M%S); BK=/var/backups/ironbody/ultron-studio-h6-$TS
+( umask 077
+  mkdir -p "$BK"
+  git -C /var/www/api rev-parse HEAD > "$BK/api-commit.txt"                       # empieza por PREVIO (hoy, 7ba0ce8)
+  sudo -u postgres pg_dump -Fc ironbody > "$BK/ironbody.dump"
+  sha256sum "$BK/ironbody.dump" > "$BK/ironbody.dump.sha256"
+  tar -C /var/www -czf "$BK/app-crm.tgz" app
+  install -m 600 -o root -g root /var/www/api/backend/.env "$BK/env.backup"
+  cp -a /var/www/api/backend/bootstrap/cache "$BK/bootstrap-cache"
+  cp -a /etc/supervisor/conf.d "$BK/supervisor-conf.d" )
+pg_restore -l "$BK/ironbody.dump" | grep -c 'TABLE DATA'                          # al menos 223 (H-4)
+stat -c '%a %U %n' "$BK" "$BK"/*                                                  # 700 el directorio; 600 y root el volcado y env.backup
+du -h "$BK/ironbody.dump"; echo "BK=$BK"
+```
+
+- **`umask 077` va dentro de una subshell**, como en el Hito 5: el volcado y la copia del entorno nacen en 600 dentro de un directorio 700, y la sesión de root no se queda con esa umask. Un `git` posterior en la misma sesión (por ejemplo, una vuelta atrás a mano) dejaría en 600 lo que reescribiera, ilegible para `www-data`. *(El §3 del informe de DevOps la fija en la sesión entera; aquí no.)*
+- **Lo que comprueba el script de este respaldo:** que `api-commit.txt` empiece por `PREVIO`; que el volcado tenga menos de 2 horas y su `.sha256` cuadre; el directorio en 700; el volcado y `env.backup` de root y en 600; al menos 223 tablas con datos; y, si no es una reanudación, que el fichero de entorno sea idéntico a `env.backup`. **Por eso el respaldo va después de cualquier cambio a mano en el fichero de entorno.**
+- **H-4 de DevOps, el umbral de 223:** las 222 tablas del volcado del Hito 5 del 01-11-2026 (antes de migrar) más `ultron_studio_publications`. Si el script aborta por él, se cuentan las tablas a mano (`pg_restore -l "$BK/ironbody.dump" | grep -c 'TABLE DATA'` frente a `SELECT count(*) FROM pg_tables WHERE schemaname = 'public';`) antes de pensar en bajarlo, y solo se baja en un commit.
+- **El respaldo es tan sensible como el servidor** (B-1 de `security`): guarda juntos el volcado y `env.backup`, y con la `APP_KEY` las huellas de los teléfonos canarios se recuperan. `env.backup` lleva secretos: 600 y nunca se imprime. **Nunca se borra un respaldo.**
+- **El respaldo automático diario** (`ironbody-db-backup.timer`) no sustituye a este: puede tener hasta 24 horas.
+
+**2. Copiar los scripts** (desde el Mac, con el árbol del backend en `<commit-backend>` y `git status` limpio)
+
+```bash
+cd /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h6/Iron-Body/backend
+O=docs/ultron-studio/ops
+shasum -a 256 $O/deploy-h6-backend-fase1.sh $O/h6-integrations-scope.sh $O/smoke-h6.py $O/smoke-run-h6.sh $O/h6-schema-check.sql
+scp $O/deploy-h6-backend-fase1.sh $O/h6-integrations-scope.sh $O/smoke-h6.py $O/smoke-run-h6.sh $O/h6-schema-check.sql ironbody-vps:/root/
+ssh ironbody-vps 'chmod 700 /root/deploy-h6-backend-fase1.sh /root/h6-integrations-scope.sh /root/smoke-run-h6.sh && chmod 600 /root/smoke-h6.py /root/h6-schema-check.sql && sha256sum /root/deploy-h6-backend-fase1.sh /root/h6-integrations-scope.sh /root/smoke-h6.py /root/smoke-run-h6.sh /root/h6-schema-check.sql'
+```
+
+Las huellas del Mac y del servidor tienen que coincidir. Se copian desde el Mac, y no con `git show` en el servidor, para que root ejecute git lo imprescindible. **El smoke borra sus dos ficheros de `/root/` al terminar:** antes de cada ejecución (también en la fase 2) se vuelven a copiar, con sus huellas.
+
+**3. Esquema antes** (solo lectura)
+
+```bash
+sudo -u postgres psql -X -v ON_ERROR_STOP=1 -v owner=iron -v app=iron_app -x -d ironbody < /root/h6-schema-check.sql
+```
+
+Esperado: `disparadores_studio` 30 y `check_studio` 27; 0 en todo lo del Hito 6 (disparadores y CHECK `uscl_`, `uscn_` y `usis_`, `parciales_h6` y `tablas_h6`); `parciales_studio` 2; `check_7_sujetos` f; `funcion_es_la_de_f` t; `dueno_funcion`, `dueno_libro` y `dueno_versiones` `iron`; `create_en_public` t; `tablas_studio` 11; `eventos_sujetos_nuevos` 0; y **0 filas de cerrojos**. Va por la entrada estándar porque `postgres` no puede leer `/root`. **Se para si** la función o alguna de las dos tablas no es de `iron` (la 100002 fallaría con 42501: no forzar), si `funcion_es_la_de_f` sale f o si hay cerrojos.
+
+**4. Ensayo en el servidor** (solo lectura, salvo el `git fetch`)
+
+```bash
+bash /root/deploy-h6-backend-fase1.sh <commit-backend> "$BK" --solo-comprobar
+```
+
+Esperado: `COMPROBACIONES PREVIAS EN VERDE (no se ha tocado nada)`. Es lo único que cubre en el servidor lo que el banco local no puede: GNU `stat` y `grep`, `sudo` real, los dueños `root` y `www-data` y el envoltorio `ironbody-migrate`. Con cualquier `ABORTA`, no se ha tocado nada: se aclara la causa y se repite.
+
+**5. Backend**
+
+```bash
+bash /root/deploy-h6-backend-fase1.sh <commit-backend> "$BK" 2>&1 | tee /root/h6-fase1-$(date -u +%Y%m%d-%H%M%S).log
+```
+
+Lo esperado, según las líneas que imprime el script. No se ha ejecutado en el servidor; en el banco local terminó en `FASE 1 (H6) COMPLETADA` en 45–46 s, con un 55P03 provocado y reintentado. `…` sustituye detalle que no cambia el resultado, y `<…>`, valores del momento:
+
+```
+0. comprobaciones previas (solo lectura; si algo falla, no se toca nada):
+   respaldo /var/backups/ironbody/ultron-studio-h6-<TS>: <≥ 223> tablas con datos · 700/600 de root
+   claves del Hito 6 ausentes o iguales · sonda: credencial otp · Twilio: SID por "TWILIO_SID", token por "TWILIO_TOKEN" (sin valores)
+   HEAD 7ba0ce8 limpio · puerta de diff vacía · esquema 30/27 del H5, 2 parciales, 11 tablas, de iron · función de F · sin cerrojos · rutas [38 0 0 0] · workers 13/0 · facturación activa
+   libro: <N> 0 (eventos · de sujetos nuevos) · colas fallidas: <N> · sellos studio: 0
+   motor, H4 y H5 (informativo; no cambia): {"engine_scope":"off", …}
+1. código: HEAD=<commit-backend>
+   los <N> ficheros del merge son legibles por www-data
+2. variables (escrituras y sonda apagadas, voz apagada, topes por defecto):
+   ULTRON_STUDIO_INTEGRATIONS_WRITES_ENABLED añadida
+   … (las otras siete, igual)
+   permisos del fichero: <dueño> <modo>
+   el fichero de entorno parsea
+3. migración (rol dueño, lock_timeout 5 s; un 55P03 se reintenta hasta 3 veces, 15 s entre intentos):
+   … 2026_11_01_100001_create_ultron_studio_integration_tables … DONE
+   … 2026_11_01_100002_add_ultron_studio_integration_guards … DONE
+   esquema 43 disparadores · 49 CHECK · 4 parciales · 14 tablas (intento 1)
+4. esquema del Hito 6 (antes de servir las rutas nuevas):
+   … : 5 5 3 4 12 6 2 true iron,iron,iron 0 0 0 0
+   iron_app (SELECT/INSERT/UPDATE/TRUNCATE/secuencia) en asociaciones · canarios · instantáneas: true/true/true/false/true true/true/true/false/true true/true/n/false/true
+5. cachés y workers:
+   cachés: www-data 600 · www-data 600
+6. rutas del Studio (total · integrations · GET · POST): 56 18 8 10 · auth:coverage --unmapped → []
+7. configuración efectiva:
+   {"writes_enabled":false,"probe_enabled":false,"probe_cooldown_s":300,"probe_credential":"otp", …}
+   motor, H4 y H5 iguales que antes del despliegue
+8. workers (RUNNING · BACKOFF/FATAL), dos lecturas separadas: [13 0] y [13 0]
+9. sanidad:
+   … sin token → 401 (cuatro líneas: integrations/status, canaries, config y POST meta/links)
+   usage-trigger sin firma → 403 (falla cerrada; T-1)
+   … colas fallidas sin crecer, 0 sellos, security:check-secret-exposure OK, publication-check 0,
+   fichero de entorno igual al respaldo salvo las 8 claves del Hito 6
+10. integrations-doctor:
+   twilio connected_otp_only · twilio_voice not_configured · elevenlabs ELEVENLABS_NOT_CONFIGURED: 0
+   meta_ads connected_read: 0                   (o una línea INFO si Meta sale degraded)
+11. primera instantánea de sistema (integrations-snapshot; inserta solo si la huella de un proveedor cambió):
+   instantáneas: 0 → 3 · observadas por proveedor: meta_ads=1 twilio=1 voice=1
+12. laravel.log ERROR desde el inicio del despliegue: 0
+FASE 1 (H6) COMPLETADA
+```
+
+- **Lo que hace el script, en orden:** comprobaciones de solo lectura (abortan sin tocar nada) → `merge --ff-only` como root con `umask 022` → comprobación de que `www-data` lee cada fichero de `git diff --name-only PREVIO HEAD` → las 8 variables (con el salto final asegurado) → comprobación de que el fichero de entorno parsea → `ironbody-migrate` con `PGOPTIONS="-c lock_timeout=5s"` y hasta 3 intentos ante un 55P03 → **compuerta del esquema (43/49/4/14, guardas por prefijo, 7 sujetos, función de F, dueños, privilegios de `iron_app` y 0 filas) antes de `route:cache`** → `route:cache` con `umask 077`, cachés de `www-data` en 600 y `queue:restart` → aserciones (rutas, configuración efectiva exacta y motor sin cambios, workers dos veces, 401, `usage-trigger` 403, colas, sellos, secretos, `publication-check`, entorno igual al respaldo) → `integrations-doctor` → la primera instantánea, **solo con 0 desvíos** → ERROR nuevos en el log, descontando como mucho una excepción 55P03 por reintento. Nunca imprime valores del fichero de entorno ni la salida de un tinker que no case con lo esperado.
+- **`integrations-doctor`:** el script lo llama dos veces. La primera exige Twilio en `connected_otp_only`, la voz de Twilio en `not_configured` y ElevenLabs en `ELEVENLABS_NOT_CONFIGURED`. La segunda acepta Meta en `connected_read` o en `degraded`; `degraded` es un dato (un dato viejo, una pasada fallida o la sincronización apagada), no un fallo del despliegue. *(El contrato, «Fase 1» paso 7, lo escribe como una sola llamada con las cuatro expectativas.)*
+- **Un tercer argumento que no sea exactamente `--solo-comprobar`** sale con 2 sin tocar nada.
+- **Con `ABORTA` porque `www-data` no puede leer algún fichero del `merge`:** el código nuevo ya está en el disco, sin variables ni migraciones. Se corrigen los permisos como dice el mensaje (644 los ficheros y 755 los directorios de `git diff --name-only 7ba0ce8 HEAD`) y se relanza el mismo comando, que reanuda.
+- **Con `ABORTA` en el paso 3 (55P03 agotado tras 3 intentos):** no hay `route:cache`, así que las 18 rutas no se sirven y nadie usa las tablas. Si cayó la 100002, las 3 tablas quedan **sin guardas** hasta el reintento. Se mira quién tiene cerrojos con `h6-schema-check.sql` y **se relanza el mismo comando**, que reanuda (HEAD ya en `<commit-backend>`, sin `merge` ni claves duplicadas).
+- **Con 42501 al migrar:** la función, el libro o versiones no son de `iron`. El script aborta sin reintentar y sin `route:cache`. Parar y avisar a `database-specialist`. **No forzar.**
+- **Con `FASE 1 (H6) CON N DESVÍOS`** (código 1): no se sigue con el CRM ni con el smoke hasta aclararlos. La primera instantánea no se toma con desvíos: la toma la siguiente ejecución, que reanuda.
+- **Reanudación tardía.** Si la fase 1 se corta y se relanza más de 2 horas después del respaldo, el paso 0 aborta (falla cerrado) y **hay que rehacer el respaldo** con el bloque del paso 1, pero con `api-commit.txt` igual a `PREVIO`, no al HEAD de ese momento: `git -C /var/www/api rev-parse 7ba0ce8 > "$BK/api-commit.txt"`. **Ojo, leído en el script:** en una reanudación, el paso 0 del H6 acepta también un `api-commit.txt` que empiece por el commit nuevo (el del H5 abortaba). Si se rehace con el HEAD, el script sigue sin quejarse, pero la vuelta atrás del código, que lee ese fichero, apuntaría al commit equivocado.
+
+**6. Esquema después** (solo lectura): el mismo `h6-schema-check.sql` del paso 3. Esperado: `disparadores_studio` 43 y `check_studio` 49; disparadores `uscl` 5, `uscn` 5 y `usis` 3; CHECK `uscl` 4, `uscn` 12 y `usis` 6; `parciales_h6` 2 y `parciales_studio` 4; `check_7_sujetos` t; la misma `huella_funcion` (`4ad748b5…`); `tablas_studio` 14 y `tablas_h6` 3; `eventos_sujetos_nuevos` 0; de `iron_app` en las tres tablas, SELECT, INSERT y UPDATE t, TRUNCATE f y secuencia t (DELETE sale t y es informativo: lo paran los disparadores); y, en las instantáneas, `meta_ads`, `twilio` y `voice` con una fila `config`/`system` cada uno.
+
+**7. CRM** (desde el Mac)
+
+```bash
+curl -fsS https://ironbodyneiva.cloud/version.json                          # <crm-prod> (esperado ab78a6a)
+cd /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h6/Iron-Body_Front   # en <build-crm>, limpio
+npm run build:prod                                                          # version.json: commit <build-crm>, dirty false
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h6/Iron-Body/backend/docs/ultron-studio/ops/deploy-crm.sh <build-crm> <crm-prod> /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h6/Iron-Body_Front
+```
+
+**El tercer argumento es obligatorio:** sin él, `deploy-crm.sh` toma el build de `_worktrees/thermal-receipts/Iron-Body_Front`, el worktree que se usó en el Hito 5. Esperado: **`CRM PUBLICADO Y VERIFICADO`**; con cualquier fallo de verificación, `CRM PUBLICADO CON N FALLOS DE VERIFICACIÓN` y código 1 (el CRM ya está publicado: se revisa antes de seguir). **Anotar** la línea `RESPALDO: /var/backups/ironbody/crm-pre-<build-crm>-<ts>`.
+
+**8. Smoke** (escribe en la fila 32 de `admins` y en `admin_sessions`), copiando antes `smoke-h6.py` y `smoke-run-h6.sh` a `/root/` (paso 2):
+
+```bash
+ssh ironbody-vps 'SMOKE_PHASE=1 bash /root/smoke-run-h6.sh'
+```
+
+Esperado:
+- `OK      configuración efectiva de la fase 1: {"writes_enabled":false,"probe_enabled":false}` y `OK      14 tablas ultron_studio_* en la base`;
+- la parte del Super Admin, unas **78 OK** con 0 FALLO y 0 OMITIDO (77 si Meta sale `degraded`), y la del Administrador (la misma cuenta con el rol cambiado), **26 OK**;
+- en la base, el recuento exacto de las 14 tablas igual antes y después (un cambio en una tabla del Hito 6 es FALLO) y ninguna fila nueva que nombre a la cuenta;
+- la cuenta en reposo (inactiva, Super Admin, sin sesiones) y los tokens muertos;
+- código de salida 0.
+
+Lo que comprueba la fase 1 (contrato, «Fase 1» paso 7, y la cabecera de `smoke-h6.py`): las 56 rutas; Twilio con `aliasesConsistent = {sid: true, token: true}` y `calls.total = 0`; las escrituras 47–54 en 409 `integrations_writes_disabled` y la sonda en 409 `probe_disabled`; los canarios vacíos con `engine_canary_not_registered`; las campañas con su antigüedad; la voz en `ELEVENLABS_NOT_CONFIGURED` con `policy.allowed = false`; la configuración en `never_authorized` con su `observed`; y un detector de fugas (claves prohibidas, formatos de SID, tokens y claves, teléfonos, ids de 10 cifras, la conversación canaria y las huellas saladas de los secretos del servidor). **Sin filas positivas:** solo envía lo que el servidor rechaza antes de escribir, y la ruta 55 (reconocer) no la llama nunca el Super Admin.
+
+Códigos: 0 todo OK · 1 algún FALLO · 3 algo OMITIDO · 2 uso incorrecto. Ensayado: 78 + 26 en el banco local y contra el arnés E2E (`f549c50`), con las 14 tablas idénticas y 0 peticiones a los simuladores.
+
+> **H-3 de DevOps: como mucho 3 smokes por hora** con la cuenta 32. El cupo de la sonda (6/h por persona) corre antes de autenticar, y cada smoke gasta 2 (Super Admin y Administrador): una cuarta ejecución en la misma hora da 429 en la sonda, que cuenta como FALLO. Además, 3 por minuto, por el login (8/min por IP). Las llamadas denegadas desde la oficina comparten también el cupo por red (20/h).
+
+**9. Controles de no regresión** (solo lectura): la sonda del contrato n8n↔backend sin efectos, como en el Hito 5; `SELECT max(started_at) FROM meta_sync_runs;` posterior al despliegue en la hora siguiente (la sincronización de Meta sigue sumando pasadas); y `usage-trigger` en 403 sin firma (ya lo comprueba el script). **No se lanza un OTP de prueba.**
+
+**10. Cierre de la fase 1:** registrar en `ULTRON_STUDIO_MASTER_ROADMAP.md`, `ULTRON_STUDIO_FINAL_REPORT.md` y `ULTRON_STUDIO_ROLLBACK.md` la fecha UTC, los commits, `$BK` y el respaldo del CRM, la salida del script y la del smoke, y el estado «Hito 6 desplegado en la fase 1 (escrituras y sonda apagadas)».
+
+### Después de la fase 1: a los 15 minutos y a las 24 horas (solo lectura)
+
+```bash
+cd /var/www/api/backend
+supervisorctl status                                                           # 13 RUNNING; tiempo de actividad ≈ desde el queue:restart; ningún BACKOFF/FATAL
+sudo -u postgres psql -X -Atq -d ironbody -c "SELECT count(*) FROM failed_jobs;"                             # igual que en el paso 0
+sudo -u www-data php artisan ultron-studio:integrations-doctor --expect=twilio:connected_otp_only,twilio_voice:not_configured,elevenlabs:ELEVENLABS_NOT_CONFIGURED   # código 0
+sudo -u www-data php artisan voice:doctor                                      # Estado: ELEVENLABS_NOT_CONFIGURED
+sudo -u www-data php artisan ultron-studio:publication-check                   # código 0
+sudo -u www-data php artisan queue:health                                      # sin incidentes
+sudo -u www-data php artisan security:check-secret-exposure                    # en verde
+grep -c 'production.ERROR' storage/logs/laravel.log                            # frente al valor del paso 0 del script
+grep ' /api/admin/ultron-studio/integrations' /var/log/nginx/access.log | awk '{print $9}' | sort | uniq -c   # si el formato es el combined: ningún 5xx
+sudo -u postgres psql -X -Atq -d ironbody -c "SELECT (SELECT count(*) FROM ultron_studio_campaign_links), (SELECT count(*) FROM ultron_studio_canary_numbers), (SELECT count(*) FROM ultron_studio_integration_snapshots);"   # 0|0|3
+```
+
+- **Si el log es diario** (`laravel-AAAA-MM-DD.log`), el fichero del día.
+- **Meta:** `integrations-doctor --expect=meta_ads:connected_read`; si sale `degraded`, se anota el motivo (dato viejo o pasada fallida), no es un fallo.
+- **A las 24 horas:** lo mismo y, si se quiere, otra pasada de `SMOKE_PHASE=1` (copiando antes los dos ficheros; H-3). Es la base para decidir la fase 2.
+
+### Fase 2: escrituras encendidas, T1, sonda y configuración autorizada
+
+**Antes:**
+- [ ] Fase 1 estable 24 horas: 0 ERROR nuevos del Studio, 0 respuestas 5xx en `integrations/*`, workers estables y colas fallidas sin crecer.
+- [ ] **Dos personas reales** disponibles: A, que tiene el teléfono de la conversación canaria, y B, Super Admin con `ultron.canary_authorize`, distinta de A. **Dos personas, no dos cuentas** (`security` §3 #13): ninguna de las dos cuentas creada o elevada por la otra en los días previos. La cuenta temporal del smoke **nunca** sirve para el T1 real.
+- [ ] **Aislamiento del rol de la aplicación** (O-2 del tester, Enmienda 4): con `default_transaction_isolation = repeatable read` en `iron_app`, 7 de las 37 carreras del tester responderían 500 (40001); el rol tiene que estar en READ COMMITTED. [PENDIENTE: comprobación de solo lectura por `devops` en producción, con su resultado anotado aquí.]
+- [ ] **El FPM ve la caché nueva sin recargarse** (N-4 a de `security`): `h6-integrations-scope.sh` no recarga FPM y da el mando por aplicado con la lectura de tinker, que es CLI. [PENDIENTE: comprobar una vez `opcache.validate_timestamps` del pool de FPM y anotarlo aquí (`devops`).] Lo que sí ve el proceso web lo comprueba el smoke de la fase 2.
+- [ ] La «base oficial» estricta de N-3 (D-18) está en el código desplegado (`3e1ee20`) **antes de reconocer Twilio**: `https`, host exacto, puerto 443 y sin credenciales en la URL. Con las bases por defecto, la huella de producción no cambia.
+
+**Pasos, en este orden** (H-1 de DevOps: la huella de la configuración de Twilio incluye `facts.probe.enabled`, así que **reconocer va después de `probe on`**; con el orden del contrato, Twilio quedaría en `drift` y el criterio de cierre exige los 3 proveedores en `authorized`):
+
+1. `bash /root/h6-integrations-scope.sh writes on off` (servidor, root). Esperado: `MANDO writes → on APLICADO (copia previa: /root/env-pre-h6-writes-on-<TS>)`. El script exige el fichero de entorno en 600 (N-4 b; si no, aborta sin tocar nada) y que el estado actual coincida con la configuración efectiva; deja una copia previa 600; reescribe la llave en el mismo fichero (conserva dueño y modo); comprueba que parsea; regenera la caché como `www-data` con `umask 077` y 600; comprueba que la configuración efectiva es la de antes con solo esa llave cambiada y que el motor no cambió; `queue:restart`; 13/0 workers dos veces; `integrations/status` sin token → 401; y una instantánea de sistema si alguna huella cambió (`writes` no cambia ninguna). Con algún desvío, `ESCRITO CON N DESVÍOS` y código 1, con la orden exacta para volver.
+2. `ssh ironbody-vps 'SMOKE_PHASE=2 bash /root/smoke-run-h6.sh'` (copiando antes los dos ficheros). Esperado: código 0, **73 + 26 OK** en el banco y en el arnés. Comprueba desde el proceso web que `flags.writesEnabled` es `true` y sigue sin escribir: recursos inventados (404) o cuerpos inválidos (422).
+3. **T1 con personas reales** (CRM, pestaña «Números canarios»):
+   1. A registra el número de WhatsApp de la conversación canaria (canal `whatsapp`, un alias por función y no el nombre de una persona, y la casilla de consentimiento);
+   2. B lo autoriza (`ultron.canary_authorize`, ≠ A);
+   3. B lo activa (`ultron.canary_manage`, ≠ A) → el banner de coherencia dice **`in_sync`**.
+
+   Evidencia sin datos personales:
+
+   ```sql
+   SELECT channel, status, registered_by_admin_id <> authorized_by_admin_id AS autoriza_otra, activated_by_admin_id <> registered_by_admin_id AS activa_otra
+     FROM ultron_studio_canary_numbers WHERE status <> 'revoked';
+   SELECT event, actor_admin_id, created_at FROM ultron_studio_audit_events WHERE subject_type = 'canary_number' ORDER BY id;
+   ```
+
+   Esperado: `whatsapp`, `active`, t, t; y `canary_number.registered`, `.authorized` y `.activated` con dos identidades distintas. **El entorno no se toca:** ULTRON sigue atendiendo solo la conversación canaria configurada en el servidor.
+4. `bash /root/h6-integrations-scope.sh probe on off`. Esperado: `MANDO probe → on APLICADO (…)`, con una instantánea de sistema nueva de Twilio (la huella cambió). Antes de escribir, el script comprueba que el entorno efectivo de la aplicación es `production` (AS-5, `6241758`): fuera de `production` la sonda no fija los hosts oficiales, y no se enciende. Imprime la credencial que usará: la del OTP mientras el propietario no cree la API key restringida.
+5. **Una** pulsación de la sonda desde el CRM (pestaña «Twilio»; el botón solo aparece con `can.integrationsManage` y `flags.twilioProbeEnabled`, es decir, para el Super Admin). Su instantánea, con cualquier `outcome`, es la evidencia: el estado de la cuenta y la respuesta a «¿hay número de voz o solo caller ID?» (`numbers.voiceCapable` y `callerIds.count`). `SELECT outcome, created_at FROM ultron_studio_integration_snapshots WHERE kind = 'probe' ORDER BY id DESC LIMIT 1;`. Una segunda pulsación en menos de 300 s devuelve la misma instantánea (`reused`), sin red. Si el propietario crea una API key restringida sin lectura de Monitor, el paso `alerts` sale `auth_failed` y la sonda, `degraded`, sin que sea un fallo (`informe-twilio.md`, «Datos y dudas», punto 5).
+6. **Obligatorio después del paso 4:** un Super Admin reconoce `meta_ads`, `twilio` y `voice` (pestaña «Twilio», «Configuración autorizada») → los tres en `authorized`. Comprobación:
+
+   ```sql
+   SELECT provider, count(*) FROM ultron_studio_integration_snapshots WHERE kind = 'config' AND actor_type = 'admin' GROUP BY provider;
+   ```
+
+   y `GET integrations/config` sin `drift`. Si alguien reconoció antes, **se vuelve a reconocer Twilio** después de `probe on`. Si la sonda se apaga más tarde (`probe off on`), Twilio vuelve a `drift` hasta que se reconozca de nuevo. Un 409 `config_changed` al reconocer significa que la configuración cambió entre leerla y pulsar: se recarga y se vuelve a reconocer lo que se ve.
+7. `SMOKE_PHASE=2` otra vez, con la sonda encendida → código 0. Ese smoke **no** pulsa la sonda: le manda un cuerpo inválido (422). H-3: como mucho 3 smokes por hora, contando los de la fase 1.
+
+- **Asociar campañas en producción no es condición** (el E2E prueba el flujo). Si se asocia alguna, queda en el libro y no cambia nada en Meta ni en el motor.
+- **La bandera de la sonda puede quedarse encendida:** son GET sin coste, con enfriamiento de 300 s y cupo de 6 por hora y persona y 20 por hora y red.
+- **Las copias del fichero de entorno** (`/root/env-pre-h6-*`, root, 600) llevan secretos: quitarlas lo decide el propietario.
+
+**Criterio de cierre** (contrato, «Criterio de cierre»): **`HITO_6_COMPLETED`**, con la evidencia en los informes, cuando las fases 1 y 2 estén ejecutadas; el T1, en `in_sync` en producción con dos identidades en el libro; la configuración de los 3 proveedores, reconocida; una sonda ejecutada con su instantánea; el panel en vivo, igual que la clasificación al congelar (Meta `connected_read`, Twilio `connected_otp_only`, Twilio Voice `not_configured`, canarios `registry` y ElevenLabs `ELEVENLABS_NOT_CONFIGURED`) o con la diferencia explicada; y ElevenLabs, todavía en **`ELEVENLABS_NOT_CONFIGURED`**, con el adaptador, el `doctor`, la firma, la política y el procedimiento de activación entregados (`ULTRON_STUDIO_ELEVENLABS_READY.md`). **`HITO_6_IMPLEMENTED_WITH_EXTERNAL_DEPENDENCY`** si falta la segunda persona para el T1 o el despliegue previo del Hito 5.
+
+### Incidencias previsibles durante el despliegue
+
+Del informe de DevOps (§6) y del de datos (§9); ninguna se ha visto en producción.
+
+| Síntoma | Causa | Qué hacer |
+|---|---|---|
+| `ABORTA` en el paso 0 del script | Algo de partida no es lo esperado (HEAD, checkout, `origin/main`, migraciones, puerta de diff, respaldo, claves, esquema, cerrojos, rutas o workers) | No se ha tocado nada. Aclarar la causa y repetir |
+| 55P03 en la migración | Alguien tenía el libro, versiones o una tabla nueva, aunque solo fuera leyendo: la 100002 pide ACCESS EXCLUSIVE | El script reintenta hasta 3 veces. Si se agota, no hay `route:cache`: las 3 tablas pueden quedar sin guardas, pero nadie las usa. `h6-schema-check.sql` para ver quién tiene cerrojos y **relanzar el mismo comando** (reanuda) hasta 43/49 |
+| 42501 al migrar | La función, el libro o versiones no son de `iron` | Parar y avisar a `database-specialist`. Ensayado en el banco: aborta sin reintentar y sin `route:cache`. **No forzar** |
+| Workers en BACKOFF tras `queue:restart` | La caché no es de `www-data` o no se puede leer | `stat -c '%U %a' bootstrap/cache/*.php`; `sudo -u www-data sh -c 'umask 077; php artisan config:cache -q'` y `chmod 600`. `supervisorctl restart` **solo con autorización**: reinicia servicios productivos |
+| `el fichero de entorno NO parsea` | Una línea mal formada | Restaurarlo desde `$BK/env.backup` (o desde la copia `/root/env-pre-h6-*` que deja el mando de alcance), con el mismo dueño y modo 600, antes de seguir. Solo se imprime la clase del error |
+| Meta `degraded` | Dato viejo (más de 180 min sin pasada con éxito), una pasada fallida o la sincronización apagada | Es un dato, no un fallo. Anotarlo |
+| El doctor no da Twilio, la voz o ElevenLabs esperados | La configuración no es la del congelado (por ejemplo, una pieza de ElevenLabs en el entorno) | Desvío: revisar la configuración sin imprimir valores. ElevenLabs no debe tener piezas |
+| El smoke da 429 | Más de 3 ejecuciones por hora (cupo de la sonda) o por minuto (login) | Esperar. La cuenta ya está en reposo |
+| El smoke dice «no se pudo activar la cuenta» | Otra fila de `admins` tiene el correo del smoke | Falla sin efectos. Aclararlo antes de repetir |
+| Veredicto `engine_canary_phone_unusable` | El lead de la conversación canaria no tiene teléfono utilizable | Dato de producción que hay que aclarar antes del T1 |
+| Smoke de la fase 2 con FALLO por banderas (el CLI dice `writes_enabled: true` y el proceso web, `flags.writesEnabled: false`) | El proceso web no ve la caché nueva | En el arnés pasó con `artisan serve --no-reload`, que fija el entorno al arrancar (DevOps §8). En producción, ver la condición de `opcache.validate_timestamps` |
+
+**Rotación de la `APP_KEY`:** no forma parte de ninguna fase. Con el Hito 6 desplegado, deja inservibles también las huellas de los teléfonos canarios, los cifrados de voz, los ids opacos de Meta y las huellas de configuración, y pierde el T1. El procedimiento ampliado está en `ULTRON_STUDIO_ROLLBACK.md` («Hito 6»).
+
 ## Fases siguientes (no incluidas aquí)
 
-Campañas Meta (solo lectura), Twilio Voice y números canarios (tabla auditada), adaptador de ElevenLabs tras bandera. Cada una con su migración revisada en PostgreSQL, su suite y su plan de reversión. (La persistencia, que también figuraba en esta lista, se desplegó con el Hito F el 18-10-2026; el laboratorio y la evaluación con OpenAI tienen su runbook en «Hito 4», más arriba, y la publicación, el canario y la reversión por versión, en «Hito 5». Actualizado el 31-10-2026.)
+Campañas Meta (solo lectura), Twilio Voice y números canarios (tabla auditada), adaptador de ElevenLabs tras bandera. Cada una con su migración revisada en PostgreSQL, su suite y su plan de reversión. (La persistencia, que también figuraba en esta lista, se desplegó con el Hito F el 18-10-2026; el laboratorio y la evaluación con OpenAI tienen su runbook en «Hito 4», más arriba, y la publicación, el canario y la reversión por versión, en «Hito 5». Actualizado el 31-10-2026.) *(Actualización del 01-11-2026: las campañas de Meta en lectura, los números canarios, la sonda de Twilio y el adaptador de ElevenLabs sin activar tienen su runbook en «Hito 6», más arriba, pendiente de ejecución. Twilio Voice y las llamadas siguen fuera: los trae el hito de voz, con autorización expresa.)*

@@ -1,6 +1,6 @@
 # ULTRON STUDIO: informe de avance
 
-**Fecha:** 17-10-2026 (se actualiza con cada fase; última actualización: 01-11-2026: Hito 4 desplegado en fases 1–2 el 25-10-2026, e Hito 5 desplegado en la fase 1 el 01-11-2026). **Rama:** `feat/ultron-studio` en el CRM (`Iron-Body_Front`) y en el backend (`Iron-Body`, solo documentación); el Hito G, en `feat/ultron-studio-g` de los dos repos; el Hito 4, en `feat/ultron-studio-h4` de los dos repos; el Hito 5, en `feat/ultron-studio-h5` de los dos repos.
+**Fecha:** 17-10-2026 (se actualiza con cada fase; última actualización: 01-11-2026: Hito 4 desplegado en fases 1–2 el 25-10-2026, Hito 5 desplegado en la fase 1 el 01-11-2026 e Hito 6 implementado en rama, sin desplegar). **Rama:** `feat/ultron-studio` en el CRM (`Iron-Body_Front`) y en el backend (`Iron-Body`, solo documentación); el Hito G, en `feat/ultron-studio-g` de los dos repos; el Hito 4, en `feat/ultron-studio-h4` de los dos repos; el Hito 5, en `feat/ultron-studio-h5` de los dos repos; el Hito 6, en `feat/ultron-studio-h6` de los dos repos.
 
 ## Estado
 
@@ -14,11 +14,12 @@
 | G. Control funcional de las diez capas (configuración real por capa, lecturas del motor, reglas con condiciones, historial y comparación) | **DESPLEGADO Y VERIFICADO** (19-10-2026 06:00–06:04 UTC; backend `e651dd9`, código `dfb30f5`; CRM `44c0e8c`). Revisiones de seguridad, de pruebas y final (APROBADO CON OBSERVACIONES, todas cerradas); E2E con la pila real 126/126; smoke en producción 29/29. Detalle en «Hito G» más abajo. **`HITO_3_COMPLETED`** |
 | Hito 4. Laboratorio de IA (escenarios sintéticos, simulaciones del Studio, evaluación asistida con OpenAI y clave propia, veredicto humano) | **DESPLEGADO EN FASES 1–2** (25-10-2026, 01:15–01:25 UTC; backend `fef7c87`, código `18dae99`; CRM `5c1dbd7`): laboratorio encendido en ensayo sin IA, presupuesto 0 y sin clave. **`HITO_4_IMPLEMENTED_WITH_EXTERNAL_DEPENDENCY`**: la fase 3 espera la clave y el proyecto de OpenAI del propietario. Revisiones cerradas (`reviewer`: APROBADO CON OBSERVACIONES, cerradas en las Enmiendas 4–6); E2E con la pila real 122/122; smoke en producción 20/20 y 17/17. Detalle en «Hito 4» más abajo. *(Antes del despliegue decía «implementado y verificado en rama, no desplegado».)* |
 | Hito 5. Gobierno y versionado (publicación firmada como declaración, sello por turno en el motor, canario, promoción, reversión y Legacy) | **DESPLEGADO EN LA FASE 1 (todo apagado) el 01-11-2026; fases 2 y 3 pendientes** (implementado el 24/25-10-2026; backend `96397ea`, CRM `a29bcc8`; fusionados con `origin/main` el 31-10-2026 en `cdb9dc8` y `9fe1817`, y en el backend, `cf59cef` con m-2 del reviewer). Está en `origin/main` (backend `7ba0ce8`, CRM `ab78a6a`) y en producción desde el 01-11-2026 01:12–01:16 UTC (fase 1). Revisiones de `security`, `api-security-specialist`, `tester` (backend y E2E) y DevOps hechas, sin bloqueantes; sus hallazgos medios, corregidos. Revisión final del `reviewer` (31-10-2026): **APROBADO CON OBSERVACIONES**; queda abierta I-1 (CRM) antes de la fase 2. Tras la fusión: puerta PostgreSQL 1447 OK sobre `cf59cef` y E2E con la pila real 408/408 sobre `cf59cef` + `9fe1817` (lead, 31-10-2026). [PENDIENTE: segunda pasada del reviewer sobre esta documentación.] Detalle en «Hito 5» más abajo |
-| Siguientes (rotuladas «G–R» antes de que G pasara a ser el control funcional): Meta, Twilio, canarios, ElevenLabs, vínculo versión↔conversación (el laboratorio y la evaluación con IA son el Hito 4; el sello de la versión declarada en cada turno, el Hito 5) | **NO EMPEZADOS** (autorizados como construcción, no como activación) |
+| Hito 6. Integraciones comerciales (Meta Ads en lectura y asociación campaña ↔ versión, panel del OTP de Twilio y sonda GET, números canarios como registro, configuración autorizada por huellas y voz con ElevenLabs preparada sin activar) | **IMPLEMENTADO EN RAMA, PENDIENTE DE E2E, REVIEWER Y DESPLIEGUE** (31-10/01-11-2026; `feat/ultron-studio-h6`, backend `e3a0fdd`; en el CRM, la capa de datos en `ede716b` y la página «Integraciones», terminada y verificada en `f38699d`: 1096/1096 y build en verde). Sin empujar ni desplegar. El backend está completo y revisado sin bloqueantes por `security` y `api-security-specialist` (Enmiendas 3 y 4); el tester de backend, 45/45 carreras en PostgreSQL; las puertas finales del lead sobre `e3a0fdd`, SQLite 2879 OK y PostgreSQL 2455 OK. Clasificación real: Meta Ads conectada en lectura, Twilio solo para OTP, Twilio Voice no configurada, canarios como registro y ElevenLabs `ELEVENLABS_NOT_CONFIGURED`. Detalle en «Hito 6» más abajo |
+| Siguientes (rotuladas «G–R» antes de que G pasara a ser el control funcional): Meta, Twilio, canarios, ElevenLabs, vínculo versión↔conversación (el laboratorio y la evaluación con IA son el Hito 4; el sello de la versión declarada en cada turno, el Hito 5) | **NO EMPEZADOS** (autorizados como construcción, no como activación). *(Actualización del 01-11-2026: Meta, Twilio, canarios y ElevenLabs son el Hito 6, en la fila de arriba. Las llamadas, T2 y T3 siguen sin empezar.)* |
 
 ## Qué hay (clasificación honesta)
 
-*Clasificación del 17-10-2026, de la vista previa visual. Lo implementado después está en las secciones de F, de G, del Hito 4 y del Hito 5 (la publicación, el canario y la reversión de versiones, que abajo figuran como no implementados, existen desde el Hito 5 en la rama `feat/ultron-studio-h5`, sin desplegar).*
+*Clasificación del 17-10-2026, de la vista previa visual. Lo implementado después está en las secciones de F, de G, del Hito 4, del Hito 5 y del Hito 6 (la publicación, el canario y la reversión de versiones, que abajo figuran como no implementados, existen desde el Hito 5, desplegado en la fase 1 el 01-11-2026; las campañas Meta, el control de Twilio, los números canarios en tabla y ElevenLabs existen desde el Hito 6 en la rama `feat/ultron-studio-h6`, sin desplegar, con su clasificación honesta en «Hito 6»).*
 
 **IMPLEMENTADA Y PROBADA** (en el CRM, con pruebas unitarias y E2E en Chrome real):
 - Navegación: submenú **Mercadeo › ULTRON Studio** (etiqueta «preview», orbe iridiscente) y ruta propia `/marketing/ultron-studio`, ambas tras la bandera `ultronStudioPreviewEnabled` y el permiso `marketing.agent.manage`.
@@ -500,6 +501,154 @@ El runbook está en `ULTRON_STUDIO_DEPLOYMENT_PLAN.md` («Hito 5: runbook por fa
 
 **Producción de partida** (lectura del lead por SSH, solo lectura, 31-10-2026): API en `7318122` y CRM en `4105016` (build del 29-10). El Studio, en el estado del Hito 4: 33 rutas, 27 disparadores y 24 CHECK, 10 tablas `ultron_studio_*`, el worker `ironbody-lab` en marcha (13 workers RUNNING) y el laboratorio encendido en `fake`, con presupuesto 0 y sin clave. Ninguna de las 7 variables del Hito 5 en el entorno; 1 borrador, 0 versiones y 0 ejecuciones del laboratorio. ULTRON, encendido con el canario configurado y el cobro apagado.
 
+## Hito 6: integraciones comerciales (31-10/01-11-2026, implementado en rama, pendiente de E2E, reviewer y despliegue)
+
+**Resumen ejecutivo.** El Hito 6 conecta el Studio con lo comercial que ya rodea a ULTRON, **en lectura y como registro**:
+- **Meta Ads:** el Studio lee las campañas del espejo local que llena la sincronización existente, distingue «En Meta» de «En ULTRON Studio» y registra la asociación de cada campaña con la línea base o con una versión;
+- **Twilio:** un panel de solo lectura del OTP, una sonda de 5 GET apagada por bandera y la configuración autorizada por huellas (también la de Meta y la de la voz);
+- **números canarios:** un registro auditado (huella HMAC y 4 dígitos; cifrado solo en voz), con cuatro ojos para autorizar y activar, comparado en cada lectura con la conversación canaria del motor;
+- **voz y ElevenLabs:** el adaptador preparado sin activar, con su `doctor`, la firma del webhook post-llamada sin ruta pública y una política que hoy niega toda llamada.
+
+**Lo que no cambia** (contrato, P1–P4): **nada de esto cambia lo que ULTRON dice o hace.** El motor no lee nada nuevo (T0 y T1), el Studio no escribe fuera de `ultron_studio_*`, ninguna ruta sale a la red con las banderas por defecto, no se escribe en Meta y no se llama a nadie. Las asociaciones, los números canarios y la configuración autorizada son **registro**, nunca autoridad.
+
+**Dónde está:** la rama `feat/ultron-studio-h6` de los dos repos, que nace de la del Hito 5; en el backend lleva fusionado `origin/main` (`d2c04a0`, con `7ba0ce8` como ancestro). Backend `e3a0fdd` (el código es el de `4e2e8cf`; lo posterior es documentación); CRM `f38699d`, con la página «Integraciones». **No está en `origin/main` ni en producción.** Contrato: `ULTRON_STUDIO_H6_CONTRACT.md` (I1–I13 y Enmiendas 1–4). Plan del architect: `plans/ULTRON_STUDIO_H6_PLAN.md`. Informes de los agentes: `plans/informes-h6/`.
+
+| Repo | Commit | Qué |
+|---|---|---|
+| Backend | `01ad03e` → `da1617e` | Paquete DB: las 3 tablas, sus guardas, los dos CHECK de cuatro ojos y el CHECK del libro ampliado (`database-specialist`) |
+| | `7241ad8` → `0014292` | Paquete V: el puerto de voz, el proveedor nulo, el adaptador de ElevenLabs tras bandera, la firma del webhook post-llamada y `voice:doctor` |
+| | `b647a8e` → `df1241c` | Paquete TW: el cliente de solo lectura de Twilio y el saneador de la sonda |
+| | `41b6470` | Matriz de credenciales del VPS (auditoría de solo lectura del 01-11-2026, sin valores) |
+| | `7d69b77` → `7df9ed9` | El fixture oráculo de integraciones, escrito a mano desde el contrato, con su comprobador independiente (`tester`) |
+| | `89184d7` | Enmienda 1 del contrato (decisiones del bloque 1) |
+| | `836b6fd` | Enmienda 2: el fixture congelado como oráculo; Q-4 a Q-13 y O-1 a O-6 |
+| | `3995b01` | `last4` del saneador con el E.164 del contrato (Q-13) |
+| | `5967f69` | Informes del arnés E2E y de la capa de datos del CRM |
+| | `4e6f5fe` | Paquete S: las 18 rutas (56 en total), los 4 permisos, los servicios, los modelos, los comandos `integrations-doctor` y `integrations-snapshot`, la exportación de fixtures y las pruebas |
+| | `34ab7b3` | Paquete OPS: scripts de la fase 1, alcance de escrituras y sonda, comprobación de esquema y smoke de las fases 1–2 |
+| | `d2c04a0` | Fusión de `origin/main` (H-2 de DevOps) |
+| | `8de30ed`, `f549c50` | Banco de ensayo en el repo (`ops/banco-h6/`) y ensayo del smoke contra el arnés E2E |
+| | `109735b`, `6241758` | Revisión de la API (`api-security-specialist`) y su AS-5 en el mando de alcance |
+| | `dd57c12`, `0b7b41d` | Revisión de seguridad transversal (`security`) y Enmienda 3 |
+| | `bd1c7af`, `fb152fe` | N-5 (el patrón del `agent_id` con `D`) y N-4 (el mando exige el fichero de entorno en 600) |
+| | `3e1ee20` | Paquete S, tanda final: paridad con las 22 secciones del fixture, Q-6, O-2, B-2, AS-1, AS-2, N-1 y N-3 |
+| | `2582f10` → `4e2e8cf` | Enmienda 4 en curso y su cierre: el `agent_id` sin recorte, el alias con dato de contacto (722 casos) y el orden `permission` antes que `shape` |
+| | `cf36b48` | Tester de backend: carreras reales en PostgreSQL, guardas como rol de aplicación, centinelas y mutaciones |
+| | `d5da123` | Capturas de la página «Integraciones» con el arnés de Chrome, en curso |
+| | `e3a0fdd` | Enmienda 4 del contrato |
+| | `7d2c6d8` | Informe de la integración de la página «Integraciones» en el CRM (`informe-front-integracion.md`). Solo documentación: el código del backend es el de `4e2e8cf` |
+| CRM | `0a83d74` → `ede716b` | Capa de datos de las integraciones: tipos, lectores, textos, el servicio de las 18 rutas, el fixture con el formato del exportador, 101 specs nuevas y los 4 permisos |
+| | `037a2cd` → `e8386dc` | Infraestructura del E2E del Hito 6: simuladores de Twilio (:8095) y ElevenLabs (:8096), semilla de Meta Ads y del canario, y el esqueleto de `h6-integrations` |
+| | `f38699d` | Página «Integraciones»: la página, la sesión, los ocho componentes, sus hojas y sus specs. El lead la confirmó como WIP «sin verificar» (el agente se cortó antes de correr la suite y el build); después, `frontend` la verificó sin cambiarla (`informe-front-integracion.md`) |
+
+**Clasificación honesta, por área** (lo que el Studio afirma, con la evidencia de producción al congelar el contrato, 31-10-2026, y de la matriz de credenciales del 01-11-2026; ningún valor impreso):
+
+| Área | Clasificación | Qué hay en la rama | Qué no hay |
+|---|---|---|---|
+| **A · Meta Ads** | **Conectada en lectura** (`connected_read`): token validado (504 pasadas `ok` en 7 días), 3 cuentas, sincronización horaria | Lectura del espejo sin red, ids opacos, «En Meta» frente a «En ULTRON Studio», asociación campaña ↔ línea base o versión, con sustitución y desactivación auditadas | Ninguna llamada a Graph ni escritura en Meta; ningún efecto en el motor; sin datos de demostración |
+| **B · Twilio (OTP)** | **Conectada solo para OTP** (`connected_otp_only`): Verify por SMS y Messages solo para el código de vínculo; la misma credencial con dos nombres | Panel de solo lectura (OTP, coste, credenciales por huella, webhook, llamadas sin datos del prospecto), sonda de 5 GET tras bandera y configuración autorizada | Ningún cambio en el OTP; ningún mensaje ni llamada; los avisos de `usage-trigger` siguen solo en el log |
+| **B · Twilio Voice** | **No configurada** (`not_configured`): sin variables, número, webhook ni código | Tres variables apagadas que solo leen el panel y la política | Ni TwiML, ni webhook de voz, ni subcuenta, ni marcador |
+| **C · Números canarios** | **Registro** (`registry`): el canario del motor sigue siendo el id de una conversación, en el entorno | Registro, autorización y activación con cuatro ojos, desactivación, revocación, versión esperada y coherencia con el canario del motor | El motor no lee el registro (T0/T1); T2 y T3, fuera, con su autorización |
+| **D · ElevenLabs** | **No configurada** (`ELEVENLABS_NOT_CONFIGURED`): cero credenciales | Puerto, proveedor nulo, adaptador tras bandera con verificación por consola, `voice:doctor`, firma del webhook post-llamada y política de llamadas | Ninguna ruta pública ni llamada; `CALLS_ENABLED_IN_CODE = false` |
+
+**IMPLEMENTADO Y PROBADO** (en rama):
+- **Las 3 tablas, de solo inserción o con transiciones condicionadas** (`ultron_studio_campaign_links`, `ultron_studio_canary_numbers` y `ultron_studio_integration_snapshots`): disparadores en los dos motores, CHECK en PostgreSQL (entre ellos, los dos de cuatro ojos), índices únicos parciales (una asociación activa por campaña; una fila viva por canal y teléfono) y el libro ampliado a 7 sujetos.
+- **18 rutas nuevas** (`/api/admin/ultron-studio/integrations/*`, 56 en el Studio), cada una con su llave en `AuthorizationMap` y la segunda puerta en el servicio; **4 permisos** (`ultron.campaigns_manage` y `ultron.canary_manage`, que el Administrador tiene por defecto; `ultron.canary_authorize` y `ultron.integrations_manage`, solo del Super Admin); una **sola bandera de escrituras** para todo el hito (reconocer la configuración queda fuera de ella) y otra para la sonda.
+- **Idempotencia por `clientRequestId`** atada a la persona y al cuerpo, el evento del libro en la misma transacción que el cambio y los topes bajo cerrojo consultivo con READ COMMITTED.
+- **La frontera, probada:** el motor no nombra `App\Services\Voice`, `App\Services\Twilio` ni `PhoneFingerprint`; con las banderas por defecto, ninguna de las 18 rutas hace una petición saliente; una centinela con valores reconocibles en los secretos y en los teléfonos no los encuentra en ninguna respuesta, en el libro, en `facts`, en la consola ni en el log.
+- **Comandos:** `ultron-studio:integrations-doctor [--json] [--expect=…]` (la clasificación por consola; lo usan el despliegue y el smoke), `ultron-studio:integrations-snapshot [--verify-voice] [--json]` (la instantánea de sistema, solo si cambió la huella) y `voice:doctor [--json] [--verify]`.
+- **CRM, capa de datos** (`ede716b`): tipos, lectores estrictos o tolerantes, los textos obligatorios literales, el servicio de las 18 rutas, el fixture con el formato del exportador del backend y la compatibilidad con un backend del Hito 5 (404 → «El servidor todavía no tiene integraciones (Hito 6)»).
+- **CRM, página «Integraciones»** (`f38699d`): `marketing/ultron-studio/integraciones`, diferida y con su enlace en la barra del tablero, con cinco pestañas (Estado, Campañas de Meta, Números canarios, Twilio y Voz); los botones salen solo de `can`, `flags` y `actions` del servidor, y sin botón el motivo se lee en texto; el teléfono solo vive en el diálogo de registro y nunca queda en pantalla.
+- **Operación:** el script de la fase 1, el mando de alcance de las dos banderas, la comprobación de esquema, el smoke de las fases 1–2 con su detector de fugas, y un banco de ensayo en el repo.
+
+**QUÉ NO HACE** (por diseño): no cambia lo que ULTRON dice o hace; no escribe en Meta ni llama a la API Graph; no envía mensajes ni hace llamadas; no toca el OTP, el motor, n8n, el cobro, la pausa ni el freno; no activa ElevenLabs; no persiste los avisos de `usage-trigger`; no lista campañas sin gasto; no programa `integrations-snapshot` (Hito 7). **Fuera de este hito, con autorización expresa aparte:** T2 y T3, cualquier llamada, cualquier escritura en Meta y encender ElevenLabs.
+
+**Evidencia por paquete.** Cada cifra lleva su informe; las de backend son de su árbol del momento. **Las puertas completas sobre el código final** las hizo el lead sobre `e3a0fdd` (el código es el de `4e2e8cf`) el 01-11-2026, de 18:43 a 18:49 UTC: Studio + Access + Chaos + Voice + Twilio + OTP en SQLite, **2879 OK** (102 omitidas, las de solo PostgreSQL); la puerta PostgreSQL, **2455 OK** en 4 minutos (base `ultron_studio_h6_lead`); **56 rutas**, `auth:coverage --unmapped` vacío y la puerta de diff del motor vacía; Marketing, **4977 OK** sobre `d2c04a0`.
+- **DB** (`informe-db.md`, sobre PostgreSQL 14.24 y SQLite 3.54.1): disparadores del Studio en PostgreSQL de **30 a 43** y CHECK de **27 a 49**; en SQLite, de 20 a 30 disparadores; índices parciales de 2 a 4; tablas `ultron_studio_*` de 11 a 14; `ultron_studio_forbid()` sin cambiar un byte (`4ad748b5…`). `UltronStudioIntegrationsSchemaTest`: 22 pruebas, 473 aserciones en PostgreSQL (en SQLite, 321 con 5 omitidas, las de solo PostgreSQL). `migrate:rollback --step=2` deja el esquema idéntico, `down()` se niega con datos del Hito 6 y un dueño sin superusuario migra sin ningún GRANT nuevo. Con un lector del libro abierto, la 100002 cae a los 5,36 s por 55P03 y deja las 3 tablas sin guardas hasta reintentar.
+- **V** (`informe-voz.md`; `fb152fe`): **72 pruebas** del paquete de voz en verde tras N-5; 26 de 26 mutantes cazados por `VoiceIsolationTest` y los 3 de `VoiceBoundaryTest`.
+- **TW** (`informe-twilio.md`): **31 pruebas** y 5782 aserciones; 22 de 22 mutaciones cazadas; cero red.
+- **Fixture del contrato** (`informe-fixture.md`; Enmiendas 2 y 4): `tests/fixtures/ultron-studio/integrations-cases.json`, **722 casos en 22 secciones** (recontados el 01-11-2026 sobre `e3a0fdd`), escritos a mano desde el contrato. La segunda derivación independiente, con openssl, rehace 704 casos con 0 discrepancias y caza 116 implementaciones equivocadas (`4e2e8cf`). Si PHP o TS discrepan, se corrige la implementación, nunca el fixture.
+- **S** (`informe-api.md`, tanda final en `3e1ee20`): **56 rutas** y `auth:coverage --unmapped` vacío; `permissions:export`, 105 permisos, idéntico al catálogo del CRM; paridad con las 22 secciones del fixture contra las clases reales (408 pruebas puras; 466 por HTTP con 1475 aserciones; `errorOrder` paso a paso, 170 pasos); Studio + Access + Chaos + Voice + Twilio en SQLite, **2806 pruebas**; la puerta PostgreSQL, **2452 pruebas**; OTP, 82 OK; Marketing, 4977 OK; 19 de 19 mutaciones de la tanda final cazadas (9 de 9 en la primera). Los 2 rojos de esa corrida no eran de S (el `agent_id` de V con recorte y un caso de alias del fixture desfasado por AS-1) y los cerró la Enmienda 4 (`4e2e8cf`: Voice + paridad + canarios, **965/965**); el tercero de PostgreSQL fue un umbral de 150 ms de una prueba del H5, rebasado en 7 ms con la máquina compartida; ejecutada sola, esa prueba pasa 3 de 3.
+- **Tester de backend** (`informe-tester-backend.md`; `cf36b48`): carreras reales en PostgreSQL entre procesos, naturales y forzadas (29 pruebas, 37 casos): **45/45** pruebas con 1526 aserciones en la corrida final (148 sesiones en las 37 carreras); guardas contra un rol de aplicación sin superusuario (P0001, 23514, 23505 y 42501); centinela ampliada al exportador de fixtures, a las filas del registro y a la configuración calculada de verdad desde el entorno; y **33 de 35 mutaciones cazadas** (las 2 que sobreviven son equivalentes y sus variantes sin la segunda comprobación caen).
+- **DevOps** (`informe-devops-h6.md`; `34ab7b3`, `8de30ed` y `f549c50`): en el banco local, despliegue con un 55P03 provocado → `FASE 1 (H6) COMPLETADA` en 45–46 s, reanudación sin duplicados y 6 negativas del paso 0; detector de fugas del smoke, **54/54**, con sus 7 mutaciones cazadas; funciones del fichero de entorno, 21/21 (y `prueba-entorno.sh`, 23/23); smoke contra el banco y contra el arnés E2E: fase 1 **78 + 26 OK**, fase 2 con la sonda apagada y encendida **73 + 26 OK**, las 14 tablas idénticas en cada pasada y 0 peticiones a los simuladores; cierre del arnés, 12/12.
+- **Infraestructura del E2E** (`informe-e2e-arnes.md`; CRM `e8386dc`): la regresión del H5 con los simuladores nuevos, **410/410** sobre `7ba0ce8` + `ab78a6a` (las 408 de siempre más 2 comprobaciones: 0 violaciones en Twilio y en ElevenLabs); el esqueleto del H6, 22/22; los simuladores aislados, 64/64.
+- **CRM, capa de datos** (`informe-front-datos.md`; `ede716b`): módulo del Studio y modelos, **1005/1005** en 60 ficheros (101 specs nuevas); `tsc` y `check:literals` limpios; 3 de 3 mutaciones cazadas.
+- **CRM, página** (`informe-front-integracion.md`; sobre `f38699d`): **1096/1096** en 70 ficheros; build de producción en verde sin avisos nuevos; 12/12 mutaciones; Chrome con la API simulada, 93/93 a 1440 y 390 px.
+- [PENDIENTE: la línea base por nombre contra `origin/main` (quedó corriendo al cortarse la sesión del tester, §7 de su informe; las puertas finales salen en verde) y F2, la validación de la corrección propuesta para H-2, que tampoco consta.]
+
+**Decisiones del lead** (contrato, decisiones 1–14, y Enmiendas 1–4):
+1. **Sonda B2:** bandera apagada en la fase 1; credencial, la API key restringida si el propietario la crea, si no la del OTP; solo GET, hosts fijos en `production`, primera página, enfriamiento de 5 minutos, cupo propio y evento en el libro.
+2. **«Asociar una versión» a un número canario es una expectativa auditada**, comparada con la cadena del Hito 5; nunca autoridad.
+3. **Transición del canario:** el Hito 6 implementa T0 (el registro existe y se compara) y T1 (el número de la conversación canaria registrado, autorizado y activado por dos personas: `in_sync`). T2 y T3, fases futuras, cada una con su autorización.
+4. **Cuatro llaves**; activar exige además una persona distinta de quien registró (con su CHECK en la base).
+5. **Minimización:** WhatsApp, solo huella y 4 dígitos; voz, cifrado y borrado al revocar; consentimiento declarado.
+6. **Una sola bandera de escrituras** para todo el hito; reconocer la configuración queda fuera de ella.
+7. **Sin ruta pública** para el webhook post-llamada de ElevenLabs; sin persistir los avisos de `usage-trigger`; sin campañas sin gasto.
+8. **Criterio de cierre:** `HITO_6_COMPLETED` con las fases 1 y 2 hechas y ElevenLabs en `ELEVENLABS_NOT_CONFIGURED`; `HITO_6_IMPLEMENTED_WITH_EXTERNAL_DEPENDENCY` si falta la segunda persona del T1 o el despliegue del Hito 5.
+- **Enmienda 1:** importes como texto con dos decimales en `facts` y mapas vacíos como `[]`; las etiquetas de versión del servidor; PCRE con `D` y `[0-9]` sin `/u`; `secretFingerprints()` como única vía a las huellas de los secretos de voz; D-1 y D-2 del esquema (la sustitución de una asociación era imposible con la guarda literal; `usis_outcome_chk` dejaba pasar una sonda sin resultado) con los recuentos 43/49; las convenciones del saneador y del cliente de Twilio.
+- **Enmienda 2:** el fixture queda congelado como oráculo; Q-4 (`ELEVENLABS_VERIFIED` exige que la **última** verificación sea `ok` y de menos de 30 días) a Q-13 (`last4` con un E.164 de 8 a 15 cifras); O-1 a O-6.
+- **Enmienda 3:** las revisiones de seguridad y de la API, sin bloqueantes; **I13 corregido** (la huella del teléfono se recupera con la `APP_KEY` y los 4 dígitos; revocar no suprime); AS-1, AS-2, B-2, N-1 y N-3 para S; N-4 y AS-5 para OPS; N-5 para V; lo diferido al Hito 7.
+- **Enmienda 4:** en las escrituras, la llave (403) va antes que la forma (422), porque la exige la puerta de `AuthorizationMap`; el alias rechaza datos de contacto (correo, u 8 o más dígitos con separadores cortos; el fixture pasa a 722 casos); el `agent_id` no se recorta; Q-6 (`activeWhatsapp` cuenta las filas activas y es `null` solo si falla el recuento); B-2, AS-2, N-1 y N-3 cerrados; H-2 del tester diferido al Hito 7.
+
+### Hito 6: revisiones de seguridad y de la API
+
+Detalle en `ULTRON_STUDIO_SECURITY_REPORT.md` («Hito 6»).
+- **`security`** (01-11-2026, sobre el backend de `4e6f5fe`/`34ab7b3` y el CRM en curso; `informe-security.md`): **sin bloqueantes, altas ni medias.** B-1 (la huella del teléfono se recupera con la `APP_KEY` y los 4 dígitos; I13 decía lo contrario, y revocar no suprime), corregida en el texto del contrato (Enmienda 3) y con la supresión diferida al Hito 7; B-2 (revocar anotaba en el libro el estado leído fuera de la transacción), corregida en `3e1ee20`; N-1, N-3 y N-5, corregidas (`3e1ee20`, `bd1c7af`, `4e2e8cf`); N-2 = AS-5, el mando de la sonda comprueba `production` (`6241758`); N-4, el mando exige el fichero de entorno en 600 (`bd1c7af`), con dos puntos pendientes de comprobar en el servidor.
+- **`api-security-specialist`** (01-11-2026, sobre `8de30ed`, código de S en `4e6f5fe`; `informe-api-security.md`): **APROBADO CON OBSERVACIONES**, sin bloqueantes ni altas. AS-1 (motivos, notas y alias con teléfonos o correos) y AS-2 (`page` enorme → 500), corregidas en `3e1ee20`; AS-3 (oráculos de pertenencia de un teléfono adivinado), nota para el Hito 7; AS-4 = B-1; AS-5 = N-2; AS-6, nota de documentación.
+- **`security`, segunda pasada sobre la página del CRM** (contrato, «Orden», paso 5): [PENDIENTE: veredicto de la segunda pasada; la rellena el lead.]
+
+### Hito 6: validación del backend por el tester
+
+**Hecha el 01-11-2026** sobre `f549c50` con la tanda final de S sin confirmar entonces, en PostgreSQL 14.24 local (`informe-tester-backend.md`; confirmada en `cf36b48`).
+- **Las carreras de I11 y más:** dos registros del mismo número, dos asociaciones de la misma campaña, autorizar frente a revocar, 4 activaciones contra un tope de 3, reconocer frente a un cambio de configuración, el tope de vivos, el tope global de asociaciones, la sustitución concurrente, el doble clic en las cinco escrituras con `clientRequestId` y la sonda con la caché compartida (4 pulsaciones → una sola salida de 5 GET). **45/45.**
+- **H-1 (= B-2):** la carrera forzada lo reprodujo de forma determinista y verifica la corrección de S (`3e1ee20`). **H-2 (baja, nueva):** la huella del teléfono llega al `DETAIL` del error 23505 del log del servidor PostgreSQL en cada registro duplicado; diferida al Hito 7 (Enmienda 4). **H-3 (= B-1):** medido, unos 705 000 HMAC por segundo y núcleo: con la `APP_KEY`, el espacio de WhatsApp (10⁹) se recorre en unos 24 minutos con un núcleo.
+- **O-1:** la carrera del H5 deja sin esquema a las clases de SQLite que corren después si es la primera del proceso (corrección de una línea, para el dueño de esa prueba). **O-2:** con `default_transaction_isolation = repeatable read` en el rol, 7 de las 37 carreras responderían 500 (40001); el rol de producción tiene que estar en READ COMMITTED (comprobación del runbook antes de la fase 2).
+- **No verificado por el tester:** producción, los roles reales, la configuración de log del PostgreSQL de producción, el 429 de la sonda entre procesos y la línea base contra `origin/main` (pendiente al cortarse su sesión).
+
+### Hito 6: E2E con la pila real
+
+**Pendiente.** La infraestructura está lista (`informe-e2e-arnes.md`; CRM `e8386dc`): simuladores de Twilio (:8095) y ElevenLabs (:8096) dentro de `e2e/ultron-studio/run.sh`, la semilla de Meta Ads (3 cuentas sintéticas, 12 campañas, una cuenta vieja) y del lead canario, y el cierre con dos comprobaciones nuevas (0 violaciones en cada simulador). La regresión del H5 con todo eso, **410/410** sobre `7ba0ce8` + `ab78a6a`. `specs/h6-integrations.cjs` es un **esqueleto que falla a propósito** en cuanto la instantánea trae las rutas del H6, para que ninguna pasada verde se lea como cobertura del hito. [PENDIENTE: los 15 escenarios E1–E15 (I11 1–9 más la configuración autorizada, la matriz, el barrido de fugas, la frontera, la firma y CRM↔H5), con la página del CRM (`f38699d` o el commit final), y la regresión del H5 sobre el commit final, con la valla vacía.]
+
+DevOps sí ejecutó su smoke contra el arnés con el backend `d2c04a0` y el CRM `ede716b` (ver «Evidencia»). Encontró una trampa del arnés: con `artisan serve --no-reload`, el proceso web fija el entorno al arrancar y no ve un cambio del fichero de entorno; el smoke lo cazó (16 FALLO, con la base intacta) y se resolvió con `config:cache`, como en producción.
+
+### Hito 6: operación (DevOps)
+
+**Hecho el 31-10/01-11-2026, todo en local**, sin SSH ni peticiones a producción (`informe-devops-h6.md`; runbook en `ULTRON_STUDIO_DEPLOYMENT_PLAN.md`, «Hito 6», y vuelta atrás en `ULTRON_STUDIO_ROLLBACK.md`, «Hito 6»).
+- **H-1:** la huella de la configuración de Twilio incluye `facts.probe.enabled`. Con el orden del contrato (reconocer y después `probe on`), Twilio quedaría en `drift`: el runbook de la fase 2 reconoce **después** de encender la sonda.
+- **H-2:** la rama no contenía `7ba0ce8`; resuelto con la fusión `d2c04a0`.
+- **H-3:** el smoke cabe 3 veces por hora: el cupo de la sonda (6/h por persona) corre antes de autenticar y cada smoke gasta 2.
+- **H-4:** `MIN_TABLAS=223` en el respaldo (las 222 del volcado del H5 más la tabla de publicaciones).
+- **No verificado:** GNU `stat` y `grep`, `sudo` real, el envoltorio `ironbody-migrate`, los dueños reales y el FPM viendo la caché nueva sin recargar. Lo cubre en parte el `--solo-comprobar` en el servidor, que no se ha ejecutado.
+
+### Hito 6: veredicto del reviewer
+
+[PENDIENTE: revisión final del `reviewer` sobre el backend y el CRM del Hito 6, tras el E2E y las revisiones de seguridad (contrato, «Orden», paso 7).] **El hito no se despliega con un bloqueante del `reviewer` abierto.**
+
+### Hito 6: el CRM
+
+Detalle en `ULTRON_STUDIO_VISUAL_REPORT.md` («Hito 6»). La capa de datos está en `ede716b` (`informe-front-datos.md`) y la página «Integraciones», **terminada y verificada en `f38699d`** por `frontend`, con el árbol limpio (`informe-front-integracion.md`, confirmado en `7d2c6d8`):
+- módulo del Studio y modelos, **1096/1096** en 70 ficheros (antes, 1005 en 60); `tsc` y `check:literals` limpios;
+- `npm run build:prod` en verde, con los mismos 36 avisos de presupuesto que en `ede716b`, nombre a nombre, y el chunk nuevo `studio-integrations-page` (162,46 kB; 38,03 kB transferidos);
+- **12/12 mutaciones** tumbadas;
+- Chrome con la API simulada, a 1440 y 390 px: **93/93**, sin errores de JavaScript, con 32 capturas (confirmadas en `d5da123`). No es el E2E con la pila real.
+
+[PENDIENTE: la segunda pasada de `security` sobre la página (la rellena el lead); volver a exportar `backend-integrations.testing.ts` desde el backend final y repetir la paridad (la copia del CRM es el export de `4e6f5fe`: le faltan los cambios de `3e1ee20`, entre ellos el texto general de O-2 y las claves `phoneNotMobileForWhatsapp` y `contactData`, comprobado el 01-11-2026); la suite completa del CRM; y la decisión del lead sobre la fila de más en la cabecera del tablero a 390 px (D-F14).]
+
+### Hito 6: despliegue por fases
+
+El runbook está en `ULTRON_STUDIO_DEPLOYMENT_PLAN.md` («Hito 6») y la vuelta atrás, en `ULTRON_STUDIO_ROLLBACK.md` («Hito 6»). **Nada ejecutado.**
+
+| Fase | Qué queda en producción | Coste | Quién decide |
+|---|---|---|---|
+| 1. Código con escrituras, sonda y voz apagadas | 56 rutas, las 3 tablas con sus guardas, las 8 variables, el CRM y la primera instantánea observada de los 3 proveedores. Escrituras y sonda en 409 | 0 | La autorización del 25-10-2026, con la puerta en verde |
+| 2. Escrituras encendidas | El T1 en `in_sync` con dos identidades, la configuración de los 3 proveedores reconocida y una sonda ejecutada | 0 (5 GET) | La misma, con dos personas disponibles |
+
+- **Criterio de cierre:** **`HITO_6_COMPLETED`** con las fases 1 y 2, el T1 en `in_sync`, la configuración reconocida, una sonda con su instantánea, el panel en vivo igual a la clasificación al congelar (o la diferencia explicada) y ElevenLabs en `ELEVENLABS_NOT_CONFIGURED`. **`HITO_6_IMPLEMENTED_WITH_EXTERNAL_DEPENDENCY`** si falta la segunda persona para el T1 o el despliegue previo del Hito 5 (este ya está hecho).
+
+### Hito 6: despliegue y verificación
+
+[PENDIENTE: fases 1 y 2 en producción, con la salida del script, la del smoke, el respaldo, la verificación a los 15 minutos y a las 24 horas, la evidencia del T1, la de la sonda y la del reconocimiento de la configuración.]
+
 ## Decisiones tomadas (y por qué)
 
 1. **Laravel conserva la autoridad; sin Python.** El motor es Laravel + n8n con contrato firmado; un segundo motor podría contradecir los 28 controles del commit.
@@ -512,6 +661,8 @@ El runbook está en `ULTRON_STUDIO_DEPLOYMENT_PLAN.md` («Hito 5: runbook por fa
 ## Preguntas abiertas para el propietario
 
 Las de `ULTRON_STUDIO_ARCHITECTURE_AUDIT.md` §14: versionado de cada turno en el commit; qué significan «números canarios» (hoy el canario es UNA conversación de WhatsApp); número de voz de Twilio o solo caller ID verificado, y si se acepta una subcuenta; si una voz puede decir precios; clave de OpenAI separada; quién escribe los prompts en n8n.
+
+*(Actualización del 01-11-2026: el sello de la versión en cada turno lo trajo el Hito 5. Con el Hito 6, los «números canarios» son un registro que se compara con la conversación canaria sin sustituirla (T0/T1), y la pregunta del número de voz la responderá la primera sonda de Twilio en la fase 2. Siguen abiertas, para el hito de voz, la subcuenta, si una voz puede decir precios y la grabación y su retención; y del Hito 6, si el envío por Messages del código de vínculo está en uso, porque `TWILIO_FROM` está vacía en producción según la matriz de credenciales.)*
 
 ## Autorizaciones
 
@@ -530,6 +681,8 @@ Las de `ULTRON_STUDIO_ARCHITECTURE_AUDIT.md` §14: versionado de cada turno en e
 - sin `push --force`, `reset --hard` ni `clean`.
 
 El contrato del Hito 5 pide además una orden expresa para cada fase de despliegue y la autorización del propietario para levantar el 409 de publicar (fase 2) y para la fase 3 («Protecciones intocables»). Según el informe de recuperación del lead (`plans/informes-h5/informe-recuperacion-2026-10-31.md` §6), esa autorización permite decidir `waived` para la puerta del laboratorio si queda documentado por escrito en cada publicación y en este informe. **Confirmado por el lead (31-10-2026):** la autorización del 25-10-2026 («no me pidas permisos, te los concedo completos») cubre las fases 2 y 3 del Hito 5 cuando cumplan sus criterios (fase 2: fase 1 verificada y smoke en verde; fase 3: evidencia del canario con al menos 24 h y 3 turnos sellados), documentando cada paso en este informe; siguen exigiendo autorización expresa aparte: llamadas reales, escribir en Meta, ElevenLabs, gasto, sustituir Legacy y `down()` en producción.
+
+**Hito 6** (contrato, «Autorizaciones», 31-10-2026): bajo la autorización del 25-10-2026, **las fases 1 y 2 del Hito 6 y la sonda GET de Twilio (coste cero) se ejecutan cuando cumplan sus criterios**, documentando cada paso: la fase 1, con la puerta en verde y el Hito 5 en su fase 1; la fase 2, con la fase 1 verificada y dos personas disponibles para el T1. Push a `main` solo con avance rápido y nunca `--force`. **Siguen exigiendo autorización expresa aparte:** T2 y T3 (que el motor lea el registro de números canarios), cualquier llamada, cualquier escritura en Meta y encender ElevenLabs. Y siguen intactos los límites absolutos de arriba: sin gasto sin control, sin tocar ni sustituir el motor y sin `down()` en producción.
 
 ## Publicación
 
