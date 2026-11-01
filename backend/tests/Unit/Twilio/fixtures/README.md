@@ -48,7 +48,7 @@ hace falta):
 3. Lo que no casa con su conjunto cuenta como **`other`** en los recuentos
    (`byStatus`, `byCode`, `byLevel`) y queda en `null` en la ficha de la cuenta.
 4. `byCode` solo admite códigos de 1 a 6 cifras sin cero inicial (un teléfono no
-   cabe); `last4` solo sale de un E.164 estricto (`^\+[1-9]\d{6,14}$`, sin
+   cabe); `last4` solo sale de un E.164 estricto (`^\+[1-9][0-9]{7,14}$` con `D`: 8 a 15 cifras, Enmienda 2 Q-13; sin
    salto de línea final).
 5. Un cuerpo inesperado: la ficha sin un `sid` `AC…` válido; una lista que falta,
    no es una lista o tiene una entrada que no es un objeto. Es `error` con el

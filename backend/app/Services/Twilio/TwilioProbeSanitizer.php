@@ -61,7 +61,7 @@ final class TwilioProbeSanitizer
     private const LIST_KEYS = ['numbers' => 'incoming_phone_numbers', 'caller_ids' => 'outgoing_caller_ids', 'calls' => 'calls', 'alerts' => 'alerts'];
 
     /** Un número de la cuenta en E.164, como lo devuelve Twilio (`D`: sin salto de línea al final). */
-    private const E164 = '/^\+[1-9][0-9]{6,14}$/D';
+    private const E164 = '/^\+[1-9][0-9]{7,14}$/D';   // 8 a 15 cifras, el E.164 del contrato (Enmienda 2, Q-13)
 
     /** Un código de error de Twilio: hasta 6 cifras sin cero a la izquierda. Nunca cabe un teléfono. */
     private const ALERT_CODE = '/^[1-9][0-9]{0,5}$/D';
