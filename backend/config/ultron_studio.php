@@ -250,4 +250,37 @@ return [
 
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Monitor (Hito 7)
+    |--------------------------------------------------------------------------
+    | Contrato: docs/ultron-studio/ULTRON_STUDIO_H7_CONTRACT.md, OPS7 (a).
+    |
+    | VIGILA, NO ACTÚA: `ultron-studio:monitor` agrupa comprobaciones que ya
+    | existían (`publication-check`, `integrations-doctor --expect=…`, la deriva
+    | de la configuración autorizada y la salud de las colas), sale con 1 si
+    | algo no cuadra y abre o suma al incidente de IRON GUARD de su clase. No
+    | frena, no revierte, no llama a ningún proveedor y no notifica fuera.
+    |
+    | APAGADO: con la bandera apagada, routes/console.php no programa nada del
+    | Studio (ni el monitor ni la instantánea diaria de integraciones). El
+    | comando sigue disponible a mano. Solo `true` (o 1/on/yes) la enciende.
+    */
+    'monitor' => [
+
+        'enabled' => filter_var(env('ULTRON_STUDIO_MONITOR_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+
+        // Lo que tiene que afirmar `integrations-doctor` (el formato de su
+        // `--expect`). Por defecto, las protecciones del Hito 6: Twilio solo
+        // para OTP, sin voz de Twilio y sin ElevenLabs. Meta no va por
+        // defecto: `degraded` es un dato (una pasada vieja), no una deriva.
+        // Vacía o sin la variable, la de por defecto (una línea `X=` no apaga
+        // la vigilancia sin que nadie lo decida); mal escrita, el monitor
+        // falla en voz alta (`expectation_invalid`), nunca se cambia sola.
+        'expect' => ($esperado = trim((string) env('ULTRON_STUDIO_MONITOR_EXPECT', ''))) !== ''
+            ? $esperado
+            : 'twilio:connected_otp_only,twilio_voice:not_configured,elevenlabs:ELEVENLABS_NOT_CONFIGURED',
+
+    ],
+
 ];

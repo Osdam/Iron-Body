@@ -381,3 +381,38 @@ if ((bool) config('meta.ads.sync_enabled', false)) {
         ->withoutOverlapping()
         ->onOneServer();
 }
+
+// ── ULTRON STUDIO: el monitor (Hito 7, contrato OPS7 (a)) ────────────────────
+// INERTE por defecto: solo se agenda si ULTRON_STUDIO_MONITOR_ENABLED=true (y
+// solo `true`, 1, on o yes). Con la bandera apagada no se programa NADA del
+// Studio; los comandos siguen disponibles a mano. Vuelta atrás = la bandera en
+// false + config:cache.
+if ((bool) config('ultron_studio.monitor.enabled', false)) {
+    // La cadena de publicaciones frente al motor (`publication-check`), las
+    // integraciones frente a lo esperado (`integrations-doctor --expect=…`, con
+    // `ULTRON_STUDIO_MONITOR_EXPECT`) y la configuración autorizada, y las colas
+    // (`queue:health`). Solo lee; si algo no cuadra, abre o suma al incidente de
+    // IRON GUARD de su clase (fuente `ultron_studio`). Las colas no abren
+    // incidente propio: ya lo hace `iron-guard:scan`.
+    //
+    // Cada 30 minutos y no cada hora: la ventana de agrupación de IRON GUARD es de
+    // 60 minutos (`IRON_GUARD_GROUPING_MINUTES`). Con una pasada por hora, cada
+    // pasada caería fuera de la ventana de la anterior y REABRIRÍA el incidente
+    // (ocurrencias a 1 y sin el reconocimiento de quien ya lo estaba mirando). A
+    // 30 minutos, la misma deriva es un solo incidente que suma ocurrencias y
+    // escala a las 10. Sin red: el coste son unas pocas lecturas de la base.
+    // Diez minutos de cerrojo, no las 24 h por defecto (lección del vigía).
+    Schedule::command('ultron-studio:monitor')
+        ->everyThirtyMinutes()
+        ->withoutOverlapping(10)
+        ->onOneServer();
+
+    // El registro de cambios de la configuración de las integraciones (H6
+    // §I5.3): una instantánea de SISTEMA por proveedor solo si su huella cambió.
+    // Diario, a primera hora en Bogotá (07:10 = 12:10 UTC). Sin red.
+    Schedule::command('ultron-studio:integrations-snapshot')
+        ->dailyAt('07:10')
+        ->timezone('America/Bogota')
+        ->withoutOverlapping(10)
+        ->onOneServer();
+}
