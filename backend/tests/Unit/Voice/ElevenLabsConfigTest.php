@@ -62,7 +62,7 @@ class ElevenLabsConfigTest extends TestCase
     public function test_las_regiones_son_una_lista_cerrada_de_dos(): void
     {
         $this->assertSame(['default' => 'https://api.elevenlabs.io', 'eu' => 'https://api.eu.residency.elevenlabs.io'], ElevenLabsConfig::REGIONS);
-        $this->assertSame('/^[A-Za-z0-9_-]{1,64}$/', ElevenLabsConfig::AGENT_ID_PATTERN);
+        $this->assertSame('/^[A-Za-z0-9_-]{1,64}$/D', ElevenLabsConfig::AGENT_ID_PATTERN);
     }
 
     /** @return array<string, array{0: array<string,mixed>, 1: string, 2: list<string>, 3: ?string}> nombre → [bloque, estado, missing, región] */
@@ -262,5 +262,12 @@ class ElevenLabsConfigTest extends TestCase
                 }
             }
         }
+    }
+
+    /** N-5 de security (Enmienda 3): sin el modificador D, PHP aceptaría un agent_id con un salto de línea final. */
+    public function test_el_agent_id_no_admite_un_salto_de_linea_final(): void
+    {
+        $this->assertSame(1, preg_match(ElevenLabsConfig::AGENT_ID_PATTERN, 'agent_abc-123'));
+        $this->assertSame(0, preg_match(ElevenLabsConfig::AGENT_ID_PATTERN, "agent_abc-123\n"));
     }
 }
