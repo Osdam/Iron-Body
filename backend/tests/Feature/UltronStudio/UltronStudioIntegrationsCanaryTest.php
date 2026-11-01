@@ -4,12 +4,19 @@ namespace Tests\Feature\UltronStudio;
 
 use App\Models\UltronStudio\StudioAuditEvent;
 use App\Models\UltronStudio\StudioCanaryNumber;
+use App\Services\UltronStudio\StudioCanaryPhone;
 use App\Support\Privacy\PhoneFingerprint;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Exceptions;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use PDOException;
+use PHPUnit\Framework\Attributes\DataProvider;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -235,7 +242,12 @@ class UltronStudioIntegrationsCanaryTest extends TestCase
         $casos = [
             ['+57 300 000 0001 ext. 12', 'whatsapp', 'El teléfono no tiene formato internacional (+57…).'],
             ['+1 202 555 0101', 'whatsapp', 'Ese país no está permitido para números canarios.'],
+            // O-2 (Enmienda 2): la pista de WhatsApp solo con un número que no es móvil.
             ['+57 601 000 0001', 'whatsapp', 'Ese número no sirve para este canal (WhatsApp exige un móvil).'],
+            ['+57 300 000 000', 'whatsapp', 'Ese número no sirve para este canal.'],
+            ['+57 300 000 00012', 'whatsapp', 'Ese número no sirve para este canal.'],
+            ['+57 401 000 0001', 'voice', 'Ese número no sirve para este canal.'],
+            ['+57 601 000 001', 'voice', 'Ese número no sirve para este canal.'],
         ];
         foreach ($casos as [$telefono, $canal, $mensaje]) {
             $r = $this->registerCanary($ana, $telefono, $canal)->assertStatus(422);
@@ -254,6 +266,124 @@ class UltronStudioIntegrationsCanaryTest extends TestCase
         $this->integrations('POST', 'canaries/'.Str::uuid().'/deactivate', $ana, ['reason' => 'Motivo válido'])->assertStatus(409)
             ->assertJsonPath('code', 'integrations_writes_disabled');
         $this->integrations('GET', 'canaries', $ana)->assertOk()->assertJsonPath('data.limits.writesEnabled', false);
+    }
+
+    /**
+     * Q-6 (Enmienda 2): si lo que no se puede leer es el teléfono del lead
+     * canario y no el registro, el veredicto es `unreadable` y `activeWhatsapp`
+     * cuenta las activas tal cual; ninguna fila se afirma canario del motor.
+     */
+    public function test_con_el_telefono_del_canario_ilegible_el_veredicto_es_unreadable_y_cuenta_las_activas(): void
+    {
+        $ana = $this->personWith(self::ADMIN_KEYS, 'Ana');
+        $root = $this->personWith(self::SUPER_KEYS, 'Root');
+        $this->activeCanary($ana, $root, '+573000000031');
+        $this->registerCanary($ana, '+573000000032', alias: 'Móvil pendiente')->assertCreated();
+        $this->engineCanary('3000000031');
+        Log::spy();
+        DB::connection()->beforeExecuting(function (string $sql): void {
+            if (str_contains($sql, 'marketing_leads')) {
+                throw new RuntimeException('el lead no se puede leer (texto que no puede salir)');
+            }
+        });
+
+        $vista = $this->integrations('GET', 'canaries?status=all', $ana)->assertOk()->json('data');
+        $this->assertSame(['engineCanaryConfigured' => true, 'verdict' => 'unreadable', 'activeWhatsapp' => 1], $vista['coherence']);
+        $this->assertSame([null, null], array_column($vista['numbers']['data'], 'isEngineCanary'), 'con unreadable, nadie es el canario del motor');
+        $estado = collect($this->integrations('GET', 'status', $ana)->assertOk()->json('data.providers'))->firstWhere('id', 'canaries');
+        $this->assertSame(['whatsapp' => 1, 'voice' => 0], $estado['evidence']['active']);
+        $this->assertSame('unreadable', $estado['evidence']['verdict']);
+        $this->assertStringNotContainsString('no se puede leer', json_encode([$vista, $estado]));
+        Log::shouldHaveReceived('warning')->with('ultron_studio.canary_coherence_unreadable', ['error_class' => 'RuntimeException']);
+    }
+
+    /**
+     * AS-1 (Enmienda 3): los motivos de desactivar y revocar, y el alias, no
+     * admiten un teléfono ni un correo; una fecha, «versión 3» o «tope de 10», sí.
+     */
+    public function test_los_motivos_y_el_alias_rechazan_telefonos_y_correos(): void
+    {
+        $this->integrationsFlags(writes: true);
+        $ana = $this->personWith(self::ADMIN_KEYS, 'Ana');
+        $root = $this->personWith(self::SUPER_KEYS, 'Root');
+        $uuid = $this->activeCanary($ana, $root, '+573000000041');
+        $eventos = StudioAuditEvent::query()->count();
+
+        foreach (['+57 300 000 0280', '300-000-0280', '3000000280', 'juan@correo.co'] as $dato) {
+            foreach (['deactivate', 'revoke'] as $accion) {
+                $r = $this->integrations('POST', "canaries/{$uuid}/{$accion}", $ana, ['reason' => "El titular {$dato} lo pidió"])->assertStatus(422);
+                $this->assertSame([StudioCanaryPhone::CONTACT_DATA_MESSAGE], $r->json('errors.reason'), "{$accion} con {$dato}");
+                $this->assertStringNotContainsString($dato, $r->getContent());
+            }
+        }
+        $this->assertSame($eventos, StudioAuditEvent::query()->count(), 'sin evento');
+        $this->assertSame('active', StudioCanaryNumber::query()->where('uuid', $uuid)->value('status'));
+        $this->integrations('POST', "canaries/{$uuid}/deactivate", $ana, ['reason' => 'Pauta 2026-11-01, versión 3, tope de 10'])->assertOk();
+
+        // Cierra O-1: un teléfono en grupos de 2 o 3 dígitos ya no pasa como alias.
+        foreach (['Móvil 300 123 45 67', 'Cel 30-01-23-45-67'] as $alias) {
+            $this->registerCanary($ana, '+573000000042', alias: $alias)->assertStatus(422)->assertJsonPath('errors.alias.0', StudioCanaryPhone::ALIAS_MESSAGE);
+        }
+    }
+
+    /**
+     * N-1 (Enmienda 3): otro fallo de la base en el alta, distinto del
+     * duplicado, no deja en el informe del error (mensaje, anteriores ni traza)
+     * ni en la respuesta la huella, los 4 dígitos, el alias ni el cifrado.
+     */
+    #[DataProvider('dbFailures')]
+    public function test_un_fallo_de_la_base_al_registrar_no_deja_datos_del_numero(string $mensaje, string $sqlstate, string $clase): void
+    {
+        $this->integrationsFlags(writes: true);
+        $ana = $this->personWith(self::ADMIN_KEYS, 'Ana');
+        $huella = PhoneFingerprint::of('+573000000043');
+        DB::connection()->beforeExecuting(function (string $sql, array $bindings) use ($mensaje, $sqlstate): void {
+            if (str_starts_with($sql, 'insert into "ultron_studio_canary_numbers"')) {
+                // El SQLSTATE va en `code`, como en un PDOException de verdad.
+                $pdo = new class($mensaje, $sqlstate) extends PDOException
+                {
+                    public function __construct(string $message, string $sqlstate)
+                    {
+                        parent::__construct($message);
+                        $this->code = $sqlstate;
+                    }
+                };
+
+                throw new QueryException('pgsql', $sql, $bindings, $pdo);
+            }
+        });
+        Exceptions::fake();
+
+        $r = $this->registerCanary($ana, '+573000000043', 'voice', 'Fijo de la prueba N1')->assertStatus(500);
+
+        $prohibidos = [substr($huella, 0, 15), "'0043'", 'Fijo de la prue', '+57300000004', 'eyJpdiI6'];
+        Exceptions::assertReported(function (RuntimeException $e) use ($prohibidos, $clase, $sqlstate): bool {
+            // Lo que Laravel escribe en el log: el mensaje y la traza. Las líneas de
+            // esta prueba (sus ayudantes reciben el teléfono) no existen en producción.
+            $traza = array_filter(explode("\n", $e->getTraceAsString()), static fn (string $l): bool => ! str_contains($l, 'Tests\\') && ! str_contains($l, '/tests/'));
+            $informe = $e->getMessage().implode("\n", $traza);
+            foreach ($prohibidos as $dato) {
+                if (str_contains($informe, $dato)) {
+                    return false;
+                }
+            }
+
+            return $e->getPrevious() === null && str_contains($e->getMessage(), "({$clase}, SQLSTATE {$sqlstate})");
+        });
+        foreach ($prohibidos as $dato) {
+            $this->assertStringNotContainsString($dato, $r->getContent());
+        }
+        $this->assertSame(0, StudioCanaryNumber::query()->count());
+    }
+
+    /** @return array<string, array{string, string, string}> */
+    public static function dbFailures(): array
+    {
+        return [
+            // Fuera de una transacción anidada, `QueryException`; dentro (como aquí), Laravel lo convierte en `DeadlockException`.
+            'tiempo de consulta agotado' => ['SQLSTATE[57014]: Query canceled: canceling statement due to statement timeout', '57014', 'QueryException'],
+            'interbloqueo' => ['SQLSTATE[40P01]: ERROR:  deadlock detected', '40P01', 'DeadlockException'],
+        ];
     }
 
     public function test_la_version_esperada_se_valida_y_la_expectativa_se_compara_con_la_cadena(): void

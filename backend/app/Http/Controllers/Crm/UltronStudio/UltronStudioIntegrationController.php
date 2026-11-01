@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\UltronStudio\StudioIntegrationSnapshot;
 use App\Rules\PlainText;
 use App\Services\UltronStudio\StudioAccess;
+use App\Services\UltronStudio\StudioCanaryPhone;
 use App\Services\UltronStudio\StudioIntegrationConfig;
 use App\Services\UltronStudio\StudioIntegrations;
 use App\Services\UltronStudio\StudioTwilioPanel;
@@ -89,7 +90,8 @@ class UltronStudioIntegrationController extends Controller
             'clientRequestId' => ['required', 'uuid'],
             'provider' => ['required', 'string', Rule::in(StudioIntegrationSnapshot::PROVIDERS)],
             'fingerprint' => ['required', 'string', 'regex:'.self::SHA256],
-            'note' => ['sometimes', 'nullable', 'string', 'max:'.StudioIntegrationConfig::NOTE_MAX, new PlainText(multiline: true)],
+            // AS-1 (Enmienda 3): la nota queda para siempre en la instantánea: sin teléfonos ni correos.
+            'note' => ['sometimes', 'nullable', 'string', 'max:'.StudioIntegrationConfig::NOTE_MAX, new PlainText(multiline: true), StudioCanaryPhone::contactDataRule()],
         ]);
 
         $resultado = $config->acknowledge($access, $request, strtolower($data['clientRequestId']), $data['provider'], $data['fingerprint'], $data['note'] ?? null);

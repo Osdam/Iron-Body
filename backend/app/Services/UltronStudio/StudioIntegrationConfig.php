@@ -596,13 +596,23 @@ final class StudioIntegrationConfig
         return ['present' => true, 'last4' => substr((string) preg_replace('/[^0-9]/', '', (string) $valor), -4)];
     }
 
-    /** `{official:true}` con el host oficial; si no, `{official:false, host}` (solo el host). */
+    /**
+     * `{official:true}` solo con la base oficial de verdad (N-3 de la Enmienda
+     * 3): `https`, el host oficial exacto (sin distinguir mayúsculas, como el
+     * DNS), sin otro puerto que el 443 y sin credenciales en la URL. Si no,
+     * `{official:false, host}` (solo el host: ni usuario, ni puerto, ni ruta).
+     */
     private static function base(mixed $valor, string $oficial): array
     {
-        $host = is_string($valor) ? parse_url(trim($valor), PHP_URL_HOST) : null;
-        $host = is_string($host) && $host !== '' ? strtolower($host) : null;
+        $partes = is_string($valor) ? parse_url(trim($valor)) : false;
+        $host = is_array($partes) && is_string($partes['host'] ?? null) && $partes['host'] !== '' ? strtolower($partes['host']) : null;
+        $deVerdad = $host === $oficial
+            && strtolower((string) ($partes['scheme'] ?? '')) === 'https'
+            && in_array($partes['port'] ?? 443, [443], true)
+            && ! isset($partes['user'])
+            && ! isset($partes['pass']);
 
-        return $host === $oficial ? ['official' => true] : ['official' => false, 'host' => $host];
+        return $deVerdad ? ['official' => true] : ['official' => false, 'host' => $host];
     }
 
     /** «AC…1234»: los 2 primeros caracteres, `…` y los 4 últimos. */

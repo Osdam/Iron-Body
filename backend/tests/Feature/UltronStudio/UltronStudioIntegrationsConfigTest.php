@@ -4,6 +4,7 @@ namespace Tests\Feature\UltronStudio;
 
 use App\Models\UltronStudio\StudioAuditEvent;
 use App\Models\UltronStudio\StudioIntegrationSnapshot;
+use App\Services\UltronStudio\StudioCanaryPhone;
 use App\Services\UltronStudio\StudioContentHasher;
 use App\Services\UltronStudio\StudioIntegrationConfig;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -294,5 +295,50 @@ class UltronStudioIntegrationsConfigTest extends TestCase
         $this->assertSame(['id' => 'meta_ads', 'expected' => 'connected_read', 'actual' => 'not_configured'], $json['mismatches'][0]);
         $this->assertSame(['meta_ads', 'twilio', 'twilio_voice', 'canaries', 'elevenlabs'], array_column($json['providers'], 'id'));
         $this->assertStringNotContainsString(self::TOKEN, json_encode($json));
+    }
+
+    /** AS-1 (Enmienda 3): la nota de reconocer no admite un teléfono ni un correo; una fecha, sí. */
+    public function test_la_nota_de_reconocer_rechaza_telefonos_y_correos(): void
+    {
+        $root = $this->personWith(self::SUPER_KEYS, 'Root');
+        $huella = StudioIntegrationConfig::fingerprintOf(StudioIntegrationConfig::facts('twilio'));
+
+        foreach (['+57 300 000 0280', '300-000-0280', '3000000280', 'juan@correo.co'] as $dato) {
+            $r = $this->integrations('POST', 'config/acknowledge', $root, ['clientRequestId' => (string) Str::uuid(), 'provider' => 'twilio', 'fingerprint' => $huella, 'note' => "Revisado con {$dato}"])
+                ->assertStatus(422);
+            $this->assertSame([StudioCanaryPhone::CONTACT_DATA_MESSAGE], $r->json('errors.note'), $dato);
+            $this->assertStringNotContainsString($dato, $r->getContent());
+        }
+        $this->assertSame(0, StudioIntegrationSnapshot::query()->count());
+        $this->integrations('POST', 'config/acknowledge', $root, ['clientRequestId' => (string) Str::uuid(), 'provider' => 'twilio', 'fingerprint' => $huella, 'note' => 'Revisado el 2026-11-01'])
+            ->assertCreated();
+    }
+
+    /**
+     * N-3 (Enmienda 3): «base oficial» solo con `https`, el host oficial exacto
+     * (sin distinguir mayúsculas, como el DNS), sin otro puerto que el 443 y sin
+     * credenciales en la URL; de una que no lo es, solo el host.
+     */
+    public function test_la_base_oficial_exige_https_el_host_exacto_el_puerto_443_y_sin_credenciales(): void
+    {
+        $casos = [
+            'https://api.twilio.com' => ['official' => true],
+            'https://API.Twilio.com/' => ['official' => true],
+            'https://api.twilio.com:443' => ['official' => true],
+            'http://api.twilio.com' => ['official' => false, 'host' => 'api.twilio.com'],
+            'https://api.twilio.com:8443' => ['official' => false, 'host' => 'api.twilio.com'],
+            'https://usuario:clavesecreta@api.twilio.com' => ['official' => false, 'host' => 'api.twilio.com'],
+            'https://usuario@api.twilio.com' => ['official' => false, 'host' => 'api.twilio.com'],
+            'https://api.twilio.com.evil.test' => ['official' => false, 'host' => 'api.twilio.com.evil.test'],
+            'http://127.0.0.1:8090' => ['official' => false, 'host' => '127.0.0.1'],
+        ];
+        foreach ($casos as $base => $esperado) {
+            config(['otp.twilio.base' => $base, 'otp.twilio.verify_base' => str_ireplace('api.twilio.com', 'verify.twilio.com', $base)]);
+            $hechos = StudioIntegrationConfig::facts('twilio');
+            $this->assertSame($esperado, $hechos['apiBase'], $base);
+            $this->assertSame(isset($esperado['host']) ? ['official' => false, 'host' => str_replace('api.twilio.com', 'verify.twilio.com', $esperado['host'])] : $esperado, $hechos['verifyBase'], $base);
+            $this->assertStringNotContainsString('clavesecreta', json_encode($hechos));
+            $this->assertStringNotContainsString('usuario', json_encode($hechos));
+        }
     }
 }

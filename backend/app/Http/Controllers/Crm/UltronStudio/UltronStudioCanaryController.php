@@ -129,7 +129,8 @@ class UltronStudioCanaryController extends Controller
     /** @return list<mixed> */
     private static function reasonRules(): array
     {
-        return ['required', 'string', 'min:'.StudioCanaryNumbers::REASON_MIN, 'max:'.StudioCanaryNumbers::REASON_MAX, new PlainText(multiline: true)];
+        // AS-1 (Enmienda 3): el motivo queda para siempre en la fila y en el libro: sin teléfonos ni correos.
+        return ['required', 'string', 'min:'.StudioCanaryNumbers::REASON_MIN, 'max:'.StudioCanaryNumbers::REASON_MAX, new PlainText(multiline: true), StudioCanaryPhone::contactDataRule()];
     }
 
     /**
@@ -146,7 +147,7 @@ class UltronStudioCanaryController extends Controller
             }
             $leido = StudioCanaryPhone::parse($value, $canal, StudioIntegrations::countryCodes());
             if ($leido['ok'] !== true) {
-                $fail(StudioCanaryPhone::MESSAGES[$leido['error']]);
+                $fail(StudioCanaryPhone::message($leido['error'], $value, $canal));
             }
         };
     }

@@ -112,7 +112,11 @@ final class StudioIntegrationsExport
                     'phoneInvalidFormat' => StudioCanaryPhone::MESSAGES[StudioCanaryPhone::INVALID_FORMAT],
                     'phoneCountryNotAllowed' => StudioCanaryPhone::MESSAGES[StudioCanaryPhone::COUNTRY_NOT_ALLOWED],
                     'phoneNotAllowedForChannel' => StudioCanaryPhone::MESSAGES[StudioCanaryPhone::NOT_ALLOWED_FOR_CHANNEL],
+                    // O-2: el mismo error con la pista, solo en WhatsApp y con un número que no es móvil.
+                    'phoneNotMobileForWhatsapp' => StudioCanaryPhone::NOT_MOBILE_MESSAGE,
                     'aliasInvalid' => StudioCanaryPhone::ALIAS_MESSAGE,
+                    // AS-1: motivos (48, 52, 53) y nota (55) con un teléfono o un correo.
+                    'contactData' => StudioCanaryPhone::CONTACT_DATA_MESSAGE,
                 ],
                 'examples' => self::examples(),
             ];
@@ -211,7 +215,8 @@ final class StudioIntegrationsExport
             StudioCanaryNumbers::actionsFor($sa, true, 'active', false, 1, 3));
         $vozDto = StudioCanaryNumbers::dto($voz, null, StudioCanaryNumbers::resolveExpectation('voice', null, $cadena, null), null,
             StudioCanaryNumbers::actionsFor($sa, true, 'pending', true, 0, 3));
-        $ilegible = ['verdict' => StudioCanaryCoherence::UNREADABLE, 'engineCanaryConfigured' => true, 'engineHash' => null, 'activeWhatsapp' => null];
+        // El teléfono del lead canario no se pudo leer y el registro sí: el recuento sale (Q-6); null solo si el recuento falla.
+        $ilegible = ['verdict' => StudioCanaryCoherence::UNREADABLE, 'engineCanaryConfigured' => true, 'engineHash' => null, 'activeWhatsapp' => 1];
         $waIlegible = StudioCanaryNumbers::dto($wa, null, StudioCanaryNumbers::resolveExpectation('whatsapp', StudioCanaryCoherence::isEngineCanary($ilegible, 'whatsapp', 'active', str_repeat('e', 64)), $cadena, null),
             null, StudioCanaryNumbers::actionsFor($sa, false, 'active', false, 1, 3));
         $nuevo = self::number(3, 'c1c1c1c1-0000-4000-8000-000000000003', 'whatsapp', 'Móvil de pruebas 2', str_repeat('f', 64), '0002', 'pending', $ahora);

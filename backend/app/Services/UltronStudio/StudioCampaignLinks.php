@@ -45,6 +45,9 @@ final class StudioCampaignLinks
 {
     public const PER_PAGE_MAX = 50;
 
+    /** AS-2 (Enmienda 3): la ruta 40 se pagina en PHP; un `page` mayor es un 422. */
+    public const CAMPAIGNS_PAGE_MAX = 100000;
+
     public const REASON_MIN = 5;
 
     public const REASON_MAX = 500;
@@ -127,8 +130,10 @@ final class StudioCampaignLinks
         }
 
         $total = count($filas);
+        // Con la página fuera de la lista, la página va vacía: el desplazamiento nunca desborda un entero (AS-2).
+        $desde = $page - 1 > intdiv($total, max(1, $perPage)) ? $total : ($page - 1) * $perPage;
         $pagina = array_map(static fn (array $f): array => $f['dto'] + ['ultron' => ['link' => $activas[$f['account'].'|'.$f['entityId']] ?? null]],
-            array_slice($filas, ($page - 1) * $perPage, $perPage));
+            array_slice($filas, $desde, $perPage));
 
         return [
             'connection' => $conexion['connection'],

@@ -8,6 +8,7 @@ use App\Models\UltronStudio\StudioCampaignLink;
 use App\Rules\PlainText;
 use App\Services\UltronStudio\StudioAccess;
 use App\Services\UltronStudio\StudioCampaignLinks;
+use App\Services\UltronStudio\StudioCanaryPhone;
 use App\Services\UltronStudio\StudioMetaCampaigns;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -42,6 +43,8 @@ class UltronStudioCampaignLinkController extends Controller
             'linked' => ['sometimes', 'nullable', 'string', Rule::in(['yes', 'no'])],
             'account' => ['sometimes', 'nullable', 'string', 'regex:'.self::ACCOUNT_ID],
             ...self::pagination(),
+            // AS-2 (Enmienda 3): esta lista se pagina en PHP; `page` lleva tope (nunca 500).
+            'page' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:'.StudioCampaignLinks::CAMPAIGNS_PAGE_MAX],
         ]);
 
         return response()->json(['ok' => true, 'data' => $links->campaignsPage(
@@ -103,7 +106,8 @@ class UltronStudioCampaignLinkController extends Controller
     {
         $access = StudioAccess::requirePerson($request);
         $data = $request->validate([
-            'reason' => ['required', 'string', 'min:'.StudioCampaignLinks::REASON_MIN, 'max:'.StudioCampaignLinks::REASON_MAX, new PlainText(multiline: true)],
+            // AS-1 (Enmienda 3): el motivo queda para siempre en la fila y en el libro: sin teléfonos ni correos.
+            'reason' => ['required', 'string', 'min:'.StudioCampaignLinks::REASON_MIN, 'max:'.StudioCampaignLinks::REASON_MAX, new PlainText(multiline: true), StudioCanaryPhone::contactDataRule()],
         ]);
 
         return response()->json(['ok' => true, 'data' => $links->deactivate($access, $request, $uuid, $data['reason'])]);

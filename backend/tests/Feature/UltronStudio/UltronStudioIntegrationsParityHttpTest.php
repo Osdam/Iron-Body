@@ -9,14 +9,18 @@ use App\Models\UltronStudio\StudioAuditEvent;
 use App\Models\UltronStudio\StudioCampaignLink;
 use App\Models\UltronStudio\StudioCanaryNumber;
 use App\Models\UltronStudio\StudioIntegrationSnapshot;
+use App\Services\UltronStudio\StudioAccess;
 use App\Services\UltronStudio\StudioCampaignLinks;
 use App\Services\UltronStudio\StudioCanaryCoherence;
 use App\Services\UltronStudio\StudioIntegrationConfig;
+use App\Services\UltronStudio\StudioIntegrations;
 use App\Services\UltronStudio\StudioMetaCampaigns;
 use App\Services\UltronStudio\StudioVersionStatus;
 use App\Support\Access\CrmPermission;
 use App\Support\Privacy\PhoneFingerprint;
 use Carbon\CarbonImmutable;
+use Closure;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Routing\Middleware\ThrottleRequests;
@@ -39,8 +43,8 @@ use Tests\Unit\UltronStudio\StudioIntegrationsParityTest;
  * Secciones: `canaryTransitions` (rutas 49–54 y el bloque `actions` de la 42),
  * `campaignLinkRules` (47 y 48), `probeRules` (56), `acknowledgeRules` (55),
  * `coherence` (§I4.5), `metaClassification · possiblyDeleted` (lee las
- * pasadas de la base) y `routeMatrix` (§I7.1). `errorOrder` es la transcripción
- * del orden que estos casos ya recorren uno a uno, y no se repite.
+ * pasadas de la base), `routeMatrix` (§I7.1) y `errorOrder` (§I7.4, EO-1), que
+ * rompe cada comprobación junto con una posterior para probar el orden.
  */
 class UltronStudioIntegrationsParityHttpTest extends TestCase
 {
@@ -53,6 +57,51 @@ class UltronStudioIntegrationsParityHttpTest extends TestCase
     private const CAMPAIGN = '120000000000000387';
 
     private const OTHER_CAMPAIGN = '120000000000000999';
+
+    /** La llave de cada escritura (§I7.1): la exige la puerta y, por defensa, el dominio. */
+    private const WRITE_KEYS = [
+        47 => 'ultron.campaigns_manage', 48 => 'ultron.campaigns_manage', 49 => 'ultron.canary_manage', 50 => 'ultron.canary_authorize',
+        51 => 'ultron.canary_manage', 52 => 'ultron.canary_manage', 53 => 'ultron.canary_manage', 54 => 'ultron.canary_manage',
+        55 => 'ultron.integrations_manage', 56 => 'ultron.integrations_manage',
+    ];
+
+    /** Rutas sin ninguna entrada (ni consulta ni cuerpo): su paso de forma no se puede provocar. */
+    private const NO_INPUT = [39, 43, 45, 46, 50, 51];
+
+    /**
+     * La COMPAÑERA de cada paso de `errorOrder`: una comprobación posterior que
+     * se puede romper a la vez (casi siempre la siguiente). Si responde el paso,
+     * el paso existe con su código y va antes que ella. Sin compañera, el paso
+     * solo (la siguiente no se puede romper a la vez: el recurso que no existe
+     * no tiene estado, la versión que no existe no tiene integridad…).
+     */
+    private const COMPANIONS = [
+        'reads' => ['session' => 'shape', 'gate' => 'shape', 'person' => 'shape', 'view' => 'shape'],
+        47 => ['session' => 'shape', 'gate' => 'shape', 'person' => 'shape', 'view' => 'shape', 'shape' => 'writesFlag', 'permission' => 'writesFlag',
+            'writesFlag' => 'replay', 'replay' => 'metaConfigured', 'replayMismatch' => 'metaConfigured', 'metaConfigured' => 'campaignResolves',
+            'campaignResolves' => 'versionExists', 'versionExists' => 'noActiveWithoutReplaces', 'versionLinkable' => 'versionIntegrity',
+            'versionIntegrity' => 'noActiveWithoutReplaces', 'noActiveWithoutReplaces' => 'activeLimit', 'replacesIsActive' => 'activeLimit',
+            'activeLimit' => 'uniqueViolation'],
+        48 => ['session' => 'shape', 'gate' => 'shape', 'person' => 'shape', 'view' => 'shape', 'shape' => 'writesFlag', 'permission' => 'writesFlag',
+            'writesFlag' => 'linkExists'],
+        49 => ['session' => 'shape', 'gate' => 'shape', 'person' => 'shape', 'view' => 'shape', 'shape' => 'writesFlag', 'permission' => 'writesFlag',
+            'writesFlag' => 'replay', 'replay' => 'liveLimit', 'replayMismatch' => 'versionExists', 'versionExists' => 'liveLimit',
+            'versionLinkable' => 'versionIntegrity', 'versionIntegrity' => 'liveLimit', 'liveLimit' => 'uniqueViolation'],
+        50 => ['session' => 'writesFlag', 'gate' => 'writesFlag', 'person' => 'writesFlag', 'view' => 'writesFlag', 'shape' => 'writesFlag',
+            'permission' => 'writesFlag', 'writesFlag' => 'numberExists', 'identity' => 'state'],
+        51 => ['session' => 'writesFlag', 'gate' => 'writesFlag', 'person' => 'writesFlag', 'view' => 'writesFlag', 'shape' => 'writesFlag',
+            'permission' => 'writesFlag', 'writesFlag' => 'numberExists', 'numberExists' => 'activeLimit', 'identity' => 'state', 'state' => 'activeLimit'],
+        52 => ['session' => 'shape', 'gate' => 'shape', 'person' => 'shape', 'view' => 'shape', 'shape' => 'writesFlag', 'permission' => 'writesFlag',
+            'writesFlag' => 'numberExists'],
+        53 => ['session' => 'shape', 'gate' => 'shape', 'person' => 'shape', 'view' => 'shape', 'shape' => 'writesFlag', 'permission' => 'writesFlag',
+            'writesFlag' => 'numberExists'],
+        54 => ['session' => 'shape', 'gate' => 'shape', 'person' => 'shape', 'view' => 'shape', 'shape' => 'writesFlag', 'permission' => 'writesFlag',
+            'writesFlag' => 'numberExists', 'numberExists' => 'versionExists', 'state' => 'versionExists', 'versionLinkable' => 'versionIntegrity'],
+        55 => ['session' => 'shape', 'gate' => 'shape', 'person' => 'shape', 'view' => 'shape', 'shape' => 'fingerprintIsEffective',
+            'permission' => 'fingerprintIsEffective', 'replay' => 'fingerprintIsEffective', 'replayMismatch' => 'fingerprintIsEffective'],
+        56 => ['session' => 'shape', 'gate' => 'shape', 'person' => 'shape', 'view' => 'shape', 'shape' => 'probeFlag', 'permission' => 'probeFlag',
+            'probeFlag' => 'replay', 'replay' => 'twilioConfigured', 'replayMismatch' => 'twilioConfigured', 'twilioConfigured' => 'cooldown'],
+    ];
 
     /** @var array<int, Admin> los ids simbólicos del fixture → personas de verdad */
     private array $people = [];
@@ -110,6 +159,16 @@ class UltronStudioIntegrationsParityHttpTest extends TestCase
     public static function routeCases(): iterable
     {
         return self::section('routeMatrix');
+    }
+
+    /** Un caso por paso de cada ruta: `[caso del fixture, índice del paso]`. */
+    public static function errorOrderCases(): iterable
+    {
+        foreach (StudioIntegrationsParityTest::fixture()['errorOrder'] ?? [] as $caso) {
+            foreach ($caso['expected']['order'] as $i => $paso) {
+                yield $caso['name'].' · '.$i.' · '.$paso['check'] => [$caso, $i];
+            }
+        }
     }
 
     // ── canaryTransitions ───────────────────────────────────────────────────
@@ -530,6 +589,292 @@ class UltronStudioIntegrationsParityHttpTest extends TestCase
                 $this->assertSame($esperado, $r->status(), "{$rol}: ".$r->getContent());
             }
         }
+    }
+
+    // ── errorOrder ──────────────────────────────────────────────────────────
+
+    /**
+     * EO-1: el orden de cada una de las 18 rutas, comprobación a comprobación
+     * (§I7.4). Cada caso rompe el paso y su compañera ({@see COMPANIONS}); tiene
+     * que responder el paso. `done` es la petición buena.
+     *
+     * Dos pasos los contesta la PUERTA (`AuthorizationMap`), no el dominio:
+     *  - `person`: con el token compartido, la puerta responde antes (CN-4);
+     *  - `permission`: la llave de cada escritura está en la puerta (§I7.1 y el
+     *    paso 1 del orden de §I3.4), con el mismo 403 `forbidden
+     *    {required_permission}`; el `require()` del dominio es la defensa en
+     *    profundidad y por HTTP no se alcanza. Por eso su compañera es la
+     *    bandera y no la forma (ver informe-api.md).
+     * En las rutas sin entradas ({@see NO_INPUT}) la forma no se puede romper:
+     * una consulta o un campo ajenos se ignoran y responde la compañera.
+     */
+    #[DataProvider('errorOrderCases')]
+    public function test_error_order(array $caso, int $i): void
+    {
+        $this->freezeSecond();
+        $ruta = $caso['route'];
+        $orden = $caso['expected']['order'];
+        $paso = $orden[$i];
+        $companera = (self::COMPANIONS[$ruta] ?? self::COMPANIONS['reads'])[$paso['check']] ?? null;
+        $romper = array_values(array_filter([$paso['check'] === 'done' ? null : $paso['check'], $companera]));
+
+        $r = $this->errorOrderRequest($caso, $romper);
+
+        if ($paso['check'] === 'shape' && in_array($ruta, self::NO_INPUT, true)) {
+            $paso = $companera === null ? $orden[array_key_last($orden)] : collect($orden)->firstWhere('check', $companera);
+        }
+        $this->assertErrorStep($r, $paso, $ruta);
+    }
+
+    /** @param  list<string>  $romper */
+    private function errorOrderRequest(array $caso, array $romper): TestResponse
+    {
+        $ruta = $caso['route'];
+        $rompe = static fn (string $check): bool => in_array($check, $romper, true);
+        [$metodo, $plantilla] = explode(' ', substr($caso['name'], strrpos($caso['name'], ' · ') + strlen(' · ')), 2);
+        $yo = $this->personWith(in_array($ruta, [50, 55, 56], true) ? self::SUPER_KEYS : self::ADMIN_KEYS, 'Quien actúa');
+        $id = (string) Str::uuid();
+        $this->integrationsFlags(writes: true, probe: true);
+
+        $plan = match (true) {
+            $ruta <= 46 => $this->readPlan($ruta, substr($plantilla, strlen('integrations/')), $rompe),
+            $ruta === 47 => $this->linkCreatePlan($id, $rompe),
+            $ruta === 48 => $this->linkDeactivatePlan($rompe),
+            $ruta === 49 => $this->canaryRegisterPlan($id, $rompe),
+            $ruta <= 54 => $this->canaryTransitionPlan($ruta, $yo, $rompe),
+            $ruta === 55 => $this->acknowledgePlan($id, $rompe),
+            default => $this->probePlan($id, $yo, $rompe),
+        };
+        if (($plan['prior'] ?? null) !== null) {
+            // La primera petición con esta clientRequestId, con las escrituras encendidas.
+            $this->integrations($metodo, $plan['path'], $yo, $plan['prior'])->assertSuccessful();
+        }
+        ($plan['after'] ?? static fn (): null => null)();
+
+        // 55 y 56 no dependen de la bandera de escrituras (AK-1, PR-1): van siempre con ella apagada.
+        $this->integrationsFlags(writes: ! $rompe('writesFlag') && $ruta < 55, probe: ! $rompe('probeFlag'));
+        $url = '/api/admin/ultron-studio/integrations/'.$plan['path'];
+
+        return match (true) {
+            $rompe('session') => $this->json($metodo, $url, $plan['body']),
+            $rompe('gate') => $this->json($metodo, $url, $plan['body'], $this->as($this->person(CrmPermission::ROLE_ENTRENADOR, 'Entrenador'))),
+            $rompe('person') => $this->json($metodo, $url, $plan['body'], $this->sharedTokenHeaders()),
+            $rompe('view') => $this->integrations($metodo, $plan['path'], $this->personWith($ruta <= 46 ? [] : [self::WRITE_KEYS[$ruta]], 'Sin ver'), $plan['body']),
+            $rompe('permission') => $this->integrations($metodo, $plan['path'], $this->personWith([StudioAccess::VIEW], 'Sin la llave'), $plan['body']),
+            default => $this->integrations($metodo, $plan['path'], $yo, $plan['body']),
+        };
+    }
+
+    /** 39–46: la forma rota es un filtro fuera de su lista (o, sin entradas, una consulta ajena). */
+    private function readPlan(int $ruta, string $path, Closure $rompe): array
+    {
+        if ($ruta === 40) {
+            $this->metaConfigured();
+        }
+        $consulta = match ($ruta) {
+            40, 41, 42 => 'status=zzz',
+            44 => 'per_page=zzz',
+            default => 'zzz=1',
+        };
+
+        return ['path' => $path.($rompe('shape') ? '?'.$consulta : ''), 'body' => []];
+    }
+
+    /** 47: asociar una campaña a una versión aprobada. */
+    private function linkCreatePlan(string $id, Closure $rompe): array
+    {
+        $this->metaConfigured();
+        $this->metaCampaign(self::ACCOUNTS[0], self::CAMPAIGN, 'Pauta del orden');
+        $otra = $this->personWith(self::ADMIN_KEYS, 'Otra persona');
+        $version = $this->versionIn($otra, $rompe('versionLinkable') ? 'DRAFT' : 'APPROVED', ! $rompe('versionIntegrity'));
+        $cuerpo = ['clientRequestId' => $id, 'campaign' => self::campaignId(self::CAMPAIGN), 'target' => ['kind' => 'version', 'versionUuid' => (string) $version->uuid]];
+        $previa = match (true) {
+            $rompe('replay') => $cuerpo,
+            $rompe('replayMismatch') => ['target' => ['kind' => 'baseline']] + $cuerpo,
+            default => null,
+        };
+
+        if ($rompe('shape')) {
+            $cuerpo['target']['kind'] = 'zzz';
+        }
+        if ($rompe('campaignResolves')) {
+            $cuerpo['campaign'] = self::campaignId('120000000000000111');
+        }
+        if ($rompe('versionExists')) {
+            $cuerpo['target']['versionUuid'] = (string) Str::uuid();
+        }
+        if ($rompe('noActiveWithoutReplaces') || $rompe('replacesIsActive')) {
+            $this->seedLink(self::CAMPAIGN, 'active', $otra);
+        }
+        if ($rompe('replacesIsActive')) {
+            $cuerpo['replaces'] = (string) $this->seedLink(self::CAMPAIGN, 'inactive', $otra)->uuid;
+        }
+        if ($rompe('activeLimit')) {
+            config(['ultron_studio.integrations.campaign_links.max_active' => 1]);
+            $this->seedLink(self::OTHER_CAMPAIGN, 'active', $otra);
+        }
+
+        return ['path' => 'meta/links', 'body' => $cuerpo, 'prior' => $previa, 'after' => function () use ($rompe, $otra): void {
+            if ($rompe('metaConfigured')) {
+                config(['meta.ads.access_token' => null]);
+            }
+            if ($rompe('uniqueViolation')) {
+                // La carrera: otra asociación de la misma campaña se confirma JUSTO
+                // después de la comprobación previa y antes del INSERT (fuera de su
+                // transacción, como la de otra petición): el 23505 de `uscl_one_active`.
+                $armada = true;
+                DB::listen(function (QueryExecuted $q) use (&$armada, $otra): void {
+                    if ($armada && str_starts_with($q->sql, 'select') && str_contains($q->sql, 'ultron_studio_campaign_links') && str_contains($q->sql, '"campaign_id" = ?')) {
+                        $armada = false;
+                        $this->seedLink(self::CAMPAIGN, 'active', $otra);
+                    }
+                });
+            }
+        }];
+    }
+
+    /** 48: desactivar una asociación activa. */
+    private function linkDeactivatePlan(Closure $rompe): array
+    {
+        $enlace = $this->seedLink(self::CAMPAIGN, $rompe('state') ? 'inactive' : 'active', $this->personWith(self::ADMIN_KEYS, 'Autora'));
+
+        return [
+            'path' => 'meta/links/'.($rompe('linkExists') ? (string) Str::uuid() : $enlace->uuid).'/deactivate',
+            'body' => ['reason' => $rompe('shape') ? 'abc' : 'Motivo del orden'],
+        ];
+    }
+
+    /** 49: registrar un WhatsApp con versión esperada. */
+    private function canaryRegisterPlan(string $id, Closure $rompe): array
+    {
+        $otra = $this->personWith(self::ADMIN_KEYS, 'Otra persona');
+        $version = $this->versionIn($otra, $rompe('versionLinkable') ? 'DRAFT' : 'APPROVED', ! $rompe('versionIntegrity'));
+        $cuerpo = ['clientRequestId' => $id, 'channel' => 'whatsapp', 'phone' => self::PHONE, 'alias' => 'Móvil del orden', 'consentAttested' => true,
+            'expectedVersionUuid' => (string) $version->uuid];
+        $previa = match (true) {
+            $rompe('replay') => $cuerpo,
+            $rompe('replayMismatch') => ['alias' => 'Otra función'] + $cuerpo,
+            default => null,
+        };
+
+        if ($rompe('shape')) {
+            $cuerpo['consentAttested'] = false;
+        }
+        if ($rompe('versionExists')) {
+            $cuerpo['expectedVersionUuid'] = (string) Str::uuid();
+        }
+        if ($rompe('uniqueViolation')) {
+            // El mismo teléfono ya vivo en el canal: sin comprobación previa, lo para el INSERT (`uscn_one_live`).
+            $this->seedNumber('whatsapp', 'pending', $otra, phone: self::PHONE);
+        }
+
+        return ['path' => 'canaries', 'body' => $cuerpo, 'prior' => $previa, 'after' => function () use ($rompe): void {
+            if ($rompe('liveLimit')) {
+                $vivos = StudioCanaryNumber::query()->where('channel', 'whatsapp')->whereIn('status', StudioCanaryNumber::LIVE)->count();
+                $this->seedLive('whatsapp', StudioIntegrations::canaryMaxLive() - $vivos);
+            }
+        }];
+    }
+
+    /** 50–54: un número en el estado de partida de cada acción; quien registró es otra persona salvo en `identity`. */
+    private function canaryTransitionPlan(int $ruta, Admin $yo, Closure $rompe): array
+    {
+        $accion = [50 => 'authorize', 51 => 'activate', 52 => 'deactivate', 53 => 'revoke', 54 => 'expectation'][$ruta];
+        [$bueno, $malo] = ['authorize' => ['pending', 'authorized'], 'activate' => ['authorized', 'pending'], 'deactivate' => ['active', 'pending'],
+            'revoke' => ['active', 'revoked'], 'expectation' => ['pending', 'revoked']][$accion];
+        $registrante = $rompe('identity') ? $yo : $this->personWith(self::SUPER_KEYS, 'Quien registró');
+        $numero = $this->seedNumber('whatsapp', $rompe('state') ? $malo : $bueno, $registrante);
+        if ($rompe('activeLimit')) {
+            config(['ultron_studio.integrations.canary.max_active' => 1]);
+            $this->seedActive('whatsapp', 1);
+        }
+
+        $cuerpo = match ($accion) {
+            'authorize', 'activate' => $rompe('shape') ? ['zzz' => 1] : [],
+            'deactivate', 'revoke' => ['reason' => $rompe('shape') ? 'abc' : 'Motivo del orden'],
+            'expectation' => ['versionUuid' => match (true) {
+                $rompe('shape') => 'zzz',
+                $rompe('versionExists') => (string) Str::uuid(),
+                default => (string) $this->versionIn($registrante, $rompe('versionLinkable') ? 'DRAFT' : 'APPROVED', ! $rompe('versionIntegrity'))->uuid,
+            }],
+        };
+
+        return ['path' => 'canaries/'.($rompe('numberExists') ? (string) Str::uuid() : $numero->uuid).'/'.$accion, 'body' => $cuerpo];
+    }
+
+    /** 55: reconocer la configuración de Twilio con su huella efectiva. */
+    private function acknowledgePlan(string $id, Closure $rompe): array
+    {
+        $cuerpo = ['clientRequestId' => $id, 'provider' => 'twilio', 'fingerprint' => StudioIntegrationConfig::fingerprintOf(StudioIntegrationConfig::facts('twilio'))];
+        $previa = match (true) {
+            $rompe('replay') => $cuerpo,
+            $rompe('replayMismatch') => $cuerpo + ['note' => 'Otra nota'],
+            default => null,
+        };
+        if ($rompe('shape')) {
+            $cuerpo['provider'] = 'zzz';
+        }
+        if ($rompe('fingerprintIsEffective') && $previa === null) {
+            $cuerpo['fingerprint'] = str_repeat('c', 64);
+        }
+
+        return ['path' => 'config/acknowledge', 'body' => $cuerpo, 'prior' => $previa, 'after' => static function () use ($rompe, $previa): void {
+            if ($rompe('fingerprintIsEffective') && $previa !== null) {
+                // La configuración cambió después de la primera vez.
+                config(['otp.cost.daily_soft' => 9.5]);
+            }
+        }];
+    }
+
+    /** 56: la sonda con el token del OTP y sin sonda reciente. */
+    private function probePlan(string $id, Admin $yo, Closure $rompe): array
+    {
+        Http::fake(fn (HttpRequest $r) => Http::response(['sid' => 'AC0123456789abcdef0123456789abcdef', 'status' => 'active', 'type' => 'Full'], 200));
+        config([
+            'ultron_studio.integrations.twilio_probe.cooldown_seconds' => 300,
+            'ultron_studio.integrations.twilio_probe.key_sid' => null,
+            'ultron_studio.integrations.twilio_probe.key_secret' => null,
+            'otp.twilio.sid' => $rompe('twilioConfigured') ? null : 'AC0123456789abcdef0123456789abcdef',
+            'otp.twilio.token' => 'h6fixturetwiliotoken000000000001',
+        ]);
+        if ($rompe('replay') || $rompe('replayMismatch')) {
+            $de = $rompe('replay') ? $yo : $this->personWith(self::SUPER_KEYS, 'Otra persona');
+            $this->seedSnapshot('probe', 'twilio', $de, $id, CarbonImmutable::now()->subHour());
+        }
+        if ($rompe('cooldown')) {
+            $this->seedSnapshot('probe', 'twilio', $this->personWith(self::SUPER_KEYS, 'Quien sondeó antes'), null, CarbonImmutable::now()->subSeconds(10));
+        }
+
+        return ['path' => 'twilio/probe', 'body' => ['clientRequestId' => $rompe('shape') ? 'zzz' : $id]];
+    }
+
+    /**
+     * El paso esperado: su estado y su código. La sesión (401) y la puerta (403)
+     * llevan el código de su middleware, no uno del dominio (`code: null` en el
+     * fixture), y el 422 es el estándar de Laravel.
+     */
+    private function assertErrorStep(TestResponse $r, array $paso, int $ruta): void
+    {
+        $donde = $paso['check'].': '.$r->getContent();
+        $this->assertSame($paso['status'], $r->status(), $donde);
+        $codigo = match (true) {
+            $r->status() >= 400 => $r->json('code'),
+            $r->json('data.replayed') === true => 'replayed',
+            $r->json('data.reused') === true => 'reused',
+            default => null,
+        };
+        match ($paso['check']) {
+            'session', 'gate' => null,
+            'shape' => $this->assertNotEmpty($r->json('errors'), $donde),
+            'person' => $this->assertContains($codigo, ['person_required', 'forbidden'], $donde),
+            default => $this->assertSame($paso['code'], $codigo, $donde),
+        };
+        match ($paso['check']) {
+            'view' => $this->assertSame(StudioAccess::VIEW, $r->json('required_permission'), $donde),
+            'permission' => $this->assertSame(self::WRITE_KEYS[$ruta], $r->json('required_permission'), $donde),
+            'identity' => $this->assertSame($ruta === 50 ? 'authorize' : 'activate', $r->json('action'), $donde),
+            default => null,
+        };
     }
 
     // ── Piezas del arnés ────────────────────────────────────────────────────

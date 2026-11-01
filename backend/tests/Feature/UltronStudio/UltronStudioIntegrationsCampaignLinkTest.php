@@ -4,9 +4,12 @@ namespace Tests\Feature\UltronStudio;
 
 use App\Models\UltronStudio\StudioAuditEvent;
 use App\Models\UltronStudio\StudioCampaignLink;
+use App\Services\UltronStudio\StudioCampaignLinks;
+use App\Services\UltronStudio\StudioCanaryPhone;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Middleware\ThrottleRequests;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -239,5 +242,46 @@ class UltronStudioIntegrationsCampaignLinkTest extends TestCase
         $this->assertFalse($enlace['campaign']['connected']);
         $this->assertNull($enlace['campaign']['currentName']);
         $this->assertSame('Pauta', $enlace['campaign']['nameAtLink']);
+    }
+
+    /** AS-1 (Enmienda 3): el motivo de desactivar no admite un teléfono ni un correo; una fecha, sí. */
+    public function test_el_motivo_de_desactivar_rechaza_telefonos_y_correos(): void
+    {
+        $ana = $this->personWith(self::ADMIN_KEYS, 'Ana');
+        $this->metaConfigured();
+        $this->metaCampaign(self::ACCOUNTS[0], self::C1, 'Pauta');
+        $uuid = (string) $this->integrations('POST', 'meta/links', $ana, ['clientRequestId' => (string) Str::uuid(), 'campaign' => self::campaignId(self::C1), 'target' => ['kind' => 'baseline']])
+            ->assertCreated()->json('data.link.uuid');
+        $eventos = StudioAuditEvent::query()->count();
+
+        foreach (['+57 300 000 0280', '300-000-0280', '3000000280', 'juan@correo.co'] as $dato) {
+            $r = $this->integrations('POST', "meta/links/{$uuid}/deactivate", $ana, ['reason' => "Lo pidió {$dato}"])->assertStatus(422);
+            $this->assertSame([StudioCanaryPhone::CONTACT_DATA_MESSAGE], $r->json('errors.reason'), $dato);
+            $this->assertStringNotContainsString($dato, $r->getContent());
+        }
+        $this->assertSame($eventos, StudioAuditEvent::query()->count(), 'sin evento');
+        $this->assertSame('active', StudioCampaignLink::query()->where('uuid', $uuid)->value('status'));
+        $this->integrations('POST', "meta/links/{$uuid}/deactivate", $ana, ['reason' => 'Pauta 2026-11-01 terminada'])->assertOk();
+    }
+
+    /** AS-2 (Enmienda 3): la ruta 40 se pagina en PHP; `page` lleva tope y nunca da 500. */
+    public function test_la_pagina_de_campanas_tiene_tope_y_nunca_da_500(): void
+    {
+        $ana = $this->personWith(self::ADMIN_KEYS, 'Ana');
+        $this->metaConfigured();
+        $this->metaCampaign(self::ACCOUNTS[0], self::C1, 'Pauta');
+        Log::spy();
+
+        foreach (['9223372036854775807', '99999999999999999999', (string) (StudioCampaignLinks::CAMPAIGNS_PAGE_MAX + 1)] as $pagina) {
+            $this->integrations('GET', "meta/campaigns?page={$pagina}", $ana)->assertStatus(422)->assertJsonValidationErrors('page');
+        }
+        $ultima = $this->integrations('GET', 'meta/campaigns?page='.StudioCampaignLinks::CAMPAIGNS_PAGE_MAX.'&per_page=50', $ana)->assertOk()->json('data.campaigns');
+        $this->assertSame([], $ultima['data']);
+        $this->assertSame(1, $ultima['total']);
+        // Y el servicio por su cuenta, sin el controlador: el desplazamiento no desborda.
+        $this->assertSame([], app(StudioCampaignLinks::class)->campaignsPage([], PHP_INT_MAX, 50)['campaigns']->items());
+        $this->assertCount(1, app(StudioCampaignLinks::class)->campaignsPage([], 1, 50)['campaigns']->items());
+        // Sin `production.ERROR`: un 422 no se informa como fallo.
+        Log::shouldNotHaveReceived('error');
     }
 }

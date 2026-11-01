@@ -3,6 +3,7 @@
 namespace App\Services\UltronStudio;
 
 use App\Support\Privacy\PhoneFingerprint;
+use Closure;
 use InvalidArgumentException;
 
 /**
@@ -21,6 +22,10 @@ use InvalidArgumentException;
  * El número completo solo existe aquí, en memoria, mientras dura la petición:
  * de él salen la huella ({@see PhoneFingerprint}), los 4
  * últimos dígitos y, solo en voz, el cifrado. Nunca se devuelve.
+ *
+ * Aquí vive también la regla de AS-1 (Enmienda 3): los textos libres del hito
+ * que el libro guarda para siempre (motivos de 48, 52 y 53, nota de 55 y el
+ * alias) no admiten un teléfono ni un correo ({@see contactDataError()}).
  */
 final class StudioCanaryPhone
 {
@@ -42,8 +47,15 @@ final class StudioCanaryPhone
     public const MESSAGES = [
         self::INVALID_FORMAT => 'El teléfono no tiene formato internacional (+57…).',
         self::COUNTRY_NOT_ALLOWED => 'Ese país no está permitido para números canarios.',
-        self::NOT_ALLOWED_FOR_CHANNEL => 'Ese número no sirve para este canal (WhatsApp exige un móvil).',
+        self::NOT_ALLOWED_FOR_CHANNEL => 'Ese número no sirve para este canal.',
     ];
+
+    /**
+     * `not_allowed_for_channel` con la pista de WhatsApp (O-2 de la Enmienda 2):
+     * solo si el canal es WhatsApp y el número colombiano no es un móvil. Con
+     * un móvil de longitud equivocada, o en voz, la pista confundiría.
+     */
+    public const NOT_MOBILE_MESSAGE = 'Ese número no sirve para este canal (WhatsApp exige un móvil).';
 
     public const ALIAS_MESSAGE = 'Usa una función de 3 a 40 caracteres, sin teléfonos ni correos.';
 
@@ -74,6 +86,25 @@ final class StudioCanaryPhone
 
     /** Una serie de 4 dígitos o más delata un teléfono o un documento. */
     public const ALIAS_DIGIT_RUN = '/[0-9]{4,}/';
+
+    public const CONTACT_DATA = 'contact_data';
+
+    /** El 422 de AS-1: no repite lo que se escribió. */
+    public const CONTACT_DATA_MESSAGE = 'Sin teléfonos ni correos: este texto queda en el libro y no se puede corregir.';
+
+    /**
+     * Las tres expresiones de `LeadSourceClassifier` (motor), COPIADAS a
+     * propósito para no añadir un lector nuevo del motor (AS-1). Una serie de 8
+     * o más dígitos aunque lleve separadores cortos que no son letras
+     * («+57 300-123-4567», «300 123 45 67»); una fecha con forma de fecha
+     * («2026-11-01») se respeta; y un correo. Llevan `\p{L}` y `u` como el
+     * original, que ya corre en producción; `D` donde hay `$` (Enmienda 1).
+     */
+    public const CONTACT_DIGIT_RUN = '/\+?\d(?:[^\p{L}\d]{0,3}\d){7,}/u';
+
+    public const CONTACT_DATE_SHAPE = '/^(?:\d{4}([-\/._])\d{2}\1\d{2}|\d{2}([-\/._])\d{2}\2\d{4})$/D';
+
+    public const CONTACT_EMAIL = '/[^\s@]+@[^\s@]+\.[^\s@]+/u';
 
     /** El punto de enmascarar (U+2022). */
     private const BULLETS = '•••';
@@ -127,6 +158,21 @@ final class StudioCanaryPhone
         return ['ok' => true, 'e164' => $e164, 'countryCode' => $pais, 'last4' => $ultimos, 'masked' => self::masked($pais, $ultimos)];
     }
 
+    /**
+     * El texto del 422 de un teléfono que `parse()` rechazó con `$error`. Pura;
+     * el número no sale del texto.
+     */
+    public static function message(string $error, #[\SensitiveParameter] string $raw, string $channel): string
+    {
+        // `not_allowed_for_channel` solo sale con el país 57: no es móvil si no empieza por +573.
+        if ($error === self::NOT_ALLOWED_FOR_CHANNEL && $channel === self::CHANNEL_WHATSAPP
+            && ! str_starts_with(str_replace(self::SEPARATORS, '', $raw), '+'.self::COLOMBIA.'3')) {
+            return self::NOT_MOBILE_MESSAGE;
+        }
+
+        return self::MESSAGES[$error];
+    }
+
     /** "+57 ••• ••• 4821" (U+2022). */
     public static function masked(string $countryCode, string $last4): string
     {
@@ -152,7 +198,44 @@ final class StudioCanaryPhone
         if (preg_match(self::ALIAS_DIGIT_RUN, $alias) === 1 || str_contains($alias, '@')) {
             return self::INVALID_ALIAS;
         }
+        // AS-1 (Enmienda 3) cierra O-1: también un teléfono escrito en grupos.
+        if (self::contactDataError($alias) !== null) {
+            return self::INVALID_ALIAS;
+        }
 
         return null;
+    }
+
+    /**
+     * `contact_data` si el texto lleva un correo o una serie de 8 o más dígitos
+     * que no es una fecha; null si no. Pura. Con UTF-8 inválido falla cerrada.
+     */
+    public static function contactDataError(string $text): ?string
+    {
+        $correo = preg_match(self::CONTACT_EMAIL, $text);
+        $series = preg_match_all(self::CONTACT_DIGIT_RUN, $text, $encontradas);
+        if ($correo === false || $series === false) {
+            return self::CONTACT_DATA;
+        }
+        if ($correo === 1) {
+            return self::CONTACT_DATA;
+        }
+        foreach ($encontradas[0] as $serie) {
+            if (preg_match(self::CONTACT_DATE_SHAPE, $serie) !== 1) {
+                return self::CONTACT_DATA;
+            }
+        }
+
+        return null;
+    }
+
+    /** La regla de validación de AS-1 para un motivo o una nota (texto fijo). */
+    public static function contactDataRule(): Closure
+    {
+        return static function (string $attribute, mixed $value, Closure $fail): void {
+            if (is_string($value) && self::contactDataError($value) !== null) {
+                $fail(self::CONTACT_DATA_MESSAGE);
+            }
+        };
     }
 }

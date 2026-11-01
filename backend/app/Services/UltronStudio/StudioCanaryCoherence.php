@@ -31,6 +31,11 @@ use Throwable;
  * activa y hay OTRAS `whatsapp` activas) → `in_sync`. NUNCA `in_sync` por
  * defecto: cualquier fallo es `unreadable`, con una línea de log que lleva solo
  * la clase del error.
+ *
+ * `activeWhatsapp` son las filas WhatsApp activas del registro, contadas tal
+ * cual: también con `no_engine_canary` (CO-4) y con `unreadable` si lo que no
+ * se pudo leer fue el teléfono del lead canario y no el registro (Q-6 de la
+ * Enmienda 2, decidido en informe-api.md). Solo es null si el propio recuento falló.
  */
 final class StudioCanaryCoherence
 {
@@ -53,7 +58,7 @@ final class StudioCanaryCoherence
 
     /**
      * Nunca lanza: cualquier Throwable → `unreadable` (al log, solo la clase).
-     * `activeWhatsapp` es null si no se pudo contar.
+     * `activeWhatsapp` es null solo si no se pudo contar.
      *
      * @return array{verdict:string,engineCanaryConfigured:bool,engineHash:?string,activeWhatsapp:?int}
      */
@@ -109,7 +114,8 @@ final class StudioCanaryCoherence
 
             return self::result($otros ? self::EXTRA_ACTIVE : self::IN_SYNC, true, $huella, $activos);
         } catch (Throwable $e) {
-            return self::unreadable($e);
+            // El recuento ya se leyó: el veredicto dice que el resto no (Q-6).
+            return self::unreadable($e, $activos);
         }
     }
 
@@ -174,12 +180,12 @@ final class StudioCanaryCoherence
     }
 
     /** @return array{verdict:string,engineCanaryConfigured:bool,engineHash:?string,activeWhatsapp:?int} */
-    private static function unreadable(Throwable $e): array
+    private static function unreadable(Throwable $e, ?int $active = null): array
     {
         // Tragado a propósito: la coherencia se pinta en la lista de números y en
         // el estado, y no puede tumbarlos. Sin el mensaje: podría llevar datos.
         Log::warning('ultron_studio.canary_coherence_unreadable', ['error_class' => class_basename($e)]);
 
-        return self::result(self::UNREADABLE, true, null, null);
+        return self::result(self::UNREADABLE, true, null, $active);
     }
 }

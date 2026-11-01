@@ -9,11 +9,14 @@ use App\Support\Privacy\PhoneFingerprint;
 use Closure;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use LogicException;
+use PDOException;
+use RuntimeException;
 use Throwable;
 
 /**
@@ -144,7 +147,7 @@ final class StudioCanaryNumbers
      *
      * @return array{number:array<string,mixed>,replayed:bool}
      */
-    public function register(StudioAccess $access, Request $request, string $clientRequestId, string $channel, #[\SensitiveParameter] string $phone, string $alias, ?string $expectedVersionUuid): array
+    public function register(StudioAccess $access, Request $request, string $clientRequestId, string $channel, #[\SensitiveParameter] string $phone, #[\SensitiveParameter] string $alias, ?string $expectedVersionUuid): array
     {
         $access->require(StudioAccess::CANARY_MANAGE);
         if (! StudioIntegrations::writesEnabled()) {
@@ -182,7 +185,7 @@ final class StudioCanaryNumbers
     }
 
     /** @return array{number:array<string,mixed>,replayed:bool} */
-    private function registerGated(StudioAccess $access, Request $request, string $clientRequestId, string $channel, string $huella, string $ultimos, string $pais, #[\SensitiveParameter] ?string $cifrar, string $alias, ?string $esperada): array
+    private function registerGated(StudioAccess $access, Request $request, string $clientRequestId, string $channel, #[\SensitiveParameter] string $huella, #[\SensitiveParameter] string $ultimos, string $pais, #[\SensitiveParameter] ?string $cifrar, #[\SensitiveParameter] string $alias, ?string $esperada): array
     {
         $version = $esperada === null ? null : StudioCampaignLinks::linkableVersion($esperada);
         $cuerpo = ['channel' => $channel, 'phoneHash' => $huella, 'alias' => $alias, 'expectedVersionUuid' => $esperada];
@@ -232,6 +235,15 @@ final class StudioCanaryNumbers
             }
 
             throw UltronStudioException::canaryNumberExists();
+        } catch (PDOException $e) {
+            // N-1 (Enmienda 3): otro fallo de la base en el alta (40P01, 57014,
+            // conexión caída…) llevaría a `laravel.log` el SQL con sus valores:
+            // huella, 4 dígitos, alias y cifrado. Se relanza SIN el original y
+            // con solo la clase y el SQLSTATE. `PDOException` cubre también la
+            // `DeadlockException` que Laravel lanza en una transacción anidada.
+            $origen = $e instanceof QueryException ? $e : ($e->getPrevious() instanceof QueryException ? $e->getPrevious() : $e);
+
+            throw new RuntimeException('ultron_studio: el registro de un número canario falló en la base ('.class_basename($e).', SQLSTATE '.$origen->getCode().').');
         }
         unset($cifrar);
 
@@ -324,7 +336,11 @@ final class StudioCanaryNumbers
         $this->assertStatus($numero, 'revoke');
 
         DB::transaction(function () use ($access, $request, $numero, $reason): void {
-            $desde = (string) $numero->status;
+            // Revocar admite tres estados de partida: el de verdad se lee con la fila
+            // BLOQUEADA, porque una autorización o activación que se confirme mientras
+            // se espera la fila lo cambia, y el libro cuenta la transición que hubo.
+            $desde = (string) StudioCanaryNumber::query()->whereKey($numero->id)->lockForUpdate()->value('status');
+            // El cifrado solo lo borra revocar, y dos revocaciones no pasan las dos: la lectura previa vale.
             $habiaCifrado = $numero->getRawOriginal('phone_encrypted') !== null;
             $yo = $access->snapshot();
             $ahora = now();
