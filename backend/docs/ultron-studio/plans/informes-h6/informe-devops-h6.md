@@ -256,13 +256,35 @@ Con la fase 1 verificada 24 h y dos personas disponibles. **El orden es obligato
      bash $O/ensayar.sh $B alcance probe on off && bash $O/ensayar.sh $B smoke 2
      bash $O/ensayar.sh $B alcance probe off on && bash $O/ensayar.sh $B alcance writes off on && bash $O/api.sh $B stop
      ```
-2. **Arnés E2E** (cuando el lead avise de que S está en verde; puertos 8092–8096, 8080, 4300 y 8099 libres):
-   - `E2E_HOLD=1 bash e2e/ultron-studio/run.sh <backend> <crm> none`, desde `_worktrees/ultron-h6/Iron-Body_Front`;
-   - con la pila en pie: `php specs/h6-seed.php $RUN/backend meta-ads <cuentas de context.json>` y `canary-lead <wa_id>`;
-   - un admin inactivo en `ultron_studio_e2e`;
-   - el lanzador con `APP_DIR=$RUN/backend SMOKE_API=http://127.0.0.1:8092/api SMOKE_PSQL="psql -X -Atq -h 127.0.0.1 -p 55432 -U ironbody -d ultron_studio_e2e"` y `SMOKE_PHASE=1`;
-   - luego `ULTRON_STUDIO_INTEGRATIONS_WRITES_ENABLED=true` en `$RUN/backend/.env` y `SMOKE_PHASE=2`;
-   - al final, `cierre` (barrido de secretos).
+2. **Arnés E2E del CRM: EJECUTADO el 01-11-2026**, con backend `d2c04a0` y CRM `ede716b`:
+   - **Pila:** `E2E_HOLD=1 bash e2e/ultron-studio/run.sh d2c04a0 ede716b none`, desde `_worktrees/ultron-h6/Iron-Body_Front`, en pie en 88 s, con la valla y los simuladores de Twilio (:8095) y ElevenLabs (:8096) en marcha.
+   - **Preparación,** como haría el despliegue (lo que `run.sh` siembra con `h6-integrations` en la lista):
+     - `h6-seed.php` con `meta-ads` (las 3 cuentas), `canary-lead <waId>` y el refresco de la cuenta 3;
+     - `ultron-studio:integrations-snapshot`: 3 observadas;
+     - una cuenta de smoke inactiva en `ultron_studio_e2e`;
+     - y la huella de inicio rehecha (la original se guardó como `fingerprint-start.orig.json`), para que el cierre mida solo el smoke.
+   - **Clasificación del doctor antes del smoke:** la de producción al congelar (Meta `connected_read`, Twilio `connected_otp_only`, voz `not_configured`, canarios `engine_canary_not_registered`, ElevenLabs `ELEVENLABS_NOT_CONFIGURED`).
+   - **Smoke** (lanzador y `smoke-h6.py` del repo, `SMOKE_API=http://127.0.0.1:8080/api` por el proxy, `SMOKE_RUN_AS=`, `APP_DIR=$RUN/backend`, `SMOKE_PSQL` contra `ultron_studio_e2e`):
+
+     | Pasada | Super Admin | Administrador | Base |
+     |---|---|---|---|
+     | Fase 1 | **78 OK · 0 FALLO · 0 OMITIDO** | **26 OK** | 14 tablas idénticas; 0 filas que nombren la cuenta; tokens muertos (403); 0 sesiones |
+     | Fase 2, sonda apagada (`…WRITES_ENABLED=true` + `config:cache`) | **73 OK · 0 FALLO** | **26 OK** | Igual |
+     | Fase 2, sonda encendida (`…PROBE_ENABLED=true` + `config:cache` + `integrations-snapshot`, como `h6-integrations-scope.sh`) | **73 OK · 0 FALLO** | **26 OK** | Igual; observado de Twilio = efectivo |
+
+   - **Simuladores:** de Twilio y de ElevenLabs, **0 peticiones y 0 violaciones** en las cuatro pasadas. El smoke nunca pulsa la sonda: con la sonda encendida, 422; para el Administrador, 403.
+   - **`cierre.cjs` del arnés al terminar: 12/12.**
+     - Las 17 tablas del motor y las colas, idénticas.
+     - 258 peticiones por el proxy sin 5xx.
+     - `laravel.log` sin ERROR; `failed_jobs` y colas vacíos.
+     - Los 4 simuladores con 0 violaciones y la valla vacía.
+     - Ninguno de los 12 secretos de la ejecución en 22 registros ni en 12 tablas.
+   - **Hallazgo del arnés, no de S ni de los scripts:** con `artisan serve --no-reload`, el proceso web fija el entorno al arrancar y **no ve un cambio del `.env`**.
+     - El primer intento de la fase 2 lo cazó el propio smoke: el CLI daba `writes_enabled: true` y el web, `flags.writesEnabled: false`, con 409 en 47–54. Eran 16 FALLO, con la base intacta.
+     - Se resolvió como en producción, con `config:cache` en la instantánea; al final, `config:clear`.
+     - Es la comprobación cruzada que `h6-integrations-scope.sh` delega en el smoke («la vista del proceso web la comprueba el smoke»).
+   - **Cupo:** ese intento gastó 2 de las 6 llamadas por hora de la sonda de la cuenta, así que la tercera pasada fue con una segunda cuenta (el correo del smoke es único y hubo que cambiárselo a la primera). Confirma H-3.
+   - **Parada:** SIGTERM a `run.sh`, no al envoltorio (trampa 34 del arnés: el primer SIGTERM fue al envoltorio). Al final, «procesos parados» y los 8 puertos libres. Las llaves volvieron a `false` antes del cierre.
 3. **Servidor:** `--solo-comprobar` (cubre GNU, `sudo`, los dueños y el envoltorio).
 
 ## 9. Acciones pendientes de autorización
