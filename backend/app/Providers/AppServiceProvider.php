@@ -650,6 +650,17 @@ class AppServiceProvider extends ServiceProvider
             Limit::perMinute(10)->by($persona($request))->response($evidencia),
             Limit::perMinute(30)->by('ultron-studio-net:'.ClientNetwork::of($request->ip()))->response($evidencia),
         ]);
+
+        // Hito 6 (contrato H6 §I5.4 y §I7.1): la sonda de solo lectura de Twilio
+        // es la única ruta del hito que puede salir a la red (cinco GET, sin
+        // coste). Además del cupo de escritura y de su enfriamiento de 5 min, un
+        // techo por HORA: 6 por PERSONA (como el de lanzar: otra pestaña u otra
+        // sesión no dan más) y 20 por red, en su propio cubo.
+        $sonda = $demasiadas('Demasiadas comprobaciones de Twilio en una hora. Espera antes de lanzar otra.');
+        RateLimiter::for('ultron-studio-probe', fn (Request $request) => [
+            Limit::perHour(6)->by($persona($request))->response($sonda),
+            Limit::perHour(20)->by('ultron-studio-net:'.ClientNetwork::of($request->ip()))->response($sonda),
+        ]);
     }
 
     /**

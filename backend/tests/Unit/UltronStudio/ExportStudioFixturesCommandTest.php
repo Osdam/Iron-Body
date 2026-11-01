@@ -4,6 +4,7 @@ namespace Tests\Unit\UltronStudio;
 
 use App\Console\Commands\UltronStudio\ExportStudioFixturesCommand;
 use App\Services\UltronStudio\StudioCatalog;
+use App\Services\UltronStudio\StudioIntegrationsExport;
 use App\Services\UltronStudio\StudioLabCatalog;
 use App\Services\UltronStudio\StudioPublicationExport;
 use App\Services\UltronStudio\StudioVersionStatus;
@@ -11,7 +12,8 @@ use Tests\TestCase;
 
 /**
  * El comando que lleva el catálogo, los casos de paridad, los escenarios del
- * laboratorio y, desde el Hito 5, las formas de la publicación al CRM.
+ * laboratorio, desde el Hito 5 las formas de la publicación y, desde el
+ * Hito 6, las de las integraciones comerciales al CRM.
  *
  * LO QUE SE PROTEGE. Que lo exportado sea exactamente lo que el servidor usa
  * (el catálogo de `GET catalog`, los casos tal cual, sin pasar un `{}` a `[]`,
@@ -56,12 +58,12 @@ class ExportStudioFixturesCommandTest extends TestCase
         return substr($ts, $inicio, $fin - $inicio);
     }
 
-    public function test_it_writes_the_five_files_and_creates_the_testing_folder_inside_an_existing_one(): void
+    public function test_it_writes_the_six_files_and_creates_the_testing_folder_inside_an_existing_one(): void
     {
         $destino = $this->dir.'/testing';
 
         $this->artisan('ultron-studio:export-fixtures', ['--path' => $destino])
-            ->expectsOutputToContain('de coherencia, 11 escenarios del laboratorio ('.StudioLabCatalog::VERSION.') y las formas de la publicación')
+            ->expectsOutputToContain('de coherencia, 11 escenarios del laboratorio ('.StudioLabCatalog::VERSION.') y las formas de la publicación y de las integraciones')
             ->assertSuccessful();
 
         $catalogo = (string) file_get_contents($destino.'/'.ExportStudioFixturesCommand::CATALOG_FILE);
@@ -115,6 +117,26 @@ class ExportStudioFixturesCommandTest extends TestCase
         $this->assertSame(['versionUuid', 'contentHash', 'previewHash', 'publishable', 'params', 'noEffect', 'requirements', 'blocking'], array_keys($formas['examples']['preview']));
         $this->assertTrue($formas['examples']['preview']['publishable']);
         $this->assertSame(['publishing_disabled', 'lab_verdict_required'], $formas['examples']['previewBlocked']['blocking']);
+
+        // Hito 6: las formas de las integraciones, con los serializadores reales y una APP_KEY sintética.
+        $integraciones = (string) file_get_contents($destino.'/'.ExportStudioFixturesCommand::INTEGRATIONS_FILE);
+        $this->assertStringStartsWith('// Formas de las integraciones comerciales de ULTRON STUDIO', $integraciones);
+        $this->assertStringContainsString('GENERADO — no editar a mano.', $integraciones);
+        $this->assertStringEndsWith(" as const;\n", $integraciones);
+        $h6 = json_decode(self::literal($integraciones, 'BACKEND_INTEGRATIONS'), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame(json_decode((string) json_encode(StudioIntegrationsExport::shapes()), true), $h6, 'lo mismo que el servidor, en el mismo orden');
+        $this->assertSame(['ultron.campaigns_manage', 'ultron.canary_manage', 'ultron.canary_authorize', 'ultron.integrations_manage'], array_column($h6['permissions'], 'key'));
+        $this->assertSame([true, true, false, false], array_column($h6['permissions'], 'administrator'));
+        $this->assertCount(22, $h6['errors'], 'los 15 códigos nuevos de I7.3 y los 7 reutilizados');
+        $this->assertSame(['status', 'statusDegraded', 'metaCampaigns', 'metaCampaignsNotConfigured', 'links', 'linkWrite', 'linkDeactivated', 'canaries', 'canariesUnreadable',
+            'canaryWrite', 'twilio', 'twilioCalls', 'probe', 'voice', 'config', 'acknowledgement'], array_keys($h6['examples']));
+        // Determinista: la APP_KEY de esta máquina no entra en el fichero.
+        $antes = config('app.key');
+        config(['app.key' => 'base64:'.base64_encode(random_bytes(32))]);
+        $this->assertSame($h6, json_decode((string) json_encode(StudioIntegrationsExport::shapes()), true));
+        config(['app.key' => $antes]);
+        $this->assertStringNotContainsString('export-synthetic-twilio-token-0001', $integraciones, 'sin secretos: solo huellas');
+        $this->assertStringNotContainsString('export-synthetic-meta-token-0001', $integraciones);
         $this->assertTrue($formas['examples']['evidence']['passes']);
         $this->assertSame(['turns'], $formas['examples']['evidenceInsufficient']['failing']);
         $this->assertSame(403, $formas['errors']['four_eyes_required']);
@@ -144,5 +166,6 @@ class ExportStudioFixturesCommandTest extends TestCase
         $this->assertFileExists($this->dir.'/'.ExportStudioFixturesCommand::COHERENCE_FILE);
         $this->assertFileExists($this->dir.'/'.ExportStudioFixturesCommand::LAB_SCENARIOS_FILE);
         $this->assertFileExists($this->dir.'/'.ExportStudioFixturesCommand::PUBLICATION_FILE);
+        $this->assertFileExists($this->dir.'/'.ExportStudioFixturesCommand::INTEGRATIONS_FILE);
     }
 }

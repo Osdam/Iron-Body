@@ -567,4 +567,186 @@ class UltronStudioException extends RuntimeException
             'run_integrity_mismatch',
         );
     }
+
+    // ── Integraciones comerciales (Hito 6, contrato H6 §I7.3) ───────────────
+    //
+    // Asociaciones de campaña, números canarios y configuración autorizada son
+    // REGISTRO del Studio: ningún texto promete un efecto en el motor. Ninguna
+    // carga lleva teléfonos, alias, ids de Meta, secretos ni sus huellas: solo
+    // los DTO públicos (ids opacos, «***» y cuatro dígitos, número enmascarado).
+
+    public static function integrationsWritesDisabled(): self
+    {
+        return new self(
+            'Las escrituras de las integraciones están apagadas en el servidor. Leer sigue disponible.',
+            'integrations_writes_disabled',
+        );
+    }
+
+    /** @param  string  $reason  el problema de `MetaAdsApiClient::configurationProblem()` */
+    public static function metaNotConfigured(string $reason): self
+    {
+        return new self(
+            'Meta Ads no está configurado en el servidor: no hay campañas que asociar.',
+            'meta_not_configured',
+            409,
+            ['reason' => $reason],
+        );
+    }
+
+    public static function campaignNotFound(): self
+    {
+        return new self('La campaña no está entre las de las cuentas de Meta conectadas.', 'campaign_not_found', 404);
+    }
+
+    public static function linkNotFound(): self
+    {
+        return new self('La asociación no existe.', 'link_not_found', 404);
+    }
+
+    public static function versionNotLinkable(string $currentStatus): self
+    {
+        return new self(
+            'Solo se asocia una versión aprobada, en canario o publicada.',
+            'version_not_linkable',
+            409,
+            ['currentStatus' => $currentStatus],
+        );
+    }
+
+    /** @param  array<string, mixed>  $current  la asociación activa (CampaignLinkDto) */
+    public static function campaignAlreadyLinked(array $current): self
+    {
+        return new self(
+            'La campaña ya tiene una asociación activa. Para cambiarla, sustitúyela.',
+            'campaign_already_linked',
+            409,
+            ['current' => $current],
+        );
+    }
+
+    /** @param  array<string, mixed>|null  $current  la asociación activa de ahora (CampaignLinkDto) o null */
+    public static function campaignLinkMoved(?array $current): self
+    {
+        return new self(
+            'La asociación que querías sustituir ya no es la activa de esta campaña. Vuelve a cargar y repite si sigue teniendo sentido.',
+            'campaign_link_moved',
+            409,
+            ['current' => $current],
+        );
+    }
+
+    public static function campaignLinksLimit(int $max): self
+    {
+        return new self(
+            "El Studio admite como mucho {$max} asociaciones de campaña activas. Desactiva alguna antes de crear otra.",
+            'campaign_links_limit',
+            409,
+            ['max' => $max],
+        );
+    }
+
+    /**
+     * Una transición que la asociación no admite (solo se desactiva una activa).
+     *
+     * @param  list<string>  $allowedFrom
+     */
+    public static function campaignLinkInvalidTransition(string $currentStatus, array $allowedFrom): self
+    {
+        return new self(
+            'La asociación ya no está activa: no se puede desactivar.',
+            'invalid_transition',
+            409,
+            ['currentStatus' => $currentStatus, 'allowedFrom' => $allowedFrom],
+        );
+    }
+
+    public static function canaryNotFound(): self
+    {
+        return new self('El número canario no existe.', 'canary_not_found', 404);
+    }
+
+    public static function canaryNumberExists(): self
+    {
+        return new self(
+            'Ese número ya está registrado en este canal (pendiente, autorizado o activo). Revócalo antes de registrarlo otra vez.',
+            'canary_number_exists',
+        );
+    }
+
+    public static function canaryLiveLimit(int $max, string $channel): self
+    {
+        return new self(
+            "El registro admite como mucho {$max} números vivos por canal. Revoca alguno antes de registrar otro.",
+            'canary_live_limit',
+            409,
+            ['max' => $max, 'channel' => $channel],
+        );
+    }
+
+    public static function canaryActiveLimit(int $max, string $channel): self
+    {
+        return new self(
+            "El registro admite como mucho {$max} números activos por canal. Desactiva alguno antes de activar otro.",
+            'canary_active_limit',
+            409,
+            ['max' => $max, 'channel' => $channel],
+        );
+    }
+
+    /** Los cuatro ojos de los números canarios: mismo código que F, con su texto. */
+    public static function canaryFourEyesRequired(string $action): self
+    {
+        $verbo = $action === 'activate' ? 'activa' : 'autoriza';
+
+        return new self(
+            "Nadie {$verbo} un número que registró: tiene que hacerlo otra persona con permiso.",
+            'four_eyes_required',
+            403,
+            ['action' => $action],
+        );
+    }
+
+    /**
+     * Una transición que el número no admite desde su estado de ahora. Si
+     * `currentStatus` ya es el destino, el CRM lo lee como «ya estaba hecho».
+     *
+     * @param  list<string>  $allowedFrom
+     */
+    public static function canaryInvalidTransition(string $currentStatus, string $currentLabel, string $action, array $allowedFrom): self
+    {
+        return new self(
+            "Un número canario en estado «{$currentLabel}» no admite «{$action}».",
+            'invalid_transition',
+            409,
+            ['currentStatus' => $currentStatus, 'allowedFrom' => $allowedFrom],
+        );
+    }
+
+    /** @param  list<array{key:string,authorized:mixed,effective:mixed}>  $drift */
+    public static function configChanged(string $provider, string $effectiveFingerprint, array $drift): self
+    {
+        return new self(
+            'La configuración cambió desde que la viste: revisa lo que cambió y vuelve a reconocerla.',
+            'config_changed',
+            409,
+            ['provider' => $provider, 'effectiveFingerprint' => $effectiveFingerprint, 'drift' => array_values($drift)],
+        );
+    }
+
+    public static function probeDisabled(): self
+    {
+        return new self('La comprobación de Twilio está apagada en el servidor.', 'probe_disabled');
+    }
+
+    /** @param  string  $reason  `missing_account_sid` | `missing_credential` */
+    public static function twilioNotConfigured(string $reason): self
+    {
+        return new self(
+            'Twilio no tiene la cuenta o la credencial que necesita la comprobación. Se arregla en el servidor.',
+            'twilio_not_configured',
+            409,
+            ['reason' => $reason],
+        );
+    }
 }

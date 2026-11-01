@@ -1,6 +1,9 @@
 <?php
 
+use App\Http\Controllers\Crm\UltronStudio\UltronStudioCampaignLinkController;
+use App\Http\Controllers\Crm\UltronStudio\UltronStudioCanaryController;
 use App\Http\Controllers\Crm\UltronStudio\UltronStudioController;
+use App\Http\Controllers\Crm\UltronStudio\UltronStudioIntegrationController;
 use App\Http\Controllers\Crm\UltronStudio\UltronStudioLabController;
 use App\Http\Controllers\Crm\UltronStudio\UltronStudioLabScenarioController;
 use App\Http\Controllers\Crm\UltronStudio\UltronStudioPublicationController;
@@ -55,7 +58,21 @@ use Illuminate\Support\Facades\Route;
 | además del cupo de lectura, su propio limitador `ultron-studio-evidence`
 | (10/min por persona, 30/min por red).
 |
-| Tope de CUERPO de 64 KB (65 536 bytes) en las 38 rutas: por encima, 413
+| Hito 6 (docs/ultron-studio/ULTRON_STUDIO_H6_CONTRACT.md §I7.1): las
+| INTEGRACIONES COMERCIALES, `integrations/*`, 18 rutas más (56 en total):
+| Meta Ads leído del espejo local, el registro de números canarios, Twilio, la
+| voz y la configuración autorizada. Es REGISTRO del Studio: nada cambia lo que
+| ULTRON dice o hace. Cerraduras: la puerta (`ultron.view`,
+| `ultron.campaigns_manage`, `ultron.canary_manage`, `ultron.canary_authorize` o
+| `ultron.integrations_manage`, una a una en AuthorizationMap) → una persona →
+| la llave → la bandera de escrituras (409 `integrations_writes_disabled` en
+| 47–54; reconocer la configuración no depende de ella). CERO RED POR DEFECTO:
+| la única que puede salir es la sonda GET de Twilio, con su bandera
+| (`ULTRON_STUDIO_TWILIO_PROBE_ENABLED`), además del cupo de escritura, su
+| propio limitador `ultron-studio-probe` (6/h por persona, 20/h por red) y un
+| enfriamiento de 300 s.
+|
+| Tope de CUERPO de 64 KB (65 536 bytes) en las 56 rutas: por encima, 413
 | `payload_too_large` antes del controlador (revisión de seguridad de la API
 | del Hito G, M-2). Es defensa en profundidad: la validación en dos fases de
 | los controladores ya rechaza una lista enorme sin recorrerla. Por qué 64 KB:
@@ -95,6 +112,16 @@ Route::prefix('admin/ultron-studio')->middleware(LimitRequestBodySize::class.':6
         Route::get('versions/{uuid}/publication-preview', [UltronStudioVersionController::class, 'preview'])->whereUuid('uuid');
         Route::get('versions/{uuid}/canary-evidence', [UltronStudioVersionController::class, 'evidence'])->whereUuid('uuid')->middleware('throttle:ultron-studio-evidence');
         Route::get('publications', [UltronStudioPublicationController::class, 'index']);
+
+        // Hito 6: las integraciones comerciales (lecturas, sin red).
+        Route::get('integrations/status', [UltronStudioIntegrationController::class, 'status']);
+        Route::get('integrations/meta/campaigns', [UltronStudioCampaignLinkController::class, 'campaigns']);
+        Route::get('integrations/meta/links', [UltronStudioCampaignLinkController::class, 'links']);
+        Route::get('integrations/canaries', [UltronStudioCanaryController::class, 'index']);
+        Route::get('integrations/twilio', [UltronStudioIntegrationController::class, 'twilio']);
+        Route::get('integrations/twilio/calls', [UltronStudioIntegrationController::class, 'calls']);
+        Route::get('integrations/voice', [UltronStudioIntegrationController::class, 'voice']);
+        Route::get('integrations/config', [UltronStudioIntegrationController::class, 'config']);
     });
 
     Route::middleware('throttle:ultron-studio-write')->group(function (): void {
@@ -122,5 +149,18 @@ Route::prefix('admin/ultron-studio')->middleware(LimitRequestBodySize::class.':6
         // (acta incluida), así que comparte el cubo de la evidencia: 10/min por persona (AS-2 de la revisión de la API).
         Route::post('versions/{uuid}/promote', [UltronStudioVersionController::class, 'promote'])->whereUuid('uuid')->middleware('throttle:ultron-studio-evidence');
         Route::post('publications/legacy', [UltronStudioPublicationController::class, 'legacy']);
+
+        // Hito 6: asociaciones de campaña, números canarios, configuración
+        // autorizada y la sonda de solo lectura de Twilio (con su limitador).
+        Route::post('integrations/meta/links', [UltronStudioCampaignLinkController::class, 'store']);
+        Route::post('integrations/meta/links/{uuid}/deactivate', [UltronStudioCampaignLinkController::class, 'deactivate'])->whereUuid('uuid');
+        Route::post('integrations/canaries', [UltronStudioCanaryController::class, 'store']);
+        Route::post('integrations/canaries/{uuid}/authorize', [UltronStudioCanaryController::class, 'authorize'])->whereUuid('uuid');
+        Route::post('integrations/canaries/{uuid}/activate', [UltronStudioCanaryController::class, 'activate'])->whereUuid('uuid');
+        Route::post('integrations/canaries/{uuid}/deactivate', [UltronStudioCanaryController::class, 'deactivate'])->whereUuid('uuid');
+        Route::post('integrations/canaries/{uuid}/revoke', [UltronStudioCanaryController::class, 'revoke'])->whereUuid('uuid');
+        Route::post('integrations/canaries/{uuid}/expectation', [UltronStudioCanaryController::class, 'expectation'])->whereUuid('uuid');
+        Route::post('integrations/config/acknowledge', [UltronStudioIntegrationController::class, 'acknowledge']);
+        Route::post('integrations/twilio/probe', [UltronStudioIntegrationController::class, 'probe'])->middleware('throttle:ultron-studio-probe');
     });
 });

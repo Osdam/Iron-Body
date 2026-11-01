@@ -123,7 +123,9 @@ class UltronStudioPermissionsTest extends TestCase
 
         $real = [];
         foreach (Route::getRoutes() as $route) {
-            if (str_starts_with($route->uri(), 'api/admin/ultron-studio')) {
+            // Las 18 de las integraciones (Hito 6) tienen su propia matriz:
+            // UltronStudioIntegrationsPermissionsTest.
+            if (str_starts_with($route->uri(), 'api/admin/ultron-studio') && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/integrations/')) {
                 $real[AuthorizationMap::routeKey($route)] = AuthorizationMap::resolve($route);
             }
         }
@@ -280,8 +282,10 @@ class UltronStudioPermissionsTest extends TestCase
     {
         $filas = array_values(array_filter(PermissionCatalog::rows(), fn (array $f): bool => $f['domain'] === 'ultron'));
 
-        // `lab_manage` (6.4) y `lab_run` (6.6) van entre reglas y aprobar.
-        $this->assertSame(self::STUDIO_KEYS, array_column($filas, 'key'));
+        // `lab_manage` (6.4) y `lab_run` (6.6) van entre reglas y aprobar. Las
+        // cuatro del Hito 6 van detrás (las prueba UltronStudioIntegrationsPermissionsTest).
+        $this->assertSame(self::STUDIO_KEYS, array_slice(array_column($filas, 'key'), 0, 8));
+        $this->assertCount(12, $filas);
         $this->assertSame('ULTRON Studio', $filas[0]['domain_label']);
         $this->assertSame('account_tree', $filas[0]['domain_icon']);
         $porLlave = array_column($filas, null, 'key');

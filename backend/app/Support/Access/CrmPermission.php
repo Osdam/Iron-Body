@@ -278,6 +278,12 @@ final class CrmPermission
             // proveedor externo. Solo Super Admin por defecto; se concede a mano
             // desde Roles (contrato H4, decisión 2). Escenarios y veredicto, sí.
             'ultron.lab_run',
+            // Hito 6 (contrato H6, decisión 4): autorizar números canarios de
+            // otra persona (los cuatro ojos del registro) y la configuración
+            // autorizada con la sonda de solo lectura de Twilio. Llegan nuevas y
+            // se reparten a mano; asociar campañas y administrar números, sí.
+            'ultron.canary_authorize',
+            'ultron.integrations_manage',
             // Corregir medio o importe de un cobro y devolver dinero (de un
             // cobro o de una venta): dinero que sale de la caja o que cambia de
             // medio en un arqueo. Llegan nuevas y se reparten a mano.

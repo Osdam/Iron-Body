@@ -75,6 +75,21 @@ final class StudioAudit
         'rule.legacy_imported',
         'rule.legacy_synced',
         'system.baseline_imported',
+        // Hito 6 (contrato H6 §I8): las integraciones comerciales. Registro del
+        // Studio: ninguno cambia el motor. Nunca llevan teléfonos, sus dígitos o
+        // su huella, alias, ids de Meta en claro, nombres de campaña ni valores
+        // o huellas de valores de configuración.
+        'campaign_link.created',
+        'campaign_link.deactivated',
+        'canary_number.registered',
+        'canary_number.authorized',
+        'canary_number.four_eyes_denied',
+        'canary_number.activated',
+        'canary_number.deactivated',
+        'canary_number.revoked',
+        'canary_number.expectation_set',
+        'integration.config_acknowledged',
+        'integration.probe_run',
     ];
 
     /** Ventana de deduplicación de los intentos denegados. */

@@ -154,6 +154,11 @@ final class PermissionCatalog
         'ultron.approve' => 'Aprobar o rechazar versiones de otra persona',
         'ultron.publish' => 'Publicar versiones',
         'ultron.rollback' => 'Revertir versiones',
+        // Hito 6 (contrato H6 §I7.1): etiquetas literales del contrato.
+        'ultron.campaigns_manage' => 'Asociar campañas de Meta',
+        'ultron.canary_manage' => 'Administrar números canarios',
+        'ultron.canary_authorize' => 'Autorizar números canarios de otra persona',
+        'ultron.integrations_manage' => 'Configuración autorizada y comprobación de Twilio',
     ];
 
     /**
@@ -216,6 +221,11 @@ final class PermissionCatalog
         'ultron.approve' => 'Aprobar o rechazar versiones enviadas a revisión, reconociendo sus avisos, y emitir el veredicto del laboratorio sobre ejecuciones de versiones ajenas. Nadie aprueba lo que creó: la versión tiene que ser de otra persona.',
         'ultron.publish' => 'Publicar registra esta versión como la configuración oficial de ULTRON y el motor la anota en cada turno. En este hito no cambia lo que ULTRON dice ni hace. Publicar (siempre en canario) y promover a todas exigen las llaves del servidor, y nadie publica lo que creó. No llega por defecto al Administrador.',
         'ultron.rollback' => 'Revertir la versión en canario o la publicada, o volver a Legacy (que la cadena no declare ninguna). En este hito no cambia lo que ULTRON dice ni hace. No depende de las llaves que permiten publicar. No llega por defecto al Administrador.',
+        // Hito 6 (contrato H6 §I7.1): ayudas literales del contrato.
+        'ultron.campaigns_manage' => 'Asociar campañas de Meta a la línea base o a una versión del Studio, y desactivar esas asociaciones. Solo queda registrado en el Studio: no cambia nada en Meta ni en lo que ULTRON dice o hace.',
+        'ultron.canary_manage' => 'Registrar números de prueba con el consentimiento de su titular, activarlos cuando otra persona los autorizó, desactivarlos y revocarlos. Son datos personales: se guardan como huella, y cifrados solo si son de voz. Nadie activa un número que registró. El motor no los lee en este hito: ULTRON sigue atendiendo solo la conversación canaria configurada en el servidor.',
+        'ultron.canary_authorize' => 'Autorizar números canarios registrados por otra persona (cuatro ojos): nadie autoriza lo que registró. No llega por defecto al Administrador.',
+        'ultron.integrations_manage' => 'Reconocer como autorizada la configuración vigente de Meta Ads, Twilio y voz, sin ver ni editar secretos (solo huellas), y lanzar la comprobación de solo lectura de Twilio. No llega por defecto al Administrador.',
     ];
 
     /**
@@ -316,7 +326,7 @@ final class PermissionCatalog
      */
     private static function sortActions(array $permisos): array
     {
-        $orden = ['view' => 0, 'view_all' => 0.5, 'stock' => 0.6, 'cost' => 0.7, 'use' => 1, 'create' => 2, 'operate' => 2, 'edit' => 3, 'update' => 3, 'edit_draft' => 3, 'cancel' => 4, 'correct' => 4.2, 'refund' => 4.4, 'complete' => 4.5, 'archive' => 5, 'delete' => 5, 'manage_rules' => 6, 'lab_manage' => 6.4, 'lab_run' => 6.6, 'approve' => 7, 'publish' => 8, 'rollback' => 8.2, 'manage_availability' => 8, 'manage_settings' => 8.5, 'manage' => 9];
+        $orden = ['view' => 0, 'view_all' => 0.5, 'stock' => 0.6, 'cost' => 0.7, 'use' => 1, 'create' => 2, 'operate' => 2, 'edit' => 3, 'update' => 3, 'edit_draft' => 3, 'cancel' => 4, 'correct' => 4.2, 'refund' => 4.4, 'complete' => 4.5, 'archive' => 5, 'delete' => 5, 'manage_rules' => 6, 'lab_manage' => 6.4, 'lab_run' => 6.6, 'approve' => 7, 'publish' => 8, 'rollback' => 8.2, 'campaigns_manage' => 8.3, 'canary_manage' => 8.35, 'canary_authorize' => 8.4, 'integrations_manage' => 8.45, 'manage_availability' => 8, 'manage_settings' => 8.5, 'manage' => 9];
         usort($permisos, fn ($a, $b) => ($orden[$a['action']] ?? 5) <=> ($orden[$b['action']] ?? 5));
 
         return $permisos;

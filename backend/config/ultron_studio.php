@@ -49,6 +49,24 @@ $ventana = static function (): string {
     return $defecto;
 };
 
+/*
+ * Los prefijos de país admitidos para los números canarios (contrato H6 §I12):
+ * una lista separada por comas de `^[1-9]\d{0,2}$`. Lo que no tiene esa forma
+ * se descarta y, si no queda ninguno, `57`: un error de escritura no abre el
+ * registro a cualquier país sin que nadie lo decida.
+ */
+$paises = static function (): array {
+    $lista = [];
+    foreach (explode(',', (string) env('ULTRON_STUDIO_CANARY_COUNTRY_CODES', '57')) as $prefijo) {
+        $prefijo = trim($prefijo);
+        if (preg_match('/^[1-9][0-9]{0,2}$/D', $prefijo) === 1 && ! in_array($prefijo, $lista, true)) {
+            $lista[] = $prefijo;
+        }
+    }
+
+    return $lista === [] ? ['57'] : $lista;
+};
+
 return [
 
     /*
@@ -164,6 +182,71 @@ return [
         'actor_max_output_tokens' => min(800, max(16, $entero('ULTRON_STUDIO_LAB_ACTOR_MAX_OUTPUT_TOKENS', 400))),
         'judge_max_output_tokens' => min(1600, max(16, $entero('ULTRON_STUDIO_LAB_JUDGE_MAX_OUTPUT_TOKENS', 900))),
         'timeout_seconds' => min(60, max(10, $entero('ULTRON_STUDIO_LAB_TIMEOUT_SECONDS', 60))),
+
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Integraciones comerciales (Hito 6)
+    |--------------------------------------------------------------------------
+    | Contrato: docs/ultron-studio/ULTRON_STUDIO_H6_CONTRACT.md, §I12.
+    |
+    | REGISTRO DEL STUDIO, NO DEL MOTOR: asociaciones de campaña, números
+    | canarios y configuración autorizada. El motor no lee nada de esto, y
+    | nada de aquí cambia lo que ULTRON dice o hace. CERO RED POR DEFECTO: la
+    | única petición saliente posible desde una ruta es la sonda GET de Twilio,
+    | y solo con su bandera.
+    */
+    'integrations' => [
+
+        // Apagada: toda escritura del hito (rutas 47–54) responde 409
+        // `integrations_writes_disabled`. Reconocer la configuración (ruta 55)
+        // NO depende de ella (decisión 11). Solo `true` (o 1/on/yes) la enciende.
+        'writes_enabled' => filter_var(env('ULTRON_STUDIO_INTEGRATIONS_WRITES_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+
+        'twilio_probe' => [
+            // Apagada: la sonda (ruta 56) responde 409 `probe_disabled`.
+            'enabled' => filter_var(env('ULTRON_STUDIO_TWILIO_PROBE_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+
+            // La API key RESTRINGIDA de la sonda (`SK…` y su secreto). Manda
+            // solo con las dos; si no, la sonda usa la credencial del OTP.
+            // Solo la lee StudioTwilioProbe, en el momento de construir el
+            // cliente, y nunca sale en una respuesta, el libro ni el log.
+            'key_sid' => env('ULTRON_STUDIO_TWILIO_PROBE_KEY_SID'),
+            'key_secret' => env('ULTRON_STUDIO_TWILIO_PROBE_KEY_SECRET'),
+
+            // SE IGNORA EN `production` (el cliente usa siempre los hosts
+            // oficiales). Fuera de producción apunta al simulador del E2E.
+            'base' => env('ULTRON_STUDIO_TWILIO_PROBE_BASE'),
+
+            // Fijo en el código: entre dos sondas, cinco minutos.
+            'cooldown_seconds' => 300,
+        ],
+
+        'canary' => [
+            // Activos por canal: 1–10 (recorte); vacío o no entero, 3.
+            'max_active' => min(10, max(1, $entero('ULTRON_STUDIO_CANARY_MAX_ACTIVE', 3))),
+            // Vivos (no revocados) por canal: fijo.
+            'max_live' => 10,
+            'country_codes' => $paises(),
+        ],
+
+        'campaign_links' => [
+            // Asociaciones activas en total: 1–200 (recorte); vacío o no entero, 50.
+            'max_active' => min(200, max(1, $entero('ULTRON_STUDIO_CAMPAIGN_LINKS_MAX_ACTIVE', 50))),
+        ],
+
+        // Calculado AL CACHEAR (fuera de la configuración, `env()` devuelve
+        // null con la caché puesta), como `forbidden_key_sha256` del Hito 4:
+        // de qué variable sale cada credencial de Twilio y si los dos nombres
+        // de la misma credencial coinciden. Solo nombres y booleanos, nunca
+        // valores; `null` si solo existe uno de los dos nombres.
+        'twilio_aliases' => [
+            'sid_source' => filled(env('TWILIO_SID')) ? 'TWILIO_SID' : (filled(env('TWILIO_ACCOUNT_SID')) ? 'TWILIO_ACCOUNT_SID' : null),
+            'token_source' => filled(env('TWILIO_TOKEN')) ? 'TWILIO_TOKEN' : (filled(env('TWILIO_AUTH_TOKEN')) ? 'TWILIO_AUTH_TOKEN' : null),
+            'sid_consistent' => filled(env('TWILIO_SID')) && filled(env('TWILIO_ACCOUNT_SID')) ? hash_equals((string) env('TWILIO_SID'), (string) env('TWILIO_ACCOUNT_SID')) : null,
+            'token_consistent' => filled(env('TWILIO_TOKEN')) && filled(env('TWILIO_AUTH_TOKEN')) ? hash_equals((string) env('TWILIO_TOKEN'), (string) env('TWILIO_AUTH_TOKEN')) : null,
+        ],
 
     ],
 

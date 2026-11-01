@@ -4,6 +4,7 @@ namespace App\Services\UltronStudio;
 
 use App\Exceptions\UltronStudioException;
 use App\Models\Admin;
+use App\Models\UltronStudio\StudioCanaryNumber;
 use App\Models\UltronStudio\StudioVersion;
 use App\Support\Access\AdminActor;
 use App\Support\Access\AuthorizationMap;
@@ -47,6 +48,22 @@ final class StudioAccess
 
     /** Ver los eventos de borrador de otras personas en la auditoría. */
     public const AUDIT_VIEW = 'audit.view';
+
+    // Hito 6 (contrato H6 §I7.1): las integraciones comerciales. Registro del
+    // Studio, sin efecto en el motor. `canary_authorize` e `integrations_manage`
+    // no llegan por defecto al Administrador (CrmPermission).
+
+    /** Asociar campañas de Meta y desactivar esas asociaciones. */
+    public const CAMPAIGNS_MANAGE = 'ultron.campaigns_manage';
+
+    /** Registrar, activar (si otra persona lo autorizó y no lo registraste tú), desactivar y revocar números canarios. */
+    public const CANARY_MANAGE = 'ultron.canary_manage';
+
+    /** Autorizar números canarios de OTRA persona (cuatro ojos por identidad). */
+    public const CANARY_AUTHORIZE = 'ultron.canary_authorize';
+
+    /** Reconocer la configuración vigente y lanzar la sonda de solo lectura de Twilio. */
+    public const INTEGRATIONS_MANAGE = 'ultron.integrations_manage';
 
     /** @var array<string, true>|null */
     private ?array $granted = null;
@@ -123,10 +140,38 @@ final class StudioAccess
         ];
     }
 
+    /**
+     * El bloque `can` de `GET integrations/status` (contrato H6 §I7.2). Cada
+     * llave presupone ver el Studio, como {@see require()}.
+     *
+     * @return array{campaignsManage:bool,canaryManage:bool,canaryAuthorize:bool,integrationsManage:bool}
+     */
+    public function integrationCapabilities(): array
+    {
+        $ve = $this->can(self::VIEW);
+
+        return [
+            'campaignsManage' => $ve && $this->can(self::CAMPAIGNS_MANAGE),
+            'canaryManage' => $ve && $this->can(self::CANARY_MANAGE),
+            'canaryAuthorize' => $ve && $this->can(self::CANARY_AUTHORIZE),
+            'integrationsManage' => $ve && $this->can(self::INTEGRATIONS_MANAGE),
+        ];
+    }
+
     /** ¿La creó quien está actuando? Es la base de los cuatro ojos. */
     public function isCreator(StudioVersion $version): bool
     {
         return (int) $version->created_by_admin_id === (int) $this->actor->id;
+    }
+
+    /**
+     * ¿Registró este número quien está actuando? Los cuatro ojos de los
+     * números canarios (autorizar y activar) comparan IDENTIDADES, nunca
+     * permisos: tener todas las llaves no deja autorizar ni activar lo propio.
+     */
+    public function isCanaryRegistrant(StudioCanaryNumber $number): bool
+    {
+        return (int) $number->registered_by_admin_id === (int) $this->actor->id;
     }
 
     /** Quien tiene `audit.view` ve también los eventos de borrador ajenos. */

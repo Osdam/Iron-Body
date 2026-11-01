@@ -34,6 +34,11 @@ use Tests\TestCase;
  * nada) y la del Studio (`ULTRON_STUDIO_PUBLISHING_ENABLED=false`: publicar y
  * promover, 409). Se evalúan los dos ficheros de configuración sin las
  * variables en el entorno.
+ *
+ * HITO 6 (contrato H6 §I9.1): las dos migraciones de las integraciones entran
+ * en la lista blanca y las rutas son 56. Las clases NEUTRAS del hito
+ * (`App\Services\Voice`, `App\Services\Twilio` y `PhoneFingerprint`) no
+ * nombran el Studio, y el motor no las nombra a ellas.
  */
 class UltronEngineIsolationTest extends TestCase
 {
@@ -56,7 +61,13 @@ class UltronEngineIsolationTest extends TestCase
         // Hito 5 (contrato H5 §A3): la cadena de publicaciones y sus guardas.
         'database/migrations/2026_10_25_100001_create_ultron_studio_publications_table.php',
         'database/migrations/2026_10_25_100002_add_ultron_studio_publication_guards.php',
+        // Hito 6 (contrato H6 §I9.1): las integraciones comerciales y sus guardas.
+        'database/migrations/2026_11_01_100001_create_ultron_studio_integration_tables.php',
+        'database/migrations/2026_11_01_100002_add_ultron_studio_integration_guards.php',
     ];
+
+    /** Hito 6: las clases neutras del hito. Ni el motor las nombra ni ellas nombran el Studio. */
+    private const NEUTRAL_ZONES = ['app/Services/Voice', 'app/Services/Twilio', 'app/Support/Privacy/PhoneFingerprint.php'];
 
     /**
      * El lector del motor (contrato H5 §A4). No está en la lista blanca: lo único
@@ -208,9 +219,42 @@ class UltronEngineIsolationTest extends TestCase
         }
 
         // Las 19 de F, las dos de lectura del Hito G (engine/readings y compare),
-        // las 12 del laboratorio del Hito 4 (`lab/*`, contrato H4 §A7) y las 5
-        // de la publicación del Hito 5 (contrato H5 §A7).
-        $this->assertSame(38, $delStudio);
+        // las 12 del laboratorio del Hito 4 (`lab/*`, contrato H4 §A7), las 5
+        // de la publicación del Hito 5 (contrato H5 §A7) y las 18 de las
+        // integraciones del Hito 6 (contrato H6 §I7.1).
+        $this->assertSame(56, $delStudio);
+    }
+
+    /**
+     * Hito 6 (contrato H6 §I9.1): ningún fichero de las zonas del motor nombra
+     * la voz, el cliente de Twilio del hito ni la huella de teléfonos; y esas
+     * clases neutras no nombran el Studio (ya lo cubre el rastreo global; se
+     * escribe aparte para que el motivo se lea).
+     */
+    public function test_el_motor_no_nombra_las_clases_neutras_y_ellas_no_nombran_el_studio(): void
+    {
+        $vistos = 0;
+        foreach (self::ENGINE_ZONES as $zona) {
+            foreach ($this->phpFiles([$zona]) as $relativa) {
+                $codigo = $this->codeOnly(base_path($relativa));
+                foreach (['App\\Services\\Voice', 'App\\Services\\Twilio', 'PhoneFingerprint', 'Services\\Voice\\', 'Services\\Twilio\\'] as $nombre) {
+                    $this->assertStringNotContainsString($nombre, $codigo, "{$relativa} nombra {$nombre}.");
+                }
+                $vistos++;
+            }
+        }
+        $this->assertGreaterThan(50, $vistos, 'el rastreo ve las zonas del motor');
+
+        $neutros = 0;
+        foreach (self::NEUTRAL_ZONES as $zona) {
+            $this->assertFileExists(base_path($zona));
+            foreach ($this->phpFiles([$zona]) as $relativa) {
+                $this->assertSame([], $this->references(base_path($relativa)), "{$relativa} nombra el Studio.");
+                $this->assertStringNotContainsString('ultron-studio', $this->codeOnly(base_path($relativa)), "{$relativa} nombra las rutas del Studio.");
+                $neutros++;
+            }
+        }
+        $this->assertGreaterThanOrEqual(15, $neutros, 'el rastreo ve las clases neutras');
     }
 
     /**

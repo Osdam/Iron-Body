@@ -22,8 +22,8 @@ use Tests\TestCase;
  *
  *  · La tabla tiene las columnas y los tipos del contrato (`effective_json`
  *    es `text`, nunca json/jsonb) y versiones no gana ninguna (§A3.3).
- *  · Recuentos del Studio: PG 30 disparadores y 27 CHECK (antes 27 y 24);
- *    SQLite 20 disparadores (antes 18). Si un hito posterior añade guardas,
+ *  · Recuentos del Studio: PG 43 disparadores y 49 CHECK con el Hito 6 (H5 solo: 30 y 27);
+ *    SQLite 30 disparadores (H5 solo: 20). Si un hito posterior añade guardas,
  *    estos números se actualizan a conciencia, como el de rutas.
  *  · La cadena es de solo inserción: P0001 en PG y 23000 en SQLite, con el
  *    texto de `ultron_studio_forbid()`.
@@ -167,9 +167,9 @@ class UltronStudioPublicationSchemaTest extends TestCase
     {
         if ($this->isPostgres()) {
             $this->assertSame(['uspub_forbid_delete', 'uspub_forbid_truncate', 'uspub_forbid_update'], $this->triggersOn(self::TABLE));
-            $this->assertSame(30, $this->studioTriggerCount(), 'F 11 + laboratorio 16 + H5 3');
+            $this->assertSame(43, $this->studioTriggerCount(), 'F 11 + laboratorio 16 + H5 3 + H6 13');
             $this->assertSame(['uspub_action_chk', 'uspub_engine_contract_chk', 'uspub_reason_chk'], $this->checksOn(self::TABLE));
-            $this->assertSame(27, $this->studioCheckCount(), 'F 11 + laboratorio 13 + H5 3 (usv_status_chk se sustituye, no se suma)');
+            $this->assertSame(49, $this->studioCheckCount(), 'F 11 + laboratorio 13 + H5 3 + H6 22 (usv_status_chk y usae_subject_type_chk se sustituyen, no se suman)');
             // Los disparadores usan la función de F; H5 no crea otra ni una sobrecarga.
             $this->assertSame(1, (int) DB::selectOne("SELECT count(*) AS n FROM pg_proc WHERE proname = 'ultron_studio_forbid'")->n);
             $this->assertSame(3, (int) DB::selectOne(
@@ -179,7 +179,7 @@ class UltronStudioPublicationSchemaTest extends TestCase
         }
 
         $this->assertSame(['uspub_forbid_delete', 'uspub_forbid_update'], $this->triggersOn(self::TABLE));
-        $this->assertSame(20, $this->studioTriggerCount(), 'F 7 + laboratorio 11 + H5 2');
+        $this->assertSame(30, $this->studioTriggerCount(), 'F 7 + laboratorio 11 + H5 2 + H6 10');
     }
 
     // ── La cadena es de solo inserción ──────────────────────────────────────
@@ -356,13 +356,13 @@ class UltronStudioPublicationSchemaTest extends TestCase
         $this->assertSame([], $this->partialIndexesOnVersions());
         if ($this->isPostgres()) {
             $this->assertSame(['DRAFT', 'VALIDATED', 'REVIEW_REQUIRED', 'APPROVED', 'REJECTED'], $this->statusCheckValues());
-            $this->assertSame(27, $this->studioTriggerCount());
-            $this->assertSame(24, $this->studioCheckCount());
+            $this->assertSame(40, $this->studioTriggerCount());
+            $this->assertSame(46, $this->studioCheckCount());
             $this->assertRejected(fn () => $this->insertVersion('CANARY'), '23514', 'usv_status_chk');
             // La función es de F: down() no la toca.
             $this->assertSame(1, (int) DB::selectOne("SELECT count(*) AS n FROM pg_proc WHERE proname = 'ultron_studio_forbid'")->n);
         } else {
-            $this->assertSame(18, $this->studioTriggerCount());
+            $this->assertSame(28, $this->studioTriggerCount());
         }
         $this->assertSame(4, DB::table('ultron_studio_versions')->count());
 
@@ -370,9 +370,9 @@ class UltronStudioPublicationSchemaTest extends TestCase
         $this->migration(self::GUARDS)->up();
 
         $this->assertH5SchemaPresent();
-        $this->assertSame($this->isPostgres() ? 30 : 20, $this->studioTriggerCount());
+        $this->assertSame($this->isPostgres() ? 43 : 30, $this->studioTriggerCount());
         if ($this->isPostgres()) {
-            $this->assertSame(27, $this->studioCheckCount());
+            $this->assertSame(49, $this->studioCheckCount());
         }
     }
 

@@ -3,6 +3,7 @@
 namespace App\Console\Commands\UltronStudio;
 
 use App\Services\UltronStudio\StudioCatalog;
+use App\Services\UltronStudio\StudioIntegrationsExport;
 use App\Services\UltronStudio\StudioLabCatalog;
 use App\Services\UltronStudio\StudioPublicationDeclaration as D;
 use App\Services\UltronStudio\StudioPublicationExport;
@@ -11,8 +12,9 @@ use JsonException;
 
 /**
  * Vuelca el catálogo de ULTRON STUDIO, los casos de paridad, el catálogo de
- * escenarios del laboratorio y, desde el Hito 5, las formas de la publicación
- * a cinco ficheros que las pruebas del CRM puedan importar.
+ * escenarios del laboratorio, desde el Hito 5 las formas de la publicación y,
+ * desde el Hito 6, las de las integraciones comerciales a seis ficheros que
+ * las pruebas del CRM puedan importar.
  *
  * Existe porque el CRM valida el borrador en vivo mientras se edita y el
  * servidor repite la validación y manda él. Si los dos lados no pintan y no
@@ -44,15 +46,22 @@ use JsonException;
  *    producidos por los MISMOS presentadores que las respuestas, con datos
  *    sintéticos fijos (sin base de datos): el CRM compara con ellos sus
  *    fixtures escritos a mano y sus lectores estrictos.
+ *  - `backend-integrations.testing.ts` (Hito 6, contrato H6 §I10): los
+ *    conjuntos cerrados de §I2, los códigos de §I7.3 con su estado HTTP, las
+ *    4 llaves nuevas con su texto literal, los topes, los textos fijos y
+ *    EJEMPLOS de cada DTO de las integraciones, producidos por los MISMOS
+ *    serializadores que las respuestas ({@see StudioIntegrationsExport}) con
+ *    datos sintéticos fijos y una `APP_KEY` sintética: sin teléfonos en claro
+ *    y sin secretos (de la configuración, solo huellas).
  *
  * No autoriza nada ni se usa en tiempo de ejecución: es un contrato
  * comprobable entre dos repositorios.
  */
 class ExportStudioFixturesCommand extends Command
 {
-    protected $signature = 'ultron-studio:export-fixtures {--path= : directorio donde escribir los cinco .ts}';
+    protected $signature = 'ultron-studio:export-fixtures {--path= : directorio donde escribir los seis .ts}';
 
-    protected $description = 'Exporta el catálogo de ULTRON STUDIO, los casos de paridad, los escenarios del laboratorio y las formas de la publicación para las pruebas del CRM';
+    protected $description = 'Exporta el catálogo de ULTRON STUDIO, los casos de paridad, los escenarios del laboratorio y las formas de la publicación y de las integraciones para las pruebas del CRM';
 
     public const CATALOG_FILE = 'backend-studio-catalog.testing.ts';
 
@@ -63,6 +72,8 @@ class ExportStudioFixturesCommand extends Command
     public const LAB_SCENARIOS_FILE = 'backend-lab-scenarios.testing.ts';
 
     public const PUBLICATION_FILE = 'backend-publication.testing.ts';
+
+    public const INTEGRATIONS_FILE = 'backend-integrations.testing.ts';
 
     /** Las listas que tiene que traer el fixture de coherencia (versión 1). */
     public const COHERENCE_SECTIONS = ['canonicalize', 'analyze', 'conflicts', 'evaluate'];
@@ -234,13 +245,34 @@ class ExportStudioFixturesCommand extends Command
 
         TS;
 
+        $integraciones = StudioIntegrationsExport::shapes();
+        $jsonIntegraciones = self::twoSpaces(json_encode($integraciones, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+
+        $contenidoIntegraciones = <<<TS
+        // Formas de las integraciones comerciales de ULTRON STUDIO (Hito 6, contrato H6 §I2, §I7 y §I10).
+        //
+        // GENERADO — no editar a mano. Lo produce el comando de artisan
+        // `ultron-studio:export-fixtures` con los MISMOS serializadores que las
+        // respuestas del servidor sobre datos sintéticos fijos: uuids, ids opacos,
+        // huellas e instantes inventados, sin base de datos, sin teléfonos en claro
+        // y sin secretos (de la configuración, solo huellas).
+        //
+        // Solo lo importan las pruebas del CRM: comparan sus conjuntos cerrados, sus
+        // códigos de error, los permisos, los textos fijos y sus lectores estrictos
+        // con lo que de verdad responde el servidor.
+        // Catálogo {$version}.
+        export const BACKEND_INTEGRATIONS = {$jsonIntegraciones} as const;
+
+        TS;
+
         file_put_contents($destino.'/'.self::CATALOG_FILE, $contenidoCatalogo);
         file_put_contents($destino.'/'.self::CASES_FILE, $contenidoCasos);
         file_put_contents($destino.'/'.self::COHERENCE_FILE, $contenidoCoherencia);
         file_put_contents($destino.'/'.self::LAB_SCENARIOS_FILE, $contenidoLaboratorio);
         file_put_contents($destino.'/'.self::PUBLICATION_FILE, $contenidoPublicacion);
+        file_put_contents($destino.'/'.self::INTEGRATIONS_FILE, $contenidoIntegraciones);
 
-        $this->info("Catálogo {$version}, {$total} casos de paridad, {$totalCoherencia} de coherencia, {$totalLab} escenarios del laboratorio ({$versionLab}) y las formas de la publicación exportados a {$destino}");
+        $this->info("Catálogo {$version}, {$total} casos de paridad, {$totalCoherencia} de coherencia, {$totalLab} escenarios del laboratorio ({$versionLab}) y las formas de la publicación y de las integraciones exportados a {$destino}");
 
         return self::SUCCESS;
     }

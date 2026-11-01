@@ -753,6 +753,35 @@ final class AuthorizationMap
         'POST api/admin/ultron-studio/versions/{uuid}/promote' => 'ultron.publish',
         'GET api/admin/ultron-studio/publications' => 'ultron.view',
         'POST api/admin/ultron-studio/publications/legacy' => 'ultron.rollback',
+        // Hito 6 (contrato docs/ultron-studio/ULTRON_STUDIO_H6_CONTRACT.md §I7.1):
+        // las integraciones comerciales, REGISTRO del Studio sin efecto en el
+        // motor. Las ocho lecturas, con `ultron.view` (sin red). Asociar campañas,
+        // con `ultron.campaigns_manage`; los números canarios, con
+        // `ultron.canary_manage`, salvo autorizar (`ultron.canary_authorize`, solo
+        // Super Admin por defecto; nadie autoriza lo que registró y nadie activa lo
+        // que registró: lo exige el servicio por identidad). Reconocer la
+        // configuración y la sonda de solo lectura de Twilio, con
+        // `ultron.integrations_manage` (solo Super Admin por defecto). Con la
+        // bandera de escrituras apagada, 47–54 responden 409 DESPUÉS de esta
+        // puerta: sin permiso, 403.
+        'GET api/admin/ultron-studio/integrations/status' => 'ultron.view',
+        'GET api/admin/ultron-studio/integrations/meta/campaigns' => 'ultron.view',
+        'GET api/admin/ultron-studio/integrations/meta/links' => 'ultron.view',
+        'GET api/admin/ultron-studio/integrations/canaries' => 'ultron.view',
+        'GET api/admin/ultron-studio/integrations/twilio' => 'ultron.view',
+        'GET api/admin/ultron-studio/integrations/twilio/calls' => 'ultron.view',
+        'GET api/admin/ultron-studio/integrations/voice' => 'ultron.view',
+        'GET api/admin/ultron-studio/integrations/config' => 'ultron.view',
+        'POST api/admin/ultron-studio/integrations/meta/links' => 'ultron.campaigns_manage',
+        'POST api/admin/ultron-studio/integrations/meta/links/{uuid}/deactivate' => 'ultron.campaigns_manage',
+        'POST api/admin/ultron-studio/integrations/canaries' => 'ultron.canary_manage',
+        'POST api/admin/ultron-studio/integrations/canaries/{uuid}/authorize' => 'ultron.canary_authorize',
+        'POST api/admin/ultron-studio/integrations/canaries/{uuid}/activate' => 'ultron.canary_manage',
+        'POST api/admin/ultron-studio/integrations/canaries/{uuid}/deactivate' => 'ultron.canary_manage',
+        'POST api/admin/ultron-studio/integrations/canaries/{uuid}/revoke' => 'ultron.canary_manage',
+        'POST api/admin/ultron-studio/integrations/canaries/{uuid}/expectation' => 'ultron.canary_manage',
+        'POST api/admin/ultron-studio/integrations/config/acknowledge' => 'ultron.integrations_manage',
+        'POST api/admin/ultron-studio/integrations/twilio/probe' => 'ultron.integrations_manage',
 
         // Ver el catálogo de roles ya revela el organigrama y qué puede cada
         // uno. Se exige el mismo permiso que para tocarlo: un dominio con una

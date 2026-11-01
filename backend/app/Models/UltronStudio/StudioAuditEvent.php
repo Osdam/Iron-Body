@@ -46,7 +46,18 @@ class StudioAuditEvent extends Model
 
     public const SUBJECT_SYSTEM = 'system';
 
-    public const SUBJECT_TYPES = [self::SUBJECT_DRAFT, self::SUBJECT_VERSION, self::SUBJECT_RULE, self::SUBJECT_SYSTEM];
+    /** Hito 6 (contrato H6 §I8): una asociación de campaña, un número canario y una instantánea de integración. */
+    public const SUBJECT_CAMPAIGN_LINK = 'campaign_link';
+
+    public const SUBJECT_CANARY_NUMBER = 'canary_number';
+
+    public const SUBJECT_INTEGRATION = 'integration';
+
+    /** Los 7 sujetos del CHECK `usae_subject_type_chk` desde la migración 2026_11_01_100002. */
+    public const SUBJECT_TYPES = [
+        self::SUBJECT_DRAFT, self::SUBJECT_VERSION, self::SUBJECT_RULE, self::SUBJECT_SYSTEM,
+        self::SUBJECT_CAMPAIGN_LINK, self::SUBJECT_CANARY_NUMBER, self::SUBJECT_INTEGRATION,
+    ];
 
     public const ACTOR_ADMIN = 'admin';
 

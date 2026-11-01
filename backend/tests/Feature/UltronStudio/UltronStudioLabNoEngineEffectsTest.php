@@ -316,7 +316,9 @@ class UltronStudioLabNoEngineEffectsTest extends TestCase
         $real = [];
         $deH5 = [];
         foreach (Route::getRoutes() as $route) {
-            if (str_starts_with($route->uri(), 'api/admin/ultron-studio') && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/lab/')) {
+            // Las 18 de las integraciones (Hito 6) tienen su propia matriz: UltronStudioIntegrationsPermissionsTest.
+            if (str_starts_with($route->uri(), 'api/admin/ultron-studio') && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/lab/')
+                && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/integrations/')) {
                 $clave = AuthorizationMap::routeKey($route);
                 if (array_key_exists($clave, $h5)) {
                     $deH5[$clave] = AuthorizationMap::resolve($route);

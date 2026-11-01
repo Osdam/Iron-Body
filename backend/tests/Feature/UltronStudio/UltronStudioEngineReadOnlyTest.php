@@ -81,9 +81,20 @@ use Tests\TestCase;
  * ficheros que llaman al lector del motor (`signatureFor()` y `describe()`) y
  * los que cuentan el canario entran en la lista de los que nombran el motor,
  * con su aserción de solo lectura.
+ *
+ * Hito 6 (contrato H6 §I9.2): los servicios de las integraciones que LEEN el
+ * espejo de Meta, la conversación canaria y su lead, `marketing_calls` y el OTP
+ * entran en la lista, cada uno con su aserción de solo lectura; el de campañas
+ * lleva además la lista blanca de llamadas a Meta (§I3.3) y, del OTP, solo se
+ * llaman `OtpCostGuard::snapshot()` y `TwilioVerifyService::isActive()`. Las 3
+ * tablas nuevas son del Studio, y el recorrido pasa por las 56 rutas con las
+ * escrituras del hito encendidas y la sonda contra `Http::fake`: al final, las
+ * huellas idénticas, nada encolado y ninguna petición salvo los 5 GET de la
+ * sonda a los hosts oficiales.
  */
 class UltronStudioEngineReadOnlyTest extends TestCase
 {
+    use IntegrationFixtures;
     use LabFixtures;
     use RefreshDatabase;
     use StudioFixtures;
@@ -93,7 +104,33 @@ class UltronStudioEngineReadOnlyTest extends TestCase
      * 5: `StudioPublications` (la firma del motor, pura) y `StudioCanaryMeasures`
      * (los recuentos del canario y su acta, de lectura).
      */
-    private const ENGINE_READERS = ['StudioCanaryMeasures.php', 'StudioEngineReadings.php', 'StudioLabEngineChecks.php', 'StudioPublications.php', 'StudioRules.php'];
+    private const ENGINE_READERS = [
+        'StudioCampaignLinks.php', 'StudioCanaryCoherence.php', 'StudioCanaryMeasures.php', 'StudioEngineReadings.php', 'StudioIntegrationConfig.php',
+        'StudioLabEngineChecks.php', 'StudioMetaCampaigns.php', 'StudioPublications.php', 'StudioRules.php', 'StudioTwilioPanel.php',
+    ];
+
+    /**
+     * Hito 6: los lectores de las integraciones, con los modelos del Studio en
+     * los que SÍ pueden escribir (sus propias tablas). Lo que nombran del motor,
+     * solo lo leen.
+     */
+    private const INTEGRATION_READERS = [
+        'StudioCampaignLinks.php' => ['StudioCampaignLink'],
+        'StudioCanaryCoherence.php' => [],
+        'StudioIntegrationConfig.php' => ['StudioIntegrationSnapshot'],
+        'StudioMetaCampaigns.php' => [],
+        'StudioTwilioPanel.php' => [],
+    ];
+
+    /** La lista blanca de llamadas a clases de Meta en el lector de campañas (§I3.3), más la consulta de lectura de las pasadas. */
+    private const META_ALLOWED = ['configurationproblem', 'accountids', 'statusall', 'forconfiguredaccount', 'accountnames', 'opaqueid', 'publicaccount', 'maskid', 'maskdigits', 'query'];
+
+    /** Las que salen a Meta o escriben el espejo (§I3.3): no aparecen en el lector de campañas. */
+    private const META_FORBIDDEN = ['campaigns', 'adsets', 'ads', 'insights', 'reach', 'account', 'tokeninfo', 'adowner', 'accounttotals', 'run', 'runall', 'refreshreach', 'refreshstatuses'];
+
+    /** Las clases de Meta y de las integraciones existentes que el Studio lee (no las atrapa el patrón del motor). */
+    private const INTEGRATION_CLASSES = ['MetaAdEntity', 'MetaSyncRun', 'MetaAdsSync', 'MetaAdsApiClient', 'LeadSourceClassifier', 'OtpCostGuard', 'TwilioVerifyService',
+        'MemberAuthChallenge', 'TrainerAuthChallenge', 'MarketingCall', 'MarketingConversation', 'MarketingLead'];
 
     /** Lo que es escribir (contrato G §A9): no puede aparecer en esos ficheros sobre el motor. */
     private const WRITE_CALLS = ['set', 'engage', 'release', 'save', 'update', 'delete', 'create', 'forcecreate', 'forcefill', 'fill',
@@ -110,6 +147,8 @@ class UltronStudioEngineReadOnlyTest extends TestCase
         'ultron_studio_drafts', 'ultron_studio_rules', 'ultron_studio_versions', 'ultron_studio_version_reviews', 'ultron_studio_audit_events',
         // Hito 4: el laboratorio (sin veredictos: en `fake` no se admiten).
         'ultron_studio_lab_scenarios', 'ultron_studio_lab_runs', 'ultron_studio_lab_run_cases', 'ultron_studio_lab_events',
+        // Hito 6: las integraciones comerciales.
+        'ultron_studio_campaign_links', 'ultron_studio_canary_numbers', 'ultron_studio_integration_snapshots',
     ];
 
     /** Una sentencia que escribe, con su tabla (con o sin esquema y comillas). */
@@ -207,6 +246,70 @@ class UltronStudioEngineReadOnlyTest extends TestCase
         $this->assertSame([], $this->configWrites($recuentos), 'StudioCanaryMeasures cambia la configuración.');
     }
 
+    /**
+     * Hito 6 (contrato H6 §I9.2): los lectores de las integraciones solo leen
+     * lo que nombran del motor y de las integraciones existentes, y solo
+     * escriben en sus propias tablas del Studio.
+     */
+    public function test_los_lectores_de_las_integraciones_solo_leen_el_motor_y_meta_tiene_su_lista_blanca(): void
+    {
+        foreach (self::INTEGRATION_READERS as $fichero => $propios) {
+            $ruta = app_path('Services/UltronStudio/'.$fichero);
+            $this->assertSame([], $this->configWrites($ruta), "{$fichero} cambia la configuración.");
+            foreach ($this->writeCalls($ruta) as $llamada) {
+                $deUnPropio = false;
+                foreach ($propios as $modelo) {
+                    $deUnPropio = $deUnPropio || str_contains($llamada['statement'], $modelo.'::query()->forceCreate(');
+                }
+                $this->assertTrue($deUnPropio, "{$fichero} escribe algo que no es su propia tabla del Studio: {$llamada['statement']}");
+            }
+            $clases = array_values(array_unique(array_map(
+                static fn (string $nombre): string => substr((string) strrchr('\\'.$nombre, '\\'), 1),
+                $this->engineReferences($ruta),
+            )));
+            foreach ([...$clases, ...array_values(array_filter(self::INTEGRATION_CLASSES, fn (string $c): bool => $this->names($ruta, $c)))] as $clase) {
+                foreach ($this->statementsNaming($ruta, $clase) as $sentencia) {
+                    foreach (self::WRITE_CALLS as $metodo) {
+                        $this->assertDoesNotMatchRegularExpression('/(->|::)'.preg_quote($metodo, '/').'\s*\(/i', $sentencia, "{$fichero} escribe el motor: {$sentencia}");
+                    }
+                }
+            }
+            // Ninguna fachada de red, colas, eventos ni ficheros; la base, solo para su transacción.
+            foreach ($this->forbiddenNames($ruta) as $nombre) {
+                $this->assertSame('DB', $nombre, "{$fichero} usa {$nombre}.");
+            }
+            foreach ($this->names($ruta, 'DB') ? $this->statementsNaming($ruta, 'DB') : [] as $sentencia) {
+                $this->assertMatchesRegularExpression('/^(\[\$\w+, \$\w+\] = |\$\w+ = )?DB::transaction\(/', $sentencia, "{$fichero} usa la base fuera de su transacción: {$sentencia}");
+            }
+        }
+
+        // El lector de campañas: solo la lista blanca de Meta (§I3.3).
+        $campanas = app_path('Services/UltronStudio/StudioMetaCampaigns.php');
+        $llamadas = $this->calledMethodsOn($campanas, ['MetaAdEntity', 'MetaSyncRun', 'LeadSourceClassifier', '$this->client', '$this->sync']);
+        $this->assertSame([], array_values(array_diff($llamadas, self::META_ALLOWED)), 'StudioMetaCampaigns llama a Meta fuera de su lista blanca.');
+        foreach (self::META_FORBIDDEN as $prohibida) {
+            $this->assertDoesNotMatchRegularExpression('/(->|::)'.$prohibida.'\s*\(/i', $this->codeOf($campanas), "StudioMetaCampaigns llama a {$prohibida}().");
+        }
+        $this->assertContains('statusall', $llamadas, 'la prueba ve las llamadas a Meta');
+
+        // De `marketing_calls`, ni una columna del prospecto (§I5.2): ni en una consulta ni en un DTO.
+        $panel = $this->codeOf(app_path('Services/UltronStudio/StudioTwilioPanel.php'));
+        foreach (['to_phone', 'from_phone', 'transcript', 'summary', 'metadata', 'marketing_lead_id', 'outcome'] as $columna) {
+            $this->assertStringNotContainsString("'{$columna}'", $panel, "StudioTwilioPanel nombra la columna {$columna} de marketing_calls.");
+        }
+        $this->assertStringContainsString("'status', 'direction', 'reason', 'scheduled_at', 'started_at', 'ended_at', 'duration_seconds', 'created_at'", $panel, 'las columnas que sí lee');
+
+        // Del OTP, solo la foto del día y si Verify está activo: nada que envíe, cuente o gaste.
+        foreach (glob(app_path('Services/UltronStudio/*.php')) as $ruta) {
+            foreach (['$this->cost' => ['snapshot'], '$this->verify' => ['isactive']] as $objeto => $permitidas) {
+                $this->assertSame([], array_values(array_diff($this->calledMethodsOn($ruta, [$objeto]), $permitidas)), basename($ruta)." usa del OTP algo que no es {$permitidas[0]}().");
+            }
+            foreach (['OtpCostGuard', 'TwilioVerifyService', 'TwilioSmsSender', 'OtpPolicy'] as $clase) {
+                $this->assertSame([], array_values(array_diff($this->calledMethodsOn($ruta, [$clase]), [])), basename($ruta)." llama estáticamente a {$clase}.");
+            }
+        }
+    }
+
     public function test_controladores_modelos_y_comandos_del_studio_no_escriben_el_motor(): void
     {
         $nombran = [];
@@ -291,7 +394,9 @@ class UltronStudioEngineReadOnlyTest extends TestCase
         foreach ($empujados[StudioLabStepJob::class] as $empujado) {
             $this->assertSame((string) config('queue.lanes.lab.queue'), $empujado['queue'], 'El paso del laboratorio salió de su carril.');
         }
-        Http::assertNothingSent();
+        // La única salida: los 5 GET de la sonda de Twilio, a los hosts oficiales (§I9.2).
+        $salidas = array_map(static fn (array $p): string => $p[0]->method().' '.parse_url($p[0]->url(), PHP_URL_HOST), Http::recorded()->all());
+        $this->assertSame(['GET api.twilio.com', 'GET api.twilio.com', 'GET api.twilio.com', 'GET api.twilio.com', 'GET monitor.twilio.com'], $salidas);
         Mail::assertNothingSent();
         Notification::assertNothingSent();
 
@@ -306,7 +411,8 @@ class UltronStudioEngineReadOnlyTest extends TestCase
         $recorridas = array_values(array_unique($this->walked));
         sort($recorridas);
         $this->assertSame($todas, $recorridas);
-        $this->assertCount(38, $recorridas);
+        // Hito 6: las 18 de las integraciones (56 en total).
+        $this->assertCount(56, $recorridas);
     }
 
     /**
@@ -602,6 +708,45 @@ class UltronStudioEngineReadOnlyTest extends TestCase
         }
 
         $this->walk('POST', 'draft/discard', $ana, ['baseRevision' => $borrador['revision']])->assertOk();
+
+        $this->walkIntegrations($ana, $root, $v1);
+    }
+
+    /**
+     * Hito 6: las 18 rutas de las integraciones con las escrituras encendidas y
+     * la sonda contra `Http::fake` (sus 5 GET son la única salida permitida).
+     * Ana registra y Root autoriza y activa (cuatro ojos); una asociación de
+     * campaña se crea, se sustituye por la versión aprobada y se desactiva; la
+     * configuración se reconoce.
+     */
+    private function walkIntegrations(Admin $ana, Admin $root, string $version): void
+    {
+        foreach (['integrations/status', 'integrations/meta/campaigns', 'integrations/meta/links', 'integrations/canaries', 'integrations/twilio',
+            'integrations/twilio/calls', 'integrations/voice', 'integrations/config'] as $lectura) {
+            $this->walk('GET', $lectura, $ana)->assertOk();
+        }
+
+        $campana = self::campaignId('120000000000000387');
+        $linea = $this->walk('POST', 'integrations/meta/links', $ana, ['clientRequestId' => (string) Str::uuid(), 'campaign' => $campana, 'target' => ['kind' => 'baseline']])
+            ->assertCreated()->json('data.link.uuid');
+        $nueva = $this->walk('POST', 'integrations/meta/links', $ana, ['clientRequestId' => (string) Str::uuid(), 'campaign' => $campana,
+            'target' => ['kind' => 'version', 'versionUuid' => $version], 'replaces' => $linea])->assertCreated()->json('data.link.uuid');
+        $this->walk('POST', "integrations/meta/links/{$nueva}/deactivate", $ana, ['reason' => 'Fin del recorrido'])->assertOk();
+
+        $numero = $this->walk('POST', 'integrations/canaries', $ana, ['clientRequestId' => (string) Str::uuid(), 'channel' => 'whatsapp', 'phone' => '+57 300 123 4567',
+            'alias' => 'Móvil del recorrido', 'consentAttested' => true, 'expectedVersionUuid' => $version])->assertCreated()->json('data.number.uuid');
+        $this->walk('POST', "integrations/canaries/{$numero}/authorize", $root)->assertOk();
+        $this->walk('POST', "integrations/canaries/{$numero}/activate", $root)->assertOk();
+        $this->walk('POST', "integrations/canaries/{$numero}/expectation", $ana, ['versionUuid' => null])->assertOk();
+        $this->walk('POST', "integrations/canaries/{$numero}/deactivate", $ana, ['reason' => 'Fin del recorrido'])->assertOk();
+        $this->walk('POST', "integrations/canaries/{$numero}/revoke", $ana, ['reason' => 'Fin del recorrido'])->assertOk();
+
+        $huella = $this->walk('GET', 'integrations/config', $root)->assertOk()->json('data.providers.1.effectiveFingerprint');
+        $this->walk('POST', 'integrations/config/acknowledge', $root, ['clientRequestId' => (string) Str::uuid(), 'provider' => 'twilio', 'fingerprint' => $huella])->assertCreated();
+        $this->walk('POST', 'integrations/twilio/probe', $root, ['clientRequestId' => (string) Str::uuid()])->assertCreated();
+        foreach (['integrations/status', 'integrations/canaries?status=all', 'integrations/meta/campaigns?linked=no', 'integrations/twilio', 'integrations/config'] as $lectura) {
+            $this->walk('GET', $lectura, $root)->assertOk();
+        }
     }
 
     /** La pausa puesta, el freno echado, conocimiento, planes y una conversación: el motor «vivo». */
@@ -620,7 +765,28 @@ class UltronStudioEngineReadOnlyTest extends TestCase
         MarketingKnowledgeItem::create(['category' => 'faq', 'key' => 'faq.propuesta', 'title' => 'Propuesta', 'content' => 'Pendiente.', 'is_active' => true, 'origin' => MarketingKnowledgeItem::ORIGIN_INTERNAL_API]);
         Plan::create(['name' => 'Mensualidad', 'price' => 98765, 'duration_days' => 30, 'active' => true, 'is_recommended' => true, 'sort_order' => 1]);
         $lead = MarketingLead::create(['channel' => 'whatsapp', 'source' => 'inbound', 'phone' => '3001234567', 'name' => 'Prospecto']);
-        MarketingConversation::create(['lead_id' => $lead->id, 'channel' => 'whatsapp', 'status' => 'open']);
+        $conversacion = MarketingConversation::create(['lead_id' => $lead->id, 'channel' => 'whatsapp', 'status' => 'open']);
+
+        // Hito 6: lo que leen las integraciones. La conversación canaria con su
+        // lead (la coherencia lee su teléfono), el espejo de Meta con sus
+        // pasadas, retos del OTP, llamadas y la configuración de Twilio y de la
+        // sonda; las escrituras del hito encendidas.
+        config(['marketing.ultron.canary_conversation_id' => $conversacion->id]);
+        $this->metaConfigured();
+        $this->metaCampaign(self::ACCOUNTS[0], '120000000000000387', 'Pauta del recorrido');
+        DB::table('trainer_auth_challenges')->insert(['uuid' => (string) Str::uuid(), 'purpose' => 'trainer_login', 'code_hash' => 'x', 'channel' => 'sms',
+            'destination' => '+573009998877', 'status' => 'verified', 'expires_at' => now(), 'created_at' => now()->subHour(), 'updated_at' => now()->subHour()]);
+        DB::table('marketing_calls')->insert(['provider' => 'twilio', 'to_phone' => '+573009998866', 'status' => 'pending', 'direction' => 'outbound',
+            'created_at' => now()->subDay(), 'updated_at' => now()->subDay()]);
+        config([
+            'otp.driver' => 'twilio',
+            'otp.twilio.sid' => 'AC0123456789abcdef0123456789abcdef',
+            'otp.twilio.token' => 'token-del-recorrido-de-solo-lectura',
+            'otp.twilio.verify_service_sid' => 'VA'.str_repeat('0', 28).'9f0e',
+            'ultron_studio.integrations.writes_enabled' => true,
+            'ultron_studio.integrations.twilio_probe.enabled' => true,
+            'ultron_studio.integrations.twilio_probe.base' => null,
+        ]);
     }
 
     /**
@@ -852,5 +1018,59 @@ class UltronStudioEngineReadOnlyTest extends TestCase
         } while ($i >= 0 && $tokens[$i][0] === T_WHITESPACE);
 
         return $i;
+    }
+
+    // ── Hito 6: lectura de tokens de los lectores de las integraciones ──────
+
+    /** ¿Nombra el código de un fichero (sin comentarios) este identificador? */
+    private function names(string $ruta, string $nombre): bool
+    {
+        foreach ($this->tokens($ruta) as $t) {
+            if (($t[0] === T_STRING || $t[0] === T_NAME_QUALIFIED || $t[0] === T_NAME_FULLY_QUALIFIED) && substr((string) strrchr('\\'.$t[1], '\\'), 1) === $nombre) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** El código de un fichero sin comentarios. */
+    private function codeOf(string $ruta): string
+    {
+        return implode('', array_map(static fn (array $t): string => $t[1], $this->tokens($ruta)));
+    }
+
+    /**
+     * Los métodos que se llaman directamente sobre unos receptores: `Clase::x(`
+     * o `$this->propiedad->x(`, en minúscula.
+     *
+     * @param  list<string>  $receivers  nombres cortos de clase o `$this->propiedad`
+     * @return list<string>
+     */
+    private function calledMethodsOn(string $ruta, array $receivers): array
+    {
+        $tokens = array_values(array_filter($this->tokens($ruta), static fn (array $t): bool => $t[0] !== T_WHITESPACE));
+        $out = [];
+        foreach ($tokens as $i => $t) {
+            foreach ($receivers as $receptor) {
+                if (str_starts_with($receptor, '$this->')) {
+                    $propiedad = substr($receptor, 7);
+                    $casa = $t[0] === T_VARIABLE && $t[1] === '$this' && ($tokens[$i + 1][1] ?? null) === '->' && ($tokens[$i + 2][1] ?? null) === $propiedad
+                        && ($tokens[$i + 3][1] ?? null) === '->' && ($tokens[$i + 5][1] ?? null) === '(';
+                    if ($casa) {
+                        $out[] = strtolower($tokens[$i + 4][1]);
+                    }
+
+                    continue;
+                }
+                $casa = ($t[0] === T_STRING || $t[0] === T_NAME_QUALIFIED || $t[0] === T_NAME_FULLY_QUALIFIED) && substr((string) strrchr('\\'.$t[1], '\\'), 1) === $receptor
+                    && ($tokens[$i + 1][1] ?? null) === '::' && ($tokens[$i + 2][0] ?? null) === T_STRING && ($tokens[$i + 3][1] ?? null) === '(';
+                if ($casa) {
+                    $out[] = strtolower($tokens[$i + 2][1]);
+                }
+            }
+        }
+
+        return array_values(array_unique($out));
     }
 }
