@@ -566,11 +566,12 @@ class ReceiptAgentSecurityTest extends TestCase
         $this->imprimirConAgente($uuid, $estacion, intento: $intento)->assertStatus(200)->assertHeader('Cache-Control', 'no-store, private');
         $this->ticketDeEstacion($estacion)->assertStatus(201)->assertHeader('Cache-Control', 'no-store, private');
 
-        // Los demás modos, como siempre.
-        $silenciosa = $this->postJson("/api/admin/receipts/{$uuid}/prints", [
+        // Los demás modos también: desde el Hito 7 de ULTRON STUDIO (B7-a, el
+        // middleware NoStoreAdminResponses) toda respuesta de /api/admin/* va
+        // con no-store, lleve ticket o no.
+        $this->postJson("/api/admin/receipts/{$uuid}/prints", [
             'client_attempt_id' => (string) Str::uuid(), 'context' => 'shift_report', 'print_mode' => 'silent',
-        ], $this->h)->assertStatus(201);
-        $this->assertStringNotContainsString('no-store', (string) $silenciosa->headers->get('Cache-Control'));
+        ], $this->h)->assertStatus(201)->assertHeader('Cache-Control', 'no-store, private');
     }
 
     /** M-4 (servidor): la impresora de una estación es local, no una ruta de red ni una URL. */

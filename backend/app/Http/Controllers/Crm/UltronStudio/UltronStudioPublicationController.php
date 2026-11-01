@@ -19,14 +19,15 @@ use Illuminate\Http\Request;
  * Volver a Legacy es el «parar de declarar» del Studio: no depende de ninguna
  * llave ni de la ventana, y responde como las otras tres escrituras (201 con la
  * entrada creada; 200 `replayed` con la de la primera vez). El servicio se
- * resuelve solo en esa acción (firma con la clase del motor): leer el
- * historial no toca ninguna clase del motor.
+ * resuelve solo en esa acción. Leer el historial no lo construye ni lee nada
+ * del motor: desde el Hito 7 (B-2) verifica cada entrada con la firma del
+ * motor, que es pura (solo la `APP_KEY`), y la devuelve con `verified`.
  */
 class UltronStudioPublicationController extends Controller
 {
     use ResolvesPagination;
 
-    /** GET /api/admin/ultron-studio/publications?page&per_page (≤ 50), de la más reciente a la más antigua */
+    /** GET /api/admin/ultron-studio/publications?page&per_page (≤ 50), de la más reciente a la más antigua; cada entrada con `verified` */
     public function index(Request $request): JsonResponse
     {
         StudioAccess::requirePerson($request);

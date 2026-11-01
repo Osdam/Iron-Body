@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Exceptions\WorkforceException;
+use App\Http\Controllers\Concerns\ValidatesListSizesFirst;
 use App\Http\Controllers\Controller;
 use App\Models\Identity;
 use App\Models\StaffProfile;
@@ -38,6 +39,8 @@ use Illuminate\Validation\Rule;
  */
 class WorkforceStaffController extends Controller
 {
+    use ValidatesListSizesFirst;
+
     public function __construct(
         private readonly EmployeeDirectory $directory,
         private readonly FaceReferenceService $faces,
@@ -111,11 +114,15 @@ class WorkforceStaffController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $data = $request->validate([
+        // Primero el tamaño de `positions` y después cada cargo (M-2, Hito 7 de
+        // ULTRON STUDIO): sin tope, 10 000 cargos tardaban 61 s en llegar al
+        // 422. El tope es el catálogo: el CRM marca casillas de los cargos de
+        // personal, sin repetir, así que nunca envía más.
+        $data = $this->validateListSizesFirst($request, [
             'full_name' => ['required', 'string', 'min:3', 'max:160'],
             'document' => ['required', 'string', 'min:4', 'max:30'],
             'phone' => ['nullable', 'string', 'max:40'],
-            'positions' => ['required', 'array', 'min:1'],
+            'positions' => ['required', 'array', 'min:1', 'max:'.count(Positions::staffKeys())],
             'positions.*' => ['string', Rule::in(Positions::staffKeys())],
             // Confirmación de la comprobación previa (`lookup`): la persona que
             // se vio en pantalla. Opcional: sin ella, el alta de siempre.
@@ -181,10 +188,11 @@ class WorkforceStaffController extends Controller
 
     public function update(Request $request, string $identity): JsonResponse
     {
-        $data = $request->validate([
+        // Como en el alta: primero el tamaño de `positions` (M-2, Hito 7).
+        $data = $this->validateListSizesFirst($request, [
             'full_name' => ['sometimes', 'string', 'min:3', 'max:160'],
             'phone' => ['sometimes', 'nullable', 'string', 'max:40'],
-            'positions' => ['sometimes', 'array', 'min:1'],
+            'positions' => ['sometimes', 'array', 'min:1', 'max:'.count(Positions::staffKeys())],
             'positions.*' => ['string', Rule::in(Positions::staffKeys())],
             'status' => ['sometimes', 'in:active,inactive'],
         ]);

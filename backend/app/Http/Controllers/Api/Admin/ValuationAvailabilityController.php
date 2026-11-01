@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Exceptions\ValuationException;
+use App\Http\Controllers\Concerns\ValidatesListSizesFirst;
 use App\Http\Controllers\Concerns\ValuationResponses;
 use App\Http\Controllers\Controller;
 use App\Models\Trainer;
@@ -26,6 +27,7 @@ use Illuminate\Validation\Rule;
  */
 class ValuationAvailabilityController extends Controller
 {
+    use ValidatesListSizesFirst;
     use ValuationResponses;
 
     private const MAX_RULES = 100;
@@ -51,7 +53,11 @@ class ValuationAvailabilityController extends Controller
             $access->require(ValuationAccess::MANAGE_AVAILABILITY);
             $this->exigirEntrenador($trainerId);
 
-            $datos = $this->validar($request, [
+            // Primero el tamaño de `rules` y después cada regla (M-2, Hito 7 de
+            // ULTRON STUDIO): el comodín se expande sobre todos los elementos
+            // antes de mirar el tope de 100; 10 000 reglas tardaban 100 s. El
+            // 422 sale igual: `conPersona` recoge la ValidationException.
+            $datos = $this->validateListSizesFirst($request, [
                 'rules' => ['present', 'array', 'max:'.self::MAX_RULES],
                 'rules.*.weekday' => ['required', 'integer', 'min:1', 'max:7'],
                 'rules.*.start_time' => ['required', 'date_format:H:i'],

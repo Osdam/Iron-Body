@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Http\Controllers\Concerns\ValidatesListSizesFirst;
 use App\Http\Controllers\Controller;
 use App\Models\Admin;
 use App\Models\MarketingConversation;
@@ -30,6 +31,8 @@ use Illuminate\Validation\Rule;
  */
 class MarketingInboxController extends Controller
 {
+    use ValidatesListSizesFirst;
+
     public function __construct(
         private readonly MarketingInboxService $inbox,
         private readonly MarketingInboxAuthorizationService $authz,
@@ -129,7 +132,10 @@ class MarketingInboxController extends Controller
 
         $maxFiles = max(1, (int) config('marketing.media.outbound.max_per_send', 5));
 
-        $data = $request->validate([
+        // Primero el tamaño de `attachment_ids` y después cada id (M-2, Hito 7
+        // de ULTRON STUDIO): el comodín se expande sobre todos los elementos
+        // antes de mirar el tope; 10 000 ids tardaban 1,7 s en llegar al 422.
+        $data = $this->validateListSizesFirst($request, [
             // El texto deja de ser obligatorio cuando hay archivo: mandar una
             // foto sin pie es normal, y exigir una palabra para poder hacerlo
             // llevaría a que la gente escriba un punto.
@@ -403,7 +409,9 @@ class MarketingInboxController extends Controller
             return $r;
         }
 
-        $data = $request->validate([
+        // Primero el tamaño de cada lista y después cada etiqueta (M-2, Hito 7
+        // de ULTRON STUDIO): 10 000 etiquetas tardaban 1,5 s en llegar al 422.
+        $data = $this->validateListSizesFirst($request, [
             'add' => ['nullable', 'array', 'max:10'],
             'add.*' => ['string', 'max:40'],
             'remove' => ['nullable', 'array', 'max:10'],

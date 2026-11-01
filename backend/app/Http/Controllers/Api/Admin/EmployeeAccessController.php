@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Http\Controllers\Concerns\ValidatesListSizesFirst;
 use App\Http\Controllers\Controller;
 use App\Models\EmployeeAccess;
 use App\Models\User;
@@ -31,6 +32,8 @@ use Illuminate\Http\Request;
  */
 class EmployeeAccessController extends Controller
 {
+    use ValidatesListSizesFirst;
+
     /** GET /api/users/{user}/employee-access */
     public function show(User $user): JsonResponse
     {
@@ -46,7 +49,10 @@ class EmployeeAccessController extends Controller
      */
     public function store(Request $request, User $user): JsonResponse
     {
-        $data = $request->validate([
+        // Primero el tamaño de cada lista y después cada día y cada franja
+        // (M-2, Hito 7 de ULTRON STUDIO): el comodín se expande sobre todos los
+        // elementos antes de mirar el tope; 10 000 franjas tardaban 15,6 s.
+        $data = $this->validateListSizesFirst($request, [
             'position' => ['nullable', 'string', 'max:60'],
             'active' => ['nullable', 'boolean'],
             'starts_on' => ['nullable', 'date_format:Y-m-d'],

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Http\Controllers\Concerns\ValidatesListSizesFirst;
 use App\Http\Controllers\Controller;
 use App\Models\Admin;
 use App\Services\Admin\IronCrm\IronCrmAiService;
@@ -23,6 +24,8 @@ use Illuminate\Support\Str;
  */
 class IronCrmAiController extends Controller
 {
+    use ValidatesListSizesFirst;
+
     public function __construct(
         private readonly IronCrmAiService $ai,
         private readonly IronCrmAuditService $audit,
@@ -32,7 +35,10 @@ class IronCrmAiController extends Controller
     {
         $maxChars = (int) config('iron_crm.max_message_chars', 4000);
 
-        $data = $request->validate([
+        // Primero el tamaño de `history` y después cada elemento (M-2, Hito 7 de
+        // ULTRON STUDIO): Laravel expande el comodín sobre todos los elementos
+        // antes de mirar el `max:50`, y 10 000 tardaban 11 s en llegar al 422.
+        $data = $this->validateListSizesFirst($request, [
             'message' => ['required', 'string', 'min:1', "max:{$maxChars}"],
             'history' => ['sometimes', 'array', 'max:50'],
             'history.*.role' => ['required_with:history', 'string', 'in:user,assistant'],

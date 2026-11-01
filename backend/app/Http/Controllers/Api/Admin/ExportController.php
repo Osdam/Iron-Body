@@ -81,19 +81,33 @@ class ExportController extends Controller
         // fichero, así que el cliente no siempre pide JSON, y en ese caso Laravel
         // responde a un error con una REDIRECCIÓN 302. Una descarga que falla
         // tiene que decir por qué, siempre en JSON.
-        $validator = Validator::make($request->all(), [
-            'format' => ['required', Rule::in($this->writer->formatKeys())],
-            'columns' => ['required', 'array', 'min:1'],
-            // Lista blanca: solo columnas que el dataset declara. Nada del
-            // cliente llega a un select sobre la tabla.
-            'columns.*' => ['string', 'distinct', Rule::in($ds->columnKeys())],
-            ...$ds->filterRules(),
-        ], [
+        $mensajes = [
             'columns.required' => 'Elige al menos una columna.',
             'columns.min' => 'Elige al menos una columna.',
+            'columns.max' => 'Este conjunto tiene :max columnas.',
             'columns.*.in' => 'La columna «:input» no existe en este conjunto.',
             'format.in' => 'Ese formato no está disponible en este servidor.',
-        ]);
+        ];
+        // Tope de la lista: con `distinct` y la lista blanca, una lista válida
+        // nunca pasa de las columnas del dataset; una más larga ya era un 422.
+        $tope = count($ds->columnKeys());
+        $columnas = $request->input('columns');
+
+        // PRIMERO ese tope (M-2, Hito 7 de ULTRON STUDIO): Laravel expande el
+        // comodín sobre todos los elementos antes de mirar ningún `max`, y
+        // `distinct` compara cada columna con todas; 10 000 columnas tardaban
+        // 24 s en llegar al 422. Solo una lista por encima del tope sale por
+        // aquí; cualquier otra petición recibe la validación de siempre.
+        $validator = is_array($columnas) && count($columnas) > $tope
+            ? Validator::make(['columns' => $columnas], ['columns' => ['array', 'max:'.$tope]], $mensajes)
+            : Validator::make($request->all(), [
+                'format' => ['required', Rule::in($this->writer->formatKeys())],
+                'columns' => ['required', 'array', 'min:1', 'max:'.$tope],
+                // Lista blanca: solo columnas que el dataset declara. Nada del
+                // cliente llega a un select sobre la tabla.
+                'columns.*' => ['string', 'distinct', Rule::in($ds->columnKeys())],
+                ...$ds->filterRules(),
+            ], $mensajes);
 
         if ($validator->fails()) {
             return response()->json([

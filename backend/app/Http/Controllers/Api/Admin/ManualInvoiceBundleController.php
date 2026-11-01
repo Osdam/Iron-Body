@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Exceptions\ManualEmissionRejectedException;
+use App\Http\Controllers\Concerns\ValidatesListSizesFirst;
 use App\Http\Controllers\Controller;
 use App\Models\FiscalProfile;
 use App\Models\Member;
@@ -25,6 +26,8 @@ use InvalidArgumentException;
  */
 class ManualInvoiceBundleController extends Controller
 {
+    use ValidatesListSizesFirst;
+
     public function __construct(private ManualInvoiceBundleService $bundles) {}
 
     // GET /api/admin/electronic-invoices/bundles/customers?q=
@@ -176,7 +179,10 @@ class ManualInvoiceBundleController extends Controller
     /** @return array<string,mixed> */
     private function validateSelection(Request $request, bool $emitting = false): array
     {
-        return $request->validate(array_merge([
+        // Primero el tamaño de `items` y después cada elemento (M-2, Hito 7 de
+        // ULTRON STUDIO): el comodín se expande sobre todos los elementos antes
+        // de mirar el tope de 30; 10 000 tardaban 2,3 s en llegar al 422.
+        return $this->validateListSizesFirst($request, array_merge([
             'member_id' => ['required', 'integer', 'exists:members,id'],
             'items' => ['required', 'array', 'min:1', 'max:'.ManualInvoiceBundleService::MAX_ITEMS],
             'items.*' => ['required', 'string', 'max:40', 'regex:/^(payment|product_sale|commission_charge):[0-9]+$/'],

@@ -566,22 +566,23 @@ final class StudioPublications
     }
 
     /**
-     * GET publications: la cadena, de la más reciente a la más antigua. Sin el
-     * texto firmado: lo que la identifica es su huella.
+     * GET publications: la cadena, de la más reciente a la más antigua, cada
+     * entrada con su `verified` ({@see historyEntryDto()}). El texto firmado se
+     * lee acotado para verificarla, como la cabeza, pero no se devuelve: lo que
+     * la identifica es su huella.
      */
     public static function page(int $perPage): LengthAwarePaginator
     {
-        return StudioPublication::query()
-            ->select(self::COLUMNS)
+        return self::withJson(StudioPublication::query())
             ->with('version:id,uuid,label')
             ->orderByDesc('seq')
             ->paginate($perPage)
-            ->through(static fn (StudioPublication $p): array => self::entryDto($p));
+            ->through(static fn (StudioPublication $p): array => self::historyEntryDto($p));
     }
 
     /**
      * Las entradas que nombran una versión (`publications` del detalle), de la
-     * más reciente a la más antigua.
+     * más reciente a la más antigua, cada una con su `verified`.
      *
      * @return list<array<string,mixed>>
      */
@@ -589,12 +590,11 @@ final class StudioPublications
     {
         $ref = self::versionRef($version);
 
-        return StudioPublication::query()
-            ->select(self::COLUMNS)
+        return self::withJson(StudioPublication::query())
             ->where('version_id', $version->id)
             ->orderByDesc('seq')
             ->get()
-            ->map(static fn (StudioPublication $p): array => self::entryDto($p, $ref))
+            ->map(static fn (StudioPublication $p): array => self::historyEntryDto($p, $ref))
             ->values()
             ->all();
     }
@@ -722,6 +722,33 @@ final class StudioPublications
             'reason' => $p->reason,
             'at' => $p->created_at?->toIso8601String(),
         ];
+    }
+
+    /**
+     * Una entrada del HISTORIAL (`GET publications` y `publications` del
+     * detalle de la versión): `PublicationEntryDto` más `verified` (B-2 de
+     * `security` en el Hito 5, diferido por la Enmienda 2 §E2.5 al Hito 7).
+     *
+     * `verified` son las MISMAS cuatro comprobaciones que el lector del motor
+     * hace sobre la cabeza y que el Studio enseña en `head.signatureOk`
+     * ({@see verify()}): el contrato, la huella de los bytes, la firma con la
+     * clave de este entorno y la decodificación estricta atada al `uuid` y al
+     * `seq` de su fila (una entrada copiada de otra fila no verifica). Una fila
+     * tocada a mano sin la clave sale `false`, y solo esa: las entradas no se
+     * verifican unas con otras. Cubre lo firmado; las columnas que no entran en
+     * la firma (`action`, `reason`, el actor, `version_id`, la fecha) solo las
+     * protege la cadena de solo inserción.
+     *
+     * Exige la fila con el texto firmado ({@see withJson()}). Las respuestas de
+     * las escrituras no lo llevan: la entrada que devuelven es la que se acaba
+     * de firmar, o la de la primera vez.
+     *
+     * @param  array{uuid:string,label:string}|null  $version
+     * @return array<string,mixed>
+     */
+    public static function historyEntryDto(StudioPublication $p, ?array $version = null): array
+    {
+        return self::entryDto($p, $version) + ['verified' => self::verify($p) !== null];
     }
 
     /**
@@ -1224,19 +1251,23 @@ final class StudioPublications
      */
     private function head(): ?StudioPublication
     {
-        return $this->withJson(StudioPublication::query())->orderByDesc('seq')->first();
+        return self::withJson(StudioPublication::query())->orderByDesc('seq')->first();
     }
 
     private function entryWithJson(int $id): ?StudioPublication
     {
-        return $this->withJson(StudioPublication::query())->whereKey($id)->first();
+        return self::withJson(StudioPublication::query())->whereKey($id)->first();
     }
 
     /**
+     * Las columnas de {@see COLUMNS} y el texto firmado acotado como lo lee el
+     * motor. Estática: también la usa el historial ({@see page()},
+     * {@see forVersion()}), que no construye el servicio.
+     *
      * @param  Builder<StudioPublication>  $consulta
      * @return Builder<StudioPublication>
      */
-    private function withJson(Builder $consulta): Builder
+    private static function withJson(Builder $consulta): Builder
     {
         return $consulta->select(self::COLUMNS)->selectRaw('substr(effective_json, 1, '.(D::MAX_EFFECTIVE_JSON + 1).') as effective_json');
     }

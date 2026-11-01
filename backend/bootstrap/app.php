@@ -8,16 +8,19 @@ use App\Http\Middleware\EnsureAdminPermission;
 use App\Http\Middleware\EnsureMemberRegistrationToken;
 use App\Http\Middleware\EnforceAdminAuthorization;
 use App\Http\Middleware\EnforceTrainerMemberScope;
+use App\Http\Middleware\NoStoreAdminResponses;
 use App\Http\Middleware\ProtectAdminPaths;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\EnsureTrainerFeature;
 use App\Http\Middleware\EnsureTrainerPermission;
+use App\Http\Middleware\ValidatePostSizeWithStudioCap;
 use App\Http\Middleware\VerifyDeviceSignature;
 use App\Http\Middleware\VerifyInternalAutomationSignature;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Exceptions\PostTooLargeException;
+use Illuminate\Http\Middleware\ValidatePostSize;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -80,6 +83,21 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Cabeceras de seguridad de base en TODAS las respuestas (web + api).
         $middleware->append(SecurityHeaders::class);
+
+        // `Cache-Control: no-store, private` en TODAS las respuestas de
+        // /api/admin/* (Hito 7 de ULTRON STUDIO, B7-a). Global y la primera de
+        // la pila, no en el grupo `api`: así también cubre lo que se responde
+        // antes del enrutado (404/405, los 413, mantenimiento, CORS) y su
+        // cabecera es la última que se escribe. Se autolimita a /api/admin.
+        $middleware->prepend(NoStoreAdminResponses::class);
+
+        // El tope de cuerpo de 64 KB del Studio ANTES de TrimStrings y
+        // ConvertEmptyStringsToNull, que decodifican y recorren el cuerpo entero
+        // (Hito 7, B7-d). No hay «insertar antes de» para la pila global: ocupa
+        // el hueco de ValidatePostSize, detrás de HandleCors (el 413 tiene que
+        // llevar CORS: el CRM es de otro origen), y después delega en él tal
+        // cual. Fuera de /api/admin/ultron-studio no cambia nada.
+        $middleware->replace(ValidatePostSize::class, ValidatePostSizeWithStudioCap::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // Cuerpo de request demasiado grande (p.ej. imagen OCR pesada). En rutas
