@@ -1,0 +1,436 @@
+{
+  "_meta": {
+    "que": "Casos de TwilioProbeSanitizer::sanitize(): respuestas por paso (con la forma que devuelve TwilioReadOnlyClient::get(), o {\"skipped\": true}) → {outcome, facts} exactos, en el orden de claves del contrato H6 §I5.4.",
+    "cuerpos": "Un cuerpo {\"$ref\": \"nombre\"} se toma de twilio-api-responses.json tal cual, sin pasar por el cliente: lleva el auth_token centinela a propósito.",
+    "mapas_vacios": "Un recuento vacío se escribe {} aquí; json_decode(…, true) lo convierte en [] y PHP lo devuelve como []. En JSON sale [].",
+    "centinelas": "Ninguna cadena de 'sentinels' puede aparecer en el JSON de ningún resultado, y todas aparecen en los cuerpos de la API (si no, la prueba no probaría nada).",
+    "escrito": "A mano, desde el contrato. Si el saneador discrepa, se corrige el saneador."
+  },
+
+  "sentinels": [
+    "tok3n-c3ntin3la-de-la-cuenta-9f8e7d", "hunter2", "hook-secret-1", "hooks.example.test", "://", "@", "%2B", "+1", "555",
+    "3105550178", "(310)", "310 555 0178", "310-555-0178", "6175550126", "617-555-0126",
+    "2025550143", "202-555-0143", "0143", "3055550199", "(305)", "0199", "7185550111", "(718)", "0111",
+    "4155550162", "415 555 0162", "415-555-0162", "0162", "7946",
+    "Iron Body", "recepción", "Ana", "López", "dueña", "Prospecto", "Pérez", "PEREZ", "Londres", "WhatsApp", "Sede norte",
+    "Msg=", "Invalid parameter", "<Response>", "Verificación", "Authenticate", "Llamar", "llamar",
+    "ACdeadbeef", "PN0123456789", "PNfedcba", "PN1111aaaa", "CA000000000", "NO000000000", "SM000000000", "VA000000000", "VE000000000",
+    "auth_token", "friendly_name", "phone_number", "alert_text", "request_url", "request_variables", "response_body", "caller_name", "subresource_uris", "more_info"
+  ],
+
+  "cases": [
+    {
+      "name": "C01 todo bien con la credencial del OTP (cuenta Full activa, 2 números, 1 caller ID, 4 llamadas, 3 alertas hostiles)",
+      "credential": "otp",
+      "responses": {
+        "account": { "ok": true, "status": 200, "body": { "$ref": "account_full_active" }, "error": null },
+        "numbers": { "ok": true, "status": 200, "body": { "$ref": "numbers_two" }, "error": null },
+        "caller_ids": { "ok": true, "status": 200, "body": { "$ref": "caller_ids_one" }, "error": null },
+        "calls": { "ok": true, "status": 200, "body": { "$ref": "calls_week" }, "error": null },
+        "alerts": { "ok": true, "status": 200, "body": { "$ref": "alerts_hostile" }, "error": null }
+      },
+      "expected": {
+        "outcome": "ok",
+        "facts": {
+          "credential": "otp",
+          "account": { "status": "active", "type": "Full" },
+          "numbers": { "count": 2, "truncated": false, "voiceCapable": 1, "smsCapable": 2, "items": [ { "last4": "0178", "voice": true, "sms": true }, { "last4": "0126", "voice": false, "sms": true } ] },
+          "callerIds": { "count": 1, "truncated": false },
+          "calls7d": { "total": 4, "truncated": false, "byStatus": { "completed": 2, "failed": 1, "no-answer": 1 } },
+          "alerts24h": { "total": 3, "truncated": false, "byCode": { "11200": 1, "60200": 2 }, "byLevel": { "error": 1, "warning": 2 } },
+          "errors": []
+        }
+      }
+    },
+    {
+      "name": "C02 llave restringida, cuenta Trial suspendida y todas las listas vacías",
+      "credential": "restricted_key",
+      "responses": {
+        "account": { "ok": true, "status": 200, "body": { "$ref": "account_trial_suspended" }, "error": null },
+        "numbers": { "ok": true, "status": 200, "body": { "$ref": "numbers_empty" }, "error": null },
+        "caller_ids": { "ok": true, "status": 200, "body": { "$ref": "caller_ids_empty" }, "error": null },
+        "calls": { "ok": true, "status": 200, "body": { "$ref": "calls_empty" }, "error": null },
+        "alerts": { "ok": true, "status": 200, "body": { "$ref": "alerts_empty" }, "error": null }
+      },
+      "expected": {
+        "outcome": "ok",
+        "facts": {
+          "credential": "restricted_key",
+          "account": { "status": "suspended", "type": "Trial" },
+          "numbers": { "count": 0, "truncated": false, "voiceCapable": 0, "smsCapable": 0, "items": [] },
+          "callerIds": { "count": 0, "truncated": false },
+          "calls7d": { "total": 0, "truncated": false, "byStatus": {} },
+          "alerts24h": { "total": 0, "truncated": false, "byCode": {}, "byLevel": {} },
+          "errors": []
+        }
+      }
+    },
+    {
+      "name": "C03 401 en la cuenta: la sonda se para y el resto se anota como saltado",
+      "credential": "otp",
+      "responses": {
+        "account": { "ok": false, "status": 401, "body": null, "error": "auth_failed" },
+        "numbers": { "skipped": true },
+        "caller_ids": { "skipped": true },
+        "calls": { "skipped": true },
+        "alerts": { "skipped": true }
+      },
+      "expected": {
+        "outcome": "auth_failed",
+        "facts": {
+          "credential": "otp",
+          "account": null, "numbers": null, "callerIds": null, "calls7d": null, "alerts24h": null,
+          "errors": [
+            { "step": "account", "outcome": "auth_failed", "httpStatus": 401 },
+            { "step": "numbers", "outcome": "skipped", "httpStatus": null },
+            { "step": "caller_ids", "outcome": "skipped", "httpStatus": null },
+            { "step": "calls", "outcome": "skipped", "httpStatus": null },
+            { "step": "alerts", "outcome": "skipped", "httpStatus": null }
+          ]
+        }
+      }
+    },
+    {
+      "name": "C04 403 en la cuenta con la llave restringida, y los demás pasos ni siquiera vienen (cuentan como saltados)",
+      "credential": "restricted_key",
+      "responses": {
+        "account": { "ok": false, "status": 403, "body": null, "error": "auth_failed" }
+      },
+      "expected": {
+        "outcome": "auth_failed",
+        "facts": {
+          "credential": "restricted_key",
+          "account": null, "numbers": null, "callerIds": null, "calls7d": null, "alerts24h": null,
+          "errors": [
+            { "step": "account", "outcome": "auth_failed", "httpStatus": 403 },
+            { "step": "numbers", "outcome": "skipped", "httpStatus": null },
+            { "step": "caller_ids", "outcome": "skipped", "httpStatus": null },
+            { "step": "calls", "outcome": "skipped", "httpStatus": null },
+            { "step": "alerts", "outcome": "skipped", "httpStatus": null }
+          ]
+        }
+      }
+    },
+    {
+      "name": "C05 tiempo agotado en la cuenta: unreachable, sin estado HTTP",
+      "credential": "otp",
+      "responses": {
+        "account": { "ok": false, "status": null, "body": null, "error": "unreachable" },
+        "numbers": { "skipped": true },
+        "caller_ids": { "skipped": true },
+        "calls": { "skipped": true },
+        "alerts": { "skipped": true }
+      },
+      "expected": {
+        "outcome": "unreachable",
+        "facts": {
+          "credential": "otp",
+          "account": null, "numbers": null, "callerIds": null, "calls7d": null, "alerts24h": null,
+          "errors": [
+            { "step": "account", "outcome": "unreachable", "httpStatus": null },
+            { "step": "numbers", "outcome": "skipped", "httpStatus": null },
+            { "step": "caller_ids", "outcome": "skipped", "httpStatus": null },
+            { "step": "calls", "outcome": "skipped", "httpStatus": null },
+            { "step": "alerts", "outcome": "skipped", "httpStatus": null }
+          ]
+        }
+      }
+    },
+    {
+      "name": "C06 429 en la cuenta: no para la sonda, los demás pasos salen y el resultado es error",
+      "credential": "otp",
+      "responses": {
+        "account": { "ok": false, "status": 429, "body": null, "error": "error" },
+        "numbers": { "ok": true, "status": 200, "body": { "$ref": "numbers_two" }, "error": null },
+        "caller_ids": { "ok": true, "status": 200, "body": { "$ref": "caller_ids_one" }, "error": null },
+        "calls": { "ok": true, "status": 200, "body": { "$ref": "calls_week" }, "error": null },
+        "alerts": { "ok": true, "status": 200, "body": { "$ref": "alerts_hostile" }, "error": null }
+      },
+      "expected": {
+        "outcome": "error",
+        "facts": {
+          "credential": "otp",
+          "account": null,
+          "numbers": { "count": 2, "truncated": false, "voiceCapable": 1, "smsCapable": 2, "items": [ { "last4": "0178", "voice": true, "sms": true }, { "last4": "0126", "voice": false, "sms": true } ] },
+          "callerIds": { "count": 1, "truncated": false },
+          "calls7d": { "total": 4, "truncated": false, "byStatus": { "completed": 2, "failed": 1, "no-answer": 1 } },
+          "alerts24h": { "total": 3, "truncated": false, "byCode": { "11200": 1, "60200": 2 }, "byLevel": { "error": 1, "warning": 2 } },
+          "errors": [ { "step": "account", "outcome": "error", "httpStatus": 429 } ]
+        }
+      }
+    },
+    {
+      "name": "C07 la cuenta responde 200 con un cuerpo de error de Twilio (cuerpo inesperado): error",
+      "credential": "otp",
+      "responses": {
+        "account": { "ok": true, "status": 200, "body": { "$ref": "twilio_error_body" }, "error": null },
+        "numbers": { "ok": true, "status": 200, "body": { "$ref": "numbers_two" }, "error": null },
+        "caller_ids": { "ok": true, "status": 200, "body": { "$ref": "caller_ids_one" }, "error": null },
+        "calls": { "ok": true, "status": 200, "body": { "$ref": "calls_week" }, "error": null },
+        "alerts": { "ok": true, "status": 200, "body": { "$ref": "alerts_hostile" }, "error": null }
+      },
+      "expected": {
+        "outcome": "error",
+        "facts": {
+          "credential": "otp",
+          "account": null,
+          "numbers": { "count": 2, "truncated": false, "voiceCapable": 1, "smsCapable": 2, "items": [ { "last4": "0178", "voice": true, "sms": true }, { "last4": "0126", "voice": false, "sms": true } ] },
+          "callerIds": { "count": 1, "truncated": false },
+          "calls7d": { "total": 4, "truncated": false, "byStatus": { "completed": 2, "failed": 1, "no-answer": 1 } },
+          "alerts24h": { "total": 3, "truncated": false, "byCode": { "11200": 1, "60200": 2 }, "byLevel": { "error": 1, "warning": 2 } },
+          "errors": [ { "step": "account", "outcome": "error", "httpStatus": 200 } ]
+        }
+      }
+    },
+    {
+      "name": "C08 la llave restringida no puede leer Monitor (403 en alertas): degraded",
+      "credential": "restricted_key",
+      "responses": {
+        "account": { "ok": true, "status": 200, "body": { "$ref": "account_full_active" }, "error": null },
+        "numbers": { "ok": true, "status": 200, "body": { "$ref": "numbers_two" }, "error": null },
+        "caller_ids": { "ok": true, "status": 200, "body": { "$ref": "caller_ids_one" }, "error": null },
+        "calls": { "ok": true, "status": 200, "body": { "$ref": "calls_week" }, "error": null },
+        "alerts": { "ok": false, "status": 403, "body": null, "error": "auth_failed" }
+      },
+      "expected": {
+        "outcome": "degraded",
+        "facts": {
+          "credential": "restricted_key",
+          "account": { "status": "active", "type": "Full" },
+          "numbers": { "count": 2, "truncated": false, "voiceCapable": 1, "smsCapable": 2, "items": [ { "last4": "0178", "voice": true, "sms": true }, { "last4": "0126", "voice": false, "sms": true } ] },
+          "callerIds": { "count": 1, "truncated": false },
+          "calls7d": { "total": 4, "truncated": false, "byStatus": { "completed": 2, "failed": 1, "no-answer": 1 } },
+          "alerts24h": null,
+          "errors": [ { "step": "alerts", "outcome": "auth_failed", "httpStatus": 403 } ]
+        }
+      }
+    },
+    {
+      "name": "C09 429 en las llamadas: degraded",
+      "credential": "otp",
+      "responses": {
+        "account": { "ok": true, "status": 200, "body": { "$ref": "account_full_active" }, "error": null },
+        "numbers": { "ok": true, "status": 200, "body": { "$ref": "numbers_two" }, "error": null },
+        "caller_ids": { "ok": true, "status": 200, "body": { "$ref": "caller_ids_one" }, "error": null },
+        "calls": { "ok": false, "status": 429, "body": null, "error": "error" },
+        "alerts": { "ok": true, "status": 200, "body": { "$ref": "alerts_hostile" }, "error": null }
+      },
+      "expected": {
+        "outcome": "degraded",
+        "facts": {
+          "credential": "otp",
+          "account": { "status": "active", "type": "Full" },
+          "numbers": { "count": 2, "truncated": false, "voiceCapable": 1, "smsCapable": 2, "items": [ { "last4": "0178", "voice": true, "sms": true }, { "last4": "0126", "voice": false, "sms": true } ] },
+          "callerIds": { "count": 1, "truncated": false },
+          "calls7d": null,
+          "alerts24h": { "total": 3, "truncated": false, "byCode": { "11200": 1, "60200": 2 }, "byLevel": { "error": 1, "warning": 2 } },
+          "errors": [ { "step": "calls", "outcome": "error", "httpStatus": 429 } ]
+        }
+      }
+    },
+    {
+      "name": "C10 tiempo agotado en las alertas: degraded",
+      "credential": "otp",
+      "responses": {
+        "account": { "ok": true, "status": 200, "body": { "$ref": "account_full_active" }, "error": null },
+        "numbers": { "ok": true, "status": 200, "body": { "$ref": "numbers_two" }, "error": null },
+        "caller_ids": { "ok": true, "status": 200, "body": { "$ref": "caller_ids_one" }, "error": null },
+        "calls": { "ok": true, "status": 200, "body": { "$ref": "calls_week" }, "error": null },
+        "alerts": { "ok": false, "status": null, "body": null, "error": "unreachable" }
+      },
+      "expected": {
+        "outcome": "degraded",
+        "facts": {
+          "credential": "otp",
+          "account": { "status": "active", "type": "Full" },
+          "numbers": { "count": 2, "truncated": false, "voiceCapable": 1, "smsCapable": 2, "items": [ { "last4": "0178", "voice": true, "sms": true }, { "last4": "0126", "voice": false, "sms": true } ] },
+          "callerIds": { "count": 1, "truncated": false },
+          "calls7d": { "total": 4, "truncated": false, "byStatus": { "completed": 2, "failed": 1, "no-answer": 1 } },
+          "alerts24h": null,
+          "errors": [ { "step": "alerts", "outcome": "unreachable", "httpStatus": null } ]
+        }
+      }
+    },
+    {
+      "name": "C11 cuerpo inesperado en los números (la lista es un texto con un teléfono): degraded",
+      "credential": "otp",
+      "responses": {
+        "account": { "ok": true, "status": 200, "body": { "$ref": "account_full_active" }, "error": null },
+        "numbers": { "ok": true, "status": 200, "body": { "$ref": "numbers_list_is_text" }, "error": null },
+        "caller_ids": { "ok": true, "status": 200, "body": { "$ref": "caller_ids_one" }, "error": null },
+        "calls": { "ok": true, "status": 200, "body": { "$ref": "calls_week" }, "error": null },
+        "alerts": { "ok": true, "status": 200, "body": { "$ref": "alerts_hostile" }, "error": null }
+      },
+      "expected": {
+        "outcome": "degraded",
+        "facts": {
+          "credential": "otp",
+          "account": { "status": "active", "type": "Full" },
+          "numbers": null,
+          "callerIds": { "count": 1, "truncated": false },
+          "calls7d": { "total": 4, "truncated": false, "byStatus": { "completed": 2, "failed": 1, "no-answer": 1 } },
+          "alerts24h": { "total": 3, "truncated": false, "byCode": { "11200": 1, "60200": 2 }, "byLevel": { "error": 1, "warning": 2 } },
+          "errors": [ { "step": "numbers", "outcome": "error", "httpStatus": 200 } ]
+        }
+      }
+    },
+    {
+      "name": "C12 cuerpo inesperado en los números (una entrada no es un objeto): degraded, sin recuentos a medias",
+      "credential": "otp",
+      "responses": {
+        "account": { "ok": true, "status": 200, "body": { "$ref": "account_full_active" }, "error": null },
+        "numbers": { "ok": true, "status": 200, "body": { "$ref": "numbers_entry_not_object" }, "error": null },
+        "caller_ids": { "ok": true, "status": 200, "body": { "$ref": "caller_ids_one" }, "error": null },
+        "calls": { "ok": true, "status": 200, "body": { "$ref": "calls_week" }, "error": null },
+        "alerts": { "ok": true, "status": 200, "body": { "$ref": "alerts_hostile" }, "error": null }
+      },
+      "expected": {
+        "outcome": "degraded",
+        "facts": {
+          "credential": "otp",
+          "account": { "status": "active", "type": "Full" },
+          "numbers": null,
+          "callerIds": { "count": 1, "truncated": false },
+          "calls7d": { "total": 4, "truncated": false, "byStatus": { "completed": 2, "failed": 1, "no-answer": 1 } },
+          "alerts24h": { "total": 3, "truncated": false, "byCode": { "11200": 1, "60200": 2 }, "byLevel": { "error": 1, "warning": 2 } },
+          "errors": [ { "step": "numbers", "outcome": "error", "httpStatus": 200 } ]
+        }
+      }
+    },
+    {
+      "name": "C13 cuerpos inesperados en los caller ID (un error de Twilio) y en las alertas (sin la lista): degraded, en el orden de los pasos",
+      "credential": "otp",
+      "responses": {
+        "alerts": { "ok": true, "status": 200, "body": { "$ref": "alerts_without_list" }, "error": null },
+        "account": { "ok": true, "status": 200, "body": { "$ref": "account_full_active" }, "error": null },
+        "numbers": { "ok": true, "status": 200, "body": { "$ref": "numbers_two" }, "error": null },
+        "caller_ids": { "ok": true, "status": 200, "body": { "$ref": "twilio_error_body" }, "error": null },
+        "calls": { "ok": true, "status": 200, "body": { "$ref": "calls_week" }, "error": null }
+      },
+      "expected": {
+        "outcome": "degraded",
+        "facts": {
+          "credential": "otp",
+          "account": { "status": "active", "type": "Full" },
+          "numbers": { "count": 2, "truncated": false, "voiceCapable": 1, "smsCapable": 2, "items": [ { "last4": "0178", "voice": true, "sms": true }, { "last4": "0126", "voice": false, "sms": true } ] },
+          "callerIds": null,
+          "calls7d": { "total": 4, "truncated": false, "byStatus": { "completed": 2, "failed": 1, "no-answer": 1 } },
+          "alerts24h": null,
+          "errors": [
+            { "step": "caller_ids", "outcome": "error", "httpStatus": 200 },
+            { "step": "alerts", "outcome": "error", "httpStatus": 200 }
+          ]
+        }
+      }
+    },
+    {
+      "name": "C14 se agotan los 30 s: llamadas y alertas saltadas, degraded",
+      "credential": "otp",
+      "responses": {
+        "account": { "ok": true, "status": 200, "body": { "$ref": "account_full_active" }, "error": null },
+        "numbers": { "ok": true, "status": 200, "body": { "$ref": "numbers_two" }, "error": null },
+        "caller_ids": { "ok": true, "status": 200, "body": { "$ref": "caller_ids_one" }, "error": null },
+        "calls": { "skipped": true },
+        "alerts": { "skipped": true }
+      },
+      "expected": {
+        "outcome": "degraded",
+        "facts": {
+          "credential": "otp",
+          "account": { "status": "active", "type": "Full" },
+          "numbers": { "count": 2, "truncated": false, "voiceCapable": 1, "smsCapable": 2, "items": [ { "last4": "0178", "voice": true, "sms": true }, { "last4": "0126", "voice": false, "sms": true } ] },
+          "callerIds": { "count": 1, "truncated": false },
+          "calls7d": null,
+          "alerts24h": null,
+          "errors": [
+            { "step": "calls", "outcome": "skipped", "httpStatus": null },
+            { "step": "alerts", "outcome": "skipped", "httpStatus": null }
+          ]
+        }
+      }
+    },
+    {
+      "name": "C15 valores fuera de los conjuntos cerrados: null en la ficha, other en los recuentos, last4 solo de un E.164 estricto",
+      "credential": "otp",
+      "responses": {
+        "account": { "ok": true, "status": 200, "body": { "$ref": "account_unknown_values" }, "error": null },
+        "numbers": { "ok": true, "status": 200, "body": { "$ref": "numbers_bad_values" }, "error": null },
+        "caller_ids": { "ok": true, "status": 200, "body": { "$ref": "caller_ids_one" }, "error": null },
+        "calls": { "ok": true, "status": 200, "body": { "$ref": "calls_odd_status" }, "error": null },
+        "alerts": { "ok": true, "status": 200, "body": { "$ref": "alerts_odd" }, "error": null }
+      },
+      "expected": {
+        "outcome": "ok",
+        "facts": {
+          "credential": "otp",
+          "account": { "status": null, "type": null },
+          "numbers": {
+            "count": 5, "truncated": false, "voiceCapable": 1, "smsCapable": 1,
+            "items": [
+              { "last4": null, "voice": false, "sms": false },
+              { "last4": null, "voice": false, "sms": false },
+              { "last4": null, "voice": true, "sms": false },
+              { "last4": null, "voice": false, "sms": false },
+              { "last4": "0958", "voice": false, "sms": true }
+            ]
+          },
+          "callerIds": { "count": 1, "truncated": false },
+          "calls7d": { "total": 5, "truncated": false, "byStatus": { "in-progress": 1, "other": 4 } },
+          "alerts24h": { "total": 6, "truncated": false, "byCode": { "30003": 1, "60200": 1, "other": 4 }, "byLevel": { "debug": 1, "notice": 1, "other": 3, "warning": 1 } },
+          "errors": []
+        }
+      }
+    },
+    {
+      "name": "C16 sobres de fallo raros: etiqueta que no existe y estado fuera de rango o que no es entero cuentan como error sin estado",
+      "credential": "otp",
+      "responses": {
+        "account": { "ok": true, "status": 200, "body": { "$ref": "account_full_active" }, "error": null },
+        "numbers": { "ok": false, "status": 999, "body": null, "error": "rate_limited" },
+        "caller_ids": { "ok": false, "status": "500", "body": null, "error": null },
+        "calls": { "ok": true, "status": 200, "body": { "$ref": "calls_week" }, "error": null },
+        "alerts": { "ok": true, "status": 200, "body": { "$ref": "alerts_hostile" }, "error": null }
+      },
+      "expected": {
+        "outcome": "degraded",
+        "facts": {
+          "credential": "otp",
+          "account": { "status": "active", "type": "Full" },
+          "numbers": null,
+          "callerIds": null,
+          "calls7d": { "total": 4, "truncated": false, "byStatus": { "completed": 2, "failed": 1, "no-answer": 1 } },
+          "alerts24h": { "total": 3, "truncated": false, "byCode": { "11200": 1, "60200": 2 }, "byLevel": { "error": 1, "warning": 2 } },
+          "errors": [
+            { "step": "numbers", "outcome": "error", "httpStatus": null },
+            { "step": "caller_ids", "outcome": "error", "httpStatus": null }
+          ]
+        }
+      }
+    },
+    {
+      "name": "C17 la cuenta dice ok pero sin cuerpo, y una lista JSON en lugar de la ficha cuentan como cuerpo inesperado: error",
+      "credential": "otp",
+      "responses": {
+        "account": { "ok": true, "status": 200, "body": null, "error": null },
+        "numbers": { "ok": true, "status": 200, "body": [ "+13105550178", "+16175550126" ], "error": null },
+        "caller_ids": { "skipped": true },
+        "calls": { "skipped": true },
+        "alerts": { "skipped": true }
+      },
+      "expected": {
+        "outcome": "error",
+        "facts": {
+          "credential": "otp",
+          "account": null, "numbers": null, "callerIds": null, "calls7d": null, "alerts24h": null,
+          "errors": [
+            { "step": "account", "outcome": "error", "httpStatus": 200 },
+            { "step": "numbers", "outcome": "error", "httpStatus": 200 },
+            { "step": "caller_ids", "outcome": "skipped", "httpStatus": null },
+            { "step": "calls", "outcome": "skipped", "httpStatus": null },
+            { "step": "alerts", "outcome": "skipped", "httpStatus": null }
+          ]
+        }
+      }
+    }
+  ]
+}

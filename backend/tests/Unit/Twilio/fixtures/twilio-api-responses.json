@@ -1,0 +1,428 @@
+{
+  "_meta": {
+    "fuente": "Forma pública de la API de Twilio consultada el 31-10-2026: Account (GET /2010-04-01/Accounts/{Sid}.json), las listas IncomingPhoneNumbers, OutgoingCallerIds y Calls de la API 2010-04-01, y Alerts de Monitor (GET https://monitor.twilio.com/v1/Alerts).",
+    "datos": "Ninguno real: SIDs inventados (AC, PN, CA, NO, SM), teléfonos de ficción (NANP 555-01xx y el rango de Ofcom 020 7946 0xxx), dominios .test, nombres inventados y un auth_token centinela.",
+    "hostil": "Los textos llevan a propósito teléfonos, URLs con credenciales y nombres de personas: nada de eso puede llegar a los hechos saneados.",
+    "escrito": "A mano. Si la API cambia de forma, se corrige aquí con la documentación del día, no al revés."
+  },
+
+  "account_full_active": {
+    "auth_token": "tok3n-c3ntin3la-de-la-cuenta-9f8e7d",
+    "date_created": "Thu, 04 Sep 2025 15:22:10 +0000",
+    "date_updated": "Fri, 30 Oct 2026 12:00:00 +0000",
+    "friendly_name": "Iron Body · recepción +1 (310) 555-0178",
+    "owner_account_sid": "ACdeadbeefdeadbeefdeadbeefdeadbeef",
+    "sid": "ACdeadbeefdeadbeefdeadbeefdeadbeef",
+    "status": "active",
+    "subresource_uris": {
+      "available_phone_numbers": "/2010-04-01/Accounts/ACdeadbeefdeadbeefdeadbeefdeadbeef/AvailablePhoneNumbers.json",
+      "calls": "/2010-04-01/Accounts/ACdeadbeefdeadbeefdeadbeefdeadbeef/Calls.json",
+      "incoming_phone_numbers": "/2010-04-01/Accounts/ACdeadbeefdeadbeefdeadbeefdeadbeef/IncomingPhoneNumbers.json",
+      "outgoing_caller_ids": "/2010-04-01/Accounts/ACdeadbeefdeadbeefdeadbeefdeadbeef/OutgoingCallerIds.json",
+      "messages": "/2010-04-01/Accounts/ACdeadbeefdeadbeefdeadbeefdeadbeef/Messages.json",
+      "balance": "/2010-04-01/Accounts/ACdeadbeefdeadbeefdeadbeefdeadbeef/Balance.json"
+    },
+    "type": "Full",
+    "uri": "/2010-04-01/Accounts/ACdeadbeefdeadbeefdeadbeefdeadbeef.json"
+  },
+
+  "account_trial_suspended": {
+    "auth_token": "tok3n-c3ntin3la-de-la-cuenta-9f8e7d",
+    "date_created": "Thu, 04 Sep 2025 15:22:10 +0000",
+    "date_updated": "Fri, 30 Oct 2026 12:00:00 +0000",
+    "friendly_name": "Cuenta de pruebas de Ana López",
+    "owner_account_sid": "ACdeadbeefdeadbeefdeadbeefdeadbeef",
+    "sid": "ACdeadbeefdeadbeefdeadbeefdeadbeef",
+    "status": "suspended",
+    "subresource_uris": {
+      "calls": "/2010-04-01/Accounts/ACdeadbeefdeadbeefdeadbeefdeadbeef/Calls.json"
+    },
+    "type": "Trial",
+    "uri": "/2010-04-01/Accounts/ACdeadbeefdeadbeefdeadbeefdeadbeef.json"
+  },
+
+  "account_unknown_values": {
+    "auth_token": "tok3n-c3ntin3la-de-la-cuenta-9f8e7d",
+    "friendly_name": "Llamar al +1 (415) 555-0162 antes de cerrar",
+    "owner_account_sid": "ACdeadbeefdeadbeefdeadbeefdeadbeef",
+    "sid": "ACdeadbeefdeadbeefdeadbeefdeadbeef",
+    "status": "frozen",
+    "type": "Enterprise",
+    "uri": "/2010-04-01/Accounts/ACdeadbeefdeadbeefdeadbeefdeadbeef.json"
+  },
+
+  "twilio_error_body": {
+    "code": 20003,
+    "message": "Authenticate: credencial de +12025550143 rechazada",
+    "more_info": "https://www.twilio.com/docs/errors/20003",
+    "status": 401
+  },
+
+  "numbers_two": {
+    "end": 1,
+    "first_page_uri": "/2010-04-01/Accounts/ACdeadbeefdeadbeefdeadbeefdeadbeef/IncomingPhoneNumbers.json?PageSize=20&Page=0",
+    "incoming_phone_numbers": [
+      {
+        "account_sid": "ACdeadbeefdeadbeefdeadbeefdeadbeef",
+        "address_requirements": "none",
+        "address_sid": null,
+        "api_version": "2010-04-01",
+        "beta": false,
+        "capabilities": { "fax": false, "mms": true, "sms": true, "voice": true },
+        "date_created": "Thu, 04 Sep 2025 15:40:02 +0000",
+        "date_updated": "Mon, 12 Oct 2026 09:13:44 +0000",
+        "emergency_address_sid": null,
+        "emergency_address_status": "unregistered",
+        "emergency_status": "Inactive",
+        "friendly_name": "(310) 555-0178",
+        "identity_sid": null,
+        "origin": "twilio",
+        "phone_number": "+13105550178",
+        "sid": "PN0123456789abcdef0123456789abcdef",
+        "sms_application_sid": "",
+        "sms_fallback_method": "POST",
+        "sms_fallback_url": "",
+        "sms_method": "POST",
+        "sms_url": "https://hooks.example.test/sms?token=hook-secret-1",
+        "status": "in-use",
+        "status_callback": "https://ops:hunter2@hooks.example.test/status",
+        "status_callback_method": "POST",
+        "subresource_uris": {
+          "assigned_add_ons": "/2010-04-01/Accounts/ACdeadbeefdeadbeefdeadbeefdeadbeef/IncomingPhoneNumbers/PN0123456789abcdef0123456789abcdef/AssignedAddOns.json"
+        },
+        "trunk_sid": null,
+        "uri": "/2010-04-01/Accounts/ACdeadbeefdeadbeefdeadbeefdeadbeef/IncomingPhoneNumbers/PN0123456789abcdef0123456789abcdef.json",
+        "voice_application_sid": "",
+        "voice_caller_id_lookup": false,
+        "voice_fallback_method": "POST",
+        "voice_fallback_url": "",
+        "voice_method": "POST",
+        "voice_receive_mode": "voice",
+        "voice_url": "https://hooks.example.test/voice",
+        "bundle_sid": null
+      },
+      {
+        "account_sid": "ACdeadbeefdeadbeefdeadbeefdeadbeef",
+        "address_requirements": "none",
+        "api_version": "2010-04-01",
+        "beta": false,
+        "capabilities": { "fax": false, "mms": false, "sms": true, "voice": false },
+        "friendly_name": "WhatsApp +1 617-555-0126 (no usar)",
+        "origin": "twilio",
+        "phone_number": "+16175550126",
+        "sid": "PNfedcba9876543210fedcba9876543210",
+        "sms_url": "https://hooks.example.test/sms",
+        "status": "in-use",
+        "uri": "/2010-04-01/Accounts/ACdeadbeefdeadbeefdeadbeefdeadbeef/IncomingPhoneNumbers/PNfedcba9876543210fedcba9876543210.json",
+        "voice_url": ""
+      }
+    ],
+    "next_page_uri": null,
+    "page": 0,
+    "page_size": 20,
+    "previous_page_uri": null,
+    "start": 0,
+    "uri": "/2010-04-01/Accounts/ACdeadbeefdeadbeefdeadbeefdeadbeef/IncomingPhoneNumbers.json?PageSize=20&Page=0"
+  },
+
+  "numbers_bad_values": {
+    "end": 4,
+    "incoming_phone_numbers": [
+      {
+        "capabilities": { "fax": false, "mms": true, "sms": 1, "voice": "true" },
+        "friendly_name": "Sede norte 310 555 0178",
+        "phone_number": "+1 310 555 0178",
+        "sid": "PN00000000000000000000000000000a01"
+      },
+      {
+        "friendly_name": "310-555-0178",
+        "phone_number": "3105550178",
+        "sid": "PN00000000000000000000000000000a02"
+      },
+      {
+        "capabilities": { "fax": false, "mms": false, "sms": false, "voice": true },
+        "phone_number": "+13105550178\n",
+        "sid": "PN00000000000000000000000000000a03"
+      },
+      {
+        "capabilities": "voice,sms",
+        "phone_number": 13105550178,
+        "sid": "PN00000000000000000000000000000a04"
+      },
+      {
+        "capabilities": { "fax": false, "mms": true, "sms": true, "voice": false },
+        "friendly_name": "Londres 020 7946 0958",
+        "phone_number": "+442079460958",
+        "sid": "PN00000000000000000000000000000a05"
+      }
+    ],
+    "next_page_uri": null,
+    "page": 0,
+    "page_size": 20,
+    "start": 0
+  },
+
+  "numbers_empty": {
+    "end": 0,
+    "first_page_uri": "/2010-04-01/Accounts/ACdeadbeefdeadbeefdeadbeefdeadbeef/IncomingPhoneNumbers.json?PageSize=20&Page=0",
+    "incoming_phone_numbers": [],
+    "next_page_uri": null,
+    "page": 0,
+    "page_size": 20,
+    "previous_page_uri": null,
+    "start": 0,
+    "uri": "/2010-04-01/Accounts/ACdeadbeefdeadbeefdeadbeefdeadbeef/IncomingPhoneNumbers.json?PageSize=20&Page=0"
+  },
+
+  "numbers_list_is_text": {
+    "incoming_phone_numbers": "+13105550178",
+    "page": 0,
+    "page_size": 20
+  },
+
+  "numbers_entry_not_object": {
+    "incoming_phone_numbers": [
+      {
+        "capabilities": { "fax": false, "mms": true, "sms": true, "voice": true },
+        "phone_number": "+13105550178",
+        "sid": "PN0123456789abcdef0123456789abcdef"
+      },
+      "+16175550126"
+    ],
+    "page": 0,
+    "page_size": 20
+  },
+
+  "caller_ids_one": {
+    "end": 0,
+    "first_page_uri": "/2010-04-01/Accounts/ACdeadbeefdeadbeefdeadbeefdeadbeef/OutgoingCallerIds.json?PageSize=20&Page=0",
+    "next_page_uri": null,
+    "outgoing_caller_ids": [
+      {
+        "account_sid": "ACdeadbeefdeadbeefdeadbeefdeadbeef",
+        "date_created": "Tue, 21 Oct 2025 18:02:51 +0000",
+        "date_updated": "Tue, 21 Oct 2025 18:02:51 +0000",
+        "friendly_name": "Móvil de la dueña +1 202-555-0143",
+        "phone_number": "+12025550143",
+        "sid": "PN1111aaaa2222bbbb3333cccc4444dddd",
+        "uri": "/2010-04-01/Accounts/ACdeadbeefdeadbeefdeadbeefdeadbeef/OutgoingCallerIds/PN1111aaaa2222bbbb3333cccc4444dddd.json"
+      }
+    ],
+    "page": 0,
+    "page_size": 20,
+    "previous_page_uri": null,
+    "start": 0,
+    "uri": "/2010-04-01/Accounts/ACdeadbeefdeadbeefdeadbeefdeadbeef/OutgoingCallerIds.json?PageSize=20&Page=0"
+  },
+
+  "caller_ids_empty": {
+    "end": 0,
+    "first_page_uri": "/2010-04-01/Accounts/ACdeadbeefdeadbeefdeadbeefdeadbeef/OutgoingCallerIds.json?PageSize=20&Page=0",
+    "next_page_uri": null,
+    "outgoing_caller_ids": [],
+    "page": 0,
+    "page_size": 20,
+    "previous_page_uri": null,
+    "start": 0,
+    "uri": "/2010-04-01/Accounts/ACdeadbeefdeadbeefdeadbeefdeadbeef/OutgoingCallerIds.json?PageSize=20&Page=0"
+  },
+
+  "calls_week": {
+    "calls": [
+      {
+        "account_sid": "ACdeadbeefdeadbeefdeadbeefdeadbeef",
+        "annotation": null,
+        "answered_by": null,
+        "api_version": "2010-04-01",
+        "caller_name": "Prospecto Pérez",
+        "date_created": "Tue, 27 Oct 2026 15:00:00 +0000",
+        "date_updated": "Tue, 27 Oct 2026 15:00:47 +0000",
+        "direction": "outbound-api",
+        "duration": "47",
+        "end_time": "Tue, 27 Oct 2026 15:00:47 +0000",
+        "forwarded_from": null,
+        "from": "+13105550178",
+        "from_formatted": "(310) 555-0178",
+        "group_sid": null,
+        "parent_call_sid": null,
+        "phone_number_sid": "PN0123456789abcdef0123456789abcdef",
+        "price": "-0.0130",
+        "price_unit": "USD",
+        "queue_time": "0",
+        "sid": "CA00000000000000000000000000000001",
+        "start_time": "Tue, 27 Oct 2026 15:00:00 +0000",
+        "status": "completed",
+        "subresource_uris": {
+          "recordings": "/2010-04-01/Accounts/ACdeadbeefdeadbeefdeadbeefdeadbeef/Calls/CA00000000000000000000000000000001/Recordings.json"
+        },
+        "to": "+13055550199",
+        "to_formatted": "(305) 555-0199",
+        "trunk_sid": null,
+        "uri": "/2010-04-01/Accounts/ACdeadbeefdeadbeefdeadbeefdeadbeef/Calls/CA00000000000000000000000000000001.json"
+      },
+      {
+        "account_sid": "ACdeadbeefdeadbeefdeadbeefdeadbeef",
+        "caller_name": null,
+        "direction": "outbound-api",
+        "duration": "0",
+        "from": "+13105550178",
+        "from_formatted": "(310) 555-0178",
+        "price": null,
+        "sid": "CA00000000000000000000000000000002",
+        "start_time": "Wed, 28 Oct 2026 16:10:00 +0000",
+        "status": "no-answer",
+        "to": "+17185550111",
+        "to_formatted": "(718) 555-0111",
+        "uri": "/2010-04-01/Accounts/ACdeadbeefdeadbeefdeadbeefdeadbeef/Calls/CA00000000000000000000000000000002.json"
+      },
+      {
+        "account_sid": "ACdeadbeefdeadbeefdeadbeefdeadbeef",
+        "caller_name": "PEREZ JUAN",
+        "direction": "inbound",
+        "duration": "125",
+        "from": "+17185550111",
+        "from_formatted": "(718) 555-0111",
+        "price": "-0.0085",
+        "sid": "CA00000000000000000000000000000003",
+        "start_time": "Thu, 29 Oct 2026 20:45:00 +0000",
+        "status": "completed",
+        "to": "+13105550178",
+        "to_formatted": "(310) 555-0178",
+        "uri": "/2010-04-01/Accounts/ACdeadbeefdeadbeefdeadbeefdeadbeef/Calls/CA00000000000000000000000000000003.json"
+      },
+      {
+        "account_sid": "ACdeadbeefdeadbeefdeadbeefdeadbeef",
+        "direction": "outbound-api",
+        "from": "+13105550178",
+        "sid": "CA00000000000000000000000000000004",
+        "start_time": "Fri, 30 Oct 2026 13:00:00 +0000",
+        "status": "failed",
+        "to": "+13055550199",
+        "uri": "/2010-04-01/Accounts/ACdeadbeefdeadbeefdeadbeefdeadbeef/Calls/CA00000000000000000000000000000004.json"
+      }
+    ],
+    "end": 3,
+    "first_page_uri": "/2010-04-01/Accounts/ACdeadbeefdeadbeefdeadbeefdeadbeef/Calls.json?PageSize=50&Page=0",
+    "next_page_uri": null,
+    "page": 0,
+    "page_size": 50,
+    "previous_page_uri": null,
+    "start": 0,
+    "uri": "/2010-04-01/Accounts/ACdeadbeefdeadbeefdeadbeefdeadbeef/Calls.json?PageSize=50&Page=0"
+  },
+
+  "calls_odd_status": {
+    "calls": [
+      { "sid": "CA00000000000000000000000000000011", "status": "in-progress", "to": "+13055550199" },
+      { "sid": "CA00000000000000000000000000000012", "status": "Completed", "to": "+13055550199" },
+      { "sid": "CA00000000000000000000000000000013", "status": "llamar al +13055550199", "to": "+13055550199" },
+      { "sid": "CA00000000000000000000000000000014", "to": "+17185550111" },
+      { "sid": "CA00000000000000000000000000000015", "status": 42, "to": "+17185550111" }
+    ],
+    "next_page_uri": null,
+    "page": 0,
+    "page_size": 50
+  },
+
+  "calls_empty": {
+    "calls": [],
+    "end": 0,
+    "first_page_uri": "/2010-04-01/Accounts/ACdeadbeefdeadbeefdeadbeefdeadbeef/Calls.json?PageSize=50&Page=0",
+    "next_page_uri": null,
+    "page": 0,
+    "page_size": 50,
+    "previous_page_uri": null,
+    "start": 0,
+    "uri": "/2010-04-01/Accounts/ACdeadbeefdeadbeefdeadbeefdeadbeef/Calls.json?PageSize=50&Page=0"
+  },
+
+  "alerts_hostile": {
+    "alerts": [
+      {
+        "account_sid": "ACdeadbeefdeadbeefdeadbeefdeadbeef",
+        "alert_text": "Msg=HTTP+retrieval+failure&sourceComponent=14100&httpResponse=502&url=https%3A%2F%2Fops%3Ahunter2%40hooks.example.test%2Fsms%3FFrom%3D%252B14155550162",
+        "api_version": "2010-04-01",
+        "date_created": "2026-10-30T14:05:11Z",
+        "date_generated": "2026-10-30T14:05:09Z",
+        "date_updated": "2026-10-30T14:05:12Z",
+        "error_code": "11200",
+        "log_level": "warning",
+        "more_info": "https://www.twilio.com/docs/errors/11200",
+        "request_method": "POST",
+        "request_url": "https://hooks.example.test/sms?From=%2B14155550162&Body=hola+Ana",
+        "request_variables": "From=%2B14155550162&To=%2B13105550178&Body=Hola+soy+Ana+L%C3%B3pez",
+        "response_body": "<Response><Message>+1 415 555 0162</Message></Response>",
+        "resource_sid": "SM00000000000000000000000000000001",
+        "service_sid": null,
+        "sid": "NO00000000000000000000000000000001",
+        "url": "https://monitor.twilio.com/v1/Alerts/NO00000000000000000000000000000001"
+      },
+      {
+        "account_sid": "ACdeadbeefdeadbeefdeadbeefdeadbeef",
+        "alert_text": "Invalid parameter `To`: +1 415 555 0162 (Ana López)",
+        "api_version": "2010-04-01",
+        "date_created": "2026-10-30T18:22:40Z",
+        "date_generated": "2026-10-30T18:22:40Z",
+        "date_updated": "2026-10-30T18:22:40Z",
+        "error_code": "60200",
+        "log_level": "error",
+        "more_info": "https://www.twilio.com/docs/errors/60200",
+        "request_method": "POST",
+        "request_url": "https://verify.twilio.com/v2/Services/VA00000000000000000000000000000001/Verifications",
+        "resource_sid": "VE00000000000000000000000000000001",
+        "service_sid": "VA00000000000000000000000000000001",
+        "sid": "NO00000000000000000000000000000002",
+        "url": "https://monitor.twilio.com/v1/Alerts/NO00000000000000000000000000000002"
+      },
+      {
+        "account_sid": "ACdeadbeefdeadbeefdeadbeefdeadbeef",
+        "alert_text": "Verificación a 415-555-0162 rechazada; ver https://hooks.example.test/admin?pass=hunter2",
+        "date_created": "2026-10-31T02:01:00Z",
+        "error_code": "60200",
+        "log_level": "warning",
+        "more_info": "https://www.twilio.com/docs/errors/60200",
+        "request_url": "https://verify.twilio.com/v2/Services/VA00000000000000000000000000000001/Verifications",
+        "sid": "NO00000000000000000000000000000003",
+        "url": "https://monitor.twilio.com/v1/Alerts/NO00000000000000000000000000000003"
+      }
+    ],
+    "meta": {
+      "first_page_url": "https://monitor.twilio.com/v1/Alerts?StartDate=2026-10-30T10%3A30%3A00Z&PageSize=50&Page=0",
+      "key": "alerts",
+      "next_page_url": null,
+      "page": 0,
+      "page_size": 50,
+      "previous_page_url": null,
+      "url": "https://monitor.twilio.com/v1/Alerts?StartDate=2026-10-30T10%3A30%3A00Z&PageSize=50&Page=0"
+    }
+  },
+
+  "alerts_odd": {
+    "alerts": [
+      { "sid": "NO00000000000000000000000000000011", "error_code": "3055550199", "log_level": "ERROR", "alert_text": "Llamar al 3055550199" },
+      { "sid": "NO00000000000000000000000000000012", "error_code": 30003, "log_level": "critical" },
+      { "sid": "NO00000000000000000000000000000013", "error_code": "", "log_level": "notice" },
+      { "sid": "NO00000000000000000000000000000014", "error_code": null, "log_level": null },
+      { "sid": "NO00000000000000000000000000000015", "error_code": "0", "log_level": "debug" },
+      { "sid": "NO00000000000000000000000000000016", "error_code": "60200", "log_level": "warning" }
+    ],
+    "meta": { "key": "alerts", "next_page_url": null, "page": 0, "page_size": 50 }
+  },
+
+  "alerts_empty": {
+    "alerts": [],
+    "meta": {
+      "first_page_url": "https://monitor.twilio.com/v1/Alerts?PageSize=50&Page=0",
+      "key": "alerts",
+      "next_page_url": null,
+      "page": 0,
+      "page_size": 50,
+      "previous_page_url": null,
+      "url": "https://monitor.twilio.com/v1/Alerts?PageSize=50&Page=0"
+    }
+  },
+
+  "alerts_without_list": {
+    "meta": { "key": "alerts", "next_page_url": null, "page": 0, "page_size": 50 }
+  }
+}
