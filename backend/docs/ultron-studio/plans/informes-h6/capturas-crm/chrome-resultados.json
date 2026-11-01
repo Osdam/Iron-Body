@@ -1,0 +1,718 @@
+{
+  "resultados": [
+    {
+      "nombre": "escritorio: la cabecera dice que es registro",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: estado con la nota de las banderas",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: las cinco áreas con su clasificación",
+      "ok": true,
+      "detalle": [
+        "meta_ads:connected_read",
+        "twilio:connected_otp_only",
+        "twilio_voice:not_configured",
+        "canaries:registry",
+        "elevenlabs:not_configured"
+      ]
+    },
+    {
+      "nombre": "escritorio estado: sin desplazamiento horizontal (1440 ≤ 1440; raíz 1160 ≤ 1160)",
+      "ok": true,
+      "detalle": {
+        "sw": 1440,
+        "cw": 1440,
+        "bw": 1440,
+        "rw": 1160,
+        "rc": 1160
+      }
+    },
+    {
+      "nombre": "escritorio: campañas sin botones y con el motivo (escrituras apagadas)",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: los dos carriles separados",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio campañas: sin desplazamiento horizontal (1440 ≤ 1440; raíz 1160 ≤ 1160)",
+      "ok": true,
+      "detalle": {
+        "sw": 1440,
+        "cw": 1440,
+        "bw": 1440,
+        "rw": 1160,
+        "rc": 1160
+      }
+    },
+    {
+      "nombre": "escritorio: canarios con el texto obligatorio",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: canarios sin registrar y con la bandera dicha una vez",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio canarios: sin desplazamiento horizontal (1440 ≤ 1440; raíz 1160 ≤ 1160)",
+      "ok": true,
+      "detalle": {
+        "sw": 1440,
+        "cw": 1440,
+        "bw": 1440,
+        "rw": 1160,
+        "rc": 1160
+      }
+    },
+    {
+      "nombre": "escritorio: sin botón de sonda y con su motivo",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio twilio: sin desplazamiento horizontal (1440 ≤ 1440; raíz 1160 ≤ 1160)",
+      "ok": true,
+      "detalle": {
+        "sw": 1440,
+        "cw": 1440,
+        "bw": 1440,
+        "rw": 1160,
+        "rc": 1160
+      }
+    },
+    {
+      "nombre": "escritorio: voz ELEVENLABS_NOT_CONFIGURED y sin llamadas",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: voz sin ningún botón",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio voz: sin desplazamiento horizontal (1440 ≤ 1440; raíz 1160 ≤ 1160)",
+      "ok": true,
+      "detalle": {
+        "sw": 1440,
+        "cw": 1440,
+        "bw": 1440,
+        "rw": 1160,
+        "rc": 1160
+      }
+    },
+    {
+      "nombre": "escritorio: en solo lectura no se escribió nada",
+      "ok": true,
+      "detalle": []
+    },
+    {
+      "nombre": "escritorio diálogo de asociar: sin desplazamiento horizontal (1440 ≤ 1440; raíz 1160 ≤ 1160)",
+      "ok": true,
+      "detalle": {
+        "sw": 1440,
+        "cw": 1440,
+        "bw": 1440,
+        "rw": 1160,
+        "rc": 1160
+      }
+    },
+    {
+      "nombre": "escritorio diálogo de asociar: el foco no sale del diálogo con Tab y Mayús+Tab",
+      "ok": true,
+      "detalle": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "nombre": "escritorio diálogo de asociar: el asistente flotante no tapa el botón",
+      "ok": true,
+      "detalle": {
+        "solapa": false,
+        "boton": [
+          886.421875,
+          596.578125,
+          960.609375,
+          630.578125
+        ],
+        "asistente": [
+          1368.9599609375,
+          371.60003662109375,
+          1401.5999755859375,
+          404.2400207519531
+        ]
+      }
+    },
+    {
+      "nombre": "escritorio: una sola petición de asociar",
+      "ok": true,
+      "detalle": [
+        "/meta/links",
+        "/meta/links/a1a1a1a1-0000-4000-8000-000000000001/deactivate"
+      ]
+    },
+    {
+      "nombre": "escritorio: las dos campañas quedan asociadas",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: desactivar lleva el aviso de datos personales",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: el historial tiene la desactivada con su motivo",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio campañas tras escribir: sin desplazamiento horizontal (1440 ≤ 1440; raíz 1160 ≤ 1160)",
+      "ok": true,
+      "detalle": {
+        "sw": 1440,
+        "cw": 1440,
+        "bw": 1440,
+        "rw": 1160,
+        "rc": 1160
+      }
+    },
+    {
+      "nombre": "escritorio: registrar avisa junto a cada campo sin pedir nada",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: el error junto al campo se ve en rojo (#fda4af)",
+      "ok": true,
+      "detalle": "rgb(253, 164, 175)"
+    },
+    {
+      "nombre": "escritorio: «Registrar» conserva su degradado con el ratón encima",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio diálogo de registrar: sin desplazamiento horizontal (1440 ≤ 1440; raíz 1160 ≤ 1160)",
+      "ok": true,
+      "detalle": {
+        "sw": 1440,
+        "cw": 1440,
+        "bw": 1440,
+        "rw": 1160,
+        "rc": 1160
+      }
+    },
+    {
+      "nombre": "escritorio diálogo de registrar: el foco no sale del diálogo con Tab y Mayús+Tab",
+      "ok": true,
+      "detalle": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "nombre": "escritorio diálogo de registrar: el asistente flotante no tapa el botón",
+      "ok": true,
+      "detalle": {
+        "solapa": false,
+        "boton": [
+          877.859375,
+          771.328125,
+          960.609375,
+          805.328125
+        ],
+        "asistente": [
+          1368.9599609375,
+          371.60003662109375,
+          1401.5999755859375,
+          404.2400207519531
+        ]
+      }
+    },
+    {
+      "nombre": "escritorio: vista previa enmascarada",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: el número nuevo está pendiente y enmascarado",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: el teléfono completo no está en la pantalla",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: cuatro ojos: el número propio no tiene «Autorizar» y dice por qué",
+      "ok": true,
+      "detalle": [
+        {
+          "boton": true,
+          "motivo": ""
+        },
+        {
+          "boton": false,
+          "motivo": "lockAutorizar: Nadie autoriza un número que registró: tiene que autorizarlo otra persona."
+        }
+      ]
+    },
+    {
+      "nombre": "escritorio canarios tras escribir: sin desplazamiento horizontal (1440 ≤ 1440; raíz 1160 ≤ 1160)",
+      "ok": true,
+      "detalle": {
+        "sw": 1440,
+        "cw": 1440,
+        "bw": 1440,
+        "rw": 1160,
+        "rc": 1160
+      }
+    },
+    {
+      "nombre": "escritorio: revocar voz dice que se borra el cifrado",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: Escape cierra y devuelve el foco a «Revocar»",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: el Administrador no ve «Autorizar» y lee la llave que le falta",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: el texto de la sonda junto al botón",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: tras el 429, el botón espera con cuenta atrás",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: el aviso del 429 se lee en su color de alerta (#fecdd3)",
+      "ok": true,
+      "detalle": "rgb(254, 205, 211)"
+    },
+    {
+      "nombre": "escritorio: dos clics, dos peticiones (la segunda, 429)",
+      "ok": true,
+      "detalle": [
+        "/twilio/probe",
+        "/twilio/probe",
+        "/config/acknowledge",
+        "/config/acknowledge"
+      ]
+    },
+    {
+      "nombre": "escritorio twilio: sin desplazamiento horizontal (1440 ≤ 1440; raíz 1160 ≤ 1160)",
+      "ok": true,
+      "detalle": {
+        "sw": 1440,
+        "cw": 1440,
+        "bw": 1440,
+        "rw": 1160,
+        "rc": 1160
+      }
+    },
+    {
+      "nombre": "escritorio: tras confirmar con la huella nueva, autorizada",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: backend H5: el texto de I10",
+      "ok": true
+    },
+    {
+      "nombre": "escritorio: el tablero sigue igual y enlaza «Integraciones»",
+      "ok": true
+    },
+    {
+      "nombre": "movil: la cabecera dice que es registro",
+      "ok": true
+    },
+    {
+      "nombre": "movil: estado con la nota de las banderas",
+      "ok": true
+    },
+    {
+      "nombre": "movil: las cinco áreas con su clasificación",
+      "ok": true,
+      "detalle": [
+        "meta_ads:connected_read",
+        "twilio:connected_otp_only",
+        "twilio_voice:not_configured",
+        "canaries:registry",
+        "elevenlabs:not_configured"
+      ]
+    },
+    {
+      "nombre": "movil estado: sin desplazamiento horizontal (390 ≤ 390; raíz 390 ≤ 390)",
+      "ok": true,
+      "detalle": {
+        "sw": 390,
+        "cw": 390,
+        "bw": 390,
+        "rw": 390,
+        "rc": 390
+      }
+    },
+    {
+      "nombre": "movil: campañas sin botones y con el motivo (escrituras apagadas)",
+      "ok": true
+    },
+    {
+      "nombre": "movil: los dos carriles separados",
+      "ok": true
+    },
+    {
+      "nombre": "movil campañas: sin desplazamiento horizontal (390 ≤ 390; raíz 390 ≤ 390)",
+      "ok": true,
+      "detalle": {
+        "sw": 390,
+        "cw": 390,
+        "bw": 390,
+        "rw": 390,
+        "rc": 390
+      }
+    },
+    {
+      "nombre": "movil: canarios con el texto obligatorio",
+      "ok": true
+    },
+    {
+      "nombre": "movil: canarios sin registrar y con la bandera dicha una vez",
+      "ok": true
+    },
+    {
+      "nombre": "movil canarios: sin desplazamiento horizontal (390 ≤ 390; raíz 390 ≤ 390)",
+      "ok": true,
+      "detalle": {
+        "sw": 390,
+        "cw": 390,
+        "bw": 390,
+        "rw": 390,
+        "rc": 390
+      }
+    },
+    {
+      "nombre": "movil: sin botón de sonda y con su motivo",
+      "ok": true
+    },
+    {
+      "nombre": "movil twilio: sin desplazamiento horizontal (390 ≤ 390; raíz 390 ≤ 390)",
+      "ok": true,
+      "detalle": {
+        "sw": 390,
+        "cw": 390,
+        "bw": 390,
+        "rw": 390,
+        "rc": 390
+      }
+    },
+    {
+      "nombre": "movil: voz ELEVENLABS_NOT_CONFIGURED y sin llamadas",
+      "ok": true
+    },
+    {
+      "nombre": "movil: voz sin ningún botón",
+      "ok": true
+    },
+    {
+      "nombre": "movil voz: sin desplazamiento horizontal (390 ≤ 390; raíz 390 ≤ 390)",
+      "ok": true,
+      "detalle": {
+        "sw": 390,
+        "cw": 390,
+        "bw": 390,
+        "rw": 390,
+        "rc": 390
+      }
+    },
+    {
+      "nombre": "movil: en solo lectura no se escribió nada",
+      "ok": true,
+      "detalle": []
+    },
+    {
+      "nombre": "movil diálogo de asociar: sin desplazamiento horizontal (390 ≤ 390; raíz 390 ≤ 390)",
+      "ok": true,
+      "detalle": {
+        "sw": 390,
+        "cw": 390,
+        "bw": 390,
+        "rw": 390,
+        "rc": 390
+      }
+    },
+    {
+      "nombre": "movil diálogo de asociar: el foco no sale del diálogo con Tab y Mayús+Tab",
+      "ok": true,
+      "detalle": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "nombre": "movil diálogo de asociar: el asistente flotante no tapa el botón",
+      "ok": true,
+      "detalle": {
+        "solapa": false,
+        "boton": [
+          168.96875,
+          771.015625,
+          293.015625,
+          815.015625
+        ],
+        "asistente": [
+          334.96002197265625,
+          331.60003662109375,
+          367.6000061035156,
+          364.2400207519531
+        ]
+      }
+    },
+    {
+      "nombre": "movil: una sola petición de asociar",
+      "ok": true,
+      "detalle": [
+        "/meta/links",
+        "/meta/links/a1a1a1a1-0000-4000-8000-000000000001/deactivate"
+      ]
+    },
+    {
+      "nombre": "movil: las dos campañas quedan asociadas",
+      "ok": true
+    },
+    {
+      "nombre": "movil: desactivar lleva el aviso de datos personales",
+      "ok": true
+    },
+    {
+      "nombre": "movil: el historial tiene la desactivada con su motivo",
+      "ok": true
+    },
+    {
+      "nombre": "movil campañas tras escribir: sin desplazamiento horizontal (390 ≤ 390; raíz 390 ≤ 390)",
+      "ok": true,
+      "detalle": {
+        "sw": 390,
+        "cw": 390,
+        "bw": 390,
+        "rw": 390,
+        "rc": 390
+      }
+    },
+    {
+      "nombre": "movil: registrar avisa junto a cada campo sin pedir nada",
+      "ok": true
+    },
+    {
+      "nombre": "movil: el error junto al campo se ve en rojo (#fda4af)",
+      "ok": true,
+      "detalle": "rgb(253, 164, 175)"
+    },
+    {
+      "nombre": "movil: «Registrar» conserva su degradado con el ratón encima",
+      "ok": true
+    },
+    {
+      "nombre": "movil diálogo de registrar: sin desplazamiento horizontal (390 ≤ 390; raíz 390 ≤ 390)",
+      "ok": true,
+      "detalle": {
+        "sw": 390,
+        "cw": 390,
+        "bw": 390,
+        "rw": 390,
+        "rc": 390
+      }
+    },
+    {
+      "nombre": "movil diálogo de registrar: el foco no sale del diálogo con Tab y Mayús+Tab",
+      "ok": true,
+      "detalle": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "nombre": "movil diálogo de registrar: el asistente flotante no tapa el botón",
+      "ok": true,
+      "detalle": {
+        "solapa": false,
+        "boton": [
+          164.6875,
+          771.015625,
+          293.015625,
+          815.015625
+        ],
+        "asistente": [
+          334.96002197265625,
+          331.60003662109375,
+          367.6000061035156,
+          364.2400207519531
+        ]
+      }
+    },
+    {
+      "nombre": "movil: vista previa enmascarada",
+      "ok": true
+    },
+    {
+      "nombre": "movil: el número nuevo está pendiente y enmascarado",
+      "ok": true
+    },
+    {
+      "nombre": "movil: el teléfono completo no está en la pantalla",
+      "ok": true
+    },
+    {
+      "nombre": "movil: cuatro ojos: el número propio no tiene «Autorizar» y dice por qué",
+      "ok": true,
+      "detalle": [
+        {
+          "boton": true,
+          "motivo": ""
+        },
+        {
+          "boton": false,
+          "motivo": "lockAutorizar: Nadie autoriza un número que registró: tiene que autorizarlo otra persona."
+        }
+      ]
+    },
+    {
+      "nombre": "movil canarios tras escribir: sin desplazamiento horizontal (390 ≤ 390; raíz 390 ≤ 390)",
+      "ok": true,
+      "detalle": {
+        "sw": 390,
+        "cw": 390,
+        "bw": 390,
+        "rw": 390,
+        "rc": 390
+      }
+    },
+    {
+      "nombre": "movil: revocar voz dice que se borra el cifrado",
+      "ok": true
+    },
+    {
+      "nombre": "movil: Escape cierra y devuelve el foco a «Revocar»",
+      "ok": true
+    },
+    {
+      "nombre": "movil: el Administrador no ve «Autorizar» y lee la llave que le falta",
+      "ok": true
+    },
+    {
+      "nombre": "movil: el texto de la sonda junto al botón",
+      "ok": true
+    },
+    {
+      "nombre": "movil: tras el 429, el botón espera con cuenta atrás",
+      "ok": true
+    },
+    {
+      "nombre": "movil: el aviso del 429 se lee en su color de alerta (#fecdd3)",
+      "ok": true,
+      "detalle": "rgb(254, 205, 211)"
+    },
+    {
+      "nombre": "movil: dos clics, dos peticiones (la segunda, 429)",
+      "ok": true,
+      "detalle": [
+        "/twilio/probe",
+        "/twilio/probe",
+        "/config/acknowledge",
+        "/config/acknowledge"
+      ]
+    },
+    {
+      "nombre": "movil twilio: sin desplazamiento horizontal (390 ≤ 390; raíz 390 ≤ 390)",
+      "ok": true,
+      "detalle": {
+        "sw": 390,
+        "cw": 390,
+        "bw": 390,
+        "rw": 390,
+        "rc": 390
+      }
+    },
+    {
+      "nombre": "movil: tras confirmar con la huella nueva, autorizada",
+      "ok": true
+    },
+    {
+      "nombre": "movil: backend H5: el texto de I10",
+      "ok": true
+    },
+    {
+      "nombre": "movil: el tablero sigue igual y enlaza «Integraciones»",
+      "ok": true
+    },
+    {
+      "nombre": "sin errores de JavaScript",
+      "ok": true,
+      "detalle": []
+    }
+  ],
+  "errores": []
+}
