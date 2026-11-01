@@ -1413,3 +1413,22 @@ Fuentes: `plans/informes-h6/informe-db.md` (§6, §10), `informe-voz.md`, `infor
 - **O-1** (security, nota): `\d{4,}` no detecta un teléfono escrito en grupos de 2 o 3 dígitos; es la regla literal y se revisa en el Hito 7.
 - **O-5** (nota): el validador privado de `usage-trigger` no reproduciría el vector `duplicateKeys` de Twilio; solo importa el día que se extraiga (fuera de alcance).
 - **O-6**: los fixtures propios de V y TW no sustituyen al oráculo: la paridad de `StudioIntegrationsParityTest` (paquete S) recorre las 22 secciones, incluidas `voiceDoctor`, `voiceVerify`, `voiceCallPolicy`, `elevenlabsSignature`, `elevenlabsEnvelope`, `twilioProbeSanitize` y `twilioSignatureOfficial`, llamando a las clases reales de V y TW.
+
+---
+
+## Enmienda 3 (01-11-2026): revisiones de seguridad y de la API (sin bloqueantes) y precisión de I13
+
+Fuentes: `plans/informes-h6/informe-security.md` (B-1, B-2, N-1…N-5) e `informe-api-security.md` (AS-1…AS-6). Ninguna es bloqueante, alta ni media.
+
+- **I13, huella del teléfono (B-1 = AS-4): corrección del texto.** La huella HMAC **sí se puede recuperar con la `APP_KEY`**: con la clave, la huella y los 4 últimos dígitos, una búsqueda sobre el espacio restante del número devuelve el teléfono en milisegundos. Lo que la huella garantiza es que **sin la clave** no es reversible y que la base no guarda el número en claro. Consecuencias: la `APP_KEY` protege también los teléfonos de los canarios (rotarla invalida las huellas; §8 del informe de DevOps del H5); revocar un número **no suprime** su huella, sus 4 dígitos ni su alias (filas de solo inserción); el procedimiento de supresión con el rol dueño (pendiente del Hito 7) cubre `ultron_studio_canary_numbers`. La subclave de las huellas comparte clave con `Workforce\Secrets` pero sus etiquetas nunca coinciden: no explotable.
+- **AS-1 (S y FE):** motivos de las rutas 48, 52 y 53, nota de la 55 y alias rechazan con 422 las series de 8 o más dígitos (`LeadSourceClassifier::DIGIT_RUN`) y los correos; cierra O-1 de la Enmienda 2. El CRM avisa en el diálogo.
+- **AS-2 (S):** `page` acotado en `GET integrations/meta/campaigns` (entero ≥ 1 con tope; nunca 500).
+- **B-2 (S):** al revocar, el libro anota el estado real leído dentro de la transacción (no el previo).
+- **N-1 (S):** un fallo del alta de un número distinto del duplicado registra solo la clase del error, nunca huella, dígitos, alias ni cifrado.
+- **N-3 (S, antes de reconocer la configuración de Twilio en la fase 2):** «base oficial» exige `https`, host exacto, sin puerto distinto del 443 ni credenciales en la URL.
+- **AS-5 = N-2 (OPS):** `h6-integrations-scope.sh probe on` comprueba que el entorno efectivo de la aplicación es `production` (`6241758`); fuera de `production` las bases de la sonda y de ElevenLabs aceptan cualquier host (como el cliente del laboratorio): queda anotado, sin cambio.
+- **N-4 (OPS):** el mando exige el modo 600 del fichero de entorno (aborta si no) y la vuelta atrás `writes off` se verifica además desde el proceso web con el smoke de la fase 1.
+- **N-5 (V):** el patrón del `agent_id` de ElevenLabs lleva `D`; la subclave que recibe `secretFingerprints()` va marcada como parámetro sensible.
+- **AS-3 (nota):** quien tiene `canary_manage` puede sondear si un número está registrado (409) o es el canario del motor (`isEngineCanary`); cada intento deja fila y evento permanentes y el tope de 10 vivos lo corta. Se revisa en el Hito 7 junto con quién puede activar antes de T2.
+- **AS-6 (nota):** `clientRequestId` vale por tabla, no entre tablas.
+- **Diferido al Hito 7:** procedimiento de supresión (cubre las 3 tablas nuevas), regla del alias, revisión de activación antes de T2, `ironbody-migrate` como root (ya conocido).
