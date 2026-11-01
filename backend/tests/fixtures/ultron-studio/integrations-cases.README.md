@@ -48,7 +48,7 @@ Tienen que reproducir cada `expected` **exactamente**. Si PHP o TS discrepan, se
 | Sección | Casos | Mínimo de I11 | Desglose |
 |---|---|---|---|
 | `phone` | 88 | 60 | 84 `parse` + 4 `masked` |
-| `alias` | 36 | 15 | — |
+| `alias` | 39 | 15 | — |
 | `fingerprint` | 18 | 8 vectores | 9 `vector` + 7 `invalidE164` + 2 `emptyKey` |
 | `canaryTransitions` | 121 | las 6 filas de I4.4 | 32 `register` + 19 `authorize` + 19 `activate` + 8 `deactivate` + 11 `revoke` + 16 `expectation` + 16 `actions` |
 | `coherence` | 34 | los 7 veredictos | — |

@@ -223,7 +223,7 @@ class StudioIntegrationsParityTest extends TestCase
             $this->assertCount(count($esperados), $vistos, "{$seccion}: ningún caso ajeno");
             $total += count($esperados);
         }
-        $this->assertSame(719, $total, 'los casos del fichero confirmado en 7df9ed9');
+        $this->assertSame(722, $total, 'los casos del fichero confirmado en 2582f10 (Enmienda 4: 3 casos de alias más)');
     }
 
     public function test_el_fixture_esta_y_trae_las_secciones_del_paquete_s(): void

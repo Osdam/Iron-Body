@@ -29,7 +29,7 @@ HERE = Path(__file__).resolve().parent
 FIXTURE = HERE.parent / "integrations-cases.json"
 BACKEND = HERE.parents[3]
 
-DECLARED = {"phone": 88, "alias": 36, "fingerprint": 18, "canaryTransitions": 121, "coherence": 34, "expectation": 24,
+DECLARED = {"phone": 88, "alias": 39, "fingerprint": 18, "canaryTransitions": 121, "coherence": 34, "expectation": 24,
             "campaignLinkRules": 64, "metaClassification": 39, "providerClassification": 21, "configFacts": 11, "configDrift": 8, "elevenlabsSignature": 52,
             "elevenlabsEnvelope": 13, "voiceDoctor": 38, "voiceVerify": 15, "voiceCallPolicy": 24, "twilioProbeSanitize": 28,
             "twilioSignatureOfficial": 7, "probeRules": 22, "acknowledgeRules": 9, "routeMatrix": 29, "errorOrder": 18}
@@ -184,6 +184,10 @@ def d_phone(c):
 ALIAS_OK = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789ÁÉÍÓÚÜÑáéíóúüñ .-_()")
 
 
+CONTACT_RUN = r"\+?[0-9](?:[^A-Za-z0-9ÁÉÍÓÚÜÑáéíóúüñ]{0,3}[0-9]){7,}"
+CONTACT_EMAIL = r"[^\s@]+@[^\s@]+\.[^\s@]+"
+
+
 def d_alias(c):
     a = c["alias"]
     if BUG == "alias:trim":
@@ -193,6 +197,10 @@ def d_alias(c):
     n = len(a.encode()) if BUG == "alias:bytes" else len(a)
     bad = not (3 <= n <= 40) or any(ch not in ALIAS_OK for ch in a) \
         or re.search(r"[0-9]{5,}" if BUG == "alias:run5" else r"[0-9]{4,}", a) is not None or "@" in a
+    # AS-1 (Enmienda 3) cierra O-1: un dato de contacto (8 o más dígitos con hasta 3 separadores que no sean
+    # letras ni dígitos entre ellos, o un correo) también invalida el alias. Variante errónea: alias:no_contact.
+    if BUG != "alias:no_contact" and (re.search(CONTACT_RUN, a) is not None or re.search(CONTACT_EMAIL, a) is not None):
+        bad = True
     return {"error": "invalid_alias" if bad else None}
 
 
@@ -1121,7 +1129,7 @@ NEEDS_FIXTURE = {"configDrift", "routeMatrix"}
 VARIANTS = [
     "phone:strip_all_whitespace", "phone:dollar_newline", "phone:unicode_digits", "phone:first_prefix", "phone:contains_prefix",
     "phone:channel_rule_any_country", "phone:whatsapp_allows_landline", "phone:country_before_format", "phone:masked_no_spaces",
-    "alias:bytes", "alias:trim", "alias:dollar_newline", "alias:run5",
+    "alias:bytes", "alias:trim", "alias:dollar_newline", "alias:no_contact", "alias:run5",
     "fingerprint:undecoded_key", "fingerprint:swapped_subkey", "fingerprint:no_subkey", "fingerprint:h5_label", "fingerprint:digits_only",
     "fingerprint:no_validation", "fingerprint:dollar_newline",
     "canaryTransitions:no_view_check", "canaryTransitions:integrity_before_status", "canaryTransitions:identity_by_name",

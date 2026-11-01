@@ -82,8 +82,8 @@ class ElevenLabsConfigTest extends TestCase
             'agente de 64 caracteres' => [self::completo(['agent_id' => str_repeat('a', 64)]), 'ELEVENLABS_DISABLED', [], 'default'],
             'agente con barra (ruta)' => [self::completo(['agent_id' => '../agents']), 'ELEVENLABS_NOT_CONFIGURED', ['agent_id'], 'default'],
             'agente con tilde' => [self::completo(['agent_id' => 'agénte']), 'ELEVENLABS_NOT_CONFIGURED', ['agent_id'], 'default'],
-            'agente con espacios alrededor: se recorta' => [self::completo(['agent_id' => ' agent_8a7f3c ']), 'ELEVENLABS_DISABLED', [], 'default'],
-            'agente con salto de línea final: se recorta' => [self::completo(['agent_id' => "agent_8a7f3c\n"]), 'ELEVENLABS_DISABLED', [], 'default'],
+            'agente con espacios alrededor: no se recorta, es inválido (N-5, Enmienda 4)' => [self::completo(['agent_id' => ' agent_8a7f3c ']), 'ELEVENLABS_NOT_CONFIGURED', ['agent_id'], 'default'],
+            'agente con salto de línea final: inválido (patrón con D, sin recorte)' => [self::completo(['agent_id' => "agent_8a7f3c\n"]), 'ELEVENLABS_NOT_CONFIGURED', ['agent_id'], 'default'],
             'agente vacío' => [self::completo(['agent_id' => '']), 'ELEVENLABS_NOT_CONFIGURED', ['agent_id'], 'default'],
             'región eu' => [self::completo(['region' => 'eu']), 'ELEVENLABS_DISABLED', [], 'eu'],
             'región EU: se pasa a minúsculas' => [self::completo(['region' => 'EU']), 'ELEVENLABS_DISABLED', [], 'eu'],
@@ -153,9 +153,10 @@ class ElevenLabsConfigTest extends TestCase
         }
     }
 
-    public function test_el_id_del_agente_sale_recortado_y_solo_si_es_valido(): void
+    public function test_el_id_del_agente_no_se_recorta_y_solo_sale_si_es_valido(): void
     {
-        $this->assertSame('agent_8a7f3c', self::con(self::completo(['agent_id' => ' agent_8a7f3c ']))->agentId());
+        $this->assertNull(self::con(self::completo(['agent_id' => ' agent_8a7f3c ']))->agentId());   // sin recorte (N-5, Enmienda 4): un espacio lo invalida, como el fixture voiceDoctor
+        $this->assertSame('agent_8a7f3c', self::con(self::completo(['agent_id' => 'agent_8a7f3c']))->agentId());
         $this->assertNull(self::con(self::completo(['agent_id' => 'agent/8a7f3c']))->agentId());
     }
 
