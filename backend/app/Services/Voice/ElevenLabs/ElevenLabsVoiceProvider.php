@@ -123,7 +123,7 @@ final class ElevenLabsVoiceProvider implements VoiceAgentProvider
      *
      * @throws InvalidArgumentException si $key === '' (una huella sin clave se podría comprobar contra un diccionario)
      */
-    public static function secretFingerprints(string $key): array
+    public static function secretFingerprints(#[\SensitiveParameter] string $key): array
     {
         if ($key === '') {
             throw new InvalidArgumentException('La clave de las huellas no puede estar vacía.');

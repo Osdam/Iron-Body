@@ -25,7 +25,7 @@ final class ElevenLabsConfig
     /** Lista CERRADA (solo las confirmadas en la documentación oficial al congelar). Otra región exige una enmienda. */
     public const REGIONS = ['default' => 'https://api.elevenlabs.io', 'eu' => 'https://api.eu.residency.elevenlabs.io'];
 
-    public const AGENT_ID_PATTERN = '/^[A-Za-z0-9_-]{1,64}$/';
+    public const AGENT_ID_PATTERN = '/^[A-Za-z0-9_-]{1,64}$/D';   // D: sin él PHP aceptaría un salto de línea final (N-5 de security, Enmienda 3)
 
     /** La región si `voice.elevenlabs.region` no existe (el defecto de `ELEVENLABS_REGION`). */
     public const DEFAULT_REGION = 'default';

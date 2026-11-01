@@ -107,6 +107,7 @@ DESDE_B=$(booleano "$DESDE"); NUEVO_B=$(booleano "$VALOR")
 ESPERADA=${ANTES/"\"$CAMPO\":$DESDE_B"/"\"$CAMPO\":$NUEVO_B"}
 [ "$ESPERADA" != "$ANTES" ] || aborta "no se pudo calcular la configuración esperada (¿cambió la forma de la lectura?)"
 DUENO=$(stat -c '%U:%G' "$ENVF"); MODO=$(stat -c '%a' "$ENVF")
+[ "$MODO" = 600 ] || aborta "el fichero de entorno tiene modo $MODO y se exige 600 (N-4 de security): corregirlo a mano antes de tocar nada"
 TS=$(date -u +%Y%m%d-%H%M%S)
 COPIA="/root/env-pre-h6-$MANDO-$VALOR-$TS"
 install -m 600 -o root -g root "$ENVF" "$COPIA"
