@@ -117,6 +117,12 @@ case "$ANTES" in
   *) CREDENCIAL='la del OTP (no hay clave restringida completa)' ;;
 esac
 [ "$MANDO" != probe ] || echo "   credencial que usará la sonda: $CREDENCIAL; solo GET, hosts oficiales en production, enfriamiento de 300 s"
+# AS-5 (api-security H6): los hosts fijos de la sonda dependen SOLO del entorno de la aplicación en «production»;
+# se comprueba el entorno efectivo (misma caché que el web) antes de encenderla, y fuera de production no se enciende.
+if [ "$MANDO $VALOR" = "probe on" ]; then
+  ENTORNO=$(sudo -u www-data php artisan tinker --execute='echo config("app.env"), PHP_EOL;' 2>&1 | tail -1) || true
+  case "$ENTORNO" in production) echo "   entorno efectivo de la aplicación: production (hosts oficiales fijos)" ;; *) aborta "el entorno efectivo de la aplicación no es production (su valor no se imprime): fuera de production la sonda no fija los hosts oficiales (AS-5); no se enciende" ;; esac
+fi
 
 set_var "$CLAVE" "$NUEVO_B"
 [ "$(stat -c '%U:%G %a' "$ENVF")" = "$DUENO $MODO" ] || { chown "$DUENO" "$ENVF"; chmod "$MODO" "$ENVF"; echo "   dueño y modo del fichero restaurados a $DUENO $MODO"; }
