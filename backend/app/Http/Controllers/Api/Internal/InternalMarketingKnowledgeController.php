@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\MarketingKnowledgeItem;
 use App\Services\Marketing\MarketingKnowledgeBaseService;
 use App\Services\Observability\ChannelLog;
+use App\Support\Text\InvisibleCharacters;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -43,6 +44,15 @@ use Illuminate\Validation\Rule;
  * propone no es aprobar. Hoy se hace desde el servidor
  * ({@see MarketingKnowledgeItem::approve()}); el panel del CRM es trabajo de
  * `backend` y usará `origin=human_panel`.
+ *
+ * INVISIBLES (H7, SEC7; AS-5 del H5). Quien aprueba lee el texto, y un
+ * carácter invisible es justo lo que no se lee: las etiquetas U+E0000–U+E007F
+ * llevan texto que un modelo sí lee, y un ZWSP dentro de la `key` crea un
+ * gemelo visual de un hecho aprobado que esquiva el 409. Aquí se LIMPIAN
+ * —la clase de {@see InvisibleCharacters}, la del laboratorio— en vez de
+ * rechazarse, porque un rechazo rompería el flujo de n8n; se limpia ANTES de
+ * validar y de buscar la `key`, se registra sin el contenido y la respuesta
+ * lo dice en `cleaned`.
  */
 class InternalMarketingKnowledgeController extends Controller
 {
@@ -112,6 +122,8 @@ class InternalMarketingKnowledgeController extends Controller
      */
     public function upsert(Request $request): JsonResponse
     {
+        $limpiados = $this->cleanInvisibles($request);
+
         $data = $request->validate([
             'category' => ['required', Rule::in(MarketingKnowledgeItem::CATEGORIES)],
             'key' => 'required|string|max:120',
@@ -153,6 +165,7 @@ class InternalMarketingKnowledgeController extends Controller
                 'code' => self::CODE_APPROVED,
                 'message' => 'Ese ítem ya está aprobado: la edición de conocimiento vigente la hace una persona identificada.',
                 'key' => $existing->key,
+                'cleaned' => $limpiados,
             ], 409);
         }
 
@@ -201,7 +214,127 @@ class InternalMarketingKnowledgeController extends Controller
             'published' => $item->isPublishable(),
             'review_status' => $item->review_status,
             'origin' => $item->origin,
+            // Los campos en los que se quitaron invisibles (vacío si ninguno):
+            // lo guardado no es byte a byte lo enviado.
+            'cleaned' => $limpiados,
             'message' => 'Guardado como borrador. No llega al asesor hasta que una persona lo apruebe.',
         ]);
+    }
+
+    /**
+     * Limpia los invisibles de `key`, `title`, `content` y de las cadenas de
+     * `metadata` (claves incluidas), y deja lo limpio en la petición para que
+     * la validación, los topes y la búsqueda de la `key` miren lo que se va a
+     * guardar. Lo que no es texto se deja a la validación (422 como siempre).
+     * `submitted_by` no hace falta: {@see MarketingKnowledgeItem::actorLabel()}
+     * ya lo reduce a ASCII.
+     *
+     * Un texto que solo eran invisibles queda vacío, y un `content` o una
+     * `key` vacíos son el 422 de siempre: no hay nada que proponer.
+     *
+     * @return list<string> los campos que se limpiaron
+     */
+    private function cleanInvisibles(Request $request): array
+    {
+        $cambios = [];
+        $porCampo = [];
+        $puntos = [];
+        $quitados = 0;
+        $utf8 = false;
+
+        $anotar = static function (string $campo, int $n, array $vistos, bool $invalido) use (&$porCampo, &$puntos, &$quitados, &$utf8): void {
+            $porCampo[$campo] = ($porCampo[$campo] ?? 0) + $n;
+            $quitados += $n;
+            $utf8 = $utf8 || $invalido;
+            foreach ($vistos as $p) {
+                $puntos[$p] = true;
+            }
+        };
+
+        foreach (['key', 'title', 'content'] as $campo) {
+            $valor = $request->input($campo);
+            if (! is_string($valor)) {
+                continue;
+            }
+            $r = InvisibleCharacters::clean($valor);
+            if ($r['removed'] > 0 || $r['invalidUtf8']) {
+                $cambios[$campo] = $r['text'];
+                $anotar($campo, $r['removed'], $r['codepoints'], $r['invalidUtf8']);
+            }
+        }
+
+        $metadata = $request->input('metadata');
+        if (is_array($metadata)) {
+            $tocado = false;
+            $limpia = self::cleanTree($metadata, static function (int $n, array $vistos, bool $invalido) use ($anotar, &$tocado): void {
+                $tocado = true;
+                $anotar('metadata', $n, $vistos, $invalido);
+            });
+            if ($tocado) {
+                $cambios['metadata'] = $limpia;
+            }
+        }
+
+        if ($cambios === []) {
+            return [];
+        }
+
+        $request->merge($cambios);
+
+        $listaPuntos = array_keys($puntos);
+        sort($listaPuntos, SORT_STRING);
+        $key = $request->input('key');
+        $proponente = $request->input('submitted_by');
+
+        ChannelLog::warning('marketing.knowledge.invisibles_cleaned', [
+            'key' => is_string($key) ? mb_substr($key, 0, 120) : null,
+            'fields' => $porCampo,
+            'removed' => $quitados,
+            // Puntos de código distintos, nunca el texto: las etiquetas
+            // U+E00xx delatan un intento de contrabando sin repetirlo.
+            'codepoints' => array_slice($listaPuntos, 0, InvisibleCharacters::CODEPOINTS_MAX),
+            'invalid_utf8' => $utf8,
+            'submitted_by' => MarketingKnowledgeItem::actorLabel(is_string($proponente) ? $proponente : null),
+        ]);
+
+        return array_keys($porCampo);
+    }
+
+    /**
+     * Las cadenas de un árbol (claves y valores), limpias. `$alLimpiar` se
+     * llama por cada cadena que cambió. Dos claves que limpias coinciden se
+     * quedan en una (la última): `metadata` no llega al prompt ni sale por
+     * {@see index()}, y un UTF-8 inválido en una clave reventaría el JSON.
+     *
+     * @param  array<array-key,mixed>  $arbol
+     * @param  callable(int,list<string>,bool):void  $alLimpiar
+     * @return array<array-key,mixed>
+     */
+    private static function cleanTree(array $arbol, callable $alLimpiar): array
+    {
+        $fuera = [];
+        foreach ($arbol as $clave => $valor) {
+            if (is_string($clave)) {
+                $r = InvisibleCharacters::clean($clave);
+                if ($r['removed'] > 0 || $r['invalidUtf8']) {
+                    $alLimpiar($r['removed'], $r['codepoints'], $r['invalidUtf8']);
+                    $clave = $r['text'];
+                }
+            }
+
+            if (is_string($valor)) {
+                $r = InvisibleCharacters::clean($valor);
+                if ($r['removed'] > 0 || $r['invalidUtf8']) {
+                    $alLimpiar($r['removed'], $r['codepoints'], $r['invalidUtf8']);
+                    $valor = $r['text'];
+                }
+            } elseif (is_array($valor)) {
+                $valor = self::cleanTree($valor, $alLimpiar);
+            }
+
+            $fuera[$clave] = $valor;
+        }
+
+        return $fuera;
     }
 }
