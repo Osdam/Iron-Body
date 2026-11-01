@@ -14,7 +14,7 @@ Estado REAL del proyecto, actualizado después de cada despliegue. Un hito solo 
 
 ## Protecciones vigentes (no se retiran sin autorización expresa)
 
-- El motor de ULTRON **no lee** nada del Studio: `StudioPublishing::ENGINE_READS_VERSIONS = false` y `ULTRON_STUDIO_PUBLISHING_ENABLED` apagada → publicar y revertir responden 409 siempre.
+- El motor de ULTRON **no lee** nada del Studio mientras `MARKETING_ULTRON_STUDIO_CONFIG=off` (fase 1 del Hito 5, en producción desde el 01-11-2026) y `ULTRON_STUDIO_PUBLISHING_ENABLED=false` → publicar y promover responden 409; revertir y Legacy no dependen de las llaves (contrato H5 §A5.3–A5.4). El código sabe leer desde `2bc053b` (`ENGINE_READS_VERSIONS = true`), pero con la llave en `off` ni consulta ni sella.
 - Sin llamadas reales, sin cambios en campañas Meta, sin ElevenLabs, sin consumo pagado sin autorización.
 - La aplicación corre en PostgreSQL con el rol solo-DML `iron_app`; las migraciones, con el rol dueño `iron` mediante `ironbody-migrate`.
 - **Tope de cuerpo de 64 KB** (65 536 bytes) en las 21 rutas del Studio, que responde 413 `payload_too_large`, y validación de listas en dos fases. Rige en producción desde el despliegue de G (19-10-2026, 06:00–06:04 UTC). Desde el despliegue del Hito 4 (25-10-2026) cubre también las 12 rutas `lab/*` (33 en total); en la rama del Hito 5, las 38.

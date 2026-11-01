@@ -75,9 +75,9 @@ La vista previa es solo frontend y no guarda nada en el servidor: revertirla no 
 - el `version.json` público trae el commit esperado y el Studio abre en fase `ready`;
 - 12 workers RUNNING (13 si `ironbody-lab` sigue instalado), ninguno en BACKOFF.
 
-## Hito 5 (gobierno y versionado) — PENDIENTE DE DESPLIEGUE; respaldo `/var/backups/ironbody/ultron-studio-h5-<fecha UTC>/` (lo crea el paso 3 del runbook del Hito 5, en `ULTRON_STUDIO_DEPLOYMENT_PLAN.md`)
+## Hito 5 (gobierno y versionado) — FASE 1 DESPLEGADA el 01-11-2026; respaldo `/var/backups/ironbody/ultron-studio-h5-20261101-011245/` (y CRM `crm-pre-ab78a6a-20261101-011457/`)
 
-**Estado (31-10-2026):** el Hito 5 no está desplegado ni en `origin/main`, y ningún paso de esta sección se ha ejecutado en producción. Producción sirve la API en `7318122` (el código del Hito 4 más trabajo de otros módulos) y el CRM en `4105016`. DevOps ensayó en local la vuelta del código a `fef7c87` con datos de H5 y la rotación de la `APP_KEY` (`plans/informes-h5/informe-devops-h5.md` §7.2 y §8). La vuelta a `7318122` no se ha ensayado; el código del Studio de los dos commits es el mismo (diff vacío en sus ficheros, comprobado el 31-10-2026). El resto se deduce del código y de las pruebas. Para quien opera, con o sin acceso al código.
+**Estado (01-11-2026):** fase 1 desplegada el 01-11-2026 01:12–01:16 UTC: producción sirve la API en `7ba0ce8` y el CRM en `ab78a6a`, con el motor en `off` y publicar en 409; fases 2 y 3 pendientes. *(Hasta el 31-10-2026: API `7318122`, CRM `4105016`, nada ejecutado.)* DevOps ensayó en local la vuelta del código a `fef7c87` con datos de H5 y la rotación de la `APP_KEY` (`plans/informes-h5/informe-devops-h5.md` §7.2 y §8). La vuelta a `7318122` no se ha ensayado; el código del Studio de los dos commits es el mismo (diff vacío en sus ficheros, comprobado el 31-10-2026). El resto se deduce del código y de las pruebas. Para quien opera, con o sin acceso al código.
 
 **Reglas que no cambian:**
 - **Nunca `migrate:rollback` / `down()` en producción.** Con filas de H5 se niega (contrato §A3.4) y, sin ellas, borraría la estructura de la cadena. Volver al código de H4 no lo necesita (§A3.5).
