@@ -22,9 +22,13 @@ use Tests\TestCase;
  *
  *  · La tabla tiene las columnas y los tipos del contrato (`effective_json`
  *    es `text`, nunca json/jsonb) y versiones no gana ninguna (§A3.3).
- *  · Recuentos del Studio: PG 43 disparadores y 49 CHECK con el Hito 6 (H5 solo: 30 y 27);
- *    SQLite 30 disparadores (H5 solo: 20). Si un hito posterior añade guardas,
- *    estos números se actualizan a conciencia, como el de rutas.
+ *  · Recuentos del Studio: PG 44 disparadores y 50 CHECK con los Hitos 6 y 7 (H5 solo: 30 y 27);
+ *    SQLite 32 disparadores (H5 solo: 20). Si un hito posterior añade guardas,
+ *    estos números se actualizan a conciencia, como el de rutas. El Hito 7
+ *    (2026_11_02_100001) añade a la cadena `uspub_chain_next` (los dos motores),
+ *    `uspub_seq_chk` (PG) y `uspub_seq_min` (SQLite): las entradas sembradas
+ *    aquí son la siguiente a la cabeza y apuntan a ella, y lo que se comprueba
+ *    del H5 son sus guardas (el down()/up() del H5 recrea la tabla sin las del H7).
  *  · La cadena es de solo inserción: P0001 en PG y 23000 en SQLite, con el
  *    texto de `ultron_studio_forbid()`.
  *  · `usv_status_chk` admite los 9 estados y rechaza el resto (23514, PG).
@@ -53,6 +57,9 @@ class UltronStudioPublicationSchemaTest extends TestCase
     private const NINE_STATUSES = ['DRAFT', 'VALIDATED', 'REVIEW_REQUIRED', 'APPROVED', 'REJECTED', 'CANARY', 'PUBLISHED', 'RETIRED', 'ROLLED_BACK'];
 
     private const H5_STATUSES = ['CANARY', 'PUBLISHED', 'RETIRED', 'ROLLED_BACK'];
+
+    /** Las guardas del Hito 7 sobre la cadena (2026_11_02_100001): disparadores de los dos motores y el CHECK de PG. */
+    private const H7_CHAIN_GUARDS = ['uspub_chain_next', 'uspub_seq_min', 'uspub_seq_chk'];
 
     /** Contrato §A3.1, en orden: columna → [tipo en PG, tipo en SQLite, NULL-able]. */
     private const COLUMNS = [
@@ -166,10 +173,10 @@ class UltronStudioPublicationSchemaTest extends TestCase
     public function test_recuentos_de_disparadores_y_check_del_studio(): void
     {
         if ($this->isPostgres()) {
-            $this->assertSame(['uspub_forbid_delete', 'uspub_forbid_truncate', 'uspub_forbid_update'], $this->triggersOn(self::TABLE));
-            $this->assertSame(43, $this->studioTriggerCount(), 'F 11 + laboratorio 16 + H5 3 + H6 13');
-            $this->assertSame(['uspub_action_chk', 'uspub_engine_contract_chk', 'uspub_reason_chk'], $this->checksOn(self::TABLE));
-            $this->assertSame(49, $this->studioCheckCount(), 'F 11 + laboratorio 13 + H5 3 + H6 22 (usv_status_chk y usae_subject_type_chk se sustituyen, no se suman)');
+            $this->assertSame(['uspub_chain_next', 'uspub_forbid_delete', 'uspub_forbid_truncate', 'uspub_forbid_update'], $this->triggersOn(self::TABLE));
+            $this->assertSame(44, $this->studioTriggerCount(), 'F 11 + laboratorio 16 + H5 3 + H6 13 + H7 1');
+            $this->assertSame(['uspub_action_chk', 'uspub_engine_contract_chk', 'uspub_reason_chk', 'uspub_seq_chk'], $this->checksOn(self::TABLE));
+            $this->assertSame(50, $this->studioCheckCount(), 'F 11 + laboratorio 13 + H5 3 + H6 22 + H7 1 (usv_status_chk y usae_subject_type_chk se sustituyen, no se suman)');
             // Los disparadores usan la función de F; H5 no crea otra ni una sobrecarga.
             $this->assertSame(1, (int) DB::selectOne("SELECT count(*) AS n FROM pg_proc WHERE proname = 'ultron_studio_forbid'")->n);
             $this->assertSame(3, (int) DB::selectOne(
@@ -178,8 +185,8 @@ class UltronStudioPublicationSchemaTest extends TestCase
             return;
         }
 
-        $this->assertSame(['uspub_forbid_delete', 'uspub_forbid_update'], $this->triggersOn(self::TABLE));
-        $this->assertSame(30, $this->studioTriggerCount(), 'F 7 + laboratorio 11 + H5 2 + H6 10');
+        $this->assertSame(['uspub_chain_next', 'uspub_forbid_delete', 'uspub_forbid_update', 'uspub_seq_min'], $this->triggersOn(self::TABLE));
+        $this->assertSame(32, $this->studioTriggerCount(), 'F 7 + laboratorio 11 + H5 2 + H6 10 + H7 2');
     }
 
     // ── La cadena es de solo inserción ──────────────────────────────────────
@@ -396,18 +403,22 @@ class UltronStudioPublicationSchemaTest extends TestCase
         }
     }
 
-    /** Tabla, disparadores, índices parciales y (en PG) CHECK de 9 estados: nada se deshizo. */
+    /**
+     * Tabla, disparadores, índices parciales y (en PG) CHECK de 9 estados: nada
+     * se deshizo. Solo las guardas del H5: las del Hito 7 están o no según si
+     * la prueba recreó la tabla con el down()/up() del H5.
+     */
     private function assertH5SchemaPresent(): void
     {
         $this->assertTrue(Schema::hasTable(self::TABLE));
         $this->assertSame(['usv_one_canary', 'usv_one_published'], $this->partialIndexesOnVersions());
         $this->assertSame(
             $this->isPostgres() ? ['uspub_forbid_delete', 'uspub_forbid_truncate', 'uspub_forbid_update'] : ['uspub_forbid_delete', 'uspub_forbid_update'],
-            $this->triggersOn(self::TABLE),
+            array_values(array_diff($this->triggersOn(self::TABLE), self::H7_CHAIN_GUARDS)),
         );
         if ($this->isPostgres()) {
             $this->assertSame(self::NINE_STATUSES, $this->statusCheckValues());
-            $this->assertSame(['uspub_action_chk', 'uspub_engine_contract_chk', 'uspub_reason_chk'], $this->checksOn(self::TABLE));
+            $this->assertSame(['uspub_action_chk', 'uspub_engine_contract_chk', 'uspub_reason_chk'], array_values(array_diff($this->checksOn(self::TABLE), self::H7_CHAIN_GUARDS)));
         }
     }
 
@@ -471,14 +482,18 @@ class UltronStudioPublicationSchemaTest extends TestCase
 
     /**
      * Una entrada válida: `publish` sobre una versión sembrada, salvo lo que se
-     * sobrescriba.
+     * sobrescriba. Es la SIGUIENTE a la cabeza de ahora y apunta a ella (lo
+     * exige `uspub_chain_next`, Hito 7): una inserción rechazada no consume
+     * número.
      *
      * @param  array<string, mixed>  $overrides
      * @return array<string, mixed>
      */
     private function publicationRow(array $overrides = []): array
     {
-        $json = '{"canary":null,"contract":"ultron-engine-config/1","entry":"x","issuedAt":"2026-10-25T00:00:00Z","rest":null,"seq":'.(++$this->seq).'}';
+        $cabeza = DB::table(self::TABLE)->orderByDesc('seq')->first(['id', 'seq']);
+        $this->seq = $cabeza === null ? 1 : (int) $cabeza->seq + 1;
+        $json = '{"canary":null,"contract":"ultron-engine-config/1","entry":"x","issuedAt":"2026-10-25T00:00:00Z","rest":null,"seq":'.$this->seq.'}';
 
         return array_merge([
             'uuid' => (string) Str::uuid(),
@@ -487,7 +502,7 @@ class UltronStudioPublicationSchemaTest extends TestCase
             'action' => 'publish',
             'version_id' => array_key_exists('version_id', $overrides) ? null : $this->insertVersion('APPROVED'),
             'restores_publication_id' => null,
-            'previous_publication_id' => null,
+            'previous_publication_id' => $cabeza === null ? null : (int) $cabeza->id,
             'engine_contract' => 'ultron-engine-config/1',
             'effective_json' => $json,
             'effective_hash' => hash('sha256', $json),

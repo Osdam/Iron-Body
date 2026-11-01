@@ -198,6 +198,16 @@ final class StudioCanaryNumbers
                 if ($vivos >= $max) {
                     throw UltronStudioException::canaryLiveLimit($max, $channel);
                 }
+                // H-2 del H6: el mismo teléfono ya vivo en el canal se contesta
+                // aquí, bajo el cerrojo de vivos, y no con el 23505 de
+                // `uscn_one_live`, cuyo DETAIL lleva la huella al log del
+                // servidor. El 23505 queda para la carrera real: una fila sin
+                // confirmar que no pasó por este cerrojo. El mismo predicado que
+                // el índice parcial; detrás del tope, para que el 409 que gana
+                // sea el de siempre.
+                if (StudioCanaryNumber::query()->where('channel', $channel)->where('phone_hash', $huella)->where('status', '<>', StudioCanaryNumber::STATUS_REVOKED)->exists()) {
+                    throw UltronStudioException::canaryNumberExists();
+                }
 
                 $ahora = now();
                 $yo = $access->snapshot();

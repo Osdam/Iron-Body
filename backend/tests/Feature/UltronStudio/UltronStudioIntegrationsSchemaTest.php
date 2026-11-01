@@ -24,9 +24,12 @@ use Tests\TestCase;
  *
  *  · Columnas y tipos de I3.1, I4.1 e I5.3; versiones y el libro no ganan
  *    columnas ni pierden guardas (en SQLite el libro ni se reconstruye).
- *  · Recuentos del Studio: PG 43 disparadores y 49 CHECK (antes 30 y 27);
- *    SQLite 30 disparadores (antes 20). Si un hito posterior añade guardas,
- *    estos números se actualizan a conciencia, como el de rutas.
+ *  · Recuentos del Studio: PG 44 disparadores y 50 CHECK (sin el H6: 31 y 28);
+ *    SQLite 32 disparadores (sin el H6: 22). Incluyen el Hito 7
+ *    (2026_11_02_100001: 1 disparador y 1 CHECK en PG, 2 disparadores en
+ *    SQLite, todos sobre la cadena del H5), que sigue ahí cuando el H6 hace
+ *    down(). Si un hito posterior añade guardas, estos números se actualizan a
+ *    conciencia, como el de rutas.
  *  · Cada disparador hace lo que dice: P0001 en PG y 23000 en SQLite, con el
  *    texto de `ultron_studio_forbid()`; cada CHECK (solo PG) da 23514.
  *  · La sustitución de una asociación (§I3.4, paso 11) pasa por la base en el
@@ -59,18 +62,22 @@ class UltronStudioIntegrationsSchemaTest extends TestCase
 
     private const GUARDS = '2026_11_01_100002_add_ultron_studio_integration_guards';
 
-    /** Recuentos de todo el Studio (tablas `ultron_studio_%`). */
-    private const PG_TRIGGERS_H5 = 30;   // F 11 + laboratorio 16 + H5 3
+    /**
+     * Recuentos de todo el Studio (tablas `ultron_studio_%`), con el Hito 7
+     * aplicado: `*_H5` es el esquema sin el H6 (el down() del H6 no toca las
+     * guardas del H7, que son de la cadena) y `*_H6`, con él.
+     */
+    private const PG_TRIGGERS_H5 = 31;   // F 11 + laboratorio 16 + H5 3 + H7 1
 
-    private const PG_TRIGGERS_H6 = 43;   // + asociaciones 5, canarios 5, instantáneas 3
+    private const PG_TRIGGERS_H6 = 44;   // + asociaciones 5, canarios 5, instantáneas 3
 
-    private const PG_CHECKS_H5 = 27;     // F 11 + laboratorio 13 + H5 3
+    private const PG_CHECKS_H5 = 28;     // F 11 + laboratorio 13 + H5 3 + H7 1
 
-    private const PG_CHECKS_H6 = 49;     // + 4, 12 y 6 (usae_subject_type_chk se sustituye, no se suma)
+    private const PG_CHECKS_H6 = 50;     // + 4, 12 y 6 (usae_subject_type_chk se sustituye, no se suma)
 
-    private const SQLITE_TRIGGERS_H5 = 20; // F 7 + laboratorio 11 + H5 2
+    private const SQLITE_TRIGGERS_H5 = 22; // F 7 + laboratorio 11 + H5 2 + H7 2
 
-    private const SQLITE_TRIGGERS_H6 = 30; // + 4, 4 y 2
+    private const SQLITE_TRIGGERS_H6 = 32; // + 4, 4 y 2
 
     /** Contrato §I3.1, en orden: columna → [tipo en PG, tipo en SQLite, NULL-able]. */
     private const LINK_COLUMNS = [
@@ -336,8 +343,8 @@ class UltronStudioIntegrationsSchemaTest extends TestCase
             foreach (self::PG_CHECKS as $tabla => $nombres) {
                 $this->assertSame($nombres, $this->checksOn($tabla), $tabla);
             }
-            $this->assertSame(self::PG_TRIGGERS_H6, $this->studioTriggerCount(), 'F 11 + laboratorio 16 + H5 3 + H6 13');
-            $this->assertSame(self::PG_CHECKS_H6, $this->studioCheckCount(), 'F 11 + laboratorio 13 + H5 3 + H6 22');
+            $this->assertSame(self::PG_TRIGGERS_H6, $this->studioTriggerCount(), 'F 11 + laboratorio 16 + H5 3 + H6 13 + H7 1');
+            $this->assertSame(self::PG_CHECKS_H6, $this->studioCheckCount(), 'F 11 + laboratorio 13 + H5 3 + H6 22 + H7 1');
 
             return;
         }
@@ -345,7 +352,7 @@ class UltronStudioIntegrationsSchemaTest extends TestCase
         foreach (self::PG_TRIGGERS as $tabla => $nombres) {
             $this->assertSame(array_values(array_filter($nombres, static fn (string $n): bool => ! str_ends_with($n, '_truncate'))), $this->triggersOn($tabla), $tabla);
         }
-        $this->assertSame(self::SQLITE_TRIGGERS_H6, $this->studioTriggerCount(), 'F 7 + laboratorio 11 + H5 2 + H6 10');
+        $this->assertSame(self::SQLITE_TRIGGERS_H6, $this->studioTriggerCount(), 'F 7 + laboratorio 11 + H5 2 + H6 10 + H7 2');
     }
 
     public function test_los_disparadores_reutilizan_la_funcion_de_f_con_su_mismo_cuerpo(): void
