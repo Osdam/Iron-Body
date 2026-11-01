@@ -7,7 +7,8 @@ decidido leyendo ULTRON_STUDIO_H6_CONTRACT.md. Aquí solo hay:
   - las primitivas criptográficas (hmac/hashlib) para los valores que no se
     pueden escribir a mano (huellas, firmas);
   - la serialización.
-Uso: python3 build.py <salida.json>
+Uso: python3 -I build.py [salida.json]   (por defecto, ../../integrations-cases.json)
+No lo ejecuta la suite: es la herramienta con la que se escribió el fixture.
 """
 import base64
 import hashlib
@@ -18,7 +19,7 @@ import unicodedata
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-OUT = Path(sys.argv[1])
+OUT = Path(sys.argv[1]) if len(sys.argv) > 1 else HERE.parent.parent / "integrations-cases.json"
 
 # ── Claves de prueba (sintéticas; nunca las de un entorno real) ─────────────
 B64KEY = "base64:" + base64.b64encode(bytes(range(32))).decode()   # bytes 00..1f
@@ -71,7 +72,7 @@ def tw_sig(token: str, base: str) -> str:
 # ── Colección de casos ──────────────────────────────────────────────────────
 ORDER = [
     "phone", "alias", "fingerprint", "canaryTransitions", "coherence", "expectation",
-    "campaignLinkRules", "metaClassification", "configFacts", "configDrift",
+    "campaignLinkRules", "metaClassification", "providerClassification", "configFacts", "configDrift",
     "elevenlabsSignature", "elevenlabsEnvelope", "voiceDoctor", "voiceVerify", "voiceCallPolicy",
     "twilioProbeSanitize", "twilioSignatureOfficial", "probeRules", "acknowledgeRules",
     "routeMatrix", "errorOrder",
@@ -94,24 +95,22 @@ def add(section: str, kind: str, desc: str, fields: dict, expected) -> dict:
 
 NS = dict(globals())
 for f in ["sec_phone.py", "sec_alias.py", "sec_fingerprint.py", "sec_canary.py", "sec_coherence.py",
-          "sec_expectation.py", "sec_campaign.py", "sec_meta.py", "sec_config.py", "sec_elevenlabs.py",
+          "sec_expectation.py", "sec_campaign.py", "sec_meta.py", "sec_status.py", "sec_config.py", "sec_elevenlabs.py",
           "sec_voice.py", "sec_twilio.py", "sec_api.py"]:
-    if (HERE / f).exists():  # PARCIAL: las secciones que faltan se saltan
-        exec(compile((HERE / f).read_text(encoding="utf-8"), f, "exec"), NS)
+    exec(compile((HERE / f).read_text(encoding="utf-8"), f, "exec"), NS)
 
 doc = {
     "version": 1,
     "catalogVersion": "2026-10-19.1",
-    "contract": "ULTRON_STUDIO_H6_CONTRACT.md (congelado el 31-10-2026)",
+    "contract": "ULTRON_STUDIO_H6_CONTRACT.md (congelado el 31-10-2026) y su Enmienda 1 (Q-1, Q-2)",
     "source": "escrito a mano desde ULTRON_STUDIO_H6_CONTRACT.md (I2–I7, I11); ver integrations-cases.README.md",
     "keys": {"appKeyBase64": B64KEY, "appKeyRaw": RAWKEY,
              "phoneFingerprintLabel": PHONE_LABEL.decode(), "configFingerprintLabel": CFG_LABEL.decode()},
+    "closedSets": NS["CLOSED_SETS"],
 }
-if "CLOSED_SETS" in NS:
-    doc["closedSets"] = NS["CLOSED_SETS"]
 for s in ORDER:
-    if SECTIONS[s]:
-        doc[s] = SECTIONS[s]
+    assert SECTIONS[s], f"sección vacía: {s}"
+    doc[s] = SECTIONS[s]
 
 
 def walk(o, path="$"):
