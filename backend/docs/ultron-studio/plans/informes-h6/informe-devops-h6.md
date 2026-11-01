@@ -2,7 +2,14 @@
 
 **Fecha:** 31-10-2026 (01-11 UTC). **Rama:** `feat/ultron-studio-h6` (worktree `_worktrees/ultron-h6`). **Modo:** todo en local; sin SSH, sin peticiones a producción, sin commit. **Entorno de todo lo ensayado: local (no es producción).** Producción, según el lead (no verificado por mí): API `7ba0ce8` (fase 1 del H5), 13 workers, `failed_jobs` 2, esquema 30/27, 11 tablas `ultron_studio_*`.
 
-**Ficheros (exclusivos de OPS):** `ops/deploy-h6-backend-fase1.sh`, `ops/h6-integrations-scope.sh`, `ops/smoke-h6.py`, `ops/smoke-run-h6.sh`, `ops/h6-schema-check.sql`, `ops/test_find_leaks_h6.py` (nuevo, autorizado) y este informe. El árbol ya venía sucio con trabajo ajeno (fixture del tester y paquete S); no lo he tocado.
+**Ficheros (exclusivos de OPS):** `ops/deploy-h6-backend-fase1.sh`, `ops/h6-integrations-scope.sh`, `ops/smoke-h6.py`, `ops/smoke-run-h6.sh`, `ops/h6-schema-check.sql`, `ops/test_find_leaks_h6.py` (nuevo, autorizado) y este informe, confirmados por el lead en `34ab7b3`. **Añadido el 01-11:** el banco local, ya en el repo en `ops/banco-h6/` (§8).
+
+**Actualización del 01-11-2026, sobre `d2c04a0`:** S confirmado en `4e6f5fe`, `origin/main` fusionado y `7ba0ce8` como ancestro (H-2 resuelto por el lead).
+- Con el banco del repo:
+  - despliegue con un 55P03 provocado → `FASE 1 (H6) COMPLETADA` (45 s; 124 ficheros del merge legibles por `www-data`);
+  - smoke F1 **78 + 26 OK**, F2 con la sonda apagada **73 + 26** y F2 con la sonda encendida **73 + 26**, con 0 FALLO y las 14 tablas idénticas en cada pasada.
+- Contra la rama real: exactamente las 2 migraciones del H6 y la puerta de diff vacía.
+- Pendiente: el ensayo contra el arnés E2E del CRM, cuando el lead avise de que S está en verde (§8).
 
 ## 0. En una pantalla
 
@@ -13,11 +20,17 @@
 | Funciones del entorno (`estado_var`, `presencia`, `set_var`) extraídas tal cual | **21/21** (sangría, `export`, `K = "v"`, repetidas, prefijos, sin salto final, inodo y modo conservados) |
 | Configuración efectiva por tinker contra el código de la rama | idéntica a la esperada de la fase 1 |
 | `h6-schema-check.sql` | antes 30/27/…/2/11, después 43/49/5-5-3/4-12-6/2/4/t/14; detecta un cerrojo abierto |
-| **Banco** (clon en `7ba0ce8`, `origin` = H6 + `origin/main` + instantánea del WIP de S, PG 14 con roles dueño/app) | despliegue limpio con **55P03 real reintentado → `FASE 1 (H6) COMPLETADA`** (46 s); reanudación sin duplicar; 6 negativas del paso 0; BACKOFF → desvío; 42501 → aborta sin `route:cache` |
+| **Banco** (clon en `7ba0ce8`, `origin` = H6 + `origin/main` + instantánea del WIP de S, PG 14 con roles dueño/app; repetido el 01-11 con el banco del repo sobre `d2c04a0`) | despliegue limpio con **55P03 real reintentado → `FASE 1 (H6) COMPLETADA`** (46 s); reanudación sin duplicar; 6 negativas del paso 0; BACKOFF → desvío; 42501 → aborta sin `route:cache` |
 | Alcance (`writes`/`probe`) en el banco | idas y vueltas `APLICADO`; `probe` añade la instantánea de Twilio, `writes` ninguna |
 | Smoke en el banco | F1 **78+26 OK**; F2 sonda apagada **73+26**; F2 sonda encendida **73+26**; 14 tablas idénticas; 0 FALLO |
 
-**Hallazgos para el lead (detalle en §7):** H-1 orden de la fase 2 (reconocer Twilio **después** de `probe on`); H-2 la rama del H6 no contiene `7ba0ce8`: hay que fusionar `origin/main` antes del push; H-3 el smoke cabe **3 veces por hora** (cupo de la sonda); H-4 `MIN_TABLAS=223`.
+**Hallazgos para el lead (detalle en §7):**
+- H-1: en la fase 2, reconocer Twilio **después** de `probe on`. Ya es orden obligatorio del runbook (§4).
+- H-2: la rama no contenía `7ba0ce8`. **Resuelto** con `d2c04a0`.
+- H-3: el smoke cabe **3 veces por hora**, por el cupo de la sonda.
+- H-4: `MIN_TABLAS=223`.
+
+H-3 y H-4 van como notas en los runbooks.
 
 ## 1. Impacto de la fase 1
 
@@ -102,7 +115,7 @@
 
 1. **Condiciones** (las del contrato, ninguna de devops):
    - puertas en verde: `reviewer`, `pgunit.sh`, suites del mismo día, E2E `h6-integrations` + regresión del H5 con la valla vacía, `security` y `api-security-specialist`;
-   - **fusionar `origin/main` en la rama del H6 y hacer push con avance rápido (H-2)**;
+   - la rama del H6 con `origin/main` fusionado (hecho en `d2c04a0`, H-2) y push con avance rápido;
    - `<commit>` = `git rev-parse --short=7 origin/main`.
 2. **Respaldo** (servidor, root):
 
@@ -117,6 +130,8 @@
    cp -a /var/www/api/backend/bootstrap/cache "$BK/bootstrap-cache"; cp -a /etc/supervisor/conf.d "$BK/supervisor-conf.d"
    stat -c '%a %U %n' "$BK" "$BK"/*; echo "BK=$BK"
    ```
+
+   > **Nota H-4.** El paso 0 exige que el volcado liste al menos 223 tablas: las 222 del volcado del H5 del 01-11 (antes de migrar) más `ultron_studio_publications`. Si aborta por eso, cuenta las tablas a mano (`pg_restore -l "$BK/ironbody.dump" | grep -c 'TABLE DATA'` frente a `SELECT count(*) FROM pg_tables WHERE schemaname = 'public'`) antes de pensar en bajar el umbral, que solo se cambia en un commit.
 3. **Copia de los scripts** (Mac, árbol en el commit desplegado):
 
    ```bash
@@ -138,6 +153,8 @@
    - 3 instantáneas `config/system`.
 8. **CRM:** `ops/deploy-crm.sh <build-crm> ab78a6a /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h6/Iron-Body_Front`. **El tercer argumento es obligatorio:** por defecto apunta al worktree del H5.
 9. **Smoke:** `ssh ironbody-vps 'SMOKE_PHASE=1 bash /root/smoke-run-h6.sh'` → código 0 (≈78 + 26 OK; 77 si Meta sale `degraded`).
+
+   > **Nota H-3.** Como mucho **3 smokes por hora** con la cuenta 32: el cupo de la sonda (6/h por persona) corre antes de autenticar, y cada smoke gasta 2 (Super Admin y Administrador). Una cuarta ejecución da 429 en la sonda, que cuenta como FALLO. También hay un tope de 3 por minuto, por el login (8/min por IP).
 10. **No regresión:**
     - la sonda n8n↔backend sin efectos (procedimiento del lead, como en el H5);
     - `SELECT max(started_at) FROM meta_sync_runs;` posterior al despliegue en la hora siguiente;
@@ -155,18 +172,22 @@
 
 ## 4. Runbook de la fase 2
 
-Con la fase 1 verificada 24 h y dos personas disponibles.
+Con la fase 1 verificada 24 h y dos personas disponibles. **El orden es obligatorio** (H-1): la huella de la configuración de Twilio incluye `facts.probe.enabled`. Si la configuración se reconoce antes de encender la sonda, `probe on` la deja en `drift`, y el criterio de cierre exige los 3 proveedores en `authorized`. Por eso el reconocimiento (paso 6) va **después** de `probe on` (paso 4).
+- Si alguien reconoció antes, se **vuelve a reconocer Twilio** después de `probe on`.
+- Si la sonda se apaga más tarde (`probe off on`), Twilio vuelve a `drift` hasta que se reconozca de nuevo.
 
 1. `bash /root/h6-integrations-scope.sh writes on off` → `APLICADO`.
-2. `SMOKE_PHASE=2 bash /root/smoke-run-h6.sh` → 0.
+2. `SMOKE_PHASE=2 bash /root/smoke-run-h6.sh` → 0. Hay que copiar antes otra vez `smoke-h6.py` y `smoke-run-h6.sh` a `/root/`: el lanzador borra sus copias al terminar.
 3. **T1 con personas reales:**
    - A (tiene el teléfono de la conversación canaria) registra el número de WhatsApp;
    - B (Super Admin, ≠ A) lo autoriza y lo activa → `in_sync`;
    - evidencia sin datos personales: `SELECT channel, status, registered_by_admin_id <> authorized_by_admin_id, activated_by_admin_id <> registered_by_admin_id FROM ultron_studio_canary_numbers WHERE status <> 'revoked';` y `SELECT event, actor_admin_id, created_at FROM ultron_studio_audit_events WHERE subject_type = 'canary_number' ORDER BY id;`.
-4. `bash /root/h6-integrations-scope.sh probe on off` → `APLICADO`, con una instantánea nueva de Twilio.
+4. `bash /root/h6-integrations-scope.sh probe on off` → `APLICADO`, con una instantánea de sistema nueva de Twilio (la huella cambió).
 5. **Una** pulsación de la sonda desde el CRM. Evidencia: `SELECT outcome, created_at FROM ultron_studio_integration_snapshots WHERE kind = 'probe' ORDER BY id DESC LIMIT 1;`.
-6. **Después** de 4 (H-1), un Super Admin reconoce `meta_ads`, `twilio` y `voice` → `authorized`.
-7. `SMOKE_PHASE=2` otra vez → 0. Como mucho 3 ejecuciones por hora.
+6. **Obligatorio después del paso 4:** un Super Admin reconoce `meta_ads`, `twilio` y `voice` → los tres en `authorized`. Comprobación: `SELECT provider, count(*) FROM ultron_studio_integration_snapshots WHERE kind = 'config' AND actor_type = 'admin' GROUP BY provider;` y `GET integrations/config`, sin `drift`.
+7. `SMOKE_PHASE=2` otra vez, con la sonda encendida → 0. Ese smoke **no** pulsa la sonda: le manda un cuerpo inválido, 422.
+
+> **Nota H-3.** Los smokes de esta fase cuentan para el mismo cupo que los de la fase 1: como mucho 3 por hora con la cuenta 32.
 
 ## 5. Vuelta atrás (niveles del contrato)
 
@@ -202,27 +223,41 @@ Con la fase 1 verificada 24 h y dos personas disponibles.
 
 ## 7. Hallazgos, riesgos y deuda
 
-- **H-1 (decisión del lead):** `facts.probe.enabled` forma parte de la huella de Twilio. Con el orden del contrato (reconocer → `probe on`), Twilio queda en `drift`. El runbook pone el reconocimiento después de la sonda, o lo repite.
-- **H-2:** la rama del H6 nace de `e1b1d26` y **no contiene `7ba0ce8`**. Sin fusionar `origin/main`, el paso 0 aborta («no es avance rápido»). En el banco, la fusión con `-X ours` solo tocó documentación.
+- **H-1 (incorporado al runbook de la fase 2 como orden obligatorio):** `facts.probe.enabled` forma parte de la huella de Twilio. Con el orden del contrato (reconocer → `probe on`), Twilio quedaría en `drift`.
+- **H-2 (resuelto por el lead):** la rama nacía de `e1b1d26` sin `7ba0ce8`. `d2c04a0` fusiona `origin/main`, y `PREVIO=7ba0ce8` sigue siendo correcto. Comprobado sobre la rama: entre `7ba0ce8` y `HEAD`, exactamente las 2 migraciones del H6 y la puerta de diff vacía.
 - **H-3:** el cupo de la sonda corre **antes** de autenticar. Los 403/409/422 del smoke gastan 2 de 6/h por persona, así que caben 3 smokes por hora.
   - Además, las llamadas denegadas desde la oficina comparten el cupo por red (20/h). Es informativo para `api-security-specialist`.
 - **H-4:** `MIN_TABLAS=223` = 222 del volcado del 01-11 más la tabla de publicaciones. Si aborta, contar a mano antes de bajarlo.
 - **Expectativas fijadas a hechos de producción:** los alias de Twilio coherentes (`true`) y 3 cuentas de Meta. Si cambian, el script lo marca como desvío.
 - **No verificado:**
   - GNU `stat`/`grep`, `sudo` real, el envoltorio `ironbody-migrate` real (en el banco hubo que vaciar la caché antes de migrar como dueño), los dueños reales, FPM viendo la caché nueva sin recargar, ni datos reales de Meta/Twilio;
-  - el código final de S: el banco usó su trabajo en curso (instantánea `7017583`).
+  - el arnés E2E con el smoke: pendiente del aviso del lead (§8). El banco ya se repitió con el código confirmado de S (`d2c04a0`).
 - **Secretos:** ninguno impreso. Las copias `/root/env-pre-h6-*` y `env.backup` llevan secretos (600); quitarlas lo decide el propietario.
-- **Banco local que queda:** base `ultron_studio_banco_h6` y herramientas en el scratchpad de la sesión (`…/scratchpad/devops-h6/banco-tools/{montar,preparar,sembrar}.sh`), **que se purga a los 3 días**. Se borran con `dropdb -h 127.0.0.1 -p 55432 -U ironbody ultron_studio_banco_h6`.
+- **Banco local:** las herramientas ya están en el repo (`ops/banco-h6/`, §8). En el clúster local queda la base `ultron_studio_banco_h6`; se borra con `dropdb -h 127.0.0.1 -p 55432 -U ironbody ultron_studio_banco_h6`, y el directorio del banco con `rm -rf`, siempre fuera del repo.
 
 ## 8. Pendiente de validar contra la pila real (comandos exactos)
 
-1. **Con S terminado:**
-   - `rm -rf <scratchpad>/devops-h6/banco && bash <scratchpad>/devops-h6/banco-tools/montar.sh && bash …/preparar.sh && bash …/sembrar.sh`;
-   - arrancar `php artisan serve --host=127.0.0.1 --port=8161 --no-reload` en `banco/api/backend` con `PGGSSENCMODE=disable`;
-   - `PATH=<banco>/bin:$PATH bash <banco>/root/deploy-h6-backend-fase1.sh $(cat <banco>/ESPERADO) <banco>/bk`;
-   - el smoke con `APP_DIR=<banco>/api/backend SMOKE_API=http://127.0.0.1:8161/api SMOKE_RUN_AS= SMOKE_PSQL="psql -X -Atq -h 127.0.0.1 -p 55432 -U ironbody -d ultron_studio_banco_h6" SMOKE_WORKDIR=<dir> SMOKE_PY=<ops>/smoke-h6.py SMOKE_ADMIN_ID=$(cat <banco>/ADMIN_ID) SMOKE_PHASE=1 bash <ops>/smoke-run-h6.sh`.
-2. **Arnés E2E:**
-   - `E2E_HOLD=1 bash e2e/ultron-studio/run.sh <backend> <crm> none`;
+1. **Banco local, ya en el repo** (`ops/banco-h6/`; ver su `README.md`).
+   - **Herramientas:**
+     - `montar.sh`: clon en `7ba0ce8` con `origin` = la ref; PG 14 con `h5_owner`/`h5_app`; fichero de entorno sintético; respaldo; sustitutos de `sudo`, `stat`, `supervisorctl`, `systemctl`, `sha256sum` e `ironbody-migrate`;
+     - `preparar.sh`, `sembrar.sh`, `api.sh`;
+     - `ensayar.sh` (`desplegar [--55p03] [--solo-comprobar]`, `alcance`, `smoke`);
+     - `prueba-entorno.sh` (23/23).
+   - **Garantías:** sin credenciales ni volcados en el repo, y se niega a montar el banco dentro de él.
+   - **Uso, con la ref confirmada en el worktree** (hecho el 01-11 sobre `d2c04a0`, en verde):
+
+     ```bash
+     O=backend/docs/ultron-studio/ops/banco-h6; B=${XDG_CACHE_HOME:-$HOME/.cache}/ironbody-banco-h6
+     bash $O/montar.sh $B && bash $O/api.sh $B start
+     bash $O/ensayar.sh $B desplegar --solo-comprobar && bash $O/ensayar.sh $B desplegar --55p03
+     bash $O/sembrar.sh $B && bash $O/ensayar.sh $B smoke 1
+     bash $O/ensayar.sh $B alcance writes on off && bash $O/ensayar.sh $B smoke 2
+     # sonda encendida: ULTRON_STUDIO_TWILIO_PROBE_BASE=http://127.0.0.1:9 en $B/api/backend/.env + config:cache, y luego
+     bash $O/ensayar.sh $B alcance probe on off && bash $O/ensayar.sh $B smoke 2
+     bash $O/ensayar.sh $B alcance probe off on && bash $O/ensayar.sh $B alcance writes off on && bash $O/api.sh $B stop
+     ```
+2. **Arnés E2E** (cuando el lead avise de que S está en verde; puertos 8092–8096, 8080, 4300 y 8099 libres):
+   - `E2E_HOLD=1 bash e2e/ultron-studio/run.sh <backend> <crm> none`, desde `_worktrees/ultron-h6/Iron-Body_Front`;
    - con la pila en pie: `php specs/h6-seed.php $RUN/backend meta-ads <cuentas de context.json>` y `canary-lead <wa_id>`;
    - un admin inactivo en `ultron_studio_e2e`;
    - el lanzador con `APP_DIR=$RUN/backend SMOKE_API=http://127.0.0.1:8092/api SMOKE_PSQL="psql -X -Atq -h 127.0.0.1 -p 55432 -U ironbody -d ultron_studio_e2e"` y `SMOKE_PHASE=1`;
