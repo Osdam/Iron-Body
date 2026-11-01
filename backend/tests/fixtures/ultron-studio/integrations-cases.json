@@ -2022,9 +2022,33 @@
       }
     },
     {
-      "name": "alias · aliasError · un teléfono en grupos de 2 no tiene serie de 4 (literal; ver O-1 del README)",
+      "name": "alias · aliasError · un teléfono en grupos de 2: 10 dígitos con separadores → dato de contacto (AS-1 de la Enmienda 3 cierra O-1)",
       "kind": "aliasError",
       "alias": "30 00 00 00 01",
+      "expected": {
+        "error": "invalid_alias"
+      }
+    },
+    {
+      "name": "alias · aliasError · 8 dígitos en grupos de 2 con separadores: dato de contacto (AS-1)",
+      "kind": "aliasError",
+      "alias": "Caja 30 00 00 01",
+      "expected": {
+        "error": "invalid_alias"
+      }
+    },
+    {
+      "name": "alias · aliasError · 7 dígitos en grupos: no llega a 8, vale",
+      "kind": "aliasError",
+      "alias": "Caja 30 00 00 1",
+      "expected": {
+        "error": null
+      }
+    },
+    {
+      "name": "alias · aliasError · un correo dentro del alias sin arroba no es correo; con arroba ya lo rechazaba",
+      "kind": "aliasError",
+      "alias": "Caja correo punto com",
       "expected": {
         "error": null
       }
@@ -25406,14 +25430,14 @@
             "code": "forbidden"
           },
           {
-            "check": "shape",
-            "status": 422,
-            "code": null
-          },
-          {
             "check": "permission",
             "status": 403,
             "code": "forbidden"
+          },
+          {
+            "check": "shape",
+            "status": 422,
+            "code": null
           },
           {
             "check": "writesFlag",
@@ -25510,14 +25534,14 @@
             "code": "forbidden"
           },
           {
-            "check": "shape",
-            "status": 422,
-            "code": null
-          },
-          {
             "check": "permission",
             "status": 403,
             "code": "forbidden"
+          },
+          {
+            "check": "shape",
+            "status": 422,
+            "code": null
           },
           {
             "check": "writesFlag",
@@ -25569,14 +25593,14 @@
             "code": "forbidden"
           },
           {
-            "check": "shape",
-            "status": 422,
-            "code": null
-          },
-          {
             "check": "permission",
             "status": 403,
             "code": "forbidden"
+          },
+          {
+            "check": "shape",
+            "status": 422,
+            "code": null
           },
           {
             "check": "writesFlag",
@@ -25653,14 +25677,14 @@
             "code": "forbidden"
           },
           {
-            "check": "shape",
-            "status": 422,
-            "code": null
-          },
-          {
             "check": "permission",
             "status": 403,
             "code": "forbidden"
+          },
+          {
+            "check": "shape",
+            "status": 422,
+            "code": null
           },
           {
             "check": "writesFlag",
@@ -25717,14 +25741,14 @@
             "code": "forbidden"
           },
           {
-            "check": "shape",
-            "status": 422,
-            "code": null
-          },
-          {
             "check": "permission",
             "status": 403,
             "code": "forbidden"
+          },
+          {
+            "check": "shape",
+            "status": 422,
+            "code": null
           },
           {
             "check": "writesFlag",
@@ -25786,14 +25810,14 @@
             "code": "forbidden"
           },
           {
-            "check": "shape",
-            "status": 422,
-            "code": null
-          },
-          {
             "check": "permission",
             "status": 403,
             "code": "forbidden"
+          },
+          {
+            "check": "shape",
+            "status": 422,
+            "code": null
           },
           {
             "check": "writesFlag",
@@ -25845,14 +25869,14 @@
             "code": "forbidden"
           },
           {
-            "check": "shape",
-            "status": 422,
-            "code": null
-          },
-          {
             "check": "permission",
             "status": 403,
             "code": "forbidden"
+          },
+          {
+            "check": "shape",
+            "status": 422,
+            "code": null
           },
           {
             "check": "writesFlag",
@@ -25904,14 +25928,14 @@
             "code": "forbidden"
           },
           {
-            "check": "shape",
-            "status": 422,
-            "code": null
-          },
-          {
             "check": "permission",
             "status": 403,
             "code": "forbidden"
+          },
+          {
+            "check": "shape",
+            "status": 422,
+            "code": null
           },
           {
             "check": "writesFlag",
@@ -25978,14 +26002,14 @@
             "code": "forbidden"
           },
           {
-            "check": "shape",
-            "status": 422,
-            "code": null
-          },
-          {
             "check": "permission",
             "status": 403,
             "code": "forbidden"
+          },
+          {
+            "check": "shape",
+            "status": 422,
+            "code": null
           },
           {
             "check": "replay",
@@ -26037,14 +26061,14 @@
             "code": "forbidden"
           },
           {
-            "check": "shape",
-            "status": 422,
-            "code": null
-          },
-          {
             "check": "permission",
             "status": 403,
             "code": "forbidden"
+          },
+          {
+            "check": "shape",
+            "status": 422,
+            "code": null
           },
           {
             "check": "probeFlag",

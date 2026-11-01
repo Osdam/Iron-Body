@@ -57,7 +57,7 @@ final class ElevenLabsConfig
         $region = $c['region'] ?? self::DEFAULT_REGION;
         $region = is_string($region) ? strtolower(trim($region)) : '';
 
-        $agente = is_string($c['agent_id'] ?? null) ? trim($c['agent_id']) : '';
+        $agente = is_string($c['agent_id'] ?? null) ? $c['agent_id'] : '';   // sin trim: el patrón (con D) decide; un salto de línea final se rechaza (N-5, fixture voiceDoctor)
 
         $base = is_string($c['base_url'] ?? null) ? trim($c['base_url']) : '';
 

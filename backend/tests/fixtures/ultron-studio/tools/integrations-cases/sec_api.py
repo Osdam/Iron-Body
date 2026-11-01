@@ -153,31 +153,34 @@ def S(check, status, code=None):
     return {"check": check, "status": status, "code": code}
 
 
-HEAD = [S("session", 401), S("gate", 403), S("person", 403, "person_required"), S("view", 403, "forbidden"), S("shape", 422)]
+HEADV = [S("session", 401), S("gate", 403), S("person", 403, "person_required"), S("view", 403, "forbidden")]
+SHAPE = S("shape", 422)
+HEAD = HEADV + [SHAPE]                      # lecturas: la llave es ultron.view (paso «view»)
 PERM = S("permission", 403, "forbidden")
+HEADW = HEADV + [PERM, SHAPE]               # escrituras: la llave de la ruta la exige la puerta de AuthorizationMap ANTES de validar la forma (Enmienda 4)
 WRITES = S("writesFlag", 409, "integrations_writes_disabled")
 REPLAY = [S("replay", 200, "replayed"), S("replayMismatch", 409, "client_request_reused")]
 ORDERS = {n: HEAD + [S("done", 200)] for n in range(39, 47)}
-ORDERS[47] = HEAD + [PERM, WRITES] + REPLAY + [
+ORDERS[47] = HEADW + [WRITES] + REPLAY + [
     S("metaConfigured", 409, "meta_not_configured"), S("campaignResolves", 404, "campaign_not_found"),
     S("versionExists", 404, "version_not_found"), S("versionLinkable", 409, "version_not_linkable"), S("versionIntegrity", 409, "integrity_mismatch"),
     S("noActiveWithoutReplaces", 409, "campaign_already_linked"), S("replacesIsActive", 409, "campaign_link_moved"),
     S("activeLimit", 409, "campaign_links_limit"), S("uniqueViolation", 409, "campaign_already_linked"), S("done", 201)]
-ORDERS[48] = HEAD + [PERM, WRITES, S("linkExists", 404, "link_not_found"), S("state", 409, "invalid_transition"), S("done", 200)]
-ORDERS[49] = HEAD + [PERM, WRITES] + REPLAY + [
+ORDERS[48] = HEADW + [WRITES, S("linkExists", 404, "link_not_found"), S("state", 409, "invalid_transition"), S("done", 200)]
+ORDERS[49] = HEADW + [WRITES] + REPLAY + [
     S("versionExists", 404, "version_not_found"), S("versionLinkable", 409, "version_not_linkable"), S("versionIntegrity", 409, "integrity_mismatch"),
     S("liveLimit", 409, "canary_live_limit"), S("uniqueViolation", 409, "canary_number_exists"), S("done", 201)]
-ORDERS[50] = HEAD + [PERM, WRITES, S("numberExists", 404, "canary_not_found"), S("identity", 403, "four_eyes_required"),
+ORDERS[50] = HEADW + [WRITES, S("numberExists", 404, "canary_not_found"), S("identity", 403, "four_eyes_required"),
                      S("state", 409, "invalid_transition"), S("done", 200)]
-ORDERS[51] = HEAD + [PERM, WRITES, S("numberExists", 404, "canary_not_found"), S("identity", 403, "four_eyes_required"),
+ORDERS[51] = HEADW + [WRITES, S("numberExists", 404, "canary_not_found"), S("identity", 403, "four_eyes_required"),
                      S("state", 409, "invalid_transition"), S("activeLimit", 409, "canary_active_limit"), S("done", 200)]
-ORDERS[52] = HEAD + [PERM, WRITES, S("numberExists", 404, "canary_not_found"), S("state", 409, "invalid_transition"), S("done", 200)]
+ORDERS[52] = HEADW + [WRITES, S("numberExists", 404, "canary_not_found"), S("state", 409, "invalid_transition"), S("done", 200)]
 ORDERS[53] = list(ORDERS[52])
-ORDERS[54] = HEAD + [PERM, WRITES, S("numberExists", 404, "canary_not_found"), S("state", 409, "invalid_transition"),
+ORDERS[54] = HEADW + [WRITES, S("numberExists", 404, "canary_not_found"), S("state", 409, "invalid_transition"),
                      S("versionExists", 404, "version_not_found"), S("versionLinkable", 409, "version_not_linkable"),
                      S("versionIntegrity", 409, "integrity_mismatch"), S("done", 200)]
-ORDERS[55] = HEAD + [PERM] + REPLAY + [S("fingerprintIsEffective", 409, "config_changed"), S("done", 201)]
-ORDERS[56] = HEAD + [PERM, S("probeFlag", 409, "probe_disabled")] + REPLAY + [
+ORDERS[55] = HEADW + REPLAY + [S("fingerprintIsEffective", 409, "config_changed"), S("done", 201)]
+ORDERS[56] = HEADW + [S("probeFlag", 409, "probe_disabled")] + REPLAY + [
     S("twilioConfigured", 409, "twilio_not_configured"), S("cooldown", 200, "reused"), S("done", 201)]
 for n, method, path, perm, throttles, controller in ROUTES:
     add("errorOrder", "route", f"{n} · {method} {path}", {"route": n}, {"order": ORDERS[n]})

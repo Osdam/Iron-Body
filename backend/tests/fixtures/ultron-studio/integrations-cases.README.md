@@ -148,7 +148,7 @@ En PHP eso exige dos cosas (casos «salto de línea al final…» y «dígitos d
 - **AL-2. `aliasError()` no recorta:** «sin recorte: un espacio delante cuenta». En HTTP, `TrimStrings` recorta antes. Ver Q-9.
 - **AL-3. Un `\n` final no vale** (el `$` sin `D`, como en TEL-2).
 - **AL-4. No se normaliza a NFC.** Una tilde combinada (U+0301) no está en la lista. Ver O-3.
-- **AL-5. Literal:** «un teléfono en grupos de 2 no tiene serie de 4» y «solo signos admitidos, sin letras» son válidos. Ver O-1.
+- **AL-5 (revisada por la Enmienda 3, AS-1):** además de `\d{4,}` y `@`, el alias se rechaza si lleva un dato de contacto (`StudioCanaryPhone::contactDataError`: correo, o 8 o más dígitos con hasta 3 separadores que no sean letras ni dígitos entre ellos). «30 00 00 00 01» (10 dígitos en grupos) ya es inválido: O-1 queda cerrada. «solo signos admitidos, sin letras» sigue siendo válido.
 
 ### Huella de teléfono (`fingerprint`)
 
@@ -174,7 +174,7 @@ En PHP eso exige dos cosas (casos «salto de línea al final…» y «dígitos d
 - `deactivate` → `["active"]`;
 - `revoke` y `expectation` → `["pending","authorized","active"]`, en ese orden.
 
-**CN-4. Los 403 son los del dominio** (como P-10 del H5). La puerta de `AuthorizationMap` puede responder antes con su propio cuerpo. El `required_permission` de `forbidden` es la primera llave que falta de `[ultron.view, la llave]` (`StudioAccess::require`).
+**CN-4. Los 403 son los del dominio** (como P-10 del H5). La puerta de `AuthorizationMap` puede responder antes con su propio cuerpo. **Enmienda 4 (`errorOrder`):** en las escrituras 47–56 el paso `permission` (403) va ANTES de `shape` (422), porque la llave de cada ruta la exige la puerta de `AuthorizationMap` antes de que el controlador valide la forma; una persona sin la llave y con un cuerpo mal formado recibe 403. El `required_permission` de `forbidden` es la primera llave que falta de `[ultron.view, la llave]` (`StudioAccess::require`).
 
 **CN-5. Registrar.**
 - Bandera → reintento → versión esperada → tope de vivos → INSERT.
