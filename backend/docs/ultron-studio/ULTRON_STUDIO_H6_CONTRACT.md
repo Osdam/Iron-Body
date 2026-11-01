@@ -1432,3 +1432,23 @@ Fuentes: `plans/informes-h6/informe-security.md` (B-1, B-2, N-1…N-5) e `inform
 - **AS-3 (nota):** quien tiene `canary_manage` puede sondear si un número está registrado (409) o es el canario del motor (`isEngineCanary`); cada intento deja fila y evento permanentes y el tope de 10 vivos lo corta. Se revisa en el Hito 7 junto con quién puede activar antes de T2.
 - **AS-6 (nota):** `clientRequestId` vale por tabla, no entre tablas.
 - **Diferido al Hito 7:** procedimiento de supresión (cubre las 3 tablas nuevas), regla del alias, revisión de activación antes de T2, `ironbody-migrate` como root (ya conocido).
+
+---
+
+## Enmienda 4 (01-11-2026): cierre de la tanda final del paquete S y del tester de backend
+
+Fuentes: `plans/informes-h6/informe-api.md` (D-14…D-18 y decisiones para el lead), `informe-tester-backend.md` (H-1…H-3, O-1, O-2), `integrations-cases.README.md` (AL-5 y CN-4 revisadas). Si contradice I7, I11 o las Enmiendas 2–3, manda esta.
+
+- **Orden de errores en las escrituras (`errorOrder`, rutas 47–56):** la llave de cada ruta la exige la puerta de `AuthorizationMap` **antes** de que el controlador valide la forma, así que el paso `permission` (403 `forbidden`) va antes que `shape` (422): una persona sin la llave y con un cuerpo mal formado recibe 403. El fixture se corrige en ese sentido (decisión 1 de S); mover la llave detrás de la validación debilitaría la puerta y cambiaría I7.1.
+- **Alias (AS-1 aplicado, cierra O-1):** además de `\d{4,}` y `@`, un alias con un dato de contacto (correo, o 8 o más dígitos con hasta 3 separadores que no sean letras ni dígitos entre ellos, criterio `StudioCanaryPhone::contactDataError`) responde 422 `invalid_alias`; «30 00 00 00 01» ya es inválido. El fixture pasa de 719 a **722 casos** (3 de alias) y su comprobador conoce la regla (variante errónea `alias:no_contact`).
+- **`agent_id` de ElevenLabs (N-5 completo):** no se recorta antes de casar el patrón (`^[A-Za-z0-9_-]{1,64}$` con `D`): un espacio o un salto de línea lo invalidan, como fija el fixture `voiceDoctor`. La región sí se normaliza (minúsculas y recorte), como fijaba E1.2.
+- **Q-6:** `activeWhatsapp` cuenta las filas activas tal cual y es `null` solo si falla el propio recuento; el veredicto `unreadable` del conjunto cerrado cubre el teléfono del lead canario ilegible.
+- **B-2 (D-14):** al revocar, el estado de partida se lee dentro de la transacción con la fila bloqueada; la carrera del tester (H-1) lo demuestra.
+- **AS-2 (D-16):** `page` de la ruta 40 admite hasta 100 000 (por encima, 422; la página 100 000, vacía) y el servicio no puede desbordar aunque se llame sin el controlador.
+- **N-1 (D-17):** un fallo de la base en el alta distinto del duplicado se relanza con la clase y el SQLSTATE; huella, 4 dígitos y alias van como parámetros sensibles.
+- **N-3 (D-18):** «base oficial» exige `https`, host exacto, puerto 443 y sin credenciales; con las bases por defecto la huella de producción no cambia. Desplegado antes de reconocer Twilio en la fase 2.
+- **H-2 del tester (baja, nuevo, diferido al Hito 7):** en cada registro duplicado la huella del teléfono acaba en el `DETAIL` del error 23505 del log del servidor PostgreSQL (`log_min_error_statement`/`log_error_verbosity`); el procedimiento de supresión y la configuración del log del servidor lo cubren en el Hito 7.
+- **H-3 del tester (= B-1/AS-4):** medido: ~705 000 HMAC por segundo y núcleo; con la `APP_KEY`, el espacio de WhatsApp (10⁹) se recorre en ~24 minutos con un núcleo. Refuerza lo escrito en la Enmienda 3: la clave protege los teléfonos.
+- **O-2 del tester (nota):** con `default_transaction_isolation = repeatable read` en el rol, 7 de las 37 carreras responderían 500 (40001); el rol de producción usa READ COMMITTED (comprobación del runbook antes de la fase 2).
+- **Hallazgo del motor para T-1 (nota, sin cambio):** el validador privado de `usage-trigger` rechazaría los 6 vectores oficiales de Twilio porque `fullUrl()` reordena la consulta; no afecta mientras la URL configurada en Twilio no lleve consulta. Hito 7.
+- **Línea base (tester):** el intermitente de `UltronHandoffHardGuardTest` fue el `decide_token` de 120 s caducado durante la suspensión del equipo; Marketing 4977 OK sobre la rama.
