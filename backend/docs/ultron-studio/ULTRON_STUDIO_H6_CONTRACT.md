@@ -1355,3 +1355,38 @@ git diff <base> --stat -- app/Services/Marketing app/Jobs app/Http/Controllers/A
 - Post-call webhooks: <https://elevenlabs.io/docs/agents-platform/workflows/post-call-webhooks>
 - Register Twilio calls: <https://elevenlabs.io/docs/agents-platform/phone-numbers/twilio-integration/register-call>
 - Data residency: <https://elevenlabs.io/docs/overview/administration/data-residency.md>
+
+---
+
+## Enmienda 1 (01-11-2026): decisiones del lead durante el bloque 1 (DB, V, TW, fixture y capa de datos del CRM)
+
+Fuentes: `plans/informes-h6/informe-db.md` (§6, §10), `informe-voz.md`, `informe-twilio.md` («Decisiones fuera del contrato», «Para S», «Para el tester»), mensajes del tester del fixture y de la capa de datos del CRM. Donde esta enmienda contradice I1–I13, manda esta.
+
+### E1.1 Fixture y formas comunes
+- **Q-1 (importes en `facts`):** `costSoftUsd`, `costHardUsd` y cualquier otro importe de `facts` viajan como **texto con dos decimales** (`"6.00"`, `"12.00"`): `StudioContentHasher::canonicalize` rechaza decimales. Los recuentos vacíos se serializan como `[]` (el canonizador no admite objetos vacíos).
+- **Q-2 (etiquetas de estado):** `statusLabel` de una versión es exactamente `StudioVersionStatus::label()` («Canario», «Publicada», «Sustituida»…); los ejemplos «En canario» del contrato eran ilustrativos.
+- **PCRE (fijado por el fixture):** toda expresión que termine en `$` lleva el modificador `D` (sin él PHP acepta un salto de línea final), y los dígitos se escriben como `[0-9]` sin `/u` (con `/u` entran dígitos de ancho completo y arábigo-índicos). Afecta a E.164, al alias, al `agent_id` de ElevenLabs y al SID de Twilio.
+- **`replayed`:** puede llegar dentro de `data` (contrato) o fuera (como en el H5); el CRM acepta las dos formas.
+
+### E1.2 Voz (paquete V)
+- **`ElevenLabsVoiceProvider::secretFingerprints(array $kCfg)`** es la única vía para las huellas de 8 hex de la clave de API, el secreto del webhook y el secreto de las herramientas (cierra el hueco entre I5.3 e I9.5): S la consume y **no lee** esas claves de `voice.elevenlabs.*` ni el bloque entero; `VoiceIsolationTest` lo vigila.
+- Aceptadas las seis decisiones de `informe-voz.md`, entre ellas: un 200 cuyo cuerpo no es un objeto JSON cuenta como `error` (nunca `credentials_ok`); un `v0` mal formado junto a otro válido da `malformed_signature`; regiones solo `default` y `eu`; en `production` se ignora la URL base configurable; la verificación es un GET sin redirecciones ni reintentos.
+- `voice:doctor` es el único comando `voice:*`, no está programado y no existe ninguna ruta de voz (`VoiceBoundaryTest`).
+
+### E1.3 Esquema (paquete DB)
+- **D-1:** `uscl_inactive_is_final` cubre solo las seis columnas del cierre (`status`, `deactivated_*`, `deactivation_reason`) y la nueva guarda **`uscl_replacement_once`** deja anotar `replaced_by_link_id` una sola vez (de NULL a un valor, solo en una fila que queda `inactive`). Con la guarda literal de I3.2, la sustitución del paso 11 de I3.4 era imposible en los dos motores. Columnas y DTO no cambian.
+- **D-2:** `usis_outcome_chk` = `(kind = 'probe' AND outcome IS NOT NULL AND outcome IN (…)) OR (kind = 'config' AND outcome IS NULL)`.
+- **Recuentos tras migrar** (para `h6-schema-check.sql` y el script de la fase 1): PostgreSQL **43 disparadores** (antes 30) y **49 CHECK** (antes 27) en `ultron_studio_%`; SQLite 30 disparadores (antes 20); 4 índices parciales (antes 2) con su `WHERE` en los dos motores; 14 tablas `ultron_studio_*` (antes 11); `ultron_studio_forbid()` intacta (`4ad748b5…`). En PG el libro solo cambia el CHECK de sujetos (4 → 7); en SQLite ese CHECK no existe y la tabla no se reconstruye.
+- **Operación:** si la segunda migración cae por `lock_timeout` (55P03), deja las tres tablas sin guardas hasta el reintento: devops reintenta hasta que el recuento dé 43/49 **antes** de servir el código nuevo.
+- S añade las dos migraciones a la lista blanca de `UltronEngineIsolationTest` (I9.1) y ajusta los recuentos globales de `UltronStudioPublicationSchemaTest` con el parche de `informe-db.md` §10.
+
+### E1.4 Twilio (paquete TW)
+- **Convenciones del saneador** (`TwilioProbeSanitizer`, fijadas para el fixture y para S): un paso fallido o saltado deja su bloque en `null`; un paso ausente cuenta como `skipped`; lo que no está en su conjunto cerrado cuenta como `other`; `last4` solo sale de un E.164 estricto; los códigos de alerta de Monitor solo de 1 a 6 cifras; los recuentos vacíos salen `[]`.
+- `TwilioReadOnlyClient`: solo `__construct` y `get`; en `production` hosts oficiales siempre (ignora la base configurable y la del simulador); primera página siempre; 10 s por consulta y 5 s de conexión; sin reintentos ni redirecciones; 401/403 → `auth_failed`, 429/5xx/3xx → `error`, tiempo agotado o sin conexión → `unreachable`, cuerpo inesperado → `error`; el token que devuelve la ficha de la cuenta se elimina del cuerpo; la credencial va en `SensitiveParameterValue` (no sale en trazas ni volcados; el cliente no se serializa); el SID se valida con `ACCOUNT_SID_PATTERN` (`^AC[0-9a-f]{32}$` con `D`) **antes** de construir el cliente (si no, 500).
+- S reparte el presupuesto de 30 s de la sonda entre los pasos (cada cliente con el tiempo que quede); el enfriamiento de 300 s es fijo en el código. Variables: `ULTRON_STUDIO_TWILIO_PROBE_ENABLED=false`, `ULTRON_STUDIO_TWILIO_PROBE_KEY_SID`, `ULTRON_STUDIO_TWILIO_PROBE_KEY_SECRET` y `ULTRON_STUDIO_TWILIO_PROBE_BASE` (ignorada en `production`).
+- Nota para `security` (sin cambio): fuera de `production` la base del simulador no se limita a `127.0.0.1`, igual que el cliente del laboratorio.
+
+### E1.5 Para el paquete S (de la capa de datos del CRM)
+- `OtpCostGuard::snapshot()` devuelve claves en `snake_case` (y `send_enabled`): S las convierte a la forma `camelCase` de I5.2.
+- `lastVerification.outcome` de voz usa el conjunto de verificación de voz (`credentials_ok`…), no el de la sonda.
+- Para `applied` con las dos partes vacías el CRM acepta `part: null` y `state: 'legacy'`.
