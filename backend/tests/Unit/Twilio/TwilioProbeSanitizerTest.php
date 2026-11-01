@@ -30,8 +30,6 @@ use ReflectionMethod;
  */
 class TwilioProbeSanitizerTest extends TestCase
 {
-    private const FICHERO = 'app/Services/Twilio/TwilioProbeSanitizer.php';
-
     /** @return array<string,mixed> */
     private static function fixture(string $nombre): array
     {
@@ -244,7 +242,7 @@ class TwilioProbeSanitizerTest extends TestCase
         $impuro = ['Http', 'Log', 'DB', 'Cache', 'Storage', 'File', 'Queue', 'Bus', 'Event', 'Carbon', 'CarbonImmutable', 'DateTime', 'DateTimeImmutable',
             'config', 'env', 'app', 'now', 'today', 'time', 'microtime', 'hrtime', 'date', 'gmdate', 'logger', 'report', 'info', 'cache', 'event', 'dispatch',
             'file_get_contents', 'file_put_contents', 'fopen', 'curl_init', 'random_int', 'mt_rand', 'rand', 'uniqid', 'getenv'];
-        $usados = self::nombresUsados(dirname(__DIR__, 3).'/'.self::FICHERO);
+        $usados = self::nombresUsados((string) (new ReflectionClass(Saneador::class))->getFileName());
         $this->assertSame([], array_values(array_intersect($impuro, $usados)), 'el saneador usa algo impuro');
     }
 

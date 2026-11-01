@@ -57,8 +57,6 @@ class TwilioReadOnlyClientTest extends TestCase
 
     private const SIMULADOR = 'http://127.0.0.1:8095';
 
-    private const FICHERO = 'app/Services/Twilio/TwilioReadOnlyClient.php';
-
     private ?string $twilioBaseAntes = null;
 
     protected function setUp(): void
@@ -478,7 +476,7 @@ class TwilioReadOnlyClientTest extends TestCase
 
     public function test_estatica_el_fichero_no_tiene_verbos_de_escritura_y_usa_una_sola_cadena_get(): void
     {
-        $fuente = (string) file_get_contents(base_path(self::FICHERO));
+        $fuente = (string) file_get_contents(self::fichero());
 
         // Ni como palabra, ni siquiera en un comentario.
         preg_match_all('/\b(post|put|patch|delete|asForm|send)\b/i', $fuente, $palabras);
@@ -555,11 +553,21 @@ class TwilioReadOnlyClientTest extends TestCase
         $this->assertStringNotContainsString(self::SECRETO, $mensaje);
     }
 
+    /**
+     * El fichero donde está definida la clase que se prueba (no una ruta
+     * escrita aquí): las comprobaciones estáticas miran el mismo código que
+     * se ejecuta, también cuando una prueba de mutación lo carga de otro sitio.
+     */
+    private static function fichero(): string
+    {
+        return (string) (new ReflectionClass(Cliente::class))->getFileName();
+    }
+
     /** @return list<array{0:int,1:string}> los tokens del cliente, sin comentarios ni espacios */
     private static function tokens(): array
     {
         $out = [];
-        foreach (token_get_all((string) file_get_contents(base_path(self::FICHERO))) as $t) {
+        foreach (token_get_all((string) file_get_contents(self::fichero())) as $t) {
             $t = is_array($t) ? $t : [0, $t];
             if (! in_array($t[0], [T_COMMENT, T_DOC_COMMENT, T_WHITESPACE], true)) {
                 $out[] = $t;
@@ -572,7 +580,7 @@ class TwilioReadOnlyClientTest extends TestCase
     /** El código del cliente sin comentarios. */
     private static function codigo(): string
     {
-        return self::sinComentarios((string) file_get_contents(base_path(self::FICHERO)));
+        return self::sinComentarios((string) file_get_contents(self::fichero()));
     }
 
     private static function sinComentarios(string $fuente): string
