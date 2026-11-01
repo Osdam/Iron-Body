@@ -808,7 +808,7 @@ Bajo `/api/admin/ultron-studio/`, con el tope de cuerpo de 64 KB del grupo. Las 
 
 ### Aislamiento del motor
 
-- **El diff del motor frente a `origin/main`** son 3 ficheros: `UltronPublishedConfig.php` (nuevo, 501 líneas), `UltronCommitService.php` (+58/−9) y `config/marketing.php` (+18). Comprobado el 31-10-2026 frente a `7318122` sobre `app/Services/Marketing`, `app/Jobs`, `app/Http/Controllers/Api/Internal`, `routes/marketing.php`, `routes/api.php` y `config/marketing.php`.
+- **El diff del motor frente a `origin/main`** son 3 ficheros: `UltronPublishedConfig.php` (nuevo, 501 líneas), `UltronCommitService.php` (+49/−9 según `git diff --numstat`; `informe-motor.md` decía +58) y `config/marketing.php` (+18). Comprobado el 31-10-2026 frente a `7318122` sobre `app/Services/Marketing`, `app/Jobs`, `app/Http/Controllers/Api/Internal`, `routes/marketing.php`, `routes/api.php` y `config/marketing.php`.
 - **`UltronEngineIsolationTest`:** 38 rutas; «el motor no lee versiones» pasa a «el motor lee solo con su llave y publicar está apagado por defecto»; las referencias del lector al Studio son exactamente `'ultron_studio_publications'`; fuera del Studio, solo `UltronCommitService` nombra al lector.
 - **Prueba de comportamiento con `DB::listen` sobre un commit completo** (A9.2, en `UltronCommitStudioStampTest`): con la llave en `off`, cero sentencias que nombren `ultron_studio_`; con `canary` o `all`, exactamente una `select` sobre `ultron_studio_publications` y ninguna escritura en `ultron_studio_*`.
 - **`UltronStudioEngineReadOnlyTest`:** recorre las 38 rutas; publicar, promover, revertir y Legacy escriben solo en `ultron_studio_*`, y la vista previa y la evidencia no escriben nada.

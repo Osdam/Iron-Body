@@ -285,7 +285,7 @@ Revertir y volver a Legacy no dependen de ninguna de las dos llaves de entorno n
 | `tester` de backend | `61048ff`/`d98bbf9`, con dos sesiones reales de PostgreSQL 14 por carrera | H-1, medio (de contrato, sin daño a datos), y B-1 a B-3, bajos (cobertura) |
 | `tester` del E2E | Backend `2bc053b` y CRM `e7ba41b`, con la pila real | 404/408: B-1 (= M-1) tres veces y C-1, menor, del CRM |
 | DevOps | Los scripts y el runbook | D-1 bloqueante (= M-2) y D-2 a D-12; todos corregidos en los scripts de `5772bdf` |
-| `reviewer` | Backend `cf59cef` y CRM `9fe1817` (31-10-2026) | **APROBADO CON OBSERVACIONES**, sin bloqueantes en el código: I-2 e I-3 (los scripts) e I-4 (la vuelta atrás del código) antes de la fase 1, cerradas; I-1 (CRM) antes de la fase 2, abierta y en corrección por `frontend`. [PENDIENTE: segunda pasada sobre la documentación.] |
+| `reviewer` | Backend `cf59cef` y CRM `9fe1817` (31-10-2026) | **APROBADO CON OBSERVACIONES**, sin bloqueantes en el código: I-2 e I-3 (los scripts) e I-4 (la vuelta atrás del código) antes de la fase 1, cerradas; I-1 (CRM) corregida en `ab78a6a` el 31-10-2026 y en corrección por `frontend`. [PENDIENTE: segunda pasada sobre la documentación.] |
 
 ### Hallazgos y estado
 
@@ -354,7 +354,7 @@ Sigue vigente y cubre ahora la cadena: antes del despliegue, `tests/Feature/Ultr
 
 - Marcar en el historial las entradas que no verifican (B-2).
 - El `seq` contiguo y `CHECK (seq >= 1)` (AS-3/N-3), en una migración aditiva.
-- `ironbody-migrate`, que corre como root sobre un árbol de `www-data` (M-3) y escribe la caché con la umask de `www-data` antes del `chmod 600` (N-7).
+- `ironbody-migrate`, que corre como root: desde el 25-10 el árbol y `vendor/` son de root, pero al migrar root ejecuta `bootstrap/cache/*.php`, que son de `www-data` (la clase de riesgo de M-3 persiste por la caché; D2-3 del reviewer, visto en el código y no comprobado en el servidor), y su `config:cache` nace con la umask de `www-data` antes del `chmod 600` (N-7).
 - Los caracteres invisibles que acaban en la cadena (AS-5), mejor antes de la fase 2.
 - El procedimiento de redacción del libro con el rol dueño, que tiene que cubrir también `ultron_studio_publications` (nombre y rol del personal, y `reason`).
 - Revocar UPDATE y DELETE de `iron_app` sobre la cadena (refuerzo candidato, en una migración aditiva del rol dueño; hoy los paran los disparadores).

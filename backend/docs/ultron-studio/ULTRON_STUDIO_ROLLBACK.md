@@ -75,9 +75,9 @@ La vista previa es solo frontend y no guarda nada en el servidor: revertirla no 
 - el `version.json` público trae el commit esperado y el Studio abre en fase `ready`;
 - 12 workers RUNNING (13 si `ironbody-lab` sigue instalado), ninguno en BACKOFF.
 
-## Hito 5 (gobierno y versionado) — PENDIENTE DE DESPLIEGUE; respaldo `/var/backups/ironbody/ultron-studio-h5-<fecha UTC>/` (lo crea el paso 3 del runbook del Hito 5, en `ULTRON_STUDIO_DEPLOYMENT_PLAN.md`)
+## Hito 5 (gobierno y versionado) — FASE 1 DESPLEGADA el 01-11-2026; respaldo `/var/backups/ironbody/ultron-studio-h5-20261101-011245/` (y CRM `crm-pre-ab78a6a-20261101-011457/`)
 
-**Estado (31-10-2026):** el Hito 5 no está desplegado ni en `origin/main`, y ningún paso de esta sección se ha ejecutado en producción. Producción sirve la API en `7318122` (el código del Hito 4 más trabajo de otros módulos) y el CRM en `4105016`. DevOps ensayó en local la vuelta del código a `fef7c87` con datos de H5 y la rotación de la `APP_KEY` (`plans/informes-h5/informe-devops-h5.md` §7.2 y §8). La vuelta a `7318122` no se ha ensayado; el código del Studio de los dos commits es el mismo (diff vacío en sus ficheros, comprobado el 31-10-2026). El resto se deduce del código y de las pruebas. Para quien opera, con o sin acceso al código.
+**Estado (01-11-2026):** fase 1 desplegada el 01-11-2026 01:12–01:16 UTC: producción sirve la API en `7ba0ce8` y el CRM en `ab78a6a`, con el motor en `off` y publicar en 409; fases 2 y 3 pendientes. *(Hasta el 31-10-2026: API `7318122`, CRM `4105016`, nada ejecutado.)* DevOps ensayó en local la vuelta del código a `fef7c87` con datos de H5 y la rotación de la `APP_KEY` (`plans/informes-h5/informe-devops-h5.md` §7.2 y §8). La vuelta a `7318122` no se ha ensayado; el código del Studio de los dos commits es el mismo (diff vacío en sus ficheros, comprobado el 31-10-2026). El resto se deduce del código y de las pruebas. Para quien opera, con o sin acceso al código.
 
 **Reglas que no cambian:**
 - **Nunca `migrate:rollback` / `down()` en producción.** Con filas de H5 se niega (contrato §A3.4) y, sin ellas, borraría la estructura de la cadena. Volver al código de H4 no lo necesita (§A3.5).
@@ -112,6 +112,13 @@ bash /root/h5-engine-scope.sh off <alcance actual>          # si no está ya en 
 cp /var/backups/ironbody/crm-pre-<build-crm>-<ts>/index.html /var/backups/ironbody/crm-pre-<build-crm>-<ts>/version.json /var/www/app/ && chown root:root /var/www/app/index.html /var/www/app/version.json
 # 2. Backend: git como root (dueño del árbol y de .git, I-3 del reviewer) y con umask 022, para que www-data lea lo que reescriba
 BK=/var/backups/ironbody/ultron-studio-h5-<fecha UTC>                                     # el respaldo del paso 3 de la fase 1
+FASE1=<commit desplegado en la fase 1 del Hito 5>                                          # el ESPERADO del script de la fase 1 (registro de despliegues de la hoja de ruta)
+# 2a. SOLO si producción sigue en el commit de la fase 1 (D2-1 del reviewer): si main se desplegó después durante el
+#     canario, este checkout borraría ese trabajo y dejaría sus migraciones sin el código que las usa (el mismo fallo
+#     que I-4, en el futuro). En ese caso NO se hace checkout: se sale por fase (paso 0) y se decide con devops un
+#     revert de los commits del Hito 5 sobre main.
+[ "$(git -C /var/www/api rev-parse HEAD)" = "$(git -C /var/www/api rev-parse "$FASE1")" ] \
+  || { echo "producción ($(git -C /var/www/api rev-parse --short=7 HEAD)) ya no está en el commit de la fase 1: no hacer checkout; salir por fase y planear un revert"; exit 1; }
 ( cd /var/www/api && umask 022 && git checkout -q --detach "$(cat "$BK/api-commit.txt")" )   # hoy, 7318122
 cd /var/www/api/backend && sudo -u www-data sh -c 'umask 077; php artisan config:cache -q && php artisan route:cache -q' && chmod 600 bootstrap/cache/config.php bootstrap/cache/routes-v7.php
 sudo -u www-data php artisan queue:restart
@@ -123,6 +130,7 @@ SMOKE_LAB_EXPECT_ENABLED=1 bash /root/smoke-run-h4.sh
 ```
 
 - **Qué queda:** la tabla `ultron_studio_publications`, sus 3 disparadores y 3 CHECK, `usv_status_chk` con 9 estados y los dos índices parciales. El código de H4 enseña las versiones de H5 con `reachable: false` y sus acciones deshabilitadas; revertir una responde el 409 provisional de F/G y `GET publications`, 404. Lo publicado, promovido o revertido queda en el historial.
+- **Mientras el árbol esté en `--detach`, nadie despliega:** el siguiente `git pull`/`merge --ff-only` de otro equipo fallaría; se vuelve a `main` (abajo) o se decide el revert antes de cualquier otro despliegue.
 - **Volver a H5:** `( cd /var/www/api && umask 022 && git checkout -q main )` (la rama local sigue en el commit de H5), las mismas cachés y `queue:restart` → 38 rutas y 0 migraciones pendientes (ensayado por DevOps en su banco local, sobre `fef7c87`).
 - **`api-commit.txt` tiene que ser el `PREVIO`** (reanudación tardía; decisión del lead, 31-10-2026). Si la fase 1 se corta y se relanza más de 2 horas después del respaldo, hay que rehacer el respaldo, y su `api-commit.txt` tiene que seguir siendo el `PREVIO` (`7318122`), no el HEAD de ese momento. Si no, el script aborta en el paso 0 (falla cerrado) y esta vuelta atrás leería un destino equivocado. El procedimiento, en el paso 5 del runbook.
 - **Por qué `git` como root** (I-3; decisión del lead, comprobada en el servidor en solo lectura el 31-10-2026): desde el 25-10, el árbol de `/var/www/api` (2.493 entradas, entre ellas todo lo que cambia el Hito 5) y `.git` (5.089 de sus 5.131 entradas) son de root, y `www-data` los lee pero no puede escribir ni en `objects/` ni en los directorios del código. Hasta ese día este procedimiento decía `sudo -u www-data -H git` (M-3), que fallaría a medias. Con `umask 077` en la sesión, lo que `git` reescribe quedaría ilegible para `www-data`: de ahí la subshell con `umask 022`.
@@ -165,4 +173,4 @@ Solo ante corrupción de datos, con **autorización expresa** y coordinado por `
 
 **Respaldos reales del despliegue del Hito 4 (25-10-2026):** `/var/backups/ironbody/ultron-studio-h4-20261025-011511/` (dump de 211 tablas, `env.backup`, `bootstrap-cache/`, `supervisor-conf.d/` antes de añadir `ironbody-lab.conf`, `api-commit.txt` = `d86a2b5`) y CRM `/var/backups/ironbody/crm-pre-5c1dbd7-20261025-012110/`. Vuelta atrás inmediata del laboratorio: `bash docs/ultron-studio/ops/deploy-h4-fase2.sh off` (bandera apagada, caché y reinicio del worker). De código: bandera apagada → `supervisorctl stop 'ironbody-lab:*'` y retirar `/etc/supervisor/conf.d/ironbody-lab.conf` (`reread && update`) → `git checkout d86a2b5` → cachés como www-data → `queue:restart` → `index.html`/`version.json` del respaldo del CRM. Las tablas se quedan; **nunca `migrate:rollback` en producción**.
 
-**Respaldos reales del despliegue del Hito 5:** [PENDIENTE: se anotan al ejecutar la fase 1: el directorio `$BK` del paso 3 del runbook y el respaldo del CRM que imprime `deploy-crm.sh` (lead o documentation-specialist).]
+**Respaldos reales del despliegue del Hito 5 (fase 1, 01-11-2026 01:12–01:16 UTC):** `$BK` = `/var/backups/ironbody/ultron-studio-h5-20261101-011245/` (`api-commit.txt` = `7318122`, `ironbody.dump` 38 MB con 222 tablas, copia del fichero de entorno, `app-crm.tgz`, `bootstrap-cache/`, `supervisor-conf.d/`; 700/600) y CRM `/var/backups/ironbody/crm-pre-ab78a6a-20261101-011457/` (`index.html` con `main-5VXOT43E.js` y `version.json` `4105016`). El commit de la fase 1 (`FASE1` de la vuelta atrás del código) es `7ba0ce8`.

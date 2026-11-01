@@ -89,13 +89,17 @@ HEAD=$(g rev-parse --short=7 HEAD)
 echo "1. código: HEAD=$HEAD"
 # Lo que el merge reescribió lo tiene que poder leer www-data (PHP-FPM y los workers); un fichero 600 de root
 # dejaría un 500 silencioso. Se comprueba fichero a fichero sobre el diff real, no sobre todo el árbol.
-ILEGIBLES=0
+ILEGIBLES=0; REVISADOS=0
+CAMBIADOS=$(g diff --name-only "$PREVIO" HEAD) || aborta "git diff --name-only $PREVIO HEAD falló: no se puede comprobar la lectura por www-data"
 while IFS= read -r f; do
+  [ -n "$f" ] || continue
   [ -e "$f" ] || continue                                     # borrado por el merge
+  REVISADOS=$((REVISADOS + 1))
   sudo -u www-data test -r "$f" || { echo "   ✗ www-data no puede leer $f ($(stat -c '%U:%G %a' "$f"))"; ILEGIBLES=$((ILEGIBLES + 1)); }
-done < <(g diff --name-only "$PREVIO" HEAD)
-[ "$ILEGIBLES" = 0 ] || aborta "$ILEGIBLES ficheros del merge no los lee www-data: chmod 644 (ficheros) / 755 (directorios) sobre git diff --name-only $PREVIO HEAD antes de seguir"
-echo "   todos los ficheros del merge son legibles por www-data"
+done <<< "$CAMBIADOS"
+[ "$REVISADOS" -gt 0 ] || aborta "la comprobación de lectura no revisó ningún fichero (el diff $PREVIO..HEAD salió vacío): algo no cuadra"
+[ "$ILEGIBLES" = 0 ] || aborta "$ILEGIBLES de $REVISADOS ficheros del merge no los lee www-data: chmod 644 (ficheros) / 755 (directorios) sobre git diff --name-only $PREVIO HEAD antes de seguir"
+echo "   los $REVISADOS ficheros del merge son legibles por www-data"
 cd backend
 echo "2. variables (todo apagado):"
 [ -z "$(tail -c1 "$ENVF")" ] || printf '\n' >> "$ENVF"
