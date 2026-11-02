@@ -38,7 +38,7 @@ case "$SOLO_COMPROBAR" in ""|--solo-comprobar) ;; *) echo "tercer argumento desc
 # NO SE CONOCE AL ESCRIBIR ESTE SCRIPT (el H6 no estaba desplegado el 01-11-2026): se fija EN UN COMMIT el día del
 # despliegue con `git -C /var/www/api rev-parse --short=7 HEAD` leído en el servidor, se revisa qué entró desde el H6 y
 # se vuelve a copiar el script. Con «pendiente» el script se niega a todo, también a --solo-comprobar.
-PREVIO=pendiente
+PREVIO=1e5f9a0   # HEAD de producción el 02-11-2026 (fase 1 del Hito 6); fijado por el lead el día del despliegue
 [[ "$PREVIO" =~ ^[0-9a-f]{7}$ ]] || { echo "PREVIO sin fijar ($PREVIO): fijarlo en un commit con el HEAD de producción del día (ver la cabecera); no se ha tocado nada"; exit 2; }
 MIGRACIONES="backend/database/migrations/2026_11_02_100001_add_ultron_studio_hardening.php "
 # Puerta de diff del contrato (la del H6: motor, integraciones existentes, catálogo y dependencias; este script no
@@ -156,8 +156,7 @@ BORRADAS=$(g diff --numstat "$PREVIO" origin/main -- backend/routes/console.php 
 [ -z "$BORRADAS" ] || [ "$BORRADAS" = 0 ] || aborta "routes/console.php pierde $BORRADAS líneas entre $PREVIO y origin/main: el H7 solo añade el bloque del monitor"
 case "$(cat "$BK/api-commit.txt" 2>/dev/null)" in
   "$PREVIO"*) ;;
-  "$ESPERADO"*) [ "$REANUDA" = 1 ] || aborta "$BK/api-commit.txt es $ESPERADO pero producción sigue en $PREVIO: el respaldo no es de antes del despliegue" ;;
-  *) aborta "$BK/api-commit.txt no es $PREVIO" ;;
+  *) aborta "$BK/api-commit.txt no es $PREVIO (la vuelta atrás del código lo lee; si el respaldo se rehizo en una reanudación, escribirlo con: git -C /var/www/api rev-parse $PREVIO > $BK/api-commit.txt)" ;;
 esac
 [ -s "$BK/ironbody.dump" ] && [ -n "$(find "$BK/ironbody.dump" -mmin -120)" ] || aborta "no hay volcado de menos de 2 h en $BK"
 [ "$(stat -c '%a' "$BK")" = 700 ] || aborta "el directorio del respaldo tiene que ser 700 (es $(stat -c '%a' "$BK"))"
