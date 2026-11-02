@@ -1,6 +1,6 @@
 # Hito 7 · REV7 · informe del `reviewer`
 
-**Fecha:** 02-11-2026. **Primera pasada** (la segunda, sobre la entrega de `h7-devops-b`, va en §9 cuando el lead la pida).
+**Fecha:** 02-11-2026. **Primera pasada** (§0–§8, sobre `ac031dd`/`ee9f128`) y **segunda pasada** (§9, sobre `3111d29`: devops, security y la segunda pasada de DOC7; la tercera pasada de DOC7 queda por revisar cuando se confirme).
 
 **Qué se revisó:**
 - **Backend:** worktree `_worktrees/ultron-h7/Iron-Body`, rama `feat/ultron-studio-h7`. Revisado sobre `ac031dd`; vale para el HEAD de cierre, `ee9f128`, que solo cambia la etiqueta de `ops/perf-h7/tramos-campanas.php` (`git diff --stat ac031dd ee9f128 -- app routes config database bootstrap tests composer.lock` sale vacío). Diff del hito `origin/main...HEAD` (`origin/main` = `bc6c0ff` = producción `1e5f9a0` + documentación).
@@ -8,6 +8,8 @@
 - **Fuera de esta pasada:** lo que `h7-devops-b` tiene sin confirmar en el árbol: `ops/deploy-h7-backend.sh`, `smoke-h7.py`, `smoke-run-h7.sh`, `banco-h7/{ensayar,preparar}.sh` y el nuevo `h7-monitor-scope.sh`. De esos scripts he revisado la versión CONFIRMADA en HEAD (`git show HEAD:…`).
 
 **Lo que no he hecho:** no he tocado código, pruebas, scripts ni informes ajenos, no he entrado al VPS y no hay commit.
+
+**Veredicto final (segunda pasada, §9): APROBADO CON OBSERVACIONES.** No quedan bloqueantes ni mayores abiertos; M-1, m-1 y m-3 están cerrados. Las secciones §0–§8 son la primera pasada.
 
 ## 0. Veredicto
 
@@ -325,10 +327,7 @@ H-6 de OPS7 (`--no-owner`) está corregido en `BACKUPS.md`: ahora restaura con d
 
 ## 8. Lo que NO verifiqué, y por qué
 
-- **Producción y el VPS:** quedan fuera por el encargo. En particular, que el `ironbody-migrate` de hoy (como root) deje pasar `PGOPTIONS` (N-10 de `security`, sin cerrar: `SECURITY_REPORT.md:311`).
-  - El H7 es la migración que pide ACCESS EXCLUSIVE sobre la cadena.
-  - Con la llave del motor en `off`, el motor no la lee, y el paso 0 exige 0 cerrojos.
-  - Si el envoltorio no la pasara, una transacción larga sobre la cadena haría esperar a la migración sin límite. Hay que vigilarlo en el paso 3.
+- **Producción y el VPS:** quedan fuera por el encargo. **N-10, cerrado (segunda pasada):** el lead comprobó en el servidor que `/usr/local/bin/ironbody-migrate` fija él mismo `PGOPTIONS="-c lock_timeout=5s"` en la línea que lanza `migrate`. El tiempo de espera de cerrojo de 5 s llega así a la migración del H7 (ACCESS EXCLUSIVE sobre la cadena), sea cual sea el entorno de quien llama.
 - **Las mutaciones** (TEST7 53/53, DB7 14/14, F-1 13/13, F-2 4/4) y los bancos de OPS7 (despliegue, smoke, recuperación 21/21, vuelta atrás 13/13): no las he repetido. He leído sus informes y he visto que las pruebas que las cazan están en verde.
 - **Las suites completas, la puerta PG entera y el E2E:** son de la fase C del tester; no las he duplicado.
 - **El PCRE 10.39 de producción:** no está en local.
@@ -338,6 +337,182 @@ H-6 de OPS7 (`--no-owner`) está corregido en `BACKUPS.md`: ahora restaura con d
 
 **Para limpiar después (mío):** la base desechable `ultron_studio_h7_rev` en `127.0.0.1:55432` y los ficheros del scratchpad de la sesión.
 
-## 9. Segunda pasada (`h7-devops-b`)
+## 9. Segunda pasada (02-11-2026)
 
-[PENDIENTE: cuando el lead la pida (reviewer).]
+**Qué se revisó:** lo confirmado en `feat/ultron-studio-h7` desde la primera pasada (`ac031dd`) hasta `3111d29`, el HEAD al revisar:
+- **devops:** `0d43401`, `7c838ca`, `f73555d` y `2139e00`;
+- **security:** `601398c` (M-1 con la opción b, y m-3) y su addendum en `informe-security.md` §7 (el SQL de H-8 con escapes);
+- **DOC7:** la segunda pasada, `59d81b0` (m-2);
+- **otros commits de documentación:** `0d4c5e8`, `cdade1e`, `0805320` y `3111d29`.
+
+**Fuera de esta pasada:**
+- la tercera pasada de DOC7, que está en curso en el árbol (`ULTRON_STUDIO_DEPLOYMENT_PLAN.md` y `ops/README.md`, sin confirmar). La reviso cuando el lead la confirme (§9.6);
+- la fase D del tester sobre este HEAD (PG, comparación, E2E y mutaciones). No la he duplicado.
+
+**Código que cambia desde la primera pasada:** solo `601398c`. Son 10 ficheros (+54/−33): `app/Rules/PlainText.php`, 8 controladores del Studio y `StudioDraftNormalizer.php`. Sobre `3111d29`, la puerta del motor sigue en los mismos 10 ficheros (+270/−19) y hay una sola migración.
+
+### 9.1 Veredicto final
+
+**APROBADO CON OBSERVACIONES.** No quedan bloqueantes ni mayores abiertos:
+- M-1, m-1 y m-3: cerrados y comprobados;
+- m-2: cerrado, salvo lo que entra en la tercera pasada de DOC7;
+- m-4 y m-5: dos menores nuevos.
+
+**Condiciones antes del paso 5** (no son hallazgos):
+- la fase D del tester en verde sobre el HEAD que se despliega. Es la primera regresión completa que incluye `601398c`;
+- la tercera pasada de DOC7, con lo de §9.6.
+
+| # | Estado | Dónde |
+|---|---|---|
+| M-1 | **Cerrado** (opción b, `601398c`) | §9.2 |
+| m-1 | **Cerrado** (`7c838ca`) | §9.3 |
+| m-2 | Cerrado salvo §9.6 (DOC7, tercera pasada) | §9.5 |
+| m-3 | **Cerrado** (`601398c`) | §9.2 |
+| m-4 (nuevo) | Menor · devops / propietario | §9.4 |
+| m-5 (nuevo) | Menor · devops (la decisión que OPS7 deja abierta) | §9.4 |
+| N-10 | **Cerrado**, comprobado por el lead en el servidor | §8 |
+
+### 9.2 security · `601398c`
+
+**`PlainText` en dos modos:**
+- **Por defecto es la regla de producción `1e5f9a0`:** `! is_string` o `! UntrustedText::isPlain()` dan el mismo mensaje, «El texto contiene caracteres no permitidos.». Leído frente a `git diff 1e5f9a0 HEAD -- app/Rules/PlainText.php`.
+- **`strict: true` es la clase de SEC7 tal cual,** con el mensaje que nombra el carácter.
+
+**Inventario, contado sobre el código** (`grep -rn "new PlainText" app`):
+- 19 sitios en `Crm/UltronStudio` y `Services/UltronStudio`, los 19 con `strict: true`;
+- 15 fuera (Valoraciones y Caja), ninguno con `strict`;
+- coincide con la tabla del addendum (`informe-security.md` §7.2), y lo vigila `test_todas_las_entradas_del_studio_usan_el_modo_estricto`.
+
+**`PlainTextOutsideStudioTest`** fija para Valoraciones y Caja el comportamiento de antes del H7:
+- aceptan U+00AD, U+2028, U+2060, U+180E y las etiquetas;
+- siguen rechazando la lista de antes, con el ZWJ siempre;
+- un barrido de todo Unicode compara la lista por defecto con la de antes.
+
+**m-3:**
+- `routes/console.php` sale de la lista blanca;
+- solo puede nombrar una vez la cadena `'ultron_studio.monitor.enabled'`, y tiene que ser la condición de un `if` sin `else`;
+- su bloque solo admite `Schedule::command('ultron-studio:…')` con argumentos literales (prueba nueva en `UltronEngineIsolationTest`).
+
+Con eso se cierra el escenario de m-3.
+
+**Ejecutado en SQLite** (`PlainTextOutsideStudioTest`, `StudioPlainTextInvisiblesTest`, `InvisibleCharactersTest`, `UltronEngineIsolationTest`, `KnowledgeInvisiblesTest` y `ValuationInputValidationTest`): **OK, 168 pruebas y 2 868 aserciones.** No repito PG, la comparación por nombre, el E2E ni las mutaciones (7/7 y 5/5 según el commit): son de la fase D del tester.
+
+**SQL de H-8** (`informe-security.md:102-112`):
+- va solo en ASCII, con escapes;
+- `security` la validó con 19/19 casos y con un barrido de 1 112 063 puntos de código en 5 intercalaciones;
+- `grep -P` con la clase sobre ese informe: 0 líneas.
+
+### 9.3 devops · `0d43401`, `7c838ca`, `f73555d`, `2139e00`
+
+**m-1, cerrado.** Los tres scripts (`deploy-h7-backend.sh`, `smoke-run-h7.sh` y `h7-monitor-scope.sh`) leen el programador con `schedule:list --json` y miran su código de salida aparte (`FALLO <código>` o `ILEGIBLE`). El despliegue y el smoke exigen además el total contra `TAREAS`.
+
+Comprobado en local con Laravel 12.58.0:
+- `--json` existe y cada tarea trae `command`;
+- con el monitor apagado salen 26 tareas, 0 del Studio; encendido, 28 y 2;
+- sin base, `schedule:list` sale con 1. En ese caso el despliegue aborta en el paso 0, el smoke falla sin tocar la cuenta y el mando se niega antes de escribir. Lo reprodujo el banco 4 quitando privilegios sobre `cache_locks` (`informe-devops-h7.md` §4.10).
+
+**`TAREAS=pendiente`**, igual que `PREVIO`:
+- `--solo-comprobar` lo lee y lo imprime, y nunca dice «EN VERDE»;
+- el despliegue y el smoke se niegan (código 2, sin tocar nada) hasta que se fija en un commit.
+
+Es correcto y falla cerrado.
+
+**Aviso de `ULTRON_STUDIO_MONITOR_EXPECT`:**
+- lo calcula Dotenv como www-data, imitando a `env()` (comillas, `true`/`false`/`null`/`empty`) y al `trim()` de la configuración;
+- nunca imprime el valor;
+- si Dotenv no lee el fichero, avisa y sigue: el paso 7 lo comprueba en la configuración efectiva;
+- 18/18 y 6/6 en el banco.
+
+**Smoke con presupuestos:**
+- **Los techos solo viven en el JSON.** El lanzador lo valida con el mismo código ANTES de activar la cuenta (`python3 -I -B`, sin `__pycache__` en `/root`).
+- **Importarlo no ejecuta el smoke:** `smoke-h7.py` tiene guarda `__main__`.
+- **Ritmo:** como mucho 90 lecturas por minuto (el cupo es 120).
+  - La evidencia se mide con 1 + 3 peticiones separadas al menos 6,5 s: 4 por pasada y 8 si se repite.
+  - Eso queda por debajo de su cupo de 10 por minuto y persona (`AppServiceProvider.php:649-652`).
+- **Un OMITIDO por estado da código 3** (decisión 1 del lead: «0, o 3 si lo único OMITIDO son presupuestos por estado»).
+- **Los invisibles del smoke van con escapes** (`smoke-h7.py:73`).
+
+**`h7-monitor-scope.sh`:**
+- exige el estado actual y que coincida con la configuración efectiva;
+- hace una copia previa en 600 en `/root`;
+- escribe la misma línea conservando inodo, dueño y modo;
+- comprueba Dotenv antes de `config:cache`;
+- deja la caché de www-data en 600 y nunca sobre un enlace;
+- comprueba que la configuración efectiva es la pedida y que lo demás no cambió;
+- exige el salto de ±2 tareas, con el código de salida del programador;
+- hace `queue:restart` y comprueba 13/0 dos veces y el 401;
+- nunca imprime valores.
+
+16/16 y 11/11 en el banco.
+
+**`supresion-1581.sql`:** solo cambian comentarios, que ahora remiten al §10.
+
+**El runbook de supresión (§10 de `informe-devops-h7.md`) es correcto:**
+- el teléfono entra por la entrada estándar, sin eco;
+- la huella se calcula con `PhoneFingerprint::of` como www-data y va directa a un fichero de root en 600;
+- `log_statement` y `log_min_duration_statement` se comprueban antes;
+- el orden es en seco → real → comprobaciones tras el COMMIT;
+- al final, `shred` del fichero de parámetros.
+
+**`preparar.sh` (T-1):** sustituye `PREVIO=` y `TAREAS=`, tengan el valor que tengan, en la COPIA del banco, y falla si una sustitución deja de casar.
+
+**Sintaxis en HEAD:** OK en `bash -n` de los 6 scripts tocados, `ast` de `smoke-h7.py`, `php -l` de `sembrar-presupuestos.php` y el JSON. No quedan caracteres invisibles literales en `ops/` ni en `informe-devops-h7.md` (`grep -P`, 0 líneas).
+
+### 9.4 Menores nuevos
+
+**m-4 · devops / propietario · `ops/h7-monitor-scope.sh:144` (heredado de `ops/h6-integrations-scope.sh:110`).**
+- **Qué choca:**
+  - los dos mandos exigen el fichero de entorno en modo **600**;
+  - `ops/ironbody-migrate-propuesta.sh:117-122` exige que sea de root, sin escritura de grupo ni de otros, y recomienda **`root:www-data 640`**. Es el paso 3b de su instalación, B-2 de la hoja de ruta.
+- **Escenario:**
+  1. El propietario instala la propuesta con el paso 3b y el fichero queda en 640.
+  2. `h7-monitor-scope.sh on off` y `off on` (encender y apagar el monitor, es decir, la vuelta atrás de nivel 2) abortan con «se exige 600». Igual el mando del H6.
+  - Falla cerrado y sin tocar nada, pero deja sin mando justo la vuelta atrás de nivel 2.
+- **Corrección:** que los mandos acepten 600 o 640, sin escritura de grupo ni de otros, como la propuesta. O que el paso 3b lo diga y explique cómo se usa entonces el mando.
+
+**m-5 · devops · paso 0 de `ops/deploy-h7-backend.sh`** (lo que OPS7 deja «sin decidir» en su §11).
+- **Qué pasa:** el paso 0 no comprueba que el fichero de entorno parsea con Dotenv. Solo lo intenta si `ULTRON_STUDIO_MONITOR_EXPECT` está presente; la comprobación de verdad es la del paso 2, **después del merge**.
+- **Escenario:**
+  1. El fichero no parsea. En producción nadie lo notaría, porque la aplicación usa la caché de configuración.
+  2. El paso 2 aborta con el código del H7 ya en el disco y sin migración.
+  3. Restaurar `env.backup`, como sugiere el mensaje, no lo arregla: es el mismo fichero.
+- **Riesgo bajo:** es recuperable (el código del H7 funciona sin la migración y relanzar reanuda), el fichero parseó en el despliegue del H6 (02-11, 04:37 UTC) y el paso 0 exige que sea igual al respaldo. Aun así, cuesta una línea.
+- **Recomendación:** repetir en el paso 0 la comprobación de Dotenv del paso 2, que aborta sin tocar nada.
+
+### 9.5 m-2 y la línea 81 de este informe
+
+**m-2:** `59d81b0` (segunda pasada de DOC7):
+- quita las afirmaciones falsas sobre `api-commit.txt`;
+- actualiza F-1/F-2 con cifras, la fase B y el HEAD con su marcador;
+- la guía (`GUIA_ADMINISTRACION.md:132`) da ya las dos cifras: la de hoy y la del H7.
+
+Queda para la tercera pasada lo de §9.6.
+
+**La línea 81 de este informe (el SQL de M-1) no lleva caracteres literales desde `0d4c5e86`:**
+- `grep -cP` con la clase de invisibles sobre el fichero del árbol y sobre `git show HEAD:…` da **0 líneas** (código 1);
+- `od -c` muestra la clase en ASCII, con barras invertidas;
+- lo que dice `security` corresponde a la versión de `3fbb155`.
+
+### 9.6 Para la tercera pasada de DOC7
+
+Es condición antes del paso 5; la reviso cuando se confirme.
+1. **`TAREAS` en `DEPLOYMENT_PLAN` y `CHECKLIST_OPERATIVO`:**
+   - leerlo con `--solo-comprobar`, que dirá «COMPROBACIONES PREVIAS LEÍDAS, FALTA FIJAR TAREAS=N» y no «EN VERDE»;
+   - fijarlo en `deploy-h7-backend.sh` y `smoke-run-h7.sh` en un commit;
+   - volver a copiar los dos con su huella;
+   - repetir `--solo-comprobar`.
+   - Hoy: 0 menciones en DEPLOYMENT_PLAN, CHECKLIST y ROLLBACK.
+2. **Lo que se copia al servidor:** también `perf-h7/presupuestos-h7.json` (sin él, el smoke sale con 2) y `h7-monitor-scope.sh`, con sus huellas.
+3. **El código esperado del smoke** es «0, o 3 si lo único OMITIDO son presupuestos por estado» (decisión 1 del lead), no «0» a secas:
+   - hoy no hay versión en CANARY en producción, así que lo esperado es 3;
+   - en la primera pasada, `SMOKE_BUDGETS_OUT=/root/<fichero>.json`: es la línea base.
+4. **Encender y apagar el monitor con `h7-monitor-scope.sh`.** El paso 10 del runbook dice todavía «No hay script». Va también en ROLLBACK, nivel 2.
+5. **N-10, cerrado** en `ULTRON_STUDIO_SECURITY_REPORT.md:311`: el envoltorio de producción fija `PGOPTIONS`.
+6. **Los invisibles, acotados al Studio,** en «Qué cambia» de DEPLOYMENT_PLAN y en la guía, con la nota de `informe-security.md` §7.3: fuera del Studio no cambia nada.
+7. **`BACKEND_REPORT.md:1093`:** la fase C del tester ya está hecha (`cdade1e`).
+
+### 9.7 Lo que no verifiqué en esta pasada
+
+- La fase D del tester y la tercera pasada de DOC7 (§9.6).
+- Los bancos de devops: los he leído, no los he repetido. Tampoco las mutaciones de `601398c`.
+- Producción: `TAREAS`, la primera pasada de presupuestos con nginx, TLS y FPM, y los mandos con `crontab` y `supervisorctl` reales.
