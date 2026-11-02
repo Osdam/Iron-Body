@@ -364,7 +364,7 @@ Sigue vigente y cubre ahora la cadena: antes del despliegue, `tests/Feature/Ultr
 
 ## Hito 6 (integraciones comerciales): revisiones de seguridad
 
-**Estado:** implementado en la rama `feat/ultron-studio-h6` (backend `e3a0fdd`; CRM `f38699d`), **no desplegado**. Revisiones del 01-11-2026: `plans/informes-h6/informe-security.md` (`security`, transversal) e `informe-api-security.md` (`api-security-specialist`), más los hallazgos de seguridad del tester de backend (`informe-tester-backend.md`) y de DevOps (`informe-devops-h6.md`). Lo que deciden está congelado en las Enmiendas 3 y 4 del contrato. Las protecciones de esta sección **rigen en producción cuando se despliegue**.
+**Estado:** implementado en la rama `feat/ultron-studio-h6` (backend `411d8b1`, código `4e2e8cf`; CRM `16c433c`), **no desplegado**. Revisiones del 01-11-2026: `plans/informes-h6/informe-security.md` (`security`, transversal) e `informe-api-security.md` (`api-security-specialist`), más los hallazgos de seguridad del tester de backend (`informe-tester-backend.md`) y de DevOps (`informe-devops-h6.md`). Lo que deciden está congelado en las Enmiendas 3 y 4 del contrato. Las protecciones de esta sección **rigen en producción cuando se despliegue**.
 
 **Superficie nueva:**
 - **18 rutas** (`/api/admin/ultron-studio/integrations/*`; 56 en el Studio), con 4 llaves nuevas: `ultron.campaigns_manage` y `ultron.canary_manage` (el Administrador las tiene por defecto) y `ultron.canary_authorize` y `ultron.integrations_manage` (solo el Super Admin por defecto). El token compartido no recibe ninguna.
@@ -397,7 +397,7 @@ Sigue vigente y cubre ahora la cadena: antes del despliegue, `tests/Feature/Ultr
 | `api-security-specialist` | Backend `8de30ed` (el código de S es el de `4e6f5fe`) | **APROBADO CON OBSERVACIONES**, sin bloqueantes ni altas: 2 bajas (AS-1 y AS-2) y 4 notas (AS-3 a AS-6) |
 | `tester` de backend | `f549c50` con la tanda final de S, en PostgreSQL 14.24 con sesiones reales | H-1 (= B-2; el tester la clasificó media, por la integridad del libro), H-2 (baja, nueva) y H-3 (= B-1, medida); O-1 y O-2, observaciones |
 | DevOps | Los scripts y el runbook | H-1 (orden de la fase 2), H-2 (la rama sin `7ba0ce8`, resuelto), H-3 (cupo del smoke) y H-4 (umbral del respaldo) |
-| `reviewer` | — | [PENDIENTE: revisión final del Hito 6.] |
+| `reviewer` | Backend `cac4d5b` (código `4e2e8cf`) y CRM `16c433c` (02-11-2026) | **APROBADO CON OBSERVACIONES**, sin bloqueantes ni mayores; 6 menores: m-1..m-4 (CRM) al Hito 7, m-5 y m-6 corregidas |
 
 ### Hallazgos y estado
 
@@ -432,7 +432,7 @@ Los códigos se repiten entre revisiones, así que cada uno lleva su origen.
 - **Escrituras.** El `clientRequestId` de otra persona da 409 en las cuatro tablas; el libro va en la misma transacción en las 10 escrituras; los topes, bajo cerrojo consultivo después de READ COMMITTED; 413 por encima de 64 KB y 422 con un JSON de 600 niveles; los campos de más se ignoran.
 - **Cupos.** Los de la sonda (6/h por persona y 20/h por red) no los esquivan dos sesiones ni `X-Forwarded-For`; el enfriamiento no hace red ni escribe evento.
 - **Operación.** `git` como root con `umask 022` y lectura por `www-data` comprobada fichero a fichero; respaldo en 700 y copias en 600 de root; el fichero de entorno se comprueba que parsea antes de tocar las cachés; la configuración efectiva se compara con la esperada; ni tinker ni el smoke imprimen valores; el smoke nunca pulsa la sonda.
-- **CRM** (capa de datos y una pasada rápida por la página, todavía en escritura cuando `security` revisó): sin `innerHTML`, `bypassSecurityTrust` ni almacenamiento del navegador; solo llama a `integrations/*`; los 7 textos obligatorios son literales; el lector de llamadas no copia `to_phone` ni `from_phone`; el teléfono del formulario no se guarda. `frontend` lo confirma sobre `f38699d` (`informe-front-integracion.md` §8): cero `innerHTML` (la mutación del alias como `[innerHTML]` cae), textos hostiles interpolados y el teléfono nunca en pantalla tras registrarlo, en la sesión ni en el almacenamiento (comprobado también en Chrome con la API simulada). [PENDIENTE: la segunda pasada de `security` sobre la página (contrato, «Orden», paso 5); la rellena el lead.]
+- **CRM** (capa de datos y una pasada rápida por la página, todavía en escritura cuando `security` revisó): sin `innerHTML`, `bypassSecurityTrust` ni almacenamiento del navegador; solo llama a `integrations/*`; los 7 textos obligatorios son literales; el lector de llamadas no copia `to_phone` ni `from_phone`; el teléfono del formulario no se guarda. `frontend` lo confirma sobre `f38699d` (`informe-front-integracion.md` §8): cero `innerHTML` (la mutación del alias como `[innerHTML]` cae), textos hostiles interpolados y el teléfono nunca en pantalla tras registrarlo, en la sesión ni en el almacenamiento (comprobado también en Chrome con la API simulada). **La segunda pasada de `security` sobre la página (01-11-2026, confirmada en `8c3eb7e`) no encontró hallazgos; ver la tabla de arriba.**
 
 ### Protecciones del Hito 6 (rigen en producción cuando se despliegue)
 
