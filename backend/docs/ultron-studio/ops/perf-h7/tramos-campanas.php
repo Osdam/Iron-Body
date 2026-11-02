@@ -5,7 +5,7 @@
  * datos de la base del banco (`ultron_studio_h7_perf_http`: 3 cuentas, 500 campañas en el espejo, 50 asociaciones
  * activas a 3 versiones). Mide por separado, n = 30 tras calentar:
  *   1. connection()  — el estado de las cuentas (MetaAdsSync::statusAll);
- *   2. campaigns()   — las 500 filas del espejo a DTO y ordenadas (se pagina DESPUÉS, en PHP);
+ *   2. campaigns()   — las 500 filas del espejo ordenadas y paginadas; desde F-2(b) solo las de la página pasan a ficha;
  *   3. la consulta de las asociaciones activas con su versión (incluido `content`);
  *   4. dtos()        — una DTO por asociación activa, con integrityOk() de su versión (huella recalculada);
  *   5. integrityOk() de UNA versión (la huella del contenido), para saber cuánto pesa en 4;
@@ -71,7 +71,7 @@ $version = $activas->first(fn ($l) => $l->version !== null)?->version;
 printf("campañas en el espejo: %d · asociaciones activas: %d · versiones distintas: %d\n\n", count($filas), $activas->count(), $activas->pluck('version_id')->filter()->unique()->count());
 printf("| Tramo | consultas | p50 ms | p95 ms | máx ms |\n|---|---|---|---|---|\n");
 $medir('1. connection() (estado de las 3 cuentas)', fn () => $meta->connection());
-$medir('2. campaigns() (500 filas → DTO + orden)', fn () => $meta->campaigns($conexion['accountStates']));
+$medir('2. campaigns() (500 filas → orden + página; fichas solo de la página desde F-2(b))', fn () => $meta->campaigns($conexion['accountStates']));
 $medir('3. asociaciones activas + versión (con content)', fn () => StudioCampaignLink::query()->with(['version:id,uuid,label,status,content,content_hash'])->where('status', 'active')
     ->whereIn('campaign_id', array_values(array_unique(array_column($filas, 'entityId'))))->get());
 $medir('4. dtos() de las 50 activas (integrityOk por asociación)', fn () => $links->dtos($activas->map(fn ($l) => $l->withoutRelations())->all()));
