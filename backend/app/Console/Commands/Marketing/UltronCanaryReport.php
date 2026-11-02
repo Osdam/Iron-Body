@@ -276,37 +276,79 @@ class UltronCanaryReport extends Command
     /**
      * Un turno es un entrante de la persona y todo lo que vino detrás.
      *
+     * Una pasada por las acciones y otra por los mensajes (F-1 del H7). Antes,
+     * por cada entrante se volvían a filtrar todos los mensajes y a recorrer
+     * todas las acciones, decodificando su `metadata` en cada vuelta: tiempo
+     * cuadrático, un segundo con 200 turnos. El resultado es el mismo byte a
+     * byte y las consultas no cambian: lo vigila
+     * `UltronCanaryReportSinglePassH7Test` contra el algoritmo de antes, y es
+     * `protected` solo para que esa prueba ponga la referencia en su lugar.
+     *
      * @return list<array<string,mixed>>
      */
-    private function turnos(Collection $mensajes, Collection $acciones, int $max): array
+    protected function turnos(Collection $mensajes, Collection $acciones, int $max): array
     {
-        $entrantes = $mensajes->where('direction', MarketingMessage::DIRECTION_INBOUND)->values();
+        /*
+         * El turno se ata por `source_event_id`, que es donde el commit
+         * escribe el id del mensaje que lo disparó; `metadata.message_id`
+         * es el respaldo para las filas del router de entrada. No existe
+         * columna `message_id` en la tabla, y darla por buena dejaba todos
+         * los turnos sin decisión, que es el fallo que cazó la prueba.
+         *
+         * Cada mensaje se queda con la PRIMERA acción (por id) que lo nombra
+         * por cualquiera de las dos vías, la misma que encontraba el `first()`
+         * de antes.
+         */
+        $accionDe = [];
+        foreach ($acciones as $a) {
+            $accionDe[(int) $a->source_event_id] ??= $a;
+            $accionDe[$this->mensajeQueNombra($a)] ??= $a;
+        }
+
+        /*
+         * Los entrantes en orden y, de cada uno, los salientes que vinieron
+         * detrás hasta el siguiente entrante. Los mensajes llegan ordenados
+         * por id (la consulta de `handle()`), así que «entre sus ids» es
+         * «entre sus posiciones». Cuenta los PRIMEROS `$max` turnos desde
+         * `--since`, y como poco uno (el corte iba después de añadir); el
+         * entrante que sigue al último solo cierra su turno, y el último sin
+         * siguiente se cierra en PHP_INT_MAX, exclusivo, como antes. La
+         * dirección se compara con `==`, como hacía `Collection::where`.
+         */
+        $tope = max(1, $max);
+        $entrantes = [];
+        $salientesDe = [];
+        foreach ($mensajes as $m) {
+            $direccion = $m->direction;
+            if ($direccion == MarketingMessage::DIRECTION_INBOUND) {
+                if (count($entrantes) === $tope) {
+                    break;
+                }
+                $entrantes[] = $m;
+                $salientesDe[] = [];
+            } elseif ($direccion == MarketingMessage::DIRECTION_OUTBOUND && $entrantes !== [] && $m->id < PHP_INT_MAX) {
+                $salientesDe[count($entrantes) - 1][] = $m;
+            }
+        }
+
         $turnos = [];
-
         foreach ($entrantes as $i => $entrante) {
-            $siguiente = $entrantes[$i + 1]->id ?? PHP_INT_MAX;
-
-            $salientes = $mensajes
-                ->where('direction', MarketingMessage::DIRECTION_OUTBOUND)
-                ->filter(fn (MarketingMessage $m) => $m->id > $entrante->id && $m->id < $siguiente)
-                ->values();
-
-            /*
-             * El turno se ata por `source_event_id`, que es donde el commit
-             * escribe el id del mensaje que lo disparó; `metadata.message_id`
-             * es el respaldo para las filas del router de entrada. No existe
-             * columna `message_id` en la tabla, y darla por buena dejaba todos
-             * los turnos sin decisión, que es el fallo que cazó la prueba.
-             */
-            $accion = $acciones->first(fn (MarketingAiAction $a) => (int) $a->source_event_id === (int) $entrante->id
-                || (int) data_get($a->metadata, 'message_id') === (int) $entrante->id);
-            $meta = is_array($accion?->metadata) ? $accion->metadata : [];
+            $salientes = collect($salientesDe[$i]);
+            $accion = $accionDe[(int) $entrante->id] ?? null;
+            $metadata = $accion?->metadata;
+            $meta = is_array($metadata) ? $metadata : [];
 
             $primera = $salientes->first();
+            // Cada lectura de `created_at` o de `metadata` vuelve a convertir el
+            // valor de la fila (un Carbon nuevo, un JSON decodificado): una vez
+            // por turno. Las fechas solo se comparan y se formatean, no cambian.
+            $en = $entrante->created_at;
+            $enPrimera = $primera?->created_at;
+            $metaEntrante = $entrante->metadata;
             $turnos[] = [
                 'turno' => $i + 1,
                 'entrante' => (string) $entrante->body,
-                'en' => optional($entrante->created_at)->toIso8601String(),
+                'en' => optional($en)->toIso8601String(),
                 'accion' => $accion?->action_type,
                 'estado' => $accion?->status,
                 'outcome' => $meta['outcome'] ?? null,
@@ -348,8 +390,8 @@ class UltronCanaryReport extends Command
                     'tipo' => data_get($m->metadata, 'kind', 'text'),
                     'texto' => (string) $m->body,
                 ])->all(),
-                'latencia_s' => $primera !== null && $entrante->created_at !== null && $primera->created_at !== null
-                    ? $entrante->created_at->diffInSeconds($primera->created_at)
+                'latencia_s' => $primera !== null && $en !== null && $enPrimera !== null
+                    ? $en->diffInSeconds($enPrimera)
                     : null,
                 /*
                  * Lo que la persona VIO mientras esperaba, y cuánto tardó en
@@ -357,24 +399,37 @@ class UltronCanaryReport extends Command
                  * si tardan más que la respuesta no sirven de nada, así que se
                  * miden con la misma vara.
                  */
-                'presencia' => data_get($entrante->metadata, 'ultron_presence'),
+                'presencia' => data_get($metaEntrante, 'ultron_presence'),
                 // Si Meta dijo cuánto tardó, esa es la medida buena: las marcas
                 // de la tabla son de segundo entero y restarlas da «0 ms».
                 'time_to_typing_ms' => $this->msEntre(
-                    $entrante->created_at,
-                    data_get($entrante->metadata, 'ultron_presence.typing_started_at'),
+                    $en,
+                    data_get($metaEntrante, 'ultron_presence.typing_started_at'),
                 ),
-                'time_to_response_ms' => $primera !== null && $entrante->created_at !== null && $primera->created_at !== null
-                    ? (int) round($entrante->created_at->diffInMilliseconds($primera->created_at))
+                'time_to_response_ms' => $primera !== null && $en !== null && $enPrimera !== null
+                    ? (int) round($en->diffInMilliseconds($enPrimera))
                     : null,
             ];
-
-            if (count($turnos) >= $max) {
-                break;
-            }
         }
 
         return $turnos;
+    }
+
+    /**
+     * `(int) data_get($a->metadata, 'message_id')`, sin decodificar el JSON
+     * cuando esa clave no puede estar. Si el texto de la fila no lleva
+     * «message_id» ni ningún escape `\u`, ninguna clave decodificada se llama
+     * así —los demás escapes de JSON solo dan comillas, barras y caracteres de
+     * control— y el resultado sería (int) null: cero. Ante la duda, decodifica.
+     */
+    private function mensajeQueNombra(MarketingAiAction $a): int
+    {
+        $crudo = $a->getAttributes()['metadata'] ?? null;
+        if (is_string($crudo) && ! str_contains($crudo, 'message_id') && ! str_contains($crudo, '\u')) {
+            return 0;
+        }
+
+        return (int) data_get($a->metadata, 'message_id');
     }
 
     /**

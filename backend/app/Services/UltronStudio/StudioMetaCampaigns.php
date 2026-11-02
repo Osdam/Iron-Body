@@ -195,8 +195,12 @@ final class StudioMetaCampaigns
      * consulta por las campañas, una por los nombres de las cuentas y dos por
      * las pasadas de referencia. Sin configuración, ninguna.
      *
+     * `dto` es un cierre que arma la DTO de la fila ({@see campaignDto()}) con
+     * los datos y el `$ahora` de este momento: quien pagina la arma solo para
+     * las filas de la página (F-2 del H7).
+     *
      * @param  array<string,string>  $accountStates  id opaco de cuenta → estado (de {@see connection()})
-     * @return list<array{account:string,entityId:string,name:?string,effectiveStatus:?string,dto:array<string,mixed>}>
+     * @return list<array{account:string,entityId:string,name:?string,effectiveStatus:?string,dto:\Closure():array<string,mixed>}>
      */
     public function campaigns(array $accountStates): array
     {
@@ -223,15 +227,20 @@ final class StudioMetaCampaigns
         $out = [];
         foreach ($filas as $e) {
             $cuenta = (string) $e->ad_account_id;
+            $entidad = (string) $e->entity_id;
+            $nombre = $e->name;
             $sincronizada = $e->synced_at !== null ? CarbonImmutable::instance($e->synced_at) : null;
             $estado = $e->effective_status !== null ? (string) $e->effective_status : null;
+            $publica = $publicas[$cuenta];
+            $estadoCuenta = $accountStates[$publica['id']] ?? null;
+            $referencia = $referencias[$cuenta] ?? null;
             $out[] = [
                 'account' => $cuenta,
-                'entityId' => (string) $e->entity_id,
-                'name' => $e->name,
+                'entityId' => $entidad,
+                'name' => $nombre,
                 'effectiveStatus' => $estado,
-                'dto' => self::campaignDto((string) $e->entity_id, $e->name, $estado, $sincronizada, $publicas[$cuenta],
-                    $accountStates[$publicas[$cuenta]['id']] ?? null, $referencias[$cuenta] ?? null, $ahora),
+                // Valores ya leídos e inmutables: armarla después da la misma DTO que armarla aquí.
+                'dto' => static fn (): array => self::campaignDto($entidad, $nombre, $estado, $sincronizada, $publica, $estadoCuenta, $referencia, $ahora),
             ];
         }
 

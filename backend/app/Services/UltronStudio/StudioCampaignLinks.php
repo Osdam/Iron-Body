@@ -132,7 +132,8 @@ final class StudioCampaignLinks
         $total = count($filas);
         // Con la página fuera de la lista, la página va vacía: el desplazamiento nunca desborda un entero (AS-2).
         $desde = $page - 1 > intdiv($total, max(1, $perPage)) ? $total : ($page - 1) * $perPage;
-        $pagina = array_map(static fn (array $f): array => $f['dto'] + ['ultron' => ['link' => $activas[$f['account'].'|'.$f['entityId']] ?? null]],
+        // La DTO de Meta solo de las filas de la página (F-2 del H7).
+        $pagina = array_map(static fn (array $f): array => ($f['dto'])() + ['ultron' => ['link' => $activas[$f['account'].'|'.$f['entityId']] ?? null]],
             array_slice($filas, $desde, $perPage));
 
         return [
@@ -370,12 +371,14 @@ final class StudioCampaignLinks
         }
         $lista->loadMissing(['version:id,uuid,label,status,content,content_hash', 'replacedBy:id,uuid']);
         $espejo = $this->meta->mirrorNames($lista->map(static fn (StudioCampaignLink $l): string => (string) $l->campaign_id)->all());
+        // La huella de cada versión, una vez por versión y no por asociación (F-2 del H7).
+        $integridad = [];
 
-        return $lista->map(function (StudioCampaignLink $l) use ($espejo): array {
+        return $lista->map(function (StudioCampaignLink $l) use ($espejo, &$integridad): array {
             $clave = $l->ad_account_id.'|'.$l->campaign_id;
             $conectada = array_key_exists($clave, $espejo);
 
-            return self::dto($l, self::versionRef($l), $conectada, $conectada ? $espejo[$clave] : null, $l->replacedBy?->uuid);
+            return self::dto($l, self::versionRef($l, $integridad), $conectada, $conectada ? $espejo[$clave] : null, $l->replacedBy?->uuid);
         })->all();
     }
 
@@ -460,8 +463,17 @@ final class StudioCampaignLinks
             ->first();
     }
 
-    /** @return array{uuid:string,label:string,status:string,integrityOk:bool}|null */
-    private static function versionRef(StudioCampaignLink $l): ?array
+    /**
+     * La versión de destino con su integridad. `integrityOk()` recalcula la
+     * huella del contenido (~0,3 ms) y es pura, y `with('version')` da la MISMA
+     * instancia a todas las asociaciones de una versión: con 50 activas sobre 3
+     * versiones se calculaba 50 veces. Se recuerda por instancia —no por id—
+     * dentro de una llamada a {@see dtos()}, que las mantiene vivas.
+     *
+     * @param  array<int,bool>  $integridad  instancia de versión (spl_object_id) → integrityOk
+     * @return array{uuid:string,label:string,status:string,integrityOk:bool}|null
+     */
+    private static function versionRef(StudioCampaignLink $l, array &$integridad): ?array
     {
         $v = $l->target_kind === StudioCampaignLink::TARGET_VERSION ? $l->version : null;
 
@@ -469,7 +481,7 @@ final class StudioCampaignLinks
             'uuid' => (string) $v->uuid,
             'label' => (string) $v->label,
             'status' => (string) $v->status,
-            'integrityOk' => StudioVersions::integrityOk($v),
+            'integrityOk' => $integridad[spl_object_id($v)] ??= StudioVersions::integrityOk($v),
         ];
     }
 
