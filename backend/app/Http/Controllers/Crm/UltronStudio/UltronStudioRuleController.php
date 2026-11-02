@@ -87,7 +87,7 @@ class UltronStudioRuleController extends Controller
     {
         $access = StudioAccess::requirePerson($request);
         $data = $this->validateListSizesFirst($request, [
-            'description' => ['required', 'string', 'max:500', new PlainText(multiline: true)],
+            'description' => ['required', 'string', 'max:500', new PlainText(multiline: true, strict: true)],
             'type' => ['required', Rule::in(StudioRule::TYPES)],
             'priority' => ['required', Rule::in(StudioRule::PRIORITIES)],
             'layers' => ['required', 'array', 'list', 'min:1', 'max:10'],
@@ -119,7 +119,7 @@ class UltronStudioRuleController extends Controller
         $access = StudioAccess::requirePerson($request);
         $data = $this->validateListSizesFirst($request, [
             'baseRevision' => ['required', 'integer:strict', 'min:1', 'max:2147483647'],
-            'description' => ['sometimes', 'required', 'string', 'max:500', new PlainText(multiline: true)],
+            'description' => ['sometimes', 'required', 'string', 'max:500', new PlainText(multiline: true, strict: true)],
             'type' => ['sometimes', 'required', Rule::in(StudioRule::TYPES)],
             'priority' => ['sometimes', 'required', Rule::in(StudioRule::PRIORITIES)],
             'layers' => ['sometimes', 'required', 'array', 'list', 'min:1', 'max:10'],
@@ -143,7 +143,7 @@ class UltronStudioRuleController extends Controller
         $access = StudioAccess::requirePerson($request);
         $data = $request->validate([
             'baseRevision' => ['required', 'integer:strict', 'min:1', 'max:2147483647'],
-            'reason' => ['required', 'string', 'min:5', 'max:500', new PlainText(multiline: true)],
+            'reason' => ['required', 'string', 'min:5', 'max:500', new PlainText(multiline: true, strict: true)],
         ]);
 
         $regla = $this->rules->findByUuid($uuid);
@@ -170,7 +170,7 @@ class UltronStudioRuleController extends Controller
             'refs.edges' => ['sometimes', 'array', 'list', "max:{$max}"],
             'refs.edges.*' => ['string', 'distinct', Rule::in(array_column(StudioCatalog::graph()['edges'], 'id'))],
             'refs.knowledgeKeys' => ['sometimes', 'array', 'list', "max:{$max}"],
-            'refs.knowledgeKeys.*' => ['string', 'distinct', 'max:255', new PlainText],
+            'refs.knowledgeKeys.*' => ['string', 'distinct', 'max:255', new PlainText(strict: true)],
             'refs.knowledgeCategories' => ['sometimes', 'array', 'list', "max:{$max}"],
             'refs.knowledgeCategories.*' => ['string', 'distinct', Rule::in(MarketingKnowledgeItem::CATEGORIES)],
         ];

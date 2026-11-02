@@ -47,7 +47,7 @@ class UltronStudioPublicationController extends Controller
         $access = StudioAccess::requirePerson($request);
         $data = $request->validate([
             'clientRequestId' => ['required', 'uuid'],
-            'reason' => ['required', 'string', 'min:'.StudioPublications::REASON_MIN, 'max:'.StudioPublications::REASON_MAX, new PlainText(multiline: true)],
+            'reason' => ['required', 'string', 'min:'.StudioPublications::REASON_MIN, 'max:'.StudioPublications::REASON_MAX, new PlainText(multiline: true, strict: true)],
         ]);
 
         $resultado = $publications->legacy($access, $request, strtolower($data['clientRequestId']), $data['reason']);

@@ -94,7 +94,7 @@ class UltronStudioLabScenarioController extends Controller
     {
         $access = $this->open($request, StudioLabScenarios::LAB_MANAGE);
         $data = $request->validate([
-            'reason' => ['required', 'string', 'min:5', 'max:500', new PlainText(multiline: true)],
+            'reason' => ['required', 'string', 'min:5', 'max:500', new PlainText(multiline: true, strict: true)],
             'baseRevision' => ['sometimes', 'nullable', 'integer:strict', 'min:1', 'max:2147483647'],
         ]);
 

@@ -107,7 +107,7 @@ class UltronStudioCampaignLinkController extends Controller
         $access = StudioAccess::requirePerson($request);
         $data = $request->validate([
             // AS-1 (Enmienda 3): el motivo queda para siempre en la fila y en el libro: sin teléfonos ni correos.
-            'reason' => ['required', 'string', 'min:'.StudioCampaignLinks::REASON_MIN, 'max:'.StudioCampaignLinks::REASON_MAX, new PlainText(multiline: true), StudioCanaryPhone::contactDataRule()],
+            'reason' => ['required', 'string', 'min:'.StudioCampaignLinks::REASON_MIN, 'max:'.StudioCampaignLinks::REASON_MAX, new PlainText(multiline: true, strict: true), StudioCanaryPhone::contactDataRule()],
         ]);
 
         return response()->json(['ok' => true, 'data' => $links->deactivate($access, $request, $uuid, $data['reason'])]);

@@ -9,6 +9,7 @@ use App\Models\UltronStudio\StudioVersion;
 use App\Rules\PlainText;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Middleware\ThrottleRequests;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -17,10 +18,12 @@ use Tests\Feature\UltronStudio\StudioFixtures;
 use Tests\TestCase;
 
 /**
- * AS-5 del H5 cerrado en H7 (SEC7): `PlainText` rechaza con 422 la clase
- * completa de `lab-invisibles` (menos lo que forma un emoji) en las entradas
- * del Studio, y el 422 llega ANTES de escribir nada: en particular, antes de
- * la cadena de publicaciones, que no se puede editar ni borrar.
+ * AS-5 del H5 cerrado en H7 (SEC7): `PlainText` con `strict: true` rechaza con
+ * 422 la clase completa de `lab-invisibles` (menos lo que forma un emoji) en
+ * las entradas del Studio, y el 422 llega ANTES de escribir nada: en
+ * particular, antes de la cadena de publicaciones, que no se puede editar ni
+ * borrar. Fuera del Studio, `PlainText` sigue con la lista de antes del H7
+ * (M-1 de la revisión final del H7): lo fija `PlainTextOutsideStudioTest`.
  *
  * Los caracteres son los que AS-5 dejó probados como «pasan la validación»
  * (U+2028, U+00AD, U+2060, U+061C, U+180E, U+E0041) más el ZWJ suelto.
@@ -109,7 +112,7 @@ class StudioPlainTextInvisiblesTest extends TestCase
 
     public function test_la_regla_en_una_linea_y_en_varias(): void
     {
-        $falla = static fn (string $v, bool $multi): bool => Validator::make(['x' => $v], ['x' => [new PlainText(multiline: $multi)]])->fails();
+        $falla = static fn (string $v, bool $multi): bool => Validator::make(['x' => $v], ['x' => [new PlainText(multiline: $multi, strict: true)]])->fails();
 
         // Lo de siempre sigue fallando, y lo nuevo también.
         foreach (["a\u{200B}b", "a\u{202E}b", "a\u{FEFF}b", "a\x1Bb", "a\u{00AD}b", "a\u{2028}b", "a\u{E0041}b", "a\u{200D}b"] as $malo) {
@@ -124,9 +127,58 @@ class StudioPlainTextInvisiblesTest extends TestCase
         $this->assertFalse($falla("Plan {$familia}", false));
         $this->assertFalse($falla("Plan \u{2764}\u{FE0F}\nfamiliar {$familia}", true));
         // Nulo y no-texto como antes.
-        $this->assertFalse(Validator::make(['x' => null], ['x' => ['nullable', new PlainText]])->fails());
-        $v = Validator::make(['x' => ['a']], ['x' => [new PlainText]]);
+        $this->assertFalse(Validator::make(['x' => null], ['x' => ['nullable', new PlainText(strict: true)]])->fails());
+        $v = Validator::make(['x' => ['a']], ['x' => [new PlainText(strict: true)]]);
         $this->assertTrue($v->fails());
         $this->assertSame(PlainText::MESSAGE_INVALID, $v->errors()->first('x'));
+    }
+
+    /**
+     * M-1 de la revisión final del H7: la clase completa es SOLO del Studio, y
+     * en el Studio es en TODAS sus entradas. Un campo nuevo con `new PlainText`
+     * sin `strict: true` volvería en silencio a la lista de antes. Se mira el
+     * código (tokens, sin comentarios) de las zonas del Studio.
+     */
+    public function test_todas_las_entradas_del_studio_usan_el_modo_estricto(): void
+    {
+        $laxas = [];
+        $vistas = 0;
+        foreach (['app/Http/Controllers/Crm/UltronStudio', 'app/Services/UltronStudio', 'app/Console/Commands/UltronStudio'] as $zona) {
+            foreach (File::allFiles(base_path($zona)) as $fichero) {
+                if ($fichero->getExtension() !== 'php') {
+                    continue;
+                }
+                $tokens = array_values(array_filter(
+                    token_get_all($fichero->getContents()),
+                    static fn ($t): bool => ! is_array($t) || ! in_array($t[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true),
+                ));
+                foreach ($tokens as $i => $t) {
+                    $clase = $tokens[$i + 1] ?? null;
+                    if (! is_array($t) || $t[0] !== T_NEW || ! is_array($clase) || ! in_array(ltrim($clase[1], '\\'), ['PlainText', 'App\\Rules\\PlainText'], true)) {
+                        continue;
+                    }
+                    $vistas++;
+                    // Los argumentos, hasta el paréntesis que los cierra.
+                    $args = '';
+                    if (($tokens[$i + 2] ?? null) === '(') {
+                        for ($j = $i + 3, $nivel = 1; isset($tokens[$j]); $j++) {
+                            $nivel += $tokens[$j] === '(' ? 1 : ($tokens[$j] === ')' ? -1 : 0);
+                            if ($nivel === 0) {
+                                break;
+                            }
+                            $args .= is_array($tokens[$j]) ? $tokens[$j][1] : $tokens[$j];
+                        }
+                    }
+                    if (! str_contains($args, 'strict:true')) {
+                        $laxas[] = "{$zona}/{$fichero->getRelativePathname()}:{$clase[2]}";
+                    }
+                }
+            }
+        }
+
+        $this->assertSame([], $laxas, 'Entradas del Studio con la lista de antes del H7 (falta `strict: true`).');
+        // Los 18 de los controladores y el del normalizador del borrador: si
+        // el rastreo dejara de verlos, no estaría comprobando nada.
+        $this->assertGreaterThanOrEqual(19, $vistas, 'el rastreo ve las entradas del Studio');
     }
 }

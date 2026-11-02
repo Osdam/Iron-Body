@@ -79,8 +79,8 @@ class UltronStudioVersionController extends Controller
     {
         $access = StudioAccess::requirePerson($request);
         $data = $request->validate([
-            'label' => ['required', 'string', 'max:80', new PlainText],
-            'note' => ['sometimes', 'nullable', 'string', 'max:500', new PlainText(multiline: true)],
+            'label' => ['required', 'string', 'max:80', new PlainText(strict: true)],
+            'note' => ['sometimes', 'nullable', 'string', 'max:500', new PlainText(multiline: true, strict: true)],
             'draftRevision' => ['required', 'integer:strict', 'min:1', 'max:2147483647'],
             'clientRequestId' => ['required', 'uuid'],
         ]);
@@ -160,7 +160,7 @@ class UltronStudioVersionController extends Controller
             // tiene que venir: no reconocer nada no es lo mismo que no decirlo.
             'acknowledgedWarnings' => ['present', 'array', 'list', 'max:100'],
             'acknowledgedWarnings.*' => ['string', 'max:80', 'distinct'],
-            'note' => ['sometimes', 'nullable', 'string', 'max:500', new PlainText(multiline: true)],
+            'note' => ['sometimes', 'nullable', 'string', 'max:500', new PlainText(multiline: true, strict: true)],
         ]);
 
         $version = $this->versions->approve(
@@ -179,7 +179,7 @@ class UltronStudioVersionController extends Controller
     {
         $access = StudioAccess::requirePerson($request);
         $data = $request->validate([
-            'reason' => ['required', 'string', 'min:5', 'max:500', new PlainText(multiline: true)],
+            'reason' => ['required', 'string', 'min:5', 'max:500', new PlainText(multiline: true, strict: true)],
         ]);
 
         $version = $this->versions->reject($access, $request, $this->versions->findByUuid($uuid), $data['reason']);
@@ -204,7 +204,7 @@ class UltronStudioVersionController extends Controller
             // decirlo, no callarlo.
             'acknowledgedNoEffect' => ['present', 'array', 'list', 'max:'.StudioPublications::MAX_ACKNOWLEDGED],
             'acknowledgedNoEffect.*' => ['string', 'max:80', 'regex:/^[A-Za-z0-9_.:\-]+$/', 'distinct'],
-            'note' => ['sometimes', 'nullable', 'string', 'max:'.StudioPublications::NOTE_MAX, new PlainText(multiline: true)],
+            'note' => ['sometimes', 'nullable', 'string', 'max:'.StudioPublications::NOTE_MAX, new PlainText(multiline: true, strict: true)],
         ]);
 
         return self::written($publications->publish(
@@ -229,7 +229,7 @@ class UltronStudioVersionController extends Controller
         $data = $request->validate([
             'clientRequestId' => ['required', 'uuid'],
             'evidenceHash' => ['required', 'string', 'regex:'.self::SHA256],
-            'note' => ['sometimes', 'nullable', 'string', 'max:'.StudioPublications::NOTE_MAX, new PlainText(multiline: true)],
+            'note' => ['sometimes', 'nullable', 'string', 'max:'.StudioPublications::NOTE_MAX, new PlainText(multiline: true, strict: true)],
         ]);
 
         return self::written($publications->promote(
@@ -252,7 +252,7 @@ class UltronStudioVersionController extends Controller
         $access = StudioAccess::requirePerson($request);
         $data = $request->validate([
             'clientRequestId' => ['required', 'uuid'],
-            'reason' => ['required', 'string', 'min:'.StudioPublications::REASON_MIN, 'max:'.StudioPublications::REASON_MAX, new PlainText(multiline: true)],
+            'reason' => ['required', 'string', 'min:'.StudioPublications::REASON_MIN, 'max:'.StudioPublications::REASON_MAX, new PlainText(multiline: true, strict: true)],
         ]);
 
         return self::written($publications->rollback($access, $request, $uuid, strtolower($data['clientRequestId']), $data['reason']));

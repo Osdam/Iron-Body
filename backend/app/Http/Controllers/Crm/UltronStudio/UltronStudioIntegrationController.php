@@ -91,7 +91,7 @@ class UltronStudioIntegrationController extends Controller
             'provider' => ['required', 'string', Rule::in(StudioIntegrationSnapshot::PROVIDERS)],
             'fingerprint' => ['required', 'string', 'regex:'.self::SHA256],
             // AS-1 (Enmienda 3): la nota queda para siempre en la instantánea: sin teléfonos ni correos.
-            'note' => ['sometimes', 'nullable', 'string', 'max:'.StudioIntegrationConfig::NOTE_MAX, new PlainText(multiline: true), StudioCanaryPhone::contactDataRule()],
+            'note' => ['sometimes', 'nullable', 'string', 'max:'.StudioIntegrationConfig::NOTE_MAX, new PlainText(multiline: true, strict: true), StudioCanaryPhone::contactDataRule()],
         ]);
 
         $resultado = $config->acknowledge($access, $request, strtolower($data['clientRequestId']), $data['provider'], $data['fingerprint'], $data['note'] ?? null);

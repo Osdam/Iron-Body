@@ -2,6 +2,7 @@
 
 **Fecha:** 01-11-2026. **Base:** `feat/ultron-studio-h7` en `f78adfc` (CRM `f38699d`, solo lectura). **Sin commit.** Rutas relativas a `backend/`.
 **Árbol compartido:** DB7, B7 y OPS7 escribían a la vez; para atribuir resultados, las suites se repitieron en un worktree temporal **HEAD + solo los ficheros de SEC7**.
+**Addendum del 02-11-2026 (§7):** M-1 de REV7 cerrado con la opción (b). La clase completa de §1 queda **solo en el Studio** (`new PlainText(strict: true)`); fuera, `PlainText` vuelve a la lista y al mensaje de antes del H7. Lo de §1 sobre `PlainText` describe hoy el modo `strict`. También m-3 (lista blanca de aislamiento) y la SQL de H-8 de §5, reescrita solo con ASCII y escapes (§7.8).
 
 ## 0. Veredicto
 
@@ -93,14 +94,238 @@
 
 ## 5. SQL de solo lectura para el conocimiento guardado (H-8)
 
+Reescrita el 02-11-2026; detalle en el addendum, §7.8.
+
+- **Solo ASCII y escapes de PostgreSQL** (`\uXXXX` y `\UXXXXXXXX`). La versión anterior llevaba los caracteres en claro. Al copiarla, el U+2028 se pegaba como un espacio y el rango pasaba a ser «espacio–U+202E», que casa con casi cualquier texto.
+- **Cubre la clase completa:** 264 puntos de código, los 265 de la clase menos NUL. La anterior cubría 170.
+
 ```sql
--- Marca también el ZWJ de un emoji legítimo (falso positivo): revisar a mano.
+-- SOLO LECTURA. Conocimiento guardado con algun caracter de la clase de
+-- `lab-invisibles` (la de PlainText(strict: true) en varias lineas: todo salvo
+-- tabulador y saltos; NUL no cabe en un text). Solo ASCII y escapes de
+-- PostgreSQL, con standard_conforming_strings = on (el valor por defecto).
+-- Marca tambien el ZWJ de un emoji legitimo (falso positivo): revisar a mano.
 SELECT id, key, review_status, origin
   FROM marketing_knowledge_items
  WHERE (key || coalesce(title, '') || coalesce(content, ''))
-       ~ '[­؀-؅؜۝܏᠎​-‏ -‮⁠-⁤⁦-⁯﻿￹-￻\U000E0000-\U000E007F]';
+       ~ '[\u0001-\u0008\u000B-\u000C\u000E-\u001F\u007F-\u009F\u00AD\u0600-\u0605\u061C\u06DD\u070F\u0890-\u0891\u08E2\u180E\u200B-\u200F\u2028-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\uFFF9-\uFFFB\U000110BD\U000110CD\U00013430-\U0001343F\U0001BCA0-\U0001BCA3\U0001D173-\U0001D17A\U000E0000-\U000E007F]';
 ```
 
 ## 6. Ficheros de SEC7
 
 `app/Support/Text/InvisibleCharacters.php` (nuevo) · `app/Rules/PlainText.php` · `app/Http/Controllers/Api/Internal/InternalMarketingKnowledgeController.php` · `tests/Unit/Support/Text/InvisibleCharactersTest.php` (nuevo) · `tests/Feature/Security/StudioPlainTextInvisiblesTest.php` (nuevo) · `tests/Feature/Marketing/KnowledgeInvisiblesTest.php` (nuevo) · este informe.
+
+## 7. Addendum (02-11-2026): M-1 y m-3 de REV7
+
+**Encargo del lead:** cerrar M-1 con la opción (b), acotar la clase nueva al Studio, y el menor m-3. Base `3fbb155`. **Sin commit.** No toca el motor, `bootstrap/app.php`, `routes/console.php`, `UntrustedText` ni `InvisibleCharacters`.
+
+### 7.1 M-1 · `PlainText` en dos modos
+
+`new PlainText(multiline: false, strict: false)` (`app/Rules/PlainText.php`):
+
+- **Por defecto: la lista de antes del H7, tal cual.** Llama a `UntrustedText::isPlain()`, como en producción `1e5f9a0`, y falla con el mensaje de siempre (`MESSAGE_INVALID`, «El texto contiene caracteres no permitidos.»).
+  - Rechaza controles C0, DEL y C1; U+200B–200F (**todo ZWJ**, también dentro de un emoji); U+202A–202E; U+2066–2069; y BOM.
+  - En una línea rechaza además `\t`, `\n` y `\r`.
+  - Nulo pasa. Un valor que no es texto o el UTF-8 inválido fallan con el mismo mensaje.
+- **`strict: true`: la clase completa de §1** (`InvisibleCharacters`, la de `lab-invisibles`). El ZWJ solo pasa dentro de un emoji, y el 422 nombra el carácter (`message()`). Es exactamente lo que SEC7 dejó.
+- **Por qué dos modos y no uno:** la agenda y la Caja están en producción, y su CRM tira el mensaje del servidor. El escenario es el de REV7 §M-1: una nota guardada con un guion blando queda sin poder reenviarse, con un mensaje que no es la causa. Ampliar la clase fuera del Studio pide antes su propia decisión: el CRM tendría que enseñar el 422 de `U+` y habría que leer los datos en producción.
+
+### 7.2 Inventario exacto de `PlainText` (34 sitios en el código)
+
+**Studio: `strict: true` en los 19 sitios** (18 en 8 controladores y el normalizador). El noveno controlador, `UltronStudioController`, entra por el normalizador.
+
+| Sitio | Acción | Campo | Líneas |
+|---|---|---|---|
+| `UltronStudioVersionController.php:82` | `store` (crear versión) | `label` | una |
+| `UltronStudioVersionController.php:83` | `store` | `note` | varias |
+| `UltronStudioVersionController.php:163` | `approve` | `note` | varias |
+| `UltronStudioVersionController.php:182` | `reject` | `reason` | varias |
+| `UltronStudioVersionController.php:207` | `publish` | `note` | varias |
+| `UltronStudioVersionController.php:232` | `promote` | `note` | varias |
+| `UltronStudioVersionController.php:255` | `rollback` | `reason` | varias |
+| `UltronStudioPublicationController.php:50` | `legacy` (volver a Legacy) | `reason` | varias |
+| `UltronStudioRuleController.php:90` | `store` | `description` | varias |
+| `UltronStudioRuleController.php:122` | `update` | `description` | varias |
+| `UltronStudioRuleController.php:146` | `archive` | `reason` | varias |
+| `UltronStudioRuleController.php:173` | `refsRules` (alta y edición) | `refs.knowledgeKeys.*` | una |
+| `UltronStudioCanaryController.php:67` | `store` | `alias` | una |
+| `UltronStudioCanaryController.php:133` | `reasonRules` (`deactivate`, `revoke`) | `reason` | varias |
+| `UltronStudioCampaignLinkController.php:110` | `deactivate` | `reason` | varias |
+| `UltronStudioIntegrationController.php:94` | `acknowledge` | `note` | varias |
+| `UltronStudioLabController.php:164` | `verdict` | `note` | varias |
+| `UltronStudioLabScenarioController.php:97` | `archive` | `reason` | varias |
+| `StudioDraftNormalizer.php:422` (`plain()`, desde `:247` y `:302`) | guardar el borrador (`saveDraft` → `StudioDrafts`) y crear una versión (`StudioVersions`) | parámetros `text`, `textarea` y `tags` | según el tipo |
+
+**Fuera del Studio: por defecto en los 15 sitios.** Igual que en producción `1e5f9a0`: `git diff 1e5f9a0 HEAD` no cambia ninguna de esas reglas.
+
+| Sitio | Acción | Campo | Líneas |
+|---|---|---|---|
+| `ValuationController.php:98` | `index` | `status` (filtro) | una |
+| `ValuationController.php:187` | `store` | `notes` | varias |
+| `ValuationController.php:189` | `store` | `past_reason` | varias |
+| `ValuationController.php:208` | `update` (tipo y notas) | `notes` | varias |
+| `ValuationController.php:224` | `reschedule` | `reason` | varias |
+| `ValuationController.php:237` | `cancel` | `reason` | varias |
+| `ValuationController.php:336` | `searchMembers` | `q` | una |
+| `ValuationController.php:405` | `transicion` (confirmar y demás) | `note` | varias |
+| `ValuationAvailabilityController.php:110` | `storeBlock` | `reason` | una |
+| `ReceiptStationController.php:79` | `store` | `name` | una |
+| `ReceiptStationController.php:113` | `update` | `name` | una |
+| `ReceiptStationController.php:115` | `update` | `printer_name` | una |
+| `ReceiptAgentController.php:78` | `redeem` | `agent.version` | una |
+| `ReceiptAgentController.php:80` | `redeem` | `agent.printer_name` | una |
+| `ReceiptAgentController.php:118` | `report` | `printer_name` | una |
+
+**Sin `PlainText`, sin cambios:**
+
+| Sitio | Qué hace |
+|---|---|
+| API interna de conocimiento (`InternalMarketingKnowledgeController`) | Limpia con `InvisibleCharacters::clean()`, como la dejó SEC7 |
+| Frases y etiquetas de `conditions` (`StudioRuleCoherence`) | `UntrustedText::isPlain` (H-6) |
+| Texto del juez (`StudioLabPrompts`) | H-6 |
+| Escenarios del laboratorio | `StudioLabPersonalData` |
+| Importador de valoraciones | `UntrustedText::isPlain` |
+| `message` del servicio local | `sanitize()`, sin validar |
+
+**Guarda:** `StudioPlainTextInvisiblesTest::test_todas_las_entradas_del_studio_usan_el_modo_estricto`.
+- Lee los tokens de `Crm/UltronStudio`, `Services/UltronStudio` y `Commands/UltronStudio`.
+- Exige `strict: true` en cada `new PlainText`, y que el rastreo vea al menos 19.
+
+### 7.3 Nota para el runbook y la guía (DOC7)
+
+**En el Studio**, en todas sus pantallas (borrador, versiones, volver a Legacy, reglas, canarios, asociaciones de campañas, integraciones y laboratorio):
+- **Qué se rechaza:** con un 422 y un mensaje en el campo que nombra el carácter («…carácter invisible o de control (U+00AD)… escríbelo de nuevo sin pegarlo»):
+  - el guion blando U+00AD;
+  - U+2028 y U+2029, también en las notas de varias líneas;
+  - U+2060–2064, U+206A–206F, U+061C, U+180E, U+0600–0605, U+06DD, U+070F, U+0890–0891, U+08E2 y U+FFF9–FFFB;
+  - las etiquetas U+E0000–E007F;
+  - y lo de siempre: controles, anchura cero, bidi y BOM.
+- **Qué se acepta:** un emoji compuesto con ZWJ.
+- **Borradores de antes del H7:** si llevan uno de esos caracteres, se rechazan al volver a guardarlos o al crear la versión. Se ve en el campo, y se arregla reescribiendo el texto.
+- **Versiones ya creadas:** no se bloquean, porque enviar, aprobar, promover y publicar no revalidan el contenido.
+
+**Fuera del Studio NO cambia nada respecto a producción:**
+- Son la agenda de valoraciones y la Caja: equipos de impresión y servicio local.
+- Valen la misma lista y el mismo mensaje («El texto contiene caracteres no permitidos.»).
+- U+00AD, U+2028 y los demás se siguen aceptando como antes del H7.
+- Un emoji con ZWJ se sigue rechazando, como antes.
+
+**La lectura en producción de REV7 §M-1 ya está hecha.**
+- El lead la ejecutó en producción, en solo lectura y con escapes, no con los caracteres en claro del informe del reviewer.
+- **Resultado: 0 filas afectadas** en valoraciones (`valuation_appointments.notes`), borradores (`ultron_studio_drafts.content`), reglas (`ultron_studio_rules.description`) y estaciones (`receipt_stations`).
+- Valoraciones y estaciones, con la opción (b), ya no se revalidan con la clase nueva.
+- En el Studio, ningún borrador ni regla guardados chocará con el modo estricto al volver a guardarse.
+
+### 7.4 m-3 · `UltronEngineIsolationTest`: el programador ya no entra entero
+
+- **`routes/console.php` sale de `ALLOWED`.**
+- **Excepción por cadena**, como la del lector del motor (`SCHEDULER_REFERENCES`): lo único que puede nombrar del Studio es `'ultron_studio.monitor.enabled'`, una vez. Es la propuesta de DB7 (`informe-db.md:284`).
+- **Prueba nueva:** `test_la_bandera_del_monitor_solo_programa_ordenes_del_studio`. Exige:
+  - que la bandera sea la condición de un `if` con bloque y sin `else`;
+  - que cada sentencia del bloque sea `Schedule::command('ultron-studio:…')` con métodos encadenados de argumentos literales (`SCHEDULER_STATEMENT`).
+- **Por qué hace falta la prueba nueva:** la excepción por cadena sola no caza un trabajo del motor metido DENTRO del bloque de la bandera (M3b y M3e).
+- **Resultado:** con el `routes/console.php` actual, 7 → **8 pruebas en verde** (1123 aserciones).
+
+### 7.5 Lo verificado
+
+Todo en el Mac: PHP 8.3.33, PHPUnit 11.5.55 y PostgreSQL 14.24 desechable (`UNIT_DB=ultron_studio_h7_sec`).
+
+| Comprobación | Resultado |
+|---|---|
+| `PlainTextOutsideStudioTest` (nueva, SQLite) | **42 pruebas OK**, contando los casos de los proveedores. Barre todo Unicode frente a la lista de antes escrita a mano: rechaza **80 puntos en una línea y 77 en varias**, sin ninguna discrepancia. Por HTTP: valoraciones (alta, cambio de tipo reenviando la nota con U+00AD y U+2028, cancelación, bloqueo y búsqueda) y Caja (alta, ajuste, canje y reporte del servicio local) aceptan lo de antes, y rechazan lo de la lista de antes con el mensaje de siempre |
+| `tests/Feature/Security` (SQLite) | **84 OK** (391 aserciones), con `StudioPlainTextInvisiblesTest` en **12 OK** (la guarda nueva incluida) |
+| `tests/Feature/Valuations` (SQLite) | **117 OK** (1 919) |
+| `tests/Feature/Caja` (SQLite) | **680 OK** (12 293) |
+| `KnowledgeInvisiblesTest` (SQLite) | **7 OK** (45) |
+| `tests/Unit/Support/Text` (SQLite) | **91 OK** (554), las mismas cifras de §2: `InvisibleCharacters` sin cambios |
+| `tests/Unit/UltronStudio` (SQLite) | **1 425 OK** (11 969) |
+| `tests/Feature/UltronStudio` (SQLite) | Primera corrida: 1 086, **1 fallo ajeno** y 106 omitidas (solo PG). Segunda corrida: **1 086 OK** (14 888 aserciones), 106 omitidas y 0 fallos |
+| PG: las dos de Security, `KnowledgeInvisiblesTest` y `UltronEngineIsolationTest` | **69 OK** (1 433). Con base real: 226 tablas y la migración `2026_11_02_100001` |
+| PG: `ReceiptStationsTest`, `ReceiptAgentSecurityTest` y `ReceiptAgentFlowTest` | **63 OK** (1 409) |
+| PG: `tests/Feature/Valuations` | **116/117.** El fallo es la precondición de entorno de `ValuationOverlapGuardMigrationTest:112`, «corre con un rol NO superusuario»: el rol local `ironbody` tiene `rolsuper = t`. No depende del código |
+| Pint (`--test`) | **passed** en los 14 PHP tocados |
+
+**El fallo ajeno de la primera corrida** es `UltronStudioIntegrationsProbeTest::test_el_enfriamiento_reutiliza_la_ultima…:129`:
+- La prueba espera 200 y recibe 201.
+- Depende del reloj: hace `travel(299)` sobre un enfriamiento de 300 s, y con la máquina cargada (2:20 de suite) el reloj real avanza ≥ 1 s.
+- Sola pasa 3/3.
+- La sonda solo valida `clientRequestId`, sin `PlainText`.
+- Va para `tester`; no lo toco.
+
+### 7.6 Mutaciones
+
+Se aplicaron en una copia del `backend`, en el scratchpad, sin tocar el árbol compartido. Cada fichero se restauró y se comprobó su SHA-256.
+
+**M-1: caen 7 de 7.**
+
+| # | Mutación | Pruebas | Resultado |
+|---|---|---|---|
+| M1a | `PlainText` vuelve a la clase completa por defecto (`strict = true`) | las dos de Security | **Cae: 42 fallos**, en las 9 pruebas de `PlainTextOutsideStudioTest` |
+| M1b | `UntrustedText::INVISIBLE` gana U+00AD (ensancha la lista de antes) | la nueva | **Cae: 4** (el barrido, el caso U+00AD, valoraciones y Caja por HTTP) |
+| M1c | `UntrustedText::INVISIBLE` pierde U+FEFF (la estrecha) | la nueva | **Cae: 3** |
+| M1d | Por defecto, el mensaje con `U+XXXX` en vez del de siempre | la nueva | **Cae: 20** |
+| M1e | Volver a Legacy pierde `strict` | Studio | **Cae: 8** (los 7 casos de AS-5 y la guarda) |
+| M1f | El normalizador del borrador pierde `strict` | Studio | **Cae: 2** (borrador y guarda) |
+| M1g | `strict` usa la lista de antes | las dos | **Cae: 30** |
+
+**m-3: caen 5 de 5 con la prueba nueva y 0 de 5 con la de HEAD.** Los dos controles legítimos pasan con las dos.
+
+| # | Mutación en `routes/console.php` | Prueba nueva | Prueba de HEAD |
+|---|---|---|---|
+| M3a | `if (config('ultron_studio.publishing_enabled'))` con `marketing:dispatch-followups` | **Cae** (rastreo global) | Pasa |
+| M3b | `Schedule::job(new SyncMetaAdsInsights)` DENTRO del bloque de la bandera | **Cae** (bloque) | Pasa |
+| M3c | `else` con una orden del motor | **Cae** (bloque) | Pasa |
+| M3d | La misma bandera en un `->when()` del motor | **Cae** (rastreo global) | Pasa |
+| M3e | `marketing:dispatch-followups` DENTRO del bloque | **Cae** (bloque) | Pasa |
+| M3f | Control: otra orden `ultron-studio:` dentro del bloque | Pasa | Pasa |
+| M3g | Control: tarea del motor sin condición del Studio | Pasa | Pasa |
+
+### 7.7 Ficheros tocados en este addendum, y lo no verificado
+
+**Código:**
+- `app/Rules/PlainText.php`;
+- los 8 controladores de `app/Http/Controllers/Crm/UltronStudio/` que usan `PlainText`: Version, Publication, Rule, Canary, CampaignLink, Integration, Lab y LabScenario. Solo añaden `strict: true`;
+- `app/Services/UltronStudio/StudioDraftNormalizer.php`: la llamada y su comentario.
+
+**Pruebas:**
+- `tests/Feature/Security/PlainTextOutsideStudioTest.php` (nueva);
+- `tests/Feature/Security/StudioPlainTextInvisiblesTest.php`: la regla con `strict: true` y la guarda;
+- `tests/Feature/UltronStudio/UltronEngineIsolationTest.php` (m-3);
+- `tests/Unit/Support/Text/InvisibleCharactersTest.php`: solo dos comentarios que nombraban `PlainText` sin el modo.
+
+**Informe:** este.
+
+**Segunda corrida de `tests/Feature/UltronStudio`:** 1 086 OK, 0 fallos y 106 omitidas (solo PG), en 1:40. El fallo de reloj no se repitió.
+
+**No verificado:**
+- El CRM en un navegador: el CRM no cambia.
+- El PCRE 10.39 de producción. El modo por defecto solo usa rangos explícitos, igual que antes. El estricto sigue con la sonda del paso 9 del runbook (§4, punto 7).
+- La suite entera y el E2E: son de la fase C del tester.
+
+### 7.8 H-8 · La lectura del conocimiento, reescrita con escapes
+
+Lo detectó el reviewer: la consulta de §5 llevaba en claro, dentro del corchete, U+00AD, U+0600–0605, U+061C, U+06DD, U+070F, U+180E, U+200B–200F, U+2028–202E, U+2060–2064, U+2066–206F, U+FEFF y U+FFF9–FFFB. Solo las etiquetas iban escapadas (`\U000E0000-\U000E007F`).
+
+**Causa.** Al escribir el informe, los escapes `\u` de cuatro cifras quedaron convertidos en caracteres literales. Los `\U` de ocho cifras sobrevivieron, y por eso las etiquetas sí estaban escapadas. Lo reproduje hoy: un fichero SQL escrito con escapes `\u` de U+00AD en adelante acabó con los caracteres en claro.
+
+**Cómo se generó la versión nueva:**
+- un guion construye los escapes desde los puntos de código, como enteros;
+- los puntos salen del barrido de `InvisibleCharacters::INVISIBLE_CLASS` (PCRE 10.47: 265 puntos), menos NUL;
+- antes de pegarla en el informe se comprobó, byte a byte, que todo es ASCII.
+
+**Verificado en PostgreSQL 14.24** (`ultron_studio_h7_sec`, UTF8, `standard_conforming_strings = on`). Los textos de prueba se construyen con `chr()`, sin escapes ni caracteres literales.
+
+| Comprobación | Resultado |
+|---|---|
+| Un espacio, U+00A0 y «Juan Pérez, 10:00 a. m.» (en ASCII, y con U+202F y U+00A0 como en Intl) | **No casan.** Tampoco tabulador ni saltos, el corazón con U+FE0F, la raya ni los puntos suspensivos |
+| U+00AD, U+2028 y U+E0041 | **Casan.** También U+200B, U+FEFF, U+2060, U+180E, U+0890, U+08E2, U+1D173, U+0085 y U+001B, y la familia con ZWJ (el falso positivo documentado). En total, 19 de 19 casos como se esperaba |
+| Barrido de 1 112 063 puntos de código (sin NUL ni sustitutos) | Casa con **264**: exactamente la clase de PHP menos U+0000, sin diferencias en ninguna dirección |
+| El mismo barrido con 5 intercalaciones (por defecto `C.UTF-8`, `C`, `es-CO-x-icu`, `en_US.UTF-8` y `und-x-icu`) | Las mismas 264, con 0 discrepancias. Los tramos van por punto de código, no por intercalación |
+| La consulta vieja, escapada tal cual | 170 puntos. Le faltaban los controles C0 y C1, U+0890–0891, U+08E2 y los `Cf` suplementarios (U+110BD, U+110CD, U+13430–1343F, U+1BCA0–1BCA3 y U+1D173–1D17A) |
+| La consulta vieja copiada con el U+2028 convertido en espacio (lo que describe el reviewer) | Casa con **8 354** puntos: el espacio, U+00A0 y «Juan Pérez» incluidos |
+| La consulta nueva sobre `marketing_knowledge_items`, con 5 filas de prueba en una transacción que se deshace | Devuelve las 4 sucias (guion blando, U+2028, etiqueta y ZWJ). La limpia, con tilde, U+202F y U+00A0, no sale |
+| El informe entero frente a la clase (los 265 puntos y el ZWJ, salvo tabulador y saltos) | **0 caracteres de la clase en claro** |
+
+**Sin hacer:** la lectura de H-8 en producción. Sigue siendo del propietario (§4).
+
+**Mismo problema en otro informe:** `informe-reviewer.md:81` (la SQL de M-1) lleva también los caracteres en claro. El lead ejecutó su equivalente con escapes; si alguien la copia del informe, tendrá el mismo fallo. El fichero no es mío y no lo toco.

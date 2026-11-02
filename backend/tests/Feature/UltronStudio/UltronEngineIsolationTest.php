@@ -40,9 +40,12 @@ use Tests\TestCase;
  * (`App\Services\Voice`, `App\Services\Twilio` y `PhoneFingerprint`) no
  * nombran el Studio, y el motor no las nombra a ellas.
  *
- * HITO 7 (contrato H7): entran en la lista blanca la migración de
- * endurecimiento (DB7) y `routes/console.php` (OPS7), que programa las tareas
- * del monitor del Studio tras su bandera. Ninguno es zona del motor.
+ * HITO 7 (contrato H7): entra en la lista blanca la migración de
+ * endurecimiento (DB7). `routes/console.php` (OPS7) programa las tareas del
+ * monitor del Studio tras su bandera, pero programa también las del motor: no
+ * entra entero (m-3 de la revisión final del H7). Como el lector, tiene su
+ * excepción por cadena (la bandera, una vez) y su propia prueba: lo que la
+ * bandera condiciona son solo órdenes del Studio.
  */
 class UltronEngineIsolationTest extends TestCase
 {
@@ -70,9 +73,27 @@ class UltronEngineIsolationTest extends TestCase
         'database/migrations/2026_11_01_100002_add_ultron_studio_integration_guards.php',
         // Hito 7 (contrato H7, DB7): el endurecimiento de las tablas de solo inserción.
         'database/migrations/2026_11_02_100001_add_ultron_studio_hardening.php',
-        // Hito 7 (contrato H7, OPS7): las tareas del monitor, tras su bandera `ultron_studio.monitor.enabled`.
-        'routes/console.php',
     ];
+
+    /**
+     * Hito 7 (contrato H7, OPS7; m-3 de la revisión final del H7): el
+     * programador. No está en la lista blanca porque programa también el motor:
+     * lo único que puede nombrar del Studio es la bandera del monitor, una vez,
+     * como cadena, y {@see test_la_bandera_del_monitor_solo_programa_ordenes_del_studio()}
+     * mira lo que esa bandera condiciona.
+     */
+    private const SCHEDULER = 'routes/console.php';
+
+    private const SCHEDULER_FLAG = "'ultron_studio.monitor.enabled'";
+
+    private const SCHEDULER_REFERENCES = ['T_CONSTANT_ENCAPSED_STRING '.self::SCHEDULER_FLAG];
+
+    /**
+     * Lo único que la bandera puede programar: una orden del Studio con su
+     * frecuencia y sus cerrojos, con argumentos literales. Ni trabajos, ni
+     * clausuras, ni variables, ni órdenes de otros.
+     */
+    private const SCHEDULER_STATEMENT = "/^Schedule::command\\('ultron-studio:[a-z0-9-]+'\\)(->[A-Za-z]+\\(('[^']*'|\\d+)?(,('[^']*'|\\d+))*\\))*$/";
 
     /** Hito 6: las clases neutras del hito. Ni el motor las nombra ni ellas nombran el Studio. */
     private const NEUTRAL_ZONES = ['app/Services/Voice', 'app/Services/Twilio', 'app/Support/Privacy/PhoneFingerprint.php'];
@@ -108,6 +129,7 @@ class UltronEngineIsolationTest extends TestCase
         $fuera = [];
         $dentro = 0;
         $lectorVisto = false;
+        $programadorVisto = false;
 
         foreach ($this->phpFiles() as $relativa) {
             $hallazgos = $this->references(base_path($relativa));
@@ -124,14 +146,83 @@ class UltronEngineIsolationTest extends TestCase
 
                 continue;
             }
+            if ($relativa === self::SCHEDULER && $this->sinLinea($hallazgos) === self::SCHEDULER_REFERENCES) {
+                $programadorVisto = true;
+
+                continue;
+            }
             $fuera[$relativa] = $hallazgos;
         }
 
-        $this->assertSame([], $fuera, "Código fuera del Studio que lo nombra (el motor solo puede leer ultron_studio_publications, desde UltronPublishedConfig):\n".json_encode($fuera, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        $this->assertSame([], $fuera, "Código fuera del Studio que lo nombra (el motor solo puede leer ultron_studio_publications, desde UltronPublishedConfig; el programador, solo la bandera del monitor, una vez):\n".json_encode($fuera, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
         // La prueba ve lo que tiene que ver: si el rastreo dejara de encontrar
         // las referencias legítimas, no estaría comprobando nada.
         $this->assertGreaterThanOrEqual(17, $dentro);
         $this->assertTrue($lectorVisto, 'El rastreo no vio la única lectura del motor sobre el Studio.');
+        $this->assertTrue($programadorVisto, 'El rastreo no vio la bandera del monitor en el programador.');
+    }
+
+    /**
+     * Hito 7 (OPS7; m-3 de la revisión final del H7): la bandera del monitor
+     * es la condición de UN `if` con su bloque, sin `else`, y lo que ese bloque
+     * programa son solo órdenes del Studio. Un trabajo del motor condicionado
+     * al Studio —dentro del bloque, en un `else`, con otra clave o con la misma
+     * bandera repetida (esto último ya lo caza el rastreo global)— la hace caer.
+     */
+    public function test_la_bandera_del_monitor_solo_programa_ordenes_del_studio(): void
+    {
+        $this->assertFileExists(base_path(self::SCHEDULER));
+        $tokens = $this->significantTokens(base_path(self::SCHEDULER));
+
+        $bandera = null;
+        foreach ($tokens as $i => $t) {
+            if (is_array($t) && $t[0] === T_CONSTANT_ENCAPSED_STRING && $t[1] === self::SCHEDULER_FLAG) {
+                $bandera = $i;
+                break;
+            }
+        }
+        $this->assertNotNull($bandera, 'El programador no nombra la bandera del monitor.');
+
+        // Es la condición de un `if`: hacia atrás, el `if` antes que el final de otra sentencia.
+        for ($i = $bandera - 1; $i >= 0 && ! (is_array($tokens[$i]) && $tokens[$i][0] === T_IF); $i--) {
+            $this->assertNotContains($tokens[$i], [';', '{', '}'], 'La bandera del monitor no es la condición de un if.');
+        }
+        $this->assertGreaterThanOrEqual(0, $i, 'La bandera del monitor no es la condición de un if.');
+
+        // Su bloque, entre llaves.
+        for ($abre = $bandera + 1; isset($tokens[$abre]) && $tokens[$abre] !== '{'; $abre++) {
+            $this->assertNotSame(';', $tokens[$abre], 'El if de la bandera no lleva un bloque entre llaves.');
+        }
+        $cierra = null;
+        for ($j = $abre, $nivel = 0; isset($tokens[$j]); $j++) {
+            $abreOtra = $tokens[$j] === '{' || (is_array($tokens[$j]) && in_array($tokens[$j][0], [T_CURLY_OPEN, T_DOLLAR_OPEN_CURLY_BRACES], true));
+            $nivel += $abreOtra ? 1 : ($tokens[$j] === '}' ? -1 : 0);
+            if ($nivel === 0) {
+                $cierra = $j;
+                break;
+            }
+        }
+        $this->assertNotNull($cierra, 'El bloque de la bandera no se cierra.');
+        $siguiente = $tokens[$cierra + 1] ?? null;
+        $this->assertFalse(is_array($siguiente) && in_array($siguiente[0], [T_ELSE, T_ELSEIF], true), 'La bandera del monitor lleva un else: con ella apagada se programaría otra cosa.');
+
+        // Lo que programa, sentencia a sentencia (sin espacios ni comentarios).
+        $sentencias = [''];
+        for ($j = $abre + 1; $j < $cierra; $j++) {
+            if ($tokens[$j] === ';') {
+                $sentencias[] = '';
+
+                continue;
+            }
+            $sentencias[array_key_last($sentencias)] .= is_array($tokens[$j]) ? $tokens[$j][1] : $tokens[$j];
+        }
+        $sentencias = array_values(array_filter($sentencias, static fn (string $s): bool => $s !== ''));
+
+        $ajenas = array_values(array_filter($sentencias, static fn (string $s): bool => preg_match(self::SCHEDULER_STATEMENT, $s) !== 1));
+        $this->assertSame([], $ajenas, 'La bandera del monitor programa algo que no es una orden del Studio.');
+        // El monitor y la instantánea de las integraciones: si el rastreo no
+        // los viera, no estaría comprobando nada.
+        $this->assertGreaterThanOrEqual(2, count($sentencias));
     }
 
     public function test_las_zonas_del_motor_estan_limpias_y_la_lista_blanca_no_esta_vieja(): void
@@ -351,6 +442,19 @@ class UltronEngineIsolationTest extends TestCase
     private function sinLinea(array $referencias): array
     {
         return array_map(fn (string $r) => (string) preg_replace('/ \(línea \d+\)$/u', '', $r), $referencias);
+    }
+
+    /**
+     * Los tokens de un fichero sin espacios, comentarios ni docblocks.
+     *
+     * @return list<array{0:int,1:string,2:int}|string>
+     */
+    private function significantTokens(string $ruta): array
+    {
+        return array_values(array_filter(
+            token_get_all((string) file_get_contents($ruta)),
+            fn ($t) => ! is_array($t) || ! in_array($t[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true),
+        ));
     }
 
     /** El código de un fichero sin comentarios ni docblocks. */

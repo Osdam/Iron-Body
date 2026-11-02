@@ -10,10 +10,10 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
- * La clase de invisibles de `PlainText` y de la API interna de conocimiento
- * (H7, SEC7; AS-5 del H5): la de `lab-invisibles`, menos lo que forma un
- * emoji. Pura: ni base, ni configuración. Este fichero no lleva ningún
- * invisible literal: todos van con `\u{…}`.
+ * La clase de invisibles de `PlainText(strict: true)` (el Studio) y de la API
+ * interna de conocimiento (H7, SEC7; AS-5 del H5): la de `lab-invisibles`,
+ * menos lo que forma un emoji. Pura: ni base, ni configuración. Este fichero
+ * no lleva ningún invisible literal: todos van con `\u{…}`.
  */
 class InvisibleCharactersTest extends TestCase
 {
@@ -95,7 +95,7 @@ class InvisibleCharactersTest extends TestCase
 
     /**
      * La «lista exacta del laboratorio» (contrato H7, SEC7), punto de código a
-     * punto de código: entre dos letras, `PlainText` de varias líneas rechaza
+     * punto de código: entre dos letras, `PlainText(multiline: true, strict: true)` rechaza
      * EXACTAMENTE lo que dispara `lab-invisibles`
      * ({@see StudioLabChecks::INVISIBLE_PATTERN}). El ZWJ va aparte: el
      * laboratorio lo deja pasar siempre y aquí solo dentro de un emoji.

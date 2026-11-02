@@ -161,7 +161,7 @@ class UltronStudioLabController extends Controller
         $access = $this->open($request, StudioAccess::APPROVE);
         $data = $this->validateListSizesFirst($request, [
             'decision' => ['required', 'string', Rule::in(StudioLabVerdict::DECISIONS)],
-            'note' => ['required_unless:decision,approved', 'nullable', 'string', 'min:5', 'max:'.StudioLabRuns::VERDICT_NOTE_MAX, new PlainText(multiline: true)],
+            'note' => ['required_unless:decision,approved', 'nullable', 'string', 'min:5', 'max:'.StudioLabRuns::VERDICT_NOTE_MAX, new PlainText(multiline: true, strict: true)],
             'acknowledgedCases' => ['present_if:decision,approved', 'prohibited_unless:decision,approved', 'array', 'list', 'max:'.StudioLabConfig::HARD_MAX_CASES_PER_RUN],
             'acknowledgedCases.*' => ['string', 'max:16', 'distinct'],
             'resultsHash' => ['required', 'string', 'regex:/^[0-9a-fA-F]{64}$/'],

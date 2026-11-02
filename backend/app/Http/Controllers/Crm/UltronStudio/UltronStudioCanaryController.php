@@ -64,7 +64,7 @@ class UltronStudioCanaryController extends Controller
             'clientRequestId' => ['required', 'uuid'],
             'channel' => ['required', 'string', Rule::in(StudioCanaryPhone::CHANNELS)],
             'phone' => ['required', 'string', 'max:'.StudioCanaryPhone::RAW_MAX, self::phoneRule($request)],
-            'alias' => ['required', 'string', self::aliasRule(), new PlainText],
+            'alias' => ['required', 'string', self::aliasRule(), new PlainText(strict: true)],
             'consentAttested' => ['required', 'boolean:strict', 'accepted'],
             'expectedVersionUuid' => ['sometimes', 'nullable', 'uuid'],
         ]);
@@ -130,7 +130,7 @@ class UltronStudioCanaryController extends Controller
     private static function reasonRules(): array
     {
         // AS-1 (Enmienda 3): el motivo queda para siempre en la fila y en el libro: sin teléfonos ni correos.
-        return ['required', 'string', 'min:'.StudioCanaryNumbers::REASON_MIN, 'max:'.StudioCanaryNumbers::REASON_MAX, new PlainText(multiline: true), StudioCanaryPhone::contactDataRule()];
+        return ['required', 'string', 'min:'.StudioCanaryNumbers::REASON_MIN, 'max:'.StudioCanaryNumbers::REASON_MAX, new PlainText(multiline: true, strict: true), StudioCanaryPhone::contactDataRule()];
     }
 
     /**

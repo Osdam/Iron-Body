@@ -410,16 +410,16 @@ final class StudioDraftNormalizer
     }
 
     /**
-     * Texto plano con la misma regla que el resto del CRM ({@see PlainText}):
-     * UTF-8 válido, sin controles ni invisibles; en multilínea admite
-     * tabulador y saltos de línea.
+     * Texto plano con la regla del resto del Studio ({@see PlainText} con
+     * `strict: true`, la clase completa de invisibles): UTF-8 válido, sin
+     * controles ni invisibles; en multilínea admite tabulador y saltos de línea.
      *
      * @param  array<string,list<string>>  $errores
      */
     private static function plain(string $texto, bool $multilinea, string $campo, array &$errores): bool
     {
         $bien = true;
-        (new PlainText(multiline: $multilinea))->validate($campo, $texto, static function (string $mensaje) use (&$errores, $campo, &$bien): void {
+        (new PlainText(multiline: $multilinea, strict: true))->validate($campo, $texto, static function (string $mensaje) use (&$errores, $campo, &$bien): void {
             $errores[$campo][] = $mensaje;
             $bien = false;
         });
