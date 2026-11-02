@@ -139,13 +139,13 @@ Cuenta 32, contraseña de un solo uso, huellas saladas, trap. Usa el detector de
   - `verified` por entrada y en el detalle de versión, y que el de la cabeza es igual a `signatureOk`;
   - 5 invisibles → 422, con 2 contrapruebas: texto limpio y un emoji con ZWJ y VS16 → 409 de la bandera;
   - **los presupuestos de rendimiento** (tanda del 02-11, discrepancia 1 de DOC7), exactamente como dice `informe-performance.md` §7.1:
-    - por cada ruta del JSON, `warmup` GET sin contar y `n` cronometradas (`perf_counter` alrededor de la petición: conexión nueva y cuerpo leído entero), en serie y separadas al menos `minIntervalSeconds`. Por defecto 1 + 5 a ≥ 0,6 s; la evidencia del canario, 0 + 3 a ≥ 6,5 s;
+    - por cada ruta del JSON, `warmup` GET sin contar y `n` cronometradas (`perf_counter` alrededor de la petición: conexión nueva y cuerpo leído entero), en serie y separadas al menos `minIntervalSeconds`. Por defecto 1 + 5 a ≥ 0,6 s; la evidencia del canario, 1 + 3 a ≥ 6,5 s (el calentamiento, decisión 4 del lead: §4.11);
     - **FALLO** si la mediana supera `p50Ms`, si el máximo supera el techo p95, si el cuerpo supera `maxBytes` o si el estado no es 200. El techo p95 es `p95MsAfterF1` cuando la ruta lo trae (la evidencia: **400 ms**, porque F-1 está en el código del H7 desde `e2411e3`) y `p95Ms` si no;
     - **OMITIDO** si falta lo que pide `requires`: sin versión en CANARY (la evidencia), sin versiones, laboratorio apagado (409 `lab_disabled`) o sin ejecuciones. Cuenta como OMITIDO, así que el código es 3;
     - un FALLO **solo de tiempo** se mide otra vez, una sola, y vale la repetición: con 5 muestras el «p95» es el máximo y un pico basta (`calibration` del JSON);
     - cada ruta imprime la propuesta de techo para recalibrar, `max(1,5 × medida, medida + 50 ms)`: el p50 con la mediana y el p95 con el máximo. Es mi lectura de la regla del JSON, que solo nombra el p95: **PERF7 debe confirmarla**;
     - las rutas del JSON se validan: solo GET a `/admin/ultron-studio/…`, sin `..` ni consulta, y solo los marcadores `{canary}`, `{firstVersion}` y `{firstRun}`, cuyo uuid resuelto se valida antes de usarlo. Un JSON manipulado no convierte el smoke en otra cosa;
-    - el ritmo nunca pasa de **90 lecturas con sesión en ningún minuto** (el cupo es 120/min por credencial; si hace falta, el smoke espera) ni de 6 evidencias por minuto (cupo 10). La pasada entera dura 70–80 s;
+    - el ritmo nunca pasa de **90 lecturas con sesión en ningún minuto** (el cupo es 120/min por credencial; si hace falta, el smoke espera) ni de 8 evidencias por minuto (cupo 10: 4 por pasada y 4 más si se repite). La pasada entera dura 70–80 s;
     - los cuerpos de esta fase no entran en el detector de fugas: son las mismas lecturas y su asunto es el tiempo;
   - sin fugas, sin 5xx y sin 429.
 - **Recalibrar sin tocar código:** los techos solo viven en el JSON. Tras la primera pasada en producción (con `SMOKE_BUDGETS_OUT=/root/<fichero>.json`, que deja en 0600 las medidas y la propuesta de cada ruta), se editan `p50Ms`/`p95Ms` en el JSON del repo (en la evidencia también `p95MsAfterF1`, que manda mientras exista), se confirma y se vuelve a copiar con su huella. El smoke imprime la ruta, la versión y el sha256 del JSON que usa.
@@ -369,7 +369,15 @@ El máximo de la evidencia en B (231,9 ms) fue su primera muestra, en frío: el 
 - con `schedule:list` fallando (`cache_locks` sin privilegios): el mando `estado` sale con 1; `on off` aborta antes de escribir; el smoke da FALLO con la cuenta sin tocar; el paso 0 aborta. Privilegios restaurados exactamente;
 - el smoke con `TAREAS` sin fijar: código 2, y el mensaje ya nombra los dos scripts.
 
-**Queda el mismo patrón en `banco-h7/ensayo-vuelta.sh`** (su nivel 2 cuenta con `grep -c` las tareas del Studio). Solo afecta al ensayo del banco, no a producción. No lo cambio en esta tanda porque habría que repetir sus 12 minutos de vuelta atrás. Propuesta: que su nivel 2 use `h7-monitor-scope.sh`, que ya está ensayado. Su línea de uso en `banco-h7/README.md` ya incluye `ensayar.sh <banco> tareas 27`, porque el despliegue y el smoke del banco lo exigen ahora.
+**Queda el mismo patrón en `banco-h7/ensayo-vuelta.sh`** (su nivel 2 cuenta con `grep -c` las tareas del Studio). Solo afecta al ensayo del banco, no a producción. **Decisión del lead: se queda como está**, como pendiente menor (H-13). La propuesta para cuando se toque es que su nivel 2 use `h7-monitor-scope.sh`, que ya está ensayado. Su línea de uso en `banco-h7/README.md` ya incluye `ensayar.sh <banco> tareas 27`, porque el despliegue y el smoke del banco lo exigen ahora.
+
+### 4.11 Decisión 4 del lead: 1 petición de calentamiento en la evidencia (banco 4, `0d43401` desplegado)
+
+- **Cambio:** en `perf-h7/presupuestos-h7.json`, la evidencia pasa de `"warmup": 0` a **`1`** (una línea; el JSON pasa a sha256 `5dd5ff55cb79`). El código no cambia: el smoke lee las muestras del JSON. Por pasada son 4 peticiones a ≥ 6,5 s, y 8 si se repite una medida, por debajo del cupo de 10/min por persona.
+- **Pasada B repetida** en el banco `-m1`, sembrado igual que el de la pasada B original (una versión en CANARY con su entrada firmada, `publication-check` 0, y una ejecución `fake` de 2 casos): **41 OK · 0 FALLO · 0 OMITIDO**, código 0; presupuestos 17 OK en 74 s; 0 respuestas 429; 14 tablas iguales.
+- **La evidencia:** mediana **80,5** y máximo **80,9 ms**. Antes, con 0 de calentamiento: 84,0 / 231,9 (B) y 106,2 / 109,8 (B2). El primer golpe en frío ya no entra en la muestra: el máximo queda a un 0,5 % de la mediana.
+- **Salvedad:** fue una sola pasada, con 3 muestras, y **bajo carga**: el Mac estaba a 12,5 (1 min) y 39 (5 min) por otras tareas, por encima del umbral de 4 de PERF7. Aun así, ninguna ruta pasó del 30 % de su techo p95 (la más cerca, `lab/runs`: 73,8 de 250 ms).
+- **Para PERF7/DOC7:** `informe-performance.md` §7.1 dice de la evidencia «3 muestras separadas ≥ 6,5 s». Ahora es 1 de calentamiento y 3 muestras. No toco ese informe.
 
 ## 5. Runbooks por fase (producción; todo con autorización)
 
@@ -464,7 +472,8 @@ Todas se cambian en `.env` y se aplican con `config:cache`. Ninguna necesita des
 | H-9 | Informativo | Las columnas `timestamp` sin zona guardan UTC. En SQL manual, `now() AT TIME ZONE 'UTC'` (el ensayo se equivocó una vez: §4.7) | — |
 | H-10 | Informativo | El total de `schedule:list` depende de las banderas del servidor (coach, bienestar, wompi, billing, seguimientos, sincronización de Meta): **26 → 28** en las pruebas y **27 → 29** en el banco. Un 26/28 fijo habría dado un desvío falso en el banco (ensayado: `TAREAS=26` aborta con 27) y, casi seguro, en producción. Tras m-1, el total se exige contra `TAREAS`, leído en el servidor con `--solo-comprobar` y fijado en un commit | — |
 | m-1 | Menor (del reviewer), **corregido** | `schedule:list` que falla se contaba como «0 tareas del Studio» en el despliegue y en el smoke. Ahora, en los tres scripts, su código de salida va aparte; el despliegue y el smoke exigen además el total contra `TAREAS` y el mando conserva el salto de ±2 (§4.10: 21/21 y 11/11) | — |
-| H-11 | Baja | La evidencia del canario se mide con 0 de calentamiento y 3 muestras (el cupo es de 10/min): su «p95» lo puede decidir la primera petición, en frío (en el banco, 231,9 ms frente a una mediana de 84,0 en una pasada; 109,8 en la siguiente). Cabe en los 400 ms tras F-1, pero es la ruta con menos margen al recalibrar | PERF7 (decidir si 1 de calentamiento, que el cupo admite: 4 por pasada) |
+| H-11 | Baja, **resuelto** | La evidencia del canario se medía con 0 de calentamiento y 3 muestras: su «p95» lo podía decidir la primera petición, en frío (231,9 ms frente a una mediana de 84,0 en una pasada; 109,8 en la siguiente). **Decisión 4 del lead:** 1 de calentamiento en el JSON (4 peticiones por pasada, dentro del cupo de 10/min). Pasada B repetida: mediana 80,5 y máximo 80,9 ms (§4.11) | — |
+| H-13 | Menor, **pendiente** | `banco-h7/ensayo-vuelta.sh` cuenta con `grep -c` las tareas del Studio en su nivel 2: el patrón de m-1. Solo afecta al ensayo del banco. El lead decidió dejarlo como está; cuando se toque, que use `h7-monitor-scope.sh` | OPS (cuando se toque el banco) |
 | H-12 | Informativo | `ops/README.md` (filas de `deploy-h7-backend.sh`, `smoke-run-h7.sh` y `supresion-1581.sql`) y `ULTRON_STUDIO_GUIA_ADMINISTRACION.md` §10 describen todavía el estado de antes de esta tanda (`PREVIO=pendiente`, `api-commit.txt` en la reanudación, «no carga los presupuestos», «el runbook Supresión no existe»). Con m-1, además, el runbook del despliegue (DEPLOYMENT_PLAN) tiene que incluir fijar `TAREAS` en `deploy-h7-backend.sh` y `smoke-run-h7.sh` junto a `PREVIO` (§5, pasos 1 y 5), y la expectativa del smoke pasa a «0, o 3 con solo presupuestos OMITIDO por estado». No los toco: son de DOC7 | DOC7 |
 
 ## 9. Pendiente de validar en producción, y lo que queda del propietario
@@ -488,9 +497,9 @@ Todas se cambian en `.env` y se aplican con `config:cache`. Ninguna necesita des
   - la copia de respaldos fuera del VPS;
   - autorizar el despliegue y el encendido del monitor;
   - decidir si, en una supresión del personal, se quita su nombre de la autoría (trazabilidad).
-- **Limpieza local** (mía, cuando el lead diga):
-  - los bancos `~/.cache/ironbody-banco-h7{,-vuelta,-doc7,-m1}` (sus API, paradas; se arrancan con `banco-h6/api.sh <banco> start`, puertos 8173 y 8174);
-  - sus bases `ultron_studio_banco_h7{,_vuelta,_doc7,_m1}`;
+- **Limpieza local:**
+  - **borrados el 02-11, por orden del lead:** los bancos `~/.cache/ironbody-banco-h7-doc7` y `-m1` y sus bases `ultron_studio_banco_h7_doc7` y `_m1`. Los del tester (`*_test7*`) siguen intactos;
+  - quedan, a la espera de su orden, los de la primera tanda: `~/.cache/ironbody-banco-h7{,-vuelta}` y sus bases `ultron_studio_banco_h7{,_vuelta}`;
   - mis bases de pruebas `ultron_studio_h7_ops` y `ultron_studio_h7_ops7`.
   - Las órdenes están en `banco-h7/README.md`.
 
@@ -613,3 +622,28 @@ cat /root/supresion/$R.psql /root/supresion-1581.sql | sudo -u postgres psql -X 
 - el fichero de parámetros, borrado.
 
 (La comprobación de los parámetros del log falló una vez por el propio arnés: un `case` dentro de `$( )` que el bash 3.2 de macOS no analiza. Corregido el arnés, dio OK con esos mismos valores.)
+
+## 11. Cierre de OPS7 (02-11-2026)
+
+**Decisiones del lead sobre mis recomendaciones (aceptadas tal cual):**
+1. El smoke en producción: «0, o 3 si lo único OMITIDO son presupuestos por estado».
+2. Techo de la evidencia: 400 ms (tras F-1).
+3. Propuesta de recalibración del p50: la misma regla que la del p95.
+4. 1 petición de calentamiento en la evidencia: aplicada y medida (§4.11).
+5. Sin detector de fugas en la fase de presupuestos.
+6. 90 lecturas por minuto como máximo.
+7. Recalibrar = editar el JSON del repo y confirmarlo.
+8. El mando exige el estado actual.
+9. El mando hace `queue:restart`.
+
+`ensayo-vuelta.sh` se queda con su `grep -c` (H-13, pendiente menor).
+
+**Lo que queda, y de quién:**
+- **Antes del despliegue (devops, con autorización):** leer `TAREAS` en el servidor con `--solo-comprobar` y fijarlo en `deploy-h7-backend.sh` y `smoke-run-h7.sh` en un commit (§5, pasos 1 y 5).
+- **En el despliegue y después:** la primera pasada del smoke con `SMOKE_BUDGETS_OUT`, que es la línea base de producción, y recalibrar los techos en un commit aparte. Encender el monitor con `h7-monitor-scope.sh on off`, con autorización.
+- **DOC7 (H-12):** las filas del despliegue, del smoke y de la supresión en `ops/README.md`; el PENDIENTE de la guía §10; y en DEPLOYMENT_PLAN, ROLLBACK y CHECKLIST la expectativa «0 o 3», la copia del JSON y del mando, `SMOKE_BUDGETS_OUT` y `TAREAS`.
+- **PERF7:** `informe-performance.md` §7.1, con el calentamiento de la evidencia (§4.11).
+- **Sin decidir:** abortar ya en el paso 0 si el fichero de entorno no parsea con Dotenv (hoy el paso 0 avisa y el despliegue aborta en el paso 2, tras el merge).
+- **Del propietario:** lo del §9.
+
+**Estado:** sin nada mío sin confirmar salvo el último paso (el JSON, el docstring del smoke y este informe). Ninguna orden de esta tanda tocó producción.

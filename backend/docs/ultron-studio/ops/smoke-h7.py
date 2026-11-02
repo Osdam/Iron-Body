@@ -13,7 +13,7 @@ Comprueba, contra la API desplegada y SIN FILAS POSITIVAS:
   · los PRESUPUESTOS DE RENDIMIENTO de PERF7 (informe-performance.md §7.1), leídos de presupuestos-h7.json: por cada
     ruta del fichero, `samples.warmup` GET sin contar y `samples.n` cronometradas (perf_counter alrededor de la
     petición: conexión nueva y cuerpo leído entero), en serie y separadas al menos `minIntervalSeconds` (la evidencia
-    del canario trae los suyos: 0 + 3, ≥ 6,5 s); mediana, máximo y bytes. FALLO si la mediana supera p50Ms, si el
+    del canario trae los suyos: 1 + 3, ≥ 6,5 s); mediana, máximo y bytes. FALLO si la mediana supera p50Ms, si el
     máximo supera el techo p95, si el cuerpo supera maxBytes o si el estado no es 200. El techo p95 es p95MsAfterF1
     cuando la ruta lo trae (F-1 está en el código del H7 desde e2411e3) y p95Ms si no. OMITIDO si falta lo que pide
     `requires`: sin versión en CANARY (la evidencia), sin versiones, laboratorio apagado (409 lab_disabled) o sin
@@ -49,7 +49,7 @@ Código: 0 todo OK · 1 algún FALLO · 3 sin fallos pero con algo OMITIDO · 2 
 presupuestos ausente o mal formado: no se hace ninguna petición).
 Cupos: 1 login (8/min por IP), 3 POST sin sesión al Studio y 8 escrituras con sesión (30/min por credencial). Las
 lecturas con sesión no pasan de 90 en ningún minuto (el cupo es 120/min por credencial; si hace falta, el smoke espera)
-y la evidencia, de 6 por minuto (10/min por persona). Dura unos 2 minutos. No toca la sonda de Twilio.
+y la evidencia, de 8 por minuto (10/min por persona; 4 por pasada y 4 más si se repite). Dura unos 2 minutos. No toca la sonda de Twilio.
 """
 import collections
 import hashlib

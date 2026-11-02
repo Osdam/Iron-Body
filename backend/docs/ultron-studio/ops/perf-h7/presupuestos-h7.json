@@ -103,7 +103,7 @@
       "path": "/admin/ultron-studio/versions/{canary}/canary-evidence",
       "requires": "canary = data.engine.publication.canary.versionUuid de GET status (sin versión en CANARY: OMITIDO)",
       "samples": {
-        "warmup": 0,
+        "warmup": 1,
         "n": 3,
         "minIntervalSeconds": 6.5
       },
