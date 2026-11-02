@@ -39,6 +39,10 @@ use Tests\TestCase;
  * en la lista blanca y las rutas son 56. Las clases NEUTRAS del hito
  * (`App\Services\Voice`, `App\Services\Twilio` y `PhoneFingerprint`) no
  * nombran el Studio, y el motor no las nombra a ellas.
+ *
+ * HITO 7 (contrato H7): entran en la lista blanca la migración de
+ * endurecimiento (DB7) y `routes/console.php` (OPS7), que programa las tareas
+ * del monitor del Studio tras su bandera. Ninguno es zona del motor.
  */
 class UltronEngineIsolationTest extends TestCase
 {
@@ -64,6 +68,10 @@ class UltronEngineIsolationTest extends TestCase
         // Hito 6 (contrato H6 §I9.1): las integraciones comerciales y sus guardas.
         'database/migrations/2026_11_01_100001_create_ultron_studio_integration_tables.php',
         'database/migrations/2026_11_01_100002_add_ultron_studio_integration_guards.php',
+        // Hito 7 (contrato H7, DB7): el endurecimiento de las tablas de solo inserción.
+        'database/migrations/2026_11_02_100001_add_ultron_studio_hardening.php',
+        // Hito 7 (contrato H7, OPS7): las tareas del monitor, tras su bandera `ultron_studio.monitor.enabled`.
+        'routes/console.php',
     ];
 
     /** Hito 6: las clases neutras del hito. Ni el motor las nombra ni ellas nombran el Studio. */

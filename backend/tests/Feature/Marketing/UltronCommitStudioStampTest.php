@@ -596,7 +596,8 @@ class UltronCommitStudioStampTest extends TestCase
             'action' => $legacy ? 'legacy' : 'publish',
             'version_id' => null,
             'restores_publication_id' => null,
-            'previous_publication_id' => null,
+            // Hito 7 (`uspub_chain_next`): la entrada nueva apunta a la cabeza.
+            'previous_publication_id' => DB::table(self::TABLA)->orderByDesc('seq')->value('id'),
             'engine_contract' => Lector::CONTRACT,
             'effective_json' => $json,
             'effective_hash' => hash('sha256', $json),

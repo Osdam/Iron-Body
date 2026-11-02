@@ -6,7 +6,6 @@ use App\Models\UltronStudio\StudioAuditEvent;
 use App\Models\UltronStudio\StudioCanaryNumber;
 use App\Support\Privacy\PhoneFingerprint;
 use Closure;
-use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -499,9 +498,11 @@ class UltronStudioHardeningH7Test extends TestCase
         $ana = $this->personWith(self::ADMIN_KEYS, 'Ana');
         $uuid = (string) $this->registerCanary($ana, self::PHONE)->assertCreated()->json('data.number.uuid');
 
+        // ANTES de ejecutarse: también las que fallan (un INSERT duplicado
+        // rechazado por `uscn_one_live` no llega a QueryExecuted).
         $sentencias = [];
-        DB::listen(static function (QueryExecuted $q) use (&$sentencias): void {
-            $sentencias[] = strtolower($q->sql);
+        DB::connection()->beforeExecuting(static function (string $query) use (&$sentencias): void {
+            $sentencias[] = strtolower($query);
         });
         $r = $this->registerCanary($ana, '+57 300 999 0707', alias: 'Otra función')->assertStatus(409)->assertJsonPath('code', 'canary_number_exists');
 

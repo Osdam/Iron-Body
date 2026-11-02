@@ -400,11 +400,17 @@ class UltronPublishedConfigTest extends TestCase
         );
     }
 
-    public function test_la_cabeza_es_la_de_mayor_seq_aunque_no_sea_la_ultima_insertada(): void
+    /**
+     * Desde el Hito 7 (`uspub_chain_next`) la base solo admite la entrada
+     * siguiente a la cabeza: la de mayor `seq` es siempre la última insertada.
+     * Lo que el lector no puede hacer es ordenar por id: aquí la cabeza tiene
+     * el id MENOR de las tres.
+     */
+    public function test_la_cabeza_es_la_de_mayor_seq_aunque_no_tenga_el_mayor_id(): void
     {
-        $this->publica($this->parte(self::VERSION_A), null, ['seq' => 1]);
-        $cabeza = $this->publica($this->parte(self::VERSION_B), null, ['seq' => 3]);
-        $this->publica(null, null, ['seq' => 2]);
+        $this->publica($this->parte(self::VERSION_A), null, ['seq' => 1, 'id' => 900]);
+        $this->publica(null, null, ['seq' => 2, 'id' => 800]);
+        $cabeza = $this->publica($this->parte(self::VERSION_B), null, ['seq' => 3, 'id' => 100]);
 
         $sello = (new Lector)->forConversation(self::CANARIO);
 
@@ -864,6 +870,19 @@ class UltronPublishedConfigTest extends TestCase
     }
 
     /**
+     * Hito 7 (`uspub_chain_next`): la base solo admite la entrada SIGUIENTE a
+     * la cabeza. Para sembrar una cabeza con `seq` n van antes las n-1
+     * anteriores, Legacy de relleno: el lector solo lee la cabeza.
+     */
+    private function rellenaHasta(int $hasta): void
+    {
+        for ($s = (int) DB::table(self::TABLA)->max('seq') + 1; $s <= $hasta; $s++) {
+            $uuid = (string) Str::uuid();
+            $this->inserta(self::canonico($this->documento($uuid, $s, null, null)), ['uuid' => $uuid, 'seq' => $s]);
+        }
+    }
+
+    /**
      * @param  array<string,mixed>  $sobre
      * @return array<string,mixed>
      */
@@ -871,6 +890,7 @@ class UltronPublishedConfigTest extends TestCase
     {
         $seq = $sobre['seq'] ?? ++$this->ultimoSeq;
         $this->ultimoSeq = max($this->ultimoSeq, $seq);
+        $this->rellenaHasta($seq - 1);
         $legacy = ! str_contains($json, '"version"');
 
         $fila = array_merge([
@@ -880,7 +900,8 @@ class UltronPublishedConfigTest extends TestCase
             'action' => $legacy ? 'legacy' : 'publish',
             'version_id' => null,
             'restores_publication_id' => null,
-            'previous_publication_id' => null,
+            // Hito 7 (`uspub_chain_next`): la entrada nueva apunta a la cabeza.
+            'previous_publication_id' => DB::table(self::TABLA)->orderByDesc('seq')->value('id'),
             'engine_contract' => Lector::CONTRACT,
             'effective_json' => $json,
             'effective_hash' => hash('sha256', $json),
