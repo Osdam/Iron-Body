@@ -78,12 +78,14 @@ Ninguno.
 
 ```sql
 -- SOLO LECTURA. Filas cuyo texto el PlainText del H7 rechazaría al reenviarse (U+00A0 no está en la clase).
-WITH c(re) AS (SELECT '[­؀-؅؜۝܏࢐࢑࣢᠎  ⁠-⁤⁪-⁯￹-￻]|[\U000E0000-\U000E007F]'::text)
+WITH c(re) AS (SELECT '[\u00AD\u0600-\u0605\u061C\u06DD\u070F\u0890\u0891\u08E2\u180E\u2028\u2029\u2060-\u2064\u206A-\u206F\uFFF9-\uFFFB]|[\U000E0000-\U000E007F]'::text)
 SELECT 'valuation_appointments.notes' AS donde, count(*) FROM valuation_appointments, c WHERE notes ~ c.re
 UNION ALL SELECT 'ultron_studio_drafts.content', count(*) FROM ultron_studio_drafts, c WHERE content::jsonb::text ~ c.re
 UNION ALL SELECT 'ultron_studio_rules.description', count(*) FROM ultron_studio_rules, c WHERE description ~ c.re
 UNION ALL SELECT 'receipt_stations.name/printer_name', count(*) FROM receipt_stations, c WHERE coalesce(name, '') || coalesce(printer_name, '') ~ c.re;
 ```
+
+**Corrección (02-11-2026, a petición del lead).** La primera versión de este bloque llevaba los caracteres de la clase LITERALES (U+00AD, U+2028, U+2029…) en lugar de escapes. Al copiarla, el U+2028 se convirtió en un espacio dentro del corchete y la expresión casaba espacios normales: falsos positivos 3/1/12/1 en producción, según el lead, que la ejecutó con los escapes. Ahora la clase va solo en ASCII, con los escapes de las ARE de PostgreSQL (barra invertida, `u` y cuatro cifras hexadecimales; `U` y ocho cifras para las etiquetas). Vuelta a comprobar en PostgreSQL 14.24 local: no casa con un espacio, ni con U+00A0, ni con «Juan Pérez, 10:00 a. m.»; casa con U+00AD, U+2028 y la etiqueta U+E0041.
 
 Validada en local:
 - la sintaxis, en PostgreSQL 14.24 (`ultron_studio_h7_rev`, en solo lectura);
