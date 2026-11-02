@@ -98,7 +98,8 @@ case "$(stat -c '%a' "$DIRCRED")" in 700|710|750) ;; *) muere "$DIRCRED tiene qu
 
 # ── El código que se va a ejecutar: de root y sin escritura para nadie más (ni el árbol ni sus directorios padre) ──
 cd "$APP"
-MALOS=$(find artisan bootstrap/app.php bootstrap/providers.php app config database routes vendor composer.json composer.lock \
+# find -L: un enlace se juzga por su destino (un enlace de root que apunte a un fichero de www-data no pasa).
+MALOS=$(find -L artisan bootstrap/app.php bootstrap/providers.php app config database routes vendor composer.json composer.lock \
   \( ! -user "$DUENO_ARBOL" -o -perm /022 \) -print 2> /dev/null | head -10 || true)
 [ -z "$MALOS" ] || muere "código que no es de $DUENO_ARBOL o que otro puede escribir (los primeros 10):
 $MALOS
@@ -113,11 +114,12 @@ done
 for d in bootstrap; do
   [ "$(stat -c '%U' "$d")" = "$DUENO_ARBOL" ] && [ $(( 0$(stat -c '%a' "$d") & 022 )) = 0 ] || muere "$APP/$d no es de $DUENO_ARBOL o lo puede escribir otro"
 done
-[ -f .env ] || muere "falta $APP/.env"
-# El .env lo lee aquí root (copiarlo no ejecuta nada). Si www-data puede escribirlo, puede cambiar la configuración de
-# todo: se avisa (el destino de la base del dueño ya no sale de él).
-if [ "$(stat -c '%U' .env)" = "$WWW" ] || { [ "$(stat -c '%G' .env)" = "$WWW" ] && [ $(( 0$(stat -c '%a' .env) & 020 )) != 0 ]; }; then
-  echo "ironbody-migrate: AVISO: $APP/.env lo puede escribir $WWW (recomendado root:$WWW 640); el destino del dueño sale de la credencial" >&2
+[ -f .env ] && [ ! -L .env ] || muere "falta $APP/.env, o es un enlace"
+# El .env lo copia aquí root (copiarlo no ejecuta nada) y lo lee el proceso que migra. Si www-data pudiera escribirlo,
+# podría cambiar lo que ese proceso hace con la credencial del dueño (p. ej., variables PG* que libpq lee del entorno):
+# se RECHAZA (N-4b del H6; SEC7 del H7). Lo recomendado: root:www-data 640 (www-data lo lee para config:cache).
+if [ "$(stat -c '%U' .env)" != "$DUENO_ARBOL" ] || [ $(( 0$(stat -c '%a' .env) & 022 )) != 0 ]; then
+  muere "$APP/.env tiene que ser de $DUENO_ARBOL y sin escritura para el grupo ni para otros (recomendado $DUENO_ARBOL:$WWW 640; instalación, paso 3b): es $(stat -c '%U:%G %a' .env)"
 fi
 
 # ── Directorio privado de esta ejecución (tmpfs): la copia del .env y las cachés de arranque del proceso que migra ──
@@ -139,7 +141,7 @@ como "$USUARIO" env -i PATH=/usr/bin:/bin LANG=C.UTF-8 HOME="$RUN" \
   APP_SERVICES_CACHE="$RUN/cache/services.php" APP_PACKAGES_CACHE="$RUN/cache/packages.php" \
   APP_EVENTS_CACHE="$RUN/cache/events.php" LOG_CHANNEL=stderr PGOPTIONS="$PGOPT" \
   IRONBODY_MIGRATE_APP="$APP" IRONBODY_MIGRATE_ENV_DIR="$RUN/env" IRONBODY_MIGRATE_CRED="$CRED" \
-  IRONBODY_MIGRATE_RUN="$RUN" IRONBODY_MIGRATE_MODE="$FASE" \
+  IRONBODY_MIGRATE_RUN="$RUN" IRONBODY_MIGRATE_MODE="$FASE" IRONBODY_MIGRATE_PGOPTIONS="$PGOPT" \
   "$PHP" -d display_errors=stderr -d log_errors=0 -- <<'LANZADOR'
 <?php
 // El lanzador del proceso que migra (lo ejecuta el usuario dedicado; viene por la entrada estándar, no es un fichero).
@@ -182,6 +184,14 @@ $kernel->bootstrap();
 str_starts_with($app->getCachedConfigPath(), $run.'/') || $fail('la caché de configuración no es la privada: no se migra');
 str_starts_with($app->getCachedServicesPath(), $run.'/') && str_starts_with($app->getCachedPackagesPath(), $run.'/') || $fail('las cachés de arranque no son las privadas: no se migra');
 $app->configurationIsCached() && $fail('hay una caché de configuración donde no debería: no se migra');
+// Laravel exporta el .env al entorno del proceso (putenv), y libpq lee de ahí PGHOSTADDR, PGSERVICE, PGPASSFILE… al
+// conectar: una de esas en el .env desviaría la conexión del dueño. Ninguna, salvo el PGOPTIONS del envoltorio.
+foreach (array_keys(getenv()) as $k) {
+    if (preg_match('/^(PG|LD_|DYLD_)/', (string) $k) === 1 && $k !== 'PGOPTIONS') {
+        $fail("el entorno trae {$k} (¿del .env?): libpq o el enlazador lo leerían; no se migra");
+    }
+}
+getenv('PGOPTIONS') === getenv('IRONBODY_MIGRATE_PGOPTIONS') || $fail('PGOPTIONS no es la del envoltorio: no se migra');
 $o = (array) config('database.connections.pgsql_owner');
 (($o['username'] ?? null) === $usuario && ($o['host'] ?? null) === $host && ($o['database'] ?? null) === $base && in_array($o['url'] ?? null, [null, ''], true))
     || $fail('la conexión pgsql_owner no es la de la credencial: no se migra');
@@ -205,9 +215,16 @@ CACHE=ok
 if [ "$MODO" = migrate ]; then
   if como "$WWW" env -i PATH=/usr/bin:/bin "$PHP" -r 'require "vendor/autoload.php"; try { Dotenv\Dotenv::createArrayBacked(".")->load(); } catch (Throwable $e) { fwrite(STDERR, get_class($e).PHP_EOL); exit(1); }'; then
     if como "$WWW" env -i PATH=/usr/bin:/bin HOME=/nonexistent sh -c 'umask 077; exec "$0" artisan config:cache -q' "$PHP"; then
+      # bootstrap/cache lo escribe www-data: root no hace chmod ahí (seguiría un enlace que www-data hubiera puesto en
+      # su lugar; H-5 de SEC7). Con umask 077 nace 600; si no, el chmod lo hace www-data, que solo cambia lo suyo.
       F=bootstrap/cache/config.php
-      [ "$(stat -c '%U' "$F")" = "$WWW" ] || { echo "ironbody-migrate: $F no es de $WWW" >&2; CACHE=mal; }
-      [ "$(stat -c '%a' "$F")" = 600 ] || { chmod 600 "$F"; echo "ironbody-migrate: $F pasado a 600" >&2; }
+      if [ -L "$F" ] || [ ! -f "$F" ]; then
+        echo "ironbody-migrate: $F no es un fichero normal (¿un enlace?): no se toca" >&2; CACHE=mal
+      elif [ "$(stat -c '%U' "$F")" != "$WWW" ]; then
+        echo "ironbody-migrate: $F no es de $WWW" >&2; CACHE=mal
+      elif [ "$(stat -c '%a' "$F")" != 600 ]; then
+        if como "$WWW" chmod 600 "$F"; then echo "ironbody-migrate: $F pasado a 600 (como $WWW)" >&2; else CACHE=mal; fi
+      fi
     else
       echo "ironbody-migrate: config:cache falló como $WWW" >&2; CACHE=mal
     fi
@@ -235,6 +252,11 @@ exit "$FIN"
 # 3. El árbol de root y sin escritura ajena (desde el 25-10 ya lo es salvo bootstrap/cache y storage, que no se tocan):
 #      find /var/www/api/backend/{artisan,bootstrap/app.php,bootstrap/providers.php,app,config,database,routes,vendor,composer.json,composer.lock} \( ! -user root -o -perm /022 \) | head
 #      (vacío; si no, chown root y chmod go-w sobre lo que salga, y volver a comprobar que www-data lee: test -r)
+#    3b. El fichero de entorno, de root y legible por www-data, sin escritura para él (el envoltorio lo exige):
+#      install -m 600 /var/www/api/backend/.env /root/env-pre-ironbody-migrate-$(date -u +%Y%m%d)   # copia previa
+#      chown root:www-data /var/www/api/backend/.env && chmod 640 /var/www/api/backend/.env
+#      sudo -u www-data test -r /var/www/api/backend/.env && ! sudo -u www-data test -w /var/www/api/backend/.env && echo OK
+#      (set_var de los scripts del Studio conserva dueño y modo: nada más cambia)
 # 4. El envoltorio nuevo, a un nombre provisional, y su comprobación sin migrar:
 #      install -m 755 -o root -g root ironbody-migrate-propuesta.sh /usr/local/bin/ironbody-migrate.h7
 #      /usr/local/bin/ironbody-migrate.h7 --check      # → migrate:status con el rol dueño, código 0
@@ -247,6 +269,16 @@ exit "$FIN"
 #                                    /usr/local/bin/ironbody-migrate --status, /usr/local/bin/ironbody-migrate --check
 #      %ironbody-deploy ALL=(root) NOPASSWD: IRONBODY_MIGRATE
 #      visudo -cf /etc/sudoers.d/ironbody-migrate
+#    Quien use esa regla llama `sudo /usr/local/bin/ironbody-migrate` a secas: `sudo env PGOPTIONS=… …` no casa con
+#    ella y se deniega (los scripts de despliegue corren como root y sí pueden).
+# 6b. H-1 (por comprobar en el servidor): si `schedule:run` corre en el crontab de ROOT, cada tarea programada (el
+#    monitor del H7 incluido) incluye como root bootstrap/cache/*.php de www-data, cada minuto: la misma clase que este
+#    envoltorio corrige. El programador no necesita root (los respaldos son timers de systemd). Comprobar y mover:
+#      crontab -l -u root | grep -n 'schedule:run'; crontab -l -u www-data 2>/dev/null | grep -n 'schedule:run'
+#      # antes de mover: que ninguna tarea programada escriba fuera de storage/ ni necesite root (schedule:list)
+#      ( crontab -l -u www-data 2>/dev/null; echo '* * * * * cd /var/www/api/backend && php artisan schedule:run >> /dev/null 2>&1' ) | crontab -u www-data -
+#      crontab -l -u root | grep -v 'artisan schedule:run' | crontab -u root -       # tras ver que la de www-data corre
+#      # verificación: el minuto siguiente, `ls -l storage/framework/schedule-*` o el log de una tarea, de www-data
 # 7. Cuando --check y un despliegue hayan ido bien: /root/.ironbody-owner.env ya no lo usa nadie. Se conserva (600) hasta
 #    que el propietario decida; borrar credenciales es decisión suya, y rotar la del dueño también.
 # Vuelta atrás: install -m 755 /root/ironbody-migrate.pre-h7 /usr/local/bin/ironbody-migrate (el usuario y la

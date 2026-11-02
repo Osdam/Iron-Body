@@ -17,6 +17,10 @@
 -- ve la tabla sin su disparador; las lecturas del Studio esperan unos milisegundos (lock_timeout 5 s: si alguien la
 -- tiene, aborta entero sin cambiar nada y se repite). No toca la definición de ningún disparador ni de ninguna función.
 --
+-- EL LABORATORIO: reply, checks y judge de cada caso entran en results_hash, que se recalcula al emitir el veredicto.
+-- Con veredicto ya emitido, redactarlos no cambia nada (la puerta de publicar mira el veredicto y la huella de la
+-- versión); SIN veredicto, esa ejecución ya no se puede juzgar (run_integrity_mismatch): el modo en seco lo cuenta.
+--
 -- LO QUE NO SE REDACTA (se informa, nunca se modifica): la configuración FIRMADA o con HUELLA, porque redactarla
 -- rompería su verificación (el motor sellaría «fallback»):
 --   ultron_studio_publications.effective_json (firmada), ultron_studio_versions.content (content_hash) y su copia
@@ -297,6 +301,18 @@ BEGIN
                            ELSE 'NO SE REDACTA (firmada o con huella): versión nueva sin el dato; decide el propietario' END;
         END IF;
     END LOOP;
+    -- reply, checks y judge entran en results_hash, que se recalcula al emitir el veredicto: una ejecución SIN veredicto
+    -- con un caso redactado ya no se puede juzgar (run_integrity_mismatch) y hay que repetirla. Con veredicto, nada cambia
+    -- (la puerta de publicar mira el veredicto y la huella de la versión, no recalcula los resultados).
+    IF array_length(v_res, 1) IS NOT NULL AND to_regclass('public.ultron_studio_lab_run_cases') IS NOT NULL THEN
+        EXECUTE 'SELECT count(DISTINCT c.run_id) FROM public.ultron_studio_lab_run_cases c
+                  WHERE NOT EXISTS (SELECT 1 FROM public.ultron_studio_lab_verdicts v WHERE v.run_id = c.run_id)
+                    AND (coalesce(c.reply, '''') ~* ANY ($1) OR coalesce(c.checks::jsonb::text, '''') ~* ANY ($1) OR coalesce(c.judge::jsonb::text, '''') ~* ANY ($1))'
+           INTO v_n USING v_res;
+        IF v_n > 0 THEN
+            RAISE NOTICE '  AVISO: % ejecución(es) del laboratorio SIN veredicto quedarían sin poder juzgarse (sus resultados ya no darían su results_hash): repetirlas después', v_n;
+        END IF;
+    END IF;
     SELECT count(*) INTO v_n FROM jsonb_array_elements(v_politica) e
      WHERE NOT EXISTS (SELECT 1 FROM information_schema.columns c WHERE c.table_schema = 'public' AND c.table_name = e->>0 AND c.column_name = e->>1);
     IF v_n > 0 THEN

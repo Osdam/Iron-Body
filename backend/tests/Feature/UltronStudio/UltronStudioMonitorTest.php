@@ -128,6 +128,13 @@ class UltronStudioMonitorTest extends TestCase
         $this->assertSame('meta_ads:connected_read', $leer(['ULTRON_STUDIO_MONITOR_EXPECT' => ' meta_ads:connected_read '])['expect']);
     }
 
+    public function test_env_example_documenta_las_dos_variables_con_sus_defectos(): void
+    {
+        $lineas = preg_split('/\R/', (string) file_get_contents(base_path('.env.example')));
+        $this->assertContains('ULTRON_STUDIO_MONITOR_ENABLED=false', $lineas);
+        $this->assertContains('ULTRON_STUDIO_MONITOR_EXPECT=', $lineas, 'vacía: rige la expectativa del código');
+    }
+
     // ── El comando ───────────────────────────────────────────────────────────
 
     /** @return array{0:int,1:array<string,mixed>} */
@@ -223,7 +230,31 @@ class UltronStudioMonitorTest extends TestCase
 
         $incidente = Incident::query()->sole();
         $this->assertSame([MonitorCommand::SOURCE, MonitorCommand::KIND_INTEGRATIONS, Incident::SEVERITY_HIGH], [$incidente->source, $incidente->kind, $incidente->severity]);
-        $this->assertSame($i['mismatches'], $incidente->evidence['mismatches']);
+        // En PostgreSQL la evidencia es jsonb, que reordena las claves de cada objeto (`id`, `actual`, `expected`):
+        // se comparan con las claves ordenadas en los dos lados y con assertSame (mismos valores y mismos TIPOS; el
+        // orden de las listas cuenta). En SQLite el orden ya coincide.
+        $this->assertSame(self::clavesOrdenadas($i['mismatches']), self::clavesOrdenadas($incidente->evidence['mismatches']));
+        $this->assertSame(['actual', 'expected', 'id'], array_keys(self::clavesOrdenadas($incidente->evidence['mismatches'][0])));
+    }
+
+    /**
+     * Las claves de cada objeto (array asociativo) ordenadas, a cualquier profundidad; las listas conservan su orden.
+     *
+     * @param  array<mixed>  $valor
+     * @return array<mixed>
+     */
+    private static function clavesOrdenadas(array $valor): array
+    {
+        foreach ($valor as $k => $v) {
+            if (is_array($v)) {
+                $valor[$k] = self::clavesOrdenadas($v);
+            }
+        }
+        if (! array_is_list($valor)) {
+            ksort($valor, SORT_STRING);
+        }
+
+        return $valor;
     }
 
     public function test_una_expectativa_mal_escrita_falla_en_voz_alta_y_no_tumba_a_las_demas(): void

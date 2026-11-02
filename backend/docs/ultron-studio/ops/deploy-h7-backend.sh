@@ -43,13 +43,25 @@ PREVIO=pendiente
 MIGRACIONES="backend/database/migrations/2026_11_02_100001_add_ultron_studio_hardening.php "
 # Puerta de diff del contrato (la del H6: motor, integraciones existentes, catálogo y dependencias; este script no
 # ejecuta composer install). En el H7 la cruzan SOLO los ficheros que el contrato nombra, cada uno con su paquete; un
-# fichero de la puerta que no esté aquí ABORTA. Se completa con los informes de B7 (los controladores de M-2, uno por
-# commit) y de SEC7 antes de desplegar; console.php solo puede AÑADIR líneas (el bloque del monitor).
+# fichero de la puerta que no esté aquí ABORTA. Lista de plans/informes-h7/informe-backend.md (B7-e §3: el tamaño de
+# las listas se valida antes que sus elementos, 7 controladores; y AdminUserController, H-2 de SEC7: restablecer la
+# contraseña cierra las demás sesiones, commit aa3451f), de SEC7 (la API interna de conocimiento limpia invisibles) y
+# de OPS7 (console.php solo puede AÑADIR líneas: el bloque del monitor).
 PUERTA=(backend/app/Services/Marketing backend/app/Jobs backend/app/Http/Controllers/Api backend/app/Services/Sms
         backend/app/Services/Otp backend/routes/api.php backend/routes/marketing.php backend/routes/console.php
         backend/config/marketing.php backend/config/meta.php backend/config/otp.php
         backend/app/Services/UltronStudio/StudioCatalog.php backend/composer.json backend/composer.lock)
-PERMITIDOS_EN_PUERTA="backend/app/Http/Controllers/Api/Internal/InternalMarketingKnowledgeController.php backend/routes/console.php"
+PERMITIDOS_EN_PUERTA="backend/app/Http/Controllers/Api/Admin/AdminUserController.php
+  backend/app/Http/Controllers/Api/Admin/EmployeeAccessController.php
+  backend/app/Http/Controllers/Api/Admin/ExportController.php
+  backend/app/Http/Controllers/Api/Admin/IronCrmAiController.php
+  backend/app/Http/Controllers/Api/Admin/ManualInvoiceBundleController.php
+  backend/app/Http/Controllers/Api/Admin/MarketingInboxController.php
+  backend/app/Http/Controllers/Api/Admin/ValuationAvailabilityController.php
+  backend/app/Http/Controllers/Api/Admin/WorkforceStaffController.php
+  backend/app/Http/Controllers/Api/Internal/InternalMarketingKnowledgeController.php
+  backend/routes/console.php"
+PERMITIDOS_EN_PUERTA=$(printf '%s\n' $PERMITIDOS_EN_PUERTA | tr '\n' ' ')
 HUELLA_F=4ad748b5f17f09b398f7f641c197d7ee        # md5(pg_get_functiondef) de ultron_studio_forbid(): la de F (H5, H6 y H7)
 MIN_TABLAS=226                                     # 223 del H6 + sus 3 tablas (asociaciones, canarios, instantáneas)
 API=https://api.ironbodyneiva.cloud/api
@@ -254,9 +266,12 @@ FILAS=$($PSQL -c "$Q_FILAS")
 [ "$FILAS" = "$FILAS0" ] && echo "   filas de la cadena, el libro y las instantáneas: $FILAS (las mismas: la migración no toca filas)" || desvio "las filas cambiaron durante la migración: antes [$FILAS0] · después [$FILAS] (¿alguien escribió en el Studio?)"
 echo "5. cachés y workers:"
 sudo -u www-data sh -c 'umask 077; php artisan route:cache -q'
+# bootstrap/cache lo escribe www-data: root no hace chmod ahí (seguiría un enlace puesto en su lugar; H-5 de SEC7).
+# Con umask 077 nacen 600; si no, el chmod lo hace www-data, que solo puede cambiar lo suyo.
 for f in bootstrap/cache/config.php bootstrap/cache/routes-v7.php; do
+  [ -f "$f" ] && [ ! -L "$f" ] || aborta "$f no es un fichero normal (¿un enlace?): no se reinician los workers"
   [ "$(stat -c '%U' "$f")" = www-data ] || aborta "$f no es de www-data: no se reinician los workers (quedarían en BACKOFF)"
-  [ "$(stat -c '%a' "$f")" = 600 ] || { chmod 600 "$f"; echo "   $f pasado a 600"; }
+  [ "$(stat -c '%a' "$f")" = 600 ] || { sudo -u www-data chmod 600 "$f" || aborta "www-data no pudo dejar $f en 600"; echo "   $f pasado a 600 (como www-data)"; }
 done
 echo "   cachés: $(stat -c '%U %a' bootstrap/cache/config.php) · $(stat -c '%U %a' bootstrap/cache/routes-v7.php)"
 PIDS_ANTES=$(supervisorctl status 2>/dev/null | grep -oE 'pid [0-9]+' | sort || true)
