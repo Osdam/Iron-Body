@@ -3,7 +3,11 @@
 namespace Tests\Feature\Hardening\ListSizesFirst;
 
 use App\Services\Exports\ExportCatalog;
+use Closure;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Testing\TestResponse;
+use Illuminate\Validation\Validator as LaravelValidator;
 use Tests\TestCase;
 
 /**
@@ -24,13 +28,11 @@ class ExportColumnsListSizeTest extends TestCase
         $this->getJson('/api/admin/exports/members?format=csv', $h)->assertStatus(422);   // en frío, sin medir
         $columnas = count(app(ExportCatalog::class)->get('members')->columnKeys());
 
-        $inicio = hrtime(true);
-        $r = $this->json('GET', '/api/admin/exports/members', ['format' => 'csv', 'columns' => array_fill(0, 10_000, 'name')], $h);
-        $ms = (hrtime(true) - $inicio) / 1e6;
+        [$r, $atributos] = $this->conAtributosValidados(fn () => $this->json('GET', '/api/admin/exports/members', ['format' => 'csv', 'columns' => array_fill(0, 10_000, 'name')], $h));
 
         $r->assertStatus(422)->assertJsonPath('code', 'invalid_export')->assertJsonPath('message', "Este conjunto tiene {$columnas} columnas.");
         $this->assertSame(['columns'], array_keys($r->json('errors')));
-        $this->assertLessThan(1000, $ms, sprintf('El 422 tardó %.1f ms (antes, 24 s).', $ms));
+        $this->assertLessThan(10, $atributos, "Se expandió la lista antes de mirar su tope ({$atributos} atributos).");
     }
 
     public function test_todas_las_columnas_del_dataset_caben_y_lo_demas_valida_como_siempre(): void
@@ -47,5 +49,26 @@ class ExportColumnsListSizeTest extends TestCase
         $this->assertSame(['columns.0', 'columns.1', 'columns.2'], array_keys($r->json('errors')));
         // Y si `columns` no es una lista, el error de siempre.
         $this->getJson('/api/admin/exports/members?format=csv&columns=name', $h)->assertStatus(422)->assertJsonPath('code', 'invalid_export');
+    }
+
+    /**
+     * La respuesta y el mayor número de atributos que llegó a validar un
+     * validador de la petición. Con el comodín expandido sobre la lista, uno
+     * (o más) por elemento; validando primero el tamaño, uno por lista. No
+     * depende de la carga de la máquina, a diferencia del tiempo.
+     *
+     * @return array{0: TestResponse, 1: int}
+     */
+    private function conAtributosValidados(Closure $peticion): array
+    {
+        $maximo = 0;
+        Validator::resolver(static function ($traductor, array $datos, array $reglas, array $mensajes, array $atributos) use (&$maximo): LaravelValidator {
+            $validador = new LaravelValidator($traductor, $datos, $reglas, $mensajes, $atributos);
+            $maximo = max($maximo, count($validador->getRules()));
+
+            return $validador;
+        });
+
+        return [$peticion(), $maximo];
     }
 }

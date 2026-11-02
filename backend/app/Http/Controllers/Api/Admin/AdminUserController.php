@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Admin;
 use App\Models\AdminRole;
+use App\Models\AdminSession;
 use App\Models\AuditLog;
 use App\Services\Audit\AuditTrail;
 use App\Support\Access\AdminActor;
@@ -322,6 +323,7 @@ class AdminUserController extends Controller
     {
         return DB::transaction(function () use ($request, $admin, $clave, $personalizada, $operacion): array {
             $admin->update(['password' => $clave]);
+            $revocadas = $this->revocarOtrasSesiones($request, $admin);
 
             app(AuditTrail::class)->record($request, [
                 'action' => 'update',
@@ -338,6 +340,8 @@ class AdminUserController extends Controller
                     'event' => AdminUserRealtimeController::PASSWORD_UPDATED,
                     'mode' => $personalizada ? 'custom' : 'generated',
                     'operation_id' => $operacion,
+                    // Cuántas sesiones cerró (H-2): ni tokens ni sus huellas.
+                    'sessions_revoked' => $revocadas,
                 ],
             ]);
 
@@ -454,6 +458,31 @@ class AdminUserController extends Controller
             'code' => 'requires_super_admin',
             'message' => 'Solo un Super Admin puede cambiar la contraseña de otro Super Admin.',
         ], 403);
+    }
+
+    /**
+     * Cierra las demás sesiones vivas de la cuenta (H-2 de la revisión de
+     * seguridad del Hito 7 de ULTRON STUDIO). Las de «recuérdame» son filas de
+     * `admin_sessions` con 30 días de vida, así que caen con las demás, y con
+     * ellas los vales de SSE, que solo valen mientras su sesión esté activa.
+     *
+     * Por qué: restablecer es la respuesta a una credencial filtrada, y cambiar
+     * la contraseña sin cerrar las sesiones dejaba dentro a quien ya tuviera un
+     * token. Es lo que ya hace `admin:password` desde la consola.
+     *
+     * La sesión con la que se hace la petición se conserva cuando la cuenta es
+     * la propia: el flujo de quien actúa no cambia. Va en la transacción de la
+     * contraseña: o cambian las dos cosas, o ninguna.
+     */
+    private function revocarOtrasSesiones(Request $request, Admin $admin): int
+    {
+        $actual = $request->attributes->get('auth_admin_session');
+
+        return AdminSession::query()
+            ->active()
+            ->where('admin_id', $admin->id)
+            ->when($actual instanceof AdminSession, fn ($q) => $q->whereKeyNot($actual->getKey()))
+            ->update(['revoked_at' => now(), 'revoked_reason' => 'password_reset']);
     }
 
     /**

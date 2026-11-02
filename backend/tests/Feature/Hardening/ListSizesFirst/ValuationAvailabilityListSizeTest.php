@@ -3,7 +3,11 @@
 namespace Tests\Feature\Hardening\ListSizesFirst;
 
 use App\Models\Trainer;
+use Closure;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Testing\TestResponse;
+use Illuminate\Validation\Validator as LaravelValidator;
 use Tests\TestCase;
 
 /**
@@ -31,13 +35,11 @@ class ValuationAvailabilityListSizeTest extends TestCase
         $ruta = $this->ruta();
         $this->putJson($ruta, [], $h)->assertStatus(422);   // en frío, sin medir
 
-        $inicio = hrtime(true);
-        $r = $this->putJson($ruta, ['rules' => array_fill(0, 10_000, ['weekday' => 1, 'start_time' => '08:00', 'end_time' => '09:00'])], $h);
-        $ms = (hrtime(true) - $inicio) / 1e6;
+        [$r, $atributos] = $this->conAtributosValidados(fn () => $this->putJson($ruta, ['rules' => array_fill(0, 10_000, ['weekday' => 1, 'start_time' => '08:00', 'end_time' => '09:00'])], $h));
 
         $r->assertStatus(422)->assertJsonPath('code', 'validation_failed');
         $this->assertSame(['rules'], array_keys($r->json('errors')));
-        $this->assertLessThan(1000, $ms, sprintf('El 422 tardó %.1f ms (antes, 100 s).', $ms));
+        $this->assertLessThan(10, $atributos, "Se expandió la lista antes de mirar su tope ({$atributos} atributos).");
     }
 
     public function test_dentro_del_tope_la_validacion_es_la_de_siempre(): void
@@ -48,5 +50,26 @@ class ValuationAvailabilityListSizeTest extends TestCase
         ]], $this->actingAsAdmin())->assertStatus(422)->assertJsonPath('code', 'validation_failed');
 
         $this->assertSame(['rules.1.weekday', 'rules.1.end_time'], array_keys($r->json('errors')));
+    }
+
+    /**
+     * La respuesta y el mayor número de atributos que llegó a validar un
+     * validador de la petición. Con el comodín expandido sobre la lista, uno
+     * (o más) por elemento; validando primero el tamaño, uno por lista. No
+     * depende de la carga de la máquina, a diferencia del tiempo.
+     *
+     * @return array{0: TestResponse, 1: int}
+     */
+    private function conAtributosValidados(Closure $peticion): array
+    {
+        $maximo = 0;
+        Validator::resolver(static function ($traductor, array $datos, array $reglas, array $mensajes, array $atributos) use (&$maximo): LaravelValidator {
+            $validador = new LaravelValidator($traductor, $datos, $reglas, $mensajes, $atributos);
+            $maximo = max($maximo, count($validador->getRules()));
+
+            return $validador;
+        });
+
+        return [$peticion(), $maximo];
     }
 }
