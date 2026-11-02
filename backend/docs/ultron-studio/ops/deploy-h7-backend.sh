@@ -280,7 +280,7 @@ echo "   filas cadena · libro · instantáneas: $FILAS0 · colas fallidas: $FAL
 echo "   motor, H4, H5 y H6 (informativo; no cambia): $PREVIA_ANTES"
 # m-5 del reviewer del H7: que el fichero de entorno parsee se comprueba también aquí, antes de tocar nada
 # (el paso 2 lo repite tras escribir la variable; si fallara solo allí, el merge ya estaría hecho).
-sudo -u www-data php -r 'require "vendor/autoload.php"; try { Dotenv\Dotenv::createArrayBacked(".")->load(); } catch (Throwable $e) { fwrite(STDERR, get_class($e).PHP_EOL); exit(1); }' \
+sudo -u www-data php -r 'require "/var/www/api/backend/vendor/autoload.php"; try { Dotenv\Dotenv::createArrayBacked("/var/www/api/backend")->load(); } catch (Throwable $e) { fwrite(STDERR, get_class($e).PHP_EOL); exit(1); }' \
   || aborta "el fichero de entorno de producción NO parsea antes de empezar: aclararlo antes de desplegar (no se ha tocado nada)"
 echo "   el fichero de entorno parsea (antes de tocar nada)"
 if [ "$SOLO_COMPROBAR" = --solo-comprobar ]; then
