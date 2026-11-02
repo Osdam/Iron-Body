@@ -238,7 +238,7 @@ Si no llega, se revierte.
 ## 7. Presupuestos (fichero máquina: `ops/perf-h7/presupuestos-h7.json`)
 
 ### 7.1 Para `smoke-h7.py` (OPS7 los carga; yo no toco su fichero)
-- **Método:** por ruta, 1 GET de calentamiento y 5 cronometradas en serie, separadas ≥ 0,6 s; la evidencia, 3 muestras separadas ≥ 6,5 s y solo si hay versión en CANARY.
+- **Método:** por ruta, 1 GET de calentamiento y 5 cronometradas en serie, separadas ≥ 0,6 s; la evidencia, 1 petición de calentamiento y 3 muestras separadas ≥ 6,5 s (el calentamiento lo añadió devops el 02-11-2026, decisión 4: en frío la primera petición decidía el máximo, 231,9 frente a 80,9 ms) y solo si hay versión en CANARY.
 - **FALLO** si la mediana supera el p50, si el máximo supera el p95, si los bytes superan el máximo o si el estado no es 200. **OMITIDO** si falta lo que la ruta requiere (laboratorio apagado o sin CANARY).
 - El smoke se ejecuta en el propio servidor, por nginx y TLS sin internet de por medio.
 - **Los p50/p95 son techos iniciales** (≈ 3–4 veces el p95 local), no medidas de producción. La primera pasada en producción deja la línea base real; después OPS7 ajusta cada techo a max(1,5 × p95 de producción, p95 + 50 ms).
