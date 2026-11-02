@@ -23,11 +23,15 @@
 # Cupos: 3 por minuto (login, 8/min por IP). Cada pasada dura unos 2 minutos (la fase de presupuestos, en serie y con
 # sus pausas) y no pasa de 90 lecturas con sesión por minuto (cupo 120). No toca la sonda de Twilio (su cupo es el
 # del H6).
-# Ensayo local: APP_DIR, SMOKE_API, SMOKE_RUN_AS="", SMOKE_PSQL, SMOKE_WORKDIR, SMOKE_PY, SMOKE_H6_PY, SMOKE_BUDGETS y
-# SMOKE_ADMIN_ID (ver banco-h7/README.md).
+# Ensayo local: APP_DIR, SMOKE_API, SMOKE_RUN_AS="", SMOKE_PSQL, SMOKE_WORKDIR, SMOKE_PY, SMOKE_H6_PY, SMOKE_BUDGETS,
+# SMOKE_TAREAS y SMOKE_ADMIN_ID (ver banco-h7/README.md).
 set -euo pipefail
 export LC_ALL=C
 
+# TAREAS = entradas de `schedule:list` en producción con el monitor APAGADO: el MISMO valor que TAREAS de
+# deploy-h7-backend.sh, leído en el servidor con su --solo-comprobar y fijado en los dos scripts en un commit (m-1 del
+# reviewer del H7). Con «pendiente» el smoke no se ejecuta (código 2). SMOKE_TAREAS lo sustituye en un ensayo local.
+TAREAS="${SMOKE_TAREAS:-pendiente}"
 APP_DIR="${APP_DIR:-/var/www/api/backend}"
 API="${SMOKE_API:-https://api.ironbodyneiva.cloud/api}"
 ADMIN_ID="${SMOKE_ADMIN_ID:-32}"
@@ -40,6 +44,7 @@ PSQL="${SMOKE_PSQL:-sudo -u postgres psql -X -Atq -d ironbody}"
 SMOKE_EMAIL=studio-smoke@ironbodyneiva.cloud
 
 [[ "$ADMIN_ID" =~ ^[0-9]+$ ]] || { echo "SMOKE_ADMIN_ID no es un número"; exit 2; }
+[[ "$TAREAS" =~ ^[0-9]+$ ]] || { echo "TAREAS sin fijar ($TAREAS): leerlo con deploy-h7-backend.sh --solo-comprobar y fijarlo aquí y en deploy-h7-backend.sh en un commit; la cuenta no se ha tocado"; exit 2; }
 if [ -n "$RUN_AS" ] && [ "$(id -u)" != 0 ]; then echo "en el servidor se ejecuta como root"; exit 2; fi
 for b in python3 php openssl curl join; do command -v "$b" > /dev/null || { echo "falta $b"; exit 2; }; done
 [ -f "$PY" ] || { echo "no encuentro $PY"; exit 2; }
@@ -58,6 +63,23 @@ print(str(d.get("version", "?")) + " · " + str(len(d["routes"])) + " rutas · s
 cd "$APP_DIR"
 
 artisan() { if [ -n "$RUN_AS" ]; then sudo -u "$RUN_AS" php artisan "$@"; else php artisan "$@"; fi; }
+# El programador por `schedule:list --json`, con su código de salida APARTE (m-1: sin base o sin caché lanza una
+# QueryException sobre cache_locks y la salida vacía no puede pasar por «0 tareas del Studio»): «total del_Studio»,
+# «FALLO <código>» o «ILEGIBLE». Su salida de error no se imprime.
+programador() {
+  local salida rc=0
+  salida=$(artisan schedule:list --json 2>/dev/null) || rc=$?
+  [ "$rc" = 0 ] || { echo "FALLO $rc"; return 0; }
+  printf '%s' "$salida" | python3 -c '
+import json, sys
+try:
+    r = json.load(sys.stdin)
+    assert isinstance(r, list)
+except Exception:
+    print("ILEGIBLE")
+    sys.exit(0)
+print(len(r), sum(1 for x in r if "ultron-studio:" in str(x.get("command", ""))))' 2>/dev/null || echo ILEGIBLE
+}
 tinker_line() {
   local salida
   salida=$(artisan tinker --execute="$2" 2>&1 | tail -1) || true
@@ -105,13 +127,18 @@ trap cleanup EXIT
 echo "== Smoke del Hito 7 · $(date -u +%Y-%m-%dT%H:%M:%SZ) · $API"
 echo "OK      presupuestos de rendimiento válidos: $PRES ($BUD)"
 
-# 1. El monitor apagado (la bandera, booleana de verdad) y el programador sin ninguna tarea del Studio.
+# 1. El monitor apagado (la bandera, booleana de verdad) y el programador: schedule:list sale con 0, TAREAS entradas y
+#    ninguna del Studio.
 CONF=$(tinker_line '^\{"monitor_enabled":(true|false)\}$' 'echo json_encode(["monitor_enabled" => config("ultron_studio.monitor.enabled")]), PHP_EOL;') \
   || { echo "FALLO   no se pudo leer la configuración efectiva del monitor (tinker falló o no hay booleano; su salida no se imprime). No se ejecuta el smoke."; FINAL=1; exit 1; }
 [ "$CONF" = '{"monitor_enabled":false}' ] || { echo "FALLO   el monitor está encendido ($CONF): este smoke es el del despliegue, con el monitor apagado. No se ejecuta."; FINAL=1; exit 1; }
 echo "OK      monitor apagado: $CONF"
-PROG=$(artisan schedule:list 2>/dev/null | grep -c 'ultron-studio:' || true)
-if [ "$PROG" = 0 ]; then echo "OK      el programador no tiene ninguna tarea del Studio"; else echo "FALLO   el programador tiene $PROG tareas del Studio con el monitor apagado"; FINAL=1; fi
+PROG=$(programador)
+case "$PROG" in
+  "FALLO "*) echo "FALLO   schedule:list no sale con 0 (código ${PROG#FALLO }; su salida no se imprime): sin poder leer el programador no se ejecuta el smoke"; FINAL=1; exit 1 ;;
+  ILEGIBLE) echo "FALLO   schedule:list no devolvió la lista JSON de tareas. No se ejecuta el smoke."; FINAL=1; exit 1 ;;
+esac
+if [ "$PROG" = "$TAREAS 0" ]; then echo "OK      el programador: $TAREAS tareas (TAREAS), ninguna del Studio"; else echo "FALLO   el programador (total · del Studio) da [$PROG] y con el monitor apagado se esperaba [$TAREAS 0]"; FINAL=1; fi
 
 # 2. ¿Tiene el motor canario? El id se queda en esta variable: nunca se imprime.
 if CANARIO=$(tinker_line '^([0-9]+|none)$' '$c = config("marketing.ultron.canary_conversation_id"); echo $c === null ? "none" : (int) $c, PHP_EOL;'); then

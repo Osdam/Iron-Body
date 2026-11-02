@@ -21,6 +21,7 @@ Ensayo de punta a punta, **en el Mac**, del despliegue del H7 y de todo lo que O
 `preparar.sh` hace las copias del banco de `deploy-h7-backend.sh`, `h7-monitor-scope.sh` y `ironbody-migrate-propuesta.sh`.
 - Cada sustitución tiene que encontrar su texto exacto. Si un script del repo cambia, `preparar.sh` falla en vez de ensayar otra cosa.
 - **`PREVIO` (T-1 del tester):** la línea `PREVIO=…` del repo se sustituye **sea cual sea su valor** (`pendiente` o el commit que fije el lead) por el de la «producción» del banco, y tiene que haber exactamente una. El valor del repo queda anotado en la propia línea. Así el banco ensaya el guion que irá a producción.
+- **`TAREAS` (m-1 del reviewer):** igual, en `deploy-h7-backend.sh` (el mando no lo usa: comprueba el salto de ±2), con `BANCO_TAREAS`, o `pendiente` mientras no se fije; el smoke lo recibe como `SMOKE_TAREAS`. Se lee como en producción: `desplegar --solo-comprobar` imprime el total del programador y `ensayar.sh <banco> tareas <n>` lo fija. En este banco es **27**: depende de las banderas, y el 26 de las pruebas aborta.
 - Lo que el banco no tiene: `setpriv`, los usuarios de sistema, `find` de GNU, `/run` y el `crontab` de otros usuarios (el aviso H-1 del mando sale como «no aparece»).
 
 ## Uso
@@ -28,7 +29,9 @@ Ensayo de punta a punta, **en el Mac**, del despliegue del H7 y de todo lo que O
 ```bash
 O=backend/docs/ultron-studio/ops; B=${XDG_CACHE_HOME:-$HOME/.cache}/ironbody-banco-h7     # desde la raíz del worktree
 BANCO_WIP=0 bash $O/banco-h7/montar.sh $B && bash $O/banco-h6/api.sh $B start && bash $O/banco-h7/sembrar.sh $B
-bash $O/banco-h7/ensayar.sh $B desplegar --solo-comprobar     # paso 0
+bash $O/banco-h7/ensayar.sh $B desplegar --solo-comprobar     # paso 0: con TAREAS sin fijar, «FALTA FIJAR TAREAS=N»
+bash $O/banco-h7/ensayar.sh $B tareas 27                     # el N que imprimió (27 con las banderas de montar.sh)
+bash $O/banco-h7/ensayar.sh $B desplegar --solo-comprobar     # → COMPROBACIONES PREVIAS EN VERDE
 bash $O/banco-h7/ensayar.sh $B desplegar --55p03              # → DESPLIEGUE H7 (BACKEND) COMPLETADO
 bash $O/banco-h7/ensayar.sh $B smoke                          # smoke-run-h7.sh del repo, con perf-h7/presupuestos-h7.json
                                                               #   recién desplegado: 3 presupuestos OMITIDO por estado → código 3
@@ -43,7 +46,7 @@ bash $O/banco-h7/ensayo-restauracion.sh $B                    # volcado -Fc y re
 bash $O/banco-h7/ensayo-recuperacion.sh $B                    # A: PG cae (clúster propio en 55440) · B: worker del laboratorio muerto
 # vuelta atrás, en un banco RECIÉN desplegado (el canario activo de sembrar-1581 cambia lo que espera el smoke del H6):
 B2=$B-vuelta; BANCO_WIP=0 BANCO_DB=ultron_studio_banco_h7_vuelta BANCO_PORT=8172 bash $O/banco-h7/montar.sh $B2
-bash $O/banco-h6/api.sh $B2 start && bash $O/banco-h7/sembrar.sh $B2 && bash $O/banco-h7/ensayar.sh $B2 desplegar
+bash $O/banco-h6/api.sh $B2 start && bash $O/banco-h7/sembrar.sh $B2 && bash $O/banco-h7/ensayar.sh $B2 tareas 27 && bash $O/banco-h7/ensayar.sh $B2 desplegar
 bash $O/banco-h7/ensayo-vuelta.sh $B2 > $B2/logs/vuelta.log 2>&1 < /dev/null   # a fichero: tarda unos 12 min (el smoke del H6 va en serie)
 # limpiar
 bash $O/banco-h6/api.sh $B stop; rm -rf $B; dropdb -h 127.0.0.1 -p 55432 -U ironbody ultron_studio_banco_h7   # y lo mismo con $B2

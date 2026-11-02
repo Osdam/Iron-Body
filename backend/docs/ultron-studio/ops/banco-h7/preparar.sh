@@ -8,6 +8,8 @@
 # PREVIO (T-1 del tester): la línea «PREVIO=…» del repo se sustituye SEA CUAL SEA su valor (pendiente o el commit que
 # fije el lead) por el de la «producción» del banco, y tiene que haber exactamente una: el banco ensaya el guion que
 # irá a producción, con la única diferencia de ese valor (y el del repo queda anotado en la propia línea).
+# TAREAS (m-1 del reviewer): igual, en deploy-h7-backend.sh (el mando no lo usa: comprueba ±2), con BANCO_TAREAS de banco.env
+# (lo fija «ensayar.sh <banco> tareas <n>» tras leerlo con --solo-comprobar, como en producción) o «pendiente».
 # Uso: bash preparar.sh <banco>       (se repite cada vez que cambian los scripts del repo; ensayar.sh lo hace solo)
 . "$(dirname "$0")/comun.sh"
 B=$(banco_dir "${1:-}")
@@ -16,10 +18,14 @@ ME=$(whoami)
 URL="http://127.0.0.1:$BANCO_PORT/api"
 BPSQL="psql -X -Atq -v ON_ERROR_STOP=1 -h $PG_HOST -p $PG_PORT -U $PG_USER -d $BANCO_DB"
 PHPBIN=$(command -v php)
-python3 - "$OPS" "$B" "$ME" "$URL" "$BPSQL" "$PHPBIN" "$PREVIO_BANCO" <<'PY'
+TAREAS_BANCO=${BANCO_TAREAS:-pendiente}
+[[ "$TAREAS_BANCO" =~ ^([0-9]+|pendiente)$ ]] || muere "BANCO_TAREAS no es un número: $TAREAS_BANCO"
+python3 - "$OPS" "$B" "$ME" "$URL" "$BPSQL" "$PHPBIN" "$PREVIO_BANCO" "$TAREAS_BANCO" <<'PY'
 import re
 import sys
-ops, b, me, url, bpsql, php, previo = sys.argv[1:8]
+ops, b, me, url, bpsql, php, previo, tareas = sys.argv[1:9]
+regla_tareas = (re.compile(r'^TAREAS=(\S*).*$', re.M),
+                lambda m: f'TAREAS={tareas}   # BANCO: el programador del banco (en el repo, TAREAS={m.group(1)})', 1)
 def sustituye(nombre, reglas):
     s = open(f'{ops}/{nombre}', encoding='utf-8').read()
     for viejo, nuevo, veces in reglas:
@@ -42,6 +48,7 @@ deploy = sustituye('deploy-h7-backend.sh', comunes + [
     ('sudo -u postgres psql -X -Atq -v ON_ERROR_STOP=1 -d ironbody', bpsql, 1),
     ('[ "$(id -u)" = 0 ]', 'true', 1),
     (re.compile(r'^PREVIO=(\S*).*$', re.M), lambda m: f'PREVIO={previo}   # BANCO: la «producción» del banco (en el repo, PREVIO={m.group(1)})', 1),
+    regla_tareas,
     ('/usr/local/bin/ironbody-migrate', f'{b}/bin/ironbody-migrate', 1),
     ("'iron_app'", "'h5_app'", 0),
     ("has_schema_privilege('iron'", "has_schema_privilege('h5_owner'", 1),

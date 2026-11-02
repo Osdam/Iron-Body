@@ -11,9 +11,10 @@
 # la llave (con la sangría que tuviera; dos espacios si falta), reescrita sobre el mismo fichero para conservar inodo,
 # dueño y modo → el fichero parsea → config:cache como www-data con umask 077; la caché, de www-data, 600 y nunca un
 # enlace (H-5: el chmod, si hace falta, lo hace www-data) → la configuración efectiva es la pedida y lo demás no cambió
-# → schedule:list: las 2 tareas del Studio (ultron-studio:monitor cada 30 min e integrations-snapshot a las 07:10 de
-# Bogotá) aparecen o desaparecen y el total cambia en exactamente 2 (en el banco, 26 ↔ 28; el total de producción
-# depende de sus otras banderas: billing, wompi, coach, bienestar, seguimientos, Meta) → queue:restart (como el mando
+# → schedule:list (su código de salida, aparte: m-1 del reviewer del H7): las 2 tareas del Studio (ultron-studio:monitor
+# cada 30 min e integrations-snapshot a las 07:10 de Bogotá) aparecen o desaparecen y el total cambia en exactamente 2
+# (26 ↔ 28 en las pruebas y 27 ↔ 29 en el banco: el total depende de las demás banderas del servidor, billing, wompi,
+# coach, bienestar, seguimientos, Meta) → queue:restart (como el mando
 # del H6: los workers vuelven a cargar la caché nueva AHORA, mientras se mira) → 13 RUNNING y 0 BACKOFF/FATAL dos veces
 # → 401 sin token. Al encender, además (informativo, no cambia el veredicto): el monitor en seco sobre la publicación y
 # las integraciones y quién ejecuta schedule:run en el crontab (H-1). «APLICADO» solo sale con 0 desvíos; con alguno,
@@ -57,16 +58,22 @@ leer_resto() {
   l=$(sudo -u www-data php artisan tinker --execute='$p = "ultron_studio.integrations."; echo json_encode(["engine_scope" => config("marketing.ultron.studio_config"), "publishing_enabled" => config("ultron_studio.publishing_enabled"), "lab_gate" => config("ultron_studio.publishing.lab_gate"), "lab_enabled" => config("ultron_studio.lab.enabled"), "lab_driver" => config("ultron_studio.lab.driver"), "canary_set" => config("marketing.ultron.canary_conversation_id") !== null, "ultron_enabled" => config("marketing.ultron.enabled"), "writes_enabled" => config($p."writes_enabled"), "probe_enabled" => config($p."twilio_probe.enabled"), "elevenlabs_enabled" => config("voice.elevenlabs.enabled"), "twilio_voice_enabled" => config("voice.twilio.enabled")]), PHP_EOL;' 2>&1 | tail -1) || true
   case "$l" in '{"engine_scope"'*) printf '%s\n' "$l" ;; esac
 }
-# El programador, por su salida JSON: «total del_Studio» (entradas de schedule:list y cuántas son ultron-studio:*), o «?».
+# El programador por `schedule:list --json`, con su código de salida APARTE (m-1: sin base o sin caché lanza una
+# QueryException sobre cache_locks y la salida vacía no puede pasar por «0 tareas»): «total del_Studio» (entradas y
+# cuántas son ultron-studio:*), «FALLO <código>» o «ILEGIBLE». Su salida de error no se imprime.
 programadas() {
-  sudo -u www-data php artisan schedule:list --json 2> /dev/null | python3 -c '
+  local salida rc=0
+  salida=$(sudo -u www-data php artisan schedule:list --json 2> /dev/null) || rc=$?
+  [ "$rc" = 0 ] || { echo "FALLO $rc"; return 0; }
+  printf '%s' "$salida" | python3 -c '
 import json, sys
 try:
     r = json.load(sys.stdin)
+    assert isinstance(r, list)
 except Exception:
-    print("?")
+    print("ILEGIBLE")
     sys.exit(0)
-print(len(r), sum(1 for x in r if "ultron-studio:" in str(x.get("command", ""))))' 2> /dev/null || echo '?'
+print(len(r), sum(1 for x in r if "ultron-studio:" in str(x.get("command", ""))))' 2> /dev/null || echo ILEGIBLE
 }
 cuenta_var() { grep -Ec "^[[:space:]]*(export[[:space:]]+)?$1[[:space:]]*=" "$ENVF" || true; }
 # Escribe la clave con la sangría que tuviera la línea (la añade con dos espacios si falta). La sustitución se escribe
@@ -102,6 +109,10 @@ PROG0=$(programadas)
 if [ "$VALOR" = estado ]; then
   echo "configuración efectiva del monitor (proceso CLI, la misma caché que el programador): monitor=$ACT"
   echo "$ANTES"
+  case "$PROG0" in
+    "FALLO "*) echo "schedule:list NO sale con 0 (código ${PROG0#FALLO }; su salida no se imprime): el programador no se puede leer (¿base o caché?)"; exit 1 ;;
+    ILEGIBLE) echo "schedule:list no devolvió la lista JSON de tareas"; exit 1 ;;
+  esac
   echo "schedule:list (total · del Studio): $PROG0 (encendido: 2 del Studio; apagado: 0)"
   exit 0
 fi
@@ -114,9 +125,13 @@ fi
 [ "$VALOR" != "$DESDE" ] || { echo "el monitor ya está en $VALOR: nada que hacer"; exit 0; }
 [ "$(cuenta_var "$CLAVE")" -le 1 ] || aborta "$CLAVE aparece repetida en el fichero de entorno (gana la última): deduplicar antes"
 case "$PROG0" in
+  "FALLO "*) aborta "schedule:list no sale con 0 (código ${PROG0#FALLO }; su salida no se imprime): sin poder leer el programador no se toca nada (¿base o caché? m-1)" ;;
+  ILEGIBLE) aborta "schedule:list no devolvió la lista JSON de tareas: no se toca nada" ;;
+esac
+case "$PROG0" in
   *" 0")  [ "$DESDE" = off ] || aborta "el programador no tiene tareas del Studio con el monitor encendido ($PROG0): revisar antes de tocar nada" ;;
   *" 2")  [ "$DESDE" = on ] || aborta "el programador tiene 2 tareas del Studio con el monitor apagado ($PROG0): revisar antes de tocar nada" ;;
-  *) aborta "no se pudo leer el programador o no cuadra antes de empezar (total · del Studio: $PROG0)" ;;
+  *) aborta "el programador no cuadra antes de empezar (total · del Studio: $PROG0)" ;;
 esac
 RESTO_ANTES=$(leer_resto)
 [ -n "$RESTO_ANTES" ] || aborta "no se pudo leer la configuración del motor, del H5 y del H6 (tinker falló; su salida no se imprime)"
@@ -161,8 +176,12 @@ fi
 RESTO=$(leer_resto)
 [ "$RESTO" = "$RESTO_ANTES" ] && echo "   motor, H4, H5 y H6 sin cambios" || desvio "la configuración del motor, del H4, del H5 o del H6 cambió: antes $RESTO_ANTES · después ${RESTO:-ilegible}"
 PROG=$(programadas)
-echo "3. programador (total · del Studio): $PROG0 → $PROG (esperado $PROG_ESPERADA: las 2 tareas del Studio $([ "$VALOR" = on ] && echo aparecen || echo desaparecen) y nada más cambia)"
-[ "$PROG" = "$PROG_ESPERADA" ] || desvio "schedule:list da [$PROG] y se esperaba [$PROG_ESPERADA]"
+case "$PROG" in
+  "FALLO "*) desvio "schedule:list no sale con 0 (código ${PROG#FALLO }; su salida no se imprime): no se puede comprobar el programador (m-1)" ;;
+  ILEGIBLE) desvio "schedule:list no devolvió la lista JSON de tareas: no se puede comprobar el programador" ;;
+  *) echo "3. programador (total · del Studio): $PROG0 → $PROG (esperado $PROG_ESPERADA: las 2 tareas del Studio $([ "$VALOR" = on ] && echo aparecen || echo desaparecen) y nada más cambia)"
+     [ "$PROG" = "$PROG_ESPERADA" ] || desvio "schedule:list da [$PROG] y se esperaba [$PROG_ESPERADA]" ;;
+esac
 sudo -u www-data php artisan queue:restart -q || desvio "queue:restart no salió con 0"
 sleep 6
 W1=$(workers 45); sleep 8; W2=$(workers 45)

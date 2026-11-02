@@ -40,6 +40,17 @@ case "$SOLO_COMPROBAR" in ""|--solo-comprobar) ;; *) echo "tercer argumento desc
 # se vuelve a copiar el script. Con «pendiente» el script se niega a todo, también a --solo-comprobar.
 PREVIO=1e5f9a0   # HEAD de producción el 02-11-2026 (fase 1 del Hito 6); fijado por el lead el día del despliegue
 [[ "$PREVIO" =~ ^[0-9a-f]{7}$ ]] || { echo "PREVIO sin fijar ($PREVIO): fijarlo en un commit con el HEAD de producción del día (ver la cabecera); no se ha tocado nada"; exit 2; }
+# TAREAS = entradas de `schedule:list` en producción con el monitor APAGADO (encendido son TAREAS + 2: las dos del
+# Studio). Depende de las banderas del servidor (billing, wompi, coach, bienestar, seguimientos, Meta): 26 en las
+# pruebas y 27 en el banco, así que NO SE CONOCE AL ESCRIBIR ESTE SCRIPT. Se lee en el servidor con --solo-comprobar
+# (lo imprime el paso 0) y se fija aquí y en smoke-run-h7.sh en UN commit; después se vuelven a copiar los dos
+# (h7-monitor-scope.sh no lo usa: comprueba el salto de ±2). Con el monitor apagado el H7 no cambia el programador (console.php solo añade el bloque
+# del monitor, tras su bandera): antes y después del despliegue tiene que dar TAREAS. Con «pendiente»,
+# --solo-comprobar lo lee y lo imprime y el despliegue de verdad se niega (m-1 del reviewer del H7).
+TAREAS=pendiente
+[[ "$TAREAS" =~ ^([0-9]+|pendiente)$ ]] || { echo "TAREAS no es un número ni «pendiente» ($TAREAS); no se ha tocado nada"; exit 2; }
+[ "$TAREAS" != pendiente ] || [ "$SOLO_COMPROBAR" = --solo-comprobar ] \
+  || { echo "TAREAS sin fijar: leerlo en el servidor con --solo-comprobar y fijarlo en un commit (ver la cabecera); no se ha tocado nada"; exit 2; }
 MIGRACIONES="backend/database/migrations/2026_11_02_100001_add_ultron_studio_hardening.php "
 # Puerta de diff del contrato (la del H6: motor, integraciones existentes, catálogo y dependencias; este script no
 # ejecuta composer install). En el H7 la cruzan SOLO los ficheros que el contrato nombra, cada uno con su paquete; un
@@ -129,6 +140,24 @@ except Exception:
     sys.exit(0)
 i = [x for x in r if "/integrations/" in "/" + str(x.get("uri", "")) + "/"]
 print(len(r), len(i), sum(1 for x in i if "GET" in str(x.get("method", ""))), sum(1 for x in i if str(x.get("method", "")) == "POST"))' 2>/dev/null || echo '?'
+}
+# El programador por `schedule:list --json`, con su código de salida APARTE (m-1 del reviewer del H7: sin base o sin
+# caché, schedule:list lanza una QueryException sobre cache_locks, la salida queda vacía y un «grep -c» la contaba como
+# «0 tareas del Studio»). Imprime «total del_Studio», «FALLO <código>» si no sale con 0 o «ILEGIBLE» si su salida no es
+# la lista JSON de tareas. Su salida de error no se imprime.
+programador() {
+  local salida rc=0
+  salida=$(artisan schedule:list --json 2>/dev/null) || rc=$?
+  [ "$rc" = 0 ] || { echo "FALLO $rc"; return 0; }
+  printf '%s' "$salida" | python3 -c '
+import json, sys
+try:
+    r = json.load(sys.stdin)
+    assert isinstance(r, list)
+except Exception:
+    print("ILEGIBLE")
+    sys.exit(0)
+print(len(r), sum(1 for x in r if "ultron-studio:" in str(x.get("command", ""))))' 2>/dev/null || echo ILEGIBLE
 }
 # Configuración del motor, del H4, del H5 y del H6 (no la toca el H7): se lee antes y después y tiene que ser la misma.
 leer_previa() {
@@ -222,6 +251,18 @@ PRIV0=$($PSQL -c "$Q_PRIV") || aborta "no se pudieron leer los privilegios de ir
 FILAS0=$($PSQL -c "$Q_FILAS") || aborta "no se pudieron contar las filas (psql)"
 RUTAS0=$(rutas)
 [ "$RUTAS0" = "56 18 8 10" ] || aborta "rutas del Studio en la caché de producción: [$RUTAS0] (esperado [56 18 8 10], el H6)"
+PROG0=$(programador)
+case "$PROG0" in
+  "FALLO "*) aborta "schedule:list no sale con 0 (código ${PROG0#FALLO }; su salida no se imprime): sin poder leer el programador no se despliega (¿base o caché? m-1)" ;;
+  ILEGIBLE) aborta "schedule:list no devolvió la lista JSON de tareas: sin poder leer el programador no se despliega" ;;
+esac
+TOTAL0=${PROG0%% *}
+[ "${PROG0##* }" = 0 ] || aborta "el programador tiene ${PROG0##* } tareas del Studio antes de desplegar (esperado 0: con el H6 no existen y con el H7 el monitor tiene que estar apagado)"
+if [ "$TAREAS" = pendiente ]; then
+  echo "   programador: $TOTAL0 tareas, ninguna del Studio · TAREAS sin fijar: fijar TAREAS=$TOTAL0 aquí y en smoke-run-h7.sh, en un commit"
+else
+  [ "$TOTAL0" = "$TAREAS" ] || aborta "el programador tiene $TOTAL0 tareas y TAREAS dice $TAREAS: revisar qué cambió (una bandera, otro despliegue) antes de seguir; si $TOTAL0 es lo correcto, fijar TAREAS=$TOTAL0 aquí y en smoke-run-h7.sh en un commit"
+fi
 PREVIA_ANTES=$(leer_previa)
 [ -n "$PREVIA_ANTES" ] || aborta "no se pudo leer la configuración efectiva del motor, del H5 y del H6 (tinker falló; su salida no se imprime)"
 W0=$(workers 20)
@@ -233,11 +274,18 @@ FALLIDAS_ANTES=$($PSQL -c "SELECT count(*) FROM failed_jobs;") || aborta "no se 
 SELLOS_ANTES=$($PSQL -c "SELECT count(*) FROM marketing_ai_actions WHERE metadata ? 'studio';") || aborta "no se pudo leer marketing_ai_actions (psql)"
 INST_ANTES=$($PSQL -c "SELECT count(*) FROM ultron_studio_integration_snapshots;") || aborta "no se pudieron contar las instantáneas (psql)"
 INCID_ANTES=$($PSQL -c "SELECT count(*) FROM incidents WHERE source = 'ultron_studio';") || aborta "no se pudieron contar los incidentes (psql)"
-echo "   HEAD $ACTUAL limpio · migración: 1 · puerta: [$EN_PUERTA] (todas nombradas por el contrato) · esquema [$PRE] · función de F · cadena consecutiva · sin cerrojos · rutas [$RUTAS0] · workers 13/0 · facturación activa"
+echo "   HEAD $ACTUAL limpio · migración: 1 · puerta: [$EN_PUERTA] (todas nombradas por el contrato) · esquema [$PRE] · función de F · cadena consecutiva · sin cerrojos · rutas [$RUTAS0] · programador $TOTAL0 tareas (TAREAS=$TAREAS), 0 del Studio · workers 13/0 · facturación activa"
 echo "   iron_app (SELECT/INSERT/UPDATE/DELETE/TRUNCATE/secuencia) en libro · asociaciones · canarios · instantáneas · cadena: $PRIV0"
 echo "   filas cadena · libro · instantáneas: $FILAS0 · colas fallidas: $FALLIDAS_ANTES · sellos studio: $SELLOS_ANTES · incidentes ultron_studio: $INCID_ANTES"
 echo "   motor, H4, H5 y H6 (informativo; no cambia): $PREVIA_ANTES"
-[ "$SOLO_COMPROBAR" != --solo-comprobar ] || { echo "COMPROBACIONES PREVIAS EN VERDE (no se ha tocado nada)"; exit 0; }
+if [ "$SOLO_COMPROBAR" = --solo-comprobar ]; then
+  if [ "$TAREAS" = pendiente ]; then
+    echo "COMPROBACIONES PREVIAS LEÍDAS, FALTA FIJAR TAREAS=$TOTAL0 (no se ha tocado nada): fijarlo en deploy-h7-backend.sh y smoke-run-h7.sh en un commit, volver a copiarlos y repetir --solo-comprobar"
+  else
+    echo "COMPROBACIONES PREVIAS EN VERDE (no se ha tocado nada)"
+  fi
+  exit 0
+fi
 
 g merge -q --ff-only origin/main
 HEAD=$(g rev-parse --short=7 HEAD)
@@ -316,8 +364,13 @@ echo "7. configuración efectiva:"
 H7=$(leer_h7)
 case "$H7" in '{"monitor_enabled"'*) echo "   $H7" ;; *) echo "   (tinker no devolvió la configuración del H7; su salida no se imprime)" ;; esac
 [ "$H7" = "$ESPERADA_H7" ] || { desvio "la configuración efectiva del monitor no es la del despliegue (apagado, expectativa del código)"; echo "     esperada: $ESPERADA_H7"; }
-PROGRAMADAS=$(artisan schedule:list 2>/dev/null | grep -c 'ultron-studio:' || true)
-echo "   tareas programadas del Studio: $PROGRAMADAS (con el monitor apagado, 0)"; [ "$PROGRAMADAS" = 0 ] || desvio "el programador tiene $PROGRAMADAS tareas del Studio con el monitor apagado"
+PROG=$(programador)
+case "$PROG" in
+  "FALLO "*) desvio "schedule:list no sale con 0 (código ${PROG#FALLO }; su salida no se imprime): no se puede comprobar el programador (m-1)" ;;
+  ILEGIBLE) desvio "schedule:list no devolvió la lista JSON de tareas: no se puede comprobar el programador" ;;
+  *) echo "   programador (total · del Studio): $PROG (esperado $TAREAS 0: con el monitor apagado el H7 no añade tareas)"
+     [ "$PROG" = "$TAREAS 0" ] || desvio "el programador da [$PROG] y se esperaba [$TAREAS 0]" ;;
+esac
 PREVIA=$(leer_previa)
 [ "$PREVIA" = "$PREVIA_ANTES" ] && echo "   motor, H4, H5 y H6 iguales que antes del despliegue" || desvio "la configuración del motor, del H4, del H5 o del H6 cambió: antes $PREVIA_ANTES · después ${PREVIA:-ilegible}"
 sleep 6

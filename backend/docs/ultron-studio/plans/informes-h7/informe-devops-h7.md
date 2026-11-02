@@ -5,7 +5,8 @@
 **Base de los ensayos:**
 - `167e34c`: la confirmación en curso de OPS7, con DB7 y B7 en curso;
 - `aa3451f`: DB7 y B7 completos;
-- `ee9f128`: la tanda del 02-11 que cierra las discrepancias de DOC7 y la T-1 del tester (§4.9), con F-1 y F-2 ya confirmados.
+- `ee9f128`: la tanda del 02-11 que cierra las discrepancias de DOC7 y la T-1 del tester (§4.9), con F-1 y F-2 ya confirmados;
+- `0d43401`: la m-1 del reviewer del H7 (`schedule:list` con su código de salida aparte y `TAREAS` exigido; §4.10).
 
 Entre las dos primeras, el código solo difiere en `AdminUserController` (+29 líneas). La migración del H7 es idéntica en las tres.
 
@@ -15,12 +16,12 @@ Entre las dos primeras, el código solo difiere en `AdminUserController` (+29 l�
 
 | Entrega | Resultado real |
 |---|---|
-| 1. Monitor con bandera | **12/12 pruebas en SQLite y en la puerta PG** (135 aserciones). `UltronEngineIsolationTest`: 7/7. `schedule:list` suma **2** entradas solo con la bandera encendida (26 → 28 en las pruebas; 27 → 29 en el banco: el total depende de otras banderas, H-10). Pint en verde. **Mando** `h7-monitor-scope.sh`: **16/16** en el banco, ida y vuelta, el fichero de entorno idéntico byte a byte al volver (§3, §4.9) |
+| 1. Monitor con bandera | **12/12 pruebas en SQLite y en la puerta PG** (135 aserciones). `UltronEngineIsolationTest`: 7/7. `schedule:list` suma **2** entradas solo con la bandera encendida (26 → 28 en las pruebas; 27 → 29 en el banco: el total depende de otras banderas, H-10). Pint en verde. **Mando** `h7-monitor-scope.sh`: **16/16** en el banco, ida y vuelta, el fichero de entorno idéntico byte a byte al volver (§3, §4.9). **m-1:** `schedule:list` con su código de salida aparte en el despliegue, el smoke y el mando; el total, exigido contra `TAREAS` (pendiente hasta leerlo en el servidor) en el despliegue y el smoke, y el mando con su salto de ±2: **21/21** y, tras dejar el mando solo con el código de salida, **11/11** en el banco (§4.10) |
 | 2. Runbook de costes | §6 |
 | 3. `ironbody-migrate` sin root | **21/21** en el banco (§4.3). H-5 de SEC7 corregido. `.env` escribible → rechazo. `find -L`. Guarda contra `PG*`/`LD_*` |
 | 4. Supresión Ley 1581 | **17/17** en el banco, con el dueño **sin superusuario**; tras redactar `reason`, la cadena sigue verificando (§4.4). **Runbook: §10 «Supresión»** (huella del teléfono sin imprimirla, en seco → real, comprobaciones tras el COMMIT y registro); sus órdenes, ensayadas en el banco |
 | 5. Respaldos | Política (§7). Ensayo `-Fc`: **14/14**, recuento exacto de las **226** tablas, RTO 1 s. **Hallazgo H-6:** `--no-owner` (§4.5) |
-| 6. Scripts del H7 | Despliegue en el banco con un 55P03 real: **`DESPLIEGUE H7 (BACKEND) COMPLETADO`** tres veces (50 s, 47 s y, en `ee9f128`, 45 s). Smoke con los **presupuestos de PERF7**: recién desplegado **36 OK · 0 FALLO · 3 OMITIDO** (código 3: sin versiones, sin CANARY y sin ejecuciones); con esos datos, **41 OK · 0 FALLO · 0 OMITIDO** (las 17 rutas medidas); con dos techos apretados en una copia del JSON, **2 FALLO** (código 1) sin tocar código (§4.9) |
+| 6. Scripts del H7 | Despliegue en el banco con un 55P03 real: **`DESPLIEGUE H7 (BACKEND) COMPLETADO`** cuatro veces (50 s, 47 s, 45 s en `ee9f128` y 45 s en `0d43401` con `TAREAS=27` exigido antes y después). Smoke con los **presupuestos de PERF7**: recién desplegado **36 OK · 0 FALLO · 3 OMITIDO** (código 3: sin versiones, sin CANARY y sin ejecuciones); con esos datos, **41 OK · 0 FALLO · 0 OMITIDO** (las 17 rutas medidas); con dos techos apretados en una copia del JSON, **2 FALLO** (código 1) sin tocar código (§4.9) |
 | 7. Recuperación | PG caído o cortado durante el commit: **11/11**. Worker del laboratorio muerto: **10/10**. Vuelta atrás por niveles: **13/13** (§4.6–4.8) |
 
 ## 1. Ficheros (exclusivos de OPS7, salvo los dos señalados)
@@ -74,13 +75,18 @@ Entre las dos primeras, el código solo difiere en `AdminUserController` (+29 l�
 Calca el del H6.
 
 - **`PREVIO`:** con `pendiente` se niega a todo, también a `--solo-comprobar`. El lead lo fijó en **`1e5f9a0`** (HEAD de producción del 02-11-2026, fase 1 del H6) en `1c76a7f`, que además exige siempre `PREVIO` en `api-commit.txt` (m-6).
+- **`TAREAS`** (m-1 del reviewer del H7): las entradas de `schedule:list` en producción con el monitor apagado. Depende de las banderas del servidor: 26 en las pruebas y 27 en el banco, así que no se puede escribir de antemano y llega como `pendiente`.
+  - Con `pendiente`, el despliegue de verdad se niega (código 2). `--solo-comprobar` lo lee, lo imprime y acaba en **`COMPROBACIONES PREVIAS LEÍDAS, FALTA FIJAR TAREAS=N`** (código 0, sin «EN VERDE»).
+  - Se fija con el mismo valor en `deploy-h7-backend.sh` y `smoke-run-h7.sh`, en un commit, y se vuelven a copiar los dos. `h7-monitor-scope.sh` no lo usa: comprueba el salto de ±2.
+  - Con el monitor apagado el H7 no cambia el programador (`console.php` solo añade el bloque del monitor, tras su bandera: 35 líneas, 0 borradas desde `1e5f9a0`), así que es el total de antes **y** el de después.
 - **Paso 0, de solo lectura:**
   - checkout limpio, avance rápido y exactamente 1 migración;
   - **puerta de diff con lista explícita**: los 7 controladores de M-2 y `AdminUserController` (B7), la API interna de conocimiento (SEC7) y `console.php`, que solo puede añadir líneas;
   - respaldo de menos de 2 h, en 700/600, con `.sha256` y **≥ 226 tablas**; `.env` igual al respaldo;
   - `ULTRON_STUDIO_MONITOR_EXPECT` (no se escribe nunca): ausente o vacía, como en `.env.example`, rige la del código y no se avisa. Lo decide Dotenv, el analizador de Laravel, con las reglas de `env()` (`empty`/`null`/`false` la vacían) y el `trim()` del bloque `monitor`, sin imprimir el valor: «presente y vacía», «escrita con la misma expectativa que el código» o **«AVISO: … tiene valor»**, porque entonces el paso 7 lo contará como desvío. Hasta el 02-11 avisaba también con la clave vacía (discrepancia 4 de DOC7);
   - esquema `43 49 4 14 iron iron,iron,iron true 1 0`, huella de F, **cadena consecutiva** (si no, la migración se negaría) y 0 cerrojos sobre la cadena;
-  - 56 rutas, 13/0 workers y facturación activa.
+  - 56 rutas, 13/0 workers y facturación activa;
+  - **el programador**, con `schedule:list --json` y su código de salida aparte: si no sale con 0, aborta. Sin base o sin caché lanza una QueryException sobre `cache_locks` y la salida queda vacía; el `grep -c 'ultron-studio:'` de antes la contaba como «0 tareas del Studio» (m-1). Exige 0 tareas del Studio y, con `TAREAS` fijado, exactamente `TAREAS` entradas (si no, aborta con los dos números).
 - **Después:**
   - merge, con lectura por `www-data` de cada fichero;
   - `ULTRON_STUDIO_MONITOR_ENABLED=false` ANTES de migrar, y Dotenv;
@@ -91,7 +97,7 @@ Calca el del H6.
   - `queue:restart`.
 - **Aserciones:**
   - 56/18/8/10 y cobertura vacía;
-  - monitor apagado y **0 tareas del Studio**; motor, H4, H5 y H6 iguales;
+  - monitor apagado y el programador en **`TAREAS 0`**: `schedule:list` sale con 0 (si no, desvío: m-1), `TAREAS` entradas y ninguna del Studio; motor, H4, H5 y H6 iguales;
   - 13/0 dos veces;
   - **`curl -I` → `Cache-Control: no-store, private`** en 3 rutas del Studio, `auth/me` y un 404;
   - **70 000 bytes sin sesión → 413**;
@@ -111,13 +117,13 @@ De solo lectura, por la entrada estándar. Recuentos, cadena, función, dueños,
 El mando de `ULTRON_STUDIO_MONITOR_ENABLED`, calcado de `h6-integrations-scope.sh`. Hasta ahora el runbook hablaba de un `set_var` que solo existía dentro de los mandos del H5 y del H6.
 
 - **Uso:** `on off` enciende, `off on` apaga (la vuelta atrás de nivel 2), `estado` solo lee. Sin el estado actual, o si no coincide con la configuración efectiva, no toca nada (código 2 o `ABORTA`).
-- **Antes de escribir:** la clave no está repetida; el programador cuadra con la bandera (2 tareas del Studio encendido, 0 apagado); el fichero de entorno **en 600** (si no, aborta); copia previa en `/root/env-pre-h7-monitor-<valor>-<fecha>` (600, root).
+- **Antes de escribir:** la clave no está repetida; `schedule:list` sale con 0 (si no, aborta: m-1) y el programador cuadra con la bandera (2 tareas del Studio encendido, 0 apagado); el fichero de entorno **en 600** (si no, aborta); copia previa en `/root/env-pre-h7-monitor-<valor>-<fecha>` (600, root).
 - **Escribe** la bandera con la sangría que tuviera la línea, sobre el **mismo fichero** (mismo inodo, dueño y modo; sin `sed -i`).
 - **Después:**
   - el fichero parsea (Dotenv) antes de tocar la caché;
   - `config:cache` como www-data con `umask 077`; la caché, de www-data, en 600 y nunca un enlace (el `chmod`, si hace falta, lo hace www-data: H-5);
   - la configuración efectiva por tinker es la de antes con solo la bandera cambiada; motor, H4, H5 y H6 iguales;
-  - `schedule:list --json`: el total cambia en **exactamente ±2** y las tareas del Studio pasan a 2 (encendido) o 0 (apagado). No compara con 26/28 fijos: el total depende de las demás banderas del servidor (H-10);
+  - `schedule:list --json`, con su código de salida aparte (si no sale con 0, desvío: m-1): el total cambia en **exactamente ±2** y las tareas del Studio pasan a 2 (encendido) o 0 (apagado). No compara con un 26/28 fijo: el total depende de las demás banderas del servidor (H-10);
   - `queue:restart` (como el mando del H6: los workers cargan la caché nueva mientras se mira), 13 RUNNING y 0 BACKOFF/FATAL dos veces, y 401 sin token.
 - **Al encender, informativo** (no cambia el veredicto): el monitor en seco sobre la publicación y las integraciones, y quién ejecuta `schedule:run` en el crontab (H-1). Termina indicando la primera pasada real, que es el paso siguiente del runbook (§5, paso 10).
 - **Veredicto:** `MANDO monitor → on APLICADO (copia previa: …)` solo con 0 desvíos. Con alguno, `ESCRITO CON N DESVÍOS`, código 1 y la orden exacta para volver (restaurar la copia previa, `config:cache`, `chmod` como www-data y `queue:restart`). Nunca imprime valores del fichero de entorno.
@@ -126,7 +132,7 @@ El mando de `ULTRON_STUDIO_MONITOR_ENABLED`, calcado de `h6-integrations-scope.s
 
 Cuenta 32, contraseña de un solo uso, huellas saladas, trap. Usa el detector de fugas de `smoke-h6.py` y los presupuestos de `perf-h7/presupuestos-h7.json`, así que se copian los cuatro.
 
-- **El lanzador comprueba:** que el JSON de presupuestos existe y **es válido con el mismo código del smoke, antes de activar la cuenta** (si no, código 2 y la cuenta sin tocar; con `python3 -B`, para que importar `smoke-h7.py` no deje `__pycache__` en `/root`); monitor apagado, 0 tareas programadas, 14 tablas idénticas, 0 incidentes y que el token muere. Al salir borra de `/root` sus copias, también la del JSON.
+- **El lanzador comprueba:** que el JSON de presupuestos existe y **es válido con el mismo código del smoke, antes de activar la cuenta** (si no, código 2 y la cuenta sin tocar; con `python3 -B`, para que importar `smoke-h7.py` no deje `__pycache__` en `/root`). Comprueba también `TAREAS` fijado (si no, código 2 sin tocar la cuenta; `SMOKE_TAREAS` lo sustituye en un ensayo) y monitor apagado. Exige `schedule:list` con código 0: si falla, FALLO y no se ejecuta el smoke (m-1). Pide además el programador en `TAREAS 0`, 14 tablas idénticas, 0 incidentes y que el token muera. Al salir borra de `/root` sus copias, también la del JSON.
 - **`smoke-h7.py` comprueba:**
   - `no-store` en todas las respuestas de `/api/admin`, también las de la fase de presupuestos;
   - 413 sin sesión y con sesión, y 401 por debajo del tope;
@@ -318,7 +324,7 @@ Latencias medidas en el banco (php -S local, sin TLS ni nginx: **no son la líne
 
 El máximo de la evidencia en B (231,9 ms) fue su primera muestra, en frío: el JSON le da 0 de calentamiento para no gastar el cupo de 10/min, y con 3 muestras ese primer golpe decide el «p95» (H-11). En la pasada de cierre con el lanzador definitivo (B2, mismo estado: **41 OK · 0 FALLO · 0 OMITIDO**, código 0), la evidencia dio 106,2 / 109,8 ms.
 
-**Una regresión mía, cazada por el propio smoke:** al reescribir `smoke-h7.py`, el U+2028 literal de `INVISIBLES` se convirtió en un espacio normal y la primera pasada A dio `FALLO motivo con un invisible … [U+2028=409]`. Corregido: los cinco invisibles, el ZWJ y el VS16 van ahora con escapes (` `…), sus valores son idénticos a los de `ee9f128` (comparados importando las dos versiones) y el fichero ya no lleva ningún carácter invisible literal. La pasada A repetida dio 36 OK.
+**Una regresión mía, cazada por el propio smoke:** al reescribir `smoke-h7.py`, el U+2028 literal de `INVISIBLES` se convirtió en un espacio normal y la primera pasada A dio `FALLO motivo con un invisible … [U+2028=409]`. Corregido: los cinco invisibles, el ZWJ y el VS16 van ahora con escapes (`\u2028`…), sus valores son idénticos a los de `ee9f128` (comparados importando las dos versiones) y el fichero ya no lleva ningún carácter invisible literal. La pasada A repetida dio 36 OK.
 
 **Discrepancia 3 (el mando del monitor): 16/16** en el banco.
 - `estado`: código 0, `monitor=off`, programador `27 0`.
@@ -328,13 +334,51 @@ El máximo de la evidencia en B (231,9 ms) fue su primera muestra, en frío: el 
 
 **Discrepancia 2:** la sección «Supresión» es el §10. Sus órdenes de la huella y del modo en seco se ensayaron en este banco (§10, «Ensayo de las órdenes»).
 
+### 4.10 m-1 del reviewer del H7: `schedule:list` con su código de salida y `TAREAS` exigido (banco 4, `0d43401`)
+
+**El fallo de m-1:** `$(artisan schedule:list 2>/dev/null | grep -c 'ultron-studio:' || true)` daba «0 tareas del Studio» también cuando `schedule:list` fallaba.
+- **Dónde estaba:** en el paso 7 del despliegue y en el paso 1 del lanzador del smoke. El mando lo cazaba de rebote, porque su JSON ilegible acababa en «?».
+- **Corrección:** en los tres, `schedule:list --json` con su código de salida **aparte** (`FALLO <código>` o `ILEGIBLE` en lugar de un recuento). En el despliegue y el smoke, además, el total absoluto exigido contra **`TAREAS`**; el mando conserva su salto de ±2 (lo pidió el lead):
+  - `TAREAS` es una variable al principio de esos dos scripts, con `pendiente` hasta leerla en el servidor con `--solo-comprobar`;
+  - en el banco la sustituye `preparar.sh`, como `PREVIO`, con `BANCO_TAREAS`, que fija la nueva orden `ensayar.sh <banco> tareas <n>`;
+  - el smoke recibe `SMOKE_TAREAS`.
+- **Por qué no 26/28:** era la medida de las pruebas, y en el banco el total es **27** (H-10).
+
+**Banco propio y nuevo:** `~/.cache/ironbody-banco-h7-m1`, base `ultron_studio_banco_h7_m1`, puerto 8174, `BANCO_WIP=0` (`0d43401`), producción en `7d2c6d8`. **21/21:**
+
+| Prueba | Resultado |
+|---|---|
+| Despliegue de verdad con `TAREAS=pendiente` | código 2, «TAREAS sin fijar»; HEAD sigue en `7d2c6d8` |
+| `--solo-comprobar` con `pendiente` | código 0: `programador: 27 tareas, ninguna del Studio · TAREAS sin fijar: fijar TAREAS=27 …` y **`COMPROBACIONES PREVIAS LEÍDAS, FALTA FIJAR TAREAS=27`** (nunca «EN VERDE») |
+| `TAREAS=26` (el valor de las pruebas) frente a un programador de 27 | **`ABORTA: el programador tiene 27 tareas y TAREAS dice 26`**: un 26 fijo habría parado el banco |
+| `TAREAS=27` | `COMPROBACIONES PREVIAS EN VERDE`, con `programador 27 tareas (TAREAS=27), 0 del Studio` en el resumen; las copias del banco llevan `TAREAS=27` y anotan el del repo (`pendiente`) |
+| `schedule:list` que falla de verdad: sin privilegios de `h5_app` sobre `cache_locks`, donde `has_mutex` toma un cerrojo (la misma QueryException del reviewer) | `schedule:list` → código 1, y el `grep -c` antiguo sobre esa salida **da 0**, que es el fallo de m-1. Ahora: |
+| · el despliegue, paso 0 | `ABORTA: schedule:list no sale con 0 (código 1; su salida no se imprime): sin poder leer el programador no se despliega` |
+| · el smoke (ya desplegado) | `FALLO   schedule:list no sale con 0 (código 1 …): … no se ejecuta el smoke`, código 1, y la cuenta 32 sin tocar (estado, contraseña, fecha y sesiones iguales) |
+| · el mando, `estado` | `schedule:list NO sale con 0 …`, código 1 |
+| · el mando, `on off` | `ABORTA: schedule:list no sale con 0 …` antes de escribir; el fichero de entorno, igual (`cmp`) |
+| Privilegios de `h5_app` sobre `cache_locks` | restaurados exactamente las dos veces (`DELETE,INSERT,SELECT,UPDATE`); `schedule:list` vuelve a salir con 0 |
+| Despliegue de verdad con `TAREAS=27` y `--55p03` | **`DESPLIEGUE H7 (BACKEND) COMPLETADO` en 45 s**: 55P03 en el intento 1, `11.22ms DONE` en el 2; paso 7: `programador (total · del Studio): 27 0 (esperado 27 0 …)` |
+| El mando | `on off` → APLICADO, `27 0 → 29 2`; `estado` → `29 2`; `off on` → APLICADO, `29 2 → 27 0`, y el fichero de entorno vuelve **byte a byte** al de antes |
+| El smoke con `TAREAS=27` | `OK el programador: 27 tareas (TAREAS), ninguna del Studio`; **36 OK · 0 FALLO · 3 OMITIDO** (código 3: los 3 presupuestos por estado), presupuestos 14 OK en 65 s |
+| El smoke con `SMOKE_TAREAS=pendiente` | código 2 y la cuenta sin tocar |
+
+**Ajuste pedido por el lead, y repetición: 11/11.** En esa primera pasada (21/21) el mando también exigía `TAREAS` (sin él, `on`/`off` se negaban). El lead pidió que solo añadiera el código de salida, porque ya comprueba el salto de ±2. Quitado, el mando no lleva `TAREAS` y `preparar.sh` solo lo sustituye en la copia del despliegue. Repetido en el mismo banco, ya desplegado con `TAREAS=27`:
+- `--solo-comprobar` (reanudación) en verde, con `programador 27 tareas (TAREAS=27)`;
+- el mando: `estado` → `27 0`; `on off` → APLICADO, `27 0 → 29 2`; `off on` → APLICADO, `29 2 → 27 0`, con el fichero de entorno byte a byte el de antes y el mismo inodo;
+- con `schedule:list` fallando (`cache_locks` sin privilegios): el mando `estado` sale con 1; `on off` aborta antes de escribir; el smoke da FALLO con la cuenta sin tocar; el paso 0 aborta. Privilegios restaurados exactamente;
+- el smoke con `TAREAS` sin fijar: código 2, y el mensaje ya nombra los dos scripts.
+
+**Queda el mismo patrón en `banco-h7/ensayo-vuelta.sh`** (su nivel 2 cuenta con `grep -c` las tareas del Studio). Solo afecta al ensayo del banco, no a producción. No lo cambio en esta tanda porque habría que repetir sus 12 minutos de vuelta atrás. Propuesta: que su nivel 2 use `h7-monitor-scope.sh`, que ya está ensayado. Su línea de uso en `banco-h7/README.md` ya incluye `ensayar.sh <banco> tareas 27`, porque el despliegue y el smoke del banco lo exigen ahora.
+
 ## 5. Runbooks por fase (producción; todo con autorización)
 
 1. **Condiciones:**
    - el H6 en su fase 1, verificado a las 24 h;
    - REV7 sin bloqueantes;
    - push con avance rápido;
-   - **`PREVIO` fijado en un commit** con el HEAD de producción del día.
+   - **`PREVIO` fijado en un commit** con el HEAD de producción del día;
+   - **`TAREAS` fijado en el mismo commit** en `deploy-h7-backend.sh` y `smoke-run-h7.sh`, con el total que imprime `--solo-comprobar` en el servidor (paso 5). Los dos se niegan a actuar sin él.
 2. **Respaldo:** el del H6 con `BK=/var/backups/ironbody/ultron-studio-h7-<ts>`, en `umask 077` y ≥ 226 tablas.
 3. **Copiar los scripts** (con su huella):
    ```bash
@@ -349,6 +393,8 @@ El máximo de la evidencia en B (231,9 ms) fue su primera muestra, en frío: el 
    ```
    Esperado: 43/49/4/14, `existe_rol_app` 1, `rotas` 0, 0 cerrojos.
 5. **Ensayo:** `bash /root/deploy-h7-backend.sh <commit> "$BK" --solo-comprobar` → `COMPROBACIONES PREVIAS EN VERDE`.
+   - Con `TAREAS=pendiente` acaba en `COMPROBACIONES PREVIAS LEÍDAS, FALTA FIJAR TAREAS=N` y no toca nada. Se fija `TAREAS=N` en `deploy-h7-backend.sh` y `smoke-run-h7.sh` en un commit, se vuelven a copiar con su huella y se repite hasta `EN VERDE`.
+   - Si aborta por `schedule:list no sale con 0`, no se sigue: el programador no se puede leer (base o caché).
 6. **Despliegue:** `bash /root/deploy-h7-backend.sh <commit> "$BK" 2>&1 | tee /root/h7-$(date -u +%Y%m%d-%H%M%S).log` → **`DESPLIEGUE H7 (BACKEND) COMPLETADO`**.
    - Con un 55P03 agotado, se relanza: reanuda.
 7. **Esquema después:** el mismo `.sql`. Esperado: 44/50, `uspub_chain_next:O` y `ar` en las 3 tablas.
@@ -366,7 +412,7 @@ El máximo de la evidencia en B (231,9 ms) fue su primera muestra, en frío: el 
 10. **Encender el monitor**, con autorización:
     - antes, revisar **H-1** (§8): con `schedule:run` en el crontab de root, el monitor corre como root (el mando lo avisa);
     - `bash /root/h7-monitor-scope.sh estado` → `monitor=off` y el programador sin tareas del Studio;
-    - `bash /root/h7-monitor-scope.sh on off` → **`MANDO monitor → on APLICADO (copia previa: …)`**. Hace la copia previa en 600, exige el fichero en 600, escribe la bandera en el mismo fichero, comprueba que parsea, `config:cache` como www-data con la caché en 600, la configuración efectiva, el programador (+2, las 2 del Studio), `queue:restart`, 13/0 dos veces y 401;
+    - `bash /root/h7-monitor-scope.sh on off` → **`MANDO monitor → on APLICADO (copia previa: …)`**. Hace la copia previa en 600, exige el fichero en 600, escribe la bandera en el mismo fichero, comprueba que parsea, `config:cache` como www-data con la caché en 600, la configuración efectiva, el programador (`schedule:list` con código 0, +2 entradas y las 2 del Studio), `queue:restart`, 13/0 dos veces y 401;
     - con desvíos sale con 1 e imprime la orden exacta para volver;
     - primera pasada: `sudo -u www-data php artisan ultron-studio:monitor` → 0 y ningún incidente `ultron_studio` nuevo.
 
@@ -416,9 +462,10 @@ Todas se cambian en `.env` y se aplican con `config:cache`. Ninguna necesita des
 | H-7 | Baja | Un worker muerto con su trabajo reservado no lo ve `queue:health`, ni el monitor, ni IRON GUARD (ensayado) | `backend` / observabilidad |
 | H-8 | Informativo | La puerta del despliegue cazó trabajo en curso no nombrado. Cualquier fichero nuevo en la puerta exige añadirlo con su paquete | Lead |
 | H-9 | Informativo | Las columnas `timestamp` sin zona guardan UTC. En SQL manual, `now() AT TIME ZONE 'UTC'` (el ensayo se equivocó una vez: §4.7) | — |
-| H-10 | Informativo | El total de `schedule:list` depende de las banderas del servidor (coach, bienestar, wompi, billing, seguimientos, sincronización de Meta): **26 → 28** en las pruebas y **27 → 29** en el banco. Un 26/28 fijo habría dado un desvío falso en el banco y, casi seguro, en producción. El mando comprueba ±2 y las 2 tareas del Studio | — |
+| H-10 | Informativo | El total de `schedule:list` depende de las banderas del servidor (coach, bienestar, wompi, billing, seguimientos, sincronización de Meta): **26 → 28** en las pruebas y **27 → 29** en el banco. Un 26/28 fijo habría dado un desvío falso en el banco (ensayado: `TAREAS=26` aborta con 27) y, casi seguro, en producción. Tras m-1, el total se exige contra `TAREAS`, leído en el servidor con `--solo-comprobar` y fijado en un commit | — |
+| m-1 | Menor (del reviewer), **corregido** | `schedule:list` que falla se contaba como «0 tareas del Studio» en el despliegue y en el smoke. Ahora, en los tres scripts, su código de salida va aparte; el despliegue y el smoke exigen además el total contra `TAREAS` y el mando conserva el salto de ±2 (§4.10: 21/21 y 11/11) | — |
 | H-11 | Baja | La evidencia del canario se mide con 0 de calentamiento y 3 muestras (el cupo es de 10/min): su «p95» lo puede decidir la primera petición, en frío (en el banco, 231,9 ms frente a una mediana de 84,0 en una pasada; 109,8 en la siguiente). Cabe en los 400 ms tras F-1, pero es la ruta con menos margen al recalibrar | PERF7 (decidir si 1 de calentamiento, que el cupo admite: 4 por pasada) |
-| H-12 | Informativo | `ops/README.md` (filas de `deploy-h7-backend.sh`, `smoke-run-h7.sh` y `supresion-1581.sql`) y `ULTRON_STUDIO_GUIA_ADMINISTRACION.md` §10 describen todavía el estado de antes de esta tanda (`PREVIO=pendiente`, `api-commit.txt` en la reanudación, «no carga los presupuestos», «el runbook Supresión no existe»). No los toco: son de DOC7 | DOC7 |
+| H-12 | Informativo | `ops/README.md` (filas de `deploy-h7-backend.sh`, `smoke-run-h7.sh` y `supresion-1581.sql`) y `ULTRON_STUDIO_GUIA_ADMINISTRACION.md` §10 describen todavía el estado de antes de esta tanda (`PREVIO=pendiente`, `api-commit.txt` en la reanudación, «no carga los presupuestos», «el runbook Supresión no existe»). Con m-1, además, el runbook del despliegue (DEPLOYMENT_PLAN) tiene que incluir fijar `TAREAS` en `deploy-h7-backend.sh` y `smoke-run-h7.sh` junto a `PREVIO` (§5, pasos 1 y 5), y la expectativa del smoke pasa a «0, o 3 con solo presupuestos OMITIDO por estado». No los toco: son de DOC7 | DOC7 |
 
 ## 9. Pendiente de validar en producción, y lo que queda del propietario
 
@@ -430,7 +477,8 @@ Todas se cambian en `.env` y se aplican con `config:cache`. Ninguna necesita des
   - FPM;
   - los tiempos reales del 55P03 con el motor leyendo;
   - **los presupuestos con nginx, TLS y FPM**: la primera pasada del smoke en producción es la línea base; después se recalibran los techos en el JSON del repo (§3), en un commit aparte y con su autorización;
-  - el mando del monitor con `crontab`, `supervisorctl` y los dueños reales (el aviso H-1 sale de verdad allí).
+  - el mando del monitor con `crontab`, `supervisorctl` y los dueños reales (el aviso H-1 sale de verdad allí);
+  - **`TAREAS`**: el total de `schedule:list` de producción, que imprime `--solo-comprobar`. Se fija en `deploy-h7-backend.sh` y `smoke-run-h7.sh` en un commit antes del despliegue (§5, pasos 1 y 5).
 - **De PERF7:** confirmar la regla de la propuesta para el p50 (aplico al p50 la misma de su JSON, que solo nombra el p95) y decidir H-11.
 - **De DOC7:** H-12.
 - **Del propietario:**
@@ -441,8 +489,8 @@ Todas se cambian en `.env` y se aplican con `config:cache`. Ninguna necesita des
   - autorizar el despliegue y el encendido del monitor;
   - decidir si, en una supresión del personal, se quita su nombre de la autoría (trazabilidad).
 - **Limpieza local** (mía, cuando el lead diga):
-  - los bancos `~/.cache/ironbody-banco-h7{,-vuelta,-doc7}` (la API del de esta tanda queda parada; se arranca con `banco-h6/api.sh <banco> start`, puerto 8173);
-  - sus bases `ultron_studio_banco_h7{,_vuelta,_doc7}`;
+  - los bancos `~/.cache/ironbody-banco-h7{,-vuelta,-doc7,-m1}` (sus API, paradas; se arrancan con `banco-h6/api.sh <banco> start`, puertos 8173 y 8174);
+  - sus bases `ultron_studio_banco_h7{,_vuelta,_doc7,_m1}`;
   - mis bases de pruebas `ultron_studio_h7_ops` y `ultron_studio_h7_ops7`.
   - Las órdenes están en `banco-h7/README.md`.
 
