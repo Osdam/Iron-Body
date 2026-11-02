@@ -1,0 +1,1133 @@
+{
+    "family": "a-pagina",
+    "env": {
+        "at": "2026-11-02T00:53:59+00:00",
+        "php": "8.3.33",
+        "opcacheCli": false,
+        "db": "ultron_studio_h7_perf",
+        "pg": "PostgreSQL 14.24 (Homebrew) on aarch64-apple-darwin25.6.0, compiled by Apple clang version 21.0.0 (clang-2100.1.1.101), 64-bit",
+        "cache": "database",
+        "queue": "database",
+        "n": 0,
+        "warm": 5,
+        "reps": 3,
+        "load": [
+            38.95263671875,
+            39.6474609375,
+            42.1484375
+        ],
+        "host": "MacBook-Air-de-Alejandro.local arm64"
+    },
+    "results": [
+        {
+            "route": "GET status",
+            "size": 1,
+            "status": 200,
+            "bytes": 1763,
+            "queries": 19,
+            "dbMs": 8.87,
+            "perTable": {
+                "cache": 14,
+                "admin_sessions": 1,
+                "admins": 1,
+                "ultron_studio_publications": 1,
+                "ultron_studio_versions": 1,
+                "ultron_studio_rules": 1
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select \"id\", \"uuid\", \"seq\", \"client_request_id\", \"action\", \"version_id\", \"restores_publication_id\", \"previous_publication_id\", \"engine_contract\", \"effective_hash\", \"signature\", \"catalog_version\", \"lab_gate\", \"acknowledged\", \"evidence\", \"reason\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"created_at\", substr(effective_json, 1, 16385) as effective_json from \"ultron_studio_publications\" order by ",
+                "select \"label\", \"uuid\" from \"ultron_studio_versions\" where \"uuid\" in (?)",
+                "select count(*) as aggregate from \"ultron_studio_rules\" where \"source\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": null
+        },
+        {
+            "route": "GET catalog",
+            "size": 1,
+            "status": 200,
+            "bytes": 35159,
+            "queries": 16,
+            "dbMs": 23.74,
+            "perTable": {
+                "cache": 14,
+                "admin_sessions": 1,
+                "admins": 1
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": null
+        },
+        {
+            "route": "GET draft",
+            "size": 1,
+            "status": 200,
+            "bytes": 3321,
+            "queries": 18,
+            "dbMs": 25.83,
+            "perTable": {
+                "cache": 14,
+                "admin_sessions": 1,
+                "admins": 1,
+                "ultron_studio_drafts": 1,
+                "ultron_studio_rules": 1
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"ultron_studio_drafts\" where \"admin_id\" = ? limit 1",
+                "select * from \"ultron_studio_rules\" where \"status\" <> ? order by \"code\" asc",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": null
+        },
+        {
+            "route": "GET rules",
+            "size": 1,
+            "status": 200,
+            "bytes": 9159,
+            "queries": 18,
+            "dbMs": 51.65,
+            "perTable": {
+                "cache": 14,
+                "ultron_studio_rules": 2,
+                "admin_sessions": 1,
+                "admins": 1
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"ultron_studio_rules\" where \"status\" in (?, ?) order by \"code\" asc",
+                "select * from \"ultron_studio_rules\" where \"status\" <> ? order by \"code\" asc",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": null
+        },
+        {
+            "route": "GET versions (por defecto)",
+            "size": 1,
+            "status": 200,
+            "bytes": 1289,
+            "queries": 19,
+            "dbMs": 7.18,
+            "perTable": {
+                "cache": 14,
+                "ultron_studio_versions": 2,
+                "admin_sessions": 1,
+                "admins": 1,
+                "ultron_studio_version_reviews": 1
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select count(*) as aggregate from \"ultron_studio_versions\"",
+                "select \"id\", \"uuid\", \"label\", \"status\", \"content_hash\", \"catalog_version\", \"created_by_admin_id\", \"created_by_name\", \"created_by_role\", \"last_validation\", \"submitted_at\", \"created_at\" from \"ultron_studio_versions\" order by \"id\" desc limit 20 offset 0",
+                "select * from \"ultron_studio_version_reviews\" where \"ultron_studio_version_reviews\".\"version_id\" in (1)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": null
+        },
+        {
+            "route": "GET versions?per_page=50",
+            "size": 1,
+            "status": 200,
+            "bytes": 1289,
+            "queries": 20,
+            "dbMs": 23.07,
+            "perTable": {
+                "cache": 14,
+                "admin_sessions": 2,
+                "ultron_studio_versions": 2,
+                "admins": 1,
+                "ultron_studio_version_reviews": 1
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "update \"admin_sessions\" set \"last_seen_at\" = ?, \"updated_at\" = ? where \"id\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select count(*) as aggregate from \"ultron_studio_versions\"",
+                "select \"id\", \"uuid\", \"label\", \"status\", \"content_hash\", \"catalog_version\", \"created_by_admin_id\", \"created_by_name\", \"created_by_role\", \"last_validation\", \"submitted_at\", \"created_at\" from \"ultron_studio_versions\" order by \"id\" desc limit 50 offset 0",
+                "select * from \"ultron_studio_version_reviews\" where \"ultron_studio_version_reviews\".\"version_id\" in (1)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": null
+        },
+        {
+            "route": "GET versions/{uuid} (1 entrada)",
+            "size": 1,
+            "status": 200,
+            "bytes": 10294,
+            "queries": 19,
+            "dbMs": 20.71,
+            "perTable": {
+                "cache": 14,
+                "admin_sessions": 1,
+                "admins": 1,
+                "ultron_studio_versions": 1,
+                "ultron_studio_version_reviews": 1,
+                "ultron_studio_publications": 1
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"ultron_studio_versions\" where \"uuid\" = ? limit 1",
+                "select * from \"ultron_studio_version_reviews\" where \"ultron_studio_version_reviews\".\"version_id\" in (1)",
+                "select \"id\", \"uuid\", \"seq\", \"client_request_id\", \"action\", \"version_id\", \"restores_publication_id\", \"previous_publication_id\", \"engine_contract\", \"effective_hash\", \"signature\", \"catalog_version\", \"lab_gate\", \"acknowledged\", \"evidence\", \"reason\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"created_at\", substr(effective_json, 1, 16385) as effective_json from \"ultron_studio_publications\" where \"ve",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": null
+        },
+        {
+            "route": "GET audit",
+            "size": 1,
+            "status": 200,
+            "bytes": 6912,
+            "queries": 18,
+            "dbMs": 7.38,
+            "perTable": {
+                "cache": 14,
+                "ultron_studio_audit_events": 2,
+                "admin_sessions": 1,
+                "admins": 1
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select count(*) as aggregate from \"ultron_studio_audit_events\"",
+                "select \"id\", \"event\", \"subject_type\", \"subject_uuid\", \"actor_type\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"from_status\", \"to_status\", \"content_hash\", \"summary\", \"diff\", \"created_at\" from \"ultron_studio_audit_events\" order by \"id\" desc limit 20 offset 0",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": null
+        },
+        {
+            "route": "GET engine/readings",
+            "size": 1,
+            "status": 200,
+            "bytes": 1269,
+            "queries": 24,
+            "dbMs": 11.52,
+            "perTable": {
+                "cache": 14,
+                "marketing_knowledge_items": 3,
+                "plans": 2,
+                "admin_sessions": 1,
+                "admins": 1,
+                "marketing_agent_settings": 1,
+                "ultron_aborts": 1,
+                "ultron_studio_publications": 1
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select \"name\" from \"plans\" where \"active\" = ? and \"sellable\" = ? and \"archived_at\" is null and \"price\" > ? and \"duration_days\" > ? order by \"is_recommended\" desc, \"sort_order\" asc, \"id\" asc limit 20",
+                "select * from \"marketing_agent_settings\" where \"marketing_agent_settings\".\"id\" = ? limit 1",
+                "select exists(select * from \"ultron_aborts\" where \"released_at\" is null) as \"exists\"",
+                "select \"category\", count(*) as aggregate from \"marketing_knowledge_items\" where \"is_active\" = ? and \"review_status\" = ? and (\"valid_from\" is null or \"valid_from\" <= ?) and (\"valid_until\" is null or \"valid_until\" >= ?) group by \"category\"",
+                "select * from \"marketing_knowledge_items\" where \"is_active\" = ? and \"review_status\" = ? and (\"valid_from\" is null or \"valid_from\" <= ?) and (\"valid_until\" is null or \"valid_until\" >= ?) order by \"priority\" asc, \"id\" asc",
+                "select count(*) as aggregate from \"marketing_knowledge_items\" where \"review_status\" = ?",
+                "select \"name\", \"is_recommended\" from \"plans\" where \"active\" = ? and \"sellable\" = ? and \"archived_at\" is null and \"price\" > ? and \"duration_days\" > ? order by \"sort_order\" asc, \"id\" asc limit 20",
+                "select \"uuid\", \"seq\", \"engine_contract\", \"effective_hash\", \"signature\", substr(effective_json, 1, 16385) as effective_json from \"ultron_studio_publications\" order by \"seq\" desc limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": null
+        },
+        {
+            "route": "GET status",
+            "size": 50,
+            "status": 200,
+            "bytes": 1763,
+            "queries": 19,
+            "dbMs": 5.96,
+            "perTable": {
+                "cache": 14,
+                "admin_sessions": 1,
+                "admins": 1,
+                "ultron_studio_publications": 1,
+                "ultron_studio_versions": 1,
+                "ultron_studio_rules": 1
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select \"id\", \"uuid\", \"seq\", \"client_request_id\", \"action\", \"version_id\", \"restores_publication_id\", \"previous_publication_id\", \"engine_contract\", \"effective_hash\", \"signature\", \"catalog_version\", \"lab_gate\", \"acknowledged\", \"evidence\", \"reason\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"created_at\", substr(effective_json, 1, 16385) as effective_json from \"ultron_studio_publications\" order by ",
+                "select \"label\", \"uuid\" from \"ultron_studio_versions\" where \"uuid\" in (?)",
+                "select count(*) as aggregate from \"ultron_studio_rules\" where \"source\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": null
+        },
+        {
+            "route": "GET catalog",
+            "size": 50,
+            "status": 200,
+            "bytes": 35159,
+            "queries": 16,
+            "dbMs": 10.93,
+            "perTable": {
+                "cache": 14,
+                "admin_sessions": 1,
+                "admins": 1
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": null
+        },
+        {
+            "route": "GET draft",
+            "size": 50,
+            "status": 200,
+            "bytes": 3321,
+            "queries": 19,
+            "dbMs": 15.85,
+            "perTable": {
+                "cache": 14,
+                "admin_sessions": 2,
+                "admins": 1,
+                "ultron_studio_drafts": 1,
+                "ultron_studio_rules": 1
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "update \"admin_sessions\" set \"last_seen_at\" = ?, \"updated_at\" = ? where \"id\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"ultron_studio_drafts\" where \"admin_id\" = ? limit 1",
+                "select * from \"ultron_studio_rules\" where \"status\" <> ? order by \"code\" asc",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": null
+        },
+        {
+            "route": "GET rules",
+            "size": 50,
+            "status": 200,
+            "bytes": 9159,
+            "queries": 18,
+            "dbMs": 12.22,
+            "perTable": {
+                "cache": 14,
+                "ultron_studio_rules": 2,
+                "admin_sessions": 1,
+                "admins": 1
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"ultron_studio_rules\" where \"status\" in (?, ?) order by \"code\" asc",
+                "select * from \"ultron_studio_rules\" where \"status\" <> ? order by \"code\" asc",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": null
+        },
+        {
+            "route": "GET versions (por defecto)",
+            "size": 50,
+            "status": 200,
+            "bytes": 12363,
+            "queries": 19,
+            "dbMs": 11.61,
+            "perTable": {
+                "cache": 14,
+                "ultron_studio_versions": 2,
+                "admin_sessions": 1,
+                "admins": 1,
+                "ultron_studio_version_reviews": 1
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select count(*) as aggregate from \"ultron_studio_versions\"",
+                "select \"id\", \"uuid\", \"label\", \"status\", \"content_hash\", \"catalog_version\", \"created_by_admin_id\", \"created_by_name\", \"created_by_role\", \"last_validation\", \"submitted_at\", \"created_at\" from \"ultron_studio_versions\" order by \"id\" desc limit 20 offset 0",
+                "select * from \"ultron_studio_version_reviews\" where \"ultron_studio_version_reviews\".\"version_id\" in (31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": null
+        },
+        {
+            "route": "GET versions?per_page=50",
+            "size": 50,
+            "status": 200,
+            "bytes": 29141,
+            "queries": 19,
+            "dbMs": 44.14,
+            "perTable": {
+                "cache": 14,
+                "ultron_studio_versions": 2,
+                "admin_sessions": 1,
+                "admins": 1,
+                "ultron_studio_version_reviews": 1
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select count(*) as aggregate from \"ultron_studio_versions\"",
+                "select \"id\", \"uuid\", \"label\", \"status\", \"content_hash\", \"catalog_version\", \"created_by_admin_id\", \"created_by_name\", \"created_by_role\", \"last_validation\", \"submitted_at\", \"created_at\" from \"ultron_studio_versions\" order by \"id\" desc limit 50 offset 0",
+                "select * from \"ultron_studio_version_reviews\" where \"ultron_studio_version_reviews\".\"version_id\" in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": null
+        },
+        {
+            "route": "GET versions/{uuid} (1 entrada)",
+            "size": 50,
+            "status": 200,
+            "bytes": 10294,
+            "queries": 19,
+            "dbMs": 35.63,
+            "perTable": {
+                "cache": 14,
+                "admin_sessions": 1,
+                "admins": 1,
+                "ultron_studio_versions": 1,
+                "ultron_studio_version_reviews": 1,
+                "ultron_studio_publications": 1
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"ultron_studio_versions\" where \"uuid\" = ? limit 1",
+                "select * from \"ultron_studio_version_reviews\" where \"ultron_studio_version_reviews\".\"version_id\" in (1)",
+                "select \"id\", \"uuid\", \"seq\", \"client_request_id\", \"action\", \"version_id\", \"restores_publication_id\", \"previous_publication_id\", \"engine_contract\", \"effective_hash\", \"signature\", \"catalog_version\", \"lab_gate\", \"acknowledged\", \"evidence\", \"reason\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"created_at\", substr(effective_json, 1, 16385) as effective_json from \"ultron_studio_publications\" where \"ve",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": null
+        },
+        {
+            "route": "GET audit",
+            "size": 50,
+            "status": 200,
+            "bytes": 6912,
+            "queries": 18,
+            "dbMs": 14.88,
+            "perTable": {
+                "cache": 14,
+                "ultron_studio_audit_events": 2,
+                "admin_sessions": 1,
+                "admins": 1
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select count(*) as aggregate from \"ultron_studio_audit_events\"",
+                "select \"id\", \"event\", \"subject_type\", \"subject_uuid\", \"actor_type\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"from_status\", \"to_status\", \"content_hash\", \"summary\", \"diff\", \"created_at\" from \"ultron_studio_audit_events\" order by \"id\" desc limit 20 offset 0",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": null
+        },
+        {
+            "route": "GET engine/readings",
+            "size": 50,
+            "status": 200,
+            "bytes": 1269,
+            "queries": 24,
+            "dbMs": 9.96,
+            "perTable": {
+                "cache": 14,
+                "marketing_knowledge_items": 3,
+                "plans": 2,
+                "admin_sessions": 1,
+                "admins": 1,
+                "marketing_agent_settings": 1,
+                "ultron_aborts": 1,
+                "ultron_studio_publications": 1
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select \"name\" from \"plans\" where \"active\" = ? and \"sellable\" = ? and \"archived_at\" is null and \"price\" > ? and \"duration_days\" > ? order by \"is_recommended\" desc, \"sort_order\" asc, \"id\" asc limit 20",
+                "select * from \"marketing_agent_settings\" where \"marketing_agent_settings\".\"id\" = ? limit 1",
+                "select exists(select * from \"ultron_aborts\" where \"released_at\" is null) as \"exists\"",
+                "select \"category\", count(*) as aggregate from \"marketing_knowledge_items\" where \"is_active\" = ? and \"review_status\" = ? and (\"valid_from\" is null or \"valid_from\" <= ?) and (\"valid_until\" is null or \"valid_until\" >= ?) group by \"category\"",
+                "select * from \"marketing_knowledge_items\" where \"is_active\" = ? and \"review_status\" = ? and (\"valid_from\" is null or \"valid_from\" <= ?) and (\"valid_until\" is null or \"valid_until\" >= ?) order by \"priority\" asc, \"id\" asc",
+                "select count(*) as aggregate from \"marketing_knowledge_items\" where \"review_status\" = ?",
+                "select \"name\", \"is_recommended\" from \"plans\" where \"active\" = ? and \"sellable\" = ? and \"archived_at\" is null and \"price\" > ? and \"duration_days\" > ? order by \"sort_order\" asc, \"id\" asc limit 20",
+                "select \"uuid\", \"seq\", \"engine_contract\", \"effective_hash\", \"signature\", substr(effective_json, 1, 16385) as effective_json from \"ultron_studio_publications\" order by \"seq\" desc limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": null
+        },
+        {
+            "route": "GET status",
+            "size": 200,
+            "status": 200,
+            "bytes": 1763,
+            "queries": 19,
+            "dbMs": 8.02,
+            "perTable": {
+                "cache": 14,
+                "admin_sessions": 1,
+                "admins": 1,
+                "ultron_studio_publications": 1,
+                "ultron_studio_versions": 1,
+                "ultron_studio_rules": 1
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select \"id\", \"uuid\", \"seq\", \"client_request_id\", \"action\", \"version_id\", \"restores_publication_id\", \"previous_publication_id\", \"engine_contract\", \"effective_hash\", \"signature\", \"catalog_version\", \"lab_gate\", \"acknowledged\", \"evidence\", \"reason\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"created_at\", substr(effective_json, 1, 16385) as effective_json from \"ultron_studio_publications\" order by ",
+                "select \"label\", \"uuid\" from \"ultron_studio_versions\" where \"uuid\" in (?)",
+                "select count(*) as aggregate from \"ultron_studio_rules\" where \"source\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": null
+        },
+        {
+            "route": "GET catalog",
+            "size": 200,
+            "status": 200,
+            "bytes": 35159,
+            "queries": 16,
+            "dbMs": 6.13,
+            "perTable": {
+                "cache": 14,
+                "admin_sessions": 1,
+                "admins": 1
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": null
+        },
+        {
+            "route": "GET draft",
+            "size": 200,
+            "status": 200,
+            "bytes": 3321,
+            "queries": 18,
+            "dbMs": 46.34,
+            "perTable": {
+                "cache": 14,
+                "admin_sessions": 1,
+                "admins": 1,
+                "ultron_studio_drafts": 1,
+                "ultron_studio_rules": 1
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"ultron_studio_drafts\" where \"admin_id\" = ? limit 1",
+                "select * from \"ultron_studio_rules\" where \"status\" <> ? order by \"code\" asc",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": null
+        },
+        {
+            "route": "GET rules",
+            "size": 200,
+            "status": 200,
+            "bytes": 9159,
+            "queries": 18,
+            "dbMs": 24.01,
+            "perTable": {
+                "cache": 14,
+                "ultron_studio_rules": 2,
+                "admin_sessions": 1,
+                "admins": 1
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"ultron_studio_rules\" where \"status\" in (?, ?) order by \"code\" asc",
+                "select * from \"ultron_studio_rules\" where \"status\" <> ? order by \"code\" asc",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": null
+        },
+        {
+            "route": "GET versions (por defecto)",
+            "size": 200,
+            "status": 200,
+            "bytes": 13132,
+            "queries": 19,
+            "dbMs": 15.33,
+            "perTable": {
+                "cache": 14,
+                "ultron_studio_versions": 2,
+                "admin_sessions": 1,
+                "admins": 1,
+                "ultron_studio_version_reviews": 1
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select count(*) as aggregate from \"ultron_studio_versions\"",
+                "select \"id\", \"uuid\", \"label\", \"status\", \"content_hash\", \"catalog_version\", \"created_by_admin_id\", \"created_by_name\", \"created_by_role\", \"last_validation\", \"submitted_at\", \"created_at\" from \"ultron_studio_versions\" order by \"id\" desc limit 20 offset 0",
+                "select * from \"ultron_studio_version_reviews\" where \"ultron_studio_version_reviews\".\"version_id\" in (181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 197, 198, 199, 200)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": null
+        },
+        {
+            "route": "GET versions?per_page=50",
+            "size": 200,
+            "status": 200,
+            "bytes": 29585,
+            "queries": 19,
+            "dbMs": 33.5,
+            "perTable": {
+                "cache": 14,
+                "ultron_studio_versions": 2,
+                "admin_sessions": 1,
+                "admins": 1,
+                "ultron_studio_version_reviews": 1
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select count(*) as aggregate from \"ultron_studio_versions\"",
+                "select \"id\", \"uuid\", \"label\", \"status\", \"content_hash\", \"catalog_version\", \"created_by_admin_id\", \"created_by_name\", \"created_by_role\", \"last_validation\", \"submitted_at\", \"created_at\" from \"ultron_studio_versions\" order by \"id\" desc limit 50 offset 0",
+                "select * from \"ultron_studio_version_reviews\" where \"ultron_studio_version_reviews\".\"version_id\" in (151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195, 196, 197, 198, 199, 200)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": null
+        },
+        {
+            "route": "GET versions/{uuid} (1 entrada)",
+            "size": 200,
+            "status": 200,
+            "bytes": 10294,
+            "queries": 20,
+            "dbMs": 14.26,
+            "perTable": {
+                "cache": 14,
+                "admin_sessions": 2,
+                "admins": 1,
+                "ultron_studio_versions": 1,
+                "ultron_studio_version_reviews": 1,
+                "ultron_studio_publications": 1
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "update \"admin_sessions\" set \"last_seen_at\" = ?, \"updated_at\" = ? where \"id\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"ultron_studio_versions\" where \"uuid\" = ? limit 1",
+                "select * from \"ultron_studio_version_reviews\" where \"ultron_studio_version_reviews\".\"version_id\" in (1)",
+                "select \"id\", \"uuid\", \"seq\", \"client_request_id\", \"action\", \"version_id\", \"restores_publication_id\", \"previous_publication_id\", \"engine_contract\", \"effective_hash\", \"signature\", \"catalog_version\", \"lab_gate\", \"acknowledged\", \"evidence\", \"reason\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"created_at\", substr(effective_json, 1, 16385) as effective_json from \"ultron_studio_publications\" where \"ve",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": null
+        },
+        {
+            "route": "GET audit",
+            "size": 200,
+            "status": 200,
+            "bytes": 6912,
+            "queries": 18,
+            "dbMs": 6.45,
+            "perTable": {
+                "cache": 14,
+                "ultron_studio_audit_events": 2,
+                "admin_sessions": 1,
+                "admins": 1
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select count(*) as aggregate from \"ultron_studio_audit_events\"",
+                "select \"id\", \"event\", \"subject_type\", \"subject_uuid\", \"actor_type\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"from_status\", \"to_status\", \"content_hash\", \"summary\", \"diff\", \"created_at\" from \"ultron_studio_audit_events\" order by \"id\" desc limit 20 offset 0",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": null
+        },
+        {
+            "route": "GET engine/readings",
+            "size": 200,
+            "status": 200,
+            "bytes": 1269,
+            "queries": 24,
+            "dbMs": 11.22,
+            "perTable": {
+                "cache": 14,
+                "marketing_knowledge_items": 3,
+                "plans": 2,
+                "admin_sessions": 1,
+                "admins": 1,
+                "marketing_agent_settings": 1,
+                "ultron_aborts": 1,
+                "ultron_studio_publications": 1
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select \"name\" from \"plans\" where \"active\" = ? and \"sellable\" = ? and \"archived_at\" is null and \"price\" > ? and \"duration_days\" > ? order by \"is_recommended\" desc, \"sort_order\" asc, \"id\" asc limit 20",
+                "select * from \"marketing_agent_settings\" where \"marketing_agent_settings\".\"id\" = ? limit 1",
+                "select exists(select * from \"ultron_aborts\" where \"released_at\" is null) as \"exists\"",
+                "select \"category\", count(*) as aggregate from \"marketing_knowledge_items\" where \"is_active\" = ? and \"review_status\" = ? and (\"valid_from\" is null or \"valid_from\" <= ?) and (\"valid_until\" is null or \"valid_until\" >= ?) group by \"category\"",
+                "select * from \"marketing_knowledge_items\" where \"is_active\" = ? and \"review_status\" = ? and (\"valid_from\" is null or \"valid_from\" <= ?) and (\"valid_until\" is null or \"valid_until\" >= ?) order by \"priority\" asc, \"id\" asc",
+                "select count(*) as aggregate from \"marketing_knowledge_items\" where \"review_status\" = ?",
+                "select \"name\", \"is_recommended\" from \"plans\" where \"active\" = ? and \"sellable\" = ? and \"archived_at\" is null and \"price\" > ? and \"duration_days\" > ? order by \"sort_order\" asc, \"id\" asc limit 20",
+                "select \"uuid\", \"seq\", \"engine_contract\", \"effective_hash\", \"signature\", substr(effective_json, 1, 16385) as effective_json from \"ultron_studio_publications\" order by \"seq\" desc limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": null
+        }
+    ]
+}

@@ -1,0 +1,790 @@
+{
+    "family": "g-evidencia-tramos",
+    "env": {
+        "at": "2026-11-02T01:02:31+00:00",
+        "php": "8.3.33",
+        "opcacheCli": false,
+        "db": "ultron_studio_h7_perf",
+        "pg": "PostgreSQL 14.24 (Homebrew) on aarch64-apple-darwin25.6.0, compiled by Apple clang version 21.0.0 (clang-2100.1.1.101), 64-bit",
+        "cache": "database",
+        "queue": "database",
+        "n": 5,
+        "warm": 5,
+        "reps": 3,
+        "load": [
+            3.60546875,
+            11.35986328125,
+            25.67724609375
+        ],
+        "host": "MacBook-Air-de-Alejandro.local arm64"
+    },
+    "results": [
+        {
+            "route": "ruta entera (en proceso)",
+            "size": "40 turnos (mensajes del canario: 80)",
+            "status": 200,
+            "bytes": 0,
+            "queries": 44,
+            "dbMs": 19.35,
+            "perTable": {
+                "cache": 28,
+                "admin_sessions": 2,
+                "ultron_studio_publications": 2,
+                "marketing_ai_actions": 2,
+                "ultron_aborts": 2,
+                "plans": 2,
+                "admins": 1,
+                "ultron_studio_versions": 1,
+                "ultron_studio_version_reviews": 1,
+                "marketing_conversations": 1,
+                "marketing_leads": 1,
+                "marketing_messages": 1
+            },
+            "perTableMs": {
+                "cache": 7.38,
+                "admin_sessions": 0.57,
+                "admins": 0.25,
+                "ultron_studio_versions": 0.31,
+                "ultron_studio_version_reviews": 0.24,
+                "ultron_studio_publications": 0.67,
+                "marketing_ai_actions": 7.46,
+                "ultron_aborts": 0.59,
+                "marketing_conversations": 0.36,
+                "marketing_leads": 0.32,
+                "marketing_messages": 0.45,
+                "plans": 0.75
+            },
+            "mostRepeated": {
+                "count": 18,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "update \"cache\" set \"value\" = ?, \"expiration\" = ? where key ~ '[0-9a-f]{32}$'",
+                "update \"cache\" set \"expiration\" = ? where key ~ '[0-9a-f]{32}:timer$'",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"ultron_studio_versions\" where \"uuid\" = ? limit 1",
+                "select * from \"ultron_studio_version_reviews\" where \"ultron_studio_version_reviews\".\"version_id\" in (1)",
+                "select \"id\", \"created_at\" from \"ultron_studio_publications\" where \"version_id\" = ? and \"action\" = ? order by \"seq\" desc limit 1",
+                "select count(*) as turns, sum(case when \"metadata\"->'studio'->>'state' = ? then 1 else 0 end) as applied, sum(case when \"metadata\"->'studio'->>'state' = ? and \"metadata\"->'studio'->>'version' = ? then 1 else 0 end) as stamped, sum(case when \"metadata\"->'studio'->>'state' = ? and \"metadata\"->'studio'->>'reason' = ? then 1 else 0 end) as fallback_0, sum(case when \"metadata\"->'studio'->>'state' = ? a",
+                "select count(*) as aggregate from \"ultron_aborts\" where \"engaged_at\" >= ?",
+                "select exists(select * from \"ultron_aborts\" where \"released_at\" is null) as \"exists\"",
+                "select * from \"marketing_conversations\" where \"marketing_conversations\".\"id\" = ? limit 1",
+                "select * from \"marketing_leads\" where \"marketing_leads\".\"id\" in (1)",
+                "select \"id\", \"direction\", \"sender_type\", \"body\", \"metadata\", \"created_at\" from \"marketing_messages\" where \"conversation_id\" = ? and \"created_at\" >= ? order by \"id\" asc",
+                "select \"id\", \"action_type\", \"status\", \"source_type\", \"source_event_id\", \"metadata\", \"created_at\" from \"marketing_ai_actions\" where \"conversation_id\" = ? and \"created_at\" >= ? order by \"id\" asc",
+                "select \"id\", \"name\", \"price\" from \"plans\" where \"active\" = ? and \"sellable\" = ? and \"archived_at\" is null and \"price\" > ? and \"duration_days\" > ?",
+                "select \"name\" from \"plans\" where \"id\" not in (?)",
+                "select \"uuid\", \"seq\", \"engine_contract\", \"effective_hash\", \"signature\", substr(effective_json, 1, 16385) as effective_json from \"ultron_studio_publications\" order by \"seq\" desc limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 5,
+                        "p50": 83.48,
+                        "p95": 85.46,
+                        "max": 85.46,
+                        "min": 82.133
+                    }
+                ],
+                "all": {
+                    "n": 5,
+                    "p50": 83.48,
+                    "p95": 85.46,
+                    "max": 85.46,
+                    "min": 82.133
+                },
+                "load1": [
+                    4.3759765625
+                ]
+            }
+        },
+        {
+            "route": "StudioCanaryMeasures::measure (recuento + frenos + acta)",
+            "size": "40 turnos (mensajes del canario: 80)",
+            "status": 200,
+            "bytes": 0,
+            "queries": 9,
+            "dbMs": 10.1,
+            "perTable": {
+                "marketing_ai_actions": 2,
+                "ultron_aborts": 2,
+                "plans": 2,
+                "marketing_conversations": 1,
+                "marketing_leads": 1,
+                "marketing_messages": 1
+            },
+            "perTableMs": {
+                "marketing_ai_actions": 7.74,
+                "ultron_aborts": 0.51,
+                "marketing_conversations": 0.43,
+                "marketing_leads": 0.29,
+                "marketing_messages": 0.44,
+                "plans": 0.69
+            },
+            "mostRepeated": {
+                "count": 1,
+                "sql": "select count(*) as turns, sum(case when \"metadata\"->'studio'->>'state' = ? then N else N end) as applied, sum(case when \"metadata\"->'studio'->>'state' = ? and \"metadata\"->'studio'->>'version' = ? then N else N end) as stamped, sum(case when"
+            },
+            "statements": [
+                "select count(*) as turns, sum(case when \"metadata\"->'studio'->>'state' = ? then 1 else 0 end) as applied, sum(case when \"metadata\"->'studio'->>'state' = ? and \"metadata\"->'studio'->>'version' = ? then 1 else 0 end) as stamped, sum(case when \"metadata\"->'studio'->>'state' = ? and \"metadata\"->'studio'->>'reason' = ? then 1 else 0 end) as fallback_0, sum(case when \"metadata\"->'studio'->>'state' = ? a",
+                "select count(*) as aggregate from \"ultron_aborts\" where \"engaged_at\" >= ?",
+                "select exists(select * from \"ultron_aborts\" where \"released_at\" is null) as \"exists\"",
+                "select * from \"marketing_conversations\" where \"marketing_conversations\".\"id\" = ? limit 1",
+                "select * from \"marketing_leads\" where \"marketing_leads\".\"id\" in (1)",
+                "select \"id\", \"direction\", \"sender_type\", \"body\", \"metadata\", \"created_at\" from \"marketing_messages\" where \"conversation_id\" = ? and \"created_at\" >= ? order by \"id\" asc",
+                "select \"id\", \"action_type\", \"status\", \"source_type\", \"source_event_id\", \"metadata\", \"created_at\" from \"marketing_ai_actions\" where \"conversation_id\" = ? and \"created_at\" >= ? order by \"id\" asc",
+                "select \"id\", \"name\", \"price\" from \"plans\" where \"active\" = ? and \"sellable\" = ? and \"archived_at\" is null and \"price\" > ? and \"duration_days\" > ?",
+                "select \"name\" from \"plans\" where \"id\" not in (?)"
+            ],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 5,
+                        "p50": 61.497,
+                        "p95": 61.957,
+                        "max": 61.957,
+                        "min": 60.88
+                    }
+                ],
+                "all": {
+                    "n": 5,
+                    "p50": 61.497,
+                    "p95": 61.957,
+                    "max": 61.957,
+                    "min": 60.88
+                },
+                "load1": [
+                    4.345703125
+                ]
+            }
+        },
+        {
+            "route": "acta: ultron:canary-report --json (--turns ≤ 200)",
+            "size": "40 turnos (mensajes del canario: 80)",
+            "status": 200,
+            "bytes": 0,
+            "queries": 6,
+            "dbMs": 5.48,
+            "perTable": {
+                "plans": 2,
+                "marketing_conversations": 1,
+                "marketing_leads": 1,
+                "marketing_messages": 1,
+                "marketing_ai_actions": 1
+            },
+            "perTableMs": {
+                "marketing_conversations": 0.5,
+                "marketing_leads": 0.39,
+                "marketing_messages": 0.5,
+                "marketing_ai_actions": 3.33,
+                "plans": 0.76
+            },
+            "mostRepeated": {
+                "count": 1,
+                "sql": "select * from \"marketing_conversations\" where \"marketing_conversations\".\"id\" = ? limit N"
+            },
+            "statements": [
+                "select * from \"marketing_conversations\" where \"marketing_conversations\".\"id\" = ? limit 1",
+                "select * from \"marketing_leads\" where \"marketing_leads\".\"id\" in (1)",
+                "select \"id\", \"direction\", \"sender_type\", \"body\", \"metadata\", \"created_at\" from \"marketing_messages\" where \"conversation_id\" = ? and \"created_at\" >= ? order by \"id\" asc",
+                "select \"id\", \"action_type\", \"status\", \"source_type\", \"source_event_id\", \"metadata\", \"created_at\" from \"marketing_ai_actions\" where \"conversation_id\" = ? and \"created_at\" >= ? order by \"id\" asc",
+                "select \"id\", \"name\", \"price\" from \"plans\" where \"active\" = ? and \"sellable\" = ? and \"archived_at\" is null and \"price\" > ? and \"duration_days\" > ?",
+                "select \"name\" from \"plans\" where \"id\" not in (?)"
+            ],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 5,
+                        "p50": 54.998,
+                        "p95": 55.652,
+                        "max": 55.652,
+                        "min": 54.792
+                    }
+                ],
+                "all": {
+                    "n": 5,
+                    "p50": 54.998,
+                    "p95": 55.652,
+                    "max": 55.652,
+                    "min": 54.792
+                },
+                "load1": [
+                    4.345703125
+                ]
+            }
+        },
+        {
+            "route": "lecturas del motor (only MUST_MATCH)",
+            "size": "40 turnos (mensajes del canario: 80)",
+            "status": 200,
+            "bytes": 0,
+            "queries": 0,
+            "dbMs": 0,
+            "perTable": [],
+            "perTableMs": [],
+            "mostRepeated": null,
+            "statements": [],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 5,
+                        "p50": 0.033,
+                        "p95": 0.034,
+                        "max": 0.034,
+                        "min": 0.033
+                    }
+                ],
+                "all": {
+                    "n": 5,
+                    "p50": 0.033,
+                    "p95": 0.034,
+                    "max": 0.034,
+                    "min": 0.033
+                },
+                "load1": [
+                    4.345703125
+                ]
+            }
+        },
+        {
+            "route": "ruta entera (en proceso)",
+            "size": "200 turnos (mensajes del canario: 400)",
+            "status": 200,
+            "bytes": 0,
+            "queries": 45,
+            "dbMs": 23.28,
+            "perTable": {
+                "cache": 28,
+                "admin_sessions": 3,
+                "ultron_studio_publications": 2,
+                "marketing_ai_actions": 2,
+                "ultron_aborts": 2,
+                "plans": 2,
+                "admins": 1,
+                "ultron_studio_versions": 1,
+                "ultron_studio_version_reviews": 1,
+                "marketing_conversations": 1,
+                "marketing_leads": 1,
+                "marketing_messages": 1
+            },
+            "perTableMs": {
+                "cache": 8.21,
+                "admin_sessions": 1.22,
+                "admins": 0.31,
+                "ultron_studio_versions": 0.4,
+                "ultron_studio_version_reviews": 0.3,
+                "ultron_studio_publications": 0.79,
+                "marketing_ai_actions": 8.68,
+                "ultron_aborts": 0.68,
+                "marketing_conversations": 0.41,
+                "marketing_leads": 0.36,
+                "marketing_messages": 0.85,
+                "plans": 1.07
+            },
+            "mostRepeated": {
+                "count": 18,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "update \"cache\" set \"value\" = ?, \"expiration\" = ? where key ~ '[0-9a-f]{32}$'",
+                "update \"cache\" set \"expiration\" = ? where key ~ '[0-9a-f]{32}:timer$'",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "update \"admin_sessions\" set \"last_seen_at\" = ?, \"updated_at\" = ? where \"id\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"ultron_studio_versions\" where \"uuid\" = ? limit 1",
+                "select * from \"ultron_studio_version_reviews\" where \"ultron_studio_version_reviews\".\"version_id\" in (1)",
+                "select \"id\", \"created_at\" from \"ultron_studio_publications\" where \"version_id\" = ? and \"action\" = ? order by \"seq\" desc limit 1",
+                "select count(*) as turns, sum(case when \"metadata\"->'studio'->>'state' = ? then 1 else 0 end) as applied, sum(case when \"metadata\"->'studio'->>'state' = ? and \"metadata\"->'studio'->>'version' = ? then 1 else 0 end) as stamped, sum(case when \"metadata\"->'studio'->>'state' = ? and \"metadata\"->'studio'->>'reason' = ? then 1 else 0 end) as fallback_0, sum(case when \"metadata\"->'studio'->>'state' = ? a",
+                "select count(*) as aggregate from \"ultron_aborts\" where \"engaged_at\" >= ?",
+                "select exists(select * from \"ultron_aborts\" where \"released_at\" is null) as \"exists\"",
+                "select * from \"marketing_conversations\" where \"marketing_conversations\".\"id\" = ? limit 1",
+                "select * from \"marketing_leads\" where \"marketing_leads\".\"id\" in (1)",
+                "select \"id\", \"direction\", \"sender_type\", \"body\", \"metadata\", \"created_at\" from \"marketing_messages\" where \"conversation_id\" = ? and \"created_at\" >= ? order by \"id\" asc",
+                "select \"id\", \"action_type\", \"status\", \"source_type\", \"source_event_id\", \"metadata\", \"created_at\" from \"marketing_ai_actions\" where \"conversation_id\" = ? and \"created_at\" >= ? order by \"id\" asc",
+                "select \"id\", \"name\", \"price\" from \"plans\" where \"active\" = ? and \"sellable\" = ? and \"archived_at\" is null and \"price\" > ? and \"duration_days\" > ?",
+                "select \"name\" from \"plans\" where \"id\" not in (?)",
+                "select \"uuid\", \"seq\", \"engine_contract\", \"effective_hash\", \"signature\", substr(effective_json, 1, 16385) as effective_json from \"ultron_studio_publications\" order by \"seq\" desc limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 5,
+                        "p50": 1051.206,
+                        "p95": 1085.993,
+                        "max": 1085.993,
+                        "min": 1049.979
+                    }
+                ],
+                "all": {
+                    "n": 5,
+                    "p50": 1051.206,
+                    "p95": 1085.993,
+                    "max": 1085.993,
+                    "min": 1049.979
+                },
+                "load1": [
+                    4.31787109375
+                ]
+            }
+        },
+        {
+            "route": "StudioCanaryMeasures::measure (recuento + frenos + acta)",
+            "size": "200 turnos (mensajes del canario: 400)",
+            "status": 200,
+            "bytes": 0,
+            "queries": 9,
+            "dbMs": 12.25,
+            "perTable": {
+                "marketing_ai_actions": 2,
+                "ultron_aborts": 2,
+                "plans": 2,
+                "marketing_conversations": 1,
+                "marketing_leads": 1,
+                "marketing_messages": 1
+            },
+            "perTableMs": {
+                "marketing_ai_actions": 8.86,
+                "ultron_aborts": 0.7,
+                "marketing_conversations": 0.41,
+                "marketing_leads": 0.4,
+                "marketing_messages": 0.9,
+                "plans": 0.98
+            },
+            "mostRepeated": {
+                "count": 1,
+                "sql": "select count(*) as turns, sum(case when \"metadata\"->'studio'->>'state' = ? then N else N end) as applied, sum(case when \"metadata\"->'studio'->>'state' = ? and \"metadata\"->'studio'->>'version' = ? then N else N end) as stamped, sum(case when"
+            },
+            "statements": [
+                "select count(*) as turns, sum(case when \"metadata\"->'studio'->>'state' = ? then 1 else 0 end) as applied, sum(case when \"metadata\"->'studio'->>'state' = ? and \"metadata\"->'studio'->>'version' = ? then 1 else 0 end) as stamped, sum(case when \"metadata\"->'studio'->>'state' = ? and \"metadata\"->'studio'->>'reason' = ? then 1 else 0 end) as fallback_0, sum(case when \"metadata\"->'studio'->>'state' = ? a",
+                "select count(*) as aggregate from \"ultron_aborts\" where \"engaged_at\" >= ?",
+                "select exists(select * from \"ultron_aborts\" where \"released_at\" is null) as \"exists\"",
+                "select * from \"marketing_conversations\" where \"marketing_conversations\".\"id\" = ? limit 1",
+                "select * from \"marketing_leads\" where \"marketing_leads\".\"id\" in (1)",
+                "select \"id\", \"direction\", \"sender_type\", \"body\", \"metadata\", \"created_at\" from \"marketing_messages\" where \"conversation_id\" = ? and \"created_at\" >= ? order by \"id\" asc",
+                "select \"id\", \"action_type\", \"status\", \"source_type\", \"source_event_id\", \"metadata\", \"created_at\" from \"marketing_ai_actions\" where \"conversation_id\" = ? and \"created_at\" >= ? order by \"id\" asc",
+                "select \"id\", \"name\", \"price\" from \"plans\" where \"active\" = ? and \"sellable\" = ? and \"archived_at\" is null and \"price\" > ? and \"duration_days\" > ?",
+                "select \"name\" from \"plans\" where \"id\" not in (?)"
+            ],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 5,
+                        "p50": 1035.083,
+                        "p95": 1063.118,
+                        "max": 1063.118,
+                        "min": 1022.891
+                    }
+                ],
+                "all": {
+                    "n": 5,
+                    "p50": 1035.083,
+                    "p95": 1063.118,
+                    "max": 1063.118,
+                    "min": 1022.891
+                },
+                "load1": [
+                    4.19482421875
+                ]
+            }
+        },
+        {
+            "route": "acta: ultron:canary-report --json (--turns ≤ 200)",
+            "size": "200 turnos (mensajes del canario: 400)",
+            "status": 200,
+            "bytes": 0,
+            "queries": 6,
+            "dbMs": 7.08,
+            "perTable": {
+                "plans": 2,
+                "marketing_conversations": 1,
+                "marketing_leads": 1,
+                "marketing_messages": 1,
+                "marketing_ai_actions": 1
+            },
+            "perTableMs": {
+                "marketing_conversations": 0.58,
+                "marketing_leads": 0.59,
+                "marketing_messages": 0.97,
+                "marketing_ai_actions": 4.02,
+                "plans": 0.92
+            },
+            "mostRepeated": {
+                "count": 1,
+                "sql": "select * from \"marketing_conversations\" where \"marketing_conversations\".\"id\" = ? limit N"
+            },
+            "statements": [
+                "select * from \"marketing_conversations\" where \"marketing_conversations\".\"id\" = ? limit 1",
+                "select * from \"marketing_leads\" where \"marketing_leads\".\"id\" in (1)",
+                "select \"id\", \"direction\", \"sender_type\", \"body\", \"metadata\", \"created_at\" from \"marketing_messages\" where \"conversation_id\" = ? and \"created_at\" >= ? order by \"id\" asc",
+                "select \"id\", \"action_type\", \"status\", \"source_type\", \"source_event_id\", \"metadata\", \"created_at\" from \"marketing_ai_actions\" where \"conversation_id\" = ? and \"created_at\" >= ? order by \"id\" asc",
+                "select \"id\", \"name\", \"price\" from \"plans\" where \"active\" = ? and \"sellable\" = ? and \"archived_at\" is null and \"price\" > ? and \"duration_days\" > ?",
+                "select \"name\" from \"plans\" where \"id\" not in (?)"
+            ],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 5,
+                        "p50": 1036.877,
+                        "p95": 1128.333,
+                        "max": 1128.333,
+                        "min": 1023.684
+                    }
+                ],
+                "all": {
+                    "n": 5,
+                    "p50": 1036.877,
+                    "p95": 1128.333,
+                    "max": 1128.333,
+                    "min": 1023.684
+                },
+                "load1": [
+                    4.33935546875
+                ]
+            }
+        },
+        {
+            "route": "lecturas del motor (only MUST_MATCH)",
+            "size": "200 turnos (mensajes del canario: 400)",
+            "status": 200,
+            "bytes": 0,
+            "queries": 0,
+            "dbMs": 0,
+            "perTable": [],
+            "perTableMs": [],
+            "mostRepeated": null,
+            "statements": [],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 5,
+                        "p50": 0.033,
+                        "p95": 0.035,
+                        "max": 0.035,
+                        "min": 0.033
+                    }
+                ],
+                "all": {
+                    "n": 5,
+                    "p50": 0.033,
+                    "p95": 0.035,
+                    "max": 0.035,
+                    "min": 0.033
+                },
+                "load1": [
+                    4.33935546875
+                ]
+            }
+        },
+        {
+            "route": "ruta entera (en proceso)",
+            "size": "1000 turnos (mensajes del canario: 2000)",
+            "status": 200,
+            "bytes": 0,
+            "queries": 45,
+            "dbMs": 30.45,
+            "perTable": {
+                "cache": 28,
+                "admin_sessions": 3,
+                "ultron_studio_publications": 2,
+                "marketing_ai_actions": 2,
+                "ultron_aborts": 2,
+                "plans": 2,
+                "admins": 1,
+                "ultron_studio_versions": 1,
+                "ultron_studio_version_reviews": 1,
+                "marketing_conversations": 1,
+                "marketing_leads": 1,
+                "marketing_messages": 1
+            },
+            "perTableMs": {
+                "cache": 8.26,
+                "admin_sessions": 1.07,
+                "admins": 0.32,
+                "ultron_studio_versions": 0.38,
+                "ultron_studio_version_reviews": 0.29,
+                "ultron_studio_publications": 0.87,
+                "marketing_ai_actions": 14.21,
+                "ultron_aborts": 0.65,
+                "marketing_conversations": 0.41,
+                "marketing_leads": 0.37,
+                "marketing_messages": 2.61,
+                "plans": 1.01
+            },
+            "mostRepeated": {
+                "count": 18,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "update \"cache\" set \"value\" = ?, \"expiration\" = ? where key ~ '[0-9a-f]{32}$'",
+                "update \"cache\" set \"expiration\" = ? where key ~ '[0-9a-f]{32}:timer$'",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "update \"admin_sessions\" set \"last_seen_at\" = ?, \"updated_at\" = ? where \"id\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"ultron_studio_versions\" where \"uuid\" = ? limit 1",
+                "select * from \"ultron_studio_version_reviews\" where \"ultron_studio_version_reviews\".\"version_id\" in (1)",
+                "select \"id\", \"created_at\" from \"ultron_studio_publications\" where \"version_id\" = ? and \"action\" = ? order by \"seq\" desc limit 1",
+                "select count(*) as turns, sum(case when \"metadata\"->'studio'->>'state' = ? then 1 else 0 end) as applied, sum(case when \"metadata\"->'studio'->>'state' = ? and \"metadata\"->'studio'->>'version' = ? then 1 else 0 end) as stamped, sum(case when \"metadata\"->'studio'->>'state' = ? and \"metadata\"->'studio'->>'reason' = ? then 1 else 0 end) as fallback_0, sum(case when \"metadata\"->'studio'->>'state' = ? a",
+                "select count(*) as aggregate from \"ultron_aborts\" where \"engaged_at\" >= ?",
+                "select exists(select * from \"ultron_aborts\" where \"released_at\" is null) as \"exists\"",
+                "select * from \"marketing_conversations\" where \"marketing_conversations\".\"id\" = ? limit 1",
+                "select * from \"marketing_leads\" where \"marketing_leads\".\"id\" in (1)",
+                "select \"id\", \"direction\", \"sender_type\", \"body\", \"metadata\", \"created_at\" from \"marketing_messages\" where \"conversation_id\" = ? and \"created_at\" >= ? order by \"id\" asc",
+                "select \"id\", \"action_type\", \"status\", \"source_type\", \"source_event_id\", \"metadata\", \"created_at\" from \"marketing_ai_actions\" where \"conversation_id\" = ? and \"created_at\" >= ? order by \"id\" asc",
+                "select \"id\", \"name\", \"price\" from \"plans\" where \"active\" = ? and \"sellable\" = ? and \"archived_at\" is null and \"price\" > ? and \"duration_days\" > ?",
+                "select \"name\" from \"plans\" where \"id\" not in (?)",
+                "select \"uuid\", \"seq\", \"engine_contract\", \"effective_hash\", \"signature\", substr(effective_json, 1, 16385) as effective_json from \"ultron_studio_publications\" order by \"seq\" desc limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 5,
+                        "p50": 4038.006,
+                        "p95": 4767.368,
+                        "max": 4767.368,
+                        "min": 4022.132
+                    }
+                ],
+                "all": {
+                    "n": 5,
+                    "p50": 4038.006,
+                    "p95": 4767.368,
+                    "max": 4767.368,
+                    "min": 4022.132
+                },
+                "load1": [
+                    3.83984375
+                ]
+            }
+        },
+        {
+            "route": "StudioCanaryMeasures::measure (recuento + frenos + acta)",
+            "size": "1000 turnos (mensajes del canario: 2000)",
+            "status": 200,
+            "bytes": 0,
+            "queries": 9,
+            "dbMs": 19.67,
+            "perTable": {
+                "marketing_ai_actions": 2,
+                "ultron_aborts": 2,
+                "plans": 2,
+                "marketing_conversations": 1,
+                "marketing_leads": 1,
+                "marketing_messages": 1
+            },
+            "perTableMs": {
+                "marketing_ai_actions": 14.42,
+                "ultron_aborts": 0.75,
+                "marketing_conversations": 0.47,
+                "marketing_leads": 0.4,
+                "marketing_messages": 2.83,
+                "plans": 0.8
+            },
+            "mostRepeated": {
+                "count": 1,
+                "sql": "select count(*) as turns, sum(case when \"metadata\"->'studio'->>'state' = ? then N else N end) as applied, sum(case when \"metadata\"->'studio'->>'state' = ? and \"metadata\"->'studio'->>'version' = ? then N else N end) as stamped, sum(case when"
+            },
+            "statements": [
+                "select count(*) as turns, sum(case when \"metadata\"->'studio'->>'state' = ? then 1 else 0 end) as applied, sum(case when \"metadata\"->'studio'->>'state' = ? and \"metadata\"->'studio'->>'version' = ? then 1 else 0 end) as stamped, sum(case when \"metadata\"->'studio'->>'state' = ? and \"metadata\"->'studio'->>'reason' = ? then 1 else 0 end) as fallback_0, sum(case when \"metadata\"->'studio'->>'state' = ? a",
+                "select count(*) as aggregate from \"ultron_aborts\" where \"engaged_at\" >= ?",
+                "select exists(select * from \"ultron_aborts\" where \"released_at\" is null) as \"exists\"",
+                "select * from \"marketing_conversations\" where \"marketing_conversations\".\"id\" = ? limit 1",
+                "select * from \"marketing_leads\" where \"marketing_leads\".\"id\" in (1)",
+                "select \"id\", \"direction\", \"sender_type\", \"body\", \"metadata\", \"created_at\" from \"marketing_messages\" where \"conversation_id\" = ? and \"created_at\" >= ? order by \"id\" asc",
+                "select \"id\", \"action_type\", \"status\", \"source_type\", \"source_event_id\", \"metadata\", \"created_at\" from \"marketing_ai_actions\" where \"conversation_id\" = ? and \"created_at\" >= ? order by \"id\" asc",
+                "select \"id\", \"name\", \"price\" from \"plans\" where \"active\" = ? and \"sellable\" = ? and \"archived_at\" is null and \"price\" > ? and \"duration_days\" > ?",
+                "select \"name\" from \"plans\" where \"id\" not in (?)"
+            ],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 5,
+                        "p50": 4285.199,
+                        "p95": 5177.746,
+                        "max": 5177.746,
+                        "min": 3960.693
+                    }
+                ],
+                "all": {
+                    "n": 5,
+                    "p50": 4285.199,
+                    "p95": 5177.746,
+                    "max": 5177.746,
+                    "min": 3960.693
+                },
+                "load1": [
+                    4.00146484375
+                ]
+            }
+        },
+        {
+            "route": "acta: ultron:canary-report --json (--turns ≤ 200)",
+            "size": "1000 turnos (mensajes del canario: 2000)",
+            "status": 200,
+            "bytes": 0,
+            "queries": 6,
+            "dbMs": 17.04,
+            "perTable": {
+                "plans": 2,
+                "marketing_conversations": 1,
+                "marketing_leads": 1,
+                "marketing_messages": 1,
+                "marketing_ai_actions": 1
+            },
+            "perTableMs": {
+                "marketing_conversations": 0.54,
+                "marketing_leads": 0.4,
+                "marketing_messages": 2.61,
+                "marketing_ai_actions": 8.57,
+                "plans": 4.92
+            },
+            "mostRepeated": {
+                "count": 1,
+                "sql": "select * from \"marketing_conversations\" where \"marketing_conversations\".\"id\" = ? limit N"
+            },
+            "statements": [
+                "select * from \"marketing_conversations\" where \"marketing_conversations\".\"id\" = ? limit 1",
+                "select * from \"marketing_leads\" where \"marketing_leads\".\"id\" in (1)",
+                "select \"id\", \"direction\", \"sender_type\", \"body\", \"metadata\", \"created_at\" from \"marketing_messages\" where \"conversation_id\" = ? and \"created_at\" >= ? order by \"id\" asc",
+                "select \"id\", \"action_type\", \"status\", \"source_type\", \"source_event_id\", \"metadata\", \"created_at\" from \"marketing_ai_actions\" where \"conversation_id\" = ? and \"created_at\" >= ? order by \"id\" asc",
+                "select \"id\", \"name\", \"price\" from \"plans\" where \"active\" = ? and \"sellable\" = ? and \"archived_at\" is null and \"price\" > ? and \"duration_days\" > ?",
+                "select \"name\" from \"plans\" where \"id\" not in (?)"
+            ],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 5,
+                        "p50": 4112.244,
+                        "p95": 4227.167,
+                        "max": 4227.167,
+                        "min": 3999.305
+                    }
+                ],
+                "all": {
+                    "n": 5,
+                    "p50": 4112.244,
+                    "p95": 4227.167,
+                    "max": 4227.167,
+                    "min": 3999.305
+                },
+                "load1": [
+                    3.60546875
+                ]
+            }
+        },
+        {
+            "route": "lecturas del motor (only MUST_MATCH)",
+            "size": "1000 turnos (mensajes del canario: 2000)",
+            "status": 200,
+            "bytes": 0,
+            "queries": 0,
+            "dbMs": 0,
+            "perTable": [],
+            "perTableMs": [],
+            "mostRepeated": null,
+            "statements": [],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 5,
+                        "p50": 0.033,
+                        "p95": 0.035,
+                        "max": 0.035,
+                        "min": 0.033
+                    }
+                ],
+                "all": {
+                    "n": 5,
+                    "p50": 0.033,
+                    "p95": 0.035,
+                    "max": 0.035,
+                    "min": 0.033
+                },
+                "load1": [
+                    3.60546875
+                ]
+            }
+        }
+    ]
+}
