@@ -47,7 +47,7 @@ PREVIO=1e5f9a0   # HEAD de producción el 02-11-2026 (fase 1 del Hito 6); fijado
 # (h7-monitor-scope.sh no lo usa: comprueba el salto de ±2). Con el monitor apagado el H7 no cambia el programador (console.php solo añade el bloque
 # del monitor, tras su bandera): antes y después del despliegue tiene que dar TAREAS. Con «pendiente»,
 # --solo-comprobar lo lee y lo imprime y el despliegue de verdad se niega (m-1 del reviewer del H7).
-TAREAS=pendiente
+TAREAS=39   # total de tareas del programador en producción con el monitor apagado, leído el 02-11-2026 17:35 UTC (schedule:list --json: 39, 0 del Studio); encendido serán 41
 [[ "$TAREAS" =~ ^([0-9]+|pendiente)$ ]] || { echo "TAREAS no es un número ni «pendiente» ($TAREAS); no se ha tocado nada"; exit 2; }
 [ "$TAREAS" != pendiente ] || [ "$SOLO_COMPROBAR" = --solo-comprobar ] \
   || { echo "TAREAS sin fijar: leerlo en el servidor con --solo-comprobar y fijarlo en un commit (ver la cabecera); no se ha tocado nada"; exit 2; }
