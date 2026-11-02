@@ -121,15 +121,16 @@ pg_restore --list /root/db-backups/auto/ironbody-<fecha>.dump | head -30
 ### Restauración real (emergencia)
 
 ```bash
-# 1. NUNCA restaurar encima de la base viva. Primero, a una base aparte:
+# 1. NUNCA restaurar encima de la base viva. Primero, a una base aparte, CON DUEÑOS (sin --no-owner):
 sudo -u postgres createdb ironbody_recuperada
 cd /
 cat /root/db-backups/auto/ironbody-<fecha>.dump \
-  | sudo -u postgres pg_restore --format=custom --dbname=ironbody_recuperada --no-owner
+  | sudo -u postgres pg_restore --format=custom --dbname=ironbody_recuperada
 
 # 2. Comprobar que está lo que tiene que estar
 sudo -u postgres psql -c 'select count(*) from members' ironbody_recuperada
 sudo -u postgres psql -c 'select count(*) from payment_transactions' ironbody_recuperada
+sudo -u postgres psql -Atc "select tableowner, count(*) from pg_tables where schemaname = 'public' group by 1" ironbody_recuperada   # los mismos dueños que en ironbody (las tablas ultron_studio_*, de iron)
 
 # 3. Solo entonces, y con la aplicación parada:
 supervisorctl stop all && systemctl stop ironbody-billing-worker php8.3-fpm
@@ -139,6 +140,8 @@ systemctl start php8.3-fpm ironbody-billing-worker && supervisorctl start all
 
 # 4. La base dañada NO se borra hasta haber validado la recuperada en uso.
 ```
+
+**Con dueños, no con `--no-owner` (corregido el 02-11-2026).** Hasta esa fecha el paso 1 llevaba `--no-owner`. Con esa opción las tablas pasan a ser del usuario que restaura (`postgres`): el rol dueño `iron` deja de serlo, el siguiente `ironbody-migrate` (que migra con `iron`) falla con 42501 y se rompe el modelo de roles (el dueño `iron` migra; la aplicación corre con `iron_app`, solo DML). Los roles `iron` e `iron_app` existen en este mismo servidor, así que restaurar con dueños los conserva, junto con los privilegios. Ensayado por `devops` en un banco local (`docs/ultron-studio/plans/informes-h7/informe-devops-h7.md` §4.5, hallazgo H-6): con dueños, 0 errores y el recuento exacto de las 226 tablas; con `--no-owner`, las tablas quedan del superusuario. La verificación semanal (`ironbody-db-restore-test.sh`) sigue con `--no-owner --no-privileges` a propósito: solo comprueba que los datos llegan a una base desechable.
 
 ### Problemas
 

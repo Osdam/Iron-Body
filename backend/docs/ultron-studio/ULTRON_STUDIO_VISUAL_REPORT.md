@@ -545,7 +545,7 @@ Congeladas en la Enmienda 2 (§E2.3) del contrato:
 
 ## Hito 6: las integraciones comerciales en el CRM
 
-**Estado:** implementado en la rama `feat/ultron-studio-h6` del CRM, **no desplegado**. La capa de datos está terminada (`0a83d74` → `ede716b`, `plans/informes-h6/informe-front-datos.md`). La página «Integraciones» está **terminada y verificada en `f38699d`**: el lead la confirmó como WIP («en curso, sin verificar») cuando se cortó la sesión de `frontend`, y después `frontend` la verificó sin cambiarla (`plans/informes-h6/informe-front-integracion.md`, confirmado en el backend en `7d2c6d8`). Producción sirve `ab78a6a` (Hito 5). El arnés E2E del Hito 6 (`037a2cd` → `e8386dc`) es del tester (ver «E2E con la pila real», abajo).
+**Estado:** implementado en la rama `feat/ultron-studio-h6` del CRM, **no desplegado**. *(Así se escribió el 01-11-2026. Desde el 02-11-2026 04:55 UTC, el CRM `16c433c` —esta página, el fixture reexportado `3bac1e2`, el arreglo H-1 `8536c0e` y el E2E— está en producción con la fase 1 del H6.)* La capa de datos está terminada (`0a83d74` → `ede716b`, `plans/informes-h6/informe-front-datos.md`). La página «Integraciones» está **terminada y verificada en `f38699d`**: el lead la confirmó como WIP («en curso, sin verificar») cuando se cortó la sesión de `frontend`, y después `frontend` la verificó sin cambiarla (`plans/informes-h6/informe-front-integracion.md`, confirmado en el backend en `7d2c6d8`). Producción sirve `ab78a6a` (Hito 5). El arnés E2E del Hito 6 (`037a2cd` → `e8386dc`) es del tester (ver «E2E con la pila real», abajo).
 
 | Commit | Qué |
 |---|---|
@@ -603,7 +603,7 @@ Cada componente es standalone y `OnPush`, con su hoja y su spec.
 ### Accesibilidad y 390 px
 
 Pestañas con teclado (flechas, Inicio y Fin), foco atrapado en los cuatro diálogos (Tab y Mayús+Tab) y devuelto al botón que los abrió con Escape, `role=alert` en los errores, insignias con texto y no solo color, y tarjetas en lugar de tablas a 390 px. La página deja 96–104 px abajo y los pies de sus diálogos dejan su esquina al asistente flotante (D-F16). **Dos cosas visibles:**
-- **D-F14:** a 390 px, el quinto icono de la barra del tablero («Integraciones») añade una fila a la cabecera (captura `movil-16`). Arreglarlo exige tocar `ultron-studio.scss`, que no se toca. [PENDIENTE: decisión del lead (Q-3 de `informe-front-integracion.md`); `frontend` propone dejarlo así.]
+- **D-F14:** a 390 px, el quinto icono de la barra del tablero («Integraciones») añade una fila a la cabecera (captura `movil-16`). Arreglarlo exige tocar `ultron-studio.scss`, que no se toca. [PENDIENTE: decisión del lead (Q-3 de `informe-front-integracion.md`); `frontend` propone dejarlo así.] *(Decidido por el lead el 01-11-2026: se acepta como está y queda como ajuste visual opcional; `ULTRON_STUDIO_FINAL_REPORT.md`, «Hito 6: el CRM».)*
 - **D-F5:** la regla global del CRM `p, small { color: … !important }` pisaba el color de los errores, las alertas y los textos obligatorios; los textos con color propio van ahora en `div` y `span`, comprobado en Chrome por el color calculado. **El laboratorio tiene el mismo problema latente** (`<p class="lab-alert">`), y también el degradado perdido de su botón principal con el ratón encima (D-F6); los dos quedan fuera (Q-5).
 
 ### Atributos `data-*` para el E2E
@@ -651,6 +651,8 @@ D-F1 a D-F16 de `informe-front-integracion.md` §3 (y D-F1 a D-F11 de la capa de
 
 ### E2E con la pila real
 
+*(Actualización del 02-11-2026: **hecho**. Pasada completa final 660/660 en 1548 s con el backend `2ac7f54` y el CRM `8536c0e`, `h6-integrations` 250 comprobaciones con E1–E12, E14 y E15; E13 (este CRM contra el backend del H5 `7ba0ce8`) 35/35; mutaciones 3/3; H-1 (longitudes en unidades UTF-16 en `studio-parse.ts`) corregido en `8536c0e`. Fuente: `plans/informes-h6/informe-tester-e2e.md`, confirmado en el CRM `16c433c`. Lo que sigue es el texto anterior.)*
+
 [PENDIENTE: los 15 escenarios de `specs/h6-integrations.cjs` con la página del CRM (`f38699d` o el commit final), entre ellos registrar como Administrador → autorizar y activar como Super Admin → `in_sync`, un segundo WhatsApp activo → `registry_has_extra_active`, revocar, asociar → sustituir → desactivar, la sonda con `reused` y su 429, reconocer frente a un cambio de configuración, la voz sin botones, la página con un backend del H5 y el teclado en los cuatro diálogos.] Ni las specs ni la prueba en Chrome usan el backend real: usan su export y un simulador con sus formas.
 
 ### Pendiente y no verificado
@@ -662,6 +664,49 @@ D-F1 a D-F16 de `informe-front-integracion.md` §3 (y D-F1 a D-F11 de la capa de
 - **Lectores de pantalla reales;** la semántica se comprobó en las specs y el teclado, en Chrome.
 - **El pie de `ib-reason-dialog` a 390 px frente al asistente flotante:** es compartido y no se tocó, como en el H5.
 - **No verificado:** Safari, Firefox, Windows y el CRM del Hito 6 sobre la pila de producción.
+
+## Hito 7: lo que cambia (y lo que no) en el CRM
+
+**Estado (02-11-2026):** **el Hito 7 no tiene código del CRM.** La rama `feat/ultron-studio-h7` del CRM está en `16c433c`, que es `origin/main` y lo que sirve producción desde la fase 1 del H6; no hay build nuevo ni despliegue del CRM en el runbook del H7 (`ULTRON_STUDIO_DEPLOYMENT_PLAN.md`, «Hito 7», paso 7). Lo que sigue es cómo ve este CRM los cambios del backend del H7, leído en su código, y lo que queda pendiente para `frontend`.
+
+### Cómo ve el CRM `16c433c` el backend del H7
+
+| Cambio del backend | Qué pasa en el CRM | Cómo se sabe |
+|---|---|---|
+| `Cache-Control: no-store, private` en `/api/admin/*` | Nada visible: el navegador deja de guardar copias de las respuestas | B7-a; no cambia ningún cuerpo |
+| El tope de 64 KB antes de la autenticación | Nada con uso normal: el 413 `payload_too_large` es el mismo byte a byte que el de la ruta y lleva las cabeceras de CORS, así que el CRM lo puede leer | B7-d; `UltronStudioEarlyBodyCapTest` |
+| `verified` por entrada del historial | **No se enseña:** el CRM no lee esa clave (ningún uso fuera de las specs, comprobado el 02-11-2026 en `src/app/modules/ultron-studio/`); sus lectores toleran las claves desconocidas | B7-c («el CRM del H6 la ignora sin romperse»). **Propuesto, no implementado:** una insignia «No verifica» por entrada, como la de «Huella alterada» al comparar |
+| Los invisibles con 422 | El servidor rechaza el texto con un mensaje que nombra el carácter (U+XXXX) | SEC7-a. Cómo lo enseña cada formulario del CRM con el H7 no se ha comprobado en el navegador. [PENDIENTE: el E2E de todas las specs en la fase B de TEST7 (`tester`).] |
+| Restablecer la contraseña cierra las demás sesiones | La cuenta afectada recibe 403 `admin_token_invalid` en su siguiente petición; `auth.interceptor.ts` (`isAdminAuthFailure`, líneas 52–66) llama a `AuthService.handleUnauthorized()`, que borra la sesión y lleva a `/login` con el aviso de sesión expirada | B7, H-2 de SEC7; leído en el código del CRM `16c433c` (por `backend` y otra vez por DOC7 el 02-11-2026); no probado en el navegador |
+| El monitor | Nada: no tiene pantalla. Sus incidentes salen en IRON GUARD | OPS7 |
+
+### Tamaño y build (PERF7, CRM `8536c0e`, `ng build --configuration production`)
+
+| Pieza | Crudo | gzip | Techo propuesto (PERF7 §7.3) |
+|---|---|---|---|
+| Inicial (10 ficheros) | 816 505 B | 196 842 B | ≤ 860 kB / ≤ 207 kB gzip («no crecer sin decisión»). Supera el aviso de 500 kB de `angular.json`; no viene del Studio |
+| `ultron-studio-page` | 719 517 B | 183 312 B | ≤ 755 kB / ≤ 193 kB |
+| `studio-lab-page` | 188 576 B | 53 403 B | ≤ 198 kB / ≤ 56 kB |
+| `studio-integrations-page` | 162 459 B | 44 753 B | ≤ 171 kB / ≤ 47 kB |
+| `ultron-studio.scss` | 27,88 kB | — | < 32 kB (el error de build): **4,12 kB de margen** (F-4) |
+
+El tiempo de `ng build` (mediana 54,5 s en tres corridas) es informativo. Los techos están en `ops/perf-h7/presupuestos-h7.json` (`crmBudgets`); ningún script del CI los comprueba todavía.
+
+### Pendiente para `frontend` (sin corregir en `16c433c`)
+
+| # | Qué | Dónde (comprobado el 02-11-2026 en `16c433c`) | Corrección propuesta |
+|---|---|---|---|
+| m-1 | `valorAdmitido()` compara en unidades UTF-16 (`v.length`) los topes que el servidor cuenta en puntos de código: un borrador con un texto de 160 caracteres que incluya un emoji, aceptado por el servidor, deja ilegible la respuesta entera | `studio-parse.ts:336-340` (`text` ≤ 160, `textarea` ≤ 600, etiquetas ≤ 60) | Contar puntos de código en `valorAdmitido` y en `valorSeguro`, sin partir pares, con su spec (reviewer del H6) |
+| m-2 | El arreglo H-1 del H6 (`8536c0e`) no tiene una spec de regresión rápida: solo lo vigila el E2E (~1 000 s) | `studio-integrations-parse.spec.ts` | 255 puntos de código (263 unidades) se aceptan; 256, no |
+| m-3 | «1 de los campañas…», «1 de los llamadas…» (concordancia) | `studio-integrations-text.ts:225` | Pasar el artículo con el sustantivo |
+| m-4 | El rótulo «Última sincronización correcta» enseña el éxito **más antiguo** entre las cuentas: con una cuenta atrasada parece que toda la sincronización de Meta está parada | `studio-integrations-text.ts:607` y `studio-meta-campaigns.ts:63` | «Cuenta más atrasada: …» o el dato por cuenta. Mientras tanto, lo explica la guía (`ULTRON_STUDIO_GUIA_ADMINISTRACION.md` §8) |
+| AS-1 local | Los avisos locales del alias y de los motivos son anteriores a AS-1: un dato de contacto escrito en grupos pasa el aviso local y lo rechaza el servidor con 422 junto al campo, sin perder lo escrito | `studio-integrations-parse.ts:1414-1426` | Alinear los avisos con AS-1 (usabilidad; sin impacto de seguridad) |
+| F-4 | `ultron-studio.scss` a 4,12 kB del error de build | `src/app/modules/ultron-studio/ultron-studio.scss` | Repartir en hojas por panel antes de añadir estilos al Studio |
+| H-3 de SEC7 | `npm audit --omit=dev`: 6 avisos en `@angular/*` 21.2.10 (4 altos) | `package.json` | Parche a 21.2.24, `ng test` y build (`frontend`/`devops`) |
+| D-F5/D-F6 | El color de las alertas del laboratorio (`<p class="lab-alert">`) y el degradado de su botón principal al pasar el ratón, latentes desde el H6 (Q-5) | `studio-lab-*.scss` | Fuera del H7; decisión de `frontend` |
+| D-F14 | La fila de más en la cabecera a 390 px | `ultron-studio.scss` (congelado) | Aceptado por el lead como ajuste visual opcional |
+
+**No verificado en el H7:** el CRM con el backend del H7 en un navegador (el E2E de la fase B de TEST7). [PENDIENTE: resultado del E2E con la pila real sobre el commit final (`tester`).]
 
 ## Revisión final independiente (`reviewer`) de la vista previa (Hito C)
 

@@ -783,7 +783,7 @@ Del informe de DevOps (§9); ninguna se ha visto en producción.
 
 ## Hito 6 (integraciones comerciales): runbook por fases — FASE 1 EJECUTADA el 02-11-2026 (fase 2 pendiente)
 
-**Estado (02-11-2026): la fase 1 se ejecutó el 02-11-2026 entre las 04:37 y las 04:57 UTC (ver «Fase 1: ejecución», abajo); la fase 2 no.** El Hito 6 está implementado en la rama `feat/ultron-studio-h6` de los dos repos (backend `411d8b1`, cuyo código es el de `4e2e8cf`; CRM `16c433c`: la página «Integraciones», el fixture reexportado `3bac1e2`, el arreglo H-1 `8536c0e` y el E2E completo), **sin empujar ni desplegar**. **Al 02-11-2026 04:40 UTC están cerradas todas las condiciones previas salvo el build del CRM, que se hace en el paso 7:** E2E 660/660, segunda pasada de `security`, `reviewer` APROBADO CON OBSERVACIONES y línea base por nombre con 0 rojos nuevos (ver «Condiciones previas»). Esta sección sale del runbook de DevOps (`plans/informes-h6/informe-devops-h6.md`, §1–§7), del contrato (`ULTRON_STUDIO_H6_CONTRACT.md`, «Despliegue por fases» y Enmiendas 1–4) y de los scripts de `ops/` (`ops/README.md`, «Hito 6»). **Donde no coinciden, mandan los scripts**, en la versión confirmada en el commit que se despliega. DevOps los ensayó en un banco local (`ops/banco-h6/`, sobre el código de S confirmado en `d2c04a0`) y contra el arnés E2E del CRM (§8 de su informe). Vuelta atrás: `ULTRON_STUDIO_ROLLBACK.md`, «Hito 6». Scripts: `ops/README.md`.
+**Estado (02-11-2026): la fase 1 se ejecutó el 02-11-2026 entre las 04:37 y las 04:57 UTC (ver «Fase 1: ejecución», abajo); la fase 2 no.** El Hito 6 está implementado en la rama `feat/ultron-studio-h6` de los dos repos (backend `411d8b1`, cuyo código es el de `4e2e8cf`; CRM `16c433c`: la página «Integraciones», el fixture reexportado `3bac1e2`, el arreglo H-1 `8536c0e` y el E2E completo), **sin empujar ni desplegar** *(así se escribió antes de la ejecución; desde el 02-11-2026 04:54 UTC está en `origin/main` y en producción en su fase 1: backend `1e5f9a0`, CRM `16c433c`)*. **Al 02-11-2026 04:40 UTC están cerradas todas las condiciones previas salvo el build del CRM, que se hace en el paso 7:** E2E 660/660, segunda pasada de `security`, `reviewer` APROBADO CON OBSERVACIONES y línea base por nombre con 0 rojos nuevos (ver «Condiciones previas»). Esta sección sale del runbook de DevOps (`plans/informes-h6/informe-devops-h6.md`, §1–§7), del contrato (`ULTRON_STUDIO_H6_CONTRACT.md`, «Despliegue por fases» y Enmiendas 1–4) y de los scripts de `ops/` (`ops/README.md`, «Hito 6»). **Donde no coinciden, mandan los scripts**, en la versión confirmada en el commit que se despliega. DevOps los ensayó en un banco local (`ops/banco-h6/`, sobre el código de S confirmado en `d2c04a0`) y contra el arnés E2E del CRM (§8 de su informe). Vuelta atrás: `ULTRON_STUDIO_ROLLBACK.md`, «Hito 6». Scripts: `ops/README.md`.
 
 **Producción de partida** (la que dejó la fase 1 del Hito 5, 01-11-2026 01:12–01:16 UTC; ver «Hito 5» y `ULTRON_STUDIO_FINAL_REPORT.md`): API `7ba0ce8`, CRM `ab78a6a`, 38 rutas del Studio, 30 disparadores y 27 CHECK en `ultron_studio_%`, 2 índices parciales, 11 tablas `ultron_studio_*`, 13 workers RUNNING y `failed_jobs` en 2. Según el lead (01-11-2026), la fase 1 del H5 sigue estable a las 12 horas; en este repositorio solo consta por escrito la verificación de los 15 minutos. **Verificación a las 24 horas hecha (lead, 02-11-2026 01:26 UTC, solo lectura):** HEAD `7ba0ce8`; 13 RUNNING; facturación activa; `failed_jobs` 2 (igual); 0 sellos; 70 turnos de ULTRON en 24 h; freno suelto; 0 publicaciones; `publication-check` 0; colas al día; `security:check-secret-exposure` OK; ERROR del log 345 (igual que la base); 0 señales; 0 respuestas 5xx de la API desde el despliegue; CRM `ab78a6a`. La fase 1 del Hito 5 es estable: es la base para su fase 2.
 
@@ -1093,6 +1093,253 @@ Del informe de DevOps (§6) y del de datos (§9); ninguna se ha visto en producc
 
 **Rotación de la `APP_KEY`:** no forma parte de ninguna fase. Con el Hito 6 desplegado, deja inservibles también las huellas de los teléfonos canarios, los cifrados de voz, los ids opacos de Meta y las huellas de configuración, y pierde el T1. El procedimiento ampliado está en `ULTRON_STUDIO_ROLLBACK.md` («Hito 6»).
 
+## Hito 7 (seguridad y producción): runbook del backend — NO EJECUTADO (02-11-2026)
+
+**Estado (02-11-2026):** implementado en la rama `feat/ultron-studio-h7` (HEAD `5ed9525`; DB7 `bbf9916`, B7 `aa3451f`, SEC7 `bd4634d`, OPS7 `fa6eb81`, PERF7 `d629202` y TEST7 fase A `1426130`), **sin empujar ni desplegar**. Siguen en curso F-1 y F-2 de PERF7 (`backend`), la fase B de TEST7 y REV7. Esta sección sale de los scripts de OPS7 (`ops/deploy-h7-backend.sh`, `ops/h7-schema-check.sql`, `ops/smoke-run-h7.sh` y `ops/smoke-h7.py`, confirmados en `fa6eb81`), del runbook de `plans/informes-h7/informe-devops-h7.md` §3–§5 y de los recuentos de `informe-db.md` §4. **Donde no coinciden, mandan los scripts**, en la versión confirmada en el commit que se despliega. En el banco local (`ops/banco-h7/`) terminó en `DESPLIEGUE H7 (BACKEND) COMPLETADO` dos veces (50 s y 47 s) con un 55P03 real, el smoke dio 22 OK (23 con una entrada en la cadena) y la vuelta atrás por niveles, 13/13. **En el servidor no se ha ejecutado nada, ni el `--solo-comprobar`.** Vuelta atrás: `ULTRON_STUDIO_ROLLBACK.md`, «Hito 7». Lista resumida: `ULTRON_STUDIO_CHECKLIST_OPERATIVO.md` §3.2.
+
+**Producción de partida** (la que dejó la fase 1 del Hito 6, 02-11-2026 04:37–04:57 UTC): API `1e5f9a0`, CRM `16c433c`, 56 rutas del Studio (18 de integraciones: 8 GET y 10 POST), esquema `43 49 4 14` (disparadores, CHECK, índices parciales y tablas `ultron_studio_*`), 13 workers RUNNING, `failed_jobs` 2, 0 sellos, 0 publicaciones, 3 instantáneas de sistema y 345 ERROR en el log (verificación de los 15 minutos del H6, 05:08 UTC).
+
+**Qué es este hito en producción.** Endurece lo que ya está; no añade rutas ni cambia el CRM, las banderas del H4, del H5 ni del H6, ni lo que ULTRON dice o hace.
+
+| Pieza | Qué cambia | Quién lo nota |
+|---|---|---|
+| Migración `2026_11_02_100001_add_ultron_studio_hardening` (DB7) | En la cadena de publicaciones, el disparador `uspub_chain_next` (solo admite la entrada siguiente a la cabeza y encadenada a ella) y `uspub_seq_chk` (`CHECK (seq >= 1)`); `REVOKE UPDATE, DELETE` de `iron_app` en la cadena, el libro y las instantáneas (de `arwd` a `ar`). PostgreSQL: 43 → 44 disparadores y 49 → 50 CHECK. `up()` se niega si la cadena existente no es consecutiva | Nadie: el código nunca hace UPDATE ni DELETE en esas tablas |
+| `Cache-Control: no-store, private` en toda `/api/admin/*` (B7-a) | Antes, `no-cache, private` (y `public` en la exportación XLSX) | Nadie: el navegador deja de guardar copias |
+| Tope de 64 KB del Studio antes de `TrimStrings` (B7-d) | 413 `payload_too_large` también sin sesión, sin recorrer el cuerpo | Nadie con uso normal |
+| `verified` por entrada en `GET publications` y en el detalle de la versión (B7-c) | Clave aditiva al final de cada entrada | El CRM `16c433c` no la lee |
+| Caracteres invisibles (SEC7-a) | `PlainText` los rechaza con 422; la API interna de conocimiento (n8n) los limpia y lo registra (`marketing.knowledge.invisibles_cleaned`), nunca 500 | El personal, si pega un texto con un invisible |
+| Topes de listas antes que sus elementos (B7-e, M-2) | 8 rutas fuera del Studio (9 contando `bundles` y `preview`) | Nadie con uso normal: cada tope es ≥ el máximo legítimo |
+| Restablecer la contraseña de un administrador (H-2 de SEC7, en B7) | Cierra sus demás sesiones, también los «recuérdame» | La cuenta afectada vuelve al login (403 `admin_token_invalid`) |
+| `ultron-studio:monitor` (OPS7) | El comando existe; con la bandera apagada **no se programa nada** | Nadie hasta que se encienda (paso 10) |
+
+**Qué NO toca:** el motor (la puerta de diff del paso 0), las banderas del H4, del H5 y del H6, las rutas (siguen 56), el CRM, FPM, supervisor, el crontab, DNS, TLS y el firewall. **Tampoco instala `ironbody-migrate` sin root:** la migración la ejecuta el envoltorio de hoy (como root) y la propuesta (`ops/ironbody-migrate-propuesta.sh`) la instala el propietario aparte (§«Pendientes del propietario» de la hoja de ruta).
+
+**Variables:** una, `ULTRON_STUDIO_MONITOR_ENABLED=false`, explícita aunque coincida con el defecto y escrita **antes** de migrar. `ULTRON_STUDIO_MONITOR_EXPECT` no se escribe: rige la del código (`twilio:connected_otp_only,twilio_voice:not_configured,elevenlabs:ELEVENLABS_NOT_CONFIGURED`); si estuviera en el fichero de entorno, el paso 0 lo avisa sin abortar. Si `ULTRON_STUDIO_MONITOR_ENABLED` ya existe con otro valor o repetida, el paso 0 aborta. Solo `true`, `1`, `on` o `yes` encienden el monitor.
+
+**Orden y compatibilidad:**
+- **Solo backend.** El H7 no tiene código del CRM: no se compila ni se publica nada (`origin/main` del CRM es `16c433c`, lo que sirve producción).
+- **Sin rutas nuevas:** el código nuevo sirve desde el `merge`; lo que falta hasta la migración es la guarda de la base, no una ruta.
+- **No usar el Studio durante el despliegue:** la migración pide ACCESS EXCLUSIVE sobre la cadena, y una lectura dentro de una transacción abierta la hace caer por 55P03 (DB7 lo midió a los 5,58 s). El motor lee la cadena solo con su llave distinta de `off` (hoy `off`).
+- **Socios, caja y ULTRON no notan nada**, salvo quien reciba un restablecimiento de contraseña en ese momento.
+
+### Condiciones previas
+
+- [ ] **El Hito 6 en su fase 1, verificado a las 24 horas.** [PENDIENTE: verificación de las 24 h del H6, hacia el 03-11-2026 05:00 UTC (lead).]
+- [ ] **REV7 sin bloqueantes** (`plans/informes-h7/informe-reviewer.md`). [PENDIENTE (`reviewer`).]
+- [ ] **TEST7 completo:** fase A hecha (`1426130`: 53/53 mutantes, Legacy 5 011/5 011 con la llave en `off` y en `all`, puerta PostgreSQL 2 799/2 799); fase B (suite por nombre contra `origin/main` del mismo día con `ops/suite-compare.sh`, CRM, E2E de todas las specs y recuperación con OPS7). [PENDIENTE: fase B en curso (`tester`).]
+- [ ] **F-1 y F-2 de PERF7** confirmados con su medida o decididos fuera del despliegue. Según sus propuestas tocan `app/Console/Commands/Marketing/UltronCanaryReport.php` y `app/Services/UltronStudio/StudioCampaignLinks.php`, que no están en la puerta de diff; una migración más haría abortar el paso 0, que admite exactamente una. [PENDIENTE: commits y medidas (`backend`).]
+- [ ] **La puerta del contrato en verde sobre el commit que se despliega** (contrato H7, «Traspasos»): el Studio, Access, Chaos y Hardening en SQLite; el grupo del Studio en PostgreSQL con `ops/pgunit.sh`; las suites del motor con la llave en `off` y en `all`; 56 rutas y `auth:coverage --unmapped` vacío; Pint en lo tocado. Se repite si el código cambia (F-1, F-2).
+- [ ] **La puerta de diff** (la repite el paso 0): entre `PREVIO` y `origin/main`, en el motor, las integraciones existentes, el catálogo y las dependencias, solo los 10 ficheros que el contrato nombra (los 7 controladores de M-2 y `AdminUserController` de B7, la API interna de conocimiento de SEC7 y `routes/console.php`, que solo puede añadir líneas). **Comprobado el 02-11-2026 sobre `5ed9525` frente a `1e5f9a0`:** exactamente esos 10, `routes/console.php` +35/−0 y una sola migración nueva, la del H7.
+- [ ] **`PREVIO` fijado en un commit** con el HEAD de producción del día (hoy, `1e5f9a0`; `git -C /var/www/api rev-parse --short=7 HEAD` en el servidor), y el script copiado desde ese commit. Con `PREVIO=pendiente` el script se niega a todo, también a `--solo-comprobar`. Si producción se mueve antes, se revisa qué entró, se actualiza `PREVIO` en otro commit y se vuelve a copiar.
+- [ ] **Push con avance rápido del backend** a `main`, solo si es avance rápido sobre `origin/main`. **Nunca `--force`.** El CRM no se empuja: no cambia.
+- [ ] Unos 15 minutos sin nadie en el Studio.
+- [ ] Anotado `<commit-backend>`: `git rev-parse --short=7 origin/main` tras el push (siete cifras).
+
+### 1. Respaldo (en el servidor, como root, menos de 2 horas antes del paso 5)
+
+```bash
+TS=$(date -u +%Y%m%d-%H%M%S); BK=/var/backups/ironbody/ultron-studio-h7-$TS
+( umask 077
+  mkdir -p "$BK"
+  git -C /var/www/api rev-parse HEAD > "$BK/api-commit.txt"                       # empieza por PREVIO (hoy, 1e5f9a0)
+  sudo -u postgres pg_dump -Fc ironbody > "$BK/ironbody.dump"
+  sha256sum "$BK/ironbody.dump" > "$BK/ironbody.dump.sha256"
+  tar -C /var/www -czf "$BK/app-crm.tgz" app
+  install -m 600 -o root -g root /var/www/api/backend/.env "$BK/env.backup"
+  cp -a /var/www/api/backend/bootstrap/cache "$BK/bootstrap-cache"
+  cp -a /etc/supervisor/conf.d "$BK/supervisor-conf.d" )
+pg_restore -l "$BK/ironbody.dump" | grep -c 'TABLE DATA'                          # al menos 226 (MIN_TABLAS del script)
+stat -c '%a %U %n' "$BK" "$BK"/*                                                  # 700 el directorio; 600 y root el volcado y env.backup
+du -h "$BK/ironbody.dump"; echo "BK=$BK"
+```
+
+Es el bloque del Hito 6 con el nombre del H7 (`informe-devops-h7.md` §5, paso 2). **Lo que comprueba el script:** que `api-commit.txt` empiece por `PREVIO` (o por el commit nuevo en una reanudación, ver abajo), el volcado de menos de 2 horas con su `.sha256`, el directorio en 700, el volcado y `env.backup` de root y en 600, **al menos 226 tablas con datos** (las 223 del H6 más sus 3 tablas) y, si no es una reanudación, el fichero de entorno idéntico a `env.backup`. **Nunca se borra un respaldo**: guarda juntos el volcado y la copia del entorno.
+
+### 2. Copiar los scripts (desde el Mac, con el árbol del backend en `<commit-backend>` y `git status` limpio)
+
+```bash
+cd /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h7/Iron-Body/backend
+O=docs/ultron-studio/ops
+shasum -a 256 $O/deploy-h7-backend.sh $O/h7-schema-check.sql $O/smoke-h7.py $O/smoke-run-h7.sh $O/smoke-h6.py
+scp $O/deploy-h7-backend.sh $O/h7-schema-check.sql $O/smoke-h7.py $O/smoke-run-h7.sh $O/smoke-h6.py ironbody-vps:/root/
+ssh ironbody-vps 'chmod 700 /root/deploy-h7-backend.sh /root/smoke-run-h7.sh && chmod 600 /root/h7-schema-check.sql /root/smoke-h7.py /root/smoke-h6.py && sha256sum /root/deploy-h7-backend.sh /root/h7-schema-check.sql /root/smoke-h7.py /root/smoke-run-h7.sh /root/smoke-h6.py'
+```
+
+Las huellas del Mac y del servidor tienen que coincidir (`informe-devops-h7.md` §5, paso 3: `.sh` en 700 y el resto en 600). `smoke-h6.py` viaja porque `smoke-h7.py` usa su detector de fugas. **El smoke del H7 borra al terminar** su lanzador, `smoke-h7.py` y `smoke-h6.py`: para la regresión del paso 8 se copian otra vez.
+
+### 3. Esquema antes (solo lectura)
+
+```bash
+sudo -u postgres psql -X -v ON_ERROR_STOP=1 -v owner=iron -v app=iron_app -x -d ironbody < /root/h7-schema-check.sql
+```
+
+Esperado (lo de antes de la flecha en cada comentario del fichero): `disparadores_studio` 43, `check_studio` 49, `parciales_studio` 4, `tablas_studio` 14, `disparadores_uspub` 3, `disparadores_cadena` `uspub_forbid_delete:O,uspub_forbid_truncate:O,uspub_forbid_update:O`, `disparadores_apagados` 0, `check_seq` 0, `funcion_es_la_de_f` t (`huella_funcion` `4ad748b5f17f09b398f7f641c197d7ee`), los tres dueños `iron`, `create_en_public` t y `existe_rol_app` 1; en la cadena, `cabeza_seq` igual a `entradas_cadena` y **`rotas` 0**; **0 filas de cerrojos**; y los privilegios de `iron_app` en las cinco tablas con SELECT, INSERT, UPDATE y DELETE en t, TRUNCATE f y secuencia t (los privilegios por defecto, `arwd`). **Se para si** `rotas` no es 0 (la migración se negaría: la reparación es del rol dueño, con autorización del propietario), si `existe_rol_app` es 0 (en `production` la migración falla), si algún dueño no es `iron` (42501) o si hay cerrojos (esperar y repetir). Va por la entrada estándar porque `postgres` no puede leer `/root`.
+
+### 4. Ensayo en el servidor (solo lectura, salvo el `git fetch`)
+
+```bash
+bash /root/deploy-h7-backend.sh <commit-backend> "$BK" --solo-comprobar
+```
+
+Esperado, en el formato del script (`<…>` son valores del momento):
+
+```
+0. comprobaciones previas (solo lectura; si algo falla, no se toca nada):
+   respaldo /var/backups/ironbody/ultron-studio-h7-<TS>: <≥ 226> tablas con datos · 700/600 de root
+   HEAD 1e5f9a0 limpio · migración: 1 · puerta: [<los 10 ficheros nombrados>] (todas nombradas por el contrato) · esquema [43 49 4 14 iron iron,iron,iron true 1 0] · función de F · cadena consecutiva · sin cerrojos · rutas [56 18 8 10] · workers 13/0 · facturación activa
+   iron_app (SELECT/INSERT/UPDATE/DELETE/TRUNCATE/secuencia) en libro · asociaciones · canarios · instantáneas · cadena: <informativo>
+   filas cadena · libro · instantáneas: <N N N> · colas fallidas: <N> · sellos studio: 0 · incidentes ultron_studio: <N>
+   motor, H4, H5 y H6 (informativo; no cambia): {"engine_scope":"off", …}
+COMPROBACIONES PREVIAS EN VERDE (no se ha tocado nada)
+```
+
+Es lo único que cubre en el servidor lo que el banco no puede: GNU `stat`, `grep` y `find`, `sudo` real, los dueños `root` y `www-data` y el envoltorio `ironbody-migrate`. Con cualquier `ABORTA`, no se ha tocado nada: se aclara la causa y se repite.
+
+### 5. Backend
+
+```bash
+bash /root/deploy-h7-backend.sh <commit-backend> "$BK" 2>&1 | tee /root/h7-$(date -u +%Y%m%d-%H%M%S).log
+```
+
+Lo esperado, según las líneas que imprime el script (no ejecutado en el servidor; en el banco, `COMPLETADO` en 47–50 s, con un 55P03 reintentado):
+
+```
+1. código: HEAD=<commit-backend>
+   los <N> ficheros del merge son legibles por www-data
+2. variable (monitor apagado):
+   ULTRON_STUDIO_MONITOR_ENABLED añadida
+   permisos del fichero: <dueño> <modo>
+   el fichero de entorno parsea
+3. migración (rol dueño, lock_timeout 5 s; un 55P03 se reintenta hasta 3 veces, 15 s entre intentos):
+   … 2026_11_02_100001_add_ultron_studio_hardening … DONE
+   esquema 44 disparadores · 50 CHECK · 4 parciales · 14 tablas (intento 1)
+4. esquema del Hito 7:
+   disparadores de la cadena · CHECK de seq · dueño/definer de la función · disparadores apagados: uspub_chain_next:O,uspub_forbid_delete:O,uspub_forbid_truncate:O,uspub_forbid_update:O CHECK ((seq >= 1)) iron/false 0
+   iron_app (SELECT/INSERT/UPDATE/DELETE/TRUNCATE/secuencia) en libro · asociaciones · canarios · instantáneas · cadena: true/true/false/false/false/true true/true/true/true/false/true true/true/true/true/false/true true/true/false/false/false/true true/true/false/false/false/true
+   filas de la cadena, el libro y las instantáneas: <N N N> (las mismas: la migración no toca filas)
+5. cachés y workers:
+   cachés: www-data 600 · www-data 600
+6. rutas del Studio (total · integrations · GET · POST): 56 18 8 10 · auth:coverage --unmapped → []
+7. configuración efectiva:
+   {"monitor_enabled":false,"monitor_expect_default":true}
+   tareas programadas del Studio: 0 (con el monitor apagado, 0)
+   motor, H4, H5 y H6 iguales que antes del despliegue
+8. workers (RUNNING · BACKOFF/FATAL), dos lecturas separadas: [13 0] y [13 0]
+   INFO: workers con pid nuevo tras queue:restart: <N> de 13 (el resto termina su trabajo antes de reiniciarse)
+9. sanidad:
+   HEAD admin/ultron-studio/status sin token → 401 · Cache-Control: no-store, private
+   … (lo mismo en publications, integrations/status y auth/me; admin/no-existe-h7 → 404 · Cache-Control: no-store, private)
+   POST versions con 70 000 bytes sin token → 413 "code":"payload_too_large"
+   usage-trigger sin firma → 403 (falla cerrada; T-1)
+   colas fallidas: <N> (antes <N>)
+   sellos studio en marketing_ai_actions (motor en off): 0
+   security:check-secret-exposure: OK
+   ultron-studio:publication-check: 0 (cuadra)
+   ultron-studio:monitor --dry-run (publicación e integraciones): 0
+   incidentes ultron_studio: <N> (los mismos)
+   fichero de entorno igual al respaldo salvo la clave del Hito 7
+10. integrations-doctor (las clasificaciones del H6, sin cambios):
+   twilio connected_otp_only · twilio_voice not_configured · elevenlabs ELEVENLABS_NOT_CONFIGURED: 0
+   meta_ads connected_read: 0                  (o una línea INFO si Meta sale degraded)
+11. integrations-snapshot (el H7 no cambia ninguna integración: no tiene que anotar nada):
+   instantáneas: <N> → <N>                      (3 → 3 si la fase 2 del H6 no se ha hecho)
+12. laravel.log ERROR desde el inicio del despliegue: 0
+DESPLIEGUE H7 (BACKEND) COMPLETADO
+```
+
+- **Lo que hace el script, en orden:** comprobaciones de solo lectura (abortan sin tocar nada) → `merge --ff-only` como root con `umask 022` → comprobación de que `www-data` lee cada fichero de `git diff --name-only PREVIO HEAD` → la variable del monitor (con el salto final asegurado) y comprobación de que el fichero de entorno parsea → `sudo env PGOPTIONS="-c lock_timeout=5s" /usr/local/bin/ironbody-migrate`, con hasta 3 intentos ante un 55P03 → **la compuerta `44 50 4 14`** y las aserciones del esquema (disparadores de la cadena, `CHECK ((seq >= 1))`, función `iron`/INVOKER, 0 disparadores apagados, `ultron_studio_forbid()` intacta, privilegios de `iron_app` uno a uno y las filas sin cambio) → `route:cache` como `www-data` con `umask 077`; el `chmod 600` de las cachés lo hace `www-data` y nunca sobre un enlace (H-5 de SEC7) → `queue:restart` → las aserciones de los pasos 6 a 12. «`DESPLIEGUE H7 (BACKEND) COMPLETADO`» solo sale con 0 desvíos; si no, «`DESPLIEGUE H7 (BACKEND) CON N DESVÍOS: no seguir con el smoke hasta aclararlos`» y código 1. Nunca imprime valores del fichero de entorno ni la salida de un tinker que no case con lo esperado.
+- **Un tercer argumento que no sea exactamente `--solo-comprobar`** sale con 2 sin tocar nada.
+- **Con `ABORTA` porque `www-data` no puede leer algún fichero del `merge`:** el código nuevo ya está en el disco, sin la variable ni la migración. Se corrigen los permisos como dice el mensaje (644 los ficheros y 755 los directorios de `git diff --name-only <PREVIO> HEAD`) y se relanza el mismo comando, que reanuda.
+- **Con `ABORTA` en el paso 3 (55P03 agotado tras 3 intentos):** la migración es una sola transacción: o está entera o no está (con `43 49 4 14`, no se aplicó). El código nuevo sirve igual; lo que falta es la guarda. Se mira quién tiene la cadena con `h7-schema-check.sql` y **se relanza el mismo comando**, que reanuda.
+- **Con 42501 o con el mensaje de la guarda de producción al migrar:** la cadena, el libro o las instantáneas no son de `iron`, o falta el rol `iron_app`. Parar y avisar a `database-specialist`. **No forzar.**
+- **Reanudación tardía.** Si se relanza más de 2 horas después del respaldo, el paso 0 aborta y **hay que rehacer el respaldo con `api-commit.txt` igual a `PREVIO`**, no al HEAD de ese momento: `git -C /var/www/api rev-parse <PREVIO> > "$BK/api-commit.txt"`. **Atención:** a diferencia del script del H6 tras m-6, el del H7 acepta en una reanudación un `api-commit.txt` que empiece por el commit nuevo (`deploy-h7-backend.sh:157-161`), así que no avisaría del error, y la vuelta atrás del código leería un destino equivocado. Comprobarlo a mano: `cat "$BK/api-commit.txt"` tiene que empezar por `PREVIO`. [PENDIENTE: dejar el paso 0 como el del H6, que exige siempre `PREVIO` (`devops`).]
+
+### 6. Esquema después (solo lectura)
+
+El mismo `h7-schema-check.sql` del paso 3. Esperado: `disparadores_studio` 44, `check_studio` 50, `parciales_studio` 4, `tablas_studio` 14, `disparadores_uspub` 4, `disparadores_cadena` con `uspub_chain_next:O` además de los tres de antes, `disparadores_apagados` 0, `check_seq` 1 con `CHECK ((seq >= 1))`, `dueno_funcion_cadena` `iron` y `funcion_cadena_definer` f, la misma `huella_funcion`, `rotas` 0, y en `iron_app`: UPDATE y DELETE **f** en la cadena, el libro y las instantáneas, t en asociaciones y canarios, TRUNCATE f y SELECT, INSERT y secuencia t en las cinco. Las filas, las mismas que antes.
+
+### 7. CRM
+
+Nada que publicar: el H7 no cambia el CRM. Comprobación: `curl -fsS https://ironbodyneiva.cloud/version.json` → `16c433c`.
+
+### 8. Smoke (escribe en la fila 32 de `admins` y en `admin_sessions`)
+
+```bash
+ssh ironbody-vps 'bash /root/smoke-run-h7.sh'
+```
+
+Esperado:
+- del lanzador: `OK      monitor apagado: {"monitor_enabled":false}`, `OK      el programador no tiene ninguna tarea del Studio` y `OK      14 tablas ultron_studio_* en la base`;
+- de `smoke-h7.py` (parte del Super Admin): login; lecturas autenticadas → 200; sin token → 401 y una ruta inexistente → 404; 70 000 bytes sin sesión y con sesión → 413 `payload_too_large`; 60 000 bytes sin sesión → 401; las entradas del historial con `verified` booleano al final y en `true`, y la de la cabeza igual a `head.signatureOk`; un motivo con cada uno de los 5 invisibles (U+2060, U+00AD, U+061C, U+2028 y U+E0041) → 422, y las dos contrapruebas (texto limpio y un emoji con ZWJ y U+FE0F) → 409 `integrations_writes_disabled` con las escrituras del H6 apagadas; `Cache-Control: no-store, private` en todas las respuestas de `/api/admin`; ninguna fuga, ningún 5xx y ningún 429;
+- en la base: ninguna fila nueva de `ultron_studio_*` nombra a la cuenta, el recuento exacto de las 14 tablas igual antes y después, y los incidentes del Studio iguales;
+- la cuenta en reposo (`OK      token tras desactivar → 401` o `403` y `OK      sesiones de la cuenta tras el smoke: 0`) y `SMOKE H7: código de salida 0`.
+
+Códigos: 0 todo OK · 1 algún FALLO · 3 algo OMITIDO · 2 uso incorrecto. **Sin filas positivas:** solo envía lo que el servidor rechaza antes de escribir. En el banco: 22 OK con la cadena vacía y 23 con una entrada; en producción el número depende de si hay versiones y canario, y lo que cuenta es 0 FALLO y el código 0. Cupo: 3 por minuto (el login); no toca la sonda de Twilio. **No mide latencias:** `smoke-h7.py` no carga `ops/perf-h7/presupuestos-h7.json`. [PENDIENTE: incorporar los presupuestos de PERF7 §7.1 al smoke y calibrarlos con la primera pasada en producción (`devops`).]
+
+**Regresión del H6** (`informe-devops-h7.md` §5, paso 8), copiando otra vez `smoke-h6.py` y `smoke-run-h6.sh` a `/root/` con sus huellas:
+
+```bash
+ssh ironbody-vps 'SMOKE_PHASE=1 bash /root/smoke-run-h6.sh'
+```
+
+Esperado: código 0 y unas 78 + 26 OK, como en la fase 1 del H6 (77 si Meta sale `degraded`). Cupo: **3 por hora** (la sonda). `smoke-h6.py` no comprueba cabeceras de caché, 413 ni invisibles (leído), así que el H7 no debería afectarle; **no consta ensayado contra el código del H7** (en el banco se ejecutó sobre el código del H6, nivel 3 de la vuelta atrás). [PENDIENTE: ensayarlo en el banco con `ensayar.sh <banco> smoke-h6 1` sobre el H7 desplegado (`devops` o `tester`).]
+
+### 9. A los 15 minutos y a las 24 horas (solo lectura)
+
+```bash
+cd /var/www/api/backend
+sudo -u www-data php artisan ultron-studio:monitor --dry-run                                        # código 0: publicación, integraciones y colas (sin abrir incidentes)
+supervisorctl status                                                                                # 13 RUNNING; ningún BACKOFF/FATAL
+sudo -u postgres psql -X -Atq -d ironbody -c "SELECT count(*) FROM failed_jobs;"                    # igual que en el paso 0
+grep -c 'production.ERROR' storage/logs/laravel.log                                                 # frente al valor de antes del despliegue
+grep ' /api/admin/' /var/log/nginx/access.log | awk '{print $9}' | sort | uniq -c                   # si el formato es el combined: ningún 5xx desde el despliegue
+curl -sI -H 'Accept: application/json' https://api.ironbodyneiva.cloud/api/admin/ultron-studio/status | grep -i '^cache-control'   # Cache-Control: no-store, private
+sudo -u postgres psql -X -Atq -d ironbody -c "SELECT count(*) FROM incidents WHERE source = 'ultron_studio';"   # igual que en el paso 0 (el monitor está apagado)
+sudo -u www-data php -r 'require "vendor/autoload.php"; var_dump(App\Support\Text\InvisibleCharacters::violation("a\u{00AD}b"), App\Support\Text\InvisibleCharacters::violation("\u{1F468}\u{200D}\u{1F469}"));'   # string(6) "U+00AD" y NULL (solo a los 15 minutos)
+```
+
+- **La sonda de la última línea** es la de `plans/informes-h7/informe-security.md` §4, punto 7: la clase de invisibles se escribió para el PCRE 10.39 de producción (solo `\p{Cf}`, rangos explícitos y miradas atrás; cabecera de `InvisibleCharacters.php`), pero solo se ha probado con el PCRE 10.47 del Mac. El smoke ya ejercita las dos ramas por HTTP (un invisible → 422; un emoji con ZWJ → no 422); la sonda lo confirma sin red.
+
+Las colas se comprueban aquí y no en el script: justo después de `queue:restart`, un carril puede tener cola sin latido unos segundos (comentario del paso 9 del script). Si el log es diario, el fichero del día. **A las 24 horas,** lo mismo; es la base para encender el monitor.
+
+### 10. Encender el monitor (con autorización aparte del propietario)
+
+**No hay script para este mando** (`informe-devops-h7.md` §5, paso 10, ensayado en el banco: con `true` y la caché, 2 tareas y una pasada real a 0 sin incidentes; con `false`, 0 tareas). [PENDIENTE: un mando con copia previa y comprobaciones, como `h6-integrations-scope.sh` (`devops`).] Antes:
+- **H-1 de OPS7:** si `schedule:run` está en el crontab de root, el monitor (y cada tarea programada) cargará como root las cachés de `www-data` cada minuto. Comprobarlo (`crontab -l -u root | grep -n 'schedule:run'; crontab -l -u www-data 2>/dev/null | grep -n 'schedule:run'`) y moverlo al de `www-data` es del propietario (paso 6b de `ironbody-migrate-propuesta.sh`).
+
+Pasos (del runbook de OPS7):
+1. Una copia del fichero de entorno en 600 de root (`install -m 600 -o root -g root /var/www/api/backend/.env /root/env-pre-monitor-on-$(date -u +%Y%m%d-%H%M%S)`).
+2. `ULTRON_STUDIO_MONITOR_ENABLED=true` en la misma línea, conservando el dueño, el modo y el inodo del fichero (lo que hace `set_var` en los mandos del H5 y del H6).
+3. `cd /var/www/api/backend && sudo -u www-data sh -c 'umask 077; php artisan config:cache -q'`, y la caché en 600 de `www-data`.
+4. `sudo -u www-data php artisan schedule:list | grep 'ultron-studio:'` → **2** tareas: `ultron-studio:monitor` cada 30 minutos y `ultron-studio:integrations-snapshot` a las 07:10 de Bogotá.
+5. Una primera pasada real: `sudo -u www-data php artisan ultron-studio:monitor` → código 0 y ningún incidente `ultron_studio` nuevo.
+
+Por qué cada 30 minutos (decisión D-1 de OPS7, aceptada por el lead): la ventana de agrupación de IRON GUARD es de 60 minutos; con una pasada por hora, cada una reabriría el incidente.
+
+### 11. Cierre
+
+Registrar en `ULTRON_STUDIO_MASTER_ROADMAP.md` (fila del H7 y registro de despliegues), `ULTRON_STUDIO_FINAL_REPORT.md` («Hito 7») y `ULTRON_STUDIO_ROLLBACK.md` («Hito 7») la fecha UTC, el commit, `$BK`, la salida del script y la del smoke, y el estado. [PENDIENTE: todo, tras el despliegue (lead).]
+
+### Incidencias previsibles durante el despliegue
+
+De `informe-devops-h7.md` §4 y §8 y de `informe-db.md` §10; ninguna se ha visto en producción.
+
+| Síntoma | Causa | Qué hacer |
+|---|---|---|
+| `ABORTA` en el paso 0 | Algo de partida no es lo esperado (HEAD, `PREVIO`, `origin/main`, la puerta de diff, la migración, el respaldo, la variable, el esquema, la cadena, cerrojos, rutas o workers) | No se ha tocado nada. Aclarar la causa y repetir |
+| `PREVIO sin fijar (pendiente)` | El script no tiene el HEAD de producción del día | Fijarlo en un commit y volver a copiar el script |
+| `la cadena de publicaciones tiene N entradas no consecutivas o mal encadenadas` | La cadena se tocó con DML (AS-3/N-3) | La migración se negaría. Reparar es del rol dueño con autorización del propietario (`ULTRON_STUDIO_ROLLBACK.md`, «Hito 5»). No forzar |
+| 55P03 en la migración | Alguien leía la cadena dentro de una transacción (una pestaña del Studio, o el motor si su llave no estuviera en `off`) | El script reintenta 3 veces cada 15 s. Si se agota, `h7-schema-check.sql` para ver quién y **relanzar el mismo comando** |
+| 42501 o la guarda de producción | Dueños distintos de `iron`, o sin el rol `iron_app` | Parar y avisar a `database-specialist`. **No forzar** |
+| Privilegios de `iron_app` distintos de lo esperado tras migrar | `iron_app` hereda UPDATE o DELETE de otro rol o de `PUBLIC` | La migración ya lo comprueba y falla (D-4 de DB7). Avisar a `database-specialist` |
+| Workers en BACKOFF tras `queue:restart` | La caché no es de `www-data` o no se puede leer | `stat -c '%U %a' bootstrap/cache/*.php`; `sudo -u www-data sh -c 'umask 077; php artisan config:cache -q'`. `supervisorctl restart` **solo con autorización** |
+| `el fichero de entorno NO parsea` | Una línea mal formada | Restaurarlo desde `$BK/env.backup` (mismo dueño, modo 600) antes de seguir |
+| El 70 000 sin sesión no da 413 | El tope temprano no está en la pila | Desvío del paso 9: revisar `bootstrap/app.php` con `backend` antes del smoke |
+| `integrations-snapshot` anota alguna instantánea | Una huella de integraciones cambió con el H7 (no debería) | Revisar `GET integrations/config` antes de seguir |
+| El smoke da 429 | Más de 3 ejecuciones por minuto (login) | Esperar. La cuenta ya está en reposo |
+
 ## Fases siguientes (no incluidas aquí)
+
+*(Actualización del 02-11-2026: el Hito 6 se ejecutó en su fase 1 el 02-11-2026, y el Hito 7 tiene su runbook en «Hito 7», más arriba, sin ejecutar.)*
 
 Campañas Meta (solo lectura), Twilio Voice y números canarios (tabla auditada), adaptador de ElevenLabs tras bandera. Cada una con su migración revisada en PostgreSQL, su suite y su plan de reversión. (La persistencia, que también figuraba en esta lista, se desplegó con el Hito F el 18-10-2026; el laboratorio y la evaluación con OpenAI tienen su runbook en «Hito 4», más arriba, y la publicación, el canario y la reversión por versión, en «Hito 5». Actualizado el 31-10-2026.) *(Actualización del 01-11-2026: las campañas de Meta en lectura, los números canarios, la sonda de Twilio y el adaptador de ElevenLabs sin activar tienen su runbook en «Hito 6», más arriba, pendiente de ejecución. Twilio Voice y las llamadas siguen fuera: los trae el hito de voz, con autorización expresa.)*

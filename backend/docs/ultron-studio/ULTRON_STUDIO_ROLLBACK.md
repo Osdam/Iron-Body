@@ -215,7 +215,7 @@ supervisorctl status | grep -c RUNNING                                          
 SMOKE_PHASE=1 bash /root/smoke-run-h5.sh
 ```
 
-- **`api-commit.txt` tiene que ser el `PREVIO`.** Si la fase 1 se relanzó más de 2 horas después del respaldo y hubo que rehacerlo, su `api-commit.txt` tiene que seguir siendo el `PREVIO`, no el HEAD de ese momento. **Leído en el script:** en una reanudación, el paso 0 del Hito 6 acepta también un `api-commit.txt` que empiece por el commit nuevo, así que el script no lo avisaría; esta vuelta atrás leería entonces el destino equivocado. Comprobarlo antes: `cat "$BK/api-commit.txt"` tiene que empezar por el `PREVIO` del día del despliegue.
+- **`api-commit.txt` tiene que ser el `PREVIO`.** Si la fase 1 se relanzó más de 2 horas después del respaldo y hubo que rehacerlo, su `api-commit.txt` tiene que seguir siendo el `PREVIO`, no el HEAD de ese momento. **Leído en el script:** en una reanudación, el paso 0 del Hito 6 acepta también un `api-commit.txt` que empiece por el commit nuevo, así que el script no lo avisaría; esta vuelta atrás leería entonces el destino equivocado. Comprobarlo antes: `cat "$BK/api-commit.txt"` tiene que empezar por el `PREVIO` del día del despliegue. *(Actualización del 02-11-2026: corregido en el script por m-6 del reviewer en `1e5f9a0`, antes de la ejecución: el paso 0 del H6 exige siempre `PREVIO`, comprobado en `deploy-h6-backend-fase1.sh:136-139`. La ejecución real del 02-11 dejó `api-commit.txt` = `7ba0ce8`.)*
 - **Smoke del H5 con datos del H6:** el lanzador del H5 compara el recuento exacto de todas las tablas `ultron_studio_*` antes y después, sin fijar cuántas son (leído en `smoke-run-h5.sh`), así que las 3 tablas del H6 no deberían hacerlo fallar. [PENDIENTE: no ensayado con datos del H6; DevOps (§5) lo da como la verificación de este nivel.]
 - **Qué queda:** las 3 tablas, sus 13 disparadores, 22 CHECK y 2 índices parciales, y `usae_subject_type_chk` con 7 sujetos (un superconjunto: las inserciones del H5 siguen pasando, `informe-db.md` R-3). Las 8 claves del fichero de entorno. El código del H5 no lee nada de eso.
 - **Qué ve el CRM** (leído en el código, `informe-front-datos.md` §5.3; corrige la frase del contrato «el libro pinta los sujetos nuevos en genérico», que solo vale con el CRM del H6):
@@ -231,8 +231,8 @@ Solo ante corrupción de datos, con **autorización expresa** y coordinado por `
 ### Datos personales: revocar no es suprimir
 
 - **La huella del teléfono es un seudónimo, no un dato anonimizado** (B-1 de `security` = AS-4 de `api-security-specialist`; I13 corregido en la Enmienda 3). Con la `APP_KEY`, la huella y los 4 dígitos que guarda la fila, el número se recupera en milisegundos; sin los 4 dígitos, el espacio de WhatsApp (10⁹) se recorre en unos 24 minutos con un núcleo (H-3 del tester, Enmienda 4). Lo que protege los teléfonos canarios es el secreto de la `APP_KEY`.
-- **Revocar no suprime:** pone a NULL el cifrado de voz, pero la huella, los 4 dígitos y el alias son columnas inmutables y la fila no se puede borrar con el rol de la aplicación. **No hay todavía un procedimiento de supresión** (derecho de supresión, Ley 1581): es del Hito 7 (architect + `database-specialist`, con decisión del propietario), y tiene que cubrir las 3 tablas nuevas además de las de F, del Hito 4 y del Hito 5.
-- **Copias fuera de las tablas:** el respaldo de la fase 1 (volcado y `env.backup` juntos), y la huella del teléfono en el `DETAIL` del error 23505 del log del servidor PostgreSQL en cada registro duplicado (H-2 del tester, diferido al Hito 7).
+- **Revocar no suprime:** pone a NULL el cifrado de voz, pero la huella, los 4 dígitos y el alias son columnas inmutables y la fila no se puede borrar con el rol de la aplicación. **No hay todavía un procedimiento de supresión** (derecho de supresión, Ley 1581): es del Hito 7 (architect + `database-specialist`, con decisión del propietario), y tiene que cubrir las 3 tablas nuevas además de las de F, del Hito 4 y del Hito 5. *(Actualización del 02-11-2026: existe en la rama del Hito 7, `ops/supresion-1581.sql` (OPS7, `fa6eb81`): redacta en las 14 tablas con el rol dueño, en seco por defecto, y en un número revocado sustituye la huella por una aleatoria, los 4 dígitos por `0000` y el alias por «suprimido». Ensayado 17/17 en el banco; **nunca ejecutado en producción**. Ver «Hito 7», abajo.)*
+- **Copias fuera de las tablas:** el respaldo de la fase 1 (volcado y `env.backup` juntos), y la huella del teléfono en el `DETAIL` del error 23505 del log del servidor PostgreSQL en cada registro duplicado (H-2 del tester, diferido al Hito 7). *(Actualización del 02-11-2026: el Hito 7 comprueba el duplicado antes del INSERT (DB7, `bbf9916`), en la rama y sin desplegar; el 23505 queda solo para la carrera real. `log_error_verbosity = terse` sigue pendiente del propietario.)*
 
 ### Rotación de la `APP_KEY` con el Hito 6 desplegado (amplía la del Hito 5)
 
@@ -255,6 +255,69 @@ Solo ante corrupción de datos, con **autorización expresa** y coordinado por `
 6. **T1 de nuevo:** registra quien tiene el teléfono de la conversación canaria; otra persona autoriza y activa; el resultado tiene que ser `in_sync`.
 7. **Recargar el CRM:** los ids opacos cambiaron.
 8. **Si fue por compromiso,** la clave vieja no se queda en `APP_PREVIOUS_KEYS` más de lo imprescindible.
+
+## Hito 7 (seguridad y producción) — SIN DESPLEGAR (02-11-2026)
+
+**Estado (02-11-2026):** implementado en la rama `feat/ultron-studio-h7` (HEAD `5ed9525`), sin desplegar; producción sigue en el backend `1e5f9a0` y el CRM `16c433c`. Sale del runbook de OPS7 (`plans/informes-h7/informe-devops-h7.md` §4.8 y §5), del informe de datos (`informe-db.md` §10) y de los scripts de `ops/`. **Ensayado en el banco** (`ops/banco-h7/ensayo-vuelta.sh`, 13/13): los niveles 2, 3 y 4. Cuando se despliegue, `BK` será el respaldo del paso 1 del runbook, `api-commit.txt` su `PREVIO` (hoy, `1e5f9a0`) y `FASE1` el commit desplegado. [PENDIENTE: los tres valores reales tras el despliegue (lead).]
+
+**Reglas que no cambian:**
+- **Nunca `migrate:rollback` / `down()` en producción.** El `down()` de `2026_11_02_100001` se niega con filas en la cadena, el libro o las instantáneas, y el libro tiene filas en cualquier entorno real (D-5 de DB7).
+- **No se quita la línea `ULTRON_STUDIO_MONITOR_ENABLED`** del fichero de entorno: el código anterior no la lee.
+- **Ninguna palanca de esta sección cambia lo que ULTRON dice o hace:** el H7 no toca el motor.
+
+| Nivel | Cómo | Qué se va | Qué se queda | Ensayado (banco) |
+|---|---|---|---|---|
+| **2 · Bandera del monitor** | `ULTRON_STUDIO_MONITOR_ENABLED=false` en la misma línea (copia previa en 600, dueño y modo intactos) y `sudo -u www-data sh -c 'umask 077; php artisan config:cache -q'` | Las 2 tareas programadas del Studio (`schedule:list` → 0). El comando `ultron-studio:monitor` sigue disponible a mano | Los incidentes ya abiertos, en IRON GUARD | Sí: `true` → 2 tareas y una pasada real a 0 sin incidentes; `false` → 0 tareas y el fichero de entorno idéntico |
+| **3 · Código** | Volver al commit de `api-commit.txt` (abajo), solo si producción sigue en el commit del H7 | `no-store` (vuelve `no-cache, private`), el 413 temprano (vuelve el 401 sin sesión), `verified`, el rechazo de invisibles, los topes de M-2, el cierre de sesiones al restablecer la contraseña y el monitor | El esquema del H7 y la variable. **Es compatible:** el disparador solo rechaza lo que el código nunca hace y el REVOKE quita privilegios que ningún código usa (`informe-db.md` §10) | Sí: con el código del H6 (`7d2c6d8`) sobre el esquema del H7, 56 rutas y 44/50; `publication-check` 0; smoke del H6 de la fase 1, 78 + 26 OK; volver a Legacy con la cadena vacía → 409 `already_legacy`; y de vuelta al H7, su smoke en verde |
+| **4 · Esquema** | `down()` | **Nunca en producción** | — | Sí: con filas se niega y el esquema sigue en 44/50 |
+
+### Vuelta atrás del código: backend del H7 → el commit anterior (`api-commit.txt` del respaldo; hoy sería `1e5f9a0`)
+
+Solo si el código del H7 se porta mal. **Volver el código no es volver los datos.** El destino se lee del respaldo, nunca de un literal (I-4 del reviewer del H5). **Antes, comprobar que `api-commit.txt` empieza por el `PREVIO`:** el paso 0 de `deploy-h7-backend.sh` acepta en una reanudación un `api-commit.txt` con el commit nuevo (líneas 157–161; el del H6 ya no, desde m-6), así que un respaldo rehecho a destiempo podría guardar el destino equivocado.
+
+```bash
+# 0. (opcional) el monitor apagado, si estaba encendido: nivel 2
+# 1. Backend: git como root (dueño del árbol y de .git) y con umask 022, para que www-data lea lo que reescriba
+BK=/var/backups/ironbody/ultron-studio-h7-<fecha UTC>                                     # el respaldo del paso 1 del runbook
+FASE1=<commit desplegado del Hito 7>                                                      # el ESPERADO del script (registro de despliegues de la hoja de ruta)
+cat "$BK/api-commit.txt"                                                                  # tiene que empezar por el PREVIO (hoy sería 1e5f9a0)
+# 1a. SOLO si producción sigue en el commit del H7: si se desplegó otra cosa después, este checkout borraría ese trabajo.
+#     En ese caso NO se hace checkout: se sale por la bandera (nivel 2) y se decide con devops un revert de los commits del H7.
+[ "$(git -C /var/www/api rev-parse HEAD)" = "$(git -C /var/www/api rev-parse "$FASE1")" ] \
+  || { echo "producción ($(git -C /var/www/api rev-parse --short=7 HEAD)) ya no está en el commit del H7: no hacer checkout; salir por la bandera y planear un revert"; exit 1; }
+( cd /var/www/api && umask 022 && git checkout -q --detach "$(cat "$BK/api-commit.txt")" )
+# 2. Cachés como www-data: con umask 077 nacen en 600; root no hace chmod en bootstrap/cache (seguiría un enlace; H-5 de SEC7)
+cd /var/www/api/backend && sudo -u www-data sh -c 'umask 077; php artisan config:cache -q && php artisan route:cache -q'
+stat -c '%U %a %F' bootstrap/cache/config.php bootstrap/cache/routes-v7.php               # www-data 600 regular file (si no es 600: sudo -u www-data chmod 600 …)
+sudo -u www-data php artisan queue:restart
+sudo -u www-data php artisan route:list --path=admin/ultron-studio --json | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))'   # 56
+sudo -u www-data php artisan auth:coverage --unmapped                                    # vacío
+supervisorctl status | grep -c RUNNING                                                    # 13
+curl -sI -H 'Accept: application/json' https://api.ironbodyneiva.cloud/api/admin/ultron-studio/status | grep -i '^cache-control'   # no-cache, private: ha vuelto el código anterior
+# 3. Smoke del H6 de la fase 1 (copiado antes desde ops/ con sus huellas; 3 por hora)
+SMOKE_PHASE=1 bash /root/smoke-run-h6.sh
+```
+
+- **Qué ve el CRM:** nada distinto. El CRM `16c433c` funciona con los dos backends y no lee `verified`.
+- **Mientras el árbol esté en `--detach`, nadie despliega:** se vuelve a `main` o se decide el revert antes de cualquier otro despliegue.
+- **Volver al H7:** `( cd /var/www/api && umask 022 && git checkout -q main )`, las mismas cachés y `queue:restart`, y el smoke del H7 (`bash /root/smoke-run-h7.sh`, copiado otra vez con `smoke-h7.py` y `smoke-h6.py`). Es lo ensayado en el banco. **No** el script de despliegue: no se ha ensayado como vuelta.
+- **El monitor con el código anterior:** la variable se queda y nadie la lee; `routes/console.php` del H6 no programa nada del Studio.
+
+### Lo que no tiene vuelta atrás
+
+- **Una supresión de la Ley 1581** (`ops/supresion-1581.sql` con `\set dry 0`): la redacción es definitiva, y la huella de un número canario suprimido no se puede recalcular. Los respaldos anteriores siguen llevando el dato; restaurar uno obliga a volver a aplicar cada supresión del registro (OPS7 §7).
+- **Una sesión cerrada al restablecer una contraseña:** la persona vuelve a entrar con la contraseña nueva.
+- **Los incidentes que abra el monitor** se quedan en IRON GUARD; el monitor no revierte ni frena nada.
+
+### Vuelta atrás de datos (último recurso)
+
+Solo ante corrupción de datos, con **autorización expresa** y coordinado por `database-specialist`, siguiendo `docs/ops/BACKUPS.md` («Restauración real»): primero a una base aparte, nunca encima de la viva, sabiendo que se pierde todo lo escrito desde el volcado. **Dos cuidados del H7:**
+- **Restaurar con dueños**, no con `--no-owner` (H-6 de OPS7, corregido en `BACKUPS.md` el 02-11-2026): con `--no-owner` las tablas pasan al superusuario y el siguiente `ironbody-migrate` falla con 42501, y se rompe el modelo de roles. Ensayado con dueños: 0 errores, el recuento exacto de las 226 tablas, 44/50/4/14 y la cadena verifica con la `APP_KEY` del entorno (OPS7 §4.5).
+- **Nunca `pg_restore --data-only` sobre el esquema ya creado** (R-4 de DB7): las filas de la cadena pasarían por `uspub_chain_next` en el orden físico del volcado, que puede no ser el de `seq`. La restauración completa (esquema y datos) crea los disparadores después de los datos y no le afecta.
+
+### `ironbody-migrate` sin root (la propuesta del H7, cuando el propietario la instale)
+
+No forma parte del despliegue del H7. Si se instala y da problemas, la vuelta atrás está en la cola de `ops/ironbody-migrate-propuesta.sh`: `install -m 755 /root/ironbody-migrate.pre-h7 /usr/local/bin/ironbody-migrate` (el envoltorio de hoy, guardado en el paso 0 de la instalación). El usuario `ironbody-migrate` y su credencial no molestan; se retiran con `userdel ironbody-migrate` y `rm -r /etc/ironbody-migrate` si el propietario lo decide.
 
 ## Fases siguientes
 

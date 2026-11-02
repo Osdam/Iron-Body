@@ -843,7 +843,7 @@ Las cifras de la tabla son de antes de la fusión del 31-10-2026 y de `cf59cef`.
 
 ## Hito 6: integraciones comerciales
 
-**Fecha:** 31-10/01-11-2026 (Bogotá). **Estado: IMPLEMENTADO EN RAMA, PENDIENTE DE E2E, REVIEWER Y DESPLIEGUE.** Rama `feat/ultron-studio-h6` del backend, nacida de la del Hito 5 (`e1b1d26`), con `origin/main` fusionado en `d2c04a0` (`7ba0ce8` es ancestro); HEAD `e3a0fdd`. **No está en `origin/main` ni en producción.** Contrato: `ULTRON_STUDIO_H6_CONTRACT.md` (decisiones del lead, I1–I13 y Enmiendas 1–4). Las formas exactas de cada DTO y de cada error están en el contrato y en `plans/informes-h6/informe-api.md`, y no se repiten aquí. Sin dependencias nuevas: `composer.json` y `composer.lock` no cambian.
+**Fecha:** 31-10/01-11-2026 (Bogotá). **Estado: IMPLEMENTADO EN RAMA, PENDIENTE DE E2E, REVIEWER Y DESPLIEGUE.** Rama `feat/ultron-studio-h6` del backend, nacida de la del Hito 5 (`e1b1d26`), con `origin/main` fusionado en `d2c04a0` (`7ba0ce8` es ancestro); HEAD `e3a0fdd`. **No está en `origin/main` ni en producción.** *(Así se escribió el 01-11-2026. Al 02-11-2026: E2E 660/660, `reviewer` APROBADO CON OBSERVACIONES y **fase 1 desplegada** el 02-11-2026 04:54 UTC, backend `1e5f9a0` con el código de `4e2e8cf`; ver `ULTRON_STUDIO_FINAL_REPORT.md`, «Hito 6».)* Contrato: `ULTRON_STUDIO_H6_CONTRACT.md` (decisiones del lead, I1–I13 y Enmiendas 1–4). Las formas exactas de cada DTO y de cada error están en el contrato y en `plans/informes-h6/informe-api.md`, y no se repiten aquí. Sin dependencias nuevas: `composer.json` y `composer.lock` no cambian.
 
 | Commit | Paquete | Qué |
 |---|---|---|
@@ -984,4 +984,103 @@ Tres sujetos nuevos (`campaign_link`, `canary_number` e `integration`; `StudioAu
 - la línea base por nombre contra `origin/main` del tester (quedó corriendo al cortarse su sesión; las puertas finales del lead salen en verde, sin rojos que comparar en el Studio) y F2, la validación de la corrección propuesta para H-2;
 - el 429 de la sonda entre procesos y el presupuesto de 30 s con un Twilio lento (el arnés lo tiene preparado, sin ejercitar);
 - la URL configurada en Twilio para `usage-trigger` (§6.2 de `informe-api.md`);
-- el E2E con la pila real de los 15 escenarios.
+- el E2E con la pila real de los 15 escenarios. *(Hecho después: 660/660 el 02-11-2026; `ULTRON_STUDIO_FINAL_REPORT.md`, «Hito 6».)*
+
+## Hito 7: seguridad y producción
+
+**Fecha:** 01/02-11-2026. **Estado: IMPLEMENTADO EN RAMA, SIN DESPLEGAR.** Rama `feat/ultron-studio-h7` del backend (contrato congelado el 01-11-2026 sobre `7d2c6d8`), HEAD `5ed9525`, que lleva fusionado el cierre de la fase 1 del H6. **No está en `origin/main` ni en producción** (producción: `1e5f9a0`). Contrato: `ULTRON_STUDIO_H7_CONTRACT.md`; informes: `plans/informes-h7/`. Sin rutas, permisos ni dependencias nuevas (`composer.json` y `composer.lock` sin cambios).
+
+| Commit | Paquete | Ficheros principales |
+|---|---|---|
+| `982d247` → `bbf9916` | DB7 | `database/migrations/2026_11_02_100001_add_ultron_studio_hardening.php`; `StudioCanaryNumbers.php` (+10, la comprobación previa); `tests/Feature/UltronStudio/UltronStudioHardeningH7Test.php`; ajustes de las pruebas de esquema, de aislamiento y del lector del motor |
+| `9530a51` → `aa3451f` | B7 | `app/Http/Middleware/NoStoreAdminResponses.php` y `ValidatePostSizeWithStudioCap.php` (registrados en `bootstrap/app.php`, líneas 92 y 100); `StudioPublications.php`; los 7 controladores de M-2; `AdminUserController.php`; `tests/Feature/Hardening/**` |
+| `bd4634d` | SEC7 | `app/Support/Text/InvisibleCharacters.php`, `app/Rules/PlainText.php`, `app/Http/Controllers/Api/Internal/InternalMarketingKnowledgeController.php` y sus pruebas |
+| `167e34c` → `fa6eb81` | OPS7 | `app/Console/Commands/UltronStudio/MonitorCommand.php`, el bloque `monitor` de `config/ultron_studio.php`, `routes/console.php` (+35 líneas), `UltronStudioMonitorTest.php`, `.env.example` y `docs/ultron-studio/ops/` |
+| `8f70d18` → `d629202` | PERF7 | Solo `docs/ultron-studio/ops/perf-h7/` y su informe: ningún cambio de código |
+| `1426130` | TEST7, fase A | `UltronStudioMonitorDriftAndFailuresH7Test.php` (4) y `UltronStudioEarlyBodyCapStreamH7Test.php` (1) |
+
+### Migración `2026_11_02_100001_add_ultron_studio_hardening` (DB7)
+
+Del `database-specialist` (`informe-db.md`), verificada en PostgreSQL 14.24 con el modelo de roles (dueño sin superusuario, aplicación solo DML) y en SQLite 3.54.1. Una sola migración, de 5 sentencias en PostgreSQL: `LOCK TABLE … ACCESS EXCLUSIVE` sobre la cadena, el CHECK, la función, el disparador y el `REVOKE`.
+
+- **`uspub_chain_next`** (`BEFORE INSERT` en `ultron_studio_publications`) con la función `ultron_studio_publication_chain()`: plpgsql, INVOKER, dueño el rol que migra y la tabla cualificada (`public.`), para que una tabla temporal con el mismo nombre no falsee la cabeza (D-2). Rechaza con P0001 una entrada por encima de la cabeza que no sea la siguiente encadenada; **lo que no pasa de la cabeza lo deciden el UNIQUE (23505) y el CHECK (23514)**, para que una carrera perdida siga siendo el 409 `publication_moved` (D-1, aceptada por el lead).
+- **`uspub_seq_chk`:** `CHECK ((seq >= 1))`; en SQLite, el disparador `uspub_seq_min`.
+- **`REVOKE UPDATE, DELETE`** de `iron_app` (o de `ULTRON_STUDIO_DB_APP_ROLE` si viene en el entorno del proceso que migra) en la cadena, el libro y las instantáneas, con la comprobación posterior por `has_any_column_privilege` y `has_table_privilege`, que ven lo heredado de otro rol o de `PUBLIC`. Asociaciones y canarios conservan UPDATE: su máquina de estados lo usa.
+- **Guarda de producción** (D-4): con `APP_ENV=production` y sin el rol, la migración falla y no se registra.
+- **`up()` se niega** si la cadena existente no es consecutiva y encadenada (D-3); **`down()` se niega** con filas en cualquiera de las 3 tablas (D-5). **Nunca en producción.**
+- **H-2 del tester del H6** (`StudioCanaryNumbers::registerGated()`, líneas 201–210): la comprobación previa del duplicado, detrás del tope de vivos y bajo `pg_advisory_xact_lock`, con el mismo predicado que `uscn_one_live`. Con el tope lleno, gana `canary_live_limit` (D-7).
+
+| Recuentos (`informe-db.md` §4) | Antes (H6) | Con el H7 | Tras `rollback --step=1` |
+|---|---|---|---|
+| PostgreSQL: disparadores `ultron_studio_%` | 43 | **44** | 43 |
+| PostgreSQL: CHECK `ultron_studio_%` | 49 | **50** | 49 |
+| PostgreSQL: disparadores / CHECK `uspub_%` | 3 / 3 | 4 / 4 | 3 / 3 |
+| SQLite: disparadores `ultron_studio_%` | 30 | **32** | 30 |
+| Tablas / índices parciales | 14 / 4 | 14 / 4 | 14 / 4 |
+| `iron_app` en la cadena, el libro y las instantáneas | `arwd` | **`ar`** | `arwd` |
+| `ultron_studio_forbid()` (md5) | `4ad748b5…` | el mismo | el mismo |
+
+**Contención:** con un lector de la cadena en una transacción abierta, la migración cae a los 5,58 s con 55P03, queda `Pending` y sin nada aplicado; el reintento pasa. Con escritores en el libro y las instantáneas, migra en 16 ms (el `REVOKE` no toma cerrojo de tabla). **Pruebas:** `UltronStudioHardeningH7Test`, PostgreSQL 25/250 y SQLite 25/126 (4 omitidas, solo PostgreSQL); el grupo PostgreSQL de 20 ficheros, 597 pruebas y 11 500 aserciones; **14/14 mutaciones**. **Lo aplicado por decisión del lead fuera de sus ficheros:** la migración y `routes/console.php` en la lista blanca de `UltronEngineIsolationTest`, y el ayudante de las pruebas del lector del motor apuntando a la cabeza (las mismas 247 pruebas y 557 aserciones).
+
+### La API administrativa (B7)
+
+| Pieza | Qué hace | Cifras |
+|---|---|---|
+| (a) `NoStoreAdminResponses` | `Cache-Control: no-store, private` en toda `/api/admin/*`, el **primero** de la pila global (`prepend`): un middleware de grupo no ve los 404, 405, 413, el mantenimiento ni la verificación previa de CORS. Sustituye lo que pusiera el controlador | La exportación XLSX respondía `public` y los SSE `no-cache`. `AdminNoStoreCacheTest` 3/3. Fuera de `/api/admin` no cambia nada (65 rutas del CRM; decisión del propietario) |
+| (b) `StudioAudit::recordDenied` | READ COMMITTED explícito | **Ya estaba** desde el H5 (A10.6): sin cambios |
+| (c) `verified` por entrada | `GET publications` (`data.data[]`) y `GET versions/{uuid}` (`data.publications[]`) ganan `verified: boolean` al final de cada entrada, con las mismas cuatro comprobaciones que `head.signatureOk` (contrato, huella, firma y decodificación atada a `uuid` y `seq`). Las respuestas de escritura no lo llevan; la exportación de fixtures no cambia | `UltronStudioPublicationVerifiedTest` 6/6; unos 47,5 µs por entrada (PERF7) |
+| (d) `ValidatePostSizeWithStudioCap` | Ocupa el hueco de `ValidatePostSize` (`replace`): **detrás de `HandleCors`** y del mantenimiento, **delante de `TrimStrings`**. Rechaza > 64 KB en `/api/admin/ultron-studio*` por `Content-Length` o leyendo el cuerpo con tope, con el mismo 413 `payload_too_large` que la ruta | Con 8 MB, de 2,7–3,3 s a 43–46 ms. **Cambio visible:** sin sesión y por encima del tope, 413 (antes, 401). **Residual:** `Request::capture()` decodifica el JSON antes de cualquier middleware (~40 ms y ~75 MB con ese cuerpo); solo lo evitaría un tope en nginx |
+| (e) M-2 | El tamaño de la lista se valida **antes** que sus elementos (Laravel expande el comodín antes de mirar el `max`) en 8 rutas: `iron-ai/chat`, mensajes y etiquetas del buzón de marketing, `electronic-invoices/bundles` y `preview`, `employee-access`, la disponibilidad de valoraciones, `exports/{dataset}` (tope nuevo: las columnas del dataset) y `workforce/staff` (tope nuevo: el catálogo de cargos) | Con 10 000 elementos, de 1,5–100 s a 43–202 ms. `tests/Feature/Hardening/ListSizesFirst/` (8 ficheros, 16 pruebas): una lista por encima → 422 y el validador no la expande |
+| (f) `TrustProxies` | Sin proxies de confianza ni `config/trustedproxy.php`: `ip()` es el par TCP. Una prueba falla si alguien configura proxies | `TrustedProxiesNetworkTest` 3/3. No comprobado en el servidor |
+| H-2 de SEC7 | `AdminUserController::guardarClave` + `revocarOtrasSesiones`: en la misma transacción que la contraseña y la traza, `admin_sessions.revoked_at = now()` y `revoked_reason = 'password_reset'` en las sesiones **vivas** de la cuenta, salvo la de quien actúa si es la suya; la traza suma `sessions_revoked` (el número) | `AdminPasswordResetRevokesSessionsTest` 4/4. El afectado recibe 403 `admin_token_invalid` y el CRM (`auth.interceptor.ts`) lo devuelve al login. Si el restablecimiento falla, no se cierra nada |
+
+**Suites de B7** (árbol compartido, 01/02-11-2026): Studio, Access, Chaos y Hardening en SQLite, 2 798 pruebas sin fallos (106 omitidas, solo PostgreSQL); Marketing 2 155 + 2 829; Hardening en PostgreSQL 44/44; Caja 680/680 (una aserción de `ReceiptAgentSecurityTest` pasó de «sin `no-store`» a `no-store, private`, por decisión del lead).
+
+### Los caracteres invisibles (SEC7, código)
+
+- **`App\Support\Text\InvisibleCharacters`:** `INVISIBLE_CLASS` es carácter a carácter la de `lab-invisibles` (`\p{Cf}`, U+E0000–E007F, U+2028/2029, C0 salvo `\t\n\r`, DEL y C1); el ZWJ (U+200D) solo se admite dentro de un emoji (precedido de pictograma, U+FE0F o tono de piel, y seguido de pictograma); U+FE00–FE0F y U+202F pasan. Escrita para el PCRE 10.39 de producción: solo `\p{Cf}`, rangos explícitos y miradas atrás, sin `\p{Extended_Pictographic}`.
+- **`PlainText`:** rechaza la clase con 422 «El texto contiene un carácter invisible o de control (U+XXXX) que no se puede guardar…», sin repetir el texto; en una sola línea, «tiene que ir en una sola línea» para `\t\n\r`.
+- **`InternalMarketingKnowledgeController`** (la API de n8n; el único fichero de la zona del motor que cruza la puerta de diff, nombrado en el contrato): limpia `key`, `title`, `content` y las cadenas de `metadata` **antes** de validar y de buscar la `key`; U+2028/2029 → salto, controles → espacio, el resto fuera; UTF-8 inválido → `?` (antes, 500 por 22021). Registra `marketing.knowledge.invisibles_cleaned` (campos, recuento y hasta 16 puntos de código, sin texto) y añade `cleaned` a las respuestas 200 y 409.
+- **Pruebas:** `InvisibleCharactersTest` 91, `StudioPlainTextInvisiblesTest` 11 y `KnowledgeInvisiblesTest` 7; la exhaustiva de los 1 112 063 puntos de código, 0 discrepancias con `lab-invisibles`; PostgreSQL 109/689.
+
+### El monitor y la operación (OPS7)
+
+- **`ultron-studio:monitor [--check=publication|integrations|queues] [--dry-run] [--json]`:** aplica las reglas de `publication-check`, de `integrations-doctor --expect=…` (con `ULTRON_STUDIO_MONITOR_EXPECT`, o la del código) y la deriva de la configuración autorizada sobre los mismos servicios, y las colas con el criterio de `queue:health`. No lanza esos comandos (`Artisan::call` pisaría la salida). Sale con 0 si cuadra, 1 si no y 2 si se usa mal. Abre o suma incidentes con `IncidentRecorder::record()`, fuente `ultron_studio`: `publication_drift` (alto), `integrations_drift` (alto) y `monitor_check_failed` (medio, con la clase del error y nunca su mensaje). Las colas no abren incidente propio. `--dry-run` solo lee. Sin red ni notificaciones externas.
+- **Configuración:** `ULTRON_STUDIO_MONITOR_ENABLED` (`filter_var`, `false` por defecto) y `ULTRON_STUDIO_MONITOR_EXPECT` (vacía = la del código; mal escrita, `expectation_invalid`).
+- **`routes/console.php`:** solo con la bandera encendida, `ultron-studio:monitor` cada 30 minutos e `ultron-studio:integrations-snapshot` a las 07:10 de Bogotá, los dos con `withoutOverlapping(10)` y `onOneServer()`. Con la bandera apagada no se programa nada del Studio (en producción hoy, `1e5f9a0`, tampoco: su `routes/console.php` no nombra el Studio).
+- **Detalle de motor:** en PostgreSQL, `incidents.evidence` es `jsonb` y reordena las claves; la prueba compara con las claves ordenadas en los dos lados.
+- **Pruebas:** `UltronStudioMonitorTest` 12/12 (135 aserciones) en SQLite y PostgreSQL, y las 4 de TEST7 que cierran los 5 mutantes que vivían.
+- **Scripts** (despliegue, smoke, esquema, propuesta de `ironbody-migrate`, supresión 1581 y banco): `docs/ultron-studio/ops/README.md`, «Hito 7».
+
+### Rendimiento (PERF7)
+
+Medido en local (Apple M2, PHP 8.3.33 con OPcache, PostgreSQL 14, caché y cola `database`), sin cambios de código (`informe-performance.md`):
+- **Sin N+1:** las sentencias de cada ruta del Studio no crecen con los datos (1/50/200 versiones o entradas, 0–1 000 turnos, 0–500 campañas).
+- **Coste fijo por petición:** 14 sentencias de los limitadores y la caché de permisos sobre la caché `database` (3,6 de los 5,1 ms de base de datos de una lectura ligera) → F-3.
+- **El commit del motor:** el lector del Studio añade ~0,2 ms (1 `SELECT`, sin punto de guardado); con `off`, 0 sentencias del Studio.
+- **F-1 (importante, `backend`, en el H7):** `UltronCanaryReport::turnos()` es O(T×M); la evidencia del canario tarda ~1,05 s con 200 turnos y ~3,9 s con 1 000. Criterio de aceptación: `turnos()` ≤ 20 ms con T = 200 / M = 2 000, la evidencia p95 ≤ 100 ms con 200 turnos y ≤ 150 ms con 1 000, la prueba dorada en verde y las mismas sentencias. [PENDIENTE: corrección y medida (`backend`).]
+- **F-2 (menor):** `integrityOk()` recalculado por asociación en `StudioCampaignLinks::dtos()` (−~12 ms memoizando). [PENDIENTE (`backend`).]
+- **F-5 (observación, fuera del H7):** 15 `Schema::hasTable()` por commit del motor (2,9–5,1 ms).
+- **Presupuestos:** `ops/perf-h7/presupuestos-h7.json` (smoke, CI y CRM). El smoke del H7 todavía no los carga.
+
+### Aislamiento del motor
+
+- **La puerta de diff del contrato** (motor, integraciones existentes, catálogo y dependencias) solo la cruzan los 10 ficheros que el contrato nombra; comprobado el 02-11-2026 sobre `5ed9525` frente a `1e5f9a0`, y la repite el paso 0 de `deploy-h7-backend.sh`. En la zona del motor, solo `InternalMarketingKnowledgeController.php` (SEC7).
+- **Legacy:** TEST7 corrió las suites del motor (Marketing y las 4 del Studio que lo leen o lo vigilan) con la llave en `off` y en `all`: **5 011/5 011 en las dos**, con los mismos nombres.
+
+### Pruebas
+
+| Ejecución | Resultado | Fuente |
+|---|---|---|
+| `UltronStudioHardeningH7Test` | PostgreSQL 25/250; SQLite 25/126 (4 omitidas) | `informe-db.md` §6.2 |
+| Grupo PostgreSQL de DB7 (20 ficheros) | 597 pruebas, 11 500 aserciones, 0 fallos | `informe-db.md` §6.3 |
+| Studio, Access, Chaos y Hardening en SQLite (B7) | 2 798, 0 fallos (106 omitidas, solo PostgreSQL) | `informe-backend.md` §4 |
+| `tests/Feature/Hardening` en PostgreSQL | 44/44 | `informe-backend.md` §4 |
+| Invisibles (SEC7) | 91 + 11 + 7 en SQLite; PostgreSQL 109/689 | `informe-security.md` §2 |
+| `UltronStudioMonitorTest` (OPS7) | 12/12 en SQLite y PostgreSQL | `informe-devops-h7.md` §0 |
+| Mutaciones de lo nuevo (TEST7) | 53/53 | `informe-tester.md` §2.1 |
+| Legacy y suites del motor, llave en `off` y en `all` (TEST7) | 5 011/5 011 en las dos | `informe-tester.md` §2.2 |
+| Puerta PostgreSQL del grupo del Studio (TEST7) | 2 799/2 799, 0 omitidas | `informe-tester.md` §2.3 |
+| Suite completa por nombre contra `origin/main` del mismo día (TEST7, fase B) | [PENDIENTE (`tester`).] | `informe-tester.md` §3 |
+
+**Lo que no se verificó:** nada en producción (ni la migración con los roles reales `iron`/`iron_app`, ni `ironbody-migrate` y su `PGOPTIONS`, ni FPM, ni el PCRE 10.39); el tope temprano con `multipart/form-data` (PHP parsea el cuerpo antes de Laravel: solo lo ve por `Content-Length`); el monitor contra una base caída de verdad (se simuló con una excepción); la concurrencia de la página del Studio (5 GET en paralelo) y la memoria (PERF7).

@@ -454,6 +454,8 @@ Sigue vigente y cubre ahora el Hito 6: `docs/ultron-studio/ops/pgunit.sh` con el
 
 ### Pendiente del propietario (Hito 7)
 
+*(Actualización del 02-11-2026: el estado de cada punto, en «Hito 7», abajo, y en la hoja de ruta, «Pendientes del propietario y dependencias externas». En la rama del H7, sin desplegar: el procedimiento de supresión, la comprobación previa del duplicado (H-2 del tester), los invisibles de `PlainText` y la programación de `integrations-snapshot` con el monitor.)*
+
 Diferido por las Enmiendas 3 y 4 y por los informes de seguridad:
 - **El procedimiento de supresión** (derecho de supresión, Ley 1581), con el rol dueño y su evento en el libro: cubre las 3 tablas nuevas (la huella, los 4 dígitos, el alias y los motivos de una fila revocada; el nombre y el rol del personal; las notas) además de las de F, del Hito 4 y de `ultron_studio_publications`.
 - **La regla del alias más fuerte** (series de dígitos con separadores que sumen 7 o más), que la Enmienda 3 difiere.
@@ -466,6 +468,80 @@ Diferido por las Enmiendas 3 y 4 y por los informes de seguridad:
 - **Programar `integrations-snapshot`** (el registro de cambios de configuración) y persistir los avisos de `usage-trigger`, si se decide.
 
 **Secretos:** ninguna revisión encontró secretos expuestos ni imprimió ninguno real (las pruebas usan valores centinela y una `APP_KEY` sintética); no hay nada que rotar.
+
+## Hito 7 (seguridad y producción): revisión transversal (SEC7) y endurecimiento
+
+**Estado:** implementado en la rama `feat/ultron-studio-h7` (HEAD `5ed9525`), **sin desplegar**. Revisión transversal: `plans/informes-h7/informe-security.md` (`security`, 01-11-2026, sobre `f78adfc` y el CRM `f38699d` en solo lectura; confirmada en `bd4634d`). Lo que la corrige o la completa: B7 (`aa3451f`, H-2), OPS7 (`fa6eb81`, H-5) y DB7 (`bbf9916`, la cadena, los privilegios y H-2 del tester del H6). [PENDIENTE: el veredicto de REV7 sobre el hito (`reviewer`).]
+
+**Veredicto de SEC7:** la parte (a), los caracteres invisibles, hecha y verificada; **sin bloqueantes nuevos para el hito**. Dos medias que exigían decisión antes de la fase 2: las dependencias con avisos (H-1) y el restablecimiento de contraseña que no revocaba sesiones (H-2, **corregido después en B7**).
+
+**Superficie que cambia** (ninguna ruta, permiso ni dependencia nueva: la puerta de diff, comprobada sobre `5ed9525`, no toca `composer.json` ni `composer.lock`):
+- **La base:** `iron_app` pierde UPDATE y DELETE en la cadena, el libro y las instantáneas; la cadena solo admite la entrada siguiente y encadenada (`uspub_chain_next`, función INVOKER con la tabla cualificada: una tabla temporal con el mismo nombre no la engaña, D-2 de DB7) y `seq >= 1`.
+- **Las respuestas:** `Cache-Control: no-store, private` en toda `/api/admin/*`; `verified` por entrada en el historial (las mismas comprobaciones que la cabeza; cubre lo firmado, no `action`, `reason`, actor ni fecha, que protege la cadena de solo inserción).
+- **Las entradas:** el tope de 64 KB del Studio antes de `TrimStrings`, también sin sesión; los invisibles en `PlainText` (422) y en la API interna de conocimiento (limpieza y registro sin el texto); las listas de 8 rutas validadas por tamaño antes que elemento a elemento.
+- **Las sesiones:** restablecer la contraseña desde el CRM revoca las demás sesiones de la cuenta, «recuérdame» incluido; los vales de SSE dejan de valer en el acto.
+- **La operación:** el monitor (lecturas de la base, sin red, incidentes en IRON GUARD), la supresión 1581 con el rol dueño y la propuesta de `ironbody-migrate` sin root.
+
+### Hallazgos y estado
+
+| Origen · # | Gravedad | Hallazgo | Estado al 02-11-2026 |
+|---|---|---|---|
+| SEC7 · H-1 | Media | `composer audit`: 13 paquetes, 46 avisos (2 críticos, 15 altos). TokenGuard y jmespath, **no alcanzables**; la URL firmada temporal (< 12.61.1), **en uso** (`MarketingAttachmentController.php:84`) | Pendiente: actualizar dentro de las mayores actuales (framework ≥ 12.69, guzzle ≥ 7.15.2, psr7 ≥ 2.12.3, commonmark ≥ 2.10.2, symfony 7.4 último parche, jmespath ≥ 2.9.1), con suite completa, PostgreSQL y E2E, en un despliegue propio. `backend`/`devops`; autoriza el propietario |
+| SEC7 · H-2 | Media | Restablecer la contraseña desde el CRM no revocaba las sesiones (`AdminUserController.php:322-324`): con «recuérdame» (30 días), el token de un atacante seguía valiendo | **Corregido en la rama** (B7, `aa3451f`): en la misma transacción, `revoked_reason = password_reset`; el afectado recibe 403 `admin_token_invalid` y el CRM lo devuelve al login; quien restablece la suya conserva la sesión con la que actúa. 4/4 pruebas; las mutaciones caen. **Residual:** un login con la contraseña anterior confirmado en los milisegundos entre la comprobación del hash y la transacción podría dejar una sesión viva (exige conocer esa contraseña) |
+| SEC7 · H-3 | Baja | `npm audit --omit=dev` del CRM: 6 avisos en `@angular/*` 21.2.10, sin SSR ni los sumideros afectados | Pendiente: parche a 21.2.24, `ng test` y build. `frontend`/`devops` |
+| SEC7 · H-4 | Baja | `security:check-secret-exposure` vigila 18 claves y deja fuera 13 (entre ellas `ADMIN_API_TOKEN`, `AUTOMATION_INTERNAL_SECRET`, `DB_OWNER_PASSWORD`, `MAIL_PASSWORD`, `N8N_WEBHOOK_SECRET`) | Pendiente. `backend` |
+| SEC7 · H-5 | Baja | La propuesta de `ironbody-migrate` hacía `chmod 600` como root sobre una caché en un directorio que escribe `www-data` (seguiría un enlace) | **Corregido** (OPS7, `fa6eb81`): lo hace `www-data` y nunca sobre un enlace, en la propuesta y en `deploy-h7-backend.sh`; ensayado (el destino de un enlace sigue en 644) |
+| SEC7 · H-6 | Baja | Las frases y etiquetas de las condiciones de reglas y el texto del juez usan la lista corta de invisibles | Pendiente: cambiar backend y CRM a la vez a la clase completa y reexportar el fixture. `backend` + `frontend` + `tester` |
+| SEC7 · H-7 | Baja | El OTP usa el Account SID y el **Auth Token maestro** de Twilio | Pendiente: API key restringida (Verify/SMS) y rotar el token. Propietario + `backend` |
+| SEC7 · H-8 | Nota | La limpieza nueva es en la escritura: una fila de conocimiento ya guardada y aprobada con invisibles llegaría al prompt | Pendiente: el SQL de solo lectura de SEC7 §5 y, con contrato, limpiar también en la lectura. Propietario + `architect` |
+| OPS7 · H-1 | Media, por comprobar | `schedule:run` en el crontab de root: cada tarea programada carga como root las cachés de `www-data` | Pendiente, **antes de encender el monitor**. Propietario |
+| OPS7 · H-3 | Media | El fichero de entorno, probablemente `www-data 600`: `www-data` puede cambiar la configuración de todo | Pendiente: `root:www-data 640` (paso 3b de la propuesta). Propietario |
+| OPS7 · H-6 | Media | La restauración de emergencia de `docs/ops/BACKUPS.md` con `--no-owner` rompía el modelo de roles | **Corregido en la documentación** el 02-11-2026 (DOC7) |
+| DB7 · §9 | Nota | Con `log_error_verbosity` por defecto, un 23505 o un 23514 de los canarios deja la huella del teléfono, o la fila entera (alias, 4 dígitos, cifrado de voz), en el log del servidor PostgreSQL | La aplicación ya no provoca el 23505 en el alta normal (comprobación previa en la rama); `terse` sigue pendiente del propietario, **antes de la fase 2 del H6** |
+| AS-5 del H5 / invisibles del H6 | Media (H5) | `PlainText` dejaba pasar invisibles que acaban en columnas que no se pueden corregir | **Corregido en la rama** (SEC7-a) para `PlainText` y la API de conocimiento; quedan las condiciones y el juez (H-6) |
+| B-2 del H5 | Baja | El historial no verificaba cada entrada | **Corregido en la rama** (B7-c) |
+| AS-3/N-3 del H5 | Baja | `seq` envenenado con DML dejaba la cadena sin salida | **Corregido en la rama** (DB7) |
+
+**Notas sin hallazgo de SEC7** (para el propietario): CORS con orígenes de desarrollo en la configuración de producción, sin credenciales (impacto bajo); `SecurityHeaders` sin HSTS ni CSP, delegados a nginx (comprobarlo en el servidor); el token del CRM en el almacenamiento del navegador y sin caducidad por inactividad; `.env.production.example` con los datos del emisor (persona natural); y los homoglifos en la `key` de conocimiento, que esta clase no cubre.
+
+### Matriz de riesgos residuales
+
+La de SEC7 §3, con el estado de H-2 tras B7.
+
+| Riesgo | Prob. | Impacto | Nivel | Control actual | Procedimiento / dueño |
+|---|---|---|---|---|---|
+| Aviso de dependencia con un camino no detectado (H-1, H-3) | Media | Alto | **Medio** | La revisión de alcance de SEC7 | Actualizar dentro de la mayor, suite + PostgreSQL + E2E, despliegue autorizado |
+| Sesión robada que sobrevive al restablecer la contraseña (H-2) | Baja | Alto | **Medio hasta desplegar el H7**; después, la carrera estrecha de B7 | Desactivar la cuenta corta al instante | Corregido en la rama (B7); se cierra con el despliegue |
+| RCE como `www-data` → root en el siguiente despliegue (`ironbody-migrate` de hoy) | Baja | Crítico | **Medio** | Ninguno técnico hoy | Instalar la propuesta de OPS7 (H-5 ya corregido). Propietario |
+| Invisibles en conocimiento ya aprobado (H-8) | Baja | Medio | Bajo | Aprobación humana | SQL de SEC7 §5; limpiar en la lectura, con contrato |
+| Invisibles en las condiciones de reglas (H-6) | Baja | Bajo | Bajo | Solo personal con `ultron.manage_rules`; sin efecto en el motor | Cambio coordinado backend + CRM + fixture |
+| Auth Token maestro de Twilio expuesto (H-7) | Baja | Alto | Bajo-Medio | El fichero de entorno y la caché en 600 | API key restringida |
+| Fichero parcial de secretos legible (H-4) | Baja | Alto | Bajo | La orden detecta los ficheros de entorno completos | Ampliar las claves |
+| Token del CRM en el almacenamiento web (XSS) | Baja | Alto | Bajo | Angular escapa; sin `innerHTML` | CSP en nginx; caducidad por inactividad |
+| Homoglifos en la `key` de conocimiento | Baja | Medio | Bajo | Aprobación humana; 409 | Formato `^[a-z0-9._-]+$` con acuerdo de n8n |
+
+Los hallazgos de OPS7 (H-1, H-3) y la nota de DB7 (§9) no están en la matriz de SEC7: sus autores los clasifican como arriba, sin probabilidad ni impacto, y esta documentación no los valora.
+
+### Verificado sin hallazgo (SEC7 §2)
+
+- **Secretos en el repositorio y en el build:** 15 patrones sobre los ficheros versionados, solo valores sintéticos (pruebas, fixtures, documentación y la `APP_KEY` 00..1f del exportador); el build de producción del CRM, 195 ficheros, 0 patrones y **0 source maps**.
+- **Permisos:** 105; el Administrador con 86 y sin `roles.manage`, `users.manage`, `ultron.publish`, `ultron.rollback`, `ultron.lab_run`, `ultron.canary_authorize` ni `ultron.integrations_manage` (comprobado de nuevo por DOC7 el 02-11-2026 sobre `5ed9525` con `CrmPermission::byRole()`).
+- **Rutas del Studio:** 56 (no 94); secretos solo como `{present, fp}`, teléfono solo con 4 dígitos, IP y agente a NULL en el libro.
+- **Proveedores:** el motor, con `store` por defecto en false; el laboratorio, Responses con `store:false`, URL fija en producción y clave propia; Meta con `graph_base` fijo; ElevenLabs sin llamadas.
+- **Prompt injection:** el motor solo **sella** el commit con la declaración; ni las reglas S-NNN ni la configuración del Studio llegan al prompt de producción. Llegan al laboratorio (actor y juez, `store:false`, salidas filtradas con `lab-invisibles`). La salida del motor la vigilan `OutboundContentGuard` y `ComposerStyleGuard`.
+- **`TrustProxies`:** sin proxies de confianza (nginx → FastCGI, sin CDN), lo correcto; B7 lo fija con una prueba de `X-Forwarded-For` falsificado.
+
+**No verificado por SEC7:** el servidor (`APP_ENV` y `APP_DEBUG` reales, nginx, permisos del fichero de entorno, alcances de los tokens de Meta y el PCRE 10.39), el CRM en un navegador y el E2E. Tras desplegar, la sonda de la clase de invisibles en el servidor está en el runbook (`ULTRON_STUDIO_DEPLOYMENT_PLAN.md`, «Hito 7», paso 9).
+
+### Protecciones del Hito 7 (rigen en producción cuando se despliegue)
+
+Las de la hoja de ruta, «Protecciones del Hito 7»: la cadena también contra el DML; `no-store`; el tope temprano; los invisibles; el cierre de sesiones; las listas por tamaño; el monitor que vigila y no actúa; y nada que cambie lo que ULTRON dice o hace.
+
+### Pendiente del propietario
+
+Consolidado, con su procedimiento, en `ULTRON_STUDIO_MASTER_ROADMAP.md`, «Pendientes del propietario y dependencias externas (consolidado al 02-11-2026)», bloques A y B.
+
+**Secretos:** ninguna revisión del H7 encontró secretos reales en el repositorio ni en los builds. **Uno sí está expuesto fuera del repositorio:** la clave de OpenAI del laboratorio viajó por el chat el 02-11-2026 (fase 3 del Hito 4, `ULTRON_STUDIO_FINAL_REPORT.md`); el lead la llevó al servidor y destruyó sus copias, pero **debe rotarse** en el panel de OpenAI (propietario). Su valor no se reproduce en ningún documento.
 
 ## Requisitos para las fases siguientes (recogidos de las revisiones y la auditoría)
 
