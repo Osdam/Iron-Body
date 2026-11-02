@@ -1,0 +1,12 @@
+campañas en el espejo: 500 · asociaciones activas: 50 · versiones distintas: 3
+
+| Tramo | consultas | p50 ms | p95 ms | máx ms |
+|---|---|---|---|---|
+| 1. connection() (estado de las 3 cuentas) | 10 | 4.72 | 5.28 | 5.30 |
+| 2. campaigns() (500 filas → DTO + orden) | 4 | 36.76 | 37.23 | 37.50 |
+| 3. asociaciones activas + versión (con content) | 2 | 3.37 | 3.63 | 3.68 |
+| 4. dtos() de las 50 activas (integrityOk por asociación) | 2 | 5.87 | 6.04 | 6.11 |
+| 5. integrityOk() de UNA versión | 0 | 0.26 | 0.26 | 0.27 |
+| 6. campaignsPage() entero (página de 20) | 17 | 51.12 | 52.32 | 52.42 |
+
+carga: 2.24 4.41 4.12

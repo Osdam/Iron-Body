@@ -1,0 +1,11 @@
+filas: 500
+
+| Tramo | p50 ms | p95 ms | máx ms |
+|---|---|---|---|
+| campaigns() entero | 17.53 | 17.75 | 17.79 |
+| solo la consulta del espejo (500 modelos) | 2.05 | 2.13 | 2.15 |
+| 500 × campaignDto() | 14.28 | 14.68 | 14.69 |
+| sort() de 500 filas | 1.52 | 1.57 | 1.58 |
+| campaignsPage() entero (página de 20) | 27.23 | 27.52 | 27.73 |
+
+carga: 1.85 3.63 4.07
