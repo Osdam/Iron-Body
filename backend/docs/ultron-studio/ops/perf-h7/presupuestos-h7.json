@@ -1,0 +1,342 @@
+{
+  "version": "perf7-2026-11-02",
+  "source": "docs/ultron-studio/plans/informes-h7/informe-performance.md §7 · banco HTTP local: Apple M2 8 núcleos / 8 GB, php artisan serve --no-reload (cli-server con OPcache, JIT apagado), APP_ENV=production con caché de config y rutas, caché y cola database, PostgreSQL 14 local; 90 muestras por ruta (3 tandas de 30 tras 5 de calentamiento), carga 1 min 2,0–3,1",
+  "howToUse": "smoke-h7.py (OPS7) lo carga, y por cada ruta hace `samples.warmup` GET sin contar y `samples.n` cronometradas (time.perf_counter() alrededor de call()), en serie y separadas al menos minIntervalSeconds (cupo de lectura: 120/min por credencial; la evidencia: 10/min por persona y 30/min por red). FALLO si la mediana supera p50Ms, si el máximo supera p95Ms, si el cuerpo supera maxBytes o si el estado no es 200. OMITIDO si falta lo que pide `requires`.",
+  "calibration": "Los p50Ms/p95Ms son TECHOS iniciales (≈ 3–4× el p95 local), no medidas de producción. La primera pasada del smoke en producción deja la línea base real (mediana y máximo por ruta). OPS7 ajusta después cada techo a max(1,5 × p95 de producción, p95 de producción + 50 ms) y lo deja anotado. Con 5 muestras, el «p95» es el máximo: un solo pico puede dar FALLO; se repite una vez antes de darlo por bueno.",
+  "samples": {
+    "warmup": 1,
+    "n": 5,
+    "minIntervalSeconds": 0.6
+  },
+  "routes": [
+    {
+      "name": "GET status",
+      "path": "/admin/ultron-studio/status",
+      "p50Ms": 150,
+      "p95Ms": 250,
+      "maxBytes": 4096,
+      "local": {
+        "p50Ms": 52.2,
+        "p95Ms": 55.7,
+        "bytes": 1839
+      }
+    },
+    {
+      "name": "GET catalog",
+      "path": "/admin/ultron-studio/catalog",
+      "p50Ms": 150,
+      "p95Ms": 250,
+      "maxBytes": 49152,
+      "local": {
+        "p50Ms": 48.2,
+        "p95Ms": 51.4,
+        "bytes": 35159
+      }
+    },
+    {
+      "name": "GET draft",
+      "path": "/admin/ultron-studio/draft",
+      "p50Ms": 150,
+      "p95Ms": 250,
+      "maxBytes": 81920,
+      "note": "el borrador admite hasta 64 KB de contenido (StudioDraftNormalizer::MAX_BYTES)",
+      "local": {
+        "p50Ms": 51.1,
+        "p95Ms": 53.3,
+        "bytes": 3321
+      }
+    },
+    {
+      "name": "GET rules",
+      "path": "/admin/ultron-studio/rules",
+      "p50Ms": 150,
+      "p95Ms": 250,
+      "maxBytes": 32768,
+      "local": {
+        "p50Ms": 51.9,
+        "p95Ms": 55.3,
+        "bytes": 9159
+      }
+    },
+    {
+      "name": "GET versions (20)",
+      "path": "/admin/ultron-studio/versions",
+      "p50Ms": 150,
+      "p95Ms": 250,
+      "maxBytes": 24576,
+      "note": "la lista no lleva `content`: si lo llevara, ~10 KB por versión",
+      "local": {
+        "p50Ms": 53.2,
+        "p95Ms": 55.9,
+        "bytes": 13597
+      }
+    },
+    {
+      "name": "GET versions/{uuid}",
+      "path": "/admin/ultron-studio/versions/{firstVersion}",
+      "requires": "firstVersion = data.data[0].uuid de GET versions",
+      "p50Ms": 150,
+      "p95Ms": 250,
+      "maxBytes": 98304,
+      "note": "~0,39 KB por entrada de la cadena que la nombra (sin LIMIT); con 1 entrada, 10,3 KB",
+      "local": {
+        "p50Ms": 52.1,
+        "p95Ms": 54.8,
+        "bytes": 10308
+      }
+    },
+    {
+      "name": "GET publications (20)",
+      "path": "/admin/ultron-studio/publications",
+      "p50Ms": 150,
+      "p95Ms": 250,
+      "maxBytes": 16384,
+      "note": "el texto firmado (effective_json, ≤ 16 KB por entrada) NO debe salir: si saliera, el cuerpo se dispara",
+      "local": {
+        "p50Ms": 53.2,
+        "p95Ms": 55.3,
+        "bytes": 9642
+      }
+    },
+    {
+      "name": "GET versions/{uuid}/canary-evidence",
+      "path": "/admin/ultron-studio/versions/{canary}/canary-evidence",
+      "requires": "canary = data.engine.publication.canary.versionUuid de GET status (sin versión en CANARY: OMITIDO)",
+      "samples": {
+        "warmup": 0,
+        "n": 3,
+        "minIntervalSeconds": 6.5
+      },
+      "p50Ms": 2000,
+      "p95Ms": 2500,
+      "p95MsAfterF1": 400,
+      "maxBytes": 2048,
+      "note": "F-1: hasta que backend corrija UltronCanaryReport::turnos(), el coste crece con turnos × mensajes del canario (1,07 s con 200 turnos en local); tras la corrección, el techo pasa a p95MsAfterF1",
+      "local": {
+        "p50Ms": 1054.1,
+        "p95Ms": 1068.3,
+        "bytes": 866
+      }
+    },
+    {
+      "name": "GET audit",
+      "path": "/admin/ultron-studio/audit",
+      "p50Ms": 150,
+      "p95Ms": 250,
+      "maxBytes": 24576,
+      "local": {
+        "p50Ms": 50.3,
+        "p95Ms": 57.1,
+        "bytes": 10139
+      }
+    },
+    {
+      "name": "GET engine/readings",
+      "path": "/admin/ultron-studio/engine/readings",
+      "p50Ms": 150,
+      "p95Ms": 250,
+      "maxBytes": 4096,
+      "local": {
+        "p50Ms": 53.9,
+        "p95Ms": 57.0,
+        "bytes": 1317
+      }
+    },
+    {
+      "name": "GET integrations/status",
+      "path": "/admin/ultron-studio/integrations/status",
+      "p50Ms": 150,
+      "p95Ms": 250,
+      "maxBytes": 4096,
+      "local": {
+        "p50Ms": 60.0,
+        "p95Ms": 62.7,
+        "bytes": 1328
+      }
+    },
+    {
+      "name": "GET integrations/meta/campaigns (20)",
+      "path": "/admin/ultron-studio/integrations/meta/campaigns",
+      "p50Ms": 250,
+      "p95Ms": 400,
+      "maxBytes": 20480,
+      "note": "pagina en PHP sobre TODO el espejo y calcula integrityOk() de la versión de cada asociación activa (ver informe F-3); producción: 114 filas en meta_ad_entities",
+      "local": {
+        "p50Ms": 108.3,
+        "p95Ms": 111.1,
+        "bytes": 11419,
+        "data": "500 campañas / 50 activas"
+      }
+    },
+    {
+      "name": "GET integrations/meta/links (20)",
+      "path": "/admin/ultron-studio/integrations/meta/links",
+      "p50Ms": 150,
+      "p95Ms": 250,
+      "maxBytes": 24576,
+      "local": {
+        "p50Ms": 55.1,
+        "p95Ms": 59.2,
+        "bytes": 13388
+      }
+    },
+    {
+      "name": "GET integrations/canaries",
+      "path": "/admin/ultron-studio/integrations/canaries",
+      "p50Ms": 150,
+      "p95Ms": 250,
+      "maxBytes": 8192,
+      "local": {
+        "p50Ms": 52.6,
+        "p95Ms": 55.8,
+        "bytes": 4107
+      }
+    },
+    {
+      "name": "GET lab/status",
+      "path": "/admin/ultron-studio/lab/status",
+      "p50Ms": 150,
+      "p95Ms": 250,
+      "maxBytes": 2048,
+      "local": {
+        "p50Ms": 49.9,
+        "p95Ms": 53.0,
+        "bytes": 831
+      }
+    },
+    {
+      "name": "GET lab/runs (20)",
+      "path": "/admin/ultron-studio/lab/runs",
+      "requires": "laboratorio encendido (apagado: 409 lab_disabled → OMITIDO)",
+      "p50Ms": 150,
+      "p95Ms": 250,
+      "maxBytes": 24576,
+      "local": {
+        "p50Ms": 53.9,
+        "p95Ms": 57.0,
+        "bytes": 15703
+      }
+    },
+    {
+      "name": "GET lab/runs/{uuid}",
+      "path": "/admin/ultron-studio/lab/runs/{firstRun}",
+      "requires": "laboratorio encendido y al menos una ejecución (firstRun = data.data[0].uuid de GET lab/runs)",
+      "p50Ms": 150,
+      "p95Ms": 250,
+      "maxBytes": 40960,
+      "local": {
+        "p50Ms": 53.4,
+        "p95Ms": 56.3,
+        "bytes": 27675,
+        "data": "12 casos"
+      }
+    }
+  ],
+  "ciOnly": {
+    "note": "No se pueden medir desde el smoke (no hay DB::listen en producción): son para TEST7/CI con el arnés PerfH7QueriesTest.php o una prueba equivalente.",
+    "statementsDoNotGrowWithData": "Por ruta, el número de sentencias con los datos pequeños y con los grandes es el mismo (±1: el `touch` de la sesión, como mucho una vez por segundo, y la lotería de `cache_locks`).",
+    "engineCommit": "Con MARKETING_ULTRON_STUDIO_CONFIG=off, ninguna sentencia nombra ultron_studio_*; con canary/all, exactamente 1 SELECT de ultron_studio_publications, sin punto de guardado, igual con 0, 1 y 50 publicaciones (ya lo fija UltronCommitStudioStampTest).",
+    "crmBundle": "ver crmBudgets en el informe (§7.3): inicial y chunks perezosos del Studio, en bytes crudos y gzip",
+    "statementsMax": {
+      "store": "CACHE_STORE=database (como producción), limitadores en estado estable; con CACHE_STORE=array, restar 14 (10 de los dos límites del throttle y 4 lecturas de la caché de permisos); la evidencia pasa por dos limitadores: restar 24",
+      "rule": "máximo = medido + 2 (el touch de la sesión, ≤ 1/s, y la lotería de cache_locks)",
+      "measured": {
+        "GET status": 19,
+        "GET catalog": 16,
+        "GET draft": 18,
+        "GET rules": 18,
+        "GET versions": 19,
+        "GET versions/{uuid}": 19,
+        "GET publications": 19,
+        "GET audit": 18,
+        "GET engine/readings": 24,
+        "GET versions/{uuid}/canary-evidence": 43,
+        "GET integrations/status": 34,
+        "GET integrations/meta/campaigns": 33,
+        "GET integrations/meta/links": 21,
+        "GET integrations/canaries": 23,
+        "GET integrations/config": 17,
+        "GET integrations/twilio": 23,
+        "GET integrations/voice": 18,
+        "GET lab/status": 19,
+        "GET lab/runs": 20,
+        "GET lab/runs/{uuid}": 20,
+        "GET lab/scenarios": 17,
+        "GET lab/events": 18
+      },
+      "max": {
+        "GET status": 21,
+        "GET catalog": 18,
+        "GET draft": 20,
+        "GET rules": 20,
+        "GET versions": 21,
+        "GET versions/{uuid}": 21,
+        "GET publications": 21,
+        "GET audit": 20,
+        "GET engine/readings": 26,
+        "GET versions/{uuid}/canary-evidence": 45,
+        "GET integrations/status": 36,
+        "GET integrations/meta/campaigns": 35,
+        "GET integrations/meta/links": 23,
+        "GET integrations/canaries": 25,
+        "GET integrations/config": 19,
+        "GET integrations/twilio": 25,
+        "GET integrations/voice": 20,
+        "GET lab/status": 21,
+        "GET lab/runs": 22,
+        "GET lab/runs/{uuid}": 22,
+        "GET lab/scenarios": 19,
+        "GET lab/events": 20
+      },
+      "commit": {
+        "off": {
+          "measured": 93,
+          "studioStatements": 0
+        },
+        "canary|all": {
+          "measured": 94,
+          "studioStatements": 1
+        }
+      }
+    }
+  },
+  "crmBudgets": {
+    "measuredOn": "CRM 8536c0e, ng build (production), 3 corridas: 84,4 / 54,5 / 47,5 s (la primera en frío)",
+    "initial": {
+      "bytes": 816505,
+      "gzip": 196842,
+      "maxBytes": 860000,
+      "maxGzip": 207000,
+      "note": "ya supera el aviso initial de 500 kB de angular.json (error en 1 MB); el techo de aquí es «no crecer sin decisión» (+5 %)"
+    },
+    "lazy": {
+      "ultron-studio-page": {
+        "bytes": 719517,
+        "gzip": 183312,
+        "maxBytes": 755000,
+        "maxGzip": 193000
+      },
+      "studio-lab-page": {
+        "bytes": 188576,
+        "gzip": 53403,
+        "maxBytes": 198000,
+        "maxGzip": 56000
+      },
+      "studio-integrations-page": {
+        "bytes": 162459,
+        "gzip": 44753,
+        "maxBytes": 171000,
+        "maxGzip": 47000
+      }
+    },
+    "styles": {
+      "ultron-studio.scss": {
+        "kB": 27.88,
+        "warningAtKB": 8,
+        "buildErrorAtKB": 32,
+        "headroomKB": 4.12,
+        "note": "anyComponentStyle, en kB tal como los cuenta el build de Angular: el aviso (8 kB) ya salta; el ERROR de build llega con 4,12 kB más"
+      }
+    }
+  }
+}

@@ -34,6 +34,25 @@ def main():
             continue
         with open(os.path.join(base, nombre), encoding='utf-8') as f:
             doc = json.load(f)
+        if nombre.startswith('http-'):
+            print(f"\n### {nombre} · banco HTTP · {doc.get('at')} · n={doc.get('n')} × {doc.get('reps')} tandas tras {doc.get('warm')} de calentamiento\n")
+            print('| Ruta | Datos | n | p50 ms | p95 ms | máx ms | p95 por tanda | bytes | estados | carga 1 min |')
+            print('|---|---|---|---|---|---|---|---|---|---|')
+            for r in doc['results']:
+                a = r['all']
+                p95s = [x['p95'] for x in r['reps']]
+                print(f"| {r['route']} | {r['size']} | {a['n']} | {a['p50']:.1f} | {a['p95']:.1f} | {a['max']:.1f} | {min(p95s):.1f}–{max(p95s):.1f} | "
+                      f"{'/'.join(str(b) for b in r['bytes'])} | {r['statuses']} | {min(r['load1']):.1f}–{max(r['load1']):.1f} |")
+            continue
+        if nombre.startswith('crm-build-'):
+            print(f"\n### {nombre} · ng build (production) · {doc.get('at')}\n")
+            for c in doc['runs']:
+                print(f"- corrida {c['run']}: {c['seconds']} s (carga antes {c['load1Before']}, después {c['load1After']})")
+            ini = doc['initial']
+            print(f"- inicial: {ini['bytes']:,} B crudos / {ini['gzip']:,} B gzip en {len(ini['files'])} ficheros".replace(',', '.'))
+            for f in doc['studioLazy']:
+                print(f"- perezoso del Studio: {f['file']} ({f['names']}): {f.get('bytes', 0):,} B / {f.get('gzip', 0):,} B gzip".replace(',', '.'))
+            continue
         env = doc.get('env', {})
         print(f"\n### {nombre} · {env.get('at')} · n={env.get('n')} × {env.get('reps')} tandas · carga al empezar {env.get('load')}\n")
         print('| Ruta | Tamaño | n | p50 ms | p95 ms | máx ms | p95 por tanda | consultas | ms en BD | bytes |')

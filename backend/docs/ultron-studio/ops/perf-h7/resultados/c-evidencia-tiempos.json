@@ -1,0 +1,513 @@
+{
+    "family": "c-evidencia",
+    "env": {
+        "at": "2026-11-02T04:50:40+00:00",
+        "php": "8.3.33",
+        "opcacheCli": false,
+        "db": "ultron_studio_h7_perf",
+        "pg": "PostgreSQL 14.24 (Homebrew) on aarch64-apple-darwin25.6.0, compiled by Apple clang version 21.0.0 (clang-2100.1.1.101), 64-bit",
+        "cache": "database",
+        "queue": "database",
+        "n": 30,
+        "warm": 5,
+        "reps": 3,
+        "load": [
+            3.349609375,
+            3.22314453125,
+            2.6171875
+        ],
+        "host": "MacBook-Air-de-Alejandro.local arm64"
+    },
+    "results": [
+        {
+            "route": "GET versions/{uuid}/canary-evidence",
+            "size": 0,
+            "status": 200,
+            "bytes": 868,
+            "queries": 42,
+            "dbMs": 17.73,
+            "perTable": {
+                "cache": 26,
+                "admin_sessions": 2,
+                "ultron_studio_publications": 2,
+                "marketing_ai_actions": 2,
+                "ultron_aborts": 2,
+                "plans": 2,
+                "admins": 1,
+                "ultron_studio_versions": 1,
+                "ultron_studio_version_reviews": 1,
+                "marketing_conversations": 1,
+                "marketing_leads": 1,
+                "marketing_messages": 1
+            },
+            "perTableMs": {
+                "cache": 7.11,
+                "admin_sessions": 0.68,
+                "admins": 0.31,
+                "ultron_studio_versions": 0.37,
+                "ultron_studio_version_reviews": 0.3,
+                "ultron_studio_publications": 0.68,
+                "marketing_ai_actions": 5.91,
+                "ultron_aborts": 0.61,
+                "marketing_conversations": 0.4,
+                "marketing_leads": 0.35,
+                "marketing_messages": 0.38,
+                "plans": 0.63
+            },
+            "mostRepeated": {
+                "count": 18,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"ultron_studio_versions\" where \"uuid\" = ? limit 1",
+                "select * from \"ultron_studio_version_reviews\" where \"ultron_studio_version_reviews\".\"version_id\" in (1)",
+                "select \"id\", \"created_at\" from \"ultron_studio_publications\" where \"version_id\" = ? and \"action\" = ? order by \"seq\" desc limit 1",
+                "select count(*) as turns, sum(case when \"metadata\"->'studio'->>'state' = ? then 1 else 0 end) as applied, sum(case when \"metadata\"->'studio'->>'state' = ? and \"metadata\"->'studio'->>'version' = ? then 1 else 0 end) as stamped, sum(case when \"metadata\"->'studio'->>'state' = ? and \"metadata\"->'studio'->>'reason' = ? then 1 else 0 end) as fallback_0, sum(case when \"metadata\"->'studio'->>'state' = ? a",
+                "select count(*) as aggregate from \"ultron_aborts\" where \"engaged_at\" >= ?",
+                "select exists(select * from \"ultron_aborts\" where \"released_at\" is null) as \"exists\"",
+                "select * from \"marketing_conversations\" where \"marketing_conversations\".\"id\" = ? limit 1",
+                "select * from \"marketing_leads\" where \"marketing_leads\".\"id\" in (1)",
+                "select \"id\", \"direction\", \"sender_type\", \"body\", \"metadata\", \"created_at\" from \"marketing_messages\" where \"conversation_id\" = ? and \"created_at\" >= ? order by \"id\" asc",
+                "select \"id\", \"action_type\", \"status\", \"source_type\", \"source_event_id\", \"metadata\", \"created_at\" from \"marketing_ai_actions\" where \"conversation_id\" = ? and \"created_at\" >= ? order by \"id\" asc",
+                "select \"id\", \"name\", \"price\" from \"plans\" where \"active\" = ? and \"sellable\" = ? and \"archived_at\" is null and \"price\" > ? and \"duration_days\" > ?",
+                "select \"name\" from \"plans\" where \"id\" not in (?)",
+                "select \"uuid\", \"seq\", \"engine_contract\", \"effective_hash\", \"signature\", substr(effective_json, 1, 16385) as effective_json from \"ultron_studio_publications\" order by \"seq\" desc limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 30.086,
+                        "p95": 31.147,
+                        "max": 31.783,
+                        "min": 24.892
+                    },
+                    {
+                        "n": 30,
+                        "p50": 30.007,
+                        "p95": 31.34,
+                        "max": 32.063,
+                        "min": 29.43
+                    },
+                    {
+                        "n": 30,
+                        "p50": 30.078,
+                        "p95": 30.666,
+                        "max": 31.679,
+                        "min": 28.834
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 30.078,
+                    "p95": 31.147,
+                    "max": 32.063,
+                    "min": 24.892
+                },
+                "load1": [
+                    2.9599609375,
+                    2.9599609375,
+                    2.9599609375,
+                    2.962890625
+                ]
+            }
+        },
+        {
+            "route": "GET versions/{uuid}/canary-evidence",
+            "size": 40,
+            "status": 200,
+            "bytes": 863,
+            "queries": 42,
+            "dbMs": 18.01,
+            "perTable": {
+                "cache": 26,
+                "admin_sessions": 2,
+                "ultron_studio_publications": 2,
+                "marketing_ai_actions": 2,
+                "ultron_aborts": 2,
+                "plans": 2,
+                "admins": 1,
+                "ultron_studio_versions": 1,
+                "ultron_studio_version_reviews": 1,
+                "marketing_conversations": 1,
+                "marketing_leads": 1,
+                "marketing_messages": 1
+            },
+            "perTableMs": {
+                "cache": 7.03,
+                "admin_sessions": 0.65,
+                "admins": 0.29,
+                "ultron_studio_versions": 0.34,
+                "ultron_studio_version_reviews": 0.26,
+                "ultron_studio_publications": 0.69,
+                "marketing_ai_actions": 6.28,
+                "ultron_aborts": 0.64,
+                "marketing_conversations": 0.38,
+                "marketing_leads": 0.35,
+                "marketing_messages": 0.45,
+                "plans": 0.65
+            },
+            "mostRepeated": {
+                "count": 18,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"ultron_studio_versions\" where \"uuid\" = ? limit 1",
+                "select * from \"ultron_studio_version_reviews\" where \"ultron_studio_version_reviews\".\"version_id\" in (1)",
+                "select \"id\", \"created_at\" from \"ultron_studio_publications\" where \"version_id\" = ? and \"action\" = ? order by \"seq\" desc limit 1",
+                "select count(*) as turns, sum(case when \"metadata\"->'studio'->>'state' = ? then 1 else 0 end) as applied, sum(case when \"metadata\"->'studio'->>'state' = ? and \"metadata\"->'studio'->>'version' = ? then 1 else 0 end) as stamped, sum(case when \"metadata\"->'studio'->>'state' = ? and \"metadata\"->'studio'->>'reason' = ? then 1 else 0 end) as fallback_0, sum(case when \"metadata\"->'studio'->>'state' = ? a",
+                "select count(*) as aggregate from \"ultron_aborts\" where \"engaged_at\" >= ?",
+                "select exists(select * from \"ultron_aborts\" where \"released_at\" is null) as \"exists\"",
+                "select * from \"marketing_conversations\" where \"marketing_conversations\".\"id\" = ? limit 1",
+                "select * from \"marketing_leads\" where \"marketing_leads\".\"id\" in (1)",
+                "select \"id\", \"direction\", \"sender_type\", \"body\", \"metadata\", \"created_at\" from \"marketing_messages\" where \"conversation_id\" = ? and \"created_at\" >= ? order by \"id\" asc",
+                "select \"id\", \"action_type\", \"status\", \"source_type\", \"source_event_id\", \"metadata\", \"created_at\" from \"marketing_ai_actions\" where \"conversation_id\" = ? and \"created_at\" >= ? order by \"id\" asc",
+                "select \"id\", \"name\", \"price\" from \"plans\" where \"active\" = ? and \"sellable\" = ? and \"archived_at\" is null and \"price\" > ? and \"duration_days\" > ?",
+                "select \"name\" from \"plans\" where \"id\" not in (?)",
+                "select \"uuid\", \"seq\", \"engine_contract\", \"effective_hash\", \"signature\", substr(effective_json, 1, 16385) as effective_json from \"ultron_studio_publications\" order by \"seq\" desc limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 79.869,
+                        "p95": 80.763,
+                        "max": 82.893,
+                        "min": 79.235
+                    },
+                    {
+                        "n": 30,
+                        "p50": 79.978,
+                        "p95": 81.028,
+                        "max": 81.578,
+                        "min": 78.725
+                    },
+                    {
+                        "n": 30,
+                        "p50": 79.813,
+                        "p95": 80.745,
+                        "max": 81.128,
+                        "min": 79.159
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 79.92,
+                    "p95": 81.022,
+                    "max": 82.893,
+                    "min": 78.725
+                },
+                "load1": [
+                    2.962890625,
+                    2.962890625,
+                    2.8056640625,
+                    2.8056640625
+                ]
+            }
+        },
+        {
+            "route": "GET versions/{uuid}/canary-evidence",
+            "size": 200,
+            "status": 200,
+            "bytes": 866,
+            "queries": 43,
+            "dbMs": 20.85,
+            "perTable": {
+                "cache": 26,
+                "admin_sessions": 3,
+                "ultron_studio_publications": 2,
+                "marketing_ai_actions": 2,
+                "ultron_aborts": 2,
+                "plans": 2,
+                "admins": 1,
+                "ultron_studio_versions": 1,
+                "ultron_studio_version_reviews": 1,
+                "marketing_conversations": 1,
+                "marketing_leads": 1,
+                "marketing_messages": 1
+            },
+            "perTableMs": {
+                "cache": 7.1,
+                "admin_sessions": 0.99,
+                "admins": 0.3,
+                "ultron_studio_versions": 0.37,
+                "ultron_studio_version_reviews": 0.26,
+                "ultron_studio_publications": 0.75,
+                "marketing_ai_actions": 7.89,
+                "ultron_aborts": 0.63,
+                "marketing_conversations": 0.41,
+                "marketing_leads": 0.36,
+                "marketing_messages": 0.85,
+                "plans": 0.94
+            },
+            "mostRepeated": {
+                "count": 18,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "update \"admin_sessions\" set \"last_seen_at\" = ?, \"updated_at\" = ? where \"id\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"ultron_studio_versions\" where \"uuid\" = ? limit 1",
+                "select * from \"ultron_studio_version_reviews\" where \"ultron_studio_version_reviews\".\"version_id\" in (1)",
+                "select \"id\", \"created_at\" from \"ultron_studio_publications\" where \"version_id\" = ? and \"action\" = ? order by \"seq\" desc limit 1",
+                "select count(*) as turns, sum(case when \"metadata\"->'studio'->>'state' = ? then 1 else 0 end) as applied, sum(case when \"metadata\"->'studio'->>'state' = ? and \"metadata\"->'studio'->>'version' = ? then 1 else 0 end) as stamped, sum(case when \"metadata\"->'studio'->>'state' = ? and \"metadata\"->'studio'->>'reason' = ? then 1 else 0 end) as fallback_0, sum(case when \"metadata\"->'studio'->>'state' = ? a",
+                "select count(*) as aggregate from \"ultron_aborts\" where \"engaged_at\" >= ?",
+                "select exists(select * from \"ultron_aborts\" where \"released_at\" is null) as \"exists\"",
+                "select * from \"marketing_conversations\" where \"marketing_conversations\".\"id\" = ? limit 1",
+                "select * from \"marketing_leads\" where \"marketing_leads\".\"id\" in (1)",
+                "select \"id\", \"direction\", \"sender_type\", \"body\", \"metadata\", \"created_at\" from \"marketing_messages\" where \"conversation_id\" = ? and \"created_at\" >= ? order by \"id\" asc",
+                "select \"id\", \"action_type\", \"status\", \"source_type\", \"source_event_id\", \"metadata\", \"created_at\" from \"marketing_ai_actions\" where \"conversation_id\" = ? and \"created_at\" >= ? order by \"id\" asc",
+                "select \"id\", \"name\", \"price\" from \"plans\" where \"active\" = ? and \"sellable\" = ? and \"archived_at\" is null and \"price\" > ? and \"duration_days\" > ?",
+                "select \"name\" from \"plans\" where \"id\" not in (?)",
+                "select \"uuid\", \"seq\", \"engine_contract\", \"effective_hash\", \"signature\", substr(effective_json, 1, 16385) as effective_json from \"ultron_studio_publications\" order by \"seq\" desc limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 1041.185,
+                        "p95": 1049.765,
+                        "max": 1067.253,
+                        "min": 1038.594
+                    },
+                    {
+                        "n": 30,
+                        "p50": 1042.592,
+                        "p95": 1059.458,
+                        "max": 1106.028,
+                        "min": 1039.012
+                    },
+                    {
+                        "n": 30,
+                        "p50": 1041.284,
+                        "p95": 1047.903,
+                        "max": 1049.555,
+                        "min": 1036.256
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 1041.581,
+                    "p95": 1049.765,
+                    "max": 1106.028,
+                    "min": 1036.256
+                },
+                "load1": [
+                    2.68115234375,
+                    2.54443359375,
+                    2.26708984375,
+                    2.49658203125
+                ]
+            }
+        },
+        {
+            "route": "GET versions/{uuid}/canary-evidence",
+            "size": 1000,
+            "status": 200,
+            "bytes": 869,
+            "queries": 43,
+            "dbMs": 26.54,
+            "perTable": {
+                "cache": 26,
+                "admin_sessions": 3,
+                "ultron_studio_publications": 2,
+                "marketing_ai_actions": 2,
+                "ultron_aborts": 2,
+                "plans": 2,
+                "admins": 1,
+                "ultron_studio_versions": 1,
+                "ultron_studio_version_reviews": 1,
+                "marketing_conversations": 1,
+                "marketing_leads": 1,
+                "marketing_messages": 1
+            },
+            "perTableMs": {
+                "cache": 7.04,
+                "admin_sessions": 0.98,
+                "admins": 0.3,
+                "ultron_studio_versions": 0.37,
+                "ultron_studio_version_reviews": 0.3,
+                "ultron_studio_publications": 0.73,
+                "marketing_ai_actions": 12,
+                "ultron_aborts": 0.65,
+                "marketing_conversations": 0.39,
+                "marketing_leads": 0.35,
+                "marketing_messages": 2.55,
+                "plans": 0.88
+            },
+            "mostRepeated": {
+                "count": 18,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "update \"admin_sessions\" set \"last_seen_at\" = ?, \"updated_at\" = ? where \"id\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"ultron_studio_versions\" where \"uuid\" = ? limit 1",
+                "select * from \"ultron_studio_version_reviews\" where \"ultron_studio_version_reviews\".\"version_id\" in (1)",
+                "select \"id\", \"created_at\" from \"ultron_studio_publications\" where \"version_id\" = ? and \"action\" = ? order by \"seq\" desc limit 1",
+                "select count(*) as turns, sum(case when \"metadata\"->'studio'->>'state' = ? then 1 else 0 end) as applied, sum(case when \"metadata\"->'studio'->>'state' = ? and \"metadata\"->'studio'->>'version' = ? then 1 else 0 end) as stamped, sum(case when \"metadata\"->'studio'->>'state' = ? and \"metadata\"->'studio'->>'reason' = ? then 1 else 0 end) as fallback_0, sum(case when \"metadata\"->'studio'->>'state' = ? a",
+                "select count(*) as aggregate from \"ultron_aborts\" where \"engaged_at\" >= ?",
+                "select exists(select * from \"ultron_aborts\" where \"released_at\" is null) as \"exists\"",
+                "select * from \"marketing_conversations\" where \"marketing_conversations\".\"id\" = ? limit 1",
+                "select * from \"marketing_leads\" where \"marketing_leads\".\"id\" in (1)",
+                "select \"id\", \"direction\", \"sender_type\", \"body\", \"metadata\", \"created_at\" from \"marketing_messages\" where \"conversation_id\" = ? and \"created_at\" >= ? order by \"id\" asc",
+                "select \"id\", \"action_type\", \"status\", \"source_type\", \"source_event_id\", \"metadata\", \"created_at\" from \"marketing_ai_actions\" where \"conversation_id\" = ? and \"created_at\" >= ? order by \"id\" asc",
+                "select \"id\", \"name\", \"price\" from \"plans\" where \"active\" = ? and \"sellable\" = ? and \"archived_at\" is null and \"price\" > ? and \"duration_days\" > ?",
+                "select \"name\" from \"plans\" where \"id\" not in (?)",
+                "select \"uuid\", \"seq\", \"engine_contract\", \"effective_hash\", \"signature\", substr(effective_json, 1, 16385) as effective_json from \"ultron_studio_publications\" order by \"seq\" desc limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 3930.296,
+                        "p95": 3979.013,
+                        "max": 4035.722,
+                        "min": 3880.536
+                    },
+                    {
+                        "n": 30,
+                        "p50": 4259.115,
+                        "p95": 6739.137,
+                        "max": 7313.863,
+                        "min": 3898.841
+                    },
+                    {
+                        "n": 30,
+                        "p50": 3963.132,
+                        "p95": 4217.871,
+                        "max": 4245.971,
+                        "min": 3896.332
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 3947.262,
+                    "p95": 5708.357,
+                    "max": 7313.863,
+                    "min": 3880.536
+                },
+                "load1": [
+                    2.32568359375,
+                    3.412109375,
+                    3.7138671875,
+                    3.349609375
+                ]
+            }
+        }
+    ]
+}

@@ -1,0 +1,1055 @@
+{
+    "family": "b-cadena",
+    "env": {
+        "at": "2026-11-02T04:41:52+00:00",
+        "php": "8.3.33",
+        "opcacheCli": false,
+        "db": "ultron_studio_h7_perf",
+        "pg": "PostgreSQL 14.24 (Homebrew) on aarch64-apple-darwin25.6.0, compiled by Apple clang version 21.0.0 (clang-2100.1.1.101), 64-bit",
+        "cache": "database",
+        "queue": "database",
+        "n": 30,
+        "warm": 5,
+        "reps": 3,
+        "load": [
+            3.130859375,
+            2.5615234375,
+            2.0849609375
+        ],
+        "host": "MacBook-Air-de-Alejandro.local arm64"
+    },
+    "results": [
+        {
+            "route": "GET publications (20)",
+            "size": 1,
+            "status": 200,
+            "bytes": 1027,
+            "queries": 19,
+            "dbMs": 5.27,
+            "perTable": {
+                "cache": 14,
+                "ultron_studio_publications": 2,
+                "admin_sessions": 1,
+                "admins": 1,
+                "ultron_studio_versions": 1
+            },
+            "perTableMs": {
+                "cache": 3.67,
+                "admin_sessions": 0.35,
+                "admins": 0.31,
+                "ultron_studio_publications": 0.66,
+                "ultron_studio_versions": 0.28
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select count(*) as aggregate from \"ultron_studio_publications\"",
+                "select \"id\", \"uuid\", \"seq\", \"client_request_id\", \"action\", \"version_id\", \"restores_publication_id\", \"previous_publication_id\", \"engine_contract\", \"effective_hash\", \"signature\", \"catalog_version\", \"lab_gate\", \"acknowledged\", \"evidence\", \"reason\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"created_at\", substr(effective_json, 1, 16385) as effective_json from \"ultron_studio_publications\" order by ",
+                "select \"id\", \"uuid\", \"label\" from \"ultron_studio_versions\" where \"ultron_studio_versions\".\"id\" in (1)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 15.145,
+                        "p95": 15.979,
+                        "max": 16.108,
+                        "min": 14.65
+                    },
+                    {
+                        "n": 30,
+                        "p50": 15.117,
+                        "p95": 15.516,
+                        "max": 15.685,
+                        "min": 13.997
+                    },
+                    {
+                        "n": 30,
+                        "p50": 15.056,
+                        "p95": 15.365,
+                        "max": 15.847,
+                        "min": 14.626
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 15.09,
+                    "p95": 15.685,
+                    "max": 16.108,
+                    "min": 13.997
+                },
+                "load1": [
+                    3.13525390625,
+                    3.13525390625,
+                    3.13525390625,
+                    3.13525390625
+                ]
+            }
+        },
+        {
+            "route": "GET publications?per_page=50",
+            "size": 1,
+            "status": 200,
+            "bytes": 1027,
+            "queries": 19,
+            "dbMs": 5.16,
+            "perTable": {
+                "cache": 14,
+                "ultron_studio_publications": 2,
+                "admin_sessions": 1,
+                "admins": 1,
+                "ultron_studio_versions": 1
+            },
+            "perTableMs": {
+                "cache": 3.64,
+                "admin_sessions": 0.32,
+                "admins": 0.28,
+                "ultron_studio_publications": 0.62,
+                "ultron_studio_versions": 0.3
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select count(*) as aggregate from \"ultron_studio_publications\"",
+                "select \"id\", \"uuid\", \"seq\", \"client_request_id\", \"action\", \"version_id\", \"restores_publication_id\", \"previous_publication_id\", \"engine_contract\", \"effective_hash\", \"signature\", \"catalog_version\", \"lab_gate\", \"acknowledged\", \"evidence\", \"reason\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"created_at\", substr(effective_json, 1, 16385) as effective_json from \"ultron_studio_publications\" order by ",
+                "select \"id\", \"uuid\", \"label\" from \"ultron_studio_versions\" where \"ultron_studio_versions\".\"id\" in (1)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 15.076,
+                        "p95": 15.468,
+                        "max": 17.176,
+                        "min": 14.428
+                    },
+                    {
+                        "n": 30,
+                        "p50": 15.021,
+                        "p95": 15.408,
+                        "max": 15.697,
+                        "min": 13.341
+                    },
+                    {
+                        "n": 30,
+                        "p50": 15.12,
+                        "p95": 15.462,
+                        "max": 15.561,
+                        "min": 13.921
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 15.085,
+                    "p95": 15.462,
+                    "max": 17.176,
+                    "min": 13.341
+                },
+                "load1": [
+                    3.13525390625,
+                    3.13525390625,
+                    3.13525390625,
+                    3.0439453125
+                ]
+            }
+        },
+        {
+            "route": "GET versions/{uuid} (n entradas)",
+            "size": 1,
+            "status": 200,
+            "bytes": 10307,
+            "queries": 19,
+            "dbMs": 5.28,
+            "perTable": {
+                "cache": 14,
+                "admin_sessions": 1,
+                "admins": 1,
+                "ultron_studio_versions": 1,
+                "ultron_studio_version_reviews": 1,
+                "ultron_studio_publications": 1
+            },
+            "perTableMs": {
+                "cache": 3.68,
+                "admin_sessions": 0.32,
+                "admins": 0.28,
+                "ultron_studio_versions": 0.35,
+                "ultron_studio_version_reviews": 0.28,
+                "ultron_studio_publications": 0.37
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"ultron_studio_versions\" where \"uuid\" = ? limit 1",
+                "select * from \"ultron_studio_version_reviews\" where \"ultron_studio_version_reviews\".\"version_id\" in (1)",
+                "select \"id\", \"uuid\", \"seq\", \"client_request_id\", \"action\", \"version_id\", \"restores_publication_id\", \"previous_publication_id\", \"engine_contract\", \"effective_hash\", \"signature\", \"catalog_version\", \"lab_gate\", \"acknowledged\", \"evidence\", \"reason\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"created_at\", substr(effective_json, 1, 16385) as effective_json from \"ultron_studio_publications\" where \"ve",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 15.594,
+                        "p95": 15.975,
+                        "max": 16.305,
+                        "min": 14.825
+                    },
+                    {
+                        "n": 30,
+                        "p50": 15.591,
+                        "p95": 15.999,
+                        "max": 16.06,
+                        "min": 15.334
+                    },
+                    {
+                        "n": 30,
+                        "p50": 15.599,
+                        "p95": 16.12,
+                        "max": 16.188,
+                        "min": 15.312
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 15.595,
+                    "p95": 15.999,
+                    "max": 16.305,
+                    "min": 14.825
+                },
+                "load1": [
+                    3.0439453125,
+                    3.0439453125,
+                    3.0439453125,
+                    3.0439453125
+                ]
+            }
+        },
+        {
+            "route": "GET status",
+            "size": 1,
+            "status": 200,
+            "bytes": 1837,
+            "queries": 19,
+            "dbMs": 5.06,
+            "perTable": {
+                "cache": 14,
+                "admin_sessions": 1,
+                "admins": 1,
+                "ultron_studio_publications": 1,
+                "ultron_studio_versions": 1,
+                "ultron_studio_rules": 1
+            },
+            "perTableMs": {
+                "cache": 3.53,
+                "admin_sessions": 0.33,
+                "admins": 0.27,
+                "ultron_studio_publications": 0.33,
+                "ultron_studio_versions": 0.29,
+                "ultron_studio_rules": 0.31
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select \"id\", \"uuid\", \"seq\", \"client_request_id\", \"action\", \"version_id\", \"restores_publication_id\", \"previous_publication_id\", \"engine_contract\", \"effective_hash\", \"signature\", \"catalog_version\", \"lab_gate\", \"acknowledged\", \"evidence\", \"reason\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"created_at\", substr(effective_json, 1, 16385) as effective_json from \"ultron_studio_publications\" order by ",
+                "select \"label\", \"uuid\" from \"ultron_studio_versions\" where \"uuid\" in (?)",
+                "select count(*) as aggregate from \"ultron_studio_rules\" where \"source\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 14.986,
+                        "p95": 15.254,
+                        "max": 15.285,
+                        "min": 14.82
+                    },
+                    {
+                        "n": 30,
+                        "p50": 15.38,
+                        "p95": 21.047,
+                        "max": 21.892,
+                        "min": 14.414
+                    },
+                    {
+                        "n": 30,
+                        "p50": 14.907,
+                        "p95": 15.163,
+                        "max": 15.221,
+                        "min": 14.047
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 15.018,
+                    "p95": 16.986,
+                    "max": 21.892,
+                    "min": 14.047
+                },
+                "load1": [
+                    3.0439453125,
+                    3.0439453125,
+                    3.0439453125,
+                    3.0439453125
+                ]
+            }
+        },
+        {
+            "route": "GET publications (20)",
+            "size": 50,
+            "status": 200,
+            "bytes": 8737,
+            "queries": 19,
+            "dbMs": 5.69,
+            "perTable": {
+                "cache": 14,
+                "ultron_studio_publications": 2,
+                "admin_sessions": 1,
+                "admins": 1,
+                "ultron_studio_versions": 1
+            },
+            "perTableMs": {
+                "cache": 3.81,
+                "admin_sessions": 0.32,
+                "admins": 0.3,
+                "ultron_studio_publications": 0.95,
+                "ultron_studio_versions": 0.31
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select count(*) as aggregate from \"ultron_studio_publications\"",
+                "select \"id\", \"uuid\", \"seq\", \"client_request_id\", \"action\", \"version_id\", \"restores_publication_id\", \"previous_publication_id\", \"engine_contract\", \"effective_hash\", \"signature\", \"catalog_version\", \"lab_gate\", \"acknowledged\", \"evidence\", \"reason\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"created_at\", substr(effective_json, 1, 16385) as effective_json from \"ultron_studio_publications\" order by ",
+                "select \"id\", \"uuid\", \"label\" from \"ultron_studio_versions\" where \"ultron_studio_versions\".\"id\" in (1)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 17.717,
+                        "p95": 18.113,
+                        "max": 18.516,
+                        "min": 17.444
+                    },
+                    {
+                        "n": 30,
+                        "p50": 17.823,
+                        "p95": 18.224,
+                        "max": 18.543,
+                        "min": 17.044
+                    },
+                    {
+                        "n": 30,
+                        "p50": 17.909,
+                        "p95": 18.567,
+                        "max": 21.597,
+                        "min": 17.713
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 17.852,
+                    "p95": 18.518,
+                    "max": 21.597,
+                    "min": 17.044
+                },
+                "load1": [
+                    3.0439453125,
+                    3.0439453125,
+                    3.0439453125,
+                    3.2001953125
+                ]
+            }
+        },
+        {
+            "route": "GET publications?per_page=50",
+            "size": 50,
+            "status": 200,
+            "bytes": 20002,
+            "queries": 19,
+            "dbMs": 5.31,
+            "perTable": {
+                "cache": 14,
+                "ultron_studio_publications": 2,
+                "admin_sessions": 1,
+                "admins": 1,
+                "ultron_studio_versions": 1
+            },
+            "perTableMs": {
+                "cache": 3.44,
+                "admin_sessions": 0.35,
+                "admins": 0.3,
+                "ultron_studio_publications": 0.94,
+                "ultron_studio_versions": 0.28
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select count(*) as aggregate from \"ultron_studio_publications\"",
+                "select \"id\", \"uuid\", \"seq\", \"client_request_id\", \"action\", \"version_id\", \"restores_publication_id\", \"previous_publication_id\", \"engine_contract\", \"effective_hash\", \"signature\", \"catalog_version\", \"lab_gate\", \"acknowledged\", \"evidence\", \"reason\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"created_at\", substr(effective_json, 1, 16385) as effective_json from \"ultron_studio_publications\" order by ",
+                "select \"id\", \"uuid\", \"label\" from \"ultron_studio_versions\" where \"ultron_studio_versions\".\"id\" in (1)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 21.546,
+                        "p95": 22.023,
+                        "max": 22.243,
+                        "min": 21.309
+                    },
+                    {
+                        "n": 30,
+                        "p50": 21.427,
+                        "p95": 21.84,
+                        "max": 22.004,
+                        "min": 20.194
+                    },
+                    {
+                        "n": 30,
+                        "p50": 21.456,
+                        "p95": 22.26,
+                        "max": 28.232,
+                        "min": 21.036
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 21.476,
+                    "p95": 22.095,
+                    "max": 28.232,
+                    "min": 20.194
+                },
+                "load1": [
+                    3.2001953125,
+                    3.2001953125,
+                    3.2001953125,
+                    3.2001953125
+                ]
+            }
+        },
+        {
+            "route": "GET versions/{uuid} (n entradas)",
+            "size": 50,
+            "status": 200,
+            "bytes": 29280,
+            "queries": 19,
+            "dbMs": 5.74,
+            "perTable": {
+                "cache": 14,
+                "admin_sessions": 1,
+                "admins": 1,
+                "ultron_studio_versions": 1,
+                "ultron_studio_version_reviews": 1,
+                "ultron_studio_publications": 1
+            },
+            "perTableMs": {
+                "cache": 3.79,
+                "admin_sessions": 0.33,
+                "admins": 0.31,
+                "ultron_studio_versions": 0.31,
+                "ultron_studio_version_reviews": 0.25,
+                "ultron_studio_publications": 0.75
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"ultron_studio_versions\" where \"uuid\" = ? limit 1",
+                "select * from \"ultron_studio_version_reviews\" where \"ultron_studio_version_reviews\".\"version_id\" in (1)",
+                "select \"id\", \"uuid\", \"seq\", \"client_request_id\", \"action\", \"version_id\", \"restores_publication_id\", \"previous_publication_id\", \"engine_contract\", \"effective_hash\", \"signature\", \"catalog_version\", \"lab_gate\", \"acknowledged\", \"evidence\", \"reason\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"created_at\", substr(effective_json, 1, 16385) as effective_json from \"ultron_studio_publications\" where \"ve",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 21.017,
+                        "p95": 21.709,
+                        "max": 22.289,
+                        "min": 20.084
+                    },
+                    {
+                        "n": 30,
+                        "p50": 20.847,
+                        "p95": 21.184,
+                        "max": 21.351,
+                        "min": 20.494
+                    },
+                    {
+                        "n": 30,
+                        "p50": 20.874,
+                        "p95": 21.286,
+                        "max": 21.389,
+                        "min": 20.002
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 20.895,
+                    "p95": 21.454,
+                    "max": 22.289,
+                    "min": 20.002
+                },
+                "load1": [
+                    3.2001953125,
+                    3.2001953125,
+                    3.2001953125,
+                    3.2001953125
+                ]
+            }
+        },
+        {
+            "route": "GET status",
+            "size": 50,
+            "status": 200,
+            "bytes": 1838,
+            "queries": 19,
+            "dbMs": 5.09,
+            "perTable": {
+                "cache": 14,
+                "admin_sessions": 1,
+                "admins": 1,
+                "ultron_studio_publications": 1,
+                "ultron_studio_versions": 1,
+                "ultron_studio_rules": 1
+            },
+            "perTableMs": {
+                "cache": 3.56,
+                "admin_sessions": 0.32,
+                "admins": 0.28,
+                "ultron_studio_publications": 0.35,
+                "ultron_studio_versions": 0.29,
+                "ultron_studio_rules": 0.29
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select \"id\", \"uuid\", \"seq\", \"client_request_id\", \"action\", \"version_id\", \"restores_publication_id\", \"previous_publication_id\", \"engine_contract\", \"effective_hash\", \"signature\", \"catalog_version\", \"lab_gate\", \"acknowledged\", \"evidence\", \"reason\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"created_at\", substr(effective_json, 1, 16385) as effective_json from \"ultron_studio_publications\" order by ",
+                "select \"label\", \"uuid\" from \"ultron_studio_versions\" where \"uuid\" in (?)",
+                "select count(*) as aggregate from \"ultron_studio_rules\" where \"source\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 14.951,
+                        "p95": 15.301,
+                        "max": 15.42,
+                        "min": 14.771
+                    },
+                    {
+                        "n": 30,
+                        "p50": 14.978,
+                        "p95": 16.75,
+                        "max": 17.983,
+                        "min": 14.667
+                    },
+                    {
+                        "n": 30,
+                        "p50": 14.868,
+                        "p95": 15.129,
+                        "max": 15.42,
+                        "min": 13.903
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 14.922,
+                    "p95": 15.42,
+                    "max": 17.983,
+                    "min": 13.903
+                },
+                "load1": [
+                    3.2001953125,
+                    3.2001953125,
+                    3.34423828125,
+                    3.34423828125
+                ]
+            }
+        },
+        {
+            "route": "GET publications (20)",
+            "size": 200,
+            "status": 200,
+            "bytes": 9554,
+            "queries": 19,
+            "dbMs": 5.51,
+            "perTable": {
+                "cache": 14,
+                "ultron_studio_publications": 2,
+                "admin_sessions": 1,
+                "admins": 1,
+                "ultron_studio_versions": 1
+            },
+            "perTableMs": {
+                "cache": 3.79,
+                "admin_sessions": 0.33,
+                "admins": 0.3,
+                "ultron_studio_publications": 0.79,
+                "ultron_studio_versions": 0.3
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select count(*) as aggregate from \"ultron_studio_publications\"",
+                "select \"id\", \"uuid\", \"seq\", \"client_request_id\", \"action\", \"version_id\", \"restores_publication_id\", \"previous_publication_id\", \"engine_contract\", \"effective_hash\", \"signature\", \"catalog_version\", \"lab_gate\", \"acknowledged\", \"evidence\", \"reason\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"created_at\", substr(effective_json, 1, 16385) as effective_json from \"ultron_studio_publications\" order by ",
+                "select \"id\", \"uuid\", \"label\" from \"ultron_studio_versions\" where \"ultron_studio_versions\".\"id\" in (1)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 17.609,
+                        "p95": 17.958,
+                        "max": 18.319,
+                        "min": 17.32
+                    },
+                    {
+                        "n": 30,
+                        "p50": 17.593,
+                        "p95": 17.867,
+                        "max": 18.265,
+                        "min": 16.544
+                    },
+                    {
+                        "n": 30,
+                        "p50": 17.663,
+                        "p95": 18.389,
+                        "max": 20.104,
+                        "min": 16.707
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 17.617,
+                    "p95": 18.265,
+                    "max": 20.104,
+                    "min": 16.544
+                },
+                "load1": [
+                    3.34423828125,
+                    3.34423828125,
+                    3.34423828125,
+                    3.34423828125
+                ]
+            }
+        },
+        {
+            "route": "GET publications?per_page=50",
+            "size": 200,
+            "status": 200,
+            "bytes": 20526,
+            "queries": 19,
+            "dbMs": 6.21,
+            "perTable": {
+                "cache": 14,
+                "ultron_studio_publications": 2,
+                "admin_sessions": 1,
+                "admins": 1,
+                "ultron_studio_versions": 1
+            },
+            "perTableMs": {
+                "cache": 3.67,
+                "admin_sessions": 0.32,
+                "admins": 0.27,
+                "ultron_studio_publications": 1.67,
+                "ultron_studio_versions": 0.28
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select count(*) as aggregate from \"ultron_studio_publications\"",
+                "select \"id\", \"uuid\", \"seq\", \"client_request_id\", \"action\", \"version_id\", \"restores_publication_id\", \"previous_publication_id\", \"engine_contract\", \"effective_hash\", \"signature\", \"catalog_version\", \"lab_gate\", \"acknowledged\", \"evidence\", \"reason\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"created_at\", substr(effective_json, 1, 16385) as effective_json from \"ultron_studio_publications\" order by ",
+                "select \"id\", \"uuid\", \"label\" from \"ultron_studio_versions\" where \"ultron_studio_versions\".\"id\" in (1)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 22.191,
+                        "p95": 22.598,
+                        "max": 22.986,
+                        "min": 21.782
+                    },
+                    {
+                        "n": 30,
+                        "p50": 22.122,
+                        "p95": 22.631,
+                        "max": 22.834,
+                        "min": 21.696
+                    },
+                    {
+                        "n": 30,
+                        "p50": 21.449,
+                        "p95": 22.165,
+                        "max": 22.818,
+                        "min": 20.512
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 22.094,
+                    "p95": 22.598,
+                    "max": 22.986,
+                    "min": 20.512
+                },
+                "load1": [
+                    3.34423828125,
+                    3.34423828125,
+                    3.34423828125,
+                    3.31640625
+                ]
+            }
+        },
+        {
+            "route": "GET versions/{uuid} (n entradas)",
+            "size": 200,
+            "status": 200,
+            "bytes": 87506,
+            "queries": 19,
+            "dbMs": 6.98,
+            "perTable": {
+                "cache": 14,
+                "admin_sessions": 1,
+                "admins": 1,
+                "ultron_studio_versions": 1,
+                "ultron_studio_version_reviews": 1,
+                "ultron_studio_publications": 1
+            },
+            "perTableMs": {
+                "cache": 3.87,
+                "admin_sessions": 0.32,
+                "admins": 0.29,
+                "ultron_studio_versions": 0.34,
+                "ultron_studio_version_reviews": 0.28,
+                "ultron_studio_publications": 1.88
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"ultron_studio_versions\" where \"uuid\" = ? limit 1",
+                "select * from \"ultron_studio_version_reviews\" where \"ultron_studio_version_reviews\".\"version_id\" in (1)",
+                "select \"id\", \"uuid\", \"seq\", \"client_request_id\", \"action\", \"version_id\", \"restores_publication_id\", \"previous_publication_id\", \"engine_contract\", \"effective_hash\", \"signature\", \"catalog_version\", \"lab_gate\", \"acknowledged\", \"evidence\", \"reason\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"created_at\", substr(effective_json, 1, 16385) as effective_json from \"ultron_studio_publications\" where \"ve",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 36.62,
+                        "p95": 37.389,
+                        "max": 37.46,
+                        "min": 35.883
+                    },
+                    {
+                        "n": 30,
+                        "p50": 36.684,
+                        "p95": 37.898,
+                        "max": 39.394,
+                        "min": 36.083
+                    },
+                    {
+                        "n": 30,
+                        "p50": 36.626,
+                        "p95": 37.19,
+                        "max": 37.304,
+                        "min": 36.324
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 36.647,
+                    "p95": 37.403,
+                    "max": 39.394,
+                    "min": 35.883
+                },
+                "load1": [
+                    3.31640625,
+                    3.31640625,
+                    3.31640625,
+                    3.31640625
+                ]
+            }
+        },
+        {
+            "route": "GET status",
+            "size": 200,
+            "status": 200,
+            "bytes": 1839,
+            "queries": 19,
+            "dbMs": 5.33,
+            "perTable": {
+                "cache": 14,
+                "admin_sessions": 1,
+                "admins": 1,
+                "ultron_studio_publications": 1,
+                "ultron_studio_versions": 1,
+                "ultron_studio_rules": 1
+            },
+            "perTableMs": {
+                "cache": 3.78,
+                "admin_sessions": 0.32,
+                "admins": 0.3,
+                "ultron_studio_publications": 0.34,
+                "ultron_studio_versions": 0.29,
+                "ultron_studio_rules": 0.3
+            },
+            "mostRepeated": {
+                "count": 10,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select \"id\", \"uuid\", \"seq\", \"client_request_id\", \"action\", \"version_id\", \"restores_publication_id\", \"previous_publication_id\", \"engine_contract\", \"effective_hash\", \"signature\", \"catalog_version\", \"lab_gate\", \"acknowledged\", \"evidence\", \"reason\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"created_at\", substr(effective_json, 1, 16385) as effective_json from \"ultron_studio_publications\" order by ",
+                "select \"label\", \"uuid\" from \"ultron_studio_versions\" where \"uuid\" in (?)",
+                "select count(*) as aggregate from \"ultron_studio_rules\" where \"source\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 14.844,
+                        "p95": 15.075,
+                        "max": 15.087,
+                        "min": 14.326
+                    },
+                    {
+                        "n": 30,
+                        "p50": 14.839,
+                        "p95": 15.138,
+                        "max": 15.445,
+                        "min": 14.589
+                    },
+                    {
+                        "n": 30,
+                        "p50": 14.809,
+                        "p95": 14.933,
+                        "max": 15.077,
+                        "min": 14.758
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 14.836,
+                    "p95": 15.075,
+                    "max": 15.445,
+                    "min": 14.326
+                },
+                "load1": [
+                    3.31640625,
+                    3.31640625,
+                    3.31640625,
+                    3.130859375
+                ]
+            }
+        }
+    ]
+}

@@ -1,0 +1,128 @@
+{
+  "crm": "/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h7/Iron-Body_Front",
+  "at": "2026-11-02T04:56:47Z",
+  "runs": [
+    {
+      "run": 1,
+      "seconds": 84.38,
+      "exit": 0,
+      "load1Before": 3.62,
+      "load1After": 10.12
+    },
+    {
+      "run": 2,
+      "seconds": 54.52,
+      "exit": 0,
+      "load1Before": 10.12,
+      "load1After": 9.61
+    },
+    {
+      "run": 3,
+      "seconds": 47.53,
+      "exit": 0,
+      "load1Before": 9.61,
+      "load1After": 9.39
+    }
+  ],
+  "initial": {
+    "files": [
+      {
+        "file": "styles-4ZGG57HX.css",
+        "names": "styles",
+        "rawReported": "253.76 kB",
+        "bytes": 253762,
+        "gzip": 36256
+      },
+      {
+        "file": "chunk-AALK5OID.js",
+        "names": "-",
+        "rawReported": "226.71 kB",
+        "bytes": 226711,
+        "gzip": 73211
+      },
+      {
+        "file": "main-TWDF2FKG.js",
+        "names": "main",
+        "rawReported": "139.43 kB",
+        "bytes": 139429,
+        "gzip": 31841
+      },
+      {
+        "file": "chunk-BYMLZNW2.js",
+        "names": "-",
+        "rawReported": "95.26 kB",
+        "bytes": 95260,
+        "gzip": 26794
+      },
+      {
+        "file": "chunk-JSKRV2L4.js",
+        "names": "-",
+        "rawReported": "52.81 kB",
+        "bytes": 52810,
+        "gzip": 11337
+      },
+      {
+        "file": "chunk-4X7RTHWU.js",
+        "names": "-",
+        "rawReported": "33.37 kB",
+        "bytes": 33372,
+        "gzip": 11534
+      },
+      {
+        "file": "chunk-EQFUKWNE.js",
+        "names": "-",
+        "rawReported": "5.11 kB",
+        "bytes": 5108,
+        "gzip": 1937
+      },
+      {
+        "file": "chunk-OZVYONYP.js",
+        "names": "-",
+        "rawReported": "4.85 kB",
+        "bytes": 4847,
+        "gzip": 1966
+      },
+      {
+        "file": "chunk-J3Z2CYVW.js",
+        "names": "-",
+        "rawReported": "3.85 kB",
+        "bytes": 3850,
+        "gzip": 1239
+      },
+      {
+        "file": "chunk-F6N3AD4Z.js",
+        "names": "-",
+        "rawReported": "1.36 kB",
+        "bytes": 1356,
+        "gzip": 727
+      }
+    ],
+    "bytes": 816505,
+    "gzip": 196842
+  },
+  "studioLazy": [
+    {
+      "file": "chunk-ODIXDWG7.js",
+      "names": "ultron-studio-page",
+      "rawReported": "719.52 kB",
+      "bytes": 719517,
+      "gzip": 183312
+    },
+    {
+      "file": "chunk-AHTSPVUK.js",
+      "names": "studio-lab-page",
+      "rawReported": "188.58 kB",
+      "bytes": 188576,
+      "gzip": 53403
+    },
+    {
+      "file": "chunk-IBXJFZ2X.js",
+      "names": "studio-integrations-page",
+      "rawReported": "162.46 kB",
+      "bytes": 162459,
+      "gzip": 44753
+    }
+  ],
+  "lazyCount": 15,
+  "buildTail": "ents/Dev/IRON_BODY/_worktrees/ultron-h7/Iron-Body_Front/src/app/modules/marketing-inbox/inbox-page.ts exceeded maximum budget. Budget 8.00 kB was not met by 1.77 kB with a total of 9.77 kB.\n\n\n▲ [WARNING] angular:styles/component:css;21f70ee169f9b75e59270eab31ec4d461422487a857cd0bec2da9d44414994da;/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h7/Iron-Body_Front/src/app/modules/components/settings-role-catalog.ts exceeded maximum budget. Budget 8.00 kB was not met by 5.73 kB with a total of 13.73 kB.\n\n\n▲ [WARNING] angular:styles/component:css;4690cb2c76bd0b9493aa7f2e93ad3e5557b1cc4c271f9a2fea20395dbe6d31a6;/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h7/Iron-Body_Front/src/app/modules/components/plan-card.ts exceeded maximum budget. Budget 8.00 kB was not met by 8.25 kB with a total of 16.25 kB.\n\n\n▲ [WARNING] src/app/modules/plan-transfers/plan-transfers.css exceeded maximum budget. Budget 8.00 kB was not met by 7.97 kB with a total of 15.97 kB.\n\n\n▲ [WARNING] angular:styles/component:css;924f8ae3646154a9c8ead1368edabba302ab47eea05676b0028883a401aa0e5a;/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h7/Iron-Body_Front/src/app/modules/classes.ts exceeded maximum budget. Budget 8.00 kB was not met by 781 bytes with a total of 8.78 kB.\n\n\n▲ [WARNING] angular:styles/component:css;fe5a7703c5dfaa137f84364ef23c7c2c173e7e043a670f3eea37be0cf5395a97;/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h7/Iron-Body_Front/src/app/modules/moderation.ts exceeded maximum budget. Budget 8.00 kB was not met by 1.01 kB with a total of 9.01 kB.\n\n\n▲ [WARNING] angular:styles/component:css;2394d18f973f08533ccb9b37135346e694228752020fc0a03a5b563c25d3e146;/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h7/Iron-Body_Front/src/app/modules/plans.ts exceeded maximum budget. Budget 8.00 kB was not met by 4.65 kB with a total of 12.65 kB.\n\n\n▲ [WARNING] angular:styles/component:css;88d05db9a50d3a90ab2d8b097a3d3c901e8686ada49b369e8d250802bda4bc8b;/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h7/Iron-Body_Front/src/app/users-list.ts exceeded maximum budget. Budget 8.00 kB was not met by 9.75 kB with a total of 17.75 kB.\n\n\n▲ [WARNING] angular:styles/component:css;2b729fb48ebc62fcd4980eca7d767df0ac81572a3f3bfa3d2abed6ac525e38c1;/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h7/Iron-Body_Front/src/app/modules/components/routine-modal.ts exceeded maximum budget. Budget 8.00 kB was not met by 3.66 kB with a total of 11.66 kB.\n\n\n▲ [WARNING] angular:styles/component:css;ee2370e5984e544122b3a66eb560888dd8fd7cb9e7d6f16db1fcd66bd06e7d22;/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h7/Iron-Body_Front/src/app/modules/attendance.ts exceeded maximum budget. Budget 8.00 kB was not met by 15.97 kB with a total of 23.97 kB.\n\n\n▲ [WARNING] angular:styles/component:css;b23db9d64493c09b59db29be3c80f6d2c53ab14f039cd081ff86d574ffef1c8d;/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h7/Iron-Body_Front/src/app/modules/payments.ts exceeded maximum budget. Budget 8.00 kB was not met by 15.60 kB with a total of 23.59 kB.\n\n\n▲ [WARNING] angular:styles/component:css;02bce96438f789b1c27f60c370ad2f4e056e582946105fd333a290c4f6f6db81;/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h7/Iron-Body_Front/src/app/home.ts exceeded maximum budget. Budget 8.00 kB was not met by 2.08 kB with a total of 10.08 kB.\n\n\n▲ [WARNING] angular:styles/component:css;5b9b9ab4e3bb1e8397562c2f6c661dd4bf5379b947e7bba5c50226e92c4662af;/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h7/Iron-Body_Front/src/app/modules/inventory.ts exceeded maximum budget. Budget 8.00 kB was not met by 15.40 kB with a total of 23.41 kB.\n\n\n▲ [WARNING] src/app/modules/ultron-studio/ultron-studio.scss exceeded maximum budget. Budget 8.00 kB was not met by 19.88 kB with a total of 27.88 kB.\n\n\n▲ [WARNING] src/app/auth/login/login.component.scss exceeded maximum budget. Budget 8.00 kB was not met by 1.36 kB with a total of 9.37 kB.\n\n\n"
+}
