@@ -36,7 +36,7 @@
 --   \set phone '+573001234567'       un teléfono en E.164: casa sus dígitos nacionales con o sin el prefijo y con
 --                                    espacios, puntos, guiones o paréntesis entre las cifras
 --   \set cc 57                       prefijo del país del teléfono (57 por defecto)
---   \set phone_hash '<64 hex>'       la huella HMAC del número canario (la calcula la aplicación: runbook). Solo
+--   \set phone_hash '<64 hex>'       la huella HMAC del número canario (la calcula la aplicación: runbook §10, paso 2). Solo
 --                                    números REVOCADOS (uno vivo aborta: su huella la usa la coherencia con el motor):
 --                                    alias → «suprimido», huella → una huella aleatoria (64 hex), 4 dígitos → 0000.
 --                                    IRREVERSIBLE: la huella original no se puede «desredactar» ni recalcular
@@ -46,7 +46,7 @@
 --   \set owner iron                  el rol dueño de las tablas (en el banco, h5_owner)
 --   \set dry 1                       1 = en seco (por defecto) · 0 = redacta
 --
--- Uso en el servidor (como root; el runbook completo está en plans/informes-h7/informe-devops-h7.md, «Supresión»):
+-- Uso en el servidor (como root; el runbook completo está en plans/informes-h7/informe-devops-h7.md §10, «Supresión»):
 --   install -m 600 /dev/null /root/supresion/<radicado>.psql     # y escribir dentro las \set con un editor
 --   cat /root/supresion/<radicado>.psql /root/supresion-1581.sql | sudo -u postgres psql -X -q -d ironbody 2>&1 | tee …
 -- Salida: solo recuentos por tabla y columna, códigos y el radicado. Nunca el dato ni los valores encontrados.
@@ -499,5 +499,5 @@ $supresion$;
   \echo '== EN SECO: ROLLBACK, nada ha cambiado.'
 \else
   COMMIT;
-  \echo '== SUPRESIÓN CONFIRMADA (COMMIT). Siguen: publication-check, el registro del radicado y las copias (runbook).'
+  \echo '== SUPRESIÓN CONFIRMADA (COMMIT). Siguen: publication-check, el registro del radicado y las copias (runbook §10, pasos 7 y 8).'
 \endif

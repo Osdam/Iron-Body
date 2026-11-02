@@ -3,14 +3,25 @@
 
 Comprueba, contra la API desplegada y SIN FILAS POSITIVAS:
   · `Cache-Control: no-store, private` en /api/admin/*: el login, lecturas autenticadas del Studio y de fuera del
-    Studio, un 401, un 404 y un 413 (B7-a);
+    Studio, un 401, un 404 y un 413 (B7-a), y también cada GET de la fase de presupuestos;
   · el tope de 64 KB del Studio ANTES de la autenticación y de la validación: 70 000 bytes → 413 payload_too_large sin
     sesión y con sesión; 60 000 bytes sin sesión → 401 (el tope no muerde de más) (B7-d);
   · `verified` por entrada en `GET publications` y en `publications` del detalle de las versiones, todas true, y la de
     la cabeza igual a `status.engine.publication.head.signatureOk` (B7-c);
   · los invisibles rechazados con 422 en un motivo (U+2060, U+00AD, U+061C, U+2028 y la etiqueta U+E0041) y las dos
     contraprobas que NO lo son (texto limpio y un emoji con ZWJ y U+FE0F) (SEC7-a);
-  · ninguna fuga en los cuerpos (el detector del H6, `find_leaks`), ningún 5xx y ningún 429.
+  · los PRESUPUESTOS DE RENDIMIENTO de PERF7 (informe-performance.md §7.1), leídos de presupuestos-h7.json: por cada
+    ruta del fichero, `samples.warmup` GET sin contar y `samples.n` cronometradas (perf_counter alrededor de la
+    petición: conexión nueva y cuerpo leído entero), en serie y separadas al menos `minIntervalSeconds` (la evidencia
+    del canario trae los suyos: 0 + 3, ≥ 6,5 s); mediana, máximo y bytes. FALLO si la mediana supera p50Ms, si el
+    máximo supera el techo p95, si el cuerpo supera maxBytes o si el estado no es 200. El techo p95 es p95MsAfterF1
+    cuando la ruta lo trae (F-1 está en el código del H7 desde e2411e3) y p95Ms si no. OMITIDO si falta lo que pide
+    `requires`: sin versión en CANARY (la evidencia), sin versiones, laboratorio apagado (409 lab_disabled) o sin
+    ejecuciones. Con 5 muestras el «p95» es el máximo y un solo pico da FALLO: un FALLO SOLO de tiempo se mide otra
+    vez, una sola, y vale la repetición (`calibration` del JSON). Cada ruta imprime además la propuesta de techo
+    max(1,5 × medida, medida + 50 ms) para recalibrar tras la primera pasada en producción;
+  · ninguna fuga en los cuerpos (el detector del H6, `find_leaks`; los de la fase de presupuestos no entran: son las
+    mismas lecturas y su asunto es el tiempo), ningún 5xx y ningún 429.
 El monitor apagado y sin tareas programadas lo comprueba el lanzador (smoke-run-h7.sh) en el servidor.
 
 POLÍTICA: SIN FILAS POSITIVAS. Las únicas peticiones que no son GET:
@@ -20,19 +31,36 @@ POLÍTICA: SIN FILAS POSITIVAS. Las únicas peticiones que no son GET:
   · 7 POST a `integrations/canaries/<uuid INVENTADO>/deactivate`: 5 con un invisible (422, antes del servicio) y 2
     contraprobas con texto válido que el servicio para antes de escribir: con las escrituras del H6 apagadas, 409
     integrations_writes_disabled; encendidas, 404 canary_not_found (el uuid no existe: no hay fila que cambiar).
-El lanzador comprueba además en la base que las 14 tablas ultron_studio_* y los incidentes no cambian.
+La fase de presupuestos solo hace GET a rutas /admin/ultron-studio/… del fichero (se validan: un fichero manipulado no
+convierte el smoke en otra cosa). El lanzador comprueba además en la base que las 14 tablas ultron_studio_* y los
+incidentes no cambian.
+
+RECALIBRAR SIN TOCAR CÓDIGO: los techos solo viven en el JSON. Se edita el JSON del repo (p50Ms, p95Ms; en la
+evidencia, también p95MsAfterF1, que manda mientras exista), se confirma y se vuelve a copiar con su huella; el smoke
+imprime la ruta, la versión y la huella del fichero que ha usado. Con SMOKE_BUDGETS_OUT=<fichero> deja además (0600)
+las medidas y la propuesta de cada ruta en JSON, sin datos personales ni secretos.
 
 Uso:   SMOKE_EMAIL=… SMOKE_PW=… python3 smoke-h7.py superadmin        (la contraseña SOLO por entorno, nunca en argv)
 Variables: SMOKE_API · SMOKE_H6_PY (la ruta de smoke-h6.py, del que se toma el detector; por defecto, junto a este) ·
-           SMOKE_CANARY_ID · SMOKE_SECRET_SALT y SMOKE_SECRET_DIGESTS (como el H6) · SMOKE_TOKEN_FILE.
-Código: 0 todo OK · 1 algún FALLO · 3 sin fallos pero con algo OMITIDO · 2 uso incorrecto.
-Cupos: 1 login (8/min por IP), 3 POST sin sesión al Studio y 8 escrituras con sesión (30/min por credencial).
+           SMOKE_BUDGETS (la ruta de presupuestos-h7.json; por defecto, junto a este o en perf-h7/) ·
+           SMOKE_BUDGETS_OUT (opcional) · SMOKE_CANARY_ID · SMOKE_SECRET_SALT y SMOKE_SECRET_DIGESTS (como el H6) ·
+           SMOKE_TOKEN_FILE.
+Código: 0 todo OK · 1 algún FALLO · 3 sin fallos pero con algo OMITIDO · 2 uso incorrecto (también un JSON de
+presupuestos ausente o mal formado: no se hace ninguna petición).
+Cupos: 1 login (8/min por IP), 3 POST sin sesión al Studio y 8 escrituras con sesión (30/min por credencial). Las
+lecturas con sesión no pasan de 90 en ningún minuto (el cupo es 120/min por credencial; si hace falta, el smoke espera)
+y la evidencia, de 6 por minuto (10/min por persona). Dura unos 2 minutos. No toca la sonda de Twilio.
 """
+import collections
+import hashlib
 import importlib.util
 import json
+import math
 import os
 import re
+import statistics
 import sys
+import time
 import urllib.error
 import urllib.request
 
@@ -42,9 +70,22 @@ FAKE = '00000000-0000-4000-8000-0000000007a7'
 NO_STORE = 'no-store, private'
 ENTRY_KEYS = ['uuid', 'seq', 'action', 'version', 'effectiveHash', 'shortHash', 'labGate', 'actor', 'reason', 'at', 'verified']
 # Invisibles que PlainText dejaba pasar antes del H7 (AS-5 del H5) y una etiqueta del bloque U+E0000–E007F.
-INVISIBLES = {'U+2060': '⁠', 'U+00AD': '­', 'U+061C': '؜', 'U+2028': ' ', 'U+E0041': '\U000e0041'}
+INVISIBLES = {'U+2060': '\u2060', 'U+00AD': '\u00ad', 'U+061C': '\u061c', 'U+2028': '\u2028', 'U+E0041': '\U000e0041'}   # escritos con escapes: un invisible literal se pierde al copiar
 REASON = 'Smoke del Hito 7: motivo de prueba, sin efecto'
-EMOJI_REASON = 'Smoke del Hito 7 \U0001F469‍\U0001F4BB ❤️ sin efecto'   # ZWJ dentro de un emoji y VS16: válidos
+EMOJI_REASON = 'Smoke del Hito 7 \U0001F469\u200d\U0001F4BB \u2764\ufe0f sin efecto'   # ZWJ dentro de un emoji y VS16: válidos
+# Peticiones con sesión en cualquier ventana de 60 s: por debajo del cupo de lectura (120/min por credencial).
+CUPO_MINUTO = 90
+# Presupuestos: las rutas que se admiten del JSON y los marcadores que se saben resolver (de dónde salen y qué
+# significa que falten). Un uuid resuelto se valida antes de entrar en una ruta.
+RUTA_PRESUPUESTO = re.compile(r'^/admin/ultron-studio/[A-Za-z0-9_/{}-]+$')
+MARCA = re.compile(r'\{([A-Za-z]+)\}')
+UUID = re.compile(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')
+MARCAS = {
+    'canary': (S + '/status', ('data', 'engine', 'publication', 'canary', 'versionUuid'),
+               'sin versión en CANARY (GET status: engine.publication.canary vacío)'),
+    'firstVersion': (S + '/versions', ('data', 'data', 0, 'uuid'), 'no hay versiones (GET versions sin ninguna)'),
+    'firstRun': (S + '/lab/runs', ('data', 'data', 0, 'uuid'), 'laboratorio apagado o sin ejecuciones (GET lab/runs sin ninguna)'),
+}
 
 
 def load_h6():
@@ -55,6 +96,80 @@ def load_h6():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
+
+
+def budgets_path():
+    env = os.environ.get('SMOKE_BUDGETS', '').strip()
+    if env:
+        return env
+    aqui = os.path.dirname(os.path.abspath(__file__))
+    for p in (os.path.join(aqui, 'presupuestos-h7.json'), os.path.join(aqui, 'perf-h7', 'presupuestos-h7.json')):
+        if os.path.isfile(p):
+            return p
+    return os.path.join(aqui, 'presupuestos-h7.json')
+
+
+def _num(x, minimo=0.0, maximo=None):
+    ok = isinstance(x, (int, float)) and not isinstance(x, bool) and x >= minimo
+    return ok and (maximo is None or x <= maximo)
+
+
+def _samples(s, donde):
+    if not (isinstance(s, dict) and isinstance(s.get('warmup'), int) and not isinstance(s.get('warmup'), bool)
+            and isinstance(s.get('n'), int) and not isinstance(s.get('n'), bool)
+            and 0 <= s['warmup'] <= 5 and 1 <= s['n'] <= 30 and _num(s.get('minIntervalSeconds'), 0, 60)):
+        raise ValueError(f'{donde}: samples tiene que ser {{warmup 0–5, n 1–30, minIntervalSeconds 0–60}}')
+    return {'warmup': s['warmup'], 'n': s['n'], 'minIntervalSeconds': float(s['minIntervalSeconds'])}
+
+
+def load_budgets(path):
+    """(documento validado, huella sha256 de 12 cifras). ValueError/OSError si no sirve: el smoke no empieza."""
+    with open(path, 'rb') as f:
+        raw = f.read()
+    doc = json.loads(raw.decode('utf-8'))
+    if not isinstance(doc, dict) or not isinstance(doc.get('routes'), list) or not doc['routes']:
+        raise ValueError('sin lista «routes»')
+    base = _samples(doc.get('samples'), 'samples')
+    vistas = set()
+    for i, r in enumerate(doc['routes']):
+        donde = f'routes[{i}]'
+        if not isinstance(r, dict) or not isinstance(r.get('name'), str) or not r['name'].strip():
+            raise ValueError(f'{donde}: sin «name»')
+        donde = f'«{r["name"]}»'
+        p = r.get('path')
+        if not isinstance(p, str) or not RUTA_PRESUPUESTO.match(p) or '..' in p or '//' in p:
+            raise ValueError(f'{donde}: «path» tiene que ser una ruta /admin/ultron-studio/… sin «..» ni consulta')
+        for m in MARCA.findall(p):
+            if m not in MARCAS:
+                raise ValueError(f'{donde}: marcador {{{m}}} desconocido (se resuelven {", ".join(sorted(MARCAS))})')
+        if MARCA.sub('', p).count('{') or MARCA.sub('', p).count('}'):
+            raise ValueError(f'{donde}: llaves sueltas en «path»')
+        for k in ('p50Ms', 'p95Ms', 'maxBytes'):
+            if not _num(r.get(k), 1):
+                raise ValueError(f'{donde}: «{k}» tiene que ser un número ≥ 1')
+        if 'p95MsAfterF1' in r and not _num(r['p95MsAfterF1'], 1):
+            raise ValueError(f'{donde}: «p95MsAfterF1» tiene que ser un número ≥ 1')
+        r['_samples'] = _samples(r['samples'], donde) if 'samples' in r else base
+        if r['name'] in vistas:
+            raise ValueError(f'{donde}: nombre repetido')
+        vistas.add(r['name'])
+    return doc, hashlib.sha256(raw).hexdigest()[:12]
+
+
+def dig(node, path):
+    for k in path:
+        if isinstance(k, int):
+            node = node[k] if isinstance(node, list) and len(node) > k else None
+        else:
+            node = node.get(k) if isinstance(node, dict) else None
+        if node is None:
+            return None
+    return node
+
+
+def propuesta(medida):
+    """El techo recalibrado del JSON (`calibration`): max(1,5 × medida, medida + 50 ms), redondeado hacia arriba."""
+    return int(math.ceil(max(1.5 * medida, medida + 50)))
 
 
 def data_of(body):
@@ -76,6 +191,10 @@ class Smoke:
         self.statuses = []
         self.no_store_bad = []
         self.no_store_seen = 0
+        self.recent = collections.deque()   # salidas con sesión de los últimos 60 s (el cupo de arriba)
+        self.waited = 0.0
+        self.last_ms = 0.0
+        self.last_bytes = 0
 
     def line(self, kind, name, detail=''):
         if kind in self.counts:
@@ -92,7 +211,21 @@ class Smoke:
     def info(self, name, detail=''):
         self.line('INFO', name, detail)
 
-    def call(self, method, path, body=None, token=None, raw=None, label=None):
+    def pace(self):
+        """Ninguna ventana de 60 s con más de CUPO_MINUTO peticiones con sesión: si hace falta, espera."""
+        ahora = time.monotonic()
+        while self.recent and ahora - self.recent[0] >= 60:
+            self.recent.popleft()
+        if len(self.recent) >= CUPO_MINUTO:
+            espera = 60 - (ahora - self.recent[0]) + 0.05
+            time.sleep(espera)
+            self.waited += espera
+            ahora = time.monotonic()
+            while self.recent and ahora - self.recent[0] >= 60:
+                self.recent.popleft()
+        self.recent.append(time.monotonic())
+
+    def call(self, method, path, body=None, token=None, raw=None, label=None, keep=True):
         data = raw if raw is not None else (json.dumps(body, ensure_ascii=False).encode('utf-8') if body is not None else None)
         req = urllib.request.Request(API + path, data=data, method=method)
         req.add_header('Accept', 'application/json')
@@ -100,15 +233,21 @@ class Smoke:
             req.add_header('Content-Type', 'application/json')
         if token:
             req.add_header('Authorization', 'Bearer ' + token)
+            self.pace()
         headers = {}
+        payload = b''
+        t0 = time.perf_counter()
         try:
             with urllib.request.urlopen(req, timeout=30) as r:
-                status, text, headers = r.status, r.read().decode('utf-8', 'replace'), r.headers
+                status, payload, headers = r.status, r.read(), r.headers
         except urllib.error.HTTPError as e:
-            status, text, headers = e.code, e.read().decode('utf-8', 'replace'), e.headers
+            status, payload, headers = e.code, e.read(), e.headers
         except (urllib.error.URLError, OSError) as e:
-            status, text = 0, ''
+            status = 0
             print(f'        (sin respuesta de {method} {label or path}: {type(e).__name__})', flush=True)
+        self.last_ms = (time.perf_counter() - t0) * 1000
+        self.last_bytes = len(payload)
+        text = payload.decode('utf-8', 'replace')
         try:
             parsed = json.loads(text) if text else None
         except ValueError:
@@ -121,7 +260,8 @@ class Smoke:
                 self.no_store_seen += 1
                 if cc != NO_STORE:
                     self.no_store_bad.append(f'{lbl}={cc}')
-        self.bodies.append((lbl, text if len(text) < 200000 else text[:200000], parsed))
+        if keep:
+            self.bodies.append((lbl, text if len(text) < 200000 else text[:200000], parsed))
         return status, parsed, headers
 
     def scan(self):
@@ -257,6 +397,121 @@ def check_invisibles(sm, token):
                  str(st) == want[0] and code_of(r) == want[1], f'HTTP {st} {code_of(r) or ""}'.strip())
 
 
+def measure(sm, token, rel, label, samples):
+    """Una medida de una ruta: (estado de corte, cuerpo de corte, tiempos ms, bytes, último cuerpo 200).
+    Se para en la primera respuesta que no sea 200 (incluido el calentamiento): no insiste sobre un error."""
+    tiempos, tamanos, ultimo, previa = [], [], None, None
+    for i in range(samples['warmup'] + samples['n']):
+        if previa is not None:
+            espera = samples['minIntervalSeconds'] - (time.perf_counter() - previa)
+            if espera > 0:
+                time.sleep(espera)
+        previa = time.perf_counter()
+        st, body, _ = sm.call('GET', rel, token=token, label=label, keep=False)
+        if st != 200:
+            return st, body, tiempos, tamanos, ultimo
+        if i >= samples['warmup']:
+            tiempos.append(sm.last_ms)
+            tamanos.append(sm.last_bytes)
+        ultimo = body
+    return 200, None, tiempos, tamanos, ultimo
+
+
+def judge(route, techo95, tiempos, tamanos):
+    """(mediana, máximo, bytes, motivos de FALLO, ¿todos los motivos son de tiempo?)."""
+    med, mx, by = statistics.median(tiempos), max(tiempos), max(tamanos)
+    tiempo = []
+    if med > route['p50Ms']:
+        tiempo.append(f'mediana {med:.1f} > {route["p50Ms"]:g}')
+    if mx > techo95:
+        tiempo.append(f'máximo {mx:.1f} > {techo95:g}')
+    otros = [f'{by} B > {route["maxBytes"]:g}'] if by > route['maxBytes'] else []
+    return med, mx, by, tiempo + otros, bool(tiempo) and not otros
+
+
+def check_budgets(sm, token, doc, origen, huella):
+    rutas = doc['routes']
+    base = doc['samples']
+    print(f"== Presupuestos de rendimiento · {origen} · {doc.get('version', '¿sin versión?')} · sha256 {huella} · {len(rutas)} rutas · "
+          f"{base['warmup']} + {base['n']} muestras, ≥ {base['minIntervalSeconds']:g} s", flush=True)
+    t0 = time.monotonic()
+    espera0 = sm.waited
+    resueltos = {}
+    sin_200 = set()          # rutas de origen de un marcador que no dieron 200 (su FALLO ya se ha contado)
+    tally = {'OK': 0, 'FALLO': 0, 'OMITIDO': 0}
+    informe = []
+
+    def anota(kind, route, motivo='', **medidas):
+        tally[kind] += 1
+        informe.append({'name': route['name'], 'path': route['path'], 'status': kind, 'reason': motivo, **medidas,
+                        'p50Ms': route['p50Ms'], 'p95Ms': route.get('p95MsAfterF1', route['p95Ms']), 'maxBytes': route['maxBytes']})
+
+    for route in rutas:
+        nombre = f"presupuesto {route['name']}"
+        faltan = [m for m in MARCA.findall(route['path']) if m not in resueltos]
+        if faltan:
+            motivo = '; '.join(f'falta {{{m}}}: GET {MARCAS[m][0].replace(S + "/", "")} no dio 200' if MARCAS[m][0] in sin_200 else MARCAS[m][2]
+                               for m in faltan)
+            sm.skip(nombre, motivo)
+            anota('OMITIDO', route, motivo)
+            continue
+        rel = MARCA.sub(lambda m: resueltos[m.group(1)], route['path'])
+        techo95 = route.get('p95MsAfterF1', route['p95Ms'])
+        nota95 = f' (tras F-1; antes, {route["p95Ms"]:g})' if 'p95MsAfterF1' in route else ''
+        etiqueta = route['name'].replace('GET ', '', 1)
+        intentos = []
+        while True:
+            st, cuerpo, tiempos, tamanos, ultimo = measure(sm, token, rel, etiqueta, route['_samples'])
+            if st != 200:
+                break
+            med, mx, by, malos, solo_tiempo = judge(route, techo95, tiempos, tamanos)
+            intentos.append((med, mx, by, malos))
+            if malos and solo_tiempo and len(intentos) == 1:
+                continue        # un pico con 5 muestras: se repite una vez y vale la repetición
+            break
+        if st == 409 and code_of(cuerpo) == 'lab_disabled' and route.get('requires'):
+            sm.skip(nombre, 'laboratorio apagado (409 lab_disabled)')
+            anota('OMITIDO', route, 'laboratorio apagado (409 lab_disabled)')
+            continue
+        if st != 200:
+            sm.check(nombre, False, f'HTTP {st} {code_of(cuerpo) or ""}'.strip() + ' (se esperaba 200)')
+            anota('FALLO', route, f'HTTP {st}')
+            sin_200.add(route['path'])
+            continue
+        med, mx, by, malos = intentos[-1]
+        n = len(tiempos)
+        previo = ''
+        if len(intentos) == 2:
+            p = intentos[0]
+            previo = f' · repetida: la primera medida dio {", ".join(p[3])}'
+        cal = f'calibración: p50 ≤ {propuesta(med)} · p95 ≤ {propuesta(mx)}'
+        texto = (f"mediana {med:.1f} ms ≤ {route['p50Ms']:g} · máximo {mx:.1f} ms ≤ {techo95:g}{nota95} · {by} B ≤ {route['maxBytes']:g}"
+                 if not malos else ', '.join(malos))
+        sm.check(f'{nombre}: {texto}', not malos, f'n {n}{previo} · {cal}')
+        anota('FALLO' if malos else 'OK', route, ', '.join(malos), n=n, medianMs=round(med, 1), maxMs=round(mx, 1), bytes=by,
+              retried=len(intentos) == 2, proposedP50Ms=propuesta(med), proposedP95Ms=propuesta(mx))
+        for marca, (origen_m, camino, _) in MARCAS.items():
+            if route['path'] == origen_m:
+                valor = dig(ultimo, camino)
+                if isinstance(valor, str) and UUID.match(valor):
+                    resueltos[marca] = valor.lower()
+    dur = time.monotonic() - t0
+    esperas = sm.waited - espera0
+    print(f"PRESUPUESTOS: {tally['OK']} OK · {tally['FALLO']} FALLO · {tally['OMITIDO']} OMITIDO · {dur:.0f} s"
+          + (f' (de ellos {esperas:.0f} s esperando al cupo de {CUPO_MINUTO}/min)' if esperas else ''), flush=True)
+    salida = os.environ.get('SMOKE_BUDGETS_OUT', '').strip()
+    if salida:
+        datos = {'source': origen, 'sha256': huella, 'version': doc.get('version'), 'api': API,
+                 'at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+                 'rule': 'propuesta = max(1,5 × medida, medida + 50 ms): p50 con la mediana, p95 con el máximo', 'routes': informe}
+        fd = os.open(salida, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            json.dump(datos, f, ensure_ascii=False, indent=2)
+            f.write('\n')
+        print(f'        medidas y propuesta de cada ruta en {salida} (0600)', flush=True)
+
+
 def main(argv):
     part = argv[1] if len(argv) > 1 else ''
     email = os.environ.get('SMOKE_EMAIL', '')
@@ -281,6 +536,13 @@ def main(argv):
     except (OSError, ImportError, SyntaxError) as e:
         print(f'no se pudo cargar el detector de smoke-h6.py ({type(e).__name__}): SMOKE_H6_PY=…')
         return 2
+    origen = budgets_path()
+    try:
+        budgets, huella = load_budgets(origen)
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        detalle = str(e) if isinstance(e, ValueError) and not isinstance(e, json.JSONDecodeError) else type(e).__name__
+        print(f'no se pudieron cargar los presupuestos de {origen} ({detalle}): SMOKE_BUDGETS=…')
+        return 2
     sm = Smoke(h6, canary, bytes.fromhex(salt_hex) if salt_hex else b'', h6.parse_digests(digests_raw))
     print(f'== Smoke del Hito 7 · {part} · {API}', flush=True)
     token = login(sm, email, password)
@@ -289,6 +551,7 @@ def main(argv):
         check_body_cap(sm, token)
         check_verified(sm, token)
         check_invisibles(sm, token)
+        check_budgets(sm, token, budgets, origen, huella)
     sm.scan()
     c = sm.counts
     print(f"RESUMEN ({part}): {c['OK']} OK · {c['FALLO']} FALLO · {c['OMITIDO']} OMITIDO", flush=True)

@@ -5,7 +5,9 @@
 #                                                                    como migrador (--55p03: el primer intento choca con
 #                                                                    un lector de la cadena y cae por lock_timeout)
 #   bash ensayar.sh <banco> smoke [<id de admin>]                    smoke-run-h7.sh del REPO con las variables locales
+#                                                                    (SMOKE_BUDGETS, si se exporta, pasa tal cual)
 #   bash ensayar.sh <banco> smoke-h6 1 [<id de admin>]               smoke-run-h6.sh del REPO (regresión del H6)
+#   bash ensayar.sh <banco> monitor on|off <actual>|estado           copia del banco de h7-monitor-scope.sh (el mando)
 # Las copias se regeneran desde el repo antes de cada ensayo (preparar.sh).
 . "$(dirname "$0")/comun.sh"
 B=$(banco_dir "${1:-}")
@@ -25,11 +27,14 @@ case "$ORDEN" in
     ID=${1:-${ADMIN_ID:-}}
     [ -n "$ID" ] || muere "sin cuenta de smoke: bash $AQUI/sembrar.sh $B"
     mkdir -p "$B/smokework"
-    exec env "${LOCAL[@]}" SMOKE_PY="$OPS/smoke-h7.py" SMOKE_H6_PY="$OPS/smoke-h6.py" SMOKE_ADMIN_ID="$ID" bash "$OPS/smoke-run-h7.sh" ;;
+    exec env "${LOCAL[@]}" SMOKE_PY="$OPS/smoke-h7.py" SMOKE_H6_PY="$OPS/smoke-h6.py" SMOKE_ADMIN_ID="$ID" \
+      SMOKE_BUDGETS="${SMOKE_BUDGETS:-$OPS/perf-h7/presupuestos-h7.json}" bash "$OPS/smoke-run-h7.sh" ;;
+  monitor)
+    exec bash "$B/root/h7-monitor-scope.sh" "$@" ;;
   smoke-h6)
     FASE=${1:-1}; ID=${2:-${ADMIN_ID:-}}
     [ -n "$ID" ] || muere "sin cuenta de smoke: bash $AQUI/sembrar.sh $B"
     mkdir -p "$B/smokework"
     exec env "${LOCAL[@]}" SMOKE_PY="$OPS/smoke-h6.py" SMOKE_ADMIN_ID="$ID" SMOKE_PHASE="$FASE" bash "$OPS/smoke-run-h6.sh" ;;
-  *) muere "uso: bash ensayar.sh <banco> desplegar|smoke|smoke-h6 …" ;;
+  *) muere "uso: bash ensayar.sh <banco> desplegar|smoke|smoke-h6|monitor …" ;;
 esac

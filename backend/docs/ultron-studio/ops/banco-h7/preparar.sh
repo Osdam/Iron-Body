@@ -1,9 +1,13 @@
 #!/bin/bash
-# Copias del banco de deploy-h7-backend.sh y de ironbody-migrate-propuesta.sh en $B/root. Solo cambian rutas, psql, la
-# URL, los roles (iron → h5_owner, iron_app → h5_app), los dueños esperados (root/www-data → el usuario del Mac), el
-# canal del log, la comprobación de root, PREVIO, y en la propuesta lo que el Mac no tiene (setpriv, getent, usuarios
-# de sistema, find de GNU, /run). La LÓGICA es la del repo: cada sustitución tiene que encontrar su texto exacto (si
-# un script del repo cambia y una ya no casa, preparar FALLA en vez de ensayar otra cosa) y el diff se enseña al final.
+# Copias del banco de deploy-h7-backend.sh, h7-monitor-scope.sh e ironbody-migrate-propuesta.sh en $B/root. Solo
+# cambian rutas, psql, la URL, los roles (iron → h5_owner, iron_app → h5_app), los dueños esperados (root/www-data →
+# el usuario del Mac), el canal del log, la comprobación de root, el valor de PREVIO, y en la propuesta lo que el Mac
+# no tiene (setpriv, getent, usuarios de sistema, find de GNU, /run). La LÓGICA es la del repo: cada sustitución tiene
+# que encontrar su texto exacto (si un script del repo cambia y una ya no casa, preparar FALLA en vez de ensayar otra
+# cosa) y el diff se enseña al final.
+# PREVIO (T-1 del tester): la línea «PREVIO=…» del repo se sustituye SEA CUAL SEA su valor (pendiente o el commit que
+# fije el lead) por el de la «producción» del banco, y tiene que haber exactamente una: el banco ensaya el guion que
+# irá a producción, con la única diferencia de ese valor (y el del repo queda anotado en la propia línea).
 # Uso: bash preparar.sh <banco>       (se repite cada vez que cambian los scripts del repo; ensayar.sh lo hace solo)
 . "$(dirname "$0")/comun.sh"
 B=$(banco_dir "${1:-}")
@@ -13,11 +17,18 @@ URL="http://127.0.0.1:$BANCO_PORT/api"
 BPSQL="psql -X -Atq -v ON_ERROR_STOP=1 -h $PG_HOST -p $PG_PORT -U $PG_USER -d $BANCO_DB"
 PHPBIN=$(command -v php)
 python3 - "$OPS" "$B" "$ME" "$URL" "$BPSQL" "$PHPBIN" "$PREVIO_BANCO" <<'PY'
+import re
 import sys
 ops, b, me, url, bpsql, php, previo = sys.argv[1:8]
 def sustituye(nombre, reglas):
     s = open(f'{ops}/{nombre}', encoding='utf-8').read()
     for viejo, nuevo, veces in reglas:
+        if isinstance(viejo, re.Pattern):          # regla por expresión regular (multilínea): la misma exigencia de veces
+            n = len(viejo.findall(s))
+            if n == 0 or (veces and n != veces):
+                sys.exit(f'preparar: /{viejo.pattern[:70]}/ casa {n} veces en {nombre} (esperado {veces or "≥ 1"}): el script cambió')
+            s = viejo.sub(nuevo, s)
+            continue
         n = s.count(viejo)
         if n == 0 or (veces and n != veces):
             sys.exit(f'preparar: «{viejo[:70]}» aparece {n} veces en {nombre} (esperado {veces or "≥ 1"}): el script cambió')
@@ -30,7 +41,7 @@ deploy = sustituye('deploy-h7-backend.sh', comunes + [
     ('https://api.ironbodyneiva.cloud/api', url, 0),
     ('sudo -u postgres psql -X -Atq -v ON_ERROR_STOP=1 -d ironbody', bpsql, 1),
     ('[ "$(id -u)" = 0 ]', 'true', 1),
-    ('PREVIO=pendiente', f'PREVIO={previo}', 1),
+    (re.compile(r'^PREVIO=(\S*).*$', re.M), lambda m: f'PREVIO={previo}   # BANCO: la «producción» del banco (en el repo, PREVIO={m.group(1)})', 1),
     ('/usr/local/bin/ironbody-migrate', f'{b}/bin/ironbody-migrate', 1),
     ("'iron_app'", "'h5_app'", 0),
     ("has_schema_privilege('iron'", "has_schema_privilege('h5_owner'", 1),
@@ -42,6 +53,17 @@ deploy = sustituye('deploy-h7-backend.sh', comunes + [
     ('production.ERROR', 'local.ERROR', 0),
 ])
 open(f'{b}/root/deploy-h7-backend.sh', 'w', encoding='utf-8').write(deploy)
+# El mando del monitor: la copia previa y el temporal van al /root del banco; install sin -o root (el Mac no es root);
+# la caché la «escribe www-data», que en el banco es el usuario del Mac. crontab -l -u … falla sin privilegios: el
+# aviso H-1 sale como «no aparece», que es lo que hay en el Mac.
+mando = sustituye('h7-monitor-scope.sh', comunes + [
+    ('https://api.ironbodyneiva.cloud/api', url, 1),
+    ('[ "$(id -u)" = 0 ]', 'true', 1),
+    ('/root/', f'{b}/root/', 0),
+    ('install -m 600 -o root -g root', 'install -m 600', 1),
+    ('= www-data ]', f'= {me} ]', 1),
+])
+open(f'{b}/root/h7-monitor-scope.sh', 'w', encoding='utf-8').write(mando)
 migrador = sustituye('ironbody-migrate-propuesta.sh', comunes + [
     ('CRED=/etc/ironbody-migrate/owner.env', f'CRED={b}/etc/ironbody-migrate/owner.env', 1),
     ('LOG=/var/log/ironbody-migrate.log', f'LOG={b}/logs/ironbody-migrate.log', 1),
@@ -67,8 +89,8 @@ migrador = sustituye('ironbody-migrate-propuesta.sh', comunes + [
 ])
 open(f'{b}/root/ironbody-migrate', 'w', encoding='utf-8').write(migrador)
 PY
-chmod 700 "$B/root/deploy-h7-backend.sh" "$B/root/ironbody-migrate"
-for f in deploy-h7-backend.sh:deploy-h7-backend.sh ironbody-migrate-propuesta.sh:ironbody-migrate; do
+chmod 700 "$B/root/deploy-h7-backend.sh" "$B/root/h7-monitor-scope.sh" "$B/root/ironbody-migrate"
+for f in deploy-h7-backend.sh:deploy-h7-backend.sh h7-monitor-scope.sh:h7-monitor-scope.sh ironbody-migrate-propuesta.sh:ironbody-migrate; do
   o=${f%%:*}; c=${f#*:}
   bash -n "$B/root/$c"
   echo "== $o → $B/root/$c: $(diff "$OPS/$o" "$B/root/$c" | grep -c '^>' || true) líneas con sustituciones del banco"

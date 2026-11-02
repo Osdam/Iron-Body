@@ -18,9 +18,10 @@ Ensayo de punta a punta, **en el Mac**, del despliegue del H7 y de todo lo que O
   - `supervisorctl` (13 RUNNING), `systemctl`, `sha256sum` y `flock` (este no bloquea);
   - `ironbody-migrate`, que es **la copia del banco de la propuesta**. Con `lock-once`, el primer intento choca con un lector de la cadena.
 
-`preparar.sh` hace las copias del banco de `deploy-h7-backend.sh` y de `ironbody-migrate-propuesta.sh`.
+`preparar.sh` hace las copias del banco de `deploy-h7-backend.sh`, `h7-monitor-scope.sh` y `ironbody-migrate-propuesta.sh`.
 - Cada sustitución tiene que encontrar su texto exacto. Si un script del repo cambia, `preparar.sh` falla en vez de ensayar otra cosa.
-- Lo que el banco no tiene: `setpriv`, los usuarios de sistema, `find` de GNU y `/run`.
+- **`PREVIO` (T-1 del tester):** la línea `PREVIO=…` del repo se sustituye **sea cual sea su valor** (`pendiente` o el commit que fije el lead) por el de la «producción» del banco, y tiene que haber exactamente una. El valor del repo queda anotado en la propia línea. Así el banco ensaya el guion que irá a producción.
+- Lo que el banco no tiene: `setpriv`, los usuarios de sistema, `find` de GNU, `/run` y el `crontab` de otros usuarios (el aviso H-1 del mando sale como «no aparece»).
 
 ## Uso
 
@@ -29,7 +30,12 @@ O=backend/docs/ultron-studio/ops; B=${XDG_CACHE_HOME:-$HOME/.cache}/ironbody-ban
 BANCO_WIP=0 bash $O/banco-h7/montar.sh $B && bash $O/banco-h6/api.sh $B start && bash $O/banco-h7/sembrar.sh $B
 bash $O/banco-h7/ensayar.sh $B desplegar --solo-comprobar     # paso 0
 bash $O/banco-h7/ensayar.sh $B desplegar --55p03              # → DESPLIEGUE H7 (BACKEND) COMPLETADO
-bash $O/banco-h7/ensayar.sh $B smoke                          # smoke-run-h7.sh del repo
+bash $O/banco-h7/ensayar.sh $B smoke                          # smoke-run-h7.sh del repo, con perf-h7/presupuestos-h7.json
+                                                              #   recién desplegado: 3 presupuestos OMITIDO por estado → código 3
+bash $O/banco-h7/sembrar-presupuestos.sh $B                   # versión en CANARY y ejecución fake: el smoke mide las 17 rutas
+SMOKE_BUDGETS=<copia del JSON> bash $O/banco-h7/ensayar.sh $B smoke   # otros techos sin tocar código (recalibrar)
+bash $O/banco-h7/ensayar.sh $B monitor estado                 # el mando del monitor (copia del banco de h7-monitor-scope.sh)
+bash $O/banco-h7/ensayar.sh $B monitor on off                 # → MANDO monitor → on APLICADO; «monitor off on» para volver
 php $O/banco-h7/sembrar-1581.php $B/api/backend 7             # datos sintéticos de una persona (desde $B/api/backend)
 bash $O/banco-h7/ensayo-supresion.sh $B                       # supresion-1581.sql con el dueño sin superusuario
 bash $O/banco-h7/ensayo-migrador.sh $B                        # la propuesta de ironbody-migrate

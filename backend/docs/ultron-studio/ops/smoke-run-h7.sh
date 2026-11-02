@@ -2,9 +2,12 @@
 # Smoke del Hito 7 en producción, con la cuenta temporal admin id 32 («Studio smoke», Super Admin, INACTIVA entre usos),
 # que al terminar vuelve a su reposo (Super Admin e inactiva, sin sesiones). Es el lanzador de smoke-run-h6.sh con lo
 # del Hito 7: el monitor apagado y sin tareas programadas, y los incidentes del Studio sin cambios.
-# Se ejecuta EN EL SERVIDOR como root, tras copiar a /root/ este fichero, smoke-h7.py y smoke-h6.py (del que smoke-h7.py
-# toma el detector de fugas):
+# Se ejecuta EN EL SERVIDOR como root, tras copiar a /root/ este fichero, smoke-h7.py, smoke-h6.py (del que smoke-h7.py
+# toma el detector de fugas) y perf-h7/presupuestos-h7.json (los presupuestos de rendimiento de PERF7, §7.1):
 #   bash /root/smoke-run-h7.sh
+# Con SMOKE_BUDGETS_OUT=/root/<fichero>.json deja además las medidas de cada ruta y la propuesta de techo (0600, sin
+# datos personales): es la línea base de la primera pasada en producción. Recalibrar = editar el JSON del REPO,
+# confirmarlo y volver a copiarlo con su huella; nunca se edita el código.
 # Sin filas positivas: el smoke solo envía lo que el servidor rechaza antes de escribir (ver smoke-h7.py) y este
 # lanzador lo comprueba en la base: recuento EXACTO de las 14 tablas ultron_studio_* antes y después, filas que nombran
 # a la cuenta en cualquier columna *admin_id y los incidentes de IRON GUARD de fuente ultron_studio. Una tabla del Studio
@@ -13,11 +16,15 @@
 # entrada estándar a tinker; el id de la conversación canaria solo va por entorno y nunca se imprime; los secretos del
 # servidor no salen de PHP (huellas saladas con una sal de esta ejecución); los tokens, en ficheros 0600 de un
 # directorio 0700; un trap deja la cuenta en reposo, comprueba que los tokens ya no sirven y borra los temporales y las
-# copias de /root aunque el smoke falle. app nunca como root (artisan como www-data).
-# Códigos de salida: 0 todo OK · 1 algún FALLO · 3 sin fallos pero con algo OMITIDO · 2 uso incorrecto.
-# Cupos: 3 por minuto (login, 8/min por IP). No toca la sonda de Twilio (su cupo es el del H6).
-# Ensayo local: APP_DIR, SMOKE_API, SMOKE_RUN_AS="", SMOKE_PSQL, SMOKE_WORKDIR, SMOKE_PY, SMOKE_H6_PY y SMOKE_ADMIN_ID
-# (ver banco-h7/README.md).
+# copias de /root (también la del JSON) aunque el smoke falle. app nunca como root (artisan como www-data).
+# Códigos de salida: 0 todo OK · 1 algún FALLO · 3 sin fallos pero con algo OMITIDO · 2 uso incorrecto. Un presupuesto
+# OMITIDO por el estado (sin versión en CANARY, laboratorio apagado o sin ejecuciones) da 3: se lee en la línea
+# «PRESUPUESTOS:» y en su motivo.
+# Cupos: 3 por minuto (login, 8/min por IP). Cada pasada dura unos 2 minutos (la fase de presupuestos, en serie y con
+# sus pausas) y no pasa de 90 lecturas con sesión por minuto (cupo 120). No toca la sonda de Twilio (su cupo es el
+# del H6).
+# Ensayo local: APP_DIR, SMOKE_API, SMOKE_RUN_AS="", SMOKE_PSQL, SMOKE_WORKDIR, SMOKE_PY, SMOKE_H6_PY, SMOKE_BUDGETS y
+# SMOKE_ADMIN_ID (ver banco-h7/README.md).
 set -euo pipefail
 export LC_ALL=C
 
@@ -27,6 +34,7 @@ ADMIN_ID="${SMOKE_ADMIN_ID:-32}"
 WORK="${SMOKE_WORKDIR:-/root}"
 PY="${SMOKE_PY:-$WORK/smoke-h7.py}"
 PY6="${SMOKE_H6_PY:-$WORK/smoke-h6.py}"
+BUD="${SMOKE_BUDGETS:-$WORK/presupuestos-h7.json}"
 RUN_AS="${SMOKE_RUN_AS-www-data}"
 PSQL="${SMOKE_PSQL:-sudo -u postgres psql -X -Atq -d ironbody}"
 SMOKE_EMAIL=studio-smoke@ironbodyneiva.cloud
@@ -36,6 +44,17 @@ if [ -n "$RUN_AS" ] && [ "$(id -u)" != 0 ]; then echo "en el servidor se ejecuta
 for b in python3 php openssl curl join; do command -v "$b" > /dev/null || { echo "falta $b"; exit 2; }; done
 [ -f "$PY" ] || { echo "no encuentro $PY"; exit 2; }
 [ -f "$PY6" ] || { echo "no encuentro $PY6 (smoke-h7.py usa su detector de fugas)"; exit 2; }
+[ -f "$BUD" ] || { echo "no encuentro $BUD (perf-h7/presupuestos-h7.json del repo, copiado junto al smoke; SMOKE_BUDGETS=…)"; exit 2; }
+# El JSON se valida con el mismo código del smoke ANTES de activar la cuenta: uno roto no la activa en balde. Con -B:
+# importar smoke-h7.py no deja __pycache__ en /root.
+PRES=$(python3 -I -B -c 'import importlib.util, sys
+s = importlib.util.spec_from_file_location("smoke_h7", sys.argv[1]); m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
+try:
+    d, h = m.load_budgets(sys.argv[2])
+except Exception as e:
+    print(type(e).__name__ + (": " + str(e) if type(e) is ValueError else "")); sys.exit(1)
+print(str(d.get("version", "?")) + " · " + str(len(d["routes"])) + " rutas · sha256 " + h)' "$PY" "$BUD" 2>&1 | tail -1) \
+  || { echo "los presupuestos de $BUD no sirven ($PRES): no se ejecuta el smoke y la cuenta no se ha tocado"; exit 2; }
 cd "$APP_DIR"
 
 artisan() { if [ -n "$RUN_AS" ]; then sudo -u "$RUN_AS" php artisan "$@"; else php artisan "$@"; fi; }
@@ -76,6 +95,7 @@ cleanup() {
   [ -n "${TMPD:-}" ] && [ -d "$TMPD" ] && rm -rf -- "$TMPD"
   case "$PY" in /root/*) rm -f -- "$PY" ;; esac
   case "$PY6" in /root/*) rm -f -- "$PY6" ;; esac
+  case "$BUD" in /root/*) rm -f -- "$BUD" ;; esac
   case "$0" in /root/*) rm -f -- "$0" ;; esac
   echo "SMOKE H7: código de salida $FINAL"
   exit "$FINAL"
@@ -83,6 +103,7 @@ cleanup() {
 trap cleanup EXIT
 
 echo "== Smoke del Hito 7 · $(date -u +%Y-%m-%dT%H:%M:%SZ) · $API"
+echo "OK      presupuestos de rendimiento válidos: $PRES ($BUD)"
 
 # 1. El monitor apagado (la bandera, booleana de verdad) y el programador sin ninguna tarea del Studio.
 CONF=$(tinker_line '^\{"monitor_enabled":(true|false)\}$' 'echo json_encode(["monitor_enabled" => config("ultron_studio.monitor.enabled")]), PHP_EOL;') \
@@ -122,7 +143,8 @@ unset HASH
 
 set +e
 SMOKE_API="$API" SMOKE_EMAIL="$SMOKE_EMAIL" SMOKE_PW="$SMOKE_PW" SMOKE_CANARY_ID="$CANARIO" SMOKE_SECRET_SALT="$SAL" \
-  SMOKE_SECRET_DIGESTS="${HUELLAS:-}" SMOKE_TOKEN_FILE="$HDR" SMOKE_H6_PY="$PY6" PYTHONIOENCODING=utf-8 PYTHONDONTWRITEBYTECODE=1 \
+  SMOKE_SECRET_DIGESTS="${HUELLAS:-}" SMOKE_TOKEN_FILE="$HDR" SMOKE_H6_PY="$PY6" SMOKE_BUDGETS="$BUD" \
+  SMOKE_BUDGETS_OUT="${SMOKE_BUDGETS_OUT:-}" PYTHONIOENCODING=utf-8 PYTHONDONTWRITEBYTECODE=1 \
   python3 "$PY" superadmin
 RC1=$?
 set -e

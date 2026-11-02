@@ -4,9 +4,10 @@
 
 **Base de los ensayos:**
 - `167e34c`: la confirmación en curso de OPS7, con DB7 y B7 en curso;
-- `aa3451f`: DB7 y B7 completos.
+- `aa3451f`: DB7 y B7 completos;
+- `ee9f128`: la tanda del 02-11 que cierra las discrepancias de DOC7 y la T-1 del tester (§4.9), con F-1 y F-2 ya confirmados.
 
-Entre las dos, el código solo difiere en `AdminUserController` (+29 líneas). La migración del H7 es idéntica.
+Entre las dos primeras, el código solo difiere en `AdminUserController` (+29 líneas). La migración del H7 es idéntica en las tres.
 
 **Entorno de todo lo hecho:** local, en el Mac. **No es producción:** sin SSH, sin peticiones al servidor y sin commit (lo hace el lead).
 
@@ -14,12 +15,12 @@ Entre las dos, el código solo difiere en `AdminUserController` (+29 líneas). L
 
 | Entrega | Resultado real |
 |---|---|
-| 1. Monitor con bandera | **12/12 pruebas en SQLite y en la puerta PG** (135 aserciones). `UltronEngineIsolationTest`: 7/7. `schedule:list` pasa de **26 a 28** entradas solo con la bandera encendida. Pint en verde |
+| 1. Monitor con bandera | **12/12 pruebas en SQLite y en la puerta PG** (135 aserciones). `UltronEngineIsolationTest`: 7/7. `schedule:list` suma **2** entradas solo con la bandera encendida (26 → 28 en las pruebas; 27 → 29 en el banco: el total depende de otras banderas, H-10). Pint en verde. **Mando** `h7-monitor-scope.sh`: **16/16** en el banco, ida y vuelta, el fichero de entorno idéntico byte a byte al volver (§3, §4.9) |
 | 2. Runbook de costes | §6 |
 | 3. `ironbody-migrate` sin root | **21/21** en el banco (§4.3). H-5 de SEC7 corregido. `.env` escribible → rechazo. `find -L`. Guarda contra `PG*`/`LD_*` |
-| 4. Supresión Ley 1581 | **17/17** en el banco, con el dueño **sin superusuario**; tras redactar `reason`, la cadena sigue verificando (§4.4) |
+| 4. Supresión Ley 1581 | **17/17** en el banco, con el dueño **sin superusuario**; tras redactar `reason`, la cadena sigue verificando (§4.4). **Runbook: §10 «Supresión»** (huella del teléfono sin imprimirla, en seco → real, comprobaciones tras el COMMIT y registro); sus órdenes, ensayadas en el banco |
 | 5. Respaldos | Política (§7). Ensayo `-Fc`: **14/14**, recuento exacto de las **226** tablas, RTO 1 s. **Hallazgo H-6:** `--no-owner` (§4.5) |
-| 6. Scripts del H7 | Despliegue en el banco con un 55P03 real: **`DESPLIEGUE H7 (BACKEND) COMPLETADO`** dos veces (50 s y 47 s). Smoke **22–23 OK · 0 FALLO** |
+| 6. Scripts del H7 | Despliegue en el banco con un 55P03 real: **`DESPLIEGUE H7 (BACKEND) COMPLETADO`** tres veces (50 s, 47 s y, en `ee9f128`, 45 s). Smoke con los **presupuestos de PERF7**: recién desplegado **36 OK · 0 FALLO · 3 OMITIDO** (código 3: sin versiones, sin CANARY y sin ejecuciones); con esos datos, **41 OK · 0 FALLO · 0 OMITIDO** (las 17 rutas medidas); con dos techos apretados en una copia del JSON, **2 FALLO** (código 1) sin tocar código (§4.9) |
 | 7. Recuperación | PG caído o cortado durante el commit: **11/11**. Worker del laboratorio muerto: **10/10**. Vuelta atrás por niveles: **13/13** (§4.6–4.8) |
 
 ## 1. Ficheros (exclusivos de OPS7, salvo los dos señalados)
@@ -33,11 +34,14 @@ Entre las dos, el código solo difiere en `AdminUserController` (+29 líneas). L
 - **`ops/`:**
   - `deploy-h7-backend.sh`, `h7-schema-check.sql`;
   - `smoke-h7.py`, `smoke-run-h7.sh`;
+  - `h7-monitor-scope.sh` (tanda del 02-11: el mando del monitor);
   - `ironbody-migrate-propuesta.sh`;
   - `supresion-1581.sql`.
 - **`ops/banco-h7/`:**
   - `README.md`, `comun.sh`, `montar.sh`, `preparar.sh`, `ensayar.sh`, `sembrar.sh`, `sembrar-1581.php`, `lector.php`;
+  - `sembrar-presupuestos.sh` y `sembrar-presupuestos.php` (tanda del 02-11: el estado para medir las 17 rutas de los presupuestos);
   - `ensayo-supresion.sh`, `ensayo-migrador.sh`, `ensayo-restauracion.sh`, `ensayo-recuperacion.sh`, `ensayo-vuelta.sh`.
+- **`ops/README.md`:** solo la fila de `h7-monitor-scope.sh` (el resto es de DOC7).
 - **Informe:** este.
 
 ## 2. Monitor (entrega 1)
@@ -60,6 +64,7 @@ Entre las dos, el código solo difiere en `AdminUserController` (+29 líneas). L
   - `ultron-studio:monitor` cada 30 min: decisión D-1, **aceptada por el lead**, por la ventana de 60 min de IRON GUARD;
   - `ultron-studio:integrations-snapshot` a las 07:10 de Bogotá;
   - las dos con `withoutOverlapping(10)` y `onOneServer()`.
+- **El mando:** la bandera se enciende y se apaga con `ops/h7-monitor-scope.sh` (§3), nunca a mano.
 - **Detalle de motor:** en PostgreSQL, `incidents.evidence` es `jsonb` y reordena las claves de cada objeto (`id`, `actual`, `expected`). Lo cazaron mi puerta PG y la de B7. La prueba compara **con las claves ordenadas en los dos lados y `assertSame`**: mismos valores, mismos tipos, y el orden de las listas cuenta. Pasa aislada en PG (10 aserciones) y en el fichero entero de PG y de SQLite (12 pruebas, 135 aserciones).
 
 ## 3. Scripts del despliegue del H7 (entrega 6)
@@ -68,11 +73,12 @@ Entre las dos, el código solo difiere en `AdminUserController` (+29 líneas). L
 
 Calca el del H6.
 
-- **`PREVIO=pendiente`:** se niega a todo, también a `--solo-comprobar`, hasta fijarlo en un commit con el HEAD de producción del día.
+- **`PREVIO`:** con `pendiente` se niega a todo, también a `--solo-comprobar`. El lead lo fijó en **`1e5f9a0`** (HEAD de producción del 02-11-2026, fase 1 del H6) en `1c76a7f`, que además exige siempre `PREVIO` en `api-commit.txt` (m-6).
 - **Paso 0, de solo lectura:**
   - checkout limpio, avance rápido y exactamente 1 migración;
   - **puerta de diff con lista explícita**: los 7 controladores de M-2 y `AdminUserController` (B7), la API interna de conocimiento (SEC7) y `console.php`, que solo puede añadir líneas;
   - respaldo de menos de 2 h, en 700/600, con `.sha256` y **≥ 226 tablas**; `.env` igual al respaldo;
+  - `ULTRON_STUDIO_MONITOR_EXPECT` (no se escribe nunca): ausente o vacía, como en `.env.example`, rige la del código y no se avisa. Lo decide Dotenv, el analizador de Laravel, con las reglas de `env()` (`empty`/`null`/`false` la vacían) y el `trim()` del bloque `monitor`, sin imprimir el valor: «presente y vacía», «escrita con la misma expectativa que el código» o **«AVISO: … tiene valor»**, porque entonces el paso 7 lo contará como desvío. Hasta el 02-11 avisaba también con la clave vacía (discrepancia 4 de DOC7);
   - esquema `43 49 4 14 iron iron,iron,iron true 1 0`, huella de F, **cadena consecutiva** (si no, la migración se negaría) y 0 cerrojos sobre la cadena;
   - 56 rutas, 13/0 workers y facturación activa.
 - **Después:**
@@ -100,18 +106,44 @@ Calca el del H6.
 
 De solo lectura, por la entrada estándar. Recuentos, cadena, función, dueños, rol de la aplicación, integridad de la cadena (`rotas`), cerrojos y privilegios uno a uno, por columna. Cada columna lleva lo esperado.
 
+### `h7-monitor-scope.sh on|off <estado actual> | estado` (tanda del 02-11, discrepancia 3 de DOC7)
+
+El mando de `ULTRON_STUDIO_MONITOR_ENABLED`, calcado de `h6-integrations-scope.sh`. Hasta ahora el runbook hablaba de un `set_var` que solo existía dentro de los mandos del H5 y del H6.
+
+- **Uso:** `on off` enciende, `off on` apaga (la vuelta atrás de nivel 2), `estado` solo lee. Sin el estado actual, o si no coincide con la configuración efectiva, no toca nada (código 2 o `ABORTA`).
+- **Antes de escribir:** la clave no está repetida; el programador cuadra con la bandera (2 tareas del Studio encendido, 0 apagado); el fichero de entorno **en 600** (si no, aborta); copia previa en `/root/env-pre-h7-monitor-<valor>-<fecha>` (600, root).
+- **Escribe** la bandera con la sangría que tuviera la línea, sobre el **mismo fichero** (mismo inodo, dueño y modo; sin `sed -i`).
+- **Después:**
+  - el fichero parsea (Dotenv) antes de tocar la caché;
+  - `config:cache` como www-data con `umask 077`; la caché, de www-data, en 600 y nunca un enlace (el `chmod`, si hace falta, lo hace www-data: H-5);
+  - la configuración efectiva por tinker es la de antes con solo la bandera cambiada; motor, H4, H5 y H6 iguales;
+  - `schedule:list --json`: el total cambia en **exactamente ±2** y las tareas del Studio pasan a 2 (encendido) o 0 (apagado). No compara con 26/28 fijos: el total depende de las demás banderas del servidor (H-10);
+  - `queue:restart` (como el mando del H6: los workers cargan la caché nueva mientras se mira), 13 RUNNING y 0 BACKOFF/FATAL dos veces, y 401 sin token.
+- **Al encender, informativo** (no cambia el veredicto): el monitor en seco sobre la publicación y las integraciones, y quién ejecuta `schedule:run` en el crontab (H-1). Termina indicando la primera pasada real, que es el paso siguiente del runbook (§5, paso 10).
+- **Veredicto:** `MANDO monitor → on APLICADO (copia previa: …)` solo con 0 desvíos. Con alguno, `ESCRITO CON N DESVÍOS`, código 1 y la orden exacta para volver (restaurar la copia previa, `config:cache`, `chmod` como www-data y `queue:restart`). Nunca imprime valores del fichero de entorno.
+
 ### `smoke-run-h7.sh` y `smoke-h7.py`
 
-Cuenta 32, contraseña de un solo uso, huellas saladas, trap. Usa el detector de fugas de `smoke-h6.py`, así que se copian los dos.
+Cuenta 32, contraseña de un solo uso, huellas saladas, trap. Usa el detector de fugas de `smoke-h6.py` y los presupuestos de `perf-h7/presupuestos-h7.json`, así que se copian los cuatro.
 
-- **El lanzador comprueba:** monitor apagado, 0 tareas programadas, 14 tablas idénticas, 0 incidentes y que el token muere.
+- **El lanzador comprueba:** que el JSON de presupuestos existe y **es válido con el mismo código del smoke, antes de activar la cuenta** (si no, código 2 y la cuenta sin tocar; con `python3 -B`, para que importar `smoke-h7.py` no deje `__pycache__` en `/root`); monitor apagado, 0 tareas programadas, 14 tablas idénticas, 0 incidentes y que el token muere. Al salir borra de `/root` sus copias, también la del JSON.
 - **`smoke-h7.py` comprueba:**
-  - `no-store` en todas las respuestas de `/api/admin`;
+  - `no-store` en todas las respuestas de `/api/admin`, también las de la fase de presupuestos;
   - 413 sin sesión y con sesión, y 401 por debajo del tope;
   - `verified` por entrada y en el detalle de versión, y que el de la cabeza es igual a `signatureOk`;
   - 5 invisibles → 422, con 2 contrapruebas: texto limpio y un emoji con ZWJ y VS16 → 409 de la bandera;
+  - **los presupuestos de rendimiento** (tanda del 02-11, discrepancia 1 de DOC7), exactamente como dice `informe-performance.md` §7.1:
+    - por cada ruta del JSON, `warmup` GET sin contar y `n` cronometradas (`perf_counter` alrededor de la petición: conexión nueva y cuerpo leído entero), en serie y separadas al menos `minIntervalSeconds`. Por defecto 1 + 5 a ≥ 0,6 s; la evidencia del canario, 0 + 3 a ≥ 6,5 s;
+    - **FALLO** si la mediana supera `p50Ms`, si el máximo supera el techo p95, si el cuerpo supera `maxBytes` o si el estado no es 200. El techo p95 es `p95MsAfterF1` cuando la ruta lo trae (la evidencia: **400 ms**, porque F-1 está en el código del H7 desde `e2411e3`) y `p95Ms` si no;
+    - **OMITIDO** si falta lo que pide `requires`: sin versión en CANARY (la evidencia), sin versiones, laboratorio apagado (409 `lab_disabled`) o sin ejecuciones. Cuenta como OMITIDO, así que el código es 3;
+    - un FALLO **solo de tiempo** se mide otra vez, una sola, y vale la repetición: con 5 muestras el «p95» es el máximo y un pico basta (`calibration` del JSON);
+    - cada ruta imprime la propuesta de techo para recalibrar, `max(1,5 × medida, medida + 50 ms)`: el p50 con la mediana y el p95 con el máximo. Es mi lectura de la regla del JSON, que solo nombra el p95: **PERF7 debe confirmarla**;
+    - las rutas del JSON se validan: solo GET a `/admin/ultron-studio/…`, sin `..` ni consulta, y solo los marcadores `{canary}`, `{firstVersion}` y `{firstRun}`, cuyo uuid resuelto se valida antes de usarlo. Un JSON manipulado no convierte el smoke en otra cosa;
+    - el ritmo nunca pasa de **90 lecturas con sesión en ningún minuto** (el cupo es 120/min por credencial; si hace falta, el smoke espera) ni de 6 evidencias por minuto (cupo 10). La pasada entera dura 70–80 s;
+    - los cuerpos de esta fase no entran en el detector de fugas: son las mismas lecturas y su asunto es el tiempo;
   - sin fugas, sin 5xx y sin 429.
-- **Sin filas positivas:** solo envía lo que el servidor rechaza antes de escribir.
+- **Recalibrar sin tocar código:** los techos solo viven en el JSON. Tras la primera pasada en producción (con `SMOKE_BUDGETS_OUT=/root/<fichero>.json`, que deja en 0600 las medidas y la propuesta de cada ruta), se editan `p50Ms`/`p95Ms` en el JSON del repo (en la evidencia también `p95MsAfterF1`, que manda mientras exista), se confirma y se vuelve a copiar con su huella. El smoke imprime la ruta, la versión y el sha256 del JSON que usa.
+- **Sin filas positivas:** solo envía lo que el servidor rechaza antes de escribir; la fase de presupuestos solo hace GET.
 
 ## 4. Ensayos en el banco (resultados reales)
 
@@ -236,6 +268,66 @@ Banco 2, recién desplegado.
   - de vuelta al H7, el smoke da **22 OK**.
 - **Nivel 4 (esquema):** `migrate:rollback` con filas → **se niega** (las filas de cadena, libro e instantáneas siguen `0 0 3`) y el esquema sigue en 44/50.
 
+### 4.9 Tanda del 02-11: las discrepancias de DOC7 y la T-1 del tester (banco 3, `ee9f128`)
+
+**Banco propio y nuevo**, para no tocar los del tester (`ultron_studio_banco_h7_test7*`, puertos 8177/8178, clúster 55440): `~/.cache/ironbody-banco-h7-doc7`, base `ultron_studio_banco_h7_doc7`, puerto 8173, `BANCO_WIP=0` (solo lo confirmado: `ee9f128`, con F-1 y F-2). Su «producción» sigue en `7d2c6d8`, que en `app/`, `config/`, `routes/` y `database/` es idéntico a `1e5f9a0` (`git diff --stat` vacío). Carga del Mac durante los ensayos: 1,8–2,5.
+
+**T-1 (preparar.sh):** la regla literal `PREVIO=pendiente` dejó de casar con `PREVIO=1e5f9a0` y el banco no se montaba. Ahora sustituye la línea `PREVIO=…` **sea cual sea su valor**, exige que haya exactamente una y deja anotado el valor del repo: `PREVIO=7d2c6d8   # BANCO: la «producción» del banco (en el repo, PREVIO=1e5f9a0)`. Todo lo demás de la copia es el guion que irá a producción (22 líneas sustituidas: rutas, psql, roles, dueños, canal del log y esa).
+
+**Discrepancia 4 (el aviso de la expectativa del monitor):**
+
+| Prueba | Resultado |
+|---|---|
+| La función contra Dotenv, 18 ficheros sintéticos (ausente, vacía, `export`, `""`, `''`, solo un comentario, espacios, `null`, `(empty)`, `false`, la del código con y sin comillas, otra, `true`, repetida en los dos órdenes, comilla sin cerrar y un fichero que no parsea) | **18/18**. Dotenv ignora una línea con la comilla sin cerrar (la clave no existe para Laravel: rige la del código) y un fichero que no parsea no devuelve nada, que se avisa como «no se pudo comprobar» |
+| `--solo-comprobar` en el banco con la clave ausente, vacía, `null`, la del código, otra y repetida con valor al final | **6/6**, las seis en `COMPROBACIONES PREVIAS EN VERDE`: sin línea; «presente y vacía»; «presente y vacía»; «escrita con la misma expectativa que el código»; `AVISO: … tiene valor`; `AVISO: … tiene valor (aparece 2 veces: rige la última)`. El fichero de entorno y `env.backup` del banco, restaurados y comparados con `cmp` |
+
+**Despliegue:** `--solo-comprobar` en verde y después `ensayar.sh desplegar --55p03` → **`DESPLIEGUE H7 (BACKEND) COMPLETADO` en 45 s**: intento 1 con 55P03 real, intento 2 `9.90ms DONE`; 44/50/4/14; disparadores y privilegios correctos; 56/18/8/10; `no-store` en las 5 cabeceras; 413 sin sesión; el monitor en seco 0; instantáneas 3 → 3; 0 ERROR.
+
+**Discrepancia 1 (los presupuestos en el smoke):**
+
+| Pasada | Estado del banco | Resultado | Presupuestos |
+|---|---|---|---|
+| A | recién desplegado: cadena vacía, sin versiones, laboratorio `fake` sin ejecuciones | **36 OK · 0 FALLO · 3 OMITIDO**, código 3 | 14 OK · 3 OMITIDO (sin versiones, sin CANARY, sin ejecuciones) en 65 s, de ellos 22 s esperando al cupo de 90/min |
+| B | tras `sembrar-presupuestos.sh`: una ejecución `fake` lanzada por la API (2 casos, `completed`), una versión en CANARY con su entrada firmada (`publication-check` 0) | **41 OK · 0 FALLO · 0 OMITIDO**, código 0 | **17 OK**, las 17 rutas medidas, en 73 s |
+| C | B, con una copia del JSON: `p50Ms` 10 en status y `maxBytes` 30 000 en el catálogo | **39 OK · 2 FALLO**, código 1 | el de tiempo, repetido una vez (54,0 → 53,7 ms > 10); el de bytes, sin repetir (35 159 B > 30 000). La cabecera enseña la copia y su sha256 (`06c69593cdc8` frente a `8e34dbcc9daa`): **recalibrar es editar el JSON** |
+| — | JSON ausente, con una ruta fuera del Studio o truncado | **3/3**: código 2 y la cuenta de smoke sin tocar (estado, contraseña, fecha y sesiones iguales). Repetido tras añadir `-B` a la validación previa: 3/3 y ningún `__pycache__` junto al smoke (sin `-B` aparecía uno: en producción habría quedado en `/root`) | — |
+
+En las tres pasadas: 0 respuestas 429, 0 5xx, `no-store` en todas las de `/api/admin` (107, 123 y 123) y **las 14 tablas idénticas antes y después**: ninguna lectura de la lista escribe.
+
+Latencias medidas en el banco (php -S local, sin TLS ni nginx: **no son la línea base de producción**; mediana / máximo en ms, n = 5; la evidencia, n = 3 sin calentamiento):
+
+| Ruta | A | B | Bytes (B) | Techos p50 / p95 / bytes |
+|---|---|---|---|---|
+| GET status | 50,7 / 55,8 | 52,9 / 54,7 | 1 741 | 150 / 250 / 4 096 |
+| GET catalog | 48,6 / 51,8 | 48,6 / 52,0 | 35 159 | 150 / 250 / 49 152 |
+| GET draft | 50,8 / 54,3 | 50,9 / 55,2 | 3 265 | 150 / 250 / 81 920 |
+| GET rules | 49,2 / 52,3 | 50,9 / 52,1 | 21 | 150 / 250 / 32 768 |
+| GET versions (20) | 50,2 / 52,8 | 52,1 / 54,5 | 1 335 | 150 / 250 / 24 576 |
+| GET versions/{uuid} | OMITIDO | 53,4 / 54,3 | 5 070 | 150 / 250 / 98 304 |
+| GET publications (20) | 49,3 / 52,1 | 51,5 / 57,8 | 1 096 | 150 / 250 / 16 384 |
+| GET versions/{uuid}/canary-evidence | OMITIDO | **84,0 / 231,9** | 676 | 2 000 / **400** (tras F-1) / 2 048 |
+| GET audit | 49,8 / 53,4 | 48,5 / 52,3 | 633 | 150 / 250 / 24 576 |
+| GET engine/readings | 53,9 / 56,5 | 56,2 / 56,9 | 1 266 | 150 / 250 / 4 096 |
+| GET integrations/status | 58,5 / 61,6 | 60,1 / 61,5 | 1 273 | 150 / 250 / 4 096 |
+| GET integrations/meta/campaigns (20) | 54,8 / 58,1 | 56,7 / 61,1 | 1 192 | 250 / 400 / 20 480 |
+| GET integrations/meta/links (20) | 49,4 / 52,8 | 50,0 / 56,9 | 713 | 150 / 250 / 24 576 |
+| GET integrations/canaries | 51,7 / 72,5 | 54,0 / 55,2 | 919 | 150 / 250 / 8 192 |
+| GET lab/status | 51,2 / 56,7 | 53,3 / 57,3 | 830 | 150 / 250 / 2 048 |
+| GET lab/runs (20) | 49,8 / 53,3 | 53,5 / 58,2 | 1 367 | 150 / 250 / 24 576 |
+| GET lab/runs/{uuid} | OMITIDO | 54,9 / 56,0 | 8 714 | 150 / 250 / 40 960 |
+
+El máximo de la evidencia en B (231,9 ms) fue su primera muestra, en frío: el JSON le da 0 de calentamiento para no gastar el cupo de 10/min, y con 3 muestras ese primer golpe decide el «p95» (H-11). En la pasada de cierre con el lanzador definitivo (B2, mismo estado: **41 OK · 0 FALLO · 0 OMITIDO**, código 0), la evidencia dio 106,2 / 109,8 ms.
+
+**Una regresión mía, cazada por el propio smoke:** al reescribir `smoke-h7.py`, el U+2028 literal de `INVISIBLES` se convirtió en un espacio normal y la primera pasada A dio `FALLO motivo con un invisible … [U+2028=409]`. Corregido: los cinco invisibles, el ZWJ y el VS16 van ahora con escapes (` `…), sus valores son idénticos a los de `ee9f128` (comparados importando las dos versiones) y el fichero ya no lleva ningún carácter invisible literal. La pasada A repetida dio 36 OK.
+
+**Discrepancia 3 (el mando del monitor): 16/16** en el banco.
+- `estado`: código 0, `monitor=off`, programador `27 0`.
+- Usos que no tocan nada: `on` sin estado → 2; `on on` → `ABORTA` (la efectiva es off); `off off` → «ya está en off», 0; un valor desconocido → 2. El fichero, igual (`cmp`) en los cuatro.
+- `on off` → **`MANDO monitor → on APLICADO (copia previa: …/env-pre-h7-monitor-on-20261102-161443)`**: programador **27 0 → 29 2**; la copia previa en 600 y byte a byte el fichero de antes; mismo inodo y modo 600; la caché en 600 y sin enlace; ningún valor del fichero de entorno en la salida (comprobado contra los valores sintéticos del banco). La primera pasada real del monitor: 0 y 0 incidentes.
+- `off on` → **`MANDO monitor → off APLICADO`**: **29 2 → 27 0**; el fichero de entorno vuelve a ser **byte a byte** el de antes, con el mismo inodo.
+
+**Discrepancia 2:** la sección «Supresión» es el §10. Sus órdenes de la huella y del modo en seco se ensayaron en este banco (§10, «Ensayo de las órdenes»).
+
 ## 5. Runbooks por fase (producción; todo con autorización)
 
 1. **Condiciones:**
@@ -247,10 +339,10 @@ Banco 2, recién desplegado.
 3. **Copiar los scripts** (con su huella):
    ```bash
    O=docs/ultron-studio/ops
-   shasum -a 256 $O/{deploy-h7-backend.sh,h7-schema-check.sql,smoke-h7.py,smoke-run-h7.sh,smoke-h6.py}
-   scp $O/{deploy-h7-backend.sh,h7-schema-check.sql,smoke-h7.py,smoke-run-h7.sh,smoke-h6.py} ironbody-vps:/root/
+   shasum -a 256 $O/{deploy-h7-backend.sh,h7-schema-check.sql,smoke-h7.py,smoke-run-h7.sh,smoke-h6.py,perf-h7/presupuestos-h7.json,h7-monitor-scope.sh}
+   scp $O/{deploy-h7-backend.sh,h7-schema-check.sql,smoke-h7.py,smoke-run-h7.sh,smoke-h6.py,perf-h7/presupuestos-h7.json,h7-monitor-scope.sh} ironbody-vps:/root/
    ```
-   En el servidor: `.sh` en 700, el resto en 600, y `sha256sum` para comparar.
+   En el servidor: `.sh` en 700, el resto en 600, y `sha256sum` para comparar. `presupuestos-h7.json` queda en `/root/` junto al smoke (el lanzador lo busca ahí y lo borra al salir); `h7-monitor-scope.sh` es para el paso 10.
 4. **Esquema antes:**
    ```bash
    sudo -u postgres psql -X -v ON_ERROR_STOP=1 -v owner=iron -v app=iron_app -x -d ironbody < /root/h7-schema-check.sql
@@ -261,7 +353,9 @@ Banco 2, recién desplegado.
    - Con un 55P03 agotado, se relanza: reanuda.
 7. **Esquema después:** el mismo `.sql`. Esperado: 44/50, `uspub_chain_next:O` y `ar` en las 3 tablas.
 8. **Smoke:**
-   - `bash /root/smoke-run-h7.sh` → 0;
+   - `SMOKE_BUDGETS_OUT=/root/h7-presupuestos-medidos-$(date -u +%Y%m%d).json bash /root/smoke-run-h7.sh` → 0, **o 3 si lo único OMITIDO son presupuestos por estado**. En producción es lo esperable: sin versión en CANARY, la evidencia sale `OMITIDO`. Leer la línea `PRESUPUESTOS:` y el motivo de cada OMITIDO; cualquier otro OMITIDO o un FALLO no son esperables;
+   - un FALLO de presupuestos de tiempo: la fase ya repitió una vez esa ruta; se repite la pasada entera una vez más antes de darlo por bueno (el JSON, `calibration`), y nunca se sube un techo para que pase;
+   - las medidas de esta primera pasada son la línea base de producción: con ellas se recalibran los techos en el JSON del repo (§3), en un commit aparte;
    - regresión: `SMOKE_PHASE=1 bash /root/smoke-run-h6.sh`, copiándolo otra vez (cupo de 3 por hora).
 9. **A los 15 min y a las 24 h** (solo lectura):
    - `sudo -u www-data php artisan ultron-studio:monitor --dry-run`: las tres comprobaciones;
@@ -270,18 +364,17 @@ Banco 2, recién desplegado.
    - 5xx en `access.log` de `/api/admin`;
    - `curl -sI …/api/admin/ultron-studio/status | grep -i cache-control`.
 10. **Encender el monitor**, con autorización:
-    - copia de `.env` en 600;
-    - `ULTRON_STUDIO_MONITOR_ENABLED=true` con `set_var` (mismo inodo y modo);
-    - `sudo -u www-data sh -c 'umask 077; php artisan config:cache -q'` y 600 (como www-data);
-    - `schedule:list` con **2** tareas del Studio;
-    - primera pasada: `ultron-studio:monitor` → 0 y ningún incidente `ultron_studio` nuevo.
-    - Antes, revisar **H-1** (§8): con `schedule:run` en el crontab de root, el monitor corre como root.
+    - antes, revisar **H-1** (§8): con `schedule:run` en el crontab de root, el monitor corre como root (el mando lo avisa);
+    - `bash /root/h7-monitor-scope.sh estado` → `monitor=off` y el programador sin tareas del Studio;
+    - `bash /root/h7-monitor-scope.sh on off` → **`MANDO monitor → on APLICADO (copia previa: …)`**. Hace la copia previa en 600, exige el fichero en 600, escribe la bandera en el mismo fichero, comprueba que parsea, `config:cache` como www-data con la caché en 600, la configuración efectiva, el programador (+2, las 2 del Studio), `queue:restart`, 13/0 dos veces y 401;
+    - con desvíos sale con 1 e imprime la orden exacta para volver;
+    - primera pasada: `sudo -u www-data php artisan ultron-studio:monitor` → 0 y ningún incidente `ultron_studio` nuevo.
 
 **Vuelta atrás:**
 
 | Nivel | Qué se hace | Qué se queda |
 |---|---|---|
-| 2 · Banderas | `ULTRON_STUDIO_MONITOR_ENABLED=false` + `config:cache`: 0 tareas | — |
+| 2 · Banderas | `bash /root/h7-monitor-scope.sh off on` → `MANDO monitor → off APLICADO`: la bandera en `false`, `config:cache`, 0 tareas del Studio, `queue:restart` (ensayado ida y vuelta: el fichero vuelve a ser byte a byte el de antes) | — |
 | 3 · Código | `git checkout -q --detach <PREVIO>`, las cachés como www-data en 600 y `queue:restart`. Smoke del H6 (ensayado: 78 + 26) | El esquema del H7 (compatible) y la variable |
 | 4 · Esquema | **Nunca en producción.** `down()` se niega con filas (ensayado) | — |
 
@@ -323,6 +416,9 @@ Todas se cambian en `.env` y se aplican con `config:cache`. Ninguna necesita des
 | H-7 | Baja | Un worker muerto con su trabajo reservado no lo ve `queue:health`, ni el monitor, ni IRON GUARD (ensayado) | `backend` / observabilidad |
 | H-8 | Informativo | La puerta del despliegue cazó trabajo en curso no nombrado. Cualquier fichero nuevo en la puerta exige añadirlo con su paquete | Lead |
 | H-9 | Informativo | Las columnas `timestamp` sin zona guardan UTC. En SQL manual, `now() AT TIME ZONE 'UTC'` (el ensayo se equivocó una vez: §4.7) | — |
+| H-10 | Informativo | El total de `schedule:list` depende de las banderas del servidor (coach, bienestar, wompi, billing, seguimientos, sincronización de Meta): **26 → 28** en las pruebas y **27 → 29** en el banco. Un 26/28 fijo habría dado un desvío falso en el banco y, casi seguro, en producción. El mando comprueba ±2 y las 2 tareas del Studio | — |
+| H-11 | Baja | La evidencia del canario se mide con 0 de calentamiento y 3 muestras (el cupo es de 10/min): su «p95» lo puede decidir la primera petición, en frío (en el banco, 231,9 ms frente a una mediana de 84,0 en una pasada; 109,8 en la siguiente). Cabe en los 400 ms tras F-1, pero es la ruta con menos margen al recalibrar | PERF7 (decidir si 1 de calentamiento, que el cupo admite: 4 por pasada) |
+| H-12 | Informativo | `ops/README.md` (filas de `deploy-h7-backend.sh`, `smoke-run-h7.sh` y `supresion-1581.sql`) y `ULTRON_STUDIO_GUIA_ADMINISTRACION.md` §10 describen todavía el estado de antes de esta tanda (`PREVIO=pendiente`, `api-commit.txt` en la reanudación, «no carga los presupuestos», «el runbook Supresión no existe»). No los toco: son de DOC7 | DOC7 |
 
 ## 9. Pendiente de validar en producción, y lo que queda del propietario
 
@@ -332,7 +428,11 @@ Todas se cambian en `.env` y se aplican con `config:cache`. Ninguna necesita des
   - GNU `stat`/`find`;
   - dueños `root` y `www-data`;
   - FPM;
-  - los tiempos reales del 55P03 con el motor leyendo.
+  - los tiempos reales del 55P03 con el motor leyendo;
+  - **los presupuestos con nginx, TLS y FPM**: la primera pasada del smoke en producción es la línea base; después se recalibran los techos en el JSON del repo (§3), en un commit aparte y con su autorización;
+  - el mando del monitor con `crontab`, `supervisorctl` y los dueños reales (el aviso H-1 sale de verdad allí).
+- **De PERF7:** confirmar la regla de la propuesta para el p50 (aplico al p50 la misma de su JSON, que solo nombra el p95) y decidir H-11.
+- **De DOC7:** H-12.
 - **Del propietario:**
   - instalar `ironbody-migrate` (pasos 0–7 del script, con 3b y 6b);
   - `log_error_verbosity = terse` (H-2 del H6; nota de DB7);
@@ -341,7 +441,127 @@ Todas se cambian en `.env` y se aplican con `config:cache`. Ninguna necesita des
   - autorizar el despliegue y el encendido del monitor;
   - decidir si, en una supresión del personal, se quita su nombre de la autoría (trazabilidad).
 - **Limpieza local** (mía, cuando el lead diga):
-  - los bancos `~/.cache/ironbody-banco-h7{,-vuelta}`;
-  - sus bases `ultron_studio_banco_h7{,_vuelta}`;
+  - los bancos `~/.cache/ironbody-banco-h7{,-vuelta,-doc7}` (la API del de esta tanda queda parada; se arranca con `banco-h6/api.sh <banco> start`, puerto 8173);
+  - sus bases `ultron_studio_banco_h7{,_vuelta,_doc7}`;
   - mis bases de pruebas `ultron_studio_h7_ops` y `ultron_studio_h7_ops7`.
   - Las órdenes están en `banco-h7/README.md`.
+
+## 10. Supresión (Ley 1581): el runbook de `supresion-1581.sql`
+
+Es la sección a la que remite la cabecera del SQL. **Nunca ejecutado en producción.** Lo que hace el SQL y su política (qué se redacta, qué solo se informa y por qué) están en su cabecera; aquí, el orden de las órdenes. El ensayo de la lógica es el §4.4 (17/17) y el de estas órdenes, el final de esta sección.
+
+**Cuándo y quién:**
+- ante una solicitud real de supresión, con número de radicado y con la **autorización del propietario**. Es una modificación de la base de producción;
+- la ejecuta quien opera el servidor, como root, con `psql` como `postgres` y `SET LOCAL ROLE iron` (el rol dueño). `iron_app` no puede: el SQL aborta con 42501 y la aplicación no puede apagar un disparador.
+
+**0. Antes de tocar nada.**
+- Qué se busca: el nombre y sus variantes de escritura (con y sin tildes, apodos: una por pasada), el teléfono en E.164, si fue un **número canario** y si es **personal** del gimnasio (`admin_id`). Quitar el nombre del personal de la autoría es decisión del propietario (§9).
+- Si fue un número canario, tiene que estar **revocado** desde el CRM antes: con uno vivo, el SQL aborta (55000) sin cambiar nada, porque su huella la usa la coherencia con el motor.
+
+**1. El fichero de parámetros, solo de root.** El dato no pasa por la línea de órdenes (`ps`), ni por el historial, ni por un fichero que `postgres` pueda leer:
+
+```bash
+install -d -m 700 /root/supresion
+R=1581-2026-001                                   # el radicado: [A-Za-z0-9._-], 3–40
+install -m 600 /dev/null /root/supresion/$R.psql
+```
+
+**2. La huella del teléfono, si fue canario.** Es `App\Support\Privacy\PhoneFingerprint::of`, un HMAC-SHA256 con una subclave derivada de la `APP_KEY`: solo la calcula la aplicación. Es la misma vía que `banco-h7/ensayo-supresion.sh`. El teléfono entra por la entrada estándar, nunca como argumento, y la huella va directa al fichero, nunca a la pantalla:
+
+```bash
+cd /var/www/api/backend
+read -rs -p 'Teléfono (E.164, +57…): ' TEL; echo           # sin eco y fuera del historial
+H=$(printf '%s\n' "$TEL" | sudo -u www-data php artisan tinker --execute='echo App\Support\Privacy\PhoneFingerprint::of(trim((string) fgets(STDIN))), PHP_EOL;' 2>/dev/null | tail -1)
+[[ "$H" =~ ^[0-9a-f]{64}$ ]] && echo "huella calculada (no se imprime)" || echo "NO se pudo calcular: ¿E.164 estricto (+ y 8–15 cifras, sin espacios)?"
+{ printf "\\\\set phone '%s'\n" "$TEL"; printf "\\\\set phone_hash '%s'\n" "$H"; } >> /root/supresion/$R.psql
+unset TEL H
+```
+
+- Como www-data porque es quien lee la configuración cacheada, y para no ejecutar como root código del árbol (H-1/H-5).
+- Un número que no fue canario no necesita huella: basta `\set phone` para buscarlo en los textos.
+- **La huella original desaparece al redactar** (se sustituye por una aleatoria): es irreversible.
+
+**3. El resto de parámetros, con un editor** (`nano`/`vi`) sobre ese mismo fichero:
+
+```
+\set radicado '1581-2026-001'
+\set term 'Nombre Apellido'          una variante por pasada; ≥ 4 caracteres, sin comillas dobles ni barras
+\set cc 57                           el prefijo del país del teléfono, si no es 57
+\set admin_id 42                     solo si es personal y el propietario lo decidió
+\set owner iron
+\set dry 1
+```
+
+**4. Que el servidor no registre el dato.** La línea `set_config` lleva los valores:
+
+```bash
+sudo -u postgres psql -X -Atq -d ironbody -c 'SHOW log_statement;' -c 'SHOW log_min_duration_statement;'
+```
+
+- Hace falta `log_statement` en `none` o `ddl`, y `log_min_duration_statement` en `-1` o en un umbral, **nunca `0`**: con `0`, PostgreSQL guarda en su log el texto de cada sentencia.
+- Si no se cumple, se para y se avisa a `database-specialist`; el ajuste de esos parámetros no es parte de este procedimiento.
+
+**5. En seco** (READ ONLY, termina en ROLLBACK):
+
+```bash
+umask 077
+cat /root/supresion/$R.psql /root/supresion-1581.sql | sudo -u postgres psql -X -q -d ironbody 2>&1 | tee /root/supresion/$R-seco.log
+```
+
+Se lee:
+- el recuento por tabla y columna;
+- el total de campos;
+- cualquier `WARNING columna sin política`: **se para y se avisa a devops**, porque es una columna nueva en la que no se busca;
+- `NO SE REDACTA (firmada o con huella)`: el remedio es una versión nueva sin el dato, que decide el propietario con su jurídico;
+- el `AVISO` de ejecuciones del laboratorio sin veredicto: habrá que repetirlas.
+
+Una pasada en seco por cada variante del nombre.
+
+**6. Redacción.**
+- Antes: un respaldo fresco (el del despliegue: `pg_dump -Fc` en 700/600) y nadie editando el Studio.
+- Cada tabla tocada queda en ACCESS EXCLUSIVE hasta el COMMIT, con `lock_timeout` de 5 s: si alguien la tiene, aborta entero sin cambiar nada y se repite.
+- En el fichero, `\set dry 1` → `\set dry 0` (con el editor). Después:
+
+```bash
+cat /root/supresion/$R.psql /root/supresion-1581.sql | sudo -u postgres psql -X -q -d ironbody 2>&1 | tee /root/supresion/$R-real.log
+```
+
+- Esperado: `redactado: {…} · disparadores del Studio activos: N (los mismos que antes) · quedan 0 coincidencias · 1 fila en el libro` y `SUPRESIÓN CONFIRMADA (COMMIT)`.
+- Es **una sola transacción**: si algo falla, no cambia nada y nunca queda un disparador apagado.
+- **No hay vuelta atrás después del COMMIT.** Restaurar un respaldo devolvería el dato, que es justo lo que se pidió quitar.
+
+**7. Tras el COMMIT.** El SQL ya comprueba antes de confirmar que quedan 0 coincidencias y los mismos disparadores activos; aquí se confirma desde fuera:
+- **la cadena sigue verificando:** `sudo -u www-data php artisan ultron-studio:publication-check` → 0. La firma no cubre `reason` ni el actor;
+- **los disparadores, activos:**
+  ```bash
+  sudo -u postgres psql -X -Atq -d ironbody -c "SELECT count(*) FILTER (WHERE t.tgenabled = 'O') || ' activos · ' || count(*) FILTER (WHERE t.tgenabled <> 'O') || ' apagados' FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid WHERE NOT t.tgisinternal AND c.relname LIKE 'ultron\_studio\_%';"
+  ```
+  Esperado: los mismos activos que imprimió el modo en seco al empezar (44 con el H7) y **0 apagados**;
+- **0 coincidencias:** se vuelve a `\set dry 1` y se repite el paso 5 con el mismo fichero → `total: 0 campo(s) que redactar`. Solo pueden seguir apareciendo, como «NO SE REDACTA», las columnas firmadas;
+- **el registro:** `SELECT id, created_at, summary FROM ultron_studio_audit_events WHERE event = 'system.personal_data_redacted' ORDER BY id DESC LIMIT 1;` → el radicado y los recuentos.
+
+**8. Qué queda registrado y qué se limpia.**
+- **En la base**, una fila del libro (de solo inserción) por cada pasada real:
+  - `event` `system.personal_data_redacted`, `actor_type` `system` y `actor_name` `supresion-1581`;
+  - el resumen con el radicado y los recuentos;
+  - en `metadata`: el radicado, los tipos de búsqueda (`term`, `phone`, `phone_hash`, `admin_id`), los campos redactados por tabla y columna, lo firmado que no se redactó y la herramienta.
+  - **Nunca el dato ni sus huellas.**
+- **En `/root/supresion/`**, los registros de cada paso (600): solo recuentos.
+- **El fichero de parámetros lleva el dato:** se borra al terminar, con `shred -u /root/supresion/$R.psql` (o `rm -f`).
+- **Fuera de la base**, el propietario anota el radicado en el **registro de supresiones** (§7): fecha, quién lo ejecutó, tipos de búsqueda, recuentos y el id de la fila del libro. Sin el dato.
+- **Los respaldos siguen llevando el dato** hasta que caducan: los automáticos, unos 3 meses (14 diarios y 8 semanales); los de despliegue, hasta que se decida. Tras **cualquier** restauración, se vuelve a aplicar cada supresión del registro, en seco y después real.
+
+**Ensayo de las órdenes en el banco (02-11, `ee9f128`): 12/12.** Pasos 1–8 sobre los datos sintéticos de `sembrar-1581.php`, con `owner h5_owner` (sin superusuario) y el superusuario del clúster en lugar de `sudo -u postgres`:
+- la huella, calculada con `PhoneFingerprint::of` por la entrada estándar: 64 hex, la del canario revocado sembrado, nunca impresa;
+- el fichero de parámetros en 600 con sus 6 `\set`;
+- `log_statement` `none` y `log_min_duration_statement` `-1`;
+- en seco: 8 campos, ROLLBACK y ni el nombre, ni el teléfono, ni ninguna huella en el registro;
+- redacción: código 0 y COMMIT;
+- después:
+  - `publication-check` 0;
+  - 44 disparadores activos y 0 apagados;
+  - el mismo fichero otra vez en seco: 0 campos;
+  - una fila más en el libro, con el radicado y sin el dato;
+- el fichero de parámetros, borrado.
+
+(La comprobación de los parámetros del log falló una vez por el propio arnés: un `case` dentro de `$( )` que el bash 3.2 de macOS no analiza. Corregido el arnés, dio OK con esos mismos valores.)

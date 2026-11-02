@@ -84,6 +84,27 @@ estado_var() { # CLAVE VALOR → falta | igual | distinto | repetida (sin imprim
   [ "$n" = 1 ] || { echo repetida; return; }
   [ "$(valor_var "$1")" = "$2" ] && echo igual || echo distinto
 }
+# Lo que dará config('ultron_studio.monitor.expect') con este fichero, SIN imprimir el valor: «vacia» si rige la del
+# código (ausente, vacía, solo espacios o un literal de env() que la vacía: empty, null o false), «codigo» si escribe
+# exactamente la del código, «valor» si es otra. Lo decide Dotenv (el analizador de Laravel: comillas, comentarios y la
+# última si se repite) con las mismas reglas que env() y el trim() del bloque monitor de config/ultron_studio.php.
+# Nada si Dotenv no lee el fichero (solo el nombre de la excepción va a stderr, que se descarta: su mensaje puede
+# llevar un trozo de una línea).
+expectativa_monitor() {
+  ( cd /var/www/api/backend && sudo -u www-data php -r '
+    require "vendor/autoload.php";
+    try { $r = Dotenv\Dotenv::createArrayBacked(".")->load(); } catch (Throwable $e) { fwrite(STDERR, get_class($e).PHP_EOL); exit(1); }
+    $v = $r["ULTRON_STUDIO_MONITOR_EXPECT"] ?? null;
+    if (is_string($v)) {
+        $l = strtolower($v);
+        if ($l === "true" || $l === "(true)") { $v = "1"; }
+        elseif (in_array($l, ["false", "(false)", "empty", "(empty)", "null", "(null)"], true)) { $v = ""; }
+        elseif (preg_match("/\\A([\x27\"])(.*)\\1\\z/", $v, $m)) { $v = $m[2]; }
+    }
+    $v = trim((string) $v);
+    echo $v === "" ? "vacia" : ($v === "twilio:connected_otp_only,twilio_voice:not_configured,elevenlabs:ELEVENLABS_NOT_CONFIGURED" ? "codigo" : "valor"), PHP_EOL;
+  ' 2> /dev/null ) || true
+}
 LOGS=/var/www/api/backend/storage/logs
 lineas_log() { local f; for f in "$LOGS"/laravel*.log; do [ -f "$f" ] && echo "$f $(wc -l < "$f" | tr -d ' ')"; done; return 0; }
 workers() {
@@ -173,7 +194,18 @@ for kv in $VARS; do
     *) aborta "${kv%%=*} ya existe con otro valor o repetida (no se imprime): el monitor se enciende después, con autorización; revisar a mano" ;;
   esac
 done
-case "$(cuenta_var ULTRON_STUDIO_MONITOR_EXPECT)" in 0) ;; *) echo "   AVISO: ULTRON_STUDIO_MONITOR_EXPECT está en el entorno (no se imprime): la expectativa del monitor no será la del código" ;; esac
+# ULTRON_STUDIO_MONITOR_EXPECT no se escribe. Ausente o vacía (como en .env.example) rige la del código; solo se avisa
+# si TIENE VALOR distinto, porque entonces el paso 7 lo contará como desvío. El valor nunca se imprime.
+N_EXPECT=$(cuenta_var ULTRON_STUDIO_MONITOR_EXPECT)
+if [ "$N_EXPECT" != 0 ]; then
+  REPE=""; [ "$N_EXPECT" = 1 ] || REPE=" (aparece $N_EXPECT veces: rige la última)"
+  case "$(expectativa_monitor)" in
+    vacia)  echo "   ULTRON_STUDIO_MONITOR_EXPECT presente y vacía$REPE: rige la expectativa del código" ;;
+    codigo) echo "   ULTRON_STUDIO_MONITOR_EXPECT escrita con la misma expectativa que el código$REPE" ;;
+    valor)  echo "   AVISO: ULTRON_STUDIO_MONITOR_EXPECT tiene valor$REPE (no se imprime): la expectativa del monitor no será la del código y el paso 7 lo contará como desvío; vaciarla o quitarla antes, salvo decisión expresa" ;;
+    *)      echo "   AVISO: no se pudo comprobar si ULTRON_STUDIO_MONITOR_EXPECT tiene valor (Dotenv no leyó el fichero; no se imprime nada): el paso 7 lo comprueba en la configuración efectiva" ;;
+  esac
+fi
 PRE=$($PSQL -c "SELECT (SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid WHERE NOT t.tgisinternal AND c.relname LIKE 'ultron_studio_%')||' '||(SELECT count(*) FROM pg_constraint k JOIN pg_class c ON c.oid = k.conrelid WHERE k.contype = 'c' AND c.relname LIKE 'ultron_studio_%')||' '||(SELECT count(*) FROM pg_index i JOIN pg_class t ON t.oid = i.indrelid WHERE t.relname LIKE 'ultron_studio_%' AND i.indpred IS NOT NULL)||' '||(SELECT count(*) FROM pg_tables WHERE schemaname = 'public' AND tablename LIKE 'ultron_studio_%')||' '||(SELECT pg_get_userbyid(proowner) FROM pg_proc WHERE proname = 'ultron_studio_forbid')||' '||(SELECT string_agg(tableowner, ',' ORDER BY tablename) FROM pg_tables WHERE schemaname = 'public' AND tablename IN ($INSERCION))||' '||has_schema_privilege('iron', 'public', 'CREATE')||' '||(SELECT count(*) FROM pg_roles WHERE rolname = 'iron_app')||' '||(SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal AND tgname = 'uspub_chain_next');") || aborta "no se pudo leer el esquema de partida (psql; ¿existe el rol iron?)"
 if [ "$REANUDA" = 0 ]; then
   [ "$PRE" = "43 49 4 14 iron iron,iron,iron true 1 0" ] || aborta "esquema de partida inesperado: [$PRE] (esperado [43 49 4 14 iron iron,iron,iron true 1 0]: el del H6 con iron_app); si la cadena, el libro o las instantáneas no son de iron, la migración falla con 42501"
