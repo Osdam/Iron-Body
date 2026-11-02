@@ -357,3 +357,111 @@ Los scripts del scratchpad (`huella-reversible.php` y las órdenes de una línea
 - **lead / DOC:** corregir I13 y el runbook (B-1, §2 de rotación); el T1 con dos personas (§3 #13).
 - **architect + DB:** el diseño de la supresión (B-1), con decisión del propietario.
 - **api-security-specialist:** AS-4 y AS-5 quedan cerrados aquí (B-1 y N-2), y su AS-3 alimenta la revisión de T2.
+
+---
+
+## Segunda pasada (01-11-2026): la página del CRM
+
+**Revisado:**
+- **CRM** `_worktrees/ultron-h6/Iron-Body_Front`, rama `feat/ultron-studio-h6`, HEAD `f38699d`.
+  - `git status` vacío antes y después de mis ejecuciones.
+  - Al cerrar aparece modificado `e2e/ultron-studio/specs/h6-lib.cjs` (14:05): es el E2E del tester (una segunda persona Super Admin), ajeno a esta revisión. No lo toqué.
+- Diff del hito: `git diff ab78a6a..f38699d -- src/app`, 54 ficheros, +13 009 −9. De ellos, 22 son de producción (sin specs, `*.testing.ts` ni hojas).
+- Leído entero:
+  - la página, la sesión, el servicio, los 8 componentes y los textos;
+  - los lectores de `studio-integrations-parse.ts` que tocan datos sensibles;
+  - lo que la página usa sin que el hito lo cambie: `ib-dialog`, `ib-reason-dialog`, `AuthInterceptor`, `readAuthToken()` y `toStudioApiError()`.
+- **Backend de contraste:** HEAD `7d2c6d8`. Su `app/` es el de S final (`3e1ee20` + `4e2e8cf`).
+
+**Modo:** solo lectura. Este apartado es lo único que escribí: sin commit y sin `ng build`.
+- **La skill `security-review` no sirve aquí.** Revisa los cambios pendientes de la rama del directorio de trabajo, y esto es un rango ya confirmado de otro worktree, con el árbol limpio.
+- **La revisión es manual.** Ninguna capa automática cubre lo que cruza ficheros (sesión ↔ servicio ↔ lectores ↔ backend).
+- **Una prueba de concepto (PoC) en el scratchpad** (`…/scratchpad/security2/poc/base-null.ts`):
+  - se empaqueta con el `esbuild` del CRM;
+  - usa los lectores reales y el export del backend;
+  - no escribe en ningún repo.
+
+**Rutas:** los ficheros del CRM sin directorio están en `‹F›`; los demás, desde `src/app/` del CRM o desde `backend/`.
+
+### S2.0 Veredicto
+
+**Sin bloqueantes. Ninguna crítica, alta, media ni baja.** Hay dos notas y ninguna es explotable.
+
+Queda comprobado lo que pedía §4 de la primera pasada:
+- cada texto obligatorio está junto a su acción;
+- la sonda solo aparece con `can.integrationsManage` y `flags.twilioProbeEnabled`;
+- nada nuevo pinta HTML.
+
+| # | Severidad | `ruta:línea` | Qué y escenario | Corrección → dueño |
+|---|---|---|---|---|
+| N-6 | Nota (vigilancia de T-6; falla cerrada) | `studio-integrations-parse.ts:847-854` (`leerBase`), `:139` (`RE_HOST`), `:983` (credenciales estrictas); `app/Services/UltronStudio/StudioIntegrationConfig.php:605-616` y `:170-171`; `StudioTwilioPanel.php:100-101` | Hay tres casos de `TWILIO_BASE` o `TWILIO_VERIFY_BASE` que el CRM no lee:<br>• sin host para `parse_url` (`api.twilio.com` sin esquema, `https:///v1`): el servidor manda `{official:false, host:null}`;<br>• con un literal IPv6 (`https://[2001:db8::1]`);<br>• con `_` en el host (`https://twilio_proxy.internal`).<br>En los dos últimos llega un host que `RE_HOST` no admite. En los tres, **todo** el panel de Twilio sale ilegible, y la sonda con él. Ese bloque vigila adónde manda el OTP la credencial en Basic (T-6), y se apaga justo cuando esa base es rara. No enseña nada falso: la deriva sigue visible debajo, porque la ruta 46 admite `host:null`. Hoy no pasa: `config/otp.php:144` y `:146` traen las bases oficiales | **FE:** que `leerBase` admita `host:null` con `official:false` («No oficial: host ilegible») y los hosts IPv6 entre corchetes o con `_`. Otra opción: leer las credenciales con `suave()`, como `cost`. **S:** dejar escrito en I5.2 que `host` puede ser `null`. **Tester:** los tres casos en la paridad |
+| N-7 | Nota (consistencia con las Enmiendas 3 y 4; sin impacto de seguridad) | `studio-integrations-parse.ts:1414-1419` (`checkCanaryAlias`) y `:1422-1426` (`checkIntegrationReason`); `testing/backend-integrations.testing.ts` | Los avisos locales y el fixture salen de `4e6f5fe`. AS-1 llegó después, en `3e1ee20`, con tres cosas:<br>• el dato de contacto en alias, motivos y nota;<br>• el texto O-2 del servidor;<br>• `contactData` en el export (`StudioIntegrationsExport.php:119`).<br>Así, «Cel 30 00 00 00 01» o un motivo con «300 123 45 67» pasan el aviso local y llegan al servidor. Este responde 422 por campo, y el CRM lo pinta junto al campo sin perder lo escrito (`studio-canary-register-dialog.ts:168-172`, `studio-canary-numbers.ts:353`, `studio-meta-campaigns.ts:378`, `studio-config-drift.ts:217`). No se guarda nada: decide el servidor. Ojo: la paridad del informe de FE es contra `4e6f5fe`, no contra el S final | **FE:** portar `contactDataError` a los dos comprobadores. **Lead / FE:** volver a exportar `backend-integrations.testing.ts` desde el backend actual y repetir la paridad. Eso cierra también Q-1 |
+
+**Lo que está bien** (detalle y comandos en S2.1):
+- **HTML y URLs:** ningún sumidero de HTML y ninguna URL armada con datos del servidor. Todo texto del servidor se interpola, también en los títulos de los diálogos compartidos.
+- **Teléfono:**
+  - viaja solo en el cuerpo de la ruta 49;
+  - se ve solo enmascarado;
+  - si `masked` no tiene esa forma, la respuesta se da por ilegible en vez de pintarse.
+- **Almacenamiento y consola:** nada.
+- **Red:** solo las 18 rutas del hito y una lectura de versiones. Ninguna escribe en Meta, llama ni toca banderas.
+- **Escrituras:**
+  - I-1 como en el H5;
+  - los botones salen solo de `can`, `flags` y `actions`;
+  - los cuatro ojos se ven en pantalla;
+  - el motivo se pide donde el contrato lo pide;
+  - el alias va en NFC;
+  - el consentimiento es explícito en tres capas.
+- **Accesibilidad:** foco atrapado y sin autofoco en el teléfono.
+- **D-F5:** no abre nada.
+
+### S2.1 Lo verificado
+
+| # | Comprobación | Comando o lugar | Resultado |
+|---|---|---|---|
+| 1 | Sumideros (punto 1) | Los 22 ficheros de producción de `git diff --name-only ab78a6a..f38699d -- src/app` (sin specs, `*.testing.ts` ni hojas) con `grep -nE "innerHTML\|outerHTML\|insertAdjacentHTML\|bypassSecurityTrust\|DomSanitizer\|SecurityContext\|document\.write\|\beval\(\|new Function\|srcdoc\|createContextualFragment\|DOMParser\|Renderer2\|setProperty\(\|setAttribute\("` | Exit 1: nada.<br>`ib-dialog` (`shared/components/ib-dialog/ib-dialog.ts:64`, `:76`) e `ib-reason-dialog` (`reason-dialog.ts:33`, `:52`, `:60`) no cambian en el hito (último commit, `ab3b58e`). Interpolan título, descripción, consecuencia y error, así que el alias y el nombre de la campaña en un título no crean elementos |
+| 2 | URLs y estilos | Los mismos ficheros con `href\|\[src\]\|window\.open\|location\.\|navigateByUrl\|router\.navigate\|routerLink\|postMessage\|_blank` y con `\[style\|\[ngStyle\|\[attr\.style\|\[class\]=` | Solo hay `routerLink` fijos: `studio-integrations-page.ts:51` y `:73`, `studio-voice-panel.ts:108`, `ultron-studio-page.ts:206`.<br>No hay estilos nuevos con datos. Los de `ultron-studio-page.ts:313-433` son del H5 y no se tocan |
+| 3 | Texto hostil, permiso desconocido, hojas, backend del H5, sesión y canarios (punto 5) | `node_modules/.bin/ng test --watch=false` con `--include` de `studio-integrations-{hostile-text,unknown-permission,sheets,compat,session}.spec.ts` y `studio-canary-numbers.spec.ts` | **6 ficheros y 60 pruebas, en verde.**<br>El módulo entero (`--include='src/app/modules/ultron-studio/**/*.spec.ts'`): **69 ficheros y 1074 pruebas, en verde**. Las 1096 de FE incluyen además `src/app/models/**`.<br>El árbol del CRM queda limpio |
+| 4 | Teléfono y datos personales (punto 2) | Lectura | **Viaja** solo en el cuerpo del POST de la ruta 49, nunca en la URL (`studio-integrations-api.service.ts:251-273`).<br>**El campo** es `type=tel`, con `autocomplete=off` y `spellcheck=false` (`studio-canary-register-dialog.ts:51`): el corrector del navegador no lo saca fuera. La vista previa es la forma enmascarada (`:125-128`).<br>**Mensajes:**<br>• los locales son fijos (`studio-integrations-text.ts:94-110`);<br>• los del servidor no repiten el número (`UltronStudioCanaryController.php:136-153`);<br>• en `lang/es/validation.php`, `:value` solo aparece en reglas que `phone` no usa.<br>**Lectores:**<br>• `masked` tiene que casar con `RE_ENMASCARADO` (`studio-integrations-parse.ts:131`, `:224-227`); si llega un número entero, la respuesta es ilegible y no se pinta;<br>• las llamadas no copian `to_phone` ni `from_phone` (`:1006-1020`);<br>• en `facts`, las credenciales llegan solo como objeto, `fp` es de 8 hexadecimales, `ref` va enmascarado y no pasa nada con 7 dígitos seguidos (`:1046-1066`, `:1076-1120`);<br>• de la sonda solo pasa `last4` (`:895`).<br>**Errores:** los de lectura llevan la ruta y el motivo, nunca el valor (`studio-parse.ts:237-239`), y `payload` no se pinta.<br>**Matiz a D-F13** (no es un hallazgo):<br>• tras un 5xx, un 429, sin red o con un 2xx ilegible, cerrar el diálogo vacía el campo (`studio-canary-register-dialog.ts:142-146`);<br>• pero la firma de la clave, el `JSON.stringify` del cuerpo con el teléfono, sigue en el `Map` privado de la sesión (`studio-integrations-session.ts:137`, `:467-470`);<br>• ahí sigue hasta el siguiente registro, un `init()` o salir de la página;<br>• solo vive en memoria: no llega al DOM, al almacenamiento, a la consola ni a la red.<br>Hay que corregir «el mismo tiempo que en el formulario» en D-F13 y el docblock (`studio-canary-register-dialog.ts:20-23`) |
+| 5 | Almacenamiento, consola y otras salidas (punto 2) | En los 22 ficheros: `grep -nE "localStorage\|sessionStorage\|indexedDB\|caches\.\|document\.cookie\|console\.\|sendBeacon\|fetch\(\|XMLHttpRequest\|WebSocket\|EventSource\|BroadcastChannel\|history\.(push\|replace)State"` | Solo salen `services/access-control.service.ts:364`, `:370` y `:582`: la política por defecto de siempre. El hito solo añade dos nombres de permiso a las exclusiones del Administrador (`:445-449`), igual que `CrmPermission::byRole()`.<br>El token es de cada pestaña (`services/auth.service.ts:48-50`).<br>`AuthInterceptor` no cambia: pone el Bearer y no registra nada |
+| 6 | Red y frontera (punto 4) | Lectura del servicio y de la sesión | Solo se llama a `${adminApiBaseUrl}/ultron-studio/integrations/*` (`studio-integrations-api.service.ts:141`, `:381-382`): 18 rutas, 10 de ellas POST.<br>Aparte, `GET versions?status=APPROVED,CANARY,PUBLISHED&per_page=50` del Studio (`studio-integrations-session.ts:278`), el único uso de `UltronStudioApi`. Ningún componente inyecta `HttpClient`.<br>Los cuerpos se arman campo a campo (`studio-integrations-api.service.ts:204-224`, `:251-259`, `:333`, `:345`). Los uuids se validan antes de componer la ruta (`:229`, `:297`, `:353`, `:407-409`).<br>Ninguna acción escribe en Meta, llama ni toca banderas |
+| 7 | I-1 y `clientRequestId` (punto 3) | `studio-integrations-session.ts:465-480` y `:560-575` | **La clave:**<br>• es la misma mientras sean la misma acción y el mismo cuerpo;<br>• se olvida con una respuesta definitiva (un 2xx legible o un 4xx que no sea 429);<br>• se conserva sin red y con un 5xx, un 429 o un 2xx ilegible.<br>Va por acción y sujeto, `init()` las borra todas (`:539`) y solo hay una escritura a la vez (`:432-437`).<br>Es un UUID v4 de `crypto.randomUUID` o `getRandomValues` (`studio-api.service.ts:152-160`) |
+| 8 | Botones que da el servidor (punto 3) | Plantillas y sesión | **Números:** `@if (n.actions[a].allowed)` (`studio-canary-numbers.ts:158-164`), y la sesión vuelve a comprobarlo (`studio-integrations-session.ts:439-444`). El lector rechaza `allowed:true` fuera de su estado y `allowed` incoherente con `reason` (`studio-integrations-parse.ts:682-708`).<br>**Campañas:** solo sin `campaignWriteBlock` (`studio-meta-campaigns.ts:145-152`).<br>**Registrar:** `studio-canary-numbers.ts:94-98`.<br>**Reconocer:** solo con `integrationsManage` y si el estado no es `authorized` (`studio-config-drift.ts:79-89`).<br>`can` y `flags` son booleanos estrictos (`studio-integrations-parse.ts:410-440`); hasta leerlos, todo está apagado (`studio-integrations-session.ts:93-94`, `:178-180`). La página no mira permisos locales (`studio-integrations-unknown-permission.spec.ts:141-157`) |
+| 9 | Cuatro ojos | `plans/informes-h6/capturas-crm/escritorio-12-administrador.png` | Ana (Administrador) no ve «Autorizar» en el número que registró y lee el motivo.<br>Los números salen como `+57 ••• ••• 4821`.<br>Autorizar y activar son un clic: el contrato les da cuerpo vacío (D-F9, Q-6) |
+| 10 | Motivo, alias y consentimiento (punto 3) | Lectura | **Motivo** (rutas 48, 52 y 53):<br>• `ib-reason-dialog` y `motivoInvalido`, de 5 a 500 puntos de código (`studio-integrations-session.ts:577-584`);<br>• el 422 del servidor se enseña en el diálogo;<br>• el aviso de datos personales va enlazado al campo (`reason-dialog.ts:161`).<br>**Nota** de la ruta 55: opcional y con su aviso (`studio-config-drift.ts:117-120`).<br>**Alias:** se pasa a NFC antes de comprobarlo y de enviarlo (`studio-integrations-session.ts:354`).<br>**Consentimiento:**<br>• la casilla empieza sin marcar (`studio-canary-register-dialog.ts:118`);<br>• la sesión exige `=== true` (`studio-integrations-session.ts:356`);<br>• el servicio envía `=== true` (`studio-integrations-api.service.ts:257`);<br>• el servidor pide `boolean:strict` y `accepted` (`UltronStudioCanaryController.php:68`) |
+| 11 | Sonda y voz (punto 4) | `studio-twilio-panel.ts:155-171`; `studio-integrations-session.ts:189-193` | **Sonda:**<br>• el botón solo aparece con `integrationsManage`, `twilioProbeEnabled` y `probe.enabled`;<br>• `TEXTO_SONDA` va a su lado, enlazado con `aria-describedby` (`:159`, `:165`);<br>• sin botón, se lee el motivo (`:166-168`);<br>• tras un 429, el botón se deshabilita con su cuenta atrás, de 3600 s como mucho (`:337-349`).<br>**Voz:** no hay ningún botón que actúe sobre la voz. El único que puede salir en esa pestaña es «Reconocer» la configuración: es registro (decisión 11) |
+| 12 | Enmienda 4: el orden `permission` antes que `shape` | Lectura | Ese orden lo aplica el servidor. En el CRM, sin la llave no hay botón ni petición.<br>Al desactivar, revocar y fijar la expectativa, los rechazos locales miran la forma antes que `actions` (`studio-integrations-session.ts:379-395`). No envían nada y no se alcanzan desde la interfaz |
+| 13 | Tolerancia (punto 5) | Lectura y specs (#3) | Un 404 sin código da `unavailable` (`studio-integrations-api.service.ts:101-104`, `studio-integrations-session.ts:516-532`); el 404 de las versiones no se confunde con él (`:280-284`).<br>`?pestana=` solo acepta valores conocidos (`studio-integrations-page.ts:135-137`).<br>Las claves desconocidas se ignoran, y los bloques ilegibles se cuentan sin pintarse. La excepción es N-6 |
+| 14 | Accesibilidad que importa para la seguridad (punto 6) | `ib-dialog.ts:174-184`, `:195-222` y `:234-241`; `grep autofocus` en los 22 ficheros | **Diálogos:**<br>• atrapan Tab y Mayús+Tab;<br>• Escape cierra y el foco vuelve a quien abrió;<br>• con algo en vuelo no se cierran.<br>**Foco inicial:** va al primer control. En el registro es la opción de WhatsApp, no el teléfono. Ningún `autofocus` en el hito.<br>**Errores del formulario y del servidor:** llevan `role=alert` (`studio-canary-register-dialog.ts:90`, `studio-canary-numbers.ts:169`, `reason-dialog.ts:52` y `:60`, `studio-campaign-link-dialog.ts:82`, `studio-config-drift.ts:122`).<br>**Para FE (accesibilidad, sin impacto de seguridad):** los errores por campo de los tres diálogos propios no llevan `role=alert` ni mueven el foco (`studio-canary-register-dialog.ts:46`, `:54`, `:64`, `:87`; `studio-campaign-link-dialog.ts:70`; `studio-config-drift.ts:120`). Un lector de pantalla no dice por qué no se registró el número, por ejemplo con la casilla sin marcar. No se envía nada |
+| 15 | D-F5 (punto 7) | Greps #1 y #2. En las 10 hojas nuevas, `grep -nE "url\(\|@import\|expression\(\|behavior\|attr\(\|content:"`. En los componentes, `grep "<p[ >]\|<small"` | **El cambio de `p` a `div` y `span`** solo cambia elementos y clases:<br>• no hay sumideros, `url()`, `@import` ni `attr()`;<br>• solo hay `content: ''` decorativo.<br>**Siguen en `<p>`:**<br>• las tres regiones vivas `visually-hidden`;<br>• el párrafo neutro del diálogo de reconocer;<br>• las fases de la página.<br>Ningún texto obligatorio ni ninguna alerta.<br>**Sin cambios:**<br>• `ultron-studio.scss` (sha256 `fc558002…`, igual que en `ab78a6a`);<br>• `package*.json`, `angular.json`, `src/environments`, `src/styles.css` e `index.html` |
+| 16 | Secretos en el diff del CRM | Líneas añadidas de `git diff ab78a6a..f38699d -- src/app`, buscando `sk-`, `AKIA`, `PRIVATE KEY`, `xox?-`, `EAA…`, `ghp_`, `base64:` largo, `AC` o `SK` seguidos de 32 hexadecimales y `Bearer` | Dos aciertos, los dos en `studio-integrations-parse.spec.ts`: un SID `AC0123…cdef` y un token `EAABsb…secreto`. Son sintéticos y están en pruebas negativas: el lector los rechaza.<br>Los teléfonos `+57300123…` también son sintéticos y solo están en specs.<br>El arnés (`capturas-crm/arnes/`) usa datos sintéticos y `token-de-prueba`, e intercepta las peticiones sin abrir ningún puerto |
+| 17 | PoC de N-6 | `…/scratchpad/security2/poc/base-null.ts` (`esbuild` del CRM, node 24) y `php -r` con `parse_url` | `ejemplo exportado legible: true`.<br>Con `host=null`, `"[2001:db8::1]"` o `"twilio_proxy.internal"`: `ILEGIBLE (StudioParseError: twilio.credentials.apiBase.host: un host que no es el oficial se dice solo con su nombre)`.<br>Con `"api.twilio.com"`: se lee, «No oficial».<br>La configuración con `host:null` se lee.<br>En PHP, `"api.twilio.com"` y `"https:///v1"` dan `host=null` |
+
+### S2.2 Lo que no verifiqué
+
+- **Sin ejecutar:**
+  - `ng build`, que el encargo excluye;
+  - la prueba en Chrome;
+  - el E2E con la pila real, que es del tester.
+
+  Para eso me apoyo en el informe de FE. De sus capturas miré la 12.
+- **Fixtures sin volver a exportar** desde el backend actual: hay que arrancar la aplicación. N-7 se apoya en git:
+  - `git show 4e6f5fe:./app/Services/UltronStudio/StudioCanaryPhone.php` no contiene `contactDataError`;
+  - en `3e1ee20` aparece 4 veces;
+  - el fixture del CRM no contiene ningún `contactData`.
+- **Mutaciones:** el encargo es de solo lectura; no repetí las 12 de FE.
+- **Lectores de pantalla reales.**
+
+### S2.3 Para cada agente
+
+- **FE:**
+  - N-6 (el lector de la base);
+  - N-7 (los comprobadores y la nueva exportación);
+  - el texto de D-F13 (S2.1 #4);
+  - los errores por campo que no se anuncian (S2.1 #14).
+- **S:** N-6. Dejar escrito en I5.2 que `host` puede ser `null`, o no emitirlo nunca.
+- **Lead:** volver a exportar y repetir la paridad antes del cierre (N-7). Nada de este apartado bloquea.
+- **Tester:**
+  - el panel de Twilio con `apiBase.host` nulo, con IPv6 y con `_`;
+  - en el E2E con la pila real, el alias «Cel 30 00 00 00 01». Debe dar un 422 junto al campo, y el teléfono sigue escrito sin aparecer en ningún otro sitio.
+- **Reviewer:** la segunda pasada no tiene bloqueantes. La primera (B-1, B-2 y N-1 a N-5) sigue como estaba, con lo que corrigieron las Enmiendas 3 y 4.

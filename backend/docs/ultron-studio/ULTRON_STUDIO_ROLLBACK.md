@@ -165,6 +165,97 @@ Solo ante corrupción de datos, con **autorización expresa** y coordinado por `
 
 **Qué NO hacer:** «volver a publicar» encima de la cabeza vieja (responde 409; R6 del plan, corregido en la Enmienda 2 del contrato), imprimir la clave o pegarla en un chat, y rotarla solo por H5.
 
+## Hito 6 (integraciones comerciales) — PENDIENTE DE DESPLIEGUE; respaldo `/var/backups/ironbody/ultron-studio-h6-<fecha UTC>/` (lo crea el paso 1 del runbook)
+
+**Estado (01-11-2026):** el Hito 6 está implementado en la rama `feat/ultron-studio-h6` (backend `e3a0fdd`; CRM `f38699d`) y **no está desplegado**: ningún paso de esta sección se ha ejecutado en producción. Sale del contrato (`ULTRON_STUDIO_H6_CONTRACT.md`, «Reversión» e I13, con las Enmiendas 3 y 4), del runbook de DevOps (`plans/informes-h6/informe-devops-h6.md` §5), del informe de datos (`informe-db.md` §9), del de seguridad (`informe-security.md` §2) y de los del CRM (`informe-front-datos.md` §5.3 e `informe-front-integracion.md`, D-F12 y Q-4). DevOps ensayó en su banco local las idas y vueltas de las dos banderas, pero **no** la vuelta del código. El resto se deduce del código y de las pruebas.
+
+**Reglas que no cambian:**
+- **Nunca `migrate:rollback` / `down()` en producción** (límite del 25-10-2026). En otros entornos, las dos migraciones se niegan con una fila en cualquiera de las 3 tablas o con un evento del libro de un sujeto nuevo: salen con código 1, con los cerrojos ya tomados y sin deshacer nada (`informe-db.md` §7).
+- **No se quitan las 8 líneas del Hito 6** del fichero de entorno: el código del Hito 5 no las lee.
+- **Ninguna palanca de esta sección cambia lo que ULTRON dice o hace:** el motor no lee nada del Hito 6, ni antes ni después.
+
+**Los cuatro niveles del contrato** («Reversión»):
+
+| Nivel | Cómo | Efecto | Pierde datos |
+|---|---|---|---|
+| **1 · Studio** | CRM, «Integraciones»: desactivar las asociaciones de campaña (`POST integrations/meta/links/{uuid}/deactivate`, motivo de 5 a 500 caracteres) y revocar los números canarios (`POST integrations/canaries/{uuid}/revoke`, motivo de 5 a 500). Necesitan la bandera de escrituras encendida (si no, 409 `integrations_writes_disabled`) y `ultron.campaigns_manage` o `ultron.canary_manage` | El registro deja de declarar. El motor no notaba nada antes ni lo nota después. Revocar es definitivo y pone a NULL el teléfono cifrado de voz en la misma sentencia | Nada se borra: la fila revocada conserva su huella, sus 4 dígitos y su alias (ver «Datos personales», abajo) |
+| **2 · Banderas** | `bash /root/h6-integrations-scope.sh writes off on` y `bash /root/h6-integrations-scope.sh probe off on` (servidor, root) | Las escrituras 47–54 vuelven a 409 `integrations_writes_disabled` y la sonda, a 409 `probe_disabled`, tras la caché de configuración. Las lecturas y reconocer la configuración siguen (reconocer no depende de la bandera de escrituras) | Nada |
+| **3 · Código** | Volver al backend del Hito 5 (el commit de `api-commit.txt`, solo si producción sigue en el commit de la fase 1 del Hito 6) y, si se quiere, al CRM anterior | Seguro con filas del H6: las tablas se quedan sin lector. Ver «Vuelta atrás del código», abajo | Nada en la base |
+| **4 · Esquema** | `down()` | **Nunca en producción.** En otros entornos, solo sin filas en las 3 tablas ni eventos con los sujetos nuevos | Todo lo del Hito 6 |
+
+**Nivel 2, la verificación.** El mando termina en `MANDO <writes|probe> → off APLICADO (copia previa: /root/env-pre-h6-<mando>-off-<fecha>)` (código 0) tras comprobar la configuración efectiva por tinker, el motor sin cambios, 13 workers RUNNING y 0 en BACKOFF/FATAL, `integrations/status` sin token → 401 y una instantánea de sistema si alguna huella cambió (`probe off` cambia la de Twilio). Si algo sale mal, imprime la orden exacta para volver a la copia previa. Exige como último argumento el estado de HOY: si no coincide con la configuración efectiva, no toca nada; y exige el fichero de entorno en 600 (N-4 b de `security`).
+- **La vista del proceso web** (N-4 a de `security`): tinker es CLI y no comparte el OPcache del FPM, y el mando no recarga FPM. Con **las dos** banderas apagadas, `SMOKE_PHASE=1 bash /root/smoke-run-h6.sh` (copiando antes `smoke-h6.py` y `smoke-run-h6.sh` a `/root/`) comprueba desde el proceso web que las escrituras y la sonda responden 409. **Con las escrituras apagadas y la sonda encendida no hay smoke que lo compruebe:** el lanzador solo admite apagado/apagado (fase 1), encendido/apagado y encendido/encendido (fase 2). En ese caso se mira `flags` de `GET integrations/status` con una sesión real. [PENDIENTE: `opcache.validate_timestamps` del pool de FPM, comprobado una vez y anotado (`devops`).]
+- **Tras `probe off`, Twilio vuelve a `drift`** frente a la configuración reconocida (la huella incluye `probe.enabled`, H-1 de DevOps): se vuelve a reconocer si se quiere el estado `authorized`.
+
+### Vuelta atrás del código: backend del H6 → el commit anterior (`api-commit.txt` del respaldo; hoy sería `7ba0ce8`), con las tablas en su sitio
+
+Solo si el código del Hito 6 se porta mal. **Volver el código no es volver los datos.** El destino es lo que servía producción justo antes del Hito 6: el commit que guardó el respaldo de la fase 1 en `api-commit.txt` (el `PREVIO` de `deploy-h6-backend-fase1.sh`; hoy, `7ba0ce8`). **Se lee del respaldo, nunca de un literal** (I-4 del reviewer del H5). No se ha ensayado: el ensayo de DevOps cubre las banderas, no el código.
+
+```bash
+# 0. Antes, cerrar las escrituras y la sonda (nivel 2): el código del H5 no conoce las rutas, pero así nada escribe mientras tanto.
+bash /root/h6-integrations-scope.sh writes off on            # si estaba en on
+bash /root/h6-integrations-scope.sh probe off on             # si estaba en on
+# 1. CRM anterior (opcional: el CRM del H6 lee los dos backends; ver «Qué ve el CRM», abajo)
+cp /var/backups/ironbody/crm-pre-<build-crm>-<ts>/index.html /var/backups/ironbody/crm-pre-<build-crm>-<ts>/version.json /var/www/app/ && chown root:root /var/www/app/index.html /var/www/app/version.json
+# 2. Backend: git como root (dueño del árbol y de .git) y con umask 022, para que www-data lea lo que reescriba
+BK=/var/backups/ironbody/ultron-studio-h6-<fecha UTC>                                     # el respaldo del paso 1 de la fase 1
+FASE1=<commit desplegado en la fase 1 del Hito 6>                                          # el ESPERADO del script (registro de despliegues de la hoja de ruta)
+# 2a. SOLO si producción sigue en el commit de la fase 1 del H6 (D2-1 del reviewer del H5): si se desplegó otra cosa
+#     después, este checkout borraría ese trabajo y dejaría sus migraciones sin el código que las usa. En ese caso NO
+#     se hace checkout: se sale por banderas (paso 0) y se decide con devops un revert de los commits del Hito 6.
+[ "$(git -C /var/www/api rev-parse HEAD)" = "$(git -C /var/www/api rev-parse "$FASE1")" ] \
+  || { echo "producción ($(git -C /var/www/api rev-parse --short=7 HEAD)) ya no está en el commit de la fase 1 del H6: no hacer checkout; salir por banderas y planear un revert"; exit 1; }
+( cd /var/www/api && umask 022 && git checkout -q --detach "$(cat "$BK/api-commit.txt")" )   # hoy sería 7ba0ce8
+cd /var/www/api/backend && sudo -u www-data sh -c 'umask 077; php artisan config:cache -q && php artisan route:cache -q' && chmod 600 bootstrap/cache/config.php bootstrap/cache/routes-v7.php
+sudo -u www-data php artisan queue:restart
+sudo -u www-data php artisan route:list --path=admin/ultron-studio --json | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))'   # 38
+sudo -u www-data php artisan auth:coverage --unmapped                                   # vacío
+supervisorctl status | grep -c RUNNING                                                  # 13
+# 3. Smoke del H5 (vuelve a valer con el código del H5; copiado antes desde ops/)
+SMOKE_PHASE=1 bash /root/smoke-run-h5.sh
+```
+
+- **`api-commit.txt` tiene que ser el `PREVIO`.** Si la fase 1 se relanzó más de 2 horas después del respaldo y hubo que rehacerlo, su `api-commit.txt` tiene que seguir siendo el `PREVIO`, no el HEAD de ese momento. **Leído en el script:** en una reanudación, el paso 0 del Hito 6 acepta también un `api-commit.txt` que empiece por el commit nuevo, así que el script no lo avisaría; esta vuelta atrás leería entonces el destino equivocado. Comprobarlo antes: `cat "$BK/api-commit.txt"` tiene que empezar por el `PREVIO` del día del despliegue.
+- **Smoke del H5 con datos del H6:** el lanzador del H5 compara el recuento exacto de todas las tablas `ultron_studio_*` antes y después, sin fijar cuántas son (leído en `smoke-run-h5.sh`), así que las 3 tablas del H6 no deberían hacerlo fallar. [PENDIENTE: no ensayado con datos del H6; DevOps (§5) lo da como la verificación de este nivel.]
+- **Qué queda:** las 3 tablas, sus 13 disparadores, 22 CHECK y 2 índices parciales, y `usae_subject_type_chk` con 7 sujetos (un superconjunto: las inserciones del H5 siguen pasando, `informe-db.md` R-3). Las 8 claves del fichero de entorno. El código del H5 no lee nada de eso.
+- **Qué ve el CRM** (leído en el código, `informe-front-datos.md` §5.3; corrige la frase del contrato «el libro pinta los sujetos nuevos en genérico», que solo vale con el CRM del H6):
+  - **con el CRM del H6** y el backend del H5: la página «Integraciones» dice «El servidor todavía no tiene integraciones (Hito 6)» (404 en `integrations/*`), y el libro pinta en genérico, clave a clave, los eventos `campaign_link`, `canary_number` e `integration`, que el backend del H5 sigue sirviendo en `GET audit` sin filtro (leído en `UltronStudioController.php` y `StudioAudit::page()` de `7ba0ce8`). Su filtro `subjectType` solo admite los 4 de antes: filtrar por uno de los nuevos da un 422, que el CRM dice como «este filtro todavía no existe en el servidor» (D-F12 de `informe-front-integracion.md`);
+  - **con el CRM anterior** (`ab78a6a`): su panel del libro solo conoce 4 sujetos y **descarta esos eventos como ilegibles** («N eventos llegaron ilegibles y no se enseñan»). No se pierde nada: el libro sigue intacto en la base.
+- **Mientras el árbol esté en `--detach`, nadie despliega:** se vuelve a `main` o se decide el revert antes de cualquier otro despliegue.
+- **Volver al H6:** `( cd /var/www/api && umask 022 && git checkout -q main )` (la rama local sigue en el commit del H6), las mismas cachés, `queue:restart` y el smoke del H6. **No** el script de despliegue: exigiría el esquema del H5 y abortaría (DevOps §5).
+
+### Vuelta atrás de datos (último recurso)
+
+Solo ante corrupción de datos, con **autorización expresa** y coordinado por `database-specialist`, siguiendo `docs/ops/BACKUPS.md` («Restauración real»): primero a una base aparte, **nunca encima de la viva**, sabiendo que se pierde todo lo escrito desde el volcado (`ironbody.dump` del respaldo de la fase 1). Nada de la fase 1 lo justifica: sus dos migraciones son aditivas y no tocan datos de otras tablas.
+
+### Datos personales: revocar no es suprimir
+
+- **La huella del teléfono es un seudónimo, no un dato anonimizado** (B-1 de `security` = AS-4 de `api-security-specialist`; I13 corregido en la Enmienda 3). Con la `APP_KEY`, la huella y los 4 dígitos que guarda la fila, el número se recupera en milisegundos; sin los 4 dígitos, el espacio de WhatsApp (10⁹) se recorre en unos 24 minutos con un núcleo (H-3 del tester, Enmienda 4). Lo que protege los teléfonos canarios es el secreto de la `APP_KEY`.
+- **Revocar no suprime:** pone a NULL el cifrado de voz, pero la huella, los 4 dígitos y el alias son columnas inmutables y la fila no se puede borrar con el rol de la aplicación. **No hay todavía un procedimiento de supresión** (derecho de supresión, Ley 1581): es del Hito 7 (architect + `database-specialist`, con decisión del propietario), y tiene que cubrir las 3 tablas nuevas además de las de F, del Hito 4 y del Hito 5.
+- **Copias fuera de las tablas:** el respaldo de la fase 1 (volcado y `env.backup` juntos), y la huella del teléfono en el `DETAIL` del error 23505 del log del servidor PostgreSQL en cada registro duplicado (H-2 del tester, diferido al Hito 7).
+
+### Rotación de la `APP_KEY` con el Hito 6 desplegado (amplía la del Hito 5)
+
+**No forma parte de ninguna fase.** Rotar la `APP_KEY` es un evento de todo el sistema (ver «Hito 5»), y el Hito 6 suma lo que deja de valer (`informe-security.md` §2, leído en el código; no ensayado):
+
+| Pieza | Tras rotar |
+|---|---|
+| Huellas de los teléfonos canarios (`phone_hash`, `PhoneFingerprint`, etiqueta `ultron-canary-phone/1`) | No casan con las nuevas. La coherencia pasa a `engine_canary_not_registered` aunque la fila siga activa: **el T1 se pierde**. Registrar otra vez el mismo número **no** choca con la fila vieja en `uscn_one_live` (es otra huella): habría dos filas vivas del mismo teléfono hasta revocar la vieja y, al activar la nueva, `registry_has_extra_active`. Reintentar un registro anterior da 409 `client_request_reused` |
+| Teléfonos cifrados de voz (`phone_encrypted`) | En el Hito 6 nada los descifra. Sin la clave vieja en `APP_PREVIOUS_KEYS` quedan indescifrables; con ella, siguen descifrables con ella |
+| Ids opacos de Meta (`MetaAdEntity::opaqueId`) | Cambian todos. El CRM con ids viejos recibe 404 `campaign_not_found` o listas vacías: hay que recargar. Las asociaciones guardan el id de Meta y sobreviven. Los eventos `campaign_link.created` conservan el id opaco viejo: se correlacionan por el uuid del sujeto |
+| Huellas de valores de la configuración (`fp`, etiqueta `ultron-studio-config-fingerprint/1`) | Cambian las del token de Meta y del de Twilio **aunque el secreto sea el mismo**: `meta_ads` y `twilio` pasan a `drift`, que parece un cambio de credenciales y no lo es |
+| Lo que no cambia | El enmascarado (sale de `phone_last4`), las asociaciones, el libro y la huella de la configuración de voz mientras no tenga secretos |
+
+**Procedimiento** (se suma al del Hito 5, en el mismo acto, solo con autorización expresa del propietario y por otro motivo):
+1. **Antes de rotar, la foto:** `GET integrations/canaries?status=all` y `GET integrations/config` (no llevan secretos ni teléfonos). Anotar de cada número vivo el canal, el alias, los 4 dígitos y el estado, y el estado de los 3 proveedores.
+2. **Revocar los números vivos**, con el motivo «Rotación de la APP_KEY (fecha, autorizada por …)», sin teléfonos ni correos (AS-1: el servidor los rechaza con 422). Borra los cifrados de voz, deja la evidencia en el libro y evita las filas duplicadas. Si la rotación es por compromiso de la clave, las filas revocadas siguen siendo recuperables con la clave vieja (B-1).
+3. **Rotar** como en el Hito 5, paso 4: `key:generate --force` sin `--show`, la clave vieja en `APP_PREVIOUS_KEYS`, `config:cache` con `umask 077` y `chmod 600`, y los reinicios.
+4. `sudo -u www-data php artisan ultron-studio:integrations-snapshot` → instantáneas de sistema nuevas de `meta_ads` y `twilio`.
+5. **Un Super Admin vuelve a reconocer** los 3 proveedores, con la nota «Rotación de la APP_KEY: la deriva es solo de huellas».
+6. **T1 de nuevo:** registra quien tiene el teléfono de la conversación canaria; otra persona autoriza y activa; el resultado tiene que ser `in_sync`.
+7. **Recargar el CRM:** los ids opacos cambiaron.
+8. **Si fue por compromiso,** la clave vieja no se queda en `APP_PREVIOUS_KEYS` más de lo imprescindible.
+
 ## Fases siguientes
 
 *(Actualización del 25-10-2026: la reversión por versión que anunciaba este apartado es la del Hito 5, arriba.)* Cuando exista persistencia (borradores, versiones, aprobaciones), la reversión se hará **por versión**, no por despliegue: una versión publicada es inmutable y `ROLLED_BACK` devuelve la anterior conocida, sin migraciones destructivas. El procedimiento se documentará con esa fase.
