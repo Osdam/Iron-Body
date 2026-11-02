@@ -364,7 +364,7 @@ Sigue vigente y cubre ahora la cadena: antes del despliegue, `tests/Feature/Ultr
 
 ## Hito 6 (integraciones comerciales): revisiones de seguridad
 
-**Estado:** implementado en la rama `feat/ultron-studio-h6` (backend `411d8b1`, código `4e2e8cf`; CRM `16c433c`), **no desplegado**. Revisiones del 01-11-2026: `plans/informes-h6/informe-security.md` (`security`, transversal) e `informe-api-security.md` (`api-security-specialist`), más los hallazgos de seguridad del tester de backend (`informe-tester-backend.md`) y de DevOps (`informe-devops-h6.md`). Lo que deciden está congelado en las Enmiendas 3 y 4 del contrato. Las protecciones de esta sección **rigen en producción cuando se despliegue**.
+**Estado:** desplegado en producción en su fase 1 el 02-11-2026 04:54 UTC (backend `1e5f9a0`, código `4e2e8cf`; CRM `16c433c`), con escrituras, sonda y voz apagadas. Revisiones del 01-11-2026: `plans/informes-h6/informe-security.md` (`security`, transversal) e `informe-api-security.md` (`api-security-specialist`), más los hallazgos de seguridad del tester de backend (`informe-tester-backend.md`) y de DevOps (`informe-devops-h6.md`). Lo que deciden está congelado en las Enmiendas 3 y 4 del contrato. Las protecciones de esta sección **rigen en producción cuando se despliegue**.
 
 **Superficie nueva:**
 - **18 rutas** (`/api/admin/ultron-studio/integrations/*`; 56 en el Studio), con 4 llaves nuevas: `ultron.campaigns_manage` y `ultron.canary_manage` (el Administrador las tiene por defecto) y `ultron.canary_authorize` y `ultron.integrations_manage` (solo el Super Admin por defecto). El token compartido no recibe ninguna.
