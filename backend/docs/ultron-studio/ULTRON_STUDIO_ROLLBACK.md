@@ -258,7 +258,7 @@ Solo ante corrupción de datos, con **autorización expresa** y coordinado por `
 
 ## Hito 7 (seguridad y producción) — SIN DESPLEGAR (02-11-2026)
 
-**Estado (02-11-2026, segunda pasada sobre `3fbb155`):** implementado en la rama `feat/ultron-studio-h7`, sin desplegar; se desplegará el HEAD de `feat/ultron-studio-h7` al desplegar [PENDIENTE: el commit final (lead)]. Producción sigue en el backend `1e5f9a0` y el CRM `16c433c`. Sale del runbook de OPS7 (`plans/informes-h7/informe-devops-h7.md` §4.8 y §5), del informe de datos (`informe-db.md` §10) y de los scripts de `ops/`. **Ensayado en el banco** (`ops/banco-h7/ensayo-vuelta.sh`, 13/13): los niveles 2, 3 y 4. Cuando se despliegue, `BK` será el respaldo del paso 1 del runbook, `api-commit.txt` su `PREVIO` (hoy, `1e5f9a0`) y `FASE1` el commit desplegado. [PENDIENTE: los tres valores reales tras el despliegue (lead).]
+**Estado (02-11-2026, tercera pasada sobre `cdade1e`):** implementado en la rama `feat/ultron-studio-h7`, sin desplegar; se desplegará el HEAD de `feat/ultron-studio-h7` al desplegar [PENDIENTE: el commit final (lead)]. Producción sigue en el backend `1e5f9a0` y el CRM `16c433c`. Sale del runbook de OPS7 (`plans/informes-h7/informe-devops-h7.md` §4.8 y §5), del informe de datos (`informe-db.md` §10) y de los scripts de `ops/`. **Ensayado en el banco** (`ops/banco-h7/ensayo-vuelta.sh`, 13/13): los niveles 2, 3 y 4. Cuando se despliegue, `BK` será el respaldo del paso 1 del runbook, `api-commit.txt` su `PREVIO` (hoy, `1e5f9a0`) y `FASE1` el commit desplegado. [PENDIENTE: los tres valores reales tras el despliegue (lead).]
 
 **Reglas que no cambian:**
 - **Nunca `migrate:rollback` / `down()` en producción.** El `down()` de `2026_11_02_100001` se niega con filas en la cadena, el libro o las instantáneas, y el libro tiene filas en cualquier entorno real (D-5 de DB7).
@@ -267,7 +267,7 @@ Solo ante corrupción de datos, con **autorización expresa** y coordinado por `
 
 | Nivel | Cómo | Qué se va | Qué se queda | Ensayado (banco) |
 |---|---|---|---|---|
-| **2 · Bandera del monitor** | `ULTRON_STUDIO_MONITOR_ENABLED=false` en la misma línea (copia previa en 600, dueño y modo intactos) y `sudo -u www-data sh -c 'umask 077; php artisan config:cache -q'` | Las 2 tareas programadas del Studio (`schedule:list` → 0). El comando `ultron-studio:monitor` sigue disponible a mano | Los incidentes ya abiertos, en IRON GUARD | Sí: `true` → 2 tareas y una pasada real a 0 sin incidentes; `false` → 0 tareas y el fichero de entorno idéntico |
+| **2 · Bandera del monitor** | `bash /root/h7-monitor-scope.sh off on` → `MANDO monitor → off APLICADO (copia previa: /root/env-pre-h7-monitor-off-<fecha>)` (`0d43401`): copia previa en 600, la bandera a `false` en el mismo fichero (inodo, dueño y modo intactos), `config:cache` como `www-data`, el programador con 2 entradas menos y 0 del Studio, `queue:restart` y 13/0 dos veces. Con algún desvío, código 1 y la orden exacta para volver. **Exige el fichero de entorno en 600** (`h7-monitor-scope.sh:144`): en 640, como lo deja la propuesta de `ironbody-migrate` (paso 3b), aborta sin tocar nada y este nivel se queda sin mando (m-4 de REV7; hoja de ruta, B-3 y C-14). [PENDIENTE: adaptar el mando antes de que el propietario instale la propuesta (`devops`).] | Las 2 tareas programadas del Studio. El comando `ultron-studio:monitor` sigue disponible a mano | Los incidentes ya abiertos, en IRON GUARD | Sí: con el mando, ida y vuelta 16/16, `29 2 → 27 0` y el fichero de entorno **byte a byte** el de antes (`informe-devops-h7.md` §4.9) |
 | **3 · Código** | Volver al commit de `api-commit.txt` (abajo), solo si producción sigue en el commit del H7 | `no-store` (vuelve `no-cache, private`), el 413 temprano (vuelve el 401 sin sesión), `verified`, el rechazo de invisibles, los topes de M-2, el cierre de sesiones al restablecer la contraseña y el monitor | El esquema del H7 y la variable. **Es compatible:** el disparador solo rechaza lo que el código nunca hace y el REVOKE quita privilegios que ningún código usa (`informe-db.md` §10) | Sí: con el código del H6 (`7d2c6d8`) sobre el esquema del H7, 56 rutas y 44/50; `publication-check` 0; smoke del H6 de la fase 1, 78 + 26 OK; volver a Legacy con la cadena vacía → 409 `already_legacy`; y de vuelta al H7, su smoke en verde |
 | **4 · Esquema** | `down()` | **Nunca en producción** | — | Sí: con filas se niega y el esquema sigue en 44/50 |
 
@@ -276,7 +276,7 @@ Solo ante corrupción de datos, con **autorización expresa** y coordinado por `
 Solo si el código del H7 se porta mal. **Volver el código no es volver los datos.** El destino se lee del respaldo, nunca de un literal (I-4 del reviewer del H5). **`api-commit.txt` es el `PREVIO`:** desde `1c76a7f`, el paso 0 de `deploy-h7-backend.sh` exige siempre que empiece por `PREVIO` (`1e5f9a0`), también en una reanudación (líneas 157–160, como el del H6 tras m-6), así que un despliegue que pasó el paso 0 deja el destino correcto en el respaldo. El `cat` del bloque de abajo es solo una lectura antes de actuar. *(La primera versión de esta sección pedía comprobarlo a mano, porque el script aceptaba también el commit nuevo.)*
 
 ```bash
-# 0. (opcional) el monitor apagado, si estaba encendido: nivel 2
+# 0. (opcional) el monitor apagado, si estaba encendido: nivel 2 (bash /root/h7-monitor-scope.sh off on)
 # 1. Backend: git como root (dueño del árbol y de .git) y con umask 022, para que www-data lea lo que reescriba
 BK=/var/backups/ironbody/ultron-studio-h7-<fecha UTC>                                     # el respaldo del paso 1 del runbook
 FASE1=<commit desplegado del Hito 7>                                                      # el ESPERADO del script (registro de despliegues de la hoja de ruta)
@@ -300,12 +300,12 @@ SMOKE_PHASE=1 bash /root/smoke-run-h6.sh
 
 - **Qué ve el CRM:** nada distinto. El CRM `16c433c` funciona con los dos backends y no lee `verified`.
 - **Mientras el árbol esté en `--detach`, nadie despliega:** se vuelve a `main` o se decide el revert antes de cualquier otro despliegue.
-- **Volver al H7:** `( cd /var/www/api && umask 022 && git checkout -q main )`, las mismas cachés y `queue:restart`, y el smoke del H7 (`bash /root/smoke-run-h7.sh`, copiado otra vez con `smoke-h7.py` y `smoke-h6.py`). Es lo ensayado en el banco. **No** el script de despliegue: no se ha ensayado como vuelta.
+- **Volver al H7:** `( cd /var/www/api && umask 022 && git checkout -q main )`, las mismas cachés y `queue:restart`, y el smoke del H7 (`bash /root/smoke-run-h7.sh`, copiado otra vez con `smoke-h7.py`, `smoke-h6.py` y `presupuestos-h7.json`; con `TAREAS` ya fijado en el script; código 0, o 3 si lo único OMITIDO son presupuestos por estado). Es lo ensayado en el banco. **No** el script de despliegue: no se ha ensayado como vuelta.
 - **El monitor con el código anterior:** la variable se queda y nadie la lee; `routes/console.php` del H6 no programa nada del Studio.
 
 ### Lo que no tiene vuelta atrás
 
-- **Una supresión de la Ley 1581** (`ops/supresion-1581.sql` con `\set dry 0`): la redacción es definitiva, y la huella de un número canario suprimido no se puede recalcular. Los respaldos anteriores siguen llevando el dato; restaurar uno obliga a volver a aplicar cada supresión del registro (OPS7 §7).
+- **Una supresión de la Ley 1581** (`ops/supresion-1581.sql` con `\set dry 0`; el runbook, en `plans/informes-h7/informe-devops-h7.md` §10): la redacción es definitiva, y la huella de un número canario suprimido no se puede recalcular. Los respaldos anteriores siguen llevando el dato; restaurar uno obliga a volver a aplicar cada supresión del registro (OPS7 §7).
 - **Una sesión cerrada al restablecer una contraseña:** la persona vuelve a entrar con la contraseña nueva.
 - **Los incidentes que abra el monitor** se quedan en IRON GUARD; el monitor no revierte ni frena nada.
 

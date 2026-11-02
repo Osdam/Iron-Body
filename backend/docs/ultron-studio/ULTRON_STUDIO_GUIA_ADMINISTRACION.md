@@ -6,7 +6,7 @@
 
 **Tipo.** Referencia y uso. No sustituye a los contratos (`ULTRON_STUDIO_F_CONTRACT.md` … `ULTRON_STUDIO_H7_CONTRACT.md`), que mandan sobre esta guía, ni al procedimiento de pruebas con personas reales (`ULTRON_STUDIO_PRUEBAS_FISICAS.md`).
 
-**Fecha:** 02-11-2026. Escrita sobre el backend `5ed9525` (rama `feat/ultron-studio-h7`) y el CRM `16c433c`, y revisada sobre `3fbb155` (F-1 y F-2 y la primera pasada de REV7), leyendo el código: rutas y permisos (`app/Support/Access/AuthorizationMap.php`, `CrmPermission.php`), configuración (`config/ultron_studio.php`), servicios del Studio y las pantallas del CRM (`src/app/modules/ultron-studio/`). Cada cifra lleva su fuente.
+**Fecha:** 02-11-2026. Escrita sobre el backend `5ed9525` (rama `feat/ultron-studio-h7`) y el CRM `16c433c`, y revisada sobre `3fbb155` (F-1 y F-2 y la primera pasada de REV7) y sobre `cdade1e` (la corrección de M-1 y el runbook de la supresión), leyendo el código: rutas y permisos (`app/Support/Access/AuthorizationMap.php`, `CrmPermission.php`), configuración (`config/ultron_studio.php`), servicios del Studio y las pantallas del CRM (`src/app/modules/ultron-studio/`). Cada cifra lleva su fuente.
 
 ---
 
@@ -206,22 +206,27 @@ Aquí no se ven ni se editan secretos: solo huellas. Las credenciales se cambian
 ## 10. Datos personales y solicitudes de supresión (Ley 1581)
 
 - **Antes de escribir:** cada campo de texto libre del Studio avisa de que queda en un libro que no se puede corregir. Los motivos y notas de integraciones rechazan teléfonos y correos (422 «Sin teléfonos ni correos: este texto queda en el libro y no se puede corregir.»).
-- **Si llega una solicitud de supresión:** la supresión es por **redacción**, nunca por borrado (las filas no se pueden borrar sin romper la cadena), y la hace quien opera el servidor con el rol dueño de la base, **en seco primero**, con `docs/ultron-studio/ops/supresion-1581.sql`. El procedimiento está en la cabecera de ese fichero; se ensayó 17/17 en un banco local (`plans/informes-h7/informe-devops-h7.md` §4.4) y **no se ha ejecutado nunca en producción**.
+- **Si llega una solicitud de supresión:** la supresión es por **redacción**, nunca por borrado (las filas no se pueden borrar sin romper la cadena), y la hace quien opera el servidor con el rol dueño de la base, **en seco primero**, con `docs/ultron-studio/ops/supresion-1581.sql`. Qué hace y qué no, en la cabecera de ese fichero; **el procedimiento paso a paso, en `plans/informes-h7/informe-devops-h7.md` §10** (ensayado en un banco local: la lógica 17/17 y las órdenes 12/12). **No se ha ejecutado nunca en producción.** Lo esencial:
+  - Hace falta un número de radicado y la **autorización del propietario**: es una modificación de la base de producción.
+  - Si fue un número canario, primero se **revoca** desde el CRM: con uno vivo, el procedimiento se niega sin cambiar nada.
+  - El dato no pasa por la línea de órdenes ni por la pantalla: va a un fichero de parámetros solo de root, y la huella del teléfono la calcula la aplicación, con el teléfono por la entrada estándar.
+  - Antes se comprueba que PostgreSQL no registrará el texto de las sentencias: `log_statement` en `none` o `ddl`, y `log_min_duration_statement` nunca en `0`.
+  - Primero **en seco** (solo cuenta) y, con un respaldo fresco, la redacción real. Después, la cadena sigue verificando y una pasada en seco da 0 campos.
   - Busca un texto (nombre, correo), un teléfono, la huella de un número canario **revocado** o una persona del personal por su id, en las 14 tablas del Studio, y lo sustituye por «[suprimido]». Deja una fila `system.personal_data_redacted` en el libro, con el radicado y los recuentos, nunca el dato.
   - **No redacta** la configuración firmada o con huella (la cadena de publicaciones, el contenido de las versiones y su copia en el laboratorio): si el dato está ahí, el remedio es una versión nueva sin él. Lo decide el propietario con su jurídico.
   - Suprimir a una persona del personal quita su nombre de la autoría de lo que hizo (queda el id): lo decide el propietario.
   - **Los respaldos siguen llevando el dato** hasta que caducan (los automáticos, unos 3 meses); una restauración obliga a volver a aplicar cada supresión. OPS7 recomienda un registro de supresiones (§7 de su informe).
-  - [PENDIENTE: la cabecera de `supresion-1581.sql` remite a un runbook completo en `informe-devops-h7.md`, «Supresión», que no existe como sección (solo el ensayo, §4.4). Hasta que `devops` lo escriba, el procedimiento es la cabecera del SQL más esta lista.]
+  - *(Hasta el 02-11-2026 aquí había un marcador de pendiente: la cabecera del SQL remitía a una sección «Supresión» que no existía. `devops` la escribió en `0d43401`, y la cabecera remite ahora a ella.)*
 
 ## 11. Qué cambia con el Hito 7 (cuando se despliegue)
 
 **Implementado en la rama `feat/ultron-studio-h7`; no está en producción.** [PENDIENTE: fecha del despliegue (lead).] Para quien usa el CRM:
 
 - **Textos con caracteres invisibles, en el Studio:** si un texto pegado trae un carácter invisible o de control, el Studio lo rechaza con «El texto contiene un carácter invisible o de control (U+XXXX) que no se puede guardar. Suele colarse al copiar y pegar: escríbelo de nuevo sin pegarlo.», junto al campo. Los emojis compuestos (con ZWJ o U+FE0F) se aceptan. Afecta a etiquetas, notas, motivos y descripciones del Studio (`plans/informes-h7/informe-security.md` §1). Un texto guardado antes del H7 con uno de esos caracteres solo se rechaza si se vuelve a guardar: al guardar el borrador o al crear una versión desde él; enviar, aprobar o publicar una versión ya creada no lo vuelve a mirar (REV7, M-1).
-- **Fuera del Studio no cambia nada:** la agenda de valoraciones y la Caja siguen con la regla de antes. Es la corrección de M-1 del reviewer (opción b), que `security` está terminando. [PENDIENTE: confirmar que el commit desplegado lleva esa corrección (lead).]
+- **Fuera del Studio no cambia nada:** la agenda de valoraciones y la Caja siguen con la regla de antes y el mensaje de siempre («El texto contiene caracteres no permitidos.»). El guion blando y los demás caracteres nuevos se siguen aceptando allí, y un emoji con ZWJ se sigue rechazando, como antes. Es la corrección de M-1 del reviewer (opción b), en `601398c`, dentro de lo que se despliega: la lectura de producción no encontró ningún texto guardado que se vea afectado (`plans/informes-h7/informe-security.md` §7).
 - **Restablecer la contraseña de un administrador desde el CRM cierra sus demás sesiones**, incluidos los «recuérdame»: la persona afectada vuelve al login en su siguiente petición. Si quien restablece es la propia cuenta, conserva la sesión con la que lo hace. Afecta a todo el CRM, no solo al Studio (B7, H-2 de SEC7).
 - **Nada visible** en el resto: las respuestas de la API administrativa dejan de guardarse en la caché del navegador (`no-store`); las peticiones de más de 64 KB al Studio se rechazan antes de autenticar; el historial de publicaciones trae `verified` por entrada, pero **el CRM `16c433c` no lo enseña** (no lo lee); y el monitor nace apagado.
-- **El monitor**, cuando el propietario autorice encenderlo, comprueba cada 30 minutos la publicación frente al motor, las integraciones frente a lo esperado y las colas, y abre un incidente en IRON GUARD (fuente `ultron_studio`) si algo no cuadra. No frena, no revierte, no llama a ningún proveedor y no notifica fuera.
+- **El monitor**, cuando el propietario autorice encenderlo, comprueba cada 30 minutos la publicación frente al motor, las integraciones frente a lo esperado y las colas, y abre un incidente en IRON GUARD (fuente `ultron_studio`) si algo no cuadra. No frena, no revierte, no llama a ningún proveedor y no notifica fuera. No se enciende desde el CRM: lo enciende y lo apaga quien opera el servidor, con `docs/ultron-studio/ops/h7-monitor-scope.sh` (runbook del H7, paso 10). Apagarlo quita sus 2 tareas programadas, pero no borra los incidentes ya abiertos.
 
 ## 12. Si algo va mal
 

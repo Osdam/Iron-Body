@@ -4,7 +4,7 @@
 
 **Para quién.** Quien opera el servidor (`ssh ironbody-vps`, root) y el propietario, que autoriza. La guía de uso del CRM está en `ULTRON_STUDIO_GUIA_ADMINISTRACION.md`; los runbooks completos, en `ULTRON_STUDIO_DEPLOYMENT_PLAN.md` y `ULTRON_STUDIO_ROLLBACK.md`.
 
-**Tipo.** Operativo (lista de comprobación). **Fecha:** 02-11-2026, escrita sobre el backend `5ed9525` y revisada sobre `3fbb155` (con `1c76a7f`, F-1 y F-2 y la primera pasada de REV7), con los scripts de `docs/ultron-studio/ops/` confirmados en esa rama. **Donde esta lista y un script no coincidan, manda el script.**
+**Tipo.** Operativo (lista de comprobación). **Fecha:** 02-11-2026, escrita sobre el backend `5ed9525` y revisada sobre `3fbb155` (con `1c76a7f`, F-1 y F-2 y la primera pasada de REV7) y sobre `cdade1e` (`TAREAS`, los presupuestos en el smoke, el mando del monitor, M-1 y la fase C de TEST7), con los scripts de `docs/ultron-studio/ops/` confirmados en esa rama. **Donde esta lista y un script no coincidan, manda el script.**
 
 ## Reglas
 
@@ -89,16 +89,17 @@ sudo -u postgres psql -X -Atq -d ironbody -c "SELECT event, count(*) FROM ultron
 |---|---|---|
 | `smoke-run-h5.sh` | 3 por minuto | El login: 8 por minuto e IP |
 | `smoke-run-h6.sh` | **3 por hora** y 3 por minuto | El cupo de la sonda (6/h por persona) corre antes de autenticar y cada smoke gasta 2: una cuarta ejecución en la hora da 429 y cuenta como FALLO (H-3 de DevOps del H6) |
-| `smoke-run-h7.sh` | 3 por minuto | El login. No toca la sonda (cabecera de `smoke-run-h7.sh`) |
+| `smoke-run-h7.sh` | 3 por minuto | El login. No toca la sonda (cabecera de `smoke-run-h7.sh`). Su fase de presupuestos no pasa de 90 lecturas con sesión por minuto (cupo de 120) y de 8 evidencias por minuto (cupo de 10); cada pasada dura unos 2 minutos |
 
 ### 3.2 Despliegue del Hito 7 (backend; el CRM no cambia)
 
 Runbook completo en `ULTRON_STUDIO_DEPLOYMENT_PLAN.md`, «Hito 7». Condiciones:
 
 - [ ] El H6 en su fase 1, **verificado a las 24 horas**. [PENDIENTE: verificación de las 24 h del H6, hacia el 03-11-2026 05:00 UTC (lead).]
-- [ ] **REV7 sin bloqueantes.** Primera pasada (`3fbb155`): APROBADO CON OBSERVACIONES, sin bloqueantes; M-1 decidida (opción b) y en corrección por `security`. [PENDIENTE: la segunda pasada del `reviewer` (`plans/informes-h7/informe-reviewer.md` §9).]
-- [ ] **El commit desplegado lleva la corrección de M-1** (la clase nueva de invisibles solo en el Studio; fuera, en la agenda de valoraciones y en la Caja, nada cambia). [PENDIENTE: el commit de `security` (lead).]
-- [ ] **TEST7 completo.** Fases A (`1426130`) y B (`df0140f`) hechas: suite por nombre 57 = 57 rojos (0 nuevos), CRM 3 312/3 328 (los 16 de la línea base), E2E 660/660, recuperación 21/21 y vuelta atrás 13/13. [PENDIENTE: la fase C sobre el código final (`tester`).]
+- [ ] **REV7 sin bloqueantes.** Primera pasada (`3fbb155`): APROBADO CON OBSERVACIONES, sin bloqueantes; M-1 y m-3 corregidos en `601398c`, m-1 en `7c838ca` y m-2 en la documentación. **Segunda pasada (`4166d94`, §9): APROBADO CON OBSERVACIONES, sin bloqueantes ni mayores abiertos**; menores nuevos m-4 (el modo 600 de los mandos, §3.3; abierto) y m-5 (Dotenv en el paso 0; corregido en `285a585`). Condiciones antes del paso 5: la fase D en verde y la tercera pasada de DOC7 revisada. [PENDIENTE: la revisión de la tercera pasada de DOC7 (`reviewer`).]
+- [x] **El commit desplegado lleva la corrección de M-1** (`601398c`, en la rama: la clase nueva de invisibles solo en el Studio; fuera, en la agenda de valoraciones y en la Caja, nada cambia). Basta con desplegar el HEAD de la rama o uno posterior.
+- [ ] **TEST7 completo.** Fases A (`1426130`), B (`df0140f`) y C (`cdade1e`) hechas; la C, tras F-1 y F-2: PostgreSQL 2 881/2 881, el motor 5 015/5 015 con las dos llaves, la suite por nombre 57 = 57 (0 nuevos, 195 pruebas nuevas) y el E2E 660/660. [PENDIENTE: la fase D, sobre el HEAD final con M-1 (`tester`).]
+- [x] **`TAREAS` fijado en un commit** en `deploy-h7-backend.sh` y en `smoke-run-h7.sh`, con el mismo número: el total de `schedule:list` de producción con el monitor apagado. Con `pendiente`, el despliegue y el smoke se negaban (código 2). **`TAREAS=39`** en los dos: en `57b1178` el despliegue y en `08bdd1d` el smoke, como valor por defecto. Se leyó el 02-11-2026 a las 17:35 UTC: 0 del Studio, 41 con el monitor encendido. Si el programador cambia antes de desplegar, el paso 4 aborta y se vuelve a fijar.
 - [x] **F-1 y F-2 de PERF7** hechos en `e2411e3`: la evidencia del canario, p95 de 1 050 a 70 ms con 200 turnos; las campañas, de 36,5 a 27,2 ms; los dos sin cambiar la respuesta.
 - [x] **`PREVIO` fijado en un commit:** `1e5f9a0`, en `1c76a7f`. Si producción se mueve antes del despliegue (`git -C /var/www/api rev-parse --short=7 HEAD` en el servidor), el paso 0 aborta: se actualiza `PREVIO` en otro commit y se vuelve a copiar el script.
 - [ ] Push con avance rápido a `main`; nunca `--force`.
@@ -107,26 +108,29 @@ Pasos (servidor, root; el detalle y lo esperado, en el runbook):
 
 ```bash
 # 1. Respaldo (bloque completo en el runbook: umask 077 en una subshell, ≥ 226 tablas con datos)
-# 2. Scripts (desde el Mac, con el árbol limpio en el commit que se despliega)
+# 2. Scripts (desde el Mac, con el árbol limpio en el commit que se despliega): son 7; smoke-h6.py también,
+#    porque smoke-h7.py usa su detector de fugas y sin él el smoke sale con 2 (smoke-run-h7.sh:51)
 O=docs/ultron-studio/ops
-shasum -a 256 $O/deploy-h7-backend.sh $O/h7-schema-check.sql $O/smoke-h7.py $O/smoke-run-h7.sh $O/smoke-h6.py
-scp $O/deploy-h7-backend.sh $O/h7-schema-check.sql $O/smoke-h7.py $O/smoke-run-h7.sh $O/smoke-h6.py ironbody-vps:/root/
+shasum -a 256 $O/deploy-h7-backend.sh $O/h7-schema-check.sql $O/smoke-h7.py $O/smoke-run-h7.sh $O/smoke-h6.py $O/perf-h7/presupuestos-h7.json $O/h7-monitor-scope.sh
+scp $O/deploy-h7-backend.sh $O/h7-schema-check.sql $O/smoke-h7.py $O/smoke-run-h7.sh $O/smoke-h6.py $O/perf-h7/presupuestos-h7.json $O/h7-monitor-scope.sh ironbody-vps:/root/
 # 3. Esquema antes (solo lectura): 43/49/4/14, rotas 0, existe_rol_app 1 y 0 filas de cerrojos
 sudo -u postgres psql -X -v ON_ERROR_STOP=1 -v owner=iron -v app=iron_app -x -d ironbody < /root/h7-schema-check.sql
-# 4. Ensayo → COMPROBACIONES PREVIAS EN VERDE (no se ha tocado nada)
+# 4. Ensayo → COMPROBACIONES PREVIAS EN VERDE, con «programador 39 tareas (TAREAS=39), 0 del Studio» (TAREAS ya fijado
+#    en los dos scripts). Si el total cambió, aborta: se fija el nuevo en los dos en un commit, se copian otra vez y se repite
 bash /root/deploy-h7-backend.sh <commit> "$BK" --solo-comprobar
 # 5. Despliegue → DESPLIEGUE H7 (BACKEND) COMPLETADO
 bash /root/deploy-h7-backend.sh <commit> "$BK" 2>&1 | tee /root/h7-$(date -u +%Y%m%d-%H%M%S).log
 # 6. Esquema después: 44/50, uspub_chain_next:O y iron_app en ar en la cadena, el libro y las instantáneas
 sudo -u postgres psql -X -v ON_ERROR_STOP=1 -v owner=iron -v app=iron_app -x -d ironbody < /root/h7-schema-check.sql
-# 7. Smoke del H7 → código 0 (borra smoke-h7.py, smoke-h6.py y su lanzador al terminar)
-bash /root/smoke-run-h7.sh
+# 7. Smoke del H7, la primera pasada con la línea base de los presupuestos → código 0, o 3 si lo único
+#    OMITIDO son presupuestos por estado (sin versión en CANARY, la evidencia). Borra al terminar sus copias de /root
+SMOKE_BUDGETS_OUT=/root/h7-presupuestos-medidos-$(date -u +%Y%m%d).json bash /root/smoke-run-h7.sh
 # 8. Regresión del H6 (copiar antes smoke-h6.py y smoke-run-h6.sh otra vez; 3 por hora) → código 0, 78 + 26 OK
 SMOKE_PHASE=1 bash /root/smoke-run-h6.sh
 ```
 
 - [ ] **Si se rehace el respaldo en una reanudación, `api-commit.txt` = `PREVIO`:** `git -C /var/www/api rev-parse 1e5f9a0 > "$BK/api-commit.txt"`. El paso 0 lo exige siempre (`deploy-h7-backend.sh:157-160`, corregido en `1c76a7f`), así que ya no hace falta comprobarlo a mano.
-- [ ] **Vigilar el paso 3 (la migración):** el `lock_timeout` de 5 s solo llega si el envoltorio de hoy conserva `PGOPTIONS` (N-10, sin comprobar en el servidor). Si no avanza, mirar los cerrojos de la cadena con `h7-schema-check.sql` desde otra sesión.
+- [ ] **El smoke:** se lee la línea `PRESUPUESTOS:` y el motivo de cada OMITIDO. Un FALLO de tiempo ya se repitió una vez dentro del smoke; se repite la pasada entera una vez más y **nunca se sube un techo para que pase**. Las medidas de esta primera pasada son la línea base: los techos se recalibran después editando `perf-h7/presupuestos-h7.json` del repo, en un commit aparte (nunca el código).
 - [ ] **A los 15 minutos y a las 24 horas:** el bloque del runbook (monitor en seco, workers, `failed_jobs`, ERROR, 5xx y `Cache-Control: no-store, private`), y a los 15 minutos la sonda de la clase de invisibles en el PCRE 10.39 del servidor (SEC7 §4.7; la última línea del bloque) → `string(6) "U+00AD"` y `NULL`.
 
 ### 3.3 Encender el monitor del Hito 7
@@ -139,7 +143,16 @@ crontab -l -u root | grep -n 'schedule:run'; crontab -l -u www-data 2>/dev/null 
 ```
 
 - [ ] Saber que, con el monitor encendido, **cambiar una bandera de integraciones abre un incidente de deriva** hasta que se reconozca otra vez la configuración (la huella de Twilio incluye la sonda; H-1 de DevOps del H6). Es una deducción de esas dos piezas, no un ensayo.
-- [ ] Los pasos (copia del fichero de entorno en 600, `ULTRON_STUDIO_MONITOR_ENABLED=true`, caché como `www-data`, `schedule:list` con 2 tareas del Studio y una primera pasada a 0) están en el runbook, «Hito 7», paso 10. **No hay script para este mando.**
+- [ ] El mando, `h7-monitor-scope.sh` (copiado en el paso 2; detalle en el runbook, «Hito 7», paso 10):
+
+```bash
+bash /root/h7-monitor-scope.sh estado          # monitor=off y ninguna tarea del Studio
+bash /root/h7-monitor-scope.sh on off          # → MANDO monitor → on APLICADO (copia previa: …): +2 tareas, las 2 del Studio
+cd /var/www/api/backend && sudo -u www-data php artisan ultron-studio:monitor   # primera pasada real: código 0 y ningún incidente nuevo
+```
+
+- [ ] **Apagarlo** (la vuelta atrás de nivel 2, `ULTRON_STUDIO_ROLLBACK.md`): `bash /root/h7-monitor-scope.sh off on` → `MANDO monitor → off APLICADO`. Quita las 2 tareas del Studio; los incidentes ya abiertos se quedan en IRON GUARD.
+- [ ] **El fichero de entorno, en 600:** el mando lo exige, como el del H6. Con la propuesta de `ironbody-migrate` instalada (paso 3b: `root:www-data 640`), los dos abortan sin tocar nada, también al apagar, y volver a 600 no sirve: tendría que ser de root y `www-data` no lo leería (m-4 de REV7; hoja de ruta, B-3 y C-14). [PENDIENTE: adaptar los mandos antes de que el propietario instale la propuesta (`devops`).]
 
 ### 3.4 Fase 2 del Hito 6 (escrituras, T1, sonda y configuración autorizada)
 
@@ -196,4 +209,4 @@ Runbook: `ULTRON_STUDIO_DEPLOYMENT_PLAN.md`, «Hito 5», «Fase 2». Personas: `
 | Verificación de restauración | Sin fallo y < 10 días | IRON GUARD |
 | Laboratorio | ≤ 2 US$ al día y ≤ 0,50 US$ por ejecución (lo para el servidor) | Configuración de la fase 3 del H4 |
 | OTP | Por debajo del techo blando de 6 US$ al día | `TWILIO-CONTROL-DE-COSTE.md` |
-| Latencias del Studio (con el H7) | Techos iniciales de `ops/perf-h7/presupuestos-h7.json` (p. ej. lecturas p95 ≤ 250 ms; la evidencia del canario p95 ≤ 2 500 ms y ≤ 400 ms tras F-1, que ya está hecho: 70 ms con 200 turnos en local) | PERF7 §7. **No implementado en el smoke:** `smoke-h7.py` no carga ese fichero. [PENDIENTE: incorporarlo y calibrar con la primera pasada en producción (`devops`).] |
+| Latencias del Studio (con el H7) | Los techos de `ops/perf-h7/presupuestos-h7.json`, que mide el smoke del H7 en su fase de presupuestos (p. ej. lecturas: mediana ≤ 150 ms y máximo ≤ 250 ms; la evidencia del canario: mediana ≤ 2 000 ms y máximo ≤ **400 ms**, el techo tras F-1). Son techos iniciales (≈ 3–4 veces el p95 local) | PERF7 §7; `smoke-h7.py` desde `0d43401`. La primera pasada en producción, con `SMOKE_BUDGETS_OUT`, es la línea base, y se recalibra editando el JSON en un commit. [PENDIENTE: la recalibración tras la primera pasada en producción (`devops`).] |
