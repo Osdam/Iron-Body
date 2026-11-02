@@ -988,7 +988,7 @@ Tres sujetos nuevos (`campaign_link`, `canary_number` e `integration`; `StudioAu
 
 ## Hito 7: seguridad y producción
 
-**Fecha:** 01/02-11-2026. **Estado: IMPLEMENTADO EN RAMA, SIN DESPLEGAR.** Rama `feat/ultron-studio-h7` del backend (contrato congelado el 01-11-2026 sobre `7d2c6d8`), HEAD `5ed9525`, que lleva fusionado el cierre de la fase 1 del H6. **No está en `origin/main` ni en producción** (producción: `1e5f9a0`). Contrato: `ULTRON_STUDIO_H7_CONTRACT.md`; informes: `plans/informes-h7/`. Sin rutas, permisos ni dependencias nuevas (`composer.json` y `composer.lock` sin cambios).
+**Fecha:** 01/02-11-2026. **Estado: IMPLEMENTADO EN RAMA, SIN DESPLEGAR.** Rama `feat/ultron-studio-h7` del backend (contrato congelado el 01-11-2026 sobre `7d2c6d8`), que lleva fusionado el cierre de la fase 1 del H6; se desplegará su HEAD al desplegar [PENDIENTE: el commit final (lead)]. Esta sección se revisó por segunda vez sobre `3fbb155`. **No está en `origin/main` ni en producción** (producción: `1e5f9a0`). Contrato: `ULTRON_STUDIO_H7_CONTRACT.md`; informes: `plans/informes-h7/`. Sin rutas, permisos ni dependencias nuevas (`composer.json` y `composer.lock` sin cambios).
 
 | Commit | Paquete | Ficheros principales |
 |---|---|---|
@@ -998,6 +998,10 @@ Tres sujetos nuevos (`campaign_link`, `canary_number` e `integration`; `StudioAu
 | `167e34c` → `fa6eb81` | OPS7 | `app/Console/Commands/UltronStudio/MonitorCommand.php`, el bloque `monitor` de `config/ultron_studio.php`, `routes/console.php` (+35 líneas), `UltronStudioMonitorTest.php`, `.env.example` y `docs/ultron-studio/ops/` |
 | `8f70d18` → `d629202` | PERF7 | Solo `docs/ultron-studio/ops/perf-h7/` y su informe: ningún cambio de código |
 | `1426130` | TEST7, fase A | `UltronStudioMonitorDriftAndFailuresH7Test.php` (4) y `UltronStudioEarlyBodyCapStreamH7Test.php` (1) |
+| `1c76a7f` | OPS7 | `ops/deploy-h7-backend.sh`: `PREVIO=1e5f9a0` (`:41`) y `api-commit.txt` siempre igual a `PREVIO` (`:157-160`) |
+| `e2411e3` | F-1 y F-2 (`backend`) | `app/Console/Commands/Marketing/UltronCanaryReport.php` (F-1), `app/Services/UltronStudio/StudioCampaignLinks.php` y `StudioMetaCampaigns.php` (F-2); `tests/Feature/Marketing/UltronCanaryReportSinglePassH7Test.php` (4) y `tests/Feature/UltronStudio/UltronStudioCampaignsPageH7Test.php` (2) |
+| `ac031dd`, `ee9f128` | F-1 y F-2 (`backend`) | La evidencia de medición (`docs/ultron-studio/ops/perf-h7/resultados/f1-f2/`) y la etiqueta del tramo 2 de `tramos-campanas.php` |
+| `df0140f` | TEST7, fase B | El informe final de la regresión: solo documentación |
 
 ### Migración `2026_11_02_100001_add_ultron_studio_hardening` (DB7)
 
@@ -1040,6 +1044,7 @@ Del `database-specialist` (`informe-db.md`), verificada en PostgreSQL 14.24 con 
 
 - **`App\Support\Text\InvisibleCharacters`:** `INVISIBLE_CLASS` es carácter a carácter la de `lab-invisibles` (`\p{Cf}`, U+E0000–E007F, U+2028/2029, C0 salvo `\t\n\r`, DEL y C1); el ZWJ (U+200D) solo se admite dentro de un emoji (precedido de pictograma, U+FE0F o tono de piel, y seguido de pictograma); U+FE00–FE0F y U+202F pasan. Escrita para el PCRE 10.39 de producción: solo `\p{Cf}`, rangos explícitos y miradas atrás, sin `\p{Extended_Pictographic}`.
 - **`PlainText`:** rechaza la clase con 422 «El texto contiene un carácter invisible o de control (U+XXXX) que no se puede guardar…», sin repetir el texto; en una sola línea, «tiene que ir en una sola línea» para `\t\n\r`.
+- **M-1 de REV7 (mayor): `PlainText` es una regla compartida.** Con el código de `3fbb155` la clase nueva rige también fuera del Studio: en la agenda de valoraciones (`ValuationController.php`, líneas 98, 187, 189, 208, 224, 237, 336 y 405, y `ValuationAvailabilityController.php:110`) y en la Caja (`ReceiptStationController.php`: 79, 113 y 115; `ReceiptAgentController.php`: 78, 80 y 118). Rechazaría por primera vez, entre otros, U+00AD, U+2060–2064, U+2028/2029 y las etiquetas, también en textos guardados antes del H7 al reenviarlos, y la agenda del CRM enseñaría un mensaje que no es la causa. Dentro del Studio solo dos sitios vuelven a pasar contenido guardado: el borrador (`StudioDrafts.php:87`) y la creación de versión (`StudioVersions.php:125`). **Decisión del lead: opción (b)**, la clase nueva solo en el Studio y la lista de antes por defecto; `security` la está implementando. [PENDIENTE: el commit y la repetición de las pruebas del Studio, Valoraciones y Caja (`security`).]
 - **`InternalMarketingKnowledgeController`** (la API de n8n; el único fichero de la zona del motor que cruza la puerta de diff, nombrado en el contrato): limpia `key`, `title`, `content` y las cadenas de `metadata` **antes** de validar y de buscar la `key`; U+2028/2029 → salto, controles → espacio, el resto fuera; UTF-8 inválido → `?` (antes, 500 por 22021). Registra `marketing.knowledge.invisibles_cleaned` (campos, recuento y hasta 16 puntos de código, sin texto) y añade `cleaned` a las respuestas 200 y 409.
 - **Pruebas:** `InvisibleCharactersTest` 91, `StudioPlainTextInvisiblesTest` 11 y `KnowledgeInvisiblesTest` 7; la exhaustiva de los 1 112 063 puntos de código, 0 discrepancias con `lab-invisibles`; PostgreSQL 109/689.
 
@@ -1058,14 +1063,14 @@ Medido en local (Apple M2, PHP 8.3.33 con OPcache, PostgreSQL 14, caché y cola 
 - **Sin N+1:** las sentencias de cada ruta del Studio no crecen con los datos (1/50/200 versiones o entradas, 0–1 000 turnos, 0–500 campañas).
 - **Coste fijo por petición:** 14 sentencias de los limitadores y la caché de permisos sobre la caché `database` (3,6 de los 5,1 ms de base de datos de una lectura ligera) → F-3.
 - **El commit del motor:** el lector del Studio añade ~0,2 ms (1 `SELECT`, sin punto de guardado); con `off`, 0 sentencias del Studio.
-- **F-1 (importante, `backend`, en el H7):** `UltronCanaryReport::turnos()` es O(T×M); la evidencia del canario tarda ~1,05 s con 200 turnos y ~3,9 s con 1 000. Criterio de aceptación: `turnos()` ≤ 20 ms con T = 200 / M = 2 000, la evidencia p95 ≤ 100 ms con 200 turnos y ≤ 150 ms con 1 000, la prueba dorada en verde y las mismas sentencias. [PENDIENTE: corrección y medida (`backend`).]
-- **F-2 (menor):** `integrityOk()` recalculado por asociación en `StudioCampaignLinks::dtos()` (−~12 ms memoizando). [PENDIENTE (`backend`).]
+- **F-1 (importante, `backend`, en el H7): hecho en `e2411e3`** (`informe-backend.md`, §F-1). `UltronCanaryReport::turnos()` era O(T×M): la evidencia del canario tardaba ~1,05 s con 200 turnos y ~3,9 s con 1 000. Ahora indexa las acciones una vez, recorre los mensajes una vez y lee cada valor de un turno una vez, **sin cambiar la semántica** (los primeros T turnos desde `--since`, el empate por id, el cierre en `PHP_INT_MAX`). Con el arnés de PERF7: `turnos()`, de 3 835 a **13,7 ms** con T = 200 y M = 2 000; la evidencia en proceso, p95 de 1 049,8 a **69,9 ms** con 200 turnos y de 5 708,4 a **95,6 ms** con 1 000; las mismas 6 sentencias del acta. `UltronCanaryReportSinglePassH7Test` (4 pruebas, 180 aserciones) compara contra el `turnos()` anterior el código de salida, la salida byte a byte (JSON y texto) y las sentencias; **13/13 mutaciones**. **Cumple el criterio de PERF7 §6.** El acta vive fuera de la puerta de diff del motor, pero la usa el vigía.
+- **F-2 (menor): hecho en `e2411e3`** (§F-2): `integrityOk()` una vez por versión dentro de `StudioCampaignLinks::dtos()`, y las fichas de las campañas solo para la página (`StudioMetaCampaigns`). `campaignsPage()`, de 36,5 a **27,2 ms** con 500 campañas y 50 asociaciones (medido A/B); la respuesta no cambia (los 722 casos del oráculo, sin discrepancias); `UltronStudioCampaignsPageH7Test` (2 pruebas) y **4/4 mutaciones**.
 - **F-5 (observación, fuera del H7):** 15 `Schema::hasTable()` por commit del motor (2,9–5,1 ms).
 - **Presupuestos:** `ops/perf-h7/presupuestos-h7.json` (smoke, CI y CRM). El smoke del H7 todavía no los carga.
 
 ### Aislamiento del motor
 
-- **La puerta de diff del contrato** (motor, integraciones existentes, catálogo y dependencias) solo la cruzan los 10 ficheros que el contrato nombra; comprobado el 02-11-2026 sobre `5ed9525` frente a `1e5f9a0`, y la repite el paso 0 de `deploy-h7-backend.sh`. En la zona del motor, solo `InternalMarketingKnowledgeController.php` (SEC7).
+- **La puerta de diff del contrato** (motor, integraciones existentes, catálogo y dependencias) solo la cruzan los 10 ficheros que el contrato nombra; comprobado el 02-11-2026 sobre `5ed9525` y otra vez sobre `3fbb155` (con F-1 y F-2, que quedan fuera de la puerta) frente a `1e5f9a0`, y la repite el paso 0 de `deploy-h7-backend.sh`. En la zona del motor, solo `InternalMarketingKnowledgeController.php` (SEC7).
 - **Legacy:** TEST7 corrió las suites del motor (Marketing y las 4 del Studio que lo leen o lo vigilan) con la llave en `off` y en `all`: **5 011/5 011 en las dos**, con los mismos nombres.
 
 ### Pruebas
@@ -1081,6 +1086,11 @@ Medido en local (Apple M2, PHP 8.3.33 con OPcache, PostgreSQL 14, caché y cola 
 | Mutaciones de lo nuevo (TEST7) | 53/53 | `informe-tester.md` §2.1 |
 | Legacy y suites del motor, llave en `off` y en `all` (TEST7) | 5 011/5 011 en las dos | `informe-tester.md` §2.2 |
 | Puerta PostgreSQL del grupo del Studio (TEST7) | 2 799/2 799, 0 omitidas | `informe-tester.md` §2.3 |
-| Suite completa por nombre contra `origin/main` del mismo día (TEST7, fase B) | [PENDIENTE (`tester`).] | `informe-tester.md` §3 |
+| F-1: `UltronCanaryReportSinglePassH7Test` | SQLite 4/4 y PostgreSQL 4/4; 13/13 mutaciones | `informe-backend.md` §F-1 |
+| F-2: `UltronStudioCampaignsPageH7Test` y las del H6 de campañas | PostgreSQL 1 008/1 008 con las 2 nuevas; oráculo 722 casos sin discrepancias; 4/4 mutaciones | `informe-backend.md` §F-2 |
+| Suite completa por nombre contra `1e5f9a0` (TEST7, fase B) | **0 rojos nuevos**: rama 12 587 pruebas y base 12 399, con 57 = 57 rojos idénticos por nombre (la línea base: contratos, Factus, IVA y el artefacto de la instantánea) | `informe-tester.md` (`df0140f`) |
+| Recuperación con OPS7 y vuelta atrás (TEST7, fase B) | 21/21 (PostgreSQL caído 11/11 y worker muerto 10/10); vuelta atrás 13/13 | `informe-tester.md` (`df0140f`) |
+| La regresión sobre el código final (TEST7, fase C) | [PENDIENTE (`tester`).] | — |
+| Pruebas nuevas del H7, recontadas sobre `3fbb155` | **95 métodos `test_` en 21 ficheros nuevos**; los 7 modificados, 0 netos (uno renombra). Método: `git diff --name-status bc6c0ff HEAD -- backend/tests` y `grep -c 'public function test_'` por fichero, `HEAD` menos `bc6c0ff`. TEST7 contó 189 **por nombre de PHPUnit**, con cada caso de un proveedor de datos como una prueba, sobre `1c76a7f`; con las 6 de F-1 y F-2, sin proveedores, serían 195 (derivado) | DOC7, 02-11-2026 |
 
 **Lo que no se verificó:** nada en producción (ni la migración con los roles reales `iron`/`iron_app`, ni `ironbody-migrate` y su `PGOPTIONS`, ni FPM, ni el PCRE 10.39); el tope temprano con `multipart/form-data` (PHP parsea el cuerpo antes de Laravel: solo lo ve por `Content-Length`); el monitor contra una base caída de verdad (se simuló con una excepción); la concurrencia de la página del Studio (5 GET en paralelo) y la memoria (PERF7).

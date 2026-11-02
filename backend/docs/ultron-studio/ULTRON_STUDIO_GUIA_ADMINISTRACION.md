@@ -6,7 +6,7 @@
 
 **Tipo.** Referencia y uso. No sustituye a los contratos (`ULTRON_STUDIO_F_CONTRACT.md` … `ULTRON_STUDIO_H7_CONTRACT.md`), que mandan sobre esta guía, ni al procedimiento de pruebas con personas reales (`ULTRON_STUDIO_PRUEBAS_FISICAS.md`).
 
-**Fecha:** 02-11-2026. Escrita sobre el backend `5ed9525` (rama `feat/ultron-studio-h7`) y el CRM `16c433c`, leyendo el código: rutas y permisos (`app/Support/Access/AuthorizationMap.php`, `CrmPermission.php`), configuración (`config/ultron_studio.php`), servicios del Studio y las pantallas del CRM (`src/app/modules/ultron-studio/`). Cada cifra lleva su fuente.
+**Fecha:** 02-11-2026. Escrita sobre el backend `5ed9525` (rama `feat/ultron-studio-h7`) y el CRM `16c433c`, y revisada sobre `3fbb155` (F-1 y F-2 y la primera pasada de REV7), leyendo el código: rutas y permisos (`app/Support/Access/AuthorizationMap.php`, `CrmPermission.php`), configuración (`config/ultron_studio.php`), servicios del Studio y las pantallas del CRM (`src/app/modules/ultron-studio/`). Cada cifra lleva su fuente.
 
 ---
 
@@ -33,7 +33,7 @@
 
 ## 3. Quién puede hacer qué
 
-El CRM tiene **105 permisos**; 12 son del Studio (`ultron.*`). Lo comprobado el 02-11-2026 con `PermissionCatalog::all()` y `CrmPermission::byRole()` sobre `5ed9525` (102 derivados de las rutas más 3 alias antiguos de caja):
+El CRM tiene **105 permisos**; 12 son del Studio (`ultron.*`). Lo comprobado el 02-11-2026 con `PermissionCatalog::all()` y `CrmPermission::byRole()` sobre `5ed9525` y otra vez sobre `3fbb155`, con el mismo resultado (102 derivados de las rutas más 3 alias antiguos de caja):
 
 | Llave | Qué abre | Super Admin | Administrador | Recepción · Entrenador · Administrativo |
 |---|---|---|---|---|
@@ -129,7 +129,7 @@ Cinco pestañas: **«Estado»**, **«Campañas de Meta»**, **«Números canario
 - **Poco tráfico.** Con unos pocos turnos de ULTRON por semana, reunir 3 turnos sellados puede tardar días: sin turnos no hay promoción, y es lo correcto.
 - **El Studio no frena ni revierte solo.** Enseña la deriva, bloquea la promoción y `ultron-studio:publication-check` sale con 1.
 - La evidencia y la promoción comparten un límite de 10 consultas por minuto y persona y 30 por minuto y red.
-- **Hoy tarda:** con 200 turnos analizados, la evidencia tarda alrededor de 1 s, y con 1 000, unos 4 s (medido en local, PERF7 F-1). [PENDIENTE: la corrección F-1 del acta en `backend`, en curso; actualizar esta línea con su medida (lead).]
+- **Cuánto tarda:** con el código de producción de hoy (`1e5f9a0`), la evidencia tarda alrededor de 1 s con 200 turnos analizados y unos 4 s con 1 000 (medido en local, PERF7 F-1). **Con el Hito 7 desplegado**, unos 70 ms con 200 turnos y menos de 100 ms con 1 000 (p95 medido en local), con el mismo resultado byte a byte: es la corrección F-1 (`e2411e3`; `plans/informes-h7/informe-backend.md`, §F-1).
 
 ## 7. El laboratorio: qué hace y qué NO hace
 
@@ -217,7 +217,8 @@ Aquí no se ven ni se editan secretos: solo huellas. Las credenciales se cambian
 
 **Implementado en la rama `feat/ultron-studio-h7`; no está en producción.** [PENDIENTE: fecha del despliegue (lead).] Para quien usa el CRM:
 
-- **Textos con caracteres invisibles:** si un texto pegado trae un carácter invisible o de control, el Studio lo rechaza con «El texto contiene un carácter invisible o de control (U+XXXX) que no se puede guardar. Suele colarse al copiar y pegar: escríbelo de nuevo sin pegarlo.». Los emojis compuestos (con ZWJ o U+FE0F) se aceptan. Afecta a etiquetas, notas, motivos, descripciones y los demás campos que validan con `PlainText` (`plans/informes-h7/informe-security.md` §1).
+- **Textos con caracteres invisibles, en el Studio:** si un texto pegado trae un carácter invisible o de control, el Studio lo rechaza con «El texto contiene un carácter invisible o de control (U+XXXX) que no se puede guardar. Suele colarse al copiar y pegar: escríbelo de nuevo sin pegarlo.», junto al campo. Los emojis compuestos (con ZWJ o U+FE0F) se aceptan. Afecta a etiquetas, notas, motivos y descripciones del Studio (`plans/informes-h7/informe-security.md` §1). Un texto guardado antes del H7 con uno de esos caracteres solo se rechaza si se vuelve a guardar: al guardar el borrador o al crear una versión desde él; enviar, aprobar o publicar una versión ya creada no lo vuelve a mirar (REV7, M-1).
+- **Fuera del Studio no cambia nada:** la agenda de valoraciones y la Caja siguen con la regla de antes. Es la corrección de M-1 del reviewer (opción b), que `security` está terminando. [PENDIENTE: confirmar que el commit desplegado lleva esa corrección (lead).]
 - **Restablecer la contraseña de un administrador desde el CRM cierra sus demás sesiones**, incluidos los «recuérdame»: la persona afectada vuelve al login en su siguiente petición. Si quien restablece es la propia cuenta, conserva la sesión con la que lo hace. Afecta a todo el CRM, no solo al Studio (B7, H-2 de SEC7).
 - **Nada visible** en el resto: las respuestas de la API administrativa dejan de guardarse en la caché del navegador (`no-store`); las peticiones de más de 64 KB al Studio se rechazan antes de autenticar; el historial de publicaciones trae `verified` por entrada, pero **el CRM `16c433c` no lo enseña** (no lo lee); y el monitor nace apagado.
 - **El monitor**, cuando el propietario autorice encenderlo, comprueba cada 30 minutos la publicación frente al motor, las integraciones frente a lo esperado y las colas, y abre un incidente en IRON GUARD (fuente `ultron_studio`) si algo no cuadra. No frena, no revierte, no llama a ningún proveedor y no notifica fuera.

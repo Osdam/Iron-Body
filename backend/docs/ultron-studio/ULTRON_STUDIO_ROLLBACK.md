@@ -258,7 +258,7 @@ Solo ante corrupción de datos, con **autorización expresa** y coordinado por `
 
 ## Hito 7 (seguridad y producción) — SIN DESPLEGAR (02-11-2026)
 
-**Estado (02-11-2026):** implementado en la rama `feat/ultron-studio-h7` (HEAD `5ed9525`), sin desplegar; producción sigue en el backend `1e5f9a0` y el CRM `16c433c`. Sale del runbook de OPS7 (`plans/informes-h7/informe-devops-h7.md` §4.8 y §5), del informe de datos (`informe-db.md` §10) y de los scripts de `ops/`. **Ensayado en el banco** (`ops/banco-h7/ensayo-vuelta.sh`, 13/13): los niveles 2, 3 y 4. Cuando se despliegue, `BK` será el respaldo del paso 1 del runbook, `api-commit.txt` su `PREVIO` (hoy, `1e5f9a0`) y `FASE1` el commit desplegado. [PENDIENTE: los tres valores reales tras el despliegue (lead).]
+**Estado (02-11-2026, segunda pasada sobre `3fbb155`):** implementado en la rama `feat/ultron-studio-h7`, sin desplegar; se desplegará el HEAD de `feat/ultron-studio-h7` al desplegar [PENDIENTE: el commit final (lead)]. Producción sigue en el backend `1e5f9a0` y el CRM `16c433c`. Sale del runbook de OPS7 (`plans/informes-h7/informe-devops-h7.md` §4.8 y §5), del informe de datos (`informe-db.md` §10) y de los scripts de `ops/`. **Ensayado en el banco** (`ops/banco-h7/ensayo-vuelta.sh`, 13/13): los niveles 2, 3 y 4. Cuando se despliegue, `BK` será el respaldo del paso 1 del runbook, `api-commit.txt` su `PREVIO` (hoy, `1e5f9a0`) y `FASE1` el commit desplegado. [PENDIENTE: los tres valores reales tras el despliegue (lead).]
 
 **Reglas que no cambian:**
 - **Nunca `migrate:rollback` / `down()` en producción.** El `down()` de `2026_11_02_100001` se niega con filas en la cadena, el libro o las instantáneas, y el libro tiene filas en cualquier entorno real (D-5 de DB7).
@@ -273,7 +273,7 @@ Solo ante corrupción de datos, con **autorización expresa** y coordinado por `
 
 ### Vuelta atrás del código: backend del H7 → el commit anterior (`api-commit.txt` del respaldo; hoy sería `1e5f9a0`)
 
-Solo si el código del H7 se porta mal. **Volver el código no es volver los datos.** El destino se lee del respaldo, nunca de un literal (I-4 del reviewer del H5). **Antes, comprobar que `api-commit.txt` empieza por el `PREVIO`:** el paso 0 de `deploy-h7-backend.sh` acepta en una reanudación un `api-commit.txt` con el commit nuevo (líneas 157–161; el del H6 ya no, desde m-6), así que un respaldo rehecho a destiempo podría guardar el destino equivocado.
+Solo si el código del H7 se porta mal. **Volver el código no es volver los datos.** El destino se lee del respaldo, nunca de un literal (I-4 del reviewer del H5). **`api-commit.txt` es el `PREVIO`:** desde `1c76a7f`, el paso 0 de `deploy-h7-backend.sh` exige siempre que empiece por `PREVIO` (`1e5f9a0`), también en una reanudación (líneas 157–160, como el del H6 tras m-6), así que un despliegue que pasó el paso 0 deja el destino correcto en el respaldo. El `cat` del bloque de abajo es solo una lectura antes de actuar. *(La primera versión de esta sección pedía comprobarlo a mano, porque el script aceptaba también el commit nuevo.)*
 
 ```bash
 # 0. (opcional) el monitor apagado, si estaba encendido: nivel 2

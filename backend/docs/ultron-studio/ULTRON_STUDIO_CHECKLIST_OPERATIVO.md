@@ -4,7 +4,7 @@
 
 **Para quién.** Quien opera el servidor (`ssh ironbody-vps`, root) y el propietario, que autoriza. La guía de uso del CRM está en `ULTRON_STUDIO_GUIA_ADMINISTRACION.md`; los runbooks completos, en `ULTRON_STUDIO_DEPLOYMENT_PLAN.md` y `ULTRON_STUDIO_ROLLBACK.md`.
 
-**Tipo.** Operativo (lista de comprobación). **Fecha:** 02-11-2026, sobre el backend `5ed9525` y los scripts de `docs/ultron-studio/ops/` de esa rama. **Donde esta lista y un script no coincidan, manda el script.**
+**Tipo.** Operativo (lista de comprobación). **Fecha:** 02-11-2026, escrita sobre el backend `5ed9525` y revisada sobre `3fbb155` (con `1c76a7f`, F-1 y F-2 y la primera pasada de REV7), con los scripts de `docs/ultron-studio/ops/` confirmados en esa rama. **Donde esta lista y un script no coincidan, manda el script.**
 
 ## Reglas
 
@@ -96,10 +96,11 @@ sudo -u postgres psql -X -Atq -d ironbody -c "SELECT event, count(*) FROM ultron
 Runbook completo en `ULTRON_STUDIO_DEPLOYMENT_PLAN.md`, «Hito 7». Condiciones:
 
 - [ ] El H6 en su fase 1, **verificado a las 24 horas**. [PENDIENTE: verificación de las 24 h del H6, hacia el 03-11-2026 05:00 UTC (lead).]
-- [ ] **REV7 sin bloqueantes.** [PENDIENTE: informe del `reviewer` (`plans/informes-h7/informe-reviewer.md`).]
-- [ ] **TEST7 completo** (fase B: suite por nombre contra `origin/main` del mismo día, CRM, E2E, recuperación). [PENDIENTE: fase B en curso (`tester`).]
-- [ ] **F-1 y F-2 de PERF7** confirmados con su medida o decididos fuera. [PENDIENTE: en curso (`backend`).]
-- [ ] **`PREVIO` fijado en un commit** con el HEAD de producción del día (hoy `1e5f9a0`): `git -C /var/www/api rev-parse --short=7 HEAD` en el servidor. Con `PREVIO=pendiente`, el script se niega a todo, también a `--solo-comprobar`.
+- [ ] **REV7 sin bloqueantes.** Primera pasada (`3fbb155`): APROBADO CON OBSERVACIONES, sin bloqueantes; M-1 decidida (opción b) y en corrección por `security`. [PENDIENTE: la segunda pasada del `reviewer` (`plans/informes-h7/informe-reviewer.md` §9).]
+- [ ] **El commit desplegado lleva la corrección de M-1** (la clase nueva de invisibles solo en el Studio; fuera, en la agenda de valoraciones y en la Caja, nada cambia). [PENDIENTE: el commit de `security` (lead).]
+- [ ] **TEST7 completo.** Fases A (`1426130`) y B (`df0140f`) hechas: suite por nombre 57 = 57 rojos (0 nuevos), CRM 3 312/3 328 (los 16 de la línea base), E2E 660/660, recuperación 21/21 y vuelta atrás 13/13. [PENDIENTE: la fase C sobre el código final (`tester`).]
+- [x] **F-1 y F-2 de PERF7** hechos en `e2411e3`: la evidencia del canario, p95 de 1 050 a 70 ms con 200 turnos; las campañas, de 36,5 a 27,2 ms; los dos sin cambiar la respuesta.
+- [x] **`PREVIO` fijado en un commit:** `1e5f9a0`, en `1c76a7f`. Si producción se mueve antes del despliegue (`git -C /var/www/api rev-parse --short=7 HEAD` en el servidor), el paso 0 aborta: se actualiza `PREVIO` en otro commit y se vuelve a copiar el script.
 - [ ] Push con avance rápido a `main`; nunca `--force`.
 
 Pasos (servidor, root; el detalle y lo esperado, en el runbook):
@@ -124,7 +125,8 @@ bash /root/smoke-run-h7.sh
 SMOKE_PHASE=1 bash /root/smoke-run-h6.sh
 ```
 
-- [ ] **Antes del paso 5, `cat "$BK/api-commit.txt"` empieza por `PREVIO`.** El script del H7 acepta en una reanudación un `api-commit.txt` con el commit nuevo (`deploy-h7-backend.sh:157-161`), justo lo que m-6 corrigió en el del H6; la vuelta atrás del código lo lee. [PENDIENTE: corregir el script como el del H6 (`devops`).]
+- [ ] **Si se rehace el respaldo en una reanudación, `api-commit.txt` = `PREVIO`:** `git -C /var/www/api rev-parse 1e5f9a0 > "$BK/api-commit.txt"`. El paso 0 lo exige siempre (`deploy-h7-backend.sh:157-160`, corregido en `1c76a7f`), así que ya no hace falta comprobarlo a mano.
+- [ ] **Vigilar el paso 3 (la migración):** el `lock_timeout` de 5 s solo llega si el envoltorio de hoy conserva `PGOPTIONS` (N-10, sin comprobar en el servidor). Si no avanza, mirar los cerrojos de la cadena con `h7-schema-check.sql` desde otra sesión.
 - [ ] **A los 15 minutos y a las 24 horas:** el bloque del runbook (monitor en seco, workers, `failed_jobs`, ERROR, 5xx y `Cache-Control: no-store, private`), y a los 15 minutos la sonda de la clase de invisibles en el PCRE 10.39 del servidor (SEC7 §4.7; la última línea del bloque) → `string(6) "U+00AD"` y `NULL`.
 
 ### 3.3 Encender el monitor del Hito 7
@@ -194,4 +196,4 @@ Runbook: `ULTRON_STUDIO_DEPLOYMENT_PLAN.md`, «Hito 5», «Fase 2». Personas: `
 | Verificación de restauración | Sin fallo y < 10 días | IRON GUARD |
 | Laboratorio | ≤ 2 US$ al día y ≤ 0,50 US$ por ejecución (lo para el servidor) | Configuración de la fase 3 del H4 |
 | OTP | Por debajo del techo blando de 6 US$ al día | `TWILIO-CONTROL-DE-COSTE.md` |
-| Latencias del Studio (con el H7) | Techos iniciales de `ops/perf-h7/presupuestos-h7.json` (p. ej. lecturas p95 ≤ 250 ms; la evidencia del canario p95 ≤ 2 500 ms y ≤ 400 ms tras F-1) | PERF7 §7. **No implementado en el smoke:** `smoke-h7.py` no carga ese fichero. [PENDIENTE: incorporarlo y calibrar con la primera pasada en producción (`devops`).] |
+| Latencias del Studio (con el H7) | Techos iniciales de `ops/perf-h7/presupuestos-h7.json` (p. ej. lecturas p95 ≤ 250 ms; la evidencia del canario p95 ≤ 2 500 ms y ≤ 400 ms tras F-1, que ya está hecho: 70 ms con 200 turnos en local) | PERF7 §7. **No implementado en el smoke:** `smoke-h7.py` no carga ese fichero. [PENDIENTE: incorporarlo y calibrar con la primera pasada en producción (`devops`).] |
