@@ -183,7 +183,7 @@ Por clase, todas en verde:
 | GuardsAdversarial | 4 | 243 |
 | Immutability | 9 | 98 |
 | Audit | 9 | 84 |
-| EngineIsolation | 7 | 1106 |
+| EngineIsolation | 7 (8 desde m-3, `601398c`) | 1106 (1123 desde m-3) |
 | **UltronPublishedConfigTest** | 217 | 331 |
 | **UltronCommitStudioStampTest** | 30 | 226 |
 
@@ -280,7 +280,7 @@ Todos los mutantes son copias en el scratchpad que la prueba carga en su propio 
 **`UltronEngineIsolationTest`:**
 - Entran en `ALLOWED` `database/migrations/2026_11_02_100001_add_ultron_studio_hardening.php` y `routes/console.php`. Eran los dos únicos ficheros que marcaba; el segundo, solo por `'ultron_studio.monitor.enabled'`, en la línea 390.
 - Ninguno de los dos es zona del motor.
-- Resultado: 7 pruebas, 1106 aserciones, en verde en los dos motores.
+- Resultado: 7 pruebas, 1106 aserciones, en verde en los dos motores. *(Desde el m-3 del reviewer del H7, `601398c` de `security`: 8 pruebas y 1123 aserciones, con la excepción por cadena de `ultron_studio.monitor.enabled` y una prueba del bloque del monitor.)*
 - **Propuesta opcional:** una excepción más estrecha para `routes/console.php`, que solo admita esa cadena (como el lector del motor), sería más estricta que permitir todo el fichero.
 
 **Pruebas del lector del motor:**
