@@ -8,16 +8,23 @@
 - Mac local, PHP 8.3.33, PHPUnit 11.5.55, SQLite en memoria y PostgreSQL 14.24 desechable en `127.0.0.1:55432`. En PG, solo mis bases: `ultron_studio_h7_t` y las de mis bancos (§6).
 - 8 núcleos y 8 GB, compartidos con PERF7, que medía a la vez. Por eso todo lo de la fase A fue un solo proceso PHPUnit cada vez y nunca a la vez que otro mío.
 
-**Estado:** fase A (§2) y fase B (§3) hechas. Ningún rojo nuevo en ninguna suite. **Un hallazgo de herramientas, T-1** (§3.4): con el HEAD de hoy, el banco de OPS7 no puede ensayar el guion de despliegue. Las cifras de recuperación salen de un clon con el mismo código (§3.4).
+**Estado:** fases A (§2), B (§3) y C (§3bis) hechas. Ningún rojo nuevo en ninguna suite.
+- **La fase C** repite las cuatro corridas tras F-1/F-2 (`e2411e3`), con el mismo código hasta `0d43401`.
+- **T-1, hallazgo de herramientas** (§3.4): el banco de OPS7 no podía ensayar el guion de despliegue de `1c76a7f`. Las cifras de recuperación salen de un clon con el mismo código. Pasó a `h7-devops-b`, que lo corrigió en `0d43401`.
+- **Limpieza hecha** (§6).
 
 **Refs al cerrar:**
 
 | Paso | Ref | Nota |
 |---|---|---|
-| Rama del backend | `1c76a7f` | Desde `1426130` entraron PERF7, DOC7, el cierre de la fase 1 del H6 y `1c76a7f` (PREVIO del guion de despliegue), **sin cambios de código ni de pruebas** |
+| Rama del backend al cerrar la fase B | `1c76a7f` | Desde `1426130` entraron PERF7, DOC7, el cierre de la fase 1 del H6 y `1c76a7f` (PREVIO del guion de despliegue), **sin cambios de código ni de pruebas** |
 | B4 | `1426130` | |
 | B6 | `5ed9525` | |
 | B7 | `5ed9525`, más un ensayo extra con `1c76a7f` | |
+| **Fase C** | `e2411e3` | Código de F-1/F-2. Hasta `0d43401` solo entra ops y documentación |
+| C1 y C2 | `ac031dd` | |
+| C3 | `ee9f128` | |
+| C4 | `0d43401` | |
 
 ## 0. En una pantalla
 
@@ -29,7 +36,8 @@
 | B4 · `suite-compare.sh` contra `origin/main` de hoy (`1e5f9a0`) | **0 rojos nuevos.** Rama 12 587 pruebas y base 12 399, con 57 = 57 rojos idénticos por nombre (Factus, contratos, IVA y el artefacto de la instantánea). 15 min 57 s + 15 min 38 s |
 | B5 · CRM `16c433c` | **`ng test`: 3 312/3 328, solo los 16 de la línea base** (los mismos 5 ficheros y nombres), en 74 s. `tsc` de la app y de las specs: salida 0. **`ng build` de producción: salida 0** (195 ficheros, 0 mapas, 0 patrones de secretos) |
 | B6 · E2E de todas las specs | **660/660 en 1 174 s**: F 40, G 25, H4 27, turno 30, H5 276, h6 250 y cierre 12. **Valla vacía; 0 de 12 secretos** en 23 registros y 12 tablas; 0 violaciones en los 4 simuladores |
-| B7 · Recuperación con OPS7 | **Recuperación 21/21** (PG caído 11/11 y worker muerto 10/10). **Vuelta atrás 13/13.** Despliegue con 55P03 real y su reintento, smoke del H7 22/22, smoke del H6 78 + 26 en la vuelta. **T-1:** el banco no monta con el guion de despliegue de HEAD (`preparar.sh` espera `PREVIO=pendiente`) |
+| B7 · Recuperación con OPS7 | **Recuperación 21/21** (PG caído 11/11 y worker muerto 10/10). **Vuelta atrás 13/13.** Despliegue con 55P03 real y su reintento, smoke del H7 22/22, smoke del H6 78 + 26 en la vuelta. **T-1:** el banco no monta con el guion de despliegue de HEAD (`preparar.sh` espera `PREVIO=pendiente`). Pasó a `h7-devops-b`, que lo corrigió en `0d43401` (OPS7-bis); no lo he vuelto a ensayar |
+| **C · tras F-1/F-2 (`e2411e3`; mismo código hasta `0d43401`)** | **C1** puerta PG + acta/vigía/superficie: **2 881/2 881**, 0 omitidas (7 min 10 s). **C2** motor con `off` y `all`: **5 015/5 015** cada una (202 s y 202 s). **C3** `suite-compare.sh` contra `1e5f9a0`: **57 = 57, 0 nuevos** (12 593 frente a 12 399). **C4** E2E: **660/660** en 1 043 s, con la valla vacía y 0 secretos |
 
 ## 1. Método: instantáneas aisladas, nunca el árbol compartido
 
@@ -408,6 +416,109 @@ Conclusión: el guion de HEAD funciona. Lo que falla es solo la herramienta del 
 
 Al terminar quedan parados los APIs de los tres bancos (8177, 8178 y 8179) y el clúster de 55440, que la trampa del ensayo borra.
 
+## 3bis. Fase C: regresión tras F-1/F-2 (`e2411e3`)
+
+**Qué cambió:** `e2411e3` confirmó el F-1 (el acta del canario en una sola pasada) y el F-2 (las campañas de Meta) de PERF7:
+- código: `UltronCanaryReport.php`, `StudioCampaignLinks.php` y `StudioMetaCampaigns.php`;
+- pruebas nuevas: `UltronCanaryReportSinglePassH7Test` (4) y `UltronStudioCampaignsPageH7Test` (2).
+
+**Refs.** El HEAD avanzó durante la fase C sin cambiar código (`git diff --stat` de `app routes config bootstrap database tests composer.lock phpunit.xml` vacío entre `e2411e3`, `ac031dd`, `ee9f128`, `0d43401` y `f73555d`):
+
+| Ref | Qué añade | Dónde se usó |
+|---|---|---|
+| `ac031dd` | Evidencia de PERF7 | Instantánea de C1 y C2 |
+| `ee9f128` | La etiqueta de un tramo del arnés de PERF7 | Rama de C3 |
+| `0d43401` | OPS7-bis (con T-1) y el informe del reviewer | Backend de C4 |
+| `f73555d` | DOC7 en su segunda pasada y el m-1 del reviewer en ops | HEAD al cerrar |
+
+Mismo orden que la fase B y de una en una. El banco (`banco-h7/`) no se tocó: T-1 es de `h7-devops-b`.
+
+### C1 · Puerta PG del grupo del Studio + acta, vigía y superficie interna
+
+```text
+cd <instantánea ac031dd>/backend && PGGSSENCMODE=disable UNIT_DB=ultron_studio_h7_t bash docs/ultron-studio/ops/pgunit.sh --do-not-cache-result --log-junit … \
+  tests/Feature/UltronStudio tests/Unit/UltronStudio tests/Feature/Hardening tests/Unit/Marketing/UltronPublishedConfigTest.php \
+  tests/Feature/Marketing/UltronCommitStudioStampTest.php tests/Feature/Marketing/UltronCanaryReportTest.php \
+  tests/Feature/Marketing/UltronCanaryReportSinglePassH7Test.php tests/Feature/Marketing/UltronTurnWatchdogTest.php \
+  tests/Feature/Marketing/InternalSecretAuthoritySurfaceTest.php
+→ OK (2881 tests, 32600 assertions)   Time: 07:09.909 (15:58:15–16:05:25), 0 omitidas
+```
+
+Cuenta: las 2 799 de la fase A + `CampaignsPageH7` 2 + acta 32 + acta de una pasada 4 + vigía 32 + superficie interna 12 = **2 881**.
+
+En PG:
+
+| Clase | Pruebas | Aserciones |
+|---|---|---|
+| `UltronCanaryReportTest` | 32 | 82 |
+| `UltronCanaryReportSinglePassH7Test` | 4 | 180 |
+| `UltronTurnWatchdogTest` | 32 | 82 |
+| `InternalSecretAuthoritySurfaceTest` | 12 | 47 |
+| `UltronStudioCampaignsPageH7Test` | 2 | 35 |
+| `UltronStudioIntegrationsCampaignLinkTest` | 9 | 166 |
+| Paridad de integraciones con el oráculo de 722 casos (`StudioIntegrationsParityTest` + `…ParityHttpTest`) | 411 + 466 | |
+| Lo nuevo del H7 de la fase A (monitor, TEST7, DB7) | | Igual que en §2.3 |
+
+### C2 · Suites del motor con la llave en `off` y en `all` (SQLite, instantánea `ac031dd`)
+
+| Llave | Resultado | Duración |
+|---|---|---|
+| `off` | **OK, 5 015 pruebas, 25 976 aserciones**, 0 omitidas | 202 s (16:05:45–16:09:07) |
+| `all` | **OK, 5 015 pruebas, 25 976 aserciones**, 0 omitidas | 202 s (16:09:08–16:12:30) |
+
+- La sonda confirma la llave antes de cada corrida.
+- Mismos nombres en las dos llaves (`cmp`) y ficheros de rojos vacíos.
+- Son las 5 011 de la fase A más las 4 del acta de una pasada (+180 aserciones).
+- **Por clase, idéntico en las dos llaves:** acta 32/32 (82), acta de una pasada 4/4 (180), vigía 32/32 (82) y `InternalSecretAuthoritySurfaceTest` 12/12 (47).
+
+### C3 · `suite-compare.sh` contra `1e5f9a0`
+
+En un directorio nuevo y en SQLite:
+
+```text
+bash backend/docs/ultron-studio/ops/suite-compare.sh <scratchpad>/suite-ee9f128-vs-1e5f9a0 1e5f9a0 ee9f128
+[rama] ee9f128 16:12:55–16:29:15  Tests: 12593, Assertions: 103314, Errors: 55, Failures: 2, Skipped: 133   (16 min 18 s)
+[base] 1e5f9a0 16:29:20–16:45:15  Tests: 12399, Assertions: 101657, Errors: 55, Failures: 2, Skipped: 129   (15 min 55 s)
+rojos en la rama: 57 · en la base: 57 · NUEVOS: 0          → exit 0
+```
+
+- **Los 57 rojos** son idénticos a los de la base y a los de la rama de la fase B, por nombre (`cmp`): Factus, contratos, IVA y el artefacto de la instantánea.
+- **195 pruebas más en la rama:** las 189 de la fase B y las 6 de F-1/F-2. La que ya no existe es el mismo renombrado de DB7.
+- **Omitidas:** las mismas 133 y 129.
+
+### C4 · E2E (backend `0d43401`, CRM `16c433c`)
+
+- **El backend.** El HEAD avanzó a `0d43401` antes de lanzar: OPS7-bis (con la corrección de T-1 en `preparar.sh`) y el informe del reviewer, solo ops y documentos. El código es el mismo que en C1–C3 (`git diff --stat ee9f128 0d43401 -- app routes config bootstrap database tests composer.lock phpunit.xml .env.example` vacío).
+- **El alcance.** El lead pidió `h6-integrations` + cierre, y H5 si cabía. Corrí la lista por defecto entera: F, G, H4 y el turno cuestan menos de un minuto más, y así el total se compara con el de la fase B.
+
+```text
+cd Iron-Body_Front && bash e2e/ultron-studio/run.sh 0d43401 16c433c
+ejecución: ~/.cache/ironbody-e2e/ultron-studio/run-20261102T164523Z-0d43401-16c433c   16:45:23–17:02:49
+TOTAL 660/660 · 1043 s según el arnés (1046 s de pared) · salida 0
+```
+
+| Spec | Resultado | Tiempo |
+|---|---|---|
+| `f-versions` | 40/40 | 27 s |
+| `g-inspector-compare` | 25/25 | 10 s |
+| `h4-lab-fake` | 27/27 | 15 s |
+| `ultron-turn` | 30/30 | 5 s |
+| `h5-governance` | 276/276 | 124 s |
+| `h6-integrations` (incluye las campañas del F-2) | 250/250 | 766 s |
+| `cierre` | 12/12 | 2 s |
+
+**La valla y los secretos:**
+- **Ningún intento de salir en toda la ejecución.**
+- **Secretos: ninguno de los 12 aparece en 23 registros ni en 12 tablas.**
+- 0 violaciones en los simuladores: OpenAI, n8n, Twilio (11 peticiones, solo GET) y ElevenLabs (5 GET, ninguna llamada).
+- Al salir no queda ningún puerto escuchando.
+
+**Resumen de la fase C: 0 rojos nuevos en las cuatro corridas tras F-1/F-2.** El acta del canario en una sola pasada y las campañas no rompen nada de Legacy ni del Studio:
+- la puerta PG: 2 881/2 881;
+- el motor: 5 015/5 015 con las dos llaves;
+- la suite completa: 57 = 57;
+- el E2E: 660/660.
+
 ## 4. Rojos y su causa
 
 No relajé ninguna comprobación, no marqué ninguna omitida y no adapté ninguna prueba al código.
@@ -419,35 +530,39 @@ No relajé ninguna comprobación, no marqué ninguna omitida y no adapté ningun
 | B5 | 16 | Los de la línea base del CRM, por fichero y nombre. **Nuevos: 0** |
 | B6 | Ninguno | |
 | B7 | Ninguno en los ensayos | Ver T-1 |
+| C1–C4 | 57 = 57 en C3 (los mismos de B4); ninguno en C1, C2 y C4 | **Nuevos: 0** |
 
-**T-1 (herramientas, no código; dueño OPS7 o el lead):**
-- `ops/banco-h7/preparar.sh:33` sigue buscando `PREVIO=pendiente`, que `1c76a7f` cambió por `PREVIO=1e5f9a0`.
-- Con el HEAD de hoy el banco no monta (`ensayar.sh desplegar` sale antes de tocar nada).
-- Corrección propuesta: sustituir la línea `PREVIO=` sea cual sea su valor, con una coincidencia exacta.
-- Con esa corrección en una copia, el guion de HEAD despliega en el banco y pasa el smoke (§3.4).
-- **Hasta que se corrija, el banco del repo no ensaya el guion que irá a producción.**
+**T-1 (herramientas, no código):**
+- `ops/banco-h7/preparar.sh:33` buscaba `PREVIO=pendiente`, que `1c76a7f` cambió por `PREVIO=1e5f9a0`. Con ese HEAD el banco no montaba: `ensayar.sh desplegar` salía antes de tocar nada.
+- Propuse sustituir la línea `PREVIO=` sea cual sea su valor. Con esa corrección en una copia, el guion de `1c76a7f` desplegó en el banco y pasó el smoke (§3.4).
+- **Lo asignó el lead a `h7-devops-b`.** Según su commit `0d43401` (OPS7-bis): «`preparar.sh` sustituye `PREVIO=` con cualquier valor (T-1); despliegue H7 en el banco COMPLETADO con 55P03 reintentado».
+- Yo no lo he vuelto a ensayar: el lead pidió no tocar `banco-h7/`.
 
 ## 5. Lo que sigue sin cubrir, y por qué
 
 1. **El monitor con PostgreSQL caído de verdad.** La prueba nueva simula el fallo con una excepción al resolver el servicio (un error SQL envenenaría la transacción de la prueba en PG). En el banco, la caída real se ensaya para el commit del motor, no para el monitor. Lo que sí está probado: con una comprobación que revienta, las demás se hacen, sale `monitor_check_failed` y sin mensaje; con IRON GUARD sin poder anotar, `not_recorded`.
 2. **El worker muerto con su trabajo reservado no lo ve nadie** (H-7 de OPS7, confirmado aquí: `problemas []` en los dos caminos). No es un hueco de prueba sino de observabilidad: el monitor y `queue:health` solo cuentan trabajos sin reservar. Sigue abierto para `backend`/observabilidad.
-3. **El guion de despliegue de HEAD en el banco del repo** (T-1). Solo lo ensayé con mi copia corregida de `preparar.sh`.
+3. **El guion de despliegue actual en el banco del repo.** Lo ensayé con mi copia corregida de `preparar.sh` sobre `1c76a7f`. El de `0d43401` (OPS7-bis, que cambia otra vez `deploy-h7-backend.sh`, `smoke-h7.py` y `smoke-run-h7.sh`) lo ensayó `h7-devops-b` según su commit; yo no.
 4. **El H7 en la pila de producción** (nginx + PHP-FPM, `config:cache`/`route:cache`). El E2E y los bancos usan `artisan serve`. El `no-store`, el 413 temprano y `verified` se vieron con el smoke del H7 en el banco y en la suite, no detrás de nginx. El tope delante de PHP (`client_max_body_size`) sigue siendo decisión de OPS7 o del propietario.
 5. **El `REVOKE` con los roles reales `iron`/`iron_app`.** Cubierto por la puerta PG de DB7 (rol de prueba creado en la transacción) y por el banco (`h5_app`), no en producción: sin acceso.
 6. **El tope temprano con `multipart/form-data`:** PHP parsea ese cuerpo antes de Laravel, así que el tope solo lo ve por `Content-Length`. Sin prueba.
 7. **En el E2E, el CRM con la clave aditiva `verified`.** Ninguna spec la comprueba. La única evidencia es indirecta: el CRM del H6 corre las 660 comprobaciones contra el backend del H7 sin romperse.
 8. **Latencias y el F-1** (evidencia del canario cuadrática): son de PERF7. Ninguna prueba funcional los vigila.
-9. **El trabajo en curso que había en el árbol al cerrar (06:10 UTC), sin confirmar y de otro agente**, entró a partir de las 05:51 UTC y **no lo cubre esta regresión**:
-   - `app/Console/Commands/Marketing/UltronCanaryReport.php` (+119/−43; es el acta del canario, una de las piezas de compatibilidad con Legacy);
-   - `app/Services/UltronStudio/StudioCampaignLinks.php` y `StudioMetaCampaigns.php`;
-   - `tests/Feature/Marketing/UltronCanaryReportSinglePassH7Test.php` y `tests/Feature/UltronStudio/UltronStudioCampaignsPageH7Test.php` (nuevas);
-   - `informe-backend.md` y `ops/perf-h7/resultados/f1-f2/`.
-   
-   **Ninguna de mis corridas lo vio:** todas trabajan sobre refs confirmadas. Las instantáneas y el E2E usan `git archive` de un commit, y los bancos van con `BANCO_WIP=0` desde clones. Si se confirma, hay que repetir al menos:
-   - la puerta PG del grupo del Studio;
-   - las suites del motor con la llave en `off` y en `all` (por el acta);
-   - `suite-compare.sh` contra `origin/main`;
-   - `h6-integrations` del E2E (campañas).
+9. **F-1/F-2** (el acta del canario en una sola pasada y las campañas), que al cerrar la fase B eran trabajo en curso sin confirmar, **ya están cubiertos**: el lead los confirmó en `e2411e3` y la fase C repitió las cuatro corridas sobre ese código (§3bis), con 0 rojos nuevos.
+   - **Lo que la fase C no repitió:** el CRM (no cambia), los bancos (B7 no depende del acta ni de las campañas, y T-1 era de `h7-devops-b`) y las mutaciones.
+   - **El byte a byte del acta** frente al algoritmo anterior y sus 13 mutaciones los informa el dueño de F-1 en su commit. Yo no los he repetido.
+10. **La puerta PG con todo `tests/Feature/Marketing`:** C1 añadió al grupo del Studio el acta, el vigía y la superficie interna, no la carpeta entera. El resto de Marketing pasa en SQLite con las dos llaves (C2) y en la comparación completa (C3), sin línea base en PG.
+11. **El trabajo en curso que hay en el árbol al cerrar la fase C (17:05 UTC), sin confirmar y de otro agente; esta regresión NO lo cubre.** Por los ficheros, parece el M-1 del reviewer: «`PlainText` más estricto también fuera del Studio», con la marca de DOC7 «invisibles acotados al Studio, hasta el commit de security».
+    - `app/Rules/PlainText.php` y `app/Services/UltronStudio/StudioDraftNormalizer.php`;
+    - los 8 controladores del Studio: `CampaignLink`, `Canary`, `Integration`, `Lab`, `LabScenario`, `Publication`, `Rule` y `Version`;
+    - las pruebas `StudioPlainTextInvisiblesTest`, `InvisibleCharactersTest` y `UltronEngineIsolationTest`, y la nueva `PlainTextOutsideStudioTest`.
+    
+    El HEAD confirmado (`f73555d`) tiene el mismo código que la fase C. Cuando eso se confirme, hay que repetir al menos:
+    - la puerta PG del grupo del Studio;
+    - `tests/Feature/Security`, `tests/Unit/Support` y las suites de caja y valoraciones (el M-1 habla de `PlainText` fuera del Studio);
+    - `suite-compare.sh` contra `1e5f9a0`;
+    - el E2E (`f-versions`, `h5-governance` y `h6-integrations` envían etiquetas, notas y motivos);
+    - las mutaciones IC/PT/KN de §2.1, porque la regla cambia.
 
 ## 6. Ficheros
 
@@ -457,20 +572,27 @@ En el repo del backend (rutas relativas a `backend/`):
 |---|---|
 | `tests/Feature/UltronStudio/UltronStudioMonitorDriftAndFailuresH7Test.php` (nuevo, 4 pruebas) | Confirmado por el lead en `1426130` |
 | `tests/Feature/UltronStudio/UltronStudioEarlyBodyCapStreamH7Test.php` (nuevo, 1 prueba) | Confirmado en `1426130` |
-| `docs/ultron-studio/plans/informes-h7/informe-tester.md` (este) | Parcial en `1426130`; esta versión final queda **sin commit** en el árbol |
+| `docs/ultron-studio/plans/informes-h7/informe-tester.md` (este) | Final de la fase B confirmado en `df0140f`; esta versión con la fase C queda **sin commit** en el árbol |
 
-De lo que enseña `git status` al cerrar, lo único mío es `informe-tester.md`. Lo demás (`UltronCanaryReport.php`, `StudioCampaignLinks.php`, `StudioMetaCampaigns.php`, `informe-backend.md`, dos pruebas `*H7*` nuevas y `perf-h7/resultados/f1-f2/`) es trabajo en curso de otro agente (§5, punto 9).
+En la fase C no escribí nada más en el repo (solo este informe). En el CRM no toqué nada (worktree limpio en `16c433c`).
 
-En el CRM no toqué nada (worktree limpio en `16c433c`).
+De lo que enseña `git status` al cerrar la fase C (HEAD `f73555d`), lo único mío es `informe-tester.md`. Lo demás es trabajo en curso de otros agentes (§5, punto 11):
+- `PlainText.php`, `StudioDraftNormalizer.php` y 8 controladores del Studio;
+- cuatro pruebas;
+- `smoke-h7.py`, `presupuestos-h7.json`, `informe-devops-h7.md` e `informe-security.md`.
 
-**Fuera del repo** (locales y desechables; no los borro hasta que el lead lo diga):
+**Limpieza hecha** (02-11, tras C4, por orden del lead):
+- los tres bancos `~/.cache/ironbody-banco-h7-test7{,-vuelta,-m6}`, con sus APIs ya paradas, están borrados;
+- `dropdb` de `ultron_studio_banco_h7_test7`, `…_vuelta`, `…_m6` y `ultron_studio_h7_t`;
+- comprobado después: 0 directorios, 0 bases y los puertos 8177–8179 y 55440 libres.
 
-| Qué | Dónde |
-|---|---|
-| Instantáneas, clones, arnés, sonda, guiones, registros y junit | Scratchpad: `clean/` y `mut/` (instantáneas `8f70d18`); `repo-5ed9525/` y `repo-1c76a7f/` (clones; el segundo con la regla de `PREVIO` cambiada en su copia de `preparar.sh`); `mutate.py` y sus tres especificaciones; `ScopeProbeH7Test.php`; `bin/{engine-scopes,b4-suite,b5-crm,b6-e2e,b7-banco}.sh`; `crm-build/` |
-| Bancos | `~/.cache/ironbody-banco-h7-test7{,-vuelta,-m6}` (APIs paradas) |
-| Ejecución del E2E | `~/.cache/ironbody-e2e/ultron-studio/run-20261102T054102Z-5ed9525-16c433c` |
-| Bases en PG 55432 | `ultron_studio_h7_t` (puerta PG) y `ultron_studio_banco_h7_test7{,_vuelta,_m6}` (bancos). `ultron_studio_e2e` la borra y la crea el arnés en cada ejecución |
+**Lo que queda fuera del repo:**
+
+| Qué | Dónde | Por qué |
+|---|---|---|
+| Instantáneas, clones, arnés, sonda, guiones, registros y junit | Scratchpad de la sesión: `clean/` y `mut/` (instantáneas `8f70d18`); `faseC/` (`ac031dd`); `repo-5ed9525/` y `repo-1c76a7f/` (clones; el segundo con la regla de `PREVIO` cambiada en su copia de `preparar.sh`); `mutate.py` y sus tres especificaciones; `ScopeProbeH7Test.php`; `bin/*.sh`; `crm-build/` | Efímero, se purga solo |
+| Las dos ejecuciones del E2E, con sus registros | `~/.cache/ironbody-e2e/ultron-studio/run-20261102T054102Z-5ed9525-16c433c` y `run-20261102T164523Z-0d43401-16c433c` | El arnés las deja, como las de los hitos anteriores |
+| `ultron_studio_e2e` | PG 55432 | La borra y la crea el arnés en cada ejecución |
 
 ## 7. Reproducir y limpiar
 
@@ -487,8 +609,10 @@ bash backend/docs/ultron-studio/ops/suite-compare.sh <dir vacío> 1e5f9a0 <rama>
 node_modules/.bin/ng test --watch=false; node_modules/.bin/tsc -p tsconfig.app.json --noEmit; node_modules/.bin/tsc -p tsconfig.spec.json --noEmit
 node_modules/.bin/ng build --configuration production                                     # en una copia: git archive 16c433c + node_modules enlazado
 bash e2e/ultron-studio/run.sh <backend> 16c433c                                            # desde el CRM
-# B7: ops/banco-h7/README.md (con T-1 corregido; mientras no, desde un clon en 5ed9525 y BANCO_SEED=<CRM>/e2e/ultron-studio/specs/h6-seed.php)
-# Limpieza local (cuando lo diga el lead)
+# B7: ops/banco-h7/README.md (T-1 corregido en 0d43401; antes, desde un clon en 5ed9525 y BANCO_SEED=<CRM>/e2e/ultron-studio/specs/h6-seed.php)
+# Fase C: lo mismo sobre e2411e3 o posterior; la puerta PG añade
+#   tests/Feature/Marketing/{UltronCanaryReportTest,UltronCanaryReportSinglePassH7Test,UltronTurnWatchdogTest,InternalSecretAuthoritySurfaceTest}.php
+# Limpieza local (YA HECHA el 02-11; queda como referencia)
 for b in ~/.cache/ironbody-banco-h7-test7 ~/.cache/ironbody-banco-h7-test7-vuelta ~/.cache/ironbody-banco-h7-test7-m6; do bash backend/docs/ultron-studio/ops/banco-h6/api.sh "$b" stop; rm -rf "$b"; done
 for d in ultron_studio_banco_h7_test7 ultron_studio_banco_h7_test7_vuelta ultron_studio_banco_h7_test7_m6 ultron_studio_h7_t; do dropdb -h 127.0.0.1 -p 55432 -U ironbody "$d"; done
 ```
