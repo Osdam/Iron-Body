@@ -31,7 +31,7 @@ export LC_ALL=C
 # TAREAS = entradas de `schedule:list` en producción con el monitor APAGADO: el MISMO valor que TAREAS de
 # deploy-h7-backend.sh, leído en el servidor con su --solo-comprobar y fijado en los dos scripts en un commit (m-1 del
 # reviewer del H7). Con «pendiente» el smoke no se ejecuta (código 2). SMOKE_TAREAS lo sustituye en un ensayo local.
-TAREAS="${SMOKE_TAREAS:-pendiente}"
+TAREAS="${SMOKE_TAREAS:-39}"   # producción, monitor apagado: 39 (leído el 02-11-2026 17:35 UTC); SMOKE_TAREAS lo sustituye en los bancos
 APP_DIR="${APP_DIR:-/var/www/api/backend}"
 API="${SMOKE_API:-https://api.ironbodyneiva.cloud/api}"
 ADMIN_ID="${SMOKE_ADMIN_ID:-32}"
