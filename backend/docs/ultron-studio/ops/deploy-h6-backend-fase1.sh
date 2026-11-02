@@ -135,8 +135,7 @@ FUERA=$(g diff --name-only "$PREVIO" origin/main -- "${PUERTA[@]}" | tr '\n' ' '
 [ -z "$FUERA" ] || aborta "la puerta de diff no está vacía (motor, integraciones existentes, catálogo o dependencias; este script no hace composer install): [$FUERA]"
 case "$(cat "$BK/api-commit.txt" 2>/dev/null)" in
   "$PREVIO"*) ;;
-  "$ESPERADO"*) [ "$REANUDA" = 1 ] || aborta "$BK/api-commit.txt es $ESPERADO pero producción sigue en $PREVIO: el respaldo no es de antes del despliegue" ;;
-  *) aborta "$BK/api-commit.txt no es $PREVIO" ;;
+  *) aborta "$BK/api-commit.txt no es $PREVIO (la vuelta atrás del código lo lee; si el respaldo se rehizo en una reanudación, escribirlo con: git -C /var/www/api rev-parse $PREVIO > $BK/api-commit.txt)" ;;
 esac
 [ -s "$BK/ironbody.dump" ] && [ -n "$(find "$BK/ironbody.dump" -mmin -120)" ] || aborta "no hay volcado de menos de 2 h en $BK"
 [ "$(stat -c '%a' "$BK")" = 700 ] || aborta "el directorio del respaldo tiene que ser 700 (es $(stat -c '%a' "$BK"))"
