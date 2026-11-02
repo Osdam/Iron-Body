@@ -8,9 +8,11 @@
 - Mac local, PHP 8.3.33, PHPUnit 11.5.55, SQLite en memoria y PostgreSQL 14.24 desechable en `127.0.0.1:55432`. En PG, solo mis bases: `ultron_studio_h7_t` y las de mis bancos (§6).
 - 8 núcleos y 8 GB, compartidos con PERF7, que medía a la vez. Por eso todo lo de la fase A fue un solo proceso PHPUnit cada vez y nunca a la vez que otro mío.
 
-**Estado:** fases A (§2), B (§3) y C (§3bis) hechas. Ningún rojo nuevo en ninguna suite.
+**Estado:** fases A (§2), B (§3), C (§3bis) y D (§3ter) hechas. Ningún rojo nuevo en ninguna suite.
 - **La fase C** repite las cuatro corridas tras F-1/F-2 (`e2411e3`), con el mismo código hasta `0d43401`.
+- **La fase D** se hizo sobre el **código final del H7** (M-1 de `601398c`, el mismo código hasta `afd24f1`).
 - **T-1, hallazgo de herramientas** (§3.4): el banco de OPS7 no podía ensayar el guion de despliegue de `1c76a7f`. Las cifras de recuperación salen de un clon con el mismo código. Pasó a `h7-devops-b`, que lo corrigió en `0d43401`.
+- **Un intermitente del arnés E2E en D3** (§3ter): saturación de los 8 workers de `artisan serve` por los SSE de notificaciones. El reintento sale 660/660.
 - **Limpieza hecha** (§6).
 
 **Refs al cerrar:**
@@ -38,6 +40,7 @@
 | B6 · E2E de todas las specs | **660/660 en 1 174 s**: F 40, G 25, H4 27, turno 30, H5 276, h6 250 y cierre 12. **Valla vacía; 0 de 12 secretos** en 23 registros y 12 tablas; 0 violaciones en los 4 simuladores |
 | B7 · Recuperación con OPS7 | **Recuperación 21/21** (PG caído 11/11 y worker muerto 10/10). **Vuelta atrás 13/13.** Despliegue con 55P03 real y su reintento, smoke del H7 22/22, smoke del H6 78 + 26 en la vuelta. **T-1:** el banco no monta con el guion de despliegue de HEAD (`preparar.sh` espera `PREVIO=pendiente`). Pasó a `h7-devops-b`, que lo corrigió en `0d43401` (OPS7-bis); no lo he vuelto a ensayar |
 | **C · tras F-1/F-2 (`e2411e3`; mismo código hasta `0d43401`)** | **C1** puerta PG + acta/vigía/superficie: **2 881/2 881**, 0 omitidas (7 min 10 s). **C2** motor con `off` y `all`: **5 015/5 015** cada una (202 s y 202 s). **C3** `suite-compare.sh` contra `1e5f9a0`: **57 = 57, 0 nuevos** (12 593 frente a 12 399). **C4** E2E: **660/660** en 1 043 s, con la valla vacía y 0 secretos |
+| **D · el código final (M-1 de `601398c`; mismo código hasta `afd24f1`)** | **D1** puerta PG + `Security` + `Unit/Support` + Caja + Valoraciones: **3 854 pruebas, 2 rojos de entorno**, los mismos que da `1e5f9a0` en ese PG (la instantánea no es un repo git; rol superusuario): **0 nuevos**. M-1 en PG: `PlainTextOutsideStudioTest` 42/42 y `StudioPlainTextInvisiblesTest` 12/12. **D2** `suite-compare.sh`: **57 = 57, 0 nuevos** (12 637 frente a 12 399). **D3** E2E: primer intento 614/615 (intermitente del arnés: SSE que saturan los 8 workers, 499 tras 19,9 s en la cola); **reintento 660/660**. **D4** mutaciones IC/PT/KN: **5/5 mueren**, y una burla la prueba de inventario y la caza el comportamiento |
 
 ## 1. Método: instantáneas aisladas, nunca el árbol compartido
 
@@ -519,6 +522,140 @@ TOTAL 660/660 · 1043 s según el arnés (1046 s de pared) · salida 0
 - la suite completa: 57 = 57;
 - el E2E: 660/660.
 
+## 3ter. Fase D: el código final del H7 (M-1 de `601398c`)
+
+**Qué cambió desde la fase C:** `601398c` (security, M-1 del reviewer).
+- **`PlainText`:** por defecto vuelve a la lista de producción (`UntrustedText::isPlain`, con el mensaje de siempre). La clase completa de invisibles solo se aplica con `strict: true`, en los 19 sitios del Studio (8 controladores + el normalizador).
+- **Pruebas:** `PlainTextOutsideStudioTest` (42, nueva), `StudioPlainTextInvisiblesTest` (con la prueba de inventario de `strict:true`), `InvisibleCharactersTest` y `UltronEngineIsolationTest` (8, con la excepción por cadena del m-3).
+
+**Refs.** El código no cambia entre `cdade1e` y el HEAD al cerrar: `git diff --stat` de `app routes config bootstrap database tests composer.lock phpunit.xml .env.example` vacío.
+
+| Ref | Qué añade | Dónde se usó |
+|---|---|---|
+| `cdade1e` | El informe de TEST7 de la fase C, sobre `601398c` | Instantánea de D1 |
+| `3111d29` | Informes de DB7 y PERF7, solo documentación | Rama de D2 |
+| `afd24f1` | Solo documentación y ops | Backend de D3 e instantáneas de D4 |
+
+No repetí las suites del motor ni el CRM: lo pidió el lead (F-1 no cambió desde la fase C y el CRM no cambia).
+
+### D1 · Puerta PG: grupo del Studio + `Security` + `Unit/Support` + Caja + Valoraciones
+
+La base `ultron_studio_h7_t` la recreé para esta fase; la había borrado en la limpieza de la fase C.
+
+```text
+cd <instantánea cdade1e>/backend && PGGSSENCMODE=disable UNIT_DB=ultron_studio_h7_t bash docs/ultron-studio/ops/pgunit.sh --do-not-cache-result --log-junit … \
+  tests/Feature/UltronStudio tests/Unit/UltronStudio tests/Feature/Hardening tests/Unit/Marketing/UltronPublishedConfigTest.php \
+  tests/Feature/Marketing/{UltronCommitStudioStampTest,UltronCanaryReportTest,UltronCanaryReportSinglePassH7Test,UltronTurnWatchdogTest,InternalSecretAuthoritySurfaceTest}.php \
+  tests/Feature/Security tests/Unit/Support tests/Feature/Caja tests/Feature/Valuations
+→ Tests: 3854, Assertions: 47782, Failures: 2   Time: 08:56.255 (17:18:23–17:27:20), 0 omitidas
+```
+
+| Carpeta | Pruebas | Aserciones | Rojos |
+|---|---|---|---|
+| `Feature/UltronStudio` | 1 086 | 19 482 | 0 |
+| `Unit/UltronStudio` | 1 425 | 11 969 | 0 |
+| `Feature/Hardening` | 44 | 219 | 0 |
+| Lector del motor (`Unit/Marketing`) | 217 | 331 | 0 |
+| Acta, acta de una pasada, vigía, superficie interna y sello (`Feature/Marketing`) | 110 | 617 | 0 |
+| **`Feature/Caja`** | **680** | **12 296** | **0** |
+| **`Feature/Valuations`** | **117** | **1 930** | **1** |
+| **`Feature/Security`** | **84** | **384** | **1** |
+| **`Unit/Support`** | **91** | **554** | **0** |
+
+**Las pruebas de M-1, en PG:** `PlainTextOutsideStudioTest` **42/42** (171), `StudioPlainTextInvisiblesTest` **12/12** (94), `InvisibleCharactersTest` **91/91** (554) y `UltronEngineIsolationTest` **8/8** (1 123).
+
+**Los 2 rojos ya estaban en la base y los causa el entorno, no el H7:**
+
+| Prueba | Causa |
+|---|---|
+| `SecretExposureTest::test_git_never_tracks_environment_files_with_secrets` | `git check-ignore` devuelve 128 porque la instantánea no es un repo git. Es el artefacto conocido de `suite-compare.sh` |
+| `ValuationOverlapGuardMigrationTest::test_el_rol_dueno_instala_btree_gist_y_crea_todas_las_restricciones` | Exige que la suite de PG corra con un rol **no superusuario**, como producción («Failed asserting that true is false»). El `ironbody` del clúster desechable es superusuario (`rolsuper = t`). La prueba no cambió en el H7 |
+
+**La prueba de que no son del H7:** las dos clases, corridas sobre una instantánea de **`1e5f9a0`** en el mismo PG (base auxiliar `ultron_studio_h7_t_base`, borrada después), fallan con **exactamente los mismos dos nombres** (23 pruebas, 2 fallos). **Rojos nuevos: 0.**
+
+Es la primera vez que Caja, Valoraciones, `Security` y `Support` pasan por la puerta PG. El rojo de Valoraciones se arregla en el entorno, no en el código: correr la puerta con un rol sin superusuario. Lo dejo como nota para devops.
+
+### D2 · `suite-compare.sh` contra `1e5f9a0`
+
+En un directorio nuevo y en SQLite:
+
+```text
+bash backend/docs/ultron-studio/ops/suite-compare.sh <scratchpad>/suite-3111d29-vs-1e5f9a0 1e5f9a0 3111d29
+[rama] 3111d29 17:28:25–17:44:50  Tests: 12637, Assertions: 103506, Errors: 55, Failures: 2, Skipped: 133   (16 min 23 s)
+[base] 1e5f9a0 17:44:55–18:00:33  Tests: 12399, Assertions: 101657, Errors: 55, Failures: 2, Skipped: 129   (15 min 38 s)
+rojos en la rama: 57 · en la base: 57 · NUEVOS: 0          → exit 0
+```
+
+- **Los 57 rojos** son idénticos a los de la base y a los de C3, por nombre (`cmp`).
+- **239 pruebas más en la rama:** las 195 de la fase C y las 44 de M-1 (`PlainTextOutsideStudioTest` 42, la de inventario de `strict` y la del bloque del monitor en `UltronEngineIsolationTest`).
+- La que ya no existe es el mismo renombrado de DB7.
+- **En SQLite**, `ValuationOverlapGuardMigrationTest` toma su rama sin PG y pasa. Su rojo de D1 es solo de la puerta PG con superusuario.
+
+### D3 · E2E completo (backend `afd24f1`, mismo código; CRM `16c433c`)
+
+**Primer intento: 614/615, salida 1** (18:00:45–18:06:01, 313 s). `run-20261102T180045Z-afd24f1-16c433c`.
+- Todo en verde (F 40, G 25, H4 27, turno 30, H5 276, cierre 12) salvo **`h6-integrations` 204/205**. Abortó en F3 con `TimeoutError: Waiting for selector [data-twilio-estado]`: la pestaña Twilio no se pintó en 30 s.
+- La spec restauró el `.env` y la pila, y el cierre salió 12/12: valla vacía, 0 secretos y 0 respuestas 5xx en 935 peticiones.
+
+**Causa, demostrada con el registro del proxy: saturación de los workers del arnés, no el código.**
+- Entre las 18:05:10 y las 18:05:40 había **unos 10 flujos SSE `/api/admin/notifications/stream` abiertos a la vez**, de unos 21 s cada uno, de las 6 sesiones del navegador y sus reconexiones. `artisan serve` tiene **8 workers** (`SERVE_WORKERS`, trampa 7).
+- El `OPTIONS …/integrations/twilio` **esperó 9,5 s** en cola; es un 204 que `HandleCors` contesta al instante. Después, el `GET …/integrations/twilio` acabó en **499** (el cliente cerró) **a los 19,9 s** sin llegar a atenderse. `/api/health` también tardó 21 s en esa ventana.
+- La captura (`evidence/h6-fallo/F3-superadmin-sesi-n-9-.png`) enseña «Leyendo Twilio desde el servidor…». La tarjeta de configuración autorizada sí se pintó (`integrations/config` 200 en 1,7 s).
+- Ninguna respuesta de error del backend.
+
+**La misma cola está en todas las pasadas** (`sse-concurrency.py` sobre cada `proxy.jsonl`):
+
+| Pasada | SSE simultáneos (máx.) | Peticiones normales de más de 5 s | Resultado |
+|---|---|---|---|
+| Fase B | 10 | 10 | 660/660 |
+| Fase C | 8 | 36 | 660/660 |
+| D3, primer intento | 10 | 5 | 614/615 |
+| D3, reintento | 11 | 10 | 660/660 |
+
+En el primer intento la espera coincidió con los 30 s del selector. M-1 no toca nada de esa ruta: solo cambia qué lista usa `PlainText` fuera del Studio; dentro sigue siendo la clase completa, con su prueba de inventario.
+
+**Reintento, sin tocar el arnés ni la spec: 660/660, salida 0** (18:07:30–18:22:04, 872 s según el arnés). `run-20261102T180730Z-afd24f1-16c433c`.
+
+| Spec | Resultado | Tiempo |
+|---|---|---|
+| `f-versions` | 40/40 | 11 s |
+| `g-inspector-compare` | 25/25 | 7 s |
+| `h4-lab-fake` | 27/27 | 14 s |
+| `ultron-turn` | 30/30 | 5 s |
+| `h5-governance` | 276/276 | 115 s |
+| `h6-integrations` | 250/250 | 674 s |
+| `cierre` | 12/12 | 2 s |
+
+- **Valla: ningún intento de salir.**
+- **Secretos: ninguno de los 12 en 23 registros ni en 12 tablas.**
+- 0 respuestas 5xx en 1 291 peticiones y 0 violaciones en los simuladores.
+
+**Para el arnés (nota a devops o al dueño del E2E):** con 6 sesiones del navegador, los SSE de notificaciones pueden ocupar los 8 workers. Una espera de 30 s puede caer en cualquier pasada. Mitigaciones posibles, ninguna aplicada (no es mío): subir `SERVE_WORKERS`, cerrar las sesiones que ya no se usan o subir el tiempo de la espera de la pestaña. El primer intento queda contado como intermitente del arnés, no como un verde.
+
+### D4 · Mutaciones por muestreo (invisibles y `PlainText`, copia aislada `afd24f1`)
+
+En `mutD/clean` y `mutD/mut` (instantáneas con `vendor/` copiado) y con el mismo arnés de la fase A. El texto original aparece exactamente una vez, se compila con `php -l` y se restaura con `cmp`. Las fuentes de `mut` quedan idénticas a `clean`; las únicas diferencias son `bootstrap/cache/{packages,services}.php`, que Laravel genera al correr.
+
+- **Pruebas:** `InvisibleCharactersTest`, `StudioPlainTextInvisiblesTest`, `PlainTextOutsideStudioTest` y `KnowledgeInvisiblesTest`.
+- **Control:** 152 pruebas y 864 aserciones, en verde.
+- **PT lleva 3 mutantes:** la clase que cambió con M-1 es exactamente la bandera `strict`. Hacen falta sus dos direcciones y una llamada.
+
+| Id | Mutación | Resultado | La cazó |
+|---|---|---|---|
+| D-IC-1 | La clase sin U+2028/U+2029 | **Muere (9)** | `InvisibleCharactersTest` (el rango, la exhaustiva frente a `lab-invisibles` y la deriva de la clase), el motivo de Legacy, `PlainTextOutsideStudioTest`… |
+| D-PT-1 | `strict` se ignora: el Studio vuelve a la lista de producción | **Muere (30)** | `StudioPlainTextInvisiblesTest` (motivo de Legacy con U+2028/U+00AD…, etiqueta con ZWJ suelto, etiquetas del borrador, una o varias líneas) |
+| D-PT-2 | Todo `strict`: Valoraciones y Caja cambian | **Muere (42)** | `PlainTextOutsideStudioTest` (la lista de antes en todo Unicode, Valoraciones y Caja aceptan y rechazan como antes, el mensaje de siempre) |
+| D-PT-3 | El motivo de la publicación con `strict: true && false`. **Burla la prueba de inventario por tokens** (`…usan_el_modo_estricto` PASA con el mutante) | **Muere (7)** | Solo por comportamiento: `StudioPlainTextInvisiblesTest::test_el_motivo_de_volver_a_legacy_con_un_invisible_es_422…` |
+| D-KN-1 | La API interna no limpia la `key` | **Muere (2)** | `KnowledgeInvisiblesTest` (el gemelo de un hecho aprobado y la limpieza de título y metadata) |
+
+**5 de 5 mueren.** D-PT-3 enseña que la protección del sitio no descansa solo en la prueba de inventario: la de comportamiento también la vigila, al menos en el motivo de la publicación. No muté los otros 18 sitios con `strict`.
+
+**Resumen de la fase D: 0 rojos nuevos.**
+- La puerta PG: 3 854, con los 2 rojos de entorno que también da `1e5f9a0`.
+- La suite completa: 57 = 57.
+- El E2E: 660/660 en el reintento; el primer intento fue el intermitente del arnés.
+- Las mutaciones: 5/5.
+
 ## 4. Rojos y su causa
 
 No relajé ninguna comprobación, no marqué ninguna omitida y no adapté ninguna prueba al código.
@@ -531,6 +668,10 @@ No relajé ninguna comprobación, no marqué ninguna omitida y no adapté ningun
 | B6 | Ninguno | |
 | B7 | Ninguno en los ensayos | Ver T-1 |
 | C1–C4 | 57 = 57 en C3 (los mismos de B4); ninguno en C1, C2 y C4 | **Nuevos: 0** |
+| D1 | 2 en la puerta PG | Los mismos dos nombres en `1e5f9a0` con el mismo PG. `SecretExposureTest` es el artefacto de la instantánea; `ValuationOverlapGuardMigrationTest` exige un rol PG sin superusuario y el clúster desechable usa uno con superusuario. **Nuevos: 0** |
+| D2 | 57 = 57 | Los mismos de B4 y C3. **Nuevos: 0** |
+| D3 | 1 en el primer intento (`h6-integrations`, F3, `TimeoutError` de un selector) | Saturación de los 8 workers del arnés por los SSE de notificaciones (§3ter), no el código. El reintento sale 660/660 |
+| D4 | — | 5/5 mutantes mueren |
 
 **T-1 (herramientas, no código):**
 - `ops/banco-h7/preparar.sh:33` buscaba `PREVIO=pendiente`, que `1c76a7f` cambió por `PREVIO=1e5f9a0`. Con ese HEAD el banco no montaba: `ensayar.sh desplegar` salía antes de tocar nada.
@@ -552,17 +693,11 @@ No relajé ninguna comprobación, no marqué ninguna omitida y no adapté ningun
    - **Lo que la fase C no repitió:** el CRM (no cambia), los bancos (B7 no depende del acta ni de las campañas, y T-1 era de `h7-devops-b`) y las mutaciones.
    - **El byte a byte del acta** frente al algoritmo anterior y sus 13 mutaciones los informa el dueño de F-1 en su commit. Yo no los he repetido.
 10. **La puerta PG con todo `tests/Feature/Marketing`:** C1 añadió al grupo del Studio el acta, el vigía y la superficie interna, no la carpeta entera. El resto de Marketing pasa en SQLite con las dos llaves (C2) y en la comparación completa (C3), sin línea base en PG.
-11. **El trabajo en curso que hay en el árbol al cerrar la fase C (17:05 UTC), sin confirmar y de otro agente; esta regresión NO lo cubre.** Por los ficheros, parece el M-1 del reviewer: «`PlainText` más estricto también fuera del Studio», con la marca de DOC7 «invisibles acotados al Studio, hasta el commit de security».
-    - `app/Rules/PlainText.php` y `app/Services/UltronStudio/StudioDraftNormalizer.php`;
-    - los 8 controladores del Studio: `CampaignLink`, `Canary`, `Integration`, `Lab`, `LabScenario`, `Publication`, `Rule` y `Version`;
-    - las pruebas `StudioPlainTextInvisiblesTest`, `InvisibleCharactersTest` y `UltronEngineIsolationTest`, y la nueva `PlainTextOutsideStudioTest`.
-    
-    El HEAD confirmado (`f73555d`) tiene el mismo código que la fase C. Cuando eso se confirme, hay que repetir al menos:
-    - la puerta PG del grupo del Studio;
-    - `tests/Feature/Security`, `tests/Unit/Support` y las suites de caja y valoraciones (el M-1 habla de `PlainText` fuera del Studio);
-    - `suite-compare.sh` contra `1e5f9a0`;
-    - el E2E (`f-versions`, `h5-governance` y `h6-integrations` envían etiquetas, notas y motivos);
-    - las mutaciones IC/PT/KN de §2.1, porque la regla cambia.
+11. **M-1** (`PlainText` por defecto como en producción y `strict: true` en el Studio), que al cerrar la fase C era trabajo en curso sin confirmar, **ya está cubierto**: el lead lo confirmó en `601398c` y la fase D (§3ter) repitió la puerta PG (con `Security`, `Support`, Caja y Valoraciones), la comparación completa, el E2E y una muestra de mutaciones IC/PT/KN, con 0 rojos nuevos.
+    - **Lo que la fase D no repitió**, por decisión del lead: las suites del motor (F-1 no cambió desde la fase C), el CRM y los bancos.
+    - **De los 19 sitios con `strict`,** muté uno (el motivo de la publicación). Los otros 18 los vigila la prueba de inventario por tokens; que además los vigile el comportamiento lo comprobé solo en ese.
+12. **El intermitente del arnés E2E** (D3, §3ter): con 6 sesiones del navegador, los SSE de notificaciones pueden ocupar los 8 workers de `artisan serve`, y una espera de 30 s puede caer en cualquier pasada. No lo he corregido (no es mío). Hasta que se mitigue, un rojo de `TimeoutError` en `h6-integrations` hay que mirarlo en `proxy.jsonl` (`OPTIONS` lentos, 499) antes de darlo por fallo del código.
+13. **La puerta PG con un rol sin superusuario:** `ValuationOverlapGuardMigrationTest` lo exige y el clúster desechable no lo tiene, así que en PG esa prueba no puede pasar aquí. Nota para devops: correr la puerta con un rol como el de producción.
 
 ## 6. Ficheros
 
@@ -572,26 +707,21 @@ En el repo del backend (rutas relativas a `backend/`):
 |---|---|
 | `tests/Feature/UltronStudio/UltronStudioMonitorDriftAndFailuresH7Test.php` (nuevo, 4 pruebas) | Confirmado por el lead en `1426130` |
 | `tests/Feature/UltronStudio/UltronStudioEarlyBodyCapStreamH7Test.php` (nuevo, 1 prueba) | Confirmado en `1426130` |
-| `docs/ultron-studio/plans/informes-h7/informe-tester.md` (este) | Final de la fase B confirmado en `df0140f`; esta versión con la fase C queda **sin commit** en el árbol |
+| `docs/ultron-studio/plans/informes-h7/informe-tester.md` (este) | La fase C quedó confirmada en `cdade1e`; esta versión con la fase D queda **sin commit** en el árbol |
 
-En la fase C no escribí nada más en el repo (solo este informe). En el CRM no toqué nada (worktree limpio en `16c433c`).
+En las fases C y D no escribí nada más en el repo (solo este informe). En el CRM no toqué nada (worktree limpio en `16c433c`).
 
-De lo que enseña `git status` al cerrar la fase C (HEAD `f73555d`), lo único mío es `informe-tester.md`. Lo demás es trabajo en curso de otros agentes (§5, punto 11):
-- `PlainText.php`, `StudioDraftNormalizer.php` y 8 controladores del Studio;
-- cuatro pruebas;
-- `smoke-h7.py`, `presupuestos-h7.json`, `informe-devops-h7.md` e `informe-security.md`.
-
-**Limpieza hecha** (02-11, tras C4, por orden del lead):
-- los tres bancos `~/.cache/ironbody-banco-h7-test7{,-vuelta,-m6}`, con sus APIs ya paradas, están borrados;
-- `dropdb` de `ultron_studio_banco_h7_test7`, `…_vuelta`, `…_m6` y `ultron_studio_h7_t`;
-- comprobado después: 0 directorios, 0 bases y los puertos 8177–8179 y 55440 libres.
+**Limpieza hecha:**
+- **Tras C4:** los tres bancos `~/.cache/ironbody-banco-h7-test7{,-vuelta,-m6}` borrados, con sus APIs ya paradas, y `dropdb` de `ultron_studio_banco_h7_test7`, `…_vuelta`, `…_m6` y `ultron_studio_h7_t`.
+- **Fase D (18:23 UTC):** `ultron_studio_h7_t`, que recreé para D1, borrada otra vez. La base auxiliar `ultron_studio_h7_t_base`, de la comprobación de los 2 rojos de entorno, la borré nada más usarla. En esta fase no monté bancos.
+- **Comprobado al final:** 0 bases mías en PG 55432, ningún banco, nada mío en marcha y libres los puertos del E2E (8080, 8092–8096, 4300, 8099) y de los bancos (8177–8179, 55440).
 
 **Lo que queda fuera del repo:**
 
 | Qué | Dónde | Por qué |
 |---|---|---|
-| Instantáneas, clones, arnés, sonda, guiones, registros y junit | Scratchpad de la sesión: `clean/` y `mut/` (instantáneas `8f70d18`); `faseC/` (`ac031dd`); `repo-5ed9525/` y `repo-1c76a7f/` (clones; el segundo con la regla de `PREVIO` cambiada en su copia de `preparar.sh`); `mutate.py` y sus tres especificaciones; `ScopeProbeH7Test.php`; `bin/*.sh`; `crm-build/` | Efímero, se purga solo |
-| Las dos ejecuciones del E2E, con sus registros | `~/.cache/ironbody-e2e/ultron-studio/run-20261102T054102Z-5ed9525-16c433c` y `run-20261102T164523Z-0d43401-16c433c` | El arnés las deja, como las de los hitos anteriores |
+| Instantáneas, clones, arnés, sonda, guiones, registros y junit | Scratchpad de la sesión: `clean/` y `mut/` (instantáneas `8f70d18`); `faseC/` (`ac031dd`); `faseD/` (`cdade1e`); `faseD-base/` (`1e5f9a0`); `mutD/` (`afd24f1`); `repo-5ed9525/` y `repo-1c76a7f/` (clones; el segundo con la regla de `PREVIO` cambiada en su copia de `preparar.sh`); `mutate.py` y sus cuatro especificaciones; `ScopeProbeH7Test.php`; `bin/*.sh` (`sse-concurrency.py` incluido); `crm-build/` | Efímero, se purga solo |
+| Las cuatro ejecuciones del E2E, con sus registros | `~/.cache/ironbody-e2e/ultron-studio/run-20261102T054102Z-5ed9525-16c433c`, `…T164523Z-0d43401-…`, `…T180045Z-afd24f1-…` (el intermitente, con `evidence/h6-fallo/`) y `…T180730Z-afd24f1-…` | El arnés las deja, como las de los hitos anteriores |
 | `ultron_studio_e2e` | PG 55432 | La borra y la crea el arnés en cada ejecución |
 
 ## 7. Reproducir y limpiar
@@ -612,6 +742,9 @@ bash e2e/ultron-studio/run.sh <backend> 16c433c                                 
 # B7: ops/banco-h7/README.md (T-1 corregido en 0d43401; antes, desde un clon en 5ed9525 y BANCO_SEED=<CRM>/e2e/ultron-studio/specs/h6-seed.php)
 # Fase C: lo mismo sobre e2411e3 o posterior; la puerta PG añade
 #   tests/Feature/Marketing/{UltronCanaryReportTest,UltronCanaryReportSinglePassH7Test,UltronTurnWatchdogTest,InternalSecretAuthoritySurfaceTest}.php
+# Fase D: la puerta PG añade además tests/Feature/Security tests/Unit/Support tests/Feature/Caja tests/Feature/Valuations;
+#   suite-compare.sh y run.sh como en la fase B; mutaciones con mutate.py y spec_h7_d.py sobre dos instantáneas (clean/ y mut/).
+#   Un TimeoutError en h6-integrations: mirar antes proxy.jsonl (OPTIONS lentos y 499 = workers saturados por los SSE).
 # Limpieza local (YA HECHA el 02-11; queda como referencia)
 for b in ~/.cache/ironbody-banco-h7-test7 ~/.cache/ironbody-banco-h7-test7-vuelta ~/.cache/ironbody-banco-h7-test7-m6; do bash backend/docs/ultron-studio/ops/banco-h6/api.sh "$b" stop; rm -rf "$b"; done
 for d in ultron_studio_banco_h7_test7 ultron_studio_banco_h7_test7_vuelta ultron_studio_banco_h7_test7_m6 ultron_studio_h7_t; do dropdb -h 127.0.0.1 -p 55432 -U ironbody "$d"; done
