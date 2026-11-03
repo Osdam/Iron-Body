@@ -499,11 +499,22 @@ class TwilioReadOnlyClientTest extends TestCase
         $directorio = base_path('app/Services/Twilio');
         $ficheros = array_map('basename', glob($directorio.'/*') ?: []);
         sort($ficheros);
-        $this->assertSame(['TwilioProbeSanitizer.php', 'TwilioReadOnlyClient.php'], $ficheros);
+        // Hito 8 (contrato H8, D8-3 y D8-4; SEC8): los dos adaptadores de Twilio
+        // de la VOZ viven aquí. Implementan las interfaces de `App\Services\Voice`
+        // y leen solo `voice.twilio.*` y `voice.webhook_base_url`: sus reglas
+        // (lectores de secretos, métodos y verbos, hosts, nada de TwiML) están en
+        // `Tests\Unit\Voice\VoiceIsolationTest` y `Tests\Feature\Telephony\TelephonyIsolationTest`.
+        $deLaVoz = ['TwilioRequestSignature.php', 'TwilioVoiceCarrier.php'];
+        $this->assertSame(['TwilioProbeSanitizer.php', 'TwilioReadOnlyClient.php'], array_values(array_diff($ficheros, $deLaVoz)));
 
         foreach ($ficheros as $fichero) {
             $fuente = (string) file_get_contents("{$directorio}/{$fichero}");
             $this->assertStringNotContainsStringIgnoringCase('studio', $fuente, "{$fichero} nombra el Studio");
+            if (in_array($fichero, $deLaVoz, true)) {
+                $this->assertDoesNotMatchRegularExpression('/App\\\\(Models|Services\\\\(?!Twilio\b|Voice\b)|Http\\\\Controllers|Support|Exceptions|Jobs)/', $fuente, "{$fichero} depende de otra parte de la aplicación");
+
+                continue;
+            }
             $this->assertDoesNotMatchRegularExpression('/App\\\\(Models|Services\\\\(?!Twilio\b)|Http\\\\Controllers|Support|Exceptions|Jobs)/', $fuente, "{$fichero} depende de otra parte de la aplicación");
             foreach (['config', 'env', 'getenv'] as $funcion) {
                 $this->assertDoesNotMatchRegularExpression('/(?<![\w>:$])'.$funcion.'\s*\(/', self::sinComentarios($fuente), "{$fichero} lee la configuración con {$funcion}()");

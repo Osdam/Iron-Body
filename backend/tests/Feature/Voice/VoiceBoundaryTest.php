@@ -45,6 +45,13 @@ use Tests\TestCase;
  *    (con el laboratorio hablado en `fake`).
  *  - Con la configuración por defecto, ninguna entrada pública del paquete sale
  *    a la red, y `marketing_calls` nunca es un origen permitido.
+ *  - CON ELEVENLABS CONFIGURADO, COMO PRODUCCIÓN DESDE EL 03-11 (Enmienda 1,
+ *    E1-12: clave, agente, secretos y `ELEVENLABS_ENABLED=true`, estado
+ *    `ELEVENLABS_UNVERIFIED`/`VERIFIED`): la política sigue cerrada solo por
+ *    `calls_disabled_in_code`, el iniciador de salientes no marca, y ni el
+ *    doctor sin `--verify` ni las entradas públicas salen a la red. Ninguna
+ *    guarda supone `ELEVENLABS_NOT_CONFIGURED` en producción: ese estado es el
+ *    de los valores del código, sin variables.
  *  - En `production`, la base de ElevenLabs es la oficial aunque haya una
  *    configurada (protección 3).
  */
@@ -199,7 +206,8 @@ class VoiceBoundaryTest extends TestCase
         $voz = $this->configuracionSinVariables('config/voice.php', ['ELEVENLABS_', 'TWILIO_VOICE_', 'VOICE_']);
         $this->assertEncendidosApagados($voz, 'voice');
 
-        // Con esos valores, el estado del H6 sigue siendo NOT_CONFIGURED.
+        // Sin variables (los valores del código), el estado es NOT_CONFIGURED.
+        // Producción ya no lo está (E1-12): eso lo cubre la prueba de abajo.
         config(['voice' => $voz]);
         $this->assertSame('ELEVENLABS_NOT_CONFIGURED', VoiceProviders::status()->state);
         $this->assertFalse($voz['elevenlabs']['enabled']);
@@ -220,7 +228,7 @@ class VoiceBoundaryTest extends TestCase
             }
         }
 
-        // La configuración cargada en la suite (la de producción hoy).
+        // La configuración cargada en la suite: la voz apagada (la suite no corre con la voz encendida).
         $this->assertFalse(config('voice.elevenlabs.enabled'));
         $this->assertFalse(config('voice.twilio.enabled'));
         $this->assertSame(0, config('voice.twilio.daily_call_cap'));
@@ -245,6 +253,56 @@ class VoiceBoundaryTest extends TestCase
         $this->assertSame('missing_signature', ElevenLabsWebhookSignature::verify('{}', null, 'secreto', 1761955200));
         $this->assertNull(ElevenLabsWebhookEnvelope::type('{}'));
         foreach ([[], ['--json' => true], ['--verify' => true], ['--verify' => true, '--json' => true]] as $opciones) {
+            Artisan::call('voice:doctor', $opciones);
+        }
+
+        Http::assertNothingSent();
+    }
+
+    /**
+     * Enmienda 1, E1-12: producción tiene ElevenLabs configurado y encendido
+     * (la clave, el agente de verificación y los dos secretos del servidor).
+     * Con eso, la fábrica ya no devuelve los nulos: lo que cierra las llamadas
+     * es la constante, no la falta de credenciales.
+     */
+    public function test_con_elevenlabs_configurado_como_en_produccion_ninguna_llamada_sale(): void
+    {
+        config([
+            'voice.elevenlabs.enabled' => true,
+            'voice.elevenlabs.api_key' => 'clave-de-prueba-e1-12-'.str_repeat('k', 24),
+            'voice.elevenlabs.agent_id' => 'agent_e112',
+            'voice.elevenlabs.webhook_secret' => 'webhook-de-prueba-e1-12-'.str_repeat('w', 24),
+            'voice.elevenlabs.tool_secret' => 'herramientas-de-prueba-e1-12-'.str_repeat('t', 24),
+            'voice.elevenlabs.region' => 'default',
+            'voice.elevenlabs.base_url' => null,
+        ]);
+        Http::preventStrayRequests();
+        Http::fake([]);
+
+        $this->assertSame('ELEVENLABS_UNVERIFIED', VoiceProviders::status()->state, 'la configuración de E1-12');
+        $this->assertSame('elevenlabs', VoiceProviders::current()->id());
+
+        // La política, aun con el proveedor VERIFIED: cerrada solo por la constante (protección 2).
+        $decision = VoiceCallPolicy::decide(new VoiceCallContext(true, true, 'ELEVENLABS_VERIFIED', 'active_voice', 'canary_registry', 20));
+        $this->assertFalse($decision->allowed);
+        $this->assertSame(['calls_disabled_in_code'], $decision->reasons);
+
+        // El iniciador de salientes de D8-3, con todo configurado, no marca.
+        $iniciador = 'App\\Services\\Voice\\ElevenLabs\\ElevenLabsCallStarter';
+        $peticion = 'App\\Services\\Voice\\Dto\\OutboundCallRequest';
+        $spec = 'App\\Services\\Voice\\Dto\\VoiceAgentSpec';
+        if (class_exists($iniciador) && class_exists($peticion) && class_exists($spec)) {
+            $ref = '00000000-0000-4000-8000-0000000e1012';
+            $variables = array_fill_keys($spec::VARIABLES, 'banco');
+            $variables[$spec::VAR_CALLER_AUTHORIZED] = $spec::CALLER_AUTHORIZED;
+            $variables[$spec::VAR_CALL_DIRECTION] = $spec::DIRECTION_OUTBOUND;
+            $variables[$spec::VAR_CALL_REF] = $ref;
+            $resultado = (new $iniciador)->startOutbound(new $peticion('agent_e112', 'phnum_e112', '+15005550006', $ref, $variables, 30, $spec::VOICEMAIL_POLICIES[0]));
+            $this->assertSame(['not_attempted', 'calls_disabled_in_code'], [$resultado->outcome, $resultado->reason], 'con ElevenLabs configurado, el iniciador no marca mientras CALLS_ENABLED_IN_CODE sea false');
+        }
+
+        // El doctor sin --verify no sale a la red.
+        foreach ([[], ['--json' => true]] as $opciones) {
             Artisan::call('voice:doctor', $opciones);
         }
 
