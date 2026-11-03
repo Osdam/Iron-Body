@@ -38,7 +38,8 @@ from zoneinfo import ZoneInfo
 HERE = Path(__file__).resolve().parent
 BACKEND = HERE.parents[3]
 FILES = ["twilio-signature-vectors.json", "elevenlabs-webhook-vectors.json", "elevenlabs-webhook-bodies.json", "twilio-webhook-bodies.json",
-         "holidays-co-2026-2028.json", "policy-tables.json", "state-transitions.json", "compiler-cases.json", "outbound-gate-cases.json"]
+         "holidays-co-2026-2028.json", "policy-tables.json", "state-transitions.json", "compiler-cases.json", "outbound-gate-cases.json",
+         "voice-chain-vectors.json"]
 BASES = {"contrato", "oficial", "ley", "supuesto-lead", "decision-fixture"}
 BOG = ZoneInfo("America/Bogota")
 
@@ -471,7 +472,7 @@ def derive_policy(doc, allh, v=frozenset()):
     for c in doc["scheduleOwn"]:
         t = bog(c["at"])
         out.append((c, {"bogotaTime": t.strftime("%H:%M:%S"), "weekday": WD[t.weekday()], "outsideHours": own_outside(t, c["ownWindow"], v)}))
-    counted = {"requested", "dialing", "ambiguous", "completed", "busy", "no_answer", "failed", "hung_up"}
+    counted = {"requested", "dialing", "active", "ambiguous", "completed", "busy", "no_answer", "failed", "hung_up"}   # E1-1: una saliente active cuenta
     if "fr_count_canceled" in v:
         counted |= {"canceled", "failed_to_start"}
     for c in doc["frequency"]:
@@ -624,6 +625,11 @@ def derive_states(doc, v=frozenset()):
         allowed.add(("dialing", "requested", "outbound"))
     if "st_dialing_cancel" in v:
         allowed.add(("dialing", "canceled", "outbound"))
+    if "st_no_dialing_active" in v:
+        allowed.discard(("dialing", "active", "outbound"))
+    if "st_denied_mutable" in v:
+        allowed.add(("denied", "completed", "inbound"))
+    initial = {d: set(x if isinstance(x, list) else [x]) for d, x in cs["initialStatus"].items()}
 
     def ok(a, z, d):
         if a == z:
@@ -645,12 +651,12 @@ def derive_states(doc, v=frozenset()):
             got["why"] = c["expected"].get("why")
         out.append((c, got))
     for c in doc["insert"]:
-        okk = c["status"] == cs["initialStatus"][c["direction"]] or ("st_insert_any" in v and c["status"] != "active" and c["direction"] == "outbound")
+        okk = c["status"] in initial[c["direction"]] or ("st_insert_any" in v and c["status"] != "active" and c["direction"] == "outbound")
         out.append((c, {"allowed": okk}))
     for c in doc["sequences"]:
         cur, steps = None, []
         for i, s in enumerate(c["steps"]):
-            acc = (s == cs["initialStatus"][c["direction"]]) if i == 0 else (ok(cur, s, c["direction"]) and cur != s)
+            acc = (s in initial[c["direction"]]) if i == 0 else (ok(cur, s, c["direction"]) and cur != s)
             steps.append({"to": s, "accepted": acc})
             if acc:
                 cur = s
@@ -719,13 +725,19 @@ def php_canon_json(x):
     return enc(x)
 
 
+E1_3_NOTICE = ("Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte "
+               "sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas "
+               "o prefieres hablar con una persona, dímelo en cualquier momento.")   # copiado del contrato (Enmienda 1, E1-3)
 MONEY = [r"\$\s?\d", r"\b(cop|pesos)\b", r"\d{1,3}[.,]\d{3}(?!\d)", r"\d{4,}", r"\b\d{1,3}\s*(mil|k)\b"]
 DISCOUNT_CATALOG = [r"\bgratis\b", r"2x1", r"\bprecio especial\b"]
 DISCOUNT_ORIGIN = [r"\bdescuento\b", r"\brebaja\b", r"\b2\s*x\s*1\b", r"\bpromoci[oó]n\b", r"\bsin costo\b"]
 URL = [r"https?://", r"\bwww\.", r"\b[a-z0-9-]+\.(com|co|net|org|io|app|test)\b"]
 PHONE = [r"(?:\+?\d[\s.\-()]*){8,}"]
 EMAIL = [r"[^\s@]+@[^\s@]+\.[a-z]{2,}"]
+ALLOWED_CHARS = re.compile(r"[A-Za-z0-9ÁÉÍÓÚÜÑáéíóúüñ .,;:¿?¡!()'\"%\-–—’…]+")   # E1-8: sin llaves, comillas angulares, símbolos ni emojis
 PICTO = re.compile("[\U0001F000-\U0001FAFF☀-➿]")
+CATALOG = ("consultar_planes", "consultar_horarios", "solicitar_humano", "no_volver_a_llamar")
+TEXT_ORDER = ["slot_invisible", "slot_email", "slot_phone", "slot_url", "slot_money", "slot_discount", "slot_characters"]
 
 
 def has_invisible(s):
@@ -742,15 +754,21 @@ def has_invisible(s):
     return False
 
 
-def text_reason(s, v):
+def text_reasons(s, v):
+    """Todos los motivos de un texto, en el orden de la plantilla (E1-9)."""
     low = s.lower()
     if "cm_strip_invisibles" in v:
         low = "".join(ch for ch in low if unicodedata.category(ch) != "Cf")
-    checks = [("slot_money", MONEY), ("slot_discount", DISCOUNT_CATALOG + ([] if "cm_catalog_discount_only" in v else DISCOUNT_ORIGIN)),
-              ("slot_url", URL), ("slot_phone", PHONE), ("slot_email", EMAIL)]
-    found = [code for code, pats in checks if any(re.search(p, low) for p in pats)]
+    found = []
     if has_invisible(s) and "cm_strip_invisibles" not in v:
         found.append("slot_invisible")
+    for code, pats in (("slot_email", EMAIL), ("slot_phone", PHONE), ("slot_url", URL), ("slot_money", MONEY),
+                       ("slot_discount", DISCOUNT_CATALOG + ([] if "cm_catalog_discount_only" in v else DISCOUNT_ORIGIN))):
+        if any(re.search(p, low) for p in pats):
+            found.append(code)
+    plain = "".join(ch for ch in s if not (PICTO.match(ch) or ch in "\ufe0f\u200d")) if "cm_emoji_ok" in v else s
+    if not ALLOWED_CHARS.fullmatch(plain):
+        found.append("slot_characters")
     return found
 
 
@@ -765,70 +783,90 @@ def cap_of(raw, v=frozenset()):
 
 
 def compile_reason(inp, notice, v=frozenset()):
+    """El orden del compilador real (E1-9): versión; perfil (estado, cuatro ojos, huella, campos cerrados, idioma, aviso, textos campo a campo,
+    duración, herramientas, destinos, privacidad, buzón); al final, handoffAliases (DF-C9, solo del fixture)."""
     p, ver, c = inp["profile"], inp["version"], inp["profile"]["content"]
     approved_versions = {"APPROVED"} if "cm_only_approved" in v else {"APPROVED", "CANARY", "PUBLISHED"}
-    if p["status"] != "approved" or (p["approvedBy"] == p["createdBy"] and "cm_self_approval" not in v):
-        return ("profile_not_approved", None)
-    if ver["status"] not in approved_versions:
+    if ver["status"] not in approved_versions or (ver["approvedBy"] in (None, ver["createdBy"]) and "cm_self_approval" not in v):
         return ("version_not_approved", None)
-    if p["storedHash"] != ossl_sha256_hex(b(php_canon_json(c))):
-        return ("profile_hash_mismatch", None)
     if ver["contentHash"] != ver["recomputedContentHash"]:
         return ("version_hash_mismatch", None)
-    fields = []
-    for k in ("greetingInbound", "greetingOutbound"):
-        if isinstance(c.get(k), str):
-            fields.append((k, c[k]))
-    for k in sorted(c.get("slots", {})):
-        fields.append((f"slots.{k}", c["slots"][k]))
-    found = {f: text_reason(t, v) for f, t in fields}
-    for code in ["slot_money", "slot_discount", "slot_url", "slot_phone", "slot_email", "slot_invisible"]:
+    if p["status"] != "approved" or (p["approvedBy"] in (None, p["createdBy"]) and "cm_self_approval" not in v):
+        return ("profile_not_approved", None)
+    if p["storedHash"] != ossl_sha256_hex(b(php_canon_json(c))):
+        return ("profile_hash_mismatch", None)
+    allowed = {"voiceId", "language", "notice", "greetingInbound", "greetingOutbound", "slots", "maxDurationSeconds", "tools", "systemTools",
+               "transferDestinations", "privacy", "voicemailPolicy"}
+    if set(c) - allowed:
+        return ("profile_field_not_allowed", None)
+    if "notice" not in c:
+        return ("notice_missing", None)
+    if c["language"] != "es":
+        return ("language_not_allowed", None)
+    if c["notice"] != notice:
+        return ("notice_missing", None)
+    fields = [("greetingInbound", c["greetingInbound"]), ("greetingOutbound", c["greetingOutbound"]),
+              ("slots.presentacion", c["slots"]["presentacion"]), ("slots.cierre", c["slots"]["cierre"])]
+    found = {f: text_reasons(t, v) for f, t in fields}
+    if "cm_reason_major" in v:
+        for code in TEXT_ORDER:
+            for f, _ in fields:
+                if code in found[f]:
+                    return (code, f)
+    else:
         for f, _ in fields:
-            if code in found[f]:
-                return (code, f)
-    if any(t not in ("consultar_planes", "consultar_horarios", "solicitar_humano", "no_volver_a_llamar") for t in c["tools"]):
+            if found[f]:
+                return (found[f][0], f)
+    if c["maxDurationSeconds"] < 60:
+        return ("max_duration_below_minimum", None)
+    if c["maxDurationSeconds"] > cap_of(inp["env"].get("VOICE_PER_CALL_MAX_SECONDS"), v):
+        return ("max_duration_exceeds_cap", None)
+    if any(t not in CATALOG for t in c["tools"]):
         return ("tool_not_in_catalog", None)
     if any(t not in ("end_call", "transfer_to_number") for t in c["systemTools"]):
         return ("system_tool_not_allowed", None)
     if "end_call" not in c["systemTools"] and "cm_end_call_optional" not in v:
         return ("end_call_missing", None)
-    aliases = {d["alias"] for d in c["transferDestinations"]}
-    if any(a not in aliases for a in ver.get("handoffAliases", [])):
-        return ("transfer_destination_not_in_profile", None)
-    if c["maxDurationSeconds"] > cap_of(inp["env"].get("VOICE_PER_CALL_MAX_SECONDS"), v):
-        return ("max_duration_exceeds_cap", None)
+    if "no_volver_a_llamar" not in c["tools"] and "cm_opt_out_optional" not in v:
+        return ("opt_out_tool_missing", None)
+    transfiere = "transfer_to_number" in c["systemTools"]
+    if transfiere and "solicitar_humano" not in c["tools"] and "cm_transfer_without_human_ok" not in v:
+        return ("transfer_requires_human_tool", None)
+    n = len(c["transferDestinations"])
+    if n > 3 or (transfiere and n == 0) or (not transfiere and n > 0):
+        return ("too_many_transfer_destinations", None)
     if c["privacy"]["recording"] and not inp["owner"]["recordingAllowed"]:
         return ("recording_enabled", None)
+    if c["privacy"]["audioStorage"]:
+        return ("audio_storage_enabled", None)
     rd = c["privacy"]["retentionDays"]
     if rd < 0 or rd > inp["owner"]["maxRetentionDays"]:
         return ("retention_exceeds_limit", None)
-    if c.get("notice") != notice:
-        return ("notice_missing", None)
-    allowed = {"voiceId", "language", "greetingInbound", "greetingOutbound", "notice", "maxDurationSeconds", "transferDestinations", "tools",
-               "systemTools", "privacy", "voicemailPolicy", "slots"}
-    if set(c) - allowed:
-        return ("profile_field_not_allowed", None)
-    if c["language"] != "es":
-        return ("language_not_allowed", None)
-    if c["maxDurationSeconds"] < 60:
-        return ("max_duration_below_minimum", None)
-    if len(c["transferDestinations"]) > 3:
-        return ("too_many_transfer_destinations", None)
-    if c["privacy"]["audioStorage"]:
-        return ("audio_storage_enabled", None)
+    if c["voicemailPolicy"] != "hang_up" and "cm_leave_message_ok" not in v:
+        return ("voicemail_not_allowed", None)
+    aliases = {d["alias"] for d in c["transferDestinations"]}
+    if any(a not in aliases for a in ver.get("handoffAliases", [])):
+        return ("transfer_destination_not_in_profile", None)
     return (None, None)
 
 
+def voice_ref(e164, app_key_b64="base64:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="):
+    sk = ossl_hmac("SHA256", base64.b64decode(app_key_b64[7:]), b"voice-phone")
+    return ossl_hmac("SHA256", sk, b(e164)).hex()
+
+
 def model_spec(inp, v=frozenset()):
+    """Un modelo NEUTRO de lo que entra en specHash (DF-C7, E1-9): no es la especificación de S8, solo sus dependencias."""
     c = inp["profile"]["content"]
     tools = list(c["tools"]) if "cm_tools_order_matters" in v else sorted(c["tools"])
     spec = {"compilerVersion": inp["compilerVersion"], "studioContentHash": inp["version"]["contentHash"], "voiceId": c["voiceId"],
             "language": c["language"], "greetingInbound": c["greetingInbound"], "greetingOutbound": c["greetingOutbound"],
             "notice": c["notice"], "maxDurationSeconds": c["maxDurationSeconds"], "tools": tools, "systemTools": sorted(c["systemTools"]),
-            "transferDestinations": sorted(c["transferDestinations"], key=lambda d: d["alias"]), "privacy": c["privacy"],
+            "transferDestinations": sorted(c["transferDestinations"], key=lambda d: d["alias"].encode()), "privacy": c["privacy"],
             "voicemailPolicy": c["voicemailPolicy"], "slots": c["slots"]}
-    if "cm_hash_includes_uuid" in v:
-        spec["profileUuid"] = inp["profile"]["uuid"]
+    if "cm_hash_excludes_uuid" not in v:
+        spec["studioVersionUuid"] = inp["version"]["uuid"]
+        spec["voiceProfileUuid"] = inp["profile"]["uuid"]
     return ossl_sha256_hex(b(php_canon_json(spec)))
 
 
@@ -839,22 +877,17 @@ def derive_compiler(doc, notice, v=frozenset()):
         reason, field = compile_reason(inp, notice, v)
         if reason is None:
             cc = inp["profile"]["content"]
-            inv = dict(c["expected"].get("invariants", {}))
-            inv.update({"maxDurationSeconds": cc["maxDurationSeconds"], "tools": sorted(cc["tools"]), "systemTools": sorted(cc["systemTools"]),
-                        "retentionDays": cc["privacy"]["retentionDays"], "voiceId": cc["voiceId"],
-                        "transferDestinations": sorted(cc["transferDestinations"], key=lambda d: d["alias"]),
-                        "firstMessageInboundStartsWith": notice, "firstMessageOutboundStartsWith": notice,
-                        "firstMessageInboundContains": cc["greetingInbound"], "firstMessageOutboundContains": cc["greetingOutbound"],
-                        "phonesOnlyInTransferDestinations": [d["e164"] for d in cc["transferDestinations"]],
-                        "compilerVersion": doc["compilerVersion"], "dynamicVariableDefaults": {"caller_authorized": "no"},
-                        "conversationConfigOverrideAllowed": False, "recordingEnabled": False, "twilioRecordingEnabled": False,
-                        "audioStorage": False, "language": "es"})
+            dests = sorted(cc["transferDestinations"], key=lambda d: d["alias"].encode())
+            inv = {"compilerVersion": doc["compilerVersion"], "language": "es", "voiceId": cc["voiceId"], "maxDurationSeconds": cc["maxDurationSeconds"],
+                   "tools": sorted(cc["tools"]), "systemTools": sorted(cc["systemTools"]),
+                   "transferDestinationAliases": [d["alias"] for d in dests], "transferDestinationRefs": [voice_ref(d["e164"]) for d in dests],
+                   "recordingEnabled": False, "twilioRecordingEnabled": False, "retentionDays": cc["privacy"]["retentionDays"], "audioStorage": False,
+                   "dynamicVariableDefaults": {"caller_authorized": "no"}, "dynamicVariables": ["call_direction", "call_ref", "caller_authorized", "version_label"],
+                   "conversationConfigOverrideAllowed": False, "firstMessageEquals": notice,
+                   "systemPromptContainsGreetings": [cc["greetingInbound"], cc["greetingOutbound"]], "promptHasNoMoneyFigures": True,
+                   "phonesNotInSpec": [d["e164"] for d in cc["transferDestinations"]], "specHashIsSha256OfCanonicalSpec": True,
+                   "payloadHashIsSha256OfCanonicalPayload": True}
             got = {"compiles": True, "invariants": inv}
-        elif "reasonOneOf" in c["expected"]:
-            ok = reason in c["expected"]["reasonOneOf"]
-            got = {"compiles": False, "reasonOneOf": c["expected"]["reasonOneOf"] if ok else [reason], "http": 422}
-            if field:
-                got["field"] = field
         else:
             got = {"compiles": False, "reason": reason, "http": 422}
             if field:
@@ -871,6 +904,91 @@ def derive_compiler(doc, notice, v=frozenset()):
         except ValueError:
             got = {"throws": "InvalidArgumentException"}
         out.append((c, got))
+    return out
+
+
+# ── cadena de voz (E1-4) ────────────────────────────────────────────────────
+CHAIN_KEYS = {"seq", "prev_hash", "version_uuid", "profile_uuid", "spec_hash", "agent_config_hash", "provider_agent_id", "scope", "actor_id", "published_at"}
+HEX64 = re.compile(r"[0-9a-f]{64}")
+UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+
+
+def app_key_bytes(k):
+    return base64.b64decode(k[7:]) if k.startswith("base64:") else k.encode()
+
+
+def chain_key(label, app_key, v=frozenset()):
+    return ossl_hmac("SHA256", app_key_bytes(app_key), b("ultron-studio-publication" if "vc_h5_label" in v else label))
+
+
+def chain_signature(message, label, app_key, v=frozenset()):
+    data = ("ultron-voice-config/1" + chr(10) + message) if "vc_contract_prefix" in v else message
+    return ossl_hmac("SHA256", chain_key(label, app_key, v), b(data)).hex()
+
+
+def chain_shape_ok(e):
+    if not isinstance(e, dict) or set(e) != CHAIN_KEYS:
+        return False
+    if not (isinstance(e["seq"], int) and not isinstance(e["seq"], bool) and e["seq"] >= 1):
+        return False
+    if not (isinstance(e["actor_id"], int) and not isinstance(e["actor_id"], bool)):
+        return False
+    if not (isinstance(e["prev_hash"], str) and HEX64.fullmatch(e["prev_hash"])):
+        return False
+    if not (isinstance(e["published_at"], str) and re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z", e["published_at"])):
+        return False
+    art = [e["version_uuid"], e["profile_uuid"], e["spec_hash"], e["agent_config_hash"], e["provider_agent_id"]]
+    if e["scope"] == "off":
+        return all(x is None for x in art)
+    if e["scope"] not in ("canary", "rest"):
+        return False
+    return bool(isinstance(e["version_uuid"], str) and UUID.fullmatch(e["version_uuid"]) and isinstance(e["profile_uuid"], str)
+                and UUID.fullmatch(e["profile_uuid"]) and isinstance(e["spec_hash"], str) and HEX64.fullmatch(e["spec_hash"])
+                and isinstance(e["agent_config_hash"], str) and HEX64.fullmatch(e["agent_config_hash"])
+                and isinstance(e["provider_agent_id"], str) and re.fullmatch(r"[A-Za-z0-9_-]{1,64}", e["provider_agent_id"]))
+
+
+def chain_verify(message, signature, previous, label, app_key, v=frozenset()):
+    try:
+        e = json.loads(message)
+    except ValueError:
+        return "malformed"
+    if not chain_shape_ok(e):
+        return "malformed"
+    if "vc_no_canonical_check" not in v and php_canon_json(e) != message:
+        return "not_canonical"
+    if not isinstance(signature, str) or not (re.fullmatch(r"[0-9a-fA-F]{64}", signature) if "vc_uppercase_ok" in v else HEX64.fullmatch(signature)):
+        return "signature_malformed"
+    if signature.lower() != chain_signature(message, label, app_key, v):
+        return "signature_mismatch"
+    want_seq = 1 if previous is None else previous["seq"] + 1
+    if "vc_no_seq_check" not in v and e["seq"] != want_seq:
+        return "seq_gap"
+    want_prev = "0" * 64 if previous is None else previous["entryHash"]
+    if e["prev_hash"] != want_prev:
+        return "chain_broken"
+    return "ok"
+
+
+def derive_chain(doc, v=frozenset()):
+    out = []
+    k = doc["keys"]
+    prev = None
+    for c in doc["chain"]:
+        msg = php_canon_json(c["entry"])
+        h = ossl_sha256_hex(b(msg))
+        sig = chain_signature(msg, k["chainLabel"], k["appKeyBase64"], v)
+        want_prev = "0" * 64 if prev is None else (prev["signature"] if "vc_prev_is_signature" in v else prev["entryHash"])
+        out.append((c, {"message": msg, "entryHash": h, "signature": sig, "prevHashIsPreviousEntryHash": c["entry"]["prev_hash"] == want_prev}))
+        prev = {"entryHash": h, "signature": sig}
+    for c in doc["subkey"]:
+        got = {"subkeyHex": chain_key(c["label"], c["appKey"], v).hex()}
+        if "differsFromChain" in c["expected"]:
+            got["differsFromChain"] = got["subkeyHex"] != chain_key(k["chainLabel"], c["appKey"], v).hex()
+        out.append((c, got))
+    for c in doc["verify"]:
+        r = chain_verify(c["message"], c["signature"], c["previous"], k["chainLabel"], c.get("appKey", k["appKeyBase64"]), v)
+        out.append((c, {"result": r, "denies": r != "ok"}))
     return out
 
 
@@ -1056,7 +1174,49 @@ def cross_checks(docs):
     base_hash = comp["canonicalHash"][0]["expected"]["sha256"]
     if comp["compile"][0]["input"]["profile"]["storedHash"] != base_hash:
         bad("cruce: el primer canonicalHash no es la huella del perfil base")
-    return n
+    # E1-1: las transiciones que citan las herramientas están permitidas
+    for c in eb["tools"]:
+        n += 1
+        tr = c["expected"].get("transition")
+        call = c["given"].get("call")
+        if tr and (tr["from"], tr["to"], call["direction"]) not in allowed:
+            bad(f"cruce: {c['name']} cita {tr} que state-transitions no permite")
+        if tr and tr["from"] != call["status"]:
+            bad(f"cruce: {c['name']} la transición no parte del estado de la fila")
+    # E1-2: la fila de la iniciación nace en un estado inicial de las entrantes
+    init_in = set(st["closedSets"]["initialStatus"]["inbound"])
+    for c in eb["initiation"]:
+        n += 1
+        row = c["expected"].get("voiceCallRow")
+        if isinstance(row, dict) and (row["status"] not in init_in or row["direction"] != "inbound"):
+            bad(f"cruce: {c['name']} la fila nace en {row['status']}")
+        if isinstance(row, dict) and (row["status"] == "denied") != (c["expected"].get("response", {}).get("dynamic_variables", {}).get("caller_authorized") == "no"):
+            bad(f"cruce: {c['name']} fila denied y respuesta no casan")
+    # E1-9: la instantánea del compilador real es coherente consigo misma y con los casos
+    rc_seen = 0
+    for c in comp["compile"]:
+        rc = c["expected"].get("realCompiler")
+        if rc is None:
+            bad(f"cruce: {c['name']} sin realCompiler (vuelve a exportar)")
+            continue
+        rc_seen += 1
+        if c["expected"]["compiles"]:
+            if not (HEX64.fullmatch(rc.get("specHash", "")) and HEX64.fullmatch(rc.get("voiceProfileHash", ""))):
+                bad(f"cruce: {c['name']} realCompiler sin huellas de 64 hex")
+        elif "knownMismatch" in rc:
+            if not HEX64.fullmatch(rc.get("specHash", "")):
+                bad(f"cruce: {c['name']} discrepancia declarada sin specHash")
+        elif not (isinstance(rc.get("reason"), str) and rc["reason"]):
+            bad(f"cruce: {c['name']} realCompiler sin motivo")
+    for c in comp["hashRelations"]:
+        rc = c["expected"].get("realCompiler")
+        if rc is None:
+            bad(f"cruce: {c['name']} sin realCompiler (vuelve a exportar)")
+            continue
+        rc_seen += 1
+        if "notApplicable" not in rc and (rc["specHashA"] == rc["specHashB"]) != c["expected"]["sameSpecHash"]:
+            bad(f"cruce: {c['name']} las huellas reales no cumplen la relación")
+    return n + rc_seen
 
 
 # ── PHP (--php) ─────────────────────────────────────────────────────────────
@@ -1070,7 +1230,7 @@ use App\Services\UltronStudio\StudioContentHasher;
 use App\Services\Voice\ElevenLabs\ElevenLabsWebhookSignature;
 use App\Services\Voice\ElevenLabs\ElevenLabsWebhookEnvelope;
 $in = json_decode((string) file_get_contents($argv[2]), true, 512, JSON_THROW_ON_ERROR);
-$out = ['canon' => [], 'el' => [], 'env' => [], 'hmac' => [], 'easter' => [], 'tw' => []];
+$out = ['canon' => [], 'el' => [], 'env' => [], 'hmac' => [], 'easter' => [], 'tw' => [], 'chain' => [], 'subkey' => []];
 foreach ($in['canon'] as $i => $v) {
     try { $c = StudioContentHasher::canonicalJson($v); $out['canon'][$i] = [$c, StudioContentHasher::hash($v)]; }
     catch (InvalidArgumentException $e) { $out['canon'][$i] = 'throws'; }
@@ -1086,6 +1246,15 @@ foreach ($in['hmac'] as $i => $h) {
 }
 foreach ($in['tw'] as $i => $t) { $out['tw'][$i] = base64_encode(hash_hmac('sha1', $t[1], $t[0], true)); }
 foreach ($in['easter'] as $y) { $d = (new DateTimeImmutable($y.'-03-21'))->modify('+'.easter_days((int) $y).' days'); $out['easter'][$y] = $d->format('Y-m-d'); }
+$clave = static function (string $k): string { return str_starts_with($k, 'base64:') ? base64_decode(substr($k, 7)) : $k; };
+$out['chain'] = [];
+foreach ($in['chain'] as $i => $c) {
+    $m = StudioContentHasher::canonicalJson($c[0]);
+    $k = hash_hmac('sha256', $c[2], $clave($c[1]), true);
+    $out['chain'][$i] = [$m, hash('sha256', $m), hash_hmac('sha256', $m, $k)];
+}
+$out['subkey'] = [];
+foreach ($in['subkey'] as $i => $c) { $out['subkey'][$i] = bin2hex(hash_hmac('sha256', $c[1], $clave($c[0]), true)); }
 echo json_encode($out, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
 '''
 
@@ -1107,8 +1276,11 @@ def php_check(docs):
     tw = []
     for c in docs["twilio-signature-vectors.json"]["compute"]:
         tw.append((c["token"], c["url"] if "rawBody" in c else c["expected"]["base"], c["expected"]["signature"]))
+    vc = docs["voice-chain-vectors.json"]
     payload = {"canon": canon_in, "el": [[c["rawBody"], c["header"], c["secret"], c["now"]] for c in ev],
-               "env": [c["rawBody"] for c in eb], "hmac": hm, "tw": [[t[0], t[1]] for t in tw], "easter": ["2026", "2027", "2028"]}
+               "env": [c["rawBody"] for c in eb], "hmac": hm, "tw": [[t[0], t[1]] for t in tw], "easter": ["2026", "2027", "2028"],
+               "chain": [[c["entry"], vc["keys"]["appKeyBase64"], vc["keys"]["chainLabel"]] for c in vc["chain"]],
+               "subkey": [[c["appKey"], c["label"]] for c in vc["subkey"]]}
     with tempfile.TemporaryDirectory() as tmp:
         sp, ip = Path(tmp) / "voice-php-check.php", Path(tmp) / "in.json"
         sp.write_text(PHP_SRC)
@@ -1152,13 +1324,54 @@ def php_check(docs):
         if res["tw"][i] != t[2]:
             fails += 1
             bad(f"--php: firma de Twilio {i} {res['tw'][i]} ≠ {t[2]}")
+    for i, c in enumerate(vc["chain"]):
+        m, h, sig = res["chain"][i]
+        if (m, h, sig) != (c["expected"]["message"], c["expected"]["entryHash"], c["expected"]["signature"]):
+            fails += 1
+            bad(f"--php: la cadena de voz «{c['name']}» no cuadra con StudioContentHasher + hash_hmac")
+    for i, c in enumerate(vc["subkey"]):
+        if res["subkey"][i] != c["expected"]["subkeyHex"]:
+            fails += 1
+            bad(f"--php: la subclave «{c['name']}» no cuadra con la derivación del H5 en PHP")
+    # E1-9: el compilador real, otra vez, sobre ESTE fichero
+    with tempfile.TemporaryDirectory() as tmp:
+        fp = Path(tmp) / "compiler-cases.json"
+        fp.write_text(json.dumps(docs["compiler-cases.json"], ensure_ascii=False))
+        rx = subprocess.run(["php", str(HERE / "compiler-export.php"), str(fp)], capture_output=True, text=True, cwd=str(BACKEND))
+    compiled = 0
+    if rx.returncode != 0:
+        fails += 1
+        bad(f"--php: el exportador del compilador falló: {rx.stderr.strip()[:300]}")
+    else:
+        ex = json.loads(rx.stdout)
+        for c in docs["compiler-cases.json"]["compile"]:
+            compiled += 1
+            got, exp = ex["compile"][c["name"]], c["expected"]
+            rc = exp.get("realCompiler", {})
+            if exp["compiles"]:
+                ok = got["compiles"] and got["specHash"] == rc.get("specHash") and got["voiceProfileHash"] == rc.get("voiceProfileHash")
+            elif "knownMismatch" in rc:
+                ok = got["compiles"] and got["specHash"] == rc.get("specHash")
+            else:
+                ok = (not got["compiles"] and got["compilerReason"] == rc.get("reason") and got["compilerField"] == rc.get("field")
+                      and got["reason"] == exp["reason"] and ("field" not in exp or got["field"] == exp["field"]))
+            if not ok:
+                fails += 1
+                bad(f"--php: el compilador real ya no da lo del fixture en «{c['name']}»: {json.dumps(got, ensure_ascii=False)[:300]}")
+        for c in docs["compiler-cases.json"]["hashRelations"]:
+            compiled += 1
+            got, rc = ex["hashRelations"][c["name"]], c["expected"].get("realCompiler", {})
+            ok = got["a"].get("specHash") == rc.get("specHashA") and ("notApplicable" in got["b"] or got["b"].get("specHash") == rc.get("specHashB"))
+            if not ok:
+                fails += 1
+                bad(f"--php: la relación «{c['name']}» ya no da las huellas del fixture")
     hol = docs["holidays-co-2026-2028.json"]["easter"]
     for y in ("2026", "2027", "2028"):
         if res["easter"][y] != hol[y]:
             fails += 1
             bad(f"--php: easter_days({y}) da {res['easter'][y]} y el fixture {hol[y]}")
     return {"canonicalHash+perfiles": len(canon_in), "elevenlabsVerify": len(ev), "envelope": len(eb), "huellasTelefono": len(hm),
-            "firmasTwilio": len(tw), "pascua": 3, "fallos": fails, "php": subprocess.run(["php", "-v"], capture_output=True, text=True).stdout.split("\n")[0]}
+            "firmasTwilio": len(tw), "pascua": 3, "cadenaVoz": len(vc["chain"]) + len(vc["subkey"]), "compiladorReal": compiled, "fallos": fails, "php": subprocess.run(["php", "-v"], capture_output=True, text=True).stdout.split("\n")[0]}
 
 
 # ── SDK de ElevenLabs (--sdk-python) ────────────────────────────────────────
@@ -1222,11 +1435,13 @@ VARIANTS = {
                            "ex_canary_ignores", "ex_ignore_denied", "ex_rne_boundary_exclusive",
                            "in_code_first", "in_concurrency_gt", "in_first_only",
                            "co_floor_minutes", "co_no_media_streams", "co_no_transfer_leg", "co_budget_lt"],
-    "state-transitions.json": ["st_final_mutable", "st_backwards", "st_dialing_cancel", "st_insert_any"],
+    "state-transitions.json": ["st_final_mutable", "st_backwards", "st_dialing_cancel", "st_insert_any", "st_no_dialing_active", "st_denied_mutable"],
     "compiler-cases.json": ["cm_self_approval", "cm_only_approved", "cm_strip_invisibles", "cm_catalog_discount_only", "cm_end_call_optional",
-                            "cm_no_clamp", "cm_tools_order_matters", "cm_hash_includes_uuid"],
+                            "cm_no_clamp", "cm_tools_order_matters", "cm_hash_excludes_uuid", "cm_emoji_ok", "cm_leave_message_ok",
+                            "cm_transfer_without_human_ok", "cm_opt_out_optional", "cm_reason_major"],
     "outbound-gate-cases.json": ["gt_first_only", "gt_cap_zero_also_reached", "gt_contacts_source_forbidden", "gt_canary_ignores_exclusion",
                                  "gt_concurrency_gt", "wa_no_national_prefix", "wa_literal"],
+    "voice-chain-vectors.json": ["vc_h5_label", "vc_contract_prefix", "vc_prev_is_signature", "vc_no_canonical_check", "vc_uppercase_ok", "vc_no_seq_check"],
 }
 
 
@@ -1253,7 +1468,11 @@ def main():
         check_shape(f, texts[f], docs[f])
         counts[f] = docs[f]["counts"]["total"]
     shape_problems = len(problems)
-    notice = docs["elevenlabs-webhook-bodies.json"]["world"]["p9Notice"]
+    notice = docs["elevenlabs-webhook-bodies.json"]["world"]["aiNotice"]
+    if notice != E1_3_NOTICE:
+        bad("el aviso de los cuerpos no es el texto de E1-3 del contrato")
+    if docs["compiler-cases.json"]["compile"][0]["input"]["profile"]["content"]["notice"] != E1_3_NOTICE:
+        bad("el aviso del perfil base del compilador no es el texto de E1-3 del contrato")
     hol_pairs, allh = derive_holidays(docs["holidays-co-2026-2028.json"])
     derivations = {
         "twilio-signature-vectors.json": lambda v: derive_twilio_sig(docs["twilio-signature-vectors.json"], v),
@@ -1263,6 +1482,7 @@ def main():
         "state-transitions.json": lambda v: derive_states(docs["state-transitions.json"], v),
         "compiler-cases.json": lambda v: derive_compiler(docs["compiler-cases.json"], notice, v),
         "outbound-gate-cases.json": lambda v: derive_gate(docs["outbound-gate-cases.json"], v),
+        "voice-chain-vectors.json": lambda v: derive_chain(docs["voice-chain-vectors.json"], v),
     }
     rehechos = 0
     disc = 0

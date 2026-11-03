@@ -1,11 +1,11 @@
 # state-transitions.json · voice_calls.status y voice_call_events (D8-13; disparador de DB8 «solo hacia delante», un final no cambia)
-STATUSES = ["requested", "canceled", "failed_to_start", "ambiguous", "dialing", "active", "completed", "busy", "no_answer", "failed", "hung_up"]
-FINALS = ["canceled", "failed_to_start", "completed", "busy", "no_answer", "failed", "hung_up"]
+STATUSES = ["requested", "canceled", "failed_to_start", "ambiguous", "dialing", "active", "denied", "completed", "busy", "no_answer", "failed", "hung_up"]
+FINALS = ["canceled", "failed_to_start", "denied", "completed", "busy", "no_answer", "failed", "hung_up"]
 EVENTS = ["outbound_requested", "outbound_started", "outbound_rejected", "outbound_ambiguous", "initiation_received",
           "post_call_transcription", "post_call_audio_discarded", "call_initiation_failure",
           "tool_call", "guard_verdict", "hangup_requested",
           "reconciled", "seal_mismatch", "cost_recorded", "unknown_provider_call"]
-assert len(STATUSES) == 11 and len(EVENTS) == 15
+assert len(STATUSES) == 12 and len(EVENTS) == 15
 SEAL_COLUMNS = ["voice_publication_seq", "part", "stamp_state", "studio_version_uuid", "studio_content_hash", "voice_profile_hash",
                 "spec_hash", "payload_hash", "compiler_version", "provider", "provider_agent_id"]
 IDENTITY_COLUMNS = ["direction", "remote_hash", "remote_last4", "client_request_id", "attempt", "parent_call_id"]
@@ -31,13 +31,17 @@ ALLOWED = [
     ("dialing", "no_answer", "outbound", "contrato", None, "call_initiation_failure = no-answer"),
     ("dialing", "failed", "outbound", "contrato", None, "call_initiation_failure = unknown u otro fallo final"),
     ("dialing", "hung_up", "outbound", "contrato", None, "corte de emergencia (D8-20, nivel 0b)"),
+    ("dialing", "active", "outbound", "contrato", None, "E1-1: la primera herramienta o el primer evento de conversación de una saliente"),
+    ("active", "completed", "outbound", "contrato", None, "post_call_transcription con duración (saliente ya active, E1-1)"),
+    ("active", "hung_up", "outbound", "contrato", None, "corte de emergencia (D8-20: cuelga las dialing y active)"),
+    ("active", "failed", "outbound", "decision-fixture", "DF-S4", "otro fallo final de una saliente ya active"),
     ("active", "completed", "inbound", "contrato", None, "post_call_transcription con duración"),
     ("active", "hung_up", "inbound", "contrato", None, "corte de emergencia"),
     ("active", "failed", "inbound", "decision-fixture", "DF-S4", "otro fallo final (la conciliación la ve failed)"),
 ]
-INITIAL = {"outbound": "requested", "inbound": "active"}
-REACHABLE = {"outbound": {"requested", "canceled", "failed_to_start", "ambiguous", "dialing", "completed", "busy", "no_answer", "failed", "hung_up"},
-             "inbound": {"active", "completed", "hung_up", "failed"}}
+INITIAL = {"outbound": ["requested"], "inbound": ["active", "denied"]}     # denied: la entrante denegada en la iniciación (E1-2)
+REACHABLE = {"outbound": {"requested", "canceled", "failed_to_start", "ambiguous", "dialing", "active", "completed", "busy", "no_answer", "failed", "hung_up"},
+             "inbound": {"active", "denied", "completed", "hung_up", "failed"}}
 
 ST = Fixture("state-transitions.json", header(
     "state-transitions.json",
@@ -53,11 +57,11 @@ ST = Fixture("state-transitions.json", header(
         "DF-S1": "Una actualización que no cambia status no es una transición: vale en cualquier estado, también en los finales (coste real, sello posterior), salvo las columnas inmutables (DF-S5).",
         "DF-S2": "requested → busy | no_answer | failed | completed: el webhook puede llegar antes de que el job guarde dialing; entonces el job ya no puede escribir dialing (final).",
         "DF-S3": "ambiguous se resuelve hacia delante: dialing si sigue en curso, o un final de llamada (completed, busy, no_answer, failed). Nunca canceled ni failed_to_start (ya se intentó).",
-        "DF-S4": "active → failed para el «otro fallo final» de una entrante.",
+        "DF-S4": "active → failed para el «otro fallo final» de una entrante o de una saliente ya active (E1-1).",
         "DF-S5": "El sello y la identidad se escriben al insertar y no cambian nunca (sealColumns e identityColumns).",
         "DF-S6": "Las columnas posteriores (afterColumns) pasan de null a un valor una sola vez; cambiarlas después se rechaza.",
         "DF-S7": "Los eventos sin clave del proveedor (p. ej. hangup_requested de una persona) llevan provider_event_key NULL y no se deduplican (UNIQUE con NULL admite varias filas en PG y SQLite). El provider «laravel» del caso es de ejemplo: el conjunto de provider lo fija DB8.",
-        "DF-S8": "Al insertar, status = el inicial de su dirección (outbound → requested, inbound → active); otro valor se rechaza.",
+        "DF-S8": "Al insertar, status = uno de los iniciales de su dirección (outbound → requested; inbound → active o denied, E1-2); otro valor se rechaza.",
         "DF-S9": "Lista cerrada: toda transición que no está en allowed se rechaza, también las que el contrato no menciona (p. ej. dialing → canceled o requested → hung_up: el corte de una pedida es canceled).",
     },
 ))
@@ -91,9 +95,9 @@ for d in ("outbound", "inbound"):
 # Inserción
 for d in ("outbound", "inbound"):
     for s in STATUSES:
-        ok = s == INITIAL[d]
-        ST.add("insert", d, f"insertar una {d} en {s}", "D8-13", "decision-fixture", {"direction": d, "status": s}, {"allowed": ok},
-               decision="DF-S8")
+        ok = s in INITIAL[d]
+        ST.add("insert", d, f"insertar una {d} en {s}", "D8-13, E1-2" if s == "denied" else "D8-13", "decision-fixture",
+               {"direction": d, "status": s}, {"allowed": ok}, decision="DF-S8")
 
 
 # Secuencias de extremo a extremo: cada paso se acepta o se rechaza
@@ -101,7 +105,7 @@ def SEQ(desc, d, steps, final, *, basis="contrato", decision=None, ref="D8-13"):
     cur, out = None, []
     for i, to in enumerate(steps):
         if i == 0:
-            ok = to == INITIAL[d]
+            ok = to in INITIAL[d]
         else:
             ok = (cur, to, d) in ALLOWED_SET
         out.append({"to": to, "accepted": ok})
@@ -129,7 +133,15 @@ SEQ("un final no cambia: completed → failed rechazado", "outbound", ["requeste
 SEQ("entrante: active → completed", "inbound", ["active", "completed"], "completed")
 SEQ("entrante cortada: active → hung_up", "inbound", ["active", "hung_up"], "hung_up")
 SEQ("una entrante no pasa por dialing", "inbound", ["active", "dialing", "completed"], "completed")
-SEQ("una saliente no puede quedar active", "outbound", ["requested", "dialing", "active"], "dialing")
+SEQ("saliente que usa herramientas: requested → dialing → active → completed (E1-1)", "outbound", ["requested", "dialing", "active", "completed"],
+    "completed", ref="D8-13, E1-1")
+SEQ("una saliente active no vuelve a dialing", "outbound", ["requested", "dialing", "active", "dialing"], "active", ref="D8-13, E1-1")
+SEQ("una saliente active no puede quedar busy (la conversación ya empezó)", "outbound", ["requested", "dialing", "active", "busy"], "active",
+    basis="decision-fixture", decision="DF-S9", ref="D8-13, E1-1")
+SEQ("cortada en mitad de la conversación: requested → dialing → active → hung_up", "outbound", ["requested", "dialing", "active", "hung_up"],
+    "hung_up", ref="D8-13, D8-20, E1-1")
+SEQ("entrante denegada: denied es final y la post-llamada no la cambia", "inbound", ["denied", "completed"], "denied", ref="D8-13, E1-2")
+SEQ("una entrante denegada nunca pasa a active", "inbound", ["denied", "active"], "denied", ref="D8-13, E1-2")
 
 
 # Columnas inmutables (DF-S5, DF-S6)

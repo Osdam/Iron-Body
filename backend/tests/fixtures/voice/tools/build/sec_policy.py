@@ -27,7 +27,7 @@ PT = Fixture("policy-tables.json", header(
     decisions={
         "DF-P1": "Intervalos semiabiertos en hora de Bogotá: [07:00, 19:00) de lunes a viernes y [08:00, 15:00) los sábados; las 19:00:00 y las 15:00:00 ya están fuera. Se evalúa la hora de MARCAR (Q-8).",
         "DF-P2": "Horario propio: la intersección con el legal (nunca amplía); sin configurar = solo el legal; mal configurado (apertura ≥ cierre o mal escrito) = fuera de horario (falla cerrado).",
-        "DF-P3": "Cuentan como intento: requested, dialing, ambiguous, completed, busy, no_answer, failed y hung_up. No cuentan canceled ni failed_to_start (no salió nada). Las entrantes nunca cuentan.",
+        "DF-P3": "Cuentan como intento: requested, dialing, active (una saliente en conversación, E1-1), ambiguous, completed, busy, no_answer, failed y hung_up. No cuentan canceled ni failed_to_start (no salió nada). Las entrantes nunca cuentan, tampoco las denied (E1-2).",
         "DF-P4": "«Hoy» y «la semana» en Bogotá: hoy = la fecha de Bogotá de now; semana = desde el lunes 00:00 de Bogotá (lectura de la ley). También se da el resultado con 7 días móviles (now − 7 días, now], la lectura más estricta, para que el propietario elija (P-11).",
         "DF-P5": "Consentimiento: manda el último evento de voice_consents por (at, id); granted solo vale con source written_form, admin_with_evidence aprobado por OTRA persona, o recorded_inbound_request si la grabación está encendida (P-7: apagada, no vale); revoked vale siempre. El consentimiento del lead del motor no es de voz.",
         "DF-P6": "Las exclusiones (y las señales do_not_contact y consent_status = denied) se miran en TODA saliente, también a canarios: D8-18 «se consulta antes de cada saliente» (Q-4: D8-12 las agrupa en el alcance contacts).",
@@ -120,7 +120,7 @@ SO("horario propio mal escrito (25:00) → fuera (falla cerrado)", bog_to_utc_is
 
 # ── frequency [P-11] ────────────────────────────────────────────────────────
 NOW_F = "2026-11-11T15:00:00Z"        # miércoles 10:00 de Bogotá; la semana empezó el lunes 09-11 a las 00:00 (05:00 UTC)
-COUNTED = {"requested", "dialing", "ambiguous", "completed", "busy", "no_answer", "failed", "hung_up"}
+COUNTED = {"requested", "dialing", "active", "ambiguous", "completed", "busy", "no_answer", "failed", "hung_up"}
 
 
 def F(desc, history, today, week, rolling, *, limits=None, basis="decision-fixture", decision="DF-P3", ref="D8-12, D8-15, P-11"):
@@ -158,6 +158,8 @@ F("una sin respuesta (no_answer) hoy cuenta", [att("2026-11-11T13:00:00Z", "no_a
 F("una ambigua hoy cuenta (pudo llamar)", [att("2026-11-11T13:00:00Z", "ambiguous")], 1, 1, 1)
 F("una pedida (requested) hoy cuenta", [att("2026-11-11T14:50:00Z", "requested")], 1, 1, 1)
 F("una colgada por el corte (hung_up) hoy cuenta", [att("2026-11-11T13:00:00Z", "hung_up")], 1, 1, 1)
+F("una saliente en conversación (active, E1-1) hoy cuenta", [att("2026-11-11T14:55:00Z", "active")], 1, 1, 1, ref="D8-12, D8-15, E1-1")
+F("una entrante denegada (denied, E1-2) no cuenta", [att("2026-11-11T13:00:00Z", "denied", "inbound")], 0, 0, 0, ref="D8-15, E1-2")
 F("una entrante de hoy no cuenta (no es un contacto proactivo)", [att("2026-11-11T13:00:00Z", "completed", "inbound")], 0, 0, 0)
 F("lunes y martes de esta semana → 2 en la semana: la tercera no cabe", [att("2026-11-09T14:00:00Z"), att("2026-11-10T14:00:00Z")], 0, 2, 2,
   basis="supuesto-lead", decision="DF-P4")

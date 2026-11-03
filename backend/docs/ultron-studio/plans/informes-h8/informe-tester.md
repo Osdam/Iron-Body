@@ -6,6 +6,191 @@
 **Alcance tocado:** solo `tests/fixtures/voice/**` y este informe.
 **Sin commit** y sin tocar el índice. **Producción:** nada tocado. **Red:** ninguna. **Suites del repo:** no lancé ninguna (máquina compartida).
 
+## §E1. Enmienda 1 aplicada (03-11-2026, sobre `75a6384`; la entrega anterior está confirmada en `356113d1`)
+
+### Resultado (salida real)
+
+```
+$ php tests/fixtures/voice/tools/compiler-export.php > tests/fixtures/voice/tools/build/compiler-export.json
+$ python3 -I tests/fixtures/voice/tools/build/build.py
+compiler-cases: instantánea del compilador real incrustada (83 casos de compilación, 15 relaciones)
+twilio-signature-vectors.json: {"compute": 15, "validate": 25, "urlBuild": 5, "total": 45}
+elevenlabs-webhook-bodies.json: {"postCall": 16, "guard": 9, "initiation": 11, "tools": 21, "routeRules": 11, "total": 68}
+elevenlabs-webhook-vectors.json: {"verify": 27, "total": 27}
+twilio-webhook-bodies.json: {"usageTrigger": 7, "callStatus": 8, "callsPage": 1, "total": 16}
+holidays-co-2026-2028.json: {"isHoliday": 77, "total": 77}
+policy-tables.json: {"scheduleLegal": 20, "scheduleOwn": 11, "frequency": 19, "consent": 13, "exclusions": 16, "inboundPolicy": 15, "costReservation": 17, "brake": 16, "phoneHash": 7, "total": 134}
+state-transitions.json: {"allowed": 25, "matrix": 288, "insert": 24, "sequences": 19, "columns": 25, "eventDedupe": 5, "total": 386}
+compiler-cases.json: {"compile": 83, "capClamp": 11, "hashRelations": 15, "canonicalHash": 9, "total": 118}
+outbound-gate-cases.json: {"decide": 43, "whatsappGuard": 7, "job": 22, "total": 72}
+voice-chain-vectors.json: {"chain": 5, "subkey": 3, "verify": 27, "total": 35}
+total: 978
+
+$ python3 -I tests/fixtures/voice/tools/voice-fixtures-check.py --php                    # sale con 0
+ficheros: 10 · total 978
+forma: OK
+derivación independiente: 872 casos rehechos · discrepancias: 0
+cruces entre ficheros: 221 comprobaciones
+variantes equivocadas: 79 · cazadas 79
+php: {"canonicalHash+perfiles": 92, "elevenlabsVerify": 27, "envelope": 16, "huellasTelefono": 6, "firmasTwilio": 15, "pascua": 3, "cadenaVoz": 8, "compiladorReal": 98, "fallos": 0, "php": "PHP 8.3.33 (cli) (built: Jul 28 2026 17:56:10) (NTS)"}
+sdk: no ejecutado (sin --sdk-python): sdkConstructEvent sigue «por confirmar con el SDK»
+RESULTADO: OK
+```
+
+- **Recuento: 868 → 978 casos.** Por base:
+  - `contrato`: 443;
+  - `decision-fixture`: 392 (163 son de `state-transitions.json`, 98 de ellos de la matriz de 12 × 12 por dirección);
+  - `ley`: 95;
+  - `oficial`: 32;
+  - `supuesto-lead`: 16.
+- **Reproducible:** dos ejecuciones del generador dan los mismos sha256.
+- **Cambios en los recuentos:**
+  - `voice-chain-vectors.json`: nuevo, con 35 casos;
+  - `compiler-cases.json`: 107 → 118;
+  - `state-transitions.json`: 329 → 386 (estado `denied`, `dialing → active` y salidas de `active` en las salientes);
+  - `elevenlabs-webhook-bodies.json`: 63 → 68;
+  - `policy-tables.json`: 132 → 134.
+  - Los demás, igual. `elevenlabs-webhook-vectors.json` cambia de bytes (no de casos) porque los cuerpos llevan el aviso nuevo y se vuelven a firmar.
+- **No se dobla.** En una copia estropeé tres cosas:
+  - una firma de la cadena;
+  - la huella real de la compilación base;
+  - `dialing → active` en la matriz.
+
+  El comprobador falla en las tres:
+
+  ```
+  derivación independiente: 872 casos rehechos · discrepancias: 2
+    state-transitions.json: DISCREPA «matrix · outbound · outbound: dialing → active»
+    voice-chain-vectors.json: DISCREPA «chain · entry · seq 3 · publicar en canario la versión 13 con otro agente»
+    --php: la cadena de voz «chain · entry · seq 3 …» no cuadra con StudioContentHasher + hash_hmac
+    --php: el compilador real ya no da lo del fixture en «compile · valid · la base: versión APPROVED y perfil aprobado por otra persona»
+  RESULTADO: FALLA (4)
+  ```
+
+  La huella real solo la caza `--php`: no se puede derivar sin la plantilla, y está dicho así (DF-C12).
+- **Dos fallos que el comprobador me cazó a mí, ya corregidos:**
+  1. Su referencia de frecuencia no contaba `active` (E1-1).
+  2. El caso «dos campos» no distinguía el orden por campo del orden por motivo, porque la URL va antes que el dinero en la plantilla. Ahora el primer campo lleva una cifra y el segundo una URL, y la variante `cm_reason_major` cae.
+
+### Qué apliqué, punto por punto
+
+| Id | Ficheros | Qué cambia |
+|---|---|---|
+| **E1-9** | `compiler-cases.json` | Alineado con `app/Services/UltronStudio/StudioVoiceCompiler.php` (S8-a). Lo detalla la tabla siguiente |
+| **E1-1** | `state-transitions.json`, `policy-tables.json`, `elevenlabs-webhook-bodies.json` | `dialing → active` en las salientes, y `active → completed`, `hung_up` y `failed` también en salientes; matriz de 12 × 12. La frecuencia cuenta `active`. Las herramientas valen en `dialing` o `active` y la primera hace la transición. El caso con herramientas parte de `active` y se añade una saliente sin herramientas |
+| **E1-2** | `state-transitions.json`, `elevenlabs-webhook-bodies.json`, `twilio-webhook-bodies.json`, `policy-tables.json` | Estado `denied` (final, inicial de las entrantes). Las iniciaciones denegadas nacen en `denied`; con el caller ID oculto, sin huella (DF-E17). Hay una post-llamada sobre una `denied` (no cambia ni frena) y una herramienta sobre una `denied` → `call_not_active`. En la conciliación, la denegada es conocida por su fila y el tramo se enlaza con la madre (los dos pasan a contrato); solo la llamada sin fila abre el freno. La denegada no cuenta como intento |
+| **E1-3** | `elevenlabs-webhook-bodies.json` (`world.aiNotice` y transcripciones), `elevenlabs-webhook-vectors.json` (refirmados), `compiler-cases.json` | El aviso nuevo, literal. El comprobador lo compara con el texto copiado del contrato. El aviso antiguo de P-9 es ahora una negativa |
+| **E1-4** | **`voice-chain-vectors.json`** (nuevo) | Ver abajo |
+
+**E1-9 en `compiler-cases.json`:**
+
+| Qué pide E1-9 | Cómo queda |
+|---|---|
+| Emoji rechazado | El caso válido del emoji pasa a negativa `slot_characters`. Hay negativas nuevas de llaves (`{{system__caller_id}}`), comillas angulares y un símbolo (E1-8) |
+| `leave_message` no existe | Negativa `voicemail_not_allowed`; `closedSets.voicemailPolicies = ["hang_up"]` |
+| Transferir exige `solicitar_humano` | Negativa `transfer_requires_human_tool`, más una válida nueva: «dos herramientas sin transferir» |
+| `no_volver_a_llamar` no se quita | Negativa `opt_out_tool_missing`. La relación «una herramienta menos» quita `consultar_planes` |
+| El primer motivo es el del primer campo declarado | Orden del compilador: versión → perfil (estado, cuatro ojos, huella, campos cerrados, idioma, aviso, textos campo a campo con el orden de la plantilla, duración, herramientas, destinos, privacidad, buzón). Los tres casos solapados de antes (DF-C11, `reasonOneOf`) tienen ya motivo exacto. El caso «dos campos» distingue los dos órdenes |
+| Los uuids entran en `specHash` | La relación de los uuids da `sameSpecHash: false` (contrato); DF-C7 cambia de texto |
+| E1-6 y E1-5 | Invariantes `firstMessageEquals` (solo el aviso), `systemPromptContainsGreetings` y `dynamicVariables` |
+| E1-7 | Las versiones que compilan pasan de decisión a contrato |
+| Recalcular los hashes con el compilador real | `expected.realCompiler` en los 83 casos de compilación y las 15 relaciones (método abajo) |
+
+### Cómo se recalcularon los hashes (E1-9: «documenta el método»)
+
+1. **`tests/fixtures/voice/tools/compiler-export.php`** carga el autoload de Composer, sin Laravel ni base. Pasa cada caso de `compiler-cases.json` por `StudioVoiceCompiler::compile()` con la traducción de `StudioVoiceCompilerParityTest` de S8-a, copiada sin cambios:
+   - los nombres de campo;
+   - la huella `voice-phone` de los destinos;
+   - la versión real del catálogo congelado, con `maxChars = 160 + 20 × variante` por cada huella de versión distinta en orden de aparición;
+   - el tope recortado.
+
+   Escribe la instantánea `tools/build/compiler-export.json`, con el sha256 de cada entrada.
+2. **`build.py`** incrusta `expected.realCompiler` en cada caso:
+   - si compila: `specHash` y `voiceProfileHash`;
+   - si no: el `reason` y el `field` del compilador, con sus nombres;
+   - en las relaciones: `specHashA` y `specHashB`.
+
+   Para incrustarlos **exige** que cuadren con la expectativa neutra: el motivo y el campo traducidos, que compile, y la igualdad de huellas de cada relación. Si una entrada cambió, no usa la huella vieja (compara el sha256 de la entrada) y avisa.
+3. **`voice-fixtures-check.py --php`** vuelve a lanzar el exportador sobre el fichero que se comprueba y compara los 98 resultados.
+
+**Qué son estos valores.** Una **instantánea de regresión** del compilador de hoy, no una derivación independiente (DF-C12). Datos de la instantánea:
+- compilador `62c25a98…`;
+- plantilla `b584cd90…`, que es la del árbol de trabajo, con el aviso de E1-3 sin commit;
+- `templateHash` `6914e2e1…`.
+
+Si S8 cambia la plantilla a propósito, se reexporta y se revisa el cambio de huellas.
+
+**Discrepancia declarada (única).** «La versión nombra un destino (Gerencia) que el perfil no tiene», de DF-C9. El compilador no lee `handoffAliases`, porque R-07 se aplica al desplegar con `assertDestinationsMatch`. Queda en `realCompiler.knownMismatch`, igual que en el `NOT_APPLICABLE` de S8. E1-9 no lo nombra; si el lead lo quiere fuera, se borra el caso.
+
+### E1-4: `voice-chain-vectors.json`
+
+**Derivación, copiada del H5** (`UltronPublishedConfig::subkey()` y `signatureFor()`, que usa `StudioPublications`):
+- `k = HMAC-SHA256(clave = APP_KEY cruda (base64: decodificado), mensaje = 'ultron-studio-voice-chain')`;
+- `firma = hex(HMAC-SHA256(k, mensaje))`;
+- `mensaje` = el JSON canónico (`StudioContentHasher::canonicalJson`) de las 10 claves de E1-4;
+- `prev_hash` = sha256 del mensaje anterior, o 64 ceros en la génesis.
+
+**Secciones:**
+- **`chain` (5).** Una cadena de cinco entradas:
+  - publicar en canario (génesis);
+  - promover a `rest`;
+  - publicar otra versión con otro agente;
+  - revertir al agente anterior (D8-9);
+  - apagar la voz, una entrada `off` sin artefactos (D8-20 nivel 2).
+
+  Cada una con su mensaje, su huella y su firma.
+- **`subkey` (3).** La subclave con la APP_KEY `base64:` y con una cruda, y la del H5, que es distinta.
+- **`verify` (27).** Las 5 buenas y las negativas, con su motivo:
+  - `signature_mismatch`: subclave del H5, prefijo de contrato, APP_KEY rotada, campo alterado;
+  - `not_canonical`: con sangría o claves desordenadas aunque la firma cuadre;
+  - `signature_malformed`: firma en mayúsculas o de 63 caracteres;
+  - `seq_gap`;
+  - `chain_broken`: `prev_hash` ajeno, `prev_hash` = la firma anterior, génesis sin ceros;
+  - `malformed`: clave de más o de menos, milisegundos, desfase en vez de Z, `seq` de texto o 0, `scope` desconocido, `off` con agente, `canary` sin `spec_hash`.
+
+**Verificación:** openssl en el comprobador y PHP real con `--php`. Seis variantes equivocadas caen:
+- etiqueta del H5;
+- prefijo de contrato;
+- `prev_hash` = firma;
+- sin recanonicalizar;
+- mayúsculas aceptadas;
+- sin mirar `seq`.
+
+**Decisiones propias (DF-V1 a DF-V6):** la forma de `prev_hash`, la fecha al segundo en UTC, los tres `scope`, los bytes canónicos, la firma en minúsculas y el orden del lector.
+
+**Dos preguntas nuevas:**
+- **Q-17.** E1-4 define el mensaje sin el prefijo `CONTRACT + "\n"` que usa el H5, y así van los vectores. Si S8-b quiere el prefijo, hay que cambiar E1-4.
+- **Q-18.** `prev_hash` es la huella del mensaje anterior, no su firma.
+
+### Lo que tiene que hacer S8 en su paridad (es su fichero; no lo toqué)
+
+`StudioVoiceCompilerParityTest` **va a fallar** contra este fixture, como estaba previsto: sus 6 `CONFLICTS` ya no existen o han cambiado de expectativa. Lo digo leyendo su código; no la ejecuté (máquina compartida: no lanzo suites del repo). Los cambios exactos están en el README del directorio, en «Para la paridad de S8»:
+- vaciar `CONFLICTS`;
+- añadir las 4 traducciones nuevas de motivo: `text_characters`, `opt_out_tool_required`, `transfer_tools_mismatch` y `profile_field_invalid` en `voicemail`;
+- actualizar las invariantes renombradas.
+
+El exportador ya aplica esa misma traducción y da 0 discrepancias con el compilador real, así que, actualizada la tabla, la paridad tiene que quedar en verde.
+
+### Ficheros de esta entrega (E1)
+
+- **Modificados** (en `tests/fixtures/voice/`):
+  - `compiler-cases.json`, `elevenlabs-webhook-bodies.json`, `elevenlabs-webhook-vectors.json`, `policy-tables.json`, `state-transitions.json`, `twilio-webhook-bodies.json` y `README.md`;
+  - `tools/voice-fixtures-check.py`;
+  - `tools/build/build.py`, `sec_compiler.py`, `sec_eleven_bodies.py`, `sec_policy.py`, `sec_states.py` y `sec_twilio_bodies.py`;
+  - este informe.
+- **Nuevos:**
+  - `tests/fixtures/voice/voice-chain-vectors.json`;
+  - `tests/fixtures/voice/tools/compiler-export.php`;
+  - `tests/fixtures/voice/tools/build/compiler-export.json` (la instantánea);
+  - `tests/fixtures/voice/tools/build/sec_chain.py`.
+- **Sin cambios:** `holidays-co-2026-2028.json`, `outbound-gate-cases.json`, `twilio-signature-vectors.json`.
+
+No toqué nada fuera de `tests/fixtures/voice/**` y este informe. No hay commit.
+
+---
+
+*Lo que sigue es la entrega del paso 1 tal como se confirmó en `356113d1`, antes de la Enmienda.*
+
 ## 0. Resumen
 
 - **Entregado:** 9 fixtures, su README, el generador (`tools/build/`) y el comprobador independiente (`tools/voice-fixtures-check.py`).

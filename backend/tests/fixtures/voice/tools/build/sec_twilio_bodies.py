@@ -29,8 +29,7 @@ TB = Fixture("twilio-webhook-bodies.json", header(
         "DF-W1": "Un aviso de gasto se persiste como evento de kind usage_alert, que NO está en el conjunto cerrado de D8-13 (Q-5: el lead lo añade o elige otro).",
         "DF-W2": "Firma de Twilio mala en usage-trigger de la voz → 401 (como la post-llamada; el del OTP da 403 y no se toca).",
         "DF-W3": "Sin IdempotencyToken: se persiste y abre el freno igual, sin deduplicación (abrir el freno es idempotente).",
-        "DF-W4": "Un tramo de transferencia (parent_call_sid de una llamada conocida) se concilia con su llamada madre y suma su coste; no es unknown_provider_call (Q-6).",
-        "DF-W5": "Una entrante denegada en la iniciación queda reconocida por su call_sid (evento initiation_received): la conciliación no la marca como desconocida (Q-6: si no, cualquier desconocido que llame abre el freno).",
+        "DF-W4": "El tramo de transferencia se reconoce por parent_call_sid = el call_sid de una llamada con fila (E1-2: «se enlaza con la llamada madre») y su coste se suma a la madre, con el evento cost_recorded.",
         "DF-W6": "Precio de Twilio: el valor absoluto de price (texto con signo) en micro-US$ enteros; null = todavía sin tarificar (se reintenta).",
     },
 ))
@@ -128,8 +127,7 @@ PAGE = {"calls": [
     "page": 0, "page_size": 50, "previous_page_uri": None, "start": 0,
     "uri": f"/2010-04-01/Accounts/{TWILIO_SUBACCOUNT_SID}/Calls.json?PageSize=50&Page=0"}
 KNOWN = {call_sid(1): "completed", call_sid(11): "ambiguous", call_sid(12): "ambiguous", call_sid(13): "dialing",
-         call_sid(14): "ambiguous", call_sid(17): "completed"}
-INITIATION_SEEN = [call_sid(16)]
+         call_sid(14): "ambiguous", call_sid(16): "denied", call_sid(17): "completed"}
 
 
 def price_micro(p):
@@ -150,14 +148,15 @@ OUTCOMES = {
     call_sid(14): {"match": "known", "statusBefore": "ambiguous", "statusAfter": "failed", "costMicroUsd": None, "events": ["reconciled"],
                    "decision": "DF-E14"},
     call_sid(15): {"match": "transfer_leg", "parentCallSid": call_sid(1), "costMicroUsd": 140000, "events": ["cost_recorded"], "brakeOpens": False,
-                   "decision": "DF-W4"},
-    call_sid(16): {"match": "denied_inbound", "events": ["cost_recorded"], "costMicroUsd": 14180, "brakeOpens": False, "decision": "DF-W5"},
+                   "basis": "contrato (E1-2)", "decision": "DF-W4"},
+    call_sid(16): {"match": "known", "statusBefore": "denied", "statusAfter": "denied", "costMicroUsd": 14180, "events": ["reconciled", "cost_recorded"],
+                   "brakeOpens": False, "basis": "contrato (E1-2): la entrante denegada tiene su fila denied"},
     call_sid(17): {"match": "known", "statusBefore": "completed", "statusAfter": "completed", "costMicroUsd": None, "events": ["reconciled"],
                    "note": "price null: todavía sin tarificar, se reintenta (DF-W6)", "decision": "DF-W6"},
 }
-TB.add("callsPage", "listCalls", "una página de la subcuenta frente a voice_calls: conocidas, ambiguas resueltas, desconocida, tramo de transferencia y entrante denegada",
-       "D8-21, D8-19, D8-3", "decision-fixture",
-       {"page": PAGE, "given": {"voiceCallsByCallSid": KNOWN, "initiationReceivedCallSids": INITIATION_SEEN, "brakeOpen": False}},
+TB.add("callsPage", "listCalls", "una página de la subcuenta frente a voice_calls: conocidas, ambiguas resueltas, desconocida (la única que abre el freno), tramo de transferencia y entrante denegada",
+       "D8-21, D8-19, D8-3, E1-2", "decision-fixture",
+       {"page": PAGE, "given": {"voiceCallsByCallSid": KNOWN, "brakeOpen": False}},
        {"perCall": OUTCOMES, "brakeOpens": True, "brakeReason": "unknown_provider_call",
         "mustNotPersist": [CANARY_A, STRANGER, DEST_RECEPCION]}, decision="DF-W6")
 for sid, o in OUTCOMES.items():

@@ -57,7 +57,7 @@
     "sealedAgentCanary": "agent_h8fx_canary_0003",
     "previousAgent": "agent_h8fx_canary_0002",
     "versionLabel": "v12 · canario",
-    "p9Notice": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma automática y tus datos se tratan según nuestra política de privacidad. Si prefieres hablar con una persona, dímelo en cualquier momento.",
+    "aiNotice": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
     "canaryActive": "+573000000031",
     "stranger": "+573000000077",
     "headers": {
@@ -79,28 +79,27 @@
     "DF-E3": "Un JSON no válido o sin type, con la firma buena, es «tipo desconocido válido»: 200 y se ignora (nunca un 4xx en bucle).",
     "DF-E4": "Un webhook sobre una llamada en estado final registra el evento y no cambia el estado.",
     "DF-E5": "Una post-llamada de una conversación sin fila en voice_calls es unknown_provider_call y abre el freno (R-2).",
-    "DF-E6": "Iniciación autenticada pero con el cuerpo mal formado: 200 con caller_authorized = no (denegación explícita, no depender de C-A2).",
+    "DF-E6": "Iniciación autenticada pero con el cuerpo mal formado: 200 con caller_authorized = no (denegación explícita, no depender de C-A2) y sin fila (sin call_sid no hay a qué atarla).",
     "DF-E8": "Esquema estricto de cada herramienta (additionalProperties = false); conversation_id y call_sid de system__* (C-A3).",
-    "DF-E9": "«En curso» para una herramienta = dialing o active (D8-10 dice active, pero una saliente contestada sigue en dialing por D8-13: Q-3).",
-    "DF-E10": "«El autorizado es el sellado» se lee como: la fila de la llamada tiene caller_authorized = si (las entrantes denegadas no reciben herramientas).",
+    "DF-E9": "Nombres de los veredictos de la comprobación de la llamada: call_not_found (sin fila), call_not_active (ni dialing ni active: E1-1; una entrante denegada está en denied, E1-2), voice_braked y tool_quota_exceeded.",
     "DF-E11": "Turnos de la guarda: índice 0 de data.transcript. Códigos de inspect() del motor más voice_notice_missing, voice_money_not_from_tool y voice_transfer_not_approved.",
-    "DF-E12": "Iniciación con un agent_id distinto del sellado de la parte vigente: caller_authorized = no, evento seal_mismatch y freno.",
+    "DF-E12": "Iniciación con un agent_id distinto del sellado de la parte vigente: caller_authorized = no (fila denied, E1-2), evento seal_mismatch y freno.",
     "DF-E13": "Iniciación para un called_number distinto de TWILIO_VOICE_FROM: caller_authorized = no.",
     "DF-E15": "Autenticación fallida en la iniciación y en las herramientas → 401; herramienta fuera de la lista cerrada → 404; los rechazos de la comprobación de la llamada → 200 con un mensaje neutro (R-16: nunca silencio).",
-    "DF-P9": "Un caller ID oculto o ausente (anonymous, vacío) no es un canario: not_an_active_voice_canary.",
+    "DF-E17": "La fila denied de E1-2 lleva la huella y los 4 últimos dígitos solo si caller_id es un E.164; con el caller ID oculto, los dos a null (la huella no se calcula sobre «anonymous»). El sello lo fija B8-b.",
     "DF-S2": "requested → busy | no_answer | failed | completed: el webhook puede llegar antes de que el job guarde dialing; entonces el job ya no puede escribir dialing (final)."
   },
   "counts": {
-    "postCall": 14,
+    "postCall": 16,
     "guard": 9,
     "initiation": 11,
-    "tools": 18,
+    "tools": 21,
     "routeRules": 11,
-    "total": 63
+    "total": 68
   },
   "postCall": [
     {
-      "name": "postCall · post_call_transcription · saliente a un canario, contestada: dialing → completed con su duración, sello verificado",
+      "name": "postCall · post_call_transcription · saliente a un canario, contestada y con herramientas (ya active por E1-1): active → completed con su duración, sello verificado",
       "kind": "post_call_transcription",
       "contractRef": "D8-13, D8-16",
       "basis": "contrato",
@@ -108,7 +107,7 @@
       "given": {
         "call": {
           "direction": "outbound",
-          "status": "dialing",
+          "status": "active",
           "providerConversationId": "conv_h8fx_0001",
           "providerCallSid": "CA000000000000000000000000a8000001",
           "callRef": "8f000000-0000-4000-8000-000000000001",
@@ -116,7 +115,7 @@
           "callerAuthorized": "si"
         }
       },
-      "rawBody": "{\"type\":\"post_call_transcription\",\"event_timestamp\":1793804340,\"data\":{\"agent_id\":\"agent_h8fx_canary_0003\",\"conversation_id\":\"conv_h8fx_0001\",\"status\":\"done\",\"user_id\":\"8f000000-0000-4000-8000-000000000001\",\"branch_id\":null,\"version_id\":null,\"environment\":\"production\",\"transcript\":[{\"role\":\"agent\",\"message\":\"Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma automática y tus datos se tratan según nuestra política de privacidad. Si prefieres hablar con una persona, dímelo en cualquier momento. ¿En qué te puedo ayudar?\",\"time_in_call_secs\":0,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"Hola, soy Ana Prueba, mi número es 300 000 0031 y mi correo ana.prueba@correo.test. ¿A qué hora abren?\",\"time_in_call_secs\":9,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Déjame consultarlo.\",\"time_in_call_secs\":14,\"tool_calls\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"result_value\":\"{\\\"sede\\\": \\\"Sede Centro\\\", \\\"horario\\\": \\\"lunes a viernes de 5:00 a 22:00; sábados de 7:00 a 14:00\\\"}\",\"is_error\":false,\"tool_has_been_called\":true}],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"La Sede Centro abre de lunes a viernes de 5:00 a 22:00 y los sábados de 7:00 a 14:00. ¿Algo más?\",\"time_in_call_secs\":16,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"No, gracias.\",\"time_in_call_secs\":25,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Con gusto. Hasta luego.\",\"time_in_call_secs\":27,\"tool_calls\":[{\"type\":\"system\",\"tool_name\":\"end_call\",\"request_id\":\"toolreq_h8fx_0002\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null}],\"metadata\":{\"start_time_unix_secs\":1793804153,\"call_duration_secs\":187,\"cost\":412,\"termination_reason\":\"end_call tool was called\",\"phone_call\":{\"direction\":\"outbound\",\"phone_number_id\":\"phnum_h8fx_0001\",\"agent_number\":\"+576010000090\",\"external_number\":\"+573000000031\",\"type\":\"twilio\",\"call_sid\":\"CA000000000000000000000000a8000001\"}},\"analysis\":{\"call_successful\":\"success\",\"transcript_summary\":\"La persona preguntó por el horario de la Sede Centro y colgó satisfecha.\",\"evaluation_criteria_results\":{},\"data_collection_results\":{}},\"conversation_initiation_client_data\":{\"dynamic_variables\":{\"caller_authorized\":\"si\",\"call_ref\":\"8f000000-0000-4000-8000-000000000001\",\"version_label\":\"v12 · canario\",\"system__caller_id\":\"+573000000031\",\"system__call_sid\":\"CA000000000000000000000000a8000001\"}}}}",
+      "rawBody": "{\"type\":\"post_call_transcription\",\"event_timestamp\":1793804340,\"data\":{\"agent_id\":\"agent_h8fx_canary_0003\",\"conversation_id\":\"conv_h8fx_0001\",\"status\":\"done\",\"user_id\":\"8f000000-0000-4000-8000-000000000001\",\"branch_id\":null,\"version_id\":null,\"environment\":\"production\",\"transcript\":[{\"role\":\"agent\",\"message\":\"Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento. ¿En qué te puedo ayudar?\",\"time_in_call_secs\":0,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"Hola, soy Ana Prueba, mi número es 300 000 0031 y mi correo ana.prueba@correo.test. ¿A qué hora abren?\",\"time_in_call_secs\":9,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Déjame consultarlo.\",\"time_in_call_secs\":14,\"tool_calls\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"result_value\":\"{\\\"sede\\\": \\\"Sede Centro\\\", \\\"horario\\\": \\\"lunes a viernes de 5:00 a 22:00; sábados de 7:00 a 14:00\\\"}\",\"is_error\":false,\"tool_has_been_called\":true}],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"La Sede Centro abre de lunes a viernes de 5:00 a 22:00 y los sábados de 7:00 a 14:00. ¿Algo más?\",\"time_in_call_secs\":16,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"No, gracias.\",\"time_in_call_secs\":25,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Con gusto. Hasta luego.\",\"time_in_call_secs\":27,\"tool_calls\":[{\"type\":\"system\",\"tool_name\":\"end_call\",\"request_id\":\"toolreq_h8fx_0002\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null}],\"metadata\":{\"start_time_unix_secs\":1793804153,\"call_duration_secs\":187,\"cost\":412,\"termination_reason\":\"end_call tool was called\",\"phone_call\":{\"direction\":\"outbound\",\"phone_number_id\":\"phnum_h8fx_0001\",\"agent_number\":\"+576010000090\",\"external_number\":\"+573000000031\",\"type\":\"twilio\",\"call_sid\":\"CA000000000000000000000000a8000001\"}},\"analysis\":{\"call_successful\":\"success\",\"transcript_summary\":\"La persona preguntó por el horario de la Sede Centro y colgó satisfecha.\",\"evaluation_criteria_results\":{},\"data_collection_results\":{}},\"conversation_initiation_client_data\":{\"dynamic_variables\":{\"caller_authorized\":\"si\",\"call_ref\":\"8f000000-0000-4000-8000-000000000001\",\"version_label\":\"v12 · canario\",\"system__caller_id\":\"+573000000031\",\"system__call_sid\":\"CA000000000000000000000000a8000001\"}}}}",
       "expected": {
         "http": 200,
         "envelopeType": "post_call_transcription",
@@ -133,7 +132,7 @@
           }
         ],
         "transition": {
-          "from": "dialing",
+          "from": "active",
           "to": "completed"
         },
         "durationSecs": 187,
@@ -178,7 +177,7 @@
           "callerAuthorized": "si"
         }
       },
-      "rawBody": "{\"type\": \"post_call_transcription\", \"event_timestamp\": 1793804340, \"data\": {\"agent_id\": \"agent_h8fx_canary_0003\", \"conversation_id\": \"conv_h8fx_0002\", \"status\": \"done\", \"user_id\": \"8f000000-0000-4000-8000-000000000002\", \"branch_id\": null, \"version_id\": null, \"environment\": \"production\", \"transcript\": [{\"role\": \"agent\", \"message\": \"Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma autom\\u00e1tica y tus datos se tratan seg\\u00fan nuestra pol\\u00edtica de privacidad. Si prefieres hablar con una persona, d\\u00edmelo en cualquier momento. \\u00bfEn qu\\u00e9 te puedo ayudar?\", \"time_in_call_secs\": 0, \"tool_calls\": [], \"tool_results\": [], \"feedback\": null, \"conversation_turn_metrics\": null}, {\"role\": \"user\", \"message\": \"Hola, soy Ana Prueba, mi n\\u00famero es 300 000 0031 y mi correo ana.prueba@correo.test. \\u00bfA qu\\u00e9 hora abren?\", \"time_in_call_secs\": 9, \"tool_calls\": [], \"tool_results\": [], \"feedback\": null, \"conversation_turn_metrics\": null}, {\"role\": \"agent\", \"message\": \"D\\u00e9jame consultarlo.\", \"time_in_call_secs\": 14, \"tool_calls\": [{\"type\": \"webhook\", \"tool_name\": \"consultar_horarios\", \"request_id\": \"toolreq_h8fx_0001\", \"params_as_json\": \"{}\", \"tool_has_been_called\": true, \"tool_details\": null}], \"tool_results\": [{\"type\": \"webhook\", \"tool_name\": \"consultar_horarios\", \"request_id\": \"toolreq_h8fx_0001\", \"result_value\": \"{\\\"sede\\\": \\\"Sede Centro\\\", \\\"horario\\\": \\\"lunes a viernes de 5:00 a 22:00; s\\u00e1bados de 7:00 a 14:00\\\"}\", \"is_error\": false, \"tool_has_been_called\": true}], \"feedback\": null, \"conversation_turn_metrics\": null}, {\"role\": \"agent\", \"message\": \"La Sede Centro abre de lunes a viernes de 5:00 a 22:00 y los s\\u00e1bados de 7:00 a 14:00. \\u00bfAlgo m\\u00e1s?\", \"time_in_call_secs\": 16, \"tool_calls\": [], \"tool_results\": [], \"feedback\": null, \"conversation_turn_metrics\": null}, {\"role\": \"user\", \"message\": \"No, gracias.\", \"time_in_call_secs\": 25, \"tool_calls\": [], \"tool_results\": [], \"feedback\": null, \"conversation_turn_metrics\": null}, {\"role\": \"agent\", \"message\": \"Con gusto. Hasta luego.\", \"time_in_call_secs\": 27, \"tool_calls\": [{\"type\": \"system\", \"tool_name\": \"end_call\", \"request_id\": \"toolreq_h8fx_0002\", \"params_as_json\": \"{}\", \"tool_has_been_called\": true, \"tool_details\": null}], \"tool_results\": [], \"feedback\": null, \"conversation_turn_metrics\": null}], \"metadata\": {\"start_time_unix_secs\": 1793804245, \"call_duration_secs\": 95, \"cost\": 210, \"termination_reason\": \"end_call tool was called\", \"phone_call\": {\"direction\": \"inbound\", \"phone_number_id\": \"phnum_h8fx_0001\", \"agent_number\": \"+576010000090\", \"external_number\": \"+573000000031\", \"type\": \"twilio\", \"call_sid\": \"CA000000000000000000000000a8000002\"}}, \"analysis\": {\"call_successful\": \"success\", \"transcript_summary\": \"La persona pregunt\\u00f3 por el horario de la Sede Centro y colg\\u00f3 satisfecha.\", \"evaluation_criteria_results\": {}, \"data_collection_results\": {}}, \"conversation_initiation_client_data\": {\"dynamic_variables\": {\"caller_authorized\": \"si\", \"call_ref\": \"8f000000-0000-4000-8000-000000000002\", \"version_label\": \"v12 \\u00b7 canario\", \"system__caller_id\": \"+573000000031\", \"system__call_sid\": \"CA000000000000000000000000a8000002\"}}}}",
+      "rawBody": "{\"type\": \"post_call_transcription\", \"event_timestamp\": 1793804340, \"data\": {\"agent_id\": \"agent_h8fx_canary_0003\", \"conversation_id\": \"conv_h8fx_0002\", \"status\": \"done\", \"user_id\": \"8f000000-0000-4000-8000-000000000002\", \"branch_id\": null, \"version_id\": null, \"environment\": \"production\", \"transcript\": [{\"role\": \"agent\", \"message\": \"Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan seg\\u00fan nuestra pol\\u00edtica de privacidad. Si no quieres recibir m\\u00e1s llamadas o prefieres hablar con una persona, d\\u00edmelo en cualquier momento. \\u00bfEn qu\\u00e9 te puedo ayudar?\", \"time_in_call_secs\": 0, \"tool_calls\": [], \"tool_results\": [], \"feedback\": null, \"conversation_turn_metrics\": null}, {\"role\": \"user\", \"message\": \"Hola, soy Ana Prueba, mi n\\u00famero es 300 000 0031 y mi correo ana.prueba@correo.test. \\u00bfA qu\\u00e9 hora abren?\", \"time_in_call_secs\": 9, \"tool_calls\": [], \"tool_results\": [], \"feedback\": null, \"conversation_turn_metrics\": null}, {\"role\": \"agent\", \"message\": \"D\\u00e9jame consultarlo.\", \"time_in_call_secs\": 14, \"tool_calls\": [{\"type\": \"webhook\", \"tool_name\": \"consultar_horarios\", \"request_id\": \"toolreq_h8fx_0001\", \"params_as_json\": \"{}\", \"tool_has_been_called\": true, \"tool_details\": null}], \"tool_results\": [{\"type\": \"webhook\", \"tool_name\": \"consultar_horarios\", \"request_id\": \"toolreq_h8fx_0001\", \"result_value\": \"{\\\"sede\\\": \\\"Sede Centro\\\", \\\"horario\\\": \\\"lunes a viernes de 5:00 a 22:00; s\\u00e1bados de 7:00 a 14:00\\\"}\", \"is_error\": false, \"tool_has_been_called\": true}], \"feedback\": null, \"conversation_turn_metrics\": null}, {\"role\": \"agent\", \"message\": \"La Sede Centro abre de lunes a viernes de 5:00 a 22:00 y los s\\u00e1bados de 7:00 a 14:00. \\u00bfAlgo m\\u00e1s?\", \"time_in_call_secs\": 16, \"tool_calls\": [], \"tool_results\": [], \"feedback\": null, \"conversation_turn_metrics\": null}, {\"role\": \"user\", \"message\": \"No, gracias.\", \"time_in_call_secs\": 25, \"tool_calls\": [], \"tool_results\": [], \"feedback\": null, \"conversation_turn_metrics\": null}, {\"role\": \"agent\", \"message\": \"Con gusto. Hasta luego.\", \"time_in_call_secs\": 27, \"tool_calls\": [{\"type\": \"system\", \"tool_name\": \"end_call\", \"request_id\": \"toolreq_h8fx_0002\", \"params_as_json\": \"{}\", \"tool_has_been_called\": true, \"tool_details\": null}], \"tool_results\": [], \"feedback\": null, \"conversation_turn_metrics\": null}], \"metadata\": {\"start_time_unix_secs\": 1793804245, \"call_duration_secs\": 95, \"cost\": 210, \"termination_reason\": \"end_call tool was called\", \"phone_call\": {\"direction\": \"inbound\", \"phone_number_id\": \"phnum_h8fx_0001\", \"agent_number\": \"+576010000090\", \"external_number\": \"+573000000031\", \"type\": \"twilio\", \"call_sid\": \"CA000000000000000000000000a8000002\"}}, \"analysis\": {\"call_successful\": \"success\", \"transcript_summary\": \"La persona pregunt\\u00f3 por el horario de la Sede Centro y colg\\u00f3 satisfecha.\", \"evaluation_criteria_results\": {}, \"data_collection_results\": {}}, \"conversation_initiation_client_data\": {\"dynamic_variables\": {\"caller_authorized\": \"si\", \"call_ref\": \"8f000000-0000-4000-8000-000000000002\", \"version_label\": \"v12 \\u00b7 canario\", \"system__caller_id\": \"+573000000031\", \"system__call_sid\": \"CA000000000000000000000000a8000002\"}}}}",
       "expected": {
         "http": 200,
         "envelopeType": "post_call_transcription",
@@ -222,6 +221,63 @@
       }
     },
     {
+      "name": "postCall · post_call_transcription · saliente contestada sin herramientas (sigue en dialing): dialing → completed",
+      "kind": "post_call_transcription",
+      "contractRef": "D8-13, E1-1",
+      "basis": "contrato",
+      "bodyKey": "pc_completed_no_tools",
+      "given": {
+        "call": {
+          "direction": "outbound",
+          "status": "dialing",
+          "providerConversationId": "conv_h8fx_0018",
+          "providerCallSid": "CA000000000000000000000000a8000012",
+          "callRef": "8f000000-0000-4000-8000-000000000018",
+          "sealedAgentId": "agent_h8fx_canary_0003",
+          "callerAuthorized": "si"
+        }
+      },
+      "rawBody": "{\"type\":\"post_call_transcription\",\"event_timestamp\":1793804340,\"data\":{\"agent_id\":\"agent_h8fx_canary_0003\",\"conversation_id\":\"conv_h8fx_0018\",\"status\":\"done\",\"user_id\":\"8f000000-0000-4000-8000-000000000018\",\"branch_id\":null,\"version_id\":null,\"environment\":\"production\",\"transcript\":[{\"role\":\"agent\",\"message\":\"Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.\",\"time_in_call_secs\":0,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"No me interesa, gracias.\",\"time_in_call_secs\":7,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Entendido. Que tengas un buen día.\",\"time_in_call_secs\":9,\"tool_calls\":[{\"type\":\"system\",\"tool_name\":\"end_call\",\"request_id\":\"toolreq_h8fx_0401\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null}],\"metadata\":{\"start_time_unix_secs\":1793804328,\"call_duration_secs\":12,\"cost\":30,\"termination_reason\":\"end_call tool was called\",\"phone_call\":{\"direction\":\"outbound\",\"phone_number_id\":\"phnum_h8fx_0001\",\"agent_number\":\"+576010000090\",\"external_number\":\"+573000000031\",\"type\":\"twilio\",\"call_sid\":\"CA000000000000000000000000a8000012\"}},\"analysis\":{\"call_successful\":\"success\",\"transcript_summary\":\"La persona preguntó por el horario de la Sede Centro y colgó satisfecha.\",\"evaluation_criteria_results\":{},\"data_collection_results\":{}},\"conversation_initiation_client_data\":{\"dynamic_variables\":{\"caller_authorized\":\"si\",\"call_ref\":\"8f000000-0000-4000-8000-000000000018\",\"version_label\":\"v12 · canario\",\"system__caller_id\":\"+573000000031\",\"system__call_sid\":\"CA000000000000000000000000a8000012\"}}}}",
+      "expected": {
+        "http": 200,
+        "envelopeType": "post_call_transcription",
+        "events": [
+          {
+            "provider": "elevenlabs",
+            "kind": "post_call_transcription",
+            "providerEventKey": "conv_h8fx_0018"
+          },
+          {
+            "provider": "elevenlabs",
+            "kind": "guard_verdict",
+            "providerEventKey": "conv_h8fx_0018"
+          }
+        ],
+        "transition": {
+          "from": "dialing",
+          "to": "completed"
+        },
+        "durationSecs": 12,
+        "seal": {
+          "observedAgentId": "agent_h8fx_canary_0003",
+          "observedVersionId": null,
+          "observedBranchId": null,
+          "sealVerified": true
+        },
+        "costRaw": 30,
+        "costUnits": "por confirmar (D8-15)",
+        "guard": {
+          "violations": [],
+          "brakeOpens": false
+        },
+        "brakeOpens": false,
+        "mustNotPersist": [
+          "+573000000031",
+          "573000000031"
+        ]
+      }
+    },
+    {
       "name": "postCall · post_call_transcription · seal_mismatch: el agente observado no es el sellado → evento y freno (D8-8, D8-19)",
       "kind": "post_call_transcription",
       "contractRef": "D8-8, D8-19",
@@ -238,7 +294,7 @@
           "callerAuthorized": "si"
         }
       },
-      "rawBody": "{\"type\":\"post_call_transcription\",\"event_timestamp\":1793804340,\"data\":{\"agent_id\":\"agent_h8fx_canary_0002\",\"conversation_id\":\"conv_h8fx_0003\",\"status\":\"done\",\"user_id\":\"8f000000-0000-4000-8000-000000000003\",\"branch_id\":null,\"version_id\":null,\"environment\":\"production\",\"transcript\":[{\"role\":\"agent\",\"message\":\"Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma automática y tus datos se tratan según nuestra política de privacidad. Si prefieres hablar con una persona, dímelo en cualquier momento. ¿En qué te puedo ayudar?\",\"time_in_call_secs\":0,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"Hola, soy Ana Prueba, mi número es 300 000 0031 y mi correo ana.prueba@correo.test. ¿A qué hora abren?\",\"time_in_call_secs\":9,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Déjame consultarlo.\",\"time_in_call_secs\":14,\"tool_calls\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"result_value\":\"{\\\"sede\\\": \\\"Sede Centro\\\", \\\"horario\\\": \\\"lunes a viernes de 5:00 a 22:00; sábados de 7:00 a 14:00\\\"}\",\"is_error\":false,\"tool_has_been_called\":true}],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"La Sede Centro abre de lunes a viernes de 5:00 a 22:00 y los sábados de 7:00 a 14:00. ¿Algo más?\",\"time_in_call_secs\":16,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"No, gracias.\",\"time_in_call_secs\":25,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Con gusto. Hasta luego.\",\"time_in_call_secs\":27,\"tool_calls\":[{\"type\":\"system\",\"tool_name\":\"end_call\",\"request_id\":\"toolreq_h8fx_0002\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null}],\"metadata\":{\"start_time_unix_secs\":1793804153,\"call_duration_secs\":187,\"cost\":412,\"termination_reason\":\"end_call tool was called\",\"phone_call\":{\"direction\":\"outbound\",\"phone_number_id\":\"phnum_h8fx_0001\",\"agent_number\":\"+576010000090\",\"external_number\":\"+573000000031\",\"type\":\"twilio\",\"call_sid\":\"CA000000000000000000000000a8000003\"}},\"analysis\":{\"call_successful\":\"success\",\"transcript_summary\":\"La persona preguntó por el horario de la Sede Centro y colgó satisfecha.\",\"evaluation_criteria_results\":{},\"data_collection_results\":{}},\"conversation_initiation_client_data\":{\"dynamic_variables\":{\"caller_authorized\":\"si\",\"call_ref\":\"8f000000-0000-4000-8000-000000000003\",\"version_label\":\"v12 · canario\",\"system__caller_id\":\"+573000000031\",\"system__call_sid\":\"CA000000000000000000000000a8000003\"}}}}",
+      "rawBody": "{\"type\":\"post_call_transcription\",\"event_timestamp\":1793804340,\"data\":{\"agent_id\":\"agent_h8fx_canary_0002\",\"conversation_id\":\"conv_h8fx_0003\",\"status\":\"done\",\"user_id\":\"8f000000-0000-4000-8000-000000000003\",\"branch_id\":null,\"version_id\":null,\"environment\":\"production\",\"transcript\":[{\"role\":\"agent\",\"message\":\"Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento. ¿En qué te puedo ayudar?\",\"time_in_call_secs\":0,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"Hola, soy Ana Prueba, mi número es 300 000 0031 y mi correo ana.prueba@correo.test. ¿A qué hora abren?\",\"time_in_call_secs\":9,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Déjame consultarlo.\",\"time_in_call_secs\":14,\"tool_calls\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"result_value\":\"{\\\"sede\\\": \\\"Sede Centro\\\", \\\"horario\\\": \\\"lunes a viernes de 5:00 a 22:00; sábados de 7:00 a 14:00\\\"}\",\"is_error\":false,\"tool_has_been_called\":true}],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"La Sede Centro abre de lunes a viernes de 5:00 a 22:00 y los sábados de 7:00 a 14:00. ¿Algo más?\",\"time_in_call_secs\":16,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"No, gracias.\",\"time_in_call_secs\":25,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Con gusto. Hasta luego.\",\"time_in_call_secs\":27,\"tool_calls\":[{\"type\":\"system\",\"tool_name\":\"end_call\",\"request_id\":\"toolreq_h8fx_0002\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null}],\"metadata\":{\"start_time_unix_secs\":1793804153,\"call_duration_secs\":187,\"cost\":412,\"termination_reason\":\"end_call tool was called\",\"phone_call\":{\"direction\":\"outbound\",\"phone_number_id\":\"phnum_h8fx_0001\",\"agent_number\":\"+576010000090\",\"external_number\":\"+573000000031\",\"type\":\"twilio\",\"call_sid\":\"CA000000000000000000000000a8000003\"}},\"analysis\":{\"call_successful\":\"success\",\"transcript_summary\":\"La persona preguntó por el horario de la Sede Centro y colgó satisfecha.\",\"evaluation_criteria_results\":{},\"data_collection_results\":{}},\"conversation_initiation_client_data\":{\"dynamic_variables\":{\"caller_authorized\":\"si\",\"call_ref\":\"8f000000-0000-4000-8000-000000000003\",\"version_label\":\"v12 · canario\",\"system__caller_id\":\"+573000000031\",\"system__call_sid\":\"CA000000000000000000000000a8000003\"}}}}",
       "expected": {
         "http": 200,
         "envelopeType": "post_call_transcription",
@@ -305,7 +361,7 @@
           "callerAuthorized": "si"
         }
       },
-      "rawBody": "{\"type\":\"post_call_transcription\",\"event_timestamp\":1793804340,\"data\":{\"agent_id\":\"agent_h8fx_canary_0003\",\"conversation_id\":\"conv_h8fx_0004\",\"status\":\"done\",\"user_id\":\"8f000000-0000-4000-8000-000000000004\",\"branch_id\":\"agtbrch_h8fx_0001\",\"version_id\":\"agtvrsn_h8fx_0001\",\"environment\":\"production\",\"transcript\":[{\"role\":\"agent\",\"message\":\"Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma automática y tus datos se tratan según nuestra política de privacidad. Si prefieres hablar con una persona, dímelo en cualquier momento. ¿En qué te puedo ayudar?\",\"time_in_call_secs\":0,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"Hola, soy Ana Prueba, mi número es 300 000 0031 y mi correo ana.prueba@correo.test. ¿A qué hora abren?\",\"time_in_call_secs\":9,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Déjame consultarlo.\",\"time_in_call_secs\":14,\"tool_calls\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"result_value\":\"{\\\"sede\\\": \\\"Sede Centro\\\", \\\"horario\\\": \\\"lunes a viernes de 5:00 a 22:00; sábados de 7:00 a 14:00\\\"}\",\"is_error\":false,\"tool_has_been_called\":true}],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"La Sede Centro abre de lunes a viernes de 5:00 a 22:00 y los sábados de 7:00 a 14:00. ¿Algo más?\",\"time_in_call_secs\":16,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"No, gracias.\",\"time_in_call_secs\":25,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Con gusto. Hasta luego.\",\"time_in_call_secs\":27,\"tool_calls\":[{\"type\":\"system\",\"tool_name\":\"end_call\",\"request_id\":\"toolreq_h8fx_0002\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null}],\"metadata\":{\"start_time_unix_secs\":1793804153,\"call_duration_secs\":187,\"cost\":412,\"termination_reason\":\"end_call tool was called\",\"phone_call\":{\"direction\":\"outbound\",\"phone_number_id\":\"phnum_h8fx_0001\",\"agent_number\":\"+576010000090\",\"external_number\":\"+573000000031\",\"type\":\"twilio\",\"call_sid\":\"CA000000000000000000000000a8000004\"}},\"analysis\":{\"call_successful\":\"success\",\"transcript_summary\":\"La persona preguntó por el horario de la Sede Centro y colgó satisfecha.\",\"evaluation_criteria_results\":{},\"data_collection_results\":{}},\"conversation_initiation_client_data\":{\"dynamic_variables\":{\"caller_authorized\":\"si\",\"call_ref\":\"8f000000-0000-4000-8000-000000000004\",\"version_label\":\"v12 · canario\",\"system__caller_id\":\"+573000000031\",\"system__call_sid\":\"CA000000000000000000000000a8000004\"}}}}",
+      "rawBody": "{\"type\":\"post_call_transcription\",\"event_timestamp\":1793804340,\"data\":{\"agent_id\":\"agent_h8fx_canary_0003\",\"conversation_id\":\"conv_h8fx_0004\",\"status\":\"done\",\"user_id\":\"8f000000-0000-4000-8000-000000000004\",\"branch_id\":\"agtbrch_h8fx_0001\",\"version_id\":\"agtvrsn_h8fx_0001\",\"environment\":\"production\",\"transcript\":[{\"role\":\"agent\",\"message\":\"Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento. ¿En qué te puedo ayudar?\",\"time_in_call_secs\":0,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"Hola, soy Ana Prueba, mi número es 300 000 0031 y mi correo ana.prueba@correo.test. ¿A qué hora abren?\",\"time_in_call_secs\":9,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Déjame consultarlo.\",\"time_in_call_secs\":14,\"tool_calls\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"result_value\":\"{\\\"sede\\\": \\\"Sede Centro\\\", \\\"horario\\\": \\\"lunes a viernes de 5:00 a 22:00; sábados de 7:00 a 14:00\\\"}\",\"is_error\":false,\"tool_has_been_called\":true}],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"La Sede Centro abre de lunes a viernes de 5:00 a 22:00 y los sábados de 7:00 a 14:00. ¿Algo más?\",\"time_in_call_secs\":16,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"No, gracias.\",\"time_in_call_secs\":25,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Con gusto. Hasta luego.\",\"time_in_call_secs\":27,\"tool_calls\":[{\"type\":\"system\",\"tool_name\":\"end_call\",\"request_id\":\"toolreq_h8fx_0002\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null}],\"metadata\":{\"start_time_unix_secs\":1793804153,\"call_duration_secs\":187,\"cost\":412,\"termination_reason\":\"end_call tool was called\",\"phone_call\":{\"direction\":\"outbound\",\"phone_number_id\":\"phnum_h8fx_0001\",\"agent_number\":\"+576010000090\",\"external_number\":\"+573000000031\",\"type\":\"twilio\",\"call_sid\":\"CA000000000000000000000000a8000004\"}},\"analysis\":{\"call_successful\":\"success\",\"transcript_summary\":\"La persona preguntó por el horario de la Sede Centro y colgó satisfecha.\",\"evaluation_criteria_results\":{},\"data_collection_results\":{}},\"conversation_initiation_client_data\":{\"dynamic_variables\":{\"caller_authorized\":\"si\",\"call_ref\":\"8f000000-0000-4000-8000-000000000004\",\"version_label\":\"v12 · canario\",\"system__caller_id\":\"+573000000031\",\"system__call_sid\":\"CA000000000000000000000000a8000004\"}}}}",
       "expected": {
         "http": 200,
         "envelopeType": "post_call_transcription",
@@ -360,7 +416,7 @@
       "given": {
         "call": null
       },
-      "rawBody": "{\"type\":\"post_call_transcription\",\"event_timestamp\":1793804340,\"data\":{\"agent_id\":\"agent_h8fx_rogue_0099\",\"conversation_id\":\"conv_h8fx_0005\",\"status\":\"done\",\"user_id\":\"8f000000-0000-4000-8000-000000000005\",\"branch_id\":null,\"version_id\":null,\"environment\":\"production\",\"transcript\":[{\"role\":\"agent\",\"message\":\"Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma automática y tus datos se tratan según nuestra política de privacidad. Si prefieres hablar con una persona, dímelo en cualquier momento. ¿En qué te puedo ayudar?\",\"time_in_call_secs\":0,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"Hola, soy Ana Prueba, mi número es 300 000 0031 y mi correo ana.prueba@correo.test. ¿A qué hora abren?\",\"time_in_call_secs\":9,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Déjame consultarlo.\",\"time_in_call_secs\":14,\"tool_calls\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"result_value\":\"{\\\"sede\\\": \\\"Sede Centro\\\", \\\"horario\\\": \\\"lunes a viernes de 5:00 a 22:00; sábados de 7:00 a 14:00\\\"}\",\"is_error\":false,\"tool_has_been_called\":true}],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"La Sede Centro abre de lunes a viernes de 5:00 a 22:00 y los sábados de 7:00 a 14:00. ¿Algo más?\",\"time_in_call_secs\":16,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"No, gracias.\",\"time_in_call_secs\":25,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Con gusto. Hasta luego.\",\"time_in_call_secs\":27,\"tool_calls\":[{\"type\":\"system\",\"tool_name\":\"end_call\",\"request_id\":\"toolreq_h8fx_0002\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null}],\"metadata\":{\"start_time_unix_secs\":1793804153,\"call_duration_secs\":187,\"cost\":412,\"termination_reason\":\"end_call tool was called\",\"phone_call\":{\"direction\":\"outbound\",\"phone_number_id\":\"phnum_h8fx_0001\",\"agent_number\":\"+576010000090\",\"external_number\":\"+573000000077\",\"type\":\"twilio\",\"call_sid\":\"CA000000000000000000000000a8000005\"}},\"analysis\":{\"call_successful\":\"success\",\"transcript_summary\":\"La persona preguntó por el horario de la Sede Centro y colgó satisfecha.\",\"evaluation_criteria_results\":{},\"data_collection_results\":{}},\"conversation_initiation_client_data\":{\"dynamic_variables\":{\"caller_authorized\":\"si\",\"call_ref\":\"8f000000-0000-4000-8000-000000000005\",\"version_label\":\"v12 · canario\",\"system__caller_id\":\"+573000000077\",\"system__call_sid\":\"CA000000000000000000000000a8000005\"}}}}",
+      "rawBody": "{\"type\":\"post_call_transcription\",\"event_timestamp\":1793804340,\"data\":{\"agent_id\":\"agent_h8fx_rogue_0099\",\"conversation_id\":\"conv_h8fx_0005\",\"status\":\"done\",\"user_id\":\"8f000000-0000-4000-8000-000000000005\",\"branch_id\":null,\"version_id\":null,\"environment\":\"production\",\"transcript\":[{\"role\":\"agent\",\"message\":\"Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento. ¿En qué te puedo ayudar?\",\"time_in_call_secs\":0,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"Hola, soy Ana Prueba, mi número es 300 000 0031 y mi correo ana.prueba@correo.test. ¿A qué hora abren?\",\"time_in_call_secs\":9,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Déjame consultarlo.\",\"time_in_call_secs\":14,\"tool_calls\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"result_value\":\"{\\\"sede\\\": \\\"Sede Centro\\\", \\\"horario\\\": \\\"lunes a viernes de 5:00 a 22:00; sábados de 7:00 a 14:00\\\"}\",\"is_error\":false,\"tool_has_been_called\":true}],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"La Sede Centro abre de lunes a viernes de 5:00 a 22:00 y los sábados de 7:00 a 14:00. ¿Algo más?\",\"time_in_call_secs\":16,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"No, gracias.\",\"time_in_call_secs\":25,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Con gusto. Hasta luego.\",\"time_in_call_secs\":27,\"tool_calls\":[{\"type\":\"system\",\"tool_name\":\"end_call\",\"request_id\":\"toolreq_h8fx_0002\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null}],\"metadata\":{\"start_time_unix_secs\":1793804153,\"call_duration_secs\":187,\"cost\":412,\"termination_reason\":\"end_call tool was called\",\"phone_call\":{\"direction\":\"outbound\",\"phone_number_id\":\"phnum_h8fx_0001\",\"agent_number\":\"+576010000090\",\"external_number\":\"+573000000077\",\"type\":\"twilio\",\"call_sid\":\"CA000000000000000000000000a8000005\"}},\"analysis\":{\"call_successful\":\"success\",\"transcript_summary\":\"La persona preguntó por el horario de la Sede Centro y colgó satisfecha.\",\"evaluation_criteria_results\":{},\"data_collection_results\":{}},\"conversation_initiation_client_data\":{\"dynamic_variables\":{\"caller_authorized\":\"si\",\"call_ref\":\"8f000000-0000-4000-8000-000000000005\",\"version_label\":\"v12 · canario\",\"system__caller_id\":\"+573000000077\",\"system__call_sid\":\"CA000000000000000000000000a8000005\"}}}}",
       "expected": {
         "http": 200,
         "envelopeType": "post_call_transcription",
@@ -405,7 +461,7 @@
           }
         ]
       },
-      "rawBody": "{\"type\":\"post_call_transcription\",\"event_timestamp\":1793804340,\"data\":{\"agent_id\":\"agent_h8fx_canary_0003\",\"conversation_id\":\"conv_h8fx_0001\",\"status\":\"done\",\"user_id\":\"8f000000-0000-4000-8000-000000000001\",\"branch_id\":null,\"version_id\":null,\"environment\":\"production\",\"transcript\":[{\"role\":\"agent\",\"message\":\"Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma automática y tus datos se tratan según nuestra política de privacidad. Si prefieres hablar con una persona, dímelo en cualquier momento. ¿En qué te puedo ayudar?\",\"time_in_call_secs\":0,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"Hola, soy Ana Prueba, mi número es 300 000 0031 y mi correo ana.prueba@correo.test. ¿A qué hora abren?\",\"time_in_call_secs\":9,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Déjame consultarlo.\",\"time_in_call_secs\":14,\"tool_calls\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"result_value\":\"{\\\"sede\\\": \\\"Sede Centro\\\", \\\"horario\\\": \\\"lunes a viernes de 5:00 a 22:00; sábados de 7:00 a 14:00\\\"}\",\"is_error\":false,\"tool_has_been_called\":true}],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"La Sede Centro abre de lunes a viernes de 5:00 a 22:00 y los sábados de 7:00 a 14:00. ¿Algo más?\",\"time_in_call_secs\":16,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"No, gracias.\",\"time_in_call_secs\":25,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Con gusto. Hasta luego.\",\"time_in_call_secs\":27,\"tool_calls\":[{\"type\":\"system\",\"tool_name\":\"end_call\",\"request_id\":\"toolreq_h8fx_0002\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null}],\"metadata\":{\"start_time_unix_secs\":1793804153,\"call_duration_secs\":187,\"cost\":412,\"termination_reason\":\"end_call tool was called\",\"phone_call\":{\"direction\":\"outbound\",\"phone_number_id\":\"phnum_h8fx_0001\",\"agent_number\":\"+576010000090\",\"external_number\":\"+573000000031\",\"type\":\"twilio\",\"call_sid\":\"CA000000000000000000000000a8000001\"}},\"analysis\":{\"call_successful\":\"success\",\"transcript_summary\":\"La persona preguntó por el horario de la Sede Centro y colgó satisfecha.\",\"evaluation_criteria_results\":{},\"data_collection_results\":{}},\"conversation_initiation_client_data\":{\"dynamic_variables\":{\"caller_authorized\":\"si\",\"call_ref\":\"8f000000-0000-4000-8000-000000000001\",\"version_label\":\"v12 · canario\",\"system__caller_id\":\"+573000000031\",\"system__call_sid\":\"CA000000000000000000000000a8000001\"}}}}",
+      "rawBody": "{\"type\":\"post_call_transcription\",\"event_timestamp\":1793804340,\"data\":{\"agent_id\":\"agent_h8fx_canary_0003\",\"conversation_id\":\"conv_h8fx_0001\",\"status\":\"done\",\"user_id\":\"8f000000-0000-4000-8000-000000000001\",\"branch_id\":null,\"version_id\":null,\"environment\":\"production\",\"transcript\":[{\"role\":\"agent\",\"message\":\"Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento. ¿En qué te puedo ayudar?\",\"time_in_call_secs\":0,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"Hola, soy Ana Prueba, mi número es 300 000 0031 y mi correo ana.prueba@correo.test. ¿A qué hora abren?\",\"time_in_call_secs\":9,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Déjame consultarlo.\",\"time_in_call_secs\":14,\"tool_calls\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"result_value\":\"{\\\"sede\\\": \\\"Sede Centro\\\", \\\"horario\\\": \\\"lunes a viernes de 5:00 a 22:00; sábados de 7:00 a 14:00\\\"}\",\"is_error\":false,\"tool_has_been_called\":true}],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"La Sede Centro abre de lunes a viernes de 5:00 a 22:00 y los sábados de 7:00 a 14:00. ¿Algo más?\",\"time_in_call_secs\":16,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"No, gracias.\",\"time_in_call_secs\":25,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Con gusto. Hasta luego.\",\"time_in_call_secs\":27,\"tool_calls\":[{\"type\":\"system\",\"tool_name\":\"end_call\",\"request_id\":\"toolreq_h8fx_0002\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null}],\"metadata\":{\"start_time_unix_secs\":1793804153,\"call_duration_secs\":187,\"cost\":412,\"termination_reason\":\"end_call tool was called\",\"phone_call\":{\"direction\":\"outbound\",\"phone_number_id\":\"phnum_h8fx_0001\",\"agent_number\":\"+576010000090\",\"external_number\":\"+573000000031\",\"type\":\"twilio\",\"call_sid\":\"CA000000000000000000000000a8000001\"}},\"analysis\":{\"call_successful\":\"success\",\"transcript_summary\":\"La persona preguntó por el horario de la Sede Centro y colgó satisfecha.\",\"evaluation_criteria_results\":{},\"data_collection_results\":{}},\"conversation_initiation_client_data\":{\"dynamic_variables\":{\"caller_authorized\":\"si\",\"call_ref\":\"8f000000-0000-4000-8000-000000000001\",\"version_label\":\"v12 · canario\",\"system__caller_id\":\"+573000000031\",\"system__call_sid\":\"CA000000000000000000000000a8000001\"}}}}",
       "expected": {
         "http": 200,
         "envelopeType": "post_call_transcription",
@@ -442,7 +498,7 @@
           "callerAuthorized": "si"
         }
       },
-      "rawBody": "{\"type\":\"post_call_transcription\",\"event_timestamp\":1793804340,\"data\":{\"agent_id\":\"agent_h8fx_canary_0003\",\"conversation_id\":\"conv_h8fx_0006\",\"status\":\"done\",\"user_id\":\"8f000000-0000-4000-8000-000000000006\",\"branch_id\":null,\"version_id\":null,\"environment\":\"production\",\"transcript\":[{\"role\":\"agent\",\"message\":\"Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma automática y tus datos se tratan según nuestra política de privacidad. Si prefieres hablar con una persona, dímelo en cualquier momento. ¿En qué te puedo ayudar?\",\"time_in_call_secs\":0,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"Hola, soy Ana Prueba, mi número es 300 000 0031 y mi correo ana.prueba@correo.test. ¿A qué hora abren?\",\"time_in_call_secs\":9,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Déjame consultarlo.\",\"time_in_call_secs\":14,\"tool_calls\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"result_value\":\"{\\\"sede\\\": \\\"Sede Centro\\\", \\\"horario\\\": \\\"lunes a viernes de 5:00 a 22:00; sábados de 7:00 a 14:00\\\"}\",\"is_error\":false,\"tool_has_been_called\":true}],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"La Sede Centro abre de lunes a viernes de 5:00 a 22:00 y los sábados de 7:00 a 14:00. ¿Algo más?\",\"time_in_call_secs\":16,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"No, gracias.\",\"time_in_call_secs\":25,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Con gusto. Hasta luego.\",\"time_in_call_secs\":27,\"tool_calls\":[{\"type\":\"system\",\"tool_name\":\"end_call\",\"request_id\":\"toolreq_h8fx_0002\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null}],\"metadata\":{\"start_time_unix_secs\":1793804299,\"call_duration_secs\":41,\"cost\":90,\"termination_reason\":\"Call ended by remote party\",\"phone_call\":{\"direction\":\"outbound\",\"phone_number_id\":\"phnum_h8fx_0001\",\"agent_number\":\"+576010000090\",\"external_number\":\"+573000000031\",\"type\":\"twilio\",\"call_sid\":\"CA000000000000000000000000a8000006\"}},\"analysis\":{\"call_successful\":\"success\",\"transcript_summary\":\"La persona preguntó por el horario de la Sede Centro y colgó satisfecha.\",\"evaluation_criteria_results\":{},\"data_collection_results\":{}},\"conversation_initiation_client_data\":{\"dynamic_variables\":{\"caller_authorized\":\"si\",\"call_ref\":\"8f000000-0000-4000-8000-000000000006\",\"version_label\":\"v12 · canario\",\"system__caller_id\":\"+573000000031\",\"system__call_sid\":\"CA000000000000000000000000a8000006\"}}}}",
+      "rawBody": "{\"type\":\"post_call_transcription\",\"event_timestamp\":1793804340,\"data\":{\"agent_id\":\"agent_h8fx_canary_0003\",\"conversation_id\":\"conv_h8fx_0006\",\"status\":\"done\",\"user_id\":\"8f000000-0000-4000-8000-000000000006\",\"branch_id\":null,\"version_id\":null,\"environment\":\"production\",\"transcript\":[{\"role\":\"agent\",\"message\":\"Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento. ¿En qué te puedo ayudar?\",\"time_in_call_secs\":0,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"Hola, soy Ana Prueba, mi número es 300 000 0031 y mi correo ana.prueba@correo.test. ¿A qué hora abren?\",\"time_in_call_secs\":9,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Déjame consultarlo.\",\"time_in_call_secs\":14,\"tool_calls\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"result_value\":\"{\\\"sede\\\": \\\"Sede Centro\\\", \\\"horario\\\": \\\"lunes a viernes de 5:00 a 22:00; sábados de 7:00 a 14:00\\\"}\",\"is_error\":false,\"tool_has_been_called\":true}],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"La Sede Centro abre de lunes a viernes de 5:00 a 22:00 y los sábados de 7:00 a 14:00. ¿Algo más?\",\"time_in_call_secs\":16,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"No, gracias.\",\"time_in_call_secs\":25,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Con gusto. Hasta luego.\",\"time_in_call_secs\":27,\"tool_calls\":[{\"type\":\"system\",\"tool_name\":\"end_call\",\"request_id\":\"toolreq_h8fx_0002\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null}],\"metadata\":{\"start_time_unix_secs\":1793804299,\"call_duration_secs\":41,\"cost\":90,\"termination_reason\":\"Call ended by remote party\",\"phone_call\":{\"direction\":\"outbound\",\"phone_number_id\":\"phnum_h8fx_0001\",\"agent_number\":\"+576010000090\",\"external_number\":\"+573000000031\",\"type\":\"twilio\",\"call_sid\":\"CA000000000000000000000000a8000006\"}},\"analysis\":{\"call_successful\":\"success\",\"transcript_summary\":\"La persona preguntó por el horario de la Sede Centro y colgó satisfecha.\",\"evaluation_criteria_results\":{},\"data_collection_results\":{}},\"conversation_initiation_client_data\":{\"dynamic_variables\":{\"caller_authorized\":\"si\",\"call_ref\":\"8f000000-0000-4000-8000-000000000006\",\"version_label\":\"v12 · canario\",\"system__caller_id\":\"+573000000031\",\"system__call_sid\":\"CA000000000000000000000000a8000006\"}}}}",
       "expected": {
         "http": 200,
         "envelopeType": "post_call_transcription",
@@ -482,6 +538,62 @@
           "+573000000031",
           "573000000031",
           "¿A qué hora abren?"
+        ]
+      }
+    },
+    {
+      "name": "postCall · post_call_transcription · entrante denegada (fila denied, E1-2): la post-llamada se registra y el estado final no cambia; sin freno",
+      "kind": "post_call_transcription",
+      "contractRef": "D8-13, E1-2",
+      "basis": "decision-fixture",
+      "decision": "DF-E4",
+      "bodyKey": "pc_denied",
+      "given": {
+        "call": {
+          "direction": "inbound",
+          "status": "denied",
+          "providerConversationId": "conv_h8fx_0022",
+          "providerCallSid": "CA000000000000000000000000a8000016",
+          "callRef": "8f000000-0000-4000-8000-000000000022",
+          "sealedAgentId": "agent_h8fx_canary_0003",
+          "callerAuthorized": "no"
+        }
+      },
+      "rawBody": "{\"type\":\"post_call_transcription\",\"event_timestamp\":1793804340,\"data\":{\"agent_id\":\"agent_h8fx_canary_0003\",\"conversation_id\":\"conv_h8fx_0022\",\"status\":\"done\",\"user_id\":\"8f000000-0000-4000-8000-000000000022\",\"branch_id\":null,\"version_id\":null,\"environment\":\"production\",\"transcript\":[{\"role\":\"agent\",\"message\":\"Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.\",\"time_in_call_secs\":0,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Lo siento, esta línea no está disponible en este momento. Gracias por llamar.\",\"time_in_call_secs\":6,\"tool_calls\":[{\"type\":\"system\",\"tool_name\":\"end_call\",\"request_id\":\"toolreq_h8fx_0301\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null}],\"metadata\":{\"start_time_unix_secs\":1793804331,\"call_duration_secs\":9,\"cost\":20,\"termination_reason\":\"end_call tool was called\",\"phone_call\":{\"direction\":\"inbound\",\"phone_number_id\":\"phnum_h8fx_0001\",\"agent_number\":\"+576010000090\",\"external_number\":\"+573000000077\",\"type\":\"twilio\",\"call_sid\":\"CA000000000000000000000000a8000016\"}},\"analysis\":{\"call_successful\":\"success\",\"transcript_summary\":\"La persona preguntó por el horario de la Sede Centro y colgó satisfecha.\",\"evaluation_criteria_results\":{},\"data_collection_results\":{}},\"conversation_initiation_client_data\":{\"dynamic_variables\":{\"caller_authorized\":\"si\",\"call_ref\":\"8f000000-0000-4000-8000-000000000022\",\"version_label\":\"v12 · canario\",\"system__caller_id\":\"+573000000077\",\"system__call_sid\":\"CA000000000000000000000000a8000016\"}}}}",
+      "expected": {
+        "http": 200,
+        "envelopeType": "post_call_transcription",
+        "events": [
+          {
+            "provider": "elevenlabs",
+            "kind": "post_call_transcription",
+            "providerEventKey": "conv_h8fx_0022"
+          },
+          {
+            "provider": "elevenlabs",
+            "kind": "guard_verdict",
+            "providerEventKey": "conv_h8fx_0022"
+          }
+        ],
+        "transition": null,
+        "statusAfter": "denied",
+        "durationSecs": 9,
+        "seal": {
+          "observedAgentId": "agent_h8fx_canary_0003",
+          "observedVersionId": null,
+          "observedBranchId": null,
+          "sealVerified": true
+        },
+        "costRaw": 20,
+        "costUnits": "por confirmar (D8-15)",
+        "guard": {
+          "violations": [],
+          "brakeOpens": false
+        },
+        "brakeOpens": false,
+        "mustNotPersist": [
+          "+573000000077",
+          "573000000077"
         ]
       }
     },
@@ -740,7 +852,7 @@
       "transcript": [
         {
           "role": "agent",
-          "message": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma automática y tus datos se tratan según nuestra política de privacidad. Si prefieres hablar con una persona, dímelo en cualquier momento. ¿En qué te puedo ayudar?",
+          "message": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento. ¿En qué te puedo ayudar?",
           "time_in_call_secs": 0,
           "tool_calls": [],
           "tool_results": [],
@@ -838,7 +950,7 @@
       "transcript": [
         {
           "role": "agent",
-          "message": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma automática y tus datos se tratan según nuestra política de privacidad. Si prefieres hablar con una persona, dímelo en cualquier momento.",
+          "message": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
           "time_in_call_secs": 0,
           "tool_calls": [],
           "tool_results": [],
@@ -910,7 +1022,7 @@
       "transcript": [
         {
           "role": "agent",
-          "message": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma automática y tus datos se tratan según nuestra política de privacidad. Si prefieres hablar con una persona, dímelo en cualquier momento.",
+          "message": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
           "time_in_call_secs": 0,
           "tool_calls": [],
           "tool_results": [],
@@ -986,7 +1098,7 @@
       "transcript": [
         {
           "role": "agent",
-          "message": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma automática y tus datos se tratan según nuestra política de privacidad. Si prefieres hablar con una persona, dímelo en cualquier momento.",
+          "message": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
           "time_in_call_secs": 0,
           "tool_calls": [],
           "tool_results": [],
@@ -1035,7 +1147,7 @@
       "transcript": [
         {
           "role": "agent",
-          "message": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma automática y tus datos se tratan según nuestra política de privacidad. Si prefieres hablar con una persona, dímelo en cualquier momento.",
+          "message": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
           "time_in_call_secs": 0,
           "tool_calls": [],
           "tool_results": [],
@@ -1084,7 +1196,7 @@
       "transcript": [
         {
           "role": "agent",
-          "message": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma automática y tus datos se tratan según nuestra política de privacidad. Si prefieres hablar con una persona, dímelo en cualquier momento.",
+          "message": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
           "time_in_call_secs": 0,
           "tool_calls": [],
           "tool_results": [],
@@ -1164,7 +1276,7 @@
       "transcript": [
         {
           "role": "agent",
-          "message": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma automática y tus datos se tratan según nuestra política de privacidad. Si prefieres hablar con una persona, dímelo en cualquier momento.",
+          "message": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
           "time_in_call_secs": 0,
           "tool_calls": [],
           "tool_results": [],
@@ -1213,7 +1325,7 @@
       "transcript": [
         {
           "role": "agent",
-          "message": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma automática y tus datos se tratan según nuestra política de privacidad. Si prefieres hablar con una persona, dímelo en cualquier momento.",
+          "message": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
           "time_in_call_secs": 0,
           "tool_calls": [],
           "tool_results": [],
@@ -1305,6 +1417,7 @@
           "status": "active",
           "direction": "inbound",
           "providerCallSid": "CA000000000000000000000000a8000015",
+          "callerAuthorized": "si",
           "remoteLast4": "0031",
           "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d",
           "part": "canary",
@@ -1315,9 +1428,9 @@
       }
     },
     {
-      "name": "initiation · initiate · número no registrado → no: «línea no disponible» y end_call (lo hace el agente)",
+      "name": "initiation · initiate · número no registrado → no y fila denied (E1-2): «línea no disponible» y end_call (lo hace el agente)",
       "kind": "initiate",
-      "contractRef": "D8-11",
+      "contractRef": "D8-11, E1-2",
       "basis": "contrato",
       "headers": {
         "X-Voice-Initiation-Secret": "h8fixture-initiation-0000000000000000000001"
@@ -1365,7 +1478,14 @@
         "events": [
           "initiation_received"
         ],
-        "voiceCallRow": null,
+        "voiceCallRow": {
+          "status": "denied",
+          "direction": "inbound",
+          "providerCallSid": "CA000000000000000000000000a8000016",
+          "callerAuthorized": "no",
+          "remoteHash": "b5d53bc17ee5dcc95f38308e60d13a9107b08c846d9a3582cb5953d43ec16ae2",
+          "remoteLast4": "0077"
+        },
         "brakeOpens": false,
         "policyReasons": [
           "not_an_active_voice_canary"
@@ -1373,11 +1493,11 @@
       }
     },
     {
-      "name": "initiation · initiate · caller ID oculto (anonymous) → no",
+      "name": "initiation · initiate · caller ID oculto (anonymous) → no y fila denied sin huella ni últimos dígitos",
       "kind": "initiate",
-      "contractRef": "D8-11",
+      "contractRef": "D8-11, E1-2",
       "basis": "decision-fixture",
-      "decision": "DF-P9",
+      "decision": "DF-E17",
       "headers": {
         "X-Voice-Initiation-Secret": "h8fixture-initiation-0000000000000000000001"
       },
@@ -1424,7 +1544,14 @@
         "events": [
           "initiation_received"
         ],
-        "voiceCallRow": null,
+        "voiceCallRow": {
+          "status": "denied",
+          "direction": "inbound",
+          "providerCallSid": "CA000000000000000000000000a8000017",
+          "callerAuthorized": "no",
+          "remoteHash": null,
+          "remoteLast4": null
+        },
         "brakeOpens": false,
         "policyReasons": [
           "not_an_active_voice_canary"
@@ -1488,9 +1615,9 @@
       }
     },
     {
-      "name": "initiation · initiate · freno abierto → no aunque sea canario",
+      "name": "initiation · initiate · freno abierto → no aunque sea canario, con fila denied",
       "kind": "initiate",
-      "contractRef": "D8-11, D8-19",
+      "contractRef": "D8-11, D8-19, E1-2",
       "basis": "contrato",
       "headers": {
         "X-Voice-Initiation-Secret": "h8fixture-initiation-0000000000000000000001"
@@ -1538,7 +1665,14 @@
         "events": [
           "initiation_received"
         ],
-        "voiceCallRow": null,
+        "voiceCallRow": {
+          "status": "denied",
+          "direction": "inbound",
+          "providerCallSid": "CA000000000000000000000000a8000018",
+          "callerAuthorized": "no",
+          "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d",
+          "remoteLast4": "0031"
+        },
         "brakeOpens": false,
         "policyReasons": [
           "voice_braked"
@@ -1546,7 +1680,7 @@
       }
     },
     {
-      "name": "initiation · initiate · agent_id distinto del sellado de la parte vigente → no, seal_mismatch y freno",
+      "name": "initiation · initiate · agent_id distinto del sellado de la parte vigente → no (fila denied), seal_mismatch y freno",
       "kind": "initiate",
       "contractRef": "D8-11",
       "basis": "decision-fixture",
@@ -1598,12 +1732,19 @@
           "initiation_received",
           "seal_mismatch"
         ],
-        "voiceCallRow": null,
+        "voiceCallRow": {
+          "status": "denied",
+          "direction": "inbound",
+          "providerCallSid": "CA000000000000000000000000a8000019",
+          "callerAuthorized": "no",
+          "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d",
+          "remoteLast4": "0031"
+        },
         "brakeOpens": true
       }
     },
     {
-      "name": "initiation · initiate · called_number que no es TWILIO_VOICE_FROM → no",
+      "name": "initiation · initiate · called_number que no es TWILIO_VOICE_FROM → no, con fila denied",
       "kind": "initiate",
       "contractRef": "D8-11",
       "basis": "decision-fixture",
@@ -1654,12 +1795,19 @@
         "events": [
           "initiation_received"
         ],
-        "voiceCallRow": null,
+        "voiceCallRow": {
+          "status": "denied",
+          "direction": "inbound",
+          "providerCallSid": "CA000000000000000000000000a800001a",
+          "callerAuthorized": "no",
+          "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d",
+          "remoteLast4": "0031"
+        },
         "brakeOpens": false
       }
     },
     {
-      "name": "initiation · initiate · autenticada pero sin call_sid → 200 y no (denegación explícita)",
+      "name": "initiation · initiate · autenticada pero sin call_sid → 200 y no (denegación explícita), sin fila",
       "kind": "initiate",
       "contractRef": "D8-11",
       "basis": "decision-fixture",
@@ -1713,7 +1861,7 @@
       }
     },
     {
-      "name": "initiation · initiate · secreto de la cabecera equivocado → 401 sin cuerpo útil (el agente se queda en caller_authorized = no por defecto, C-A2)",
+      "name": "initiation · initiate · secreto de la cabecera equivocado → 401 sin cuerpo útil ni fila (el agente se queda en caller_authorized = no por defecto, C-A2)",
       "kind": "initiate",
       "contractRef": "D8-11, D8-16",
       "basis": "decision-fixture",
@@ -1811,11 +1959,10 @@
   ],
   "tools": [
     {
-      "name": "tools · consultar_horarios · consultar_horarios en una saliente en curso → la sede y el horario",
+      "name": "tools · consultar_horarios · la primera herramienta de una saliente en dialing responde y la pasa a active (E1-1)",
       "kind": "consultar_horarios",
-      "contractRef": "D8-10, D8-16",
-      "basis": "decision-fixture",
-      "decision": "DF-E9",
+      "contractRef": "D8-10, E1-1",
+      "basis": "contrato",
       "tool": "consultar_horarios",
       "headers": {
         "Authorization": "Bearer h8fixture-tool-bearer-0000000000000000000001"
@@ -1839,10 +1986,76 @@
         "events": [
           "tool_call"
         ],
+        "transition": {
+          "from": "dialing",
+          "to": "active"
+        },
         "responseMustNotContain": [
           "+573000000031",
           "573000000031"
         ]
+      }
+    },
+    {
+      "name": "tools · consultar_horarios · una herramienta en una saliente ya active responde sin transición",
+      "kind": "consultar_horarios",
+      "contractRef": "D8-10, E1-1",
+      "basis": "contrato",
+      "tool": "consultar_horarios",
+      "headers": {
+        "Authorization": "Bearer h8fixture-tool-bearer-0000000000000000000001"
+      },
+      "given": {
+        "call": {
+          "status": "active",
+          "direction": "outbound",
+          "providerConversationId": "conv_h8fx_0031",
+          "providerCallSid": "CA000000000000000000000000a800001f",
+          "callerAuthorized": "si",
+          "toolRequests": 1,
+          "braked": false,
+          "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d"
+        }
+      },
+      "rawBody": "{\"conversation_id\":\"conv_h8fx_0031\",\"call_sid\":\"CA000000000000000000000000a800001f\"}",
+      "expected": {
+        "http": 200,
+        "verdict": "ok",
+        "events": [
+          "tool_call"
+        ],
+        "transition": null
+      }
+    },
+    {
+      "name": "tools · consultar_horarios · una herramienta en una entrante active (canario autorizado) responde sin transición",
+      "kind": "consultar_horarios",
+      "contractRef": "D8-10, E1-1",
+      "basis": "contrato",
+      "tool": "consultar_horarios",
+      "headers": {
+        "Authorization": "Bearer h8fixture-tool-bearer-0000000000000000000001"
+      },
+      "given": {
+        "call": {
+          "status": "active",
+          "direction": "inbound",
+          "providerConversationId": "conv_h8fx_0031",
+          "providerCallSid": "CA000000000000000000000000a800001f",
+          "callerAuthorized": "si",
+          "toolRequests": 0,
+          "braked": false,
+          "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d"
+        }
+      },
+      "rawBody": "{\"conversation_id\":\"conv_h8fx_0031\",\"call_sid\":\"CA000000000000000000000000a800001f\"}",
+      "expected": {
+        "http": 200,
+        "verdict": "ok",
+        "events": [
+          "tool_call"
+        ],
+        "transition": null
       }
     },
     {
@@ -1856,12 +2069,12 @@
       },
       "given": {
         "call": {
-          "status": "dialing",
+          "status": "active",
           "direction": "outbound",
           "providerConversationId": "conv_h8fx_0031",
           "providerCallSid": "CA000000000000000000000000a800001f",
           "callerAuthorized": "si",
-          "toolRequests": 0,
+          "toolRequests": 1,
           "braked": false,
           "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d"
         }
@@ -1888,12 +2101,12 @@
       },
       "given": {
         "call": {
-          "status": "dialing",
+          "status": "active",
           "direction": "outbound",
           "providerConversationId": "conv_h8fx_0031",
           "providerCallSid": "CA000000000000000000000000a800001f",
           "callerAuthorized": "si",
-          "toolRequests": 0,
+          "toolRequests": 1,
           "braked": false,
           "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d"
         },
@@ -1925,12 +2138,12 @@
       },
       "given": {
         "call": {
-          "status": "dialing",
+          "status": "active",
           "direction": "outbound",
           "providerConversationId": "conv_h8fx_0031",
           "providerCallSid": "CA000000000000000000000000a800001f",
           "callerAuthorized": "si",
-          "toolRequests": 0,
+          "toolRequests": 1,
           "braked": false,
           "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d"
         },
@@ -1958,12 +2171,12 @@
       },
       "given": {
         "call": {
-          "status": "dialing",
+          "status": "active",
           "direction": "outbound",
           "providerConversationId": "conv_h8fx_0031",
           "providerCallSid": "CA000000000000000000000000a800001f",
           "callerAuthorized": "si",
-          "toolRequests": 0,
+          "toolRequests": 1,
           "braked": false,
           "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d"
         }
@@ -1996,12 +2209,12 @@
       },
       "given": {
         "call": {
-          "status": "dialing",
+          "status": "active",
           "direction": "outbound",
           "providerConversationId": "conv_h8fx_0031",
           "providerCallSid": "CA000000000000000000000000a800001f",
           "callerAuthorized": "si",
-          "toolRequests": 0,
+          "toolRequests": 1,
           "braked": false,
           "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d"
         }
@@ -2156,7 +2369,7 @@
     {
       "name": "tools · consultar_horarios · la llamada ya terminó (completed) → rechazada",
       "kind": "consultar_horarios",
-      "contractRef": "D8-10, D8-16",
+      "contractRef": "D8-10, E1-1",
       "basis": "decision-fixture",
       "decision": "DF-E9",
       "tool": "consultar_horarios",
@@ -2186,18 +2399,50 @@
       }
     },
     {
-      "name": "tools · consultar_planes · entrante denegada (caller_authorized = no) → ninguna herramienta responde (C-A2)",
-      "kind": "consultar_planes",
-      "contractRef": "D8-10, D8-11",
+      "name": "tools · consultar_horarios · la saliente todavía requested (sin conversación) → rechazada",
+      "kind": "consultar_horarios",
+      "contractRef": "D8-10, E1-1",
       "basis": "decision-fixture",
-      "decision": "DF-E10",
+      "decision": "DF-E9",
+      "tool": "consultar_horarios",
+      "headers": {
+        "Authorization": "Bearer h8fixture-tool-bearer-0000000000000000000001"
+      },
+      "given": {
+        "call": {
+          "status": "requested",
+          "direction": "outbound",
+          "providerConversationId": "conv_h8fx_0031",
+          "providerCallSid": "CA000000000000000000000000a800001f",
+          "callerAuthorized": "si",
+          "toolRequests": 0,
+          "braked": false,
+          "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d"
+        }
+      },
+      "rawBody": "{\"conversation_id\":\"conv_h8fx_0031\",\"call_sid\":\"CA000000000000000000000000a800001f\"}",
+      "expected": {
+        "http": 200,
+        "verdict": "call_not_active",
+        "neutralMessage": true,
+        "events": [
+          "tool_call"
+        ]
+      }
+    },
+    {
+      "name": "tools · consultar_planes · entrante denegada (fila denied, E1-2) → ninguna herramienta responde (C-A2)",
+      "kind": "consultar_planes",
+      "contractRef": "D8-10, D8-11, E1-1, E1-2",
+      "basis": "decision-fixture",
+      "decision": "DF-E9",
       "tool": "consultar_planes",
       "headers": {
         "Authorization": "Bearer h8fixture-tool-bearer-0000000000000000000001"
       },
       "given": {
         "call": {
-          "status": "active",
+          "status": "denied",
           "direction": "inbound",
           "providerConversationId": "conv_h8fx_0031",
           "providerCallSid": "CA000000000000000000000000a800001f",
@@ -2210,7 +2455,7 @@
       "rawBody": "{\"conversation_id\":\"conv_h8fx_0031\",\"call_sid\":\"CA000000000000000000000000a800001f\"}",
       "expected": {
         "http": 200,
-        "verdict": "caller_not_authorized",
+        "verdict": "call_not_active",
         "neutralMessage": true,
         "events": [
           "tool_call"
@@ -2229,12 +2474,12 @@
       },
       "given": {
         "call": {
-          "status": "dialing",
+          "status": "active",
           "direction": "outbound",
           "providerConversationId": "conv_h8fx_0031",
           "providerCallSid": "CA000000000000000000000000a800001f",
           "callerAuthorized": "si",
-          "toolRequests": 0,
+          "toolRequests": 1,
           "braked": true,
           "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d"
         }
@@ -2260,7 +2505,7 @@
       },
       "given": {
         "call": {
-          "status": "dialing",
+          "status": "active",
           "direction": "outbound",
           "providerConversationId": "conv_h8fx_0031",
           "providerCallSid": "CA000000000000000000000000a800001f",
@@ -2276,7 +2521,8 @@
         "verdict": "ok",
         "events": [
           "tool_call"
-        ]
+        ],
+        "transition": null
       }
     },
     {
@@ -2291,7 +2537,7 @@
       },
       "given": {
         "call": {
-          "status": "dialing",
+          "status": "active",
           "direction": "outbound",
           "providerConversationId": "conv_h8fx_0031",
           "providerCallSid": "CA000000000000000000000000a800001f",
@@ -2323,12 +2569,12 @@
       },
       "given": {
         "call": {
-          "status": "dialing",
+          "status": "active",
           "direction": "outbound",
           "providerConversationId": "conv_h8fx_0031",
           "providerCallSid": "CA000000000000000000000000a800001f",
           "callerAuthorized": "si",
-          "toolRequests": 0,
+          "toolRequests": 1,
           "braked": false,
           "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d"
         }
@@ -2352,12 +2598,12 @@
       },
       "given": {
         "call": {
-          "status": "dialing",
+          "status": "active",
           "direction": "outbound",
           "providerConversationId": "conv_h8fx_0031",
           "providerCallSid": "CA000000000000000000000000a800001f",
           "callerAuthorized": "si",
-          "toolRequests": 0,
+          "toolRequests": 1,
           "braked": false,
           "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d"
         }

@@ -38,6 +38,7 @@
       "ambiguous",
       "dialing",
       "active",
+      "denied",
       "completed",
       "busy",
       "no_answer",
@@ -47,6 +48,7 @@
     "finalStatuses": [
       "canceled",
       "failed_to_start",
+      "denied",
       "completed",
       "busy",
       "no_answer",
@@ -84,8 +86,13 @@
       "inbound"
     ],
     "initialStatus": {
-      "outbound": "requested",
-      "inbound": "active"
+      "outbound": [
+        "requested"
+      ],
+      "inbound": [
+        "active",
+        "denied"
+      ]
     },
     "reachableByDirection": {
       "outbound": [
@@ -94,6 +101,7 @@
         "failed_to_start",
         "ambiguous",
         "dialing",
+        "active",
         "completed",
         "busy",
         "no_answer",
@@ -102,6 +110,7 @@
       ],
       "inbound": [
         "active",
+        "denied",
         "completed",
         "failed",
         "hung_up"
@@ -139,21 +148,21 @@
     "DF-S1": "Una actualización que no cambia status no es una transición: vale en cualquier estado, también en los finales (coste real, sello posterior), salvo las columnas inmutables (DF-S5).",
     "DF-S2": "requested → busy | no_answer | failed | completed: el webhook puede llegar antes de que el job guarde dialing; entonces el job ya no puede escribir dialing (final).",
     "DF-S3": "ambiguous se resuelve hacia delante: dialing si sigue en curso, o un final de llamada (completed, busy, no_answer, failed). Nunca canceled ni failed_to_start (ya se intentó).",
-    "DF-S4": "active → failed para el «otro fallo final» de una entrante.",
+    "DF-S4": "active → failed para el «otro fallo final» de una entrante o de una saliente ya active (E1-1).",
     "DF-S5": "El sello y la identidad se escriben al insertar y no cambian nunca (sealColumns e identityColumns).",
     "DF-S6": "Las columnas posteriores (afterColumns) pasan de null a un valor una sola vez; cambiarlas después se rechaza.",
     "DF-S7": "Los eventos sin clave del proveedor (p. ej. hangup_requested de una persona) llevan provider_event_key NULL y no se deduplican (UNIQUE con NULL admite varias filas en PG y SQLite). El provider «laravel» del caso es de ejemplo: el conjunto de provider lo fija DB8.",
-    "DF-S8": "Al insertar, status = el inicial de su dirección (outbound → requested, inbound → active); otro valor se rechaza.",
+    "DF-S8": "Al insertar, status = uno de los iniciales de su dirección (outbound → requested; inbound → active o denied, E1-2); otro valor se rechaza.",
     "DF-S9": "Lista cerrada: toda transición que no está en allowed se rechaza, también las que el contrato no menciona (p. ej. dialing → canceled o requested → hung_up: el corte de una pedida es canceled)."
   },
   "counts": {
-    "allowed": 21,
-    "matrix": 242,
-    "insert": 22,
-    "sequences": 14,
+    "allowed": 25,
+    "matrix": 288,
+    "insert": 24,
+    "sequences": 19,
     "columns": 25,
     "eventDedupe": 5,
-    "total": 329
+    "total": 386
   },
   "allowed": [
     {
@@ -400,6 +409,59 @@
       }
     },
     {
+      "name": "allowed · outbound · dialing → active",
+      "kind": "outbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "dialing",
+      "to": "active",
+      "direction": "outbound",
+      "trigger": "E1-1: la primera herramienta o el primer evento de conversación de una saliente",
+      "expected": {
+        "allowed": true
+      }
+    },
+    {
+      "name": "allowed · outbound · active → completed",
+      "kind": "outbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "active",
+      "to": "completed",
+      "direction": "outbound",
+      "trigger": "post_call_transcription con duración (saliente ya active, E1-1)",
+      "expected": {
+        "allowed": true
+      }
+    },
+    {
+      "name": "allowed · outbound · active → hung_up",
+      "kind": "outbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "active",
+      "to": "hung_up",
+      "direction": "outbound",
+      "trigger": "corte de emergencia (D8-20: cuelga las dialing y active)",
+      "expected": {
+        "allowed": true
+      }
+    },
+    {
+      "name": "allowed · outbound · active → failed",
+      "kind": "outbound",
+      "contractRef": "D8-13",
+      "basis": "decision-fixture",
+      "decision": "DF-S4",
+      "from": "active",
+      "to": "failed",
+      "direction": "outbound",
+      "trigger": "otro fallo final de una saliente ya active",
+      "expected": {
+        "allowed": true
+      }
+    },
+    {
       "name": "allowed · inbound · active → completed",
       "kind": "inbound",
       "contractRef": "D8-13",
@@ -511,6 +573,20 @@
       "decision": "DF-S9",
       "from": "requested",
       "to": "active",
+      "direction": "outbound",
+      "expected": {
+        "allowed": false,
+        "why": "no es una transición hacia delante prevista"
+      }
+    },
+    {
+      "name": "matrix · outbound · outbound: requested → denied",
+      "kind": "outbound",
+      "contractRef": "D8-13",
+      "basis": "decision-fixture",
+      "decision": "DF-S9",
+      "from": "requested",
+      "to": "denied",
       "direction": "outbound",
       "expected": {
         "allowed": false,
@@ -663,6 +739,19 @@
       }
     },
     {
+      "name": "matrix · outbound · outbound: canceled → denied",
+      "kind": "outbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "canceled",
+      "to": "denied",
+      "direction": "outbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
+      }
+    },
+    {
       "name": "matrix · outbound · outbound: canceled → completed",
       "kind": "outbound",
       "contractRef": "D8-13",
@@ -800,6 +889,19 @@
       "basis": "contrato",
       "from": "failed_to_start",
       "to": "active",
+      "direction": "outbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
+      }
+    },
+    {
+      "name": "matrix · outbound · outbound: failed_to_start → denied",
+      "kind": "outbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "failed_to_start",
+      "to": "denied",
       "direction": "outbound",
       "expected": {
         "allowed": false,
@@ -951,6 +1053,20 @@
       "direction": "outbound",
       "expected": {
         "allowed": false,
+        "why": "no es una transición hacia delante prevista"
+      }
+    },
+    {
+      "name": "matrix · outbound · outbound: ambiguous → denied",
+      "kind": "outbound",
+      "contractRef": "D8-13",
+      "basis": "decision-fixture",
+      "decision": "DF-S9",
+      "from": "ambiguous",
+      "to": "denied",
+      "direction": "outbound",
+      "expected": {
+        "allowed": false,
         "why": "estado imposible en esta dirección"
       }
     },
@@ -1094,10 +1210,22 @@
       "name": "matrix · outbound · outbound: dialing → active",
       "kind": "outbound",
       "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "dialing",
+      "to": "active",
+      "direction": "outbound",
+      "expected": {
+        "allowed": true
+      }
+    },
+    {
+      "name": "matrix · outbound · outbound: dialing → denied",
+      "kind": "outbound",
+      "contractRef": "D8-13",
       "basis": "decision-fixture",
       "decision": "DF-S9",
       "from": "dialing",
-      "to": "active",
+      "to": "denied",
       "direction": "outbound",
       "expected": {
         "allowed": false,
@@ -1175,7 +1303,7 @@
       "direction": "outbound",
       "expected": {
         "allowed": false,
-        "why": "estado imposible en esta dirección"
+        "why": "no es una transición hacia delante prevista"
       }
     },
     {
@@ -1189,7 +1317,7 @@
       "direction": "outbound",
       "expected": {
         "allowed": false,
-        "why": "estado imposible en esta dirección"
+        "why": "no es una transición hacia delante prevista"
       }
     },
     {
@@ -1203,7 +1331,7 @@
       "direction": "outbound",
       "expected": {
         "allowed": false,
-        "why": "estado imposible en esta dirección"
+        "why": "no es una transición hacia delante prevista"
       }
     },
     {
@@ -1217,7 +1345,7 @@
       "direction": "outbound",
       "expected": {
         "allowed": false,
-        "why": "estado imposible en esta dirección"
+        "why": "no es una transición hacia delante prevista"
       }
     },
     {
@@ -1231,7 +1359,7 @@
       "direction": "outbound",
       "expected": {
         "allowed": false,
-        "why": "estado imposible en esta dirección"
+        "why": "no es una transición hacia delante prevista"
       }
     },
     {
@@ -1249,17 +1377,29 @@
       }
     },
     {
-      "name": "matrix · outbound · outbound: active → completed",
+      "name": "matrix · outbound · outbound: active → denied",
       "kind": "outbound",
       "contractRef": "D8-13",
       "basis": "decision-fixture",
       "decision": "DF-S9",
       "from": "active",
-      "to": "completed",
+      "to": "denied",
       "direction": "outbound",
       "expected": {
         "allowed": false,
         "why": "estado imposible en esta dirección"
+      }
+    },
+    {
+      "name": "matrix · outbound · outbound: active → completed",
+      "kind": "outbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "active",
+      "to": "completed",
+      "direction": "outbound",
+      "expected": {
+        "allowed": true
       }
     },
     {
@@ -1273,7 +1413,7 @@
       "direction": "outbound",
       "expected": {
         "allowed": false,
-        "why": "estado imposible en esta dirección"
+        "why": "no es una transición hacia delante prevista"
       }
     },
     {
@@ -1287,7 +1427,7 @@
       "direction": "outbound",
       "expected": {
         "allowed": false,
-        "why": "estado imposible en esta dirección"
+        "why": "no es una transición hacia delante prevista"
       }
     },
     {
@@ -1295,27 +1435,181 @@
       "kind": "outbound",
       "contractRef": "D8-13",
       "basis": "decision-fixture",
-      "decision": "DF-S9",
+      "decision": "DF-S4",
       "from": "active",
       "to": "failed",
       "direction": "outbound",
       "expected": {
-        "allowed": false,
-        "why": "estado imposible en esta dirección"
+        "allowed": true
       }
     },
     {
       "name": "matrix · outbound · outbound: active → hung_up",
       "kind": "outbound",
       "contractRef": "D8-13",
-      "basis": "decision-fixture",
-      "decision": "DF-S9",
+      "basis": "contrato",
       "from": "active",
       "to": "hung_up",
       "direction": "outbound",
       "expected": {
+        "allowed": true
+      }
+    },
+    {
+      "name": "matrix · outbound · outbound: denied → requested",
+      "kind": "outbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "denied",
+      "to": "requested",
+      "direction": "outbound",
+      "expected": {
         "allowed": false,
-        "why": "estado imposible en esta dirección"
+        "why": "estado final"
+      }
+    },
+    {
+      "name": "matrix · outbound · outbound: denied → canceled",
+      "kind": "outbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "denied",
+      "to": "canceled",
+      "direction": "outbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
+      }
+    },
+    {
+      "name": "matrix · outbound · outbound: denied → failed_to_start",
+      "kind": "outbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "denied",
+      "to": "failed_to_start",
+      "direction": "outbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
+      }
+    },
+    {
+      "name": "matrix · outbound · outbound: denied → ambiguous",
+      "kind": "outbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "denied",
+      "to": "ambiguous",
+      "direction": "outbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
+      }
+    },
+    {
+      "name": "matrix · outbound · outbound: denied → dialing",
+      "kind": "outbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "denied",
+      "to": "dialing",
+      "direction": "outbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
+      }
+    },
+    {
+      "name": "matrix · outbound · outbound: denied → active",
+      "kind": "outbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "denied",
+      "to": "active",
+      "direction": "outbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
+      }
+    },
+    {
+      "name": "matrix · outbound · outbound: denied → denied",
+      "kind": "outbound",
+      "contractRef": "D8-13",
+      "basis": "decision-fixture",
+      "decision": "DF-S1",
+      "from": "denied",
+      "to": "denied",
+      "direction": "outbound",
+      "expected": {
+        "allowed": true,
+        "noChange": true
+      }
+    },
+    {
+      "name": "matrix · outbound · outbound: denied → completed",
+      "kind": "outbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "denied",
+      "to": "completed",
+      "direction": "outbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
+      }
+    },
+    {
+      "name": "matrix · outbound · outbound: denied → busy",
+      "kind": "outbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "denied",
+      "to": "busy",
+      "direction": "outbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
+      }
+    },
+    {
+      "name": "matrix · outbound · outbound: denied → no_answer",
+      "kind": "outbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "denied",
+      "to": "no_answer",
+      "direction": "outbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
+      }
+    },
+    {
+      "name": "matrix · outbound · outbound: denied → failed",
+      "kind": "outbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "denied",
+      "to": "failed",
+      "direction": "outbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
+      }
+    },
+    {
+      "name": "matrix · outbound · outbound: denied → hung_up",
+      "kind": "outbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "denied",
+      "to": "hung_up",
+      "direction": "outbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
       }
     },
     {
@@ -1390,6 +1684,19 @@
       "basis": "contrato",
       "from": "completed",
       "to": "active",
+      "direction": "outbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
+      }
+    },
+    {
+      "name": "matrix · outbound · outbound: completed → denied",
+      "kind": "outbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "completed",
+      "to": "denied",
       "direction": "outbound",
       "expected": {
         "allowed": false,
@@ -1541,6 +1848,19 @@
       }
     },
     {
+      "name": "matrix · outbound · outbound: busy → denied",
+      "kind": "outbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "busy",
+      "to": "denied",
+      "direction": "outbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
+      }
+    },
+    {
       "name": "matrix · outbound · outbound: busy → completed",
       "kind": "outbound",
       "contractRef": "D8-13",
@@ -1678,6 +1998,19 @@
       "basis": "contrato",
       "from": "no_answer",
       "to": "active",
+      "direction": "outbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
+      }
+    },
+    {
+      "name": "matrix · outbound · outbound: no_answer → denied",
+      "kind": "outbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "no_answer",
+      "to": "denied",
       "direction": "outbound",
       "expected": {
         "allowed": false,
@@ -1829,6 +2162,19 @@
       }
     },
     {
+      "name": "matrix · outbound · outbound: failed → denied",
+      "kind": "outbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "failed",
+      "to": "denied",
+      "direction": "outbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
+      }
+    },
+    {
       "name": "matrix · outbound · outbound: failed → completed",
       "kind": "outbound",
       "contractRef": "D8-13",
@@ -1966,6 +2312,19 @@
       "basis": "contrato",
       "from": "hung_up",
       "to": "active",
+      "direction": "outbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
+      }
+    },
+    {
+      "name": "matrix · outbound · outbound: hung_up → denied",
+      "kind": "outbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "hung_up",
+      "to": "denied",
       "direction": "outbound",
       "expected": {
         "allowed": false,
@@ -2123,6 +2482,20 @@
       }
     },
     {
+      "name": "matrix · inbound · inbound: requested → denied",
+      "kind": "inbound",
+      "contractRef": "D8-13",
+      "basis": "decision-fixture",
+      "decision": "DF-S9",
+      "from": "requested",
+      "to": "denied",
+      "direction": "inbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado imposible en esta dirección"
+      }
+    },
+    {
       "name": "matrix · inbound · inbound: requested → completed",
       "kind": "inbound",
       "contractRef": "D8-13",
@@ -2265,6 +2638,19 @@
       "basis": "contrato",
       "from": "canceled",
       "to": "active",
+      "direction": "inbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
+      }
+    },
+    {
+      "name": "matrix · inbound · inbound: canceled → denied",
+      "kind": "inbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "canceled",
+      "to": "denied",
       "direction": "inbound",
       "expected": {
         "allowed": false,
@@ -2416,6 +2802,19 @@
       }
     },
     {
+      "name": "matrix · inbound · inbound: failed_to_start → denied",
+      "kind": "inbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "failed_to_start",
+      "to": "denied",
+      "direction": "inbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
+      }
+    },
+    {
       "name": "matrix · inbound · inbound: failed_to_start → completed",
       "kind": "inbound",
       "contractRef": "D8-13",
@@ -2558,6 +2957,20 @@
       "decision": "DF-S9",
       "from": "ambiguous",
       "to": "active",
+      "direction": "inbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado imposible en esta dirección"
+      }
+    },
+    {
+      "name": "matrix · inbound · inbound: ambiguous → denied",
+      "kind": "inbound",
+      "contractRef": "D8-13",
+      "basis": "decision-fixture",
+      "decision": "DF-S9",
+      "from": "ambiguous",
+      "to": "denied",
       "direction": "inbound",
       "expected": {
         "allowed": false,
@@ -2719,6 +3132,20 @@
       }
     },
     {
+      "name": "matrix · inbound · inbound: dialing → denied",
+      "kind": "inbound",
+      "contractRef": "D8-13",
+      "basis": "decision-fixture",
+      "decision": "DF-S9",
+      "from": "dialing",
+      "to": "denied",
+      "direction": "inbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado imposible en esta dirección"
+      }
+    },
+    {
       "name": "matrix · inbound · inbound: dialing → completed",
       "kind": "inbound",
       "contractRef": "D8-13",
@@ -2873,6 +3300,20 @@
       }
     },
     {
+      "name": "matrix · inbound · inbound: active → denied",
+      "kind": "inbound",
+      "contractRef": "D8-13",
+      "basis": "decision-fixture",
+      "decision": "DF-S9",
+      "from": "active",
+      "to": "denied",
+      "direction": "inbound",
+      "expected": {
+        "allowed": false,
+        "why": "no es una transición hacia delante prevista"
+      }
+    },
+    {
       "name": "matrix · inbound · inbound: active → completed",
       "kind": "inbound",
       "contractRef": "D8-13",
@@ -2935,6 +3376,163 @@
       "direction": "inbound",
       "expected": {
         "allowed": true
+      }
+    },
+    {
+      "name": "matrix · inbound · inbound: denied → requested",
+      "kind": "inbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "denied",
+      "to": "requested",
+      "direction": "inbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
+      }
+    },
+    {
+      "name": "matrix · inbound · inbound: denied → canceled",
+      "kind": "inbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "denied",
+      "to": "canceled",
+      "direction": "inbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
+      }
+    },
+    {
+      "name": "matrix · inbound · inbound: denied → failed_to_start",
+      "kind": "inbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "denied",
+      "to": "failed_to_start",
+      "direction": "inbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
+      }
+    },
+    {
+      "name": "matrix · inbound · inbound: denied → ambiguous",
+      "kind": "inbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "denied",
+      "to": "ambiguous",
+      "direction": "inbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
+      }
+    },
+    {
+      "name": "matrix · inbound · inbound: denied → dialing",
+      "kind": "inbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "denied",
+      "to": "dialing",
+      "direction": "inbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
+      }
+    },
+    {
+      "name": "matrix · inbound · inbound: denied → active",
+      "kind": "inbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "denied",
+      "to": "active",
+      "direction": "inbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
+      }
+    },
+    {
+      "name": "matrix · inbound · inbound: denied → denied",
+      "kind": "inbound",
+      "contractRef": "D8-13",
+      "basis": "decision-fixture",
+      "decision": "DF-S1",
+      "from": "denied",
+      "to": "denied",
+      "direction": "inbound",
+      "expected": {
+        "allowed": true,
+        "noChange": true
+      }
+    },
+    {
+      "name": "matrix · inbound · inbound: denied → completed",
+      "kind": "inbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "denied",
+      "to": "completed",
+      "direction": "inbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
+      }
+    },
+    {
+      "name": "matrix · inbound · inbound: denied → busy",
+      "kind": "inbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "denied",
+      "to": "busy",
+      "direction": "inbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
+      }
+    },
+    {
+      "name": "matrix · inbound · inbound: denied → no_answer",
+      "kind": "inbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "denied",
+      "to": "no_answer",
+      "direction": "inbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
+      }
+    },
+    {
+      "name": "matrix · inbound · inbound: denied → failed",
+      "kind": "inbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "denied",
+      "to": "failed",
+      "direction": "inbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
+      }
+    },
+    {
+      "name": "matrix · inbound · inbound: denied → hung_up",
+      "kind": "inbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "denied",
+      "to": "hung_up",
+      "direction": "inbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
       }
     },
     {
@@ -3009,6 +3607,19 @@
       "basis": "contrato",
       "from": "completed",
       "to": "active",
+      "direction": "inbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
+      }
+    },
+    {
+      "name": "matrix · inbound · inbound: completed → denied",
+      "kind": "inbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "completed",
+      "to": "denied",
       "direction": "inbound",
       "expected": {
         "allowed": false,
@@ -3160,6 +3771,19 @@
       }
     },
     {
+      "name": "matrix · inbound · inbound: busy → denied",
+      "kind": "inbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "busy",
+      "to": "denied",
+      "direction": "inbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
+      }
+    },
+    {
       "name": "matrix · inbound · inbound: busy → completed",
       "kind": "inbound",
       "contractRef": "D8-13",
@@ -3297,6 +3921,19 @@
       "basis": "contrato",
       "from": "no_answer",
       "to": "active",
+      "direction": "inbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
+      }
+    },
+    {
+      "name": "matrix · inbound · inbound: no_answer → denied",
+      "kind": "inbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "no_answer",
+      "to": "denied",
       "direction": "inbound",
       "expected": {
         "allowed": false,
@@ -3448,6 +4085,19 @@
       }
     },
     {
+      "name": "matrix · inbound · inbound: failed → denied",
+      "kind": "inbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "failed",
+      "to": "denied",
+      "direction": "inbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
+      }
+    },
+    {
       "name": "matrix · inbound · inbound: failed → completed",
       "kind": "inbound",
       "contractRef": "D8-13",
@@ -3585,6 +4235,19 @@
       "basis": "contrato",
       "from": "hung_up",
       "to": "active",
+      "direction": "inbound",
+      "expected": {
+        "allowed": false,
+        "why": "estado final"
+      }
+    },
+    {
+      "name": "matrix · inbound · inbound: hung_up → denied",
+      "kind": "inbound",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "from": "hung_up",
+      "to": "denied",
       "direction": "inbound",
       "expected": {
         "allowed": false,
@@ -3732,6 +4395,18 @@
       }
     },
     {
+      "name": "insert · outbound · insertar una outbound en denied",
+      "kind": "outbound",
+      "contractRef": "D8-13, E1-2",
+      "basis": "decision-fixture",
+      "decision": "DF-S8",
+      "direction": "outbound",
+      "status": "denied",
+      "expected": {
+        "allowed": false
+      }
+    },
+    {
       "name": "insert · outbound · insertar una outbound en completed",
       "kind": "outbound",
       "contractRef": "D8-13",
@@ -3859,6 +4534,18 @@
       "decision": "DF-S8",
       "direction": "inbound",
       "status": "active",
+      "expected": {
+        "allowed": true
+      }
+    },
+    {
+      "name": "insert · inbound · insertar una inbound en denied",
+      "kind": "inbound",
+      "contractRef": "D8-13, E1-2",
+      "basis": "decision-fixture",
+      "decision": "DF-S8",
+      "direction": "inbound",
+      "status": "denied",
       "expected": {
         "allowed": true
       }
@@ -4311,15 +4998,16 @@
       }
     },
     {
-      "name": "sequences · outbound · una saliente no puede quedar active",
+      "name": "sequences · outbound · saliente que usa herramientas: requested → dialing → active → completed (E1-1)",
       "kind": "outbound",
-      "contractRef": "D8-13",
+      "contractRef": "D8-13, E1-1",
       "basis": "contrato",
       "direction": "outbound",
       "steps": [
         "requested",
         "dialing",
-        "active"
+        "active",
+        "completed"
       ],
       "expected": {
         "steps": [
@@ -4333,10 +5021,165 @@
           },
           {
             "to": "active",
+            "accepted": true
+          },
+          {
+            "to": "completed",
+            "accepted": true
+          }
+        ],
+        "finalStatus": "completed"
+      }
+    },
+    {
+      "name": "sequences · outbound · una saliente active no vuelve a dialing",
+      "kind": "outbound",
+      "contractRef": "D8-13, E1-1",
+      "basis": "contrato",
+      "direction": "outbound",
+      "steps": [
+        "requested",
+        "dialing",
+        "active",
+        "dialing"
+      ],
+      "expected": {
+        "steps": [
+          {
+            "to": "requested",
+            "accepted": true
+          },
+          {
+            "to": "dialing",
+            "accepted": true
+          },
+          {
+            "to": "active",
+            "accepted": true
+          },
+          {
+            "to": "dialing",
             "accepted": false
           }
         ],
-        "finalStatus": "dialing"
+        "finalStatus": "active"
+      }
+    },
+    {
+      "name": "sequences · outbound · una saliente active no puede quedar busy (la conversación ya empezó)",
+      "kind": "outbound",
+      "contractRef": "D8-13, E1-1",
+      "basis": "decision-fixture",
+      "decision": "DF-S9",
+      "direction": "outbound",
+      "steps": [
+        "requested",
+        "dialing",
+        "active",
+        "busy"
+      ],
+      "expected": {
+        "steps": [
+          {
+            "to": "requested",
+            "accepted": true
+          },
+          {
+            "to": "dialing",
+            "accepted": true
+          },
+          {
+            "to": "active",
+            "accepted": true
+          },
+          {
+            "to": "busy",
+            "accepted": false
+          }
+        ],
+        "finalStatus": "active"
+      }
+    },
+    {
+      "name": "sequences · outbound · cortada en mitad de la conversación: requested → dialing → active → hung_up",
+      "kind": "outbound",
+      "contractRef": "D8-13, D8-20, E1-1",
+      "basis": "contrato",
+      "direction": "outbound",
+      "steps": [
+        "requested",
+        "dialing",
+        "active",
+        "hung_up"
+      ],
+      "expected": {
+        "steps": [
+          {
+            "to": "requested",
+            "accepted": true
+          },
+          {
+            "to": "dialing",
+            "accepted": true
+          },
+          {
+            "to": "active",
+            "accepted": true
+          },
+          {
+            "to": "hung_up",
+            "accepted": true
+          }
+        ],
+        "finalStatus": "hung_up"
+      }
+    },
+    {
+      "name": "sequences · inbound · entrante denegada: denied es final y la post-llamada no la cambia",
+      "kind": "inbound",
+      "contractRef": "D8-13, E1-2",
+      "basis": "contrato",
+      "direction": "inbound",
+      "steps": [
+        "denied",
+        "completed"
+      ],
+      "expected": {
+        "steps": [
+          {
+            "to": "denied",
+            "accepted": true
+          },
+          {
+            "to": "completed",
+            "accepted": false
+          }
+        ],
+        "finalStatus": "denied"
+      }
+    },
+    {
+      "name": "sequences · inbound · una entrante denegada nunca pasa a active",
+      "kind": "inbound",
+      "contractRef": "D8-13, E1-2",
+      "basis": "contrato",
+      "direction": "inbound",
+      "steps": [
+        "denied",
+        "active"
+      ],
+      "expected": {
+        "steps": [
+          {
+            "to": "denied",
+            "accepted": true
+          },
+          {
+            "to": "active",
+            "accepted": false
+          }
+        ],
+        "finalStatus": "denied"
       }
     }
   ],

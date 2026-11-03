@@ -57,8 +57,7 @@
     "DF-W1": "Un aviso de gasto se persiste como evento de kind usage_alert, que NO está en el conjunto cerrado de D8-13 (Q-5: el lead lo añade o elige otro).",
     "DF-W2": "Firma de Twilio mala en usage-trigger de la voz → 401 (como la post-llamada; el del OTP da 403 y no se toca).",
     "DF-W3": "Sin IdempotencyToken: se persiste y abre el freno igual, sin deduplicación (abrir el freno es idempotente).",
-    "DF-W4": "Un tramo de transferencia (parent_call_sid de una llamada conocida) se concilia con su llamada madre y suma su coste; no es unknown_provider_call (Q-6).",
-    "DF-W5": "Una entrante denegada en la iniciación queda reconocida por su call_sid (evento initiation_received): la conciliación no la marca como desconocida (Q-6: si no, cualquier desconocido que llame abre el freno).",
+    "DF-W4": "El tramo de transferencia se reconoce por parent_call_sid = el call_sid de una llamada con fila (E1-2: «se enlaza con la llamada madre») y su coste se suma a la madre, con el evento cost_recorded.",
     "DF-W6": "Precio de Twilio: el valor absoluto de price (texto con signo) en micro-US$ enteros; null = todavía sin tarificar (se reintenta)."
   },
   "counts": {
@@ -990,9 +989,9 @@
   ],
   "callsPage": [
     {
-      "name": "callsPage · listCalls · una página de la subcuenta frente a voice_calls: conocidas, ambiguas resueltas, desconocida, tramo de transferencia y entrante denegada",
+      "name": "callsPage · listCalls · una página de la subcuenta frente a voice_calls: conocidas, ambiguas resueltas, desconocida (la única que abre el freno), tramo de transferencia y entrante denegada",
       "kind": "listCalls",
-      "contractRef": "D8-21, D8-19, D8-3",
+      "contractRef": "D8-21, D8-19, D8-3, E1-2",
       "basis": "decision-fixture",
       "decision": "DF-W6",
       "page": {
@@ -1293,11 +1292,9 @@
           "CA000000000000000000000000a800000c": "ambiguous",
           "CA000000000000000000000000a800000d": "dialing",
           "CA000000000000000000000000a800000e": "ambiguous",
+          "CA000000000000000000000000a8000010": "denied",
           "CA000000000000000000000000a8000011": "completed"
         },
-        "initiationReceivedCallSids": [
-          "CA000000000000000000000000a8000010"
-        ],
         "brakeOpen": false
       },
       "expected": {
@@ -1363,16 +1360,20 @@
               "cost_recorded"
             ],
             "brakeOpens": false,
+            "basis": "contrato (E1-2)",
             "decision": "DF-W4"
           },
           "CA000000000000000000000000a8000010": {
-            "match": "denied_inbound",
+            "match": "known",
+            "statusBefore": "denied",
+            "statusAfter": "denied",
+            "costMicroUsd": 14180,
             "events": [
+              "reconciled",
               "cost_recorded"
             ],
-            "costMicroUsd": 14180,
             "brakeOpens": false,
-            "decision": "DF-W5"
+            "basis": "contrato (E1-2): la entrante denegada tiene su fila denied"
           },
           "CA000000000000000000000000a8000011": {
             "match": "known",

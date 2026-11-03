@@ -52,7 +52,7 @@
   "decisions": {
     "DF-P1": "Intervalos semiabiertos en hora de Bogotá: [07:00, 19:00) de lunes a viernes y [08:00, 15:00) los sábados; las 19:00:00 y las 15:00:00 ya están fuera. Se evalúa la hora de MARCAR (Q-8).",
     "DF-P2": "Horario propio: la intersección con el legal (nunca amplía); sin configurar = solo el legal; mal configurado (apertura ≥ cierre o mal escrito) = fuera de horario (falla cerrado).",
-    "DF-P3": "Cuentan como intento: requested, dialing, ambiguous, completed, busy, no_answer, failed y hung_up. No cuentan canceled ni failed_to_start (no salió nada). Las entrantes nunca cuentan.",
+    "DF-P3": "Cuentan como intento: requested, dialing, active (una saliente en conversación, E1-1), ambiguous, completed, busy, no_answer, failed y hung_up. No cuentan canceled ni failed_to_start (no salió nada). Las entrantes nunca cuentan, tampoco las denied (E1-2).",
     "DF-P4": "«Hoy» y «la semana» en Bogotá: hoy = la fecha de Bogotá de now; semana = desde el lunes 00:00 de Bogotá (lectura de la ley). También se da el resultado con 7 días móviles (now − 7 días, now], la lectura más estricta, para que el propietario elija (P-11).",
     "DF-P5": "Consentimiento: manda el último evento de voice_consents por (at, id); granted solo vale con source written_form, admin_with_evidence aprobado por OTRA persona, o recorded_inbound_request si la grabación está encendida (P-7: apagada, no vale); revoked vale siempre. El consentimiento del lead del motor no es de voz.",
     "DF-P6": "Las exclusiones (y las señales do_not_contact y consent_status = denied) se miran en TODA saliente, también a canarios: D8-18 «se consulta antes de cada saliente» (Q-4: D8-12 las agrupa en el alcance contacts).",
@@ -69,14 +69,14 @@
   "counts": {
     "scheduleLegal": 20,
     "scheduleOwn": 11,
-    "frequency": 17,
+    "frequency": 19,
     "consent": 13,
     "exclusions": 16,
     "inboundPolicy": 15,
     "costReservation": 17,
     "brake": 16,
     "phoneHash": 7,
-    "total": 132
+    "total": 134
   },
   "scheduleLegal": [
     {
@@ -864,6 +864,58 @@
         "countRolling7Days": 1,
         "frequencyExceeded": true,
         "frequencyExceededRolling7Days": true
+      }
+    },
+    {
+      "name": "frequency · count · una saliente en conversación (active, E1-1) hoy cuenta",
+      "kind": "count",
+      "contractRef": "D8-12, D8-15, E1-1",
+      "basis": "decision-fixture",
+      "decision": "DF-P3",
+      "now": "2026-11-11T15:00:00Z",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2
+      },
+      "history": [
+        {
+          "at": "2026-11-11T14:55:00Z",
+          "status": "active",
+          "direction": "outbound"
+        }
+      ],
+      "expected": {
+        "countToday": 1,
+        "countWeek": 1,
+        "countRolling7Days": 1,
+        "frequencyExceeded": true,
+        "frequencyExceededRolling7Days": true
+      }
+    },
+    {
+      "name": "frequency · count · una entrante denegada (denied, E1-2) no cuenta",
+      "kind": "count",
+      "contractRef": "D8-15, E1-2",
+      "basis": "decision-fixture",
+      "decision": "DF-P3",
+      "now": "2026-11-11T15:00:00Z",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2
+      },
+      "history": [
+        {
+          "at": "2026-11-11T13:00:00Z",
+          "status": "denied",
+          "direction": "inbound"
+        }
+      ],
+      "expected": {
+        "countToday": 0,
+        "countWeek": 0,
+        "countRolling7Days": 0,
+        "frequencyExceeded": false,
+        "frequencyExceededRolling7Days": false
       }
     },
     {

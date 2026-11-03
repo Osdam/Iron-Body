@@ -6,9 +6,10 @@
 #   routeRules · tabla de respuestas HTTP de las tres rutas públicas (D8-16)
 NOW = epoch(2026, 11, 4, 15, 0, 0)          # miércoles 04-11-2026, 10:00 en Bogotá
 assert NOW == 1793804400
-P9_NOTICE = ("Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. "
-             "Esta llamada se procesa de forma automática y tus datos se tratan según nuestra política de privacidad. "
-             "Si prefieres hablar con una persona, dímelo en cualquier momento.")
+AI_NOTICE = ("Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. "
+             "Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. "
+             "Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.")   # E1-3 (sustituye el de P-9)
+UNAVAILABLE = "Lo siento, esta línea no está disponible en este momento. Gracias por llamar."
 AGENT_CANARY = "agent_h8fx_canary_0003"     # el agente sellado de la parte canary vigente
 AGENT_OLD = "agent_h8fx_canary_0002"        # el de la publicación anterior (sigue existiendo, D8-7)
 AGENT_ROGUE = "agent_h8fx_rogue_0099"       # uno que ninguna publicación conoce
@@ -54,7 +55,7 @@ EB = Fixture("elevenlabs-webhook-bodies.json", header(
          "url": "https://elevenlabs.io/docs/eleven-agents/customization/personalization/dynamic-variables.md", "consulted": "03-11-2026 (auditoría §d.1, vista)", "how": "—"},
     ],
     world={"now": NOW, "nowIso": utc_iso(2026, 11, 4, 15, 0, 0), "voiceFrom": VOICE_FROM, "agentPhoneNumberId": PHNUM,
-           "sealedAgentCanary": AGENT_CANARY, "previousAgent": AGENT_OLD, "versionLabel": VERSION_LABEL, "p9Notice": P9_NOTICE,
+           "sealedAgentCanary": AGENT_CANARY, "previousAgent": AGENT_OLD, "versionLabel": VERSION_LABEL, "aiNotice": AI_NOTICE,
            "canaryActive": CANARY_A, "stranger": STRANGER,
            "headers": {"initiation": "X-Voice-Initiation-Secret", "initiationValue": EL_INITIATION_VALUE,
                        "tools": "Authorization", "toolsValue": "Bearer " + EL_TOOL_BEARER},
@@ -65,13 +66,13 @@ EB = Fixture("elevenlabs-webhook-bodies.json", header(
         "DF-E3": "Un JSON no válido o sin type, con la firma buena, es «tipo desconocido válido»: 200 y se ignora (nunca un 4xx en bucle).",
         "DF-E4": "Un webhook sobre una llamada en estado final registra el evento y no cambia el estado.",
         "DF-E5": "Una post-llamada de una conversación sin fila en voice_calls es unknown_provider_call y abre el freno (R-2).",
-        "DF-E6": "Iniciación autenticada pero con el cuerpo mal formado: 200 con caller_authorized = no (denegación explícita, no depender de C-A2).",
+        "DF-E6": "Iniciación autenticada pero con el cuerpo mal formado: 200 con caller_authorized = no (denegación explícita, no depender de C-A2) y sin fila (sin call_sid no hay a qué atarla).",
         "DF-E7": "La respuesta de iniciación lleva SIEMPRE las tres variables (también al denegar): ElevenLabs exige todas las del agente.",
         "DF-E8": "Esquema estricto de cada herramienta (additionalProperties = false); conversation_id y call_sid de system__* (C-A3).",
-        "DF-E9": "«En curso» para una herramienta = dialing o active (D8-10 dice active, pero una saliente contestada sigue en dialing por D8-13: Q-3).",
-        "DF-E10": "«El autorizado es el sellado» se lee como: la fila de la llamada tiene caller_authorized = si (las entrantes denegadas no reciben herramientas).",
+        "DF-E9": "Nombres de los veredictos de la comprobación de la llamada: call_not_found (sin fila), call_not_active (ni dialing ni active: E1-1; una entrante denegada está en denied, E1-2), voice_braked y tool_quota_exceeded.",
         "DF-E11": "Turnos de la guarda: índice 0 de data.transcript. Códigos de inspect() del motor más voice_notice_missing, voice_money_not_from_tool y voice_transfer_not_approved.",
-        "DF-E12": "Iniciación con un agent_id distinto del sellado de la parte vigente: caller_authorized = no, evento seal_mismatch y freno.",
+        "DF-E12": "Iniciación con un agent_id distinto del sellado de la parte vigente: caller_authorized = no (fila denied, E1-2), evento seal_mismatch y freno.",
+        "DF-E17": "La fila denied de E1-2 lleva la huella y los 4 últimos dígitos solo si caller_id es un E.164; con el caller ID oculto, los dos a null (la huella no se calcula sobre «anonymous»). El sello lo fija B8-b.",
         "DF-E13": "Iniciación para un called_number distinto de TWILIO_VOICE_FROM: caller_authorized = no.",
         "DF-E14": "Twilio canceled (marcada y cancelada antes de contestar) se concilia como failed; queued, ringing e in-progress siguen en dialing.",
         "DF-E15": "Autenticación fallida en la iniciación y en las herramientas → 401; herramienta fuera de la lista cerrada → 404; los rechazos de la comprobación de la llamada → 200 con un mensaje neutro (R-16: nunca silencio).",
@@ -96,7 +97,7 @@ HORARIOS = json.dumps({"sede": "Sede Centro", "horario": "lunes a viernes de 5:0
 PLANES = json.dumps({"planes": [{"nombre": "Mensual", "condiciones": "Acceso a la sede, sin permanencia", "precio": "$ 89.000"}]}, ensure_ascii=False)
 
 TRANSCRIPT_OK = [
-    turn("agent", P9_NOTICE + " ¿En qué te puedo ayudar?", 0),
+    turn("agent", AI_NOTICE + " ¿En qué te puedo ayudar?", 0),
     turn("user", f"Hola, soy {SENT_NAME}, mi número es {SENT_PHONE_SPOKEN} y mi correo {SENT_EMAIL}. ¿A qué hora abren?", 9),
     turn("agent", "Déjame consultarlo.", 14, tool_calls=[tool_call("consultar_horarios", "toolreq_h8fx_0001")],
          tool_results=[tool_result("consultar_horarios", "toolreq_h8fx_0001", HORARIOS)]),
@@ -167,13 +168,13 @@ def dialing(conv_id, ref, agent=AGENT_CANARY, sid=None, direction="outbound", st
 
 
 # 1. Saliente contestada y completada
-PC("saliente a un canario, contestada: dialing → completed con su duración, sello verificado", "pc_completed",
+PC("saliente a un canario, contestada y con herramientas (ya active por E1-1): active → completed con su duración, sello verificado", "pc_completed",
    post_call_body(conv(1), AGENT_CANARY, ref=call_ref(1), direction="outbound", external=CANARY_A),
-   dialing(conv(1), call_ref(1)),
+   dialing(conv(1), call_ref(1), status="active"),
    {"http": 200, "envelopeType": "post_call_transcription",
     "events": [{"provider": "elevenlabs", "kind": "post_call_transcription", "providerEventKey": conv(1)},
                {"provider": "elevenlabs", "kind": "guard_verdict", "providerEventKey": conv(1)}],
-    "transition": {"from": "dialing", "to": "completed"}, "durationSecs": 187,
+    "transition": {"from": "active", "to": "completed"}, "durationSecs": 187,
     "seal": {"observedAgentId": AGENT_CANARY, "observedVersionId": None, "observedBranchId": None, "sealVerified": True},
     "costRaw": 412, "costUnits": "por confirmar (D8-15)", "guard": {"violations": [], "brakeOpens": False}, "brakeOpens": False})
 # 2. Entrante del canario (la misma forma, otra serialización)
@@ -187,6 +188,20 @@ PC("entrante de un canario: active → completed; serializado con \\u00f1 y sepa
     "seal": {"observedAgentId": AGENT_CANARY, "observedVersionId": None, "observedBranchId": None, "sealVerified": True},
     "costRaw": 210, "costUnits": "por confirmar (D8-15)", "guard": {"violations": [], "brakeOpens": False}, "brakeOpens": False},
    ascii_escape=True, sentinels=[SENT_NAME, SENT_PHONE_SPOKEN, SENT_EMAIL, CANARY_A, "573000000031"])
+# 2 bis. Saliente contestada sin ninguna herramienta: sigue en dialing hasta la post-llamada
+TRANSCRIPT_NO_TOOLS = [turn("agent", AI_NOTICE, 0), turn("user", "No me interesa, gracias.", 7),
+                       turn("agent", "Entendido. Que tengas un buen día.", 9, tool_calls=[tool_call("end_call", "toolreq_h8fx_0401", "system")])]
+PC("saliente contestada sin herramientas (sigue en dialing): dialing → completed", "pc_completed_no_tools",
+   post_call_body(conv(18), AGENT_CANARY, ref=call_ref(18), direction="outbound", external=CANARY_A, sid=call_sid(18), duration=12, cost=30,
+                  transcript=TRANSCRIPT_NO_TOOLS),
+   dialing(conv(18), call_ref(18), sid=call_sid(18)),
+   {"http": 200, "envelopeType": "post_call_transcription",
+    "events": [{"provider": "elevenlabs", "kind": "post_call_transcription", "providerEventKey": conv(18)},
+               {"provider": "elevenlabs", "kind": "guard_verdict", "providerEventKey": conv(18)}],
+    "transition": {"from": "dialing", "to": "completed"}, "durationSecs": 12,
+    "seal": {"observedAgentId": AGENT_CANARY, "observedVersionId": None, "observedBranchId": None, "sealVerified": True},
+    "costRaw": 30, "costUnits": "por confirmar (D8-15)", "guard": {"violations": [], "brakeOpens": False}, "brakeOpens": False},
+   ref="D8-13, E1-1", sentinels=[CANARY_A, "573000000031"])
 # 3. Agente observado distinto del sellado
 PC("seal_mismatch: el agente observado no es el sellado → evento y freno (D8-8, D8-19)", "pc_seal_mismatch",
    post_call_body(conv(3), AGENT_OLD, ref=call_ref(3), direction="outbound", external=CANARY_A, sid=call_sid(3)),
@@ -241,6 +256,20 @@ PC("la post-llamada llega después del corte (hung_up): se registra y el estado 
     "seal": {"observedAgentId": AGENT_CANARY, "observedVersionId": None, "observedBranchId": None, "sealVerified": True},
     "costRaw": 90, "costUnits": "por confirmar (D8-15)", "guard": {"violations": [], "brakeOpens": False}, "brakeOpens": False},
    basis="decision-fixture", decision="DF-E4")
+# 7 bis. Entrante denegada (E1-2): la post-llamada llega y la fila sigue en denied
+TRANSCRIPT_DENIED = [turn("agent", AI_NOTICE, 0), turn("agent", UNAVAILABLE, 6, tool_calls=[tool_call("end_call", "toolreq_h8fx_0301", "system")])]
+PC("entrante denegada (fila denied, E1-2): la post-llamada se registra y el estado final no cambia; sin freno", "pc_denied",
+   post_call_body(conv(22), AGENT_CANARY, ref=call_ref(22), direction="inbound", external=STRANGER, sid=call_sid(22), duration=9, cost=20,
+                  transcript=TRANSCRIPT_DENIED),
+   {"call": {"direction": "inbound", "status": "denied", "providerConversationId": conv(22), "providerCallSid": call_sid(22),
+             "callRef": call_ref(22), "sealedAgentId": AGENT_CANARY, "callerAuthorized": "no"}},
+   {"http": 200, "envelopeType": "post_call_transcription",
+    "events": [{"provider": "elevenlabs", "kind": "post_call_transcription", "providerEventKey": conv(22)},
+               {"provider": "elevenlabs", "kind": "guard_verdict", "providerEventKey": conv(22)}],
+    "transition": None, "statusAfter": "denied", "durationSecs": 9,
+    "seal": {"observedAgentId": AGENT_CANARY, "observedVersionId": None, "observedBranchId": None, "sealVerified": True},
+    "costRaw": 20, "costUnits": "por confirmar (D8-15)", "guard": {"violations": [], "brakeOpens": False}, "brakeOpens": False},
+   ref="D8-13, E1-2", basis="decision-fixture", decision="DF-E4", sentinels=[STRANGER, "573000000077"])
 # 8. Audio: se descarta
 PC("post_call_audio: 200, se descarta y queda el evento post_call_audio_discarded; el audio no se guarda", "pc_audio",
    {"type": "post_call_audio", "event_timestamp": NOW - 30, "data": {"agent_id": AGENT_CANARY, "conversation_id": conv(1), "full_audio": AUDIO_B64}},
@@ -298,33 +327,33 @@ PRICE_TOOL = turn("agent", "Lo consulto.", 10, tool_calls=[tool_call("consultar_
                   tool_results=[tool_result("consultar_planes", "toolreq_h8fx_0101", PLANES)])
 G("sin violaciones: aviso en el primer turno, hechos de la herramienta", TRANSCRIPT_OK, {"violations": [], "brakeOpens": False, "storesText": False})
 G("P-3: el precio dicho es exactamente el que devolvió consultar_planes en esa llamada → no es violación",
-  [turn("agent", P9_NOTICE, 0), ASK_PRICE, PRICE_TOOL, turn("agent", "El plan Mensual cuesta $ 89.000 al mes, sin permanencia.", 12)],
+  [turn("agent", AI_NOTICE, 0), ASK_PRICE, PRICE_TOOL, turn("agent", "El plan Mensual cuesta $ 89.000 al mes, sin permanencia.", 12)],
   {"violations": [], "brakeOpens": False, "storesText": False,
    "note": "inspect() del motor da machine_reply_invented_price ante cualquier cifra: el adaptador de voz descuenta las que devolvió la herramienta"},
   basis="supuesto-lead", ref="D8-10, P-3")
 G("P-3: una cifra distinta de la de la herramienta → violación y freno",
-  [turn("agent", P9_NOTICE, 0), ASK_PRICE, PRICE_TOOL, turn("agent", "El plan Mensual te queda en $ 79.000.", 12)],
+  [turn("agent", AI_NOTICE, 0), ASK_PRICE, PRICE_TOOL, turn("agent", "El plan Mensual te queda en $ 79.000.", 12)],
   {"violations": [{"turn": 3, "code": "voice_money_not_from_tool"}], "brakeOpens": True, "storesText": False},
   basis="supuesto-lead", ref="D8-10, P-3, D8-19")
 G("P-3: una cifra sin haber llamado a la herramienta → violación",
-  [turn("agent", P9_NOTICE, 0), ASK_PRICE, turn("agent", "Cuesta 89.000 pesos.", 9)],
+  [turn("agent", AI_NOTICE, 0), ASK_PRICE, turn("agent", "Cuesta 89.000 pesos.", 9)],
   {"violations": [{"turn": 2, "code": "voice_money_not_from_tool"}], "brakeOpens": True, "storesText": False},
   basis="supuesto-lead", ref="D8-10, P-3, D8-19")
 G("vocabulario de descuento (R-02) en un turno del agente → la guarda del motor lo marca",
-  [turn("agent", P9_NOTICE, 0), turn("user", "¿Hay algo gratis?", 5), turn("agent", "Sí, la primera semana es gratis.", 7)],
+  [turn("agent", AI_NOTICE, 0), turn("user", "¿Hay algo gratis?", 5), turn("agent", "Sí, la primera semana es gratis.", 7)],
   {"violations": [{"turn": 2, "code": "machine_reply_invented_discount"}], "brakeOpens": True, "storesText": False}, ref="D8-10, R-02, D8-19")
 G("una URL en un turno del agente → machine_reply_url",
-  [turn("agent", P9_NOTICE, 0), turn("agent", "Puedes ver todo en www.ironbody.co/planes", 6)],
+  [turn("agent", AI_NOTICE, 0), turn("agent", "Puedes ver todo en www.ironbody.co/planes", 6)],
   {"violations": [{"turn": 1, "code": "machine_reply_url"}], "brakeOpens": True, "storesText": False}, ref="D8-10, R-03, D8-19")
 G("el primer turno del agente no lleva el aviso [P-9] → voice_notice_missing",
   [turn("agent", "¡Hola! ¿En qué te ayudo?", 0), turn("user", "Hola", 3)],
   {"violations": [{"turn": 0, "code": "voice_notice_missing"}], "brakeOpens": True, "storesText": False}, ref="D8-10, D8-17, P-9")
 G("transferencia a un destino que no es del perfil → voice_transfer_not_approved (imposible por configuración, se comprueba igual)",
-  [turn("agent", P9_NOTICE, 0), turn("agent", "Te comunico.", 6, tool_calls=[tool_call("transfer_to_number", "toolreq_h8fx_0201", "system",
+  [turn("agent", AI_NOTICE, 0), turn("agent", "Te comunico.", 6, tool_calls=[tool_call("transfer_to_number", "toolreq_h8fx_0201", "system",
                                                                                      json.dumps({"transfer_number": "+573000000099"}))])],
   {"violations": [{"turn": 1, "code": "voice_transfer_not_approved"}], "brakeOpens": True, "storesText": False}, ref="D8-10, D8-14, R-07")
 G("los turnos del usuario no se juzgan: «gratis» y un teléfono en boca de la persona no son violación",
-  [turn("agent", P9_NOTICE, 0), turn("user", f"Me dijeron que era gratis, llámame al {SENT_PHONE_SPOKEN}", 5), turn("agent", "Te cuento las condiciones del plan.", 8)],
+  [turn("agent", AI_NOTICE, 0), turn("user", f"Me dijeron que era gratis, llámame al {SENT_PHONE_SPOKEN}", 5), turn("agent", "Te cuento las condiciones del plan.", 8)],
   {"violations": [], "brakeOpens": False, "storesText": False}, ref="D8-10")
 
 
@@ -362,27 +391,37 @@ def iexp(authorized, *, http=200, events=("initiation_received",), row=None, bra
     return e
 
 
+def denied_row(caller, sid):
+    e164 = caller if re.fullmatch(r"\+[1-9][0-9]{7,14}", caller) else None
+    return {"status": "denied", "direction": "inbound", "providerCallSid": sid, "callerAuthorized": "no",
+            "remoteHash": phone_hash(e164) if e164 else None, "remoteLast4": e164[-4:] if e164 else None}
+
+
 I("canario de voz activo, todo abierto → si, fila active idempotente por call_sid", init_body(CANARY_A, call_sid(21), conv(21)),
   {"policy": ALL_OPEN, "caller": "active_voice"},
-  iexp(True, row={"status": "active", "direction": "inbound", "providerCallSid": call_sid(21), "remoteLast4": "0031",
+  iexp(True, row={"status": "active", "direction": "inbound", "providerCallSid": call_sid(21), "callerAuthorized": "si", "remoteLast4": "0031",
                   "remoteHash": phone_hash(CANARY_A), "part": "canary", "stampState": "applied"}, reasons=[]))
-I("número no registrado → no: «línea no disponible» y end_call (lo hace el agente)", init_body(STRANGER, call_sid(22), conv(22)),
-  {"policy": ALL_OPEN, "caller": "not_registered"}, iexp(False, reasons=["not_an_active_voice_canary"]))
-I("caller ID oculto (anonymous) → no", init_body("anonymous", call_sid(23), conv(23)), {"policy": ALL_OPEN, "caller": "withheld"},
-  iexp(False, reasons=["not_an_active_voice_canary"]), basis="decision-fixture", decision="DF-P9")
+I("número no registrado → no y fila denied (E1-2): «línea no disponible» y end_call (lo hace el agente)", init_body(STRANGER, call_sid(22), conv(22)),
+  {"policy": ALL_OPEN, "caller": "not_registered"}, iexp(False, reasons=["not_an_active_voice_canary"], row=denied_row(STRANGER, call_sid(22))),
+  ref="D8-11, E1-2")
+I("caller ID oculto (anonymous) → no y fila denied sin huella ni últimos dígitos", init_body("anonymous", call_sid(23), conv(23)),
+  {"policy": ALL_OPEN, "caller": "withheld"},
+  iexp(False, reasons=["not_an_active_voice_canary"], row=denied_row("anonymous", call_sid(23))), basis="decision-fixture", decision="DF-E17",
+  ref="D8-11, E1-2")
 I("la misma iniciación dos veces (mismo call_sid) → la misma respuesta y una sola fila", init_body(CANARY_A, call_sid(21), conv(21)),
   {"policy": ALL_OPEN, "caller": "active_voice", "existingRowForCallSid": True},
   iexp(True, events=(), row="la existente (sin fila nueva)", reasons=[], note="call_ref igual al de la primera respuesta"))
-I("freno abierto → no aunque sea canario", init_body(CANARY_A, call_sid(24), conv(24)), {"policy": dict(ALL_OPEN, braked=True), "caller": "active_voice"},
-  iexp(False, reasons=["voice_braked"]), ref="D8-11, D8-19")
-I("agent_id distinto del sellado de la parte vigente → no, seal_mismatch y freno", init_body(CANARY_A, call_sid(25), conv(25), agent=AGENT_OLD),
-  {"policy": ALL_OPEN, "caller": "active_voice"}, iexp(False, events=("initiation_received", "seal_mismatch"), brake=True),
+I("freno abierto → no aunque sea canario, con fila denied", init_body(CANARY_A, call_sid(24), conv(24)), {"policy": dict(ALL_OPEN, braked=True), "caller": "active_voice"},
+  iexp(False, reasons=["voice_braked"], row=denied_row(CANARY_A, call_sid(24))), ref="D8-11, D8-19, E1-2")
+I("agent_id distinto del sellado de la parte vigente → no (fila denied), seal_mismatch y freno", init_body(CANARY_A, call_sid(25), conv(25), agent=AGENT_OLD),
+  {"policy": ALL_OPEN, "caller": "active_voice"},
+  iexp(False, events=("initiation_received", "seal_mismatch"), brake=True, row=denied_row(CANARY_A, call_sid(25))),
   basis="decision-fixture", decision="DF-E12")
-I("called_number que no es TWILIO_VOICE_FROM → no", init_body(CANARY_A, call_sid(26), conv(26), called="+576010000091"),
-  {"policy": ALL_OPEN, "caller": "active_voice"}, iexp(False), basis="decision-fixture", decision="DF-E13")
-I("autenticada pero sin call_sid → 200 y no (denegación explícita)", {"caller_id": CANARY_A, "agent_id": AGENT_CANARY, "called_number": VOICE_FROM},
+I("called_number que no es TWILIO_VOICE_FROM → no, con fila denied", init_body(CANARY_A, call_sid(26), conv(26), called="+576010000091"),
+  {"policy": ALL_OPEN, "caller": "active_voice"}, iexp(False, row=denied_row(CANARY_A, call_sid(26))), basis="decision-fixture", decision="DF-E13")
+I("autenticada pero sin call_sid → 200 y no (denegación explícita), sin fila", {"caller_id": CANARY_A, "agent_id": AGENT_CANARY, "called_number": VOICE_FROM},
   {"policy": ALL_OPEN, "caller": "active_voice"}, iexp(False, events=()), basis="decision-fixture", decision="DF-E6")
-I("secreto de la cabecera equivocado → 401 sin cuerpo útil (el agente se queda en caller_authorized = no por defecto, C-A2)",
+I("secreto de la cabecera equivocado → 401 sin cuerpo útil ni fila (el agente se queda en caller_authorized = no por defecto, C-A2)",
   init_body(CANARY_A, call_sid(27), conv(27)), {"policy": ALL_OPEN, "caller": "active_voice"},
   iexp(False, http=401, events=()), auth="h8fixture-initiation-0000000000000000000009", ref="D8-11, D8-16",
   basis="decision-fixture", decision="DF-E15")
@@ -393,10 +432,11 @@ I("el secreto de las herramientas en la cabecera de iniciación → 401 (tres se
   basis="decision-fixture", decision="DF-E15")
 
 
-# ── tools: POST /api/voice/tools/{tool} (D8-10) ─────────────────────────────────────────────────────────────
+# ── tools: POST /api/voice/tools/{tool} (D8-10, E1-1) ───────────────────────────────────────────────────────
 TOOLS = ["consultar_planes", "consultar_horarios", "solicitar_humano", "no_volver_a_llamar"]
 LIVE = {"status": "dialing", "direction": "outbound", "providerConversationId": conv(31), "providerCallSid": call_sid(31),
         "callerAuthorized": "si", "toolRequests": 0, "braked": False, "remoteHash": phone_hash(CANARY_A)}
+ACTIVE_OUT = dict(LIVE, status="active", toolRequests=1)
 
 
 def T(desc, tool, body, exp, *, call=LIVE, auth="Bearer " + EL_TOOL_BEARER, basis="contrato", decision=None, ref="D8-10, D8-16",
@@ -413,26 +453,31 @@ def ids(c=31):
     return {"conversation_id": conv(c), "call_sid": call_sid(c)}
 
 
-T("consultar_horarios en una saliente en curso → la sede y el horario", "consultar_horarios", ids(),
-  {"http": 200, "verdict": "ok", "events": ["tool_call"], "responseMustNotContain": [CANARY_A, "573000000031"]},
-  basis="decision-fixture", decision="DF-E9")
+T("la primera herramienta de una saliente en dialing responde y la pasa a active (E1-1)", "consultar_horarios", ids(),
+  {"http": 200, "verdict": "ok", "events": ["tool_call"], "transition": {"from": "dialing", "to": "active"},
+   "responseMustNotContain": [CANARY_A, "573000000031"]}, ref="D8-10, E1-1")
+T("una herramienta en una saliente ya active responde sin transición", "consultar_horarios", ids(),
+  {"http": 200, "verdict": "ok", "events": ["tool_call"], "transition": None}, call=ACTIVE_OUT, ref="D8-10, E1-1")
+T("una herramienta en una entrante active (canario autorizado) responde sin transición", "consultar_horarios", ids(),
+  {"http": 200, "verdict": "ok", "events": ["tool_call"], "transition": None}, call=dict(LIVE, status="active", direction="inbound"),
+  ref="D8-10, E1-1")
 T("consultar_planes → nombres y condiciones del catálogo vigente y, por P-3, el precio exacto de la base", "consultar_planes", ids(),
   {"http": 200, "verdict": "ok", "events": ["tool_call"], "priceSource": "Plan::sellable()", "neverComputedOrDiscounted": True},
-  basis="supuesto-lead", ref="D8-10, P-3")
+  call=ACTIVE_OUT, basis="supuesto-lead", ref="D8-10, P-3")
 T("solicitar_humano en horario del personal → disponible y el alias, nunca el número", "solicitar_humano", ids(),
   {"http": 200, "verdict": "ok", "available": True, "alias": "Recepción", "responseMustNotContain": [DEST_RECEPCION, "576010000011"]},
-  extra_given={"staffHoursNow": True, "profileTransferAliases": ["Recepción"]}, ref="D8-10, D8-14")
+  call=ACTIVE_OUT, extra_given={"staffHoursNow": True, "profileTransferAliases": ["Recepción"]}, ref="D8-10, D8-14")
 T("solicitar_humano fuera del horario del personal → no disponible", "solicitar_humano", ids(),
   {"http": 200, "verdict": "ok", "available": False, "alias": None},
-  extra_given={"staffHoursNow": False, "profileTransferAliases": ["Recepción"]}, ref="D8-10, D8-11, D8-14")
+  call=ACTIVE_OUT, extra_given={"staffHoursNow": False, "profileTransferAliases": ["Recepción"]}, ref="D8-10, D8-11, D8-14")
 T("no_volver_a_llamar → exclusión inmediata spoken_opt_out para el número de LA LLAMADA, sin confirmación del LLM", "no_volver_a_llamar", ids(),
   {"http": 200, "verdict": "ok", "events": ["tool_call"],
    "sideEffects": [{"table": "voice_exclusions", "source": "spoken_opt_out", "remoteHash": phone_hash(CANARY_A)}]},
-  ref="D8-10, D8-18 (Ley 2300)")
+  call=ACTIVE_OUT, ref="D8-10, D8-18 (Ley 2300)")
 T("no_volver_a_llamar con un teléfono en el cuerpo → 422 por el esquema estricto y ninguna exclusión de ese número", "no_volver_a_llamar",
   dict(ids(), telefono="+573000000099"),
   {"http": 422, "verdict": "invalid_schema", "sideEffects": [], "mustNotCreateExclusionFor": [phone_hash("+573000000099")]},
-  basis="decision-fixture", decision="DF-E8")
+  call=ACTIVE_OUT, basis="decision-fixture", decision="DF-E8")
 T("Bearer equivocado → 401", "consultar_horarios", ids(), {"http": 401, "verdict": "unauthorized", "events": []},
   auth="Bearer h8fixture-tool-bearer-0000000000000000000009", basis="decision-fixture", decision="DF-E15")
 T("sin Authorization → 401", "consultar_horarios", ids(), {"http": 401, "verdict": "unauthorized", "events": []}, auth=None,
@@ -447,21 +492,26 @@ T("conversation_id que no existe en voice_calls → rechazada, sin evento (no ha
   basis="decision-fixture", decision="DF-E9")
 T("la llamada ya terminó (completed) → rechazada", "consultar_horarios", ids(),
   {"http": 200, "verdict": "call_not_active", "neutralMessage": True, "events": ["tool_call"]}, call=dict(LIVE, status="completed"),
-  basis="decision-fixture", decision="DF-E9")
-T("entrante denegada (caller_authorized = no) → ninguna herramienta responde (C-A2)", "consultar_planes", ids(),
-  {"http": 200, "verdict": "caller_not_authorized", "neutralMessage": True, "events": ["tool_call"]},
-  call=dict(LIVE, status="active", direction="inbound", callerAuthorized="no"), basis="decision-fixture", decision="DF-E10", ref="D8-10, D8-11")
+  basis="decision-fixture", decision="DF-E9", ref="D8-10, E1-1")
+T("la saliente todavía requested (sin conversación) → rechazada", "consultar_horarios", ids(),
+  {"http": 200, "verdict": "call_not_active", "neutralMessage": True, "events": ["tool_call"]}, call=dict(LIVE, status="requested"),
+  basis="decision-fixture", decision="DF-E9", ref="D8-10, E1-1")
+T("entrante denegada (fila denied, E1-2) → ninguna herramienta responde (C-A2)", "consultar_planes", ids(),
+  {"http": 200, "verdict": "call_not_active", "neutralMessage": True, "events": ["tool_call"]},
+  call=dict(LIVE, status="denied", direction="inbound", callerAuthorized="no"), basis="decision-fixture", decision="DF-E9",
+  ref="D8-10, D8-11, E1-1, E1-2")
 T("freno abierto → rechazada", "consultar_planes", ids(), {"http": 200, "verdict": "voice_braked", "neutralMessage": True, "events": ["tool_call"]},
-  call=dict(LIVE, braked=True), basis="decision-fixture", decision="DF-E9", ref="D8-10, D8-19")
-T("la petición 20 de la llamada todavía vale", "consultar_horarios", ids(), {"http": 200, "verdict": "ok", "events": ["tool_call"]},
-  call=dict(LIVE, toolRequests=19))
+  call=dict(ACTIVE_OUT, braked=True), basis="decision-fixture", decision="DF-E9", ref="D8-10, D8-19")
+T("la petición 20 de la llamada todavía vale", "consultar_horarios", ids(), {"http": 200, "verdict": "ok", "events": ["tool_call"], "transition": None},
+  call=dict(ACTIVE_OUT, toolRequests=19))
 T("la petición 21 de la llamada → cupo agotado", "consultar_horarios", ids(),
-  {"http": 200, "verdict": "tool_quota_exceeded", "neutralMessage": True, "events": ["tool_call"]}, call=dict(LIVE, toolRequests=20),
+  {"http": 200, "verdict": "tool_quota_exceeded", "neutralMessage": True, "events": ["tool_call"]}, call=dict(ACTIVE_OUT, toolRequests=20),
   basis="decision-fixture", decision="DF-E9")
 T("un parámetro que el esquema no conoce (el LLM intenta salir de su llamada) → 422", "consultar_horarios",
-  dict(ids(), conversation_id_override=conv(32)), {"http": 422, "verdict": "invalid_schema", "events": []}, basis="decision-fixture", decision="DF-E8")
+  dict(ids(), conversation_id_override=conv(32)), {"http": 422, "verdict": "invalid_schema", "events": []}, call=ACTIVE_OUT,
+  basis="decision-fixture", decision="DF-E8")
 T("cuerpo que no es JSON → 422", "consultar_horarios", None, {"http": 422, "verdict": "invalid_schema", "events": []},
-  raw_override="conversation_id=conv_h8fx_0031", basis="decision-fixture", decision="DF-E8")
+  call=ACTIVE_OUT, raw_override="conversation_id=conv_h8fx_0031", basis="decision-fixture", decision="DF-E8")
 
 
 # ── routeRules: lo que D8-16 fija para las rutas públicas (tabla para las pruebas Feature) ───────────────────

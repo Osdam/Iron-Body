@@ -1,0 +1,1020 @@
+{
+    "compiler": {
+        "class": "App\\Services\\UltronStudio\\StudioVoiceCompiler",
+        "version": "ultron-voice-compiler/1",
+        "compilerSha256": "62c25a98849ba6c03f78854e91c00606ce460371703a7ae023dcc20facdbd79c",
+        "templateSha256": "b584cd903f93b863286b5c642ceeec1fe2065bb62d68296b77529b66502fbd2d",
+        "templateVersion": "ultron-voice-template/1",
+        "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e",
+        "aiNotice": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+        "php": "8.3.33"
+    },
+    "compile": {
+        "compile · valid · la base: versión APPROVED y perfil aprobado por otra persona": {
+            "inputSha256": "2777b01ff66edfb76fce4648f744d6dcc6b4bea60bc0dd355e80f8ef519958cd",
+            "compiles": true,
+            "specHash": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+            "voiceProfileHash": "9785318f83a28b8d2bf2e521d4ea810cb2dafc0182b987c902804cd80bed800a",
+            "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+            "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+        },
+        "compile · valid · versión CANARY": {
+            "inputSha256": "98c5495ebaca0887456cba22b28500d28753d21b3e081251b9e100136c388e08",
+            "compiles": true,
+            "specHash": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+            "voiceProfileHash": "9785318f83a28b8d2bf2e521d4ea810cb2dafc0182b987c902804cd80bed800a",
+            "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+            "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+        },
+        "compile · valid · versión PUBLISHED": {
+            "inputSha256": "ba1321ba4ea37b8be16cbebc6ff5e28d8e55e5120bd918c1a775af85b93b0495",
+            "compiles": true,
+            "specHash": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+            "voiceProfileHash": "9785318f83a28b8d2bf2e521d4ea810cb2dafc0182b987c902804cd80bed800a",
+            "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+            "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+        },
+        "compile · valid · sin destinos de transferencia ni transfer_to_number": {
+            "inputSha256": "b60796c016a971b919590abc3cc55547b5ae95d1f658030c43137beecbfb3f37",
+            "compiles": true,
+            "specHash": "c42d1689c76a38c2b3fefb6200660833583a0782654745a92c2ea29e32879ef8",
+            "voiceProfileHash": "8e08c32dba469e4763aa5119f3f92f5a87153a14a5117687ada12a49a56bee64",
+            "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+            "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+        },
+        "compile · valid · tres destinos (el máximo)": {
+            "inputSha256": "cced4793542680fa5e212872c31e941dbd6afe508bbe049dd0a94c9cbb894497",
+            "compiles": true,
+            "specHash": "de336c2f58538d2bfbbdd5a251b270578404264043b5d53c4510c819f4a032b8",
+            "voiceProfileHash": "6b54cb401a13e70f02be767a43b1a704f077198317c4c4b830f5e147af7b420c",
+            "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+            "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+        },
+        "compile · valid · duración igual al tope (300 = 300): el borde vale": {
+            "inputSha256": "2777b01ff66edfb76fce4648f744d6dcc6b4bea60bc0dd355e80f8ef519958cd",
+            "compiles": true,
+            "specHash": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+            "voiceProfileHash": "9785318f83a28b8d2bf2e521d4ea810cb2dafc0182b987c902804cd80bed800a",
+            "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+            "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+        },
+        "compile · valid · tope del entorno 900 recortado a 600 y perfil de 600": {
+            "inputSha256": "31e78a74b7a5c1c6561638bb14b0851996da8dd1990fbd5f8a61712363da366b",
+            "compiles": true,
+            "specHash": "e651a53e13a614df4b6231dd80d93f339ce962f388d19cf0da46dc79e86e282f",
+            "voiceProfileHash": "aec1a19d1b9a4a6e5c0f3e73234009fb87aac8e1b7852d32b127373e94aa8032",
+            "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+            "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+        },
+        "compile · valid · duración mínima de ElevenLabs (60)": {
+            "inputSha256": "c0443a95ff5d3b6f0b90121d65b3e9b4c87b33e00048031db67d21fc5a01291b",
+            "compiles": true,
+            "specHash": "927b1c5d61f00fa22fa1cc40e75a97d68438a908512fc1599c15feaed588b3c7",
+            "voiceProfileHash": "ba481fffc5e83daa2a4f8964371b768a5cda9eff0b675e164bfef11a40c83d56",
+            "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+            "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+        },
+        "compile · valid · números que no son dinero en un slot («a las 5», «24 horas», «365 días»)": {
+            "inputSha256": "2d1b3cdf3e92e256c6e4349ef67a9a07ddde1fff99d47bc46202b9d3bbcc1251",
+            "compiles": true,
+            "specHash": "eda59526488b593b77f96664609d73b4a07e5e748ba74d0ba7ce2dbd93661f09",
+            "voiceProfileHash": "a81a4cf3db4cf19eb1e7f8abed7d0caa595481403cd16e45ae29ba0dc9a7aaea",
+            "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+            "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+        },
+        "compile · valid · dos herramientas sin transferir (no_volver_a_llamar se queda)": {
+            "inputSha256": "cc3b8f06ffb91abbd41ec64f2c68d800559501f867585da1d48dd569ce3a6a67",
+            "compiles": true,
+            "specHash": "4ba9c83ceeb825264fa3e7cdb89abf5502e6549a5dba495ff20bbad9411575a7",
+            "voiceProfileHash": "34ba8f91dc8b5dc28047acb012207654af604a1c4c3c3c49c7d74ba39700a761",
+            "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+            "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+        },
+        "compile · valid · sin consultar_planes (la voz no dice precios)": {
+            "inputSha256": "0d8c1e52f16cd17a289d0b548401dc055984a5e17bed9559358129110f89d737",
+            "compiles": true,
+            "specHash": "bc0f0fd51ead75dae1d2daa4aabedf467d61a3429e280fa0238e116b2f49fc60",
+            "voiceProfileHash": "d42d3a9df3bcd5bc11de5cbdd0a88cbac4c83f05df6da9f70524a0fc7853d160",
+            "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+            "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+        },
+        "compile · valid · retención menor que la de P-8 (15 días)": {
+            "inputSha256": "00a634fa01909962d8f52f9ada2c228441f6455b9c2d9087c799872e436718ba",
+            "compiles": true,
+            "specHash": "caddfd27d6925518504e7aa2746cf7cecf6b43bcf61cdefc707d23fe2d2dcfc6",
+            "voiceProfileHash": "6a706f33a185d4423861311e6c43b50c7f3ea9a21e82af6b4ba3aa2946593995",
+            "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+            "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+        },
+        "compile · valid · herramientas y destinos en otro orden compilan igual": {
+            "inputSha256": "24b071328fb19641444c7f79d8b83bc27aeefee469dbe704b288f41ce017ef59",
+            "compiles": true,
+            "specHash": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+            "voiceProfileHash": "9785318f83a28b8d2bf2e521d4ea810cb2dafc0182b987c902804cd80bed800a",
+            "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+            "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+        },
+        "compile · negative · perfil en draft": {
+            "inputSha256": "5769d17ca63d2638420af8c3a56c0d2e01f5a7d3e3237b9be58fa90761655e6a",
+            "compiles": false,
+            "compilerReason": "profile_not_approved",
+            "compilerField": "profile.status",
+            "reason": "profile_not_approved",
+            "field": "profile.status",
+            "http": 422
+        },
+        "compile · negative · perfil en submitted": {
+            "inputSha256": "4058f74165c73fd3c5cb687476522c5727a59d2398d92439899a32195dec38bf",
+            "compiles": false,
+            "compilerReason": "profile_not_approved",
+            "compilerField": "profile.status",
+            "reason": "profile_not_approved",
+            "field": "profile.status",
+            "http": 422
+        },
+        "compile · negative · perfil en rejected": {
+            "inputSha256": "17bc3302a1592a82ff6ebf25329af4a744a9a91b707effe7cb45f3c9afcde65b",
+            "compiles": false,
+            "compilerReason": "profile_not_approved",
+            "compilerField": "profile.status",
+            "reason": "profile_not_approved",
+            "field": "profile.status",
+            "http": 422
+        },
+        "compile · negative · perfil aprobado por quien lo creó (por identidad)": {
+            "inputSha256": "9c4cfbf4b747b7db17e2882949a2af5daed0d59a769195650857b7d83ea26442",
+            "compiles": false,
+            "compilerReason": "profile_four_eyes",
+            "compilerField": "profile.approvedBy",
+            "reason": "profile_not_approved",
+            "field": "profile.approvedBy",
+            "http": 422
+        },
+        "compile · negative · versión en DRAFT": {
+            "inputSha256": "bee8ded64ddefbfdc69bb92b6184ff22bbda10775ec079782ec20d54ec2af30b",
+            "compiles": false,
+            "compilerReason": "version_not_approved",
+            "compilerField": "version.status",
+            "reason": "version_not_approved",
+            "field": "version.status",
+            "http": 422
+        },
+        "compile · negative · versión en VALIDATED": {
+            "inputSha256": "89c931e216203161b4255a269bb91c40f20f6cd4938faab969d698806ebcd3a3",
+            "compiles": false,
+            "compilerReason": "version_not_approved",
+            "compilerField": "version.status",
+            "reason": "version_not_approved",
+            "field": "version.status",
+            "http": 422
+        },
+        "compile · negative · versión en REVIEW_REQUIRED": {
+            "inputSha256": "fc01cfcb52877bd2163ab60fc5edf91ff61a54ca35a6c43c68d7ba5d80c1dcf0",
+            "compiles": false,
+            "compilerReason": "version_not_approved",
+            "compilerField": "version.status",
+            "reason": "version_not_approved",
+            "field": "version.status",
+            "http": 422
+        },
+        "compile · negative · versión en REJECTED": {
+            "inputSha256": "6c0ca17146b93815fd115b8f83b68f85a3fcc01ed4072abe8a85a18fc8ee9e49",
+            "compiles": false,
+            "compilerReason": "version_not_approved",
+            "compilerField": "version.status",
+            "reason": "version_not_approved",
+            "field": "version.status",
+            "http": 422
+        },
+        "compile · negative · versión en RETIRED": {
+            "inputSha256": "7efdea0c22b7d70ab699b93afa0cb10cf53a6613ca410befa2df54114c848696",
+            "compiles": false,
+            "compilerReason": "version_not_approved",
+            "compilerField": "version.status",
+            "reason": "version_not_approved",
+            "field": "version.status",
+            "http": 422
+        },
+        "compile · negative · versión en ROLLED_BACK": {
+            "inputSha256": "1576d6ad10644bdf9f826a6938ace514c8deeef22c96eac2ef040b1e851338b2",
+            "compiles": false,
+            "compilerReason": "version_not_approved",
+            "compilerField": "version.status",
+            "reason": "version_not_approved",
+            "field": "version.status",
+            "http": 422
+        },
+        "compile · negative · la huella guardada del perfil no cuadra con su contenido": {
+            "inputSha256": "5fc5c07941b6a75ad325ba4782efe529605a611ae6e9e399db555f707b00a615",
+            "compiles": false,
+            "compilerReason": "profile_hash_mismatch",
+            "compilerField": "profile.contentHash",
+            "reason": "profile_hash_mismatch",
+            "field": "profile.contentHash",
+            "http": 422
+        },
+        "compile · negative · la huella guardada de la versión no cuadra con la recalculada": {
+            "inputSha256": "f27ea2d1b3cbdb7822d37ef5bf530957f3495363e0cdd6af5460da923efb608e",
+            "compiles": false,
+            "compilerReason": "version_hash_mismatch",
+            "compilerField": "version.contentHash",
+            "reason": "version_hash_mismatch",
+            "field": "version.contentHash",
+            "http": 422
+        },
+        "compile · negative · slot_money en slots.presentacion: «Planes desde $ 89.000 al mes.»": {
+            "inputSha256": "9746d4a1676b7b80e2890b783e2bb67232d218fa40c24cd2c6753df62cfd9f6a",
+            "compiles": false,
+            "compilerReason": "text_money",
+            "compilerField": "profile.content.holes.presentation",
+            "reason": "slot_money",
+            "field": "slots.presentacion",
+            "http": 422
+        },
+        "compile · negative · slot_money en slots.presentacion: «Te sale en 80 mil pesos.»": {
+            "inputSha256": "b2a8d558d44cecaeecf74adc94fc3c93051fc79515a157d86dc3f79651e1d754",
+            "compiles": false,
+            "compilerReason": "text_money",
+            "compilerField": "profile.content.holes.presentation",
+            "reason": "slot_money",
+            "field": "slots.presentacion",
+            "http": 422
+        },
+        "compile · negative · slot_money en slots.cierre: «El mensual vale 89000.»": {
+            "inputSha256": "7190f3873e90194cae045636443ab413d04eed10e843c4ac94af2057887d664a",
+            "compiles": false,
+            "compilerReason": "text_money",
+            "compilerField": "profile.content.holes.closing",
+            "reason": "slot_money",
+            "field": "slots.cierre",
+            "http": 422
+        },
+        "compile · negative · slot_money en greetingOutbound: «Te llamo para ofrecerte el plan de 89.000.»": {
+            "inputSha256": "48827b5bddfd187c001fec073381dd9a100a2ecd7edd3dead8e83912eca94c67",
+            "compiles": false,
+            "compilerReason": "text_money",
+            "compilerField": "profile.content.greetings.outbound",
+            "reason": "slot_money",
+            "field": "greetingOutbound",
+            "http": 422
+        },
+        "compile · negative · slot_discount en slots.presentacion: «La primera semana es gratis.»": {
+            "inputSha256": "c9b6e67a34160077d3f044085b9711769b44480bdd0e0212127df5b7b71b51f0",
+            "compiles": false,
+            "compilerReason": "text_discount",
+            "compilerField": "profile.content.holes.presentation",
+            "reason": "slot_discount",
+            "field": "slots.presentacion",
+            "http": 422
+        },
+        "compile · negative · slot_discount en slots.presentacion: «Hoy tenemos 2x1.»": {
+            "inputSha256": "53288491de2da597dd3e1ba0ba25fe48be4ed19e6df689214838d17c4c96517f",
+            "compiles": false,
+            "compilerReason": "text_discount",
+            "compilerField": "profile.content.holes.presentation",
+            "reason": "slot_discount",
+            "field": "slots.presentacion",
+            "http": 422
+        },
+        "compile · negative · slot_discount en slots.cierre: «Pregunta por el precio especial.»": {
+            "inputSha256": "49a37f1f0064eed12ccf31e74a0ce770567d8f48f825092e988ac65f04edc27d",
+            "compiles": false,
+            "compilerReason": "text_discount",
+            "compilerField": "profile.content.holes.closing",
+            "reason": "slot_discount",
+            "field": "slots.cierre",
+            "http": 422
+        },
+        "compile · negative · slot_discount en slots.cierre: «Pide tu descuento.»": {
+            "inputSha256": "1782f3e39b45236f8de2b13a5fd64daf3568629de348021744374483c457902a",
+            "compiles": false,
+            "compilerReason": "text_discount",
+            "compilerField": "profile.content.holes.closing",
+            "reason": "slot_discount",
+            "field": "slots.cierre",
+            "http": 422
+        },
+        "compile · negative · slot_discount en slots.presentacion: «Promoción 2 x 1 con espacios.»": {
+            "inputSha256": "3725cf11385017dd51c3f012006aa449d62dbff0baac464f1849d8928b491fbc",
+            "compiles": false,
+            "compilerReason": "text_discount",
+            "compilerField": "profile.content.holes.presentation",
+            "reason": "slot_discount",
+            "field": "slots.presentacion",
+            "http": 422
+        },
+        "compile · negative · slot_url en slots.presentacion: «Mira todo en www.ironbody.co»": {
+            "inputSha256": "96190f4853948985e37efb620e7ee60ff8610653659a041b0d91963b0eaf65a4",
+            "compiles": false,
+            "compilerReason": "text_url",
+            "compilerField": "profile.content.holes.presentation",
+            "reason": "slot_url",
+            "field": "slots.presentacion",
+            "http": 422
+        },
+        "compile · negative · slot_url en slots.cierre: «Entra a https://ironbody.test/planes»": {
+            "inputSha256": "79e17648406b35f22ff473ee6747dc7e2558a6b788b6988d49714ccc5126435a",
+            "compiles": false,
+            "compilerReason": "text_url",
+            "compilerField": "profile.content.holes.closing",
+            "reason": "slot_url",
+            "field": "slots.cierre",
+            "http": 422
+        },
+        "compile · negative · slot_phone en slots.cierre: «Llámanos al 3 0 0 0 0 0 0 0 3 1.»": {
+            "inputSha256": "a368c84e2383d07ca47367f0285e3ebd9aef0f5824f71137421239eb4dbb3bfa",
+            "compiles": false,
+            "compilerReason": "text_phone",
+            "compilerField": "profile.content.holes.closing",
+            "reason": "slot_phone",
+            "field": "slots.cierre",
+            "http": 422
+        },
+        "compile · negative · slot_phone en slots.cierre: «Llámanos al 300 000 0031.»": {
+            "inputSha256": "1baed49e2c9d8ab3c878dd7ecb0973c651f15e9fbb4182fa7900a737d88918fe",
+            "compiles": false,
+            "compilerReason": "text_phone",
+            "compilerField": "profile.content.holes.closing",
+            "reason": "slot_phone",
+            "field": "slots.cierre",
+            "http": 422
+        },
+        "compile · negative · slot_phone en greetingInbound: «Gracias por llamar al +57 601 000 0011.»": {
+            "inputSha256": "8f0728eed1fab4f630e1f8cd080cf7733c21cfe82a23460e9f00495972d9535a",
+            "compiles": false,
+            "compilerReason": "text_phone",
+            "compilerField": "profile.content.greetings.inbound",
+            "reason": "slot_phone",
+            "field": "greetingInbound",
+            "http": 422
+        },
+        "compile · negative · slot_email en slots.cierre: «Escríbenos a hola@ironbody.test.»": {
+            "inputSha256": "c1c418f7ccd5963fd210d6c9c84c992d71941ca49775692b494d02c7ad19da42",
+            "compiles": false,
+            "compilerReason": "text_email",
+            "compilerField": "profile.content.holes.closing",
+            "reason": "slot_email",
+            "field": "slots.cierre",
+            "http": 422
+        },
+        "compile · negative · slot_invisible en slots.presentacion: «Te ayudo⟦U+200B⟧ con planes.»": {
+            "inputSha256": "eca1c63b9eb2c1320651f37c103549a2cd377537153bbc0f5680f9dba41d187a",
+            "compiles": false,
+            "compilerReason": "text_invisible",
+            "compilerField": "profile.content.holes.presentation",
+            "reason": "slot_invisible",
+            "field": "slots.presentacion",
+            "http": 422
+        },
+        "compile · negative · slot_invisible en slots.presentacion: «Te ayudo ⟦U+202E⟧con planes.»": {
+            "inputSha256": "eaee12eacff8d50a9bd6e51640b58d79de8f1c9ea8ebdc10e931cf57e3c64bcb",
+            "compiles": false,
+            "compilerReason": "text_invisible",
+            "compilerField": "profile.content.holes.presentation",
+            "reason": "slot_invisible",
+            "field": "slots.presentacion",
+            "http": 422
+        },
+        "compile · negative · slot_invisible en slots.cierre: «Hasta luego⟦U+E0041⟧.»": {
+            "inputSha256": "c0865b597f3bfc99a88fe5d1c69f1c6f8d50f06bab912d05f0e4353a0d321074",
+            "compiles": false,
+            "compilerReason": "text_invisible",
+            "compilerField": "profile.content.holes.closing",
+            "reason": "slot_invisible",
+            "field": "slots.cierre",
+            "http": 422
+        },
+        "compile · negative · slot_invisible en slots.cierre: «Hasta⟦U+2028⟧luego.»": {
+            "inputSha256": "12c648a894cf5a6b9c7486d9bea839cce5a36e20ade128e6975dac678e177d82",
+            "compiles": false,
+            "compilerReason": "text_invisible",
+            "compilerField": "profile.content.holes.closing",
+            "reason": "slot_invisible",
+            "field": "slots.cierre",
+            "http": 422
+        },
+        "compile · negative · slot_invisible en slots.presentacion: «Pide tu des⟦U+00AD⟧cuento.»": {
+            "inputSha256": "d8d7fe2fbc1487bce518a68b4f5b8ae906bea042020dbadae12021933df1f2da",
+            "compiles": false,
+            "compilerReason": "text_invisible",
+            "compilerField": "profile.content.holes.presentation",
+            "reason": "slot_invisible",
+            "field": "slots.presentacion",
+            "http": 422
+        },
+        "compile · negative · slot_characters en slots.cierre: «Te esperamos ❤⟦U+FE0F⟧ 👨⟦U+200D⟧👩⟦U+200D⟧👧»": {
+            "inputSha256": "2535ca931ccc34900574e66aab84f1af38d28ff1f84e7a7c82cbbe7b6450fed9",
+            "compiles": false,
+            "compilerReason": "text_characters",
+            "compilerField": "profile.content.holes.closing",
+            "reason": "slot_characters",
+            "field": "slots.cierre",
+            "http": 422
+        },
+        "compile · negative · slot_characters en slots.cierre: «Hasta pronto 😀»": {
+            "inputSha256": "b6db027afa2834ab534873b8e3be6b0c3ee18e447841e8484008ce969bd08506",
+            "compiles": false,
+            "compilerReason": "text_characters",
+            "compilerField": "profile.content.holes.closing",
+            "reason": "slot_characters",
+            "field": "slots.cierre",
+            "http": 422
+        },
+        "compile · negative · slot_characters en greetingInbound: «Hola {{system__caller_id}}, gracias por llamar.»": {
+            "inputSha256": "9d7ddca06a024ba8c7ef47f55cdfd5507aba21d55c59101fb6a95e04dfadb6e1",
+            "compiles": false,
+            "compilerReason": "text_characters",
+            "compilerField": "profile.content.greetings.inbound",
+            "reason": "slot_characters",
+            "field": "greetingInbound",
+            "http": 422
+        },
+        "compile · negative · slot_characters en slots.presentacion: «Te cuento sobre «nuestros planes».»": {
+            "inputSha256": "073f2e3d788b7ef9bbcc3409351a91027f8b0f880195b41c1b14146771d4f2bf",
+            "compiles": false,
+            "compilerReason": "text_characters",
+            "compilerField": "profile.content.holes.presentation",
+            "reason": "slot_characters",
+            "field": "slots.presentacion",
+            "http": 422
+        },
+        "compile · negative · slot_characters en slots.presentacion: «Somos la sede #1 de la ciudad.»": {
+            "inputSha256": "e474793de0c5f4c3ae4ab0d42ab7c0614b9be623c293d7c94a207d4fce4c055f",
+            "compiles": false,
+            "compilerReason": "text_characters",
+            "compilerField": "profile.content.holes.presentation",
+            "reason": "slot_characters",
+            "field": "slots.presentacion",
+            "http": 422
+        },
+        "compile · negative · dos problemas en el mismo slot (cifra y «gratis»): manda el orden de la plantilla, slot_money": {
+            "inputSha256": "ecd3f963f19f2c0713b1bb92aca13609fb606fbe307b4a93c49971efa016b033",
+            "compiles": false,
+            "compilerReason": "text_money",
+            "compilerField": "profile.content.holes.presentation",
+            "reason": "slot_money",
+            "field": "slots.presentacion",
+            "http": 422
+        },
+        "compile · negative · dos campos con problemas distintos (cifra en el saludo de entrada, URL en un slot): manda el primer campo declarado aunque su motivo vaya después, slot_money en greetingInbound": {
+            "inputSha256": "b697c6ae98309baef5258f8b42d943290c8f5ffa0df87c830be470438f28424b",
+            "compiles": false,
+            "compilerReason": "text_money",
+            "compilerField": "profile.content.greetings.inbound",
+            "reason": "slot_money",
+            "field": "greetingInbound",
+            "http": 422
+        },
+        "compile · negative · herramienta fuera del catálogo (aplicar_descuento)": {
+            "inputSha256": "ecdc98d4451651ae410bc66202180465e0a9b28282f6bf7d28c628aa18178ea5",
+            "compiles": false,
+            "compilerReason": "tool_not_in_catalog",
+            "compilerField": "profile.content.tools.4",
+            "reason": "tool_not_in_catalog",
+            "field": "profile.content.tools.4",
+            "http": 422
+        },
+        "compile · negative · herramienta de cobro (enviar_enlace_pago)": {
+            "inputSha256": "2d0fedc356944de4458114dc2e532cfdca00f24c2240def0d55e3a4d5438626e",
+            "compiles": false,
+            "compilerReason": "tool_not_in_catalog",
+            "compilerField": "profile.content.tools.1",
+            "reason": "tool_not_in_catalog",
+            "field": "profile.content.tools.1",
+            "http": 422
+        },
+        "compile · negative · herramienta de sistema skip_turn": {
+            "inputSha256": "e004affa1d636c8af7ae6adec732eb5659ba73320f500022bcd6bedcd9b6188a",
+            "compiles": false,
+            "compilerReason": "system_tool_not_allowed",
+            "compilerField": "profile.content.systemTools.2",
+            "reason": "system_tool_not_allowed",
+            "field": "profile.content.systemTools.2",
+            "http": 422
+        },
+        "compile · negative · herramienta de sistema language_detection": {
+            "inputSha256": "f243edd20dc016f37c62608b7b6b1319954f93c0ccdc9ef5ceb83cc9fe568832",
+            "compiles": false,
+            "compilerReason": "system_tool_not_allowed",
+            "compilerField": "profile.content.systemTools.2",
+            "reason": "system_tool_not_allowed",
+            "field": "profile.content.systemTools.2",
+            "http": 422
+        },
+        "compile · negative · herramienta de sistema transfer_to_agent": {
+            "inputSha256": "3d95d0a35bbcdeea1acc1030a50668a57d6fa7af935c28cd0a229e7a15eca60d",
+            "compiles": false,
+            "compilerReason": "system_tool_not_allowed",
+            "compilerField": "profile.content.systemTools.2",
+            "reason": "system_tool_not_allowed",
+            "field": "profile.content.systemTools.2",
+            "http": 422
+        },
+        "compile · negative · herramienta de sistema play_keypad_touch_tone": {
+            "inputSha256": "529e8802c71de36e011fae1889cccea14621303f0b8c49b9d4c5ade30d667db9",
+            "compiles": false,
+            "compilerReason": "system_tool_not_allowed",
+            "compilerField": "profile.content.systemTools.2",
+            "reason": "system_tool_not_allowed",
+            "field": "profile.content.systemTools.2",
+            "http": 422
+        },
+        "compile · negative · herramienta de sistema voicemail_detection": {
+            "inputSha256": "5de766ac0b2a9495c5d08183bc13b5f8fc2488ceaf74127b3ddce92aa7eb88a2",
+            "compiles": false,
+            "compilerReason": "system_tool_not_allowed",
+            "compilerField": "profile.content.systemTools.2",
+            "reason": "system_tool_not_allowed",
+            "field": "profile.content.systemTools.2",
+            "http": 422
+        },
+        "compile · negative · falta end_call": {
+            "inputSha256": "17507f880a5142cf09521e4649ac54cd43c5174c96e74bda8a98db9265a1a7b5",
+            "compiles": false,
+            "compilerReason": "end_call_required",
+            "compilerField": "profile.content.systemTools",
+            "reason": "end_call_missing",
+            "field": "profile.content.systemTools",
+            "http": 422
+        },
+        "compile · negative · sin herramientas de sistema": {
+            "inputSha256": "574a22f11cab46d977f5e24511688ba2182d1e4488e231eec249dad2793e5963",
+            "compiles": false,
+            "compilerReason": "end_call_required",
+            "compilerField": "profile.content.systemTools",
+            "reason": "end_call_missing",
+            "field": "profile.content.systemTools",
+            "http": 422
+        },
+        "compile · negative · sin no_volver_a_llamar (la revocación oral de la Ley 2300)": {
+            "inputSha256": "70afc71304598f3873e3327f1205a2754195540ed0cdebd2199c546d6ab97571",
+            "compiles": false,
+            "compilerReason": "opt_out_tool_required",
+            "compilerField": "profile.content.tools",
+            "reason": "opt_out_tool_missing",
+            "field": "profile.content.tools",
+            "http": 422
+        },
+        "compile · negative · transfer_to_number sin solicitar_humano": {
+            "inputSha256": "62e68470bf6c9c5eadb830a64b5dad871976b8284524f63d36d14cab9d4763de",
+            "compiles": false,
+            "compilerReason": "transfer_tools_mismatch",
+            "compilerField": "profile.content.systemTools",
+            "reason": "transfer_requires_human_tool",
+            "field": "profile.content.systemTools",
+            "http": 422
+        },
+        "compile · negative · la versión nombra un destino (Gerencia) que el perfil no tiene": {
+            "inputSha256": "01755c4acbd228a870f8c3acca74d3a5e781de8786bdec3b6492680c5c417312",
+            "compiles": true,
+            "specHash": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+            "voiceProfileHash": "9785318f83a28b8d2bf2e521d4ea810cb2dafc0182b987c902804cd80bed800a",
+            "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+            "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+        },
+        "compile · negative · duración 301 con tope 300": {
+            "inputSha256": "025dbe2af78894de66c725a6e057692922024ae8dc4750d860361be5526e9142",
+            "compiles": false,
+            "compilerReason": "duration_exceeds_limit",
+            "compilerField": "profile.content.maxDurationSeconds",
+            "reason": "max_duration_exceeds_cap",
+            "field": "profile.content.maxDurationSeconds",
+            "http": 422
+        },
+        "compile · negative · duración 601 con el entorno en 900 (recortado a 600)": {
+            "inputSha256": "52579885f676783cfdedff193d6a15c4129a7b2992e08ecd4e1461b207df6b80",
+            "compiles": false,
+            "compilerReason": "duration_exceeds_limit",
+            "compilerField": "profile.content.maxDurationSeconds",
+            "reason": "max_duration_exceeds_cap",
+            "field": "profile.content.maxDurationSeconds",
+            "http": 422
+        },
+        "compile · negative · duración 120 con el entorno en 30 (recortado a 60)": {
+            "inputSha256": "110a93d456213a01d97e6b870abaefe5b524750a38703bf8fb190492491ea19f",
+            "compiles": false,
+            "compilerReason": "duration_exceeds_limit",
+            "compilerField": "profile.content.maxDurationSeconds",
+            "reason": "max_duration_exceeds_cap",
+            "field": "profile.content.maxDurationSeconds",
+            "http": 422
+        },
+        "compile · negative · grabación encendida sin P-7": {
+            "inputSha256": "780ece6e4ac7de1bd3d62420d1066a265224bb05014af3a4b1645164763cf744",
+            "compiles": false,
+            "compilerReason": "recording_not_allowed",
+            "compilerField": "profile.content.privacy.recording",
+            "reason": "recording_enabled",
+            "field": "profile.content.privacy.recording",
+            "http": 422
+        },
+        "compile · negative · retención de 31 días (P-8: 30)": {
+            "inputSha256": "5e9fd448b651822941c24d562cc3048f83c6747cd6c064d1c512aef1adb21c8c",
+            "compiles": false,
+            "compilerReason": "retention_exceeds_limit",
+            "compilerField": "profile.content.privacy.retentionDays",
+            "reason": "retention_exceeds_limit",
+            "field": "profile.content.privacy.retentionDays",
+            "http": 422
+        },
+        "compile · negative · retención ilimitada (-1 en ElevenLabs)": {
+            "inputSha256": "307a4ecccbd17553d35f7718f2fce01c8a714375a48777be9bad931178c46ecd",
+            "compiles": false,
+            "compilerReason": "retention_exceeds_limit",
+            "compilerField": "profile.content.privacy.retentionDays",
+            "reason": "retention_exceeds_limit",
+            "field": "profile.content.privacy.retentionDays",
+            "http": 422
+        },
+        "compile · negative · buzón leave_message: no existe (solo hang_up)": {
+            "inputSha256": "1a19df4a537078b39fa96b6ac74e3efdb9d2072d3edc89c167a6e3b79ef2bcd7",
+            "compiles": false,
+            "compilerReason": "profile_field_invalid",
+            "compilerField": "profile.content.voicemail",
+            "reason": "voicemail_not_allowed",
+            "field": "profile.content.voicemail",
+            "http": 422
+        },
+        "compile · negative · sin aviso": {
+            "inputSha256": "e47c7d8064c677c00b4639591bc2d7b6ef9ae630c5b2e99fe531464b45dd8324",
+            "compiles": false,
+            "compilerReason": "notice_missing",
+            "compilerField": "profile.content.aiNotice",
+            "reason": "notice_missing",
+            "field": "profile.content.aiNotice",
+            "http": 422
+        },
+        "compile · negative · aviso vacío": {
+            "inputSha256": "6230e08dbdd6deec767d3a78a53dc17063c78627e8eb7cde39ab2afb7b732c57",
+            "compiles": false,
+            "compilerReason": "notice_missing",
+            "compilerField": "profile.content.aiNotice",
+            "reason": "notice_missing",
+            "field": "profile.content.aiNotice",
+            "http": 422
+        },
+        "compile · negative · aviso con una palabra cambiada": {
+            "inputSha256": "d2ba04eb2c1ab4f5a0c6ce406ec99e6b0350dd8a93339d29e80b6782f2c83358",
+            "compiles": false,
+            "compilerReason": "notice_mismatch",
+            "compilerField": "profile.content.aiNotice",
+            "reason": "notice_missing",
+            "field": "profile.content.aiNotice",
+            "http": 422
+        },
+        "compile · negative · el aviso antiguo de P-9 (sustituido por E1-3)": {
+            "inputSha256": "26c04d652320aa35e3620001e0e93d484de6f1dbb3098d473efe8863635ea2bf",
+            "compiles": false,
+            "compilerReason": "notice_mismatch",
+            "compilerField": "profile.content.aiNotice",
+            "reason": "notice_missing",
+            "field": "profile.content.aiNotice",
+            "http": 422
+        },
+        "compile · negative · un campo que no es del conjunto cerrado (prompt libre)": {
+            "inputSha256": "2328f7db334758cb49fef1c0e67277fb7fff6b63625f23da20c0e9cb4eee036a",
+            "compiles": false,
+            "compilerReason": "profile_field_unknown",
+            "compilerField": "profile.content.prompt",
+            "reason": "profile_field_not_allowed",
+            "field": "profile.content.prompt",
+            "http": 422
+        },
+        "compile · negative · idioma en": {
+            "inputSha256": "56d5cbbcc5a4521618ca8f3f96a83c7888749ef81ee6c552b33ef6ef7f8bbc32",
+            "compiles": false,
+            "compilerReason": "profile_field_invalid",
+            "compilerField": "profile.content.language",
+            "reason": "language_not_allowed",
+            "field": "profile.content.language",
+            "http": 422
+        },
+        "compile · negative · duración 59 (por debajo del mínimo de ElevenLabs)": {
+            "inputSha256": "d8225ef873f120eb38156dfda7abd77be8df8086cfb542e08a91381788344f50",
+            "compiles": false,
+            "compilerReason": "profile_field_invalid",
+            "compilerField": "profile.content.maxDurationSeconds",
+            "reason": "max_duration_below_minimum",
+            "field": "profile.content.maxDurationSeconds",
+            "http": 422
+        },
+        "compile · negative · cuatro destinos": {
+            "inputSha256": "09093bc4d63ddaa90229a9ef5456bfa64df0f3773e7a3e2ab5f3343d5edcaa63",
+            "compiles": false,
+            "compilerReason": "transfer_destinations_invalid",
+            "compilerField": "profile.content.transfer.destinations",
+            "reason": "too_many_transfer_destinations",
+            "field": "profile.content.transfer.destinations",
+            "http": 422
+        },
+        "compile · negative · audio guardado encendido (P-8)": {
+            "inputSha256": "5bce7a71b0cb4e18586101de9884221bf01491c1d31c3060b918152f9a33a1b8",
+            "compiles": false,
+            "compilerReason": "audio_retention_not_allowed",
+            "compilerField": "profile.content.privacy.storeAudio",
+            "reason": "audio_storage_enabled",
+            "field": "profile.content.privacy.storeAudio",
+            "http": 422
+        },
+        "compile · negative · orden: perfil sin aprobar y además sin end_call → profile_not_approved": {
+            "inputSha256": "1d1d79735110c3f54b647d48c404f42c7f1ce93634fb20fc6714939356a1f11f",
+            "compiles": false,
+            "compilerReason": "profile_not_approved",
+            "compilerField": "profile.status",
+            "reason": "profile_not_approved",
+            "field": "profile.status",
+            "http": 422
+        },
+        "compile · negative · orden: versión sin aprobar y perfil sin aprobar → manda la versión": {
+            "inputSha256": "8fc81c5675187e551a6b067f7b8a27c3e60592a46bf414a5206f449af40e333f",
+            "compiles": false,
+            "compilerReason": "version_not_approved",
+            "compilerField": "version.status",
+            "reason": "version_not_approved",
+            "field": "version.status",
+            "http": 422
+        },
+        "compile · negative · orden: slot con URL y además grabación encendida → slot_url": {
+            "inputSha256": "b6a60eaa7524c19ef51b123605e4ee67e55c64a96492e175315945474bd9860c",
+            "compiles": false,
+            "compilerReason": "text_url",
+            "compilerField": "profile.content.holes.closing",
+            "reason": "slot_url",
+            "field": "slots.cierre",
+            "http": 422
+        }
+    },
+    "hashRelations": {
+        "hashRelations · specHash · la misma entrada dos veces → la misma huella (determinista)": {
+            "inputSha256A": "2777b01ff66edfb76fce4648f744d6dcc6b4bea60bc0dd355e80f8ef519958cd",
+            "inputSha256B": "2777b01ff66edfb76fce4648f744d6dcc6b4bea60bc0dd355e80f8ef519958cd",
+            "a": {
+                "compiles": true,
+                "specHash": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+                "voiceProfileHash": "9785318f83a28b8d2bf2e521d4ea810cb2dafc0182b987c902804cd80bed800a",
+                "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+                "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+            },
+            "b": {
+                "compiles": true,
+                "specHash": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+                "voiceProfileHash": "9785318f83a28b8d2bf2e521d4ea810cb2dafc0182b987c902804cd80bed800a",
+                "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+                "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+            }
+        },
+        "hashRelations · specHash · las claves del perfil en otro orden → la misma huella": {
+            "inputSha256A": "2777b01ff66edfb76fce4648f744d6dcc6b4bea60bc0dd355e80f8ef519958cd",
+            "inputSha256B": "2777b01ff66edfb76fce4648f744d6dcc6b4bea60bc0dd355e80f8ef519958cd",
+            "a": {
+                "compiles": true,
+                "specHash": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+                "voiceProfileHash": "9785318f83a28b8d2bf2e521d4ea810cb2dafc0182b987c902804cd80bed800a",
+                "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+                "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+            },
+            "b": {
+                "compiles": true,
+                "specHash": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+                "voiceProfileHash": "9785318f83a28b8d2bf2e521d4ea810cb2dafc0182b987c902804cd80bed800a",
+                "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+                "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+            }
+        },
+        "hashRelations · specHash · otro uuid de perfil y de versión (mismo contenido) → otra huella (E1-9: los uuids entran)": {
+            "inputSha256A": "2777b01ff66edfb76fce4648f744d6dcc6b4bea60bc0dd355e80f8ef519958cd",
+            "inputSha256B": "de1eec6f3ccf9c36ade3c33e7a9bfe5489f140cec2286eb3a6c65899b48c6354",
+            "a": {
+                "compiles": true,
+                "specHash": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+                "voiceProfileHash": "9785318f83a28b8d2bf2e521d4ea810cb2dafc0182b987c902804cd80bed800a",
+                "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+                "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+            },
+            "b": {
+                "compiles": true,
+                "specHash": "070b04226e0514a69d2c833fef7824c3fcd541eff88ae3b30ce98a3073e692f6",
+                "voiceProfileHash": "9785318f83a28b8d2bf2e521d4ea810cb2dafc0182b987c902804cd80bed800a",
+                "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+                "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+            }
+        },
+        "hashRelations · specHash · otras identidades de autor y aprobador → la misma huella": {
+            "inputSha256A": "2777b01ff66edfb76fce4648f744d6dcc6b4bea60bc0dd355e80f8ef519958cd",
+            "inputSha256B": "946ff0262036439c2a7491b1ef3a0dd02c5ba2e27fa95ceb77a7418a5da5f4fc",
+            "a": {
+                "compiles": true,
+                "specHash": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+                "voiceProfileHash": "9785318f83a28b8d2bf2e521d4ea810cb2dafc0182b987c902804cd80bed800a",
+                "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+                "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+            },
+            "b": {
+                "compiles": true,
+                "specHash": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+                "voiceProfileHash": "9785318f83a28b8d2bf2e521d4ea810cb2dafc0182b987c902804cd80bed800a",
+                "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+                "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+            }
+        },
+        "hashRelations · specHash · herramientas en otro orden → la misma huella (conjunto)": {
+            "inputSha256A": "2777b01ff66edfb76fce4648f744d6dcc6b4bea60bc0dd355e80f8ef519958cd",
+            "inputSha256B": "24b071328fb19641444c7f79d8b83bc27aeefee469dbe704b288f41ce017ef59",
+            "a": {
+                "compiles": true,
+                "specHash": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+                "voiceProfileHash": "9785318f83a28b8d2bf2e521d4ea810cb2dafc0182b987c902804cd80bed800a",
+                "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+                "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+            },
+            "b": {
+                "compiles": true,
+                "specHash": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+                "voiceProfileHash": "9785318f83a28b8d2bf2e521d4ea810cb2dafc0182b987c902804cd80bed800a",
+                "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+                "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+            }
+        },
+        "hashRelations · specHash · destinos en otro orden → la misma huella (ordenados por alias)": {
+            "inputSha256A": "6a41ac3e0b5b1396999a1f89897a9b74a1bd067c3a47d4dd2f76d40ddad74517",
+            "inputSha256B": "d982a91fc338b84c0f7cde72dfc788da162fbfd4ae5071fbed89b16a0c5b018b",
+            "a": {
+                "compiles": true,
+                "specHash": "052e37d94c46d073475cb24c41a33375d6cf1f0151e8e64e1d7be1f52ac63081",
+                "voiceProfileHash": "8633268e145fd0e8e461dcf69662af9aeb994d9a824095c4b64639fdcf4d6361",
+                "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+                "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+            },
+            "b": {
+                "compiles": true,
+                "specHash": "052e37d94c46d073475cb24c41a33375d6cf1f0151e8e64e1d7be1f52ac63081",
+                "voiceProfileHash": "8633268e145fd0e8e461dcf69662af9aeb994d9a824095c4b64639fdcf4d6361",
+                "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+                "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+            }
+        },
+        "hashRelations · specHash · otro tope del entorno con el mismo perfil (300 ≤ 600) → la misma huella": {
+            "inputSha256A": "2777b01ff66edfb76fce4648f744d6dcc6b4bea60bc0dd355e80f8ef519958cd",
+            "inputSha256B": "ce3ad3ba9fa4431f33981c79dcd9e38b7425b0ef325addc96c61cdf64f22351e",
+            "a": {
+                "compiles": true,
+                "specHash": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+                "voiceProfileHash": "9785318f83a28b8d2bf2e521d4ea810cb2dafc0182b987c902804cd80bed800a",
+                "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+                "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+            },
+            "b": {
+                "compiles": true,
+                "specHash": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+                "voiceProfileHash": "9785318f83a28b8d2bf2e521d4ea810cb2dafc0182b987c902804cd80bed800a",
+                "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+                "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+            }
+        },
+        "hashRelations · specHash · un carácter del saludo de entrada → otra huella": {
+            "inputSha256A": "2777b01ff66edfb76fce4648f744d6dcc6b4bea60bc0dd355e80f8ef519958cd",
+            "inputSha256B": "30d1bf77e6dd4d48ccc69d8b8f551612c562a0a53ce597ab1383acfe1e81b01c",
+            "a": {
+                "compiles": true,
+                "specHash": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+                "voiceProfileHash": "9785318f83a28b8d2bf2e521d4ea810cb2dafc0182b987c902804cd80bed800a",
+                "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+                "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+            },
+            "b": {
+                "compiles": true,
+                "specHash": "a378e380211aeb2f1733be98326f5ca3dea8a655999ed56fde286a96764c978d",
+                "voiceProfileHash": "ca5d761ee52758012e76dc6d349dba9d3cb93445ee4114b2057751994371b446",
+                "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+                "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+            }
+        },
+        "hashRelations · specHash · otra voz → otra huella": {
+            "inputSha256A": "2777b01ff66edfb76fce4648f744d6dcc6b4bea60bc0dd355e80f8ef519958cd",
+            "inputSha256B": "4262f4da2f17d3e7e788d306b0a7979bc745f47a73adcad09710f5887401899d",
+            "a": {
+                "compiles": true,
+                "specHash": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+                "voiceProfileHash": "9785318f83a28b8d2bf2e521d4ea810cb2dafc0182b987c902804cd80bed800a",
+                "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+                "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+            },
+            "b": {
+                "compiles": true,
+                "specHash": "75b39e003665ee9ca7ce9e17a82cdeb60ab69057e0f21e1a446cfac5a64f46e8",
+                "voiceProfileHash": "062e792da7553f50803c502a86337cbf7e72d5151f0ea30b5ff790d19efdeabb",
+                "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+                "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+            }
+        },
+        "hashRelations · specHash · otra duración (240) → otra huella": {
+            "inputSha256A": "2777b01ff66edfb76fce4648f744d6dcc6b4bea60bc0dd355e80f8ef519958cd",
+            "inputSha256B": "c65c571338f2f261b7d88999fd5c995c2adaa8ed212a4e23c03d4068447c871e",
+            "a": {
+                "compiles": true,
+                "specHash": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+                "voiceProfileHash": "9785318f83a28b8d2bf2e521d4ea810cb2dafc0182b987c902804cd80bed800a",
+                "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+                "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+            },
+            "b": {
+                "compiles": true,
+                "specHash": "1c800bc006aba757afe7765daf98cb5b94da2563094c8dfa5e857bc2b0912fe2",
+                "voiceProfileHash": "0bf233991558e4399e1eacb26a67986a8975450ab192e17e182196ee8d1c306a",
+                "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+                "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+            }
+        },
+        "hashRelations · specHash · una herramienta menos (consultar_planes; no_volver_a_llamar no se quita) → otra huella": {
+            "inputSha256A": "2777b01ff66edfb76fce4648f744d6dcc6b4bea60bc0dd355e80f8ef519958cd",
+            "inputSha256B": "0d8c1e52f16cd17a289d0b548401dc055984a5e17bed9559358129110f89d737",
+            "a": {
+                "compiles": true,
+                "specHash": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+                "voiceProfileHash": "9785318f83a28b8d2bf2e521d4ea810cb2dafc0182b987c902804cd80bed800a",
+                "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+                "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+            },
+            "b": {
+                "compiles": true,
+                "specHash": "bc0f0fd51ead75dae1d2daa4aabedf467d61a3429e280fa0238e116b2f49fc60",
+                "voiceProfileHash": "d42d3a9df3bcd5bc11de5cbdd0a88cbac4c83f05df6da9f70524a0fc7853d160",
+                "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+                "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+            }
+        },
+        "hashRelations · specHash · otro número de destino con el mismo alias → otra huella": {
+            "inputSha256A": "2777b01ff66edfb76fce4648f744d6dcc6b4bea60bc0dd355e80f8ef519958cd",
+            "inputSha256B": "0fc73f5988c4840763dbeb7f28feff48060194bb57c3f3ccc71d3a931afbcd4c",
+            "a": {
+                "compiles": true,
+                "specHash": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+                "voiceProfileHash": "9785318f83a28b8d2bf2e521d4ea810cb2dafc0182b987c902804cd80bed800a",
+                "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+                "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+            },
+            "b": {
+                "compiles": true,
+                "specHash": "e143a4ca3ec0735fab281aab821bd6551b10475b510a308caeee13992e315e7c",
+                "voiceProfileHash": "da51e39f52fbfee2cbc5cca864912d6b648b51ed930d3395c32b1b565dd10d94",
+                "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+                "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+            }
+        },
+        "hashRelations · specHash · otra retención → otra huella": {
+            "inputSha256A": "2777b01ff66edfb76fce4648f744d6dcc6b4bea60bc0dd355e80f8ef519958cd",
+            "inputSha256B": "00a634fa01909962d8f52f9ada2c228441f6455b9c2d9087c799872e436718ba",
+            "a": {
+                "compiles": true,
+                "specHash": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+                "voiceProfileHash": "9785318f83a28b8d2bf2e521d4ea810cb2dafc0182b987c902804cd80bed800a",
+                "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+                "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+            },
+            "b": {
+                "compiles": true,
+                "specHash": "caddfd27d6925518504e7aa2746cf7cecf6b43bcf61cdefc707d23fe2d2dcfc6",
+                "voiceProfileHash": "6a706f33a185d4423861311e6c43b50c7f3ea9a21e82af6b4ba3aa2946593995",
+                "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+                "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+            }
+        },
+        "hashRelations · specHash · otra versión del Studio (otro contenido) → otra huella": {
+            "inputSha256A": "2777b01ff66edfb76fce4648f744d6dcc6b4bea60bc0dd355e80f8ef519958cd",
+            "inputSha256B": "0f8145141e4b81ccadc820032a7413f168200f19924510e93e3a05049f23d4f9",
+            "a": {
+                "compiles": true,
+                "specHash": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+                "voiceProfileHash": "9785318f83a28b8d2bf2e521d4ea810cb2dafc0182b987c902804cd80bed800a",
+                "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+                "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+            },
+            "b": {
+                "compiles": true,
+                "specHash": "03f4f2b23d3955f6ff9d073673978363a42238a926fcebdfae72b7b4903689d5",
+                "voiceProfileHash": "9785318f83a28b8d2bf2e521d4ea810cb2dafc0182b987c902804cd80bed800a",
+                "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+                "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+            }
+        },
+        "hashRelations · specHash · otra versión del compilador → otra huella": {
+            "inputSha256A": "2777b01ff66edfb76fce4648f744d6dcc6b4bea60bc0dd355e80f8ef519958cd",
+            "inputSha256B": "f1f443388f846151d2a8794ef41551d432aa348e63f46366559a1851cf0e168c",
+            "a": {
+                "compiles": true,
+                "specHash": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+                "voiceProfileHash": "9785318f83a28b8d2bf2e521d4ea810cb2dafc0182b987c902804cd80bed800a",
+                "firstMessage": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
+                "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e"
+            },
+            "b": {
+                "notApplicable": "la versión del compilador es una constante"
+            }
+        }
+    },
+    "variants": {
+        "abada4c9df41c12efc6aff6f3eb2fa6590898b764e88d056846c955823140d44": 0,
+        "a138a1bc2fcb7314e0bb69dff5ff32c32851554476e3f65742649f2b7ae8beff": 1,
+        "9c2f7f2c69f91be9c07e433180170d05d81e6c9ef6df77c3bb89ce62078cfd29": 2
+    }
+}

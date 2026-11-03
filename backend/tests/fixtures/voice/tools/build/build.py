@@ -316,7 +316,7 @@ def header(name, sections, sources, **extra):
 
 SECTION_FILES = [
     "sec_twilio_sig.py", "sec_eleven_bodies.py", "sec_eleven_sig.py", "sec_twilio_bodies.py",
-    "sec_holidays.py", "sec_policy.py", "sec_states.py", "sec_compiler.py", "sec_gate.py",
+    "sec_holidays.py", "sec_policy.py", "sec_states.py", "sec_compiler.py", "sec_gate.py", "sec_chain.py",
 ]
 
 if __name__ == "__main__":

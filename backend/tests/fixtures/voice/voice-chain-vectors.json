@@ -1,0 +1,698 @@
+{
+  "fixture": "voice-chain-vectors.json",
+  "version": 1,
+  "contract": "backend/docs/ultron-studio/ULTRON_STUDIO_H8_CONTRACT.md (congelado el 03-11-2026, commit 57bab8a)",
+  "audit": "backend/docs/ultron-studio/ULTRON_STUDIO_H8_VOICE_AUDIT.md (03-11-2026)",
+  "contractSections": [
+    "E1-4 (el mensaje firmado de la cadena de voz: JSON canónico de {seq, prev_hash, version_uuid, profile_uuid, spec_hash, agent_config_hash, provider_agent_id, scope, actor_id, published_at}; prev_hash = el de la entrada anterior o 64 ceros; HMAC-SHA256 con una subclave de la APP_KEY de contexto ultron-studio-voice-chain, como la cadena del H5)",
+    "D8-8 (cadena propia de solo inserción, seq = cabeza + 1, CHECK seq ≥ 1; implementación única en Telephony\\VoicePublishedConfig::signatureFor(); un fallo deniega)",
+    "D8-9 (revertir = una entrada que apunta al agente anterior)",
+    "D8-20 (nivel 2: voz apagada = una entrada sin agente)"
+  ],
+  "generatedBy": "tests/fixtures/voice/tools/build/build.py (python3 -I), con los casos a mano en sec_*.py",
+  "checkedBy": "tests/fixtures/voice/tools/voice-fixtures-check.py",
+  "readme": "tests/fixtures/voice/README.md",
+  "basisLegend": {
+    "contrato": "Lo dice el contrato H8 tal cual (contractRef).",
+    "oficial": "Lo dice la documentación oficial o el SDK oficial del proveedor (source).",
+    "ley": "Lo dice la ley citada (Ley 2300 de 2023, Ley 51 de 1983).",
+    "supuesto-lead": "Sigue un supuesto de la congelación del lead (P-n), que el propietario puede cambiar.",
+    "decision-fixture": "El contrato no lo fija: lo decide este fixture (campo decision; README §Decisiones). Lo congela el lead."
+  },
+  "sources": [
+    {
+      "what": "La derivación de la subclave y la firma de la cadena del H5 (la que E1-4 manda copiar)",
+      "url": "backend/app/Services/Marketing/Ultron/UltronPublishedConfig.php (subkey(), signatureFor()) y backend/app/Services/UltronStudio/StudioPublications.php (la inserción y verify())",
+      "consulted": "03-11-2026, en este árbol (sin cambios desde el H5)",
+      "how": "subkey() = hash_hmac('sha256', KEY_LABEL, APP_KEY cruda, true) con base64: decodificado; signatureFor() = hash_hmac('sha256', CONTRACT.\"\\n\".json, subkey()). La de voz copia la subclave con su propia etiqueta y firma el JSON canónico tal cual (E1-4 define así el mensaje: sin el prefijo de contrato del H5)."
+    },
+    {
+      "what": "JSON canónico",
+      "url": "backend/app/Services/UltronStudio/StudioContentHasher.php (canonicalJson)",
+      "consulted": "03-11-2026",
+      "how": "Claves ordenadas, sin espacios, UTF-8 sin escapar (E1-4); el comprobador lo cruza con PHP (--php)."
+    }
+  ],
+  "syntheticData": "Ningún dato real: SIDs, ids, secretos, tokens, URLs (.test) y teléfonos (+57 300 000 00xx, +57 601 000 00xx) inventados.",
+  "keys": {
+    "appKeyBase64": "base64:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+    "appKeyRaw": "h6-fixture-app-key-NOT-A-SECRET!",
+    "chainLabel": "ultron-studio-voice-chain",
+    "h5Label": "ultron-studio-publication",
+    "chainSubkeyHex": "9674d702032875b7122655638eb51cc374fa7d352747ea222edf16f56d84c775",
+    "chainSubkeyHexFromRawAppKey": "8f35ee34ce8041344116e87195fdd81f593429a25f312d83c5585a697712f4d5",
+    "h5SubkeyHex": "3059c3cdeeb5cc101c324228c5246f7814b638efe63cbd07da2ccf050a5271c3"
+  },
+  "algorithm": {
+    "subkey": "k = HMAC-SHA256(clave = APP_KEY cruda (base64: decodificado, como EncryptionServiceProvider::parseKey), mensaje = 'ultron-studio-voice-chain'), 32 bytes",
+    "message": "JSON canónico (StudioContentHasher::canonicalJson) del objeto de las 10 claves de E1-4, ni una más ni una menos",
+    "entryHash": "sha256 hex del mensaje (como effective_hash del H5); es el prev_hash de la entrada siguiente",
+    "signature": "hex(HMAC-SHA256(k, mensaje)): 64 hexadecimales en minúscula, sin el prefijo de contrato del H5",
+    "genesis": "la primera entrada (seq = 1) lleva prev_hash = 64 ceros"
+  },
+  "closedSets": {
+    "keys": [
+      "actor_id",
+      "agent_config_hash",
+      "prev_hash",
+      "profile_uuid",
+      "provider_agent_id",
+      "published_at",
+      "scope",
+      "seq",
+      "spec_hash",
+      "version_uuid"
+    ],
+    "scopes": [
+      "canary",
+      "rest",
+      "off"
+    ],
+    "verifyResults": [
+      "ok",
+      "malformed",
+      "not_canonical",
+      "signature_malformed",
+      "signature_mismatch",
+      "seq_gap",
+      "chain_broken"
+    ]
+  },
+  "decisions": {
+    "DF-V1": "prev_hash = entryHash de la entrada anterior = sha256 de su mensaje canónico (como effective_hash del H5), no su firma.",
+    "DF-V2": "published_at en UTC y al segundo, «Y-m-d\\TH:i:s\\Z» (el issuedAt del H5): sin fracciones ni otro desfase.",
+    "DF-V3": "scope ∈ {canary, rest, off}; una entrada off (voz apagada, D8-20 nivel 2) lleva a null version_uuid, profile_uuid, spec_hash, agent_config_hash y provider_agent_id; canary y rest los llevan todos.",
+    "DF-V4": "El lector exige que los bytes guardados SEAN el JSON canónico de su propio contenido (recanonicaliza y compara); si no, not_canonical, aunque la firma cuadre con esos bytes.",
+    "DF-V5": "La firma es 64 hex en minúscula (como HEX64 del H5); otra forma es signature_malformed.",
+    "DF-V6": "Orden del lector: forma (malformed) → canónico (not_canonical) → forma de la firma → firma (signature_mismatch) → seq = anterior + 1 (seq_gap) → prev_hash = entryHash anterior (chain_broken). El primer fallo deniega (D8-8: «un fallo deniega»)."
+  },
+  "counts": {
+    "chain": 5,
+    "subkey": 3,
+    "verify": 27,
+    "total": 35
+  },
+  "chain": [
+    {
+      "name": "chain · entry · seq 1 · publicar en canario la versión 12 (génesis: prev_hash = 64 ceros)",
+      "kind": "entry",
+      "contractRef": "D8-8, E1-4",
+      "basis": "contrato",
+      "decision": "DF-V1",
+      "entry": {
+        "seq": 1,
+        "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "version_uuid": "9a000000-0000-4000-8000-000000000012",
+        "profile_uuid": "9b000000-0000-4000-8000-000000000003",
+        "spec_hash": "3599bc3578c02d5a5da60612721b513c76e5cd82105144211fa5b9139e6894da",
+        "agent_config_hash": "54bf6e3519abec321f1edf9022ef659f5953b6e868703846bdd664fe6d740c26",
+        "provider_agent_id": "agent_h8fx_canary_0002",
+        "scope": "canary",
+        "actor_id": 7,
+        "published_at": "2026-11-04T15:00:00Z"
+      },
+      "expected": {
+        "message": "{\"actor_id\":7,\"agent_config_hash\":\"54bf6e3519abec321f1edf9022ef659f5953b6e868703846bdd664fe6d740c26\",\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"profile_uuid\":\"9b000000-0000-4000-8000-000000000003\",\"provider_agent_id\":\"agent_h8fx_canary_0002\",\"published_at\":\"2026-11-04T15:00:00Z\",\"scope\":\"canary\",\"seq\":1,\"spec_hash\":\"3599bc3578c02d5a5da60612721b513c76e5cd82105144211fa5b9139e6894da\",\"version_uuid\":\"9a000000-0000-4000-8000-000000000012\"}",
+        "entryHash": "0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c",
+        "signature": "a9aeae1a42fcd2fded76534f021013681138e273a4b9c62ec21666c794fd387c",
+        "prevHashIsPreviousEntryHash": true
+      }
+    },
+    {
+      "name": "chain · entry · seq 2 · promover la misma publicación a rest",
+      "kind": "entry",
+      "contractRef": "D8-19, E1-4",
+      "basis": "contrato",
+      "decision": "DF-V1",
+      "entry": {
+        "seq": 2,
+        "prev_hash": "0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c",
+        "version_uuid": "9a000000-0000-4000-8000-000000000012",
+        "profile_uuid": "9b000000-0000-4000-8000-000000000003",
+        "spec_hash": "3599bc3578c02d5a5da60612721b513c76e5cd82105144211fa5b9139e6894da",
+        "agent_config_hash": "54bf6e3519abec321f1edf9022ef659f5953b6e868703846bdd664fe6d740c26",
+        "provider_agent_id": "agent_h8fx_canary_0002",
+        "scope": "rest",
+        "actor_id": 7,
+        "published_at": "2026-11-05T15:00:00Z"
+      },
+      "expected": {
+        "message": "{\"actor_id\":7,\"agent_config_hash\":\"54bf6e3519abec321f1edf9022ef659f5953b6e868703846bdd664fe6d740c26\",\"prev_hash\":\"0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c\",\"profile_uuid\":\"9b000000-0000-4000-8000-000000000003\",\"provider_agent_id\":\"agent_h8fx_canary_0002\",\"published_at\":\"2026-11-05T15:00:00Z\",\"scope\":\"rest\",\"seq\":2,\"spec_hash\":\"3599bc3578c02d5a5da60612721b513c76e5cd82105144211fa5b9139e6894da\",\"version_uuid\":\"9a000000-0000-4000-8000-000000000012\"}",
+        "entryHash": "454c073d48e7412280a3a4952f8e5fbdfc91b1c1a1eb3c6b31129c4790eda592",
+        "signature": "7c80175a18d385066a6117c3a2f8ed8b0a771929144faa3452828bbcf9022b3a",
+        "prevHashIsPreviousEntryHash": true
+      }
+    },
+    {
+      "name": "chain · entry · seq 3 · publicar en canario la versión 13 con otro agente",
+      "kind": "entry",
+      "contractRef": "D8-7, E1-4",
+      "basis": "contrato",
+      "decision": "DF-V1",
+      "entry": {
+        "seq": 3,
+        "prev_hash": "454c073d48e7412280a3a4952f8e5fbdfc91b1c1a1eb3c6b31129c4790eda592",
+        "version_uuid": "9a000000-0000-4000-8000-000000000013",
+        "profile_uuid": "9b000000-0000-4000-8000-000000000004",
+        "spec_hash": "a8c5ab8a1b403cc69e5d5e0d8d8df8cf87577463afa48399378b730d8d0041ac",
+        "agent_config_hash": "71c199a3da5929b4997ee942651e76fbc700abd3ac8601e9ebb66e7521cdaa13",
+        "provider_agent_id": "agent_h8fx_canary_0003",
+        "scope": "canary",
+        "actor_id": 9,
+        "published_at": "2026-11-06T15:00:00Z"
+      },
+      "expected": {
+        "message": "{\"actor_id\":9,\"agent_config_hash\":\"71c199a3da5929b4997ee942651e76fbc700abd3ac8601e9ebb66e7521cdaa13\",\"prev_hash\":\"454c073d48e7412280a3a4952f8e5fbdfc91b1c1a1eb3c6b31129c4790eda592\",\"profile_uuid\":\"9b000000-0000-4000-8000-000000000004\",\"provider_agent_id\":\"agent_h8fx_canary_0003\",\"published_at\":\"2026-11-06T15:00:00Z\",\"scope\":\"canary\",\"seq\":3,\"spec_hash\":\"a8c5ab8a1b403cc69e5d5e0d8d8df8cf87577463afa48399378b730d8d0041ac\",\"version_uuid\":\"9a000000-0000-4000-8000-000000000013\"}",
+        "entryHash": "fc7e11e054d9d92e11e132b46b11484daf011094e3669a6b8b4ed0eeca221e65",
+        "signature": "fefa883e7f296db39a77bf1ab378b4e8e4efcecefb080ab7997c59841e8f1f78",
+        "prevHashIsPreviousEntryHash": true
+      }
+    },
+    {
+      "name": "chain · entry · seq 4 · revertir el canario al agente anterior (sigue existiendo)",
+      "kind": "entry",
+      "contractRef": "D8-9, D8-20 nivel 1, E1-4",
+      "basis": "contrato",
+      "decision": "DF-V1",
+      "entry": {
+        "seq": 4,
+        "prev_hash": "fc7e11e054d9d92e11e132b46b11484daf011094e3669a6b8b4ed0eeca221e65",
+        "version_uuid": "9a000000-0000-4000-8000-000000000012",
+        "profile_uuid": "9b000000-0000-4000-8000-000000000003",
+        "spec_hash": "3599bc3578c02d5a5da60612721b513c76e5cd82105144211fa5b9139e6894da",
+        "agent_config_hash": "54bf6e3519abec321f1edf9022ef659f5953b6e868703846bdd664fe6d740c26",
+        "provider_agent_id": "agent_h8fx_canary_0002",
+        "scope": "canary",
+        "actor_id": 7,
+        "published_at": "2026-11-06T16:30:00Z"
+      },
+      "expected": {
+        "message": "{\"actor_id\":7,\"agent_config_hash\":\"54bf6e3519abec321f1edf9022ef659f5953b6e868703846bdd664fe6d740c26\",\"prev_hash\":\"fc7e11e054d9d92e11e132b46b11484daf011094e3669a6b8b4ed0eeca221e65\",\"profile_uuid\":\"9b000000-0000-4000-8000-000000000003\",\"provider_agent_id\":\"agent_h8fx_canary_0002\",\"published_at\":\"2026-11-06T16:30:00Z\",\"scope\":\"canary\",\"seq\":4,\"spec_hash\":\"3599bc3578c02d5a5da60612721b513c76e5cd82105144211fa5b9139e6894da\",\"version_uuid\":\"9a000000-0000-4000-8000-000000000012\"}",
+        "entryHash": "606bd892b2f46336ede1f7b2d12091a4248beea3de1a95a225420535225747aa",
+        "signature": "0ecd949a8b9220d8403cbc58dfd329145eebe6d101ff4e8afdeb54dd4c1b4e0a",
+        "prevHashIsPreviousEntryHash": true
+      }
+    },
+    {
+      "name": "chain · entry · seq 5 · apagar la voz: una entrada sin agente",
+      "kind": "entry",
+      "contractRef": "D8-20 nivel 2, E1-4",
+      "basis": "decision-fixture",
+      "decision": "DF-V3",
+      "entry": {
+        "seq": 5,
+        "prev_hash": "606bd892b2f46336ede1f7b2d12091a4248beea3de1a95a225420535225747aa",
+        "version_uuid": null,
+        "profile_uuid": null,
+        "spec_hash": null,
+        "agent_config_hash": null,
+        "provider_agent_id": null,
+        "scope": "off",
+        "actor_id": 7,
+        "published_at": "2026-11-06T17:00:00Z"
+      },
+      "expected": {
+        "message": "{\"actor_id\":7,\"agent_config_hash\":null,\"prev_hash\":\"606bd892b2f46336ede1f7b2d12091a4248beea3de1a95a225420535225747aa\",\"profile_uuid\":null,\"provider_agent_id\":null,\"published_at\":\"2026-11-06T17:00:00Z\",\"scope\":\"off\",\"seq\":5,\"spec_hash\":null,\"version_uuid\":null}",
+        "entryHash": "d20a4afc8985ea2d19096aca878d107866e28559a78a078a862ca42e88d32d91",
+        "signature": "f3ba93dc40a8f0ce41b1c8bb73ce5c4ea2f447cea89bb3d73f2e3dbdde02b778",
+        "prevHashIsPreviousEntryHash": true
+      }
+    }
+  ],
+  "subkey": [
+    {
+      "name": "subkey · derive · subclave de la cadena de voz con la APP_KEY base64: (bytes 00..1f)",
+      "kind": "derive",
+      "contractRef": "E1-4",
+      "basis": "contrato",
+      "appKey": "base64:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+      "label": "ultron-studio-voice-chain",
+      "expected": {
+        "subkeyHex": "9674d702032875b7122655638eb51cc374fa7d352747ea222edf16f56d84c775"
+      }
+    },
+    {
+      "name": "subkey · derive · subclave de la cadena de voz con una APP_KEY sin base64: (se usa tal cual, como Laravel)",
+      "kind": "derive",
+      "contractRef": "E1-4",
+      "basis": "contrato",
+      "appKey": "h6-fixture-app-key-NOT-A-SECRET!",
+      "label": "ultron-studio-voice-chain",
+      "expected": {
+        "subkeyHex": "8f35ee34ce8041344116e87195fdd81f593429a25f312d83c5585a697712f4d5"
+      }
+    },
+    {
+      "name": "subkey · derive · la subclave del H5 (ultron-studio-publication) es otra: una firma de un dominio no vale en el otro",
+      "kind": "derive",
+      "contractRef": "D8-8, E1-4",
+      "basis": "contrato",
+      "appKey": "base64:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+      "label": "ultron-studio-publication",
+      "expected": {
+        "subkeyHex": "3059c3cdeeb5cc101c324228c5246f7814b638efe63cbd07da2ccf050a5271c3",
+        "differsFromChain": true
+      }
+    }
+  ],
+  "verify": [
+    {
+      "name": "verify · read · la entrada seq 1 de la cadena verifica",
+      "kind": "read",
+      "contractRef": "D8-8, E1-4",
+      "basis": "contrato",
+      "message": "{\"actor_id\":7,\"agent_config_hash\":\"54bf6e3519abec321f1edf9022ef659f5953b6e868703846bdd664fe6d740c26\",\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"profile_uuid\":\"9b000000-0000-4000-8000-000000000003\",\"provider_agent_id\":\"agent_h8fx_canary_0002\",\"published_at\":\"2026-11-04T15:00:00Z\",\"scope\":\"canary\",\"seq\":1,\"spec_hash\":\"3599bc3578c02d5a5da60612721b513c76e5cd82105144211fa5b9139e6894da\",\"version_uuid\":\"9a000000-0000-4000-8000-000000000012\"}",
+      "signature": "a9aeae1a42fcd2fded76534f021013681138e273a4b9c62ec21666c794fd387c",
+      "previous": null,
+      "expected": {
+        "result": "ok",
+        "denies": false
+      }
+    },
+    {
+      "name": "verify · read · la entrada seq 2 de la cadena verifica",
+      "kind": "read",
+      "contractRef": "D8-8, E1-4",
+      "basis": "contrato",
+      "message": "{\"actor_id\":7,\"agent_config_hash\":\"54bf6e3519abec321f1edf9022ef659f5953b6e868703846bdd664fe6d740c26\",\"prev_hash\":\"0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c\",\"profile_uuid\":\"9b000000-0000-4000-8000-000000000003\",\"provider_agent_id\":\"agent_h8fx_canary_0002\",\"published_at\":\"2026-11-05T15:00:00Z\",\"scope\":\"rest\",\"seq\":2,\"spec_hash\":\"3599bc3578c02d5a5da60612721b513c76e5cd82105144211fa5b9139e6894da\",\"version_uuid\":\"9a000000-0000-4000-8000-000000000012\"}",
+      "signature": "7c80175a18d385066a6117c3a2f8ed8b0a771929144faa3452828bbcf9022b3a",
+      "previous": {
+        "seq": 1,
+        "entryHash": "0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c"
+      },
+      "expected": {
+        "result": "ok",
+        "denies": false
+      }
+    },
+    {
+      "name": "verify · read · la entrada seq 3 de la cadena verifica",
+      "kind": "read",
+      "contractRef": "D8-8, E1-4",
+      "basis": "contrato",
+      "message": "{\"actor_id\":9,\"agent_config_hash\":\"71c199a3da5929b4997ee942651e76fbc700abd3ac8601e9ebb66e7521cdaa13\",\"prev_hash\":\"454c073d48e7412280a3a4952f8e5fbdfc91b1c1a1eb3c6b31129c4790eda592\",\"profile_uuid\":\"9b000000-0000-4000-8000-000000000004\",\"provider_agent_id\":\"agent_h8fx_canary_0003\",\"published_at\":\"2026-11-06T15:00:00Z\",\"scope\":\"canary\",\"seq\":3,\"spec_hash\":\"a8c5ab8a1b403cc69e5d5e0d8d8df8cf87577463afa48399378b730d8d0041ac\",\"version_uuid\":\"9a000000-0000-4000-8000-000000000013\"}",
+      "signature": "fefa883e7f296db39a77bf1ab378b4e8e4efcecefb080ab7997c59841e8f1f78",
+      "previous": {
+        "seq": 2,
+        "entryHash": "454c073d48e7412280a3a4952f8e5fbdfc91b1c1a1eb3c6b31129c4790eda592"
+      },
+      "expected": {
+        "result": "ok",
+        "denies": false
+      }
+    },
+    {
+      "name": "verify · read · la entrada seq 4 de la cadena verifica",
+      "kind": "read",
+      "contractRef": "D8-8, E1-4",
+      "basis": "contrato",
+      "message": "{\"actor_id\":7,\"agent_config_hash\":\"54bf6e3519abec321f1edf9022ef659f5953b6e868703846bdd664fe6d740c26\",\"prev_hash\":\"fc7e11e054d9d92e11e132b46b11484daf011094e3669a6b8b4ed0eeca221e65\",\"profile_uuid\":\"9b000000-0000-4000-8000-000000000003\",\"provider_agent_id\":\"agent_h8fx_canary_0002\",\"published_at\":\"2026-11-06T16:30:00Z\",\"scope\":\"canary\",\"seq\":4,\"spec_hash\":\"3599bc3578c02d5a5da60612721b513c76e5cd82105144211fa5b9139e6894da\",\"version_uuid\":\"9a000000-0000-4000-8000-000000000012\"}",
+      "signature": "0ecd949a8b9220d8403cbc58dfd329145eebe6d101ff4e8afdeb54dd4c1b4e0a",
+      "previous": {
+        "seq": 3,
+        "entryHash": "fc7e11e054d9d92e11e132b46b11484daf011094e3669a6b8b4ed0eeca221e65"
+      },
+      "expected": {
+        "result": "ok",
+        "denies": false
+      }
+    },
+    {
+      "name": "verify · read · la entrada seq 5 de la cadena verifica",
+      "kind": "read",
+      "contractRef": "D8-8, E1-4",
+      "basis": "contrato",
+      "message": "{\"actor_id\":7,\"agent_config_hash\":null,\"prev_hash\":\"606bd892b2f46336ede1f7b2d12091a4248beea3de1a95a225420535225747aa\",\"profile_uuid\":null,\"provider_agent_id\":null,\"published_at\":\"2026-11-06T17:00:00Z\",\"scope\":\"off\",\"seq\":5,\"spec_hash\":null,\"version_uuid\":null}",
+      "signature": "f3ba93dc40a8f0ce41b1c8bb73ce5c4ea2f447cea89bb3d73f2e3dbdde02b778",
+      "previous": {
+        "seq": 4,
+        "entryHash": "606bd892b2f46336ede1f7b2d12091a4248beea3de1a95a225420535225747aa"
+      },
+      "expected": {
+        "result": "ok",
+        "denies": false
+      }
+    },
+    {
+      "name": "verify · read · firmada con la subclave del H5 (ultron-studio-publication) → signature_mismatch",
+      "kind": "read",
+      "contractRef": "D8-8, E1-4",
+      "basis": "contrato",
+      "message": "{\"actor_id\":7,\"agent_config_hash\":\"54bf6e3519abec321f1edf9022ef659f5953b6e868703846bdd664fe6d740c26\",\"prev_hash\":\"0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c\",\"profile_uuid\":\"9b000000-0000-4000-8000-000000000003\",\"provider_agent_id\":\"agent_h8fx_canary_0002\",\"published_at\":\"2026-11-05T15:00:00Z\",\"scope\":\"rest\",\"seq\":2,\"spec_hash\":\"3599bc3578c02d5a5da60612721b513c76e5cd82105144211fa5b9139e6894da\",\"version_uuid\":\"9a000000-0000-4000-8000-000000000012\"}",
+      "signature": "f477664a3e13a8a46c02f121b09f7d186a08f23b229e8cd617d368a8c1dd60f3",
+      "previous": {
+        "seq": 1,
+        "entryHash": "0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c"
+      },
+      "expected": {
+        "result": "signature_mismatch",
+        "denies": true
+      }
+    },
+    {
+      "name": "verify · read · firmada con el prefijo de contrato del H5 («ultron-voice-config/1\\n» + mensaje) → signature_mismatch",
+      "kind": "read",
+      "contractRef": "D8-8, E1-4",
+      "basis": "contrato",
+      "message": "{\"actor_id\":7,\"agent_config_hash\":\"54bf6e3519abec321f1edf9022ef659f5953b6e868703846bdd664fe6d740c26\",\"prev_hash\":\"0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c\",\"profile_uuid\":\"9b000000-0000-4000-8000-000000000003\",\"provider_agent_id\":\"agent_h8fx_canary_0002\",\"published_at\":\"2026-11-05T15:00:00Z\",\"scope\":\"rest\",\"seq\":2,\"spec_hash\":\"3599bc3578c02d5a5da60612721b513c76e5cd82105144211fa5b9139e6894da\",\"version_uuid\":\"9a000000-0000-4000-8000-000000000012\"}",
+      "signature": "3dad2ef00fa84e10dbf3767cadf918fd443b3a969d61741907cb2120b5331c37",
+      "previous": {
+        "seq": 1,
+        "entryHash": "0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c"
+      },
+      "expected": {
+        "result": "signature_mismatch",
+        "denies": true
+      }
+    },
+    {
+      "name": "verify · read · firmada con otra APP_KEY (rotada) → signature_mismatch",
+      "kind": "read",
+      "contractRef": "D8-8, E1-4",
+      "basis": "contrato",
+      "message": "{\"actor_id\":7,\"agent_config_hash\":\"54bf6e3519abec321f1edf9022ef659f5953b6e868703846bdd664fe6d740c26\",\"prev_hash\":\"0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c\",\"profile_uuid\":\"9b000000-0000-4000-8000-000000000003\",\"provider_agent_id\":\"agent_h8fx_canary_0002\",\"published_at\":\"2026-11-05T15:00:00Z\",\"scope\":\"rest\",\"seq\":2,\"spec_hash\":\"3599bc3578c02d5a5da60612721b513c76e5cd82105144211fa5b9139e6894da\",\"version_uuid\":\"9a000000-0000-4000-8000-000000000012\"}",
+      "signature": "3ec0fc9700f6969be6f14573b32eb2700886167cd9eeb5ebd3bd19eefc4f292b",
+      "previous": {
+        "seq": 1,
+        "entryHash": "0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c"
+      },
+      "expected": {
+        "result": "signature_mismatch",
+        "denies": true
+      }
+    },
+    {
+      "name": "verify · read · un carácter de spec_hash cambiado con la firma original → signature_mismatch",
+      "kind": "read",
+      "contractRef": "D8-8, E1-4",
+      "basis": "contrato",
+      "message": "{\"actor_id\":7,\"agent_config_hash\":\"54bf6e3519abec321f1edf9022ef659f5953b6e868703846bdd664fe6d740c26\",\"prev_hash\":\"0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c\",\"profile_uuid\":\"9b000000-0000-4000-8000-000000000003\",\"provider_agent_id\":\"agent_h8fx_canary_0002\",\"published_at\":\"2026-11-05T15:00:00Z\",\"scope\":\"rest\",\"seq\":2,\"spec_hash\":\"3599bc3578c02d5a5da60612721b513c76e5cd82105144211fa5b9139e6894d0\",\"version_uuid\":\"9a000000-0000-4000-8000-000000000012\"}",
+      "signature": "7c80175a18d385066a6117c3a2f8ed8b0a771929144faa3452828bbcf9022b3a",
+      "previous": {
+        "seq": 1,
+        "entryHash": "0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c"
+      },
+      "expected": {
+        "result": "signature_mismatch",
+        "denies": true
+      }
+    },
+    {
+      "name": "verify · read · bytes guardados no canónicos (con sangría) aunque la firma cuadre con ellos → not_canonical",
+      "kind": "read",
+      "contractRef": "D8-8, E1-4",
+      "basis": "decision-fixture",
+      "decision": "DF-V4",
+      "message": "{\n \"actor_id\": 7,\n \"agent_config_hash\": \"54bf6e3519abec321f1edf9022ef659f5953b6e868703846bdd664fe6d740c26\",\n \"prev_hash\": \"0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c\",\n \"profile_uuid\": \"9b000000-0000-4000-8000-000000000003\",\n \"provider_agent_id\": \"agent_h8fx_canary_0002\",\n \"published_at\": \"2026-11-05T15:00:00Z\",\n \"scope\": \"rest\",\n \"seq\": 2,\n \"spec_hash\": \"3599bc3578c02d5a5da60612721b513c76e5cd82105144211fa5b9139e6894da\",\n \"version_uuid\": \"9a000000-0000-4000-8000-000000000012\"\n}",
+      "signature": "247bee8592ee8be750c8ad74508faec355d461eae74fdb01ae9ae367dc9a7fb1",
+      "previous": {
+        "seq": 1,
+        "entryHash": "0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c"
+      },
+      "expected": {
+        "result": "not_canonical",
+        "denies": true
+      }
+    },
+    {
+      "name": "verify · read · claves en otro orden (sin espacios) aunque la firma cuadre → not_canonical",
+      "kind": "read",
+      "contractRef": "D8-8, E1-4",
+      "basis": "decision-fixture",
+      "decision": "DF-V4",
+      "message": "{\"version_uuid\":\"9a000000-0000-4000-8000-000000000012\",\"spec_hash\":\"3599bc3578c02d5a5da60612721b513c76e5cd82105144211fa5b9139e6894da\",\"seq\":2,\"scope\":\"rest\",\"published_at\":\"2026-11-05T15:00:00Z\",\"provider_agent_id\":\"agent_h8fx_canary_0002\",\"profile_uuid\":\"9b000000-0000-4000-8000-000000000003\",\"prev_hash\":\"0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c\",\"agent_config_hash\":\"54bf6e3519abec321f1edf9022ef659f5953b6e868703846bdd664fe6d740c26\",\"actor_id\":7}",
+      "signature": "461a90399a7afa109dfdcba8b34b19f76ff9a11877a97c5071db7449d8464c15",
+      "previous": {
+        "seq": 1,
+        "entryHash": "0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c"
+      },
+      "expected": {
+        "result": "not_canonical",
+        "denies": true
+      }
+    },
+    {
+      "name": "verify · read · la firma en mayúsculas → signature_malformed",
+      "kind": "read",
+      "contractRef": "D8-8, E1-4",
+      "basis": "decision-fixture",
+      "decision": "DF-V5",
+      "message": "{\"actor_id\":7,\"agent_config_hash\":\"54bf6e3519abec321f1edf9022ef659f5953b6e868703846bdd664fe6d740c26\",\"prev_hash\":\"0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c\",\"profile_uuid\":\"9b000000-0000-4000-8000-000000000003\",\"provider_agent_id\":\"agent_h8fx_canary_0002\",\"published_at\":\"2026-11-05T15:00:00Z\",\"scope\":\"rest\",\"seq\":2,\"spec_hash\":\"3599bc3578c02d5a5da60612721b513c76e5cd82105144211fa5b9139e6894da\",\"version_uuid\":\"9a000000-0000-4000-8000-000000000012\"}",
+      "signature": "7C80175A18D385066A6117C3A2F8ED8B0A771929144FAA3452828BBCF9022B3A",
+      "previous": {
+        "seq": 1,
+        "entryHash": "0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c"
+      },
+      "expected": {
+        "result": "signature_malformed",
+        "denies": true
+      }
+    },
+    {
+      "name": "verify · read · la firma de 63 caracteres → signature_malformed",
+      "kind": "read",
+      "contractRef": "D8-8, E1-4",
+      "basis": "decision-fixture",
+      "decision": "DF-V5",
+      "message": "{\"actor_id\":7,\"agent_config_hash\":\"54bf6e3519abec321f1edf9022ef659f5953b6e868703846bdd664fe6d740c26\",\"prev_hash\":\"0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c\",\"profile_uuid\":\"9b000000-0000-4000-8000-000000000003\",\"provider_agent_id\":\"agent_h8fx_canary_0002\",\"published_at\":\"2026-11-05T15:00:00Z\",\"scope\":\"rest\",\"seq\":2,\"spec_hash\":\"3599bc3578c02d5a5da60612721b513c76e5cd82105144211fa5b9139e6894da\",\"version_uuid\":\"9a000000-0000-4000-8000-000000000012\"}",
+      "signature": "7c80175a18d385066a6117c3a2f8ed8b0a771929144faa3452828bbcf9022b3",
+      "previous": {
+        "seq": 1,
+        "entryHash": "0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c"
+      },
+      "expected": {
+        "result": "signature_malformed",
+        "denies": true
+      }
+    },
+    {
+      "name": "verify · read · seq 2 detrás de una cabeza con seq 2 (no es cabeza + 1) → seq_gap",
+      "kind": "read",
+      "contractRef": "D8-8 (seq = cabeza + 1), E1-4",
+      "basis": "contrato",
+      "decision": "DF-V6",
+      "message": "{\"actor_id\":7,\"agent_config_hash\":\"54bf6e3519abec321f1edf9022ef659f5953b6e868703846bdd664fe6d740c26\",\"prev_hash\":\"0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c\",\"profile_uuid\":\"9b000000-0000-4000-8000-000000000003\",\"provider_agent_id\":\"agent_h8fx_canary_0002\",\"published_at\":\"2026-11-05T15:00:00Z\",\"scope\":\"rest\",\"seq\":2,\"spec_hash\":\"3599bc3578c02d5a5da60612721b513c76e5cd82105144211fa5b9139e6894da\",\"version_uuid\":\"9a000000-0000-4000-8000-000000000012\"}",
+      "signature": "7c80175a18d385066a6117c3a2f8ed8b0a771929144faa3452828bbcf9022b3a",
+      "previous": {
+        "seq": 2,
+        "entryHash": "0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c"
+      },
+      "expected": {
+        "result": "seq_gap",
+        "denies": true
+      }
+    },
+    {
+      "name": "verify · read · seq 3 directamente detrás de seq 1 → seq_gap",
+      "kind": "read",
+      "contractRef": "D8-8, E1-4",
+      "basis": "contrato",
+      "decision": "DF-V6",
+      "message": "{\"actor_id\":9,\"agent_config_hash\":\"71c199a3da5929b4997ee942651e76fbc700abd3ac8601e9ebb66e7521cdaa13\",\"prev_hash\":\"454c073d48e7412280a3a4952f8e5fbdfc91b1c1a1eb3c6b31129c4790eda592\",\"profile_uuid\":\"9b000000-0000-4000-8000-000000000004\",\"provider_agent_id\":\"agent_h8fx_canary_0003\",\"published_at\":\"2026-11-06T15:00:00Z\",\"scope\":\"canary\",\"seq\":3,\"spec_hash\":\"a8c5ab8a1b403cc69e5d5e0d8d8df8cf87577463afa48399378b730d8d0041ac\",\"version_uuid\":\"9a000000-0000-4000-8000-000000000013\"}",
+      "signature": "fefa883e7f296db39a77bf1ab378b4e8e4efcecefb080ab7997c59841e8f1f78",
+      "previous": {
+        "seq": 1,
+        "entryHash": "0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c"
+      },
+      "expected": {
+        "result": "seq_gap",
+        "denies": true
+      }
+    },
+    {
+      "name": "verify · read · prev_hash que no es el de la entrada anterior → chain_broken",
+      "kind": "read",
+      "contractRef": "D8-8, E1-4",
+      "basis": "contrato",
+      "decision": "DF-V6",
+      "message": "{\"actor_id\":7,\"agent_config_hash\":\"54bf6e3519abec321f1edf9022ef659f5953b6e868703846bdd664fe6d740c26\",\"prev_hash\":\"0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c\",\"profile_uuid\":\"9b000000-0000-4000-8000-000000000003\",\"provider_agent_id\":\"agent_h8fx_canary_0002\",\"published_at\":\"2026-11-05T15:00:00Z\",\"scope\":\"rest\",\"seq\":2,\"spec_hash\":\"3599bc3578c02d5a5da60612721b513c76e5cd82105144211fa5b9139e6894da\",\"version_uuid\":\"9a000000-0000-4000-8000-000000000012\"}",
+      "signature": "7c80175a18d385066a6117c3a2f8ed8b0a771929144faa3452828bbcf9022b3a",
+      "previous": {
+        "seq": 1,
+        "entryHash": "09f6029f0f0ad34b103ad079a08a8910510e55b01348b87d2a8c7f3ecb2ff2ff"
+      },
+      "expected": {
+        "result": "chain_broken",
+        "denies": true
+      }
+    },
+    {
+      "name": "verify · read · prev_hash = la FIRMA de la anterior (no su huella) → chain_broken",
+      "kind": "read",
+      "contractRef": "D8-8, E1-4",
+      "basis": "decision-fixture",
+      "decision": "DF-V1",
+      "message": "{\"actor_id\":7,\"agent_config_hash\":\"54bf6e3519abec321f1edf9022ef659f5953b6e868703846bdd664fe6d740c26\",\"prev_hash\":\"a9aeae1a42fcd2fded76534f021013681138e273a4b9c62ec21666c794fd387c\",\"profile_uuid\":\"9b000000-0000-4000-8000-000000000003\",\"provider_agent_id\":\"agent_h8fx_canary_0002\",\"published_at\":\"2026-11-05T15:00:00Z\",\"scope\":\"rest\",\"seq\":2,\"spec_hash\":\"3599bc3578c02d5a5da60612721b513c76e5cd82105144211fa5b9139e6894da\",\"version_uuid\":\"9a000000-0000-4000-8000-000000000012\"}",
+      "signature": "ac8a9f7231e5de0cb79cdf38fa64b84cf7277aebfeebb18e3f47e0af7dbf82d3",
+      "previous": {
+        "seq": 1,
+        "entryHash": "0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c"
+      },
+      "expected": {
+        "result": "chain_broken",
+        "denies": true
+      }
+    },
+    {
+      "name": "verify · read · la génesis sin los 64 ceros → chain_broken",
+      "kind": "read",
+      "contractRef": "D8-8, E1-4",
+      "basis": "contrato",
+      "decision": "DF-V6",
+      "message": "{\"actor_id\":7,\"agent_config_hash\":\"54bf6e3519abec321f1edf9022ef659f5953b6e868703846bdd664fe6d740c26\",\"prev_hash\":\"92fa18a4717c7589fde18c7fbfc5c68589c00084935c4bb75849c36aa85c573e\",\"profile_uuid\":\"9b000000-0000-4000-8000-000000000003\",\"provider_agent_id\":\"agent_h8fx_canary_0002\",\"published_at\":\"2026-11-04T15:00:00Z\",\"scope\":\"canary\",\"seq\":1,\"spec_hash\":\"3599bc3578c02d5a5da60612721b513c76e5cd82105144211fa5b9139e6894da\",\"version_uuid\":\"9a000000-0000-4000-8000-000000000012\"}",
+      "signature": "62346eff4173c16590e904cfa4e12a1712536394d30c553a1fbe2f3563e832db",
+      "previous": null,
+      "expected": {
+        "result": "chain_broken",
+        "denies": true
+      }
+    },
+    {
+      "name": "verify · read · una clave de más (contract) → malformed",
+      "kind": "read",
+      "contractRef": "D8-8, E1-4",
+      "basis": "decision-fixture",
+      "decision": "DF-V6",
+      "message": "{\"actor_id\":7,\"agent_config_hash\":\"54bf6e3519abec321f1edf9022ef659f5953b6e868703846bdd664fe6d740c26\",\"contract\":\"ultron-voice-config/1\",\"prev_hash\":\"0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c\",\"profile_uuid\":\"9b000000-0000-4000-8000-000000000003\",\"provider_agent_id\":\"agent_h8fx_canary_0002\",\"published_at\":\"2026-11-05T15:00:00Z\",\"scope\":\"rest\",\"seq\":2,\"spec_hash\":\"3599bc3578c02d5a5da60612721b513c76e5cd82105144211fa5b9139e6894da\",\"version_uuid\":\"9a000000-0000-4000-8000-000000000012\"}",
+      "signature": "b1573e01529a3395881e82c6d7a8a9e1c66767afeea20652257cb18a554fdf41",
+      "previous": {
+        "seq": 1,
+        "entryHash": "0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c"
+      },
+      "expected": {
+        "result": "malformed",
+        "denies": true
+      }
+    },
+    {
+      "name": "verify · read · falta actor_id → malformed",
+      "kind": "read",
+      "contractRef": "D8-8, E1-4",
+      "basis": "decision-fixture",
+      "decision": "DF-V6",
+      "message": "{\"agent_config_hash\":\"54bf6e3519abec321f1edf9022ef659f5953b6e868703846bdd664fe6d740c26\",\"prev_hash\":\"0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c\",\"profile_uuid\":\"9b000000-0000-4000-8000-000000000003\",\"provider_agent_id\":\"agent_h8fx_canary_0002\",\"published_at\":\"2026-11-05T15:00:00Z\",\"scope\":\"rest\",\"seq\":2,\"spec_hash\":\"3599bc3578c02d5a5da60612721b513c76e5cd82105144211fa5b9139e6894da\",\"version_uuid\":\"9a000000-0000-4000-8000-000000000012\"}",
+      "signature": "5e68cb65ab5c471f61d5b941f65d5684ae6141dfd3b124d07be78523e5273373",
+      "previous": {
+        "seq": 1,
+        "entryHash": "0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c"
+      },
+      "expected": {
+        "result": "malformed",
+        "denies": true
+      }
+    },
+    {
+      "name": "verify · read · published_at con milisegundos → malformed",
+      "kind": "read",
+      "contractRef": "D8-8, E1-4",
+      "basis": "decision-fixture",
+      "decision": "DF-V2",
+      "message": "{\"actor_id\":7,\"agent_config_hash\":\"54bf6e3519abec321f1edf9022ef659f5953b6e868703846bdd664fe6d740c26\",\"prev_hash\":\"0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c\",\"profile_uuid\":\"9b000000-0000-4000-8000-000000000003\",\"provider_agent_id\":\"agent_h8fx_canary_0002\",\"published_at\":\"2026-11-05T15:00:00.123Z\",\"scope\":\"rest\",\"seq\":2,\"spec_hash\":\"3599bc3578c02d5a5da60612721b513c76e5cd82105144211fa5b9139e6894da\",\"version_uuid\":\"9a000000-0000-4000-8000-000000000012\"}",
+      "signature": "208dbac18bae72ce3a6fe5fcae7b2483ba0e090dded105fab1f3f70d133ea097",
+      "previous": {
+        "seq": 1,
+        "entryHash": "0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c"
+      },
+      "expected": {
+        "result": "malformed",
+        "denies": true
+      }
+    },
+    {
+      "name": "verify · read · published_at con desfase de Bogotá en vez de Z → malformed",
+      "kind": "read",
+      "contractRef": "D8-8, E1-4",
+      "basis": "decision-fixture",
+      "decision": "DF-V2",
+      "message": "{\"actor_id\":7,\"agent_config_hash\":\"54bf6e3519abec321f1edf9022ef659f5953b6e868703846bdd664fe6d740c26\",\"prev_hash\":\"0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c\",\"profile_uuid\":\"9b000000-0000-4000-8000-000000000003\",\"provider_agent_id\":\"agent_h8fx_canary_0002\",\"published_at\":\"2026-11-05T10:00:00-05:00\",\"scope\":\"rest\",\"seq\":2,\"spec_hash\":\"3599bc3578c02d5a5da60612721b513c76e5cd82105144211fa5b9139e6894da\",\"version_uuid\":\"9a000000-0000-4000-8000-000000000012\"}",
+      "signature": "563fabbc2d74071a2ad6376c057a3da34cb3216ef710b063f67a2d6b74349f4f",
+      "previous": {
+        "seq": 1,
+        "entryHash": "0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c"
+      },
+      "expected": {
+        "result": "malformed",
+        "denies": true
+      }
+    },
+    {
+      "name": "verify · read · seq como texto → malformed",
+      "kind": "read",
+      "contractRef": "D8-8, E1-4",
+      "basis": "decision-fixture",
+      "decision": "DF-V6",
+      "message": "{\"actor_id\":7,\"agent_config_hash\":\"54bf6e3519abec321f1edf9022ef659f5953b6e868703846bdd664fe6d740c26\",\"prev_hash\":\"0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c\",\"profile_uuid\":\"9b000000-0000-4000-8000-000000000003\",\"provider_agent_id\":\"agent_h8fx_canary_0002\",\"published_at\":\"2026-11-05T15:00:00Z\",\"scope\":\"rest\",\"seq\":\"2\",\"spec_hash\":\"3599bc3578c02d5a5da60612721b513c76e5cd82105144211fa5b9139e6894da\",\"version_uuid\":\"9a000000-0000-4000-8000-000000000012\"}",
+      "signature": "8288abf71534027155e7cb624f9e2439e88b0b907f754fb4cc70061a44749c62",
+      "previous": {
+        "seq": 1,
+        "entryHash": "0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c"
+      },
+      "expected": {
+        "result": "malformed",
+        "denies": true
+      }
+    },
+    {
+      "name": "verify · read · scope «all» (fuera del conjunto) → malformed",
+      "kind": "read",
+      "contractRef": "D8-8, E1-4",
+      "basis": "decision-fixture",
+      "decision": "DF-V3",
+      "message": "{\"actor_id\":7,\"agent_config_hash\":\"54bf6e3519abec321f1edf9022ef659f5953b6e868703846bdd664fe6d740c26\",\"prev_hash\":\"0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c\",\"profile_uuid\":\"9b000000-0000-4000-8000-000000000003\",\"provider_agent_id\":\"agent_h8fx_canary_0002\",\"published_at\":\"2026-11-05T15:00:00Z\",\"scope\":\"all\",\"seq\":2,\"spec_hash\":\"3599bc3578c02d5a5da60612721b513c76e5cd82105144211fa5b9139e6894da\",\"version_uuid\":\"9a000000-0000-4000-8000-000000000012\"}",
+      "signature": "8520cac3b41c6a8c5ea046a8b9003c4704cf00a190f58962c1a0c41d70c6609a",
+      "previous": {
+        "seq": 1,
+        "entryHash": "0536e397e0b79c6f53fb761c8216c399f79a7b9a787963666f9b71263caaed1c"
+      },
+      "expected": {
+        "result": "malformed",
+        "denies": true
+      }
+    },
+    {
+      "name": "verify · read · una entrada off con agente → malformed",
+      "kind": "read",
+      "contractRef": "D8-8, E1-4",
+      "basis": "decision-fixture",
+      "decision": "DF-V3",
+      "message": "{\"actor_id\":7,\"agent_config_hash\":null,\"prev_hash\":\"606bd892b2f46336ede1f7b2d12091a4248beea3de1a95a225420535225747aa\",\"profile_uuid\":null,\"provider_agent_id\":\"agent_h8fx_canary_0002\",\"published_at\":\"2026-11-06T17:00:00Z\",\"scope\":\"off\",\"seq\":5,\"spec_hash\":null,\"version_uuid\":null}",
+      "signature": "0699fd8722972acd6ca807c244ec776e9dddb8dfe127a6c1f06ae2a332ce065a",
+      "previous": {
+        "seq": 4,
+        "entryHash": "606bd892b2f46336ede1f7b2d12091a4248beea3de1a95a225420535225747aa"
+      },
+      "expected": {
+        "result": "malformed",
+        "denies": true
+      }
+    },
+    {
+      "name": "verify · read · una entrada canary sin spec_hash → malformed",
+      "kind": "read",
+      "contractRef": "D8-8, E1-4",
+      "basis": "decision-fixture",
+      "decision": "DF-V3",
+      "message": "{\"actor_id\":7,\"agent_config_hash\":\"54bf6e3519abec321f1edf9022ef659f5953b6e868703846bdd664fe6d740c26\",\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"profile_uuid\":\"9b000000-0000-4000-8000-000000000003\",\"provider_agent_id\":\"agent_h8fx_canary_0002\",\"published_at\":\"2026-11-04T15:00:00Z\",\"scope\":\"canary\",\"seq\":1,\"spec_hash\":null,\"version_uuid\":\"9a000000-0000-4000-8000-000000000012\"}",
+      "signature": "fa4a140f259ace13bbdccfcc8a6dcb0ecadf4a1cab87810a4220a7baa026e27d",
+      "previous": null,
+      "expected": {
+        "result": "malformed",
+        "denies": true
+      }
+    },
+    {
+      "name": "verify · read · seq 0 (CHECK seq ≥ 1) → malformed",
+      "kind": "read",
+      "contractRef": "D8-8 (CHECK seq ≥ 1), E1-4",
+      "basis": "contrato",
+      "decision": "DF-V6",
+      "message": "{\"actor_id\":7,\"agent_config_hash\":\"54bf6e3519abec321f1edf9022ef659f5953b6e868703846bdd664fe6d740c26\",\"prev_hash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"profile_uuid\":\"9b000000-0000-4000-8000-000000000003\",\"provider_agent_id\":\"agent_h8fx_canary_0002\",\"published_at\":\"2026-11-04T15:00:00Z\",\"scope\":\"canary\",\"seq\":0,\"spec_hash\":\"3599bc3578c02d5a5da60612721b513c76e5cd82105144211fa5b9139e6894da\",\"version_uuid\":\"9a000000-0000-4000-8000-000000000012\"}",
+      "signature": "96553d7e3e7c95f411537f7a6e137e61dfde2140a3399d92b1bc6b0aaccab217",
+      "previous": null,
+      "expected": {
+        "result": "malformed",
+        "denies": true
+      }
+    }
+  ]
+}

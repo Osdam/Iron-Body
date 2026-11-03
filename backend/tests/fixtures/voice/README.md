@@ -1,37 +1,62 @@
-# Fixtures de voz y telefonía del Hito 8 (TEST8-a, paso 1)
+# Fixtures de voz y telefonía del Hito 8 (TEST8-a, paso 1, con la Enmienda 1)
 
-Escritos **desde el contrato y antes del código**: `docs/ultron-studio/ULTRON_STUDIO_H8_CONTRACT.md`, congelado el 03-11-2026 (commit `57bab8a`), y su auditoría `ULTRON_STUDIO_H8_VOICE_AUDIT.md`. Son el oráculo de las pruebas puras de B8, S8, DB8 y OPS8.
+Escritos **desde el contrato y antes del código**: `docs/ultron-studio/ULTRON_STUDIO_H8_CONTRACT.md`, congelado el 03-11-2026 (commit `57bab8a`), y su auditoría `ULTRON_STUDIO_H8_VOICE_AUDIT.md`. Desde el 03-11-2026 aplican también la **Enmienda 1** (commit `75a6384`):
+- **E1-1:** las herramientas responden en `dialing` o `active`, y la primera pasa una saliente a `active`;
+- **E1-2:** las entrantes denegadas llevan fila `denied` y cada tramo de transferencia se enlaza con su llamada madre;
+- **E1-3:** el aviso nuevo;
+- **E1-4:** la cadena de voz;
+- **E1-9:** el compilador alineado con S8-a.
+
+Son el oráculo de las pruebas puras de B8, S8, DB8 y OPS8.
 
 **Regla de uso.** Si una implementación discrepa de un caso con `basis` `contrato`, `oficial` o `ley`, se corrige la implementación. Si el caso es `decision-fixture`, lo congela el lead (§Decisiones). Si el lead decide otra cosa, se cambia aquí con el generador. **Nunca se dobla un caso para que dé verde.**
 
-**No los ejecuta la suite.** PHPUnit solo recorre `tests/Unit` y `tests/Feature`. Aquí hay `.json`, `.md` y `.py`.
+`compiler-cases.json` es la excepción declarada (E1-9): se alinea **con el compilador real**. Sus `expected.realCompiler` son una instantánea de lo que ese compilador da hoy (DF-C12).
+
+**No los ejecuta la suite.** PHPUnit solo recorre `tests/Unit` y `tests/Feature`. Aquí hay `.json`, `.md`, `.py` y un exportador `.php` que se lanza a mano.
 
 ## Cómo se generan y se comprueban
 
 ```
-python3 -I tests/fixtures/voice/tools/build/build.py            # reescribe los 9 JSON (reproducible byte a byte)
+python3 -I tests/fixtures/voice/tools/build/build.py            # reescribe los 10 JSON (reproducible byte a byte)
+php tests/fixtures/voice/tools/compiler-export.php > tests/fixtures/voice/tools/build/compiler-export.json   # E1-9: el compilador real
+python3 -I tests/fixtures/voice/tools/build/build.py            # otra vez: incrusta expected.realCompiler y exige que cada caso cuadre
 python3 -I tests/fixtures/voice/tools/voice-fixtures-check.py   # forma + segunda derivación + cruces + variantes
-python3 -I tests/fixtures/voice/tools/voice-fixtures-check.py --php                       # + StudioContentHasher, ElevenLabsWebhookSignature/Envelope, hash_hmac, easter_days
+python3 -I tests/fixtures/voice/tools/voice-fixtures-check.py --php                       # + PHP real (ver abajo)
 python3 -I tests/fixtures/voice/tools/voice-fixtures-check.py --sdk-python /ruta/python   # + el SDK oficial de ElevenLabs (cuando haya uno instalado)
 ```
 
 - **El generador** está en `tools/build/`:
   - `build.py` contiene las primitivas, las claves sintéticas y la serialización;
-  - un `sec_*.py` por fichero contiene los casos **a mano**.
+  - un `sec_*.py` por fichero contiene los casos **a mano**;
+  - `compiler-export.json` es la instantánea del compilador real.
 
-  Cada `expected` es un literal escrito desde el contrato. El generador solo calcula lo que no se puede escribir a mano: HMAC, sha256 y fechas. Además contrasta los literales con una referencia propia (`assert`).
+  Cada `expected` es un literal escrito desde el contrato y su Enmienda. El generador solo calcula lo que no se puede escribir a mano (HMAC, sha256, fechas) y contrasta los literales con una referencia propia (`assert`).
+
+  Si una entrada del compilador cambia, su huella vieja no se usa: se compara el sha256 de la entrada y el generador avisa «vuelve a exportar».
+- **El exportador** (`tools/compiler-export.php`) pasa cada caso de `compiler-cases.json` por `StudioVoiceCompiler` con la **misma traducción** que `tests/Unit/UltronStudio/StudioVoiceCompilerParityTest.php` (S8-a). Está explicada en su cabecera:
+  - nombres de campo;
+  - huella `voice-phone` de los destinos;
+  - versión real del catálogo congelado con una variante de `maxChars` por cada huella de versión distinta, en orden de aparición;
+  - tope recortado.
+
+  Carga el autoload de Composer: no arranca Laravel, ni toca la base ni la red. En la segunda pasada, el generador **exige** que cada caso cuadre con el compilador real: motivo y campo traducidos, que compile, y la igualdad de huellas de cada relación. La única excepción es la declarada en `realCompiler.knownMismatch` (DF-C9).
 - **El comprobador** (`tools/voice-fixtures-check.py`) **no importa el generador**. Vuelve a derivar cada caso con otra implementación y otra maquinaria:
   - toda la criptografía con el binario `openssl`;
-  - la Pascua por Gauss (el generador usa el algoritmo gregoriano anónimo);
-  - Bogotá con `zoneinfo` (el generador usa un desfase fijo).
+  - la Pascua por Gauss;
+  - Bogotá con `zoneinfo`;
+  - el aviso comparado con el texto de E1-3 copiado del contrato.
 
-  Además prueba 66 implementaciones equivocadas (§Verificación).
-- **`--php`** carga solo tres clases puras del árbol, sin Laravel, y comprueba que siguen sin cambios:
-  - `app/Services/UltronStudio/StudioContentHasher.php`;
-  - `app/Services/Voice/ElevenLabs/ElevenLabsWebhookSignature.php`;
-  - `app/Services/Voice/ElevenLabs/ElevenLabsWebhookEnvelope.php`.
+  Además prueba 79 implementaciones equivocadas.
+- **`--php`** carga solo clases puras y comprueba que siguen sin cambios:
+  - `StudioContentHasher`;
+  - `ElevenLabsWebhookSignature` y `ElevenLabsWebhookEnvelope`;
+  - `hash_hmac` y `easter_days`;
+  - la derivación de la subclave del H5 para la cadena de voz.
 
-## Forma común de los 9 ficheros
+  Además **vuelve a ejecutar el exportador** sobre el fichero que se comprueba y compara cada huella y cada motivo.
+
+## Forma común de los 10 ficheros
 
 **Cabecera:**
 - `fixture`, `version`, `contract`, `audit` y `contractSections`;
@@ -41,51 +66,52 @@ python3 -I tests/fixtures/voice/tools/voice-fixtures-check.py --sdk-python /ruta
 - `syntheticData`;
 - `decisions`: solo las que usan sus casos;
 - `counts`;
-- y lo propio de cada fichero: `keys`, `closedSets`, `algorithm`, `world`, `years`…
+- y lo propio de cada fichero: `keys`, `closedSets`, `algorithm`, `world`, `years`, `realCompilerExport`…
 
 Después, una lista de casos por sección.
 
 **Cada caso** lleva:
 - `name`, único y con el formato `<sección> · <kind> · <descripción>`;
 - `kind`;
-- `contractRef`: de qué sección del contrato sale;
+- `contractRef`: de qué sección del contrato o de la Enmienda sale;
 - `basis`, uno de estos:
-  - `contrato`: lo dice el contrato;
-  - `oficial`: documentación o SDK del proveedor;
+  - `contrato`;
+  - `oficial`;
   - `ley`;
-  - `supuesto-lead`: P-n de la congelación;
-  - `decision-fixture`: el contrato no lo fija;
+  - `supuesto-lead`;
+  - `decision-fixture`;
 - `decision` (DF-…) cuando el caso depende de una decisión;
 - sus entradas;
 - `expected`.
 
 **Convenciones:**
 - Una cabecera HTTP con valor `null` significa **ausente**.
-- `mustNotPersist` y `responseMustNotContain` son centinelas que **están** en el cuerpo de entrada (el comprobador lo verifica). No pueden aparecer en ninguna fila, evento, log ni respuesta.
+- `mustNotPersist` y `responseMustNotContain` son centinelas que **están** en la entrada. No pueden aparecer en ninguna fila, evento, log ni respuesta.
 - Ningún dato es real:
   - SIDs, ids, secretos y dominios `.test` inventados;
-  - teléfonos de ficción (`+57 300 000 00xx` y `+57 601 000 00xx`);
-  - la `APP_KEY` del fixture del H6 (bytes 00..1f).
+  - teléfonos de ficción;
+  - la `APP_KEY` del H6 (bytes 00..1f).
 
-  Los textos no llevan invisibles literales: van como `\uXXXX`.
+  Ni invisibles literales: van como `\uXXXX`.
 
 ## Índice
 
 | Fichero | Para | Secciones (casos) | Contrato |
 |---|---|---|---|
-| `twilio-signature-vectors.json` | B8 `Telephony\TwilioRequestSignature` | `compute` 15 (los 6 oficiales + 9 derivados), `validate` 25, `urlBuild` 5 | D8-4, D8-16, OTP-2/3 |
-| `elevenlabs-webhook-vectors.json` | B8 `ElevenLabsEventVerifier` (envuelve la firma del H6 sin cambios) | `verify` 27 | D8-16, D8-3, D8-5 |
-| `elevenlabs-webhook-bodies.json` | B8 webhooks, herramientas y guarda; OPS8 simulador | `postCall` 14, `guard` 9, `initiation` 11, `tools` 18, `routeRules` 11 | D8-8, D8-10, D8-11, D8-13, D8-16, D8-17, D8-19 |
-| `twilio-webhook-bodies.json` | B8 `usage-trigger` y conciliación; OPS8 simulador | `usageTrigger` 7, `callStatus` 8, `callsPage` 1 (9 llamadas) | D8-16, D8-19, D8-21 |
-| `holidays-co-2026-2028.json` | B8 `Telephony\ColombianHolidays` | `years` (3 × 18 festivos) y `isHoliday` 77 | D8-15 (Ley 51 de 1983) |
-| `policy-tables.json` | B8 `OutboundPolicy`/`InboundPolicy` y sus tablas, `VoiceCostGuard`, el freno | `scheduleLegal` 20, `scheduleOwn` 11, `frequency` 17, `consent` 13, `exclusions` 16, `inboundPolicy` 15, `costReservation` 17, `brake` 16, `phoneHash` 7 | D8-11, D8-15, D8-17, D8-18, D8-19 |
-| `state-transitions.json` | DB8 (disparador), B8 | `allowed` 21, `matrix` 242 (11 × 11 por dirección), `insert` 22, `sequences` 14, `columns` 25, `eventDedupe` 5 | D8-13, D8-8 |
-| `compiler-cases.json` | S8 `StudioVoiceCompiler`; B8 `ElevenLabsAgentMapper` (hash) | `compile` 73 (13 válidas + 60 negativas), `capClamp` 11, `hashRelations` 14, `canonicalHash` 9 | D8-6, D8-7, D8-11, D8-14, D8-15, D8-17 |
+| `twilio-signature-vectors.json` | B8 `TwilioRequestSignature` | `compute` 15 (los 6 oficiales + 9 derivados), `validate` 25, `urlBuild` 5 | D8-4, D8-16 |
+| `elevenlabs-webhook-vectors.json` | B8 `ElevenLabsEventVerifier` | `verify` 27 | D8-16, D8-3, D8-5 |
+| `elevenlabs-webhook-bodies.json` | B8 webhooks, herramientas y guarda; OPS8 | `postCall` 16, `guard` 9, `initiation` 11, `tools` 21, `routeRules` 11 | D8-8, D8-10, D8-11, D8-13, D8-16, D8-17, D8-19, E1-1, E1-2, E1-3 |
+| `twilio-webhook-bodies.json` | B8 `usage-trigger` y conciliación; OPS8 | `usageTrigger` 7, `callStatus` 8, `callsPage` 1 (9 llamadas) | D8-16, D8-19, D8-21, E1-2 |
+| `holidays-co-2026-2028.json` | B8 `ColombianHolidays` | `years` (3 × 18) e `isHoliday` 77 | D8-15 (Ley 51 de 1983) |
+| `policy-tables.json` | B8 políticas y sus tablas, `VoiceCostGuard`, freno | `scheduleLegal` 20, `scheduleOwn` 11, `frequency` 19, `consent` 13, `exclusions` 16, `inboundPolicy` 15, `costReservation` 17, `brake` 16, `phoneHash` 7 | D8-11, D8-15, D8-17, D8-18, D8-19, E1-1, E1-2 |
+| `state-transitions.json` | DB8 (disparador), B8 | `allowed` 25, `matrix` 288 (12 × 12 por dirección), `insert` 24, `sequences` 19, `columns` 25, `eventDedupe` 5 | D8-13, D8-8, E1-1, E1-2 |
+| `compiler-cases.json` | S8 `StudioVoiceCompiler`; B8 `VoiceAgentSpec` | `compile` 83 (13 válidas + 70 negativas), `capClamp` 11, `hashRelations` 15, `canonicalHash` 9 | D8-6, D8-7, D8-11, D8-14, D8-15, D8-17, E1-3, E1-5…E1-9 |
 | `outbound-gate-cases.json` | B8 `OutboundPolicy` y `PlaceOutboundVoiceCall` | `decide` 43, `whatsappGuard` 7, `job` 22 | D8-12, D8-9, D8-5, D8-13, D8-19, D8-21 |
+| **`voice-chain-vectors.json`** (nuevo) | S8-b `VoicePublishedConfig::signatureFor()` y su lector | `chain` 5, `subkey` 3, `verify` 27 | E1-4, D8-8, D8-9, D8-20 |
 
-**Total: 868 casos.** Por base:
-- `contrato`: 350;
-- `decision-fixture`: 375 (152 son la matriz de estados);
+**Total: 978 casos.** Por base:
+- `contrato`: 443;
+- `decision-fixture`: 392 (163 de `state-transitions.json`, 98 de ellos de la matriz);
 - `ley`: 95;
 - `oficial`: 32;
 - `supuesto-lead`: 16.
@@ -93,189 +119,182 @@ Después, una lista de casos por sección.
 ### Cómo se consume cada uno (resumen)
 
 - **Firmas de Twilio.**
-  - `compute`: `signature(token, url, params | rawBody)` tiene que dar `expected.signature`. Con `rawBody`, la base es la URL y `bodySHA256` es el sha256 hex.
-  - `validate`: `valid(token, url, header, params | rawBody)` tiene que dar `expected.valid`. Con un token vacío, `throws`.
-  - `validWithoutPortTolerance` dice lo que daría un validador sin la tolerancia de puerto del SDK (DF-T2).
+  - `compute`: `signature(token, url, params | rawBody)`.
+  - `validate`: `valid(…)`. `validWithoutPortTolerance` es lo que daría un validador sin la tolerancia de puerto del SDK.
   - `urlBuild`: `url(base, requestUri)`.
-- **Firmas de ElevenLabs.** `ElevenLabsWebhookSignature::verify(rawBody, header, secret, now)` tiene que dar `expected.signatureResult`, y el controlador, `expected.http`.
-  - `sdkConstructEvent` es lo que haría el **ejemplo documentado** del SDK: **por confirmar con el SDK** (`sdkVerified: false`).
-  - Las divergencias con el H6 están marcadas DF-E16 y manda el H6 (D8-16 «sin cambios»).
+- **Firmas de ElevenLabs.** `ElevenLabsWebhookSignature::verify(rawBody, header, secret, now)` → `signatureResult`, y el controlador → `http`. `sdkConstructEvent` está **por confirmar con el SDK**.
 - **Cuerpos de ElevenLabs.**
-  - `postCall`: con `given.call` como fila previa, al recibir `rawBody` bien firmado se esperan `http`, `events` (terna de deduplicación), `transition` (o `statusAfter`), `seal`, `costRaw`, `guard`, `brakeOpens` y `mustNotPersist`.
-  - `guard`: `transcript` → `violations` `[{turn, code}]`.
-  - `initiation`: la respuesta exacta (`response`; `<uuid>` y `<texto>` son formas), las claves prohibidas y la fila.
-  - `tools`: `verdict`, `http`, `sideEffects` y `mustNotCreateExclusionFor`.
-  - `routeRules`: la tabla de D8-16 por escenario.
+  - `postCall`: con `given.call` como fila previa → `http`, `events`, `transition` (o `statusAfter`), `seal`, `costRaw`, `guard`, `brakeOpens` y `mustNotPersist`.
+  - `guard`: `transcript` → `violations`.
+  - `initiation`: la respuesta exacta y la fila. Con E1-2, las denegadas nacen en `denied`.
+  - `tools`: `verdict`, `http`, `transition` y `sideEffects`. Con E1-1, la primera herramienta de una saliente la pasa de `dialing` a `active`.
 - **Cuerpos de Twilio.**
-  - `usageTrigger`: lleva `url`, `requestUri`, `params`, `rawBody` (formulario) y `headers` (firmados con el token sintético de la subcuenta) → `http`, `persisted`, `eventKind`, `dedupeKey` y `brakeOpens`.
-  - `callsPage`: la página de `listCalls` y `given` → `perCall` (coincidencia, estado antes y después, coste en micro-US$, eventos).
-- **Festivos.** `years` es la lista completa para `forYear()`. `isHoliday`: `date` → `holiday` y `name`; `instant` (UTC) → la fecha de Bogotá y `holiday`.
-- **Políticas.** Cada sección es una tabla de entrada y `expected`. `inboundPolicy` da `codeOpen` (la constante girada en la copia del banco) y `codeClosed` (el árbol compartido, `CALLS_ENABLED_IN_CODE = false`).
+  - `usageTrigger`: formulario firmado → `http`, `persisted`, `eventKind`, `dedupeKey` y `brakeOpens`.
+  - `callsPage`: `listCalls` → `perCall`. Con E1-2, la entrante denegada es conocida por su fila y el tramo de transferencia se enlaza con la madre: solo la llamada sin fila abre el freno.
+- **Festivos.** `years` y `isHoliday`.
+- **Políticas.** Tablas de entrada y `expected`. `inboundPolicy` da `codeOpen` y `codeClosed`.
 - **Estados.**
-  - `matrix`: `(from, to, direction)` → `allowed`; la diagonal es `noChange`.
-  - `insert`: el estado inicial por dirección.
-  - `sequences`: pasos aceptados o rechazados.
-  - `columns`: inmutables y de una sola escritura.
-  - `eventDedupe`: la UNIQUE de eventos.
+  - `matrix`: `(from, to, direction)` → `allowed`.
+  - `insert`: los estados iniciales por dirección (`initialStatus`: listas).
+  - `sequences`, `columns` y `eventDedupe`.
 - **Compilador.**
-  - `compile`: `input` (forma neutra de `inputShape`) → `compiles` con `invariants`, o `reason` (o `reasonOneOf`) con `field` y `http` 422.
-  - `capClamp`: el tope del entorno.
-  - `hashRelations`: `sameSpecHash` de dos entradas.
-  - `canonicalHash`: el JSON canónico y su sha256, exactos.
-- **Puerta de salientes.**
-  - `decide`: `facts` → `codeOpen` y `codeClosed`, con `allowed`, `reasons` (todas, en orden) y `http`.
-  - `whatsappGuard`: los tres valores crudos → booleano.
-  - `job`: `row`, `given` y `elevenlabsResponse` → `request` (método, ruta, veces, aserciones del cuerpo y rutas prohibidas), `statusAfter`, `reason`, `events`, `reservation` y `retries`.
+  - `compile`: `input` neutro → `compiles` con `invariants`, o `reason` y `field` (http 422).
+  - `realCompiler`: lo que da el compilador real (`specHash` y `voiceProfileHash`, o su `reason` y `field` con sus nombres).
+  - `hashRelations`: `sameSpecHash` y `realCompiler.specHashA` y `specHashB`.
+  - `capClamp` y `canonicalHash`.
+- **Puerta de salientes.** `decide` → `codeOpen` y `codeClosed`; `whatsappGuard`; `job`.
+- **Cadena de voz.**
+  - `chain`: cada `entry` → su `message` (JSON canónico), `entryHash` (sha256), `signature` (HMAC-SHA256 con la subclave) y el enlace `prev_hash`.
+  - `subkey`: la subclave de cada APP_KEY y etiqueta.
+  - `verify`: `message`, `signature` y `previous` (`{seq, entryHash}` o `null`) → `result` (`ok`, `malformed`, `not_canonical`, `signature_malformed`, `signature_mismatch`, `seq_gap` o `chain_broken`).
+
+## Lo que cambió con la Enmienda 1 (03-11-2026)
+
+| Id | Dónde | Cambio |
+|---|---|---|
+| E1-1 | `state-transitions`, `policy-tables`, `elevenlabs-webhook-bodies` | Transiciones nuevas: `dialing → active` en las salientes, y `active → completed`, `hung_up` y `failed` también en las salientes. La frecuencia cuenta `active`. Las herramientas valen en `dialing` y `active`, y la primera hace la transición. El caso de la saliente con herramientas parte de `active`, y se añade una saliente sin herramientas (`dialing → completed`) |
+| E1-2 | `state-transitions`, `elevenlabs-webhook-bodies`, `twilio-webhook-bodies`, `policy-tables` | Estado `denied`: final, de entrada e inicial de las entrantes. Las iniciaciones denegadas crean fila `denied` (con el caller ID oculto, sin huella: DF-E17). Hay una post-llamada sobre una `denied` y una herramienta sobre una `denied` → `call_not_active`. En la conciliación, la denegada es «conocida» y el tramo de transferencia queda enlazado con la madre (contrato). La denegada no cuenta para la frecuencia |
+| E1-3 | `elevenlabs-webhook-bodies` (`world.aiNotice` y transcripciones), `elevenlabs-webhook-vectors` (sus firmas), `compiler-cases` | El aviso nuevo en todos los cuerpos y perfiles. El de P-9 pasa a ser una negativa (`notice_missing`) |
+| E1-4 | `voice-chain-vectors.json` (nuevo) | Mensaje, huella, firma y lector de la cadena de voz |
+| E1-5…E1-9 | `compiler-cases.json` | Alineado con el compilador de S8-a, más las huellas reales (lista abajo) |
+
+**El detalle de `compiler-cases.json` (E1-9):**
+- **Caracteres de la plantilla.** El emoji pasa a negativa (`slot_characters`), con casos nuevos de llaves, comillas angulares y símbolos (E1-8).
+- **Buzón.** `leave_message` pasa a negativa (`voicemail_not_allowed`).
+- **Herramientas.**
+  - «Transferir sin `solicitar_humano`» pasa a negativa (`transfer_requires_human_tool`), con una válida nueva: dos herramientas sin transferir.
+  - «Sin `no_volver_a_llamar`» es negativa (`opt_out_tool_missing`). La relación «una herramienta menos» quita ahora `consultar_planes`.
+- **Orden de los motivos.** Manda el compilador: primero la versión y después el perfil campo a campo en el orden declarado; dentro de cada texto, el orden de la plantilla.
+  - Los tres casos solapados de antes (teléfono o dinero, correo o URL) pasan a tener un motivo exacto.
+  - El caso «dos campos» distingue ahora los dos órdenes posibles.
+- **Uuids.** Entran en `specHash`: la relación de los uuids da ahora huellas distintas.
+- **Primer mensaje.** Es solo el aviso; los saludos van en el prompt (E1-6). La invariante `firstMessageEquals` y `systemPromptContainsGreetings` sustituyen a `firstMessage*StartsWith/Contains`.
+- **Destinos.** Van por alias y por su huella `voice-phone` (`transferDestinationRefs`). `phonesNotInSpec` sustituye a `phonesOnlyInTransferDestinations`.
+- **Variables y versiones.** La variable `call_direction` (E1-5). Las versiones que compilan, APPROVED, CANARY y PUBLISHED, pasan de decisión a contrato (E1-7).
+
+### Para la paridad de S8 (`StudioVoiceCompilerParityTest`, fichero de S8)
+
+Con este fixture, su lista `CONFLICTS` se queda **vacía**. Su prueba va a fallar hasta que la actualice: lo digo leyendo su código, no la ejecuté. No la toqué. Hay que cambiar esto:
+1. **Quitar las 6 entradas de `CONFLICTS`.** Sus casos ya existen con otro nombre o con otra expectativa:
+   - `compile · negative · slot_characters en slots.cierre: «Te esperamos ❤⟦U+FE0F⟧ 👨⟦U+200D⟧👩⟦U+200D⟧👧»`;
+   - `compile · negative · buzón leave_message: no existe (solo hang_up)`;
+   - `compile · negative · transfer_to_number sin solicitar_humano` y `compile · valid · dos herramientas sin transferir (no_volver_a_llamar se queda)`;
+   - `compile · negative · dos campos con problemas distintos (cifra en el saludo de entrada, URL en un slot): manda el primer campo declarado aunque su motivo vaya después, slot_money en greetingInbound`;
+   - `hashRelations · specHash · otro uuid de perfil y de versión (mismo contenido) → otra huella (E1-9: los uuids entran)`;
+   - `hashRelations · specHash · una herramienta menos (consultar_planes; no_volver_a_llamar no se quita) → otra huella`.
+2. **`REASONS`:**
+   - `text_characters` → `slot_characters`;
+   - `opt_out_tool_required` → `opt_out_tool_missing`;
+   - `transfer_tools_mismatch` → `transfer_requires_human_tool`.
+
+   **`REASONS_BY_FIELD`:** `profile_field_invalid|profile.content.voicemail` → `voicemail_not_allowed`. Es la misma tabla que usa `tools/compiler-export.php`.
+3. **Invariantes:**
+   - `firstMessageEquals` (en lugar de `firstMessage*StartsWith`);
+   - `systemPromptContainsGreetings` (en lugar de `firstMessage*Contains`);
+   - `transferDestinationAliases` y `transferDestinationRefs` (en lugar de `transferDestinations`);
+   - `phonesNotInSpec`;
+   - `dynamicVariables`.
+4. **Opcional:** comparar `specHash` con `expected.realCompiler.specHash`. Hace falta la misma asignación de variantes de versión de la cabecera (`realCompilerExport.versionVariants`).
+
+`NOT_APPLICABLE` no cambia (los dos casos conservan el nombre).
 
 ## Decisiones del fixture (las congela el lead)
 
-El texto exacto de cada una está en la cabecera `decisions` del fichero que la usa (69 con caso). E7, G4 y G6 solo están en el generador, sin caso propio todavía. Resumen por grupo:
+El texto exacto de cada una está en la cabecera `decisions` del fichero que la usa (72 con caso). DF-E7, DF-G4 y DF-G6 solo están en el generador. Desde la Enmienda 1:
+- **Pasan a contrato:**
+  - DF-C2 (E1-7);
+  - DF-C11, porque con el orden del compilador ya no hace falta `reasonOneOf`;
+  - DF-W5 (E1-2);
+  - DF-E10 (E1-2: una entrante denegada está en `denied`).
+- **Cambian de texto:**
+  - DF-E9: los veredictos, con E1-1 y E1-2;
+  - DF-W4: el tramo, enlazado con la madre por E1-2;
+  - DF-C1: el orden del compilador real;
+  - DF-C3: los caracteres de E1-8;
+  - DF-C4: el aviso de E1-3;
+  - DF-C7: los uuids dentro;
+  - DF-C8: el primer mensaje de E1-6;
+  - DF-P3: `active` cuenta y `denied` no;
+  - DF-S4 y DF-S8: las iniciales de las entrantes.
+- **Nuevas:**
+  - **DF-E17:** fila `denied` sin huella con el caller ID oculto;
+  - **DF-C12:** `realCompiler` es una instantánea de regresión;
+  - **DF-V1…V6:** la cadena de voz:
+    - `prev_hash` = sha256 del mensaje anterior, no su firma;
+    - `published_at` en UTC y al segundo;
+    - `scope` ∈ {canary, rest, off}, y una `off` va sin artefactos;
+    - el lector exige los bytes canónicos;
+    - la firma, en hex en minúscula;
+    - el orden de las comprobaciones del lector.
 
-- **T: firma de Twilio.**
-  - **T1.** URL = `rtrim(VOICE_WEBHOOK_BASE_URL, '/')` + la URI cruda (`getRequestUri()`). El esquema y el host salen solo de la base.
-  - **T2.** Tolerancia de puerto como `validate()` del SDK oficial.
-  - **T3.** Orden de bytes (`SORT_STRING`) en claves y valores: «10» va antes que «9».
-  - **T4.** `bodySHA256` se compara exacto.
-  - **T5.** Un token vacío lanza.
-- **E: webhooks y herramientas de ElevenLabs.**
-  - **E1.** Toda firma que no es `ok` da 401.
-  - **E2.** La deduplicación usa `(elevenlabs, type, conversation_id)`.
-  - **E3.** Un JSON roto con la firma buena da 200 y se ignora.
-  - **E4.** Un evento sobre un estado final no cambia el estado.
-  - **E5.** Una post-llamada sin su fila es `unknown_provider_call` y abre el freno.
-  - **E6.** En la iniciación, un cuerpo mal formado da 200 con `no`.
-  - **E7.** La respuesta lleva siempre las tres variables.
-  - **E8.** Esquema estricto en las herramientas.
-  - **E9.** «En curso» = `dialing` o `active`.
-  - **E10.** «El autorizado es el sellado» = `caller_authorized = si`.
-  - **E11.** Los turnos se numeran desde 0. Códigos de voz propuestos: `voice_notice_missing`, `voice_money_not_from_tool` y `voice_transfer_not_approved`.
-  - **E12.** Iniciación con otro `agent_id`: `seal_mismatch` y freno.
-  - **E13.** `called_number` ajeno da `no`.
-  - **E14.** `canceled` de Twilio se concilia como `failed`.
-  - **E15.** Una autenticación fallida da 401; una herramienta desconocida, 404; un rechazo de la llamada, 200 con mensaje neutro.
-  - **E16.** Divergencias del ejemplo del SDK: manda el H6.
-- **W: avisos y conciliación de Twilio.**
-  - **W1.** `usage_alert` (fuera del conjunto cerrado, Q-5).
-  - **W2.** Una firma mala da 401.
-  - **W3.** Sin `IdempotencyToken`, se persiste igual.
-  - **W4.** Un tramo de transferencia se concilia con su llamada madre.
-  - **W5.** Una entrante denegada queda reconocida por su `call_sid`.
-  - **W6.** Precio en micro-US$; `null` = sin tarificar.
-- **P: tablas de política.**
-  - **P1.** Intervalos semiabiertos en Bogotá; 19:00 y 15:00 ya están fuera.
-  - **P2.** Horario propio = intersección con el legal; mal configurado = fuera.
-  - **P3.** Qué estados cuentan como intento.
-  - **P4.** Día y semana de Bogotá, y además los 7 días móviles.
-  - **P5.** Consentimiento: manda el último evento; cuatro ojos; P-7.
-  - **P6.** Las exclusiones también valen para los canarios.
-  - **P7.** RNE: el borde de la vigencia vale.
-  - **P8.** `InboundPolicy` acumula los motivos.
-  - **P9.** Caller ID oculto = no es canario.
-  - **P10.** Topes con `≥`.
-  - **P11.** Un alcance distinto de `canary` = `inbound_disabled`.
-  - **P12.** Fórmula de la reserva.
-  - **P13.** Presupuesto en micro-US$.
-  - **P14.** Soltar el freno.
-  - **P15.** La huella de voz no normaliza.
-- **S: estados.**
-  - **S1.** Sin cambio de estado no hay transición.
-  - **S2.** Un webhook antes que el job.
-  - **S3.** `ambiguous` se resuelve hacia delante.
-  - **S4.** `active` → `failed`.
-  - **S5.** El sello y la identidad son inmutables.
-  - **S6.** Las columnas posteriores se escriben una sola vez.
-  - **S7.** Eventos sin clave del proveedor.
-  - **S8.** El estado inicial por dirección.
-  - **S9.** Lista cerrada de transiciones.
-- **C: compilador.**
-  - **C1.** Nombres y orden de los motivos.
-  - **C2.** Versiones y perfiles aprobados.
-  - **C3.** Comprobaciones de los textos.
-  - **C4.** Aviso exacto.
-  - **C5.** Forma cerrada del perfil.
-  - **C6.** Tope del entorno.
-  - **C7.** Qué entra en `specHash`.
-  - **C8.** Invariantes de la salida.
-  - **C9.** `handoffAliases`.
-  - **C10.** Rarezas del JSON canónico de PHP.
-  - **C11.** Detectores solapados (`reasonOneOf`).
-- **G: puerta de salientes.**
-  - **G1.** Acumula, y se dan las dos variantes de la constante.
-  - **G2.** Orígenes y alcance.
-  - **G3.** Los cupos.
-  - **G4.** HTTP 202 o 409.
-  - **G5.** `duplicate_request`.
-  - **G6.** Un rechazo no crea fila.
-  - **G7.** La reserva.
-  - **G8.** Respuestas raras de `outbound-call`.
-  - **G9.** Qué vuelve a mirar el job.
-  - **G10.** La guarda de WhatsApp por dígitos.
+**El resto, por grupo:**
+- **T:** URL, puerto, orden de bytes, `bodySHA256` y token vacío.
+- **E:** 401, deduplicación, JSON roto, finales, llamada desconocida, iniciación mal formada, tres variables, esquema estricto, turnos de la guarda, `seal_mismatch` en la iniciación, `called_number`, Twilio `canceled`, HTTP de las herramientas y divergencias del SDK.
+- **W:** `usage_alert`, 401, sin token, tramo y precio.
+- **P:** horario, frecuencia, consentimiento, exclusiones, RNE, entrantes, coste, freno y huella.
+- **S:** sin cambio de estado, webhook antes que el job, `ambiguous`, inmutables, una sola escritura, eventos sin clave e iniciales.
+- **C:** forma del perfil, tope, `handoffAliases` y JSON de PHP.
+- **G:** acumulación, orígenes, cupos, `duplicate_request`, reserva, respuestas raras, job y WhatsApp.
 
 ## Preguntas abiertas para el lead
 
-Las cito en los casos con su número.
+**Resueltas por la Enmienda 1:**
+- **Q-1** (E1-3);
+- **Q-3** (E1-1);
+- **Q-6** (E1-2): «hay que fijar si una entrante denegada crea fila» queda cerrado, porque crea fila `denied`;
+- **Q-14** (E1-4).
 
-- **Q-1 (P-9 frente a D8-17, legal).** El texto provisional del aviso no dice **la finalidad** ni **cómo pedir no recibir más llamadas**, que D8-17 exige. Es la revocación de la Ley 2300. El fixture usa el texto de P-9 tal cual.
-- **Q-2 (D8-12).** ¿`duplicate_request` corta la evaluación (idempotencia: devuelve la fila sin mirar nada más) o se acumula el último? El fixture acumula (DF-G5), que es la lectura literal.
-- **Q-3 (D8-10 frente a D8-13).** Las herramientas exigen la llamada `active`, pero una saliente contestada sigue en `dialing`: `active` es solo de entrantes. Leído al pie de la letra, **ninguna herramienta respondería en una saliente**. El fixture admite `dialing` o `active` (DF-E9).
-- **Q-4 (D8-12 frente a D8-18).** `excluded` está en el grupo del alcance `contacts`, pero D8-18 dice que las exclusiones se consultan «antes de cada saliente». El fixture las aplica también a los canarios (DF-P6).
-- **Q-5 (D8-13).** Un aviso de gasto se persiste como evento (D8-16), pero no hay ningún `kind` para él en el conjunto cerrado. El fixture propone `usage_alert`.
-- **Q-6 (D8-19, D8-21).** La conciliación ve como «llamada sin fila» los tramos de transferencia y, si no se registran, las entrantes denegadas. Con el freno automático, **cualquier desconocido que llame al número abriría el freno** y pararía la voz. El fixture reconoce los dos casos (DF-W4, DF-W5). Hay que fijar si una entrante denegada crea fila.
-- **Q-7 (P-2).** Una post-llamada con `version_id` no nulo indica que alguien activó el versionado en el panel, y eso es irreversible. ¿Es deriva o `seal_mismatch`? Hoy el sello solo compara el agente.
-- **Q-8 (D8-15).** ¿El horario se evalúa al pedir o al marcar? El job no vuelve a mirar el calendario (DF-G9) y una saliente pedida a las 18:59:59 puede marcarse a las 19:00:05.
-- **Q-9 (D8-16).** Si ElevenLabs reintenta con el `t` original, un reintento a los 30 min da 401 y cuenta para la desactivación automática tras 10 fallos. Está por confirmar con la cuenta real.
-- **Q-10 (D8-14, D8-15).** El tramo transferido no lo acota `max_duration_seconds`: la reserva no puede acotar su coste.
-- **Q-11 (protección 1 frente a D8-15).** `VOICE_PER_CALL_MAX_SECONDS` tiene 300 por defecto y `VOICE_MAX_CONCURRENT_CALLS`, 1, pero la protección 1 pide `VOICE_*` en `false` o `0`. El fixture toma 300 (DF-C6).
-- **Q-12 (D8-6 frente a P-9).** El aviso aparece como campo del perfil (D8-6) y también como «solo texto, en la plantilla» (congelación). El fixture exige el texto exacto en el perfil (DF-C4).
-- **Q-13 (D8-17).** La etiqueta de la huella es `voice-phone`, literal, o `voice-phone/1`, versionada como las del H6. El fixture usa la literal.
-- **Q-14 (D8-8).** Falta el formato exacto del mensaje que se firma en la cadena de voz: ¿`"ultron-voice-config/1\n" + effective_json`, como el H5? **No hay vectores de la cadena hasta fijarlo.**
-- **Q-15 (D8-22 y fase 4a).** La frecuencia de 1 al día también vale para los canarios: las 7 pruebas de la fase 4a necesitan varios canarios o varios días.
-- **Q-16.** Otros puntos sin fijar:
-  - el tope de cuerpo de `usage-trigger` (D8-16 no lo da);
-  - la longitud de los «huecos cortos»;
-  - si los textos del perfil se normalizan a NFC (una tilde NFD cambia la huella; O-3 del H6);
-  - si las salientes también envían `version_label`.
+**Siguen abiertas:**
+- **Q-2:** `duplicate_request`, ¿acumula o corta?
+- **Q-4:** las exclusiones en `canary`.
+- **Q-5:** `usage_alert` no está en el conjunto cerrado de eventos.
+- **Q-7:** ¿un `version_id` no nulo es deriva?
+- **Q-8:** ¿el horario se evalúa al pedir o al marcar?
+- **Q-9:** los reintentos de ElevenLabs con el `t` original.
+- **Q-10:** el tramo transferido no lo acota `max_duration_seconds`.
+- **Q-11:** los defectos 300 y 1 frente a la protección 1.
+- **Q-12:** E1-3 confirma el texto, y el compilador lo tiene en la plantilla y lo compara con el perfil.
+- **Q-13:** ¿`voice-phone` o `voice-phone/1`?
+- **Q-15:** la frecuencia de los canarios en la fase 4a.
+- **Q-16:** el tope de `usage-trigger`, NFC y `version_label` en las salientes.
+
+**Nuevas:**
+- **Q-17 (E1-4).** El H5 firma `CONTRACT + "\n" + json`. E1-4 define el mensaje como el JSON canónico a secas, y así van los vectores. Si S8-b prefiere el prefijo, como el H5, hay que cambiarlo aquí y en E1-4. La variante `vc_contract_prefix` lo caza.
+- **Q-18 (E1-4).** La forma de `prev_hash`: aquí es el sha256 del mensaje anterior (DF-V1), como `effective_hash` del H5. Si se quiere la firma anterior, la variante `vc_prev_is_signature` lo caza.
 
 ## Observaciones para otros paquetes (no son del fixture)
 
-- **O-1 (SEC8, S8).** `specHash` y la huella del perfil son sha256 sin clave sobre contenido que incluye el **E.164 en claro** de los destinos de transferencia. Quien tenga la base y el código puede probar números por fuerza bruta. Son números del personal (riesgo bajo), pero conviene valorarlo.
-- **O-2 (B8).** `OutboundContentGuard::inspect()` marca **cualquier** cifra (`machine_reply_invented_price`). Con P-3, el adaptador de voz tiene que descontar las cifras que devolvió `consultar_planes` en esa llamada. Las cifras dichas con letras («ochenta y nueve mil») quedan sin cubrir.
-- **O-3 (B8).** Con el `sort()` por defecto de PHP, los valores numéricos repetidos se ordenan como números. Hace falta `SORT_STRING`: el vector «10/9» lo caza.
-- **O-4 (OPS8).** Los vectores y cuerpos firmados sirven tal cual al simulador de ElevenLabs y Twilio, con los secretos sintéticos de `keys`.
+- **O-1 (SEC8, S8):** queda resuelta en S8-a. La especificación lleva la huella `voice-phone` de cada destino, no el número.
+- **O-2 (B8):** `inspect()` marca cualquier cifra y, con P-3, el adaptador de voz tiene que descontar las de `consultar_planes`.
+- **O-3 (B8):** `SORT_STRING` en el validador de Twilio.
+- **O-4 (OPS8):** los vectores y cuerpos firmados sirven a los simuladores.
+- **O-5 (S8-b):** la cadena de voz necesita su propio `HEX64` en minúscula y la recanonicalización en el lector (DF-V4, DF-V5). Los 27 casos de `verify` los fijan.
 
 ## Lo que no cubre, y por qué
 
-- **El valor de `specHash` y `payloadHash` de una compilación real.** Depende de la plantilla de S8, que vive en el código (P-6). El fixture fija el algoritmo de la huella (vectores exactos, cruzados con PHP), las negativas y las relaciones entre huellas.
-- **La carga y la proyección de ElevenLabs** (rutas y campos de crear, leer y asignar agentes). El contrato las deja **[por confirmar]** (D8-3), y la deriva necesita el mapeador de B8.
-- **La cadena firmada de voz** (D8-8): Q-14.
-- **Lo que no es núcleo puro:**
-  - los disparadores y los `REVOKE` en PostgreSQL (DB8, en su puerta PG);
-  - la matriz RBAC y `AuthorizationMap` (D8-22);
-  - el laboratorio hablado (D8-23) y la evidencia del canario y la promoción (D8-19, P-16);
-  - el conector del RNE (P-14);
+- **Los valores de `specHash` de cualquier plantilla futura.** `realCompiler` es la de hoy: `ultron-voice-template/1`, con el aviso de E1-3, sha256 de la plantilla `b584cd90…`. Si cambia a propósito, se reexporta y se revisa.
+- **La carga y la proyección de ElevenLabs** (B8) y la deriva.
+- **Lo que no es puro:**
+  - disparadores y `REVOKE` en PostgreSQL;
+  - RBAC;
+  - el laboratorio hablado;
+  - la evidencia y la promoción;
+  - el conector del RNE;
   - los DTO del CRM;
-  - el E2E con simuladores (paso 3 de TEST8).
-- **Verificación con el SDK de ElevenLabs.** No hay red ni copia local: `sdkConstructEvent` queda **por confirmar con el SDK**. El comando está en la cabecera de `elevenlabs-webhook-vectors.json`.
-- **Fuentes que no se abrieron hoy** (sin red):
-  - los vectores oficiales de Twilio salen de la descarga del H6 del 31-10-2026 (sha256 del fichero en la cabecera);
-  - el texto de la Ley 51 de 1983 lo tiene que aprobar el propietario antes de dar el fixture de festivos por bueno (`approvedByOwner: false`);
-  - los campos de los cuerpos que la auditoría no enumera van marcados **[por confirmar]**.
+  - el E2E.
+- **El SDK de ElevenLabs:** sin verificar (`sdkConstructEvent` por confirmar).
+- **Fuentes que no se abrieron** (sin red): la Ley 51 de 1983 (`approvedByOwner: false`) y la página de Usage Trigger.
 
-## Verificación (salida real del 03-11-2026)
+## Verificación (salida real del 03-11-2026, tras la Enmienda 1)
 
 ```
-derivación independiente: 767 casos rehechos · discrepancias: 0
-cruces entre ficheros: 90 comprobaciones
-variantes equivocadas: 66 · cazadas 66
-php: canonicalHash+perfiles 82, elevenlabsVerify 27, envelope 14, huellasTelefono 6, firmasTwilio 15, pascua 3 · fallos 0 (PHP 8.3.33)
+ficheros: 10 · total 978
+forma: OK
+derivación independiente: 872 casos rehechos · discrepancias: 0
+cruces entre ficheros: 221 comprobaciones
+variantes equivocadas: 79 · cazadas 79
+php: canonicalHash+perfiles 92, elevenlabsVerify 27, envelope 16, huellasTelefono 6, firmasTwilio 15, pascua 3, cadenaVoz 8, compiladorReal 98 · fallos 0 (PHP 8.3.33)
 RESULTADO: OK
 ```
 
-Los 101 casos que no se vuelven a derivar se validan con los cruces entre ficheros:
-- los cuerpos de ElevenLabs (63);
-- los de Twilio (16);
-- el job (22).
-
-Los cruces comprueban que las transiciones están permitidas, que los eventos son del conjunto cerrado, que los centinelas están presentes, que la clave de deduplicación es `conversation_id`, que las firmas de los avisos casan con el HTTP esperado, y que el formulario y el coste están bien convertidos.
-
-El detalle está en `docs/ultron-studio/plans/informes-h8/informe-tester.md`.
+El detalle está en `docs/ultron-studio/plans/informes-h8/informe-tester.md` (§E1).
