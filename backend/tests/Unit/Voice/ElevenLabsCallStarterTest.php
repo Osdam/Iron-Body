@@ -18,7 +18,8 @@ use Tests\Unit\Voice\Support\FreshHttpFake;
  *    configuración esté completa y la clase se instancie a mano.
  *  - El cuerpo (puro): el agente sellado, el número importado, el destino, la
  *    grabación apagada en los dos sitios [P-7], la detección de contestador
- *    según el buzón [P-10], `user_id = call_ref` y las variables de la puerta.
+ *    que cuelga (el único buzón, [P-10] y E1-8), `user_id = call_ref` y las
+ *    variables de la puerta.
  *  - La tabla de resultados (pura): `started` solo con éxito y los dos ids;
  *    nunca un «no se marcó» cuando no se sabe (`ambiguous`).
  *  - Ningún resultado lleva el número.
@@ -76,8 +77,9 @@ class ElevenLabsCallStarterTest extends TestCase
         ], $colgar);
         $this->assertArrayNotHasKey('conversation_config_override', $colgar['conversation_initiation_client_data'], 'sin sobrescrituras (D8-11)');
 
-        $dejar = ElevenLabsCallStarter::requestBody(self::peticion('leave_message'));
-        $this->assertNull($dejar['telephony_call_config']['twilio_machine_detection'], 'dejar el mensaje = sin detección de contestador');
+        // Enmienda 1 (E1-8, E1-9): el buzón solo admite colgar; con otro, la petición ni se construye.
+        $this->expectException(\InvalidArgumentException::class);
+        self::peticion('leave_message');
     }
 
     /** @return iterable<string, array{0:int, 1:string, 2:string, 3:?string, 4:?string, 5:?int}> */

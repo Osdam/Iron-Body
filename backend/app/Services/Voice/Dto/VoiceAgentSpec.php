@@ -33,7 +33,7 @@ use InvalidArgumentException;
  *     prices            'catalog_tool_only' | 'never' [P-3]
  *     forbiddenPhrases  [texto]
  *     privacy           {retentionDays, storeAudio: false, recording: false} [P-7, P-8]
- *     voicemail         'hang_up' | 'leave_message' [P-10]
+ *     voicemail         'hang_up' [P-10; Enmienda 1, E1-8 y E1-9: `leave_message` no existe]
  *
  * Un destino de transferencia es su alias y `ref`, la HUELLA de su teléfono:
  * el número no está aquí. Lo pone, descifrado en memoria, quien despliega
@@ -116,9 +116,8 @@ final class VoiceAgentSpec
 
     public const VOICEMAIL_HANG_UP = 'hang_up';
 
-    public const VOICEMAIL_LEAVE_MESSAGE = 'leave_message';
-
-    public const VOICEMAIL_POLICIES = [self::VOICEMAIL_HANG_UP, self::VOICEMAIL_LEAVE_MESSAGE];
+    /** Enmienda 1 (E1-8, E1-9): el buzón solo admite colgar; dejar un mensaje exigiría otra plantilla y otra enmienda. */
+    public const VOICEMAIL_POLICIES = [self::VOICEMAIL_HANG_UP];
 
     // ── Límites de forma ────────────────────────────────────────────────────
 

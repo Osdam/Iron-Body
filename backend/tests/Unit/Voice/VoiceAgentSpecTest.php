@@ -145,6 +145,7 @@ class VoiceAgentSpecTest extends TestCase
         yield 'audio guardado' => [M::with($s, 'privacy.storeAudio', true)];
         yield 'grabación como 0' => [M::with($s, 'privacy.recording', 0)];
         yield 'otro buzón' => [M::with($s, 'voicemail', 'transcribe')];
+        yield 'dejar un mensaje en el buzón (E1-8: no existe)' => [M::with($s, 'voicemail', 'leave_message')];
     }
 
     /** @param  array<string, mixed>  $datos */

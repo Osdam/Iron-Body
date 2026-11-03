@@ -52,7 +52,13 @@ class ColombianHolidaysTest extends TestCase
 
     public function test_la_ley_2578_cuenta_desde_2026_y_dos_festivos_pueden_coincidir(): void
     {
-        $this->assertCount(18, H::forYear(2025));
+        // 2025, el calendario que ya pasó: sin Chiquinquirá, y San Pedro (29-06,
+        // domingo) y el Sagrado Corazón (Pascua + 71) en el mismo lunes 30-06:
+        // 18 festivos en 17 fechas.
+        $d2025 = H::forYear(2025);
+        $this->assertCount(17, $d2025);
+        $this->assertSame(18, array_sum(array_map('count', $d2025)));
+        $this->assertSame(['sagrado_corazon', 'san_pedro_y_san_pablo'], $d2025['2025-06-30']);
         $this->assertFalse(H::isHolidayDate('2025-07-14'));
         $d2038 = H::forYear(2038);
         $this->assertSame(['sagrado_corazon', 'san_pedro_y_san_pablo'], $d2038['2038-07-05']);

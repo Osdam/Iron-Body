@@ -63,7 +63,7 @@ final class TwilioRequestSignature
     public const FINGERPRINT_HEX_LENGTH = 8;
 
     /**
-     * La firma de una URL y sus parámetros POST.
+     * La firma de una URL y sus parámetros POST: base64(HMAC-SHA1(token, {@see signingBase()})).
      *
      * @param  list<array{0:string, 1:string}>  $pairs  los pares clave → valor en su orden (las claves pueden repetirse)
      *
@@ -74,6 +74,21 @@ final class TwilioRequestSignature
         if ($token === '') {
             throw new InvalidArgumentException('El token de firma de Twilio no puede estar vacío.');
         }
+
+        return base64_encode(hash_hmac('sha1', self::signingBase($url, $pairs), $token, true));
+    }
+
+    /**
+     * El texto que se firma: la URL tal cual y, por clave en orden de bytes,
+     * la clave seguida de cada uno de sus valores distintos en orden de bytes.
+     * Pura y sin secretos (`'10'` va antes que `'9'`; las claves distinguen mayúsculas).
+     *
+     * @param  list<array{0:string, 1:string}>  $pairs
+     *
+     * @throws InvalidArgumentException si un par no es [clave, valor] de textos
+     */
+    public static function signingBase(string $url, array $pairs): string
+    {
         $porClave = [];
         foreach ($pairs as $par) {
             if (! is_array($par) || ! is_string($par[0] ?? null) || ! is_string($par[1] ?? null)) {
@@ -92,7 +107,7 @@ final class TwilioRequestSignature
             }
         }
 
-        return base64_encode(hash_hmac('sha1', $base, $token, true));
+        return $base;
     }
 
     /**

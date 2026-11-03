@@ -190,10 +190,40 @@ class ElevenLabsConfigTest extends TestCase
         $this->assertSame([
             'elevenlabs' => [
                 'enabled' => false, 'api_key' => null, 'agent_id' => null, 'webhook_secret' => null, 'region' => 'default',
-                'agent_phone_number_id' => null, 'tool_secret' => null, 'base_url' => null, 'timeout_seconds' => 10,
+                'agent_phone_number_id' => null, 'tool_secret' => null,
+                // H8 (D8-5 y D8-16): el secreto de iniciación y las tres referencias, vacíos.
+                'initiation_secret' => null, 'tool_secret_ref' => null, 'initiation_secret_ref' => null, 'post_call_webhook_ref' => null,
+                'base_url' => null, 'timeout_seconds' => 10,
             ],
-            'twilio' => ['enabled' => false, 'from' => null, 'daily_call_cap' => 0],
-        ], $vacio, 'los defectos de §I6.2, en su orden');
+            'twilio' => [
+                'enabled' => false, 'from' => null, 'daily_call_cap' => 0,
+                // H8 (D8-4 y D8-5): la subcuenta, la key de Laravel, el token de firma y el simulador, vacíos.
+                'account_sid' => null, 'api_key_sid' => null, 'api_key_secret' => null, 'signing_token' => null, 'base_url' => null,
+            ],
+            // H8 (D8-11, D8-12 y D8-15): TODO APAGADO; los límites son techos, que no encienden nada.
+            'webhook_base_url' => null,
+            'inbound' => ['enabled' => false, 'scope' => 'canary', 'daily_cap' => 0],
+            'outbound' => ['enabled' => false, 'scope' => 'canary'],
+            'limits' => ['max_concurrent_calls' => 1, 'per_call_max_seconds' => 300, 'daily_budget_usd' => '0'],
+        ], $vacio, 'los defectos de §I6.2 y del H8, en su orden');
+
+        // H8: las banderas nuevas con el mismo filter_var; el alcance de salientes,
+        // `contacts` o el más estrecho; los techos, recortados.
+        foreach (['true' => true, 'on' => true, 'false' => false, '' => false, 'si' => false] as $valor => $esperado) {
+            $this->assertSame($esperado, self::evaluar(['VOICE_INBOUND_ENABLED' => (string) $valor])['inbound']['enabled'], "VOICE_INBOUND_ENABLED={$valor}");
+            $this->assertSame($esperado, self::evaluar(['VOICE_OUTBOUND_ENABLED' => (string) $valor])['outbound']['enabled'], "VOICE_OUTBOUND_ENABLED={$valor}");
+        }
+        foreach (['contacts' => 'contacts', ' Contacts ' => 'contacts', 'canary' => 'canary', 'all' => 'canary', '' => 'canary'] as $valor => $esperado) {
+            $this->assertSame($esperado, self::evaluar(['VOICE_OUTBOUND_SCOPE' => (string) $valor])['outbound']['scope'], "VOICE_OUTBOUND_SCOPE={$valor}");
+        }
+        foreach (['VOICE_INBOUND_DAILY_CAP' => ['inbound', 'daily_cap', ['5' => 5, '-1' => 0, '99' => 20, 'x' => 0]],
+            'VOICE_MAX_CONCURRENT_CALLS' => ['limits', 'max_concurrent_calls', ['2' => 2, '0' => 1, '9' => 4, 'x' => 1]],
+            'VOICE_PER_CALL_MAX_SECONDS' => ['limits', 'per_call_max_seconds', ['120' => 120, '10' => 60, '7200' => 600, '' => 300]]] as $variable => [$bloque, $clave, $casos]) {
+            foreach ($casos as $valor => $esperado) {
+                $this->assertSame($esperado, self::evaluar([$variable => (string) $valor])[$bloque][$clave], "{$variable}={$valor}");
+            }
+        }
+        $this->assertSame('2.50', self::evaluar(['VOICE_DAILY_BUDGET_USD' => '2.50'])['limits']['daily_budget_usd'], 'el presupuesto va como texto decimal');
 
         foreach (['true' => true, '1' => true, 'on' => true, 'yes' => true, 'TRUE' => true, 'Yes' => true, 'false' => false, '0' => false, 'off' => false, 'no' => false, '' => false, 'si' => false, 'enabled' => false] as $valor => $esperado) {
             $this->assertSame($esperado, self::evaluar(['ELEVENLABS_ENABLED' => (string) $valor])['elevenlabs']['enabled'], "ELEVENLABS_ENABLED={$valor}");
@@ -233,7 +263,12 @@ class ElevenLabsConfigTest extends TestCase
     {
         $todas = ['ELEVENLABS_ENABLED', 'ELEVENLABS_API_KEY', 'ELEVENLABS_AGENT_ID', 'ELEVENLABS_WEBHOOK_SECRET', 'ELEVENLABS_REGION',
             'ELEVENLABS_AGENT_PHONE_NUMBER_ID', 'ELEVENLABS_TOOL_SECRET', 'ELEVENLABS_BASE_URL', 'ELEVENLABS_TIMEOUT_SECONDS',
-            'TWILIO_VOICE_ENABLED', 'TWILIO_VOICE_FROM', 'TWILIO_VOICE_DAILY_CALL_CAP'];
+            'TWILIO_VOICE_ENABLED', 'TWILIO_VOICE_FROM', 'TWILIO_VOICE_DAILY_CALL_CAP',
+            // H8
+            'ELEVENLABS_INITIATION_SECRET', 'ELEVENLABS_TOOL_SECRET_REF', 'ELEVENLABS_INITIATION_SECRET_REF', 'ELEVENLABS_POST_CALL_WEBHOOK_REF',
+            'TWILIO_VOICE_ACCOUNT_SID', 'TWILIO_VOICE_API_KEY_SID', 'TWILIO_VOICE_API_KEY_SECRET', 'TWILIO_VOICE_SIGNING_TOKEN', 'TWILIO_VOICE_BASE_URL',
+            'VOICE_WEBHOOK_BASE_URL', 'VOICE_INBOUND_ENABLED', 'VOICE_INBOUND_DAILY_CAP', 'VOICE_OUTBOUND_ENABLED', 'VOICE_OUTBOUND_SCOPE',
+            'VOICE_MAX_CONCURRENT_CALLS', 'VOICE_PER_CALL_MAX_SECONDS', 'VOICE_DAILY_BUDGET_USD'];
         $antes = [];
         foreach ($todas as $nombre) {
             $antes[$nombre] = [$_SERVER[$nombre] ?? null, $_ENV[$nombre] ?? null, getenv($nombre)];

@@ -4,7 +4,6 @@ namespace App\Services\Voice\ElevenLabs;
 
 use App\Services\Voice\Dto\OutboundCallRequest;
 use App\Services\Voice\Dto\OutboundCallResult;
-use App\Services\Voice\Dto\VoiceAgentSpec;
 use App\Services\Voice\Dto\VoiceIds;
 use App\Services\Voice\VoiceCallPolicy;
 use App\Services\Voice\VoiceCallStarter;
@@ -49,7 +48,7 @@ final class ElevenLabsCallStarter implements VoiceCallStarter
     /** Por debajo del plazo de 30 s del job (D8-12): el job nunca muere con la petición en el aire sin saberlo. */
     public const MAX_TIMEOUT_SECONDS = 20;
 
-    /** [P-10] colgar sin dejar mensaje: la detección de contestador cuelga ante una máquina o un fax. */
+    /** [P-10] y Enmienda 1 (E1-8): colgar sin dejar mensaje; la detección de contestador cuelga ante una máquina o un fax. */
     public const MACHINE_ANSWERS = ['fax', 'machine_start'];
 
     private const JSON_MAX_DEPTH = 16;
@@ -105,10 +104,8 @@ final class ElevenLabsCallStarter implements VoiceCallStarter
             'telephony_call_config' => [
                 'ringing_timeout_secs' => $request->ringingTimeoutSeconds,
                 'twilio_call_recording_enabled' => false,
-                // null = sin detección de contestador (dejar el mensaje, [P-10]).
-                'twilio_machine_detection' => $request->voicemailPolicy === VoiceAgentSpec::VOICEMAIL_HANG_UP
-                    ? ['mode' => 'enable', 'actions' => [['action' => 'hang_up', 'answered_by' => self::MACHINE_ANSWERS]]]
-                    : null,
+                // El único buzón del H8 es colgar (E1-8): la petición no se construye con otro.
+                'twilio_machine_detection' => ['mode' => 'enable', 'actions' => [['action' => 'hang_up', 'answered_by' => self::MACHINE_ANSWERS]]],
             ],
             'conversation_initiation_client_data' => [
                 'user_id' => $request->callRef,

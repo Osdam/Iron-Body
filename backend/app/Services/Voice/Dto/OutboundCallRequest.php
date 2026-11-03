@@ -23,7 +23,8 @@ use SensitiveParameterValue;
  *    con `caller_authorized = si`, `call_direction = saliente` y
  *    `call_ref = callRef` (una saliente la autoriza la puerta; con la
  *    dirección, la plantilla elige el saludo de las salientes).
- *  - `ringingTimeoutSeconds` y `voicemailPolicy`: [P-10].
+ *  - `ringingTimeoutSeconds` y `voicemailPolicy`: [P-10] (el buzón solo admite
+ *    `hang_up`: Enmienda 1, E1-8).
  *
  * La grabación no es un campo: en el H8 va siempre apagada [P-7], en el
  * proveedor y en el operador.
