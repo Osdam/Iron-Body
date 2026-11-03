@@ -29,7 +29,7 @@
 | Hito 6 (integraciones) | Fase 1: escrituras, sonda y voz apagadas | Se ve todo; **asociar campañas, registrar números canarios y la comprobación de Twilio responden 409** hasta la fase 2. Reconocer la configuración no depende de esa bandera | `ULTRON_STUDIO_DEPLOYMENT_PLAN.md`, «Hito 6» |
 | Hito 7 (seguridad y producción) | Implementado en la rama, **sin desplegar** | Ver §11 | `ULTRON_STUDIO_FINAL_REPORT.md`, «Hito 7» |
 
-[PENDIENTE: actualizar esta tabla cuando se despliegue el Hito 7 y cuando el propietario autorice las fases 2 del H5 y del H6 (lead).]
+*Actualizado el 03-11-2026: el Hito 7 está en producción; las fases 2 del H5 y del H6 siguen pendientes de la autorización del propietario.*
 
 ## 3. Quién puede hacer qué
 
@@ -220,7 +220,7 @@ Aquí no se ven ni se editan secretos: solo huellas. Las credenciales se cambian
 
 ## 11. Qué cambia con el Hito 7 (cuando se despliegue)
 
-**Implementado en la rama `feat/ultron-studio-h7`; no está en producción.** [PENDIENTE: fecha del despliegue (lead).] Para quien usa el CRM:
+**En producción desde el 03-11-2026.** Para quien usa el CRM:
 
 - **Textos con caracteres invisibles, en el Studio:** si un texto pegado trae un carácter invisible o de control, el Studio lo rechaza con «El texto contiene un carácter invisible o de control (U+XXXX) que no se puede guardar. Suele colarse al copiar y pegar: escríbelo de nuevo sin pegarlo.», junto al campo. Los emojis compuestos (con ZWJ o U+FE0F) se aceptan. Afecta a etiquetas, notas, motivos y descripciones del Studio (`plans/informes-h7/informe-security.md` §1). Un texto guardado antes del H7 con uno de esos caracteres solo se rechaza si se vuelve a guardar: al guardar el borrador o al crear una versión desde él; enviar, aprobar o publicar una versión ya creada no lo vuelve a mirar (REV7, M-1).
 - **Fuera del Studio no cambia nada:** la agenda de valoraciones y la Caja siguen con la regla de antes y el mensaje de siempre («El texto contiene caracteres no permitidos.»). El guion blando y los demás caracteres nuevos se siguen aceptando allí, y un emoji con ZWJ se sigue rechazando, como antes. Es la corrección de M-1 del reviewer (opción b), en `601398c`, dentro de lo que se despliega: la lectura de producción no encontró ningún texto guardado que se vea afectado (`plans/informes-h7/informe-security.md` §7).
