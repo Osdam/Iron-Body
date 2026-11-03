@@ -13,31 +13,33 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * PARIDAD del compilador de la voz con `tests/fixtures/voice/compiler-cases.json`
- * (TEST8-a, escrito desde el contrato H8 sin mirar ninguna implementación).
+ * (TEST8-a, escrito desde el contrato H8 y alineado con este compilador por la
+ * Enmienda 1, E1-9; esta prueba, por la Enmienda 2, E2-9).
  *
- * El fixture propone una forma NEUTRA de entrada y unos nombres de motivo
- * («si S8 usa otros nombres, la prueba traduce; el caso no cambia»). Esta
- * prueba traduce la entrada (perfil, versión, tope del entorno) y la salida
- * (motivo y campo) y compara caso a caso.
+ * El fixture usa una forma NEUTRA de entrada y sus propios nombres de motivo:
+ * esta prueba traduce la entrada (perfil, versión, tope del entorno) y la
+ * salida (motivo y campo) y compara caso a caso. La traducción es la misma que
+ * usa `tests/fixtures/voice/tools/compiler-export.php`, que escribió las
+ * huellas reales en `expected.realCompiler` (DF-C12: una instantánea de
+ * regresión): por eso las variantes de versión se leen de la cabecera
+ * (`realCompilerExport.versionVariants`) y no dependen del orden de ejecución.
  *
- * EL AVISO. El fixture fija la regla (el aviso del perfil es EXACTAMENTE el
- * aprobado) con la redacción de P-9; la Enmienda 1 (E1-3) la sustituyó. El
- * aviso aprobado del fixture se traduce al de la plantilla solo si es ese texto
- * de P-9, que se lee del contrato; cualquier otro (vacío, con una palabra
- * cambiada) llega tal cual.
+ * Cada caso se comprueba DOS veces: contra lo que dice el contrato (`reason`,
+ * `field`, las invariantes, `sameSpecHash`) y contra la instantánea (la huella
+ * de la especificación y del perfil, y el motivo y el campo del compilador).
  *
  * NADA SE SALTA EN SILENCIO. Los casos que dependen de algo que el compilador
- * no tiene ({@see NOT_APPLICABLE}) y los que discrepan por una decisión que
- * tiene que tomar el lead ({@see CONFLICTS}) están aquí por su nombre, y cada
- * uno COMPRUEBA su discrepancia exacta: si cambia el fixture o el compilador,
- * la prueba falla y obliga a reclasificarlo. El informe S8 los explica.
+ * no tiene ({@see NOT_APPLICABLE}) están aquí por su nombre y cada uno
+ * comprueba por qué. Una discrepancia que tenga que decidir el lead se fija en
+ * {@see CONFLICTS} con el motivo exacto del compilador; con este fixture la
+ * lista está vacía.
  */
 class StudioVoiceCompilerParityTest extends TestCase
 {
     /** La `APP_KEY` sintética del fixture (bytes 00..1f) y la etiqueta de la huella de voz (D8-17). */
     private const VOICE_PHONE_LABEL = 'voice-phone';
 
-    /** Motivo del compilador → motivo del fixture (los que solo dependen del motivo). */
+    /** Motivo del compilador → motivo del fixture (los que solo dependen del motivo). La tabla de `compiler-export.php`. */
     private const REASONS = [
         'profile_not_approved' => 'profile_not_approved',
         'profile_four_eyes' => 'profile_not_approved',
@@ -51,9 +53,12 @@ class StudioVoiceCompilerParityTest extends TestCase
         'text_phone' => 'slot_phone',
         'text_email' => 'slot_email',
         'text_invisible' => 'slot_invisible',
+        'text_characters' => 'slot_characters',
         'tool_not_in_catalog' => 'tool_not_in_catalog',
         'system_tool_not_allowed' => 'system_tool_not_allowed',
         'end_call_required' => 'end_call_missing',
+        'opt_out_tool_required' => 'opt_out_tool_missing',
+        'transfer_tools_mismatch' => 'transfer_requires_human_tool',
         'duration_exceeds_limit' => 'max_duration_exceeds_cap',
         'recording_not_allowed' => 'recording_enabled',
         'retention_exceeds_limit' => 'retention_exceeds_limit',
@@ -67,6 +72,7 @@ class StudioVoiceCompilerParityTest extends TestCase
     private const REASONS_BY_FIELD = [
         'profile_field_invalid|profile.content.language' => 'language_not_allowed',
         'profile_field_invalid|profile.content.maxDurationSeconds' => 'max_duration_below_minimum',
+        'profile_field_invalid|profile.content.voicemail' => 'voicemail_not_allowed',
         'transfer_destinations_invalid|profile.content.transfer.destinations' => 'too_many_transfer_destinations',
     ];
 
@@ -84,20 +90,16 @@ class StudioVoiceCompilerParityTest extends TestCase
         'hashRelations · specHash · otra versión del compilador → otra huella' => 'la versión del compilador es una constante del código: no es una entrada',
     ];
 
-    /** Las discrepancias que decide el lead (cada caso comprueba la suya). */
-    private const CONFLICTS = [
-        'compile · valid · emoji legítimos en un slot: corazón con U+FE0F y familia con ZWJ (InvisibleCharacters los deja pasar)' => 'text_characters',
-        'compile · valid · política de buzón leave_message [P-10]' => 'profile_field_invalid',
-        'compile · valid · solo dos herramientas del catálogo' => 'transfer_tools_mismatch',
-        'compile · negative · dos campos con problemas distintos (URL en el saludo de entrada, cifra en un slot): manda el motivo, slot_money, y su campo' => 'text_url',
-        'hashRelations · specHash · otro uuid de perfil y de versión (mismo contenido) → la misma huella' => 'distinta',
-        'hashRelations · specHash · una herramienta menos → otra huella' => 'opt_out_tool_required',
-    ];
+    /**
+     * Las discrepancias que decide el lead: nombre del caso → el motivo exacto
+     * del compilador. Vacía desde la Enmienda 1 (E1-9) y la reexportación del
+     * fixture.
+     *
+     * @var array<string,string>
+     */
+    private const CONFLICTS = [];
 
     private static ?array $fixture = null;
-
-    /** @var array<string,int> contentHash del fixture → variante de contenido real */
-    private static array $variantes = [];
 
     private static function fixture(): array
     {
@@ -137,17 +139,24 @@ class StudioVoiceCompilerParityTest extends TestCase
         foreach ([...array_keys(self::NOT_APPLICABLE), ...array_keys(self::CONFLICTS)] as $nombre) {
             $this->assertContains($nombre, $nombres, "la lista nombra un caso que el fixture ya no tiene: {$nombre}");
         }
-        // El aviso aprobado del fixture es el de la plantilla (E1-3) o, hasta que TEST8-a reexporte
-        // (Enmienda 1, E1-9), EXACTAMENTE el de P-9 que E1-3 sustituyó. Ningún otro.
-        $this->assertNotSame('', self::supersededP9Notice(), 'el contrato ya no tiene el texto de P-9 en su sitio');
-        $this->assertContains(self::fixtureNotice(), [T::AI_NOTICE, self::supersededP9Notice()]);
 
-        // Cada negativa trae un motivo o una lista de motivos admitidos (DF-C11), nunca las dos cosas.
+        // El aviso aprobado del fixture es el de la plantilla (E1-3), y la instantánea es de esta plantilla.
+        $this->assertSame(T::AI_NOTICE, self::baseInput()['profile']['content']['notice']);
+        $exportado = $f['realCompilerExport']['compiler'];
+        $this->assertSame([C::VERSION, T::VERSION, T::hash(), T::AI_NOTICE], [$exportado['version'], $exportado['templateVersion'], $exportado['templateHash'], $exportado['aiNotice']]);
+
+        // Cada negativa trae UN motivo (DF-C11 ya no hace falta) y cada caso de compilar o de huellas, su instantánea.
         foreach ($f['compile'] as $caso) {
+            $this->assertArrayHasKey('realCompiler', $caso['expected'], $caso['name']);
             if ($caso['expected']['compiles'] === false) {
-                $this->assertTrue(isset($caso['expected']['reason']) !== isset($caso['expected']['reasonOneOf']), $caso['name']);
+                $this->assertIsString($caso['expected']['reason'], $caso['name']);
+                $this->assertArrayNotHasKey('reasonOneOf', $caso['expected'], $caso['name']);
             }
         }
+        foreach ($f['hashRelations'] as $caso) {
+            $this->assertArrayHasKey('realCompiler', $caso['expected'], $caso['name']);
+        }
+
         // Todos los motivos del fixture tienen traducción.
         $traducidos = [...array_values(self::REASONS), ...array_values(self::REASONS_BY_FIELD), 'transfer_destination_not_in_profile'];
         $this->assertSame([], array_values(array_diff($f['closedSets']['reasonsInOrder'], $traducidos)));
@@ -169,11 +178,13 @@ class StudioVoiceCompilerParityTest extends TestCase
     private function compileCase(array $caso): void
     {
         $nombre = $caso['name'];
+        $instantanea = $caso['expected']['realCompiler'];
         if (isset(self::NOT_APPLICABLE[$nombre])) {
             // La versión nombra un alias que el perfil no tiene: el compilador no lee eso y compila.
             $alias = array_column($caso['input']['profile']['content']['transferDestinations'], 'alias');
             $this->assertNotSame([], array_diff($caso['input']['version']['handoffAliases'], $alias));
-            $this->assertArrayHasKey('specHash', $this->compileInput($caso['input']));
+            $this->assertTrue($instantanea['compiles']);
+            $this->assertSame($instantanea['specHash'], $this->compileInput($caso['input'])['specHash']);
 
             return;
         }
@@ -190,46 +201,40 @@ class StudioVoiceCompilerParityTest extends TestCase
         if ($esperado['compiles']) {
             $this->assertTrue($resultado['compiles'], "{$nombre}: se negó con ".($resultado['myReason'] ?? '?').' en '.($resultado['myField'] ?? '?'));
             $this->invariants($esperado['invariants'], $resultado['compiled'], $caso['input']);
+            // La instantánea: la misma huella de la especificación y del perfil traducido.
+            $this->assertSame($instantanea['specHash'], $resultado['compiled']['specHash'], "{$nombre}: specHash");
+            $this->assertSame($instantanea['voiceProfileHash'], $resultado['compiled']['spec']['source']['voiceProfileHash'], "{$nombre}: huella del perfil");
 
             return;
         }
 
         $this->assertFalse($resultado['compiles'], "{$nombre}: compiló");
         $this->assertSame(422, $esperado['http']);
-        // DF-C11: donde el contrato no fija el detector, vale cualquiera de los motivos de la lista.
-        $admitidos = isset($esperado['reasonOneOf']) ? $esperado['reasonOneOf'] : [$esperado['reason']];
-        $this->assertContains($resultado['reason'], $admitidos, "{$nombre}: el compilador dio {$resultado['myReason']} en {$resultado['myField']}");
+        $this->assertSame($esperado['reason'], $resultado['reason'], "{$nombre}: el compilador dio {$resultado['myReason']} en {$resultado['myField']}");
         if (isset($esperado['field'])) {
             $this->assertSame($esperado['field'], $resultado['field'], $nombre);
         }
+        // La instantánea: el motivo y el campo del compilador, sin traducir.
+        $this->assertSame([$instantanea['reason'], $instantanea['field']], [$resultado['myReason'], $resultado['myField']], "{$nombre}: instantánea");
     }
 
     private function hashRelation(array $caso): void
     {
         $nombre = $caso['name'];
+        $instantanea = $caso['expected']['realCompiler'];
         if (isset(self::NOT_APPLICABLE[$nombre])) {
             $this->assertNotSame(C::VERSION, $caso['inputB']['compilerVersion']);
             $this->assertSame(C::VERSION, $caso['inputA']['compilerVersion']);
-
-            return;
-        }
-
-        if (isset(self::CONFLICTS[$nombre]) && self::CONFLICTS[$nombre] !== 'distinta') {
-            $this->assertSame(self::CONFLICTS[$nombre], $this->outcome($caso['inputB'])['myReason'], "{$nombre}: el conflicto cambió");
+            $this->assertArrayHasKey('notApplicable', $instantanea);
+            $this->assertSame($instantanea['specHashA'], $this->compileInput($caso['inputA'])['specHash']);
 
             return;
         }
 
         $a = $this->compileInput($caso['inputA'])['specHash'];
         $b = $this->compileInput($caso['inputB'])['specHash'];
-        if (isset(self::CONFLICTS[$nombre])) {
-            // Los uuids están en `source`: la huella identifica también el origen.
-            $this->assertTrue($caso['expected']['sameSpecHash']);
-            $this->assertNotSame($a, $b, "{$nombre}: el conflicto cambió");
-
-            return;
-        }
         $this->assertSame($caso['expected']['sameSpecHash'], $a === $b, $nombre);
+        $this->assertSame([$instantanea['specHashA'], $instantanea['specHashB']], [$a, $b], "{$nombre}: instantánea");
     }
 
     private function canonicalHash(array $caso): void
@@ -284,14 +289,19 @@ class StudioVoiceCompilerParityTest extends TestCase
         return C::compile($this->version($input['version']), $this->profile($input['profile']), self::cap($input['env']['VOICE_PER_CALL_MAX_SECONDS'] ?? null));
     }
 
-    /** La versión del fixture (sin contenido) → una versión real: cada huella distinta del fixture, una variante del contenido. */
+    /**
+     * La versión del fixture (sin contenido) → una versión real: la variante
+     * de contenido de su huella, la de la cabecera (`versionVariants`), con
+     * `persona.maxChars` = 160 + 20 × variante.
+     */
     private function version(array $v): array
     {
         $this->assertSame(StudioCatalog::VERSION, $v['catalogVersion']);
-        $variante = self::$variantes[$v['recomputedContentHash']] ??= count(self::$variantes);
+        $variantes = self::fixture()['realCompilerExport']['versionVariants'];
+        $this->assertArrayHasKey($v['recomputedContentHash'], $variantes, 'una huella de versión sin su variante en la cabecera');
         $base = StudioCatalog::baseline();
         $configs = $base['configs'];
-        $configs['persona']['maxChars'] = 160 + 20 * $variante;   // otro contenido, el mismo prompt
+        $configs['persona']['maxChars'] = 160 + 20 * $variantes[$v['recomputedContentHash']];   // otro contenido, el mismo prompt
         $reglas = array_map(static fn (array $r): array => [
             'code' => $r['code'], 'revision' => 2, 'source' => 'legacy_baseline', 'enforcement' => 'code', 'status' => $r['status'],
             'description' => $r['description'], 'type' => $r['type'], 'layers' => $r['layers'], 'priority' => $r['priority'],
@@ -320,16 +330,12 @@ class StudioVoiceCompilerParityTest extends TestCase
     {
         $suyo = $p['content'];
         $mapa = [
-            'voiceId' => 'voiceId', 'language' => 'language', 'maxDurationSeconds' => 'maxDurationSeconds',
+            'voiceId' => 'voiceId', 'language' => 'language', 'notice' => 'aiNotice', 'maxDurationSeconds' => 'maxDurationSeconds',
             'tools' => 'tools', 'systemTools' => 'systemTools', 'voicemailPolicy' => 'voicemail',
         ];
         $c = ['format' => C::PROFILE_FORMAT];
         foreach ($suyo as $clave => $valor) {
-            if ($clave === 'notice') {
-                // El aviso APROBADO del fixture es el de la plantilla (E1-3 sustituye la redacción de P-9; la regla
-                // «exactamente el aprobado» no cambia). Cualquier otro texto, tal cual.
-                $c['aiNotice'] = self::notice($valor);
-            } elseif (isset($mapa[$clave])) {
+            if (isset($mapa[$clave])) {
                 $c[$mapa[$clave]] = $valor;
             } elseif ($clave === 'greetingInbound') {
                 $c['greetings']['inbound'] = $valor;
@@ -359,27 +365,6 @@ class StudioVoiceCompilerParityTest extends TestCase
         ];
     }
 
-    /** El aviso del fixture traducido: el aprobado es el de la plantilla (E1-3); cualquier otro texto, tal cual. */
-    private static function notice(mixed $delFixture): mixed
-    {
-        return $delFixture === self::fixtureNotice() ? T::AI_NOTICE : $delFixture;
-    }
-
-    /** El aviso aprobado del fixture: el del perfil de su caso base. */
-    private static function fixtureNotice(): string
-    {
-        return self::fixture()['compile'][0]['input']['profile']['content']['notice'];
-    }
-
-    /** El texto de P-9 de la congelación, que E1-3 sustituyó (se lee del contrato). */
-    private static function supersededP9Notice(): string
-    {
-        $contrato = (string) file_get_contents(dirname(__DIR__, 3).'/docs/ultron-studio/ULTRON_STUDIO_H8_CONTRACT.md');
-        preg_match('/\| P-9 \| Texto provisional del aviso al empezar cada llamada: «([^»]+)»/u', $contrato, $m);
-
-        return $m[1] ?? '';
-    }
-
     /** DF-C6: ausente o vacío → 300; no entero → 0; después, el recorte a 60–600. */
     private static function cap(?string $raw): int
     {
@@ -397,7 +382,7 @@ class StudioVoiceCompilerParityTest extends TestCase
         return hash_hmac('sha256', $e164, $subclave);
     }
 
-    /** Las invariantes de una compilación válida, traducidas a la especificación. */
+    /** Las invariantes de una compilación válida (DF-C8), traducidas a la especificación. */
     private function invariants(array $inv, array $compilado, array $input): void
     {
         $s = $compilado['spec'];
@@ -408,34 +393,34 @@ class StudioVoiceCompilerParityTest extends TestCase
         $this->assertSame($inv['tools'], array_column($s['tools'], 'name'));
         $this->assertSame($inv['systemTools'], array_column($s['systemTools'], 'name'));
         // Los destinos, por alias y con la HUELLA del número: el número no está en la especificación.
-        $this->assertSame(array_column($inv['transferDestinations'], 'alias'), array_column($s['transfer']['destinations'], 'alias'));
-        $this->assertSame(array_map(static fn (array $d): string => self::voicePhoneHash($d['e164']), $inv['transferDestinations']), array_column($s['transfer']['destinations'], 'ref'));
+        $this->assertSame($inv['transferDestinationAliases'], array_column($s['transfer']['destinations'], 'alias'));
+        $this->assertSame($inv['transferDestinationRefs'], array_column($s['transfer']['destinations'], 'ref'));
         $this->assertSame($inv['recordingEnabled'], $s['privacy']['recording']);
         $this->assertFalse($inv['twilioRecordingEnabled']);   // es de la carga del proveedor (B8)
         $this->assertSame($inv['retentionDays'], $s['privacy']['retentionDays']);
         $this->assertSame($inv['audioStorage'], $s['privacy']['storeAudio']);
+        $this->assertSame($inv['dynamicVariables'], array_keys($s['dynamicVariables']));
         foreach ($inv['dynamicVariableDefaults'] as $nombre => $defecto) {
             $this->assertSame($defecto, $s['dynamicVariables'][$nombre]);
         }
         $this->assertSame($inv['conversationConfigOverrideAllowed'], $s['overridesAllowed']);
-        // Un solo primer mensaje, el aviso, en los dos sentidos...
-        $this->assertStringStartsWith(self::notice($inv['firstMessageInboundStartsWith']), $s['firstMessage']);
-        $this->assertStringStartsWith(self::notice($inv['firstMessageOutboundStartsWith']), $s['firstMessage']);
-        // ...y el saludo de cada sentido en el prompt, en su rama (diseño de S8: informe, «primer mensaje»).
-        $this->assertStringContainsString('«'.$inv['firstMessageInboundContains'].'»', $s['systemPrompt']);
-        $this->assertStringContainsString('«'.$inv['firstMessageOutboundContains'].'»', $s['systemPrompt']);
+        // E1-6: el primer mensaje es solo el aviso, en los dos sentidos; los saludos van en el prompt.
+        $this->assertSame($inv['firstMessageEquals'], $s['firstMessage']);
+        foreach ($inv['systemPromptContainsGreetings'] as $saludo) {
+            $this->assertStringContainsString('«'.$saludo.'»', $s['systemPrompt']);
+        }
         $this->assertTrue($inv['promptHasNoMoneyFigures']);
         $this->assertSame(0, preg_match(T::PRICE_PATTERN, $s['systemPrompt']));
-        // Más estricto que el fixture: ningún teléfono en la especificación, tampoco los de los destinos.
+        // Ningún teléfono en la especificación, tampoco los de los destinos (ni su parte nacional).
         $json = StudioContentHasher::canonicalJson($s);
-        foreach ($inv['phonesOnlyInTransferDestinations'] as $e164) {
+        foreach ($inv['phonesNotInSpec'] as $e164) {
             $this->assertStringNotContainsString($e164, $json);
             $this->assertStringNotContainsString(substr($e164, 3), $json);
         }
         $this->assertTrue($inv['specHashIsSha256OfCanonicalSpec']);
         $this->assertSame(hash('sha256', $json), $compilado['specHash']);
         $this->assertTrue($inv['payloadHashIsSha256OfCanonicalPayload']);   // la carga es del mapper (B8)
-        $this->assertSame(self::cap($input['env']['VOICE_PER_CALL_MAX_SECONDS'] ?? null) >= $s['maxDurationSeconds'], true);
+        $this->assertTrue(self::cap($input['env']['VOICE_PER_CALL_MAX_SECONDS'] ?? null) >= $s['maxDurationSeconds']);
     }
 
     private static function baseInput(): array
