@@ -46,6 +46,17 @@ use Tests\TestCase;
  * entra entero (m-3 de la revisión final del H7). Como el lector, tiene su
  * excepción por cadena (la bandera, una vez) y su propia prueba: lo que la
  * bandera condiciona son solo órdenes del Studio.
+ *
+ * HITO 8 (contrato H8, D8-2 y D8-8; SEC8): la telefonía NO entra en la lista
+ * blanca. Como el lector del motor, tiene excepciones por cadena: el lector de
+ * la cadena de voz (`Telephony\VoicePublishedConfig`) nombra solo la tabla de
+ * SU cadena (`ultron_studio_voice_publications`, nunca la del motor), y un
+ * adaptador de la telefonía puede importar el modelo de los canarios
+ * (`StudioCanaryNumber`) y su normalizador puro (`StudioCanaryPhone`), nada
+ * más. Las migraciones del H8 que nombran la voz (DB8, `2026_11_1*`) entran
+ * por patrón hasta que DB8 fije sus nombres. Los trabajos de la voz
+ * (`app/Jobs/Voice/`) no son del motor. El resto de la frontera de la
+ * telefonía está en `Tests\Feature\Telephony\TelephonyIsolationTest`.
  */
 class UltronEngineIsolationTest extends TestCase
 {
@@ -74,6 +85,39 @@ class UltronEngineIsolationTest extends TestCase
         // Hito 7 (contrato H7, DB7): el endurecimiento de las tablas de solo inserción.
         'database/migrations/2026_11_02_100001_add_ultron_studio_hardening.php',
     ];
+
+    /**
+     * Hito 8 (contrato H8, DB8): las migraciones de la voz y de su gobierno
+     * (`2026_11_1*_create_voice_*`, `…_create_ultron_studio_voice_*` y sus
+     * guardas), por patrón hasta que DB8 fije los nombres; entonces pasan a
+     * {@see ALLOWED} con su ruta exacta.
+     */
+    private const ALLOWED_H8_PATTERNS = ['database/migrations/2026_11_1*voice*.php'];
+
+    /**
+     * Hito 8 (contrato H8, D8-8): el lector de la cadena de voz. No está en la
+     * lista blanca: lo único que puede nombrar del Studio es la tabla de SU
+     * cadena, una vez, como cadena (nunca `ultron_studio_publications`).
+     */
+    private const VOICE_READER = 'app/Services/Telephony/VoicePublishedConfig.php';
+
+    private const VOICE_READER_REFERENCES = ["T_CONSTANT_ENCAPSED_STRING 'ultron_studio_voice_publications'"];
+
+    /**
+     * Hito 8 (contrato H8, D8-2; auditoría OTP-4): lo único del Studio que un
+     * fichero de la telefonía puede importar.
+     */
+    private const TELEPHONY_DIR = 'app/Services/Telephony/';
+
+    private const TELEPHONY_STUDIO_REFERENCES = [
+        'T_NAME_QUALIFIED App\\Models\\UltronStudio\\StudioCanaryNumber',
+        'T_NAME_FULLY_QUALIFIED \\App\\Models\\UltronStudio\\StudioCanaryNumber',
+        'T_NAME_QUALIFIED App\\Services\\UltronStudio\\StudioCanaryPhone',
+        'T_NAME_FULLY_QUALIFIED \\App\\Services\\UltronStudio\\StudioCanaryPhone',
+    ];
+
+    /** Hito 8: los trabajos de la voz no son del motor (la frontera motor ↔ voz está en `TelephonyIsolationTest`). */
+    private const NOT_ENGINE = ['app/Jobs/Voice/'];
 
     /**
      * Hito 7 (contrato H7, OPS7; m-3 de la revisión final del H7): el
@@ -149,6 +193,13 @@ class UltronEngineIsolationTest extends TestCase
             if ($relativa === self::SCHEDULER && $this->sinLinea($hallazgos) === self::SCHEDULER_REFERENCES) {
                 $programadorVisto = true;
 
+                continue;
+            }
+            // Hito 8: el lector de la cadena de voz y los adaptadores de los canarios de la telefonía.
+            if ($relativa === self::VOICE_READER && $this->sinLinea($hallazgos) === self::VOICE_READER_REFERENCES) {
+                continue;
+            }
+            if (str_starts_with($relativa, self::TELEPHONY_DIR) && array_diff($this->sinLinea($hallazgos), self::TELEPHONY_STUDIO_REFERENCES) === []) {
                 continue;
             }
             $fuera[$relativa] = $hallazgos;
@@ -230,6 +281,9 @@ class UltronEngineIsolationTest extends TestCase
         foreach (self::ENGINE_ZONES as $zona) {
             $this->assertFileExists(base_path($zona));
             foreach ($this->phpFiles([$zona]) as $relativa) {
+                if ($this->notEngine($relativa)) {
+                    continue;
+                }
                 $esperado = $relativa === self::ENGINE_READER ? self::ENGINE_READER_REFERENCES : [];
                 $this->assertSame($esperado, $this->sinLinea($this->references(base_path($relativa))), "{$relativa} nombra el Studio.");
             }
@@ -335,6 +389,9 @@ class UltronEngineIsolationTest extends TestCase
         $vistos = 0;
         foreach (self::ENGINE_ZONES as $zona) {
             foreach ($this->phpFiles([$zona]) as $relativa) {
+                if ($this->notEngine($relativa)) {
+                    continue;
+                }
                 $codigo = $this->codeOnly(base_path($relativa));
                 foreach (['App\\Services\\Voice', 'App\\Services\\Twilio', 'PhoneFingerprint', 'Services\\Voice\\', 'Services\\Twilio\\'] as $nombre) {
                     $this->assertStringNotContainsString($nombre, $codigo, "{$relativa} nombra {$nombre}.");
@@ -499,6 +556,24 @@ class UltronEngineIsolationTest extends TestCase
     {
         foreach (self::ALLOWED as $permitido) {
             if (str_ends_with($permitido, '/') ? str_starts_with($relativa, $permitido) : $relativa === $permitido) {
+                return true;
+            }
+        }
+        // Hito 8: las migraciones de DB8, por patrón (sin `/` en el comodín: no cruza directorios).
+        foreach (self::ALLOWED_H8_PATTERNS as $patron) {
+            if (fnmatch($patron, $relativa, FNM_PATHNAME)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** Hito 8: lo que vive en una zona del motor sin ser del motor (los trabajos de la voz). */
+    private function notEngine(string $relativa): bool
+    {
+        foreach (self::NOT_ENGINE as $prefijo) {
+            if (str_starts_with($relativa, $prefijo)) {
                 return true;
             }
         }
