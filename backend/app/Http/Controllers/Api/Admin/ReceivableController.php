@@ -5,22 +5,25 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Enums\CashShiftType;
 use App\Enums\DebtorType;
 use App\Exceptions\CashShiftException;
-use App\Exceptions\ReceivableException;
 use App\Exceptions\PlanReplayException;
+use App\Exceptions\ReceivableException;
+use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Concerns\ResolvesPagination;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
+use App\Models\CashShift;
 use App\Models\Member;
 use App\Models\Payment;
 use App\Models\Plan;
 use App\Models\ProductSale;
 use App\Models\Receivable;
 use App\Models\ReceivablePayment;
-use App\Services\Billing\Money;
+use App\Rules\PaymentMethodInput;
+use App\Rules\PlanNotArchived;
 use App\Services\Audit\FinancialAudit;
-use App\Services\Caja\CashReceipts;
-use App\Models\CashShift;
+use App\Services\Billing\Money;
 use App\Services\Caja\BulkSettlement;
+use App\Services\Caja\CashReceipts;
 use App\Services\Caja\DebtorAccounts;
 use App\Services\Caja\DebtorDirectory;
 use App\Services\Caja\MembershipFinancialStanding;
@@ -28,12 +31,12 @@ use App\Services\Caja\ReceivableDueNotifier;
 use App\Services\Caja\ReceivableService;
 use App\Services\Payments\MembershipPeriod;
 use App\Services\Payments\PaymentMembershipActivator;
+use App\Services\Payments\PaymentSplits;
 use App\Services\RealtimeEvents;
 use App\Support\Access\AdminActor;
 use App\Support\Caja\PaymentMethodKind;
 use App\Support\Caja\PaymentOrigin;
 use App\Support\Caja\PaymentTerm;
-use App\Rules\PlanNotArchived;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
@@ -470,7 +473,6 @@ class ReceivableController extends Controller
         ], 201);
     }
 
-
     /**
      * GET /api/admin/receivables/people — LA DEUDA POR PERSONA.
      *
@@ -796,7 +798,11 @@ class ReceivableController extends Controller
             'user_id' => ['required', 'integer', 'exists:users,id'],
             'plan_id' => ['required', 'integer', 'exists:plans,id', new PlanNotArchived],
             'first_payment' => ['required', 'numeric', 'min:0.01'],
-            'method' => ['required', Rule::in(PaymentMethodKind::selectableAtCounter())],
+            // `mixed` se admite como medio porque no es un medio: es la marca
+            // de que el abono viene repartido. Exige `splits`, y se comprueba
+            // justo debajo.
+            'method' => ['required', Rule::in([...PaymentMethodKind::selectableAtCounter(), PaymentSplits::MIXED])],
+            ...PaymentSplits::rules(),
             'client_request_id' => ['nullable', 'string', 'max:100'],
             'reference' => ['nullable', 'string', 'max:120'],
             // Fecha límite del saldo. Si no viene, se deriva del plazo
@@ -810,6 +816,25 @@ class ReceivableController extends Controller
 
         if ($error = MembershipPeriod::startError($data['starts_on'] ?? null)) {
             throw ValidationException::withMessages(['starts_on' => [$error]]);
+        }
+
+        // LO QUE SE PAGA HOY ES LO QUE SE REPARTE, no el precio del plan: el
+        // resto queda a deber y todavía no ha entrado por ningún medio.
+        $splits = $data['splits'] ?? null;
+        $esMixto = ($data['method'] ?? null) === PaymentSplits::MIXED;
+
+        if ($esMixto && ($splits === null || $splits === [])) {
+            throw ValidationException::withMessages([
+                'splits' => ['Un cobro mixto necesita el desglose de los medios.'],
+            ]);
+        }
+        if ($splits !== null && ! $esMixto) {
+            throw ValidationException::withMessages([
+                'method' => ['Para repartir el cobro entre varios medios, el método tiene que ser «mixto».'],
+            ]);
+        }
+        if ($splits !== null) {
+            app(PaymentSplits::class)->assertMatchesTotal($splits, (float) $data['first_payment']);
         }
 
         // Camino rápido del reintento: si esta misma petición ya se atendió, se
@@ -862,7 +887,7 @@ class ReceivableController extends Controller
         try {
             $vence = PaymentTerm::resolve($data['due_at'] ?? null, CashShiftType::GYM);
 
-            [$pago, $cuenta, $abono] = DB::transaction(function () use ($data, $plan, $total, $primero, $member, $actor, $request, $requestId, $vence) {
+            [$pago, $cuenta, $abono] = DB::transaction(function () use ($data, $plan, $total, $primero, $member, $actor, $request, $requestId, $vence, $splits) {
                 $pago = Payment::create([
                     'user_id' => (int) $data['user_id'],
                     'plan_id' => $plan->id,
@@ -900,6 +925,7 @@ class ReceivableController extends Controller
                     actor: $actor,
                     clientRequestId: $requestId,
                     reference: $data['reference'] ?? null,
+                    splits: $splits,
                 );
 
                 // `settle()` devuelve el abono YA REGISTRADO cuando la petición
@@ -1003,7 +1029,7 @@ class ReceivableController extends Controller
             // Cualquier medio de mostrador reconocido (Nequi y Daviplata se
             // guardan como transferencia, igual que al abonar), nunca pasarela,
             // `receivable` ni `mixed`. La regla da el mensaje en español.
-            'method' => ['required', 'string', 'max:80', new \App\Rules\PaymentMethodInput(soloUnMedio: true)],
+            'method' => ['required', 'string', 'max:80', new PaymentMethodInput(soloUnMedio: true)],
             'reason' => ['required', 'string', 'min:5', 'max:500'],
         ]);
 
@@ -1026,7 +1052,7 @@ class ReceivableController extends Controller
     public function history(Request $request, Receivable $receivable): JsonResponse
     {
         // Solo una persona (B-3): el token compartido no lee trazas de dinero.
-        if ($sinPersona = \App\Http\Controllers\Api\PaymentController::requirePerson($request)) {
+        if ($sinPersona = PaymentController::requirePerson($request)) {
             return $sinPersona;
         }
         $abonos = $receivable->payments()->pluck('id')->map(fn ($id) => (string) $id)->all();

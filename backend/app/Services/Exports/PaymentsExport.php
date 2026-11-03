@@ -4,6 +4,7 @@ namespace App\Services\Exports;
 
 use App\Http\Controllers\Api\PaymentController;
 use App\Models\Payment;
+use App\Models\ReceivablePaymentSplit;
 use App\Support\Caja\PaymentMethodKind;
 use App\Support\Caja\PaymentOrigin;
 use Illuminate\Database\Eloquent\Builder;
@@ -235,13 +236,26 @@ class PaymentsExport extends ExportDataset
     /** «Efectivo 20.000 · Nequi / Daviplata 40.000». Vacío si no es mixto. */
     public static function breakdown(?Payment $pago): ?string
     {
-        if (! $pago || $pago->splits->isEmpty()) {
-            return null;
+        return $pago ? self::breakdownOf($pago->splits) : null;
+    }
+
+    /**
+     * El mismo desglose a partir de las partes sueltas.
+     *
+     * Existe porque los abonos repartidos se guardan en su propia tabla
+     * ({@see ReceivablePaymentSplit}) y leen igual de bien: «Mixto»
+     * a secas no le dice nada a quien revisa un informe.
+     *
+     * @param  iterable<object{method: string, amount: mixed}>  $splits
+     */
+    public static function breakdownOf(iterable $splits): ?string
+    {
+        $partes = [];
+        foreach ($splits as $s) {
+            $partes[] = self::methodLabel($s->method).' '.number_format((float) $s->amount, 0, ',', '.');
         }
 
-        return $pago->splits
-            ->map(fn ($s) => self::methodLabel($s->method).' '.number_format((float) $s->amount, 0, ',', '.'))
-            ->implode(' · ');
+        return $partes === [] ? null : implode(' · ', $partes);
     }
 
     /** Método, y si fue mixto, su desglose entre paréntesis. */

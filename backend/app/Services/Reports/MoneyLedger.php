@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\PaymentController;
 use App\Models\Admin;
 use App\Models\CashRefund;
 use App\Models\Payment;
+use App\Models\PaymentSplit;
 use App\Models\ProductSale;
 use App\Models\Receivable;
 use App\Models\ReceivablePayment;
@@ -135,7 +136,7 @@ final class MoneyLedger
      *
      * Los cobros mixtos se reparten parte a parte: atribuir los 60.000 de un
      * «20 en efectivo + 40 con tarjeta» a un solo medio descuadraba el arqueo y
-     * mentía en este desglose. Ver {@see \App\Models\PaymentSplit}.
+     * mentía en este desglose. Ver {@see PaymentSplit}.
      *
      * @return list<array{key: string, label: string, amount: float, share: float}>
      */
@@ -168,9 +169,23 @@ final class MoneyLedger
         }
 
         if ($this->includes(self::SOURCE_INSTALLMENT)) {
+            // Abonos de un solo medio.
             foreach ($this->installments()
+                ->whereNotExists(fn ($q) => $q->select(DB::raw(1))->from('receivable_payment_splits')
+                    ->whereColumn('receivable_payment_splits.receivable_payment_id', 'receivable_payments.id'))
                 ->groupBy('receivable_payments.method')
                 ->selectRaw('receivable_payments.method as metodo, COALESCE(SUM(receivable_payments.amount), 0) as suma')
+                ->get() as $fila) {
+                $suma($fila->metodo, (float) $fila->suma);
+            }
+
+            // Y cada parte de los repartidos, a su medio. Sin esto, «50.000 en
+            // efectivo + 30.000 por Nequi» entraba entero en «Otros»: `mixed`
+            // no es un medio y normalize() manda a OTHER lo que no reconoce.
+            foreach ($this->installments()
+                ->join('receivable_payment_splits', 'receivable_payment_splits.receivable_payment_id', '=', 'receivable_payments.id')
+                ->groupBy('receivable_payment_splits.method')
+                ->selectRaw('receivable_payment_splits.method as metodo, COALESCE(SUM(receivable_payment_splits.amount), 0) as suma')
                 ->get() as $fila) {
                 $suma($fila->metodo, (float) $fila->suma);
             }
@@ -624,7 +639,7 @@ final class MoneyLedger
 
         if ($medio = $this->methodFilter()) {
             $alias = $medio->aliases();
-            $q->where(function (Builder $w) use ($alias, $medio): void {
+            $q->where(function (Builder $w) use ($alias): void {
                 if ($alias !== []) {
                     $w->whereRaw('LOWER(payments.method) IN ('.ReportSql::marks($alias).')', $alias)
                         ->orWhereHas('splits', fn (Builder $s) => $s
@@ -670,12 +685,27 @@ final class MoneyLedger
         }
 
         if ($medio = $this->methodFilter()) {
+            // Un abono repartido lleva `mixed` en su columna, así que filtrar
+            // solo por ella lo dejaría fuera de «Efectivo» aunque parte del
+            // dinero haya entrado en efectivo. Se mira también el desglose.
+            $partes = fn ($q) => $q->select(DB::raw(1))
+                ->from('receivable_payment_splits')
+                ->whereColumn('receivable_payment_splits.receivable_payment_id', 'receivable_payments.id');
+
             $alias = $medio->aliases();
             if ($alias !== []) {
-                $q->whereRaw('LOWER(receivable_payments.method) IN ('.ReportSql::marks($alias).')', $alias);
+                $q->where(fn ($w) => $w
+                    ->whereRaw('LOWER(receivable_payments.method) IN ('.ReportSql::marks($alias).')', $alias)
+                    ->orWhereExists(fn ($s) => $partes($s)
+                        ->whereRaw('LOWER(receivable_payment_splits.method) IN ('.ReportSql::marks($alias).')', $alias)));
             } else {
                 $conocidos = self::knownMethodAliases();
-                $q->whereRaw('LOWER(receivable_payments.method) NOT IN ('.ReportSql::marks($conocidos).')', $conocidos);
+                $q->where(fn ($w) => $w
+                    ->where(fn ($x) => $x
+                        ->whereRaw('LOWER(receivable_payments.method) NOT IN ('.ReportSql::marks($conocidos).')', $conocidos)
+                        ->whereNotExists(fn ($s) => $partes($s)))
+                    ->orWhereExists(fn ($s) => $partes($s)
+                        ->whereRaw('LOWER(receivable_payment_splits.method) NOT IN ('.ReportSql::marks($conocidos).')', $conocidos)));
             }
         }
 

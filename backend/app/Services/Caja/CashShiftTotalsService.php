@@ -6,6 +6,7 @@ use App\Enums\CashShiftType;
 use App\Models\CashShift;
 use App\Services\Payments\PaymentSplits;
 use App\Support\Caja\PaymentMethodKind;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -263,14 +264,49 @@ class CashShiftTotalsService
 
     private function receivablePaymentsByMethod(CashShift $shift): array
     {
-        $filas = DB::table('receivable_payments')
+        // 1) Abonos de un solo medio: como siempre.
+        $simples = DB::table('receivable_payments')
             ->where('cash_shift_id', $shift->id)
             ->where('status', 'applied')
+            ->whereNotExists(fn ($q) => $q
+                ->select(DB::raw(1))
+                ->from('receivable_payment_splits')
+                ->whereColumn('receivable_payment_splits.receivable_payment_id', 'receivable_payments.id'))
             ->groupBy('method')
             ->select('method', DB::raw('SUM(amount) AS suma'), DB::raw('COUNT(*) AS n'))
             ->get();
 
-        return $this->fold($filas, 'method');
+        // 2) Abonos repartidos: cada parte suma a SU medio. Lo mismo que ya se
+        //    hacía con los cobros y las ventas. Sin esto, el medio del abono
+        //    sería `mixed` —que no es un medio— y caería entero en «Otros»: el
+        //    arqueo pediría ese efectivo donde no está.
+        $partes = DB::table('receivable_payment_splits')
+            ->join('receivable_payments', 'receivable_payments.id', '=', 'receivable_payment_splits.receivable_payment_id')
+            ->where('receivable_payments.cash_shift_id', $shift->id)
+            ->where('receivable_payments.status', 'applied')
+            ->groupBy('receivable_payment_splits.method')
+            ->select(
+                'receivable_payment_splits.method',
+                DB::raw('SUM(receivable_payment_splits.amount) AS suma'),
+                // Cero: un abono repartido en dos medios sigue siendo UNA
+                // operación, y se cuenta en la consulta de arriba.
+                DB::raw('0 AS n'),
+            )
+            ->get();
+
+        // El conteo de operaciones sale aparte por lo mismo: los abonos mixtos
+        // no aparecen en `$simples`, así que se suman uno a uno aquí.
+        $resultado = $this->fold($simples->concat($partes), 'method');
+        $resultado['count'] += DB::table('receivable_payments')
+            ->where('cash_shift_id', $shift->id)
+            ->where('status', 'applied')
+            ->whereExists(fn ($q) => $q
+                ->select(DB::raw(1))
+                ->from('receivable_payment_splits')
+                ->whereColumn('receivable_payment_splits.receivable_payment_id', 'receivable_payments.id'))
+            ->count();
+
+        return $resultado;
     }
 
     /**
@@ -298,7 +334,7 @@ class CashShiftTotalsService
      * pueden caer en el mismo medio (`efectivo` y `cash` son ambos CASH), así
      * que se acumulan en vez de sobrescribirse.
      *
-     * @param  \Illuminate\Support\Collection<int, object>  $filas
+     * @param  Collection<int, object>  $filas
      * @return array{totals: array<string,string>, count: int}
      */
     private function fold($filas, string $columna): array

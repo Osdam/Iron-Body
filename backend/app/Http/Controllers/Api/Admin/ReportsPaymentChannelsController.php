@@ -135,7 +135,7 @@ class ReportsPaymentChannelsController extends Controller
         $roles = Admin::query()->pluck('role', 'id');
 
         return app(CashReceipts::class)->appliedInstallments(CashShiftType::GYM)
-            ->with(['receivable.member.user:id,name,document'])
+            ->with(['receivable.member.user:id,name,document', 'splits'])
             ->whereBetween('receivable_payments.created_at', [$desde->utc(), $hasta->utc()])
             ->get()
             ->map(function (ReceivablePayment $a) use ($roles): array {
@@ -153,7 +153,9 @@ class ReportsPaymentChannelsController extends Controller
                     'member_document' => $user?->document,
                     'plan' => $a->receivable?->concept,
                     'amount' => (float) $a->amount,
-                    'method_label' => PaymentsExport::methodLabel($a->method),
+                    'method_label' => $a->isMixed()
+                        ? 'Mixto: '.PaymentsExport::breakdownOf($a->splits)
+                        : PaymentsExport::methodLabel($a->method),
                     'channel' => 'gym',
                     'channel_label' => PaymentOrigin::channelLabelFor('gym'),
                     'registered_by' => $a->created_by,

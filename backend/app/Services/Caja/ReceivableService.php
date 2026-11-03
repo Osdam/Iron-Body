@@ -9,13 +9,13 @@ use App\Exceptions\ReceivableException;
 use App\Http\Controllers\Api\PaymentController;
 use App\Models\Admin;
 use App\Models\CashShift;
-use App\Models\Member;
 use App\Models\Payment;
 use App\Models\ProductSale;
 use App\Models\Receivable;
 use App\Models\ReceivablePayment;
 use App\Services\Audit\FinancialAudit;
 use App\Services\Billing\Money;
+use App\Services\Payments\PaymentSplits;
 use App\Support\Caja\PaymentMethodKind;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
@@ -138,9 +138,18 @@ class ReceivableService
      * gimnasio. Si el cliente pudiera elegirlo, podría mandar el dinero a la
      * caja equivocada —o a ninguna— y el arqueo del día dejaría de cuadrar.
      *
+     * UN ABONO PUEDE VENIR REPARTIDO. «Te doy 50.000 en efectivo y 30.000 por
+     * Nequi» es una frase normal en el mostrador. Con `$splits`, el medio del
+     * abono queda en `mixed` y cada parte se guarda en
+     * `receivable_payment_splits`: el arqueo y los reportes preguntan por
+     * {@see ReceivablePayment::amountsByMethod()} y atribuyen cada peso a su
+     * medio. Sin el desglose, `mixed` se normalizaría a «Otros» y el efectivo
+     * del cajón saldría descuadrado por el importe entero.
+     *
      * @param  string|null  $clientRequestId  Identificador de la petición. Si se
      *                                        repite, se devuelve el abono ya
      *                                        registrado en vez de crear otro.
+     * @param  list<array{method: string, amount: mixed, reference?: string|null}>|null  $splits  Las partes, si el cobro se repartió; tienen que sumar `$amount`.
      */
     public function settle(
         Receivable $receivable,
@@ -150,6 +159,7 @@ class ReceivableService
         ?string $clientRequestId = null,
         ?string $reference = null,
         ?string $notes = null,
+        ?array $splits = null,
     ): ReceivablePayment {
         if (! $amount->isPositive()) {
             throw ReceivableException::invalidAmount();
@@ -169,7 +179,7 @@ class ReceivableService
 
         try {
             return DB::transaction(function () use (
-                $receivable, $amount, $method, $actor, $clientRequestId, $reference, $notes, $shift
+                $receivable, $amount, $method, $actor, $clientRequestId, $reference, $notes, $shift, $splits
             ) {
                 // El turno se relee aquí con bloqueo compartido (turno → deuda):
                 // si alguien lo cerró entre la comprobación de fuera y ahora, el
@@ -199,10 +209,18 @@ class ReceivableService
 
                 $saldoDespues = $saldoAntes->minus($amount);
 
+                // Con desglose, el medio es `mixed` SIN normalizar: no es un
+                // medio de pago, es la marca de que hay partes. Normalizarlo lo
+                // convertiría en «Otros» y el arqueo buscaría ese dinero donde
+                // no está.
+                $esMixto = $splits !== null && $splits !== [];
+
                 $abono = ReceivablePayment::create([
                     'receivable_id' => $fresca->id,
                     'amount' => $amount->toDatabase(),
-                    'method' => PaymentMethodKind::normalize($method)->value,
+                    'method' => $esMixto
+                        ? PaymentSplits::MIXED
+                        : PaymentMethodKind::normalize($method)->value,
                     'cash_shift_id' => $shift->id,
                     'balance_before' => $saldoAntes->toDatabase(),
                     'balance_after' => $saldoDespues->toDatabase(),
@@ -213,6 +231,19 @@ class ReceivableService
                     'reference' => $reference,
                     'notes' => $notes,
                 ]);
+
+                if ($esMixto) {
+                    // Dentro de la transacción: un abono mixto sin sus partes
+                    // sería dinero que el arqueo no sabe dónde poner.
+                    app(PaymentSplits::class)->assertMatchesTotal($splits, $amount->toFloat());
+                    foreach ($splits as $parte) {
+                        $abono->splits()->create([
+                            'method' => $parte['method'],
+                            'amount' => round((float) $parte['amount'], 2),
+                            'reference' => $parte['reference'] ?? null,
+                        ]);
+                    }
+                }
 
                 // El estado es una CONSECUENCIA del saldo, no una decisión: se
                 // recalcula en la misma transacción para que no exista un
@@ -347,7 +378,6 @@ class ReceivableService
             return ['payment' => $fresco, 'already' => false];
         }, 3);
     }
-
 
     /**
      * Anula una obligación: deja de ser exigible.

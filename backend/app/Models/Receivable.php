@@ -4,20 +4,21 @@ namespace App\Models;
 
 use App\Enums\CashShiftType;
 use App\Enums\DebtorType;
-use App\Services\Caja\DebtorDirectory;
-use App\Models\ProductSale;
+use App\Http\Controllers\Api\PaymentController;
 use App\Services\Billing\Money;
-use Illuminate\Support\Carbon;
+use App\Services\Caja\DebtorDirectory;
+use App\Services\Caja\ReceivableService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Support\Carbon;
 
 /**
  * Una obligación pendiente: lo que alguien debe al gimnasio.
  *
- * Ver {@see \App\Services\Caja\ReceivableService}, que es quien la crea y la
+ * Ver {@see ReceivableService}, que es quien la crea y la
  * abona; aquí solo vive la forma del dato y el cálculo del saldo.
  *
  * EL SALDO SE DERIVA, NUNCA SE GUARDA. `paidAmount()` suma los abonos aplicados
@@ -314,7 +315,7 @@ class Receivable extends Model
 
     /**
      * @param  array<string,mixed>|null  $debtor  La ficha ya resuelta, para no
-     *   consultarla una vez por fila al pintar un listado.
+     *                                            consultarla una vez por fila al pintar un listado.
      * @return array<string,mixed>
      */
     public function toCrmArray(bool $withPayments = false, ?array $debtor = null): array
@@ -380,7 +381,7 @@ class Receivable extends Model
 
         if ($withPayments) {
             $abonos = $this->payments()
-                ->with(['reversedBy:id,name', 'cashShift:id,status,type,closed_at'])
+                ->with(['reversedBy:id,name', 'cashShift:id,status,type,closed_at', 'splits'])
                 ->orderBy('id')
                 ->get();
             // El número de recibo, de una vez para todos los abonos: uno a uno
@@ -439,7 +440,7 @@ class Receivable extends Model
         }
 
         return $this->source_type === Payment::class
-            ? in_array(strtolower($estado), \App\Http\Controllers\Api\PaymentController::PAID_STATUSES, true)
+            ? in_array(strtolower($estado), PaymentController::PAID_STATUSES, true)
             : ! in_array($estado, ['cancelled', ProductSale::STATUS_REFUNDED], true);
     }
 

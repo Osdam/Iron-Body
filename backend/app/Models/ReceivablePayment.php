@@ -3,10 +3,13 @@
 namespace App\Models;
 
 use App\Services\Billing\Money;
+use App\Services\Payments\PaymentSplits;
+use App\Support\Caja\PaymentMethodKind;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use App\Support\Caja\PaymentMethodKind;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Un abono: dinero real recibido contra una cuenta por cobrar.
@@ -49,6 +52,12 @@ class ReceivablePayment extends Model
         return $this->belongsTo(CashShift::class);
     }
 
+    /** Las partes, cuando el abono se cobró entre varios medios. */
+    public function splits(): HasMany
+    {
+        return $this->hasMany(ReceivablePaymentSplit::class);
+    }
+
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(Admin::class, 'created_by');
@@ -72,7 +81,7 @@ class ReceivablePayment extends Model
             return [];
         }
 
-        return \Illuminate\Support\Facades\DB::table('receipt_sources')
+        return DB::table('receipt_sources')
             ->join('receipts', 'receipts.id', '=', 'receipt_sources.receipt_id')
             ->where('receipt_sources.source_type', ReceiptSource::TYPE_RECEIVABLE_PAYMENT)
             ->whereIn('receipt_sources.source_id', $ids)
@@ -97,6 +106,41 @@ class ReceivablePayment extends Model
         return PaymentMethodKind::normalize($this->method);
     }
 
+    /** ¿Se repartió entre varios medios? */
+    public function isMixed(): bool
+    {
+        return strtolower((string) $this->method) === PaymentSplits::MIXED;
+    }
+
+    /**
+     * Cuánto entró por cada medio.
+     *
+     * Es LA función que deben usar el arqueo y los reportes en lugar de mirar
+     * `method` a secas, igual que en {@see Payment::amountsByMethod()}: un
+     * abono normal devuelve su total bajo su único medio y uno mixto se reparte
+     * como se cobró. Sin esto, «50.000 en efectivo + 30.000 por Nequi» caería
+     * entero en «Otros» —`mixed` no es un medio que el arqueo sepa contar— y el
+     * cajón pediría ese efectivo en otro sitio.
+     *
+     * @return array<string, float> medio canónico => importe
+     */
+    public function amountsByMethod(): array
+    {
+        $splits = $this->relationLoaded('splits') ? $this->splits : $this->splits()->get();
+
+        if ($splits->isEmpty()) {
+            return [$this->kind()->value => (float) $this->amount];
+        }
+
+        $porMedio = [];
+        foreach ($splits as $split) {
+            $clave = $split->kind()->value;
+            $porMedio[$clave] = ($porMedio[$clave] ?? 0) + (float) $split->amount;
+        }
+
+        return $porMedio;
+    }
+
     public function isApplied(): bool
     {
         return $this->status === self::STATUS_APPLIED;
@@ -104,7 +148,7 @@ class ReceivablePayment extends Model
 
     /**
      * @param  string|null  $receiptNumber  Ya resuelto por quien pinta la lista
-     *   (ver receiptNumbersFor()); si no llega, se busca este solo.
+     *                                      (ver receiptNumbersFor()); si no llega, se busca este solo.
      * @return array<string,mixed>
      */
     public function toCrmArray(?string $receiptNumber = null): array
@@ -116,7 +160,8 @@ class ReceivablePayment extends Model
             'receivable_id' => $this->receivable_id,
             'amount' => (float) $this->amount,
             'method' => $this->method,
-            'method_label' => $this->kind()->label(),
+            'method_label' => $this->isMixed() ? 'Mixto' : $this->kind()->label(),
+            'splits' => $this->splits->map(fn (ReceivablePaymentSplit $s) => $s->toPublicArray())->values()->all(),
             'cash_shift_id' => $this->cash_shift_id,
             'balance_before' => (float) $this->balance_before,
             'balance_after' => (float) $this->balance_after,
