@@ -1,0 +1,2896 @@
+{
+  "fixture": "policy-tables.json",
+  "version": 1,
+  "contract": "backend/docs/ultron-studio/ULTRON_STUDIO_H8_CONTRACT.md (congelado el 03-11-2026, commit 57bab8a)",
+  "audit": "backend/docs/ultron-studio/ULTRON_STUDIO_H8_VOICE_AUDIT.md (03-11-2026)",
+  "contractSections": [
+    "D8-11 (InboundPolicy, en orden)",
+    "D8-15 (límites: horario, festivos, frecuencia, concurrencia, gasto)",
+    "D8-17 (huella del teléfono con su subclave voice-phone y últimos 4 dígitos)",
+    "D8-18 (voice_consents, voice_exclusions, voice_rne_checks y las señales del lead)",
+    "D8-19 (freno)",
+    "D8-22 (ultron.voice_publish)"
+  ],
+  "generatedBy": "tests/fixtures/voice/tools/build/build.py (python3 -I), con los casos a mano en sec_*.py",
+  "checkedBy": "tests/fixtures/voice/tools/voice-fixtures-check.py",
+  "readme": "tests/fixtures/voice/README.md",
+  "basisLegend": {
+    "contrato": "Lo dice el contrato H8 tal cual (contractRef).",
+    "oficial": "Lo dice la documentación oficial o el SDK oficial del proveedor (source).",
+    "ley": "Lo dice la ley citada (Ley 2300 de 2023, Ley 51 de 1983).",
+    "supuesto-lead": "Sigue un supuesto de la congelación del lead (P-n), que el propietario puede cambiar.",
+    "decision-fixture": "El contrato no lo fija: lo decide este fixture (campo decision; README §Decisiones). Lo congela el lead."
+  },
+  "sources": [
+    {
+      "what": "Ley 2300 de 2023, arts. 2, 3 y 5 (canales autorizados; lunes a viernes 7:00–19:00, sábados 8:00–15:00, ni domingos ni festivos; una vez al día)",
+      "url": "https://normograma.dian.gov.co/dian/compilacion/docs/ley_2300_2023.htm",
+      "consulted": "03-11-2026 (auditoría §d.3, leída por el architect)",
+      "how": "Los límites exactos del intervalo (¿las 19:00 están dentro?) no los dice la ley: DF-P1."
+    },
+    {
+      "what": "Precios oficiales de la reserva (ElevenLabs 0,08 US$/min; Twilio Colombia: entrante local 0,0945, saliente a móvil 0,0377, a fijo 0,0700, Media Streams 0,0044)",
+      "url": "https://elevenlabs.io/pricing/api y https://www.twilio.com/en-us/voice/pricing/co",
+      "consulted": "03-11-2026 (auditoría §d.1 y §d.2)",
+      "how": "La página de Twilio dice «$» sin código de moneda; se leen como US$ (auditoría)."
+    }
+  ],
+  "syntheticData": "Ningún dato real: SIDs, ids, secretos, tokens, URLs (.test) y teléfonos (+57 300 000 00xx, +57 601 000 00xx) inventados.",
+  "keys": {
+    "appKeyBase64": "base64:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+    "voicePhoneLabel": "voice-phone",
+    "canaryPhoneLabel": "ultron-canary-phone/1"
+  },
+  "pricesMicroUsdPerMinute": {
+    "elevenlabs": 80000,
+    "twilioOutboundMobileCO": 37700,
+    "twilioOutboundLandlineCO": 70000,
+    "twilioInboundLocalCO": 94500,
+    "twilioMediaStreams": 4400,
+    "asOf": "2026-11-03"
+  },
+  "decisions": {
+    "DF-P1": "Intervalos semiabiertos en hora de Bogotá: [07:00, 19:00) de lunes a viernes y [08:00, 15:00) los sábados; las 19:00:00 y las 15:00:00 ya están fuera. Se evalúa la hora de MARCAR (Q-8).",
+    "DF-P2": "Horario propio: la intersección con el legal (nunca amplía); sin configurar = solo el legal; mal configurado (apertura ≥ cierre o mal escrito) = fuera de horario (falla cerrado).",
+    "DF-P3": "Cuentan como intento: requested, dialing, ambiguous, completed, busy, no_answer, failed y hung_up. No cuentan canceled ni failed_to_start (no salió nada). Las entrantes nunca cuentan.",
+    "DF-P4": "«Hoy» y «la semana» en Bogotá: hoy = la fecha de Bogotá de now; semana = desde el lunes 00:00 de Bogotá (lectura de la ley). También se da el resultado con 7 días móviles (now − 7 días, now], la lectura más estricta, para que el propietario elija (P-11).",
+    "DF-P5": "Consentimiento: manda el último evento de voice_consents por (at, id); granted solo vale con source written_form, admin_with_evidence aprobado por OTRA persona, o recorded_inbound_request si la grabación está encendida (P-7: apagada, no vale); revoked vale siempre. El consentimiento del lead del motor no es de voz.",
+    "DF-P6": "Las exclusiones (y las señales do_not_contact y consent_status = denied) se miran en TODA saliente, también a canarios: D8-18 «se consulta antes de cada saliente» (Q-4: D8-12 las agrupa en el alcance contacts).",
+    "DF-P7": "Una consulta al RNE vale si checked_at ≥ now − vigencia (el borde vale); listed excluye; sin consulta vigente, rne_check_missing (solo alcance contacts). Vigencia de ejemplo: 30 días [P-14].",
+    "DF-P8": "InboundPolicy acumula todos los motivos que apliquen en el orden de D8-11, como VoiceCallPolicy::decide del H6.",
+    "DF-P9": "Un caller ID oculto o ausente (anonymous, vacío) no es un canario: not_an_active_voice_canary.",
+    "DF-P10": "Concurrencia: rechaza si dialing + active ≥ VOICE_MAX_CONCURRENT_CALLS (la nueva haría max + 1). Cupo diario: rechaza si las de hoy ≥ el cupo; un cupo 0 de entrantes da daily_cap_reached (D8-11 no tiene daily_cap_zero).",
+    "DF-P11": "VOICE_INBOUND_SCOPE distinto de canary (el único del H8) = inbound_disabled: nunca abre a todos por un valor mal escrito.",
+    "DF-P12": "Reserva = ceil(segundos máximos / 60) × (ElevenLabs + tramo de Twilio según el destino + Media Streams), más el tramo de transferencia al precio del destino si el perfil tiene destinos (Q-10: el tramo transferido no lo acota max_duration_seconds).",
+    "DF-P13": "Presupuesto en micro-US$ enteros: «5.50» → 5 500 000; más de 6 decimales se truncan; vacío, negativo o mal escrito → 0. Cabe si gastado + reservado + nueva ≤ presupuesto (el borde vale); presupuesto 0 → budget_exhausted.",
+    "DF-P14": "Soltar el freno: persona con ultron.voice_publish (si no, 403), con nota PlainText de 1 a 300 caracteres (si no, 422) y una sola vez (otra vez, 409). Una automatización nunca lo suelta.",
+    "DF-P15": "La huella de voz no normaliza: recibe un E.164 estricto (^\\+[1-9][0-9]{7,14}$ con D, el de PhoneFingerprint) y lanza con cualquier otra cosa; normalizar es de quien llama (StudioCanaryPhone para Colombia)."
+  },
+  "counts": {
+    "scheduleLegal": 20,
+    "scheduleOwn": 11,
+    "frequency": 17,
+    "consent": 13,
+    "exclusions": 16,
+    "inboundPolicy": 15,
+    "costReservation": 17,
+    "brake": 16,
+    "phoneHash": 7,
+    "total": 132
+  },
+  "scheduleLegal": [
+    {
+      "name": "scheduleLegal · legal · lunes 06:59:59 de Bogotá: fuera",
+      "kind": "legal",
+      "contractRef": "D8-15, D8-18 (Ley 2300 art. 3)",
+      "basis": "ley",
+      "at": "2026-11-09T11:59:59Z",
+      "expected": {
+        "bogotaDate": "2026-11-09",
+        "bogotaTime": "06:59:59",
+        "weekday": "lunes",
+        "outsideHours": true,
+        "holiday": false,
+        "allowed": false
+      }
+    },
+    {
+      "name": "scheduleLegal · legal · lunes 07:00:00: dentro",
+      "kind": "legal",
+      "contractRef": "D8-15, D8-18 (Ley 2300 art. 3)",
+      "basis": "decision-fixture",
+      "decision": "DF-P1",
+      "at": "2026-11-09T12:00:00Z",
+      "expected": {
+        "bogotaDate": "2026-11-09",
+        "bogotaTime": "07:00:00",
+        "weekday": "lunes",
+        "outsideHours": false,
+        "holiday": false,
+        "allowed": true
+      }
+    },
+    {
+      "name": "scheduleLegal · legal · lunes 18:59:59: dentro",
+      "kind": "legal",
+      "contractRef": "D8-15, D8-18 (Ley 2300 art. 3)",
+      "basis": "ley",
+      "at": "2026-11-09T23:59:59Z",
+      "expected": {
+        "bogotaDate": "2026-11-09",
+        "bogotaTime": "18:59:59",
+        "weekday": "lunes",
+        "outsideHours": false,
+        "holiday": false,
+        "allowed": true
+      }
+    },
+    {
+      "name": "scheduleLegal · legal · lunes 19:00:00: ya fuera (intervalo semiabierto)",
+      "kind": "legal",
+      "contractRef": "D8-15, D8-18 (Ley 2300 art. 3)",
+      "basis": "decision-fixture",
+      "decision": "DF-P1",
+      "at": "2026-11-10T00:00:00Z",
+      "expected": {
+        "bogotaDate": "2026-11-09",
+        "bogotaTime": "19:00:00",
+        "weekday": "lunes",
+        "outsideHours": true,
+        "holiday": false,
+        "allowed": false
+      }
+    },
+    {
+      "name": "scheduleLegal · legal · lunes 18:30 de Bogotá = 23:30 UTC: dentro",
+      "kind": "legal",
+      "contractRef": "D8-15, D8-18 (Ley 2300 art. 3)",
+      "basis": "ley",
+      "at": "2026-11-09T23:30:00Z",
+      "trap": "con la hora UTC sin convertir el resultado sería el contrario",
+      "expected": {
+        "bogotaDate": "2026-11-09",
+        "bogotaTime": "18:30:00",
+        "weekday": "lunes",
+        "outsideHours": false,
+        "holiday": false,
+        "allowed": true
+      }
+    },
+    {
+      "name": "scheduleLegal · legal · lunes 06:30 de Bogotá = 11:30 UTC: fuera",
+      "kind": "legal",
+      "contractRef": "D8-15, D8-18 (Ley 2300 art. 3)",
+      "basis": "ley",
+      "at": "2026-11-09T11:30:00Z",
+      "trap": "con la hora UTC sin convertir el resultado sería el contrario",
+      "expected": {
+        "bogotaDate": "2026-11-09",
+        "bogotaTime": "06:30:00",
+        "weekday": "lunes",
+        "outsideHours": true,
+        "holiday": false,
+        "allowed": false
+      }
+    },
+    {
+      "name": "scheduleLegal · legal · viernes 18:59 de Bogotá = 23:59 UTC: dentro",
+      "kind": "legal",
+      "contractRef": "D8-15, D8-18 (Ley 2300 art. 3)",
+      "basis": "ley",
+      "at": "2026-11-06T23:59:00Z",
+      "expected": {
+        "bogotaDate": "2026-11-06",
+        "bogotaTime": "18:59:00",
+        "weekday": "viernes",
+        "outsideHours": false,
+        "holiday": false,
+        "allowed": true
+      }
+    },
+    {
+      "name": "scheduleLegal · legal · viernes 19:00 de Bogotá = sábado 00:00 UTC: fuera (el día UTC ya es sábado)",
+      "kind": "legal",
+      "contractRef": "D8-15, D8-18 (Ley 2300 art. 3)",
+      "basis": "decision-fixture",
+      "decision": "DF-P1",
+      "at": "2026-11-07T00:00:00Z",
+      "trap": "con la hora UTC sin convertir el resultado sería el contrario",
+      "expected": {
+        "bogotaDate": "2026-11-06",
+        "bogotaTime": "19:00:00",
+        "weekday": "viernes",
+        "outsideHours": true,
+        "holiday": false,
+        "allowed": false
+      }
+    },
+    {
+      "name": "scheduleLegal · legal · sábado 07:59:59: fuera",
+      "kind": "legal",
+      "contractRef": "D8-15, D8-18 (Ley 2300 art. 3)",
+      "basis": "ley",
+      "at": "2026-11-07T12:59:59Z",
+      "expected": {
+        "bogotaDate": "2026-11-07",
+        "bogotaTime": "07:59:59",
+        "weekday": "sábado",
+        "outsideHours": true,
+        "holiday": false,
+        "allowed": false
+      }
+    },
+    {
+      "name": "scheduleLegal · legal · sábado 08:00:00: dentro",
+      "kind": "legal",
+      "contractRef": "D8-15, D8-18 (Ley 2300 art. 3)",
+      "basis": "decision-fixture",
+      "decision": "DF-P1",
+      "at": "2026-11-07T13:00:00Z",
+      "expected": {
+        "bogotaDate": "2026-11-07",
+        "bogotaTime": "08:00:00",
+        "weekday": "sábado",
+        "outsideHours": false,
+        "holiday": false,
+        "allowed": true
+      }
+    },
+    {
+      "name": "scheduleLegal · legal · sábado 14:59:59: dentro",
+      "kind": "legal",
+      "contractRef": "D8-15, D8-18 (Ley 2300 art. 3)",
+      "basis": "ley",
+      "at": "2026-11-07T19:59:59Z",
+      "expected": {
+        "bogotaDate": "2026-11-07",
+        "bogotaTime": "14:59:59",
+        "weekday": "sábado",
+        "outsideHours": false,
+        "holiday": false,
+        "allowed": true
+      }
+    },
+    {
+      "name": "scheduleLegal · legal · sábado 15:00:00: ya fuera",
+      "kind": "legal",
+      "contractRef": "D8-15, D8-18 (Ley 2300 art. 3)",
+      "basis": "decision-fixture",
+      "decision": "DF-P1",
+      "at": "2026-11-07T20:00:00Z",
+      "expected": {
+        "bogotaDate": "2026-11-07",
+        "bogotaTime": "15:00:00",
+        "weekday": "sábado",
+        "outsideHours": true,
+        "holiday": false,
+        "allowed": false
+      }
+    },
+    {
+      "name": "scheduleLegal · legal · domingo 10:00: fuera",
+      "kind": "legal",
+      "contractRef": "D8-15, D8-18 (Ley 2300 art. 3)",
+      "basis": "ley",
+      "at": "2026-11-08T15:00:00Z",
+      "expected": {
+        "bogotaDate": "2026-11-08",
+        "bogotaTime": "10:00:00",
+        "weekday": "domingo",
+        "outsideHours": true,
+        "holiday": false,
+        "allowed": false
+      }
+    },
+    {
+      "name": "scheduleLegal · legal · lunes festivo (Independencia de Cartagena, 16-11-2026) a las 10:00: festivo dentro de horas",
+      "kind": "legal",
+      "contractRef": "D8-15, D8-18 (Ley 2300 art. 3)",
+      "basis": "ley",
+      "at": "2026-11-16T15:00:00Z",
+      "expected": {
+        "bogotaDate": "2026-11-16",
+        "bogotaTime": "10:00:00",
+        "weekday": "lunes",
+        "outsideHours": false,
+        "holiday": true,
+        "allowed": false
+      }
+    },
+    {
+      "name": "scheduleLegal · legal · lunes festivo a las 20:00: fuera y festivo",
+      "kind": "legal",
+      "contractRef": "D8-15, D8-18 (Ley 2300 art. 3)",
+      "basis": "ley",
+      "at": "2026-11-17T01:00:00Z",
+      "expected": {
+        "bogotaDate": "2026-11-16",
+        "bogotaTime": "20:00:00",
+        "weekday": "lunes",
+        "outsideHours": true,
+        "holiday": true,
+        "allowed": false
+      }
+    },
+    {
+      "name": "scheduleLegal · legal · sábado festivo (1 de mayo de 2027) a las 10:00: festivo",
+      "kind": "legal",
+      "contractRef": "D8-15, D8-18 (Ley 2300 art. 3)",
+      "basis": "ley",
+      "at": "2027-05-01T15:00:00Z",
+      "expected": {
+        "bogotaDate": "2027-05-01",
+        "bogotaTime": "10:00:00",
+        "weekday": "sábado",
+        "outsideHours": false,
+        "holiday": true,
+        "allowed": false
+      }
+    },
+    {
+      "name": "scheduleLegal · legal · martes 29-02-2028 (bisiesto) a las 10:00: dentro",
+      "kind": "legal",
+      "contractRef": "D8-15, D8-18 (Ley 2300 art. 3)",
+      "basis": "ley",
+      "at": "2028-02-29T15:00:00Z",
+      "expected": {
+        "bogotaDate": "2028-02-29",
+        "bogotaTime": "10:00:00",
+        "weekday": "martes",
+        "outsideHours": false,
+        "holiday": false,
+        "allowed": true
+      }
+    },
+    {
+      "name": "scheduleLegal · legal · jueves 31-12-2026 a las 18:30: dentro (el 1 de enero ya es festivo)",
+      "kind": "legal",
+      "contractRef": "D8-15, D8-18 (Ley 2300 art. 3)",
+      "basis": "ley",
+      "at": "2026-12-31T23:30:00Z",
+      "expected": {
+        "bogotaDate": "2026-12-31",
+        "bogotaTime": "18:30:00",
+        "weekday": "jueves",
+        "outsideHours": false,
+        "holiday": false,
+        "allowed": true
+      }
+    },
+    {
+      "name": "scheduleLegal · legal · la misma hora escrita con desfase -05:00 da lo mismo",
+      "kind": "legal",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "at": "2026-11-09T18:59:59-05:00",
+      "expected": {
+        "bogotaDate": "2026-11-09",
+        "bogotaTime": "18:59:59",
+        "weekday": "lunes",
+        "outsideHours": false,
+        "holiday": false,
+        "allowed": true
+      }
+    },
+    {
+      "name": "scheduleLegal · legal · la misma hora escrita con desfase +01:00 (00:30 del martes) es el lunes 18:30 en Bogotá",
+      "kind": "legal",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "at": "2026-11-10T00:30:00+01:00",
+      "expected": {
+        "bogotaDate": "2026-11-09",
+        "bogotaTime": "18:30:00",
+        "weekday": "lunes",
+        "outsideHours": false,
+        "holiday": false,
+        "allowed": true
+      }
+    }
+  ],
+  "scheduleOwn": [
+    {
+      "name": "scheduleOwn · own · propio L-V 09:00–18:00: lunes 08:30 → fuera aunque la ley lo permita",
+      "kind": "own",
+      "contractRef": "D8-15, P-13",
+      "basis": "decision-fixture",
+      "decision": "DF-P2",
+      "at": "2026-11-09T13:30:00Z",
+      "ownWindow": {
+        "weekdays": [
+          "09:00",
+          "18:00"
+        ],
+        "saturday": null
+      },
+      "expected": {
+        "bogotaTime": "08:30:00",
+        "weekday": "lunes",
+        "outsideHours": true
+      }
+    },
+    {
+      "name": "scheduleOwn · own · propio: lunes 09:00 → dentro",
+      "kind": "own",
+      "contractRef": "D8-15, P-13",
+      "basis": "decision-fixture",
+      "decision": "DF-P2",
+      "at": "2026-11-09T14:00:00Z",
+      "ownWindow": {
+        "weekdays": [
+          "09:00",
+          "18:00"
+        ],
+        "saturday": null
+      },
+      "expected": {
+        "bogotaTime": "09:00:00",
+        "weekday": "lunes",
+        "outsideHours": false
+      }
+    },
+    {
+      "name": "scheduleOwn · own · propio: lunes 17:59:59 → dentro",
+      "kind": "own",
+      "contractRef": "D8-15, P-13",
+      "basis": "decision-fixture",
+      "decision": "DF-P2",
+      "at": "2026-11-09T22:59:59Z",
+      "ownWindow": {
+        "weekdays": [
+          "09:00",
+          "18:00"
+        ],
+        "saturday": null
+      },
+      "expected": {
+        "bogotaTime": "17:59:59",
+        "weekday": "lunes",
+        "outsideHours": false
+      }
+    },
+    {
+      "name": "scheduleOwn · own · propio: lunes 18:00 → fuera",
+      "kind": "own",
+      "contractRef": "D8-15, P-13",
+      "basis": "decision-fixture",
+      "decision": "DF-P2",
+      "at": "2026-11-09T23:00:00Z",
+      "ownWindow": {
+        "weekdays": [
+          "09:00",
+          "18:00"
+        ],
+        "saturday": null
+      },
+      "expected": {
+        "bogotaTime": "18:00:00",
+        "weekday": "lunes",
+        "outsideHours": true
+      }
+    },
+    {
+      "name": "scheduleOwn · own · propio sin sábado: sábado 10:00 → fuera",
+      "kind": "own",
+      "contractRef": "D8-15, P-13",
+      "basis": "decision-fixture",
+      "decision": "DF-P2",
+      "at": "2026-11-07T15:00:00Z",
+      "ownWindow": {
+        "weekdays": [
+          "09:00",
+          "18:00"
+        ],
+        "saturday": null
+      },
+      "expected": {
+        "bogotaTime": "10:00:00",
+        "weekday": "sábado",
+        "outsideHours": true
+      }
+    },
+    {
+      "name": "scheduleOwn · own · propio más ancho que la ley (06:00–20:00): lunes 06:30 → fuera por la ley",
+      "kind": "own",
+      "contractRef": "D8-15, P-13",
+      "basis": "decision-fixture",
+      "decision": "DF-P2",
+      "at": "2026-11-09T11:30:00Z",
+      "ownWindow": {
+        "weekdays": [
+          "06:00",
+          "20:00"
+        ],
+        "saturday": [
+          "06:00",
+          "20:00"
+        ]
+      },
+      "expected": {
+        "bogotaTime": "06:30:00",
+        "weekday": "lunes",
+        "outsideHours": true
+      }
+    },
+    {
+      "name": "scheduleOwn · own · propio más ancho que la ley: lunes 19:30 → fuera por la ley",
+      "kind": "own",
+      "contractRef": "D8-15, P-13",
+      "basis": "decision-fixture",
+      "decision": "DF-P2",
+      "at": "2026-11-10T00:30:00Z",
+      "ownWindow": {
+        "weekdays": [
+          "06:00",
+          "20:00"
+        ],
+        "saturday": [
+          "06:00",
+          "20:00"
+        ]
+      },
+      "expected": {
+        "bogotaTime": "19:30:00",
+        "weekday": "lunes",
+        "outsideHours": true
+      }
+    },
+    {
+      "name": "scheduleOwn · own · propio más ancho: sábado 15:30 → fuera por la ley",
+      "kind": "own",
+      "contractRef": "D8-15, P-13",
+      "basis": "decision-fixture",
+      "decision": "DF-P2",
+      "at": "2026-11-07T20:30:00Z",
+      "ownWindow": {
+        "weekdays": [
+          "06:00",
+          "20:00"
+        ],
+        "saturday": [
+          "06:00",
+          "20:00"
+        ]
+      },
+      "expected": {
+        "bogotaTime": "15:30:00",
+        "weekday": "sábado",
+        "outsideHours": true
+      }
+    },
+    {
+      "name": "scheduleOwn · own · sin horario propio: manda el legal (lunes 07:30 → dentro)",
+      "kind": "own",
+      "contractRef": "D8-15, P-13",
+      "basis": "decision-fixture",
+      "decision": "DF-P2",
+      "at": "2026-11-09T12:30:00Z",
+      "ownWindow": null,
+      "expected": {
+        "bogotaTime": "07:30:00",
+        "weekday": "lunes",
+        "outsideHours": false
+      }
+    },
+    {
+      "name": "scheduleOwn · own · horario propio mal configurado (18:00–09:00) → fuera (falla cerrado)",
+      "kind": "own",
+      "contractRef": "D8-15, P-13",
+      "basis": "decision-fixture",
+      "decision": "DF-P2",
+      "at": "2026-11-09T15:00:00Z",
+      "ownWindow": {
+        "weekdays": [
+          "18:00",
+          "09:00"
+        ],
+        "saturday": null
+      },
+      "expected": {
+        "bogotaTime": "10:00:00",
+        "weekday": "lunes",
+        "outsideHours": true
+      }
+    },
+    {
+      "name": "scheduleOwn · own · horario propio mal escrito (25:00) → fuera (falla cerrado)",
+      "kind": "own",
+      "contractRef": "D8-15, P-13",
+      "basis": "decision-fixture",
+      "decision": "DF-P2",
+      "at": "2026-11-09T15:00:00Z",
+      "ownWindow": {
+        "weekdays": [
+          "09:00",
+          "25:00"
+        ],
+        "saturday": null
+      },
+      "expected": {
+        "bogotaTime": "10:00:00",
+        "weekday": "lunes",
+        "outsideHours": true
+      }
+    }
+  ],
+  "frequency": [
+    {
+      "name": "frequency · count · sin historial → 0 y cabe",
+      "kind": "count",
+      "contractRef": "D8-12, D8-15, P-11",
+      "basis": "ley",
+      "now": "2026-11-11T15:00:00Z",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2
+      },
+      "history": [],
+      "expected": {
+        "countToday": 0,
+        "countWeek": 0,
+        "countRolling7Days": 0,
+        "frequencyExceeded": false,
+        "frequencyExceededRolling7Days": false
+      }
+    },
+    {
+      "name": "frequency · count · una completada hoy a las 08:00 de Bogotá → la de ahora sería la segunda del día",
+      "kind": "count",
+      "contractRef": "D8-12, D8-15, P-11",
+      "basis": "ley",
+      "now": "2026-11-11T15:00:00Z",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2
+      },
+      "history": [
+        {
+          "at": "2026-11-11T13:00:00Z",
+          "status": "completed",
+          "direction": "outbound"
+        }
+      ],
+      "expected": {
+        "countToday": 1,
+        "countWeek": 1,
+        "countRolling7Days": 1,
+        "frequencyExceeded": true,
+        "frequencyExceededRolling7Days": true
+      }
+    },
+    {
+      "name": "frequency · count · ayer a las 23:30 de Bogotá es el mismo día UTC que ahora: no cuenta como hoy",
+      "kind": "count",
+      "contractRef": "D8-12, D8-15, P-11",
+      "basis": "decision-fixture",
+      "decision": "DF-P4",
+      "now": "2026-11-11T15:00:00Z",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2
+      },
+      "history": [
+        {
+          "at": "2026-11-11T04:30:00Z",
+          "status": "completed",
+          "direction": "outbound"
+        }
+      ],
+      "expected": {
+        "countToday": 0,
+        "countWeek": 1,
+        "countRolling7Days": 1,
+        "frequencyExceeded": false,
+        "frequencyExceededRolling7Days": false
+      }
+    },
+    {
+      "name": "frequency · count · una cancelada hoy no cuenta (no salió)",
+      "kind": "count",
+      "contractRef": "D8-12, D8-15, P-11",
+      "basis": "decision-fixture",
+      "decision": "DF-P3",
+      "now": "2026-11-11T15:00:00Z",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2
+      },
+      "history": [
+        {
+          "at": "2026-11-11T13:00:00Z",
+          "status": "canceled",
+          "direction": "outbound"
+        }
+      ],
+      "expected": {
+        "countToday": 0,
+        "countWeek": 0,
+        "countRolling7Days": 0,
+        "frequencyExceeded": false,
+        "frequencyExceededRolling7Days": false
+      }
+    },
+    {
+      "name": "frequency · count · una failed_to_start hoy no cuenta (ElevenLabs la rechazó)",
+      "kind": "count",
+      "contractRef": "D8-12, D8-15, P-11",
+      "basis": "decision-fixture",
+      "decision": "DF-P3",
+      "now": "2026-11-11T15:00:00Z",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2
+      },
+      "history": [
+        {
+          "at": "2026-11-11T13:00:00Z",
+          "status": "failed_to_start",
+          "direction": "outbound"
+        }
+      ],
+      "expected": {
+        "countToday": 0,
+        "countWeek": 0,
+        "countRolling7Days": 0,
+        "frequencyExceeded": false,
+        "frequencyExceededRolling7Days": false
+      }
+    },
+    {
+      "name": "frequency · count · una comunicando (busy) hoy cuenta: el reintento de negocio es otro día",
+      "kind": "count",
+      "contractRef": "D8-12, D8-15, P-11",
+      "basis": "decision-fixture",
+      "decision": "DF-P3",
+      "now": "2026-11-11T15:00:00Z",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2
+      },
+      "history": [
+        {
+          "at": "2026-11-11T13:00:00Z",
+          "status": "busy",
+          "direction": "outbound"
+        }
+      ],
+      "expected": {
+        "countToday": 1,
+        "countWeek": 1,
+        "countRolling7Days": 1,
+        "frequencyExceeded": true,
+        "frequencyExceededRolling7Days": true
+      }
+    },
+    {
+      "name": "frequency · count · una sin respuesta (no_answer) hoy cuenta",
+      "kind": "count",
+      "contractRef": "D8-12, D8-15, P-11",
+      "basis": "decision-fixture",
+      "decision": "DF-P3",
+      "now": "2026-11-11T15:00:00Z",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2
+      },
+      "history": [
+        {
+          "at": "2026-11-11T13:00:00Z",
+          "status": "no_answer",
+          "direction": "outbound"
+        }
+      ],
+      "expected": {
+        "countToday": 1,
+        "countWeek": 1,
+        "countRolling7Days": 1,
+        "frequencyExceeded": true,
+        "frequencyExceededRolling7Days": true
+      }
+    },
+    {
+      "name": "frequency · count · una ambigua hoy cuenta (pudo llamar)",
+      "kind": "count",
+      "contractRef": "D8-12, D8-15, P-11",
+      "basis": "decision-fixture",
+      "decision": "DF-P3",
+      "now": "2026-11-11T15:00:00Z",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2
+      },
+      "history": [
+        {
+          "at": "2026-11-11T13:00:00Z",
+          "status": "ambiguous",
+          "direction": "outbound"
+        }
+      ],
+      "expected": {
+        "countToday": 1,
+        "countWeek": 1,
+        "countRolling7Days": 1,
+        "frequencyExceeded": true,
+        "frequencyExceededRolling7Days": true
+      }
+    },
+    {
+      "name": "frequency · count · una pedida (requested) hoy cuenta",
+      "kind": "count",
+      "contractRef": "D8-12, D8-15, P-11",
+      "basis": "decision-fixture",
+      "decision": "DF-P3",
+      "now": "2026-11-11T15:00:00Z",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2
+      },
+      "history": [
+        {
+          "at": "2026-11-11T14:50:00Z",
+          "status": "requested",
+          "direction": "outbound"
+        }
+      ],
+      "expected": {
+        "countToday": 1,
+        "countWeek": 1,
+        "countRolling7Days": 1,
+        "frequencyExceeded": true,
+        "frequencyExceededRolling7Days": true
+      }
+    },
+    {
+      "name": "frequency · count · una colgada por el corte (hung_up) hoy cuenta",
+      "kind": "count",
+      "contractRef": "D8-12, D8-15, P-11",
+      "basis": "decision-fixture",
+      "decision": "DF-P3",
+      "now": "2026-11-11T15:00:00Z",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2
+      },
+      "history": [
+        {
+          "at": "2026-11-11T13:00:00Z",
+          "status": "hung_up",
+          "direction": "outbound"
+        }
+      ],
+      "expected": {
+        "countToday": 1,
+        "countWeek": 1,
+        "countRolling7Days": 1,
+        "frequencyExceeded": true,
+        "frequencyExceededRolling7Days": true
+      }
+    },
+    {
+      "name": "frequency · count · una entrante de hoy no cuenta (no es un contacto proactivo)",
+      "kind": "count",
+      "contractRef": "D8-12, D8-15, P-11",
+      "basis": "decision-fixture",
+      "decision": "DF-P3",
+      "now": "2026-11-11T15:00:00Z",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2
+      },
+      "history": [
+        {
+          "at": "2026-11-11T13:00:00Z",
+          "status": "completed",
+          "direction": "inbound"
+        }
+      ],
+      "expected": {
+        "countToday": 0,
+        "countWeek": 0,
+        "countRolling7Days": 0,
+        "frequencyExceeded": false,
+        "frequencyExceededRolling7Days": false
+      }
+    },
+    {
+      "name": "frequency · count · lunes y martes de esta semana → 2 en la semana: la tercera no cabe",
+      "kind": "count",
+      "contractRef": "D8-12, D8-15, P-11",
+      "basis": "supuesto-lead",
+      "decision": "DF-P4",
+      "now": "2026-11-11T15:00:00Z",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2
+      },
+      "history": [
+        {
+          "at": "2026-11-09T14:00:00Z",
+          "status": "completed",
+          "direction": "outbound"
+        },
+        {
+          "at": "2026-11-10T14:00:00Z",
+          "status": "completed",
+          "direction": "outbound"
+        }
+      ],
+      "expected": {
+        "countToday": 0,
+        "countWeek": 2,
+        "countRolling7Days": 2,
+        "frequencyExceeded": true,
+        "frequencyExceededRolling7Days": true
+      }
+    },
+    {
+      "name": "frequency · count · solo el lunes → 1 en la semana: cabe",
+      "kind": "count",
+      "contractRef": "D8-12, D8-15, P-11",
+      "basis": "supuesto-lead",
+      "decision": "DF-P4",
+      "now": "2026-11-11T15:00:00Z",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2
+      },
+      "history": [
+        {
+          "at": "2026-11-09T14:00:00Z",
+          "status": "completed",
+          "direction": "outbound"
+        }
+      ],
+      "expected": {
+        "countToday": 0,
+        "countWeek": 1,
+        "countRolling7Days": 1,
+        "frequencyExceeded": false,
+        "frequencyExceededRolling7Days": false
+      }
+    },
+    {
+      "name": "frequency · count · viernes y sábado de la semana pasada: la semana de calendario empieza en 0, los 7 días móviles ven 2",
+      "kind": "count",
+      "contractRef": "D8-12, D8-15, P-11",
+      "basis": "decision-fixture",
+      "decision": "DF-P4",
+      "now": "2026-11-11T15:00:00Z",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2
+      },
+      "history": [
+        {
+          "at": "2026-11-06T14:00:00Z",
+          "status": "completed",
+          "direction": "outbound"
+        },
+        {
+          "at": "2026-11-07T14:00:00Z",
+          "status": "completed",
+          "direction": "outbound"
+        }
+      ],
+      "expected": {
+        "countToday": 0,
+        "countWeek": 0,
+        "countRolling7Days": 2,
+        "frequencyExceeded": false,
+        "frequencyExceededRolling7Days": true
+      }
+    },
+    {
+      "name": "frequency · count · hace exactamente 7 días (04-11 15:00:00 UTC) ya no entra en los 7 días móviles",
+      "kind": "count",
+      "contractRef": "D8-12, D8-15, P-11",
+      "basis": "decision-fixture",
+      "decision": "DF-P4",
+      "now": "2026-11-11T15:00:00Z",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2
+      },
+      "history": [
+        {
+          "at": "2026-11-04T15:00:00Z",
+          "status": "completed",
+          "direction": "outbound"
+        }
+      ],
+      "expected": {
+        "countToday": 0,
+        "countWeek": 0,
+        "countRolling7Days": 0,
+        "frequencyExceeded": false,
+        "frequencyExceededRolling7Days": false
+      }
+    },
+    {
+      "name": "frequency · count · hace 7 días menos un segundo sí entra en los 7 días móviles",
+      "kind": "count",
+      "contractRef": "D8-12, D8-15, P-11",
+      "basis": "decision-fixture",
+      "decision": "DF-P4",
+      "now": "2026-11-11T15:00:00Z",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2
+      },
+      "history": [
+        {
+          "at": "2026-11-04T15:00:01Z",
+          "status": "completed",
+          "direction": "outbound"
+        }
+      ],
+      "expected": {
+        "countToday": 0,
+        "countWeek": 0,
+        "countRolling7Days": 1,
+        "frequencyExceeded": false,
+        "frequencyExceededRolling7Days": false
+      }
+    },
+    {
+      "name": "frequency · count · domingo pasado a las 23:59:59 de Bogotá no es de esta semana; el lunes 00:00:00 sí",
+      "kind": "count",
+      "contractRef": "D8-12, D8-15, P-11",
+      "basis": "decision-fixture",
+      "decision": "DF-P4",
+      "now": "2026-11-11T15:00:00Z",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2
+      },
+      "history": [
+        {
+          "at": "2026-11-09T04:59:59Z",
+          "status": "failed",
+          "direction": "outbound"
+        },
+        {
+          "at": "2026-11-09T05:00:00Z",
+          "status": "failed",
+          "direction": "outbound"
+        }
+      ],
+      "expected": {
+        "countToday": 0,
+        "countWeek": 1,
+        "countRolling7Days": 2,
+        "frequencyExceeded": false,
+        "frequencyExceededRolling7Days": true
+      }
+    }
+  ],
+  "consent": [
+    {
+      "name": "consent · voice · sin eventos → sin consentimiento",
+      "kind": "voice",
+      "contractRef": "D8-18",
+      "basis": "contrato",
+      "voiceConsents": [],
+      "leadConsentStatus": "unknown",
+      "recordingEnabled": false,
+      "expected": {
+        "hasVoiceConsent": false
+      }
+    },
+    {
+      "name": "consent · voice · granted por formulario escrito → sí",
+      "kind": "voice",
+      "contractRef": "D8-18",
+      "basis": "contrato",
+      "voiceConsents": [
+        {
+          "id": 1,
+          "kind": "granted",
+          "channel": "voice_call",
+          "purpose": "commercial",
+          "source": "written_form",
+          "at": "2026-11-01T15:00:00Z",
+          "actorId": 7,
+          "approvedBy": null
+        }
+      ],
+      "leadConsentStatus": "unknown",
+      "recordingEnabled": false,
+      "expected": {
+        "hasVoiceConsent": true
+      }
+    },
+    {
+      "name": "consent · voice · granted y después revoked → no",
+      "kind": "voice",
+      "contractRef": "D8-18",
+      "basis": "decision-fixture",
+      "decision": "DF-P5",
+      "voiceConsents": [
+        {
+          "id": 1,
+          "kind": "granted",
+          "channel": "voice_call",
+          "purpose": "commercial",
+          "source": "written_form",
+          "at": "2026-11-01T15:00:00Z",
+          "actorId": 7,
+          "approvedBy": null
+        },
+        {
+          "id": 2,
+          "kind": "revoked",
+          "channel": "voice_call",
+          "purpose": "commercial",
+          "source": "written_form",
+          "at": "2026-11-02T15:00:00Z",
+          "actorId": 7,
+          "approvedBy": null
+        }
+      ],
+      "leadConsentStatus": "unknown",
+      "recordingEnabled": false,
+      "expected": {
+        "hasVoiceConsent": false
+      }
+    },
+    {
+      "name": "consent · voice · revoked y después un granted nuevo → sí",
+      "kind": "voice",
+      "contractRef": "D8-18",
+      "basis": "decision-fixture",
+      "decision": "DF-P5",
+      "voiceConsents": [
+        {
+          "id": 1,
+          "kind": "revoked",
+          "channel": "voice_call",
+          "purpose": "commercial",
+          "source": "written_form",
+          "at": "2026-11-01T15:00:00Z",
+          "actorId": 7,
+          "approvedBy": null
+        },
+        {
+          "id": 2,
+          "kind": "granted",
+          "channel": "voice_call",
+          "purpose": "commercial",
+          "source": "written_form",
+          "at": "2026-11-02T15:00:00Z",
+          "actorId": 7,
+          "approvedBy": null
+        }
+      ],
+      "leadConsentStatus": "unknown",
+      "recordingEnabled": false,
+      "expected": {
+        "hasVoiceConsent": true
+      }
+    },
+    {
+      "name": "consent · voice · el lead del motor con consent_status = granted (WhatsApp) no es consentimiento de voz (Ley 2300 art. 2)",
+      "kind": "voice",
+      "contractRef": "D8-18",
+      "basis": "ley",
+      "voiceConsents": [],
+      "leadConsentStatus": "granted",
+      "recordingEnabled": false,
+      "expected": {
+        "hasVoiceConsent": false
+      }
+    },
+    {
+      "name": "consent · voice · admin_with_evidence sin la segunda persona → no (cuatro ojos pendientes)",
+      "kind": "voice",
+      "contractRef": "D8-18, P-18",
+      "basis": "decision-fixture",
+      "decision": "DF-P5",
+      "voiceConsents": [
+        {
+          "id": 1,
+          "kind": "granted",
+          "channel": "voice_call",
+          "purpose": "commercial",
+          "source": "admin_with_evidence",
+          "at": "2026-11-01T15:00:00Z",
+          "actorId": 7,
+          "approvedBy": null
+        }
+      ],
+      "leadConsentStatus": "unknown",
+      "recordingEnabled": false,
+      "expected": {
+        "hasVoiceConsent": false
+      }
+    },
+    {
+      "name": "consent · voice · admin_with_evidence aprobado por quien lo cargó → no",
+      "kind": "voice",
+      "contractRef": "D8-18, P-18",
+      "basis": "decision-fixture",
+      "decision": "DF-P5",
+      "voiceConsents": [
+        {
+          "id": 1,
+          "kind": "granted",
+          "channel": "voice_call",
+          "purpose": "commercial",
+          "source": "admin_with_evidence",
+          "at": "2026-11-01T15:00:00Z",
+          "actorId": 7,
+          "approvedBy": 7
+        }
+      ],
+      "leadConsentStatus": "unknown",
+      "recordingEnabled": false,
+      "expected": {
+        "hasVoiceConsent": false
+      }
+    },
+    {
+      "name": "consent · voice · admin_with_evidence aprobado por otra persona → sí",
+      "kind": "voice",
+      "contractRef": "D8-18, P-18",
+      "basis": "decision-fixture",
+      "decision": "DF-P5",
+      "voiceConsents": [
+        {
+          "id": 1,
+          "kind": "granted",
+          "channel": "voice_call",
+          "purpose": "commercial",
+          "source": "admin_with_evidence",
+          "at": "2026-11-01T15:00:00Z",
+          "actorId": 7,
+          "approvedBy": 9
+        }
+      ],
+      "leadConsentStatus": "unknown",
+      "recordingEnabled": false,
+      "expected": {
+        "hasVoiceConsent": true
+      }
+    },
+    {
+      "name": "consent · voice · recorded_inbound_request con la grabación apagada (P-7) → no vale",
+      "kind": "voice",
+      "contractRef": "D8-18, P-7",
+      "basis": "decision-fixture",
+      "decision": "DF-P5",
+      "voiceConsents": [
+        {
+          "id": 1,
+          "kind": "granted",
+          "channel": "voice_call",
+          "purpose": "commercial",
+          "source": "recorded_inbound_request",
+          "at": "2026-11-01T15:00:00Z",
+          "actorId": 7,
+          "approvedBy": null
+        }
+      ],
+      "leadConsentStatus": "unknown",
+      "recordingEnabled": false,
+      "expected": {
+        "hasVoiceConsent": false
+      }
+    },
+    {
+      "name": "consent · voice · recorded_inbound_request con la grabación encendida → vale",
+      "kind": "voice",
+      "contractRef": "D8-18, P-7",
+      "basis": "decision-fixture",
+      "decision": "DF-P5",
+      "voiceConsents": [
+        {
+          "id": 1,
+          "kind": "granted",
+          "channel": "voice_call",
+          "purpose": "commercial",
+          "source": "recorded_inbound_request",
+          "at": "2026-11-01T15:00:00Z",
+          "actorId": 7,
+          "approvedBy": null
+        }
+      ],
+      "leadConsentStatus": "unknown",
+      "recordingEnabled": true,
+      "expected": {
+        "hasVoiceConsent": true
+      }
+    },
+    {
+      "name": "consent · voice · granted y revoked con la misma hora: manda el id mayor (revoked)",
+      "kind": "voice",
+      "contractRef": "D8-18",
+      "basis": "decision-fixture",
+      "decision": "DF-P5",
+      "voiceConsents": [
+        {
+          "id": 1,
+          "kind": "granted",
+          "channel": "voice_call",
+          "purpose": "commercial",
+          "source": "written_form",
+          "at": "2026-11-01T15:00:00Z",
+          "actorId": 7,
+          "approvedBy": null
+        },
+        {
+          "id": 2,
+          "kind": "revoked",
+          "channel": "voice_call",
+          "purpose": "commercial",
+          "source": "written_form",
+          "at": "2026-11-01T15:00:00Z",
+          "actorId": 7,
+          "approvedBy": null
+        }
+      ],
+      "leadConsentStatus": "unknown",
+      "recordingEnabled": false,
+      "expected": {
+        "hasVoiceConsent": false
+      }
+    },
+    {
+      "name": "consent · voice · revoked sin cuatro ojos sigue valiendo: revocar nunca espera a nadie",
+      "kind": "voice",
+      "contractRef": "D8-18",
+      "basis": "decision-fixture",
+      "decision": "DF-P5",
+      "voiceConsents": [
+        {
+          "id": 1,
+          "kind": "granted",
+          "channel": "voice_call",
+          "purpose": "commercial",
+          "source": "written_form",
+          "at": "2026-11-01T15:00:00Z",
+          "actorId": 7,
+          "approvedBy": null
+        },
+        {
+          "id": 2,
+          "kind": "revoked",
+          "channel": "voice_call",
+          "purpose": "commercial",
+          "source": "admin_with_evidence",
+          "at": "2026-11-02T15:00:00Z",
+          "actorId": 7,
+          "approvedBy": null
+        }
+      ],
+      "leadConsentStatus": "unknown",
+      "recordingEnabled": false,
+      "expected": {
+        "hasVoiceConsent": false
+      }
+    },
+    {
+      "name": "consent · voice · un granted pendiente de aprobar no tapa uno anterior válido",
+      "kind": "voice",
+      "contractRef": "D8-18",
+      "basis": "decision-fixture",
+      "decision": "DF-P5",
+      "voiceConsents": [
+        {
+          "id": 1,
+          "kind": "granted",
+          "channel": "voice_call",
+          "purpose": "commercial",
+          "source": "written_form",
+          "at": "2026-11-01T15:00:00Z",
+          "actorId": 7,
+          "approvedBy": null
+        },
+        {
+          "id": 2,
+          "kind": "granted",
+          "channel": "voice_call",
+          "purpose": "commercial",
+          "source": "admin_with_evidence",
+          "at": "2026-11-02T15:00:00Z",
+          "actorId": 7,
+          "approvedBy": null
+        }
+      ],
+      "leadConsentStatus": "unknown",
+      "recordingEnabled": false,
+      "expected": {
+        "hasVoiceConsent": true
+      }
+    }
+  ],
+  "exclusions": [
+    {
+      "name": "exclusions · contacts · contacto limpio con consulta vigente → nada",
+      "kind": "contacts",
+      "contractRef": "D8-18",
+      "basis": "contrato",
+      "now": "2026-11-11T15:00:00Z",
+      "scope": "contacts",
+      "rneValidityDays": 30,
+      "exclusions": [],
+      "lead": {
+        "doNotContact": false,
+        "consentStatus": "granted"
+      },
+      "rneCheck": {
+        "checkedAt": "2026-11-01T15:00:00Z",
+        "result": "not_listed"
+      },
+      "expected": {
+        "excluded": false,
+        "rneCheckMissing": false
+      }
+    },
+    {
+      "name": "exclusions · contacts · exclusión rne → excluded",
+      "kind": "contacts",
+      "contractRef": "D8-18",
+      "basis": "contrato",
+      "now": "2026-11-11T15:00:00Z",
+      "scope": "contacts",
+      "rneValidityDays": 30,
+      "exclusions": [
+        {
+          "source": "rne",
+          "at": "2026-11-05T15:00:00Z"
+        }
+      ],
+      "lead": {
+        "doNotContact": false,
+        "consentStatus": "granted"
+      },
+      "rneCheck": {
+        "checkedAt": "2026-11-01T15:00:00Z",
+        "result": "not_listed"
+      },
+      "expected": {
+        "excluded": true,
+        "rneCheckMissing": false
+      }
+    },
+    {
+      "name": "exclusions · contacts · exclusión spoken_opt_out → excluded",
+      "kind": "contacts",
+      "contractRef": "D8-18",
+      "basis": "contrato",
+      "now": "2026-11-11T15:00:00Z",
+      "scope": "contacts",
+      "rneValidityDays": 30,
+      "exclusions": [
+        {
+          "source": "spoken_opt_out",
+          "at": "2026-11-05T15:00:00Z"
+        }
+      ],
+      "lead": {
+        "doNotContact": false,
+        "consentStatus": "granted"
+      },
+      "rneCheck": {
+        "checkedAt": "2026-11-01T15:00:00Z",
+        "result": "not_listed"
+      },
+      "expected": {
+        "excluded": true,
+        "rneCheckMissing": false
+      }
+    },
+    {
+      "name": "exclusions · contacts · exclusión lead_do_not_contact → excluded",
+      "kind": "contacts",
+      "contractRef": "D8-18",
+      "basis": "contrato",
+      "now": "2026-11-11T15:00:00Z",
+      "scope": "contacts",
+      "rneValidityDays": 30,
+      "exclusions": [
+        {
+          "source": "lead_do_not_contact",
+          "at": "2026-11-05T15:00:00Z"
+        }
+      ],
+      "lead": {
+        "doNotContact": false,
+        "consentStatus": "granted"
+      },
+      "rneCheck": {
+        "checkedAt": "2026-11-01T15:00:00Z",
+        "result": "not_listed"
+      },
+      "expected": {
+        "excluded": true,
+        "rneCheckMissing": false
+      }
+    },
+    {
+      "name": "exclusions · contacts · exclusión lead_consent_denied → excluded",
+      "kind": "contacts",
+      "contractRef": "D8-18",
+      "basis": "contrato",
+      "now": "2026-11-11T15:00:00Z",
+      "scope": "contacts",
+      "rneValidityDays": 30,
+      "exclusions": [
+        {
+          "source": "lead_consent_denied",
+          "at": "2026-11-05T15:00:00Z"
+        }
+      ],
+      "lead": {
+        "doNotContact": false,
+        "consentStatus": "granted"
+      },
+      "rneCheck": {
+        "checkedAt": "2026-11-01T15:00:00Z",
+        "result": "not_listed"
+      },
+      "expected": {
+        "excluded": true,
+        "rneCheckMissing": false
+      }
+    },
+    {
+      "name": "exclusions · contacts · exclusión admin → excluded",
+      "kind": "contacts",
+      "contractRef": "D8-18",
+      "basis": "contrato",
+      "now": "2026-11-11T15:00:00Z",
+      "scope": "contacts",
+      "rneValidityDays": 30,
+      "exclusions": [
+        {
+          "source": "admin",
+          "at": "2026-11-05T15:00:00Z"
+        }
+      ],
+      "lead": {
+        "doNotContact": false,
+        "consentStatus": "granted"
+      },
+      "rneCheck": {
+        "checkedAt": "2026-11-01T15:00:00Z",
+        "result": "not_listed"
+      },
+      "expected": {
+        "excluded": true,
+        "rneCheckMissing": false
+      }
+    },
+    {
+      "name": "exclusions · contacts · lead con do_not_contact (leído en vivo) → excluded",
+      "kind": "contacts",
+      "contractRef": "D8-18",
+      "basis": "contrato",
+      "now": "2026-11-11T15:00:00Z",
+      "scope": "contacts",
+      "rneValidityDays": 30,
+      "exclusions": [],
+      "lead": {
+        "doNotContact": true,
+        "consentStatus": "granted"
+      },
+      "rneCheck": {
+        "checkedAt": "2026-11-01T15:00:00Z",
+        "result": "not_listed"
+      },
+      "expected": {
+        "excluded": true,
+        "rneCheckMissing": false
+      }
+    },
+    {
+      "name": "exclusions · contacts · lead con consent_status = denied → excluded",
+      "kind": "contacts",
+      "contractRef": "D8-18",
+      "basis": "contrato",
+      "now": "2026-11-11T15:00:00Z",
+      "scope": "contacts",
+      "rneValidityDays": 30,
+      "exclusions": [],
+      "lead": {
+        "doNotContact": false,
+        "consentStatus": "denied"
+      },
+      "rneCheck": {
+        "checkedAt": "2026-11-01T15:00:00Z",
+        "result": "not_listed"
+      },
+      "expected": {
+        "excluded": true,
+        "rneCheckMissing": false
+      }
+    },
+    {
+      "name": "exclusions · contacts · contacto sin lead de origen (manual) → solo cuentan sus exclusiones",
+      "kind": "contacts",
+      "contractRef": "D8-18",
+      "basis": "contrato",
+      "now": "2026-11-11T15:00:00Z",
+      "scope": "contacts",
+      "rneValidityDays": 30,
+      "exclusions": [],
+      "lead": null,
+      "rneCheck": {
+        "checkedAt": "2026-11-01T15:00:00Z",
+        "result": "not_listed"
+      },
+      "expected": {
+        "excluded": false,
+        "rneCheckMissing": false
+      }
+    },
+    {
+      "name": "exclusions · contacts · una exclusión antigua no la levanta un consentimiento posterior (solo la supresión)",
+      "kind": "contacts",
+      "contractRef": "D8-18",
+      "basis": "contrato",
+      "now": "2026-11-11T15:00:00Z",
+      "scope": "contacts",
+      "rneValidityDays": 30,
+      "exclusions": [
+        {
+          "source": "spoken_opt_out",
+          "at": "2026-10-01T15:00:00Z"
+        }
+      ],
+      "lead": {
+        "doNotContact": false,
+        "consentStatus": "granted"
+      },
+      "rneCheck": {
+        "checkedAt": "2026-11-01T15:00:00Z",
+        "result": "not_listed"
+      },
+      "expected": {
+        "excluded": true,
+        "rneCheckMissing": false
+      }
+    },
+    {
+      "name": "exclusions · contacts · sin consulta al RNE → rne_check_missing",
+      "kind": "contacts",
+      "contractRef": "D8-18, P-14",
+      "basis": "decision-fixture",
+      "decision": "DF-P7",
+      "now": "2026-11-11T15:00:00Z",
+      "scope": "contacts",
+      "rneValidityDays": 30,
+      "exclusions": [],
+      "lead": {
+        "doNotContact": false,
+        "consentStatus": "granted"
+      },
+      "rneCheck": null,
+      "expected": {
+        "excluded": false,
+        "rneCheckMissing": true
+      }
+    },
+    {
+      "name": "exclusions · contacts · consulta de hace 31 días (vigencia 30) → rne_check_missing",
+      "kind": "contacts",
+      "contractRef": "D8-18, P-14",
+      "basis": "decision-fixture",
+      "decision": "DF-P7",
+      "now": "2026-11-11T15:00:00Z",
+      "scope": "contacts",
+      "rneValidityDays": 30,
+      "exclusions": [],
+      "lead": {
+        "doNotContact": false,
+        "consentStatus": "granted"
+      },
+      "rneCheck": {
+        "checkedAt": "2026-10-11T14:59:59Z",
+        "result": "not_listed"
+      },
+      "expected": {
+        "excluded": false,
+        "rneCheckMissing": true
+      }
+    },
+    {
+      "name": "exclusions · contacts · consulta de hace exactamente 30 días → todavía vale",
+      "kind": "contacts",
+      "contractRef": "D8-18, P-14",
+      "basis": "decision-fixture",
+      "decision": "DF-P7",
+      "now": "2026-11-11T15:00:00Z",
+      "scope": "contacts",
+      "rneValidityDays": 30,
+      "exclusions": [],
+      "lead": {
+        "doNotContact": false,
+        "consentStatus": "granted"
+      },
+      "rneCheck": {
+        "checkedAt": "2026-10-12T15:00:00Z",
+        "result": "not_listed"
+      },
+      "expected": {
+        "excluded": false,
+        "rneCheckMissing": false
+      }
+    },
+    {
+      "name": "exclusions · contacts · el RNE dice listed → excluded (no rne_check_missing)",
+      "kind": "contacts",
+      "contractRef": "D8-18, P-14",
+      "basis": "decision-fixture",
+      "decision": "DF-P7",
+      "now": "2026-11-11T15:00:00Z",
+      "scope": "contacts",
+      "rneValidityDays": 30,
+      "exclusions": [],
+      "lead": {
+        "doNotContact": false,
+        "consentStatus": "granted"
+      },
+      "rneCheck": {
+        "checkedAt": "2026-11-10T15:00:00Z",
+        "result": "listed"
+      },
+      "expected": {
+        "excluded": true,
+        "rneCheckMissing": false
+      }
+    },
+    {
+      "name": "exclusions · canary · canario sin consulta al RNE → no hace falta en alcance canary",
+      "kind": "canary",
+      "contractRef": "D8-12, P-20",
+      "basis": "contrato",
+      "now": "2026-11-11T15:00:00Z",
+      "scope": "canary",
+      "rneValidityDays": 30,
+      "exclusions": [],
+      "lead": null,
+      "rneCheck": null,
+      "expected": {
+        "excluded": false,
+        "rneCheckMissing": false
+      }
+    },
+    {
+      "name": "exclusions · canary · canario que dijo «no me vuelvas a llamar» → excluded también en canary",
+      "kind": "canary",
+      "contractRef": "D8-18, D8-12",
+      "basis": "decision-fixture",
+      "decision": "DF-P6",
+      "now": "2026-11-11T15:00:00Z",
+      "scope": "canary",
+      "rneValidityDays": 30,
+      "exclusions": [
+        {
+          "source": "spoken_opt_out",
+          "at": "2026-11-05T15:00:00Z"
+        }
+      ],
+      "lead": null,
+      "rneCheck": null,
+      "expected": {
+        "excluded": true,
+        "rneCheckMissing": false
+      }
+    }
+  ],
+  "inboundPolicy": [
+    {
+      "name": "inboundPolicy · decide · todo abierto y canario activo → si (con la constante del código girada)",
+      "kind": "decide",
+      "contractRef": "D8-11",
+      "basis": "decision-fixture",
+      "decision": "DF-P8",
+      "facts": {
+        "inboundEnabled": true,
+        "scope": "canary",
+        "braked": false,
+        "publication": "ok",
+        "caller": "active_voice",
+        "activeOrDialing": 0,
+        "maxConcurrent": 1,
+        "inboundToday": 0,
+        "inboundDailyCap": 3
+      },
+      "expected": {
+        "codeOpen": {
+          "authorized": true,
+          "reasons": [],
+          "callerAuthorized": "si"
+        },
+        "codeClosed": {
+          "authorized": false,
+          "reasons": [
+            "calls_disabled_in_code"
+          ],
+          "callerAuthorized": "no"
+        }
+      }
+    },
+    {
+      "name": "inboundPolicy · decide · VOICE_INBOUND_ENABLED = false",
+      "kind": "decide",
+      "contractRef": "D8-11",
+      "basis": "decision-fixture",
+      "decision": "DF-P8",
+      "facts": {
+        "inboundEnabled": false,
+        "scope": "canary",
+        "braked": false,
+        "publication": "ok",
+        "caller": "active_voice",
+        "activeOrDialing": 0,
+        "maxConcurrent": 1,
+        "inboundToday": 0,
+        "inboundDailyCap": 3
+      },
+      "expected": {
+        "codeOpen": {
+          "authorized": false,
+          "reasons": [
+            "inbound_disabled"
+          ],
+          "callerAuthorized": "no"
+        },
+        "codeClosed": {
+          "authorized": false,
+          "reasons": [
+            "inbound_disabled",
+            "calls_disabled_in_code"
+          ],
+          "callerAuthorized": "no"
+        }
+      }
+    },
+    {
+      "name": "inboundPolicy · decide · alcance distinto de canary (all) → inbound_disabled",
+      "kind": "decide",
+      "contractRef": "D8-11",
+      "basis": "decision-fixture",
+      "decision": "DF-P11",
+      "facts": {
+        "inboundEnabled": true,
+        "scope": "all",
+        "braked": false,
+        "publication": "ok",
+        "caller": "active_voice",
+        "activeOrDialing": 0,
+        "maxConcurrent": 1,
+        "inboundToday": 0,
+        "inboundDailyCap": 3
+      },
+      "expected": {
+        "codeOpen": {
+          "authorized": false,
+          "reasons": [
+            "inbound_disabled"
+          ],
+          "callerAuthorized": "no"
+        },
+        "codeClosed": {
+          "authorized": false,
+          "reasons": [
+            "inbound_disabled",
+            "calls_disabled_in_code"
+          ],
+          "callerAuthorized": "no"
+        }
+      }
+    },
+    {
+      "name": "inboundPolicy · decide · freno abierto",
+      "kind": "decide",
+      "contractRef": "D8-11",
+      "basis": "decision-fixture",
+      "decision": "DF-P8",
+      "facts": {
+        "inboundEnabled": true,
+        "scope": "canary",
+        "braked": true,
+        "publication": "ok",
+        "caller": "active_voice",
+        "activeOrDialing": 0,
+        "maxConcurrent": 1,
+        "inboundToday": 0,
+        "inboundDailyCap": 3
+      },
+      "expected": {
+        "codeOpen": {
+          "authorized": false,
+          "reasons": [
+            "voice_braked"
+          ],
+          "callerAuthorized": "no"
+        },
+        "codeClosed": {
+          "authorized": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "voice_braked"
+          ],
+          "callerAuthorized": "no"
+        }
+      }
+    },
+    {
+      "name": "inboundPolicy · decide · sin publicación de voz",
+      "kind": "decide",
+      "contractRef": "D8-11",
+      "basis": "decision-fixture",
+      "decision": "DF-P8",
+      "facts": {
+        "inboundEnabled": true,
+        "scope": "canary",
+        "braked": false,
+        "publication": "none",
+        "caller": "active_voice",
+        "activeOrDialing": 0,
+        "maxConcurrent": 1,
+        "inboundToday": 0,
+        "inboundDailyCap": 3
+      },
+      "expected": {
+        "codeOpen": {
+          "authorized": false,
+          "reasons": [
+            "no_publication"
+          ],
+          "callerAuthorized": "no"
+        },
+        "codeClosed": {
+          "authorized": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "no_publication"
+          ],
+          "callerAuthorized": "no"
+        }
+      }
+    },
+    {
+      "name": "inboundPolicy · decide · publicación ilegible (un fallo deniega)",
+      "kind": "decide",
+      "contractRef": "D8-11",
+      "basis": "decision-fixture",
+      "decision": "DF-P8",
+      "facts": {
+        "inboundEnabled": true,
+        "scope": "canary",
+        "braked": false,
+        "publication": "unreadable",
+        "caller": "active_voice",
+        "activeOrDialing": 0,
+        "maxConcurrent": 1,
+        "inboundToday": 0,
+        "inboundDailyCap": 3
+      },
+      "expected": {
+        "codeOpen": {
+          "authorized": false,
+          "reasons": [
+            "publication_unreadable"
+          ],
+          "callerAuthorized": "no"
+        },
+        "codeClosed": {
+          "authorized": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "publication_unreadable"
+          ],
+          "callerAuthorized": "no"
+        }
+      }
+    },
+    {
+      "name": "inboundPolicy · decide · número no registrado",
+      "kind": "decide",
+      "contractRef": "D8-11",
+      "basis": "decision-fixture",
+      "decision": "DF-P8",
+      "facts": {
+        "inboundEnabled": true,
+        "scope": "canary",
+        "braked": false,
+        "publication": "ok",
+        "caller": "not_registered",
+        "activeOrDialing": 0,
+        "maxConcurrent": 1,
+        "inboundToday": 0,
+        "inboundDailyCap": 3
+      },
+      "expected": {
+        "codeOpen": {
+          "authorized": false,
+          "reasons": [
+            "not_an_active_voice_canary"
+          ],
+          "callerAuthorized": "no"
+        },
+        "codeClosed": {
+          "authorized": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "not_an_active_voice_canary"
+          ],
+          "callerAuthorized": "no"
+        }
+      }
+    },
+    {
+      "name": "inboundPolicy · decide · canario registrado pero no activo",
+      "kind": "decide",
+      "contractRef": "D8-11",
+      "basis": "decision-fixture",
+      "decision": "DF-P8",
+      "facts": {
+        "inboundEnabled": true,
+        "scope": "canary",
+        "braked": false,
+        "publication": "ok",
+        "caller": "not_active",
+        "activeOrDialing": 0,
+        "maxConcurrent": 1,
+        "inboundToday": 0,
+        "inboundDailyCap": 3
+      },
+      "expected": {
+        "codeOpen": {
+          "authorized": false,
+          "reasons": [
+            "not_an_active_voice_canary"
+          ],
+          "callerAuthorized": "no"
+        },
+        "codeClosed": {
+          "authorized": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "not_an_active_voice_canary"
+          ],
+          "callerAuthorized": "no"
+        }
+      }
+    },
+    {
+      "name": "inboundPolicy · decide · caller ID oculto",
+      "kind": "decide",
+      "contractRef": "D8-11",
+      "basis": "decision-fixture",
+      "decision": "DF-P9",
+      "facts": {
+        "inboundEnabled": true,
+        "scope": "canary",
+        "braked": false,
+        "publication": "ok",
+        "caller": "withheld",
+        "activeOrDialing": 0,
+        "maxConcurrent": 1,
+        "inboundToday": 0,
+        "inboundDailyCap": 3
+      },
+      "expected": {
+        "codeOpen": {
+          "authorized": false,
+          "reasons": [
+            "not_an_active_voice_canary"
+          ],
+          "callerAuthorized": "no"
+        },
+        "codeClosed": {
+          "authorized": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "not_an_active_voice_canary"
+          ],
+          "callerAuthorized": "no"
+        }
+      }
+    },
+    {
+      "name": "inboundPolicy · decide · concurrencia 1 de 1 → concurrency_exceeded",
+      "kind": "decide",
+      "contractRef": "D8-11",
+      "basis": "decision-fixture",
+      "decision": "DF-P10",
+      "facts": {
+        "inboundEnabled": true,
+        "scope": "canary",
+        "braked": false,
+        "publication": "ok",
+        "caller": "active_voice",
+        "activeOrDialing": 1,
+        "maxConcurrent": 1,
+        "inboundToday": 0,
+        "inboundDailyCap": 3
+      },
+      "expected": {
+        "codeOpen": {
+          "authorized": false,
+          "reasons": [
+            "concurrency_exceeded"
+          ],
+          "callerAuthorized": "no"
+        },
+        "codeClosed": {
+          "authorized": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "concurrency_exceeded"
+          ],
+          "callerAuthorized": "no"
+        }
+      }
+    },
+    {
+      "name": "inboundPolicy · decide · concurrencia 1 de 2 → cabe",
+      "kind": "decide",
+      "contractRef": "D8-11",
+      "basis": "decision-fixture",
+      "decision": "DF-P10",
+      "facts": {
+        "inboundEnabled": true,
+        "scope": "canary",
+        "braked": false,
+        "publication": "ok",
+        "caller": "active_voice",
+        "activeOrDialing": 1,
+        "maxConcurrent": 2,
+        "inboundToday": 0,
+        "inboundDailyCap": 3
+      },
+      "expected": {
+        "codeOpen": {
+          "authorized": true,
+          "reasons": [],
+          "callerAuthorized": "si"
+        },
+        "codeClosed": {
+          "authorized": false,
+          "reasons": [
+            "calls_disabled_in_code"
+          ],
+          "callerAuthorized": "no"
+        }
+      }
+    },
+    {
+      "name": "inboundPolicy · decide · 3 entrantes hoy con cupo 3 → daily_cap_reached",
+      "kind": "decide",
+      "contractRef": "D8-11",
+      "basis": "decision-fixture",
+      "decision": "DF-P10",
+      "facts": {
+        "inboundEnabled": true,
+        "scope": "canary",
+        "braked": false,
+        "publication": "ok",
+        "caller": "active_voice",
+        "activeOrDialing": 0,
+        "maxConcurrent": 1,
+        "inboundToday": 3,
+        "inboundDailyCap": 3
+      },
+      "expected": {
+        "codeOpen": {
+          "authorized": false,
+          "reasons": [
+            "daily_cap_reached"
+          ],
+          "callerAuthorized": "no"
+        },
+        "codeClosed": {
+          "authorized": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "daily_cap_reached"
+          ],
+          "callerAuthorized": "no"
+        }
+      }
+    },
+    {
+      "name": "inboundPolicy · decide · 2 entrantes hoy con cupo 3 → cabe",
+      "kind": "decide",
+      "contractRef": "D8-11",
+      "basis": "decision-fixture",
+      "decision": "DF-P10",
+      "facts": {
+        "inboundEnabled": true,
+        "scope": "canary",
+        "braked": false,
+        "publication": "ok",
+        "caller": "active_voice",
+        "activeOrDialing": 0,
+        "maxConcurrent": 1,
+        "inboundToday": 2,
+        "inboundDailyCap": 3
+      },
+      "expected": {
+        "codeOpen": {
+          "authorized": true,
+          "reasons": [],
+          "callerAuthorized": "si"
+        },
+        "codeClosed": {
+          "authorized": false,
+          "reasons": [
+            "calls_disabled_in_code"
+          ],
+          "callerAuthorized": "no"
+        }
+      }
+    },
+    {
+      "name": "inboundPolicy · decide · cupo de entrantes 0 (el defecto, P-5) → daily_cap_reached siempre",
+      "kind": "decide",
+      "contractRef": "D8-11",
+      "basis": "decision-fixture",
+      "decision": "DF-P10",
+      "facts": {
+        "inboundEnabled": true,
+        "scope": "canary",
+        "braked": false,
+        "publication": "ok",
+        "caller": "active_voice",
+        "activeOrDialing": 0,
+        "maxConcurrent": 1,
+        "inboundToday": 0,
+        "inboundDailyCap": 0
+      },
+      "expected": {
+        "codeOpen": {
+          "authorized": false,
+          "reasons": [
+            "daily_cap_reached"
+          ],
+          "callerAuthorized": "no"
+        },
+        "codeClosed": {
+          "authorized": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "daily_cap_reached"
+          ],
+          "callerAuthorized": "no"
+        }
+      }
+    },
+    {
+      "name": "inboundPolicy · decide · todo mal a la vez → todos los motivos en el orden de D8-11",
+      "kind": "decide",
+      "contractRef": "D8-11",
+      "basis": "decision-fixture",
+      "decision": "DF-P8",
+      "facts": {
+        "inboundEnabled": false,
+        "scope": "canary",
+        "braked": true,
+        "publication": "unreadable",
+        "caller": "not_registered",
+        "activeOrDialing": 1,
+        "maxConcurrent": 1,
+        "inboundToday": 3,
+        "inboundDailyCap": 3
+      },
+      "expected": {
+        "codeOpen": {
+          "authorized": false,
+          "reasons": [
+            "inbound_disabled",
+            "voice_braked",
+            "publication_unreadable",
+            "not_an_active_voice_canary",
+            "concurrency_exceeded",
+            "daily_cap_reached"
+          ],
+          "callerAuthorized": "no"
+        },
+        "codeClosed": {
+          "authorized": false,
+          "reasons": [
+            "inbound_disabled",
+            "calls_disabled_in_code",
+            "voice_braked",
+            "publication_unreadable",
+            "not_an_active_voice_canary",
+            "concurrency_exceeded",
+            "daily_cap_reached"
+          ],
+          "callerAuthorized": "no"
+        }
+      }
+    }
+  ],
+  "costReservation": [
+    {
+      "name": "costReservation · reserve · saliente a móvil, 300 s → 5 min × (80 000 + 37 700 + 4 400) = 610 500 µUS$",
+      "kind": "reserve",
+      "contractRef": "D8-15",
+      "basis": "decision-fixture",
+      "decision": "DF-P12",
+      "direction": "outbound",
+      "destinationKind": "mobile",
+      "maxDurationSeconds": 300,
+      "transferDestinationKind": null,
+      "expected": {
+        "minutes": 5,
+        "reserveMicroUsd": 610500
+      }
+    },
+    {
+      "name": "costReservation · reserve · saliente a fijo, 300 s → 5 × (80 000 + 70 000 + 4 400) = 772 000",
+      "kind": "reserve",
+      "contractRef": "D8-15",
+      "basis": "decision-fixture",
+      "decision": "DF-P12",
+      "direction": "outbound",
+      "destinationKind": "landline",
+      "maxDurationSeconds": 300,
+      "transferDestinationKind": null,
+      "expected": {
+        "minutes": 5,
+        "reserveMicroUsd": 772000
+      }
+    },
+    {
+      "name": "costReservation · reserve · entrante, 300 s → 5 × (80 000 + 94 500 + 4 400) = 894 500",
+      "kind": "reserve",
+      "contractRef": "D8-15",
+      "basis": "decision-fixture",
+      "decision": "DF-P12",
+      "direction": "inbound",
+      "destinationKind": "inbound",
+      "maxDurationSeconds": 300,
+      "transferDestinationKind": null,
+      "expected": {
+        "minutes": 5,
+        "reserveMicroUsd": 894500
+      }
+    },
+    {
+      "name": "costReservation · reserve · 301 s son 6 minutos → 732 600",
+      "kind": "reserve",
+      "contractRef": "D8-15",
+      "basis": "decision-fixture",
+      "decision": "DF-P12",
+      "direction": "outbound",
+      "destinationKind": "mobile",
+      "maxDurationSeconds": 301,
+      "transferDestinationKind": null,
+      "expected": {
+        "minutes": 6,
+        "reserveMicroUsd": 732600
+      }
+    },
+    {
+      "name": "costReservation · reserve · 60 s es 1 minuto → 122 100",
+      "kind": "reserve",
+      "contractRef": "D8-15",
+      "basis": "decision-fixture",
+      "decision": "DF-P12",
+      "direction": "outbound",
+      "destinationKind": "mobile",
+      "maxDurationSeconds": 60,
+      "transferDestinationKind": null,
+      "expected": {
+        "minutes": 1,
+        "reserveMicroUsd": 122100
+      }
+    },
+    {
+      "name": "costReservation · reserve · 61 s son 2 minutos → 244 200",
+      "kind": "reserve",
+      "contractRef": "D8-15",
+      "basis": "decision-fixture",
+      "decision": "DF-P12",
+      "direction": "outbound",
+      "destinationKind": "mobile",
+      "maxDurationSeconds": 61,
+      "transferDestinationKind": null,
+      "expected": {
+        "minutes": 2,
+        "reserveMicroUsd": 244200
+      }
+    },
+    {
+      "name": "costReservation · reserve · saliente a móvil con transferencia a un fijo (recepción) → + 5 × 70 000 = 960 500",
+      "kind": "reserve",
+      "contractRef": "D8-15",
+      "basis": "decision-fixture",
+      "decision": "DF-P12",
+      "direction": "outbound",
+      "destinationKind": "mobile",
+      "maxDurationSeconds": 300,
+      "transferDestinationKind": "landline",
+      "expected": {
+        "minutes": 5,
+        "reserveMicroUsd": 960500
+      }
+    },
+    {
+      "name": "costReservation · budget · cabe justo: 4 000 000 + 389 500 + 610 500 = 5 000 000",
+      "kind": "budget",
+      "contractRef": "D8-15",
+      "basis": "decision-fixture",
+      "decision": "DF-P13",
+      "budgetRaw": "5",
+      "spentMicroUsd": 4000000,
+      "reservedMicroUsd": 389500,
+      "newReserveMicroUsd": 610500,
+      "expected": {
+        "budgetMicroUsd": 5000000,
+        "fits": true,
+        "reason": null
+      }
+    },
+    {
+      "name": "costReservation · budget · un micro-US$ más ya no cabe",
+      "kind": "budget",
+      "contractRef": "D8-15",
+      "basis": "decision-fixture",
+      "decision": "DF-P13",
+      "budgetRaw": "5",
+      "spentMicroUsd": 4000001,
+      "reservedMicroUsd": 389500,
+      "newReserveMicroUsd": 610500,
+      "expected": {
+        "budgetMicroUsd": 5000000,
+        "fits": false,
+        "reason": "budget_exhausted"
+      }
+    },
+    {
+      "name": "costReservation · budget · presupuesto 0 (el defecto) → budget_exhausted siempre",
+      "kind": "budget",
+      "contractRef": "D8-15",
+      "basis": "decision-fixture",
+      "decision": "DF-P13",
+      "budgetRaw": "0",
+      "spentMicroUsd": 0,
+      "reservedMicroUsd": 0,
+      "newReserveMicroUsd": 122100,
+      "expected": {
+        "budgetMicroUsd": 0,
+        "fits": false,
+        "reason": "budget_exhausted"
+      }
+    },
+    {
+      "name": "costReservation · budget · «5.50» → 5 500 000",
+      "kind": "budget",
+      "contractRef": "D8-15",
+      "basis": "decision-fixture",
+      "decision": "DF-P13",
+      "budgetRaw": "5.50",
+      "spentMicroUsd": 0,
+      "reservedMicroUsd": 0,
+      "newReserveMicroUsd": 610500,
+      "expected": {
+        "budgetMicroUsd": 5500000,
+        "fits": true,
+        "reason": null
+      }
+    },
+    {
+      "name": "costReservation · budget · «0.61» → 610 000: una reserva de 610 500 no cabe",
+      "kind": "budget",
+      "contractRef": "D8-15",
+      "basis": "decision-fixture",
+      "decision": "DF-P13",
+      "budgetRaw": "0.61",
+      "spentMicroUsd": 0,
+      "reservedMicroUsd": 0,
+      "newReserveMicroUsd": 610500,
+      "expected": {
+        "budgetMicroUsd": 610000,
+        "fits": false,
+        "reason": "budget_exhausted"
+      }
+    },
+    {
+      "name": "costReservation · budget · más de 6 decimales se truncan: «1.2345679» → 1 234 567",
+      "kind": "budget",
+      "contractRef": "D8-15",
+      "basis": "decision-fixture",
+      "decision": "DF-P13",
+      "budgetRaw": "1.2345679",
+      "spentMicroUsd": 0,
+      "reservedMicroUsd": 0,
+      "newReserveMicroUsd": 610500,
+      "expected": {
+        "budgetMicroUsd": 1234567,
+        "fits": true,
+        "reason": null
+      }
+    },
+    {
+      "name": "costReservation · budget · vacío → 0",
+      "kind": "budget",
+      "contractRef": "D8-15",
+      "basis": "decision-fixture",
+      "decision": "DF-P13",
+      "budgetRaw": "",
+      "spentMicroUsd": 0,
+      "reservedMicroUsd": 0,
+      "newReserveMicroUsd": 122100,
+      "expected": {
+        "budgetMicroUsd": 0,
+        "fits": false,
+        "reason": "budget_exhausted"
+      }
+    },
+    {
+      "name": "costReservation · budget · negativo → 0",
+      "kind": "budget",
+      "contractRef": "D8-15",
+      "basis": "decision-fixture",
+      "decision": "DF-P13",
+      "budgetRaw": "-1",
+      "spentMicroUsd": 0,
+      "reservedMicroUsd": 0,
+      "newReserveMicroUsd": 122100,
+      "expected": {
+        "budgetMicroUsd": 0,
+        "fits": false,
+        "reason": "budget_exhausted"
+      }
+    },
+    {
+      "name": "costReservation · budget · notación científica → mal escrito → 0",
+      "kind": "budget",
+      "contractRef": "D8-15",
+      "basis": "decision-fixture",
+      "decision": "DF-P13",
+      "budgetRaw": "1e3",
+      "spentMicroUsd": 0,
+      "reservedMicroUsd": 0,
+      "newReserveMicroUsd": 122100,
+      "expected": {
+        "budgetMicroUsd": 0,
+        "fits": false,
+        "reason": "budget_exhausted"
+      }
+    },
+    {
+      "name": "costReservation · budget · texto → 0",
+      "kind": "budget",
+      "contractRef": "D8-15",
+      "basis": "decision-fixture",
+      "decision": "DF-P13",
+      "budgetRaw": "cinco",
+      "spentMicroUsd": 0,
+      "reservedMicroUsd": 0,
+      "newReserveMicroUsd": 122100,
+      "expected": {
+        "budgetMicroUsd": 0,
+        "fits": false,
+        "reason": "budget_exhausted"
+      }
+    }
+  ],
+  "brake": [
+    {
+      "name": "brake · opens · guard_violation → abre el freno",
+      "kind": "opens",
+      "contractRef": "D8-19, D8-10",
+      "basis": "supuesto-lead",
+      "trigger": "guard_violation",
+      "expected": {
+        "opensBrake": true,
+        "incident": true
+      }
+    },
+    {
+      "name": "brake · opens · seal_mismatch → abre el freno",
+      "kind": "opens",
+      "contractRef": "D8-19, D8-8",
+      "basis": "supuesto-lead",
+      "trigger": "seal_mismatch",
+      "expected": {
+        "opensBrake": true,
+        "incident": true
+      }
+    },
+    {
+      "name": "brake · opens · agent_drift → abre el freno",
+      "kind": "opens",
+      "contractRef": "D8-19, D8-21",
+      "basis": "supuesto-lead",
+      "trigger": "agent_drift",
+      "expected": {
+        "opensBrake": true,
+        "incident": true
+      }
+    },
+    {
+      "name": "brake · opens · daily_hard_cap_reached → abre el freno",
+      "kind": "opens",
+      "contractRef": "D8-19, D8-15",
+      "basis": "supuesto-lead",
+      "trigger": "daily_hard_cap_reached",
+      "expected": {
+        "opensBrake": true,
+        "incident": true
+      }
+    },
+    {
+      "name": "brake · opens · usage_alert → abre el freno",
+      "kind": "opens",
+      "contractRef": "D8-19, D8-16",
+      "basis": "supuesto-lead",
+      "trigger": "usage_alert",
+      "expected": {
+        "opensBrake": true,
+        "incident": true
+      }
+    },
+    {
+      "name": "brake · opens · unknown_provider_call → abre el freno",
+      "kind": "opens",
+      "contractRef": "D8-19, D8-21",
+      "basis": "supuesto-lead",
+      "trigger": "unknown_provider_call",
+      "expected": {
+        "opensBrake": true,
+        "incident": true
+      }
+    },
+    {
+      "name": "brake · opens · post_call_transcription_clean → no abre el freno",
+      "kind": "opens",
+      "contractRef": "D8-19",
+      "basis": "supuesto-lead",
+      "trigger": "post_call_transcription_clean",
+      "expected": {
+        "opensBrake": false,
+        "incident": false
+      }
+    },
+    {
+      "name": "brake · opens · call_initiation_failure → no abre el freno",
+      "kind": "opens",
+      "contractRef": "D8-19",
+      "basis": "supuesto-lead",
+      "trigger": "call_initiation_failure",
+      "expected": {
+        "opensBrake": false,
+        "incident": false
+      }
+    },
+    {
+      "name": "brake · opens · outbound_rejected → no abre el freno",
+      "kind": "opens",
+      "contractRef": "D8-19",
+      "basis": "supuesto-lead",
+      "trigger": "outbound_rejected",
+      "expected": {
+        "opensBrake": false,
+        "incident": false
+      }
+    },
+    {
+      "name": "brake · opens · tool_call_rejected → no abre el freno",
+      "kind": "opens",
+      "contractRef": "D8-19",
+      "basis": "supuesto-lead",
+      "trigger": "tool_call_rejected",
+      "expected": {
+        "opensBrake": false,
+        "incident": false
+      }
+    },
+    {
+      "name": "brake · release · Super Admin con ultron.voice_publish y nota → suelto",
+      "kind": "release",
+      "contractRef": "D8-19, D8-22",
+      "basis": "decision-fixture",
+      "decision": "DF-P14",
+      "actor": {
+        "person": true,
+        "adminId": 7,
+        "permissions": [
+          "ultron.voice_publish",
+          "telephony.view"
+        ]
+      },
+      "note": "Revisada la guarda: falso positivo del aviso.",
+      "brakeState": "open",
+      "expected": {
+        "http": 200,
+        "released": true
+      }
+    },
+    {
+      "name": "brake · release · sin ultron.voice_publish → 403",
+      "kind": "release",
+      "contractRef": "D8-19, D8-22",
+      "basis": "decision-fixture",
+      "decision": "DF-P14",
+      "actor": {
+        "person": true,
+        "adminId": 9,
+        "permissions": [
+          "telephony.view",
+          "ultron.voice_manage"
+        ]
+      },
+      "note": "Revisado.",
+      "brakeState": "open",
+      "expected": {
+        "http": 403,
+        "released": false
+      }
+    },
+    {
+      "name": "brake · release · una automatización (token compartido) nunca lo suelta → 403",
+      "kind": "release",
+      "contractRef": "D8-19, D8-22",
+      "basis": "decision-fixture",
+      "decision": "DF-P14",
+      "actor": {
+        "person": false,
+        "adminId": null,
+        "permissions": [
+          "ultron.voice_publish"
+        ]
+      },
+      "note": "Revisado.",
+      "brakeState": "open",
+      "expected": {
+        "http": 403,
+        "released": false
+      }
+    },
+    {
+      "name": "brake · release · sin nota → 422",
+      "kind": "release",
+      "contractRef": "D8-19, D8-22",
+      "basis": "decision-fixture",
+      "decision": "DF-P14",
+      "actor": {
+        "person": true,
+        "adminId": 7,
+        "permissions": [
+          "ultron.voice_publish",
+          "telephony.view"
+        ]
+      },
+      "note": "",
+      "brakeState": "open",
+      "expected": {
+        "http": 422,
+        "released": false
+      }
+    },
+    {
+      "name": "brake · release · nota con un teléfono → 422 (PlainText y sin datos de contacto)",
+      "kind": "release",
+      "contractRef": "D8-19, D8-22",
+      "basis": "decision-fixture",
+      "decision": "DF-P14",
+      "actor": {
+        "person": true,
+        "adminId": 7,
+        "permissions": [
+          "ultron.voice_publish",
+          "telephony.view"
+        ]
+      },
+      "note": "Llamé al 300 000 0031 y todo bien",
+      "brakeState": "open",
+      "expected": {
+        "http": 422,
+        "released": false
+      }
+    },
+    {
+      "name": "brake · release · ya suelto → 409 (se suelta una vez)",
+      "kind": "release",
+      "contractRef": "D8-19, D8-22",
+      "basis": "decision-fixture",
+      "decision": "DF-P14",
+      "actor": {
+        "person": true,
+        "adminId": 7,
+        "permissions": [
+          "ultron.voice_publish",
+          "telephony.view"
+        ]
+      },
+      "note": "Otra vez.",
+      "brakeState": "released",
+      "expected": {
+        "http": 409,
+        "released": false
+      }
+    }
+  ],
+  "phoneHash": [
+    {
+      "name": "phoneHash · voice · móvil de un canario",
+      "kind": "voice",
+      "contractRef": "D8-17",
+      "basis": "contrato",
+      "e164": "+573000000031",
+      "expected": {
+        "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d",
+        "remoteLast4": "0031",
+        "canaryFingerprint": "ec032d8e2a62cb7f6f8eae7caa2053b703a100625be21313cab2f261bd1abe97"
+      }
+    },
+    {
+      "name": "phoneHash · voice · el número dedicado (fijo de Bogotá)",
+      "kind": "voice",
+      "contractRef": "D8-17",
+      "basis": "contrato",
+      "e164": "+576010000090",
+      "expected": {
+        "remoteHash": "c2c2feee0544adf4372d073f8f3f53736fe2dbf23539c385936ad267619d5743",
+        "remoteLast4": "0090",
+        "canaryFingerprint": "8b408002037c4ebfc9d5f9362c842f189a9b6abe802e6af5f7bafff0d30b564a"
+      }
+    },
+    {
+      "name": "phoneHash · voice · un E.164 de otro país también se huellea (la huella no decide el país)",
+      "kind": "voice",
+      "contractRef": "D8-17",
+      "basis": "contrato",
+      "e164": "+12025550143",
+      "expected": {
+        "remoteHash": "ca678d0712a522e10895d5c8a0d0dd505ec9f386c558ef2415369dca62be51c9",
+        "remoteLast4": "0143",
+        "canaryFingerprint": "b2286c606f8316bfaf47d531539ec6d218a0ef4afc5d42768e6700404c253d2d"
+      }
+    },
+    {
+      "name": "phoneHash · voice · con espacios no es E.164 → lanza",
+      "kind": "voice",
+      "contractRef": "D8-17",
+      "basis": "decision-fixture",
+      "decision": "DF-P15",
+      "e164": "+57 300 000 0031",
+      "expected": {
+        "throws": "InvalidArgumentException"
+      }
+    },
+    {
+      "name": "phoneHash · voice · sin + → lanza",
+      "kind": "voice",
+      "contractRef": "D8-17",
+      "basis": "decision-fixture",
+      "decision": "DF-P15",
+      "e164": "573000000031",
+      "expected": {
+        "throws": "InvalidArgumentException"
+      }
+    },
+    {
+      "name": "phoneHash · voice · con un salto de línea final → lanza ($ con D)",
+      "kind": "voice",
+      "contractRef": "D8-17",
+      "basis": "decision-fixture",
+      "decision": "DF-P15",
+      "e164": "+573000000031\n",
+      "expected": {
+        "throws": "InvalidArgumentException"
+      }
+    },
+    {
+      "name": "phoneHash · voice · vacío → lanza",
+      "kind": "voice",
+      "contractRef": "D8-17",
+      "basis": "decision-fixture",
+      "decision": "DF-P15",
+      "e164": "",
+      "expected": {
+        "throws": "InvalidArgumentException"
+      }
+    }
+  ]
+}

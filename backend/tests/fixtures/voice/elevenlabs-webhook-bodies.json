@@ -1,0 +1,2523 @@
+{
+  "fixture": "elevenlabs-webhook-bodies.json",
+  "version": 1,
+  "contract": "backend/docs/ultron-studio/ULTRON_STUDIO_H8_CONTRACT.md (congelado el 03-11-2026, commit 57bab8a)",
+  "audit": "backend/docs/ultron-studio/ULTRON_STUDIO_H8_VOICE_AUDIT.md (03-11-2026)",
+  "contractSections": [
+    "D8-8 (sello posterior: observed_agent_id, observed_version_id, observed_branch_id, seal_verified)",
+    "D8-10 (herramientas: catálogo cerrado, autenticación, esquema, comprobación de la llamada, 20 por llamada; guarda posterior)",
+    "D8-11 (iniciación: InboundPolicy, respuesta solo con caller_authorized, call_ref y version_label)",
+    "D8-13 (estados y eventos)",
+    "D8-16 (rutas públicas, topes y códigos HTTP)",
+    "D8-17 (sin transcripciones ni teléfonos en Laravel)",
+    "D8-19 (freno: guarda, seal_mismatch, llamada desconocida)"
+  ],
+  "generatedBy": "tests/fixtures/voice/tools/build/build.py (python3 -I), con los casos a mano en sec_*.py",
+  "checkedBy": "tests/fixtures/voice/tools/voice-fixtures-check.py",
+  "readme": "tests/fixtures/voice/README.md",
+  "basisLegend": {
+    "contrato": "Lo dice el contrato H8 tal cual (contractRef).",
+    "oficial": "Lo dice la documentación oficial o el SDK oficial del proveedor (source).",
+    "ley": "Lo dice la ley citada (Ley 2300 de 2023, Ley 51 de 1983).",
+    "supuesto-lead": "Sigue un supuesto de la congelación del lead (P-n), que el propietario puede cambiar.",
+    "decision-fixture": "El contrato no lo fija: lo decide este fixture (campo decision; README §Decisiones). Lo congela el lead."
+  },
+  "sources": [
+    {
+      "what": "Webhooks post-llamada: tipos, campos de data (agent_id, conversation_id, branch_id, version_id, environment, transcript, analysis, metadata), deduplicar por conversation_id, desactivación tras 10 fallos",
+      "url": "https://elevenlabs.io/docs/agents-platform/workflows/post-call-webhooks",
+      "consulted": "03-11-2026 (auditoría §d.1, leída por el architect)",
+      "how": "No la abrí hoy (sin red). Los nombres de campo que la auditoría no enumera (tool_calls/tool_results de cada turno, metadata.phone_call, metadata del fallo de inicio) son los de la documentación tal como la conozco, marcados [por confirmar] en cada cuerpo."
+    },
+    {
+      "what": "Webhook de iniciación de las entrantes de Twilio (caller_id, agent_id, called_number, call_sid, conversation_id) y la respuesta conversation_initiation_client_data con dynamic_variables",
+      "url": "https://elevenlabs.io/docs/eleven-agents/phone-numbers/twilio-integration/customising-calls.md",
+      "consulted": "03-11-2026 (auditoría §d.1)",
+      "how": "Campos de la auditoría."
+    },
+    {
+      "what": "Server tools (webhook con cuerpo JSON propio, Bearer guardado como secreto, sin firma HMAC del cuerpo)",
+      "url": "https://elevenlabs.io/docs/eleven-agents/customization/tools/server-tools",
+      "consulted": "03-11-2026 (auditoría §d.1)",
+      "how": "El cuerpo de cada herramienta lo define Laravel (DF-E8); que conversation_id y call_sid lleguen de system__* sin que los rellene el LLM es C-A3 [por confirmar]."
+    },
+    {
+      "what": "Variables de sistema system__caller_id, system__call_sid, system__conversation_id",
+      "url": "https://elevenlabs.io/docs/eleven-agents/customization/personalization/dynamic-variables.md",
+      "consulted": "03-11-2026 (auditoría §d.1, vista)",
+      "how": "—"
+    }
+  ],
+  "syntheticData": "Ningún dato real: SIDs, ids, secretos, tokens, URLs (.test) y teléfonos (+57 300 000 00xx, +57 601 000 00xx) inventados.",
+  "world": {
+    "now": 1793804400,
+    "nowIso": "2026-11-04T15:00:00Z",
+    "voiceFrom": "+576010000090",
+    "agentPhoneNumberId": "phnum_h8fx_0001",
+    "sealedAgentCanary": "agent_h8fx_canary_0003",
+    "previousAgent": "agent_h8fx_canary_0002",
+    "versionLabel": "v12 · canario",
+    "p9Notice": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma automática y tus datos se tratan según nuestra política de privacidad. Si prefieres hablar con una persona, dímelo en cualquier momento.",
+    "canaryActive": "+573000000031",
+    "stranger": "+573000000077",
+    "headers": {
+      "initiation": "X-Voice-Initiation-Secret",
+      "initiationValue": "h8fixture-initiation-0000000000000000000001",
+      "tools": "Authorization",
+      "toolsValue": "Bearer h8fixture-tool-bearer-0000000000000000000001"
+    },
+    "limits": {
+      "postCallBytes": 1048576,
+      "initiationBytes": 8192,
+      "toolBytes": 8192,
+      "toolRequestsPerCall": 20
+    }
+  },
+  "decisions": {
+    "DF-E1": "Toda firma que no sea ok (missing, malformed, expired, from_future, mismatch) es «firma mala»: 401, sin leer el cuerpo.",
+    "DF-E2": "La clave de deduplicación de post-llamada es (elevenlabs, <type>, data.conversation_id).",
+    "DF-E3": "Un JSON no válido o sin type, con la firma buena, es «tipo desconocido válido»: 200 y se ignora (nunca un 4xx en bucle).",
+    "DF-E4": "Un webhook sobre una llamada en estado final registra el evento y no cambia el estado.",
+    "DF-E5": "Una post-llamada de una conversación sin fila en voice_calls es unknown_provider_call y abre el freno (R-2).",
+    "DF-E6": "Iniciación autenticada pero con el cuerpo mal formado: 200 con caller_authorized = no (denegación explícita, no depender de C-A2).",
+    "DF-E8": "Esquema estricto de cada herramienta (additionalProperties = false); conversation_id y call_sid de system__* (C-A3).",
+    "DF-E9": "«En curso» para una herramienta = dialing o active (D8-10 dice active, pero una saliente contestada sigue en dialing por D8-13: Q-3).",
+    "DF-E10": "«El autorizado es el sellado» se lee como: la fila de la llamada tiene caller_authorized = si (las entrantes denegadas no reciben herramientas).",
+    "DF-E11": "Turnos de la guarda: índice 0 de data.transcript. Códigos de inspect() del motor más voice_notice_missing, voice_money_not_from_tool y voice_transfer_not_approved.",
+    "DF-E12": "Iniciación con un agent_id distinto del sellado de la parte vigente: caller_authorized = no, evento seal_mismatch y freno.",
+    "DF-E13": "Iniciación para un called_number distinto de TWILIO_VOICE_FROM: caller_authorized = no.",
+    "DF-E15": "Autenticación fallida en la iniciación y en las herramientas → 401; herramienta fuera de la lista cerrada → 404; los rechazos de la comprobación de la llamada → 200 con un mensaje neutro (R-16: nunca silencio).",
+    "DF-P9": "Un caller ID oculto o ausente (anonymous, vacío) no es un canario: not_an_active_voice_canary.",
+    "DF-S2": "requested → busy | no_answer | failed | completed: el webhook puede llegar antes de que el job guarde dialing; entonces el job ya no puede escribir dialing (final)."
+  },
+  "counts": {
+    "postCall": 14,
+    "guard": 9,
+    "initiation": 11,
+    "tools": 18,
+    "routeRules": 11,
+    "total": 63
+  },
+  "postCall": [
+    {
+      "name": "postCall · post_call_transcription · saliente a un canario, contestada: dialing → completed con su duración, sello verificado",
+      "kind": "post_call_transcription",
+      "contractRef": "D8-13, D8-16",
+      "basis": "contrato",
+      "bodyKey": "pc_completed",
+      "given": {
+        "call": {
+          "direction": "outbound",
+          "status": "dialing",
+          "providerConversationId": "conv_h8fx_0001",
+          "providerCallSid": "CA000000000000000000000000a8000001",
+          "callRef": "8f000000-0000-4000-8000-000000000001",
+          "sealedAgentId": "agent_h8fx_canary_0003",
+          "callerAuthorized": "si"
+        }
+      },
+      "rawBody": "{\"type\":\"post_call_transcription\",\"event_timestamp\":1793804340,\"data\":{\"agent_id\":\"agent_h8fx_canary_0003\",\"conversation_id\":\"conv_h8fx_0001\",\"status\":\"done\",\"user_id\":\"8f000000-0000-4000-8000-000000000001\",\"branch_id\":null,\"version_id\":null,\"environment\":\"production\",\"transcript\":[{\"role\":\"agent\",\"message\":\"Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma automática y tus datos se tratan según nuestra política de privacidad. Si prefieres hablar con una persona, dímelo en cualquier momento. ¿En qué te puedo ayudar?\",\"time_in_call_secs\":0,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"Hola, soy Ana Prueba, mi número es 300 000 0031 y mi correo ana.prueba@correo.test. ¿A qué hora abren?\",\"time_in_call_secs\":9,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Déjame consultarlo.\",\"time_in_call_secs\":14,\"tool_calls\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"result_value\":\"{\\\"sede\\\": \\\"Sede Centro\\\", \\\"horario\\\": \\\"lunes a viernes de 5:00 a 22:00; sábados de 7:00 a 14:00\\\"}\",\"is_error\":false,\"tool_has_been_called\":true}],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"La Sede Centro abre de lunes a viernes de 5:00 a 22:00 y los sábados de 7:00 a 14:00. ¿Algo más?\",\"time_in_call_secs\":16,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"No, gracias.\",\"time_in_call_secs\":25,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Con gusto. Hasta luego.\",\"time_in_call_secs\":27,\"tool_calls\":[{\"type\":\"system\",\"tool_name\":\"end_call\",\"request_id\":\"toolreq_h8fx_0002\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null}],\"metadata\":{\"start_time_unix_secs\":1793804153,\"call_duration_secs\":187,\"cost\":412,\"termination_reason\":\"end_call tool was called\",\"phone_call\":{\"direction\":\"outbound\",\"phone_number_id\":\"phnum_h8fx_0001\",\"agent_number\":\"+576010000090\",\"external_number\":\"+573000000031\",\"type\":\"twilio\",\"call_sid\":\"CA000000000000000000000000a8000001\"}},\"analysis\":{\"call_successful\":\"success\",\"transcript_summary\":\"La persona preguntó por el horario de la Sede Centro y colgó satisfecha.\",\"evaluation_criteria_results\":{},\"data_collection_results\":{}},\"conversation_initiation_client_data\":{\"dynamic_variables\":{\"caller_authorized\":\"si\",\"call_ref\":\"8f000000-0000-4000-8000-000000000001\",\"version_label\":\"v12 · canario\",\"system__caller_id\":\"+573000000031\",\"system__call_sid\":\"CA000000000000000000000000a8000001\"}}}}",
+      "expected": {
+        "http": 200,
+        "envelopeType": "post_call_transcription",
+        "events": [
+          {
+            "provider": "elevenlabs",
+            "kind": "post_call_transcription",
+            "providerEventKey": "conv_h8fx_0001"
+          },
+          {
+            "provider": "elevenlabs",
+            "kind": "guard_verdict",
+            "providerEventKey": "conv_h8fx_0001"
+          }
+        ],
+        "transition": {
+          "from": "dialing",
+          "to": "completed"
+        },
+        "durationSecs": 187,
+        "seal": {
+          "observedAgentId": "agent_h8fx_canary_0003",
+          "observedVersionId": null,
+          "observedBranchId": null,
+          "sealVerified": true
+        },
+        "costRaw": 412,
+        "costUnits": "por confirmar (D8-15)",
+        "guard": {
+          "violations": [],
+          "brakeOpens": false
+        },
+        "brakeOpens": false,
+        "mustNotPersist": [
+          "Ana Prueba",
+          "300 000 0031",
+          "ana.prueba@correo.test",
+          "La persona preguntó por el horario de la Sede Centro y colgó satisfecha.",
+          "+573000000031",
+          "573000000031",
+          "¿A qué hora abren?"
+        ]
+      }
+    },
+    {
+      "name": "postCall · post_call_transcription · entrante de un canario: active → completed; serializado con \\u00f1 y separadores con espacio (se firma el crudo)",
+      "kind": "post_call_transcription",
+      "contractRef": "D8-13, D8-16",
+      "basis": "contrato",
+      "bodyKey": "pc_inbound",
+      "given": {
+        "call": {
+          "direction": "inbound",
+          "status": "active",
+          "providerConversationId": "conv_h8fx_0002",
+          "providerCallSid": "CA000000000000000000000000a8000002",
+          "callRef": "8f000000-0000-4000-8000-000000000002",
+          "sealedAgentId": "agent_h8fx_canary_0003",
+          "callerAuthorized": "si"
+        }
+      },
+      "rawBody": "{\"type\": \"post_call_transcription\", \"event_timestamp\": 1793804340, \"data\": {\"agent_id\": \"agent_h8fx_canary_0003\", \"conversation_id\": \"conv_h8fx_0002\", \"status\": \"done\", \"user_id\": \"8f000000-0000-4000-8000-000000000002\", \"branch_id\": null, \"version_id\": null, \"environment\": \"production\", \"transcript\": [{\"role\": \"agent\", \"message\": \"Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma autom\\u00e1tica y tus datos se tratan seg\\u00fan nuestra pol\\u00edtica de privacidad. Si prefieres hablar con una persona, d\\u00edmelo en cualquier momento. \\u00bfEn qu\\u00e9 te puedo ayudar?\", \"time_in_call_secs\": 0, \"tool_calls\": [], \"tool_results\": [], \"feedback\": null, \"conversation_turn_metrics\": null}, {\"role\": \"user\", \"message\": \"Hola, soy Ana Prueba, mi n\\u00famero es 300 000 0031 y mi correo ana.prueba@correo.test. \\u00bfA qu\\u00e9 hora abren?\", \"time_in_call_secs\": 9, \"tool_calls\": [], \"tool_results\": [], \"feedback\": null, \"conversation_turn_metrics\": null}, {\"role\": \"agent\", \"message\": \"D\\u00e9jame consultarlo.\", \"time_in_call_secs\": 14, \"tool_calls\": [{\"type\": \"webhook\", \"tool_name\": \"consultar_horarios\", \"request_id\": \"toolreq_h8fx_0001\", \"params_as_json\": \"{}\", \"tool_has_been_called\": true, \"tool_details\": null}], \"tool_results\": [{\"type\": \"webhook\", \"tool_name\": \"consultar_horarios\", \"request_id\": \"toolreq_h8fx_0001\", \"result_value\": \"{\\\"sede\\\": \\\"Sede Centro\\\", \\\"horario\\\": \\\"lunes a viernes de 5:00 a 22:00; s\\u00e1bados de 7:00 a 14:00\\\"}\", \"is_error\": false, \"tool_has_been_called\": true}], \"feedback\": null, \"conversation_turn_metrics\": null}, {\"role\": \"agent\", \"message\": \"La Sede Centro abre de lunes a viernes de 5:00 a 22:00 y los s\\u00e1bados de 7:00 a 14:00. \\u00bfAlgo m\\u00e1s?\", \"time_in_call_secs\": 16, \"tool_calls\": [], \"tool_results\": [], \"feedback\": null, \"conversation_turn_metrics\": null}, {\"role\": \"user\", \"message\": \"No, gracias.\", \"time_in_call_secs\": 25, \"tool_calls\": [], \"tool_results\": [], \"feedback\": null, \"conversation_turn_metrics\": null}, {\"role\": \"agent\", \"message\": \"Con gusto. Hasta luego.\", \"time_in_call_secs\": 27, \"tool_calls\": [{\"type\": \"system\", \"tool_name\": \"end_call\", \"request_id\": \"toolreq_h8fx_0002\", \"params_as_json\": \"{}\", \"tool_has_been_called\": true, \"tool_details\": null}], \"tool_results\": [], \"feedback\": null, \"conversation_turn_metrics\": null}], \"metadata\": {\"start_time_unix_secs\": 1793804245, \"call_duration_secs\": 95, \"cost\": 210, \"termination_reason\": \"end_call tool was called\", \"phone_call\": {\"direction\": \"inbound\", \"phone_number_id\": \"phnum_h8fx_0001\", \"agent_number\": \"+576010000090\", \"external_number\": \"+573000000031\", \"type\": \"twilio\", \"call_sid\": \"CA000000000000000000000000a8000002\"}}, \"analysis\": {\"call_successful\": \"success\", \"transcript_summary\": \"La persona pregunt\\u00f3 por el horario de la Sede Centro y colg\\u00f3 satisfecha.\", \"evaluation_criteria_results\": {}, \"data_collection_results\": {}}, \"conversation_initiation_client_data\": {\"dynamic_variables\": {\"caller_authorized\": \"si\", \"call_ref\": \"8f000000-0000-4000-8000-000000000002\", \"version_label\": \"v12 \\u00b7 canario\", \"system__caller_id\": \"+573000000031\", \"system__call_sid\": \"CA000000000000000000000000a8000002\"}}}}",
+      "expected": {
+        "http": 200,
+        "envelopeType": "post_call_transcription",
+        "events": [
+          {
+            "provider": "elevenlabs",
+            "kind": "post_call_transcription",
+            "providerEventKey": "conv_h8fx_0002"
+          },
+          {
+            "provider": "elevenlabs",
+            "kind": "guard_verdict",
+            "providerEventKey": "conv_h8fx_0002"
+          }
+        ],
+        "transition": {
+          "from": "active",
+          "to": "completed"
+        },
+        "durationSecs": 95,
+        "seal": {
+          "observedAgentId": "agent_h8fx_canary_0003",
+          "observedVersionId": null,
+          "observedBranchId": null,
+          "sealVerified": true
+        },
+        "costRaw": 210,
+        "costUnits": "por confirmar (D8-15)",
+        "guard": {
+          "violations": [],
+          "brakeOpens": false
+        },
+        "brakeOpens": false,
+        "mustNotPersist": [
+          "Ana Prueba",
+          "300 000 0031",
+          "ana.prueba@correo.test",
+          "+573000000031",
+          "573000000031"
+        ]
+      }
+    },
+    {
+      "name": "postCall · post_call_transcription · seal_mismatch: el agente observado no es el sellado → evento y freno (D8-8, D8-19)",
+      "kind": "post_call_transcription",
+      "contractRef": "D8-8, D8-19",
+      "basis": "contrato",
+      "bodyKey": "pc_seal_mismatch",
+      "given": {
+        "call": {
+          "direction": "outbound",
+          "status": "dialing",
+          "providerConversationId": "conv_h8fx_0003",
+          "providerCallSid": "CA000000000000000000000000a8000003",
+          "callRef": "8f000000-0000-4000-8000-000000000003",
+          "sealedAgentId": "agent_h8fx_canary_0003",
+          "callerAuthorized": "si"
+        }
+      },
+      "rawBody": "{\"type\":\"post_call_transcription\",\"event_timestamp\":1793804340,\"data\":{\"agent_id\":\"agent_h8fx_canary_0002\",\"conversation_id\":\"conv_h8fx_0003\",\"status\":\"done\",\"user_id\":\"8f000000-0000-4000-8000-000000000003\",\"branch_id\":null,\"version_id\":null,\"environment\":\"production\",\"transcript\":[{\"role\":\"agent\",\"message\":\"Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma automática y tus datos se tratan según nuestra política de privacidad. Si prefieres hablar con una persona, dímelo en cualquier momento. ¿En qué te puedo ayudar?\",\"time_in_call_secs\":0,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"Hola, soy Ana Prueba, mi número es 300 000 0031 y mi correo ana.prueba@correo.test. ¿A qué hora abren?\",\"time_in_call_secs\":9,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Déjame consultarlo.\",\"time_in_call_secs\":14,\"tool_calls\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"result_value\":\"{\\\"sede\\\": \\\"Sede Centro\\\", \\\"horario\\\": \\\"lunes a viernes de 5:00 a 22:00; sábados de 7:00 a 14:00\\\"}\",\"is_error\":false,\"tool_has_been_called\":true}],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"La Sede Centro abre de lunes a viernes de 5:00 a 22:00 y los sábados de 7:00 a 14:00. ¿Algo más?\",\"time_in_call_secs\":16,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"No, gracias.\",\"time_in_call_secs\":25,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Con gusto. Hasta luego.\",\"time_in_call_secs\":27,\"tool_calls\":[{\"type\":\"system\",\"tool_name\":\"end_call\",\"request_id\":\"toolreq_h8fx_0002\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null}],\"metadata\":{\"start_time_unix_secs\":1793804153,\"call_duration_secs\":187,\"cost\":412,\"termination_reason\":\"end_call tool was called\",\"phone_call\":{\"direction\":\"outbound\",\"phone_number_id\":\"phnum_h8fx_0001\",\"agent_number\":\"+576010000090\",\"external_number\":\"+573000000031\",\"type\":\"twilio\",\"call_sid\":\"CA000000000000000000000000a8000003\"}},\"analysis\":{\"call_successful\":\"success\",\"transcript_summary\":\"La persona preguntó por el horario de la Sede Centro y colgó satisfecha.\",\"evaluation_criteria_results\":{},\"data_collection_results\":{}},\"conversation_initiation_client_data\":{\"dynamic_variables\":{\"caller_authorized\":\"si\",\"call_ref\":\"8f000000-0000-4000-8000-000000000003\",\"version_label\":\"v12 · canario\",\"system__caller_id\":\"+573000000031\",\"system__call_sid\":\"CA000000000000000000000000a8000003\"}}}}",
+      "expected": {
+        "http": 200,
+        "envelopeType": "post_call_transcription",
+        "events": [
+          {
+            "provider": "elevenlabs",
+            "kind": "post_call_transcription",
+            "providerEventKey": "conv_h8fx_0003"
+          },
+          {
+            "provider": "elevenlabs",
+            "kind": "seal_mismatch",
+            "providerEventKey": "conv_h8fx_0003"
+          },
+          {
+            "provider": "elevenlabs",
+            "kind": "guard_verdict",
+            "providerEventKey": "conv_h8fx_0003"
+          }
+        ],
+        "transition": {
+          "from": "dialing",
+          "to": "completed"
+        },
+        "durationSecs": 187,
+        "seal": {
+          "observedAgentId": "agent_h8fx_canary_0002",
+          "observedVersionId": null,
+          "observedBranchId": null,
+          "sealVerified": false
+        },
+        "costRaw": 412,
+        "costUnits": "por confirmar (D8-15)",
+        "guard": {
+          "violations": [],
+          "brakeOpens": false
+        },
+        "brakeOpens": true,
+        "mustNotPersist": [
+          "Ana Prueba",
+          "300 000 0031",
+          "ana.prueba@correo.test",
+          "La persona preguntó por el horario de la Sede Centro y colgó satisfecha.",
+          "+573000000031",
+          "573000000031",
+          "¿A qué hora abren?"
+        ]
+      }
+    },
+    {
+      "name": "postCall · post_call_transcription · el mismo agente pero con version_id y branch_id: se guardan tal cual y el sello verifica el agente (Q-7: ¿es deriva?)",
+      "kind": "post_call_transcription",
+      "contractRef": "D8-8, P-2",
+      "basis": "contrato",
+      "bodyKey": "pc_version",
+      "given": {
+        "call": {
+          "direction": "outbound",
+          "status": "dialing",
+          "providerConversationId": "conv_h8fx_0004",
+          "providerCallSid": "CA000000000000000000000000a8000004",
+          "callRef": "8f000000-0000-4000-8000-000000000004",
+          "sealedAgentId": "agent_h8fx_canary_0003",
+          "callerAuthorized": "si"
+        }
+      },
+      "rawBody": "{\"type\":\"post_call_transcription\",\"event_timestamp\":1793804340,\"data\":{\"agent_id\":\"agent_h8fx_canary_0003\",\"conversation_id\":\"conv_h8fx_0004\",\"status\":\"done\",\"user_id\":\"8f000000-0000-4000-8000-000000000004\",\"branch_id\":\"agtbrch_h8fx_0001\",\"version_id\":\"agtvrsn_h8fx_0001\",\"environment\":\"production\",\"transcript\":[{\"role\":\"agent\",\"message\":\"Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma automática y tus datos se tratan según nuestra política de privacidad. Si prefieres hablar con una persona, dímelo en cualquier momento. ¿En qué te puedo ayudar?\",\"time_in_call_secs\":0,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"Hola, soy Ana Prueba, mi número es 300 000 0031 y mi correo ana.prueba@correo.test. ¿A qué hora abren?\",\"time_in_call_secs\":9,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Déjame consultarlo.\",\"time_in_call_secs\":14,\"tool_calls\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"result_value\":\"{\\\"sede\\\": \\\"Sede Centro\\\", \\\"horario\\\": \\\"lunes a viernes de 5:00 a 22:00; sábados de 7:00 a 14:00\\\"}\",\"is_error\":false,\"tool_has_been_called\":true}],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"La Sede Centro abre de lunes a viernes de 5:00 a 22:00 y los sábados de 7:00 a 14:00. ¿Algo más?\",\"time_in_call_secs\":16,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"No, gracias.\",\"time_in_call_secs\":25,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Con gusto. Hasta luego.\",\"time_in_call_secs\":27,\"tool_calls\":[{\"type\":\"system\",\"tool_name\":\"end_call\",\"request_id\":\"toolreq_h8fx_0002\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null}],\"metadata\":{\"start_time_unix_secs\":1793804153,\"call_duration_secs\":187,\"cost\":412,\"termination_reason\":\"end_call tool was called\",\"phone_call\":{\"direction\":\"outbound\",\"phone_number_id\":\"phnum_h8fx_0001\",\"agent_number\":\"+576010000090\",\"external_number\":\"+573000000031\",\"type\":\"twilio\",\"call_sid\":\"CA000000000000000000000000a8000004\"}},\"analysis\":{\"call_successful\":\"success\",\"transcript_summary\":\"La persona preguntó por el horario de la Sede Centro y colgó satisfecha.\",\"evaluation_criteria_results\":{},\"data_collection_results\":{}},\"conversation_initiation_client_data\":{\"dynamic_variables\":{\"caller_authorized\":\"si\",\"call_ref\":\"8f000000-0000-4000-8000-000000000004\",\"version_label\":\"v12 · canario\",\"system__caller_id\":\"+573000000031\",\"system__call_sid\":\"CA000000000000000000000000a8000004\"}}}}",
+      "expected": {
+        "http": 200,
+        "envelopeType": "post_call_transcription",
+        "events": [
+          {
+            "provider": "elevenlabs",
+            "kind": "post_call_transcription",
+            "providerEventKey": "conv_h8fx_0004"
+          },
+          {
+            "provider": "elevenlabs",
+            "kind": "guard_verdict",
+            "providerEventKey": "conv_h8fx_0004"
+          }
+        ],
+        "transition": {
+          "from": "dialing",
+          "to": "completed"
+        },
+        "durationSecs": 187,
+        "seal": {
+          "observedAgentId": "agent_h8fx_canary_0003",
+          "observedVersionId": "agtvrsn_h8fx_0001",
+          "observedBranchId": "agtbrch_h8fx_0001",
+          "sealVerified": true
+        },
+        "costRaw": 412,
+        "costUnits": "por confirmar (D8-15)",
+        "guard": {
+          "violations": [],
+          "brakeOpens": false
+        },
+        "brakeOpens": false,
+        "mustNotPersist": [
+          "Ana Prueba",
+          "300 000 0031",
+          "ana.prueba@correo.test",
+          "La persona preguntó por el horario de la Sede Centro y colgó satisfecha.",
+          "+573000000031",
+          "573000000031",
+          "¿A qué hora abren?"
+        ]
+      }
+    },
+    {
+      "name": "postCall · post_call_transcription · conversación sin fila en voice_calls (iniciada fuera de Laravel): unknown_provider_call y freno",
+      "kind": "post_call_transcription",
+      "contractRef": "D8-13, D8-19",
+      "basis": "decision-fixture",
+      "decision": "DF-E5",
+      "bodyKey": "pc_unknown",
+      "given": {
+        "call": null
+      },
+      "rawBody": "{\"type\":\"post_call_transcription\",\"event_timestamp\":1793804340,\"data\":{\"agent_id\":\"agent_h8fx_rogue_0099\",\"conversation_id\":\"conv_h8fx_0005\",\"status\":\"done\",\"user_id\":\"8f000000-0000-4000-8000-000000000005\",\"branch_id\":null,\"version_id\":null,\"environment\":\"production\",\"transcript\":[{\"role\":\"agent\",\"message\":\"Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma automática y tus datos se tratan según nuestra política de privacidad. Si prefieres hablar con una persona, dímelo en cualquier momento. ¿En qué te puedo ayudar?\",\"time_in_call_secs\":0,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"Hola, soy Ana Prueba, mi número es 300 000 0031 y mi correo ana.prueba@correo.test. ¿A qué hora abren?\",\"time_in_call_secs\":9,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Déjame consultarlo.\",\"time_in_call_secs\":14,\"tool_calls\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"result_value\":\"{\\\"sede\\\": \\\"Sede Centro\\\", \\\"horario\\\": \\\"lunes a viernes de 5:00 a 22:00; sábados de 7:00 a 14:00\\\"}\",\"is_error\":false,\"tool_has_been_called\":true}],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"La Sede Centro abre de lunes a viernes de 5:00 a 22:00 y los sábados de 7:00 a 14:00. ¿Algo más?\",\"time_in_call_secs\":16,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"No, gracias.\",\"time_in_call_secs\":25,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Con gusto. Hasta luego.\",\"time_in_call_secs\":27,\"tool_calls\":[{\"type\":\"system\",\"tool_name\":\"end_call\",\"request_id\":\"toolreq_h8fx_0002\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null}],\"metadata\":{\"start_time_unix_secs\":1793804153,\"call_duration_secs\":187,\"cost\":412,\"termination_reason\":\"end_call tool was called\",\"phone_call\":{\"direction\":\"outbound\",\"phone_number_id\":\"phnum_h8fx_0001\",\"agent_number\":\"+576010000090\",\"external_number\":\"+573000000077\",\"type\":\"twilio\",\"call_sid\":\"CA000000000000000000000000a8000005\"}},\"analysis\":{\"call_successful\":\"success\",\"transcript_summary\":\"La persona preguntó por el horario de la Sede Centro y colgó satisfecha.\",\"evaluation_criteria_results\":{},\"data_collection_results\":{}},\"conversation_initiation_client_data\":{\"dynamic_variables\":{\"caller_authorized\":\"si\",\"call_ref\":\"8f000000-0000-4000-8000-000000000005\",\"version_label\":\"v12 · canario\",\"system__caller_id\":\"+573000000077\",\"system__call_sid\":\"CA000000000000000000000000a8000005\"}}}}",
+      "expected": {
+        "http": 200,
+        "envelopeType": "post_call_transcription",
+        "events": [
+          {
+            "provider": "elevenlabs",
+            "kind": "unknown_provider_call",
+            "providerEventKey": "conv_h8fx_0005"
+          }
+        ],
+        "transition": null,
+        "brakeOpens": true,
+        "guard": null,
+        "mustNotPersist": [
+          "+573000000077",
+          "300 000 0031"
+        ]
+      }
+    },
+    {
+      "name": "postCall · post_call_transcription · duplicado: la misma conversación y el mismo tipo otra vez → 200 y nada nuevo",
+      "kind": "post_call_transcription",
+      "contractRef": "D8-13, D8-16",
+      "basis": "decision-fixture",
+      "decision": "DF-E2",
+      "bodyKey": "pc_duplicate",
+      "given": {
+        "call": {
+          "direction": "outbound",
+          "status": "completed",
+          "providerConversationId": "conv_h8fx_0001",
+          "providerCallSid": "CA000000000000000000000000a8000001",
+          "callRef": "8f000000-0000-4000-8000-000000000001",
+          "sealedAgentId": "agent_h8fx_canary_0003",
+          "callerAuthorized": "si"
+        },
+        "existingEvents": [
+          {
+            "provider": "elevenlabs",
+            "kind": "post_call_transcription",
+            "providerEventKey": "conv_h8fx_0001"
+          }
+        ]
+      },
+      "rawBody": "{\"type\":\"post_call_transcription\",\"event_timestamp\":1793804340,\"data\":{\"agent_id\":\"agent_h8fx_canary_0003\",\"conversation_id\":\"conv_h8fx_0001\",\"status\":\"done\",\"user_id\":\"8f000000-0000-4000-8000-000000000001\",\"branch_id\":null,\"version_id\":null,\"environment\":\"production\",\"transcript\":[{\"role\":\"agent\",\"message\":\"Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma automática y tus datos se tratan según nuestra política de privacidad. Si prefieres hablar con una persona, dímelo en cualquier momento. ¿En qué te puedo ayudar?\",\"time_in_call_secs\":0,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"Hola, soy Ana Prueba, mi número es 300 000 0031 y mi correo ana.prueba@correo.test. ¿A qué hora abren?\",\"time_in_call_secs\":9,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Déjame consultarlo.\",\"time_in_call_secs\":14,\"tool_calls\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"result_value\":\"{\\\"sede\\\": \\\"Sede Centro\\\", \\\"horario\\\": \\\"lunes a viernes de 5:00 a 22:00; sábados de 7:00 a 14:00\\\"}\",\"is_error\":false,\"tool_has_been_called\":true}],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"La Sede Centro abre de lunes a viernes de 5:00 a 22:00 y los sábados de 7:00 a 14:00. ¿Algo más?\",\"time_in_call_secs\":16,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"No, gracias.\",\"time_in_call_secs\":25,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Con gusto. Hasta luego.\",\"time_in_call_secs\":27,\"tool_calls\":[{\"type\":\"system\",\"tool_name\":\"end_call\",\"request_id\":\"toolreq_h8fx_0002\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null}],\"metadata\":{\"start_time_unix_secs\":1793804153,\"call_duration_secs\":187,\"cost\":412,\"termination_reason\":\"end_call tool was called\",\"phone_call\":{\"direction\":\"outbound\",\"phone_number_id\":\"phnum_h8fx_0001\",\"agent_number\":\"+576010000090\",\"external_number\":\"+573000000031\",\"type\":\"twilio\",\"call_sid\":\"CA000000000000000000000000a8000001\"}},\"analysis\":{\"call_successful\":\"success\",\"transcript_summary\":\"La persona preguntó por el horario de la Sede Centro y colgó satisfecha.\",\"evaluation_criteria_results\":{},\"data_collection_results\":{}},\"conversation_initiation_client_data\":{\"dynamic_variables\":{\"caller_authorized\":\"si\",\"call_ref\":\"8f000000-0000-4000-8000-000000000001\",\"version_label\":\"v12 · canario\",\"system__caller_id\":\"+573000000031\",\"system__call_sid\":\"CA000000000000000000000000a8000001\"}}}}",
+      "expected": {
+        "http": 200,
+        "envelopeType": "post_call_transcription",
+        "events": [],
+        "transition": null,
+        "brakeOpens": false,
+        "duplicate": true,
+        "mustNotPersist": [
+          "Ana Prueba",
+          "300 000 0031",
+          "ana.prueba@correo.test",
+          "La persona preguntó por el horario de la Sede Centro y colgó satisfecha.",
+          "+573000000031",
+          "573000000031",
+          "¿A qué hora abren?"
+        ]
+      }
+    },
+    {
+      "name": "postCall · post_call_transcription · la post-llamada llega después del corte (hung_up): se registra y el estado final no cambia",
+      "kind": "post_call_transcription",
+      "contractRef": "D8-13, D8-16",
+      "basis": "decision-fixture",
+      "decision": "DF-E4",
+      "bodyKey": "pc_after_hangup",
+      "given": {
+        "call": {
+          "direction": "outbound",
+          "status": "hung_up",
+          "providerConversationId": "conv_h8fx_0006",
+          "providerCallSid": "CA000000000000000000000000a8000006",
+          "callRef": "8f000000-0000-4000-8000-000000000006",
+          "sealedAgentId": "agent_h8fx_canary_0003",
+          "callerAuthorized": "si"
+        }
+      },
+      "rawBody": "{\"type\":\"post_call_transcription\",\"event_timestamp\":1793804340,\"data\":{\"agent_id\":\"agent_h8fx_canary_0003\",\"conversation_id\":\"conv_h8fx_0006\",\"status\":\"done\",\"user_id\":\"8f000000-0000-4000-8000-000000000006\",\"branch_id\":null,\"version_id\":null,\"environment\":\"production\",\"transcript\":[{\"role\":\"agent\",\"message\":\"Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma automática y tus datos se tratan según nuestra política de privacidad. Si prefieres hablar con una persona, dímelo en cualquier momento. ¿En qué te puedo ayudar?\",\"time_in_call_secs\":0,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"Hola, soy Ana Prueba, mi número es 300 000 0031 y mi correo ana.prueba@correo.test. ¿A qué hora abren?\",\"time_in_call_secs\":9,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Déjame consultarlo.\",\"time_in_call_secs\":14,\"tool_calls\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[{\"type\":\"webhook\",\"tool_name\":\"consultar_horarios\",\"request_id\":\"toolreq_h8fx_0001\",\"result_value\":\"{\\\"sede\\\": \\\"Sede Centro\\\", \\\"horario\\\": \\\"lunes a viernes de 5:00 a 22:00; sábados de 7:00 a 14:00\\\"}\",\"is_error\":false,\"tool_has_been_called\":true}],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"La Sede Centro abre de lunes a viernes de 5:00 a 22:00 y los sábados de 7:00 a 14:00. ¿Algo más?\",\"time_in_call_secs\":16,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"user\",\"message\":\"No, gracias.\",\"time_in_call_secs\":25,\"tool_calls\":[],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null},{\"role\":\"agent\",\"message\":\"Con gusto. Hasta luego.\",\"time_in_call_secs\":27,\"tool_calls\":[{\"type\":\"system\",\"tool_name\":\"end_call\",\"request_id\":\"toolreq_h8fx_0002\",\"params_as_json\":\"{}\",\"tool_has_been_called\":true,\"tool_details\":null}],\"tool_results\":[],\"feedback\":null,\"conversation_turn_metrics\":null}],\"metadata\":{\"start_time_unix_secs\":1793804299,\"call_duration_secs\":41,\"cost\":90,\"termination_reason\":\"Call ended by remote party\",\"phone_call\":{\"direction\":\"outbound\",\"phone_number_id\":\"phnum_h8fx_0001\",\"agent_number\":\"+576010000090\",\"external_number\":\"+573000000031\",\"type\":\"twilio\",\"call_sid\":\"CA000000000000000000000000a8000006\"}},\"analysis\":{\"call_successful\":\"success\",\"transcript_summary\":\"La persona preguntó por el horario de la Sede Centro y colgó satisfecha.\",\"evaluation_criteria_results\":{},\"data_collection_results\":{}},\"conversation_initiation_client_data\":{\"dynamic_variables\":{\"caller_authorized\":\"si\",\"call_ref\":\"8f000000-0000-4000-8000-000000000006\",\"version_label\":\"v12 · canario\",\"system__caller_id\":\"+573000000031\",\"system__call_sid\":\"CA000000000000000000000000a8000006\"}}}}",
+      "expected": {
+        "http": 200,
+        "envelopeType": "post_call_transcription",
+        "events": [
+          {
+            "provider": "elevenlabs",
+            "kind": "post_call_transcription",
+            "providerEventKey": "conv_h8fx_0006"
+          },
+          {
+            "provider": "elevenlabs",
+            "kind": "guard_verdict",
+            "providerEventKey": "conv_h8fx_0006"
+          }
+        ],
+        "transition": null,
+        "statusAfter": "hung_up",
+        "durationSecs": 41,
+        "seal": {
+          "observedAgentId": "agent_h8fx_canary_0003",
+          "observedVersionId": null,
+          "observedBranchId": null,
+          "sealVerified": true
+        },
+        "costRaw": 90,
+        "costUnits": "por confirmar (D8-15)",
+        "guard": {
+          "violations": [],
+          "brakeOpens": false
+        },
+        "brakeOpens": false,
+        "mustNotPersist": [
+          "Ana Prueba",
+          "300 000 0031",
+          "ana.prueba@correo.test",
+          "La persona preguntó por el horario de la Sede Centro y colgó satisfecha.",
+          "+573000000031",
+          "573000000031",
+          "¿A qué hora abren?"
+        ]
+      }
+    },
+    {
+      "name": "postCall · post_call_audio · post_call_audio: 200, se descarta y queda el evento post_call_audio_discarded; el audio no se guarda",
+      "kind": "post_call_audio",
+      "contractRef": "D8-16, D8-17",
+      "basis": "contrato",
+      "bodyKey": "pc_audio",
+      "given": {
+        "call": {
+          "direction": "outbound",
+          "status": "dialing",
+          "providerConversationId": "conv_h8fx_0001",
+          "providerCallSid": "CA000000000000000000000000a8000001",
+          "callRef": "8f000000-0000-4000-8000-000000000001",
+          "sealedAgentId": "agent_h8fx_canary_0003",
+          "callerAuthorized": "si"
+        }
+      },
+      "rawBody": "{\"type\":\"post_call_audio\",\"event_timestamp\":1793804370,\"data\":{\"agent_id\":\"agent_h8fx_canary_0003\",\"conversation_id\":\"conv_h8fx_0001\",\"full_audio\":\"SUQzBAAAAAAAAGg4Zml4dHVyZS1tcDMtZmFsc28AAQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHw==\"}}",
+      "expected": {
+        "http": 200,
+        "envelopeType": "post_call_audio",
+        "events": [
+          {
+            "provider": "elevenlabs",
+            "kind": "post_call_audio_discarded",
+            "providerEventKey": "conv_h8fx_0001"
+          }
+        ],
+        "transition": null,
+        "brakeOpens": false,
+        "mustNotPersist": [
+          "SUQzBAAAAAAAAGg4Zml4dHVyZS1tcDMtZmFsc28AAQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHw=="
+        ]
+      }
+    },
+    {
+      "name": "postCall · call_initiation_failure · call_initiation_failure = busy: dialing → busy",
+      "kind": "call_initiation_failure",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "bodyKey": "pc_fail_busy",
+      "given": {
+        "call": {
+          "direction": "outbound",
+          "status": "dialing",
+          "providerConversationId": "conv_h8fx_0007",
+          "providerCallSid": "CA000000000000000000000000a8000007",
+          "callRef": "8f000000-0000-4000-8000-000000000007",
+          "sealedAgentId": "agent_h8fx_canary_0003",
+          "callerAuthorized": "si"
+        }
+      },
+      "rawBody": "{\"type\":\"call_initiation_failure\",\"event_timestamp\":1793804380,\"data\":{\"agent_id\":\"agent_h8fx_canary_0003\",\"conversation_id\":\"conv_h8fx_0007\",\"failure_reason\":\"busy\",\"metadata\":{\"type\":\"twilio\",\"body\":{\"CallSid\":\"CA000000000000000000000000a8000007\",\"AccountSid\":\"AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f\",\"From\":\"+576010000090\",\"To\":\"+573000000031\",\"CallStatus\":\"busy\",\"Direction\":\"outbound-api\",\"ApiVersion\":\"2010-04-01\",\"CallDuration\":\"0\",\"SipResponseCode\":\"486\"}}}}",
+      "expected": {
+        "http": 200,
+        "envelopeType": "call_initiation_failure",
+        "events": [
+          {
+            "provider": "elevenlabs",
+            "kind": "call_initiation_failure",
+            "providerEventKey": "conv_h8fx_0007"
+          }
+        ],
+        "transition": {
+          "from": "dialing",
+          "to": "busy"
+        },
+        "brakeOpens": false,
+        "mustNotPersist": [
+          "+573000000031"
+        ]
+      }
+    },
+    {
+      "name": "postCall · call_initiation_failure · call_initiation_failure = no-answer: dialing → no_answer",
+      "kind": "call_initiation_failure",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "bodyKey": "pc_fail_no_answer",
+      "given": {
+        "call": {
+          "direction": "outbound",
+          "status": "dialing",
+          "providerConversationId": "conv_h8fx_0008",
+          "providerCallSid": "CA000000000000000000000000a8000008",
+          "callRef": "8f000000-0000-4000-8000-000000000008",
+          "sealedAgentId": "agent_h8fx_canary_0003",
+          "callerAuthorized": "si"
+        }
+      },
+      "rawBody": "{\"type\":\"call_initiation_failure\",\"event_timestamp\":1793804380,\"data\":{\"agent_id\":\"agent_h8fx_canary_0003\",\"conversation_id\":\"conv_h8fx_0008\",\"failure_reason\":\"no-answer\",\"metadata\":{\"type\":\"twilio\",\"body\":{\"CallSid\":\"CA000000000000000000000000a8000008\",\"AccountSid\":\"AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f\",\"From\":\"+576010000090\",\"To\":\"+573000000031\",\"CallStatus\":\"no-answer\",\"Direction\":\"outbound-api\",\"ApiVersion\":\"2010-04-01\",\"CallDuration\":\"0\",\"SipResponseCode\":\"486\"}}}}",
+      "expected": {
+        "http": 200,
+        "envelopeType": "call_initiation_failure",
+        "events": [
+          {
+            "provider": "elevenlabs",
+            "kind": "call_initiation_failure",
+            "providerEventKey": "conv_h8fx_0008"
+          }
+        ],
+        "transition": {
+          "from": "dialing",
+          "to": "no_answer"
+        },
+        "brakeOpens": false,
+        "mustNotPersist": [
+          "+573000000031"
+        ]
+      }
+    },
+    {
+      "name": "postCall · call_initiation_failure · call_initiation_failure = unknown: dialing → failed",
+      "kind": "call_initiation_failure",
+      "contractRef": "D8-13",
+      "basis": "contrato",
+      "bodyKey": "pc_fail_failed",
+      "given": {
+        "call": {
+          "direction": "outbound",
+          "status": "dialing",
+          "providerConversationId": "conv_h8fx_0009",
+          "providerCallSid": "CA000000000000000000000000a8000009",
+          "callRef": "8f000000-0000-4000-8000-000000000009",
+          "sealedAgentId": "agent_h8fx_canary_0003",
+          "callerAuthorized": "si"
+        }
+      },
+      "rawBody": "{\"type\":\"call_initiation_failure\",\"event_timestamp\":1793804380,\"data\":{\"agent_id\":\"agent_h8fx_canary_0003\",\"conversation_id\":\"conv_h8fx_0009\",\"failure_reason\":\"unknown\",\"metadata\":{\"type\":\"twilio\",\"body\":{\"CallSid\":\"CA000000000000000000000000a8000009\",\"AccountSid\":\"AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f\",\"From\":\"+576010000090\",\"To\":\"+573000000031\",\"CallStatus\":\"failed\",\"Direction\":\"outbound-api\",\"ApiVersion\":\"2010-04-01\",\"CallDuration\":\"0\",\"SipResponseCode\":\"486\"}}}}",
+      "expected": {
+        "http": 200,
+        "envelopeType": "call_initiation_failure",
+        "events": [
+          {
+            "provider": "elevenlabs",
+            "kind": "call_initiation_failure",
+            "providerEventKey": "conv_h8fx_0009"
+          }
+        ],
+        "transition": {
+          "from": "dialing",
+          "to": "failed"
+        },
+        "brakeOpens": false,
+        "mustNotPersist": [
+          "+573000000031"
+        ]
+      }
+    },
+    {
+      "name": "postCall · call_initiation_failure · call_initiation_failure antes de que el job guarde dialing: se casa por user_id/call_ref y requested → busy",
+      "kind": "call_initiation_failure",
+      "contractRef": "D8-13",
+      "basis": "decision-fixture",
+      "decision": "DF-S2",
+      "bodyKey": "pc_fail_race",
+      "given": {
+        "call": {
+          "direction": "outbound",
+          "status": "requested",
+          "providerConversationId": null,
+          "providerCallSid": null,
+          "callRef": "8f000000-0000-4000-8000-000000000010",
+          "sealedAgentId": "agent_h8fx_canary_0003",
+          "callerAuthorized": "si"
+        }
+      },
+      "rawBody": "{\"type\":\"call_initiation_failure\",\"event_timestamp\":1793804380,\"data\":{\"agent_id\":\"agent_h8fx_canary_0003\",\"conversation_id\":\"conv_h8fx_0010\",\"failure_reason\":\"busy\",\"metadata\":{\"type\":\"twilio\",\"body\":{\"CallSid\":\"CA000000000000000000000000a800000a\",\"AccountSid\":\"AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f\",\"From\":\"+576010000090\",\"To\":\"+573000000031\",\"CallStatus\":\"busy\",\"Direction\":\"outbound-api\",\"ApiVersion\":\"2010-04-01\",\"CallDuration\":\"0\",\"SipResponseCode\":\"486\"}},\"user_id\":\"8f000000-0000-4000-8000-000000000010\"}}",
+      "expected": {
+        "http": 200,
+        "envelopeType": "call_initiation_failure",
+        "events": [
+          {
+            "provider": "elevenlabs",
+            "kind": "call_initiation_failure",
+            "providerEventKey": "conv_h8fx_0010"
+          }
+        ],
+        "transition": {
+          "from": "requested",
+          "to": "busy"
+        },
+        "brakeOpens": false,
+        "thenJobWritesDialing": "rechazado: busy es final (state-transitions.json)",
+        "mustNotPersist": [
+          "+573000000031"
+        ]
+      }
+    },
+    {
+      "name": "postCall · post_call_summary · tipo desconocido con la firma buena: 200 y se ignora (D8-16)",
+      "kind": "post_call_summary",
+      "contractRef": "D8-16",
+      "basis": "contrato",
+      "bodyKey": "pc_unknown_type",
+      "given": {
+        "call": {
+          "direction": "outbound",
+          "status": "dialing",
+          "providerConversationId": "conv_h8fx_0001",
+          "providerCallSid": "CA000000000000000000000000a8000001",
+          "callRef": "8f000000-0000-4000-8000-000000000001",
+          "sealedAgentId": "agent_h8fx_canary_0003",
+          "callerAuthorized": "si"
+        }
+      },
+      "rawBody": "{\"type\":\"post_call_summary\",\"event_timestamp\":1793804390,\"data\":{\"agent_id\":\"agent_h8fx_canary_0003\",\"conversation_id\":\"conv_h8fx_0001\"}}",
+      "expected": {
+        "http": 200,
+        "envelopeType": null,
+        "events": [],
+        "transition": null,
+        "brakeOpens": false,
+        "mustNotPersist": []
+      }
+    },
+    {
+      "name": "postCall · raro · JSON no válido con la firma buena: 200 y se ignora (nunca un 4xx en bucle)",
+      "kind": "raro",
+      "contractRef": "D8-16",
+      "basis": "decision-fixture",
+      "decision": "DF-E3",
+      "bodyKey": "pc_broken_json",
+      "given": {
+        "call": {
+          "direction": "outbound",
+          "status": "dialing",
+          "providerConversationId": "conv_h8fx_0001",
+          "providerCallSid": "CA000000000000000000000000a8000001",
+          "callRef": "8f000000-0000-4000-8000-000000000001",
+          "sealedAgentId": "agent_h8fx_canary_0003",
+          "callerAuthorized": "si"
+        }
+      },
+      "rawBody": "{\"type\":\"post_call_transcription\",\"data\":{\"agent_id\":\"agent_h8fx_canary_0003\"",
+      "expected": {
+        "http": 200,
+        "envelopeType": null,
+        "events": [],
+        "transition": null,
+        "brakeOpens": false,
+        "mustNotPersist": []
+      }
+    }
+  ],
+  "guard": [
+    {
+      "name": "guard · inspect · sin violaciones: aviso en el primer turno, hechos de la herramienta",
+      "kind": "inspect",
+      "contractRef": "D8-10",
+      "basis": "contrato",
+      "decision": "DF-E11",
+      "transcript": [
+        {
+          "role": "agent",
+          "message": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma automática y tus datos se tratan según nuestra política de privacidad. Si prefieres hablar con una persona, dímelo en cualquier momento. ¿En qué te puedo ayudar?",
+          "time_in_call_secs": 0,
+          "tool_calls": [],
+          "tool_results": [],
+          "feedback": null,
+          "conversation_turn_metrics": null
+        },
+        {
+          "role": "user",
+          "message": "Hola, soy Ana Prueba, mi número es 300 000 0031 y mi correo ana.prueba@correo.test. ¿A qué hora abren?",
+          "time_in_call_secs": 9,
+          "tool_calls": [],
+          "tool_results": [],
+          "feedback": null,
+          "conversation_turn_metrics": null
+        },
+        {
+          "role": "agent",
+          "message": "Déjame consultarlo.",
+          "time_in_call_secs": 14,
+          "tool_calls": [
+            {
+              "type": "webhook",
+              "tool_name": "consultar_horarios",
+              "request_id": "toolreq_h8fx_0001",
+              "params_as_json": "{}",
+              "tool_has_been_called": true,
+              "tool_details": null
+            }
+          ],
+          "tool_results": [
+            {
+              "type": "webhook",
+              "tool_name": "consultar_horarios",
+              "request_id": "toolreq_h8fx_0001",
+              "result_value": "{\"sede\": \"Sede Centro\", \"horario\": \"lunes a viernes de 5:00 a 22:00; sábados de 7:00 a 14:00\"}",
+              "is_error": false,
+              "tool_has_been_called": true
+            }
+          ],
+          "feedback": null,
+          "conversation_turn_metrics": null
+        },
+        {
+          "role": "agent",
+          "message": "La Sede Centro abre de lunes a viernes de 5:00 a 22:00 y los sábados de 7:00 a 14:00. ¿Algo más?",
+          "time_in_call_secs": 16,
+          "tool_calls": [],
+          "tool_results": [],
+          "feedback": null,
+          "conversation_turn_metrics": null
+        },
+        {
+          "role": "user",
+          "message": "No, gracias.",
+          "time_in_call_secs": 25,
+          "tool_calls": [],
+          "tool_results": [],
+          "feedback": null,
+          "conversation_turn_metrics": null
+        },
+        {
+          "role": "agent",
+          "message": "Con gusto. Hasta luego.",
+          "time_in_call_secs": 27,
+          "tool_calls": [
+            {
+              "type": "system",
+              "tool_name": "end_call",
+              "request_id": "toolreq_h8fx_0002",
+              "params_as_json": "{}",
+              "tool_has_been_called": true,
+              "tool_details": null
+            }
+          ],
+          "tool_results": [],
+          "feedback": null,
+          "conversation_turn_metrics": null
+        }
+      ],
+      "profileTransferAliases": [
+        "Recepción"
+      ],
+      "expected": {
+        "violations": [],
+        "brakeOpens": false,
+        "storesText": false
+      }
+    },
+    {
+      "name": "guard · inspect · P-3: el precio dicho es exactamente el que devolvió consultar_planes en esa llamada → no es violación",
+      "kind": "inspect",
+      "contractRef": "D8-10, P-3",
+      "basis": "supuesto-lead",
+      "decision": "DF-E11",
+      "transcript": [
+        {
+          "role": "agent",
+          "message": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma automática y tus datos se tratan según nuestra política de privacidad. Si prefieres hablar con una persona, dímelo en cualquier momento.",
+          "time_in_call_secs": 0,
+          "tool_calls": [],
+          "tool_results": [],
+          "feedback": null,
+          "conversation_turn_metrics": null
+        },
+        {
+          "role": "user",
+          "message": "¿Cuánto vale el plan mensual?",
+          "time_in_call_secs": 8,
+          "tool_calls": [],
+          "tool_results": [],
+          "feedback": null,
+          "conversation_turn_metrics": null
+        },
+        {
+          "role": "agent",
+          "message": "Lo consulto.",
+          "time_in_call_secs": 10,
+          "tool_calls": [
+            {
+              "type": "webhook",
+              "tool_name": "consultar_planes",
+              "request_id": "toolreq_h8fx_0101",
+              "params_as_json": "{}",
+              "tool_has_been_called": true,
+              "tool_details": null
+            }
+          ],
+          "tool_results": [
+            {
+              "type": "webhook",
+              "tool_name": "consultar_planes",
+              "request_id": "toolreq_h8fx_0101",
+              "result_value": "{\"planes\": [{\"nombre\": \"Mensual\", \"condiciones\": \"Acceso a la sede, sin permanencia\", \"precio\": \"$ 89.000\"}]}",
+              "is_error": false,
+              "tool_has_been_called": true
+            }
+          ],
+          "feedback": null,
+          "conversation_turn_metrics": null
+        },
+        {
+          "role": "agent",
+          "message": "El plan Mensual cuesta $ 89.000 al mes, sin permanencia.",
+          "time_in_call_secs": 12,
+          "tool_calls": [],
+          "tool_results": [],
+          "feedback": null,
+          "conversation_turn_metrics": null
+        }
+      ],
+      "profileTransferAliases": [
+        "Recepción"
+      ],
+      "expected": {
+        "violations": [],
+        "brakeOpens": false,
+        "storesText": false,
+        "note": "inspect() del motor da machine_reply_invented_price ante cualquier cifra: el adaptador de voz descuenta las que devolvió la herramienta"
+      }
+    },
+    {
+      "name": "guard · inspect · P-3: una cifra distinta de la de la herramienta → violación y freno",
+      "kind": "inspect",
+      "contractRef": "D8-10, P-3, D8-19",
+      "basis": "supuesto-lead",
+      "decision": "DF-E11",
+      "transcript": [
+        {
+          "role": "agent",
+          "message": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma automática y tus datos se tratan según nuestra política de privacidad. Si prefieres hablar con una persona, dímelo en cualquier momento.",
+          "time_in_call_secs": 0,
+          "tool_calls": [],
+          "tool_results": [],
+          "feedback": null,
+          "conversation_turn_metrics": null
+        },
+        {
+          "role": "user",
+          "message": "¿Cuánto vale el plan mensual?",
+          "time_in_call_secs": 8,
+          "tool_calls": [],
+          "tool_results": [],
+          "feedback": null,
+          "conversation_turn_metrics": null
+        },
+        {
+          "role": "agent",
+          "message": "Lo consulto.",
+          "time_in_call_secs": 10,
+          "tool_calls": [
+            {
+              "type": "webhook",
+              "tool_name": "consultar_planes",
+              "request_id": "toolreq_h8fx_0101",
+              "params_as_json": "{}",
+              "tool_has_been_called": true,
+              "tool_details": null
+            }
+          ],
+          "tool_results": [
+            {
+              "type": "webhook",
+              "tool_name": "consultar_planes",
+              "request_id": "toolreq_h8fx_0101",
+              "result_value": "{\"planes\": [{\"nombre\": \"Mensual\", \"condiciones\": \"Acceso a la sede, sin permanencia\", \"precio\": \"$ 89.000\"}]}",
+              "is_error": false,
+              "tool_has_been_called": true
+            }
+          ],
+          "feedback": null,
+          "conversation_turn_metrics": null
+        },
+        {
+          "role": "agent",
+          "message": "El plan Mensual te queda en $ 79.000.",
+          "time_in_call_secs": 12,
+          "tool_calls": [],
+          "tool_results": [],
+          "feedback": null,
+          "conversation_turn_metrics": null
+        }
+      ],
+      "profileTransferAliases": [
+        "Recepción"
+      ],
+      "expected": {
+        "violations": [
+          {
+            "turn": 3,
+            "code": "voice_money_not_from_tool"
+          }
+        ],
+        "brakeOpens": true,
+        "storesText": false
+      }
+    },
+    {
+      "name": "guard · inspect · P-3: una cifra sin haber llamado a la herramienta → violación",
+      "kind": "inspect",
+      "contractRef": "D8-10, P-3, D8-19",
+      "basis": "supuesto-lead",
+      "decision": "DF-E11",
+      "transcript": [
+        {
+          "role": "agent",
+          "message": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma automática y tus datos se tratan según nuestra política de privacidad. Si prefieres hablar con una persona, dímelo en cualquier momento.",
+          "time_in_call_secs": 0,
+          "tool_calls": [],
+          "tool_results": [],
+          "feedback": null,
+          "conversation_turn_metrics": null
+        },
+        {
+          "role": "user",
+          "message": "¿Cuánto vale el plan mensual?",
+          "time_in_call_secs": 8,
+          "tool_calls": [],
+          "tool_results": [],
+          "feedback": null,
+          "conversation_turn_metrics": null
+        },
+        {
+          "role": "agent",
+          "message": "Cuesta 89.000 pesos.",
+          "time_in_call_secs": 9,
+          "tool_calls": [],
+          "tool_results": [],
+          "feedback": null,
+          "conversation_turn_metrics": null
+        }
+      ],
+      "profileTransferAliases": [
+        "Recepción"
+      ],
+      "expected": {
+        "violations": [
+          {
+            "turn": 2,
+            "code": "voice_money_not_from_tool"
+          }
+        ],
+        "brakeOpens": true,
+        "storesText": false
+      }
+    },
+    {
+      "name": "guard · inspect · vocabulario de descuento (R-02) en un turno del agente → la guarda del motor lo marca",
+      "kind": "inspect",
+      "contractRef": "D8-10, R-02, D8-19",
+      "basis": "contrato",
+      "decision": "DF-E11",
+      "transcript": [
+        {
+          "role": "agent",
+          "message": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma automática y tus datos se tratan según nuestra política de privacidad. Si prefieres hablar con una persona, dímelo en cualquier momento.",
+          "time_in_call_secs": 0,
+          "tool_calls": [],
+          "tool_results": [],
+          "feedback": null,
+          "conversation_turn_metrics": null
+        },
+        {
+          "role": "user",
+          "message": "¿Hay algo gratis?",
+          "time_in_call_secs": 5,
+          "tool_calls": [],
+          "tool_results": [],
+          "feedback": null,
+          "conversation_turn_metrics": null
+        },
+        {
+          "role": "agent",
+          "message": "Sí, la primera semana es gratis.",
+          "time_in_call_secs": 7,
+          "tool_calls": [],
+          "tool_results": [],
+          "feedback": null,
+          "conversation_turn_metrics": null
+        }
+      ],
+      "profileTransferAliases": [
+        "Recepción"
+      ],
+      "expected": {
+        "violations": [
+          {
+            "turn": 2,
+            "code": "machine_reply_invented_discount"
+          }
+        ],
+        "brakeOpens": true,
+        "storesText": false
+      }
+    },
+    {
+      "name": "guard · inspect · una URL en un turno del agente → machine_reply_url",
+      "kind": "inspect",
+      "contractRef": "D8-10, R-03, D8-19",
+      "basis": "contrato",
+      "decision": "DF-E11",
+      "transcript": [
+        {
+          "role": "agent",
+          "message": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma automática y tus datos se tratan según nuestra política de privacidad. Si prefieres hablar con una persona, dímelo en cualquier momento.",
+          "time_in_call_secs": 0,
+          "tool_calls": [],
+          "tool_results": [],
+          "feedback": null,
+          "conversation_turn_metrics": null
+        },
+        {
+          "role": "agent",
+          "message": "Puedes ver todo en www.ironbody.co/planes",
+          "time_in_call_secs": 6,
+          "tool_calls": [],
+          "tool_results": [],
+          "feedback": null,
+          "conversation_turn_metrics": null
+        }
+      ],
+      "profileTransferAliases": [
+        "Recepción"
+      ],
+      "expected": {
+        "violations": [
+          {
+            "turn": 1,
+            "code": "machine_reply_url"
+          }
+        ],
+        "brakeOpens": true,
+        "storesText": false
+      }
+    },
+    {
+      "name": "guard · inspect · el primer turno del agente no lleva el aviso [P-9] → voice_notice_missing",
+      "kind": "inspect",
+      "contractRef": "D8-10, D8-17, P-9",
+      "basis": "contrato",
+      "decision": "DF-E11",
+      "transcript": [
+        {
+          "role": "agent",
+          "message": "¡Hola! ¿En qué te ayudo?",
+          "time_in_call_secs": 0,
+          "tool_calls": [],
+          "tool_results": [],
+          "feedback": null,
+          "conversation_turn_metrics": null
+        },
+        {
+          "role": "user",
+          "message": "Hola",
+          "time_in_call_secs": 3,
+          "tool_calls": [],
+          "tool_results": [],
+          "feedback": null,
+          "conversation_turn_metrics": null
+        }
+      ],
+      "profileTransferAliases": [
+        "Recepción"
+      ],
+      "expected": {
+        "violations": [
+          {
+            "turn": 0,
+            "code": "voice_notice_missing"
+          }
+        ],
+        "brakeOpens": true,
+        "storesText": false
+      }
+    },
+    {
+      "name": "guard · inspect · transferencia a un destino que no es del perfil → voice_transfer_not_approved (imposible por configuración, se comprueba igual)",
+      "kind": "inspect",
+      "contractRef": "D8-10, D8-14, R-07",
+      "basis": "contrato",
+      "decision": "DF-E11",
+      "transcript": [
+        {
+          "role": "agent",
+          "message": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma automática y tus datos se tratan según nuestra política de privacidad. Si prefieres hablar con una persona, dímelo en cualquier momento.",
+          "time_in_call_secs": 0,
+          "tool_calls": [],
+          "tool_results": [],
+          "feedback": null,
+          "conversation_turn_metrics": null
+        },
+        {
+          "role": "agent",
+          "message": "Te comunico.",
+          "time_in_call_secs": 6,
+          "tool_calls": [
+            {
+              "type": "system",
+              "tool_name": "transfer_to_number",
+              "request_id": "toolreq_h8fx_0201",
+              "params_as_json": "{\"transfer_number\": \"+573000000099\"}",
+              "tool_has_been_called": true,
+              "tool_details": null
+            }
+          ],
+          "tool_results": [],
+          "feedback": null,
+          "conversation_turn_metrics": null
+        }
+      ],
+      "profileTransferAliases": [
+        "Recepción"
+      ],
+      "expected": {
+        "violations": [
+          {
+            "turn": 1,
+            "code": "voice_transfer_not_approved"
+          }
+        ],
+        "brakeOpens": true,
+        "storesText": false
+      }
+    },
+    {
+      "name": "guard · inspect · los turnos del usuario no se juzgan: «gratis» y un teléfono en boca de la persona no son violación",
+      "kind": "inspect",
+      "contractRef": "D8-10",
+      "basis": "contrato",
+      "decision": "DF-E11",
+      "transcript": [
+        {
+          "role": "agent",
+          "message": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma automática y tus datos se tratan según nuestra política de privacidad. Si prefieres hablar con una persona, dímelo en cualquier momento.",
+          "time_in_call_secs": 0,
+          "tool_calls": [],
+          "tool_results": [],
+          "feedback": null,
+          "conversation_turn_metrics": null
+        },
+        {
+          "role": "user",
+          "message": "Me dijeron que era gratis, llámame al 300 000 0031",
+          "time_in_call_secs": 5,
+          "tool_calls": [],
+          "tool_results": [],
+          "feedback": null,
+          "conversation_turn_metrics": null
+        },
+        {
+          "role": "agent",
+          "message": "Te cuento las condiciones del plan.",
+          "time_in_call_secs": 8,
+          "tool_calls": [],
+          "tool_results": [],
+          "feedback": null,
+          "conversation_turn_metrics": null
+        }
+      ],
+      "profileTransferAliases": [
+        "Recepción"
+      ],
+      "expected": {
+        "violations": [],
+        "brakeOpens": false,
+        "storesText": false
+      }
+    }
+  ],
+  "initiation": [
+    {
+      "name": "initiation · initiate · canario de voz activo, todo abierto → si, fila active idempotente por call_sid",
+      "kind": "initiate",
+      "contractRef": "D8-11",
+      "basis": "contrato",
+      "headers": {
+        "X-Voice-Initiation-Secret": "h8fixture-initiation-0000000000000000000001"
+      },
+      "given": {
+        "policy": {
+          "inboundEnabled": true,
+          "callsEnabledInCode": true,
+          "braked": false,
+          "publication": "ok",
+          "scope": "canary",
+          "sealedAgentId": "agent_h8fx_canary_0003",
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "inboundToday": 0,
+          "inboundDailyCap": 3
+        },
+        "caller": "active_voice"
+      },
+      "rawBody": "{\"caller_id\":\"+573000000031\",\"agent_id\":\"agent_h8fx_canary_0003\",\"called_number\":\"+576010000090\",\"call_sid\":\"CA000000000000000000000000a8000015\",\"conversation_id\":\"conv_h8fx_0021\"}",
+      "expected": {
+        "http": 200,
+        "response": {
+          "type": "conversation_initiation_client_data",
+          "dynamic_variables": {
+            "caller_authorized": "si",
+            "call_ref": "<uuid>",
+            "version_label": "v12 · canario"
+          }
+        },
+        "responseMustNotContainKeys": [
+          "conversation_config_override",
+          "caller_id",
+          "called_number",
+          "user_id",
+          "nombre",
+          "telefono"
+        ],
+        "responseMustNotContain": [
+          "+573000000031",
+          "+573000000077",
+          "573000000031",
+          "573000000077"
+        ],
+        "events": [
+          "initiation_received"
+        ],
+        "voiceCallRow": {
+          "status": "active",
+          "direction": "inbound",
+          "providerCallSid": "CA000000000000000000000000a8000015",
+          "remoteLast4": "0031",
+          "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d",
+          "part": "canary",
+          "stampState": "applied"
+        },
+        "brakeOpens": false,
+        "policyReasons": []
+      }
+    },
+    {
+      "name": "initiation · initiate · número no registrado → no: «línea no disponible» y end_call (lo hace el agente)",
+      "kind": "initiate",
+      "contractRef": "D8-11",
+      "basis": "contrato",
+      "headers": {
+        "X-Voice-Initiation-Secret": "h8fixture-initiation-0000000000000000000001"
+      },
+      "given": {
+        "policy": {
+          "inboundEnabled": true,
+          "callsEnabledInCode": true,
+          "braked": false,
+          "publication": "ok",
+          "scope": "canary",
+          "sealedAgentId": "agent_h8fx_canary_0003",
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "inboundToday": 0,
+          "inboundDailyCap": 3
+        },
+        "caller": "not_registered"
+      },
+      "rawBody": "{\"caller_id\":\"+573000000077\",\"agent_id\":\"agent_h8fx_canary_0003\",\"called_number\":\"+576010000090\",\"call_sid\":\"CA000000000000000000000000a8000016\",\"conversation_id\":\"conv_h8fx_0022\"}",
+      "expected": {
+        "http": 200,
+        "response": {
+          "type": "conversation_initiation_client_data",
+          "dynamic_variables": {
+            "caller_authorized": "no",
+            "call_ref": "<uuid>",
+            "version_label": "<texto>"
+          }
+        },
+        "responseMustNotContainKeys": [
+          "conversation_config_override",
+          "caller_id",
+          "called_number",
+          "user_id",
+          "nombre",
+          "telefono"
+        ],
+        "responseMustNotContain": [
+          "+573000000031",
+          "+573000000077",
+          "573000000031",
+          "573000000077"
+        ],
+        "events": [
+          "initiation_received"
+        ],
+        "voiceCallRow": null,
+        "brakeOpens": false,
+        "policyReasons": [
+          "not_an_active_voice_canary"
+        ]
+      }
+    },
+    {
+      "name": "initiation · initiate · caller ID oculto (anonymous) → no",
+      "kind": "initiate",
+      "contractRef": "D8-11",
+      "basis": "decision-fixture",
+      "decision": "DF-P9",
+      "headers": {
+        "X-Voice-Initiation-Secret": "h8fixture-initiation-0000000000000000000001"
+      },
+      "given": {
+        "policy": {
+          "inboundEnabled": true,
+          "callsEnabledInCode": true,
+          "braked": false,
+          "publication": "ok",
+          "scope": "canary",
+          "sealedAgentId": "agent_h8fx_canary_0003",
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "inboundToday": 0,
+          "inboundDailyCap": 3
+        },
+        "caller": "withheld"
+      },
+      "rawBody": "{\"caller_id\":\"anonymous\",\"agent_id\":\"agent_h8fx_canary_0003\",\"called_number\":\"+576010000090\",\"call_sid\":\"CA000000000000000000000000a8000017\",\"conversation_id\":\"conv_h8fx_0023\"}",
+      "expected": {
+        "http": 200,
+        "response": {
+          "type": "conversation_initiation_client_data",
+          "dynamic_variables": {
+            "caller_authorized": "no",
+            "call_ref": "<uuid>",
+            "version_label": "<texto>"
+          }
+        },
+        "responseMustNotContainKeys": [
+          "conversation_config_override",
+          "caller_id",
+          "called_number",
+          "user_id",
+          "nombre",
+          "telefono"
+        ],
+        "responseMustNotContain": [
+          "+573000000031",
+          "+573000000077",
+          "573000000031",
+          "573000000077"
+        ],
+        "events": [
+          "initiation_received"
+        ],
+        "voiceCallRow": null,
+        "brakeOpens": false,
+        "policyReasons": [
+          "not_an_active_voice_canary"
+        ]
+      }
+    },
+    {
+      "name": "initiation · initiate · la misma iniciación dos veces (mismo call_sid) → la misma respuesta y una sola fila",
+      "kind": "initiate",
+      "contractRef": "D8-11",
+      "basis": "contrato",
+      "headers": {
+        "X-Voice-Initiation-Secret": "h8fixture-initiation-0000000000000000000001"
+      },
+      "given": {
+        "policy": {
+          "inboundEnabled": true,
+          "callsEnabledInCode": true,
+          "braked": false,
+          "publication": "ok",
+          "scope": "canary",
+          "sealedAgentId": "agent_h8fx_canary_0003",
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "inboundToday": 0,
+          "inboundDailyCap": 3
+        },
+        "caller": "active_voice",
+        "existingRowForCallSid": true
+      },
+      "rawBody": "{\"caller_id\":\"+573000000031\",\"agent_id\":\"agent_h8fx_canary_0003\",\"called_number\":\"+576010000090\",\"call_sid\":\"CA000000000000000000000000a8000015\",\"conversation_id\":\"conv_h8fx_0021\"}",
+      "expected": {
+        "http": 200,
+        "response": {
+          "type": "conversation_initiation_client_data",
+          "dynamic_variables": {
+            "caller_authorized": "si",
+            "call_ref": "<uuid>",
+            "version_label": "v12 · canario"
+          }
+        },
+        "responseMustNotContainKeys": [
+          "conversation_config_override",
+          "caller_id",
+          "called_number",
+          "user_id",
+          "nombre",
+          "telefono"
+        ],
+        "responseMustNotContain": [
+          "+573000000031",
+          "+573000000077",
+          "573000000031",
+          "573000000077"
+        ],
+        "events": [],
+        "voiceCallRow": "la existente (sin fila nueva)",
+        "brakeOpens": false,
+        "policyReasons": [],
+        "note": "call_ref igual al de la primera respuesta"
+      }
+    },
+    {
+      "name": "initiation · initiate · freno abierto → no aunque sea canario",
+      "kind": "initiate",
+      "contractRef": "D8-11, D8-19",
+      "basis": "contrato",
+      "headers": {
+        "X-Voice-Initiation-Secret": "h8fixture-initiation-0000000000000000000001"
+      },
+      "given": {
+        "policy": {
+          "inboundEnabled": true,
+          "callsEnabledInCode": true,
+          "braked": true,
+          "publication": "ok",
+          "scope": "canary",
+          "sealedAgentId": "agent_h8fx_canary_0003",
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "inboundToday": 0,
+          "inboundDailyCap": 3
+        },
+        "caller": "active_voice"
+      },
+      "rawBody": "{\"caller_id\":\"+573000000031\",\"agent_id\":\"agent_h8fx_canary_0003\",\"called_number\":\"+576010000090\",\"call_sid\":\"CA000000000000000000000000a8000018\",\"conversation_id\":\"conv_h8fx_0024\"}",
+      "expected": {
+        "http": 200,
+        "response": {
+          "type": "conversation_initiation_client_data",
+          "dynamic_variables": {
+            "caller_authorized": "no",
+            "call_ref": "<uuid>",
+            "version_label": "<texto>"
+          }
+        },
+        "responseMustNotContainKeys": [
+          "conversation_config_override",
+          "caller_id",
+          "called_number",
+          "user_id",
+          "nombre",
+          "telefono"
+        ],
+        "responseMustNotContain": [
+          "+573000000031",
+          "+573000000077",
+          "573000000031",
+          "573000000077"
+        ],
+        "events": [
+          "initiation_received"
+        ],
+        "voiceCallRow": null,
+        "brakeOpens": false,
+        "policyReasons": [
+          "voice_braked"
+        ]
+      }
+    },
+    {
+      "name": "initiation · initiate · agent_id distinto del sellado de la parte vigente → no, seal_mismatch y freno",
+      "kind": "initiate",
+      "contractRef": "D8-11",
+      "basis": "decision-fixture",
+      "decision": "DF-E12",
+      "headers": {
+        "X-Voice-Initiation-Secret": "h8fixture-initiation-0000000000000000000001"
+      },
+      "given": {
+        "policy": {
+          "inboundEnabled": true,
+          "callsEnabledInCode": true,
+          "braked": false,
+          "publication": "ok",
+          "scope": "canary",
+          "sealedAgentId": "agent_h8fx_canary_0003",
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "inboundToday": 0,
+          "inboundDailyCap": 3
+        },
+        "caller": "active_voice"
+      },
+      "rawBody": "{\"caller_id\":\"+573000000031\",\"agent_id\":\"agent_h8fx_canary_0002\",\"called_number\":\"+576010000090\",\"call_sid\":\"CA000000000000000000000000a8000019\",\"conversation_id\":\"conv_h8fx_0025\"}",
+      "expected": {
+        "http": 200,
+        "response": {
+          "type": "conversation_initiation_client_data",
+          "dynamic_variables": {
+            "caller_authorized": "no",
+            "call_ref": "<uuid>",
+            "version_label": "<texto>"
+          }
+        },
+        "responseMustNotContainKeys": [
+          "conversation_config_override",
+          "caller_id",
+          "called_number",
+          "user_id",
+          "nombre",
+          "telefono"
+        ],
+        "responseMustNotContain": [
+          "+573000000031",
+          "+573000000077",
+          "573000000031",
+          "573000000077"
+        ],
+        "events": [
+          "initiation_received",
+          "seal_mismatch"
+        ],
+        "voiceCallRow": null,
+        "brakeOpens": true
+      }
+    },
+    {
+      "name": "initiation · initiate · called_number que no es TWILIO_VOICE_FROM → no",
+      "kind": "initiate",
+      "contractRef": "D8-11",
+      "basis": "decision-fixture",
+      "decision": "DF-E13",
+      "headers": {
+        "X-Voice-Initiation-Secret": "h8fixture-initiation-0000000000000000000001"
+      },
+      "given": {
+        "policy": {
+          "inboundEnabled": true,
+          "callsEnabledInCode": true,
+          "braked": false,
+          "publication": "ok",
+          "scope": "canary",
+          "sealedAgentId": "agent_h8fx_canary_0003",
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "inboundToday": 0,
+          "inboundDailyCap": 3
+        },
+        "caller": "active_voice"
+      },
+      "rawBody": "{\"caller_id\":\"+573000000031\",\"agent_id\":\"agent_h8fx_canary_0003\",\"called_number\":\"+576010000091\",\"call_sid\":\"CA000000000000000000000000a800001a\",\"conversation_id\":\"conv_h8fx_0026\"}",
+      "expected": {
+        "http": 200,
+        "response": {
+          "type": "conversation_initiation_client_data",
+          "dynamic_variables": {
+            "caller_authorized": "no",
+            "call_ref": "<uuid>",
+            "version_label": "<texto>"
+          }
+        },
+        "responseMustNotContainKeys": [
+          "conversation_config_override",
+          "caller_id",
+          "called_number",
+          "user_id",
+          "nombre",
+          "telefono"
+        ],
+        "responseMustNotContain": [
+          "+573000000031",
+          "+573000000077",
+          "573000000031",
+          "573000000077"
+        ],
+        "events": [
+          "initiation_received"
+        ],
+        "voiceCallRow": null,
+        "brakeOpens": false
+      }
+    },
+    {
+      "name": "initiation · initiate · autenticada pero sin call_sid → 200 y no (denegación explícita)",
+      "kind": "initiate",
+      "contractRef": "D8-11",
+      "basis": "decision-fixture",
+      "decision": "DF-E6",
+      "headers": {
+        "X-Voice-Initiation-Secret": "h8fixture-initiation-0000000000000000000001"
+      },
+      "given": {
+        "policy": {
+          "inboundEnabled": true,
+          "callsEnabledInCode": true,
+          "braked": false,
+          "publication": "ok",
+          "scope": "canary",
+          "sealedAgentId": "agent_h8fx_canary_0003",
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "inboundToday": 0,
+          "inboundDailyCap": 3
+        },
+        "caller": "active_voice"
+      },
+      "rawBody": "{\"caller_id\":\"+573000000031\",\"agent_id\":\"agent_h8fx_canary_0003\",\"called_number\":\"+576010000090\"}",
+      "expected": {
+        "http": 200,
+        "response": {
+          "type": "conversation_initiation_client_data",
+          "dynamic_variables": {
+            "caller_authorized": "no",
+            "call_ref": "<uuid>",
+            "version_label": "<texto>"
+          }
+        },
+        "responseMustNotContainKeys": [
+          "conversation_config_override",
+          "caller_id",
+          "called_number",
+          "user_id",
+          "nombre",
+          "telefono"
+        ],
+        "responseMustNotContain": [
+          "+573000000031",
+          "+573000000077",
+          "573000000031",
+          "573000000077"
+        ],
+        "events": [],
+        "voiceCallRow": null,
+        "brakeOpens": false
+      }
+    },
+    {
+      "name": "initiation · initiate · secreto de la cabecera equivocado → 401 sin cuerpo útil (el agente se queda en caller_authorized = no por defecto, C-A2)",
+      "kind": "initiate",
+      "contractRef": "D8-11, D8-16",
+      "basis": "decision-fixture",
+      "decision": "DF-E15",
+      "headers": {
+        "X-Voice-Initiation-Secret": "h8fixture-initiation-0000000000000000000009"
+      },
+      "given": {
+        "policy": {
+          "inboundEnabled": true,
+          "callsEnabledInCode": true,
+          "braked": false,
+          "publication": "ok",
+          "scope": "canary",
+          "sealedAgentId": "agent_h8fx_canary_0003",
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "inboundToday": 0,
+          "inboundDailyCap": 3
+        },
+        "caller": "active_voice"
+      },
+      "rawBody": "{\"caller_id\":\"+573000000031\",\"agent_id\":\"agent_h8fx_canary_0003\",\"called_number\":\"+576010000090\",\"call_sid\":\"CA000000000000000000000000a800001b\",\"conversation_id\":\"conv_h8fx_0027\"}",
+      "expected": {
+        "http": 401,
+        "events": [],
+        "voiceCallRow": null,
+        "brakeOpens": false
+      }
+    },
+    {
+      "name": "initiation · initiate · sin la cabecera del secreto → 401",
+      "kind": "initiate",
+      "contractRef": "D8-16",
+      "basis": "decision-fixture",
+      "decision": "DF-E15",
+      "headers": {
+        "X-Voice-Initiation-Secret": null
+      },
+      "given": {
+        "policy": {
+          "inboundEnabled": true,
+          "callsEnabledInCode": true,
+          "braked": false,
+          "publication": "ok",
+          "scope": "canary",
+          "sealedAgentId": "agent_h8fx_canary_0003",
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "inboundToday": 0,
+          "inboundDailyCap": 3
+        },
+        "caller": "active_voice"
+      },
+      "rawBody": "{\"caller_id\":\"+573000000031\",\"agent_id\":\"agent_h8fx_canary_0003\",\"called_number\":\"+576010000090\",\"call_sid\":\"CA000000000000000000000000a800001c\",\"conversation_id\":\"conv_h8fx_0028\"}",
+      "expected": {
+        "http": 401,
+        "events": [],
+        "voiceCallRow": null,
+        "brakeOpens": false
+      }
+    },
+    {
+      "name": "initiation · initiate · el secreto de las herramientas en la cabecera de iniciación → 401 (tres secretos distintos, D8-5)",
+      "kind": "initiate",
+      "contractRef": "D8-5, D8-16",
+      "basis": "decision-fixture",
+      "decision": "DF-E15",
+      "headers": {
+        "X-Voice-Initiation-Secret": "h8fixture-tool-bearer-0000000000000000000001"
+      },
+      "given": {
+        "policy": {
+          "inboundEnabled": true,
+          "callsEnabledInCode": true,
+          "braked": false,
+          "publication": "ok",
+          "scope": "canary",
+          "sealedAgentId": "agent_h8fx_canary_0003",
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "inboundToday": 0,
+          "inboundDailyCap": 3
+        },
+        "caller": "active_voice"
+      },
+      "rawBody": "{\"caller_id\":\"+573000000031\",\"agent_id\":\"agent_h8fx_canary_0003\",\"called_number\":\"+576010000090\",\"call_sid\":\"CA000000000000000000000000a800001d\",\"conversation_id\":\"conv_h8fx_0029\"}",
+      "expected": {
+        "http": 401,
+        "events": [],
+        "voiceCallRow": null,
+        "brakeOpens": false
+      }
+    }
+  ],
+  "tools": [
+    {
+      "name": "tools · consultar_horarios · consultar_horarios en una saliente en curso → la sede y el horario",
+      "kind": "consultar_horarios",
+      "contractRef": "D8-10, D8-16",
+      "basis": "decision-fixture",
+      "decision": "DF-E9",
+      "tool": "consultar_horarios",
+      "headers": {
+        "Authorization": "Bearer h8fixture-tool-bearer-0000000000000000000001"
+      },
+      "given": {
+        "call": {
+          "status": "dialing",
+          "direction": "outbound",
+          "providerConversationId": "conv_h8fx_0031",
+          "providerCallSid": "CA000000000000000000000000a800001f",
+          "callerAuthorized": "si",
+          "toolRequests": 0,
+          "braked": false,
+          "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d"
+        }
+      },
+      "rawBody": "{\"conversation_id\":\"conv_h8fx_0031\",\"call_sid\":\"CA000000000000000000000000a800001f\"}",
+      "expected": {
+        "http": 200,
+        "verdict": "ok",
+        "events": [
+          "tool_call"
+        ],
+        "responseMustNotContain": [
+          "+573000000031",
+          "573000000031"
+        ]
+      }
+    },
+    {
+      "name": "tools · consultar_planes · consultar_planes → nombres y condiciones del catálogo vigente y, por P-3, el precio exacto de la base",
+      "kind": "consultar_planes",
+      "contractRef": "D8-10, P-3",
+      "basis": "supuesto-lead",
+      "tool": "consultar_planes",
+      "headers": {
+        "Authorization": "Bearer h8fixture-tool-bearer-0000000000000000000001"
+      },
+      "given": {
+        "call": {
+          "status": "dialing",
+          "direction": "outbound",
+          "providerConversationId": "conv_h8fx_0031",
+          "providerCallSid": "CA000000000000000000000000a800001f",
+          "callerAuthorized": "si",
+          "toolRequests": 0,
+          "braked": false,
+          "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d"
+        }
+      },
+      "rawBody": "{\"conversation_id\":\"conv_h8fx_0031\",\"call_sid\":\"CA000000000000000000000000a800001f\"}",
+      "expected": {
+        "http": 200,
+        "verdict": "ok",
+        "events": [
+          "tool_call"
+        ],
+        "priceSource": "Plan::sellable()",
+        "neverComputedOrDiscounted": true
+      }
+    },
+    {
+      "name": "tools · solicitar_humano · solicitar_humano en horario del personal → disponible y el alias, nunca el número",
+      "kind": "solicitar_humano",
+      "contractRef": "D8-10, D8-14",
+      "basis": "contrato",
+      "tool": "solicitar_humano",
+      "headers": {
+        "Authorization": "Bearer h8fixture-tool-bearer-0000000000000000000001"
+      },
+      "given": {
+        "call": {
+          "status": "dialing",
+          "direction": "outbound",
+          "providerConversationId": "conv_h8fx_0031",
+          "providerCallSid": "CA000000000000000000000000a800001f",
+          "callerAuthorized": "si",
+          "toolRequests": 0,
+          "braked": false,
+          "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d"
+        },
+        "staffHoursNow": true,
+        "profileTransferAliases": [
+          "Recepción"
+        ]
+      },
+      "rawBody": "{\"conversation_id\":\"conv_h8fx_0031\",\"call_sid\":\"CA000000000000000000000000a800001f\"}",
+      "expected": {
+        "http": 200,
+        "verdict": "ok",
+        "available": true,
+        "alias": "Recepción",
+        "responseMustNotContain": [
+          "+576010000011",
+          "576010000011"
+        ]
+      }
+    },
+    {
+      "name": "tools · solicitar_humano · solicitar_humano fuera del horario del personal → no disponible",
+      "kind": "solicitar_humano",
+      "contractRef": "D8-10, D8-11, D8-14",
+      "basis": "contrato",
+      "tool": "solicitar_humano",
+      "headers": {
+        "Authorization": "Bearer h8fixture-tool-bearer-0000000000000000000001"
+      },
+      "given": {
+        "call": {
+          "status": "dialing",
+          "direction": "outbound",
+          "providerConversationId": "conv_h8fx_0031",
+          "providerCallSid": "CA000000000000000000000000a800001f",
+          "callerAuthorized": "si",
+          "toolRequests": 0,
+          "braked": false,
+          "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d"
+        },
+        "staffHoursNow": false,
+        "profileTransferAliases": [
+          "Recepción"
+        ]
+      },
+      "rawBody": "{\"conversation_id\":\"conv_h8fx_0031\",\"call_sid\":\"CA000000000000000000000000a800001f\"}",
+      "expected": {
+        "http": 200,
+        "verdict": "ok",
+        "available": false,
+        "alias": null
+      }
+    },
+    {
+      "name": "tools · no_volver_a_llamar · no_volver_a_llamar → exclusión inmediata spoken_opt_out para el número de LA LLAMADA, sin confirmación del LLM",
+      "kind": "no_volver_a_llamar",
+      "contractRef": "D8-10, D8-18 (Ley 2300)",
+      "basis": "contrato",
+      "tool": "no_volver_a_llamar",
+      "headers": {
+        "Authorization": "Bearer h8fixture-tool-bearer-0000000000000000000001"
+      },
+      "given": {
+        "call": {
+          "status": "dialing",
+          "direction": "outbound",
+          "providerConversationId": "conv_h8fx_0031",
+          "providerCallSid": "CA000000000000000000000000a800001f",
+          "callerAuthorized": "si",
+          "toolRequests": 0,
+          "braked": false,
+          "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d"
+        }
+      },
+      "rawBody": "{\"conversation_id\":\"conv_h8fx_0031\",\"call_sid\":\"CA000000000000000000000000a800001f\"}",
+      "expected": {
+        "http": 200,
+        "verdict": "ok",
+        "events": [
+          "tool_call"
+        ],
+        "sideEffects": [
+          {
+            "table": "voice_exclusions",
+            "source": "spoken_opt_out",
+            "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d"
+          }
+        ]
+      }
+    },
+    {
+      "name": "tools · no_volver_a_llamar · no_volver_a_llamar con un teléfono en el cuerpo → 422 por el esquema estricto y ninguna exclusión de ese número",
+      "kind": "no_volver_a_llamar",
+      "contractRef": "D8-10, D8-16",
+      "basis": "decision-fixture",
+      "decision": "DF-E8",
+      "tool": "no_volver_a_llamar",
+      "headers": {
+        "Authorization": "Bearer h8fixture-tool-bearer-0000000000000000000001"
+      },
+      "given": {
+        "call": {
+          "status": "dialing",
+          "direction": "outbound",
+          "providerConversationId": "conv_h8fx_0031",
+          "providerCallSid": "CA000000000000000000000000a800001f",
+          "callerAuthorized": "si",
+          "toolRequests": 0,
+          "braked": false,
+          "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d"
+        }
+      },
+      "rawBody": "{\"conversation_id\":\"conv_h8fx_0031\",\"call_sid\":\"CA000000000000000000000000a800001f\",\"telefono\":\"+573000000099\"}",
+      "expected": {
+        "http": 422,
+        "verdict": "invalid_schema",
+        "sideEffects": [],
+        "mustNotCreateExclusionFor": [
+          "c485a07cbc891df814459aa56ed33570c6db6637ab6efba5733abcd960996968"
+        ]
+      }
+    },
+    {
+      "name": "tools · consultar_horarios · Bearer equivocado → 401",
+      "kind": "consultar_horarios",
+      "contractRef": "D8-10, D8-16",
+      "basis": "decision-fixture",
+      "decision": "DF-E15",
+      "tool": "consultar_horarios",
+      "headers": {
+        "Authorization": "Bearer h8fixture-tool-bearer-0000000000000000000009"
+      },
+      "given": {
+        "call": {
+          "status": "dialing",
+          "direction": "outbound",
+          "providerConversationId": "conv_h8fx_0031",
+          "providerCallSid": "CA000000000000000000000000a800001f",
+          "callerAuthorized": "si",
+          "toolRequests": 0,
+          "braked": false,
+          "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d"
+        }
+      },
+      "rawBody": "{\"conversation_id\":\"conv_h8fx_0031\",\"call_sid\":\"CA000000000000000000000000a800001f\"}",
+      "expected": {
+        "http": 401,
+        "verdict": "unauthorized",
+        "events": []
+      }
+    },
+    {
+      "name": "tools · consultar_horarios · sin Authorization → 401",
+      "kind": "consultar_horarios",
+      "contractRef": "D8-10, D8-16",
+      "basis": "decision-fixture",
+      "decision": "DF-E15",
+      "tool": "consultar_horarios",
+      "headers": {
+        "Authorization": null
+      },
+      "given": {
+        "call": {
+          "status": "dialing",
+          "direction": "outbound",
+          "providerConversationId": "conv_h8fx_0031",
+          "providerCallSid": "CA000000000000000000000000a800001f",
+          "callerAuthorized": "si",
+          "toolRequests": 0,
+          "braked": false,
+          "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d"
+        }
+      },
+      "rawBody": "{\"conversation_id\":\"conv_h8fx_0031\",\"call_sid\":\"CA000000000000000000000000a800001f\"}",
+      "expected": {
+        "http": 401,
+        "verdict": "unauthorized",
+        "events": []
+      }
+    },
+    {
+      "name": "tools · consultar_horarios · el secreto de iniciación como Bearer → 401 (tres secretos distintos)",
+      "kind": "consultar_horarios",
+      "contractRef": "D8-5, D8-10",
+      "basis": "decision-fixture",
+      "decision": "DF-E15",
+      "tool": "consultar_horarios",
+      "headers": {
+        "Authorization": "Bearer h8fixture-initiation-0000000000000000000001"
+      },
+      "given": {
+        "call": {
+          "status": "dialing",
+          "direction": "outbound",
+          "providerConversationId": "conv_h8fx_0031",
+          "providerCallSid": "CA000000000000000000000000a800001f",
+          "callerAuthorized": "si",
+          "toolRequests": 0,
+          "braked": false,
+          "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d"
+        }
+      },
+      "rawBody": "{\"conversation_id\":\"conv_h8fx_0031\",\"call_sid\":\"CA000000000000000000000000a800001f\"}",
+      "expected": {
+        "http": 401,
+        "verdict": "unauthorized",
+        "events": []
+      }
+    },
+    {
+      "name": "tools · aplicar_descuento · herramienta fuera de la lista cerrada (aplicar_descuento) → 404",
+      "kind": "aplicar_descuento",
+      "contractRef": "D8-10, D8-16",
+      "basis": "decision-fixture",
+      "decision": "DF-E15",
+      "tool": "aplicar_descuento",
+      "headers": {
+        "Authorization": "Bearer h8fixture-tool-bearer-0000000000000000000001"
+      },
+      "given": {
+        "call": {
+          "status": "dialing",
+          "direction": "outbound",
+          "providerConversationId": "conv_h8fx_0031",
+          "providerCallSid": "CA000000000000000000000000a800001f",
+          "callerAuthorized": "si",
+          "toolRequests": 0,
+          "braked": false,
+          "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d"
+        }
+      },
+      "rawBody": "{\"conversation_id\":\"conv_h8fx_0031\",\"call_sid\":\"CA000000000000000000000000a800001f\"}",
+      "expected": {
+        "http": 404,
+        "verdict": "unknown_tool",
+        "events": []
+      }
+    },
+    {
+      "name": "tools · consultar_horarios · conversation_id que no existe en voice_calls → rechazada, sin evento (no hay llamada a la que atarlo)",
+      "kind": "consultar_horarios",
+      "contractRef": "D8-10, D8-16",
+      "basis": "decision-fixture",
+      "decision": "DF-E9",
+      "tool": "consultar_horarios",
+      "headers": {
+        "Authorization": "Bearer h8fixture-tool-bearer-0000000000000000000001"
+      },
+      "given": {
+        "call": null
+      },
+      "rawBody": "{\"conversation_id\":\"conv_h8fx_0099\",\"call_sid\":\"CA000000000000000000000000a8000063\"}",
+      "expected": {
+        "http": 200,
+        "verdict": "call_not_found",
+        "neutralMessage": true,
+        "events": []
+      }
+    },
+    {
+      "name": "tools · consultar_horarios · la llamada ya terminó (completed) → rechazada",
+      "kind": "consultar_horarios",
+      "contractRef": "D8-10, D8-16",
+      "basis": "decision-fixture",
+      "decision": "DF-E9",
+      "tool": "consultar_horarios",
+      "headers": {
+        "Authorization": "Bearer h8fixture-tool-bearer-0000000000000000000001"
+      },
+      "given": {
+        "call": {
+          "status": "completed",
+          "direction": "outbound",
+          "providerConversationId": "conv_h8fx_0031",
+          "providerCallSid": "CA000000000000000000000000a800001f",
+          "callerAuthorized": "si",
+          "toolRequests": 0,
+          "braked": false,
+          "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d"
+        }
+      },
+      "rawBody": "{\"conversation_id\":\"conv_h8fx_0031\",\"call_sid\":\"CA000000000000000000000000a800001f\"}",
+      "expected": {
+        "http": 200,
+        "verdict": "call_not_active",
+        "neutralMessage": true,
+        "events": [
+          "tool_call"
+        ]
+      }
+    },
+    {
+      "name": "tools · consultar_planes · entrante denegada (caller_authorized = no) → ninguna herramienta responde (C-A2)",
+      "kind": "consultar_planes",
+      "contractRef": "D8-10, D8-11",
+      "basis": "decision-fixture",
+      "decision": "DF-E10",
+      "tool": "consultar_planes",
+      "headers": {
+        "Authorization": "Bearer h8fixture-tool-bearer-0000000000000000000001"
+      },
+      "given": {
+        "call": {
+          "status": "active",
+          "direction": "inbound",
+          "providerConversationId": "conv_h8fx_0031",
+          "providerCallSid": "CA000000000000000000000000a800001f",
+          "callerAuthorized": "no",
+          "toolRequests": 0,
+          "braked": false,
+          "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d"
+        }
+      },
+      "rawBody": "{\"conversation_id\":\"conv_h8fx_0031\",\"call_sid\":\"CA000000000000000000000000a800001f\"}",
+      "expected": {
+        "http": 200,
+        "verdict": "caller_not_authorized",
+        "neutralMessage": true,
+        "events": [
+          "tool_call"
+        ]
+      }
+    },
+    {
+      "name": "tools · consultar_planes · freno abierto → rechazada",
+      "kind": "consultar_planes",
+      "contractRef": "D8-10, D8-19",
+      "basis": "decision-fixture",
+      "decision": "DF-E9",
+      "tool": "consultar_planes",
+      "headers": {
+        "Authorization": "Bearer h8fixture-tool-bearer-0000000000000000000001"
+      },
+      "given": {
+        "call": {
+          "status": "dialing",
+          "direction": "outbound",
+          "providerConversationId": "conv_h8fx_0031",
+          "providerCallSid": "CA000000000000000000000000a800001f",
+          "callerAuthorized": "si",
+          "toolRequests": 0,
+          "braked": true,
+          "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d"
+        }
+      },
+      "rawBody": "{\"conversation_id\":\"conv_h8fx_0031\",\"call_sid\":\"CA000000000000000000000000a800001f\"}",
+      "expected": {
+        "http": 200,
+        "verdict": "voice_braked",
+        "neutralMessage": true,
+        "events": [
+          "tool_call"
+        ]
+      }
+    },
+    {
+      "name": "tools · consultar_horarios · la petición 20 de la llamada todavía vale",
+      "kind": "consultar_horarios",
+      "contractRef": "D8-10, D8-16",
+      "basis": "contrato",
+      "tool": "consultar_horarios",
+      "headers": {
+        "Authorization": "Bearer h8fixture-tool-bearer-0000000000000000000001"
+      },
+      "given": {
+        "call": {
+          "status": "dialing",
+          "direction": "outbound",
+          "providerConversationId": "conv_h8fx_0031",
+          "providerCallSid": "CA000000000000000000000000a800001f",
+          "callerAuthorized": "si",
+          "toolRequests": 19,
+          "braked": false,
+          "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d"
+        }
+      },
+      "rawBody": "{\"conversation_id\":\"conv_h8fx_0031\",\"call_sid\":\"CA000000000000000000000000a800001f\"}",
+      "expected": {
+        "http": 200,
+        "verdict": "ok",
+        "events": [
+          "tool_call"
+        ]
+      }
+    },
+    {
+      "name": "tools · consultar_horarios · la petición 21 de la llamada → cupo agotado",
+      "kind": "consultar_horarios",
+      "contractRef": "D8-10, D8-16",
+      "basis": "decision-fixture",
+      "decision": "DF-E9",
+      "tool": "consultar_horarios",
+      "headers": {
+        "Authorization": "Bearer h8fixture-tool-bearer-0000000000000000000001"
+      },
+      "given": {
+        "call": {
+          "status": "dialing",
+          "direction": "outbound",
+          "providerConversationId": "conv_h8fx_0031",
+          "providerCallSid": "CA000000000000000000000000a800001f",
+          "callerAuthorized": "si",
+          "toolRequests": 20,
+          "braked": false,
+          "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d"
+        }
+      },
+      "rawBody": "{\"conversation_id\":\"conv_h8fx_0031\",\"call_sid\":\"CA000000000000000000000000a800001f\"}",
+      "expected": {
+        "http": 200,
+        "verdict": "tool_quota_exceeded",
+        "neutralMessage": true,
+        "events": [
+          "tool_call"
+        ]
+      }
+    },
+    {
+      "name": "tools · consultar_horarios · un parámetro que el esquema no conoce (el LLM intenta salir de su llamada) → 422",
+      "kind": "consultar_horarios",
+      "contractRef": "D8-10, D8-16",
+      "basis": "decision-fixture",
+      "decision": "DF-E8",
+      "tool": "consultar_horarios",
+      "headers": {
+        "Authorization": "Bearer h8fixture-tool-bearer-0000000000000000000001"
+      },
+      "given": {
+        "call": {
+          "status": "dialing",
+          "direction": "outbound",
+          "providerConversationId": "conv_h8fx_0031",
+          "providerCallSid": "CA000000000000000000000000a800001f",
+          "callerAuthorized": "si",
+          "toolRequests": 0,
+          "braked": false,
+          "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d"
+        }
+      },
+      "rawBody": "{\"conversation_id\":\"conv_h8fx_0031\",\"call_sid\":\"CA000000000000000000000000a800001f\",\"conversation_id_override\":\"conv_h8fx_0032\"}",
+      "expected": {
+        "http": 422,
+        "verdict": "invalid_schema",
+        "events": []
+      }
+    },
+    {
+      "name": "tools · consultar_horarios · cuerpo que no es JSON → 422",
+      "kind": "consultar_horarios",
+      "contractRef": "D8-10, D8-16",
+      "basis": "decision-fixture",
+      "decision": "DF-E8",
+      "tool": "consultar_horarios",
+      "headers": {
+        "Authorization": "Bearer h8fixture-tool-bearer-0000000000000000000001"
+      },
+      "given": {
+        "call": {
+          "status": "dialing",
+          "direction": "outbound",
+          "providerConversationId": "conv_h8fx_0031",
+          "providerCallSid": "CA000000000000000000000000a800001f",
+          "callerAuthorized": "si",
+          "toolRequests": 0,
+          "braked": false,
+          "remoteHash": "ff5fdd07e94788f57149e5abc085c8f0a19e926c6c68f8708c13a0bf10f0ce1d"
+        }
+      },
+      "rawBody": "conversation_id=conv_h8fx_0031",
+      "expected": {
+        "http": 422,
+        "verdict": "invalid_schema",
+        "events": []
+      }
+    }
+  ],
+  "routeRules": [
+    {
+      "name": "routeRules · http · post-call · cuerpo de 1 048 576 bytes: pasa el tope (después decide la firma)",
+      "kind": "http",
+      "contractRef": "D8-16",
+      "basis": "contrato",
+      "route": "POST /api/webhooks/voice/elevenlabs/post-call",
+      "scenario": {
+        "bodyBytes": 1048576
+      },
+      "expected": {
+        "http": "no 413"
+      }
+    },
+    {
+      "name": "routeRules · http · post-call · cuerpo de 1 048 577 bytes → 413 payload_too_large antes de mirar la firma",
+      "kind": "http",
+      "contractRef": "D8-16",
+      "basis": "decision-fixture",
+      "decision": "DF-E1",
+      "route": "POST /api/webhooks/voice/elevenlabs/post-call",
+      "scenario": {
+        "bodyBytes": 1048577
+      },
+      "expected": {
+        "http": 413
+      }
+    },
+    {
+      "name": "routeRules · http · post-call · firma mala (cualquier resultado que no sea ok) → 401",
+      "kind": "http",
+      "contractRef": "D8-16",
+      "basis": "decision-fixture",
+      "decision": "DF-E1",
+      "route": "POST /api/webhooks/voice/elevenlabs/post-call",
+      "scenario": {
+        "signature": "not ok"
+      },
+      "expected": {
+        "http": 401
+      }
+    },
+    {
+      "name": "routeRules · http · post-call · duplicado → 200",
+      "kind": "http",
+      "contractRef": "D8-16",
+      "basis": "contrato",
+      "route": "POST /api/webhooks/voice/elevenlabs/post-call",
+      "scenario": {
+        "duplicate": true
+      },
+      "expected": {
+        "http": 200
+      }
+    },
+    {
+      "name": "routeRules · http · post-call · tipo desconocido válido → 200 y se ignora",
+      "kind": "http",
+      "contractRef": "D8-16",
+      "basis": "contrato",
+      "route": "POST /api/webhooks/voice/elevenlabs/post-call",
+      "scenario": {
+        "type": "desconocido",
+        "signature": "ok"
+      },
+      "expected": {
+        "http": 200
+      }
+    },
+    {
+      "name": "routeRules · http · post-call · fallo propio de la base → 5xx para que ElevenLabs reintente",
+      "kind": "http",
+      "contractRef": "D8-16",
+      "basis": "contrato",
+      "route": "POST /api/webhooks/voice/elevenlabs/post-call",
+      "scenario": {
+        "dbFailure": true
+      },
+      "expected": {
+        "http": "5xx"
+      }
+    },
+    {
+      "name": "routeRules · http · post-call · post_call_audio → 200 y se descarta",
+      "kind": "http",
+      "contractRef": "D8-16",
+      "basis": "contrato",
+      "route": "POST /api/webhooks/voice/elevenlabs/post-call",
+      "scenario": {
+        "type": "post_call_audio",
+        "signature": "ok"
+      },
+      "expected": {
+        "http": 200
+      }
+    },
+    {
+      "name": "routeRules · http · initiation · 8 192 bytes pasan; 8 193 → 413",
+      "kind": "http",
+      "contractRef": "D8-16",
+      "basis": "contrato",
+      "route": "POST /api/webhooks/voice/elevenlabs/initiation",
+      "scenario": {
+        "bodyBytes": 8193
+      },
+      "expected": {
+        "http": 413
+      }
+    },
+    {
+      "name": "routeRules · http · initiation · ninguna petición saliente en la ruta (Http::preventStrayRequests sin falsos)",
+      "kind": "http",
+      "contractRef": "D8-11 (PERF8)",
+      "basis": "contrato",
+      "route": "POST /api/webhooks/voice/elevenlabs/initiation",
+      "scenario": {
+        "network": "ninguna"
+      },
+      "expected": {
+        "http": 200
+      }
+    },
+    {
+      "name": "routeRules · http · tools · 8 193 bytes → 413",
+      "kind": "http",
+      "contractRef": "D8-16",
+      "basis": "contrato",
+      "route": "POST /api/voice/tools/{tool}",
+      "scenario": {
+        "bodyBytes": 8193
+      },
+      "expected": {
+        "http": 413
+      }
+    },
+    {
+      "name": "routeRules · http · tools · {tool} fuera de la lista cerrada → 404",
+      "kind": "http",
+      "contractRef": "D8-16",
+      "basis": "decision-fixture",
+      "decision": "DF-E8",
+      "route": "POST /api/voice/tools/{tool}",
+      "scenario": {
+        "tool": "aplicar_descuento"
+      },
+      "expected": {
+        "http": 404
+      }
+    }
+  ]
+}

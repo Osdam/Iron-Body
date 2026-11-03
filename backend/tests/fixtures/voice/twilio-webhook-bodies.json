@@ -1,0 +1,1399 @@
+{
+  "fixture": "twilio-webhook-bodies.json",
+  "version": 1,
+  "contract": "backend/docs/ultron-studio/ULTRON_STUDIO_H8_CONTRACT.md (congelado el 03-11-2026, commit 57bab8a)",
+  "audit": "backend/docs/ultron-studio/ULTRON_STUDIO_H8_VOICE_AUDIT.md (03-11-2026)",
+  "contractSections": [
+    "D8-16 (usage-trigger de la voz: X-Twilio-Signature con TwilioRequestSignature y el token de la subcuenta; idempotencia por IdempotencyToken; se persiste y puede accionar el freno)",
+    "D8-19 (el freno se abre solo con un aviso de la subcuenta o con una unknown_provider_call)",
+    "D8-21 (conciliación: llamadas de la subcuenta frente a voice_calls; resuelve las ambiguous y registra el precio real)",
+    "D8-3 (TelephonyCarrier::listCalls, una página, solo GET)"
+  ],
+  "generatedBy": "tests/fixtures/voice/tools/build/build.py (python3 -I), con los casos a mano en sec_*.py",
+  "checkedBy": "tests/fixtures/voice/tools/voice-fixtures-check.py",
+  "readme": "tests/fixtures/voice/README.md",
+  "basisLegend": {
+    "contrato": "Lo dice el contrato H8 tal cual (contractRef).",
+    "oficial": "Lo dice la documentación oficial o el SDK oficial del proveedor (source).",
+    "ley": "Lo dice la ley citada (Ley 2300 de 2023, Ley 51 de 1983).",
+    "supuesto-lead": "Sigue un supuesto de la congelación del lead (P-n), que el propietario puede cambiar.",
+    "decision-fixture": "El contrato no lo fija: lo decide este fixture (campo decision; README §Decisiones). Lo congela el lead."
+  },
+  "sources": [
+    {
+      "what": "Firma de los avisos (X-Twilio-Signature)",
+      "url": "https://www.twilio.com/docs/usage/webhooks/webhooks-security",
+      "consulted": "03-11-2026 (auditoría §d.2)",
+      "how": "Algoritmo de twilio-signature-vectors.json."
+    },
+    {
+      "what": "Parámetros del callback de un Usage Trigger (AccountSid, UsageTriggerSid, DateFired, Recurring, UsageCategory, TriggerBy, TriggerValue, CurrentValue, UsageRecordUri, IdempotencyToken)",
+      "url": "https://www.twilio.com/docs/usage/api/usage-trigger",
+      "consulted": "NO consultado hoy (sin red)",
+      "how": "Lista de la documentación tal como la conozco y la que lee el controlador del OTP (TwilioUsageTriggerController.php:39-54). [por confirmar] el formato exacto de DateFired y de IdempotencyToken; FriendlyName lo lee el OTP pero no lo doy por enviado."
+    },
+    {
+      "what": "Recurso Call y sus estados (queued, ringing, in-progress, completed, busy, failed, no-answer, canceled); forma de la lista Calls",
+      "url": "https://www.twilio.com/docs/voice/api/call-resource",
+      "consulted": "03-11-2026 (auditoría §d.2) y 31-10-2026 (tests/Unit/Twilio/fixtures/twilio-api-responses.json, calls_week)",
+      "how": "La forma de cada llamada copia la de calls_week del paquete TW del H6."
+    },
+    {
+      "what": "Parámetros de un callback de estado (CallSid, AccountSid, From, To, CallStatus, Direction, ApiVersion, CallDuration, CallbackSource, SequenceNumber, Timestamp)",
+      "url": "https://www.twilio.com/docs/voice/twiml#request-parameters",
+      "consulted": "NO consultado hoy (sin red)",
+      "how": "[por confirmar] la lista completa."
+    }
+  ],
+  "syntheticData": "Ningún dato real: SIDs, ids, secretos, tokens, URLs (.test) y teléfonos (+57 300 000 00xx, +57 601 000 00xx) inventados.",
+  "keys": {
+    "subaccountSid": "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f",
+    "subaccountSigningToken": "h8fixturesubaccountsigning000001",
+    "otpMasterTokenSynthetic": "h8fixtureMASTERotpTOKEN000000002",
+    "voiceWebhookBaseUrl": "https://crm.ironbody.test"
+  },
+  "decisions": {
+    "DF-E14": "Twilio canceled (marcada y cancelada antes de contestar) se concilia como failed; queued, ringing e in-progress siguen en dialing.",
+    "DF-W1": "Un aviso de gasto se persiste como evento de kind usage_alert, que NO está en el conjunto cerrado de D8-13 (Q-5: el lead lo añade o elige otro).",
+    "DF-W2": "Firma de Twilio mala en usage-trigger de la voz → 401 (como la post-llamada; el del OTP da 403 y no se toca).",
+    "DF-W3": "Sin IdempotencyToken: se persiste y abre el freno igual, sin deduplicación (abrir el freno es idempotente).",
+    "DF-W4": "Un tramo de transferencia (parent_call_sid de una llamada conocida) se concilia con su llamada madre y suma su coste; no es unknown_provider_call (Q-6).",
+    "DF-W5": "Una entrante denegada en la iniciación queda reconocida por su call_sid (evento initiation_received): la conciliación no la marca como desconocida (Q-6: si no, cualquier desconocido que llame abre el freno).",
+    "DF-W6": "Precio de Twilio: el valor absoluto de price (texto con signo) en micro-US$ enteros; null = todavía sin tarificar (se reintenta)."
+  },
+  "counts": {
+    "usageTrigger": 7,
+    "callStatus": 8,
+    "callsPage": 1,
+    "total": 16
+  },
+  "usageTrigger": [
+    {
+      "name": "usageTrigger · usageTrigger · aviso diario de la subcuenta, bien firmado → 200, se persiste y abre el freno",
+      "kind": "usageTrigger",
+      "contractRef": "D8-16, D8-19",
+      "basis": "decision-fixture",
+      "decision": "DF-W1",
+      "url": "https://crm.ironbody.test/api/webhooks/voice/twilio/usage-trigger",
+      "requestUri": "/api/webhooks/voice/twilio/usage-trigger",
+      "params": [
+        [
+          "AccountSid",
+          "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f"
+        ],
+        [
+          "UsageTriggerSid",
+          "UT000000000000000000000000b8000001"
+        ],
+        [
+          "DateFired",
+          "Wed, 04 Nov 2026 14:01:00 +0000"
+        ],
+        [
+          "Recurring",
+          "daily"
+        ],
+        [
+          "UsageCategory",
+          "totalprice"
+        ],
+        [
+          "TriggerBy",
+          "price"
+        ],
+        [
+          "TriggerValue",
+          "4.00"
+        ],
+        [
+          "CurrentValue",
+          "4.02"
+        ],
+        [
+          "UsageRecordUri",
+          "/2010-04-01/Accounts/AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f/Usage/Records/Today.json?Category=totalprice"
+        ],
+        [
+          "IdempotencyToken",
+          "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f-FIRES-UT0001-20261104"
+        ]
+      ],
+      "rawBody": "AccountSid=AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f&UsageTriggerSid=UT000000000000000000000000b8000001&DateFired=Wed%2C+04+Nov+2026+14%3A01%3A00+%2B0000&Recurring=daily&UsageCategory=totalprice&TriggerBy=price&TriggerValue=4.00&CurrentValue=4.02&UsageRecordUri=%2F2010-04-01%2FAccounts%2FAC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f%2FUsage%2FRecords%2FToday.json%3FCategory%3Dtotalprice&IdempotencyToken=AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f-FIRES-UT0001-20261104",
+      "headers": {
+        "X-Twilio-Signature": "8pkVzPHNzLVG2IKhlIC3l97Yw58="
+      },
+      "given": {
+        "brakeOpen": false,
+        "seenIdempotencyTokens": []
+      },
+      "expected": {
+        "http": 200,
+        "persisted": true,
+        "eventKind": "usage_alert",
+        "dedupeKey": "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f-FIRES-UT0001-20261104",
+        "brakeOpens": true,
+        "incident": "IRON GUARD (mecanismo del monitor del H7)"
+      }
+    },
+    {
+      "name": "usageTrigger · usageTrigger · aviso mensual → igual: cualquier aviso de la subcuenta abre el freno (P-17)",
+      "kind": "usageTrigger",
+      "contractRef": "D8-19, P-17",
+      "basis": "decision-fixture",
+      "decision": "DF-W1",
+      "url": "https://crm.ironbody.test/api/webhooks/voice/twilio/usage-trigger",
+      "requestUri": "/api/webhooks/voice/twilio/usage-trigger",
+      "params": [
+        [
+          "AccountSid",
+          "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f"
+        ],
+        [
+          "UsageTriggerSid",
+          "UT000000000000000000000000b8000002"
+        ],
+        [
+          "DateFired",
+          "Wed, 04 Nov 2026 14:02:00 +0000"
+        ],
+        [
+          "Recurring",
+          "monthly"
+        ],
+        [
+          "UsageCategory",
+          "totalprice"
+        ],
+        [
+          "TriggerBy",
+          "price"
+        ],
+        [
+          "TriggerValue",
+          "90.00"
+        ],
+        [
+          "CurrentValue",
+          "90.40"
+        ],
+        [
+          "UsageRecordUri",
+          "/2010-04-01/Accounts/AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f/Usage/Records/Today.json?Category=totalprice"
+        ],
+        [
+          "IdempotencyToken",
+          "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f-FIRES-UT0002-20261104"
+        ]
+      ],
+      "rawBody": "AccountSid=AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f&UsageTriggerSid=UT000000000000000000000000b8000002&DateFired=Wed%2C+04+Nov+2026+14%3A02%3A00+%2B0000&Recurring=monthly&UsageCategory=totalprice&TriggerBy=price&TriggerValue=90.00&CurrentValue=90.40&UsageRecordUri=%2F2010-04-01%2FAccounts%2FAC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f%2FUsage%2FRecords%2FToday.json%3FCategory%3Dtotalprice&IdempotencyToken=AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f-FIRES-UT0002-20261104",
+      "headers": {
+        "X-Twilio-Signature": "Vp+PkrodSIOIY7bwo+xAluDhp94="
+      },
+      "given": {
+        "brakeOpen": false,
+        "seenIdempotencyTokens": []
+      },
+      "expected": {
+        "http": 200,
+        "persisted": true,
+        "eventKind": "usage_alert",
+        "dedupeKey": "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f-FIRES-UT0002-20261104",
+        "brakeOpens": true
+      }
+    },
+    {
+      "name": "usageTrigger · usageTrigger · el mismo aviso otra vez (mismo IdempotencyToken) → 200 sin evento nuevo ni otra apertura",
+      "kind": "usageTrigger",
+      "contractRef": "D8-16, D8-19",
+      "basis": "contrato",
+      "url": "https://crm.ironbody.test/api/webhooks/voice/twilio/usage-trigger",
+      "requestUri": "/api/webhooks/voice/twilio/usage-trigger",
+      "params": [
+        [
+          "AccountSid",
+          "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f"
+        ],
+        [
+          "UsageTriggerSid",
+          "UT000000000000000000000000b8000001"
+        ],
+        [
+          "DateFired",
+          "Wed, 04 Nov 2026 14:01:00 +0000"
+        ],
+        [
+          "Recurring",
+          "daily"
+        ],
+        [
+          "UsageCategory",
+          "totalprice"
+        ],
+        [
+          "TriggerBy",
+          "price"
+        ],
+        [
+          "TriggerValue",
+          "4.00"
+        ],
+        [
+          "CurrentValue",
+          "4.02"
+        ],
+        [
+          "UsageRecordUri",
+          "/2010-04-01/Accounts/AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f/Usage/Records/Today.json?Category=totalprice"
+        ],
+        [
+          "IdempotencyToken",
+          "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f-FIRES-UT0001-20261104"
+        ]
+      ],
+      "rawBody": "AccountSid=AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f&UsageTriggerSid=UT000000000000000000000000b8000001&DateFired=Wed%2C+04+Nov+2026+14%3A01%3A00+%2B0000&Recurring=daily&UsageCategory=totalprice&TriggerBy=price&TriggerValue=4.00&CurrentValue=4.02&UsageRecordUri=%2F2010-04-01%2FAccounts%2FAC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f%2FUsage%2FRecords%2FToday.json%3FCategory%3Dtotalprice&IdempotencyToken=AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f-FIRES-UT0001-20261104",
+      "headers": {
+        "X-Twilio-Signature": "8pkVzPHNzLVG2IKhlIC3l97Yw58="
+      },
+      "given": {
+        "brakeOpen": true,
+        "seenIdempotencyTokens": [
+          "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f-FIRES-UT0001-20261104"
+        ]
+      },
+      "expected": {
+        "http": 200,
+        "persisted": false,
+        "duplicate": true,
+        "brakeOpens": false
+      }
+    },
+    {
+      "name": "usageTrigger · usageTrigger · sin IdempotencyToken → se persiste y abre el freno, sin deduplicar",
+      "kind": "usageTrigger",
+      "contractRef": "D8-16, D8-19",
+      "basis": "decision-fixture",
+      "decision": "DF-W3",
+      "url": "https://crm.ironbody.test/api/webhooks/voice/twilio/usage-trigger",
+      "requestUri": "/api/webhooks/voice/twilio/usage-trigger",
+      "params": [
+        [
+          "AccountSid",
+          "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f"
+        ],
+        [
+          "UsageTriggerSid",
+          "UT000000000000000000000000b8000003"
+        ],
+        [
+          "DateFired",
+          "Wed, 04 Nov 2026 14:03:00 +0000"
+        ],
+        [
+          "Recurring",
+          "daily"
+        ],
+        [
+          "UsageCategory",
+          "totalprice"
+        ],
+        [
+          "TriggerBy",
+          "price"
+        ],
+        [
+          "TriggerValue",
+          "4.00"
+        ],
+        [
+          "CurrentValue",
+          "4.10"
+        ],
+        [
+          "UsageRecordUri",
+          "/2010-04-01/Accounts/AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f/Usage/Records/Today.json?Category=totalprice"
+        ]
+      ],
+      "rawBody": "AccountSid=AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f&UsageTriggerSid=UT000000000000000000000000b8000003&DateFired=Wed%2C+04+Nov+2026+14%3A03%3A00+%2B0000&Recurring=daily&UsageCategory=totalprice&TriggerBy=price&TriggerValue=4.00&CurrentValue=4.10&UsageRecordUri=%2F2010-04-01%2FAccounts%2FAC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f%2FUsage%2FRecords%2FToday.json%3FCategory%3Dtotalprice",
+      "headers": {
+        "X-Twilio-Signature": "JxMOsnePfPODRkCzZOWqmyOjqJw="
+      },
+      "given": {
+        "brakeOpen": false,
+        "seenIdempotencyTokens": []
+      },
+      "expected": {
+        "http": 200,
+        "persisted": true,
+        "eventKind": "usage_alert",
+        "dedupeKey": null,
+        "brakeOpens": true
+      }
+    },
+    {
+      "name": "usageTrigger · usageTrigger · firma mala (un carácter) → 401, nada persistido",
+      "kind": "usageTrigger",
+      "contractRef": "D8-16, D8-19",
+      "basis": "decision-fixture",
+      "decision": "DF-W2",
+      "url": "https://crm.ironbody.test/api/webhooks/voice/twilio/usage-trigger",
+      "requestUri": "/api/webhooks/voice/twilio/usage-trigger",
+      "params": [
+        [
+          "AccountSid",
+          "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f"
+        ],
+        [
+          "UsageTriggerSid",
+          "UT000000000000000000000000b8000001"
+        ],
+        [
+          "DateFired",
+          "Wed, 04 Nov 2026 14:01:00 +0000"
+        ],
+        [
+          "Recurring",
+          "daily"
+        ],
+        [
+          "UsageCategory",
+          "totalprice"
+        ],
+        [
+          "TriggerBy",
+          "price"
+        ],
+        [
+          "TriggerValue",
+          "4.00"
+        ],
+        [
+          "CurrentValue",
+          "4.02"
+        ],
+        [
+          "UsageRecordUri",
+          "/2010-04-01/Accounts/AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f/Usage/Records/Today.json?Category=totalprice"
+        ],
+        [
+          "IdempotencyToken",
+          "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f-FIRES-UT0001-20261104"
+        ]
+      ],
+      "rawBody": "AccountSid=AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f&UsageTriggerSid=UT000000000000000000000000b8000001&DateFired=Wed%2C+04+Nov+2026+14%3A01%3A00+%2B0000&Recurring=daily&UsageCategory=totalprice&TriggerBy=price&TriggerValue=4.00&CurrentValue=4.02&UsageRecordUri=%2F2010-04-01%2FAccounts%2FAC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f%2FUsage%2FRecords%2FToday.json%3FCategory%3Dtotalprice&IdempotencyToken=AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f-FIRES-UT0001-20261104",
+      "headers": {
+        "X-Twilio-Signature": "8pkVzPHNzLVG2IKhlIC3l97Yw5A="
+      },
+      "given": {
+        "brakeOpen": false,
+        "seenIdempotencyTokens": []
+      },
+      "expected": {
+        "http": 401,
+        "persisted": false,
+        "brakeOpens": false
+      }
+    },
+    {
+      "name": "usageTrigger · usageTrigger · OTP-2: firmado con el token maestro del OTP → 401 (solo vale el de la subcuenta)",
+      "kind": "usageTrigger",
+      "contractRef": "D8-4, D8-16, auditoría OTP-2",
+      "basis": "decision-fixture",
+      "decision": "DF-W2",
+      "url": "https://crm.ironbody.test/api/webhooks/voice/twilio/usage-trigger",
+      "requestUri": "/api/webhooks/voice/twilio/usage-trigger",
+      "params": [
+        [
+          "AccountSid",
+          "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f"
+        ],
+        [
+          "UsageTriggerSid",
+          "UT000000000000000000000000b8000001"
+        ],
+        [
+          "DateFired",
+          "Wed, 04 Nov 2026 14:01:00 +0000"
+        ],
+        [
+          "Recurring",
+          "daily"
+        ],
+        [
+          "UsageCategory",
+          "totalprice"
+        ],
+        [
+          "TriggerBy",
+          "price"
+        ],
+        [
+          "TriggerValue",
+          "4.00"
+        ],
+        [
+          "CurrentValue",
+          "4.02"
+        ],
+        [
+          "UsageRecordUri",
+          "/2010-04-01/Accounts/AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f/Usage/Records/Today.json?Category=totalprice"
+        ],
+        [
+          "IdempotencyToken",
+          "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f-FIRES-UT0001-20261104"
+        ]
+      ],
+      "rawBody": "AccountSid=AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f&UsageTriggerSid=UT000000000000000000000000b8000001&DateFired=Wed%2C+04+Nov+2026+14%3A01%3A00+%2B0000&Recurring=daily&UsageCategory=totalprice&TriggerBy=price&TriggerValue=4.00&CurrentValue=4.02&UsageRecordUri=%2F2010-04-01%2FAccounts%2FAC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f%2FUsage%2FRecords%2FToday.json%3FCategory%3Dtotalprice&IdempotencyToken=AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f-FIRES-UT0001-20261104",
+      "headers": {
+        "X-Twilio-Signature": "neM7WFWA/cucf0KiP1TdyS9V17A="
+      },
+      "given": {
+        "brakeOpen": false,
+        "seenIdempotencyTokens": []
+      },
+      "expected": {
+        "http": 401,
+        "persisted": false,
+        "brakeOpens": false
+      }
+    },
+    {
+      "name": "usageTrigger · usageTrigger · sin cabecera X-Twilio-Signature → 401",
+      "kind": "usageTrigger",
+      "contractRef": "D8-16, D8-19",
+      "basis": "decision-fixture",
+      "decision": "DF-W2",
+      "url": "https://crm.ironbody.test/api/webhooks/voice/twilio/usage-trigger",
+      "requestUri": "/api/webhooks/voice/twilio/usage-trigger",
+      "params": [
+        [
+          "AccountSid",
+          "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f"
+        ],
+        [
+          "UsageTriggerSid",
+          "UT000000000000000000000000b8000001"
+        ],
+        [
+          "DateFired",
+          "Wed, 04 Nov 2026 14:01:00 +0000"
+        ],
+        [
+          "Recurring",
+          "daily"
+        ],
+        [
+          "UsageCategory",
+          "totalprice"
+        ],
+        [
+          "TriggerBy",
+          "price"
+        ],
+        [
+          "TriggerValue",
+          "4.00"
+        ],
+        [
+          "CurrentValue",
+          "4.02"
+        ],
+        [
+          "UsageRecordUri",
+          "/2010-04-01/Accounts/AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f/Usage/Records/Today.json?Category=totalprice"
+        ],
+        [
+          "IdempotencyToken",
+          "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f-FIRES-UT0001-20261104"
+        ]
+      ],
+      "rawBody": "AccountSid=AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f&UsageTriggerSid=UT000000000000000000000000b8000001&DateFired=Wed%2C+04+Nov+2026+14%3A01%3A00+%2B0000&Recurring=daily&UsageCategory=totalprice&TriggerBy=price&TriggerValue=4.00&CurrentValue=4.02&UsageRecordUri=%2F2010-04-01%2FAccounts%2FAC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f%2FUsage%2FRecords%2FToday.json%3FCategory%3Dtotalprice&IdempotencyToken=AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f-FIRES-UT0001-20261104",
+      "headers": {
+        "X-Twilio-Signature": ""
+      },
+      "given": {
+        "brakeOpen": false,
+        "seenIdempotencyTokens": []
+      },
+      "expected": {
+        "http": 401,
+        "persisted": false,
+        "brakeOpens": false
+      }
+    }
+  ],
+  "callStatus": [
+    {
+      "name": "callStatus · queued · estado de Twilio queued → voice_calls.status dialing",
+      "kind": "queued",
+      "contractRef": "D8-13, D8-21",
+      "basis": "decision-fixture",
+      "decision": "DF-E14",
+      "params": [
+        [
+          "CallSid",
+          "CA000000000000000000000000a8000028"
+        ],
+        [
+          "AccountSid",
+          "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f"
+        ],
+        [
+          "From",
+          "+576010000090"
+        ],
+        [
+          "To",
+          "+573000000031"
+        ],
+        [
+          "CallStatus",
+          "queued"
+        ],
+        [
+          "Direction",
+          "outbound-api"
+        ],
+        [
+          "ApiVersion",
+          "2010-04-01"
+        ],
+        [
+          "CallbackSource",
+          "call-progress-events"
+        ],
+        [
+          "SequenceNumber",
+          "0"
+        ],
+        [
+          "Timestamp",
+          "Wed, 04 Nov 2026 15:00:00 +0000"
+        ]
+      ],
+      "rawBody": "CallSid=CA000000000000000000000000a8000028&AccountSid=AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f&From=%2B576010000090&To=%2B573000000031&CallStatus=queued&Direction=outbound-api&ApiVersion=2010-04-01&CallbackSource=call-progress-events&SequenceNumber=0&Timestamp=Wed%2C+04+Nov+2026+15%3A00%3A00+%2B0000",
+      "expected": {
+        "ourStatus": "dialing",
+        "final": false,
+        "mustNotPersist": [
+          "+573000000031",
+          "+576010000090"
+        ]
+      }
+    },
+    {
+      "name": "callStatus · ringing · estado de Twilio ringing → voice_calls.status dialing",
+      "kind": "ringing",
+      "contractRef": "D8-13, D8-21",
+      "basis": "decision-fixture",
+      "decision": "DF-E14",
+      "params": [
+        [
+          "CallSid",
+          "CA000000000000000000000000a8000029"
+        ],
+        [
+          "AccountSid",
+          "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f"
+        ],
+        [
+          "From",
+          "+576010000090"
+        ],
+        [
+          "To",
+          "+573000000031"
+        ],
+        [
+          "CallStatus",
+          "ringing"
+        ],
+        [
+          "Direction",
+          "outbound-api"
+        ],
+        [
+          "ApiVersion",
+          "2010-04-01"
+        ],
+        [
+          "CallbackSource",
+          "call-progress-events"
+        ],
+        [
+          "SequenceNumber",
+          "1"
+        ],
+        [
+          "Timestamp",
+          "Wed, 04 Nov 2026 15:01:00 +0000"
+        ]
+      ],
+      "rawBody": "CallSid=CA000000000000000000000000a8000029&AccountSid=AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f&From=%2B576010000090&To=%2B573000000031&CallStatus=ringing&Direction=outbound-api&ApiVersion=2010-04-01&CallbackSource=call-progress-events&SequenceNumber=1&Timestamp=Wed%2C+04+Nov+2026+15%3A01%3A00+%2B0000",
+      "expected": {
+        "ourStatus": "dialing",
+        "final": false,
+        "mustNotPersist": [
+          "+573000000031",
+          "+576010000090"
+        ]
+      }
+    },
+    {
+      "name": "callStatus · in-progress · estado de Twilio in-progress → voice_calls.status dialing",
+      "kind": "in-progress",
+      "contractRef": "D8-13, D8-21",
+      "basis": "decision-fixture",
+      "decision": "DF-E14",
+      "params": [
+        [
+          "CallSid",
+          "CA000000000000000000000000a800002a"
+        ],
+        [
+          "AccountSid",
+          "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f"
+        ],
+        [
+          "From",
+          "+576010000090"
+        ],
+        [
+          "To",
+          "+573000000031"
+        ],
+        [
+          "CallStatus",
+          "in-progress"
+        ],
+        [
+          "Direction",
+          "outbound-api"
+        ],
+        [
+          "ApiVersion",
+          "2010-04-01"
+        ],
+        [
+          "CallbackSource",
+          "call-progress-events"
+        ],
+        [
+          "SequenceNumber",
+          "2"
+        ],
+        [
+          "Timestamp",
+          "Wed, 04 Nov 2026 15:02:00 +0000"
+        ]
+      ],
+      "rawBody": "CallSid=CA000000000000000000000000a800002a&AccountSid=AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f&From=%2B576010000090&To=%2B573000000031&CallStatus=in-progress&Direction=outbound-api&ApiVersion=2010-04-01&CallbackSource=call-progress-events&SequenceNumber=2&Timestamp=Wed%2C+04+Nov+2026+15%3A02%3A00+%2B0000",
+      "expected": {
+        "ourStatus": "dialing",
+        "final": false,
+        "mustNotPersist": [
+          "+573000000031",
+          "+576010000090"
+        ]
+      }
+    },
+    {
+      "name": "callStatus · completed · estado de Twilio completed → voice_calls.status completed",
+      "kind": "completed",
+      "contractRef": "D8-13, D8-21",
+      "basis": "contrato",
+      "params": [
+        [
+          "CallSid",
+          "CA000000000000000000000000a800002b"
+        ],
+        [
+          "AccountSid",
+          "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f"
+        ],
+        [
+          "From",
+          "+576010000090"
+        ],
+        [
+          "To",
+          "+573000000031"
+        ],
+        [
+          "CallStatus",
+          "completed"
+        ],
+        [
+          "Direction",
+          "outbound-api"
+        ],
+        [
+          "ApiVersion",
+          "2010-04-01"
+        ],
+        [
+          "CallbackSource",
+          "call-progress-events"
+        ],
+        [
+          "SequenceNumber",
+          "3"
+        ],
+        [
+          "Timestamp",
+          "Wed, 04 Nov 2026 15:03:00 +0000"
+        ],
+        [
+          "CallDuration",
+          "187"
+        ]
+      ],
+      "rawBody": "CallSid=CA000000000000000000000000a800002b&AccountSid=AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f&From=%2B576010000090&To=%2B573000000031&CallStatus=completed&Direction=outbound-api&ApiVersion=2010-04-01&CallbackSource=call-progress-events&SequenceNumber=3&Timestamp=Wed%2C+04+Nov+2026+15%3A03%3A00+%2B0000&CallDuration=187",
+      "expected": {
+        "ourStatus": "completed",
+        "final": true,
+        "mustNotPersist": [
+          "+573000000031",
+          "+576010000090"
+        ]
+      }
+    },
+    {
+      "name": "callStatus · busy · estado de Twilio busy → voice_calls.status busy",
+      "kind": "busy",
+      "contractRef": "D8-13, D8-21",
+      "basis": "contrato",
+      "params": [
+        [
+          "CallSid",
+          "CA000000000000000000000000a800002c"
+        ],
+        [
+          "AccountSid",
+          "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f"
+        ],
+        [
+          "From",
+          "+576010000090"
+        ],
+        [
+          "To",
+          "+573000000031"
+        ],
+        [
+          "CallStatus",
+          "busy"
+        ],
+        [
+          "Direction",
+          "outbound-api"
+        ],
+        [
+          "ApiVersion",
+          "2010-04-01"
+        ],
+        [
+          "CallbackSource",
+          "call-progress-events"
+        ],
+        [
+          "SequenceNumber",
+          "4"
+        ],
+        [
+          "Timestamp",
+          "Wed, 04 Nov 2026 15:04:00 +0000"
+        ]
+      ],
+      "rawBody": "CallSid=CA000000000000000000000000a800002c&AccountSid=AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f&From=%2B576010000090&To=%2B573000000031&CallStatus=busy&Direction=outbound-api&ApiVersion=2010-04-01&CallbackSource=call-progress-events&SequenceNumber=4&Timestamp=Wed%2C+04+Nov+2026+15%3A04%3A00+%2B0000",
+      "expected": {
+        "ourStatus": "busy",
+        "final": true,
+        "mustNotPersist": [
+          "+573000000031",
+          "+576010000090"
+        ]
+      }
+    },
+    {
+      "name": "callStatus · no-answer · estado de Twilio no-answer → voice_calls.status no_answer",
+      "kind": "no-answer",
+      "contractRef": "D8-13, D8-21",
+      "basis": "contrato",
+      "params": [
+        [
+          "CallSid",
+          "CA000000000000000000000000a800002d"
+        ],
+        [
+          "AccountSid",
+          "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f"
+        ],
+        [
+          "From",
+          "+576010000090"
+        ],
+        [
+          "To",
+          "+573000000031"
+        ],
+        [
+          "CallStatus",
+          "no-answer"
+        ],
+        [
+          "Direction",
+          "outbound-api"
+        ],
+        [
+          "ApiVersion",
+          "2010-04-01"
+        ],
+        [
+          "CallbackSource",
+          "call-progress-events"
+        ],
+        [
+          "SequenceNumber",
+          "5"
+        ],
+        [
+          "Timestamp",
+          "Wed, 04 Nov 2026 15:05:00 +0000"
+        ]
+      ],
+      "rawBody": "CallSid=CA000000000000000000000000a800002d&AccountSid=AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f&From=%2B576010000090&To=%2B573000000031&CallStatus=no-answer&Direction=outbound-api&ApiVersion=2010-04-01&CallbackSource=call-progress-events&SequenceNumber=5&Timestamp=Wed%2C+04+Nov+2026+15%3A05%3A00+%2B0000",
+      "expected": {
+        "ourStatus": "no_answer",
+        "final": true,
+        "mustNotPersist": [
+          "+573000000031",
+          "+576010000090"
+        ]
+      }
+    },
+    {
+      "name": "callStatus · failed · estado de Twilio failed → voice_calls.status failed",
+      "kind": "failed",
+      "contractRef": "D8-13, D8-21",
+      "basis": "contrato",
+      "params": [
+        [
+          "CallSid",
+          "CA000000000000000000000000a800002e"
+        ],
+        [
+          "AccountSid",
+          "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f"
+        ],
+        [
+          "From",
+          "+576010000090"
+        ],
+        [
+          "To",
+          "+573000000031"
+        ],
+        [
+          "CallStatus",
+          "failed"
+        ],
+        [
+          "Direction",
+          "outbound-api"
+        ],
+        [
+          "ApiVersion",
+          "2010-04-01"
+        ],
+        [
+          "CallbackSource",
+          "call-progress-events"
+        ],
+        [
+          "SequenceNumber",
+          "6"
+        ],
+        [
+          "Timestamp",
+          "Wed, 04 Nov 2026 15:06:00 +0000"
+        ]
+      ],
+      "rawBody": "CallSid=CA000000000000000000000000a800002e&AccountSid=AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f&From=%2B576010000090&To=%2B573000000031&CallStatus=failed&Direction=outbound-api&ApiVersion=2010-04-01&CallbackSource=call-progress-events&SequenceNumber=6&Timestamp=Wed%2C+04+Nov+2026+15%3A06%3A00+%2B0000",
+      "expected": {
+        "ourStatus": "failed",
+        "final": true,
+        "mustNotPersist": [
+          "+573000000031",
+          "+576010000090"
+        ]
+      }
+    },
+    {
+      "name": "callStatus · canceled · estado de Twilio canceled → voice_calls.status failed",
+      "kind": "canceled",
+      "contractRef": "D8-13, D8-21",
+      "basis": "decision-fixture",
+      "decision": "DF-E14",
+      "params": [
+        [
+          "CallSid",
+          "CA000000000000000000000000a800002f"
+        ],
+        [
+          "AccountSid",
+          "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f"
+        ],
+        [
+          "From",
+          "+576010000090"
+        ],
+        [
+          "To",
+          "+573000000031"
+        ],
+        [
+          "CallStatus",
+          "canceled"
+        ],
+        [
+          "Direction",
+          "outbound-api"
+        ],
+        [
+          "ApiVersion",
+          "2010-04-01"
+        ],
+        [
+          "CallbackSource",
+          "call-progress-events"
+        ],
+        [
+          "SequenceNumber",
+          "7"
+        ],
+        [
+          "Timestamp",
+          "Wed, 04 Nov 2026 15:07:00 +0000"
+        ]
+      ],
+      "rawBody": "CallSid=CA000000000000000000000000a800002f&AccountSid=AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f&From=%2B576010000090&To=%2B573000000031&CallStatus=canceled&Direction=outbound-api&ApiVersion=2010-04-01&CallbackSource=call-progress-events&SequenceNumber=7&Timestamp=Wed%2C+04+Nov+2026+15%3A07%3A00+%2B0000",
+      "expected": {
+        "ourStatus": "failed",
+        "final": true,
+        "mustNotPersist": [
+          "+573000000031",
+          "+576010000090"
+        ]
+      }
+    }
+  ],
+  "callsPage": [
+    {
+      "name": "callsPage · listCalls · una página de la subcuenta frente a voice_calls: conocidas, ambiguas resueltas, desconocida, tramo de transferencia y entrante denegada",
+      "kind": "listCalls",
+      "contractRef": "D8-21, D8-19, D8-3",
+      "basis": "decision-fixture",
+      "decision": "DF-W6",
+      "page": {
+        "calls": [
+          {
+            "account_sid": "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f",
+            "annotation": null,
+            "answered_by": null,
+            "api_version": "2010-04-01",
+            "caller_name": null,
+            "date_created": "Wed, 04 Nov 2026 14:00:00 +0000",
+            "date_updated": "Wed, 04 Nov 2026 14:05:00 +0000",
+            "direction": "outbound-api",
+            "duration": "187",
+            "end_time": "Wed, 04 Nov 2026 14:05:00 +0000",
+            "forwarded_from": null,
+            "from": "+576010000090",
+            "from_formatted": "+576010000090",
+            "group_sid": null,
+            "parent_call_sid": null,
+            "phone_number_sid": "PN000000000000000000000000000000c8",
+            "price": "-0.07050",
+            "price_unit": "USD",
+            "queue_time": "0",
+            "sid": "CA000000000000000000000000a8000001",
+            "start_time": "Wed, 04 Nov 2026 14:00:00 +0000",
+            "status": "completed",
+            "subresource_uris": {
+              "recordings": "/2010-04-01/Accounts/AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f/Calls/CA000000000000000000000000a8000001/Recordings.json"
+            },
+            "to": "+573000000031",
+            "to_formatted": "+573000000031",
+            "trunk_sid": null,
+            "uri": "/2010-04-01/Accounts/AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f/Calls/CA000000000000000000000000a8000001.json"
+          },
+          {
+            "account_sid": "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f",
+            "annotation": null,
+            "answered_by": null,
+            "api_version": "2010-04-01",
+            "caller_name": null,
+            "date_created": "Wed, 04 Nov 2026 14:00:00 +0000",
+            "date_updated": "Wed, 04 Nov 2026 14:05:00 +0000",
+            "direction": "outbound-api",
+            "duration": "60",
+            "end_time": "Wed, 04 Nov 2026 14:05:00 +0000",
+            "forwarded_from": null,
+            "from": "+576010000090",
+            "from_formatted": "+576010000090",
+            "group_sid": null,
+            "parent_call_sid": null,
+            "phone_number_sid": "PN000000000000000000000000000000c8",
+            "price": "-0.03770",
+            "price_unit": "USD",
+            "queue_time": "0",
+            "sid": "CA000000000000000000000000a800000b",
+            "start_time": "Wed, 04 Nov 2026 14:00:00 +0000",
+            "status": "completed",
+            "subresource_uris": {
+              "recordings": "/2010-04-01/Accounts/AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f/Calls/CA000000000000000000000000a800000b/Recordings.json"
+            },
+            "to": "+573000000031",
+            "to_formatted": "+573000000031",
+            "trunk_sid": null,
+            "uri": "/2010-04-01/Accounts/AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f/Calls/CA000000000000000000000000a800000b.json"
+          },
+          {
+            "account_sid": "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f",
+            "annotation": null,
+            "answered_by": null,
+            "api_version": "2010-04-01",
+            "caller_name": null,
+            "date_created": "Wed, 04 Nov 2026 14:00:00 +0000",
+            "date_updated": "Wed, 04 Nov 2026 14:05:00 +0000",
+            "direction": "outbound-api",
+            "duration": "0",
+            "end_time": "Wed, 04 Nov 2026 14:05:00 +0000",
+            "forwarded_from": null,
+            "from": "+576010000090",
+            "from_formatted": "+576010000090",
+            "group_sid": null,
+            "parent_call_sid": null,
+            "phone_number_sid": "PN000000000000000000000000000000c8",
+            "price": null,
+            "price_unit": "USD",
+            "queue_time": "0",
+            "sid": "CA000000000000000000000000a800000c",
+            "start_time": "Wed, 04 Nov 2026 14:00:00 +0000",
+            "status": "no-answer",
+            "subresource_uris": {
+              "recordings": "/2010-04-01/Accounts/AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f/Calls/CA000000000000000000000000a800000c/Recordings.json"
+            },
+            "to": "+573000000031",
+            "to_formatted": "+573000000031",
+            "trunk_sid": null,
+            "uri": "/2010-04-01/Accounts/AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f/Calls/CA000000000000000000000000a800000c.json"
+          },
+          {
+            "account_sid": "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f",
+            "annotation": null,
+            "answered_by": null,
+            "api_version": "2010-04-01",
+            "caller_name": null,
+            "date_created": "Wed, 04 Nov 2026 14:00:00 +0000",
+            "date_updated": "Wed, 04 Nov 2026 14:05:00 +0000",
+            "direction": "outbound-api",
+            "duration": "30",
+            "end_time": "Wed, 04 Nov 2026 14:05:00 +0000",
+            "forwarded_from": null,
+            "from": "+576010000090",
+            "from_formatted": "+576010000090",
+            "group_sid": null,
+            "parent_call_sid": null,
+            "phone_number_sid": "PN000000000000000000000000000000c8",
+            "price": "-0.03770",
+            "price_unit": "USD",
+            "queue_time": "0",
+            "sid": "CA000000000000000000000000a8000005",
+            "start_time": "Wed, 04 Nov 2026 14:00:00 +0000",
+            "status": "completed",
+            "subresource_uris": {
+              "recordings": "/2010-04-01/Accounts/AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f/Calls/CA000000000000000000000000a8000005/Recordings.json"
+            },
+            "to": "+573000000077",
+            "to_formatted": "+573000000077",
+            "trunk_sid": null,
+            "uri": "/2010-04-01/Accounts/AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f/Calls/CA000000000000000000000000a8000005.json"
+          },
+          {
+            "account_sid": "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f",
+            "annotation": null,
+            "answered_by": null,
+            "api_version": "2010-04-01",
+            "caller_name": null,
+            "date_created": "Wed, 04 Nov 2026 14:00:00 +0000",
+            "date_updated": "Wed, 04 Nov 2026 14:05:00 +0000",
+            "direction": "outbound-api",
+            "duration": "0",
+            "end_time": null,
+            "forwarded_from": null,
+            "from": "+576010000090",
+            "from_formatted": "+576010000090",
+            "group_sid": null,
+            "parent_call_sid": null,
+            "phone_number_sid": "PN000000000000000000000000000000c8",
+            "price": null,
+            "price_unit": "USD",
+            "queue_time": "0",
+            "sid": "CA000000000000000000000000a800000d",
+            "start_time": "Wed, 04 Nov 2026 14:00:00 +0000",
+            "status": "in-progress",
+            "subresource_uris": {
+              "recordings": "/2010-04-01/Accounts/AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f/Calls/CA000000000000000000000000a800000d/Recordings.json"
+            },
+            "to": "+573000000031",
+            "to_formatted": "+573000000031",
+            "trunk_sid": null,
+            "uri": "/2010-04-01/Accounts/AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f/Calls/CA000000000000000000000000a800000d.json"
+          },
+          {
+            "account_sid": "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f",
+            "annotation": null,
+            "answered_by": null,
+            "api_version": "2010-04-01",
+            "caller_name": null,
+            "date_created": "Wed, 04 Nov 2026 14:00:00 +0000",
+            "date_updated": "Wed, 04 Nov 2026 14:05:00 +0000",
+            "direction": "outbound-api",
+            "duration": "0",
+            "end_time": "Wed, 04 Nov 2026 14:05:00 +0000",
+            "forwarded_from": null,
+            "from": "+576010000090",
+            "from_formatted": "+576010000090",
+            "group_sid": null,
+            "parent_call_sid": null,
+            "phone_number_sid": "PN000000000000000000000000000000c8",
+            "price": null,
+            "price_unit": "USD",
+            "queue_time": "0",
+            "sid": "CA000000000000000000000000a800000e",
+            "start_time": "Wed, 04 Nov 2026 14:00:00 +0000",
+            "status": "canceled",
+            "subresource_uris": {
+              "recordings": "/2010-04-01/Accounts/AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f/Calls/CA000000000000000000000000a800000e/Recordings.json"
+            },
+            "to": "+573000000031",
+            "to_formatted": "+573000000031",
+            "trunk_sid": null,
+            "uri": "/2010-04-01/Accounts/AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f/Calls/CA000000000000000000000000a800000e.json"
+          },
+          {
+            "account_sid": "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f",
+            "annotation": null,
+            "answered_by": null,
+            "api_version": "2010-04-01",
+            "caller_name": null,
+            "date_created": "Wed, 04 Nov 2026 14:00:00 +0000",
+            "date_updated": "Wed, 04 Nov 2026 14:05:00 +0000",
+            "direction": "outbound-api",
+            "duration": "120",
+            "end_time": "Wed, 04 Nov 2026 14:05:00 +0000",
+            "forwarded_from": null,
+            "from": "+576010000090",
+            "from_formatted": "+576010000090",
+            "group_sid": null,
+            "parent_call_sid": "CA000000000000000000000000a8000001",
+            "phone_number_sid": "PN000000000000000000000000000000c8",
+            "price": "-0.14000",
+            "price_unit": "USD",
+            "queue_time": "0",
+            "sid": "CA000000000000000000000000a800000f",
+            "start_time": "Wed, 04 Nov 2026 14:00:00 +0000",
+            "status": "completed",
+            "subresource_uris": {
+              "recordings": "/2010-04-01/Accounts/AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f/Calls/CA000000000000000000000000a800000f/Recordings.json"
+            },
+            "to": "+576010000011",
+            "to_formatted": "+576010000011",
+            "trunk_sid": null,
+            "uri": "/2010-04-01/Accounts/AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f/Calls/CA000000000000000000000000a800000f.json"
+          },
+          {
+            "account_sid": "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f",
+            "annotation": null,
+            "answered_by": null,
+            "api_version": "2010-04-01",
+            "caller_name": null,
+            "date_created": "Wed, 04 Nov 2026 14:00:00 +0000",
+            "date_updated": "Wed, 04 Nov 2026 14:05:00 +0000",
+            "direction": "inbound",
+            "duration": "9",
+            "end_time": "Wed, 04 Nov 2026 14:05:00 +0000",
+            "forwarded_from": null,
+            "from": "+573000000077",
+            "from_formatted": "+573000000077",
+            "group_sid": null,
+            "parent_call_sid": null,
+            "phone_number_sid": "PN000000000000000000000000000000c8",
+            "price": "-0.01418",
+            "price_unit": "USD",
+            "queue_time": "0",
+            "sid": "CA000000000000000000000000a8000010",
+            "start_time": "Wed, 04 Nov 2026 14:00:00 +0000",
+            "status": "completed",
+            "subresource_uris": {
+              "recordings": "/2010-04-01/Accounts/AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f/Calls/CA000000000000000000000000a8000010/Recordings.json"
+            },
+            "to": "+576010000090",
+            "to_formatted": "+576010000090",
+            "trunk_sid": null,
+            "uri": "/2010-04-01/Accounts/AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f/Calls/CA000000000000000000000000a8000010.json"
+          },
+          {
+            "account_sid": "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f",
+            "annotation": null,
+            "answered_by": null,
+            "api_version": "2010-04-01",
+            "caller_name": null,
+            "date_created": "Wed, 04 Nov 2026 14:00:00 +0000",
+            "date_updated": "Wed, 04 Nov 2026 14:05:00 +0000",
+            "direction": "outbound-api",
+            "duration": "45",
+            "end_time": "Wed, 04 Nov 2026 14:05:00 +0000",
+            "forwarded_from": null,
+            "from": "+576010000090",
+            "from_formatted": "+576010000090",
+            "group_sid": null,
+            "parent_call_sid": null,
+            "phone_number_sid": "PN000000000000000000000000000000c8",
+            "price": null,
+            "price_unit": "USD",
+            "queue_time": "0",
+            "sid": "CA000000000000000000000000a8000011",
+            "start_time": "Wed, 04 Nov 2026 14:00:00 +0000",
+            "status": "completed",
+            "subresource_uris": {
+              "recordings": "/2010-04-01/Accounts/AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f/Calls/CA000000000000000000000000a8000011/Recordings.json"
+            },
+            "to": "+573000000031",
+            "to_formatted": "+573000000031",
+            "trunk_sid": null,
+            "uri": "/2010-04-01/Accounts/AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f/Calls/CA000000000000000000000000a8000011.json"
+          }
+        ],
+        "end": 8,
+        "first_page_uri": "/2010-04-01/Accounts/AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f/Calls.json?PageSize=50&Page=0",
+        "next_page_uri": null,
+        "page": 0,
+        "page_size": 50,
+        "previous_page_uri": null,
+        "start": 0,
+        "uri": "/2010-04-01/Accounts/AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f/Calls.json?PageSize=50&Page=0"
+      },
+      "given": {
+        "voiceCallsByCallSid": {
+          "CA000000000000000000000000a8000001": "completed",
+          "CA000000000000000000000000a800000b": "ambiguous",
+          "CA000000000000000000000000a800000c": "ambiguous",
+          "CA000000000000000000000000a800000d": "dialing",
+          "CA000000000000000000000000a800000e": "ambiguous",
+          "CA000000000000000000000000a8000011": "completed"
+        },
+        "initiationReceivedCallSids": [
+          "CA000000000000000000000000a8000010"
+        ],
+        "brakeOpen": false
+      },
+      "expected": {
+        "perCall": {
+          "CA000000000000000000000000a8000001": {
+            "match": "known",
+            "statusBefore": "completed",
+            "statusAfter": "completed",
+            "costMicroUsd": 70500,
+            "events": [
+              "reconciled",
+              "cost_recorded"
+            ]
+          },
+          "CA000000000000000000000000a800000b": {
+            "match": "known",
+            "statusBefore": "ambiguous",
+            "statusAfter": "completed",
+            "costMicroUsd": 37700,
+            "events": [
+              "reconciled",
+              "cost_recorded"
+            ]
+          },
+          "CA000000000000000000000000a800000c": {
+            "match": "known",
+            "statusBefore": "ambiguous",
+            "statusAfter": "no_answer",
+            "costMicroUsd": null,
+            "events": [
+              "reconciled"
+            ]
+          },
+          "CA000000000000000000000000a8000005": {
+            "match": "unknown",
+            "events": [
+              "unknown_provider_call"
+            ],
+            "brakeOpens": true
+          },
+          "CA000000000000000000000000a800000d": {
+            "match": "known",
+            "statusBefore": "dialing",
+            "statusAfter": "dialing",
+            "costMicroUsd": null,
+            "events": []
+          },
+          "CA000000000000000000000000a800000e": {
+            "match": "known",
+            "statusBefore": "ambiguous",
+            "statusAfter": "failed",
+            "costMicroUsd": null,
+            "events": [
+              "reconciled"
+            ],
+            "decision": "DF-E14"
+          },
+          "CA000000000000000000000000a800000f": {
+            "match": "transfer_leg",
+            "parentCallSid": "CA000000000000000000000000a8000001",
+            "costMicroUsd": 140000,
+            "events": [
+              "cost_recorded"
+            ],
+            "brakeOpens": false,
+            "decision": "DF-W4"
+          },
+          "CA000000000000000000000000a8000010": {
+            "match": "denied_inbound",
+            "events": [
+              "cost_recorded"
+            ],
+            "costMicroUsd": 14180,
+            "brakeOpens": false,
+            "decision": "DF-W5"
+          },
+          "CA000000000000000000000000a8000011": {
+            "match": "known",
+            "statusBefore": "completed",
+            "statusAfter": "completed",
+            "costMicroUsd": null,
+            "events": [
+              "reconciled"
+            ],
+            "note": "price null: todavía sin tarificar, se reintenta (DF-W6)",
+            "decision": "DF-W6"
+          }
+        },
+        "brakeOpens": true,
+        "brakeReason": "unknown_provider_call",
+        "mustNotPersist": [
+          "+573000000031",
+          "+573000000077",
+          "+576010000011"
+        ]
+      }
+    }
+  ]
+}

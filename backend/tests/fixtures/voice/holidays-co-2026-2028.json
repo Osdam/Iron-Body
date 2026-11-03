@@ -1,0 +1,1442 @@
+{
+  "fixture": "holidays-co-2026-2028.json",
+  "version": 1,
+  "contract": "backend/docs/ultron-studio/ULTRON_STUDIO_H8_CONTRACT.md (congelado el 03-11-2026, commit 57bab8a)",
+  "audit": "backend/docs/ultron-studio/ULTRON_STUDIO_H8_VOICE_AUDIT.md (03-11-2026)",
+  "contractSections": [
+    "D8-15 (festivos: Telephony\\ColombianHolidays, Ley 51 de 1983 y los móviles de Pascua; fixture 2026–2028 aprobado por el propietario)",
+    "D8-12 (motivo holiday de la puerta de salientes)",
+    "D8-18 (horario de salientes en Colombia)"
+  ],
+  "generatedBy": "tests/fixtures/voice/tools/build/build.py (python3 -I), con los casos a mano en sec_*.py",
+  "checkedBy": "tests/fixtures/voice/tools/voice-fixtures-check.py",
+  "readme": "tests/fixtures/voice/README.md",
+  "basisLegend": {
+    "contrato": "Lo dice el contrato H8 tal cual (contractRef).",
+    "oficial": "Lo dice la documentación oficial o el SDK oficial del proveedor (source).",
+    "ley": "Lo dice la ley citada (Ley 2300 de 2023, Ley 51 de 1983).",
+    "supuesto-lead": "Sigue un supuesto de la congelación del lead (P-n), que el propietario puede cambiar.",
+    "decision-fixture": "El contrato no lo fija: lo decide este fixture (campo decision; README §Decisiones). Lo congela el lead."
+  },
+  "sources": [
+    {
+      "what": "Ley 51 de 1983, art. 1 (modifica el art. 177 del Código Sustantivo del Trabajo): los 18 días de fiesta y el traslado al lunes («Ley Emiliani»)",
+      "url": "http://www.secretariasenado.gov.co/senado/basedoc/ley_0051_1983.html",
+      "consulted": "NO consultado hoy (sin red)",
+      "how": "Texto conocido de la ley: el 6 de enero, 19 de marzo, 29 de junio, 15 de agosto, 12 de octubre, 1 y 11 de noviembre, la Ascensión, el Corpus Christi y el Sagrado Corazón, si no caen en lunes, se trasladan al lunes siguiente (también si caen en domingo). [por confirmar con la fuente oficial antes de aprobar]"
+    },
+    {
+      "what": "Fechas de Pascua 2026–2028",
+      "url": "(cálculo)",
+      "consulted": "03-11-2026",
+      "how": "Algoritmo gregoriano anónimo (Meeus/Jones/Butcher) en el generador, el de Gauss en el comprobador y easter_days() de PHP 8.3: 05-04-2026, 28-03-2027 y 16-04-2028 (las tres coinciden)."
+    }
+  ],
+  "syntheticData": "Ningún dato real: SIDs, ids, secretos, tokens, URLs (.test) y teléfonos (+57 300 000 00xx, +57 601 000 00xx) inventados.",
+  "approvedByOwner": false,
+  "approvalNote": "Propuesta para la aprobación del propietario (D8-15, P-13). Hasta entonces, ColombianHolidays se prueba contra esta lista y la política no se enciende para contactos (fase 4b).",
+  "timezone": "America/Bogota (UTC−05:00 todo el año, sin horario de verano desde 1993)",
+  "rule": {
+    "fixed": [
+      "01-01 Año Nuevo",
+      "05-01 Día del Trabajo",
+      "07-20 Día de la Independencia",
+      "08-07 Batalla de Boyacá",
+      "12-08 Inmaculada Concepción",
+      "12-25 Navidad"
+    ],
+    "emiliani": [
+      "01-06 Reyes Magos",
+      "03-19 San José",
+      "06-29 San Pedro y San Pablo",
+      "08-15 Asunción de la Virgen",
+      "10-12 Día de la Raza",
+      "11-01 Todos los Santos",
+      "11-11 Independencia de Cartagena"
+    ],
+    "easter": [
+      "Pascua − 3 Jueves Santo",
+      "Pascua − 2 Viernes Santo"
+    ],
+    "easterEmiliani": [
+      "Pascua + 39 Ascensión del Señor → lunes (Pascua + 43)",
+      "Pascua + 60 Corpus Christi → lunes (Pascua + 64)",
+      "Pascua + 68 Sagrado Corazón de Jesús → lunes (Pascua + 71)"
+    ],
+    "move": "si no cae en lunes, al lunes siguiente (de domingo, al día después)",
+    "notHolidays": "el domingo de Pascua, el sábado santo, el 24 y el 31 de diciembre no son festivos (el domingo ya queda fuera del horario de salientes)"
+  },
+  "easter": {
+    "2026": "2026-04-05",
+    "2027": "2027-03-28",
+    "2028": "2028-04-16"
+  },
+  "years": {
+    "2026": [
+      {
+        "date": "2026-01-01",
+        "weekday": "jueves",
+        "name": "Año Nuevo",
+        "rule": "fijo",
+        "baseDate": null,
+        "moved": false
+      },
+      {
+        "date": "2026-01-12",
+        "weekday": "lunes",
+        "name": "Reyes Magos",
+        "rule": "emiliani",
+        "baseDate": "2026-01-06",
+        "moved": true
+      },
+      {
+        "date": "2026-03-23",
+        "weekday": "lunes",
+        "name": "San José",
+        "rule": "emiliani",
+        "baseDate": "2026-03-19",
+        "moved": true
+      },
+      {
+        "date": "2026-04-02",
+        "weekday": "jueves",
+        "name": "Jueves Santo",
+        "rule": "pascua",
+        "baseDate": null,
+        "moved": false
+      },
+      {
+        "date": "2026-04-03",
+        "weekday": "viernes",
+        "name": "Viernes Santo",
+        "rule": "pascua",
+        "baseDate": null,
+        "moved": false
+      },
+      {
+        "date": "2026-05-01",
+        "weekday": "viernes",
+        "name": "Día del Trabajo",
+        "rule": "fijo",
+        "baseDate": null,
+        "moved": false
+      },
+      {
+        "date": "2026-05-18",
+        "weekday": "lunes",
+        "name": "Ascensión del Señor",
+        "rule": "pascua-emiliani",
+        "baseDate": "2026-05-14",
+        "moved": true
+      },
+      {
+        "date": "2026-06-08",
+        "weekday": "lunes",
+        "name": "Corpus Christi",
+        "rule": "pascua-emiliani",
+        "baseDate": "2026-06-04",
+        "moved": true
+      },
+      {
+        "date": "2026-06-15",
+        "weekday": "lunes",
+        "name": "Sagrado Corazón de Jesús",
+        "rule": "pascua-emiliani",
+        "baseDate": "2026-06-12",
+        "moved": true
+      },
+      {
+        "date": "2026-06-29",
+        "weekday": "lunes",
+        "name": "San Pedro y San Pablo",
+        "rule": "emiliani",
+        "baseDate": "2026-06-29",
+        "moved": false
+      },
+      {
+        "date": "2026-07-20",
+        "weekday": "lunes",
+        "name": "Día de la Independencia",
+        "rule": "fijo",
+        "baseDate": null,
+        "moved": false
+      },
+      {
+        "date": "2026-08-07",
+        "weekday": "viernes",
+        "name": "Batalla de Boyacá",
+        "rule": "fijo",
+        "baseDate": null,
+        "moved": false
+      },
+      {
+        "date": "2026-08-17",
+        "weekday": "lunes",
+        "name": "Asunción de la Virgen",
+        "rule": "emiliani",
+        "baseDate": "2026-08-15",
+        "moved": true
+      },
+      {
+        "date": "2026-10-12",
+        "weekday": "lunes",
+        "name": "Día de la Raza",
+        "rule": "emiliani",
+        "baseDate": "2026-10-12",
+        "moved": false
+      },
+      {
+        "date": "2026-11-02",
+        "weekday": "lunes",
+        "name": "Todos los Santos",
+        "rule": "emiliani",
+        "baseDate": "2026-11-01",
+        "moved": true
+      },
+      {
+        "date": "2026-11-16",
+        "weekday": "lunes",
+        "name": "Independencia de Cartagena",
+        "rule": "emiliani",
+        "baseDate": "2026-11-11",
+        "moved": true
+      },
+      {
+        "date": "2026-12-08",
+        "weekday": "martes",
+        "name": "Inmaculada Concepción",
+        "rule": "fijo",
+        "baseDate": null,
+        "moved": false
+      },
+      {
+        "date": "2026-12-25",
+        "weekday": "viernes",
+        "name": "Navidad",
+        "rule": "fijo",
+        "baseDate": null,
+        "moved": false
+      }
+    ],
+    "2027": [
+      {
+        "date": "2027-01-01",
+        "weekday": "viernes",
+        "name": "Año Nuevo",
+        "rule": "fijo",
+        "baseDate": null,
+        "moved": false
+      },
+      {
+        "date": "2027-01-11",
+        "weekday": "lunes",
+        "name": "Reyes Magos",
+        "rule": "emiliani",
+        "baseDate": "2027-01-06",
+        "moved": true
+      },
+      {
+        "date": "2027-03-22",
+        "weekday": "lunes",
+        "name": "San José",
+        "rule": "emiliani",
+        "baseDate": "2027-03-19",
+        "moved": true
+      },
+      {
+        "date": "2027-03-25",
+        "weekday": "jueves",
+        "name": "Jueves Santo",
+        "rule": "pascua",
+        "baseDate": null,
+        "moved": false
+      },
+      {
+        "date": "2027-03-26",
+        "weekday": "viernes",
+        "name": "Viernes Santo",
+        "rule": "pascua",
+        "baseDate": null,
+        "moved": false
+      },
+      {
+        "date": "2027-05-01",
+        "weekday": "sábado",
+        "name": "Día del Trabajo",
+        "rule": "fijo",
+        "baseDate": null,
+        "moved": false
+      },
+      {
+        "date": "2027-05-10",
+        "weekday": "lunes",
+        "name": "Ascensión del Señor",
+        "rule": "pascua-emiliani",
+        "baseDate": "2027-05-06",
+        "moved": true
+      },
+      {
+        "date": "2027-05-31",
+        "weekday": "lunes",
+        "name": "Corpus Christi",
+        "rule": "pascua-emiliani",
+        "baseDate": "2027-05-27",
+        "moved": true
+      },
+      {
+        "date": "2027-06-07",
+        "weekday": "lunes",
+        "name": "Sagrado Corazón de Jesús",
+        "rule": "pascua-emiliani",
+        "baseDate": "2027-06-04",
+        "moved": true
+      },
+      {
+        "date": "2027-07-05",
+        "weekday": "lunes",
+        "name": "San Pedro y San Pablo",
+        "rule": "emiliani",
+        "baseDate": "2027-06-29",
+        "moved": true
+      },
+      {
+        "date": "2027-07-20",
+        "weekday": "martes",
+        "name": "Día de la Independencia",
+        "rule": "fijo",
+        "baseDate": null,
+        "moved": false
+      },
+      {
+        "date": "2027-08-07",
+        "weekday": "sábado",
+        "name": "Batalla de Boyacá",
+        "rule": "fijo",
+        "baseDate": null,
+        "moved": false
+      },
+      {
+        "date": "2027-08-16",
+        "weekday": "lunes",
+        "name": "Asunción de la Virgen",
+        "rule": "emiliani",
+        "baseDate": "2027-08-15",
+        "moved": true
+      },
+      {
+        "date": "2027-10-18",
+        "weekday": "lunes",
+        "name": "Día de la Raza",
+        "rule": "emiliani",
+        "baseDate": "2027-10-12",
+        "moved": true
+      },
+      {
+        "date": "2027-11-01",
+        "weekday": "lunes",
+        "name": "Todos los Santos",
+        "rule": "emiliani",
+        "baseDate": "2027-11-01",
+        "moved": false
+      },
+      {
+        "date": "2027-11-15",
+        "weekday": "lunes",
+        "name": "Independencia de Cartagena",
+        "rule": "emiliani",
+        "baseDate": "2027-11-11",
+        "moved": true
+      },
+      {
+        "date": "2027-12-08",
+        "weekday": "miércoles",
+        "name": "Inmaculada Concepción",
+        "rule": "fijo",
+        "baseDate": null,
+        "moved": false
+      },
+      {
+        "date": "2027-12-25",
+        "weekday": "sábado",
+        "name": "Navidad",
+        "rule": "fijo",
+        "baseDate": null,
+        "moved": false
+      }
+    ],
+    "2028": [
+      {
+        "date": "2028-01-01",
+        "weekday": "sábado",
+        "name": "Año Nuevo",
+        "rule": "fijo",
+        "baseDate": null,
+        "moved": false
+      },
+      {
+        "date": "2028-01-10",
+        "weekday": "lunes",
+        "name": "Reyes Magos",
+        "rule": "emiliani",
+        "baseDate": "2028-01-06",
+        "moved": true
+      },
+      {
+        "date": "2028-03-20",
+        "weekday": "lunes",
+        "name": "San José",
+        "rule": "emiliani",
+        "baseDate": "2028-03-19",
+        "moved": true
+      },
+      {
+        "date": "2028-04-13",
+        "weekday": "jueves",
+        "name": "Jueves Santo",
+        "rule": "pascua",
+        "baseDate": null,
+        "moved": false
+      },
+      {
+        "date": "2028-04-14",
+        "weekday": "viernes",
+        "name": "Viernes Santo",
+        "rule": "pascua",
+        "baseDate": null,
+        "moved": false
+      },
+      {
+        "date": "2028-05-01",
+        "weekday": "lunes",
+        "name": "Día del Trabajo",
+        "rule": "fijo",
+        "baseDate": null,
+        "moved": false
+      },
+      {
+        "date": "2028-05-29",
+        "weekday": "lunes",
+        "name": "Ascensión del Señor",
+        "rule": "pascua-emiliani",
+        "baseDate": "2028-05-25",
+        "moved": true
+      },
+      {
+        "date": "2028-06-19",
+        "weekday": "lunes",
+        "name": "Corpus Christi",
+        "rule": "pascua-emiliani",
+        "baseDate": "2028-06-15",
+        "moved": true
+      },
+      {
+        "date": "2028-06-26",
+        "weekday": "lunes",
+        "name": "Sagrado Corazón de Jesús",
+        "rule": "pascua-emiliani",
+        "baseDate": "2028-06-23",
+        "moved": true
+      },
+      {
+        "date": "2028-07-03",
+        "weekday": "lunes",
+        "name": "San Pedro y San Pablo",
+        "rule": "emiliani",
+        "baseDate": "2028-06-29",
+        "moved": true
+      },
+      {
+        "date": "2028-07-20",
+        "weekday": "jueves",
+        "name": "Día de la Independencia",
+        "rule": "fijo",
+        "baseDate": null,
+        "moved": false
+      },
+      {
+        "date": "2028-08-07",
+        "weekday": "lunes",
+        "name": "Batalla de Boyacá",
+        "rule": "fijo",
+        "baseDate": null,
+        "moved": false
+      },
+      {
+        "date": "2028-08-21",
+        "weekday": "lunes",
+        "name": "Asunción de la Virgen",
+        "rule": "emiliani",
+        "baseDate": "2028-08-15",
+        "moved": true
+      },
+      {
+        "date": "2028-10-16",
+        "weekday": "lunes",
+        "name": "Día de la Raza",
+        "rule": "emiliani",
+        "baseDate": "2028-10-12",
+        "moved": true
+      },
+      {
+        "date": "2028-11-06",
+        "weekday": "lunes",
+        "name": "Todos los Santos",
+        "rule": "emiliani",
+        "baseDate": "2028-11-01",
+        "moved": true
+      },
+      {
+        "date": "2028-11-13",
+        "weekday": "lunes",
+        "name": "Independencia de Cartagena",
+        "rule": "emiliani",
+        "baseDate": "2028-11-11",
+        "moved": true
+      },
+      {
+        "date": "2028-12-08",
+        "weekday": "viernes",
+        "name": "Inmaculada Concepción",
+        "rule": "fijo",
+        "baseDate": null,
+        "moved": false
+      },
+      {
+        "date": "2028-12-25",
+        "weekday": "lunes",
+        "name": "Navidad",
+        "rule": "fijo",
+        "baseDate": null,
+        "moved": false
+      }
+    ]
+  },
+  "decisions": {},
+  "counts": {
+    "isHoliday": 77,
+    "total": 77
+  },
+  "isHoliday": [
+    {
+      "name": "isHoliday · date · Reyes Magos 2026: se celebra el lunes 2026-01-12",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2026-01-12",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": true,
+        "name": "Reyes Magos"
+      }
+    },
+    {
+      "name": "isHoliday · date · Reyes Magos 2026: su fecha de origen 2026-01-06 (martes) no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2026-01-06",
+      "weekday": "martes",
+      "expected": {
+        "holiday": false,
+        "why": "trasladado al lunes (Ley 51 de 1983)"
+      }
+    },
+    {
+      "name": "isHoliday · date · San José 2026: se celebra el lunes 2026-03-23",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2026-03-23",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": true,
+        "name": "San José"
+      }
+    },
+    {
+      "name": "isHoliday · date · San José 2026: su fecha de origen 2026-03-19 (jueves) no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2026-03-19",
+      "weekday": "jueves",
+      "expected": {
+        "holiday": false,
+        "why": "trasladado al lunes (Ley 51 de 1983)"
+      }
+    },
+    {
+      "name": "isHoliday · date · Ascensión del Señor 2026: se celebra el lunes 2026-05-18",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2026-05-18",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": true,
+        "name": "Ascensión del Señor"
+      }
+    },
+    {
+      "name": "isHoliday · date · Ascensión del Señor 2026: su fecha de origen 2026-05-14 (jueves) no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2026-05-14",
+      "weekday": "jueves",
+      "expected": {
+        "holiday": false,
+        "why": "trasladado al lunes (Ley 51 de 1983)"
+      }
+    },
+    {
+      "name": "isHoliday · date · Corpus Christi 2026: se celebra el lunes 2026-06-08",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2026-06-08",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": true,
+        "name": "Corpus Christi"
+      }
+    },
+    {
+      "name": "isHoliday · date · Corpus Christi 2026: su fecha de origen 2026-06-04 (jueves) no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2026-06-04",
+      "weekday": "jueves",
+      "expected": {
+        "holiday": false,
+        "why": "trasladado al lunes (Ley 51 de 1983)"
+      }
+    },
+    {
+      "name": "isHoliday · date · Sagrado Corazón de Jesús 2026: se celebra el lunes 2026-06-15",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2026-06-15",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": true,
+        "name": "Sagrado Corazón de Jesús"
+      }
+    },
+    {
+      "name": "isHoliday · date · Sagrado Corazón de Jesús 2026: su fecha de origen 2026-06-12 (viernes) no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2026-06-12",
+      "weekday": "viernes",
+      "expected": {
+        "holiday": false,
+        "why": "trasladado al lunes (Ley 51 de 1983)"
+      }
+    },
+    {
+      "name": "isHoliday · date · Asunción de la Virgen 2026: se celebra el lunes 2026-08-17",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2026-08-17",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": true,
+        "name": "Asunción de la Virgen"
+      }
+    },
+    {
+      "name": "isHoliday · date · Asunción de la Virgen 2026: su fecha de origen 2026-08-15 (sábado) no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2026-08-15",
+      "weekday": "sábado",
+      "expected": {
+        "holiday": false,
+        "why": "trasladado al lunes (Ley 51 de 1983)"
+      }
+    },
+    {
+      "name": "isHoliday · date · Todos los Santos 2026: se celebra el lunes 2026-11-02",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2026-11-02",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": true,
+        "name": "Todos los Santos"
+      }
+    },
+    {
+      "name": "isHoliday · date · Todos los Santos 2026: su fecha de origen 2026-11-01 (domingo) no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2026-11-01",
+      "weekday": "domingo",
+      "expected": {
+        "holiday": false,
+        "why": "trasladado al lunes (Ley 51 de 1983)"
+      }
+    },
+    {
+      "name": "isHoliday · date · Independencia de Cartagena 2026: se celebra el lunes 2026-11-16",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2026-11-16",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": true,
+        "name": "Independencia de Cartagena"
+      }
+    },
+    {
+      "name": "isHoliday · date · Independencia de Cartagena 2026: su fecha de origen 2026-11-11 (miércoles) no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2026-11-11",
+      "weekday": "miércoles",
+      "expected": {
+        "holiday": false,
+        "why": "trasladado al lunes (Ley 51 de 1983)"
+      }
+    },
+    {
+      "name": "isHoliday · date · Reyes Magos 2027: se celebra el lunes 2027-01-11",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2027-01-11",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": true,
+        "name": "Reyes Magos"
+      }
+    },
+    {
+      "name": "isHoliday · date · Reyes Magos 2027: su fecha de origen 2027-01-06 (miércoles) no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2027-01-06",
+      "weekday": "miércoles",
+      "expected": {
+        "holiday": false,
+        "why": "trasladado al lunes (Ley 51 de 1983)"
+      }
+    },
+    {
+      "name": "isHoliday · date · San José 2027: se celebra el lunes 2027-03-22",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2027-03-22",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": true,
+        "name": "San José"
+      }
+    },
+    {
+      "name": "isHoliday · date · San José 2027: su fecha de origen 2027-03-19 (viernes) no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2027-03-19",
+      "weekday": "viernes",
+      "expected": {
+        "holiday": false,
+        "why": "trasladado al lunes (Ley 51 de 1983)"
+      }
+    },
+    {
+      "name": "isHoliday · date · Ascensión del Señor 2027: se celebra el lunes 2027-05-10",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2027-05-10",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": true,
+        "name": "Ascensión del Señor"
+      }
+    },
+    {
+      "name": "isHoliday · date · Ascensión del Señor 2027: su fecha de origen 2027-05-06 (jueves) no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2027-05-06",
+      "weekday": "jueves",
+      "expected": {
+        "holiday": false,
+        "why": "trasladado al lunes (Ley 51 de 1983)"
+      }
+    },
+    {
+      "name": "isHoliday · date · Corpus Christi 2027: se celebra el lunes 2027-05-31",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2027-05-31",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": true,
+        "name": "Corpus Christi"
+      }
+    },
+    {
+      "name": "isHoliday · date · Corpus Christi 2027: su fecha de origen 2027-05-27 (jueves) no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2027-05-27",
+      "weekday": "jueves",
+      "expected": {
+        "holiday": false,
+        "why": "trasladado al lunes (Ley 51 de 1983)"
+      }
+    },
+    {
+      "name": "isHoliday · date · Sagrado Corazón de Jesús 2027: se celebra el lunes 2027-06-07",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2027-06-07",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": true,
+        "name": "Sagrado Corazón de Jesús"
+      }
+    },
+    {
+      "name": "isHoliday · date · Sagrado Corazón de Jesús 2027: su fecha de origen 2027-06-04 (viernes) no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2027-06-04",
+      "weekday": "viernes",
+      "expected": {
+        "holiday": false,
+        "why": "trasladado al lunes (Ley 51 de 1983)"
+      }
+    },
+    {
+      "name": "isHoliday · date · San Pedro y San Pablo 2027: se celebra el lunes 2027-07-05",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2027-07-05",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": true,
+        "name": "San Pedro y San Pablo"
+      }
+    },
+    {
+      "name": "isHoliday · date · San Pedro y San Pablo 2027: su fecha de origen 2027-06-29 (martes) no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2027-06-29",
+      "weekday": "martes",
+      "expected": {
+        "holiday": false,
+        "why": "trasladado al lunes (Ley 51 de 1983)"
+      }
+    },
+    {
+      "name": "isHoliday · date · Asunción de la Virgen 2027: se celebra el lunes 2027-08-16",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2027-08-16",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": true,
+        "name": "Asunción de la Virgen"
+      }
+    },
+    {
+      "name": "isHoliday · date · Asunción de la Virgen 2027: su fecha de origen 2027-08-15 (domingo) no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2027-08-15",
+      "weekday": "domingo",
+      "expected": {
+        "holiday": false,
+        "why": "trasladado al lunes (Ley 51 de 1983)"
+      }
+    },
+    {
+      "name": "isHoliday · date · Día de la Raza 2027: se celebra el lunes 2027-10-18",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2027-10-18",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": true,
+        "name": "Día de la Raza"
+      }
+    },
+    {
+      "name": "isHoliday · date · Día de la Raza 2027: su fecha de origen 2027-10-12 (martes) no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2027-10-12",
+      "weekday": "martes",
+      "expected": {
+        "holiday": false,
+        "why": "trasladado al lunes (Ley 51 de 1983)"
+      }
+    },
+    {
+      "name": "isHoliday · date · Independencia de Cartagena 2027: se celebra el lunes 2027-11-15",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2027-11-15",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": true,
+        "name": "Independencia de Cartagena"
+      }
+    },
+    {
+      "name": "isHoliday · date · Independencia de Cartagena 2027: su fecha de origen 2027-11-11 (jueves) no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2027-11-11",
+      "weekday": "jueves",
+      "expected": {
+        "holiday": false,
+        "why": "trasladado al lunes (Ley 51 de 1983)"
+      }
+    },
+    {
+      "name": "isHoliday · date · Reyes Magos 2028: se celebra el lunes 2028-01-10",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2028-01-10",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": true,
+        "name": "Reyes Magos"
+      }
+    },
+    {
+      "name": "isHoliday · date · Reyes Magos 2028: su fecha de origen 2028-01-06 (jueves) no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2028-01-06",
+      "weekday": "jueves",
+      "expected": {
+        "holiday": false,
+        "why": "trasladado al lunes (Ley 51 de 1983)"
+      }
+    },
+    {
+      "name": "isHoliday · date · San José 2028: se celebra el lunes 2028-03-20",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2028-03-20",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": true,
+        "name": "San José"
+      }
+    },
+    {
+      "name": "isHoliday · date · San José 2028: su fecha de origen 2028-03-19 (domingo) no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2028-03-19",
+      "weekday": "domingo",
+      "expected": {
+        "holiday": false,
+        "why": "trasladado al lunes (Ley 51 de 1983)"
+      }
+    },
+    {
+      "name": "isHoliday · date · Ascensión del Señor 2028: se celebra el lunes 2028-05-29",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2028-05-29",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": true,
+        "name": "Ascensión del Señor"
+      }
+    },
+    {
+      "name": "isHoliday · date · Ascensión del Señor 2028: su fecha de origen 2028-05-25 (jueves) no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2028-05-25",
+      "weekday": "jueves",
+      "expected": {
+        "holiday": false,
+        "why": "trasladado al lunes (Ley 51 de 1983)"
+      }
+    },
+    {
+      "name": "isHoliday · date · Corpus Christi 2028: se celebra el lunes 2028-06-19",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2028-06-19",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": true,
+        "name": "Corpus Christi"
+      }
+    },
+    {
+      "name": "isHoliday · date · Corpus Christi 2028: su fecha de origen 2028-06-15 (jueves) no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2028-06-15",
+      "weekday": "jueves",
+      "expected": {
+        "holiday": false,
+        "why": "trasladado al lunes (Ley 51 de 1983)"
+      }
+    },
+    {
+      "name": "isHoliday · date · Sagrado Corazón de Jesús 2028: se celebra el lunes 2028-06-26",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2028-06-26",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": true,
+        "name": "Sagrado Corazón de Jesús"
+      }
+    },
+    {
+      "name": "isHoliday · date · Sagrado Corazón de Jesús 2028: su fecha de origen 2028-06-23 (viernes) no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2028-06-23",
+      "weekday": "viernes",
+      "expected": {
+        "holiday": false,
+        "why": "trasladado al lunes (Ley 51 de 1983)"
+      }
+    },
+    {
+      "name": "isHoliday · date · San Pedro y San Pablo 2028: se celebra el lunes 2028-07-03",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2028-07-03",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": true,
+        "name": "San Pedro y San Pablo"
+      }
+    },
+    {
+      "name": "isHoliday · date · San Pedro y San Pablo 2028: su fecha de origen 2028-06-29 (jueves) no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2028-06-29",
+      "weekday": "jueves",
+      "expected": {
+        "holiday": false,
+        "why": "trasladado al lunes (Ley 51 de 1983)"
+      }
+    },
+    {
+      "name": "isHoliday · date · Asunción de la Virgen 2028: se celebra el lunes 2028-08-21",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2028-08-21",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": true,
+        "name": "Asunción de la Virgen"
+      }
+    },
+    {
+      "name": "isHoliday · date · Asunción de la Virgen 2028: su fecha de origen 2028-08-15 (martes) no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2028-08-15",
+      "weekday": "martes",
+      "expected": {
+        "holiday": false,
+        "why": "trasladado al lunes (Ley 51 de 1983)"
+      }
+    },
+    {
+      "name": "isHoliday · date · Día de la Raza 2028: se celebra el lunes 2028-10-16",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2028-10-16",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": true,
+        "name": "Día de la Raza"
+      }
+    },
+    {
+      "name": "isHoliday · date · Día de la Raza 2028: su fecha de origen 2028-10-12 (jueves) no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2028-10-12",
+      "weekday": "jueves",
+      "expected": {
+        "holiday": false,
+        "why": "trasladado al lunes (Ley 51 de 1983)"
+      }
+    },
+    {
+      "name": "isHoliday · date · Todos los Santos 2028: se celebra el lunes 2028-11-06",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2028-11-06",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": true,
+        "name": "Todos los Santos"
+      }
+    },
+    {
+      "name": "isHoliday · date · Todos los Santos 2028: su fecha de origen 2028-11-01 (miércoles) no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2028-11-01",
+      "weekday": "miércoles",
+      "expected": {
+        "holiday": false,
+        "why": "trasladado al lunes (Ley 51 de 1983)"
+      }
+    },
+    {
+      "name": "isHoliday · date · Independencia de Cartagena 2028: se celebra el lunes 2028-11-13",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2028-11-13",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": true,
+        "name": "Independencia de Cartagena"
+      }
+    },
+    {
+      "name": "isHoliday · date · Independencia de Cartagena 2028: su fecha de origen 2028-11-11 (sábado) no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2028-11-11",
+      "weekday": "sábado",
+      "expected": {
+        "holiday": false,
+        "why": "trasladado al lunes (Ley 51 de 1983)"
+      }
+    },
+    {
+      "name": "isHoliday · date · Todos los Santos 2027 cae en lunes: no se traslada",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2027-11-01",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": true,
+        "name": "Todos los Santos"
+      }
+    },
+    {
+      "name": "isHoliday · date · San Pedro y San Pablo 2026 cae en lunes: no se traslada",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2026-06-29",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": true,
+        "name": "San Pedro y San Pablo"
+      }
+    },
+    {
+      "name": "isHoliday · date · Día de la Raza 2026 cae en lunes: no se traslada",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2026-10-12",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": true,
+        "name": "Día de la Raza"
+      }
+    },
+    {
+      "name": "isHoliday · date · 1 de mayo de 2027 cae en sábado y sigue siendo festivo (los fijos no se trasladan)",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2027-05-01",
+      "weekday": "sábado",
+      "expected": {
+        "holiday": true,
+        "name": "Día del Trabajo"
+      }
+    },
+    {
+      "name": "isHoliday · date · 7 de agosto de 2027 cae en sábado y sigue siendo festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2027-08-07",
+      "weekday": "sábado",
+      "expected": {
+        "holiday": true,
+        "name": "Batalla de Boyacá"
+      }
+    },
+    {
+      "name": "isHoliday · date · Navidad de 2027 cae en sábado y sigue siendo festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2027-12-25",
+      "weekday": "sábado",
+      "expected": {
+        "holiday": true,
+        "name": "Navidad"
+      }
+    },
+    {
+      "name": "isHoliday · date · 1 de enero de 2028 cae en sábado y sigue siendo festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2028-01-01",
+      "weekday": "sábado",
+      "expected": {
+        "holiday": true,
+        "name": "Año Nuevo"
+      }
+    },
+    {
+      "name": "isHoliday · date · Jueves Santo 2026",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2026-04-02",
+      "weekday": "jueves",
+      "expected": {
+        "holiday": true,
+        "name": "Jueves Santo"
+      }
+    },
+    {
+      "name": "isHoliday · date · Viernes Santo 2027 (marzo)",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2027-03-26",
+      "weekday": "viernes",
+      "expected": {
+        "holiday": true,
+        "name": "Viernes Santo"
+      }
+    },
+    {
+      "name": "isHoliday · date · el sábado santo de 2026 no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2026-04-04",
+      "weekday": "sábado",
+      "expected": {
+        "holiday": false
+      }
+    },
+    {
+      "name": "isHoliday · date · el domingo de Pascua de 2026 no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2026-04-05",
+      "weekday": "domingo",
+      "expected": {
+        "holiday": false
+      }
+    },
+    {
+      "name": "isHoliday · date · el lunes de Pascua de 2028 no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2028-04-17",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": false
+      }
+    },
+    {
+      "name": "isHoliday · date · 24 de diciembre de 2026 no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2026-12-24",
+      "weekday": "jueves",
+      "expected": {
+        "holiday": false
+      }
+    },
+    {
+      "name": "isHoliday · date · 31 de diciembre de 2027 no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2027-12-31",
+      "weekday": "viernes",
+      "expected": {
+        "holiday": false
+      }
+    },
+    {
+      "name": "isHoliday · date · 29 de febrero de 2028 (bisiesto) es un martes laborable",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2028-02-29",
+      "weekday": "martes",
+      "expected": {
+        "holiday": false
+      }
+    },
+    {
+      "name": "isHoliday · date · el día siguiente a un festivo trasladado (martes 13-01-2026) no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "date": "2026-01-13",
+      "weekday": "martes",
+      "expected": {
+        "holiday": false
+      }
+    },
+    {
+      "name": "isHoliday · instant · 04:59:59 UTC del 12-01-2026 todavía es domingo 11 en Bogotá: no es festivo",
+      "kind": "instant",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "at": "2026-01-12T04:59:59Z",
+      "expected": {
+        "bogotaDate": "2026-01-11",
+        "bogotaTime": "23:59:59",
+        "holiday": false
+      }
+    },
+    {
+      "name": "isHoliday · instant · 05:00:00 UTC del 12-01-2026 es lunes 12 a medianoche en Bogotá: festivo",
+      "kind": "instant",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "at": "2026-01-12T05:00:00Z",
+      "expected": {
+        "bogotaDate": "2026-01-12",
+        "bogotaTime": "00:00:00",
+        "holiday": true,
+        "name": "Reyes Magos"
+      }
+    },
+    {
+      "name": "isHoliday · instant · 04:59:59 UTC del 13-01-2026 todavía es el lunes festivo en Bogotá",
+      "kind": "instant",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "at": "2026-01-13T04:59:59Z",
+      "expected": {
+        "bogotaDate": "2026-01-12",
+        "bogotaTime": "23:59:59",
+        "holiday": true,
+        "name": "Reyes Magos"
+      }
+    },
+    {
+      "name": "isHoliday · instant · 05:00:00 UTC del 13-01-2026 ya es martes: no es festivo",
+      "kind": "instant",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "at": "2026-01-13T05:00:00Z",
+      "expected": {
+        "bogotaDate": "2026-01-13",
+        "bogotaTime": "00:00:00",
+        "holiday": false
+      }
+    },
+    {
+      "name": "isHoliday · instant · Navidad de 2026 a las 23:30 de Bogotá (04:30 UTC del 26)",
+      "kind": "instant",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "at": "2026-12-26T04:30:00Z",
+      "expected": {
+        "bogotaDate": "2026-12-25",
+        "bogotaTime": "23:30:00",
+        "holiday": true,
+        "name": "Navidad"
+      }
+    },
+    {
+      "name": "isHoliday · instant · Año Nuevo de 2027 a las 00:00 de Bogotá (05:00 UTC)",
+      "kind": "instant",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "at": "2027-01-01T05:00:00Z",
+      "expected": {
+        "bogotaDate": "2027-01-01",
+        "bogotaTime": "00:00:00",
+        "holiday": true,
+        "name": "Año Nuevo"
+      }
+    },
+    {
+      "name": "isHoliday · instant · 31-12-2026 a las 23:59:59 de Bogotá (04:59:59 UTC del 1 de enero): no es festivo",
+      "kind": "instant",
+      "contractRef": "D8-15",
+      "basis": "ley",
+      "at": "2027-01-01T04:59:59Z",
+      "expected": {
+        "bogotaDate": "2026-12-31",
+        "bogotaTime": "23:59:59",
+        "holiday": false
+      }
+    }
+  ]
+}

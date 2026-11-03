@@ -1,0 +1,4508 @@
+{
+  "fixture": "outbound-gate-cases.json",
+  "version": 1,
+  "contract": "backend/docs/ultron-studio/ULTRON_STUDIO_H8_CONTRACT.md (congelado el 03-11-2026, commit 57bab8a)",
+  "audit": "backend/docs/ultron-studio/ULTRON_STUDIO_H8_VOICE_AUDIT.md (03-11-2026)",
+  "contractSections": [
+    "D8-12 (OutboundPolicy: conjunto cerrado de motivos en este orden; idempotencia; job tries = 1; la petición a ElevenLabs)",
+    "D8-9 (publication_moved)",
+    "D8-5 (voice_number_is_whatsapp)",
+    "D8-13 (estados y eventos de la saliente)",
+    "D8-19 (409 voice_braked)",
+    "D8-21 (deriva también en el job)",
+    "H6 §I6.5 (VoiceCallPolicy::decide acumula los motivos en orden)"
+  ],
+  "generatedBy": "tests/fixtures/voice/tools/build/build.py (python3 -I), con los casos a mano en sec_*.py",
+  "checkedBy": "tests/fixtures/voice/tools/voice-fixtures-check.py",
+  "readme": "tests/fixtures/voice/README.md",
+  "basisLegend": {
+    "contrato": "Lo dice el contrato H8 tal cual (contractRef).",
+    "oficial": "Lo dice la documentación oficial o el SDK oficial del proveedor (source).",
+    "ley": "Lo dice la ley citada (Ley 2300 de 2023, Ley 51 de 1983).",
+    "supuesto-lead": "Sigue un supuesto de la congelación del lead (P-n), que el propietario puede cambiar.",
+    "decision-fixture": "El contrato no lo fija: lo decide este fixture (campo decision; README §Decisiones). Lo congela el lead."
+  },
+  "sources": [
+    {
+      "what": "POST /v1/convai/twilio/outbound-call: agent_id, agent_phone_number_id y to_number obligatorios; call_recording_enabled; telephony_call_config (ringing_timeout_secs, twilio_call_recording_enabled, twilio_machine_detection); conversation_initiation_client_data (dynamic_variables, user_id…); respuesta success, message, conversation_id y callSid",
+      "url": "https://elevenlabs.io/docs/api-reference/twilio/outbound-call",
+      "consulted": "03-11-2026 (auditoría §d.1, leída por el architect)",
+      "how": "La cabecera xi-api-key es la del código del H6 (ElevenLabsVoiceProvider.php:82). El tipo de twilio_machine_detection no está en la auditoría: [por confirmar]."
+    }
+  ],
+  "syntheticData": "Ningún dato real: SIDs, ids, secretos, tokens, URLs (.test) y teléfonos (+57 300 000 00xx, +57 601 000 00xx) inventados.",
+  "closedSets": {
+    "reasonsInOrder": [
+      "calls_disabled_in_code",
+      "outbound_disabled",
+      "twilio_voice_disabled",
+      "no_voice_number",
+      "voice_number_is_whatsapp",
+      "elevenlabs_not_configured",
+      "elevenlabs_disabled",
+      "elevenlabs_unverified",
+      "no_publication",
+      "publication_unreadable",
+      "agent_drift",
+      "voice_braked",
+      "source_not_allowed",
+      "not_an_active_voice_canary",
+      "contact_not_authorized",
+      "no_voice_consent",
+      "excluded",
+      "rne_check_missing",
+      "outside_hours",
+      "holiday",
+      "frequency_exceeded",
+      "concurrency_exceeded",
+      "daily_cap_zero",
+      "daily_cap_reached",
+      "budget_exhausted",
+      "duplicate_request"
+    ],
+    "allowedSources": [
+      "canary_registry",
+      "voice_contacts"
+    ],
+    "forbiddenSources": [
+      "marketing_calls",
+      "other"
+    ],
+    "scopes": [
+      "canary",
+      "contacts"
+    ],
+    "providerStates": [
+      "ELEVENLABS_NOT_CONFIGURED",
+      "ELEVENLABS_DISABLED",
+      "ELEVENLABS_UNVERIFIED",
+      "ELEVENLABS_VERIFIED"
+    ],
+    "contactStatuses": [
+      "pending",
+      "authorized",
+      "suspended"
+    ],
+    "jobOutcomes": [
+      "started",
+      "rejected",
+      "ambiguous",
+      "error"
+    ]
+  },
+  "decisions": {
+    "DF-G1": "OutboundPolicy ACUMULA todos los motivos que apliquen, en el orden de D8-12 (como VoiceCallPolicy::decide del H6). codeClosed es lo que da el árbol compartido (CALLS_ENABLED_IN_CODE = false); codeOpen, la copia del banco con la constante girada.",
+    "DF-G2": "source_not_allowed solo para orígenes fuera de {canary_registry, voice_contacts}; el alcance decide lo demás: en canary hace falta un canario de voz activo, en contacts un voice_contact authorized con consentimiento y RNE vigente.",
+    "DF-G3": "daily_cap_reached solo con un cupo > 0 (con 0 ya sale daily_cap_zero); concurrency_exceeded si dialing + active ≥ el máximo.",
+    "DF-G5": "duplicate_request: client_request_id ya usado por la MISMA persona para una solicitud aceptada → 200 con la fila existente; otra persona con el mismo id no es duplicado (UNIQUE por persona). Va el último y se acumula como los demás.",
+    "DF-G7": "La reserva de coste: se libera con failed_to_start y canceled; se mantiene con ambiguous hasta que la conciliación lo resuelva.",
+    "DF-G8": "Respuestas raras de outbound-call: 200 con success = false → failed_to_start; 200 sin conversation_id o sin callSid, o un 3xx (no se siguen redirecciones) → ambiguous; un fallo local antes de enviar (descifrado, configuración) → error → canceled, sin petición.",
+    "DF-G9": "El job vuelve a mirar, en este orden: la constante y las banderas, el freno, la cabeza de la cadena (publication_moved si cambió seq) y la deriva del agente (con su caché ≤ 5 min). No repite la frecuencia ni los cupos: ya están reservados.",
+    "DF-G10": "Guarda del número de WhatsApp: se comparan los dígitos (como la lista de config/meta.php); un número nacional de 10 dígitos (3… o 60…) gana el 57 delante. Coincide con WHATSAPP_DISPLAY_PHONE o con cualquiera de WHATSAPP_PROTECTED_NUMBERS → voice_number_is_whatsapp.",
+    "DF-P6": "Las exclusiones (y las señales do_not_contact y consent_status = denied) se miran en TODA saliente, también a canarios: D8-18 «se consulta antes de cada saliente» (Q-4: D8-12 las agrupa en el alcance contacts)."
+  },
+  "counts": {
+    "decide": 43,
+    "whatsappGuard": 7,
+    "job": 22,
+    "total": 72
+  },
+  "decide": [
+    {
+      "name": "decide · canary · canario: todo abierto → permitida (solo con la constante girada)",
+      "kind": "canary",
+      "contractRef": "D8-12",
+      "basis": "contrato",
+      "decision": "DF-G1",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "canary",
+          "source": "canary_registry",
+          "canary": "active_voice",
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": true,
+          "reasons": [],
+          "http": 202
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · contacts · contacto con consentimiento: todo abierto → permitida",
+      "kind": "contacts",
+      "contractRef": "D8-12, D8-18, P-20",
+      "basis": "contrato",
+      "decision": "DF-G1",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "contacts",
+          "source": "voice_contacts",
+          "contactStatus": "authorized",
+          "voiceConsent": true,
+          "excluded": false,
+          "rneCheckMissing": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": true,
+          "reasons": [],
+          "http": 202
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · VOICE_OUTBOUND_ENABLED = false",
+      "kind": "canary",
+      "contractRef": "D8-12",
+      "basis": "contrato",
+      "decision": "DF-G1",
+      "facts": {
+        "flags": {
+          "outboundEnabled": false,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "canary",
+          "source": "canary_registry",
+          "canary": "active_voice",
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "outbound_disabled"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "outbound_disabled"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · TWILIO_VOICE_ENABLED = false",
+      "kind": "canary",
+      "contractRef": "D8-12",
+      "basis": "contrato",
+      "decision": "DF-G1",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": false
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "canary",
+          "source": "canary_registry",
+          "canary": "active_voice",
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "twilio_voice_disabled"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "twilio_voice_disabled"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · sin TWILIO_VOICE_FROM",
+      "kind": "canary",
+      "contractRef": "D8-12",
+      "basis": "contrato",
+      "decision": "DF-G1",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": false,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "canary",
+          "source": "canary_registry",
+          "canary": "active_voice",
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "no_voice_number"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "no_voice_number"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · el número de voz es el de WhatsApp",
+      "kind": "canary",
+      "contractRef": "D8-5, D8-12",
+      "basis": "decision-fixture",
+      "decision": "DF-G10",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": true
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "canary",
+          "source": "canary_registry",
+          "canary": "active_voice",
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "voice_number_is_whatsapp"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "voice_number_is_whatsapp"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · ElevenLabs sin configurar",
+      "kind": "canary",
+      "contractRef": "D8-12",
+      "basis": "contrato",
+      "decision": "DF-G1",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_NOT_CONFIGURED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "canary",
+          "source": "canary_registry",
+          "canary": "active_voice",
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "elevenlabs_not_configured"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "elevenlabs_not_configured"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · ElevenLabs apagado",
+      "kind": "canary",
+      "contractRef": "D8-12",
+      "basis": "contrato",
+      "decision": "DF-G1",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_DISABLED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "canary",
+          "source": "canary_registry",
+          "canary": "active_voice",
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "elevenlabs_disabled"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "elevenlabs_disabled"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · ElevenLabs sin verificar (o la última verificación ok tiene 30 días o más)",
+      "kind": "canary",
+      "contractRef": "D8-12",
+      "basis": "contrato",
+      "decision": "DF-G1",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_UNVERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "canary",
+          "source": "canary_registry",
+          "canary": "active_voice",
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "elevenlabs_unverified"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "elevenlabs_unverified"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · sin publicación de voz",
+      "kind": "canary",
+      "contractRef": "D8-12",
+      "basis": "contrato",
+      "decision": "DF-G1",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "none",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "canary",
+          "source": "canary_registry",
+          "canary": "active_voice",
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "no_publication"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "no_publication"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · publicación ilegible: un fallo deniega",
+      "kind": "canary",
+      "contractRef": "D8-8, D8-12",
+      "basis": "contrato",
+      "decision": "DF-G1",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "unreadable",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "canary",
+          "source": "canary_registry",
+          "canary": "active_voice",
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "publication_unreadable"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "publication_unreadable"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · deriva del agente sellado",
+      "kind": "canary",
+      "contractRef": "D8-12, D8-21",
+      "basis": "contrato",
+      "decision": "DF-G1",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": true,
+          "braked": false
+        },
+        "target": {
+          "scope": "canary",
+          "source": "canary_registry",
+          "canary": "active_voice",
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "agent_drift"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "agent_drift"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · freno abierto → 409 voice_braked",
+      "kind": "canary",
+      "contractRef": "D8-12, D8-19",
+      "basis": "contrato",
+      "decision": "DF-G1",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": true
+        },
+        "target": {
+          "scope": "canary",
+          "source": "canary_registry",
+          "canary": "active_voice",
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "voice_braked"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "voice_braked"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · origen marketing_calls (prohibido desde el H6)",
+      "kind": "canary",
+      "contractRef": "D8-12, H6 T-7",
+      "basis": "decision-fixture",
+      "decision": "DF-G2",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "canary",
+          "source": "marketing_calls",
+          "canary": "active_voice",
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "source_not_allowed"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "source_not_allowed"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · origen other",
+      "kind": "canary",
+      "contractRef": "D8-12",
+      "basis": "decision-fixture",
+      "decision": "DF-G2",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "canary",
+          "source": "other",
+          "canary": "active_voice",
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "source_not_allowed"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "source_not_allowed"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · alcance canary y el número no está registrado",
+      "kind": "canary",
+      "contractRef": "D8-12",
+      "basis": "contrato",
+      "decision": "DF-G1",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "canary",
+          "source": "canary_registry",
+          "canary": "not_registered",
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "not_an_active_voice_canary"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "not_an_active_voice_canary"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · alcance canary y el canario no está activo",
+      "kind": "canary",
+      "contractRef": "D8-12",
+      "basis": "contrato",
+      "decision": "DF-G1",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "canary",
+          "source": "canary_registry",
+          "canary": "not_active",
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "not_an_active_voice_canary"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "not_an_active_voice_canary"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · contacts · alcance contacts y el contacto está pendiente",
+      "kind": "contacts",
+      "contractRef": "D8-12, D8-18",
+      "basis": "contrato",
+      "decision": "DF-G1",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "contacts",
+          "source": "voice_contacts",
+          "contactStatus": "pending",
+          "voiceConsent": true,
+          "excluded": false,
+          "rneCheckMissing": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "contact_not_authorized"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "contact_not_authorized"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · contacts · alcance contacts sin consentimiento de voz",
+      "kind": "contacts",
+      "contractRef": "D8-12, D8-18",
+      "basis": "contrato",
+      "decision": "DF-G1",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "contacts",
+          "source": "voice_contacts",
+          "contactStatus": "authorized",
+          "voiceConsent": false,
+          "excluded": false,
+          "rneCheckMissing": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "no_voice_consent"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "no_voice_consent"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · contacts · alcance contacts con una exclusión",
+      "kind": "contacts",
+      "contractRef": "D8-12, D8-18",
+      "basis": "contrato",
+      "decision": "DF-G1",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "contacts",
+          "source": "voice_contacts",
+          "contactStatus": "authorized",
+          "voiceConsent": true,
+          "excluded": true,
+          "rneCheckMissing": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "excluded"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "excluded"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · contacts · alcance contacts sin consulta vigente al RNE",
+      "kind": "contacts",
+      "contractRef": "D8-12, D8-18, P-14",
+      "basis": "contrato",
+      "decision": "DF-G1",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "contacts",
+          "source": "voice_contacts",
+          "contactStatus": "authorized",
+          "voiceConsent": true,
+          "excluded": false,
+          "rneCheckMissing": true
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "rne_check_missing"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "rne_check_missing"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · fuera de horario",
+      "kind": "canary",
+      "contractRef": "D8-12, D8-15",
+      "basis": "contrato",
+      "decision": "DF-G1",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "canary",
+          "source": "canary_registry",
+          "canary": "active_voice",
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": true,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "outside_hours"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "outside_hours"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · festivo",
+      "kind": "canary",
+      "contractRef": "D8-12, D8-15",
+      "basis": "contrato",
+      "decision": "DF-G1",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "canary",
+          "source": "canary_registry",
+          "canary": "active_voice",
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": true
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "holiday"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "holiday"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · frecuencia agotada (1 al día, 2 a la semana)",
+      "kind": "canary",
+      "contractRef": "D8-12, D8-15",
+      "basis": "contrato",
+      "decision": "DF-G1",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "canary",
+          "source": "canary_registry",
+          "canary": "active_voice",
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": true,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "frequency_exceeded"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "frequency_exceeded"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · concurrencia: 1 en curso de 1",
+      "kind": "canary",
+      "contractRef": "D8-12, D8-15",
+      "basis": "decision-fixture",
+      "decision": "DF-G3",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "canary",
+          "source": "canary_registry",
+          "canary": "active_voice",
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 1,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "concurrency_exceeded"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "concurrency_exceeded"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · cupo diario 0 (el defecto)",
+      "kind": "canary",
+      "contractRef": "D8-12, D8-15",
+      "basis": "contrato",
+      "decision": "DF-G1",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "canary",
+          "source": "canary_registry",
+          "canary": "active_voice",
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 0,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "daily_cap_zero"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "daily_cap_zero"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · cupo diario agotado: 3 de 3",
+      "kind": "canary",
+      "contractRef": "D8-12, D8-15",
+      "basis": "decision-fixture",
+      "decision": "DF-G3",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "canary",
+          "source": "canary_registry",
+          "canary": "active_voice",
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 3,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "daily_cap_reached"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "daily_cap_reached"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · la reserva de coste no cabe",
+      "kind": "canary",
+      "contractRef": "D8-12, D8-15",
+      "basis": "contrato",
+      "decision": "DF-G1",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "canary",
+          "source": "canary_registry",
+          "canary": "active_voice",
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": false
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "budget_exhausted"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "budget_exhausted"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · client_request_id ya usado por la misma persona → 200 con la misma fila",
+      "kind": "canary",
+      "contractRef": "D8-12",
+      "basis": "decision-fixture",
+      "decision": "DF-G5",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "canary",
+          "source": "canary_registry",
+          "canary": "active_voice",
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": true
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "duplicate_request"
+          ],
+          "http": 200
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "duplicate_request"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · concurrencia: 1 en curso de 2 → cabe",
+      "kind": "canary",
+      "contractRef": "D8-12",
+      "basis": "decision-fixture",
+      "decision": "DF-G3",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "canary",
+          "source": "canary_registry",
+          "canary": "active_voice",
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 1,
+          "maxConcurrent": 2,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": true,
+          "reasons": [],
+          "http": 202
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · cupo diario: 2 de 3 → cabe",
+      "kind": "canary",
+      "contractRef": "D8-12",
+      "basis": "decision-fixture",
+      "decision": "DF-G3",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "canary",
+          "source": "canary_registry",
+          "canary": "active_voice",
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 2,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": true,
+          "reasons": [],
+          "http": 202
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · cupo diario 0 y 0 hechas: solo daily_cap_zero, no también daily_cap_reached",
+      "kind": "canary",
+      "contractRef": "D8-12",
+      "basis": "decision-fixture",
+      "decision": "DF-G3",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "canary",
+          "source": "canary_registry",
+          "canary": "active_voice",
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 0,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "daily_cap_zero"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "daily_cap_zero"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · sin número: no se mira si es el de WhatsApp",
+      "kind": "canary",
+      "contractRef": "D8-12",
+      "basis": "decision-fixture",
+      "decision": "DF-G10",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": false,
+          "voiceNumberIsWhatsapp": true
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "canary",
+          "source": "canary_registry",
+          "canary": "active_voice",
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "no_voice_number"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "no_voice_number"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · canario con exclusión (dijo «no me vuelvas a llamar») → excluded también en canary",
+      "kind": "canary",
+      "contractRef": "D8-12, D8-18",
+      "basis": "decision-fixture",
+      "decision": "DF-P6",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "canary",
+          "source": "canary_registry",
+          "canary": "active_voice",
+          "excluded": true
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "excluded"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "excluded"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · un voice_contact con alcance canary → not_an_active_voice_canary (el origen sí está permitido)",
+      "kind": "canary",
+      "contractRef": "D8-12",
+      "basis": "decision-fixture",
+      "decision": "DF-G2",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "canary",
+          "source": "voice_contacts",
+          "canary": null,
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "not_an_active_voice_canary"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "not_an_active_voice_canary"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · contacts · un canario con alcance contacts → contact_not_authorized y no_voice_consent",
+      "kind": "contacts",
+      "contractRef": "D8-12",
+      "basis": "decision-fixture",
+      "decision": "DF-G2",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "contacts",
+          "source": "canary_registry",
+          "contactStatus": null,
+          "voiceConsent": false,
+          "excluded": false,
+          "rneCheckMissing": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "contact_not_authorized",
+            "no_voice_consent"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "contact_not_authorized",
+            "no_voice_consent"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · en alcance canary el RNE no se mira",
+      "kind": "canary",
+      "contractRef": "D8-12, P-20",
+      "basis": "contrato",
+      "decision": "DF-G2",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "canary",
+          "source": "canary_registry",
+          "canary": "active_voice",
+          "excluded": false,
+          "rneCheckMissing": true
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": true,
+          "reasons": [],
+          "http": 202
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · publicación ilegible: la deriva no se puede mirar (sale solo publication_unreadable)",
+      "kind": "canary",
+      "contractRef": "D8-12",
+      "basis": "decision-fixture",
+      "decision": "DF-G1",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "unreadable",
+          "agentDrift": true,
+          "braked": false
+        },
+        "target": {
+          "scope": "canary",
+          "source": "canary_registry",
+          "canary": "active_voice",
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "publication_unreadable"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "publication_unreadable"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · freno y fuera de horario: los dos, en orden",
+      "kind": "canary",
+      "contractRef": "D8-12",
+      "basis": "contrato",
+      "decision": "DF-G1",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": true
+        },
+        "target": {
+          "scope": "canary",
+          "source": "canary_registry",
+          "canary": "active_voice",
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": true,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "voice_braked",
+            "outside_hours"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "voice_braked",
+            "outside_hours"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · duplicado con el freno abierto: se acumula (voice_braked y duplicate_request)",
+      "kind": "canary",
+      "contractRef": "D8-12",
+      "basis": "decision-fixture",
+      "decision": "DF-G5",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": true
+        },
+        "target": {
+          "scope": "canary",
+          "source": "canary_registry",
+          "canary": "active_voice",
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 0,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": true
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "voice_braked",
+            "duplicate_request"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "voice_braked",
+            "duplicate_request"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · festivo en sábado y además cupo agotado",
+      "kind": "canary",
+      "contractRef": "D8-12",
+      "basis": "contrato",
+      "decision": "DF-G1",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "canary",
+          "source": "canary_registry",
+          "canary": "active_voice",
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": true
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 3,
+          "budgetFits": true
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "holiday",
+            "daily_cap_reached"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "holiday",
+            "daily_cap_reached"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · canary · todo apagado como en producción hoy (fase 1)",
+      "kind": "canary",
+      "contractRef": "D8-12, protección 1",
+      "basis": "contrato",
+      "decision": "DF-G1",
+      "facts": {
+        "flags": {
+          "outboundEnabled": false,
+          "twilioVoiceEnabled": false
+        },
+        "number": {
+          "voiceFromConfigured": false,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_NOT_CONFIGURED"
+        },
+        "publication": {
+          "head": "none",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "canary",
+          "source": "canary_registry",
+          "canary": "active_voice",
+          "excluded": false
+        },
+        "calendar": {
+          "outsideHours": false,
+          "holiday": false
+        },
+        "quotas": {
+          "frequencyExceeded": false,
+          "activeOrDialing": 0,
+          "maxConcurrent": 1,
+          "dailyCap": 0,
+          "placedToday": 0,
+          "budgetFits": false
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "outbound_disabled",
+            "twilio_voice_disabled",
+            "no_voice_number",
+            "elevenlabs_not_configured",
+            "no_publication",
+            "daily_cap_zero",
+            "budget_exhausted"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "outbound_disabled",
+            "twilio_voice_disabled",
+            "no_voice_number",
+            "elevenlabs_not_configured",
+            "no_publication",
+            "daily_cap_zero",
+            "budget_exhausted"
+          ],
+          "http": 409
+        }
+      }
+    },
+    {
+      "name": "decide · contacts · contacto con todo mal → todos los motivos del destino, el calendario y los cupos en orden",
+      "kind": "contacts",
+      "contractRef": "D8-12",
+      "basis": "contrato",
+      "decision": "DF-G1",
+      "facts": {
+        "flags": {
+          "outboundEnabled": true,
+          "twilioVoiceEnabled": true
+        },
+        "number": {
+          "voiceFromConfigured": true,
+          "voiceNumberIsWhatsapp": false
+        },
+        "provider": {
+          "state": "ELEVENLABS_VERIFIED"
+        },
+        "publication": {
+          "head": "ok",
+          "agentDrift": false,
+          "braked": false
+        },
+        "target": {
+          "scope": "contacts",
+          "source": "voice_contacts",
+          "contactStatus": "suspended",
+          "voiceConsent": false,
+          "excluded": true,
+          "rneCheckMissing": true
+        },
+        "calendar": {
+          "outsideHours": true,
+          "holiday": true
+        },
+        "quotas": {
+          "frequencyExceeded": true,
+          "activeOrDialing": 1,
+          "maxConcurrent": 1,
+          "dailyCap": 3,
+          "placedToday": 3,
+          "budgetFits": false
+        },
+        "request": {
+          "clientRequestIdSeenForSamePerson": false
+        }
+      },
+      "expected": {
+        "codeOpen": {
+          "allowed": false,
+          "reasons": [
+            "contact_not_authorized",
+            "no_voice_consent",
+            "excluded",
+            "rne_check_missing",
+            "outside_hours",
+            "holiday",
+            "frequency_exceeded",
+            "concurrency_exceeded",
+            "daily_cap_reached",
+            "budget_exhausted"
+          ],
+          "http": 409
+        },
+        "codeClosed": {
+          "allowed": false,
+          "reasons": [
+            "calls_disabled_in_code",
+            "contact_not_authorized",
+            "no_voice_consent",
+            "excluded",
+            "rne_check_missing",
+            "outside_hours",
+            "holiday",
+            "frequency_exceeded",
+            "concurrency_exceeded",
+            "daily_cap_reached",
+            "budget_exhausted"
+          ],
+          "http": 409
+        }
+      }
+    }
+  ],
+  "whatsappGuard": [
+    {
+      "name": "whatsappGuard · guard · el número dedicado (fijo) no es el de WhatsApp",
+      "kind": "guard",
+      "contractRef": "D8-5",
+      "basis": "decision-fixture",
+      "decision": "DF-G10",
+      "voiceFrom": "+576010000090",
+      "whatsappDisplayPhone": "+573000000050",
+      "whatsappProtectedNumbers": "",
+      "expected": {
+        "voiceNumberIsWhatsapp": false
+      }
+    },
+    {
+      "name": "whatsappGuard · guard · el número de voz es el visible de WhatsApp",
+      "kind": "guard",
+      "contractRef": "D8-5",
+      "basis": "decision-fixture",
+      "decision": "DF-G10",
+      "voiceFrom": "+573000000050",
+      "whatsappDisplayPhone": "+573000000050",
+      "whatsappProtectedNumbers": "",
+      "expected": {
+        "voiceNumberIsWhatsapp": true
+      }
+    },
+    {
+      "name": "whatsappGuard · guard · el visible escrito con espacios y sin + coincide igual",
+      "kind": "guard",
+      "contractRef": "D8-5",
+      "basis": "decision-fixture",
+      "decision": "DF-G10",
+      "voiceFrom": "+573000000050",
+      "whatsappDisplayPhone": "57 300 000 0050",
+      "whatsappProtectedNumbers": "",
+      "expected": {
+        "voiceNumberIsWhatsapp": true
+      }
+    },
+    {
+      "name": "whatsappGuard · guard · el visible en formato nacional (10 dígitos) coincide igual",
+      "kind": "guard",
+      "contractRef": "D8-5",
+      "basis": "decision-fixture",
+      "decision": "DF-G10",
+      "voiceFrom": "+573000000050",
+      "whatsappDisplayPhone": "300 000 0050",
+      "whatsappProtectedNumbers": "",
+      "expected": {
+        "voiceNumberIsWhatsapp": true
+      }
+    },
+    {
+      "name": "whatsappGuard · guard · está en la lista de protegidos (separada por comas)",
+      "kind": "guard",
+      "contractRef": "D8-5",
+      "basis": "decision-fixture",
+      "decision": "DF-G10",
+      "voiceFrom": "+573000000051",
+      "whatsappDisplayPhone": "+573000000050",
+      "whatsappProtectedNumbers": "+573000000051, +573000000052",
+      "expected": {
+        "voiceNumberIsWhatsapp": true
+      }
+    },
+    {
+      "name": "whatsappGuard · guard · la lista de protegidos no lo tiene ni el visible",
+      "kind": "guard",
+      "contractRef": "D8-5",
+      "basis": "decision-fixture",
+      "decision": "DF-G10",
+      "voiceFrom": "+573000000053",
+      "whatsappDisplayPhone": "+573000000050",
+      "whatsappProtectedNumbers": "+573000000051,+573000000052",
+      "expected": {
+        "voiceNumberIsWhatsapp": false
+      }
+    },
+    {
+      "name": "whatsappGuard · guard · sin visible ni protegidos: no hay con qué chocar",
+      "kind": "guard",
+      "contractRef": "D8-5",
+      "basis": "decision-fixture",
+      "decision": "DF-G10",
+      "voiceFrom": "+576010000090",
+      "whatsappDisplayPhone": "",
+      "whatsappProtectedNumbers": "",
+      "expected": {
+        "voiceNumberIsWhatsapp": false
+      }
+    }
+  ],
+  "job": [
+    {
+      "name": "job · place · todo bien: una petición y dialing con conversation_id y callSid",
+      "kind": "place",
+      "contractRef": "D8-12, D8-13",
+      "basis": "contrato",
+      "row": {
+        "status": "requested",
+        "direction": "outbound",
+        "callRef": "8f000000-0000-4000-8000-000000000051",
+        "sealedAgentId": "agent_h8fx_canary_0003",
+        "voicePublicationSeq": 3,
+        "toEncrypted": "(cifrado de +573000000031)",
+        "reserveMicroUsd": 610500
+      },
+      "given": {
+        "callsEnabledInCode": true,
+        "outboundEnabled": true,
+        "braked": false,
+        "headSeq": 3,
+        "agentDrift": false
+      },
+      "elevenlabsResponse": {
+        "status": 200,
+        "body": {
+          "success": true,
+          "message": "Success",
+          "conversation_id": "conv_h8fx_0051",
+          "callSid": "CA000000000000000000000000a8000033"
+        }
+      },
+      "expected": {
+        "request": {
+          "method": "POST",
+          "path": "/v1/convai/twilio/outbound-call",
+          "times": 1,
+          "header": "xi-api-key",
+          "followRedirects": false,
+          "bodyAssertions": [
+            {
+              "path": "agent_id",
+              "equals": "agent_h8fx_canary_0003"
+            },
+            {
+              "path": "agent_phone_number_id",
+              "equals": "phnum_h8fx_0001"
+            },
+            {
+              "path": "to_number",
+              "equals": "+573000000031"
+            },
+            {
+              "path": "call_recording_enabled",
+              "equals": false
+            },
+            {
+              "path": "telephony_call_config.twilio_call_recording_enabled",
+              "equals": false
+            },
+            {
+              "path": "conversation_initiation_client_data.dynamic_variables",
+              "equals": {
+                "caller_authorized": "si",
+                "call_ref": "8f000000-0000-4000-8000-000000000051"
+              }
+            },
+            {
+              "path": "conversation_initiation_client_data.user_id",
+              "equals": "8f000000-0000-4000-8000-000000000051"
+            }
+          ],
+          "configurablePaths": [
+            "telephony_call_config.ringing_timeout_secs (P-10)",
+            "telephony_call_config.twilio_machine_detection (P-10, tipo por confirmar)"
+          ],
+          "forbiddenPaths": [
+            "conversation_initiation_client_data.conversation_config_override",
+            "conversation_initiation_client_data.source_info",
+            "conversation_initiation_client_data.branch_id"
+          ]
+        },
+        "statusAfter": "dialing",
+        "providerConversationId": "conv_h8fx_0051",
+        "providerCallSid": "CA000000000000000000000000a8000033",
+        "events": [
+          "outbound_started"
+        ],
+        "reservation": "se mantiene",
+        "retries": 0
+      }
+    },
+    {
+      "name": "job · place · la cabeza de la cadena cambió (seq 3 → 4) → canceled publication_moved, sin petición",
+      "kind": "place",
+      "contractRef": "D8-9, D8-13",
+      "basis": "decision-fixture",
+      "decision": "DF-G7",
+      "row": {
+        "status": "requested",
+        "direction": "outbound",
+        "callRef": "8f000000-0000-4000-8000-000000000051",
+        "sealedAgentId": "agent_h8fx_canary_0003",
+        "voicePublicationSeq": 3,
+        "toEncrypted": "(cifrado de +573000000031)",
+        "reserveMicroUsd": 610500
+      },
+      "given": {
+        "callsEnabledInCode": true,
+        "outboundEnabled": true,
+        "braked": false,
+        "headSeq": 4,
+        "agentDrift": false
+      },
+      "elevenlabsResponse": null,
+      "expected": {
+        "request": null,
+        "statusAfter": "canceled",
+        "reason": "publication_moved",
+        "events": [],
+        "reservation": "se libera"
+      }
+    },
+    {
+      "name": "job · place · deriva del agente en el job → canceled agent_drift, freno y sin petición",
+      "kind": "place",
+      "contractRef": "D8-19, D8-21",
+      "basis": "decision-fixture",
+      "decision": "DF-G9",
+      "row": {
+        "status": "requested",
+        "direction": "outbound",
+        "callRef": "8f000000-0000-4000-8000-000000000051",
+        "sealedAgentId": "agent_h8fx_canary_0003",
+        "voicePublicationSeq": 3,
+        "toEncrypted": "(cifrado de +573000000031)",
+        "reserveMicroUsd": 610500
+      },
+      "given": {
+        "callsEnabledInCode": true,
+        "outboundEnabled": true,
+        "braked": false,
+        "headSeq": 3,
+        "agentDrift": true
+      },
+      "elevenlabsResponse": null,
+      "expected": {
+        "request": null,
+        "statusAfter": "canceled",
+        "reason": "agent_drift",
+        "brakeOpens": true,
+        "events": [],
+        "reservation": "se libera"
+      }
+    },
+    {
+      "name": "job · place · freno abierto entre la solicitud y el job → canceled voice_braked, sin petición",
+      "kind": "place",
+      "contractRef": "D8-13, D8-19",
+      "basis": "decision-fixture",
+      "decision": "DF-G9",
+      "row": {
+        "status": "requested",
+        "direction": "outbound",
+        "callRef": "8f000000-0000-4000-8000-000000000051",
+        "sealedAgentId": "agent_h8fx_canary_0003",
+        "voicePublicationSeq": 3,
+        "toEncrypted": "(cifrado de +573000000031)",
+        "reserveMicroUsd": 610500
+      },
+      "given": {
+        "callsEnabledInCode": true,
+        "outboundEnabled": true,
+        "braked": true,
+        "headSeq": 3,
+        "agentDrift": false
+      },
+      "elevenlabsResponse": null,
+      "expected": {
+        "request": null,
+        "statusAfter": "canceled",
+        "reason": "voice_braked",
+        "events": [],
+        "reservation": "se libera"
+      }
+    },
+    {
+      "name": "job · place · la constante cerrada (el árbol compartido) → canceled calls_disabled_in_code, sin petición",
+      "kind": "place",
+      "contractRef": "protección 2, D8-13",
+      "basis": "decision-fixture",
+      "decision": "DF-G9",
+      "row": {
+        "status": "requested",
+        "direction": "outbound",
+        "callRef": "8f000000-0000-4000-8000-000000000051",
+        "sealedAgentId": "agent_h8fx_canary_0003",
+        "voicePublicationSeq": 3,
+        "toEncrypted": "(cifrado de +573000000031)",
+        "reserveMicroUsd": 610500
+      },
+      "given": {
+        "callsEnabledInCode": false,
+        "outboundEnabled": true,
+        "braked": false,
+        "headSeq": 3,
+        "agentDrift": false
+      },
+      "elevenlabsResponse": null,
+      "expected": {
+        "request": null,
+        "statusAfter": "canceled",
+        "reason": "calls_disabled_in_code",
+        "events": [],
+        "reservation": "se libera"
+      }
+    },
+    {
+      "name": "job · place · VOICE_OUTBOUND_ENABLED apagado después de pedirla (nivel 0) → canceled outbound_disabled",
+      "kind": "place",
+      "contractRef": "D8-20, D8-13",
+      "basis": "decision-fixture",
+      "decision": "DF-G9",
+      "row": {
+        "status": "requested",
+        "direction": "outbound",
+        "callRef": "8f000000-0000-4000-8000-000000000051",
+        "sealedAgentId": "agent_h8fx_canary_0003",
+        "voicePublicationSeq": 3,
+        "toEncrypted": "(cifrado de +573000000031)",
+        "reserveMicroUsd": 610500
+      },
+      "given": {
+        "callsEnabledInCode": true,
+        "outboundEnabled": false,
+        "braked": false,
+        "headSeq": 3,
+        "agentDrift": false
+      },
+      "elevenlabsResponse": null,
+      "expected": {
+        "request": null,
+        "statusAfter": "canceled",
+        "reason": "outbound_disabled",
+        "events": [],
+        "reservation": "se libera"
+      }
+    },
+    {
+      "name": "job · place · ElevenLabs responde 400 → failed_to_start, reserva liberada, sin reintento",
+      "kind": "place",
+      "contractRef": "D8-12, D8-13",
+      "basis": "contrato",
+      "row": {
+        "status": "requested",
+        "direction": "outbound",
+        "callRef": "8f000000-0000-4000-8000-000000000051",
+        "sealedAgentId": "agent_h8fx_canary_0003",
+        "voicePublicationSeq": 3,
+        "toEncrypted": "(cifrado de +573000000031)",
+        "reserveMicroUsd": 610500
+      },
+      "given": {
+        "callsEnabledInCode": true,
+        "outboundEnabled": true,
+        "braked": false,
+        "headSeq": 3,
+        "agentDrift": false
+      },
+      "elevenlabsResponse": {
+        "status": 400,
+        "body": {
+          "detail": "rechazada"
+        }
+      },
+      "expected": {
+        "request": {
+          "method": "POST",
+          "path": "/v1/convai/twilio/outbound-call",
+          "times": 1,
+          "header": "xi-api-key",
+          "followRedirects": false,
+          "bodyAssertions": [
+            {
+              "path": "agent_id",
+              "equals": "agent_h8fx_canary_0003"
+            },
+            {
+              "path": "agent_phone_number_id",
+              "equals": "phnum_h8fx_0001"
+            },
+            {
+              "path": "to_number",
+              "equals": "+573000000031"
+            },
+            {
+              "path": "call_recording_enabled",
+              "equals": false
+            },
+            {
+              "path": "telephony_call_config.twilio_call_recording_enabled",
+              "equals": false
+            },
+            {
+              "path": "conversation_initiation_client_data.dynamic_variables",
+              "equals": {
+                "caller_authorized": "si",
+                "call_ref": "8f000000-0000-4000-8000-000000000051"
+              }
+            },
+            {
+              "path": "conversation_initiation_client_data.user_id",
+              "equals": "8f000000-0000-4000-8000-000000000051"
+            }
+          ],
+          "configurablePaths": [
+            "telephony_call_config.ringing_timeout_secs (P-10)",
+            "telephony_call_config.twilio_machine_detection (P-10, tipo por confirmar)"
+          ],
+          "forbiddenPaths": [
+            "conversation_initiation_client_data.conversation_config_override",
+            "conversation_initiation_client_data.source_info",
+            "conversation_initiation_client_data.branch_id"
+          ]
+        },
+        "statusAfter": "failed_to_start",
+        "events": [
+          "outbound_rejected"
+        ],
+        "reservation": "se libera",
+        "retries": 0
+      }
+    },
+    {
+      "name": "job · place · ElevenLabs responde 401 → failed_to_start, reserva liberada, sin reintento",
+      "kind": "place",
+      "contractRef": "D8-12, D8-13",
+      "basis": "contrato",
+      "row": {
+        "status": "requested",
+        "direction": "outbound",
+        "callRef": "8f000000-0000-4000-8000-000000000051",
+        "sealedAgentId": "agent_h8fx_canary_0003",
+        "voicePublicationSeq": 3,
+        "toEncrypted": "(cifrado de +573000000031)",
+        "reserveMicroUsd": 610500
+      },
+      "given": {
+        "callsEnabledInCode": true,
+        "outboundEnabled": true,
+        "braked": false,
+        "headSeq": 3,
+        "agentDrift": false
+      },
+      "elevenlabsResponse": {
+        "status": 401,
+        "body": {
+          "detail": "rechazada"
+        }
+      },
+      "expected": {
+        "request": {
+          "method": "POST",
+          "path": "/v1/convai/twilio/outbound-call",
+          "times": 1,
+          "header": "xi-api-key",
+          "followRedirects": false,
+          "bodyAssertions": [
+            {
+              "path": "agent_id",
+              "equals": "agent_h8fx_canary_0003"
+            },
+            {
+              "path": "agent_phone_number_id",
+              "equals": "phnum_h8fx_0001"
+            },
+            {
+              "path": "to_number",
+              "equals": "+573000000031"
+            },
+            {
+              "path": "call_recording_enabled",
+              "equals": false
+            },
+            {
+              "path": "telephony_call_config.twilio_call_recording_enabled",
+              "equals": false
+            },
+            {
+              "path": "conversation_initiation_client_data.dynamic_variables",
+              "equals": {
+                "caller_authorized": "si",
+                "call_ref": "8f000000-0000-4000-8000-000000000051"
+              }
+            },
+            {
+              "path": "conversation_initiation_client_data.user_id",
+              "equals": "8f000000-0000-4000-8000-000000000051"
+            }
+          ],
+          "configurablePaths": [
+            "telephony_call_config.ringing_timeout_secs (P-10)",
+            "telephony_call_config.twilio_machine_detection (P-10, tipo por confirmar)"
+          ],
+          "forbiddenPaths": [
+            "conversation_initiation_client_data.conversation_config_override",
+            "conversation_initiation_client_data.source_info",
+            "conversation_initiation_client_data.branch_id"
+          ]
+        },
+        "statusAfter": "failed_to_start",
+        "events": [
+          "outbound_rejected"
+        ],
+        "reservation": "se libera",
+        "retries": 0
+      }
+    },
+    {
+      "name": "job · place · ElevenLabs responde 404 → failed_to_start, reserva liberada, sin reintento",
+      "kind": "place",
+      "contractRef": "D8-12, D8-13",
+      "basis": "contrato",
+      "row": {
+        "status": "requested",
+        "direction": "outbound",
+        "callRef": "8f000000-0000-4000-8000-000000000051",
+        "sealedAgentId": "agent_h8fx_canary_0003",
+        "voicePublicationSeq": 3,
+        "toEncrypted": "(cifrado de +573000000031)",
+        "reserveMicroUsd": 610500
+      },
+      "given": {
+        "callsEnabledInCode": true,
+        "outboundEnabled": true,
+        "braked": false,
+        "headSeq": 3,
+        "agentDrift": false
+      },
+      "elevenlabsResponse": {
+        "status": 404,
+        "body": {
+          "detail": "rechazada"
+        }
+      },
+      "expected": {
+        "request": {
+          "method": "POST",
+          "path": "/v1/convai/twilio/outbound-call",
+          "times": 1,
+          "header": "xi-api-key",
+          "followRedirects": false,
+          "bodyAssertions": [
+            {
+              "path": "agent_id",
+              "equals": "agent_h8fx_canary_0003"
+            },
+            {
+              "path": "agent_phone_number_id",
+              "equals": "phnum_h8fx_0001"
+            },
+            {
+              "path": "to_number",
+              "equals": "+573000000031"
+            },
+            {
+              "path": "call_recording_enabled",
+              "equals": false
+            },
+            {
+              "path": "telephony_call_config.twilio_call_recording_enabled",
+              "equals": false
+            },
+            {
+              "path": "conversation_initiation_client_data.dynamic_variables",
+              "equals": {
+                "caller_authorized": "si",
+                "call_ref": "8f000000-0000-4000-8000-000000000051"
+              }
+            },
+            {
+              "path": "conversation_initiation_client_data.user_id",
+              "equals": "8f000000-0000-4000-8000-000000000051"
+            }
+          ],
+          "configurablePaths": [
+            "telephony_call_config.ringing_timeout_secs (P-10)",
+            "telephony_call_config.twilio_machine_detection (P-10, tipo por confirmar)"
+          ],
+          "forbiddenPaths": [
+            "conversation_initiation_client_data.conversation_config_override",
+            "conversation_initiation_client_data.source_info",
+            "conversation_initiation_client_data.branch_id"
+          ]
+        },
+        "statusAfter": "failed_to_start",
+        "events": [
+          "outbound_rejected"
+        ],
+        "reservation": "se libera",
+        "retries": 0
+      }
+    },
+    {
+      "name": "job · place · ElevenLabs responde 409 → failed_to_start, reserva liberada, sin reintento",
+      "kind": "place",
+      "contractRef": "D8-12, D8-13",
+      "basis": "contrato",
+      "row": {
+        "status": "requested",
+        "direction": "outbound",
+        "callRef": "8f000000-0000-4000-8000-000000000051",
+        "sealedAgentId": "agent_h8fx_canary_0003",
+        "voicePublicationSeq": 3,
+        "toEncrypted": "(cifrado de +573000000031)",
+        "reserveMicroUsd": 610500
+      },
+      "given": {
+        "callsEnabledInCode": true,
+        "outboundEnabled": true,
+        "braked": false,
+        "headSeq": 3,
+        "agentDrift": false
+      },
+      "elevenlabsResponse": {
+        "status": 409,
+        "body": {
+          "detail": "rechazada"
+        }
+      },
+      "expected": {
+        "request": {
+          "method": "POST",
+          "path": "/v1/convai/twilio/outbound-call",
+          "times": 1,
+          "header": "xi-api-key",
+          "followRedirects": false,
+          "bodyAssertions": [
+            {
+              "path": "agent_id",
+              "equals": "agent_h8fx_canary_0003"
+            },
+            {
+              "path": "agent_phone_number_id",
+              "equals": "phnum_h8fx_0001"
+            },
+            {
+              "path": "to_number",
+              "equals": "+573000000031"
+            },
+            {
+              "path": "call_recording_enabled",
+              "equals": false
+            },
+            {
+              "path": "telephony_call_config.twilio_call_recording_enabled",
+              "equals": false
+            },
+            {
+              "path": "conversation_initiation_client_data.dynamic_variables",
+              "equals": {
+                "caller_authorized": "si",
+                "call_ref": "8f000000-0000-4000-8000-000000000051"
+              }
+            },
+            {
+              "path": "conversation_initiation_client_data.user_id",
+              "equals": "8f000000-0000-4000-8000-000000000051"
+            }
+          ],
+          "configurablePaths": [
+            "telephony_call_config.ringing_timeout_secs (P-10)",
+            "telephony_call_config.twilio_machine_detection (P-10, tipo por confirmar)"
+          ],
+          "forbiddenPaths": [
+            "conversation_initiation_client_data.conversation_config_override",
+            "conversation_initiation_client_data.source_info",
+            "conversation_initiation_client_data.branch_id"
+          ]
+        },
+        "statusAfter": "failed_to_start",
+        "events": [
+          "outbound_rejected"
+        ],
+        "reservation": "se libera",
+        "retries": 0
+      }
+    },
+    {
+      "name": "job · place · ElevenLabs responde 422 → failed_to_start, reserva liberada, sin reintento",
+      "kind": "place",
+      "contractRef": "D8-12, D8-13",
+      "basis": "contrato",
+      "row": {
+        "status": "requested",
+        "direction": "outbound",
+        "callRef": "8f000000-0000-4000-8000-000000000051",
+        "sealedAgentId": "agent_h8fx_canary_0003",
+        "voicePublicationSeq": 3,
+        "toEncrypted": "(cifrado de +573000000031)",
+        "reserveMicroUsd": 610500
+      },
+      "given": {
+        "callsEnabledInCode": true,
+        "outboundEnabled": true,
+        "braked": false,
+        "headSeq": 3,
+        "agentDrift": false
+      },
+      "elevenlabsResponse": {
+        "status": 422,
+        "body": {
+          "detail": "rechazada"
+        }
+      },
+      "expected": {
+        "request": {
+          "method": "POST",
+          "path": "/v1/convai/twilio/outbound-call",
+          "times": 1,
+          "header": "xi-api-key",
+          "followRedirects": false,
+          "bodyAssertions": [
+            {
+              "path": "agent_id",
+              "equals": "agent_h8fx_canary_0003"
+            },
+            {
+              "path": "agent_phone_number_id",
+              "equals": "phnum_h8fx_0001"
+            },
+            {
+              "path": "to_number",
+              "equals": "+573000000031"
+            },
+            {
+              "path": "call_recording_enabled",
+              "equals": false
+            },
+            {
+              "path": "telephony_call_config.twilio_call_recording_enabled",
+              "equals": false
+            },
+            {
+              "path": "conversation_initiation_client_data.dynamic_variables",
+              "equals": {
+                "caller_authorized": "si",
+                "call_ref": "8f000000-0000-4000-8000-000000000051"
+              }
+            },
+            {
+              "path": "conversation_initiation_client_data.user_id",
+              "equals": "8f000000-0000-4000-8000-000000000051"
+            }
+          ],
+          "configurablePaths": [
+            "telephony_call_config.ringing_timeout_secs (P-10)",
+            "telephony_call_config.twilio_machine_detection (P-10, tipo por confirmar)"
+          ],
+          "forbiddenPaths": [
+            "conversation_initiation_client_data.conversation_config_override",
+            "conversation_initiation_client_data.source_info",
+            "conversation_initiation_client_data.branch_id"
+          ]
+        },
+        "statusAfter": "failed_to_start",
+        "events": [
+          "outbound_rejected"
+        ],
+        "reservation": "se libera",
+        "retries": 0
+      }
+    },
+    {
+      "name": "job · place · ElevenLabs responde 429 → failed_to_start, reserva liberada, sin reintento",
+      "kind": "place",
+      "contractRef": "D8-12, D8-13",
+      "basis": "contrato",
+      "row": {
+        "status": "requested",
+        "direction": "outbound",
+        "callRef": "8f000000-0000-4000-8000-000000000051",
+        "sealedAgentId": "agent_h8fx_canary_0003",
+        "voicePublicationSeq": 3,
+        "toEncrypted": "(cifrado de +573000000031)",
+        "reserveMicroUsd": 610500
+      },
+      "given": {
+        "callsEnabledInCode": true,
+        "outboundEnabled": true,
+        "braked": false,
+        "headSeq": 3,
+        "agentDrift": false
+      },
+      "elevenlabsResponse": {
+        "status": 429,
+        "body": {
+          "detail": "rechazada"
+        }
+      },
+      "expected": {
+        "request": {
+          "method": "POST",
+          "path": "/v1/convai/twilio/outbound-call",
+          "times": 1,
+          "header": "xi-api-key",
+          "followRedirects": false,
+          "bodyAssertions": [
+            {
+              "path": "agent_id",
+              "equals": "agent_h8fx_canary_0003"
+            },
+            {
+              "path": "agent_phone_number_id",
+              "equals": "phnum_h8fx_0001"
+            },
+            {
+              "path": "to_number",
+              "equals": "+573000000031"
+            },
+            {
+              "path": "call_recording_enabled",
+              "equals": false
+            },
+            {
+              "path": "telephony_call_config.twilio_call_recording_enabled",
+              "equals": false
+            },
+            {
+              "path": "conversation_initiation_client_data.dynamic_variables",
+              "equals": {
+                "caller_authorized": "si",
+                "call_ref": "8f000000-0000-4000-8000-000000000051"
+              }
+            },
+            {
+              "path": "conversation_initiation_client_data.user_id",
+              "equals": "8f000000-0000-4000-8000-000000000051"
+            }
+          ],
+          "configurablePaths": [
+            "telephony_call_config.ringing_timeout_secs (P-10)",
+            "telephony_call_config.twilio_machine_detection (P-10, tipo por confirmar)"
+          ],
+          "forbiddenPaths": [
+            "conversation_initiation_client_data.conversation_config_override",
+            "conversation_initiation_client_data.source_info",
+            "conversation_initiation_client_data.branch_id"
+          ]
+        },
+        "statusAfter": "failed_to_start",
+        "events": [
+          "outbound_rejected"
+        ],
+        "reservation": "se libera",
+        "retries": 0
+      }
+    },
+    {
+      "name": "job · place · ElevenLabs responde 500 → ambiguous, sin reintento (lo resuelve la conciliación)",
+      "kind": "place",
+      "contractRef": "D8-12, D8-13",
+      "basis": "contrato",
+      "decision": "DF-G7",
+      "row": {
+        "status": "requested",
+        "direction": "outbound",
+        "callRef": "8f000000-0000-4000-8000-000000000051",
+        "sealedAgentId": "agent_h8fx_canary_0003",
+        "voicePublicationSeq": 3,
+        "toEncrypted": "(cifrado de +573000000031)",
+        "reserveMicroUsd": 610500
+      },
+      "given": {
+        "callsEnabledInCode": true,
+        "outboundEnabled": true,
+        "braked": false,
+        "headSeq": 3,
+        "agentDrift": false
+      },
+      "elevenlabsResponse": {
+        "status": 500,
+        "body": null
+      },
+      "expected": {
+        "request": {
+          "method": "POST",
+          "path": "/v1/convai/twilio/outbound-call",
+          "times": 1,
+          "header": "xi-api-key",
+          "followRedirects": false,
+          "bodyAssertions": [
+            {
+              "path": "agent_id",
+              "equals": "agent_h8fx_canary_0003"
+            },
+            {
+              "path": "agent_phone_number_id",
+              "equals": "phnum_h8fx_0001"
+            },
+            {
+              "path": "to_number",
+              "equals": "+573000000031"
+            },
+            {
+              "path": "call_recording_enabled",
+              "equals": false
+            },
+            {
+              "path": "telephony_call_config.twilio_call_recording_enabled",
+              "equals": false
+            },
+            {
+              "path": "conversation_initiation_client_data.dynamic_variables",
+              "equals": {
+                "caller_authorized": "si",
+                "call_ref": "8f000000-0000-4000-8000-000000000051"
+              }
+            },
+            {
+              "path": "conversation_initiation_client_data.user_id",
+              "equals": "8f000000-0000-4000-8000-000000000051"
+            }
+          ],
+          "configurablePaths": [
+            "telephony_call_config.ringing_timeout_secs (P-10)",
+            "telephony_call_config.twilio_machine_detection (P-10, tipo por confirmar)"
+          ],
+          "forbiddenPaths": [
+            "conversation_initiation_client_data.conversation_config_override",
+            "conversation_initiation_client_data.source_info",
+            "conversation_initiation_client_data.branch_id"
+          ]
+        },
+        "statusAfter": "ambiguous",
+        "events": [
+          "outbound_ambiguous"
+        ],
+        "reservation": "se mantiene",
+        "retries": 0
+      }
+    },
+    {
+      "name": "job · place · ElevenLabs responde 502 → ambiguous, sin reintento (lo resuelve la conciliación)",
+      "kind": "place",
+      "contractRef": "D8-12, D8-13",
+      "basis": "contrato",
+      "decision": "DF-G7",
+      "row": {
+        "status": "requested",
+        "direction": "outbound",
+        "callRef": "8f000000-0000-4000-8000-000000000051",
+        "sealedAgentId": "agent_h8fx_canary_0003",
+        "voicePublicationSeq": 3,
+        "toEncrypted": "(cifrado de +573000000031)",
+        "reserveMicroUsd": 610500
+      },
+      "given": {
+        "callsEnabledInCode": true,
+        "outboundEnabled": true,
+        "braked": false,
+        "headSeq": 3,
+        "agentDrift": false
+      },
+      "elevenlabsResponse": {
+        "status": 502,
+        "body": null
+      },
+      "expected": {
+        "request": {
+          "method": "POST",
+          "path": "/v1/convai/twilio/outbound-call",
+          "times": 1,
+          "header": "xi-api-key",
+          "followRedirects": false,
+          "bodyAssertions": [
+            {
+              "path": "agent_id",
+              "equals": "agent_h8fx_canary_0003"
+            },
+            {
+              "path": "agent_phone_number_id",
+              "equals": "phnum_h8fx_0001"
+            },
+            {
+              "path": "to_number",
+              "equals": "+573000000031"
+            },
+            {
+              "path": "call_recording_enabled",
+              "equals": false
+            },
+            {
+              "path": "telephony_call_config.twilio_call_recording_enabled",
+              "equals": false
+            },
+            {
+              "path": "conversation_initiation_client_data.dynamic_variables",
+              "equals": {
+                "caller_authorized": "si",
+                "call_ref": "8f000000-0000-4000-8000-000000000051"
+              }
+            },
+            {
+              "path": "conversation_initiation_client_data.user_id",
+              "equals": "8f000000-0000-4000-8000-000000000051"
+            }
+          ],
+          "configurablePaths": [
+            "telephony_call_config.ringing_timeout_secs (P-10)",
+            "telephony_call_config.twilio_machine_detection (P-10, tipo por confirmar)"
+          ],
+          "forbiddenPaths": [
+            "conversation_initiation_client_data.conversation_config_override",
+            "conversation_initiation_client_data.source_info",
+            "conversation_initiation_client_data.branch_id"
+          ]
+        },
+        "statusAfter": "ambiguous",
+        "events": [
+          "outbound_ambiguous"
+        ],
+        "reservation": "se mantiene",
+        "retries": 0
+      }
+    },
+    {
+      "name": "job · place · ElevenLabs responde 503 → ambiguous, sin reintento (lo resuelve la conciliación)",
+      "kind": "place",
+      "contractRef": "D8-12, D8-13",
+      "basis": "contrato",
+      "decision": "DF-G7",
+      "row": {
+        "status": "requested",
+        "direction": "outbound",
+        "callRef": "8f000000-0000-4000-8000-000000000051",
+        "sealedAgentId": "agent_h8fx_canary_0003",
+        "voicePublicationSeq": 3,
+        "toEncrypted": "(cifrado de +573000000031)",
+        "reserveMicroUsd": 610500
+      },
+      "given": {
+        "callsEnabledInCode": true,
+        "outboundEnabled": true,
+        "braked": false,
+        "headSeq": 3,
+        "agentDrift": false
+      },
+      "elevenlabsResponse": {
+        "status": 503,
+        "body": null
+      },
+      "expected": {
+        "request": {
+          "method": "POST",
+          "path": "/v1/convai/twilio/outbound-call",
+          "times": 1,
+          "header": "xi-api-key",
+          "followRedirects": false,
+          "bodyAssertions": [
+            {
+              "path": "agent_id",
+              "equals": "agent_h8fx_canary_0003"
+            },
+            {
+              "path": "agent_phone_number_id",
+              "equals": "phnum_h8fx_0001"
+            },
+            {
+              "path": "to_number",
+              "equals": "+573000000031"
+            },
+            {
+              "path": "call_recording_enabled",
+              "equals": false
+            },
+            {
+              "path": "telephony_call_config.twilio_call_recording_enabled",
+              "equals": false
+            },
+            {
+              "path": "conversation_initiation_client_data.dynamic_variables",
+              "equals": {
+                "caller_authorized": "si",
+                "call_ref": "8f000000-0000-4000-8000-000000000051"
+              }
+            },
+            {
+              "path": "conversation_initiation_client_data.user_id",
+              "equals": "8f000000-0000-4000-8000-000000000051"
+            }
+          ],
+          "configurablePaths": [
+            "telephony_call_config.ringing_timeout_secs (P-10)",
+            "telephony_call_config.twilio_machine_detection (P-10, tipo por confirmar)"
+          ],
+          "forbiddenPaths": [
+            "conversation_initiation_client_data.conversation_config_override",
+            "conversation_initiation_client_data.source_info",
+            "conversation_initiation_client_data.branch_id"
+          ]
+        },
+        "statusAfter": "ambiguous",
+        "events": [
+          "outbound_ambiguous"
+        ],
+        "reservation": "se mantiene",
+        "retries": 0
+      }
+    },
+    {
+      "name": "job · place · ElevenLabs responde 504 → ambiguous, sin reintento (lo resuelve la conciliación)",
+      "kind": "place",
+      "contractRef": "D8-12, D8-13",
+      "basis": "contrato",
+      "decision": "DF-G7",
+      "row": {
+        "status": "requested",
+        "direction": "outbound",
+        "callRef": "8f000000-0000-4000-8000-000000000051",
+        "sealedAgentId": "agent_h8fx_canary_0003",
+        "voicePublicationSeq": 3,
+        "toEncrypted": "(cifrado de +573000000031)",
+        "reserveMicroUsd": 610500
+      },
+      "given": {
+        "callsEnabledInCode": true,
+        "outboundEnabled": true,
+        "braked": false,
+        "headSeq": 3,
+        "agentDrift": false
+      },
+      "elevenlabsResponse": {
+        "status": 504,
+        "body": null
+      },
+      "expected": {
+        "request": {
+          "method": "POST",
+          "path": "/v1/convai/twilio/outbound-call",
+          "times": 1,
+          "header": "xi-api-key",
+          "followRedirects": false,
+          "bodyAssertions": [
+            {
+              "path": "agent_id",
+              "equals": "agent_h8fx_canary_0003"
+            },
+            {
+              "path": "agent_phone_number_id",
+              "equals": "phnum_h8fx_0001"
+            },
+            {
+              "path": "to_number",
+              "equals": "+573000000031"
+            },
+            {
+              "path": "call_recording_enabled",
+              "equals": false
+            },
+            {
+              "path": "telephony_call_config.twilio_call_recording_enabled",
+              "equals": false
+            },
+            {
+              "path": "conversation_initiation_client_data.dynamic_variables",
+              "equals": {
+                "caller_authorized": "si",
+                "call_ref": "8f000000-0000-4000-8000-000000000051"
+              }
+            },
+            {
+              "path": "conversation_initiation_client_data.user_id",
+              "equals": "8f000000-0000-4000-8000-000000000051"
+            }
+          ],
+          "configurablePaths": [
+            "telephony_call_config.ringing_timeout_secs (P-10)",
+            "telephony_call_config.twilio_machine_detection (P-10, tipo por confirmar)"
+          ],
+          "forbiddenPaths": [
+            "conversation_initiation_client_data.conversation_config_override",
+            "conversation_initiation_client_data.source_info",
+            "conversation_initiation_client_data.branch_id"
+          ]
+        },
+        "statusAfter": "ambiguous",
+        "events": [
+          "outbound_ambiguous"
+        ],
+        "reservation": "se mantiene",
+        "retries": 0
+      }
+    },
+    {
+      "name": "job · place · tiempo agotado → ambiguous, nunca failed",
+      "kind": "place",
+      "contractRef": "D8-12, D8-13",
+      "basis": "contrato",
+      "decision": "DF-G7",
+      "row": {
+        "status": "requested",
+        "direction": "outbound",
+        "callRef": "8f000000-0000-4000-8000-000000000051",
+        "sealedAgentId": "agent_h8fx_canary_0003",
+        "voicePublicationSeq": 3,
+        "toEncrypted": "(cifrado de +573000000031)",
+        "reserveMicroUsd": 610500
+      },
+      "given": {
+        "callsEnabledInCode": true,
+        "outboundEnabled": true,
+        "braked": false,
+        "headSeq": 3,
+        "agentDrift": false
+      },
+      "elevenlabsResponse": {
+        "timeout": true
+      },
+      "expected": {
+        "request": {
+          "method": "POST",
+          "path": "/v1/convai/twilio/outbound-call",
+          "times": 1,
+          "header": "xi-api-key",
+          "followRedirects": false,
+          "bodyAssertions": [
+            {
+              "path": "agent_id",
+              "equals": "agent_h8fx_canary_0003"
+            },
+            {
+              "path": "agent_phone_number_id",
+              "equals": "phnum_h8fx_0001"
+            },
+            {
+              "path": "to_number",
+              "equals": "+573000000031"
+            },
+            {
+              "path": "call_recording_enabled",
+              "equals": false
+            },
+            {
+              "path": "telephony_call_config.twilio_call_recording_enabled",
+              "equals": false
+            },
+            {
+              "path": "conversation_initiation_client_data.dynamic_variables",
+              "equals": {
+                "caller_authorized": "si",
+                "call_ref": "8f000000-0000-4000-8000-000000000051"
+              }
+            },
+            {
+              "path": "conversation_initiation_client_data.user_id",
+              "equals": "8f000000-0000-4000-8000-000000000051"
+            }
+          ],
+          "configurablePaths": [
+            "telephony_call_config.ringing_timeout_secs (P-10)",
+            "telephony_call_config.twilio_machine_detection (P-10, tipo por confirmar)"
+          ],
+          "forbiddenPaths": [
+            "conversation_initiation_client_data.conversation_config_override",
+            "conversation_initiation_client_data.source_info",
+            "conversation_initiation_client_data.branch_id"
+          ]
+        },
+        "statusAfter": "ambiguous",
+        "events": [
+          "outbound_ambiguous"
+        ],
+        "reservation": "se mantiene",
+        "retries": 0
+      }
+    },
+    {
+      "name": "job · place · conexión rechazada → ambiguous",
+      "kind": "place",
+      "contractRef": "D8-12, D8-13",
+      "basis": "contrato",
+      "decision": "DF-G7",
+      "row": {
+        "status": "requested",
+        "direction": "outbound",
+        "callRef": "8f000000-0000-4000-8000-000000000051",
+        "sealedAgentId": "agent_h8fx_canary_0003",
+        "voicePublicationSeq": 3,
+        "toEncrypted": "(cifrado de +573000000031)",
+        "reserveMicroUsd": 610500
+      },
+      "given": {
+        "callsEnabledInCode": true,
+        "outboundEnabled": true,
+        "braked": false,
+        "headSeq": 3,
+        "agentDrift": false
+      },
+      "elevenlabsResponse": {
+        "connectionError": true
+      },
+      "expected": {
+        "request": {
+          "method": "POST",
+          "path": "/v1/convai/twilio/outbound-call",
+          "times": 1,
+          "header": "xi-api-key",
+          "followRedirects": false,
+          "bodyAssertions": [
+            {
+              "path": "agent_id",
+              "equals": "agent_h8fx_canary_0003"
+            },
+            {
+              "path": "agent_phone_number_id",
+              "equals": "phnum_h8fx_0001"
+            },
+            {
+              "path": "to_number",
+              "equals": "+573000000031"
+            },
+            {
+              "path": "call_recording_enabled",
+              "equals": false
+            },
+            {
+              "path": "telephony_call_config.twilio_call_recording_enabled",
+              "equals": false
+            },
+            {
+              "path": "conversation_initiation_client_data.dynamic_variables",
+              "equals": {
+                "caller_authorized": "si",
+                "call_ref": "8f000000-0000-4000-8000-000000000051"
+              }
+            },
+            {
+              "path": "conversation_initiation_client_data.user_id",
+              "equals": "8f000000-0000-4000-8000-000000000051"
+            }
+          ],
+          "configurablePaths": [
+            "telephony_call_config.ringing_timeout_secs (P-10)",
+            "telephony_call_config.twilio_machine_detection (P-10, tipo por confirmar)"
+          ],
+          "forbiddenPaths": [
+            "conversation_initiation_client_data.conversation_config_override",
+            "conversation_initiation_client_data.source_info",
+            "conversation_initiation_client_data.branch_id"
+          ]
+        },
+        "statusAfter": "ambiguous",
+        "events": [
+          "outbound_ambiguous"
+        ],
+        "reservation": "se mantiene",
+        "retries": 0
+      }
+    },
+    {
+      "name": "job · place · 200 con success = false → failed_to_start",
+      "kind": "place",
+      "contractRef": "D8-12, D8-13",
+      "basis": "decision-fixture",
+      "decision": "DF-G8",
+      "row": {
+        "status": "requested",
+        "direction": "outbound",
+        "callRef": "8f000000-0000-4000-8000-000000000051",
+        "sealedAgentId": "agent_h8fx_canary_0003",
+        "voicePublicationSeq": 3,
+        "toEncrypted": "(cifrado de +573000000031)",
+        "reserveMicroUsd": 610500
+      },
+      "given": {
+        "callsEnabledInCode": true,
+        "outboundEnabled": true,
+        "braked": false,
+        "headSeq": 3,
+        "agentDrift": false
+      },
+      "elevenlabsResponse": {
+        "status": 200,
+        "body": {
+          "success": false,
+          "message": "No se pudo",
+          "conversation_id": null,
+          "callSid": null
+        }
+      },
+      "expected": {
+        "request": {
+          "method": "POST",
+          "path": "/v1/convai/twilio/outbound-call",
+          "times": 1,
+          "header": "xi-api-key",
+          "followRedirects": false,
+          "bodyAssertions": [
+            {
+              "path": "agent_id",
+              "equals": "agent_h8fx_canary_0003"
+            },
+            {
+              "path": "agent_phone_number_id",
+              "equals": "phnum_h8fx_0001"
+            },
+            {
+              "path": "to_number",
+              "equals": "+573000000031"
+            },
+            {
+              "path": "call_recording_enabled",
+              "equals": false
+            },
+            {
+              "path": "telephony_call_config.twilio_call_recording_enabled",
+              "equals": false
+            },
+            {
+              "path": "conversation_initiation_client_data.dynamic_variables",
+              "equals": {
+                "caller_authorized": "si",
+                "call_ref": "8f000000-0000-4000-8000-000000000051"
+              }
+            },
+            {
+              "path": "conversation_initiation_client_data.user_id",
+              "equals": "8f000000-0000-4000-8000-000000000051"
+            }
+          ],
+          "configurablePaths": [
+            "telephony_call_config.ringing_timeout_secs (P-10)",
+            "telephony_call_config.twilio_machine_detection (P-10, tipo por confirmar)"
+          ],
+          "forbiddenPaths": [
+            "conversation_initiation_client_data.conversation_config_override",
+            "conversation_initiation_client_data.source_info",
+            "conversation_initiation_client_data.branch_id"
+          ]
+        },
+        "statusAfter": "failed_to_start",
+        "events": [
+          "outbound_rejected"
+        ],
+        "reservation": "se libera",
+        "retries": 0
+      }
+    },
+    {
+      "name": "job · place · 200 sin callSid → ambiguous (no se puede confirmar)",
+      "kind": "place",
+      "contractRef": "D8-12, D8-13",
+      "basis": "decision-fixture",
+      "decision": "DF-G8",
+      "row": {
+        "status": "requested",
+        "direction": "outbound",
+        "callRef": "8f000000-0000-4000-8000-000000000051",
+        "sealedAgentId": "agent_h8fx_canary_0003",
+        "voicePublicationSeq": 3,
+        "toEncrypted": "(cifrado de +573000000031)",
+        "reserveMicroUsd": 610500
+      },
+      "given": {
+        "callsEnabledInCode": true,
+        "outboundEnabled": true,
+        "braked": false,
+        "headSeq": 3,
+        "agentDrift": false
+      },
+      "elevenlabsResponse": {
+        "status": 200,
+        "body": {
+          "success": true,
+          "message": "Success",
+          "conversation_id": "conv_h8fx_0052"
+        }
+      },
+      "expected": {
+        "request": {
+          "method": "POST",
+          "path": "/v1/convai/twilio/outbound-call",
+          "times": 1,
+          "header": "xi-api-key",
+          "followRedirects": false,
+          "bodyAssertions": [
+            {
+              "path": "agent_id",
+              "equals": "agent_h8fx_canary_0003"
+            },
+            {
+              "path": "agent_phone_number_id",
+              "equals": "phnum_h8fx_0001"
+            },
+            {
+              "path": "to_number",
+              "equals": "+573000000031"
+            },
+            {
+              "path": "call_recording_enabled",
+              "equals": false
+            },
+            {
+              "path": "telephony_call_config.twilio_call_recording_enabled",
+              "equals": false
+            },
+            {
+              "path": "conversation_initiation_client_data.dynamic_variables",
+              "equals": {
+                "caller_authorized": "si",
+                "call_ref": "8f000000-0000-4000-8000-000000000051"
+              }
+            },
+            {
+              "path": "conversation_initiation_client_data.user_id",
+              "equals": "8f000000-0000-4000-8000-000000000051"
+            }
+          ],
+          "configurablePaths": [
+            "telephony_call_config.ringing_timeout_secs (P-10)",
+            "telephony_call_config.twilio_machine_detection (P-10, tipo por confirmar)"
+          ],
+          "forbiddenPaths": [
+            "conversation_initiation_client_data.conversation_config_override",
+            "conversation_initiation_client_data.source_info",
+            "conversation_initiation_client_data.branch_id"
+          ]
+        },
+        "statusAfter": "ambiguous",
+        "events": [
+          "outbound_ambiguous"
+        ],
+        "reservation": "se mantiene",
+        "retries": 0
+      }
+    },
+    {
+      "name": "job · place · 302 → ambiguous, sin seguir la redirección",
+      "kind": "place",
+      "contractRef": "D8-12, D8-13",
+      "basis": "decision-fixture",
+      "decision": "DF-G8",
+      "row": {
+        "status": "requested",
+        "direction": "outbound",
+        "callRef": "8f000000-0000-4000-8000-000000000051",
+        "sealedAgentId": "agent_h8fx_canary_0003",
+        "voicePublicationSeq": 3,
+        "toEncrypted": "(cifrado de +573000000031)",
+        "reserveMicroUsd": 610500
+      },
+      "given": {
+        "callsEnabledInCode": true,
+        "outboundEnabled": true,
+        "braked": false,
+        "headSeq": 3,
+        "agentDrift": false
+      },
+      "elevenlabsResponse": {
+        "status": 302,
+        "headers": {
+          "Location": "https://evil.test/outbound-call"
+        }
+      },
+      "expected": {
+        "request": {
+          "method": "POST",
+          "path": "/v1/convai/twilio/outbound-call",
+          "times": 1,
+          "header": "xi-api-key",
+          "followRedirects": false,
+          "bodyAssertions": [
+            {
+              "path": "agent_id",
+              "equals": "agent_h8fx_canary_0003"
+            },
+            {
+              "path": "agent_phone_number_id",
+              "equals": "phnum_h8fx_0001"
+            },
+            {
+              "path": "to_number",
+              "equals": "+573000000031"
+            },
+            {
+              "path": "call_recording_enabled",
+              "equals": false
+            },
+            {
+              "path": "telephony_call_config.twilio_call_recording_enabled",
+              "equals": false
+            },
+            {
+              "path": "conversation_initiation_client_data.dynamic_variables",
+              "equals": {
+                "caller_authorized": "si",
+                "call_ref": "8f000000-0000-4000-8000-000000000051"
+              }
+            },
+            {
+              "path": "conversation_initiation_client_data.user_id",
+              "equals": "8f000000-0000-4000-8000-000000000051"
+            }
+          ],
+          "configurablePaths": [
+            "telephony_call_config.ringing_timeout_secs (P-10)",
+            "telephony_call_config.twilio_machine_detection (P-10, tipo por confirmar)"
+          ],
+          "forbiddenPaths": [
+            "conversation_initiation_client_data.conversation_config_override",
+            "conversation_initiation_client_data.source_info",
+            "conversation_initiation_client_data.branch_id"
+          ]
+        },
+        "statusAfter": "ambiguous",
+        "events": [
+          "outbound_ambiguous"
+        ],
+        "reservation": "se mantiene",
+        "retries": 0,
+        "requestsToOtherHosts": 0
+      }
+    },
+    {
+      "name": "job · place · fallo local antes de enviar (no se puede descifrar el número) → canceled, sin petición",
+      "kind": "place",
+      "contractRef": "D8-12, D8-13",
+      "basis": "decision-fixture",
+      "decision": "DF-G8",
+      "row": {
+        "status": "requested",
+        "direction": "outbound",
+        "callRef": "8f000000-0000-4000-8000-000000000051",
+        "sealedAgentId": "agent_h8fx_canary_0003",
+        "voicePublicationSeq": 3,
+        "toEncrypted": "(cifrado de +573000000031)",
+        "reserveMicroUsd": 610500
+      },
+      "given": {
+        "callsEnabledInCode": true,
+        "outboundEnabled": true,
+        "braked": false,
+        "headSeq": 3,
+        "agentDrift": false,
+        "decryptFails": true
+      },
+      "elevenlabsResponse": null,
+      "expected": {
+        "request": null,
+        "statusAfter": "canceled",
+        "reason": "error",
+        "events": [],
+        "reservation": "se libera"
+      }
+    }
+  ]
+}

@@ -1,0 +1,1308 @@
+{
+  "fixture": "twilio-signature-vectors.json",
+  "version": 1,
+  "contract": "backend/docs/ultron-studio/ULTRON_STUDIO_H8_CONTRACT.md (congelado el 03-11-2026, commit 57bab8a)",
+  "audit": "backend/docs/ultron-studio/ULTRON_STUDIO_H8_VOICE_AUDIT.md (03-11-2026)",
+  "contractSections": [
+    "D8-4 (TwilioRequestSignature: 6 vectores oficiales, bodySHA256, claves repetidas; URL = base canónica + URI tal como llega)",
+    "D8-16 (usage-trigger de la subcuenta con X-Twilio-Signature)",
+    "D8-5 (TWILIO_VOICE_SIGNING_TOKEN, VOICE_WEBHOOK_BASE_URL)",
+    "Auditoría §c.2 OTP-2 y OTP-3, §d.2"
+  ],
+  "generatedBy": "tests/fixtures/voice/tools/build/build.py (python3 -I), con los casos a mano en sec_*.py",
+  "checkedBy": "tests/fixtures/voice/tools/voice-fixtures-check.py",
+  "readme": "tests/fixtures/voice/README.md",
+  "basisLegend": {
+    "contrato": "Lo dice el contrato H8 tal cual (contractRef).",
+    "oficial": "Lo dice la documentación oficial o el SDK oficial del proveedor (source).",
+    "ley": "Lo dice la ley citada (Ley 2300 de 2023, Ley 51 de 1983).",
+    "supuesto-lead": "Sigue un supuesto de la congelación del lead (P-n), que el propietario puede cambiar.",
+    "decision-fixture": "El contrato no lo fija: lo decide este fixture (campo decision; README §Decisiones). Lo congela el lead."
+  },
+  "sources": [
+    {
+      "what": "Algoritmo de X-Twilio-Signature (HMAC-SHA1, URL exacta, bodySHA256 con JSON, sin rangos de IP)",
+      "url": "https://www.twilio.com/docs/usage/webhooks/webhooks-security",
+      "consulted": "03-11-2026 (auditoría §d.2, leída por el architect)",
+      "how": "No la abrí hoy (sin red): el algoritmo es el de la auditoría y el de los vectores oficiales."
+    },
+    {
+      "what": "Los 6 vectores oficiales (formulario, JSON con bodySHA256, claves repetidas y tres de puerto) y la semántica de validate()",
+      "url": "https://github.com/twilio/twilio-python/blob/main/tests/unit/test_request_validator.py",
+      "consulted": "31-10-2026 (descargado por el tester del H6 como dato; sha256 del fichero 4522667e1aef9fcc1e598dad33f84315913feac4a7cc2cfe02b3f34ef5bc4509, informe-fixture.md §2.5)",
+      "how": "Literales copiados del fixture del H6 (integrations-cases.json § twilioSignatureOfficial). El generador y el comprobador recalculan cada firma con HMAC-SHA1 y coinciden."
+    }
+  ],
+  "syntheticData": "Ningún dato real: SIDs, ids, secretos, tokens, URLs (.test) y teléfonos (+57 300 000 00xx, +57 601 000 00xx) inventados.",
+  "keys": {
+    "officialToken": "12345",
+    "subaccountSigningToken": "h8fixturesubaccountsigning000001",
+    "otpMasterTokenSynthetic": "h8fixtureMASTERotpTOKEN000000002",
+    "voiceWebhookBaseUrl": "https://crm.ironbody.test"
+  },
+  "algorithm": {
+    "form": "base = url + concat(clave + valor) con las claves en orden de bytes y, por clave, sus valores en orden de bytes y sin repetir; firma = base64(HMAC-SHA1(token, base))",
+    "json": "la URL lleva bodySHA256 = sha256 hex (minúsculas) del cuerpo crudo; base = url (sin parámetros); además sha256(cuerpo) tiene que ser igual, byte a byte, al bodySHA256 de la consulta",
+    "port": "como validate() del SDK oficial: vale la firma sobre la URL sin puerto o sobre la URL con el puerto por defecto añadido (443 https, 80 http) si no traía (DF-T2)",
+    "url": "url = rtrim(VOICE_WEBHOOK_BASE_URL, '/') + la URI tal como llega (ruta y consulta crudas, sin decodificar, recodificar ni reordenar); nunca fullUrl() (DF-T1, T-1)"
+  },
+  "decisions": {
+    "DF-T1": "URL = rtrim(base, '/') + requestUri crudo (getRequestUri()); el esquema y el host salen SOLO de la base.",
+    "DF-T2": "Tolerancia de puerto como validate() del SDK oficial. Si el lead la descarta, vale expected.validWithoutPortTolerance.",
+    "DF-T3": "Orden de bytes (strcmp / SORT_STRING) para claves y valores: '10' va antes que '9'. Las claves distinguen mayúsculas.",
+    "DF-T4": "bodySHA256 se compara exacto con el sha256 hex en minúsculas del cuerpo crudo (como compare() del SDK).",
+    "DF-T5": "Token de firma vacío = fallo de configuración: lanza InvalidArgumentException (el convenio de ElevenLabsWebhookSignature del H6), nunca 'válida'."
+  },
+  "counts": {
+    "compute": 15,
+    "validate": 25,
+    "urlBuild": 5,
+    "total": 45
+  },
+  "compute": [
+    {
+      "name": "compute · form · oficial 1 · el vector clásico: URL con consulta y cinco parámetros",
+      "kind": "form",
+      "contractRef": "D8-4",
+      "basis": "oficial",
+      "token": "12345",
+      "url": "https://mycompany.com/myapp.php?foo=1&bar=2",
+      "params": [
+        [
+          "CallSid",
+          "CA1234567890ABCDE"
+        ],
+        [
+          "Digits",
+          "1234"
+        ],
+        [
+          "From",
+          "+14158675309"
+        ],
+        [
+          "To",
+          "+18005551212"
+        ],
+        [
+          "Caller",
+          "+14158675309"
+        ]
+      ],
+      "source": "twilio/twilio-python tests/unit/test_request_validator.py (main, 31-10-2026)",
+      "expected": {
+        "signature": "RSOYDt4T1cUTdK1PDd93/VVr8B8=",
+        "base": "https://mycompany.com/myapp.php?foo=1&bar=2CallSidCA1234567890ABCDECaller+14158675309Digits1234From+14158675309To+18005551212"
+      }
+    },
+    {
+      "name": "compute · json · oficial 2 · JSON: bodySHA256 en la URL y la base es solo la URL",
+      "kind": "json",
+      "contractRef": "D8-4",
+      "basis": "oficial",
+      "token": "12345",
+      "url": "https://mycompany.com/myapp.php?foo=1&bar=2&bodySHA256=0a1ff7634d9ab3b95db5c9a2dfe9416e41502b283a80c7cf19632632f96e6620",
+      "params": [],
+      "rawBody": "{\"property\": \"value\", \"boolean\": true}",
+      "source": "twilio/twilio-python tests/unit/test_request_validator.py (main, 31-10-2026)",
+      "expected": {
+        "signature": "a9nBmqA0ju/hNViExpshrM61xv4=",
+        "bodySHA256": "0a1ff7634d9ab3b95db5c9a2dfe9416e41502b283a80c7cf19632632f96e6620"
+      }
+    },
+    {
+      "name": "compute · form · oficial 3 · claves repetidas: claves ordenadas, valores ordenados y sin repetir",
+      "kind": "form",
+      "contractRef": "D8-4",
+      "basis": "oficial",
+      "token": "12345",
+      "url": "https://mycompany.com/myapp.php?foo=1&bar=2",
+      "params": [
+        [
+          "Sid",
+          "CA123"
+        ],
+        [
+          "SidAccount",
+          "AC123"
+        ],
+        [
+          "Digits",
+          "5678"
+        ],
+        [
+          "Digits",
+          "1234"
+        ],
+        [
+          "Digits",
+          "1234"
+        ]
+      ],
+      "source": "twilio/twilio-python tests/unit/test_request_validator.py (main, 31-10-2026)",
+      "expected": {
+        "signature": "IK+Dwps556ElfBT0I3Rgjkr1wJU=",
+        "base": "https://mycompany.com/myapp.php?foo=1&bar=2Digits1234Digits5678SidCA123SidAccountAC123"
+      }
+    },
+    {
+      "name": "compute · form · oficial 4 · https con :443 en la URL",
+      "kind": "form",
+      "contractRef": "D8-4",
+      "basis": "oficial",
+      "token": "12345",
+      "url": "https://mycompany.com:443/myapp.php?foo=1&bar=2",
+      "params": [
+        [
+          "CallSid",
+          "CA1234567890ABCDE"
+        ],
+        [
+          "Digits",
+          "1234"
+        ],
+        [
+          "From",
+          "+14158675309"
+        ],
+        [
+          "To",
+          "+18005551212"
+        ],
+        [
+          "Caller",
+          "+14158675309"
+        ]
+      ],
+      "source": "twilio/twilio-python tests/unit/test_request_validator.py (main, 31-10-2026)",
+      "expected": {
+        "signature": "kvajT1Ptam85bY51eRf/AJRuM3w=",
+        "base": "https://mycompany.com:443/myapp.php?foo=1&bar=2CallSidCA1234567890ABCDECaller+14158675309Digits1234From+14158675309To+18005551212"
+      }
+    },
+    {
+      "name": "compute · form · oficial 5 · http con :80 en la URL",
+      "kind": "form",
+      "contractRef": "D8-4",
+      "basis": "oficial",
+      "token": "12345",
+      "url": "http://mycompany.com:80/myapp.php?foo=1&bar=2",
+      "params": [
+        [
+          "CallSid",
+          "CA1234567890ABCDE"
+        ],
+        [
+          "Digits",
+          "1234"
+        ],
+        [
+          "From",
+          "+14158675309"
+        ],
+        [
+          "To",
+          "+18005551212"
+        ],
+        [
+          "Caller",
+          "+14158675309"
+        ]
+      ],
+      "source": "twilio/twilio-python tests/unit/test_request_validator.py (main, 31-10-2026)",
+      "expected": {
+        "signature": "0ZXoZLH/DfblKGATFgpif+LLRf4=",
+        "base": "http://mycompany.com:80/myapp.php?foo=1&bar=2CallSidCA1234567890ABCDECaller+14158675309Digits1234From+14158675309To+18005551212"
+      }
+    },
+    {
+      "name": "compute · form · oficial 6 · http con :1234 en la URL",
+      "kind": "form",
+      "contractRef": "D8-4",
+      "basis": "oficial",
+      "token": "12345",
+      "url": "http://mycompany.com:1234/myapp.php?foo=1&bar=2",
+      "params": [
+        [
+          "CallSid",
+          "CA1234567890ABCDE"
+        ],
+        [
+          "Digits",
+          "1234"
+        ],
+        [
+          "From",
+          "+14158675309"
+        ],
+        [
+          "To",
+          "+18005551212"
+        ],
+        [
+          "Caller",
+          "+14158675309"
+        ]
+      ],
+      "source": "twilio/twilio-python tests/unit/test_request_validator.py (main, 31-10-2026)",
+      "expected": {
+        "signature": "Zmvh+3yNM1Phv2jhDCwEM3q5ebU=",
+        "base": "http://mycompany.com:1234/myapp.php?foo=1&bar=2CallSidCA1234567890ABCDECaller+14158675309Digits1234From+14158675309To+18005551212"
+      }
+    },
+    {
+      "name": "compute · form · sin consulta: la URL de usage-trigger de la voz tal cual",
+      "kind": "form",
+      "contractRef": "D8-4, D8-16",
+      "basis": "oficial",
+      "token": "h8fixturesubaccountsigning000001",
+      "url": "https://crm.ironbody.test/api/webhooks/voice/twilio/usage-trigger",
+      "params": [
+        [
+          "AccountSid",
+          "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f"
+        ],
+        [
+          "UsageTriggerSid",
+          "UT1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a"
+        ],
+        [
+          "IdempotencyToken",
+          "AC8f-UT1a-0001"
+        ]
+      ],
+      "expected": {
+        "signature": "tsk5LrHQcqzmz4yFkkyCL54dP6s=",
+        "base": "https://crm.ironbody.test/api/webhooks/voice/twilio/usage-triggerAccountSidAC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8fIdempotencyTokenAC8f-UT1a-0001UsageTriggerSidUT1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a"
+      }
+    },
+    {
+      "name": "compute · form · consulta en el orden en que llega (?b=2&a=1): no se reordena",
+      "kind": "form",
+      "contractRef": "D8-4",
+      "basis": "oficial",
+      "token": "h8fixturesubaccountsigning000001",
+      "url": "https://crm.ironbody.test/api/webhooks/voice/twilio/usage-trigger?b=2&a=1",
+      "params": [
+        [
+          "AccountSid",
+          "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f"
+        ],
+        [
+          "UsageTriggerSid",
+          "UT1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a"
+        ],
+        [
+          "IdempotencyToken",
+          "AC8f-UT1a-0001"
+        ]
+      ],
+      "expected": {
+        "signature": "HcvfLwL02/JyiYqfRd1mW8NLRYc=",
+        "base": "https://crm.ironbody.test/api/webhooks/voice/twilio/usage-trigger?b=2&a=1AccountSidAC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8fIdempotencyTokenAC8f-UT1a-0001UsageTriggerSidUT1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a"
+      }
+    },
+    {
+      "name": "compute · form · consulta codificada tal cual (%20 y %2B): no se decodifica",
+      "kind": "form",
+      "contractRef": "D8-4",
+      "basis": "oficial",
+      "token": "h8fixturesubaccountsigning000001",
+      "url": "https://crm.ironbody.test/api/webhooks/voice/twilio/usage-trigger?q=a%20b%2Bc",
+      "params": [
+        [
+          "AccountSid",
+          "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f"
+        ],
+        [
+          "UsageTriggerSid",
+          "UT1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a"
+        ],
+        [
+          "IdempotencyToken",
+          "AC8f-UT1a-0001"
+        ]
+      ],
+      "expected": {
+        "signature": "n77VnPgzyXE4LzOneKXV9E++h00=",
+        "base": "https://crm.ironbody.test/api/webhooks/voice/twilio/usage-trigger?q=a%20b%2BcAccountSidAC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8fIdempotencyTokenAC8f-UT1a-0001UsageTriggerSidUT1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a"
+      }
+    },
+    {
+      "name": "compute · form · un valor vacío cuenta como la clave sola",
+      "kind": "form",
+      "contractRef": "D8-4",
+      "basis": "oficial",
+      "token": "h8fixturesubaccountsigning000001",
+      "url": "https://crm.ironbody.test/api/webhooks/voice/twilio/usage-trigger",
+      "params": [
+        [
+          "AccountSid",
+          "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f"
+        ],
+        [
+          "UsageTriggerSid",
+          "UT1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a"
+        ],
+        [
+          "IdempotencyToken",
+          "AC8f-UT1a-0001"
+        ],
+        [
+          "ForwardedFrom",
+          ""
+        ]
+      ],
+      "expected": {
+        "signature": "Hxn25PVIpuf9wMTFqTKTRtai02U=",
+        "base": "https://crm.ironbody.test/api/webhooks/voice/twilio/usage-triggerAccountSidAC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8fForwardedFromIdempotencyTokenAC8f-UT1a-0001UsageTriggerSidUT1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a"
+      }
+    },
+    {
+      "name": "compute · form · valor con ñ y emoji: se firman los bytes UTF-8",
+      "kind": "form",
+      "contractRef": "D8-4",
+      "basis": "oficial",
+      "token": "h8fixturesubaccountsigning000001",
+      "url": "https://crm.ironbody.test/api/webhooks/voice/twilio/usage-trigger",
+      "params": [
+        [
+          "AccountSid",
+          "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f"
+        ],
+        [
+          "UsageTriggerSid",
+          "UT1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a"
+        ],
+        [
+          "IdempotencyToken",
+          "AC8f-UT1a-0001"
+        ],
+        [
+          "CallerName",
+          "Peña Ñandú 🎉"
+        ]
+      ],
+      "expected": {
+        "signature": "GmOr1ee18BhXs1TR/1Pma/Rhfic=",
+        "base": "https://crm.ironbody.test/api/webhooks/voice/twilio/usage-triggerAccountSidAC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8fCallerNamePeña Ñandú 🎉IdempotencyTokenAC8f-UT1a-0001UsageTriggerSidUT1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a"
+      }
+    },
+    {
+      "name": "compute · form · valores numéricos repetidos: orden de bytes, '10' antes que '9'",
+      "kind": "form",
+      "contractRef": "D8-4",
+      "basis": "decision-fixture",
+      "decision": "DF-T3",
+      "token": "h8fixturesubaccountsigning000001",
+      "url": "https://crm.ironbody.test/api/webhooks/voice/twilio/usage-trigger",
+      "params": [
+        [
+          "AccountSid",
+          "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f"
+        ],
+        [
+          "UsageTriggerSid",
+          "UT1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a"
+        ],
+        [
+          "IdempotencyToken",
+          "AC8f-UT1a-0001"
+        ],
+        [
+          "Digits",
+          "9"
+        ],
+        [
+          "Digits",
+          "10"
+        ]
+      ],
+      "expected": {
+        "signature": "zIUXcsKLdbBuU12vDd/2zPb2mu0=",
+        "base": "https://crm.ironbody.test/api/webhooks/voice/twilio/usage-triggerAccountSidAC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8fDigits10Digits9IdempotencyTokenAC8f-UT1a-0001UsageTriggerSidUT1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a"
+      }
+    },
+    {
+      "name": "compute · form · claves que solo difieren en mayúsculas: orden de bytes (B, a, b)",
+      "kind": "form",
+      "contractRef": "D8-4",
+      "basis": "decision-fixture",
+      "decision": "DF-T3",
+      "token": "h8fixturesubaccountsigning000001",
+      "url": "https://crm.ironbody.test/api/webhooks/voice/twilio/usage-trigger",
+      "params": [
+        [
+          "b",
+          "2"
+        ],
+        [
+          "B",
+          "1"
+        ],
+        [
+          "a",
+          "3"
+        ]
+      ],
+      "expected": {
+        "signature": "qvVpOi3sHApii1ROHwjkj35Lpb4=",
+        "base": "https://crm.ironbody.test/api/webhooks/voice/twilio/usage-triggerB1a3b2"
+      }
+    },
+    {
+      "name": "compute · form · el + de un E.164 se firma como +, no como espacio ni %2B",
+      "kind": "form",
+      "contractRef": "D8-4",
+      "basis": "oficial",
+      "token": "h8fixturesubaccountsigning000001",
+      "url": "https://crm.ironbody.test/api/webhooks/voice/twilio/usage-trigger",
+      "params": [
+        [
+          "AccountSid",
+          "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f"
+        ],
+        [
+          "UsageTriggerSid",
+          "UT1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a"
+        ],
+        [
+          "IdempotencyToken",
+          "AC8f-UT1a-0001"
+        ],
+        [
+          "From",
+          "+573000000031"
+        ]
+      ],
+      "expected": {
+        "signature": "4vJKVSkSKv44xYpANOjAq3JJry0=",
+        "base": "https://crm.ironbody.test/api/webhooks/voice/twilio/usage-triggerAccountSidAC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8fFrom+573000000031IdempotencyTokenAC8f-UT1a-0001UsageTriggerSidUT1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a"
+      }
+    },
+    {
+      "name": "compute · json · JSON derivado: bodySHA256 de un cuerpo con ñ (bytes UTF-8)",
+      "kind": "json",
+      "contractRef": "D8-4",
+      "basis": "oficial",
+      "token": "h8fixturesubaccountsigning000001",
+      "url": "https://crm.ironbody.test/api/webhooks/voice/twilio/usage-trigger?bodySHA256=28c59b3e5d1801a69f587e6f16e0190ab04bd72c31c9dd284edcf0997ab1ccba",
+      "params": [],
+      "rawBody": "{\"AccountSid\":\"AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f\",\"Kind\":\"ejemplo con ñ\"}",
+      "expected": {
+        "signature": "dixRBKpKnQao0Ai92LDW08/+vEk=",
+        "bodySHA256": "28c59b3e5d1801a69f587e6f16e0190ab04bd72c31c9dd284edcf0997ab1ccba"
+      }
+    }
+  ],
+  "validate": [
+    {
+      "name": "validate · form · oficial: el clásico vale",
+      "kind": "form",
+      "contractRef": "D8-4",
+      "basis": "oficial",
+      "token": "12345",
+      "url": "https://mycompany.com/myapp.php?foo=1&bar=2",
+      "header": "RSOYDt4T1cUTdK1PDd93/VVr8B8=",
+      "params": [
+        [
+          "CallSid",
+          "CA1234567890ABCDE"
+        ],
+        [
+          "Digits",
+          "1234"
+        ],
+        [
+          "From",
+          "+14158675309"
+        ],
+        [
+          "To",
+          "+18005551212"
+        ],
+        [
+          "Caller",
+          "+14158675309"
+        ]
+      ],
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "name": "validate · json · oficial: JSON con su bodySHA256 vale",
+      "kind": "json",
+      "contractRef": "D8-4",
+      "basis": "oficial",
+      "token": "12345",
+      "url": "https://mycompany.com/myapp.php?foo=1&bar=2&bodySHA256=0a1ff7634d9ab3b95db5c9a2dfe9416e41502b283a80c7cf19632632f96e6620",
+      "header": "a9nBmqA0ju/hNViExpshrM61xv4=",
+      "rawBody": "{\"property\": \"value\", \"boolean\": true}",
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "name": "validate · form · oficial: claves repetidas valen",
+      "kind": "form",
+      "contractRef": "D8-4",
+      "basis": "oficial",
+      "token": "12345",
+      "url": "https://mycompany.com/myapp.php?foo=1&bar=2",
+      "header": "IK+Dwps556ElfBT0I3Rgjkr1wJU=",
+      "params": [
+        [
+          "Sid",
+          "CA123"
+        ],
+        [
+          "SidAccount",
+          "AC123"
+        ],
+        [
+          "Digits",
+          "5678"
+        ],
+        [
+          "Digits",
+          "1234"
+        ],
+        [
+          "Digits",
+          "1234"
+        ]
+      ],
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "name": "validate · form · oficial (validate): https sin puerto y la firma de :443 vale (añade el puerto)",
+      "kind": "form",
+      "contractRef": "D8-4",
+      "basis": "decision-fixture",
+      "decision": "DF-T2",
+      "token": "12345",
+      "url": "https://mycompany.com/myapp.php?foo=1&bar=2",
+      "header": "kvajT1Ptam85bY51eRf/AJRuM3w=",
+      "params": [
+        [
+          "CallSid",
+          "CA1234567890ABCDE"
+        ],
+        [
+          "Digits",
+          "1234"
+        ],
+        [
+          "From",
+          "+14158675309"
+        ],
+        [
+          "To",
+          "+18005551212"
+        ],
+        [
+          "Caller",
+          "+14158675309"
+        ]
+      ],
+      "expected": {
+        "valid": true,
+        "validWithoutPortTolerance": false,
+        "why": "el SDK prueba también la URL con :443"
+      }
+    },
+    {
+      "name": "validate · form · oficial (validate): https con :1234 y la firma sin puerto vale (quita el puerto)",
+      "kind": "form",
+      "contractRef": "D8-4",
+      "basis": "decision-fixture",
+      "decision": "DF-T2",
+      "token": "12345",
+      "url": "https://mycompany.com:1234/myapp.php?foo=1&bar=2",
+      "header": "RSOYDt4T1cUTdK1PDd93/VVr8B8=",
+      "params": [
+        [
+          "CallSid",
+          "CA1234567890ABCDE"
+        ],
+        [
+          "Digits",
+          "1234"
+        ],
+        [
+          "From",
+          "+14158675309"
+        ],
+        [
+          "To",
+          "+18005551212"
+        ],
+        [
+          "Caller",
+          "+14158675309"
+        ]
+      ],
+      "expected": {
+        "valid": true,
+        "validWithoutPortTolerance": false,
+        "why": "el SDK prueba también la URL sin puerto"
+      }
+    },
+    {
+      "name": "validate · form · oficial (validate): http sin puerto y la firma de :80 vale",
+      "kind": "form",
+      "contractRef": "D8-4",
+      "basis": "decision-fixture",
+      "decision": "DF-T2",
+      "token": "12345",
+      "url": "http://mycompany.com/myapp.php?foo=1&bar=2",
+      "header": "0ZXoZLH/DfblKGATFgpif+LLRf4=",
+      "params": [
+        [
+          "CallSid",
+          "CA1234567890ABCDE"
+        ],
+        [
+          "Digits",
+          "1234"
+        ],
+        [
+          "From",
+          "+14158675309"
+        ],
+        [
+          "To",
+          "+18005551212"
+        ],
+        [
+          "Caller",
+          "+14158675309"
+        ]
+      ],
+      "expected": {
+        "valid": true,
+        "validWithoutPortTolerance": false
+      }
+    },
+    {
+      "name": "validate · form · oficial (validate): http con :1234 y la firma con :1234 vale",
+      "kind": "form",
+      "contractRef": "D8-4",
+      "basis": "decision-fixture",
+      "decision": "DF-T2",
+      "token": "12345",
+      "url": "http://mycompany.com:1234/myapp.php?foo=1&bar=2",
+      "header": "Zmvh+3yNM1Phv2jhDCwEM3q5ebU=",
+      "params": [
+        [
+          "CallSid",
+          "CA1234567890ABCDE"
+        ],
+        [
+          "Digits",
+          "1234"
+        ],
+        [
+          "From",
+          "+14158675309"
+        ],
+        [
+          "To",
+          "+18005551212"
+        ],
+        [
+          "Caller",
+          "+14158675309"
+        ]
+      ],
+      "expected": {
+        "valid": true,
+        "validWithoutPortTolerance": true
+      }
+    },
+    {
+      "name": "validate · form · una letra cambiada en la firma",
+      "kind": "form",
+      "contractRef": "D8-4",
+      "basis": "oficial",
+      "token": "12345",
+      "url": "https://mycompany.com/myapp.php?foo=1&bar=2",
+      "header": "RSOYDt4T1cUTdK1PDd93/VVr8B9=",
+      "params": [
+        [
+          "CallSid",
+          "CA1234567890ABCDE"
+        ],
+        [
+          "Digits",
+          "1234"
+        ],
+        [
+          "From",
+          "+14158675309"
+        ],
+        [
+          "To",
+          "+18005551212"
+        ],
+        [
+          "Caller",
+          "+14158675309"
+        ]
+      ],
+      "expected": {
+        "valid": false
+      }
+    },
+    {
+      "name": "validate · form · la firma sin el relleno '='",
+      "kind": "form",
+      "contractRef": "D8-4",
+      "basis": "oficial",
+      "token": "12345",
+      "url": "https://mycompany.com/myapp.php?foo=1&bar=2",
+      "header": "RSOYDt4T1cUTdK1PDd93/VVr8B8",
+      "params": [
+        [
+          "CallSid",
+          "CA1234567890ABCDE"
+        ],
+        [
+          "Digits",
+          "1234"
+        ],
+        [
+          "From",
+          "+14158675309"
+        ],
+        [
+          "To",
+          "+18005551212"
+        ],
+        [
+          "Caller",
+          "+14158675309"
+        ]
+      ],
+      "expected": {
+        "valid": false
+      }
+    },
+    {
+      "name": "validate · form · T-1: la firma oficial contra la URL en http (fullUrl() tras el proxy) no vale",
+      "kind": "form",
+      "contractRef": "D8-4 (T-1)",
+      "basis": "oficial",
+      "token": "12345",
+      "url": "http://mycompany.com/myapp.php?foo=1&bar=2",
+      "header": "RSOYDt4T1cUTdK1PDd93/VVr8B8=",
+      "params": [
+        [
+          "CallSid",
+          "CA1234567890ABCDE"
+        ],
+        [
+          "Digits",
+          "1234"
+        ],
+        [
+          "From",
+          "+14158675309"
+        ],
+        [
+          "To",
+          "+18005551212"
+        ],
+        [
+          "Caller",
+          "+14158675309"
+        ]
+      ],
+      "expected": {
+        "valid": false,
+        "why": "el esquema sale de la base canónica, nunca de la petición"
+      }
+    },
+    {
+      "name": "validate · form · T-1: la consulta reordenada (?bar=2&foo=1, como fullUrl()) no vale",
+      "kind": "form",
+      "contractRef": "D8-4 (T-1, OTP-3)",
+      "basis": "oficial",
+      "token": "12345",
+      "url": "https://mycompany.com/myapp.php?bar=2&foo=1",
+      "header": "RSOYDt4T1cUTdK1PDd93/VVr8B8=",
+      "params": [
+        [
+          "CallSid",
+          "CA1234567890ABCDE"
+        ],
+        [
+          "Digits",
+          "1234"
+        ],
+        [
+          "From",
+          "+14158675309"
+        ],
+        [
+          "To",
+          "+18005551212"
+        ],
+        [
+          "Caller",
+          "+14158675309"
+        ]
+      ],
+      "expected": {
+        "valid": false
+      }
+    },
+    {
+      "name": "validate · json · JSON: un carácter del cuerpo cambiado (la URL y la firma intactas)",
+      "kind": "json",
+      "contractRef": "D8-4",
+      "basis": "oficial",
+      "token": "12345",
+      "url": "https://mycompany.com/myapp.php?foo=1&bar=2&bodySHA256=0a1ff7634d9ab3b95db5c9a2dfe9416e41502b283a80c7cf19632632f96e6620",
+      "header": "a9nBmqA0ju/hNViExpshrM61xv4=",
+      "rawBody": "{\"property\": \"valuE\", \"boolean\": true}",
+      "expected": {
+        "valid": false,
+        "why": "sha256 del cuerpo ≠ bodySHA256"
+      }
+    },
+    {
+      "name": "validate · json · JSON: el mismo cuerpo con un salto de línea final que no se firmó",
+      "kind": "json",
+      "contractRef": "D8-4",
+      "basis": "oficial",
+      "token": "12345",
+      "url": "https://mycompany.com/myapp.php?foo=1&bar=2&bodySHA256=0a1ff7634d9ab3b95db5c9a2dfe9416e41502b283a80c7cf19632632f96e6620",
+      "header": "a9nBmqA0ju/hNViExpshrM61xv4=",
+      "rawBody": "{\"property\": \"value\", \"boolean\": true}\n",
+      "expected": {
+        "valid": false
+      }
+    },
+    {
+      "name": "validate · json · JSON: bodySHA256 en mayúsculas (firmada así): se compara exacto con el hex en minúsculas",
+      "kind": "json",
+      "contractRef": "D8-4",
+      "basis": "decision-fixture",
+      "decision": "DF-T4",
+      "token": "12345",
+      "url": "https://mycompany.com/myapp.php?foo=1&bar=2&bodySHA256=0A1FF7634D9AB3B95DB5C9A2DFE9416E41502B283A80C7CF19632632F96E6620",
+      "header": "KF9uuYbODKamvlRt1B1bFONb+Q8=",
+      "rawBody": "{\"property\": \"value\", \"boolean\": true}",
+      "expected": {
+        "valid": false
+      }
+    },
+    {
+      "name": "validate · form · cabecera ausente",
+      "kind": "form",
+      "contractRef": "D8-4",
+      "basis": "oficial",
+      "token": "12345",
+      "url": "https://mycompany.com/myapp.php?foo=1&bar=2",
+      "header": null,
+      "params": [
+        [
+          "CallSid",
+          "CA1234567890ABCDE"
+        ],
+        [
+          "Digits",
+          "1234"
+        ],
+        [
+          "From",
+          "+14158675309"
+        ],
+        [
+          "To",
+          "+18005551212"
+        ],
+        [
+          "Caller",
+          "+14158675309"
+        ]
+      ],
+      "expected": {
+        "valid": false
+      }
+    },
+    {
+      "name": "validate · form · cabecera vacía",
+      "kind": "form",
+      "contractRef": "D8-4",
+      "basis": "oficial",
+      "token": "12345",
+      "url": "https://mycompany.com/myapp.php?foo=1&bar=2",
+      "header": "",
+      "params": [
+        [
+          "CallSid",
+          "CA1234567890ABCDE"
+        ],
+        [
+          "Digits",
+          "1234"
+        ],
+        [
+          "From",
+          "+14158675309"
+        ],
+        [
+          "To",
+          "+18005551212"
+        ],
+        [
+          "Caller",
+          "+14158675309"
+        ]
+      ],
+      "expected": {
+        "valid": false
+      }
+    },
+    {
+      "name": "validate · form · token vacío: fallo de configuración, nunca válida",
+      "kind": "form",
+      "contractRef": "D8-4",
+      "basis": "decision-fixture",
+      "decision": "DF-T5",
+      "token": "",
+      "url": "https://mycompany.com/myapp.php?foo=1&bar=2",
+      "header": "RSOYDt4T1cUTdK1PDd93/VVr8B8=",
+      "params": [
+        [
+          "CallSid",
+          "CA1234567890ABCDE"
+        ],
+        [
+          "Digits",
+          "1234"
+        ],
+        [
+          "From",
+          "+14158675309"
+        ],
+        [
+          "To",
+          "+18005551212"
+        ],
+        [
+          "Caller",
+          "+14158675309"
+        ]
+      ],
+      "expected": {
+        "throws": "InvalidArgumentException"
+      }
+    },
+    {
+      "name": "validate · form · un parámetro de más que no se firmó",
+      "kind": "form",
+      "contractRef": "D8-4",
+      "basis": "oficial",
+      "token": "12345",
+      "url": "https://mycompany.com/myapp.php?foo=1&bar=2",
+      "header": "RSOYDt4T1cUTdK1PDd93/VVr8B8=",
+      "params": [
+        [
+          "CallSid",
+          "CA1234567890ABCDE"
+        ],
+        [
+          "Digits",
+          "1234"
+        ],
+        [
+          "From",
+          "+14158675309"
+        ],
+        [
+          "To",
+          "+18005551212"
+        ],
+        [
+          "Caller",
+          "+14158675309"
+        ],
+        [
+          "CallStatus",
+          "completed"
+        ]
+      ],
+      "expected": {
+        "valid": false
+      }
+    },
+    {
+      "name": "validate · form · un parámetro de menos",
+      "kind": "form",
+      "contractRef": "D8-4",
+      "basis": "oficial",
+      "token": "12345",
+      "url": "https://mycompany.com/myapp.php?foo=1&bar=2",
+      "header": "RSOYDt4T1cUTdK1PDd93/VVr8B8=",
+      "params": [
+        [
+          "CallSid",
+          "CA1234567890ABCDE"
+        ],
+        [
+          "Digits",
+          "1234"
+        ],
+        [
+          "From",
+          "+14158675309"
+        ],
+        [
+          "To",
+          "+18005551212"
+        ]
+      ],
+      "expected": {
+        "valid": false
+      }
+    },
+    {
+      "name": "validate · form · el + del From decodificado como espacio",
+      "kind": "form",
+      "contractRef": "D8-4",
+      "basis": "oficial",
+      "token": "12345",
+      "url": "https://mycompany.com/myapp.php?foo=1&bar=2",
+      "header": "RSOYDt4T1cUTdK1PDd93/VVr8B8=",
+      "params": [
+        [
+          "CallSid",
+          "CA1234567890ABCDE"
+        ],
+        [
+          "Digits",
+          "1234"
+        ],
+        [
+          "From",
+          " 14158675309"
+        ],
+        [
+          "To",
+          "+18005551212"
+        ],
+        [
+          "Caller",
+          "+14158675309"
+        ]
+      ],
+      "expected": {
+        "valid": false,
+        "why": "error típico al decodificar el formulario a mano"
+      }
+    },
+    {
+      "name": "validate · form · firma calculada con HMAC-SHA256 en vez de SHA1",
+      "kind": "form",
+      "contractRef": "D8-4",
+      "basis": "oficial",
+      "token": "12345",
+      "url": "https://mycompany.com/myapp.php?foo=1&bar=2",
+      "header": "033hgUJA9M/hXIZsYjwkerEP/DBm35nEri5FhCYjA5s=",
+      "params": [
+        [
+          "CallSid",
+          "CA1234567890ABCDE"
+        ],
+        [
+          "Digits",
+          "1234"
+        ],
+        [
+          "From",
+          "+14158675309"
+        ],
+        [
+          "To",
+          "+18005551212"
+        ],
+        [
+          "Caller",
+          "+14158675309"
+        ]
+      ],
+      "expected": {
+        "valid": false
+      }
+    },
+    {
+      "name": "validate · form · subcuenta: el aviso firmado con el token de la subcuenta vale",
+      "kind": "form",
+      "contractRef": "D8-4, D8-5, D8-16",
+      "basis": "oficial",
+      "token": "h8fixturesubaccountsigning000001",
+      "url": "https://crm.ironbody.test/api/webhooks/voice/twilio/usage-trigger",
+      "header": "tsk5LrHQcqzmz4yFkkyCL54dP6s=",
+      "params": [
+        [
+          "AccountSid",
+          "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f"
+        ],
+        [
+          "UsageTriggerSid",
+          "UT1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a"
+        ],
+        [
+          "IdempotencyToken",
+          "AC8f-UT1a-0001"
+        ]
+      ],
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "name": "validate · form · OTP-2: el mismo aviso firmado con el token maestro del OTP no vale con el de la subcuenta",
+      "kind": "form",
+      "contractRef": "D8-4, auditoría OTP-2",
+      "basis": "oficial",
+      "token": "h8fixturesubaccountsigning000001",
+      "url": "https://crm.ironbody.test/api/webhooks/voice/twilio/usage-trigger",
+      "header": "4LnykYrYqfioFsXpsm/hWY95B8A=",
+      "params": [
+        [
+          "AccountSid",
+          "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f"
+        ],
+        [
+          "UsageTriggerSid",
+          "UT1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a"
+        ],
+        [
+          "IdempotencyToken",
+          "AC8f-UT1a-0001"
+        ]
+      ],
+      "expected": {
+        "valid": false
+      }
+    },
+    {
+      "name": "validate · form · subcuenta: la URL con / final que Twilio no firmó",
+      "kind": "form",
+      "contractRef": "D8-4",
+      "basis": "oficial",
+      "token": "h8fixturesubaccountsigning000001",
+      "url": "https://crm.ironbody.test/api/webhooks/voice/twilio/usage-trigger/",
+      "header": "tsk5LrHQcqzmz4yFkkyCL54dP6s=",
+      "params": [
+        [
+          "AccountSid",
+          "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f"
+        ],
+        [
+          "UsageTriggerSid",
+          "UT1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a"
+        ],
+        [
+          "IdempotencyToken",
+          "AC8f-UT1a-0001"
+        ]
+      ],
+      "expected": {
+        "valid": false
+      }
+    },
+    {
+      "name": "validate · form · subcuenta: la URL en mayúsculas no es la firmada",
+      "kind": "form",
+      "contractRef": "D8-4",
+      "basis": "oficial",
+      "token": "h8fixturesubaccountsigning000001",
+      "url": "https://crm.ironbody.test/api/webhooks/voice/twilio/Usage-Trigger",
+      "header": "tsk5LrHQcqzmz4yFkkyCL54dP6s=",
+      "params": [
+        [
+          "AccountSid",
+          "AC8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f8f"
+        ],
+        [
+          "UsageTriggerSid",
+          "UT1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a"
+        ],
+        [
+          "IdempotencyToken",
+          "AC8f-UT1a-0001"
+        ]
+      ],
+      "expected": {
+        "valid": false
+      }
+    }
+  ],
+  "urlBuild": [
+    {
+      "name": "urlBuild · build · la base configurada + la URI tal como llega",
+      "kind": "build",
+      "contractRef": "D8-4",
+      "basis": "contrato",
+      "baseUrl": "https://crm.ironbody.test",
+      "requestUri": "/api/webhooks/voice/twilio/usage-trigger",
+      "expected": {
+        "url": "https://crm.ironbody.test/api/webhooks/voice/twilio/usage-trigger"
+      }
+    },
+    {
+      "name": "urlBuild · build · la base con / final no dobla la barra",
+      "kind": "build",
+      "contractRef": "D8-4",
+      "basis": "decision-fixture",
+      "decision": "DF-T1",
+      "baseUrl": "https://crm.ironbody.test/",
+      "requestUri": "/api/webhooks/voice/twilio/usage-trigger",
+      "expected": {
+        "url": "https://crm.ironbody.test/api/webhooks/voice/twilio/usage-trigger"
+      }
+    },
+    {
+      "name": "urlBuild · build · la consulta se conserva en su orden",
+      "kind": "build",
+      "contractRef": "D8-4",
+      "basis": "contrato",
+      "baseUrl": "https://crm.ironbody.test",
+      "requestUri": "/api/webhooks/voice/twilio/usage-trigger?b=2&a=1",
+      "expected": {
+        "url": "https://crm.ironbody.test/api/webhooks/voice/twilio/usage-trigger?b=2&a=1"
+      }
+    },
+    {
+      "name": "urlBuild · build · la consulta se conserva codificada",
+      "kind": "build",
+      "contractRef": "D8-4",
+      "basis": "contrato",
+      "baseUrl": "https://crm.ironbody.test",
+      "requestUri": "/api/webhooks/voice/twilio/usage-trigger?q=a%20b%2Bc",
+      "expected": {
+        "url": "https://crm.ironbody.test/api/webhooks/voice/twilio/usage-trigger?q=a%20b%2Bc"
+      }
+    },
+    {
+      "name": "urlBuild · build · tras el proxy la petición llega en http: el esquema sale de la base (https)",
+      "kind": "build",
+      "contractRef": "D8-4",
+      "basis": "contrato",
+      "baseUrl": "https://crm.ironbody.test",
+      "requestUri": "/api/webhooks/voice/twilio/usage-trigger",
+      "expected": {
+        "url": "https://crm.ironbody.test/api/webhooks/voice/twilio/usage-trigger",
+        "why": "nunca fullUrl(): sin trustProxies daría http:// (T-1)"
+      }
+    }
+  ]
+}
