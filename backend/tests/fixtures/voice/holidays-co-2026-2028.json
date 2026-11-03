@@ -6,7 +6,8 @@
   "contractSections": [
     "D8-15 (festivos: Telephony\\ColombianHolidays, Ley 51 de 1983 y los móviles de Pascua; fixture 2026–2028 aprobado por el propietario)",
     "D8-12 (motivo holiday de la puerta de salientes)",
-    "D8-18 (horario de salientes en Colombia)"
+    "D8-18 (horario de salientes en Colombia)",
+    "Enmienda 2, E2-1 (Ley 2578 del 01-06-2026: la Virgen de Chiquinquirá; 19 festivos por año mientras la ley esté vigente, «por confirmar (Ley 2578/2026, demandada)»)"
   ],
   "generatedBy": "tests/fixtures/voice/tools/build/build.py (python3 -I), con los casos a mano en sec_*.py",
   "checkedBy": "tests/fixtures/voice/tools/voice-fixtures-check.py",
@@ -26,6 +27,12 @@
       "how": "Texto conocido de la ley: el 6 de enero, 19 de marzo, 29 de junio, 15 de agosto, 12 de octubre, 1 y 11 de noviembre, la Ascensión, el Corpus Christi y el Sagrado Corazón, si no caen en lunes, se trasladan al lunes siguiente (también si caen en domingo). [por confirmar con la fuente oficial antes de aprobar]"
     },
     {
+      "what": "Ley 2578 del 01-06-2026: el 9 de julio, Nuestra Señora del Rosario de Chiquinquirá, con las disposiciones de la Ley 51 de 1983 (trasladable al lunes); rige desde su promulgación, así que cuenta desde 2026",
+      "url": "(no consultada hoy: sin red)",
+      "consulted": "03-11-2026, por la Enmienda 2 (E2-1) del contrato y la nota de app/Services/Telephony/ColombianHolidays.php (B8-a), que cita la noticia del Ministerio del Interior del 05-06-2026 y la sinopsis del Centro de Estudios Regulatorios",
+      "how": "POR CONFIRMAR: la ley está demandada ante la Corte Constitucional. Tratar el día como festivo solo restringe más las salientes; si la Corte la tumba, se quita en un commit (E2-1)."
+    },
+    {
       "what": "Fechas de Pascua 2026–2028",
       "url": "(cálculo)",
       "consulted": "03-11-2026",
@@ -34,7 +41,10 @@
   ],
   "syntheticData": "Ningún dato real: SIDs, ids, secretos, tokens, URLs (.test) y teléfonos (+57 300 000 00xx, +57 601 000 00xx) inventados.",
   "approvedByOwner": false,
-  "approvalNote": "Propuesta para la aprobación del propietario (D8-15, P-13). Hasta entonces, ColombianHolidays se prueba contra esta lista y la política no se enciende para contactos (fase 4b).",
+  "approvalNote": "Propuesta para la aprobación del propietario (D8-15, P-13). Hasta entonces, ColombianHolidays se prueba contra esta lista y la política no se enciende para contactos (fase 4b). Son 19 festivos por año con la Ley 2578 de 2026 (E2-1), el de Chiquinquirá «por confirmar (Ley 2578/2026, demandada)».",
+  "pendingConfirmation": {
+    "Virgen de Chiquinquirá": "por confirmar (Ley 2578/2026, demandada ante la Corte Constitucional; E2-1)"
+  },
   "timezone": "America/Bogota (UTC−05:00 todo el año, sin horario de verano desde 1993)",
   "rule": {
     "fixed": [
@@ -53,6 +63,9 @@
       "10-12 Día de la Raza",
       "11-01 Todos los Santos",
       "11-11 Independencia de Cartagena"
+    ],
+    "emilianiLey2578": [
+      "07-09 Virgen de Chiquinquirá, desde 2026 (Ley 2578 de 2026, por confirmar: demandada)"
     ],
     "easter": [
       "Pascua − 3 Jueves Santo",
@@ -79,7 +92,8 @@
         "name": "Año Nuevo",
         "rule": "fijo",
         "baseDate": null,
-        "moved": false
+        "moved": false,
+        "pendingConfirmation": null
       },
       {
         "date": "2026-01-12",
@@ -87,7 +101,8 @@
         "name": "Reyes Magos",
         "rule": "emiliani",
         "baseDate": "2026-01-06",
-        "moved": true
+        "moved": true,
+        "pendingConfirmation": null
       },
       {
         "date": "2026-03-23",
@@ -95,7 +110,8 @@
         "name": "San José",
         "rule": "emiliani",
         "baseDate": "2026-03-19",
-        "moved": true
+        "moved": true,
+        "pendingConfirmation": null
       },
       {
         "date": "2026-04-02",
@@ -103,7 +119,8 @@
         "name": "Jueves Santo",
         "rule": "pascua",
         "baseDate": null,
-        "moved": false
+        "moved": false,
+        "pendingConfirmation": null
       },
       {
         "date": "2026-04-03",
@@ -111,7 +128,8 @@
         "name": "Viernes Santo",
         "rule": "pascua",
         "baseDate": null,
-        "moved": false
+        "moved": false,
+        "pendingConfirmation": null
       },
       {
         "date": "2026-05-01",
@@ -119,7 +137,8 @@
         "name": "Día del Trabajo",
         "rule": "fijo",
         "baseDate": null,
-        "moved": false
+        "moved": false,
+        "pendingConfirmation": null
       },
       {
         "date": "2026-05-18",
@@ -127,7 +146,8 @@
         "name": "Ascensión del Señor",
         "rule": "pascua-emiliani",
         "baseDate": "2026-05-14",
-        "moved": true
+        "moved": true,
+        "pendingConfirmation": null
       },
       {
         "date": "2026-06-08",
@@ -135,7 +155,8 @@
         "name": "Corpus Christi",
         "rule": "pascua-emiliani",
         "baseDate": "2026-06-04",
-        "moved": true
+        "moved": true,
+        "pendingConfirmation": null
       },
       {
         "date": "2026-06-15",
@@ -143,7 +164,8 @@
         "name": "Sagrado Corazón de Jesús",
         "rule": "pascua-emiliani",
         "baseDate": "2026-06-12",
-        "moved": true
+        "moved": true,
+        "pendingConfirmation": null
       },
       {
         "date": "2026-06-29",
@@ -151,7 +173,17 @@
         "name": "San Pedro y San Pablo",
         "rule": "emiliani",
         "baseDate": "2026-06-29",
-        "moved": false
+        "moved": false,
+        "pendingConfirmation": null
+      },
+      {
+        "date": "2026-07-13",
+        "weekday": "lunes",
+        "name": "Virgen de Chiquinquirá",
+        "rule": "emiliani",
+        "baseDate": "2026-07-09",
+        "moved": true,
+        "pendingConfirmation": "por confirmar (Ley 2578/2026, demandada ante la Corte Constitucional; E2-1)"
       },
       {
         "date": "2026-07-20",
@@ -159,7 +191,8 @@
         "name": "Día de la Independencia",
         "rule": "fijo",
         "baseDate": null,
-        "moved": false
+        "moved": false,
+        "pendingConfirmation": null
       },
       {
         "date": "2026-08-07",
@@ -167,7 +200,8 @@
         "name": "Batalla de Boyacá",
         "rule": "fijo",
         "baseDate": null,
-        "moved": false
+        "moved": false,
+        "pendingConfirmation": null
       },
       {
         "date": "2026-08-17",
@@ -175,7 +209,8 @@
         "name": "Asunción de la Virgen",
         "rule": "emiliani",
         "baseDate": "2026-08-15",
-        "moved": true
+        "moved": true,
+        "pendingConfirmation": null
       },
       {
         "date": "2026-10-12",
@@ -183,7 +218,8 @@
         "name": "Día de la Raza",
         "rule": "emiliani",
         "baseDate": "2026-10-12",
-        "moved": false
+        "moved": false,
+        "pendingConfirmation": null
       },
       {
         "date": "2026-11-02",
@@ -191,7 +227,8 @@
         "name": "Todos los Santos",
         "rule": "emiliani",
         "baseDate": "2026-11-01",
-        "moved": true
+        "moved": true,
+        "pendingConfirmation": null
       },
       {
         "date": "2026-11-16",
@@ -199,7 +236,8 @@
         "name": "Independencia de Cartagena",
         "rule": "emiliani",
         "baseDate": "2026-11-11",
-        "moved": true
+        "moved": true,
+        "pendingConfirmation": null
       },
       {
         "date": "2026-12-08",
@@ -207,7 +245,8 @@
         "name": "Inmaculada Concepción",
         "rule": "fijo",
         "baseDate": null,
-        "moved": false
+        "moved": false,
+        "pendingConfirmation": null
       },
       {
         "date": "2026-12-25",
@@ -215,7 +254,8 @@
         "name": "Navidad",
         "rule": "fijo",
         "baseDate": null,
-        "moved": false
+        "moved": false,
+        "pendingConfirmation": null
       }
     ],
     "2027": [
@@ -225,7 +265,8 @@
         "name": "Año Nuevo",
         "rule": "fijo",
         "baseDate": null,
-        "moved": false
+        "moved": false,
+        "pendingConfirmation": null
       },
       {
         "date": "2027-01-11",
@@ -233,7 +274,8 @@
         "name": "Reyes Magos",
         "rule": "emiliani",
         "baseDate": "2027-01-06",
-        "moved": true
+        "moved": true,
+        "pendingConfirmation": null
       },
       {
         "date": "2027-03-22",
@@ -241,7 +283,8 @@
         "name": "San José",
         "rule": "emiliani",
         "baseDate": "2027-03-19",
-        "moved": true
+        "moved": true,
+        "pendingConfirmation": null
       },
       {
         "date": "2027-03-25",
@@ -249,7 +292,8 @@
         "name": "Jueves Santo",
         "rule": "pascua",
         "baseDate": null,
-        "moved": false
+        "moved": false,
+        "pendingConfirmation": null
       },
       {
         "date": "2027-03-26",
@@ -257,7 +301,8 @@
         "name": "Viernes Santo",
         "rule": "pascua",
         "baseDate": null,
-        "moved": false
+        "moved": false,
+        "pendingConfirmation": null
       },
       {
         "date": "2027-05-01",
@@ -265,7 +310,8 @@
         "name": "Día del Trabajo",
         "rule": "fijo",
         "baseDate": null,
-        "moved": false
+        "moved": false,
+        "pendingConfirmation": null
       },
       {
         "date": "2027-05-10",
@@ -273,7 +319,8 @@
         "name": "Ascensión del Señor",
         "rule": "pascua-emiliani",
         "baseDate": "2027-05-06",
-        "moved": true
+        "moved": true,
+        "pendingConfirmation": null
       },
       {
         "date": "2027-05-31",
@@ -281,7 +328,8 @@
         "name": "Corpus Christi",
         "rule": "pascua-emiliani",
         "baseDate": "2027-05-27",
-        "moved": true
+        "moved": true,
+        "pendingConfirmation": null
       },
       {
         "date": "2027-06-07",
@@ -289,7 +337,8 @@
         "name": "Sagrado Corazón de Jesús",
         "rule": "pascua-emiliani",
         "baseDate": "2027-06-04",
-        "moved": true
+        "moved": true,
+        "pendingConfirmation": null
       },
       {
         "date": "2027-07-05",
@@ -297,7 +346,17 @@
         "name": "San Pedro y San Pablo",
         "rule": "emiliani",
         "baseDate": "2027-06-29",
-        "moved": true
+        "moved": true,
+        "pendingConfirmation": null
+      },
+      {
+        "date": "2027-07-12",
+        "weekday": "lunes",
+        "name": "Virgen de Chiquinquirá",
+        "rule": "emiliani",
+        "baseDate": "2027-07-09",
+        "moved": true,
+        "pendingConfirmation": "por confirmar (Ley 2578/2026, demandada ante la Corte Constitucional; E2-1)"
       },
       {
         "date": "2027-07-20",
@@ -305,7 +364,8 @@
         "name": "Día de la Independencia",
         "rule": "fijo",
         "baseDate": null,
-        "moved": false
+        "moved": false,
+        "pendingConfirmation": null
       },
       {
         "date": "2027-08-07",
@@ -313,7 +373,8 @@
         "name": "Batalla de Boyacá",
         "rule": "fijo",
         "baseDate": null,
-        "moved": false
+        "moved": false,
+        "pendingConfirmation": null
       },
       {
         "date": "2027-08-16",
@@ -321,7 +382,8 @@
         "name": "Asunción de la Virgen",
         "rule": "emiliani",
         "baseDate": "2027-08-15",
-        "moved": true
+        "moved": true,
+        "pendingConfirmation": null
       },
       {
         "date": "2027-10-18",
@@ -329,7 +391,8 @@
         "name": "Día de la Raza",
         "rule": "emiliani",
         "baseDate": "2027-10-12",
-        "moved": true
+        "moved": true,
+        "pendingConfirmation": null
       },
       {
         "date": "2027-11-01",
@@ -337,7 +400,8 @@
         "name": "Todos los Santos",
         "rule": "emiliani",
         "baseDate": "2027-11-01",
-        "moved": false
+        "moved": false,
+        "pendingConfirmation": null
       },
       {
         "date": "2027-11-15",
@@ -345,7 +409,8 @@
         "name": "Independencia de Cartagena",
         "rule": "emiliani",
         "baseDate": "2027-11-11",
-        "moved": true
+        "moved": true,
+        "pendingConfirmation": null
       },
       {
         "date": "2027-12-08",
@@ -353,7 +418,8 @@
         "name": "Inmaculada Concepción",
         "rule": "fijo",
         "baseDate": null,
-        "moved": false
+        "moved": false,
+        "pendingConfirmation": null
       },
       {
         "date": "2027-12-25",
@@ -361,7 +427,8 @@
         "name": "Navidad",
         "rule": "fijo",
         "baseDate": null,
-        "moved": false
+        "moved": false,
+        "pendingConfirmation": null
       }
     ],
     "2028": [
@@ -371,7 +438,8 @@
         "name": "Año Nuevo",
         "rule": "fijo",
         "baseDate": null,
-        "moved": false
+        "moved": false,
+        "pendingConfirmation": null
       },
       {
         "date": "2028-01-10",
@@ -379,7 +447,8 @@
         "name": "Reyes Magos",
         "rule": "emiliani",
         "baseDate": "2028-01-06",
-        "moved": true
+        "moved": true,
+        "pendingConfirmation": null
       },
       {
         "date": "2028-03-20",
@@ -387,7 +456,8 @@
         "name": "San José",
         "rule": "emiliani",
         "baseDate": "2028-03-19",
-        "moved": true
+        "moved": true,
+        "pendingConfirmation": null
       },
       {
         "date": "2028-04-13",
@@ -395,7 +465,8 @@
         "name": "Jueves Santo",
         "rule": "pascua",
         "baseDate": null,
-        "moved": false
+        "moved": false,
+        "pendingConfirmation": null
       },
       {
         "date": "2028-04-14",
@@ -403,7 +474,8 @@
         "name": "Viernes Santo",
         "rule": "pascua",
         "baseDate": null,
-        "moved": false
+        "moved": false,
+        "pendingConfirmation": null
       },
       {
         "date": "2028-05-01",
@@ -411,7 +483,8 @@
         "name": "Día del Trabajo",
         "rule": "fijo",
         "baseDate": null,
-        "moved": false
+        "moved": false,
+        "pendingConfirmation": null
       },
       {
         "date": "2028-05-29",
@@ -419,7 +492,8 @@
         "name": "Ascensión del Señor",
         "rule": "pascua-emiliani",
         "baseDate": "2028-05-25",
-        "moved": true
+        "moved": true,
+        "pendingConfirmation": null
       },
       {
         "date": "2028-06-19",
@@ -427,7 +501,8 @@
         "name": "Corpus Christi",
         "rule": "pascua-emiliani",
         "baseDate": "2028-06-15",
-        "moved": true
+        "moved": true,
+        "pendingConfirmation": null
       },
       {
         "date": "2028-06-26",
@@ -435,7 +510,8 @@
         "name": "Sagrado Corazón de Jesús",
         "rule": "pascua-emiliani",
         "baseDate": "2028-06-23",
-        "moved": true
+        "moved": true,
+        "pendingConfirmation": null
       },
       {
         "date": "2028-07-03",
@@ -443,7 +519,17 @@
         "name": "San Pedro y San Pablo",
         "rule": "emiliani",
         "baseDate": "2028-06-29",
-        "moved": true
+        "moved": true,
+        "pendingConfirmation": null
+      },
+      {
+        "date": "2028-07-10",
+        "weekday": "lunes",
+        "name": "Virgen de Chiquinquirá",
+        "rule": "emiliani",
+        "baseDate": "2028-07-09",
+        "moved": true,
+        "pendingConfirmation": "por confirmar (Ley 2578/2026, demandada ante la Corte Constitucional; E2-1)"
       },
       {
         "date": "2028-07-20",
@@ -451,7 +537,8 @@
         "name": "Día de la Independencia",
         "rule": "fijo",
         "baseDate": null,
-        "moved": false
+        "moved": false,
+        "pendingConfirmation": null
       },
       {
         "date": "2028-08-07",
@@ -459,7 +546,8 @@
         "name": "Batalla de Boyacá",
         "rule": "fijo",
         "baseDate": null,
-        "moved": false
+        "moved": false,
+        "pendingConfirmation": null
       },
       {
         "date": "2028-08-21",
@@ -467,7 +555,8 @@
         "name": "Asunción de la Virgen",
         "rule": "emiliani",
         "baseDate": "2028-08-15",
-        "moved": true
+        "moved": true,
+        "pendingConfirmation": null
       },
       {
         "date": "2028-10-16",
@@ -475,7 +564,8 @@
         "name": "Día de la Raza",
         "rule": "emiliani",
         "baseDate": "2028-10-12",
-        "moved": true
+        "moved": true,
+        "pendingConfirmation": null
       },
       {
         "date": "2028-11-06",
@@ -483,7 +573,8 @@
         "name": "Todos los Santos",
         "rule": "emiliani",
         "baseDate": "2028-11-01",
-        "moved": true
+        "moved": true,
+        "pendingConfirmation": null
       },
       {
         "date": "2028-11-13",
@@ -491,7 +582,8 @@
         "name": "Independencia de Cartagena",
         "rule": "emiliani",
         "baseDate": "2028-11-11",
-        "moved": true
+        "moved": true,
+        "pendingConfirmation": null
       },
       {
         "date": "2028-12-08",
@@ -499,7 +591,8 @@
         "name": "Inmaculada Concepción",
         "rule": "fijo",
         "baseDate": null,
-        "moved": false
+        "moved": false,
+        "pendingConfirmation": null
       },
       {
         "date": "2028-12-25",
@@ -507,14 +600,15 @@
         "name": "Navidad",
         "rule": "fijo",
         "baseDate": null,
-        "moved": false
+        "moved": false,
+        "pendingConfirmation": null
       }
     ]
   },
   "decisions": {},
   "counts": {
-    "isHoliday": 77,
-    "total": 77
+    "isHoliday": 85,
+    "total": 85
   },
   "isHoliday": [
     {
@@ -635,6 +729,32 @@
       "expected": {
         "holiday": false,
         "why": "trasladado al lunes (Ley 51 de 1983)"
+      }
+    },
+    {
+      "name": "isHoliday · date · Virgen de Chiquinquirá 2026: se celebra el lunes 2026-07-13",
+      "kind": "date",
+      "contractRef": "D8-15, E2-1",
+      "basis": "ley",
+      "date": "2026-07-13",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": true,
+        "name": "Virgen de Chiquinquirá",
+        "pendingConfirmation": "por confirmar (Ley 2578/2026, demandada ante la Corte Constitucional; E2-1)"
+      }
+    },
+    {
+      "name": "isHoliday · date · Virgen de Chiquinquirá 2026: su fecha de origen 2026-07-09 (jueves) no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15, E2-1",
+      "basis": "ley",
+      "date": "2026-07-09",
+      "weekday": "jueves",
+      "expected": {
+        "holiday": false,
+        "pendingConfirmation": "por confirmar (Ley 2578/2026, demandada ante la Corte Constitucional; E2-1)",
+        "why": "trasladado al lunes (Ley 51 de 1983, por la Ley 2578 de 2026)"
       }
     },
     {
@@ -854,6 +974,32 @@
       }
     },
     {
+      "name": "isHoliday · date · Virgen de Chiquinquirá 2027: se celebra el lunes 2027-07-12",
+      "kind": "date",
+      "contractRef": "D8-15, E2-1",
+      "basis": "ley",
+      "date": "2027-07-12",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": true,
+        "name": "Virgen de Chiquinquirá",
+        "pendingConfirmation": "por confirmar (Ley 2578/2026, demandada ante la Corte Constitucional; E2-1)"
+      }
+    },
+    {
+      "name": "isHoliday · date · Virgen de Chiquinquirá 2027: su fecha de origen 2027-07-09 (viernes) no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15, E2-1",
+      "basis": "ley",
+      "date": "2027-07-09",
+      "weekday": "viernes",
+      "expected": {
+        "holiday": false,
+        "pendingConfirmation": "por confirmar (Ley 2578/2026, demandada ante la Corte Constitucional; E2-1)",
+        "why": "trasladado al lunes (Ley 51 de 1983, por la Ley 2578 de 2026)"
+      }
+    },
+    {
       "name": "isHoliday · date · Asunción de la Virgen 2027: se celebra el lunes 2027-08-16",
       "kind": "date",
       "contractRef": "D8-15",
@@ -1067,6 +1213,32 @@
       "expected": {
         "holiday": false,
         "why": "trasladado al lunes (Ley 51 de 1983)"
+      }
+    },
+    {
+      "name": "isHoliday · date · Virgen de Chiquinquirá 2028: se celebra el lunes 2028-07-10",
+      "kind": "date",
+      "contractRef": "D8-15, E2-1",
+      "basis": "ley",
+      "date": "2028-07-10",
+      "weekday": "lunes",
+      "expected": {
+        "holiday": true,
+        "name": "Virgen de Chiquinquirá",
+        "pendingConfirmation": "por confirmar (Ley 2578/2026, demandada ante la Corte Constitucional; E2-1)"
+      }
+    },
+    {
+      "name": "isHoliday · date · Virgen de Chiquinquirá 2028: su fecha de origen 2028-07-09 (domingo) no es festivo",
+      "kind": "date",
+      "contractRef": "D8-15, E2-1",
+      "basis": "ley",
+      "date": "2028-07-09",
+      "weekday": "domingo",
+      "expected": {
+        "holiday": false,
+        "pendingConfirmation": "por confirmar (Ley 2578/2026, demandada ante la Corte Constitucional; E2-1)",
+        "why": "trasladado al lunes (Ley 51 de 1983, por la Ley 2578 de 2026)"
       }
     },
     {
@@ -1424,6 +1596,33 @@
         "bogotaTime": "00:00:00",
         "holiday": true,
         "name": "Año Nuevo"
+      }
+    },
+    {
+      "name": "isHoliday · instant · Virgen de Chiquinquirá 2026 (E2-1, por confirmar): el lunes 13-07 a las 00:00 de Bogotá (05:00 UTC) ya es festivo",
+      "kind": "instant",
+      "contractRef": "D8-15, E2-1",
+      "basis": "ley",
+      "at": "2026-07-13T05:00:00Z",
+      "expected": {
+        "bogotaDate": "2026-07-13",
+        "bogotaTime": "00:00:00",
+        "holiday": true,
+        "name": "Virgen de Chiquinquirá",
+        "pendingConfirmation": "por confirmar (Ley 2578/2026, demandada ante la Corte Constitucional; E2-1)"
+      }
+    },
+    {
+      "name": "isHoliday · instant · Virgen de Chiquinquirá 2026: el domingo 12-07 a las 23:59:59 de Bogotá (04:59:59 UTC del 13) todavía no",
+      "kind": "instant",
+      "contractRef": "D8-15, E2-1",
+      "basis": "ley",
+      "at": "2026-07-13T04:59:59Z",
+      "expected": {
+        "bogotaDate": "2026-07-12",
+        "bogotaTime": "23:59:59",
+        "holiday": false,
+        "pendingConfirmation": "por confirmar (Ley 2578/2026, demandada ante la Corte Constitucional; E2-1)"
       }
     },
     {

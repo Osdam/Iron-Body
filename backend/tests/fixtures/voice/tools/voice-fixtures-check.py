@@ -372,6 +372,8 @@ def holidays_of(y, v=frozenset()):
     e = easter_gauss(y, v)
     fixed = [(1, 1), (5, 1), (7, 20), (8, 7), (12, 8), (12, 25)]
     moving = [(1, 6), (3, 19), (6, 29), (8, 15), (10, 12), (11, 1), (11, 11)]
+    if y >= 2026 and "ho_no_ley_2578" not in v:
+        moving.append((7, 9))      # E2-1: Ley 2578 de 2026, Virgen de Chiquinquirá, trasladable (por confirmar: demandada)
     out = {dt.date(y, m, d) for m, d in fixed}
     out |= {monday_on_or_after(dt.date(y, m, d), v) for m, d in moving}
     hw = 1 if "ho_holy_week_off_by_one" in v else 0
@@ -394,8 +396,12 @@ def derive_holidays(doc, v=frozenset()):
         listed = [r["date"] for r in rows]
         if "ho_" not in "".join(v) and listed != yrs[y]:
             bad(f"holidays: la lista de {y} no es la de la regla: {sorted(set(listed) ^ set(yrs[y]))}")
+        if not v and len(rows) != 19:
+            bad(f"holidays: {y} tiene {len(rows)} festivos y E2-1 dice 19")
         for r in rows:
             dd = dt.date.fromisoformat(r["date"])
+            if not v and (r.get("pendingConfirmation") is not None) != (r["name"] == "Virgen de Chiquinquirá"):
+                bad(f"holidays: la marca «por confirmar» solo va en Chiquinquirá ({r['date']})")
             if r["weekday"] != ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"][dd.weekday()]:
                 bad(f"holidays: día de la semana mal en {r['date']}")
             if r["rule"] in ("emiliani", "pascua-emiliani") and dd.weekday() != 0 and not v:
@@ -1253,6 +1259,15 @@ foreach ($in['chain'] as $i => $c) {
     $k = hash_hmac('sha256', $c[2], $clave($c[1]), true);
     $out['chain'][$i] = [$m, hash('sha256', $m), hash_hmac('sha256', $m, $k)];
 }
+$out['b8holidays'] = null;
+$b8 = $root.'/app/Services/Telephony/ColombianHolidays.php';
+if (is_file($b8)) {
+    require_once $b8;
+    $out['b8holidays'] = ['years' => [], 'dates' => [], 'instants' => []];
+    foreach (['2026', '2027', '2028'] as $y) { $out['b8holidays']['years'][$y] = array_keys(App\Services\Telephony\ColombianHolidays::forYear((int) $y)); }
+    foreach ($in['holidayDates'] as $i => $d) { $out['b8holidays']['dates'][$i] = App\Services\Telephony\ColombianHolidays::isHolidayDate($d); }
+    foreach ($in['holidayInstants'] as $i => $t) { $out['b8holidays']['instants'][$i] = App\Services\Telephony\ColombianHolidays::isHoliday(new DateTimeImmutable($t)); }
+}
 $out['subkey'] = [];
 foreach ($in['subkey'] as $i => $c) { $out['subkey'][$i] = bin2hex(hash_hmac('sha256', $c[1], $clave($c[0]), true)); }
 echo json_encode($out, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
@@ -1280,7 +1295,9 @@ def php_check(docs):
     payload = {"canon": canon_in, "el": [[c["rawBody"], c["header"], c["secret"], c["now"]] for c in ev],
                "env": [c["rawBody"] for c in eb], "hmac": hm, "tw": [[t[0], t[1]] for t in tw], "easter": ["2026", "2027", "2028"],
                "chain": [[c["entry"], vc["keys"]["appKeyBase64"], vc["keys"]["chainLabel"]] for c in vc["chain"]],
-               "subkey": [[c["appKey"], c["label"]] for c in vc["subkey"]]}
+               "subkey": [[c["appKey"], c["label"]] for c in vc["subkey"]],
+               "holidayDates": [c["date"] for c in docs["holidays-co-2026-2028.json"]["isHoliday"] if c["kind"] == "date"],
+               "holidayInstants": [c["at"] for c in docs["holidays-co-2026-2028.json"]["isHoliday"] if c["kind"] == "instant"]}
     with tempfile.TemporaryDirectory() as tmp:
         sp, ip = Path(tmp) / "voice-php-check.php", Path(tmp) / "in.json"
         sp.write_text(PHP_SRC)
@@ -1365,13 +1382,35 @@ def php_check(docs):
             if not ok:
                 fails += 1
                 bad(f"--php: la relación «{c['name']}» ya no da las huellas del fixture")
+    hdoc = docs["holidays-co-2026-2028.json"]
+    b8n = 0
+    if res.get("b8holidays"):
+        bh = res["b8holidays"]
+        for y in ("2026", "2027", "2028"):
+            b8n += 1
+            if bh["years"][y] != [r["date"] for r in hdoc["years"][y]]:
+                fails += 1
+                bad(f"--php: ColombianHolidays::forYear({y}) de B8 no da los festivos del fixture")
+        dcases = [c for c in hdoc["isHoliday"] if c["kind"] == "date"]
+        icases = [c for c in hdoc["isHoliday"] if c["kind"] == "instant"]
+        for c, got in zip(dcases, bh["dates"]):
+            b8n += 1
+            if got != c["expected"]["holiday"]:
+                fails += 1
+                bad(f"--php: ColombianHolidays::isHolidayDate de B8 discrepa en «{c['name']}»")
+        for c, got in zip(icases, bh["instants"]):
+            b8n += 1
+            if got != c["expected"]["holiday"]:
+                fails += 1
+                bad(f"--php: ColombianHolidays::isHoliday de B8 discrepa en «{c['name']}»")
     hol = docs["holidays-co-2026-2028.json"]["easter"]
     for y in ("2026", "2027", "2028"):
         if res["easter"][y] != hol[y]:
             fails += 1
             bad(f"--php: easter_days({y}) da {res['easter'][y]} y el fixture {hol[y]}")
     return {"canonicalHash+perfiles": len(canon_in), "elevenlabsVerify": len(ev), "envelope": len(eb), "huellasTelefono": len(hm),
-            "firmasTwilio": len(tw), "pascua": 3, "cadenaVoz": len(vc["chain"]) + len(vc["subkey"]), "compiladorReal": compiled, "fallos": fails, "php": subprocess.run(["php", "-v"], capture_output=True, text=True).stdout.split("\n")[0]}
+            "firmasTwilio": len(tw), "pascua": 3, "cadenaVoz": len(vc["chain"]) + len(vc["subkey"]), "compiladorReal": compiled,
+            "festivosB8": b8n if res.get("b8holidays") else "sin ColombianHolidays en el árbol", "fallos": fails, "php": subprocess.run(["php", "-v"], capture_output=True, text=True).stdout.split("\n")[0]}
 
 
 # ── SDK de ElevenLabs (--sdk-python) ────────────────────────────────────────
@@ -1428,7 +1467,8 @@ VARIANTS = {
                                       "tw_ignore_body_hash", "tw_no_port_tolerance", "tw_sha256", "tw_no_rtrim"],
     "elevenlabs-webhook-vectors.json": ["el_no_t_prefix", "el_le_tolerance", "el_no_future", "el_case_sensitive", "el_first_v0_only",
                                         "el_reserialize", "el_tolerance_300"],
-    "holidays-co-2026-2028.json": ["ho_no_emiliani", "ho_monday_moves_too", "ho_easter_no_move", "ho_holy_week_off_by_one", "ho_easter_week_late"],
+    "holidays-co-2026-2028.json": ["ho_no_emiliani", "ho_monday_moves_too", "ho_easter_no_move", "ho_holy_week_off_by_one", "ho_easter_week_late",
+                                   "ho_no_ley_2578"],
     "policy-tables.json": ["sc_utc", "sc_closed_interval", "sc_saturday_19", "sc_sunday_ok", "sc_ignore_holidays", "sc_own_invalid_open",
                            "fr_count_canceled", "fr_count_inbound", "fr_utc_day", "fr_rolling_as_week", "fr_week_sunday",
                            "co_no_four_eyes", "co_recorded_ok", "co_tie_low_id", "co_first_event", "co_lead_counts",

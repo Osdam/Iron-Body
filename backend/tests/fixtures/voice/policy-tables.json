@@ -67,7 +67,7 @@
     "DF-P15": "La huella de voz no normaliza: recibe un E.164 estricto (^\\+[1-9][0-9]{7,14}$ con D, el de PhoneFingerprint) y lanza con cualquier otra cosa; normalizar es de quien llama (StudioCanaryPhone para Colombia)."
   },
   "counts": {
-    "scheduleLegal": 20,
+    "scheduleLegal": 22,
     "scheduleOwn": 11,
     "frequency": 19,
     "consent": 13,
@@ -76,7 +76,7 @@
     "costReservation": 17,
     "brake": 16,
     "phoneHash": 7,
-    "total": 134
+    "total": 136
   },
   "scheduleLegal": [
     {
@@ -325,6 +325,36 @@
         "outsideHours": false,
         "holiday": true,
         "allowed": false
+      }
+    },
+    {
+      "name": "scheduleLegal · legal · lunes 13-07-2026, Virgen de Chiquinquirá (Ley 2578/2026, por confirmar: E2-1), a las 10:00: festivo; tratarlo así solo restringe más",
+      "kind": "legal",
+      "contractRef": "D8-15, D8-18 (Ley 2300 art. 3), E2-1",
+      "basis": "ley",
+      "at": "2026-07-13T15:00:00Z",
+      "expected": {
+        "bogotaDate": "2026-07-13",
+        "bogotaTime": "10:00:00",
+        "weekday": "lunes",
+        "outsideHours": false,
+        "holiday": true,
+        "allowed": false
+      }
+    },
+    {
+      "name": "scheduleLegal · legal · jueves 09-07-2026, la fecha de origen de Chiquinquirá (trasladada al lunes), a las 10:00: no es festivo",
+      "kind": "legal",
+      "contractRef": "D8-15, D8-18 (Ley 2300 art. 3), E2-1",
+      "basis": "ley",
+      "at": "2026-07-09T15:00:00Z",
+      "expected": {
+        "bogotaDate": "2026-07-09",
+        "bogotaTime": "10:00:00",
+        "weekday": "jueves",
+        "outsideHours": false,
+        "holiday": false,
+        "allowed": true
       }
     },
     {

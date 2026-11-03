@@ -1,4 +1,4 @@
-# Fixtures de voz y telefonía del Hito 8 (TEST8-a, paso 1, con la Enmienda 1)
+# Fixtures de voz y telefonía del Hito 8 (TEST8-a, paso 1, con las Enmiendas 1 y 2)
 
 Escritos **desde el contrato y antes del código**: `docs/ultron-studio/ULTRON_STUDIO_H8_CONTRACT.md`, congelado el 03-11-2026 (commit `57bab8a`), y su auditoría `ULTRON_STUDIO_H8_VOICE_AUDIT.md`. Desde el 03-11-2026 aplican también la **Enmienda 1** (commit `75a6384`):
 - **E1-1:** las herramientas responden en `dialing` o `active`, y la primera pasa una saliente a `active`;
@@ -102,17 +102,17 @@ Después, una lista de casos por sección.
 | `elevenlabs-webhook-vectors.json` | B8 `ElevenLabsEventVerifier` | `verify` 27 | D8-16, D8-3, D8-5 |
 | `elevenlabs-webhook-bodies.json` | B8 webhooks, herramientas y guarda; OPS8 | `postCall` 16, `guard` 9, `initiation` 11, `tools` 21, `routeRules` 11 | D8-8, D8-10, D8-11, D8-13, D8-16, D8-17, D8-19, E1-1, E1-2, E1-3 |
 | `twilio-webhook-bodies.json` | B8 `usage-trigger` y conciliación; OPS8 | `usageTrigger` 7, `callStatus` 8, `callsPage` 1 (9 llamadas) | D8-16, D8-19, D8-21, E1-2 |
-| `holidays-co-2026-2028.json` | B8 `ColombianHolidays` | `years` (3 × 18) e `isHoliday` 77 | D8-15 (Ley 51 de 1983) |
-| `policy-tables.json` | B8 políticas y sus tablas, `VoiceCostGuard`, freno | `scheduleLegal` 20, `scheduleOwn` 11, `frequency` 19, `consent` 13, `exclusions` 16, `inboundPolicy` 15, `costReservation` 17, `brake` 16, `phoneHash` 7 | D8-11, D8-15, D8-17, D8-18, D8-19, E1-1, E1-2 |
+| `holidays-co-2026-2028.json` | B8 `ColombianHolidays` | `years` (3 × 19) e `isHoliday` 85 | D8-15 (Ley 51 de 1983), E2-1 (Ley 2578 de 2026) |
+| `policy-tables.json` | B8 políticas y sus tablas, `VoiceCostGuard`, freno | `scheduleLegal` 22, `scheduleOwn` 11, `frequency` 19, `consent` 13, `exclusions` 16, `inboundPolicy` 15, `costReservation` 17, `brake` 16, `phoneHash` 7 | D8-11, D8-15, D8-17, D8-18, D8-19, E1-1, E1-2 |
 | `state-transitions.json` | DB8 (disparador), B8 | `allowed` 25, `matrix` 288 (12 × 12 por dirección), `insert` 24, `sequences` 19, `columns` 25, `eventDedupe` 5 | D8-13, D8-8, E1-1, E1-2 |
 | `compiler-cases.json` | S8 `StudioVoiceCompiler`; B8 `VoiceAgentSpec` | `compile` 83 (13 válidas + 70 negativas), `capClamp` 11, `hashRelations` 15, `canonicalHash` 9 | D8-6, D8-7, D8-11, D8-14, D8-15, D8-17, E1-3, E1-5…E1-9 |
 | `outbound-gate-cases.json` | B8 `OutboundPolicy` y `PlaceOutboundVoiceCall` | `decide` 43, `whatsappGuard` 7, `job` 22 | D8-12, D8-9, D8-5, D8-13, D8-19, D8-21 |
 | **`voice-chain-vectors.json`** (nuevo) | S8-b `VoicePublishedConfig::signatureFor()` y su lector | `chain` 5, `subkey` 3, `verify` 27 | E1-4, D8-8, D8-9, D8-20 |
 
-**Total: 978 casos.** Por base:
+**Total: 988 casos.** Por base:
 - `contrato`: 443;
 - `decision-fixture`: 392 (163 de `state-transitions.json`, 98 de ellos de la matriz);
-- `ley`: 95;
+- `ley`: 105;
 - `oficial`: 32;
 - `supuesto-lead`: 16.
 
@@ -147,6 +147,19 @@ Después, una lista de casos por sección.
   - `chain`: cada `entry` → su `message` (JSON canónico), `entryHash` (sha256), `signature` (HMAC-SHA256 con la subclave) y el enlace `prev_hash`.
   - `subkey`: la subclave de cada APP_KEY y etiqueta.
   - `verify`: `message`, `signature` y `previous` (`{seq, entryHash}` o `null`) → `result` (`ok`, `malformed`, `not_canonical`, `signature_malformed`, `signature_mismatch`, `seq_gap` o `chain_broken`).
+
+## Lo que cambió con la Enmienda 2 (03-11-2026)
+
+- **E2-1.** La Ley 2578 del 01-06-2026 añade la Virgen de Chiquinquirá: el 9 de julio, trasladable al lunes como los de la Ley 51 de 1983, desde 2026. Cae el 13-07-2026, el 12-07-2027 y el 10-07-2028, así que hay **19 festivos por año**.
+  - En `years`, sus filas llevan `pendingConfirmation` = «por confirmar (Ley 2578/2026, demandada ante la Corte Constitucional; E2-1)»; las demás, `null`.
+  - En `isHoliday` hay 8 casos nuevos: los tres lunes, sus tres fechas de origen y dos instantes en el borde de medianoche de Bogotá.
+  - En `policy-tables.json` hay 2 casos nuevos de `scheduleLegal`: el lunes festivo y el jueves 9. Ningún caso anterior caía en esos días.
+  - Tratar el día como festivo solo restringe más las salientes. Si la Corte tumba la ley, se quita en un commit: la regla, los 8 casos y los 2 de horario.
+- **E2-7.** Confirma la cadena de voz tal como está en `voice-chain-vectors.json`: sin prefijo y con `prev_hash` = sha256 del mensaje anterior. Cierra Q-17 y Q-18.
+- **Comprobador.**
+  - Exige 19 festivos por año y la marca solo en Chiquinquirá.
+  - Variante nueva `ho_no_ley_2578` (cazada).
+  - Con `--php` cruza además con `app/Services/Telephony/ColombianHolidays.php` de B8-a: `forYear()` en los tres años, `isHolidayDate()` e `isHoliday()` en los 85 casos. Son 88 cruces, 0 fallos.
 
 ## Lo que cambió con la Enmienda 1 (03-11-2026)
 
@@ -259,8 +272,8 @@ El texto exacto de cada una está en la cabecera `decisions` del fichero que la 
 - **Q-16:** el tope de `usage-trigger`, NFC y `version_label` en las salientes.
 
 **Nuevas:**
-- **Q-17 (E1-4).** El H5 firma `CONTRACT + "\n" + json`. E1-4 define el mensaje como el JSON canónico a secas, y así van los vectores. Si S8-b prefiere el prefijo, como el H5, hay que cambiarlo aquí y en E1-4. La variante `vc_contract_prefix` lo caza.
-- **Q-18 (E1-4).** La forma de `prev_hash`: aquí es el sha256 del mensaje anterior (DF-V1), como `effective_hash` del H5. Si se quiere la firma anterior, la variante `vc_prev_is_signature` lo caza.
+- **Q-17 (E1-4), cerrada por E2-7: sin prefijo.** El H5 firma `CONTRACT + "\n" + json`. E1-4 define el mensaje como el JSON canónico a secas, y así van los vectores. Si S8-b prefiere el prefijo, como el H5, hay que cambiarlo aquí y en E1-4. La variante `vc_contract_prefix` lo caza.
+- **Q-18 (E1-4), cerrada por E2-7: `prev_hash` = sha256 del mensaje anterior.** La forma de `prev_hash`: aquí es el sha256 del mensaje anterior (DF-V1), como `effective_hash` del H5. Si se quiere la firma anterior, la variante `vc_prev_is_signature` lo caza.
 
 ## Observaciones para otros paquetes (no son del fixture)
 
@@ -283,18 +296,18 @@ El texto exacto de cada una está en la cabecera `decisions` del fichero que la 
   - los DTO del CRM;
   - el E2E.
 - **El SDK de ElevenLabs:** sin verificar (`sdkConstructEvent` por confirmar).
-- **Fuentes que no se abrieron** (sin red): la Ley 51 de 1983 (`approvedByOwner: false`) y la página de Usage Trigger.
+- **Fuentes que no se abrieron** (sin red): la Ley 51 de 1983 (`approvedByOwner: false`), la Ley 2578 de 2026 (por confirmar, demandada) y la página de Usage Trigger.
 
-## Verificación (salida real del 03-11-2026, tras la Enmienda 1)
+## Verificación (salida real del 03-11-2026, tras la Enmienda 2)
 
 ```
-ficheros: 10 · total 978
+ficheros: 10 · total 988
 forma: OK
-derivación independiente: 872 casos rehechos · discrepancias: 0
+derivación independiente: 882 casos rehechos · discrepancias: 0
 cruces entre ficheros: 221 comprobaciones
-variantes equivocadas: 79 · cazadas 79
-php: canonicalHash+perfiles 92, elevenlabsVerify 27, envelope 16, huellasTelefono 6, firmasTwilio 15, pascua 3, cadenaVoz 8, compiladorReal 98 · fallos 0 (PHP 8.3.33)
+variantes equivocadas: 80 · cazadas 80
+php: canonicalHash+perfiles 92, elevenlabsVerify 27, envelope 16, huellasTelefono 6, firmasTwilio 15, pascua 3, cadenaVoz 8, compiladorReal 98, festivosB8 88 · fallos 0 (PHP 8.3.33)
 RESULTADO: OK
 ```
 
-El detalle está en `docs/ultron-studio/plans/informes-h8/informe-tester.md` (§E1).
+El detalle está en `docs/ultron-studio/plans/informes-h8/informe-tester.md` (§E2 y §E1).

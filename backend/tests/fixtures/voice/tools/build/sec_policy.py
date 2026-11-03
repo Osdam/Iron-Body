@@ -53,7 +53,7 @@ def legal_window(b):
     return False
 
 
-def SL(desc, at, outside, holiday, *, basis="ley", decision=None, naive_utc_would_say=None):
+def SL(desc, at, outside, holiday, *, basis="ley", decision=None, naive_utc_would_say=None, ref="D8-15, D8-18 (Ley 2300 art. 3)"):
     b = to_bogota(at)
     assert legal_window(b) == (not outside), desc
     assert (b.date() in ALL) == holiday, desc
@@ -62,7 +62,7 @@ def SL(desc, at, outside, holiday, *, basis="ley", decision=None, naive_utc_woul
     fields = {"at": at}
     if naive_utc_would_say is not None:
         fields["trap"] = "con la hora UTC sin convertir el resultado sería el contrario"
-    PT.add("scheduleLegal", "legal", desc, "D8-15, D8-18 (Ley 2300 art. 3)", basis, fields, exp, decision=decision)
+    PT.add("scheduleLegal", "legal", desc, ref, basis, fields, exp, decision=decision)
 
 
 SL("lunes 06:59:59 de Bogotá: fuera", bog_to_utc_iso(2026, 11, 9, 6, 59, 59), True, False)
@@ -82,6 +82,10 @@ SL("domingo 10:00: fuera", bog_to_utc_iso(2026, 11, 8, 10, 0, 0), True, False)
 SL("lunes festivo (Independencia de Cartagena, 16-11-2026) a las 10:00: festivo dentro de horas", bog_to_utc_iso(2026, 11, 16, 10, 0, 0), False, True)
 SL("lunes festivo a las 20:00: fuera y festivo", bog_to_utc_iso(2026, 11, 16, 20, 0, 0), True, True)
 SL("sábado festivo (1 de mayo de 2027) a las 10:00: festivo", bog_to_utc_iso(2027, 5, 1, 10, 0, 0), False, True)
+SL("lunes 13-07-2026, Virgen de Chiquinquirá (Ley 2578/2026, por confirmar: E2-1), a las 10:00: festivo; tratarlo así solo restringe más",
+   bog_to_utc_iso(2026, 7, 13, 10, 0, 0), False, True, ref="D8-15, D8-18 (Ley 2300 art. 3), E2-1")
+SL("jueves 09-07-2026, la fecha de origen de Chiquinquirá (trasladada al lunes), a las 10:00: no es festivo", bog_to_utc_iso(2026, 7, 9, 10, 0, 0),
+   False, False, ref="D8-15, D8-18 (Ley 2300 art. 3), E2-1")
 SL("martes 29-02-2028 (bisiesto) a las 10:00: dentro", "2028-02-29T15:00:00Z", False, False)
 SL("jueves 31-12-2026 a las 18:30: dentro (el 1 de enero ya es festivo)", bog_to_utc_iso(2026, 12, 31, 18, 30, 0), False, False)
 PT.add("scheduleLegal", "legal", "la misma hora escrita con desfase -05:00 da lo mismo", "D8-15", "ley",

@@ -6,6 +6,52 @@
 **Alcance tocado:** solo `tests/fixtures/voice/**` y este informe.
 **Sin commit** y sin tocar el índice. **Producción:** nada tocado. **Red:** ninguna. **Suites del repo:** no lancé ninguna (máquina compartida).
 
+## §E2. Enmienda 2 aplicada (E2-1; 03-11-2026, sobre `7ffd61c3`)
+
+**Qué cambia.** La Virgen de Chiquinquirá (Ley 2578 del 01-06-2026): el 9 de julio, trasladable al lunes como los de la Ley 51 de 1983, desde 2026. Es la misma regla que `ColombianHolidays::CHIQUINQUIRA` de B8-a.
+- **Fechas:** 13-07-2026 (de jueves), 12-07-2027 (de viernes) y 10-07-2028 (de domingo). Ahora hay **19 festivos por año**.
+- **Marca:** sus filas llevan `pendingConfirmation` «por confirmar (Ley 2578/2026, demandada ante la Corte Constitucional; E2-1)».
+- **La regla, por dos vías:** la lista escrita a mano y la del generador incluyen la fecha; el comprobador la deriva por otra vía (Gauss y su propia fórmula del lunes).
+
+**Recuento: 978 → 988.**
+- `holidays-co-2026-2028.json`: 77 → 85. Hay 8 casos nuevos: los tres lunes, sus tres fechas de origen y dos instantes en el borde de medianoche de Bogotá.
+- `policy-tables.json`: 134 → 136. Hay 2 casos nuevos de `scheduleLegal`: el lunes 13-07-2026 a las 10:00 es festivo y el jueves 09-07-2026 no. **Ningún caso anterior caía en esos días**: ningún fixture tenía fechas de julio, así que no hubo que corregir nada.
+- El resto, igual.
+- Por base: `ley` 105, `contrato` 443, `decision-fixture` 392, `oficial` 32, `supuesto-lead` 16.
+
+**Salida real:**
+
+```
+$ python3 -I tests/fixtures/voice/tools/build/build.py      # reproducible: los mismos sha256 en dos ejecuciones
+holidays-co-2026-2028.json: {"isHoliday": 85, "total": 85}
+policy-tables.json: {"scheduleLegal": 22, …, "total": 136}
+total: 988
+$ python3 -I tests/fixtures/voice/tools/voice-fixtures-check.py --php       # sale con 0
+ficheros: 10 · total 988
+forma: OK
+derivación independiente: 882 casos rehechos · discrepancias: 0
+cruces entre ficheros: 221 comprobaciones
+variantes equivocadas: 80 · cazadas 80                       (nueva: ho_no_ley_2578, cazada en 4 casos)
+php: {…, "compiladorReal": 98, "festivosB8": 88, "fallos": 0}
+RESULTADO: OK
+```
+
+**Cruce con B8.** `--php` carga ahora también `app/Services/Telephony/ColombianHolidays.php`, que es pura, y compara:
+- `forYear()` de 2026, 2027 y 2028 con `years`;
+- `isHolidayDate()` en los 76 casos de fecha;
+- `isHoliday()` en los 9 de instante.
+
+Son 88 cruces, **0 fallos**. Es una prueba de paridad, no del oráculo: el fixture sigue siendo la referencia.
+
+**E2-7.** Q-17 y Q-18 se cierran tal como estaban los vectores de la cadena: sin prefijo, y `prev_hash` = sha256 del mensaje canónico anterior. No hay cambios en `voice-chain-vectors.json`.
+
+**Ficheros de E2 (sin commit):**
+- `tests/fixtures/voice/holidays-co-2026-2028.json` y `policy-tables.json`;
+- `tools/build/sec_holidays.py` y `sec_policy.py`;
+- `tools/voice-fixtures-check.py`;
+- `README.md`;
+- este informe.
+
 ## §E1. Enmienda 1 aplicada (03-11-2026, sobre `75a6384`; la entrega anterior está confirmada en `356113d1`)
 
 ### Resultado (salida real)
