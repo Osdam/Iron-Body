@@ -183,7 +183,7 @@ class ValuationController extends Controller
                 'trainer_id' => ['required', 'integer', 'exists:trainers,id'],
                 'type' => ['required', Rule::in(ValuationAppointment::TYPES)],
                 'starts_at' => ['required', 'string', 'max:40'],
-                'duration_minutes' => ['nullable', 'integer', 'min:15', 'max:240', 'multiple_of:5'],
+                'duration_minutes' => ['nullable', 'integer', 'min:10', 'max:240', 'multiple_of:5'],
                 'notes' => ['nullable', 'string', 'max:1000', new PlainText(multiline: true)],
                 'allow_past' => ['nullable', 'boolean'],
                 'past_reason' => ['nullable', 'required_if_accepted:allow_past', 'string', 'min:5', 'max:500', new PlainText(multiline: true)],
@@ -219,7 +219,7 @@ class ValuationController extends Controller
             $datos = $this->validar($request, [
                 'expected_version' => ['required', 'integer', 'min:1'],
                 'starts_at' => ['required', 'string', 'max:40'],
-                'duration_minutes' => ['nullable', 'integer', 'min:15', 'max:240', 'multiple_of:5'],
+                'duration_minutes' => ['nullable', 'integer', 'min:10', 'max:240', 'multiple_of:5'],
                 'trainer_id' => ['nullable', 'integer', 'exists:trainers,id'],
                 'reason' => ['nullable', 'string', 'max:500', new PlainText(multiline: true)],
             ]);
@@ -268,7 +268,7 @@ class ValuationController extends Controller
             $datos = $this->validar($request, [
                 'trainer_id' => ['required', 'integer', 'exists:trainers,id'],
                 'date' => ['required', 'date_format:Y-m-d'],
-                'duration_minutes' => ['nullable', 'integer', 'min:15', 'max:240', 'multiple_of:5'],
+                'duration_minutes' => ['nullable', 'integer', 'min:10', 'max:240', 'multiple_of:5'],
                 'exclude' => ['nullable', 'uuid'],
             ]);
             $access->requireCoversTrainer((int) $datos['trainer_id']);
