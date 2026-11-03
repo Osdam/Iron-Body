@@ -64,7 +64,7 @@ const LARAVEL = {
 };
 
 /** El aviso provisional de P-9 (congelación del lead, 03-11-2026): primer turno del agente en los guiones. */
-const AVISO = 'Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma automática y tus datos se tratan según nuestra política de privacidad. Si prefieres hablar con una persona, dímelo en cualquier momento.';
+const AVISO = 'Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.';
 
 // ── Superficie ───────────────────────────────────────────────────────────────────────────────────
 // `doc`: «B8-a» = comprobada por B8-a en la referencia oficial el 03-11-2026 (docblocks de ElevenLabsAgentDeployer y
