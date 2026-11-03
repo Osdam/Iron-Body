@@ -26,9 +26,11 @@ use InvalidArgumentException;
  * decir un precio, pero solo el que le devuelva `consultar_planes` en esa
  * llamada ({@see PRICES_FROM_CATALOG_TOOL}).
  *
- * EL AVISO DE IA ({@see AI_NOTICE}) es el texto PROVISIONAL de P-9, literal:
- * el propietario lo aprueba o lo cambia antes de la fase 3. Es el primer
- * mensaje de toda llamada, entrante o saliente, autorizada o no.
+ * EL AVISO DE IA ({@see AI_NOTICE}) es el texto PROVISIONAL de la Enmienda 1
+ * del contrato (E1-3, que sustituye el de P-9), literal: dice quién atiende,
+ * la finalidad y cómo pedir que no llamen más (D8-17, Ley 2300). El
+ * propietario lo aprueba antes de la fase 3. Es el primer mensaje de toda
+ * llamada, entrante o saliente, autorizada o no.
  *
  * LAS VARIABLES DINÁMICAS ({@see DYNAMIC_VARIABLES}) son las únicas `{{…}}` de
  * los textos, con su valor por defecto en el agente. `caller_authorized = no`
@@ -58,10 +60,11 @@ final class StudioVoiceTemplate
     public const LANGUAGE = 'es';
 
     /**
-     * P-9, TEXTO PROVISIONAL del lead (congelación del 03-11-2026). El primer
-     * mensaje de cada llamada. Una prueba lo compara con el contrato.
+     * E1-3 (Enmienda 1 del contrato, 03-11-2026; sustituye el texto de P-9),
+     * PROVISIONAL hasta que lo apruebe el propietario antes de la fase 3. El
+     * primer mensaje de cada llamada. Una prueba lo compara con el contrato.
      */
-    public const AI_NOTICE = 'Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Esta llamada se procesa de forma automática y tus datos se tratan según nuestra política de privacidad. Si prefieres hablar con una persona, dímelo en cualquier momento.';
+    public const AI_NOTICE = 'Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.';
 
     /** Lo único que dice el agente a quien no está autorizado (D8-11), antes de `end_call`. */
     public const UNAVAILABLE_MESSAGE = 'Lo siento, esta línea no está disponible en este momento. Gracias por llamar.';

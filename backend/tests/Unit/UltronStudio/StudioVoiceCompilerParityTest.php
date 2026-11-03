@@ -20,6 +20,12 @@ use PHPUnit\Framework\TestCase;
  * prueba traduce la entrada (perfil, versión, tope del entorno) y la salida
  * (motivo y campo) y compara caso a caso.
  *
+ * EL AVISO. El fixture fija la regla (el aviso del perfil es EXACTAMENTE el
+ * aprobado) con la redacción de P-9; la Enmienda 1 (E1-3) la sustituyó. El
+ * aviso aprobado del fixture se traduce al de la plantilla solo si es ese texto
+ * de P-9, que se lee del contrato; cualquier otro (vacío, con una palabra
+ * cambiada) llega tal cual.
+ *
  * NADA SE SALTA EN SILENCIO. Los casos que dependen de algo que el compilador
  * no tiene ({@see NOT_APPLICABLE}) y los que discrepan por una decisión que
  * tiene que tomar el lead ({@see CONFLICTS}) están aquí por su nombre, y cada
@@ -131,6 +137,11 @@ class StudioVoiceCompilerParityTest extends TestCase
         foreach ([...array_keys(self::NOT_APPLICABLE), ...array_keys(self::CONFLICTS)] as $nombre) {
             $this->assertContains($nombre, $nombres, "la lista nombra un caso que el fixture ya no tiene: {$nombre}");
         }
+        // El aviso aprobado del fixture es el de la plantilla (E1-3) o, hasta que TEST8-a reexporte
+        // (Enmienda 1, E1-9), EXACTAMENTE el de P-9 que E1-3 sustituyó. Ningún otro.
+        $this->assertNotSame('', self::supersededP9Notice(), 'el contrato ya no tiene el texto de P-9 en su sitio');
+        $this->assertContains(self::fixtureNotice(), [T::AI_NOTICE, self::supersededP9Notice()]);
+
         // Cada negativa trae un motivo o una lista de motivos admitidos (DF-C11), nunca las dos cosas.
         foreach ($f['compile'] as $caso) {
             if ($caso['expected']['compiles'] === false) {
@@ -309,12 +320,16 @@ class StudioVoiceCompilerParityTest extends TestCase
     {
         $suyo = $p['content'];
         $mapa = [
-            'voiceId' => 'voiceId', 'language' => 'language', 'notice' => 'aiNotice', 'maxDurationSeconds' => 'maxDurationSeconds',
+            'voiceId' => 'voiceId', 'language' => 'language', 'maxDurationSeconds' => 'maxDurationSeconds',
             'tools' => 'tools', 'systemTools' => 'systemTools', 'voicemailPolicy' => 'voicemail',
         ];
         $c = ['format' => C::PROFILE_FORMAT];
         foreach ($suyo as $clave => $valor) {
-            if (isset($mapa[$clave])) {
+            if ($clave === 'notice') {
+                // El aviso APROBADO del fixture es el de la plantilla (E1-3 sustituye la redacción de P-9; la regla
+                // «exactamente el aprobado» no cambia). Cualquier otro texto, tal cual.
+                $c['aiNotice'] = self::notice($valor);
+            } elseif (isset($mapa[$clave])) {
                 $c[$mapa[$clave]] = $valor;
             } elseif ($clave === 'greetingInbound') {
                 $c['greetings']['inbound'] = $valor;
@@ -342,6 +357,27 @@ class StudioVoiceCompilerParityTest extends TestCase
             'createdBy' => $p['createdBy'],
             'approvedBy' => $p['approvedBy'],
         ];
+    }
+
+    /** El aviso del fixture traducido: el aprobado es el de la plantilla (E1-3); cualquier otro texto, tal cual. */
+    private static function notice(mixed $delFixture): mixed
+    {
+        return $delFixture === self::fixtureNotice() ? T::AI_NOTICE : $delFixture;
+    }
+
+    /** El aviso aprobado del fixture: el del perfil de su caso base. */
+    private static function fixtureNotice(): string
+    {
+        return self::fixture()['compile'][0]['input']['profile']['content']['notice'];
+    }
+
+    /** El texto de P-9 de la congelación, que E1-3 sustituyó (se lee del contrato). */
+    private static function supersededP9Notice(): string
+    {
+        $contrato = (string) file_get_contents(dirname(__DIR__, 3).'/docs/ultron-studio/ULTRON_STUDIO_H8_CONTRACT.md');
+        preg_match('/\| P-9 \| Texto provisional del aviso al empezar cada llamada: «([^»]+)»/u', $contrato, $m);
+
+        return $m[1] ?? '';
     }
 
     /** DF-C6: ausente o vacío → 300; no entero → 0; después, el recorte a 60–600. */
@@ -383,8 +419,8 @@ class StudioVoiceCompilerParityTest extends TestCase
         }
         $this->assertSame($inv['conversationConfigOverrideAllowed'], $s['overridesAllowed']);
         // Un solo primer mensaje, el aviso, en los dos sentidos...
-        $this->assertStringStartsWith($inv['firstMessageInboundStartsWith'], $s['firstMessage']);
-        $this->assertStringStartsWith($inv['firstMessageOutboundStartsWith'], $s['firstMessage']);
+        $this->assertStringStartsWith(self::notice($inv['firstMessageInboundStartsWith']), $s['firstMessage']);
+        $this->assertStringStartsWith(self::notice($inv['firstMessageOutboundStartsWith']), $s['firstMessage']);
         // ...y el saludo de cada sentido en el prompt, en su rama (diseño de S8: informe, «primer mensaje»).
         $this->assertStringContainsString('«'.$inv['firstMessageInboundContains'].'»', $s['systemPrompt']);
         $this->assertStringContainsString('«'.$inv['firstMessageOutboundContains'].'»', $s['systemPrompt']);

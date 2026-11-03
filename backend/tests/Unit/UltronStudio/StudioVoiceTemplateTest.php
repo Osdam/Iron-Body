@@ -34,13 +34,22 @@ class StudioVoiceTemplateTest extends TestCase
      * una comprobación, se sube VERSION (y la del compilador) y se fija aquí
      * la nueva: nunca se cambia esta sin cambiar la versión.
      */
-    private const HASH_V1 = '276cb2586280aee3eadc68a5017b11a4ce1ec2697232b383b0eaf0499034938b';
+    private const HASH_V1 = '6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e';
 
-    public function test_el_aviso_es_el_texto_provisional_de_p9_del_contrato(): void
+    public function test_el_aviso_es_el_texto_de_e1_3_del_contrato(): void
     {
         $contrato = (string) file_get_contents(dirname(__DIR__, 3).'/docs/ultron-studio/ULTRON_STUDIO_H8_CONTRACT.md');
-        $this->assertSame(1, preg_match('/\| P-9 \| Texto provisional del aviso al empezar cada llamada: «([^»]+)»/u', $contrato, $m), 'el contrato ya no tiene el texto de P-9 en su sitio');
+        $this->assertSame(1, preg_match('/^\| E1-3 \([^)]*\) \|[^|]*\| Texto provisional: «([^»]+)»/mu', $contrato, $m), 'el contrato ya no tiene el texto de E1-3 en su sitio');
         $this->assertSame($m[1], T::AI_NOTICE);
+
+        // D8-17: quién atiende (una IA), la finalidad y cómo pedir que no llamen más.
+        $this->assertStringContainsString('asistente virtual de Iron Body Workout, un sistema de inteligencia artificial', T::AI_NOTICE);
+        $this->assertStringContainsString('Te atiendo para informarte sobre nuestros planes y servicios', T::AI_NOTICE);
+        $this->assertStringContainsString('Si no quieres recibir más llamadas', T::AI_NOTICE);
+
+        // E1-3 sustituye el texto de P-9: el de la congelación ya no es el aviso.
+        $this->assertSame(1, preg_match('/\| P-9 \| Texto provisional del aviso al empezar cada llamada: «([^»]+)»/u', $contrato, $p9));
+        $this->assertNotSame($p9[1], T::AI_NOTICE);
     }
 
     public function test_la_huella_esta_fijada_para_su_version(): void
