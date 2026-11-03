@@ -56,11 +56,27 @@ return [
         // región en las piezas que faltan.
         'region' => strtolower(trim((string) env('ELEVENLABS_REGION', 'default'))),
 
-        // Solo la integración nativa (descartada); no se exige.
+        // Contrato H8, D8-1 y D8-5: el id del número dedicado IMPORTADO en
+        // ElevenLabs (integración nativa, la opción A). No es un secreto; no
+        // lo exige `missing()` (los cuatro estados del H6 no cambian).
         'agent_phone_number_id' => env('ELEVENLABS_AGENT_PHONE_NUMBER_ID'),
 
-        // Secreto de las server tools del futuro; no se exige.
+        // Secreto de las server tools (H8, D8-16: Bearer con hash_equals); no
+        // lo exige `missing()`.
         'tool_secret' => env('ELEVENLABS_TOOL_SECRET'),
+
+        // Secreto (H8, D8-5 y D8-16): la cabecera fija del webhook de
+        // iniciación de las entrantes. DISTINTO del de las herramientas. No lo
+        // exige `missing()`.
+        'initiation_secret' => env('ELEVENLABS_INITIATION_SECRET'),
+
+        // H8, D8-16: los IDS (no los valores) del secreto de las herramientas y
+        // del de iniciación tal como están guardados en el gestor de secretos
+        // de ElevenLabs, y el id del webhook post-llamada del workspace. Van en
+        // la carga compilada del agente; ninguno es un secreto.
+        'tool_secret_ref' => env('ELEVENLABS_TOOL_SECRET_REF'),
+        'initiation_secret_ref' => env('ELEVENLABS_INITIATION_SECRET_REF'),
+        'post_call_webhook_ref' => env('ELEVENLABS_POST_CALL_WEBHOOK_REF'),
 
         // SE IGNORA EN `production`, donde la URL es siempre la de la región.
         // Fuera de producción apunta al simulador local del E2E (:8096).
@@ -84,6 +100,64 @@ return [
         // Llamadas al día; entero recortado a 0–20. Con 0 la política dice `daily_cap_zero`.
         'daily_call_cap' => min(20, max(0, $entero('TWILIO_VOICE_DAILY_CALL_CAP', 0))),
 
+        // H8, D8-4 y D8-5: la SUBCUENTA «Voz» (AC…), nunca la cuenta madre ni
+        // la credencial del OTP (`otp.twilio.*`, que la voz no lee).
+        'account_sid' => env('TWILIO_VOICE_ACCOUNT_SID'),
+
+        // La API key RESTRINGIDA de Laravel (SK… y su secreto): llamadas
+        // (leer, listar y actualizar), números y uso (leer). Secreto: solo lo
+        // lee `App\Services\Twilio\TwilioVoiceCarrier`, al usarlo.
+        'api_key_sid' => env('TWILIO_VOICE_API_KEY_SID'),
+        'api_key_secret' => env('TWILIO_VOICE_API_KEY_SECRET'),
+
+        // Secreto: el Auth Token de la SUBCUENTA, solo para VALIDAR
+        // `X-Twilio-Signature`; no firma peticiones. Solo lo lee
+        // `App\Services\Twilio\TwilioRequestSignature`.
+        'signing_token' => env('TWILIO_VOICE_SIGNING_TOKEN'),
+
+        // SE IGNORA EN `production`, donde el host es siempre api.twilio.com.
+        // Fuera de producción apunta al simulador local del banco.
+        'base_url' => env('TWILIO_VOICE_BASE_URL'),
+
+    ],
+
+    // H8, D8-4 y D8-16: la base canónica pública de Laravel (https, esquema y
+    // host SIN ruta), con la que se calculan las firmas de Twilio (base + la
+    // URI tal como llega, nunca fullUrl()) y las URL que llama ElevenLabs.
+    'webhook_base_url' => env('VOICE_WEBHOOK_BASE_URL'),
+
+    // H8, D8-11: entrantes. Apagadas, la iniciación responde caller_authorized = no.
+    'inbound' => [
+        'enabled' => filter_var(env('VOICE_INBOUND_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+
+        // `canary` es el único alcance del H8; cualquier otro valor cuenta como `canary`.
+        'scope' => 'canary',
+
+        // Entrantes al día [P-5]; entero recortado a 0–20. Con 0 no se atiende ninguna.
+        'daily_cap' => min(20, max(0, $entero('VOICE_INBOUND_DAILY_CAP', 0))),
+    ],
+
+    // H8, D8-12: salientes, la única puerta. Apagadas, `outbound_disabled`.
+    'outbound' => [
+        'enabled' => filter_var(env('VOICE_OUTBOUND_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+
+        // `canary` (fase 4a) o `contacts` (fase 4b); cualquier otro valor, el
+        // más estrecho: `canary`.
+        'scope' => strtolower(trim((string) env('VOICE_OUTBOUND_SCOPE', 'canary'))) === 'contacts' ? 'contacts' : 'canary',
+    ],
+
+    // H8, D8-15: límites. Son TECHOS: ninguno enciende nada.
+    'limits' => [
+        // Llamadas a la vez (dialing + active); entero recortado a 1–4.
+        'max_concurrent_calls' => min(4, max(1, $entero('VOICE_MAX_CONCURRENT_CALLS', 1))),
+
+        // Duración máxima por llamada; entero recortado a 60–600 [C-A5]. El
+        // compilador se niega a compilar un perfil que pida más.
+        'per_call_max_seconds' => min(600, max(60, $entero('VOICE_PER_CALL_MAX_SECONDS', 300))),
+
+        // US$ al día de Bogotá, texto decimal (lo interpreta quien reserva el
+        // coste, como el laboratorio del H4). Con 0 no hay ninguna saliente.
+        'daily_budget_usd' => env('VOICE_DAILY_BUDGET_USD', '0'),
     ],
 
 ];

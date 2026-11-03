@@ -295,13 +295,13 @@ class ElevenLabsVoiceProviderTest extends TestCase
 
         // Derivadas con `openssl dgst -sha256 -hmac` y con `hmac` de Python: los 8 primeros hex.
         $this->assertSame(
-            ['api_key' => '1a33febe', 'webhook_secret' => 'c7e86c56', 'tool_secret' => '5be3314a'],
+            ['api_key' => '1a33febe', 'webhook_secret' => 'c7e86c56', 'tool_secret' => '5be3314a', 'initiation_secret' => null],
             Proveedor::secretFingerprints('clave-de-huellas-de-prueba'),
         );
 
         // Se recorta como al usarla: el mismo secreto con espacios alrededor tiene la misma huella.
         $this->configurar(['api_key' => '  '.self::CLAVE."\n", 'webhook_secret' => '', 'tool_secret' => null]);
-        $this->assertSame(['api_key' => '1a33febe', 'webhook_secret' => null, 'tool_secret' => null], Proveedor::secretFingerprints('clave-de-huellas-de-prueba'));
+        $this->assertSame(['api_key' => '1a33febe', 'webhook_secret' => null, 'tool_secret' => null, 'initiation_secret' => null], Proveedor::secretFingerprints('clave-de-huellas-de-prueba'));
 
         // Otra clave, otras huellas; nunca el secreto.
         $otra = Proveedor::secretFingerprints('otra-clave');

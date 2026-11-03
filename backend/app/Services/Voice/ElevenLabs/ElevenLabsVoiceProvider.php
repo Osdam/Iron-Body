@@ -23,10 +23,13 @@ use Throwable;
  * este hito solo lo lanza la consola. No hay ningún método que inicie,
  * registre ni transfiera una llamada.
  *
- * Es el ÚNICO fichero que lee los secretos de la configuración (la clave de
- * API, el secreto del webhook y el de las server tools), en el momento de
- * usarlos y sin guardarlos en una propiedad, un resultado, un registro ni el
- * mensaje de una excepción (`VoiceIsolationTest` lo vigila).
+ * Lee los secretos de la configuración en el momento de usarlos y sin
+ * guardarlos en una propiedad, un resultado, un registro ni el mensaje de una
+ * excepción. En el H6 era el único lector; desde el H8 (D8-5) los lectores
+ * están ENUMERADOS (la clave también la leen los adaptadores de D8-3, y el
+ * secreto del webhook el verificador) y este fichero sigue siendo el único
+ * punto de las huellas de los de ElevenLabs ({@see secretFingerprints()}).
+ * `VoiceIsolationTest` (SEC8) lo vigila.
  */
 final class ElevenLabsVoiceProvider implements VoiceAgentProvider
 {
@@ -113,13 +116,18 @@ final class ElevenLabsVoiceProvider implements VoiceAgentProvider
     }
 
     /**
-     * Las huellas de los tres secretos, sin red: los primeros 8 hexadecimales
-     * de `hash_hmac('sha256', <secreto recortado>, $key)`, o null si el secreto
-     * no está. Para que quien describa la configuración pueda decir «cambió»
-     * sin leer los secretos: la clave de las huellas la pone quien llama, y de
-     * aquí solo salen las huellas.
+     * Las huellas de los secretos de ElevenLabs, sin red: los primeros 8
+     * hexadecimales de `hash_hmac('sha256', <secreto recortado>, $key)`, o null
+     * si el secreto no está. Para que quien describa la configuración pueda
+     * decir «cambió» sin leer los secretos: la clave de las huellas la pone
+     * quien llama, y de aquí solo salen las huellas.
      *
-     * @return array{api_key: ?string, webhook_secret: ?string, tool_secret: ?string}
+     * Contrato H8, D8-5: gana la del secreto del webhook de iniciación
+     * (`initiation_secret`), al final, para que las tres del H6 no se muevan.
+     * El único punto de las huellas de ElevenLabs: S8 la consume en
+     * `voiceFactsFrom` y no la duplica.
+     *
+     * @return array{api_key: ?string, webhook_secret: ?string, tool_secret: ?string, initiation_secret: ?string}
      *
      * @throws InvalidArgumentException si $key === '' (una huella sin clave se podría comprobar contra un diccionario)
      */
@@ -138,6 +146,7 @@ final class ElevenLabsVoiceProvider implements VoiceAgentProvider
             'api_key' => $huella(config('voice.elevenlabs.api_key')),
             'webhook_secret' => $huella(config('voice.elevenlabs.webhook_secret')),
             'tool_secret' => $huella(config('voice.elevenlabs.tool_secret')),
+            'initiation_secret' => $huella(config('voice.elevenlabs.initiation_secret')),
         ];
     }
 
