@@ -122,6 +122,11 @@ class UserController extends Controller
         $page->getCollection()->transform(function (User $u) use ($pausas, $accesos): User {
             $member = $u->appMember;
             $u->setAttribute('isMinor', (bool) ($member?->is_minor));
+            // El CRM la pide en camelCase, como el resto de estas claves. Sin
+            // esto el listado solo mandaba `birth_date` y para la pantalla de
+            // detalles la fecha no existía; peor: el modal de editar la abría
+            // vacía y al guardar la borraba.
+            $u->setAttribute('birthDate', self::birthDateKey($u));
             $u->setAttribute('guardian', $this->guardianArray($member?->guardian));
             $u->setAttribute('freeze', $pausas->state($u));
             $u->setAttribute('access', $accesos[$u->id] ?? null);
@@ -139,6 +144,12 @@ class UserController extends Controller
         return array_merge(
             $user->only(array_merge($this->memberFields(), ['membershipStartDate', 'membershipEndDate'])),
             [
+                // La fecha de nacimiento, con el nombre que pide el CRM. No se
+                // resuelve con un accesor del modelo porque `getBirthDateAttribute`
+                // respondería también a `birth_date` —Laravel los compara en
+                // studly— y se comería el cast de fecha que el resto del backend
+                // usa como Carbon.
+                'birthDate' => self::birthDateKey($user),
                 // El congelamiento viaja también en la ficha suelta: el CRM abre
                 // esta ruta para refrescar a un socio concreto, y sin esto la
                 // pausa desaparecía de la pantalla al recargarlo.
@@ -479,6 +490,14 @@ class UserController extends Controller
         return response()->json(null, 204);
     }
 
+    /** La fecha de nacimiento como «AAAA-MM-DD», o null. Una sola definición. */
+    private static function birthDateKey(User $user): ?string
+    {
+        $valor = $user->getAttributes()['birth_date'] ?? null;
+
+        return $valor ? substr((string) $valor, 0, 10) : null;
+    }
+
     /**
      * Columns selected for member listings.
      */
@@ -517,7 +536,7 @@ class UserController extends Controller
             'email' => $user->email,
             'document' => $user->document,
             'phone' => $user->phone,
-            'birthDate' => $user->birth_date ? substr((string) $user->birth_date, 0, 10) : null,
+            'birthDate' => self::birthDateKey($user),
             'gender' => $user->gender,
             'address' => $user->address,
             'emergencyContact' => $user->emergency_contact,
