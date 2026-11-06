@@ -102,9 +102,19 @@ class MembershipAccess
         $pausas = app(MembershipFreeze::class);
         $planes = $this->plansByName();
 
+        // LOS DERECHOS, de una sola consulta: los periodos congelados de sus
+        // cobros pagados. De aquí salen tres cosas que antes se resolvían por
+        // separado —y una de ellas, mal—: qué plan gobierna, cuál es la ventana
+        // de entradas y qué beneficios añadidos están vivos hoy.
+        $derechos = $this->derechosDe($users);
+
         // La etiqueta `users.plan` gobierna salvo cuando es el eco de una
-        // compra: entonces mandan las compras. Ver derechoQueGobierna().
-        $vigentes = $this->derechoQueGobierna($users, $hoy);
+        // compra: entonces mandan las compras. Ver planQueGobierna().
+        $vigentes = $this->planQueGobierna($users, $derechos, $hoy);
+
+        // Los beneficios añadidos vigentes (plan día, una clase). Son derechos
+        // APARTE: no gobiernan la membresía, pero abren la puerta por su cuenta.
+        $beneficios = $this->beneficiosActivos($users, $derechos, $hoy);
 
         // Las reglas de cada socio primero: solo los planes por consumo pagan el
         // recuento de entradas, y son los menos.
@@ -125,9 +135,21 @@ class MembershipAccess
             ->keyBy('user_id');
 
         $porConsumo = $users->filter(fn (User $u): bool => $reglas[$u->id]->isByEntries());
-        $ventanas = $this->windowsFor($porConsumo, $hoy);
-        $usadas = $this->usedEntriesFor($porConsumo, $ventanas, $ahora);
+        $ventanas = $this->windowsFor($porConsumo, $derechos, $hoy);
         $regaladas = $this->grantedEntriesFor($porConsumo, $ventanas);
+
+        // Las entradas usadas se cuentan también para quien tenga un beneficio
+        // POR CONSUMO vivo: su derecho se gasta en su propia ventana, y sin
+        // estos marcajes un plan día de una entrada valdría para todo el día.
+        $conBeneficioPorConsumo = $users->filter(
+            fn (User $u): bool => $this->algunBeneficioPorConsumo($beneficios[$u->id] ?? [])
+        );
+        $necesitanMarcajes = $porConsumo->concat($conBeneficioPorConsumo->all())->unique('id');
+        $usadas = $this->usedEntriesFor(
+            $necesitanMarcajes,
+            $this->ventanasAbarcadas($ventanas, $beneficios),
+            $ahora,
+        );
 
         $estados = [];
         foreach ($users as $user) {
@@ -141,6 +163,7 @@ class MembershipAccess
                 $regaladas[$user->id] ?? 0,
                 $empleos->get($user->id),
                 $ahora,
+                $beneficios[$user->id] ?? [],
             );
         }
 
@@ -165,6 +188,7 @@ class MembershipAccess
         int $regaladas,
         ?EmployeeAccess $empleo,
         CarbonImmutable $ahora,
+        array $beneficios = [],
     ): array {
         $hoy = $ahora->startOfDay();
         $inicio = $this->day($user->membership_start_date);
@@ -201,6 +225,18 @@ class MembershipAccess
         // ── La decisión ─────────────────────────────────────────────────────
         [$motivo, $mensaje, $via] = $this->decide($reglas, $pausa, $entradas, $empleado, $inicio, $fin, $ahora);
 
+        // UN BENEFICIO AÑADIDO ABRE POR SU CUENTA. Si la membresía dice que no
+        // —hoy no es su día, no le quedan entradas, venció, está congelada— pero
+        // la persona compró un plan día para hoy, entra: ese derecho lo pagó
+        // aparte y no depende del estado de su membresía. Es la otra mitad de
+        // «una compra añadida no borra ni invalida lo que ya tenía».
+        $abierto = $this->beneficioQueAbre($beneficios, $usadas, $ahora);
+        if ($motivo !== null && $abierto !== null) {
+            $motivo = null;
+            $mensaje = null;
+            $via = self::VIA_MEMBERSHIP;
+        }
+
         return [
             'plan' => $plan ? ['id' => $plan->id, 'name' => $plan->name] : null,
             'rules' => $reglas->toArray(),
@@ -215,7 +251,94 @@ class MembershipAccess
             // Resumen de una línea para la ficha y el terminal: «7 de 15
             // entradas · Lun, Mié y Vie · 06:00–10:00».
             'summary' => $this->summary($reglas, $entradas, $empleado),
+            // Los beneficios añadidos vigentes, y cuál abrió la puerta si fue
+            // uno de ellos. ADITIVO: quien no los conozca —la app publicada, el
+            // terminal— sigue leyendo lo de siempre.
+            'benefits' => array_map(fn (array $b): array => [
+                'plan' => ['id' => $b['plan']->id, 'name' => $b['plan']->name],
+                'from' => $b['from']->toDateString(),
+                'to' => $b['to']->toDateString(),
+            ], $beneficios),
+            'benefit_opened' => $abierto !== null
+                ? ['id' => $abierto['plan']->id, 'name' => $abierto['plan']->name]
+                : null,
         ];
+    }
+
+    /**
+     * El beneficio añadido que abre la puerta AHORA, o null.
+     *
+     * Su derecho es independiente: cubre hoy por construcción
+     * ({@see beneficiosActivos()}), así que solo queda comprobar lo suyo —su día,
+     * su hora y, si es por consumo, que le quede entrada en SU ventana—.
+     *
+     * Quien ya entró hoy no gasta otra, igual que en la membresía: el día está
+     * pagado.
+     *
+     * @param  list<array{plan: Plan, from: CarbonImmutable, to: CarbonImmutable}>  $beneficios
+     * @param  array{days: list<string>, last: string|null}  $usadas
+     * @return array{plan: Plan, from: CarbonImmutable, to: CarbonImmutable}|null
+     */
+    private function beneficioQueAbre(array $beneficios, array $usadas, CarbonImmutable $ahora): ?array
+    {
+        $hoy = $ahora->startOfDay()->toDateString();
+
+        foreach ($beneficios as $beneficio) {
+            $reglas = PlanAccessRules::fromPlan($beneficio['plan']);
+
+            if (! $reglas->allowsDay($ahora) || ! $reglas->allowsHour($ahora)) {
+                continue;
+            }
+
+            if ($reglas->isByEntries()) {
+                $dias = $this->daysInWindow($usadas['days'], $beneficio);
+                if (! in_array($hoy, $dias, true) && count($dias) >= (int) $reglas->entries) {
+                    continue;
+                }
+            }
+
+            return $beneficio;
+        }
+
+        return null;
+    }
+
+    /** @param list<array{plan: Plan, from: CarbonImmutable, to: CarbonImmutable}> $beneficios */
+    private function algunBeneficioPorConsumo(array $beneficios): bool
+    {
+        foreach ($beneficios as $beneficio) {
+            if (PlanAccessRules::fromPlan($beneficio['plan'])->isByEntries()) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Las ventanas que hay que abarcar al leer marcajes: la del plan y las de
+     * sus beneficios. Solo sirve para saber desde cuándo consultar.
+     *
+     * @param  array<int, array{from: CarbonImmutable, to: CarbonImmutable, source: string}>  $ventanas
+     * @param  array<int, list<array{plan: Plan, from: CarbonImmutable, to: CarbonImmutable}>>  $beneficios
+     * @return array<int, array{from: CarbonImmutable, to: CarbonImmutable, source: string}>
+     */
+    private function ventanasAbarcadas(array $ventanas, array $beneficios): array
+    {
+        foreach ($beneficios as $userId => $suyos) {
+            foreach ($suyos as $beneficio) {
+                $actual = $ventanas[$userId]['from'] ?? null;
+                if ($actual === null || $beneficio['from']->lessThan($actual)) {
+                    $ventanas[$userId] = [
+                        'from' => $beneficio['from'],
+                        'to' => $ventanas[$userId]['to'] ?? $beneficio['to'],
+                        'source' => 'payment',
+                    ];
+                }
+            }
+        }
+
+        return $ventanas;
     }
 
     /**
@@ -451,7 +574,9 @@ class MembershipAccess
     {
         $hoy = ($at ?? CarbonImmutable::now(self::TZ))->setTimezone(self::TZ)->startOfDay();
 
-        return $this->windowsFor(collect([$user]), $hoy)[$user->id]
+        $uno = collect([$user]);
+
+        return $this->windowsFor($uno, $this->derechosDe($uno), $hoy)[$user->id]
             ?? $this->fallbackWindow(
                 $this->day($user->membership_start_date),
                 $this->day($user->membership_end_date),
@@ -492,51 +617,22 @@ class MembershipAccess
     // ────────────────────────────────────────────────────────────────────────
 
     /**
-     * EL PLAN QUE GOBIERNA, cuando NO es el de la etiqueta.
+     * LOS DERECHOS DE CADA SOCIO: los periodos congelados de sus cobros
+     * pagados, con el plan de cada uno ya resuelto.
      *
-     * `users.plan` es una etiqueta materializada y la escriben tres cosas
-     * legítimas: un cobro ({@see MembershipPeriod::applyLocked()}),
-     * un traslado de plan y una edición a mano. El problema es que el cobro la
-     * escribe SIEMPRE, también cuando lo que compró no es la membresía
-     * principal.
-     *
-     * EL CASO REAL. Una socia con una ANUALIDAD vigente compra además un PLAN
-     * DÍA para una clase. Son dos compras independientes, pero la etiqueta pasa
-     * a «PLAN DÍA» y las reglas de acceso salían de ahí: un plan día es por
-     * consumo —UNA entrada—, y las entradas se cuentan en el periodo del cobro
-     * que cubre hoy, que es el del año. La socia llevaba meses entrando, así que
-     * quedaba bloqueada en el acto con la anualidad pagada y vigente. Y al
-     * vencer el plan día seguía igual: la etiqueta no se cae sola.
-     *
-     * LA REGLA. Si la etiqueta es el ECO DE UNA COMPRA —hay un cobro suyo que
-     * compró ese mismo plan—, entonces las compras son la verdad y gobierna el
-     * DERECHO que cubre hoy: el periodo congelado del cobro
-     * (`period_start`/`period_end`), la misma fuente de la que
-     * {@see windowsFor()} saca la ventana de entradas. Las dos cosas salían de
-     * sitios distintos —la ventana del cobro, las reglas del nombre— y esa
-     * contradicción era el fallo.
-     *
-     * Si la etiqueta dice algo que NINGUNA compra explica, la puso un traslado
-     * de plan o una edición a mano, que son cambios legítimos sin cobro detrás:
-     * entonces gobierna ella y aquí no se toca nada.
-     *
-     * Cuando varios derechos cubren hoy manda el que TERMINA MÁS TARDE: es la
-     * membresía principal, y lo que no se puede hacer nunca es recortarle
-     * derechos por una compra añadida.
-     *
-     * LO QUE SIGUE IGUAL: una renovación normal (la etiqueta y el derecho
-     * vigente son el mismo plan, misma respuesta), una mejora de plan (su cobro
-     * compra el periodo nuevo y es el que cubre hoy), un traslado, una edición a
-     * mano y las fichas sin periodos congelados (importadas del sistema
-     * anterior), que se gobiernan por su etiqueta como siempre.
+     * Una consulta para toda la página, más una de planes. De aquí salen las
+     * tres preguntas de la puerta —qué plan gobierna, cuál es la ventana de
+     * entradas y qué beneficios añadidos viven hoy— para que no puedan volver a
+     * contestarse desde sitios distintos, que es lo que originó el fallo.
      *
      * @param  Collection<int, User>  $users
-     * @return array<int, Plan>
+     * @return array{pagos: array<int, Collection<int, Payment>>, planes: Collection<int, Plan>}
      */
-    private function derechoQueGobierna(Collection $users, CarbonImmutable $hoy): array
+    private function derechosDe(Collection $users): array
     {
+        $vacio = ['pagos' => [], 'planes' => collect()];
         if ($users->isEmpty()) {
-            return [];
+            return $vacio;
         }
 
         $marcadores = implode(',', array_fill(0, count(PaymentController::PAID_STATUSES), '?'));
@@ -547,39 +643,87 @@ class MembershipAccess
             ->whereNotNull('period_start')
             ->whereNotNull('period_end')
             ->whereRaw('LOWER(status) IN ('.$marcadores.')', PaymentController::PAID_STATUSES)
+            ->orderByDesc('period_start')
+            ->orderByDesc('id')
             ->get(['id', 'user_id', 'plan_id', 'period_start', 'period_end'])
             ->groupBy('user_id');
 
         if ($pagos->isEmpty()) {
+            return $vacio;
+        }
+
+        $planes = Plan::query()
+            ->whereIn('id', $pagos->flatten()->pluck('plan_id')->unique()->all())
+            ->get(['id', 'name', 'duration_days', 'benefit_only', 'access_mode', 'entry_credits', 'access_days', 'access_windows'])
+            ->keyBy('id');
+
+        return ['pagos' => $pagos->all(), 'planes' => $planes];
+    }
+
+    /**
+     * EL PLAN QUE GOBIERNA, cuando NO es el de la etiqueta.
+     *
+     * `users.plan` es una etiqueta materializada y la escriben tres cosas
+     * legítimas: un cobro ({@see MembershipPeriod::applyLocked()}), un traslado
+     * de plan y una edición a mano. El problema es que hasta ahora el cobro la
+     * escribía SIEMPRE, también cuando lo que compró no era la membresía
+     * principal.
+     *
+     * EL CASO REAL. Una socia con una ANUALIDAD vigente compró además un plan
+     * día para una clase. La etiqueta pasó a «PLAN DÍA» y las reglas de acceso
+     * salían de ahí: un plan día es por consumo —UNA entrada— y las entradas se
+     * cuentan en el periodo del cobro que cubre hoy, que es el del año. La socia
+     * llevaba meses entrando, así que quedó bloqueada en el acto con el año
+     * pagado y vigente. Al vencer el plan día seguía igual: la etiqueta no se
+     * cae sola.
+     *
+     * LA REGLA. Si la etiqueta es el ECO DE UNA COMPRA —hay un cobro suyo de ese
+     * mismo plan—, entonces las compras son la verdad y gobierna el DERECHO que
+     * cubre hoy: el periodo congelado del cobro, la misma fuente de la que sale
+     * la ventana de entradas. Si varios cubren hoy manda el que TERMINA MÁS
+     * TARDE, que es la membresía principal: lo que no se puede hacer nunca es
+     * recortarle derechos por una compra añadida.
+     *
+     * Si la etiqueta dice algo que NINGUNA compra explica, la puso un traslado
+     * de plan o una edición a mano —cambios legítimos sin cobro detrás— y
+     * gobierna ella.
+     *
+     * LOS BENEFICIOS AÑADIDOS NO GOBIERNAN NUNCA: no son la membresía de nadie.
+     * Abren la puerta por su cuenta ({@see beneficioQueAbre()}), que es otra
+     * cosa. Si son lo ÚNICO que tiene, su cobro ya se aplicó por el camino
+     * normal y entonces sí es su membresía (ver MembershipPeriod).
+     *
+     * @param  Collection<int, User>  $users
+     * @param  array{pagos: array<int, Collection<int, Payment>>, planes: Collection<int, Plan>}  $derechos
+     * @return array<int, Plan>
+     */
+    private function planQueGobierna(Collection $users, array $derechos, CarbonImmutable $hoy): array
+    {
+        if ($derechos['pagos'] === []) {
             return [];
         }
 
-        // Los planes de todos los cobros en juego, de una consulta: hace falta
-        // el NOMBRE para saber si la etiqueta es el eco de una compra.
-        $planes = Plan::query()
-            ->whereIn('id', $pagos->flatten()->pluck('plan_id')->unique()->all())
-            ->get(['id', 'name', 'duration_days', 'access_mode', 'entry_credits', 'access_days', 'access_windows'])
-            ->keyBy('id');
-
+        $planes = $derechos['planes'];
         $gobierna = [];
+
         foreach ($users as $user) {
             /** @var Collection<int, Payment> $suyos */
-            $suyos = $pagos->get($user->id) ?? collect();
+            $suyos = $derechos['pagos'][$user->id] ?? collect();
             if ($suyos->isEmpty()) {
                 continue;
             }
 
             $etiqueta = self::planKey((string) ($user->plan ?? ''));
-            $comprada = $suyos->contains(
-                fn (Payment $p): bool => $etiqueta !== ''
-                    && self::planKey((string) ($planes->get($p->plan_id)?->name ?? '')) === $etiqueta
+            $comprada = $etiqueta !== '' && $suyos->contains(
+                fn (Payment $p): bool => self::planKey((string) ($planes->get($p->plan_id)?->name ?? '')) === $etiqueta
             );
             if (! $comprada) {
                 continue; // La puso un traslado o una edición: manda ella.
             }
 
             $cubriendo = $suyos
-                ->filter(fn (Payment $p): bool => $this->cubre($p, $hoy))
+                ->filter(fn (Payment $p): bool => $this->cubre($p, $hoy)
+                    && ! (bool) ($planes->get($p->plan_id)?->benefit_only))
                 ->sortByDesc(fn (Payment $p): string => $p->period_end->format('Y-m-d'))
                 ->first();
 
@@ -589,6 +733,47 @@ class MembershipAccess
         }
 
         return $gobierna;
+    }
+
+    /**
+     * LOS BENEFICIOS AÑADIDOS VIVOS HOY, por socio.
+     *
+     * Derechos aparte, con su propia vigencia: un plan día, una clase. No
+     * sustituyen la membresía ni la gobiernan; abren la puerta por su cuenta
+     * mientras duren, y cuando se acaban solo se acaban ellos.
+     *
+     * @param  Collection<int, User>  $users
+     * @param  array{pagos: array<int, Collection<int, Payment>>, planes: Collection<int, Plan>}  $derechos
+     * @return array<int, list<array{plan: Plan, from: CarbonImmutable, to: CarbonImmutable}>>
+     */
+    private function beneficiosActivos(Collection $users, array $derechos, CarbonImmutable $hoy): array
+    {
+        if ($derechos['pagos'] === []) {
+            return [];
+        }
+
+        $planes = $derechos['planes'];
+        $activos = [];
+
+        foreach ($users as $user) {
+            /** @var Collection<int, Payment> $suyos */
+            $suyos = $derechos['pagos'][$user->id] ?? collect();
+
+            foreach ($suyos as $pago) {
+                $plan = $planes->get($pago->plan_id);
+                if ($plan === null || ! (bool) $plan->benefit_only || ! $this->cubre($pago, $hoy)) {
+                    continue;
+                }
+
+                $activos[(int) $user->id][] = [
+                    'plan' => $plan,
+                    'from' => $this->day($pago->period_start->format('Y-m-d')),
+                    'to' => $this->day($pago->period_end->format('Y-m-d')),
+                ];
+            }
+        }
+
+        return $activos;
     }
 
     /** ¿El periodo que compró este cobro incluye hoy? */
@@ -608,33 +793,29 @@ class MembershipAccess
      * ESTE mes. El periodo que compró cada pago sí está congelado en el pago
      * (`period_start`/`period_end`), y es de ahí de donde se lee.
      *
+     * UN BENEFICIO AÑADIDO NO ES ESTA VENTANA. Desde que el plan día dejó de
+     * encadenarse, su periodo cubre hoy y es el más reciente: sin descartarlo,
+     * la ventana de un plan mensual de 15 entradas pasaría a ser el día del
+     * beneficio y el recuento del socio se reiniciaría: entradas infinitas.
+     *
      * @param  Collection<int, User>  $users
+     * @param  array{pagos: array<int, Collection<int, Payment>>, planes: Collection<int, Plan>}  $derechos
      * @return array<int, array{from: CarbonImmutable, to: CarbonImmutable, source: string}>
      */
-    private function windowsFor(Collection $users, CarbonImmutable $hoy): array
+    private function windowsFor(Collection $users, array $derechos, CarbonImmutable $hoy): array
     {
         if ($users->isEmpty()) {
             return [];
         }
 
-        $ids = $users->pluck('id')->all();
-        $marcadores = implode(',', array_fill(0, count(PaymentController::PAID_STATUSES), '?'));
-
-        $pagos = Payment::query()
-            ->whereIn('user_id', $ids)
-            ->whereNotNull('plan_id')
-            ->whereNotNull('period_start')
-            ->whereNotNull('period_end')
-            ->whereRaw('LOWER(status) IN ('.$marcadores.')', PaymentController::PAID_STATUSES)
-            ->orderByDesc('period_start')
-            ->orderByDesc('id')
-            ->get(['id', 'user_id', 'period_start', 'period_end'])
-            ->groupBy('user_id');
+        $planes = $derechos['planes'];
 
         $ventanas = [];
         foreach ($users as $user) {
             /** @var Collection<int, Payment> $suyos */
-            $suyos = $pagos->get($user->id) ?? collect();
+            $suyos = ($derechos['pagos'][$user->id] ?? collect())
+                ->filter(fn (Payment $p): bool => ! (bool) ($planes->get($p->plan_id)?->benefit_only))
+                ->values();
 
             // El periodo que cubre hoy. Si ninguno lo cubre —venció, o todavía
             // no empieza— vale el más reciente: es el que el socio está usando

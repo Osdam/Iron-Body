@@ -74,6 +74,17 @@ class MembershipRebuilder
 
                 continue;
             }
+            // UN BENEFICIO AÑADIDO NO ENTRA EN LA VIGENCIA. El plan día y las
+            // clases sueltas son derechos aparte, con su propio periodo
+            // congelado en su cobro: encadenarlos aquí volvería a inflar el
+            // vencimiento del socio, que es justo lo que esta reconstrucción
+            // tiene que poder corregir. Ver `plans.benefit_only`.
+            if ($this->esBeneficio($pago)) {
+                $aplicados++;
+
+                continue;
+            }
+
             $dias = $this->durationOf($pago);
             if ($dias <= 0) {
                 continue;
@@ -116,8 +127,11 @@ class MembershipRebuilder
 
         $antesInicio = $user->membership_start_date;
         $antesFin = $user->membership_end_date;
+        $antesPlan = $user->plan;
+        $etiqueta = $this->etiquetaCorrecta($user);
 
-        if ($antesInicio === $nuevo['start'] && $antesFin === $nuevo['end']) {
+        if ($antesInicio === $nuevo['start'] && $antesFin === $nuevo['end']
+            && ($etiqueta === null || $etiqueta === $antesPlan)) {
             return null;
         }
 
@@ -128,6 +142,12 @@ class MembershipRebuilder
         // nadie.
         if ($nuevo['end'] === null) {
             $user->plan = null;
+        } elseif ($etiqueta !== null) {
+            // LA ETIQUETA, cuando la reescribió un beneficio añadido. Ver
+            // etiquetaCorrecta(): es el otro rastro que dejó el fallo, y sin
+            // corregirlo la ficha sigue enseñando «PLAN DÍA» como la membresía
+            // de alguien que tiene una anualidad.
+            $user->plan = $etiqueta;
         }
         $user->save();
 
@@ -136,6 +156,8 @@ class MembershipRebuilder
             'end' => $nuevo['end'],
             'previous_start' => $antesInicio,
             'previous_end' => $antesFin,
+            'plan' => $user->plan,
+            'previous_plan' => $antesPlan,
             'applied' => $nuevo['applied'],
         ];
     }
@@ -223,6 +245,52 @@ class MembershipRebuilder
      * Cuántos días compró un pago: los que se le congelaron, y si no, los que
      * dura su plan hoy.
      */
+    /**
+     * EL NOMBRE QUE DEBERÍA TENER LA ETIQUETA, o null si no hay nada que decir.
+     *
+     * `users.plan` lo reescribía CADA cobro, también el de un beneficio añadido:
+     * una socia con una anualidad vigente que compró un plan día se quedó con
+     * «PLAN DÍA» como membresía, y de ahí salían sus reglas de acceso.
+     *
+     * Solo se repara ese caso concreto y demostrable: la etiqueta nombra un plan
+     * marcado como BENEFICIO AÑADIDO y el socio tiene un cobro de un plan que no
+     * lo es. Entonces su membresía es ésa —la del último cobro de membresía de
+     * verdad— y se le devuelve el nombre.
+     *
+     * Si la etiqueta nombra un plan normal no se toca NADA: pudo ponerla un
+     * traslado o una edición a mano, que son cambios legítimos, y adivinar ahí
+     * sería reescribir decisiones de otra persona.
+     */
+    private function etiquetaCorrecta(User $user): ?string
+    {
+        $etiqueta = trim((string) ($user->plan ?? ''));
+        if ($etiqueta === '') {
+            return null;
+        }
+
+        $pagos = $this->paidPlanPayments($user);
+
+        $nombraBeneficio = $pagos->contains(
+            fn (Payment $p): bool => (bool) ($p->plan?->benefit_only)
+                && mb_strtolower(trim((string) $p->plan?->name)) === mb_strtolower($etiqueta)
+        );
+        if (! $nombraBeneficio) {
+            return null;
+        }
+
+        $membresia = $pagos
+            ->filter(fn (Payment $p): bool => $p->plan !== null && ! (bool) $p->plan->benefit_only)
+            ->last();
+
+        return $membresia?->plan?->name;
+    }
+
+    /** ¿Este cobro compró un beneficio añadido en vez de membresía? */
+    private function esBeneficio(Payment $pago): bool
+    {
+        return (bool) (Plan::find($pago->plan_id)?->benefit_only);
+    }
+
     private function durationOf(Payment $pago): int
     {
         if ($pago->period_start && $pago->period_end) {
