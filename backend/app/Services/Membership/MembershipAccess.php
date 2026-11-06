@@ -102,12 +102,16 @@ class MembershipAccess
         $pausas = app(MembershipFreeze::class);
         $planes = $this->plansByName();
 
+        // La etiqueta `users.plan` gobierna salvo cuando es el eco de una
+        // compra: entonces mandan las compras. Ver derechoQueGobierna().
+        $vigentes = $this->derechoQueGobierna($users, $hoy);
+
         // Las reglas de cada socio primero: solo los planes por consumo pagan el
         // recuento de entradas, y son los menos.
         $reglas = [];
         $planDe = [];
         foreach ($users as $user) {
-            $plan = $planes->get(self::planKey((string) ($user->plan ?? '')));
+            $plan = $vigentes[$user->id] ?? $planes->get(self::planKey((string) ($user->plan ?? '')));
             $planDe[$user->id] = $plan;
             $reglas[$user->id] = PlanAccessRules::fromPlan($plan);
         }
@@ -486,6 +490,116 @@ class MembershipAccess
     // ────────────────────────────────────────────────────────────────────────
     //  De dónde sale cada dato
     // ────────────────────────────────────────────────────────────────────────
+
+    /**
+     * EL PLAN QUE GOBIERNA, cuando NO es el de la etiqueta.
+     *
+     * `users.plan` es una etiqueta materializada y la escriben tres cosas
+     * legítimas: un cobro ({@see MembershipPeriod::applyLocked()}),
+     * un traslado de plan y una edición a mano. El problema es que el cobro la
+     * escribe SIEMPRE, también cuando lo que compró no es la membresía
+     * principal.
+     *
+     * EL CASO REAL. Una socia con una ANUALIDAD vigente compra además un PLAN
+     * DÍA para una clase. Son dos compras independientes, pero la etiqueta pasa
+     * a «PLAN DÍA» y las reglas de acceso salían de ahí: un plan día es por
+     * consumo —UNA entrada—, y las entradas se cuentan en el periodo del cobro
+     * que cubre hoy, que es el del año. La socia llevaba meses entrando, así que
+     * quedaba bloqueada en el acto con la anualidad pagada y vigente. Y al
+     * vencer el plan día seguía igual: la etiqueta no se cae sola.
+     *
+     * LA REGLA. Si la etiqueta es el ECO DE UNA COMPRA —hay un cobro suyo que
+     * compró ese mismo plan—, entonces las compras son la verdad y gobierna el
+     * DERECHO que cubre hoy: el periodo congelado del cobro
+     * (`period_start`/`period_end`), la misma fuente de la que
+     * {@see windowsFor()} saca la ventana de entradas. Las dos cosas salían de
+     * sitios distintos —la ventana del cobro, las reglas del nombre— y esa
+     * contradicción era el fallo.
+     *
+     * Si la etiqueta dice algo que NINGUNA compra explica, la puso un traslado
+     * de plan o una edición a mano, que son cambios legítimos sin cobro detrás:
+     * entonces gobierna ella y aquí no se toca nada.
+     *
+     * Cuando varios derechos cubren hoy manda el que TERMINA MÁS TARDE: es la
+     * membresía principal, y lo que no se puede hacer nunca es recortarle
+     * derechos por una compra añadida.
+     *
+     * LO QUE SIGUE IGUAL: una renovación normal (la etiqueta y el derecho
+     * vigente son el mismo plan, misma respuesta), una mejora de plan (su cobro
+     * compra el periodo nuevo y es el que cubre hoy), un traslado, una edición a
+     * mano y las fichas sin periodos congelados (importadas del sistema
+     * anterior), que se gobiernan por su etiqueta como siempre.
+     *
+     * @param  Collection<int, User>  $users
+     * @return array<int, Plan>
+     */
+    private function derechoQueGobierna(Collection $users, CarbonImmutable $hoy): array
+    {
+        if ($users->isEmpty()) {
+            return [];
+        }
+
+        $marcadores = implode(',', array_fill(0, count(PaymentController::PAID_STATUSES), '?'));
+
+        $pagos = Payment::query()
+            ->whereIn('user_id', $users->pluck('id')->all())
+            ->whereNotNull('plan_id')
+            ->whereNotNull('period_start')
+            ->whereNotNull('period_end')
+            ->whereRaw('LOWER(status) IN ('.$marcadores.')', PaymentController::PAID_STATUSES)
+            ->get(['id', 'user_id', 'plan_id', 'period_start', 'period_end'])
+            ->groupBy('user_id');
+
+        if ($pagos->isEmpty()) {
+            return [];
+        }
+
+        // Los planes de todos los cobros en juego, de una consulta: hace falta
+        // el NOMBRE para saber si la etiqueta es el eco de una compra.
+        $planes = Plan::query()
+            ->whereIn('id', $pagos->flatten()->pluck('plan_id')->unique()->all())
+            ->get(['id', 'name', 'duration_days', 'access_mode', 'entry_credits', 'access_days', 'access_windows'])
+            ->keyBy('id');
+
+        $gobierna = [];
+        foreach ($users as $user) {
+            /** @var Collection<int, Payment> $suyos */
+            $suyos = $pagos->get($user->id) ?? collect();
+            if ($suyos->isEmpty()) {
+                continue;
+            }
+
+            $etiqueta = self::planKey((string) ($user->plan ?? ''));
+            $comprada = $suyos->contains(
+                fn (Payment $p): bool => $etiqueta !== ''
+                    && self::planKey((string) ($planes->get($p->plan_id)?->name ?? '')) === $etiqueta
+            );
+            if (! $comprada) {
+                continue; // La puso un traslado o una edición: manda ella.
+            }
+
+            $cubriendo = $suyos
+                ->filter(fn (Payment $p): bool => $this->cubre($p, $hoy))
+                ->sortByDesc(fn (Payment $p): string => $p->period_end->format('Y-m-d'))
+                ->first();
+
+            if ($cubriendo !== null && $planes->get($cubriendo->plan_id) !== null) {
+                $gobierna[(int) $user->id] = $planes->get($cubriendo->plan_id);
+            }
+        }
+
+        return $gobierna;
+    }
+
+    /** ¿El periodo que compró este cobro incluye hoy? */
+    private function cubre(Payment $pago, CarbonImmutable $hoy): bool
+    {
+        $desde = $this->day($pago->period_start->format('Y-m-d'));
+        $hasta = $this->day($pago->period_end->format('Y-m-d'));
+
+        return $desde !== null && $hasta !== null
+            && ! $desde->greaterThan($hoy) && ! $hasta->lessThan($hoy);
+    }
 
     /**
      * El PERIODO al que pertenecen las entradas. No es la membresía completa:
