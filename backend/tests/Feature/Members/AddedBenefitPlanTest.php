@@ -442,4 +442,91 @@ class AddedBenefitPlanTest extends TestCase
         $this->assertSame(4, $acceso['entries']['used'], 'sus entradas del mes siguen contadas');
         $this->assertSame($this->hoy()->subDays(5)->toDateString(), $acceso['entries']['window']['from']);
     }
+
+    // ── Quien NO tiene membresía: el plan día suelto ────────────────────────
+
+    public function test_a_un_visitante_sin_membresia_el_plan_dia_le_funciona_como_siempre(): void
+    {
+        // LA OTRA MITAD DE LA MARCA. Marcar el plan día como beneficio añadido
+        // no puede romper la venta de siempre: alguien que llega de la calle,
+        // paga un día y entra. No tiene nada encima de lo que ponerse, así que
+        // para él el plan día SÍ es su membresía y se comporta como antes.
+        $visitante = $this->socia();
+        $dia = $this->planDia();
+
+        $pago = $this->cobrar($visitante, $dia);
+
+        $visitante->refresh();
+        $this->assertSame('PLAN DÍA', $visitante->plan, 'sin otra membresía, el plan día es la suya');
+        $this->assertSame(
+            $this->hoy()->toDateString(),
+            substr((string) $visitante->membership_start_date, 0, 10),
+        );
+        $this->assertSame($this->hoy()->toDateString(), $pago->period_start->format('Y-m-d'));
+
+        $acceso = $this->acceso($visitante);
+        $this->assertTrue($acceso['can_enter'], 'pagó su día: entra');
+        $this->assertSame($dia->id, $acceso['plan']['id']);
+        $this->assertSame(1, $acceso['entries']['total']);
+        $this->assertSame(0, $acceso['entries']['used']);
+        $this->assertSame($this->hoy()->toDateString(), $acceso['entries']['window']['from']);
+
+        // Y su entrada se le cuenta: no es una puerta abierta, es un día.
+        Attendance::create([
+            'user_id' => $visitante->id,
+            'action' => 'entry',
+            'source' => 'facial',
+            'captured_at' => $this->hoy()->setTime(9, 0)->setTimezone('UTC'),
+        ]);
+
+        $acceso = $this->acceso($visitante);
+        $this->assertSame(1, $acceso['entries']['used']);
+        $this->assertTrue($acceso['can_enter'], 'ya entró hoy: puede volver a pasar sin gastar otra');
+        $this->assertTrue($acceso['entries']['used_today']);
+    }
+
+    public function test_quien_vuelve_a_comprar_un_plan_dia_meses_despues_entra_con_el_nuevo(): void
+    {
+        // EL CASO QUE NO ES OBVIO. Tras su primera visita se quedó con «PLAN
+        // DÍA» como etiqueta y una vigencia vencida, así que su SEGUNDA compra
+        // ya se trata como beneficio añadido: no le mueve fechas ni etiqueta.
+        // Lo que tiene que pasar es que entre igual, con el derecho que acaba
+        // de pagar, sin que le estorbe la entrada que gastó hace dos meses.
+        $visitante = $this->socia();
+        $dia = $this->planDia();
+
+        $this->cobrar($visitante, $dia, $this->hoy()->subDays(60));
+        Attendance::create([
+            'user_id' => $visitante->id,
+            'action' => 'entry',
+            'source' => 'facial',
+            'captured_at' => $this->hoy()->subDays(60)->setTime(9, 0)->setTimezone('UTC'),
+        ]);
+
+        $this->assertFalse($this->acceso($visitante)['can_enter'], 'su día de hace dos meses ya pasó');
+
+        $pago = $this->cobrar($visitante, $dia);
+        $this->assertSame(
+            $this->hoy()->toDateString(),
+            $pago->period_start->format('Y-m-d'),
+            'el día que paga hoy vale hoy, no detrás de nada',
+        );
+
+        $acceso = $this->acceso($visitante);
+        $this->assertTrue($acceso['can_enter'], 'pagó su día de hoy: entra');
+        $this->assertSame($dia->id, $acceso['benefit_opened']['id'] ?? null);
+
+        // Y SIGUE SIENDO UN DÍA. Usado el de hoy, mañana vuelve a estar fuera:
+        // el beneficio gasta su propia entrada, no abre la puerta sin más.
+        Attendance::create([
+            'user_id' => $visitante->id,
+            'action' => 'entry',
+            'source' => 'facial',
+            'captured_at' => $this->hoy()->setTime(9, 0)->setTimezone('UTC'),
+        ]);
+
+        $manana = $this->acceso($visitante, $this->hoy()->addDays(1)->setTime(9, 0));
+        $this->assertFalse($manana['can_enter'], 'un día es un día: mañana paga otro');
+        $this->assertNull($manana['benefit_opened']);
+    }
 }
