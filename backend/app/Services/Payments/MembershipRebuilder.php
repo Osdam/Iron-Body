@@ -253,6 +253,22 @@ class MembershipRebuilder
             return 'tiene pagos migrados (MIGR-*): su vigencia vino del sistema anterior';
         }
 
+        // SUS ÚNICOS COBROS SON BENEFICIOS AÑADIDOS: esos días SON su vigencia.
+        //
+        // Un beneficio solo es «añadido» cuando hay una membresía debajo —es la
+        // misma regla con la que se cobra, {@see MembershipPeriod}—. Quien llega
+        // de la calle y paga un plan día no tiene nada debajo: ese día es toda
+        // su vigencia, y así se la escribió la caja.
+        //
+        // Sin esto la reconstrucción los vaciaba. Salta los beneficios para no
+        // volver a inflar vencimientos, y a quien solo tiene beneficios no le
+        // quedaba ni un pago que contar: ficha en blanco, plan en null y fuera
+        // del gimnasio el que acababa de pagar su día.
+        if ($pagos->isNotEmpty()
+            && ! $pagos->contains(fn (Payment $p): bool => ! (bool) ($p->plan?->benefit_only))) {
+            return 'sus únicos cobros son beneficios añadidos (plan día, clase suelta): esos días son su vigencia';
+        }
+
         foreach ($pagos as $pago) {
             if ($pago->upgraded_from_plan_id) {
                 // Legacy: solo cambió el plan, sin días nuevos. Las nuevas

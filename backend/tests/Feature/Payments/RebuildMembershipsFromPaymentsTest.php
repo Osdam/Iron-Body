@@ -228,4 +228,54 @@ class RebuildMembershipsFromPaymentsTest extends TestCase
         $this->assertSame('Elizabet Calderón', $u->name);
         $this->assertSame(2, Payment::where('user_id', $u->id)->count());
     }
+
+    public function test_no_le_quita_la_vigencia_a_quien_solo_compro_planes_dia(): void
+    {
+        // EL VISITANTE DE LA CALLE. No tiene membresía debajo, así que su plan
+        // día ES su vigencia y así se la escribió la caja. La reconstrucción
+        // salta los beneficios añadidos para no volver a inflar vencimientos,
+        // y a él no le quedaba ni un pago que contar: le vaciaba la ficha y lo
+        // dejaba fuera el mismo día que pagó.
+        $dia = Plan::create([
+            'name' => 'PLAN DÍA', 'price' => 12000, 'duration_days' => 1,
+            'benefit_only' => true, 'active' => true,
+        ]);
+        $hoy = MembershipRebuilder::today();
+
+        $u = User::create([
+            'name' => 'Miguel Rincón', 'email' => 'miguel-'.uniqid().'@example.com',
+            'password' => 'secret', 'status' => 'active', 'plan' => 'PLAN DÍA',
+            'membership_start_date' => $hoy->toDateString(),
+            'membership_end_date' => $hoy->addDays(1)->toDateString(),
+        ]);
+        Payment::create([
+            'user_id' => $u->id, 'plan_id' => $dia->id, 'amount' => 12000,
+            'method' => 'cash', 'status' => 'paid', 'origin' => 'counter',
+            'paid_at' => $hoy->setTime(9, 0),
+            'period_start' => $hoy->toDateString(), 'period_end' => $hoy->addDays(1)->toDateString(),
+        ]);
+
+        $this->artisan("memberships:rebuild --user={$u->id} --apply")->assertSuccessful();
+
+        $u->refresh();
+        $this->assertSame('PLAN DÍA', $u->plan, 'su plan día es su membresía: no se le borra');
+        $this->assertSame($hoy->toDateString(), $u->membership_start_date);
+        $this->assertSame($hoy->addDays(1)->toDateString(), $u->membership_end_date);
+    }
+
+    public function test_labels_only_corrige_el_nombre_y_no_toca_ninguna_fecha(): void
+    {
+        // Las dos reparaciones no tienen el mismo riesgo: el nombre del plan
+        // sale del historial y es demostrable; recalcular una vigencia puede
+        // acortarle el acceso a quien hoy entra. Con --labels-only se aplica
+        // la mitad segura sobre todo el gimnasio sin mover una sola fecha.
+        $plan = $this->plan();
+        $u = $this->elizabet($plan);
+
+        $this->artisan("memberships:rebuild --user={$u->id} --apply --labels-only")->assertSuccessful();
+
+        $u->refresh();
+        $this->assertSame('2026-09-12', $u->membership_start_date);
+        $this->assertSame('2026-11-11', $u->membership_end_date, 'su vigencia estirada sigue igual');
+    }
 }

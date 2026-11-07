@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\DB;
  *   php artisan memberships:rebuild --user=7642          qué le quedaría a uno
  *   php artisan memberships:rebuild --user=7642 --apply  lo corrige
  *   php artisan memberships:rebuild --all --apply        corrige a todos los que salgan
+ *   php artisan memberships:rebuild --all --apply --labels-only   solo los nombres de plan
  *
  * PARA QUÉ. Los cobros anulados ANTES del 14/09/2026 no devolvieron los días
  * que habían dado, y de aquella época no quedó periodo congelado que devolver
@@ -32,13 +33,21 @@ class RebuildMembershipsFromPayments extends Command
     protected $signature = 'memberships:rebuild
         {--user= : Un solo socio (users.id)}
         {--all : Autoriza tocar a todos los socios que salgan}
-        {--apply : Guarda los cambios. Sin esto solo informa}';
+        {--apply : Guarda los cambios. Sin esto solo informa}
+        {--labels-only : Corrige SOLO los nombres de plan. No toca ninguna fecha}';
 
     protected $description = 'Recalcula la vigencia de los socios a partir de sus pagos cobrados';
 
     public function handle(MembershipRebuilder $rebuilder): int
     {
         $aplicar = (bool) $this->option('apply');
+        // SOLO LAS ETIQUETAS. Las dos reparaciones son independientes y no
+        // tienen el mismo riesgo: el nombre del plan sale del historial del
+        // socio y es demostrable, mientras que recalcular una vigencia puede
+        // acortarle el acceso a alguien que hoy entra —una cortesía, una
+        // extensión puesta a mano— y eso lo tiene que mirar una persona fila
+        // por fila. Sin esta opción había que elegir entre las dos o ninguna.
+        $soloEtiquetas = (bool) $this->option('labels-only');
         $unSocio = $this->option('user');
 
         if ($aplicar && ! $unSocio && ! $this->option('all')) {
@@ -120,7 +129,7 @@ class RebuildMembershipsFromPayments extends Command
                 $this->warning($user, $previo),
             ];
 
-            if ($aplicar) {
+            if ($aplicar && ! $soloEtiquetas) {
                 $hecho = DB::transaction(fn () => $rebuilder->rebuild($user));
                 if ($hecho) {
                     $this->audit($user, $hecho);
@@ -130,7 +139,7 @@ class RebuildMembershipsFromPayments extends Command
         }
 
         if ($filas === []) {
-            $this->info('Ninguna vigencia se aparta de sus pagos.'
+            $this->info(($soloEtiquetas ? 'Ninguna fecha tocada.' : 'Ninguna vigencia se aparta de sus pagos.')
                 .($omitidos ? " ({$omitidos} sin reconstruir)" : '')
                 .($etiquetas ? " Etiquetas corregidas: {$etiquetas}." : ''));
 
@@ -139,9 +148,13 @@ class RebuildMembershipsFromPayments extends Command
 
         $this->table(['#', 'socio', 'tiene', 'le corresponde', 'según', 'ojo'], $filas);
         $this->newLine();
-        $this->line($aplicar
-            ? "Corregidos: {$corregidos}. Etiquetas: {$etiquetas}. Sin reconstruir: {$omitidos}."
-            : count($filas).' socio(s) con la vigencia estirada. Repite con --apply para corregir.');
+        $this->line(match (true) {
+            $aplicar && $soloEtiquetas => "Etiquetas corregidas: {$etiquetas}. NINGUNA fecha tocada: "
+                .count($filas).' socio(s) siguen con la vigencia estirada.',
+            $aplicar => "Corregidos: {$corregidos}. Etiquetas: {$etiquetas}. Sin reconstruir: {$omitidos}.",
+            default => count($filas).' socio(s) con la vigencia estirada. Repite con --apply para corregir'
+                .' (o --apply --labels-only para corregir solo los nombres de plan).',
+        });
         $this->newLine();
 
         return self::SUCCESS;
