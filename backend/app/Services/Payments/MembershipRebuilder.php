@@ -85,6 +85,19 @@ class MembershipRebuilder
                 continue;
             }
 
+            // UN COBRO QUE NO DA VIGENCIA NO ENCADENA NADA. Lo dice el catálogo
+            // poniendo el plan en cero días, y la caja ya lo respeta
+            // (`MembershipPeriod::apply()` se detiene en `dias <= 0`). Aquí
+            // faltaba: estos cobros sí tienen periodo congelado de cuando el
+            // plan duraba treinta días, y reconstruir desde él le devolvería al
+            // socio el mes que una comisión le regaló. Es de donde salieron las
+            // vigencias que empiezan en 2027 ({@see MembershipFutureDatesCommand}).
+            if ((int) ($pago->plan?->duration_days ?? 0) <= 0) {
+                $aplicados++;
+
+                continue;
+            }
+
             $dias = $this->durationOf($pago);
             if ($dias <= 0) {
                 continue;
@@ -284,8 +297,17 @@ class MembershipRebuilder
 
                 continue;
             }
+            // Un plan que no existe deja la cuenta sin base y hay que pararse.
+            // Uno de cero días NO: es un cobro sin vigencia a propósito, y el
+            // bucle lo salta.
+            if ($pago->plan === null) {
+                return "el pago #{$pago->id} apunta al plan {$pago->plan_id}, que no existe";
+            }
+            if ((int) $pago->plan->duration_days <= 0) {
+                continue;
+            }
             if ($this->durationOf($pago) <= 0) {
-                return "el pago #{$pago->id} apunta al plan {$pago->plan_id}, que no existe o no tiene duración";
+                return "el pago #{$pago->id} apunta al plan {$pago->plan_id}, que no tiene duración";
             }
         }
 
@@ -329,8 +351,19 @@ class MembershipRebuilder
             return null;
         }
 
+        // NI LA ETIQUETA SALE DE UN COBRO QUE NO DA VIGENCIA. Hay planes en el
+        // catálogo que no son membresías: la «Comisión de personalizados» es el
+        // vehículo contable con el que se apuntaba el cobro de piso de los
+        // entrenadores, cargada como un plan de treinta días y precio cero. Un
+        // plan de CERO DÍAS es justo eso —un cobro sin vigencia, {@see
+        // PlanController::validatedData()}— y no puede ser la membresía de
+        // nadie: proponerlo como etiqueta le pondría «Comisión de
+        // personalizados» de plan a una socia, con las reglas de acceso que
+        // tuviera ese plan.
         $membresia = $pagos
-            ->filter(fn (Payment $p): bool => $p->plan !== null && ! (bool) $p->plan->benefit_only)
+            ->filter(fn (Payment $p): bool => $p->plan !== null
+                && ! (bool) $p->plan->benefit_only
+                && (int) $p->plan->duration_days > 0)
             ->last();
 
         return $membresia?->plan?->name;
