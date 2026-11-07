@@ -11,6 +11,7 @@ use App\Services\Membership\MembershipAccess;
 use App\Services\Membership\MembershipFreeze;
 use App\Services\Membership\PlanAccessRules;
 use App\Services\Payments\MembershipPeriod;
+use App\Services\Payments\MembershipRebuilder;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -303,6 +304,80 @@ class AddedBenefitPlanTest extends TestCase
     }
 
     // ── Lo que no cambia ────────────────────────────────────────────────────
+
+    public function test_a_una_socia_del_sistema_anterior_se_le_repara_la_etiqueta(): void
+    {
+        // EL CASO DE CAMILA. Su anualidad vino del sistema anterior: el pago es
+        // `MIGR-*` y no congeló periodo, así que la vigencia NO se puede
+        // recalcular sin inventarla y `memberships:rebuild` se niega, con razón.
+        //
+        // Pero su etiqueta sí se puede reparar: el nombre correcto está en su
+        // propio historial. Y hace falta justo para esta gente —los socios de
+        // siempre—, porque sin ella se quedan con «PLAN DÍA» como membresía y
+        // con sus reglas, UNA entrada, gobernando el año que tienen pagado.
+        $socia = $this->socia();
+        $anual = $this->anualidad();
+        $dia = $this->planDia();
+        $inicio = $this->hoy()->subDays(300);
+
+        // El pago importado: sin periodo congelado, como lo deja el importador.
+        Payment::create([
+            'user_id' => $socia->id, 'plan_id' => $anual->id, 'amount' => $anual->price,
+            'method' => 'manual', 'status' => 'paid', 'reference' => 'MIGR-4821',
+            'paid_at' => $inicio->setTime(9, 0),
+        ]);
+        $socia->forceFill([
+            'plan' => $anual->name,
+            'membership_start_date' => $inicio->toDateString(),
+            'membership_end_date' => $inicio->addDays(365)->toDateString(),
+        ])->save();
+
+        // Y el plan día encima, cobrado antes de marcar la casilla: encadenado
+        // al final del año y con la etiqueta reescrita, como pasó de verdad.
+        $encadenado = $inicio->addDays(365);
+        Payment::create([
+            'user_id' => $socia->id, 'plan_id' => $dia->id, 'amount' => $dia->price,
+            'method' => 'cash', 'status' => 'paid', 'paid_at' => $this->hoy()->setTime(10, 0),
+            'starts_on' => $this->hoy()->toDateString(),
+            'period_start' => $encadenado->toDateString(),
+            'period_end' => $encadenado->addDays(1)->toDateString(),
+        ]);
+        $socia->forceFill([
+            'plan' => $dia->name,
+            'membership_end_date' => $encadenado->addDays(1)->toDateString(),
+        ])->save();
+
+        // Con la etiqueta en «PLAN DÍA» y sus 40 entradas del año, está fuera.
+        $this->entradas($socia, 40);
+        $this->assertFalse($this->acceso($socia)['can_enter'], 'así estaba: bloqueada');
+
+        // La reparación de la etiqueta, que no mira fechas.
+        $fechaAntes = (string) $socia->refresh()->membership_end_date;
+        $hecho = app(MembershipRebuilder::class)->rebuildLabel($socia);
+
+        $this->assertSame(['from' => 'PLAN DÍA', 'to' => 'Anualidad'], $hecho);
+        $this->assertSame('Anualidad', $socia->refresh()->plan);
+        // Y NO toca la vigencia: esa no se puede recalcular y no se inventa.
+        $this->assertSame($fechaAntes, (string) $socia->membership_end_date);
+
+        // Ahora entra, con las reglas de su anualidad.
+        $acceso = $this->acceso($socia);
+        $this->assertTrue($acceso['can_enter'], $acceso['message'] ?? '');
+        $this->assertSame($anual->id, $acceso['plan']['id']);
+    }
+
+    public function test_la_reparacion_no_toca_a_quien_tiene_una_etiqueta_legitima(): void
+    {
+        // Si la etiqueta nombra un plan normal, la pudo poner un traslado o una
+        // edición a mano. No se adivina: se deja.
+        $socia = $this->socia();
+        $otro = Plan::create(['name' => 'Anualidad Plus', 'price' => 1400000, 'duration_days' => 365, 'active' => true]);
+        $this->cobrar($socia, $this->anualidad(), $this->hoy()->subDays(10));
+        $socia->forceFill(['plan' => $otro->name])->save();
+
+        $this->assertNull(app(MembershipRebuilder::class)->rebuildLabel($socia->refresh()));
+        $this->assertSame('Anualidad Plus', $socia->refresh()->plan);
+    }
 
     public function test_la_casilla_se_guarda_y_se_devuelve_desde_el_crm(): void
     {

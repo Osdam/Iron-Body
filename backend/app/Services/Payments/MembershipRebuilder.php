@@ -113,6 +113,41 @@ class MembershipRebuilder
     }
 
     /**
+     * ESCRIBE SOLO LA ETIQUETA, sin tocar ninguna fecha.
+     *
+     * Existe porque las dos reparaciones son independientes y una de ellas se
+     * puede hacer siempre. La vigencia no se puede recalcular para quien vino
+     * del sistema anterior —sus pagos `MIGR-*` no congelaron periodo y
+     * rehacerla sería inventarla—, pero la ETIQUETA sí: su nombre correcto está
+     * en su propio historial, es el plan de su último cobro de membresía de
+     * verdad.
+     *
+     * Y hace falta justo para esa gente. Son los socios de siempre, los que
+     * venían del sistema anterior, y a ellos el plan día les reescribió la
+     * etiqueta igual que a todos: `rebuild()` se negaba antes de llegar aquí, y
+     * se quedaban con «PLAN DÍA» como membresía y con sus reglas de acceso —una
+     * entrada— gobernando el año que tienen pagado.
+     *
+     * No inventa nada: no toca fechas, importes, cobros ni historial. Devuelve
+     * el nombre anterior y el nuevo, o null si no había nada que corregir.
+     *
+     * @return array{from: ?string, to: string}|null
+     */
+    public function rebuildLabel(User $user): ?array
+    {
+        $correcta = $this->labelFix($user);
+        if ($correcta === null || $correcta === $user->plan) {
+            return null;
+        }
+
+        $antes = $user->plan;
+        $user->plan = $correcta;
+        $user->save();
+
+        return ['from' => $antes, 'to' => $correcta];
+    }
+
+    /**
      * Escribe el recálculo. Devuelve null si no había nada que cambiar o si el
      * socio no se puede reconstruir.
      *
@@ -128,7 +163,7 @@ class MembershipRebuilder
         $antesInicio = $user->membership_start_date;
         $antesFin = $user->membership_end_date;
         $antesPlan = $user->plan;
-        $etiqueta = $this->etiquetaCorrecta($user);
+        $etiqueta = $this->labelFix($user);
 
         if ($antesInicio === $nuevo['start'] && $antesFin === $nuevo['end']
             && ($etiqueta === null || $etiqueta === $antesPlan)) {
@@ -261,7 +296,7 @@ class MembershipRebuilder
      * traslado o una edición a mano, que son cambios legítimos, y adivinar ahí
      * sería reescribir decisiones de otra persona.
      */
-    private function etiquetaCorrecta(User $user): ?string
+    public function labelFix(User $user): ?string
     {
         $etiqueta = trim((string) ($user->plan ?? ''));
         if ($etiqueta === '') {
