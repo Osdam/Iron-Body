@@ -278,4 +278,37 @@ class RebuildMembershipsFromPaymentsTest extends TestCase
         $this->assertSame('2026-09-12', $u->membership_start_date);
         $this->assertSame('2026-11-11', $u->membership_end_date, 'su vigencia estirada sigue igual');
     }
+
+    public function test_el_barrido_dice_de_quien_es_cada_etiqueta(): void
+    {
+        // En el barrido de todo el gimnasio son decenas de líneas seguidas. Sin
+        // nombre ni número no hay forma de revisar la lista antes de escribirla
+        // —ni de ver que a alguien le quiere poner de plan algo que no es una
+        // membresía— ni de comprobarla después.
+        $mensual = $this->plan();
+        $dia = Plan::create([
+            'name' => 'PLAN DÍA', 'price' => 12000, 'duration_days' => 1,
+            'benefit_only' => true, 'active' => true,
+        ]);
+
+        $u = User::create([
+            'name' => 'Socia del sistema anterior', 'email' => 'anterior-'.uniqid().'@example.com',
+            'password' => 'secret', 'status' => 'active', 'plan' => 'PLAN DÍA',
+            'membership_start_date' => '2026-10-01', 'membership_end_date' => '2026-12-01',
+        ]);
+        Payment::create([
+            'user_id' => $u->id, 'plan_id' => $mensual->id, 'amount' => 180000,
+            'method' => 'cash', 'status' => 'paid', 'reference' => 'MIGR-77',
+            'paid_at' => '2026-10-01 00:00:00', 'origin' => 'counter',
+        ]);
+        Payment::create([
+            'user_id' => $u->id, 'plan_id' => $dia->id, 'amount' => 12000,
+            'method' => 'cash', 'status' => 'paid', 'origin' => 'counter',
+            'paid_at' => '2026-11-01 00:00:00',
+        ]);
+
+        $this->artisan('memberships:rebuild')
+            ->expectsOutputToContain("#{$u->id} Socia del sistema anterior: su plan dice «PLAN DÍA»")
+            ->assertSuccessful();
+    }
 }

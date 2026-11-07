@@ -95,7 +95,13 @@ class RebuildMembershipsFromPayments extends Command
                 // gobernando el año que tienen pagado.
                 if ($etiqueta = $rebuilder->labelFix($user)) {
                     if ($etiqueta !== $user->plan) {
-                        $this->line("     su plan dice «{$user->plan}» y su última membresía pagada es «{$etiqueta}»");
+                        // CON NOMBRE Y NÚMERO, siempre. En el barrido de todo
+                        // el gimnasio son decenas de líneas seguidas, y sin
+                        // saber de quién es cada una no hay forma de revisar
+                        // la lista antes de escribirla ni de comprobarla
+                        // después.
+                        $this->line("  #{$user->id} {$user->name}: su plan dice «{$user->plan}»"
+                            ." y su última membresía pagada es «{$etiqueta}»");
                         if ($aplicar && ($hecho = DB::transaction(fn () => $rebuilder->rebuildLabel($user)))) {
                             $this->info("     corregido: «{$hecho['from']}» → «{$hecho['to']}» (fechas intactas)");
                             $this->auditLabel($user, $hecho);
