@@ -1,0 +1,14 @@
+--- a/backend/tests/Feature/UltronStudio/UltronStudioEngineReadOnlyTest.php
++++ b/backend/tests/Feature/UltronStudio/UltronStudioEngineReadOnlyTest.php
+@@ -745,9 +745,9 @@
+         $this->walk('POST', "voice/profiles/{$otro}/reject", $root, ['note' => 'Rechazado en el recorrido'])->assertOk();
+         // La versión del recorrido cambia parámetros que la voz no compila: 200 o el 422 del compilador, sin red.
+         $this->walk('POST', 'voice/compile-preview', $ana, ['versionUuid' => $version, 'profileUuid' => $perfil]);
+-        $this->walk('POST', 'voice/publish', $root, ['clientRequestId' => (string) Str::uuid(), 'versionUuid' => $version, 'profileUuid' => $perfil])
++        $this->walk('POST', 'voice/publish', $root, ['clientRequestId' => (string) Str::uuid(), 'versionUuid' => $version, 'profileUuid' => $perfil, 'expectedSpecHash' => str_repeat('0', 64)])
+             ->assertStatus(409)->assertJsonPath('code', 'voice_publishing_disabled');
+-        $this->walk('POST', 'voice/promote', $root, ['clientRequestId' => (string) Str::uuid(), 'evidenceHash' => str_repeat('0', 64)])
++        $this->walk('POST', 'voice/promote', $root, ['clientRequestId' => (string) Str::uuid(), 'evidenceHash' => str_repeat('0', 64), 'expectedSpecHash' => str_repeat('0', 64)])
+             ->assertStatus(409)->assertJsonPath('code', 'voice_publishing_disabled');
+         $this->walk('POST', 'voice/rollback', $root, ['clientRequestId' => (string) Str::uuid(), 'scope' => 'canary', 'reason' => 'Recorrido del motor'])
+             ->assertStatus(409)->assertJsonPath('code', 'nothing_to_rollback');

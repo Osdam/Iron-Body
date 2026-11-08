@@ -3,9 +3,12 @@
 namespace Tests\Feature\UltronStudio;
 
 use App\Models\Admin;
+use App\Services\UltronStudio\StudioAccess;
 use App\Services\UltronStudio\StudioIntegrationConfig;
 use App\Services\UltronStudio\StudioIntegrations;
+use App\Services\UltronStudio\StudioVoiceTemplate;
 use App\Services\Voice\ElevenLabs\ElevenLabsVoiceProvider;
+use App\Support\Access\CrmPermission;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
@@ -18,12 +21,21 @@ use Tests\TestCase;
  * connected_voice`; y los hechos de voz con la subcuenta, las referencias y las
  * huellas de los secretos nuevos, sin un secreto en claro y sin duplicar la
  * huella del secreto de iniciación.
+ *
+ * S8-c (E5-6, Q-1 y Q-2 de FE8): la ruta 45 dice además lo que puede la
+ * sesión con las 7 llaves de D8-22 (`can`) y trae la plantilla vigente con los
+ * topes del perfil (`template`), fijados contra los CHECK de la migración de
+ * DB8 y contra lo que la API admite al crear un perfil.
  */
 class UltronStudioVoiceIntegrationsTest extends TestCase
 {
     use IntegrationFixtures;
     use RefreshDatabase;
     use StudioFixtures;
+    use StudioVoiceFixtures;
+
+    /** La migración del gobierno de la voz (DB8): sus CHECK son los topes del perfil. */
+    private const VOICE_MIGRATION = '2026_11_10_100001_create_ultron_studio_voice_tables';
 
     private const SECRETS = [
         'voice.elevenlabs.api_key' => 'sk_h8s_CENTINELA_api_key_0001',
@@ -55,6 +67,109 @@ class UltronStudioVoiceIntegrationsTest extends TestCase
         $this->assertSame(['id' => 'brake', 'available' => true, 'state' => 'released'], $voz['brake']);
         $this->assertSame([false, 'voice_publishing_disabled'], [$voz['publishing']['enabled'], $voz['publishing']['code']]);
         $this->assertSame([null, null, null, true], [$voz['publication']['head'], $voz['publication']['canary'], $voz['publication']['rest'], $voz['publication']['verified']]);
+    }
+
+    public function test_la_ruta_45_dice_lo_que_puede_la_sesion_con_las_siete_llaves_de_d8_22(): void
+    {
+        // Las 7 filas de D8-22, en su orden, cada una con su nombre en el DTO.
+        $this->assertSame(['ultron.voice_manage', 'ultron.approve', 'ultron.voice_publish', 'ultron.voice_lab_run', 'telephony.view', 'telephony.call_place', 'telephony.contacts_manage'],
+            array_values(StudioIntegrations::VOICE_CAPABILITIES));
+        $claves = array_keys(StudioIntegrations::VOICE_CAPABILITIES);
+
+        // Super Admin: todas.
+        $root = $this->person(Admin::ROLE_SUPER_ADMIN, 'Root');
+        $this->assertSame(array_fill_keys($claves, true), $this->integrations('GET', 'voice', $root)->assertOk()->json('data.can'));
+
+        // Administrador (P-18): editar el perfil, ver el registro y aprobar como hoy; ni
+        // publicar, ni el laboratorio hablado, ni llamar, ni los contactos.
+        $admin = $this->person(Admin::ROLE_ADMINISTRADOR, 'Ana Administradora');
+        $comoAdmin = ['voiceManage' => true, 'approve' => true, 'voicePublish' => false, 'voiceLabRun' => false,
+            'telephonyView' => true, 'telephonyCallPlace' => false, 'telephonyContactsManage' => false];
+        $this->assertSame($comoAdmin, $this->integrations('GET', 'voice', $admin)->assertOk()->json('data.can'));
+        // Es el reparto del catálogo, no una lista propia.
+        $defectos = CrmPermission::defaultsFor(Admin::ROLE_ADMINISTRADOR);
+        foreach (StudioIntegrations::VOICE_CAPABILITIES as $clave => $permiso) {
+            $this->assertSame(in_array($permiso, $defectos, true), $comoAdmin[$clave], "{$clave} no es el valor por defecto del Administrador");
+        }
+
+        // Lo que dice la SESIÓN (su rol y la política guardada), no el nombre del rol.
+        $llama = $this->personWith(['ultron.view', 'telephony.call_place'], 'Solo llama');
+        $this->assertSame(['telephonyCallPlace'], array_keys(array_filter($this->integrations('GET', 'voice', $llama)->assertOk()->json('data.can'))));
+        $ve = $this->personWith(['ultron.view'], 'Solo ve');
+        $this->assertSame(array_fill_keys($claves, false), $this->integrations('GET', 'voice', $ve)->assertOk()->json('data.can'));
+    }
+
+    public function test_la_ruta_45_sin_sesion_401_con_el_token_compartido_403_y_sin_ultron_view_403(): void
+    {
+        $this->json('GET', '/api/admin/ultron-studio/integrations/voice')->assertStatus(401);
+        $this->json('GET', '/api/admin/ultron-studio/integrations/voice', [], $this->sharedTokenHeaders())->assertStatus(403);
+        // Las llaves de la telefonía no abren el Studio: la ruta 45 exige ver el Studio.
+        $soloTelefonia = $this->personWith(['telephony.view', 'telephony.call_place'], 'Solo telefonía');
+        $r = $this->integrations('GET', 'voice', $soloTelefonia)->assertStatus(403);
+        $this->assertSame(['forbidden', 'ultron.view'], [$r->json('code'), $r->json('required_permission')]);
+        $this->assertArrayNotHasKey('data', $r->json());
+        // Y en el servicio, cada llave presupone ver el Studio (como `integrationCapabilities()`).
+        $this->assertSame(array_fill_keys(array_keys(StudioIntegrations::VOICE_CAPABILITIES), false), StudioIntegrations::voiceCapabilities(new StudioAccess($soloTelefonia)));
+    }
+
+    public function test_la_ruta_45_trae_la_plantilla_vigente_y_los_topes_del_esquema_de_db8(): void
+    {
+        config(self::SECRETS + ['voice.limits.per_call_max_seconds' => 240]);
+        $root = $this->person(Admin::ROLE_SUPER_ADMIN, 'Root');
+        $plantilla = $this->integrations('GET', 'voice', $root)->assertOk()->json('data.template');
+
+        // Las constantes de la plantilla, tal cual (las herramientas del servidor con P-3 aplicado:
+        // el catálogo que admite el compilador).
+        $this->assertSame([
+            'version' => StudioVoiceTemplate::VERSION,
+            'hash' => StudioVoiceTemplate::hash(),
+            'aiNotice' => StudioVoiceTemplate::AI_NOTICE,
+            'greetingMax' => StudioVoiceTemplate::GREETING_MAX,
+            'textMin' => StudioVoiceTemplate::TEXT_MIN,
+            'holes' => StudioVoiceTemplate::HOLES,
+            'tones' => StudioVoiceTemplate::TONES,
+            'goals' => StudioVoiceTemplate::GOALS,
+            'fallbacks' => StudioVoiceTemplate::FALLBACKS,
+            'serverTools' => StudioVoiceTemplate::serverTools(),
+            'systemTools' => StudioVoiceTemplate::SYSTEM_TOOLS,
+        ], array_diff_key($plantilla, ['limits' => true]));
+
+        // Los topes, contra los CHECK de la migración de DB8 (no una copia a mano).
+        $migracion = require database_path('migrations/'.self::VOICE_MIGRATION.'.php');
+        $checks = $migracion::ROW_CHECKS[$migracion::PROFILES];
+        $this->assertSame(1, preg_match('/^max_duration_seconds BETWEEN (\d+) AND (\d+)$/D', $checks['usvp_duration_chk'], $duracion), $checks['usvp_duration_chk']);
+        $this->assertSame(1, preg_match('/^retention_days BETWEEN (\d+) AND (\d+)$/D', $checks['usvp_retention_chk'], $retencion), $checks['usvp_retention_chk']);
+        $this->assertSame(1, preg_match('/^transfer_count BETWEEN (\d+) AND (\d+) AND /', $checks['usvp_transfer_chk'], $destinos), $checks['usvp_transfer_chk']);
+        $this->assertSame([
+            'maxDurationSeconds' => ['min' => (int) $duracion[1], 'max' => 240, 'ceiling' => (int) $duracion[2]],
+            'retentionDays' => ['max' => (int) $retencion[2]],
+            'transferDestinations' => ['max' => (int) $destinos[2]],
+        ], $plantilla['limits']);
+
+        // `max` es el tope del servidor (`VOICE_PER_CALL_MAX_SECONDS`, recortado a 60–600).
+        foreach ([900 => 600, 30 => 60, 300 => 300] as $configurado => $tope) {
+            config(['voice.limits.per_call_max_seconds' => $configurado]);
+            $this->assertSame($tope, $this->integrations('GET', 'voice', $root)->json('data.template.limits.maxDurationSeconds.max'), "configurado {$configurado}");
+        }
+
+        // Y son lo que la API admite al crear un perfil: el tope pasa, uno más no.
+        config(['voice.limits.per_call_max_seconds' => 240]);
+        $this->createProfile($root, self::profileContent(['maxDurationSeconds' => 240]))->assertCreated();
+        $this->createProfile($root, self::profileContent(['maxDurationSeconds' => 241]))->assertStatus(422)->assertJsonPath('reason', 'duration_exceeds_limit');
+        $this->createProfile($root, self::profileContent(['privacy' => ['retentionDays' => $plantilla['limits']['retentionDays']['max'] + 1]]))
+            ->assertStatus(422)->assertJsonValidationErrors(['content.privacy.retentionDays']);
+        $conTransferencia = self::profileContentWithTransfer();
+        $conTransferencia['transfer']['destinations'] = array_map(static fn (int $i): array => ['alias' => "Destino {$i}", 'phone' => '+57601000009'.$i], range(1, $plantilla['limits']['transferDestinations']['max'] + 1));
+        $this->createProfile($root, $conTransferencia)->assertStatus(422)->assertJsonValidationErrors(['content.transfer.destinations']);
+
+        // La misma para cualquier sesión, y sin teléfonos ni secretos (la huella de la plantilla aparte: es hexadecimal).
+        $this->assertSame($plantilla, $this->integrations('GET', 'voice', $this->person(Admin::ROLE_ADMINISTRADOR, 'Ana'))->json('data.template'));
+        $this->assertMatchesRegularExpression('/^[0-9a-f]{64}$/', $plantilla['hash']);
+        $json = (string) json_encode(array_diff_key($plantilla, ['hash' => true]), JSON_UNESCAPED_UNICODE);
+        $this->assertDoesNotMatchRegularExpression('/\d{4,}|\+\d/', $json);
+        foreach (self::SECRETS as $secreto) {
+            $this->assertStringNotContainsString($secreto, $json);
+        }
     }
 
     public function test_la_fase_que_se_deduce_de_la_configuracion(): void

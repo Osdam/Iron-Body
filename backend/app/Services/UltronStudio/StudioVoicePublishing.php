@@ -37,7 +37,9 @@ use Throwable;
  *  1. compilar la versión aprobada y el perfil aprobado ({@see StudioVoiceCompiler});
  *  2. `createAgent`: un agente NUEVO e inmutable (nunca se modifica uno que
  *     haya atendido llamadas), con `call_limits`, la privacidad y el audio
- *     apagado ya en la carga (`ElevenLabsAgentMapper`, B8);
+ *     apagado ya en la carga (`ElevenLabsAgentMapper`, B8); su fila guarda
+ *     los destinos compilados como alias y huella (E5-1,
+ *     {@see destinationHashes()});
  *  3. `describeAgent`: la proyección observada tiene que ser la compilada; si
  *     no, el agente queda `rejected` y no se publica;
  *  4. `assignNumber`: la parte canaria atiende las entrantes ({@see INBOUND_PART});
@@ -50,6 +52,11 @@ use Throwable;
  * PROMOVER lleva el agente de la parte canaria a la parte `rest`, con la
  * evidencia del canario medida en el servidor (D8-19, P-16;
  * {@see StudioVoiceEvidence}) y el agente sin deriva. No toca el número.
+ *
+ * LO QUE SE VIO ES LO QUE SE PUBLICA (S8-c, E5-6; como la `previewHash` del
+ * H5): publicar lleva la `specHash` que devolvió `compile-preview` y promover
+ * la del agente del canario que se enseñó. Si la de ahora es otra, 409
+ * `spec_changed` con `{expected, actual}`, antes de desplegar o escribir nada.
  *
  * REVERTIR (D8-9, D8-20 nivel 1) inserta una entrada que apunta al agente
  * ANTERIOR de la parte (que sigue existiendo) y, en la parte de las entrantes,
@@ -65,9 +72,11 @@ use Throwable;
  * defecto) → bandera (`ULTRON_STUDIO_VOICE_PUBLISHING_ENABLED`, apagada; solo
  * publicar y promover, E2-4) → reintento → recursos y cuatro ojos (nadie
  * publica ni promueve lo que creó, versión o perfil) → ventana de 07:00 a
- * 19:00 de Bogotá (P-25) → freno suelto → compilar → puerta del laboratorio
- * hablado (`required`: un veredicto `approved` sobre la MISMA huella, P-19) →
- * piezas del despliegue → red → transacción.
+ * 19:00 de Bogotá (P-25) → freno suelto → compilar → la huella que se vio
+ * (`spec_changed`) → puerta del laboratorio hablado (`required`: un veredicto
+ * `approved` sobre la MISMA huella, P-19) → piezas del despliegue → red →
+ * transacción. Promover: … → ventana → la huella del canario que se vio →
+ * evidencia → deriva → transacción.
  *
  * IDEMPOTENCIA: la misma `clientRequestId`, la misma persona y el mismo cuerpo
  * devuelven las entradas de la primera vez (200 `replayed`); otra cosa es 409
@@ -87,6 +96,9 @@ final class StudioVoicePublishing
     public const PUBLISH = 'ultron.voice_publish';
 
     public const CODE_DISABLED = 'voice_publishing_disabled';
+
+    /** S8-c: la huella de ahora no es la que se vio (`{expected, actual}`). */
+    public const CODE_SPEC_CHANGED = 'spec_changed';
 
     public const LAB_REQUIRED = 'required';
 
@@ -210,20 +222,20 @@ final class StudioVoicePublishing
     /**
      * @return array{entries:list<array<string,mixed>>,agent:array<string,mixed>|null,number:array<string,mixed>|null,replayed:bool}
      */
-    public function publish(StudioAccess $access, Request $request, string $clientRequestId, string $versionUuid, string $profileUuid, ?string $note): array
+    public function publish(StudioAccess $access, Request $request, string $clientRequestId, string $versionUuid, string $profileUuid, string $expectedSpecHash, ?string $note): array
     {
         $access->require(self::PUBLISH);
         $this->assertEnabled();
-        $cuerpo = ['version' => strtolower($versionUuid), 'profile' => strtolower($profileUuid), 'note' => $note];
+        $cuerpo = ['version' => strtolower($versionUuid), 'profile' => strtolower($profileUuid), 'specHash' => $expectedSpecHash, 'note' => $note];
         if ($previa = $this->replay($access, StudioVoicePublication::ACTION_PUBLISH, $clientRequestId, $cuerpo)) {
             return $previa;
         }
 
-        return $this->orReplayed(fn (): array => $this->publishGated($access, $request, $clientRequestId, $versionUuid, $profileUuid, $note), $access, StudioVoicePublication::ACTION_PUBLISH, $clientRequestId, $cuerpo);
+        return $this->orReplayed(fn (): array => $this->publishGated($access, $request, $clientRequestId, $versionUuid, $profileUuid, $expectedSpecHash, $note), $access, StudioVoicePublication::ACTION_PUBLISH, $clientRequestId, $cuerpo);
     }
 
     /** @return array{entries:list<array<string,mixed>>,agent:array<string,mixed>|null,number:array<string,mixed>|null,replayed:bool} */
-    private function publishGated(StudioAccess $access, Request $request, string $clientRequestId, string $versionUuid, string $profileUuid, ?string $note): array
+    private function publishGated(StudioAccess $access, Request $request, string $clientRequestId, string $versionUuid, string $profileUuid, string $expectedSpecHash, ?string $note): array
     {
         $version = $this->versions->findByUuid($versionUuid);
         $perfil = StudioVoiceProfiles::findByUuid($profileUuid);
@@ -232,6 +244,9 @@ final class StudioVoicePublishing
         $this->assertBrakeReleased();
 
         $spec = self::compile($version, $perfil, StudioVoiceCompiler::PURPOSE_PUBLICATION);
+        // Lo que se vio es lo que se publica: antes de la puerta del
+        // laboratorio (su veredicto es de otra huella) y de desplegar nada.
+        self::assertSeenSpec($expectedSpecHash, $spec->specHash, 'La compilación de la voz cambió desde que la previsualizaste: vuelve a previsualizarla y revísala antes de publicar.');
         $puerta = self::labGate($spec->specHash);
         $numeroId = self::numberId();
         $faltan = self::missingPieces($spec);
@@ -295,20 +310,20 @@ final class StudioVoicePublishing
     /**
      * @return array{entries:list<array<string,mixed>>,agent:array<string,mixed>|null,number:array<string,mixed>|null,replayed:bool}
      */
-    public function promote(StudioAccess $access, Request $request, string $clientRequestId, string $evidenceHash, ?string $note): array
+    public function promote(StudioAccess $access, Request $request, string $clientRequestId, string $evidenceHash, string $expectedSpecHash, ?string $note): array
     {
         $access->require(self::PUBLISH);
         $this->assertEnabled();
-        $cuerpo = ['evidenceHash' => $evidenceHash, 'note' => $note];
+        $cuerpo = ['evidenceHash' => $evidenceHash, 'specHash' => $expectedSpecHash, 'note' => $note];
         if ($previa = $this->replay($access, StudioVoicePublication::ACTION_PROMOTE, $clientRequestId, $cuerpo)) {
             return $previa;
         }
 
-        return $this->orReplayed(fn (): array => $this->promoteGated($access, $request, $clientRequestId, $evidenceHash, $note), $access, StudioVoicePublication::ACTION_PROMOTE, $clientRequestId, $cuerpo);
+        return $this->orReplayed(fn (): array => $this->promoteGated($access, $request, $clientRequestId, $evidenceHash, $expectedSpecHash, $note), $access, StudioVoicePublication::ACTION_PROMOTE, $clientRequestId, $cuerpo);
     }
 
     /** @return array{entries:list<array<string,mixed>>,agent:array<string,mixed>|null,number:array<string,mixed>|null,replayed:bool} */
-    private function promoteGated(StudioAccess $access, Request $request, string $clientRequestId, string $evidenceHash, ?string $note): array
+    private function promoteGated(StudioAccess $access, Request $request, string $clientRequestId, string $evidenceHash, string $expectedSpecHash, ?string $note): array
     {
         $canario = StudioVoicePublications::current(StudioVoicePublication::SCOPE_CANARY);
         $agente = $canario?->agent;
@@ -324,6 +339,9 @@ final class StudioVoicePublishing
         }
         $this->assertFourEyes($access, $request, $version, $perfil, StudioVoicePublication::ACTION_PROMOTE);
         $this->assertWindow();
+        // El agente del canario es el que se vio (otra publicación en canario
+        // entretanto lo cambia), antes de medir su evidencia.
+        self::assertSeenSpec($expectedSpecHash, (string) $agente->spec_hash, 'La voz en canario ya no es la que viste: vuelve a cargarla y revísala antes de promover.');
 
         $evidencia = $this->evidence->canary();
         if (! $evidencia['evaluation']['passes']) {
@@ -535,6 +553,7 @@ final class StudioVoicePublishing
             'spec_hash' => $spec->specHash,
             'payload_hash' => $payload->payloadHash,
             'projection_hash' => $payload->projectionHash,
+            'transfer_destination_hashes' => self::destinationHashes($spec),
             'provider' => StudioVoiceAgent::PROVIDER_ELEVENLABS,
             'status' => StudioVoiceAgent::STATUS_PENDING,
             'serves_canary' => false,
@@ -575,6 +594,21 @@ final class StudioVoicePublishing
         ]);
 
         return $agente->refresh();
+    }
+
+    /**
+     * Los destinos de transferencia APROBADOS del agente (E5-1): los compilados,
+     * no los del perfil (el perfil puede cambiar; el agente no). De cada uno, el
+     * alias y la huella `voice-phone` de la especificación (`ref`, la de
+     * {@see StudioVoiceProfiles::phoneHash()}, que {@see target()} ya comprobó
+     * contra los números descifrados), NUNCA el número; `[]` sin destinos. La
+     * lee la telefonía (`VoicePublishedConfig`) sin descifrar nada.
+     *
+     * @return list<array{alias:string,hash:string}>
+     */
+    private static function destinationHashes(VoiceAgentSpec $spec): array
+    {
+        return array_map(static fn (array $d): array => ['alias' => $d['alias'], 'hash' => $d['ref']], $spec->transferDestinations());
     }
 
     /**
@@ -861,7 +895,8 @@ final class StudioVoicePublishing
 
     /**
      * Lo que identifica el cuerpo de la petición que creó una entrada, con la
-     * misma forma que lo calcula cada acción.
+     * misma forma que lo calcula cada acción. La `specHash` que se vio es la
+     * del agente de la entrada: publicar y promover solo escriben si cuadran.
      *
      * @return array<string, mixed>
      */
@@ -871,10 +906,12 @@ final class StudioVoicePublishing
             StudioVoicePublication::ACTION_PUBLISH => [
                 'version' => $p->agent?->version?->uuid,
                 'profile' => $p->agent?->profile?->uuid,
+                'specHash' => $p->agent?->spec_hash,
                 'note' => $p->reason,
             ],
             StudioVoicePublication::ACTION_PROMOTE => [
                 'evidenceHash' => is_array($p->evidence) ? StudioContentHasher::hash($p->evidence) : null,
+                'specHash' => $p->agent?->spec_hash,
                 'note' => $p->reason,
             ],
             StudioVoicePublication::ACTION_ROLLBACK => ['scope' => $p->scope, 'reason' => $p->reason],
@@ -905,6 +942,19 @@ final class StudioVoicePublishing
     {
         if (! self::enabled()) {
             throw new UltronStudioException('Publicar la voz está desactivado en el servidor: lo enciende quien administra el sistema.', self::CODE_DISABLED, 409);
+        }
+    }
+
+    /**
+     * S8-c (E5-6): la huella que se vio (`expectedSpecHash`, la de
+     * `compile-preview` al publicar o la del agente del canario al promover) es
+     * la de ahora. Si no, 409 `spec_changed` con las dos, sin desplegar ni
+     * escribir nada; el CRM vuelve a enseñar la compilación.
+     */
+    private static function assertSeenSpec(string $expected, string $actual, string $message): void
+    {
+        if (! hash_equals($actual, $expected)) {
+            throw new UltronStudioException($message, self::CODE_SPEC_CHANGED, 409, ['expected' => $expected, 'actual' => $actual]);
         }
     }
 

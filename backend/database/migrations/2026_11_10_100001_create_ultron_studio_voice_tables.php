@@ -11,6 +11,11 @@ use Illuminate\Support\Facades\Schema;
  * D8-19, D8-23, «Contratos de datos» y la Enmienda 1 (E1-4: el mensaje firmado
  * de la cadena). Informe: plans/informes-h8/informe-db.md.
  *
+ * EDITADA EN SITIO el 08-11-2026 por la Enmienda 5 (E5-1, paquete S8-c): una
+ * columna más en `ultron_studio_voice_agents`, `transfer_destination_hashes`
+ * (json, nullable, inmutable). Se edita aquí y no en otra migración porque esta
+ * no ha corrido en ningún entorno.
+ *
  * Cuatro tablas NUEVAS, SOLO ADITIVAS E INERTES: crearlas no enciende nada,
  * ningún código las lee con las banderas por defecto y no alteran ninguna tabla
  * existente (solo REFERENCIAN `ultron_studio_versions` con una FK). La voz no
@@ -63,7 +68,10 @@ use Illuminate\Support\Facades\Schema;
  * (`transfer_destinations_encrypted`, cast `encrypted` del modelo); en `content`
  * solo su alias (y, si el servicio quiere, su huella y sus 4 últimos dígitos).
  * Los agentes guardan HUELLAS de la compilación, nunca la carga: la carga lleva
- * los destinos en claro (D8-14) y se reconstruye en memoria. Quien actúa se
+ * los destinos en claro (D8-14) y se reconstruye en memoria. De los destinos,
+ * el agente guarda solo su alias y su huella `voice-phone`
+ * (`transfer_destination_hashes`, E5-1): los aprobados para sus llamadas son los
+ * compilados, no los del perfil. Quien actúa se
  * guarda como INSTANTÁNEA (id + nombre + rol) SIN FK a `admins`, como en F; la
  * supresión 1581 (OPS8) tiene que cubrir también estas cuatro tablas (nombres,
  * notas y el cifrado de los destinos; `effective_json` está FIRMADO y, como el
@@ -215,11 +223,11 @@ return new class extends Migration
         'status_changed_at', 'updated_at',
     ];
 
-    /** Lo que un agente congela al compilarse. */
+    /** Lo que un agente congela al compilarse (con sus destinos compilados, E5-1). */
     public const AGENT_IMMUTABLE_COLUMNS = [
         'id', 'uuid', 'client_request_id', 'purpose', 'studio_version_id', 'studio_content_hash',
         'voice_profile_id', 'voice_profile_hash', 'compiler_version', 'spec_hash', 'payload_hash',
-        'projection_hash', 'provider', 'created_by_admin_id', 'created_by_name', 'created_by_role', 'created_at',
+        'projection_hash', 'transfer_destination_hashes', 'provider', 'created_by_admin_id', 'created_by_name', 'created_by_role', 'created_at',
     ];
 
     /** El despliegue (el id y la observación, una vez), su estado y las partes que atiende. */
@@ -578,6 +586,13 @@ return new class extends Migration
             $table->char('payload_hash', 64);
             // La proyección compilada: lo que se compara con la observada (deriva).
             $table->char('projection_hash', 64);
+            // E5-1 (Enmienda 5): los destinos de transferencia COMPILADOS en el agente, los
+            // únicos aprobados para sus llamadas (el perfil puede cambiar; el agente no). Lista
+            // de {alias, hash}: el alias de la especificación y la huella `voice-phone` del
+            // número, NUNCA el número; `[]` sin destinos; NULL solo en agentes anteriores a la
+            // columna. La escribe S8 al compilar y la lee la telefonía (`VoicePublishedConfig`)
+            // sin descifrar nada. Se congela con el resto de la compilación.
+            $table->json('transfer_destination_hashes')->nullable();
             // elevenlabs | fake (el simulador del laboratorio; nunca en publicación).
             $table->string('provider', 16);
             // El `agent_id` de ElevenLabs: una vez (`usva_bindings_once`) y único.

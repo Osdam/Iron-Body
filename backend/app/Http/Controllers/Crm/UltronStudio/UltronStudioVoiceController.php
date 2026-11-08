@@ -85,7 +85,7 @@ class UltronStudioVoiceController extends Controller
     /** Todas las rutas del Studio con el Hito 8: 56 + 15 + 6 (E2-6; una prueba lo ata a las dos listas y a las rutas reales). */
     public const STUDIO_ROUTE_COUNT = 77;
 
-    /** `fingerprint` de la evidencia: sha256 en hexadecimal en minúsculas. */
+    /** `evidenceHash` y `expectedSpecHash`: sha256 en hexadecimal en minúsculas, como los calcula el servidor (se comparan exactos). */
     private const SHA256 = '/^[0-9a-f]{64}$/D';
 
     private const BRAKES_DEFAULT = 20;
@@ -233,7 +233,12 @@ class UltronStudioVoiceController extends Controller
         ]]);
     }
 
-    /** POST voice/publish   {clientRequestId, versionUuid, profileUuid, note?≤500} */
+    /**
+     * POST voice/publish   {clientRequestId, versionUuid, profileUuid, expectedSpecHash, note?≤500}
+     *
+     * `expectedSpecHash` es la `specHash` que se VIO en `compile-preview`
+     * (S8-c, E5-6): si la compilación da otra, 409 `spec_changed` sin desplegar.
+     */
     public function publish(Request $request, StudioVoicePublishing $publishing): JsonResponse
     {
         $access = StudioAccess::requirePerson($request);
@@ -241,23 +246,30 @@ class UltronStudioVoiceController extends Controller
             'clientRequestId' => ['required', 'uuid'],
             'versionUuid' => ['required', 'uuid'],
             'profileUuid' => ['required', 'uuid'],
+            'expectedSpecHash' => ['required', 'string', 'regex:'.self::SHA256],
             'note' => self::noteRules(),
         ]);
 
-        return self::written($publishing->publish($access, $request, strtolower($data['clientRequestId']), $data['versionUuid'], $data['profileUuid'], $data['note'] ?? null));
+        return self::written($publishing->publish($access, $request, strtolower($data['clientRequestId']), $data['versionUuid'], $data['profileUuid'], $data['expectedSpecHash'], $data['note'] ?? null));
     }
 
-    /** POST voice/promote   {clientRequestId, evidenceHash, note?≤500} */
+    /**
+     * POST voice/promote   {clientRequestId, evidenceHash, expectedSpecHash, note?≤500}
+     *
+     * `expectedSpecHash` es la `specHash` del agente del canario que se VIO
+     * (S8-c, E5-6): si el canario tiene otro, 409 `spec_changed` sin escribir.
+     */
     public function promote(Request $request, StudioVoicePublishing $publishing): JsonResponse
     {
         $access = StudioAccess::requirePerson($request);
         $data = $request->validate([
             'clientRequestId' => ['required', 'uuid'],
             'evidenceHash' => ['required', 'string', 'regex:'.self::SHA256],
+            'expectedSpecHash' => ['required', 'string', 'regex:'.self::SHA256],
             'note' => self::noteRules(),
         ]);
 
-        return self::written($publishing->promote($access, $request, strtolower($data['clientRequestId']), $data['evidenceHash'], $data['note'] ?? null));
+        return self::written($publishing->promote($access, $request, strtolower($data['clientRequestId']), $data['evidenceHash'], $data['expectedSpecHash'], $data['note'] ?? null));
     }
 
     /** POST voice/rollback   {clientRequestId, scope: canary|rest, reason 5–500} — sin bandera ni ventana */

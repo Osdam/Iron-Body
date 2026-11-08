@@ -61,12 +61,12 @@ class UltronStudioIntegrationController extends Controller
         return response()->json(['ok' => true, 'data' => $twilio->calls($this->resolvePerPage($request, 20, StudioTwilioPanel::PER_PAGE_MAX))]);
     }
 
-    /** GET /api/admin/ultron-studio/integrations/voice (sin red): en este hito no se hace ninguna llamada */
+    /** GET /api/admin/ultron-studio/integrations/voice (sin red): en este hito no se hace ninguna llamada; `can` es el de la sesión (S8-c) */
     public function voice(Request $request, StudioIntegrations $integrations): JsonResponse
     {
-        StudioAccess::requirePerson($request);
+        $access = StudioAccess::requirePerson($request);
 
-        return response()->json(['ok' => true, 'data' => $integrations->voicePanel()]);
+        return response()->json(['ok' => true, 'data' => $integrations->voicePanel($access)]);
     }
 
     /** GET /api/admin/ultron-studio/integrations/config — un GET nunca escribe */

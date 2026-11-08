@@ -43,6 +43,7 @@ use LogicException;
  * @property string $spec_hash
  * @property string $payload_hash
  * @property string $projection_hash
+ * @property list<array{alias:string,hash:string}>|null $transfer_destination_hashes E5-1: los destinos compilados (alias y huella `voice-phone`, nunca el número); null solo en agentes anteriores a la columna
  * @property string $provider
  * @property string|null $provider_agent_id
  * @property string|null $observed_hash
@@ -94,6 +95,7 @@ class StudioVoiceAgent extends Model
         return [
             'studio_version_id' => 'integer',
             'voice_profile_id' => 'integer',
+            'transfer_destination_hashes' => 'array',
             'serves_canary' => 'boolean',
             'serves_rest' => 'boolean',
             'created_by_admin_id' => 'integer',

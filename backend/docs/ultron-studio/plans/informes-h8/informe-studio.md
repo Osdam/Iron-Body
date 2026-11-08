@@ -116,6 +116,8 @@ Las decisiones de §3 y §4 quedan aceptadas en E1-5 a E1-9. Esta ronda solo apl
 
 ## 8. Contratos
 
+> **Ampliado por §S8-c (08-11-2026, E5-6):** la ruta 45 gana `can` y `template`; `POST voice/publish` y `POST voice/promote` exigen `expectedSpecHash` y responden 409 `spec_changed`. Los DTO y el orden de las puertas, en §S8-c (§14).
+
 ### 8.1 Las rutas nuevas (todas bajo `/api/admin/ultron-studio`, 64 KB, persona obligatoria)
 
 | Método y ruta | Permiso | Cupo | Cuerpo → respuesta |
@@ -243,3 +245,278 @@ Los dos parches están en el scratchpad de esta sesión: `/private/tmp/claude-50
 - **El único fallo de la suite del Studio que no arregla el Anexo B:** `UltronEngineIsolationTest::test_fuera_del_studio_nadie_nombra…`, por el lector de B8-b.
 - **No ejecuté** la suite completa del backend ni el banco de OPS8 (máquina compartida; es de TEST8). La pasada amplia fue `tests/Unit/UltronStudio` + `tests/Feature/UltronStudio`, en SQLite.
 - **No probado contra el proveedor real:** la asignación del número y la vigencia de la URL firmada están [por confirmar] (informe de B8-a §5).
+
+---
+
+# §S8-c (remate del paso 2) · `can`, `template` y `expectedSpecHash` en la API de voz, y los destinos compilados en el agente
+
+**Fecha:** 08-11-2026. **Árbol:** `_worktrees/ultron-h8/Iron-Body/backend`, rama `feat/ultron-studio-h8-voice`. Empezó sobre `589e6c6b` (Enmienda 5) y cerró sobre `45e3714e` (tanda 2 de B8-b, `2af01023`, y el informe de FE8); en medio, B8-b y SEC8 trabajaron en ficheros disjuntos. **Sin commit.** Producción y red: nada.
+**Contrato:**
+- E5-6, que recoge Q-1, Q-2 y Q-3 de FE8 (`informe-front.md` §9);
+- E5-1 (punto 4 del lead): los destinos aprobados son los compilados en el agente, en la columna `transfer_destination_hashes` (§14.4).
+
+**Sin rutas nuevas:** `STUDIO_ROUTE_COUNT` sigue en 77. **Migración:** la `2026_11_10_100001` se edita en sitio, por E5-1 (una columna); no ha corrido en ningún entorno.
+
+## 13. Qué cambia (por fichero)
+
+| Fichero | Cambio |
+|---|---|
+| `app/Services/UltronStudio/StudioIntegrations.php` | Solo la ruta 45. `voicePanel(StudioAccess $access)` añade dos claves:<br>• `can`: `VOICE_CAPABILITIES` + `voiceCapabilities()`, con el mecanismo de `integrationCapabilities()` (cada llave presupone `ultron.view`);<br>• `template`: `voiceTemplate()`, con las constantes de `StudioVoiceTemplate` y los topes del perfil.<br>El resto del panel no cambia. |
+| `app/Http/Controllers/Crm/UltronStudio/UltronStudioIntegrationController.php` | **Fuera de la lista del encargo, 2 líneas; el lead las aceptó.** `voice()` guarda el `StudioAccess` de `requirePerson()` y se lo pasa a `voicePanel()`. Sin esto, la ruta 45 no conoce la sesión. Nadie más lo edita en el H8: `git status` lo daba sin cambios antes de tocarlo. |
+| `docs/ultron-studio/plans/informes-h8/anexos/anexo-d-walkvoice-spechash.diff` | **Nuevo.** El Anexo D para `UltronStudioEngineReadOnlyTest::walkVoice()` (§16). Lo aplica el lead. |
+| `app/Http/Controllers/Crm/UltronStudio/UltronStudioVoiceController.php` | `publish` y `promote` validan `expectedSpecHash` y se lo pasan al servicio. Es obligatorio y sigue la regla de `evidenceHash` (`/^[0-9a-f]{64}$/D`). |
+| `app/Services/UltronStudio/StudioVoicePublishing.php` | • Firmas nuevas: `publish(…, $expectedSpecHash, $note)` y `promote(…, $evidenceHash, $expectedSpecHash, $note)`.<br>• `assertSeenSpec()` responde 409 `spec_changed {expected, actual}` (constante `CODE_SPEC_CHANGED`).<br>• La huella entra en el cuerpo del reintento: `bodyOf()` la lee del agente de la entrada.<br>• E5-1: al crear el agente de publicación escribe `transfer_destination_hashes` con `destinationHashes()`, a partir de la especificación compilada. |
+| `database/migrations/2026_11_10_100001_create_ultron_studio_voice_tables.php` | E5-1, editada en sitio:<br>• columna `transfer_destination_hashes` (json, nullable) en `ultron_studio_voice_agents`, detrás de `projection_hash`, con su comentario;<br>• la columna va en `AGENT_IMMUTABLE_COLUMNS`, así que `usva_forbid_immutable_update` la congela;<br>• una nota de la edición en la cabecera.<br>No cambian los recuentos de E3-5: ni disparadores, ni CHECK, ni índices nuevos. |
+| `app/Models/UltronStudio/StudioVoiceAgent.php` | E5-1: cast `array` de la columna y su `@property`. Dos líneas. |
+| `tests/Feature/UltronStudio/UltronStudioVoiceSchemaTest.php` | **De DB8; solo sus listas, como pidió el lead:**<br>• la entrada de la columna en `STUDIO_VOICE_AGENTS_COLUMNS` (`json` en PG, `text` en SQLite, nullable);<br>• la columna en el recorrido de inmutables de `test_lo_que_un_agente_compila_no_cambia…`. |
+| `tests/Feature/UltronStudio/StudioVoiceFixtures.php` | `publishVoice()` manda por defecto la huella que daría la previsualización (`seenSpecHash()`). Nuevos: `promoteVoice()` y `canarySpecHash()`. |
+| `tests/Feature/UltronStudio/UltronStudioVoiceIntegrationsTest.php` | 3 pruebas nuevas de la ruta 45:<br>• `can` por rol y por sesión, y la regla de `ultron.view` en el servicio;<br>• 401 y 403;<br>• `template` contra los CHECK de la migración y contra lo que admite `POST voice/profiles`. |
+| `tests/Feature/UltronStudio/UltronStudioVoicePublishingTest.php` | 3 pruebas nuevas:<br>• publicar y promover con la huella: 401, 403, 422 y 409 `spec_changed`, el orden de las puertas, que no se despliega nada, el reintento y el camino feliz con el desplegador falso;<br>• E5-1: un perfil con dos destinos deja en la fila del agente exactamente sus dos `{alias, hash}` y ningún rastro del número; la telefonía los lee; sin destinos, `[]`.<br>Las 9 llamadas que ya había a `promote` pasan por `promoteVoice()`. |
+| `tests/Feature/UltronStudio/UltronStudioVoiceNoNetworkTest.php` | Los cuerpos de `publish` y `promote` llevan `expectedSpecHash`. El 409 de la bandera no cambia. |
+
+**Sin tocar:**
+- `StudioVoiceTemplate.php`: no hizo falta exponer nada; las constantes ya eran públicas.
+- `StudioAccess.php`: se usa por `can()`.
+- `routes/`, `app/Services/Telephony/**`, `app/Services/Voice/**` y las guardas `*IsolationTest`.
+- `tests/Feature/Telephony/Schema/*`: no enumeran las columnas del agente.
+
+## 14. Contratos para FE8 (paso 3)
+
+### 14.1 Ruta 45 · `GET integrations/voice`: dos claves más (solo se añade)
+
+**`can`:**
+- 7 booleanos, uno por fila de D8-22.
+- Se resuelven para la SESIÓN: el rol más lo guardado en Configuración → Roles.
+- Cada llave presupone `ultron.view`. En la 45 eso siempre se cumple, porque la ruta lo exige.
+- Solo dice qué botones enseñar: cada ruta vuelve a exigir su permiso.
+
+| Clave | Permiso | Super Admin | Administrador (por defecto) |
+|---|---|---|---|
+| `voiceManage` | `ultron.voice_manage` | sí | sí |
+| `approve` | `ultron.approve` | sí | sí (como hoy) |
+| `voicePublish` | `ultron.voice_publish` | sí | no |
+| `voiceLabRun` | `ultron.voice_lab_run` | sí | no |
+| `telephonyView` | `telephony.view` | sí | sí |
+| `telephonyCallPlace` | `telephony.call_place` | sí | no |
+| `telephonyContactsManage` | `telephony.contacts_manage` | sí | no |
+
+**`template`:**
+- Son constantes del código: el bloque es el mismo para cualquier sesión.
+- No lleva teléfonos ni secretos.
+- Los mapas son objetos JSON con el orden de la constante. Sus claves son conjuntos cerrados.
+
+```json
+"template": {
+  "version": "ultron-voice-template/1",
+  "hash": "<sha256 de la plantilla, 64 hex>",
+  "aiNotice": "Hola, te habla el asistente virtual de Iron Body Workout, …",
+  "greetingMax": 200,
+  "textMin": 2,
+  "holes": {"presentation": {"label": "Presentación", "max": 160}, "closing": {"label": "Despedida", "max": 160}},
+  "tones": {"cercano": "…", "profesional": "…", "entusiasta": "…"},
+  "goals": {"cita": "…", "venta": "…", "informar": "…"},
+  "fallbacks": {"preguntar": {"transfer": "…", "none": "…"}, "humano": {"transfer": "…", "none": "…"}},
+  "serverTools": {"consultar_horarios": "…", "consultar_planes": "…", "no_volver_a_llamar": "…", "solicitar_humano": "…"},
+  "systemTools": {"end_call": "…", "transfer_to_number": "…"},
+  "limits": {
+    "maxDurationSeconds": {"min": 60, "max": 300, "ceiling": 600},
+    "retentionDays": {"max": 30},
+    "transferDestinations": {"max": 3}
+  }
+}
+```
+
+**Campo por campo:**
+- `version` y `hash` coinciden con el `template` que devuelve `compile-preview`. Si no coinciden, la previsualización se hizo con otra plantilla (hubo un despliegue entremedias).
+- `serverTools` lleva P-3 aplicado: es `StudioVoiceTemplate::serverTools()`, el catálogo que admite el compilador. Hoy es igual que `SERVER_TOOLS`.
+- `aiNotice` se lee, no se escribe: lo pone el servidor en el perfil.
+- `limits.maxDurationSeconds`:
+  - `max` es el **tope del servidor**: `VOICE_PER_CALL_MAX_SECONDS` recortado a 60–600, 300 por defecto;
+  - un `POST voice/profiles` que lo supere da 422 `voice_compile_refused {reason: duration_exceeds_limit, field: profile.content.maxDurationSeconds}`;
+  - `min` y `ceiling` son el CHECK `usvp_duration_chk` (60–600).
+- `limits.retentionDays.max` es el máximo del CHECK `usvp_retention_chk` (0–30). La API exige además al menos 1: con 0, 422.
+- `limits.transferDestinations.max` es el máximo del CHECK `usvp_transfer_chk` (0–3).
+
+**Cómo se fijan los topes:**
+- una prueba lee los tres CHECK de `ROW_CHECKS` en la migración `2026_11_10_100001_create_ultron_studio_voice_tables.php` y los compara con el bloque;
+- otra crea perfiles justo en el tope y uno por encima.
+
+**Lo que no va en el bloque.** Estas reglas las aplica el compilador, y su negativa llega con el campo:
+- `no_volver_a_llamar` y `end_call` son obligatorias;
+- `transfer_to_number` exige `solicitar_humano`;
+- el buzón solo admite `hang_up`;
+- el patrón de caracteres admitidos.
+
+Si el formulario las quiere antes de previsualizar, basta con una constante más. Lo decide el lead.
+
+### 14.2 `POST voice/publish` y `POST voice/promote`: `expectedSpecHash` (obligatorio)
+
+| Ruta | Cuerpo | De dónde sale `expectedSpecHash` | Se compara con |
+|---|---|---|---|
+| `POST voice/publish` | `{clientRequestId, versionUuid, profileUuid, expectedSpecHash, note?}` | `data.specHash` de `POST voice/compile-preview`, con la misma versión, el mismo perfil y el `purpose` por defecto (`publication`) | la compilación de ahora |
+| `POST voice/promote` | `{clientRequestId, evidenceHash, expectedSpecHash, note?}` | `data.state.canary.agent.specHash` de `GET voice/publications`, o `publication.canary.agent.specHash` de la ruta 45 | la `spec_hash` del agente que atiende el canario |
+
+**Formato:**
+- sha256 en hexadecimal y en minúsculas (`/^[0-9a-f]{64}$/`), como `evidenceHash`;
+- si falta, va en mayúsculas, tiene otra longitud o no es texto: 422 de Laravel en `errors.expectedSpecHash`;
+- FE8 lo manda hoy como `specHash` (`informe-front.md` §3.3). El servidor ignora esa clave, así que sin `expectedSpecHash` la petición da 422.
+
+**El 409 `spec_changed`:**
+- Cuerpo: `{ok: false, code: "spec_changed", message, expected, actual}`.
+- No se despliega ni se escribe nada: ni `createAgent`, ni número, ni entrada de la cadena, ni evento en el libro.
+- El CRM vuelve a previsualizar (al publicar) o a cargar el canario (al promover) y pide que se confirme otra vez.
+
+**Orden de las puertas al publicar:**
+1. la puerta: 401 sin sesión y 403 `forbidden` sin la llave (`AuthorizationMap`);
+2. 422 de validación;
+3. 403 de la segunda cerradura (la llave en el servicio; con la puerta bien clasificada no se alcanza);
+4. 409 `voice_publishing_disabled`;
+5. el reintento;
+6. 404 de la versión o el perfil;
+7. 403 de cuatro ojos;
+8. 409 `outside_publication_window`;
+9. 409 `voice_braked`;
+10. 422 del compilador;
+11. **409 `spec_changed`**;
+12. 409 `lab_verdict_required`;
+13. 409 `voice_not_deployable`;
+14. el despliegue.
+
+**Orden de las puertas al promover:**
+1. la puerta (401 y 403);
+2. 422;
+3. 403 de la segunda cerradura;
+4. 409 `voice_publishing_disabled`;
+5. el reintento;
+6. 409 `no_canary_publication`;
+7. 403 de cuatro ojos;
+8. 409 de la ventana;
+9. **409 `spec_changed`**;
+10. 409 `canary_evidence_insufficient`;
+11. 409 `evidence_changed`;
+12. 409 `voice_agent_drift`;
+13. la transacción.
+
+**El reintento:** la huella es parte del cuerpo.
+- La misma `clientRequestId` con el mismo cuerpo da 200 `replayed`.
+- La misma `clientRequestId` con otra `expectedSpecHash` da 409 `client_request_reused`.
+
+**Además:**
+- La respuesta 201 no cambia: `{entries, agent, number}`.
+- Dos agentes de la misma compilación (republicar la misma versión con el mismo perfil) tienen la misma `spec_hash`. Al promover, los distingue la `evidenceHash`: es otra entrada y otra evidencia.
+
+### 14.3 Errores (se suma a §8.2)
+
+409: `spec_changed {expected, actual}`.
+
+### 14.4 La columna `ultron_studio_voice_agents.transfer_destination_hashes` (E5-1; la lee B8-b en `VoicePublishedConfig`)
+
+**Tipo:** `json` y nullable en PG; `text` en SQLite. Inmutable: está en `AGENT_IMMUTABLE_COLUMNS`, así que un `UPDATE … SET transfer_destination_hashes = …` lo para `usva_forbid_immutable_update`, en los dos motores.
+
+**Forma:** una lista de objetos con exactamente dos claves, en el orden de la `VoiceAgentSpec`:
+
+```json
+[{"alias": "Recepción", "hash": "<huella voice-phone, 64 hex en minúsculas>"},
+ {"alias": "Ventas", "hash": "<…>"}]
+```
+
+- `alias`: el de `transfer.destinations[i].alias` de la especificación. Como mucho 40 caracteres (`VoiceAgentSpec::ALIAS_MAX`).
+- `hash`: `transfer.destinations[i].ref`, la huella `voice-phone` del número. Es la misma que `StudioVoiceProfiles::phoneHash()`; `target()` ya la comprobó contra los números descifrados antes de crear el agente (R-07).
+- **Nunca el número**, ni cifrado.
+- Como mucho 3 destinos (D8-14).
+- `[]` si el agente no tiene destinos.
+- `NULL` solo en agentes anteriores a la columna. Los agentes de laboratorio de LAB8 también quedan en `NULL` (§16), pero nunca entran en la cadena.
+
+**Quién la escribe:** `StudioVoicePublishing::deployedAgent()`, en el mismo `INSERT` que crea el agente (`pending`), a través del cast `array` del modelo.
+
+**Codificación:** la de Laravel, `json_encode` sin opciones, así que los acentos van escapados (`"Recepción"`). Quien lea la columna tiene que decodificarla, como ya hace B8-b. Su lector exige exactamente `{alias, hash}` y es compatible con esta forma.
+
+## 15. Verificado (comandos ejecutados)
+
+Estado final, con el árbol tal cual (`HEAD` `45e3714e` más lo que sigue en curso en los demás paquetes).
+
+| Pasada | Resultado |
+|---|---|
+| `tests/Feature/UltronStudio/UltronStudioVoice*Test.php` + `tests/Unit/UltronStudio/StudioVoice*Test.php` (18 ficheros), **SQLite** | **580 pruebas, 5 187 aserciones, 0 fallos.** 73 omitidas, que solo corren en PG. |
+| Lo mismo, **PG** (`ultron_studio_h8_sc`, creada en el clúster desechable `127.0.0.1:55432`) | **580 pruebas, 5 583 aserciones, 0 fallos.** |
+| Telefonía y voz de B8-b, para ver si la columna nueva rompe algo (`tests/Feature/Telephony`, `tests/Unit/Telephony`, `tests/Unit/Voice`, `tests/Feature/Voice`) | SQLite: **624 pruebas, 0 fallos** (131 omitidas, solo PG). PG: **624 pruebas, 0 fallos.** |
+| Vecinas del H6 que leen la ruta 45 o cuentan rutas y permisos (18 ficheros: `UltronStudioIntegrations*Test`, `StudioIntegrations*Test`, `UltronStudioPermissionsTest`, `UltronStudioEarlyBodyCapTest`, `UltronStudioLabNoEngineEffectsTest`), SQLite | 1 029 pruebas, **0 fallos** (46 omitidas, solo PG). |
+| Guardas (`TelephonyIsolationTest`, `VoiceIsolationTest`, `UltronEngineIsolationTest`, `VoiceBoundaryTest`, `OtpUntouchedByVoiceTest`), SQLite | **43 pruebas, 0 fallos.** |
+| `UltronStudioEngineReadOnlyTest`, SQLite | 1 fallo, el previsto: `walkVoice()` publica y promueve sin `expectedSpecHash` y recibe 422 en vez de 409. Lo arregla el **Anexo D** (§16), que sigue aplicando limpio. La copia parcheada pasa **6 de 6 en SQLite y en PG**. |
+| Mutaciones por muestreo: 29 mutantes en 4 ficheros (servicio, panel, controlador y modelo), cada uno en una copia del scratchpad cargada tras el autoload | **28 cazados.** El superviviente, I07 (`serverTools()` → `SERVER_TOOLS`), es equivalente mientras P-3 esté encendido. La huella de los 4 ficheros es `3345ddf2dd1b0cf4` antes y después. |
+| `php artisan auth:coverage --unmapped` | Sale con 0 y sin salida. |
+| `vendor/bin/pint --test` (los 11 ficheros PHP tocados) | `passed`. |
+
+**El lector de B8-b, durante el trabajo.** Antes de añadir la columna, su `VoicePublishedConfig` (en curso) ya la seleccionaba, y caían 3 pruebas de publicar en SQLite y 4 en PG (`read_failed`). Con la columna en la migración desaparecen, sin cambiar nada de B8-b. Su `VoiceFixtures` añade la columna en las pruebas si no existe; con la migración ya no hace nada.
+
+**Qué cazan las mutaciones:**
+- publicar o promover sin comparar la huella;
+- la comparación movida detrás de la puerta del laboratorio, de las piezas del despliegue o de la evidencia;
+- el reintento que pierde o ignora la huella;
+- el 409 sin `actual` o con otro estado;
+- una llave sin `ultron.view`;
+- una llave con el permiso de otra;
+- `can` que no mira la sesión;
+- el tope del servidor sustituido por el del esquema;
+- otra retención u otro aviso;
+- `expectedSpecHash` opcional o admitido en mayúsculas;
+- E5-1: el agente sin destinos (`null`), siempre vacío, otra huella, `null` en vez de `[]`, una clave de más, otro orden o el modelo sin el cast.
+
+La clasificación de la columna como inmutable la fija la prueba de esquema: su recorrido de inmutables la incluye.
+
+El script de mutaciones es `/private/tmp/claude-501/-Users-alejodev-Documents-Dev-IRON-BODY--worktrees-ultron-h8-Iron-Body-backend/7d086b82-539e-4fff-a2c5-f5dd005f4765/scratchpad/mutar/mutar.py`.
+
+**Comandos:**
+- **SQLite:** `php -d memory_limit=2G vendor/bin/phpunit tests/Feature/UltronStudio/UltronStudioVoice*Test.php tests/Unit/UltronStudio/StudioVoice*Test.php`.
+- **PG:** `PGGSSENCMODE=disable UNIT_DB=ultron_studio_h8_sc bash docs/ultron-studio/ops/pgunit.sh <los mismos ficheros>`.
+
+## 16. Para el lead y los demás paquetes
+
+**Anexo D (para el lead, como E4-5):**
+- Cambia 2 líneas de `UltronStudioEngineReadOnlyTest::walkVoice()`, que no es mía.
+- Añade `'expectedSpecHash' => str_repeat('0', 64)` a los cuerpos de `voice/publish` y `voice/promote`.
+- Con la bandera apagada, el 409 `voice_publishing_disabled` sigue saliendo antes que la comparación.
+- `git apply --check` sale limpio sobre `45e3714e`.
+- Fichero: `plans/informes-h8/anexos/anexo-d-walkvoice-spechash.diff`. Se aplica desde la raíz del repositorio, como los anexos B y C.
+
+```diff
+-        $this->walk('POST', 'voice/publish', $root, ['clientRequestId' => (string) Str::uuid(), 'versionUuid' => $version, 'profileUuid' => $perfil])
++        $this->walk('POST', 'voice/publish', $root, ['clientRequestId' => (string) Str::uuid(), 'versionUuid' => $version, 'profileUuid' => $perfil, 'expectedSpecHash' => str_repeat('0', 64)])
+-        $this->walk('POST', 'voice/promote', $root, ['clientRequestId' => (string) Str::uuid(), 'evidenceHash' => str_repeat('0', 64)])
++        $this->walk('POST', 'voice/promote', $root, ['clientRequestId' => (string) Str::uuid(), 'evidenceHash' => str_repeat('0', 64), 'expectedSpecHash' => str_repeat('0', 64)])
+```
+
+**B8-b (E5-1):**
+- La columna existe y S8 la escribe con la forma acordada (§14.4).
+- Su lector la lee y lo comprueba una prueba mía: `VoicePublishedConfig::read()['canary']->transferDestinations` da exactamente los dos `{alias, hash}` publicados.
+- El apaño de su `VoiceFixtures` (añade la columna si falta) ya se puede quitar cuando le venga bien.
+- Ojo: su fixture escribe `null` cuando no hay destinos, y S8 escribe `[]`. Las dos formas niegan cualquier transferencia, pero solo `[]` dice «agente sin destinos».
+
+**DB8:** la columna la añadí yo en su migración, por encargo del lead (E5-1, editada en sitio y anotada en la cabecera). Ajusté solo dos listas de `UltronStudioVoiceSchemaTest`. Los recuentos de E3-5 no cambian.
+
+**LAB8:** sus agentes de laboratorio (`StudioVoiceLabAgents::insertGetId`) no escriben la columna y quedan en `NULL`. No afecta a las llamadas: un agente de laboratorio nunca entra en la cadena (`usvpub_agents_for_calls`). Si se quiere `[]` también en ellos, es una línea en su fichero, con `$spec->transferDestinations()` (decisión del lead).
+
+**FE8, para el paso 3:**
+- leer `can` y `template` de la ruta 45 (§14.1);
+- mandar `expectedSpecHash`, no `specHash`;
+- tratar `spec_changed` como `preview_stale` en el H5: volver a enseñar y pedir confirmación.
+
+**Tester, casos límite que conozco desde dentro:**
+- la huella de otro perfil de la misma versión;
+- una publicación nueva en canario entre leer y promover: `spec_changed` va antes que `canary_evidence_insufficient`;
+- un perfil sin veredicto del laboratorio y una huella mala: `spec_changed` va antes que `lab_verdict_required`;
+- con la bandera apagada, la bandera va antes que la huella;
+- el mismo `clientRequestId` con otra huella: `client_request_reused`;
+- `VOICE_PER_CALL_MAX_SECONDS` en 30 o 900 se recorta a 60 o 600 en `limits.maxDurationSeconds.max`;
+- un rol a medida con solo llaves de telefonía no entra en la ruta 45;
+- E5-1: un perfil cambiado DESPUÉS de publicar no cambia los destinos aprobados. Son los del agente, y su columna no se puede actualizar ni con SQL a mano (`usva_forbid_immutable_update`);
+- E5-1: dos destinos con el mismo número no llegan al agente (el compilador rechaza destinos repetidos);
+- E5-1: un agente sin destinos tiene `[]`, nunca `null`.
+
+**Security:**
+- `can` es solo presentación: cada ruta vuelve a exigir su permiso.
+- El 409 devuelve la `spec_hash` de ahora. Es una huella de una especificación sin teléfonos ni secretos, y ya la ve quien tiene `ultron.view` en `GET voice/publications` (de los agentes publicados) y quien tiene `ultron.voice_manage` al previsualizar.
+- `template` lo ve cualquiera con `ultron.view`. Son textos de producto, sin datos de contacto.
+- E5-1: la fila del agente guarda solo el alias y la huella `voice-phone` (HMAC con su subclave) de cada destino, nunca el número ni su cifrado.
+  - Lo comprueba una prueba: en toda la fila no aparecen el E.164, sus dígitos, el número nacional ni sus 7 últimos.
+  - Una huella sin la clave no deja recuperar el número, pero con la clave de la aplicación se puede confirmar un número que se sospeche: es el mismo nivel que `voice_calls` (D8-17).

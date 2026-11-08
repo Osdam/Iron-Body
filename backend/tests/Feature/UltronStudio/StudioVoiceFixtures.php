@@ -2,9 +2,11 @@
 
 namespace Tests\Feature\UltronStudio;
 
+use App\Exceptions\UltronStudioException;
 use App\Http\Middleware\EnforceAdminAuthorization;
 use App\Models\Admin;
 use App\Models\UltronStudio\StudioVersion;
+use App\Models\UltronStudio\StudioVoiceAgent;
 use App\Models\UltronStudio\StudioVoiceProfile;
 use App\Services\UltronStudio\StudioAudit;
 use App\Services\UltronStudio\StudioVersions;
@@ -226,13 +228,57 @@ trait StudioVoiceFixtures
         ]);
     }
 
-    protected function publishVoice(Admin $as, StudioVersion $v, StudioVoiceProfile $p, ?string $clientRequestId = null, ?string $note = null): TestResponse
+    /**
+     * Publica como lo hace el CRM (S8-c): con la `specHash` que se VIO al
+     * previsualizar esa versión y ese perfil, salvo que se dé otra.
+     */
+    protected function publishVoice(Admin $as, StudioVersion $v, StudioVoiceProfile $p, ?string $clientRequestId = null, ?string $note = null, ?string $expectedSpecHash = null): TestResponse
     {
         return $this->voice('POST', 'publish', $as, array_filter([
             'clientRequestId' => $clientRequestId ?? (string) Str::uuid(),
             'versionUuid' => $v->uuid,
             'profileUuid' => $p->uuid,
+            'expectedSpecHash' => $expectedSpecHash ?? self::seenSpecHash($v, $p),
             'note' => $note,
         ], static fn (mixed $x): bool => $x !== null));
+    }
+
+    /**
+     * La `specHash` que enseñaría `compile-preview`. Si el compilador se niega
+     * (un perfil sin aprobar), una huella cualquiera: el servidor responde
+     * con la misma negativa antes de compararla, y una prueba que esperara
+     * publicar caería con `spec_changed`, nunca en silencio.
+     */
+    protected static function seenSpecHash(StudioVersion $v, StudioVoiceProfile $p): string
+    {
+        try {
+            return self::specHashOf($v, $p);
+        } catch (UltronStudioException $e) {
+            if ($e->errorCode !== StudioVoiceCompiler::ERROR_CODE) {
+                throw $e;
+            }
+
+            return str_repeat('0', 64);
+        }
+    }
+
+    /**
+     * Promueve como lo hace el CRM (S8-c): con la huella de la evidencia y la
+     * `specHash` del agente que atiende el canario, las dos como se vieron.
+     */
+    protected function promoteVoice(Admin $as, string $evidenceHash, ?string $clientRequestId = null, ?string $note = null, ?string $expectedSpecHash = null): TestResponse
+    {
+        return $this->voice('POST', 'promote', $as, array_filter([
+            'clientRequestId' => $clientRequestId ?? (string) Str::uuid(),
+            'evidenceHash' => $evidenceHash,
+            'expectedSpecHash' => $expectedSpecHash ?? self::canarySpecHash(),
+            'note' => $note,
+        ], static fn (mixed $x): bool => $x !== null));
+    }
+
+    /** La `specHash` del agente que atiende el canario (la que enseña `GET voice/publications`), o una cualquiera si no hay. */
+    protected static function canarySpecHash(): string
+    {
+        return (string) (StudioVoiceAgent::query()->where('serves_canary', true)->value('spec_hash') ?? str_repeat('0', 64));
     }
 }

@@ -107,6 +107,8 @@ class UltronStudioVoiceSchemaTest extends TestCase
         'spec_hash' => ['character(64)', 'varchar', false],
         'payload_hash' => ['character(64)', 'varchar', false],
         'projection_hash' => ['character(64)', 'varchar', false],
+        // E5-1 (S8-c): los destinos compilados, alias y huella `voice-phone`.
+        'transfer_destination_hashes' => ['json', 'text', true],
         'provider' => ['character varying(16)', 'varchar', false],
         'provider_agent_id' => ['character varying(128)', 'varchar', true],
         'observed_hash' => ['character(64)', 'varchar', true],
@@ -489,7 +491,7 @@ class UltronStudioVoiceSchemaTest extends TestCase
     {
         $id = $this->insertAgent();
         foreach (['id', 'uuid', 'client_request_id', 'purpose', 'studio_version_id', 'studio_content_hash', 'voice_profile_id', 'voice_profile_hash',
-            'compiler_version', 'spec_hash', 'payload_hash', 'projection_hash', 'provider', 'created_by_admin_id', 'created_by_name', 'created_by_role', 'created_at'] as $columna) {
+            'compiler_version', 'spec_hash', 'payload_hash', 'projection_hash', 'transfer_destination_hashes', 'provider', 'created_by_admin_id', 'created_by_name', 'created_by_role', 'created_at'] as $columna) {
             $this->assertGuarded(fn () => DB::statement('UPDATE '.self::AGENTS." SET {$columna} = {$columna} WHERE id = ?", [$id]), self::AGENT_FROZEN, $columna);
         }
 

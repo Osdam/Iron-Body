@@ -77,8 +77,8 @@ class UltronStudioVoiceNoNetworkTest extends TestCase
             ['POST', "profiles/{$uuid}/reject", ['note' => 'No sirve para nada'], 404],
             ['POST', 'compile-preview', ['versionUuid' => $v->uuid, 'profileUuid' => $p->uuid], 200],
             ['GET', 'publications', [], 200],
-            ['POST', 'publish', ['clientRequestId' => (string) Str::uuid(), 'versionUuid' => $v->uuid, 'profileUuid' => $p->uuid], 409],
-            ['POST', 'promote', ['clientRequestId' => (string) Str::uuid(), 'evidenceHash' => str_repeat('a', 64)], 409],
+            ['POST', 'publish', ['clientRequestId' => (string) Str::uuid(), 'versionUuid' => $v->uuid, 'profileUuid' => $p->uuid, 'expectedSpecHash' => self::specHashOf($v, $p)], 409],
+            ['POST', 'promote', ['clientRequestId' => (string) Str::uuid(), 'evidenceHash' => str_repeat('a', 64), 'expectedSpecHash' => str_repeat('b', 64)], 409],
             ['POST', 'rollback', ['clientRequestId' => (string) Str::uuid(), 'scope' => 'canary', 'reason' => 'Revertir sin nada'], 409],
             ['POST', 'off', ['clientRequestId' => (string) Str::uuid(), 'reason' => 'Apagar sin nada'], 409],
             ['GET', 'canary-evidence', [], 200],
@@ -93,7 +93,7 @@ class UltronStudioVoiceNoNetworkTest extends TestCase
             $vistas[] = preg_replace('/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/', '{uuid}', "{$metodo} voice/{$ruta}");
             $this->assertStringNotContainsString('CENTINELA', $r->getContent());
         }
-        $this->assertSame('voice_publishing_disabled', $this->voice('POST', 'publish', $todo, ['clientRequestId' => (string) Str::uuid(), 'versionUuid' => $v->uuid, 'profileUuid' => $p->uuid])->json('code'));
+        $this->assertSame('voice_publishing_disabled', $this->voice('POST', 'publish', $todo, ['clientRequestId' => (string) Str::uuid(), 'versionUuid' => $v->uuid, 'profileUuid' => $p->uuid, 'expectedSpecHash' => str_repeat('c', 64)])->json('code'));
         $this->integrations('GET', 'voice', $todo)->assertOk();
 
         // Se recorrieron TODAS las rutas de voz del Studio (la lista de la constante).

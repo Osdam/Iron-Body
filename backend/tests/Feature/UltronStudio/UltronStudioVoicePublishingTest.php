@@ -11,6 +11,7 @@ use App\Models\UltronStudio\StudioVoicePublication;
 use App\Services\Telephony\VoiceBrake;
 use App\Services\Telephony\VoicePublishedConfig;
 use App\Services\UltronStudio\StudioVoiceEvidence;
+use App\Services\UltronStudio\StudioVoiceProfiles;
 use App\Services\UltronStudio\StudioVoicePublications;
 use App\Services\UltronStudio\StudioVoicePublishing;
 use App\Services\Voice\Dto\VoiceDeployResult;
@@ -18,6 +19,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -109,6 +111,53 @@ class UltronStudioVoicePublishingTest extends TestCase
         $this->assertSame(1, StudioAuditEvent::query()->where('event', 'voice_publication.published')->count());
     }
 
+    /**
+     * E5-1 (Enmienda 5): los destinos aprobados son los COMPILADOS en el
+     * agente. Su fila guarda el alias y la huella `voice-phone` de cada uno,
+     * nunca el número, y `[]` sin destinos; la telefonía los lee de ahí.
+     */
+    public function test_el_agente_guarda_sus_destinos_compilados_como_alias_y_huella_sin_el_numero(): void
+    {
+        $numeros = ['Recepción' => '+576010000097', 'Ventas' => '+576010000098'];
+        $contenido = self::profileContentWithTransfer();
+        $contenido['transfer']['destinations'] = array_map(static fn (string $alias, string $numero): array => ['alias' => $alias, 'phone' => $numero], array_keys($numeros), $numeros);
+        [$v, $p] = $this->ready('dos destinos', $contenido);
+        $this->publishVoice($this->pablo, $v, $p)->assertCreated();
+
+        // Exactamente sus dos destinos, en el orden de la especificación: el alias y la huella del número.
+        $esperados = array_map(static fn (string $alias, string $numero): array => ['alias' => $alias, 'hash' => StudioVoiceProfiles::phoneHash($numero)], array_keys($numeros), $numeros);
+        $fila = DB::table('ultron_studio_voice_agents')->where('purpose', 'publication')->sole();
+        $this->assertSame($esperados, json_decode((string) $fila->transfer_destination_hashes, true));
+        $this->assertSame($esperados, StudioVoiceAgent::query()->where('purpose', 'publication')->sole()->transfer_destination_hashes);
+        $compilados = $this->voice('POST', 'compile-preview', $this->ana, ['versionUuid' => $v->uuid, 'profileUuid' => $p->uuid])->assertOk()->json('data.spec.transfer.destinations');
+        $this->assertSame($esperados, array_map(static fn (array $d): array => ['alias' => $d['alias'], 'hash' => $d['ref']], $compilados), 'son los de la especificación compilada');
+
+        // Ni rastro del número en toda la fila: ni el E.164, ni sus dígitos, ni el número nacional, ni sus 7 últimos.
+        $cruda = (string) json_encode((array) $fila, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        foreach ($numeros as $alias => $numero) {
+            $digitos = ltrim($numero, '+');
+            foreach ([$numero, $digitos, substr($digitos, 2), substr($digitos, -7)] as $rastro) {
+                $this->assertStringNotContainsString($rastro, $cruda, "{$alias}: {$rastro}");
+            }
+        }
+        // En la columna, alias sin dígitos y huellas de 64 hex: nada más.
+        foreach (json_decode((string) $fila->transfer_destination_hashes, true) as $d) {
+            $this->assertSame(['alias', 'hash'], array_keys($d));
+            $this->assertDoesNotMatchRegularExpression('/\d/', $d['alias']);
+            $this->assertMatchesRegularExpression('/^[0-9a-f]{64}$/D', $d['hash']);
+        }
+
+        // La telefonía los lee de la fila del agente, sin descifrar nada (E5-1).
+        $parte = VoicePublishedConfig::read()['canary'];
+        $this->assertSame('ok', $parte->status, (string) $parte->reason);
+        $this->assertSame($esperados, $parte->transferDestinations);
+
+        // Sin destinos, una lista vacía: null queda para los agentes anteriores a la columna.
+        [$v2, $p2] = $this->ready('sin destinos', self::profileContent(['maxDurationSeconds' => 240]));
+        $this->publishVoice($this->pablo, $v2, $p2)->assertCreated();
+        $this->assertSame('[]', DB::table('ultron_studio_voice_agents')->where('purpose', 'publication')->where('spec_hash', self::specHashOf($v2, $p2))->sole()->transfer_destination_hashes);
+    }
+
     public function test_las_puertas_antes_de_desplegar_y_ninguna_sale_a_la_red(): void
     {
         [$v, $p] = $this->ready();
@@ -166,6 +215,122 @@ class UltronStudioVoicePublishingTest extends TestCase
         config(['ultron_studio.voice.lab_gate' => 'waived']);
         $r = $this->publishVoice($this->pablo, $v, $sinLab)->assertCreated();
         $this->assertSame(['mode' => 'waived'], $r->json('data.entries.0.labGate'));
+    }
+
+    /**
+     * S8-c (E5-6, Q-3 de FE8): lo que se vio es lo que se publica, como la
+     * `previewHash` del H5. Publicar lleva la `specHash` de `compile-preview`.
+     */
+    public function test_publicar_lleva_la_huella_que_se_vio_y_si_cambio_es_spec_changed_sin_desplegar_nada(): void
+    {
+        [$v, $p] = $this->ready('vista');
+        $p2 = $this->approvedProfile($this->ana, $this->root, self::profileContent(['maxDurationSeconds' => 240]), 'Perfil que se cambió');
+        $this->labVerdictFor($v, $p2, $this->ana, $this->root);
+
+        // Lo que enseña la previsualización es la huella que compara publicar.
+        $vista = $this->voice('POST', 'compile-preview', $this->ana, ['versionUuid' => $v->uuid, 'profileUuid' => $p->uuid])->assertOk()->json('data.specHash');
+        $otra = $this->voice('POST', 'compile-preview', $this->ana, ['versionUuid' => $v->uuid, 'profileUuid' => $p2->uuid])->assertOk()->json('data.specHash');
+        $this->assertSame([self::specHashOf($v, $p), self::specHashOf($v, $p2)], [$vista, $otra]);
+        $this->assertNotSame($vista, $otra);
+
+        // 401 sin sesión; 422 sin la huella o si no es un sha256 en minúsculas; 403 sin la llave.
+        $cuerpo = static fn (array $over = []): array => $over + ['clientRequestId' => (string) Str::uuid(), 'versionUuid' => $v->uuid, 'profileUuid' => $p->uuid, 'expectedSpecHash' => $vista];
+        $this->json('POST', '/api/admin/ultron-studio/voice/publish', $cuerpo())->assertStatus(401);
+        $sinHuella = $cuerpo();
+        unset($sinHuella['expectedSpecHash']);
+        $this->voice('POST', 'publish', $this->pablo, $sinHuella)->assertStatus(422)->assertJsonValidationErrors(['expectedSpecHash']);
+        foreach ([strtoupper($vista), substr($vista, 1), $vista.'0', 'g'.substr($vista, 1), ['x'], 12345] as $mala) {
+            $this->voice('POST', 'publish', $this->pablo, $cuerpo(['expectedSpecHash' => $mala]))->assertStatus(422)->assertJsonValidationErrors(['expectedSpecHash']);
+        }
+        $this->voice('POST', 'publish', $this->personWith(['ultron.view'], 'Solo Ve'), $cuerpo())->assertStatus(403)->assertJsonPath('required_permission', 'ultron.voice_publish');
+
+        // Se vio el perfil 1 y se pide el 2: 409 con las dos huellas.
+        $r = $this->publishVoice($this->pablo, $v, $p2, null, null, $vista)->assertStatus(409);
+        $this->assertSame(['spec_changed', $vista, $otra], [$r->json('code'), $r->json('expected'), $r->json('actual')]);
+
+        // El orden: la bandera va antes (no compila); el laboratorio y las piezas del despliegue,
+        // después (el veredicto es de otra huella; lo que falta da igual si no es lo que se vio).
+        $sinLab = $this->approvedProfile($this->ana, $this->root, self::profileContent(['maxDurationSeconds' => 200]), 'Sin laboratorio');
+        $this->publishVoice($this->pablo, $v, $sinLab, null, null, $vista)->assertStatus(409)->assertJsonPath('code', 'spec_changed');
+        $this->publishVoice($this->pablo, $v, $sinLab)->assertStatus(409)->assertJsonPath('code', 'lab_verdict_required');
+        $this->deployConfig(['voice.elevenlabs.initiation_secret_ref' => null]);
+        $this->publishVoice($this->pablo, $v, $p2, null, null, $vista)->assertStatus(409)->assertJsonPath('code', 'spec_changed');
+        $this->deployConfig(['ultron_studio.voice.publishing_enabled' => false]);
+        $this->publishVoice($this->pablo, $v, $p2, null, null, $vista)->assertStatus(409)->assertJsonPath('code', 'voice_publishing_disabled');
+        $this->deployConfig();
+
+        // Nada salió al proveedor ni se escribió.
+        $this->assertSame([], $this->fake->calls);
+        $this->assertSame(0, StudioVoiceAgent::query()->where('purpose', 'publication')->count());
+        $this->assertSame(0, StudioVoicePublication::query()->count());
+        $this->assertSame(0, StudioAuditEvent::query()->where('event', 'voice_publication.published')->count());
+
+        // Con la huella de lo que se publica: 201, y el agente desplegado es esa compilación.
+        $crid = (string) Str::uuid();
+        $this->publishVoice($this->pablo, $v, $p2, $crid, null, $otra)->assertCreated();
+        $this->assertSame($otra, StudioVoiceAgent::query()->where('serves_canary', true)->value('spec_hash'));
+
+        // El reintento: el mismo cuerpo da lo de la primera vez; otra huella con la misma llave es otra petición.
+        $this->publishVoice($this->pablo, $v, $p2, $crid, null, $otra)->assertOk()->assertJsonPath('replayed', true);
+        $this->publishVoice($this->pablo, $v, $p2, $crid, null, $vista)->assertStatus(409)->assertJsonPath('code', 'client_request_reused');
+        $this->assertCount(1, $this->fake->callsOf('create'));
+    }
+
+    /**
+     * S8-c (E5-6): promover lleva la `specHash` del agente del canario que se
+     * vio (`GET voice/publications` → `state.canary.agent.specHash`).
+     */
+    public function test_promover_lleva_la_huella_del_canario_que_se_vio_y_si_cambio_es_spec_changed_sin_escribir(): void
+    {
+        $this->bindFake(fn (): array => ['calls' => 3, 'guardViolations' => 0, 'sealMismatches' => 0, 'driftEvents' => 0, 'unknownProviderCalls' => 0, 'budgetBreaches' => 0]);
+        [$v, $p] = $this->ready('uno');
+        Carbon::setTestNow(Carbon::parse('2026-11-09T14:00:00Z'));
+        $this->freshSessions();
+        $this->publishVoice($this->pablo, $v, $p)->assertCreated();
+        Carbon::setTestNow(Carbon::parse('2026-11-10T15:00:00Z'));
+        $this->freshSessions();
+
+        // Lo que ve el CRM: el agente del canario con su huella y la evidencia, que basta.
+        $vista = $this->voice('GET', 'publications', $this->paula)->assertOk()->json('data.state.canary.agent.specHash');
+        $this->assertSame(self::specHashOf($v, $p), $vista);
+        $e = $this->voice('GET', 'canary-evidence', $this->paula)->assertOk()->json('data');
+        $this->assertTrue($e['passes'], json_encode($e['failing']));
+
+        // 401 sin sesión; 422 sin la huella o mal escrita; 403 sin la llave.
+        $cuerpo = static fn (array $over = []): array => $over + ['clientRequestId' => (string) Str::uuid(), 'evidenceHash' => $e['evidenceHash'], 'expectedSpecHash' => $vista];
+        $this->json('POST', '/api/admin/ultron-studio/voice/promote', $cuerpo())->assertStatus(401);
+        $sinHuella = $cuerpo();
+        unset($sinHuella['expectedSpecHash']);
+        $this->voice('POST', 'promote', $this->paula, $sinHuella)->assertStatus(422)->assertJsonValidationErrors(['expectedSpecHash']);
+        $this->voice('POST', 'promote', $this->paula, $cuerpo(['expectedSpecHash' => strtoupper($vista)]))->assertStatus(422)->assertJsonValidationErrors(['expectedSpecHash']);
+        $this->voice('POST', 'promote', $this->personWith(['ultron.view'], 'Solo Ve'), $cuerpo())->assertStatus(403)->assertJsonPath('required_permission', 'ultron.voice_publish');
+
+        // Una huella que no es la del agente del canario: 409 con las dos, sin escribir.
+        $r = $this->promoteVoice($this->paula, $e['evidenceHash'], null, null, str_repeat('d', 64))->assertStatus(409);
+        $this->assertSame(['spec_changed', str_repeat('d', 64), $vista], [$r->json('code'), $r->json('expected'), $r->json('actual')]);
+
+        // Entretanto se publica OTRA voz en canario: lo que se vio ya no es lo que se promovería
+        // (y va antes que la evidencia, que para la voz nueva aún no basta).
+        [$v2, $p2] = $this->ready('dos', self::profileContent(['maxDurationSeconds' => 240]));
+        $this->publishVoice($this->pablo, $v2, $p2)->assertCreated();
+        $r = $this->promoteVoice($this->paula, $e['evidenceHash'], null, null, $vista)->assertStatus(409);
+        $this->assertSame(['spec_changed', $vista, self::specHashOf($v2, $p2)], [$r->json('code'), $r->json('expected'), $r->json('actual')]);
+        $this->assertSame(0, StudioVoicePublication::query()->where('action', 'promote')->count());
+        $this->assertSame(0, StudioVoiceAgent::query()->where('serves_rest', true)->count());
+
+        // Con la voz nueva vista y su evidencia: 201, y el resto pasa a ese agente.
+        Carbon::setTestNow(Carbon::parse('2026-11-11T16:00:00Z'));
+        $this->freshSessions();
+        $nueva = $this->voice('GET', 'publications', $this->paula)->json('data.state.canary.agent.specHash');
+        $e2 = $this->voice('GET', 'canary-evidence', $this->paula)->json('data');
+        $crid = (string) Str::uuid();
+        $this->promoteVoice($this->paula, $e2['evidenceHash'], $crid, null, $nueva)->assertCreated();
+        $this->assertSame($nueva, StudioVoiceAgent::query()->where('serves_rest', true)->value('spec_hash'));
+
+        // El reintento: el mismo cuerpo da lo de la primera vez; otra huella con la misma llave, 409.
+        $this->promoteVoice($this->paula, $e2['evidenceHash'], $crid, null, $nueva)->assertOk()->assertJsonPath('replayed', true);
+        $this->promoteVoice($this->paula, $e2['evidenceHash'], $crid, null, $vista)->assertStatus(409)->assertJsonPath('code', 'client_request_reused');
+        $this->assertSame(1, StudioVoicePublication::query()->where('action', 'promote')->count());
     }
 
     public function test_con_el_freno_de_voz_echado_no_se_publica(): void
@@ -268,7 +433,7 @@ class UltronStudioVoicePublishingTest extends TestCase
 
             return $medidas;
         });
-        $this->voice('POST', 'promote', $this->paula, ['clientRequestId' => (string) Str::uuid(), 'evidenceHash' => str_repeat('a', 64)])
+        $this->promoteVoice($this->paula, str_repeat('a', 64))
             ->assertStatus(409)->assertJsonPath('code', 'no_canary_publication');
 
         [$v, $p] = $this->ready();
@@ -280,7 +445,7 @@ class UltronStudioVoicePublishingTest extends TestCase
         $e = $this->voice('GET', 'canary-evidence', $this->paula)->assertOk()->json('data');
         $this->assertFalse($e['passes']);
         $this->assertSame(['too_soon', 'too_few_calls'], $e['failing']);
-        $this->voice('POST', 'promote', $this->paula, ['clientRequestId' => (string) Str::uuid(), 'evidenceHash' => $e['evidenceHash']])
+        $this->promoteVoice($this->paula, $e['evidenceHash'])
             ->assertStatus(409)->assertJsonPath('code', 'canary_evidence_insufficient');
 
         // 25 h y 3 llamadas selladas sin incidentes: pasa.
@@ -292,16 +457,16 @@ class UltronStudioVoicePublishingTest extends TestCase
         $this->assertSame(25, $e['hours']);
 
         // Una huella de la evidencia que no es la de ahora: 409 con la evidencia nueva.
-        $this->voice('POST', 'promote', $this->paula, ['clientRequestId' => (string) Str::uuid(), 'evidenceHash' => str_repeat('b', 64)])
+        $this->promoteVoice($this->paula, str_repeat('b', 64))
             ->assertStatus(409)->assertJsonPath('code', 'evidence_changed')->assertJsonPath('evidence.evidenceHash', $e['evidenceHash']);
 
         // Con una violación de la guarda entretanto, la huella cambia: 409.
         $medidas['guardViolations'] = 1;
-        $this->voice('POST', 'promote', $this->paula, ['clientRequestId' => (string) Str::uuid(), 'evidenceHash' => $e['evidenceHash']])
+        $this->promoteVoice($this->paula, $e['evidenceHash'])
             ->assertStatus(409)->assertJsonPath('code', 'canary_evidence_insufficient')->assertJsonPath('evidence.failing', ['guard_violations']);
         $medidas['guardViolations'] = 0;
 
-        $r = $this->voice('POST', 'promote', $this->paula, ['clientRequestId' => (string) Str::uuid(), 'evidenceHash' => $e['evidenceHash'], 'note' => 'Evidencia completa'])->assertCreated();
+        $r = $this->promoteVoice($this->paula, $e['evidenceHash'], null, 'Evidencia completa')->assertCreated();
         $fila = StudioVoicePublication::query()->where('action', 'promote')->sole();
         $this->assertSame([2, 'rest'], [$fila->seq, $fila->scope]);
         $this->assertSame(3, $fila->evidence['measures']['calls']);
@@ -317,7 +482,7 @@ class UltronStudioVoicePublishingTest extends TestCase
         $this->freshSessions();
         $e2 = $this->voice('GET', 'canary-evidence', $this->paula)->json('data');
         $this->fake->drifted[] = (string) StudioVoiceAgent::query()->where('serves_canary', true)->value('provider_agent_id');
-        $this->voice('POST', 'promote', $this->paula, ['clientRequestId' => (string) Str::uuid(), 'evidenceHash' => $e2['evidenceHash']])
+        $this->promoteVoice($this->paula, $e2['evidenceHash'])
             ->assertStatus(409)->assertJsonPath('code', 'voice_agent_drift')->assertJsonPath('drift.outcome', 'drift');
     }
 
@@ -329,7 +494,7 @@ class UltronStudioVoicePublishingTest extends TestCase
         $this->labVerdictFor($v, $p, $this->ana, $this->root);
         $this->publishVoice($this->pablo, $v, $p)->assertCreated();
 
-        $this->voice('POST', 'promote', $autora, ['clientRequestId' => (string) Str::uuid(), 'evidenceHash' => str_repeat('c', 64)])
+        $this->promoteVoice($autora, str_repeat('c', 64))
             ->assertStatus(403)->assertJsonPath('code', 'four_eyes_required');
         $this->assertSame(1, StudioAuditEvent::query()->where('event', 'voice_publication.four_eyes_denied')->count());
         $this->assertSame(0, StudioVoicePublication::query()->where('action', 'promote')->count());
@@ -377,7 +542,7 @@ class UltronStudioVoicePublishingTest extends TestCase
         // Promover dos veces el mismo agente al resto: dos entradas, un solo agente.
         foreach ([1, 2] as $vez) {
             $e = $this->voice('GET', 'canary-evidence', $this->paula)->json('data');
-            $this->voice('POST', 'promote', $this->paula, ['clientRequestId' => (string) Str::uuid(), 'evidenceHash' => $e['evidenceHash'], 'note' => "Vez {$vez}"])->assertCreated();
+            $this->promoteVoice($this->paula, $e['evidenceHash'], null, "Vez {$vez}")->assertCreated();
         }
         $this->assertSame(2, StudioVoicePublication::query()->where('scope', 'rest')->count());
         // «El agente anterior» de la parte no es el mismo: nada a donde volver.
@@ -398,7 +563,7 @@ class UltronStudioVoicePublishingTest extends TestCase
         Carbon::setTestNow(Carbon::parse('2026-11-10T15:00:00Z'));
         $this->freshSessions();
         $e = $this->voice('GET', 'canary-evidence', $this->paula)->json('data');
-        $this->voice('POST', 'promote', $this->paula, ['clientRequestId' => (string) Str::uuid(), 'evidenceHash' => $e['evidenceHash']])->assertCreated();
+        $this->promoteVoice($this->paula, $e['evidenceHash'])->assertCreated();
 
         $this->deployConfig(['ultron_studio.voice.publishing_enabled' => false]);
         $r = $this->voice('POST', 'off', $this->pablo, $cuerpo)->assertCreated();

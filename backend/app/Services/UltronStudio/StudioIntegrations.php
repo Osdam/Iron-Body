@@ -9,6 +9,7 @@ use App\Services\Voice\VoiceCallContext;
 use App\Services\Voice\VoiceCallPolicy;
 use App\Services\Voice\VoiceProviders;
 use App\Services\Voice\VoiceProviderStatus;
+use App\Support\Access\CrmPermission;
 use App\Support\Privacy\PhoneFingerprint;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -68,6 +69,20 @@ final class StudioIntegrations
 
     /** Lo que una prueba de integración futura no necesita: no llamará a nadie (§I6.6). */
     public const INTEGRATION_TEST_EXCLUDED = ['not_an_active_voice_canary', 'daily_cap_zero'];
+
+    /**
+     * El bloque `can` de la ruta 45 (Hito 8, S8-c, E5-6): las 7 llaves de
+     * D8-22, nombre en el DTO → permiso, en el orden de la tabla.
+     */
+    public const VOICE_CAPABILITIES = [
+        'voiceManage' => CrmPermission::ULTRON_VOICE_MANAGE,
+        'approve' => StudioAccess::APPROVE,
+        'voicePublish' => CrmPermission::ULTRON_VOICE_PUBLISH,
+        'voiceLabRun' => CrmPermission::ULTRON_VOICE_LAB_RUN,
+        'telephonyView' => CrmPermission::TELEPHONY_VIEW,
+        'telephonyCallPlace' => CrmPermission::TELEPHONY_CALL_PLACE,
+        'telephonyContactsManage' => CrmPermission::TELEPHONY_CONTACTS_MANAGE,
+    ];
 
     public const DEFAULT_CANARY_MAX_ACTIVE = 3;
 
@@ -323,9 +338,13 @@ final class StudioIntegrations
      * política de llamadas y los tres niveles de prueba. En H6 la política
      * nunca permite: `calls_disabled_in_code` va siempre el primero.
      *
+     * Hito 8 (S8-c, E5-6): además, lo que puede la sesión con las llaves de la
+     * voz ({@see voiceCapabilities()}) y la plantilla vigente para el
+     * formulario del perfil ({@see voiceTemplate()}).
+     *
      * @return array<string,mixed>
      */
-    public function voicePanel(): array
+    public function voicePanel(StudioAccess $access): array
     {
         $estado = VoiceProviders::status();
         $codigo = self::voiceState();
@@ -346,7 +365,65 @@ final class StudioIntegrations
         $panel['publishing'] = self::block('publishing', fn (): array => StudioVoicePublishing::status());
         $panel['publication'] = self::block('publication', fn (): array => StudioVoicePublications::state());
 
+        // S8-c: sin bloque propio. Las llaves ya se calcularon al entrar
+        // (`requirePerson`) y la plantilla son constantes del código.
+        $panel['can'] = self::voiceCapabilities($access);
+        $panel['template'] = self::voiceTemplate();
+
         return $panel;
+    }
+
+    /**
+     * El bloque `can` de la ruta 45: las 7 llaves de D8-22 ({@see
+     * VOICE_CAPABILITIES}) resueltas para la sesión, con el mecanismo de
+     * {@see StudioAccess::integrationCapabilities()}: cada llave presupone ver
+     * el Studio. Solo dice qué enseñar; cada ruta lo vuelve a exigir.
+     *
+     * @return array<string,bool>
+     */
+    public static function voiceCapabilities(StudioAccess $access): array
+    {
+        $ve = $access->can(StudioAccess::VIEW);
+
+        return array_map(static fn (string $permiso): bool => $ve && $access->can($permiso), self::VOICE_CAPABILITIES);
+    }
+
+    /**
+     * El bloque `template` de la ruta 45 (Q-2 de FE8): lo que el formulario
+     * del perfil de voz necesita de la plantilla vigente
+     * ({@see StudioVoiceTemplate}, con P-3 aplicado a las herramientas del
+     * servidor, que es el catálogo que admite el compilador) y los topes del
+     * perfil. `maxDurationSeconds.max` es el tope del servidor
+     * (`VOICE_PER_CALL_MAX_SECONDS` recortado): un perfil que lo supere no se
+     * crea ni compila (`duration_exceeds_limit`); `ceiling` es el del esquema.
+     * Solo lectura y solo constantes del código: sin teléfonos ni secretos.
+     *
+     * @return array<string,mixed>
+     */
+    public static function voiceTemplate(): array
+    {
+        return [
+            'version' => StudioVoiceTemplate::VERSION,
+            'hash' => StudioVoiceTemplate::hash(),
+            'aiNotice' => StudioVoiceTemplate::AI_NOTICE,
+            'greetingMax' => StudioVoiceTemplate::GREETING_MAX,
+            'textMin' => StudioVoiceTemplate::TEXT_MIN,
+            'holes' => StudioVoiceTemplate::HOLES,
+            'tones' => StudioVoiceTemplate::TONES,
+            'goals' => StudioVoiceTemplate::GOALS,
+            'fallbacks' => StudioVoiceTemplate::FALLBACKS,
+            'serverTools' => StudioVoiceTemplate::serverTools(),
+            'systemTools' => StudioVoiceTemplate::SYSTEM_TOOLS,
+            'limits' => [
+                'maxDurationSeconds' => [
+                    'min' => StudioVoiceCompiler::MIN_DURATION_SECONDS,
+                    'max' => StudioVoicePublishing::maxCallSeconds(),
+                    'ceiling' => StudioVoiceCompiler::MAX_DURATION_CEILING,
+                ],
+                'retentionDays' => ['max' => StudioVoiceCompiler::MAX_RETENTION_DAYS],
+                'transferDestinations' => ['max' => StudioVoiceCompiler::MAX_DESTINATIONS],
+            ],
+        ];
     }
 
     /**
