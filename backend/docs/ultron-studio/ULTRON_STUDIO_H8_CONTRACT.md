@@ -849,3 +849,16 @@ Resuelve lo que TEST8-a, S8-a y OPS8-a dejaron abierto y recoge lo que el propie
 | E8-8 (hecho) | Reescritura autorizada | Con la autorización expresa del propietario (08-11, «Autorizo reescribir la rama»), la rama del backend, nunca subida, se rehízo commit a commit con plumbing de git: solo cambia `TwilioVoiceCarrierTest.php:34` (el literal `SK…` pasa a concatenación de dos literales, mismo valor). HEAD antiguo `e753649` en `refs/backup/h8-voice-antes-de-rehacer`; nuevo `c01124c`, subido a GitHub |
 | E8-9 (hecho) | Límite de uso | TEST8-b, OPS8-b, PERF8 y FE8-3 quedaron a medias el 08-11 ~18:17 UTC con el trabajo en disco; se reanudan con su contexto. Sus informes dicen qué está ejecutado y qué no: nada no ejecutado se da por bueno |
 
+## Enmienda 9 (lead, 08-11-2026 23:00 UTC): cierre de las correcciones del paso 3 (B8-c)
+
+| Id | Qué | Decisión / hecho |
+|---|---|---|
+| E9-1 (E8-1) | Oyente del laboratorio | Registrado en `AppServiceProvider::boot()` (el sitio que documenta Laravel 12; funciona con la configuración y las rutas en caché). `UltronEngineIsolationTest` admite esa única referencia al Studio en ese fichero (E8-1) |
+| E9-2 (E8-6) | Purga de los límites | `voice:prune-rate-limits [--dry-run] [--json]` borra solo las claves `voice-rl:*` caducadas; la parte que localiza la caché vive en `app/Support/Cache/ExpiredCachePruner.php` porque la guarda prohíbe a la voz leer `cache.*` (no se relaja la guarda). Programada a las **04:40 de Bogotá** (una vez al día basta) en el bloque de voz; son cuatro tareas de voz |
+| E9-3 (E7-2) | Techo global autenticado | Variables opcionales `VOICE_PUBLIC_INITIATION_PER_MINUTE=120`, `VOICE_PUBLIC_POST_CALL_PER_MINUTE=240`, `VOICE_PUBLIC_TOOLS_PER_MINUTE=600`, `VOICE_PUBLIC_USAGE_TRIGGER_PER_MINUTE=60`; registro `voice.public.failures_silenced {route, silenced}` ≤ 1/min por ruta |
+| E9-4 (P8-5, cubo del login) | Cupos del CRM de voz | `throttle:voice-admin-read` / `voice-admin-write` con nombre: con sesión, por persona (120/30 por minuto; una segunda sesión no da más cupo); sin sesión, por ruta y red (60/30), sin tocar nunca el cubo del login. **Sin** techo por red para lo autenticado (volvería a dar un cubo común a toda la recepción). El 429 de `/api/admin/voice/*` lleva el cuerpo uniforme del Studio (`ok`, `code`, `message`, `retry_after`) y `Retry-After`: FE8-3 lo consume |
+| E9-5 (P8-7) | Conciliación en régimen | Los dos `INSERT` condenados por llamada se evitan con dos `EXISTS` en el `SELECT … FOR UPDATE`: 166 → 57 ms de mediana en PG, mismo resumen y 0 puntos de guardado deshechos |
+| E9-6 (O-1) | Recuento de eventos al segundo | **Diferido** (sentido seguro: solo puede bloquear promover de más). Propuesta aceptada para después de la fase 1: columna nullable `events_watermark_id` en la entrada de la cadena (DB8) escrita al publicar (S8) y usada por `forPublication()` (B8) |
+| E9-7 (hecho) | Cifras de B8-c | SQLite 759 + 588 pruebas, PG 1 347, 0 fallos; `auth:coverage` vacío; 46/46 mutaciones; `status`/`metrics` 33/30 → 17 consultas; contactos 202 → 4 |
+| E9-8 (hecho) | Agentes | Cerrados por orden del propietario al entregar: TEST8-b, OPS8-b, PERF8, B8-c. El lead asume: la pasada final del E2E con evidencia, el antes/después de PERF8 y el ensayo del paso 0 sobre el HEAD final. Sigue activo FE8-3 (relanzado) |
+
