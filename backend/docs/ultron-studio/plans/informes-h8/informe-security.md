@@ -195,3 +195,235 @@ Siglas: VI `VoiceIsolationTest`, VB `VoiceBoundaryTest`, TI `TelephonyIsolationT
 **Informe:** `docs/ultron-studio/plans/informes-h8/informe-security.md` (este).
 
 **Fuera del repositorio** (scratchpad, desechable): el banco `tools/banco.php` (27 operaciones de control y las mutaciones) y `tools/correr.php`, y las copias `mut/` y `mut2/`.
+
+---
+
+# §SEC8-b-lite · paso 2, puerta 2 · guardas ceñidas al contrato (`security`)
+
+**Fecha:** 08-11-2026. **Base:** `d6ed5ba` (los anexos B y C, confirmados por el lead). En paralelo, `backend` (B8-b) edita `app/Services/{Telephony,Voice}/**`, `config/voice.php` y sus pruebas, sin commit. **Sin commit.** Rutas relativas a `backend/`. Para separar mi trabajo del suyo, las cifras limpias salen de una **copia aislada: `d6ed5ba` + solo mis tres guardas** (`<scratchpad>/mut/backend`). El árbol compartido se midió aparte (§5).
+
+## 0. Resumen
+
+- **Los 4 fallos de E4-3 y E4-4 pasan a verde** con cuatro excepciones. Cada una va con su fichero exacto, su nombre exacto y la referencia del contrato junto a la lista blanca. Sin listas abiertas y sin `markTestSkipped`.
+- **Anexos verificados.** El C (E2-6) y el B (las 8 del Studio y el recuento de rutas) pasan.
+  - Al verificar el C vi que admitía **más de lo que permite E2-6**: cualquier miembro de `VoiceBrake`, también `open()`. Lo ciño al contrato (§2, H-1).
+- **Cuatro endurecimientos** en las mismas guardas (§2). No los pidió nadie: tres cierran huecos que mis mutaciones dejaban vivos y uno ciñe el Anexo C. Cada uno se revierte por bloque.
+- **Cifras en la copia:**
+
+  | Suite | Pruebas | Aserciones | Fallos | Omitidas |
+  |---|---|---|---|---|
+  | Las 14 citadas | 42 ejecuciones (13 métodos + 29 casos de `test_route_matrix`) | 9 232 | 0 | — |
+  | Voz y telefonía, SQLite | 675 | 184 545 | 0 | 131 (solo PG) |
+  | Studio, SQLite | 3 085 | 32 201 | 0 | 179 (solo PG) |
+  | Puerta PG | 295 | 160 254 | 0 | — |
+
+  Pint, `passed`.
+- **Mutaciones:** caen **26 de 26**, y 1 control no cae (reordenar las constantes del lector). Las 27 se restauraron con el SHA-256 igual. D4–D9 **sobreviven con las guardas de `d6ed5ba`** y caen con las nuevas.
+- **Árbol compartido:** las ediciones en curso de B8-b para E4-7 y E4-8 hacen caer guardas **a propósito**. No las adapté (§5).
+- **Revisión** (§6):
+  - 1 hallazgo **medio**: los limitadores de las 4 rutas públicas comparten un contador por IP, y ElevenLabs sale por IP comunes a todos sus clientes;
+  - 1 **bajo**: lo que permite el secreto de iniciación filtrado;
+  - S8-b, sin hallazgos.
+
+## 1. Ajustes que permite el contrato
+
+| Prueba | Fichero:línea | Qué se admite, exactamente | Contrato |
+|---|---|---|---|
+| `TelephonyIsolationTest::…canarios_y_su_cadena` | `tests/Feature/Telephony/TelephonyIsolationTest.php:89-99, 182, 207-213` | `'ultron_studio_voice_agents'`, además de `'ultron_studio_voice_publications'`, **solo** en `app/Services/Telephony/VoicePublishedConfig.php`. Del Studio, exactamente 2 apariciones de `ultron_studio_`, una de cada tabla. Sigue sin escrituras | E4-3 |
+| `UltronEngineIsolationTest::…nadie_nombra…` | `tests/Feature/UltronStudio/UltronEngineIsolationTest.php:99-113, 208-211, 515-525` | Las dos referencias, una vez cada una y solo en ese fichero. Se comparan como conjunto: el orden de las constantes no cuenta (control A8) | E4-3 |
+| `TelephonyIsolationTest::…dos_adaptadores` | `TelephonyIsolationTest.php:127-136, 250-252` | El literal `voice_number_is_whatsapp`, **solo** en `app/Services/Telephony/OutboundPolicy.php` | E4-4 (motivo de D8-5 y D8-12) |
+| `VoiceIsolationTest::…lectores_enumerados` | `tests/Unit/Voice/VoiceIsolationTest.php:147-154, 520-522` | El literal `telephony`, **solo** en dos sitios y nunca como argumento de una lectura de configuración (`config()`, `Config::`, `config()->`):<br>• `app/Support/Access/CrmPermission.php:266`, en `SHARED_TOKEN_EXCLUDED_DOMAINS`;<br>• `app/Support/Access/PermissionCatalog.php:57`, en la ficha del dominio | E4-4 (D8-22) |
+
+## 2. Endurecimientos (dentro de las mismas guardas)
+
+| # | Qué | Por qué | Dónde |
+|---|---|---|---|
+| H-1 | De la evidencia y del freno, el Studio solo usa `VoiceEvidence::forPublication`, `VoiceBrake::{isOpen, list, release}`, `::class` (para `method_exists`) y las constantes | El Anexo C admitía cualquier miembro, pero E2-6 dice «lee la evidencia y suelta el freno». `VoiceBrake::open()` o `VoiceEvidence::summary()` desde el Studio pasaban (D4, D7) | `TelephonyIsolationTest.php:62-75, 515-523` |
+| H-2 | La comprobación de miembros vale también con el nombre cualificado | `\App\Services\Telephony\VoicePublishedConfig::read()` pasaba porque solo se miraba el nombre corto (D5, D6). Hueco de SEC8-a | ídem |
+| H-3 | El Studio de voz no nombra tablas de la telefonía (`voice_calls`…`voice_brakes`, tampoco con alias ni con columna) | E2-6: «nunca escribe en `voice_*` directamente». Ninguna guarda lo miraba (D8, D9) | `TelephonyIsolationTest.php:140-142, 524-526` |
+| H-4 | Un prefijo de un solo segmento (`'telephony.'`, `'voice.'`) cuenta como bloque | El patrón exigía dos puntos (`\.[a-z0-9_.]*\.$`), así que `'telephony.'.$x` leía el bloque sin caer (C6). Hueco de SEC8-a. No hay ningún literal así en `app`, `routes`, `config`, `bootstrap` ni `database` | `VoiceIsolationTest.php:517-519` |
+
+- Los cuatro pasan hoy con el código de `d6ed5ba`: el Studio usa justo esos miembros y ninguna tabla `voice_*`.
+- **Límite:** siguen siendo rastreos de tokens. No ven una llamada dinámica (`[VoiceBrake::class, 'open']()`) ni un nombre de tabla compuesto en tiempo de ejecución.
+
+## 3. Lo verificado
+
+| Comprobación | Dónde | Resultado |
+|---|---|---|
+| Las 14 pruebas citadas: las 6 guardas de E4-3, E4-4, E2-6 y del recuento, y las 8 del Studio del Anexo B | copia | 42 ejecuciones OK, 9 232 aserciones |
+| Las 3 guardas tocadas | árbol, antes de que B8-b empezara a editar | 30 OK (128 432 aserciones) |
+| `tests/Feature/Telephony tests/Feature/Voice tests/Unit/Voice tests/Unit/Twilio tests/Unit/Telephony`, SQLite | copia | 675 OK, 184 545 aserciones, 131 omitidas (solo PG) |
+| `tests/Unit/UltronStudio tests/Feature/UltronStudio`, SQLite | copia | 3 085 OK, 32 201 aserciones, 179 omitidas |
+| `tests/Feature/Telephony tests/Feature/Voice`, PG desechable (`UNIT_DB=ultron_studio_h8_sec_copia`) | copia | 295 OK, 160 254 aserciones |
+| Pint `--test` en las 3 guardas | árbol | passed |
+| Las mismas suites en el árbol compartido | árbol, con B8-b en curso | §5 |
+
+Las 8 del Studio, por nombre:
+- `UltronStudioEarlyBodyCapTest::test_el_tope_global_es_el_de_las_56_rutas_del_studio`;
+- `UltronStudioEngineReadOnlyTest::test_recorrer_todas_las_rutas_del_studio_no_cambia_nada_del_motor`;
+- `UltronStudioIntegrationsParityHttpTest::test_route_matrix` (29 casos);
+- `UltronStudioIntegrationsPermissionsTest::test_el_mapa_resuelve_exactamente_las_56_rutas_y_las_18_nuevas_con_su_permiso` y `::test_valores_por_defecto_catalogo_y_token_compartido`;
+- `UltronStudioLabNoEngineEffectsTest::test_el_contrato_de_las_21_rutas_de_f_y_g_no_cambia`;
+- `UltronStudioPermissionsTest::test_el_catalogo_describe_las_ocho_llaves_en_su_orden` y `::test_el_mapa_resuelve_exactamente_las_38_rutas_del_contrato`.
+
+Ninguna sigue cayendo con el Anexo B: no hubo nada que diagnosticar.
+
+## 4. Mutaciones
+
+**Procedimiento** (en la copia; el árbol compartido no se tocó):
+1. aplicar la mutación y comprobar su sintaxis con `php -l`;
+2. correr las 3 guardas, con el resultado en JUnit;
+3. restaurar y comparar el SHA-256.
+
+**Resultado:**
+- base: 30 OK; después: 30 OK;
+- **caen 26 de 26**;
+- el control A8 no cae;
+- las 27 se restauraron con el SHA-256 igual.
+
+Siglas: TI `TelephonyIsolationTest`, VI `VoiceIsolationTest`, UEI `UltronEngineIsolationTest`.
+
+| # | Mutación | Fichero | Resultado | La caza |
+|---|---|---|---|---|
+| A1 | Otro fichero de la telefonía nombra la tabla de los agentes | `app/Services/Telephony/VoiceEvidence.php` | CAE | TI `del_studio_la_telefonia_solo_nombra_los_canarios_y_su_cadena`; UEI `fuera_del_studio_nadie_nombra_sus_clases_sus_tablas_ni_su_configuracion` |
+| A2 | El lector nombra la tabla de los perfiles (lo que pediría E4-7) | `app/Services/Telephony/VoicePublishedConfig.php` | CAE | TI `…canarios_y_su_cadena`; UEI `…nadie_nombra…` |
+| A3 | El lector nombra dos veces la tabla de los agentes | ídem | CAE | TI `…canarios_y_su_cadena`; UEI `…nadie_nombra…` |
+| A4 | El lector nombra la cadena del motor | ídem | CAE | TI `…canarios_y_su_cadena`; UEI `…nadie_nombra…` |
+| A5 | El lector escribe en la tabla de los agentes | ídem | CAE | TI `…canarios_y_su_cadena` |
+| A6 | El lector importa un modelo del Studio | ídem | CAE | TI `…canarios_y_su_cadena`; UEI `…nadie_nombra…` |
+| A7 | El lector lee la configuración del Studio | ídem | CAE | TI `…canarios_y_su_cadena`; TI `la_voz_solo_lee_su_configuracion_y_nada_del_entorno`; UEI `…nadie_nombra…` |
+| A8 | **Control:** el lector reordena sus dos constantes | ídem | no cae (bien) | — |
+| B1 | Otro fichero de la telefonía nombra el motivo del número | `app/Services/Telephony/VoiceTelephonyStatus.php` | CAE | TI `del_motor_la_voz_solo_lee_por_los_dos_adaptadores` |
+| B2 | La política de salientes nombra otro literal con «whatsapp» | `app/Services/Telephony/OutboundPolicy.php` | CAE | TI `…dos_adaptadores` |
+| B3 | La política de salientes lee una clave de Meta, que ya lee `VoiceNumberGuard` | ídem | CAE | TI `…dos_adaptadores` |
+| B4 | Un fichero neutro nombra el motivo del número | `app/Services/Voice/VoiceCallContext.php` | CAE | TI `…dos_adaptadores`; VI `outbound_call_solo_en_el_iniciador_y_nada_de_register_call_lotes_sip_ni_whatsapp` |
+| C1 | Otro fichero de Access nombra el literal `telephony` | `app/Support/Access/AuthorizationMap.php` | CAE | VI `los_secretos_solo_en_sus_lectores_enumerados` |
+| C2 | Un servicio de la telefonía lee el bloque `telephony` | `app/Services/Telephony/VoiceCostGuard.php` | CAE | VI `…lectores_enumerados` |
+| C3 | `CrmPermission` lee el bloque con `config()` | `app/Support/Access/CrmPermission.php` | CAE | VI `…lectores_enumerados` |
+| C4 | `PermissionCatalog` lee el bloque con `Config::get()` | `app/Support/Access/PermissionCatalog.php` | CAE | VI `…lectores_enumerados` |
+| C5 | `CrmPermission` lee el bloque con `config()->get()` | `app/Support/Access/CrmPermission.php` | CAE | VI `…lectores_enumerados` |
+| C6 | `CrmPermission` nombra el prefijo `'telephony.'` | ídem | CAE (con H-4) | VI `…lectores_enumerados` |
+| D1 | Otro fichero del Studio de voz importa el freno | `app/Services/UltronStudio/StudioVoicePublishing.php` | CAE | TI `el_studio_de_voz_solo_nombra_los_adaptadores_enumerados` |
+| D2 | `StudioVoiceEvidence` importa otra clase de la telefonía | `app/Services/UltronStudio/StudioVoiceEvidence.php` | CAE | TI `…adaptadores_enumerados` |
+| D3 | `StudioVoiceEvidence` importa un modelo de la voz | ídem | CAE | TI `…adaptadores_enumerados` |
+| D4 | `StudioVoiceEvidence` abre un freno | ídem | CAE (con H-1) | TI `…adaptadores_enumerados` |
+| D5 | Ídem, con el nombre cualificado | ídem | CAE (con H-1 y H-2) | TI `…adaptadores_enumerados` |
+| D6 | El Studio llama a `VoicePublishedConfig::read()` con el nombre cualificado | `app/Services/UltronStudio/StudioVoicePublishing.php` | CAE (con H-2) | TI `…adaptadores_enumerados` |
+| D7 | `StudioVoiceEvidence` pide `VoiceEvidence::summary()` | `app/Services/UltronStudio/StudioVoiceEvidence.php` | CAE (con H-1) | TI `…adaptadores_enumerados` |
+| D8 | `StudioVoiceEvidence` inserta en `voice_brakes` directamente | ídem | CAE (con H-3) | TI `…adaptadores_enumerados` |
+| D9 | `UltronStudioVoiceController` lee `voice_calls as c` | `app/Http/Controllers/Crm/UltronStudio/UltronStudioVoiceController.php` | CAE (con H-3) | TI `…adaptadores_enumerados` |
+
+**Contraprueba de los endurecimientos.** Con las tres guardas de `d6ed5ba` puestas otra vez en la copia, en modo relativo (los 4 fallos previstos como base):
+- D1–D3 caen;
+- **D4, D5, D6, D7, D8 y D9 sobreviven**.
+
+El hueco de C6 se ve en el patrón de `d6ed5ba` sin correrlo: VI ya cae ahí por E4-4.
+
+## 5. Árbol compartido: lo que B8-b tiene en curso y cae (no adaptado)
+
+**Foto del 08-11 a las 11:37** (`git status` igual antes y después de correr): 23 ficheros cambiados y 7 nuevos de B8-b (E4-1, E4-2, E4-7 y E4-8, sin commit).
+
+| Suite | Resultado |
+|---|---|
+| Voz y telefonía, SQLite | 701 pruebas, 188 507 aserciones, **3 fallos**, los tres de guardas y por el trabajo nuevo |
+| Studio, SQLite | 3 085 pruebas, 32 203 aserciones, **1 fallo**: UEI `…nadie_nombra…` (E4-7); 179 omitidas |
+| PG (`tests/Feature/Telephony tests/Feature/Voice`, `UNIT_DB=ultron_studio_h8_sec`) | 317 pruebas, 165 113 aserciones, **1 fallo**: TI `…canarios_y_su_cadena` (E4-7). Las de VI no entran en esta puerta (son `tests/Unit`) |
+
+| Cae | Fichero y motivo | Qué hace falta |
+|---|---|---|
+| TI `…canarios_y_su_cadena` y UEI `…nadie_nombra…` | `app/Services/Telephony/VoicePublishedConfig.php:92` declara `PROFILES = 'ultron_studio_voice_profiles'` y hace JOIN al perfil (`:368`) para los destinos de E4-7. **E4-3 solo admite la cadena y los agentes** | **Una decisión del lead.** Si se enmienda E4-3 para el perfil, SEC8 añade la tercera tabla (solo en ese fichero, una vez) en TI y UEI |
+| VI `estan_los_ficheros_del_h6_y_ninguno_que_no_nombre_el_contrato` | `app/Services/Voice/VoiceNumberObserver.php` (interfaz nueva de E4-8) no está en la lista cerrada | Ver abajo (E4-8) |
+| VI `la_red_solo_sale_de_los_metodos_enumerados` | `app/Services/Voice/ElevenLabs/ElevenLabsAgentDeployer.php` sale a la red desde `describeNumber`, que no está enumerado | Ver abajo (E4-8) |
+
+**E4-8: lo que SEC8 enumerará cuando el lead lo confirme** (no enumerado, como pediste). B8-b eligió una **interfaz segregada nueva**, `VoiceNumberObserver`, en lugar de ampliar `VoiceAgentDeployer`. Tiene su nulo `NullVoiceNumberObserver`, el DTO `Dto/VoiceNumberAssignment`, la fábrica `VoiceAdapters::numberObserver()` y la usa `VoiceReconciler::numbers()`. En `VoiceIsolationTest` hará falta:
+1. `PAQUETE_H8`: añadir `VoiceNumberObserver.php`. El nulo entra por su patrón y el DTO por `Dto/`, si es inerte.
+2. `INTERFACES`: `'VoiceNumberObserver' => ['describeNumber']`. Sin esto cae también el nulo («implementa una interfaz que no es del paquete»).
+3. `RED`: `self::DESPLEGADOR => [… 'describeNumber' => ['get']]`.
+4. `UNA_PETICION`: `self::DESPLEGADOR.'::describeNumber'`, porque es un GET.
+5. Opcional, para decidir: llevar `describenumber` a la puerta única de TI (`$quien`), solo desde `app/Services/Telephony/VoiceReconciler.php` (y `StudioVoiceDrift`, si S8 la usa). Es solo lectura, pero es red.
+
+**Nota de seguridad sobre E4-7** (no bloquea):
+- Hoy `VoicePublishedConfig` descifra en la telefonía `transfer_destinations_encrypted` (`Crypt::decryptString`, `:336`) solo para leer la huella `phoneHash` de cada destino. Los números del personal pasan por la memoria de la telefonía sin necesidad.
+- **Menor privilegio:** que S8 guarde las huellas `voice-phone` de los destinos aprobados **sin cifrar**, en la fila del perfil o del agente. Una huella no es el número. Así la telefonía no descifra nada del Studio.
+- Encaja con la unificación en `PhoneFingerprint` de E4-9.
+
+## 6. Revisión de seguridad: B8-b en `61513a1` (controladores públicos de voz) y S8-b
+
+Leído el código de `61513a1`, que es `d6ed5ba` en `app/`: las 4 rutas públicas de `routes/voice.php`, sus 4 controladores y lo que llaman (`VoiceInitiationAuth`, `VoiceToolAuth`, `ElevenLabsEventVerifier`/`ElevenLabsWebhookSignature`, `TwilioRequestSignature`, `InboundGate`, `VoiceTools`, `VoicePostCall`, `TwilioUsageAlert`, `LimitRequestBodySize`) y `UltronStudioVoiceController` con sus servicios. Los controladores del CRM (`Crm/Voice`) y el BOLA de llamadas y contactos quedan para el SEC8-b completo (paso 4) con `api-security-specialist`.
+
+### M-1 · Media · Los limitadores de las rutas públicas cuentan, antes de autenticar, en un contador por IP que comparten las 4 rutas y todos los clientes de ElevenLabs
+
+**Dónde:**
+- `routes/voice.php:36, 40, 45, 49`: `throttle:240,1`, `120,1`, `600,1` y `60,1`.
+- Sin usuario, la clave del limitador es `sha1(dominio|IP)`, **sin la ruta ni el prefijo**: `vendor/laravel/framework/src/Illuminate/Routing/Middleware/ThrottleRequests.php:98, 227` (v12.58.0). Las 4 rutas suben **un mismo contador** por IP, cada una con su tope.
+- El limitador corre antes del controlador, así que **una petición con credencial mala también cuenta**.
+- ElevenLabs manda **todo** su tráfico saliente (webhooks post-llamada y herramientas de webhook incluidos) desde dos IP estáticas por región, comunes a todos sus servicios ([IP allowlisting](https://elevenlabs.io/docs/eleven-api/resources/ip-allowlisting)).
+
+**Cómo se explota** (desde la fase 3; hoy todo está apagado):
+1. Cualquiera con una cuenta de ElevenLabs crea un agente con una herramienta de webhook o un webhook post-llamada que apunta a `https://<host>/api/voice/tools/consultar_planes`, y lo hace llamar en bucle desde unas pocas conversaciones.
+2. Esas peticiones salen de las mismas IP que las nuestras. Con más de 120 por minuto en ese contador, **la iniciación de nuestras entrantes recibe 429**. ElevenLabs sigue entonces con los valores por defecto (`caller_authorized = no`) y el canario oye «línea no disponible». Falla cerrado, pero es una denegación de la línea.
+3. Con más de 240 por minuto, **el post-llamada recibe 429**. Según D8-16 y la auditoría, ElevenLabs desactiva el webhook tras 10 fallos (**por confirmar** que cuente los 429). Mientras siga desactivado no hay guarda posterior (capa 4 de D8-10), ni `seal_verified`, ni coste por webhook, y **una violación no acciona el freno**.
+4. Con más de 600 por minuto, las herramientas reciben 429.
+
+**Corrección** (B8, `routes/voice.php` y los limitadores con nombre; no es estructural):
+- no limitar por IP **antes** de autenticar en estas 4 rutas;
+- limitar **después** de autenticar, con una clave por ruta y, cuando exista, por llamada. Las herramientas ya tienen el tope de 20 por llamada en la base; la iniciación es idempotente por `call_sid` y el post-llamada deduplica por evento;
+- los fallos de autenticación, en un cubo propio (`ruta|IP|fallo`), para que el tráfico malo no gaste el presupuesto del bueno.
+
+**Coste:** quien tenga una credencial válida solo queda limitado por llamada. Es aceptable, porque la credencial es la defensa principal.
+
+**Nota para P-26:** la lista de IP de ElevenLabs no distingue nuestro workspace del de otro cliente. Solo frena lo que no sale de ElevenLabs, así que es un refuerzo débil. La firma y los secretos son el control real.
+
+### B-1 · Baja · El secreto de iniciación es una credencial estática sin atadura al cuerpo (diseño de D8-16), y filtrado da tres palancas
+
+**Dónde:** `app/Http/Controllers/Api/Voice/ElevenLabsInitiationController.php:27` y `app/Services/Telephony/InboundGate.php:63-66, 117-119, 157-161`.
+
+Con el secreto (no la firma: la iniciación no la tiene), quien lo tenga puede:
+- **Saber si un teléfono es un canario de voz activo.** `caller_authorized` responde `si` o `no` para el `caller_id` que mande, con el número de voz, que es público, en `called_number`.
+- **Echar el freno de voz.** Basta un `agent_id` distinto del sellado mientras haya publicación (`seal_mismatch`, `VoiceBrake::open`). La voz queda parada hasta que una persona con `ultron.voice_publish` lo suelte.
+- **Ocupar la concurrencia y el cupo diario de entrantes.** Con el número de un canario puede crear filas `active` que no terminan hasta la conciliación («atascadas»).
+
+**Corrección:** son consecuencias del diseño (D8-16, el secreto en una cabecera fija). Hay que guardar el secreto como el resto de D8-5 y rotarlo si se sospecha. La lista de IP (P-26) no ayuda contra otro cliente de ElevenLabs (M-1). Si ElevenLabs llega a ofrecer firma en la iniciación, migrar a ella.
+
+### Confirmado sin hallazgo
+
+- **Firmas en tiempo constante y fallo cerrado.**
+  - Herramientas e iniciación: `hash_equals`, y sin secreto configurado o con la cabecera vacía no pasa nada, nunca `hash_equals('', '')` (`VoiceToolAuth.php:22-31`, `VoiceInitiationAuth.php:24-29`).
+  - Post-llamada: `hash_equals` sin cortocircuito entre las variantes, ventana de 1 800 s hacia atrás y 300 hacia delante, y `reason` de una lista cerrada (`ElevenLabsWebhookSignature.php:98-111`, `VoiceWebhookVerdict.php:111`).
+  - Twilio: el token vacío da `not_configured`; base canónica + `getRequestUri()`, nunca `fullUrl()`; `bodySHA256` único, hexadecimal y comparado con `hash_equals`; variantes de puerto sin cortocircuito (`TwilioRequestSignature.php:152-166, 199-241, 281-288`).
+- **Tope de cuerpo antes de leer.** `LimitRequestBodySize` mide `Content-Length` y la longitud real antes del controlador, en las 4 rutas (`routes/voice.php:34-50`). Que el JSON lo pueda decodificar antes un middleware global es lo ya conocido (M-2 del Hito G).
+- **Cero datos personales en respuestas y registros.**
+  - La iniciación responde solo `caller_authorized`, `call_direction`, `call_ref` y `version_label`, y guarda del llamante solo la huella y los 4 últimos dígitos (`InboundGate.php:137-138, 178-189`).
+  - Las herramientas devuelven planes, horario, alias y un booleano.
+  - Todos los registros van por `Log::channel('voice')`, con uuid, códigos y booleanos.
+  - `no_volver_a_llamar` excluye **el número sellado de la llamada** (`remote_hash`), nunca un parámetro (A-8 de SEC8-a, cerrado: `VoiceTools.php:216-237`).
+  - Las herramientas exigen la llamada viva, autorizada si es entrante, sin freno y con cupo (`VoiceTools.php:57-90`). Si el cuerpo trae `call_ref`, tiene que ser el de esa llamada (`:131-133`).
+- **S8-b (`UltronStudioVoiceController`).**
+  - El permiso de cada ruta sigue D8-22 (`:52-68`).
+  - El contenido del perfil es un conjunto cerrado (`profile_field_unknown`, `StudioVoiceProfiles.php:424-433`), aunque el controlador pasa `content` crudo (`:160`).
+  - Los destinos se devuelven como alias y 4 dígitos (`:112-118`).
+  - `compile-preview` devuelve la `VoiceAgentSpec`, con alias y huella del destino, nunca el número (`VoiceAgentSpec.php:32, 566-571`).
+  - Publicar devuelve del número solo la acción y el resultado (`StudioVoicePublishing.php:670-682`).
+  - La URL firmada del laboratorio (LAB8) sale una sola vez, al crear la sesión: ni al repetir la petición ni en el detalle (`StudioVoiceLabSessions.php:257, 339-342, 371`).
+
+## 7. Para el lead
+
+1. **E4-7 choca con E4-3.** El JOIN al perfil nombra una tercera tabla del Studio. Hace falta enmendar E4-3, o que S8 exponga las huellas de los destinos fuera del perfil (es lo recomendado, §5). Hasta entonces, TI y UEI caen a propósito en el árbol compartido.
+2. **E4-8:** la lista de §5, para cuando B8-b confirme `VoiceNumberObserver`.
+3. **M-1** va a B8 (límites después de autenticar en las 4 rutas públicas) antes de la fase 3.
+4. **Los endurecimientos H-1 a H-4** no estaban pedidos. Si no los quieres, cada uno es una vuelta atrás de un bloque.
+
+## 8. Ficheros
+
+- `tests/Feature/Telephony/TelephonyIsolationTest.php`: E4-3, E4-4, H-1, H-2 y H-3.
+- `tests/Unit/Voice/VoiceIsolationTest.php`: E4-4 y H-4.
+- `tests/Feature/UltronStudio/UltronEngineIsolationTest.php`: E4-3, solo las líneas del H8.
+- `docs/ultron-studio/plans/informes-h8/informe-security.md`: este apartado.
+
+No tocados: nada de `app/`, `config/` ni `routes/`, ni las otras guardas de SEC8 (`VoiceBoundaryTest`, `OtpUntouchedByVoiceTest`, `TwilioReadOnlyClientTest`, que pasan).
+
+**Fuera del repositorio** (scratchpad, desechable):
+- la copia `mut/backend`;
+- el banco `tools/mutar.php`;
+- las salidas en `out/`, con JUnit y JSON;
+- en el PG desechable, las bases `ultron_studio_h8_sec` y `ultron_studio_h8_sec_copia`.

@@ -36,8 +36,9 @@ use RecursiveIteratorIterator;
  *  - SECRETOS, SOLO EN SUS LECTORES (D8-5). Cada secreto de `voice.*` lo leen
  *    solo sus lectores enumerados (y el punto único de las huellas); un
  *    secreto nuevo sin lector enumerado cae. El bloque entero solo lo lee
- *    `ElevenLabsConfig`. Las variables de voz del entorno, solo su fichero de
- *    configuración.
+ *    `ElevenLabsConfig` (el dominio de permisos `telephony` de D8-22 no es un
+ *    bloque: E4-4, en sus dos ficheros). Las variables de voz del entorno, solo
+ *    su fichero de configuración.
  *  - NEUTRO Y SIN ESTADO (se conserva el H6): el paquete no nombra el Studio,
  *    el motor, los modelos ni la telefonía, y no usa base, caché, colas,
  *    registro ni reloj.
@@ -143,6 +144,14 @@ class VoiceIsolationTest extends TestCase
     private const AUTH_HERRAMIENTAS = 'app/Services/Telephony/VoiceToolAuth.php';
 
     private const AUTH_INICIACION = 'app/Services/Telephony/VoiceInitiationAuth.php';
+
+    /**
+     * E4-4 (Enmienda 4; SEC8-b): donde el literal `telephony` es el DOMINIO de
+     * permisos de D8-22 (`CrmPermission::SHARED_TOKEN_EXCLUDED_DOMAINS` y su
+     * ficha en `PermissionCatalog`), no el bloque de configuración. Solo en
+     * estos dos ficheros y nunca como argumento de una lectura de configuración.
+     */
+    private const DOMINIO_TELEPHONY = ['app/Support/Access/CrmPermission.php', 'app/Support/Access/PermissionCatalog.php'];
 
     /** La red, solo aquí: fichero → método → verbos (D8-3: una petición por método, sin reintentos ni redirecciones). */
     private const RED = [
@@ -506,8 +515,11 @@ class VoiceIsolationTest extends TestCase
                 }
                 $esBloque = in_array($valor, ['voice.elevenlabs', 'voice.twilio', 'telephony'], true)
                     || ($valor === 'voice' && self::esLecturaDeConfiguracion($tokens, $i))
-                    || preg_match('/^(voice|telephony)\.[a-z0-9_.]*\.$/i', $valor) === 1;
-                if ($esBloque) {
+                    // Un prefijo para componer la clave (`'voice.twilio.'.$x`), también de un solo segmento (`'telephony.'.$x`, SEC8-b).
+                    || preg_match('/^(voice|telephony)\.([a-z0-9_.]*\.)?$/i', $valor) === 1;
+                // E4-4: el dominio de permisos `telephony` (D8-22), solo en sus dos ficheros y sin leer la configuración.
+                $esDominio = $valor === 'telephony' && in_array($relativa, self::DOMINIO_TELEPHONY, true) && ! self::esLecturaDeConfiguracion($tokens, $i);
+                if ($esBloque && ! $esDominio) {
                     $bloques[$relativa][] = $valor;
                 }
             }

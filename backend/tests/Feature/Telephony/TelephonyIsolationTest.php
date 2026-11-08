@@ -16,9 +16,9 @@ use Tests\TestCase;
  *  1. DEL STUDIO, la telefonía solo nombra el modelo de los canarios
  *     (`StudioCanaryNumber`, de solo lectura, en un único adaptador que no
  *     escribe nada), su normalizador puro (`StudioCanaryPhone`, auditoría
- *     OTP-4) y, en `VoicePublishedConfig`, la tabla de SU cadena, una vez y sin
- *     escribirla. Ni la cadena del motor (`ultron_studio_publications`) ni sus
- *     servicios.
+ *     OTP-4) y, en `VoicePublishedConfig` (el puente, E4-3), la tabla de SU
+ *     cadena y la de sus agentes, una vez cada una y sin escribirlas. Ni la
+ *     cadena del motor (`ultron_studio_publications`) ni sus servicios.
  *  2. DEL MOTOR, solo los dos adaptadores de solo lectura de la protección 5:
  *     `OutboundContentGuard::inspect()` (nunca `assertSafe`, que registra) y
  *     las señales del lead (`MarketingLead`), cada uno en un único fichero de
@@ -60,6 +60,20 @@ class TelephonyIsolationTest extends TestCase
     private const STUDIO_VOZ = ['app/Services/UltronStudio/StudioVoice*.php', 'app/Models/UltronStudio/StudioVoice*.php',
         'app/Http/Controllers/Crm/UltronStudio/UltronStudioVoice*.php'];
 
+    /**
+     * Lo único que el Studio de voz usa de las clases de la telefonía que puede
+     * nombrar (además de sus constantes), con nombre corto o cualificado:
+     *  - D8-2: del lector, solo la firma;
+     *  - E2-6 (Anexo C, SEC8-b): de la evidencia y del freno, y solo desde
+     *    `StudioVoiceEvidence`, leer la evidencia, leer el freno y soltarlo;
+     *    nunca abrirlo (`VoiceBrake::open`). `::class`, para `method_exists`.
+     */
+    private const MIEMBROS_DE_LA_TELEFONIA = [
+        'VoicePublishedConfig' => ['signatureFor'],
+        'VoiceEvidence' => ['forPublication', 'class'],
+        'VoiceBrake' => ['isOpen', 'list', 'release', 'class'],
+    ];
+
     /** El motor (protección 5). Los trabajos de la voz no son del motor. */
     private const MOTOR = ['app/Services/Marketing', 'app/Jobs', 'app/Http/Controllers/Api/Internal', 'routes/marketing.php', 'config/marketing.php'];
 
@@ -69,10 +83,20 @@ class TelephonyIsolationTest extends TestCase
 
     private const TELEFONIA_SERVICIOS = 'app/Services/Telephony/';
 
-    /** El lector de la cadena de voz (D8-8): la única que nombra la tabla, y sin escribirla. */
+    /** El lector de la cadena de voz (D8-8): el único fichero que nombra tablas del Studio, y sin escribirlas. */
     private const LECTOR_DE_VOZ = 'app/Services/Telephony/VoicePublishedConfig.php';
 
+    /** D8-8: la tabla de SU cadena (nunca la del motor). */
     private const TABLA_DE_LA_CADENA = "T_CONSTANT_ENCAPSED_STRING 'ultron_studio_voice_publications'";
+
+    /**
+     * E4-3 (Enmienda 4; SEC8-b): `VoicePublishedConfig` es el puente y nombra
+     * también la tabla de los agentes, por el JOIN de los tres campos del sello
+     * que el mensaje firmado no lleva (`studio_content_hash`,
+     * `voice_profile_hash` y `compiler_version`). SOLO en {@see LECTOR_DE_VOZ},
+     * una vez; ninguna otra tabla del Studio (tampoco los perfiles).
+     */
+    private const TABLA_DE_LOS_AGENTES = "T_CONSTANT_ENCAPSED_STRING 'ultron_studio_voice_agents'";
 
     /** Del Studio, lo único que la telefonía nombra. */
     private const STUDIO_PERMITIDO = [
@@ -102,8 +126,20 @@ class TelephonyIsolationTest extends TestCase
     /** Las dos claves de Meta que lee la guarda del número de WhatsApp (D8-5). */
     private const META_PERMITIDO = ['meta.whatsapp_display_phone', 'meta.protected_numbers'];
 
+    /**
+     * E4-4 (Enmienda 4; SEC8-b): el MOTIVO del contrato (D8-5, D8-12) lleva
+     * «whatsapp» y no nombra Meta ni el motor. Se admite como literal SOLO en
+     * {@see POLITICA_DE_SALIENTES}, que es quien lo da.
+     */
+    private const MOTIVO_DEL_NUMERO = 'voice_number_is_whatsapp';
+
+    private const POLITICA_DE_SALIENTES = 'app/Services/Telephony/OutboundPolicy.php';
+
     /** Las tablas de la voz (contratos de datos del H8). */
     private const TABLAS_DE_VOZ = '/^(voice_(calls|call_events|contacts|consents|exclusions|rne_checks|brakes)|ultron_studio_voice_[a-z_]+)$/';
+
+    /** E2-6: las de la telefonía, que el Studio nunca nombra (ni con alias ni con columna): lee y suelta por los servicios de B8. */
+    private const TABLAS_DE_LA_TELEFONIA = '/^voice_(calls|call_events|contacts|consents|exclusions|rne_checks|brakes)(\s|\.|$)/';
 
     /** Los validadores de los webhooks y las herramientas (D8-16). */
     private const VALIDADORES = ['VoiceEventVerifier', 'ElevenLabsEventVerifier', 'VoiceInitiationAuth', 'VoiceToolAuth', 'TwilioRequestSignature'];
@@ -143,10 +179,10 @@ class TelephonyIsolationTest extends TestCase
 
                     continue;
                 }
-                if ($relativa === self::LECTOR_DE_VOZ && "{$tipo} {$texto}" === self::TABLA_DE_LA_CADENA) {
+                if ($relativa === self::LECTOR_DE_VOZ && in_array("{$tipo} {$texto}", [self::TABLA_DE_LA_CADENA, self::TABLA_DE_LOS_AGENTES], true)) {
                     continue;
                 }
-                $this->fail("{$relativa} nombra el Studio ({$tipo} {$texto}): la telefonía solo nombra el modelo de los canarios, su normalizador y, en VoicePublishedConfig, la tabla de su cadena (D8-2)");
+                $this->fail("{$relativa} nombra el Studio ({$tipo} {$texto}): la telefonía solo nombra el modelo de los canarios, su normalizador y, en VoicePublishedConfig, la tabla de su cadena y la de sus agentes (D8-2, E4-3)");
             }
         }
 
@@ -167,10 +203,13 @@ class TelephonyIsolationTest extends TestCase
             }
         }
 
-        // El lector de la cadena de voz: la tabla una vez y ninguna escritura.
+        // El lector de la cadena de voz: la tabla de la cadena y la de los agentes (E4-3), una vez cada una, y ninguna escritura.
         $lector = base_path(self::LECTOR_DE_VOZ);
         if (is_file($lector)) {
-            $this->assertSame(1, substr_count($this->codigo($lector), 'ultron_studio_'), 'VoicePublishedConfig nombra la tabla de su cadena una sola vez');
+            $codigo = $this->codigo($lector);
+            $this->assertSame(2, substr_count($codigo, 'ultron_studio_'), 'VoicePublishedConfig nombra del Studio solo la tabla de su cadena y la de sus agentes, una vez cada una (D8-8, E4-3)');
+            $this->assertSame(1, substr_count($codigo, "'ultron_studio_voice_publications'"), 'VoicePublishedConfig nombra la tabla de su cadena una sola vez');
+            $this->assertSame(1, substr_count($codigo, "'ultron_studio_voice_agents'"), 'VoicePublishedConfig nombra la tabla de los agentes una sola vez (E4-3)');
             $this->assertSame([], $this->escrituras($lector), 'VoicePublishedConfig escribe: es un lector (D8-8)');
         }
     }
@@ -207,6 +246,9 @@ class TelephonyIsolationTest extends TestCase
                     $valor = $this->literal($t[1]);
                     if ($valor === 'marketing_calls' && $relativa === 'app/Services/Voice/VoiceCallContext.php') {
                         continue;   // la etiqueta del origen PROHIBIDO del H6
+                    }
+                    if ($valor === self::MOTIVO_DEL_NUMERO && $relativa === self::POLITICA_DE_SALIENTES) {
+                        continue;   // E4-4: el motivo del contrato, no una clave de Meta ni del motor
                     }
                     if (in_array($valor, self::META_PERMITIDO, true)) {
                         $meta[$relativa] = true;
@@ -472,12 +514,17 @@ class TelephonyIsolationTest extends TestCase
         foreach ($this->glob(...self::STUDIO_VOZ) as $relativa => $ruta) {
             $tokens = $this->tokens($ruta);
             foreach ($tokens as $i => $t) {
+                // Lo que usa de esas clases (D8-2, E2-6), también con el nombre cualificado (`\App\…\VoiceBrake::open()`).
+                $clase = in_array($t[0], [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true) ? $this->corto($t[1]) : '';
+                if (isset(self::MIEMBROS_DE_LA_TELEFONIA[$clase]) && ($tokens[$i + 1][0] ?? null) === T_DOUBLE_COLON) {
+                    $miembro = $tokens[$i + 2][1] ?? '';
+                    $this->assertTrue(in_array($miembro, self::MIEMBROS_DE_LA_TELEFONIA[$clase], true) || preg_match('/^[A-Z][A-Z0-9_]*$/', $miembro) === 1,
+                        "{$relativa} usa {$clase}::{$miembro}: del lector, solo la firma (D8-2); de la evidencia y del freno, leer y soltar (E2-6)");
+                }
+                if ($t[0] === T_CONSTANT_ENCAPSED_STRING) {
+                    $this->assertDoesNotMatchRegularExpression(self::TABLAS_DE_LA_TELEFONIA, $this->literal($t[1]), "{$relativa} nombra {$t[1]}: el Studio nunca toca las tablas de la telefonía directamente (E2-6)");
+                }
                 if (! in_array($t[0], [T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true)) {
-                    if ($t[0] === T_STRING && $t[1] === 'VoicePublishedConfig' && ($tokens[$i + 1][0] ?? null) === T_DOUBLE_COLON) {
-                        $miembro = $tokens[$i + 2][1] ?? '';
-                        $this->assertTrue($miembro === 'signatureFor' || preg_match('/^[A-Z][A-Z0-9_]*$/', $miembro) === 1, "{$relativa} usa VoicePublishedConfig::{$miembro}: del lector, solo la firma");
-                    }
-
                     continue;
                 }
                 $nombre = ltrim($t[1], '\\');

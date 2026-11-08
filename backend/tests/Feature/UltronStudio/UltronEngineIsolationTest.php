@@ -50,8 +50,9 @@ use Tests\TestCase;
  *
  * HITO 8 (contrato H8, D8-2 y D8-8; SEC8): la telefonía NO entra en la lista
  * blanca. Como el lector del motor, tiene excepciones por cadena: el lector de
- * la cadena de voz (`Telephony\VoicePublishedConfig`) nombra solo la tabla de
- * SU cadena (`ultron_studio_voice_publications`, nunca la del motor), y un
+ * la cadena de voz (`Telephony\VoicePublishedConfig`, el puente de E4-3) nombra
+ * solo la tabla de SU cadena (`ultron_studio_voice_publications`, nunca la del
+ * motor) y la de sus agentes (`ultron_studio_voice_agents`), y un
  * adaptador de la telefonía puede importar el modelo de los canarios
  * (`StudioCanaryNumber`) y su normalizador puro (`StudioCanaryPhone`), nada
  * más. Las migraciones del H8 que nombran la voz (DB8, `2026_11_1*`) entran
@@ -98,11 +99,18 @@ class UltronEngineIsolationTest extends TestCase
     /**
      * Hito 8 (contrato H8, D8-8): el lector de la cadena de voz. No está en la
      * lista blanca: lo único que puede nombrar del Studio es la tabla de SU
-     * cadena, una vez, como cadena (nunca `ultron_studio_publications`).
+     * cadena (nunca `ultron_studio_publications`) y, por E4-3 (Enmienda 4;
+     * SEC8-b), la de sus agentes, por el JOIN de los tres campos del sello que el
+     * mensaje firmado no lleva. Una vez cada una, como cadena (en cualquier
+     * orden), y SOLO en este fichero.
      */
     private const VOICE_READER = 'app/Services/Telephony/VoicePublishedConfig.php';
 
-    private const VOICE_READER_REFERENCES = ["T_CONSTANT_ENCAPSED_STRING 'ultron_studio_voice_publications'"];
+    private const VOICE_READER_REFERENCES = [
+        "T_CONSTANT_ENCAPSED_STRING 'ultron_studio_voice_publications'",
+        // E4-3: la tabla de los agentes (studio_content_hash, voice_profile_hash, compiler_version).
+        "T_CONSTANT_ENCAPSED_STRING 'ultron_studio_voice_agents'",
+    ];
 
     /**
      * Hito 8 (contrato H8, D8-2; auditoría OTP-4): lo único del Studio que un
@@ -197,7 +205,8 @@ class UltronEngineIsolationTest extends TestCase
                 continue;
             }
             // Hito 8: el lector de la cadena de voz y los adaptadores de los canarios de la telefonía.
-            if ($relativa === self::VOICE_READER && $this->sinLinea($hallazgos) === self::VOICE_READER_REFERENCES) {
+            // E4-3: exactamente esas dos referencias, una vez cada una (el orden de las constantes no cuenta).
+            if ($relativa === self::VOICE_READER && $this->ordenadas($this->sinLinea($hallazgos)) === $this->ordenadas(self::VOICE_READER_REFERENCES)) {
                 continue;
             }
             if (str_starts_with($relativa, self::TELEPHONY_DIR) && array_diff($this->sinLinea($hallazgos), self::TELEPHONY_STUDIO_REFERENCES) === []) {
@@ -501,6 +510,19 @@ class UltronEngineIsolationTest extends TestCase
     private function sinLinea(array $referencias): array
     {
         return array_map(fn (string $r) => (string) preg_replace('/ \(línea \d+\)$/u', '', $r), $referencias);
+    }
+
+    /**
+     * Las mismas referencias, ordenadas: compara QUÉ se nombra y cuántas veces, no en qué orden.
+     *
+     * @param  list<string>  $referencias
+     * @return list<string>
+     */
+    private function ordenadas(array $referencias): array
+    {
+        sort($referencias);
+
+        return $referencias;
     }
 
     /**
