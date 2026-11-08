@@ -481,7 +481,10 @@ class TelephonyIsolationTest extends TestCase
                     continue;
                 }
                 $nombre = ltrim($t[1], '\\');
-                if (str_starts_with($nombre, 'App\\Services\\Telephony\\')) {
+                // E2-6: la evidencia del canario y el freno, SOLO por los servicios de B8 y SOLO desde StudioVoiceEvidence.
+                $porE26 = $relativa === 'app/Services/UltronStudio/StudioVoiceEvidence.php'
+                    && in_array($nombre, ['App\\Services\\Telephony\\VoiceEvidence', 'App\\Services\\Telephony\\VoiceBrake'], true);
+                if (str_starts_with($nombre, 'App\\Services\\Telephony\\') && ! $porE26) {
                     $this->assertSame('App\\Services\\Telephony\\VoicePublishedConfig', $nombre, "{$relativa} nombra {$nombre}: de la telefonía, el Studio solo nombra VoicePublishedConfig::signatureFor() (D8-2)");
                 }
                 if (str_starts_with($nombre, 'App\\Services\\Voice\\')) {

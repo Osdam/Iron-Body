@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\UltronStudio;
 
+use App\Http\Controllers\Crm\UltronStudio\UltronStudioVoiceController;
 use App\Services\UltronStudio\StudioPublishing;
 use Illuminate\Support\Facades\Route;
 use RecursiveDirectoryIterator;
@@ -375,7 +376,8 @@ class UltronEngineIsolationTest extends TestCase
         // las 12 del laboratorio del Hito 4 (`lab/*`, contrato H4 §A7), las 5
         // de la publicación del Hito 5 (contrato H5 §A7) y las 18 de las
         // integraciones del Hito 6 (contrato H6 §I7.1).
-        $this->assertSame(56, $delStudio);
+        // Y las 21 del Hito 8 (contrato H8, «API»): la lista, en la constante (E2-6).
+        $this->assertSame(UltronStudioVoiceController::STUDIO_ROUTE_COUNT, $delStudio);
     }
 
     /**

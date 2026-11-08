@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\UltronStudio;
 
+use App\Http\Controllers\Crm\UltronStudio\UltronStudioVoiceController;
 use App\Http\Middleware\LimitRequestBodySize;
 use App\Http\Middleware\ValidatePostSizeWithStudioCap;
 use App\Models\Admin;
@@ -189,7 +190,7 @@ class UltronStudioEarlyBodyCapTest extends TestCase
         $rutas = collect(app('router')->getRoutes()->getRoutes())
             ->filter(static fn (Route $r): bool => str_starts_with($r->uri(), 'api/admin/ultron-studio'));
 
-        $this->assertCount(56, $rutas);
+        $this->assertCount(UltronStudioVoiceController::STUDIO_ROUTE_COUNT, $rutas);
         foreach ($rutas as $ruta) {
             $this->assertTrue(Str::is(ValidatePostSizeWithStudioCap::STUDIO_PATHS, $ruta->uri()), "{$ruta->uri()} queda fuera del prefijo del tope global.");
             $this->assertContains(LimitRequestBodySize::class.':'.ValidatePostSizeWithStudioCap::STUDIO_MAX_BYTES, $ruta->gatherMiddleware(), "{$ruta->uri()} no tiene el tope de ruta del mismo tamaño.");

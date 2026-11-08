@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\UltronStudio;
 
+use App\Http\Controllers\Crm\UltronStudio\UltronStudioVoiceController;
 use App\Models\Admin;
 use App\Support\Access\AuthorizationMap;
 use App\Support\Access\CrmPermission;
@@ -86,7 +87,7 @@ class UltronStudioIntegrationsPermissionsTest extends TestCase
         ksort($real);
 
         $this->assertSame($esperado, $real);
-        $this->assertSame(56, $todas);
+        $this->assertSame(UltronStudioVoiceController::STUDIO_ROUTE_COUNT, $todas);
         // La sonda lleva su propio limitador además del de escritura.
         $sonda = collect(Route::getRoutes()->getRoutes())->first(fn ($r) => $r->uri() === 'api/admin/ultron-studio/integrations/twilio/probe');
         $this->assertContains('throttle:ultron-studio-probe', $sonda->gatherMiddleware());
@@ -186,7 +187,7 @@ class UltronStudioIntegrationsPermissionsTest extends TestCase
         }
 
         $filas = array_column(array_values(array_filter(PermissionCatalog::rows(), fn (array $f): bool => $f['domain'] === 'ultron')), null, 'key');
-        $this->assertSame(self::NEW_KEYS, array_slice(array_keys($filas), 8));
+        $this->assertSame(self::NEW_KEYS, array_slice(array_keys($filas), 8, 4));
         $this->assertSame('Asociar campañas de Meta', $filas['ultron.campaigns_manage']['label']);
         $this->assertSame('Administrar números canarios', $filas['ultron.canary_manage']['label']);
         $this->assertSame('Autorizar números canarios de otra persona', $filas['ultron.canary_authorize']['label']);

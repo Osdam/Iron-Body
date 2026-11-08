@@ -317,8 +317,11 @@ class UltronStudioLabNoEngineEffectsTest extends TestCase
         $deH5 = [];
         foreach (Route::getRoutes() as $route) {
             // Las 18 de las integraciones (Hito 6) tienen su propia matriz: UltronStudioIntegrationsPermissionsTest.
+            // Las 21 de la voz (Hito 8), también: UltronStudioVoiceRoutesTest (y abrir una sesión del laboratorio
+            // hablado lleva a propósito el limitador del laboratorio de texto).
             if (str_starts_with($route->uri(), 'api/admin/ultron-studio') && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/lab/')
-                && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/integrations/')) {
+                && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/integrations/')
+                && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/voice/') && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/voice-lab/')) {
                 $clave = AuthorizationMap::routeKey($route);
                 if (array_key_exists($clave, $h5)) {
                     $deH5[$clave] = AuthorizationMap::resolve($route);

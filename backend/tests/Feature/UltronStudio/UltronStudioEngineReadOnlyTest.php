@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\UltronStudio;
 
+use App\Http\Controllers\Crm\UltronStudio\UltronStudioVoiceController;
 use App\Models\Admin;
 use App\Models\MarketingAgentSetting;
 use App\Models\MarketingAiAction;
@@ -411,8 +412,8 @@ class UltronStudioEngineReadOnlyTest extends TestCase
         $recorridas = array_values(array_unique($this->walked));
         sort($recorridas);
         $this->assertSame($todas, $recorridas);
-        // Hito 6: las 18 de las integraciones (56 en total).
-        $this->assertCount(56, $recorridas);
+        // Hito 6: las 18 de las integraciones (56 en total); Hito 8: las 21 de la voz (la constante, E2-6).
+        $this->assertCount(UltronStudioVoiceController::STUDIO_ROUTE_COUNT, $recorridas);
     }
 
     /**
@@ -710,6 +711,61 @@ class UltronStudioEngineReadOnlyTest extends TestCase
         $this->walk('POST', 'draft/discard', $ana, ['baseRevision' => $borrador['revision']])->assertOk();
 
         $this->walkIntegrations($ana, $root, $v1);
+        $this->walkVoice($ana, $root, $v1);
+    }
+
+    /**
+     * Hito 8 (contrato H8, «API»): las 15 rutas del gobierno de la voz y las
+     * 6 del laboratorio hablado, con las banderas por defecto (publicar y el
+     * laboratorio apagados): un perfil se crea, se envía, se aprueba; otro se
+     * rechaza; se previsualiza la compilación; publicar y promover son 409;
+     * revertir y apagar no tienen nada que hacer; el freno no existe. Nada sale
+     * a la red y nada escribe fuera de `ultron_studio_*`.
+     */
+    private function walkVoice(Admin $ana, Admin $root, string $version): void
+    {
+        $contenido = [
+            'voiceId' => 'pNInz6obpgDQGcFmaJgB',
+            'greetings' => ['inbound' => '¿En qué te puedo ayudar hoy?', 'outbound' => 'Te llamo porque pediste información de Iron Body.'],
+            'holes' => ['presentation' => 'Te ayudo con planes, horarios y la sede.', 'closing' => 'Gracias por tu tiempo.'],
+            'maxDurationSeconds' => 300,
+            'tools' => ['consultar_planes', 'consultar_horarios', 'no_volver_a_llamar'],
+            'systemTools' => ['end_call'],
+            'transfer' => ['destinations' => []],
+            'privacy' => ['retentionDays' => 30],
+            'voicemail' => 'hang_up',
+        ];
+        $perfil = $this->walk('POST', 'voice/profiles', $ana, ['clientRequestId' => (string) Str::uuid(), 'label' => 'Voz del recorrido', 'content' => $contenido])
+            ->assertCreated()->json('data.uuid');
+        $this->walk('POST', "voice/profiles/{$perfil}/submit", $ana)->assertOk();
+        $this->walk('POST', "voice/profiles/{$perfil}/approve", $root)->assertOk();
+        $otro = $this->walk('POST', 'voice/profiles', $ana, ['clientRequestId' => (string) Str::uuid(), 'label' => 'Voz rechazada', 'content' => ['maxDurationSeconds' => 240] + $contenido])
+            ->assertCreated()->json('data.uuid');
+        $this->walk('POST', "voice/profiles/{$otro}/submit", $ana)->assertOk();
+        $this->walk('POST', "voice/profiles/{$otro}/reject", $root, ['note' => 'Rechazado en el recorrido'])->assertOk();
+        // La versión del recorrido cambia parámetros que la voz no compila: 200 o el 422 del compilador, sin red.
+        $this->walk('POST', 'voice/compile-preview', $ana, ['versionUuid' => $version, 'profileUuid' => $perfil]);
+        $this->walk('POST', 'voice/publish', $root, ['clientRequestId' => (string) Str::uuid(), 'versionUuid' => $version, 'profileUuid' => $perfil])
+            ->assertStatus(409)->assertJsonPath('code', 'voice_publishing_disabled');
+        $this->walk('POST', 'voice/promote', $root, ['clientRequestId' => (string) Str::uuid(), 'evidenceHash' => str_repeat('0', 64)])
+            ->assertStatus(409)->assertJsonPath('code', 'voice_publishing_disabled');
+        $this->walk('POST', 'voice/rollback', $root, ['clientRequestId' => (string) Str::uuid(), 'scope' => 'canary', 'reason' => 'Recorrido del motor'])
+            ->assertStatus(409)->assertJsonPath('code', 'nothing_to_rollback');
+        $this->walk('POST', 'voice/off', $root, ['clientRequestId' => (string) Str::uuid(), 'reason' => 'Recorrido del motor'])
+            ->assertStatus(409)->assertJsonPath('code', 'voice_already_off');
+        $this->walk('POST', 'voice/brakes/'.Str::uuid().'/release', $root, ['clientRequestId' => (string) Str::uuid(), 'note' => 'Recorrido del motor'])->assertNotFound();
+        foreach (['voice/profiles', "voice/profiles/{$perfil}", 'voice/publications', 'voice/canary-evidence', 'voice/brakes'] as $lectura) {
+            $this->walk('GET', $lectura, $root)->assertOk();
+        }
+
+        // El laboratorio hablado (LAB8), apagado: el estado responde; lo demás, 4xx sin red.
+        $this->walk('GET', 'voice-lab/status', $ana)->assertOk();
+        $sesion = (string) Str::uuid();
+        foreach ([['GET', 'voice-lab/sessions', []], ['GET', "voice-lab/sessions/{$sesion}", []],
+            ['POST', 'voice-lab/sessions', ['versionUuid' => $version, 'profileUuid' => $perfil, 'acceptedMaxCostMicros' => 0, 'clientRequestId' => (string) Str::uuid()]],
+            ['POST', "voice-lab/sessions/{$sesion}/end", []], ['POST', "voice-lab/sessions/{$sesion}/verdict", ['decision' => 'approved', 'specHash' => str_repeat('0', 64)]]] as [$metodo, $ruta, $cuerpo]) {
+            $this->assertGreaterThanOrEqual(400, $this->walk($metodo, $ruta, $root, $cuerpo)->status(), "{$metodo} {$ruta} con el laboratorio hablado apagado");
+        }
     }
 
     /**
