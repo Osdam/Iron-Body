@@ -665,3 +665,18 @@ Entre paréntesis, los casos que la cazan.
 - Los cambios ajenos que se ven en `git status` (S8 y B8) no son míos y no los leí.
 - No hay `__pycache__`: el generador ejecuta las secciones con `exec` y los scripts se lanzan con `-I`.
 - Los temporales (la copia estropeada, la imitación del SDK y las salidas) están en el scratchpad de la sesión, fuera del repo.
+
+## Cierre del lead (08-11-2026 22:42 UTC): pasada final del E2E sobre `8ed0924`
+
+Ejecutada por el lead tras cerrar al agente (`bash backend/docs/ultron-studio/ops/h8-e2e.sh ambas`, 99 s), con el oyente del laboratorio de B8-c (E8-1/E9-1) y el simulador de OPS8-b (F-6) ya confirmados:
+
+| Fase | Pruebas | Comprobaciones |
+|---|---|---|
+| Cerrada (17 s) | 6 / 6 OK | 112 / 112 OK |
+| Abierta (74 s) | 9 / 9 OK | 283 / 283 OK |
+
+- 0 violaciones en los dos simuladores (113 peticiones a ElevenLabs, 10 a Twilio), 0 falsos positivos de F-6; la valla solo con sus 2 sondas; `lsof` sin conexiones fuera de 127.0.0.1 (47 muestras); 0 ERROR; colas y `failed_jobs` vacíos; barrido limpio (31 valores en 22 ficheros).
+- Hash de resultados: `6ee260efa9e55e48031588781aab7b8baf55c885fbe929bb8b77941eb4ce3beb`.
+- Evidencia: `backend/docs/ultron-studio/ops/evidencia-h8/2026-11-08/20261108T224030Z-8ed09240/`.
+- F-1 cerrado (B8-c), F-2 y F-6 cerrados (OPS8-b); O-1 diferido (E9-6); O-2 en el runbook.
+

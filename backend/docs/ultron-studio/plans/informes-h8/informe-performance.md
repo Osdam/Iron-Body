@@ -214,3 +214,20 @@ Sin red: `Http::preventStrayRequests()` en proceso y proxies muertos en HTTP, co
   - `run-queries.sh`, `serve.sh`, `http-bench-h8.py`, `resumen.py`, `presupuestos.py`, `indices-parciales.sql`;
   - `presupuestos-h8.json`;
   - `resultados/`: `siembra.json`, `{a..h}-*-consultas.json`, `{a..h}-*-tiempos.json`, `http-20261108T214830Z.json`, `http-20261108T214851Z.json`, `tramos-post-llamada.json` e `indices-parciales.txt`.
+
+## Cierre del lead (08-11-2026 22:41 UTC): el «después» de B8-c, en modo consultas (`PERF_N=0`, misma siembra)
+
+Ejecutado por el lead tras cerrar al agente (`run-queries.sh test_e_crm` y `test_h_job_y_conciliacion` sobre `8ed0924`); el «antes» es el fichero confirmado en `f84c6bc`:
+
+| Consulta | Antes | Después |
+|---|---|---|
+| `GET admin/voice/status` | 41 | 25 |
+| `GET admin/voice/metrics` | 38 | 25 |
+| `GET admin/voice/contacts` (100 filas) | 212 | 15 |
+| `GET admin/voice/calls` (página) | 12 | 13 (+1: el limitador por persona, E9-4) |
+| `GET admin/voice/calls/{uuid}` | 12 | 14 |
+| `POST admin/voice/calls` (puerta) | 25 | 23–26 |
+| `voice:reconcile` en régimen | 104 | 104 (el ahorro de P8-7 es de tiempo, no de sentencias: 166 → 57 ms de mediana medidos por B8-c) |
+
+P8-1 y P8-2 quedan cerrados por recuento; el índice `vc_publication_idx` existe en la migración editada. Los tiempos p95 del «después» no se repitieron en máquina compartida; los presupuestos de `presupuestos-h8.json` siguen siendo los del «antes» (más holgados), válidos para el smoke.
+
