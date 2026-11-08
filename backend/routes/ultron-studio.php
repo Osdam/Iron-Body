@@ -9,6 +9,8 @@ use App\Http\Controllers\Crm\UltronStudio\UltronStudioLabScenarioController;
 use App\Http\Controllers\Crm\UltronStudio\UltronStudioPublicationController;
 use App\Http\Controllers\Crm\UltronStudio\UltronStudioRuleController;
 use App\Http\Controllers\Crm\UltronStudio\UltronStudioVersionController;
+use App\Http\Controllers\Crm\UltronStudio\UltronStudioVoiceController;
+use App\Http\Controllers\Crm\UltronStudio\UltronStudioVoiceLabController;
 use App\Http\Middleware\LimitRequestBodySize;
 use Illuminate\Support\Facades\Route;
 
@@ -72,7 +74,24 @@ use Illuminate\Support\Facades\Route;
 | propio limitador `ultron-studio-probe` (6/h por persona, 20/h por red) y un
 | enfriamiento de 300 s.
 |
-| Tope de CUERPO de 64 KB (65 536 bytes) en las 56 rutas: por encima, 413
+| Hito 8 (docs/ultron-studio/ULTRON_STUDIO_H8_CONTRACT.md, «API»): el
+| GOBIERNO DE LA VOZ, `voice/*`, 15 rutas, y el LABORATORIO HABLADO,
+| `voice-lab/*`, 6 rutas del paquete LAB8 (77 en total). La lista con su
+| permiso, una a una, es `UltronStudioVoiceController::ROUTES` y `::LAB_ROUTES`
+| (E2-6: las guardas leen el recuento de ahí, no de un literal). Cerraduras:
+| la puerta (`ultron.view`, `ultron.voice_manage`, `ultron.approve`,
+| `ultron.voice_publish` o `ultron.voice_lab_run`, una a una en
+| AuthorizationMap) → una persona → la llave → la bandera (publicar y promover:
+| 409 `voice_publishing_disabled`; el laboratorio hablado: 409
+| `voice_lab_disabled`, salvo `GET voice-lab/status`). CERO RED POR DEFECTO: las
+| lecturas y `POST voice/compile-preview` (con las lecturas: no escribe) nunca
+| salen a la red. Publicar y promover despliegan y miden la evidencia: además
+| del cupo de escritura, el limitador de la evidencia (`ultron-studio-evidence`,
+| 10/min por persona), como promover en el H5. Abrir una sesión del laboratorio
+| hablado gasta: además del cupo de escritura, `ultron-studio-lab-run` (10/h
+| por persona, 30/h por red), el del laboratorio de texto del H4.
+|
+| Tope de CUERPO de 64 KB (65 536 bytes) en las 77 rutas: por encima, 413
 | `payload_too_large` antes del controlador (revisión de seguridad de la API
 | del Hito G, M-2). Es defensa en profundidad: la validación en dos fases de
 | los controladores ya rechaza una lista enorme sin recorrerla. Por qué 64 KB:
@@ -122,6 +141,18 @@ Route::prefix('admin/ultron-studio')->middleware(LimitRequestBodySize::class.':6
         Route::get('integrations/twilio/calls', [UltronStudioIntegrationController::class, 'calls']);
         Route::get('integrations/voice', [UltronStudioIntegrationController::class, 'voice']);
         Route::get('integrations/config', [UltronStudioIntegrationController::class, 'config']);
+
+        // Hito 8: el gobierno de la voz (lecturas, sin red; la previsualización
+        // compila sin escribir) y el laboratorio hablado (lecturas).
+        Route::get('voice/profiles', [UltronStudioVoiceController::class, 'profiles']);
+        Route::get('voice/profiles/{uuid}', [UltronStudioVoiceController::class, 'profile'])->whereUuid('uuid');
+        Route::post('voice/compile-preview', [UltronStudioVoiceController::class, 'preview']);
+        Route::get('voice/publications', [UltronStudioVoiceController::class, 'publications']);
+        Route::get('voice/canary-evidence', [UltronStudioVoiceController::class, 'evidence'])->middleware('throttle:ultron-studio-evidence');
+        Route::get('voice/brakes', [UltronStudioVoiceController::class, 'brakes']);
+        Route::get('voice-lab/status', [UltronStudioVoiceLabController::class, 'status']);
+        Route::get('voice-lab/sessions', [UltronStudioVoiceLabController::class, 'index']);
+        Route::get('voice-lab/sessions/{uuid}', [UltronStudioVoiceLabController::class, 'show'])->whereUuid('uuid');
     });
 
     Route::middleware('throttle:ultron-studio-write')->group(function (): void {
@@ -162,5 +193,21 @@ Route::prefix('admin/ultron-studio')->middleware(LimitRequestBodySize::class.':6
         Route::post('integrations/canaries/{uuid}/expectation', [UltronStudioCanaryController::class, 'expectation'])->whereUuid('uuid');
         Route::post('integrations/config/acknowledge', [UltronStudioIntegrationController::class, 'acknowledge']);
         Route::post('integrations/twilio/probe', [UltronStudioIntegrationController::class, 'probe'])->middleware('throttle:ultron-studio-probe');
+
+        // Hito 8: perfiles de voz, la cadena de voz, el freno y el laboratorio
+        // hablado. Publicar y promover despliegan y miden: con el limitador de
+        // la evidencia. Abrir una sesión del laboratorio gasta: con el suyo.
+        Route::post('voice/profiles', [UltronStudioVoiceController::class, 'storeProfile']);
+        Route::post('voice/profiles/{uuid}/submit', [UltronStudioVoiceController::class, 'submitProfile'])->whereUuid('uuid');
+        Route::post('voice/profiles/{uuid}/approve', [UltronStudioVoiceController::class, 'approveProfile'])->whereUuid('uuid');
+        Route::post('voice/profiles/{uuid}/reject', [UltronStudioVoiceController::class, 'rejectProfile'])->whereUuid('uuid');
+        Route::post('voice/publish', [UltronStudioVoiceController::class, 'publish'])->middleware('throttle:ultron-studio-evidence');
+        Route::post('voice/promote', [UltronStudioVoiceController::class, 'promote'])->middleware('throttle:ultron-studio-evidence');
+        Route::post('voice/rollback', [UltronStudioVoiceController::class, 'rollback']);
+        Route::post('voice/off', [UltronStudioVoiceController::class, 'off']);
+        Route::post('voice/brakes/{uuid}/release', [UltronStudioVoiceController::class, 'releaseBrake'])->whereUuid('uuid');
+        Route::post('voice-lab/sessions', [UltronStudioVoiceLabController::class, 'store'])->middleware('throttle:ultron-studio-lab-run');
+        Route::post('voice-lab/sessions/{uuid}/end', [UltronStudioVoiceLabController::class, 'end'])->whereUuid('uuid');
+        Route::post('voice-lab/sessions/{uuid}/verdict', [UltronStudioVoiceLabController::class, 'verdict'])->whereUuid('uuid');
     });
 });

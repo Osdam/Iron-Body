@@ -455,6 +455,22 @@ final class StudioVoiceCompiler
             throw self::refusal('profile_hash_mismatch', 'profile.contentHash');
         }
 
+        return self::profileContent($c, $maxCallSeconds);
+    }
+
+    /**
+     * El CONTENIDO de un perfil, sin mirar su estado, sus cuatro ojos ni su
+     * huella: las mismas comprobaciones, en el mismo orden, que al compilar.
+     * Lo usa también quien crea y aprueba perfiles (S8-b), para negarse con el
+     * mismo motivo y el mismo campo antes de que el perfil llegue a compilarse.
+     *
+     * @param  array<string,mixed>  $c
+     * @return array{voiceId:string,greetings:array{inbound:string,outbound:string},holes:array<string,string>,maxDurationSeconds:int,tools:list<string>,systemTools:list<string>,destinations:list<array{alias:string,phoneHash:string}>,privacy:array{retentionDays:int,storeAudio:bool,recording:bool},voicemail:string}
+     *
+     * @throws UltronStudioException 422 `voice_compile_refused`
+     */
+    public static function profileContent(array $c, int $maxCallSeconds): array
+    {
         self::closedKeys($c, self::PROFILE_FIELDS, 'profile.content');
 
         if ($c['format'] !== self::PROFILE_FORMAT) {

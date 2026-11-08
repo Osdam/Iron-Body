@@ -7,6 +7,8 @@ use App\Models\UltronStudio\StudioAuditEvent;
 use App\Models\UltronStudio\StudioIntegrationSnapshot;
 use App\Services\Marketing\Attribution\LeadSourceClassifier;
 use App\Services\Marketing\Meta\MetaAdsApiClient;
+use App\Services\Twilio\TwilioRequestSignature;
+use App\Services\Twilio\TwilioVoiceCarrier;
 use App\Services\Voice\ElevenLabs\ElevenLabsVoiceProvider;
 use App\Services\Voice\VoiceCheckResult;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -184,10 +186,14 @@ final class StudioIntegrationConfig
     /** @return array<string, mixed> */
     public static function voiceFacts(): array
     {
-        // Los secretos de voz SOLO por esta vía (Enmienda 1): el proveedor los
-        // lee y devuelve sus huellas con nuestra subclave; aquí no se leen.
+        // Los secretos de voz SOLO por esta vía (Enmienda 1 del H6 y D8-5 del
+        // H8): cada lector enumerado lee el suyo y devuelve su huella con
+        // nuestra subclave; aquí no se lee ninguno. La del secreto de iniciación
+        // sale de `ElevenLabsVoiceProvider::secretFingerprints()` (no se duplica).
+        $clave = self::key();
+
         return self::voiceFactsFrom(
-            ElevenLabsVoiceProvider::secretFingerprints(self::key()),
+            ElevenLabsVoiceProvider::secretFingerprints($clave),
             config('voice.elevenlabs.enabled') === true,
             self::text(config('voice.elevenlabs.agent_id')),
             config('voice.elevenlabs.region'),
@@ -195,6 +201,19 @@ final class StudioIntegrationConfig
             config('voice.twilio.enabled') === true,
             config('voice.twilio.from'),
             (int) config('voice.twilio.daily_call_cap'),
+            [
+                'secretRefs' => [
+                    'tool' => self::text(config('voice.elevenlabs.tool_secret_ref')),
+                    'initiation' => self::text(config('voice.elevenlabs.initiation_secret_ref')),
+                    'postCallWebhook' => self::text(config('voice.elevenlabs.post_call_webhook_ref')),
+                ],
+                'accountSid' => self::text(config('voice.twilio.account_sid')),
+                'apiKeySid' => self::text(config('voice.twilio.api_key_sid')),
+                'apiKeySecretFp' => TwilioVoiceCarrier::secretFingerprints($clave)['api_key_secret'] ?? null,
+                'signingTokenFp' => TwilioRequestSignature::secretFingerprints($clave)['signing_token'] ?? null,
+                'twilioBase' => config('voice.twilio.base_url'),
+                'webhookBase' => config('voice.webhook_base_url'),
+            ],
         );
     }
 
@@ -203,18 +222,28 @@ final class StudioIntegrationConfig
      * secretos (nunca los secretos) y lo que no es secreto. Pura: la usa
      * también la exportación de fixtures, que así no toca la configuración de voz.
      *
-     * @param  array{api_key:?string,webhook_secret:?string,tool_secret:?string}  $secretFingerprints
+     * Hito 8 (`$h8`, «Impacto» del contrato H8: la huella autorizada se
+     * reconoce otra vez en la fase 2): la subcuenta de voz, las referencias de
+     * las claves y de los secretos del gestor del proveedor, y las huellas de
+     * los secretos nuevos (iniciación, la clave de Laravel y el token de
+     * firma). Sin `$h8`, o sin ninguna pieza del Hito 8 configurada, los
+     * hechos del Hito 6 tal cual (la exportación de fixtures, su paridad y la
+     * huella autorizada de producción hasta la fase 2).
+     *
+     * @param  array{api_key:?string,webhook_secret:?string,tool_secret:?string,initiation_secret?:?string}  $secretFingerprints
+     * @param  array{secretRefs:array{tool:?string,initiation:?string,postCallWebhook:?string},accountSid:?string,apiKeySid:?string,apiKeySecretFp:?string,signingTokenFp:?string,twilioBase:mixed,webhookBase:mixed}|null  $h8
      * @return array<string, mixed>
      */
-    public static function voiceFactsFrom(array $secretFingerprints, bool $enabled, ?string $agentId, mixed $region, ?string $phoneNumberId, bool $twilioEnabled, mixed $twilioFrom, int $dailyCallCap): array
+    public static function voiceFactsFrom(array $secretFingerprints, bool $enabled, ?string $agentId, mixed $region, ?string $phoneNumberId, bool $twilioEnabled, mixed $twilioFrom, int $dailyCallCap, ?array $h8 = null): array
     {
         $huella = static fn (?string $fp): array => $fp === null ? ['present' => false] : ['present' => true, 'fp' => $fp];
+        $ultimos = static fn (?string $id): array => filled($id) ? ['present' => true, 'ref' => mb_substr(trim((string) $id), -4)] : ['present' => false];
 
-        return [
+        $hechos = [
             'elevenlabs' => [
                 'enabled' => $enabled,
                 'apiKey' => $huella($secretFingerprints['api_key'] ?? null),
-                'agentId' => filled($agentId) ? ['present' => true, 'ref' => mb_substr(trim((string) $agentId), -4)] : ['present' => false],
+                'agentId' => $ultimos($agentId),
                 'webhookSecret' => $huella($secretFingerprints['webhook_secret'] ?? null),
                 // La región va tal cual (no es secreta): una fuera de la lista se ve como es.
                 'region' => is_string($region) ? $region : null,
@@ -227,6 +256,59 @@ final class StudioIntegrationConfig
                 'dailyCallCap' => $dailyCallCap,
             ],
         ];
+        if ($h8 === null || ! self::anyH8Piece($secretFingerprints, $h8)) {
+            // Sin ninguna pieza del Hito 8, los hechos (y su huella) son los del
+            // Hito 6: desplegar el código en la fase 1 no deja la configuración
+            // autorizada en deriva. Al poner la primera (fase 2), cambian y se
+            // reconocen otra vez («Impacto» del contrato H8).
+            return $hechos;
+        }
+
+        $hechos['elevenlabs']['initiationSecret'] = $huella($secretFingerprints['initiation_secret'] ?? null);
+        $hechos['elevenlabs']['secretRefs'] = [
+            'tool' => $ultimos($h8['secretRefs']['tool'] ?? null),
+            'initiation' => $ultimos($h8['secretRefs']['initiation'] ?? null),
+            'postCallWebhook' => $ultimos($h8['secretRefs']['postCallWebhook'] ?? null),
+        ];
+        $hechos['twilioVoice']['subaccount'] = [
+            'accountSid' => self::identifier($h8['accountSid'] ?? null),
+            'apiKeySid' => self::identifier($h8['apiKeySid'] ?? null),
+            'apiKeySecret' => $huella($h8['apiKeySecretFp'] ?? null),
+            'signingToken' => $huella($h8['signingTokenFp'] ?? null),
+            'apiBase' => filled(self::text($h8['twilioBase'] ?? null)) ? self::base($h8['twilioBase'], self::TWILIO_API_HOST) : ['official' => true],
+        ];
+        // La base con la que se firman y se reciben los webhooks: solo su host.
+        $partes = is_string($h8['webhookBase'] ?? null) ? parse_url(trim($h8['webhookBase'])) : false;
+        $hechos['twilioVoice']['webhookBase'] = is_array($partes) && is_string($partes['host'] ?? null) && $partes['host'] !== ''
+            ? ['present' => true, 'host' => strtolower($partes['host'])]
+            : ['present' => false];
+
+        return $hechos;
+    }
+
+    /**
+     * ¿Hay alguna pieza del Hito 8 configurada? El secreto de iniciación, una
+     * referencia del gestor del proveedor, la subcuenta de voz (cuenta, clave
+     * o token de firma), una base propia de Twilio o la de los webhooks.
+     *
+     * @param  array<string, string|null>  $secretFingerprints
+     * @param  array<string, mixed>  $h8
+     */
+    private static function anyH8Piece(array $secretFingerprints, array $h8): bool
+    {
+        $piezas = [
+            $secretFingerprints['initiation_secret'] ?? null,
+            ...array_values(is_array($h8['secretRefs'] ?? null) ? $h8['secretRefs'] : []),
+            $h8['accountSid'] ?? null, $h8['apiKeySid'] ?? null, $h8['apiKeySecretFp'] ?? null, $h8['signingTokenFp'] ?? null,
+            $h8['twilioBase'] ?? null, $h8['webhookBase'] ?? null,
+        ];
+        foreach ($piezas as $pieza) {
+            if (is_string($pieza) && trim($pieza) !== '') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** Con qué credencial leería la sonda de Twilio (§I5.4): la llave restringida solo si están las dos piezas. */

@@ -4,6 +4,7 @@ namespace App\Services\UltronStudio;
 
 use App\Models\UltronStudio\StudioCanaryNumber;
 use App\Models\UltronStudio\StudioIntegrationSnapshot;
+use App\Services\Twilio\TwilioVoiceCarrier;
 use App\Services\Voice\VoiceCallContext;
 use App\Services\Voice\VoiceCallPolicy;
 use App\Services\Voice\VoiceProviders;
@@ -39,11 +40,15 @@ final class StudioIntegrations
     /** Los bloques de `GET integrations/status`, en su orden (§I7.2). */
     public const PROVIDER_IDS = ['meta_ads', 'twilio', 'twilio_voice', 'canaries', 'elevenlabs'];
 
-    /** Lo que puede afirmar cada bloque en H6 («nunca otra cosa»). */
+    /**
+     * Lo que puede afirmar cada bloque («nunca otra cosa»). Hito 8 (D8-21 e
+     * «Impacto»): `twilio_voice` gana `connected_voice` (número, bandera y la
+     * subcuenta de voz completa).
+     */
     public const PROVIDER_CLASSIFICATIONS = [
         'meta_ads' => ['connected_read', 'degraded', 'not_configured'],
         'twilio' => ['connected_otp_only', 'degraded', 'not_configured'],
-        'twilio_voice' => ['not_configured', 'disabled', 'degraded'],
+        'twilio_voice' => ['not_configured', 'disabled', 'degraded', 'connected_voice'],
         'canaries' => ['registry'],
         'elevenlabs' => ['not_configured', 'disabled', 'degraded', 'connected_read'],
     ];
@@ -233,17 +238,18 @@ final class StudioIntegrations
     /** @return array<string,mixed> */
     private static function twilioVoiceBlock(): array
     {
-        return self::twilioVoiceBlockFrom(self::twilioVoice());
+        return self::twilioVoiceBlockFrom(self::twilioVoice(), TwilioVoiceCarrier::configured());
     }
 
     /**
      * @param  array{enabled:bool,fromConfigured:bool,dailyCallCap:int}  $voice
+     * @param  bool  $subaccountReady  la credencial de la subcuenta de voz completa (Hito 8, D8-5)
      * @return array<string,mixed>
      */
-    public static function twilioVoiceBlockFrom(array $voice): array
+    public static function twilioVoiceBlockFrom(array $voice, bool $subaccountReady = false): array
     {
         return [
-            'classification' => self::classifyTwilioVoice($voice['fromConfigured'], $voice['enabled']),
+            'classification' => self::classifyTwilioVoice($voice['fromConfigured'], $voice['enabled'], $subaccountReady),
             'evidence' => ['enabled' => $voice['enabled'], 'fromConfigured' => $voice['fromConfigured']],
         ];
     }
@@ -324,12 +330,68 @@ final class StudioIntegrations
         $estado = VoiceProviders::status();
         $codigo = self::voiceState();
         $ultima = StudioIntegrationConfig::latest(StudioIntegrationSnapshot::PROVIDER_VOICE, StudioIntegrationSnapshot::KIND_PROBE);
-
-        return self::voicePanelFrom($estado, $codigo, $ultima === null ? null : [
+        $panel = self::voicePanelFrom($estado, $codigo, $ultima === null ? null : [
             'at' => $ultima->created_at?->toIso8601String(),
             'outcome' => is_string($ultima->facts['outcome'] ?? null) ? $ultima->facts['outcome'] : null,
             'agentAudioUlaw8000' => is_bool($ultima->facts['agentAudioUlaw8000'] ?? null) ? $ultima->facts['agentAudioUlaw8000'] : null,
         ], self::twilioVoice(), self::voiceCanary());
+
+        // Hito 8: el estado real de la voz, la fase que se deduce, el freno y
+        // la publicación vigente. Cada bloque por su cuenta: si su fuente falla,
+        // `{available:false}` y una línea de log (nunca un valor inventado).
+        $telefonia = self::block('telephonyState', fn (): array => self::voiceTelephony($codigo));
+        $panel['telephonyState'] = $telefonia;
+        $panel['phase'] = ($telefonia['available'] ?? false) === true ? self::voicePhase($telefonia) : null;
+        $panel['brake'] = self::block('brake', fn (): array => ['state' => StudioVoiceEvidence::brakeState()]);
+        $panel['publishing'] = self::block('publishing', fn (): array => StudioVoicePublishing::status());
+        $panel['publication'] = self::block('publication', fn (): array => StudioVoicePublications::state());
+
+        return $panel;
+    }
+
+    /**
+     * Las banderas y piezas de la telefonía, SIN SECRETOS: solo booleanos,
+     * recuentos y el estado del proveedor (Hito 8, D8-11, D8-12, D8-15).
+     *
+     * @return array<string,mixed>
+     */
+    public static function voiceTelephony(string $providerState): array
+    {
+        return [
+            'providerState' => $providerState,
+            'subaccountReady' => TwilioVoiceCarrier::configured(),
+            'numberImported' => is_string($id = config('voice.elevenlabs.agent_phone_number_id')) && trim($id) !== '',
+            'inbound' => ['enabled' => config('voice.inbound.enabled') === true, 'dailyCap' => (int) config('voice.inbound.daily_cap')],
+            'outbound' => [
+                'enabled' => config('voice.outbound.enabled') === true,
+                'scope' => config('voice.outbound.scope') === 'contacts' ? 'contacts' : 'canary',
+                'dailyCap' => (int) config('voice.twilio.daily_call_cap'),
+            ],
+        ];
+    }
+
+    /**
+     * La fase del despliegue que se DEDUCE de la configuración (contrato H8,
+     * «Fases de despliegue»), pura: 4b con salientes a contactos, 4a con
+     * salientes a canarios, 3 con entrantes, 2 con ElevenLabs con credenciales
+     * y la subcuenta y el número listos, y 1 en cualquier otro caso. Es una
+     * lectura, no una autorización: cada fase la autoriza el propietario.
+     *
+     * @param  array<string,mixed>  $telephony
+     * @return array{id:string,basis:string}
+     */
+    public static function voicePhase(array $telephony): array
+    {
+        $credenciales = in_array($telephony['providerState'] ?? null, [VoiceProviderStatus::STATE_UNVERIFIED, VoiceProviderStatus::STATE_VERIFIED], true);
+        $id = match (true) {
+            ($telephony['outbound']['enabled'] ?? false) === true && ($telephony['outbound']['scope'] ?? null) === 'contacts' => '4b',
+            ($telephony['outbound']['enabled'] ?? false) === true => '4a',
+            ($telephony['inbound']['enabled'] ?? false) === true => '3',
+            $credenciales && ($telephony['subaccountReady'] ?? false) === true && ($telephony['numberImported'] ?? false) === true => '2',
+            default => '1',
+        };
+
+        return ['id' => $id, 'basis' => 'config'];
     }
 
     /**
@@ -484,12 +546,18 @@ final class StudioIntegrations
         };
     }
 
-    /** Twilio Voice: sin número E.164, `not_configured`; si no, `disabled` con la bandera apagada y `degraded` con ella encendida. */
-    public static function classifyTwilioVoice(bool $fromConfigured, bool $enabled): string
+    /**
+     * Twilio Voice: sin número E.164, `not_configured`; si no, `disabled` con
+     * la bandera apagada; con ella encendida, `connected_voice` si además la
+     * credencial de la subcuenta de voz está completa (Hito 8) y `degraded` si
+     * no. Sin el tercer argumento, la regla del Hito 6.
+     */
+    public static function classifyTwilioVoice(bool $fromConfigured, bool $enabled, bool $subaccountReady = false): string
     {
         return match (true) {
             ! $fromConfigured => 'not_configured',
             ! $enabled => 'disabled',
+            $subaccountReady => 'connected_voice',
             default => 'degraded',
         };
     }

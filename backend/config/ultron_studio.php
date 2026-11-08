@@ -252,6 +252,40 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Gobierno de la voz (Hito 8, paquete S8)
+    |--------------------------------------------------------------------------
+    | Contrato: docs/ultron-studio/ULTRON_STUDIO_H8_CONTRACT.md, D8-7, D8-19,
+    | D8-23 y E2-4.
+    |
+    | PUBLICAR LA VOZ ES DEL STUDIO, LLAMAR ES DE LA TELEFONÍA: aquí solo lo que
+    | decide el Studio al publicar y promover un agente de voz. Las banderas y
+    | los techos de las llamadas y del laboratorio hablado viven en
+    | config/voice.php. Todo APAGADO por defecto (protección 1): sin la bandera,
+    | publicar y promover responden 409 `voice_publishing_disabled` antes de
+    | compilar ni de salir a la red (E2-4). Revertir y apagar la voz no
+    | dependen de ella (deshacer no puede depender de la llave que permite
+    | cambiar). Solo `true` (o 1/on/yes) la enciende. La ventana de publicación
+    | es la del Hito 5 (`publishing.window`, D8-19 y P-25).
+    */
+    'voice' => [
+
+        'publishing_enabled' => filter_var(env('ULTRON_STUDIO_VOICE_PUBLISHING_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+
+        // P-19: `required` (defecto): publicar exige un veredicto `approved`
+        // del laboratorio hablado sobre la MISMA compilación. `waived` lo
+        // decide el propietario y queda escrito en la entrada. Otro valor, `required`.
+        'lab_gate' => strtolower(trim((string) env('ULTRON_STUDIO_VOICE_LAB_GATE', 'required'))) === 'waived' ? 'waived' : 'required',
+
+        // P-16: la evidencia mínima del canario de voz para promover: horas
+        // desde la publicación en canario (1–168) y llamadas selladas con ella
+        // (1–100). Fuera del rango se recorta; vacío o no entero, el defecto.
+        'canary_min_hours' => min(168, max(1, $entero('ULTRON_STUDIO_VOICE_CANARY_MIN_HOURS', 24))),
+        'canary_min_calls' => min(100, max(1, $entero('ULTRON_STUDIO_VOICE_CANARY_MIN_CALLS', 3))),
+
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Monitor (Hito 7)
     |--------------------------------------------------------------------------
     | Contrato: docs/ultron-studio/ULTRON_STUDIO_H7_CONTRACT.md, OPS7 (a).
