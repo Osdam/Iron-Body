@@ -45,6 +45,8 @@ use RecursiveIteratorIterator;
  *  - EL PUERTO NO SABE LLAMAR: las interfaces tienen sus métodos cerrados
  *    (ninguna actualiza ni borra un agente, D8-7) y un método público con
  *    nombre de llamada solo existe donde el contrato lo pone.
+ *  - EL NÚMERO SE OBSERVA (E5-2): `VoiceNumberObserver::describeNumber`, un
+ *    GET a `/v1/convai/phone-numbers/{id}` y solo desde `VoiceReconciler`.
  *  - RUTAS: ninguna ruta apunta a un servicio de voz; los controladores de
  *    voz solo en `routes/voice.php` (los del Studio, en el suyo).
  *  - LAS PRUEBAS DE VOZ CON RED cierran la red con
@@ -80,6 +82,9 @@ class VoiceIsolationTest extends TestCase
         'VoiceCallStarter.php',
         'VoiceEventVerifier.php',
         'VoiceLabSessionIssuer.php',
+        // E5-2 (Enmienda 5; E4-8): la observación del número, interfaz propia de
+        // solo lectura (su nulo entra por {@see NULO}; su DTO, por `Dto/`).
+        'VoiceNumberObserver.php',
         // Los DTO neutros, si no van en `Dto/`.
         'CarrierCallsPage.php',
         'CarrierResult.php',
@@ -116,6 +121,8 @@ class VoiceIsolationTest extends TestCase
         'VoiceCallStarter' => ['startOutbound'],
         'VoiceEventVerifier' => ['verifyPostCall'],
         'VoiceLabSessionIssuer' => ['signedSessionUrl'],
+        // E5-2: un solo método, de lectura.
+        'VoiceNumberObserver' => ['describeNumber'],
     ];
 
     /** Los comandos de voz: el doctor del H6 y los del H8 (`voice:hangup`, `voice:reconcile`); los nombres de consola, en `VoiceBoundaryTest`. */
@@ -153,10 +160,14 @@ class VoiceIsolationTest extends TestCase
      */
     private const DOMINIO_TELEPHONY = ['app/Support/Access/CrmPermission.php', 'app/Support/Access/PermissionCatalog.php'];
 
-    /** La red, solo aquí: fichero → método → verbos (D8-3: una petición por método, sin reintentos ni redirecciones). */
+    /**
+     * La red, solo aquí: fichero → método → verbos (D8-3: una petición por
+     * método, sin reintentos ni redirecciones). E5-2: `describeNumber`, un GET
+     * a `/v1/convai/phone-numbers/{id}` ({@see RUTA_DEL_NUMERO}).
+     */
     private const RED = [
         self::PROVEEDOR => ['verifyCredentials' => ['get']],
-        self::DESPLEGADOR => ['createAgent' => ['post'], 'describeAgent' => ['get'], 'assignNumber' => ['patch', 'post']],
+        self::DESPLEGADOR => ['createAgent' => ['post'], 'describeAgent' => ['get'], 'assignNumber' => ['patch', 'post'], 'describeNumber' => ['get']],
         self::INICIADOR => ['startOutbound' => ['post']],
         self::EMISOR => ['signedSessionUrl' => ['get']],
         self::TRANSPORTISTA => ['hangup' => ['post'], 'listCalls' => ['get']],
@@ -172,7 +183,15 @@ class VoiceIsolationTest extends TestCase
     private const UNA_PETICION = [
         self::PROVEEDOR.'::verifyCredentials', self::INICIADOR.'::startOutbound', self::EMISOR.'::signedSessionUrl',
         self::DESPLEGADOR.'::assignNumber', self::TRANSPORTISTA.'::hangup', self::TRANSPORTISTA.'::listCalls',
+        // E5-2: el GET del número, uno.
+        self::DESPLEGADOR.'::describeNumber',
     ];
+
+    /** E5-2: el único fichero que llama a `describeNumber` (`VoiceReconciler::numbers()`, desde `voice:reconcile --numbers`). */
+    private const OBSERVA_EL_NUMERO = 'app/Services/Telephony/VoiceReconciler.php';
+
+    /** E5-2: adónde va el GET de `describeNumber` (`ElevenLabsAgentDeployer::PHONE_NUMBERS_PATH` + el id codificado). */
+    private const RUTA_DEL_NUMERO = '/v1/convai/phone-numbers/';
 
     /** La cadena del GET del H6, exacta. */
     private const CADENA_H6 = ['withHeaders', 'acceptJson', 'withoutRedirecting', 'connectTimeout', 'timeout', 'get'];
@@ -667,6 +686,41 @@ class VoiceIsolationTest extends TestCase
                 }
             }
         }
+    }
+
+    /**
+     * E5-2 (Enmienda 5; E4-8, E2-3): el número se observa con UN GET a su ruta
+     * y solo desde la conciliación. Nadie más llama a `describeNumber` (con
+     * `->`, `?->` o `::`), nadie lo nombra en una cadena (una llamada dinámica),
+     * y el GET va a `/v1/convai/phone-numbers/{id}` con el id codificado: ni
+     * otra ruta del proveedor (una conversación, su transcripción) ni el id en
+     * crudo. El verbo, la petición única, las redirecciones y los reintentos los
+     * mira {@see test_la_red_solo_sale_de_los_metodos_enumerados()}.
+     */
+    public function test_el_numero_se_observa_con_un_get_a_su_ruta_y_solo_desde_la_conciliacion(): void
+    {
+        $llaman = [];
+        foreach (self::php('app', 'routes') as $relativa => $ruta) {
+            if (stripos((string) file_get_contents($ruta), 'describeNumber') === false) {
+                continue;
+            }
+            $tokens = self::tokens($ruta);
+            foreach ($tokens as $i => $t) {
+                if ($t[0] === T_STRING && $t[1] === 'describeNumber' && in_array(self::anterior($tokens, $i)[0] ?? null, [T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR, T_DOUBLE_COLON], true)) {
+                    $llaman[$relativa] = true;
+                }
+                if ($t[0] === T_CONSTANT_ENCAPSED_STRING && strcasecmp(self::literal($t[1]), 'describeNumber') === 0) {
+                    $this->fail("{$relativa} nombra describeNumber en una cadena: solo VoiceReconciler la llama, y de forma directa (E5-2)");
+                }
+            }
+        }
+        $this->assertSame([self::OBSERVA_EL_NUMERO], array_keys($llaman), 'describeNumber se llama solo desde VoiceReconciler (E5-2): '.implode(', ', array_keys($llaman)));
+
+        $desplegador = self::raiz().'/'.self::DESPLEGADOR;
+        $codigo = self::codigoDeMetodo($desplegador, 'describeNumber');
+        $this->assertStringContainsString('PHONE_NUMBERS_PATH', $codigo, 'describeNumber pide otra ruta que la del número (E5-2)');
+        $this->assertStringContainsString('rawurlencode', $codigo, 'describeNumber pone el id del número en la ruta sin codificar (E5-2)');
+        $this->assertMatchesRegularExpression('/const PHONE_NUMBERS_PATH = \''.preg_quote(self::RUTA_DEL_NUMERO, '/').'\';/', self::codigo($desplegador), 'la ruta del número no es '.self::RUTA_DEL_NUMERO.' (E5-2)');
     }
 
     // ── Rutas y pruebas ─────────────────────────────────────────────────────
