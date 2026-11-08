@@ -163,11 +163,43 @@ class MembershipPeriod
         }, 3);
     }
 
+    /**
+     * ¿Este socio tiene una membresía propia a la que añadirle un beneficio?
+     *
+     * Si no la tiene, el beneficio ES su membresía: alguien que entra por
+     * primera vez y compra un plan día no puede quedarse sin nada que la puerta
+     * sepa leer. Entonces se aplica por el camino de siempre.
+     *
+     * Basta con que la membresía EXISTA, vigente o no: a quien venció hace un
+     * mes y compra un plan día tampoco se le reescribe el historial de su plan
+     * anterior. Su derecho de hoy es el del beneficio, y eso ya lo resuelve la
+     * puerta leyendo los periodos de sus cobros.
+     */
+    private function tieneMembresiaPropia(User $user): bool
+    {
+        return trim((string) ($user->plan ?? '')) !== ''
+            || $user->membership_end_date !== null;
+    }
+
     /** @return array{start: string, end: string, chained: bool}|null */
     private function applyLocked(Payment $payment): ?array
     {
         /** @var User|null $user */
         $user = User::find($payment->user_id);
+
+        /** @var Plan|null $plan */
+        $plan = Plan::find($payment->plan_id);
+        $dias = (int) ($plan?->duration_days ?? 0);
+
+        if (! $user || ! $plan || $dias <= 0) {
+            return null;
+        }
+
+        // UN BENEFICIO AÑADIDO NO DESCONGELA. Es un derecho aparte —un plan día
+        // para una clase— y no una renovación: reanudar la membresía aquí le
+        // gastaría al socio los días que tiene guardados sin que haya pedido
+        // volver. Se mira antes del descongelado por eso.
+        $esBeneficio = (bool) $plan->benefit_only && $this->tieneMembresiaPropia($user);
 
         // PAGAR DESCONGELA. Durante una pausa la app le muestra la membresía
         // vencida —es lo que la hace bloquear sin tocar la app—, así que el
@@ -176,16 +208,9 @@ class MembershipPeriod
         // reanudarse pisarían el periodo recién comprado. Se reanuda primero:
         // recupera sus días y el cobro se encadena detrás, como cualquier otra
         // renovación anticipada.
-        if ($user && app(MembershipFreeze::class)->isFrozen($user)) {
+        if (! $esBeneficio && app(MembershipFreeze::class)->isFrozen($user)) {
             app(MembershipFreeze::class)->resume($user, null, 'payment');
             $user->refresh();
-        }
-        /** @var Plan|null $plan */
-        $plan = Plan::find($payment->plan_id);
-        $dias = (int) ($plan?->duration_days ?? 0);
-
-        if (! $user || ! $plan || $dias <= 0) {
-            return null;
         }
 
         $cobro = $this->paidDay($payment);
@@ -198,6 +223,33 @@ class MembershipPeriod
         // La excepción: lo que esperó a confirmarse no empieza antes de pagarse.
         if ($inicio->lessThan($cobro) && $this->confirmadoMasTarde($payment)) {
             $inicio = $cobro;
+        }
+
+        // EL BENEFICIO AÑADIDO VALE DESDE QUE SE COMPRÓ, y ahí se acaba lo que
+        // hace: no encadena detrás de la membresía, no le mueve el vencimiento y
+        // no le cambia la etiqueta. Su derecho existe igual que el de cualquier
+        // otro cobro —el periodo congelado en el propio pago—, y la puerta lo
+        // tiene en cuenta como un derecho más ({@see MembershipAccess}).
+        //
+        // Sin esto, el plan día se encadenaba al final de la anualidad: la socia
+        // pagaba un día para hoy y el sistema se lo apuntaba doce meses más
+        // adelante, le movía el vencimiento del año y le cambiaba las reglas de
+        // acceso a las del plan día. Ver la migración `add_benefit_only_to_plans_table`.
+        if ($esBeneficio) {
+            $fin = $inicio->addDays($dias);
+
+            $payment->forceFill([
+                'starts_on' => $inicio->toDateString(),
+                'period_start' => $inicio->toDateString(),
+                'period_end' => $fin->toDateString(),
+            ])->save();
+
+            return [
+                'start' => $inicio->toDateString(),
+                'end' => $fin->toDateString(),
+                'chained' => false,
+                'benefit' => true,
+            ];
         }
 
         $finActual = $user->membership_end_date

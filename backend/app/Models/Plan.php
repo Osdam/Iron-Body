@@ -18,6 +18,16 @@ class Plan extends Model
         'price',
         'original_price',
         'duration_days',
+        /*
+         * BENEFICIO AÑADIDO. Un plan que se compra ENCIMA de otro y no lo
+         * sustituye: el plan día, una clase suelta. No encadena detrás de la
+         * membresía vigente, no le mueve el vencimiento y no le cambia la
+         * etiqueta; vale desde el día que se compró y por su propia duración.
+         *
+         * Es una propiedad del PRODUCTO, no de cada venta. Ver la migración
+         * `add_benefit_only_to_plans_table` para por qué no se adivina.
+         */
+        'benefit_only',
         // Reglas de acceso: qué compra el plan además de la vigencia.
         'access_mode',
         'entry_credits',
@@ -49,6 +59,7 @@ class Plan extends Model
         'original_price' => 'float',
         'is_recommended' => 'boolean',
         'access_classes' => 'boolean',
+        'benefit_only' => 'boolean',
         'active' => 'boolean',
         'sellable' => 'boolean',
         'visible_in_app' => 'boolean',

@@ -74,6 +74,30 @@ class MembershipRebuilder
 
                 continue;
             }
+            // UN BENEFICIO AÑADIDO NO ENTRA EN LA VIGENCIA. El plan día y las
+            // clases sueltas son derechos aparte, con su propio periodo
+            // congelado en su cobro: encadenarlos aquí volvería a inflar el
+            // vencimiento del socio, que es justo lo que esta reconstrucción
+            // tiene que poder corregir. Ver `plans.benefit_only`.
+            if ($this->esBeneficio($pago)) {
+                $aplicados++;
+
+                continue;
+            }
+
+            // UN COBRO QUE NO DA VIGENCIA NO ENCADENA NADA. Lo dice el catálogo
+            // poniendo el plan en cero días, y la caja ya lo respeta
+            // (`MembershipPeriod::apply()` se detiene en `dias <= 0`). Aquí
+            // faltaba: estos cobros sí tienen periodo congelado de cuando el
+            // plan duraba treinta días, y reconstruir desde él le devolvería al
+            // socio el mes que una comisión le regaló. Es de donde salieron las
+            // vigencias que empiezan en 2027 ({@see MembershipFutureDatesCommand}).
+            if ((int) ($pago->plan?->duration_days ?? 0) <= 0) {
+                $aplicados++;
+
+                continue;
+            }
+
             $dias = $this->durationOf($pago);
             if ($dias <= 0) {
                 continue;
@@ -102,6 +126,41 @@ class MembershipRebuilder
     }
 
     /**
+     * ESCRIBE SOLO LA ETIQUETA, sin tocar ninguna fecha.
+     *
+     * Existe porque las dos reparaciones son independientes y una de ellas se
+     * puede hacer siempre. La vigencia no se puede recalcular para quien vino
+     * del sistema anterior —sus pagos `MIGR-*` no congelaron periodo y
+     * rehacerla sería inventarla—, pero la ETIQUETA sí: su nombre correcto está
+     * en su propio historial, es el plan de su último cobro de membresía de
+     * verdad.
+     *
+     * Y hace falta justo para esa gente. Son los socios de siempre, los que
+     * venían del sistema anterior, y a ellos el plan día les reescribió la
+     * etiqueta igual que a todos: `rebuild()` se negaba antes de llegar aquí, y
+     * se quedaban con «PLAN DÍA» como membresía y con sus reglas de acceso —una
+     * entrada— gobernando el año que tienen pagado.
+     *
+     * No inventa nada: no toca fechas, importes, cobros ni historial. Devuelve
+     * el nombre anterior y el nuevo, o null si no había nada que corregir.
+     *
+     * @return array{from: ?string, to: string}|null
+     */
+    public function rebuildLabel(User $user): ?array
+    {
+        $correcta = $this->labelFix($user);
+        if ($correcta === null || $correcta === $user->plan) {
+            return null;
+        }
+
+        $antes = $user->plan;
+        $user->plan = $correcta;
+        $user->save();
+
+        return ['from' => $antes, 'to' => $correcta];
+    }
+
+    /**
      * Escribe el recálculo. Devuelve null si no había nada que cambiar o si el
      * socio no se puede reconstruir.
      *
@@ -116,8 +175,11 @@ class MembershipRebuilder
 
         $antesInicio = $user->membership_start_date;
         $antesFin = $user->membership_end_date;
+        $antesPlan = $user->plan;
+        $etiqueta = $this->labelFix($user);
 
-        if ($antesInicio === $nuevo['start'] && $antesFin === $nuevo['end']) {
+        if ($antesInicio === $nuevo['start'] && $antesFin === $nuevo['end']
+            && ($etiqueta === null || $etiqueta === $antesPlan)) {
             return null;
         }
 
@@ -128,6 +190,12 @@ class MembershipRebuilder
         // nadie.
         if ($nuevo['end'] === null) {
             $user->plan = null;
+        } elseif ($etiqueta !== null) {
+            // LA ETIQUETA, cuando la reescribió un beneficio añadido. Ver
+            // etiquetaCorrecta(): es el otro rastro que dejó el fallo, y sin
+            // corregirlo la ficha sigue enseñando «PLAN DÍA» como la membresía
+            // de alguien que tiene una anualidad.
+            $user->plan = $etiqueta;
         }
         $user->save();
 
@@ -136,6 +204,8 @@ class MembershipRebuilder
             'end' => $nuevo['end'],
             'previous_start' => $antesInicio,
             'previous_end' => $antesFin,
+            'plan' => $user->plan,
+            'previous_plan' => $antesPlan,
             'applied' => $nuevo['applied'],
         ];
     }
@@ -196,6 +266,22 @@ class MembershipRebuilder
             return 'tiene pagos migrados (MIGR-*): su vigencia vino del sistema anterior';
         }
 
+        // SUS ÚNICOS COBROS SON BENEFICIOS AÑADIDOS: esos días SON su vigencia.
+        //
+        // Un beneficio solo es «añadido» cuando hay una membresía debajo —es la
+        // misma regla con la que se cobra, {@see MembershipPeriod}—. Quien llega
+        // de la calle y paga un plan día no tiene nada debajo: ese día es toda
+        // su vigencia, y así se la escribió la caja.
+        //
+        // Sin esto la reconstrucción los vaciaba. Salta los beneficios para no
+        // volver a inflar vencimientos, y a quien solo tiene beneficios no le
+        // quedaba ni un pago que contar: ficha en blanco, plan en null y fuera
+        // del gimnasio el que acababa de pagar su día.
+        if ($pagos->isNotEmpty()
+            && ! $pagos->contains(fn (Payment $p): bool => ! (bool) ($p->plan?->benefit_only))) {
+            return 'sus únicos cobros son beneficios añadidos (plan día, clase suelta): esos días son su vigencia';
+        }
+
         foreach ($pagos as $pago) {
             if ($pago->upgraded_from_plan_id) {
                 // Legacy: solo cambió el plan, sin días nuevos. Las nuevas
@@ -211,8 +297,17 @@ class MembershipRebuilder
 
                 continue;
             }
+            // Un plan que no existe deja la cuenta sin base y hay que pararse.
+            // Uno de cero días NO: es un cobro sin vigencia a propósito, y el
+            // bucle lo salta.
+            if ($pago->plan === null) {
+                return "el pago #{$pago->id} apunta al plan {$pago->plan_id}, que no existe";
+            }
+            if ((int) $pago->plan->duration_days <= 0) {
+                continue;
+            }
             if ($this->durationOf($pago) <= 0) {
-                return "el pago #{$pago->id} apunta al plan {$pago->plan_id}, que no existe o no tiene duración";
+                return "el pago #{$pago->id} apunta al plan {$pago->plan_id}, que no tiene duración";
             }
         }
 
@@ -223,6 +318,63 @@ class MembershipRebuilder
      * Cuántos días compró un pago: los que se le congelaron, y si no, los que
      * dura su plan hoy.
      */
+    /**
+     * EL NOMBRE QUE DEBERÍA TENER LA ETIQUETA, o null si no hay nada que decir.
+     *
+     * `users.plan` lo reescribía CADA cobro, también el de un beneficio añadido:
+     * una socia con una anualidad vigente que compró un plan día se quedó con
+     * «PLAN DÍA» como membresía, y de ahí salían sus reglas de acceso.
+     *
+     * Solo se repara ese caso concreto y demostrable: la etiqueta nombra un plan
+     * marcado como BENEFICIO AÑADIDO y el socio tiene un cobro de un plan que no
+     * lo es. Entonces su membresía es ésa —la del último cobro de membresía de
+     * verdad— y se le devuelve el nombre.
+     *
+     * Si la etiqueta nombra un plan normal no se toca NADA: pudo ponerla un
+     * traslado o una edición a mano, que son cambios legítimos, y adivinar ahí
+     * sería reescribir decisiones de otra persona.
+     */
+    public function labelFix(User $user): ?string
+    {
+        $etiqueta = trim((string) ($user->plan ?? ''));
+        if ($etiqueta === '') {
+            return null;
+        }
+
+        $pagos = $this->paidPlanPayments($user);
+
+        $nombraBeneficio = $pagos->contains(
+            fn (Payment $p): bool => (bool) ($p->plan?->benefit_only)
+                && mb_strtolower(trim((string) $p->plan?->name)) === mb_strtolower($etiqueta)
+        );
+        if (! $nombraBeneficio) {
+            return null;
+        }
+
+        // NI LA ETIQUETA SALE DE UN COBRO QUE NO DA VIGENCIA. Hay planes en el
+        // catálogo que no son membresías: la «Comisión de personalizados» es el
+        // vehículo contable con el que se apuntaba el cobro de piso de los
+        // entrenadores, cargada como un plan de treinta días y precio cero. Un
+        // plan de CERO DÍAS es justo eso —un cobro sin vigencia, {@see
+        // PlanController::validatedData()}— y no puede ser la membresía de
+        // nadie: proponerlo como etiqueta le pondría «Comisión de
+        // personalizados» de plan a una socia, con las reglas de acceso que
+        // tuviera ese plan.
+        $membresia = $pagos
+            ->filter(fn (Payment $p): bool => $p->plan !== null
+                && ! (bool) $p->plan->benefit_only
+                && (int) $p->plan->duration_days > 0)
+            ->last();
+
+        return $membresia?->plan?->name;
+    }
+
+    /** ¿Este cobro compró un beneficio añadido en vez de membresía? */
+    private function esBeneficio(Payment $pago): bool
+    {
+        return (bool) (Plan::find($pago->plan_id)?->benefit_only);
+    }
+
     private function durationOf(Payment $pago): int
     {
         if ($pago->period_start && $pago->period_end) {

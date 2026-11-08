@@ -721,6 +721,19 @@ class PlanController extends Controller
              * están en el catálogo y en el histórico.
              */
             'duration_days' => [$updating ? 'sometimes' : 'required_without_all:duration_months,months', 'integer', 'min:0'],
+            /*
+             * BENEFICIO AÑADIDO. El plan día, una clase suelta: se compra
+             * ENCIMA de otra membresía y no la sustituye. Vale desde el día que
+             * se compró, no encadena detrás de la vigente, no le mueve el
+             * vencimiento y no le cambia el plan; abre la puerta por su cuenta
+             * mientras dure y, al terminar, solo se acaba él.
+             *
+             * Lo marca quien gestiona el catálogo porque NO se puede adivinar:
+             * el mostrador manda `starts_on` con la fecha de hoy en todas las
+             * ventas, así que tomarlo por «empieza hoy» convertiría cada
+             * renovación anticipada en una pérdida de días pagados.
+             */
+            'benefit_only' => ['sometimes', 'boolean'],
             // TIPO DE PLAN. 'unlimited' es el de siempre: entra cuantas veces
             // quiera mientras esté vigente. 'entries' es por consumo: la
             // vigencia sigue siendo `duration_days` y ademas trae un número de

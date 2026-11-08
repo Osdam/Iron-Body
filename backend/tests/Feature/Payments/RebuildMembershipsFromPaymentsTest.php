@@ -228,4 +228,184 @@ class RebuildMembershipsFromPaymentsTest extends TestCase
         $this->assertSame('Elizabet Calderón', $u->name);
         $this->assertSame(2, Payment::where('user_id', $u->id)->count());
     }
+
+    public function test_no_le_quita_la_vigencia_a_quien_solo_compro_planes_dia(): void
+    {
+        // EL VISITANTE DE LA CALLE. No tiene membresía debajo, así que su plan
+        // día ES su vigencia y así se la escribió la caja. La reconstrucción
+        // salta los beneficios añadidos para no volver a inflar vencimientos,
+        // y a él no le quedaba ni un pago que contar: le vaciaba la ficha y lo
+        // dejaba fuera el mismo día que pagó.
+        $dia = Plan::create([
+            'name' => 'PLAN DÍA', 'price' => 12000, 'duration_days' => 1,
+            'benefit_only' => true, 'active' => true,
+        ]);
+        $hoy = MembershipRebuilder::today();
+
+        $u = User::create([
+            'name' => 'Miguel Rincón', 'email' => 'miguel-'.uniqid().'@example.com',
+            'password' => 'secret', 'status' => 'active', 'plan' => 'PLAN DÍA',
+            'membership_start_date' => $hoy->toDateString(),
+            'membership_end_date' => $hoy->addDays(1)->toDateString(),
+        ]);
+        Payment::create([
+            'user_id' => $u->id, 'plan_id' => $dia->id, 'amount' => 12000,
+            'method' => 'cash', 'status' => 'paid', 'origin' => 'counter',
+            'paid_at' => $hoy->setTime(9, 0),
+            'period_start' => $hoy->toDateString(), 'period_end' => $hoy->addDays(1)->toDateString(),
+        ]);
+
+        $this->artisan("memberships:rebuild --user={$u->id} --apply")->assertSuccessful();
+
+        $u->refresh();
+        $this->assertSame('PLAN DÍA', $u->plan, 'su plan día es su membresía: no se le borra');
+        $this->assertSame($hoy->toDateString(), $u->membership_start_date);
+        $this->assertSame($hoy->addDays(1)->toDateString(), $u->membership_end_date);
+    }
+
+    public function test_labels_only_corrige_el_nombre_y_no_toca_ninguna_fecha(): void
+    {
+        // Las dos reparaciones no tienen el mismo riesgo: el nombre del plan
+        // sale del historial y es demostrable; recalcular una vigencia puede
+        // acortarle el acceso a quien hoy entra. Con --labels-only se aplica
+        // la mitad segura sobre todo el gimnasio sin mover una sola fecha.
+        $plan = $this->plan();
+        $u = $this->elizabet($plan);
+
+        $this->artisan("memberships:rebuild --user={$u->id} --apply --labels-only")->assertSuccessful();
+
+        $u->refresh();
+        $this->assertSame('2026-09-12', $u->membership_start_date);
+        $this->assertSame('2026-11-11', $u->membership_end_date, 'su vigencia estirada sigue igual');
+    }
+
+    public function test_el_barrido_dice_de_quien_es_cada_etiqueta(): void
+    {
+        // En el barrido de todo el gimnasio son decenas de líneas seguidas. Sin
+        // nombre ni número no hay forma de revisar la lista antes de escribirla
+        // —ni de ver que a alguien le quiere poner de plan algo que no es una
+        // membresía— ni de comprobarla después.
+        $mensual = $this->plan();
+        $dia = Plan::create([
+            'name' => 'PLAN DÍA', 'price' => 12000, 'duration_days' => 1,
+            'benefit_only' => true, 'active' => true,
+        ]);
+
+        $u = User::create([
+            'name' => 'Socia del sistema anterior', 'email' => 'anterior-'.uniqid().'@example.com',
+            'password' => 'secret', 'status' => 'active', 'plan' => 'PLAN DÍA',
+            'membership_start_date' => '2026-10-01', 'membership_end_date' => '2026-12-01',
+        ]);
+        Payment::create([
+            'user_id' => $u->id, 'plan_id' => $mensual->id, 'amount' => 180000,
+            'method' => 'cash', 'status' => 'paid', 'reference' => 'MIGR-77',
+            'paid_at' => '2026-10-01 00:00:00', 'origin' => 'counter',
+        ]);
+        Payment::create([
+            'user_id' => $u->id, 'plan_id' => $dia->id, 'amount' => 12000,
+            'method' => 'cash', 'status' => 'paid', 'origin' => 'counter',
+            'paid_at' => '2026-11-01 00:00:00',
+        ]);
+
+        $this->artisan('memberships:rebuild')
+            ->expectsOutputToContain("#{$u->id} Socia del sistema anterior: su plan dice «PLAN DÍA»")
+            ->assertSuccessful();
+    }
+
+    // ── Cobros que no son membresías ────────────────────────────────────────
+
+    /** El vehículo contable: cargado como plan, pero sin vigencia que dar. */
+    private function comision(): Plan
+    {
+        return Plan::create([
+            'name' => 'Comisión de personalizados', 'price' => 0,
+            'duration_days' => 0, 'active' => true,
+        ]);
+    }
+
+    public function test_una_comision_no_puede_ser_la_etiqueta_de_un_socio(): void
+    {
+        // «Comisión de personalizados» es el cobro de piso de los entrenadores,
+        // cargado como un plan de treinta días. Puesto en cero días —así lo
+        // marca el catálogo para los cobros sin vigencia— no puede ser la
+        // membresía de nadie: la reparación tiene que seguir mirando hacia
+        // atrás hasta el último cobro que SÍ compró membresía.
+        $mensual = $this->plan();
+        $dia = Plan::create([
+            'name' => 'PLAN DÍA', 'price' => 12000, 'duration_days' => 1,
+            'benefit_only' => true, 'active' => true,
+        ]);
+
+        $u = User::create([
+            'name' => 'Sorley Hernandez', 'email' => 'sorley-'.uniqid().'@example.com',
+            'password' => 'secret', 'status' => 'active', 'plan' => 'PLAN DÍA',
+            'membership_start_date' => '2026-10-01', 'membership_end_date' => '2026-12-01',
+        ]);
+        foreach ([[$mensual, '2026-09-01'], [$this->comision(), '2026-10-01'], [$dia, '2026-11-01']] as [$plan, $fecha]) {
+            Payment::create([
+                'user_id' => $u->id, 'plan_id' => $plan->id, 'amount' => $plan->price,
+                'method' => 'cash', 'status' => 'paid', 'origin' => 'counter',
+                'paid_at' => $fecha.' 00:00:00',
+            ]);
+        }
+
+        $this->assertSame('Élite', app(MembershipRebuilder::class)->labelFix($u));
+    }
+
+    public function test_sin_ninguna_membresia_pagada_no_propone_etiqueta(): void
+    {
+        // Y si lo único que tiene son comisiones, no hay nombre que devolver:
+        // antes de inventar uno, mejor dejarlo como está para que lo mire una
+        // persona.
+        $dia = Plan::create([
+            'name' => 'PLAN DÍA', 'price' => 12000, 'duration_days' => 1,
+            'benefit_only' => true, 'active' => true,
+        ]);
+        $u = User::create([
+            'name' => 'Solo comisiones', 'email' => 'comis-'.uniqid().'@example.com',
+            'password' => 'secret', 'status' => 'active', 'plan' => 'PLAN DÍA',
+            'membership_start_date' => '2026-10-01', 'membership_end_date' => '2026-12-01',
+        ]);
+        foreach ([$this->comision(), $dia] as $plan) {
+            Payment::create([
+                'user_id' => $u->id, 'plan_id' => $plan->id, 'amount' => $plan->price,
+                'method' => 'cash', 'status' => 'paid', 'origin' => 'counter',
+                'paid_at' => '2026-10-01 00:00:00',
+            ]);
+        }
+
+        $this->assertNull(app(MembershipRebuilder::class)->labelFix($u));
+    }
+
+    public function test_una_comision_no_le_regala_dias_de_vigencia(): void
+    {
+        // Estos cobros tienen periodo congelado de cuando el plan duraba treinta
+        // días. Reconstruir desde él le devolvería al socio el mes que la
+        // comisión le regaló, que es de donde salieron las vigencias que
+        // empiezan en 2027.
+        $mensual = $this->plan();
+        $comision = $this->comision();
+
+        $u = User::create([
+            'name' => 'Socio con comisión', 'email' => 'comision-'.uniqid().'@example.com',
+            'password' => 'secret', 'status' => 'active', 'plan' => 'Élite',
+            'membership_start_date' => '2026-09-14', 'membership_end_date' => '2026-11-13',
+        ]);
+        Payment::create([
+            'user_id' => $u->id, 'plan_id' => $mensual->id, 'amount' => 180000,
+            'method' => 'cash', 'status' => 'paid', 'origin' => 'counter',
+            'paid_at' => '2026-09-14 00:00:00',
+        ]);
+        Payment::create([
+            'user_id' => $u->id, 'plan_id' => $comision->id, 'amount' => 0,
+            'method' => 'cash', 'status' => 'paid', 'origin' => 'counter',
+            'paid_at' => '2026-10-14 00:00:00',
+            'period_start' => '2026-10-14', 'period_end' => '2026-11-13',
+        ]);
+
+        $this->artisan("memberships:rebuild --user={$u->id} --apply")->assertSuccessful();
+
+        // Su mes de Élite y nada más: 14 sept + 30 = 14 oct.
+        $this->assertSame('2026-10-14', $u->refresh()->membership_end_date);
+    }
 }
