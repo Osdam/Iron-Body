@@ -277,3 +277,17 @@ El banco se rehízo con producción en **`32a2560`** (la real), `BANCO_WIP=0` (s
 - En el servidor no se ensayó nada: solo las dos lecturas. El `--solo-comprobar` de producción es el paso 4 del runbook, ya con H-10 y H-11 resueltos.
 - La regresión de los smokes del H6 y del H7 tras el H8 no se ensayó: cuentan 14 tablas y `TAREAS`, y no aplican sin adaptar.
 - El mando `h8-voice-scope.sh` (fases 2–4b), nginx (P-26 y el tope de 1 MB en el servidor real) y la supresión 1581 de voz quedan pendientes de OPS8.
+
+## Cierre del lead (08-11-2026 22:46 UTC): ensayo de la fase 1 sobre el HEAD final `8d3c41f`
+
+Banco rehecho desde cero (`montar.sh … HEAD`, `BANCO_PREVIO=32a2560`, `BANCO_WIP=0`; ESPERADO=`8d3c41f`), «producción» del banco en el estado de E1-12 y sembrada:
+
+| Paso | Resultado |
+|---|---|
+| Paso 0 sin bandera | código 3: «FALTA DECIDIR los commits ajenos [7c84cb5]», sin tocar nada |
+| Paso 0 con `--acepta-main=7c84cb5` | `COMPROBACIONES PREVIAS EN VERDE`; HEAD `32a2560` limpio; 2 migraciones del H8 pendientes |
+| Despliegue completo (banco) | `DESPLIEGUE H8 FASE 1 (BACKEND) COMPLETADO` |
+| Smoke (presupuestos de PERF8) | 49 OK · 0 FALLO · 1 OMITIDO (`voice-lab/sessions`, 409 `voice_lab_disabled`: lo esperado en la fase 1); 10 presupuestos OK |
+
+Con esto, el guion de la fase 1 queda ensayado sobre el código que se desplegará. En el VPS no se ha ejecutado nada.
+
