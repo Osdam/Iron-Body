@@ -366,3 +366,176 @@ Ya pasan con los cambios de SEC8-b en el árbol: la tabla de agentes (E4-3), `vo
 ## 5. Ficheros de esta tanda
 
 `app/Services/Telephony/{VoicePublishedConfig,VoicePublishedPart,VoiceTransferDirectory}.php`; `app/Services/Telephony/VoiceRateLimits.php` (nuevo); `app/Http/Controllers/Api/Voice/{ElevenLabsInitiationController,ElevenLabsPostCallController,VoiceToolController,TwilioVoiceUsageTriggerController}.php`; `routes/voice.php`; `tests/Feature/Telephony/{Support/VoiceFixtures,VoiceTransferDestinationsTest,TelephonyRoutesTest,VoiceProductionNoNetworkTest}.php`; `tests/Feature/Telephony/VoicePublicRateLimitsTest.php` (nuevo); este informe. Sin rutas, permisos, variables ni migraciones nuevas.
+
+---
+
+# §B8-c · correcciones del paso 3 (Enmienda 8: E8-1, E8-4, E8-5, E8-6; y E7-2)
+
+**Fecha:** 08-11-2026. **Árbol:** worktree `ultron-h8`, rama `feat/ultron-studio-h8-voice`. Empecé sobre `c01124c`; mientras trabajaba, OPS8-b confirmó `2b3c2936` y `af6bd805` (no tocan nada mío). Todo lo de abajo se midió por última vez sobre **`af6bd805` + mis cambios, sin commit**. Cero red: toda prueba con `Http::preventStrayRequests()`. No toqué las guardas de SEC8, ni `routes/console.php`, ni `ops/**`, ni el E2E, ni el CRM.
+
+## 1. Cifras reales (comandos ejecutados)
+
+| Qué | Comando | Resultado |
+|---|---|---|
+| Voz, telefonía y Twilio, SQLite | `phpunit tests/Feature/Telephony tests/Feature/Voice tests/Unit/Telephony tests/Unit/Voice tests/Unit/Twilio` | **751 pruebas, 195 456 aserciones, 2 fallos** (§4: 1 y 3), 146 omitidas (solo PG) |
+| Studio de voz, laboratorio y guarda del motor, SQLite | `phpunit tests/Feature/UltronStudio/UltronStudioVoice*Test.php tests/Unit/UltronStudio/*Voice*Test.php tests/Feature/UltronStudio/UltronEngineIsolationTest.php` | **588 pruebas, 6 460 aserciones, 1 fallo** (§4: 2), 73 omitidas |
+| Todo lo anterior, puerta PG | `PGGSSENCMODE=disable UNIT_DB=ultron_studio_h8_bc bash docs/ultron-studio/ops/pgunit.sh …` | **1 339 pruebas, 203 068 aserciones, 3 fallos** (los mismos 3 de §4), 15 omitidas |
+| Lo que lee el fichero de ejemplo de entorno y el tope global | `SecretExposureTest`, `UltronStudioMonitorTest`, `UltronStudioIntegrationsConfigTest`, `UltronStudioPublicationConfigTest`, `UltronStudioIntegrationsNoNetworkTest`, `UltronStudioEarlyBodyCapTest` | 66 OK |
+| Rutas | `php artisan auth:coverage --unmapped` | vacío, exit 0 (ninguna ruta nueva) |
+| Estilo | `pint --test` en mis 18 ficheros | `passed` salvo `AppServiceProvider.php`, que **ya falla igual en HEAD** (orden de imports y dos nombres cualificados del limitador de traslados; comprobado sobre `git show HEAD:…` en copia). No lo reformateé: ninguna de esas líneas es mía |
+| Mutaciones por muestreo | copia aislada en el scratchpad (`vendor` clonado), una a la vez, `php -l`, sus pruebas, restaurar y comparar sha256 | **30 aplicadas, 30 muertas**, 0 vivas, 0 equivalentes (F-1 3, P8-1 10, P8-2 4, P8-3 5, E7-2 8) |
+
+**Cada prueba de regresión falla sin su arreglo** (ejecutado):
+- F-1: `VoiceLabPostCallWiringTest` sobre el árbol antes de registrar el oyente → 2 fallos: ningún oyente registrado y `{"ok":true,"unknown":true}` en vez de `{"ok":true,"lab":"recorded"}` (el síntoma exacto de TEST8-b).
+- P8-1 y P8-2: `VoiceCrmQueryBudgetTest` sobre el código anterior → 4 fallos (sin índice; `summary` 10 sentencias; `status` 31; contactos 52). Con los topes anulados (copia en el scratchpad), **todos los valores esperados coinciden con lo que daba el código anterior**: la prueba fija los resultados de antes y los recuentos de ahora.
+- E7-2: las 3 pruebas nuevas de `VoicePublicRateLimitsTest` contra `VoiceRateLimits` y `config/voice.php` de HEAD (copia) → 1 error y 2 fallos (200 en vez de 429; ninguna línea de silenciados).
+- P8-3: el comando no existía; la prueba comprueba además el síntoma (las filas caducadas siguen en `cache` hasta purgarlas).
+
+**Recuentos de sentencias** (SQLite, caché `array` de la suite; PERF8 midió con la caché `database`, por eso sus cifras son mayores):
+
+| Lectura | Antes | Ahora |
+|---|---|---|
+| `VoiceEvidence::summary()` de una parte | 10 (6 de `voice_calls`) | **4** (1 de `voice_calls`); 3 si le pasan el freno |
+| `VoiceTelephonyStatus::snapshot()` | 31 (cadena ×3, freno ×4, 12 recorridos de `voice_calls` por entrada) | **14** (cadena ×1, freno ×1, 2 agregaciones) |
+| `GET admin/voice/status` / `metrics` (pila HTTP) | 33 / 30 | **16 / 16** |
+| `GET admin/voice/contacts` con 25 / 100 filas | 52 / 202 | **4 / 4** |
+
+**El índice con volumen** (copia por plantilla de `ultron_studio_h8_perf_seed` de PERF8, 5 101 llamadas y 20 000 eventos, en mi base `ultron_studio_h8_bc_perf`; `EXPLAIN (ANALYZE, BUFFERS)`): sin el índice, cada lectura de una entrada es `Seq Scan` con **880 búferes** (y había 6 por parte); con `vc_publication_idx`, la agregación es `Bitmap Index Scan on vc_publication_idx` con **38 búferes**, y `forPublication()` (la evidencia del Studio) también lo usa. Los eventos van por `vce_kind_idx` (478 búferes); sin el filtro por `kind`, el planificador recorre los 20 000 eventos: el filtro se queda. **Sin medir:** tiempos (p50/p95) y la caché `database`; es la pasada de tiempos de PERF8.
+
+## 2. Qué cambió y por qué (por fichero)
+
+**E8-1 (TEST8-b F-1), el oyente del laboratorio.**
+- `app/Providers/AppServiceProvider.php`: `boot()` llama a `oyenteDelLaboratorioHablado()`, que registra `Event::listen(VoicePostCall::LAB_EVENT, [StudioVoiceLabSessions::class, 'recordProviderReport'])`. El Studio escucha a la telefonía; la telefonía sigue sin nombrar el Studio. En el arranque vale en la web, las colas y la consola, también con rutas y configuración en caché (por eso no en `routes/ultron-studio.php`: producción cachea rutas).
+- `tests/Feature/Telephony/VoiceLabPostCallWiringTest.php` (nuevo, 3): el oyente registrado al arrancar, UNA vez; una sesión real abierta por la API del Studio (ElevenLabs simulado sobre `Http::fake`), su post-llamada web FIRMADA por la ruta pública → `{"ok":true,"lab":"recorded"}`, 0 `voice_call_events`, 0 `voice_brakes`, la sesión `ended` / `provider_report` con 90 s y el coste prorrateado (150 000 de 300 000); la reentrega es `duplicate` sin evento ni freno; y un agente ajeno con el oyente real sigue echando el freno. Nada conectado a mano.
+- `tests/Feature/Telephony/VoiceLabPostCallTest.php`: deja de conectar el oyente a mano (con el de arranque quedaría registrado dos veces). Las tres pruebas que necesitan OTRO oyente (o ninguno) lo quitan antes con `Event::forget`; la cuarta comprueba ahora el de arranque.
+
+**E8-4 (PERF8 P8-1).**
+- `database/migrations/2026_11_10_100002_create_voice_tables.php`: **editada en sitio** (nunca ha corrido en ningún entorno; anotado en la cabecera): índice NO parcial `vc_publication_idx (voice_publication_seq, part)` en `voice_calls`. E3-5 no cambia (27 / 51 / 3 / 7): lo confirman en PG `VoiceSchemaTest` (recuentos y nombres de parciales) y las idas y vueltas por huella del esquema. Ninguna prueba de DB8 enumeraba los índices no parciales: no hubo que ajustar ninguna.
+- `app/Services/Telephony/VoiceEvidence.php`: `summary(string $part, int $seq, ?bool $brakeOpen = null)`: UNA agregación (`count(*)`, `count(CASE …)` de completadas y verificadas, `sum`, `min`, `max`), los eventos en UNA sentencia con semi-join (sin traer los ids a PHP) y las desconocidas desde la primera llamada; sin llamadas, ni eventos ni desconocidas. Mismo SQL en los dos motores. La salida es la misma, clave a clave.
+- `app/Services/Telephony/VoiceCallsQuery.php`: `metrics(?string $budgetDay = null, ?array $parts = null, ?bool $brakeOpen = null)`: lee el freno una vez y se lo pasa a cada `summary()`; usa la cadena si se la pasan.
+- `app/Services/Telephony/VoiceTransferDirectory.php`: `countsByPart(?array $parts = null)`.
+- `app/Services/Telephony/VoiceTelephonyStatus.php`: `snapshot()` lee la cadena y el freno UNA vez y los pasa a `metrics()` y a `countsByPart()`.
+
+**E8-5 (PERF8 P8-2).**
+- `app/Services/Telephony/VoiceContacts.php`: `list()` carga los consentimientos de la página con un `whereIn('contact_id')` y evalúa `VoiceConsentRule` en memoria con los mismos eventos; `row()` y `hasConsent()` (las de una fila, las que usa la política dentro de su cerrojo) no cambian de comportamiento; la fila se arma en un `present()` común.
+- `app/Services/Telephony/VoiceCallFacts.php`: `excludedAmong(list<string>)`, el `excluded()` de una página en un `whereIn('phone_hash')`.
+
+**E8-6 (PERF8 P8-3).**
+- `app/Console/Commands/Voice/VoicePruneRateLimitsCommand.php` (nuevo): `voice:prune-rate-limits {--dry-run} {--json}`. Borra SOLO las claves `voice-rl:*` caducadas; registra `voice.rate_limits.pruned` (almacén y recuentos) en el canal `voice`. Sale con 0.
+- `app/Support/Cache/ExpiredCachePruner.php` (nuevo, genérico): resuelve el almacén del limitador como `CacheServiceProvider` (`cache.limiter` o el de por defecto); si no es `database`, no hace nada. Borra filas con `expiration <= ahora` (lo mismo que `forgetIfExpired`) y clave que empieza EXACTAMENTE por el prefijo del almacén + el dado (LIKE con `ESCAPE '!'`: un `%` o `_` del prefijo no es comodín), en DELETE de 1 000 (como mucho 1 000 tandas por ejecución). Sin prefijo, se niega.
+- `app/Services/Telephony/VoiceRateLimits.php`: `PREFIX` pasa a público (el comando lo necesita).
+- `tests/Feature/Telephony/VoicePruneRateLimitsCommandTest.php` (nuevo, 4): claves escritas por el limitador REAL sobre la caché `database` con un prefijo de almacén con `_` y `%`; en seco solo cuenta; de verdad borra exactamente las caducadas de la voz y se quedan las vivas (el contador de silenciados, el techo global de una llamada nueva), una clave ajena caducada, un prefijo parecido (`voice-rlx:`) y una que solo casaría con los comodines sin escapar; el limitador sigue contando bien después; un atraso de 2 500 filas en 3 tandas; con el almacén `array`, nada; sin prefijo, excepción.
+
+**E7-2 (SEC8-b-lite, notas residuales 1 y 3).**
+- `app/Services/Telephony/VoiceRateLimits.php`: `authenticated()` comprueba el techo GLOBAL de la ruta (`voice-rl:<ruta>|global`) y el de la llamada, y solo si pasan los dos cuenta en los dos (una petición frenada por uno no gasta ninguno). `globalPerMinute()` lee `voice.public_limits.global_per_minute` y lo recorta entre el cupo por llamada y 10 veces el defecto. `failure()` con el cubo agotado llama a `silenced()`: cuenta el fallo silenciado y, como mucho una vez por minuto y ruta, registra `voice.public.failures_silenced` con `{route, silenced}` (los silenciados desde la línea anterior, este incluido); ni IP, ni credencial, ni cuerpo. Los controladores no cambian (el orden que vigila `VoiceBoundaryTest` sigue igual y la guarda pasa).
+- `config/voice.php`: bloque `public_limits.global_per_minute` (`initiation` 120, `post_call` 240, `tools` 600, `usage_trigger` 60: los `throttle` por IP que quitó E5-4); `.env.example`: sus 4 variables.
+- `tests/Feature/Telephony/VoicePublicRateLimitsTest.php`: 3 pruebas nuevas (el techo de cada una de las 4 rutas entre llamadas distintas, que 35 peticiones con credencial mala no gastan; frenada por su llamada no gasta el global; la línea de silenciados: una al silenciar el primero, una por ruta, la siguiente al minuto con 5, ninguna con la credencial buena, sin la IP en ninguna línea del canal). La prueba que ya existía de 125 iniciaciones buenas desde una IP (`test_ya_no_hay_un_contador_por_ip_comun_a_las_rutas`) sube el techo de la iniciación a 200: mira solo que no hay cubo por IP; el techo global tiene sus pruebas.
+- `tests/Unit/Voice/ElevenLabsConfigTest.php`: el bloque nuevo en los defectos y sus recortes.
+
+## 3. Decisiones tomadas (para confirmar)
+
+1. **El oyente en `AppServiceProvider::boot()`**, no en un proveedor propio: es el sitio que documenta Laravel 12 para `Event::listen`, es donde el repo ya engancha los observadores y los limitadores del Studio, y no cambia la lista de proveedores (un proveedor nuevo obliga a recompilar `bootstrap/cache/services.php` en el primer arranque tras desplegar; con `umask 077` y un `artisan` como root, FPM dejaría de leerlo). Cuesta una excepción exacta en `UltronEngineIsolationTest` (§4).
+2. **`count(CASE …)` en vez de `FILTER`:** el mismo SQL en SQLite y en PG, para que la suite SQLite ejecute exactamente el de producción (lo de SQLite que no ve lo que PG rechaza). Cuenta igual y da 0, no NULL, sin filas.
+3. **La purga genérica fuera de la voz:** la telefonía solo puede leer `voice.*`/`telephony.*` (`TelephonyIsolationTest::test_la_voz_solo_lee_su_configuracion_y_nada_del_entorno`) y saber dónde vive la caché es leer `cache.*`. La parte de caché va en `app/Support/Cache/` (no es de ningún dominio y no lee secretos); el comando de voz solo aporta su prefijo. Si el lead prefiere el comando autocontenido en `Commands/Voice/`, cae esa guarda y SEC8 tendría que admitir `cache.*` allí.
+4. **Defectos del techo global = los `throttle` por IP de antes** (120/240/600/60), holgados frente al tráfico real (≤ 4 a la vez, ≤ 20 entrantes al día); recorte entre el cupo por llamada (un techo menor frenaría a una sola llamada antes que su cupo) y 10 veces el defecto. Son techos: no encienden nada (`test_todo_apagado_por_defecto` pasa).
+5. **N de la línea de silenciados = los silenciados desde la línea anterior.** El contador vive 1 h. Límite conocido: los silenciados después de la última línea no se cuentan hasta el siguiente silenciado (si la inundación para, la cola no se registra); la primera línea de cada episodio dice 1.
+
+## 4. Guardas que caen (para SEC8, por el lead)
+
+1. **`VoiceBoundaryTest::test_los_comandos_de_voz_son_los_del_contrato_y_por_defecto_ninguno_esta_programado`** (mía, E8-6): `COMANDOS` += `'voice:prune-rate-limits'`. La segunda mitad de esa prueba (con las banderas por defecto no se programa ningún `voice:*`) seguirá pasando si OPS8-b lo agenda dentro del bloque `voice.monitor.enabled`, como dice E8-6.
+2. **`UltronEngineIsolationTest::test_fuera_del_studio_nadie_nombra_sus_clases_sus_tablas_ni_su_configuracion`** (mía, E8-1): `app/Providers/AppServiceProvider.php` nombra exactamente `T_NAME_QUALIFIED App\Services\UltronStudio\StudioVoiceLabSessions`, una vez (el `use`). Propuesta: una excepción por fichero y referencia exacta, como la del lector de voz (`VOICE_READER`/`VOICE_READER_REFERENCES`), y si se quiere, que la única llamada sea `Event::listen(VoicePostCall::LAB_EVENT, [StudioVoiceLabSessions::class, 'recordProviderReport'])`.
+3. **`VoiceIsolationTest::test_las_pruebas_de_voz_con_red_cierran_la_red`** (NO es mía; ya cae en HEAD `af6bd805`): `tests/Feature/Voice/VoiceMonitorScheduleTest.php` (OPS8-b, confirmada en `2b3c2936`) no llama a `Http::preventStrayRequests()`.
+
+En los seis ficheros de guardas de SEC8 pasan **58 de 61** (caen solo estas 3), también la frontera de límites de `VoiceBoundaryTest` (credencial → cubo de fallos → autenticado → 429) y el registro de la voz de `TelephonyIsolationTest` con las dos líneas nuevas.
+
+## 5. Contratos nuevos o modificados
+
+- **Comando nuevo** `voice:prune-rate-limits [--dry-run] [--json]` → `{store, driver, supported, dryRun, expired, deleted, batches}`; exit 0.
+- **Rutas públicas:** sin cambios de forma. Pueden dar 429 también por el techo global de su ruta, con la misma respuesta (`{ok:false, code:too_many_requests}` y `Retry-After`; E6-10 ya lo anuncia al CRM). Solo lo alcanza tráfico con credencial válida.
+- **CRM** (`status`, `metrics`, `contacts`): mismas respuestas, byte a byte en lo comprobado (DTO completos en las pruebas).
+- **Firmas internas** (todas compatibles hacia atrás, parámetros opcionales): `VoiceEvidence::summary($part, $seq, ?bool $brakeOpen = null)`; `VoiceCallsQuery::metrics(?string $budgetDay = null, ?array $parts = null, ?bool $brakeOpen = null)`; `VoiceTransferDirectory::countsByPart(?array $parts = null)`. Nuevas: `VoiceCallFacts::excludedAmong()`, `VoiceRateLimits::globalPerMinute()`, constantes `PREFIX` (ahora pública), `GLOBAL`, `GLOBAL_PER_MINUTE`, `SILENCED_NOTICE_SECONDS`, `SILENCED_COUNTER_SECONDS`.
+- **Registro (canal `voice`)**: `voice.public.failures_silenced {route, silenced}` (≤ 1/min por ruta) y `voice.rate_limits.pruned {store, supported, dry_run, expired, deleted}`.
+- **Evento**: `voice.lab.post_call` tiene ahora su oyente de arranque.
+
+## 6. Migración, configuración y despliegue
+
+- **Migración:** ninguna nueva; `2026_11_10_100002` editada en sitio (un índice). Si en algún entorno de pruebas ya se aplicó (bancos, PG desechables), hay que recrearlo para tener el índice; en producción no ha corrido. `h8-schema-check.sql` solo cuenta parciales: no cambia.
+- **Variables nuevas (opcionales, con defecto):** `VOICE_PUBLIC_INITIATION_PER_MINUTE=120`, `VOICE_PUBLIC_POST_CALL_PER_MINUTE=240`, `VOICE_PUBLIC_TOOLS_PER_MINUTE=600`, `VOICE_PUBLIC_USAGE_TRIGGER_PER_MINUTE=60`. Con la configuración en caché, cambiarlas pide `config:cache` como el resto.
+- **Para OPS8-b (E8-6), la línea exacta**, dentro de `if ((bool) config('voice.monitor.enabled', false)) {` de `routes/console.php`:
+
+  ```php
+      // La purga de los límites de las rutas públicas (PERF8 P8-3, E8-6): borra de la
+      // caché database SOLO las claves voice-rl:* CADUCADAS. Local, sin red. Una vez al día.
+      Schedule::command('voice:prune-rate-limits')
+          ->dailyAt('04:40')
+          ->timezone('America/Bogota')
+          ->withoutOverlapping(10)
+          ->onOneServer();
+  ```
+
+  `VoiceMonitorScheduleTest` (suya) fija el conjunto exacto de órdenes del bloque: hay que añadir esta. Mientras el monitor esté apagado (fase 1), se acumulan sobre todo los cubos de fallo por IP de quien sondee las rutas; se purgan a mano con el mismo comando (`--dry-run` primero).
+
+## 7. Para tester (casos límite desde dentro)
+
+- Techo global: la comprobación y el `hit` no son atómicos (como antes y como el `attempt()` de Laravel): con concurrencia se puede pasar por una o dos peticiones.
+- Purga: una petición que reutiliza una clave caducada justo mientras se borra puede contar una vez de menos; inocuo (el limitador sería una petición más permisivo).
+- Oyente: si `recordProviderReport` lanza (una guarda sin forma), la post-llamada responde 5xx y ElevenLabs reintenta; un agente de laboratorio con la sesión `failed` o sin URL responde `ignored` y no es desconocida (diseño de LAB8/B8-b).
+- La fase cerrada del E2E (TEST8-b) debe repetirse con el oyente: ahora la post-llamada web del laboratorio cierra la sesión y no echa el freno.
+
+## 8. Ficheros
+
+Cambiados: `.env.example`, `app/Providers/AppServiceProvider.php`, `app/Services/Telephony/{VoiceCallFacts,VoiceCallsQuery,VoiceContacts,VoiceEvidence,VoiceRateLimits,VoiceTelephonyStatus,VoiceTransferDirectory}.php`, `config/voice.php`, `database/migrations/2026_11_10_100002_create_voice_tables.php`, `tests/Feature/Telephony/{VoiceLabPostCallTest,VoicePublicRateLimitsTest}.php`, `tests/Unit/Voice/ElevenLabsConfigTest.php`, este informe.
+Nuevos: `app/Console/Commands/Voice/VoicePruneRateLimitsCommand.php`, `app/Support/Cache/ExpiredCachePruner.php`, `tests/Feature/Telephony/{VoiceLabPostCallWiringTest,VoiceCrmQueryBudgetTest,VoicePruneRateLimitsCommandTest}.php`.
+Sin commit. Bases PG mías: `ultron_studio_h8_bc` (la puerta, se queda) y `ultron_studio_h8_bc_perf` (la copia para el EXPLAIN, borrada al terminar).
+
+## §B8-c (2) · puntos 6–9 del lead: P8-5 y la fuga al login (punto 8), P8-7, y O-1
+
+**Árbol:** `f84c6bc4` + mis cambios, **sin commit**. Mientras tanto, sus dueños dejaron en el árbol (sin confirmar, no los toqué) la excepción de `UltronEngineIsolationTest` para el oyente (`LAB_LISTENER`), `voice:prune-rate-limits` en `VoiceBoundaryTest::COMANDOS` (SEC8), y la línea de la purga en el bloque de voz de `routes/console.php` con su `VoiceMonitorScheduleTest` (OPS8-b). **Con eso, las tres guardas de §4 están en verde.**
+
+### 1. Cifras (comandos ejecutados, después de todo lo anterior)
+
+| Qué | Resultado |
+|---|---|
+| `tests/Feature/Telephony tests/Feature/Voice tests/Unit/Telephony tests/Unit/Voice tests/Unit/Twilio`, SQLite | **759 pruebas, 196 398 aserciones, 0 fallos**, 146 omitidas (solo PG) |
+| Studio de voz, laboratorio y guarda del motor, SQLite | **588 pruebas, 6 464 aserciones, 0 fallos**, 73 omitidas |
+| Todo lo anterior en la puerta PG (`ultron_studio_h8_bc`) | **1 347 pruebas, 204 014 aserciones, 0 fallos**, 15 omitidas |
+| `auth:coverage --unmapped` | vacío, exit 0 |
+| Pint en lo nuevo de esta tanda | `passed` (`AppServiceProvider`, como en §1: solo líneas previas) |
+| Mutaciones de esta tanda (copia aislada, sha256 restaurado) | **16 aplicadas, 16 muertas** (P8-5/punto 8: 9; P8-7: 7). En total B8-c: **46/46** |
+
+### 2. P8-5 y punto 8: los cupos del CRM de la telefonía
+
+**El defecto, reproducido antes de tocar nada** (`VoiceAdminRateLimitsTest` sobre el código anterior, 6/6 en rojo): tras 50 peticiones anónimas a `admin/voice/status`, el login del panel con la contraseña buena responde **429**; dos personas desde la misma IP comparten las 120 lecturas; un bearer inventado por petición no tiene tope propio. La causa: `throttle:120,1` y `throttle:30,1` SIN NOMBRE corren ANTES que `ProtectAdminPaths` (orden real comprobado: `ThrottleRequests:120,1` es el primero), sin `$request->user()` (el panel no lo rellena) Laravel cuenta en `sha1(dominio|IP)`, y ese cubo es el MISMO que el del login (`throttle:8,1`) y el de cualquier otro `throttle` sin nombre.
+
+**Qué cambió:**
+- `routes/voice.php`: `throttle:voice-admin-read` y `throttle:voice-admin-write` (limitadores con nombre: Laravel antepone su nombre a la clave, nunca coinciden con un `throttle` sin nombre). Comentario de cabecera al día.
+- `app/Providers/AppServiceProvider.php`, `limitadoresDeLaTelefonia()` (el patrón del Studio: bloque autocontenido, respuesta 429 uniforme): con sesión, un cubo por **persona** (el administrador de la sesión del bearer, resuelta aquí porque el limitador corre antes que `ProtectAdminPaths`; otra pestaña u otra sesión no dan más): 120 lecturas y 30 escrituras por minuto, los mismos números que antes, ahora por persona. Sin sesión (sin bearer, uno inventado o caducado, o el token compartido, que la telefonía no admite), un cubo **propio por ruta y red** (`ClientNetwork`: IPv4 o el /64): 60 lecturas y 30 escrituras por minuto. Su 401 o su 403 no gasta el cupo de nadie, ni el del login, y un bearer inventado por petición no estrena cubo.
+- `tests/Feature/Telephony/VoiceAdminRateLimitsTest.php` (nueva, 6): las 13 rutas con su limitador con nombre y ninguno sin nombre; dos personas desde la misma IP (lectura y escritura) no se gastan el cupo; el cupo es de la persona y no de la sesión; **50 peticiones anónimas no cambian el login** (200 antes y después) ni el cupo de una persona de la misma IP; sin sesión, cada ruta y cada red tienen su cubo y 60 bearers inventados agotan el mismo; el 429 con `Retry-After` y `{ok:false, code:too_many_requests, message, retry_after}`.
+
+**Coste:** una sentencia por petición del CRM de voz (la sesión del bearer): `GET status` y `metrics` por la pila HTTP, 16 → **17** (siguen muy por debajo de los 33/30 de antes de §B8-c).
+
+**Decisión para confirmar:** sin el techo por red del Studio. Allí existe porque su cupo va por credencial SIN resolverla (un bearer inventado nunca lo alcanzaría); aquí lo que no es una sesión cae en el cubo anónimo de su ruta y red, y un techo por red volvería a dar un cubo común a toda la recepción (P8-5) que las anónimas podrían gastar (punto 8). Si el lead lo quiere igual, es una línea, y entonces las anónimas no deben contar en él.
+
+**Contrato (para FE8):** un 429 de `/api/admin/voice/*` trae ahora el cuerpo uniforme del Studio (`ok`, `code: too_many_requests`, `message`, `retry_after`) con `Retry-After`; antes, el de Laravel (`{"message":"Too Many Attempts."}`). Para SEC8: cambia la superficie de limitación del CRM de voz (PERF8 lo pidió así).
+
+### 3. P8-7: la conciliación en régimen
+
+**Perfil (antes de tocar nada; PG local, 100 llamadas ya conciliadas, transportista en memoria):** 171–185 ms por pasada con 104 sentencias y 28–31 ms de BD visibles. Un `record()` repetido cuesta 0,667 ms frente a 0,297 de un `exists()`: los 2 por llamada × 100 explican ~133 de los ~141 ms que `DB::listen` no ve (las sentencias que fallan no se registran). **Hipótesis de PERF8 confirmada.**
+
+**Qué cambió:** `app/Services/Telephony/VoiceReconciler.php`: la fila de la llamada (y la de la madre de un tramo) se lee con DOS marcas en la MISMA `SELECT … FOR UPDATE` que ya la bloquea: `EXISTS` del `reconciled` de su estado y del `cost_recorded` de su precio (`cost:` o `leg:`). Con la marca a sí no se intenta el INSERT. Cero sentencias más (el presupuesto de PERF8 para el régimen es 106; siguen 104; las primeras pasadas no cambian). Los eventos son de solo inserción: una marca a sí no envejece; una a no que se quede vieja (otra conciliación a la vez) vuelve al camino de siempre (el repetido devuelve null). Las marcas salen de los atributos de la fila.
+
+**Prueba** (`tests/Feature/Telephony/VoiceReconcilerSteadyStateTest.php`, nueva, 2): en régimen, el MISMO resumen, ningún evento nuevo, los mismos costes y **0 puntos de guardado deshechos** (antes, 7 por pasada: 3 llamadas × 2 + el tramo) con una transacción por llamada; y lo que cambia entre pasadas (un estado final nuevo, un precio que llega tarde) se escribe una vez. La de antes (`VoiceReconcilerTest`, con el transportista real) sigue en verde.
+
+**Medida A/B** (PG local, alternando el código anterior en una copia y el nuevo, en bases mías): con `RefreshDatabase` el lado nuevo empeoraba pasada a pasada (83 → 124 ms) por un artefacto de la prueba (bloquear las mismas filas en subtransacciones de una transacción que nunca se confirma); **con confirmaciones reales**, como producción, 15 pasadas: antes **166 ms** de mediana (p95 178, BD 23,9 ms; las cifras de PERF8), después **57 ms** (p95 59–67, BD 31,4 ms), 104 sentencias en los dos. Una ronda «antes» salió ruidosa (363 ms) por carga ajena de la máquina compartida.
+
+### 4. Punto 9 (O-1): no cabe en B8; medido y anotado
+
+**Medida** (sonda fuera del repo, SQLite y PG): una `unknown_provider_call` creada 0,4 s ANTES de publicar se guarda `2026-11-09 15:00:00`, igual que la entrada de la cadena (`created_at` de precisión 0 en las dos tablas), y `forPublication()` la cuenta (1; el contrato espera 0). La de 1 s antes no cuenta. Ventana de la ambigüedad: hasta 1 s, en el sentido seguro (bloquea promover de más, nunca de menos).
+
+**Por qué no lo cerré aquí:** el ancla es la entrada de la cadena (`StudioVoiceEvidence`: `$entrada->created_at`, segundos; el mensaje firmado también va a segundos). Microsegundos solo en los eventos no lo arreglan (el ancla seguiría truncada), y no hay campo de marca de agua en `ultron_studio_voice_publications`. Las dos salidas tocan DB8 (`2026_11_10_100001`) y S8 (`StudioVoicePublishing`/`StudioVoiceEvidence`):
+- **(A, recomendada) marca de agua:** columna nullable `events_watermark_id` en la entrada (fuera del mensaje firmado), que S8 escribe en el mismo INSERT con un lector de B8 (`max(voice_call_events.id)` leído en esa transacción); `forPublication(…, ?int $afterEventId = null)` cuenta por `id >` cuando viene. Exacta salvo los eventos en vuelo al publicar, que cuentan (sentido seguro). Sin relojes.
+- **(B) microsegundos** en `created_at` de las dos tablas (`timestamp(…, 6)`), el formato de fecha de los dos modelos y la comparación con el instante formateado con `.u`.
+
+### 5. Ficheros de esta tanda
+
+Cambiados: `routes/voice.php`, `app/Providers/AppServiceProvider.php` (`limitadoresDeLaTelefonia()`), `app/Services/Telephony/VoiceReconciler.php`, este informe. Nuevos: `tests/Feature/Telephony/{VoiceAdminRateLimitsTest,VoiceReconcilerSteadyStateTest}.php`. Bases PG mías borradas: `ultron_studio_h8_bc_old` (A/B); queda `ultron_studio_h8_bc`.

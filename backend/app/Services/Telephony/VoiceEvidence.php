@@ -86,32 +86,46 @@ final class VoiceEvidence
      * Los recuentos ricos de una entrada de la cadena, para las métricas de la
      * telefonía (`GET admin/voice/metrics`).
      *
+     * Como mucho TRES sentencias (PERF8, P8-1): una agregación de las llamadas
+     * de la entrada y su parte (por `vc_publication_idx`), una de sus eventos
+     * con semi-join (sin traer los ids a PHP) y las desconocidas desde la
+     * primera llamada; sin llamadas, ni eventos ni desconocidas. El mismo SQL
+     * en los dos motores (`count(CASE …)`, que da 0 y no NULL sin filas). Quien
+     * ya leyó el freno lo pasa en `$brakeOpen`; si no, se lee aquí.
+     *
      * @return array<string, mixed>
      */
-    public static function summary(string $part, int $seq): array
+    public static function summary(string $part, int $seq, ?bool $brakeOpen = null): array
     {
-        $llamadas = VoiceCall::query()->where('voice_publication_seq', $seq)->where('part', $part)->whereNull('transfer_of_call_id');
-        $ids = (clone $llamadas)->pluck('id')->all();
-        $primera = (clone $llamadas)->min('created_at');
-        $ultima = (clone $llamadas)->max('created_at');
-        $eventos = static fn (string $tipo): int => $ids === [] ? 0 : VoiceCallEvent::query()->whereIn('call_id', $ids)->where('kind', $tipo)->count();
-        $violaciones = $ids === [] ? 0 : VoiceCallEvent::query()->whereIn('call_id', $ids)->where('kind', 'guard_verdict')->where('outcome', 'violation')->count();
-        $desde = $primera === null ? null : Carbon::parse($primera);
+        $llamadas = static fn (): Builder => VoiceCall::query()->where('voice_publication_seq', $seq)->where('part', $part)->whereNull('transfer_of_call_id');
+        $f = $llamadas()->toBase()->selectRaw(
+            'count(*) AS sealed, count(CASE WHEN status = ? THEN 1 END) AS completed, count(CASE WHEN seal_verified = ? THEN 1 END) AS verified, '
+            .'sum(reserved_micros) AS committed, min(created_at) AS first_at, max(created_at) AS last_at',
+            [VoiceCall::STATUS_COMPLETED, true],
+        )->first();
+        $selladas = (int) ($f->sealed ?? 0);
+        $eventos = $selladas === 0 ? null : VoiceCallEvent::query()->toBase()
+            ->whereIn('call_id', $llamadas()->select('id'))
+            ->whereIn('kind', ['seal_mismatch', 'guard_verdict'])
+            ->selectRaw('count(CASE WHEN kind = ? THEN 1 END) AS mismatches, count(CASE WHEN kind = ? AND outcome = ? THEN 1 END) AS violations',
+                ['seal_mismatch', 'guard_verdict', 'violation'])
+            ->first();
+        $desde = ($f->first_at ?? null) === null ? null : Carbon::parse($f->first_at);
 
         return [
             'part' => $part,
             'seq' => $seq,
-            'sealedCalls' => count($ids),
-            'completedCalls' => (clone $llamadas)->where('status', VoiceCall::STATUS_COMPLETED)->count(),
-            'sealVerified' => (clone $llamadas)->where('seal_verified', true)->count(),
-            'sealMismatches' => $eventos('seal_mismatch'),
-            'guardViolations' => $violaciones,
+            'sealedCalls' => $selladas,
+            'completedCalls' => (int) ($f->completed ?? 0),
+            'sealVerified' => (int) ($f->verified ?? 0),
+            'sealMismatches' => (int) ($eventos->mismatches ?? 0),
+            'guardViolations' => (int) ($eventos->violations ?? 0),
             'unknownProviderCalls' => $desde === null ? 0 : VoiceCallEvent::query()->where('kind', 'unknown_provider_call')->where('created_at', '>=', $desde)->count(),
-            'committedMicros' => (int) (clone $llamadas)->sum('reserved_micros'),
+            'committedMicros' => (int) ($f->committed ?? 0),
             'firstCallAt' => $desde?->toIso8601String(),
-            'lastCallAt' => $ultima === null ? null : Carbon::parse($ultima)->toIso8601String(),
+            'lastCallAt' => ($f->last_at ?? null) === null ? null : Carbon::parse($f->last_at)->toIso8601String(),
             'hoursObserved' => $desde === null ? 0 : (int) floor($desde->diffInHours(now(), true)),
-            'brakeOpen' => VoiceBrake::isOpen(),
+            'brakeOpen' => $brakeOpen ?? VoiceBrake::isOpen(),
         ];
     }
 }

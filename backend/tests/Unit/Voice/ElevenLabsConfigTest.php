@@ -214,6 +214,8 @@ class ElevenLabsConfigTest extends TestCase
             // los hechos de `consultar_horarios`, la vigencia del RNE (0 = ninguna) y los precios oficiales con su fecha.
             // E4-1: la bandera de publicar es del Studio (`ultron_studio.voice.publishing_enabled`); aquí no está.
             'lab' => ['enabled' => false, 'driver' => 'fake', 'daily_budget_usd' => '0', 'session_budget_usd' => '0', 'max_session_seconds' => 300, 'max_sessions_per_day' => 5],
+            // B8-c (Enmienda 7, E7-2): el techo global por minuto de lo autenticado de cada ruta pública.
+            'public_limits' => ['global_per_minute' => ['initiation' => 120, 'post_call' => 240, 'tools' => 600, 'usage_trigger' => 60]],
             'monitor' => ['enabled' => false],
             'transfer' => ['staff_hours' => ['weekdays' => '', 'saturday' => '']],
             'facts' => ['site' => '', 'hours' => ''],
@@ -252,6 +254,15 @@ class ElevenLabsConfigTest extends TestCase
         }
         foreach (['30' => 30, '-1' => 0, '999' => 365, 'x' => 0] as $valor => $esperado) {
             $this->assertSame($esperado, self::evaluar(['VOICE_RNE_VALIDITY_DAYS' => (string) $valor])['contacts']['rne_validity_days'], "VOICE_RNE_VALIDITY_DAYS={$valor}");
+        }
+        // B8-c (E7-2): cada techo global, entre el cupo por llamada de su ruta y diez veces su defecto; vacío o sin forma, el defecto.
+        foreach (['VOICE_PUBLIC_INITIATION_PER_MINUTE' => ['initiation', ['300' => 300, '1' => 10, '99999' => 1200, 'x' => 120, '' => 120]],
+            'VOICE_PUBLIC_POST_CALL_PER_MINUTE' => ['post_call', ['500' => 500, '0' => 10, '99999' => 2400, 'x' => 240]],
+            'VOICE_PUBLIC_TOOLS_PER_MINUTE' => ['tools', ['900' => 900, '59' => 60, '99999' => 6000, '-5' => 60, 'x' => 600]],
+            'VOICE_PUBLIC_USAGE_TRIGGER_PER_MINUTE' => ['usage_trigger', ['30' => 30, '9' => 10, '99999' => 600, 'x' => 60]]] as $variable => [$clave, $casos]) {
+            foreach ($casos as $valor => $esperado) {
+                $this->assertSame($esperado, self::evaluar([$variable => (string) $valor])['public_limits']['global_per_minute'][$clave], "{$variable}={$valor}");
+            }
         }
 
         // H8: las banderas nuevas con el mismo filter_var; el alcance de salientes,

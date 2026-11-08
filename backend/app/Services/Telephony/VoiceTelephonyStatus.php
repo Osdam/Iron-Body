@@ -15,15 +15,23 @@ use Throwable;
  */
 final class VoiceTelephonyStatus
 {
-    /** @return array<string, mixed> */
+    /**
+     * La cadena y el freno se leen UNA vez y sirven para todo lo demás (las
+     * métricas, la evidencia de cada parte y los destinos; PERF8, P8-1): antes,
+     * tres lecturas de la cadena y cuatro del freno por petición.
+     *
+     * @return array<string, mixed>
+     */
     public static function snapshot(): array
     {
+        $leidas = null;
         try {
+            $leidas = VoicePublishedConfig::read();
             $partes = array_map(static fn (VoicePublishedPart $p): array => [
                 'status' => $p->status, 'seq' => $p->seq, 'reason' => $p->reason, 'providerAgentId' => $p->providerAgentId,
-            ], VoicePublishedConfig::read());
+            ], $leidas);
             $freno = VoiceBrake::isOpen();
-            $metricas = VoiceCallsQuery::metrics();
+            $metricas = VoiceCallsQuery::metrics(null, $leidas, $freno);
         } catch (Throwable $e) {
             // Sin la base (p. ej., el doctor en una máquina sin migrar) el estado sigue saliendo, sin lo que vive en ella.
             $partes = null;
@@ -63,7 +71,7 @@ final class VoiceTelephonyStatus
                 'staffHours' => OutboundSchedule::staffFromConfig() === false ? 'invalid' : (OutboundSchedule::staffFromConfig() === null ? 'none' : 'configured'),
             ],
             'facts' => ['hoursConfigured' => (string) config('voice.facts.site', '') !== '' && (string) config('voice.facts.hours', '') !== ''],
-            'transferDirectory' => VoiceTransferDirectory::countsByPart(),
+            'transferDirectory' => VoiceTransferDirectory::countsByPart($leidas),
             'today' => $metricas,
         ];
     }

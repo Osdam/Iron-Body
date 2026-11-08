@@ -12,6 +12,14 @@ use Illuminate\Support\Facades\Schema;
  * grafo de estados, alineado con `tests/fixtures/voice/state-transitions.json`
  * (DF-S2, DF-S3). Informe: plans/informes-h8/informe-db.md.
  *
+ * EDITADA EN SITIO el 08-11-2026 por B8-c (PERF8, hallazgo P8-1): un índice
+ * más en `voice_calls`, `vc_publication_idx` (`voice_publication_seq`,
+ * `part`), NO parcial, para la evidencia y las métricas de una entrada de la
+ * cadena (`VoiceEvidence::summary()` y `forPublication()`), que recorrían la
+ * tabla entera. Se edita aquí y no en otra migración porque esta no ha corrido
+ * en ningún entorno. Los recuentos de E3-5 (27 disparadores, 51 CHECK, 3
+ * índices parciales y 7 tablas) no cambian.
+ *
  * Siete tablas NUEVAS, SOLO ADITIVAS E INERTES: crearlas no enciende nada
  * (protecciones 1 y 10), no alteran ninguna tabla existente y no referencian
  * NINGUNA tabla de fuera de este paquete: ni del motor (`marketing_calls` no se
@@ -736,6 +744,9 @@ return new class extends Migration
             $table->index(['budget_day', 'direction'], 'vc_day_idx');
             // Los tramos de una llamada (E1-2).
             $table->index(['transfer_of_call_id'], 'vc_transfer_idx');
+            // Las llamadas selladas con una entrada de la cadena y su parte: la
+            // evidencia del canario y las métricas (B8-c, P8-1). No parcial.
+            $table->index(['voice_publication_seq', 'part'], 'vc_publication_idx');
         });
 
         Schema::create(self::EVENTS, function (Blueprint $table): void {

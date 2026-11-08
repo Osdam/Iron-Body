@@ -43,15 +43,15 @@ final class VoiceContacts
 
     // ── Lecturas para la política ────────────────────────────────────────────
 
+    /** Las columnas de un consentimiento que mira la regla. */
+    private const CONSENT_COLUMNS = ['id', 'kind', 'source', 'recorded_at', 'recorded_by_admin_id', 'confirmed_by_admin_id'];
+
     /** ¿Tiene el contacto consentimiento de voz vigente? (E3-4; la grabación, apagada por P-7). */
     public static function hasConsent(int $contactId): bool
     {
         $eventos = VoiceConsent::query()->where('contact_id', $contactId)->orderBy('id')
-            ->get(['id', 'kind', 'source', 'recorded_at', 'recorded_by_admin_id', 'confirmed_by_admin_id'])
-            ->map(static fn (VoiceConsent $c): array => [
-                'id' => (int) $c->id, 'kind' => (string) $c->kind, 'source' => (string) $c->source, 'at' => $c->recorded_at,
-                'actorId' => $c->recorded_by_admin_id, 'approvedBy' => $c->confirmed_by_admin_id,
-            ])->all();
+            ->get(self::CONSENT_COLUMNS)
+            ->map(self::consentEvent(...))->all();
 
         return VoiceConsentRule::hasConsent($eventos, false);
     }
@@ -353,14 +353,35 @@ final class VoiceContacts
 
     // ── Lecturas para el CRM ─────────────────────────────────────────────────
 
-    /** @return array{data: list<array<string, mixed>>, meta: array<string, int>} */
+    /**
+     * La página de contactos. Los consentimientos y las exclusiones de TODA la
+     * página van en dos sentencias (PERF8, P8-2: antes, dos por fila) y la
+     * regla se evalúa en memoria con los mismos eventos que
+     * {@see hasConsent()}: cada fila es la de {@see row()}.
+     *
+     * @return array{data: list<array<string, mixed>>, meta: array<string, int>}
+     */
     public function list(int $page, int $perPage): array
     {
         $porPagina = max(1, min(100, $perPage));
         $p = VoiceContact::query()->orderByDesc('id')->paginate($porPagina, ['*'], 'page', max(1, $page));
+        /** @var list<VoiceContact> $contactos */
+        $contactos = $p->items();
+
+        $eventos = [];
+        if ($contactos !== []) {
+            $ids = array_map(static fn (VoiceContact $c): int => (int) $c->id, $contactos);
+            foreach (VoiceConsent::query()->whereIn('contact_id', $ids)->orderBy('id')->get(['contact_id', ...self::CONSENT_COLUMNS]) as $consentimiento) {
+                $eventos[(int) $consentimiento->contact_id][] = self::consentEvent($consentimiento);
+            }
+        }
+        $excluidas = VoiceCallFacts::excludedAmong(array_map(static fn (VoiceContact $c): string => (string) $c->phone_hash, $contactos));
 
         return [
-            'data' => array_map(self::row(...), $p->items()),
+            'data' => array_map(static fn (VoiceContact $c): array => self::present($c,
+                VoiceConsentRule::hasConsent($eventos[(int) $c->id] ?? [], false),
+                isset($excluidas[(string) $c->phone_hash]),
+            ), $contactos),
             'meta' => ['page' => $p->currentPage(), 'perPage' => $p->perPage(), 'total' => $p->total(), 'lastPage' => $p->lastPage()],
         ];
     }
@@ -368,22 +389,37 @@ final class VoiceContacts
     /** @return array<string, mixed> un contacto sin su número: los 4 dígitos, el origen, el consentimiento y lo pendiente */
     public static function row(VoiceContact $c): array
     {
+        return self::present($c, self::hasConsent((int) $c->id), VoiceCallFacts::excluded((string) $c->phone_hash));
+    }
+
+    /** @return array<string, mixed> la fila de {@see row()} con el consentimiento y la exclusión ya leídos */
+    private static function present(VoiceContact $c, bool $voiceConsent, bool $excluded): array
+    {
         return [
             'uuid' => $c->uuid,
             'last4' => $c->phone_last4,
             'status' => $c->status,
             'sourceType' => $c->source_type,
             'sourceId' => $c->source_id,
-            'voiceConsent' => self::hasConsent((int) $c->id),
+            'voiceConsent' => $voiceConsent,
             'pendingConsent' => $c->consent_request_source === null ? null : [
                 'source' => $c->consent_request_source,
                 'requestedBy' => $c->consent_requested_by_name,
                 'requestedById' => $c->consent_requested_by_admin_id,
                 'requestedAt' => $c->consent_requested_at?->toIso8601String(),
             ],
-            'excluded' => VoiceCallFacts::excluded((string) $c->phone_hash),
+            'excluded' => $excluded,
             'registeredBy' => $c->registered_by_name,
             'createdAt' => $c->created_at?->toIso8601String(),
+        ];
+    }
+
+    /** @return array{id: int, kind: string, source: string, at: mixed, actorId: mixed, approvedBy: mixed} un consentimiento como lo lee la regla */
+    private static function consentEvent(VoiceConsent $c): array
+    {
+        return [
+            'id' => (int) $c->id, 'kind' => (string) $c->kind, 'source' => (string) $c->source, 'at' => $c->recorded_at,
+            'actorId' => $c->recorded_by_admin_id, 'approvedBy' => $c->confirmed_by_admin_id,
         ];
     }
 

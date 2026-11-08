@@ -6,7 +6,10 @@ use App\Services\Telephony\VoiceRateLimits;
 use App\Services\Twilio\TwilioRequestSignature;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Testing\TestResponse;
+use Monolog\Handler\TestHandler;
+use Monolog\LogRecord;
 use Tests\Feature\Telephony\Support\VoiceFixtures;
 use Tests\TestCase;
 
@@ -17,6 +20,11 @@ use Tests\TestCase;
  * autenticar, un cubo por ruta y por llamada; y los fallos, en su propio cubo
  * `ruta|IP|fallo`, que nunca frena una credencial buena. Todo desde la MISMA IP
  * de la prueba, como llegaría ElevenLabs. Sin red.
+ *
+ * Enmienda 7 (E7-2, B8-c): además, un techo GLOBAL por ruta para lo
+ * autenticado (entre todas las llamadas), que una credencial mala no gasta; y,
+ * con el cubo de fallos agotado, una línea por minuto y ruta con los fallos
+ * silenciados, sin la IP.
  */
 class VoicePublicRateLimitsTest extends TestCase
 {
@@ -169,6 +177,10 @@ class VoicePublicRateLimitsTest extends TestCase
 
     public function test_ya_no_hay_un_contador_por_ip_comun_a_las_rutas(): void
     {
+        // E7-2: el techo GLOBAL de la ruta (120 por defecto) es otra cosa —lo autenticado de la ruta
+        // entre todas las llamadas y todas las IP— y tiene su prueba abajo; aquí se sube para mirar
+        // solo que ya no hay un cubo por IP.
+        config(['voice.public_limits.global_per_minute.initiation' => 200]);
         // Antes: `throttle:120,1` en la iniciación, en un cubo sha1(dominio|IP) común a las cuatro rutas.
         for ($n = 100; $n < 100 + 125; $n++) {
             $this->initiation($this->sid($n))->assertOk();
@@ -176,5 +188,117 @@ class VoicePublicRateLimitsTest extends TestCase
         $this->tool('conv_rl_0011')->assertOk();
         $this->postCall('conv_rl_0011')->assertOk();
         Http::assertNothingSent();
+    }
+
+    // ── E7-2: el techo global de lo autenticado y los fallos silenciados ────
+
+    /** Una petición de la ruta con una llamada (o un aviso) DISTINTA en cada `$n`, buena o mala. */
+    private function distinct(string $route, int $n, bool $good = true): TestResponse
+    {
+        return match ($route) {
+            VoiceRateLimits::ROUTE_INITIATION => $this->initiation($this->sid(1000 + $n), $good),
+            VoiceRateLimits::ROUTE_POST_CALL => $this->postCall('conv_global_'.$n, $good),
+            VoiceRateLimits::ROUTE_TOOLS => $this->tool('conv_global_'.$n, $good),
+            VoiceRateLimits::ROUTE_USAGE_TRIGGER => $this->usage('AC8f-FIRES-UT0001-G'.$n, $good),
+        };
+    }
+
+    public function test_el_techo_global_frena_lo_autenticado_de_su_ruta_entre_todas_las_llamadas_y_una_credencial_mala_no_lo_gasta(): void
+    {
+        $this->assertSame([VoiceRateLimits::ROUTE_INITIATION => 120, VoiceRateLimits::ROUTE_POST_CALL => 240, VoiceRateLimits::ROUTE_TOOLS => 600, VoiceRateLimits::ROUTE_USAGE_TRIGGER => 60],
+            array_map(VoiceRateLimits::globalPerMinute(...), array_combine(array_keys(VoiceRateLimits::PER_CALL), array_keys(VoiceRateLimits::PER_CALL))),
+            'los defectos de config/voice.php');
+        // Techos pequeños (el mínimo de cada ruta es su cupo por llamada) para recorrerlos aquí.
+        $techos = [VoiceRateLimits::ROUTE_INITIATION => 12, VoiceRateLimits::ROUTE_POST_CALL => 12, VoiceRateLimits::ROUTE_TOOLS => 61, VoiceRateLimits::ROUTE_USAGE_TRIGGER => 12];
+        config(['voice.public_limits.global_per_minute' => ['initiation' => 12, 'post_call' => 12, 'tools' => 61, 'usage_trigger' => 12]]);
+
+        foreach ($techos as $ruta => $techo) {
+            $this->assertSame($techo, VoiceRateLimits::globalPerMinute($ruta));
+            // Sin la credencial, más de lo que da su cubo de fallos (401 y luego 429): no gasta el techo.
+            for ($i = 0; $i < VoiceRateLimits::FAILURES_PER_MINUTE + 5; $i++) {
+                $this->assertContains($this->distinct($ruta, $i, false)->status(), [401, 429]);
+            }
+            // Con la credencial, cada petición de una llamada DISTINTA: el techo entero, ni una menos.
+            for ($i = 0; $i < $techo; $i++) {
+                $this->assertNotSame(429, $this->distinct($ruta, $i)->status(), "{$ruta}: la buena número ".($i + 1).' de '.$techo);
+            }
+            $this->distinct($ruta, $techo)->assertStatus(429)->assertHeader('Retry-After')->assertJson(['code' => 'too_many_requests']);
+        }
+        // Con las cuatro agotadas, la credencial mala sigue en su cubo y su 401 o su 429, no en el techo.
+        $this->withServerVariables(['REMOTE_ADDR' => self::OTHER_IP]);
+        $this->distinct(VoiceRateLimits::ROUTE_TOOLS, 9000, false)->assertStatus(401);
+
+        // Pasado el minuto, el techo vuelve entero.
+        $this->travel(61)->seconds();
+        $this->distinct(VoiceRateLimits::ROUTE_INITIATION, 500)->assertOk();
+    }
+
+    public function test_frenada_por_su_llamada_una_peticion_no_gasta_el_techo_global(): void
+    {
+        config(['voice.public_limits.global_per_minute.initiation' => 15]);
+        $sid = $this->sid(7000);
+        for ($i = 1; $i <= VoiceRateLimits::PER_CALL[VoiceRateLimits::ROUTE_INITIATION]; $i++) {
+            $this->initiation($sid)->assertOk();
+        }
+        // Diez más de la misma llamada: 429 por su cupo, sin tocar el de la ruta.
+        for ($i = 0; $i < 10; $i++) {
+            $this->initiation($sid)->assertStatus(429);
+        }
+        // Quedan exactamente 15 − 10 = 5 para el resto de llamadas.
+        for ($n = 1; $n <= 5; $n++) {
+            $this->initiation($this->sid(7000 + $n))->assertOk();
+        }
+        $this->initiation($this->sid(7100))->assertStatus(429);
+    }
+
+    public function test_con_el_cubo_de_fallos_agotado_sale_una_linea_por_minuto_y_ruta_con_los_silenciados_y_sin_la_ip(): void
+    {
+        $registro = $this->voiceLogHandler();
+        $silenciados = fn (): array => array_values(array_map(static fn (LogRecord $r): array => $r->context,
+            array_filter($registro->getRecords(), static fn (LogRecord $r): bool => $r->message === 'voice.public.failures_silenced')));
+
+        for ($i = 0; $i < VoiceRateLimits::FAILURES_PER_MINUTE; $i++) {
+            $this->initiation($this->sid(1), false)->assertStatus(401);
+        }
+        $this->assertSame([], $silenciados(), 'mientras cabe en el cubo, cada fallo lleva su aviso y no hay línea de silenciados');
+        for ($i = 0; $i < 5; $i++) {
+            $this->initiation($this->sid(1), false)->assertStatus(429);
+        }
+        $this->assertSame([['route' => 'initiation', 'silenced' => 1]], $silenciados(), 'UNA línea, al silenciar el primero');
+
+        // Otra ruta: su propia línea.
+        for ($i = 0; $i <= VoiceRateLimits::FAILURES_PER_MINUTE; $i++) {
+            $this->tool('conv_rl_silencio', false);
+        }
+        $this->assertSame([['route' => 'initiation', 'silenced' => 1], ['route' => 'tools', 'silenced' => 1]], $silenciados());
+
+        // El minuto siguiente: el cubo vuelve a llenarse y la siguiente línea cuenta los 4 que se callaron
+        // después de la primera más el que la dispara.
+        $this->travel(61)->seconds();
+        for ($i = 0; $i < VoiceRateLimits::FAILURES_PER_MINUTE; $i++) {
+            $this->initiation($this->sid(1), false)->assertStatus(401);
+        }
+        $this->initiation($this->sid(1), false)->assertStatus(429);
+        $this->initiation($this->sid(1), false)->assertStatus(429);
+        $this->assertSame([['route' => 'initiation', 'silenced' => 1], ['route' => 'tools', 'silenced' => 1], ['route' => 'initiation', 'silenced' => 5]], $silenciados());
+
+        // Sin la IP ni nada de la petición, en ninguna línea de la voz.
+        foreach ($registro->getRecords() as $r) {
+            $this->assertStringNotContainsString('127.0.0.1', $r->message.json_encode($r->context));
+        }
+        // Una credencial buena no deja línea de silenciados.
+        $this->initiation($this->sid(2))->assertOk();
+        $this->assertCount(3, $silenciados());
+    }
+
+    /** El canal `voice` en memoria (sin disco): el manejador de Monolog que recoge las líneas. */
+    private function voiceLogHandler(): TestHandler
+    {
+        config(['logging.channels.voice' => ['driver' => 'monolog', 'handler' => TestHandler::class, 'level' => 'debug']]);
+        Log::forgetChannel('voice');
+        $manejador = Log::channel('voice')->getLogger()->getHandlers()[0];
+        $this->assertInstanceOf(TestHandler::class, $manejador);
+
+        return $manejador;
     }
 }

@@ -60,4 +60,21 @@ final class VoiceCallFacts
     {
         return DB::table('voice_exclusions')->where('phone_hash', $phoneHash)->exists();
     }
+
+    /**
+     * {@see excluded()} de una página entera en UNA sentencia (la lista de
+     * contactos del CRM; PERF8, P8-2).
+     *
+     * @param  list<string>  $phoneHashes
+     * @return array<string, true> las huellas que tienen alguna exclusión
+     */
+    public static function excludedAmong(array $phoneHashes): array
+    {
+        if ($phoneHashes === []) {
+            return [];
+        }
+
+        return array_fill_keys(DB::table('voice_exclusions')->whereIn('phone_hash', array_values(array_unique($phoneHashes)))
+            ->distinct()->pluck('phone_hash')->map(static fn ($h): string => (string) $h)->all(), true);
+    }
 }

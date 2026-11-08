@@ -96,8 +96,8 @@ class VoiceBoundaryTest extends TestCase
 
     private const CONTROLADORES_CRM = 'App\\Http\\Controllers\\Crm\\Voice\\';
 
-    /** Los comandos de voz del contrato: el doctor (H6) y los de D8-20 y D8-21. */
-    private const COMANDOS = ['voice:doctor', 'voice:hangup', 'voice:reconcile'];
+    /** Los comandos de voz del contrato: el doctor (H6), los de D8-20 y D8-21 y la purga de los límites (E8-6). */
+    private const COMANDOS = ['voice:doctor', 'voice:hangup', 'voice:reconcile', 'voice:prune-rate-limits'];
 
     /** Cabeceras basura y vacías para las entradas públicas (la del secreto de iniciación la fija B8; se prueban las formas habituales). */
     private const CABECERAS_DE_CREDENCIAL = ['HTTP_AUTHORIZATION', 'HTTP_ELEVENLABS_SIGNATURE', 'HTTP_X_TWILIO_SIGNATURE', 'HTTP_X_ELEVENLABS_SECRET',

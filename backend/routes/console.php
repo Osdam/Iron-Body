@@ -447,6 +447,14 @@ if ((bool) config('voice.monitor.enabled', false)) {
         ->withoutOverlapping(10)
         ->onOneServer();
 
+    // La purga de los límites de las rutas públicas (PERF8 P8-3, E8-6): borra de la
+    // caché database SOLO las claves voice-rl:* CADUCADAS. Local, sin red. Una vez al día.
+    Schedule::command('voice:prune-rate-limits')
+        ->dailyAt('04:40')
+        ->timezone('America/Bogota')
+        ->withoutOverlapping(10)
+        ->onOneServer();
+
     // La verificación semanal de ElevenLabs (D8-12 y D8-21): un GET de solo
     // lectura al agente de verificación que guarda su evidencia; con ella de
     // menos de 30 días, el Studio sigue afirmando ELEVENLABS_VERIFIED. Sin la

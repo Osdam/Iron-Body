@@ -104,6 +104,16 @@ class UltronEngineIsolationTest extends TestCase
      * mensaje firmado no lleva. Una vez cada una, como cadena (en cualquier
      * orden), y SOLO en este fichero.
      */
+    /**
+     * Hito 8 (Enmienda 8, E8-1): el arranque de la aplicación registra el oyente
+     * del evento `voice.lab.post_call` de la telefonía hacia el laboratorio
+     * hablado del Studio. Es la única clase del Studio que puede nombrar, una
+     * vez (el `use`), y SOLO en este fichero.
+     */
+    private const LAB_LISTENER = 'app/Providers/AppServiceProvider.php';
+
+    private const LAB_LISTENER_REFERENCES = ['T_NAME_QUALIFIED App\\Services\\UltronStudio\\StudioVoiceLabSessions'];
+
     private const VOICE_READER = 'app/Services/Telephony/VoicePublishedConfig.php';
 
     private const VOICE_READER_REFERENCES = [
@@ -202,6 +212,10 @@ class UltronEngineIsolationTest extends TestCase
             if ($relativa === self::SCHEDULER && $this->sinLinea($hallazgos) === self::SCHEDULER_REFERENCES) {
                 $programadorVisto = true;
 
+                continue;
+            }
+            // Hito 8 (E8-1): el oyente del laboratorio hablado en el arranque, exactamente esa referencia, una vez.
+            if ($relativa === self::LAB_LISTENER && $this->sinLinea($hallazgos) === self::LAB_LISTENER_REFERENCES) {
                 continue;
             }
             // Hito 8: el lector de la cadena de voz y los adaptadores de los canarios de la telefonía.

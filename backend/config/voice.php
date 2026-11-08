@@ -186,6 +186,23 @@ return [
         'max_sessions_per_day' => min(50, max(0, $entero('VOICE_LAB_MAX_SESSIONS_PER_DAY', 5))),
     ],
 
+    // H8, Enmienda 7 (E7-2; SEC8-b-lite, nota residual 1): el TECHO GLOBAL por
+    // ruta de lo AUTENTICADO en las cuatro rutas públicas, peticiones por
+    // minuto entre TODAS las llamadas (además del cupo por llamada). Solo lo
+    // gasta quien trae la credencial: una credencial mala cuenta en su cubo de
+    // fallos y nunca llega aquí. Holgados a propósito (los del `throttle` por
+    // IP que quitó E5-4); entero recortado entre el cupo por llamada de la ruta
+    // (un techo menor frenaría a una sola llamada antes que su propio cupo) y
+    // diez veces el defecto. No enciende nada.
+    'public_limits' => [
+        'global_per_minute' => [
+            'initiation' => min(1200, max(10, $entero('VOICE_PUBLIC_INITIATION_PER_MINUTE', 120))),
+            'post_call' => min(2400, max(10, $entero('VOICE_PUBLIC_POST_CALL_PER_MINUTE', 240))),
+            'tools' => min(6000, max(60, $entero('VOICE_PUBLIC_TOOLS_PER_MINUTE', 600))),
+            'usage_trigger' => min(600, max(10, $entero('VOICE_PUBLIC_USAGE_TRIGGER_PER_MINUTE', 60))),
+        ],
+    ],
+
     // H8, D8-21 y E2-6: las tareas `voice:*` del monitor (OPS8 las programa en
     // su propio bloque bajo esta bandera). Apagada, nada se programa.
     'monitor' => [

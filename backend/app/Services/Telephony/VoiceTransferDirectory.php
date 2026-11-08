@@ -32,11 +32,17 @@ final class VoiceTransferDirectory
         return self::partFor($call)?->transferAliases() ?? [];
     }
 
-    /** @return array<string, int|null> parte → cuántos destinos aprobados tiene su entrada vigente (null = ninguno se puede leer) */
-    public static function countsByPart(): array
+    /**
+     * Parte → cuántos destinos aprobados tiene su entrada vigente (null =
+     * ninguno se puede leer). Quien ya leyó la cadena la pasa (P8-1).
+     *
+     * @param  array<string, VoicePublishedPart>|null  $parts  la salida de {@see VoicePublishedConfig::read()}
+     * @return array<string, int|null>
+     */
+    public static function countsByPart(?array $parts = null): array
     {
         $out = [];
-        foreach (VoicePublishedConfig::read() as $nombre => $parte) {
+        foreach ($parts ?? VoicePublishedConfig::read() as $nombre => $parte) {
             $out[$nombre] = $parte->ok() && $parte->transferDestinationHashes() !== null ? count($parte->transferDestinationHashes()) : null;
         }
 

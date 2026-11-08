@@ -19,9 +19,15 @@ use Tests\TestCase;
  * informe-lab §2.6): la telefonía no nombra el Studio, así que lo entrega por
  * el evento con nombre `voice.lab.post_call` (el veredicto neutro y los
  * códigos de la guarda). Solo si el laboratorio la reconoce como suya deja de
- * ser `unknown_provider_call`; sin oyente (hoy: dónde se registra lo deciden
- * el lead y SEC8), con `not_a_lab_session`, con llamada de Twilio o con el
- * agente publicado, el freno se abre como siempre (falla cerrado). Sin red.
+ * ser `unknown_provider_call`; sin oyente, con `not_a_lab_session`, con
+ * llamada de Twilio o con el agente publicado, el freno se abre como siempre
+ * (falla cerrado). Sin red.
+ *
+ * El oyente REAL lo registra la aplicación al arrancar (`AppServiceProvider`,
+ * B8-c; TEST8-b F-1): estas pruebas no lo vuelven a conectar. Las que
+ * necesitan otro oyente (uno que responda lo que la prueba quiere, o
+ * ninguno) quitan antes el de arranque con `Event::forget`; el camino de
+ * punta a punta con una sesión de verdad está en `VoiceLabPostCallWiringTest`.
  */
 class VoiceLabPostCallTest extends TestCase
 {
@@ -52,6 +58,7 @@ class VoiceLabPostCallTest extends TestCase
 
     public function test_sin_oyente_una_conversacion_web_desconocida_sigue_abriendo_el_freno(): void
     {
+        Event::forget(VoicePostCall::LAB_EVENT);
         $this->postCall(self::AGENTE_DE_LABORATORIO, 'conv_lab_0001')->assertOk()->assertJson(['unknown' => true]);
         $this->assertSame(['unknown_provider_call'], VoiceCallEvent::query()->pluck('kind')->all());
         $this->assertTrue(VoiceBrake::isOpen());
@@ -60,6 +67,7 @@ class VoiceLabPostCallTest extends TestCase
     public function test_si_el_laboratorio_la_reconoce_no_es_desconocida_y_recibe_veredicto_y_guarda(): void
     {
         $recibido = [];
+        Event::forget(VoicePostCall::LAB_EVENT);
         Event::listen(VoicePostCall::LAB_EVENT, function (VoiceWebhookVerdict $v, ?array $guarda) use (&$recibido): string {
             $recibido = [$v->conversationId, $v->agentId, $v->durationSeconds, $guarda];
 
@@ -77,6 +85,7 @@ class VoiceLabPostCallTest extends TestCase
     public function test_no_es_del_laboratorio_si_lo_dice_el_si_hay_llamada_de_twilio_o_si_es_el_agente_publicado(): void
     {
         $llamadas = 0;
+        Event::forget(VoicePostCall::LAB_EVENT);
         Event::listen(VoicePostCall::LAB_EVENT, function () use (&$llamadas): string {
             $llamadas++;
 
@@ -103,8 +112,9 @@ class VoiceLabPostCallTest extends TestCase
 
     public function test_el_oyente_real_del_laboratorio_casa_con_la_carga_y_dice_que_un_agente_ajeno_no_es_suyo(): void
     {
-        // La firma de StudioVoiceLabSessions::recordProviderReport(VoiceWebhookVerdict, ?array) con la carga del evento.
-        Event::listen(VoicePostCall::LAB_EVENT, [StudioVoiceLabSessions::class, 'recordProviderReport']);
+        // El de arranque, sin conectarlo a mano: la firma de
+        // StudioVoiceLabSessions::recordProviderReport(VoiceWebhookVerdict, ?array) casa con la carga del evento.
+        $this->assertSame([[StudioVoiceLabSessions::class, 'recordProviderReport']], Event::getRawListeners()[VoicePostCall::LAB_EVENT] ?? []);
         $this->postCall('agent_desconocido_0002', 'conv_lab_0006')->assertOk()->assertJson(['unknown' => true]);
         $this->assertTrue(VoiceBrake::isOpen(), 'not_a_lab_session: el freno se abre como siempre');
     }

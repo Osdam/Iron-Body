@@ -12,6 +12,7 @@ use App\Services\Voice\TelephonyCarrier;
 use App\Services\Voice\VoiceAgentDeployer;
 use App\Services\Voice\VoiceNumberObserver;
 use DateTimeInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -105,11 +106,12 @@ final class VoiceReconciler
     /** @return 'known'|'legs'|'unknown' */
     public function one(CarrierCall $c): string
     {
-        $fila = VoiceCall::query()->where('provider_call_sid', $c->sid)->lockForUpdate()->first() ?? $this->ambiguousFor($c->sid);
+        $vistos = [];
+        $fila = self::lockedWithMarks(VoiceCall::query()->where('provider_call_sid', $c->sid), $c, 'cost:', $vistos) ?? $this->ambiguousFor($c->sid);
         if ($fila === null && $c->parentSid !== null) {
-            $madre = VoiceCall::query()->where('provider_call_sid', $c->parentSid)->whereNull('transfer_of_call_id')->lockForUpdate()->first();
+            $madre = self::lockedWithMarks(VoiceCall::query()->where('provider_call_sid', $c->parentSid)->whereNull('transfer_of_call_id'), $c, 'leg:', $vistos);
             if ($madre !== null) {
-                $this->cost($madre, $c, 'leg:');
+                $this->cost($madre, $c, 'leg:', $vistos);
 
                 return 'legs';
             }
@@ -143,14 +145,44 @@ final class VoiceReconciler
                 $despues = $destino;
             }
         }
-        if (in_array($c->status, self::CARRIER_FINAL, true)) {
+        if (in_array($c->status, self::CARRIER_FINAL, true) && ! ($vistos['reconciled'] ?? false)) {
             VoiceEvents::record('reconciled', (int) $fila->id, VoiceCallEvent::PROVIDER_TWILIO, $c->sid.':'.$c->status, [
                 'outcome' => $despues, 'codes' => ['carrierStatus' => $c->status, 'before' => $antes, 'after' => $despues],
             ]);
         }
-        $this->cost($fila, $c, 'cost:');
+        $this->cost($fila, $c, 'cost:', $vistos);
 
         return 'known';
+    }
+
+    /**
+     * La fila BLOQUEADA y, en la MISMA sentencia, dos marcas (PERF8 P8-7): si ya
+     * están los eventos que la conciliación escribe una sola vez para esta
+     * llamada de Twilio (`reconciled` del estado que enseña y el
+     * `cost_recorded` de su precio, `cost:` o `leg:`). En régimen ya están:
+     * sin las marcas, cada pasada intentaba dos INSERT por llamada que el
+     * UNIQUE rechazaba (su punto de guardado, su excepción y su vuelta atrás;
+     * perfilado, el 80 % del tiempo de la pasada). Los eventos son de solo
+     * inserción: una marca a «sí» no envejece; una a «no» que se quede vieja
+     * (otra conciliación a la vez) vuelve al camino de siempre, donde el
+     * repetido devuelve null. Las marcas no son columnas: salen de la fila.
+     *
+     * @param  array{reconciled?: bool, cost?: bool}  $seen  las marcas (salida)
+     */
+    private static function lockedWithMarks(Builder $query, CarrierCall $c, string $costPrefix, array &$seen): ?VoiceCall
+    {
+        $existe = 'EXISTS (SELECT 1 FROM voice_call_events e WHERE e.provider = ? AND e.kind = ? AND e.provider_event_key = ?)';
+        $fila = $query->select('voice_calls.*')
+            ->selectRaw("{$existe} AS seen_reconciled", [VoiceCallEvent::PROVIDER_TWILIO, 'reconciled', $c->sid.':'.$c->status])
+            ->selectRaw("{$existe} AS seen_cost", [VoiceCallEvent::PROVIDER_TWILIO, 'cost_recorded', $costPrefix.$c->sid])
+            ->lockForUpdate()->first();
+        if (! $fila instanceof VoiceCall) {
+            return null;
+        }
+        $seen = ['reconciled' => (bool) $fila->getAttribute('seen_reconciled'), 'cost' => (bool) $fila->getAttribute('seen_cost')];
+        $fila->setRawAttributes(array_diff_key($fila->getAttributes(), ['seen_reconciled' => true, 'seen_cost' => true]), true);
+
+        return $fila;
     }
 
     /** La ambigua cuyo evento guardó este SID (la fila ambigua no admite ids, DB8). */
@@ -162,11 +194,21 @@ final class VoiceReconciler
         return $evento === null ? null : VoiceCall::query()->whereKey($evento->call_id)->where('status', VoiceCall::STATUS_AMBIGUOUS)->lockForUpdate()->first();
     }
 
-    /** El precio de Twilio (valor absoluto, DF-W6) en un `cost_recorded`, y el coste del operador = la suma de los suyos. */
-    private function cost(VoiceCall $fila, CarrierCall $c, string $prefijo): void
+    /**
+     * El precio de Twilio (valor absoluto, DF-W6) en un `cost_recorded`, y el
+     * coste del operador = la suma de los suyos. Si la marca de
+     * {@see lockedWithMarks()} dice que ya está, nada (lo mismo que cuando el
+     * repetido devolvía null).
+     *
+     * @param  array{reconciled?: bool, cost?: bool}  $seen
+     */
+    private function cost(VoiceCall $fila, CarrierCall $c, string $prefijo, array $seen = []): void
     {
         if ($c->price === null) {
             return;   // sin tarificar todavía: la siguiente pasada lo recoge
+        }
+        if ($seen['cost'] ?? false) {
+            return;
         }
         $micros = VoiceCostGuard::budgetMicros(ltrim($c->price, '-'));
         $nuevo = VoiceEvents::record('cost_recorded', (int) $fila->id, VoiceCallEvent::PROVIDER_TWILIO, $prefijo.$c->sid, [

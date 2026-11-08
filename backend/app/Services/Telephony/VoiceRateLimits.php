@@ -5,6 +5,7 @@ namespace App\Services\Telephony;
 use App\Services\Voice\Dto\VoiceIds;
 use App\Services\Voice\Dto\VoiceWebhookVerdict;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 
 /**
@@ -22,10 +23,23 @@ use Illuminate\Support\Facades\RateLimiter;
  *    su `IdempotencyToken`;
  *  - un FALLO de autenticación cuenta en su propio cubo `ruta|IP|fallo`
  *    ({@see failure()}): pasado el cupo se responde 429 en vez de 401, sin
- *    registrar nada. Ese cubo NUNCA frena una credencial buena.
+ *    registrar cada uno. Ese cubo NUNCA frena una credencial buena.
+ *
+ * Enmienda 7 (E7-2; SEC8-b-lite, notas residuales 1 y 3):
+ *  - lo autenticado cuenta ADEMÁS en el techo GLOBAL de su ruta
+ *    (`ruta|global`, holgado, `voice.public_limits.global_per_minute`): con
+ *    una credencial válida ya no se puede estrenar un cubo por petición sin
+ *    tope. Quien no tiene la credencial no lo gasta (nunca llega aquí);
+ *  - con el cubo de fallos agotado, una línea en el canal `voice` como mucho
+ *    una vez por minuto y ruta, con cuántos fallos se silenciaron desde la
+ *    anterior (sin la IP ni nada de la petición): otro cliente de ElevenLabs
+ *    que salga por las mismas IP ya no apaga en silencio nuestros avisos
+ *    `voice.*.unauthorized`.
  *
  * Las claves de llamada se guardan como huella (nunca el valor recibido).
- * Usa el limitador de Laravel (la caché de la aplicación), como `throttle`.
+ * Usa el limitador de Laravel (la caché de la aplicación), como `throttle`;
+ * todas empiezan por {@see PREFIX} (`voice:prune-rate-limits` purga las
+ * caducadas de la caché `database`, PERF8 P8-3).
  */
 final class VoiceRateLimits
 {
@@ -53,7 +67,32 @@ final class VoiceRateLimits
     /** El cubo de una petición autenticada sin llamada que la identifique (un cuerpo mal formado). */
     public const NO_CALL = 'sin-llamada';
 
-    private const PREFIX = 'voice-rl:';
+    /** E7-2: el cubo del techo global de lo autenticado de una ruta (`voice-rl:<ruta>|global`). */
+    public const GLOBAL = 'global';
+
+    /**
+     * E7-2: el techo global por defecto (peticiones autenticadas por minuto y
+     * ruta), si la configuración falta o no es un entero válido. Los mismos
+     * que `config/voice.php`.
+     */
+    public const GLOBAL_PER_MINUTE = [
+        self::ROUTE_INITIATION => 120,
+        self::ROUTE_POST_CALL => 240,
+        self::ROUTE_TOOLS => 600,
+        self::ROUTE_USAGE_TRIGGER => 60,
+    ];
+
+    /** E7-2: como mucho una línea de fallos silenciados por ruta en esta ventana (s). */
+    public const SILENCED_NOTICE_SECONDS = 60;
+
+    /**
+     * E7-2: cuánto vive el contador de fallos silenciados sin otra línea (s):
+     * más que la ventana del aviso, para no perder los de un minuto a otro.
+     */
+    public const SILENCED_COUNTER_SECONDS = 3600;
+
+    /** El comienzo de TODAS las claves de estos límites en la caché (también los `:timer` de Laravel). */
+    public const PREFIX = 'voice-rl:';
 
     /** Lo que identifica la llamada en el cuerpo de una herramienta, en este orden ({@see VoiceTools::BODY_KEYS}). */
     private const TOOL_CALL_KEYS = ['conversation_id', 'call_sid', 'call_ref'];
@@ -64,13 +103,28 @@ final class VoiceRateLimits
      */
     public static function authenticated(string $route, ?string $callKey): ?int
     {
-        $clave = self::PREFIX.self::route($route).'|'.($callKey === null || $callKey === '' ? self::NO_CALL : substr(hash('sha256', $callKey), 0, 40));
-        if (RateLimiter::tooManyAttempts($clave, self::PER_CALL[$route])) {
-            return max(1, RateLimiter::availableIn($clave));
+        // E7-2: el techo de la ruta entre todas las llamadas, y el de su llamada. Una petición
+        // frenada por cualquiera de los dos no cuenta en ninguno.
+        $global = self::PREFIX.self::route($route).'|'.self::GLOBAL;
+        $clave = self::PREFIX.$route.'|'.($callKey === null || $callKey === '' ? self::NO_CALL : substr(hash('sha256', $callKey), 0, 40));
+        foreach ([$global => self::globalPerMinute($route), $clave => self::PER_CALL[$route]] as $cubo => $cupo) {
+            if (RateLimiter::tooManyAttempts($cubo, $cupo)) {
+                return max(1, RateLimiter::availableIn($cubo));
+            }
         }
+        RateLimiter::hit($global, self::DECAY_SECONDS);
         RateLimiter::hit($clave, self::DECAY_SECONDS);
 
         return null;
+    }
+
+    /** E7-2: el techo global de lo autenticado de una ruta, de la configuración y recortado como allí. */
+    public static function globalPerMinute(string $route): int
+    {
+        $techos = config('voice.public_limits.global_per_minute');
+        $valor = is_array($techos) ? ($techos[str_replace('-', '_', self::route($route))] ?? null) : null;
+
+        return is_int($valor) ? min(self::GLOBAL_PER_MINUTE[$route] * 10, max(self::PER_CALL[$route], $valor)) : self::GLOBAL_PER_MINUTE[$route];
     }
 
     /**
@@ -82,11 +136,32 @@ final class VoiceRateLimits
     {
         $clave = self::PREFIX.self::route($route).'|'.($ip ?? 'sin-ip').'|fallo';
         if (RateLimiter::tooManyAttempts($clave, self::FAILURES_PER_MINUTE)) {
+            self::silenced($route);
+
             return max(1, RateLimiter::availableIn($clave));
         }
         RateLimiter::hit($clave, self::DECAY_SECONDS);
 
         return null;
+    }
+
+    /**
+     * E7-2: un fallo SILENCIADO (cubo de fallos agotado: 429 sin su aviso). Se
+     * cuenta, y como mucho una vez por minuto y ruta sale una línea con
+     * cuántos se silenciaron desde la anterior (esta incluida). Nada de la
+     * petición: ni la IP, ni la credencial, ni el cuerpo.
+     */
+    private static function silenced(string $route): void
+    {
+        $contador = self::PREFIX.$route.'|silenciados';
+        $silenciados = RateLimiter::hit($contador, self::SILENCED_COUNTER_SECONDS);
+        $aviso = self::PREFIX.$route.'|silenciados-aviso';
+        if (RateLimiter::tooManyAttempts($aviso, 1)) {
+            return;
+        }
+        RateLimiter::hit($aviso, self::SILENCED_NOTICE_SECONDS);
+        RateLimiter::clear($contador);
+        Log::channel('voice')->warning('voice.public.failures_silenced', ['route' => $route, 'silenced' => $silenciados]);
     }
 
     /** La respuesta de un cubo agotado. */

@@ -33,7 +33,11 @@ use Illuminate\Support\Facades\Route;
 | AuthorizationMap::OVERRIDES, una a una (los controladores no están en
 | CONTROLLERS: una ruta nueva sin clasificar se deniega), y además una
 | persona. Tope de 16 KB (el cuerpo más grande, un contacto, no llega a 1 KB).
-| Dos cupos: lectura 120/min y escritura 30/min.
+| Dos cupos CON NOMBRE (B8-c; PERF8 P8-5 y el hallazgo de OPS8-b): lectura
+| 120/min y escritura 30/min POR PERSONA, y sin sesión un cubo propio por ruta
+| y red (60 y 30/min), en `AppServiceProvider::limitadoresDeLaTelefonia()`.
+| Nunca `throttle:N,M` sin nombre: sin usuario cuenta por IP en el mismo cubo
+| que el login del panel.
 */
 
 Route::middleware(LimitRequestBodySize::class.':1048576')
@@ -50,7 +54,7 @@ Route::middleware(LimitRequestBodySize::class.':65536')
     ->post('webhooks/voice/twilio/usage-trigger', TwilioVoiceUsageTriggerController::class);
 
 Route::prefix('admin/voice')->middleware(LimitRequestBodySize::class.':16384')->group(function (): void {
-    Route::middleware('throttle:120,1')->group(function (): void {
+    Route::middleware('throttle:voice-admin-read')->group(function (): void {
         Route::get('status', [VoiceCallController::class, 'status']);
         Route::get('calls', [VoiceCallController::class, 'index']);
         Route::get('calls/{uuid}', [VoiceCallController::class, 'show'])->whereUuid('uuid');
@@ -58,7 +62,7 @@ Route::prefix('admin/voice')->middleware(LimitRequestBodySize::class.':16384')->
         Route::get('contacts', [VoiceContactController::class, 'index']);
     });
 
-    Route::middleware('throttle:30,1')->group(function (): void {
+    Route::middleware('throttle:voice-admin-write')->group(function (): void {
         Route::post('calls', [VoiceCallController::class, 'store']);
         Route::post('calls/{uuid}/hangup', [VoiceCallController::class, 'hangup'])->whereUuid('uuid');
         Route::post('contacts', [VoiceContactController::class, 'store']);

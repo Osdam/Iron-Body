@@ -37,6 +37,8 @@ use App\Services\Marketing\SalesAgentPromptBuilder;
 use App\Services\Marketing\SalesAiConfig;
 use App\Services\Meta\WhatsappIntegrationRegistry;
 use App\Services\Observability\QueueHealthService;
+use App\Services\Telephony\VoicePostCall;
+use App\Services\UltronStudio\StudioVoiceLabSessions;
 use App\Services\Wompi\WompiConfigValidator;
 use App\Support\Access\AdminActor;
 use App\Support\Access\TrainerMemberScope;
@@ -44,6 +46,7 @@ use App\Support\Network\ClientNetwork;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Queue\Events\JobProcessed;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\RateLimiter;
@@ -149,6 +152,9 @@ class AppServiceProvider extends ServiceProvider
         $this->limitadorDelServicioDeImpresion();
         $this->limitadorDeValoraciones();
         $this->limitadoresDelStudio();
+        $this->limitadoresDeLaTelefonia();
+
+        $this->oyenteDelLaboratorioHablado();
 
         $this->guardWompiConfig();
         $this->guardFactusConfig();
@@ -661,6 +667,90 @@ class AppServiceProvider extends ServiceProvider
             Limit::perHour(6)->by($persona($request))->response($sonda),
             Limit::perHour(20)->by('ultron-studio-net:'.ClientNetwork::of($request->ip()))->response($sonda),
         ]);
+    }
+
+    /**
+     * Voz (Hito 8, B8-c; PERF8 P8-5 y el hallazgo de OPS8-b en el banco): los
+     * cupos del CRM de la telefonía (`/api/admin/voice/*`), CON NOMBRE.
+     *
+     * Antes eran `throttle:120,1` y `throttle:30,1`: sin `$request->user()` (la
+     * sesión del panel no lo rellena, ver AdminActor) Laravel cuenta en
+     * `sha1(dominio|IP)`, un cubo COMÚN a todas las rutas con `throttle` sin
+     * nombre. Toda la recepción, que sale por una IP, compartía 120 lecturas por
+     * minuto, y unas pocas peticiones anónimas a la telefonía dejaban el login
+     * del panel (`throttle:8,1`) en 429.
+     *
+     * Con sesión, un cubo por PERSONA: el administrador de la sesión del bearer,
+     * que se resuelve aquí porque el limitador corre antes que
+     * ProtectAdminPaths (como el de lanzar del Studio: otra pestaña u otra
+     * sesión no dan más). Sin sesión (sin bearer, uno que no es de ninguna
+     * sesión viva o el token compartido, que la telefonía no admite), un cubo
+     * PROPIO por ruta y red: su 401 o su 403 no gasta el cupo de nadie, ni el
+     * del login, y un bearer inventado por petición no estrena cubos. No hace
+     * falta el techo por red del Studio: allí el cupo va por credencial sin
+     * resolverla; aquí lo que no es una sesión cae en el cubo anónimo.
+     *
+     * Bloque autocontenido, como el del Studio.
+     */
+    private function limitadoresDeLaTelefonia(): void
+    {
+        $demasiadas = fn (string $mensaje) => fn ($request, array $headers) => response()->json([
+            'ok' => false,
+            'code' => 'too_many_requests',
+            'message' => $mensaje,
+            'retry_after' => (int) ($headers['Retry-After'] ?? 60),
+        ], 429, $headers);
+        $persona = function (Request $request): ?int {
+            $admin = AdminActor::from($request);
+            if ($admin !== null) {
+                return (int) $admin->id;
+            }
+            $token = $request->bearerToken();
+            $sesion = $token ? app(AdminSessionService::class)->resolveByToken($token) : null;
+
+            return $sesion === null ? null : (int) $sesion->admin_id;
+        };
+        $cubo = function (Request $request) use ($persona): string {
+            $quien = $persona($request);
+
+            return $quien !== null
+                ? 'voice-admin:admin:'.$quien
+                : 'voice-admin:anon:'.($request->route()?->uri() ?? $request->path()).'|'.ClientNetwork::of($request->ip());
+        };
+
+        $leer = $demasiadas('Demasiadas consultas seguidas a la telefonía. Espera un momento.');
+        RateLimiter::for('voice-admin-read', function (Request $request) use ($cubo, $leer) {
+            $clave = $cubo($request);
+
+            return Limit::perMinute(str_starts_with($clave, 'voice-admin:anon:') ? 60 : 120)->by($clave)->response($leer);
+        });
+
+        $escribir = $demasiadas('Demasiados cambios seguidos en la telefonía. Espera un minuto.');
+        RateLimiter::for('voice-admin-write', fn (Request $request) => Limit::perMinute(30)->by($cubo($request))->response($escribir));
+    }
+
+    /**
+     * Voz (Hito 8, contrato H8 D8-19 y D8-23; LAB8 §2.6; TEST8-b F-1): el
+     * informe post-llamada de una conversación del LABORATORIO HABLADO.
+     *
+     * La telefonía no nombra el Studio: una post-llamada firmada, web (sin
+     * llamada de Twilio) y de un agente que no es el de ninguna parte publicada
+     * la entrega con el evento con nombre `voice.lab.post_call`
+     * ({@see VoicePostCall::LAB_EVENT}). El Studio ESCUCHA a la telefonía,
+     * nunca al revés, y el sitio que los une es este, el del arranque: así vale
+     * en la web, en las colas y en la consola, también con las rutas y la
+     * configuración en caché.
+     *
+     * Sin este oyente, cada conversación del laboratorio quedaba como
+     * `unknown_provider_call` y ECHABA EL FRENO (publicar daba `voice_braked`),
+     * y la sesión seguía abierta. Falla cerrado igual que antes: si el
+     * laboratorio no la reconoce (`not_a_lab_session`) o el oyente lanza, el
+     * camino de siempre (evento y freno, o un 5xx para que ElevenLabs
+     * reintente).
+     */
+    private function oyenteDelLaboratorioHablado(): void
+    {
+        Event::listen(VoicePostCall::LAB_EVENT, [StudioVoiceLabSessions::class, 'recordProviderReport']);
     }
 
     /**

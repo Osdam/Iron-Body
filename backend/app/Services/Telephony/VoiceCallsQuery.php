@@ -97,18 +97,27 @@ final class VoiceCallsQuery
         ];
     }
 
-    /** @return array<string, mixed> las métricas de un día de Bogotá: recuentos por estado y sentido, coste y salud */
-    public static function metrics(?string $budgetDay = null): array
+    /**
+     * Las métricas de un día de Bogotá: recuentos por estado y sentido, coste y
+     * salud. Quien ya leyó la cadena (`$parts`, la salida de
+     * {@see VoicePublishedConfig::read()}) y el freno los pasa: `status` los lee
+     * UNA vez para todo (PERF8, P8-1); si no, se leen aquí.
+     *
+     * @param  array<string, VoicePublishedPart>|null  $parts
+     * @return array<string, mixed>
+     */
+    public static function metrics(?string $budgetDay = null, ?array $parts = null, ?bool $brakeOpen = null): array
     {
         $dia = $budgetDay ?? VoiceCostGuard::budgetDay(now());
         $porEstado = VoiceCall::query()->where('budget_day', $dia)->whereNull('transfer_of_call_id')
             ->selectRaw('direction, status, count(*) as n')->groupBy('direction', 'status')->get()
             ->map(static fn ($f): array => ['direction' => $f->direction, 'status' => $f->status, 'count' => (int) $f->n])->all();
         $ultimaEntrega = VoiceCallEvent::query()->whereIn('kind', ['post_call_transcription', 'call_initiation_failure'])->max('created_at');
+        $freno = $brakeOpen ?? VoiceBrake::isOpen();
         // La evidencia de la entrada vigente de cada parte (E4-2: la de promover la mide el Studio con `forPublication`).
         $publicaciones = [];
-        foreach (VoicePublishedConfig::read() as $nombre => $parte) {
-            $publicaciones[$nombre] = $parte->ok() ? VoiceEvidence::summary($nombre, (int) $parte->seq) : ['part' => $nombre, 'status' => $parte->status];
+        foreach ($parts ?? VoicePublishedConfig::read() as $nombre => $parte) {
+            $publicaciones[$nombre] = $parte->ok() ? VoiceEvidence::summary($nombre, (int) $parte->seq, $freno) : ['part' => $nombre, 'status' => $parte->status];
         }
 
         return [
@@ -119,7 +128,7 @@ final class VoiceCallsQuery
             'ambiguous' => VoiceCall::query()->where('status', VoiceCall::STATUS_AMBIGUOUS)->count(),
             'stuckDialing' => VoiceCall::query()->where('status', VoiceCall::STATUS_DIALING)->where('status_changed_at', '<', now()->subMinutes(VoiceReconciler::STUCK_DIALING_MINUTES))->count(),
             'lastWebhookAt' => $ultimaEntrega === null ? null : Carbon::parse($ultimaEntrega)->toIso8601String(),
-            'brakeOpen' => VoiceBrake::isOpen(),
+            'brakeOpen' => $freno,
             'publications' => $publicaciones,
         ];
     }
