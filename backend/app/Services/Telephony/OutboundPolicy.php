@@ -59,6 +59,12 @@ final class OutboundPolicy
 
     public const REASON_DUPLICATE = 'duplicate_request';
 
+    /** Los motivos del destino y del calendario ({@see targetReasons()}): los que el job vuelve a mirar antes de marcar. */
+    public const TARGET_REASONS = [
+        'source_not_allowed', 'not_an_active_voice_canary', 'contact_not_authorized', 'no_voice_consent', 'excluded', 'rne_check_missing',
+        'outside_hours', 'holiday',
+    ];
+
     /**
      * @param  array{outboundEnabled: bool, twilioVoiceEnabled: bool, voiceFromConfigured: bool, voiceNumberCollides: bool, providerState: string,
      *               publication: string, agentDrift: bool, braked: bool,
@@ -109,6 +115,56 @@ final class OutboundPolicy
             $motivos[] = 'voice_braked';
         }
 
+        // 3 y 4. El destino y el calendario (las mismas reglas que repite el job antes de marcar).
+        array_push($motivos, ...self::targetReasons($f));
+
+        // 5. Los cupos.
+        if ($f['frequencyExceeded'] === true) {
+            $motivos[] = 'frequency_exceeded';
+        }
+        if ($f['activeOrDialing'] >= $f['maxConcurrent']) {
+            $motivos[] = 'concurrency_exceeded';
+        }
+        if ($f['dailyCap'] <= 0) {
+            $motivos[] = 'daily_cap_zero';
+        } elseif ($f['placedToday'] >= $f['dailyCap']) {
+            $motivos[] = 'daily_cap_reached';
+        }
+        if ($f['budgetFits'] !== true) {
+            $motivos[] = 'budget_exhausted';
+        }
+
+        // 6. La idempotencia, la última.
+        if ($f['duplicate'] === true) {
+            $motivos[] = self::REASON_DUPLICATE;
+        }
+
+        $motivos = array_values(array_intersect(self::REASONS, $motivos));
+
+        return ['allowed' => $motivos === [], 'reasons' => $motivos, 'http' => self::httpStatus($motivos)];
+    }
+
+    /**
+     * EL DESTINO Y EL CALENDARIO (los bloques 3 y 4 de {@see decide()}), con
+     * su propia entrada para que el job de la saliente los repita justo antes
+     * de marcar con EXACTAMENTE las mismas reglas (revisión de seguridad,
+     * TOCTOU: entre encolar y marcar pueden revocarse el consentimiento,
+     * añadirse una exclusión, caducar la consulta al RNE, cerrarse la ventana
+     * o empezar un festivo). Pura.
+     *
+     * @param  array{scope: string, source: string, canary: ?string, contactAuthorized: bool, voiceConsent: bool, excluded: bool,
+     *               rneCheckMissing: bool, outsideHours: bool, holiday: bool}  $f
+     * @return list<string> los de {@see TARGET_REASONS}, en el orden de {@see REASONS}
+     *
+     * @throws InvalidArgumentException con un alcance desconocido
+     */
+    public static function targetReasons(array $f): array
+    {
+        if (! in_array($f['scope'], self::SCOPES, true)) {
+            throw new InvalidArgumentException('Alcance de salientes desconocido.');
+        }
+        $motivos = [];
+
         // 3. El destino.
         if (! in_array($f['source'], self::ALLOWED_SOURCES, true)) {
             $motivos[] = 'source_not_allowed';
@@ -141,30 +197,7 @@ final class OutboundPolicy
             $motivos[] = 'holiday';
         }
 
-        // 5. Los cupos.
-        if ($f['frequencyExceeded'] === true) {
-            $motivos[] = 'frequency_exceeded';
-        }
-        if ($f['activeOrDialing'] >= $f['maxConcurrent']) {
-            $motivos[] = 'concurrency_exceeded';
-        }
-        if ($f['dailyCap'] <= 0) {
-            $motivos[] = 'daily_cap_zero';
-        } elseif ($f['placedToday'] >= $f['dailyCap']) {
-            $motivos[] = 'daily_cap_reached';
-        }
-        if ($f['budgetFits'] !== true) {
-            $motivos[] = 'budget_exhausted';
-        }
-
-        // 6. La idempotencia, la última.
-        if ($f['duplicate'] === true) {
-            $motivos[] = self::REASON_DUPLICATE;
-        }
-
-        $motivos = array_values(array_intersect(self::REASONS, $motivos));
-
-        return ['allowed' => $motivos === [], 'reasons' => $motivos, 'http' => self::httpStatus($motivos)];
+        return array_values(array_intersect(self::REASONS, $motivos));
     }
 
     /** @param  list<string>  $reasons */

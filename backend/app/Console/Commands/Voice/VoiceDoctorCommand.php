@@ -131,7 +131,7 @@ class VoiceDoctorCommand extends Command
         $this->info('── Voz · telefonía (H8) ──');
         $this->line('Constante  : '.($t['callsEnabledInCode'] ? 'ABIERTA' : 'cerrada').' (la de VoiceCallPolicy: las llamadas en el código)');
         $this->line('Banderas   : entrantes '.$si($t['flags']['inbound']).' · salientes '.$si($t['flags']['outbound']).' ('.$t['scopes']['outbound'].') · Twilio Voice '.$si($t['flags']['twilioVoice'])
-            .' · publicar '.$si($t['flags']['publishing']).' · laboratorio '.$si($t['flags']['lab']).' · monitor '.$si($t['flags']['monitor']));
+            .' · laboratorio '.$si($t['flags']['lab']).' · monitor '.$si($t['flags']['monitor']));
         $this->line('Proveedor  : '.$t['provider']);
         $this->line('Número     : '.($t['number']['configured'] ? 'configurado' : 'sin configurar (TWILIO_VOICE_FROM)')
             .($t['number']['collidesWithMessaging'] ? ' · CHOCA con un número protegido de la mensajería del motor (config/meta.php): la política deniega las salientes por nombre' : '')
@@ -147,7 +147,11 @@ class VoiceDoctorCommand extends Command
         $l = $t['limits'];
         $this->line(sprintf('Límites    : %d a la vez · %d s por llamada · salientes/día %d · entrantes/día %d · presupuesto %d µUS$ · RNE %d días',
             $l['maxConcurrentCalls'], $l['perCallMaxSeconds'], $l['outboundDailyCap'], $l['inboundDailyCap'], $l['dailyBudgetMicros'], $l['rneValidityDays']));
-        $this->line('Horario    : propio '.$t['schedule']['ownHours'].' · personal '.$t['schedule']['staffHours'].' · destinos de transferencia '.$t['transferDirectory']);
+        $destinos = [];
+        foreach ($t['transferDirectory'] as $parte => $n) {
+            $destinos[] = $parte.' '.($n === null ? 'ilegibles' : $n);
+        }
+        $this->line('Horario    : propio '.$t['schedule']['ownHours'].' · personal '.$t['schedule']['staffHours'].' · destinos de transferencia '.implode(', ', $destinos));
         $this->newLine();
     }
 }

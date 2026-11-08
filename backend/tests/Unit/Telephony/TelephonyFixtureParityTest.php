@@ -253,8 +253,10 @@ class TelephonyFixtureParityTest extends TestCase
                 $this->assertSame($c['expected']['opensBrake'], VoiceBrake::opensFor($c['trigger']), $c['name']);
             }
         }
-        // Y cada causa tiene su motivo cerrado de la base (DB8).
-        $this->assertSame(['guard_violation', 'seal_mismatch', 'agent_drift', 'cost_cap', 'subaccount_alert', 'unknown_provider_call'], array_values(VoiceBrake::TRIGGERS));
+        // Y cada causa tiene su motivo cerrado de la base (DB8): los seis, y ninguno más.
+        $this->assertSame(['guard_violation', 'seal_mismatch', 'agent_drift', 'cost_cap', 'subaccount_alert', 'unknown_provider_call'], array_values(array_unique(VoiceBrake::TRIGGERS)));
+        // E4-8: la deriva del número (que el fixture no lista) se guarda como deriva del agente.
+        $this->assertSame('agent_drift', VoiceBrake::TRIGGERS['number_drift']);
     }
 
     // ── La huella del teléfono ──────────────────────────────────────────────

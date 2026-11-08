@@ -33,6 +33,14 @@ use Throwable;
  * en bytes, decodificación estricta y orden de DF-V6. NUNCA LANZA y, a
  * diferencia del motor, UN FALLO DENIEGA: `publication_unreadable`.
  *
+ * LOS DESTINOS DE TRANSFERENCIA (Enmienda 5, E5-1, que sustituye a E4-7):
+ * los COMPILADOS EN EL AGENTE (el perfil puede cambiar después; el agente es
+ * inmutable), en su columna `transfer_destination_hashes` (S8 la escribe al
+ * desplegar): una lista de alias y huella `voice-phone`, sin números. Se lee
+ * de la fila del agente que la sentencia YA une y no se descifra nada. Sin
+ * escribir (null) o sin forma: ningún destino aprobado (fallo cerrado: toda
+ * transferencia es violación), sin tocar el resto de la parte.
+ *
  * Solo lee: no escribe la cadena ni el agente.
  */
 final class VoicePublishedConfig
@@ -78,6 +86,9 @@ final class VoicePublishedConfig
     private const TABLE = 'ultron_studio_voice_publications';
 
     private const AGENTS = 'ultron_studio_voice_agents';
+
+    /** D8-14: el alias de un destino, texto corto (el Studio lo valida al crear el perfil). */
+    private const ALIAS_MAX = 60;
 
     private const HEX64 = '/^[0-9a-f]{64}$/D';
 
@@ -288,12 +299,52 @@ final class VoicePublishedConfig
             projectionHash: $fila->a_projection_hash,
             compilerVersion: $fila->a_compiler_version,
             providerAgentId: $e['provider_agent_id'],
+            transferDestinations: self::destinations($fila->a_transfer_destinations),
         );
     }
 
     /**
+     * E5-1: los destinos compilados en el agente, como pares alias + huella
+     * (`[{alias, hash}]`, como mucho tres). null si la columna está sin
+     * escribir o no tiene esa forma exacta: ningún destino aprobado.
+     *
+     * @return list<array{alias: string, hash: string}>|null
+     */
+    private static function destinations(mixed $columna): ?array
+    {
+        if (! is_string($columna) || $columna === '') {
+            return null;
+        }
+        try {
+            $lista = json_decode($columna, true, 4, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            // Tragado a propósito: una columna que no es JSON no aprueba a nadie (fallo cerrado).
+            return null;
+        }
+        if (! is_array($lista) || ! array_is_list($lista) || count($lista) > VoicePublishedPart::MAX_TRANSFER_DESTINATIONS) {
+            return null;
+        }
+        $destinos = [];
+        foreach ($lista as $d) {
+            if (! is_array($d)) {
+                return null;
+            }
+            // Exactamente alias y huella (un `jsonb` puede devolverlas en otro orden).
+            $claves = array_keys($d);
+            sort($claves);
+            if ($claves !== ['alias', 'hash'] || ! is_string($d['alias']) || trim($d['alias']) === '' || mb_strlen($d['alias']) > self::ALIAS_MAX
+                || ! is_string($d['hash']) || preg_match(self::HEX64, $d['hash']) !== 1) {
+                return null;
+            }
+            $destinos[] = ['alias' => $d['alias'], 'hash' => $d['hash']];
+        }
+
+        return $destinos;
+    }
+
+    /**
      * UNA sentencia: las vigentes de cada parte y la anterior de cada una en
-     * la cadena, con su agente.
+     * la cadena, con su agente (y, de él, los destinos compilados, E5-1).
      *
      * @return list<object>
      */
@@ -311,7 +362,7 @@ final class VoicePublishedConfig
                 'a.provider_agent_id as a_provider_agent_id', 'a.spec_hash as a_spec_hash', 'a.payload_hash as a_payload_hash',
                 'a.projection_hash as a_projection_hash', 'a.studio_content_hash as a_studio_content_hash',
                 'a.voice_profile_hash as a_voice_profile_hash', 'a.compiler_version as a_compiler_version',
-                'a.purpose as a_purpose', 'a.status as a_status',
+                'a.purpose as a_purpose', 'a.status as a_status', 'a.transfer_destination_hashes as a_transfer_destinations',
             ])
             ->all();
     }

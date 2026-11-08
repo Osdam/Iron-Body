@@ -6,6 +6,7 @@ use App\Models\Voice\VoiceCall;
 use App\Models\Voice\VoiceCallEvent;
 use App\Models\Voice\VoiceContact;
 use App\Services\Telephony\OutboundGate;
+use App\Services\Telephony\OutboundPolicy;
 use App\Services\Telephony\VoiceBrake;
 use App\Services\Telephony\VoiceCanaryDirectory;
 use App\Services\Telephony\VoiceEvents;
@@ -41,7 +42,7 @@ use Throwable;
  * reintento manual (que sería OTRA fila).
  *
  * Antes de marcar vuelve a mirar, en este orden (DF-G9), y si algo falla
- * cancela SIN PETICIÓN (la reserva se libera):
+ * cancela SIN PETICIÓN (`not_attempted`: la reserva se libera, sin coste):
  *  1. la constante y las banderas (`calls_disabled_in_code`,
  *     `outbound_disabled`, `twilio_voice_disabled`);
  *  2. el freno (`voice_braked`);
@@ -50,7 +51,17 @@ use Throwable;
  *  4. la deriva del agente sellado, con su caché de 5 min (D8-21): una
  *     proyección observada distinta es `agent_drift` y abre el freno; sin
  *     poder observarla, `drift_unverified`;
- *  5. el destino, descifrado SOLO EN MEMORIA, que tiene que seguir siendo
+ *  5. EL DESTINO Y EL CALENDARIO, con EXACTAMENTE las reglas y los motivos
+ *     de la puerta ({@see OutboundPolicy::targetReasons()} sobre
+ *     {@see OutboundGate::targetFacts()}; revisión de seguridad, TOCTOU):
+ *     entre encolar y marcar pudo revocarse el consentimiento
+ *     (`no_voice_consent`), añadirse una exclusión (`excluded`: la del
+ *     número, también la sellada, la oral, la del lead o el RNE marcado),
+ *     caducar la consulta al RNE (`rne_check_missing`), dejar de ser un
+ *     canario activo o un contacto activo, o cerrarse la ventana legal o
+ *     propia (`outside_hours`) o empezar un festivo (`holiday`), a la hora
+ *     en que corre el job;
+ *  6. el destino, descifrado SOLO EN MEMORIA, que tiene que seguir siendo
  *     el sellado (su huella); si no se puede, `error` (DF-G8).
  * La frecuencia y los cupos no se repiten: ya están reservados.
  */
@@ -130,6 +141,18 @@ class PlaceOutboundVoiceCall implements ShouldQueue
         if (VoiceCallPolicy::CALLS_ENABLED_IN_CODE !== true) {
             return 'calls_disabled_in_code';
         }
+
+        return $this->recheckAfterCode($llamada);
+    }
+
+    /**
+     * Los pasos 1 (banderas) a 5 de DF-G9, ya comprobada la constante. Aparte
+     * solo para que las pruebas los recorran en el árbol compartido, donde la
+     * constante está cerrada y `run()` nunca pasa de ella: no es un atajo
+     * (solo lo llama {@see recheck()} y no marca nada).
+     */
+    private function recheckAfterCode(VoiceCall $llamada): ?string
+    {
         if (config('voice.outbound.enabled') !== true) {
             return 'outbound_disabled';
         }
@@ -157,6 +180,14 @@ class PlaceOutboundVoiceCall implements ShouldQueue
             VoiceBrake::open('agent_drift', 'drift:'.$parte->providerAgentId, ['where' => 'outbound_job', 'seq' => $parte->seq, 'part' => $parte->part], (int) $llamada->id);
 
             return 'agent_drift';
+        }
+
+        // 5. El destino y el calendario, justo antes de marcar y con las reglas de la puerta.
+        $motivos = OutboundPolicy::targetReasons(OutboundGate::targetFacts(OutboundGate::targetOf($llamada), OutboundGate::currentScope(), now(), $llamada->remote_hash));
+        if ($motivos !== []) {
+            Log::channel('voice')->info('voice.outbound.target_recheck', ['call_uuid' => $llamada->uuid, 'reasons' => $motivos]);
+
+            return $motivos[0];
         }
 
         return null;

@@ -43,6 +43,7 @@ class VoiceProductionNoNetworkTest extends TestCase
         Http::preventStrayRequests();
         Http::fake();
         Queue::fake();
+        $this->ensureCompiledDestinationsColumn();
         config([
             'app.key' => self::APP_KEY,
             'voice.elevenlabs.enabled' => true,
@@ -69,8 +70,11 @@ class VoiceProductionNoNetworkTest extends TestCase
         $this->assertSame('ELEVENLABS_UNVERIFIED', VoiceProviders::status()->state, 'la configuración de E1-12');
         $this->assertFalse(config('voice.inbound.enabled'));
         $this->assertFalse(config('voice.outbound.enabled'));
-        $this->assertFalse(config('voice.publishing.enabled'));
+        // E4-1: una sola bandera de publicar, la del Studio; la telefonía no tiene ninguna.
+        $this->assertFalse(config('ultron_studio.voice.publishing_enabled'));
+        $this->assertNull(config('voice.publishing'));
         $this->assertFalse(config('voice.lab.enabled'));
+        $this->assertSame('fake', config('voice.lab.driver'));
 
         // Las públicas, con credencial válida donde la hay (la de iniciación no está en producción).
         $cuerpo = '{"type":"post_call_transcription","event_timestamp":'.now()->getTimestamp().',"data":{"agent_id":"agent_x","conversation_id":"conv_prod_1","transcript":[]}}';

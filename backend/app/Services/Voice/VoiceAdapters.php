@@ -15,9 +15,9 @@ use App\Services\Voice\ElevenLabs\ElevenLabsLabSessionIssuer;
  * de servicio, así que nadie cambia una implementación registrando otra clase.
  * Por defecto, todo es nulo y nada sale a la red.
  *
- *  - Desplegador, iniciador y emisor del laboratorio: el de ElevenLabs solo con
- *    la bandera encendida y todas las piezas (`ELEVENLABS_UNVERIFIED`); si no,
- *    el nulo. Cada adaptador lo vuelve a comprobar antes de salir, y el
+ *  - Desplegador (y su lector del número, E4-8), iniciador y emisor del
+ *    laboratorio: el de ElevenLabs solo con la bandera encendida y todas las
+ *    piezas (`ELEVENLABS_UNVERIFIED`); si no, el nulo. Cada adaptador lo vuelve a comprobar antes de salir, y el
  *    iniciador además exige `CALLS_ENABLED_IN_CODE`.
  *  - Verificador del webhook: el de ElevenLabs si hay secreto del webhook
  *    (no necesita red ni la bandera: un evento que llega con la voz ya
@@ -31,6 +31,12 @@ final class VoiceAdapters
     public static function deployer(): VoiceAgentDeployer
     {
         return self::elevenLabsReady() ? new ElevenLabsAgentDeployer : new NullVoiceAgentDeployer;
+    }
+
+    /** E4-8: quien lee a qué agente apunta el número (el desplegador de ElevenLabs, solo su GET), o el nulo. */
+    public static function numberObserver(): VoiceNumberObserver
+    {
+        return self::elevenLabsReady() ? new ElevenLabsAgentDeployer : new NullVoiceNumberObserver;
     }
 
     public static function callStarter(): VoiceCallStarter

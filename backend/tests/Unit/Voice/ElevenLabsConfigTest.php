@@ -212,8 +212,8 @@ class ElevenLabsConfigTest extends TestCase
             ],
             // H8, B8-b: E2-4 (publicar y el laboratorio hablado, cada uno con su bandera), el monitor, el horario del personal,
             // los hechos de `consultar_horarios`, la vigencia del RNE (0 = ninguna) y los precios oficiales con su fecha.
-            'publishing' => ['enabled' => false],
-            'lab' => ['enabled' => false],
+            // E4-1: la bandera de publicar es del Studio (`ultron_studio.voice.publishing_enabled`); aquí no está.
+            'lab' => ['enabled' => false, 'driver' => 'fake', 'daily_budget_usd' => '0', 'session_budget_usd' => '0', 'max_session_seconds' => 300, 'max_sessions_per_day' => 5],
             'monitor' => ['enabled' => false],
             'transfer' => ['staff_hours' => ['weekdays' => '', 'saturday' => '']],
             'facts' => ['site' => '', 'hours' => ''],
@@ -225,13 +225,25 @@ class ElevenLabsConfigTest extends TestCase
 
         // H8, B8-b: las banderas de E2-4 y del monitor, con el mismo filter_var; los recortes y la semana.
         foreach (['true' => true, 'on' => true, 'false' => false, '' => false, 'si' => false] as $valor => $esperado) {
-            foreach (['VOICE_PUBLISHING_ENABLED' => 'publishing', 'VOICE_LAB_ENABLED' => 'lab', 'VOICE_MONITOR_ENABLED' => 'monitor'] as $variable => $bloque) {
+            foreach (['VOICE_LAB_ENABLED' => 'lab', 'VOICE_MONITOR_ENABLED' => 'monitor'] as $variable => $bloque) {
                 $this->assertSame($esperado, self::evaluar([$variable => (string) $valor])[$bloque]['enabled'], "{$variable}={$valor}");
             }
         }
+        // E4-1: VOICE_PUBLISHING_ENABLED ya no se lee aquí (una sola bandera de publicar, la del Studio).
+        $this->assertArrayNotHasKey('publishing', self::evaluar(['VOICE_PUBLISHING_ENABLED' => 'true']));
         foreach (['5' => 10, '45' => 45, '90' => 60, 'x' => 30] as $valor => $esperado) {
             $this->assertSame($esperado, self::evaluar(['VOICE_OUTBOUND_RINGING_SECONDS' => (string) $valor])['outbound']['ringing_timeout_seconds'], "VOICE_OUTBOUND_RINGING_SECONDS={$valor}");
         }
+        // LAB8 (informe-lab §2.3): el controlador en minúsculas y sin espacios; los recortes de la sesión y del cupo.
+        $this->assertSame('elevenlabs', self::evaluar(['VOICE_LAB_DRIVER' => ' ElevenLabs '])['lab']['driver']);
+        $this->assertSame('otro', self::evaluar(['VOICE_LAB_DRIVER' => 'otro'])['lab']['driver'], 'un valor desconocido llega tal cual: el laboratorio lo niega (invalid_driver)');
+        foreach (['30' => 60, '120' => 120, '900' => 300, 'x' => 300] as $valor => $esperado) {
+            $this->assertSame($esperado, self::evaluar(['VOICE_LAB_MAX_SESSION_SECONDS' => (string) $valor])['lab']['max_session_seconds'], "VOICE_LAB_MAX_SESSION_SECONDS={$valor}");
+        }
+        foreach (['-1' => 0, '0' => 0, '7' => 7, '99' => 50] as $valor => $esperado) {
+            $this->assertSame($esperado, self::evaluar(['VOICE_LAB_MAX_SESSIONS_PER_DAY' => (string) $valor])['lab']['max_sessions_per_day'], "VOICE_LAB_MAX_SESSIONS_PER_DAY={$valor}");
+        }
+        $this->assertSame(['12.5', '1.25'], [self::evaluar(['VOICE_LAB_DAILY_BUDGET_USD' => '12.5'])['lab']['daily_budget_usd'], self::evaluar(['VOICE_LAB_SESSION_BUDGET_USD' => '1.25'])['lab']['session_budget_usd']]);
         foreach (['1' => 1, '0' => 1, '7' => 2] as $valor => $esperado) {
             $this->assertSame($esperado, self::evaluar(['VOICE_FREQUENCY_PER_WEEK' => (string) $valor])['outbound']['frequency']['per_week'], "VOICE_FREQUENCY_PER_WEEK={$valor}");
         }
@@ -307,7 +319,9 @@ class ElevenLabsConfigTest extends TestCase
             // H8, B8-b
             'VOICE_OUTBOUND_RINGING_SECONDS', 'VOICE_OUTBOUND_HOURS_WEEKDAYS', 'VOICE_OUTBOUND_HOURS_SATURDAY', 'VOICE_FREQUENCY_PER_WEEK',
             'VOICE_FREQUENCY_WEEK', 'VOICE_PUBLISHING_ENABLED', 'VOICE_LAB_ENABLED', 'VOICE_MONITOR_ENABLED', 'VOICE_TRANSFER_HOURS_WEEKDAYS',
-            'VOICE_TRANSFER_HOURS_SATURDAY', 'VOICE_FACTS_SITE', 'VOICE_FACTS_HOURS', 'VOICE_RNE_VALIDITY_DAYS'];
+            'VOICE_TRANSFER_HOURS_SATURDAY', 'VOICE_FACTS_SITE', 'VOICE_FACTS_HOURS', 'VOICE_RNE_VALIDITY_DAYS',
+            // LAB8 (informe-lab §2.3)
+            'VOICE_LAB_DRIVER', 'VOICE_LAB_DAILY_BUDGET_USD', 'VOICE_LAB_SESSION_BUDGET_USD', 'VOICE_LAB_MAX_SESSION_SECONDS', 'VOICE_LAB_MAX_SESSIONS_PER_DAY'];
         $antes = [];
         foreach ($todas as $nombre) {
             $antes[$nombre] = [$_SERVER[$nombre] ?? null, $_ENV[$nombre] ?? null, getenv($nombre)];

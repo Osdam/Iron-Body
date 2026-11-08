@@ -14,6 +14,12 @@ use InvalidArgumentException;
  *  - `off`: la entrada vigente apaga la parte (voz apagada, D8-20 nivel 2).
  *  - `unreadable`: algo no verifica (`reason` dice qué, sin valores): un
  *    fallo DENIEGA (D8-8: `publication_unreadable`).
+ *
+ * Los DESTINOS DE TRANSFERENCIA aprobados (Enmienda 5, E5-1): los compilados
+ * en el agente de la parte, solo su alias y la huella `voice-phone` de su
+ * número, nunca el número. null = sin escribir o ilegibles (ninguno vale: la
+ * guarda trata toda transferencia como no aprobada y `solicitar_humano` dice
+ * que no hay nadie).
  */
 final class VoicePublishedPart
 {
@@ -27,7 +33,14 @@ final class VoicePublishedPart
 
     public const STATUSES = [self::STATUS_OK, self::STATUS_NONE, self::STATUS_OFF, self::STATUS_UNREADABLE];
 
-    /** @throws InvalidArgumentException */
+    /** D8-14: como mucho tres destinos por perfil (`usvp_transfer_chk`). */
+    public const MAX_TRANSFER_DESTINATIONS = 3;
+
+    /**
+     * @param  list<array{alias: string, hash: string}>|null  $transferDestinations  solo con la parte vigente
+     *
+     * @throws InvalidArgumentException
+     */
     public function __construct(
         public readonly string $part,
         public readonly string $status,
@@ -42,6 +55,7 @@ final class VoicePublishedPart
         public readonly ?string $projectionHash = null,
         public readonly ?string $compilerVersion = null,
         public readonly ?string $providerAgentId = null,
+        public readonly ?array $transferDestinations = null,
     ) {
         if (! in_array($part, VoicePublishedConfig::PARTS, true) || ! in_array($status, self::STATUSES, true)) {
             throw new InvalidArgumentException('Parte o estado de la cadena de voz desconocidos.');
@@ -53,6 +67,29 @@ final class VoicePublishedPart
         if ($status !== self::STATUS_OK && array_filter($sello, static fn ($v) => $v !== null) !== []) {
             throw new InvalidArgumentException('Solo una parte vigente lleva sello.');
         }
+        if ($transferDestinations !== null) {
+            if ($status !== self::STATUS_OK || ! array_is_list($transferDestinations) || count($transferDestinations) > self::MAX_TRANSFER_DESTINATIONS) {
+                throw new InvalidArgumentException('Los destinos de transferencia son de una parte vigente, como mucho tres.');
+            }
+            foreach ($transferDestinations as $d) {
+                if (! is_array($d) || array_keys($d) !== ['alias', 'hash'] || ! is_string($d['alias']) || trim($d['alias']) === ''
+                    || ! is_string($d['hash']) || preg_match('/^[0-9a-f]{64}$/D', $d['hash']) !== 1) {
+                    throw new InvalidArgumentException('Un destino de transferencia es su alias y su huella, nada más.');
+                }
+            }
+        }
+    }
+
+    /** @return list<string>|null las huellas `voice-phone` aprobadas (E5-1); null = no se sabe (ninguna vale) */
+    public function transferDestinationHashes(): ?array
+    {
+        return $this->transferDestinations === null ? null : array_column($this->transferDestinations, 'hash');
+    }
+
+    /** @return list<string> los alias aprobados, en el orden del perfil (sin números) */
+    public function transferAliases(): array
+    {
+        return $this->transferDestinations === null ? [] : array_column($this->transferDestinations, 'alias');
     }
 
     public function ok(): bool

@@ -8,6 +8,7 @@ use App\Models\Voice\VoiceCall;
 use App\Models\Voice\VoiceCallEvent;
 use App\Models\Voice\VoiceContact;
 use App\Services\Voice\VoiceCallContext;
+use DateTimeInterface;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -76,7 +77,7 @@ final class OutboundGate
         VoiceLocks::gate();
         $ahora = now();
         $dia = VoiceCostGuard::budgetDay($ahora);
-        $alcance = config('voice.outbound.scope') === OutboundPolicy::SCOPE_CONTACTS ? OutboundPolicy::SCOPE_CONTACTS : OutboundPolicy::SCOPE_CANARY;
+        $alcance = self::currentScope();
 
         // 1. La idempotencia.
         $previa = VoiceCall::query()->where('requested_by_admin_id', $actor->id)->where('client_request_id', $crid)->first();
@@ -91,11 +92,8 @@ final class OutboundGate
 
         // 3. Los hechos.
         $parte = VoicePublishedConfig::read()[VoicePublishedConfig::partForScope($alcance)];
-        $exclusion = $huella !== null && VoiceCallFacts::excluded($huella);
-        $reglas = VoiceExclusionRule::evaluate($alcance, $exclusion, $destino['lead'], $destino['rne'], $ahora, (int) config('voice.contacts.rne_validity_days', 0));
         $frecuencia = $huella === null ? false
             : VoiceFrequency::exceeded(VoiceFrequency::count($ahora, VoiceCallFacts::historyFor($huella, $ahora)), VoiceFrequency::perWeekFromConfig(), VoiceFrequency::weekModeFromConfig());
-        $calendario = OutboundSchedule::evaluate($ahora, OutboundSchedule::ownFromConfig());
         $precios = VoiceCostGuard::prices();
         $maxima = (int) config('voice.limits.per_call_max_seconds', 300);
         $reserva = VoiceCostGuard::reserveMicros($numero === null ? VoiceCostGuard::KIND_LANDLINE : VoiceCostGuard::destinationKind($numero), $maxima, VoiceCostGuard::KIND_LANDLINE, $precios);
@@ -110,15 +108,8 @@ final class OutboundGate
             'publication' => $parte->policyState(),
             'agentDrift' => $parte->ok() && Cache::get(self::DRIFT_CACHE_PREFIX.$parte->providerAgentId) === true,
             'braked' => VoiceBrake::isOpen(),
-            'scope' => $alcance,
-            'source' => $destino['source'],
-            'canary' => $destino['canary'],
-            'contactAuthorized' => $destino['contactActive'],
-            'voiceConsent' => $destino['consent'],
-            'excluded' => $reglas['excluded'],
-            'rneCheckMissing' => $reglas['rneCheckMissing'],
-            'outsideHours' => $calendario['outsideHours'],
-            'holiday' => $calendario['holiday'],
+            // El destino y el calendario: los mismos hechos que vuelve a calcular el job antes de marcar.
+            ...self::targetFacts($destino, $alcance, $ahora),
             'frequencyExceeded' => $frecuencia,
             'activeOrDialing' => VoiceCallFacts::liveCount(),
             'maxConcurrent' => max(1, (int) config('voice.limits.max_concurrent_calls', 1)),
@@ -171,6 +162,68 @@ final class OutboundGate
         return ['http' => 202, 'body' => ['ok' => true, 'call' => VoiceCallsQuery::row($llamada->refresh())]];
     }
 
+    /** El alcance de las salientes ahora: `contacts` (4b) o, con cualquier otro valor, `canary` (4a). */
+    public static function currentScope(): string
+    {
+        return config('voice.outbound.scope') === OutboundPolicy::SCOPE_CONTACTS ? OutboundPolicy::SCOPE_CONTACTS : OutboundPolicy::SCOPE_CANARY;
+    }
+
+    /**
+     * Los hechos del DESTINO y del CALENDARIO para
+     * {@see OutboundPolicy::targetReasons()}, calculados IGUAL en la puerta y
+     * en el job, que los repite justo antes de marcar (revisión de seguridad,
+     * TOCTOU): la exclusión (la del número, la oral, la del lead y el RNE
+     * marcado), el consentimiento, la vigencia de la consulta al RNE y la
+     * ventana legal y propia con sus festivos, a `$now`. El número se usa SOLO
+     * EN MEMORIA, para su huella. Con `$sealedHash` (el job) cuenta también una
+     * exclusión de la huella SELLADA en la fila.
+     *
+     * @param  array{source: string, canary: ?string, contactActive: bool, consent: bool, lead: ?array, rne: ?array, number: ?SensitiveParameterValue}  $destino
+     * @return array{scope: string, source: string, canary: ?string, contactAuthorized: bool, voiceConsent: bool, excluded: bool,
+     *               rneCheckMissing: bool, outsideHours: bool, holiday: bool}
+     */
+    public static function targetFacts(array $destino, string $scope, DateTimeInterface $now, ?string $sealedHash = null): array
+    {
+        $numero = $destino['number'] instanceof SensitiveParameterValue ? $destino['number']->getValue() : null;
+        $huella = VoicePhone::isE164($numero) ? VoicePhone::hash($numero) : null;
+        unset($numero);
+        $exclusion = ($huella !== null && VoiceCallFacts::excluded($huella))
+            || ($sealedHash !== null && $sealedHash !== $huella && VoiceCallFacts::excluded($sealedHash));
+        $reglas = VoiceExclusionRule::evaluate($scope, $exclusion, $destino['lead'], $destino['rne'], $now, (int) config('voice.contacts.rne_validity_days', 0));
+        $calendario = OutboundSchedule::evaluate($now, OutboundSchedule::ownFromConfig());
+
+        return [
+            'scope' => $scope,
+            'source' => $destino['source'],
+            'canary' => $destino['canary'],
+            'contactAuthorized' => $destino['contactActive'],
+            'voiceConsent' => $destino['consent'],
+            'excluded' => $reglas['excluded'],
+            'rneCheckMissing' => $reglas['rneCheckMissing'],
+            'outsideHours' => $calendario['outsideHours'],
+            'holiday' => $calendario['holiday'],
+        ];
+    }
+
+    /**
+     * El destino SELLADO de una saliente ya pedida, con la misma forma que el
+     * de la puerta, para que el job lo vuelva a mirar. Si ya no existe, un
+     * destino sin autorizar: la política da su motivo (nunca se marca).
+     *
+     * @return array{source: string, canary: ?string, canaryUuid?: ?string, contactId?: ?int, contactActive: bool, consent: bool, lead: ?array, rne: ?array, number: ?SensitiveParameterValue}
+     */
+    public static function targetOf(VoiceCall $call): array
+    {
+        if ($call->target_source === VoiceCallContext::SOURCE_CANARY_REGISTRY) {
+            return self::canaryTarget($call->canary_number_uuid === null ? null : VoiceCanaryDirectory::forDial((string) $call->canary_number_uuid));
+        }
+        if ($call->target_source === VoiceCallContext::SOURCE_VOICE_CONTACTS) {
+            return self::contactTarget($call->voice_contact_id === null ? null : VoiceContact::query()->whereKey($call->voice_contact_id)->first());
+        }
+
+        return ['source' => (string) $call->target_source, 'canary' => null, 'contactActive' => false, 'consent' => false, 'lead' => null, 'rne' => null, 'number' => null];
+    }
+
     /**
      * El destino: su origen y lo que la política necesita saber de él. El
      * número va envuelto y solo en memoria.
@@ -187,13 +240,36 @@ final class OutboundGate
                 throw TelephonyException::notFound('target');
             }
 
-            return ['source' => VoiceCallContext::SOURCE_CANARY_REGISTRY, 'canary' => $canario['state'], 'canaryUuid' => $canario['uuid'],
-                'contactActive' => false, 'consent' => false, 'lead' => null, 'rne' => null, 'number' => $canario['number']];
+            return self::canaryTarget($canario);
         }
 
         $contacto = VoiceContact::query()->where('uuid', $uuid)->first();
         if ($contacto === null) {
             throw TelephonyException::notFound('target');
+        }
+
+        return self::contactTarget($contacto);
+    }
+
+    /**
+     * @param  array{state: string, uuid: string, number: ?SensitiveParameterValue}|null  $canario  null = ya no está en el registro
+     * @return array{source: string, canary: string, canaryUuid: ?string, contactActive: false, consent: false, lead: null, rne: null, number: ?SensitiveParameterValue}
+     */
+    private static function canaryTarget(?array $canario): array
+    {
+        return ['source' => VoiceCallContext::SOURCE_CANARY_REGISTRY, 'canary' => $canario['state'] ?? VoiceCallContext::CANARY_NOT_REGISTERED,
+            'canaryUuid' => $canario['uuid'] ?? null, 'contactActive' => false, 'consent' => false, 'lead' => null, 'rne' => null, 'number' => $canario['number'] ?? null];
+    }
+
+    /**
+     * @param  VoiceContact|null  $contacto  null = ya no existe
+     * @return array{source: string, canary: null, contactId: ?int, contactActive: bool, consent: bool, lead: ?array, rne: ?array, number: ?SensitiveParameterValue}
+     */
+    private static function contactTarget(?VoiceContact $contacto): array
+    {
+        if ($contacto === null) {
+            return ['source' => VoiceCallContext::SOURCE_VOICE_CONTACTS, 'canary' => null, 'contactId' => null, 'contactActive' => false, 'consent' => false,
+                'lead' => null, 'rne' => null, 'number' => null];
         }
         $numero = null;
         if ($contacto->status === VoiceContact::STATUS_ACTIVE) {

@@ -21,8 +21,13 @@ use Illuminate\Support\Facades\Route;
 | PÚBLICAS (las cuatro de D8-16, solo POST, sin sesión y fuera de
 | /api/admin): cada una con su autenticación propia en el controlador (firma
 | de ElevenLabs, secreto de iniciación, Bearer de herramientas o firma de
-| Twilio), su TOPE DE CUERPO antes de leer nada y su limitador. Están
-| clasificadas en AuthorizationMap::PUBLIC_VOICE_ROUTES con su razón.
+| Twilio) y su TOPE DE CUERPO antes de leer nada. SIN límite por IP antes de
+| autenticar (Enmienda 5, E5-4: ElevenLabs sale por dos IP que comparten todos
+| sus clientes y el `throttle:N,1` contaba en un cubo `sha1(dominio|IP)` común a
+| las cuatro): el controlador limita DESPUÉS de autenticar, por ruta y por
+| llamada, y cuenta los fallos en su propio cubo `ruta|IP|fallo`
+| (App\Services\Telephony\VoiceRateLimits). Están clasificadas en
+| AuthorizationMap::PUBLIC_VOICE_ROUTES con su razón.
 |
 | CRM (/api/admin/voice/*): cada ruta con su llave `telephony.*` en
 | AuthorizationMap::OVERRIDES, una a una (los controladores no están en
@@ -32,21 +37,17 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::middleware(LimitRequestBodySize::class.':1048576')
-    ->post('webhooks/voice/elevenlabs/post-call', ElevenLabsPostCallController::class)
-    ->middleware('throttle:240,1');
+    ->post('webhooks/voice/elevenlabs/post-call', ElevenLabsPostCallController::class);
 
 Route::middleware(LimitRequestBodySize::class.':8192')
-    ->post('webhooks/voice/elevenlabs/initiation', ElevenLabsInitiationController::class)
-    ->middleware('throttle:120,1');
+    ->post('webhooks/voice/elevenlabs/initiation', ElevenLabsInitiationController::class);
 
 Route::middleware(LimitRequestBodySize::class.':8192')
     ->post('voice/tools/{tool}', VoiceToolController::class)
-    ->where('tool', '[a-z_]{1,48}')
-    ->middleware('throttle:600,1');
+    ->where('tool', '[a-z_]{1,48}');
 
 Route::middleware(LimitRequestBodySize::class.':65536')
-    ->post('webhooks/voice/twilio/usage-trigger', TwilioVoiceUsageTriggerController::class)
-    ->middleware('throttle:60,1');
+    ->post('webhooks/voice/twilio/usage-trigger', TwilioVoiceUsageTriggerController::class);
 
 Route::prefix('admin/voice')->middleware(LimitRequestBodySize::class.':16384')->group(function (): void {
     Route::middleware('throttle:120,1')->group(function (): void {

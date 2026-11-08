@@ -7,8 +7,10 @@ use App\Models\Voice\VoiceCall;
 use App\Services\Telephony\VoicePhone;
 use App\Services\Telephony\VoicePublishedConfig;
 use App\Services\Voice\Dto\VoiceCanonicalJson;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Tests\Feature\UltronStudio\IntegrationFixtures;
@@ -68,6 +70,24 @@ trait VoiceFixtures
             'voice.limits.max_concurrent_calls' => 1,
             'ultron_studio.integrations.writes_enabled' => true,
         ], $extra));
+        $this->ensureCompiledDestinationsColumn();
+    }
+
+    /**
+     * E5-1: la columna de los destinos COMPILADOS en el agente
+     * (`ultron_studio_voice_agents.transfer_destination_hashes`, json nullable).
+     * La añaden DB8/S8-c en la migración `2026_11_10_100001`; mientras no esté,
+     * la prueba la crea DENTRO de su transacción (se va con ella) para leerla
+     * como la leerá producción. Cuando llegue la migración, esto no hace nada y
+     * se quita.
+     */
+    protected function ensureCompiledDestinationsColumn(): void
+    {
+        if (! Schema::hasColumn('ultron_studio_voice_agents', 'transfer_destination_hashes')) {
+            Schema::table('ultron_studio_voice_agents', static function (Blueprint $t): void {
+                $t->json('transfer_destination_hashes')->nullable();
+            });
+        }
     }
 
     /** Las cabeceras de la iniciación con el secreto bueno. @return array<string, string> */
@@ -103,45 +123,64 @@ trait VoiceFixtures
     /**
      * Una versión aprobada, un perfil aprobado por otra persona, un agente de
      * publicación desplegado con `$providerAgentId` y su entrada FIRMADA en la
-     * cadena para `$part` (encadenada a la cabeza actual).
+     * cadena para `$part` (encadenada a la cabeza actual). Con `$agent['row']`,
+     * una VUELTA ATRÁS: la entrada apunta a ese agente, que ya existe.
      *
-     * @return array{seq: int, agentRowId: int, projectionHash: string, payloadHash: string, specHash: string, versionUuid: string}
+     * @param  array<string, mixed>  $agent  huellas que la prueba fija, `row` (vuelta atrás) o `transfer_destination_hashes` (la columna tal cual)
+     * @param  list<array{0: string, 1: string}>  $transfers  los destinos compilados en el agente (alias, E.164), como los escribe S8 al desplegar (E5-1)
+     * @return array{seq: int, agentRowId: int, projectionHash: string, payloadHash: string, specHash: string, versionUuid: string, profileUuid: string}
      */
-    protected function publishVoice(string $providerAgentId = self::SEALED_AGENT, string $part = VoicePublishedConfig::PART_CANARY, array $agent = []): array
+    protected function publishVoice(string $providerAgentId = self::SEALED_AGENT, string $part = VoicePublishedConfig::PART_CANARY, array $agent = [],
+        array $transfers = []): array
     {
         $n = ++$this->voiceSeq;
-        $versionUuid = (string) Str::uuid();
-        $version = (int) DB::table('ultron_studio_versions')->insertGetId([
-            'uuid' => $versionUuid, 'client_request_id' => (string) Str::uuid(), 'label' => "Versión de voz {$n}", 'status' => 'APPROVED',
-            'content' => '{}', 'content_hash' => str_repeat('a', 64), 'catalog_version' => '2026-10-19.1', 'catalog_hash' => str_repeat('b', 64),
-            'source_draft_revision' => 1, 'created_by_admin_id' => 3, 'created_by_name' => 'Caro', 'created_at' => now(), 'updated_at' => now(),
-        ]);
-        $perfilUuid = (string) Str::uuid();
-        $perfil = (int) DB::table('ultron_studio_voice_profiles')->insertGetId([
-            'uuid' => $perfilUuid, 'client_request_id' => (string) Str::uuid(), 'revision' => 1, 'based_on_profile_id' => null, 'label' => "Perfil {$n}",
-            'language' => 'es', 'max_duration_seconds' => 300, 'retention_days' => 30, 'record_calls' => false, 'record_voice' => false,
-            'transfer_count' => 0, 'transfer_destinations_encrypted' => null,
-            'content' => '{"voiceId":"voz_prueba","slots":{"saludo":"Hola"},"tools":["consultar_planes"],"transfers":[]}',
-            'content_hash' => hash('sha256', "perfil-{$n}"), 'status' => 'draft', 'created_by_admin_id' => 1, 'created_by_name' => 'Ana',
-            'created_by_role' => 'Super Admin', 'created_at' => now(), 'status_changed_at' => now(), 'updated_at' => now(),
-        ]);
-        DB::table('ultron_studio_voice_profiles')->where('id', $perfil)->update(['status' => 'submitted', 'submitted_by_admin_id' => 1, 'submitted_by_name' => 'Ana', 'submitted_at' => now(), 'status_changed_at' => now()]);
-        DB::table('ultron_studio_voice_profiles')->where('id', $perfil)->update(['status' => 'approved', 'reviewed_by_admin_id' => 2, 'reviewed_by_name' => 'Beto', 'reviewed_at' => now(), 'status_changed_at' => now()]);
+        if (isset($agent['row'])) {
+            // Una VUELTA ATRÁS (D8-20 nivel 1): una entrada nueva que apunta a un agente que ya existe, con su versión y su perfil.
+            $fila = DB::table('ultron_studio_voice_agents')->where('id', $agent['row'])->first();
+            $agente = (int) $fila->id;
+            $providerAgentId = (string) $fila->provider_agent_id;
+            [$proyeccion, $carga, $spec] = [(string) $fila->projection_hash, (string) $fila->payload_hash, (string) $fila->spec_hash];
+            $perfilUuid = (string) DB::table('ultron_studio_voice_profiles')->where('id', $fila->voice_profile_id)->value('uuid');
+            $versionUuid = (string) DB::table('ultron_studio_versions')->where('id', $fila->studio_version_id)->value('uuid');
+        } else {
+            $versionUuid = (string) Str::uuid();
+            $version = (int) DB::table('ultron_studio_versions')->insertGetId([
+                'uuid' => $versionUuid, 'client_request_id' => (string) Str::uuid(), 'label' => "Versión de voz {$n}", 'status' => 'APPROVED',
+                'content' => '{}', 'content_hash' => str_repeat('a', 64), 'catalog_version' => '2026-10-19.1', 'catalog_hash' => str_repeat('b', 64),
+                'source_draft_revision' => 1, 'created_by_admin_id' => 3, 'created_by_name' => 'Caro', 'created_at' => now(), 'updated_at' => now(),
+            ]);
+            $perfilUuid = (string) Str::uuid();
+            $perfil = (int) DB::table('ultron_studio_voice_profiles')->insertGetId([
+                'uuid' => $perfilUuid, 'client_request_id' => (string) Str::uuid(), 'revision' => 1, 'based_on_profile_id' => null, 'label' => "Perfil {$n}",
+                'language' => 'es', 'max_duration_seconds' => 300, 'retention_days' => 30, 'record_calls' => false, 'record_voice' => false,
+                'transfer_count' => 0, 'transfer_destinations_encrypted' => null,
+                'content' => '{"voiceId":"voz_prueba","slots":{"saludo":"Hola"},"tools":["consultar_planes"],"transfers":[]}',
+                'content_hash' => hash('sha256', "perfil-{$n}"), 'status' => 'draft', 'created_by_admin_id' => 1, 'created_by_name' => 'Ana',
+                'created_by_role' => 'Super Admin', 'created_at' => now(), 'status_changed_at' => now(), 'updated_at' => now(),
+            ]);
+            DB::table('ultron_studio_voice_profiles')->where('id', $perfil)->update(['status' => 'submitted', 'submitted_by_admin_id' => 1, 'submitted_by_name' => 'Ana', 'submitted_at' => now(), 'status_changed_at' => now()]);
+            DB::table('ultron_studio_voice_profiles')->where('id', $perfil)->update(['status' => 'approved', 'reviewed_by_admin_id' => 2, 'reviewed_by_name' => 'Beto', 'reviewed_at' => now(), 'status_changed_at' => now()]);
+            // E5-1: los destinos COMPILADOS en el agente, como los escribe S8 al desplegar: alias y huella, por alias, sin números.
+            $destinos = array_map(static fn (array $d): array => ['alias' => $d[0], 'hash' => VoicePhone::hash($d[1])], $transfers);
+            usort($destinos, static fn (array $a, array $b): int => strcmp($a['alias'], $b['alias']));
+            $columna = array_key_exists('transfer_destination_hashes', $agent) ? $agent['transfer_destination_hashes'] : ($destinos === [] ? null : json_encode($destinos));
 
-        $proyeccion = $agent['projection_hash'] ?? hash('sha256', "proyeccion-{$n}");
-        $carga = $agent['payload_hash'] ?? hash('sha256', "carga-{$n}");
-        $spec = $agent['spec_hash'] ?? hash('sha256', "spec-{$n}");
-        $agente = (int) DB::table('ultron_studio_voice_agents')->insertGetId([
-            'uuid' => (string) Str::uuid(), 'client_request_id' => (string) Str::uuid(), 'purpose' => 'publication', 'studio_version_id' => $version,
-            'studio_content_hash' => str_repeat('a', 64), 'voice_profile_id' => $perfil, 'voice_profile_hash' => hash('sha256', "perfil-{$n}"),
-            'compiler_version' => 'ultron-voice-compiler/1', 'spec_hash' => $spec, 'payload_hash' => $carga, 'projection_hash' => $proyeccion,
-            'provider' => 'elevenlabs', 'provider_agent_id' => null, 'observed_hash' => null, 'observed_at' => null, 'status' => 'pending',
-            'failure_code' => null, 'serves_canary' => false, 'serves_rest' => false, 'created_by_admin_id' => 2, 'created_by_name' => 'Beto',
-            'created_by_role' => 'Super Admin', 'created_at' => now(), 'status_changed_at' => now(), 'updated_at' => now(),
-        ]);
-        DB::table('ultron_studio_voice_agents')->where('id', $agente)->update([
-            'status' => 'deployed', 'provider_agent_id' => $providerAgentId, 'observed_hash' => $proyeccion, 'observed_at' => now(), 'status_changed_at' => now(),
-        ]);
+            $proyeccion = $agent['projection_hash'] ?? hash('sha256', "proyeccion-{$n}");
+            $carga = $agent['payload_hash'] ?? hash('sha256', "carga-{$n}");
+            $spec = $agent['spec_hash'] ?? hash('sha256', "spec-{$n}");
+            $agente = (int) DB::table('ultron_studio_voice_agents')->insertGetId([
+                'uuid' => (string) Str::uuid(), 'client_request_id' => (string) Str::uuid(), 'purpose' => 'publication', 'studio_version_id' => $version,
+                'studio_content_hash' => str_repeat('a', 64), 'voice_profile_id' => $perfil, 'voice_profile_hash' => hash('sha256', "perfil-{$n}"),
+                'compiler_version' => 'ultron-voice-compiler/1', 'spec_hash' => $spec, 'payload_hash' => $carga, 'projection_hash' => $proyeccion,
+                'provider' => 'elevenlabs', 'provider_agent_id' => null, 'observed_hash' => null, 'observed_at' => null, 'status' => 'pending',
+                'failure_code' => null, 'serves_canary' => false, 'serves_rest' => false, 'created_by_admin_id' => 2, 'created_by_name' => 'Beto',
+                'created_by_role' => 'Super Admin', 'created_at' => now(), 'status_changed_at' => now(), 'updated_at' => now(),
+                'transfer_destination_hashes' => $columna,
+            ]);
+            DB::table('ultron_studio_voice_agents')->where('id', $agente)->update([
+                'status' => 'deployed', 'provider_agent_id' => $providerAgentId, 'observed_hash' => $proyeccion, 'observed_at' => now(), 'status_changed_at' => now(),
+            ]);
+        }
 
         $cabeza = DB::table('ultron_studio_voice_publications')->orderByDesc('seq')->first(['id', 'seq', 'effective_hash']);
         $seq = $cabeza === null ? 1 : (int) $cabeza->seq + 1;
@@ -151,14 +190,15 @@ trait VoiceFixtures
             'seq' => $seq, 'spec_hash' => $spec, 'version_uuid' => $versionUuid,
         ]);
         DB::table('ultron_studio_voice_publications')->insert([
-            'uuid' => (string) Str::uuid(), 'seq' => $seq, 'client_request_id' => (string) Str::uuid(), 'action' => 'publish', 'scope' => $part,
+            // DB8 (`usvpub_shape_chk`): `publish` solo en la parte canaria; la de `rest` es una promoción.
+            'uuid' => (string) Str::uuid(), 'seq' => $seq, 'client_request_id' => (string) Str::uuid(), 'action' => $part === 'rest' ? 'promote' : 'publish', 'scope' => $part,
             'previous_publication_id' => $cabeza?->id, 'prev_hash' => $cabeza === null ? self::GENESIS : (string) $cabeza->effective_hash,
             'restores_publication_id' => null, 'agent_id' => $agente, 'effective_json' => $mensaje, 'effective_hash' => hash('sha256', $mensaje),
             'signature' => VoicePublishedConfig::signatureFor($mensaje), 'lab_gate' => '{"mode":"required"}', 'evidence' => null, 'reason' => null,
             'actor_admin_id' => 2, 'actor_name' => 'Beto', 'actor_role' => 'Super Admin', 'created_at' => now(),
         ]);
 
-        return ['seq' => $seq, 'agentRowId' => $agente, 'projectionHash' => $proyeccion, 'payloadHash' => $carga, 'specHash' => $spec, 'versionUuid' => $versionUuid];
+        return ['seq' => $seq, 'agentRowId' => $agente, 'projectionHash' => $proyeccion, 'payloadHash' => $carga, 'specHash' => $spec, 'versionUuid' => $versionUuid, 'profileUuid' => $perfilUuid];
     }
 
     // ── Canarios (la API del H6) ────────────────────────────────────────────
@@ -214,7 +254,8 @@ trait VoiceFixtures
         }
 
         $id = (int) DB::table('voice_calls')->insertGetId(array_merge($base, [
-            'status' => 'requested', 'target_source' => 'canary_registry', 'canary_number_uuid' => $o['canary_number_uuid'] ?? (string) Str::uuid(),
+            // Un contacto (`target_source` = voice_contacts) lleva `canary_number_uuid` nulo explícito (DB8, `vc_target_chk`).
+            'status' => 'requested', 'target_source' => 'canary_registry', 'canary_number_uuid' => array_key_exists('canary_number_uuid', $o) ? $o['canary_number_uuid'] : (string) Str::uuid(),
             'client_request_id' => (string) Str::uuid(), 'requested_by_type' => 'admin', 'requested_by_admin_id' => $o['requested_by_admin_id'] ?? 1,
             'requested_by_name' => 'Ana', 'requested_by_role' => 'Super Admin',
         ], array_diff_key($o, ['provider_conversation_id' => 1, 'provider_call_sid' => 1, 'canary_number_uuid' => 1, 'requested_by_admin_id' => 1, 'tool_calls' => 1])));

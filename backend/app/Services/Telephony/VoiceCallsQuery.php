@@ -105,6 +105,11 @@ final class VoiceCallsQuery
             ->selectRaw('direction, status, count(*) as n')->groupBy('direction', 'status')->get()
             ->map(static fn ($f): array => ['direction' => $f->direction, 'status' => $f->status, 'count' => (int) $f->n])->all();
         $ultimaEntrega = VoiceCallEvent::query()->whereIn('kind', ['post_call_transcription', 'call_initiation_failure'])->max('created_at');
+        // La evidencia de la entrada vigente de cada parte (E4-2: la de promover la mide el Studio con `forPublication`).
+        $publicaciones = [];
+        foreach (VoicePublishedConfig::read() as $nombre => $parte) {
+            $publicaciones[$nombre] = $parte->ok() ? VoiceEvidence::summary($nombre, (int) $parte->seq) : ['part' => $nombre, 'status' => $parte->status];
+        }
 
         return [
             'budgetDay' => $dia,
@@ -115,6 +120,7 @@ final class VoiceCallsQuery
             'stuckDialing' => VoiceCall::query()->where('status', VoiceCall::STATUS_DIALING)->where('status_changed_at', '<', now()->subMinutes(VoiceReconciler::STUCK_DIALING_MINUTES))->count(),
             'lastWebhookAt' => $ultimaEntrega === null ? null : Carbon::parse($ultimaEntrega)->toIso8601String(),
             'brakeOpen' => VoiceBrake::isOpen(),
+            'publications' => $publicaciones,
         ];
     }
 }

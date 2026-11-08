@@ -234,3 +234,135 @@ Cambiados: `config/voice.php` (E2-4 y las piezas de abajo), `config/queue.php` (
 ## 5. Para tester (casos límite desde dentro)
 
 Carrera de dos iniciaciones con el mismo `call_sid` (cerrojo + UNIQUE); webhook antes que el job (DF-S2, solo PG muestra los CHECK); `ambiguous` sin ids en la fila (el SID vive en su evento); cupo de herramientas 20/21; una saliente viva por número (`vc_one_live_outbound`); PG obligatorio (los CHECK de forma solo existen allí).
+
+---
+
+# §B8-b · tanda E4 (Enmienda 4: E4-1, E4-2, E4-7, E4-8, y lo pedido por LAB8 y S8-b)
+
+**Fecha:** 08-11-2026. **Árbol:** el mismo, sobre `61513a1`, **sin commit**. Cero red: toda prueba con `Http::preventStrayRequests()`. No toqué las guardas de SEC8 ni ficheros de S8-b, LAB8 o pruebas del Studio (los cambios en `tests/Unit/Voice/VoiceIsolationTest.php`, `tests/Feature/Telephony/TelephonyIsolationTest.php` y `tests/Feature/UltronStudio/*` del árbol son de SEC8-b y del lead).
+
+## 1. Cifras reales (comandos ejecutados)
+
+- **SQLite**, todo el alcance (`tests/Unit/Voice tests/Unit/Twilio tests/Unit/Telephony tests/Feature/Voice tests/Feature/Telephony tests/Feature/Access tests/Feature/Chaos/ChaosLaneIsolationTest.php tests/Feature/UltronStudio/UltronEngineIsolationTest.php` + las 15 `tests/{Feature,Unit}/UltronStudio/*Voice*Test.php`) → **1 442 pruebas, 195 385 aserciones, 4 fallos** (las 4 guardas de §4; 204 omitidas: las de esquema solo-PG). Las del Studio de voz solas: 574, sin fallos.
+- **Puerta PG** (`PGGSSENCMODE=disable UNIT_DB=ultron_studio_h8_b bash docs/ultron-studio/ops/pgunit.sh …`): primera pasada con telefonía, voz, Twilio, acceso y Studio de voz → **1 420 pruebas, 3 fallos** (las 3 guardas de §4 que están en esas carpetas) **y 1 error ajeno** (`AdminUserPasswordTest`, disparador con sintaxis de SQLite; no lo toqué). La final, tras el último cambio, en el §6.
+- **Pruebas nuevas: 5 ficheros, 26 pruebas** (`VoiceEvidenceTest` 3, `VoiceTransferDestinationsTest` 11, `VoiceNumberDriftTest` 4, `ElevenLabsNumberObserverTest` 4, `VoiceLabPostCallTest` 4). Además, el caso del fixture `tools · solicitar_humano en horario del personal` ya se cumple tal cual (antes iba traducido como «pendiente»): **la paridad de `tools` es 21/21 sin traducciones de destinos**.
+- **Mutaciones por muestreo** (copia aislada en el scratchpad con `vendor` clonado, una a la vez, sus pruebas en SQLite): **51 aplicadas, 47 muertas, 3 equivalentes y 1 hallazgo real corregido**. Equivalentes: E7 (filtro de fecha de los eventos de filas selladas: un evento no precede a su llamada), E14 (filtro `kind = open` del freno: una suelta lleva `reason` nulo por `vbr_shape_chk`) y D5 (sin `stamp_state = applied`: `vc_stamp_chk` deja sin parte ni agente toda fila no sellada). **D1 (real):** exigir además la misma entrada (`seq`) en el directorio de destinos sobraba y, en una vuelta atrás al mismo agente, marcaba como violación una transferencia legítima → ahora compara parte y agente (los destinos los fija el agente), con su prueba de vuelta atrás.
+- `php artisan auth:coverage --unmapped` → vacío (exit 0; ninguna ruta nueva). Pint `--test` en mis 28 ficheros de esta tanda → `passed`.
+
+## 2. Qué cambió y por qué (por fichero)
+
+**E4-2, la evidencia.** `app/Services/Telephony/VoiceEvidence.php`: `forPublication(int $seq, string $part, DateTimeInterface $since): array` con exactamente `KEYS` = `calls, guardViolations, sealMismatches, driftEvents, unknownProviderCalls, budgetBreaches` (enteros ≥ 0). `calls` = selladas (`applied`) con esa parte y esa entrada desde `$since`, sin tramos, sin denegadas **y sin las salientes que nunca llegaron al agente** (`requested`, `canceled`, `failed_to_start`; §3.3). `guardViolations` y `sealMismatches` = eventos de TODAS las filas selladas con la entrada (también la denegada: un `seal_mismatch` en la iniciación la deja `denied`). `driftEvents` = aperturas del freno por `agent_drift` (incluye la deriva del número, §3.2); `unknownProviderCalls` = eventos `unknown_provider_call`; `budgetBreaches` = aperturas por `cost_cap` y `subaccount_alert`; los tres, de todo el sistema desde `$since`. Los recuentos ricos de antes pasan a `summary(string $part, int $seq)`; `app/Services/Telephony/VoiceCallsQuery.php` los publica en `GET admin/voice/metrics` (`publications`). Probado de punta a punta: `StudioVoiceEvidence::measure()` (S8-b) devuelve el array, no null.
+
+**E4-1, una sola bandera de publicar.** `config/voice.php`: fuera el bloque `publishing`. `.env.example`: fuera `VOICE_PUBLISHING_ENABLED`. `app/Services/Telephony/VoiceTelephonyStatus.php` y `app/Console/Commands/Voice/VoiceDoctorCommand.php` ya no informan `publishing`. `VoiceProductionNoNetworkTest` afirma `config('ultron_studio.voice.publishing_enabled') === false` y que `voice.publishing` no existe.
+
+**LAB8 (§2.3) y S8-b (§8.5).** `config/voice.php`, bloque `lab`: `driver` (`fake`), `daily_budget_usd` y `session_budget_usd` (`'0'`), `max_session_seconds` (60–300, 300) y `max_sessions_per_day` (0–50, 5), exactamente como los propone LAB8; `voice.prices.elevenlabs` (80 000 µUS$/min) ya existía. `.env.example`: las 5 `VOICE_LAB_*` y las 4 `ULTRON_STUDIO_VOICE_*` de S8-b. La llave `ultron.voice_lab_run` y las 6 rutas `voice-lab/*` ya estaban en `61513a1` con las llaves que pidió el lead (comprobado en `AuthorizationMap`).
+
+**E4-7, los destinos de transferencia.** `app/Services/Telephony/VoicePublishedConfig.php`: la misma sentencia une el perfil del agente (`ultron_studio_voice_profiles`), cruza que es el perfil FIRMADO en la entrada y el que sella el agente (`content_hash` = `voice_profile_hash`; si no, la parte es ilegible, `agent_mismatch`), descifra `transfer_destinations_encrypted` con la clave de la aplicación (`Crypt::decryptString`, el cast `encrypted:array` del Studio) y deja SOLO alias y huella; un perfil sin aprobar, un cifrado que no abre, una lista que no es la que dice `transfer_count` o un destino sin forma → destinos null (ninguno vale; la parte sigue vigente). `VoicePublishedPart.php`: `transferDestinations` (`list<{alias, hash}>|null`), `transferHashes()`, `transferAliases()`. `VoiceTransferDirectory.php`: por LLAMADA, los de la parte de su sello si la parte apunta al mismo agente (`approvedHashesFor`, `aliasesFor`, `countsByPart`). `VoicePostCall.php` (la guarda) y `VoiceTools.php` (`solicitar_humano`) los usan. Probado: aprobado = sin violación ni freno; ajeno = `voice_transfer_not_approved` y freno.
+
+**E4-8, la deriva del número.** Nuevos `app/Services/Voice/Dto/VoiceNumberAssignment.php` (resultado, id del número, agente asignado, estado `assigned | unassigned | unknown`; nunca el teléfono), `app/Services/Voice/VoiceNumberObserver.php` (`describeNumber(string $phoneNumberId): VoiceNumberAssignment`) y `app/Services/Voice/NullVoiceNumberObserver.php` («desconocido»). `ElevenLabsAgentDeployer.php` la implementa con UN `GET /v1/convai/phone-numbers/{id}` (mismas reglas que `describeAgent`: sin red si no está configurado, sin redirecciones ni reintentos, la clave solo en `xi-api-key`, fallos como resultados). `VoiceAdapters::numberObserver()`. `VoiceReconciler::numbers()`: el número frente al agente de la parte `canary` (sin entrada o apagada, ninguno); si difieren, `VoiceBrake::open('number_drift', 'number:{id}:{agente|none}', …)` e incidente. `voice:reconcile --numbers` (exit 1 con deriva). `VoiceBrake.php`: `number_drift` → `agent_drift` (§3.2).
+
+**LAB8 §2.6, el informe post-llamada del laboratorio.** `VoicePostCall.php`: una transcripción aceptada, con conversación, SIN llamada de Twilio y de un agente que no es el de ninguna parte publicada se entrega con el evento con nombre `voice.lab.post_call` (`[VoiceWebhookVerdict, list<{turn, code}>]`, la guarda posterior sin destinos). Solo si el laboratorio responde `recorded | duplicate | ignored` deja de ser `unknown_provider_call`; sin oyente, con `not_a_lab_session`, con `call_sid` o con el agente publicado, evento y freno como siempre. La telefonía no nombra el Studio y el laboratorio no escribe en `voice_*`. Probado con el oyente real (`[StudioVoiceLabSessions::class, 'recordProviderReport']`): la firma casa con la carga.
+
+**Pruebas cambiadas:** `tests/Feature/Telephony/Support/VoiceFixtures.php` (`publishVoice` con destinos cifrados como el Studio, estado del perfil, columnas forzadas, perfil firmado distinto y vuelta atrás a un agente existente), `VoiceToolsTest.php` (destinos reales y un miércoles de Bogotá fijo: el personal no atiende en domingo), `TelephonyFixtureParityTest.php` (los seis motivos únicos + `number_drift`), `ElevenLabsConfigTest.php` (sin `publishing`; los `lab.*` y sus recortes), `VoiceProductionNoNetworkTest.php`.
+
+## 3. Decisiones tomadas en esta tanda (para confirmar)
+
+1. **`describeNumber` en una interfaz SEGREGADA (`VoiceNumberObserver`), no en `VoiceAgentDeployer`.** E4-8 dice «la interfaz de observación gana el método»; añadirlo a `VoiceAgentDeployer` deja a `tests/Feature/UltronStudio/FakeVoiceDeployer.php` (de S8, fuera de mi alcance) con un método abstracto sin implementar: error fatal que tumba la suite. Es el patrón que B8-a ya usó con el desplegador frente al puerto del H6. Si el lead lo quiere en `VoiceAgentDeployer`: una línea aquí y tres en `FakeVoiceDeployer` (S8).
+2. **`number_drift` se guarda como `agent_drift`.** `vbr_reason_chk` (DB8) solo admite los seis motivos de D8-19; la deriva del número es la del agente que atiende. La evidencia lleva `trigger: number_drift` y la clave `number:{id}:{agente}`. Un motivo propio sería una migración aditiva de DB8.
+3. **`calls` también excluye `requested`, `canceled` y `failed_to_start`** (nunca llegaron al agente; DB8 les prohíbe ids del proveedor). Es más estricto que la letra de E4-2 («sin tramos ni denegadas»), en el sentido seguro; en las fases 1 y 2 no hay salientes, así que hoy no cambia nada.
+4. **El alias del destino sale junto a la huella.** E4-7 dice «solo las huellas»; el fixture `tools · solicitar_humano` (D8-14) exige además el alias («disponible y el alias, nunca el número»). El número se descifra y se descarta en memoria; el alias ya está en claro en el `content` del perfil.
+5. **Los destinos los fija el agente**, no la entrada (hallazgo D1): una llamada conserva los del agente de su sello mientras su parte apunte a él.
+6. **`--numbers` es aditivo** (la conciliación de llamadas sigue corriendo). Si OPS8 lo entendiera como «solo números» y programara solo eso, no se perdería la detección de llamadas desconocidas.
+7. **El oyente del laboratorio no está registrado.** Dónde registrar `Event::listen('voice.lab.post_call', [StudioVoiceLabSessions::class, 'recordProviderReport'])` lo deciden el lead y SEC8 (`UltronEngineIsolationTest::ALLOWED` o un fichero del Studio que cargue al arrancar). Hasta entonces, con el laboratorio en `elevenlabs`, **cada sesión real abre el freno** al llegar su informe (el riesgo que ya señaló LAB8 §6.1).
+8. **Persistencia de una deriva tras soltar el freno:** la misma deriva no lo reabre (misma `open_key`, como la del agente); reasignar el número a otro agente sí.
+
+## 4. Guardas que caen a propósito (SEC8-b debe enumerarlas)
+
+1. `VoiceIsolationTest::test_estan_los_ficheros_del_h6_y_ninguno_que_no_nombre_el_contrato`: `VoiceNumberObserver.php` en `PAQUETE_H8`, y `'VoiceNumberObserver' => ['describeNumber']` en `INTERFACES` (E4-8).
+2. `VoiceIsolationTest::test_la_red_solo_sale_de_los_metodos_enumerados`: `self::DESPLEGADOR => [… 'describeNumber' => ['get']]` en `RED` y `DESPLEGADOR::describeNumber` en `UNA_PETICION` (E4-8).
+3. `TelephonyIsolationTest::test_del_studio_la_telefonia_solo_nombra_los_canarios_y_su_cadena`: el literal `'ultron_studio_voice_profiles'` en `VoicePublishedConfig` (E4-7: «JOIN al perfil»). **Ojo:** la guarda que SEC8-b tiene ahora en el árbol dice «ninguna otra tabla del Studio (tampoco los perfiles)»; E4-7 la contradice.
+4. `UltronEngineIsolationTest::test_fuera_del_studio_nadie_nombra_sus_clases_sus_tablas_ni_su_configuracion`: el mismo tercer literal en `VOICE_READER_REFERENCES`.
+
+Ya pasan con los cambios de SEC8-b en el árbol: la tabla de agentes (E4-3), `voice_number_is_whatsapp` y el dominio `telephony` (E4-4), y `StudioVoiceEvidence` nombrando la telefonía (Anexo C).
+
+## 5. Contratos nuevos o modificados (para FE8, S8-b, LAB8, OPS8)
+
+- `GET api/admin/voice/status`: sin `flags.publishing` (E4-1); **`transferDirectory` pasa de cadena (`available | unavailable`) a `{canary: int|null, rest: int|null}`** (destinos aprobados de la entrada vigente; null = ilegibles o sin entrada). El CRM no lo usa hoy (búsqueda en `frontend/src`).
+- `GET api/admin/voice/metrics`: añade `publications: {canary, rest}` (el `summary()` de la entrada vigente, o `{part, status}`).
+- `voice:reconcile --numbers` (OPS8-b lo programa): añade `number: {result: ok | drift | not_configured | expected_unknown | unobserved_<resultado>, observed, expected, seq, outcome, brakeOpened}`.
+- `voice:doctor --telefonia`: los destinos, por parte.
+- Evento `voice.lab.post_call` (§2).
+- Variables: **fuera** `VOICE_PUBLISHING_ENABLED`; **nuevas** `VOICE_LAB_DRIVER=fake`, `VOICE_LAB_DAILY_BUDGET_USD=0`, `VOICE_LAB_SESSION_BUDGET_USD=0`, `VOICE_LAB_MAX_SESSION_SECONDS=300`, `VOICE_LAB_MAX_SESSIONS_PER_DAY=5`, y las de S8-b `ULTRON_STUDIO_VOICE_PUBLISHING_ENABLED=false`, `ULTRON_STUDIO_VOICE_LAB_GATE=required`, `ULTRON_STUDIO_VOICE_CANARY_MIN_HOURS=24`, `ULTRON_STUDIO_VOICE_CANARY_MIN_CALLS=3`. Migraciones: ninguna.
+
+## 6. Puerta PG final y lo que queda
+
+- PG final, tras la corrección D1 (`tests/Feature/Telephony tests/Unit/Telephony tests/Unit/Voice tests/Feature/Voice` + `tests/Feature/UltronStudio/*Voice*Test.php`) → **778 pruebas, 185 648 aserciones, 3 fallos** (las guardas 1–3 de §4; la 4 no está en esas carpetas) y ningún error.
+- Sigue fallando cerrado (E4-6, antes de la fase 3): `ELEVENLABS_VERIFIED` → `elevenlabs_unverified`.
+- **Para tester:** una vuelta atrás con una llamada en curso que transfiere (ahora vale); una deriva del número que persiste tras soltar el freno (no reabre); una conversación web de un agente publicado (abre el freno); `ignored` del laboratorio solo es seguro con las precondiciones de `labReport()`; un perfil con 3 destinos y uno ilegible (ninguno vale).
+
+---
+
+# §B8-b · punto 6: el job repite el destino y el calendario (revisión de seguridad, MEDIO, TOCTOU)
+
+**Hallazgo** (revisión automática sobre `61513a1`): `PlaceOutboundVoiceCall::recheck()` volvía a mirar banderas, freno, `publication_moved` y deriva, pero no lo que puede cambiar entre encolar y marcar. No era explotable (salientes cerradas por la constante), pero se cierra ahora.
+
+**Qué cambió:**
+- `app/Services/Telephony/OutboundPolicy.php`: los bloques 3 (destino) y 4 (calendario) de `decide()` pasan a `targetReasons()` (pura, con `TARGET_REASONS`), y `decide()` la llama. La puerta y el job aplican el MISMO código; la paridad con los 43 casos de `decide` sigue en verde.
+- `app/Services/Telephony/OutboundGate.php`: `targetFacts()` (exclusión del número —y, para el job, también de la huella SELLADA—, oral, del lead y RNE marcado; consentimiento; vigencia del RNE; ventana legal y propia con festivos, a `$now`), `targetOf(VoiceCall)` (el destino sellado de una fila; si ya no existe, un destino sin autorizar) y `currentScope()`. La puerta usa los mismos `targetFacts()`.
+- `app/Jobs/Voice/PlaceOutboundVoiceCall.php`: paso 5 nuevo de DF-G9, justo antes de construir la petición (tras la deriva): si `targetReasons()` da algún motivo, cancela con el primero (orden de `REASONS`), sin petición, sin evento (como las demás cancelaciones del job, fixture §job) y con la reserva liberada. Los pasos 1–5 tras la constante quedan en `recheckAfterCode()`, que solo llama `recheck()`, para poder recorrerlos en el árbol compartido.
+- Además de lo pedido, y por la misma regla: un canario que dejó de estar activo da ahora `not_an_active_voice_canary` (antes, `error` al construir la petición) y un alcance estrechado a `canary` con un contacto en la cola, también. Lo uno y lo otro ya cancelaba; ahora con el motivo de la puerta.
+
+**Pruebas:** `tests/Feature/Telephony/PlaceOutboundVoiceCallRecheckTest.php`, **7 pruebas**: todo en regla (sin motivo, y `run()` sigue cancelando primero por la constante), consentimiento revocado tras encolar (`no_voice_consent`), exclusión añadida tras encolar por número de canario y de contacto y por la huella sellada (`excluded`), RNE que caduca (`rne_check_missing`, también con vigencia 0), fuera de la ventana legal, fuera de la propia y festivo (`outside_hours`, `holiday`), alcance estrechado (`not_an_active_voice_canary`) y la cancelación (`canceled`, su motivo, `ended_at`, sin evento, `committedMicros` a 0, sin red). `VoiceFixtures`: una llamada a contacto lleva `canary_number_uuid` nulo y una entrada `rest` se siembra como `promote` (PG cazó las dos con `vc_target_chk` y `usvpub_shape_chk`).
+
+**Cifras:** SQLite (voz, Twilio, telefonía, acceso, carriles y guardas) 875 pruebas, solo las 4 guardas de E4; PG `tests/Feature/Telephony tests/Unit/Telephony` 326 pruebas, solo la guarda 3 de E4 (`TelephonyIsolationTest`); mutantes del cambio 12/12 muertos (quitar el paso 5, ignorar la huella sellada, evaluar a la hora de encolar, fijar el alcance, devolver null, el destino del canario, consentimiento, RNE, horario propio, la regla de festivo y la llamada desde `decide()`); Pint `passed`.
+
+---
+
+# §B8-b · Enmienda 5 (E5-1, E5-2, E5-4) y cierre del conjunto
+
+**Fecha:** 08-11-2026. **Árbol:** el mismo, sobre `589e6c6`, **sin commit**. Lo que sigue manda sobre lo dicho de E4-7 en las secciones anteriores.
+
+**Decisiones confirmadas por el lead:** (1) `VoiceNumberObserver` como interfaz propia (E5-2); (2) la deriva del número se guarda como `agent_drift` con `trigger: number_drift`; (3) `calls` excluye también `requested`, `canceled` y `failed_to_start`; (4) cada destino es `{alias, hash}`. La decisión sobre `--numbers` está completa en la §3.6 de la tanda E4: es aditivo (la conciliación de llamadas sigue corriendo).
+
+## 1. E5-1: los destinos aprobados son los compilados en el agente
+
+- `app/Services/Telephony/VoicePublishedConfig.php`: **fuera** el JOIN a `ultron_studio_voice_profiles`, el descifrado (`Crypt`) y los cruces del perfil (`vp_uuid`, `content_hash`). Lee `a.transfer_destination_hashes` de la fila del agente que ya une (E4-3: dos tablas). Forma EXACTA: lista JSON de como mucho 3 `{alias, hash}` (alias 1–60 caracteres; `hash` hex de 64; las claves en cualquier orden, como las devuelve un `jsonb`). Sin escribir (null) o con otra forma → ningún destino aprobado (toda transferencia es violación; `solicitar_humano` no ofrece a nadie), sin tocar el resto de la parte.
+- `VoicePublishedPart.php`: `transferDestinationHashes()` (antes `transferHashes()`), `transferAliases()` y la propiedad `transferDestinations`. `VoiceTransferDirectory.php` compara huellas igual que antes (por llamada, con el agente de su sello).
+- Ya pasan las guardas `TelephonyIsolationTest::…canarios_y_su_cadena` y `UltronEngineIsolationTest::…nadie_nombra…` (las 3 y 4 de la §4 de E4 ya no aplican).
+- **Dependencia de orden con DB8 y S8-c.** La columna todavía no está en la migración `2026_11_10_100001`. Hasta que entre:
+  - en el árbol compartido caen **3 pruebas de S8** que leen con `VoicePublishedConfig` (`UltronStudioVoicePublishingTest`: publicar, revertir, apagar): la consulta falla y el lector da la cadena por ilegible (falla cerrado);
+  - mis pruebas crean la columna si falta, dentro de la transacción de cada prueba (`VoiceFixtures::ensureCompiledDestinationsColumn()`); con la migración dentro no hace nada y se quita.
+  - **Verificado en copia aislada** con la columna simulada (`json` nulo, en `AGENT_IMMUTABLE_COLUMNS`): SQLite 446 pruebas (publicación de S8 + telefonía + esquema), solo cae el inventario de columnas de DB8 (`UltronStudioVoiceSchemaTest::test_columnas_tipos_y_nulos_de_las_cuatro_tablas`, que DB8 actualiza con la columna); PG 59 pruebas (publicación de S8, destinos, herramientas y límites), en verde.
+  - No puse ninguna comprobación del esquema en tiempo de ejecución: esa migración no ha corrido en ningún entorno y entrará junto con este lector.
+- **Para DB8:** `$table->json('transfer_destination_hashes')->nullable()` en `ultron_studio_voice_agents`, en `AGENT_IMMUTABLE_COLUMNS` (se compila al crear el agente y no cambia) y en sus inventarios. **Para S8-c:** escribirla al INSERTAR el agente, exactamente `[{"alias": …, "hash": …}]` (el alias del destino y la huella `voice-phone` de su E.164); `[]` si no hay destinos.
+
+## 2. E5-2: lo que SEC8 tiene que enumerar
+
+- `app/Services/Voice/VoiceNumberObserver.php`: interfaz, un método `describeNumber(string $phoneNumberId): VoiceNumberAssignment`.
+- `app/Services/Voice/NullVoiceNumberObserver.php`: el nulo («desconocido», `not_configured`, sin red).
+- `app/Services/Voice/Dto/VoiceNumberAssignment.php`: el DTO (resultado, id del número, agente asignado, estado `assigned | unassigned | unknown`; nunca el teléfono).
+- `app/Services/Voice/ElevenLabs/ElevenLabsAgentDeployer.php::describeNumber`: **UNA** petición `GET {base}/v1/convai/phone-numbers/{phone_number_id}` con `Http::withHeaders(['xi-api-key' => …])->acceptJson()->withoutRedirecting()->connectTimeout(min(5, t))->timeout(t)->get(…)`; sin reintentos; base de `ElevenLabsConfig::baseUrl()` (la oficial en producción); sin configurar, sin red.
+- La fábrica `VoiceAdapters::numberObserver()`. **Único que la llama:** `VoiceReconciler::numbers()` (desde `voice:reconcile --numbers`).
+- Líneas para `VoiceIsolationTest`: `PAQUETE_H8` += `VoiceNumberObserver.php`; `INTERFACES` += `'VoiceNumberObserver' => ['describeNumber']`; `RED[DESPLEGADOR]` += `'describeNumber' => ['get']`; `UNA_PETICION` += `DESPLEGADOR.'::describeNumber'`.
+
+## 3. E5-4 (M-1): límites después de autenticar
+
+- `routes/voice.php`: fuera `throttle:240,1`, `throttle:120,1`, `throttle:600,1` y `throttle:60,1` de las cuatro rutas públicas, que compartían el cubo `sha1(dominio|IP)`. Siguen sus topes de cuerpo. Las del CRM conservan sus limitadores (van por sesión).
+- `app/Services/Telephony/VoiceRateLimits.php` (nuevo), con el limitador de Laravel (la caché de la aplicación, como `throttle`):
+  - **Autenticada**, por ruta y por llamada: iniciación por `call_sid` (10/min); post-llamada por evento, tipo + conversación (10/min); herramientas por llamada, `conversation_id`, `call_sid` o `call_ref` (60/min, además del tope de 20 de la base); aviso de Twilio por `IdempotencyToken` (10/min). Sin llamada que la identifique, el cubo «sin llamada» de su ruta. La clave guarda la huella de la llamada, nunca el valor.
+  - **Fallo de autenticación**: cubo propio `ruta|IP|fallo`, 30/min; pasado, 429 sin registrar nada. Una credencial buena nunca lo consulta.
+  - Pasado un cubo: 429 con `Retry-After` y `{ok: false, code: too_many_requests}`.
+- Los cuatro controladores de `app/Http/Controllers/Api/Voice/`: primero la credencial; si falla, su cubo (401 o 429); si vale, el límite por llamada (429) y después el trabajo. En el post-llamada, un sobre válido puede recibir 429 temporal si el MISMO evento pasa de 10 por minuto (una repetición o un reenvío en bucle).
+- **Pruebas:** `VoicePublicRateLimitsTest`, 5: una credencial mala no gasta el presupuesto de la buena en ninguna de las 4 rutas (todo desde la misma IP); el cubo de fallos es de su ruta y de su IP; cada llamada y cada ruta tienen su contador (también el «sin llamada»); herramientas por llamada; y ya no hay contador por IP común (125 iniciaciones buenas desde una IP, más que el antiguo 120). `TelephonyRoutesTest`: las públicas, sin `throttle`; las del CRM, con.
+- **Guarda que cae a propósito:** `VoiceBoundaryTest::test_en_la_tabla_de_rutas_real_la_voz_vive_en_sus_prefijos` (SEC8-a) exige `throttle` en toda ruta de voz («sin limitador (D8-16)»); E5-4 lo quita en las cuatro públicas. SEC8 debe aceptar ahí que el controlador limite con `VoiceRateLimits`.
+
+## 4. Cifras del conjunto (comandos ejecutados)
+
+- **SQLite**, todo el alcance (voz, Twilio, telefonía, acceso, carriles, `UltronEngineIsolationTest` y las 15 `*Voice*Test` del Studio): **1 462 pruebas, 6 fallos**: las 2 guardas de E5-2 (`VoiceIsolationTest`), la de E5-4 (`VoiceBoundaryTest`) y las 3 de S8 que esperan la columna de DB8; 204 omitidas (solo PG).
+- **PG** (`tests/Feature/Telephony tests/Unit/Telephony tests/Unit/Voice tests/Feature/Voice`): **622 pruebas, 3 fallos** (las 3 guardas) y ningún error.
+- **Mutaciones** de esta tanda: 18 aplicadas y 18 muertas (7 del lector de E5-1 y 11 de los límites; una, la ruta en la clave de una petición autenticada, solo murió tras añadir la prueba del cubo «sin llamada» por ruta). Punto 6: 12/12. Tanda E4: 51 aplicadas, 47 muertas, 3 equivalentes y 1 hallazgo real corregido.
+- `auth:coverage --unmapped` vacío; Pint `passed`.
+
+## 5. Ficheros de esta tanda
+
+`app/Services/Telephony/{VoicePublishedConfig,VoicePublishedPart,VoiceTransferDirectory}.php`; `app/Services/Telephony/VoiceRateLimits.php` (nuevo); `app/Http/Controllers/Api/Voice/{ElevenLabsInitiationController,ElevenLabsPostCallController,VoiceToolController,TwilioVoiceUsageTriggerController}.php`; `routes/voice.php`; `tests/Feature/Telephony/{Support/VoiceFixtures,VoiceTransferDestinationsTest,TelephonyRoutesTest,VoiceProductionNoNetworkTest}.php`; `tests/Feature/Telephony/VoicePublicRateLimitsTest.php` (nuevo); este informe. Sin rutas, permisos, variables ni migraciones nuevas.

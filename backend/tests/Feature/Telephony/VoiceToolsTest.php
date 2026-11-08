@@ -8,6 +8,7 @@ use App\Models\Voice\VoiceCallEvent;
 use App\Models\Voice\VoiceExclusion;
 use App\Services\Telephony\VoiceBrake;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Feature\Telephony\Support\VoiceFixtures;
@@ -31,8 +32,6 @@ class VoiceToolsTest extends TestCase
 {
     use RefreshDatabase;
     use VoiceFixtures;
-
-    private const PENDING_DIRECTORY = 'tools · solicitar_humano · solicitar_humano en horario del personal → disponible y el alias, nunca el número';
 
     private const REQUESTED_BY_CALL_REF = 'tools · consultar_horarios · la saliente todavía requested (sin conversación) → rechazada';
 
@@ -60,6 +59,10 @@ class VoiceToolsTest extends TestCase
     #[DataProvider('toolCases')]
     public function test_cada_caso_del_fixture(array $c): void
     {
+        if (isset($c['given']['profileTransferAliases'])) {
+            // El horario del personal no abre en domingo ni en festivo: un miércoles laborable de Bogotá.
+            $this->travelTo(Carbon::parse('2026-11-04 15:00:00', 'America/Bogota'));
+        }
         $g = $c['given']['call'] ?? null;
         $llamada = null;
         $cuerpo = $c['rawBody'];
@@ -75,6 +78,14 @@ class VoiceToolsTest extends TestCase
             }
             if ($g['braked']) {
                 VoiceBrake::open('guard_violation', 'guard:prueba-herramienta', []);
+            }
+        }
+        if (isset($c['given']['profileTransferAliases'])) {
+            // E4-7: los destinos del perfil de la entrada que selló la llamada (la 1, con el agente sellado).
+            $this->publishVoice(transfers: array_map(static fn (string $alias, int $i): array => [$alias, '+5760100001'.str_pad((string) $i, 2, '0', STR_PAD_LEFT)],
+                $c['given']['profileTransferAliases'], array_keys($c['given']['profileTransferAliases'])));
+            if (($c['given']['staffHoursNow'] ?? true) === false) {
+                config(['voice.transfer.staff_hours.weekdays' => '', 'voice.transfer.staff_hours.saturday' => '']);
             }
         }
         if (in_array($c['tool'], ['consultar_planes'], true)) {
@@ -95,11 +106,7 @@ class VoiceToolsTest extends TestCase
             $this->assertIsString($r->json('message'));
         }
         if (array_key_exists('available', $e)) {
-            if ($c['name'] === self::PENDING_DIRECTORY) {
-                $this->assertSame([false, null], [$r->json('disponible'), $r->json('alias')], 'sin directorio de destinos: no disponible (decisión pendiente)');
-            } else {
-                $this->assertSame([$e['available'], $e['alias']], [$r->json('disponible'), $r->json('alias')]);
-            }
+            $this->assertSame([$e['available'], $e['alias']], [$r->json('disponible'), $r->json('alias')]);
         }
         foreach ($e['sideEffects'] ?? [] as $efecto) {
             $this->assertSame('voice_exclusions', $efecto['table']);

@@ -7,8 +7,10 @@ use App\Models\Voice\VoiceCallEvent;
 use App\Services\Voice\Dto\CarrierCall;
 use App\Services\Voice\Dto\CarrierCallsPage;
 use App\Services\Voice\Dto\VoiceAgentObservation;
+use App\Services\Voice\Dto\VoiceNumberAssignment;
 use App\Services\Voice\TelephonyCarrier;
 use App\Services\Voice\VoiceAgentDeployer;
+use App\Services\Voice\VoiceNumberObserver;
 use DateTimeInterface;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -40,10 +42,13 @@ use Illuminate\Support\Facades\Log;
  * veredicto en la caché que lee el job (≤ 5 min); y si lo comprometido del día
  * pasa del presupuesto, freno por coste (el techo duro).
  *
- * PENDIENTE (E2-3, deriva del NÚMERO): leer a qué agente apunta el número
- * importado necesita un GET que las interfaces cerradas de D8-3 no tienen
- * (VoiceIsolationTest). Mientras, la iniciación lo vigila llamada a llamada
- * (DF-E12: un `agent_id` que no es el sellado abre el freno).
+ * LA DERIVA DEL NÚMERO (E2-3; Enmienda 4, E4-8; {@see numbers()}, la pide
+ * `voice:reconcile --numbers`): el agente al que apunta el número importado en
+ * ElevenLabs (`describeNumber`, solo GET) frente al que debe atenderlo, el de
+ * la parte `canary` de la cadena (en el H8 las entrantes son solo de canarios,
+ * E2-8; sin entrada o con la parte apagada, ninguno). Si difieren: freno
+ * (`number_drift`, que la base guarda como `agent_drift`) e incidente. La
+ * iniciación lo vigila además llamada a llamada (DF-E12).
  */
 final class VoiceReconciler
 {
@@ -221,6 +226,58 @@ final class VoiceReconciler
         }
 
         return $out;
+    }
+
+    /** La parte de la cadena cuyo agente atiende el número (las entrantes del H8 son de canarios, E2-8). */
+    public const NUMBER_PART = VoicePublishedConfig::PART_CANARY;
+
+    public const NUMBER_OK = 'ok';
+
+    public const NUMBER_DRIFT = 'drift';
+
+    public const NUMBER_NOT_CONFIGURED = 'not_configured';
+
+    /** La cadena no se puede leer: no se sabe qué agente debería atender (ya deniega todo, D8-8). */
+    public const NUMBER_EXPECTED_UNKNOWN = 'expected_unknown';
+
+    /**
+     * La deriva del número (E2-3, E4-8). Solo GET; sin el id del número
+     * importado o sin el proveedor configurado, sin red.
+     *
+     * @return array{result: string, observed: string, expected: string, seq: ?int, outcome: ?string, brakeOpened: bool}
+     */
+    public function numbers(VoiceNumberObserver $observer): array
+    {
+        $id = config('voice.elevenlabs.agent_phone_number_id');
+        $parte = VoicePublishedConfig::read()[self::NUMBER_PART];
+        $esperado = $parte->ok() ? $parte->providerAgentId : null;
+        $esperadoEstado = $parte->status === VoicePublishedPart::STATUS_UNREADABLE ? VoiceNumberAssignment::STATE_UNKNOWN
+            : ($esperado === null ? VoiceNumberAssignment::STATE_UNASSIGNED : VoiceNumberAssignment::STATE_ASSIGNED);
+        $resumen = ['result' => self::NUMBER_NOT_CONFIGURED, 'observed' => VoiceNumberAssignment::STATE_UNKNOWN, 'expected' => $esperadoEstado,
+            'seq' => $parte->seq, 'outcome' => null, 'brakeOpened' => false];
+        if (! is_string($id) || trim($id) === '') {
+            return $resumen;
+        }
+
+        $o = $observer->describeNumber(trim($id));
+        $resumen['outcome'] = $o->outcome;
+        $resumen['observed'] = $o->state();
+        if ($o->outcome !== VoiceNumberAssignment::OUTCOME_OBSERVED) {
+            $resumen['result'] = 'unobserved_'.$o->outcome;
+        } elseif ($esperadoEstado === VoiceNumberAssignment::STATE_UNKNOWN) {
+            $resumen['result'] = self::NUMBER_EXPECTED_UNKNOWN;
+        } elseif ($o->agentId === $esperado) {
+            $resumen['result'] = self::NUMBER_OK;
+        } else {
+            $resumen['result'] = self::NUMBER_DRIFT;
+            $resumen['brakeOpened'] = VoiceBrake::open('number_drift', 'number:'.$o->phoneNumberId.':'.($o->agentId ?? 'none'), [
+                'where' => 'reconcile', 'part' => self::NUMBER_PART, 'seq' => $parte->seq,
+                'observedAgentId' => $o->agentId, 'expectedAgentId' => $esperado,
+            ]) !== null;
+        }
+        Log::channel('voice')->info('voice.reconcile.number', ['result' => $resumen['result'], 'observed' => $resumen['observed'], 'expected' => $resumen['expected']]);
+
+        return $resumen;
     }
 
     /** El techo duro: lo comprometido de hoy por encima del presupuesto abre el freno por coste. */

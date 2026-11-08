@@ -167,15 +167,23 @@ return [
         ],
     ],
 
-    // H8, Enmienda 2 (E2-4): publicar la voz (S8) y el laboratorio hablado
-    // (LAB8) se cierran por su PROPIA bandera, además de la credencial (que en
-    // producción ya está desde E1-12). Apagadas, ninguna de las dos sale a la red.
-    'publishing' => [
-        'enabled' => filter_var(env('VOICE_PUBLISHING_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
-    ],
-
+    // H8, Enmienda 2 (E2-4): el laboratorio hablado (LAB8) se cierra por su
+    // PROPIA bandera, además de la credencial (que en producción ya está desde
+    // E1-12). Apagada, no sale a la red. Publicar la voz tiene la suya en el
+    // Studio (Enmienda 4, E4-1: `ultron_studio.voice.publishing_enabled`).
+    //
+    // Lo demás, con los defectos CERRADOS que propone LAB8 (informe-lab §2.3):
+    // el simulador, presupuesto 0 (`zero_budget`: no abre nada), 60–300 s por
+    // sesión (D8-23) y 0–50 sesiones por persona y día de Bogotá.
     'lab' => [
         'enabled' => filter_var(env('VOICE_LAB_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        // fake | elevenlabs. Cualquier otro valor: `invalid_driver`, nunca el simulador en silencio.
+        'driver' => strtolower(trim((string) env('VOICE_LAB_DRIVER', 'fake'))),
+        // US$ del día de Bogotá y tope por sesión; texto decimal (lo interpreta el laboratorio).
+        'daily_budget_usd' => env('VOICE_LAB_DAILY_BUDGET_USD', '0'),
+        'session_budget_usd' => env('VOICE_LAB_SESSION_BUDGET_USD', '0'),
+        'max_session_seconds' => min(300, max(60, $entero('VOICE_LAB_MAX_SESSION_SECONDS', 300))),
+        'max_sessions_per_day' => min(50, max(0, $entero('VOICE_LAB_MAX_SESSIONS_PER_DAY', 5))),
     ],
 
     // H8, D8-21 y E2-6: las tareas `voice:*` del monitor (OPS8 las programa en

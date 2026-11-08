@@ -81,7 +81,7 @@ final class VoiceTools
             $respuesta = match ($tool) {
                 VoiceAgentSpec::TOOL_CONSULTAR_PLANES => self::plans(),
                 VoiceAgentSpec::TOOL_CONSULTAR_HORARIOS => self::hours(),
-                VoiceAgentSpec::TOOL_SOLICITAR_HUMANO => self::human(),
+                VoiceAgentSpec::TOOL_SOLICITAR_HUMANO => self::human($llamada),
                 VoiceAgentSpec::TOOL_NO_VOLVER_A_LLAMAR => self::optOut($llamada),
             };
             VoiceEvents::record('tool_call', $id, VoiceCallEvent::PROVIDER_ELEVENLABS, null, ['tool' => $tool, 'outcome' => self::VERDICT_OK]);
@@ -195,12 +195,13 @@ final class VoiceTools
      * `solicitar_humano` (D8-14): si hay transferencia AHORA (el horario del
      * personal [P-12] y un destino aprobado) y el ALIAS del destino, nunca su
      * número. Sin horario o sin destinos, no hay nadie: el agente no transfiere.
+     * Los destinos son los del perfil de la entrada que SELLÓ la llamada (E4-7).
      *
      * @return array<string, mixed>
      */
-    private static function human(): array
+    private static function human(VoiceCall $llamada): array
     {
-        $alias = VoiceTransferDirectory::aliases()[0] ?? null;
+        $alias = VoiceTransferDirectory::aliasesFor($llamada)[0] ?? null;
         $hay = $alias !== null && OutboundSchedule::within(now(), OutboundSchedule::staffFromConfig());
 
         return ['disponible' => $hay, 'alias' => $hay ? $alias : null];

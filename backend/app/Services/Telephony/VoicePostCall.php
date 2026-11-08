@@ -26,11 +26,29 @@ use Illuminate\Support\Facades\Log;
  *    y la GUARDA POSTERIOR en memoria, de la que solo se guardan códigos y
  *    números de turno (una violación abre el freno).
  *  - Una conversación sin fila (iniciada fuera de Laravel) es
- *    `unknown_provider_call` y abre el freno (DF-E5).
+ *    `unknown_provider_call` y abre el freno (DF-E5). Salvo que sea del
+ *    LABORATORIO HABLADO y él la reconozca como suya (LAB8, informe-lab §2.6;
+ *    {@see labReport()}): sin oyente, o si dice que no es suya, freno.
  *  - Duplicado (la misma conversación y el mismo tipo): 200 y nada nuevo (DF-E2).
  */
 final class VoicePostCall
 {
+    /**
+     * El evento CON NOMBRE con el que el laboratorio hablado (LAB8) recibe el
+     * informe de una conversación suya: la telefonía no nombra el Studio
+     * (TelephonyIsolationTest). Su carga: el veredicto neutro y los códigos de
+     * la guarda posterior (`[{turn, code}]`).
+     */
+    public const LAB_EVENT = 'voice.lab.post_call';
+
+    /**
+     * Lo que responde el laboratorio cuando la conversación es SUYA
+     * (`StudioVoiceLabSessions::recordProviderReport`). `ignored` solo lo es
+     * porque antes de entregar se exige un informe aceptado, de transcripción y
+     * con conversación (el laboratorio solo lo dice entonces de un agente suyo).
+     */
+    public const LAB_CLAIMED = ['recorded', 'duplicate', 'ignored'];
+
     /** @return array<string, mixed> el cuerpo de la respuesta (200) */
     public function ingest(VoiceWebhookVerdict $v): array
     {
@@ -122,7 +140,7 @@ final class VoicePostCall
         }
 
         // 3. La guarda posterior: en memoria; se guardan códigos y números de turno.
-        $violaciones = VoiceTranscriptGuard::inspect($v->guardTurns(), VoiceTransferDirectory::approvedHashes());
+        $violaciones = VoiceTranscriptGuard::inspect($v->guardTurns(), VoiceTransferDirectory::approvedHashesFor($llamada));
         $veredicto = VoiceEvents::record('guard_verdict', $id, VoiceCallEvent::PROVIDER_ELEVENLABS, $clave, [
             'outcome' => $violaciones === [] ? 'clean' : 'violation',
             'codes' => ['violations' => $violaciones],
@@ -138,6 +156,10 @@ final class VoicePostCall
     /** @return array<string, mixed> una conversación que Laravel no inició: evento y freno (DF-E5) */
     private function unknown(VoiceWebhookVerdict $v): array
     {
+        $laboratorio = $this->labReport($v);
+        if ($laboratorio !== null) {
+            return ['ok' => true, 'lab' => $laboratorio];
+        }
         $clave = $v->conversationId ?? ($v->callSid === null ? null : 'sid:'.$v->callSid);
         $evento = VoiceEvents::record('unknown_provider_call', null, VoiceCallEvent::PROVIDER_ELEVENLABS, $clave, ['outcome' => (string) $v->kind]);
         if ($evento !== null || $clave === null) {
@@ -146,6 +168,38 @@ final class VoicePostCall
         Log::channel('voice')->warning('voice.post_call.unknown_call', ['kind' => $v->kind]);
 
         return ['ok' => true, 'unknown' => true];
+    }
+
+    /**
+     * Una conversación WEB (sin llamada de Twilio), con su id y de un agente
+     * que no es el de ninguna parte publicada, puede ser del laboratorio
+     * hablado: se le entrega por {@see LAB_EVENT}, con los códigos de la
+     * guarda posterior (el laboratorio no transfiere: ningún destino vale).
+     * Devuelve lo que respondió si la reconoce como suya; si no, null y sigue
+     * el camino de siempre (falla cerrado). El laboratorio no escribe en
+     * `voice_*` y la telefonía, de esto, solo registra el resultado.
+     */
+    private function labReport(VoiceWebhookVerdict $v): ?string
+    {
+        if ($v->kind !== VoiceWebhookVerdict::KIND_POST_CALL_TRANSCRIPTION || ! $v->accepted() || $v->callSid !== null
+            || $v->conversationId === null || $v->agentId === null) {
+            return null;
+        }
+        foreach (VoicePublishedConfig::read() as $parte) {
+            if ($parte->ok() && hash_equals((string) $parte->providerAgentId, $v->agentId)) {
+                return null;   // una conversación del agente PUBLICADO fuera de Laravel es una anomalía, no una prueba
+            }
+        }
+        $guarda = VoiceTranscriptGuard::inspect($v->guardTurns(), []);
+        foreach ((array) event(self::LAB_EVENT, [$v, $guarda]) as $respuesta) {
+            if (in_array($respuesta, self::LAB_CLAIMED, true)) {
+                Log::channel('voice')->info('voice.post_call.lab', ['result' => $respuesta, 'violations' => count($guarda)]);
+
+                return $respuesta;
+            }
+        }
+
+        return null;
     }
 
     /**

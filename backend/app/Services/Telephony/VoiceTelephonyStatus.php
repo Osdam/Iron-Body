@@ -37,7 +37,6 @@ final class VoiceTelephonyStatus
                 'inbound' => config('voice.inbound.enabled') === true,
                 'outbound' => config('voice.outbound.enabled') === true,
                 'twilioVoice' => config('voice.twilio.enabled') === true,
-                'publishing' => config('voice.publishing.enabled') === true,
                 'lab' => config('voice.lab.enabled') === true,
                 'monitor' => config('voice.monitor.enabled') === true,
             ],
@@ -64,7 +63,7 @@ final class VoiceTelephonyStatus
                 'staffHours' => OutboundSchedule::staffFromConfig() === false ? 'invalid' : (OutboundSchedule::staffFromConfig() === null ? 'none' : 'configured'),
             ],
             'facts' => ['hoursConfigured' => (string) config('voice.facts.site', '') !== '' && (string) config('voice.facts.hours', '') !== ''],
-            'transferDirectory' => VoiceTransferDirectory::approvedHashes() === null ? 'unavailable' : 'available',
+            'transferDirectory' => VoiceTransferDirectory::countsByPart(),
             'today' => $metricas,
         ];
     }

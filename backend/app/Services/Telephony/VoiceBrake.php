@@ -38,7 +38,13 @@ use Throwable;
  */
 final class VoiceBrake
 {
-    /** Las causas del fixture (§brake) → el motivo cerrado de la base (DB8). */
+    /**
+     * Las causas del fixture (§brake) → el motivo cerrado de la base (DB8).
+     * E4-8: la deriva del NÚMERO (apunta a un agente que no es el publicado)
+     * es una deriva del agente que atiende (D8-19); la base no tiene otro
+     * motivo (`vbr_reason_chk`), así que se guarda como `agent_drift` y la
+     * evidencia dice la causa (`trigger`).
+     */
     public const TRIGGERS = [
         'guard_violation' => 'guard_violation',
         'seal_mismatch' => 'seal_mismatch',
@@ -46,6 +52,7 @@ final class VoiceBrake
         'daily_hard_cap_reached' => 'cost_cap',
         'usage_alert' => 'subaccount_alert',
         'unknown_provider_call' => 'unknown_provider_call',
+        'number_drift' => 'agent_drift',
     ];
 
     public const NOTE_MAX = 300;
@@ -71,14 +78,21 @@ final class VoiceBrake
 
     /**
      * Abre el freno. Devuelve la apertura nueva, o null si esa misma causa ya
-     * lo había abierto (idempotente por `open_key`).
+     * lo había abierto (idempotente por `open_key`). `$reason` es un motivo de
+     * la base o una causa de {@see TRIGGERS} (se guarda su motivo y, si es
+     * otro, la causa en la evidencia).
      *
      * @param  array<string, int|string|bool|null|list<mixed>>  $evidence  códigos y cifras, nunca texto ni teléfonos
      */
     public static function open(string $reason, string $openKey, array $evidence = [], ?int $callId = null, ?int $eventId = null): ?VoiceBrakeEntry
     {
+        $causa = $reason;
+        $reason = self::TRIGGERS[$causa] ?? $causa;
         if (! in_array($reason, VoiceBrakeEntry::REASONS, true) || preg_match(VoiceEvents::KEY_PATTERN, $openKey) !== 1) {
             throw new \InvalidArgumentException('Motivo o clave del freno fuera de su forma.');
+        }
+        if ($causa !== $reason) {
+            $evidence = ['trigger' => $causa] + $evidence;
         }
         $fila = (new VoiceBrakeEntry)->forceFill([
             'kind' => VoiceBrakeEntry::KIND_OPEN,

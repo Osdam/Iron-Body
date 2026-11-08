@@ -6,8 +6,10 @@ use App\Services\Voice\Dto\VoiceAgentObservation;
 use App\Services\Voice\Dto\VoiceAgentPayload;
 use App\Services\Voice\Dto\VoiceDeployResult;
 use App\Services\Voice\Dto\VoiceIds;
+use App\Services\Voice\Dto\VoiceNumberAssignment;
 use App\Services\Voice\VoiceAgentDeployer;
 use App\Services\Voice\VoiceCallPolicy;
+use App\Services\Voice\VoiceNumberObserver;
 use App\Services\Voice\VoiceProviderStatus;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
@@ -21,7 +23,9 @@ use Throwable;
  *  - `POST /v1/convai/tools` (`{tool_config}` → `{id}`);
  *  - `POST /v1/convai/agents/create` (→ `{agent_id}`);
  *  - `GET  /v1/convai/agents/{agent_id}` y `GET /v1/convai/tools/{tool_id}`;
- *  - `PATCH /v1/convai/phone-numbers/{phone_number_id}` (`{agent_id}`).
+ *  - `PATCH /v1/convai/phone-numbers/{phone_number_id}` (`{agent_id}`);
+ *  - `GET  /v1/convai/phone-numbers/{phone_number_id}` (→ `assigned_agent`),
+ *    para la deriva del número (Enmienda 4, E4-8; {@see VoiceNumberObserver}).
  *
  * Reglas:
  *  - Antes de salir vuelve a mirar la configuración: si el estado no es
@@ -40,7 +44,7 @@ use Throwable;
  *    necesita el giro.
  *  - Nunca modifica un agente: no hay ningún PATCH ni DELETE de agentes.
  */
-final class ElevenLabsAgentDeployer implements VoiceAgentDeployer
+final class ElevenLabsAgentDeployer implements VoiceAgentDeployer, VoiceNumberObserver
 {
     public const CREATE_AGENT_PATH = '/v1/convai/agents/create';
 
@@ -251,6 +255,64 @@ final class ElevenLabsAgentDeployer implements VoiceAgentDeployer
         }
 
         return new VoiceDeployResult(VoiceDeployResult::OUTCOME_ASSIGNED, $observado, [], $estado, null);
+    }
+
+    /**
+     * E4-8: a qué agente apunta el número importado. Solo GET, UNA petición;
+     * del cuerpo solo se toma `assigned_agent.agent_id` (el teléfono que trae
+     * la respuesta no sale de aquí). Sin la bandera o sin todas las piezas,
+     * «desconocido» sin red.
+     */
+    public function describeNumber(string $phoneNumberId): VoiceNumberAssignment
+    {
+        $config = ElevenLabsConfig::fromConfig();
+        $base = $config->baseUrl();
+        if ($config->status()->state !== VoiceProviderStatus::STATE_UNVERIFIED || $base === null) {
+            return VoiceNumberAssignment::unknown();
+        }
+        if (! VoiceIds::isProviderId($phoneNumberId)) {
+            return new VoiceNumberAssignment(VoiceNumberAssignment::OUTCOME_ERROR, null, null, null, VoiceNumberAssignment::REASON_INVALID_REQUEST);
+        }
+        $espera = $config->timeoutSeconds();
+
+        try {
+            $respuesta = Http::withHeaders(['xi-api-key' => trim((string) config('voice.elevenlabs.api_key'))])
+                ->acceptJson()
+                ->withoutRedirecting()
+                ->connectTimeout(min(self::CONNECT_TIMEOUT_SECONDS, $espera))
+                ->timeout($espera)
+                ->get($base.self::PHONE_NUMBERS_PATH.rawurlencode($phoneNumberId));
+        } catch (StrayRequestException $e) {
+            throw $e;
+        } catch (ConnectionException) {
+            return new VoiceNumberAssignment(VoiceNumberAssignment::OUTCOME_UNREACHABLE, $phoneNumberId, null, null, null);
+        } catch (Throwable) {
+            return new VoiceNumberAssignment(VoiceNumberAssignment::OUTCOME_ERROR, $phoneNumberId, null, null, null);
+        }
+
+        $estado = $respuesta->status();
+        $http = $estado >= 100 && $estado <= 599 ? $estado : null;
+        if ($estado < 200 || $estado > 299) {
+            $resultado = match (true) {
+                $estado === 401, $estado === 403 => VoiceNumberAssignment::OUTCOME_AUTH_FAILED,
+                $estado === 404 => VoiceNumberAssignment::OUTCOME_NOT_FOUND,
+                default => VoiceNumberAssignment::OUTCOME_ERROR,
+            };
+
+            return new VoiceNumberAssignment($resultado, $phoneNumberId, null, $http, null);
+        }
+        $numero = self::jsonObject($respuesta);
+        if ($numero === null || ! array_key_exists('assigned_agent', $numero)) {
+            return new VoiceNumberAssignment(VoiceNumberAssignment::OUTCOME_ERROR, $phoneNumberId, null, $http, VoiceNumberAssignment::REASON_INVALID_RESPONSE);
+        }
+        $asignado = $numero['assigned_agent'];
+        $agente = is_array($asignado) ? VoiceIds::providerIdOrNull($asignado['agent_id'] ?? null) : null;
+        if ($asignado !== null && $agente === null) {
+            // Un agente asignado sin id legible no es «sin asignar»: no se sabe.
+            return new VoiceNumberAssignment(VoiceNumberAssignment::OUTCOME_ERROR, $phoneNumberId, null, $http, VoiceNumberAssignment::REASON_INVALID_RESPONSE);
+        }
+
+        return new VoiceNumberAssignment(VoiceNumberAssignment::OUTCOME_OBSERVED, $phoneNumberId, $agente, $http, null);
     }
 
     // ── Piezas puras ────────────────────────────────────────────────────────

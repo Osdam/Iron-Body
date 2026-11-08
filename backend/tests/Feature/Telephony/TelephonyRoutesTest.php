@@ -14,11 +14,13 @@ use Tests\TestCase;
 
 /**
  * La tabla de rutas de la telefonía (contrato H8, D8-16, D8-22, «API»; puerta
- * 2): cada ruta de `routes/voice.php` con su tope de cuerpo y su limitador; las
- * públicas, exactamente las de `AuthorizationMap::PUBLIC_VOICE_ROUTES` (las
- * cuatro de D8-16, cada una con su razón); las del CRM, cada una resuelta a su
- * llave `telephony.*`; `auth:coverage --unmapped` vacío; y el 413 en TODAS con
- * un cuerpo por encima de su tope, antes de autenticar.
+ * 2): cada ruta de `routes/voice.php` con su tope de cuerpo; las del CRM con
+ * su limitador y su llave `telephony.*`; las públicas, exactamente las de
+ * `AuthorizationMap::PUBLIC_VOICE_ROUTES` (las cuatro de D8-16, cada una con su
+ * razón) y SIN limitador por IP antes de autenticar (Enmienda 5, E5-4: limitan
+ * sus controladores después, VoicePublicRateLimitsTest); `auth:coverage
+ * --unmapped` vacío; y el 413 en TODAS con un cuerpo por encima de su tope,
+ * antes de autenticar.
  */
 class TelephonyRoutesTest extends TestCase
 {
@@ -48,7 +50,7 @@ class TelephonyRoutesTest extends TestCase
             || str_contains(ltrim($r->getActionName(), '\\'), 'Controllers\\Crm\\Voice\\')));
     }
 
-    public function test_cada_ruta_lleva_su_tope_y_su_limitador_y_las_publicas_son_las_clasificadas(): void
+    public function test_cada_ruta_lleva_su_tope_las_del_crm_su_limitador_y_las_publicas_son_las_clasificadas_sin_limite_por_ip(): void
     {
         $rutas = $this->voiceRoutes();
         $this->assertCount(17, $rutas, '4 públicas y 13 del CRM');
@@ -64,8 +66,8 @@ class TelephonyRoutesTest extends TestCase
                 $limitador = $limitador || (is_string($m) && str_starts_with($m, 'throttle:'));
             }
             $clave = AuthorizationMap::routeKey($r);
-            $this->assertTrue($limitador, "{$clave} sin limitador");
             if (str_starts_with($r->uri(), 'api/admin/voice/')) {
+                $this->assertTrue($limitador, "{$clave} sin limitador");
                 $this->assertSame(self::ADMIN_CAP, $tope, "{$clave}: tope del CRM");
                 $this->assertTrue(AuthorizationMap::isAdministrative($r));
                 $permiso = AuthorizationMap::resolve($r);
@@ -75,6 +77,7 @@ class TelephonyRoutesTest extends TestCase
                 continue;
             }
             $this->assertSame(self::CAPS[$r->uri()], $tope, "{$clave}: tope de D8-16");
+            $this->assertFalse($limitador, "{$clave}: ningún límite por IP antes de autenticar (E5-4)");
             $this->assertFalse(AuthorizationMap::isAdministrative($r), "{$clave} es pública: fuera del universo administrativo");
             $this->assertSame(['POST'], $r->methods(), $clave);
             $publicas[] = $clave;

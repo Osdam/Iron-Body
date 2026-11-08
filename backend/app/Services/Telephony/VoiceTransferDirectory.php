@@ -2,29 +2,55 @@
 
 namespace App\Services\Telephony;
 
+use App\Models\Voice\VoiceCall;
+
 /**
- * Los destinos de transferencia APROBADOS de la publicación vigente (contrato
- * H8, D8-6, D8-14): su alias (para `solicitar_humano`) y la huella
- * `voice-phone` de su número (para la guarda posterior).
+ * Los destinos de transferencia APROBADOS de una llamada (contrato H8, D8-6,
+ * D8-14; Enmienda 5, E5-1): los COMPILADOS en el agente que la SELLÓ, tal como
+ * los da {@see VoicePublishedConfig} (alias y huella `voice-phone`, nunca el
+ * número). La guarda compara huellas.
  *
- * Viven en el perfil de voz aprobado (Studio, S8) y la telefonía no puede
- * leerlo (TelephonyIsolationTest). Hasta que el lead enumere cómo llegan
- * (un adaptador de solo lectura o el sello de la cadena), el directorio está
- * VACÍO y falla cerrado: `solicitar_humano` dice que no hay nadie (el agente
- * no transfiere) y cualquier `transfer_to_number` que aparezca en una
- * transcripción es `voice_transfer_not_approved` (abre el freno).
+ * Los destinos los fija el AGENTE (es inmutable):
+ * valen los de la entrada vigente de la parte de la llamada si apunta al
+ * MISMO agente del sello, sea esa entrada u otra posterior (una vuelta atrás a
+ * ese agente lleva los mismos destinos). Si la parte apunta ya a otro agente,
+ * o la llamada no tiene sello, no se sabe cuáles eran y ninguno vale (fallo
+ * cerrado: la guarda trata toda transferencia como
+ * `voice_transfer_not_approved` y `solicitar_humano` dice que no hay nadie).
  */
 final class VoiceTransferDirectory
 {
-    /** @return list<string>|null las huellas aprobadas; null = no se sabe (ninguna vale) */
-    public static function approvedHashes(): ?array
+    /** @return list<string>|null las huellas aprobadas para esta llamada; null = no se sabe (ninguna vale) */
+    public static function approvedHashesFor(VoiceCall $call): ?array
     {
-        return null;
+        return self::partFor($call)?->transferDestinationHashes();
     }
 
-    /** @return list<string> los alias aprobados (sin números) */
-    public static function aliases(): array
+    /** @return list<string> los alias aprobados para esta llamada (sin números) */
+    public static function aliasesFor(VoiceCall $call): array
     {
-        return [];
+        return self::partFor($call)?->transferAliases() ?? [];
+    }
+
+    /** @return array<string, int|null> parte → cuántos destinos aprobados tiene su entrada vigente (null = ninguno se puede leer) */
+    public static function countsByPart(): array
+    {
+        $out = [];
+        foreach (VoicePublishedConfig::read() as $nombre => $parte) {
+            $out[$nombre] = $parte->ok() && $parte->transferDestinationHashes() !== null ? count($parte->transferDestinationHashes()) : null;
+        }
+
+        return $out;
+    }
+
+    private static function partFor(VoiceCall $call): ?VoicePublishedPart
+    {
+        if ($call->stamp_state !== 'applied' || ! in_array($call->part, VoicePublishedConfig::PARTS, true) || $call->voice_publication_seq === null) {
+            return null;
+        }
+        $parte = VoicePublishedConfig::read()[$call->part];
+
+        return $parte->ok() && is_string($call->provider_agent_id) && hash_equals((string) $parte->providerAgentId, $call->provider_agent_id)
+            ? $parte : null;
     }
 }
