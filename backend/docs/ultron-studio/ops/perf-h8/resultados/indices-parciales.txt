@@ -1,0 +1,349 @@
+Pager usage is off.
+BEGIN
+════ 1. Volumen de la siembra (30 exclusiones, 200 contactos), planificador natural ════
+── vex_one_opt_out_per_call: no_volver_a_llamar (VoiceTools.php:222)
+                                           QUERY PLAN                                           
+------------------------------------------------------------------------------------------------
+ Result  (cost=1.45..1.46 rows=1 width=1) (actual rows=1 loops=1)
+   Buffers: shared read=1
+   InitPlan 1 (returns $0)
+     ->  Seq Scan on voice_exclusions  (cost=0.00..1.45 rows=1 width=0) (actual rows=0 loops=1)
+           Filter: ((call_id = 5002) AND ((source)::text = 'spoken_opt_out'::text))
+           Rows Removed by Filter: 30
+           Buffers: shared read=1
+ Planning:
+   Buffers: shared hit=76 read=7
+ Planning Time: 0.368 ms
+ Execution Time: 0.032 ms
+(11 rows)
+
+── vex_phone_idx: VoiceCallFacts::excluded (VoiceCallFacts.php:61)
+                                                 QUERY PLAN                                                  
+-------------------------------------------------------------------------------------------------------------
+ Result  (cost=1.38..1.39 rows=1 width=1) (actual rows=1 loops=1)
+   Buffers: shared hit=1
+   InitPlan 1 (returns $0)
+     ->  Seq Scan on voice_exclusions  (cost=0.00..1.38 rows=1 width=0) (actual rows=0 loops=1)
+           Filter: (phone_hash = '4b6542c96741cecafd8f1639d258252c50f4aff02a29473773f503c566dbb70a'::bpchar)
+           Rows Removed by Filter: 30
+           Buffers: shared hit=1
+ Planning:
+   Buffers: shared hit=7 read=2
+ Planning Time: 0.056 ms
+ Execution Time: 0.008 ms
+(11 rows)
+
+── vct_one_live: contacto vivo por huella
+                                                QUERY PLAN                                                 
+-----------------------------------------------------------------------------------------------------------
+ Index Scan using vct_one_live on voice_contacts  (cost=0.27..8.29 rows=1 width=8) (actual rows=1 loops=1)
+   Index Cond: (phone_hash = '4b6542c96741cecafd8f1639d258252c50f4aff02a29473773f503c566dbb70a'::bpchar)
+   Buffers: shared hit=1 read=2
+ Planning:
+   Buffers: shared hit=4 read=1
+ Planning Time: 0.036 ms
+ Execution Time: 0.024 ms
+(7 rows)
+
+── usva_one_canary / usva_one_rest: el agente que atiende cada parte
+                                                        QUERY PLAN                                                         
+---------------------------------------------------------------------------------------------------------------------------
+ Index Scan using usva_one_canary on ultron_studio_voice_agents  (cost=0.12..8.14 rows=1 width=65) (actual rows=0 loops=1)
+   Buffers: shared hit=1
+ Planning:
+   Buffers: shared hit=112 read=13 dirtied=1
+ Planning Time: 0.532 ms
+ Execution Time: 0.003 ms
+(6 rows)
+
+                                                       QUERY PLAN                                                        
+-------------------------------------------------------------------------------------------------------------------------
+ Index Scan using usva_one_rest on ultron_studio_voice_agents  (cost=0.12..8.14 rows=1 width=65) (actual rows=0 loops=1)
+   Buffers: shared hit=1
+ Planning:
+   Buffers: shared hit=5
+ Planning Time: 0.018 ms
+ Execution Time: 0.002 ms
+(6 rows)
+
+── vc_one_live_outbound: la saliente viva de un número (ninguna consulta de la aplicación lo lee: guarda de unicidad)
+                                                   QUERY PLAN                                                   
+----------------------------------------------------------------------------------------------------------------
+ Index Scan using vc_one_live_outbound on voice_calls  (cost=0.13..8.14 rows=1 width=8) (actual rows=1 loops=1)
+   Index Cond: (remote_hash = '5c497cb305bec30325861d64cd84ac667f94bd8d27e75b727f7e2524a325b18e'::bpchar)
+   Buffers: shared hit=1 read=1
+ Planning:
+   Buffers: shared hit=56 read=1
+ Planning Time: 0.155 ms
+ Execution Time: 0.013 ms
+(7 rows)
+
+════ 2. Mismo volumen con enable_seqscan = off: ¿el planificador PUEDE usarlos? ════
+SET
+                                                              QUERY PLAN                                                              
+--------------------------------------------------------------------------------------------------------------------------------------
+ Result  (cost=4.14..4.15 rows=1 width=1) (actual rows=1 loops=1)
+   Buffers: shared hit=5
+   InitPlan 1 (returns $0)
+     ->  Index Only Scan using vex_one_opt_out_per_call on voice_exclusions  (cost=0.12..4.14 rows=1 width=0) (actual rows=0 loops=1)
+           Index Cond: (call_id = 5002)
+           Heap Fetches: 0
+           Buffers: shared hit=5
+ Planning:
+   Buffers: shared hit=1
+ Planning Time: 0.027 ms
+ Execution Time: 0.019 ms
+(11 rows)
+
+                                                        QUERY PLAN                                                         
+---------------------------------------------------------------------------------------------------------------------------
+ Result  (cost=4.16..4.17 rows=1 width=1) (actual rows=1 loops=1)
+   Buffers: shared read=1
+   InitPlan 1 (returns $0)
+     ->  Index Only Scan using vex_phone_idx on voice_exclusions  (cost=0.14..4.16 rows=1 width=0) (actual rows=0 loops=1)
+           Index Cond: (phone_hash = '4b6542c96741cecafd8f1639d258252c50f4aff02a29473773f503c566dbb70a'::bpchar)
+           Heap Fetches: 0
+           Buffers: shared read=1
+ Planning:
+   Buffers: shared hit=1
+ Planning Time: 0.019 ms
+ Execution Time: 0.011 ms
+(11 rows)
+
+                                                QUERY PLAN                                                 
+-----------------------------------------------------------------------------------------------------------
+ Index Scan using vct_one_live on voice_contacts  (cost=0.27..8.29 rows=1 width=8) (actual rows=1 loops=1)
+   Index Cond: (phone_hash = '4b6542c96741cecafd8f1639d258252c50f4aff02a29473773f503c566dbb70a'::bpchar)
+   Buffers: shared hit=3
+ Planning Time: 0.018 ms
+ Execution Time: 0.005 ms
+(5 rows)
+
+                                                        QUERY PLAN                                                         
+---------------------------------------------------------------------------------------------------------------------------
+ Index Scan using usva_one_canary on ultron_studio_voice_agents  (cost=0.12..8.14 rows=1 width=65) (actual rows=0 loops=1)
+   Buffers: shared hit=1
+ Planning:
+   Buffers: shared hit=2
+ Planning Time: 0.015 ms
+ Execution Time: 0.003 ms
+(6 rows)
+
+                                                       QUERY PLAN                                                        
+-------------------------------------------------------------------------------------------------------------------------
+ Index Scan using usva_one_rest on ultron_studio_voice_agents  (cost=0.12..8.14 rows=1 width=65) (actual rows=0 loops=1)
+   Buffers: shared hit=1
+ Planning:
+   Buffers: shared hit=2
+ Planning Time: 0.013 ms
+ Execution Time: 0.002 ms
+(6 rows)
+
+                                                   QUERY PLAN                                                   
+----------------------------------------------------------------------------------------------------------------
+ Index Scan using vc_one_live_outbound on voice_calls  (cost=0.13..8.14 rows=1 width=8) (actual rows=1 loops=1)
+   Index Cond: (remote_hash = '5c497cb305bec30325861d64cd84ac667f94bd8d27e75b727f7e2524a325b18e'::bpchar)
+   Buffers: shared hit=2
+ Planning Time: 0.064 ms
+ Execution Time: 0.004 ms
+(5 rows)
+
+SET
+════ 3. Con volumen: 5 000 bajas orales (una por llamada) + 15 000 exclusiones manuales, 5 000 contactos más ════
+INSERT 0 4502
+INSERT 0 15000
+INSERT 0 5000
+ANALYZE
+ANALYZE
+ exclusiones | contactos 
+-------------+-----------
+       19532 |      5200
+(1 row)
+
+                                                                        QUERY PLAN                                                                        
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+ Result  (cost=16.61..16.62 rows=1 width=1) (actual rows=1 loops=1)
+   Buffers: shared hit=7
+   InitPlan 2 (returns $1)
+     ->  Index Only Scan using vex_one_opt_out_per_call on voice_exclusions voice_exclusions_1  (cost=8.59..16.61 rows=1 width=0) (actual rows=1 loops=1)
+           Index Cond: (call_id = $0)
+           Heap Fetches: 1
+           Buffers: shared hit=7
+           InitPlan 1 (returns $0)
+             ->  Index Scan using voice_exclusions_pkey on voice_exclusions  (cost=0.29..8.30 rows=1 width=8) (actual rows=1 loops=1)
+                   Index Cond: (id = 4532)
+                   Buffers: shared hit=3
+ Planning Time: 0.052 ms
+ Execution Time: 0.049 ms
+(13 rows)
+
+                                                              QUERY PLAN                                                              
+--------------------------------------------------------------------------------------------------------------------------------------
+ Result  (cost=8.30..8.31 rows=1 width=1) (actual rows=1 loops=1)
+   Buffers: shared hit=4
+   InitPlan 1 (returns $0)
+     ->  Index Only Scan using vex_one_opt_out_per_call on voice_exclusions  (cost=0.28..8.30 rows=1 width=0) (actual rows=1 loops=1)
+           Index Cond: (call_id = 5002)
+           Heap Fetches: 1
+           Buffers: shared hit=4
+ Planning Time: 0.028 ms
+ Execution Time: 0.006 ms
+(9 rows)
+
+                                                        QUERY PLAN                                                         
+---------------------------------------------------------------------------------------------------------------------------
+ Result  (cost=8.43..8.44 rows=1 width=1) (actual rows=1 loops=1)
+   Buffers: shared hit=3
+   InitPlan 1 (returns $0)
+     ->  Index Only Scan using vex_phone_idx on voice_exclusions  (cost=0.41..8.43 rows=1 width=0) (actual rows=0 loops=1)
+           Index Cond: (phone_hash = '4b6542c96741cecafd8f1639d258252c50f4aff02a29473773f503c566dbb70a'::bpchar)
+           Heap Fetches: 0
+           Buffers: shared hit=3
+ Planning Time: 0.019 ms
+ Execution Time: 0.007 ms
+(9 rows)
+
+                                                QUERY PLAN                                                 
+-----------------------------------------------------------------------------------------------------------
+ Index Scan using vct_one_live on voice_contacts  (cost=0.28..8.30 rows=1 width=8) (actual rows=1 loops=1)
+   Index Cond: (phone_hash = '4b6542c96741cecafd8f1639d258252c50f4aff02a29473773f503c566dbb70a'::bpchar)
+   Buffers: shared hit=3
+ Planning:
+   Buffers: shared hit=6
+ Planning Time: 0.033 ms
+ Execution Time: 0.006 ms
+(7 rows)
+
+── la unicidad sigue viva: una segunda saliente viva al mismo número choca con vc_one_live_outbound (23505)
+SAVEPOINT
+psql:indices-parciales.sql:75: ERROR:  duplicate key value violates unique constraint "vc_one_live_outbound"
+DETAIL:  Key (remote_hash)=(5c497cb305bec30325861d64cd84ac667f94bd8d27e75b727f7e2524a325b18e) already exists.
+ROLLBACK
+════ 4. P8-1: las lecturas de VoiceEvidence::summary() (VoiceEvidence.php:93-110), antes y con el índice candidato ════
+── antes (sin índice por voice_publication_seq)
+                                                   QUERY PLAN                                                   
+----------------------------------------------------------------------------------------------------------------
+ Seq Scan on voice_calls  (cost=0.00..956.51 rows=82 width=8) (actual rows=130 loops=1)
+   Filter: ((transfer_of_call_id IS NULL) AND (voice_publication_seq = 49) AND ((part)::text = 'canary'::text))
+   Rows Removed by Filter: 4971
+   Buffers: shared hit=880
+ Planning Time: 0.030 ms
+ Execution Time: 1.493 ms
+(6 rows)
+
+                                                                          QUERY PLAN                                                                           
+---------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=969.39..969.40 rows=1 width=8) (actual rows=1 loops=1)
+   Buffers: shared hit=880
+   ->  Seq Scan on voice_calls  (cost=0.00..969.27 rows=50 width=0) (actual rows=90 loops=1)
+         Filter: ((transfer_of_call_id IS NULL) AND (voice_publication_seq = 49) AND ((part)::text = 'canary'::text) AND ((status)::text = 'completed'::text))
+         Rows Removed by Filter: 5011
+         Buffers: shared hit=880
+ Planning Time: 0.037 ms
+ Execution Time: 0.911 ms
+(8 rows)
+
+                                                                                                                                               QUERY PLAN                                                                                                                                               
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=1033.07..1033.08 rows=1 width=8) (actual rows=1 loops=1)
+   Buffers: shared hit=880
+   ->  Seq Scan on voice_calls  (cost=0.00..1033.03 rows=16 width=0) (actual rows=95 loops=1)
+         Filter: ((transfer_of_call_id IS NULL) AND ((stamp_state)::text = 'applied'::text) AND ((part)::text = 'canary'::text) AND (voice_publication_seq = 49) AND ((status)::text <> ALL ('{denied,requested,canceled,failed_to_start}'::text[])) AND (created_at >= (now() - '30 days'::interval)))
+         Rows Removed by Filter: 5006
+         Buffers: shared hit=880
+ Planning:
+   Buffers: shared hit=6
+ Planning Time: 0.070 ms
+ Execution Time: 1.991 ms
+(10 rows)
+
+── la agregación única con FILTER (la propuesta de P8-1), sin índice
+                                                      QUERY PLAN                                                      
+----------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=957.95..957.96 rows=1 width=72) (actual rows=1 loops=1)
+   Buffers: shared hit=880
+   ->  Seq Scan on voice_calls  (cost=0.00..956.51 rows=82 width=26) (actual rows=130 loops=1)
+         Filter: ((transfer_of_call_id IS NULL) AND (voice_publication_seq = 49) AND ((part)::text = 'canary'::text))
+         Rows Removed by Filter: 4971
+         Buffers: shared hit=880
+ Planning:
+   Buffers: shared hit=19 read=2
+ Planning Time: 0.066 ms
+ Execution Time: 0.940 ms
+(10 rows)
+
+CREATE INDEX
+ANALYZE
+── con el índice candidato (voice_publication_seq, part) WHERE transfer_of_call_id IS NULL
+                                                      QUERY PLAN                                                      
+----------------------------------------------------------------------------------------------------------------------
+ Bitmap Heap Scan on voice_calls  (cost=5.12..251.34 rows=82 width=8) (actual rows=130 loops=1)
+   Recheck Cond: ((voice_publication_seq = 49) AND ((part)::text = 'canary'::text) AND (transfer_of_call_id IS NULL))
+   Heap Blocks: exact=35
+   Buffers: shared hit=35 read=2
+   ->  Bitmap Index Scan on vc_perf_candidato_seq_part  (cost=0.00..5.10 rows=82 width=0) (actual rows=130 loops=1)
+         Index Cond: ((voice_publication_seq = 49) AND ((part)::text = 'canary'::text))
+         Buffers: shared read=2
+ Planning:
+   Buffers: shared hit=14 read=1
+ Planning Time: 0.062 ms
+ Execution Time: 0.053 ms
+(11 rows)
+
+                                                         QUERY PLAN                                                         
+----------------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=251.66..251.67 rows=1 width=8) (actual rows=1 loops=1)
+   Buffers: shared hit=37
+   ->  Bitmap Heap Scan on voice_calls  (cost=5.12..251.54 rows=50 width=0) (actual rows=90 loops=1)
+         Recheck Cond: ((voice_publication_seq = 49) AND ((part)::text = 'canary'::text) AND (transfer_of_call_id IS NULL))
+         Filter: ((status)::text = 'completed'::text)
+         Rows Removed by Filter: 40
+         Heap Blocks: exact=35
+         Buffers: shared hit=37
+         ->  Bitmap Index Scan on vc_perf_candidato_seq_part  (cost=0.00..5.10 rows=82 width=0) (actual rows=130 loops=1)
+               Index Cond: ((voice_publication_seq = 49) AND ((part)::text = 'canary'::text))
+               Buffers: shared hit=2
+ Planning:
+   Buffers: shared hit=3
+ Planning Time: 0.048 ms
+ Execution Time: 0.040 ms
+(15 rows)
+
+                                                                                           QUERY PLAN                                                                                            
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=252.60..252.61 rows=1 width=8) (actual rows=1 loops=1)
+   Buffers: shared hit=37
+   ->  Bitmap Heap Scan on voice_calls  (cost=5.11..252.56 rows=16 width=0) (actual rows=95 loops=1)
+         Recheck Cond: ((voice_publication_seq = 49) AND ((part)::text = 'canary'::text) AND (transfer_of_call_id IS NULL))
+         Filter: (((stamp_state)::text = 'applied'::text) AND ((status)::text <> ALL ('{denied,requested,canceled,failed_to_start}'::text[])) AND (created_at >= (now() - '30 days'::interval)))
+         Rows Removed by Filter: 35
+         Heap Blocks: exact=35
+         Buffers: shared hit=37
+         ->  Bitmap Index Scan on vc_perf_candidato_seq_part  (cost=0.00..5.10 rows=82 width=0) (actual rows=130 loops=1)
+               Index Cond: ((voice_publication_seq = 49) AND ((part)::text = 'canary'::text))
+               Buffers: shared hit=2
+ Planning:
+   Buffers: shared hit=13
+ Planning Time: 0.080 ms
+ Execution Time: 0.098 ms
+(15 rows)
+
+                                                         QUERY PLAN                                                         
+----------------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=252.78..252.79 rows=1 width=72) (actual rows=1 loops=1)
+   Buffers: shared hit=37
+   ->  Bitmap Heap Scan on voice_calls  (cost=5.12..251.34 rows=82 width=26) (actual rows=130 loops=1)
+         Recheck Cond: ((voice_publication_seq = 49) AND ((part)::text = 'canary'::text) AND (transfer_of_call_id IS NULL))
+         Heap Blocks: exact=35
+         Buffers: shared hit=37
+         ->  Bitmap Index Scan on vc_perf_candidato_seq_part  (cost=0.00..5.10 rows=82 width=0) (actual rows=130 loops=1)
+               Index Cond: ((voice_publication_seq = 49) AND ((part)::text = 'canary'::text))
+               Buffers: shared hit=2
+ Planning:
+   Buffers: shared hit=6
+ Planning Time: 0.046 ms
+ Execution Time: 0.081 ms
+(13 rows)
+
+ROLLBACK
+════ fin: transacción deshecha (la copia queda como estaba) ════

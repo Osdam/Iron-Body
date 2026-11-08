@@ -1,0 +1,116 @@
+{
+    "env": {
+        "at": "2026-11-08T18:10:01+00:00",
+        "php": "8.3.33",
+        "opcacheCli": false,
+        "db": "ultron_studio_h8_perf_seed",
+        "pg": "PostgreSQL 14.24 (Homebrew) on aarch64-apple-darwin25.6.0, compiled by Apple clang version 21.0.0 (clang-2100.1.1.101), 64-bit",
+        "cache": "database",
+        "queue": "database",
+        "n": 0,
+        "warm": 5,
+        "reps": 3,
+        "load": [
+            2.208984375,
+            2.45947265625,
+            2.35986328125
+        ],
+        "host": "MacBook-Air-de-Alejandro.local arm64",
+        "head": "e753649e"
+    },
+    "counts": {
+        "voice_calls": 5101,
+        "voice_call_events": 20000,
+        "voice_contacts": 200,
+        "voice_consents": 185,
+        "voice_exclusions": 30,
+        "voice_rne_checks": 200,
+        "voice_brakes": 16,
+        "ultron_studio_voice_publications": 50,
+        "ultron_studio_voice_agents": 325,
+        "ultron_studio_voice_profiles": 50,
+        "ultron_studio_voice_lab_sessions": 300,
+        "ultron_studio_canary_numbers": 3,
+        "ultron_studio_versions": 26,
+        "plans": 8,
+        "marketing_leads": 50,
+        "cache": 1,
+        "incidents": 4,
+        "_seconds": 9.8
+    },
+    "tables": [
+        {
+            "tabla": "cache",
+            "filas": 1,
+            "bytes": 49152
+        },
+        {
+            "tabla": "incidents",
+            "filas": 4,
+            "bytes": 81920
+        },
+        {
+            "tabla": "ultron_studio_voice_agents",
+            "filas": 268,
+            "bytes": 499712
+        },
+        {
+            "tabla": "ultron_studio_voice_lab_sessions",
+            "filas": 242,
+            "bytes": 286720
+        },
+        {
+            "tabla": "ultron_studio_voice_profiles",
+            "filas": 50,
+            "bytes": 221184
+        },
+        {
+            "tabla": "ultron_studio_voice_publications",
+            "filas": 50,
+            "bytes": 163840
+        },
+        {
+            "tabla": "voice_brakes",
+            "filas": 16,
+            "bytes": 98304
+        },
+        {
+            "tabla": "voice_call_events",
+            "filas": 20000,
+            "bytes": 8871936
+        },
+        {
+            "tabla": "voice_calls",
+            "filas": 5101,
+            "bytes": 10805248
+        },
+        {
+            "tabla": "voice_consents",
+            "filas": 185,
+            "bytes": 147456
+        },
+        {
+            "tabla": "voice_contacts",
+            "filas": 200,
+            "bytes": 245760
+        },
+        {
+            "tabla": "voice_exclusions",
+            "filas": 30,
+            "bytes": 90112
+        },
+        {
+            "tabla": "voice_rne_checks",
+            "filas": 200,
+            "bytes": 180224
+        }
+    ],
+    "canary": {
+        "seq": 49,
+        "agent": "agent_perf_0025"
+    },
+    "rest": {
+        "seq": 50,
+        "agent": "agent_perf_0025"
+    }
+}

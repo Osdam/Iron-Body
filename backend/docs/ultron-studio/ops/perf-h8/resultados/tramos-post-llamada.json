@@ -1,0 +1,143 @@
+{
+    "at": "2026-11-08T21:43:17+00:00",
+    "php": "8.3.33",
+    "load": [
+        1.583984375,
+        1.6728515625,
+        1.46435546875
+    ],
+    "results": [
+        {
+            "size": "9 KB",
+            "bodyBytes": 9168,
+            "agentTurns": 20,
+            "agentTextBytes": 2003,
+            "stages": {
+                "firma (HMAC-SHA256 del cuerpo)": {
+                    "p50": 0.066,
+                    "p95": 0.067,
+                    "max": 0.07
+                },
+                "json_decode #1 (Envelope::type)": {
+                    "p50": 0.05,
+                    "p95": 0.05,
+                    "max": 0.051
+                },
+                "sobre (envelope: json_decode #2 + turnos del agente)": {
+                    "p50": 0.143,
+                    "p95": 0.155,
+                    "max": 0.156
+                },
+                "guarda (VoiceTranscriptGuard::inspect)": {
+                    "p50": 0.846,
+                    "p95": 0.861,
+                    "max": 0.864
+                },
+                "  · de ella, OutboundContentGuard::inspect por turno": {
+                    "p50": 0.838,
+                    "p95": 0.86,
+                    "max": 0.892
+                }
+            }
+        },
+        {
+            "size": "40 KB",
+            "bodyBytes": 40568,
+            "agentTurns": 100,
+            "agentTextBytes": 8963,
+            "stages": {
+                "firma (HMAC-SHA256 del cuerpo)": {
+                    "p50": 0.281,
+                    "p95": 0.284,
+                    "max": 0.284
+                },
+                "json_decode #1 (Envelope::type)": {
+                    "p50": 0.226,
+                    "p95": 0.229,
+                    "max": 0.236
+                },
+                "sobre (envelope: json_decode #2 + turnos del agente)": {
+                    "p50": 0.639,
+                    "p95": 0.652,
+                    "max": 0.657
+                },
+                "guarda (VoiceTranscriptGuard::inspect)": {
+                    "p50": 3.901,
+                    "p95": 3.923,
+                    "max": 3.932
+                },
+                "  · de ella, OutboundContentGuard::inspect por turno": {
+                    "p50": 3.874,
+                    "p95": 3.926,
+                    "max": 3.995
+                }
+            }
+        },
+        {
+            "size": "~100 KB",
+            "bodyBytes": 128579,
+            "agentTurns": 100,
+            "agentTextBytes": 96974,
+            "stages": {
+                "firma (HMAC-SHA256 del cuerpo)": {
+                    "p50": 0.894,
+                    "p95": 0.912,
+                    "max": 0.926
+                },
+                "json_decode #1 (Envelope::type)": {
+                    "p50": 0.404,
+                    "p95": 0.409,
+                    "max": 0.44
+                },
+                "sobre (envelope: json_decode #2 + turnos del agente)": {
+                    "p50": 1,
+                    "p95": 1.016,
+                    "max": 1.023
+                },
+                "guarda (VoiceTranscriptGuard::inspect)": {
+                    "p50": 29.186,
+                    "p95": 29.418,
+                    "max": 29.634
+                },
+                "  · de ella, OutboundContentGuard::inspect por turno": {
+                    "p50": 29.151,
+                    "p95": 29.24,
+                    "max": 29.457
+                }
+            }
+        },
+        {
+            "size": "~1 MB",
+            "bodyBytes": 1046985,
+            "agentTurns": 467,
+            "agentTextBytes": 902525,
+            "stages": {
+                "firma (HMAC-SHA256 del cuerpo)": {
+                    "p50": 7.26,
+                    "p95": 7.365,
+                    "max": 7.588
+                },
+                "json_decode #1 (Envelope::type)": {
+                    "p50": 2.759,
+                    "p95": 2.794,
+                    "max": 2.813
+                },
+                "sobre (envelope: json_decode #2 + turnos del agente)": {
+                    "p50": 6.371,
+                    "p95": 6.439,
+                    "max": 6.442
+                },
+                "guarda (VoiceTranscriptGuard::inspect)": {
+                    "p50": 260.025,
+                    "p95": 265.765,
+                    "max": 266.102
+                },
+                "  · de ella, OutboundContentGuard::inspect por turno": {
+                    "p50": 259.81,
+                    "p95": 263.008,
+                    "max": 263.62
+                }
+            }
+        }
+    ]
+}

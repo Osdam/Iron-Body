@@ -1,0 +1,434 @@
+{
+  "version": "perf8-2026-11-08",
+  "source": "PERF8 (plans/informes-h8/informe-performance.md): techos INICIALES derivados de lo medido en local (banco HTTP php -S + arnés en proceso, siembra a escala); se recalibran con la primera pasada en producción.",
+  "rules": "(las mismas del H7, escritas para que nadie las adivine):\n  · techo inicial del smoke: p50Ms = ↑10(max(3 × p50 HTTP local, p50 + 100 ms)); p95Ms = ↑10(max(3 × p95 HTTP local,\n    p95 + 150 ms)). Son techos INICIALES (≈ 3 veces lo local), no medidas de producción: la primera pasada en\n    producción los recalibra con la regla de OPS8 (max(1,5 × medida, medida + 50 ms)), en un commit aparte.\n  · maxBytes = ↑KB(max(1,5 × bytes medidos con la siembra a escala, bytes + 4 KB)): la siembra llena las páginas.\n  · public401.maxMs = ↑10(max(3 × p95 HTTP del 401, p95 + 100 ms)).\n  · maxQueries (CI) = sentencias medidas + 2 (CACHE_STORE=database; limitadores como en el arnés).",
+  "samples": {
+    "warmup": 1,
+    "n": 5,
+    "minIntervalSeconds": 0.6
+  },
+  "public401": {
+    "maxMs": 140,
+    "note": "401 sin credencial de las 4 públicas; local HTTP p95 38.285 ms (iniciación, n=30)"
+  },
+  "routes": [
+    {
+      "name": "GET admin/voice/status",
+      "path": "/admin/voice/status",
+      "p50Ms": 290,
+      "p95Ms": 310,
+      "maxBytes": 7168,
+      "measured": {
+        "httpLocal": {
+          "n": 30,
+          "p50": 93.406,
+          "p95": 101.292,
+          "max": 104.527,
+          "bytes": 2126
+        },
+        "inProcess": {
+          "n": 90,
+          "p50": 43.937,
+          "p95": 44.996
+        },
+        "queries": 41
+      }
+    },
+    {
+      "name": "GET admin/voice/calls",
+      "path": "/admin/voice/calls",
+      "p50Ms": 190,
+      "p95Ms": 220,
+      "maxBytes": 24576,
+      "measured": {
+        "httpLocal": {
+          "n": 30,
+          "p50": 62.405,
+          "p95": 66.65,
+          "max": 70.547,
+          "bytes": 15829
+        },
+        "inProcess": {
+          "n": 90,
+          "p50": 15.416,
+          "p95": 16.392
+        },
+        "queries": 12
+      }
+    },
+    {
+      "name": "GET admin/voice/metrics",
+      "path": "/admin/voice/metrics",
+      "p50Ms": 280,
+      "p95Ms": 290,
+      "maxBytes": 6144,
+      "measured": {
+        "httpLocal": {
+          "n": 30,
+          "p50": 90.875,
+          "p95": 96.19,
+          "max": 96.27,
+          "bytes": 1304
+        },
+        "inProcess": {
+          "n": 90,
+          "p50": 41.622,
+          "p95": 43.384
+        },
+        "queries": 38
+      }
+    },
+    {
+      "name": "GET admin/voice/contacts",
+      "path": "/admin/voice/contacts",
+      "p50Ms": 210,
+      "p95Ms": 240,
+      "maxBytes": 11264,
+      "measured": {
+        "httpLocal": {
+          "n": 30,
+          "p50": 67.674,
+          "p95": 78.72,
+          "max": 80.127,
+          "bytes": 6461
+        },
+        "inProcess": {
+          "n": 90,
+          "p50": 21.747,
+          "p95": 22.823
+        },
+        "queries": 62
+      }
+    },
+    {
+      "name": "GET voice/profiles",
+      "path": "/admin/ultron-studio/voice/profiles",
+      "p50Ms": 170,
+      "p95Ms": 220,
+      "maxBytes": 28672,
+      "measured": {
+        "httpLocal": {
+          "n": 30,
+          "p50": 54.988,
+          "p95": 60.261,
+          "max": 64.768,
+          "bytes": 18727
+        },
+        "inProcess": {
+          "n": 90,
+          "p50": 17.295,
+          "p95": 17.749
+        },
+        "queries": 18
+      }
+    },
+    {
+      "name": "GET voice/publications",
+      "path": "/admin/ultron-studio/voice/publications",
+      "p50Ms": 200,
+      "p95Ms": 230,
+      "maxBytes": 40960,
+      "measured": {
+        "httpLocal": {
+          "n": 30,
+          "p50": 66.552,
+          "p95": 75.963,
+          "max": 77.628,
+          "bytes": 27030
+        },
+        "inProcess": {
+          "n": 90,
+          "p50": 28.313,
+          "p95": 30.86
+        },
+        "queries": 33
+      }
+    },
+    {
+      "name": "GET voice/brakes",
+      "path": "/admin/ultron-studio/voice/brakes",
+      "p50Ms": 170,
+      "p95Ms": 220,
+      "maxBytes": 7168,
+      "measured": {
+        "httpLocal": {
+          "n": 30,
+          "p50": 55.348,
+          "p95": 65.452,
+          "max": 66.545,
+          "bytes": 2379
+        },
+        "inProcess": {
+          "n": 90,
+          "p50": 15.46,
+          "p95": 16.752
+        },
+        "queries": 19
+      }
+    },
+    {
+      "name": "GET voice-lab/status",
+      "path": "/admin/ultron-studio/voice-lab/status",
+      "p50Ms": 170,
+      "p95Ms": 210,
+      "maxBytes": 7168,
+      "measured": {
+        "httpLocal": {
+          "n": 30,
+          "p50": 54.688,
+          "p95": 58.806,
+          "max": 60.72,
+          "bytes": 2315
+        },
+        "inProcess": {
+          "n": 90,
+          "p50": 14.57,
+          "p95": 14.88
+        },
+        "queries": 18
+      }
+    },
+    {
+      "name": "GET voice-lab/sessions",
+      "path": "/admin/ultron-studio/voice-lab/sessions",
+      "p50Ms": 190,
+      "p95Ms": 220,
+      "maxBytes": 52224,
+      "measured": {
+        "httpLocal": {
+          "n": 30,
+          "p50": 62.098,
+          "p95": 68.823,
+          "max": 71.336,
+          "bytes": 34442
+        },
+        "inProcess": {
+          "n": 90,
+          "p50": 19.891,
+          "p95": 20.529
+        },
+        "queries": 21
+      }
+    },
+    {
+      "name": "GET integrations/voice",
+      "path": "/admin/ultron-studio/integrations/voice",
+      "p50Ms": 180,
+      "p95Ms": 270,
+      "maxBytes": 11264,
+      "measured": {
+        "httpLocal": {
+          "n": 30,
+          "p50": 58.749,
+          "p95": 87.725,
+          "max": 93.256,
+          "bytes": 6911
+        },
+        "inProcess": {
+          "n": 90,
+          "p50": 20.55,
+          "p95": 21.917
+        },
+        "queries": 30
+      }
+    },
+    {
+      "name": "GET voice/canary-evidence",
+      "path": "/admin/ultron-studio/voice/canary-evidence",
+      "p50Ms": 250,
+      "p95Ms": 290,
+      "maxBytes": 5120,
+      "measured": {
+        "httpLocal": {
+          "n": 30,
+          "p50": 80.079,
+          "p95": 93.978,
+          "max": 97.292,
+          "bytes": 661
+        },
+        "inProcess": {
+          "n": 90,
+          "p50": 26.191,
+          "p95": 26.842
+        },
+        "queries": 42
+      }
+    }
+  ],
+  "publicRoutes": [
+    {
+      "name": "POST webhooks/voice/elevenlabs/initiation",
+      "contractP95Ms": 300,
+      "httpLocal": {
+        "n": 30,
+        "p50": 34.456,
+        "p95": 41.947,
+        "max": 42.817,
+        "requestBytes": 197
+      },
+      "inProcess": {
+        "n": 90,
+        "p50": 10.589,
+        "p95": 10.923
+      },
+      "queries": 18,
+      "meetsContract": true
+    },
+    {
+      "name": "POST voice/tools/consultar_planes",
+      "contractP95Ms": 500,
+      "httpLocal": {
+        "n": 30,
+        "p50": 22.503,
+        "p95": 25.174,
+        "max": 25.839,
+        "requestBytes": 148
+      },
+      "inProcess": {
+        "n": 90,
+        "p50": 6.631,
+        "p95": 7.154
+      },
+      "queries": 10,
+      "meetsContract": true
+    },
+    {
+      "name": "POST voice/tools/solicitar_humano",
+      "contractP95Ms": 500,
+      "httpLocal": {
+        "n": 30,
+        "p50": 24.899,
+        "p95": 33.547,
+        "max": 36.999,
+        "requestBytes": 148
+      },
+      "inProcess": {
+        "n": 90,
+        "p50": 6.908,
+        "p95": 7.213
+      },
+      "queries": 10,
+      "meetsContract": true
+    },
+    {
+      "name": "POST webhooks/voice/elevenlabs/post-call (9 KB)",
+      "contractP95Ms": 200,
+      "httpLocal": {
+        "n": 30,
+        "p50": 32.152,
+        "p95": 40.328,
+        "max": 43.73,
+        "requestBytes": 9051
+      },
+      "inProcess": {
+        "n": 90,
+        "p50": 10.959,
+        "p95": 12.231
+      },
+      "queries": 13,
+      "meetsContract": true
+    },
+    {
+      "name": "POST webhooks/voice/elevenlabs/post-call (~1 MB, peor caso)",
+      "contractP95Ms": 200,
+      "httpLocal": {
+        "n": 30,
+        "p50": 320.25,
+        "p95": 328.601,
+        "max": 330.104,
+        "requestBytes": 1046869
+      },
+      "inProcess": {
+        "n": 90,
+        "p50": 313.756,
+        "p95": 317.87
+      },
+      "queries": 13,
+      "meetsContract": false
+    },
+    {
+      "name": "POST webhooks/voice/twilio/usage-trigger",
+      "contractP95Ms": null,
+      "httpLocal": {
+        "n": 30,
+        "p50": 25.333,
+        "p95": 34.22,
+        "max": 35.938,
+        "requestBytes": 426
+      },
+      "inProcess": {
+        "n": 90,
+        "p50": 7.154,
+        "p95": 7.573
+      },
+      "queries": 11,
+      "meetsContract": null
+    }
+  ],
+  "maxQueries": {
+    "GET admin/voice/calls · direction=inbound": 14,
+    "GET admin/voice/calls · page=150 (profunda)": 14,
+    "GET admin/voice/calls · perPage=100": 14,
+    "GET admin/voice/calls · por defecto (25)": 14,
+    "GET admin/voice/calls · status=completed": 14,
+    "GET admin/voice/calls · status=hung_up (raro)": 14,
+    "GET admin/voice/calls/{uuid} · la de más eventos": 14,
+    "GET admin/voice/contacts · perPage=100": 214,
+    "GET admin/voice/contacts · por defecto (25)": 64,
+    "GET admin/voice/metrics · hoy + 2 partes": 40,
+    "GET admin/voice/status · 5 000 llamadas": 43,
+    "GET integrations/voice (ruta 45) · Super Admin": 32,
+    "GET integrations/voice (ruta 45) · publicador": 32,
+    "GET voice-lab/sessions · 20 de 300": 23,
+    "GET voice-lab/sessions · per_page=50": 23,
+    "GET voice-lab/sessions/{uuid} · una": 22,
+    "GET voice-lab/status · 300 sesiones": 20,
+    "GET voice/brakes · 8 sueltos": 21,
+    "GET voice/canary-evidence · canario vigente": 44,
+    "GET voice/profiles · 20": 20,
+    "GET voice/profiles/{uuid} · real": 19,
+    "GET voice/publications · 20 de 50": 35,
+    "GET voice/publications · per_page=50": 35,
+    "OutboundGate::targetFacts(targetOf(...)) · canario (descifra)": 4,
+    "OutboundGate::targetFacts(targetOf(...)) · contacto con lead (descifra, consentimiento, RNE, lead)": 7,
+    "POST admin/voice/calls (puerta de salientes) · a un canario": 24,
+    "POST admin/voice/calls (puerta de salientes) · a un contacto con lead": 27,
+    "POST initiation · canario (todo abierto salvo la constante) · canario": 20,
+    "POST initiation · desconocido denegado · desconocido": 20,
+    "POST initiation · repetida (idempotente) · reentrega": 8,
+    "POST initiation · secreto malo · 401": 7,
+    "POST post-call · call_initiation_failure (busy) · saliente dialing": 12,
+    "POST post-call · duplicada · 8 KB repetida": 8,
+    "POST post-call · firma mala · 401": 7,
+    "POST post-call · post_call_audio · descartado": 11,
+    "POST post-call · transcripción · 40 KB · 200 turnos": 15,
+    "POST post-call · transcripción · 9 KB · 40 turnos": 15,
+    "POST post-call · transcripción · ~1 MB · 1000 turnos": 15,
+    "POST post-call · transcripción · ~100 KB · 200 turnos": 15,
+    "POST tools/consultar_horarios · primera de la llamada": 13,
+    "POST tools/consultar_horarios · siguiente (cupo 2–11 de 20)": 11,
+    "POST tools/consultar_planes · primera de la llamada": 14,
+    "POST tools/consultar_planes · siguiente (cupo 2–11 de 20)": 12,
+    "POST tools/consultar_planes · Bearer malo · 401": 7,
+    "POST tools/no_volver_a_llamar · primera de la llamada": 15,
+    "POST tools/no_volver_a_llamar · siguiente (cupo 2–11 de 20)": 12,
+    "POST tools/solicitar_humano · primera de la llamada": 14,
+    "POST tools/solicitar_humano · siguiente (cupo 2–11 de 20)": 12,
+    "POST twilio/usage-trigger · aviso nuevo (abre el freno)": 13,
+    "POST twilio/usage-trigger · firma mala": 7,
+    "POST twilio/usage-trigger · repetido (idempotente)": 7,
+    "POST voice/compile-preview · versión y perfil reales": 22,
+    "POST voice/publish · adaptador real + Http::fake (constante cerrada → 409)": 45,
+    "POST voice/publish · desplegador falso (camino entero)": 55,
+    "PlaceOutboundVoiceCall::recheckAfterCode() (reflexión) · deriva en caché": 8,
+    "PlaceOutboundVoiceCall::record() (reflexión) · started → dialing": 7,
+    "PlaceOutboundVoiceCall::run() (constante cerrada) · cancela sin red": 5,
+    "VoiceBrake::isOpen() · 200 abiertos y sueltos": 3,
+    "VoiceBrake::isOpen() · 8 abiertos y sueltos": 3,
+    "VoicePublishedConfig::read() · cadena de 200": 3,
+    "VoicePublishedConfig::read() · cadena de 50": 3,
+    "voice:reconcile (VoiceReconciler::run) · primera pasada · 1 000 llamadas (10 páginas)": 5026,
+    "voice:reconcile (VoiceReconciler::run) · primera pasada · 100 llamadas (1 página)": 508,
+    "voice:reconcile (VoiceReconciler::run) · régimen · 100 ya conciliadas": 106
+  }
+}

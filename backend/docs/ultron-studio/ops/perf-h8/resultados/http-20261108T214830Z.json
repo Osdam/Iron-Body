@@ -1,0 +1,347 @@
+{
+  "env": {
+    "at": "2026-11-08T21:48:30Z",
+    "base": "127.0.0.1:8610/api",
+    "n": 30,
+    "warm": 3,
+    "load_start": [
+      1.67578125,
+      1.66796875,
+      1.47314453125
+    ],
+    "load_end": [
+      2.5771484375,
+      2.12744140625,
+      1.71875
+    ],
+    "server": "php artisan serve --no-reload, 4 workers, APP_ENV=production, config/route/event cache"
+  },
+  "results": [
+    {
+      "route": "GET admin/voice/status",
+      "expected": 200,
+      "statuses": {
+        "200": 33
+      },
+      "bytes": 2126,
+      "requestBytes": 0,
+      "timing": {
+        "n": 30,
+        "p50": 93.406,
+        "p95": 101.292,
+        "max": 104.527,
+        "min": 88.666
+      },
+      "spacingSeconds": 0.15,
+      "load1": 1.79248046875
+    },
+    {
+      "route": "GET admin/voice/calls",
+      "expected": 200,
+      "statuses": {
+        "200": 33
+      },
+      "bytes": 15829,
+      "requestBytes": 0,
+      "timing": {
+        "n": 30,
+        "p50": 62.405,
+        "p95": 66.65,
+        "max": 70.547,
+        "min": 52.636
+      },
+      "spacingSeconds": 0.15,
+      "load1": 1.64892578125
+    },
+    {
+      "route": "GET admin/voice/metrics",
+      "expected": 200,
+      "statuses": {
+        "200": 33
+      },
+      "bytes": 1304,
+      "requestBytes": 0,
+      "timing": {
+        "n": 30,
+        "p50": 90.875,
+        "p95": 96.19,
+        "max": 96.27,
+        "min": 84.853
+      },
+      "spacingSeconds": 0.15,
+      "load1": 1.77587890625
+    },
+    {
+      "route": "GET admin/voice/contacts",
+      "expected": 200,
+      "statuses": {
+        "200": 21,
+        "429": 1
+      },
+      "bytes": 6461,
+      "requestBytes": 0,
+      "timing": {
+        "n": 18,
+        "p50": 73.359,
+        "p95": 84.191,
+        "max": 84.191,
+        "min": 69.435
+      },
+      "spacingSeconds": 0.15,
+      "load1": 1.71337890625,
+      "error": "HTTP 429 (esperado 200): b'{\\n    \"message\": \"Too Many Attempts.\"\\n}'"
+    },
+    {
+      "route": "GET integrations/voice",
+      "expected": 200,
+      "statuses": {
+        "200": 33
+      },
+      "bytes": 6911,
+      "requestBytes": 0,
+      "timing": {
+        "n": 30,
+        "p50": 58.749,
+        "p95": 87.725,
+        "max": 93.256,
+        "min": 56.984
+      },
+      "spacingSeconds": 0.15,
+      "load1": 1.81640625
+    },
+    {
+      "route": "GET voice/publications",
+      "expected": 200,
+      "statuses": {
+        "200": 33
+      },
+      "bytes": 27030,
+      "requestBytes": 0,
+      "timing": {
+        "n": 30,
+        "p50": 66.552,
+        "p95": 75.963,
+        "max": 77.628,
+        "min": 62.282
+      },
+      "spacingSeconds": 0.15,
+      "load1": 1.6904296875
+    },
+    {
+      "route": "GET voice/profiles",
+      "expected": 200,
+      "statuses": {
+        "200": 33
+      },
+      "bytes": 18727,
+      "requestBytes": 0,
+      "timing": {
+        "n": 30,
+        "p50": 54.988,
+        "p95": 60.261,
+        "max": 64.768,
+        "min": 52.82
+      },
+      "spacingSeconds": 0.15,
+      "load1": 1.71484375
+    },
+    {
+      "route": "GET voice/brakes",
+      "expected": 200,
+      "statuses": {
+        "200": 33
+      },
+      "bytes": 2379,
+      "requestBytes": 0,
+      "timing": {
+        "n": 30,
+        "p50": 55.348,
+        "p95": 65.452,
+        "max": 66.545,
+        "min": 51.167
+      },
+      "spacingSeconds": 0.15,
+      "load1": 1.8447265625
+    },
+    {
+      "route": "GET voice-lab/status",
+      "expected": 200,
+      "statuses": {
+        "200": 33
+      },
+      "bytes": 2315,
+      "requestBytes": 0,
+      "timing": {
+        "n": 30,
+        "p50": 54.688,
+        "p95": 58.806,
+        "max": 60.72,
+        "min": 50.459
+      },
+      "spacingSeconds": 0.15,
+      "load1": 1.69677734375
+    },
+    {
+      "route": "GET voice-lab/sessions",
+      "expected": 200,
+      "statuses": {
+        "200": 33
+      },
+      "bytes": 34442,
+      "requestBytes": 0,
+      "timing": {
+        "n": 30,
+        "p50": 62.098,
+        "p95": 68.823,
+        "max": 71.336,
+        "min": 57.77
+      },
+      "spacingSeconds": 0.15,
+      "load1": 2.28125
+    },
+    {
+      "route": "GET voice/canary-evidence",
+      "expected": 200,
+      "statuses": {
+        "200": 33
+      },
+      "bytes": 661,
+      "requestBytes": 0,
+      "timing": {
+        "n": 30,
+        "p50": 80.079,
+        "p95": 93.978,
+        "max": 97.292,
+        "min": 72.484
+      },
+      "spacingSeconds": 2.05,
+      "load1": 2.34423828125
+    },
+    {
+      "route": "POST initiation (canario)",
+      "expected": 200,
+      "statuses": {
+        "200": 33
+      },
+      "bytes": 224,
+      "requestBytes": 197,
+      "timing": {
+        "n": 30,
+        "p50": 34.456,
+        "p95": 41.947,
+        "max": 42.817,
+        "min": 27.32
+      },
+      "spacingSeconds": 0.15,
+      "load1": 2.291015625
+    },
+    {
+      "route": "POST initiation (secreto malo, 401)",
+      "expected": 401,
+      "statuses": {
+        "401": 33
+      },
+      "bytes": 34,
+      "requestBytes": 197,
+      "timing": {
+        "n": 30,
+        "p50": 18.732,
+        "p95": 38.285,
+        "max": 46.423,
+        "min": 12.961
+      },
+      "spacingSeconds": 2.05,
+      "load1": 2.513671875
+    },
+    {
+      "route": "POST tools/consultar_planes",
+      "expected": 200,
+      "statuses": {
+        "200": 33
+      },
+      "bytes": 722,
+      "requestBytes": 148,
+      "timing": {
+        "n": 30,
+        "p50": 22.503,
+        "p95": 25.174,
+        "max": 25.839,
+        "min": 20.34
+      },
+      "spacingSeconds": 0.15,
+      "load1": 2.66796875
+    },
+    {
+      "route": "POST tools/solicitar_humano",
+      "expected": 200,
+      "statuses": {
+        "200": 33
+      },
+      "bytes": 58,
+      "requestBytes": 148,
+      "timing": {
+        "n": 30,
+        "p50": 24.899,
+        "p95": 33.547,
+        "max": 36.999,
+        "min": 22.275
+      },
+      "spacingSeconds": 0.15,
+      "load1": 2.5341796875
+    },
+    {
+      "route": "POST post-call (9 KB)",
+      "expected": 200,
+      "statuses": {
+        "200": 33
+      },
+      "bytes": 67,
+      "requestBytes": 9051,
+      "timing": {
+        "n": 30,
+        "p50": 32.152,
+        "p95": 40.328,
+        "max": 43.73,
+        "min": 26.21
+      },
+      "spacingSeconds": 0.15,
+      "load1": 2.4111328125
+    },
+    {
+      "route": "POST post-call (~1 MB)",
+      "expected": 200,
+      "statuses": {
+        "200": 33
+      },
+      "bytes": 67,
+      "requestBytes": 1046869,
+      "timing": {
+        "n": 30,
+        "p50": 320.25,
+        "p95": 328.601,
+        "max": 330.104,
+        "min": 315.574
+      },
+      "spacingSeconds": 0.15,
+      "load1": 2.54052734375
+    },
+    {
+      "route": "POST twilio/usage-trigger (abre el freno)",
+      "expected": 200,
+      "statuses": {
+        "200": 33
+      },
+      "bytes": 28,
+      "requestBytes": 426,
+      "timing": {
+        "n": 30,
+        "p50": 25.333,
+        "p95": 34.22,
+        "max": 35.938,
+        "min": 20.354
+      },
+      "spacingSeconds": 0.15,
+      "load1": 2.5771484375
+    }
+  ]
+}

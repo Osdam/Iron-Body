@@ -1,0 +1,652 @@
+{
+    "family": "b-post-llamada",
+    "env": {
+        "at": "2026-11-08T21:39:13+00:00",
+        "php": "8.3.33",
+        "opcacheCli": false,
+        "db": "ultron_studio_h8_perf",
+        "pg": "PostgreSQL 14.24 (Homebrew) on aarch64-apple-darwin25.6.0, compiled by Apple clang version 21.0.0 (clang-2100.1.1.101), 64-bit",
+        "cache": "database",
+        "queue": "database",
+        "n": 30,
+        "warm": 5,
+        "reps": 3,
+        "load": [
+            2.12841796875,
+            1.6630859375,
+            1.39111328125
+        ],
+        "host": "MacBook-Air-de-Alejandro.local arm64",
+        "head": "bb239b53"
+    },
+    "results": [
+        {
+            "route": "POST post-call · transcripción",
+            "size": "9 KB · 40 turnos",
+            "status": 200,
+            "bytes": 67,
+            "requestBytes": 9047,
+            "queries": 13,
+            "dbMs": 5.88,
+            "perTable": {
+                "cache": 7,
+                "voice_calls": 3,
+                "voice_call_events": 2,
+                "ultron_studio_voice_publications": 1
+            },
+            "perTableMs": {
+                "cache": 2.07,
+                "voice_calls": 2.17,
+                "voice_call_events": 1.05,
+                "ultron_studio_voice_publications": 0.59
+            },
+            "mostRepeated": {
+                "count": 3,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "insert into \"cache\" (\"key\", \"value\", \"expiration\") values (?, ?, ?) on conflict do nothing",
+                "select * from \"cache\" where \"key\" in (?)",
+                "insert into \"cache\" (\"key\", \"value\", \"expiration\") values (?, ?, ?) on conflict do nothing",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"voice_calls\" where \"provider_conversation_id\" = ? and \"transfer_of_call_id\" is null limit 1 for update",
+                "insert into \"voice_call_events\" (\"call_id\", \"provider\", \"kind\", \"provider_event_key\", \"tool\", \"outcome\", \"codes\", \"actor_type\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"occurred_at\", \"uuid\", \"created_at\") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) returning \"id\"",
+                "update \"voice_calls\" set \"observed_agent_id\" = ?, \"observed_version_id\" = ?, \"observed_branch_id\" = ?, \"seal_verified\" = ?, \"updated_at\" = ? where \"voice_calls\".\"id\" = ? and \"observed_agent_id\" is null",
+                "update \"voice_calls\" set \"status\" = ?, \"status_changed_at\" = ?, \"duration_seconds\" = ?, \"ended_at\" = ?, \"updated_at\" = ? where \"voice_calls\".\"id\" = ? and \"status\" in (?, ?, ?, ?)",
+                "select \"p\".\"seq\", \"p\".\"scope\", \"p\".\"agent_id\", \"p\".\"effective_json\", \"p\".\"effective_hash\", \"p\".\"signature\", \"a\".\"provider_agent_id\" as \"a_provider_agent_id\", \"a\".\"spec_hash\" as \"a_spec_hash\", \"a\".\"payload_hash\" as \"a_payload_hash\", \"a\".\"projection_hash\" as \"a_projection_hash\", \"a\".\"studio_content_hash\" as \"a_studio_content_hash\", \"a\".\"voice_profile_hash\" as \"a_voice_profile_hash\", \"a\".\"compiler_ve",
+                "insert into \"voice_call_events\" (\"call_id\", \"provider\", \"kind\", \"provider_event_key\", \"tool\", \"outcome\", \"codes\", \"actor_type\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"occurred_at\", \"uuid\", \"created_at\") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) returning \"id\""
+            ],
+            "transactions": {
+                "begin": 4,
+                "commit": 2,
+                "rollback": 0
+            },
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 11.015,
+                        "p95": 12.231,
+                        "max": 13.75,
+                        "min": 9.86
+                    },
+                    {
+                        "n": 30,
+                        "p50": 10.998,
+                        "p95": 11.735,
+                        "max": 12.113,
+                        "min": 10.243
+                    },
+                    {
+                        "n": 30,
+                        "p50": 9.27,
+                        "p95": 19.815,
+                        "max": 25.081,
+                        "min": 8.575
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 10.959,
+                    "p95": 12.231,
+                    "max": 25.081,
+                    "min": 8.575
+                },
+                "load1": [
+                    1.890625,
+                    1.890625,
+                    1.890625,
+                    1.890625
+                ]
+            }
+        },
+        {
+            "route": "POST post-call · transcripción",
+            "size": "40 KB · 200 turnos",
+            "status": 200,
+            "bytes": 67,
+            "requestBytes": 40449,
+            "queries": 13,
+            "dbMs": 5.34,
+            "perTable": {
+                "cache": 7,
+                "voice_calls": 3,
+                "voice_call_events": 2,
+                "ultron_studio_voice_publications": 1
+            },
+            "perTableMs": {
+                "cache": 1.76,
+                "voice_calls": 2.14,
+                "voice_call_events": 0.88,
+                "ultron_studio_voice_publications": 0.56
+            },
+            "mostRepeated": {
+                "count": 3,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "insert into \"cache\" (\"key\", \"value\", \"expiration\") values (?, ?, ?) on conflict do nothing",
+                "select * from \"cache\" where \"key\" in (?)",
+                "insert into \"cache\" (\"key\", \"value\", \"expiration\") values (?, ?, ?) on conflict do nothing",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"voice_calls\" where \"provider_conversation_id\" = ? and \"transfer_of_call_id\" is null limit 1 for update",
+                "insert into \"voice_call_events\" (\"call_id\", \"provider\", \"kind\", \"provider_event_key\", \"tool\", \"outcome\", \"codes\", \"actor_type\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"occurred_at\", \"uuid\", \"created_at\") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) returning \"id\"",
+                "update \"voice_calls\" set \"observed_agent_id\" = ?, \"observed_version_id\" = ?, \"observed_branch_id\" = ?, \"seal_verified\" = ?, \"updated_at\" = ? where \"voice_calls\".\"id\" = ? and \"observed_agent_id\" is null",
+                "update \"voice_calls\" set \"status\" = ?, \"status_changed_at\" = ?, \"duration_seconds\" = ?, \"ended_at\" = ?, \"updated_at\" = ? where \"voice_calls\".\"id\" = ? and \"status\" in (?, ?, ?, ?)",
+                "select \"p\".\"seq\", \"p\".\"scope\", \"p\".\"agent_id\", \"p\".\"effective_json\", \"p\".\"effective_hash\", \"p\".\"signature\", \"a\".\"provider_agent_id\" as \"a_provider_agent_id\", \"a\".\"spec_hash\" as \"a_spec_hash\", \"a\".\"payload_hash\" as \"a_payload_hash\", \"a\".\"projection_hash\" as \"a_projection_hash\", \"a\".\"studio_content_hash\" as \"a_studio_content_hash\", \"a\".\"voice_profile_hash\" as \"a_voice_profile_hash\", \"a\".\"compiler_ve",
+                "insert into \"voice_call_events\" (\"call_id\", \"provider\", \"kind\", \"provider_event_key\", \"tool\", \"outcome\", \"codes\", \"actor_type\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"occurred_at\", \"uuid\", \"created_at\") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) returning \"id\""
+            ],
+            "transactions": {
+                "begin": 4,
+                "commit": 2,
+                "rollback": 0
+            },
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 17.17,
+                        "p95": 17.529,
+                        "max": 17.585,
+                        "min": 16.049
+                    },
+                    {
+                        "n": 30,
+                        "p50": 17.182,
+                        "p95": 17.47,
+                        "max": 17.872,
+                        "min": 16.564
+                    },
+                    {
+                        "n": 30,
+                        "p50": 17.181,
+                        "p95": 17.653,
+                        "max": 17.832,
+                        "min": 16.903
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 17.181,
+                    "p95": 17.553,
+                    "max": 17.872,
+                    "min": 16.049
+                },
+                "load1": [
+                    1.890625,
+                    1.890625,
+                    1.890625,
+                    1.89892578125
+                ]
+            }
+        },
+        {
+            "route": "POST post-call · transcripción",
+            "size": "~100 KB · 200 turnos",
+            "status": 200,
+            "bytes": 67,
+            "requestBytes": 128461,
+            "queries": 13,
+            "dbMs": 5.59,
+            "perTable": {
+                "cache": 7,
+                "voice_calls": 3,
+                "voice_call_events": 2,
+                "ultron_studio_voice_publications": 1
+            },
+            "perTableMs": {
+                "cache": 1.93,
+                "voice_calls": 2.09,
+                "voice_call_events": 1.01,
+                "ultron_studio_voice_publications": 0.56
+            },
+            "mostRepeated": {
+                "count": 3,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "insert into \"cache\" (\"key\", \"value\", \"expiration\") values (?, ?, ?) on conflict do nothing",
+                "select * from \"cache\" where \"key\" in (?)",
+                "insert into \"cache\" (\"key\", \"value\", \"expiration\") values (?, ?, ?) on conflict do nothing",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"voice_calls\" where \"provider_conversation_id\" = ? and \"transfer_of_call_id\" is null limit 1 for update",
+                "insert into \"voice_call_events\" (\"call_id\", \"provider\", \"kind\", \"provider_event_key\", \"tool\", \"outcome\", \"codes\", \"actor_type\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"occurred_at\", \"uuid\", \"created_at\") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) returning \"id\"",
+                "update \"voice_calls\" set \"observed_agent_id\" = ?, \"observed_version_id\" = ?, \"observed_branch_id\" = ?, \"seal_verified\" = ?, \"updated_at\" = ? where \"voice_calls\".\"id\" = ? and \"observed_agent_id\" is null",
+                "update \"voice_calls\" set \"status\" = ?, \"status_changed_at\" = ?, \"duration_seconds\" = ?, \"ended_at\" = ?, \"updated_at\" = ? where \"voice_calls\".\"id\" = ? and \"status\" in (?, ?, ?, ?)",
+                "select \"p\".\"seq\", \"p\".\"scope\", \"p\".\"agent_id\", \"p\".\"effective_json\", \"p\".\"effective_hash\", \"p\".\"signature\", \"a\".\"provider_agent_id\" as \"a_provider_agent_id\", \"a\".\"spec_hash\" as \"a_spec_hash\", \"a\".\"payload_hash\" as \"a_payload_hash\", \"a\".\"projection_hash\" as \"a_projection_hash\", \"a\".\"studio_content_hash\" as \"a_studio_content_hash\", \"a\".\"voice_profile_hash\" as \"a_voice_profile_hash\", \"a\".\"compiler_ve",
+                "insert into \"voice_call_events\" (\"call_id\", \"provider\", \"kind\", \"provider_event_key\", \"tool\", \"outcome\", \"codes\", \"actor_type\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"occurred_at\", \"uuid\", \"created_at\") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) returning \"id\""
+            ],
+            "transactions": {
+                "begin": 4,
+                "commit": 2,
+                "rollback": 0
+            },
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 45.07,
+                        "p95": 45.92,
+                        "max": 46.588,
+                        "min": 44.677
+                    },
+                    {
+                        "n": 30,
+                        "p50": 45.133,
+                        "p95": 47.171,
+                        "max": 48.023,
+                        "min": 44.635
+                    },
+                    {
+                        "n": 30,
+                        "p50": 45.043,
+                        "p95": 45.368,
+                        "max": 45.524,
+                        "min": 44.748
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 45.084,
+                    "p95": 45.99,
+                    "max": 48.023,
+                    "min": 44.635
+                },
+                "load1": [
+                    1.89892578125,
+                    1.89892578125,
+                    1.89892578125,
+                    1.89892578125
+                ]
+            }
+        },
+        {
+            "route": "POST post-call · transcripción",
+            "size": "~1 MB · 1000 turnos",
+            "status": 200,
+            "bytes": 67,
+            "requestBytes": 1046867,
+            "queries": 13,
+            "dbMs": 6.56,
+            "perTable": {
+                "cache": 7,
+                "voice_calls": 3,
+                "voice_call_events": 2,
+                "ultron_studio_voice_publications": 1
+            },
+            "perTableMs": {
+                "cache": 2.74,
+                "voice_calls": 2.16,
+                "voice_call_events": 1.06,
+                "ultron_studio_voice_publications": 0.6
+            },
+            "mostRepeated": {
+                "count": 3,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "insert into \"cache\" (\"key\", \"value\", \"expiration\") values (?, ?, ?) on conflict do nothing",
+                "select * from \"cache\" where \"key\" in (?)",
+                "insert into \"cache\" (\"key\", \"value\", \"expiration\") values (?, ?, ?) on conflict do nothing",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"voice_calls\" where \"provider_conversation_id\" = ? and \"transfer_of_call_id\" is null limit 1 for update",
+                "insert into \"voice_call_events\" (\"call_id\", \"provider\", \"kind\", \"provider_event_key\", \"tool\", \"outcome\", \"codes\", \"actor_type\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"occurred_at\", \"uuid\", \"created_at\") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) returning \"id\"",
+                "update \"voice_calls\" set \"observed_agent_id\" = ?, \"observed_version_id\" = ?, \"observed_branch_id\" = ?, \"seal_verified\" = ?, \"updated_at\" = ? where \"voice_calls\".\"id\" = ? and \"observed_agent_id\" is null",
+                "update \"voice_calls\" set \"status\" = ?, \"status_changed_at\" = ?, \"duration_seconds\" = ?, \"ended_at\" = ?, \"updated_at\" = ? where \"voice_calls\".\"id\" = ? and \"status\" in (?, ?, ?, ?)",
+                "select \"p\".\"seq\", \"p\".\"scope\", \"p\".\"agent_id\", \"p\".\"effective_json\", \"p\".\"effective_hash\", \"p\".\"signature\", \"a\".\"provider_agent_id\" as \"a_provider_agent_id\", \"a\".\"spec_hash\" as \"a_spec_hash\", \"a\".\"payload_hash\" as \"a_payload_hash\", \"a\".\"projection_hash\" as \"a_projection_hash\", \"a\".\"studio_content_hash\" as \"a_studio_content_hash\", \"a\".\"voice_profile_hash\" as \"a_voice_profile_hash\", \"a\".\"compiler_ve",
+                "insert into \"voice_call_events\" (\"call_id\", \"provider\", \"kind\", \"provider_event_key\", \"tool\", \"outcome\", \"codes\", \"actor_type\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"occurred_at\", \"uuid\", \"created_at\") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) returning \"id\""
+            ],
+            "transactions": {
+                "begin": 4,
+                "commit": 2,
+                "rollback": 0
+            },
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 313.121,
+                        "p95": 315.274,
+                        "max": 319.732,
+                        "min": 311.862
+                    },
+                    {
+                        "n": 30,
+                        "p50": 313.843,
+                        "p95": 316.426,
+                        "max": 320.983,
+                        "min": 312.326
+                    },
+                    {
+                        "n": 30,
+                        "p50": 313.987,
+                        "p95": 319.868,
+                        "max": 341.464,
+                        "min": 312.729
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 313.756,
+                    "p95": 317.87,
+                    "max": 341.464,
+                    "min": 311.862
+                },
+                "load1": [
+                    1.90673828125,
+                    1.8408203125,
+                    1.974609375,
+                    1.97802734375
+                ]
+            }
+        },
+        {
+            "route": "POST post-call · call_initiation_failure (busy)",
+            "size": "saliente dialing",
+            "status": 200,
+            "bytes": 27,
+            "requestBytes": null,
+            "queries": 10,
+            "dbMs": 4.16,
+            "perTable": {
+                "cache": 7,
+                "voice_calls": 2,
+                "voice_call_events": 1
+            },
+            "perTableMs": {
+                "cache": 2.33,
+                "voice_calls": 1.38,
+                "voice_call_events": 0.45
+            },
+            "mostRepeated": {
+                "count": 3,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "insert into \"cache\" (\"key\", \"value\", \"expiration\") values (?, ?, ?) on conflict do nothing",
+                "select * from \"cache\" where \"key\" in (?)",
+                "insert into \"cache\" (\"key\", \"value\", \"expiration\") values (?, ?, ?) on conflict do nothing",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"voice_calls\" where \"provider_conversation_id\" = ? and \"transfer_of_call_id\" is null limit 1 for update",
+                "insert into \"voice_call_events\" (\"call_id\", \"provider\", \"kind\", \"provider_event_key\", \"tool\", \"outcome\", \"codes\", \"actor_type\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"occurred_at\", \"uuid\", \"created_at\") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) returning \"id\"",
+                "update \"voice_calls\" set \"status\" = ?, \"status_changed_at\" = ?, \"failure_code\" = ?, \"ended_at\" = ?, \"updated_at\" = ? where \"voice_calls\".\"id\" = ? and \"status\" in (?, ?, ?)"
+            ],
+            "transactions": {
+                "begin": 3,
+                "commit": 2,
+                "rollback": 0
+            },
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 6.283,
+                        "p95": 6.656,
+                        "max": 6.878,
+                        "min": 6.088
+                    },
+                    {
+                        "n": 30,
+                        "p50": 6.418,
+                        "p95": 6.676,
+                        "max": 6.811,
+                        "min": 5.984
+                    },
+                    {
+                        "n": 30,
+                        "p50": 6.476,
+                        "p95": 7.535,
+                        "max": 10.225,
+                        "min": 5.808
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 6.407,
+                    "p95": 6.811,
+                    "max": 10.225,
+                    "min": 5.808
+                },
+                "load1": [
+                    1.97802734375,
+                    1.97802734375,
+                    1.97802734375,
+                    2.1396484375
+                ]
+            }
+        },
+        {
+            "route": "POST post-call · duplicada",
+            "size": "8 KB repetida",
+            "status": 200,
+            "bytes": 28,
+            "requestBytes": 9049,
+            "queries": 6,
+            "dbMs": 1.77,
+            "perTable": {
+                "cache": 5,
+                "voice_calls": 1
+            },
+            "perTableMs": {
+                "cache": 1.36,
+                "voice_calls": 0.41
+            },
+            "mostRepeated": {
+                "count": 3,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"voice_calls\" where \"provider_conversation_id\" = ? and \"transfer_of_call_id\" is null limit 1 for update"
+            ],
+            "transactions": {
+                "begin": 3,
+                "commit": 2,
+                "rollback": 1
+            },
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 5.576,
+                        "p95": 5.871,
+                        "max": 6.25,
+                        "min": 5.457
+                    },
+                    {
+                        "n": 30,
+                        "p50": 5.508,
+                        "p95": 5.861,
+                        "max": 5.916,
+                        "min": 4.81
+                    },
+                    {
+                        "n": 30,
+                        "p50": 5.543,
+                        "p95": 5.874,
+                        "max": 5.884,
+                        "min": 5.28
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 5.559,
+                    "p95": 5.871,
+                    "max": 6.25,
+                    "min": 4.81
+                },
+                "load1": [
+                    2.1396484375,
+                    2.1396484375,
+                    2.1396484375,
+                    2.1396484375
+                ]
+            }
+        },
+        {
+            "route": "POST post-call · post_call_audio",
+            "size": "descartado",
+            "status": 200,
+            "bytes": 46,
+            "requestBytes": 2923,
+            "queries": 9,
+            "dbMs": 2.72,
+            "perTable": {
+                "cache": 7,
+                "voice_calls": 1,
+                "voice_call_events": 1
+            },
+            "perTableMs": {
+                "cache": 1.9,
+                "voice_calls": 0.37,
+                "voice_call_events": 0.45
+            },
+            "mostRepeated": {
+                "count": 3,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "insert into \"cache\" (\"key\", \"value\", \"expiration\") values (?, ?, ?) on conflict do nothing",
+                "select * from \"cache\" where \"key\" in (?)",
+                "insert into \"cache\" (\"key\", \"value\", \"expiration\") values (?, ?, ?) on conflict do nothing",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"voice_calls\" where \"provider_conversation_id\" = ? and \"transfer_of_call_id\" is null limit 1",
+                "insert into \"voice_call_events\" (\"call_id\", \"provider\", \"kind\", \"provider_event_key\", \"tool\", \"outcome\", \"codes\", \"actor_type\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"occurred_at\", \"uuid\", \"created_at\") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) returning \"id\""
+            ],
+            "transactions": {
+                "begin": 2,
+                "commit": 2,
+                "rollback": 0
+            },
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 4.964,
+                        "p95": 6.621,
+                        "max": 6.967,
+                        "min": 4.619
+                    },
+                    {
+                        "n": 30,
+                        "p50": 4.944,
+                        "p95": 5.418,
+                        "max": 5.507,
+                        "min": 4.64
+                    },
+                    {
+                        "n": 30,
+                        "p50": 5.033,
+                        "p95": 5.353,
+                        "max": 5.371,
+                        "min": 4.534
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 4.98,
+                    "p95": 5.507,
+                    "max": 6.967,
+                    "min": 4.534
+                },
+                "load1": [
+                    2.1396484375,
+                    2.1396484375,
+                    2.1396484375,
+                    2.1396484375
+                ]
+            }
+        },
+        {
+            "route": "POST post-call · firma mala",
+            "size": "401",
+            "status": 401,
+            "bytes": 39,
+            "requestBytes": 9049,
+            "queries": 5,
+            "dbMs": 1.32,
+            "perTable": {
+                "cache": 5
+            },
+            "perTableMs": {
+                "cache": 1.32
+            },
+            "mostRepeated": {
+                "count": 3,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?"
+            ],
+            "transactions": {
+                "begin": 1,
+                "commit": 1,
+                "rollback": 0
+            },
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 3.595,
+                        "p95": 3.686,
+                        "max": 3.957,
+                        "min": 3.481
+                    },
+                    {
+                        "n": 30,
+                        "p50": 3.571,
+                        "p95": 3.71,
+                        "max": 3.828,
+                        "min": 3.362
+                    },
+                    {
+                        "n": 30,
+                        "p50": 3.591,
+                        "p95": 3.808,
+                        "max": 3.841,
+                        "min": 3.528
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 3.593,
+                    "p95": 3.774,
+                    "max": 3.957,
+                    "min": 3.362
+                },
+                "load1": [
+                    2.1396484375,
+                    2.1396484375,
+                    2.1396484375,
+                    2.12841796875
+                ]
+            }
+        }
+    ]
+}

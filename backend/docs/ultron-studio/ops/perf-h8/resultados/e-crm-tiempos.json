@@ -1,0 +1,1471 @@
+{
+    "family": "e-crm",
+    "env": {
+        "at": "2026-11-08T21:40:05+00:00",
+        "php": "8.3.33",
+        "opcacheCli": false,
+        "db": "ultron_studio_h8_perf",
+        "pg": "PostgreSQL 14.24 (Homebrew) on aarch64-apple-darwin25.6.0, compiled by Apple clang version 21.0.0 (clang-2100.1.1.101), 64-bit",
+        "cache": "database",
+        "queue": "database",
+        "n": 30,
+        "warm": 5,
+        "reps": 3,
+        "load": [
+            2.0146484375,
+            1.71044921875,
+            1.42333984375
+        ],
+        "host": "MacBook-Air-de-Alejandro.local arm64",
+        "head": "bb239b53"
+    },
+    "results": [
+        {
+            "route": "GET admin/voice/status",
+            "size": "5 000 llamadas",
+            "status": 200,
+            "bytes": 2127,
+            "requestBytes": null,
+            "queries": 41,
+            "dbMs": 29.78,
+            "perTable": {
+                "voice_calls": 17,
+                "cache": 8,
+                "voice_call_events": 7,
+                "voice_brakes": 4,
+                "ultron_studio_voice_publications": 3,
+                "admin_sessions": 1,
+                "admins": 1
+            },
+            "perTableMs": {
+                "cache": 2.24,
+                "admin_sessions": 0.38,
+                "admins": 0.29,
+                "ultron_studio_voice_publications": 1.78,
+                "voice_brakes": 1.61,
+                "voice_calls": 18.25,
+                "voice_call_events": 5.23
+            },
+            "mostRepeated": {
+                "count": 6,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select \"p\".\"seq\", \"p\".\"scope\", \"p\".\"agent_id\", \"p\".\"effective_json\", \"p\".\"effective_hash\", \"p\".\"signature\", \"a\".\"provider_agent_id\" as \"a_provider_agent_id\", \"a\".\"spec_hash\" as \"a_spec_hash\", \"a\".\"payload_hash\" as \"a_payload_hash\", \"a\".\"projection_hash\" as \"a_projection_hash\", \"a\".\"studio_content_hash\" as \"a_studio_content_hash\", \"a\".\"voice_profile_hash\" as \"a_voice_profile_hash\", \"a\".\"compiler_ve",
+                "select exists(select * from \"voice_brakes\" as \"o\" where \"o\".\"kind\" = ? and not exists (select * from \"voice_brakes\" as \"r\" where \"r\".\"brake_id\" = \"o\".\"id\")) as \"exists\"",
+                "select direction, status, count(*) as n from \"voice_calls\" where \"budget_day\" = ? and \"transfer_of_call_id\" is null group by \"direction\", \"status\"",
+                "select max(\"created_at\") as aggregate from \"voice_call_events\" where \"kind\" in (?, ?)",
+                "select \"p\".\"seq\", \"p\".\"scope\", \"p\".\"agent_id\", \"p\".\"effective_json\", \"p\".\"effective_hash\", \"p\".\"signature\", \"a\".\"provider_agent_id\" as \"a_provider_agent_id\", \"a\".\"spec_hash\" as \"a_spec_hash\", \"a\".\"payload_hash\" as \"a_payload_hash\", \"a\".\"projection_hash\" as \"a_projection_hash\", \"a\".\"studio_content_hash\" as \"a_studio_content_hash\", \"a\".\"voice_profile_hash\" as \"a_voice_profile_hash\", \"a\".\"compiler_ve",
+                "select \"id\" from \"voice_calls\" where \"voice_publication_seq\" = ? and \"part\" = ? and \"transfer_of_call_id\" is null",
+                "select min(\"created_at\") as aggregate from \"voice_calls\" where \"voice_publication_seq\" = ? and \"part\" = ? and \"transfer_of_call_id\" is null",
+                "select max(\"created_at\") as aggregate from \"voice_calls\" where \"voice_publication_seq\" = ? and \"part\" = ? and \"transfer_of_call_id\" is null",
+                "select count(*) as aggregate from \"voice_call_events\" where \"call_id\" in (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,",
+                "select count(*) as aggregate from \"voice_calls\" where \"voice_publication_seq\" = ? and \"part\" = ? and \"transfer_of_call_id\" is null and \"status\" = ?",
+                "select count(*) as aggregate from \"voice_calls\" where \"voice_publication_seq\" = ? and \"part\" = ? and \"transfer_of_call_id\" is null and \"seal_verified\" = ?",
+                "select count(*) as aggregate from \"voice_call_events\" where \"call_id\" in (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,",
+                "select count(*) as aggregate from \"voice_call_events\" where \"kind\" = ? and \"created_at\" >= ?",
+                "select sum(\"reserved_micros\") as aggregate from \"voice_calls\" where \"voice_publication_seq\" = ? and \"part\" = ? and \"transfer_of_call_id\" is null",
+                "select exists(select * from \"voice_brakes\" as \"o\" where \"o\".\"kind\" = ? and not exists (select * from \"voice_brakes\" as \"r\" where \"r\".\"brake_id\" = \"o\".\"id\")) as \"exists\"",
+                "select \"id\" from \"voice_calls\" where \"voice_publication_seq\" = ? and \"part\" = ? and \"transfer_of_call_id\" is null",
+                "select min(\"created_at\") as aggregate from \"voice_calls\" where \"voice_publication_seq\" = ? and \"part\" = ? and \"transfer_of_call_id\" is null",
+                "select max(\"created_at\") as aggregate from \"voice_calls\" where \"voice_publication_seq\" = ? and \"part\" = ? and \"transfer_of_call_id\" is null",
+                "select count(*) as aggregate from \"voice_call_events\" where \"call_id\" in (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) and \"kind\" = ? and \"outcome\" = ?",
+                "select count(*) as aggregate from \"voice_calls\" where \"voice_publication_seq\" = ? and \"part\" = ? and \"transfer_of_call_id\" is null and \"status\" = ?",
+                "select count(*) as aggregate from \"voice_calls\" where \"voice_publication_seq\" = ? and \"part\" = ? and \"transfer_of_call_id\" is null and \"seal_verified\" = ?",
+                "select count(*) as aggregate from \"voice_call_events\" where \"call_id\" in (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) and \"kind\" = ?",
+                "select count(*) as aggregate from \"voice_call_events\" where \"kind\" = ? and \"created_at\" >= ?",
+                "select sum(\"reserved_micros\") as aggregate from \"voice_calls\" where \"voice_publication_seq\" = ? and \"part\" = ? and \"transfer_of_call_id\" is null",
+                "select exists(select * from \"voice_brakes\" as \"o\" where \"o\".\"kind\" = ? and not exists (select * from \"voice_brakes\" as \"r\" where \"r\".\"brake_id\" = \"o\".\"id\")) as \"exists\"",
+                "select COALESCE(SUM(CASE WHEN status IN ('canceled', 'failed_to_start') THEN 0 WHEN status IN ('busy', 'no_answer', 'failed') THEN (COALESCE(provider_cost_micros, 0) + COALESCE(carrier_cost_micros, 0)) WHEN reserved_micros >= (COALESCE(provider_cost_micros, 0) + COALESCE(carrier_cost_micros, 0)) THEN reserved_micros ELSE (COALESCE(provider_cost_micros, 0) + COALESCE(carrier_cost_micros, 0)) END), ",
+                "select count(*) as aggregate from \"voice_calls\" where \"status\" in (?, ?, ?, ?) and \"transfer_of_call_id\" is null",
+                "select count(*) as aggregate from \"voice_calls\" where \"status\" = ?",
+                "select count(*) as aggregate from \"voice_calls\" where \"status\" = ? and \"status_changed_at\" < ?",
+                "select exists(select * from \"voice_brakes\" as \"o\" where \"o\".\"kind\" = ? and not exists (select * from \"voice_brakes\" as \"r\" where \"r\".\"brake_id\" = \"o\".\"id\")) as \"exists\"",
+                "select \"p\".\"seq\", \"p\".\"scope\", \"p\".\"agent_id\", \"p\".\"effective_json\", \"p\".\"effective_hash\", \"p\".\"signature\", \"a\".\"provider_agent_id\" as \"a_provider_agent_id\", \"a\".\"spec_hash\" as \"a_spec_hash\", \"a\".\"payload_hash\" as \"a_payload_hash\", \"a\".\"projection_hash\" as \"a_projection_hash\", \"a\".\"studio_content_hash\" as \"a_studio_content_hash\", \"a\".\"voice_profile_hash\" as \"a_voice_profile_hash\", \"a\".\"compiler_ve",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "transactions": {
+                "begin": 1,
+                "commit": 1,
+                "rollback": 0
+            },
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 43.963,
+                        "p95": 45.45,
+                        "max": 45.48,
+                        "min": 42.763
+                    },
+                    {
+                        "n": 30,
+                        "p50": 43.92,
+                        "p95": 44.996,
+                        "max": 45.305,
+                        "min": 43.262
+                    },
+                    {
+                        "n": 30,
+                        "p50": 43.948,
+                        "p95": 44.721,
+                        "max": 46.1,
+                        "min": 43.487
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 43.937,
+                    "p95": 44.996,
+                    "max": 46.1,
+                    "min": 42.763
+                },
+                "load1": [
+                    2.185546875,
+                    2.09033203125,
+                    2.09033203125,
+                    2.09033203125
+                ]
+            }
+        },
+        {
+            "route": "GET admin/voice/calls",
+            "size": "por defecto (25)",
+            "status": 200,
+            "bytes": 17280,
+            "requestBytes": null,
+            "queries": 12,
+            "dbMs": 3.74,
+            "perTable": {
+                "cache": 8,
+                "voice_calls": 2,
+                "admin_sessions": 1,
+                "admins": 1
+            },
+            "perTableMs": {
+                "cache": 2.08,
+                "admin_sessions": 0.32,
+                "admins": 0.27,
+                "voice_calls": 1.07
+            },
+            "mostRepeated": {
+                "count": 6,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select count(*) as aggregate from \"voice_calls\" where \"transfer_of_call_id\" is null",
+                "select * from \"voice_calls\" where \"transfer_of_call_id\" is null order by \"id\" desc limit 25 offset 0",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "transactions": {
+                "begin": 1,
+                "commit": 1,
+                "rollback": 0
+            },
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 15.455,
+                        "p95": 17.103,
+                        "max": 18.808,
+                        "min": 15.268
+                    },
+                    {
+                        "n": 30,
+                        "p50": 15.401,
+                        "p95": 15.85,
+                        "max": 15.994,
+                        "min": 15.092
+                    },
+                    {
+                        "n": 30,
+                        "p50": 15.393,
+                        "p95": 15.77,
+                        "max": 16.392,
+                        "min": 15.024
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 15.416,
+                    "p95": 16.392,
+                    "max": 18.808,
+                    "min": 15.024
+                },
+                "load1": [
+                    2.09033203125,
+                    2.09033203125,
+                    2.09033203125,
+                    2.09033203125
+                ]
+            }
+        },
+        {
+            "route": "GET admin/voice/calls",
+            "size": "perPage=100",
+            "status": 200,
+            "bytes": 69175,
+            "requestBytes": null,
+            "queries": 13,
+            "dbMs": 4.84,
+            "perTable": {
+                "cache": 8,
+                "admin_sessions": 2,
+                "voice_calls": 2,
+                "admins": 1
+            },
+            "perTableMs": {
+                "cache": 2.34,
+                "admin_sessions": 0.64,
+                "admins": 0.29,
+                "voice_calls": 1.57
+            },
+            "mostRepeated": {
+                "count": 6,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "update \"admin_sessions\" set \"last_seen_at\" = ?, \"updated_at\" = ? where \"id\" = ?",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select count(*) as aggregate from \"voice_calls\" where \"transfer_of_call_id\" is null",
+                "select * from \"voice_calls\" where \"transfer_of_call_id\" is null order by \"id\" desc limit 100 offset 0",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "transactions": {
+                "begin": 1,
+                "commit": 1,
+                "rollback": 0
+            },
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 23.07,
+                        "p95": 23.682,
+                        "max": 23.804,
+                        "min": 22.808
+                    },
+                    {
+                        "n": 30,
+                        "p50": 23.062,
+                        "p95": 23.467,
+                        "max": 23.486,
+                        "min": 22.361
+                    },
+                    {
+                        "n": 30,
+                        "p50": 23.101,
+                        "p95": 23.995,
+                        "max": 24.12,
+                        "min": 22.819
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 23.081,
+                    "p95": 23.734,
+                    "max": 24.12,
+                    "min": 22.361
+                },
+                "load1": [
+                    2.09033203125,
+                    2.0830078125,
+                    2.0830078125,
+                    2.0830078125
+                ]
+            }
+        },
+        {
+            "route": "GET admin/voice/calls",
+            "size": "status=completed",
+            "status": 200,
+            "bytes": 17506,
+            "requestBytes": null,
+            "queries": 12,
+            "dbMs": 4.45,
+            "perTable": {
+                "cache": 8,
+                "voice_calls": 2,
+                "admin_sessions": 1,
+                "admins": 1
+            },
+            "perTableMs": {
+                "cache": 1.76,
+                "admin_sessions": 0.25,
+                "admins": 0.21,
+                "voice_calls": 2.23
+            },
+            "mostRepeated": {
+                "count": 6,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select count(*) as aggregate from \"voice_calls\" where \"transfer_of_call_id\" is null and \"status\" = ?",
+                "select * from \"voice_calls\" where \"transfer_of_call_id\" is null and \"status\" = ? order by \"id\" desc limit 25 offset 0",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "transactions": {
+                "begin": 1,
+                "commit": 1,
+                "rollback": 0
+            },
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 16.837,
+                        "p95": 18.645,
+                        "max": 18.721,
+                        "min": 16.242
+                    },
+                    {
+                        "n": 30,
+                        "p50": 16.791,
+                        "p95": 18.533,
+                        "max": 18.569,
+                        "min": 16.409
+                    },
+                    {
+                        "n": 30,
+                        "p50": 16.505,
+                        "p95": 16.857,
+                        "max": 17.016,
+                        "min": 16.112
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 16.663,
+                    "p95": 18.176,
+                    "max": 18.721,
+                    "min": 16.112
+                },
+                "load1": [
+                    2.0830078125,
+                    2.0830078125,
+                    2.0830078125,
+                    2.0830078125
+                ]
+            }
+        },
+        {
+            "route": "GET admin/voice/calls",
+            "size": "status=hung_up (raro)",
+            "status": 200,
+            "bytes": 16425,
+            "requestBytes": null,
+            "queries": 12,
+            "dbMs": 3.7,
+            "perTable": {
+                "cache": 8,
+                "voice_calls": 2,
+                "admin_sessions": 1,
+                "admins": 1
+            },
+            "perTableMs": {
+                "cache": 2.08,
+                "admin_sessions": 0.33,
+                "admins": 0.37,
+                "voice_calls": 0.92
+            },
+            "mostRepeated": {
+                "count": 6,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select count(*) as aggregate from \"voice_calls\" where \"transfer_of_call_id\" is null and \"status\" = ?",
+                "select * from \"voice_calls\" where \"transfer_of_call_id\" is null and \"status\" = ? order by \"id\" desc limit 25 offset 0",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "transactions": {
+                "begin": 1,
+                "commit": 1,
+                "rollback": 0
+            },
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 15.423,
+                        "p95": 15.917,
+                        "max": 15.985,
+                        "min": 15.245
+                    },
+                    {
+                        "n": 30,
+                        "p50": 15.668,
+                        "p95": 16.638,
+                        "max": 16.711,
+                        "min": 15.225
+                    },
+                    {
+                        "n": 30,
+                        "p50": 15.615,
+                        "p95": 15.817,
+                        "max": 15.825,
+                        "min": 15.237
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 15.628,
+                    "p95": 16.286,
+                    "max": 16.711,
+                    "min": 15.225
+                },
+                "load1": [
+                    2.0830078125,
+                    2.0830078125,
+                    2.0830078125,
+                    2.15625
+                ]
+            }
+        },
+        {
+            "route": "GET admin/voice/calls",
+            "size": "direction=inbound",
+            "status": 200,
+            "bytes": 16452,
+            "requestBytes": null,
+            "queries": 12,
+            "dbMs": 5.26,
+            "perTable": {
+                "cache": 8,
+                "voice_calls": 2,
+                "admin_sessions": 1,
+                "admins": 1
+            },
+            "perTableMs": {
+                "cache": 1.92,
+                "admin_sessions": 0.33,
+                "admins": 0.28,
+                "voice_calls": 2.73
+            },
+            "mostRepeated": {
+                "count": 6,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select count(*) as aggregate from \"voice_calls\" where \"transfer_of_call_id\" is null and \"direction\" = ?",
+                "select * from \"voice_calls\" where \"transfer_of_call_id\" is null and \"direction\" = ? order by \"id\" desc limit 25 offset 0",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "transactions": {
+                "begin": 1,
+                "commit": 1,
+                "rollback": 0
+            },
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 17.026,
+                        "p95": 18.229,
+                        "max": 18.35,
+                        "min": 16.77
+                    },
+                    {
+                        "n": 30,
+                        "p50": 16.886,
+                        "p95": 17.387,
+                        "max": 17.421,
+                        "min": 16.772
+                    },
+                    {
+                        "n": 30,
+                        "p50": 17.497,
+                        "p95": 18.697,
+                        "max": 18.856,
+                        "min": 16.782
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 17.037,
+                    "p95": 18.372,
+                    "max": 18.856,
+                    "min": 16.77
+                },
+                "load1": [
+                    2.15625,
+                    2.15625,
+                    2.15625,
+                    2.15625
+                ]
+            }
+        },
+        {
+            "route": "GET admin/voice/calls",
+            "size": "page=150 (profunda)",
+            "status": 200,
+            "bytes": 16478,
+            "requestBytes": null,
+            "queries": 12,
+            "dbMs": 10.11,
+            "perTable": {
+                "cache": 8,
+                "voice_calls": 2,
+                "admin_sessions": 1,
+                "admins": 1
+            },
+            "perTableMs": {
+                "cache": 2.11,
+                "admin_sessions": 0.32,
+                "admins": 0.3,
+                "voice_calls": 7.38
+            },
+            "mostRepeated": {
+                "count": 6,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select count(*) as aggregate from \"voice_calls\" where \"transfer_of_call_id\" is null",
+                "select * from \"voice_calls\" where \"transfer_of_call_id\" is null order by \"id\" desc limit 25 offset 3725",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "transactions": {
+                "begin": 1,
+                "commit": 1,
+                "rollback": 0
+            },
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 22.002,
+                        "p95": 22.859,
+                        "max": 24.781,
+                        "min": 21.555
+                    },
+                    {
+                        "n": 30,
+                        "p50": 21.863,
+                        "p95": 22.926,
+                        "max": 23.822,
+                        "min": 21.298
+                    },
+                    {
+                        "n": 30,
+                        "p50": 21.788,
+                        "p95": 22.659,
+                        "max": 40.335,
+                        "min": 20.002
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 21.91,
+                    "p95": 22.859,
+                    "max": 40.335,
+                    "min": 20.002
+                },
+                "load1": [
+                    2.15625,
+                    2.15625,
+                    2.15625,
+                    2.15625
+                ]
+            }
+        },
+        {
+            "route": "GET admin/voice/calls/{uuid}",
+            "size": "la de más eventos",
+            "status": 200,
+            "bytes": 2432,
+            "requestBytes": null,
+            "queries": 12,
+            "dbMs": 3.37,
+            "perTable": {
+                "cache": 8,
+                "admin_sessions": 1,
+                "admins": 1,
+                "voice_calls": 1,
+                "voice_call_events": 1
+            },
+            "perTableMs": {
+                "cache": 2.09,
+                "admin_sessions": 0.32,
+                "admins": 0.28,
+                "voice_calls": 0.37,
+                "voice_call_events": 0.31
+            },
+            "mostRepeated": {
+                "count": 6,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"voice_calls\" where \"uuid\" = ? limit 1",
+                "select * from \"voice_call_events\" where \"call_id\" = ? order by \"id\" asc limit 200",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "transactions": {
+                "begin": 1,
+                "commit": 1,
+                "rollback": 0
+            },
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 12.997,
+                        "p95": 13.987,
+                        "max": 19.509,
+                        "min": 12.186
+                    },
+                    {
+                        "n": 30,
+                        "p50": 12.944,
+                        "p95": 13.186,
+                        "max": 13.222,
+                        "min": 12.793
+                    },
+                    {
+                        "n": 30,
+                        "p50": 13.01,
+                        "p95": 13.888,
+                        "max": 15.083,
+                        "min": 12.602
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 12.986,
+                    "p95": 13.835,
+                    "max": 19.509,
+                    "min": 12.186
+                },
+                "load1": [
+                    2.15625,
+                    2.3037109375,
+                    2.3037109375,
+                    2.3037109375
+                ]
+            }
+        },
+        {
+            "route": "GET admin/voice/metrics",
+            "size": "hoy + 2 partes",
+            "status": 200,
+            "bytes": 1298,
+            "requestBytes": null,
+            "queries": 38,
+            "dbMs": 27.49,
+            "perTable": {
+                "voice_calls": 17,
+                "cache": 8,
+                "voice_call_events": 7,
+                "voice_brakes": 3,
+                "admin_sessions": 1,
+                "admins": 1,
+                "ultron_studio_voice_publications": 1
+            },
+            "perTableMs": {
+                "cache": 2.26,
+                "admin_sessions": 0.32,
+                "admins": 0.27,
+                "voice_calls": 17.94,
+                "voice_call_events": 4.82,
+                "ultron_studio_voice_publications": 0.57,
+                "voice_brakes": 1.31
+            },
+            "mostRepeated": {
+                "count": 6,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select direction, status, count(*) as n from \"voice_calls\" where \"budget_day\" = ? and \"transfer_of_call_id\" is null group by \"direction\", \"status\"",
+                "select max(\"created_at\") as aggregate from \"voice_call_events\" where \"kind\" in (?, ?)",
+                "select \"p\".\"seq\", \"p\".\"scope\", \"p\".\"agent_id\", \"p\".\"effective_json\", \"p\".\"effective_hash\", \"p\".\"signature\", \"a\".\"provider_agent_id\" as \"a_provider_agent_id\", \"a\".\"spec_hash\" as \"a_spec_hash\", \"a\".\"payload_hash\" as \"a_payload_hash\", \"a\".\"projection_hash\" as \"a_projection_hash\", \"a\".\"studio_content_hash\" as \"a_studio_content_hash\", \"a\".\"voice_profile_hash\" as \"a_voice_profile_hash\", \"a\".\"compiler_ve",
+                "select \"id\" from \"voice_calls\" where \"voice_publication_seq\" = ? and \"part\" = ? and \"transfer_of_call_id\" is null",
+                "select min(\"created_at\") as aggregate from \"voice_calls\" where \"voice_publication_seq\" = ? and \"part\" = ? and \"transfer_of_call_id\" is null",
+                "select max(\"created_at\") as aggregate from \"voice_calls\" where \"voice_publication_seq\" = ? and \"part\" = ? and \"transfer_of_call_id\" is null",
+                "select count(*) as aggregate from \"voice_call_events\" where \"call_id\" in (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,",
+                "select count(*) as aggregate from \"voice_calls\" where \"voice_publication_seq\" = ? and \"part\" = ? and \"transfer_of_call_id\" is null and \"status\" = ?",
+                "select count(*) as aggregate from \"voice_calls\" where \"voice_publication_seq\" = ? and \"part\" = ? and \"transfer_of_call_id\" is null and \"seal_verified\" = ?",
+                "select count(*) as aggregate from \"voice_call_events\" where \"call_id\" in (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,",
+                "select count(*) as aggregate from \"voice_call_events\" where \"kind\" = ? and \"created_at\" >= ?",
+                "select sum(\"reserved_micros\") as aggregate from \"voice_calls\" where \"voice_publication_seq\" = ? and \"part\" = ? and \"transfer_of_call_id\" is null",
+                "select exists(select * from \"voice_brakes\" as \"o\" where \"o\".\"kind\" = ? and not exists (select * from \"voice_brakes\" as \"r\" where \"r\".\"brake_id\" = \"o\".\"id\")) as \"exists\"",
+                "select \"id\" from \"voice_calls\" where \"voice_publication_seq\" = ? and \"part\" = ? and \"transfer_of_call_id\" is null",
+                "select min(\"created_at\") as aggregate from \"voice_calls\" where \"voice_publication_seq\" = ? and \"part\" = ? and \"transfer_of_call_id\" is null",
+                "select max(\"created_at\") as aggregate from \"voice_calls\" where \"voice_publication_seq\" = ? and \"part\" = ? and \"transfer_of_call_id\" is null",
+                "select count(*) as aggregate from \"voice_call_events\" where \"call_id\" in (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) and \"kind\" = ? and \"outcome\" = ?",
+                "select count(*) as aggregate from \"voice_calls\" where \"voice_publication_seq\" = ? and \"part\" = ? and \"transfer_of_call_id\" is null and \"status\" = ?",
+                "select count(*) as aggregate from \"voice_calls\" where \"voice_publication_seq\" = ? and \"part\" = ? and \"transfer_of_call_id\" is null and \"seal_verified\" = ?",
+                "select count(*) as aggregate from \"voice_call_events\" where \"call_id\" in (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) and \"kind\" = ?",
+                "select count(*) as aggregate from \"voice_call_events\" where \"kind\" = ? and \"created_at\" >= ?",
+                "select sum(\"reserved_micros\") as aggregate from \"voice_calls\" where \"voice_publication_seq\" = ? and \"part\" = ? and \"transfer_of_call_id\" is null",
+                "select exists(select * from \"voice_brakes\" as \"o\" where \"o\".\"kind\" = ? and not exists (select * from \"voice_brakes\" as \"r\" where \"r\".\"brake_id\" = \"o\".\"id\")) as \"exists\"",
+                "select COALESCE(SUM(CASE WHEN status IN ('canceled', 'failed_to_start') THEN 0 WHEN status IN ('busy', 'no_answer', 'failed') THEN (COALESCE(provider_cost_micros, 0) + COALESCE(carrier_cost_micros, 0)) WHEN reserved_micros >= (COALESCE(provider_cost_micros, 0) + COALESCE(carrier_cost_micros, 0)) THEN reserved_micros ELSE (COALESCE(provider_cost_micros, 0) + COALESCE(carrier_cost_micros, 0)) END), ",
+                "select count(*) as aggregate from \"voice_calls\" where \"status\" in (?, ?, ?, ?) and \"transfer_of_call_id\" is null",
+                "select count(*) as aggregate from \"voice_calls\" where \"status\" = ?",
+                "select count(*) as aggregate from \"voice_calls\" where \"status\" = ? and \"status_changed_at\" < ?",
+                "select exists(select * from \"voice_brakes\" as \"o\" where \"o\".\"kind\" = ? and not exists (select * from \"voice_brakes\" as \"r\" where \"r\".\"brake_id\" = \"o\".\"id\")) as \"exists\"",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "transactions": {
+                "begin": 1,
+                "commit": 1,
+                "rollback": 0
+            },
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 41.562,
+                        "p95": 42.239,
+                        "max": 42.271,
+                        "min": 41.211
+                    },
+                    {
+                        "n": 30,
+                        "p50": 41.659,
+                        "p95": 44.908,
+                        "max": 52.707,
+                        "min": 40.815
+                    },
+                    {
+                        "n": 30,
+                        "p50": 41.608,
+                        "p95": 43.878,
+                        "max": 45.527,
+                        "min": 40.692
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 41.622,
+                    "p95": 43.384,
+                    "max": 52.707,
+                    "min": 40.692
+                },
+                "load1": [
+                    2.3037109375,
+                    2.3037109375,
+                    2.3037109375,
+                    2.19921875
+                ]
+            }
+        },
+        {
+            "route": "GET admin/voice/contacts",
+            "size": "por defecto (25)",
+            "status": 200,
+            "bytes": 6461,
+            "requestBytes": null,
+            "queries": 62,
+            "dbMs": 14.65,
+            "perTable": {
+                "voice_consents": 25,
+                "voice_exclusions": 25,
+                "cache": 8,
+                "voice_contacts": 2,
+                "admin_sessions": 1,
+                "admins": 1
+            },
+            "perTableMs": {
+                "cache": 1.62,
+                "admin_sessions": 0.26,
+                "admins": 0.23,
+                "voice_contacts": 0.63,
+                "voice_consents": 5.95,
+                "voice_exclusions": 5.96
+            },
+            "mostRepeated": {
+                "count": 25,
+                "sql": "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select count(*) as aggregate from \"voice_contacts\"",
+                "select * from \"voice_contacts\" order by \"id\" desc limit 25 offset 0",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "transactions": {
+                "begin": 1,
+                "commit": 1,
+                "rollback": 0
+            },
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 21.678,
+                        "p95": 22.973,
+                        "max": 23.215,
+                        "min": 21.512
+                    },
+                    {
+                        "n": 30,
+                        "p50": 21.907,
+                        "p95": 22.755,
+                        "max": 22.955,
+                        "min": 21.433
+                    },
+                    {
+                        "n": 30,
+                        "p50": 21.747,
+                        "p95": 22.823,
+                        "max": 22.872,
+                        "min": 21.324
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 21.747,
+                    "p95": 22.823,
+                    "max": 23.215,
+                    "min": 21.324
+                },
+                "load1": [
+                    2.19921875,
+                    2.19921875,
+                    2.19921875,
+                    2.19921875
+                ]
+            }
+        },
+        {
+            "route": "GET admin/voice/contacts",
+            "size": "perPage=100",
+            "status": 200,
+            "bytes": 25789,
+            "requestBytes": null,
+            "queries": 212,
+            "dbMs": 30.21,
+            "perTable": {
+                "voice_consents": 100,
+                "voice_exclusions": 100,
+                "cache": 8,
+                "voice_contacts": 2,
+                "admin_sessions": 1,
+                "admins": 1
+            },
+            "perTableMs": {
+                "cache": 0.93,
+                "admin_sessions": 0.17,
+                "admins": 0.13,
+                "voice_contacts": 0.58,
+                "voice_consents": 14.28,
+                "voice_exclusions": 14.12
+            },
+            "mostRepeated": {
+                "count": 100,
+                "sql": "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select count(*) as aggregate from \"voice_contacts\"",
+                "select * from \"voice_contacts\" order by \"id\" desc limit 100 offset 0",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "transactions": {
+                "begin": 1,
+                "commit": 1,
+                "rollback": 0
+            },
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 61.287,
+                        "p95": 62.058,
+                        "max": 62.208,
+                        "min": 58.528
+                    },
+                    {
+                        "n": 30,
+                        "p50": 61.74,
+                        "p95": 62.45,
+                        "max": 63.029,
+                        "min": 58.458
+                    },
+                    {
+                        "n": 30,
+                        "p50": 62.142,
+                        "p95": 73.758,
+                        "max": 77.897,
+                        "min": 60.227
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 61.74,
+                    "p95": 64.579,
+                    "max": 77.897,
+                    "min": 58.458
+                },
+                "load1": [
+                    2.19921875,
+                    2.19921875,
+                    2.10302734375,
+                    2.10302734375
+                ]
+            }
+        },
+        {
+            "route": "POST admin/voice/calls (puerta de salientes)",
+            "size": "a un canario",
+            "status": 409,
+            "bytes": 270,
+            "requestBytes": 36,
+            "queries": 22,
+            "dbMs": 3.66,
+            "perTable": {
+                "cache": 9,
+                "voice_calls": 5,
+                "admin_sessions": 1,
+                "admins": 1,
+                "SET": 1,
+                "SELECT PG_ADVISORY": 1,
+                "ultron_studio_canary_numbers": 1,
+                "ultron_studio_voice_publications": 1,
+                "voice_brakes": 1,
+                "voice_exclusions": 1
+            },
+            "perTableMs": {
+                "cache": 1.04,
+                "admin_sessions": 0.17,
+                "admins": 0.14,
+                "SET": 0.08,
+                "SELECT PG_ADVISORY": 0.09,
+                "voice_calls": 1.2,
+                "ultron_studio_canary_numbers": 0.18,
+                "ultron_studio_voice_publications": 0.42,
+                "voice_brakes": 0.2,
+                "voice_exclusions": 0.14
+            },
+            "mostRepeated": {
+                "count": 7,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "SET TRANSACTION ISOLATION LEVEL READ COMMITTED",
+                "SELECT pg_advisory_xact_lock(?)",
+                "select * from \"voice_calls\" where \"requested_by_admin_id\" = ? and \"client_request_id\" = ? limit 1",
+                "select * from \"ultron_studio_canary_numbers\" where \"uuid\" = ? and \"channel\" = ? limit 1",
+                "select \"p\".\"seq\", \"p\".\"scope\", \"p\".\"agent_id\", \"p\".\"effective_json\", \"p\".\"effective_hash\", \"p\".\"signature\", \"a\".\"provider_agent_id\" as \"a_provider_agent_id\", \"a\".\"spec_hash\" as \"a_spec_hash\", \"a\".\"payload_hash\" as \"a_payload_hash\", \"a\".\"projection_hash\" as \"a_projection_hash\", \"a\".\"studio_content_hash\" as \"a_studio_content_hash\", \"a\".\"voice_profile_hash\" as \"a_voice_profile_hash\", \"a\".\"compiler_ve",
+                "select \"created_at\", \"status\", \"direction\" from \"voice_calls\" where \"remote_hash\" = ? and \"direction\" = ? and \"transfer_of_call_id\" is null and \"created_at\" >= ?",
+                "select COALESCE(SUM(CASE WHEN status IN ('canceled', 'failed_to_start') THEN 0 WHEN status IN ('busy', 'no_answer', 'failed') THEN (COALESCE(provider_cost_micros, 0) + COALESCE(carrier_cost_micros, 0)) WHEN reserved_micros >= (COALESCE(provider_cost_micros, 0) + COALESCE(carrier_cost_micros, 0)) THEN reserved_micros ELSE (COALESCE(provider_cost_micros, 0) + COALESCE(carrier_cost_micros, 0)) END), ",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select exists(select * from \"voice_brakes\" as \"o\" where \"o\".\"kind\" = ? and not exists (select * from \"voice_brakes\" as \"r\" where \"r\".\"brake_id\" = \"o\".\"id\")) as \"exists\"",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select count(*) as aggregate from \"voice_calls\" where \"status\" in (?, ?, ?, ?) and \"transfer_of_call_id\" is null",
+                "select count(*) as aggregate from \"voice_calls\" where \"budget_day\" = ? and \"direction\" = ? and \"transfer_of_call_id\" is null and \"status\" not in (?, ?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "transactions": {
+                "begin": 2,
+                "commit": 2,
+                "rollback": 0
+            },
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 18.001,
+                        "p95": 29.817,
+                        "max": 32.238,
+                        "min": 14.502
+                    },
+                    {
+                        "n": 30,
+                        "p50": 18.153,
+                        "p95": 19.255,
+                        "max": 19.35,
+                        "min": 17.633
+                    },
+                    {
+                        "n": 30,
+                        "p50": 18.101,
+                        "p95": 19.071,
+                        "max": 19.127,
+                        "min": 17.847
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 18.114,
+                    "p95": 19.255,
+                    "max": 32.238,
+                    "min": 14.502
+                },
+                "load1": [
+                    2.10302734375,
+                    2.10302734375,
+                    2.10302734375,
+                    2.0146484375
+                ]
+            }
+        },
+        {
+            "route": "POST admin/voice/calls (puerta de salientes)",
+            "size": "a un contacto con lead",
+            "status": 409,
+            "bytes": 278,
+            "requestBytes": 36,
+            "queries": 25,
+            "dbMs": 7.64,
+            "perTable": {
+                "cache": 9,
+                "voice_calls": 5,
+                "admin_sessions": 1,
+                "admins": 1,
+                "SET": 1,
+                "SELECT PG_ADVISORY": 1,
+                "voice_contacts": 1,
+                "voice_consents": 1,
+                "marketing_leads": 1,
+                "voice_rne_checks": 1,
+                "ultron_studio_voice_publications": 1,
+                "voice_brakes": 1,
+                "voice_exclusions": 1
+            },
+            "perTableMs": {
+                "cache": 2.35,
+                "admin_sessions": 0.31,
+                "admins": 0.31,
+                "SET": 0.23,
+                "SELECT PG_ADVISORY": 0.21,
+                "voice_calls": 1.84,
+                "voice_contacts": 0.31,
+                "voice_consents": 0.3,
+                "marketing_leads": 0.29,
+                "voice_rne_checks": 0.28,
+                "ultron_studio_voice_publications": 0.56,
+                "voice_brakes": 0.37,
+                "voice_exclusions": 0.28
+            },
+            "mostRepeated": {
+                "count": 7,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"admin_sessions\" where \"revoked_at\" is null and (\"expires_at\" is null or \"expires_at\" > ?) and \"token_hash\" = ? limit 1",
+                "select * from \"admins\" where \"admins\".\"id\" = ? limit 1",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "SET TRANSACTION ISOLATION LEVEL READ COMMITTED",
+                "SELECT pg_advisory_xact_lock(?)",
+                "select * from \"voice_calls\" where \"requested_by_admin_id\" = ? and \"client_request_id\" = ? limit 1",
+                "select * from \"voice_contacts\" where \"uuid\" = ? limit 1",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select \"id\", \"do_not_contact\", \"consent_status\" from \"marketing_leads\" where \"marketing_leads\".\"id\" = ? limit 1",
+                "select \"checked_at\", \"result\" from \"voice_rne_checks\" where \"phone_hash\" = ? order by \"checked_at\" desc, \"id\" desc limit 1",
+                "select \"p\".\"seq\", \"p\".\"scope\", \"p\".\"agent_id\", \"p\".\"effective_json\", \"p\".\"effective_hash\", \"p\".\"signature\", \"a\".\"provider_agent_id\" as \"a_provider_agent_id\", \"a\".\"spec_hash\" as \"a_spec_hash\", \"a\".\"payload_hash\" as \"a_payload_hash\", \"a\".\"projection_hash\" as \"a_projection_hash\", \"a\".\"studio_content_hash\" as \"a_studio_content_hash\", \"a\".\"voice_profile_hash\" as \"a_voice_profile_hash\", \"a\".\"compiler_ve",
+                "select \"created_at\", \"status\", \"direction\" from \"voice_calls\" where \"remote_hash\" = ? and \"direction\" = ? and \"transfer_of_call_id\" is null and \"created_at\" >= ?",
+                "select COALESCE(SUM(CASE WHEN status IN ('canceled', 'failed_to_start') THEN 0 WHEN status IN ('busy', 'no_answer', 'failed') THEN (COALESCE(provider_cost_micros, 0) + COALESCE(carrier_cost_micros, 0)) WHEN reserved_micros >= (COALESCE(provider_cost_micros, 0) + COALESCE(carrier_cost_micros, 0)) THEN reserved_micros ELSE (COALESCE(provider_cost_micros, 0) + COALESCE(carrier_cost_micros, 0)) END), ",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select exists(select * from \"voice_brakes\" as \"o\" where \"o\".\"kind\" = ? and not exists (select * from \"voice_brakes\" as \"r\" where \"r\".\"brake_id\" = \"o\".\"id\")) as \"exists\"",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\"",
+                "select count(*) as aggregate from \"voice_calls\" where \"status\" in (?, ?, ?, ?) and \"transfer_of_call_id\" is null",
+                "select count(*) as aggregate from \"voice_calls\" where \"budget_day\" = ? and \"direction\" = ? and \"transfer_of_call_id\" is null and \"status\" not in (?, ?)",
+                "select * from \"cache\" where \"key\" in (?)"
+            ],
+            "transactions": {
+                "begin": 2,
+                "commit": 2,
+                "rollback": 0
+            },
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 19.04,
+                        "p95": 20.457,
+                        "max": 23.968,
+                        "min": 18.62
+                    },
+                    {
+                        "n": 30,
+                        "p50": 19.067,
+                        "p95": 20.141,
+                        "max": 20.162,
+                        "min": 18.758
+                    },
+                    {
+                        "n": 30,
+                        "p50": 18.952,
+                        "p95": 19.864,
+                        "max": 19.933,
+                        "min": 18.787
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 19.017,
+                    "p95": 20.141,
+                    "max": 23.968,
+                    "min": 18.62
+                },
+                "load1": [
+                    2.0146484375,
+                    2.0146484375,
+                    2.0146484375,
+                    2.0146484375
+                ]
+            }
+        }
+    ]
+}

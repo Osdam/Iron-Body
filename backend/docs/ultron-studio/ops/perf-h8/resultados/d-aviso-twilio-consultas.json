@@ -1,0 +1,813 @@
+{
+    "family": "d-aviso-twilio",
+    "env": {
+        "at": "2026-11-08T21:37:57+00:00",
+        "php": "8.3.33",
+        "opcacheCli": false,
+        "db": "ultron_studio_h8_perf",
+        "pg": "PostgreSQL 14.24 (Homebrew) on aarch64-apple-darwin25.6.0, compiled by Apple clang version 21.0.0 (clang-2100.1.1.101), 64-bit",
+        "cache": "database",
+        "queue": "database",
+        "n": 0,
+        "warm": 5,
+        "reps": 3,
+        "load": [
+            2.05029296875,
+            1.5546875,
+            1.33642578125
+        ],
+        "host": "MacBook-Air-de-Alejandro.local arm64",
+        "head": "bb239b53"
+    },
+    "results": [
+        {
+            "route": "POST twilio/usage-trigger",
+            "size": "aviso nuevo (abre el freno)",
+            "status": 200,
+            "bytes": 28,
+            "requestBytes": null,
+            "queries": 11,
+            "dbMs": 3.71,
+            "perTable": {
+                "cache": 7,
+                "incidents": 2,
+                "voice_call_events": 1,
+                "voice_brakes": 1
+            },
+            "perTableMs": {
+                "cache": 2.04,
+                "voice_call_events": 0.52,
+                "voice_brakes": 0.48,
+                "incidents": 0.67
+            },
+            "mostRepeated": {
+                "count": 3,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "insert into \"cache\" (\"key\", \"value\", \"expiration\") values (?, ?, ?) on conflict do nothing",
+                "select * from \"cache\" where \"key\" in (?)",
+                "insert into \"cache\" (\"key\", \"value\", \"expiration\") values (?, ?, ?) on conflict do nothing",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "insert into \"voice_call_events\" (\"call_id\", \"provider\", \"kind\", \"provider_event_key\", \"tool\", \"outcome\", \"codes\", \"actor_type\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"occurred_at\", \"uuid\", \"created_at\") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) returning \"id\"",
+                "insert into \"voice_brakes\" (\"kind\", \"reason\", \"open_key\", \"call_id\", \"event_id\", \"evidence\", \"actor_type\", \"actor_admin_id\", \"actor_name\", \"uuid\", \"created_at\") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) returning \"id\"",
+                "select * from \"incidents\" where \"fingerprint\" = ? limit 1 for update",
+                "update \"incidents\" set \"occurrences\" = ?, \"evidence\" = ?, \"updated_at\" = ? where \"id\" = ?"
+            ],
+            "transactions": {
+                "begin": 5,
+                "commit": 3,
+                "rollback": 0
+            },
+            "plans": [
+                {
+                    "sql": "select * from \"cache\" where \"key\" in (?…)",
+                    "calls": 3,
+                    "ms": 0.3,
+                    "execMs": 0.006,
+                    "nodes": [
+                        "Seq Scan  on cache rows=1"
+                    ],
+                    "seqScans": [
+                        "cache (rows=1, removed=4)"
+                    ],
+                    "indexes": [],
+                    "sharedHit": 1,
+                    "sharedRead": 0
+                },
+                {
+                    "sql": "select * from \"cache\" where \"key\" = ? limit N for update",
+                    "calls": 1,
+                    "ms": 0.27,
+                    "execMs": 0.01,
+                    "nodes": [
+                        "Limit rows=1",
+                        "LockRows rows=1",
+                        "Seq Scan  on cache rows=1"
+                    ],
+                    "seqScans": [
+                        "cache (rows=1, removed=4)"
+                    ],
+                    "indexes": [],
+                    "sharedHit": 2,
+                    "sharedRead": 0
+                },
+                {
+                    "sql": "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                    "calls": 1,
+                    "ms": 0.27,
+                    "execMs": null,
+                    "nodes": [
+                        "ModifyTable  on cache",
+                        "Seq Scan  on cache"
+                    ],
+                    "seqScans": [
+                        "cache"
+                    ],
+                    "indexes": [],
+                    "sharedHit": null,
+                    "sharedRead": null
+                },
+                {
+                    "sql": "select * from \"incidents\" where \"fingerprint\" = ? limit N for update",
+                    "calls": 1,
+                    "ms": 0.36,
+                    "execMs": 0.019,
+                    "nodes": [
+                        "Limit rows=1",
+                        "LockRows rows=1",
+                        "Seq Scan  on incidents rows=1"
+                    ],
+                    "seqScans": [
+                        "incidents (rows=1, removed=3)"
+                    ],
+                    "indexes": [],
+                    "sharedHit": 2,
+                    "sharedRead": 0
+                },
+                {
+                    "sql": "update \"incidents\" set \"occurrences\" = ?, \"evidence\" = ?, \"updated_at\" = ? where \"id\" = ?",
+                    "calls": 1,
+                    "ms": 0.31,
+                    "execMs": null,
+                    "nodes": [
+                        "ModifyTable  on incidents",
+                        "Seq Scan  on incidents"
+                    ],
+                    "seqScans": [
+                        "incidents"
+                    ],
+                    "indexes": [],
+                    "sharedHit": null,
+                    "sharedRead": null
+                }
+            ],
+            "timing": null
+        },
+        {
+            "route": "POST twilio/usage-trigger",
+            "size": "repetido (idempotente)",
+            "status": 200,
+            "bytes": 28,
+            "requestBytes": null,
+            "queries": 5,
+            "dbMs": 1.32,
+            "perTable": {
+                "cache": 5
+            },
+            "perTableMs": {
+                "cache": 1.32
+            },
+            "mostRepeated": {
+                "count": 3,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?"
+            ],
+            "transactions": {
+                "begin": 3,
+                "commit": 2,
+                "rollback": 1
+            },
+            "plans": [
+                {
+                    "sql": "select * from \"cache\" where \"key\" in (?…)",
+                    "calls": 3,
+                    "ms": 0.27,
+                    "execMs": 0.005,
+                    "nodes": [
+                        "Seq Scan  on cache rows=1"
+                    ],
+                    "seqScans": [
+                        "cache (rows=1, removed=6)"
+                    ],
+                    "indexes": [],
+                    "sharedHit": 1,
+                    "sharedRead": 0
+                },
+                {
+                    "sql": "select * from \"cache\" where \"key\" = ? limit N for update",
+                    "calls": 1,
+                    "ms": 0.26,
+                    "execMs": 0.009,
+                    "nodes": [
+                        "Limit rows=1",
+                        "LockRows rows=1",
+                        "Seq Scan  on cache rows=1"
+                    ],
+                    "seqScans": [
+                        "cache (rows=1, removed=6)"
+                    ],
+                    "indexes": [],
+                    "sharedHit": 2,
+                    "sharedRead": 0
+                },
+                {
+                    "sql": "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                    "calls": 1,
+                    "ms": 0.28,
+                    "execMs": null,
+                    "nodes": [
+                        "ModifyTable  on cache",
+                        "Seq Scan  on cache"
+                    ],
+                    "seqScans": [
+                        "cache"
+                    ],
+                    "indexes": [],
+                    "sharedHit": null,
+                    "sharedRead": null
+                }
+            ],
+            "timing": null
+        },
+        {
+            "route": "POST twilio/usage-trigger",
+            "size": "firma mala",
+            "status": 401,
+            "bytes": 39,
+            "requestBytes": null,
+            "queries": 5,
+            "dbMs": 1.29,
+            "perTable": {
+                "cache": 5
+            },
+            "perTableMs": {
+                "cache": 1.29
+            },
+            "mostRepeated": {
+                "count": 3,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?"
+            ],
+            "transactions": {
+                "begin": 1,
+                "commit": 1,
+                "rollback": 0
+            },
+            "plans": [
+                {
+                    "sql": "select * from \"cache\" where \"key\" in (?…)",
+                    "calls": 3,
+                    "ms": 0.26,
+                    "execMs": 0.005,
+                    "nodes": [
+                        "Seq Scan  on cache rows=1"
+                    ],
+                    "seqScans": [
+                        "cache (rows=1, removed=8)"
+                    ],
+                    "indexes": [],
+                    "sharedHit": 1,
+                    "sharedRead": 0
+                },
+                {
+                    "sql": "select * from \"cache\" where \"key\" = ? limit N for update",
+                    "calls": 1,
+                    "ms": 0.27,
+                    "execMs": 0.009,
+                    "nodes": [
+                        "Limit rows=1",
+                        "LockRows rows=1",
+                        "Seq Scan  on cache rows=1"
+                    ],
+                    "seqScans": [
+                        "cache (rows=1, removed=8)"
+                    ],
+                    "indexes": [],
+                    "sharedHit": 2,
+                    "sharedRead": 0
+                },
+                {
+                    "sql": "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                    "calls": 1,
+                    "ms": 0.26,
+                    "execMs": null,
+                    "nodes": [
+                        "ModifyTable  on cache",
+                        "Seq Scan  on cache"
+                    ],
+                    "seqScans": [
+                        "cache"
+                    ],
+                    "indexes": [],
+                    "sharedHit": null,
+                    "sharedRead": null
+                }
+            ],
+            "timing": null
+        }
+    ],
+    "indexUsage": [
+        {
+            "tabla": "ultron_studio_voice_agents",
+            "indice": "ultron_studio_voice_agents_client_request_id_unique",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "ultron_studio_voice_agents",
+            "indice": "ultron_studio_voice_agents_pkey",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "ultron_studio_voice_agents",
+            "indice": "ultron_studio_voice_agents_provider_agent_id_unique",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "ultron_studio_voice_agents",
+            "indice": "ultron_studio_voice_agents_uuid_unique",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "ultron_studio_voice_agents",
+            "indice": "usva_one_canary",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": "(serves_canary = true)",
+            "unico": true
+        },
+        {
+            "tabla": "ultron_studio_voice_agents",
+            "indice": "usva_one_rest",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": "(serves_rest = true)",
+            "unico": true
+        },
+        {
+            "tabla": "ultron_studio_voice_agents",
+            "indice": "usva_purpose_idx",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": false
+        },
+        {
+            "tabla": "ultron_studio_voice_lab_sessions",
+            "indice": "ultron_studio_voice_lab_sessions_client_request_id_unique",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "ultron_studio_voice_lab_sessions",
+            "indice": "ultron_studio_voice_lab_sessions_pkey",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "ultron_studio_voice_lab_sessions",
+            "indice": "ultron_studio_voice_lab_sessions_uuid_unique",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "ultron_studio_voice_lab_sessions",
+            "indice": "usvl_agent_idx",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": false
+        },
+        {
+            "tabla": "ultron_studio_voice_lab_sessions",
+            "indice": "usvl_budget_idx",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": false
+        },
+        {
+            "tabla": "ultron_studio_voice_lab_sessions",
+            "indice": "usvl_person_day_idx",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": false
+        },
+        {
+            "tabla": "ultron_studio_voice_profiles",
+            "indice": "ultron_studio_voice_profiles_client_request_id_unique",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "ultron_studio_voice_profiles",
+            "indice": "ultron_studio_voice_profiles_pkey",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "ultron_studio_voice_profiles",
+            "indice": "ultron_studio_voice_profiles_uuid_unique",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "ultron_studio_voice_profiles",
+            "indice": "usvp_status_idx",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": false
+        },
+        {
+            "tabla": "ultron_studio_voice_publications",
+            "indice": "ultron_studio_voice_publications_client_request_id_unique",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "ultron_studio_voice_publications",
+            "indice": "ultron_studio_voice_publications_pkey",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "ultron_studio_voice_publications",
+            "indice": "ultron_studio_voice_publications_seq_unique",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "ultron_studio_voice_publications",
+            "indice": "ultron_studio_voice_publications_uuid_unique",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "ultron_studio_voice_publications",
+            "indice": "usvpub_scope_idx",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": false
+        },
+        {
+            "tabla": "voice_brakes",
+            "indice": "vbr_release_once",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "voice_brakes",
+            "indice": "voice_brakes_client_request_id_unique",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "voice_brakes",
+            "indice": "voice_brakes_open_key_unique",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "voice_brakes",
+            "indice": "voice_brakes_pkey",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "voice_brakes",
+            "indice": "voice_brakes_uuid_unique",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "voice_call_events",
+            "indice": "vce_call_idx",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": false
+        },
+        {
+            "tabla": "voice_call_events",
+            "indice": "vce_dedupe_unique",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "voice_call_events",
+            "indice": "vce_kind_idx",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": false
+        },
+        {
+            "tabla": "voice_call_events",
+            "indice": "voice_call_events_pkey",
+            "scans": 3,
+            "tuplas": 3,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "voice_call_events",
+            "indice": "voice_call_events_uuid_unique",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "voice_calls",
+            "indice": "vc_client_request_unique",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "voice_calls",
+            "indice": "vc_day_idx",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": false
+        },
+        {
+            "tabla": "voice_calls",
+            "indice": "vc_one_live_outbound",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": "(((direction)::text = 'outbound'::text) AND (transfer_of_call_id IS NULL) AND ((status)::text = ANY ((ARRAY['requested'::character varying, 'ambiguous'::character varying, 'dialing'::character varying, 'active'::character varying])::text[])))",
+            "unico": true
+        },
+        {
+            "tabla": "voice_calls",
+            "indice": "vc_remote_idx",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": false
+        },
+        {
+            "tabla": "voice_calls",
+            "indice": "vc_retry_unique",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "voice_calls",
+            "indice": "vc_status_idx",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": false
+        },
+        {
+            "tabla": "voice_calls",
+            "indice": "vc_transfer_idx",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": false
+        },
+        {
+            "tabla": "voice_calls",
+            "indice": "voice_calls_call_ref_unique",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "voice_calls",
+            "indice": "voice_calls_pkey",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "voice_calls",
+            "indice": "voice_calls_provider_call_sid_unique",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "voice_calls",
+            "indice": "voice_calls_provider_conversation_id_unique",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "voice_calls",
+            "indice": "voice_calls_uuid_unique",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "voice_consents",
+            "indice": "vcs_contact_idx",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": false
+        },
+        {
+            "tabla": "voice_consents",
+            "indice": "voice_consents_client_request_id_unique",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "voice_consents",
+            "indice": "voice_consents_pkey",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "voice_consents",
+            "indice": "voice_consents_uuid_unique",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "voice_contacts",
+            "indice": "vct_one_live",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": "((status)::text <> 'retired'::text)",
+            "unico": true
+        },
+        {
+            "tabla": "voice_contacts",
+            "indice": "vct_status_idx",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": false
+        },
+        {
+            "tabla": "voice_contacts",
+            "indice": "voice_contacts_client_request_id_unique",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "voice_contacts",
+            "indice": "voice_contacts_pkey",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "voice_contacts",
+            "indice": "voice_contacts_uuid_unique",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "voice_exclusions",
+            "indice": "vex_one_opt_out_per_call",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": "((source)::text = 'spoken_opt_out'::text)",
+            "unico": true
+        },
+        {
+            "tabla": "voice_exclusions",
+            "indice": "vex_phone_idx",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": false
+        },
+        {
+            "tabla": "voice_exclusions",
+            "indice": "voice_exclusions_client_request_id_unique",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "voice_exclusions",
+            "indice": "voice_exclusions_pkey",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "voice_exclusions",
+            "indice": "voice_exclusions_uuid_unique",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "voice_rne_checks",
+            "indice": "voice_rne_checks_client_request_id_unique",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "voice_rne_checks",
+            "indice": "voice_rne_checks_pkey",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "voice_rne_checks",
+            "indice": "voice_rne_checks_uuid_unique",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": true
+        },
+        {
+            "tabla": "voice_rne_checks",
+            "indice": "vrne_phone_idx",
+            "scans": 0,
+            "tuplas": 0,
+            "parcial": null,
+            "unico": false
+        }
+    ]
+}

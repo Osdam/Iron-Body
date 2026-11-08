@@ -1,0 +1,243 @@
+{
+    "family": "d-aviso-twilio",
+    "env": {
+        "at": "2026-11-08T21:39:30+00:00",
+        "php": "8.3.33",
+        "opcacheCli": false,
+        "db": "ultron_studio_h8_perf",
+        "pg": "PostgreSQL 14.24 (Homebrew) on aarch64-apple-darwin25.6.0, compiled by Apple clang version 21.0.0 (clang-2100.1.1.101), 64-bit",
+        "cache": "database",
+        "queue": "database",
+        "n": 30,
+        "warm": 5,
+        "reps": 3,
+        "load": [
+            2.185546875,
+            1.69580078125,
+            1.4072265625
+        ],
+        "host": "MacBook-Air-de-Alejandro.local arm64",
+        "head": "bb239b53"
+    },
+    "results": [
+        {
+            "route": "POST twilio/usage-trigger",
+            "size": "aviso nuevo (abre el freno)",
+            "status": 200,
+            "bytes": 28,
+            "requestBytes": null,
+            "queries": 11,
+            "dbMs": 4.1,
+            "perTable": {
+                "cache": 7,
+                "incidents": 2,
+                "voice_call_events": 1,
+                "voice_brakes": 1
+            },
+            "perTableMs": {
+                "cache": 2.29,
+                "voice_call_events": 0.59,
+                "voice_brakes": 0.49,
+                "incidents": 0.73
+            },
+            "mostRepeated": {
+                "count": 3,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "insert into \"cache\" (\"key\", \"value\", \"expiration\") values (?, ?, ?) on conflict do nothing",
+                "select * from \"cache\" where \"key\" in (?)",
+                "insert into \"cache\" (\"key\", \"value\", \"expiration\") values (?, ?, ?) on conflict do nothing",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "insert into \"voice_call_events\" (\"call_id\", \"provider\", \"kind\", \"provider_event_key\", \"tool\", \"outcome\", \"codes\", \"actor_type\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"occurred_at\", \"uuid\", \"created_at\") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) returning \"id\"",
+                "insert into \"voice_brakes\" (\"kind\", \"reason\", \"open_key\", \"call_id\", \"event_id\", \"evidence\", \"actor_type\", \"actor_admin_id\", \"actor_name\", \"uuid\", \"created_at\") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) returning \"id\"",
+                "select * from \"incidents\" where \"fingerprint\" = ? limit 1 for update",
+                "update \"incidents\" set \"occurrences\" = ?, \"evidence\" = ?, \"updated_at\" = ? where \"id\" = ?"
+            ],
+            "transactions": {
+                "begin": 5,
+                "commit": 3,
+                "rollback": 0
+            },
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 7.092,
+                        "p95": 7.568,
+                        "max": 7.632,
+                        "min": 6.479
+                    },
+                    {
+                        "n": 30,
+                        "p50": 7.203,
+                        "p95": 7.564,
+                        "max": 7.888,
+                        "min": 6.486
+                    },
+                    {
+                        "n": 30,
+                        "p50": 7.154,
+                        "p95": 7.862,
+                        "max": 8.199,
+                        "min": 6.535
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 7.154,
+                    "p95": 7.573,
+                    "max": 8.199,
+                    "min": 6.479
+                },
+                "load1": [
+                    2.185546875,
+                    2.185546875,
+                    2.185546875,
+                    2.185546875
+                ]
+            }
+        },
+        {
+            "route": "POST twilio/usage-trigger",
+            "size": "repetido (idempotente)",
+            "status": 200,
+            "bytes": 28,
+            "requestBytes": null,
+            "queries": 5,
+            "dbMs": 1.48,
+            "perTable": {
+                "cache": 5
+            },
+            "perTableMs": {
+                "cache": 1.48
+            },
+            "mostRepeated": {
+                "count": 3,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?"
+            ],
+            "transactions": {
+                "begin": 3,
+                "commit": 2,
+                "rollback": 1
+            },
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 4.051,
+                        "p95": 4.305,
+                        "max": 4.372,
+                        "min": 3.617
+                    },
+                    {
+                        "n": 30,
+                        "p50": 4.054,
+                        "p95": 5.066,
+                        "max": 5.453,
+                        "min": 3.76
+                    },
+                    {
+                        "n": 30,
+                        "p50": 4.141,
+                        "p95": 5.754,
+                        "max": 6.748,
+                        "min": 3.751
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 4.065,
+                    "p95": 5.047,
+                    "max": 6.748,
+                    "min": 3.617
+                },
+                "load1": [
+                    2.185546875,
+                    2.185546875,
+                    2.185546875,
+                    2.185546875
+                ]
+            }
+        },
+        {
+            "route": "POST twilio/usage-trigger",
+            "size": "firma mala",
+            "status": 401,
+            "bytes": 39,
+            "requestBytes": null,
+            "queries": 5,
+            "dbMs": 1.37,
+            "perTable": {
+                "cache": 5
+            },
+            "perTableMs": {
+                "cache": 1.37
+            },
+            "mostRepeated": {
+                "count": 3,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?"
+            ],
+            "transactions": {
+                "begin": 1,
+                "commit": 1,
+                "rollback": 0
+            },
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 2.941,
+                        "p95": 3.034,
+                        "max": 3.129,
+                        "min": 2.81
+                    },
+                    {
+                        "n": 30,
+                        "p50": 2.819,
+                        "p95": 2.965,
+                        "max": 3.014,
+                        "min": 2.774
+                    },
+                    {
+                        "n": 30,
+                        "p50": 2.88,
+                        "p95": 3.186,
+                        "max": 3.259,
+                        "min": 2.517
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 2.88,
+                    "p95": 3.129,
+                    "max": 3.259,
+                    "min": 2.517
+                },
+                "load1": [
+                    2.185546875,
+                    2.185546875,
+                    2.185546875,
+                    2.185546875
+                ]
+            }
+        }
+    ]
+}

@@ -1,0 +1,752 @@
+{
+    "family": "c-herramientas",
+    "env": {
+        "at": "2026-11-08T21:39:27+00:00",
+        "php": "8.3.33",
+        "opcacheCli": false,
+        "db": "ultron_studio_h8_perf",
+        "pg": "PostgreSQL 14.24 (Homebrew) on aarch64-apple-darwin25.6.0, compiled by Apple clang version 21.0.0 (clang-2100.1.1.101), 64-bit",
+        "cache": "database",
+        "queue": "database",
+        "n": 30,
+        "warm": 5,
+        "reps": 3,
+        "load": [
+            2.02783203125,
+            1.6572265625,
+            1.39208984375
+        ],
+        "host": "MacBook-Air-de-Alejandro.local arm64",
+        "head": "bb239b53"
+    },
+    "results": [
+        {
+            "route": "POST tools/consultar_planes",
+            "size": "primera de la llamada",
+            "status": 200,
+            "bytes": 722,
+            "requestBytes": null,
+            "queries": 12,
+            "dbMs": 5.05,
+            "perTable": {
+                "cache": 7,
+                "voice_calls": 2,
+                "voice_brakes": 1,
+                "plans": 1,
+                "voice_call_events": 1
+            },
+            "perTableMs": {
+                "cache": 2.18,
+                "voice_calls": 1.35,
+                "voice_brakes": 0.43,
+                "plans": 0.37,
+                "voice_call_events": 0.72
+            },
+            "mostRepeated": {
+                "count": 3,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "insert into \"cache\" (\"key\", \"value\", \"expiration\") values (?, ?, ?) on conflict do nothing",
+                "select * from \"cache\" where \"key\" in (?)",
+                "insert into \"cache\" (\"key\", \"value\", \"expiration\") values (?, ?, ?) on conflict do nothing",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"voice_calls\" where \"transfer_of_call_id\" is null and \"provider_conversation_id\" = ? limit 1 for update",
+                "select exists(select * from \"voice_brakes\" as \"o\" where \"o\".\"kind\" = ? and not exists (select * from \"voice_brakes\" as \"r\" where \"r\".\"brake_id\" = \"o\".\"id\")) as \"exists\"",
+                "update \"voice_calls\" set \"tool_calls\" = ?, \"updated_at\" = ? where \"voice_calls\".\"id\" = ? and \"status\" in (?, ?) and \"tool_calls\" = ?",
+                "select \"id\", \"name\", \"price\", \"duration_days\", \"benefit_only\" from \"plans\" where \"active\" = ? and \"sellable\" = ? and \"archived_at\" is null and \"price\" > ? and \"duration_days\" > ? order by \"sort_order\" asc, \"duration_days\" asc limit 20",
+                "insert into \"voice_call_events\" (\"call_id\", \"provider\", \"kind\", \"provider_event_key\", \"tool\", \"outcome\", \"codes\", \"actor_type\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"occurred_at\", \"uuid\", \"created_at\") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) returning \"id\""
+            ],
+            "transactions": {
+                "begin": 3,
+                "commit": 2,
+                "rollback": 0
+            },
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 7.586,
+                        "p95": 7.857,
+                        "max": 7.915,
+                        "min": 7.227
+                    },
+                    {
+                        "n": 30,
+                        "p50": 7.77,
+                        "p95": 7.957,
+                        "max": 8.175,
+                        "min": 7.461
+                    },
+                    {
+                        "n": 30,
+                        "p50": 7.655,
+                        "p95": 8.034,
+                        "max": 8.164,
+                        "min": 7.389
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 7.658,
+                    "p95": 7.957,
+                    "max": 8.175,
+                    "min": 7.227
+                },
+                "load1": [
+                    2.12841796875,
+                    2.12841796875,
+                    2.12841796875,
+                    2.12841796875
+                ]
+            }
+        },
+        {
+            "route": "POST tools/consultar_planes",
+            "size": "siguiente (cupo 2–11 de 20)",
+            "status": 200,
+            "bytes": 722,
+            "requestBytes": null,
+            "queries": 10,
+            "dbMs": 4.01,
+            "perTable": {
+                "cache": 5,
+                "voice_calls": 2,
+                "voice_brakes": 1,
+                "plans": 1,
+                "voice_call_events": 1
+            },
+            "perTableMs": {
+                "cache": 1.51,
+                "voice_calls": 1.28,
+                "voice_brakes": 0.39,
+                "plans": 0.36,
+                "voice_call_events": 0.47
+            },
+            "mostRepeated": {
+                "count": 3,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"voice_calls\" where \"transfer_of_call_id\" is null and \"provider_conversation_id\" = ? limit 1 for update",
+                "select exists(select * from \"voice_brakes\" as \"o\" where \"o\".\"kind\" = ? and not exists (select * from \"voice_brakes\" as \"r\" where \"r\".\"brake_id\" = \"o\".\"id\")) as \"exists\"",
+                "update \"voice_calls\" set \"tool_calls\" = ?, \"updated_at\" = ? where \"voice_calls\".\"id\" = ? and \"status\" in (?, ?) and \"tool_calls\" = ?",
+                "select \"id\", \"name\", \"price\", \"duration_days\", \"benefit_only\" from \"plans\" where \"active\" = ? and \"sellable\" = ? and \"archived_at\" is null and \"price\" > ? and \"duration_days\" > ? order by \"sort_order\" asc, \"duration_days\" asc limit 20",
+                "insert into \"voice_call_events\" (\"call_id\", \"provider\", \"kind\", \"provider_event_key\", \"tool\", \"outcome\", \"codes\", \"actor_type\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"occurred_at\", \"uuid\", \"created_at\") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) returning \"id\""
+            ],
+            "transactions": {
+                "begin": 3,
+                "commit": 2,
+                "rollback": 0
+            },
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 6.608,
+                        "p95": 6.917,
+                        "max": 7.154,
+                        "min": 6.308
+                    },
+                    {
+                        "n": 30,
+                        "p50": 6.651,
+                        "p95": 7.037,
+                        "max": 7.208,
+                        "min": 6.365
+                    },
+                    {
+                        "n": 30,
+                        "p50": 6.661,
+                        "p95": 7.308,
+                        "max": 7.567,
+                        "min": 6.224
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 6.631,
+                    "p95": 7.154,
+                    "max": 7.567,
+                    "min": 6.224
+                },
+                "load1": [
+                    2.12841796875,
+                    2.12841796875,
+                    2.12841796875,
+                    2.12841796875
+                ]
+            }
+        },
+        {
+            "route": "POST tools/consultar_horarios",
+            "size": "primera de la llamada",
+            "status": 200,
+            "bytes": 174,
+            "requestBytes": null,
+            "queries": 11,
+            "dbMs": 3.94,
+            "perTable": {
+                "cache": 7,
+                "voice_calls": 2,
+                "voice_brakes": 1,
+                "voice_call_events": 1
+            },
+            "perTableMs": {
+                "cache": 1.93,
+                "voice_calls": 1.22,
+                "voice_brakes": 0.37,
+                "voice_call_events": 0.42
+            },
+            "mostRepeated": {
+                "count": 3,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "insert into \"cache\" (\"key\", \"value\", \"expiration\") values (?, ?, ?) on conflict do nothing",
+                "select * from \"cache\" where \"key\" in (?)",
+                "insert into \"cache\" (\"key\", \"value\", \"expiration\") values (?, ?, ?) on conflict do nothing",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"voice_calls\" where \"transfer_of_call_id\" is null and \"provider_conversation_id\" = ? limit 1 for update",
+                "select exists(select * from \"voice_brakes\" as \"o\" where \"o\".\"kind\" = ? and not exists (select * from \"voice_brakes\" as \"r\" where \"r\".\"brake_id\" = \"o\".\"id\")) as \"exists\"",
+                "update \"voice_calls\" set \"tool_calls\" = ?, \"updated_at\" = ? where \"voice_calls\".\"id\" = ? and \"status\" in (?, ?) and \"tool_calls\" = ?",
+                "insert into \"voice_call_events\" (\"call_id\", \"provider\", \"kind\", \"provider_event_key\", \"tool\", \"outcome\", \"codes\", \"actor_type\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"occurred_at\", \"uuid\", \"created_at\") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) returning \"id\""
+            ],
+            "transactions": {
+                "begin": 3,
+                "commit": 2,
+                "rollback": 0
+            },
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 6.821,
+                        "p95": 7.055,
+                        "max": 7.078,
+                        "min": 6.37
+                    },
+                    {
+                        "n": 30,
+                        "p50": 6.538,
+                        "p95": 6.787,
+                        "max": 6.844,
+                        "min": 6.445
+                    },
+                    {
+                        "n": 30,
+                        "p50": 6.353,
+                        "p95": 7.039,
+                        "max": 7.279,
+                        "min": 5.738
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 6.592,
+                    "p95": 7.012,
+                    "max": 7.279,
+                    "min": 5.738
+                },
+                "load1": [
+                    2.12841796875,
+                    2.12841796875,
+                    2.12841796875,
+                    2.12841796875
+                ]
+            }
+        },
+        {
+            "route": "POST tools/consultar_horarios",
+            "size": "siguiente (cupo 2–11 de 20)",
+            "status": 200,
+            "bytes": 174,
+            "requestBytes": null,
+            "queries": 9,
+            "dbMs": 3.37,
+            "perTable": {
+                "cache": 5,
+                "voice_calls": 2,
+                "voice_brakes": 1,
+                "voice_call_events": 1
+            },
+            "perTableMs": {
+                "cache": 1.33,
+                "voice_calls": 1.21,
+                "voice_brakes": 0.36,
+                "voice_call_events": 0.47
+            },
+            "mostRepeated": {
+                "count": 3,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"voice_calls\" where \"transfer_of_call_id\" is null and \"provider_conversation_id\" = ? limit 1 for update",
+                "select exists(select * from \"voice_brakes\" as \"o\" where \"o\".\"kind\" = ? and not exists (select * from \"voice_brakes\" as \"r\" where \"r\".\"brake_id\" = \"o\".\"id\")) as \"exists\"",
+                "update \"voice_calls\" set \"tool_calls\" = ?, \"updated_at\" = ? where \"voice_calls\".\"id\" = ? and \"status\" in (?, ?) and \"tool_calls\" = ?",
+                "insert into \"voice_call_events\" (\"call_id\", \"provider\", \"kind\", \"provider_event_key\", \"tool\", \"outcome\", \"codes\", \"actor_type\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"occurred_at\", \"uuid\", \"created_at\") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) returning \"id\""
+            ],
+            "transactions": {
+                "begin": 3,
+                "commit": 2,
+                "rollback": 0
+            },
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 5.953,
+                        "p95": 6.204,
+                        "max": 6.311,
+                        "min": 5.834
+                    },
+                    {
+                        "n": 30,
+                        "p50": 5.886,
+                        "p95": 6.249,
+                        "max": 6.417,
+                        "min": 5.597
+                    },
+                    {
+                        "n": 30,
+                        "p50": 5.891,
+                        "p95": 6.117,
+                        "max": 6.129,
+                        "min": 5.831
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 5.901,
+                    "p95": 6.194,
+                    "max": 6.417,
+                    "min": 5.597
+                },
+                "load1": [
+                    2.11767578125,
+                    2.11767578125,
+                    2.11767578125,
+                    2.11767578125
+                ]
+            }
+        },
+        {
+            "route": "POST tools/solicitar_humano",
+            "size": "primera de la llamada",
+            "status": 200,
+            "bytes": 58,
+            "requestBytes": null,
+            "queries": 12,
+            "dbMs": 4.58,
+            "perTable": {
+                "cache": 7,
+                "voice_calls": 2,
+                "voice_brakes": 1,
+                "ultron_studio_voice_publications": 1,
+                "voice_call_events": 1
+            },
+            "perTableMs": {
+                "cache": 1.93,
+                "voice_calls": 1.24,
+                "voice_brakes": 0.37,
+                "ultron_studio_voice_publications": 0.57,
+                "voice_call_events": 0.47
+            },
+            "mostRepeated": {
+                "count": 3,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "insert into \"cache\" (\"key\", \"value\", \"expiration\") values (?, ?, ?) on conflict do nothing",
+                "select * from \"cache\" where \"key\" in (?)",
+                "insert into \"cache\" (\"key\", \"value\", \"expiration\") values (?, ?, ?) on conflict do nothing",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"voice_calls\" where \"transfer_of_call_id\" is null and \"provider_conversation_id\" = ? limit 1 for update",
+                "select exists(select * from \"voice_brakes\" as \"o\" where \"o\".\"kind\" = ? and not exists (select * from \"voice_brakes\" as \"r\" where \"r\".\"brake_id\" = \"o\".\"id\")) as \"exists\"",
+                "update \"voice_calls\" set \"tool_calls\" = ?, \"updated_at\" = ? where \"voice_calls\".\"id\" = ? and \"status\" in (?, ?) and \"tool_calls\" = ?",
+                "select \"p\".\"seq\", \"p\".\"scope\", \"p\".\"agent_id\", \"p\".\"effective_json\", \"p\".\"effective_hash\", \"p\".\"signature\", \"a\".\"provider_agent_id\" as \"a_provider_agent_id\", \"a\".\"spec_hash\" as \"a_spec_hash\", \"a\".\"payload_hash\" as \"a_payload_hash\", \"a\".\"projection_hash\" as \"a_projection_hash\", \"a\".\"studio_content_hash\" as \"a_studio_content_hash\", \"a\".\"voice_profile_hash\" as \"a_voice_profile_hash\", \"a\".\"compiler_ve",
+                "insert into \"voice_call_events\" (\"call_id\", \"provider\", \"kind\", \"provider_event_key\", \"tool\", \"outcome\", \"codes\", \"actor_type\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"occurred_at\", \"uuid\", \"created_at\") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) returning \"id\""
+            ],
+            "transactions": {
+                "begin": 3,
+                "commit": 2,
+                "rollback": 0
+            },
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 7.69,
+                        "p95": 7.996,
+                        "max": 8.062,
+                        "min": 7.127
+                    },
+                    {
+                        "n": 30,
+                        "p50": 7.663,
+                        "p95": 8.026,
+                        "max": 8.033,
+                        "min": 7.097
+                    },
+                    {
+                        "n": 30,
+                        "p50": 7.851,
+                        "p95": 8.065,
+                        "max": 8.068,
+                        "min": 7.748
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 7.811,
+                    "p95": 8.031,
+                    "max": 8.068,
+                    "min": 7.097
+                },
+                "load1": [
+                    2.11767578125,
+                    2.11767578125,
+                    2.11767578125,
+                    2.11767578125
+                ]
+            }
+        },
+        {
+            "route": "POST tools/solicitar_humano",
+            "size": "siguiente (cupo 2–11 de 20)",
+            "status": 200,
+            "bytes": 58,
+            "requestBytes": null,
+            "queries": 10,
+            "dbMs": 3.96,
+            "perTable": {
+                "cache": 5,
+                "voice_calls": 2,
+                "voice_brakes": 1,
+                "ultron_studio_voice_publications": 1,
+                "voice_call_events": 1
+            },
+            "perTableMs": {
+                "cache": 1.34,
+                "voice_calls": 1.25,
+                "voice_brakes": 0.37,
+                "ultron_studio_voice_publications": 0.56,
+                "voice_call_events": 0.44
+            },
+            "mostRepeated": {
+                "count": 3,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"voice_calls\" where \"transfer_of_call_id\" is null and \"provider_conversation_id\" = ? limit 1 for update",
+                "select exists(select * from \"voice_brakes\" as \"o\" where \"o\".\"kind\" = ? and not exists (select * from \"voice_brakes\" as \"r\" where \"r\".\"brake_id\" = \"o\".\"id\")) as \"exists\"",
+                "update \"voice_calls\" set \"tool_calls\" = ?, \"updated_at\" = ? where \"voice_calls\".\"id\" = ? and \"status\" in (?, ?) and \"tool_calls\" = ?",
+                "select \"p\".\"seq\", \"p\".\"scope\", \"p\".\"agent_id\", \"p\".\"effective_json\", \"p\".\"effective_hash\", \"p\".\"signature\", \"a\".\"provider_agent_id\" as \"a_provider_agent_id\", \"a\".\"spec_hash\" as \"a_spec_hash\", \"a\".\"payload_hash\" as \"a_payload_hash\", \"a\".\"projection_hash\" as \"a_projection_hash\", \"a\".\"studio_content_hash\" as \"a_studio_content_hash\", \"a\".\"voice_profile_hash\" as \"a_voice_profile_hash\", \"a\".\"compiler_ve",
+                "insert into \"voice_call_events\" (\"call_id\", \"provider\", \"kind\", \"provider_event_key\", \"tool\", \"outcome\", \"codes\", \"actor_type\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"occurred_at\", \"uuid\", \"created_at\") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) returning \"id\""
+            ],
+            "transactions": {
+                "begin": 3,
+                "commit": 2,
+                "rollback": 0
+            },
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 6.879,
+                        "p95": 7.209,
+                        "max": 14.964,
+                        "min": 6.347
+                    },
+                    {
+                        "n": 30,
+                        "p50": 6.885,
+                        "p95": 7.047,
+                        "max": 7.234,
+                        "min": 6.802
+                    },
+                    {
+                        "n": 30,
+                        "p50": 6.993,
+                        "p95": 7.342,
+                        "max": 7.561,
+                        "min": 6.594
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 6.908,
+                    "p95": 7.213,
+                    "max": 14.964,
+                    "min": 6.347
+                },
+                "load1": [
+                    2.11767578125,
+                    2.11767578125,
+                    2.11767578125,
+                    2.11767578125
+                ]
+            }
+        },
+        {
+            "route": "POST tools/no_volver_a_llamar",
+            "size": "primera de la llamada",
+            "status": 200,
+            "bytes": 42,
+            "requestBytes": null,
+            "queries": 13,
+            "dbMs": 4.68,
+            "perTable": {
+                "cache": 7,
+                "voice_calls": 2,
+                "voice_exclusions": 2,
+                "voice_brakes": 1,
+                "voice_call_events": 1
+            },
+            "perTableMs": {
+                "cache": 1.92,
+                "voice_calls": 1.22,
+                "voice_brakes": 0.37,
+                "voice_exclusions": 0.74,
+                "voice_call_events": 0.43
+            },
+            "mostRepeated": {
+                "count": 3,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "insert into \"cache\" (\"key\", \"value\", \"expiration\") values (?, ?, ?) on conflict do nothing",
+                "select * from \"cache\" where \"key\" in (?)",
+                "insert into \"cache\" (\"key\", \"value\", \"expiration\") values (?, ?, ?) on conflict do nothing",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"voice_calls\" where \"transfer_of_call_id\" is null and \"provider_conversation_id\" = ? limit 1 for update",
+                "select exists(select * from \"voice_brakes\" as \"o\" where \"o\".\"kind\" = ? and not exists (select * from \"voice_brakes\" as \"r\" where \"r\".\"brake_id\" = \"o\".\"id\")) as \"exists\"",
+                "update \"voice_calls\" set \"tool_calls\" = ?, \"updated_at\" = ? where \"voice_calls\".\"id\" = ? and \"status\" in (?, ?) and \"tool_calls\" = ?",
+                "select exists(select * from \"voice_exclusions\" where \"call_id\" = ? and \"source\" = ?) as \"exists\"",
+                "insert into \"voice_exclusions\" (\"phone_hash\", \"phone_last4\", \"source\", \"call_id\", \"contact_id\", \"actor_type\", \"actor_name\", \"uuid\", \"created_at\") values (?, ?, ?, ?, ?, ?, ?, ?, ?) returning \"id\"",
+                "insert into \"voice_call_events\" (\"call_id\", \"provider\", \"kind\", \"provider_event_key\", \"tool\", \"outcome\", \"codes\", \"actor_type\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"occurred_at\", \"uuid\", \"created_at\") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) returning \"id\""
+            ],
+            "transactions": {
+                "begin": 4,
+                "commit": 2,
+                "rollback": 0
+            },
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 7.645,
+                        "p95": 8.055,
+                        "max": 8.057,
+                        "min": 7.464
+                    },
+                    {
+                        "n": 30,
+                        "p50": 7.727,
+                        "p95": 8.083,
+                        "max": 8.211,
+                        "min": 7.407
+                    },
+                    {
+                        "n": 30,
+                        "p50": 7.913,
+                        "p95": 8.258,
+                        "max": 8.457,
+                        "min": 7.552
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 7.738,
+                    "p95": 8.156,
+                    "max": 8.457,
+                    "min": 7.407
+                },
+                "load1": [
+                    2.11767578125,
+                    2.11767578125,
+                    2.11767578125,
+                    2.02783203125
+                ]
+            }
+        },
+        {
+            "route": "POST tools/no_volver_a_llamar",
+            "size": "siguiente (cupo 2–11 de 20)",
+            "status": 200,
+            "bytes": 42,
+            "requestBytes": null,
+            "queries": 10,
+            "dbMs": 3.66,
+            "perTable": {
+                "cache": 5,
+                "voice_calls": 2,
+                "voice_brakes": 1,
+                "voice_exclusions": 1,
+                "voice_call_events": 1
+            },
+            "perTableMs": {
+                "cache": 1.28,
+                "voice_calls": 1.26,
+                "voice_brakes": 0.37,
+                "voice_exclusions": 0.31,
+                "voice_call_events": 0.44
+            },
+            "mostRepeated": {
+                "count": 3,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?",
+                "select * from \"voice_calls\" where \"transfer_of_call_id\" is null and \"provider_conversation_id\" = ? limit 1 for update",
+                "select exists(select * from \"voice_brakes\" as \"o\" where \"o\".\"kind\" = ? and not exists (select * from \"voice_brakes\" as \"r\" where \"r\".\"brake_id\" = \"o\".\"id\")) as \"exists\"",
+                "update \"voice_calls\" set \"tool_calls\" = ?, \"updated_at\" = ? where \"voice_calls\".\"id\" = ? and \"status\" in (?, ?) and \"tool_calls\" = ?",
+                "select exists(select * from \"voice_exclusions\" where \"call_id\" = ? and \"source\" = ?) as \"exists\"",
+                "insert into \"voice_call_events\" (\"call_id\", \"provider\", \"kind\", \"provider_event_key\", \"tool\", \"outcome\", \"codes\", \"actor_type\", \"actor_admin_id\", \"actor_name\", \"actor_role\", \"occurred_at\", \"uuid\", \"created_at\") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) returning \"id\""
+            ],
+            "transactions": {
+                "begin": 3,
+                "commit": 2,
+                "rollback": 0
+            },
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 6.308,
+                        "p95": 6.518,
+                        "max": 6.585,
+                        "min": 6.064
+                    },
+                    {
+                        "n": 30,
+                        "p50": 6.296,
+                        "p95": 6.561,
+                        "max": 6.574,
+                        "min": 6.018
+                    },
+                    {
+                        "n": 30,
+                        "p50": 6.313,
+                        "p95": 6.619,
+                        "max": 6.963,
+                        "min": 6.218
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 6.308,
+                    "p95": 6.584,
+                    "max": 6.963,
+                    "min": 6.018
+                },
+                "load1": [
+                    2.02783203125,
+                    2.02783203125,
+                    2.02783203125,
+                    2.02783203125
+                ]
+            }
+        },
+        {
+            "route": "POST tools/consultar_planes · Bearer malo",
+            "size": "401",
+            "status": 401,
+            "bytes": 37,
+            "requestBytes": null,
+            "queries": 5,
+            "dbMs": 1.29,
+            "perTable": {
+                "cache": 5
+            },
+            "perTableMs": {
+                "cache": 1.29
+            },
+            "mostRepeated": {
+                "count": 3,
+                "sql": "select * from \"cache\" where \"key\" in (?…)"
+            },
+            "statements": [
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" in (?)",
+                "select * from \"cache\" where \"key\" = ? limit 1 for update",
+                "update \"cache\" set \"value\" = ? where \"key\" = ?"
+            ],
+            "transactions": {
+                "begin": 1,
+                "commit": 1,
+                "rollback": 0
+            },
+            "timing": {
+                "reps": [
+                    {
+                        "n": 30,
+                        "p50": 2.874,
+                        "p95": 3.34,
+                        "max": 3.504,
+                        "min": 2.731
+                    },
+                    {
+                        "n": 30,
+                        "p50": 2.969,
+                        "p95": 3.1,
+                        "max": 3.171,
+                        "min": 2.719
+                    },
+                    {
+                        "n": 30,
+                        "p50": 2.868,
+                        "p95": 3.093,
+                        "max": 3.11,
+                        "min": 2.648
+                    }
+                ],
+                "all": {
+                    "n": 90,
+                    "p50": 2.896,
+                    "p95": 3.202,
+                    "max": 3.504,
+                    "min": 2.648
+                },
+                "load1": [
+                    2.02783203125,
+                    2.02783203125,
+                    2.02783203125,
+                    2.02783203125
+                ]
+            }
+        }
+    ]
+}

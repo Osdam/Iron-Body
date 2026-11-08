@@ -1,0 +1,39 @@
+{
+  "env": {
+    "at": "2026-11-08T21:48:51Z",
+    "base": "127.0.0.1:8610/api",
+    "n": 30,
+    "warm": 3,
+    "load_start": [
+      2.60888671875,
+      2.1533203125,
+      1.73486328125
+    ],
+    "load_end": [
+      2.59521484375,
+      2.1640625,
+      1.74365234375
+    ],
+    "server": "php artisan serve --no-reload, 4 workers, APP_ENV=production, config/route/event cache"
+  },
+  "results": [
+    {
+      "route": "GET admin/voice/contacts",
+      "expected": 200,
+      "statuses": {
+        "200": 33
+      },
+      "bytes": 6461,
+      "requestBytes": 0,
+      "timing": {
+        "n": 30,
+        "p50": 67.674,
+        "p95": 78.72,
+        "max": 80.127,
+        "min": 66.328
+      },
+      "spacingSeconds": 0.15,
+      "load1": 2.59521484375
+    }
+  ]
+}

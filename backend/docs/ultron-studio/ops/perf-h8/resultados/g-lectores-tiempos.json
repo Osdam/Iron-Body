@@ -1,0 +1,351 @@
+{
+    "family": "g-lectores",
+    "env": {
+        "at": "2026-11-08T21:41:07+00:00",
+        "php": "8.3.33",
+        "opcacheCli": false,
+        "db": "ultron_studio_h8_perf",
+        "pg": "PostgreSQL 14.24 (Homebrew) on aarch64-apple-darwin25.6.0, compiled by Apple clang version 21.0.0 (clang-2100.1.1.101), 64-bit",
+        "cache": "database",
+        "queue": "database",
+        "n": 30,
+        "warm": 5,
+        "reps": 3,
+        "load": [
+            2.12890625,
+            1.79150390625,
+            1.47021484375
+        ],
+        "host": "MacBook-Air-de-Alejandro.local arm64",
+        "head": "bb239b53"
+    },
+    "results": [
+        {
+            "route": "VoicePublishedConfig::read()",
+            "size": "cadena de 50",
+            "queries": 1,
+            "dbMs": 0.64,
+            "perTable": {
+                "ultron_studio_voice_publications": 1
+            },
+            "perTableMs": {
+                "ultron_studio_voice_publications": 0.64
+            },
+            "mostRepeated": {
+                "count": 1,
+                "sql": "select \"p\".\"seq\", \"p\".\"scope\", \"p\".\"agent_id\", \"p\".\"effective_json\", \"p\".\"effective_hash\", \"p\".\"signature\", \"a\".\"provider_agent_id\" as \"a_provider_agent_id\", \"a\".\"spec_hash\" as \"a_spec_hash\", \"a\".\"payload_hash\" as \"a_payload_hash\", \"a\".\"pro"
+            },
+            "statements": [
+                "select \"p\".\"seq\", \"p\".\"scope\", \"p\".\"agent_id\", \"p\".\"effective_json\", \"p\".\"effective_hash\", \"p\".\"signature\", \"a\".\"provider_agent_id\" as \"a_provider_agent_id\", \"a\".\"spec_hash\" as \"a_spec_hash\", \"a\".\"payload_hash\" as \"a_payload_hash\", \"a\".\"projection_hash\" as \"a_projection_hash\", \"a\".\"studio_content_hash\" as \"a_studio_content_hash\", \"a\".\"voice_profile_hash\" as \"a_voice_profile_hash\", \"a\".\"compiler_ve"
+            ],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 2000,
+                        "p50": 0.811,
+                        "p95": 0.844,
+                        "max": 1.096,
+                        "min": 0.63
+                    },
+                    {
+                        "n": 2000,
+                        "p50": 0.806,
+                        "p95": 0.842,
+                        "max": 1.445,
+                        "min": 0.637
+                    },
+                    {
+                        "n": 2000,
+                        "p50": 0.813,
+                        "p95": 0.841,
+                        "max": 1.422,
+                        "min": 0.67
+                    }
+                ],
+                "all": {
+                    "n": 6000,
+                    "p50": 0.81,
+                    "p95": 0.843,
+                    "max": 1.445,
+                    "min": 0.63
+                },
+                "load1": 2.044921875
+            }
+        },
+        {
+            "route": "VoiceBrake::isOpen()",
+            "size": "8 abiertos y sueltos",
+            "queries": 1,
+            "dbMs": 0.39,
+            "perTable": {
+                "voice_brakes": 1
+            },
+            "perTableMs": {
+                "voice_brakes": 0.39
+            },
+            "mostRepeated": {
+                "count": 1,
+                "sql": "select exists(select * from \"voice_brakes\" as \"o\" where \"o\".\"kind\" = ? and not exists (select * from \"voice_brakes\" as \"r\" where \"r\".\"brake_id\" = \"o\".\"id\")) as \"exists\""
+            },
+            "statements": [
+                "select exists(select * from \"voice_brakes\" as \"o\" where \"o\".\"kind\" = ? and not exists (select * from \"voice_brakes\" as \"r\" where \"r\".\"brake_id\" = \"o\".\"id\")) as \"exists\""
+            ],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 2000,
+                        "p50": 0.265,
+                        "p95": 0.28,
+                        "max": 0.39,
+                        "min": 0.229
+                    },
+                    {
+                        "n": 2000,
+                        "p50": 0.265,
+                        "p95": 0.278,
+                        "max": 0.322,
+                        "min": 0.219
+                    },
+                    {
+                        "n": 2000,
+                        "p50": 0.264,
+                        "p95": 0.283,
+                        "max": 0.32,
+                        "min": 0.224
+                    }
+                ],
+                "all": {
+                    "n": 6000,
+                    "p50": 0.265,
+                    "p95": 0.281,
+                    "max": 0.39,
+                    "min": 0.219
+                },
+                "load1": 2.044921875
+            }
+        },
+        {
+            "route": "OutboundGate::targetFacts(targetOf(...))",
+            "size": "canario (descifra)",
+            "queries": 2,
+            "dbMs": 0.34,
+            "perTable": {
+                "ultron_studio_canary_numbers": 1,
+                "voice_exclusions": 1
+            },
+            "perTableMs": {
+                "ultron_studio_canary_numbers": 0.2,
+                "voice_exclusions": 0.14
+            },
+            "mostRepeated": {
+                "count": 1,
+                "sql": "select * from \"ultron_studio_canary_numbers\" where \"uuid\" = ? and \"channel\" = ? limit N"
+            },
+            "statements": [
+                "select * from \"ultron_studio_canary_numbers\" where \"uuid\" = ? and \"channel\" = ? limit 1",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\""
+            ],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 2000,
+                        "p50": 0.58,
+                        "p95": 0.607,
+                        "max": 0.68,
+                        "min": 0.51
+                    },
+                    {
+                        "n": 2000,
+                        "p50": 0.58,
+                        "p95": 0.622,
+                        "max": 0.826,
+                        "min": 0.515
+                    },
+                    {
+                        "n": 2000,
+                        "p50": 0.579,
+                        "p95": 0.612,
+                        "max": 0.72,
+                        "min": 0.512
+                    }
+                ],
+                "all": {
+                    "n": 6000,
+                    "p50": 0.58,
+                    "p95": 0.613,
+                    "max": 0.826,
+                    "min": 0.51
+                },
+                "load1": 1.9609375
+            }
+        },
+        {
+            "route": "OutboundGate::targetFacts(targetOf(...))",
+            "size": "contacto con lead (descifra, consentimiento, RNE, lead)",
+            "queries": 5,
+            "dbMs": 0.77,
+            "perTable": {
+                "voice_contacts": 1,
+                "voice_consents": 1,
+                "marketing_leads": 1,
+                "voice_rne_checks": 1,
+                "voice_exclusions": 1
+            },
+            "perTableMs": {
+                "voice_contacts": 0.2,
+                "voice_consents": 0.16,
+                "marketing_leads": 0.14,
+                "voice_rne_checks": 0.14,
+                "voice_exclusions": 0.13
+            },
+            "mostRepeated": {
+                "count": 1,
+                "sql": "select * from \"voice_contacts\" where \"voice_contacts\".\"id\" = ? limit N"
+            },
+            "statements": [
+                "select * from \"voice_contacts\" where \"voice_contacts\".\"id\" = ? limit 1",
+                "select \"id\", \"kind\", \"source\", \"recorded_at\", \"recorded_by_admin_id\", \"confirmed_by_admin_id\" from \"voice_consents\" where \"contact_id\" = ? order by \"id\" asc",
+                "select \"id\", \"do_not_contact\", \"consent_status\" from \"marketing_leads\" where \"marketing_leads\".\"id\" = ? limit 1",
+                "select \"checked_at\", \"result\" from \"voice_rne_checks\" where \"phone_hash\" = ? order by \"checked_at\" desc, \"id\" desc limit 1",
+                "select exists(select * from \"voice_exclusions\" where \"phone_hash\" = ?) as \"exists\""
+            ],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 2000,
+                        "p50": 1.412,
+                        "p95": 1.468,
+                        "max": 1.763,
+                        "min": 1.247
+                    },
+                    {
+                        "n": 2000,
+                        "p50": 1.412,
+                        "p95": 1.459,
+                        "max": 1.753,
+                        "min": 1.245
+                    },
+                    {
+                        "n": 2000,
+                        "p50": 1.415,
+                        "p95": 1.473,
+                        "max": 2.087,
+                        "min": 1.276
+                    }
+                ],
+                "all": {
+                    "n": 6000,
+                    "p50": 1.413,
+                    "p95": 1.465,
+                    "max": 2.087,
+                    "min": 1.245
+                },
+                "load1": 1.9638671875
+            }
+        },
+        {
+            "route": "VoicePublishedConfig::read()",
+            "size": "cadena de 200",
+            "queries": 1,
+            "dbMs": 0.51,
+            "perTable": {
+                "ultron_studio_voice_publications": 1
+            },
+            "perTableMs": {
+                "ultron_studio_voice_publications": 0.51
+            },
+            "mostRepeated": {
+                "count": 1,
+                "sql": "select \"p\".\"seq\", \"p\".\"scope\", \"p\".\"agent_id\", \"p\".\"effective_json\", \"p\".\"effective_hash\", \"p\".\"signature\", \"a\".\"provider_agent_id\" as \"a_provider_agent_id\", \"a\".\"spec_hash\" as \"a_spec_hash\", \"a\".\"payload_hash\" as \"a_payload_hash\", \"a\".\"pro"
+            },
+            "statements": [
+                "select \"p\".\"seq\", \"p\".\"scope\", \"p\".\"agent_id\", \"p\".\"effective_json\", \"p\".\"effective_hash\", \"p\".\"signature\", \"a\".\"provider_agent_id\" as \"a_provider_agent_id\", \"a\".\"spec_hash\" as \"a_spec_hash\", \"a\".\"payload_hash\" as \"a_payload_hash\", \"a\".\"projection_hash\" as \"a_projection_hash\", \"a\".\"studio_content_hash\" as \"a_studio_content_hash\", \"a\".\"voice_profile_hash\" as \"a_voice_profile_hash\", \"a\".\"compiler_ve"
+            ],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 2000,
+                        "p50": 0.907,
+                        "p95": 0.949,
+                        "max": 1.078,
+                        "min": 0.675
+                    },
+                    {
+                        "n": 2000,
+                        "p50": 0.902,
+                        "p95": 0.951,
+                        "max": 1.8,
+                        "min": 0.755
+                    },
+                    {
+                        "n": 2000,
+                        "p50": 0.905,
+                        "p95": 0.956,
+                        "max": 1.59,
+                        "min": 0.79
+                    }
+                ],
+                "all": {
+                    "n": 6000,
+                    "p50": 0.905,
+                    "p95": 0.952,
+                    "max": 1.8,
+                    "min": 0.675
+                },
+                "load1": 2.12890625
+            }
+        },
+        {
+            "route": "VoiceBrake::isOpen()",
+            "size": "200 abiertos y sueltos",
+            "queries": 1,
+            "dbMs": 0.45,
+            "perTable": {
+                "voice_brakes": 1
+            },
+            "perTableMs": {
+                "voice_brakes": 0.45
+            },
+            "mostRepeated": {
+                "count": 1,
+                "sql": "select exists(select * from \"voice_brakes\" as \"o\" where \"o\".\"kind\" = ? and not exists (select * from \"voice_brakes\" as \"r\" where \"r\".\"brake_id\" = \"o\".\"id\")) as \"exists\""
+            },
+            "statements": [
+                "select exists(select * from \"voice_brakes\" as \"o\" where \"o\".\"kind\" = ? and not exists (select * from \"voice_brakes\" as \"r\" where \"r\".\"brake_id\" = \"o\".\"id\")) as \"exists\""
+            ],
+            "timing": {
+                "reps": [
+                    {
+                        "n": 2000,
+                        "p50": 0.36,
+                        "p95": 0.376,
+                        "max": 0.51,
+                        "min": 0.315
+                    },
+                    {
+                        "n": 2000,
+                        "p50": 0.359,
+                        "p95": 0.377,
+                        "max": 0.471,
+                        "min": 0.318
+                    },
+                    {
+                        "n": 2000,
+                        "p50": 0.359,
+                        "p95": 0.374,
+                        "max": 0.532,
+                        "min": 0.317
+                    }
+                ],
+                "all": {
+                    "n": 6000,
+                    "p50": 0.359,
+                    "p95": 0.376,
+                    "max": 0.532,
+                    "min": 0.315
+                },
+                "load1": 2.12890625
+            }
+        }
+    ]
+}
