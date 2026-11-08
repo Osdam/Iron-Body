@@ -825,3 +825,13 @@ Resuelve lo que TEST8-a, S8-a y OPS8-a dejaron abierto y recoge lo que el propie
 | E6-10 (contratos para FE8-3) | Cambios de forma del servidor | `GET admin/voice/status` ya no trae `flags.publishing`; `transferDirectory` pasa de texto a `{canary, rest}`; `GET admin/voice/metrics` añade `publications`; las rutas públicas pueden responder 429 con `Retry-After` |
 | E6-11 (TEST8-b) | E2E con simuladores | Siempre a través de los adaptadores reales apuntados a los simuladores de `ops/banco-h8/` (nunca los nulos, para que el veredicto del laboratorio sea admisible); la evidencia del canario se comprueba por recuentos y la regla de 24 h por pruebas unitarias (`too_soon` es el resultado esperado del E2E); la constante de salientes solo se abre en la copia del banco |
 
+## Enmienda 7 (lead, 08-11-2026 18:10 UTC): puerta 2 en verde y restos para el paso 4
+
+| Id | Qué | Decisión / hecho |
+|---|---|---|
+| E7-1 (hecho) | **Puerta 2** sobre `d07eec0` (ejecución propia del lead, 17:45–17:49 UTC) | `auth:coverage --unmapped` vacío; voz y telefonía SQLite **718** pruebas, 0 fallos (131 solo PG); Studio completo SQLite **3 091**, 0 fallos; puerta PG (telefonía, voz, esquema, Studio de voz, laboratorio, guarda del motor) **484**, 0 fallos; migraciones ida y vuelta PG **109**, 0 fallos. El tope de cuerpo (`UltronStudioEarlyBodyCapTest`), el cero red con la configuración de producción (`VoiceProductionNoNetworkTest`, `UltronStudioVoiceNoNetworkTest`) y las 61 guardas están dentro |
+| E7-2 (SEC8-b-lite, notas residuales) | Limitadores autenticados | Para **B8-c (paso 4)**: techo global por ruta para lo autenticado (nadie sin credencial lo gasta), y una línea de registro limitada («fallos silenciados: N») cuando el cubo de fallos se agota, para que otro cliente de ElevenLabs no apague nuestros avisos `voice.*.unauthorized`. El cubo `sin-llamada` se queda |
+| E7-3 (S8-c) | Agentes de laboratorio | Dejan `transfer_destination_hashes` en `null`: nunca entran en la cadena de publicación. Aceptado |
+| E7-4 (hecho) | Agentes | Cerrados al entregar: DB8, LAB8, S8-b, B8-b, S8-c, FE8 (paso 2), SEC8-b-lite. En curso (paso 3): FE8-3, TEST8-b (E2E), OPS8-b, PERF8. El SEC8-b completo del paso 4 lo hará un agente nuevo con el informe de SEC8-b-lite como base |
+| E7-5 (hecho) | Respaldo remoto | La rama del CRM está en GitHub (`26ef142`); la del backend la bloquea la protección de secretos por el valor de prueba de `TwilioVoiceCarrierTest.php:34` (commit `7a27a44`, paso 1): se sube cuando el propietario lo permita o desactive un momento la protección |
+
