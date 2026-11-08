@@ -70,17 +70,17 @@ class UltronStudioHardeningH7Test extends TestCase
     private const SEQ_MESSAGE = 'ultron_studio: seq empieza en 1 (INSERT en ultron_studio_publications)';
 
     /** Recuentos de todo el Studio (tablas `ultron_studio_%`). */
-    private const PG_TRIGGERS_H6 = 43;
+    private const PG_TRIGGERS_H6 = 67;   // con el H8 (+24)
 
-    private const PG_TRIGGERS_H7 = 44;   // + uspub_chain_next
+    private const PG_TRIGGERS_H7 = 68;   // + uspub_chain_next
 
-    private const PG_CHECKS_H6 = 49;
+    private const PG_CHECKS_H6 = 83;     // con el H8 (+34)
 
-    private const PG_CHECKS_H7 = 50;     // + uspub_seq_chk
+    private const PG_CHECKS_H7 = 84;     // + uspub_seq_chk
 
-    private const SQLITE_TRIGGERS_H6 = 30;
+    private const SQLITE_TRIGGERS_H6 = 53; // con el H8 (+23)
 
-    private const SQLITE_TRIGGERS_H7 = 32; // + uspub_chain_next y uspub_seq_min
+    private const SQLITE_TRIGGERS_H7 = 55; // + uspub_chain_next y uspub_seq_min
 
     /** md5 de `pg_get_functiondef` de la función de F: el mismo desde el H5. */
     private const FORBID_MD5 = '4ad748b5f17f09b398f7f641c197d7ee';
@@ -109,8 +109,8 @@ class UltronStudioHardeningH7Test extends TestCase
             $this->assertSame(['uspub_chain_next', 'uspub_forbid_delete', 'uspub_forbid_truncate', 'uspub_forbid_update'], $this->triggersOn(self::TABLE));
             $this->assertSame(['uspub_action_chk', 'uspub_engine_contract_chk', 'uspub_reason_chk', 'uspub_seq_chk'], $this->checksOn(self::TABLE));
             $this->assertSame('CHECK ((seq >= 1))', DB::scalar("SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'uspub_seq_chk'"));
-            $this->assertSame(self::PG_TRIGGERS_H7, $this->studioTriggerCount(), 'F 11 + laboratorio 16 + H5 3 + H6 13 + H7 1');
-            $this->assertSame(self::PG_CHECKS_H7, $this->studioCheckCount(), 'F 11 + laboratorio 13 + H5 3 + H6 22 + H7 1');
+            $this->assertSame(self::PG_TRIGGERS_H7, $this->studioTriggerCount(), 'F 11 + laboratorio 16 + H5 3 + H6 13 + H7 1 + H8 24');
+            $this->assertSame(self::PG_CHECKS_H7, $this->studioCheckCount(), 'F 11 + laboratorio 13 + H5 3 + H6 22 + H7 1 + H8 34');
 
             // El disparador de la cadena: BEFORE INSERT, por fila, con su función; los tres de H5 siguen con la de F.
             $def = (string) DB::scalar("SELECT pg_get_triggerdef(oid) FROM pg_trigger WHERE tgname = 'uspub_chain_next'");
@@ -133,7 +133,7 @@ class UltronStudioHardeningH7Test extends TestCase
         }
 
         $this->assertSame(['uspub_chain_next', 'uspub_forbid_delete', 'uspub_forbid_update', 'uspub_seq_min'], $this->triggersOn(self::TABLE));
-        $this->assertSame(self::SQLITE_TRIGGERS_H7, $this->studioTriggerCount(), 'F 7 + laboratorio 11 + H5 2 + H6 10 + H7 2');
+        $this->assertSame(self::SQLITE_TRIGGERS_H7, $this->studioTriggerCount(), 'F 7 + laboratorio 11 + H5 2 + H6 10 + H7 2 + H8 23');
     }
 
     // ── La cadena: la siguiente, encadenada ─────────────────────────────────
