@@ -227,7 +227,46 @@ Nada más en el VPS. **No es un despliegue: nada del H8 está en producción.** 
 - El chunk de voz es `chunk-TIMQWAQ4.js` (**264 343 B, 71 136 B con gzip -9**, como midió FE8) y el del tablero `chunk-27WCULYR.js`, con `data-voz-enlace` y la ruta; los importa el main del build.
 - La publicación (respaldo, `rsync` sin `--delete` y verificación pública) **no se ensayó**: necesita el VPS.
 
-## Pendiente y notas
+## Paso 0 repetido tras la ascendencia corregida (HEAD `2b3c293` = `f7ae3a3` + OPS8-b)
+
+El banco se rehízo con producción en **`32a2560`** (la real), `BANCO_WIP=0` (solo lo confirmado; B8-c tiene cambios sin confirmar) y sin `BANCO_UNIR`, porque la rama ya contiene a `32a2560` y a `7c84cb5`. Estado de E1-12: 4/4.
+- **`--solo-comprobar`, sin la bandera:** «PENDIENTE DE DECISIÓN: … `7c84cb5` «Un cobro que no da vigencia no es la membresía de nadie»». Es el **único** ajeno: sin copias. Termina en «COMPROBACIONES PREVIAS LEÍDAS, FALTA DECIDIR los commits ajenos [7c84cb5]», con **código 3**.
+- **`--solo-comprobar --acepta-main=7c84cb5`:** «commits ajenos ACEPTADOS … 7c84cb5» y **`COMPROBACIONES PREVIAS EN VERDE`**, con **código 0**.
+- En los dos casos: `HEAD 32a2560 limpio`, las 2 migraciones del H8 pendientes y la puerta con solo los ficheros del contrato.
+
+**A la espera de B8-c** (avisará el lead): `voice:prune-rate-limits` cada hora en el bloque de voz de `routes/console.php`, su caso en `VoiceMonitorScheduleTest` y otro `--solo-comprobar` del banco sobre el HEAD final.
+
+## F-6 y O-2 (encargo de TEST8-b vía el lead)
+
+- **F-6, simulador** (`ops/banco-h8/sim-comun.cjs`, `pareceDatoPersonal`): la cola de un uuid aleatorio (`…-eb3443320330`) se tomaba por un móvil, porque se quitaban todos los guiones y el borde admitía letras pegadas.
+  - **Corregido sin aflojar la detección:**
+    - los uuid se quitan enteros antes de buscar;
+    - solo se unen dígitos separados por separadores de teléfono;
+    - un número colombiano (3 + 9 o 60 + 8) no admite letras ni dígitos pegados;
+    - el E.164 se busca tras unir.
+  - **Medido** sobre 20 000 uuid aleatorios: la versión del HEAD daba **57 falsos teléfonos (0,28 % por uuid)**, la corregida **0**. El ejemplo de TEST8 pasa de `true` a `false`.
+  - **2 pruebas nuevas:** los uuid con colas de 10 dígitos y los 20 000 aleatorios dan 0; los teléfonos de prueba (`+573000000011`, `+57 300 000 0011`, `300-000-0011`, `(601) 000 0011`, `601.000.0011`…) y un correo se siguen detectando.
+  - `node sim-pruebas.cjs`: **80 OK · 0 FALLO**, con las mismas violaciones provocadas (50 y 22).
+- **O-2, runbook:** en `ULTRON_STUDIO_DEPLOYMENT_PLAN.md`, Hito 8, fases 2 → 4b, la comprobación del secreto de iniciación **antes de asignar el número**.
+  - La iniciación de prueba se hace con la herramienta de ElevenLabs o desde el servidor, sin imprimir el valor, y deja una fila `denied` sintética como evidencia.
+  - Para el diagnóstico: `voice.inbound.unauthorized` con `has_header`, sin fila en `voice_calls`, `unknown` en la conciliación, freno e incidentes.
+  - El remedio y quién suelta el freno.
+
+## Pendientes de la fase 2 en adelante (listados, no hechos ahora; con su dueño)
+
+| Pendiente | Antes de | Dueño |
+|---|---|---|
+| El mando `h8-voice-scope.sh` (mueve las banderas y las piezas de las fases 2–4b en el mismo fichero, con copia previa, `config:cache` como `www-data`, 600/640 por C-14 y la expectativa del monitor por fase) | Fase 2 | OPS8 |
+| nginx: la lista de IP de salida de ElevenLabs (P-26, refuerzo) y que la post-llamada de 1 MB pase (el INFO del smoke en el servidor) | Fase 3 (la lista, al decidir P-26) | OPS8, con autorización (`nginx -t` y `reload`) |
+| La sección de voz de `ops/supresion-1581.sql` (huellas, últimos dígitos, cifrados, evidencias y notas; `voice_forbid()` y `ultron_studio_forbid()`) | Fase 3 (primeros datos personales) | OPS8 + `database-specialist` |
+| Limitadores con nombre por credencial en las 13 rutas del CRM de la telefonía (H-12) | Fase 1 (recomendado) | B8-c (ya avisado) |
+| La salud del webhook automatizada (decisión (f)) | Fase 3 | B8 |
+| El lector de la última verificación en la telefonía (E4-6) | Fase 3 | B8 + SEC8 |
+| Instalar el worker `ironbody-voice` (borrador en `docs/ops/supervisor/ironbody-voice.conf`; antes, comprobar la conexión `voice`) | Fase 4a | OPS8, con autorización |
+| Rotar la clave de ElevenLabs (E2-2) y registrar los dos secretos propios sin imprimirlos (procedimiento en el plan) | Fase 2 | Propietario, con OPS8 |
+| La regresión de los smokes del H6 y del H7 adaptada al H8 (cuentan 14 tablas y `TAREAS`) | Fase 2 | TEST8 / OPS8 |
+
+## Notas
 
 - **`voice:prune-rate-limits` (cada hora)** al bloque de voz de `routes/console.php`, cuando B8-c lo entregue: el lead avisará. Va en el bloque bajo `VOICE_MONITOR_ENABLED` (o en el general, si B8-c lo quiere siempre) y lleva su prueba en `VoiceMonitorScheduleTest`.
 - **Cambios en curso de otros agentes** (sin confirmar mientras ensayaba): B8-c añade el índice NO parcial `vc_publication_idx` en la `100002`. Según su comentario, los recuentos de E3-5 no cambian, y el script solo cuenta índices parciales. También toca `config/voice.php`, `AppServiceProvider` (el oyente de la post-llamada del laboratorio) y servicios de Telephony. Mi ensayo es sobre `bb239b5` + mi `console.php`: **hay que repetir el `--solo-comprobar` del banco con el HEAD final**, tras el arreglo de la ascendencia (H-10).

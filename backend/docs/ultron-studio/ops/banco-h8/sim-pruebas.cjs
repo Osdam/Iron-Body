@@ -496,6 +496,25 @@ caso('EL · URL firmada del laboratorio: ws://127.0.0.1 con conversation_signatu
   assert.deepEqual(d, { agent_id_pattern: 1 });
 });
 
+caso('COMÚN · F-6: un uuid (también con una cola de 10 dígitos) no es un teléfono; 20 000 uuid aleatorios → 0', async () => {
+  for (const u of ['00000000-0000-4000-8000-eb3443320330', '12345678-90ab-4cde-8f01-a30000000011', 'ffffffff-ffff-4fff-bfff-603443320330',
+    '3fa85f64-5717-4562-b3fc-3000000011ab']) {
+    assert.equal(C.pareceDatoPersonal(JSON.stringify({ call_ref: u, call_direction: 'saliente', caller_authorized: 'si', version_label: 'canario · v-1' })), false, u);
+  }
+  let falsos = 0;
+  for (let i = 0; i < 20000; i++) if (C.pareceDatoPersonal(JSON.stringify({ call_ref: crypto.randomUUID() }))) falsos++;
+  assert.equal(falsos, 0, `${falsos} uuid aleatorios tomados por teléfonos`);
+  for (const h of ['eb3443320330', 'a3443320330b', crypto.createHash('sha256').update('x').digest('hex'), '2026-11-08T12:00:00Z', 'v-banco-1 · seq 12']) {
+    assert.equal(C.pareceDatoPersonal(h), false, h);
+  }
+});
+caso('COMÚN · F-6: los teléfonos de prueba siguen detectándose (E.164, móvil y fijo de Colombia, con separadores) y los correos', async () => {
+  for (const t of ['+573000000011', 'Llamar al +57 300 000 0011', '3000000011', '"to":"300 000 0011"', '300-000-0011', '(601) 000 0011',
+    '601.000.0011', 'tel:3000000011.', 'a@b.co']) {
+    assert.equal(C.pareceDatoPersonal(t), true, t);
+  }
+  assert.equal(C.pareceDatoPersonal('referencia 300 000 0011 0', ['3000000011']), true, 'el número del destino (extra) sigue contando');
+});
 caso('EL · la URL firmada registra una conversación WEB del laboratorio (sin número ni call_sid; D8-23)', async () => {
   const antes = (await ctl(BASE_EL, '/__state')).conversations.filter((c) => c.direction === 'web').length;
   const r = await el('GET', `/v1/convai/conversation/get-signed-url?agent_id=${ESTADO.agente}`);

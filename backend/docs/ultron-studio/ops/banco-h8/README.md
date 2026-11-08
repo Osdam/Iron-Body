@@ -372,3 +372,5 @@ bash ensayar.sh "$B" smoke                          # ver informe-devops.md §OP
   - El emisor: `GET /__emit/post-call?web=1&agent_id=<agente de laboratorio>`, que usa la conversación de su URL o crea una.
   - El arnés de TEST8-b (`ops/h8-e2e/lab-post-call.cjs`) sigue sirviendo sin cambios: su `delete` de `phone_call` ya no tiene nada que quitar, y la firma es la misma.
 - **Pruebas propias:** `node sim-pruebas.cjs`, **78 OK · 0 FALLO** (73 de antes y 5 nuevas). Provocan a propósito 50 violaciones de ElevenLabs (antes 46) y 22 de Twilio.
+
+**F-6 (TEST8-b), en `sim-comun.cjs`:** `pareceDatoPersonal` ya no toma la cola de un uuid por un teléfono: los uuid se quitan enteros y un número no puede llevar letras ni dígitos pegados. La detección de teléfonos reales no cambia. Medido sobre 20 000 uuid aleatorios: antes 57 falsos, ahora 0. `sim-pruebas.cjs`: 80 OK.

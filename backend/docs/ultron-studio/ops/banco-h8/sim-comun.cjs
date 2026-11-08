@@ -103,13 +103,25 @@ function idEleven(prefijo) {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i; // el patrón de B8-a (VoiceIds::UUID_PATTERN), sin exigir versión
 const E164 = /^\+[1-9]\d{6,14}$/;
 
-/** ¿Lleva el texto un teléfono (E.164, móvil o fijo de Colombia) o un correo? Para respuestas que no deben llevarlos. */
+/** Un uuid dentro de un texto (cualquier versión): no es un teléfono y sus guiones no se quitan (F-6 de TEST8-b). */
+const UUID_EN_TEXTO = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+
+/**
+ * ¿Lleva el texto un teléfono (E.164, móvil o fijo de Colombia) o un correo? Para respuestas que no deben llevarlos.
+ * F-6 de TEST8-b: antes se quitaban TODOS los guiones y la cola de un uuid aleatorio (`…-eb3443320330`) parecía un
+ * móvil en el 1–2 % de las llamadas. Ahora: (1) los uuid se quitan enteros antes de buscar; (2) solo se unen grupos de
+ * DÍGITOS separados por separadores de teléfono (espacio, punto, guion, paréntesis); (3) un teléfono colombiano (3 + 9
+ * o 60 + 8) no puede llevar letras ni dígitos pegados (no es parte de un token hexadecimal ni de un número más largo);
+ * (4) el E.164 se busca después de unir, con su «+» y sin letras pegadas. La detección no se afloja: «300 000 0011»,
+ * «(601) 000 0011», «+57 300 000 0011» y un 3000000011 suelto siguen siendo teléfonos.
+ */
 function pareceDatoPersonal(texto, extra = []) {
-  const s = String(texto);
-  if (/\+\d{8,15}\b/.test(s)) return true;
-  if (/(^|[^\d])(3\d{9}|60\d{8})([^\d]|$)/.test(s.replace(/[\s.-]/g, ''))) return true;
+  const s = String(texto).replace(UUID_EN_TEXTO, ' ');
+  const compacto = s.replace(/(\d)[\s.()-]+(?=\d)/g, '$1');
+  if (/(^|[^\w+])\+[1-9]\d{7,14}(?!\w)/.test(compacto)) return true;
+  if (/(^|[^0-9A-Za-z_])(3\d{9}|60\d{8})(?![0-9A-Za-z_])/.test(compacto)) return true;
   if (/[^\s@"']+@[^\s@"']+\.[a-z]{2,}/i.test(s)) return true;
-  return extra.some((x) => x && x.length >= 7 && s.replace(/[\s().-]/g, '').includes(x));
+  return extra.some((x) => x && x.length >= 7 && compacto.includes(x));
 }
 
 function json(res, status, body, extra = {}) {

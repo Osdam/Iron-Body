@@ -1668,6 +1668,21 @@ Cada fase pide **autorización escrita** del propietario, con su entorno, su imp
 - El libro lo registra, y cada apertura abrió un incidente de IRON GUARD.
 - **Antes de soltarlo**, se aclara la causa con `GET voice/brakes` y `voice:reconcile --json`. Soltar sin causa conocida no es el procedimiento.
 
+**El secreto de iniciación, comprobado ANTES de conectar el número a las entrantes (fase 2; O-2 de TEST8-b).**
+- **Riesgo:** si el secreto está mal puesto en ElevenLabs (otro valor, otra cabecera o sin poner), cada entrante recibe un **401 en la iniciación, sin fila en `voice_calls`**: la autenticación va antes de la puerta. La conciliación ve en Twilio una llamada sin su fila, la marca `unknown_provider_call` y **echa el freno**. Falla cerrado, pero ruidoso: un freno y un incidente por llamada, hasta que se arregle.
+- **Antes de asignar el número al agente**, una iniciación de prueba:
+  - **con la herramienta de prueba del webhook de ElevenLabs** [por confirmar en la consola]: esperado 200 y `caller_authorized` = «no» (las entrantes siguen apagadas en la fase 2), y en `voice-*.log`, **ningún** `voice.inbound.unauthorized`;
+  - o **desde el servidor**, con el valor leído del entorno por PHP y pasado a `curl` por la entrada estándar (sin la línea de órdenes ni el terminal), un cuerpo sintético con un número de prueba (`+57 300 000 00xx`) y un `call_sid` inventado: esperado 200 y `caller_authorized` = «no». **Deja una fila `denied`** con esa huella sintética: es la evidencia de la prueba y no es un dato personal.
+  - Con un 401, el secreto no casa: no se conecta el número.
+  - En el banco, el mismo ensayo es `ensayar.sh <banco>` con `/__inbound?from=…&variant=valid` del simulador; `variant=bad_secret` da el síntoma.
+- **Diagnóstico, si ya pasó:**
+  - `voice.inbound.unauthorized` en `storage/logs/voice-*.log`, con `has_header: true` (cabecera presente y valor distinto) o `false` (sin cabecera o con otro nombre; la cabecera es `X-Voice-Initiation-Secret`);
+  - ninguna fila en `voice_calls` para esas llamadas;
+  - en `GET admin/voice/metrics`, el freno echado;
+  - `voice:reconcile --json` con `unknown` > 0;
+  - en IRON GUARD, un incidente por llamada.
+- **Remedio:** corregir el secreto en ElevenLabs o en el entorno (el mando, sin imprimirlo) y repetir la iniciación de prueba. **Solo después** lo suelta una persona (`ultron.voice_publish`), con la nota de la causa.
+
 **Rotación de la clave de ElevenLabs antes de la fase 2 (E2-2; la del 03-11 viajó por el chat).**
 1. El propietario crea una clave nueva en la consola, acotada y con cupo de créditos (P-22).
 2. La pone en el servidor sin pasar por el chat, con el procedimiento de `ULTRON_STUDIO_ELEVENLABS_READY.md` (pasos 1–6: el fichero de la clave en 600 y `el-verificar.sh`).
