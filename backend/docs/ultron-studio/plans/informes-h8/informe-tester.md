@@ -6,6 +6,125 @@
 **Alcance tocado:** solo `tests/fixtures/voice/**` y este informe.
 **Sin commit** y sin tocar el índice. **Producción:** nada tocado. **Red:** ninguna. **Suites del repo:** no lancé ninguna (máquina compartida).
 
+## §TEST8-b (paso 3, parte 1: E2E con simuladores) — LISTO; falta la pasada final tras B8-c (F-1)
+
+**Fecha:** 08-11-2026 (21:40–22:15 UTC). **Base:** `2b3c2936` (HEAD: commit «OPS8-b», con el simulador de ElevenLabs al
+día), copias por `git archive`: lo que no está confirmado (el oyente de B8-c, hoy en el árbol de trabajo) no entra.
+**Sin commit.**
+**Estado:** el arnés y las dos fases están escritos y validados de punta a punta. La pasada FINAL con la evidencia en
+`ops/evidencia-h8/<fecha>/` y su hash se hace cuando B8-c (el oyente del laboratorio) esté confirmado: hasta entonces
+`evidencia-h8/` sigue vacío a propósito (una evidencia con F-1 abierto no es la del cierre).
+
+**Cambios tras el commit de OPS8-b:** el laboratorio se cierra con la post-llamada web del EMISOR del simulador
+(`/__emit/post-call?web=1&agent_id=`, la conversación que registró la URL firmada) y se juzga por el estado de la
+sesión en la base; el emisor de biblioteca `lab-post-call.cjs` se retiró. La «deriva conocida» del simulador se quitó:
+con F-2 corregido, cualquier violación del contrato cuenta (solo se restan, uno a uno, los falsos positivos de F-6
+verificados por el oráculo propio).
+
+### Cómo se ejecuta
+
+`bash backend/docs/ultron-studio/ops/h8-e2e.sh ambas` (README en `ops/h8-e2e/README.md`). Por fase: copia del commit
+(cerrada) o del banco con el giro de UNA línea (abierta, comprobado con `diff`), PG desechable con roles de producción
+(`h8e2e_owner`/`h8e2e_app`, el REVOKE de DB8), 330 migraciones, comprobación previa, valla + simuladores de OPS8 +
+`artisan serve --no-reload` + worker real `queue:work voice`, sondas de la valla, 3 cuentas (Ana y Beto Super Admin,
+Carla Administrador), `--verify-voice` contra el simulador, PHPUnit en la copia contra la pila, cierre, resumen y hash.
+
+### Resultado real de la última pasada de validación (`H8_E2E_EVIDENCIA=0`, sobre `2b3c2936`, 22:08–22:10 UTC, 101 s)
+
+| Fase | Pruebas | Comprobaciones | Rojo |
+|---|---|---|---|
+| cerrada (18 s) | 6: 5 OK, 1 FALLO | 113: 111 OK, 2 FALLO | F-1 y «PHPUnit salió con 0» |
+| abierta (74 s) | 9: 7 OK, 2 FALLO | 285: 282 OK, 3 FALLO | F-1 (los dos laboratorios) y «PHPUnit salió con 0» |
+
+Hash de resultados: `fe8d4dcec973b6e97e58174525d778a877c953d705a317a96cefc7c7faf07aca`. Pasadas anteriores del mismo
+día: `5f4ece14…` (`f7ae3a3c`, con el emisor de biblioteca y la deriva conocida), `645a50da…` (`bb239b53`, antes del
+arreglo de O-1) y `a342a715…` (solo la abierta). Cierre de las dos fases en verde: **0 violaciones del contrato en
+los dos simuladores sin ninguna exención** (ElevenLabs 24 y 113 peticiones, Twilio 0 y 10; F-2 corregido también al
+ejecutar), la valla solo con sus 2 sondas, `lsof` sin conexiones fuera de 127.0.0.1, 0 `ERROR`, `failed_jobs` y colas
+vacíos, barrido sin hallazgos. Esperas por los limitadores reales: 1 (33 s, `end` del laboratorio, en la vía alterna
+de F-1). Falsos positivos de F-6 en esta pasada: 0. Simuladores: `d2635349…` (los de `2b3c2936`).
+
+**Lo que queda cubierto (con HTTP real y SQL):**
+- **a:** versión del Studio a cuatro ojos; perfil (Ana) → enviar → aprobar (Beto; la propia, 403); compile-preview
+  sin red y sin escribir; laboratorio con el adaptador real (4 herramientas, agente, lectura, URL firmada ≤ 15 min, la
+  repetición SIN URL); Carla 403; veredicto de otra identidad sobre la MISMA huella (Ana 403, otra huella 409,
+  definitivo).
+- **b:** `spec_changed` (409, sin red ni filas); Ana y Carla 403; publicar 201: entrada 1 génesis, huella = sha256 de
+  los bytes, firma, número asignado en el simulador, proyección observada = compilada, destinos `[]`; `GET
+  voice/publications` verificada y sin el id del proveedor; repetición `replayed`; UPDATE/DELETE de la aplicación 42501.
+- **c:** 3 entrantes del canario selladas (entrada, parte, specHash, agente, versión, compilador, 4 dígitos), las 4
+  herramientas con lo del catálogo (`$ 89.000` de la base, sede, sin humano, exclusión oral del número SELLADO),
+  post-llamada → `completed` + `seal_verified`, guarda `clean`, sin texto de la transcripción en la base; el no
+  canario `denied` con su fila y `call_not_active`; conciliación con 4 conocidas y el precio real de Twilio en
+  `carrier_cost_micros` (con `cost_recorded` y `reconciled`); registro, detalle y métricas sin teléfonos.
+- **d:** evidencia `{calls 3, 0, 0, 0, 0, 0}`, `failing = [too_soon]`, cadena verificada, veredicto approved; promover:
+  `spec_changed`, cuatro ojos y 409 `canary_evidence_insufficient`, sin escribir ni red.
+- **e:** `seal_mismatch` → freno → herramientas `voice_braked` → entrante `denied`; Carla 403, sin nota 422, suelta de
+  Ana (una vez; la segunda 409); llamada solo en Twilio → `unknown_provider_call` + freno; iniciación con el secreto
+  mal puesto → 401 sin fila y el agente con su defecto `no` (C-A2) → la conciliación la marca desconocida y frena (O-2);
+  deriva del agente (panel) → freno, y vuelta a `ok`; deriva del número → `agent_drift` con `trigger: number_drift`
+  (E6-1), y vuelta a `ok`; el corte: Carla 403, Ana `hung_up` con UN `calls_update` en Twilio, y la post-llamada
+  posterior no cambia un final.
+- **g:** la puerta, 409 con EXACTAMENTE `elevenlabs_unverified` + el calendario de ahora (oráculo con el fixture de
+  festivos); el worker RESIDENTE con el reloj real (domingo → `outside_hours`); la saliente COMPLETA con el job en el
+  martes 10:00: una `outbound-call` sin violaciones, la llamada creada en Twilio por ElevenLabs con SU credencial,
+  `dialing` → `active` con la primera herramienta → `completed` + `seal_verified`, y su precio por la conciliación;
+  canceladas sin petición ni evento: domingo (`outside_hours`), festivo 16/11 (`holiday`) y exclusión tras encolar
+  (`excluded`).
+- **f:** perfil 2 con su laboratorio y su veredicto → entrada 2 y el número al agente 2; revertir (Ana, sin cuatro ojos)
+  → entrada 3 que restaura la 1 y el número al agente 1; apagar → entrada 4 sin agente y el número sin agente (el
+  simulador ya no llama a Laravel); apagar otra vez 409; la cadena 1..4 encadenada, las entradas anteriores byte a byte
+  iguales, todas verificadas, y UPDATE/DELETE/TRUNCATE de la aplicación 42501.
+- **cerrada:** con todas las banderas encendidas, la constante cierra sola: publicar despliega un agente inerte y se
+  detiene sin PATCH (`not_attempted · calls_disabled_in_code`); la entrante (número asignado a mano en el panel) `no`;
+  la puerta 409 con `calls_disabled_in_code` el primero; la base rechaza una saliente sin sello (`vc_stamp_chk`, F-5);
+  con la entrada de la cadena puesta a mano, la fila sellada la cancela el worker real sin petición; 0 peticiones a
+  Twilio en toda la fase.
+
+**El E2E muerde (mutantes en la copia, pila retenida):** M1 (`VoicePostCall`: el sello siempre verificado) → 7
+comprobaciones rojas en e; M2 (`InboundPolicy` sin `not_an_active_voice_canary`) → 3 en c y los recuentos de d; M3
+(`ElevenLabsAgentDeployer::assignNumber` sin la constante, en la copia cerrada) → 6 en b y lo que depende de él en c y
+g. Y el propio E2E cazó F-1, que la suite tenía en verde.
+
+### Hallazgos
+
+- **F-1 (real; B8-c lo corrige):** nadie escucha `voice.lab.post_call` (`VoicePostCall.php:42` y `:194` frente a
+  `StudioVoiceLabSessions.php:445`); solo las pruebas lo registran (`VoiceLabPostCallTest.php:107`). La post-llamada web
+  del laboratorio (la del emisor del simulador) deja `unknown_provider_call` y echa el freno; la sesión sigue `open`.
+  El E2E lo anota en rojo y sigue por la vía alterna (cierre por quien abrió la sesión y suelta del freno).
+- **F-2 (simulador; OPS8-b) — CERRADO en `2b3c2936`:** las variables E1-5 (`call_direction`, `version_label`). Sin
+  exención en el E2E: 0 violaciones en las dos fases.
+- **F-3 (simulador; OPS8-b) — CERRADO en `2b3c2936`:** el emisor hace la post-llamada web del laboratorio; el E2E la usa.
+- **F-4 (por diseño, E4-6):** ninguna saliente pasa la puerta (`elevenlabs_unverified`); el job se ejerce con la
+  costura de la fila sellada.
+- **F-5 (bien):** `vc_stamp_chk` no admite una saliente sin sello aplicado.
+- **F-6 (simulador, OPS8, nuevo):** `pareceDatoPersonal` (`sim-comun.cjs:110`) quita los guiones y la cola de un
+  `call_ref` aleatorio casa con `3\d{9}`: visto con `call_ref = 643e8716-4972-42a9-bcd6-eb3443320330` («3443320330»)
+  → `dynamic_variables_personal_data`. Pasa en ~1–2 % de los uuid y también puede tocar a
+  `initiation_response_personal_data`. El E2E lo verifica con un oráculo propio sobre las variables que llegaron y lo
+  cuenta aparte (nunca lo esconde: si hubiera un teléfono, la comprobación falla).
+- **O-1 (B8, baja):** la evidencia del canario cuenta sucesos con `created_at >= publicación` a granularidad de segundo
+  (`VoiceEvidence.php:80`): un suceso anterior del mismo segundo cuenta contra la publicación (sentido seguro). El E2E
+  deja pasar 1,1 s antes de publicar.
+- **O-2 (operación, DOC8):** con el secreto de iniciación mal puesto, cada entrante es 401 sin fila y la conciliación
+  la marca desconocida y frena: fallo cerrado, pero ruidoso.
+
+### Lo que sigue sin cubrir, y por qué
+
+- El consentimiento revocado tras encolar: el alcance `contacts` lee la parte `rest`, que exige promover (≥ 1 h de
+  evidencia). Lo cubre `PlaceOutboundVoiceCallRecheckTest`. Tampoco los contactos 4b por la API.
+- Transferencias: el laboratorio no admite perfiles con destinos (`StudioVoiceLabErrors::transfersNotSupported`) y la
+  puerta `required` exige su veredicto.
+- Buzón, comunicando, sin respuesta, ambigua y duplicada de las salientes: los simuladores lo permiten
+  (`/__call`, `/__fault`) y no están en esta tanda.
+- Lo que el banco no modela: audio, WebSocket del laboratorio, tiempos reales de los proveedores.
+
+### Ficheros (sin commit)
+
+`docs/ultron-studio/ops/h8-e2e.sh`; `docs/ultron-studio/ops/h8-e2e/{README.md, entorno-banco.ejemplo, ayudante.php,
+reloj.php, barrido.py}`; `tests/Feature/Voice/E2E/{H8StackE2ETestCase.php, H8E2ECerradaTest.php,
+H8E2EAbiertaTest.php}`; este informe.
+
 ## §E2. Enmienda 2 aplicada (E2-1; 03-11-2026, sobre `7ffd61c3`)
 
 **Qué cambia.** La Virgen de Chiquinquirá (Ley 2578 del 01-06-2026): el 9 de julio, trasladable al lunes como los de la Ley 51 de 1983, desde 2026. Es la misma regla que `ColombianHolidays::CHIQUINQUIRA` de B8-a.

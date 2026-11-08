@@ -1,0 +1,132 @@
+# Entorno del banco del E2E del Hito 8 (TEST8-b). PLANTILLA: el arnés `ops/h8-e2e.sh` la copia en el fichero de
+# entorno de cada copia del árbol (fuera del repo, 600) y sustituye cada marcador entre arrobas dobles por una pieza SINTÉTICA de la
+# ejecución (aleatoria, generada en esa máquina y nunca impresa). Este fichero no lleva ningún secreto.
+#
+# Lo que NO es la producción, a propósito:
+#  - APP_ENV=local: fuera de `production` valen las bases configurables (ELEVENLABS_BASE_URL y TWILIO_VOICE_BASE_URL)
+#    y apuntan a los simuladores de 127.0.0.1. En `production` se ignoran y saldrían a los hosts reales: el arnés lo
+#    comprueba ANTES de arrancar nada (`ayudante.php preflight`) y la valla bloquea cualquier escape.
+#  - TODAS las banderas de la voz ENCENDIDAS (las de las fases 2–4b a la vez): así la única cerradura que distingue la
+#    copia CERRADA de la ABIERTA es `VoiceCallPolicy::CALLS_ENABLED_IN_CODE` (protección 2: se gira solo en la copia
+#    abierta del banco, nunca en el árbol compartido).
+#  - Presupuestos > 0 y topes pequeños, para que el freno por coste (`cost_cap`) no salte con las reservas del E2E.
+#  - El OTP con credenciales maestras SINTÉTICAS (como el banco de OPS8): si la voz las usara, el simulador de Twilio
+#    lo marca (`master_credential_used`); el OTP no se ejercita.
+
+APP_NAME=IronBody
+APP_ENV=local
+APP_KEY=@@APP_KEY@@
+APP_DEBUG=false
+APP_URL=http://127.0.0.1:@@PUERTO_API@@
+LOG_CHANNEL=single
+LOG_LEVEL=debug
+
+# PostgreSQL desechable con el modelo de roles de producción: el dueño migra; la aplicación solo hace DML y es el rol
+# al que DB8 le revoca UPDATE y DELETE de las tablas de solo inserción (ULTRON_STUDIO_DB_APP_ROLE).
+DB_CONNECTION=pgsql
+DB_HOST=127.0.0.1
+DB_PORT=@@PG_PORT@@
+DB_DATABASE=@@DB@@
+DB_USERNAME=@@DB_APP@@
+DB_PASSWORD=
+ULTRON_STUDIO_DB_APP_ROLE=@@DB_APP@@
+
+# Como producción: limitadores y cerrojos entre procesos de verdad (con `array` no habría 429 ni cerrojos).
+CACHE_STORE=database
+QUEUE_CONNECTION=database
+SESSION_DRIVER=database
+MAIL_MAILER=log
+BROADCAST_CONNECTION=log
+
+# OTP (no se toca): credencial maestra sintética y bases oficiales; nada del E2E la usa.
+OTP_DRIVER=twilio
+TWILIO_SID=@@TW_MASTER_SID@@
+TWILIO_ACCOUNT_SID=@@TW_MASTER_SID@@
+TWILIO_TOKEN=@@TW_MASTER_TOKEN@@
+TWILIO_AUTH_TOKEN=@@TW_MASTER_TOKEN@@
+TWILIO_VERIFY_SERVICE_SID=@@TW_VERIFY_SID@@
+TWILIO_BASE=https://api.twilio.com
+TWILIO_VERIFY_BASE=https://verify.twilio.com
+TWILIO_FROM=
+
+# Motor y WhatsApp: apagados; el número de WhatsApp sintético (guarda `voice_number_is_whatsapp`).
+META_ENABLED=false
+WHATSAPP_DISPLAY_PHONE=+573000000050
+MARKETING_ULTRON_ENABLED=false
+MARKETING_ULTRON_STUDIO_CONFIG=off
+ULTRON_STUDIO_PUBLISHING_ENABLED=false
+ULTRON_STUDIO_LAB_ENABLED=false
+ULTRON_STUDIO_MONITOR_ENABLED=false
+
+# Studio: el registro de canarios (H6, fase 2: escrituras y cuatro ojos) y la ventana de publicación del H5 (P-25).
+ULTRON_STUDIO_INTEGRATIONS_WRITES_ENABLED=true
+ULTRON_STUDIO_TWILIO_PROBE_ENABLED=false
+ULTRON_STUDIO_CANARY_MAX_ACTIVE=3
+ULTRON_STUDIO_CANARY_COUNTRY_CODES=57
+ULTRON_STUDIO_PUBLISH_WINDOW=@@VENTANA@@
+
+# Voz: gobierno del Studio (S8) y puerta del laboratorio hablado `required` (P-19).
+ULTRON_STUDIO_VOICE_PUBLISHING_ENABLED=true
+ULTRON_STUDIO_VOICE_LAB_GATE=required
+ULTRON_STUDIO_VOICE_CANARY_MIN_HOURS=24
+ULTRON_STUDIO_VOICE_CANARY_MIN_CALLS=3
+
+# ElevenLabs: las piezas de la fase 2, sintéticas, contra el simulador (E6-11: los adaptadores REALES, nunca los nulos).
+ELEVENLABS_ENABLED=true
+ELEVENLABS_API_KEY=@@EL_API_KEY@@
+ELEVENLABS_AGENT_ID=@@EL_VERIFY_AGENT_ID@@
+ELEVENLABS_WEBHOOK_SECRET=@@EL_WEBHOOK_SECRET@@
+ELEVENLABS_REGION=default
+ELEVENLABS_AGENT_PHONE_NUMBER_ID=@@EL_PHONE_NUMBER_ID@@
+ELEVENLABS_TOOL_SECRET=@@EL_TOOL_SECRET@@
+ELEVENLABS_INITIATION_SECRET=@@EL_INITIATION_SECRET@@
+ELEVENLABS_TOOL_SECRET_REF=secref_h8e2e_herramientas
+ELEVENLABS_INITIATION_SECRET_REF=secref_h8e2e_iniciacion
+ELEVENLABS_POST_CALL_WEBHOOK_REF=
+ELEVENLABS_BASE_URL=http://127.0.0.1:@@PUERTO_EL@@
+ELEVENLABS_TIMEOUT_SECONDS=10
+
+# Twilio, subcuenta de voz: la API key restringida de Laravel y el token de firma, contra el simulador.
+TWILIO_VOICE_ENABLED=true
+TWILIO_VOICE_FROM=+576010000090
+TWILIO_VOICE_DAILY_CALL_CAP=5
+TWILIO_VOICE_ACCOUNT_SID=@@TW_ACCOUNT_SID@@
+TWILIO_VOICE_API_KEY_SID=@@TW_LARAVEL_KEY_SID@@
+TWILIO_VOICE_API_KEY_SECRET=@@TW_LARAVEL_KEY_SECRET@@
+TWILIO_VOICE_SIGNING_TOKEN=@@TW_SIGNING_TOKEN@@
+TWILIO_VOICE_BASE_URL=http://127.0.0.1:@@PUERTO_TW@@
+
+# La base canónica de las firmas y de las URL que llama ElevenLabs: distinta de la URL real del banco, para cazar un
+# `fullUrl()` (la del simulador de Twilio, TW_SIGN_BASE).
+VOICE_WEBHOOK_BASE_URL=https://api.ironbody-banco.invalid
+
+# Entrantes y salientes encendidas (alcance canario; la parte 4b cambia VOICE_OUTBOUND_SCOPE a `contacts`).
+VOICE_INBOUND_ENABLED=true
+VOICE_INBOUND_DAILY_CAP=12
+VOICE_OUTBOUND_ENABLED=true
+VOICE_OUTBOUND_SCOPE=@@ALCANCE_SALIENTES@@
+VOICE_MAX_CONCURRENT_CALLS=2
+VOICE_PER_CALL_MAX_SECONDS=300
+VOICE_DAILY_BUDGET_USD=60
+VOICE_OUTBOUND_RINGING_SECONDS=30
+VOICE_FREQUENCY_PER_WEEK=2
+VOICE_FREQUENCY_WEEK=rolling
+VOICE_RNE_VALIDITY_DAYS=30
+QUEUE_VOICE_RETRY_AFTER=120
+
+# Laboratorio hablado: driver `elevenlabs` contra el simulador (el `fake` no admite veredicto), presupuesto > 0.
+VOICE_LAB_ENABLED=true
+VOICE_LAB_DRIVER=elevenlabs
+VOICE_LAB_DAILY_BUDGET_USD=5
+VOICE_LAB_SESSION_BUDGET_USD=1
+VOICE_LAB_MAX_SESSION_SECONDS=300
+VOICE_LAB_MAX_SESSIONS_PER_DAY=6
+VOICE_MONITOR_ENABLED=false
+
+# Hechos de `consultar_horarios` (texto plano, sin cifras ni teléfonos) y sin horario del personal (no se transfiere).
+VOICE_FACTS_SITE="Sede del banco de pruebas"
+VOICE_FACTS_HOURS="De lunes a viernes, de la mañana a la noche"
+VOICE_TRANSFER_HOURS_WEEKDAYS=
+VOICE_TRANSFER_HOURS_SATURDAY=
+VOICE_OUTBOUND_HOURS_WEEKDAYS=
+VOICE_OUTBOUND_HOURS_SATURDAY=
