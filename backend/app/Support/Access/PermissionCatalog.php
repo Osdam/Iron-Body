@@ -53,6 +53,8 @@ final class PermissionCatalog
         'billing' => ['label' => 'Facturación electrónica', 'icon' => 'receipt_long', 'hint' => 'Comprobantes DIAN y tarifas fiscales'],
         'marketing' => ['label' => 'Mercadeo', 'icon' => 'campaign', 'hint' => 'Bandeja, campañas, citas y agente comercial'],
         'ultron' => ['label' => 'ULTRON Studio', 'icon' => 'account_tree', 'hint' => 'Borradores, versiones, reglas, aprobaciones y publicaciones del agente comercial. El motor solo anota la versión publicada: no cambia lo que dice ni hace'],
+        // Hito 8 (D8-22): la voz por teléfono, gobernada por Laravel.
+        'telephony' => ['label' => 'Voz y telefonía', 'icon' => 'call', 'hint' => 'Registro de llamadas de voz sin datos personales, la puerta de salientes, el corte y los contactos con consentimiento de voz'],
         'content' => ['label' => 'Contenido de la app', 'icon' => 'smartphone', 'hint' => 'Eventos, anuncios, rachas y notificaciones push'],
         'moderation' => ['label' => 'Moderación', 'icon' => 'gavel', 'hint' => 'Historias, lives y sanciones de comunidad'],
         'nutrition' => ['label' => 'Nutrición', 'icon' => 'nutrition', 'hint' => 'Catálogo de alimentos'],
@@ -159,6 +161,13 @@ final class PermissionCatalog
         'ultron.canary_manage' => 'Administrar números canarios',
         'ultron.canary_authorize' => 'Autorizar números canarios de otra persona',
         'ultron.integrations_manage' => 'Configuración autorizada y comprobación de Twilio',
+        // Hito 8 (D8-22): voz y telefonía.
+        'ultron.voice_manage' => 'Editar el perfil de voz',
+        'ultron.voice_publish' => 'Publicar la voz y soltar su freno',
+        'ultron.voice_lab_run' => 'Abrir el laboratorio hablado (consume presupuesto)',
+        'telephony.view' => 'Ver el registro de llamadas',
+        'telephony.call_place' => 'Pedir llamadas salientes y colgar',
+        'telephony.contacts_manage' => 'Administrar contactos de voz y su consentimiento',
     ];
 
     /**
@@ -226,6 +235,13 @@ final class PermissionCatalog
         'ultron.canary_manage' => 'Registrar números de prueba con el consentimiento de su titular, activarlos cuando otra persona los autorizó, desactivarlos y revocarlos. Son datos personales: se guardan como huella, y cifrados solo si son de voz. Nadie activa un número que registró. El motor no los lee en este hito: ULTRON sigue atendiendo solo la conversación canaria configurada en el servidor.',
         'ultron.canary_authorize' => 'Autorizar números canarios registrados por otra persona (cuatro ojos): nadie autoriza lo que registró. No llega por defecto al Administrador.',
         'ultron.integrations_manage' => 'Reconocer como autorizada la configuración vigente de Meta Ads, Twilio y voz, sin ver ni editar secretos (solo huellas), y lanzar la comprobación de solo lectura de Twilio. No llega por defecto al Administrador.',
+        // Hito 8 (D8-22).
+        'ultron.voice_manage' => 'Editar el perfil de voz del agente (voz, saludos, destinos de transferencia, herramientas y privacidad), enviarlo a revisión y previsualizar su compilación sin red. Nadie aprueba el perfil que creó.',
+        'ultron.voice_publish' => 'Publicar la voz en canario, promoverla, revertirla y apagarla, y soltar el freno de voz con una nota. Cada publicación crea un agente nuevo e inmutable. No llega por defecto al Administrador.',
+        'ultron.voice_lab_run' => 'Abrir sesiones del laboratorio hablado: hablar con un agente de laboratorio desde el navegador, sin teléfono. Gasta presupuesto del proveedor de voz. No llega por defecto al Administrador.',
+        'telephony.view' => 'Ver el registro de llamadas de voz (sin números: solo los 4 últimos dígitos), su sello, sus eventos, las métricas y los costes del día.',
+        'telephony.call_place' => 'Pedir una llamada saliente a un destino autorizado (la política de Laravel decide) y colgar una llamada en curso. No llega por defecto al Administrador.',
+        'telephony.contacts_manage' => 'Registrar contactos de voz, cargar y confirmar su consentimiento (cuatro ojos: lo confirma otra persona), revocarlo, excluir números y anotar consultas al Registro de Números Excluidos. Son datos personales. No llega por defecto al Administrador.',
     ];
 
     /**
@@ -326,7 +342,7 @@ final class PermissionCatalog
      */
     private static function sortActions(array $permisos): array
     {
-        $orden = ['view' => 0, 'view_all' => 0.5, 'stock' => 0.6, 'cost' => 0.7, 'use' => 1, 'create' => 2, 'operate' => 2, 'edit' => 3, 'update' => 3, 'edit_draft' => 3, 'cancel' => 4, 'correct' => 4.2, 'refund' => 4.4, 'complete' => 4.5, 'archive' => 5, 'delete' => 5, 'manage_rules' => 6, 'lab_manage' => 6.4, 'lab_run' => 6.6, 'approve' => 7, 'publish' => 8, 'rollback' => 8.2, 'campaigns_manage' => 8.3, 'canary_manage' => 8.35, 'canary_authorize' => 8.4, 'integrations_manage' => 8.45, 'manage_availability' => 8, 'manage_settings' => 8.5, 'manage' => 9];
+        $orden = ['view' => 0, 'view_all' => 0.5, 'stock' => 0.6, 'cost' => 0.7, 'use' => 1, 'create' => 2, 'operate' => 2, 'edit' => 3, 'update' => 3, 'edit_draft' => 3, 'cancel' => 4, 'correct' => 4.2, 'refund' => 4.4, 'complete' => 4.5, 'archive' => 5, 'delete' => 5, 'manage_rules' => 6, 'lab_manage' => 6.4, 'lab_run' => 6.6, 'approve' => 7, 'publish' => 8, 'rollback' => 8.2, 'campaigns_manage' => 8.3, 'canary_manage' => 8.35, 'canary_authorize' => 8.4, 'integrations_manage' => 8.45, 'voice_manage' => 8.5, 'voice_lab_run' => 8.55, 'voice_publish' => 8.6, 'call_place' => 2, 'contacts_manage' => 8.7, 'manage_availability' => 8, 'manage_settings' => 8.5, 'manage' => 9];
         usort($permisos, fn ($a, $b) => ($orden[$a['action']] ?? 5) <=> ($orden[$b['action']] ?? 5));
 
         return $permisos;

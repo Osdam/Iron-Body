@@ -66,7 +66,7 @@ class ElevenLabsAgentMapperTest extends TestCase
         $this->assertFalse($ps['overrides']['custom_llm_extra_body']);
         $this->assertSame([
             'url' => 'https://api.ironbody.test/api/webhooks/voice/elevenlabs/initiation',
-            'request_headers' => ['X-IronBody-Voice-Initiation' => ['secret_id' => 'sec_init_0001']],
+            'request_headers' => ['X-Voice-Initiation-Secret' => ['secret_id' => 'sec_init_0001']],
         ], $ps['workspace_overrides']['conversation_initiation_client_data_webhook']);
         $this->assertSame(['post_call_webhook_id' => 'wh_postcall_0001', 'events' => ['call_initiation_failure', 'transcript']], $ps['workspace_overrides']['webhooks']);
         $this->assertNotContains('audio', $ps['workspace_overrides']['webhooks']['events']);

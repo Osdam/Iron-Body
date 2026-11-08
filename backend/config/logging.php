@@ -1,5 +1,6 @@
 <?php
 
+use Monolog\Formatter\JsonFormatter;
 use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
@@ -105,12 +106,28 @@ return [
             // 403. El 0664 es la mitad del arreglo; la otra es que el scheduler
             // no corra como root (ver docs/ops/ROTACION-CREDENCIALES.md).
             'permission' => 0664,
-            'formatter' => Monolog\Formatter\JsonFormatter::class,
+            'formatter' => JsonFormatter::class,
             'formatter_with' => [
-                'batchMode' => Monolog\Formatter\JsonFormatter::BATCH_MODE_JSON,
+                'batchMode' => JsonFormatter::BATCH_MODE_JSON,
                 'appendNewline' => true,
             ],
             'replace_placeholders' => false,
+        ],
+
+        /*
+         * VOZ Y TELEFONÍA (ULTRON STUDIO H8, D8-4): el canal propio de la voz,
+         * el ÚNICO por el que registra la telefonía (TelephonyIsolationTest).
+         * Sin teléfonos, transcripciones ni cuerpos crudos: solo códigos, uuids
+         * y recuentos. Rotación diaria de 30 días, como `channel`, y permiso de
+         * grupo por la misma razón (php-fpm, los workers y el scheduler).
+         */
+        'voice' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/voice.log'),
+            'level' => 'info',
+            'days' => 30,
+            'permission' => 0664,
+            'replace_placeholders' => true,
         ],
 
         'slack' => [

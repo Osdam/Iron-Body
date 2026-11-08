@@ -1,18 +1,18 @@
 <?php
 
 use App\Http\Middleware\AuthenticateMember;
-use App\Http\Middleware\EnsureMembershipBenefitsAvailable;
 use App\Http\Middleware\AuthenticateTrainer;
+use App\Http\Middleware\EnforceAdminAuthorization;
+use App\Http\Middleware\EnforceTrainerMemberScope;
 use App\Http\Middleware\EnsureAdminAuth;
 use App\Http\Middleware\EnsureAdminPermission;
 use App\Http\Middleware\EnsureMemberRegistrationToken;
-use App\Http\Middleware\EnforceAdminAuthorization;
-use App\Http\Middleware\EnforceTrainerMemberScope;
+use App\Http\Middleware\EnsureMembershipBenefitsAvailable;
+use App\Http\Middleware\EnsureTrainerFeature;
+use App\Http\Middleware\EnsureTrainerPermission;
 use App\Http\Middleware\NoStoreAdminResponses;
 use App\Http\Middleware\ProtectAdminPaths;
 use App\Http\Middleware\SecurityHeaders;
-use App\Http\Middleware\EnsureTrainerFeature;
-use App\Http\Middleware\EnsureTrainerPermission;
 use App\Http\Middleware\ValidatePostSizeWithStudioCap;
 use App\Http\Middleware\VerifyDeviceSignature;
 use App\Http\Middleware\VerifyInternalAutomationSignature;
@@ -42,20 +42,28 @@ return Application::configure(basePath: dirname(__DIR__))
             Route::middleware('api')
                 ->prefix('api')
                 ->group(base_path('routes/ultron-studio.php'));
+
+            // VOZ Y TELEFONÍA (Hito 8, D8-4): sus webhooks públicos
+            // (/api/webhooks/voice/*, /api/voice/tools/*) y el CRM
+            // (/api/admin/voice/*), en su propio fichero: routes/api.php, el
+            // del OTP, no se toca. Mismo grupo `api`.
+            Route::middleware('api')
+                ->prefix('api')
+                ->group(base_path('routes/voice.php'));
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'member.registration.token' => EnsureMemberRegistrationToken::class,
-            'auth.member'               => AuthenticateMember::class,
-            'membership.benefits'       => EnsureMembershipBenefitsAvailable::class,
-            'auth.trainer'              => AuthenticateTrainer::class,
-            'device.signed'             => VerifyDeviceSignature::class,
-            'auth.admin'                => EnsureAdminAuth::class,
-            'admin.can'                 => EnsureAdminPermission::class,
-            'automation.internal'       => VerifyInternalAutomationSignature::class,
-            'trainer.can'               => EnsureTrainerPermission::class,
-            'trainer.feature'           => EnsureTrainerFeature::class,
+            'auth.member' => AuthenticateMember::class,
+            'membership.benefits' => EnsureMembershipBenefitsAvailable::class,
+            'auth.trainer' => AuthenticateTrainer::class,
+            'device.signed' => VerifyDeviceSignature::class,
+            'auth.admin' => EnsureAdminAuth::class,
+            'admin.can' => EnsureAdminPermission::class,
+            'automation.internal' => VerifyInternalAutomationSignature::class,
+            'trainer.can' => EnsureTrainerPermission::class,
+            'trainer.feature' => EnsureTrainerFeature::class,
         ]);
 
         // Blindaje global: TODAS las rutas /api/admin/* y los pagos legacy
@@ -106,11 +114,12 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(function (PostTooLargeException $e, Request $request) {
             if ($request->is('api/*') || $request->expectsJson()) {
                 return response()->json([
-                    'ok'      => false,
-                    'code'    => 'ocr_image_too_large',
+                    'ok' => false,
+                    'code' => 'ocr_image_too_large',
                     'message' => 'La imagen es demasiado pesada. Intenta con una foto más cercana o más clara.',
                 ], 413);
             }
+
             return null;
         });
     })->create();

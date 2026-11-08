@@ -193,3 +193,44 @@ Las `ULTRON_STUDIO_VOICE_LAB_*` de D8-23 **no** se añadieron: las lee `config/u
    - `config/queue.php` (E1-10).
 
 Sin commit: el lead confirma por paquete.
+
+---
+
+# §B8-b · paso 2 del Hito 8 (telefonía sobre los adaptadores de B8-a)
+
+**Fecha:** 07-11-2026. **Árbol:** worktree `ultron-h8`, rama `feat/ultron-studio-h8-voice`, **sin commit**. Cero red: ninguna petición a un proveedor; toda prueba con `Http::preventStrayRequests()`.
+
+## 1. Cifras reales (comandos ejecutados)
+
+- SQLite: `phpunit tests/Unit/Voice tests/Unit/Twilio tests/Unit/Telephony tests/Feature/Voice tests/Feature/Telephony tests/Feature/Access tests/Feature/Chaos/ChaosLaneIsolationTest.php` → **834 pruebas, 178 640 aserciones, 4 fallos** (las 4 guardas de §4; 131 omitidas: las de esquema solo-PG).
+- Puerta PG (`UNIT_DB=ultron_studio_h8_b bash docs/ultron-studio/ops/pgunit.sh … tests/Feature/Telephony tests/Unit/Telephony tests/Feature/Voice tests/Feature/Access tests/Unit/Voice tests/Unit/Twilio`) → **825 pruebas, 179 329 aserciones, 4 fallos (las guardas de §4) y 1 error ajeno** (`AdminUserPasswordTest`, usa sintaxis de disparador de SQLite; fichero no tocado). La puerta PG cazó un fallo real mío (`outcome = 'no-answer'` contra `vce_codes_chk`): corregido con `VoiceEvents::code()`.
+- Mis pruebas nuevas: **12 ficheros, 108 pruebas** (paridad 15; iniciación 8; post-llamada 19; herramientas 26; aviso de Twilio 9; conciliación 4; CRM 8; job 6; freno 3; rutas 2; cero red E2-4 1; comandos 2), todas en verde en SQLite y PG.
+- Paridad con TEST8-a, caso a caso: `inboundPolicy` 15, `decide` 43, `whatsappGuard` 7, `scheduleLegal` 22 y `scheduleOwn` 11, `frequency` 19, `consent` 13, `exclusions` 16, `costReservation` 17, `brake` 10, `phoneHash` 7, cadena (`chain` 5, `subkey` 3, `verify` 27), `guard` 9 (por el verificador real), `postCall` 16, `tools` 21, `usageTrigger` 7 (firmas reales), `callsPage` 1 (9 llamadas, por el transportista real con `Http::fake`).
+- `php artisan auth:coverage --unmapped` → vacío (exit 0). Pint `--test` en mis 78 ficheros → `passed`.
+- **No hecho:** mutaciones por muestreo (sin tiempo en esta tanda). PERF8 no medido.
+
+## 2. Ficheros
+
+Nuevos: `app/Services/Telephony/{InboundPolicy,OutboundPolicy,InboundGate,OutboundGate,OutboundSchedule,VoiceFrequency,VoiceConsentRule,VoiceExclusionRule,VoiceCostGuard,VoiceNumberGuard,VoicePhone,VoicePublishedConfig,VoicePublishedPart,VoiceTranscriptGuard,VoiceCanaryDirectory,VoiceLeadSignals,VoiceToolAuth,VoiceInitiationAuth,VoiceTools,VoicePostCall,TwilioUsageAlert,VoiceReconciler,VoiceHangup,VoiceBrake,VoiceEvidence,VoiceEvents,VoiceLocks,VoiceCallFacts,VoiceCallsQuery,VoiceTelephonyStatus,VoiceContacts,VoiceActor,VoiceProviderState,VoiceTransferDirectory,TelephonyException}.php`; `app/Models/Voice/{VoiceCall,VoiceCallEvent,VoiceContact,VoiceConsent,VoiceExclusion,VoiceRneCheck,VoiceBrakeEntry}.php`; `app/Jobs/Voice/PlaceOutboundVoiceCall.php`; `app/Http/Controllers/Api/Voice/{ElevenLabsPostCallController,ElevenLabsInitiationController,VoiceToolController,TwilioVoiceUsageTriggerController}.php`; `app/Http/Controllers/Crm/Voice/{VoiceCallController,VoiceContactController}.php`; `app/Console/Commands/Voice/{VoiceHangupCommand,VoiceReconcileCommand}.php`; `routes/voice.php`; pruebas en `tests/Unit/Telephony/` y `tests/Feature/Telephony/` (+ `Support/VoiceFixtures.php`).
+
+Cambiados: `config/voice.php` (E2-4 y las piezas de abajo), `config/queue.php` (conexión y carril `voice`, E1-10), `config/logging.php` (canal `voice`, D8-4; no tenía dueño), `bootstrap/app.php` (monta `routes/voice.php`), `.env.example` (bloque B8-b), `app/Support/Access/{AuthorizationMap,CrmPermission,PermissionCatalog}.php`, `app/Console/Commands/Voice/VoiceDoctorCommand.php` (`--telefonia`; salida por defecto intacta), y de B8-a: `ElevenLabsAgentMapper` (cabecera `X-Voice-Initiation-Secret`, la de fixtures, banco y lead), `ElevenLabsEventVerifier` + `VoiceWebhookVerdict` (turnos de la guarda con su índice y lo que devolvió `consultar_planes`, solo en memoria; `call_ref` desde `user_id` en `call_initiation_failure`, DF-S2) y sus pruebas `ElevenLabsAgentMapperTest`/`ElevenLabsConfigTest`.
+
+## 3. Contratos
+
+**Rutas nuevas (17).** Públicas (en `AuthorizationMap::PUBLIC_VOICE_ROUTES` con su razón): `POST api/webhooks/voice/elevenlabs/post-call` (1 MB, 240/min), `POST api/webhooks/voice/elevenlabs/initiation` (8 KB, 120/min), `POST api/voice/tools/{tool}` (8 KB, 600/min), `POST api/webhooks/voice/twilio/usage-trigger` (64 KB, 60/min). CRM (16 KB; 120/min lectura, 30/min escritura): `GET status|calls|calls/{uuid}|metrics` (`telephony.view`), `POST calls`, `POST calls/{uuid}/hangup` (`telephony.call_place`), `GET|POST contacts`, `POST contacts/{uuid}/consents`, **`POST contacts/{uuid}/consents/confirm` (nueva, E3-4: la segunda persona)**, `POST contacts/{uuid}/revoke`, `POST exclusions`, `POST rne-checks` (`telephony.contacts_manage`). El campo del teléfono en las peticiones se llama `number`. Mapeadas también las 22 rutas de voz del Studio de S8/LAB8.
+
+**Permisos (D8-22):** `ultron.voice_manage`, `ultron.voice_publish`, `ultron.voice_lab_run`, `telephony.view`, `telephony.call_place`, `telephony.contacts_manage` (+ `ultron.approve`). Super Admin todas; Administrador solo `ultron.voice_manage` y `telephony.view` (tabla de D8-22). `telephony` en `SHARED_TOKEN_EXCLUDED_DOMAINS`.
+
+**Variables nuevas (todas apagadas o vacías):** `VOICE_PUBLISHING_ENABLED`, `VOICE_LAB_ENABLED`, `VOICE_MONITOR_ENABLED`, `VOICE_OUTBOUND_RINGING_SECONDS=30`, `VOICE_OUTBOUND_HOURS_WEEKDAYS`, `VOICE_OUTBOUND_HOURS_SATURDAY`, `VOICE_FREQUENCY_PER_WEEK=2`, `VOICE_FREQUENCY_WEEK=rolling`, `VOICE_TRANSFER_HOURS_WEEKDAYS`, `VOICE_TRANSFER_HOURS_SATURDAY`, `VOICE_FACTS_SITE`, `VOICE_FACTS_HOURS`, `VOICE_RNE_VALIDITY_DAYS=0`, `QUEUE_VOICE_RETRY_AFTER=120`. Precios oficiales con fecha en `voice.prices` (sin variable). Migraciones: ninguna.
+
+## 4. Decisiones pendientes del lead / SEC8 (las 4 guardas que caen)
+
+1. **Sello incompleto:** `vc_stamp_chk` exige `studio_content_hash`, `voice_profile_hash` y `compiler_version`, que el mensaje de E1-4 no lleva. `VoicePublishedConfig` los lee en UNA sentencia con JOIN al agente de cada entrada y cruza agente, `spec_hash` y `agent_config_hash` = `payload_hash` (S8 debe confirmarlo). Cae `TelephonyIsolationTest::…canarios_y_su_cadena` y `UltronEngineIsolationTest::fuera_del_studio…`: SEC8 tiene que admitir el literal de la tabla de agentes.
+2. **Falso positivo:** el motivo del contrato `voice_number_is_whatsapp` es un literal con «whatsapp» → `TelephonyIsolationTest::…dos_adaptadores`.
+3. **Falso positivo:** el dominio `telephony` (D8-22) → `VoiceIsolationTest::…lectores_enumerados` ($bloques).
+4. **E2-6:** `StudioVoiceEvidence` (S8) nombra `Telephony\VoiceBrake` → `TelephonyIsolationTest::…adaptadores_enumerados`. (Y el recuento 77≠56 de rutas del Studio es de S8.)
+5. Fallo cerrado mientras se decide: `ELEVENLABS_VERIFIED` (la evidencia está en la tabla de instantáneas del Studio) → siempre `elevenlabs_unverified`; destinos de transferencia (perfil del Studio) → `solicitar_humano` no disponible y todo `transfer_to_number` es violación; deriva del NÚMERO en la conciliación (E2-3) necesita un GET que las interfaces cerradas no tienen (la iniciación ya la vigila por llamada, DF-E12); `usage_alert` no está en D8-13 (se guarda como `cost_recorded`, DF-W1); E3-4 supera 3 casos de `consent` del fixture (TEST8 debe regenerar).
+
+## 5. Para tester (casos límite desde dentro)
+
+Carrera de dos iniciaciones con el mismo `call_sid` (cerrojo + UNIQUE); webhook antes que el job (DF-S2, solo PG muestra los CHECK); `ambiguous` sin ids en la fila (el SID vive en su evento); cupo de herramientas 20/21; una saliente viva por número (`vc_one_live_outbound`); PG obligatorio (los CHECK de forma solo existen allí).

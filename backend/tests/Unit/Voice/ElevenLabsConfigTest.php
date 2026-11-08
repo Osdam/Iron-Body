@@ -203,9 +203,44 @@ class ElevenLabsConfigTest extends TestCase
             // H8 (D8-11, D8-12 y D8-15): TODO APAGADO; los límites son techos, que no encienden nada.
             'webhook_base_url' => null,
             'inbound' => ['enabled' => false, 'scope' => 'canary', 'daily_cap' => 0],
-            'outbound' => ['enabled' => false, 'scope' => 'canary'],
+            'outbound' => [
+                'enabled' => false, 'scope' => 'canary',
+                // H8, B8-b (P-10, P-11 y P-13): el timbre, el horario propio vacío (solo el legal) y la frecuencia más estricta.
+                'ringing_timeout_seconds' => 30,
+                'own_hours' => ['weekdays' => '', 'saturday' => ''],
+                'frequency' => ['per_week' => 2, 'week' => 'rolling'],
+            ],
+            // H8, B8-b: E2-4 (publicar y el laboratorio hablado, cada uno con su bandera), el monitor, el horario del personal,
+            // los hechos de `consultar_horarios`, la vigencia del RNE (0 = ninguna) y los precios oficiales con su fecha.
+            'publishing' => ['enabled' => false],
+            'lab' => ['enabled' => false],
+            'monitor' => ['enabled' => false],
+            'transfer' => ['staff_hours' => ['weekdays' => '', 'saturday' => '']],
+            'facts' => ['site' => '', 'hours' => ''],
+            'contacts' => ['rne_validity_days' => 0],
+            'prices' => ['as_of' => '2026-11-03', 'elevenlabs' => 80000, 'twilio_outbound_mobile_co' => 37700, 'twilio_outbound_landline_co' => 70000,
+                'twilio_inbound_local_co' => 94500, 'twilio_media_streams' => 4400],
             'limits' => ['max_concurrent_calls' => 1, 'per_call_max_seconds' => 300, 'daily_budget_usd' => '0'],
         ], $vacio, 'los defectos de §I6.2 y del H8, en su orden');
+
+        // H8, B8-b: las banderas de E2-4 y del monitor, con el mismo filter_var; los recortes y la semana.
+        foreach (['true' => true, 'on' => true, 'false' => false, '' => false, 'si' => false] as $valor => $esperado) {
+            foreach (['VOICE_PUBLISHING_ENABLED' => 'publishing', 'VOICE_LAB_ENABLED' => 'lab', 'VOICE_MONITOR_ENABLED' => 'monitor'] as $variable => $bloque) {
+                $this->assertSame($esperado, self::evaluar([$variable => (string) $valor])[$bloque]['enabled'], "{$variable}={$valor}");
+            }
+        }
+        foreach (['5' => 10, '45' => 45, '90' => 60, 'x' => 30] as $valor => $esperado) {
+            $this->assertSame($esperado, self::evaluar(['VOICE_OUTBOUND_RINGING_SECONDS' => (string) $valor])['outbound']['ringing_timeout_seconds'], "VOICE_OUTBOUND_RINGING_SECONDS={$valor}");
+        }
+        foreach (['1' => 1, '0' => 1, '7' => 2] as $valor => $esperado) {
+            $this->assertSame($esperado, self::evaluar(['VOICE_FREQUENCY_PER_WEEK' => (string) $valor])['outbound']['frequency']['per_week'], "VOICE_FREQUENCY_PER_WEEK={$valor}");
+        }
+        foreach (['calendar' => 'calendar', ' Calendar ' => 'calendar', 'rolling' => 'rolling', 'semana' => 'rolling', '' => 'rolling'] as $valor => $esperado) {
+            $this->assertSame($esperado, self::evaluar(['VOICE_FREQUENCY_WEEK' => (string) $valor])['outbound']['frequency']['week'], "VOICE_FREQUENCY_WEEK={$valor}");
+        }
+        foreach (['30' => 30, '-1' => 0, '999' => 365, 'x' => 0] as $valor => $esperado) {
+            $this->assertSame($esperado, self::evaluar(['VOICE_RNE_VALIDITY_DAYS' => (string) $valor])['contacts']['rne_validity_days'], "VOICE_RNE_VALIDITY_DAYS={$valor}");
+        }
 
         // H8: las banderas nuevas con el mismo filter_var; el alcance de salientes,
         // `contacts` o el más estrecho; los techos, recortados.
@@ -268,7 +303,11 @@ class ElevenLabsConfigTest extends TestCase
             'ELEVENLABS_INITIATION_SECRET', 'ELEVENLABS_TOOL_SECRET_REF', 'ELEVENLABS_INITIATION_SECRET_REF', 'ELEVENLABS_POST_CALL_WEBHOOK_REF',
             'TWILIO_VOICE_ACCOUNT_SID', 'TWILIO_VOICE_API_KEY_SID', 'TWILIO_VOICE_API_KEY_SECRET', 'TWILIO_VOICE_SIGNING_TOKEN', 'TWILIO_VOICE_BASE_URL',
             'VOICE_WEBHOOK_BASE_URL', 'VOICE_INBOUND_ENABLED', 'VOICE_INBOUND_DAILY_CAP', 'VOICE_OUTBOUND_ENABLED', 'VOICE_OUTBOUND_SCOPE',
-            'VOICE_MAX_CONCURRENT_CALLS', 'VOICE_PER_CALL_MAX_SECONDS', 'VOICE_DAILY_BUDGET_USD'];
+            'VOICE_MAX_CONCURRENT_CALLS', 'VOICE_PER_CALL_MAX_SECONDS', 'VOICE_DAILY_BUDGET_USD',
+            // H8, B8-b
+            'VOICE_OUTBOUND_RINGING_SECONDS', 'VOICE_OUTBOUND_HOURS_WEEKDAYS', 'VOICE_OUTBOUND_HOURS_SATURDAY', 'VOICE_FREQUENCY_PER_WEEK',
+            'VOICE_FREQUENCY_WEEK', 'VOICE_PUBLISHING_ENABLED', 'VOICE_LAB_ENABLED', 'VOICE_MONITOR_ENABLED', 'VOICE_TRANSFER_HOURS_WEEKDAYS',
+            'VOICE_TRANSFER_HOURS_SATURDAY', 'VOICE_FACTS_SITE', 'VOICE_FACTS_HOURS', 'VOICE_RNE_VALIDITY_DAYS'];
         $antes = [];
         foreach ($todas as $nombre) {
             $antes[$nombre] = [$_SERVER[$nombre] ?? null, $_ENV[$nombre] ?? null, getenv($nombre)];

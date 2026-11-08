@@ -67,10 +67,16 @@ final class VoiceWebhookVerdict
     /** @var SensitiveParameterValue<list<string>> */
     private readonly SensitiveParameterValue $transferTargets;
 
+    /** @var SensitiveParameterValue<list<array{index:int, text:string, tools:list<string>, transfers:list<string>, planResults:list<string>}>> */
+    private readonly SensitiveParameterValue $guardTurns;
+
     /**
      * @param  list<string>  $toolCalls  los nombres de las herramientas que el agente llamó, en orden
      * @param  list<string>  $agentTurns  el texto de cada turno del agente, en orden (solo en memoria)
      * @param  list<string>  $transferTargets  los números a los que pidió transferir (solo en memoria)
+     * @param  list<array{index:int, text:string, tools:list<string>, transfers:list<string>, planResults:list<string>}>  $guardTurns
+     *                                                                                                                                 cada turno del AGENTE con su índice en `data.transcript` (DF-E11), las herramientas que llamó, los números
+     *                                                                                                                                 que pidió a `transfer_to_number` y lo que devolvió `consultar_planes` en ese turno (P-3). Solo en memoria.
      *
      * @throws InvalidArgumentException
      */
@@ -92,6 +98,7 @@ final class VoiceWebhookVerdict
         public readonly array $toolCalls,
         #[\SensitiveParameter] array $agentTurns = [],
         #[\SensitiveParameter] array $transferTargets = [],
+        #[\SensitiveParameter] array $guardTurns = [],
     ) {
         if (! in_array($outcome, self::OUTCOMES, true)) {
             throw new InvalidArgumentException('Resultado de webhook desconocido.');
@@ -142,12 +149,27 @@ final class VoiceWebhookVerdict
                 }
             }
         }
-        if ($kind !== self::KIND_POST_CALL_TRANSCRIPTION && ($agentTurns !== [] || $transferTargets !== [] || $toolCalls !== [])) {
+        if (! array_is_list($guardTurns)) {
+            throw new InvalidArgumentException('Los turnos de la guarda son una lista.');
+        }
+        foreach ($guardTurns as $turno) {
+            if (! is_array($turno) || array_keys($turno) !== ['index', 'text', 'tools', 'transfers', 'planResults']
+                || ! is_int($turno['index']) || $turno['index'] < 0 || ! is_string($turno['text'])) {
+                throw new InvalidArgumentException('Cada turno de la guarda lleva su índice, su texto, sus herramientas, sus destinos y sus resultados.');
+            }
+            foreach (['tools', 'transfers', 'planResults'] as $campo) {
+                if (! is_array($turno[$campo]) || ! array_is_list($turno[$campo]) || array_filter($turno[$campo], static fn ($v): bool => ! is_string($v)) !== []) {
+                    throw new InvalidArgumentException('Las herramientas, los destinos y los resultados de un turno son listas de textos.');
+                }
+            }
+        }
+        if ($kind !== self::KIND_POST_CALL_TRANSCRIPTION && ($agentTurns !== [] || $transferTargets !== [] || $toolCalls !== [] || $guardTurns !== [])) {
             throw new InvalidArgumentException('Solo una transcripción lleva turnos, herramientas o destinos.');
         }
 
         $this->agentTurns = new SensitiveParameterValue($agentTurns);
         $this->transferTargets = new SensitiveParameterValue($transferTargets);
+        $this->guardTurns = new SensitiveParameterValue($guardTurns);
     }
 
     public function accepted(): bool
@@ -165,6 +187,18 @@ final class VoiceWebhookVerdict
     public function transferTargets(): array
     {
         return $this->transferTargets->getValue();
+    }
+
+    /**
+     * EN MEMORIA: los turnos del agente para la guarda posterior (D8-10 capa
+     * 4), con su índice en la transcripción; nunca a la base, un registro ni
+     * una respuesta.
+     *
+     * @return list<array{index:int, text:string, tools:list<string>, transfers:list<string>, planResults:list<string>}>
+     */
+    public function guardTurns(): array
+    {
+        return $this->guardTurns->getValue();
     }
 
     /** @return array<string, mixed> el evento neutro, sin turnos ni destinos */

@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands\Voice;
 
+use App\Services\Telephony\VoiceTelephonyStatus;
 use App\Services\Voice\ElevenLabs\ElevenLabsConfig;
 use App\Services\Voice\VoiceCheckResult;
 use App\Services\Voice\VoiceProviders;
@@ -28,7 +29,8 @@ class VoiceDoctorCommand extends Command
 {
     protected $signature = 'voice:doctor
         {--json : el estado en JSON (con --verify, también la verificación)}
-        {--verify : con ELEVENLABS_UNVERIFIED, comprueba la clave y el agente con un GET de solo lectura (no guarda nada)}';
+        {--verify : con ELEVENLABS_UNVERIFIED, comprueba la clave y el agente con un GET de solo lectura (no guarda nada)}
+        {--telefonia : además, el estado de la telefonía del H8 (banderas, cadena por partes, freno, límites y el día), sin red}';
 
     protected $description = 'Estado de la voz (ElevenLabs): piezas que faltan por nombre, nunca valores. Con --verify y ELEVENLABS_UNVERIFIED, un GET de solo lectura; entonces sale 0 solo con credentials_ok.';
 
@@ -58,6 +60,9 @@ class VoiceDoctorCommand extends Command
             if ($verificar) {
                 $salida['verification'] = $resultado?->toArray();
             }
+            if ($this->option('telefonia')) {
+                $salida['telefonia'] = VoiceTelephonyStatus::snapshot();
+            }
             // Salida cruda: nada de marcado de consola dentro del JSON.
             $this->output->writeln((string) json_encode($salida, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT), OutputInterface::OUTPUT_RAW);
 
@@ -74,6 +79,9 @@ class VoiceDoctorCommand extends Command
             : implode(', ', array_map(static fn (string $pieza): string => $pieza.' ('.self::ENV[$pieza].')', $estado->missing))));
         $this->line('Llamadas   : cerradas en el código. En este hito no se hace ninguna llamada.');
         $this->newLine();
+        if ($this->option('telefonia')) {
+            $this->telephony(VoiceTelephonyStatus::snapshot());
+        }
 
         $this->line(match ($estado->state) {
             VoiceProviderStatus::STATE_NOT_CONFIGURED => '<comment>Sin configurar: faltan piezas. No sale nada a la red.</comment>',
@@ -109,5 +117,37 @@ class VoiceDoctorCommand extends Command
         }
 
         return $codigo;
+    }
+
+    /**
+     * La telefonía del H8 (contrato H8, D8-20 y D8-21), por nombre y sin
+     * valores: ningún número, secreto ni dato personal.
+     *
+     * @param  array<string, mixed>  $t
+     */
+    private function telephony(array $t): void
+    {
+        $si = static fn (mixed $v): string => $v === true ? 'sí' : ($v === false ? 'no' : '—');
+        $this->info('── Voz · telefonía (H8) ──');
+        $this->line('Constante  : '.($t['callsEnabledInCode'] ? 'ABIERTA' : 'cerrada').' (la de VoiceCallPolicy: las llamadas en el código)');
+        $this->line('Banderas   : entrantes '.$si($t['flags']['inbound']).' · salientes '.$si($t['flags']['outbound']).' ('.$t['scopes']['outbound'].') · Twilio Voice '.$si($t['flags']['twilioVoice'])
+            .' · publicar '.$si($t['flags']['publishing']).' · laboratorio '.$si($t['flags']['lab']).' · monitor '.$si($t['flags']['monitor']));
+        $this->line('Proveedor  : '.$t['provider']);
+        $this->line('Número     : '.($t['number']['configured'] ? 'configurado' : 'sin configurar (TWILIO_VOICE_FROM)')
+            .($t['number']['collidesWithMessaging'] ? ' · CHOCA con un número protegido de la mensajería del motor (config/meta.php): la política deniega las salientes por nombre' : '')
+            .' · número importado '.$si($t['number']['importedNumberIdConfigured']).' · subcuenta (corte y conciliación) '.$si($t['carrierConfigured']));
+        if (is_array($t['publication'])) {
+            foreach ($t['publication'] as $parte => $p) {
+                $this->line(sprintf('Cadena     : %s %s%s%s', $parte, $p['status'], $p['seq'] === null ? '' : ' · seq '.$p['seq'], $p['reason'] === null ? '' : ' · '.$p['reason']));
+            }
+        } else {
+            $this->line('Cadena     : no se pudo leer la base');
+        }
+        $this->line('Freno      : '.($t['brakeOpen'] === true ? 'ECHADO' : ($t['brakeOpen'] === false ? 'suelto' : '—')));
+        $l = $t['limits'];
+        $this->line(sprintf('Límites    : %d a la vez · %d s por llamada · salientes/día %d · entrantes/día %d · presupuesto %d µUS$ · RNE %d días',
+            $l['maxConcurrentCalls'], $l['perCallMaxSeconds'], $l['outboundDailyCap'], $l['inboundDailyCap'], $l['dailyBudgetMicros'], $l['rneValidityDays']));
+        $this->line('Horario    : propio '.$t['schedule']['ownHours'].' · personal '.$t['schedule']['staffHours'].' · destinos de transferencia '.$t['transferDirectory']);
+        $this->newLine();
     }
 }

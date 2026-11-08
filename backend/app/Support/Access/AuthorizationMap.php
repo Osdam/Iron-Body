@@ -783,12 +783,81 @@ final class AuthorizationMap
         'POST api/admin/ultron-studio/integrations/config/acknowledge' => 'ultron.integrations_manage',
         'POST api/admin/ultron-studio/integrations/twilio/probe' => 'ultron.integrations_manage',
 
+        // ULTRON STUDIO · Hito 8 (D8-22, «API»): la voz en el Studio (rutas de
+        // S8 y LAB8 en routes/ultron-studio.php). Leer, con `ultron.view`; el
+        // perfil y la previsualización, con `ultron.voice_manage`; aprobar el
+        // perfil y el veredicto del laboratorio hablado ajenos, con
+        // `ultron.approve`; publicar, promover, revertir, apagar y soltar el
+        // freno, con `ultron.voice_publish`; el laboratorio hablado (gasta), con
+        // `ultron.voice_lab_run`. Nadie aprueba ni publica lo que creó (lo
+        // comprueba el servicio por identidad).
+        'GET api/admin/ultron-studio/voice/profiles' => 'ultron.view',
+        'GET api/admin/ultron-studio/voice/profiles/{uuid}' => 'ultron.view',
+        'POST api/admin/ultron-studio/voice/profiles' => CrmPermission::ULTRON_VOICE_MANAGE,
+        'POST api/admin/ultron-studio/voice/profiles/{uuid}/submit' => CrmPermission::ULTRON_VOICE_MANAGE,
+        'POST api/admin/ultron-studio/voice/profiles/{uuid}/approve' => 'ultron.approve',
+        'POST api/admin/ultron-studio/voice/profiles/{uuid}/reject' => 'ultron.approve',
+        'POST api/admin/ultron-studio/voice/compile-preview' => CrmPermission::ULTRON_VOICE_MANAGE,
+        'GET api/admin/ultron-studio/voice/publications' => 'ultron.view',
+        'POST api/admin/ultron-studio/voice/publish' => CrmPermission::ULTRON_VOICE_PUBLISH,
+        'POST api/admin/ultron-studio/voice/promote' => CrmPermission::ULTRON_VOICE_PUBLISH,
+        'POST api/admin/ultron-studio/voice/rollback' => CrmPermission::ULTRON_VOICE_PUBLISH,
+        'POST api/admin/ultron-studio/voice/off' => CrmPermission::ULTRON_VOICE_PUBLISH,
+        'GET api/admin/ultron-studio/voice/canary-evidence' => 'ultron.view',
+        'GET api/admin/ultron-studio/voice/brakes' => 'ultron.view',
+        'POST api/admin/ultron-studio/voice/brakes/{uuid}/release' => CrmPermission::ULTRON_VOICE_PUBLISH,
+        'GET api/admin/ultron-studio/voice-lab/status' => 'ultron.view',
+        'GET api/admin/ultron-studio/voice-lab/sessions' => 'ultron.view',
+        'GET api/admin/ultron-studio/voice-lab/sessions/{uuid}' => 'ultron.view',
+        'POST api/admin/ultron-studio/voice-lab/sessions' => CrmPermission::ULTRON_VOICE_LAB_RUN,
+        'POST api/admin/ultron-studio/voice-lab/sessions/{uuid}/end' => CrmPermission::ULTRON_VOICE_LAB_RUN,
+        'POST api/admin/ultron-studio/voice-lab/sessions/{uuid}/verdict' => 'ultron.approve',
+
+        // VOZ Y TELEFONÍA · Hito 8 (D8-22, «API»): el CRM de la telefonía en
+        // routes/voice.php. El registro, las métricas y el estado, con
+        // `telephony.view` (sin datos personales); la puerta de salientes y el
+        // corte, con `telephony.call_place`; los contactos, el consentimiento a
+        // cuatro ojos, las exclusiones y el RNE, con `telephony.contacts_manage`.
+        // El dominio `telephony` no llega al token compartido (CrmPermission) y
+        // los controladores exigen además una persona.
+        'GET api/admin/voice/status' => CrmPermission::TELEPHONY_VIEW,
+        'GET api/admin/voice/calls' => CrmPermission::TELEPHONY_VIEW,
+        'GET api/admin/voice/calls/{uuid}' => CrmPermission::TELEPHONY_VIEW,
+        'GET api/admin/voice/metrics' => CrmPermission::TELEPHONY_VIEW,
+        'POST api/admin/voice/calls' => CrmPermission::TELEPHONY_CALL_PLACE,
+        'POST api/admin/voice/calls/{uuid}/hangup' => CrmPermission::TELEPHONY_CALL_PLACE,
+        'GET api/admin/voice/contacts' => CrmPermission::TELEPHONY_CONTACTS_MANAGE,
+        'POST api/admin/voice/contacts' => CrmPermission::TELEPHONY_CONTACTS_MANAGE,
+        'POST api/admin/voice/contacts/{uuid}/consents' => CrmPermission::TELEPHONY_CONTACTS_MANAGE,
+        'POST api/admin/voice/contacts/{uuid}/consents/confirm' => CrmPermission::TELEPHONY_CONTACTS_MANAGE,
+        'POST api/admin/voice/contacts/{uuid}/revoke' => CrmPermission::TELEPHONY_CONTACTS_MANAGE,
+        'POST api/admin/voice/exclusions' => CrmPermission::TELEPHONY_CONTACTS_MANAGE,
+        'POST api/admin/voice/rne-checks' => CrmPermission::TELEPHONY_CONTACTS_MANAGE,
+
         // Ver el catálogo de roles ya revela el organigrama y qué puede cada
         // uno. Se exige el mismo permiso que para tocarlo: un dominio con una
         // sola llave se entiende mejor que uno con dos que casi coinciden.
         'GET api/admin/roles' => 'roles.manage',
         'GET api/admin/roles/assignable' => 'roles.manage',
         'GET api/admin/roles/permissions' => 'roles.manage',
+    ];
+
+    /**
+     * Las rutas PÚBLICAS de la voz (Hito 8, D8-16), fuera del universo
+     * administrativo (`/api/webhooks/voice/*` y `/api/voice/tools/*`, sin
+     * sesión): no las resuelve {@see resolve()} porque no exigen un permiso del
+     * CRM, sino su propia credencial, que comprueba su controlador antes de
+     * leer nada. Se declaran aquí, con su razón, para que la lista sea cerrada
+     * y revisable (`TelephonyRoutesTest` la compara con la tabla de rutas
+     * real). Todas llevan su tope de cuerpo y su limitador.
+     *
+     * @var array<string, string>
+     */
+    public const PUBLIC_VOICE_ROUTES = [
+        'POST api/webhooks/voice/elevenlabs/post-call' => 'Webhook post-llamada de ElevenLabs: lo autentica la firma HMAC del cuerpo crudo (ElevenLabs-Signature).',
+        'POST api/webhooks/voice/elevenlabs/initiation' => 'Webhook de iniciación de las entrantes: lo autentica el secreto de iniciación en su cabecera fija.',
+        'POST api/voice/tools/{tool}' => 'Server tools del agente de voz (catálogo cerrado): las autentica el Bearer con el secreto de las herramientas.',
+        'POST api/webhooks/voice/twilio/usage-trigger' => 'Aviso de gasto de la subcuenta de voz: lo autentica X-Twilio-Signature con el token de la subcuenta.',
     ];
 
     /**

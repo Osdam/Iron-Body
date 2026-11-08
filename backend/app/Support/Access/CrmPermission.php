@@ -140,6 +140,33 @@ final class CrmPermission
     // ── Administración de roles ─────────────────────────────────────────────
     public const ROLES_MANAGE = 'roles.manage';
 
+    // ── Voz y telefonía (ULTRON STUDIO, Hito 8, D8-22) ──────────────────────
+    //
+    // Las del Studio de voz (`ultron.voice_*`) y las de la telefonía
+    // (`telephony.*`). `ultron.approve` (existente) aprueba también el perfil
+    // de voz y el veredicto del laboratorio hablado ajenos. Reparto por defecto
+    // [P-18]: Super Admin todas; Administrador solo editar el perfil de voz y
+    // ver el registro de llamadas; publicar, el laboratorio hablado (gasta),
+    // llamar y los contactos, solo Super Admin.
+
+    /** Editar el perfil de voz, enviarlo a revisión y previsualizar la compilación. */
+    public const ULTRON_VOICE_MANAGE = 'ultron.voice_manage';
+
+    /** Publicar, promover, revertir y apagar la voz; soltar el freno. Solo Super Admin por defecto. */
+    public const ULTRON_VOICE_PUBLISH = 'ultron.voice_publish';
+
+    /** Abrir sesiones del laboratorio hablado (gasta). Solo Super Admin por defecto. */
+    public const ULTRON_VOICE_LAB_RUN = 'ultron.voice_lab_run';
+
+    /** El registro de llamadas sin datos personales, las métricas y los costes. */
+    public const TELEPHONY_VIEW = 'telephony.view';
+
+    /** Pedir una saliente autorizada y colgar una llamada. Solo Super Admin por defecto. */
+    public const TELEPHONY_CALL_PLACE = 'telephony.call_place';
+
+    /** Contactos, consentimientos, exclusiones y consultas al RNE. Solo Super Admin por defecto. */
+    public const TELEPHONY_CONTACTS_MANAGE = 'telephony.contacts_manage';
+
     /**
      * Equivalencias legado ↔ nuevo. Conceder cualquiera de los dos lados
      * concede el otro: es lo que permite renombrar el vocabulario sin una
@@ -231,10 +258,12 @@ final class CrmPermission
      * Y ULTRON STUDIO (`ultron`): borradores, versiones y aprobaciones los
      * firma una persona, y el diseño del agente no se le enseña a una
      * automatización (los controladores exigen además una persona).
+     * Y la TELEFONÍA (`telephony`, Hito 8, D8-22): una automatización no
+     * llama ni lee el registro de llamadas.
      * Se compara el PRIMER segmento de la clave: `valuations.view_all` y
      * cualquier `valuations.algo.view` futuro quedan fuera igual.
      */
-    public const SHARED_TOKEN_EXCLUDED_DOMAINS = [...self::PERSONNEL_DOMAINS, 'valuations', 'ultron'];
+    public const SHARED_TOKEN_EXCLUDED_DOMAINS = [...self::PERSONNEL_DOMAINS, 'valuations', 'ultron', 'telephony'];
 
     /**
      * Permisos por defecto de cada rol del sistema.
@@ -284,6 +313,13 @@ final class CrmPermission
             // se reparten a mano; asociar campañas y administrar números, sí.
             'ultron.canary_authorize',
             'ultron.integrations_manage',
+            // Hito 8 (D8-22, P-18): publicar la voz y soltar su freno, el
+            // laboratorio hablado (gasta), pedir y colgar llamadas y los
+            // contactos con datos personales: solo Super Admin por defecto.
+            self::ULTRON_VOICE_PUBLISH,
+            self::ULTRON_VOICE_LAB_RUN,
+            self::TELEPHONY_CALL_PLACE,
+            self::TELEPHONY_CONTACTS_MANAGE,
             // Corregir medio o importe de un cobro y devolver dinero (de un
             // cobro o de una venta): dinero que sale de la caja o que cambia de
             // medio en un arqueo. Llegan nuevas y se reparten a mano.

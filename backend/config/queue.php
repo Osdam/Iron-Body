@@ -186,6 +186,23 @@ return [
             'after_commit' => false,
         ],
 
+        // P1 · La VOZ (ULTRON STUDIO H8, D8-4 y D8-12; Enmienda 1, E1-10): el
+        // job que marca una saliente ya aceptada por la puerta, con su worker
+        // propio (`ironbody-voice`, 1 proceso, timeout 30 s y tries=1: un
+        // reintento de la cola podría marcar dos veces). Nunca el carril del
+        // puente de n8n ni `studio-lab`. El nombre de la cola es fijo (`voice`):
+        // el job lo escribe tal cual (TelephonyIsolationTest). retry_after 120 >
+        // timeout 30; si el worker muere a mitad, el job no se repite (tries=1)
+        // y la llamada queda `ambiguous` para la conciliación.
+        'voice' => [
+            'driver' => 'database',
+            'connection' => env('DB_QUEUE_CONNECTION'),
+            'table' => env('DB_QUEUE_TABLE', 'jobs'),
+            'queue' => 'voice',
+            'retry_after' => (int) env('QUEUE_VOICE_RETRY_AFTER', 120),
+            'after_commit' => false,
+        ],
+
     ],
 
     /*
@@ -232,6 +249,9 @@ return [
                 return preg_match('/^-?\d+$/', $valor) === 1 ? min(3600, max(60, (int) $valor)) : 300;
             })(),
         ],
+        // La voz (H8): quien pidió la saliente espera a que suene. Desatendido a
+        // los 120 s (el global): con todo apagado el carril no recibe trabajos.
+        'voice' => ['connection' => 'voice', 'queue' => 'voice', 'priority' => 1, 'slo_wait_ms' => 5000],
     ],
 
     /*

@@ -72,7 +72,7 @@ final class ElevenLabsAgentMapper
     public const TOOL_AUTH_HEADER = 'Authorization';
 
     /** La cabecera fija del webhook de iniciación (D8-16); la lee la telefonía con `hash_equals`. */
-    public const INITIATION_AUTH_HEADER = 'X-IronBody-Voice-Initiation';
+    public const INITIATION_AUTH_HEADER = 'X-Voice-Initiation-Secret';
 
     /** Los eventos post-llamada del agente, en orden de bytes: sin `audio` (D8-16). */
     public const POST_CALL_EVENTS = ['call_initiation_failure', 'transcript'];

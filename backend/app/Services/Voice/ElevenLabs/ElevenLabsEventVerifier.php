@@ -99,24 +99,30 @@ final class ElevenLabsEventVerifier implements VoiceEventVerifier
         $turnos = [];
         $herramientas = [];
         $destinos = [];
+        $guarda = [];
         $transcripcion = is_array($datos['transcript'] ?? null) && array_is_list($datos['transcript']) ? $datos['transcript'] : [];
-        foreach (array_slice($transcripcion, 0, self::MAX_TURNS) as $turno) {
+        foreach (array_slice($transcripcion, 0, self::MAX_TURNS) as $indice => $turno) {
             if (! is_array($turno) || ($turno['role'] ?? null) !== 'agent') {
                 continue;   // los turnos de la persona no se conservan, ni en memoria
             }
-            if (is_string($turno['message'] ?? null) && $turno['message'] !== '') {
-                $turnos[] = $turno['message'];
+            $texto = is_string($turno['message'] ?? null) ? $turno['message'] : '';
+            if ($texto !== '') {
+                $turnos[] = $texto;
             }
+            $delTurno = [];
+            $destinosDelTurno = [];
             foreach (is_array($turno['tool_calls'] ?? null) ? $turno['tool_calls'] : [] as $llamada) {
                 $nombre = is_array($llamada) ? ($llamada['tool_name'] ?? null) : null;
                 if (! is_string($nombre) || preg_match('/^[A-Za-z0-9_-]{1,64}$/D', $nombre) !== 1) {
                     continue;
                 }
                 $herramientas[] = $nombre;
+                $delTurno[] = $nombre;
                 if ($nombre === 'transfer_to_number') {
-                    $destinos[] = self::transferTarget($llamada['params_as_json'] ?? null);
+                    $destinos[] = $destinosDelTurno[] = self::transferTarget($llamada['params_as_json'] ?? null);
                 }
             }
+            $guarda[] = ['index' => $indice, 'text' => $texto, 'tools' => $delTurno, 'transfers' => $destinosDelTurno, 'planResults' => self::planResults($turno['tool_results'] ?? null)];
         }
 
         return new VoiceWebhookVerdict(
@@ -137,6 +143,7 @@ final class ElevenLabsEventVerifier implements VoiceEventVerifier
             toolCalls: $herramientas,
             agentTurns: $turnos,
             transferTargets: $destinos,
+            guardTurns: $guarda,
         );
     }
 
@@ -159,7 +166,9 @@ final class ElevenLabsEventVerifier implements VoiceEventVerifier
             versionId: null,
             branchId: null,
             callSid: $sid,
-            callRef: null,
+            // El `user_id` de la saliente es su `call_ref` (D8-12): casa la fila
+            // si el fallo llega antes de que el job guarde los ids (DF-S2).
+            callRef: VoiceIds::uuidOrNull($datos['user_id'] ?? null),
             durationSeconds: null,
             cost: null,
             failureReason: is_string($motivo) && in_array($motivo, VoiceWebhookVerdict::FAILURE_REASONS, true) ? $motivo : null,
@@ -228,6 +237,26 @@ final class ElevenLabsEventVerifier implements VoiceEventVerifier
         $numero = is_array($argumentos) ? ($argumentos['transfer_number'] ?? null) : null;
 
         return is_string($numero) && $numero !== '' && strlen($numero) <= 32 ? $numero : '?';
+    }
+
+    /**
+     * Lo que devolvió `consultar_planes` en un turno (`result_value`, si no es
+     * un error y no pasa del tope), para que la guarda sepa qué cifras dio la
+     * herramienta en ESA llamada (P-3). Solo en memoria.
+     *
+     * @return list<string>
+     */
+    private static function planResults(mixed $resultados): array
+    {
+        $out = [];
+        foreach (is_array($resultados) && array_is_list($resultados) ? $resultados : [] as $r) {
+            if (is_array($r) && ($r['tool_name'] ?? null) === 'consultar_planes' && ($r['is_error'] ?? false) !== true
+                && is_string($r['result_value'] ?? null) && strlen($r['result_value']) <= self::MAX_TOOL_ARGUMENTS_BYTES) {
+                $out[] = $r['result_value'];
+            }
+        }
+
+        return $out;
     }
 
     private static function nonNegativeInt(mixed $valor): ?int

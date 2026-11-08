@@ -144,6 +144,80 @@ return [
         // `canary` (fase 4a) o `contacts` (fase 4b); cualquier otro valor, el
         // más estrecho: `canary`.
         'scope' => strtolower(trim((string) env('VOICE_OUTBOUND_SCOPE', 'canary'))) === 'contacts' ? 'contacts' : 'canary',
+
+        // [P-10] los segundos de timbre de una saliente; entero recortado a 10–60.
+        'ringing_timeout_seconds' => min(60, max(10, $entero('VOICE_OUTBOUND_RINGING_SECONDS', 30))),
+
+        // [P-13] horario PROPIO de salientes (`HH:MM-HH:MM`, hora de Bogotá):
+        // siempre la intersección con el legal, nunca lo amplía. Vacíos los
+        // dos = solo el legal; uno vacío = ese tipo de día cerrado; mal
+        // escrito = fuera de horario (falla cerrado).
+        'own_hours' => [
+            'weekdays' => trim((string) env('VOICE_OUTBOUND_HOURS_WEEKDAYS', '')),
+            'saturday' => trim((string) env('VOICE_OUTBOUND_HOURS_SATURDAY', '')),
+        ],
+
+        // [P-11] intentos por contacto: 1 al día (Ley 2300, fijo en el código)
+        // y como mucho N a la semana (1–2). La semana: `rolling` (los 7 días
+        // móviles, la lectura más estricta, por defecto) o `calendar` (desde
+        // el lunes 00:00 de Bogotá).
+        'frequency' => [
+            'per_week' => min(2, max(1, $entero('VOICE_FREQUENCY_PER_WEEK', 2))),
+            'week' => strtolower(trim((string) env('VOICE_FREQUENCY_WEEK', 'rolling'))) === 'calendar' ? 'calendar' : 'rolling',
+        ],
+    ],
+
+    // H8, Enmienda 2 (E2-4): publicar la voz (S8) y el laboratorio hablado
+    // (LAB8) se cierran por su PROPIA bandera, además de la credencial (que en
+    // producción ya está desde E1-12). Apagadas, ninguna de las dos sale a la red.
+    'publishing' => [
+        'enabled' => filter_var(env('VOICE_PUBLISHING_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+    ],
+
+    'lab' => [
+        'enabled' => filter_var(env('VOICE_LAB_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+    ],
+
+    // H8, D8-21 y E2-6: las tareas `voice:*` del monitor (OPS8 las programa en
+    // su propio bloque bajo esta bandera). Apagada, nada se programa.
+    'monitor' => [
+        'enabled' => filter_var(env('VOICE_MONITOR_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+    ],
+
+    // H8, D8-14 [P-12]: el horario del PERSONAL que atiende las transferencias
+    // (`HH:MM-HH:MM`, Bogotá). Sin configurar, `solicitar_humano` dice que no
+    // hay nadie (nunca se ofrece transferir).
+    'transfer' => [
+        'staff_hours' => [
+            'weekdays' => trim((string) env('VOICE_TRANSFER_HOURS_WEEKDAYS', '')),
+            'saturday' => trim((string) env('VOICE_TRANSFER_HOURS_SATURDAY', '')),
+        ],
+    ],
+
+    // H8, D8-10 (R-01): los HECHOS que dice `consultar_horarios`. Texto plano
+    // corto, sin teléfonos ni URL. Vacíos, la herramienta dice que no los
+    // tiene (nunca se inventan).
+    'facts' => [
+        'site' => trim((string) env('VOICE_FACTS_SITE', '')),
+        'hours' => trim((string) env('VOICE_FACTS_HOURS', '')),
+    ],
+
+    // H8, D8-18 [P-14]: días que vale una consulta al RNE; entero 0–365. Con 0
+    // (el defecto mientras P-14 no se decida) ninguna vale: el alcance
+    // `contacts` da siempre `rne_check_missing`.
+    'contacts' => [
+        'rne_validity_days' => min(365, max(0, $entero('VOICE_RNE_VALIDITY_DAYS', 0))),
+    ],
+
+    // H8, D8-15: los precios OFICIALES con su fecha, en micro-US$ por minuto,
+    // para la reserva de coste. Cambiarlos es un commit revisado.
+    'prices' => [
+        'as_of' => '2026-11-03',
+        'elevenlabs' => 80000,
+        'twilio_outbound_mobile_co' => 37700,
+        'twilio_outbound_landline_co' => 70000,
+        'twilio_inbound_local_co' => 94500,
+        'twilio_media_streams' => 4400,
     ],
 
     // H8, D8-15: límites. Son TECHOS: ninguno enciende nada.
