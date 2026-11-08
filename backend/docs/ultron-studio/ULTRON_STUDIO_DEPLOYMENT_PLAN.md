@@ -1376,6 +1376,359 @@ De `informe-devops-h7.md` §4 y §8 y de `informe-db.md` §10; ninguna se ha vis
 | `integrations-snapshot` anota alguna instantánea | Una huella de integraciones cambió con el H7 (no debería) | Revisar `GET integrations/config` antes de seguir |
 | El smoke da 429 | Más de 3 ejecuciones por minuto (login) | Esperar. La cuenta ya está en reposo |
 
+## Hito 8 (voz y telefonía): runbook por fases — FASE 1 PREPARADA Y ENSAYADA EN EL BANCO (08-11-2026), SIN EJECUTAR
+
+**Estado (08-11-2026, OPS8-b):** nada del H8 está en producción. Los scripts de la fase 1 están en `ops/` y se ensayaron en el banco (`ops/banco-h8/`, producción de juguete en `7c84cb5` con el estado de E1-12): `--solo-comprobar` EN VERDE, el despliegue en `DESPLIEGUE H8 FASE 1 (BACKEND) COMPLETADO` y el smoke (ver `plans/informes-h8/informe-devops.md`, §OPS8-b). **Donde este texto y los scripts no coincidan, mandan los scripts** del commit que se despliega. Contrato: `ULTRON_STUDIO_H8_CONTRACT.md` («Fases de despliegue», D8-19, D8-20, D8-21 y las enmiendas 1–6).
+
+**Producción de partida** (leída el 08-11-2026 por devops, solo lectura y con la autorización del lead: `git rev-parse HEAD` y `migrate:status | tail`): API **`32a2560`** con la migración ajena `2026_11_06_000001_add_benefit_only_to_plans_table` ya aplicada (lote 133); el H7 completo (`HITO_7_COMPLETED`); ElevenLabs como lo dejó E1-12: piezas del H6 puestas, `ELEVENLABS_ENABLED=true`, verificación guardada el 03-11-2026 a las 22:55 UTC. Por eso el Studio afirma `ELEVENLABS_VERIFIED` hasta el **03-12-2026 a las 22:55 UTC**. `CALLS_ENABLED_IN_CODE = false`, `TWILIO_VOICE_ENABLED=false` y el OTP intacto. El CRM, el que diga `version.json` el día del despliegue.
+
+**Dónde vive cada estado de ElevenLabs (decisión (b) del lead).**
+- `voice:doctor` y la telefonía (`GET admin/voice/status`, `voice:doctor --telefonia`) dicen **`ELEVENLABS_UNVERIFIED`**. Es a propósito: el espacio neutro no guarda evidencia, y la telefonía no lee la verificación hasta la fase 3 (E4-6).
+- El Studio (`integrations-doctor`, la ruta 45) dice **`ELEVENLABS_VERIFIED`**.
+- Los scripts esperan cada estado en su sitio.
+
+### Bloqueantes antes de la fase 1
+
+1. **La rama de voz perdió la ascendencia de producción.** La reescritura autorizada del 08-11-2026 dejó copias de los commits ajenos de planes y beneficios con otro hash: `32a2560` (producción) y `7c84cb5` (`origin/main`) **no son ancestros** del HEAD de la rama, y su base común con `origin/main` es `d828bf7`.
+   - Así, el push a `main` no sería de avance rápido, y el `merge --ff-only` del servidor fallaría (el paso 0 aborta: «origin/main no es avance rápido desde 32a2560»).
+   - **Arreglo, del lead:** unir `origin/main` en la rama con un merge normal, sin `--force` ni reescritura. Los árboles de las copias son idénticos a los originales y el merge sale limpio. Ensayado en el clon del banco (`BANCO_UNIR=7c84cb52`): sin conflictos.
+   - Después, push con avance rápido.
+2. **`7c84cb5` no está en producción** («Un cobro que no da vigencia no es la membresía de nadie»: `MembershipRebuilder` y su prueba, sin migración y fuera de la puerta). El H8 lo llevaría consigo.
+   - El paso 0 lo detecta por parche, aunque esté copiado, y **aborta** («commits ajenos al H8 … que producción no tiene»).
+   - **Decisión del lead (08-11-2026):** el paso 0 lo detecta y lo lista, y el despliegue **solo sigue si se pasa la bandera explícita `--acepta-main=7c84cb5`**. La decide el propietario en el momento de desplegar, con los hashes tal como los imprima el paso 0. Sin la bandera, el despliegue aborta y `--solo-comprobar` termina en «FALTA DECIDIR» (código 3). Un commit aceptado que no esté entre los ajenos también aborta: nada se acepta a ciegas.
+3. **REV8 sin bloqueantes** (puerta 4 del contrato).
+4. **Recomendado, B8 (hallazgo de OPS8-b en el banco):** las 13 rutas del CRM de la telefonía usan `throttle:120,1` y `throttle:30,1` y exigen la sesión en el controlador. Una petición **sin sesión** a `/api/admin/voice/*` suma en el cubo por IP que Laravel comparte con el login del CRM (`throttle:8,1`): 9 seguidas desde la misma IP dejan el login en 429 durante un minuto (medido en el banco).
+   - Riesgo: una pestaña con la sesión caducada en la oficina podría dejar sin login a toda la oficina, el mismo caso que ya se resolvió en la agenda y en valoraciones.
+   - Arreglo: limitadores con nombre, por credencial, como `marketing-agenda`.
+
+### Fase 1 (todo apagado): qué entra y qué no
+
+| Pieza | Qué cambia | Quién lo nota |
+|---|---|---|
+| Migraciones `2026_11_10_100001` (Studio, 4 tablas) y `…100002` (telefonía, 7 tablas) | Esquema `ultron_studio_%` 44/50/4/14 → **68/84/6/18**; `voice_%` 0 → **27/51/3/7**; 4 funciones INVOKER del dueño; `iron_app` en `ra` en las 6 de solo inserción y en `rawd` en las 5 con estados (E3-5). La 100001 pide SHARE ROW EXCLUSIVE sobre `ultron_studio_versions` (choca con un escritor, no con un lector) | Nadie |
+| 21 rutas del Studio (56 → 77) y 17 de la telefonía (13 del CRM y 4 públicas) | Cerradas: banderas apagadas (409), sin credencial (401), validación (422) | El CRM nuevo; nadie más |
+| `routes/console.php` | Bloque de voz bajo `VOICE_MONITOR_ENABLED`, **apagado**: no programa nada | Nadie |
+| 9 variables explícitas | 5 interruptores en `false` (`VOICE_INBOUND/OUTBOUND/LAB/MONITOR_ENABLED`, `ULTRON_STUDIO_VOICE_PUBLISHING_ENABLED`) y 4 cerrojos de gasto (`VOICE_INBOUND_DAILY_CAP=0`, `VOICE_DAILY_BUDGET_USD=0`, `VOICE_LAB_DAILY_BUDGET_USD=0`, `VOICE_LAB_DRIVER=fake`) | Nadie |
+| CRM | Sección «Voz y telefonía» (`marketing/ultron-studio/voz`, chunk `studio-voice-page`) y su enlace en el tablero | Quien tenga `ultron.view`: ve la voz apagada |
+
+**Qué NO entra en la fase 1:**
+- ninguna pieza del H8 (secretos, subcuenta, número, bases: el paso 0 aborta si encuentra una, porque cambiaría la huella de voz, S8-b 9);
+- el worker `ironbody-voice` (solo la saliente usa la cola `voice`; se instala en la 4a);
+- `composer install` (el H8 no cambia `composer.lock`; si cambia, el paso 0 aborta);
+- nginx, DNS, TLS, el firewall y el crontab.
+
+**Orden obligatorio:** backend → smoke del backend → CRM. Publicar el CRM antes dejaría la página nueva hablando con rutas que no existen, y `deploy-h8-crm-fase1.sh` lo comprueba: sin token, `admin/voice/status` tiene que dar 401 y no 404.
+
+#### 1. Respaldo (en el servidor, como root, menos de 2 horas antes del paso 5)
+
+```bash
+TS=$(date -u +%Y%m%d-%H%M%S); BK=/var/backups/ironbody/ultron-studio-h8-fase1-$TS
+( umask 077
+  mkdir -p "$BK"
+  git -C /var/www/api rev-parse HEAD > "$BK/api-commit.txt"                       # empieza por PREVIO (hoy, 32a2560)
+  sudo -u postgres pg_dump -Fc ironbody > "$BK/ironbody.dump"
+  sha256sum "$BK/ironbody.dump" > "$BK/ironbody.dump.sha256"                      # con la ruta absoluta: el paso 0 lo comprueba
+  tar -C /var/www -czf "$BK/app-crm.tgz" app
+  install -m 600 -o root -g root /var/www/api/backend/.env "$BK/env.backup"
+  cp -a /var/www/api/backend/bootstrap/cache "$BK/bootstrap-cache"
+  cp -a /etc/supervisor/conf.d "$BK/supervisor-conf.d" )
+pg_restore -l "$BK/ironbody.dump" | grep -c 'TABLE DATA'                          # al menos 227 (MIN_TABLAS del script)
+stat -c '%a %U %n' "$BK" "$BK"/*; du -h "$BK/ironbody.dump"; echo "BK=$BK"
+```
+
+**Nunca se borra un respaldo.** La política de respaldos del H8 está más abajo (E3-7).
+
+#### 2. Copiar los scripts (desde el Mac, con el árbol del backend en `<commit-backend>` y `git status` limpio)
+
+```bash
+O=backend/docs/ultron-studio/ops
+shasum -a 256 $O/deploy-h8-backend-fase1.sh $O/h8-schema-check.sql $O/smoke-h8.py $O/smoke-run-h8.sh $O/smoke-h6.py $O/perf-h8/presupuestos-h8.json
+scp $O/deploy-h8-backend-fase1.sh $O/h8-schema-check.sql $O/smoke-h8.py $O/smoke-run-h8.sh $O/smoke-h6.py $O/perf-h8/presupuestos-h8.json ironbody-vps:/root/   # el JSON de PERF8 llega como /root/presupuestos-h8.json
+ssh ironbody-vps 'chmod 700 /root/deploy-h8-backend-fase1.sh /root/smoke-run-h8.sh && chmod 600 /root/h8-schema-check.sql /root/smoke-h8.py /root/smoke-h6.py /root/presupuestos-h8.json && sha256sum /root/deploy-h8-backend-fase1.sh /root/h8-schema-check.sql /root/smoke-h8.py /root/smoke-run-h8.sh /root/smoke-h6.py /root/presupuestos-h8.json'
+```
+
+Son 6 ficheros. Los presupuestos son los de PERF8 (`ops/perf-h8/presupuestos-h8.json`, medidos con datos: p95 y bytes por ruta), los únicos (el provisional de OPS8-b se retiró). El smoke imprime cuál usa y su huella; recalibrar es editar ese JSON en un commit, nunca el código. `smoke-h6.py` viaja porque `smoke-h8.py` usa su detector de fugas. El lanzador borra al terminar sus copias de `/root`.
+
+#### 3. Esquema antes (solo lectura)
+
+```bash
+sudo -u postgres psql -X -v ON_ERROR_STOP=1 -v owner=iron -v app=iron_app -x -d ironbody < /root/h8-schema-check.sql
+```
+
+**Esperado:**
+- Studio 44/50/4/14 y `voice_%` 0/0/0/0;
+- `funciones_h8` 0;
+- `funcion_es_la_de_f` t;
+- `dueno_versiones` iron;
+- `create_en_public` t;
+- `existe_rol_app` 1;
+- `migraciones_h8_registradas` 0;
+- 0 filas de cerrojos de escritura en versiones.
+
+**Se para si** hay tablas `voice_*` antes de migrar, si falta `iron_app` (en `production` las dos migraciones se niegan) o si hay escritores abiertos de versiones (esperar y repetir).
+
+#### 4. Ensayo en el servidor (solo lectura, salvo el `git fetch`)
+
+```bash
+bash /root/deploy-h8-backend-fase1.sh <commit-backend> "$BK" --solo-comprobar [--acepta-main=7c84cb5]
+```
+
+**Termina en `COMPROBACIONES PREVIAS EN VERDE (no se ha tocado nada)`.**
+
+Comprueba:
+- `PREVIO` = el HEAD de producción;
+- `origin/main` = `<commit-backend>` y avance rápido desde `PREVIO`;
+- en el diff, solo las 2 migraciones del H8;
+- las pendientes (ficheros de `origin/main` menos la tabla `migrations`): exactamente las que falten del H8;
+- la puerta de diff (OTP, motor, API interna, Meta, catálogo y dependencias), que solo cruzan los 4 controladores públicos de la voz, el job de la saliente y `console.php`, este último solo añadiendo líneas;
+- los commits ajenos por parche;
+- el respaldo (huella, 700/600, al menos 227 tablas, `env.backup` = el entorno);
+- las 9 claves ausentes o iguales, ninguna pieza del H8 ni del número, `TWILIO_VOICE_*` apagado;
+- el esquema de partida, la función de F y que no haya escritores de versiones;
+- 56 rutas y 0 de voz;
+- el programador con su código de salida: 0 del Studio y 0 de voz;
+- el monitor del H7 apagado;
+- que el Studio afirme `ELEVENLABS_VERIFIED`, y cuántas horas le quedan;
+- `integrations-doctor --expect=twilio:connected_otp_only,twilio_voice:not_configured,elevenlabs:ELEVENLABS_VERIFIED` con código 0;
+- el monitor en seco sin `config_drift`;
+- 13 workers y 0 en BACKOFF/FATAL, y la facturación;
+- que el entorno parsea.
+
+Todo queda en `/root/h8-fase1-comprobar-<fecha>.log` (600).
+
+**Con cualquier `ABORTA` no se ha tocado nada:** se aclara y se repite. Las causas conocidas están en «Incidencias previsibles».
+
+#### 5. Backend
+
+```bash
+bash /root/deploy-h8-backend-fase1.sh <commit-backend> "$BK" [--acepta-main=7c84cb5]      # la bandera, solo si el propietario lo decide ahí
+```
+
+El registro queda en `/root/h8-fase1-<fecha>.log` (600).
+
+**Lo que hace, en orden:**
+1. El paso 0.
+2. `merge --ff-only`, como root con `umask 022`, y comprobación de que `www-data` lee cada fichero del merge.
+3. Las 9 variables, añadidas solo si faltan, y comprobación de que el entorno parsea.
+4. `sudo env PGOPTIONS="-c lock_timeout=5s" /usr/local/bin/ironbody-migrate`: hasta 3 intentos ante un 55P03, con 15 s entre ellos. Si las dos migraciones ya estaban aplicadas por otro, no se llama y se comprueba el esquema.
+5. **La compuerta `68 84 6 18 27 51 3 7`**: sin ella no hay `route:cache`.
+6. Las aserciones del esquema: 4 funciones INVOKER del dueño, ningún disparador apagado, F intacta, las 11 tablas de `iron`, privilegios uno a uno, 0 filas, y las tablas del H6/H7 iguales.
+7. `config:cache` y `route:cache` como `www-data` con `umask 077`, en 600 y nunca a través de un enlace.
+8. `queue:restart`.
+9. Las comprobaciones posteriores:
+   - rutas `77 18 8 10 15 6 13 5 8 4` y `auth:coverage --unmapped` vacío;
+   - la configuración efectiva toda apagada;
+   - el motor, el H4–H7 y la voz iguales que antes;
+   - el programador con el mismo total y 0/0, y la cola `voice` vacía;
+   - 13 workers dos veces;
+   - la sanidad HTTP: 401 y `no-store` en lo nuevo, 401 en las 4 públicas sin credencial, 413 con 9 000 bytes en la iniciación, el 413 del Studio y el 403 del OTP;
+   - las colas, los sellos, los secretos y `publication-check`;
+   - el monitor con el mismo veredicto y sin deriva;
+   - el entorno igual al respaldo salvo las 9 claves;
+   - `voice:doctor --telefonia`;
+   - el `integrations-doctor` de la fase;
+   - `integrations-snapshot` sin instantáneas nuevas;
+   - 0 ERROR en el log.
+
+**Termina en `DESPLIEGUE H8 FASE 1 (BACKEND) COMPLETADO`.** En el banco tardó unos 35 s, con 0 desvíos.
+
+#### 6. Esquema después (solo lectura)
+
+El mismo `h8-schema-check.sql`. **Esperado:**
+- Studio 68/84/6/18 y `voice_%` 27/51/3/7;
+- `disparadores_apagados` 0;
+- `funciones_h8` 4 y `funciones_h8_definer` 0, las cuatro de `iron`;
+- la huella de F igual;
+- `migraciones_h8_registradas` 2;
+- las 11 tablas de `iron`;
+- `ra---s` en `ultron_studio_voice_publications`, `voice_brakes`, `voice_call_events`, `voice_consents`, `voice_exclusions` y `voice_rne_checks`, y `rawd-s` en las otras 5;
+- `filas_h8` todas a 0.
+
+#### 7. Smoke (escribe en la fila 32 de `admins` y en `admin_sessions`)
+
+```bash
+ssh ironbody-vps 'SMOKE_BUDGETS_OUT=/root/h8-presupuestos-medidos-$(date -u +%Y%m%d).json bash /root/smoke-run-h8.sh'
+```
+
+**Antes de activar la cuenta**, el lanzador comprueba:
+- la voz toda apagada (las 5 banderas, la constante cerrada y los dos monitores);
+- el programador: 0 del Studio y 0 de voz, con su código de salida;
+- `voice:doctor --telefonia` en el estado de la fase 1;
+- el monitor del H7 sin deriva;
+- 18 + 7 tablas.
+
+**El smoke (`smoke-h8.py`):**
+- el login primero;
+- la telefonía con sesión: constante cerrada, banderas apagadas, cadena vacía, freno suelto, cupos a 0, listas vacías, 404 a lo inventado y 422 a cada POST vacía;
+- las 21 del Studio con sesión: lecturas 200, inventados 404, laboratorio 409 `voice_lab_disabled`, publicar y promover 409 `voice_publishing_disabled`, y revertir y apagar solo con cuerpos inválidos (422);
+- la ruta 45: `ELEVENLABS_VERIFIED`, publicar apagado y las 7 llaves de `can`;
+- los presupuestos;
+- **después**, lo anónimo:
+  - las 13 del CRM de la telefonía dan 401 y las 4 públicas, 401 con su motivo;
+  - sus topes, 413;
+  - una post-llamada de exactamente 1 MB sin firma: si contesta Laravel con 401, nginx deja pasar el tope entero; si contesta nginx con un 413 HTML, hay que subir su `client_max_body_size` antes de la fase 3;
+  - las 21 del Studio sin sesión, 401;
+- el detector de fugas.
+
+**En la base y los registros, antes y después:**
+- el recuento exacto de las 25 tablas;
+- las filas que nombran a la cuenta;
+- los incidentes y la cola `voice`;
+- en el canal `voice`, solo los 4 rechazos esperados;
+- 0 ERROR.
+
+**Red saliente:** en el servidor, un muestreo informativo de los sockets de PHP hacia ElevenLabs (débil: las IP de una CDN se comparten). Lo estricto es la base y el canal `voice`. En el banco, la valla.
+
+**Esperado: código 3**, y lo único OMITIDO es el presupuesto de `GET voice-lab/sessions`: el laboratorio está apagado (409 `voice_lab_disabled`), como en la fase 1. Cualquier otro OMITIDO, o un FALLO, no se espera. Sin filas positivas: solo se envía lo que el servidor rechaza antes de escribir. **Ritmo:** la telefonía del CRM comparte el cubo por IP con el login (bloqueante 4); el smoke hace el login primero y no pasa de 25 peticiones por minuto a `/api/admin/voice/*`. No se lanzan dos pasadas en el mismo minuto.
+
+#### 8. CRM (desde el Mac)
+
+```bash
+bash backend/docs/ultron-studio/ops/deploy-h8-crm-fase1.sh <commit-crm> <commit-crm-en-producción> /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body_Front --solo-comprobar   # build y dist, sin publicar
+bash backend/docs/ultron-studio/ops/deploy-h8-crm-fase1.sh <commit-crm> <commit-crm-en-producción> /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body_Front
+```
+
+**Lo que hace:**
+- comprueba que el backend del H8 ya sirve: 401 en `admin/voice/status` y en `admin/ultron-studio/voice/publications`;
+- el árbol limpio en el commit del build, igual a `origin/main` y conteniendo el commit de producción;
+- `npm ci` solo si cambia el lock;
+- `npm run build:prod` y la comprobación del sello;
+- el chunk de voz (selector `app-ultron-studio-voice`) y el del tablero (`data-voz-enlace` y la ruta), con el main del build importándolos;
+- respaldo en el servidor (`index.html`, `version.json` y `app.tgz` de todo `/var/www/app`);
+- `rsync` **sin `--delete`** y dueños `root:root`;
+- la verificación pública: `version.json`, el main nuevo, el viejo, el chunk de voz y el del tablero en 200, y `/marketing/ultron-studio` y `/marketing/ultron-studio/voz` en 200.
+
+**Imprime la orden exacta de su vuelta atrás.**
+
+#### 9. A los 15 minutos y a las 24 horas (solo lectura)
+
+```bash
+cd /var/www/api/backend
+sudo -u www-data php artisan voice:doctor --telefonia                                   # constante cerrada, banderas apagadas, cadena none/none, freno suelto
+sudo -u www-data php artisan ultron-studio:monitor --check=publication --dry-run        # 0
+supervisorctl status | grep -c RUNNING                                                  # 13
+sudo -u postgres psql -X -Atq -d ironbody -c "SELECT count(*) FROM failed_jobs;"        # igual que en el paso 0
+grep -c 'production.ERROR' storage/logs/laravel.log                                     # frente al de antes
+ls storage/logs/voice-*.log 2>/dev/null && grep -hoE '\] [a-z]+\.[A-Z]+: [a-z0-9_.]+' storage/logs/voice-*.log | sort | uniq -c   # solo rechazos de rutas públicas, si alguien las tocó
+```
+
+#### 10. Antes del 03-12-2026 a las 22:55 UTC: la verificación de ElevenLabs (decisión (c) del lead)
+
+`ELEVENLABS_VERIFIED` caduca a los 30 días de la última verificación «ok». En la fase 1, la verificación semanal está programada, pero en el bloque de voz, que está apagado. **Antes de esa fecha**, una de dos, con autorización:
+- **a mano:** `cd /var/www/api/backend && sudo -u www-data php artisan ultron-studio:integrations-snapshot --verify-voice`. Hace un GET de solo lectura al agente de verificación y guarda la evidencia. Esperado: «credenciales válidas; evidencia guardada». Con la clave nueva si ya se rotó (E2-2);
+- **encender el monitor de voz** (`VOICE_MONITOR_ENABLED=true`, con el mando de las fases 2–4b), que programa la verificación los lunes a las 07:20 de Bogotá.
+
+**Encender el monitor del Studio (H7) no renueva la verificación:** solo avisa cuando caduca, y eso si se le ha fijado la expectativa de la fase (paso 11). Si caduca sin renovarse, el Studio pasa a `ELEVENLABS_UNVERIFIED` (clasificación `degraded`). Nada se rompe (las salientes siguen fallando cerradas, E4-6), pero un ensayo posterior de este script aborta en el paso 0 hasta renovarla.
+
+#### 11. Antes de encender el monitor del H7: su expectativa de la fase 1 (decisión (d) del lead)
+
+El defecto del código sigue en `elevenlabs:ELEVENLABS_NOT_CONFIGURED`: no se cambia. Encendido así, abriría un incidente `integrations_drift`. **Antes de `h7-monitor-scope.sh on off`**, la expectativa se fija en el entorno, en el mismo fichero (mismo inodo) y con copia previa:
+
+```bash
+cd /var/www/api/backend
+install -m 600 -o root -g root .env /root/env-pre-h8-expect-$(date -u +%Y%m%d-%H%M%S)
+python3 - .env <<'PY'
+import re, sys
+p = sys.argv[1]
+s = open(p, encoding='utf-8').read()
+v = 'twilio:connected_otp_only,twilio_voice:not_configured,elevenlabs:ELEVENLABS_VERIFIED'
+n = len(re.findall(r'(?m)^[ \t]*ULTRON_STUDIO_MONITOR_EXPECT[ \t]*=.*$', s))
+assert n <= 1, 'clave repetida: deduplicar a mano'
+s = re.sub(r'(?m)^[ \t]*ULTRON_STUDIO_MONITOR_EXPECT[ \t]*=.*$', '  ULTRON_STUDIO_MONITOR_EXPECT=' + v, s) if n else s.rstrip('\n') + '\n  ULTRON_STUDIO_MONITOR_EXPECT=' + v + '\n'
+with open(p, 'r+', encoding='utf-8') as f:
+    f.seek(0); f.write(s); f.truncate()
+print('expectativa escrita (no es un secreto)')
+PY
+sudo -u www-data php -r 'require "vendor/autoload.php"; Dotenv\Dotenv::createArrayBacked(".")->load(); echo "parsea\n";'
+sudo -u www-data sh -c 'umask 077; php artisan config:cache -q'
+sudo -u www-data php artisan ultron-studio:monitor --check=integrations --dry-run            # integrations: OK
+```
+
+En las fases siguientes, cada mando reescribe esta expectativa con la de su fase (tabla de abajo).
+
+### Fases 2 → 3 → 4a → 4b
+
+Cada fase pide **autorización escrita** del propietario, con su entorno, su impacto y su vuelta atrás declarados antes (protección 13). Ninguna se encadena con la siguiente sin su criterio de entrada. **El mando `h8-voice-scope.sh` está pendiente (OPS8):** mueve las banderas en el mismo fichero, con copia previa y `config:cache` como `www-data`, como `h7-monitor-scope.sh`. Sin él no se enciende ninguna fase: las ediciones a mano del entorno de producción no son el procedimiento.
+
+| Fase | Criterio de entrada | Qué se enciende o se pone | Expectativa del monitor | Vuelta atrás |
+|---|---|---|---|---|
+| **2. Credenciales y número** | La fase 1 estable 24 h; B-6 hecho [P-4]; [P-5], [P-21], [P-22] y [P-23] decididos; **la clave de ElevenLabs rotada (E2-2, abajo)**; el plan de pago con telefonía (P-22) | Las piezas del propietario: la subcuenta y sus 2 keys, el token de firma, el número (`TWILIO_VOICE_FROM`), `ELEVENLABS_AGENT_PHONE_NUMBER_ID`, `ELEVENLABS_INITIATION_SECRET`, las referencias de los secretos y `VOICE_WEBHOOK_BASE_URL`. La importación del número en ElevenLabs. **`VOICE_MONITOR_ENABLED=true`** en cuanto el número esté importado: la conciliación avisa de cualquier llamada que no haya pedido Laravel. El laboratorio hablado con presupuesto mayor que 0 (`VOICE_LAB_ENABLED=true`, `VOICE_LAB_DRIVER=elevenlabs`). **La configuración autorizada se reconoce otra vez** (la huella de voz cambia). **Ni una llamada telefónica** | `twilio_voice:disabled` (número sin bandera) o `connected_voice`; `elevenlabs:ELEVENLABS_VERIFIED` | Nivel 2 de D8-20: `voice/off`, `ELEVENLABS_ENABLED=false`. Nivel 3: revocar las keys en las consolas |
+| **3. Entrantes en canario** | La fase 2 verificada; [P-7] a [P-9], [P-12], [P-16] y [P-24] decididos; la **salud del webhook** automatizada (B8, decisión (f)); nginx deja pasar 1 MB a la post-llamada (el INFO del smoke); el lector de la verificación de E4-6 (B8); canarios de voz activos (fase 2 del H6) | El commit `voice(calls-open)`, desplegado; una publicación de voz en `canary`; `VOICE_INBOUND_ENABLED=true`, `VOICE_INBOUND_DAILY_CAP` > 0 y `TWILIO_VOICE_ENABLED=true` | `twilio_voice:connected_voice`; `elevenlabs:ELEVENLABS_VERIFIED` | Nivel 0: `VOICE_INBOUND_ENABLED=false`. Nivel 0b: `voice:hangup --all --confirm`. Nivel 1: revertir la publicación |
+| **4a. Salientes a canarios** | La 3 estable 24 h y N llamadas sin incidencias; **el worker `ironbody-voice` instalado y en RUNNING** (borrador en `docs/ops/supervisor/ironbody-voice.conf`; antes de copiarlo, comprobar la conexión `voice`, E1-10: 14 RUNNING) | `VOICE_OUTBOUND_ENABLED=true` con alcance `canary`, `TWILIO_VOICE_DAILY_CALL_CAP` pequeño (p. ej., 3) y `VOICE_DAILY_BUDGET_USD` > 0 | La misma | Nivel 0: `VOICE_OUTBOUND_ENABLED=false`; 0b; 1 |
+| **4b. Contactos con consentimiento** | La 4a estable; **el visto bueno legal**; [P-11], [P-13] a [P-15] y [P-20]; el RNE decidido (P-14) | `VOICE_OUTBOUND_SCOPE=contacts` y `VOICE_RNE_VALIDITY_DAYS` > 0 | La misma | `VOICE_OUTBOUND_SCOPE=canary` o nivel 0 |
+
+**Cómo se suelta el freno (D8-19).**
+- El freno lo abren solos:
+  - una violación de la guarda;
+  - un `seal_mismatch`;
+  - la deriva del agente o del número (`agent_drift` con `trigger: number_drift`, E6-1);
+  - el techo de gasto;
+  - una llamada que Laravel no inició.
+- **Nunca se suelta solo.** Lo suelta una persona con `ultron.voice_publish` (por defecto, solo el Super Admin), con una nota de 5 a 500 caracteres. Desde el CRM («Voz y telefonía» → freno), o con `POST /api/admin/ultron-studio/voice/brakes/{uuid}/release` `{clientRequestId, note}`.
+- El libro lo registra, y cada apertura abrió un incidente de IRON GUARD.
+- **Antes de soltarlo**, se aclara la causa con `GET voice/brakes` y `voice:reconcile --json`. Soltar sin causa conocida no es el procedimiento.
+
+**Rotación de la clave de ElevenLabs antes de la fase 2 (E2-2; la del 03-11 viajó por el chat).**
+1. El propietario crea una clave nueva en la consola, acotada y con cupo de créditos (P-22).
+2. La pone en el servidor sin pasar por el chat, con el procedimiento de `ULTRON_STUDIO_ELEVENLABS_READY.md` (pasos 1–6: el fichero de la clave en 600 y `el-verificar.sh`).
+3. `ultron-studio:integrations-snapshot --verify-voice` (un GET) tiene que dar «credenciales válidas».
+4. **Solo entonces** se revoca la clave vieja en la consola.
+5. La configuración autorizada se reconoce otra vez, porque cambia la huella de la clave.
+
+**Registrar en ElevenLabs los dos secretos propios (el del webhook y el de las herramientas) sin imprimirlos.** E1-12 los generó en el servidor, y aún no están registrados.
+- **Preferido: por la API, desde el servidor.** Ninguna persona ve el valor, ni pasa por un terminal, un chat o un registro.
+  - PHP lee el secreto y la clave de la configuración y se los pasa a `curl` por la entrada estándar (`--data-binary @-`, con la cabecera de la clave desde un fichero de cabeceras en 600 dentro de un `mktemp -d` en 700). Nunca en la línea de órdenes, que verían `ps` y el historial.
+  - ElevenLabs devuelve el **id** del secreto, que no es secreto y va a `ELEVENLABS_TOOL_SECRET_REF`. El del webhook va a `ELEVENLABS_POST_CALL_WEBHOOK_REF`.
+  - **[Por confirmar en la referencia oficial el día que se haga]:** la ruta exacta (`/v1/convai/secrets`), si un webhook HMAC admite un secreto propio o lo genera ElevenLabs, y la forma de la respuesta.
+- **Si la consola es la única vía:** el propietario abre su propia sesión SSH y lee el valor una sola vez en su pantalla (`sudo -u www-data php -r '…'`). Lo pega en la consola y limpia el terminal (`clear` y fuera del historial). Nunca lo copia a un chat, una nota ni un ticket.
+- **Si ElevenLabs genera el del webhook:** se hace al revés. El propietario lo pega en un `read -rs` (sin eco) del mando de la fase 2, que lo escribe en el entorno sin imprimirlo.
+- Después, en los dos casos:
+  - `voice:doctor` dice las piezas por nombre, sin valores;
+  - el smoke compara los cuerpos con las huellas saladas de los secretos del servidor;
+  - un secreto que haya pasado por el chat se da por quemado y se rota.
+
+### Política de respaldos del H8 (E3-7)
+
+- **Restauración completa** (`pg_dump -Fc` → `pg_restore`, esquema y datos): funciona, porque los disparadores se crean después de los datos. Es la vía por defecto, siempre a una **base aparte** y nunca encima de la viva, con dueños (sin `--no-owner`) y coordinada por `database-specialist` con autorización (`docs/ops/BACKUPS.md`, «Restauración real»).
+- **Restauración de solo datos** sobre un esquema ya migrado: **falla**, porque los disparadores de «nace en su estado inicial» rechazan llamadas, perfiles, agentes y sesiones en estados posteriores (R-2 de DB8). Solo se hace con `pg_restore --data-only --disable-triggers` como superusuario, sabiendo que durante la carga **no hay ninguna guarda**: ni las de solo inserción, ni las de transiciones, ni las de la cadena de voz. Después, `h8-schema-check.sql` tiene que dar `disparadores_apagados` 0 y la cadena de voz tiene que verificar.
+- **Nunca `migrate:rollback` en producción:** `down()` se niega con datos y deja las tablas (D8-20, nivel 4).
+- Cada fase lleva su respaldo con el bloque del paso 1 (`ultron-studio-h8-<fase>-<fecha>`), de menos de 2 horas. **Nunca se borra un respaldo.** Una supresión de la Ley 1581 hecha después obliga a repetirla sobre cualquier respaldo restaurado.
+
+### Vuelta atrás de la fase 1
+
+**No hay bandera que bajar:** todo está apagado.
+
+**Código** (solo si producción sigue en el commit del H8; si se desplegó otra cosa después, se planea un revert con devops):
+
+```bash
+BK=/var/backups/ironbody/ultron-studio-h8-fase1-<fecha UTC>; FASE1=<commit-backend>
+[ "$(git -C /var/www/api rev-parse HEAD)" = "$(git -C /var/www/api rev-parse "$FASE1")" ] || { echo "producción ya no está en el commit del H8: no hacer checkout"; exit 1; }
+( cd /var/www/api && umask 022 && git checkout -q --detach "$(cat "$BK/api-commit.txt")" )      # hoy, 32a2560
+cd /var/www/api/backend && sudo -u www-data sh -c 'umask 077; php artisan config:cache -q && php artisan route:cache -q'
+stat -c '%U %a %F' bootstrap/cache/config.php bootstrap/cache/routes-v7.php                      # www-data 600 regular file
+sudo -u www-data php artisan queue:restart
+sudo -u www-data php artisan route:list --path=admin/ultron-studio --json | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))'   # 56
+supervisorctl status | grep -c RUNNING                                                            # 13
+```
+
+- **Lo que no vuelve:** las 11 tablas quedan vacías y sin lector; no molestan. Quitarlas es de `database-specialist`, con autorización y nunca con `migrate:rollback`. Las 9 variables quedan y el código anterior no las lee; si se quieren fuera, se restaura `env.backup` (mismo dueño y modo) y `config:cache`.
+- **CRM:** la orden que imprimió `deploy-h8-crm-fase1.sh`, que restaura `index.html` y `version.json`; o `tar -xzpf <BK>/app.tgz -C /var/www`.
+- **Volver al H8:** `git checkout -q main`, las mismas cachés, `queue:restart` y el smoke del H8.
+
+### Incidencias previsibles durante la fase 1
+
+| Síntoma | Causa | Qué hacer |
+|---|---|---|
+| `origin/main no es avance rápido desde 32a2560` | La rama reescrita sin volver a unir `origin/main` (bloqueante 1) | El lead une `origin/main` en la rama (merge) y empuja con avance rápido |
+| `commits ajenos al H8 … que producción no tiene: …` (o `FALTA DECIDIR` en el ensayo) | `7c84cb5` u otro trabajo ajeno sin desplegar (bloqueante 2) | Lo despliega su dueño antes, o el propietario lo acepta al desplegar con `--acepta-main=<commits>` |
+| `migraciones pendientes en origin/main frente a la base` | Migraciones ajenas sin aplicar en producción | `ironbody-migrate` las aplicaría todas (lección del H7): se despliegan antes por su vía |
+| `las dos migraciones del H8 YA están aplicadas` (AVISO) | Un `migrate` ajeno las aplicó | No es un fallo: el script no vuelve a migrar y comprueba el esquema |
+| `el Studio no afirma ELEVENLABS_VERIFIED` | La verificación tiene más de 30 días (paso 10) | Renovarla (un GET, con autorización) y repetir |
+| `… está en el entorno: es una pieza de la fase 2` | Alguien puso ya una pieza del H8 o el número | Aclararlo con el propietario: cambiaría la huella de voz |
+| 55P03 en la migración | Un escritor de `ultron_studio_versions` (alguien guardando en el Studio) | El script reintenta 3 veces. Si se agota, `h8-schema-check.sql` para ver quién y **relanzar el mismo comando** (reanuda) |
+| El login del smoke da 429 | Más de 8 peticiones anónimas o logins por minuto desde la IP del servidor (el cubo compartido, bloqueante 4) | Esperar un minuto. La cuenta queda en reposo |
+| El smoke informa de que nginx corta la post-llamada de 1 MB | `client_max_body_size` menor que el tope | Subirlo antes de la fase 3 (cambio de nginx con autorización: `nginx -t` y `reload`) |
+
 ## Fases siguientes (no incluidas aquí)
 
 *(Actualización del 02-11-2026: el Hito 6 se ejecutó en su fase 1 el 02-11-2026, y el Hito 7 tiene su runbook en «Hito 7», más arriba, sin ejecutar.)*

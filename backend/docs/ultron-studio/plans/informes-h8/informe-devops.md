@@ -128,3 +128,113 @@ Las m1–m10 corrieron sobre la suite de **67** casos, **antes** de alinearla co
 
    Lo que sí queda abierto es de E1-12: **la clave de ElevenLabs de producción viajó por el chat y hay que rotarla antes de la fase 3.** La rotación es del propietario y exige su autorización.
 8. **Estado del banco.** Está montado y **parado**, en `~/.cache/ironbody-banco-h8` y con la base `ultron_studio_banco_h8_ops`, para que OPS8-b lo reutilice. Cómo limpiarlo, en el §3.
+
+---
+
+# §OPS8-b (paso 3) · despliegue de la fase 1, smoke, monitor de voz, simulador y runbook — 08-11-2026
+
+**Entorno:** el banco local (Mac) y **dos lecturas de producción autorizadas por el lead**, por SSH y como `www-data`:
+- `git rev-parse HEAD`;
+- `migrate:status | tail`.
+
+Nada más en el VPS. **No es un despliegue: nada del H8 está en producción.** Sin commit.
+
+## Ficheros (lista exacta)
+
+| Fichero | Estado |
+|---|---|
+| `docs/ultron-studio/ops/deploy-h8-backend-fase1.sh` (nuevo) | `PREVIO=32a2560`. Detecta por parche los commits ajenos y **solo sigue con `--acepta-main=<commits>`** (decisión del lead). **Ensayado en el banco** |
+| `docs/ultron-studio/ops/h8-schema-check.sql` (nuevo) | Solo lectura (recuentos de E3-5, privilegios y cerrojos). Las mismas consultas van dentro del script |
+| `docs/ultron-studio/ops/deploy-h8-crm-fase1.sh` (nuevo) | Con `--solo-comprobar`. Ver «CRM», abajo |
+| `docs/ultron-studio/ops/smoke-h8.py` y `smoke-run-h8.sh` (nuevos) | **Ensayados en el banco** |
+| ~~`docs/ultron-studio/ops/presupuestos-h8.json`~~ | **Retirado** al llegar `ops/perf-h8/presupuestos-h8.json` de PERF8 (11 rutas, con medidas), que cubre todas las mías. Mis `maxBytes` se quedaban cortos con datos reales (aviso de PERF8). El smoke, el banco y el runbook usan el de PERF8 |
+| `routes/console.php` | El bloque de voz: +42/−0 |
+| `tests/Feature/Voice/VoiceMonitorScheduleTest.php` (nuevo) | 4 pruebas |
+| `docs/ultron-studio/ops/banco-h8/{sim-elevenlabs.cjs,sim-pruebas.cjs,comun.sh,montar.sh,ensayar.sh,README.md}` y `banco-h8/preparar.sh` (nuevo) | El simulador (E1-5 y la post-llamada web) y el ensayo de OPS8-b |
+| `docs/ultron-studio/ULTRON_STUDIO_DEPLOYMENT_PLAN.md` | La sección «Hito 8» (fases 1 a 4b, respaldos E3-7, rotación, secretos) |
+
+## Verificado, con su salida
+
+- **Producción (solo lectura):**
+  - HEAD `32a2560202383a8b79122802b288a3b69eca1344`;
+  - `2026_11_06_000001_add_benefit_only_to_plans_table`: `[133] Ran`.
+- **Simulador:** `node sim-pruebas.cjs` da **78 OK · 0 FALLO · 0 OMITIDO** (73 de antes y 5 nuevas). Las violaciones provocadas a propósito son 50 de ElevenLabs y 22 de Twilio.
+- **Programador:** `VoiceMonitorScheduleTest`, 4/4. Antes, 55 pruebas del programador y de las guardas (`UltronStudioMonitorTest`, `UltronEngineIsolationTest`, `VoiceBoundaryTest` y otras): 0 fallos.
+- **Banco** (`~/.cache/ironbody-banco-h8-ops8b`: producción de juguete en `7c84cb5`, origen `13fed36` = HEAD `bb239b5` + mi `console.php` + la unión de `7c84cb52`):
+  - **`e112` 4/4:**
+    - verificación `credentials_ok` con un GET y nada por la valla;
+    - el Studio dice `ELEVENLABS_VERIFIED` y el proveedor neutro `ELEVENLABS_UNVERIFIED`;
+    - respaldo rehecho.
+  - **`desplegar --solo-comprobar`: `COMPROBACIONES PREVIAS EN VERDE`**:
+    - 227 tablas;
+    - puerta: los 4 controladores públicos, el job y `console.php`;
+    - esquema `44 50 4 14 0 0 0 0`;
+    - programador 27/0/0;
+    - VERIFIED con 719 h por delante en el banco.
+    El primer intento abortó por mi propio `e112` (la huella del volcado con ruta relativa): corregido.
+  - **`desplegar`: `DESPLIEGUE H8 FASE 1 (BACKEND) COMPLETADO`**, 0 desvíos:
+    - esquema `68 84 6 18 27 51 3 7`;
+    - 4 funciones del dueño y ninguna DEFINER;
+    - `ra---s` en las 6 tablas de solo inserción y `rawd-s` en las 5 con estados;
+    - rutas `77 18 8 10 15 6 13 5 8 4` y `auth:coverage` vacío;
+    - la configuración efectiva toda apagada;
+    - el motor, el H4–H7 y la voz iguales que antes;
+    - 13 workers;
+    - todos los 401, 413 y 403 de la sanidad;
+    - el monitor con el mismo veredicto;
+    - `voice:doctor --telefonia` el de la fase 1;
+    - instantáneas 6 → 6 (la huella de voz no cambia, S8-b 9);
+    - 0 ERROR.
+  - **Smoke** (`smoke-run-h8.sh` del repo, con la valla como prueba estricta de cero red):
+    - con los presupuestos de **PERF8**: **49 OK · 0 FALLO · 1 OMITIDO**, código 3, el esperado; lo único omitido es `GET voice-lab/sessions` (409 `voice_lab_disabled`, el laboratorio apagado), y los presupuestos dan 10 OK y 1 OMITIDO;
+    - con los provisionales, antes de retirarlos: 49 OK · 0 FALLO, código 0;
+    - en los dos, el lanzador da en verde: voz apagada, programador 27/0/0, `voice:doctor --telefonia` el de la fase 1, monitor sin deriva, 25 tablas idénticas antes y después, en el canal `voice` solo los 4 rechazos esperados, 0 ERROR, valla 0 → 0 y la cuenta en reposo;
+    - **INFO:** una post-llamada de exactamente 1 048 576 bytes llega a Laravel (401). En el banco no hay nginx: en el servidor, el smoke dirá quién responde;
+    - las dos primeras pasadas fallaron y destaparon H-12: el login daba 429 tras las peticiones anónimas a la telefonía, y las POST anónimas daban 429 tras ~38 con sesión. Corregido en el smoke: el login va primero y la telefonía tiene su cubo de 25/min.
+  - **`--acepta-main`** (decisión (2) del lead), con el código real del script en una copia del banco con `PREVIO=32a2560`:
+    - `--solo-comprobar` sin la bandera lista «PENDIENTE DE DECISIÓN: 7c84cb5 · 1279016» (el original y su copia) y sigue;
+    - el despliegue sin la bandera aborta con la lista;
+    - `--acepta-main=abcdef1` aborta («no está entre los ajenos»);
+    - `--acepta-main=7c84cb5,1279016` los anota como ACEPTADOS y continúa;
+    - además, con los refs reales, de 42 commits con parche solo `1279016` no está en producción (las otras 7 copias se reconocen por parche).
+
+## Hallazgos (para el lead y para B8)
+
+- **H-10 · Bloqueante. La rama perdió la ascendencia de producción** con la reescritura del 08-11-2026.
+  - `32a2560` (producción) y `7c84cb52` (`origin/main`) **no son ancestros** del HEAD; las copias tienen el mismo árbol y otros hashes, y la base común con `origin/main` es `d828bf7`.
+  - Así, el push a `main` no es de avance rápido y el paso 0 aborta («no es avance rápido»).
+  - **Arreglo, del lead:** unir `origin/main` en la rama con un merge normal, sin `--force`. En el clon del banco salió limpio.
+- **H-11 · Decidido por el lead. `7c84cb5` no está en producción** (`MembershipRebuilder`, sin migración) y viajaría con el H8. El paso 0 lo detecta por parche, aunque esté copiado, y solo sigue si el propietario pasa `--acepta-main=7c84cb5` al desplegar (ensayado: las 4 ramas). El lead corrige la ascendencia (H-10); después de su arreglo debería salir solo `7c84cb5`, sin la copia.
+- **H-12 · Para B8, antes de la fase 1. Las 13 rutas del CRM de la telefonía usan `throttle:120,1` y `throttle:30,1`.** El throttle corre antes de que el controlador autentique (`VoiceActor::require`), así que el contador es **el de la IP, con sesión o sin ella**, y es el mismo cubo que el del login del CRM (`throttle:8,1`).
+  - **Medido en el banco:** tras 9 GET anónimos a `admin/voice/status`, el login da **429**; tras 9 a una ruta del Studio (limitador con nombre), el login da 401 normal.
+  - En el smoke, tras ~38 peticiones a la telefonía en un minuto (con sesión), las POST anónimas dieron 429 (cupo 30).
+  - **Impacto:** personas en la misma red (la oficina o el Wi-Fi del gimnasio) comparten el cupo de la telefonía y gastan el del login. Basta una pestaña de «Voz» abierta para poder dejar a la oficina sin login un minuto.
+  - **Arreglo:** limitadores con nombre, por credencial, como `marketing-agenda` o `ultron-studio-read`. El smoke ya marca el ritmo en ese cubo (25/min) y hace el login primero.
+- Siguen en pie H-2 a H-9. Las decisiones (a) a (f) del lead ya están en el runbook:
+  - (b) cada estado de ElevenLabs en su sitio;
+  - (c) la verificación antes del 03-12-2026 a las 22:55 UTC: **el monitor del Studio solo avisa, no renueva**; renuevan el `--verify-voice` a mano o el monitor de voz;
+  - (d) la expectativa del monitor del H7, en el entorno y con su procedimiento, sin cambiar el defecto;
+  - (e) sin `composer install` ni el worker en la fase 1;
+  - (f) la salud del webhook, para B8 antes de la fase 3.
+
+## CRM
+
+`bash -n` OK. **`--solo-comprobar` ensayado en un clon aislado** del CRM (scratchpad, `node_modules` por clonación APFS; el árbol de FE8 no se tocó), contra la API del banco: `BUILD VERIFICADO`.
+- El backend del H8 responde 401, no 404.
+- El árbol, limpio en `26ef142` = su `origin/main`, contiene `c9eef6d`.
+- Sin cambios de dependencias: `npm ls` OK.
+- `build:prod` en 42,6 s, con el sello `26ef142` limpio.
+- El chunk de voz es `chunk-TIMQWAQ4.js` (**264 343 B, 71 136 B con gzip -9**, como midió FE8) y el del tablero `chunk-27WCULYR.js`, con `data-voz-enlace` y la ruta; los importa el main del build.
+- La publicación (respaldo, `rsync` sin `--delete` y verificación pública) **no se ensayó**: necesita el VPS.
+
+## Pendiente y notas
+
+- **`voice:prune-rate-limits` (cada hora)** al bloque de voz de `routes/console.php`, cuando B8-c lo entregue: el lead avisará. Va en el bloque bajo `VOICE_MONITOR_ENABLED` (o en el general, si B8-c lo quiere siempre) y lleva su prueba en `VoiceMonitorScheduleTest`.
+- **Cambios en curso de otros agentes** (sin confirmar mientras ensayaba): B8-c añade el índice NO parcial `vc_publication_idx` en la `100002`. Según su comentario, los recuentos de E3-5 no cambian, y el script solo cuenta índices parciales. También toca `config/voice.php`, `AppServiceProvider` (el oyente de la post-llamada del laboratorio) y servicios de Telephony. Mi ensayo es sobre `bb239b5` + mi `console.php`: **hay que repetir el `--solo-comprobar` del banco con el HEAD final**, tras el arreglo de la ascendencia (H-10).
+- El banco `~/.cache/ironbody-banco-h8-ops8b` (base `ultron_studio_banco_h8_ops8b`, puertos 8411–8414) queda montado y **parado**. Para limpiarlo: `rm -rf` del directorio y `dropdb -h 127.0.0.1 -p 55432 -U ironbody ultron_studio_banco_h8_ops8b`. El PostgreSQL desechable lo arrancó otro agente: no lo toqué.
+
+## No verificado, y por qué
+
+- En el servidor no se ensayó nada: solo las dos lecturas. El `--solo-comprobar` de producción es el paso 4 del runbook, ya con H-10 y H-11 resueltos.
+- La regresión de los smokes del H6 y del H7 tras el H8 no se ensayó: cuentan 14 tablas y `TAREAS`, y no aplican sin adaptar.
+- El mando `h8-voice-scope.sh` (fases 2–4b), nginx (P-26 y el tope de 1 MB en el servidor real) y la supresión 1581 de voz quedan pendientes de OPS8.

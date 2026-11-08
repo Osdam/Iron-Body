@@ -174,7 +174,7 @@ function agenteCompilado(toolIds, extra = {}) {
     conversation_config: {
       agent: {
         first_message: EL.AVISO, language: 'es',
-        dynamic_variables: { dynamic_variable_placeholders: { caller_authorized: 'no', call_ref: '', version_label: '' } },
+        dynamic_variables: { dynamic_variable_placeholders: { call_direction: 'entrante', caller_authorized: 'no', call_ref: '', version_label: '' } },
         prompt: {
           prompt: 'Plantilla ultron-voice-compiler/1 (banco).', llm: 'banco-llm', temperature: 0, tool_ids: toolIds,
           built_in_tools: {
@@ -200,9 +200,9 @@ function agenteCompilado(toolIds, extra = {}) {
 const salienteValida = (agentId, to = TEL_CANARIO, extra = {}) => C.mezclar({
   agent_id: agentId, agent_phone_number_id: PZ.EL_PHONE_NUMBER_ID, to_number: to, call_recording_enabled: false,
   telephony_call_config: { ringing_timeout_secs: 30, twilio_call_recording_enabled: false },
-  conversation_initiation_client_data: { dynamic_variables: { caller_authorized: 'si', call_ref: crypto.randomUUID() } },
+  conversation_initiation_client_data: { dynamic_variables: { call_direction: 'saliente', call_ref: crypto.randomUUID(), caller_authorized: 'si', version_label: 'canario · v-banco-1' } },
 }, extra);
-const respuestaIniciacion = (si = 'si') => ({ status: 200, body: { type: 'conversation_initiation_client_data', dynamic_variables: { caller_authorized: si, call_ref: crypto.randomUUID(), version_label: 'v-banco-1' } } });
+const respuestaIniciacion = (si = 'si') => ({ status: 200, body: { type: 'conversation_initiation_client_data', dynamic_variables: { caller_authorized: si, call_direction: 'entrante', call_ref: crypto.randomUUID(), version_label: 'v-banco-1' } } });
 
 // ══ A. ElevenLabs: superficie y autenticación ═════════════════════════════════════════════════
 caso('EL · el control (/__stats, /__surface) responde y no cuenta como petición; superficie de 13 rutas', async () => {
@@ -386,6 +386,12 @@ caso('EL · saliente con grabación, grabación de Twilio, override y variables 
   assert.equal(r.status, 200);
   assert.deepEqual(d, { recording_enabled: 1, twilio_recording_enabled: 1, config_override: 1, dynamic_variables_beyond_contract: 1, dynamic_variables_personal_data: 1 });
 });
+caso('EL · saliente con call_direction ≠ «saliente» y version_label con llaves (E1-5) → 2 violaciones', async () => {
+  const b = salienteValida(ESTADO.agente, TEL_OTRO, { conversation_initiation_client_data: { dynamic_variables: { call_direction: 'entrante', version_label: 'v {{otra}}' } } });
+  const { r, d } = await nuevas(statsEl, () => el('POST', '/v1/convai/twilio/outbound-call', { body: b }));
+  assert.equal(r.status, 200);
+  assert.deepEqual(d, { outbound_call_direction: 1, outbound_version_label: 1 });
+});
 caso('EL · saliente mal formada (to_number sin E.164) → 422 y outbound_malformed; agente desconocido → 404 sin violación', async () => {
   const a = await nuevas(statsEl, () => el('POST', '/v1/convai/twilio/outbound-call', { body: salienteValida(ESTADO.agente, '3000000011') }));
   assert.equal(a.r.status, 422);
@@ -490,6 +496,34 @@ caso('EL · URL firmada del laboratorio: ws://127.0.0.1 con conversation_signatu
   assert.deepEqual(d, { agent_id_pattern: 1 });
 });
 
+caso('EL · la URL firmada registra una conversación WEB del laboratorio (sin número ni call_sid; D8-23)', async () => {
+  const antes = (await ctl(BASE_EL, '/__state')).conversations.filter((c) => c.direction === 'web').length;
+  const r = await el('GET', `/v1/convai/conversation/get-signed-url?agent_id=${ESTADO.agente}`);
+  assert.equal(r.status, 200);
+  const webs = (await ctl(BASE_EL, '/__state')).conversations.filter((c) => c.direction === 'web');
+  assert.equal(webs.length, antes + 1);
+  const w = webs[webs.length - 1];
+  assert.equal(w.agentId, ESTADO.agente);
+  assert.equal(w.callSid, null);
+  assert.equal(w.origin, 'lab');
+  const det = await el('GET', `/v1/convai/conversations/${w.id}`);
+  assert.equal(det.status, 200);
+  assert.ok(!Object.hasOwn(det.json.metadata, 'phone_call'), 'el detalle de una conversación web no lleva phone_call');
+  ESTADO.web = w.id;
+});
+caso('EL · postCall puro de una conversación web: sin metadata.phone_call, firma verificable; call_initiation_failure web → error', async () => {
+  const now = C.ahoraS();
+  const conv = { conversation_id: 'conv_web_banco', agentId: ESTADO.agente, direction: 'web', started: now - 70, duration: 64, cost: 640, termination: 'end_call tool', dynamicVariables: {} };
+  const w = EL.postCall({ variant: 'valid', type: 'post_call_transcription', now, secret: PZ.EL_WEBHOOK_SECRET, agentId: ESTADO.agente, conv });
+  const b = JSON.parse(w.rawBody);
+  assert.ok(!Object.hasOwn(b.data.metadata, 'phone_call'));
+  assert.equal(b.data.conversation_id, 'conv_web_banco');
+  const m = /^t=(\d+),v0=([0-9a-f]{64})$/.exec(w.header);
+  assert.ok(m);
+  assert.equal(C.hmacHex(PZ.EL_WEBHOOK_SECRET, `${m[1]}.${w.rawBody}`), m[2]);
+  assert.throws(() => EL.postCall({ variant: 'valid', type: 'call_initiation_failure', now, secret: PZ.EL_WEBHOOK_SECRET, agentId: ESTADO.agente, conv }), /web/);
+});
+
 // ══ F. Emisores hacia Laravel ═══════════════════════════════════════════════════════════════════
 caso('EL → L · post-llamada válida: cabecera ElevenLabs-Signature verificable sobre el cuerpo CRUDO, centinela y teléfono dentro', async () => {
   reglas.delete(EL.LARAVEL.postCall);
@@ -545,8 +579,30 @@ caso('EL → L · iniciación conforme: secreto en su cabecera, los 5 campos ofi
   assert.equal((await ctl(BASE_TW, `/__state?sid=${r.call_sid}`)).direction, 'inbound');
   ESTADO.entrante = r.conversation_id;
 });
+caso('EL → L · respuesta de iniciación sin call_direction (la forma de antes de E1-5) → 2 violaciones', async () => {
+  reglas.set(EL.LARAVEL.initiation, () => ({ status: 200, body: { type: 'conversation_initiation_client_data', dynamic_variables: { caller_authorized: 'si', call_ref: crypto.randomUUID(), version_label: 'v-banco-1' } } }));
+  const { d } = await nuevas(statsEl, () => ctl(BASE_EL, `/__inbound?from=${encodeURIComponent(TEL_OTRO)}`));
+  assert.deepEqual(d, { initiation_response_variables: 1, initiation_response_call_direction: 1 });
+});
+caso('EL → L · post-llamada WEB (web=1&agent_id=): la de la URL firmada, sin phone_call, firmada sobre el cuerpo crudo', async () => {
+  reglas.delete(EL.LARAVEL.postCall);
+  const n = recibido.length;
+  const r = await ctl(BASE_EL, `/__emit/post-call?web=1&agent_id=${ESTADO.agente}`);
+  assert.equal(r.deliveries[0].status, 200);
+  const e = recibido[n];
+  assert.equal(e.url, EL.LARAVEL.postCall);
+  const m = /^t=(\d+),v0=([0-9a-f]{64})$/.exec(e.headers['elevenlabs-signature']);
+  assert.ok(m);
+  assert.equal(C.hmacHex(PZ.EL_WEBHOOK_SECRET, `${m[1]}.${e.raw}`), m[2]);
+  const b = JSON.parse(e.raw);
+  assert.equal(b.data.conversation_id, ESTADO.web);
+  assert.equal(b.data.agent_id, ESTADO.agente);
+  assert.ok(!Object.hasOwn(b.data.metadata, 'phone_call'), 'una conversación web no lleva phone_call');
+  const malo = await ctl(BASE_EL, `/__emit/post-call?web=1&conversation_id=${ESTADO.conv}&agent_id=${ESTADO.agente}`);
+  assert.ok(malo.error || malo.status === 'error' || malo.ok === false || malo.message, 'una telefónica con web=1 se rechaza');
+});
 caso('EL → L · respuesta de iniciación con override, clave de más y el teléfono → 3 violaciones', async () => {
-  reglas.set(EL.LARAVEL.initiation, () => ({ status: 200, body: { type: 'conversation_initiation_client_data', dynamic_variables: { caller_authorized: 'si', call_ref: crypto.randomUUID(), version_label: `v ${TEL_OTRO}` }, conversation_config_override: { agent: {} } } }));
+  reglas.set(EL.LARAVEL.initiation, () => ({ status: 200, body: { type: 'conversation_initiation_client_data', dynamic_variables: { caller_authorized: 'si', call_direction: 'entrante', call_ref: crypto.randomUUID(), version_label: `v ${TEL_OTRO}` }, conversation_config_override: { agent: {} } } }));
   const { d } = await nuevas(statsEl, () => ctl(BASE_EL, `/__inbound?from=${encodeURIComponent(TEL_OTRO)}`));
   assert.deepEqual(d, { initiation_response_extra_keys: 1, initiation_response_override: 1, initiation_response_personal_data: 1 });
 });

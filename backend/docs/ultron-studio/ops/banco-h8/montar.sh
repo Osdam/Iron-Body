@@ -42,7 +42,6 @@ echo "== 1. origen: $REF ($(git -C "$WT" rev-parse --short=7 "$SHA"))"
 $G clone -q --no-checkout "$COMUN" "$B/src"
 cd "$B/src"
 $G checkout -q -B banco "$SHA"
-git merge-base --is-ancestor "$PREVIO_BANCO" HEAD || muere "la ref no contiene $PREVIO_BANCO (la producción de hoy)"
 if [ "$WIP" = 1 ]; then
   N=0
   while IFS= read -r line; do
@@ -52,9 +51,18 @@ if [ "$WIP" = 1 ]; then
     mkdir -p "$(dirname "$f")"; cp -R "$WT/$f" "$f"; N=$((N + 1))
   done < <(git -C "$WT" status --porcelain --untracked-files=all)
   git add -A backend
-  $G commit -q -m "banco: instantánea del trabajo en curso ($N ficheros)" || true
+  # Con el prefijo del H8: es trabajo del hito (el paso 0 del despliegue reconoce los commits del H8 por su prefijo).
+  $G commit -q -m "wip(ultron-studio-h8): banco: instantánea del trabajo en curso ($N ficheros)" || true
   echo "   + $N ficheros sin confirmar del worktree (BANCO_WIP=1)"
 fi
+# BANCO_UNIR=<ref>: une esa ref en el origen del banco (en SU clon, nunca en el repo), para ensayar lo que la rama
+# necesita cuando ha perdido la ascendencia de producción (la reescritura del 08-11-2026 dejó copias de los commits
+# ajenos con otro hash: hay que volver a unir origin/main antes de desplegar).
+if [ -n "${BANCO_UNIR:-}" ]; then
+  $G merge -q --no-ff --no-edit -m "merge(ultron-studio-h8): banco: une $BANCO_UNIR (la ascendencia de producción)" "$BANCO_UNIR" || muere "no se pudo unir $BANCO_UNIR en el origen del banco"
+  echo "   + unida $BANCO_UNIR (BANCO_UNIR): $(git rev-parse --short=7 HEAD)"
+fi
+git merge-base --is-ancestor "$PREVIO_BANCO" HEAD || muere "la ref no contiene $PREVIO_BANCO (la producción del banco): con la rama reescrita, BANCO_UNIR=<origin/main>"
 ESPERADO=$(git rev-parse --short=7 HEAD)
 $G branch -q -f main HEAD
 echo "   ESPERADO=$ESPERADO · migraciones nuevas desde $PREVIO_BANCO: $(git diff --name-only --diff-filter=AMDR "$PREVIO_BANCO" HEAD -- backend/database/migrations | wc -l | tr -d ' ')"
@@ -248,5 +256,5 @@ echo "== 8. respaldo con el formato del runbook (700/600)"
   chmod 700 "$BK"; chmod 600 "$BK"/*
 )
 echo "   tablas con datos en el volcado: $(pg_restore -l "$B/bk/ironbody.dump" | grep -c 'TABLE DATA')"
-printf 'BANCO_DB=%s\nBANCO_PORT=%s\nPUERTO_EL=%s\nPUERTO_TW=%s\nPUERTO_VALLA=%s\nESPERADO=%s\n' "$DB" "$PORT" "$PEL" "$PTW" "$PVA" "$ESPERADO" > "$B/banco.env"
+printf 'BANCO_DB=%s\nBANCO_PORT=%s\nPUERTO_EL=%s\nPUERTO_TW=%s\nPUERTO_VALLA=%s\nESPERADO=%s\nPREVIO_BANCO=%s\n' "$DB" "$PORT" "$PEL" "$PTW" "$PVA" "$ESPERADO" "$PREVIO_BANCO" > "$B/banco.env"
 echo "BANCO LISTO: $B (ESPERADO=$ESPERADO). Siguiente: bash $AQUI/ensayar.sh $B arrancar && bash $AQUI/sembrar.sh $B"

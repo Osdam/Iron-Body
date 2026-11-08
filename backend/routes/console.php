@@ -416,3 +416,45 @@ if ((bool) config('ultron_studio.monitor.enabled', false)) {
         ->withoutOverlapping(10)
         ->onOneServer();
 }
+
+// ── Voz y telefonía: el monitor de la voz (Hito 8, contrato H8 D8-21, E2-3, E2-6 y E6-5) ──
+// INERTE por defecto: solo se agenda si VOICE_MONITOR_ENABLED=true (y solo
+// `true`, 1, on o yes). Es un bloque PROPIO, nunca dentro del del monitor del
+// Studio (m-3 del H7, E2-6): la bandera del Studio solo programa órdenes del
+// Studio sin argumentos. Con esta apagada no se programa NADA de la voz; los
+// comandos siguen disponibles a mano. Vuelta atrás = la bandera en false +
+// config:cache. Solo GET a los proveedores; cualquier llamada que Twilio
+// enseñe sin su fila, una deriva o el techo de gasto ECHAN EL FRENO (lo suelta
+// una persona, D8-19).
+if ((bool) config('voice.monitor.enabled', false)) {
+    // La conciliación (D8-21): las llamadas de la subcuenta en Twilio frente a
+    // voice_calls, las ambiguas, las salientes que perdieron su job, las
+    // atascadas en dialing, la deriva de los agentes vigentes y el techo duro
+    // de gasto. Cada 10 minutos en total: estas cinco pasadas, y la sexta (en
+    // el minuto 0) es la de abajo, que hace lo mismo y además el número, así
+    // que nunca corren dos a la vez en el mismo minuto. Diez minutos de cerrojo,
+    // no las 24 h por defecto (lección del vigía).
+    Schedule::command('voice:reconcile')
+        ->cron('10,20,30,40,50 * * * *')
+        ->withoutOverlapping(10)
+        ->onOneServer();
+
+    // La deriva del NÚMERO importado (E2-3, E4-8, E6-5): un GET por número a
+    // ElevenLabs para ver a qué agente apunta frente al publicado en canario.
+    // Se suma a la conciliación de llamadas, no la sustituye. Cada hora.
+    Schedule::command('voice:reconcile --numbers')
+        ->hourly()
+        ->withoutOverlapping(10)
+        ->onOneServer();
+
+    // La verificación semanal de ElevenLabs (D8-12 y D8-21): un GET de solo
+    // lectura al agente de verificación que guarda su evidencia; con ella de
+    // menos de 30 días, el Studio sigue afirmando ELEVENLABS_VERIFIED. Sin la
+    // voz en UNVERIFIED no llama a nada y sale con 1. Los lunes a las 07:20 de
+    // Bogotá (12:20 UTC), tras la instantánea diaria del monitor del Studio.
+    Schedule::command('ultron-studio:integrations-snapshot --verify-voice')
+        ->weeklyOn(1, '07:20')
+        ->timezone('America/Bogota')
+        ->withoutOverlapping(10)
+        ->onOneServer();
+}

@@ -331,3 +331,44 @@ Las referencias de secretos del gestor de ElevenLabs (`ELEVENLABS_*_REF`) no son
 - La valla cubre los clientes que respetan las variables de proxy (Guzzle/cURL, que es el `Http::` de Laravel), no los sockets crudos.
 
 Para todo eso, el banco no sustituye la comprobación en el servidor ni las pruebas físicas de la fase 3.
+
+## OPS8-b (08-11-2026): el ensayo de la fase 1 y los cambios del simulador
+
+**Órdenes nuevas de `ensayar.sh`** (con `preparar.sh`, que copia en `$B/root` el `deploy-h8-backend-fase1.sh` y la propuesta de `ironbody-migrate` con las sustituciones del banco; cada una tiene que casar):
+
+| Orden | Qué hace |
+|---|---|
+| `e112` | Pone la «producción» del banco en el estado de E1-12. Escribe las piezas del H6 de ElevenLabs (de `sim/piezas.conf`, sin valores en la línea de órdenes) y `ELEVENLABS_ENABLED=true`. Guarda `integrations-snapshot --verify-voice` contra el simulador (un GET y nada por la valla), de modo que el Studio afirma `ELEVENLABS_VERIFIED` y el proveedor neutro `ELEVENLABS_UNVERIFIED`. Rehace el respaldo de partida: `env.backup` y un volcado con su huella, con ruta absoluta como el runbook |
+| `desplegar [--solo-comprobar]` | La copia del banco del despliegue de la fase 1, con RED |
+| `smoke [<id>]` | `smoke-run-h8.sh` del repo con la valla como prueba estricta de cero red |
+
+**Variables nuevas de `montar.sh`:**
+- `BANCO_PREVIO`: la «producción» del banco; se guarda en `banco.env` (por defecto, `cfcd0d1`).
+- `BANCO_UNIR`: une esa ref en el **clon** del banco, nunca en el repo. Sirve para ensayar la rama reescrita, que perdió la ascendencia de producción.
+
+La instantánea de `BANCO_WIP=1` lleva el prefijo `wip(ultron-studio-h8):`, que es como el paso 0 reconoce los commits del hito.
+
+**El ensayo del 08-11-2026:**
+
+```bash
+B=$HOME/.cache/ironbody-banco-h8-ops8b
+BANCO_DB=ultron_studio_banco_h8_ops8b BANCO_PORT=8411 BANCO_PUERTO_EL=8412 BANCO_PUERTO_TW=8413 BANCO_PUERTO_VALLA=8414 \
+  BANCO_PREVIO=7c84cb5 BANCO_UNIR=7c84cb52 BANCO_WIP=1 bash montar.sh "$B" HEAD
+bash ensayar.sh "$B" arrancar && bash ensayar.sh "$B" e112 && bash sembrar.sh "$B"
+bash ensayar.sh "$B" desplegar --solo-comprobar     # COMPROBACIONES PREVIAS EN VERDE
+bash ensayar.sh "$B" desplegar                      # DESPLIEGUE H8 FASE 1 (BACKEND) COMPLETADO
+bash ensayar.sh "$B" smoke                          # ver informe-devops.md §OPS8-b
+```
+
+**El simulador de ElevenLabs:**
+- **Variables dinámicas de E1-5.**
+  - La saliente lleva exactamente `call_direction` (= `saliente`), `call_ref`, `caller_authorized` y `version_label`. Las violaciones nuevas son `outbound_call_direction` y `outbound_version_label`, y `dynamic_variables_beyond_contract` pasa al conjunto de 4.
+  - La respuesta de la iniciación, igual, con `call_direction` = `entrante`: violaciones `initiation_response_call_direction` y `initiation_response_version_label`.
+  - Si Laravel falla, `fail_mode=defaults` usa también el defecto de `call_direction`.
+- **Conversaciones web del laboratorio hablado (D8-23).**
+  - La URL firmada registra una conversación con `direction: 'web'`, sin número ni `call_sid`.
+  - Ni su detalle (`GET /v1/convai/conversations/{id}`) ni su post-llamada llevan `metadata.phone_call`.
+  - `postCall({conv: {direction: 'web', …}})` (puro) lo hace igual, y para una conversación web `call_initiation_failure` es un error.
+  - El emisor: `GET /__emit/post-call?web=1&agent_id=<agente de laboratorio>`, que usa la conversación de su URL o crea una.
+  - El arnés de TEST8-b (`ops/h8-e2e/lab-post-call.cjs`) sigue sirviendo sin cambios: su `delete` de `phone_call` ya no tiene nada que quitar, y la firma es la misma.
+- **Pruebas propias:** `node sim-pruebas.cjs`, **78 OK · 0 FALLO** (73 de antes y 5 nuevas). Provocan a propósito 50 violaciones de ElevenLabs (antes 46) y 22 de Twilio.

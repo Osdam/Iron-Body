@@ -12,7 +12,10 @@ SUPERVISOR_VOZ="$WT/backend/docs/ops/supervisor/ironbody-voice.conf"   # el BORR
 PG_HOST=127.0.0.1
 PG_PORT=${BANCO_PG_PORT:-55432}
 PG_USER=ironbody                               # superusuario del clúster desechable (trust), como pgunit.sh
-PREVIO_BANCO=cfcd0d1                           # la «producción» del banco: la de hoy (backend cfcd0d1, 03-11-2026)
+# La «producción» del banco: cfcd0d1 (la del 03-11-2026) por defecto; BANCO_PREVIO la cambia al montar y banco.env la
+# guarda (OPS8-b: 7c84cb5, con lo ajeno de planes y beneficios ya en ella, como la producción del 08-11-2026 más un commit).
+PREVIO_BANCO=${BANCO_PREVIO:-cfcd0d1}
+[[ "$PREVIO_BANCO" =~ ^[0-9a-f]{7,40}$ ]] || { echo "banco: BANCO_PREVIO no es un commit" >&2; exit 1; }
 muere() { echo "banco: $*" >&2; exit 1; }
 psql_su() { psql -X -q -v ON_ERROR_STOP=1 -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" "$@"; }
 banco_dir() {

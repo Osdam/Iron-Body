@@ -26,13 +26,16 @@
  *
  * LADO EMISOR (simulador → Laravel, solo a 127.0.0.1), por el control:
  *   /__inbound      una entrante: crea la llamada en el simulador de Twilio y hace el webhook de iniciación (D8-11)
- *                   con el secreto en su cabecera; revisa la respuesta (solo caller_authorized, call_ref, version_label;
+ *                   con el secreto en su cabecera; revisa la respuesta (solo caller_authorized, call_direction =
+ *                   entrante, call_ref y version_label, E1-5;
  *                   sin conversation_config_override ni datos personales) y, si Laravel falla, sigue con los valores
  *                   por defecto del agente (`fail_mode=defaults`) o no arranca (`abort`): las dos lecturas de C-A2.
  *   /__tool         una server tool (D8-10) con `Authorization: Bearer`; rellena las variables de sistema según el
  *                   esquema compilado del agente (C-A3) y revisa que la respuesta no lleve teléfonos.
  *   /__emit/post-call  webhook post-llamada firmado (`ElevenLabs-Signature`), tipos y variantes de firma; modela la
- *                   desactivación automática tras 10 fallos seguidos (auditoría §d.1).
+ *                   desactivación automática tras 10 fallos seguidos (auditoría §d.1). Con `web=1&agent_id=` es la de
+ *                   una conversación WEB del laboratorio hablado (D8-23): sin `metadata.phone_call` ni `call_sid`
+ *                   (la URL firmada registra esa conversación; si no la hay, se crea al emitir).
  *   /__post-call    generador PURO (no envía): como el del H6.
  * Y el estado de las llamadas: /__call (sonando, contestada, buzón, completada, comunicando, sin respuesta, fallo),
  * /__scenario (lo que responde la saliente a un destino), /__panel-call (una llamada que Laravel no pidió: R-2),
@@ -123,7 +126,9 @@ const VIOLACIONES = {
   twilio_recording_enabled: 'telephony_call_config.twilio_call_recording_enabled = true (D8-12, P-7)',
   config_override: 'conversation_config_override en la saliente (D8-11)',
   outbound_dynamic_variables: 'variables dinámicas de la saliente sin caller_authorized = «si» y call_ref uuid (D8-12)',
-  dynamic_variables_beyond_contract: 'variables dinámicas de la saliente fuera de {caller_authorized, call_ref} (D8-12)',
+  outbound_call_direction: 'call_direction de la saliente distinto de «saliente» (E1-5)',
+  outbound_version_label: 'version_label de la saliente vacío, de más de 40 caracteres o con controles o llaves (E1-5)',
+  dynamic_variables_beyond_contract: 'variables dinámicas de la saliente fuera de {call_direction, call_ref, caller_authorized, version_label} (D8-12, E1-5)',
   dynamic_variables_personal_data: 'un teléfono o un correo en las variables dinámicas (D8-17)',
   outbound_user_id: 'user_id distinto de call_ref (D8-12)',
   conversation_delete_disabled: 'DELETE de una conversación con el borrado apagado (solo el ensayo de la supresión lo enciende)',
@@ -131,7 +136,9 @@ const VIOLACIONES = {
   initiation_response_type: 'type ≠ conversation_initiation_client_data',
   initiation_response_extra_keys: 'claves de primer nivel fuera de {type, dynamic_variables} (D8-11)',
   initiation_response_override: 'conversation_config_override en la respuesta (D8-11)',
-  initiation_response_variables: 'dynamic_variables ≠ exactamente {caller_authorized, call_ref, version_label} (D8-11)',
+  initiation_response_variables: 'dynamic_variables ≠ exactamente {call_direction, call_ref, caller_authorized, version_label} (D8-11, E1-5)',
+  initiation_response_call_direction: 'call_direction de la iniciación distinto de «entrante» (E1-5)',
+  initiation_response_version_label: 'version_label de la iniciación vacío, de más de 40 caracteres o con controles o llaves (E1-5)',
   initiation_response_caller_authorized: 'caller_authorized fuera de {si, no}',
   initiation_response_call_ref: 'call_ref que no es un uuid opaco',
   initiation_response_personal_data: 'un teléfono o un correo en la respuesta de la iniciación (D8-11)',
@@ -218,7 +225,9 @@ const GUIONES = ['limpio', 'sin_aviso', 'precio_inventado', 'descuento', 'url', 
 function cuerpoPostLlamada(type, t, { agentId, conv, centinela, transcript = 'limpio', versionId = null, branchId = null, reason = null }) {
   const convId = conv?.conversation_id ?? 'conv_banco_0001';
   const data = { agent_id: agentId, conversation_id: convId };
-  const llamada = conv
+  // Una conversación WEB (el laboratorio hablado, en el navegador): no hay llamada ni call_sid (D8-23).
+  const web = conv?.direction === 'web';
+  const llamada = web ? null : conv
     ? { direction: conv.direction, phone_number_id: conv.phoneNumberId, agent_number: conv.agentNumber, external_number: conv.remote, type: 'twilio', call_sid: conv.callSid }
     : { direction: 'outbound', phone_number_id: 'phnum_banco', agent_number: '+576010000090', external_number: '+573000000011', type: 'twilio', call_sid: 'CA00000000000000000000000000000000' };
   switch (type) {
@@ -231,7 +240,7 @@ function cuerpoPostLlamada(type, t, { agentId, conv, centinela, transcript = 'li
           transcript: guion(transcript, centinela, conv),
           metadata: {
             start_time_unix_secs: conv?.started ?? t - 60, call_duration_secs: conv?.duration ?? 42, cost: conv?.cost ?? 420,
-            termination_reason: conv?.termination ?? 'end_call tool', phone_call: llamada,
+            termination_reason: conv?.termination ?? 'end_call tool', ...(web ? {} : { phone_call: llamada }),
           },
           analysis: { call_successful: 'success', transcript_summary: `Resumen con el centinela ${centinela}`, evaluation_criteria_results: {}, data_collection_results: {} },
           conversation_initiation_client_data: { dynamic_variables: conv?.dynamicVariables ?? {} },
@@ -240,6 +249,7 @@ function cuerpoPostLlamada(type, t, { agentId, conv, centinela, transcript = 'li
     case 'post_call_audio':
       return { type, event_timestamp: t, data: { ...data, full_audio: Buffer.from(`audio-banco-${centinela}`).toString('base64') } };
     case 'call_initiation_failure':
+      if (web) throw new Error('una conversación web no tiene call_initiation_failure (no hay llamada)');
       return {
         type, event_timestamp: t,
         data: { ...data, failure_reason: reason ?? conv?.failure ?? 'busy', metadata: { type: 'twilio', body: { To: llamada.external_number, From: llamada.agent_number, CallSid: llamada.call_sid, CallStatus: reason ?? conv?.failure ?? 'busy' } } },
@@ -337,6 +347,11 @@ function revisarHerramienta(t, v) {
     if (nombre === 'transfer_to_number') revisarTransferencia(t.params ?? {}, v);
   } else v.push('tool_type_not_allowed');
 }
+
+/** El conjunto CERRADO de variables dinámicas que manda Laravel (D8-11, D8-12 y E1-5), en orden de bytes. */
+const VARIABLES_DINAMICAS = ['call_direction', 'call_ref', 'caller_authorized', 'version_label'];
+/** version_label: 1–40 puntos de código, sin controles ni llaves de plantilla (la regla de OutboundCallRequest de B8). */
+const etiquetaValida = (s) => typeof s === 'string' && s !== '' && [...s].length <= 40 && !/[\u0000-\u001f\u007f-\u009f]/.test(s) && !s.includes('{{');
 
 /** El valor por defecto de una variable dinámica (busca la clave dentro de un objeto cuyo padre nombra «dynamic_variable»). */
 function porDefecto(b, nombre) {
@@ -474,7 +489,7 @@ if (require.main === module) {
     if (!completa) return corta;
     return {
       ...corta, transcript: c.status === 'done' ? guion('limpio', CENTINELA, c) : [],
-      metadata: { start_time_unix_secs: c.started, call_duration_secs: c.duration, cost: c.cost, termination_reason: c.termination, phone_call: { direction: c.direction, phone_number_id: c.phoneNumberId, agent_number: c.agentNumber, external_number: c.remote, type: 'twilio', call_sid: c.callSid } },
+      metadata: { start_time_unix_secs: c.started, call_duration_secs: c.duration, cost: c.cost, termination_reason: c.termination, ...(c.direction === 'web' ? {} : { phone_call: { direction: c.direction, phone_number_id: c.phoneNumberId, agent_number: c.agentNumber, external_number: c.remote, type: 'twilio', call_sid: c.callSid } }) },
       analysis: { call_successful: corta.call_successful, transcript_summary: `Resumen ${CENTINELA}` },
       conversation_initiation_client_data: { dynamic_variables: c.dynamicVariables ?? {} },
       has_audio: false, has_user_audio: false, has_response_audio: false, version_id: c.versionId ?? null, branch_id: c.branchId ?? null,
@@ -595,7 +610,9 @@ if (require.main === module) {
       if (init?.conversation_config_override !== undefined && init.conversation_config_override !== null) ctx.v.push('config_override');
       const dv = init?.dynamic_variables;
       if (!C.esObjeto(dv) || dv.caller_authorized !== 'si' || !C.UUID.test(String(dv.call_ref ?? ''))) ctx.v.push('outbound_dynamic_variables');
-      if (C.esObjeto(dv) && Object.keys(dv).some((k) => !['caller_authorized', 'call_ref'].includes(k))) ctx.v.push('dynamic_variables_beyond_contract');
+      if (C.esObjeto(dv) && dv.call_direction !== 'saliente') ctx.v.push('outbound_call_direction');
+      if (C.esObjeto(dv) && !etiquetaValida(dv.version_label)) ctx.v.push('outbound_version_label');
+      if (C.esObjeto(dv) && Object.keys(dv).some((k) => !VARIABLES_DINAMICAS.includes(k))) ctx.v.push('dynamic_variables_beyond_contract');
       if (C.esObjeto(dv) && C.pareceDatoPersonal(JSON.stringify(dv), [b.to_number.replace(/\D/g, '').slice(-10)])) ctx.v.push('dynamic_variables_personal_data');
       if (init?.user_id !== undefined && init.user_id !== dv?.call_ref) ctx.v.push('outbound_user_id');
       if (!AGENT_ID.test(b.agent_id)) ctx.v.push('agent_id_pattern');
@@ -661,7 +678,10 @@ if (require.main === module) {
       const firma = crypto.randomBytes(24).toString('base64url');
       const emitida = C.ahoraS();
       estado.urls.push({ agentId: id, emitida, caduca: emitida + 900 });
+      // La conversación WEB que abriría el navegador con esta URL (D8-23): sin número ni call_sid.
+      const web = conversacionWeb(id, emitida);
       ctx.e.agentId = id;
+      ctx.e.conversationId = web.conversation_id;
       return { status: 200, body: { signed_url: `ws://127.0.0.1:${servidor.address().port}/v1/convai/conversation?agent_id=${encodeURIComponent(id)}&conversation_signature=${firma}` } };
     },
   };
@@ -760,6 +780,13 @@ if (require.main === module) {
 
   // ── Control (solo GET) y emisores ─────────────────────────────────────────────────────────────
   const conv = (id) => estado.conversaciones.get(id ?? '');
+  /** Una conversación WEB del laboratorio hablado (D8-23): sin número ni call_sid. La registra la URL firmada. */
+  const conversacionWeb = (agentId, started) => {
+    const c = { conversation_id: C.idEleven('conv'), agentId, direction: 'web', remote: null, agentNumber: null, phoneNumberId: null,
+      callSid: null, status: 'in-progress', started, duration: 64, cost: 640, termination: 'end_call tool', failure: null, dynamicVariables: {}, origin: 'lab' };
+    estado.conversaciones.set(c.conversation_id, c);
+    return c;
+  };
   const ok = (res, body) => C.json(res, 200, body);
   const mal = (res, error, extra = {}) => C.json(res, 400, { ok: false, error, ...extra });
 
@@ -960,7 +987,9 @@ if (require.main === module) {
           if (Object.keys(j).some((k) => !['type', 'dynamic_variables'].includes(k))) v.push('initiation_response_extra_keys');
           if (j.conversation_config_override !== undefined) v.push('initiation_response_override');
           dv = C.esObjeto(j.dynamic_variables) ? j.dynamic_variables : null;
-          if (!dv || Object.keys(dv).sort().join(',') !== 'call_ref,caller_authorized,version_label') v.push('initiation_response_variables');
+          if (!dv || Object.keys(dv).sort().join(',') !== VARIABLES_DINAMICAS.join(',')) v.push('initiation_response_variables');
+          if (dv && dv.call_direction !== 'entrante') v.push('initiation_response_call_direction');
+          if (dv && !etiquetaValida(dv.version_label)) v.push('initiation_response_version_label');
           if (!['si', 'no'].includes(dv?.caller_authorized)) v.push('initiation_response_caller_authorized');
           if (dv && !C.UUID.test(String(dv.call_ref ?? ''))) v.push('initiation_response_call_ref');
         }
@@ -978,7 +1007,7 @@ if (require.main === module) {
         origen = 'aborted';
       } else {
         const d = porDefecto(agente.payload, 'caller_authorized');
-        dv = { caller_authorized: d ?? null, call_ref: null, version_label: null };
+        dv = { caller_authorized: d ?? null, call_direction: porDefecto(agente.payload, 'call_direction') ?? null, call_ref: null, version_label: null };
         origen = 'fallback_defaults';
       }
     }
@@ -1048,9 +1077,17 @@ if (require.main === module) {
     return ok(res, { tool, variant: variante, expectedAuth: variante === 'valid' ? 'accepted' : 'rejected', bodyFrom: desde, laravel: { status: r.status, ms: Math.round(r.ms * 10) / 10, body: respuesta }, violations: v });
   }
 
-  /** /__emit/post-call?conversation_id=&type=&variant=&transcript=&agent_id=&version_id=&branch_id=&reason=&repeat=N&now= */
+  /** /__emit/post-call?conversation_id=&type=&variant=&transcript=&agent_id=&version_id=&branch_id=&reason=&repeat=N&now=
+   *  · con web=1&agent_id=<agente de laboratorio>: la conversación web de ese agente (la de su URL firmada; si no la hay,
+   *    una nueva), sin phone_call ni call_sid (D8-23). */
   async function emitirPostLlamada(res, q) {
-    const c = conv(q.get('conversation_id'));
+    let c = conv(q.get('conversation_id'));
+    if (q.get('web') === '1') {
+      const ag = q.get('agent_id') ?? '';
+      if (!AGENT_ID.test(ag)) return mal(res, 'web=1 pide agent_id (el agente de laboratorio)');
+      if (c && c.direction !== 'web') return mal(res, 'conversation_id no es una conversación web');
+      c = c ?? [...estado.conversaciones.values()].filter((x) => x.direction === 'web' && x.agentId === ag).pop() ?? conversacionWeb(ag, C.ahoraS());
+    }
     const repetir = q.has('repeat') ? Number(q.get('repeat')) : 1;
     if (!(Number.isInteger(repetir) && repetir >= 1 && repetir <= 20)) return mal(res, 'repeat 1–20');
     let w;

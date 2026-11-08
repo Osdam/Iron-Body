@@ -12,7 +12,15 @@
 #                                                          orden contra la «producción» (¿existe la conexión voice?) y su
 #                                                          instalación simulada (13 → 14 programas y vuelta)
 #   bash ensayar.sh <banco> cierre                         0 violaciones en los dos simuladores y la valla sin más que sondas
-#   bash ensayar.sh <banco> desplegar|smoke|alcance        de OPS8-b (tras la puerta 1): todavía no existen
+#   bash ensayar.sh <banco> e112                           (OPS8-b) la «producción» en el estado de E1-12: las piezas del
+#                                                          H6 de ElevenLabs en su entorno, ELEVENLABS_ENABLED=true y la
+#                                                          verificación guardada contra el simulador (el Studio afirma
+#                                                          ELEVENLABS_VERIFIED); rehace el respaldo de partida
+#   bash ensayar.sh <banco> desplegar [--solo-comprobar] [--acepta-main=…]  (OPS8-b) la copia del banco de deploy-h8-backend-fase1.sh
+#                                                          (preparar.sh), con RED: el ensayo del paso 0 o el despliegue
+#   bash ensayar.sh <banco> smoke [<id de admin>]          (OPS8-b) smoke-run-h8.sh del REPO con las variables locales y
+#                                                          la valla como prueba estricta de cero red
+#   bash ensayar.sh <banco> alcance                        el mando de las fases 2–4b: todavía no existe
 # Sin banco: node sim-pruebas.cjs (las pruebas propias de los simuladores y la valla).
 . "$(dirname "$0")/comun.sh"
 B=$(banco_dir "${1:-}")
@@ -230,7 +238,65 @@ PY
     echo "$((CASOS - FALLOS)) OK · $FALLOS FALLO"
     [ "$FALLOS" = 0 ] ;;
 
-  desplegar|smoke|alcance)
-    muere "«$ORDEN» es de OPS8-b (tras la puerta 1): deploy-h8-backend-fase1.sh, smoke-run-h8.sh y h8-voice-scope.sh todavía no existen" ;;
-  *) muere "uso: bash ensayar.sh <banco> arrancar|parar|estado|valla|doctor|worker …|cierre" ;;
+  e112)
+    vivo "$PUERTO_VALLA" && vivo "$PUERTO_EL" || muere "arranca antes: bash $AQUI/ensayar.sh $B arrancar"
+    # Las piezas del H6 que E1-12 dejó en producción, de sim/piezas.conf (600) al fichero de entorno del banco, en el
+    # MISMO fichero (mismo inodo) y sin pasar por la línea de órdenes ni imprimir valores.
+    python3 -I - "$B/sim/piezas.conf" "$BE/.env" <<'E112'
+import sys
+p = {}
+for l in open(sys.argv[1], encoding='utf-8'):
+    l = l.strip()
+    if l and not l.startswith('#') and '=' in l:
+        k, v = l.split('=', 1)
+        p[k.strip()] = v.strip()
+claves = {'ELEVENLABS_ENABLED': 'true', 'ELEVENLABS_API_KEY': p['EL_API_KEY'], 'ELEVENLABS_AGENT_ID': p['EL_VERIFY_AGENT_ID'],
+          'ELEVENLABS_WEBHOOK_SECRET': p['EL_WEBHOOK_SECRET'], 'ELEVENLABS_TOOL_SECRET': p['EL_TOOL_SECRET'], 'ELEVENLABS_REGION': 'default'}
+with open(sys.argv[2], 'r+', encoding='utf-8') as f:
+    lineas = [l for l in f.read().splitlines() if l.strip().split('=', 1)[0].strip() not in claves]
+    lineas += [f'  {k}={v}' for k, v in claves.items()]
+    f.seek(0)
+    f.write('\n'.join(lineas) + '\n')
+    f.truncate()
+print('   piezas de E1-12 en el entorno del banco: ' + ', '.join(claves) + ' (sin valores)')
+E112
+    ( cd "$BE" && env "${RED[@]}" php artisan config:cache -q && chmod 600 bootstrap/cache/config.php )
+    E0=$(stats "$PUERTO_EL"); V0=$(stats "$PUERTO_VALLA")
+    VER=$(cd "$BE" && env "${RED[@]}" php artisan ultron-studio:integrations-snapshot --verify-voice --json 2> /dev/null | campo voice.outcome || true)
+    E1=$(stats "$PUERTO_EL"); V1=$(stats "$PUERTO_VALLA")
+    caso "integrations-snapshot --verify-voice contra el simulador: credentials_ok" "$([ "$VER" = credentials_ok ] && echo 0 || echo 1)" "$VER"
+    caso "una sola petición al simulador de ElevenLabs y ninguna por la valla" "$([ $(( $(printf '%s' "$E1" | campo requests) - $(printf '%s' "$E0" | campo requests) )) = 1 ] && [ "$(printf '%s' "$V0" | campo blocked)" = "$(printf '%s' "$V1" | campo blocked)" ] && echo 0 || echo 1)"
+    EST=$(cd "$BE" && env "${RED[@]}" php artisan tinker --execute='echo App\Services\UltronStudio\StudioIntegrations::voiceState(), PHP_EOL;' 2> /dev/null | tail -1)
+    NEU=$(cd "$BE" && env "${RED[@]}" php artisan voice:doctor --json 2> /dev/null | campo state)
+    caso "el Studio afirma ELEVENLABS_VERIFIED y el proveedor neutro ELEVENLABS_UNVERIFIED (E1-12)" "$([ "$EST $NEU" = "ELEVENLABS_VERIFIED ELEVENLABS_UNVERIFIED" ] && echo 0 || echo 1)" "$EST · $NEU"
+    # El respaldo de partida pasa a ser este (el paso 0 exige env.backup = el fichero de entorno y un volcado de < 2 h).
+    ( umask 077
+      install -m 600 "$BE/.env" "$B/bk/env.backup"
+      pg_dump -Fc -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" "$BANCO_DB" > "$B/bk/ironbody.dump"
+      shasum -a 256 "$B/bk/ironbody.dump" > "$B/bk/ironbody.dump.sha256"   # con la ruta absoluta, como el runbook
+      chmod 600 "$B"/bk/* )
+    caso "respaldo de partida rehecho (env.backup = el entorno de E1-12, volcado nuevo con su huella)" "$(cmp -s "$BE/.env" "$B/bk/env.backup" && shasum -a 256 -c --status "$B/bk/ironbody.dump.sha256" && echo 0 || echo 1)"
+    echo "$((CASOS - FALLOS)) OK · $FALLOS FALLO"
+    [ "$FALLOS" = 0 ] ;;
+
+  desplegar)
+    bash "$AQUI/preparar.sh" "$B"
+    EXTRA=()
+    for a in "$@"; do case "$a" in --solo-comprobar|--acepta-main=*) EXTRA+=("$a") ;; *) muere "opción desconocida: $a" ;; esac; done
+    export "${RED[@]}"
+    exec bash "$B/root/deploy-h8-backend-fase1.sh" "$ESPERADO" "$B/bk" ${EXTRA[@]+"${EXTRA[@]}"} ;;
+
+  smoke)
+    ID=${1:-${ADMIN_ID:-}}
+    [ -n "$ID" ] || muere "sin cuenta de smoke: bash $AQUI/sembrar.sh $B"
+    mkdir -p "$B/smokework"
+    exec env "${RED[@]}" APP_DIR="$BE" SMOKE_API="http://127.0.0.1:$BANCO_PORT/api" SMOKE_RUN_AS= \
+      SMOKE_PSQL="psql -X -Atq -h $PG_HOST -p $PG_PORT -U $PG_USER -d $BANCO_DB" SMOKE_WORKDIR="$B/smokework" \
+      SMOKE_PY="$OPS/smoke-h8.py" SMOKE_H6_PY="$OPS/smoke-h6.py" SMOKE_ADMIN_ID="$ID" \
+      SMOKE_BUDGETS="${SMOKE_BUDGETS:-$OPS/perf-h8/presupuestos-h8.json}" SMOKE_BUDGETS_OUT="${SMOKE_BUDGETS_OUT:-}" \
+      SMOKE_VALLA_STATS="http://127.0.0.1:$PUERTO_VALLA/__stats" SMOKE_LOGS="$BE/storage/logs" bash "$OPS/smoke-run-h8.sh" ;;
+
+  alcance)
+    muere "«alcance» es el mando de las fases 2–4b (h8-voice-scope.sh): todavía no existe (pendiente de OPS8)" ;;
+  *) muere "uso: bash ensayar.sh <banco> arrancar|parar|estado|valla|doctor|worker …|cierre|e112|desplegar [--solo-comprobar]|smoke [<id>]" ;;
 esac
