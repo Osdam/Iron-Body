@@ -1,0 +1,201 @@
+--- a/backend/tests/Feature/UltronStudio/UltronEngineIsolationTest.php
++++ b/backend/tests/Feature/UltronStudio/UltronEngineIsolationTest.php
+@@ -2,6 +2,7 @@
+ 
+ namespace Tests\Feature\UltronStudio;
+ 
++use App\Http\Controllers\Crm\UltronStudio\UltronStudioVoiceController;
+ use App\Services\UltronStudio\StudioPublishing;
+ use Illuminate\Support\Facades\Route;
+ use RecursiveDirectoryIterator;
+@@ -375,7 +376,8 @@
+         // las 12 del laboratorio del Hito 4 (`lab/*`, contrato H4 §A7), las 5
+         // de la publicación del Hito 5 (contrato H5 §A7) y las 18 de las
+         // integraciones del Hito 6 (contrato H6 §I7.1).
+-        $this->assertSame(56, $delStudio);
++        // Y las 21 del Hito 8 (contrato H8, «API»): la lista, en la constante (E2-6).
++        $this->assertSame(UltronStudioVoiceController::STUDIO_ROUTE_COUNT, $delStudio);
+     }
+ 
+     /**
+--- a/backend/tests/Feature/UltronStudio/UltronStudioEarlyBodyCapTest.php
++++ b/backend/tests/Feature/UltronStudio/UltronStudioEarlyBodyCapTest.php
+@@ -2,6 +2,7 @@
+ 
+ namespace Tests\Feature\UltronStudio;
+ 
++use App\Http\Controllers\Crm\UltronStudio\UltronStudioVoiceController;
+ use App\Http\Middleware\LimitRequestBodySize;
+ use App\Http\Middleware\ValidatePostSizeWithStudioCap;
+ use App\Models\Admin;
+@@ -189,7 +190,7 @@
+         $rutas = collect(app('router')->getRoutes()->getRoutes())
+             ->filter(static fn (Route $r): bool => str_starts_with($r->uri(), 'api/admin/ultron-studio'));
+ 
+-        $this->assertCount(56, $rutas);
++        $this->assertCount(UltronStudioVoiceController::STUDIO_ROUTE_COUNT, $rutas);
+         foreach ($rutas as $ruta) {
+             $this->assertTrue(Str::is(ValidatePostSizeWithStudioCap::STUDIO_PATHS, $ruta->uri()), "{$ruta->uri()} queda fuera del prefijo del tope global.");
+             $this->assertContains(LimitRequestBodySize::class.':'.ValidatePostSizeWithStudioCap::STUDIO_MAX_BYTES, $ruta->gatherMiddleware(), "{$ruta->uri()} no tiene el tope de ruta del mismo tamaño.");
+--- a/backend/tests/Feature/UltronStudio/UltronStudioEngineReadOnlyTest.php
++++ b/backend/tests/Feature/UltronStudio/UltronStudioEngineReadOnlyTest.php
+@@ -2,6 +2,7 @@
+ 
+ namespace Tests\Feature\UltronStudio;
+ 
++use App\Http\Controllers\Crm\UltronStudio\UltronStudioVoiceController;
+ use App\Models\Admin;
+ use App\Models\MarketingAgentSetting;
+ use App\Models\MarketingAiAction;
+@@ -411,8 +412,8 @@
+         $recorridas = array_values(array_unique($this->walked));
+         sort($recorridas);
+         $this->assertSame($todas, $recorridas);
+-        // Hito 6: las 18 de las integraciones (56 en total).
+-        $this->assertCount(56, $recorridas);
++        // Hito 6: las 18 de las integraciones (56 en total); Hito 8: las 21 de la voz (la constante, E2-6).
++        $this->assertCount(UltronStudioVoiceController::STUDIO_ROUTE_COUNT, $recorridas);
+     }
+ 
+     /**
+@@ -710,6 +711,61 @@
+         $this->walk('POST', 'draft/discard', $ana, ['baseRevision' => $borrador['revision']])->assertOk();
+ 
+         $this->walkIntegrations($ana, $root, $v1);
++        $this->walkVoice($ana, $root, $v1);
++    }
++
++    /**
++     * Hito 8 (contrato H8, «API»): las 15 rutas del gobierno de la voz y las
++     * 6 del laboratorio hablado, con las banderas por defecto (publicar y el
++     * laboratorio apagados): un perfil se crea, se envía, se aprueba; otro se
++     * rechaza; se previsualiza la compilación; publicar y promover son 409;
++     * revertir y apagar no tienen nada que hacer; el freno no existe. Nada sale
++     * a la red y nada escribe fuera de `ultron_studio_*`.
++     */
++    private function walkVoice(Admin $ana, Admin $root, string $version): void
++    {
++        $contenido = [
++            'voiceId' => 'pNInz6obpgDQGcFmaJgB',
++            'greetings' => ['inbound' => '¿En qué te puedo ayudar hoy?', 'outbound' => 'Te llamo porque pediste información de Iron Body.'],
++            'holes' => ['presentation' => 'Te ayudo con planes, horarios y la sede.', 'closing' => 'Gracias por tu tiempo.'],
++            'maxDurationSeconds' => 300,
++            'tools' => ['consultar_planes', 'consultar_horarios', 'no_volver_a_llamar'],
++            'systemTools' => ['end_call'],
++            'transfer' => ['destinations' => []],
++            'privacy' => ['retentionDays' => 30],
++            'voicemail' => 'hang_up',
++        ];
++        $perfil = $this->walk('POST', 'voice/profiles', $ana, ['clientRequestId' => (string) Str::uuid(), 'label' => 'Voz del recorrido', 'content' => $contenido])
++            ->assertCreated()->json('data.uuid');
++        $this->walk('POST', "voice/profiles/{$perfil}/submit", $ana)->assertOk();
++        $this->walk('POST', "voice/profiles/{$perfil}/approve", $root)->assertOk();
++        $otro = $this->walk('POST', 'voice/profiles', $ana, ['clientRequestId' => (string) Str::uuid(), 'label' => 'Voz rechazada', 'content' => ['maxDurationSeconds' => 240] + $contenido])
++            ->assertCreated()->json('data.uuid');
++        $this->walk('POST', "voice/profiles/{$otro}/submit", $ana)->assertOk();
++        $this->walk('POST', "voice/profiles/{$otro}/reject", $root, ['note' => 'Rechazado en el recorrido'])->assertOk();
++        // La versión del recorrido cambia parámetros que la voz no compila: 200 o el 422 del compilador, sin red.
++        $this->walk('POST', 'voice/compile-preview', $ana, ['versionUuid' => $version, 'profileUuid' => $perfil]);
++        $this->walk('POST', 'voice/publish', $root, ['clientRequestId' => (string) Str::uuid(), 'versionUuid' => $version, 'profileUuid' => $perfil])
++            ->assertStatus(409)->assertJsonPath('code', 'voice_publishing_disabled');
++        $this->walk('POST', 'voice/promote', $root, ['clientRequestId' => (string) Str::uuid(), 'evidenceHash' => str_repeat('0', 64)])
++            ->assertStatus(409)->assertJsonPath('code', 'voice_publishing_disabled');
++        $this->walk('POST', 'voice/rollback', $root, ['clientRequestId' => (string) Str::uuid(), 'scope' => 'canary', 'reason' => 'Recorrido del motor'])
++            ->assertStatus(409)->assertJsonPath('code', 'nothing_to_rollback');
++        $this->walk('POST', 'voice/off', $root, ['clientRequestId' => (string) Str::uuid(), 'reason' => 'Recorrido del motor'])
++            ->assertStatus(409)->assertJsonPath('code', 'voice_already_off');
++        $this->walk('POST', 'voice/brakes/'.Str::uuid().'/release', $root, ['clientRequestId' => (string) Str::uuid(), 'note' => 'Recorrido del motor'])->assertNotFound();
++        foreach (['voice/profiles', "voice/profiles/{$perfil}", 'voice/publications', 'voice/canary-evidence', 'voice/brakes'] as $lectura) {
++            $this->walk('GET', $lectura, $root)->assertOk();
++        }
++
++        // El laboratorio hablado (LAB8), apagado: el estado responde; lo demás, 4xx sin red.
++        $this->walk('GET', 'voice-lab/status', $ana)->assertOk();
++        $sesion = (string) Str::uuid();
++        foreach ([['GET', 'voice-lab/sessions', []], ['GET', "voice-lab/sessions/{$sesion}", []],
++            ['POST', 'voice-lab/sessions', ['versionUuid' => $version, 'profileUuid' => $perfil, 'acceptedMaxCostMicros' => 0, 'clientRequestId' => (string) Str::uuid()]],
++            ['POST', "voice-lab/sessions/{$sesion}/end", []], ['POST', "voice-lab/sessions/{$sesion}/verdict", ['decision' => 'approved', 'specHash' => str_repeat('0', 64)]]] as [$metodo, $ruta, $cuerpo]) {
++            $this->assertGreaterThanOrEqual(400, $this->walk($metodo, $ruta, $root, $cuerpo)->status(), "{$metodo} {$ruta} con el laboratorio hablado apagado");
++        }
+     }
+ 
+     /**
+--- a/backend/tests/Feature/UltronStudio/UltronStudioIntegrationsParityHttpTest.php
++++ b/backend/tests/Feature/UltronStudio/UltronStudioIntegrationsParityHttpTest.php
+@@ -556,7 +556,9 @@
+     public function test_route_matrix(array $caso): void
+     {
+         if ($caso['kind'] === 'legacy') {
+-            $todas = collect(app('router')->getRoutes()->getRoutes())->filter(fn ($r) => str_starts_with($r->uri(), 'api/admin/ultron-studio'));
++            // Hito 8: las 21 de la voz tienen su propia matriz (UltronStudioVoiceRoutesTest).
++            $todas = collect(app('router')->getRoutes()->getRoutes())->filter(fn ($r) => str_starts_with($r->uri(), 'api/admin/ultron-studio')
++                && ! str_starts_with($r->uri(), 'api/admin/ultron-studio/voice/') && ! str_starts_with($r->uri(), 'api/admin/ultron-studio/voice-lab/'));
+             $this->assertCount($caso['expected']['studioRoutesTotal'], $todas);
+             $this->assertCount($caso['count'], $todas->reject(fn ($r) => str_starts_with($r->uri(), 'api/admin/ultron-studio/integrations/')));
+ 
+--- a/backend/tests/Feature/UltronStudio/UltronStudioIntegrationsPermissionsTest.php
++++ b/backend/tests/Feature/UltronStudio/UltronStudioIntegrationsPermissionsTest.php
+@@ -2,6 +2,7 @@
+ 
+ namespace Tests\Feature\UltronStudio;
+ 
++use App\Http\Controllers\Crm\UltronStudio\UltronStudioVoiceController;
+ use App\Models\Admin;
+ use App\Support\Access\AuthorizationMap;
+ use App\Support\Access\CrmPermission;
+@@ -86,7 +87,7 @@
+         ksort($real);
+ 
+         $this->assertSame($esperado, $real);
+-        $this->assertSame(56, $todas);
++        $this->assertSame(UltronStudioVoiceController::STUDIO_ROUTE_COUNT, $todas);
+         // La sonda lleva su propio limitador además del de escritura.
+         $sonda = collect(Route::getRoutes()->getRoutes())->first(fn ($r) => $r->uri() === 'api/admin/ultron-studio/integrations/twilio/probe');
+         $this->assertContains('throttle:ultron-studio-probe', $sonda->gatherMiddleware());
+@@ -186,7 +187,7 @@
+         }
+ 
+         $filas = array_column(array_values(array_filter(PermissionCatalog::rows(), fn (array $f): bool => $f['domain'] === 'ultron')), null, 'key');
+-        $this->assertSame(self::NEW_KEYS, array_slice(array_keys($filas), 8));
++        $this->assertSame(self::NEW_KEYS, array_slice(array_keys($filas), 8, 4));
+         $this->assertSame('Asociar campañas de Meta', $filas['ultron.campaigns_manage']['label']);
+         $this->assertSame('Administrar números canarios', $filas['ultron.canary_manage']['label']);
+         $this->assertSame('Autorizar números canarios de otra persona', $filas['ultron.canary_authorize']['label']);
+--- a/backend/tests/Feature/UltronStudio/UltronStudioLabNoEngineEffectsTest.php
++++ b/backend/tests/Feature/UltronStudio/UltronStudioLabNoEngineEffectsTest.php
+@@ -317,8 +317,11 @@
+         $deH5 = [];
+         foreach (Route::getRoutes() as $route) {
+             // Las 18 de las integraciones (Hito 6) tienen su propia matriz: UltronStudioIntegrationsPermissionsTest.
++            // Las 21 de la voz (Hito 8), también: UltronStudioVoiceRoutesTest (y abrir una sesión del laboratorio
++            // hablado lleva a propósito el limitador del laboratorio de texto).
+             if (str_starts_with($route->uri(), 'api/admin/ultron-studio') && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/lab/')
+-                && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/integrations/')) {
++                && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/integrations/')
++                && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/voice/') && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/voice-lab/')) {
+                 $clave = AuthorizationMap::routeKey($route);
+                 if (array_key_exists($clave, $h5)) {
+                     $deH5[$clave] = AuthorizationMap::resolve($route);
+--- a/backend/tests/Feature/UltronStudio/UltronStudioPermissionsTest.php
++++ b/backend/tests/Feature/UltronStudio/UltronStudioPermissionsTest.php
+@@ -125,7 +125,9 @@
+         foreach (Route::getRoutes() as $route) {
+             // Las 18 de las integraciones (Hito 6) tienen su propia matriz:
+             // UltronStudioIntegrationsPermissionsTest.
+-            if (str_starts_with($route->uri(), 'api/admin/ultron-studio') && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/integrations/')) {
++            // Las 21 de la voz (Hito 8), también: UltronStudioVoiceRoutesTest.
++            if (str_starts_with($route->uri(), 'api/admin/ultron-studio') && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/integrations/')
++                && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/voice/') && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/voice-lab/')) {
+                 $real[AuthorizationMap::routeKey($route)] = AuthorizationMap::resolve($route);
+             }
+         }
+@@ -285,7 +287,8 @@
+         // `lab_manage` (6.4) y `lab_run` (6.6) van entre reglas y aprobar. Las
+         // cuatro del Hito 6 van detrás (las prueba UltronStudioIntegrationsPermissionsTest).
+         $this->assertSame(self::STUDIO_KEYS, array_slice(array_column($filas, 'key'), 0, 8));
+-        $this->assertCount(12, $filas);
++        // + las 4 del Hito 6 y las 3 del Hito 8 (D8-22: voice_manage, voice_publish y voice_lab_run).
++        $this->assertCount(15, $filas);
+         $this->assertSame('ULTRON Studio', $filas[0]['domain_label']);
+         $this->assertSame('account_tree', $filas[0]['domain_icon']);
+         $porLlave = array_column($filas, null, 'key');
