@@ -11,11 +11,33 @@ use Illuminate\Support\Carbon;
  * `telephony.view`, «sin datos personales»). De cada llamada: su estado, su
  * sello, su coste y sus tiempos; del otro extremo solo los 4 últimos dígitos
  * (nunca la huella, el número ni el alias de un canario); de los eventos, el
- * tipo, el resultado y los códigos (sin texto).
+ * tipo, el resultado y los códigos (sin texto), estos como una lista plana de
+ * códigos cortos ({@see eventCodes()}).
  */
 final class VoiceCallsQuery
 {
     public const STATUS_FILTERS = ['requested', 'canceled', 'failed_to_start', 'ambiguous', 'dialing', 'active', 'denied', 'completed', 'busy', 'no_answer', 'failed', 'hung_up'];
+
+    /**
+     * Cada código de un evento en el detalle, como lo lee el CRM
+     * (`studio-voice-parse.ts`, `codigos()` con `RE_CODIGO`; un evento con otra
+     * forma se descarta allí).
+     */
+    public const EVENT_CODE_PATTERN = '/^[a-z][a-z0-9_]{0,47}$/D';
+
+    /** Códigos de un evento, como mucho (el CRM admite 64): si sobran, el último es `y_<n>_mas`. */
+    public const MAX_EVENT_CODES = 50;
+
+    /**
+     * Las claves de `codes` que se enseñan, con su valor (`clave_valor`). Las
+     * demás no salen: los ids del proveedor (`conversationId`, `callSid`; el
+     * registro no los da) y la clase de un error (`error_class`).
+     */
+    private const SHOWN_KEYS = ['reason', 'http', 'scope', 'seq', 'part', 'where', 'caller', 'publication', 'carrierStatus', 'before', 'after',
+        'errorCode', 'reservedMicros', 'durationSeconds', 'costRaw', 'agentTurns', 'toolCalls', 'micros', 'unit'];
+
+    /** Las banderas: `clave` si es cierta, `clave_no` si no. */
+    private const FLAG_KEYS = ['hasAudio', 'afterCancel'];
 
     /**
      * @param  array{status?: ?string, direction?: ?string}  $filters
@@ -51,13 +73,88 @@ final class VoiceCallsQuery
                 'provider' => $e->provider,
                 'tool' => $e->tool,
                 'outcome' => $e->outcome,
-                'codes' => $e->codes,
+                'codes' => self::eventCodes($e->codes),
                 'actor' => $e->actor_type === VoiceCallEvent::ACTOR_ADMIN ? $e->actor_name : $e->actor_type,
                 'occurredAt' => $e->occurred_at?->toIso8601String(),
                 'createdAt' => $e->created_at?->toIso8601String(),
             ])->all();
 
         return self::row($llamada) + ['events' => $eventos];
+    }
+
+    /**
+     * Los `codes` de un evento PARA EL CRM (SEC8-b (3), O-1), sin cambiar lo
+     * guardado: una lista plana de códigos cortos y pintables, cada uno con
+     * {@see EVENT_CODE_PATTERN} y como mucho {@see MAX_EVENT_CODES}.
+     *  - una clave de {@see SHOWN_KEYS} con su valor: `reason_no_answer`,
+     *    `carrier_status_completed`, `seq_3`, `http_200`;
+     *  - una bandera: `after_cancel` o `has_audio_no`;
+     *  - los motivos de la iniciación: `reason_<motivo>` cada uno;
+     *  - las violaciones de la guarda: `<código>_turno_<n>`, en orden de turno;
+     *  - las que no se guardaron (`truncated`, E10-4) y las que no caben: el
+     *    último, `y_<n>_mas`.
+     * Sin códigos (null o vacío), `[]`. Ni teléfonos ni texto libre: solo salen
+     * códigos y números escritos por la telefonía; lo que no tiene esa forma
+     * se omite.
+     *
+     * @return list<string>
+     */
+    public static function eventCodes(mixed $codes): array
+    {
+        if (! is_array($codes)) {
+            return [];
+        }
+        $out = [];
+        $mas = 0;
+        foreach ($codes as $clave => $valor) {
+            if ($clave === 'violations' && is_array($valor)) {
+                foreach ($valor as $v) {
+                    if (is_array($v) && is_string($v['code'] ?? null) && is_int($v['turn'] ?? null)) {
+                        $out[] = self::violationCode($v['code'], $v['turn']);
+                    }
+                }
+            } elseif ($clave === 'reasons' && is_array($valor)) {
+                foreach ($valor as $motivo) {
+                    $out[] = is_string($motivo) ? self::code('reason_'.$motivo) : null;
+                }
+            } elseif ($clave === 'truncated' && is_int($valor)) {
+                $mas += max(0, $valor);
+            } elseif (in_array($clave, self::FLAG_KEYS, true) && is_bool($valor)) {
+                $out[] = self::code(self::snake($clave).($valor ? '' : '_no'));
+            } elseif (in_array($clave, self::SHOWN_KEYS, true) && (is_string($valor) || is_int($valor) || is_float($valor))) {
+                $out[] = self::code(self::snake($clave).'_'.$valor);
+            }
+        }
+        $out = array_values(array_filter($out, static fn (?string $c): bool => $c !== null));
+        if ($mas === 0 && count($out) <= self::MAX_EVENT_CODES) {
+            return $out;
+        }
+        $vistos = array_slice($out, 0, self::MAX_EVENT_CODES - 1);
+
+        return [...$vistos, 'y_'.(count($out) - count($vistos) + $mas).'_mas'];
+    }
+
+    /** `<código>_turno_<n>`, recortando el código si no cabe en los 48 caracteres. */
+    private static function violationCode(string $code, int $turn): string
+    {
+        $sufijo = '_turno_'.max(0, $turn);
+        $base = rtrim(substr(self::code($code) ?? 'violacion', 0, 48 - strlen($sufijo)), '_');
+
+        return self::code(($base === '' ? 'violacion' : $base).$sufijo) ?? 'violacion';
+    }
+
+    /** Un texto como código del CRM (`[a-z0-9_]`, empieza por letra, ≤ 48), o null si no queda ninguno. */
+    private static function code(string $raw): ?string
+    {
+        $c = rtrim(substr(trim((string) preg_replace('/[^a-z0-9]+/', '_', strtolower($raw)), '_'), 0, 48), '_');
+
+        return preg_match(self::EVENT_CODE_PATTERN, $c) === 1 ? $c : null;
+    }
+
+    /** `carrierStatus` → `carrier_status`. */
+    private static function snake(string $clave): string
+    {
+        return strtolower((string) preg_replace('/(?<!^)[A-Z]/', '_$0', $clave));
     }
 
     /** @return array<string, mixed> una llamada, sin datos personales */

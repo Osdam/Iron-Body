@@ -25,12 +25,15 @@ use Illuminate\Support\Facades\DB;
  *    borde vale); con presupuesto 0, nunca.
  *
  * LO COMPROMETIDO de una llamada del día (conservador: nunca cuenta de menos):
- *  - `canceled` y `failed_to_start`: 0 (DF-G7, no salió nada);
- *  - `busy`, `no_answer` y `failed`: lo real conocido (no hubo conversación);
- *  - el resto (en curso, `ambiguous`, `completed`, `hung_up`, `denied`): el
- *    mayor entre la reserva y lo real. El coste real de ElevenLabs llega en
- *    unidades [por confirmar] y no se convierte: hasta confirmarlas, la
- *    reserva manda.
+ *  - sin reserva, SOLO LO REAL CONOCIDO:
+ *    · `canceled` y `failed_to_start` (DF-G7: no salió nada, así que 0; si
+ *      el proveedor la inició igual y se colgó en el acto, E10-5, su precio);
+ *    · `denied` (E10-8: lo denegado no compromete gasto; con presupuesto 0,
+ *      la fila de la prueba O-2 ya no echa el freno);
+ *    · `busy`, `no_answer` y `failed` (no hubo conversación);
+ *  - el resto (en curso, `ambiguous`, `completed`, `hung_up`): el mayor entre
+ *    la reserva y lo real. El coste real de ElevenLabs llega en unidades
+ *    [por confirmar] y no se convierte: hasta confirmarlas, la reserva manda.
  *
  * LA RESERVA ES ATÓMICA: quien reserva lo hace dentro de la transacción del
  * cerrojo de la puerta (`VoiceLocks::gate()`), leyendo lo comprometido y
@@ -49,6 +52,9 @@ final class VoiceCostGuard
     public const RELEASED_STATUSES = ['canceled', 'failed_to_start'];
 
     public const NO_CONVERSATION_STATUSES = ['busy', 'no_answer', 'failed'];
+
+    /** Las denegadas (E10-8): no reservan; cuenta lo real conocido. */
+    public const DENIED_STATUSES = ['denied'];
 
     /** Lo que se usa si `voice.prices` falta (los oficiales del 03-11-2026, como el fixture). */
     public const DEFAULT_PRICES = [
@@ -142,16 +148,27 @@ final class VoiceCostGuard
         return DateTimeImmutable::createFromInterface($at)->setTimezone(new DateTimeZone(OutboundSchedule::ZONE))->format('Y-m-d');
     }
 
+    /**
+     * Lo que compromete UNA llamada, con la regla de arriba (la misma de
+     * {@see committedMicros()}, en PHP; la usa la conciliación en seco, E10-9,
+     * para contar lo que dejaría la propia pasada).
+     */
+    public static function contribution(string $status, int $reservedMicros, int $realMicros): int
+    {
+        return in_array($status, [...self::RELEASED_STATUSES, ...self::DENIED_STATUSES, ...self::NO_CONVERSATION_STATUSES], true)
+            ? $realMicros
+            : max($reservedMicros, $realMicros);
+    }
+
     /** Lo comprometido de un día de Bogotá, en micro-US$, con la regla de arriba (una sentencia). */
     public static function committedMicros(string $budgetDay): int
     {
         $real = '(COALESCE(provider_cost_micros, 0) + COALESCE(carrier_cost_micros, 0))';
-        $liberadas = "'".implode("', '", self::RELEASED_STATUSES)."'";
-        $sinConversacion = "'".implode("', '", self::NO_CONVERSATION_STATUSES)."'";
+        $sinReserva = "'".implode("', '", [...self::RELEASED_STATUSES, ...self::DENIED_STATUSES, ...self::NO_CONVERSATION_STATUSES])."'";
 
         return (int) DB::table('voice_calls')
             ->where('budget_day', $budgetDay)
-            ->selectRaw("COALESCE(SUM(CASE WHEN status IN ({$liberadas}) THEN 0 WHEN status IN ({$sinConversacion}) THEN {$real} "
+            ->selectRaw("COALESCE(SUM(CASE WHEN status IN ({$sinReserva}) THEN {$real} "
                 ."WHEN reserved_micros >= {$real} THEN reserved_micros ELSE {$real} END), 0) AS comprometido")
             ->value('comprometido');
     }

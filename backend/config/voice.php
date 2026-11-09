@@ -2,21 +2,34 @@
 
 /*
 |--------------------------------------------------------------------------
-| Voz: ElevenLabs y Twilio Voice (preparación, SIN ACTIVAR)
+| Voz: ElevenLabs y Twilio Voice (H6 preparado; H8 telefonía), TODO APAGADO
 |--------------------------------------------------------------------------
-| Contrato: docs/ultron-studio/ULTRON_STUDIO_H6_CONTRACT.md, §I6.2.
+| Contratos: docs/ultron-studio/ULTRON_STUDIO_H6_CONTRACT.md (§I6.2) y
+| docs/ultron-studio/ULTRON_STUDIO_H8_CONTRACT.md (D8-4, D8-5, D8-11, D8-12,
+| D8-15, D8-16, D8-23 y sus enmiendas).
 |
-| TODO APAGADO. Con estos defectos el estado es `ELEVENLABS_NOT_CONFIGURED`,
-| ninguna clase sale a la red y ninguna llamada es posible: además de las
-| banderas, las llamadas están cerradas en el código
-| (`App\Services\Voice\VoiceCallPolicy::CALLS_ENABLED_IN_CODE = false`) y en
-| este hito no existe ningún código capaz de iniciarlas.
+| TODO APAGADO POR DEFECTO (protección 1 del H8): las banderas en `false` y los
+| presupuestos y cupos en 0; solo `true`, `1`, `on` o `yes` encienden. Los
+| techos de los limitadores (`public_limits`) no encienden nada y conservan sus
+| defectos (E11-2). Con estos defectos ElevenLabs está en
+| `ELEVENLABS_NOT_CONFIGURED` y nada sale a la red.
 |
-| La interpreta `App\Services\Voice\ElevenLabs\ElevenLabsConfig`, que vuelve a
-| aplicar las reglas de forma (aquí se aplican al leer el entorno para que la
-| caché de configuración ya las lleve). LOS SECRETOS solo los lee
-| `ElevenLabsVoiceProvider`, en el momento de usarlos; una prueba estática
-| (`VoiceIsolationTest`) comprueba que ningún otro fichero los toma.
+| Desde el H8 SÍ existe el código que llama (la puerta de salientes y su job,
+| las entrantes, las herramientas, los webhooks, el corte y la conciliación),
+| pero ninguna llamada es posible mientras la constante siga cerrada
+| (`App\Services\Voice\VoiceCallPolicy::CALLS_ENABLED_IN_CODE = false`; solo se
+| gira en un commit `voice(calls-open)` con la autorización escrita del
+| propietario, en la fase 3). Además, cada vía tiene sus cerrojos: su bandera,
+| el proveedor configurado, sus cupos (y el presupuesto del día, las salientes
+| y el laboratorio) y el freno.
+|
+| La interpretan `App\Services\Voice\ElevenLabs\ElevenLabsConfig` y la
+| telefonía (`App\Services\Telephony`), que vuelven a aplicar las reglas de
+| forma (aquí se aplican al leer el entorno para que la caché de configuración
+| ya las lleve). LOS SECRETOS solo los leen sus lectores enumerados (D8-5), en
+| el momento de usarlos; las pruebas estáticas (`VoiceIsolationTest`,
+| `TelephonyIsolationTest`) comprueban que ningún otro fichero los toma. La voz
+| no lee `otp.*` y el OTP no lee `voice.*`.
 |
 | El motor no lee esta configuración.
 */
@@ -47,7 +60,8 @@ return [
         // Tiene que casar con ElevenLabsConfig::AGENT_ID_PATTERN; si no, cuenta como que falta.
         'agent_id' => env('ELEVENLABS_AGENT_ID'),
 
-        // Secreto (firma del webhook post-llamada; no hay ruta en este hito).
+        // Secreto: la firma del webhook post-llamada (H8, D8-16:
+        // `POST /api/webhooks/voice/elevenlabs/post-call`); lo lee su verificador.
         'webhook_secret' => env('ELEVENLABS_WEBHOOK_SECRET'),
 
         // `default` (api.elevenlabs.io) o `eu` (api.eu.residency.elevenlabs.io):
@@ -89,8 +103,9 @@ return [
 
     'twilio' => [
 
-        // Como ELEVENLABS_ENABLED. Nada la usa para ejecutar: solo la leen el
-        // panel de integraciones y la política de llamadas.
+        // Como ELEVENLABS_ENABLED. La leen el panel de integraciones y la
+        // política de llamadas; en el H8, apagada, ninguna saliente pasa la
+        // puerta ni el job (`twilio_voice_disabled`).
         'enabled' => filter_var(env('TWILIO_VOICE_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
 
         // E.164: número de voz o caller ID verificado. Nunca el número

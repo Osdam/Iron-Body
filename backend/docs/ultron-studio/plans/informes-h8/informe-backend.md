@@ -539,3 +539,285 @@ Sin commit. Bases PG mías: `ultron_studio_h8_bc` (la puerta, se queda) y `ultro
 ### 5. Ficheros de esta tanda
 
 Cambiados: `routes/voice.php`, `app/Providers/AppServiceProvider.php` (`limitadoresDeLaTelefonia()`), `app/Services/Telephony/VoiceReconciler.php`, este informe. Nuevos: `tests/Feature/Telephony/{VoiceAdminRateLimitsTest,VoiceReconcilerSteadyStateTest}.php`. Bases PG mías borradas: `ultron_studio_h8_bc_old` (A/B); queda `ultron_studio_h8_bc`.
+
+---
+
+# §B8-d · correcciones antes de la fase 2 (Enmienda 10: E10-4, E10-5, E10-6, E10-8, E10-9; DOC8 D-10 y D-11)
+
+**Fecha:** 09-11-2026. **Árbol:** worktree `ultron-h8`, rama `feat/ultron-studio-h8-voice`, sobre `a20c48a0` (árbol limpio al empezar) + mis cambios, **sin commit**. Cero red: toda prueba con `Http::preventStrayRequests()`; Twilio y ElevenLabs, solo contra `Http::fake` o adaptadores falsos. No toqué guardas (`*IsolationTest`, `VoiceBoundaryTest`), `routes/console.php`, `docs/ultron-studio/ops/**`, `docs/ultron-studio/*.md`, migraciones ni el CRM. Ni una variable nueva ni un valor cambiado.
+
+## 1. Cifras reales (comandos ejecutados sobre el estado final)
+
+| Qué | Comando | Resultado |
+|---|---|---|
+| Voz, telefonía y Twilio, SQLite | `phpunit tests/Feature/Telephony tests/Feature/Voice tests/Unit/Telephony tests/Unit/Voice tests/Unit/Twilio` | **782 pruebas, 200 714 aserciones, 0 fallos**, 146 omitidas (solo PG). Antes de B8-d eran 761: **+21 nuevas** |
+| Studio de voz, laboratorio y guarda del motor, SQLite | `phpunit tests/Feature/UltronStudio/*Voice*Test.php tests/Unit/UltronStudio/*Voice*Test.php tests/Feature/UltronStudio/UltronEngineIsolationTest.php` | **588 pruebas, 6 464 aserciones, 0 fallos**, 73 omitidas (las mismas cifras que en §SEC8-b (2)) |
+| Todo lo anterior, puerta PG | `PGGSSENCMODE=disable UNIT_DB=ultron_studio_h8_bd2 bash docs/ultron-studio/ops/pgunit.sh …` (las dos listas) | **1 370 pruebas, 208 330 aserciones, 0 fallos**, 15 omitidas (las mismas 15). Antes eran 1 349 |
+| Quien lee el fichero de ejemplo de entorno y `config/voice.php` | `SecretExposureTest`, `UltronStudioMonitorTest`, `UltronStudioIntegrationsConfigTest`, `UltronStudioPublicationConfigTest`, `UltronStudioIntegrationsNoNetworkTest`, `UltronStudioEarlyBodyCapTest` | **66 OK**, 746 aserciones |
+| Rutas | `php artisan auth:coverage --unmapped` | vacío, exit 0 (ninguna ruta nueva) |
+| Estilo | `pint --test` en los 9 ficheros de `app/` y `config/` tocados y en las 6 pruebas | `passed` |
+| Las guardas de SEC8 | dentro de las dos primeras filas (`VoiceIsolationTest`, `VoiceBoundaryTest`, `TelephonyIsolationTest`, `OtpUntouchedByVoiceTest`, `UltronEngineIsolationTest`) | en verde, sin tocarlas |
+
+**Cada prueba de regresión cae sin su arreglo** (ejecutado). La copia aislada es un clon APFS del backend, sin el fichero de entorno, con los 9 ficheros de `app/` y `config/` de `HEAD` y las pruebas finales:
+- SQLite: de las **21 pruebas nuevas caen 19** (con la del doctor, 20 de 32 en esos ficheros: 9 errores y 11 fallos). Las 2 que pasan a los dos lados lo hacen **a propósito**, porque fijan lo que no debe cambiar: `test_el_resto_de_la_regla_de_lo_comprometido_no_cambia` y `test_solo_se_cuelga_lo_que_corto_una_persona_no_lo_que_ya_termino`.
+- **M-2 en PG, antes:** `Expected response status code [200] but received 500` … `SQLSTATE[23514] … violates check constraint "vce_codes_chk"`. Es el síntoma exacto de §SEC8-b (2). Antes de arreglarlo, el árbol compartido dio lo mismo.
+
+**Mutaciones por muestreo.** Las corrí en otra copia aislada (clon APFS con su `vendor/`), con el banco `<scratchpad>/tools/mutar-b8d.php`. Para cada mutación: el texto de partida aparece exactamente una vez, `php -l`, sus pruebas en SQLite, se restaura y se compara el SHA-256.
+- **Resultado: 35 de 35 muertas**; los **2 controles no caen**; las **37 se restauran con el SHA-256 igual** y la copia queda idéntica al árbol.
+- Por punto: M-2, 5; B-2, 8; E10-8, 4; E10-9, 9; M-3, 8; D-11, 1.
+- En la primera pasada **sobrevivieron 3** y cada una destapó un hueco de las pruebas, ya cerrado:
+  - **B2-2** (`>` → `>=` en la observación posterior): las pruebas viajaban a una hora de Bogotá y Carbon leía las fechas de la base en `-05` (§5). Ahora el reloj de la prueba va en UTC.
+  - **B2-7** (el número de generación): solo se llegaba a `r3`; ahora se llega a `r4`.
+  - **D9-6** (la exclusión de las atascadas en seco): la saliente no era vieja; ahora lleva 16 minutos en `dialing`.
+- Mutante equivalente, anotado y sin probar: en `costCap()`, `$comprometido <= 0` es redundante mientras el presupuesto sea ≥ 0 (`budgetMicros()` nunca da negativo). Queda porque es la regla escrita de E10-8.
+
+## 2. Qué cambió y por qué (por fichero)
+
+**E10-4 (SEC8-b M-2): el veredicto acotado.**
+- `app/Services/Telephony/VoicePostCall.php`:
+  - `MAX_GUARD_CODES = 50` (como el laboratorio) y `MAX_GUARD_CODES_BYTES = 3 584`.
+  - `verdictCodes()` guarda las PRIMERAS violaciones, en orden de turno, mientras quepan las dos cotas. Añade `truncated` (cuántas no caben) solo si sobra alguna. Sin violaciones, la forma de siempre: `{violations: []}`.
+  - El recuento completo sigue en la respuesta (`violations`) y en el registro.
+  - El veredicto (`outcome = violation`) y el freno no dependen del tamaño: su evidencia son los códigos DISTINTOS, de un conjunto cerrado, también acotados.
+  - La cota de bytes cubre códigos del motor más largos que los de hoy (≤ 31 caracteres).
+- `tests/Feature/Telephony/VoicePostCallGuardCapTest.php` (nueva, 3 pruebas):
+  - 200 violaciones por la ruta firmada: 200, `completed`, `seal_verified`, 50 guardadas con `truncated = 150`, JSON ≤ 4 096 bytes, freno abierto con su evento, y el reintento de ElevenLabs da `duplicate`. **En PG antes: 500.**
+  - Justo en el tope: la forma de siempre.
+  - Con códigos de 64 caracteres manda la cota de bytes.
+
+**E10-6 (SEC8-b B-2): el freno se rearma si la evidencia cambió después de soltarlo.**
+- `app/Services/Telephony/VoiceBrake.php`:
+  - `openOrRearm()`:
+    - nunca abierta: como `open()`;
+    - echada: idempotente;
+    - soltada: abre OTRA apertura solo si `$changedAfterRelease(apertura soltada, suelta)` lo dice. La nueva lleva la generación siguiente de la clave (`<clave>:r2`, `:r3`… o, con claves de más de 120 caracteres, `rearm:<sha256>:r<n>`, que siempre cabe en los 128 de `open_key`), `rearmOf` en la evidencia y su incidente.
+  - `nextOpening()`: la misma decisión sin escribir (la usa el modo en seco). Sin regla de rearme, es la regla de `open()`: cada clave, una vez.
+  - `observedAfter()`: la regla de las derivas. La observación empezó DESPUÉS de la suelta; en el mismo segundo cuenta como posterior, en el sentido seguro (la suelta se guarda a segundos).
+  - `open()` no cambia: las causas de una sola vez (`unknown:`, `seal:`, `guard:`, `usage:`) no se rearman.
+- `app/Services/Telephony/VoiceReconciler.php`:
+  - deriva del agente y deriva del número con `observedAfter(instante antes del GET)`;
+  - techo de gasto con «lo comprometido > el `committedMicros` registrado en la apertura soltada».
+- `app/Jobs/Voice/PlaceOutboundVoiceCall.php`:
+  - la deriva del job solo rearma con una observación hecha ahí;
+  - el veredicto de la caché (≤ 5 min) es anterior: cancela la llamada con `agent_drift`, pero no reabre.
+- `tests/Feature/Telephony/VoiceBrakeRearmTest.php` (nueva, 4 pruebas):
+  - misma observación (la suelta llega con la lectura en vuelo) → no; observación nueva → sí (`r2`, con su incidente), idempotente mientras sigue echada, y `r3` y `r4`;
+  - deriva del agente: la conciliación rearma y la caché del job no;
+  - gasto igual → no; gasto mayor → sí, con lo comprometido de ahora;
+  - las causas de una sola vez, la llamada a la regla con la apertura y su suelta, y la clave larga.
+
+**E10-8 (DOC8-1): el freno de gasto con presupuesto 0.**
+- `app/Services/Telephony/VoiceCostGuard.php`:
+  - `denied` sale del grupo «el mayor entre la reserva y lo real» y pasa a «solo lo real conocido» (`DENIED_STATUSES`).
+  - Por coherencia con M-3, `canceled` y `failed_to_start` también cuentan lo real conocido, que es 0 si no salió nada (antes, 0 fijo). Ver §4.1.
+  - `contribution()` es la misma regla en PHP. La usa el modo en seco y hay una prueba de paridad, estado a estado, con el SQL.
+- `VoiceReconciler::costCap()`: `cost_cap` solo si lo comprometido es mayor que 0 **y** mayor que el presupuesto. El resumen `costCap` sigue diciendo el ESTADO (se pasa del techo), se abra ahora o no: el código de salida del comando depende de él y no cambia.
+- `tests/Feature/Telephony/VoiceCostCapZeroBudgetTest.php` (nueva, 5 pruebas):
+  - **la prueba O-2 tal cual**: iniciación con el secreto bueno y las entrantes apagadas, que deja una fila `denied` con su reserva de un minuto. Comprometido 0, sin freno, también con más denegadas;
+  - presupuesto 0 y una llamada con coste → freno;
+  - lo real de una denegada sí cuenta;
+  - el resto de la regla no cambia;
+  - paridad PHP/SQL.
+
+**E10-9 (DOC8-2): `voice:reconcile --dry-run`.**
+- `app/Services/Telephony/VoiceReconciler.php`: `run(…, bool $dryRun = false)`, `numbers(…, bool $dryRun = false)` y `dryRunReport()`.
+  - En seco lee lo mismo, también los GET a los proveedores, y decide con el MISMO código. Los sitios que escriben pasan por cuatro ayudantes (`event()`, `transition()`, `brake()` y el final de `cost()`) que en seco no escriben y apuntan lo que harían.
+  - Sin transacción ni cerrojos.
+  - Sin `Cache::put` del veredicto de deriva (la caché que lee el job).
+  - Simula en memoria los estados nuevos y los precios sumados, para que el techo y las atascadas salgan como después de la pasada de verdad.
+  - Anuncia cada clave del freno una vez, como `open()`.
+  - Una línea `voice.reconcile` con `dryRun: true`.
+- `app/Console/Commands/Voice/VoiceReconcileCommand.php`: la opción `--dry-run`. Con `--json` añade el informe; en texto, la cabecera «EN SECO» y dos líneas «Haría». El código de salida se calcula como siempre.
+- `tests/Feature/Telephony/VoiceReconcileDryRunTest.php` (nueva, 4 pruebas):
+  - **la llamada desconocida sembrada** (la página del fixture), con una pedida sin job y el techo superado. En seco: la base no cambia (filas, eventos, freno e incidentes, comparados enteros), código de salida 1, y anuncia las dos aperturas, sus 2 incidentes y los eventos. Después, de verdad: el mismo resumen, los mismos eventos por tipo, las mismas aperturas, las mismas transiciones y los mismos precios. Una segunda pasada en seco ya no anuncia nada;
+  - el techo con lo que deja la pasada: el estado (`busy` deja de reservar) y el precio sumado, con dos presupuestos;
+  - deriva del agente (dos partes, el mismo agente: una apertura) y deriva del número, y su rearme anunciado sin escribirlo ni tocar la caché.
+
+**E10-5 (SEC8-b M-3): gana el corte.**
+- `app/Jobs/Voice/PlaceOutboundVoiceCall.php`, `record()`: si la fila ya está `canceled` cuando el proveedor responde `started` (o `ambiguous` con `callSid`):
+  - la fila no cambia: un final no cambia, y la fila `canceled` no admite ids (`vc_provider_binding_chk`);
+  - el evento lleva `{conversationId, callSid, afterCancel: true}`;
+  - FUERA de la transacción, sin cerrojo durante la red, se cuelga en el acto.
+- `app/Services/Telephony/VoiceHangup.php`:
+  - `startedAfterCancel()`: el transportista real (Twilio, la llamada a `completed`) y `hangup_requested`, actor sistema, con lo que dijo el transportista (sin valores de `outcome` nuevos);
+  - el otro orden de la carrera: si la cancelación no aplica porque el job marcó entre tanto, relee la fila y corta como una viva (`hung_up`) en vez de responder `not_live`. El evento `canceled_before_dial` solo se escribe si de verdad canceló.
+- `app/Services/Telephony/VoiceReconciler.php`, `canceledStartFor()`: ese SID es CONOCIDO si Twilio ya la da por terminada (estado `reconciled` y precio en la fila cortada). Si la enseña viva, el corte no surtió efecto y sigue el camino de una desconocida, con freno, como antes del arreglo.
+- `tests/Feature/Telephony/PlaceOutboundVoiceCallHangupRaceTest.php` (nueva, 5 pruebas, con el transportista real contra `Http::fake`):
+  - el corte primero: colgada en el acto, los ids en el evento y la conciliación la reconoce, sin freno; su precio compromete gasto;
+  - el job primero: `hung_up`;
+  - Twilio responde 500 al colgar: la conciliación la ve viva y frena, y la reconoce cuando termina;
+  - una saliente ya terminada por el webhook (DF-S2) no se cuelga;
+  - una ambigua con SID sobre una cortada se cuelga y se reconoce; sin SID, ninguna petición.
+
+**DOC8 D-11 y D-10.**
+- `app/Console/Commands/Voice/VoiceDoctorCommand.php`: la línea «Llamadas» lee `VoiceCallPolicy::CALLS_ENABLED_IN_CODE` (sin nombrarla dentro de una cadena, como exige `VoiceIsolationTest`).
+- `tests/Feature/Voice/VoiceDoctorCommandTest.php` (del H6): su aserción del texto viejo («En este hito no se hace ninguna llamada.») pasa al nuevo («Llamadas   : cerradas en el código (la constante de VoiceCallPolicy)»). Una línea; es la única prueba que la fijaba.
+- `config/voice.php`, solo comentarios:
+  - la cabecera del H6 («SIN ACTIVAR», «no existe ningún código capaz de iniciarlas», «solo los lee ElevenLabsVoiceProvider»), con el estado del H8;
+  - la del secreto del webhook («no hay ruta en este hito»);
+  - la de `TWILIO_VOICE_ENABLED` («nada la usa para ejecutar»).
+- El fichero de ejemplo de entorno, solo comentarios:
+  - la cabecera del bloque del H6 («En este hito no se hace ninguna llamada», «estado de producción del Hito 6»; ahora con E1-12);
+  - una línea para `ELEVENLABS_WEBHOOK_SECRET`;
+  - la de `TWILIO_VOICE_ENABLED`;
+  - la nota de E10-8 junto a `VOICE_DAILY_BUDGET_USD`.
+- Ningún valor cambia. `git diff` de `config/voice.php` solo toca líneas de comentario.
+
+## 3. Contratos nuevos o modificados
+
+- **`voice:reconcile --dry-run [--json] [--numbers] [--hours=N]`.** El resumen de siempre más:
+  - `dryRun: true`;
+  - `wouldOpenBrake: bool`;
+  - `would: {brakes: [{reason, cause}], incidents: N, events: {<tipo>: N}, transitions: N, costs: N}`.
+
+  Con `--numbers`, `number.brakeOpened` es `false` y `number.wouldOpenBrake` dice si se abriría. Sin `--dry-run`, la salida no cambia ni en una clave. **El nombre:** el contrato escribió `would_open_brake`; en el JSON es `wouldOpenBrake`, en camelCase como el resto del resumen (`staleRequested`, `costCap`, `brakeOpened`). Si el lead prefiere el otro, es una línea.
+- **`guard_verdict.codes`** = `{violations: [≤ 50 primeras {turn, code}], truncated?: N}`. La respuesta del webhook (`violations`) sigue con el recuento completo.
+- **Frenos**:
+  - las reaperturas son filas nuevas (`open_key` `<clave>:r<n>` o `rearm:<sha256>:r<n>`), con `rearmOf` (el uuid de la soltada) en la evidencia;
+  - `GET voice/brakes` y `GET admin/voice/status` las enseñan como aperturas más;
+  - el Studio sigue usando solo `isOpen`, `list` y `release`;
+  - en IRON GUARD, un incidente por motivo mientras sigue abierto, con una ocurrencia por apertura (el agrupamiento de siempre de `IncidentRecorder`).
+- **Eventos**:
+  - solo en el caso cortado, `outbound_started.codes` gana `{conversationId, callSid, afterCancel}` y `outbound_ambiguous.codes` gana `afterCancel`;
+  - un `hangup_requested` de sistema con `codes.afterCancel`;
+  - ningún valor nuevo de `kind` ni de `outcome`: el CRM (`GET calls/{uuid}`) no necesita textos nuevos.
+- **Lo comprometido del día** (`GET admin/voice/metrics` → `cost.committedMicros`, la reserva de las salientes y el techo):
+  - una denegada ya no reserva: cuenta lo real conocido;
+  - una cortada o rechazada cuenta lo real conocido (0 si no salió nada).
+- **`VoiceHangup::hangup()`**: en la carrera con el job, `hung_up` donde antes daba `not_live`.
+- **`voice:doctor`** (texto): «Llamadas   : cerradas en el código (la constante de VoiceCallPolicy): ni salientes ni entrantes autorizadas.» (con la constante abierta, «ABIERTAS …»).
+- **Firmas internas** (compatibles hacia atrás):
+  - nuevas: `VoiceBrake::openOrRearm()`, `::nextOpening()`, `::observedAfter()` y `REARM_READABLE_MAX`; `VoiceCostGuard::contribution()` y `DENIED_STATUSES`; `VoicePostCall::MAX_GUARD_CODES` y `MAX_GUARD_CODES_BYTES`; `VoiceReconciler::dryRunReport()`; `VoiceHangup::startedAfterCancel()`;
+  - con un parámetro opcional nuevo: `VoiceReconciler::run(…, bool $dryRun = false)` y `numbers(…, bool $dryRun = false)`.
+
+## 4. Decisiones tomadas (para confirmar)
+
+1. **«Lo denegado no compromete gasto» = no reserva, pero lo real conocido sí cuenta.** Es el grupo de `busy`, `no_answer` y `failed`. No lo dejo en 0 siempre por dos razones:
+   - una avalancha de entrantes denegadas cuesta minutos reales de Twilio y de ElevenLabs, y con 0 siempre el techo no la vería nunca;
+   - las filas de la prueba O-2 son sintéticas, no tienen coste real y no echan el freno.
+
+   Por lo mismo, `canceled` y `failed_to_start` pasan de «0» a «lo real», que es 0 salvo en el caso de M-3, donde la llamada sí salió y se colgó. Si el lead quiere la denegada en 0 siempre, es una línea; pierde esa vigilancia.
+2. **El techo, rearmado frente a lo registrado en la apertura soltada.** La suelta no admite evidencia (`vbr_shape_chk` exige `evidence IS NULL`) y no toqué el esquema. Lo registrado al abrir es ≤ lo que había al soltar, así que va en el sentido seguro: un gasto que llegó entre abrir y soltar (un precio tardío) también rearma.
+3. **La deriva, por instantes.** Cuenta el instante en que empieza la observación (antes del GET) frente a `created_at` de la suelta. En el mismo segundo cuenta como posterior (falla cerrado). El veredicto de la caché del job no rearma nunca: la conciliación siguiente sí.
+4. **M-3 falla cerrado si el corte inmediato no surte efecto.** Pasa si Twilio está caído o si el proceso muere entre guardar y colgar. En ese caso la llamada sigue hasta su máximo (≤ 300 s), queda `hangup_requested` con el fallo y un `voice.hangup.after_cancel_failed` en el registro, y la siguiente conciliación la ve viva y echa el freno (`unknown:<sid>`). **No añadí** un reintento manual: `voice:hangup` no corta una fila `canceled`, porque su SID solo está en el evento. Queda como riesgo residual (§6).
+5. **M-3 sin dos conexiones de PG.** El job no tiene cerrojo mientras espera al proveedor, así que los dos órdenes de la carrera son secuencias deterministas sobre la base, y las dos se prueban, también en PG dentro de la puerta. El único solape real es el `FOR UPDATE` de `record()` contra el `UPDATE … WHERE status = 'requested'` del corte. PG lo serializa por la fila y vuelve a evaluar el `WHERE` en READ COMMITTED: el corte afecta a 0 filas y pasa a la relectura, que es exactamente el estado de la segunda prueba. Para un bloqueo de verdad entre dos sesiones haría falta un segundo proceso: una prueba de un solo hilo se quedaría esperando.
+6. **El modo en seco simula en memoria lo que dejaría la pasada** (estados y precios) para el techo y las atascadas. Sin eso, anunciaba un `cost_cap` que no iba a pasar (y al revés con los precios), y lo cazan las mutaciones D9-5 y D9-9. No es una instantánea transaccional: con escrituras concurrentes, la pasada de verdad puede diferir.
+7. **El tope de bytes además del de 50.** Hoy 50 entradas ocupan unos 3 KB. La cota de 3 584 bytes cubre que el motor traiga códigos más largos sin volver a romper el CHECK.
+
+## 5. Para tester (casos límite desde dentro)
+
+- **Artefacto de las pruebas, no de producción.** Con `travelTo()` a un Carbon en otra zona (p. ej. `America/Bogota`), Carbon lee las fechas de la base EN ESA ZONA (`createFromFormat` toma la zona de la hora de prueba) hasta el primer `travel()`, que la deja en UTC: los instantes leídos salen 5 h desplazados.
+  - Lo medí con una sonda: escrito `15:00:00` en UTC, se lee `15:00:00 -05`.
+  - Las pruebas que comparan un instante con un `created_at` recién leído deben fijar el reloj en UTC; la de rearme ya lo hace.
+  - En producción no hay hora de prueba y se escribe y lee en la misma zona.
+- **Rearme concurrente.** Dos conciliaciones calculan el mismo `r<n>`: el UNIQUE de `open_key` deja una y la otra es idempotente. Si la suelta y una observación en vuelo se cruzan, decide el instante de la observación.
+- **El colgado inmediato después de 20 s de ElevenLabs.** El plazo de Twilio es 10 s y el job tiene 30 s. Si los dos se agotan, `failed()` no toca la fila (`canceled`) y la conciliación decide.
+- **`canceledStartFor()`** mira, como `ambiguousFor()`, los últimos 200 eventos de ese tipo (cupo ≤ 20 salientes al día).
+- **En seco, sin transacción:** lee el estado de cada sentencia, no una foto.
+
+## 6. Riesgos residuales y pendientes
+
+- **M-3**, si el corte inmediato falla: no hay reintento desde Laravel sobre la fila cortada (decisión 4). La conciliación frena y el incidente avisa; se corta en la consola (nivel 3). Si el lead lo quiere, es una tanda pequeña: `voice:hangup <uuid>` sobre una `canceled` con `afterCancel` y sin colgado bueno.
+- **Documentos de DOC8 y del lead** (no los toqué): las marcas «corrección en curso (B8-d)» de R8-13, R8-19 a R8-21 y R8-27 y del plan, el checklist, la guía y `ULTRON_STUDIO_H8_VOZ.md` (la fila de `voice:reconcile`, que ya admite `--dry-run`), y el nombre `wouldOpenBrake`.
+- **Fuera de B8-d:** E10-10 (destinos en el laboratorio, fase 3) y E10-7 (lead).
+
+## 7. Migración, configuración y despliegue
+
+- **Migraciones:** ninguna. **Variables nuevas:** ninguna. **Valores:** ninguno cambia; solo comentarios en `config/voice.php` y en el fichero de ejemplo de entorno.
+- **Para el runbook (OPS8/DOC8):** antes de soltar el freno, `php artisan voice:reconcile --dry-run --json` (con `--numbers` si hace falta) ya es de solo lectura sobre la base: no escribe filas, eventos, freno, incidentes ni la caché del job. Los GET a los proveedores sí salen, igual que de verdad.
+
+## 8. Ficheros
+
+**Cambiados:**
+- `app/Services/Telephony/{VoicePostCall,VoiceBrake,VoiceReconciler,VoiceCostGuard,VoiceHangup}.php`
+- `app/Jobs/Voice/PlaceOutboundVoiceCall.php`
+- `app/Console/Commands/Voice/{VoiceReconcileCommand,VoiceDoctorCommand}.php`
+- `config/voice.php` (comentarios)
+- el fichero de ejemplo de entorno (comentarios del bloque de voz)
+- `tests/Feature/Voice/VoiceDoctorCommandTest.php` (una aserción)
+- este informe
+
+**Nuevos:** `tests/Feature/Telephony/{VoicePostCallGuardCapTest,VoiceBrakeRearmTest,VoiceCostCapZeroBudgetTest,VoiceReconcileDryRunTest,PlaceOutboundVoiceCallHangupRaceTest}.php`.
+
+**Sin commit.**
+
+**Bases PG:** queda la mía, `ultron_studio_h8_bd2` (la puerta); borré `ultron_studio_h8_bd2_antes`.
+
+**Fuera del repositorio** (desechable, en el scratchpad de la sesión):
+- las copias `antes/backend` (HEAD) y `mut/backend`;
+- el banco `tools/mutar-b8d.php`;
+- `out/{mutaciones-b8d.json, mutaciones-b8d-2.json, mutaciones-b8d-final.json, mutaciones-b8d-final.txt, voz-sqlite.xml, studio-voz-sqlite.xml, puerta-pg.xml}`.
+
+## §B8-d (2) · punto 7 del lead: los `codes` de los eventos en el detalle de la llamada (SEC8-b (3), O-1, funcional)
+
+### 1. El defecto y el formato elegido
+
+**El defecto:**
+- `VoiceCallsQuery::show()` (el detalle de `GET admin/voice/calls/{uuid}`; el método se llama `show()`, no `detail()`) daba `codes` tal como se guarda: un objeto con códigos y números de turno.
+- El CRM lee cada evento con `leerEvento` → `codigos()` (`studio-voice-parse.ts:1318` y `:209`): una LISTA, cada entrada con `RE_CODIGO = /^[a-z][a-z0-9_]{0,47}$/` (`:141`) y como mucho 64. Lo demás lo descarta («N eventos descartados»).
+- Lo reproduje: la prueba nueva cae 4 de 4 sobre el código anterior. Los motivos son `array_is_list` falso, que es el síntoma exacto, y `codes: null` en los eventos sin códigos.
+
+**El formato, para confirmar.** Los ejemplos del encargo (`violation:no_discounts@turno 12`, `reason:no_answer`, `+N más`) llevan `:`, `@`, espacios, `+` y tilde, y el CRM de hoy los seguiría descartando. Como el CRM no se toca, cada cadena casa `RE_CODIGO`:
+- violaciones: `<código>_turno_<n>`, p. ej. `machine_reply_invented_discount_turno_12`;
+- claves con su valor: `reason_no_answer`, `carrier_status_completed`, `before_active`, `after_completed`, `http_200`, `seq_3`, `micros_37700`;
+- banderas: `after_cancel` y `has_audio_no`;
+- lo que no cabe: `y_<n>_mas`.
+
+El CRM las pinta tal cual (`e.codes.join(', ')`, `studio-voice-calls.ts:128`). Si se prefiere el formato con `:` y `@`, FE8 tiene que cambiar `leerEvento` a un lector de lista pintable; entonces es una línea por ficha aquí.
+
+### 2. Qué cambió
+
+`app/Services/Telephony/VoiceCallsQuery.php`: `eventCodes()`, que se aplica a cada evento de `show()`. Lo guardado no cambia.
+- **Lista blanca de claves** (`SHOWN_KEYS`, `FLAG_KEYS`): no salen los ids del proveedor (`conversationId` y `callSid`; el registro no los da), la clase de un error (`error_class` del job que muere) ni ninguna clave desconocida.
+- `reasons`: `reason_<motivo>` cada uno.
+- `violations`: en orden de turno; el código se recorta si no cabe con su turno en 48.
+- Lo que no tiene forma de código se omite.
+- **Como mucho 50** (el CRM admite 64). Si sobran, o si hay `truncated` (E10-4), las 49 primeras y `y_<n>_mas`, con n = las que no caben + las no guardadas.
+- `null` o vacío: `[]`.
+
+### 3. Prueba y captura
+
+`tests/Feature/Telephony/VoiceCallDetailEventsTest.php` (nueva, 4 pruebas). Todas piden el detalle por HTTP con `telephony.view` y comprueban cada evento con la regla del CRM: lista, `RE_CODIGO` y ≤ 64.
+- **La captura con eventos reales.** Una post-llamada FIRMADA con 3 violaciones en los turnos 0, 2 y 4 y la conciliación con Twilio simulado dan cuatro eventos:
+  - `post_call_transcription`: `[duration_seconds_40, agent_turns_3, tool_calls_0]`;
+  - `guard_verdict`: `[voice_notice_missing_turno_0, voice_money_not_from_tool_turno_2, …_turno_4]`;
+  - `reconciled`: `[carrier_status_completed, before_completed, after_completed]`;
+  - `cost_recorded`: `[micros_37700, unit_usd]`.
+
+  En la respuesta no aparecen el texto de la transcripción, el teléfono, el SID ni la conversación.
+- 200 violaciones por la ruta firmada: 50 entradas, la última `y_151_mas`.
+- La saliente cortada que el job colgó (M-3), el job que muere, una herramienta y una entrante no canaria. Resultados:
+  - el `outbound_ambiguous` cortado da `[reason_server_error, http_502, after_cancel]`, sin la conversación ni el SID;
+  - el `hangup_requested` del sistema da `[carrier_status_completed, http_200, after_cancel]`;
+  - el job que muere da `[]`, sin `RuntimeException`;
+  - la herramienta da `[]`;
+  - la iniciación da `reason_<motivo>` cada uno y `publication_<estado>`.
+- La normalización con valores raros: mayúsculas, guiones, ids, una clase, texto con un teléfono, un código de 78 caracteres, un turno no entero, un código que empieza por cifra. Más los bordes: 50 justas, 60, y `truncated` con pocas.
+
+### 4. Cifras
+
+| Qué | Resultado |
+|---|---|
+| Voz, telefonía y Twilio, SQLite | **786 pruebas, 202 001 aserciones, 0 fallos**, 146 omitidas |
+| Studio de voz y guarda del motor, SQLite | **588, 0 fallos**, 73 omitidas |
+| Puerta PG (`ultron_studio_h8_bd2`) | **1 374, 209 617 aserciones, 0 fallos**, 15 omitidas |
+| `auth:coverage --unmapped` | vacío, exit 0 |
+| Pint en los dos ficheros | `passed` |
+| Antes del cambio | la copia con todo B8-d salvo esto: 4 de 4 caen |
+| Mutaciones (misma copia aislada y mismo banco) | **14 de 14 muertas**, el control no cae, la copia vuelve a quedar idéntica |
+
+Las 14 mutaciones: quitar la normalización, ignorar las violaciones, tope 64, olvidar `truncated` en la marca, enseñar los ids, quitar la lista blanca, recortar a 60, no reservar sitio para el turno, banderas falsas sin `_no`, marcar siempre, motivos sin `reason_`, sin `snake_case`, sin filtrar los nulos y `truncated` a 0.
+
+### 5. Contrato para FE8
+
+`GET admin/voice/calls/{uuid}` → `call.events[].codes` es ahora SIEMPRE una lista de códigos cortos (≤ 50, `RE_CODIGO`), `[]` sin códigos. Antes era un objeto o `null`.
+
+**Comprobado contra una COPIA** de `RE_CODIGO` y del tope de `codigos()` en la prueba del backend; **no ejecuté** el lector del CRM. Hipótesis por verificar con un spec del CRM (FE8 o tester): el CRM de `45dd73a` lo lee sin cambios y los eventos descartados son 0.
+
+Para la próxima captura de FE8, esta prueba da el detalle con eventos reales.
+
+### 6. Ficheros de esta tanda
+
+- Cambiados: `app/Services/Telephony/VoiceCallsQuery.php` y este informe.
+- Nuevo: `tests/Feature/Telephony/VoiceCallDetailEventsTest.php`.
+- Sin commit.

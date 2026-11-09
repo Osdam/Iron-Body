@@ -9,6 +9,9 @@ use App\Rules\PlainText;
 use App\Services\IronGuard\IncidentRecorder;
 use App\Services\UltronStudio\StudioCanaryPhone;
 use App\Support\Access\CrmPermission;
+use Closure;
+use DateTimeImmutable;
+use DateTimeInterface;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -25,6 +28,11 @@ use Throwable;
  * subcuenta, y una llamada que Laravel no inició. Abrir es IDEMPOTENTE por su
  * clave (`open_key`, una por causa concreta) y abre además un incidente de
  * IRON GUARD (el mecanismo del monitor del H7), después de confirmar.
+ *
+ * SE REARMA ({@see openOrRearm()}; E10-6, SEC8-b B-2): las causas que repiten
+ * clave (la deriva del agente y la del número, el techo de gasto de un día)
+ * vuelven a echarlo si la evidencia cambió después de que una persona lo
+ * soltara: una apertura nueva (`<clave>:r<n>`), con su incidente.
  *
  * Con el freno echado (alguna apertura sin soltar): las salientes dan 409
  * `voice_braked`, las entrantes `caller_authorized = no` y las herramientas no
@@ -60,6 +68,15 @@ final class VoiceBrake
     public const INCIDENT_SOURCE = 'voice';
 
     public const INCIDENT_KIND = 'voice_brake';
+
+    /**
+     * Las reaperturas de una causa (E10-6) llevan su generación en la clave:
+     * `<clave>:r2`, `:r3`… mientras quepa en `open_key` (128,
+     * `VoiceEvents::KEY_PATTERN`); con una clave más larga (ids del proveedor de
+     * hasta 128), `rearm:<sha256 de la clave>:r<n>`. Los ids no llevan `:`
+     * (`VoiceIds`): ninguna clave de primera apertura cae en una familia.
+     */
+    public const REARM_READABLE_MAX = 120;
 
     /** ¿Abre el freno esta causa? (pura, paridad con el fixture). */
     public static function opensFor(string $trigger): bool
@@ -118,6 +135,88 @@ final class VoiceBrake
         });
 
         return $fila;
+    }
+
+    /**
+     * Abre el freno por una causa que se REPITE con la misma clave (E10-6,
+     * SEC8-b B-2): la deriva del agente (`drift:<agente>`), la del número
+     * (`number:<id>:<agente>`) y el techo de gasto (`cost_cap:<día>`).
+     *  - Nunca abierta: como {@see open()}.
+     *  - Su última apertura sigue echada: idempotente (null).
+     *  - Una persona ya la soltó: se abre OTRA (la generación siguiente de la
+     *    clave, con `rearmOf` en la evidencia y su incidente) SOLO si
+     *    `$changedAfterRelease`, con la apertura soltada y su suelta, dice que
+     *    la evidencia cambió después de soltarla (una observación posterior,
+     *    {@see observedAfter()}; un gasto mayor que el registrado). La misma
+     *    evidencia no la reabre: soltarla con la causa corregida se respeta.
+     *
+     * @param  array<string, int|string|bool|null|list<mixed>>  $evidence  códigos y cifras, nunca texto ni teléfonos
+     * @param  Closure(VoiceBrakeEntry, VoiceBrakeEntry): bool  $changedAfterRelease
+     */
+    public static function openOrRearm(string $reason, string $openKey, array $evidence, Closure $changedAfterRelease, ?int $callId = null, ?int $eventId = null): ?VoiceBrakeEntry
+    {
+        $plan = self::nextOpening($openKey, $changedAfterRelease);
+        if ($plan === null) {
+            return null;
+        }
+        [$clave, $soltada] = $plan;
+
+        return self::open($reason, $clave, $soltada === null ? $evidence : $evidence + ['rearmOf' => (string) $soltada->uuid], $callId, $eventId);
+    }
+
+    /**
+     * SIN ESCRIBIR (lo usa también `voice:reconcile --dry-run`, E10-9): la
+     * clave con la que se abriría ahora y la apertura soltada a la que sucede
+     * (null la primera vez), o null si no se abriría. Sin
+     * `$changedAfterRelease`, la regla de {@see open()}: cada clave, una vez.
+     *
+     * @param  (Closure(VoiceBrakeEntry, VoiceBrakeEntry): bool)|null  $changedAfterRelease
+     * @return array{0: string, 1: ?VoiceBrakeEntry}|null
+     */
+    public static function nextOpening(string $openKey, ?Closure $changedAfterRelease = null): ?array
+    {
+        if ($changedAfterRelease === null) {
+            return VoiceBrakeEntry::query()->where('open_key', $openKey)->exists() ? null : [$openKey, null];
+        }
+        $familia = strlen($openKey) <= self::REARM_READABLE_MAX ? $openKey.':r' : 'rearm:'.hash('sha256', $openKey).':r';
+        $generaciones = [];
+        $aperturas = VoiceBrakeEntry::query()->where('kind', VoiceBrakeEntry::KIND_OPEN)
+            ->where(static fn ($q) => $q->where('open_key', $openKey)->orWhereRaw('substr(open_key, 1, '.strlen($familia).') = ?', [$familia]))
+            ->get();
+        foreach ($aperturas as $a) {
+            $resto = substr((string) $a->open_key, strlen($familia));
+            if ($a->open_key === $openKey) {
+                $generaciones[1] = $a;
+            } elseif (str_starts_with((string) $a->open_key, $familia) && preg_match('/^[1-9][0-9]{0,5}$/D', $resto) === 1) {
+                $generaciones[(int) $resto] = $a;
+            }
+        }
+        if ($generaciones === []) {
+            return [$openKey, null];
+        }
+        $n = max(array_keys($generaciones));
+        $ultima = $generaciones[$n];
+        $suelta = VoiceBrakeEntry::query()->where('kind', VoiceBrakeEntry::KIND_RELEASE)->where('brake_id', $ultima->id)->first();
+        if ($suelta === null || ! $changedAfterRelease($ultima, $suelta)) {
+            return null;
+        }
+
+        return [$familia.($n + 1), $ultima];
+    }
+
+    /**
+     * La regla de las derivas (E10-6): una observación hecha DESPUÉS de soltar
+     * es evidencia nueva. `$observedAt` es el instante en que empezó a
+     * observarse (antes de la petición). La suelta se guarda a segundos: una
+     * observación del mismo segundo cuenta como posterior (falla cerrado).
+     *
+     * @return Closure(VoiceBrakeEntry, VoiceBrakeEntry): bool
+     */
+    public static function observedAfter(DateTimeInterface $observedAt): Closure
+    {
+        $observada = DateTimeImmutable::createFromInterface($observedAt);
+
+        return static fn (VoiceBrakeEntry $abierta, VoiceBrakeEntry $suelta): bool => $suelta->created_at === null || $observada > $suelta->created_at;
     }
 
     /**

@@ -49,6 +49,24 @@ final class VoicePostCall
      */
     public const LAB_CLAIMED = ['recorded', 'duplicate', 'ignored'];
 
+    /**
+     * Violaciones de la guarda posterior que se guardan en el veredicto, como
+     * mucho (E10-4, SEC8-b M-2; como el laboratorio,
+     * `StudioVoiceLabSessions::MAX_GUARD_CODES`): las primeras, en orden de
+     * turno, y `truncated` con las que no caben. Sin tope, unos 76 turnos con
+     * violación pasaban de los 4 096 bytes de `vce_codes_chk` (PG): el INSERT
+     * caía, se deshacía todo (también el freno) y ElevenLabs, reintentando el
+     * mismo cuerpo, acababa desactivando el webhook (D8-16).
+     */
+    public const MAX_GUARD_CODES = 50;
+
+    /**
+     * Y como mucho estos bytes de JSON, por si el motor trae códigos más largos
+     * que los de hoy (≤ 31 caracteres: 50 entradas son ~3 KB): holgura bajo los
+     * 4 096 de `vce_codes_chk` para `{"violations":[…],"truncated":N}`.
+     */
+    public const MAX_GUARD_CODES_BYTES = 3584;
+
     /** @return array<string, mixed> el cuerpo de la respuesta (200) */
     public function ingest(VoiceWebhookVerdict $v): array
     {
@@ -139,14 +157,15 @@ final class VoicePostCall
             VoiceCall::bind($id, ['duration_seconds' => $duracion], ['duration_seconds']);
         }
 
-        // 3. La guarda posterior: en memoria; se guardan códigos y números de turno.
+        // 3. La guarda posterior: en memoria; se guardan códigos y números de turno, acotados (E10-4).
         $violaciones = VoiceTranscriptGuard::inspect($v->guardTurns(), VoiceTransferDirectory::approvedHashesFor($llamada));
         $veredicto = VoiceEvents::record('guard_verdict', $id, VoiceCallEvent::PROVIDER_ELEVENLABS, $clave, [
             'outcome' => $violaciones === [] ? 'clean' : 'violation',
-            'codes' => ['violations' => $violaciones],
+            'codes' => self::verdictCodes($violaciones),
         ]);
         if ($violaciones !== []) {
-            VoiceBrake::open('guard_violation', 'guard:'.($clave ?? $llamada->uuid), ['codes' => array_values(array_unique(array_column($violaciones, 'code')))], $id, $veredicto?->id);
+            // Los códigos DISTINTOS (un conjunto cerrado del motor y de la voz): su tamaño no crece con los turnos.
+            VoiceBrake::open('guard_violation', 'guard:'.($clave ?? $llamada->uuid), ['codes' => array_slice(array_values(array_unique(array_column($violaciones, 'code'))), 0, self::MAX_GUARD_CODES)], $id, $veredicto?->id);
         }
         Log::channel('voice')->info('voice.post_call.transcription', ['call_uuid' => $llamada->uuid, 'seal_verified' => $verificado, 'violations' => count($violaciones), 'completed' => $cambio]);
 
@@ -200,6 +219,33 @@ final class VoicePostCall
         }
 
         return null;
+    }
+
+    /**
+     * Lo que se guarda del veredicto (E10-4): las primeras violaciones, como
+     * mucho {@see MAX_GUARD_CODES} y {@see MAX_GUARD_CODES_BYTES} de JSON, y
+     * `truncated` (cuántas no caben) solo si sobra alguna; sin violaciones, la
+     * forma de siempre (`{violations: []}`). El recuento completo va en la
+     * respuesta y en el registro; el freno no depende de esto.
+     *
+     * @param  list<array{turn:int, code:string}>  $violaciones
+     * @return array{violations: list<array{turn:int, code:string}>, truncated?: int}
+     */
+    private static function verdictCodes(array $violaciones): array
+    {
+        $guardadas = [];
+        $bytes = strlen('{"violations":[],"truncated":'.count($violaciones).'}');
+        foreach ($violaciones as $v) {
+            $tam = strlen((string) json_encode($v)) + 1;
+            if (count($guardadas) >= self::MAX_GUARD_CODES || $bytes + $tam > self::MAX_GUARD_CODES_BYTES) {
+                break;
+            }
+            $guardadas[] = $v;
+            $bytes += $tam;
+        }
+        $fuera = count($violaciones) - count($guardadas);
+
+        return ['violations' => $guardadas] + ($fuera > 0 ? ['truncated' => $fuera] : []);
     }
 
     /**

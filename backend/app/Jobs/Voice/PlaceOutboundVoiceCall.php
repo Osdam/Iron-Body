@@ -10,6 +10,7 @@ use App\Services\Telephony\OutboundPolicy;
 use App\Services\Telephony\VoiceBrake;
 use App\Services\Telephony\VoiceCanaryDirectory;
 use App\Services\Telephony\VoiceEvents;
+use App\Services\Telephony\VoiceHangup;
 use App\Services\Telephony\VoicePhone;
 use App\Services\Telephony\VoicePublishedConfig;
 use App\Services\Voice\Dto\OutboundCallRequest;
@@ -168,16 +169,21 @@ class PlaceOutboundVoiceCall implements ShouldQueue
         }
 
         $deriva = Cache::get(OutboundGate::DRIFT_CACHE_PREFIX.$parte->providerAgentId);
+        // E10-6: solo una observación hecha AQUÍ puede rearmar un freno soltado;
+        // el veredicto de la caché es de antes (la misma observación).
+        $rearma = static fn (): bool => false;
         if ($deriva === null) {
+            $observada = now();
             $observacion = VoiceAdapters::deployer()->describeAgent((string) $parte->providerAgentId);
             if ($observacion->outcome !== VoiceAgentObservation::OUTCOME_OBSERVED) {
                 return 'drift_unverified';
             }
             $deriva = ! hash_equals((string) $parte->projectionHash, (string) $observacion->projectionHash);
             Cache::put(OutboundGate::DRIFT_CACHE_PREFIX.$parte->providerAgentId, $deriva, OutboundGate::DRIFT_CACHE_SECONDS);
+            $rearma = VoiceBrake::observedAfter($observada);
         }
         if ($deriva === true) {
-            VoiceBrake::open('agent_drift', 'drift:'.$parte->providerAgentId, ['where' => 'outbound_job', 'seq' => $parte->seq, 'part' => $parte->part], (int) $llamada->id);
+            VoiceBrake::openOrRearm('agent_drift', 'drift:'.$parte->providerAgentId, ['where' => 'outbound_job', 'seq' => $parte->seq, 'part' => $parte->part], $rearma, (int) $llamada->id);
 
             return 'agent_drift';
         }
@@ -229,13 +235,27 @@ class PlaceOutboundVoiceCall implements ShouldQueue
         );
     }
 
+    /**
+     * Lo que dejó el proveedor. GANA EL CORTE (E10-5, SEC8-b M-3): si mientras
+     * el job esperaba una persona cortó la saliente (`requested` → `canceled`,
+     * {@see VoiceHangup}) y el proveedor la inició igual, la fila no cambia (un
+     * final no cambia, DB8), sus ids quedan en el evento (`afterCancel`; la
+     * fila `canceled` no los admite) para que la conciliación la reconozca, y
+     * la llamada recién iniciada se cuelga EN EL ACTO con el transportista,
+     * fuera de la transacción (sin cerrojo durante la red).
+     */
     private function record(VoiceCall $llamada, OutboundCallResult $r): string
     {
         $id = (int) $llamada->id;
         $codigos = ['reason' => $r->reason, 'http' => $r->httpStatus];
+        $colgar = null;
 
-        return DB::transaction(function () use ($id, $llamada, $r, $codigos): string {
+        $estado = DB::transaction(function () use ($id, $llamada, $r, $codigos, &$colgar): string {
             $fila = VoiceCall::query()->lockForUpdate()->find($id);
+            $cortada = $fila->status === VoiceCall::STATUS_CANCELED;
+            if ($cortada && $r->callSid !== null && in_array($r->outcome, [OutboundCallResult::OUTCOME_STARTED, OutboundCallResult::OUTCOME_AMBIGUOUS], true)) {
+                $colgar = $r->callSid;
+            }
 
             switch ($r->outcome) {
                 case OutboundCallResult::OUTCOME_STARTED:
@@ -248,7 +268,8 @@ class PlaceOutboundVoiceCall implements ShouldQueue
                     }
                     // El webhook pudo llegar antes y dejarla en un final (DF-S2): entonces ya no se escribe `dialing`.
                     VoiceCall::transition($id, [VoiceCall::STATUS_REQUESTED], VoiceCall::STATUS_DIALING, $valores);
-                    VoiceEvents::record('outbound_started', $id, VoiceCallEvent::PROVIDER_ELEVENLABS, (string) $r->conversationId, ['outcome' => 'started', 'codes' => $codigos]);
+                    VoiceEvents::record('outbound_started', $id, VoiceCallEvent::PROVIDER_ELEVENLABS, (string) $r->conversationId, ['outcome' => 'started',
+                        'codes' => $codigos + ($cortada ? ['conversationId' => $r->conversationId, 'callSid' => $r->callSid, 'afterCancel' => true] : [])]);
                     break;
 
                 case OutboundCallResult::OUTCOME_REJECTED:
@@ -260,7 +281,7 @@ class PlaceOutboundVoiceCall implements ShouldQueue
                     VoiceCall::transition($id, [VoiceCall::STATUS_REQUESTED], VoiceCall::STATUS_AMBIGUOUS, ['failure_code' => $r->reason]);
                     // Los ids que vinieran se guardan en el evento (la fila ambigua no los admite, DB8) para conciliar.
                     VoiceEvents::record('outbound_ambiguous', $id, VoiceCallEvent::PROVIDER_ELEVENLABS, 'amb:'.$llamada->uuid, [
-                        'outcome' => (string) $r->reason, 'codes' => $codigos + ['conversationId' => $r->conversationId, 'callSid' => $r->callSid],
+                        'outcome' => (string) $r->reason, 'codes' => $codigos + ['conversationId' => $r->conversationId, 'callSid' => $r->callSid] + ($cortada ? ['afterCancel' => true] : []),
                     ]);
                     break;
 
@@ -273,6 +294,12 @@ class PlaceOutboundVoiceCall implements ShouldQueue
 
             return (string) VoiceCall::query()->whereKey($id)->value('status');
         });
+
+        if ($colgar !== null) {
+            VoiceHangup::startedAfterCancel($llamada, $colgar, VoiceAdapters::carrier());
+        }
+
+        return $estado;
     }
 
     private function cancel(VoiceCall $llamada, string $motivo): string

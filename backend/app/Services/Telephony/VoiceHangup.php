@@ -18,6 +18,13 @@ use Illuminate\Support\Facades\Log;
  *
  * Funciona con la voz ya apagada (las banderas no lo impiden): cortar es lo
  * que se hace cuando algo va mal.
+ *
+ * GANA EL CORTE (E10-5, SEC8-b M-3) en los dos órdenes de la carrera con el
+ * job, que no tiene cerrojo mientras espera al proveedor:
+ *  - el corte llega primero (`requested` → `canceled`) y el proveedor la
+ *    inicia igual: el job la cuelga al volver ({@see startedAfterCancel()});
+ *  - el job marca primero (`dialing`) entre la lectura de la fila y el corte:
+ *    la cancelación no aplica y el corte sigue por la vía de una llamada viva.
  */
 final class VoiceHangup
 {
@@ -38,10 +45,13 @@ final class VoiceHangup
             : ['actor_type' => VoiceCallEvent::ACTOR_ADMIN, 'actor_admin_id' => $actor->id, 'actor_name' => (string) $actor->name, 'actor_role' => $actor->role];
 
         if ($llamada->status === VoiceCall::STATUS_REQUESTED) {
-            $hecho = VoiceCall::transition($id, [VoiceCall::STATUS_REQUESTED], VoiceCall::STATUS_CANCELED, ['policy_reason' => 'hangup', 'ended_at' => now()]);
-            VoiceEvents::record('hangup_requested', $id, VoiceCallEvent::PROVIDER_LARAVEL, null, $quien + ['outcome' => 'canceled_before_dial']);
+            if (VoiceCall::transition($id, [VoiceCall::STATUS_REQUESTED], VoiceCall::STATUS_CANCELED, ['policy_reason' => 'hangup', 'ended_at' => now()])) {
+                VoiceEvents::record('hangup_requested', $id, VoiceCallEvent::PROVIDER_LARAVEL, null, $quien + ['outcome' => 'canceled_before_dial']);
 
-            return ['result' => $hecho ? self::RESULT_CANCELED : self::RESULT_NOT_LIVE, 'carrier' => null, 'status' => self::status($id)];
+                return ['result' => self::RESULT_CANCELED, 'carrier' => null, 'status' => self::status($id)];
+            }
+            // Ya no estaba pedida (E10-5): si el job la marcó entre tanto, se corta como una viva.
+            $llamada = VoiceCall::query()->find($id) ?? $llamada;
         }
         if (! in_array($llamada->status, [VoiceCall::STATUS_DIALING, VoiceCall::STATUS_ACTIVE], true)) {
             return ['result' => self::RESULT_NOT_LIVE, 'carrier' => null, 'status' => (string) $llamada->status];
@@ -61,6 +71,30 @@ final class VoiceHangup
         Log::channel('voice')->warning('voice.hangup', ['call_uuid' => $llamada->uuid, 'carrier_outcome' => $r->outcome, 'hung_up' => $hecho]);
 
         return ['result' => $hecho ? self::RESULT_HUNG_UP : $r->outcome, 'carrier' => $r->outcome, 'status' => self::status($id)];
+    }
+
+    /**
+     * E10-5: la saliente se cortó (`canceled`) mientras el job esperaba al
+     * proveedor y el proveedor la inició igual: se cuelga EN EL ACTO la llamada
+     * recién iniciada (Twilio a `completed`, con la key de Laravel). La fila no
+     * cambia (un final no cambia, DB8); queda `hangup_requested` con lo que dijo
+     * el transportista. Si no se pudo colgar, error en el registro: la
+     * conciliación verá la llamada viva y echará el freno.
+     */
+    public static function startedAfterCancel(VoiceCall $llamada, string $callSid, TelephonyCarrier $carrier): string
+    {
+        $r = $carrier->hangup($callSid);
+        VoiceEvents::record('hangup_requested', (int) $llamada->id, VoiceCallEvent::PROVIDER_LARAVEL, null, [
+            'actor_type' => VoiceCallEvent::ACTOR_SYSTEM, 'outcome' => $r->outcome,
+            'codes' => ['carrierStatus' => $r->providerStatus, 'http' => $r->httpStatus, 'errorCode' => $r->providerErrorCode, 'afterCancel' => true],
+        ]);
+        if (in_array($r->outcome, [CarrierResult::OUTCOME_REQUESTED, CarrierResult::OUTCOME_NOT_FOUND], true)) {
+            Log::channel('voice')->warning('voice.hangup.after_cancel', ['call_uuid' => $llamada->uuid, 'carrier_outcome' => $r->outcome]);
+        } else {
+            Log::channel('voice')->error('voice.hangup.after_cancel_failed', ['call_uuid' => $llamada->uuid, 'carrier_outcome' => $r->outcome]);
+        }
+
+        return $r->outcome;
     }
 
     private static function status(int $id): string

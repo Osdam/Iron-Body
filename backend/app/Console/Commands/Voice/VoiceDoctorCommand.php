@@ -4,6 +4,7 @@ namespace App\Console\Commands\Voice;
 
 use App\Services\Telephony\VoiceTelephonyStatus;
 use App\Services\Voice\ElevenLabs\ElevenLabsConfig;
+use App\Services\Voice\VoiceCallPolicy;
 use App\Services\Voice\VoiceCheckResult;
 use App\Services\Voice\VoiceProviders;
 use App\Services\Voice\VoiceProviderStatus;
@@ -77,7 +78,10 @@ class VoiceDoctorCommand extends Command
         $this->line('Faltan     : '.($estado->missing === []
             ? 'ninguna'
             : implode(', ', array_map(static fn (string $pieza): string => $pieza.' ('.self::ENV[$pieza].')', $estado->missing))));
-        $this->line('Llamadas   : cerradas en el código. En este hito no se hace ninguna llamada.');
+        // La constante del H6, leída (DOC8 D-11): el texto sigue al código, también tras el giro de la fase 3.
+        $this->line('Llamadas   : '.(VoiceCallPolicy::CALLS_ENABLED_IN_CODE
+            ? 'ABIERTAS en el código (la constante de VoiceCallPolicy): cada llamada depende de sus banderas, sus cupos y el freno.'
+            : 'cerradas en el código (la constante de VoiceCallPolicy): ni salientes ni entrantes autorizadas.'));
         $this->newLine();
         if ($this->option('telefonia')) {
             $this->telephony(VoiceTelephonyStatus::snapshot());
