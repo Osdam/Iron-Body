@@ -1,0 +1,10 @@
+OK      simulador elevenlabs: 0 violaciones del contrato (solo se restan los falsos positivos de F-6 verificados por el paso h)  [propias {} · restados {} · 113 peticiones]
+OK      simulador twilio: 0 violaciones del contrato (solo se restan los falsos positivos de F-6 verificados por el paso h)  [propias {} · restados {} · 10 peticiones]
+OK      valla: ningún host fuera de 127.0.0.1 salvo las 2 sondas del arranque  [ninguno · bloqueadas 2]
+OK      valla: ningún tráfico local por la valla (no_proxy respetado)
+OK      lsof: ninguna conexión de la pila fuera de 127.0.0.1  [22 muestras · 0 líneas fuera]
+OK      laravel.log y el canal voice sin ERROR  [0]
+OK      failed_jobs vacío  [0]
+OK      ningún trabajo pendiente en ninguna cola  [0]
+OK      barrido: ningún secreto, token, centinela ni teléfono completo en registros, base, respuestas ni evidencia  [barrido: 31 valores buscados en 22 ficheros]
+FALLO   PHPUnit de la fase salió con 0  [código 1]

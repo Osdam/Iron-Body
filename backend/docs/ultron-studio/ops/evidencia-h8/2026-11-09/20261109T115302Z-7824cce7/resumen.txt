@@ -1,0 +1,6 @@
+E2E H8 · backend 7824cce7 (7824cce747415feced6e9dce30e3a5cfa5c0a044) · 2026-11-09T11:53:29Z · 26 s
+pruebas del E2E (sha256 de tests/Feature/Voice/E2E/*.php): 11d85036bd429495
+simuladores y valla de ops/banco-h8 (sha256 de los 4 .cjs, del árbol de trabajo): 9c87835600b7afdf
+cerrada: pruebas 6 (6 OK, 0 FALLO, 0 OMITIDAS) · comprobaciones 112 (112 OK, 0 FALLO) · 17 s
+comprobaciones que fallaron: 0
+hash de resultados (sha256 de las comprobaciones ordenadas: fase, paso, nombre, ok): a49db7d0277b646adf1e0f5c8545387b5ce81fd82e024491466386f5a73f42e4

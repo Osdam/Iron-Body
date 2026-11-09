@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="Tests\Feature\Voice\E2E\H8E2EAbiertaTest" file="/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/abierta/backend/tests/Feature/Voice/E2E/H8E2EAbiertaTest.php" tests="9" assertions="113" errors="0" failures="7" skipped="0" time="3.649557">
+    <testcase name="test_0_la_copia_del_banco_tiene_la_constante_abierta_y_los_canarios_de_voz_activos" file="/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/abierta/backend/tests/Feature/Voice/E2E/H8E2EAbiertaTest.php" line="40" class="Tests\Feature\Voice\E2E\H8E2EAbiertaTest" classname="Tests.Feature.Voice.E2E.H8E2EAbiertaTest" assertions="25" time="0.856124"/>
+    <testcase name="test_a_perfil_compilacion_laboratorio_y_veredicto" file="/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/abierta/backend/tests/Feature/Voice/E2E/H8E2EAbiertaTest.php" line="52" class="Tests\Feature\Voice\E2E\H8E2EAbiertaTest" classname="Tests.Feature.Voice.E2E.H8E2EAbiertaTest" assertions="62" time="1.220111"/>
+    <testcase name="test_b_publicar_en_canario_con_la_huella_que_se_vio" file="/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/abierta/backend/tests/Feature/Voice/E2E/H8E2EAbiertaTest.php" line="59" class="Tests\Feature\Voice\E2E\H8E2EAbiertaTest" classname="Tests.Feature.Voice.E2E.H8E2EAbiertaTest" assertions="10" time="1.385466">
+      <failure type="PHPUnit\Framework\AssertionFailedError">Tests\Feature\Voice\E2E\H8E2EAbiertaTest::test_b_publicar_en_canario_con_la_huella_que_se_vio
+publicar con otra huella → 409 spec_changed {expected, actual} — {"http":409,"code":"outside_publication_window","expected":null,"actual":null}
+PARADA: Beto publica en canario (201) — {"http":409,"code":"outside_publication_window","data.number":null}
+
+/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/abierta/backend/tests/Feature/Voice/E2E/H8StackE2ETestCase.php:89
+/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/abierta/backend/tests/Feature/Voice/E2E/H8E2EAbiertaTest.php:85</failure>
+    </testcase>
+    <testcase name="test_c_tres_entrantes_del_canario_selladas_y_una_de_un_numero_que_no_es_canario" file="/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/abierta/backend/tests/Feature/Voice/E2E/H8E2EAbiertaTest.php" line="117" class="Tests\Feature\Voice\E2E\H8E2EAbiertaTest" classname="Tests.Feature.Voice.E2E.H8E2EAbiertaTest" assertions="2" time="0.030548">
+      <failure type="PHPUnit\Framework\AssertionFailedError">Tests\Feature\Voice\E2E\H8E2EAbiertaTest::test_c_tres_entrantes_del_canario_selladas_y_una_de_un_numero_que_no_es_canario
+PARADA: estado del paso anterior «pub1» (si falta, ese paso falló antes de dejarlo) — ["canarios","version","a"]
+
+/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/abierta/backend/tests/Feature/Voice/E2E/H8StackE2ETestCase.php:89
+/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/abierta/backend/tests/Feature/Voice/E2E/H8StackE2ETestCase.php:704
+/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/abierta/backend/tests/Feature/Voice/E2E/H8E2EAbiertaTest.php:120</failure>
+    </testcase>
+    <testcase name="test_d_la_evidencia_del_canario_cuenta_bien_y_promover_se_niega_por_too_soon" file="/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/abierta/backend/tests/Feature/Voice/E2E/H8E2EAbiertaTest.php" line="199" class="Tests\Feature\Voice\E2E\H8E2EAbiertaTest" classname="Tests.Feature.Voice.E2E.H8E2EAbiertaTest" assertions="2" time="0.032304">
+      <failure type="PHPUnit\Framework\AssertionFailedError">Tests\Feature\Voice\E2E\H8E2EAbiertaTest::test_d_la_evidencia_del_canario_cuenta_bien_y_promover_se_niega_por_too_soon
+PARADA: estado del paso anterior «c» (si falta, ese paso falló antes de dejarlo) — ["canarios","version","a"]
+
+/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/abierta/backend/tests/Feature/Voice/E2E/H8StackE2ETestCase.php:89
+/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/abierta/backend/tests/Feature/Voice/E2E/H8StackE2ETestCase.php:704
+/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/abierta/backend/tests/Feature/Voice/E2E/H8E2EAbiertaTest.php:202</failure>
+    </testcase>
+    <testcase name="test_e_el_freno_se_abre_solo_y_solo_lo_suelta_una_persona" file="/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/abierta/backend/tests/Feature/Voice/E2E/H8E2EAbiertaTest.php" line="227" class="Tests\Feature\Voice\E2E\H8E2EAbiertaTest" classname="Tests.Feature.Voice.E2E.H8E2EAbiertaTest" assertions="1" time="0.029513">
+      <failure type="PHPUnit\Framework\AssertionFailedError">Tests\Feature\Voice\E2E\H8E2EAbiertaTest::test_e_el_freno_se_abre_solo_y_solo_lo_suelta_una_persona
+PARADA: estado del paso anterior «pub1» (si falta, ese paso falló antes de dejarlo) — ["canarios","version","a"]
+
+/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/abierta/backend/tests/Feature/Voice/E2E/H8StackE2ETestCase.php:89
+/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/abierta/backend/tests/Feature/Voice/E2E/H8StackE2ETestCase.php:704
+/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/abierta/backend/tests/Feature/Voice/E2E/H8E2EAbiertaTest.php:229</failure>
+    </testcase>
+    <testcase name="test_g_salientes_la_puerta_y_el_job_real_contra_los_simuladores" file="/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/abierta/backend/tests/Feature/Voice/E2E/H8E2EAbiertaTest.php" line="329" class="Tests\Feature\Voice\E2E\H8E2EAbiertaTest" classname="Tests.Feature.Voice.E2E.H8E2EAbiertaTest" assertions="2" time="0.029265">
+      <failure type="PHPUnit\Framework\AssertionFailedError">Tests\Feature\Voice\E2E\H8E2EAbiertaTest::test_g_salientes_la_puerta_y_el_job_real_contra_los_simuladores
+PARADA: estado del paso anterior «pub1» (si falta, ese paso falló antes de dejarlo) — ["canarios","version","a"]
+
+/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/abierta/backend/tests/Feature/Voice/E2E/H8StackE2ETestCase.php:89
+/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/abierta/backend/tests/Feature/Voice/E2E/H8StackE2ETestCase.php:704
+/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/abierta/backend/tests/Feature/Voice/E2E/H8E2EAbiertaTest.php:332</failure>
+    </testcase>
+    <testcase name="test_f_revertir_y_apagar_el_numero_sigue_a_la_cadena_que_solo_crece" file="/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/abierta/backend/tests/Feature/Voice/E2E/H8E2EAbiertaTest.php" line="421" class="Tests\Feature\Voice\E2E\H8E2EAbiertaTest" classname="Tests.Feature.Voice.E2E.H8E2EAbiertaTest" assertions="1" time="0.031154">
+      <failure type="PHPUnit\Framework\AssertionFailedError">Tests\Feature\Voice\E2E\H8E2EAbiertaTest::test_f_revertir_y_apagar_el_numero_sigue_a_la_cadena_que_solo_crece
+PARADA: estado del paso anterior «pub1» (si falta, ese paso falló antes de dejarlo) — ["canarios","version","a"]
+
+/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/abierta/backend/tests/Feature/Voice/E2E/H8StackE2ETestCase.php:89
+/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/abierta/backend/tests/Feature/Voice/E2E/H8StackE2ETestCase.php:704
+/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/abierta/backend/tests/Feature/Voice/E2E/H8E2EAbiertaTest.php:423</failure>
+    </testcase>
+    <testcase name="test_h_cero_red_fuera_de_127_y_0_violaciones_del_contrato" file="/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/abierta/backend/tests/Feature/Voice/E2E/H8E2EAbiertaTest.php" line="483" class="Tests\Feature\Voice\E2E\H8E2EAbiertaTest" classname="Tests.Feature.Voice.E2E.H8E2EAbiertaTest" assertions="8" time="0.035072">
+      <failure type="PHPUnit\Framework\ExpectationFailedException">Tests\Feature\Voice\E2E\H8E2EAbiertaTest::test_h_cero_red_fuera_de_127_y_0_violaciones_del_contrato
+Comprobaciones que no se cumplieron:
+ElevenLabs: exactamente UNA outbound-call en toda la fase (la saliente completa) — {"/v1/convai/agents/{agent_id}":2,"/v1/convai/tools":4,"/v1/convai/agents/create":1,"/v1/convai/tools/{tool_id}":4,"/v1/convai/conversation/get-signed-url":1}
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+-Array &amp;0 []
++Array &amp;0 [
++    0 =&gt; 'ElevenLabs: exactamente UNA outbound-call en toda la fase (la saliente completa) — {"/v1/convai/agents/{agent_id}":2,"/v1/convai/tools":4,"/v1/convai/agents/create":1,"/v1/convai/tools/{tool_id}":4,"/v1/convai/conversation/get-signed-url":1}',
++]
+
+/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/abierta/backend/tests/Feature/Voice/E2E/H8StackE2ETestCase.php:97
+/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/abierta/backend/tests/Feature/Voice/E2E/H8E2EAbiertaTest.php:500</failure>
+    </testcase>
+  </testsuite>
+</testsuites>

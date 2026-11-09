@@ -1,0 +1,30 @@
+{
+    "snapshots": [
+        {
+            "provider": "meta_ads",
+            "fingerprint": "f015334fcc0cd0cdcf04c08a26f4c6162f8daf15ceb2baed7d02c3ee0d9d4bff",
+            "recorded": true,
+            "uuid": "939eae5d-1ab3-423c-b997-a292aaa60670"
+        },
+        {
+            "provider": "twilio",
+            "fingerprint": "45313ce267bc500b49635dd3a88de877b1a0b9153ec98394e9d568fe06b7c78a",
+            "recorded": true,
+            "uuid": "5ae1f205-b84b-466a-8143-2c80be7be632"
+        },
+        {
+            "provider": "voice",
+            "fingerprint": "31bcfc9235a0eafea9744afc694ab42f9a41358db67d8c5be34e861a81a0fec6",
+            "recorded": true,
+            "uuid": "5e54e242-681d-43e1-b505-47b5a72c4a08"
+        }
+    ],
+    "voice": {
+        "verified": true,
+        "outcome": "credentials_ok",
+        "snapshotOutcome": "ok",
+        "snapshot": "3cec3032-d0b6-468a-814a-2ff6e06d6933",
+        "httpStatus": 200,
+        "agentAudioUlaw8000": true
+    }
+}

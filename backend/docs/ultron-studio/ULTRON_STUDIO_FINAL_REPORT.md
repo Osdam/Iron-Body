@@ -878,3 +878,14 @@ Vista previa protegida publicada el **18-10-2026 02:56 UTC** siguiendo `ULTRON_S
 **Estado del 31-10-2026** (lectura del lead por SSH, solo lectura): la URL es la misma. Producción sirve el CRM `4105016` y la API `7318122`, con el Studio en el estado del Hito 4 (fases 1–2). El Hito 5 no está publicado ni en `origin/main`.
 
 **Estado del 02-11-2026** (registro de despliegues de la hoja de ruta): la URL es la misma. Producción sirve el CRM `16c433c` y la API `1e5f9a0`: el Hito 4 en su fase 3, el Hito 5 en su fase 1 y el Hito 6 en su fase 1. El Hito 7 está en la rama `feat/ultron-studio-h7`, sin desplegar.
+
+## Hito 8. Voz y telefonía (09-11-2026)
+
+**Qué es.** Llamadas con el asesor de ULTRON por Twilio Programmable Voice y ElevenLabs ElevenAgents con Laravel como única puerta: perfil de voz a cuatro ojos, agente inmutable por publicación, cadena de voz firmada por parte (canario / resto), catálogo cerrado de herramientas (planes, horarios, pedir humano, no volver a llamar), guarda de la transcripción, conciliación y deriva, freno automático que suelta una persona, laboratorio hablado en el navegador, costes y techos, y, en la fase 4, salientes solo con consentimiento, horario de la Ley 2300 y festivos. Nada de esto cambia lo que ULTRON dice o hace por WhatsApp.
+
+**Estado: `HITO_8_IMPLEMENTED`, sin desplegar.** Rama `feat/ultron-studio-h8-voice`: backend `7824cce` (11 tablas, 38 rutas, 4 comandos, 4 tareas programadas, todo apagado por defecto y `CALLS_ENABLED_IN_CODE = false`), CRM `45dd73a` (sección «Voz y telefonía», 7 pestañas, cliente de ElevenLabs 1.30.0 alojado). Contrato: `ULTRON_STUDIO_H8_CONTRACT.md` con 14 enmiendas.
+
+**Verificado.** Puertas 1–4 del contrato; regresión global sin rojos nuevos frente a `main` (13 931 pruebas); E2E de 15 recorridos contra simuladores (0 red externa, 0 violaciones; evidencia en `ops/evidencia-h8/`); fase 1 ensayada en banco sobre el commit final (paso 0, despliegue completo y smoke 49 OK); revisión de seguridad completa (sin hallazgos críticos, altos ni medios abiertos); revisión independiente REV8: **aprobado con condiciones**, condiciones cerradas (Enmiendas 13 y 14).
+
+**Qué falta.** La fase 1 en producción (todo apagado) con la autorización del propietario; después, sus dependencias externas para las pruebas físicas (plan de pago de ElevenLabs con telefonía, subcuenta y número de Twilio con el bundle regulatorio, rotación de la clave y registro de los dos secretos, dos cuentas reales del CRM) y las fases 2 → 4b con sus puertas. Pendientes técnicos con dueño y momento: Enmienda 14, E14-5. Riesgos: `ULTRON_STUDIO_H8_RIESGOS.md`. Manual: `ULTRON_STUDIO_H8_VOZ.md`. Guía: `ULTRON_STUDIO_GUIA_ADMINISTRACION.md` §14. Operación: `ULTRON_STUDIO_CHECKLIST_OPERATIVO.md` §5 y `ULTRON_STUDIO_DEPLOYMENT_PLAN.md`, «Hito 8».
+

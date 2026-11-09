@@ -1,0 +1,41 @@
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/cerrada/backend/phpunit.xml
+
+..F.F.                                                              6 / 6 (100%)
+
+Time: 00:02.896, Memory: 46.50 MB
+
+There were 2 failures:
+
+1) Tests\Feature\Voice\E2E\H8E2ECerradaTest::test_b_publicar_despliega_un_agente_inerte_y_se_detiene_antes_del_numero
+Comprobaciones que no se cumplieron:
+publicar con otra huella → 409 spec_changed {expected, actual} — {"http":409,"code":"outside_publication_window","expected":null,"actual":null}
+publicar con la constante cerrada → 409 voice_number_not_assigned (not_attempted · calls_disabled_in_code) — {"http":409,"code":"outside_publication_window","outcome":null,"reason":null,"agent.status":null}
+en ElevenLabs: el agente se crea y se lee (4 herramientas, crear, leer), y NINGÚN PATCH al número — {"requests":0,"byRoute":[],"violations":[],"emitted":[]}
+SQL: el agente de publicación quedó deployed, INERTE (sin parte) y con su huella y destinos [] — null
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+-Array &0 []
++Array &0 [
++    0 => 'publicar con otra huella → 409 spec_changed {expected, actual} — {"http":409,"code":"outside_publication_window","expected":null,"actual":null}',
++    1 => 'publicar con la constante cerrada → 409 voice_number_not_assigned (not_attempted · calls_disabled_in_code) — {"http":409,"code":"outside_publication_window","outcome":null,"reason":null,"agent.status":null}',
++    2 => 'en ElevenLabs: el agente se crea y se lee (4 herramientas, crear, leer), y NINGÚN PATCH al número — {"requests":0,"byRoute":[],"violations":[],"emitted":[]}',
++    3 => 'SQL: el agente de publicación quedó deployed, INERTE (sin parte) y con su huella y destinos [] — null',
++]
+
+/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/cerrada/backend/tests/Feature/Voice/E2E/H8StackE2ETestCase.php:97
+/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/cerrada/backend/tests/Feature/Voice/E2E/H8E2ECerradaTest.php:84
+
+2) Tests\Feature\Voice\E2E\H8E2ECerradaTest::test_g_una_saliente_es_409_en_la_puerta_y_el_job_la_cancela_sin_peticion
+PARADA: estado del paso anterior «agenteInerte» (si falta, ese paso falló antes de dejarlo) — ["canarios","version","a"]
+
+/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/cerrada/backend/tests/Feature/Voice/E2E/H8StackE2ETestCase.php:89
+/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/cerrada/backend/tests/Feature/Voice/E2E/H8StackE2ETestCase.php:704
+/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T055957Z-7661b02c/cerrada/backend/tests/Feature/Voice/E2E/H8E2ECerradaTest.php:138
+
+FAILURES!
+Tests: 6, Assertions: 132, Failures: 2.

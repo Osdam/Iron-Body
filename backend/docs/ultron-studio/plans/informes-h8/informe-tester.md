@@ -680,3 +680,15 @@ Ejecutada por el lead tras cerrar al agente (`bash backend/docs/ultron-studio/op
 - Evidencia: `backend/docs/ultron-studio/ops/evidencia-h8/2026-11-08/20261108T224030Z-8ed09240/`.
 - F-1 cerrado (B8-c), F-2 y F-6 cerrados (OPS8-b); O-1 diferido (E9-6); O-2 en el runbook.
 
+## Cierre del lead (09-11-2026 11:55 UTC): C-1 de REV8 sobre `7824cce`
+
+Tres pasadas el mismo día, todas con evidencia en `ops/evidencia-h8/2026-11-09/`:
+
+| Pasada | Resultado | Causa |
+|---|---|---|
+| 05:59 UTC (`…T055957Z-7661b02c`) | cerrada 4/6, abierta 2/9 | 01:00 de Bogotá: publicar → 409 `outside_publication_window` y cascada. No es del código |
+| 11:11 UTC (`…T111106Z-7824cce7`), con `H8_E2E_VENTANA=` | cerrada 5/6, abierta 8/9 | Máquina recién despertada: el job de salientes tardó más de los 15 s de `esperarEstado` en el paso g de las dos fases (la fila acabó `canceled` con el motivo correcto). No es del código |
+| 11:53 y 11:54 UTC (`…T115302Z` y `…T115426Z`, `7824cce7`), en caliente | **cerrada 6/6 (112), abierta 9/9 (283)**; hashes `a49db7d0…` y `20bc13a1…` | — |
+
+Pendiente para TEST8 antes de la fase 2: `esperarEstado` a 30 s (Enmienda 14, E14-2).
+
