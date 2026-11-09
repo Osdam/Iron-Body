@@ -6,7 +6,7 @@
 
 **Tipo.** Descriptivo (§1–§6) y de referencia (§7–§11). No sustituye al contrato (`ULTRON_STUDIO_H8_CONTRACT.md`, con sus Enmiendas 1–9), que manda sobre este documento.
 
-**Fecha y base:** 08-11-2026, escrito sobre el backend `8d3c41f` (rama `feat/ultron-studio-h8-voice`, commit «Enmienda 9») y el CRM `26ef142` (paso 2 de FE8), leyendo el código. Lo que depende del paso 3 del CRM (laboratorio con micrófono y formas reales en seis pestañas) va marcado **[paso 3]**.
+**Fecha y base:** 08-11-2026, escrito sobre el backend `8d3c41f` (rama `feat/ultron-studio-h8-voice`, commit «Enmienda 9») y el CRM `45dd73a` (paso 3 de FE8, 09-11-2026), leyendo el código.
 
 > **Estado el 08-11-2026: nada del Hito 8 está en producción.** La fase 1 (todo apagado) está preparada y ensayada en el banco, sin ejecutar (`ULTRON_STUDIO_DEPLOYMENT_PLAN.md`, «Hito 8»). En el código, `VoiceCallPolicy::CALLS_ENABLED_IN_CODE = false`: ninguna llamada es posible hasta el commit `voice(calls-open)` de la fase 3.
 
@@ -104,7 +104,7 @@ Tabla de solo inserción `voice_brakes`: abrir y soltar son filas. **Lo abre sol
 
 Voz en el navegador, **sin teléfono**, contra un **agente de laboratorio** (misma compilación, `purpose = lab`, sin número, nunca entra en la cadena; uno por sesión, con concurrencia 1 y 1 conversación al día). Laravel emite una URL firmada de un solo uso (vigencia de 900 s; no se guarda ni se repite). **Cuatro cerrojos**: `VOICE_LAB_ENABLED`, `VOICE_LAB_DRIVER` (`fake` = simulador sin ElevenLabs), presupuesto (`VOICE_LAB_DAILY_BUDGET_USD` y `VOICE_LAB_SESSION_BUDGET_USD` > 0) y ElevenLabs en `ELEVENLABS_VERIFIED`; con `elevenlabs`, además `VOICE_WEBHOOK_BASE_URL` y las referencias de los secretos. Como mucho 5 minutos por sesión, un cupo por persona y día de Bogotá (`VOICE_LAB_MAX_SESSIONS_PER_DAY`, 5) y una reserva atómica del coste.
 
-**[paso 3]** En el CRM, el cliente oficial `@elevenlabs/client` **1.30.0**, en un chunk diferido; el micrófono se pide **antes** de abrir la sesión (si se niega, no se gasta) (E10-12).
+En el CRM, el cliente oficial `@elevenlabs/client` **1.30.0**, en un chunk diferido; el micrófono se pide **antes** de abrir la sesión (si se niega, no se gasta) (E10-12).
 
 El veredicto (`approved` o `rejected`, con nota si rechaza) lo emite **otra persona**: ni quien abrió la sesión ni quien creó la versión. Es definitivo. Las sesiones del simulador no admiten veredicto. Con la puerta en `required` (`ULTRON_STUDIO_VOICE_LAB_GATE`), publicar exige que el último veredicto sobre **la misma `specHash`** sea `approved`.
 
@@ -388,7 +388,7 @@ Estado el 08-11-2026. «Hecho» es lo ejecutado en el banco o en las suites, nun
 | Puerta 3 y regresión global (E10-1, E10-2) | `auth:coverage` vacío; SQLite 759 (voz y telefonía) y 3 091 (Studio), PG 525, 0 fallos; `suite-compare.sh` frente a `origin/main`: 13 931 pruebas, 57 rojos conocidos, **0 nuevos** | Contrato, Enmienda 10 |
 | SEC8-a / SEC8-b-lite / SEC8-b (parcial) | Modelo de amenazas, 61 guardas en verde sobre `8d3c41f`; M-1 corregido (E5-4), B-1 aceptado (E5-5); el SEC8-b parcial deja M-2, M-3, B-2, B-3 y tres huecos de guardas, por lectura de código | `informe-security.md` |
 
-**En curso o pendiente de cierre el 08-11-2026:** FE8 paso 3 (laboratorio con micrófono y formas reales) **[paso 3]**; el SEC8-b completo (pruebas de concepto de M-2 y M-3, puerta PG, mutaciones y revisión del CRM); la corrección B8-d (§12.2); REV8. Sin REV8 sin bloqueantes no hay fase 1 (puerta 4).
+**En curso o pendiente de cierre el 08-11-2026:** el SEC8-b completo (la revisión del CRM; el backend está cerrado); la corrección B8-d (§12.2); el E2E del CRM (TEST8-b, parte 2); REV8. Sin REV8 sin bloqueantes no hay fase 1 (puerta 4).
 
 ### 12.2 Pendiente de configuración o de código (antes de una fase)
 

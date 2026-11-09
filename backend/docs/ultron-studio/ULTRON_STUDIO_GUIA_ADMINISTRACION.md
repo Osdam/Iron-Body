@@ -258,7 +258,7 @@ Contratos `ULTRON_STUDIO_{F,G,H4,H5,H6,H7}_CONTRACT.md`; `ULTRON_STUDIO_FINAL_RE
 
 **Para quién.** El propietario y el personal que use la voz (Super Admin y Administrador). No hace falta conocer el código. La referencia técnica (rutas, variables, comandos) está en `ULTRON_STUDIO_H8_VOZ.md`; lo que mira quien opera el servidor, en `ULTRON_STUDIO_CHECKLIST_OPERATIVO.md` §5; los riesgos, en `ULTRON_STUDIO_H8_RIESGOS.md`; las pruebas con personas reales, en `ULTRON_STUDIO_PRUEBAS_FISICAS.md` §9.
 
-> **Estado el 08-11-2026: nada del Hito 8 está en producción.** Cuando se despliegue la fase 1 todo nacerá apagado. Lo que dependa del paso 3 del CRM (todavía en curso) va marcado **[paso 3]**.
+> **Estado el 08-11-2026: nada del Hito 8 está en producción.** Cuando se despliegue la fase 1 todo nacerá apagado. El CRM del paso 3 (formas reales en las siete pestañas y laboratorio con micrófono) está confirmado en la rama desde el 09-11-2026 (`45dd73a`).
 
 ### 14.1 Lo primero que hay que saber
 
@@ -276,7 +276,7 @@ Contratos `ULTRON_STUDIO_{F,G,H4,H5,H6,H7}_CONTRACT.md`; `ULTRON_STUDIO_FINAL_RE
 - **La página «Voz y telefonía»:** `https://ironbodyneiva.cloud/marketing/ultron-studio/voz`. Se llega con el enlace «Voz y telefonía» de la barra del tablero del Studio, tras «Integraciones». Pide `ultron.view`.
 - **La cabecera, siempre a la vista:** la fase que calcula el servidor (por ejemplo, «Fase 1 Todo apagado»), el freno («Freno suelto», «Freno echado» o «sin leer: cuenta como echado») y, mientras la constante del código esté cerrada, «Hoy no se hace ninguna llamada: la constante del código sigue cerrada hasta la fase 3, con la autorización escrita del propietario.»
 - **Siete pestañas:** «Estado», «Perfil de voz», «Publicación», «Llamadas», «Costes y métricas», «Contactos» y «Laboratorio hablado». Se recorren con las flechas, Inicio y Fin.
-- **[paso 3]** Con el CRM del paso 2, contra el servidor real solo funcionan la cabecera y la pestaña «Estado». Las otras seis dicen «No se pudo leer…» (sin enseñar nada inventado) hasta que el paso 3 las alinee con las respuestas reales.
+- Las siete pestañas leen las respuestas reales del servidor (CRM del paso 3, 09-11-2026); si una no puede leerse, lo dice sin enseñar nada inventado.
 
 *Fuentes: CRM `26ef142`, `studio-voice-page.ts:14-23` y `studio-voice-text.ts:58-61`; `plans/informes-h8/informe-front.md` §2 y §3.3.*
 
@@ -296,7 +296,7 @@ El CRM pasa a tener **111 permisos**; 7 filas de la voz (6 llaves nuevas y `ultr
 
 - Son los valores por defecto. El propietario los cambia por rol en Configuración › Roles, y el servidor vuelve a comprobar la llave en cada petición.
 - **Las automatizaciones (el token compartido) no reciben ninguna llave de voz:** la voz exige siempre una persona.
-- Los botones salen de lo que el servidor permite a tu sesión (`can` de la ruta 45). **[paso 3]** El CRM del paso 2 los saca de los permisos de la sesión; en los dos casos el servidor decide.
+- Los botones salen de lo que el servidor permite a tu sesión (`can` de la ruta 45).
 
 *Fuentes: `app/Support/Access/CrmPermission.php:143-168, 288-322` y `PermissionCatalog.php:165-170, 239-244` (ejecutados con `tinker`); contrato D8-22, E6-7; `informe-studio.md` §14.1.*
 
@@ -396,7 +396,7 @@ El CRM pasa a tener **111 permisos**; 7 filas de la voz (6 llaves nuevas y `ultr
 
 **Con el freno echado:** no sale ninguna llamada, las entrantes oyen «línea no disponible», el agente no recibe datos de las herramientas y no se puede publicar. Cada apertura abre un incidente en IRON GUARD.
 
-**Quién lo suelta y cómo:** una persona con `ultron.voice_publish` (Super Admin por defecto), con una nota de **5 a 300 caracteres** sin datos personales. **Cada apertura se suelta por separado y una sola vez:** si hay tres aperturas, hay que soltar las tres. **[paso 3]** En el CRM: «Estado» → el freno → «Soltar»; con el CRM del paso 2 la lista de frenos todavía no se lee contra el servidor real.
+**Quién lo suelta y cómo:** una persona con `ultron.voice_publish` (Super Admin por defecto), con una nota de **5 a 300 caracteres** sin datos personales. **Cada apertura se suelta por separado y una sola vez:** si hay tres aperturas, hay que soltar las tres. En el CRM: «Estado» → el freno → «Soltar».
 
 **Qué NO hagas:**
 - **No sueltes un freno sin conocer su causa.** Antes, quien opera el servidor la aclara (checklist §5). Soltarlo deja pasar otra vez lo que lo abrió.
@@ -413,7 +413,7 @@ El CRM pasa a tener **111 permisos**; 7 filas de la voz (6 llaves nuevas y `ultr
 **Qué ves antes de abrir:** los cuatro cerrojos en orden (la bandera, el modo, el presupuesto y la credencial verificada), el presupuesto del día de Bogotá, lo que reservará la sesión y tu cupo del día (5 sesiones por persona por defecto).
 
 **Qué haces:**
-1. **[paso 3]** Dar permiso al micrófono: el CRM lo pide **antes** de abrir la sesión, y si no das permiso no se gasta nada (E10-12).
+1. Dar permiso al micrófono: el CRM lo pide **antes** de abrir la sesión, y si no das permiso no se gasta nada (E10-12).
 2. **Abrir la sesión** (`ultron.voice_lab_run`; **gasta**): se reserva su coste antes de empezar. Hablar; como mucho 5 minutos.
 3. **Terminar** (solo quien la abrió) y anotar lo observado con las casillas del CRM.
 4. **Otra persona da el veredicto** (`ultron.approve`): ni quien abrió la sesión ni quien creó la versión. «Aprobado» o «Rechazado» (este, con nota). Es definitivo y va sobre la huella que se ve.
@@ -435,7 +435,7 @@ El CRM pasa a tener **111 permisos**; 7 filas de la voz (6 llaves nuevas y `ultr
 
 - **«Pedir una llamada»** sale solo con `telephony.call_place`, la constante abierta, las salientes encendidas y el freno suelto. El destino es un canario de voz (fase 4a) o un contacto con consentimiento (fase 4b). Si la puerta lo rechaza, el CRM enseña **todos sus motivos en orden** (por ejemplo, fuera de horario, festivo, sin consentimiento, techo del día alcanzado).
 - **Una petición es una llamada.** No hay reintentos automáticos: si no contestó o comunicaba, otro intento es otra petición. Una llamada «ambigua» (el proveedor no confirmó) **no se repite** hasta que la conciliación la resuelva.
-- **«Cortar la llamada»** (`telephony.call_place`) cuelga una llamada en curso. Quien opera el servidor tiene además el corte de todas (`voice:hangup --all --confirm`). **[paso 3]** El botón vive en «Llamadas».
+- **«Cortar la llamada»** (`telephony.call_place`) cuelga una llamada en curso. Quien opera el servidor tiene además el corte de todas (`voice:hangup --all --confirm`). El botón vive en «Llamadas».
 - **Hoy las salientes no pasan la puerta** aunque todo esté encendido: la telefonía todavía no lee la verificación de ElevenLabs (falla cerrado con `elevenlabs_unverified`); el lector llega antes de la fase 3.
 
 *Fuentes: contrato D8-12, D8-20, E4-6, E6-6; `informe-front.md` §2; código: `app/Services/Telephony/OutboundPolicy.php:38-46`, `app/Console/Commands/Voice/VoiceHangupCommand.php`.*
@@ -468,7 +468,7 @@ El CRM pasa a tener **111 permisos**; 7 filas de la voz (6 llaves nuevas y `ultr
 
 - **Cuánto se reserva por llamada** (con los precios oficiales del 03-11-2026 y 300 s): unos **0,96 US$** una saliente a un móvil, **1,24 US$** una entrante del canario y **0,18 US$** una entrante denegada. Es el peor caso; el coste real llega después del proveedor y de la conciliación.
 - **Costes fijos:** el número local, 17,50 US$ al mes, y el plan de pago de ElevenLabs con telefonía (lo elige el propietario). El coste del modelo de lenguaje de ElevenLabs está por confirmar.
-- **Dónde se mira:** la pestaña «Costes y métricas» **[paso 3]**. La segunda barrera son el presupuesto y los avisos de la propia subcuenta de Twilio, que fija el propietario en su consola (P-5): un aviso de gasto echa el freno.
+- **Dónde se mira:** la pestaña «Costes y métricas». La segunda barrera son el presupuesto y los avisos de la propia subcuenta de Twilio, que fija el propietario en su consola (P-5): un aviso de gasto echa el freno.
 - **Aviso:** con el presupuesto en 0 y una llamada en el día, la conciliación echa hoy el freno de gasto (§14.9): **corrección en curso (B8-d)**.
 
 *Fuentes: `config/voice.php:100-101, 136-137, 237-260`; código: `app/Services/Telephony/VoiceCostGuard.php:88-102` (los importes son el cálculo de su fórmula); `ULTRON_STUDIO_H8_VOICE_AUDIT.md` (precios, punto 7); contrato D8-15, P-5, P-22.*
@@ -510,7 +510,7 @@ El CRM pasa a tener **111 permisos**; 7 filas de la voz (6 llaves nuevas y `ultr
 | 409 `spec_changed` al publicar o promover | Volver a previsualizar (o a cargar el canario) y confirmar otra vez | Quien publica |
 | 409 `lab_verdict_required` | Falta un veredicto «aprobado» de otra persona sobre esa misma huella | — |
 | 409 `outside_publication_window` | Esperar a la ventana (07:00–19:00 de Bogotá) | — |
-| «No se pudo leer…» en una pestaña | **[paso 3]** Con el CRM del paso 2 es lo esperado en seis pestañas; después, «Reintentar» y, si persiste, avisar | Cualquiera |
+| «No se pudo leer…» en una pestaña | «Reintentar»; si persiste, avisar a quien opera el servidor (puede ser el cupo del CRM, el servidor o la red) | Cualquiera |
 | Una persona pide durante una llamada que no la llamen más | Ya está: la herramienta «No volver a llamar» crea la exclusión en el acto | — |
 | Una solicitud de supresión (Ley 1581) sobre la voz | Avisar al propietario. **La sección de voz del procedimiento de supresión todavía no existe**: llega antes de la fase 3 | Propietario + quien opera |
 
