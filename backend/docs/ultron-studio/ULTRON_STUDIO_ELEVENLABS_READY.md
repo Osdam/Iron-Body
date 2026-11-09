@@ -1,5 +1,7 @@
 # ULTRON STUDIO: ElevenLabs
 
+> **Actualización del 08-11-2026 (Hito 8, E1-12 y E4-6).** Desde el 03-11-2026 22:55 UTC ElevenLabs está configurado y verificado en producción con la autorización expresa del propietario: el Studio afirma **`ELEVENLABS_VERIFIED`** (caduca el 03-12-2026 22:55 UTC si no se renueva la verificación) y la telefonía (`voice:doctor`) dice **`ELEVENLABS_UNVERIFIED`** a propósito hasta la fase 3. Las llamadas siguen cerradas por código. El procedimiento ejecutado y el de rotación están en `ops/el-verificar.sh` (regenera también los dos secretos propios: tras rotar hay que volver a registrarlos en ElevenLabs). Lo que sigue describe el estado del Hito 6 (`ELEVENLABS_NOT_CONFIGURED`) tal como se entregó entonces.
+
 **Fecha:** 17-10-2026; actualizado el 01-11-2026 con el Hito 6. **Estado: `ELEVENLABS_NOT_CONFIGURED`.** El adaptador está construido en la rama `feat/ultron-studio-h6` del backend (`e3a0fdd`), **apagado, sin credenciales y sin ninguna ruta pública**. No se ha generado ninguna llamada ni ninguna voz, y no está desplegado. En producción no hay ninguna variable de ElevenLabs (contrato, «Hechos de producción al congelar», 31-10-2026; matriz de credenciales del 01-11-2026, sin imprimir valores). Encender ElevenLabs exige una **autorización expresa aparte** de la del 25-10-2026 (contrato, «Autorizaciones»). Contrato: `ULTRON_STUDIO_H6_CONTRACT.md` §I6 y Enmiendas 1, 3 y 4; detalle técnico: `ULTRON_STUDIO_BACKEND_REPORT.md` («Hito 6»).
 
 ## Qué hay (Hito 6, paquete V)

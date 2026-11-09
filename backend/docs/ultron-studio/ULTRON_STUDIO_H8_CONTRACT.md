@@ -881,3 +881,16 @@ Resuelve lo que TEST8-a, S8-a y OPS8-a dejaron abierto y recoge lo que el propie
 | E10-13 (DOC8, discrepancias) | Guía y checklist del H7 esperan `ELEVENLABS_NOT_CONFIGURED` desde el 03-11; el plan cita cupos antiguos y una nota de 5–500 (el código admite 5–300); `el-verificar.sh` no estaba en el repo; fase 3 sin `ULTRON_STUDIO_VOICE_PUBLISHING_ENABLED`; fase 4b sin la publicación promovida | DOC8 corrige los documentos con fecha y fuente; `el-verificar.sh` (ejecutado en producción el 03-11) está desde hoy en `ops/`, recuperado del scratchpad (que se purga a los 3 días) |
 | E10-14 (hecho) | Límite de uso | FE8-3b, SEC8-b y DOC8 quedaron a medias el 08-11 ~22:58 UTC; su trabajo está confirmado como parcial (el CRM en un commit WIP `c6c48b6` con `ng test` sin compilar) y se reanudan con su contexto. Nuevo agente B8-d para E10-4..E10-9 |
 
+## Enmienda 11 (lead, 09-11-2026 03:15 UTC): aclaraciones de DOC8 y cierre documental
+
+| Id | Qué | Decisión |
+|---|---|---|
+| E11-1 (D8-23) | El contrato nombra las variables del laboratorio como `ULTRON_STUDIO_VOICE_LAB_*`; el código usa `VOICE_LAB_*` en `config/voice.php` | **Manda el código** (E4-1/E2-4: las banderas de la telefonía viven en `config/voice.php` y solo publicar en el Studio); D8-23 se lee con `VOICE_LAB_*` |
+| E11-2 (protección 1) | «Todo en false o 0» frente a techos por minuto con defecto no nulo | Se aclara: «apagado» son las banderas y los presupuestos (todos `false`/0); los techos de los limitadores (`VOICE_PUBLIC_*_PER_MINUTE`, cupos del CRM) no habilitan nada y conservan sus defectos |
+| E11-3 (P-18 frente a D8-22) | El supuesto P-18 daba el laboratorio al Administrador | **D8-22 manda**: `ultron.voice_lab_run` solo Super Admin; el Administrador tiene `ultron.approve`, `ultron.voice_manage` y `telephony.view` (E6-7) |
+| E11-4 (fila DOC8) | Documentos adicionales que pedía la fila | `ROLLBACK` del H8: está en la sección H8 del plan; `TWILIO_REPORT`: pendiente de configuración (no hay subcuenta ni número); `FINAL_REPORT`, `ops/README.md` y la fila 8 de la hoja de ruta: el lead al cierre con REV8; `VISUAL`: capturas del CRM con FE8-3 (paso 3); `SECURITY`/`BACKEND`: los informes de `plans/informes-h8/` hacen de tales |
+| E11-5 (hecho) | Correcciones documentales del lead | `ULTRON_STUDIO_ELEVENLABS_READY.md` con nota fechada del estado real (E1-12/E4-6); plan, fase 2: `twilio_voice:disabled` es el único estado posible con la bandera apagada y se añade la CSP de Nginx del laboratorio (E10-12). `informe-devops.md` («cada hora») se deja como registro histórico: la purga corre a diario a las 04:40 (E9-2) |
+| E11-6 (DOC8, aviso) | `el-verificar.sh` regenera también los dos secretos propios | Al rotar la clave (E2-2) hay que volver a registrar el secreto del webhook y el de las herramientas en ElevenLabs; en el plan, el checklist y el manual |
+| E11-7 (DOC8, aviso) | Un canario que diga «no me vuelvas a llamar» en una prueba queda excluido para siempre de las salientes de la 4a | Es el comportamiento del contrato (D8-10, `no_volver_a_llamar` excluye el número sellado); la guía física lo avisa: en las pruebas se usa la frase solo cuando se quiera probar la exclusión |
+| E11-8 (hecho) | DOC8 | Completo y confirmado (`532d738`); agente cerrado. Las marcas «[paso 3]» las retira el lead al confirmar FE8-3 |
+
