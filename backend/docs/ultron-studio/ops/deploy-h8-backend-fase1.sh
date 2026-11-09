@@ -325,6 +325,10 @@ for f in $EN_PUERTA; do case " $PERMITIDOS_EN_PUERTA " in *" $f "*) ;; *) FUERA=
 [ -z "$FUERA" ] || aborta "la puerta de diff tiene ficheros que el contrato del H8 no nombra (OTP, motor, API interna, Meta, catálogo o dependencias):$FUERA"
 BORRADAS=$(g diff --numstat "$BASE" origin/main -- backend/routes/console.php | awk '{print $2}')
 [ -z "$BORRADAS" ] || [ "$BORRADAS" = 0 ] || aborta "routes/console.php pierde $BORRADAS líneas entre $BASE y origin/main: el H8 solo añade el bloque de voz"
+# E10-7 (SEC8-b B-3): la constante de llamadas se comprueba ANTES del merge, en el commit que se va a desplegar (y no solo
+# después, en el paso 7): la fase 1 nunca despliega la constante abierta (`voice(calls-open):` es de la fase 3).
+CONSTANTE_EN_ORIGEN=$(g show "origin/main:backend/app/Services/Voice/VoiceCallPolicy.php" 2>/dev/null | grep -cE 'CALLS_ENABLED_IN_CODE[[:space:]]*=[[:space:]]*false[[:space:]]*;')
+[ "$CONSTANTE_EN_ORIGEN" = 1 ] || aborta "VoiceCallPolicy::CALLS_ENABLED_IN_CODE no es false en origin/main ($ESPERADO): la fase 1 no despliega la constante abierta"
 case "$(cat "$BK/api-commit.txt" 2>/dev/null)" in
   "$BASE"*) ;;
   *) aborta "$BK/api-commit.txt no es $BASE (la vuelta atrás del código lo lee; si el respaldo se rehizo en una reanudación, escribirlo con: git -C /var/www/api rev-parse $BASE > $BK/api-commit.txt)" ;;
