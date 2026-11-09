@@ -6,7 +6,7 @@
 # Nunca imprime valores. Uso: bash /root/el-verificar.sh /root/el-clave.txt <agent_id>
 # Ejecutado en producción el 03-11-2026 22:55 UTC (E1-12). Endurecido el 08-11-2026 tras la revisión automática: python en modo
 # aislado (-I: root no importa módulos del directorio de www-data), sin seguir enlaces simbólicos y escritura atómica del fichero
-# de entorno conservando dueño y modo. Para la ROTACIÓN de la clave (E2-2): clave nueva en la consola →
+# de entorno conservando dueño y modo (fchown/fchmod sobre el descriptor abierto, nunca por ruta). Para la ROTACIÓN de la clave (E2-2): clave nueva en la consola →
 # este mismo guion con el fichero nuevo → revocar la vieja en la consola. Copia en el repo desde el 08-11-2026 (DOC8, discrepancia 4).
 set -uo pipefail
 export LC_ALL=C
@@ -38,8 +38,9 @@ for k, v in vals:
     else: s += f'{k}={v}\n'; print('   ' + k + ' añadida')
 tmp = p + '.tmp-' + str(os.getpid())
 tfd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-with os.fdopen(tfd, 'w', encoding='utf-8') as fh: fh.write(s)
-os.chown(tmp, st.st_uid, st.st_gid); os.chmod(tmp, 0o600); os.replace(tmp, p)
+with os.fdopen(tfd, 'w', encoding='utf-8') as fh:
+    fh.write(s); fh.flush(); os.fchown(fh.fileno(), st.st_uid, st.st_gid); os.fchmod(fh.fileno(), 0o600); os.fsync(fh.fileno())
+os.replace(tmp, p)
 PY
 unset WH TL
 sudo -u www-data php -r 'require "/var/www/api/backend/vendor/autoload.php"; try { Dotenv\Dotenv::createArrayBacked("/var/www/api/backend")->load(); } catch (Throwable $e) { fwrite(STDERR, get_class($e).PHP_EOL); exit(1); }' || { echo "ABORTA: el fichero de entorno NO parsea; restaurar /root/env-pre-elevenlabs-$TS"; exit 1; }
@@ -54,8 +55,9 @@ with os.fdopen(fd, encoding='utf-8') as fh: s = fh.read()
 s = re.sub(r'^(\s*)ELEVENLABS_ENABLED\s*=.*$', r'\1ELEVENLABS_ENABLED=true', s, count=1, flags=re.M)
 tmp = p + '.tmp-' + str(os.getpid())
 tfd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-with os.fdopen(tfd, 'w', encoding='utf-8') as fh: fh.write(s)
-os.chown(tmp, st.st_uid, st.st_gid); os.chmod(tmp, 0o600); os.replace(tmp, p); print('   ELEVENLABS_ENABLED=true')
+with os.fdopen(tfd, 'w', encoding='utf-8') as fh:
+    fh.write(s); fh.flush(); os.fchown(fh.fileno(), st.st_uid, st.st_gid); os.fchmod(fh.fileno(), 0o600); os.fsync(fh.fileno())
+os.replace(tmp, p); print('   ELEVENLABS_ENABLED=true')
 PY
 cache; echo "3. doctor --verify (un GET al agente):"; doctor --verify | sed 's/^/   /' | head -8; RC=${PIPESTATUS[0]}
 echo "4. instantánea de verificación (integrations-snapshot --verify-voice):"; sudo -u www-data php artisan ultron-studio:integrations-snapshot --verify-voice 2>&1 | grep -vE 'xi-api|sk_' | sed 's/^/   /' | tail -4
