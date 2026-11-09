@@ -301,7 +301,9 @@ ACEPTADOS_VISTOS=""
 while read -r pid cid; do
   [ -n "${cid:-}" ] || continue
   grep -qxF "$pid" <<< "$EN_PROD" && continue
-  [[ "$(g log -1 --format=%s "$cid")" =~ ^[a-z]+\((ultron-studio-h8|calls-open)\): ]] && continue
+  # Los commits del hito llevan el prefijo `tipo(ultron-studio-h8):` o `voice(calls-open):`; el tipo puede ser compuesto
+  # con barras (`docs/test/ops(ultron-studio-h8):`, commits del lead): C-1 de REV8 lo detectó como «ajeno» por error.
+  [[ "$(g log -1 --format=%s "$cid")" =~ ^[a-z]+(/[a-z]+)*\((ultron-studio-h8|calls-open)\): ]] && continue
   case ",$ACEPTA," in *",${cid:0:7},"*) ACEPTADOS_VISTOS="$ACEPTADOS_VISTOS ${cid:0:7}"; continue ;; esac
   AJENOS="$AJENOS ${cid:0:7}"
 done < <(g log --no-merges -p "$BASE..origin/main" | g patch-id --stable)
