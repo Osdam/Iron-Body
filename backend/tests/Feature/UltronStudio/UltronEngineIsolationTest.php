@@ -91,10 +91,13 @@ class UltronEngineIsolationTest extends TestCase
     /**
      * Hito 8 (contrato H8, DB8): las migraciones de la voz y de su gobierno
      * (`2026_11_1*_create_voice_*`, `…_create_ultron_studio_voice_*` y sus
-     * guardas), por patrón hasta que DB8 fije los nombres; entonces pasan a
-     * {@see ALLOWED} con su ruta exacta.
+     * guardas): las dos rutas exactas (REV8 m-2; DB8 fijó los nombres).
      */
-    private const ALLOWED_H8_PATTERNS = ['database/migrations/2026_11_1*voice*.php'];
+    private const ALLOWED_H8_PATTERNS = [
+        // REV8 m-2: las dos rutas exactas de DB8 (sin comodín: una migración futura con «voice» en el nombre no entra sola).
+        'database/migrations/2026_11_10_100001_create_ultron_studio_voice_tables.php',
+        'database/migrations/2026_11_10_100002_create_voice_tables.php',
+    ];
 
     /**
      * Hito 8 (Enmienda 8, E8-1; Enmienda 9, E9-1): el arranque de la aplicación

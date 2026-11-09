@@ -402,7 +402,7 @@ El CRM pasa a tener **111 permisos**; 7 filas de la voz (6 llaves nuevas y `ultr
 - **No sueltes un freno sin conocer su causa.** Antes, quien opera el servidor la aclara (checklist §5). Soltarlo deja pasar otra vez lo que lo abrió.
 - No lo sueltes para «probar si ya funciona».
 
-**Con el presupuesto de voz en 0, la primera llamada del día echaría el «Techo duro de gasto»** en la siguiente conciliación, también la de prueba de la fase 2: **corrección en curso (B8-d)**, antes de la fase 2. Con ella, el freno de gasto solo salta con gasto real comprometido, y una llamada denegada no cuenta (Enmienda 10, E10-8).
+**Con el presupuesto de voz en 0, el freno de gasto solo salta si hay gasto real comprometido mayor que cero** (Enmienda 12, E12-3; corregido en B8-d el 09-11-2026): la llamada de prueba de la fase 2 (denegada, coste 0) no lo echa; una avalancha de denegadas con minutos reales sí cuenta su coste.
 
 *Fuentes: contrato D8-19, E6-1; código: `app/Services/Telephony/VoiceBrake.php:48-56, 87-176`, `app/Models/Voice/VoiceBrakeEntry.php:21`; CRM `26ef142`, `studio-voice-text.ts:76, 333-343`; decisión del lead del 08-11-2026 (B8-d); `informe-front.md` §3.3.*
 
@@ -469,7 +469,7 @@ El CRM pasa a tener **111 permisos**; 7 filas de la voz (6 llaves nuevas y `ultr
 - **Cuánto se reserva por llamada** (con los precios oficiales del 03-11-2026 y 300 s): unos **0,96 US$** una saliente a un móvil, **1,24 US$** una entrante del canario y **0,18 US$** una entrante denegada. Es el peor caso; el coste real llega después del proveedor y de la conciliación.
 - **Costes fijos:** el número local, 17,50 US$ al mes, y el plan de pago de ElevenLabs con telefonía (lo elige el propietario). El coste del modelo de lenguaje de ElevenLabs está por confirmar.
 - **Dónde se mira:** la pestaña «Costes y métricas». La segunda barrera son el presupuesto y los avisos de la propia subcuenta de Twilio, que fija el propietario en su consola (P-5): un aviso de gasto echa el freno.
-- **Aviso:** con el presupuesto en 0 y una llamada en el día, la conciliación echa hoy el freno de gasto (§14.9): **corrección en curso (B8-d)**.
+- **Aviso:** con el presupuesto en 0, el freno de gasto solo salta con gasto real mayor que cero (§14.9, E12-3).
 
 *Fuentes: `config/voice.php:100-101, 136-137, 237-260`; código: `app/Services/Telephony/VoiceCostGuard.php:88-102` (los importes son el cálculo de su fórmula); `ULTRON_STUDIO_H8_VOICE_AUDIT.md` (precios, punto 7); contrato D8-15, P-5, P-22.*
 

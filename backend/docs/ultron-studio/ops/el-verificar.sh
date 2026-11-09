@@ -60,6 +60,14 @@ with os.fdopen(tfd, 'w', encoding='utf-8') as fh:
 os.replace(tmp, p); print('   ELEVENLABS_ENABLED=true')
 PY
 cache; echo "3. doctor --verify (un GET al agente):"; doctor --verify | sed 's/^/   /' | head -8; RC=${PIPESTATUS[0]}
+if [ "$RC" != 0 ]; then
+  # REV8 m-5: fallo cerrado. La clave nueva queda escrita y la bandera encendida, pero SIN verificar: se destruye el fichero
+  # de la clave igualmente (no se deja en claro en disco) y se sale con error; quien opera decide repetir con un fichero nuevo
+  # o volver atrás (ELEVENLABS_ENABLED=false y la caché; copia previa en /root/env-pre-elevenlabs-$TS).
+  shred -u "$KEYFILE" 2>/dev/null || rm -f "$KEYFILE"
+  echo "ELEVENLABS VERIFICACIÓN FALLIDA (doctor --verify salió con $RC): fichero de la clave destruido; la configuración queda SIN verificar. Repetir con un fichero nuevo o volver atrás: ELEVENLABS_ENABLED=false y la caché (copia previa: /root/env-pre-elevenlabs-$TS)"
+  exit 1
+fi
 echo "4. instantánea de verificación (integrations-snapshot --verify-voice):"; sudo -u www-data php artisan ultron-studio:integrations-snapshot --verify-voice 2>&1 | grep -vE 'xi-api|sk_' | sed 's/^/   /' | tail -4
 echo "5. estado efectivo:"; sudo -u www-data php artisan tinker --execute='echo json_encode(["calls_enabled_in_code" => App\Services\Voice\VoiceCallPolicy::CALLS_ENABLED_IN_CODE, "elevenlabs_enabled" => config("voice.elevenlabs.enabled"), "has_key" => (bool) config("voice.elevenlabs.api_key"), "agent_id_set" => (bool) config("voice.elevenlabs.agent_id"), "twilio_voice_enabled" => config("voice.twilio.enabled")]), PHP_EOL;' 2>/dev/null | tail -1 | sed 's/^/   /'
 sudo -u www-data php artisan queue:restart -q; sleep 6
