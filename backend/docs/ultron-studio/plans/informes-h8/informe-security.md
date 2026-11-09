@@ -827,3 +827,143 @@ No tocados: nada de `app/`, `config/`, `routes/`, `database/` ni de los guiones;
 - `<scratchpad>/tools/mutar-b.php`;
 - las salidas `<scratchpad>/out/{mutaciones-sec8b.json, mutaciones-sec8b-contraprueba.json, poc-pg.err, poc-sqlite.err, guardas-sqlite-2.xml, voz-sqlite.xml, studio-voz-sqlite.xml, puerta-pg.xml}`;
 - las bases PG `ultron_studio_h8_secb` y `ultron_studio_h8_secb_copia` (esta, sin usar).
+
+---
+
+# §SEC8-b (3) · el CRM del paso 3 (`Iron-Body_Front`, `45dd73a`)
+
+**Fecha:** 08-11-2026. **Base:** `45dd73a` (FE8 paso 3, encima de `c6c48b6`), con el árbol limpio, frente a producción `73dbcd3`. Lectura del código, del cliente 1.30.0 instalado en `node_modules` y del registro público de npm. **No edité el CRM.** No ejecuté su suite (es de FE8). Rutas relativas a `src/app/modules/ultron-studio/`.
+
+**Veredicto: sin hallazgos de severidad crítica, alta ni media en el CRM.**
+- 1 baja, previa al H8: el CRM no manda CSP (§1.1);
+- 1 observación funcional, no de seguridad (§1.2);
+- el dictamen de la `ref` (§3).
+
+## 1. Hallazgos
+
+### B-4 · Baja · preexistente · El CRM no manda ninguna CSP ni `Permissions-Policy`: la nota de FE8-3 para OPS8 parte de una CSP que no existe
+- **Dónde:** el vhost de nginx de `https://ironbodyneiva.cloud/`.
+  - Leído hoy con un `HEAD` anónimo: solo `x-content-type-options: nosniff`, `x-frame-options: SAMEORIGIN`, `referrer-policy: strict-origin-when-cross-origin` y HSTS.
+  - `src/index.html` no tiene `<meta http-equiv>`.
+- **Impacto:**
+  - Hoy, ninguno sobre el laboratorio: sin `Permissions-Policy`, `microphone` vale `self` por defecto, y sin CSP el WebSocket no tiene restricción.
+  - Para OPS8, por tanto, **no hay que «añadir» nada para que funcione la fase 2**. Lo de `informe-front.md` §3.4 vale solo cuando exista una CSP.
+  - La falta de CSP es un hueco de endurecimiento anterior al H8: si entrara un XSS, nada limitaría a dónde habla la página. El H8 lo agrava poco, porque el cliente de ElevenLabs va empaquetado y sus worklets salen del propio origen.
+- **Corrección (OPS8, después de la fase 1 y fuera del H8):** una CSP en `Content-Security-Policy-Report-Only` primero. Como mínimo: `default-src 'self'; script-src 'self'; connect-src 'self' https://api.ironbodyneiva.cloud wss://api.elevenlabs.io; img-src 'self' data:; frame-ancestors 'self'`.
+  - **No** añadir `https://api.elevenlabs.io` ni `wss://livekit.rtc.elevenlabs.io`: con la URL firmada el cliente solo abre el WebSocket.
+  - Con [P-21] = `eu`, `wss://api.eu.residency.elevenlabs.io`.
+  - Además, `Permissions-Policy: microphone=(self), camera=(), geolocation=()`.
+
+### O-1 · Observación funcional (no de seguridad) · El detalle de una llamada descarta casi todos sus eventos
+- **Dónde:** `studio-voice-parse.ts:1318` lee `codes` como una **lista** de códigos cortos (`codigos()` → `lista()`). El backend manda un **objeto**:
+  - `VoiceCallsQuery.php:54` devuelve `'codes' => $e->codes`, con el cast `array` de un JSON objeto;
+  - por ejemplo `{reason, http}` en `outbound_started`, `{violations: [...]}` en `guard_verdict` y `{scope, seq, part, reservedMicros}` en `outbound_requested`.
+- **Efecto:**
+  - `leerLista` descarta cada evento con códigos y lo cuenta: «N eventos descartados» (`studio-voice-calls.ts:131`).
+  - La captura del backend (`testing/backend-voice.testing.ts:5043`) trae `events: []`, así que ninguna prueba vio la forma real.
+  - Falla cerrado, sin fuga, pero quien atienda un incidente no verá en el CRM los turnos de la guarda ni el antes y después de la conciliación.
+- **Corrección (decisión del lead entre B8 y FE8):** o el servidor aplana `codes` a una lista de códigos, o el CRM lee del objeto solo los escalares de forma de código.
+
+## 2. Verificado sin hallazgo
+
+**Teléfonos, URL, almacenamiento y consola (foco 1).**
+- En los 30 ficheros de voz del H8 no hay `console.*`, `localStorage`/`sessionStorage`/`indexedDB`, `innerHTML`, `bypassSecurityTrust*`, `window.open`, `eval` ni URL fijas. El único `localStorage` es la política de acceso de `access-control.service.ts`, que ya existía.
+- Los teléfonos viajan solo en dos cuerpos POST: `createProfile` (los destinos, `studio-voice-api.service.ts:221`) y `createContact` (`:526`). Nunca en una URL ni en un parámetro: cada uuid se valida (`isLowerUuid`) y se codifica antes de entrar en la ruta.
+- Cada respuesta de escritura se comprueba contra lo pedido (`:197-199`, `:271-273`, `:296-300`…).
+
+**Nada ilegible llega a la vista.**
+- Un fallo del lector sale como `unreadable` con un mensaje genérico (`studio-voice-api.service.ts:631-634`).
+- El motivo, que con `muestra()` puede repetir hasta 40 caracteres del valor (`studio-parse.ts:230-235`), se queda en `payload.reason` y **ninguna plantilla lo pinta**: solo `error.message`.
+- En los campos de teléfono, el lector no repite el valor (`studio-voice-parse.ts:212-225`), y los textos que se pintan rechazan series de 7 dígitos o un «+57» (`:152-153`, `:250-254`).
+- Las claves desconocidas se ignoran campo a campo.
+
+**`clientRequestId`.**
+- Lo genera `crypto.randomUUID()` (`studio-api.service.ts:152-158`).
+- Se reutiliza solo si el cuerpo no cambió: lo compara una firma cyrb53, no el cuerpo, así que el teléfono no queda en claro en la sesión (`studio-voice-session.ts:887-901`).
+- Se descarta cuando el servidor lo gasta.
+
+**Laboratorio (foco 2).**
+- **Orden:** cerrojos y presupuesto vistos → `supported()` (AudioWorklet, `getUserMedia` y la restricción `sampleRate`) → **permiso de micrófono antes del POST que gasta** (`studio-voice-session.ts:748-760`), con la pista soltada al momento (`studio-voice-lab-conversation.ts:93-103`).
+- **La URL firmada:**
+  - pasa directa a `Conversation.startSession({signedUrl, connectionType: 'websocket'})` y no entra en ninguna señal (`studio-voice-session.ts:818-843`, `studio-voice-lab-conversation.ts:105-122`);
+  - los errores del cliente se resumen sin texto;
+  - la repetición 200 no la trae, y el componente no la toca (`studio-voice-lab.ts:406`).
+- **Sin CDN:**
+  - los dos worklets se copian del paquete verificado a `assets/elevenlabs-client-1.30.0/` (`angular.json`, sin `scribeAudioProcessor.js`);
+  - `libsampleratePath` apunta a una ruta propia que no existe. En 1.30.0, `addLibsamplerateModule` usa `customPath || CDN` (`node_modules/@elevenlabs/client/dist/platform/web/addLibsamplerateModule.js:4`): con una ruta propia, **nunca va a jsDelivr**. Si la salida de audio tuviera que remuestrear (`output.js:55-59`), la sesión falla en el propio origen.
+  - El cliente solo hace `fetch` en `uploadFile`, `postOverallFeedback` y WebRTC, que el CRM no usa.
+- **Residual ya anotado por FE8:** si el WebSocket falla, la consola del navegador puede mostrar la URL que falló. Es de un solo uso y caduca en ≤ 15 min.
+
+**`expectedSpecHash` y 409 (foco 3).**
+- Publicar manda la `specHash` de la previsualización de ESA versión, perfil y propósito (`studio-voice-publications.ts:288-301, 380-400`), y promover, la del agente canario que se vio.
+- Un 409 `spec_changed` borra la previsualización (`studio-voice-session.ts:576`) y la vista solo avisa: **ningún reintento**.
+- La huella nueva cambia el cuerpo, y con él el `clientRequestId`.
+
+**Botones por `can` (foco 4).**
+- `can` vale «todo denegado» mientras no se lea (`studio-voice-session.ts:244-246`).
+- Cada escritura tiene su bloqueo, de `can` más el estado de `actions` del servidor (`:281-340, 618, 649, 798, 852`).
+- Las plantillas ofrecen la acción solo con el bloqueo a `null` (por ejemplo `studio-voice-calls.ts:54-58`, `studio-voice-publications.ts:95`, `studio-voice-lab.ts:84`), y `previo()` vuelve a negar.
+- El servidor decide de todos modos.
+
+**Rutas.** `marketing/ultron-studio/voz` va con `AuthGuard` y `ultron.view` (`app.routes.ts`). Los 4 permisos que son solo de Super Admin quedan fuera del Administrador por defecto (`access-control.service.ts`), como `CrmPermission::byRole()`.
+
+## 3. Dictamen: la `ref` de los destinos en `compile-preview` (foco 6)
+
+**Qué es:**
+- `ref` = `VoicePhone::hash()` del E.164 del destino: HMAC-SHA256 con la subclave `voice-phone` de la `APP_KEY` (`StudioVoiceCompiler.php:264`, `VoicePhone.php`).
+- Viaja dentro de `spec` en la respuesta de `POST voice/compile-preview` (`StudioVoicePublishing.php:212`), a quien tiene `ultron.voice_manage` (Administrador y Super Admin), en una respuesta autenticada y `no-store`.
+
+**Dictamen:**
+1. **Para Iron Body sigue siendo un dato personal seudonimizado** en el sentido de la Ley 1581: quien tiene la clave puede volver a ligarla a un número calculando la huella de un candidato.
+2. **No es un «teléfono en claro»** (protección 9). D8-5 y D8-17 hacen de esa huella la forma permitida del teléfono en todo el H8: `remote_hash`, `phone_hash`, `transfer_destination_hashes`.
+3. **Para quien la recibe no identifica a nadie:** sin la subclave no se puede recorrer el espacio de números de Colombia.
+4. **No se puede cruzar con nada en el CRM:** ninguna otra respuesta devuelve huellas `voice-phone` (llamadas, contactos y perfiles dan `last4`; `VoiceCallsQuery.php:64-98`, `VoiceContacts.php:390-400`).
+5. **El CRM la ignora:** el lector solo toma `alias` y `condition` (`studio-voice-parse.ts:862-865`).
+
+**Conclusión: conforme con el contrato; S8 no está obligado a quitarla.**
+- **Mejora de minimización (baja, opcional, después de la fase 1):** que la respuesta de `compile-preview` omita la `ref` o la ponga a `null`. La `specHash` se sigue calculando en el servidor sobre la especificación completa, y el CRM no la recalcula.
+- **Condición para mantenerla:** que ninguna respuesta futura del CRM devuelva huellas `voice-phone`, porque permitiría cruzarlas.
+
+## 4. Cadena de suministro: `@elevenlabs/client` 1.30.0 (foco 7)
+
+**El lock.**
+- El H8 añade **14 paquetes**: el cliente y 13 transitivos.
+- **`jose` 6.2.3** pasa de dependencia de desarrollo a dependencia de producción: lo arrastra `livekit-client`, con la misma versión e integridad.
+- La raíz solo gana `"@elevenlabs/client": "1.30.0"` (versión exacta). Nada más cambia.
+
+**Contra el registro** (`https://registry.npmjs.org/<paquete>/<versión>`, los 15):
+- `dist.integrity` y `dist.tarball` **iguales en los 15**;
+- `hasInstallScript` falso en todos y sin `binding.gyp`;
+- **ningún gancho de instalación** (`preinstall`, `install`, `postinstall`);
+- solo `sdp` (`npm run build`) y `webrtc-adapter` (`grunt build`) traen `prepare`, que npm no ejecuta al instalar desde el registro;
+- con procedencia firmada (Sigstore): `@elevenlabs/client`, `@elevenlabs/types`, `@livekit/protocol`, `livekit-client` y `jose`.
+
+| Paquete | Versión | Integridad y tarball | Ganchos |
+|---|---|---|---|
+| `@elevenlabs/client` | 1.30.0 | iguales | ninguno |
+| `@elevenlabs/types` | 0.25.0 | iguales | ninguno |
+| `livekit-client` | 2.23.0 | iguales | ninguno |
+| `@livekit/protocol` | 1.52.1 | iguales | ninguno |
+| `@livekit/mutex` | 1.1.1 | iguales | ninguno |
+| `@bufbuild/protobuf` | 1.10.1 | iguales | ninguno |
+| `@types/dom-mediacapture-record` | 1.0.22 | iguales | ninguno |
+| `events` | 3.3.0 | iguales | ninguno |
+| `jose` | 6.2.3 | iguales | ninguno |
+| `loglevel` | 1.9.2 | iguales | ninguno |
+| `machina` | 7.0.1 | iguales | ninguno |
+| `sdp` | 3.2.2 | iguales | `prepare` (no se ejecuta) |
+| `sdp-transform` | 2.15.0 | iguales | ninguno |
+| `typed-emitter` | 2.1.0 | iguales | ninguno |
+| `webrtc-adapter` | 9.0.6 | iguales | `prepare` (no se ejecuta) |
+
+**Hosts escritos en el cliente** (`dist/`):
+- `api.elevenlabs.io` (https y wss);
+- `livekit.rtc.elevenlabs.io` (WebRTC, que no se usa);
+- `cdn.jsdelivr.net` (solo `libsamplerate`, desviado, §2).
+
+El despliegue del CRM ejecuta `npm ci --no-audit --no-fund` en el Mac que compila, y solo si cambia el lock (`deploy-h8-crm-fase1.sh:74-78`), nunca en el servidor.
+
+## 5. Ficheros
+- Este apartado de `docs/ultron-studio/plans/informes-h8/informe-security.md`.
+- **CRM, sin tocar.**
+- **Fuera del repositorio** (desechable): `<scratchpad>/out/{lock-antes.json, lock-despues.json, lock-registro.txt, crm-ficheros.txt}`.
