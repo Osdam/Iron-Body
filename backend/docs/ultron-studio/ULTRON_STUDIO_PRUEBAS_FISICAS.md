@@ -526,6 +526,8 @@ SELECT provider, kind, outcome, actor_type, left(fingerprint, 12) AS huella, cre
 
 ### 6.3 `voice:doctor` → `ELEVENLABS_NOT_CONFIGURED`
 
+*Nota del 08-11-2026 (DOC8): superado.* El Hito 6 está en producción y, desde el 03-11-2026 a las 22:55 UTC, ElevenLabs tiene credenciales (contrato H8, E1-12): `voice:doctor` dice `ELEVENLABS_UNVERIFIED` y el Studio `ELEVENLABS_VERIFIED`. Lo esperado de hoy está en `ULTRON_STUDIO_CHECKLIST_OPERATIVO.md` §1 y §5; las pruebas de la voz, en §9.
+
 **Estado.** El comando existe solo en la rama local `feat/ultron-studio-h6` (paquete V, `0014292`). **No está en `origin/main` ni en producción**, así que hoy no se puede lanzar allí.
 
 **Cuando se despliegue el Hito 6** (leído en el código de la rama; no ejecutado por esta documentación):
@@ -539,6 +541,8 @@ Sin ninguna variable de ElevenLabs en el entorno, la salida esperada es: la lín
 ---
 
 ## 7. Eventual llamada real de prueba — fuera del alcance; hoy imposible
+
+*Nota del 08-11-2026 (DOC8): superado por el Hito 8.* La llamada real tiene ya su hito, su contrato (`ULTRON_STUDIO_H8_CONTRACT.md`) y sus pruebas físicas, en **§9**. Lo de abajo describe el código de `origin/main` del 01-11-2026 y se conserva como histórico. Con el Hito 8, las llamadas siguen cerradas en el código (`CALLS_ENABLED_IN_CODE = false`) hasta la fase 3.
 
 **Hoy ningún código puede llamar** (comprobado en el código de `origin/main` el 01-11-2026):
 - no hay TwiML, webhook de voz, marcador ni ninguna llamada a la API de voz de Twilio;
@@ -639,6 +643,131 @@ SELECT event, count(*) FROM ultron_studio_lab_events GROUP BY event ORDER BY eve
 
 ---
 
+## 9. Voz y telefonía (Hito 8): pruebas físicas de nivel 3 — planificadas; requieren el Hito 8 desplegado y la autorización escrita de cada fase
+
+**Qué es.** Las pruebas con la cuenta real de ElevenLabs y Twilio y con personas reales: lo que el banco no puede demostrar (las condiciones C-A1 a C-A5 del contrato y el comportamiento de una llamada telefónica de verdad). El nivel 1 del laboratorio es el de texto (§3); el nivel 2, el laboratorio hablado en el navegador, sin teléfono; **el nivel 3 son llamadas telefónicas** (fases 3 y 4a).
+
+**Estado el 08-11-2026:** **ninguna se ha ejecutado.** El Hito 8 no está desplegado. Todo lo de abajo sale del contrato H8 (con sus Enmiendas 1–9), del runbook (`ULTRON_STUDIO_DEPLOYMENT_PLAN.md`, «Hito 8»), del código de `8d3c41f` y del E2E con simuladores (`plans/informes-h8/informe-tester.md`, que recorrió estos caminos contra el banco, nunca contra los proveedores). Lo que todavía no se puede decir con certeza va marcado **[por confirmar]**.
+
+### 9.0 Reglas propias de la voz (además de las comunes)
+
+1. **Cada prueba de esta sección, en su fase y con su autorización escrita:** la fase 2 no hace ni una llamada telefónica; las entrantes son de la fase 3; las salientes, de la 4a. Abrir las llamadas exige además el commit `voice(calls-open)` desplegado.
+2. **Personas:** A crea el perfil y la versión; B aprueba y da el veredicto del laboratorio; C publica, distinta de quien creó la versión o el perfil (puede ser B). Más **al menos dos personas canario de voz**, cuyo teléfono esté en el registro del H6 (canal voz, activo, registrado por una persona y autorizado y activado por otra) y que hayan consentido las llamadas de prueba. Nunca la cuenta de smoke.
+3. **El perfil del canario no lleva destinos de transferencia** (decisión del lead del 08-11-2026): el laboratorio todavía no admite perfiles con destinos y, con la puerta en `required`, no se podrían publicar.
+4. **En las llamadas no se dicen datos reales:** escenarios inventados («Prueba física de voz 1: pregunto por los planes»). La voz de quien llama es un dato personal y ElevenLabs la retiene hasta 30 días (P-8).
+5. **Cuesta dinero:** cada minuto se paga a ElevenLabs y a Twilio, dentro de los techos de la fase. Reserva aproximada con 300 s: 1,24 US$ una entrante, 0,96 US$ una saliente a un móvil (`ULTRON_STUDIO_H8_VOZ.md` §10).
+6. **Lo que se crea no se borra:** agentes, entradas de la cadena, llamadas, eventos, exclusiones y frenos se quedan. **Una exclusión solo la quita el procedimiento de supresión:** no pidas «no me vuelvas a llamar» desde un canario que vaya a recibir salientes en la 4a.
+7. **La evidencia nunca lleva números ni transcripciones.** Las consultas, con el patrón de solo lectura del principio, no seleccionan `remote_hash`, `remote_last4`, `phone_hash`, `phone_encrypted`, `evidence` ni `note`.
+
+**Consultas de evidencia** (patrón de solo lectura de «Cómo se lanza una consulta SQL de solo lectura»; columnas del esquema de DB8, `plans/informes-h8/informe-db.md` §3.2; **no ejecutadas contra producción**):
+
+```sql
+SELECT uuid, direction, status, part, voice_publication_seq, stamp_state, seal_verified,
+       policy_reason, tool_calls, duration_seconds, termination_reason, created_at
+  FROM voice_calls ORDER BY id DESC LIMIT 5;                                        -- (V1) las últimas llamadas
+SELECT kind, tool, outcome, created_at FROM voice_call_events
+ WHERE call_id = (SELECT id FROM voice_calls WHERE uuid = '<uuid de V1>') ORDER BY id;   -- (V2) sus eventos
+SELECT kind, reason, created_at FROM voice_brakes ORDER BY id DESC LIMIT 5;        -- (V3) el freno
+SELECT source, created_at FROM voice_exclusions ORDER BY id DESC LIMIT 5;          -- (V4) las exclusiones
+```
+
+### 9.1 Antes del nivel 3 (fase 2, sin llamadas)
+
+| Prueba | Qué demuestra | Esperado | Evidencia |
+|---|---|---|---|
+| **Verificación con la clave rotada** (E2-2) | La clave nueva abre el agente de verificación | `ultron-studio:integrations-snapshot --verify-voice` → «credenciales válidas; evidencia guardada» (un GET) | La instantánea; el Studio en `ELEVENLABS_VERIFIED` |
+| **C-A1: importar el número** con la API key restringida de la subcuenta | La integración nativa no necesita la credencial maestra | El número aparece importado en ElevenLabs; `voice:doctor --telefonia` dice «número importado sí». Si ElevenLabs exigiera un Auth Token, solo el de la subcuenta, y se anota | Nota del propietario con la fecha; sin valores |
+| **O-2: el secreto de iniciación** | Que ElevenLabs manda el secreto que Laravel espera, en la cabecera `X-Voice-Initiation-Secret` | 200 y `caller_authorized` = «no»; ningún `voice.inbound.unauthorized` en `voice-*.log`; una fila `denied` sintética en V1 | V1; el registro. Procedimiento: runbook, «El secreto de iniciación…». **Con la corrección B8-d desplegada** (E10-8: lo denegado no compromete gasto; sin ella, esa fila echaría el freno de gasto con el presupuesto en 0) |
+| **Laboratorio hablado (nivel 2)** | Que la voz suena como se compiló, sin teléfono | Una sesión real abierta (gasta; **[paso 3]** el CRM pide el micrófono antes de abrirla y, si se niega, no gasta, E10-12), cerrada y con el veredicto `approved` de otra persona sobre la misma huella | La sesión en el historial con su veredicto |
+
+### 9.2 Fase 3: entrantes del canario (nivel 3)
+
+**Precondiciones:** los requisitos de la fase 3 (`ULTRON_STUDIO_CHECKLIST_OPERATIVO.md` §5.6), entre ellos el commit `voice(calls-open)` desplegado, una publicación en canario con su veredicto, el monitor de voz encendido y la autorización escrita y la del «T3 de voz». El freno suelto (V3).
+
+**Prueba 1 · Llama un canario.**
+- **Quién:** una persona canario, desde su teléfono registrado.
+- **Pasos:** llamar al número dedicado; escuchar; preguntar por los planes y por el horario; colgar.
+- **Esperado:** el primer turno es el aviso de IA (el texto provisional de E1-3, hasta que el propietario lo apruebe); el agente responde con lo que devuelven `consultar_planes` (el precio exacto de la base) y `consultar_horarios` (lo de `VOICE_FACTS_*`).
+- **Evidencia:** V1 con una fila `inbound`, `completed`, `stamp_state = applied`, la parte `canary` y la entrada vigente, `seal_verified = true` y `tool_calls` ≥ 2; V2 con `initiation_received`, los `tool_call` y la `post_call_transcription`; un `guard_verdict` limpio; en el CRM, «Llamadas», el alias del canario y sus 4 dígitos **[paso 3]**; la conciliación (minutos 10–50) anota el precio real de Twilio.
+- **Qué NO ocurre:** ningún texto de la conversación en la base, ningún número completo, ningún freno.
+
+**Prueba 2 · Llama un teléfono no registrado (C-A2).**
+- **Quién:** una persona con un teléfono que **no** esté en el registro de canarios.
+- **Esperado:** «línea no disponible» y el agente cuelga; ninguna herramienta responde.
+- **Evidencia:** V1 con una fila `inbound`, `denied`, `policy_reason = not_an_active_voice_canary`.
+- **Qué demuestra:** la puerta de entrantes falla cerrada con la cuenta real. **Si el agente siguiera conversando, se para la fase 3** (nivel 0) y se avisa al lead: es la pregunta abierta C-A2 del contrato (la salida B1 no está construida).
+
+**Prueba 3 · «Quiero hablar con una persona».**
+- **Esperado:** sin destinos en el perfil del canario, `solicitar_humano` responde que ahora no hay nadie y el agente **no transfiere**. La transferencia real (conferencia a un destino aprobado) queda **aplazada** hasta que el laboratorio admita perfiles con destinos (`ULTRON_STUDIO_H8_RIESGOS.md`, R8-14).
+
+**Prueba 4 · C-A3: las herramientas reciben los ids sin que los rellene el modelo.**
+- **Esperado:** cada `tool_call` de V2 pertenece a la llamada de la prueba. En la consola de ElevenLabs, la conversación enseña los parámetros de la herramienta con `system__conversation_id` y `system__call_sid` puestos por la plataforma **[por confirmar dónde lo enseña la consola]**.
+
+**Prueba 5 · C-A5: `max_duration_seconds` corta la llamada telefónica.**
+- **Pasos:** dejar correr una llamada de un canario hasta el tope del perfil (60 s si se publica un perfil de prueba corto; 300 s con el del canario, unos 1,24 US$ de reserva).
+- **Esperado:** la llamada telefónica termina en el tope (no solo la conversación): `duration_seconds` en V1 cerca del tope y la llamada terminada en Twilio. **Si no cortara**, el corte de emergencia (Prueba 7) cubre el tope y se anota como C-A5 incumplida.
+
+**Prueba 6 · C-A4: una publicación nueva no cambia una llamada en curso.**
+- **Requiere** una segunda publicación (o un agente anterior al que revertir), dentro de la ventana y con cuatro ojos.
+- **Pasos:** con una llamada del canario en curso, otra persona revierte o publica.
+- **Esperado:** la llamada sigue sin cortes y su post-llamada sale `seal_verified = true` con el agente con el que empezó. Las llamadas siguientes se sellan con la entrada nueva.
+- **Riesgo conocido:** una entrante que **empiece** entre la asignación del número y la entrada de la cadena puede salir `seal_mismatch` y echar el freno (fallo seguro; `informe-studio.md` §10.4). No llamar mientras se publica.
+
+**Prueba 7 · El corte de emergencia.**
+- **Pasos:** con una llamada del canario en curso, «Cortar la llamada» en el CRM (`telephony.call_place`) **[paso 3]** o, en el servidor, `cd /var/www/api/backend && sudo -u www-data php artisan voice:hangup <uuid>`.
+- **Esperado:** la llamada se corta; V1 en `hung_up`; V2 con `hangup_requested`; una sola actualización en Twilio. Una post-llamada que llegue después no cambia el estado final.
+
+**Prueba 8 · El freno (al final de la fase).**
+- **Cómo se provoca:** con una pregunta que lleve al agente a decir algo que la guarda marca, por ejemplo pedir un descuento: la guarda marca la palabra «descuento» también en «no tengo ningún descuento» (`informe-security.md`, §SEC8-b, M-2) **[por confirmar con el modelo real]**.
+- **Esperado:** `guard_verdict` con violación en V2, una apertura `guard_violation` en V3, un incidente en IRON GUARD; las entrantes siguientes oyen «línea no disponible».
+- **Soltarlo:** un Super Admin, con la nota de la causa (5–300 caracteres).
+- **Ojo:** esa violación cuenta para siempre en la evidencia de esa publicación, que ya no se podrá promover: se hace cuando ya no se quiera promover esa entrada (o se publica otra después).
+
+### 9.3 Fase 4a: salientes a canarios (nivel 3)
+
+**Precondiciones:** la fase 3 estable 24 horas con N llamadas sin incidencias; el worker `ironbody-voice` en RUNNING (14 workers); la corrección de M-3 de SEC8-b (B8-d, E10-5); la autorización escrita. **Hasta que esté desplegada, no cortar una saliente mientras está «pedida»** (con el job en vuelo podría quedar una llamada real que Laravel ya no puede colgar).
+
+| Prueba | Cómo | Esperado (V1 y V2) |
+|---|---|---|
+| Contestada | «Pedir una llamada» a un canario, que contesta y conversa | `requested` → `dialing` → `active` (con la primera herramienta) → `completed`, `seal_verified = true`; el precio real por la conciliación |
+| Comunicando | El canario rechaza o está en otra llamada | `busy`; la reserva se libera a lo real |
+| Sin respuesta | El canario no contesta hasta el timbre máximo (`VOICE_OUTBOUND_RINGING_SECONDS`, 30 s) | `no_answer` |
+| Buzón | El canario deja que salte el buzón | El agente cuelga sin dejar mensaje (el buzón solo admite `hang_up`, P-10) **[por confirmar cómo queda el estado con la cuenta real]** |
+| Duplicada | Repetir la misma petición (el mismo `clientRequestId`) y pedir otra al mismo número con una viva | La repetición devuelve la misma fila (`duplicate_request`); la segunda, rechazada mientras la primera siga viva |
+| Frecuencia y horario | Una segunda llamada al mismo canario el mismo día; una petición un domingo o un festivo | `frequency_exceeded`; `outside_hours` u `holiday` (la puerta enseña todos sus motivos) |
+| Corte | «Cortar la llamada» con la llamada ya en curso (`dialing` o `active`) | `hung_up` |
+| Transferencia | — | **Aplazada** (sin destinos en el perfil del canario) |
+
+**Qué NO ocurre:** ningún reintento automático; una llamada `ambiguous` no se vuelve a pedir hasta que la conciliación la resuelva.
+
+### 9.4 Vuelta atrás
+
+| Nivel | Cómo | Quién |
+|---|---|---|
+| 0 | `VOICE_INBOUND_ENABLED=false` y/o `VOICE_OUTBOUND_ENABLED=false`, con el mando `h8-voice-scope.sh` y la caché | Quien opera, con autorización. **[PENDIENTE: el mando (OPS8).]** |
+| 0b | `sudo -u www-data php artisan voice:hangup --all --confirm` | Quien opera |
+| 1 | Revertir la publicación (Studio, `ultron.voice_publish`, sin ventana) | Super Admin |
+| 2 | Apagar la voz (`voice/off`) y `ELEVENLABS_ENABLED=false` con la caché | Super Admin + quien opera |
+| 3 | Revocar las keys de ElevenLabs y de Twilio, suspender la subcuenta y quitar la importación del número (consolas) | Propietario |
+
+### 9.5 Orden y dependencias
+
+| # | Prueba | Fase | Escribe | Coste |
+|---|---|---|---|---|
+| 1 | Verificación con la clave rotada, C-A1, O-2 | 2 | Instantánea; una fila `denied` sintética | Un GET; 0 |
+| 2 | Laboratorio hablado y su veredicto | 2 | Sesión, agente de laboratorio y veredicto | Minutos de ElevenLabs |
+| 3 | Pruebas 1, 2, 3 y 4 | 3 | Llamadas, eventos | Por minuto |
+| 4 | Prueba 5 (C-A5) y Prueba 7 (corte) | 3 | Ídem | Ídem |
+| 5 | Prueba 6 (C-A4) | 3 | Entrada de la cadena | Ídem |
+| 6 | Prueba 8 (el freno) | 3, al final | Freno, incidente | Ídem |
+| 7 | Salientes de §9.3 | 4a | Llamadas, eventos | Por minuto |
+
+**Dependencias del propietario:** las de `ULTRON_STUDIO_CHECKLIST_OPERATIVO.md` §5.3 (plan de pago de ElevenLabs, clave rotada, subcuenta y número con su expediente, secretos registrados, personas canario, aviso de IA aprobado, autorización de cada fase).
+
+*Fuentes §9: contrato H8, D8-11 a D8-14, D8-19, D8-20, D8-23, «Fases de despliegue», C-A1 a C-A5 (auditoría §e), E1-1, E1-3, E2-2; `ULTRON_STUDIO_DEPLOYMENT_PLAN.md`, «Hito 8»; `plans/informes-h8/informe-tester.md` §TEST8-b (recorridos c, e y g); `informe-security.md` §SEC8-b (M-2, M-3); `informe-db.md` §3.2 y §4; decisiones del lead del 08-11-2026 (B8-d y transferencias); código de `8d3c41f`: `app/Services/Telephony/{InboundPolicy,OutboundPolicy,VoiceTools,VoiceHangup,VoiceReconciler}.php`, `app/Console/Commands/Voice/VoiceHangupCommand.php`, `config/voice.php`.*
+
+---
+
 ## Orden de ejecución recomendado
 
 Primero lo aislado y sin llamadas; después lo que escribe en libros permanentes; al final lo que depende del propietario.
@@ -683,6 +812,7 @@ Primero lo aislado y sin llamadas; después lo que escribe en libros permanentes
 - [PENDIENTE: primera ejecución en el servidor del patrón de solo lectura con `PGOPTIONS` (anotar que `SHOW default_transaction_read_only` dice `on`).]
 - [PENDIENTE: contrastar §5, §6.2 y §6.3 con la API, el CRM y los scripts del Hito 6 cuando existan; hoy solo hay contrato y paquetes DB, V y TW en una rama local.]
 - [PENDIENTE: el comando de §6.1 no se ha ejecutado contra producción.]
+- [PENDIENTE (08-11-2026): §9 (voz) no se ha ejecutado; contrastarla con la cuenta real en las fases 2, 3 y 4a, cerrar los [por confirmar] y quitar las marcas [paso 3] cuando el CRM del paso 3 esté confirmado.]
 
 ## Fuentes
 

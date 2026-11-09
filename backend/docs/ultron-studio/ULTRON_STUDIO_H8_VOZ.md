@@ -2,7 +2,7 @@
 
 **Qué es.** Cómo funciona la voz de ULTRON STUDIO: qué es cada pieza, cómo se gobierna desde el Studio, cómo entra y sale una llamada, qué la frena, qué hace el laboratorio hablado, qué se puede comprobar hoy y qué falta, y qué **no** hace el sistema. Incluye la referencia de rutas, comandos, tareas programadas y variables.
 
-**Para quién.** El propietario, quien opera el servidor y las personas que desarrollan o revisan el Hito 8. Hace falta saber qué es una API y una variable de entorno; no hace falta haber leído el código. El uso del CRM en lenguaje llano está en `ULTRON_STUDIO_GUIA_ADMINISTRACION.md` §14; las comprobaciones por fase, en `ULTRON_STUDIO_CHECKLIST_OPERATIVO.md` §5; los riesgos, en `ULTRON_STUDIO_H8_RIESGOS.md`; el procedimiento de despliegue, en `ULTRON_STUDIO_DEPLOYMENT_PLAN.md` («Hito 8»).
+**Para quién.** El propietario, quien opera el servidor y las personas que desarrollan o revisan el Hito 8. Hace falta saber qué es una API y una variable de entorno; no hace falta haber leído el código. El uso del CRM en lenguaje llano está en `ULTRON_STUDIO_GUIA_ADMINISTRACION.md` §14; las comprobaciones por fase, en `ULTRON_STUDIO_CHECKLIST_OPERATIVO.md` §5; las pruebas con personas reales (nivel 3), en `ULTRON_STUDIO_PRUEBAS_FISICAS.md` §9; los riesgos, en `ULTRON_STUDIO_H8_RIESGOS.md`; el procedimiento de despliegue, en `ULTRON_STUDIO_DEPLOYMENT_PLAN.md` («Hito 8»).
 
 **Tipo.** Descriptivo (§1–§6) y de referencia (§7–§11). No sustituye al contrato (`ULTRON_STUDIO_H8_CONTRACT.md`, con sus Enmiendas 1–9), que manda sobre este documento.
 
@@ -104,9 +104,11 @@ Tabla de solo inserción `voice_brakes`: abrir y soltar son filas. **Lo abre sol
 
 Voz en el navegador, **sin teléfono**, contra un **agente de laboratorio** (misma compilación, `purpose = lab`, sin número, nunca entra en la cadena; uno por sesión, con concurrencia 1 y 1 conversación al día). Laravel emite una URL firmada de un solo uso (vigencia de 900 s; no se guarda ni se repite). **Cuatro cerrojos**: `VOICE_LAB_ENABLED`, `VOICE_LAB_DRIVER` (`fake` = simulador sin ElevenLabs), presupuesto (`VOICE_LAB_DAILY_BUDGET_USD` y `VOICE_LAB_SESSION_BUDGET_USD` > 0) y ElevenLabs en `ELEVENLABS_VERIFIED`; con `elevenlabs`, además `VOICE_WEBHOOK_BASE_URL` y las referencias de los secretos. Como mucho 5 minutos por sesión, un cupo por persona y día de Bogotá (`VOICE_LAB_MAX_SESSIONS_PER_DAY`, 5) y una reserva atómica del coste.
 
+**[paso 3]** En el CRM, el cliente oficial `@elevenlabs/client` **1.30.0**, en un chunk diferido; el micrófono se pide **antes** de abrir la sesión (si se niega, no se gasta) (E10-12).
+
 El veredicto (`approved` o `rejected`, con nota si rechaza) lo emite **otra persona**: ni quien abrió la sesión ni quien creó la versión. Es definitivo. Las sesiones del simulador no admiten veredicto. Con la puerta en `required` (`ULTRON_STUDIO_VOICE_LAB_GATE`), publicar exige que el último veredicto sobre **la misma `specHash`** sea `approved`.
 
-**Limitaciones conocidas:** las herramientas responden que no hay llamada (en el laboratorio no hay fila en `voice_calls`); un perfil con destinos de transferencia da 409 `voice_lab_transfers_not_supported`; un perfil de más de 5 minutos no se puede probar (`informe-lab.md` §3, §6; ver `ULTRON_STUDIO_H8_RIESGOS.md`).
+**Limitaciones conocidas:** las herramientas responden que no hay llamada (en el laboratorio no hay fila en `voice_calls`); un perfil con destinos de transferencia da 409 `voice_lab_transfers_not_supported` y, con la puerta en `required`, no se puede publicar: **limitación aceptada hasta la fase 3, el perfil del canario no lleva destinos; en la fase 3 el laboratorio admitirá destinos** (E10-10); un perfil de más de 5 minutos no se puede probar (`informe-lab.md` §3, §6; `ULTRON_STUDIO_H8_RIESGOS.md`, R8-14).
 
 *Fuentes §3: contrato D8-6 a D8-10, D8-14, D8-19, D8-21, D8-23, E1-1, E1-4, E1-7, E2-3, E2-7, E3-2, E5-1, E5-6, E6-1, E6-8, E6-9; `informe-studio.md` §7–§16; `informe-lab.md` §2–§3; `informe-backend.md` §B8-b; código: `app/Services/Telephony/{VoiceBrake,VoiceTools,VoiceReconciler,VoicePublishedConfig}.php`, `app/Models/Voice/VoiceBrakeEntry.php:21`, `app/Services/UltronStudio/{StudioVoicePublishing,StudioVoiceEvidence,StudioVoiceLabConfig}.php`, `app/Services/Voice/Dto/VoiceLabSession.php:45`.*
 
@@ -129,8 +131,8 @@ sequenceDiagram
         L-->>E: 401 y ninguna fila
         E->>P: con su defecto caller_authorized=no, «línea no disponible» y cuelga (C-A2: visto en el simulador, por confirmar con la cuenta real)
     else secreto válido
-        L->>L: InboundPolicy y sello de la parte canary; fila voice_calls active (canario) o denied
-        L-->>E: caller_authorized si|no, call_direction, call_ref, version_label
+        L->>L: InboundPolicy y sello de la parte canary · fila voice_calls active (canario) o denied
+        L-->>E: caller_authorized (si o no), call_direction, call_ref, version_label
         E->>P: aviso de IA y saludo (o «línea no disponible» y end_call)
     end
     loop durante la llamada (como mucho 20)
@@ -143,7 +145,7 @@ sequenceDiagram
         L->>L: seal_mismatch o guard_verdict → freno e incidente de IRON GUARD
     end
     M->>T: voice:reconcile (cada 10 min, solo GET)
-    M->>L: precio real; una llamada sin fila es unknown_provider_call → freno
+    M->>L: precio real · una llamada sin fila es unknown_provider_call → freno
     Note over L: GET voice/canary-evidence cuenta la llamada sellada con esa entrada y esa parte
 ```
 
@@ -181,7 +183,7 @@ flowchart TD
 |---|---|---|---|
 | **1. Todo apagado** | Código y migraciones; todo apagado; la constante en `false` | Nada (el script escribe 9 variables en su valor apagado) | Orden de despliegue del propietario |
 | **2. Credenciales y número** | Subcuenta, keys y número (con su expediente); clave de ElevenLabs rotada; secretos registrados; laboratorio hablado con presupuesto; **ni una llamada telefónica** | Las piezas de la fase 2, `VOICE_MONITOR_ENABLED`, `VOICE_LAB_*` | Autorización escrita |
-| **3. Entrantes en canario** | Commit `voice(calls-open)`; publicación en canario; canarios de voz activos | `VOICE_INBOUND_ENABLED`, `VOICE_INBOUND_DAILY_CAP` > 0, `TWILIO_VOICE_ENABLED` | Autorización escrita y la del «T3 de voz» |
+| **3. Entrantes en canario** | Commit `voice(calls-open)`; publicación en canario; canarios de voz activos | `ULTRON_STUDIO_VOICE_PUBLISHING_ENABLED` (para publicar el canario), `VOICE_INBOUND_ENABLED`, `VOICE_INBOUND_DAILY_CAP` > 0, `TWILIO_VOICE_ENABLED` | Autorización escrita y la del «T3 de voz» |
 | **4a. Salientes a canarios** | Worker `ironbody-voice` | `VOICE_OUTBOUND_ENABLED`, `TWILIO_VOICE_DAILY_CALL_CAP` pequeño, `VOICE_DAILY_BUDGET_USD` > 0 | Autorización escrita |
 | **4b. Contactos con consentimiento** | Visto bueno legal; consentimientos, RNE, horario, festivos y frecuencia; una publicación promovida a `rest` | `VOICE_OUTBOUND_SCOPE=contacts`, `VOICE_RNE_VALIDITY_DAYS` > 0 | Autorización escrita |
 
@@ -274,7 +276,7 @@ Todos como `www-data`, desde `/var/www/api/backend`: `sudo -u www-data php artis
 |---|---|---|---|
 | `voice:doctor [--json] [--verify] [--telefonia]` | Estado de ElevenLabs y piezas que faltan **por nombre**. `--verify` solo actúa en `ELEVENLABS_UNVERIFIED` (un GET al agente de verificación; no guarda nada). `--telefonia` añade la constante, las banderas, el número, la cadena por partes, el freno, los límites, el horario y los destinos de transferencia | 0; con `--verify`, 0 solo con `credentials_ok` | Solo con `--verify` |
 | `voice:hangup {call?} [--all --confirm]` | Corte de emergencia (D8-20, nivel 0b): cuelga en Twilio una llamada o, con `--all --confirm`, todas las `dialing`, `active` y las pedidas sin marcar (estas se cancelan). Sin la credencial de la subcuenta avisa y solo cancela las no marcadas | 0 si todas quedan colgadas, canceladas o ya no vivas; 1 si alguna falla, si falta `--confirm` o si la llamada indicada no existe | Twilio (`Status=completed`) |
-| `voice:reconcile [--hours=48] [--numbers] [--json]` | Conciliación (§3.6). `--numbers` **se suma**: además mira a qué agente apunta el número. **No es de solo lectura:** escribe eventos y precios y puede echar el freno, también ejecutado a mano | 0 sin desconocidas, sin techo superado y sin deriva; si no, 1 | Solo GET a los proveedores |
+| `voice:reconcile [--hours=48] [--numbers] [--json]` | Conciliación (§3.6). `--numbers` **se suma**: además mira a qué agente apunta el número. **No es de solo lectura:** escribe eventos y precios y puede echar el freno, también ejecutado a mano. Un modo en seco (`--dry-run`, que informa `would_open_brake`, incidentes y eventos sin escribir) es una **corrección en curso (B8-d, E10-9)** | 0 sin desconocidas, sin techo superado y sin deriva; si no, 1 | Solo GET a los proveedores |
 | `voice:prune-rate-limits [--dry-run] [--json]` | Borra de la caché `database` **solo** las claves `voice-rl:*` caducadas (P8-3); `--dry-run` solo cuenta | 0 | Ninguna |
 | `ultron-studio:integrations-snapshot --verify-voice` | La verificación que deja evidencia: un GET al agente de verificación y una instantánea; con ella de menos de 30 días el Studio afirma `ELEVENLABS_VERIFIED` | 1 si la voz no está en `UNVERIFIED` | Un GET |
 
@@ -302,7 +304,7 @@ Leídas en `config/voice.php` y `config/ultron_studio.php` (bloque `voice`) y co
 | Variable | Defecto | Rango / forma | Secreto | Cuándo se pone o se enciende |
 |---|---|---|---|---|
 | `ELEVENLABS_ENABLED` | `false` | booleano | | **Ya `true` en producción desde el 03-11-2026** (E1-12) |
-| `ELEVENLABS_API_KEY` | vacía | | sí | Puesta (E1-12). **Rotar antes de la fase 2** (E2-2) |
+| `ELEVENLABS_API_KEY` | vacía | | sí | Puesta (E1-12). **Rotar antes de la fase 2** (E2-2), con `backend/docs/ultron-studio/ops/el-verificar.sh`, que regenera también los dos secretos propios: antes de registrarlos |
 | `ELEVENLABS_AGENT_ID` | vacía | `^[A-Za-z0-9_-]{1,64}$` | | Puesta (E1-12): el agente **de verificación**, inerte y sin número |
 | `ELEVENLABS_WEBHOOK_SECRET` | vacía | | sí | Generada en el servidor (E1-12); registrarla en ElevenLabs en la fase 2 |
 | `ELEVENLABS_TOOL_SECRET` | vacía | | sí | Generada en el servidor (E1-12); registrarla en la fase 2 |
@@ -353,7 +355,7 @@ Leídas en `config/voice.php` y `config/ultron_studio.php` (bloque `voice`) y co
 
 **Precios para la reserva** (`config/voice.php:239-246`, sin variable, fecha `2026-11-03`; cambiarlos es un commit revisado): ElevenLabs 80 000 µUS$/min; Twilio saliente a móvil 37 700, a fijo 70 000, entrante local 94 500 y Media Streams 4 400 µUS$/min. La reserva de una llamada es `ceil(segundos máximos / 60) × (ElevenLabs + tramo de Twilio + Media Streams)`, más el tramo de transferencia al precio de fijo (`VoiceCostGuard::reserveMicros`). Con los defectos (300 s): unos **0,96 US$** una saliente a móvil, **1,24 US$** una entrante autorizada y **0,18 US$** una entrante denegada (un minuto). Son techos de reserva, no el coste real.
 
-> **Nota de DOC8 (leída en el código, no ensayada):** `VoiceReconciler::costCap()` (`app/Services/Telephony/VoiceReconciler.php:326-336`) echa el freno `cost_cap` en cuanto lo comprometido del día de Bogotá supera `VOICE_DAILY_BUDGET_USD`, y **toda** fila de `voice_calls` del día compromete su reserva, también una entrante denegada (salvo `canceled` y `failed_to_start`; `VoiceCostGuard::committedMicros`). Con el presupuesto en 0, la primera fila (por ejemplo, la iniciación de prueba de O-2 en la fase 2, que deja una fila `denied`, o la primera entrante del canario en la fase 3) echaría el freno en la siguiente conciliación, programada o a mano. El plan de despliegue no fija `VOICE_DAILY_BUDGET_USD` antes de la fase 4a. Está reportado al lead (`plans/informes-h8/informe-doc.md`) y registrado en `ULTRON_STUDIO_H8_RIESGOS.md` (R8-13).
+> **Nota de DOC8 (leída en el código, no ensayada):** `VoiceReconciler::costCap()` (`app/Services/Telephony/VoiceReconciler.php:326-336`) echa el freno `cost_cap` en cuanto lo comprometido del día de Bogotá supera `VOICE_DAILY_BUDGET_USD`, y **toda** fila de `voice_calls` del día compromete su reserva, también una entrante denegada (salvo `canceled` y `failed_to_start`; `VoiceCostGuard::committedMicros`). Con el presupuesto en 0, la primera fila (por ejemplo, la iniciación de prueba de O-2 en la fase 2, que deja una fila `denied`, o la primera entrante del canario en la fase 3) echaría el freno en la siguiente conciliación, programada o a mano. El plan de despliegue no fija `VOICE_DAILY_BUDGET_USD` antes de la fase 4a. **Corrección en curso (B8-d), antes de la fase 2** (E10-8): `cost_cap` solo con gasto comprometido mayor que el presupuesto **y** que cero, y lo denegado no compromete gasto; registrado en `ULTRON_STUDIO_H8_RIESGOS.md` (R8-13).
 
 *Fuentes: `config/voice.php` (leído entero), `config/ultron_studio.php:270-284, 303-316`, el fichero de ejemplo de entorno (líneas 395–513, solo nombres), `config/queue.php:186-204`; código: `app/Services/Telephony/{VoiceCostGuard,OutboundGate,InboundGate,VoiceReconciler}.php`; contrato D8-5, D8-15, E1-12, E2-2, E4-1, E9-3; `ULTRON_STUDIO_DEPLOYMENT_PLAN.md`, «Hito 8».*
 
@@ -380,12 +382,13 @@ Estado el 08-11-2026. «Hecho» es lo ejecutado en el banco o en las suites, nun
 | S8 (gobierno) | Perfiles, compilador, publicación, cadena, evidencia, deriva, `can`, `template`, `expectedSpecHash` | `informe-studio.md` §15; E5-6, E6-7 a E6-9 |
 | LAB8 (laboratorio) | Sesiones, cuatro cerrojos, reserva atómica, veredicto; oyente de la post-llamada registrado (E8-1, E9-1) | `informe-lab.md`; `informe-backend.md` §B8-c |
 | FE8 paso 2 (CRM) | 7 pestañas; 1 195 specs en verde; `tsc` 0/0; catálogo de permisos regenerado (111 permisos) | `informe-front.md` §0 |
-| TEST8-b (E2E con simuladores) | Fase cerrada y abierta validadas; único rojo F-1, corregido después por B8-c | `informe-tester.md` §TEST8-b |
-| OPS8 (despliegue de la fase 1) | `--solo-comprobar` y despliegue ensayados en el banco; smoke 49 OK, código 3 esperado | `informe-devops.md` §OPS8-b |
-| PERF8 | Rutas públicas dentro de objetivo salvo la post-llamada de 1 MB (P8-4, aceptada); presupuestos del smoke | `informe-performance.md` §3, §7 |
-| SEC8-a / SEC8-b-lite | Modelo de amenazas, 61 guardas; M-1 corregido (E5-4), B-1 aceptado (E5-5) | `informe-security.md` |
+| TEST8-b (E2E con simuladores) | **Pasada final sobre `8ed0924`:** cerrada 6/6 (112 comprobaciones), abierta 9/9 (283), 0 violaciones en los simuladores, 0 red fuera de 127.0.0.1; hash `6ee260ef…`; evidencia en `ops/evidencia-h8/2026-11-08/20261108T224030Z-8ed09240/` | `informe-tester.md`, «Cierre del lead» (`ccbf4a0`) |
+| OPS8 (despliegue de la fase 1) | **Ensayo sobre el HEAD final `8d3c41f`** en el banco rehecho: paso 0 con código 3 sin la bandera y en verde con `--acepta-main=7c84cb5`, despliegue completado, smoke 49 OK y 1 omitido esperado | `informe-devops.md`, «Cierre del lead» (`e112586`) |
+| PERF8 | Rutas públicas dentro de objetivo salvo la post-llamada de 1 MB (P8-4, aceptada); «después» de B8-c en consultas: `status` 41 → 25, `metrics` 38 → 25, contactos (100 filas) 212 → 15 | `informe-performance.md` §3, §7 y «Cierre del lead» |
+| Puerta 3 y regresión global (E10-1, E10-2) | `auth:coverage` vacío; SQLite 759 (voz y telefonía) y 3 091 (Studio), PG 525, 0 fallos; `suite-compare.sh` frente a `origin/main`: 13 931 pruebas, 57 rojos conocidos, **0 nuevos** | Contrato, Enmienda 10 |
+| SEC8-a / SEC8-b-lite / SEC8-b (parcial) | Modelo de amenazas, 61 guardas en verde sobre `8d3c41f`; M-1 corregido (E5-4), B-1 aceptado (E5-5); el SEC8-b parcial deja M-2, M-3, B-2, B-3 y tres huecos de guardas, por lectura de código | `informe-security.md` |
 
-**En curso o pendiente de cierre el 08-11-2026:** FE8 paso 3 (laboratorio con micrófono y formas reales) **[paso 3]**; SEC8-b completo (`informe-security.md` §SEC8-b, todavía sin escribir); la pasada final del E2E con evidencia en `ops/evidencia-h8/` y el antes/después de PERF8 (los asume el lead, E9-8); REV8. Sin REV8 sin bloqueantes no hay fase 1 (puerta 4).
+**En curso o pendiente de cierre el 08-11-2026:** FE8 paso 3 (laboratorio con micrófono y formas reales) **[paso 3]**; el SEC8-b completo (pruebas de concepto de M-2 y M-3, puerta PG, mutaciones y revisión del CRM); la corrección B8-d (§12.2); REV8. Sin REV8 sin bloqueantes no hay fase 1 (puerta 4).
 
 ### 12.2 Pendiente de configuración o de código (antes de una fase)
 
@@ -400,7 +403,10 @@ Estado el 08-11-2026. «Hecho» es lo ejecutado en el banco o en las suites, nun
 | El commit `voice(calls-open)` (una línea, con la autorización escrita citada) | Fase 3 | Lead, con orden del propietario | Protección 2 |
 | El worker `ironbody-voice` (borrador en `docs/ops/supervisor/ironbody-voice.conf`) | Fase 4a | OPS8, con autorización | `informe-devops.md` §OPS8-a |
 | `events_watermark_id` (O-1) | Después de la fase 1 | DB8 + S8 + B8 | E9-6 |
-| Admitir perfiles con destinos en el laboratorio | Antes de publicar un perfil con transferencias | LAB8 (backend) | `informe-lab.md` §6.4; `informe-tester.md` §TEST8-b |
+| **B8-d, corrección en curso** (Enmienda 10): `cost_cap` solo con gasto comprometido mayor que el presupuesto y que cero, y lo denegado sin gasto (E10-8); `voice:reconcile --dry-run` (E10-9); el tope de los códigos de la guarda en la post-llamada (M-2, E10-4); el rearme del freno si cambió la evidencia (B-2, E10-6); que gane el corte de una saliente con el job en vuelo (M-3, E10-5, se hace ya) | Fase 2 (M-3, antes de la 4a) | B8-d | E10-4 a E10-9; R8-13, R8-19 a R8-21, R8-27 |
+| La CSP del laboratorio hablado en nginx: `connect-src wss://api.elevenlabs.io` y `Permissions-Policy: microphone=(self)` | Fase 2 | OPS8, con autorización | E10-12 |
+| Los tres endurecimientos de las guardas | Fase 2 | SEC8-b | E10-11 |
+| Admitir perfiles con destinos en el laboratorio | **Limitación aceptada hasta la fase 3** (el perfil del canario no lleva destinos) | LAB8 (backend) | `informe-lab.md` §6.4; decisión del lead del 08-11-2026 |
 
 ### 12.3 Bloqueado por el propietario
 
@@ -430,13 +436,13 @@ Estado el 08-11-2026. «Hecho» es lo ejecutado en el banco o en las suites, nun
 | **C-A3** | 3 | Las herramientas reciben `system__conversation_id` y `system__call_sid` sin que los rellene el LLM |
 | **C-A4** | 3 | Una publicación nueva no cambia una llamada en curso (por construcción; se comprueba con el `agent_id` de la post-llamada) |
 | **C-A5** | 3 | `max_duration_seconds` corta la llamada telefónica y no solo la conversación |
-| Pruebas de la fase 3 | 3 | Llama un canario; llama un no registrado; la transferencia; el freno |
-| Pruebas de la fase 4a | 4a | Contestada, comunicando, sin respuesta, buzón, duplicada, transferencia y corte |
+| Pruebas de la fase 3 | 3 | Llama un canario; llama un no registrado; el corte; el freno. La transferencia, **aplazada** (el perfil del canario no lleva destinos) |
+| Pruebas de la fase 4a | 4a | Contestada, comunicando, sin respuesta, buzón, duplicada y corte. La transferencia, aplazada |
 | Por confirmar en la referencia oficial | 2–3 | Las unidades de `metadata.cost`; que el webhook de iniciación no se dispare en las sesiones web; la vigencia real de la URL firmada; que `call_limits.daily_limit` cuente las conversaciones web; que `null` desasigne el número; la ruta para registrar secretos (`/v1/convai/secrets`) |
 
-La guía de las pruebas físicas de voz (nivel 3) **no está escrita**: el contrato la asigna a DOC8 en `ULTRON_STUDIO_PRUEBAS_FISICAS.md` y queda pendiente (`informe-doc.md`).
+El procedimiento de cada una (quién, pasos, lo esperado, la evidencia y la vuelta atrás) está en `ULTRON_STUDIO_PRUEBAS_FISICAS.md` §9. **Ninguna se ha ejecutado.**
 
-*Fuentes §12: contrato «Criterio de cierre», «Fases de despliegue», D8-23, E1-12, E2-2, E8-7, E9-6 a E9-8; auditoría `ULTRON_STUDIO_H8_VOICE_AUDIT.md` §e (C-A1 a C-A5); los informes de `plans/informes-h8/` citados en cada fila.*
+*Fuentes §12: contrato «Criterio de cierre», «Fases de despliegue», D8-23, E1-12, E2-2, E8-7, E9-6 a E9-8, E10-1 a E10-12; auditoría `ULTRON_STUDIO_H8_VOICE_AUDIT.md` §e (C-A1 a C-A5); los informes de `plans/informes-h8/` citados en cada fila.*
 
 ## 13. Lo que la voz NO hace
 
