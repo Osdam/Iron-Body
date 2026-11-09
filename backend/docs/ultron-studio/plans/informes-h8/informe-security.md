@@ -576,3 +576,86 @@ R4 es la mutación que rompería la propiedad que pediste verificar, y la cazan 
 No tocados: nada de `app/`, `config/`, `routes/` ni `database/`, ni las otras cuatro guardas.
 
 **Fuera del repositorio** (desechable): la copia `mut2/backend`, el banco `tools/mutar2.php` y las salidas en `out/` (`mutaciones-e5.json`, `c2-*`, `a2-*`).
+
+---
+
+# §SEC8-b · paso 4 · revisión final del backend — PARCIAL (cortada por el límite de uso)
+
+**Fecha:** 08-11-2026. **Base:** `8d3c41f` (Enmienda 9). **Estado: INCOMPLETA.** Lo de abajo sale de leer el código; las pruebas de concepto, la puerta PG, las mutaciones, los endurecimientos de las guardas y el CRM quedan pendientes (§5). **Sin commit.** Solo se ha tocado este informe.
+
+## 1. Hallazgos (lectura de código; sin prueba de concepto ejecutada todavía)
+
+### M-2 · Media · Una post-llamada con muchas violaciones no echa el freno y puede desactivar el webhook
+- **Dónde:** `app/Services/Telephony/VoicePostCall.php:143-150` guarda `codes = {violations: [...]}` sin tope. El CHECK `vce_codes_chk` exige `octet_length(codes::text) <= 4096` (`database/migrations/2026_11_10_100002_create_voice_tables.php:421`, solo PG).
+- **Cómo se explota:** cada entrada pesa unos 54 bytes (`machine_reply_invented_discount`). Bastan unos 76 turnos del agente con violación. `\bdescuento\b` también salta con «no tengo ningún descuento». Quien habla (un canario en la fase 3, un contacto en la 4b) repite «¿me haces un descuento?» durante una llamada larga.
+  - En PG el INSERT cae con 23514 y `ingest()` deshace toda la transacción: ni evento, ni `seal_verified`, ni **freno**.
+  - Laravel responde 5xx y ElevenLabs reintenta el mismo cuerpo, que vuelve a caer. Tras 10 fallos desactiva el webhook (D8-16): ya no hay guarda posterior para ninguna llamada.
+  - SQLite no tiene ese CHECK, así que la suite SQLite no lo ve.
+- **Corrección (B8):** acotar lo que se guarda, como ya hace el laboratorio (`StudioVoiceLabSessions.php:479`, `MAX_GUARD_CODES`): códigos únicos con su recuento y el primer turno. El freno no debe depender del tamaño de la evidencia. Falta la prueba en PG.
+
+### M-3 · Media · El corte de una saliente `requested` con el job en vuelo deja una llamada real que Laravel ya no puede colgar
+- **Dónde:**
+  - `VoiceHangup.php:40-44` cancela la `requested` sin coordinarse con el job.
+  - `PlaceOutboundVoiceCall.php:241-251`: si ElevenLabs responde `started`, la transición `requested→dialing` falla en silencio. Los ids no se guardan (el evento `outbound_started` solo lleva `reason`/`http`).
+  - `voice:hangup --all` no ve las `canceled` (`VoiceHangupCommand.php:49`).
+  - La conciliación las trata como desconocidas (`VoiceReconciler.php:110, 119-125`).
+- **Cómo se explota:** una persona pulsa «colgar», o hace el corte de emergencia del nivel 0b, mientras el job espera la respuesta (hasta 20 s). La llamada suena y se atiende. El CRM dice «cancelada», el corte responde `not_live` y el freno solo llega con la siguiente conciliación.
+- **Corrección (B8, antes de la fase 4a):** que gane el corte. En `record()`, un `started` sobre una fila que ya no está `requested` cuelga en el acto el `callSid` devuelto con el transportista. Además, guardar los ids en el evento y que `ambiguousFor()` mire también `outbound_started`.
+
+### B-2 · Baja · Una apertura del freno soltada no vuelve a abrirse por la misma causa
+- **Dónde:** `VoiceBrake.php:108-113`. `open_key` es UNIQUE para siempre, y estas claves se repiten:
+  - `number:<id>:<agente>` (`VoiceReconciler.php:315`);
+  - `drift:<agente>` (`VoiceReconciler.php:265` y `PlaceOutboundVoiceCall.php:180`);
+  - `cost_cap:<día>` (`VoiceReconciler.php:333`).
+- **Cómo se explota:** con la clave filtrada (E2-2), se reapunta el número al mismo agente propio después de que lo corrigieran y soltaran el freno. No hay ni freno ni incidente; solo una línea `info`. Lo mismo pasa con el techo de gasto soltado en el mismo día: las entrantes no miran el presupuesto.
+- **Corrección (B8):** una generación en la clave (aperturas previas con esa clave), o reabrir si la anterior ya está soltada.
+
+### B-3 · Baja (despliegue) · La fase 1 solo comprueba la constante después de desplegar
+- **Dónde:** `ops/deploy-h8-backend-fase1.sh:216` y `:530` (aserción posterior). En `:298`, un commit `voice(calls-open):` cuenta como del H8.
+- **Corrección (OPS8):** en el paso 0, antes del merge, exigir `CALLS_ENABLED_IN_CODE = false` en `origin/main` y ningún `voice(calls-open):` en `BASE..origin/main`.
+
+### Huecos de las guardas (para SEC8; sin aplicar)
+1. `app/Support/Cache/ExpiredCachePruner.php`, que llama a diario el comando de voz, no está en `SIN_RED` (`VoiceIsolationTest.php:219`). Un `Http::` ahí no caería. Contrato: E9-2.
+2. `voice.lab.post_call` tiene hoy un solo oyente (`AppServiceProvider.php:753`), pero ninguna guarda lo fija. Un segundo oyente (o un comodín) que responda `recorded` o `ignored` evitaría el freno de toda conversación desconocida (`VoicePostCall.php:194-199`).
+   - Además, la excepción `LAB_LISTENER` (`UltronEngineIsolationTest.php:107-115, 217-219`) no ata el `use` a ese `Event::listen(…, 'recordProviderReport')`.
+   - Hay un docblock huérfano en `:101-106`.
+   - Contrato: E8-1 y E9-1.
+3. Los limitadores con nombre del CRM solo los fija una prueba de B8 (`VoiceAdminRateLimitsTest.php:53`), no una guarda. Contrato: E9-4.
+
+## 2. Verificado sin hallazgo (lectura)
+- **Las 4 rutas públicas.** Comparan en tiempo constante y fallan cerrado sin secreto. La firma va sobre el cuerpo crudo, con 1 800 s hacia atrás y 300 hacia delante. Hay tope de cuerpo antes de leer, y el límite va después de autenticar, con el cubo de fallos aparte y un 429 sin fuga. La profundidad del JSON está acotada. Las claves duplicadas no importan: un solo analizador sobre los mismos bytes.
+- **Herramientas.**
+  - Los ids del cuerpo salen de variables dinámicas, no del LLM (`ElevenLabsAgentMapper.php:80-84, 205-225`).
+  - `no_volver_a_llamar` excluye la huella sellada.
+- **CRM y Studio.**
+  - Cada ruta tiene su llave en `AuthorizationMap`, más persona y llave en el controlador.
+  - `clientRequestId` va por persona y da 409 si es de otra.
+  - Hay cuatro ojos por identidad en perfiles y publicación, y `expectedSpecHash` antes de desplegar.
+  - Los permisos por rol siguen D8-22.
+  - El registro no devuelve huella, `call_ref`, ids del proveedor ni números.
+- **Lector de la cadena.** Falla cerrado. La URL firmada del laboratorio sale una vez y no se guarda.
+- **Configuración y despliegue.**
+  - La configuración arranca toda apagada.
+  - El script de la fase 1 no imprime valores del entorno: registro 600, `--acepta-main` explícito y vuelta atrás documentada.
+  - El smoke solo manda lo que se rechaza, con contraseña de un uso y un `trap` que deja la cuenta 32 en reposo.
+
+## 3. Registro de riesgos para DOC8 (además de los del encargo)
+- B-1 (secreto de iniciación estático).
+- E4-6 (verificación diferida; caduca el 03-12-2026 a las 22:55 UTC).
+- E9-6 (O-1 diferido).
+- P8-4 (post-llamada de 1 MB).
+- La lista de IP de ElevenLabs, que es un refuerzo débil.
+- **Nuevos:**
+  - [por confirmar] `metadata.phone_call.call_sid` en los cuerpos reales: sin él, `VoicePostCall.php:184` no distingue una llamada de teléfono de una conversación web.
+  - El agente de verificación tiene que ser privado (`enable_auth`): cualquier conversación de un agente que no sea de laboratorio echa el freno y gasta créditos.
+  - Falta `h8-voice-scope.sh` (nivel 0 de D8-20) antes de la fase 2.
+  - La cuenta del smoke es Super Admin mientras está activa.
+
+## 4. Lo ejecutado
+- Las 6 guardas de SEC8 en SQLite sobre `8d3c41f` (árbol compartido, sin tocarlo): **61 OK, 184 759 aserciones**.
+
+## 5. Pendiente
+1. Las pruebas de concepto de M-2 en PG (`UNIT_DB=ultron_studio_h8_secb`) y de M-3.
+2. Aplicar los 3 endurecimientos de las guardas y hacer mutaciones por muestreo en una copia aislada.
+3. La puerta PG y las suites de voz y telefonía.
+4. La revisión del CRM, cuando el lead lo confirme.

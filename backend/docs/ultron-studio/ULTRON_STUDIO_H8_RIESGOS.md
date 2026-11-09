@@ -1,0 +1,28 @@
+# ULTRON STUDIO · Hito 8: registro de riesgos de la voz
+
+**Qué es.** Los riesgos conocidos de la voz y la telefonía, con su mitigación vigente, su dueño y su fecha límite. **Para quién:** el propietario, el lead, `security` y quien opera el servidor. **Tipo:** referencia. **Fecha:** 08-11-2026, sobre el backend `8d3c41f`. **Incompleto:** falta fundir lo que añada §SEC8-b de `plans/informes-h8/informe-security.md` (todavía sin escribir).
+
+**Gravedad** es la de la fuente cuando la da; **probabilidad** es una estimación de DOC8, a revisar por `security`.
+
+| Id | Riesgo | Impacto | Gravedad · probabilidad | Mitigación vigente | Dueño | Fecha límite |
+|---|---|---|---|---|---|---|
+| R8-01 (B-1) | El secreto de iniciación es estático y no se ata al cuerpo | Con él filtrado: saber si un teléfono es canario, echar el freno, ocupar concurrencia y cupo de entrantes | Baja (SEC8) · baja | Se guarda como el resto de D8-5; rotar ante sospecha; migrar a firma si ElevenLabs la ofrece (E5-5); techo global autenticado (E9-3) | security / propietario | — |
+| R8-02 (E4-6) | La telefonía no lee la verificación de ElevenLabs | Las salientes fallan cerradas con `elevenlabs_unverified` | — · cierta hasta corregir | Fallo cerrado; no afecta a las fases 1 y 2 | B8 + SEC8 | Antes de la fase 3 |
+| R8-03 (E9-6, O-1) | La evidencia cuenta sucesos del mismo segundo que la publicación | Puede bloquear promover de más, nunca de menos | Baja · baja | Diferido: `events_watermark_id` | DB8 + S8 + B8 | Después de la fase 1 |
+| R8-04 (P8-4) | Post-llamada de ~1 MB: p95 328,6 ms frente a 200 | Latencia del webhook en el caso extremo | Media · baja (10–20 KB de texto real estimados) | Aceptado; tope de 1 MB y 10/min por evento | — | — |
+| R8-05 | La verificación de ElevenLabs caduca el **03-12-2026 a las 22:55 UTC** | El Studio pasa a `ELEVENLABS_UNVERIFIED`; un ensayo del despliegue aborta | Media · alta si nadie actúa | `integrations-snapshot --verify-voice` a mano (con autorización) o el monitor de voz (lunes 07:20); el monitor del H7 solo avisa | Propietario / devops | 03-12-2026 22:55 UTC |
+| R8-06 (P-26) | La lista de IP de ElevenLabs es un refuerzo débil | Las IP son comunes a todos sus clientes | — · cierta | La firma y los secretos son el control; sin límite por IP antes de autenticar (E5-4) | security | — |
+| R8-07 (M-1, P8-5, H-12) | Cupos compartidos: las rutas públicas por IP y el CRM de telefonía con el login | Denegación de la línea o login en 429 | Media · — | **Corregido**: límites tras autenticar (E5-4, E6-4) y cupos por persona (E9-4). Residual: el cubo `sin-llamada` y los fallos silenciados (≤ 1 línea/min) | B8 | Hecho |
+| R8-08 (E2-2) | La clave de ElevenLabs viajó por el chat | Con el número importado, llamadas fuera de Laravel y reasignación del número | Alta · media | Rotar antes de la fase 2; deriva del número y conciliación con freno | Propietario | Antes de la fase 2 |
+| R8-09 (C-A2) | Si la iniciación no fuera fallo cerrado, un desconocido hablaría con el agente sin herramientas | Conversación no autorizada hasta `max_duration_seconds` | — · por confirmar | Aceptado solo para el canario; número sin publicar; freno por la guarda | Lead + propietario | Fase 3 |
+| R8-10 (A-4) | La key de Laravel tiene «Calls: update» | Una llamada viva se podría desviar | — · baja | El transportista solo manda `Status=completed`; acotar en la consola si se puede | security / propietario | Fase 2 |
+| R8-11 | Carrera entre asignar el número y confirmar la entrada | `seal_mismatch` y freno | — · baja | Fallo seguro; publicar con el canario en silencio | S8 | — |
+| R8-12 | ElevenLabs desactiva el webhook tras 10 fallos | Sin guarda posterior ni `seal_verified`: una violación no frena | Media · baja | Nunca 4xx en bucle; la salud del webhook automatizada | B8 | Antes de la fase 3 |
+| R8-13 (DOC8) | Con `VOICE_DAILY_BUDGET_USD=0`, la primera fila del día (la `denied` de la prueba O-2 o la primera entrante) echa el freno `cost_cap` en la siguiente conciliación | Freno e incidente inesperados en las fases 2 y 3 | — · alta si no se ajusta (deducido del código, sin ensayar) | Ninguna en el plan | devops + lead | Antes de la fase 2 |
+| R8-14 | Un perfil con destinos de transferencia no se prueba en el laboratorio ni se publica con la puerta `required` | Sin transferencias en la fase 3 salvo dispensa | — · cierta hoy | Ninguna | LAB8 (backend) / lead | Antes de la fase 3 |
+| R8-15 (E3-7) | Una restauración de solo datos falla con las guardas | Restauración incompleta | — · baja | Restauración completa a una base aparte; `--disable-triggers` solo como superusuario | database-specialist | — |
+| R8-16 | Faltan el mando `h8-voice-scope.sh` y la sección de voz de `supresion-1581.sql` | Sin procedimiento para las fases 2–4b ni para suprimir datos de voz | — · cierta | Ninguna fase sin el mando | OPS8 (+ database-specialist) | Fase 2 / fase 3 |
+| R8-17 (E2-1) | El festivo de la Ley 2578 está demandado | Si cae, un día se trata como festivo de más | Baja · — | Sentido seguro: solo restringe | backend | — |
+| R8-18 | Unidades de `metadata.cost` sin confirmar | Coste real de ElevenLabs desconocido | — · cierta | La reserva manda sobre lo real | B8 | Fase 2 |
+
+*Fuentes: contrato H8 (C-A2, D8-16, E2-1, E2-2, E3-7, E4-6, E5-4, E5-5, E6-4, E8-7, E9-3, E9-4, E9-6); `plans/informes-h8/informe-security.md` (A-4, M-1, B-1, notas residuales); `informe-performance.md` (P8-4, P8-5); `informe-studio.md` §10.4; `informe-lab.md` §6; `informe-devops.md` (H-12); `ULTRON_STUDIO_DEPLOYMENT_PLAN.md`, «Hito 8»; código citado en `plans/informes-h8/informe-doc.md` §4.*

@@ -252,3 +252,84 @@ Antes, en la primera pasada de este paso (sin la alineación de E4), otras 3 (co
 - La pila real: ninguna spec ni prueba usa el backend vivo; lo alineado (§3.1, §3.2) se comprobó leyendo el código de S8-b, LAB8 y B8-b.
 - Chrome real a 1 440 y 390 px y lectores de pantalla reales (la semántica se comprobó en specs).
 - La suite completa del CRM fuera de `ultron-studio` y `models`.
+
+---
+
+# §FE8-3 · paso 3 (08-11-2026) — A MEDIAS: cortado por límite de uso
+
+**Árbol:** el mismo worktree y rama, sobre `26ef142`. **Sin commit.** Backend: solo lectura (nada escrito en el repo del backend salvo este informe).
+
+## Estado real
+
+| Pieza | Estado |
+|---|---|
+| Formas reales (tipos, lectores, servicio, sesión) | **Hecho.** `tsc -p tsconfig.app.json` sin errores |
+| Las 7 pestañas y los diálogos con las formas reales | **Hecho.** `ng build --configuration production` salió con 0: 39 avisos, 38 de la base y 1 mío (NG8102 en `studio-voice-profiles.ts:193`), **ya corregido pero sin volver a construir** |
+| S8-c: `can`, `template` y `expectedSpecHash` con el 409 `spec_changed` | **Hecho** en la sesión y en las pestañas |
+| Laboratorio hablado con el cliente oficial | **Hecho** (adaptador diferido + flujo completo) |
+| Specs | **A MEDIAS: `ng test` NO COMPILA ahora.** Reescritos: `parity`, `parse`, `session`, `status` y `guards`. Faltan los de `profiles`, `publications`, `calls`, `costs`, `contacts`, `lab` y `page` (citan nombres viejos). **Ninguno se ha ejecutado** en este paso |
+| `tsc -p tsconfig.spec.json`, mutaciones, tamaños finales y capturas | **No hechos** |
+
+## Formas: capturadas, compuestas y derivadas
+
+- **Mecanismo del H6:** `ultron-studio:export-fixtures` → `StudioIntegrationsExport::shapes()`. Para la voz no hay exportador. **Para hacerlo oficial haría falta en el backend:**
+  - un `app/Services/UltronStudio/StudioVoiceExport.php` con `shapes()`: datos sintéticos fijos con `SYNTHETIC_APP_KEY`, los mismos presentadores de S8-b, LAB8 y B8-b, y las rutas del CRM;
+  - un séptimo fichero, `backend-voice.testing.ts`, en `ExportStudioFixturesCommand`;
+  - su prueba en `ExportStudioFixturesCommandTest`.
+- **Mientras tanto, CAPTURADAS:**
+  - `git archive` de `af6bd805` en mi scratchpad, con `vendor` clonado (APFS); el autoload apunta a la copia (comprobado con `ReflectionClass`);
+  - un capturador en `TestCase::call()` de la copia, nunca del repo;
+  - las pruebas Feature de voz, laboratorio y telefonía del propio backend: **31/31 ficheros OK, 642 respuestas reales**.
+- Generador: `…/scratchpad/fe8/gen/gen-backend-voice-3.py`. Scratchpad: `/private/tmp/claude-501/-Users-alejodev-Documents-Dev-IRON-BODY-Iron-Body-Crm/bee5b9e8-7d99-4d6d-875a-94ea20871824/scratchpad`; se purga a los 3 días.
+- **`testing/backend-voice.testing.ts`:** 75 ejemplos, cubren **35 rutas** (la 45, 21 del Studio y 13 de telefonía). `provenance` dice de qué prueba sale cada uno:
+  - **71 capturados**;
+  - **2 compuestos** de capturas: la ruta 45 con el freno echado y con una cadena publicada;
+  - **2 derivados** del código: el 202 y el 200 `duplicate` de `POST admin/voice/calls`, porque ninguna saliente pasa la puerta en el banco (E8-3).
+  - `sets` y `compiler` se conservan del paso 2 y cuadran con lo capturado: plantilla `6914e2e1…`, aviso, topes y variables.
+- B8-c tenía cambios sin confirmar en la telefonía. Las claves de `metrics()` se comprobaron iguales; no se recapturó sobre su HEAD final.
+
+## Lo que cambió (ficheros, `‹F›` = `src/app/modules/ultron-studio`)
+
+- **Nuevo:** `‹F›/studio-voice-lab-conversation.ts`.
+- **Reescritos o modificados:**
+  - capa de datos: `‹F›/studio-voice-{api.types,parse,api.service,session,text}.ts`;
+  - pestañas: `‹F›/studio-voice-{status,profiles,profile-dialog,publications,calls,call-dialog,costs,contacts,contact-dialog,lab}.ts`;
+  - hojas: `‹F›/studio-voice-{lab,costs}.scss`;
+  - pruebas: `‹F›/studio-voice-{fixtures,ui}.testing.ts`, `‹F›/testing/backend-voice.testing.ts` y los 5 specs reescritos.
+- **Dependencia:** `package.json` y `package-lock.json` (+14 paquetes).
+- **Entorno:** el `node_modules` de este árbol era un enlace en cadena (H8 → H7 → `thermal-receipts`). Lo sustituí por un **clon APFS propio** de ese directorio y solo en él instalé el cliente. Los árboles ajenos no se tocaron; está ignorado por git.
+
+## Cliente de ElevenLabs
+
+- **`@elevenlabs/client` 1.30.0 exacta**, publicada el **21-10-2026T22:20Z** (fuente: `npm view @elevenlabs/client time`).
+  - La 1.31.0 (26-10) no cumple las 2 semanas.
+  - Licencia MIT; integridad `sha512-3JCmanYb…` (comprobada contra el tarball).
+- **Instalación:** `--save-exact --before=2026-10-25T00:00:00Z --ignore-scripts`. Los transitivos nuevos se publicaron todos antes del 25-10; el más reciente, `livekit-client` 2.23.0, el 16-10.
+- **Carga diferida:** solo `import()` en el adaptador. Chunk propio de **642 567 B (168 556 B con gzip -9)**, que solo lo importa el de la voz. El de voz pasa de 264 kB a **303,7 kB** (82 077 B con gzip -9).
+- **Flujo:** cerrojos, presupuesto y reserva visibles → **permiso de micrófono ANTES de gastar** → `POST voice-lab/sessions` con `acceptedMaxCostMicros` = `estimate.reservedMicros` → la URL firmada pasa directa a `Conversation.startSession({signedUrl, connectionType: 'websocket'})` → colgar o silenciar → contar lo observado → veredicto de otra persona con la `specHash` visible.
+  - **D-F11:** el micrófono va antes de crear la sesión, no después de la URL como decía el encargo. Así, con el micrófono negado no se gasta nada.
+- **La URL firmada** no entra en ninguna señal, ni en el almacenamiento, ni en la consola, ni en la URL del navegador (lo fija `studio-voice-guards.spec.ts`).
+  - **Límite que no controla el CRM:** si el WebSocket falla, el propio navegador puede escribir en la consola de desarrollo la URL que falló. Es de un solo uso y caduca en ≤ 15 min.
+
+## CSP: vive en Nginx (no en `src/index.html`). No la toqué. Para OPS8
+
+Con la región `default`, lo mínimo es:
+- `connect-src … wss://api.elevenlabs.io`. El SDK abre la URL firmada tal cual más `&source=js_sdk&version=1.30.0`. Con la región `eu`: `wss://api.eu.residency.elevenlabs.io`. LiveKit no hace falta: se fuerza WebSocket.
+- `script-src` (o `script-src-elem`) `blob: data:` para los AudioWorklet del SDK.
+  - Lo estricto sería alojar los worklets: copiar `@elevenlabs/client/worklets/*` como recursos en `angular.json` y pasar `workletPaths`. `angular.json` está fuera de mi lista: **decisión del lead**.
+- Si hay `Permissions-Policy`: `microphone=(self)`.
+
+## Para security (nuevo)
+
+- `POST voice/compile-preview` manda en `spec.transfer.destinations[].ref` la **huella `voice-phone`** de cada destino.
+  - El CRM no la lee, pero llega al navegador de quien tiene `ultron.voice_manage`.
+  - Contradice el espíritu de D8-17 y lo que daba por hecho el paso 2. Propuesta para S8: quitar `ref` de la previsualización.
+
+## Lo que queda (en orden)
+
+1. Reescribir los specs de `profiles`, `publications`, `calls`, `costs`, `contacts`, `lab` y `page`, hasta que `ng test` compile y pase.
+2. `tsc -p tsconfig.spec.json`.
+3. Rebuild: confirmar 38 avisos y los tamaños.
+4. Mutaciones por muestreo.
+5. 390 px y capturas en Chrome.
+6. Para el E2E con TEST8-b: el laboratorio con el emisor del simulador, publicar y promover con `spec_changed`, y los contactos a cuatro ojos.
