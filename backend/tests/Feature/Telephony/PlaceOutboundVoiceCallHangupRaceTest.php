@@ -36,8 +36,9 @@ use Tests\TestCase;
  *  2. El job marca primero (`dialing`) entre la lectura de la fila y el corte.
  *     Antes: el corte respondía `not_live` y la llamada seguía. Ahora: se
  *     corta como una llamada viva (`hung_up`).
- * Si Twilio no deja colgarla, la conciliación la ve viva y echa el freno (el
- * comportamiento de antes, en el sentido seguro).
+ * Si Twilio no deja colgarla, el freno se echa EN EL ACTO y la conciliación
+ * no la reconoce nunca sin un colgado confirmado (E12-5, B8-e; los demás
+ * casos, en {@see PlaceOutboundVoiceCallHangupFailClosedTest}).
  */
 class PlaceOutboundVoiceCallHangupRaceTest extends TestCase
 {
@@ -117,8 +118,9 @@ class PlaceOutboundVoiceCallHangupRaceTest extends TestCase
         Http::assertSent(self::hungUp(self::SID));
         Http::assertSentCount(1);
         $cortes = VoiceCallEvent::query()->where('call_id', $llamada->id)->where('kind', 'hangup_requested')->orderBy('id')->get();
-        $this->assertSame([['canceled_before_dial', 'admin'], ['requested', 'system']], $cortes->map(static fn ($e): array => [$e->outcome, $e->actor_type])->all());
-        $this->assertSame(['carrierStatus' => 'completed', 'http' => 200, 'errorCode' => null, 'afterCancel' => true], $cortes[1]->codes);
+        $this->assertSame([['canceled_before_dial', 'admin'], ['hung_up', 'system']], $cortes->map(static fn ($e): array => [$e->outcome, $e->actor_type])->all());
+        $this->assertSame(['carrierStatus' => 'completed', 'http' => 200, 'errorCode' => null, 'afterCancel' => true, 'callSid' => self::SID, 'carrierOutcome' => 'requested'], $cortes[1]->codes);
+        $this->assertFalse(VoiceBrake::isOpen(), 'colgada y confirmada: sin freno');
 
         // La conciliación la reconoce: ni desconocida ni freno; su precio cuenta.
         $resumen = $this->reconcile();
@@ -146,7 +148,7 @@ class PlaceOutboundVoiceCallHangupRaceTest extends TestCase
         $this->assertSame(['reason' => null, 'http' => 200], VoiceCallEvent::query()->where('kind', 'outbound_started')->sole()->codes, 'una saliente normal: el evento de siempre');
     }
 
-    public function test_si_twilio_no_deja_colgarla_la_conciliacion_la_ve_viva_y_echa_el_freno(): void
+    public function test_si_twilio_no_deja_colgarla_el_freno_se_echa_en_el_acto_y_la_conciliacion_no_la_reconoce(): void
     {
         $this->twilio(500, self::SID, 'in-progress', null);
         $llamada = $this->voiceCall('outbound', 'requested', ['remote' => '+573000000053']);
@@ -154,16 +156,24 @@ class PlaceOutboundVoiceCallHangupRaceTest extends TestCase
 
         $this->assertSame('canceled', $this->record($llamada, new OutboundCallResult('started', null, 'conv_h8fx_m3_0003', self::SID, 200)));
         Http::assertSent(self::hungUp(self::SID));
-        $this->assertSame('error', VoiceCallEvent::query()->where('call_id', $llamada->id)->where('kind', 'hangup_requested')->where('actor_type', 'system')->sole()->outcome);
 
-        // Viva en Twilio: el corte no surtió efecto → desconocida y freno, como antes del arreglo.
+        // E12-5 (B8-e): el freno, EN EL ACTO, sin esperar a la conciliación (antes, sin freno hasta ella).
+        $this->assertTrue(VoiceBrake::isOpen());
+        $this->assertSame('ambiguous', VoiceCallEvent::query()->where('call_id', $llamada->id)->where('kind', 'hangup_requested')->where('actor_type', 'system')->sole()->outcome, 'un 5xx no prueba que no se colgó');
+        $this->assertSame(['unknown_provider_call', 'unknown:'.self::SID, (int) $llamada->id], [VoiceBrakeEntry::query()->sole()->reason, VoiceBrakeEntry::query()->sole()->open_key, VoiceBrakeEntry::query()->sole()->call_id]);
+
+        // Viva en Twilio: la conciliación vuelve a colgarla (500 otra vez) → desconocida, y el freno no se duplica.
         $this->assertSame([0, 1], [($r = $this->reconcile())['known'], $r['unknown']]);
-        $this->assertSame(['unknown_provider_call', 'unknown:'.self::SID], [VoiceBrakeEntry::query()->sole()->reason, VoiceBrakeEntry::query()->sole()->open_key]);
+        $this->assertSame(1, VoiceBrakeEntry::query()->count());
+        $this->assertSame(['ambiguous', 'ambiguous'], VoiceCallEvent::query()->where('call_id', $llamada->id)->where('kind', 'hangup_requested')->where('actor_type', 'system')->orderBy('id')->pluck('outcome')->all());
 
-        // Cuando Twilio ya la da por terminada, es conocida (su precio queda en la fila cortada).
+        // Terminada sin un colgado confirmado: pudo seguir hasta su máximo → sigue desconocida (antes, «conocida» y en silencio);
+        // su precio, en su fila.
         $this->twilio(200, self::SID, 'completed', '-0.03770');
-        $this->assertSame([1, 0], [($r = $this->reconcile())['known'], $r['unknown']]);
+        $this->assertSame([0, 1], [($r = $this->reconcile())['known'], $r['unknown']]);
+        $this->assertSame(1, VoiceBrakeEntry::query()->count());
         $this->assertSame(37700, VoiceCall::query()->findOrFail($llamada->id)->carrier_cost_micros);
+        $this->assertSame(0, VoiceCallEvent::query()->where('call_id', $llamada->id)->where('kind', 'reconciled')->count());
     }
 
     public function test_solo_se_cuelga_lo_que_corto_una_persona_no_lo_que_ya_termino(): void

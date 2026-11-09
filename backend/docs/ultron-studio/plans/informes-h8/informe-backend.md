@@ -821,3 +821,221 @@ Para la próxima captura de FE8, esta prueba da el detalle con eventos reales.
 - Cambiados: `app/Services/Telephony/VoiceCallsQuery.php` y este informe.
 - Nuevo: `tests/Feature/Telephony/VoiceCallDetailEventsTest.php`.
 - Sin commit.
+
+# §B8-e · gana el corte y además falla cerrado (E12-5, E13-9; revisión automática de `bff58d8`, MEDIO, «fail-open state drift»)
+
+**Fecha:** 09-11-2026. **Árbol:** worktree `ultron-h8`, rama `feat/ultron-studio-h8-voice`, sobre `fab99dcc` (Enmienda 13; árbol limpio al empezar) + mis cambios, **sin commit**.
+
+**Cero red:** toda prueba con `Http::preventStrayRequests()`; Twilio, el transportista real contra `Http::fake`.
+
+**No toqué:** guardas (`*IsolationTest`, `VoiceBoundaryTest`), `routes/`, `docs/ultron-studio/ops/**`, `docs/ultron-studio/*.md`, migraciones ni el CRM. Ni una variable nueva.
+
+## 1. El defecto
+
+- `VoiceReconciler::canceledStartFor()` daba por CONOCIDA una llamada que Twilio enseñaba terminada si tenía su `outbound_started`/`outbound_ambiguous` con `afterCancel` y su `callSid`. No miraba el colgado.
+- La conciliación corre cada 10 minutos (`routes/console.php`) y una llamada dura como mucho 300 s, así que casi siempre la veía ya terminada. Si el colgado inmediato había fallado, la cortada duraba sus 5 minutos y quedaba conocida: sin freno y en silencio. El freno solo llegaba si la pasada la pillaba viva.
+- `VoiceHangup::startedAfterCancel()` solo escribía el error en el registro.
+- Si el adaptador lanzaba, la excepción se escapaba sin evento ni freno.
+- Si el job moría a mitad del colgado, nadie frenaba. Pasa dentro de su plazo: 20 s del proveedor más 10 s de Twilio llegan a sus 30 s.
+
+## 2. Cifras reales (comandos ejecutados sobre el estado final)
+
+| Qué | Comando | Resultado |
+|---|---|---|
+| Voz y telefonía, SQLite | `phpunit tests/Feature/Telephony tests/Feature/Voice tests/Unit/Telephony tests/Unit/Voice` | **704 pruebas, 197 932 aserciones, 0 fallos**, 146 omitidas (solo PG). En `fab99dcc`, el mismo comando: 692, 196 018, 0 fallos. **+12 nuevas** |
+| Lo mismo, puerta PG | `PGGSSENCMODE=disable UNIT_DB=ultron_studio_h8_be bash docs/ultron-studio/ops/pgunit.sh` (las mismas 4 carpetas) | **704, 198 688 aserciones, 0 fallos**, 15 omitidas (las 15 del E2E, que corren en su arnés) |
+| Regresión en lo relacionado, SQLite | `phpunit tests/Unit/Twilio`; la lista de B8-d del Studio de voz (`tests/Feature/UltronStudio/*Voice*Test.php tests/Unit/UltronStudio/*Voice*Test.php tests/Feature/UltronStudio/UltronEngineIsolationTest.php`) | 94 OK (5 983 aserciones); 588, 6 464 aserciones, 0 fallos, 73 omitidas (idéntico a B8-d) |
+| Rutas | `php artisan auth:coverage --unmapped` | vacío, exit 0 (ninguna ruta nueva) |
+| Estilo | `pint --test` en los 7 ficheros PHP tocados | `passed` |
+
+**Antes del arreglo.** Corrí las 2 pruebas en un clon APFS de `fab99dcc` que solo difiere en `app/`, en SQLite y en PG (`ultron_studio_h8_be_antes`): **13 de 17 caen**, con 3 errores y 10 fallos. Las que demuestran el defecto caen en la aserción de comportamiento, no en el formato:
+- el colgado que falla (400 y 500) y la prueba de la carrera de B8-d: `VoiceBrake::isOpen()` es `false` justo después del job;
+- **el hallazgo tal cual**: dos cortadas ya terminadas, una sin colgado y otra con el colgado fallido, salen `known: 2, unknown: 0` (ahora `0, 2`);
+- la viva: ningún reintento (`[]`);
+- el freno ya soltado: no se rearma en el acto;
+- `failed()`: ninguna apertura;
+- el adaptador que lanza: la excepción se escapa, sin evento ni freno.
+
+Las demás caen por el formato nuevo: `hung_up` frente a `requested`, la clasificación y el modo en seco. Las **4 que pasan a los dos lados lo hacen a propósito**, porque fijan lo que no cambia:
+- el job que marca primero (dos pruebas);
+- la ocupada que no se cuelga;
+- la ambigua con el colgado confirmado.
+
+**Mutaciones por muestreo.** Banco `<scratchpad>/tools/mutar-b8e.php`, en una copia aislada con su `vendor/`. Para cada mutación: el texto de partida aparece exactamente una vez, `php -l`, sus pruebas en SQLite, se restaura y se compara el SHA-256.
+
+**Resultado final: 29 de 29 muertas.** Los 3 equivalentes y los 2 controles no caen. Los 34 se restauran con el SHA-256 igual, y la copia queda idéntica: SHA-256 de todos sus `.php`, antes y después.
+
+En la primera pasada sobrevivieron 2:
+- **H9** (el colgado fallido del job nunca rearma). Lo enmascaraba la conciliación, cuyo propio freno rearma. Faltaba la vía del job; ahora la cubre `test_el_colgado_fallido_del_job_rearma_en_el_acto_el_freno_ya_soltado_de_esa_llamada`.
+- **R16**, que pasa a equivalente (E3, abajo).
+
+Equivalentes, anotados y sin probar:
+- **E1**: mirar el tramo antes que la cortada. Una cortada nunca es un tramo.
+- **E2**: el cerrojo de `one()`. Una prueba de un hilo no lo distingue.
+- **E3**: quitar «ninguna fila lleva ese SID» del reintento. Con datos posibles da lo mismo, porque cada SID sale de la respuesta del proveedor a UNA fila. Su papel es de rendimiento: una viva con su fila no lee los eventos de las cortadas.
+
+Controles: un comentario y el nombre de una línea del registro (las pruebas no fijan los registros).
+
+La copia del banco tiene de `VoiceBrake.php` la versión anterior a dos retoques de comentario; la línea de `TRIGGERS` que muta B1 es la misma.
+
+**Hallazgo fuera de B8-e (no lo toqué): 4 pruebas dependen de la hora.**
+- Son `VoiceReconcilerTest::test_una_pedida_vieja_que_perdio_su_job_pasa_a_ambigua_y_el_techo_de_gasto_frena` y tres de `VoiceReconcileDryRunTest`: `…una_desconocida_se_informa…`, `…el_techo_cuenta_el_estado…` y `…el_techo_cuenta_el_precio…`.
+- Crean la fila con el `budget_day` de hoy en Bogotá y viajan 16 minutos. Entre las **04:44 y las 05:00 UTC** (23:44–00:00 en Bogotá) cruzan al día siguiente, y lo comprometido de ese día es 0.
+- Caen igual en `fab99dcc`: lo comprobé a las 04:51 UTC. A mí me cayeron en tres ejecuciones, entre las 04:50 y las 04:59 UTC. Las cifras de arriba son de después de las 05:00.
+- Arreglo propuesto (para su dueño): fijar la hora en UTC con `travelTo()`, como ya hace `VoiceBrakeRearmTest`.
+
+## 3. Qué cambió y por qué (por fichero)
+
+**`app/Services/Telephony/VoiceHangup.php`**
+- `startedAfterCancel(VoiceCall, string $callSid, TelephonyCarrier, string $where = 'outbound_job'): string`:
+  - cuelga, sin transacción ni cerrojo durante la red;
+  - si el adaptador lanza, guarda su clase y no relanza (§5.5). La excepción: `StrayRequestException`, que solo existe en las pruebas y se relanza para que se vea, como en el adaptador;
+  - clasifica con `afterCancelResult()`;
+  - en UNA transacción escribe el `hangup_requested` del sistema y, si el corte no se confirma, `VoiceBrake::openOrRearm('hangup_failed', 'unknown:<sid>', {where, outcome, http}, observedAfter(instante antes del intento), fila, evento)`;
+  - registro: `voice.hangup.after_cancel` (warning) o `…_failed` (error, con la clase si lanzó).
+- El evento: `outcome` es `hung_up`, `not_found`, `failed` o `ambiguous`. `codes` gana `callSid` y `carrierOutcome`, `error_class` si lanzó y `where: reconcile` si lo llama la conciliación.
+- `afterCancelResult()`: la tabla cerrada; lo que no se conoce es `failed`.
+- `AFTER_CANCEL_CONFIRMED = [hung_up, not_found]`.
+- `brakeKey()`: `unknown:<sid>`, la clave de la conciliación.
+- `lastAfterCancelResult(fila, sid)`: el último colgado del sistema de esa cortada con ese SID.
+- `brakeIfUnconfirmedAfterCancel(fila)`: la usa `failed()`.
+
+**`app/Jobs/Voice/PlaceOutboundVoiceCall.php`**
+- `failed()`, después de su línea de registro, llama a `brakeIfUnconfirmedAfterCancel()`. El caso: el job muere o agota su plazo a mitad del colgado, con una cortada cuyo SID está en el evento y sin colgado confirmado.
+- Ese freno se echa en el acto, con la misma clave y la evidencia `{where: outbound_job, outcome: job_failed, http: null}`.
+- `record()` no cambia (ya llamaba a `startedAfterCancel()`); solo su docblock.
+
+**`app/Services/Telephony/VoiceReconciler.php`**
+- `reconcileCall()` (nuevo; `run()` lo usa con cada llamada). Si Twilio la enseña VIVA, ninguna fila lleva su SID y es una cortada con `afterCancel`:
+  - la vuelve a colgar FUERA de la transacción de la llamada, con `startedAfterCancel(…, 'reconcile')`, que frena si no se confirma;
+  - después, `one()` en su transacción, como siempre;
+  - en seco no cuelga: suma `would.events.hangup_requested`.
+- `one()`: la cortada es CONOCIDA solo si su ÚLTIMO colgado se confirmó. Si no:
+  - sigue el camino de una desconocida: `unknown_provider_call`, `unknown++`, el comando sale con 1;
+  - echa el freno `hangup_failed` sobre `unknown:<sid>`, con la fila y el evento. Terminada, con `open()`: cada clave, una vez. Viva, con la regla de rearme por observación; de verdad ya la aplicó el reintento, y en seco se anuncia;
+  - **deja su precio en su fila**.
+- `one()` ya no mira la vía de los tramos para una cortada.
+- `canceledStartFor(string $sid, bool $lock = true)` ya no exige que esté terminada: lo decide el colgado. Sin cerrojo, para el reintento.
+- `afterCancelResult()`: en seco y con la llamada viva, `null` (cuenta como si fallara).
+- `brake(…, ?int $callId)`.
+- Docblock: su única escritura a un proveedor.
+
+**`app/Services/Telephony/VoiceBrake.php`**
+- `TRIGGERS['hangup_failed'] = 'unknown_provider_call'`, como `number_drift` → `agent_drift` (E4-8).
+- `vbr_reason_chk` no cambia, y `TelephonyFixtureParityTest` tampoco: los 6 motivos, en el mismo orden.
+- Docblocks: qué causas se rearman.
+
+**`app/Console/Commands/Voice/VoiceReconcileCommand.php`**: docblock y `description`, que ahora dicen «GET, salvo volver a colgar una cortada que sigue viva». Ninguna prueba los fija.
+
+**`tests/Feature/Telephony/PlaceOutboundVoiceCallHangupFailClosedTest.php`** (nueva, 12 pruebas). Usa el transportista real contra `Http::fake`, con una sonda del nivel de transacción en cada colgado (1 = fuera de toda transacción de la aplicación). Cubre:
+- el colgado que falla (400): freno en el acto y `outcome=failed`. Después la conciliación: desconocida, sin duplicar el freno, el precio en su fila, otra pasada sin nada nuevo y el comando con 1;
+- el hallazgo tal cual (§2);
+- cada resultado del colgado: 500 y sin conexión dan `ambiguous`; 400, 401 y 403 dan `failed`, igual que la falta de credencial (sin red). Todos frenan. 404 (`not_found`) y 200 (`hung_up`) no frenan;
+- el adaptador que lanza: no se traga, frena y no filtra el mensaje. La petición perdida de una prueba sí se relanza;
+- el colgado confirmado y la llamada que ya no existe: sin freno, y la conciliación las reconoce;
+- la viva y el colgado que vuelve a fallar: reintento fuera de la transacción, freno, sin duplicar en la segunda pasada, rearme `:r2` tras soltarlo y, terminada, desconocida con su precio;
+- el rearme en el acto desde el job;
+- la viva que esta vez se cuelga: conocida y sin freno nuevo; manda el último colgado. También la viva con el colgado del job confirmado (la lista de Twilio con retraso);
+- **el job que marca primero: nada cambia**, también cuando Twilio no deja cortar por la vía de siempre (ni freno ni reintento sobre una llamada con su fila);
+- `failed()`: con colgado confirmado no frena; una pedida o una cortada sin respuesta del proveedor, tampoco;
+- en seco: no cuelga, cuenta como fallida, anuncia el rearme y la divergencia documentada (§5.7);
+- la tabla de la clasificación.
+
+**`tests/Feature/Telephony/PlaceOutboundVoiceCallHangupRaceTest.php`** (de B8-d)
+- La 1: `hung_up` en vez de `requested`, los códigos con `callSid` y `carrierOutcome`, y «sin freno» justo después del job.
+- La 3, reescrita y con otro nombre. Fijaba justo el comportamiento del hallazgo («cuando Twilio ya la da por terminada, es conocida»). Ahora fija: freno en el acto, `ambiguous`, el reintento de la viva sin duplicar el freno y, ya terminada, desconocida con su precio en la fila.
+
+## 4. Contratos nuevos o modificados (para FE8, OPS8, DOC8 y tester)
+
+**El `hangup_requested` del sistema con `codes.afterCancel`**
+- `outcome` es `hung_up`, `not_found`, `failed` o `ambiguous`. Antes era lo que dijo el transportista (`requested`, `error`…), que ahora va en `codes.carrierOutcome`.
+- `codes` gana `callSid`, `carrierOutcome` y, si el adaptador lanzó, `error_class`. Los tres quedan fuera de la lista blanca del detalle.
+- El reintento de la conciliación lleva `where: reconcile`, que **sí** sale en el detalle, como `where_reconcile`.
+- En el detalle de la llamada (`GET admin/voice/calls/{uuid}`), el colgado del job sigue dando `[carrier_status_completed, http_200, after_cancel]` (`VoiceCallDetailEventsTest`, sin tocar).
+- El CRM pinta `outcome` tal cual (`studio-voice-calls.ts:128`): no necesita cambios. Las etiquetas en castellano, si se quieren, son de FE8.
+- El `hangup_requested` de una persona no cambia (`VoiceHangup::hangup()`, desde el CRM y `voice:hangup`).
+
+**El freno**
+- Causa nueva `hangup_failed` → motivo `unknown_provider_call`, sin cambio de esquema.
+- Clave `unknown:<sid>`, la de la conciliación: el job, el reintento y la conciliación no duplican la apertura.
+- `call_id`: la fila cortada. `event_id`: el colgado o la desconocida.
+- Evidencia `{trigger: hangup_failed, where, outcome, http}`; en la conciliación, `{trigger, where: reconcile, carrierStatus, outcome}`.
+- Se rearma (`:r2`…) solo cuando un colgado posterior a la suelta vuelve a fallar.
+- El CRM lee de la evidencia solo `codes`. El incidente de IRON GUARD es el de `unknown_provider_call`.
+
+**`voice:reconcile`**
+- Una cortada terminada sin colgado confirmado cuenta como `unknown` (antes, `known`), con su `unknown_provider_call`. Su precio va a su fila.
+- **El comando sale con 1 en cada pasada mientras Twilio la liste (48 h)**, como cualquier desconocida.
+- Con la llamada viva hace un **POST a Twilio**: la conciliación ya no es «solo GET».
+- `--dry-run` no cuelga, suma `would.events.hangup_requested` y la cuenta como si el colgado fallara.
+
+**Firmas internas**, compatibles hacia atrás:
+- `startedAfterCancel(…, string $where = 'outbound_job')` devuelve el resultado clasificado.
+- Nuevas en `VoiceHangup`: `afterCancelResult()`, `brakeKey()`, `lastAfterCancelResult()`, `brakeIfUnconfirmedAfterCancel()` y sus constantes (`AFTER_CANCEL_*`, `WHERE_*`, `BRAKE_CAUSE`, `AFTER_CANCEL_START_KINDS`).
+- Nueva y privada: `VoiceReconciler::reconcileCall()`.
+
+## 5. Decisiones tomadas (para confirmar)
+
+1. **La clasificación.** Confirman el corte solo `hung_up` (Twilio aceptó `completed`) y `not_found` (404).
+   - `failed`: un 4xx (también el 400 con 21220, «Call is not in-progress»), un 401/403, la falta de credencial o un SID sin forma.
+   - `ambiguous`: un 5xx, sin conexión o tiempo agotado, o el adaptador que lanza. Es la convención del job: un 5xx no prueba que no pasó.
+   - Las dos frenan.
+   - El 21220 podría querer decir «ya terminó». La documentación oficial no lo dice para `Status=completed`: la página del error 21220 solo nombra grabar o redirigir.
+   - Darlo por confirmado fallaría abierto si viniera de una llamada viva que Twilio no deja cortar. Se calibra en la fase 4a, con respuestas reales.
+2. **Manda el ÚLTIMO colgado.** El encargo dice «existe un colgado con éxito»; yo tomo el más reciente. Un reintento que falla anula un «colgada» anterior, porque la llamada seguía viva. Solo cambia ese caso, y en el sentido seguro.
+3. **El precio va a su fila aunque sea desconocida.** «Como antes de B8-d» habría perdido el coste de la llamada más cara, la que duró su máximo: el techo de gasto la contaría en 0. La fila cortada cuenta lo real (E10-8, E12-3). Si se prefiere sin precio, es una línea.
+4. **`failed()` también frena.** Es el «proceso que muere» del hallazgo mientras el job sigue vivo: el plazo se agota a mitad del colgado. Sin esto, frenaba la conciliación (≤ 10 min). Un `kill -9` sigue esperando al `failed()` del siguiente worker (`retry_after`, 120 s) o a la conciliación.
+5. **El adaptador que lanza no se relanza.** Su clase queda en el evento y en el registro, pero no el mensaje, que puede llevar la credencial. En la conciliación, relanzar dejaría la pasada sin el resto: las demás llamadas, la deriva y el techo.
+6. **El reintento de la viva.**
+   - Se hace siempre que Twilio la enseñe viva, aunque el colgado anterior se confirmara.
+   - Si se confirma, es conocida y no hay freno nuevo, como pide el encargo; el freno del job, si lo hubo, sigue echado.
+   - Si una pasada la ve viva justo después de un colgado bueno (la lista de Twilio con retraso), la vuelve a colgar. Si Twilio responde 21220, frena: un falso positivo, en el sentido seguro.
+7. **En seco no se cuelga.** Una cortada viva cuenta como si el colgado fallara. Es la única diferencia con la pasada de verdad, y la prueba la fija: de verdad, si el colgado se confirma, es conocida.
+8. **Evento y freno en una transacción**: o los dos o ninguno. El incidente se abre después de confirmar.
+
+## 6. Para tester (casos límite desde dentro)
+
+- **Dos procesos sobre la misma cortada.** El job, a mitad de su colgado, y una conciliación que la ve viva: dos POST (colgar es idempotente) y dos eventos. El UNIQUE de `open_key` deja una sola apertura. Si el de la conciliación falla y el del job no, el freno se queda (falso positivo, en el sentido seguro).
+- **El 21220 al reintentar** una llamada que acaba de terminar entre la lista y el POST: freno.
+- **Viva y Twilio responde `requested` pero no la cuelga.** Cada pasada lo reintenta, una vez cada 10 min. Sin freno, porque se confirma; lo acota el máximo de 300 s.
+- **Una pasada en seco justo después de soltar el freno**: anuncia el rearme si la llamada sigue viva (probado).
+- **Reloj**: las pruebas nuevas fijan la hora en UTC. Las 4 del §2, no.
+- **El E2E** (`H8E2EAbiertaTest`) no recorre este caso: su corte es el de una viva (`hung_up`, `emergency_hangup`), que no cambia. No lo ejecuté, porque necesita su arnés, sus puertos y los simuladores.
+
+## 7. Riesgos residuales y pendientes
+
+- **`voice:hangup` sigue sin cortar a mano una fila `canceled`**, porque su SID está en el evento. El pendiente de E12-5 queda a medias: el freno ya es inmediato y la conciliación reintenta cada 10 min.
+- **Lo que hay que poner al día y no toqué:**
+  - lo que dice «solo GET»: `routes/console.php:426` y `ULTRON_STUDIO_H8_VOZ.md:90`, `:147` y `:279`;
+  - el texto de E12-5 («Pendiente para la fase 4a…»);
+  - el runbook: un freno `unknown_provider_call` con `trigger: hangup_failed` es una cortada que pudo durar su máximo, no una llamada ajena. Se reconoce por `call_id` y por el detalle de esa llamada.
+- **E13-3** es el punto 2 de B8-e según el contrato: `missingPostCall` en `StudioVoiceEvidence`. No estaba en mi encargo («una sola corrección») y **no lo hice**. Toca el Studio y lo que lee el CRM (`studio-publication-text.ts`, `CRITERIOS_CONOCIDOS`). Queda a la espera de su encargo.
+- **Las 4 pruebas que dependen de la hora** (§2).
+
+## 8. Migración, configuración y despliegue
+
+- **Migraciones:** ninguna. **Variables:** ninguna.
+- **Operación:** la conciliación programada puede hacer un POST a Twilio para colgar, con la misma key del corte de emergencia. Solo lo hace con una cortada viva y con la subcuenta configurada; sin credencial, no sale a la red.
+- Si OPS8 alerta por el código de salida, avisará durante 48 h por una cortada terminada sin colgado confirmado: la pasada sale con 1 mientras Twilio la liste.
+
+## 9. Ficheros
+
+**Cambiados:**
+- `app/Services/Telephony/{VoiceHangup,VoiceReconciler,VoiceBrake}.php`
+- `app/Jobs/Voice/PlaceOutboundVoiceCall.php`
+- `app/Console/Commands/Voice/VoiceReconcileCommand.php` (docblock y `description`)
+- `tests/Feature/Telephony/PlaceOutboundVoiceCallHangupRaceTest.php`
+- este informe
+
+**Nuevo:** `tests/Feature/Telephony/PlaceOutboundVoiceCallHangupFailClosedTest.php`.
+
+**Sin commit.**
+
+**No es mío:** `docs/ultron-studio/ops/h8-e2e-crm/`, sin seguimiento (el arnés del E2E del CRM).
+
+**Bases PG:** queda `ultron_studio_h8_be` (la puerta); borré `ultron_studio_h8_be_antes`.
+
+**Fuera del repositorio** (desechable, en el scratchpad de la sesión):
+- las copias `antes/backend` (`fab99dcc`) y `mut/backend`;
+- el banco `tools/mutar-b8e.php`;
+- `out/` (resultados JSON y JUnit de cada ejecución).

@@ -14,9 +14,10 @@ use Symfony\Component\Console\Output\OutputInterface;
  * registra el precio real), las salientes que perdieron su job, la deriva de
  * los agentes vigentes (abre el freno) y el techo duro de gasto. Con
  * `--numbers` (Enmienda 4, E4-8), ADEMÁS la deriva del número importado (a qué
- * agente apunta en ElevenLabs frente al publicado; abre el freno). Solo GET a
- * los proveedores; sin credenciales, sin red. OPS8 la programa bajo
- * `voice.monitor.enabled`.
+ * agente apunta en ElevenLabs frente al publicado; abre el freno). GET a los
+ * proveedores, salvo volver a colgar en Twilio una saliente cortada que sigue
+ * viva (E12-5, B8-e; si no se confirma, freno); sin credenciales, sin red.
+ * OPS8 la programa bajo `voice.monitor.enabled`.
  *
  * Con `--dry-run` (E10-9; el diagnóstico del runbook ANTES de soltar el freno)
  * lee y decide lo mismo, pero no escribe nada (ni filas, ni eventos, ni freno,
@@ -32,7 +33,7 @@ class VoiceReconcileCommand extends Command
         {--dry-run : en seco: informa lo que haría sin escribir nada (E10-9)}
         {--json : el resumen en JSON}';
 
-    protected $description = 'Conciliación de la voz (D8-21): Twilio frente a voice_calls, ambiguas, deriva de los agentes y techo de gasto. Solo GET; abre el freno si hace falta. Con --dry-run no escribe nada.';
+    protected $description = 'Conciliación de la voz (D8-21): Twilio frente a voice_calls, ambiguas, deriva de los agentes y techo de gasto. GET, salvo volver a colgar una cortada que sigue viva; abre el freno si hace falta. Con --dry-run no escribe nada.';
 
     public function handle(VoiceReconciler $conciliacion): int
     {

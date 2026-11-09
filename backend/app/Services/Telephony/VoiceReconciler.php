@@ -21,9 +21,10 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * LA CONCILIACIÓN (contrato H8, D8-21; E1-2, E2-3; fixture
- * `twilio-webhook-bodies.json` §callsPage). Solo lee de los proveedores (GET):
+ * `twilio-webhook-bodies.json` §callsPage). Lee de los proveedores (GET):
  * las llamadas de la subcuenta en Twilio y la proyección de los agentes
- * vigentes en ElevenLabs.
+ * vigentes en ElevenLabs. Su ÚNICA escritura a un proveedor (E12-5, B8-e):
+ * volver a colgar una saliente cortada que Twilio enseña viva (nunca en seco).
  *
  * Cada llamada que enseña Twilio:
  *  - CONOCIDA (tiene fila por su SID, o es la ambigua cuyo SID dejó el job en
@@ -47,11 +48,17 @@ use Illuminate\Support\Facades\Log;
  * La deriva y el techo SE REARMAN si la evidencia cambió después de soltar el
  * freno (E10-6: {@see VoiceBrake::openOrRearm()}).
  *
- * Una saliente CORTADA mientras el job esperaba al proveedor y que el job
- * colgó al volver (E10-5, SEC8-b M-3) es CONOCIDA: su SID está en su evento
- * `outbound_started` (la fila `canceled` no admite ids, DB8). Solo si Twilio
- * ya la da por terminada; si la enseña viva, el corte no surtió efecto y sigue
- * el camino de una desconocida (freno).
+ * Una saliente CORTADA mientras el job esperaba al proveedor y que el
+ * proveedor inició igual (E10-5, SEC8-b M-3): su SID está en su evento
+ * `outbound_started` (la fila `canceled` no admite ids, DB8). FALLA CERRADO
+ * (E12-5, B8-e): es CONOCIDA solo si su ÚLTIMO colgado del sistema se confirmó
+ * (`hung_up` o `not_found`, {@see VoiceHangup::AFTER_CANCEL_CONFIRMED}). Si no
+ * (falló, no se sabe si surtió efecto, o nunca se colgó porque el proceso
+ * murió), pudo seguir hasta su máximo: sigue el camino de una desconocida y
+ * echa el freno con la clave del job (no duplica la apertura), y su precio
+ * queda en su fila (lo real de una cortada cuenta, E10-8). Si Twilio la enseña
+ * VIVA, antes se vuelve a colgar fuera de la transacción
+ * ({@see reconcileCall()}); en seco no se cuelga y cuenta como si fallara.
  *
  * EN SECO (`$dryRun`, E10-9; `voice:reconcile --dry-run`): lee lo mismo
  * (también los GET a los proveedores) y decide lo mismo, pero NO ESCRIBE NADA
@@ -123,8 +130,7 @@ final class VoiceReconciler
                 break;
             }
             foreach ($pagina->calls as $llamada) {
-                // En seco solo se lee: ni transacción ni cerrojos.
-                $resumen[$this->dryRun ? $this->one($llamada) : DB::transaction(fn (): string => $this->one($llamada))]++;
+                $resumen[$this->reconcileCall($carrier, $llamada)]++;
             }
             $resumen['truncated'] = $pagina->truncated;
             $token = $pagina->nextPageToken;
@@ -162,13 +168,49 @@ final class VoiceReconciler
         ]];
     }
 
+    /**
+     * Una llamada de Twilio, cada una en su transacción ({@see one()}; en seco
+     * solo se lee: ni transacción ni cerrojos).
+     *
+     * E12-5 (B8-e): si es una saliente CORTADA que el proveedor inició igual y
+     * Twilio la enseña VIVA, antes se vuelve a colgar, FUERA de la transacción
+     * (sin cerrojo durante la red); si no se confirma,
+     * {@see VoiceHangup::startedAfterCancel()} echa el freno, y one() decide con
+     * el colgado que quedó. Ninguna fila lleva su SID (la cortada no admite
+     * ids) y la vía de las ambiguas no puede tenerlo: cada SID sale de la
+     * respuesta del proveedor a UNA fila, y esa fila está cortada. En seco no se
+     * cuelga (colgar no es una lectura): se apunta el `hangup_requested` que
+     * habría y one() la cuenta como si el colgado fallara (en el sentido seguro).
+     *
+     * @return 'known'|'legs'|'unknown'
+     */
+    private function reconcileCall(TelephonyCarrier $carrier, CarrierCall $c): string
+    {
+        if (! in_array($c->status, self::CARRIER_FINAL, true) && VoiceCall::query()->where('provider_call_sid', $c->sid)->doesntExist()
+            && ($cortada = $this->canceledStartFor($c->sid, false)) !== null) {
+            if ($this->dryRun) {
+                $this->would['events']['hangup_requested'] = ($this->would['events']['hangup_requested'] ?? 0) + 1;
+            } else {
+                VoiceHangup::startedAfterCancel($cortada, $c->sid, $carrier, VoiceHangup::WHERE_RECONCILE);
+            }
+        }
+
+        return $this->dryRun ? $this->one($c) : DB::transaction(fn (): string => $this->one($c));
+    }
+
     /** @return 'known'|'legs'|'unknown' */
     public function one(CarrierCall $c): string
     {
         $vistos = [];
         $fila = self::lockedWithMarks(VoiceCall::query()->where('provider_call_sid', $c->sid), $c, 'cost:', $vistos, ! $this->dryRun)
-            ?? $this->ambiguousFor($c->sid) ?? $this->canceledStartFor($c);
-        if ($fila === null && $c->parentSid !== null) {
+            ?? $this->ambiguousFor($c->sid);
+        // E12-5 (B8-e): la cortada que el proveedor inició igual es conocida SOLO con su último colgado confirmado.
+        $cortada = $fila === null ? $this->canceledStartFor($c->sid) : null;
+        $colgado = $cortada === null ? null : $this->afterCancelResult($cortada, $c);
+        if ($cortada !== null && in_array($colgado, VoiceHangup::AFTER_CANCEL_CONFIRMED, true)) {
+            [$fila, $cortada] = [$cortada, null];
+        }
+        if ($fila === null && $cortada === null && $c->parentSid !== null) {
             $madre = self::lockedWithMarks(VoiceCall::query()->where('provider_call_sid', $c->parentSid)->whereNull('transfer_of_call_id'), $c, 'leg:', $vistos, ! $this->dryRun);
             if ($madre !== null) {
                 $this->cost($madre, $c, 'leg:', $vistos);
@@ -180,7 +222,15 @@ final class VoiceReconciler
             $evento = $this->event('unknown_provider_call', null, VoiceCallEvent::PROVIDER_TWILIO, $c->sid, [
                 'outcome' => (string) $c->status, 'codes' => ['direction' => $c->direction, 'carrierStatus' => $c->status],
             ]);
-            if ($evento !== null) {
+            if ($cortada !== null) {
+                // E12-5 (B8-e): sin un colgado confirmado, freno con la clave del job (no duplica) y su precio en su fila
+                // (lo real de una cortada cuenta). Viva, el colgado de ahora es evidencia nueva: rearma uno ya soltado (de
+                // verdad ya lo hizo el reintento de reconcileCall(); aquí, en seco, se anuncia). Terminada, cada clave una vez.
+                $viva = ! in_array($c->status, self::CARRIER_FINAL, true);
+                $this->brake(VoiceHangup::BRAKE_CAUSE, VoiceHangup::brakeKey($c->sid), ['where' => 'reconcile', 'carrierStatus' => $c->status, 'outcome' => $colgado],
+                    $viva ? VoiceBrake::observedAfter(now()) : null, $evento?->id === null ? null : (int) $evento->id, (int) $cortada->id);
+                $this->cost($cortada, $c, 'cost:');
+            } elseif ($evento !== null) {
                 $this->brake('unknown_provider_call', 'unknown:'.$c->sid, ['where' => 'reconcile', 'direction' => $c->direction], null, $evento->id === null ? null : (int) $evento->id);
             }
 
@@ -257,24 +307,40 @@ final class VoiceReconciler
 
     /**
      * E10-5 (SEC8-b M-3): la saliente CORTADA (`canceled`) mientras el job
-     * esperaba al proveedor, que el proveedor inició igual y el job colgó al
-     * volver: el SID quedó en su `outbound_started` (o en el `outbound_ambiguous`
-     * que trajo SID) con `afterCancel`, porque la fila `canceled` no admite ids
-     * (DB8). Conocida solo si Twilio ya la da por
-     * terminada (el corte surtió efecto); viva, null: sigue el camino de una
-     * desconocida y echa el freno, como antes del arreglo.
+     * esperaba al proveedor, que el proveedor inició igual: el SID quedó en su
+     * `outbound_started` (o en el `outbound_ambiguous` que trajo SID) con
+     * `afterCancel`, porque la fila `canceled` no admite ids (DB8). Viva o
+     * terminada: si es conocida lo decide su colgado (E12-5, B8-e,
+     * {@see afterCancelResult()}). Con `$lock` false, sin cerrojo (lo lee
+     * {@see reconcileCall()} fuera de la transacción).
      */
-    private function canceledStartFor(CarrierCall $c): ?VoiceCall
+    private function canceledStartFor(string $sid, bool $lock = true): ?VoiceCall
     {
-        if (! in_array($c->status, self::CARRIER_FINAL, true)) {
-            return null;
-        }
-        $evento = VoiceCallEvent::query()->whereIn('kind', ['outbound_started', 'outbound_ambiguous'])->whereNotNull('call_id')
+        $evento = VoiceCallEvent::query()->whereIn('kind', VoiceHangup::AFTER_CANCEL_START_KINDS)->whereNotNull('call_id')
             ->whereIn('call_id', VoiceCall::query()->select('id')->where('status', VoiceCall::STATUS_CANCELED))
             ->orderByDesc('id')->limit(200)->get(['call_id', 'codes'])
-            ->first(static fn (VoiceCallEvent $e): bool => is_array($e->codes) && ($e->codes['afterCancel'] ?? false) === true && ($e->codes['callSid'] ?? null) === $c->sid);
+            ->first(static fn (VoiceCallEvent $e): bool => is_array($e->codes) && ($e->codes['afterCancel'] ?? false) === true && ($e->codes['callSid'] ?? null) === $sid);
+        if ($evento === null) {
+            return null;
+        }
+        $query = VoiceCall::query()->whereKey($evento->call_id)->where('status', VoiceCall::STATUS_CANCELED);
 
-        return $evento === null ? null : $this->locked(VoiceCall::query()->whereKey($evento->call_id)->where('status', VoiceCall::STATUS_CANCELED));
+        return $lock ? $this->locked($query) : $query->first();
+    }
+
+    /**
+     * E12-5 (B8-e): el resultado del último colgado del sistema de la cortada
+     * con este SID (null: nunca se colgó). En seco y con la llamada viva, null:
+     * la pasada de verdad volvería a colgarla antes de decidir, y en seco no se
+     * cuelga; cuenta como si fallara (en el sentido seguro).
+     */
+    private function afterCancelResult(VoiceCall $cortada, CarrierCall $c): ?string
+    {
+        if ($this->dryRun && ! in_array($c->status, self::CARRIER_FINAL, true)) {
+            return null;
+        }
+
+        return VoiceHangup::lastAfterCancelResult((int) $cortada->id, $c->sid);
     }
 
     /** La fila con su cerrojo; en seco, sin él (E10-9). */
@@ -333,7 +399,7 @@ final class VoiceReconciler
      * @param  array<string, int|string|bool|null|list<mixed>>  $evidence
      * @param  (Closure(VoiceBrakeEntry, VoiceBrakeEntry): bool)|null  $changedAfterRelease
      */
-    private function brake(string $cause, string $key, array $evidence, ?Closure $changedAfterRelease, ?int $eventId = null): bool
+    private function brake(string $cause, string $key, array $evidence, ?Closure $changedAfterRelease, ?int $eventId = null, ?int $callId = null): bool
     {
         if ($this->dryRun) {
             $abriria = ! isset($this->plannedKeys[$key]) && VoiceBrake::nextOpening($key, $changedAfterRelease) !== null;
@@ -346,8 +412,8 @@ final class VoiceReconciler
         }
 
         return ($changedAfterRelease === null
-            ? VoiceBrake::open($cause, $key, $evidence, null, $eventId)
-            : VoiceBrake::openOrRearm($cause, $key, $evidence, $changedAfterRelease, null, $eventId)) !== null;
+            ? VoiceBrake::open($cause, $key, $evidence, $callId, $eventId)
+            : VoiceBrake::openOrRearm($cause, $key, $evidence, $changedAfterRelease, $callId, $eventId)) !== null;
     }
 
     /**

@@ -30,9 +30,10 @@ use Throwable;
  * IRON GUARD (el mecanismo del monitor del H7), después de confirmar.
  *
  * SE REARMA ({@see openOrRearm()}; E10-6, SEC8-b B-2): las causas que repiten
- * clave (la deriva del agente y la del número, el techo de gasto de un día)
- * vuelven a echarlo si la evidencia cambió después de que una persona lo
- * soltara: una apertura nueva (`<clave>:r<n>`), con su incidente.
+ * clave (la deriva del agente y la del número, el techo de gasto de un día y,
+ * desde E12-5/B8-e, el colgado sin confirmar de una saliente cortada sobre
+ * `unknown:<sid>`) vuelven a echarlo si la evidencia cambió después de que una
+ * persona lo soltara: una apertura nueva (`<clave>:r<n>`), con su incidente.
  *
  * Con el freno echado (alguna apertura sin soltar): las salientes dan 409
  * `voice_braked`, las entrantes `caller_authorized = no` y las herramientas no
@@ -52,6 +53,10 @@ final class VoiceBrake
      * es una deriva del agente que atiende (D8-19); la base no tiene otro
      * motivo (`vbr_reason_chk`), así que se guarda como `agent_drift` y la
      * evidencia dice la causa (`trigger`).
+     * E12-5 (B8-e): una saliente CORTADA que el proveedor inició igual y cuyo
+     * colgado no se confirma (`hangup_failed`, {@see VoiceHangup::startedAfterCancel()})
+     * es una llamada que nadie controla: se guarda como `unknown_provider_call`
+     * (con la clave de la conciliación para ese SID) y la evidencia dice la causa.
      */
     public const TRIGGERS = [
         'guard_violation' => 'guard_violation',
@@ -61,6 +66,7 @@ final class VoiceBrake
         'usage_alert' => 'subaccount_alert',
         'unknown_provider_call' => 'unknown_provider_call',
         'number_drift' => 'agent_drift',
+        'hangup_failed' => 'unknown_provider_call',
     ];
 
     public const NOTE_MAX = 300;
@@ -140,7 +146,10 @@ final class VoiceBrake
     /**
      * Abre el freno por una causa que se REPITE con la misma clave (E10-6,
      * SEC8-b B-2): la deriva del agente (`drift:<agente>`), la del número
-     * (`number:<id>:<agente>`) y el techo de gasto (`cost_cap:<día>`).
+     * (`number:<id>:<agente>`), el techo de gasto (`cost_cap:<día>`) y el
+     * colgado sin confirmar de una saliente cortada (`hangup_failed` sobre
+     * `unknown:<sid>`, E12-5/B8-e; un intento posterior que vuelve a fallar). La
+     * desconocida de verdad sigue por {@see open()}: cada clave, una vez.
      *  - Nunca abierta: como {@see open()}.
      *  - Su última apertura sigue echada: idempotente (null).
      *  - Una persona ya la soltó: se abre OTRA (la generación siguiente de la

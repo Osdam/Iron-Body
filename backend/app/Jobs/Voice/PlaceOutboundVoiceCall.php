@@ -122,7 +122,12 @@ class PlaceOutboundVoiceCall implements ShouldQueue
         return $this->record($llamada, $resultado);
     }
 
-    /** El job murió o agotó su plazo: no se sabe si se marcó → `ambiguous`, nunca un reintento. */
+    /**
+     * El job murió o agotó su plazo: no se sabe si se marcó → `ambiguous`, nunca
+     * un reintento. Si murió con una saliente YA cortada que el proveedor inició
+     * y sin un colgado confirmado (p. ej. a mitad del colgado), el freno en el
+     * acto (E12-5, B8-e; {@see VoiceHangup::brakeIfUnconfirmedAfterCancel()}).
+     */
     public function failed(?Throwable $e): void
     {
         $llamada = VoiceCall::query()->find($this->callId);
@@ -135,6 +140,7 @@ class PlaceOutboundVoiceCall implements ShouldQueue
             ]);
         }
         Log::channel('voice')->error('voice.outbound.job_failed', ['call_uuid' => $llamada->uuid, 'error_class' => $e === null ? null : $e::class]);
+        VoiceHangup::brakeIfUnconfirmedAfterCancel($llamada);
     }
 
     private function recheck(VoiceCall $llamada): ?string
@@ -242,7 +248,9 @@ class PlaceOutboundVoiceCall implements ShouldQueue
      * final no cambia, DB8), sus ids quedan en el evento (`afterCancel`; la
      * fila `canceled` no los admite) para que la conciliación la reconozca, y
      * la llamada recién iniciada se cuelga EN EL ACTO con el transportista,
-     * fuera de la transacción (sin cerrojo durante la red).
+     * fuera de la transacción (sin cerrojo durante la red). Si ese colgado no
+     * se confirma, el freno se echa en el acto (E12-5, B8-e) y la conciliación
+     * no la reconoce hasta que un colgado la confirme.
      */
     private function record(VoiceCall $llamada, OutboundCallResult $r): string
     {
