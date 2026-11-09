@@ -423,9 +423,10 @@ if ((bool) config('ultron_studio.monitor.enabled', false)) {
 // Studio (m-3 del H7, E2-6): la bandera del Studio solo programa órdenes del
 // Studio sin argumentos. Con esta apagada no se programa NADA de la voz; los
 // comandos siguen disponibles a mano. Vuelta atrás = la bandera en false +
-// config:cache. Solo GET a los proveedores; cualquier llamada que Twilio
-// enseñe sin su fila, una deriva o el techo de gasto ECHAN EL FRENO (lo suelta
-// una persona, D8-19).
+// config:cache. Lecturas a los proveedores, salvo una escritura acotada: volver
+// a colgar una saliente cortada que Twilio enseñe viva (B8-e, E13-9); cualquier
+// llamada que Twilio enseñe sin su fila, una deriva o el techo de gasto ECHAN EL
+// FRENO (lo suelta una persona, D8-19).
 if ((bool) config('voice.monitor.enabled', false)) {
     // La conciliación (D8-21): las llamadas de la subcuenta en Twilio frente a
     // voice_calls, las ambiguas, las salientes que perdieron su job, las

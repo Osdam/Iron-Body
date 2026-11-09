@@ -87,7 +87,7 @@ La post-llamada (`post_call_transcription`) se recorre **en memoria**: cada turn
 ### 3.6 Conciliación y deriva
 
 Con el monitor de voz encendido (`VOICE_MONITOR_ENABLED=true`, §9):
-- **Conciliación:** las llamadas de la subcuenta en Twilio (solo GET) frente a `voice_calls`. Una llamada **sin su fila** es `unknown_provider_call` y echa el freno; resuelve las `ambiguous`, anota el precio real de Twilio y cuenta las atascadas en `dialing` más de 10 minutos.
+- **Conciliación:** las llamadas de la subcuenta en Twilio (lecturas; la única escritura es volver a colgar una saliente cortada que siga viva, E13-9) frente a `voice_calls`. Una llamada **sin su fila** es `unknown_provider_call` y echa el freno; resuelve las `ambiguous`, anota el precio real de Twilio y cuenta las atascadas en `dialing` más de 10 minutos.
 - **Deriva del agente:** la proyección observada de cada agente vivo frente a la compilada.
 - **Deriva del número** (`--numbers`): a qué agente apunta el número en ElevenLabs frente al publicado en canario; una diferencia se guarda como `agent_drift` con `trigger: number_drift` (E2-3, E6-1).
 - **Techo de gasto:** si lo comprometido del día de Bogotá supera `VOICE_DAILY_BUDGET_USD`, freno `cost_cap`.
@@ -144,7 +144,7 @@ sequenceDiagram
     opt agente distinto del sellado o violación de la guarda
         L->>L: seal_mismatch o guard_verdict → freno e incidente de IRON GUARD
     end
-    M->>T: voice:reconcile (cada 10 min, solo GET)
+    M->>T: voice:reconcile (cada 10 min; lecturas, y cuelga una cortada que siga viva)
     M->>L: precio real · una llamada sin fila es unknown_provider_call → freno
     Note over L: GET voice/canary-evidence cuenta la llamada sellada con esa entrada y esa parte
 ```
@@ -276,7 +276,7 @@ Todos como `www-data`, desde `/var/www/api/backend`: `sudo -u www-data php artis
 |---|---|---|---|
 | `voice:doctor [--json] [--verify] [--telefonia]` | Estado de ElevenLabs y piezas que faltan **por nombre**. `--verify` solo actúa en `ELEVENLABS_UNVERIFIED` (un GET al agente de verificación; no guarda nada). `--telefonia` añade la constante, las banderas, el número, la cadena por partes, el freno, los límites, el horario y los destinos de transferencia | 0; con `--verify`, 0 solo con `credentials_ok` | Solo con `--verify` |
 | `voice:hangup {call?} [--all --confirm]` | Corte de emergencia (D8-20, nivel 0b): cuelga en Twilio una llamada o, con `--all --confirm`, todas las `dialing`, `active` y las pedidas sin marcar (estas se cancelan). Sin la credencial de la subcuenta avisa y solo cancela las no marcadas | 0 si todas quedan colgadas, canceladas o ya no vivas; 1 si alguna falla, si falta `--confirm` o si la llamada indicada no existe | Twilio (`Status=completed`) |
-| `voice:reconcile [--hours=48] [--numbers] [--dry-run] [--json]` | Conciliación (§3.6). `--numbers` **se suma**: además mira a qué agente apunta el número. **No es de solo lectura:** escribe eventos y precios y puede echar el freno, también ejecutado a mano. El modo en seco `--dry-run` informa `wouldOpenBrake`, incidentes, eventos, transiciones y precios **sin escribir nada** (E12-4, B8-d) | 0 sin desconocidas, sin techo superado y sin deriva; si no, 1 | Solo GET a los proveedores |
+| `voice:reconcile [--hours=48] [--numbers] [--dry-run] [--json]` | Conciliación (§3.6). `--numbers` **se suma**: además mira a qué agente apunta el número. **No es de solo lectura:** escribe eventos y precios y puede echar el freno, también ejecutado a mano. El modo en seco `--dry-run` informa `wouldOpenBrake`, incidentes, eventos, transiciones y precios **sin escribir nada** (E12-4, B8-d). Una saliente cortada que Twilio enseñe viva se vuelve a colgar y, si no se confirma, freno (E13-9, B8-e) | 0 sin desconocidas, sin techo superado y sin deriva; si no, 1 | Solo GET a los proveedores |
 | `voice:prune-rate-limits [--dry-run] [--json]` | Borra de la caché `database` **solo** las claves `voice-rl:*` caducadas (P8-3); `--dry-run` solo cuenta | 0 | Ninguna |
 | `ultron-studio:integrations-snapshot --verify-voice` | La verificación que deja evidencia: un GET al agente de verificación y una instantánea; con ella de menos de 30 días el Studio afirma `ELEVENLABS_VERIFIED` | 1 si la voz no está en `UNVERIFIED` | Un GET |
 
