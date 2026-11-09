@@ -252,7 +252,8 @@ set -e
 
 # 6. Fotografía después y comparación.
 RC2=0
-[ -z "$VIGIA_PID" ] || { kill "$VIGIA_PID" 2> /dev/null; wait "$VIGIA_PID" 2> /dev/null; VIGIA_PID=""; }
+# El vigía muere por SIGTERM y su `wait` devuelve 143: con `set -e` eso tumbaba el lanzador y el código final salía 143 en vez de 3 (visto en producción el 09-11-2026).
+[ -z "$VIGIA_PID" ] || { kill "$VIGIA_PID" 2> /dev/null; wait "$VIGIA_PID" 2> /dev/null || true; VIGIA_PID=""; }
 echo "== Base, registros y red (solo lectura)"
 if DESPUES=$(sql "$Q_TABLAS") && DESPUES_CUENTA=$(sql "$Q_CUENTA") && INC_DESPUES=$(sql "$Q_INCIDENTES") && COLA_DESPUES=$(sql "$Q_COLA_VOZ"); then
   if [ "$ANTES_CUENTA" = "$DESPUES_CUENTA" ]; then echo "OK      ninguna fila nueva de ultron_studio_* ni de voice_* nombra a la cuenta $ADMIN_ID"; else echo "FALLO   filas que nombran a la cuenta: antes [$ANTES_CUENTA] · después [$DESPUES_CUENTA]"; RC2=1; fi
