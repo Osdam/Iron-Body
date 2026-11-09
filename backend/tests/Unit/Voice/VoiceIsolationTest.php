@@ -215,9 +215,17 @@ class VoiceIsolationTest extends TestCase
     private const IMPURO = ['DB', 'Schema', 'Log', 'Cache', 'Queue', 'Bus', 'Storage', 'Mail', 'Notification', 'Event', 'Session', 'Redis',
         'dispatch', 'event', 'cache', 'logger', 'report', 'info', 'now', 'today', 'Carbon', 'CarbonImmutable', 'env', 'session'];
 
+    /**
+     * Lo que la voz llama FUERA de sus directorios y tampoco sale a la red (Enmienda 9, E9-2; SEC8-b): el podador
+     * de la caché de `voice:prune-rate-limits`, que el bloque de voz programa a diario. Fichero a fichero y
+     * existente (`php()` se salta en silencio una ruta que no existe); lo que la voz use de `App\Support\Cache`
+     * tiene que estar aquí ({@see test_lo_que_la_voz_usa_de_support_cache_esta_enumerado_y_sin_red()}).
+     */
+    private const SIN_RED_FUERA_DE_LA_VOZ = ['app/Support/Cache/ExpiredCachePruner.php'];
+
     /** La telefonía con estado (D8-2) y el gobierno de la voz: orquestan, guardan y registran, pero no salen a la red. */
     private const SIN_RED = ['app/Services/Telephony', 'app/Models/Voice', 'app/Http/Controllers/Api/Voice', 'app/Http/Controllers/Crm/Voice',
-        'app/Jobs/Voice', 'app/Console/Commands/Voice', 'routes/voice.php'];
+        'app/Jobs/Voice', 'app/Console/Commands/Voice', 'routes/voice.php', ...self::SIN_RED_FUERA_DE_LA_VOZ];
 
     private const STUDIO_VOZ = ['app/Services/UltronStudio/StudioVoice*.php', 'app/Http/Controllers/Crm/UltronStudio/UltronStudioVoice*.php'];
 
@@ -406,6 +414,37 @@ class VoiceIsolationTest extends TestCase
                 $this->assertNotContains($primitiva, self::funcionesLlamadas($ruta), "{$relativa} usa {$primitiva}()");
             }
         }
+    }
+
+    /**
+     * Enmienda 9, E9-2 (SEC8-b): lo que la voz usa de `App\Support\Cache` (hoy, el podador de
+     * `voice:prune-rate-limits`) está enumerado en {@see SIN_RED_FUERA_DE_LA_VOZ}, existe y, por estar en
+     * {@see SIN_RED}, lo mira la guarda de la red. Una clase de `app/Support/Cache` que la voz llame sin
+     * enumerarla, o el espacio entero importado, cae aquí: si no, saldría a la red sin que nadie lo viera.
+     */
+    public function test_lo_que_la_voz_usa_de_support_cache_esta_enumerado_y_sin_red(): void
+    {
+        foreach (self::SIN_RED_FUERA_DE_LA_VOZ as $fichero) {
+            $this->assertFileExists(self::raiz().'/'.$fichero, "{$fichero} está en SIN_RED: si se movió o se renombró, la guarda de la red dejaría de mirarlo en silencio");
+        }
+        $vistos = 0;
+        foreach (self::php('app/Services/Voice', ...self::SIN_RED) + self::glob(...self::STUDIO_VOZ) as $relativa => $ruta) {
+            $tokens = self::tokens($ruta);
+            foreach ($tokens as $i => $t) {
+                // La declaración `namespace …;` de un fichero no es un uso.
+                $nombre = in_array($t[0], [T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true) && (self::anterior($tokens, $i)[0] ?? null) !== T_NAMESPACE ? ltrim($t[1], '\\') : '';
+                if ($nombre === 'App\\Support\\Cache') {
+                    $this->fail("{$relativa} nombra el espacio App\\Support\\Cache entero: cada clase, por su nombre y enumerada (E9-2)");
+                }
+                if (! str_starts_with($nombre, 'App\\Support\\Cache\\')) {
+                    continue;
+                }
+                $vistos++;
+                $fichero = 'app/'.str_replace('\\', '/', substr($nombre, strlen('App\\'))).'.php';
+                $this->assertContains($fichero, self::SIN_RED_FUERA_DE_LA_VOZ, "{$relativa} usa {$nombre}: lo que la voz llama de app/Support/Cache va en SIN_RED_FUERA_DE_LA_VOZ (E9-2), para que la guarda de la red lo mire");
+            }
+        }
+        $this->assertGreaterThanOrEqual(1, $vistos, 'el rastreo ve el podador que usa voice:prune-rate-limits');
     }
 
     public function test_el_transportista_solo_cuelga_y_lista(): void

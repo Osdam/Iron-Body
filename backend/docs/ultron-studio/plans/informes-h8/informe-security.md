@@ -659,3 +659,171 @@ No tocados: nada de `app/`, `config/`, `routes/` ni `database/`, ni las otras cu
 2. Aplicar los 3 endurecimientos de las guardas y hacer mutaciones por muestreo en una copia aislada.
 3. La puerta PG y las suites de voz y telefonía.
 4. La revisión del CRM, cuando el lead lo confirme.
+
+---
+
+# §SEC8-b (2) · pruebas de concepto, guardas endurecidas, mutaciones y suites (backend)
+
+**Fecha:** 08-11-2026. **Base:** `b81af59`, con el mismo código que `8d3c41f`: entre los dos, nada cambia en `app/`, `routes/`, `config/`, `bootstrap/`, `database/` ni `tests/`. **Sin commit.** Toco 4 guardas y este informe. Lo que sigue abierto del punto 5 anterior es solo el 4, el CRM (§6).
+
+**Decisiones del lead (mensaje del 08-11):**
+- M-2, B-2 y los dos hallazgos de DOC8 los corrige un agente nuevo, B8-d, antes de la fase 2.
+- M-3, antes de la fase 4a.
+- B-3 lo corrigió el lead en `c8c4eb4`; lo verifico en §5.
+
+## 1. Pruebas de concepto (ejecutadas; salida real)
+
+**Cómo se ejecutaron:**
+- Fichero fuera del repositorio: `<scratchpad>/poc/Sec8bPocTest.php`, con las ayudas de `VoiceFixtures`.
+- Sin red (`Http::preventStrayRequests()`) y con la constante cerrada.
+- Lanzado desde el árbol compartido, sin escribir en él.
+- PG con `PGGSSENCMODE=disable UNIT_DB=ultron_studio_h8_secb bash docs/ultron-studio/ops/pgunit.sh <fichero>`; SQLite con la configuración de `phpunit.xml`.
+
+### M-2 · confirmado, y solo en PG
+
+Post-llamada firmada de una saliente `active`, con N intercambios en los que el agente dice «No tengo ningún descuento para ofrecerte.».
+
+```
+POC M-2 pgsql  {"n":120,"http":[500,500],"excepcion":"Illuminate\\Database\\QueryException SQLSTATE=23514 vce_codes_chk","brakeOpen":false,"aperturas":0,"eventos":0,"estado":"active"}
+POC M-2 sqlite {"n":120,"http":[200,200],"excepcion":null,"brakeOpen":true,"aperturas":1,"eventos":2,"estado":"completed"}
+```
+
+| Turnos con violación | Violaciones | Bytes de `codes` | PG | Freno en PG |
+|---|---|---|---|---|
+| 10 | 11 | 582 | 200 | sí |
+| 60 | 61 | 3 242 | 200 | sí |
+| 74 | 75 | 3 998 | 200 | sí |
+| 75 | 76 | 4 052 | 200 | sí |
+| **76** | **77** | **4 106** | **500** | **no** |
+| 80 | 81 | 4 322 | 500 | no |
+
+**Lo que muestra:**
+- Desde el turno 76 con violación, el INSERT del veredicto (`VoicePostCall.php:144`) rompe `vce_codes_chk` (`…100002_create_voice_tables.php:421`).
+- `ingest()` (`VoicePostCall.php:58`) deshace TODO: ni `post_call_transcription`, ni `seal_verified`, ni el freno de `:148-150`. La llamada sigue `active`.
+- El reintento del mismo cuerpo vuelve a dar 500, así que es determinista: ElevenLabs acabaría desactivando el webhook (D8-16).
+- En SQLite (sin ese CHECK) la misma post-llamada da 200 y echa el freno: **la suite SQLite no lo puede ver**.
+- El umbral depende del código: 54 bytes por entrada con `machine_reply_invented_discount`.
+
+**Para la prueba de B8-d:** que caiga en PG con 76 turnos o más, sin el arreglo.
+
+### M-3 · confirmado (PG y SQLite, igual)
+
+Una saliente `requested`. Se corta con `VoiceHangup::hangup()` mientras el job espera a ElevenLabs. Después, `record()` del job recibe `started`.
+
+```
+POC M-3 pgsql {"corte":"canceled","estadoTrasStarted":"canceled","sidGuardado":null,"conversacionGuardada":null,
+  "eventoStarted":{"clave":"conv_sec8b_m3","codes":{"reason":null,"http":200}},"segundoCorte":"not_live",
+  "laVeHangupAll":false,"conciliacion":"unknown","freno":["unknown_provider_call"]}
+```
+
+**Lo que muestra:**
+- La fila queda `canceled` y sin ids (`PlaceOutboundVoiceCall.php:241-251`: la transición falla en silencio).
+- El evento `outbound_started` no lleva el `callSid`: solo `{reason, http}`.
+- Un segundo corte da `not_live` (`VoiceHangup.php:46-48`), y `voice:hangup --all` no la ve (`VoiceHangupCommand.php:49`).
+- La conciliación la da por desconocida y echa el freno `unknown_provider_call` (`VoiceReconciler.php:110, 119-125`).
+- Mientras tanto, la llamada real sigue hasta su duración máxima.
+
+### B-2 · confirmado (PG y SQLite, igual)
+
+Deriva del número al agente `agent_ajeno_sec8b_01`. Una Super Admin suelta el freno. La conciliación ve la misma deriva otra vez.
+
+```
+POC B-2 pgsql {"primera":["drift",true],"sueltoTrasSoltar":true,"segunda":["drift",false],"frenoEchadoTrasLaSegunda":false,"aperturas":1}
+```
+
+La segunda vez `VoiceReconciler::numbers()` da `drift`, pero no echa el freno ni abre incidente: la clave `number:<id>:<agente>` es UNIQUE para siempre (`VoiceBrake.php:108-113`). El rearme que decidió el lead lo hace B8-d.
+
+## 2. Los 3 huecos de las guardas, cerrados (H-5, H-6, H-7)
+
+| # | Qué fija | Dónde | Contrato |
+|---|---|---|---|
+| H-5 | El podador de la caché entra en la guarda de «sin red» con su propia lista, `SIN_RED_FUERA_DE_LA_VOZ`, dentro de `SIN_RED`. La prueba nueva exige que exista: `php()` se salta en silencio lo que no existe. También exige que todo lo que la voz (paquete, telefonía, comandos, trabajos, controladores y Studio de voz) use de `App\Support\Cache` esté en esa lista, y prohíbe importar el espacio entero | `tests/Unit/Voice/VoiceIsolationTest.php:218-228` (constantes) y `:419-448` (`test_lo_que_la_voz_usa_de_support_cache_esta_enumerado_y_sin_red`) | E9-2 |
+| H-6 | El informe del laboratorio tiene **una entrega y un oyente**:<br>• el nombre `voice.lab.post_call`, una vez y solo en `VoicePostCall::LAB_EVENT`;<br>• `LAB_EVENT`, solo en `VoicePostCall.php` (su declaración y un `event(self::LAB_EVENT,`) y en `AppServiceProvider.php`, un `Event::listen(VoicePostCall::LAB_EVENT, [StudioVoiceLabSessions::class, 'recordProviderReport']);` exacto;<br>• ningún `listen()` con un nombre literal de voz o comodín, y ninguna clave `'*' =>` en `app/Providers` | `tests/Feature/Telephony/TelephonyIsolationTest.php:548-629` (`test_el_informe_del_laboratorio_tiene_una_sola_entrega_y_un_solo_oyente` y el ayudante `veces()`) | D8-19, E8-1, E9-1 |
+| H-6b | La excepción `LAB_LISTENER` del arranque pasa a ser exacta: el `use` sin alias y una vez, y el nombre corto una sola vez, dentro de `LAB_LISTENER_CALL`. Además, el docblock huérfano del lector de la cadena vuelve a su constante | `tests/Feature/UltronStudio/UltronEngineIsolationTest.php:99-122` (constantes), `:222-226` (la rama) y `:548-565` (`onlyTheLabListener`) | E8-1, E9-1 |
+| H-7 | Los limitadores con nombre del CRM, por guarda (antes solo los fijaba `VoiceAdminRateLimitsTest`, de B8):<br>• cada ruta de `Crm\Voice`, con `throttle:voice-admin-read` (GET) o `throttle:voice-admin-write` (POST) y ninguno más;<br>• esos dos, en ninguna otra ruta;<br>• los dos, registrados (`RateLimiter::limiter`) | `tests/Feature/Voice/VoiceBoundaryTest.php:100-103` (constantes), `:147-158` (en `test_en_la_tabla_de_rutas_real_la_voz_vive_en_sus_prefijos`) y el final de esa prueba | E9-4 (P8-5) |
+
+**Lo que no ven:** siguen siendo rastreos de tokens. No ven un nombre de evento compuesto en tiempo de ejecución (`'voice.lab.'.$x`), un oyente por `$dispatcher` inyectado con un nombre construido, ni un limitador añadido en tiempo de ejecución.
+
+## 3. Mutaciones (copia aislada)
+
+**La copia:** `<scratchpad>/mut/backend`, un clon APFS del backend con su propio `vendor/` (la carga automática apunta a la copia). El banco es `<scratchpad>/tools/mutar-b.php`.
+
+**El procedimiento, por mutación:**
+1. el texto de partida tiene que aparecer exactamente una vez;
+2. `php -l`;
+3. las 4 guardas tocadas, con su JUnit;
+4. restaurar y comparar el SHA-256.
+
+**Resultado:**
+- base 41/41; **caen 21 de 21**; **los 4 controles no caen**; después 41/41;
+- **25 de 25 restauradas con el SHA-256 igual**; los ficheros creados, borrados.
+
+**Contraprueba:** las mismas 25 con las 4 guardas de `HEAD` (base 39/39): **sobreviven las 21**. Cada endurecimiento cierra un hueco real.
+
+Siglas: VI `VoiceIsolationTest`, TI `TelephonyIsolationTest`, UEI `UltronEngineIsolationTest`, VB `VoiceBoundaryTest`.
+
+| # | Mutación | La caza |
+|---|---|---|
+| P1 | `ExpiredCachePruner` llama a `Http::get(…)` | VI `la_red_solo_sale…`, VI `hosts_oficiales…` |
+| P2 | `ExpiredCachePruner` usa `file_get_contents('https://…')` | VI `la_red_solo_sale…`, VI `hosts_oficiales…` |
+| P3 | El comando usa una clase nueva de `app/Support/Cache` que sale a la red | VI `lo_que_la_voz_usa_de_support_cache…` |
+| P4 | El podador se renombra (con su `use … as`) | VI `lo_que_la_voz_usa_de_support_cache…` |
+| P5 | El comando importa `App\Support\Cache` entero | VI `lo_que_la_voz_usa_de_support_cache…` |
+| L1 | Un segundo `Event::listen(VoicePostCall::LAB_EVENT, fn () => 'recorded')` | TI `informe_del_laboratorio…` |
+| L2 | `Event::listen('voice.*', …)` en el arranque | TI |
+| L3 | `Event::listen('*', …)` en `routes/console.php` | TI |
+| L4 | Otro proveedor escucha `'voice.lab.post_call'` | TI |
+| L5 | El oyente apunta a otro método del laboratorio | TI, UEI |
+| L6 | El arranque usa `StudioVoiceLabSessions` para otra cosa | UEI |
+| L7 | El `use` con alias y el oyente con el alias | TI, UEI |
+| L8 | `VoiceTools` dispara el informe del laboratorio | TI |
+| L9 | `VoicePostCall` entrega el informe dos veces | TI |
+| L10 | Un `$listen = ['*' => …]` en un proveedor | TI |
+| T1 | Las lecturas del CRM vuelven a `throttle:120,1` | VB `vive_en_sus_prefijos` |
+| T2 | Una POST del CRM con el cupo de lectura | VB |
+| T3 | Una ruta del CRM sin limitador | VB |
+| T4 | Una ruta del CRM con un `throttle:60,1` de más | VB |
+| T5 | `voice-admin-read` registrado con otro nombre | VB |
+| T6 | Una ruta del Studio usa `throttle:voice-admin-write` | VB |
+| C1 | **Control:** el podador renombra una variable local | no cae (bien) |
+| C2 | **Control:** el arranque reordena dos `use` | no cae (bien) |
+| C3 | **Control:** el oyente se registra desde otro método privado, idéntico | no cae (bien) |
+| C4 | **Control:** se reordenan dos lecturas del CRM | no cae (bien) |
+
+## 4. Suites (árbol compartido con las 4 guardas nuevas; `git status` igual antes y después)
+
+| Suite | Resultado |
+|---|---|
+| Las 6 guardas de SEC8, SQLite | **63 OK** (61 + 2 nuevas), 184 791 aserciones |
+| `tests/Feature/Telephony tests/Feature/Voice tests/Unit/Telephony tests/Unit/Voice tests/Unit/Twilio`, SQLite | **761 OK**, 196 430 aserciones, 146 omitidas (solo PG) |
+| `tests/Feature/UltronStudio/*Voice*Test.php tests/Unit/UltronStudio/*Voice*Test.php` y `UltronEngineIsolationTest`, SQLite | **588 OK**, 6 464 aserciones, 73 omitidas |
+| Lo mismo en la puerta PG (`ultron_studio_h8_secb`) | **1 349 OK**, 204 046 aserciones, 15 omitidas, **0 fallos** |
+| `php artisan auth:coverage --unmapped` | vacío, exit 0 |
+| Pint `--test` en las 4 guardas tocadas | `passed` |
+
+## 5. B-3, verificado en `c8c4eb4`
+- `deploy-h8-backend-fase1.sh:330-331` exige, en el paso 0 y antes del merge (`:449`), un `CALLS_ENABLED_IN_CODE = false;` en `origin/main` (que es `ESPERADO`). **Cerrado.**
+- **Detalle, para el lead:** con `set -euo pipefail` (`:41`), si no hay coincidencia `grep -c` sale con 1 y el guion muere en `:330` **sin imprimir su `ABORTA`**. Ensayado: `X=$(printf 'nada\n' | grep -c …)` termina con 1. Sigue fallando cerrado y antes de tocar nada, pero sin el mensaje. Corrección: `… | grep -cE '…' || true` dentro de la sustitución, como ya hace `cuenta_var`.
+
+## 6. Pendiente
+- **La revisión del CRM** (D8-23: CSP `connect-src`, micrófono y la cadena de suministro del cliente de ElevenLabs con su versión exacta; los textos de los motivos; nada de datos personales en la vista), cuando el lead avise de que el paso 3 de FE8 está confirmado.
+- **Para B8-d** (decisión del lead), con estas pruebas de concepto como regresión:
+  - M-2 tiene que dar 200 con el freno echado en PG con 76 turnos o más;
+  - B-2 tiene que reabrir con la segunda observación;
+  - M-3 (antes de la 4a): `record()` sobre una `canceled` cuelga el `callSid` devuelto y la conciliación la reconoce.
+
+## 7. Ficheros
+- `tests/Unit/Voice/VoiceIsolationTest.php` (H-5).
+- `tests/Feature/Telephony/TelephonyIsolationTest.php` (H-6).
+- `tests/Feature/UltronStudio/UltronEngineIsolationTest.php` (H-6b; solo las líneas del H8).
+- `tests/Feature/Voice/VoiceBoundaryTest.php` (H-7).
+- `docs/ultron-studio/plans/informes-h8/informe-security.md` (este apartado).
+
+No tocados: nada de `app/`, `config/`, `routes/`, `database/` ni de los guiones; tampoco `OtpUntouchedByVoiceTest` ni `TwilioReadOnlyClientTest`, que pasan.
+
+**Fuera del repositorio** (desechable):
+- `<scratchpad>/poc/Sec8bPocTest.php`;
+- la copia `<scratchpad>/mut/backend`;
+- `<scratchpad>/tools/mutar-b.php`;
+- las salidas `<scratchpad>/out/{mutaciones-sec8b.json, mutaciones-sec8b-contraprueba.json, poc-pg.err, poc-sqlite.err, guardas-sqlite-2.xml, voz-sqlite.xml, studio-voz-sqlite.xml, puerta-pg.xml}`;
+- las bases PG `ultron_studio_h8_secb` y `ultron_studio_h8_secb_copia` (esta, sin usar).

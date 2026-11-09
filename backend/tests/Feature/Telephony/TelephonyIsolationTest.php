@@ -545,6 +545,88 @@ class TelephonyIsolationTest extends TestCase
         }
     }
 
+    // ── 9. El informe del laboratorio hablado (Enmienda 8, E8-1; Enmienda 9, E9-1) ──
+
+    /** Quien entrega el informe: la post-llamada de una conversación que la telefonía no reconoce. */
+    private const ENTREGA_DEL_INFORME = 'app/Services/Telephony/VoicePostCall.php';
+
+    /** Donde se registra su único oyente (E9-1: el arranque de la aplicación). */
+    private const ARRANQUE = 'app/Providers/AppServiceProvider.php';
+
+    private const NOMBRE_DEL_INFORME = 'voice.lab.post_call';
+
+    /** La única entrega, en `VoicePostCall::labReport()`. */
+    private const ENTREGA = ['event', '(', 'self', '::', 'LAB_EVENT', ','];
+
+    /** El único oyente, exacto. */
+    private const OYENTE = ['Event', '::', 'listen', '(', 'VoicePostCall', '::', 'LAB_EVENT', ',', '[', 'StudioVoiceLabSessions', '::', 'class', ',', "'recordProviderReport'", ']', ')', ';'];
+
+    /**
+     * Una post-llamada que la telefonía no reconoce solo se libra del freno si el laboratorio la reclama
+     * (`VoicePostCall::LAB_CLAIMED`: `recorded`, `duplicate` o `ignored`). Un segundo oyente, o uno comodín, que
+     * respondiera eso apagaría el freno de TODA conversación desconocida (D8-19), y otro sitio que disparara el
+     * evento le daría al laboratorio informes que no son de ElevenLabs. Fijado:
+     *  - el nombre del evento, una vez y solo en su constante (`VoicePostCall::LAB_EVENT`);
+     *  - la constante, solo en VoicePostCall (su declaración y UNA entrega) y en el arranque (UN oyente exacto:
+     *    `Event::listen(VoicePostCall::LAB_EVENT, [StudioVoiceLabSessions::class, 'recordProviderReport'])`);
+     *  - ningún `listen()` con un nombre literal de voz o comodín, ni una clave `'*'` en un proveedor.
+     */
+    public function test_el_informe_del_laboratorio_tiene_una_sola_entrega_y_un_solo_oyente(): void
+    {
+        $nombres = [];
+        $constantes = [];
+        foreach ($this->php('app', 'bootstrap', 'routes', 'config') as $relativa => $ruta) {
+            $tokens = $this->tokens($ruta);
+            foreach ($tokens as $i => $t) {
+                if ($t[0] === T_CONSTANT_ENCAPSED_STRING && $this->literal($t[1]) === self::NOMBRE_DEL_INFORME) {
+                    $nombres[] = $relativa;
+                }
+                if ($t[0] === T_STRING && $t[1] === 'LAB_EVENT') {
+                    $constantes[$relativa][] = $i;
+                }
+                // Un oyente con el nombre a mano, o comodín: `listen('voice…', …)`, `listen('*', …)`.
+                if ($t[0] === T_STRING && strtolower($t[1]) === 'listen' && ($tokens[$i + 1][1] ?? '') === '(' && ($tokens[$i + 2][0] ?? null) === T_CONSTANT_ENCAPSED_STRING) {
+                    $primero = $this->literal($tokens[$i + 2][1]);
+                    $this->assertFalse($primero === '*' || str_starts_with($primero, 'voice') || str_contains($primero, '*'),
+                        "{$relativa} escucha «{$primero}»: el informe del laboratorio tiene un solo oyente, el del arranque (E9-1)");
+                }
+                if (str_starts_with($relativa, 'app/Providers/') && $t[0] === T_CONSTANT_ENCAPSED_STRING && $this->literal($t[1]) === '*' && ($tokens[$i + 1][0] ?? null) === T_DOUBLE_ARROW) {
+                    $this->fail("{$relativa} declara un oyente comodín ('*' =>): el informe del laboratorio tiene un solo oyente (E9-1)");
+                }
+            }
+        }
+
+        $this->assertSame([self::ENTREGA_DEL_INFORME], $nombres, 'el nombre del evento, una vez y solo en VoicePostCall::LAB_EVENT');
+        $this->assertSame([self::ARRANQUE, self::ENTREGA_DEL_INFORME], array_keys($constantes),
+            'LAB_EVENT, solo en la telefonía que lo entrega y en el arranque que registra su oyente');
+
+        $entrega = $this->tokens(base_path(self::ENTREGA_DEL_INFORME));
+        $this->assertCount(2, $constantes[self::ENTREGA_DEL_INFORME], 'en VoicePostCall, LAB_EVENT solo en su declaración y en su entrega');
+        $this->assertSame(1, $this->veces($entrega, ['const', 'LAB_EVENT', '=']), 'VoicePostCall declara LAB_EVENT una vez');
+        $this->assertSame(1, $this->veces($entrega, self::ENTREGA), 'VoicePostCall entrega el informe UNA vez (labReport)');
+
+        $arranque = $this->tokens(base_path(self::ARRANQUE));
+        $this->assertCount(1, $constantes[self::ARRANQUE], 'en el arranque, LAB_EVENT solo en su oyente');
+        $this->assertSame(1, $this->veces($arranque, self::OYENTE), "el arranque registra exactamente Event::listen(VoicePostCall::LAB_EVENT, [StudioVoiceLabSessions::class, 'recordProviderReport'])");
+    }
+
+    /**
+     * Cuántas veces aparece la secuencia de textos de tokens (sin espacios ni comentarios).
+     *
+     * @param  list<array{0:int,1:string}>  $tokens
+     * @param  list<string>  $secuencia
+     */
+    private function veces(array $tokens, array $secuencia): int
+    {
+        $textos = array_map(static fn (array $t): string => $t[1], $tokens);
+        $n = 0;
+        for ($i = 0, $fin = count($textos) - count($secuencia); $i <= $fin; $i++) {
+            $n += array_slice($textos, $i, count($secuencia)) === $secuencia ? 1 : 0;
+        }
+
+        return $n;
+    }
+
     // ────────────────────────────────────────────────────────────────────────
 
     private function assertNombreGuardable(string $nombre, string $donde): void

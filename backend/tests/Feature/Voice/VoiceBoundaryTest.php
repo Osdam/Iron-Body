@@ -16,6 +16,7 @@ use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
@@ -96,6 +97,11 @@ class VoiceBoundaryTest extends TestCase
 
     private const CONTROLADORES_CRM = 'App\\Http\\Controllers\\Crm\\Voice\\';
 
+    /** Los limitadores con nombre del CRM de voz (Enmienda 9, E9-4): por persona con sesión, por ruta y red sin ella. */
+    private const LIMITADOR_CRM_LECTURA = 'voice-admin-read';
+
+    private const LIMITADOR_CRM_ESCRITURA = 'voice-admin-write';
+
     /** Los comandos de voz del contrato: el doctor (H6), los de D8-20 y D8-21 y la purga de los límites (E8-6). */
     private const COMANDOS = ['voice:doctor', 'voice:hangup', 'voice:reconcile', 'voice:prune-rate-limits'];
 
@@ -138,6 +144,18 @@ class VoiceBoundaryTest extends TestCase
             if (str_starts_with($clase, self::CONTROLADORES_CRM) && ! str_starts_with($uri, self::PREFIJO_CRM)) {
                 $fallos[] = "{$descripcion}: el CRM de voz cuelga de api/admin/voice/";
             }
+            // Enmienda 9, E9-4 (PERF8 P8-5; SEC8-b): cada ruta del CRM de voz con SU limitador con nombre y ninguno
+            // más (un `throttle:N,M` sin nombre cuenta por IP en el cubo del login del panel), y esos dos limitadores
+            // solo en el CRM de voz (su cupo es por persona: otra ruta no lo gasta).
+            $limitadores = array_values(array_filter($ruta->gatherMiddleware(), static fn ($m): bool => is_string($m) && (str_starts_with($m, 'throttle') || str_contains($m, 'ThrottleRequests'))));
+            if (str_starts_with($clase, self::CONTROLADORES_CRM)) {
+                $esperado = 'throttle:'.(in_array('GET', $ruta->methods(), true) ? self::LIMITADOR_CRM_LECTURA : self::LIMITADOR_CRM_ESCRITURA);
+                if ($limitadores !== [$esperado]) {
+                    $fallos[] = "{$descripcion}: lleva [".implode(', ', $limitadores)."]; le toca solo {$esperado} (E9-4)";
+                }
+            } elseif (preg_grep('/^throttle:('.self::LIMITADOR_CRM_LECTURA.'|'.self::LIMITADOR_CRM_ESCRITURA.')$/', $limitadores) !== []) {
+                $fallos[] = "{$descripcion}: usa un limitador del CRM de voz fuera de api/admin/voice/ (E9-4)";
+            }
             if (! str_starts_with($clase, self::CONTROLADORES_PUBLICOS)) {
                 continue;
             }
@@ -169,6 +187,10 @@ class VoiceBoundaryTest extends TestCase
         }
 
         $this->assertSame([], $fallos, "Rutas de voz fuera de su sitio:\n".implode("\n", $fallos));
+        // E9-4: los dos limitadores con nombre existen (registrados en el arranque); sin ellos, `throttle:<nombre>` no limita nada.
+        foreach ([self::LIMITADOR_CRM_LECTURA, self::LIMITADOR_CRM_ESCRITURA] as $nombre) {
+            $this->assertInstanceOf(\Closure::class, RateLimiter::limiter($nombre), "el limitador con nombre {$nombre} no está registrado (E9-4)");
+        }
     }
 
     /**

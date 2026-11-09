@@ -327,7 +327,7 @@ BORRADAS=$(g diff --numstat "$BASE" origin/main -- backend/routes/console.php | 
 [ -z "$BORRADAS" ] || [ "$BORRADAS" = 0 ] || aborta "routes/console.php pierde $BORRADAS líneas entre $BASE y origin/main: el H8 solo añade el bloque de voz"
 # E10-7 (SEC8-b B-3): la constante de llamadas se comprueba ANTES del merge, en el commit que se va a desplegar (y no solo
 # después, en el paso 7): la fase 1 nunca despliega la constante abierta (`voice(calls-open):` es de la fase 3).
-CONSTANTE_EN_ORIGEN=$(g show "origin/main:backend/app/Services/Voice/VoiceCallPolicy.php" 2>/dev/null | grep -cE 'CALLS_ENABLED_IN_CODE[[:space:]]*=[[:space:]]*false[[:space:]]*;')
+CONSTANTE_EN_ORIGEN=$(g show "origin/main:backend/app/Services/Voice/VoiceCallPolicy.php" 2>/dev/null | { grep -cE 'CALLS_ENABLED_IN_CODE[[:space:]]*=[[:space:]]*false[[:space:]]*;' || true; })
 [ "$CONSTANTE_EN_ORIGEN" = 1 ] || aborta "VoiceCallPolicy::CALLS_ENABLED_IN_CODE no es false en origin/main ($ESPERADO): la fase 1 no despliega la constante abierta"
 case "$(cat "$BK/api-commit.txt" 2>/dev/null)" in
   "$BASE"*) ;;

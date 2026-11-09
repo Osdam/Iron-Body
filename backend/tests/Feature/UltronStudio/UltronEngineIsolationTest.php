@@ -97,6 +97,21 @@ class UltronEngineIsolationTest extends TestCase
     private const ALLOWED_H8_PATTERNS = ['database/migrations/2026_11_1*voice*.php'];
 
     /**
+     * Hito 8 (Enmienda 8, E8-1; Enmienda 9, E9-1): el arranque de la aplicación
+     * registra el oyente del evento `voice.lab.post_call` de la telefonía hacia
+     * el laboratorio hablado del Studio. Es la única clase del Studio que puede
+     * nombrar, SOLO en este fichero y EXACTAMENTE así (SEC8-b): el `use` sin
+     * alias, una vez, y el nombre corto una sola vez, dentro de
+     * {@see LAB_LISTENER_CALL}. Nada más del laboratorio desde el arranque.
+     */
+    private const LAB_LISTENER = 'app/Providers/AppServiceProvider.php';
+
+    private const LAB_LISTENER_REFERENCES = ['T_NAME_QUALIFIED App\\Services\\UltronStudio\\StudioVoiceLabSessions'];
+
+    /** El único uso del laboratorio en el arranque, token a token (sin espacios ni comentarios). */
+    private const LAB_LISTENER_CALL = ['Event', '::', 'listen', '(', 'VoicePostCall', '::', 'LAB_EVENT', ',', '[', 'StudioVoiceLabSessions', '::', 'class', ',', "'recordProviderReport'", ']', ')', ';'];
+
+    /**
      * Hito 8 (contrato H8, D8-8): el lector de la cadena de voz. No está en la
      * lista blanca: lo único que puede nombrar del Studio es la tabla de SU
      * cadena (nunca `ultron_studio_publications`) y, por E4-3 (Enmienda 4;
@@ -104,16 +119,6 @@ class UltronEngineIsolationTest extends TestCase
      * mensaje firmado no lleva. Una vez cada una, como cadena (en cualquier
      * orden), y SOLO en este fichero.
      */
-    /**
-     * Hito 8 (Enmienda 8, E8-1): el arranque de la aplicación registra el oyente
-     * del evento `voice.lab.post_call` de la telefonía hacia el laboratorio
-     * hablado del Studio. Es la única clase del Studio que puede nombrar, una
-     * vez (el `use`), y SOLO en este fichero.
-     */
-    private const LAB_LISTENER = 'app/Providers/AppServiceProvider.php';
-
-    private const LAB_LISTENER_REFERENCES = ['T_NAME_QUALIFIED App\\Services\\UltronStudio\\StudioVoiceLabSessions'];
-
     private const VOICE_READER = 'app/Services/Telephony/VoicePublishedConfig.php';
 
     private const VOICE_READER_REFERENCES = [
@@ -214,8 +219,9 @@ class UltronEngineIsolationTest extends TestCase
 
                 continue;
             }
-            // Hito 8 (E8-1): el oyente del laboratorio hablado en el arranque, exactamente esa referencia, una vez.
-            if ($relativa === self::LAB_LISTENER && $this->sinLinea($hallazgos) === self::LAB_LISTENER_REFERENCES) {
+            // Hito 8 (E8-1, E9-1): el oyente del laboratorio hablado en el arranque, exactamente esa referencia, una vez,
+            // y usada solo en su `Event::listen` (SEC8-b).
+            if ($relativa === self::LAB_LISTENER && $this->sinLinea($hallazgos) === self::LAB_LISTENER_REFERENCES && $this->onlyTheLabListener(base_path($relativa))) {
                 continue;
             }
             // Hito 8: el lector de la cadena de voz y los adaptadores de los canarios de la telefonía.
@@ -537,6 +543,24 @@ class UltronEngineIsolationTest extends TestCase
         sort($referencias);
 
         return $referencias;
+    }
+
+    /**
+     * Hito 8 (E8-1, E9-1; SEC8-b): en el arranque, el laboratorio hablado solo
+     * se nombra para registrar su oyente. El `use` sin alias (justo `use …;`),
+     * el nombre corto una sola vez y esa vez dentro de {@see LAB_LISTENER_CALL}.
+     */
+    private function onlyTheLabListener(string $ruta): bool
+    {
+        $textos = array_map(fn ($t) => is_array($t) ? $t[1] : $t, $this->significantTokens($ruta));
+        $usos = array_keys($textos, 'App\\Services\\UltronStudio\\StudioVoiceLabSessions', true);
+        $cortos = array_keys($textos, 'StudioVoiceLabSessions', true);
+        if (count($usos) !== 1 || ($textos[$usos[0] - 1] ?? null) !== 'use' || ($textos[$usos[0] + 1] ?? null) !== ';' || count($cortos) !== 1) {
+            return false;
+        }
+        $inicio = $cortos[0] - (int) array_search('StudioVoiceLabSessions', self::LAB_LISTENER_CALL, true);
+
+        return $inicio >= 0 && array_slice($textos, $inicio, count(self::LAB_LISTENER_CALL)) === self::LAB_LISTENER_CALL;
     }
 
     /**
