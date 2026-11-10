@@ -287,7 +287,10 @@ MODIFICADOS=$(g status --porcelain --untracked-files=no | wc -l | tr -d ' ')
 [ "$(g rev-parse --short=7 origin/main)" = "$ESPERADO" ] || aborta "origin/main es $(g rev-parse --short=7 origin/main), no $ESPERADO"
 g merge-base --is-ancestor "$BASE" origin/main || aborta "origin/main no es avance rápido desde $BASE"
 NUEVAS=$(g diff --name-only --diff-filter=AMDR "$BASE" origin/main -- backend/database/migrations | sort | tr '\n' ' ')
-if [ "$NUEVAS" != "$MIGRACIONES" ]; then
+if [ -z "$NUEVAS" ]; then
+  # Despliegue solo de código (1b, E16): las dos migraciones del H8 ya estaban en PREVIO (fase 1). Nada nuevo que migrar.
+  echo "   sin migraciones nuevas entre $BASE y origin/main: las dos del Hito 8 ya estaban en $BASE (despliegue solo de código)"
+elif [ "$NUEVAS" != "$MIGRACIONES" ]; then
   AJENAS=""
   for f in $NUEVAS; do case " $MIGRACIONES " in *" $f "*) ;; *) AJENAS="$AJENAS ${f##*/}" ;; esac; done
   aborta "migraciones nuevas o tocadas entre $BASE y origin/main distintas de las dos del Hito 8: [$NUEVAS]${AJENAS:+ · ajenas al H8:$AJENAS}. El H8 no despliega trabajo de otros: que su dueño lo despliegue antes por su vía (y entonces fijar PREVIO al commit que ya lo tiene en producción)"
