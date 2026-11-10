@@ -22,7 +22,7 @@ Leyenda: **I+P** implementado y probado con integración real · **I·SR** imple
 | Tareas programadas bajo `VOICE_MONITOR_ENABLED` (4), apagadas | **I+P** | programador 39/0/0 |
 | CRM «Voz y telefonía», 7 pestañas, cliente ElevenLabs 1.30.0 alojado | **I+P** (publicado y servido) / **I·SR** (laboratorio con micrófono: nunca contra ElevenLabs real) | `CRM H8 FASE 1 PUBLICADO Y VERIFICADO` |
 | Guardas de aislamiento (OTP, motor, Legacy intactos) | **I+P** | 63 guardas; puertas de diff vacías en el paso 0 del despliegue |
-| Respaldo, despliegue, smoke, vuelta atrás ensayada | **I+P** | Enmienda 15 |
+| Respaldo, despliegue, smoke, vuelta atrás ensayada | **I+P** | Enmienda 15 (fase 1) y Enmienda 16, E16-30 y E16-31 (despliegue 1b del cierre integral, 10-11 02:20–02:24 UTC) |
 
 ## Fase 2 · credenciales, número y laboratorio
 

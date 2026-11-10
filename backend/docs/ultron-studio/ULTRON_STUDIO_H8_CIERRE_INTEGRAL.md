@@ -2,7 +2,7 @@
 
 **Veredicto: `HITO_8_NOT_YET_COMPLETE`.** El código del hito está terminado y la fase 1 (todo apagado) está en producción desde el 09-11-2026 a las 12:06 UTC (Enmienda 15). Ninguna fase 2 → 4b está activa: todas dependen de acciones externas del propietario (credenciales, cuenta de Twilio, plan de ElevenLabs, autorizaciones) y de pruebas físicas con llamadas reales que este encargo prohíbe ejecutar sin orden expresa.
 
-**Estado de este informe:** actualizado a las 00:50 UTC del 10-11-2026. Entregados: SEC8-c, S8-d, OPS8-c, B8-g, TEST8-c y la corrección B8-h de los hallazgos de la revisión independiente REV8-c (aprobada con condiciones: 0 bloqueantes). A las 02:05 UTC quedan cerrados la regresión global (E16-29), el H-1 del CRM (SSE9-f, L9-53 del contrato del H9) y la segunda mirada del revisor (E16-27). Lo único pendiente del lado del código es la orden del propietario para el commit, el push y el despliegue 1b. Fuentes verificables: `ULTRON_STUDIO_H8_CONTRACT.md` (Enmiendas 15 y 16), `ULTRON_STUDIO_H8_COMPLETITUD.md` (matriz por fase), `plans/informes-h8/{informe-security,informe-studio,informe-backend,informe-devops,informe-tester}.md`, `ULTRON_STUDIO_DEPLOYMENT_PLAN.md` («Hito 8»). **Nada de lo de hoy tiene commit**: el propietario lo prohibió sin orden expresa.
+**Estado de este informe:** actualizado a las 02:50 UTC del 10-11-2026 (el despliegue 1b del cierre integral está en producción: E16-30 y E16-31; sigue sin haber fase 2 → 4b encendida). Entregados: SEC8-c, S8-d, OPS8-c, B8-g, TEST8-c y la corrección B8-h de los hallazgos de la revisión independiente REV8-c (aprobada con condiciones: 0 bloqueantes). A las 02:05 UTC quedan cerrados la regresión global (E16-29), el H-1 del CRM (SSE9-f, L9-53 del contrato del H9) y la segunda mirada del revisor (E16-27). Lo único pendiente del lado del código es la orden del propietario para el commit, el push y el despliegue 1b. Fuentes verificables: `ULTRON_STUDIO_H8_CONTRACT.md` (Enmiendas 15 y 16), `ULTRON_STUDIO_H8_COMPLETITUD.md` (matriz por fase), `plans/informes-h8/{informe-security,informe-studio,informe-backend,informe-devops,informe-tester}.md`, `ULTRON_STUDIO_DEPLOYMENT_PLAN.md` («Hito 8»). **Nada de lo de hoy tiene commit**: el propietario lo prohibió sin orden expresa.
 
 ---
 
@@ -91,7 +91,7 @@ Nota: una primera pasada con los 128 MB por defecto del CLI murió por memoria e
 
 | Fase | Código | Operación (mandos, runbook, smoke) | Qué falta para activar |
 |---|---|---|---|
-| **1 · todo apagado** | En producción (`fe29126` / `45dd73a`) | Hecho (E15) | — (vigilancia a 24 h el 10-11 ≥ 12:06 UTC) |
+| **1 · todo apagado** | En producción: fase 1 (`fe29126` / `45dd73a`, 09-11 12:06 UTC) y despliegue 1b del cierre integral (`a608450` / `e0f7983`, 10-11 02:20–02:24 UTC) | Hecho (E15, E16-30, E16-31) | — (vigilancia a 24 h de la fase 1 el 10-11 ≥ 12:06 UTC) |
 | **1b · código del cierre integral** | **Listo**: regresión global sin rojos nuevos del H8 (E16-29) y segunda mirada del revisor aprobada (E16-27). Falta la orden del propietario; antes de desplegar, repetir los E2E sobre el commit | Guion de la fase 1 reutilizable | Orden de commit, push y despliegue |
 | **2 · credenciales y número** | Listo | `el-verificar.sh` (+ `--solo-clave`), `h8-secrets-register.sh`, `h8-twilio-check.sh`, `h8-voice-scope.sh fase 2` | D-1, D-2, D-3, D-5 |
 | **2a · laboratorio hablado** | Listo (4 cerrojos, destinos, libro) | Runbook «Fase 2a», `SMOKE_PHASE=2a`, `h8-voice-scope.sh lab on` | D-4, D-6, D-7 y autorización escrita; la primera sesión real consume créditos |
