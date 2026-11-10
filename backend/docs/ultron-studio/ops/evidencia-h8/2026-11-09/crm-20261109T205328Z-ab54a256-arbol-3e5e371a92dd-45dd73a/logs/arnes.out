@@ -1,0 +1,13 @@
+== E2E H8 · 2026-11-09T20:53:30Z · ab54a256-arbol-3e5e371a92dd (HEAD) · fases: abierta · /Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T205329Z-ab54a256-arbol-3e5e371a92dd
+== 1. copias de ab54a256-arbol-3e5e371a92dd
+   árbol de trabajo: 3253 ficheros de backend/ (versionados y sin seguimiento no ignorados)
+   cerrada: el árbol de trabajo sobre HEAD (huella 3e5e371a92dd) tal cual · abierta: lo mismo + el giro de UNA línea (2 líneas cambiadas en el diff: una fuera y una dentro, solo app/Services/Voice/VoiceCallPolicy.php)
+   AVISO: los simuladores del árbol de trabajo (3791625ad9fe282c) no son los del commit (9c87835600b7afdf): se usan los del commit
+== fase abierta · 2026-11-09T20:53:52Z
+   migraciones: 330 · tablas de voz: 11
+   preflight: local · ultron_studio_h8_e2e como h8e2e_app · constante True · entrantes True · EL y Twilio → 127.0.0.1 · ELEVENLABS_UNVERIFIED
+   pila: valla :8404 · ElevenLabs :8402 · Twilio :8403 · API :8401 (5 procesos de php -S con la valla) · worker voice (pid 13757)
+   valla: sondas → ConnectionException 403 (esperado: ConnectionException 403)
+   cuentas: a=1 (Super Admin), b=2 (Super Admin), c=3 (Administrador) · verificación de voz: {"snapshots": [{"provider": "meta_ads", "fingerprint": "f015334fcc0cd0cdcf04c08a26f4c6162f8daf15ceb2baed7d02c3ee0d9d4bff", "recorded": true, "uuid": "d079f7a6-d
+== PILA EN PIE (H8_E2E_HOLD=1): H8_E2E_CONTEXT=/Users/alejodev/.cache/ironbody-h8-e2e/run-20261109T205329Z-ab54a256-arbol-3e5e371a92dd/abierta/context.json · parar con SIGTERM a este proceso (13231)
+h8-e2e: interrumpido

@@ -1,0 +1,4 @@
+E2E CRM H8 · backend ab54a256-arbol-ace6becff7a1 (ab54a256089a8b560f00238bb314623f0b122d8b + el árbol de trabajo sin confirmar, relanzado desde la copia de una ejecución anterior) · CRM 45dd73a (45dd73a91260805cf85b08bf4d54f9eb36effbb0) · fase abierta · 2026-11-09T22:31:12Z · 825 s
+guiones (sha256 de ops/h8-e2e-crm/*.cjs): 4c6cec069290b92c
+183 comprobaciones (178 OK, 5 FALLO)
+hash de resultados (sha256 de las comprobaciones ordenadas: fase, paso, nombre, ok): 2a43437feba816ab44e32ba5b95ba96a3de54e88b5564be7ef9eba0450cb1cef

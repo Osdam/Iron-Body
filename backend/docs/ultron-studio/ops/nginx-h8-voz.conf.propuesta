@@ -1,0 +1,48 @@
+# nginx · Hito 8 (voz) · PROPUESTA de OPS8-d (10-11-2026). NO ESTÁ APLICADA en el servidor: cada bloque entra con la
+# autorización del propietario, `nginx -t` y `nginx -s reload`, y su vuelta atrás es quitar las líneas y recargar.
+# El vhost real no está en el repo: lo que sigue son las líneas que se añaden donde se indica. Verificado antes de
+# proponer: el servidor ya tiene `client_max_body_size 10M` global (ULTRON_STUDIO_SECURITY_REPORT.md) y el smoke de la
+# fase 1 en producción confirmó que la post-llamada de 1 MB la contesta Laravel (E15-3): el tope de P-26 ya pasa.
+
+# ── 1. CRM (vhost de https://ironbodyneiva.cloud/, raíz /var/www/app) · E12-7 · CSP en Report-Only primero ─────────
+# Hoy el CRM no manda ninguna CSP ni Permissions-Policy (SEC8-b, B-4): sin ellas el laboratorio hablado YA funciona
+# (microphone vale `self` por defecto y el WebSocket no tiene restricción). Esto es endurecimiento, no un requisito de
+# la fase 2a. Se pone en Report-Only, se mira el informe (`/csp-report`, o el registro del navegador) durante unos días
+# de uso real del laboratorio, y solo entonces se cambia la cabecera a `Content-Security-Policy`.
+#   · connect-src: la API y SOLO el WebSocket de ElevenLabs (con la URL firmada el cliente no llama a la API REST);
+#     con [P-21] = eu, sustituir por wss://api.eu.residency.elevenlabs.io.
+#   · NO añadir https://api.elevenlabs.io ni wss://livekit.rtc.elevenlabs.io ni `script-src blob: data:` (E10-12):
+#     los worklets de audio del cliente salen del propio origen del CRM.
+#   · frame-ancestors 'self' sustituye en la práctica a X-Frame-Options SAMEORIGIN (las dos pueden convivir).
+# Dentro del `server { … }` del CRM:
+add_header Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.ironbodyneiva.cloud wss://api.elevenlabs.io; img-src 'self' data:; font-src 'self' data:; media-src 'self' blob:; worker-src 'self' blob:; frame-ancestors 'self'; base-uri 'self'; form-action 'self'" always;
+add_header Permissions-Policy "microphone=(self), camera=(), geolocation=()" always;
+#   Nota: `style-src 'unsafe-inline'`, `media-src blob:` y `worker-src blob:` son lo que Angular (estilos en línea de
+#   los componentes) y el cliente @elevenlabs/client 1.30.0 (audio por worklets y blobs del propio origen) necesitan;
+#   el periodo en Report-Only sirve exactamente para confirmar o recortar estas tres. Si el vhost ya tiene otros
+#   `add_header`, recordar que nginx los hereda SOLO si el bloque `location` no declara ninguno propio.
+
+# ── 2. API (vhost de https://api.ironbodyneiva.cloud/) · las cuatro rutas públicas de la voz ───────────────────────
+# 2a. Tope de cuerpo (P-26, parte «topes»): Laravel ya corta la post-llamada en 1 048 576 bytes (413 JSON) y las otras
+#     tres en 8 KB; nginx deja pasar 10M global. OPCIONAL y solo si se quiere que nginx devuelva el 413 antes de que el
+#     cuerpo llegue a PHP (ahorra CPU ante un cuerpo grande): NO es necesario para ninguna fase.
+#     Ojo: con esta línea, un cuerpo de más de 1m lo contesta nginx con un 413 HTML, no Laravel con su JSON; el smoke
+#     del H8 lo dirá («nginx corta la post-llamada de 1 MB» si se pone por debajo de 1m: no bajar de 1m).
+location ~ ^/api/webhooks/voice/ {
+    client_max_body_size 1m;
+    # … y el resto EXACTAMENTE como el `location` que hoy atiende /api/ (fastcgi_pass, include, etc.): un `location`
+    # con regex gana al de prefijo y, si no repite las directivas de PHP, nginx serviría el fichero en vez de pasarlo.
+}
+
+# 2b. Lista de IP de salida de ElevenLabs (P-26, parte «lista»): DECISIÓN PENDIENTE del propietario (contrato H8, P-26;
+#     informe-security.md: «la lista de IP de ElevenLabs no distingue nuestro workspace del de otro cliente: refuerzo
+#     débil; la firma y los secretos son el control real»). Si se decide, las IP son las de la documentación oficial
+#     (elevenlabs.io/docs/eleven-api/resources/ip-allowlisting, dos por región, comunes a todos sus clientes) y se
+#     leen ese día, nunca de memoria. Aplicarlas SOLO a las tres rutas que llama ElevenLabs (iniciación, post-llamada
+#     y herramientas), NUNCA a /api/webhooks/voice/twilio/usage-trigger (eso lo llama Twilio).
+# location ~ ^/api/(webhooks/voice/elevenlabs/|voice/tools/) {
+#     allow <IP 1 de ElevenLabs, región default>;
+#     allow <IP 2 de ElevenLabs, región default>;
+#     deny all;
+#     # … el resto como el location de /api/
+# }

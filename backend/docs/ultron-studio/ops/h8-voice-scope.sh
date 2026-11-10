@@ -605,7 +605,11 @@ echo "   voice:doctor --telefonia (sin red): $(telefonia)"
 case "$ORDEN" in
   fase2-set|fase2-secreto)
     echo "   AVISO: la huella de voz del Studio cambió con las piezas: reconocer otra vez la configuración autorizada (CRM → Studio → Integraciones → Voz, o GET/POST integrations/config) antes de seguir; si el monitor del H7 está encendido, su expectativa pasa a ser la de la fase 2 (bash $0 expectativa fase2)" ;;
+  salientes-off)
+    echo "   AVISO (H-25, OPS8-d): salientes on/off cambian la huella de voz del Studio (twilioVoice.enabled y dailyCallCap): reconocer otra vez la configuración autorizada (CRM → Studio → Integraciones → Voz) o, con el monitor del H7 encendido, saltará config_drift:voice"
+    ;;
   salientes-on)
+    echo "   AVISO (H-25, OPS8-d): salientes on/off cambian la huella de voz del Studio (twilioVoice.enabled y dailyCallCap): reconocer otra vez la configuración autorizada (CRM → Studio → Integraciones → Voz) o, con el monitor del H7 encendido, saltará config_drift:voice"
     echo "   AVISO: la puerta deniega igualmente sin una publicación de voz en canary, con el freno echado, sin canarios de voz activos o con ElevenLabs sin verificar en la telefonía (E4-6); la primera saliente, a un canario y desde el CRM («Voz y telefonía»)"
     [ "$(campo monitor)" = true ] || echo "   AVISO: el monitor de voz está apagado: sin conciliación no se ven las ambiguas ni las llamadas ajenas (bash $0 monitor on)"
     case "$(campo number_decl_known) $(campo number_inbound_capable)" in

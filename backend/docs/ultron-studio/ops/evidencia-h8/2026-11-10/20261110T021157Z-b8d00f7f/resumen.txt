@@ -1,0 +1,8 @@
+E2E H8 · backend b8d00f7f (b8d00f7f52a614206b8eab17c68d3bc207c68a6a) · 2026-11-10T02:14:44Z · 167 s
+pruebas del E2E (sha256 de tests/Feature/Voice/E2E/*.php): 35208147663fac8d
+simuladores y valla de ops/banco-h8 (sha256 de los 4 .cjs, DEL COMMIT b8d00f7f; los del árbol de trabajo: 3791625ad9fe282c): 3791625ad9fe282c
+cerrada: pruebas 6 (6 OK, 0 FALLO, 0 OMITIDAS) · comprobaciones 113 (113 OK, 0 FALLO) · 19 s
+abierta: pruebas 9 (9 OK, 0 FALLO, 0 OMITIDAS) · comprobaciones 301 (301 OK, 0 FALLO) · 75 s
+salientes: pruebas 11 (11 OK, 0 FALLO, 0 OMITIDAS) · comprobaciones 247 (247 OK, 0 FALLO) · 60 s
+comprobaciones que fallaron: 0
+hash de resultados (sha256 de las comprobaciones ordenadas: fase, paso, nombre, ok): 32a8507beea569dfcc85a2a023a2835b7013b338bdea62d0c997c6578360270c

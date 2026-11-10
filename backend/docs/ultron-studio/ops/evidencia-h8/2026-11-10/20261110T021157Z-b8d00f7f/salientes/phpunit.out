@@ -1,0 +1,10 @@
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/.cache/ironbody-h8-e2e/run-20261110T021157Z-b8d00f7f/salientes/backend/phpunit.xml
+
+...........                                                       11 / 11 (100%)
+
+Time: 00:47.989, Memory: 46.50 MB
+
+OK (11 tests, 324 assertions)

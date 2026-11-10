@@ -416,3 +416,23 @@ bash ensayar.sh "$B" smoke                          # ver informe-devops.md §OP
 - Crear o verificar un caller ID (`POST OutgoingCallerIds.json`) sigue sin estar: 405.
 
 **Pruebas propias:** `node sim-pruebas.cjs`, **88 OK · 0 FALLO · 0 OMITIDO** (80 de antes y 8 nuevas en la sección L; 2 ajustadas: la superficie de ElevenLabs pasa de 13 a 18 rutas y el ejemplo de «ruta no listada» de Twilio pasa a ser la ficha de un caller ID). Provocan a propósito 62 violaciones de ElevenLabs y 23 de Twilio.
+
+## OPS8-d (10-11-2026): el ensayo de la secuencia exacta de producción (fases 2, 2a y 4a-primero)
+
+**`ensayar-ops8d.sh <banco>`** recorre, con el código que corre en producción (`a608450`) y contra los simuladores, la secuencia de los runbooks «Fase 2a» y «Fase 4a-primero» de principio a fin y por la API: la rotación de la clave (`el-verificar.sh`, modo completo, con la clave vieja revocada en el simulador), la base, el registro de secretos y webhook con su oráculo, `--solo-clave` (H-16), reconocer la configuración, el laboratorio con `fake` (sesión entera y el veredicto negado `fake_mode`) y con `elevenlabs` (sesión real contra el simulador, cerrada por su informe, y el veredicto de otra identidad), Twilio (`fase 2 secreto`, `fase 2 set` con `VOICE_NUMBER_INBOUND_CAPABLE=false`, `h8-twilio-check.sh`), `expectativa`, `monitor on`, `publicar on`, la constante girada solo en el clon, el worker, `salientes on`, la publicación canaria (y el 409 `voice_not_deployable` si se intenta antes de `salientes on`: H-26), los smokes 2a y 4a, una saliente punta a punta con su post-llamada, su coste conciliado y la segunda petición del día, y la vuelta atrás completa. Requisitos y uso:
+
+```bash
+O=backend/docs/ultron-studio/ops/banco-h8; B=$HOME/.cache/ironbody-banco-h8-ops8d
+BANCO_DB=ultron_studio_banco_h8_ops8d BANCO_PORT=8431 BANCO_PUERTO_EL=8432 BANCO_PUERTO_TW=8433 BANCO_PUERTO_VALLA=8434 \
+  BANCO_PREVIO=fe29126 BANCO_WIP=0 bash $O/montar.sh "$B" a608450     # «producción» = lo que había antes del 1b; origen = a608450
+bash $O/ensayar.sh "$B" arrancar && bash $O/ensayar.sh "$B" e112 && bash $O/sembrar.sh "$B" --canarios-voz
+( cd "$B/api/backend" && env http_proxy=http://127.0.0.1:8434 https_proxy=http://127.0.0.1:8434 no_proxy=127.0.0.1,localhost php artisan ultron-studio:import-baseline -q )   # la línea base del Studio (producción ya la tiene)
+bash $O/ensayar.sh "$B" desplegar --solo-comprobar && bash $O/ensayar.sh "$B" desplegar   # el despliegue 1b (solo código)
+bash $O/ensayar-ops8d.sh "$B"                                                               # 102 OK · 0 FALLO en la 5.ª pasada (10-11-2026); registro en $B/logs/ensayo-ops8d-<fecha>.txt
+```
+
+- **`ayudante-ops8d.php <backend> cuentas|canarios|observar-numero|revocar`**: lo que el ensayo no puede hacer por HTTP ni con psql (el `ayudante.php` del E2E se niega fuera de `ultron_studio_h8_e2e*`).
+- **Costuras del banco:** `TWILIO_VOICE_BASE_URL` (en `production` se ignora); la rotación «en la consola» cambia la clave en `sim/piezas.conf` y reinicia los simuladores; publicar y la saliente van por una **segunda API** (`php -S` en `BANCO_PORT+4`, enrutado propio `$B/root/api2-router.php` que carga `ops/h8-e2e/reloj.php` —`php -S` no ejecuta `auto_prepend_file` con un guion de enrutado— y define `STDERR`) y por el worker con la orden literal del borrador de supervisor y el reloj desplazado al siguiente día hábil a las 07:30 de Bogotá (`OPS8D_RELOJ` lo fija). El resto corre con el reloj real.
+- **`montar.sh`** pasa ahora `ULTRON_STUDIO_DB_APP_ROLE=h5_app` al `migrate` (H-20): sin él, un banco cuya «producción» ya trae las migraciones del H7/H8 deja al rol de la aplicación con UPDATE y DELETE en las tablas de solo inserción y el despliegue aborta en el paso 4 (como debe).
+- **Presupuestos de rendimiento en los smokes:** son los de PERF8, medidos en el servidor; en el Mac con otros agentes trabajando un GET puede pasar su techo (pasó una vez en la 2.ª pasada). El veredicto funcional del ensayo los dice aparte y no los cuenta como fallo de la secuencia.
+- **Evidencia:** `ops/evidencia-h8/2026-11-10/ops8d/` (ver su `00-README.md`). Los registros no llevan secretos ni teléfonos (barrido al cierre: piezas secretas, tokens y patrones).

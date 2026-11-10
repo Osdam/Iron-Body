@@ -86,6 +86,7 @@ Nota: una primera pasada con los 128 MB por defecto del CLI murió por memoria e
 | D-10 | Decidir si habrá **entrantes**: exige un número de Twilio propio de la (sub)cuenta importado con entrantes (compra o portabilidad) o decidir que no haya fase 3 | El caller ID verificado no recibe llamadas | Antes de la fase 3 |
 | D-11 | `ULTRON_STUDIO_MONITOR_EXPECT` antes de encender el monitor del H7; renovar la verificación de ElevenLabs antes del 03-12-2026 22:55 UTC | Operación | Fases 2 → 4b |
 | D-12 | Visto bueno legal (Ley 1581/2012 y Ley 2300/2023, RNE) y la supresión 1581 de `voice_*`; CSP del CRM en Report-Only (E12-7) | Contactos con consentimiento | Antes de la 4b |
+| D-13 | **La fase 2 del Hito 6 (escrituras de integraciones) y el canario de voz del propietario:** registrar el número con consentimiento y que OTRA persona lo autorice y active (`StudioCanaryNumbers`, fase 2 del H6 con `h6-integrations-scope.sh`) | H-22 (OPS8-d, E16-32): sin un canario de voz ACTIVO la puerta deniega `not_an_active_voice_canary` aunque haya plan; no estaba en esta lista | Antes de la 4a |
 
 ## 5. Qué fases están listas para activarse
 
@@ -96,7 +97,7 @@ Nota: una primera pasada con los 128 MB por defecto del CLI murió por memoria e
 | **2 · credenciales y número** | Listo | `el-verificar.sh` (+ `--solo-clave`), `h8-secrets-register.sh`, `h8-twilio-check.sh`, `h8-voice-scope.sh fase 2` | D-1, D-2, D-3, D-5 |
 | **2a · laboratorio hablado** | Listo (4 cerrojos, destinos, libro) | Runbook «Fase 2a», `SMOKE_PHASE=2a`, `h8-voice-scope.sh lab on` | D-4, D-6, D-7 y autorización escrita; la primera sesión real consume créditos |
 | **3 · entrantes en canario** | Listo | Runbook de la fase 3 (plan de despliegue) | **Imposible con el número actual** (D-10) |
-| **4a · salientes a canarios** | Listo | Runbook «Fase 4a-primero», `SMOKE_PHASE=4a`, `h8-voice-scope.sh fase 4a` | 1b desplegada, 2 y 2a hechas, D-8, D-9, ratificar E16-16, `TWILIO_VOICE_DAILY_CALL_CAP=1`, presupuesto ≥ 0,97 US$ por llamada, primera llamada al propietario |
+| **4a · salientes a canarios** | Listo; ensayada punta a punta en el banco (E16-32: 102 OK · 0 FALLO) con el orden corregido de H-26 (`voice(calls-open)` → worker → `salientes on` → reconocer → publicar → smoke) y el aviso de H-25 (reconocer tras `salientes on/off`) | Runbook «Fase 4a-primero», `SMOKE_PHASE=4a`, `h8-voice-scope.sh salientes on` | 1b desplegada, 2 y 2a hechas, D-8, D-9, ratificar E16-16, `TWILIO_VOICE_DAILY_CALL_CAP=1`, presupuesto ≥ 0,97 US$ por llamada, primera llamada al propietario |
 | **4b · contactos con consentimiento** | Listo (consentimientos a cuatro ojos, exclusiones, Ley 2300, festivos, frecuencia) | Mando `fase 4b` | 4a con evidencia (3 llamadas, 24 h, 0 incidentes, promoción a `rest`), D-12 |
 
 ## 6. Qué autorizaciones hacen falta para cada activación

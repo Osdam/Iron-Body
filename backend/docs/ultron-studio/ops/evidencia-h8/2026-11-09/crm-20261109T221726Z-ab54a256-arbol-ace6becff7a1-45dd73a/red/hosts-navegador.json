@@ -1,0 +1,6 @@
+{
+ "http:http://127.0.0.1:4300": 1816,
+ "http:https://fonts.googleapis.com": 33,
+ "http:http://127.0.0.1:8080": 629,
+ "websocket:wss://127.0.0.1:8402": 1
+}

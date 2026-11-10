@@ -1,0 +1,189 @@
+── preparacion
+  OK    H6 (API): Ana registra el canario de voz 1
+  OK    H6 (API): Beto lo autoriza y lo activa
+  OK    H6 (API): Ana registra el canario de voz 2
+  OK    H6 (API): Beto lo autoriza y lo activa
+  OK    H5 (API): borrador desde la línea base
+  OK    H5 (API): Ana crea la versión del Studio
+  OK    H5 (API): Beto la aprueba (cuatro ojos)
+  OK    ruta 45 (a): 200 con can
+  OK    ruta 45 (b): 200 con can
+  OK    ruta 45 (c): 200 con can
+  OK    ruta 45: Ana y Beto con las 7 llaves; Carla con menos
+── can
+  OK    a: el control de «voiceManage» está si y solo si can.voiceManage (true)
+  OK    a: el control de «callPlace» está si y solo si can.telephonyCallPlace (true)
+  OK    a: el control de «telephonyView» está si y solo si can.telephonyView (true)
+  OK    a: el control de «contactsManage» está si y solo si can.telephonyContactsManage (true)
+  OK    a: el control de «voiceLabRun» está si y solo si can.voiceLabRun (true)
+  OK    a: el control de «voicePublish» está si y solo si can.voicePublish (true)
+  OK    b: el control de «voiceManage» está si y solo si can.voiceManage (true)
+  OK    b: el control de «callPlace» está si y solo si can.telephonyCallPlace (true)
+  OK    b: el control de «telephonyView» está si y solo si can.telephonyView (true)
+  OK    b: el control de «contactsManage» está si y solo si can.telephonyContactsManage (true)
+  OK    b: el control de «voiceLabRun» está si y solo si can.voiceLabRun (true)
+  OK    b: el control de «voicePublish» está si y solo si can.voicePublish (true)
+  OK    c: el control de «voiceManage» está si y solo si can.voiceManage (true)
+  OK    c: el control de «callPlace» está si y solo si can.telephonyCallPlace (false)
+  OK    c: el control de «telephonyView» está si y solo si can.telephonyView (true)
+  OK    c: el control de «contactsManage» está si y solo si can.telephonyContactsManage (false)
+  OK    c: el control de «voiceLabRun» está si y solo si can.voiceLabRun (false)
+  OK    c: el control de «voicePublish» está si y solo si can.voicePublish (false)
+── perfil
+  OK    Ana: pestaña Perfil de voz
+  OK    Ana: «Nuevo perfil»
+  OK    el diálogo del perfil se abre
+  OK    diálogo «Nuevo perfil de voz»: el foco no sale (40 Tab y 10 Mayús+Tab)
+  OK    perfil-dialogo a 390 px: sin desplazamiento horizontal
+  OK    Ana guarda el perfil
+  OK    el diálogo se cierra al guardar
+  OK    el perfil aparece en la lista
+  OK    SQL: el perfil nace en draft, de Ana
+  OK    Ana lo envía a revisión
+  OK    … y queda enviado
+  OK    Ana no tiene «Aprobar» en su propio perfil (cuatro ojos)
+  OK    Beto: pestaña Perfil de voz
+  OK    Beto: «Aprobar»
+  OK    el diálogo de aprobar se abre
+  OK    diálogo de aprobar el perfil: el foco no sale
+  OK    Beto aprueba
+  OK    … y queda aprobado
+  OK    SQL: approved, de Ana, revisado por Beto, con su huella
+── previa
+  OK    Beto: pestaña Perfil de voz (previsualizar)
+  OK    «Compilar sin publicar»
+  OK    la previsualización compila
+  OK    la huella que enseña el CRM es la de compile-preview (64 hex)
+  OK    previsualizar no llama a ElevenLabs ni escribe agentes
+── laboratorio
+  OK    Ana: pestaña Laboratorio
+  OK    laboratorio disponible, en modo elevenlabs (el adaptador real contra el simulador)
+  OK    antes de abrir se ven la reserva de esta sesión, lo que queda hoy y el cupo
+  OK    «Abrir la sesión» (sesión 1)
+  OK    SQL: el servidor abrió la sesión 1 (open, elevenlabs, la huella previsualizada)
+  OK    sesión 1: el CRM NO se conecta a una URL firmada sin TLS (ws:// del simulador): lo dice y no abre ningún WebSocket
+  OK    Ana: «Contar lo que pasó» en la sesión 1
+  OK    el formulario de lo observado se abre
+  OK    Ana guarda lo observado
+  OK    … la sesión 1 enseña lo observado
+  OK    SQL: la sesión 1 queda ended por tester_ended
+  OK    Ana no tiene «Aprobar» en su propia sesión (cuatro ojos)
+  OK    Ana: pestaña Laboratorio (sesión 2)
+  OK    «Abrir la sesión» (sesión 2)
+  OK    sesión 2: el CRM abre la conversación (franja en vivo) con la URL firmada en wss://
+  OK    SQL: una sesión 2 del laboratorio (abierta, elevenlabs, la MISMA huella previsualizada)
+  OK    una sola petición de abrir (POST voice-lab/sessions)
+  OK    el cliente oficial abre el WebSocket con la URL firmada del SIMULADOR (wss://127.0.0.1, agent_id y conversation_signature)
+  OK    el WebSocket falla (el simulador no habla TLS ni modela la conversación) y el CRM lo enseña sin reintentar
+  OK    SQL: la URL firmada no se guarda en ninguna sesión
+  OK    laboratorio abierto: ni la URL firmada ni el id completo del agente en el DOM, el almacenamiento ni la URL del navegador
+  OK    laboratorio abierto: la consola de la PÁGINA no lleva la URL firmada
+  OK    emisor del simulador: post-llamada web → 200
+  OK    SQL: la sesión 2 se cierra por el informe del proveedor (provider_report)
+  OK    el informe del laboratorio no abre el freno ni deja unknown_provider_call
+  FALLO Ana (su dueña) ve en el CRM la sesión 2 cerrada por el proveedor — {"crm":["1 sesión llegó ilegible y no se enseña."],"servidor":{"status":"ended","endReason":"provider_report","actionsEnd":{"allowed":true},"reported":{"provider":true,"tester":false},"verdict":null}}
+  OK    Beto: pestaña Laboratorio
+  OK    Beto ve la sesión 2 cerrada por el proveedor, con su duración (64 s) y su coste
+  OK    el diálogo del veredicto se abre
+  OK    el veredicto enseña la huella ENTERA que se juzga, la del perfil previsualizado
+  OK    diálogo del veredicto: el foco no sale
+  OK    Beto aprueba la sesión 2
+  OK    … y la sesión enseña el veredicto aprobado
+  OK    SQL: veredicto approved de Beto sobre la MISMA huella
+── publicar
+  OK    Beto: pestaña Publicación
+  OK    la ventana de publicación está abierta (el arnés corre sin ventana)
+  OK    «Publicar en canario»
+  OK    el diálogo de publicar se abre
+  OK    diálogo de publicar: el foco no sale
+  OK    el diálogo enseña la huella que se va a publicar
+  OK    … y es la del perfil previsualizado
+  OK    publicar-dialogo a 390 px: sin desplazamiento horizontal
+  OK    spec_changed: el CRM lo dice («la compilación cambió») y borra la huella vista
+  OK    spec_changed: una sola petición de publicar, sin reintento
+  OK    spec_changed: «Publicar en canario» desactivado hasta volver a previsualizar
+  OK    spec_changed: nada en ElevenLabs, ningún agente de publicación ni entrada
+  OK    volver a previsualizar enseña la huella
+  OK    Beto publica en canario
+  OK    SQL: entrada 1 publish canary de Beto, puerta del laboratorio required; agente deployed con la huella vista
+  OK    simulador: el número apunta al agente publicado
+── cadena
+  OK    Carla: pestaña Publicación
+  OK    la cadena enseña la entrada 1 (publish) sin firma mala
+  OK    la parte canario vigente y verificada
+  OK    Carla no tiene acciones de publicar (sin can.voicePublish)
+  OK    el id del agente se ve enmascarado («…»)
+  OK    Publicación (Carla): ni el id completo del agente ni secretos en DOM, almacenamiento ni consola
+── llamadas
+  OK    entrante 1: la iniciación autoriza (200, si)
+  OK    entrante 1: post-llamada 200
+  OK    entrante 2: la iniciación autoriza (200, si)
+  OK    entrante 2: post-llamada 200
+  OK    entrante 3: la iniciación autoriza (200, si)
+  OK    entrante 3: post-llamada 200
+  OK    voice:reconcile tras las 3 entrantes sale con 0
+  OK    SQL: 3 entrantes completed y selladas
+  OK    Ana: pestaña Llamadas
+  OK    las 3 entrantes: solo los 4 últimos dígitos del canario (ni el número ni el alias)
+  OK    abrir el detalle de una
+  OK    detalle: el CRM enseña TODOS los eventos de la API (eventos descartados = 0)
+  OK    detalle: los códigos de los eventos son una lista plana snake_case y se ven en el CRM
+  OK    Llamadas: ningún teléfono completo ni secreto en DOM, almacenamiento ni consola
+  OK    llamadas-detalle a 390 px: sin desplazamiento horizontal
+── costes
+  OK    Ana: pestaña Costes
+  OK    Costes y métricas se pintan con cifras
+  OK    Costes: ningún teléfono ni secreto en DOM, almacenamiento ni consola
+── contactos
+  OK    Ana: pestaña Contactos
+  OK    el diálogo de alta se abre
+  OK    diálogo de alta del contacto: el foco no sale
+  OK    el contacto aparece con ••0071
+  OK    SQL: el contacto guardado cifrado con sus 4 últimos
+  OK    Ana: «Cargar el consentimiento»
+  OK    el diálogo del consentimiento se abre
+  OK    … queda pendiente de confirmar por otra persona
+  OK    Ana no confirma lo que ella cargó (el servidor lo niega y el CRM lo dice)
+  OK    Beto: pestaña Contactos
+  OK    el diálogo de confirmar se abre
+  OK    Beto confirma: el consentimiento queda vigente
+  OK    SQL: consentimiento cargado por Ana y confirmado por Beto
+  OK    el diálogo de excluir se abre
+  OK    diálogo de excluir: el foco no sale
+  OK    el contacto queda excluido
+  OK    Contactos: ningún teléfono completo ni secreto en DOM, almacenamiento ni consola
+── freno
+  OK    entrante del canario 2 autorizada
+  OK    post-llamada con OTRO agente → 200
+  OK    SQL: el freno abierto por seal_mismatch
+  OK    Carla: pestaña Estado
+  OK    el freno se ve echado
+  OK    Carla no tiene «Soltar el freno»
+  OK    Ana: pestaña Estado
+  OK    el diálogo de soltar se abre
+  OK    diálogo de soltar el freno: el foco no sale
+  OK    el freno queda suelto en el CRM
+  OK    SQL: la suelta es de Ana
+── salientes
+  OK    Ana: pestaña Llamadas
+  OK    el diálogo de pedir una llamada se abre
+  OK    diálogo de pedir una llamada: el foco no sale
+  FALLO el diálogo de pedir una llamada enseña cada canario por su alias y sus 4 dígitos (nunca el número) — []
+  FALLO salientes: terminó sin excepción — Error: No element found for selector: [data-saliente-canario="2712cdfd-f3ed-4d9e-b44e-8834389e8403"] |     at assert (/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body_Front/node_modules/puppeteer-core/lib/cjs/puppeteer/util/assert.js:18:15) |     at CdpFrame.click (/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body_Front/node_modules/puppeteer-core/lib/cjs/puppeteer/api/Frame.js:751:40)
+── 429
+  OK    el limitador de lectura responde 429 con el cuerpo uniforme (code too_many_requests, retry_after) y Retry-After igual
+  FALLO 429: terminó sin excepción — Error: Attempted to use detached Frame 'E25E4D39908F28D3076EA56502EFB029'. |     at CdpFrame.<anonymous> (/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body_Front/node_modules/puppeteer-core/lib/cjs/puppeteer/util/decorators.js:107:23) |     at CdpPage.goto (/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body_Front/node_modules/puppeteer-core/lib/cjs/puppeteer/api/Page.js:580:43)
+── firefox
+  OK    «Firefox» (Ana): pestaña Laboratorio
+  OK    el CRM dice que este navegador no puede y que no se gastó nada
+  OK    ninguna petición de abrir sesión, ni micrófono pedido
+  OK    ninguna sesión en la base ni petición a ElevenLabs
+── transversal
+  FALLO transversal: terminó sin excepción — TargetCloseError: Protocol error (Emulation.setTouchEmulationEnabled): Session closed. Most likely the page has been closed. |     at CdpCDPSession.send (/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body_Front/node_modules/puppeteer-core/lib/cjs/puppeteer/cdp/CdpSession.js:72:35) |     at #applyViewport (/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body_Front/node_modules/puppeteer-core/lib/cjs/puppeteer/cdp/EmulationManager.js:150:32)
+── navegador
+  OK    ningún error de JavaScript sin capturar en ninguna sesión
+  OK    ninguna respuesta 5xx de la API
+  OK    red: ningún teléfono completo, secreto, URL firmada ni id completo del agente en lo que el navegador envía o recibe (salvo donde viaja por diseño)
+  OK    red del navegador: ninguna petición fuera de 127.0.0.1 salvo las fuentes de Google del index.html (anteriores al H8; no resuelven)
+  OK    red del navegador: el WebSocket del laboratorio solo contra el simulador, y solo con TLS (wss)
+  → 167/172 OK en 719 s

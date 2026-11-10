@@ -1,0 +1,1 @@
+{"sim":"twilio","requests":1,"violations":0,"violationsByCode":{},"authRejected":0,"byRoute":{"/2010-04-01/Accounts/{sid}/Calls.json":1},"byStatus":{"200":1},"faultsServed":0,"controlCalls":10,"emitted":{},"emitStatus":{},"emitLatencyMs":{},"state":{"calls":4,"byStatus":{"completed":4},"numberUpdates":0}}

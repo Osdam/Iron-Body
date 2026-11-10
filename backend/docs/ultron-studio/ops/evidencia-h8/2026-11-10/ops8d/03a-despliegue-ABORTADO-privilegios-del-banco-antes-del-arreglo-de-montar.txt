@@ -1,0 +1,44 @@
+== deploy-h8-backend-fase1.sh → /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/deploy-h8-backend-fase1.sh: 23 líneas con sustituciones del banco
+== ironbody-migrate-propuesta.sh → /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/ironbody-migrate: 26 líneas con sustituciones del banco
+== h8-voice-scope.sh → /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/h8-voice-scope.sh: 9 líneas con sustituciones del banco
+== h8-secrets-register.sh → /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/h8-secrets-register.sh: 10 líneas con sustituciones del banco
+== h8-twilio-check.sh → /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/h8-twilio-check.sh: 5 líneas con sustituciones del banco
+== deploy-h8-backend-fase1.sh · 2026-11-10T04:13:18Z · ESPERADO=a608450 · PREVIO=fe29126 · BK=/Users/alejodev/.cache/ironbody-banco-h8-ops8d/bk · registro /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/h8-fase1-20261110-041318.log
+0. comprobaciones previas (solo lectura; si algo falla, no se toca nada):
+   sin migraciones nuevas entre fe29126 y origin/main: las dos del Hito 8 ya estaban en fe29126 (despliegue solo de código)
+   respaldo /Users/alejodev/.cache/ironbody-banco-h8-ops8d/bk: 238 tablas con datos · 700/600 de root · huella del volcado comprobada
+   ElevenLabs (E1-12; presencia, sin valores): API_KEY=presente AGENT_ID=presente WEBHOOK_SECRET=presente TOOL_SECRET=presente · ENABLED=true
+   AVISO: ELEVENLABS_BASE_URL está en el entorno: en production se ignora (hosts oficiales siempre)
+   claves de la fase 1 ausentes o iguales · ninguna pieza del H8 ni del número
+   AVISO: las dos migraciones del H8 YA están aplicadas (otro despliegue o un migrate ajeno, como en el H7): no se vuelve a migrar; el esquema se comprueba igual
+   rutas en la caché ahora (informativo en una reanudación): [77 18 8 10 15 6 13 5 8 4]
+   verificación de voz: ok · ELEVENLABS_VERIFIED hasta 2026-12-10T04:13 UTC (quedan 719 h)
+   HEAD fe29126 limpio · migraciones del H8: 2 en el diff, pendientes [] (ya aplicadas por otro) · puerta: [backend/app/Jobs/Voice/PlaceOutboundVoiceCall.php] (todas nombradas por el contrato) · esquema [68 84 6 18 27 51 3 7 h5_owner h5_owner true 1] · función de F · sin escritores de versiones · rutas [77 18 8 10 15 6 13 5 8 4] · programador 27 tareas, 0 del Studio, 0 de voz · workers 13/0 · facturación activa
+   iron_app en libro · asociaciones · canarios · instantáneas · cadena (SELECT/INSERT/UPDATE/DELETE/TRUNCATE): true/true/true/true/false true/true/true/true/false true/true/true/true/false true/true/true/true/false true/true/true/true/false
+   filas cadena · libro · instantáneas · versiones: 0 13 5 0 · colas fallidas: 0 · sellos studio: 0 · incidentes ultron_studio: 0
+   motor, H4–H7 y voz (informativo; no cambia): {"engine_scope":"off","publishing_enabled":false,"lab_gate":"required","lab_enabled":true,"lab_driver":"fake","canary_set":true,"ultron_enabled":true,"writes_enabled":false,"probe_enabled":false,"monitor_enabled":false,"elevenlabs_enabled":true,"twilio_voice_enabled":false,"voice":{"provider":"elevenlabs","state":"ELEVENLABS_UNVERIFIED","enabled":true,"missing":[],"region":"default"},"studio_voice":"ELEVENLABS_VERIFIED"}
+   integrations-doctor twilio:connected_otp_only,twilio_voice:not_configured,elevenlabs:ELEVENLABS_VERIFIED: 0 · monitor del H7 en seco, integraciones: [elevenlabs:ELEVENLABS_NOT_CONFIGURED->connected_read] (informativo; tiene que seguir igual)
+   AVISO: la expectativa del monitor del H7 no es la de la fase 1 (E1-12): antes de ENCENDERLO, ULTRON_STUDIO_MONITOR_EXPECT=twilio:connected_otp_only,twilio_voice:not_configured,elevenlabs:ELEVENLABS_VERIFIED (decisión del lead; ver el plan, «Hito 8», fase 1)
+   el fichero de entorno parsea (antes de tocar nada)
+1. código: HEAD=a608450
+   los 213 ficheros del merge son legibles por www-data
+2. variables (5 interruptores y 4 cerrojos de gasto de la voz, apagados):
+   VOICE_INBOUND_ENABLED añadida
+   VOICE_OUTBOUND_ENABLED añadida
+   VOICE_LAB_ENABLED añadida
+   VOICE_MONITOR_ENABLED añadida
+   ULTRON_STUDIO_VOICE_PUBLISHING_ENABLED añadida
+   VOICE_INBOUND_DAILY_CAP añadida
+   VOICE_DAILY_BUDGET_USD añadida
+   VOICE_LAB_DAILY_BUDGET_USD añadida
+   VOICE_LAB_DRIVER añadida
+   permisos del fichero: alejodev 600
+   el fichero de entorno parsea
+3. migraciones (rol dueño, lock_timeout 5 s; un 55P03 se reintenta hasta 3 veces, 15 s entre intentos):
+   nada que migrar: las dos del H8 ya estaban registradas (paso 0); no se llama a ironbody-migrate
+   esquema [68 84 6 18 27 51 3 7]: 68 disparadores · 84 CHECK · 6 parciales · 18 tablas del Studio; 27 · 51 · 3 · 7 de la telefonía (intento 0)
+4. esquema del Hito 8 (antes de servir las rutas nuevas):
+   funciones nuevas (número · SECURITY DEFINER · dueños): 4 0 ultron_studio_voice_publication_agents:h5_owner,ultron_studio_voice_publication_chain:h5_owner,voice_brake_release:h5_owner,voice_forbid:h5_owner
+   iron_app en las 11 tablas (r SELECT · a INSERT · w UPDATE · d DELETE · D TRUNCATE · s secuencia): ultron_studio_voice_agents=rawd-s ultron_studio_voice_lab_sessions=rawd-s ultron_studio_voice_profiles=rawd-s ultron_studio_voice_publications=rawd-s voice_brakes=rawd-s voice_call_events=rawd-s voice_calls=rawd-s voice_consents=rawd-s voice_contacts=rawd-s voice_exclusions=rawd-s voice_rne_checks=rawd-s
+ABORTA: privilegios de iron_app en las tablas del H8 [ultron_studio_voice_agents=rawd-s ultron_studio_voice_lab_sessions=rawd-s ultron_studio_voice_profiles=rawd-s ultron_studio_voice_publications=rawd-s voice_brakes=rawd-s voice_call_events=rawd-s voice_calls=rawd-s voice_consents=rawd-s voice_contacts=rawd-s voice_exclusions=rawd-s voice_rne_checks=rawd-s], esperado [ultron_studio_voice_agents=rawd-s ultron_studio_voice_lab_sessions=rawd-s ultron_studio_voice_profiles=rawd-s ultron_studio_voice_publications=ra---s voice_brakes=ra---s voice_call_events=ra---s voice_calls=rawd-s voice_consents=ra---s voice_contacts=rawd-s voice_exclusions=ra---s voice_rne_checks=ra---s] (ra en las 6 de solo inserción, rawd en las 5 con estados). NO se ha hecho route:cache; avisar a database-specialist
+código despliegue: 1

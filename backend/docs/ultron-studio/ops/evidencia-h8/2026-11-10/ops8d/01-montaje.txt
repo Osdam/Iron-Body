@@ -1,0 +1,15 @@
+== 1. origen: a608450 (a608450)
+   ESPERADO=a608450 · migraciones nuevas desde fe29126: 0
+== 2. «producción» en fe29126 (origin = el origen del banco)
+== 3. base ultron_studio_banco_h8_ops8d con el modelo de roles de producción
+== 4. fichero de entorno SINTÉTICO de la fase 1 (sin piezas de voz; sangría de dos espacios como producción)
+== 5. piezas SINTÉTICAS de los simuladores (sim/piezas.conf, 600): las de la fase 2, que la aplicación NO tiene
+== 6. migraciones de fe29126 como h5_owner (esquema de hoy) y cachés; sin red (proxy a un puerto cerrado)
+   rutas del Studio: 77 (56 = el H7 en producción)
+   instantáneas de sistema: 3 (3 = meta_ads, twilio y voice)
+   voz: ELEVENLABS_NOT_CONFIGURED (fase 1: ELEVENLABS_NOT_CONFIGURED)
+== 7. sustitutos en /Users/alejodev/.cache/ironbody-banco-h8-ops8d/bin
+== 8. respaldo con el formato del runbook (700/600)
+   tablas con datos en el volcado: 238
+BANCO LISTO: /Users/alejodev/.cache/ironbody-banco-h8-ops8d (ESPERADO=a608450). Siguiente: bash /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/docs/ultron-studio/ops/banco-h8/ensayar.sh /Users/alejodev/.cache/ironbody-banco-h8-ops8d arrancar && bash /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/docs/ultron-studio/ops/banco-h8/sembrar.sh /Users/alejodev/.cache/ironbody-banco-h8-ops8d
+BANCO_DB=ultron_studio_banco_h8_ops8d BANCO_PORT=8431 BANCO_PUERTO_EL=8432 =   1.84s user 6.54s system 76% cpu 10.929 total

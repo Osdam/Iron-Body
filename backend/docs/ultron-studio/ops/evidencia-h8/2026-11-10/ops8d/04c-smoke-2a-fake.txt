@@ -1,0 +1,83 @@
+== Smoke del Hito 8 (fase 2a) · 2026-11-10T04:47:33Z · http://127.0.0.1:8431/api
+OK      presupuestos de rendimiento válidos: perf8-2026-11-08 · 11 rutas · sha256 2e495a753e5a (/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/docs/ultron-studio/ops/perf-h8/presupuestos-h8.json)
+OK      configuración de la voz de la fase 2a: {"calls_in_code":false,"inbound":false,"outbound":false,"lab":true,"voice_monitor":false,"publishing":false,"twilio_voice":false,"studio_monitor":false}
+OK      el programador: 27 tareas, 0 del Studio y 0 de voz (las de los monitores encendidos)
+OK      voice:doctor --telefonia (sin red), la de la fase 2a: estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=1 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=no subcuenta=no proveedor=ELEVENLABS_VERIFIED
+OK      monitor del H7 en seco (integraciones), sin deriva de la configuración autorizada: [ok]
+INFO    canario del motor configurado: sí (su id no se imprime)
+INFO    centinela exacto: 19 huellas saladas de secretos del servidor
+OK      18 tablas ultron_studio_* y 7 voice_* en la base
+cuenta 1 activa como Super Admin
+== Smoke del Hito 8 (fase 2a) · superadmin · http://127.0.0.1:8431/api
+OK      login de la cuenta de smoke  [HTTP 200]
+OK      GET admin/voice/status → 200  [HTTP 200]
+OK      la constante de las llamadas, cerrada (VoiceCallPolicy::CALLS_ENABLED_IN_CODE = false)  [False]
+OK      banderas de la fase 2a: inbound no, outbound no, twilioVoice no, lab sí  [{"inbound": false, "outbound": false, "twilioVoice": false, "lab": true, "monitor": false}]
+OK      sin flags.publishing en la telefonía (E4-1: la bandera de publicar vive en el Studio)
+OK      la cadena de voz sin entradas (canary y rest: none) y el freno suelto  [{"canary": "none", "rest": "none"} · freno False]
+OK      cupos y presupuesto a 0 (salientes al día, entrantes al día, µUS$ al día)  [{"outboundDailyCap": 0, "inboundDailyCap": 0, "dailyBudgetMicros": 0}]
+INFO    piezas de la fase 2 (informativo en la 2a: el laboratorio no las necesita)  [{"configured": false, "collidesWithMessaging": false, "importedNumberIdConfigured": false, "inboundCapable": null, "observed": null, "check": "unverified", "checkReason": "no_observation"} · subcuenta False]
+INFO    proveedor según la telefonía  [ELEVENLABS_VERIFIED (E4-6: dice UNVERIFIED hasta que B8 añada su lector de la verificación, antes de la fase 3)]
+OK      GET admin/voice/calls → 200 (fase 2a: puede haber llamadas de canarios)  [HTTP 200 · total 0]
+OK      GET admin/voice/contacts → 200, contactos vacíos  [HTTP 200 · total 0]
+OK      GET admin/voice/calls/<inventado> → 404 call_not_found  [HTTP 404 call_not_found]
+OK      GET admin/voice/metrics → 200 sin llamadas vivas ni ambiguas, freno suelto  [HTTP 200 · vivas 0 · ambiguas 0]
+OK      las 7 POST de la telefonía con un cuerpo vacío → 422 validation_failed (antes de la puerta: nada se escribe)
+OK      POST admin/voice/calls/<inventado>/hangup → 404 call_not_found (antes de hablar con Twilio)  [HTTP 404 call_not_found]
+OMITIDO POST /admin/ultron-studio/voice-lab/sessions  [laboratorio hablado encendido: abrir, cerrar o juzgar una sesión escribe o gasta; el smoke no lo hace]
+OMITIDO POST /admin/ultron-studio/voice-lab/sessions/<inventado>/end  [laboratorio hablado encendido: abrir, cerrar o juzgar una sesión escribe o gasta; el smoke no lo hace]
+OMITIDO POST /admin/ultron-studio/voice-lab/sessions/<inventado>/verdict  [laboratorio hablado encendido: abrir, cerrar o juzgar una sesión escribe o gasta; el smoke no lo hace]
+OK      las 18 rutas nuevas del Studio con sesión que no escriben en la fase 2a: lecturas 200, inventados 404, laboratorio encendido (lista 200, inventada 404), publicar y promover 409 voice_publishing_disabled, el resto 422 antes de escribir
+INFO    GET voice/profiles (informativo desde la fase 2: el laboratorio y la publicación usan perfiles)  [total 0]
+OK      GET voice/publications: publicar apagado (voice_publishing_disabled) y la cadena de voz sin entradas  [publicar {"enabled": false, "code": "voice_publishing_disabled"} · entradas 0]
+INFO    GET voice-lab/status  [{"enabled": true}]
+OK      GET integrations/voice (ruta 45) → 200  [HTTP 200]
+OK      ruta 45: ElevenLabs en ELEVENLABS_VERIFIED (E1-12; lo afirma el Studio con la verificación de menos de 30 días)  [ELEVENLABS_VERIFIED]
+OK      ruta 45: publicar la voz apagado (publishing.enabled false, E4-1)  [{"available": true, "enabled": false, "code": "voice_publishing_disabled"}]
+OK      ruta 45: «can» con las 7 llaves de D8-22, todas true para el Super Admin  [approve=True, telephonyCallPlace=True, telephonyContactsManage=True, telephonyView=True, voiceLabRun=True, voiceManage=True, voicePublish=True]
+== Presupuestos de rendimiento · /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/docs/ultron-studio/ops/perf-h8/presupuestos-h8.json · perf8-2026-11-08 · sha256 2e495a753e5a · 11 rutas · 1 + 5 muestras, ≥ 0.6 s
+OK      presupuesto GET admin/voice/status: mediana 69.8 ms ≤ 290 · máximo 111.2 ms ≤ 310 · 1295 B ≤ 7168  [n 5 · calibración: p50 ≤ 120 · p95 ≤ 167]
+OK      presupuesto GET admin/voice/calls: mediana 72.4 ms ≤ 190 · máximo 93.4 ms ≤ 220 · 75 B ≤ 24576  [n 5 · calibración: p50 ≤ 123 · p95 ≤ 144]
+OK      presupuesto GET admin/voice/metrics: mediana 59.7 ms ≤ 280 · máximo 68.7 ms ≤ 290 · 300 B ≤ 6144  [n 5 · calibración: p50 ≤ 110 · p95 ≤ 119]
+OK      presupuesto GET admin/voice/contacts: mediana 49.4 ms ≤ 210 · máximo 75.1 ms ≤ 240 · 75 B ≤ 11264  [n 5 · calibración: p50 ≤ 100 · p95 ≤ 126]
+OK      presupuesto GET voice/profiles: mediana 52.4 ms ≤ 170 · máximo 78.4 ms ≤ 220 · 673 B ≤ 28672  [n 5 · calibración: p50 ≤ 103 · p95 ≤ 129]
+OK      presupuesto GET voice/publications: mediana 55.0 ms ≤ 200 · máximo 61.5 ms ≤ 230 · 903 B ≤ 40960  [n 5 · calibración: p50 ≤ 106 · p95 ≤ 112]
+OK      presupuesto GET voice/brakes: mediana 61.9 ms ≤ 170 · máximo 180.1 ms ≤ 220 · 51 B ≤ 7168  [n 5 · calibración: p50 ≤ 112 · p95 ≤ 271]
+OK      presupuesto GET voice-lab/status: mediana 48.5 ms ≤ 170 · máximo 70.1 ms ≤ 210 · 2326 B ≤ 7168  [n 5 · calibración: p50 ≤ 99 · p95 ≤ 121]
+OK      presupuesto GET voice-lab/sessions: mediana 34.2 ms ≤ 190 · máximo 46.9 ms ≤ 220 · 689 B ≤ 52224  [n 5 · calibración: p50 ≤ 85 · p95 ≤ 97]
+OK      presupuesto GET integrations/voice: mediana 42.1 ms ≤ 180 · máximo 80.2 ms ≤ 270 · 5107 B ≤ 11264  [n 5 · calibración: p50 ≤ 93 · p95 ≤ 131]
+OK      presupuesto GET voice/canary-evidence: mediana 75.4 ms ≤ 250 · máximo 77.7 ms ≤ 290 · 335 B ≤ 5120  [n 5 · calibración: p50 ≤ 126 · p95 ≤ 128]
+PRESUPUESTOS: 11 OK · 0 FALLO · 0 OMITIDO · 86 s (de ellos 53 s esperando a los cupos)
+OK      telefonía del CRM sin sesión: las 13 rutas → 401 (5 GET y 8 POST)
+OK      las 4 públicas sin credencial → 401 con su motivo (unauthorized · invalid_signature · verdict unauthorized · invalid_signature)
+OK      las 4 públicas responden el 401 en menos de 140 ms (máximo 12.9 ms; sin red saliente en ese camino)  [13, 9, 11, 9 ms]
+OK      una herramienta con un nombre fuera del patrón [a-z_]{1,48} → 404 (la ruta no casa)  [HTTP 404]
+OK      /webhooks/voice/elevenlabs/initiation con 9009 bytes sin credencial → 413 (tope de 8 KB antes de autenticar)  [HTTP 413 payload_too_large]
+OK      /voice/tools/consultar_planes con 9009 bytes sin credencial → 413 (tope de 8 KB antes de autenticar)  [HTTP 413 payload_too_large]
+OK      /webhooks/voice/twilio/usage-trigger con 70005 bytes sin credencial → 413 (tope de 64 KB antes de autenticar)  [HTTP 413 payload_too_large]
+INFO    post-call con 1048576 bytes (= el tope de 1 MB) sin firma: responde Laravel (401 invalid_signature): nginx deja pasar el tope entero
+OK      las 21 rutas nuevas del Studio sin sesión → 401 (8 GET y 13 POST)
+OK      cuerpos (74): sin claves prohibidas (teléfono, huellas, ids de Meta, textos del proveedor, firmas)
+OK      cuerpos (74): cada secreto solo como presencia, origen, huella de 8 hex o referencia corta
+OK      cuerpos (74): sin credenciales, sin APP_KEY y sin rutas del servidor
+OK      cuerpos (74): sin teléfonos ni ids de Meta (10 cifras o más)
+OK      cuerpos (74): ninguna clave nombra una conversación
+OK      cuerpos (74): ninguno lleva el id de la conversación canaria
+OK      cuerpos (74): ninguno contiene un secreto del servidor (centinela exacto, 19 huellas saladas)
+OK      Cache-Control «no-store, private» en las 133 respuestas de /api/admin
+OK      limitador: ninguna respuesta 429  [0 respuestas 429]
+OK      ninguna respuesta 5xx  [0 respuestas 5xx]
+RESUMEN (superadmin): 48 OK · 0 FALLO · 3 OMITIDO
+== Base, registros y red (solo lectura)
+OK      ninguna fila nueva de ultron_studio_* ni de voice_* nombra a la cuenta 1
+OK      recuento exacto de las 25 tablas (18 del Studio y 7 de la voz) igual antes y después: ninguna escritura, ningún agente, ninguna instantánea, ningún evento de llamada
+OK      incidentes de IRON GUARD del Studio (filas · ocurrencias): 0 0, los mismos
+OK      cola voice: 0 trabajos (antes 0)
+OK      canal voice durante el smoke: solo los rechazos esperados de las rutas públicas [voice.inbound.unauthorized×1(WARNING) voice.post_call.rejected×2(WARNING) voice.tool.unauthorized×1(WARNING) voice.twilio.usage_rejected×1(WARNING) ] (nada sale a la red ni se encola)
+OK      laravel*.log: ningún ERROR durante el smoke
+OK      cero red saliente (valla): bloqueos 0 → 0
+OK      monitor del H7 en seco (integraciones) igual que antes del smoke: [ok]
+cuenta 1 en reposo: inactiva, Super Admin, sesiones borradas: 1
+OK      token tras desactivar → 403
+OK      sesiones de la cuenta tras el smoke: 0
+SMOKE H8: código de salida 3

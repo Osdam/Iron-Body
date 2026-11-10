@@ -1,0 +1,721 @@
+════ 0 · mando · estado de partida: constante cerrada, todo apagado, ElevenLabs VERIFIED en el Studio · código 0
+== estado de la voz (configuración efectiva del proceso CLI, la misma caché que el web; sin valores de secretos)
+   código desplegado: HEAD a608450 · constante de llamadas: cerrada
+   salientes: no · alcance canary · cupo/día 0 · presupuesto/día 0 US$ · Twilio Voice no
+   entrantes: no · cupo/día 0
+   laboratorio hablado: no · driver fake · presupuesto/día 0 US$ · por sesión 0 US$ · 300 s · 5 sesiones/día
+   monitor de voz: no · publicar la voz (Studio): no · monitor del H7: no (expectativa: twilio:connected_otp_only,twilio_voice:not_configured,elevenlabs:ELEVENLABS_NOT_CONFIGURED)
+   piezas no secretas: VOICE_WEBHOOK_BASE_URL — · ELEVENLABS_AGENT_PHONE_NUMBER_ID — · TWILIO_VOICE_FROM — · TWILIO_VOICE_ACCOUNT_SID —
+   referencias (ids, no secretos): herramientas — · iniciación — · webhook post-llamada —
+   secretos (solo presencia): ELEVENLABS_API_KEY presente · ELEVENLABS_WEBHOOK_SECRET presente · ELEVENLABS_TOOL_SECRET presente · ELEVENLABS_INITIATION_SECRET falta · TWILIO_VOICE_API_KEY_SID falta · TWILIO_VOICE_API_KEY_SECRET falta · TWILIO_VOICE_SIGNING_TOKEN falta
+   número de voz igual a uno de WhatsApp: no · ElevenLabs según el Studio: ELEVENLABS_VERIFIED
+   el número admite entrantes (VOICE_NUMBER_INBOUND_CAPABLE): sin declarar (se trata como «admite»)
+   reserva por saliente (VoiceCostGuard): 0.6105 US$ a un móvil sin transferencia · 1.1220 US$ a un fijo con transferencia
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=0 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=no importado=no subcuenta=no whatsapp=no proveedor=ELEVENLABS_UNVERIFIED
+   programador (total · del Studio · de voz): 27 0 0 (de voz: 4 con el monitor de voz encendido, 0 apagado)
+   workers (RUNNING · BACKOFF/FATAL): 13 0 · ironbody-voice en RUNNING: 0 (lo exige «salientes on»)
+   fichero de entorno: alejodev:staff 600 (C-14: www-data 600 o root:www-data 640)
+   integrations-doctor confirma la expectativa del monitor del H7: NO (con el monitor del H7 encendido abriría un incidente; ver «expectativa»)
+════ 0 · mando · expectativa fase1 (monitor del H7 apagado; integrations-doctor la confirma) → APLICADA · código 0
+0. expectativa-fase1 · copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-expectativa-fase1-20261110-043314 (600, alejodev) · fichero alejodev:staff 600 · programador 27 0 0 · workers 13 0 · constante cerrada
+   ULTRON_STUDIO_MONITOR_EXPECT añadida
+1. claves escritas (sin valores): ULTRON_STUDIO_MONITOR_EXPECT · fichero alejodev:staff 600
+2. el fichero parsea · caché: alejodev 600
+3. configuración efectiva, antes → después (sin valores de secretos): expect: "twilio:connected_otp_only,twilio_voice:not_configured,elevenlabs:ELEVENLABS_NOT_CONFIGURED" → "twilio:connected_otp_only,twilio_voice:not_configured,elevenlabs:ELEVENLABS_VERIFIED"
+   motor, H4–H7 y ElevenLabs (proveedor y Studio) sin cambios
+   el fichero de entorno es la copia previa salvo 1 clave(s) de la orden
+4. programador (total · del Studio · de voz): 27 0 0 → 27 0 0 (esperado 27 0 0)
+5. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+6. admin/voice/status sin token → 401
+7. local.ERROR en laravel*.log: 0 → 0
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=0 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=no importado=no subcuenta=no whatsapp=no proveedor=ELEVENLABS_UNVERIFIED
+   vuelta atrás exacta (el fichero de antes): install -m 600 -o alejodev -g staff /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-expectativa-fase1-20261110-043314 /Users/alejodev/.cache/ironbody-banco-h8-ops8d/api/backend/.env && cd /Users/alejodev/.cache/ironbody-banco-h8-ops8d/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+MANDO expectativa-fase1 APLICADO (copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-expectativa-fase1-20261110-043314)
+banco parado
+banco en marcha: valla :8434 · ElevenLabs :8432 · Twilio :8433 · API :8431 (status sin token → 401)
+════ 1 · el-verificar.sh <fichero de la clave> <agent_id> (modo completo, ANTES del registro) → VERIFICACIÓN TERMINADA · código 0
+0. partida: ── Voz · ElevenLabs · doctor ── · workers 13/0
+   ELEVENLABS_ENABLED sustituida
+   ELEVENLABS_API_KEY sustituida
+   ELEVENLABS_AGENT_ID sustituida
+   ELEVENLABS_WEBHOOK_SECRET sustituida
+   ELEVENLABS_TOOL_SECRET sustituida
+   ELEVENLABS_REGION sustituida
+   parsea · permisos alejodev 600
+2. caché alejodev 600 · doctor con la bandera apagada:
+   ── Voz · ElevenLabs · doctor ──
+   Estado     : ELEVENLABS_DISABLED
+   Proveedor  : none
+   Bandera    : apagada (ELEVENLABS_ENABLED)
+   Región     : default
+   Faltan     : ninguna
+   ELEVENLABS_ENABLED=true
+3. doctor --verify (un GET al agente):
+   ── Voz · ElevenLabs · doctor ──
+   Estado     : ELEVENLABS_UNVERIFIED
+   Proveedor  : elevenlabs
+   Bandera    : encendida (ELEVENLABS_ENABLED)
+   Región     : default
+   Faltan     : ninguna
+   Llamadas   : cerradas en el código (la constante de VoiceCallPolicy): ni salientes ni entrantes autorizadas.
+   
+4. instantánea de verificación (integrations-snapshot --verify-voice):
+   meta_ads: sin cambios (huella a14fc2eb7434…)
+   twilio: sin cambios (huella 7f8743a62b1a…)
+   voice: anotada (huella 596ba98fb822…)
+   Verificación de voz: credenciales válidas; evidencia guardada y marca de la telefonía escrita (30 días).
+5. estado efectivo:
+   {"calls_enabled_in_code":false,"elevenlabs_enabled":true,"has_key":true,"agent_id_set":true,"twilio_voice_enabled":false}
+   workers 13/0 · secret-exposure: OK · ERROR log: 0
+   integrations-doctor (voz): 
+6. fichero de la clave destruido · copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-elevenlabs-20261110-043334 (600 root) · vuelta atrás: ELEVENLABS_ENABLED=false y la caché · modo: completo
+ELEVENLABS VERIFICACIÓN TERMINADA
+════ 1 · mando · fase 2 set VOICE_WEBHOOK_BASE_URL (la base canónica) → APLICADO · código 0
+0. fase2-set · copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-fase2-set-20261110-043344 (600, alejodev) · fichero alejodev:staff 600 · programador 27 0 0 · workers 13 0 · constante cerrada
+   VOICE_WEBHOOK_BASE_URL añadida
+1. claves escritas (sin valores): VOICE_WEBHOOK_BASE_URL · fichero alejodev:staff 600
+2. el fichero parsea · caché: alejodev 600
+3. configuración efectiva, antes → después (sin valores de secretos): webhook_base: null → "https://api.ironbody-banco.invalid"
+   motor, H4–H7 y ElevenLabs (proveedor y Studio) sin cambios
+   el fichero de entorno es la copia previa salvo 1 clave(s) de la orden
+4. programador (total · del Studio · de voz): 27 0 0 → 27 0 0 (esperado 27 0 0)
+5. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+6. admin/voice/status sin token → 401
+7. local.ERROR en laravel*.log: 0 → 0
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=0 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=no importado=no subcuenta=no whatsapp=no proveedor=ELEVENLABS_VERIFIED
+   AVISO: la huella de voz del Studio cambió con las piezas: reconocer otra vez la configuración autorizada (CRM → Studio → Integraciones → Voz, o GET/POST integrations/config) antes de seguir; si el monitor del H7 está encendido, su expectativa pasa a ser la de la fase 2 (bash /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/h8-voice-scope.sh expectativa fase2)
+   vuelta atrás exacta (el fichero de antes): install -m 600 -o alejodev -g staff /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-fase2-set-20261110-043344 /Users/alejodev/.cache/ironbody-banco-h8-ops8d/api/backend/.env && cd /Users/alejodev/.cache/ironbody-banco-h8-ops8d/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+MANDO fase2-set APLICADO (copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-fase2-set-20261110-043344)
+════ 1 · registro · --solo-comprobar antes: FALTA ALGO (código 3; solo GET) · código 3
+== h8-secrets-register.sh · 2026-11-10T04:34:01Z · comprobar · política ninguna
+   presencia en el entorno (sin valores): clave=si herramientas=si iniciacion=no webhook=si base=si region=default
+   secreto ironbody-voz-herramientas  no existe: se crearía
+   secreto ironbody-voz-iniciacion    falta en el entorno: se generaría y se crearía
+   webhook ironbody-voz-post-llamada  no existe: se crearía · HTTP 200
+SECRETOS Y WEBHOOK: FALTA ALGO (arriba, qué; solo GET; no se ha tocado nada)
+════ 1 · registro · aplicar: SECRETOS Y WEBHOOK REGISTRADOS · código 0
+== h8-secrets-register.sh · 2026-11-10T04:34:01Z · aplicar · política ninguna
+   presencia en el entorno (sin valores): clave=si herramientas=si iniciacion=no webhook=si base=si region=default
+0. copia previa del fichero de entorno: /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-secretos-20261110-043401 (600, alejodev)
+   ELEVENLABS_INITIATION_SECRET añadida
+   ELEVENLABS_INITIATION_SECRET generado aquí (openssl rand -hex 32) y escrito; no se imprime
+   secreto ironbody-voz-herramientas  CREADO · id sec_caphe1vnr2mff6ypy1pynvepbz · HTTP 200
+   secreto ironbody-voz-iniciacion    CREADO · id sec_v2fx7t7hftgvpk828zqpr5sbq3 · HTTP 200
+   webhook ironbody-voz-post-llamada  CREADO · id wh_2n6e4100eszkr4nm1mkm8mzybn · HTTP 200
+   ELEVENLABS_TOOL_SECRET_REF añadida
+   ELEVENLABS_INITIATION_SECRET_REF añadida
+   ELEVENLABS_POST_CALL_WEBHOOK_REF añadida
+   ELEVENLABS_WEBHOOK_SECRET sustituida
+1. el fichero parsea · caché alejodev 600 · fichero de entorno alejodev:staff 600
+2. workers: 13 RUNNING (antes 13) · 0 BACKOFF/FATAL
+3. post-llamada sin firma → 401 (esperado 401)
+4. configuración efectiva (ids y presencia, sin valores): {"tool_ref":"sec_caphe1vnr2mff6ypy1pynvepbz","initiation_ref":"sec_v2fx7t7hftgvpk828zqpr5sbq3","post_call_ref":"wh_2n6e4100eszkr4nm1mkm8mzybn","initiation_secret":true,"webhook_secret":true}
+   AVISO: la huella de voz del Studio cambió: reconocer otra vez la configuración autorizada (Studio → Integraciones → Voz)
+   AVISO: ElevenLabs no usa el webhook ni los secretos hasta que un agente los cite (la publicación y el laboratorio compilan las referencias)
+   vuelta atrás del fichero: install -m 600 -o alejodev -g staff /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-secretos-20261110-043401 /Users/alejodev/.cache/ironbody-banco-h8-ops8d/api/backend/.env && cd /Users/alejodev/.cache/ironbody-banco-h8-ops8d/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+   lo creado en ElevenLabs se queda: si hay que quitarlo, el propietario en la consola (Agents → Settings)
+SECRETOS Y WEBHOOK REGISTRADOS (copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-secretos-20261110-043401)
+════ 1 · registro · --solo-comprobar después: TODO REGISTRADO (código 0) · código 0
+== h8-secrets-register.sh · 2026-11-10T04:34:09Z · comprobar · política ninguna
+   presencia en el entorno (sin valores): clave=si herramientas=si iniciacion=si webhook=si base=si region=default
+   secreto ironbody-voz-herramientas  ya registrado (el id del entorno es el de ElevenLabs; su VALOR no se puede leer: si el secreto del entorno cambió después, repetir con --actualizar) · id sec_caphe1vnr2mff6ypy1pynvepbz
+   secreto ironbody-voz-iniciacion    ya registrado (el id del entorno es el de ElevenLabs; su VALOR no se puede leer: si el secreto del entorno cambió después, repetir con --actualizar) · id sec_v2fx7t7hftgvpk828zqpr5sbq3
+   webhook ironbody-voz-post-llamada  ya registrado (el id del entorno es el de ElevenLabs; su VALOR no se puede leer: si el secreto del entorno cambió después, repetir con --actualizar) · id wh_2n6e4100eszkr4nm1mkm8mzybn · HTTP 200
+SECRETOS Y WEBHOOK: TODO REGISTRADO (solo GET; no se ha tocado nada)
+════ 1 · el-verificar.sh <fichero> --solo-clave (rotación DESPUÉS del registro, H-16) → VERIFICACIÓN TERMINADA · código 0
+0. partida: ── Voz · ElevenLabs · doctor ── · workers 13/0
+1. modo --solo-clave: se sustituye solo la clave; secretos, agente y región se conservan
+   ELEVENLABS_ENABLED sustituida
+   ELEVENLABS_API_KEY sustituida
+   parsea · permisos alejodev 600
+2. caché alejodev 600 · doctor con la bandera apagada:
+   ── Voz · ElevenLabs · doctor ──
+   Estado     : ELEVENLABS_DISABLED
+   Proveedor  : none
+   Bandera    : apagada (ELEVENLABS_ENABLED)
+   Región     : default
+   Faltan     : ninguna
+   ELEVENLABS_ENABLED=true
+3. doctor --verify (un GET al agente):
+   ── Voz · ElevenLabs · doctor ──
+   Estado     : ELEVENLABS_UNVERIFIED
+   Proveedor  : elevenlabs
+   Bandera    : encendida (ELEVENLABS_ENABLED)
+   Región     : default
+   Faltan     : ninguna
+   Llamadas   : cerradas en el código (la constante de VoiceCallPolicy): ni salientes ni entrantes autorizadas.
+   
+4. instantánea de verificación (integrations-snapshot --verify-voice):
+   meta_ads: sin cambios (huella a14fc2eb7434…)
+   twilio: sin cambios (huella 7f8743a62b1a…)
+   voice: anotada (huella b721e374e433…)
+   Verificación de voz: credenciales válidas; evidencia guardada y marca de la telefonía escrita (30 días).
+5. estado efectivo:
+   {"calls_enabled_in_code":false,"elevenlabs_enabled":true,"has_key":true,"agent_id_set":true,"twilio_voice_enabled":false}
+   workers 13/0 · secret-exposure: OK · ERROR log: 0
+   integrations-doctor (voz): 
+6. fichero de la clave destruido · copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-elevenlabs-20261110-043409 (600 root) · vuelta atrás: ELEVENLABS_ENABLED=false y la caché · modo: solo-clave
+ELEVENLABS VERIFICACIÓN TERMINADA
+════ API b GET admin/ultron-studio/integrations/config
+{"http":200,"body":{"ok":true,"data":{"providers":[{"provider":"meta_ads","state":"never_authorized","effective":{"token":"[oculto]","accounts":[{"ref":"***1001"},{"ref":"***2002"},{"ref":"***3003"}],"graphVersion":"v26.0","syncEnabled":true,"syncDays":7,"staleMinutes":180,"timezone":"America/Bogota"},"effectiveFingerprint":"a14fc2eb743477db9b1f6bb60eaec171360a02a95e12fb355af4a4f25b901e55","authorized":null,"observed":{"uuid":"15c66523-6911-4c75-a737-ea3ea9b2ff1b","fingerprint":"a14fc2eb743477db9b1f6bb60eaec171360a02a95e12fb355af4a4f25b901e55","at":"2026-11-10T04:30:26+00:00"},"drift":[]},{"provider":"twilio","state":"never_authorized","effective":{"otpDriver":"twilio","accountSid":{"present":true,"source":"TWILIO_SID","ref":"AC…d237"},"authToken":{"present":true,"source":"TWILIO_TOKEN","fp":"55538f87"},"aliasesConsistent":{"sid":true,"token":"[oculto]"},"verifyServiceSid":{"present":true,"ref":"VA…6bee"},"from":{"present":false},"apiBase":{"official":true},"verifyBase":{"official":true},"rateLimitName":{"present":false},"sendEnabled":true,"legacySenderEnabled":false,"costSoftUsd":"6.00","costHardUsd":"12.00","probe":{"enabled":false,"credential":"otp"}},"effectiveFingerprint":"7f8743a62b1a29c9ecf53cb77267087b9a823618ec54a19d289cce1837eeff31","authorized":null,"observed":{"uuid":"53336bd3-41b8-4aa8-a324-8931d68d5548","fingerprint":"7f8743a62b1a29c9ecf53cb77267087b9a823618ec54a19d289cce1837eeff31","at":"2026-11-10T04:30:26+00:00"},"drift":[]},{"provider":"voice","state":"n
+════ API b POST admin/ultron-studio/integrations/config/acknowledge
+{"http":201,"body":{"ok":true,"data":{"replayed":false,"snapshot":{"uuid":"72e1b5ba-4ccc-4ca9-884f-23a5508a4a17","provider":"voice","fingerprint":"b721e374e433e7889394d09c5880c0731d6ae3ceac891b8b51f3ef70596ab499","at":"2026-11-10T04:34:18+00:00","by":{"name":"Beto Revisor (OPS8-d)","role":"Super Admin"},"note":"OPS8-d: piezas de la fase 2 en el banco"}}}}
+════ 1 · mando · estado tras la fase 2: las tres referencias y la base presentes, todo apagado · código 0
+== estado de la voz (configuración efectiva del proceso CLI, la misma caché que el web; sin valores de secretos)
+   código desplegado: HEAD a608450 · constante de llamadas: cerrada
+   salientes: no · alcance canary · cupo/día 0 · presupuesto/día 0 US$ · Twilio Voice no
+   entrantes: no · cupo/día 0
+   laboratorio hablado: no · driver fake · presupuesto/día 0 US$ · por sesión 0 US$ · 300 s · 5 sesiones/día
+   monitor de voz: no · publicar la voz (Studio): no · monitor del H7: no (expectativa: twilio:connected_otp_only,twilio_voice:not_configured,elevenlabs:ELEVENLABS_VERIFIED)
+   piezas no secretas: VOICE_WEBHOOK_BASE_URL https://api.ironbody-banco.invalid · ELEVENLABS_AGENT_PHONE_NUMBER_ID — · TWILIO_VOICE_FROM — · TWILIO_VOICE_ACCOUNT_SID —
+   referencias (ids, no secretos): herramientas sec_caphe1vnr2mff6ypy1pynvepbz · iniciación sec_v2fx7t7hftgvpk828zqpr5sbq3 · webhook post-llamada wh_2n6e4100eszkr4nm1mkm8mzybn
+   secretos (solo presencia): ELEVENLABS_API_KEY presente · ELEVENLABS_WEBHOOK_SECRET presente · ELEVENLABS_TOOL_SECRET presente · ELEVENLABS_INITIATION_SECRET presente · TWILIO_VOICE_API_KEY_SID falta · TWILIO_VOICE_API_KEY_SECRET falta · TWILIO_VOICE_SIGNING_TOKEN falta
+   número de voz igual a uno de WhatsApp: no · ElevenLabs según el Studio: ELEVENLABS_VERIFIED
+   el número admite entrantes (VOICE_NUMBER_INBOUND_CAPABLE): sin declarar (se trata como «admite»)
+   reserva por saliente (VoiceCostGuard): 0.6105 US$ a un móvil sin transferencia · 1.1220 US$ a un fijo con transferencia
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=0 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=no importado=no subcuenta=no whatsapp=no proveedor=ELEVENLABS_VERIFIED
+   programador (total · del Studio · de voz): 27 0 0 (de voz: 4 con el monitor de voz encendido, 0 apagado)
+   workers (RUNNING · BACKOFF/FATAL): 13 0 · ironbody-voice en RUNNING: 0 (lo exige «salientes on»)
+   fichero de entorno: alejodev:staff 600 (C-14: www-data 600 o root:www-data 640)
+   integrations-doctor confirma la expectativa del monitor del H7: sí
+════ 2a · mando · lab on --driver=fake (1.00/0.50 US$, 3 sesiones, 300 s) → APLICADO · código 0
+0. lab-on · copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-lab-on-20261110-043420 (600, alejodev) · fichero alejodev:staff 600 · programador 27 0 0 · workers 13 0 · constante cerrada
+   VOICE_LAB_DAILY_BUDGET_USD sustituida
+   VOICE_LAB_DRIVER sustituida
+   VOICE_LAB_ENABLED sustituida
+   VOICE_LAB_MAX_SESSIONS_PER_DAY añadida
+   VOICE_LAB_MAX_SESSION_SECONDS añadida
+   VOICE_LAB_SESSION_BUDGET_USD añadida
+1. claves escritas (sin valores): VOICE_LAB_DAILY_BUDGET_USD VOICE_LAB_DRIVER VOICE_LAB_ENABLED VOICE_LAB_MAX_SESSIONS_PER_DAY VOICE_LAB_MAX_SESSION_SECONDS VOICE_LAB_SESSION_BUDGET_USD · fichero alejodev:staff 600
+2. el fichero parsea · caché: alejodev 600
+3. configuración efectiva, antes → después (sin valores de secretos): lab: false → true · lab_budget: "0" → "1.00" · lab_session_budget: "0" → "0.50" · lab_sessions: 5 → 3
+   motor, H4–H7 y ElevenLabs (proveedor y Studio) sin cambios
+   el fichero de entorno es la copia previa salvo 6 clave(s) de la orden
+4. programador (total · del Studio · de voz): 27 0 0 → 27 0 0 (esperado 27 0 0)
+5. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+6. admin/voice/status sin token → 401
+7. local.ERROR en laravel*.log: 0 → 0
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=1 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=no importado=no subcuenta=no whatsapp=no proveedor=ELEVENLABS_VERIFIED
+   vuelta atrás exacta (el fichero de antes): install -m 600 -o alejodev -g staff /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-lab-on-20261110-043420 /Users/alejodev/.cache/ironbody-banco-h8-ops8d/api/backend/.env && cd /Users/alejodev/.cache/ironbody-banco-h8-ops8d/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+   vuelta atrás funcional: bash /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/h8-voice-scope.sh lab off
+MANDO lab-on APLICADO (copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-lab-on-20261110-043420)
+════ smoke fase 2a · código 1
+== Smoke del Hito 8 (fase 2a) · 2026-11-10T04:34:36Z · http://127.0.0.1:8431/api
+OK      presupuestos de rendimiento válidos: perf8-2026-11-08 · 11 rutas · sha256 2e495a753e5a (/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/docs/ultron-studio/ops/perf-h8/presupuestos-h8.json)
+OK      configuración de la voz de la fase 2a: {"calls_in_code":false,"inbound":false,"outbound":false,"lab":true,"voice_monitor":false,"publishing":false,"twilio_voice":false,"studio_monitor":false}
+OK      el programador: 27 tareas, 0 del Studio y 0 de voz (las de los monitores encendidos)
+OK      voice:doctor --telefonia (sin red), la de la fase 2a: estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=1 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=no subcuenta=no proveedor=ELEVENLABS_VERIFIED
+OK      monitor del H7 en seco (integraciones), sin deriva de la configuración autorizada: [ok]
+INFO    canario del motor configurado: sí (su id no se imprime)
+INFO    centinela exacto: 19 huellas saladas de secretos del servidor
+OK      18 tablas ultron_studio_* y 7 voice_* en la base
+cuenta 1 activa como Super Admin
+== Smoke del Hito 8 (fase 2a) · superadmin · http://127.0.0.1:8431/api
+OK      login de la cuenta de smoke  [HTTP 200]
+OK      GET admin/voice/status → 200  [HTTP 200]
+OK      la constante de las llamadas, cerrada (VoiceCallPolicy::CALLS_ENABLED_IN_CODE = false)  [False]
+OK      banderas de la fase 2a: inbound no, outbound no, twilioVoice no, lab sí  [{"inbound": false, "outbound": false, "twilioVoice": false, "lab": true, "monitor": false}]
+OK      sin flags.publishing en la telefonía (E4-1: la bandera de publicar vive en el Studio)
+OK      la cadena de voz sin entradas (canary y rest: none) y el freno suelto  [{"canary": "none", "rest": "none"} · freno False]
+OK      cupos y presupuesto a 0 (salientes al día, entrantes al día, µUS$ al día)  [{"outboundDailyCap": 0, "inboundDailyCap": 0, "dailyBudgetMicros": 0}]
+INFO    piezas de la fase 2 (informativo en la 2a: el laboratorio no las necesita)  [{"configured": false, "collidesWithMessaging": false, "importedNumberIdConfigured": false, "inboundCapable": null, "observed": null, "check": "unverified", "checkReason": "no_observation"} · subcuenta False]
+INFO    proveedor según la telefonía  [ELEVENLABS_VERIFIED (E4-6: dice UNVERIFIED hasta que B8 añada su lector de la verificación, antes de la fase 3)]
+OK      GET admin/voice/calls → 200 (fase 2a: puede haber llamadas de canarios)  [HTTP 200 · total 0]
+OK      GET admin/voice/contacts → 200, contactos vacíos  [HTTP 200 · total 0]
+OK      GET admin/voice/calls/<inventado> → 404 call_not_found  [HTTP 404 call_not_found]
+OK      GET admin/voice/metrics → 200 sin llamadas vivas ni ambiguas, freno suelto  [HTTP 200 · vivas 0 · ambiguas 0]
+OK      las 7 POST de la telefonía con un cuerpo vacío → 422 validation_failed (antes de la puerta: nada se escribe)
+OK      POST admin/voice/calls/<inventado>/hangup → 404 call_not_found (antes de hablar con Twilio)  [HTTP 404 call_not_found]
+OMITIDO POST /admin/ultron-studio/voice-lab/sessions  [laboratorio hablado encendido: abrir, cerrar o juzgar una sesión escribe o gasta; el smoke no lo hace]
+OMITIDO POST /admin/ultron-studio/voice-lab/sessions/<inventado>/end  [laboratorio hablado encendido: abrir, cerrar o juzgar una sesión escribe o gasta; el smoke no lo hace]
+OMITIDO POST /admin/ultron-studio/voice-lab/sessions/<inventado>/verdict  [laboratorio hablado encendido: abrir, cerrar o juzgar una sesión escribe o gasta; el smoke no lo hace]
+OK      las 18 rutas nuevas del Studio con sesión que no escriben en la fase 2a: lecturas 200, inventados 404, laboratorio encendido (lista 200, inventada 404), publicar y promover 409 voice_publishing_disabled, el resto 422 antes de escribir
+INFO    GET voice/profiles (informativo desde la fase 2: el laboratorio y la publicación usan perfiles)  [total 0]
+OK      GET voice/publications: publicar apagado (voice_publishing_disabled) y la cadena de voz sin entradas  [publicar {"enabled": false, "code": "voice_publishing_disabled"} · entradas 0]
+INFO    GET voice-lab/status  [{"enabled": true}]
+OK      GET integrations/voice (ruta 45) → 200  [HTTP 200]
+OK      ruta 45: ElevenLabs en ELEVENLABS_VERIFIED (E1-12; lo afirma el Studio con la verificación de menos de 30 días)  [ELEVENLABS_VERIFIED]
+OK      ruta 45: publicar la voz apagado (publishing.enabled false, E4-1)  [{"available": true, "enabled": false, "code": "voice_publishing_disabled"}]
+OK      ruta 45: «can» con las 7 llaves de D8-22, todas true para el Super Admin  [approve=True, telephonyCallPlace=True, telephonyContactsManage=True, telephonyView=True, voiceLabRun=True, voiceManage=True, voicePublish=True]
+== Presupuestos de rendimiento · /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/docs/ultron-studio/ops/perf-h8/presupuestos-h8.json · perf8-2026-11-08 · sha256 2e495a753e5a · 11 rutas · 1 + 5 muestras, ≥ 0.6 s
+OK      presupuesto GET admin/voice/status: mediana 39.1 ms ≤ 290 · máximo 69.9 ms ≤ 310 · 1295 B ≤ 7168  [n 5 · calibración: p50 ≤ 90 · p95 ≤ 120]
+OK      presupuesto GET admin/voice/calls: mediana 55.0 ms ≤ 190 · máximo 64.1 ms ≤ 220 · 75 B ≤ 24576  [n 5 · calibración: p50 ≤ 105 · p95 ≤ 115]
+OK      presupuesto GET admin/voice/metrics: mediana 92.3 ms ≤ 280 · máximo 129.0 ms ≤ 290 · 300 B ≤ 6144  [n 5 · calibración: p50 ≤ 143 · p95 ≤ 194]
+OK      presupuesto GET admin/voice/contacts: mediana 66.2 ms ≤ 210 · máximo 77.6 ms ≤ 240 · 75 B ≤ 11264  [n 5 · calibración: p50 ≤ 117 · p95 ≤ 128]
+OK      presupuesto GET voice/profiles: mediana 61.1 ms ≤ 170 · máximo 80.2 ms ≤ 220 · 673 B ≤ 28672  [n 5 · calibración: p50 ≤ 112 · p95 ≤ 131]
+OK      presupuesto GET voice/publications: mediana 72.6 ms ≤ 200 · máximo 76.9 ms ≤ 230 · 903 B ≤ 40960  [n 5 · calibración: p50 ≤ 123 · p95 ≤ 127]
+OK      presupuesto GET voice/brakes: mediana 57.8 ms ≤ 170 · máximo 65.4 ms ≤ 220 · 51 B ≤ 7168  [n 5 · calibración: p50 ≤ 108 · p95 ≤ 116]
+OK      presupuesto GET voice-lab/status: mediana 108.8 ms ≤ 170 · máximo 149.0 ms ≤ 210 · 2326 B ≤ 7168  [n 5 · calibración: p50 ≤ 164 · p95 ≤ 224]
+OK      presupuesto GET voice-lab/sessions: mediana 89.9 ms ≤ 190 · máximo 123.0 ms ≤ 220 · 689 B ≤ 52224  [n 5 · calibración: p50 ≤ 140 · p95 ≤ 185]
+FALLO   presupuesto GET integrations/voice: máximo 275.6 > 270  [n 5 · repetida: la primera medida dio máximo 622.1 > 270 · calibración: p50 ≤ 193 · p95 ≤ 414]
+OK      presupuesto GET voice/canary-evidence: mediana 87.8 ms ≤ 250 · máximo 103.8 ms ≤ 290 · 335 B ≤ 5120  [n 5 · calibración: p50 ≤ 138 · p95 ≤ 156]
+PRESUPUESTOS: 10 OK · 1 FALLO · 0 OMITIDO · 90 s (de ellos 53 s esperando a los cupos)
+OK      telefonía del CRM sin sesión: las 13 rutas → 401 (5 GET y 8 POST)
+OK      las 4 públicas sin credencial → 401 con su motivo (unauthorized · invalid_signature · verdict unauthorized · invalid_signature)
+OK      las 4 públicas responden el 401 en menos de 140 ms (máximo 20.6 ms; sin red saliente en ese camino)  [21, 15, 20, 16 ms]
+OK      una herramienta con un nombre fuera del patrón [a-z_]{1,48} → 404 (la ruta no casa)  [HTTP 404]
+OK      /webhooks/voice/elevenlabs/initiation con 9009 bytes sin credencial → 413 (tope de 8 KB antes de autenticar)  [HTTP 413 payload_too_large]
+OK      /voice/tools/consultar_planes con 9009 bytes sin credencial → 413 (tope de 8 KB antes de autenticar)  [HTTP 413 payload_too_large]
+OK      /webhooks/voice/twilio/usage-trigger con 70005 bytes sin credencial → 413 (tope de 64 KB antes de autenticar)  [HTTP 413 payload_too_large]
+INFO    post-call con 1048576 bytes (= el tope de 1 MB) sin firma: responde Laravel (401 invalid_signature): nginx deja pasar el tope entero
+OK      las 21 rutas nuevas del Studio sin sesión → 401 (8 GET y 13 POST)
+OK      cuerpos (74): sin claves prohibidas (teléfono, huellas, ids de Meta, textos del proveedor, firmas)
+OK      cuerpos (74): cada secreto solo como presencia, origen, huella de 8 hex o referencia corta
+OK      cuerpos (74): sin credenciales, sin APP_KEY y sin rutas del servidor
+OK      cuerpos (74): sin teléfonos ni ids de Meta (10 cifras o más)
+OK      cuerpos (74): ninguna clave nombra una conversación
+OK      cuerpos (74): ninguno lleva el id de la conversación canaria
+OK      cuerpos (74): ninguno contiene un secreto del servidor (centinela exacto, 19 huellas saladas)
+OK      Cache-Control «no-store, private» en las 139 respuestas de /api/admin
+OK      limitador: ninguna respuesta 429  [0 respuestas 429]
+OK      ninguna respuesta 5xx  [0 respuestas 5xx]
+RESUMEN (superadmin): 47 OK · 1 FALLO · 3 OMITIDO
+== Base, registros y red (solo lectura)
+OK      ninguna fila nueva de ultron_studio_* ni de voice_* nombra a la cuenta 1
+OK      recuento exacto de las 25 tablas (18 del Studio y 7 de la voz) igual antes y después: ninguna escritura, ningún agente, ninguna instantánea, ningún evento de llamada
+OK      incidentes de IRON GUARD del Studio (filas · ocurrencias): 0 0, los mismos
+OK      cola voice: 0 trabajos (antes 0)
+OK      canal voice durante el smoke: solo los rechazos esperados de las rutas públicas [voice.inbound.unauthorized×1(WARNING) voice.post_call.rejected×2(WARNING) voice.tool.unauthorized×1(WARNING) voice.twilio.usage_rejected×1(WARNING) ] (nada sale a la red ni se encola)
+OK      laravel*.log: ningún ERROR durante el smoke
+OK      cero red saliente (valla): bloqueos 0 → 0
+OK      monitor del H7 en seco (integraciones) igual que antes del smoke: [ok]
+cuenta 1 en reposo: inactiva, Super Admin, sesiones borradas: 1
+OK      token tras desactivar → 403
+OK      sesiones de la cuenta tras el smoke: 0
+SMOKE H8: código de salida 1
+════ API a GET admin/ultron-studio/draft
+{"http":200,"body":{"ok":true,"data":{"exists":false,"isBaseline":true,"uuid":null,"revision":0,"savedAt":null,"catalogVersion":"2026-10-19.1","contentHash":"c1d5fff543455240ccd7da6d6db09924c06007bf11809dc5289b57e9317b7e19","content":{"definition":{"layers":["knowledge","persona","intent","context","memory","strategy","rules","composer","integrations","governance"],"edgeIds":["E01","E02","E03","E04","E05","E06","E07","E08","E09","E10","E11","E12","E13","E15","E17","E18","E19"]},"configs":{"knowledge":{"sources":["Base de conocimiento aprobada","Planes vendibles","Clases y horarios"],"strictFacts":true},"persona":{"tone":"cercano","emojis":true,"maxChars":320},"intent":{"driver":"entorno","fallback":"preguntar"},"context":{"windowTurns":10},"memory":{"useLeadProfile":true},"strategy":{"goal":"cita","offerPriority":["Plan insignia (is_recommended)"],"discountsAllowed":false},"rules":{"handoffOnlyCorroborated":true,"paymentLinksEnabled":false},"composer":{"critic":true,"retry":true},"integrations":{"channel":"whatsapp","appointments":true},"governance":{"enabled":true,"canaryOnly":true,"autoBrake":true}},"layout":{"positions":{"knowledge":{"x":672,"y":0},"persona":{"x":1344,"y":0},"intent":{"x":672,"y":352},"context":{"x":336,"y":352},"memory":{"x":672,"y":704},"strategy":{"x":1008,"y":352},"rules":{"x":1680,"y":352},"composer":{"x":1344,"y":352},"integrations":{"x":1344,"y":704},"governance":{"x":1680,"y":0}},"viewport":null}},"validation":{"catalogVersion":"2026-10-19.1","publ
+════ API a PUT admin/ultron-studio/draft
+{"http":200,"body":{"ok":true,"data":{"exists":true,"isBaseline":true,"uuid":"906ae5ae-36f1-49da-b70a-62767fd2f345","revision":1,"savedAt":"2026-11-10T04:36:25+00:00","catalogVersion":"2026-10-19.1","contentHash":"c1d5fff543455240ccd7da6d6db09924c06007bf11809dc5289b57e9317b7e19","content":{"definition":{"layers":["knowledge","persona","intent","context","memory","strategy","rules","composer","integrations","governance"],"edgeIds":["E01","E02","E03","E04","E05","E06","E07","E08","E09","E10","E11","E12","E13","E15","E17","E18","E19"]},"configs":{"knowledge":{"sources":["Base de conocimiento aprobada","Planes vendibles","Clases y horarios"],"strictFacts":true},"persona":{"tone":"cercano","emojis":true,"maxChars":320},"intent":{"driver":"entorno","fallback":"preguntar"},"context":{"windowTurns":10},"memory":{"useLeadProfile":true},"strategy":{"goal":"cita","offerPriority":["Plan insignia (is_recommended)"],"discountsAllowed":false},"rules":{"handoffOnlyCorroborated":true,"paymentLinksEnabled":false},"composer":{"critic":true,"retry":true},"integrations":{"channel":"whatsapp","appointments":true},"governance":{"enabled":true,"canaryOnly":true,"autoBrake":true}},"layout":{"positions":{"knowledge":{"x":672,"y":0},"persona":{"x":1344,"y":0},"intent":{"x":672,"y":352},"context":{"x":336,"y":352},"memory":{"x":672,"y":704},"strategy":{"x":1008,"y":352},"rules":{"x":1680,"y":352},"composer":{"x":1344,"y":352},"integrations":{"x":1344,"y":704},"governance":{"x":1680,"y":0}},"viewport":nu
+════ API a POST admin/ultron-studio/versions
+{"http":201,"body":{"ok":true,"data":{"uuid":"3e7ccf91-1d18-4e62-b06c-c118a3f05513","label":"Versión del ensayo OPS8-d","status":"DRAFT","statusLabel":"Creada, sin enviar","contentHash":"9060d16439064921a5d83594bf495c30841d4a77c2aa64074f69a032de966e56","shortHash":"9060d164","catalogVersion":"2026-10-19.1","createdBy":{"name":"Ana Autora (OPS8-d)","role":"Super Admin"},"mine":true,"createdAt":"2026-11-10T04:36:29+00:00","submittedAt":null,"warnings":["opcional-E14","opcional-E16"],"blocking":0,"review":null,"engineReads":true,"note":null,"content":{"definition":{"layers":["knowledge","persona","intent","context","memory","strategy","rules","composer","integrations","governance"],"edgeIds":["E01","E02","E03","E04","E05","E06","E07","E08","E09","E10","E11","E12","E13","E15","E17","E18","E19"]},"configs":{"knowledge":{"sources":["Base de conocimiento aprobada","Planes vendibles","Clases y horarios"],"strictFacts":true},"persona":{"tone":"cercano","emojis":true,"maxChars":320},"intent":{"driver":"entorno","fallback":"preguntar"},"context":{"windowTurns":10},"memory":{"useLeadProfile":true},"strategy":{"goal":"cita","offerPriority":["Plan insignia (is_recommended)"],"discountsAllowed":false},"rules":{"handoffOnlyCorroborated":true,"paymentLinksEnabled":false},"composer":{"critic":true,"retry":true},"integrations":{"channel":"whatsapp","appointments":true},"governance":{"enabled":true,"canaryOnly":true,"autoBrake":true}},"layout":{"positions":{"knowledge":{"x":672,"y":0},"persona"
+════ API a POST admin/ultron-studio/versions/3e7ccf91-1d18-4e62-b06c-c118a3f05513/submit
+{"http":200,"body":{"ok":true,"data":{"uuid":"3e7ccf91-1d18-4e62-b06c-c118a3f05513","label":"Versión del ensayo OPS8-d","status":"REVIEW_REQUIRED","statusLabel":"Con avisos · espera revisión","contentHash":"9060d16439064921a5d83594bf495c30841d4a77c2aa64074f69a032de966e56","shortHash":"9060d164","catalogVersion":"2026-10-19.1","createdBy":{"name":"Ana Autora (OPS8-d)","role":"Super Admin"},"mine":true,"createdAt":"2026-11-10T04:36:29+00:00","submittedAt":"2026-11-10T04:36:32+00:00","warnings":["opcional-E14","opcional-E16"],"blocking":0,"review":null,"engineReads":true,"note":null,"content":{"definition":{"layers":["knowledge","persona","intent","context","memory","strategy","rules","composer","integrations","governance"],"edgeIds":["E01","E02","E03","E04","E05","E06","E07","E08","E09","E10","E11","E12","E13","E15","E17","E18","E19"]},"configs":{"knowledge":{"sources":["Base de conocimiento aprobada","Planes vendibles","Clases y horarios"],"strictFacts":true},"persona":{"tone":"cercano","emojis":true,"maxChars":320},"intent":{"driver":"entorno","fallback":"preguntar"},"context":{"windowTurns":10},"memory":{"useLeadProfile":true},"strategy":{"goal":"cita","offerPriority":["Plan insignia (is_recommended)"],"discountsAllowed":false},"rules":{"handoffOnlyCorroborated":true,"paymentLinksEnabled":false},"composer":{"critic":true,"retry":true},"integrations":{"channel":"whatsapp","appointments":true},"governance":{"enabled":true,"canaryOnly":true,"autoBrake":true}},"layout":{"posi
+════ API a POST admin/ultron-studio/versions/3e7ccf91-1d18-4e62-b06c-c118a3f05513/approve
+{"http":403,"body":{"ok":false,"code":"four_eyes_required","message":"Nadie aprueba ni rechaza lo que creó: pide a otra persona con permiso que revise esta versión."}}
+════ API b POST admin/ultron-studio/versions/3e7ccf91-1d18-4e62-b06c-c118a3f05513/approve
+{"http":200,"body":{"ok":true,"data":{"uuid":"3e7ccf91-1d18-4e62-b06c-c118a3f05513","label":"Versión del ensayo OPS8-d","status":"APPROVED","statusLabel":"Aprobada","contentHash":"9060d16439064921a5d83594bf495c30841d4a77c2aa64074f69a032de966e56","shortHash":"9060d164","catalogVersion":"2026-10-19.1","createdBy":{"name":"Ana Autora (OPS8-d)","role":"Super Admin"},"mine":false,"createdAt":"2026-11-10T04:36:29+00:00","submittedAt":"2026-11-10T04:36:32+00:00","warnings":["opcional-E14","opcional-E16"],"blocking":0,"review":{"decision":"approved","by":{"name":"Beto Revisor (OPS8-d)","role":"Super Admin"},"at":"2026-11-10T04:36:35+00:00","note":null,"acknowledgedWarnings":["opcional-E14","opcional-E16"]},"engineReads":true,"note":null,"content":{"definition":{"layers":["knowledge","persona","intent","context","memory","strategy","rules","composer","integrations","governance"],"edgeIds":["E01","E02","E03","E04","E05","E06","E07","E08","E09","E10","E11","E12","E13","E15","E17","E18","E19"]},"configs":{"knowledge":{"sources":["Base de conocimiento aprobada","Planes vendibles","Clases y horarios"],"strictFacts":true},"persona":{"tone":"cercano","emojis":true,"maxChars":320},"intent":{"driver":"entorno","fallback":"preguntar"},"context":{"windowTurns":10},"memory":{"useLeadProfile":true},"strategy":{"goal":"cita","offerPriority":["Plan insignia (is_recommended)"],"discountsAllowed":false},"rules":{"handoffOnlyCorroborated":true,"paymentLinksEnabled":false},"composer":{"critic":true,"re
+════ API a POST admin/ultron-studio/voice/profiles
+{"http":201,"body":{"ok":true,"data":{"uuid":"5c95417e-0285-4e93-8f55-7dfd8db3f104","revision":1,"basedOn":null,"label":"Voz del ensayo OPS8-d","status":"draft","statusLabel":"Borrador","contentHash":"196f14a55428352cf25ff05eb2fe8fd5920d8f53eaa0f0b225aa05f4de6b9cb1","shortHash":"196f14a5","language":"es","maxDurationSeconds":300,"retentionDays":30,"recordCalls":false,"recordVoice":false,"transferCount":0,"createdBy":{"name":"Ana Autora (OPS8-d)","role":"Super Admin"},"createdAt":"2026-11-10T04:36:37+00:00","submittedBy":null,"submittedAt":null,"reviewedBy":null,"reviewedAt":null,"reviewNote":null,"actions":{"submit":{"allowed":true},"approve":{"allowed":false,"code":"four_eyes_required"},"reject":{"allowed":false,"code":"four_eyes_required"}},"content":{"format":"ultron-voice-profile/1","voiceId":"pNInz6obpgDQGcFmaJgB","language":"es","aiNotice":"Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.","greetings":{"inbound":"¿En qué te puedo ayudar hoy?","outbound":"Te llamo porque pediste información de Iron Body."},"holes":{"presentation":"Te ayudo con planes, horarios y la sede.","closing":"Gracias por tu tiempo."},"maxDurationSeconds":300,"tools":["consultar_planes","consultar_horarios","solicitar_humano",
+════ API a POST admin/ultron-studio/voice/profiles/5c95417e-0285-4e93-8f55-7dfd8db3f104/submit
+{"http":200,"body":{"ok":true,"data":{"uuid":"5c95417e-0285-4e93-8f55-7dfd8db3f104","revision":1,"basedOn":null,"label":"Voz del ensayo OPS8-d","status":"submitted","statusLabel":"En revisión","contentHash":"196f14a55428352cf25ff05eb2fe8fd5920d8f53eaa0f0b225aa05f4de6b9cb1","shortHash":"196f14a5","language":"es","maxDurationSeconds":300,"retentionDays":30,"recordCalls":false,"recordVoice":false,"transferCount":0,"createdBy":{"name":"Ana Autora (OPS8-d)","role":"Super Admin"},"createdAt":"2026-11-10T04:36:37+00:00","submittedBy":{"name":"Ana Autora (OPS8-d)","role":"Super Admin"},"submittedAt":"2026-11-10T04:36:38+00:00","reviewedBy":null,"reviewedAt":null,"reviewNote":null,"actions":{"submit":{"allowed":false,"code":"invalid_transition"},"approve":{"allowed":false,"code":"four_eyes_required"},"reject":{"allowed":false,"code":"four_eyes_required"}},"content":{"format":"ultron-voice-profile/1","voiceId":"pNInz6obpgDQGcFmaJgB","language":"es","aiNotice":"Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.","greetings":{"inbound":"¿En qué te puedo ayudar hoy?","outbound":"Te llamo porque pediste información de Iron Body."},"holes":{"presentation":"Te ayudo con planes, horarios y la sede.","closing":"Gracias por
+════ API a POST admin/ultron-studio/voice/profiles/5c95417e-0285-4e93-8f55-7dfd8db3f104/approve
+{"http":403,"body":{"ok":false,"code":"four_eyes_required","message":"Nadie aprueba ni rechaza lo que creó: pide a otra persona con permiso que revise este perfil de voz."}}
+════ API b POST admin/ultron-studio/voice/profiles/5c95417e-0285-4e93-8f55-7dfd8db3f104/approve
+{"http":200,"body":{"ok":true,"data":{"uuid":"5c95417e-0285-4e93-8f55-7dfd8db3f104","revision":1,"basedOn":null,"label":"Voz del ensayo OPS8-d","status":"approved","statusLabel":"Aprobado","contentHash":"196f14a55428352cf25ff05eb2fe8fd5920d8f53eaa0f0b225aa05f4de6b9cb1","shortHash":"196f14a5","language":"es","maxDurationSeconds":300,"retentionDays":30,"recordCalls":false,"recordVoice":false,"transferCount":0,"createdBy":{"name":"Ana Autora (OPS8-d)","role":"Super Admin"},"createdAt":"2026-11-10T04:36:37+00:00","submittedBy":{"name":"Ana Autora (OPS8-d)","role":"Super Admin"},"submittedAt":"2026-11-10T04:36:38+00:00","reviewedBy":{"name":"Beto Revisor (OPS8-d)","role":"Super Admin"},"reviewedAt":"2026-11-10T04:36:39+00:00","reviewNote":null,"actions":{"submit":{"allowed":false,"code":"not_profile_owner"},"approve":{"allowed":false,"code":"invalid_transition"},"reject":{"allowed":false,"code":"invalid_transition"}},"content":{"format":"ultron-voice-profile/1","voiceId":"pNInz6obpgDQGcFmaJgB","language":"es","aiNotice":"Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.","greetings":{"inbound":"¿En qué te puedo ayudar hoy?","outbound":"Te llamo porque pediste información de Iron Body."},"holes":{"presentation"
+════ API a POST admin/ultron-studio/voice/compile-preview
+{"http":200,"body":{"ok":true,"data":{"purpose":"publication","specHash":"e1fdbafd68165ea14c269b5bc93d999ce508851507bfe5a491d4f7f50de3e7da","shortSpecHash":"e1fdbafd","compilerVersion":"ultron-voice-compiler/1","template":{"version":"ultron-voice-template/2","hash":"b60c71c291146ce96d05eb404898516a930b08768ece07bdefd5b4755f6caa15"},"spec":{"contract":"ultron-voice-spec/1","compilerVersion":"ultron-voice-compiler/1","template":{"version":"ultron-voice-template/2","hash":"b60c71c291146ce96d05eb404898516a930b08768ece07bdefd5b4755f6caa15"},"source":{"studioVersionUuid":"3e7ccf91-1d18-4e62-b06c-c118a3f05513","studioContentHash":"9060d16439064921a5d83594bf495c30841d4a77c2aa64074f69a032de966e56","catalogVersion":"2026-10-19.1","voiceProfileUuid":"5c95417e-0285-4e93-8f55-7dfd8db3f104","voiceProfileHash":"196f14a55428352cf25ff05eb2fe8fd5920d8f53eaa0f0b225aa05f4de6b9cb1"},"language":"es","voiceId":"pNInz6obpgDQGcFmaJgB","firstMessage":"Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.","systemPrompt":"Eres el asistente virtual de voz de Iron Body Workout, un gimnasio. Atiendes llamadas telefónicas en español de Colombia. Eres un sistema de inteligencia artificial y no lo ocultas: si te preguntan si eres una persona,
+════ API a POST admin/ultron-studio/voice-lab/sessions
+{"http":201,"body":{"ok":true,"data":{"uuid":"432704a7-6da6-4c59-b8e0-12e242080cef","status":"open","statusLabel":"Abierta","expired":false,"deadline":"2026-11-10T04:58:41+00:00","mode":"fake","version":{"uuid":"3e7ccf91-1d18-4e62-b06c-c118a3f05513","label":"Versión del ensayo OPS8-d","status":"APPROVED","shortHash":"9060d164"},"profile":{"uuid":"5c95417e-0285-4e93-8f55-7dfd8db3f104","label":"Voz del ensayo OPS8-d","revision":1,"status":"approved","shortHash":"196f14a5"},"agent":{"uuid":"3c160c74-a4bb-431b-86e5-b62b63b0ad21","status":"deployed","specHash":"e1fdbafd68165ea14c269b5bc93d999ce508851507bfe5a491d4f7f50de3e7da","compilerVersion":"ultron-voice-compiler/1","providerAgentId":"fake_lab_eea9de6547fe9736ce552f34"},"maxSeconds":300,"budget":{"day":"2026-11-09","reservedMicros":0,"costMicros":null},"connection":{"issued":true,"expiresAt":"2026-11-10T04:51:41+00:00"},"metrics":{"durationSeconds":null,"windowSeconds":0,"interruptions":null,"objectives":[],"restrictions":{"respected":null,"broken":[],"guardViolations":null},"errors":[],"toolCalls":[],"reported":{"provider":false,"tester":false}},"endReason":null,"endReasonLabel":null,"createdBy":{"name":"Ana Autora (OPS8-d)","role":"Super Admin"},"mine":true,"createdAt":"2026-11-10T04:36:41+00:00","startedAt":"2026-11-10T04:36:41+00:00","endedAt":null,"verdict":null,"actions":{"end":{"allowed":true},"verdict":{"allowed":false,"code":"voice_lab_session_not_reviewable","message":"Solo se emite el veredicto sobre una sesión ter
+════ API a GET admin/ultron-studio/voice-lab/sessions/432704a7-6da6-4c59-b8e0-12e242080cef
+{"http":200,"body":{"ok":true,"data":{"uuid":"432704a7-6da6-4c59-b8e0-12e242080cef","status":"open","statusLabel":"Abierta","expired":false,"deadline":"2026-11-10T04:58:41+00:00","mode":"fake","version":{"uuid":"3e7ccf91-1d18-4e62-b06c-c118a3f05513","label":"Versión del ensayo OPS8-d","status":"APPROVED","shortHash":"9060d164"},"profile":{"uuid":"5c95417e-0285-4e93-8f55-7dfd8db3f104","label":"Voz del ensayo OPS8-d","revision":1,"status":"approved","shortHash":"196f14a5"},"agent":{"uuid":"3c160c74-a4bb-431b-86e5-b62b63b0ad21","status":"deployed","specHash":"e1fdbafd68165ea14c269b5bc93d999ce508851507bfe5a491d4f7f50de3e7da","compilerVersion":"ultron-voice-compiler/1","providerAgentId":"fake_lab_eea9de6547fe9736ce552f34"},"maxSeconds":300,"budget":{"day":"2026-11-09","reservedMicros":0,"costMicros":null},"connection":{"issued":true,"expiresAt":"2026-11-10T04:51:41+00:00"},"metrics":{"durationSeconds":null,"windowSeconds":2,"interruptions":null,"objectives":[],"restrictions":{"respected":null,"broken":[],"guardViolations":null},"errors":[],"toolCalls":[],"reported":{"provider":false,"tester":false}},"endReason":null,"endReasonLabel":null,"createdBy":{"name":"Ana Autora (OPS8-d)","role":"Super Admin"},"mine":true,"createdAt":"2026-11-10T04:36:41+00:00","startedAt":"2026-11-10T04:36:41+00:00","endedAt":null,"verdict":null,"actions":{"end":{"allowed":true},"verdict":{"allowed":false,"code":"voice_lab_session_not_reviewable","message":"Solo se emite el veredicto sobre una sesión ter
+════ API a POST admin/ultron-studio/voice-lab/sessions/432704a7-6da6-4c59-b8e0-12e242080cef/end
+{"http":200,"body":{"ok":true,"data":{"uuid":"432704a7-6da6-4c59-b8e0-12e242080cef","status":"ended","statusLabel":"Terminada","expired":false,"deadline":null,"mode":"fake","version":{"uuid":"3e7ccf91-1d18-4e62-b06c-c118a3f05513","label":"Versión del ensayo OPS8-d","status":"APPROVED","shortHash":"9060d164"},"profile":{"uuid":"5c95417e-0285-4e93-8f55-7dfd8db3f104","label":"Voz del ensayo OPS8-d","revision":1,"status":"approved","shortHash":"196f14a5"},"agent":{"uuid":"3c160c74-a4bb-431b-86e5-b62b63b0ad21","status":"deployed","specHash":"e1fdbafd68165ea14c269b5bc93d999ce508851507bfe5a491d4f7f50de3e7da","compilerVersion":"ultron-voice-compiler/1","providerAgentId":"fake_lab_eea9de6547fe9736ce552f34"},"maxSeconds":300,"budget":{"day":"2026-11-09","reservedMicros":0,"costMicros":0},"connection":{"issued":true,"expiresAt":"2026-11-10T04:51:41+00:00"},"metrics":{"durationSeconds":null,"windowSeconds":3,"interruptions":0,"objectives":["aviso_ia","saludo"],"restrictions":{"respected":true,"broken":[],"guardViolations":null},"errors":[],"toolCalls":[],"reported":{"provider":false,"tester":true}},"endReason":"tester_ended","endReasonLabel":"La terminó quien la abrió.","createdBy":{"name":"Ana Autora (OPS8-d)","role":"Super Admin"},"mine":true,"createdAt":"2026-11-10T04:36:41+00:00","startedAt":"2026-11-10T04:36:41+00:00","endedAt":"2026-11-10T04:36:44+00:00","verdict":null,"actions":{"end":{"allowed":false,"code":"voice_lab_already_reported","message":"Ya contaste lo que pasó en es
+════ API b POST admin/ultron-studio/voice-lab/sessions/432704a7-6da6-4c59-b8e0-12e242080cef/verdict
+{"http":409,"body":{"ok":false,"code":"voice_lab_session_not_reviewable","message":"Una sesión del simulador no admite veredicto: no habló ningún agente.","reason":"fake_mode"}}
+════ 2a · mando · lab off → APLICADO (los cuatro cerrojos) · código 0
+0. lab-off · copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-lab-off-20261110-043648 (600, alejodev) · fichero alejodev:staff 600 · programador 27 0 0 · workers 13 0 · constante cerrada
+   VOICE_LAB_DAILY_BUDGET_USD sustituida
+   VOICE_LAB_DRIVER sustituida
+   VOICE_LAB_ENABLED sustituida
+   VOICE_LAB_SESSION_BUDGET_USD sustituida
+1. claves escritas (sin valores): VOICE_LAB_DAILY_BUDGET_USD VOICE_LAB_DRIVER VOICE_LAB_ENABLED VOICE_LAB_SESSION_BUDGET_USD · fichero alejodev:staff 600
+2. el fichero parsea · caché: alejodev 600
+3. configuración efectiva, antes → después (sin valores de secretos): lab: true → false · lab_budget: "1.00" → "0" · lab_session_budget: "0.50" → "0"
+   motor, H4–H7 y ElevenLabs (proveedor y Studio) sin cambios
+   el fichero de entorno es la copia previa salvo 4 clave(s) de la orden
+4. programador (total · del Studio · de voz): 27 0 0 → 27 0 0 (esperado 27 0 0)
+5. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+6. admin/voice/status sin token → 401
+7. local.ERROR en laravel*.log: 0 → 0
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=0 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=no importado=no subcuenta=no whatsapp=no proveedor=ELEVENLABS_VERIFIED
+   vuelta atrás exacta (el fichero de antes): install -m 600 -o alejodev -g staff /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-lab-off-20261110-043648 /Users/alejodev/.cache/ironbody-banco-h8-ops8d/api/backend/.env && cd /Users/alejodev/.cache/ironbody-banco-h8-ops8d/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+MANDO lab-off APLICADO (copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-lab-off-20261110-043648)
+════ 2a · mando · lab on --driver=elevenlabs (las referencias y la base puestas; VERIFIED) → APLICADO · código 0
+0. lab-on · copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-lab-on-20261110-043706 (600, alejodev) · fichero alejodev:staff 600 · programador 27 0 0 · workers 13 0 · constante cerrada
+   VOICE_LAB_DAILY_BUDGET_USD sustituida
+   VOICE_LAB_DRIVER sustituida
+   VOICE_LAB_ENABLED sustituida
+   VOICE_LAB_MAX_SESSIONS_PER_DAY sustituida
+   VOICE_LAB_MAX_SESSION_SECONDS sustituida
+   VOICE_LAB_SESSION_BUDGET_USD sustituida
+1. claves escritas (sin valores): VOICE_LAB_DAILY_BUDGET_USD VOICE_LAB_DRIVER VOICE_LAB_ENABLED VOICE_LAB_MAX_SESSIONS_PER_DAY VOICE_LAB_MAX_SESSION_SECONDS VOICE_LAB_SESSION_BUDGET_USD · fichero alejodev:staff 600
+2. el fichero parsea · caché: alejodev 600
+3. configuración efectiva, antes → después (sin valores de secretos): lab: false → true · lab_budget: "0" → "1.00" · lab_driver: "fake" → "elevenlabs" · lab_session_budget: "0" → "0.50"
+   motor, H4–H7 y ElevenLabs (proveedor y Studio) sin cambios
+   el fichero de entorno es la copia previa salvo 6 clave(s) de la orden
+4. programador (total · del Studio · de voz): 27 0 0 → 27 0 0 (esperado 27 0 0)
+5. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+6. admin/voice/status sin token → 401
+7. local.ERROR en laravel*.log: 0 → 0
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=1 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=no importado=no subcuenta=no whatsapp=no proveedor=ELEVENLABS_VERIFIED
+   vuelta atrás exacta (el fichero de antes): install -m 600 -o alejodev -g staff /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-lab-on-20261110-043706 /Users/alejodev/.cache/ironbody-banco-h8-ops8d/api/backend/.env && cd /Users/alejodev/.cache/ironbody-banco-h8-ops8d/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+   vuelta atrás funcional: bash /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/h8-voice-scope.sh lab off
+MANDO lab-on APLICADO (copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-lab-on-20261110-043706)
+════ smoke fase 2a · código 3
+== Smoke del Hito 8 (fase 2a) · 2026-11-10T04:37:22Z · http://127.0.0.1:8431/api
+OK      presupuestos de rendimiento válidos: perf8-2026-11-08 · 11 rutas · sha256 2e495a753e5a (/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/docs/ultron-studio/ops/perf-h8/presupuestos-h8.json)
+OK      configuración de la voz de la fase 2a: {"calls_in_code":false,"inbound":false,"outbound":false,"lab":true,"voice_monitor":false,"publishing":false,"twilio_voice":false,"studio_monitor":false}
+OK      el programador: 27 tareas, 0 del Studio y 0 de voz (las de los monitores encendidos)
+OK      voice:doctor --telefonia (sin red), la de la fase 2a: estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=1 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=no subcuenta=no proveedor=ELEVENLABS_VERIFIED
+OK      monitor del H7 en seco (integraciones), sin deriva de la configuración autorizada: [ok]
+INFO    canario del motor configurado: sí (su id no se imprime)
+INFO    centinela exacto: 19 huellas saladas de secretos del servidor
+OK      18 tablas ultron_studio_* y 7 voice_* en la base
+cuenta 1 activa como Super Admin
+== Smoke del Hito 8 (fase 2a) · superadmin · http://127.0.0.1:8431/api
+OK      login de la cuenta de smoke  [HTTP 200]
+OK      GET admin/voice/status → 200  [HTTP 200]
+OK      la constante de las llamadas, cerrada (VoiceCallPolicy::CALLS_ENABLED_IN_CODE = false)  [False]
+OK      banderas de la fase 2a: inbound no, outbound no, twilioVoice no, lab sí  [{"inbound": false, "outbound": false, "twilioVoice": false, "lab": true, "monitor": false}]
+OK      sin flags.publishing en la telefonía (E4-1: la bandera de publicar vive en el Studio)
+OK      la cadena de voz sin entradas (canary y rest: none) y el freno suelto  [{"canary": "none", "rest": "none"} · freno False]
+OK      cupos y presupuesto a 0 (salientes al día, entrantes al día, µUS$ al día)  [{"outboundDailyCap": 0, "inboundDailyCap": 0, "dailyBudgetMicros": 0}]
+INFO    piezas de la fase 2 (informativo en la 2a: el laboratorio no las necesita)  [{"configured": false, "collidesWithMessaging": false, "importedNumberIdConfigured": false, "inboundCapable": null, "observed": null, "check": "unverified", "checkReason": "no_observation"} · subcuenta False]
+INFO    proveedor según la telefonía  [ELEVENLABS_VERIFIED (E4-6: dice UNVERIFIED hasta que B8 añada su lector de la verificación, antes de la fase 3)]
+OK      GET admin/voice/calls → 200 (fase 2a: puede haber llamadas de canarios)  [HTTP 200 · total 0]
+OK      GET admin/voice/contacts → 200, contactos vacíos  [HTTP 200 · total 0]
+OK      GET admin/voice/calls/<inventado> → 404 call_not_found  [HTTP 404 call_not_found]
+OK      GET admin/voice/metrics → 200 sin llamadas vivas ni ambiguas, freno suelto  [HTTP 200 · vivas 0 · ambiguas 0]
+OK      las 7 POST de la telefonía con un cuerpo vacío → 422 validation_failed (antes de la puerta: nada se escribe)
+OK      POST admin/voice/calls/<inventado>/hangup → 404 call_not_found (antes de hablar con Twilio)  [HTTP 404 call_not_found]
+OMITIDO POST /admin/ultron-studio/voice-lab/sessions  [laboratorio hablado encendido: abrir, cerrar o juzgar una sesión escribe o gasta; el smoke no lo hace]
+OMITIDO POST /admin/ultron-studio/voice-lab/sessions/<inventado>/end  [laboratorio hablado encendido: abrir, cerrar o juzgar una sesión escribe o gasta; el smoke no lo hace]
+OMITIDO POST /admin/ultron-studio/voice-lab/sessions/<inventado>/verdict  [laboratorio hablado encendido: abrir, cerrar o juzgar una sesión escribe o gasta; el smoke no lo hace]
+OK      las 18 rutas nuevas del Studio con sesión que no escriben en la fase 2a: lecturas 200, inventados 404, laboratorio encendido (lista 200, inventada 404), publicar y promover 409 voice_publishing_disabled, el resto 422 antes de escribir
+INFO    GET voice/profiles (informativo desde la fase 2: el laboratorio y la publicación usan perfiles)  [total 1]
+OK      GET voice/publications: publicar apagado (voice_publishing_disabled) y la cadena de voz sin entradas  [publicar {"enabled": false, "code": "voice_publishing_disabled"} · entradas 0]
+INFO    GET voice-lab/status  [{"enabled": true}]
+OK      GET integrations/voice (ruta 45) → 200  [HTTP 200]
+OK      ruta 45: ElevenLabs en ELEVENLABS_VERIFIED (E1-12; lo afirma el Studio con la verificación de menos de 30 días)  [ELEVENLABS_VERIFIED]
+OK      ruta 45: publicar la voz apagado (publishing.enabled false, E4-1)  [{"available": true, "enabled": false, "code": "voice_publishing_disabled"}]
+OK      ruta 45: «can» con las 7 llaves de D8-22, todas true para el Super Admin  [approve=True, telephonyCallPlace=True, telephonyContactsManage=True, telephonyView=True, voiceLabRun=True, voiceManage=True, voicePublish=True]
+== Presupuestos de rendimiento · /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/docs/ultron-studio/ops/perf-h8/presupuestos-h8.json · perf8-2026-11-08 · sha256 2e495a753e5a · 11 rutas · 1 + 5 muestras, ≥ 0.6 s
+OK      presupuesto GET admin/voice/status: mediana 78.5 ms ≤ 290 · máximo 83.0 ms ≤ 310 · 1295 B ≤ 7168  [n 5 · calibración: p50 ≤ 129 · p95 ≤ 134]
+OK      presupuesto GET admin/voice/calls: mediana 55.4 ms ≤ 190 · máximo 63.2 ms ≤ 220 · 75 B ≤ 24576  [n 5 · calibración: p50 ≤ 106 · p95 ≤ 114]
+OK      presupuesto GET admin/voice/metrics: mediana 67.4 ms ≤ 280 · máximo 76.2 ms ≤ 290 · 300 B ≤ 6144  [n 5 · calibración: p50 ≤ 118 · p95 ≤ 127]
+OK      presupuesto GET admin/voice/contacts: mediana 70.5 ms ≤ 210 · máximo 76.2 ms ≤ 240 · 75 B ≤ 11264  [n 5 · calibración: p50 ≤ 121 · p95 ≤ 127]
+OK      presupuesto GET voice/profiles: mediana 69.2 ms ≤ 170 · máximo 73.9 ms ≤ 220 · 1556 B ≤ 28672  [n 5 · calibración: p50 ≤ 120 · p95 ≤ 124]
+OK      presupuesto GET voice/publications: mediana 72.9 ms ≤ 200 · máximo 87.5 ms ≤ 230 · 903 B ≤ 40960  [n 5 · calibración: p50 ≤ 123 · p95 ≤ 138]
+OK      presupuesto GET voice/brakes: mediana 64.8 ms ≤ 170 · máximo 83.9 ms ≤ 220 · 51 B ≤ 7168  [n 5 · calibración: p50 ≤ 115 · p95 ≤ 134]
+OK      presupuesto GET voice-lab/status: mediana 70.0 ms ≤ 170 · máximo 77.3 ms ≤ 210 · 2470 B ≤ 7168  [n 5 · calibración: p50 ≤ 120 · p95 ≤ 128]
+OK      presupuesto GET voice-lab/sessions: mediana 70.2 ms ≤ 190 · máximo 75.9 ms ≤ 220 · 2359 B ≤ 52224  [n 5 · calibración: p50 ≤ 121 · p95 ≤ 126]
+OK      presupuesto GET integrations/voice: mediana 73.6 ms ≤ 180 · máximo 79.2 ms ≤ 270 · 5107 B ≤ 11264  [n 5 · calibración: p50 ≤ 124 · p95 ≤ 130]
+OK      presupuesto GET voice/canary-evidence: mediana 65.3 ms ≤ 250 · máximo 79.1 ms ≤ 290 · 335 B ≤ 5120  [n 5 · calibración: p50 ≤ 116 · p95 ≤ 130]
+PRESUPUESTOS: 11 OK · 0 FALLO · 0 OMITIDO · 86 s (de ellos 53 s esperando a los cupos)
+OK      telefonía del CRM sin sesión: las 13 rutas → 401 (5 GET y 8 POST)
+OK      las 4 públicas sin credencial → 401 con su motivo (unauthorized · invalid_signature · verdict unauthorized · invalid_signature)
+OK      las 4 públicas responden el 401 en menos de 140 ms (máximo 9.0 ms; sin red saliente en ese camino)  [9, 9, 8, 8 ms]
+OK      una herramienta con un nombre fuera del patrón [a-z_]{1,48} → 404 (la ruta no casa)  [HTTP 404]
+OK      /webhooks/voice/elevenlabs/initiation con 9009 bytes sin credencial → 413 (tope de 8 KB antes de autenticar)  [HTTP 413 payload_too_large]
+OK      /voice/tools/consultar_planes con 9009 bytes sin credencial → 413 (tope de 8 KB antes de autenticar)  [HTTP 413 payload_too_large]
+OK      /webhooks/voice/twilio/usage-trigger con 70005 bytes sin credencial → 413 (tope de 64 KB antes de autenticar)  [HTTP 413 payload_too_large]
+INFO    post-call con 1048576 bytes (= el tope de 1 MB) sin firma: responde Laravel (401 invalid_signature): nginx deja pasar el tope entero
+OK      las 21 rutas nuevas del Studio sin sesión → 401 (8 GET y 13 POST)
+OK      cuerpos (74): sin claves prohibidas (teléfono, huellas, ids de Meta, textos del proveedor, firmas)
+OK      cuerpos (74): cada secreto solo como presencia, origen, huella de 8 hex o referencia corta
+OK      cuerpos (74): sin credenciales, sin APP_KEY y sin rutas del servidor
+OK      cuerpos (74): sin teléfonos ni ids de Meta (10 cifras o más)
+OK      cuerpos (74): ninguna clave nombra una conversación
+OK      cuerpos (74): ninguno lleva el id de la conversación canaria
+OK      cuerpos (74): ninguno contiene un secreto del servidor (centinela exacto, 19 huellas saladas)
+OK      Cache-Control «no-store, private» en las 133 respuestas de /api/admin
+OK      limitador: ninguna respuesta 429  [0 respuestas 429]
+OK      ninguna respuesta 5xx  [0 respuestas 5xx]
+RESUMEN (superadmin): 48 OK · 0 FALLO · 3 OMITIDO
+== Base, registros y red (solo lectura)
+OK      ninguna fila nueva de ultron_studio_* ni de voice_* nombra a la cuenta 1
+OK      recuento exacto de las 25 tablas (18 del Studio y 7 de la voz) igual antes y después: ninguna escritura, ningún agente, ninguna instantánea, ningún evento de llamada
+OK      incidentes de IRON GUARD del Studio (filas · ocurrencias): 0 0, los mismos
+OK      cola voice: 0 trabajos (antes 0)
+OK      canal voice durante el smoke: solo los rechazos esperados de las rutas públicas [voice.inbound.unauthorized×1(WARNING) voice.post_call.rejected×2(WARNING) voice.tool.unauthorized×1(WARNING) voice.twilio.usage_rejected×1(WARNING) ] (nada sale a la red ni se encola)
+OK      laravel*.log: ningún ERROR durante el smoke
+OK      cero red saliente (valla): bloqueos 0 → 0
+OK      monitor del H7 en seco (integraciones) igual que antes del smoke: [ok]
+cuenta 1 en reposo: inactiva, Super Admin, sesiones borradas: 1
+OK      token tras desactivar → 403
+OK      sesiones de la cuenta tras el smoke: 0
+SMOKE H8: código de salida 3
+════ API a POST admin/ultron-studio/voice-lab/sessions
+{"http":201,"body":{"ok":true,"data":{"uuid":"2d333e91-263a-481c-ba75-5a75170d1cb3","status":"open","statusLabel":"Abierta","expired":false,"deadline":"2026-11-10T05:00:53+00:00","mode":"elevenlabs","version":{"uuid":"3e7ccf91-1d18-4e62-b06c-c118a3f05513","label":"Versión del ensayo OPS8-d","status":"APPROVED","shortHash":"9060d164"},"profile":{"uuid":"5c95417e-0285-4e93-8f55-7dfd8db3f104","label":"Voz del ensayo OPS8-d","revision":1,"status":"approved","shortHash":"196f14a5"},"agent":{"uuid":"faedf2ac-f4a5-4651-bd3b-5b44dca916a0","status":"deployed","specHash":"e1fdbafd68165ea14c269b5bc93d999ce508851507bfe5a491d4f7f50de3e7da","compilerVersion":"ultron-voice-compiler/1","providerAgentId":"agent_vt0340e556kyyxwpfmrj0eq3t4"},"maxSeconds":300,"budget":{"day":"2026-11-09","reservedMicros":400000,"costMicros":null},"connection":{"issued":true,"expiresAt":"2026-11-10T04:53:53+00:00","signedUrl":"[oculto]"},"metrics":{"durationSeconds":null,"windowSeconds":0,"interruptions":null,"objectives":[],"restrictions":{"respected":null,"broken":[],"guardViolations":null},"errors":[],"toolCalls":[],"reported":{"provider":false,"tester":false}},"endReason":null,"endReasonLabel":null,"createdBy":{"name":"Ana Autora (OPS8-d)","role":"Super Admin"},"mine":true,"createdAt":"2026-11-10T04:38:53+00:00","startedAt":"2026-11-10T04:38:53+00:00","endedAt":null,"verdict":null,"actions":{"end":{"allowed":true},"verdict":{"allowed":false,"code":"voice_lab_session_not_reviewable","message":"Solo se emite e
+════ emisor post-llamada web
+{"type":"post_call_transcription","variant":"valid","expected":"ok","expectedType":"post_call_transcription","deliveries":[{"status":200,"ms":35.1}],"webhook":{"fallosSeguidos":0,"ultimaBuena":1794285534055,"desactivado":false}}
+════ API a POST admin/ultron-studio/voice-lab/sessions/2d333e91-263a-481c-ba75-5a75170d1cb3/verdict
+{"http":403,"body":{"ok":false,"code":"four_eyes_required","message":"Nadie emite el veredicto sobre la sesión que abrió: pide a otra persona con permiso que lo emita.","reason":"session_creator"}}
+════ API b POST admin/ultron-studio/voice-lab/sessions/2d333e91-263a-481c-ba75-5a75170d1cb3/verdict
+{"http":200,"body":{"ok":true,"data":{"uuid":"2d333e91-263a-481c-ba75-5a75170d1cb3","status":"ended","statusLabel":"Terminada","expired":false,"deadline":null,"mode":"elevenlabs","version":{"uuid":"3e7ccf91-1d18-4e62-b06c-c118a3f05513","label":"Versión del ensayo OPS8-d","status":"APPROVED","shortHash":"9060d164"},"profile":{"uuid":"5c95417e-0285-4e93-8f55-7dfd8db3f104","label":"Voz del ensayo OPS8-d","revision":1,"status":"approved","shortHash":"196f14a5"},"agent":{"uuid":"faedf2ac-f4a5-4651-bd3b-5b44dca916a0","status":"deployed","specHash":"e1fdbafd68165ea14c269b5bc93d999ce508851507bfe5a491d4f7f50de3e7da","compilerVersion":"ultron-voice-compiler/1","providerAgentId":"agent_vt0340e556kyyxwpfmrj0eq3t4"},"maxSeconds":300,"budget":{"day":"2026-11-09","reservedMicros":400000,"costMicros":85334},"connection":{"issued":true,"expiresAt":"2026-11-10T04:53:53+00:00"},"metrics":{"durationSeconds":64,"windowSeconds":1,"interruptions":null,"objectives":[],"restrictions":{"respected":false,"broken":[],"guardViolations":[{"code":"voice_money_not_from_tool","turn":2}]},"errors":[],"toolCalls":[],"reported":{"provider":true,"tester":false}},"endReason":"provider_report","endReasonLabel":"Llegó el informe del proveedor al terminar la conversación.","createdBy":{"name":"Ana Autora (OPS8-d)","role":"Super Admin"},"mine":false,"createdAt":"2026-11-10T04:38:53+00:00","startedAt":"2026-11-10T04:38:53+00:00","endedAt":"2026-11-10T04:38:54+00:00","verdict":{"decision":"approved","note":null,"by"
+════ API a POST admin/ultron-studio/voice/compile-preview
+{"http":200,"body":{"ok":true,"data":{"purpose":"publication","specHash":"e1fdbafd68165ea14c269b5bc93d999ce508851507bfe5a491d4f7f50de3e7da","shortSpecHash":"e1fdbafd","compilerVersion":"ultron-voice-compiler/1","template":{"version":"ultron-voice-template/2","hash":"b60c71c291146ce96d05eb404898516a930b08768ece07bdefd5b4755f6caa15"},"spec":{"contract":"ultron-voice-spec/1","compilerVersion":"ultron-voice-compiler/1","template":{"version":"ultron-voice-template/2","hash":"b60c71c291146ce96d05eb404898516a930b08768ece07bdefd5b4755f6caa15"},"source":{"studioVersionUuid":"3e7ccf91-1d18-4e62-b06c-c118a3f05513","studioContentHash":"9060d16439064921a5d83594bf495c30841d4a77c2aa64074f69a032de966e56","catalogVersion":"2026-10-19.1","voiceProfileUuid":"5c95417e-0285-4e93-8f55-7dfd8db3f104","voiceProfileHash":"196f14a55428352cf25ff05eb2fe8fd5920d8f53eaa0f0b225aa05f4de6b9cb1"},"language":"es","voiceId":"pNInz6obpgDQGcFmaJgB","firstMessage":"Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.","systemPrompt":"Eres el asistente virtual de voz de Iron Body Workout, un gimnasio. Atiendes llamadas telefónicas en español de Colombia. Eres un sistema de inteligencia artificial y no lo ocultas: si te preguntan si eres una persona,
+════ 4a · mando · fase 2 secreto /root/tw-voz.txt (key de Laravel y token de firma) → APLICADO y el fichero destruido · código 0
+0. fase2-secreto · copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-fase2-secreto-20261110-043856 (600, alejodev) · fichero alejodev:staff 600 · programador 27 0 0 · workers 13 0 · constante cerrada
+   TWILIO_VOICE_API_KEY_SECRET añadida
+   TWILIO_VOICE_API_KEY_SID añadida
+   TWILIO_VOICE_SIGNING_TOKEN añadida
+1. claves escritas (sin valores): TWILIO_VOICE_API_KEY_SID TWILIO_VOICE_API_KEY_SECRET TWILIO_VOICE_SIGNING_TOKEN · fichero alejodev:staff 600
+2. el fichero parsea · caché: alejodev 600
+3. configuración efectiva, antes → después (sin valores de secretos): s_signing: false → true · s_twilio_key_secret: false → true · s_twilio_key_sid: false → true
+   motor, H4–H7 y ElevenLabs (proveedor y Studio) sin cambios
+   el fichero de entorno es la copia previa salvo 3 clave(s) de la orden
+4. programador (total · del Studio · de voz): 27 0 0 → 27 0 0 (esperado 27 0 0)
+5. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+6. admin/voice/status sin token → 401
+7. local.ERROR en laravel*.log: 0 → 0
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=1 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=no importado=no subcuenta=no whatsapp=no proveedor=ELEVENLABS_VERIFIED
+   AVISO: la huella de voz del Studio cambió con las piezas: reconocer otra vez la configuración autorizada (CRM → Studio → Integraciones → Voz, o GET/POST integrations/config) antes de seguir; si el monitor del H7 está encendido, su expectativa pasa a ser la de la fase 2 (bash /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/h8-voice-scope.sh expectativa fase2)
+   vuelta atrás exacta (el fichero de antes): install -m 600 -o alejodev -g staff /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-fase2-secreto-20261110-043856 /Users/alejodev/.cache/ironbody-banco-h8-ops8d/api/backend/.env && cd /Users/alejodev/.cache/ironbody-banco-h8-ops8d/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+   /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/tw-voz.txt destruido (los secretos solo quedan en el fichero de entorno y en la copia previa, las dos 600)
+MANDO fase2-secreto APLICADO (copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-fase2-secreto-20261110-043856)
+════ 4a · mando · fase 2 set de la cuenta, el número, el id importado y VOICE_NUMBER_INBOUND_CAPABLE=false → APLICADO · código 0
+0. fase2-set · copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-fase2-set-20261110-043914 (600, alejodev) · fichero alejodev:staff 600 · programador 27 0 0 · workers 13 0 · constante cerrada
+   ELEVENLABS_AGENT_PHONE_NUMBER_ID añadida
+   TWILIO_VOICE_ACCOUNT_SID añadida
+   TWILIO_VOICE_FROM añadida
+   VOICE_NUMBER_INBOUND_CAPABLE añadida
+1. claves escritas (sin valores): ELEVENLABS_AGENT_PHONE_NUMBER_ID TWILIO_VOICE_ACCOUNT_SID TWILIO_VOICE_FROM VOICE_NUMBER_INBOUND_CAPABLE · fichero alejodev:staff 600
+2. el fichero parsea · caché: alejodev 600
+3. configuración efectiva, antes → después (sin valores de secretos): account_last4: null → "659c" · from_last4: null → "0090" · number_inbound_capable: null → false · phone_number_id: null → "phnum_383138adac2f2f19"
+   motor, H4–H7 y ElevenLabs (proveedor y Studio) sin cambios
+   el fichero de entorno es la copia previa salvo 4 clave(s) de la orden
+4. programador (total · del Studio · de voz): 27 0 0 → 27 0 0 (esperado 27 0 0)
+5. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+6. admin/voice/status sin token → 401
+7. local.ERROR en laravel*.log: 0 → 0
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=1 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=si importado=si subcuenta=si whatsapp=no proveedor=ELEVENLABS_VERIFIED
+   AVISO: la huella de voz del Studio cambió con las piezas: reconocer otra vez la configuración autorizada (CRM → Studio → Integraciones → Voz, o GET/POST integrations/config) antes de seguir; si el monitor del H7 está encendido, su expectativa pasa a ser la de la fase 2 (bash /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/h8-voice-scope.sh expectativa fase2)
+   vuelta atrás exacta (el fichero de antes): install -m 600 -o alejodev -g staff /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-fase2-set-20261110-043914 /Users/alejodev/.cache/ironbody-banco-h8-ops8d/api/backend/.env && cd /Users/alejodev/.cache/ironbody-banco-h8-ops8d/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+MANDO fase2-set APLICADO (copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-fase2-set-20261110-043914)
+════ 4a · h8-twilio-check.sh: subcuenta con el número como CALLER ID VERIFICADO → APTA (código 0) con los avisos · código 0
+== h8-twilio-check · cuenta de voz AC…659c · número …0090 · ventana de llamadas 7 días (desde 2026-11-03 UTC)
+OK      credencial: API key SK… con su secreto (las de ElevenLabs y el OTP no se leen)
+INFO    TWILIO_VOICE_SIGNING_TOKEN presente
+OK      el número de voz no es ninguno de WhatsApp (VoiceNumberGuard)
+OK      cuenta activa · tipo Full
+INFO    la cuenta de voz es una SUBCUENTA de la cuenta del OTP
+OK      CALLER ID VERIFICADO de esta cuenta (en ElevenLabs, «Outbound Only»): sirve para SALIENTES sin comprar nada
+AVISO   no recibe llamadas por Twilio ni se asigna a un agente: la fase 3 (entrantes) exige un número comprado o portado
+AVISO   declararlo ANTES de publicar: «h8-voice-scope.sh fase 2 set VOICE_NUMBER_INBOUND_CAPABLE=false» (código de B8-g/S8-d). Sin la declaración, publicar el canario intenta asignarle el agente y la deriva del número (voice:reconcile --numbers) echaría el freno con el monitor de voz encendido
+OK      la key NO puede leer mensajes (HTTP 401): no tiene permisos de mensajería
+INFO    una key podría tener messages/create sin messages/list: la prueba definitiva es su lista de permisos en la consola (API keys → la key)
+INFO    llamadas en la cuenta: 0 (con el número de voz 0 · ajenas 0) · por dirección: — · por estado: —
+
+VEREDICTO: APTA: subcuenta dedicada con la key restringida (lo que pide D8-5) y avisos arriba.
+════ API b GET admin/ultron-studio/integrations/config
+{"http":200,"body":{"ok":true,"data":{"providers":[{"provider":"meta_ads","state":"never_authorized","effective":{"token":"[oculto]","accounts":[{"ref":"***1001"},{"ref":"***2002"},{"ref":"***3003"}],"graphVersion":"v26.0","syncEnabled":true,"syncDays":7,"staleMinutes":180,"timezone":"America/Bogota"},"effectiveFingerprint":"a14fc2eb743477db9b1f6bb60eaec171360a02a95e12fb355af4a4f25b901e55","authorized":null,"observed":{"uuid":"15c66523-6911-4c75-a737-ea3ea9b2ff1b","fingerprint":"a14fc2eb743477db9b1f6bb60eaec171360a02a95e12fb355af4a4f25b901e55","at":"2026-11-10T04:30:26+00:00"},"drift":[]},{"provider":"twilio","state":"never_authorized","effective":{"otpDriver":"twilio","accountSid":{"present":true,"source":"TWILIO_SID","ref":"AC…d237"},"authToken":{"present":true,"source":"TWILIO_TOKEN","fp":"55538f87"},"aliasesConsistent":{"sid":true,"token":"[oculto]"},"verifyServiceSid":{"present":true,"ref":"VA…6bee"},"from":{"present":false},"apiBase":{"official":true},"verifyBase":{"official":true},"rateLimitName":{"present":false},"sendEnabled":true,"legacySenderEnabled":false,"costSoftUsd":"6.00","costHardUsd":"12.00","probe":{"enabled":false,"credential":"otp"}},"effectiveFingerprint":"7f8743a62b1a29c9ecf53cb77267087b9a823618ec54a19d289cce1837eeff31","authorized":null,"observed":{"uuid":"53336bd3-41b8-4aa8-a324-8931d68d5548","fingerprint":"7f8743a62b1a29c9ecf53cb77267087b9a823618ec54a19d289cce1837eeff31","at":"2026-11-10T04:30:26+00:00"},"drift":[]},{"provider":"voice","state":"d
+════ API b POST admin/ultron-studio/integrations/config/acknowledge
+{"http":201,"body":{"ok":true,"data":{"replayed":false,"snapshot":{"uuid":"78f38d5b-1e8a-421e-9f06-226f3bcec028","provider":"voice","fingerprint":"734e8ed293df37e30ec93923f1f0181fc400204d19dca8b9d5ab399c53b83096","at":"2026-11-10T04:39:31+00:00","by":{"name":"Beto Revisor (OPS8-d)","role":"Super Admin"},"note":"OPS8-d: cuenta y número de Twilio en el banco"}}}}
+════ 4a · mando · expectativa fase2 (número puesto, Twilio Voice apagado) → APLICADA · código 0
+0. expectativa-fase2 · copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-expectativa-fase2-20261110-043932 (600, alejodev) · fichero alejodev:staff 600 · programador 27 0 0 · workers 13 0 · constante cerrada
+   ULTRON_STUDIO_MONITOR_EXPECT sustituida
+1. claves escritas (sin valores): ULTRON_STUDIO_MONITOR_EXPECT · fichero alejodev:staff 600
+2. el fichero parsea · caché: alejodev 600
+3. configuración efectiva, antes → después (sin valores de secretos): expect: "twilio:connected_otp_only,twilio_voice:not_configured,elevenlabs:ELEVENLABS_VERIFIED" → "twilio:connected_otp_only,twilio_voice:disabled,elevenlabs:ELEVENLABS_VERIFIED"
+   motor, H4–H7 y ElevenLabs (proveedor y Studio) sin cambios
+   el fichero de entorno es la copia previa salvo 1 clave(s) de la orden
+4. programador (total · del Studio · de voz): 27 0 0 → 27 0 0 (esperado 27 0 0)
+5. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+6. admin/voice/status sin token → 401
+7. local.ERROR en laravel*.log: 0 → 0
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=1 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=si importado=si subcuenta=si whatsapp=no proveedor=ELEVENLABS_VERIFIED
+   vuelta atrás exacta (el fichero de antes): install -m 600 -o alejodev -g staff /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-expectativa-fase2-20261110-043932 /Users/alejodev/.cache/ironbody-banco-h8-ops8d/api/backend/.env && cd /Users/alejodev/.cache/ironbody-banco-h8-ops8d/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+MANDO expectativa-fase2 APLICADO (copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-expectativa-fase2-20261110-043932)
+════ 4a · mando · monitor on (la conciliación en seco no echaría el freno) → APLICADO, programador +4 · código 0
+   conciliación en seco (voice:reconcile --dry-run --numbers, código 0): desconocidas=0 conocidas=0 ambiguas_sin_job=0 atascadas=0 techo=dentro numero=outbound_only haria_freno=no causas=—
+0. monitor-on · copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-monitor-on-20261110-043949 (600, alejodev) · fichero alejodev:staff 600 · programador 27 0 0 · workers 13 0 · constante cerrada
+   VOICE_MONITOR_ENABLED sustituida
+1. claves escritas (sin valores): VOICE_MONITOR_ENABLED · fichero alejodev:staff 600
+2. el fichero parsea · caché: alejodev 600
+3. configuración efectiva, antes → después (sin valores de secretos): monitor: false → true
+   motor, H4–H7 y ElevenLabs (proveedor y Studio) sin cambios
+   el fichero de entorno es la copia previa salvo 1 clave(s) de la orden
+4. programador (total · del Studio · de voz): 27 0 0 → 31 0 4 (esperado 31 0 4)
+5. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+6. admin/voice/status sin token → 401
+7. local.ERROR en laravel*.log: 0 → 0
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=2 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=si importado=si subcuenta=si whatsapp=no proveedor=ELEVENLABS_VERIFIED
+   AVISO: la primera pasada corre en el siguiente minuto 10/20/30/40/50 (la del número, a la hora en punto): mirar entonces voice:reconcile --dry-run --json y el freno
+   vuelta atrás exacta (el fichero de antes): install -m 600 -o alejodev -g staff /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-monitor-on-20261110-043949 /Users/alejodev/.cache/ironbody-banco-h8-ops8d/api/backend/.env && cd /Users/alejodev/.cache/ironbody-banco-h8-ops8d/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+   vuelta atrás funcional: bash /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/h8-voice-scope.sh monitor off
+MANDO monitor-on APLICADO (copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-monitor-on-20261110-043949)
+════ 4a · mando · publicar on → APLICADO · código 0
+0. publicar-on · copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-publicar-on-20261110-044007 (600, alejodev) · fichero alejodev:staff 600 · programador 31 0 4 · workers 13 0 · constante cerrada
+   ULTRON_STUDIO_VOICE_PUBLISHING_ENABLED sustituida
+1. claves escritas (sin valores): ULTRON_STUDIO_VOICE_PUBLISHING_ENABLED · fichero alejodev:staff 600
+2. el fichero parsea · caché: alejodev 600
+3. configuración efectiva, antes → después (sin valores de secretos): publishing: false → true
+   motor, H4–H7 y ElevenLabs (proveedor y Studio) sin cambios
+   el fichero de entorno es la copia previa salvo 1 clave(s) de la orden
+4. programador (total · del Studio · de voz): 31 0 4 → 31 0 4 (esperado 31 0 4)
+5. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+6. admin/voice/status sin token → 401
+7. local.ERROR en laravel*.log: 0 → 0
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=2 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=si importado=si subcuenta=si whatsapp=no proveedor=ELEVENLABS_VERIFIED
+   vuelta atrás exacta (el fichero de antes): install -m 600 -o alejodev -g staff /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-publicar-on-20261110-044007 /Users/alejodev/.cache/ironbody-banco-h8-ops8d/api/backend/.env && cd /Users/alejodev/.cache/ironbody-banco-h8-ops8d/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+   vuelta atrás funcional: bash /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/h8-voice-scope.sh publicar off
+MANDO publicar-on APLICADO (copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-publicar-on-20261110-044007)
+════ segunda API (:8435) con el reloj desplazado a 2026-11-10T07:30:00-05:00
+[Mon Nov  9 23:40:23 2026] PHP 8.3.33 Development Server (http://127.0.0.1:8435) started
+[Mon Nov  9 23:40:24 2026] 127.0.0.1:55823 Accepted
+h8-e2e reloj: desfase de 28176 s (solo Carbon en este proceso)
+════ API a POST admin/ultron-studio/voice/publish
+{"http":403,"body":{"ok":false,"code":"four_eyes_required","message":"Nadie publica lo que creó: pide a otra persona con permiso que lo haga."}}
+════ API b POST admin/ultron-studio/voice/publish
+{"http":409,"body":{"ok":false,"code":"voice_not_deployable","message":"Faltan piezas de la configuración de voz para desplegar un agente (se arreglan en el servidor).","missing":["daily_call_cap"]}}
+════ 4a · mando · estado tras publicar: la cadena canary:ok · código 0
+== estado de la voz (configuración efectiva del proceso CLI, la misma caché que el web; sin valores de secretos)
+   código desplegado: HEAD a608450 · constante de llamadas: cerrada
+   salientes: no · alcance canary · cupo/día 0 · presupuesto/día 0 US$ · Twilio Voice no
+   entrantes: no · cupo/día 0
+   laboratorio hablado: sí · driver elevenlabs · presupuesto/día 1.00 US$ · por sesión 0.50 US$ · 300 s · 3 sesiones/día
+   monitor de voz: sí · publicar la voz (Studio): sí · monitor del H7: no (expectativa: twilio:connected_otp_only,twilio_voice:disabled,elevenlabs:ELEVENLABS_VERIFIED)
+   piezas no secretas: VOICE_WEBHOOK_BASE_URL https://api.ironbody-banco.invalid · ELEVENLABS_AGENT_PHONE_NUMBER_ID phnum_383138adac2f2f19 · TWILIO_VOICE_FROM …0090 · TWILIO_VOICE_ACCOUNT_SID AC…659c
+   referencias (ids, no secretos): herramientas sec_caphe1vnr2mff6ypy1pynvepbz · iniciación sec_v2fx7t7hftgvpk828zqpr5sbq3 · webhook post-llamada wh_2n6e4100eszkr4nm1mkm8mzybn
+   secretos (solo presencia): ELEVENLABS_API_KEY presente · ELEVENLABS_WEBHOOK_SECRET presente · ELEVENLABS_TOOL_SECRET presente · ELEVENLABS_INITIATION_SECRET presente · TWILIO_VOICE_API_KEY_SID presente · TWILIO_VOICE_API_KEY_SECRET presente · TWILIO_VOICE_SIGNING_TOKEN presente
+   número de voz igual a uno de WhatsApp: no · ElevenLabs según el Studio: ELEVENLABS_VERIFIED
+   el número admite entrantes (VOICE_NUMBER_INBOUND_CAPABLE): NO: «Outbound Only» declarado
+   reserva por saliente (VoiceCostGuard): 0.6105 US$ a un móvil sin transferencia · 1.1220 US$ a un fijo con transferencia
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=2 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=si importado=si subcuenta=si whatsapp=no proveedor=ELEVENLABS_VERIFIED
+   programador (total · del Studio · de voz): 31 0 4 (de voz: 4 con el monitor de voz encendido, 0 apagado)
+   workers (RUNNING · BACKOFF/FATAL): 13 0 · ironbody-voice en RUNNING: 0 (lo exige «salientes on»)
+   fichero de entorno: alejodev:staff 600 (C-14: www-data 600 o root:www-data 640)
+   integrations-doctor confirma la expectativa del monitor del H7: sí
+constante en el clon del banco: CALLS_ENABLED_IN_CODE = true · último commit: e077dc2d voice(calls-open): banco: abre las llamadas en el clon del banco (ensay
+════ 4a · worker comprobar: el origen declara la conexión voice y la orden literal del borrador arranca y sale vacía · código 0
+OK      el origen (a608450) declara la conexión voice en config/queue.php
+OK      la orden del borrador arranca contra la «producción» (e077dc2) y sale vacía (sin trabajos)
+════ 4a · worker instalar: supervisorctl 13 → 14 programas · código 0
+reread: ironbody-voice: available  · update: ironbody-voice: added process group 
+programas RUNNING: 14 (14 con el worker de voz)
+════ 4a · mando · salientes on --cupo=1 --presupuesto=2.00 → APLICADO (alcance canary, 14 workers) · código 0
+0. salientes-on · copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-salientes-on-20261110-044031 (600, alejodev) · fichero alejodev:staff 600 · programador 31 0 4 · workers 14 0 · constante abierta
+   TWILIO_VOICE_DAILY_CALL_CAP sustituida
+   TWILIO_VOICE_ENABLED sustituida
+   VOICE_DAILY_BUDGET_USD sustituida
+   VOICE_OUTBOUND_ENABLED sustituida
+   VOICE_OUTBOUND_SCOPE añadida
+1. claves escritas (sin valores): TWILIO_VOICE_DAILY_CALL_CAP TWILIO_VOICE_ENABLED VOICE_DAILY_BUDGET_USD VOICE_OUTBOUND_ENABLED VOICE_OUTBOUND_SCOPE · fichero alejodev:staff 600
+2. el fichero parsea · caché: alejodev 600
+3. configuración efectiva, antes → después (sin valores de secretos): budget: "0" → "2.00" · outbound: false → true · outbound_cap: 0 → 1 · twilio_voice: false → true
+   motor, H4–H7 y ElevenLabs (proveedor y Studio) sin cambios
+   el fichero de entorno es la copia previa salvo 5 clave(s) de la orden
+4. programador (total · del Studio · de voz): 31 0 4 → 31 0 4 (esperado 31 0 4)
+5. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [14 0] y [14 0] (esperado 14 0 las dos veces)
+6. admin/voice/status sin token → 401
+7. local.ERROR en laravel*.log: 0 → 0
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_UNVERIFIED constante=abierta encendidas=4 cadena=canary:none,rest:none freno=suelto cupos=1/0/2000000 numero=si importado=si subcuenta=si whatsapp=no proveedor=ELEVENLABS_VERIFIED
+   AVISO: la puerta deniega igualmente sin una publicación de voz en canary, con el freno echado, sin canarios de voz activos o con ElevenLabs sin verificar en la telefonía (E4-6); la primera saliente, a un canario y desde el CRM («Voz y telefonía»)
+   vuelta atrás exacta (el fichero de antes): install -m 600 -o alejodev -g staff /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-salientes-on-20261110-044031 /Users/alejodev/.cache/ironbody-banco-h8-ops8d/api/backend/.env && cd /Users/alejodev/.cache/ironbody-banco-h8-ops8d/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+   vuelta atrás funcional: bash /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/h8-voice-scope.sh salientes off
+MANDO salientes-on APLICADO (copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-salientes-on-20261110-044031)
+════ 4a · mando · expectativa llamadas (Twilio Voice conectado) → APLICADA · código 0
+0. expectativa-llamadas · copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-expectativa-llamadas-20261110-044049 (600, alejodev) · fichero alejodev:staff 600 · programador 31 0 4 · workers 14 0 · constante abierta
+   ULTRON_STUDIO_MONITOR_EXPECT sustituida
+1. claves escritas (sin valores): ULTRON_STUDIO_MONITOR_EXPECT · fichero alejodev:staff 600
+2. el fichero parsea · caché: alejodev 600
+3. configuración efectiva, antes → después (sin valores de secretos): expect: "twilio:connected_otp_only,twilio_voice:disabled,elevenlabs:ELEVENLABS_VERIFIED" → "twilio:connected_otp_only,twilio_voice:connected_voice,elevenlabs:ELEVENLABS_VERIFIED"
+   motor, H4–H7 y ElevenLabs (proveedor y Studio) sin cambios
+   el fichero de entorno es la copia previa salvo 1 clave(s) de la orden
+4. programador (total · del Studio · de voz): 31 0 4 → 31 0 4 (esperado 31 0 4)
+5. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [14 0] y [14 0] (esperado 14 0 las dos veces)
+6. admin/voice/status sin token → 401
+7. local.ERROR en laravel*.log: 0 → 0
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_UNVERIFIED constante=abierta encendidas=4 cadena=canary:none,rest:none freno=suelto cupos=1/0/2000000 numero=si importado=si subcuenta=si whatsapp=no proveedor=ELEVENLABS_VERIFIED
+   vuelta atrás exacta (el fichero de antes): install -m 600 -o alejodev -g staff /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-expectativa-llamadas-20261110-044049 /Users/alejodev/.cache/ironbody-banco-h8-ops8d/api/backend/.env && cd /Users/alejodev/.cache/ironbody-banco-h8-ops8d/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+MANDO expectativa-llamadas APLICADO (copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8d/root/env-pre-voice-expectativa-llamadas-20261110-044049)
+════ API b GET admin/ultron-studio/integrations/config
+{"http":200,"body":{"ok":true,"data":{"providers":[{"provider":"meta_ads","state":"never_authorized","effective":{"token":"[oculto]","accounts":[{"ref":"***1001"},{"ref":"***2002"},{"ref":"***3003"}],"graphVersion":"v26.0","syncEnabled":true,"syncDays":7,"staleMinutes":180,"timezone":"America/Bogota"},"effectiveFingerprint":"a14fc2eb743477db9b1f6bb60eaec171360a02a95e12fb355af4a4f25b901e55","authorized":null,"observed":{"uuid":"15c66523-6911-4c75-a737-ea3ea9b2ff1b","fingerprint":"a14fc2eb743477db9b1f6bb60eaec171360a02a95e12fb355af4a4f25b901e55","at":"2026-11-10T04:30:26+00:00"},"drift":[]},{"provider":"twilio","state":"never_authorized","effective":{"otpDriver":"twilio","accountSid":{"present":true,"source":"TWILIO_SID","ref":"AC…d237"},"authToken":{"present":true,"source":"TWILIO_TOKEN","fp":"55538f87"},"aliasesConsistent":{"sid":true,"token":"[oculto]"},"verifyServiceSid":{"present":true,"ref":"VA…6bee"},"from":{"present":false},"apiBase":{"official":true},"verifyBase":{"official":true},"rateLimitName":{"present":false},"sendEnabled":true,"legacySenderEnabled":false,"costSoftUsd":"6.00","costHardUsd":"12.00","probe":{"enabled":false,"credential":"otp"}},"effectiveFingerprint":"7f8743a62b1a29c9ecf53cb77267087b9a823618ec54a19d289cce1837eeff31","authorized":null,"observed":{"uuid":"53336bd3-41b8-4aa8-a324-8931d68d5548","fingerprint":"7f8743a62b1a29c9ecf53cb77267087b9a823618ec54a19d289cce1837eeff31","at":"2026-11-10T04:30:26+00:00"},"drift":[]},{"provider":"voice","state":"d
+════ API b POST admin/ultron-studio/integrations/config/acknowledge
+{"http":201,"body":{"ok":true,"data":{"replayed":false,"snapshot":{"uuid":"b69b7a25-86a5-47e8-ae7c-75b76931438c","provider":"voice","fingerprint":"6e631d1a75c748eca89bf9d42bcbe46e70d3c439a398b15ab3baeaefca0f909b","at":"2026-11-10T04:41:06+00:00","by":{"name":"Beto Revisor (OPS8-d)","role":"Super Admin"},"note":"OPS8-d: salientes encendidas (cupo 1, 2.00 US$)"}}}}
+════ API a POST admin/ultron-studio/voice/compile-preview
+{"http":200,"body":{"ok":true,"data":{"purpose":"publication","specHash":"e1fdbafd68165ea14c269b5bc93d999ce508851507bfe5a491d4f7f50de3e7da","shortSpecHash":"e1fdbafd","compilerVersion":"ultron-voice-compiler/1","template":{"version":"ultron-voice-template/2","hash":"b60c71c291146ce96d05eb404898516a930b08768ece07bdefd5b4755f6caa15"},"spec":{"contract":"ultron-voice-spec/1","compilerVersion":"ultron-voice-compiler/1","template":{"version":"ultron-voice-template/2","hash":"b60c71c291146ce96d05eb404898516a930b08768ece07bdefd5b4755f6caa15"},"source":{"studioVersionUuid":"3e7ccf91-1d18-4e62-b06c-c118a3f05513","studioContentHash":"9060d16439064921a5d83594bf495c30841d4a77c2aa64074f69a032de966e56","catalogVersion":"2026-10-19.1","voiceProfileUuid":"5c95417e-0285-4e93-8f55-7dfd8db3f104","voiceProfileHash":"196f14a55428352cf25ff05eb2fe8fd5920d8f53eaa0f0b225aa05f4de6b9cb1"},"language":"es","voiceId":"pNInz6obpgDQGcFmaJgB","firstMessage":"Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.","systemPrompt":"Eres el asistente virtual de voz de Iron Body Workout, un gimnasio. Atiendes llamadas telefónicas en español de Colombia. Eres un sistema de inteligencia artificial y no lo ocultas: si te preguntan si eres una persona,
+════ smoke fase 4a · código 1
+== Smoke del Hito 8 (fase 4a) · 2026-11-10T04:41:06Z · http://127.0.0.1:8431/api
+OK      presupuestos de rendimiento válidos: perf8-2026-11-08 · 11 rutas · sha256 2e495a753e5a (/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/docs/ultron-studio/ops/perf-h8/presupuestos-h8.json)
+OK      configuración de la voz de la fase 4a: {"calls_in_code":true,"inbound":false,"outbound":true,"lab":true,"voice_monitor":true,"publishing":true,"twilio_voice":true,"studio_monitor":false}
+OK      el programador: 31 tareas, 0 del Studio y 4 de voz (las de los monitores encendidos)
+FALLO   voice:doctor --telefonia: [estado=ELEVENLABS_UNVERIFIED constante=abierta encendidas=4 cadena=canary:none,rest:none freno=suelto cupos=1/0/2000000 numero=si subcuenta=si proveedor=ELEVENLABS_VERIFIED] (no es la de la fase 4a)
+OK      monitor del H7 en seco (integraciones), sin deriva de la configuración autorizada: [ok]
+INFO    canario del motor configurado: sí (su id no se imprime)
+INFO    centinela exacto: 25 huellas saladas de secretos del servidor
+OK      18 tablas ultron_studio_* y 7 voice_* en la base
+cuenta 1 activa como Super Admin
+== Smoke del Hito 8 (fase 4a) · superadmin · http://127.0.0.1:8431/api
+OK      login de la cuenta de smoke  [HTTP 200]
+OK      GET admin/voice/status → 200  [HTTP 200]
+OK      la constante de las llamadas, ABIERTA (el commit voice(calls-open) desplegado, fase 4a)  [True]
+OK      banderas de la fase 4a: inbound no, outbound sí, twilioVoice sí, monitor sí  [{"inbound": false, "outbound": true, "twilioVoice": true, "lab": true, "monitor": true}]
+OK      sin flags.publishing en la telefonía (E4-1: la bandera de publicar vive en el Studio)
+FALLO   la cadena de voz con la parte canary vigente (ok) y la rest sin entradas (none), y el freno suelto  [{"canary": "none", "rest": "none"} · freno False]
+OK      cupo de salientes ≥ 1 con presupuesto > 0 y entrantes a 0 (fase 4a)  [{"outboundDailyCap": 1, "inboundDailyCap": 0, "dailyBudgetMicros": 2000000}]
+OK      el número de voz, el id importado y la subcuenta de Twilio puestos, y el número no es de WhatsApp  [{"configured": true, "collidesWithMessaging": false, "importedNumberIdConfigured": true, "inboundCapable": false, "observed": null, "check": "unverified", "checkReason": "no_observation"} · subcuenta True]
+INFO    proveedor según la telefonía  [ELEVENLABS_VERIFIED (E4-6: dice UNVERIFIED hasta que B8 añada su lector de la verificación, antes de la fase 3)]
+OK      GET admin/voice/calls → 200 (fase 4a: puede haber llamadas de canarios)  [HTTP 200 · total 0]
+OK      GET admin/voice/contacts → 200, contactos vacíos  [HTTP 200 · total 0]
+OK      GET admin/voice/calls/<inventado> → 404 call_not_found  [HTTP 404 call_not_found]
+OK      GET admin/voice/metrics → 200 sin llamadas vivas ni ambiguas, freno suelto  [HTTP 200 · vivas 0 · ambiguas 0]
+OK      las 7 POST de la telefonía con un cuerpo vacío → 422 validation_failed (antes de la puerta: nada se escribe)
+OK      POST admin/voice/calls/<inventado>/hangup → 404 call_not_found (antes de hablar con Twilio)  [HTTP 404 call_not_found]
+OMITIDO POST /admin/ultron-studio/voice/publish  [publicar la voz encendido: publicar o promover escribe en la cadena y crea agentes; el smoke no lo hace]
+OMITIDO POST /admin/ultron-studio/voice/promote  [publicar la voz encendido: publicar o promover escribe en la cadena y crea agentes; el smoke no lo hace]
+OMITIDO POST /admin/ultron-studio/voice-lab/sessions  [laboratorio hablado encendido: abrir, cerrar o juzgar una sesión escribe o gasta; el smoke no lo hace]
+OMITIDO POST /admin/ultron-studio/voice-lab/sessions/<inventado>/end  [laboratorio hablado encendido: abrir, cerrar o juzgar una sesión escribe o gasta; el smoke no lo hace]
+OMITIDO POST /admin/ultron-studio/voice-lab/sessions/<inventado>/verdict  [laboratorio hablado encendido: abrir, cerrar o juzgar una sesión escribe o gasta; el smoke no lo hace]
+OK      las 16 rutas nuevas del Studio con sesión que no escriben en la fase 4a: lecturas 200, inventados 404, laboratorio encendido (lista 200, inventada 404), el resto 422 antes de escribir
+INFO    GET voice/profiles (informativo desde la fase 2: el laboratorio y la publicación usan perfiles)  [total 1]
+FALLO   GET voice/publications: publicar ENCENDIDO y la cadena de voz con al menos una entrada (la del canario)  [publicar {"enabled": true, "code": null} · entradas 0]
+INFO    GET voice-lab/status  [{"enabled": true}]
+OK      GET integrations/voice (ruta 45) → 200  [HTTP 200]
+OK      ruta 45: ElevenLabs en ELEVENLABS_VERIFIED (E1-12; lo afirma el Studio con la verificación de menos de 30 días)  [ELEVENLABS_VERIFIED]
+OK      ruta 45: publicar la voz encendido (publishing.enabled true, fase 4a)  [{"available": true, "enabled": true, "code": null}]
+OK      ruta 45: «can» con las 7 llaves de D8-22, todas true para el Super Admin  [approve=True, telephonyCallPlace=True, telephonyContactsManage=True, telephonyView=True, voiceLabRun=True, voiceManage=True, voicePublish=True]
+== Presupuestos de rendimiento · /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/docs/ultron-studio/ops/perf-h8/presupuestos-h8.json · perf8-2026-11-08 · sha256 2e495a753e5a · 11 rutas · 1 + 5 muestras, ≥ 0.6 s
+OK      presupuesto GET admin/voice/status: mediana 78.4 ms ≤ 290 · máximo 80.8 ms ≤ 310 · 1301 B ≤ 7168  [n 5 · calibración: p50 ≤ 129 · p95 ≤ 131]
+OK      presupuesto GET admin/voice/calls: mediana 67.7 ms ≤ 190 · máximo 80.9 ms ≤ 220 · 75 B ≤ 24576  [n 5 · calibración: p50 ≤ 118 · p95 ≤ 131]
+OK      presupuesto GET admin/voice/metrics: mediana 65.0 ms ≤ 280 · máximo 74.6 ms ≤ 290 · 306 B ≤ 6144  [n 5 · calibración: p50 ≤ 116 · p95 ≤ 125]
+OK      presupuesto GET admin/voice/contacts: mediana 70.4 ms ≤ 210 · máximo 74.5 ms ≤ 240 · 75 B ≤ 11264  [n 5 · calibración: p50 ≤ 121 · p95 ≤ 125]
+OK      presupuesto GET voice/profiles: mediana 69.2 ms ≤ 170 · máximo 90.3 ms ≤ 220 · 1556 B ≤ 28672  [n 5 · calibración: p50 ≤ 120 · p95 ≤ 141]
+OK      presupuesto GET voice/publications: mediana 63.7 ms ≤ 200 · máximo 71.0 ms ≤ 230 · 879 B ≤ 40960  [n 5 · calibración: p50 ≤ 114 · p95 ≤ 122]
+OK      presupuesto GET voice/brakes: mediana 67.1 ms ≤ 170 · máximo 71.5 ms ≤ 220 · 51 B ≤ 7168  [n 5 · calibración: p50 ≤ 118 · p95 ≤ 122]
+OK      presupuesto GET voice-lab/status: mediana 66.4 ms ≤ 170 · máximo 71.0 ms ≤ 210 · 2473 B ≤ 7168  [n 5 · calibración: p50 ≤ 117 · p95 ≤ 122]
+OK      presupuesto GET voice-lab/sessions: mediana 70.7 ms ≤ 190 · máximo 83.3 ms ≤ 220 · 4169 B ≤ 52224  [n 5 · calibración: p50 ≤ 121 · p95 ≤ 134]
+OK      presupuesto GET integrations/voice: mediana 71.8 ms ≤ 180 · máximo 76.9 ms ≤ 270 · 4844 B ≤ 11264  [n 5 · calibración: p50 ≤ 122 · p95 ≤ 127]
+OK      presupuesto GET voice/canary-evidence: mediana 65.7 ms ≤ 250 · máximo 78.2 ms ≤ 290 · 335 B ≤ 5120  [n 5 · calibración: p50 ≤ 116 · p95 ≤ 129]
+PRESUPUESTOS: 11 OK · 0 FALLO · 0 OMITIDO · 86 s (de ellos 53 s esperando a los cupos)
+OK      telefonía del CRM sin sesión: las 13 rutas → 401 (5 GET y 8 POST)
+OK      las 4 públicas sin credencial → 401 con su motivo (unauthorized · invalid_signature · verdict unauthorized · invalid_signature)
+OK      las 4 públicas responden el 401 en menos de 140 ms (máximo 9.3 ms; sin red saliente en ese camino)  [9, 9, 9, 9 ms]
+OK      una herramienta con un nombre fuera del patrón [a-z_]{1,48} → 404 (la ruta no casa)  [HTTP 404]
+OK      /webhooks/voice/elevenlabs/initiation con 9009 bytes sin credencial → 413 (tope de 8 KB antes de autenticar)  [HTTP 413 payload_too_large]
+OK      /voice/tools/consultar_planes con 9009 bytes sin credencial → 413 (tope de 8 KB antes de autenticar)  [HTTP 413 payload_too_large]
+OK      /webhooks/voice/twilio/usage-trigger con 70005 bytes sin credencial → 413 (tope de 64 KB antes de autenticar)  [HTTP 413 payload_too_large]
+INFO    post-call con 1048576 bytes (= el tope de 1 MB) sin firma: responde Laravel (401 invalid_signature): nginx deja pasar el tope entero
+OK      las 21 rutas nuevas del Studio sin sesión → 401 (8 GET y 13 POST)
+OK      cuerpos (72): sin claves prohibidas (teléfono, huellas, ids de Meta, textos del proveedor, firmas)
+OK      cuerpos (72): cada secreto solo como presencia, origen, huella de 8 hex o referencia corta
+OK      cuerpos (72): sin credenciales, sin APP_KEY y sin rutas del servidor
+OK      cuerpos (72): sin teléfonos ni ids de Meta (10 cifras o más)
+OK      cuerpos (72): ninguna clave nombra una conversación
+OK      cuerpos (72): ninguno lleva el id de la conversación canaria
+OK      cuerpos (72): ninguno contiene un secreto del servidor (centinela exacto, 25 huellas saladas)
+OK      Cache-Control «no-store, private» en las 131 respuestas de /api/admin
+OK      limitador: ninguna respuesta 429  [0 respuestas 429]
+OK      ninguna respuesta 5xx  [0 respuestas 5xx]
+RESUMEN (superadmin): 47 OK · 2 FALLO · 5 OMITIDO
+== Base, registros y red (solo lectura)
+OK      ninguna fila nueva de ultron_studio_* ni de voice_* nombra a la cuenta 1
+OK      recuento exacto de las 25 tablas (18 del Studio y 7 de la voz) igual antes y después: ninguna escritura, ningún agente, ninguna instantánea, ningún evento de llamada
+OK      incidentes de IRON GUARD del Studio (filas · ocurrencias): 0 0, los mismos
+OK      cola voice: 0 trabajos (antes 0)
+OK      canal voice durante el smoke: solo los rechazos esperados de las rutas públicas [voice.inbound.unauthorized×1(WARNING) voice.post_call.rejected×2(WARNING) voice.tool.unauthorized×1(WARNING) voice.twilio.usage_rejected×1(WARNING) ] (nada sale a la red ni se encola)
+OK      laravel*.log: ningún ERROR durante el smoke
+OK      cero red saliente (valla): bloqueos 0 → 0
+OK      monitor del H7 en seco (integraciones) igual que antes del smoke: [ok]
+cuenta 1 en reposo: inactiva, Super Admin, sesiones borradas: 1
+OK      token tras desactivar → 403
+OK      sesiones de la cuenta tras el smoke: 0
+SMOKE H8: código de salida 1
+════ observar-numero (reloj desplazado)
+{"ok":true,"at":"2026-11-10T12:30:00Z","result":"outbound_only","matchesFrom":true,"brakeOpened":false,"policy":"verified"}
+════ API a POST admin/voice/calls
+{"http":409,"body":{"ok":false,"code":"outbound_denied","message":"La política de salientes no permite esta llamada.","reasons":["no_publication"]}}
+════ worker (orden literal del borrador, una pasada)
+

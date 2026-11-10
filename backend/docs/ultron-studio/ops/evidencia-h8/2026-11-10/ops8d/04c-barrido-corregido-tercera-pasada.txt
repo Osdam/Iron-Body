@@ -1,0 +1,4 @@
+Barrido corregido (solo piezas secretas y tokens) sobre la tercera pasada, pasado a mano el 2026-11-10T04:58:06Z:
+limpio
+14 valores secretos vigilados (12 piezas + 2 tokens), 4 patrones, 4 ficheros
+El FALLO de la tercera pasada era el id del número importado (EL_PHONE_NUMBER_ID), que no es secreto (config/voice.php) y el mando imprime en «piezas no secretas» (3 líneas: la del antes → después de fase 2 set y dos «estado»).

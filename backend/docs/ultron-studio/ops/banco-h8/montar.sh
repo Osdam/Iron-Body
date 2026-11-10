@@ -174,9 +174,12 @@ TW_EL_KEY_SID=SK$(hex 16)
 TW_EL_KEY_SECRET=$(hex 16)
 TW_VOICE_NUMBER_SID=PN$(hex 16)
 TW_SIGN_BASE=https://api.ironbody-banco.invalid
-SENTINEL_ELEVENLABS=banco-h8-centinela-el-$(hex 6)
-SENTINEL_TWILIO=banco-h8-centinela-tw-$(hex 6)
+SENTINEL_ELEVENLABS=banco-h8-centinela-el-$(hex 6 | tr 0-9 g-p)
+SENTINEL_TWILIO=banco-h8-centinela-tw-$(hex 6 | tr 0-9 g-p)
 PZ
+# Los centinelas van SIN cifras (como los del E2E de TEST8): el simulador los mete en un turno del agente de la post-llamada
+# y la guarda de la transcripción lee un tramo de cifras como un precio (voice_money_not_from_tool) y echa el freno
+# (OPS8-d, 10-11-2026: pasó con un centinela con cinco cifras seguidas).
 chmod 600 "$B/sim/piezas.conf"
 umask 022
 unset OTP_SID OTP_TOK
@@ -184,7 +187,11 @@ unset OTP_SID OTP_TOK
 echo "== 6. migraciones de $PREVIO_BANCO como h5_owner (esquema de hoy) y cachés; sin red (proxy a un puerto cerrado)"
 cd "$B/api/backend"
 SINRED=(PGGSSENCMODE=disable http_proxy=http://127.0.0.1:9 https_proxy=http://127.0.0.1:9 HTTP_PROXY=http://127.0.0.1:9 HTTPS_PROXY=http://127.0.0.1:9 no_proxy=127.0.0.1,localhost NO_PROXY=127.0.0.1,localhost)
-env "${SINRED[@]}" DB_USERNAME=h5_owner php artisan migrate --force -q
+# ULTRON_STUDIO_DB_APP_ROLE: el REVOKE de UPDATE y DELETE del rol de la aplicación sobre las tablas de solo inserción (H7 y H8)
+# solo se aplica si la migración conoce el rol (en producción lo pone ironbody-migrate). Sin él, el despliegue del H8 aborta
+# en el paso 4 («privilegios de iron_app … rawd-s, esperado ra---s») cuando la «producción» de partida ya trae esas migraciones
+# (OPS8-d, 10-11-2026: BANCO_PREVIO=fe29126).
+env "${SINRED[@]}" DB_USERNAME=h5_owner ULTRON_STUDIO_DB_APP_ROLE=h5_app php artisan migrate --force -q
 env "${SINRED[@]}" php artisan config:cache -q && env "${SINRED[@]}" php artisan route:cache -q && chmod 600 bootstrap/cache/config.php bootstrap/cache/routes-v7.php
 echo "   rutas del Studio: $(env "${SINRED[@]}" php artisan route:list --path=admin/ultron-studio --json | python3 -c 'import json, sys; print(len(json.load(sys.stdin)))') (56 = el H7 en producción)"
 env "${SINRED[@]}" php artisan ultron-studio:integrations-snapshot -q
