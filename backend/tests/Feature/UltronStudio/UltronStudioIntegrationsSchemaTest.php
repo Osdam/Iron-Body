@@ -67,17 +67,17 @@ class UltronStudioIntegrationsSchemaTest extends TestCase
      * aplicado: `*_H5` es el esquema sin el H6 (el down() del H6 no toca las
      * guardas del H7, que son de la cadena) y `*_H6`, con él.
      */
-    private const PG_TRIGGERS_H5 = 55;   // F 11 + laboratorio 16 + H5 3 + H7 1 + H8 24
+    private const PG_TRIGGERS_H5 = 110;  // F 11 + laboratorio 16 + H5 3 + H7 1 + H8 24 + H9 55
 
-    private const PG_TRIGGERS_H6 = 68;   // + asociaciones 5, canarios 5, instantáneas 3
+    private const PG_TRIGGERS_H6 = 123;  // + asociaciones 5, canarios 5, instantáneas 3
 
-    private const PG_CHECKS_H5 = 62;     // F 11 + laboratorio 13 + H5 3 + H7 1 + H8 34
+    private const PG_CHECKS_H5 = 115;    // F 11 + laboratorio 13 + H5 3 + H7 1 + H8 34 + H9 53
 
-    private const PG_CHECKS_H6 = 84;     // + 4, 12 y 6 (usae_subject_type_chk se sustituye, no se suma)
+    private const PG_CHECKS_H6 = 137;    // + 4, 12 y 6 (usae_subject_type_chk se sustituye, no se suma)
 
-    private const SQLITE_TRIGGERS_H5 = 45; // F 7 + laboratorio 11 + H5 2 + H7 2 + H8 23
+    private const SQLITE_TRIGGERS_H5 = 98; // F 7 + laboratorio 11 + H5 2 + H7 2 + H8 23 + H9 53
 
-    private const SQLITE_TRIGGERS_H6 = 55; // + 4, 4 y 2
+    private const SQLITE_TRIGGERS_H6 = 108; // + 4, 4 y 2
 
     /** Contrato §I3.1, en orden: columna → [tipo en PG, tipo en SQLite, NULL-able]. */
     private const LINK_COLUMNS = [
@@ -185,6 +185,9 @@ class UltronStudioIntegrationsSchemaTest extends TestCase
     ];
 
     private const SEVEN_SUBJECTS = ['draft', 'version', 'rule', 'system', 'campaign_link', 'canary_number', 'integration'];
+
+    /** Con el Hito 9 (DB9, 2026_11_12_100001) el libro admite 4 más. El up() del H6 los reescribe a sus 7: en producción, el orden del rollback lo impide. */
+    private const ELEVEN_SUBJECTS = [...self::SEVEN_SUBJECTS, 'strategy', 'strategy_version', 'message_template', 'person_binding'];
 
     /** Contrato §I8: los eventos nuevos y su sujeto (caben en `event` varchar(48) y `subject_type` varchar(16)). */
     private const H6_EVENTS = [
@@ -334,7 +337,7 @@ class UltronStudioIntegrationsSchemaTest extends TestCase
 
     public function test_recuentos_de_disparadores_check_e_indices_parciales_del_studio(): void
     {
-        $this->assertSame(['uscl_one_active', 'uscn_one_live', 'usv_one_canary', 'usv_one_published', 'usva_one_canary', 'usva_one_rest'], $this->studioPartialIndexes());
+        $this->assertSame(['uscl_one_active', 'uscn_one_live', 'uspb_one_active', 'ussv_one_canary', 'ussv_one_published', 'usv_one_canary', 'usv_one_published', 'usva_one_canary', 'usva_one_rest'], $this->studioPartialIndexes());
 
         if ($this->isPostgres()) {
             foreach (self::PG_TRIGGERS as $tabla => $nombres) {
@@ -343,8 +346,8 @@ class UltronStudioIntegrationsSchemaTest extends TestCase
             foreach (self::PG_CHECKS as $tabla => $nombres) {
                 $this->assertSame($nombres, $this->checksOn($tabla), $tabla);
             }
-            $this->assertSame(self::PG_TRIGGERS_H6, $this->studioTriggerCount(), 'F 11 + laboratorio 16 + H5 3 + H6 13 + H7 1 + H8 24');
-            $this->assertSame(self::PG_CHECKS_H6, $this->studioCheckCount(), 'F 11 + laboratorio 13 + H5 3 + H6 22 + H7 1 + H8 34');
+            $this->assertSame(self::PG_TRIGGERS_H6, $this->studioTriggerCount(), 'F 11 + laboratorio 16 + H5 3 + H6 13 + H7 1 + H8 24 + H9 55');
+            $this->assertSame(self::PG_CHECKS_H6, $this->studioCheckCount(), 'F 11 + laboratorio 13 + H5 3 + H6 22 + H7 1 + H8 34 + H9 53');
 
             return;
         }
@@ -352,7 +355,7 @@ class UltronStudioIntegrationsSchemaTest extends TestCase
         foreach (self::PG_TRIGGERS as $tabla => $nombres) {
             $this->assertSame(array_values(array_filter($nombres, static fn (string $n): bool => ! str_ends_with($n, '_truncate'))), $this->triggersOn($tabla), $tabla);
         }
-        $this->assertSame(self::SQLITE_TRIGGERS_H6, $this->studioTriggerCount(), 'F 7 + laboratorio 11 + H5 2 + H6 10 + H7 2 + H8 23');
+        $this->assertSame(self::SQLITE_TRIGGERS_H6, $this->studioTriggerCount(), 'F 7 + laboratorio 11 + H5 2 + H6 10 + H7 2 + H8 23 + H9 53');
     }
 
     public function test_los_disparadores_reutilizan_la_funcion_de_f_con_su_mismo_cuerpo(): void
@@ -735,8 +738,8 @@ class UltronStudioIntegrationsSchemaTest extends TestCase
     {
         $this->requirePostgres('El CHECK de sujetos solo existe en PostgreSQL (F); en SQLite lo vigila `StudioAuditEvent::SUBJECT_TYPES`.');
 
-        $this->assertSame(self::SEVEN_SUBJECTS, $this->checkValues('usae_subject_type_chk', self::AUDIT));
-        foreach (self::SEVEN_SUBJECTS as $sujeto) {
+        $this->assertSame(self::ELEVEN_SUBJECTS, $this->checkValues('usae_subject_type_chk', self::AUDIT));
+        foreach (self::ELEVEN_SUBJECTS as $sujeto) {
             $this->insertEvent($sujeto, "{$sujeto}.prueba");
         }
         // Los nombres de §I8 caben en sus columnas.
@@ -746,7 +749,7 @@ class UltronStudioIntegrationsSchemaTest extends TestCase
         foreach (['campaign', 'canary', 'integrations', 'campaign_links', ''] as $inventado) {
             $this->assertRejected(fn () => $this->insertEvent($inventado, 'x.y'), '23514', 'usae_subject_type_chk', "«{$inventado}»");
         }
-        $this->assertSame(7 + count(self::H6_EVENTS), DB::table(self::AUDIT)->count());
+        $this->assertSame(11 + count(self::H6_EVENTS), DB::table(self::AUDIT)->count());
     }
 
     // ── Índices parciales ───────────────────────────────────────────────────
@@ -823,7 +826,7 @@ class UltronStudioIntegrationsSchemaTest extends TestCase
         foreach ([self::LINKS, self::CANARIES, self::SNAPSHOTS] as $tabla) {
             $this->assertFalse(Schema::hasTable($tabla), $tabla);
         }
-        $this->assertSame(['usv_one_canary', 'usv_one_published', 'usva_one_canary', 'usva_one_rest'], $this->studioPartialIndexes());
+        $this->assertSame(['uspb_one_active', 'ussv_one_canary', 'ussv_one_published', 'usv_one_canary', 'usv_one_published', 'usva_one_canary', 'usva_one_rest'], $this->studioPartialIndexes());
         $this->assertSame($libro, $this->sqliteObjectsOf(self::AUDIT), 'el libro cambió en SQLite');
         if ($this->isPostgres()) {
             $this->assertSame(['draft', 'version', 'rule', 'system'], $this->checkValues('usae_subject_type_chk', self::AUDIT));
@@ -841,7 +844,8 @@ class UltronStudioIntegrationsSchemaTest extends TestCase
         $this->migration(self::CREATE)->up();
         $this->migration(self::GUARDS)->up();
 
-        $this->assertH6SchemaPresent();
+        // El up() del H6 deja sus 7 sujetos: los 4 del H9 vuelven con la migración del H9.
+        $this->assertH6SchemaPresent(self::SEVEN_SUBJECTS);
         $this->assertSame($libro, $this->sqliteObjectsOf(self::AUDIT), 'el libro cambió en SQLite');
         $this->assertSame($this->isPostgres() ? self::PG_TRIGGERS_H6 : self::SQLITE_TRIGGERS_H6, $this->studioTriggerCount());
         if ($this->isPostgres()) {
@@ -895,20 +899,20 @@ class UltronStudioIntegrationsSchemaTest extends TestCase
         }
     }
 
-    /** Tablas, disparadores, parciales y (en PG) CHECK y 7 sujetos: nada se deshizo. */
-    private function assertH6SchemaPresent(): void
+    /** Tablas, disparadores, parciales y (en PG) CHECK y los sujetos del libro: nada se deshizo. @param  list<string>  $sujetos */
+    private function assertH6SchemaPresent(array $sujetos = self::ELEVEN_SUBJECTS): void
     {
         foreach (self::PG_TRIGGERS as $tabla => $nombres) {
             $this->assertTrue(Schema::hasTable($tabla), $tabla);
             $this->assertSame($this->isPostgres() ? $nombres : array_values(array_filter($nombres, static fn (string $n): bool => ! str_ends_with($n, '_truncate'))),
                 $this->triggersOn($tabla), $tabla);
         }
-        $this->assertSame(['uscl_one_active', 'uscn_one_live', 'usv_one_canary', 'usv_one_published', 'usva_one_canary', 'usva_one_rest'], $this->studioPartialIndexes());
+        $this->assertSame(['uscl_one_active', 'uscn_one_live', 'uspb_one_active', 'ussv_one_canary', 'ussv_one_published', 'usv_one_canary', 'usv_one_published', 'usva_one_canary', 'usva_one_rest'], $this->studioPartialIndexes());
         if ($this->isPostgres()) {
             foreach (self::PG_CHECKS as $tabla => $nombres) {
                 $this->assertSame($nombres, $this->checksOn($tabla), $tabla);
             }
-            $this->assertSame(self::SEVEN_SUBJECTS, $this->checkValues('usae_subject_type_chk', self::AUDIT));
+            $this->assertSame($sujetos, $this->checkValues('usae_subject_type_chk', self::AUDIT));
         }
     }
 

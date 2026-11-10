@@ -202,14 +202,14 @@ class UltronStudioVoiceSchemaTest extends TestCase
     ];
 
     /** Todos los del Studio, con el H8: 44 + 24 y 50 + 34 en PG; 32 + 23 en SQLite. */
-    private const PG_STUDIO_TRIGGERS = 68;
+    private const PG_STUDIO_TRIGGERS = 123;
 
-    private const PG_STUDIO_CHECKS = 84;
+    private const PG_STUDIO_CHECKS = 137;
 
-    private const SQLITE_STUDIO_TRIGGERS = 55;
+    private const SQLITE_STUDIO_TRIGGERS = 108;
 
     /** Los parciales de todo el Studio: los 4 de H5/H6 y los 2 de los agentes. */
-    private const STUDIO_PARTIAL_INDEXES = ['uscl_one_active', 'uscn_one_live', 'usv_one_canary', 'usv_one_published', 'usva_one_canary', 'usva_one_rest'];
+    private const STUDIO_PARTIAL_INDEXES = ['uscl_one_active', 'uscn_one_live', 'uspb_one_active', 'ussv_one_canary', 'ussv_one_published', 'usv_one_canary', 'usv_one_published', 'usva_one_canary', 'usva_one_rest'];
 
     private const FORBID_MD5 = '4ad748b5f17f09b398f7f641c197d7ee';
 
@@ -315,8 +315,8 @@ class UltronStudioVoiceSchemaTest extends TestCase
             }
             $this->assertSame(24, $this->countLike('trigger', 'ultron\\_studio\\_voice\\_%'), 'perfiles 6 + agentes 7 + cadena 5 + sesiones 6');
             $this->assertSame(34, $this->countLike('check', 'ultron\\_studio\\_voice\\_%'), 'perfiles 11 + agentes 10 + cadena 8 + sesiones 5');
-            $this->assertSame(self::PG_STUDIO_TRIGGERS, $this->countLike('trigger', 'ultron\\_studio\\_%'), 'F 11 + laboratorio 16 + H5 3 + H6 13 + H7 1 + H8 24');
-            $this->assertSame(self::PG_STUDIO_CHECKS, $this->countLike('check', 'ultron\\_studio\\_%'), 'F 11 + laboratorio 13 + H5 3 + H6 22 + H7 1 + H8 34');
+            $this->assertSame(self::PG_STUDIO_TRIGGERS, $this->countLike('trigger', 'ultron\\_studio\\_%'), 'F 11 + laboratorio 16 + H5 3 + H6 13 + H7 1 + H8 24 + H9 55');
+            $this->assertSame(self::PG_STUDIO_CHECKS, $this->countLike('check', 'ultron\\_studio\\_%'), 'F 11 + laboratorio 13 + H5 3 + H6 22 + H7 1 + H8 34 + H9 53');
 
             return;
         }
@@ -327,7 +327,7 @@ class UltronStudioVoiceSchemaTest extends TestCase
             $this->assertSame($esperados, $this->triggersOn($tabla), $tabla);
         }
         $this->assertSame(23, $this->countLike('trigger', 'ultron_studio_voice_%'), 'perfiles 6 + agentes 6 + cadena 5 + sesiones 6');
-        $this->assertSame(self::SQLITE_STUDIO_TRIGGERS, $this->countLike('trigger', 'ultron_studio_%'), 'F 7 + laboratorio 11 + H5 2 + H6 10 + H7 2 + H8 23');
+        $this->assertSame(self::SQLITE_STUDIO_TRIGGERS, $this->countLike('trigger', 'ultron_studio_%'), 'F 7 + laboratorio 11 + H5 2 + H6 10 + H7 2 + H8 23 + H9 53');
     }
 
     public function test_solo_en_postgres_las_funciones_de_la_cadena_son_propias_y_la_de_f_no_cambia(): void
