@@ -202,6 +202,8 @@ class ElevenLabsConfigTest extends TestCase
             ],
             // H8 (D8-11, D8-12 y D8-15): TODO APAGADO; los límites son techos, que no encienden nada.
             'webhook_base_url' => null,
+            // B8-g: lo DECLARADO del número importado (¿admite entrantes?): sin declarar, null (no es una bandera).
+            'number' => ['inbound_capable' => null],
             'inbound' => ['enabled' => false, 'scope' => 'canary', 'daily_cap' => 0],
             'outbound' => [
                 'enabled' => false, 'scope' => 'canary',
@@ -231,6 +233,13 @@ class ElevenLabsConfigTest extends TestCase
                 $this->assertSame($esperado, self::evaluar([$variable => (string) $valor])[$bloque]['enabled'], "{$variable}={$valor}");
             }
         }
+        // B8-g: `VOICE_NUMBER_INBOUND_CAPABLE` es una DECLARACIÓN sin defecto: solo un sí o un no explícitos cuentan;
+        // vacía o ilegible es null (S8 asigna el número como siempre). Ningún booleano nace encendido (protección 1).
+        foreach (['' => null, ' ' => null, 'si' => null, 'quizá' => null, 'false' => false, '0' => false, 'off' => false, 'no' => false,
+            'true' => true, '1' => true, 'on' => true, 'yes' => true] as $valor => $esperado) {
+            $this->assertSame($esperado, self::evaluar(['VOICE_NUMBER_INBOUND_CAPABLE' => (string) $valor])['number']['inbound_capable'], "VOICE_NUMBER_INBOUND_CAPABLE={$valor}");
+        }
+
         // E4-1: VOICE_PUBLISHING_ENABLED ya no se lee aquí (una sola bandera de publicar, la del Studio).
         $this->assertArrayNotHasKey('publishing', self::evaluar(['VOICE_PUBLISHING_ENABLED' => 'true']));
         foreach (['5' => 10, '45' => 45, '90' => 60, 'x' => 30] as $valor => $esperado) {
@@ -332,7 +341,10 @@ class ElevenLabsConfigTest extends TestCase
             'VOICE_FREQUENCY_WEEK', 'VOICE_PUBLISHING_ENABLED', 'VOICE_LAB_ENABLED', 'VOICE_MONITOR_ENABLED', 'VOICE_TRANSFER_HOURS_WEEKDAYS',
             'VOICE_TRANSFER_HOURS_SATURDAY', 'VOICE_FACTS_SITE', 'VOICE_FACTS_HOURS', 'VOICE_RNE_VALIDITY_DAYS',
             // LAB8 (informe-lab §2.3)
-            'VOICE_LAB_DRIVER', 'VOICE_LAB_DAILY_BUDGET_USD', 'VOICE_LAB_SESSION_BUDGET_USD', 'VOICE_LAB_MAX_SESSION_SECONDS', 'VOICE_LAB_MAX_SESSIONS_PER_DAY'];
+            'VOICE_LAB_DRIVER', 'VOICE_LAB_DAILY_BUDGET_USD', 'VOICE_LAB_SESSION_BUDGET_USD', 'VOICE_LAB_MAX_SESSION_SECONDS', 'VOICE_LAB_MAX_SESSIONS_PER_DAY',
+            // B8-g, la declaración del número. B8-h: faltaba en esta lista, así que el último valor del bucle («yes» → true) se quedaba
+            // en el entorno del proceso y se filtraba a las pruebas siguientes (el doctor y la deriva lo leían como declarado).
+            'VOICE_NUMBER_INBOUND_CAPABLE'];
         $antes = [];
         foreach ($todas as $nombre) {
             $antes[$nombre] = [$_SERVER[$nombre] ?? null, $_ENV[$nombre] ?? null, getenv($nombre)];

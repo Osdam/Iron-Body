@@ -43,6 +43,8 @@ final class H8E2EAbiertaTest extends H8StackE2ETestCase
         $st = $this->telefonia('GET', 'status', 'a');
         $this->check('GET admin/voice/status: 200, banderas encendidas y sin flags.publishing', $st->status() === 200 && $st->json('flags.inbound') === true && $st->json('flags.outbound') === true
             && ! array_key_exists('publishing', (array) $st->json('flags')), self::resumen($st, 'flags'));
+        $this->check('E4-6 (B8-g): la verificación del arranque (--verify-voice contra el simulador) dejó el proveedor VERIFICADO, con su marca vigente', $st->json('provider') === 'ELEVENLABS_VERIFIED'
+            && $st->json('providerVerification.state') === 'valid', self::resumen($st, 'provider', 'providerVerification'));
         $iv = $this->studio('GET', 'integrations/voice', 'b');
         $this->check('ruta 45: 200 y Beto (Super Admin) tiene las 7 llaves de D8-22', $iv->status() === 200 && count(array_filter((array) $iv->json('data.can'))) === 7, self::resumen($iv, 'data.can'));
         $this->prepararCanarios();
@@ -202,8 +204,10 @@ final class H8E2EAbiertaTest extends H8StackE2ETestCase
         $this->requiere('c');
         $ev = $this->studio('GET', 'voice/canary-evidence', 'b');
         $this->must('GET voice/canary-evidence: 200', $ev->status() === 200, self::resumen($ev));
-        $this->check('recuentos: 3 llamadas selladas (sin la denegada), 0 violaciones, 0 sellos rotos, 0 deriva, 0 desconocidas, 0 gasto de más', $ev->json('data.measures') === [
-            'calls' => 3, 'guardViolations' => 0, 'sealMismatches' => 0, 'driftEvents' => 0, 'unknownProviderCalls' => 0, 'budgetBreaches' => 0], $ev->json('data.measures'));
+        // E13-3 (B8-g): siete claves; `calls` cuenta solo las selladas con su post-llamada PROCESADA (`guard_verdict`) y
+        // `missingPostCall` las que deberían tenerla y no la tienen (el caso con una que falta: fase «salientes», paso e).
+        $this->check('recuentos: 3 llamadas selladas con su post-llamada (sin la denegada), 0 violaciones, 0 sellos rotos, 0 deriva, 0 desconocidas, 0 gasto de más, 0 post-llamadas que falten', $ev->json('data.measures') === [
+            'calls' => 3, 'guardViolations' => 0, 'sealMismatches' => 0, 'driftEvents' => 0, 'unknownProviderCalls' => 0, 'budgetBreaches' => 0, 'missingPostCall' => 0], $ev->json('data.measures'));
         $this->check('solo falla too_soon (E6-11): 0 h < 24 h; cadena verificada, freno suelto, veredicto approved', $ev->json('data.failing') === ['too_soon'] && $ev->json('data.passes') === false
             && $ev->json('data.hours') === 0 && $ev->json('data.chainVerified') === true && $ev->json('data.brake') === 'released' && $ev->json('data.labVerdict.latest') === 'approved'
             && $ev->json('data.thresholds') === ['minHours' => 24, 'minCalls' => 3] && $ev->json('data.specHash') === $a['specHash'], self::resumen($ev, 'data.failing', 'data.hours', 'data.brake'));
@@ -333,34 +337,60 @@ final class H8E2EAbiertaTest extends H8StackE2ETestCase
         $canario = $this->requiere('canarios')[1];
         $ana = (string) self::ctx()['accounts']['a']['id'];
 
-        // 1. La puerta, con el reloj real: E4-6 y el calendario (oráculo propio con el fixture de festivos de TEST8-a).
+        // B8-g (`number_unverified`): la puerta exige una conciliación del número importado de menos de 2 h que cuadre con
+        // TWILIO_VOICE_FROM. La de verdad, con el reloj real, antes de las salientes (los workers de un trabajo la repiten
+        // con su reloj: `workerDeUnTrabajo()`).
+        $cn = $this->conciliar(true);
+        $this->check('voice:reconcile --numbers antes de las salientes: el número importado cuadra con TWILIO_VOICE_FROM', ($cn['json']['number']['matchesFrom'] ?? null) === true
+            && ($cn['json']['number']['result'] ?? null) === 'ok', $cn['json']['number'] ?? $cn);
+
+        // 1. La PUERTA REAL con el reloj real. E4-6 (B8-g): la verificación del arranque del arnés (`--verify-voice` contra
+        //    el simulador) dejó la marca y el proveedor está VERIFICADO, así que ya no sale `elevenlabs_unverified`. Fuera
+        //    del horario legal (oráculo propio con el fixture de festivos de TEST8-a): 409 con EXACTAMENTE el calendario.
+        //    Dentro: 202 → la fila sellada y el job en `voice` → el worker RESIDENTE marca contra los simuladores.
         $ahora = new \DateTimeImmutable('now');
         $cal = self::calendarioLegal($ahora);
-        $antes = $this->fotos();
-        $r = $this->telefonia('POST', 'calls', 'a', ['clientRequestId' => self::uuid(), 'target' => ['kind' => 'canary', 'uuid' => $canario]]);
-        $m = (array) $r->json('reasons');
-        $esperados = array_values(array_filter(['elevenlabs_unverified', $cal['outsideHours'] ? 'outside_hours' : null, $cal['holiday'] ? 'holiday' : null]));
-        $this->check('la puerta: 409 con EXACTAMENTE elevenlabs_unverified (E4-6) y el calendario de ahora ('.implode(', ', $esperados).')', $r->status() === 409 && $m === $esperados, ['reasons' => $m, 'esperados' => $esperados, 'ahora' => $ahora->format(DATE_ATOM)]);
-        $this->check('la puerta no llama a nadie ni escribe una fila', self::delta($antes['el'], $this->el('stats'))['requests'] === 0
-            && (int) $this->valor("SELECT count(*) FROM voice_calls WHERE direction = 'outbound'") === 0, null);
+        $fuera = $cal['outsideHours'] || $cal['holiday'];
+        $esperados = array_values(array_filter([$cal['outsideHours'] ? 'outside_hours' : null, $cal['holiday'] ? 'holiday' : null]));
         $nc = $this->telefonia('POST', 'calls', 'c', ['clientRequestId' => self::uuid(), 'target' => ['kind' => 'canary', 'uuid' => $canario]]);
         $this->check('Carla no pide salientes (403)', $nc->status() === 403, self::resumen($nc));
-
-        // 2. El WORKER RESIDENTE con el reloj real: la fila sellada como la puerta y el job en la cola `voice`.
-        $s = $this->ayudante(['saliente', 'canary', $canario, self::uuid(), $ana, '0']);
-        $this->must('costura: fila requested sellada (applied, entrada 1, canario)', ($s['status'] ?? null) === 'requested' && ($s['stampState'] ?? null) === 'applied' && ($s['seq'] ?? null) === 1, $s);
         $antes = $this->fotos();
-        $this->ayudante(['despachar', $s['call'], 'voice']);
-        $estado = $this->esperarEstado($s['call']);
-        if ($cal['outsideHours'] || $cal['holiday']) {
+        $crid = self::uuid();
+        $r = $this->telefonia('POST', 'calls', 'a', ['clientRequestId' => $crid, 'target' => ['kind' => 'canary', 'uuid' => $canario]]);
+        if ($fuera) {
+            $this->check('la puerta (fuera del horario legal): 409 con EXACTAMENTE el calendario de ahora ('.implode(', ', $esperados).'); sin elevenlabs_unverified (E4-6)', $r->status() === 409
+                && (array) $r->json('reasons') === $esperados, ['reasons' => $r->json('reasons'), 'esperados' => $esperados, 'ahora' => $ahora->format(DATE_ATOM)]);
+            $this->check('la puerta no llama a nadie ni escribe una fila', self::delta($antes['el'], $this->el('stats'))['requests'] === 0
+                && (int) $this->valor("SELECT count(*) FROM voice_calls WHERE direction = 'outbound'") === 0, null);
+
+            // 2. El WORKER RESIDENTE con el reloj real: la fila sellada como la puerta (costura) y el job en `voice`.
+            $s = $this->ayudante(['saliente', 'canary', $canario, self::uuid(), $ana, '0']);
+            $this->must('costura: fila requested sellada (applied, entrada 1, canario)', ($s['status'] ?? null) === 'requested' && ($s['stampState'] ?? null) === 'applied' && ($s['seq'] ?? null) === 1, $s);
+            $antes = $this->fotos();
+            $this->ayudante(['despachar', $s['call'], 'voice']);
+            $estado = $this->esperarEstado($s['call']);
             $motivo = $cal['outsideHours'] ? 'outside_hours' : 'holiday';
             $this->check("worker residente (reloj real, fuera de la ventana legal): cancelada con {$motivo}, sin petición", $estado === 'canceled'
                 && $this->valor('SELECT policy_reason FROM voice_calls WHERE uuid = ?', [$s['call']]) === $motivo
                 && ! isset(self::delta($antes['el'], $this->el('stats'))['byRoute']['/v1/convai/twilio/outbound-call']), ['estado' => $estado]);
         } else {
-            $this->check('worker residente (reloj real, dentro de la ventana): marca → dialing', $estado === 'dialing', ['estado' => $estado]);
-            $conv = (string) $this->valor('SELECT provider_conversation_id FROM voice_calls WHERE uuid = ?', [$s['call']]);
-            $this->cerrarConversacion($conv, 30);
+            $uuid = (string) $r->json('call.uuid');
+            $this->must('la puerta (dentro del horario legal, proveedor verificado): 202 y la fila requested', $r->status() === 202 && $r->json('ok') === true
+                && $r->json('call.status') === 'requested' && preg_match('/^[0-9a-f-]{36}$/', $uuid) === 1, self::resumen($r, 'call.status'));
+            $fs = $this->fila('SELECT stamp_state, voice_publication_seq, part, requested_by_admin_id FROM voice_calls WHERE uuid = ?', [$uuid]);
+            $this->check('SQL: la fila de la puerta, sellada con la entrada 1 y la parte canaria, pedida por Ana', $fs !== null && $fs['stamp_state'] === 'applied' && (int) $fs['voice_publication_seq'] === 1
+                && $fs['part'] === 'canary' && (int) $fs['requested_by_admin_id'] === (int) $ana, $fs);
+            $dup = $this->telefonia('POST', 'calls', 'a', ['clientRequestId' => $crid, 'target' => ['kind' => 'canary', 'uuid' => $canario]]);
+            $this->check('repetir la petición (el mismo clientRequestId) → 200 duplicate con la MISMA fila', $dup->status() === 200 && $dup->json('duplicate') === true && $dup->json('call.uuid') === $uuid, self::resumen($dup, 'duplicate'));
+            $estado = $this->esperarEstado($uuid);
+            $this->check('worker residente (reloj real, dentro de la ventana): marca → dialing, UNA outbound-call', $estado === 'dialing'
+                && (self::delta($antes['el'], $this->el('stats'))['byRoute']['/v1/convai/twilio/outbound-call'] ?? 0) === 1, ['estado' => $estado]);
+            $conv = (string) $this->valor('SELECT provider_conversation_id FROM voice_calls WHERE uuid = ?', [$uuid]);
+            $cierre = $this->cerrarConversacion($conv, 30);
+            $this->check('la saliente de la puerta termina limpia (completed, seal_verified)', ($cierre['post']['deliveries'][0]['status'] ?? null) === 200
+                && $this->valor('SELECT status FROM voice_calls WHERE uuid = ?', [$uuid]) === 'completed' && $this->valor('SELECT seal_verified FROM voice_calls WHERE uuid = ?', [$uuid]) === true, null);
+            // Dentro del horario legal esta saliente SÍ sale al proveedor: el paso h la cuenta.
+            self::$s['salientesMarcadas'] = (self::$s['salientesMarcadas'] ?? 0) + ($estado === 'dialing' ? 1 : 0);
         }
 
         // 3. SALIENTE COMPLETA, con el job en un instante dentro del horario legal (martes 10:00 de Bogotá).
@@ -371,6 +401,7 @@ final class H8E2EAbiertaTest extends H8StackE2ETestCase
         $this->check('el worker de un trabajo (reloj en el martes) sale con 0', $w['code'] === 0, mb_substr($w['err'], 0, 300));
         $f = $this->fila('SELECT status, provider_conversation_id, provider_call_sid, started_at IS NOT NULL AS empezo, voice_publication_seq, provider_agent_id, spec_hash FROM voice_calls WHERE uuid = ?', [$s2['call']]);
         $this->must('la saliente marcó: dialing con la conversación y el SID de Twilio', $f !== null && $f['status'] === 'dialing' && is_string($f['provider_conversation_id']) && preg_match('/^CA[0-9a-f]{32}$/', (string) $f['provider_call_sid']) === 1, $f);
+        self::$s['salientesMarcadas'] = (self::$s['salientesMarcadas'] ?? 0) + 1;
         $this->check('sellada con la entrada 1 y su agente y huella', (int) $f['voice_publication_seq'] === 1 && $f['provider_agent_id'] === $p['provider'] && $f['spec_hash'] === $a['specHash'] && $f['empezo'] === true, $f);
         $dEl = self::delta($antes['el'], $this->el('stats'));
         $dTw = self::delta($antes['tw'], $this->tw('stats'));
@@ -490,7 +521,11 @@ final class H8E2EAbiertaTest extends H8StackE2ETestCase
             ['violaciones' => $el['violationsByCode'] ?? null, 'falsosPositivosF6' => self::$s['falsosPositivos'] ?? []]);
         $this->check('falsos positivos del simulador por F-6 (verificados con el oráculo propio): '.array_sum((array) (self::$s['falsosPositivos'] ?? [])), true, self::$s['falsosPositivosDetalle'] ?? []);
         $this->check('Twilio: 0 violaciones en toda la fase (ni la maestra, ni crear llamadas desde Laravel, ni teléfonos en la consulta)', ($tw['violationsByCode'] ?? []) === [], $tw['violationsByCode'] ?? null);
-        $this->check('ElevenLabs: exactamente UNA outbound-call en toda la fase (la saliente completa)', ($el['byRoute']['/v1/convai/twilio/outbound-call'] ?? 0) === 1, $el['byRoute'] ?? null);
+        // Las que marcó el job en el paso g: la completa (reloj en un martes) y, si el E2E corre DENTRO del horario legal,
+        // también la del worker residente con el reloj real. Ninguna más (las canceladas no llaman a nadie).
+        $marcadas = (int) (self::$s['salientesMarcadas'] ?? 0);
+        $this->check('ElevenLabs: tantas outbound-call como salientes marcó el job en el paso g, y al menos la completa', $marcadas >= 1
+            && ($el['byRoute']['/v1/convai/twilio/outbound-call'] ?? 0) === $marcadas, ['marcadas' => $marcadas, 'byRoute' => $el['byRoute'] ?? null]);
         $hosts = array_diff(array_keys($va['byHost'] ?? []), ['h8-e2e-sonda.invalid', 'h8-e2e-sonda.invalid:443']);
         $this->check('valla: ningún host salvo las dos sondas del arranque', $hosts === [] && ($va['localThroughFence'] ?? 1) === 0, $va);
         $this->check('sin deriva conocida del simulador (F-2 corregido por OPS8-b): lo que quede, aparte', true, ['elevenlabs' => $sEl['simDrift']]);

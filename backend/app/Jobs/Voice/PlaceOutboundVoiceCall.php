@@ -11,6 +11,7 @@ use App\Services\Telephony\VoiceBrake;
 use App\Services\Telephony\VoiceCanaryDirectory;
 use App\Services\Telephony\VoiceEvents;
 use App\Services\Telephony\VoiceHangup;
+use App\Services\Telephony\VoiceNumberGuard;
 use App\Services\Telephony\VoicePhone;
 use App\Services\Telephony\VoicePublishedConfig;
 use App\Services\Voice\Dto\OutboundCallRequest;
@@ -45,7 +46,10 @@ use Throwable;
  * Antes de marcar vuelve a mirar, en este orden (DF-G9), y si algo falla
  * cancela SIN PETICIÓN (`not_attempted`: la reserva se libera, sin coste):
  *  1. la constante y las banderas (`calls_disabled_in_code`,
- *     `outbound_disabled`, `twilio_voice_disabled`);
+ *     `outbound_disabled`, `twilio_voice_disabled`), y el número que de verdad
+ *     llama (B8-g: sin una conciliación del número de menos de 2 h que cuadre,
+ *     `number_unverified`; si dice que no es `TWILIO_VOICE_FROM`,
+ *     `number_mismatch`; una lectura de caché, como en la puerta);
  *  2. el freno (`voice_braked`);
  *  3. la entrada vigente de su parte de la cadena: si su `seq` no es la
  *     sellada, `publication_moved` (D8-9: conservador a propósito);
@@ -165,6 +169,12 @@ class PlaceOutboundVoiceCall implements ShouldQueue
         }
         if (config('voice.twilio.enabled') !== true) {
             return 'twilio_voice_disabled';
+        }
+        // B8-g (decisión del lead, en la lista de E6-6): el número que de verdad llama, otra vez justo antes de marcar
+        // (una lectura de caché, antes de cualquier red): la conciliación pudo caducar o cambiar entre la puerta y el job.
+        $numero = VoiceNumberGuard::policyCheck();
+        if ($numero !== OutboundPolicy::NUMBER_VERIFIED) {
+            return $numero === OutboundPolicy::NUMBER_MISMATCH ? 'number_mismatch' : 'number_unverified';
         }
         if (VoiceBrake::isOpen()) {
             return 'voice_braked';

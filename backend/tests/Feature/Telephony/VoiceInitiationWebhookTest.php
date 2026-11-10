@@ -173,6 +173,95 @@ class VoiceInitiationWebhookTest extends TestCase
         $this->assertTrue(VoiceBrake::isOpen());
     }
 
+    /**
+     * B8-g (SEC8-c M-2), los dos modos del número. Sin declarar (o declarado
+     * `true`), lo de siempre: al canario activo solo lo para la constante.
+     * Declarado «Outbound Only» (`VOICE_NUMBER_INBOUND_CAPABLE=false`), la
+     * iniciación se deniega SIEMPRE, con las entrantes encendidas, y el primer
+     * motivo (el de `policy_reason`) es `number_outbound_only`.
+     */
+    public function test_con_el_numero_declarado_solo_saliente_la_iniciacion_deniega_siempre(): void
+    {
+        $this->activeVoiceCanary();
+        $this->publishVoice();
+        $this->assertTrue(config('voice.inbound.enabled'));
+        $motivos = fn (string $sid): array => VoiceCallEvent::query()->where('provider_event_key', $sid)->sole()->codes['reasons'];
+
+        // Sin declarar: lo de siempre.
+        $this->assertCleanResponse($this->rawPost(self::URI, $this->body(self::CANARY_PHONE, $this->sid('31'), 'conv_h8fx_0031'), $this->initiationHeaders()), 'no');
+        $this->assertSame(['calls_disabled_in_code'], $motivos($this->sid('31')));
+
+        // Declarado solo saliente: denegada siempre, y es su primer motivo.
+        config(['voice.number.inbound_capable' => false]);
+        $this->assertCleanResponse($this->rawPost(self::URI, $this->body(self::CANARY_PHONE, $this->sid('32'), 'conv_h8fx_0032'), $this->initiationHeaders()), 'no');
+        $fila = VoiceCall::query()->where('provider_call_sid', $this->sid('32'))->sole();
+        $this->assertSame(['denied', false, 'number_outbound_only'], [$fila->status, $fila->caller_authorized, $fila->policy_reason]);
+        $this->assertSame(['number_outbound_only', 'calls_disabled_in_code'], $motivos($this->sid('32')));
+        $this->assertFalse(VoiceBrake::isOpen(), 'con el agente sellado no hay sello roto: solo se deniega');
+
+        // Declarado `true`: lo de siempre otra vez.
+        config(['voice.number.inbound_capable' => true]);
+        $this->assertCleanResponse($this->rawPost(self::URI, $this->body(self::CANARY_PHONE, $this->sid('33'), 'conv_h8fx_0033'), $this->initiationHeaders()), 'no');
+        $this->assertSame(['calls_disabled_in_code'], $motivos($this->sid('33')));
+    }
+
+    /**
+     * SEC8-c M-2: declarado solo saliente, pero el número sí admite entrantes y
+     * apunta a un agente VIEJO: la iniciación lo deniega, abre el freno por
+     * `seal_mismatch` y nunca queda atendida por ese agente.
+     */
+    public function test_declarado_solo_saliente_con_un_agente_viejo_en_el_numero_deniega_y_frena(): void
+    {
+        $this->activeVoiceCanary();
+        $this->publishVoice();
+        config(['voice.number.inbound_capable' => false]);
+
+        $this->assertCleanResponse($this->rawPost(self::URI, $this->body(self::CANARY_PHONE, $this->sid('34'), 'conv_h8fx_0034', 'agent_h8fx_viejo_0001'), $this->initiationHeaders()), 'no');
+        $fila = VoiceCall::query()->sole();
+        $this->assertSame(['denied', false, 'number_outbound_only'], [$fila->status, $fila->caller_authorized, $fila->policy_reason]);
+        $this->assertSame(['number_outbound_only', 'calls_disabled_in_code', 'seal_mismatch'],
+            VoiceCallEvent::query()->where('call_id', $fila->id)->where('kind', 'initiation_received')->sole()->codes['reasons']);
+        $this->assertSame(['open', 'seal_mismatch', 'seal:'.$this->sid('34')], [($freno = VoiceBrakeEntry::query()->sole())->kind, $freno->reason, $freno->open_key]);
+        $this->assertTrue(VoiceBrake::isOpen());
+    }
+
+    /**
+     * B8-g (decisión del lead): si ElevenLabs llamara al webhook de iniciación en
+     * una SALIENTE (la doc lo describe solo para entrantes), su SID ya es el de
+     * una fila saliente de Laravel: se responde como saliente, con la
+     * autorización de esa fila, y no se crea ninguna entrante `denied`. Antes
+     * respondía `caller_authorized=no` y `entrante` y el agente colgaba al canario.
+     */
+    public function test_el_webhook_de_iniciacion_con_el_sid_de_una_saliente_responde_como_saliente_sin_crear_filas(): void
+    {
+        $pub = $this->publishVoice();
+        $viva = $this->voiceCall('outbound', 'dialing', ['provider_call_sid' => $this->sid('41'), 'remote' => '+573000000041']);
+        $terminada = $this->voiceCall('outbound', 'completed', ['provider_call_sid' => $this->sid('42'), 'remote' => '+573000000042']);
+        $filas = VoiceCall::query()->count();
+
+        // La viva: autorizada, saliente, su call_ref y su etiqueta. Quien «llama» en una saliente es el número de voz.
+        $r = $this->rawPost(self::URI, $this->body(self::VOICE_FROM, $this->sid('41'), 'conv_h8fx_0041', self::SEALED_AGENT, '+573000000041'), $this->initiationHeaders())->assertOk();
+        $this->assertSame(['type', 'dynamic_variables'], array_keys($r->json()));
+        $this->assertSame(['caller_authorized' => 'si', 'call_direction' => 'saliente', 'call_ref' => $viva->call_ref, 'version_label' => 'canario · publicación '.$pub['seq']],
+            $r->json('dynamic_variables'));
+        foreach (array_merge(self::SENTINELS, ['573000000041']) as $s) {
+            $this->assertStringNotContainsString($s, (string) $r->getContent());
+        }
+
+        // La que ya terminó: no autorizada, y tampoco crea nada.
+        $r = $this->rawPost(self::URI, $this->body(self::VOICE_FROM, $this->sid('42'), 'conv_h8fx_0042', self::SEALED_AGENT, '+573000000042'), $this->initiationHeaders())->assertOk();
+        $this->assertSame(['no', 'saliente', $terminada->call_ref], [$r->json('dynamic_variables.caller_authorized'), $r->json('dynamic_variables.call_direction'), $r->json('dynamic_variables.call_ref')]);
+
+        $this->assertSame($filas, VoiceCall::query()->count(), 'ninguna fila nueva: ni entrante denied ni otra');
+        $this->assertSame(0, VoiceCallEvent::query()->where('kind', 'initiation_received')->count());
+        $this->assertSame(['dialing', 'completed'], [VoiceCall::query()->findOrFail($viva->id)->status, VoiceCall::query()->findOrFail($terminada->id)->status]);
+        $this->assertFalse(VoiceBrake::isOpen());
+
+        // Un SID que no es de ninguna fila: lo de siempre (una entrante, denegada).
+        $this->assertCleanResponse($this->rawPost(self::URI, $this->body(self::CANARY_PHONE, $this->sid('43'), 'conv_h8fx_0043'), $this->initiationHeaders()), 'no');
+        $this->assertSame(['inbound', 'denied'], [($nueva = VoiceCall::query()->where('provider_call_sid', $this->sid('43'))->sole())->direction, $nueva->status]);
+    }
+
     public function test_sin_publicacion_la_fila_lleva_el_sello_off_y_no_publication(): void
     {
         $this->assertCleanResponse($this->rawPost(self::URI, $this->body(self::CANARY_PHONE, $this->sid('20')), $this->initiationHeaders()), 'no');

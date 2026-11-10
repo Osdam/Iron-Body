@@ -2,12 +2,38 @@
 
 ```bash
 bash backend/docs/ultron-studio/ops/h8-e2e.sh ambas            # desde la raíz del worktree: las dos fases, cierre, hash y evidencia
+bash backend/docs/ultron-studio/ops/h8-e2e.sh todas            # cerrada, abierta y salientes (TEST8-c)
+H8_E2E_VENTANA= bash backend/docs/ultron-studio/ops/h8-e2e.sh salientes   # fuera de 07–19 de Bogotá: sin la ventana de publicar
 H8_E2E_EVIDENCIA=0 bash backend/docs/ultron-studio/ops/h8-e2e.sh abierta    # una fase, sin copiar la evidencia al repo
 H8_E2E_HOLD=1 bash backend/docs/ultron-studio/ops/h8-e2e.sh cerrada         # deja la pila en pie (desarrollo); parar con SIGTERM al proceso
 ```
 
 **Nunca toca producción ni sale a la red.** ElevenLabs y Twilio son los simuladores de OPS8 (`ops/banco-h8/`), en
 127.0.0.1, con los adaptadores REALES apuntados a ellos (E6-11). Todo proceso PHP de la pila sale por la valla.
+
+**`H8_E2E_ARBOL=1`** (TEST8-c, 09-11-2026): el backend se copia del ÁRBOL DE TRABAJO sobre HEAD (los ficheros versionados
+con su contenido de ahora y los sin seguimiento no ignorados; nunca el fichero de entorno ni `vendor/`), UNA vez, y cada
+fase lo clona. Su huella (el `git diff --binary HEAD -- backend` y el contenido de los sin seguimiento) va en el nombre
+de la ejecución, de la evidencia y en el resumen (`<commit>-arbol-<huella>`). Sirve para probar trabajo sin confirmar
+de otros paquetes (B8-g y S8-d el 09-11) sin crear ningún commit; no admite `H8_E2E_REF`.
+
+**`H8_E2E_FUENTE=<ejecución>/fuente`** (TEST8-c): relanza sobre la MISMA copia que sacó una ejecución anterior en modo
+árbol (su `fuente/`, en `~/.cache/ironbody-h8-e2e/`), cuando el árbol ya cambió: para repetir o mutar exactamente el código
+de una evidencia. La huella sale del nombre de esa ejecución.
+
+**Los simuladores son los DEL COMMIT** (TEST8-c, 09-11-2026): se extraen con `git archive` del mismo commit que el
+backend. Antes eran los del árbol de trabajo, y OPS8 los cambia ahí mientras otros corren el E2E (el 09-11, OPS8-c con
+el registro de secretos y webhooks a medias). El resumen dice las dos huellas y avisa si difieren.
+
+## Las fases
+
+| Fase | Copia | Configuración | Clase |
+|---|---|---|---|
+| `cerrada` | el commit tal cual | todas las banderas encendidas: la constante cierra sola | `H8E2ECerradaTest` |
+| `abierta` | el commit + el giro de UNA línea | todas las banderas encendidas (fases 2–4a) | `H8E2EAbiertaTest` |
+| `salientes` (TEST8-c) | el commit + el mismo giro | la 4a SIN la 3: `VOICE_INBOUND_ENABLED=false`; una segunda API en `H8_E2E_PUERTO_API2` (8405) con `VOICE_OUTBOUND_SCOPE=contacts` para la parte 4b | `H8E2ESalientesPrimeroTest` |
+
+`ambas` = cerrada y abierta (la de C-1); `todas` = las tres.
 
 ## Qué hace
 
@@ -42,6 +68,14 @@ H8_E2E_HOLD=1 bash backend/docs/ultron-studio/ops/h8-e2e.sh cerrada         # de
 
 ## Costuras (y por qué)
 
+- **La antigüedad de la entrada canaria** (fase `salientes`, `comoSuperusuario()`): para promover hacen falta 24 h de
+  evidencia (P-16). El superusuario del banco retrasa 25 h el `created_at` de la entrada 1 con los disparadores de solo
+  inserción apagados en ESA transacción (`session_replication_role = replica`), solo en la base desechable. La firma no
+  cubre esa columna y la cadena sigue verificando: observación O-4 del informe §TEST8-c.
+- **La segunda API** (fase `salientes`): `php -S` de la MISMA copia, base, caché y sesiones, con el alcance `contacts`
+  en el entorno del proceso (manda sobre el fichero de entorno). La arranca y la para la prueba; el arnés mata lo que
+  quede en su puerto.
+
 - **Fila `requested` sellada** (`ayudante.php saliente`): exactamente las columnas, el evento y el job que escribe
   `OutboundGate::decide`. La puerta no deja pasar ninguna saliente hasta E4-6 (`elevenlabs_unverified`); así se ejerce
   el JOB real (recheck TOCTOU, adaptador real, simuladores). La política la prueba la puerta por HTTP.
@@ -62,3 +96,8 @@ H8_E2E_HOLD=1 bash backend/docs/ultron-studio/ops/h8-e2e.sh cerrada         # de
 - `$x['k'] ?? 'x'` con un valor `null` devuelve `'x'`: para «la clave existe y es null», `array_key_exists`.
 - El python3 del sistema es 3.9: sin comillas dobles anidadas en las f-string.
 - `read` parte por espacios: el JSON que lee el cierre va compacto.
+- Dentro del horario legal (lunes a viernes 07–19 y sábados 08–15 de Bogotá) el worker RESIDENTE de la fase abierta
+  marca de verdad su saliente: el paso h cuenta las `outbound-call` que marcó el job (hasta el 09-11 todas las pasadas
+  habían sido de noche o en domingo y el paso h esperaba siempre una).
+- El cupo de las rutas públicas es POR LLAMADA y por EVENTO dentro de un minuto: una prueba de cupo usa un evento que
+  no haya llegado antes en ese minuto (la fase `salientes` usa el `post_call_audio` de una conversación).

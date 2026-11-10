@@ -282,7 +282,7 @@ class UltronStudioVoicePublishingTest extends TestCase
      */
     public function test_promover_lleva_la_huella_del_canario_que_se_vio_y_si_cambio_es_spec_changed_sin_escribir(): void
     {
-        $this->bindFake(fn (): array => ['calls' => 3, 'guardViolations' => 0, 'sealMismatches' => 0, 'driftEvents' => 0, 'unknownProviderCalls' => 0, 'budgetBreaches' => 0]);
+        $this->bindFake(fn (): array => ['calls' => 3, 'guardViolations' => 0, 'sealMismatches' => 0, 'driftEvents' => 0, 'unknownProviderCalls' => 0, 'budgetBreaches' => 0, 'missingPostCall' => 0]);
         [$v, $p] = $this->ready('uno');
         Carbon::setTestNow(Carbon::parse('2026-11-09T14:00:00Z'));
         $this->freshSessions();
@@ -427,7 +427,7 @@ class UltronStudioVoicePublishingTest extends TestCase
 
     public function test_promover_con_la_evidencia_del_canario_y_sin_deriva(): void
     {
-        $medidas = ['calls' => 0, 'guardViolations' => 0, 'sealMismatches' => 0, 'driftEvents' => 0, 'unknownProviderCalls' => 0, 'budgetBreaches' => 0];
+        $medidas = ['calls' => 0, 'guardViolations' => 0, 'sealMismatches' => 0, 'driftEvents' => 0, 'unknownProviderCalls' => 0, 'budgetBreaches' => 0, 'missingPostCall' => 0];
         $this->bindFake(function (int $seq, string $part) use (&$medidas): array {
             $this->assertSame('canary', $part);
 
@@ -486,6 +486,54 @@ class UltronStudioVoicePublishingTest extends TestCase
             ->assertStatus(409)->assertJsonPath('code', 'voice_agent_drift')->assertJsonPath('drift.outcome', 'drift');
     }
 
+    /**
+     * E13-3 (REV8 M-3, cambia P-16): una llamada sellada cuya post-llamada
+     * nunca llegó no es evidencia. `missingPostCall` tiene que ser 0 para
+     * promover (`missing_post_call`), y la medida de la telefonía trae
+     * EXACTAMENTE siete claves: la de seis (anterior a E13-3) o una de más no
+     * es evidencia (`evidence_unavailable`), nunca un cero.
+     */
+    public function test_e13_3_promover_exige_cero_llamadas_sin_post_llamada_y_la_medida_de_siete_claves(): void
+    {
+        $medidas = ['calls' => 3, 'guardViolations' => 0, 'sealMismatches' => 0, 'driftEvents' => 0, 'unknownProviderCalls' => 0, 'budgetBreaches' => 0, 'missingPostCall' => 1];
+        $this->bindFake(function () use (&$medidas): array {
+            return $medidas;
+        });
+        [$v, $p] = $this->ready();
+        Carbon::setTestNow(Carbon::parse('2026-11-09T14:00:00Z'));
+        $this->freshSessions();
+        $this->publishVoice($this->pablo, $v, $p)->assertCreated();
+        Carbon::setTestNow(Carbon::parse('2026-11-10T15:00:00Z'));
+        $this->freshSessions();
+
+        // Una llamada sellada sin su post-llamada: no basta, aunque todo lo demás cuadre.
+        $e = $this->voice('GET', 'canary-evidence', $this->paula)->assertOk()->json('data');
+        $this->assertSame(['missing_post_call'], $e['failing']);
+        $this->assertSame(1, $e['measures']['missingPostCall']);
+        $this->promoteVoice($this->paula, $e['evidenceHash'])
+            ->assertStatus(409)->assertJsonPath('code', 'canary_evidence_insufficient')->assertJsonPath('evidence.failing', ['missing_post_call']);
+
+        // La forma anterior a E13-3 (seis claves) y una de más: sin evidencia, no se promueve.
+        $sinClave = $medidas;
+        unset($sinClave['missingPostCall']);
+        foreach (['seis claves' => $sinClave, 'ocho claves' => ['otra' => 0] + $medidas] as $nombre => $mala) {
+            $medidas = $mala;
+            $e = $this->voice('GET', 'canary-evidence', $this->paula)->assertOk()->json('data');
+            $this->assertNull($e['measures'], $nombre);
+            $this->assertSame(['evidence_unavailable'], $e['failing'], $nombre);
+            $this->promoteVoice($this->paula, $e['evidenceHash'])->assertStatus(409)->assertJsonPath('code', 'canary_evidence_insufficient');
+        }
+        $this->assertSame(0, StudioVoicePublication::query()->where('action', 'promote')->count());
+
+        // Con todas sus post-llamadas: pasa, y la entrada guarda las siete medidas.
+        $medidas = ['missingPostCall' => 0] + $sinClave;
+        $e = $this->voice('GET', 'canary-evidence', $this->paula)->assertOk()->json('data');
+        $this->assertTrue($e['passes'], json_encode($e['failing']));
+        $this->assertSame(StudioVoiceEvidence::MEASURE_KEYS, array_keys($e['measures']));
+        $this->promoteVoice($this->paula, $e['evidenceHash'])->assertCreated();
+        $this->assertSame(0, StudioVoicePublication::query()->where('action', 'promote')->sole()->evidence['measures']['missingPostCall']);
+    }
+
     public function test_nadie_promueve_lo_que_creo_aunque_tenga_la_llave(): void
     {
         $autora = $this->personWith([...self::VOICE_PUBLISHER, ...self::VOICE_MANAGER], 'Autora del perfil');
@@ -532,7 +580,7 @@ class UltronStudioVoicePublishingTest extends TestCase
 
     public function test_revertir_una_parte_que_siempre_tuvo_el_mismo_agente_no_tiene_a_donde_volver(): void
     {
-        $this->bindFake(fn (): array => ['calls' => 3, 'guardViolations' => 0, 'sealMismatches' => 0, 'driftEvents' => 0, 'unknownProviderCalls' => 0, 'budgetBreaches' => 0]);
+        $this->bindFake(fn (): array => ['calls' => 3, 'guardViolations' => 0, 'sealMismatches' => 0, 'driftEvents' => 0, 'unknownProviderCalls' => 0, 'budgetBreaches' => 0, 'missingPostCall' => 0]);
         [$v, $p] = $this->ready();
         Carbon::setTestNow(Carbon::parse('2026-11-09T14:00:00Z'));
         $this->freshSessions();
@@ -552,7 +600,7 @@ class UltronStudioVoicePublishingTest extends TestCase
 
     public function test_apagar_deja_una_entrada_sin_agente_por_parte_y_el_numero_sin_agente(): void
     {
-        $this->bindFake(fn (): array => ['calls' => 3, 'guardViolations' => 0, 'sealMismatches' => 0, 'driftEvents' => 0, 'unknownProviderCalls' => 0, 'budgetBreaches' => 0]);
+        $this->bindFake(fn (): array => ['calls' => 3, 'guardViolations' => 0, 'sealMismatches' => 0, 'driftEvents' => 0, 'unknownProviderCalls' => 0, 'budgetBreaches' => 0, 'missingPostCall' => 0]);
         $cuerpo = ['clientRequestId' => $crid = (string) Str::uuid(), 'reason' => 'Apagar la voz por la noche'];
         $this->voice('POST', 'off', $this->pablo, $cuerpo)->assertStatus(409)->assertJsonPath('code', 'voice_already_off');
 

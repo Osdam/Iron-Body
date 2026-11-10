@@ -23,7 +23,7 @@ class StudioVoiceEvidenceDriftTest extends TestCase
         return array_replace_recursive([
             'publication' => ['uuid' => '9a000000-0000-4000-8000-000000000001', 'seq' => 4, 'since' => '2026-11-09T14:00:00Z'],
             'specHash' => str_repeat('a', 64),
-            'measures' => ['calls' => 3, 'guardViolations' => 0, 'sealMismatches' => 0, 'driftEvents' => 0, 'unknownProviderCalls' => 0, 'budgetBreaches' => 0],
+            'measures' => ['calls' => 3, 'guardViolations' => 0, 'sealMismatches' => 0, 'driftEvents' => 0, 'unknownProviderCalls' => 0, 'budgetBreaches' => 0, 'missingPostCall' => 0],
             'chainVerified' => true,
             'brake' => E::BRAKE_RELEASED,
             'labVerdict' => ['latest' => 'approved', 'sessionUuid' => null, 'at' => null],
@@ -60,12 +60,14 @@ class StudioVoiceEvidenceDriftTest extends TestCase
             'deriva' => [['measures' => ['driftEvents' => 1]], ['drift_events']],
             'llamada desconocida' => [['measures' => ['unknownProviderCalls' => 1]], ['unknown_provider_calls']],
             'techo de gasto' => [['measures' => ['budgetBreaches' => 1]], ['budget_breaches']],
+            // E13-3: una llamada sellada sin su post-llamada procesada no prueba nada.
+            'post-llamada que falta' => [['measures' => ['missingPostCall' => 1]], ['missing_post_call']],
             'freno echado' => [['brake' => E::BRAKE_ENGAGED], ['brake_engaged']],
             'freno sin leer' => [['brake' => E::BRAKE_UNKNOWN], ['brake_engaged']],
             'veredicto rechazado' => [['labVerdict' => ['latest' => 'rejected']], ['lab_verdict_missing']],
             'sin veredicto' => [['labVerdict' => ['latest' => null]], ['lab_verdict_missing']],
-            'todo a la vez' => [['chainVerified' => false, 'measures' => ['calls' => 0, 'sealMismatches' => 1, 'budgetBreaches' => 3], 'brake' => E::BRAKE_ENGAGED, 'labVerdict' => ['latest' => null]],
-                ['chain_unverified', 'too_few_calls', 'seal_mismatches', 'budget_breaches', 'brake_engaged', 'lab_verdict_missing']],
+            'todo a la vez' => [['chainVerified' => false, 'measures' => ['calls' => 0, 'sealMismatches' => 1, 'budgetBreaches' => 3, 'missingPostCall' => 2], 'brake' => E::BRAKE_ENGAGED, 'labVerdict' => ['latest' => null]],
+                ['chain_unverified', 'too_few_calls', 'seal_mismatches', 'budget_breaches', 'missing_post_call', 'brake_engaged', 'lab_verdict_missing']],
         ];
         foreach ($casos as $nombre => [$cambio, $fallan]) {
             $r = $cambio === ['publication' => null] ? array_replace(self::record(), $cambio) : self::record($cambio);
@@ -80,13 +82,43 @@ class StudioVoiceEvidenceDriftTest extends TestCase
         // Con la puerta del laboratorio dispensada (P-19), el veredicto no hace falta.
         $this->assertTrue(E::evaluate(self::record(['labGate' => 'waived', 'labVerdict' => ['latest' => null]]), $tarde)['passes']);
         $this->assertSame(array_values(E::FAILURES), E::FAILURES, 'motivos en una lista cerrada');
+        $this->assertSame([
+            'no_canary_publication', 'evidence_unavailable', 'chain_unverified', 'too_soon', 'too_few_calls',
+            'guard_violations', 'seal_mismatches', 'drift_events', 'unknown_provider_calls', 'budget_breaches',
+            'missing_post_call', 'brake_engaged', 'lab_verdict_missing',
+        ], E::FAILURES, 'E13-3: `missing_post_call` en la lista cerrada, detrás de los recuentos de incidentes');
+    }
+
+    public function test_e13_3_un_registro_sin_missing_post_call_no_pasa_aunque_lo_demas_cuadre(): void
+    {
+        // Un registro escrito con la forma anterior a E13-3 (seis claves) no
+        // cuenta el recuento que falta como un cero: falla cerrado.
+        $r = self::record();
+        unset($r['measures']['missingPostCall']);
+        $e = E::evaluate($r, self::at('2026-11-12T00:00:00Z'));
+        $this->assertFalse($e['passes']);
+        $this->assertSame(['missing_post_call'], $e['failing']);
     }
 
     public function test_la_medida_de_la_telefonia_tiene_que_tener_su_forma(): void
     {
-        $bien = ['calls' => 3, 'guardViolations' => 0, 'sealMismatches' => 0, 'driftEvents' => 0, 'unknownProviderCalls' => 0, 'budgetBreaches' => 0];
-        $this->assertSame($bien, E::validMeasures($bien + ['otra' => 'se ignora']));
-        foreach (['falta una' => array_diff_key($bien, ['driftEvents' => 1]), 'negativa' => ['calls' => -1] + $bien, 'texto' => ['calls' => '3'] + $bien, 'decimal' => ['calls' => 3.0] + $bien] as $nombre => $mala) {
+        $bien = ['calls' => 3, 'guardViolations' => 0, 'sealMismatches' => 0, 'driftEvents' => 0, 'unknownProviderCalls' => 0, 'budgetBreaches' => 0, 'missingPostCall' => 0];
+        $this->assertSame($bien, E::validMeasures($bien));
+        $this->assertSame(E::MEASURE_KEYS, array_keys(E::validMeasures(array_reverse($bien, true)) ?? []), 'sale en el orden de MEASURE_KEYS');
+        $this->assertSame(['calls', 'guardViolations', 'sealMismatches', 'driftEvents', 'unknownProviderCalls', 'budgetBreaches', 'missingPostCall'], E::MEASURE_KEYS);
+        foreach ([
+            'falta una' => array_diff_key($bien, ['driftEvents' => 1]),
+            // E13-3: la forma de la telefonía anterior (seis claves) ya no es evidencia.
+            'sin missingPostCall (forma anterior a E13-3)' => array_diff_key($bien, ['missingPostCall' => 1]),
+            // «Exactas»: una de más tampoco (nunca se ignora en silencio).
+            'una de más' => $bien + ['otra' => 0],
+            'negativa' => ['calls' => -1] + $bien,
+            'missingPostCall negativa' => ['missingPostCall' => -1] + $bien,
+            'texto' => ['calls' => '3'] + $bien,
+            'decimal' => ['calls' => 3.0] + $bien,
+            'null' => ['missingPostCall' => null] + $bien,
+            'lista de siete' => array_values($bien),
+        ] as $nombre => $mala) {
             $this->assertNull(E::validMeasures($mala), $nombre);
         }
         $this->assertNull(E::validMeasures('nada'));

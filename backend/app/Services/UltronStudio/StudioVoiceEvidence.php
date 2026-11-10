@@ -32,12 +32,20 @@ use Throwable;
  * LA EVIDENCIA PARA PROMOVER (D8-19, P-16), medida en el servidor sobre la
  * entrada vigente de la parte canaria: al menos {@see minHours()} horas desde
  * ella y {@see minCalls()} llamadas selladas con ella; 0 violaciones de la
- * guarda, 0 `seal_mismatch`, 0 deriva, 0 llamadas desconocidas y 0 veces el
- * techo de gasto; la cadena verificada; el freno suelto; y un veredicto
- * `approved` del laboratorio hablado sobre la misma huella, de otra identidad
- * que quien abrió la sesión (la base lo exige: `usvl_four_eyes_chk`). La
- * decisión es pura ({@see evaluate()}) y su huella (`evidenceHash`) la manda el
- * CRM al promover: si cambió entretanto, 409 `evidence_changed`.
+ * guarda, 0 `seal_mismatch`, 0 deriva, 0 llamadas desconocidas, 0 veces el
+ * techo de gasto y 0 llamadas selladas sin su post-llamada procesada
+ * (`missingPostCall`, E13-3: una llamada cuya transcripción nunca pasó por la
+ * guarda no es evidencia de que el agente se porta bien); la cadena
+ * verificada; el freno suelto; y un veredicto `approved` del laboratorio
+ * hablado sobre la misma huella, de otra identidad que quien abrió la sesión
+ * (la base lo exige: `usvl_four_eyes_chk`). La decisión es pura
+ * ({@see evaluate()}) y su huella (`evidenceHash`) la manda el CRM al
+ * promover: si cambió entretanto, 409 `evidence_changed`.
+ *
+ * LA MEDIDA DE LA TELEFONÍA tiene que traer EXACTAMENTE las siete claves de
+ * {@see MEASURE_KEYS} (E4-2 + E13-3): una de menos (una telefonía anterior a
+ * E13-3) o una de más no es evidencia y promover se niega
+ * (`evidence_unavailable`), nunca se completa con un cero.
  */
 final class StudioVoiceEvidence
 {
@@ -59,14 +67,28 @@ final class StudioVoiceEvidence
 
     public const BRAKE_UNKNOWN = 'unknown';
 
-    /** Los recuentos que la telefonía tiene que dar a 0 (D8-19). */
-    public const ZERO_COUNTS = ['guardViolations', 'sealMismatches', 'driftEvents', 'unknownProviderCalls', 'budgetBreaches'];
+    /**
+     * Los recuentos que la telefonía tiene que dar a 0 (D8-19), cada uno con
+     * su motivo de {@see FAILURES}. `missingPostCall` (E13-3): las llamadas
+     * selladas con la entrada cuya post-llamada no se procesó.
+     */
+    public const ZERO_COUNTS = [
+        'guardViolations' => 'guard_violations',
+        'sealMismatches' => 'seal_mismatches',
+        'driftEvents' => 'drift_events',
+        'unknownProviderCalls' => 'unknown_provider_calls',
+        'budgetBreaches' => 'budget_breaches',
+        'missingPostCall' => 'missing_post_call',
+    ];
 
-    /** Los motivos de una evidencia que no pasa, en su orden. */
+    /** Las claves EXACTAS de la medida de la telefonía (`VoiceEvidence::forPublication`, E4-2 y E13-3), en su orden. */
+    public const MEASURE_KEYS = ['calls', 'guardViolations', 'sealMismatches', 'driftEvents', 'unknownProviderCalls', 'budgetBreaches', 'missingPostCall'];
+
+    /** Los motivos de una evidencia que no pasa, en su orden: una lista CERRADA. */
     public const FAILURES = [
         'no_canary_publication', 'evidence_unavailable', 'chain_unverified', 'too_soon', 'too_few_calls',
         'guard_violations', 'seal_mismatches', 'drift_events', 'unknown_provider_calls', 'budget_breaches',
-        'brake_engaged', 'lab_verdict_missing',
+        'missing_post_call', 'brake_engaged', 'lab_verdict_missing',
     ];
 
     public const NOTE_MIN = 5;
@@ -151,9 +173,9 @@ final class StudioVoiceEvidence
                 if ($m['calls'] < $umbrales['minCalls']) {
                     $fallan[] = 'too_few_calls';
                 }
-                foreach (['guardViolations' => 'guard_violations', 'sealMismatches' => 'seal_mismatches', 'driftEvents' => 'drift_events',
-                    'unknownProviderCalls' => 'unknown_provider_calls', 'budgetBreaches' => 'budget_breaches'] as $clave => $motivo) {
-                    if ($m[$clave] !== 0) {
+                foreach (self::ZERO_COUNTS as $clave => $motivo) {
+                    // Falla cerrada: un recuento que falta no es un cero.
+                    if (($m[$clave] ?? null) !== 0) {
                         $fallan[] = $motivo;
                     }
                 }
@@ -175,7 +197,7 @@ final class StudioVoiceEvidence
      * `$since` y sus incidentes. null si la telefonía no está o falla, o si lo
      * que devuelve no tiene la forma esperada (falla cerrado).
      *
-     * @return array{calls:int,guardViolations:int,sealMismatches:int,driftEvents:int,unknownProviderCalls:int,budgetBreaches:int}|null
+     * @return array{calls:int,guardViolations:int,sealMismatches:int,driftEvents:int,unknownProviderCalls:int,budgetBreaches:int,missingPostCall:int}|null
      */
     public static function measure(int $seq, string $part, DateTimeInterface $since): ?array
     {
@@ -196,19 +218,21 @@ final class StudioVoiceEvidence
     }
 
     /**
-     * Los recuentos con su forma (enteros no negativos, exactamente los que se
-     * piden), o null: lo que no tiene forma no es evidencia (falla cerrado).
+     * Los recuentos con su forma: EXACTAMENTE las claves de
+     * {@see MEASURE_KEYS} (E13-3: ni una de menos ni una de más), cada una un
+     * entero no negativo; o null: lo que no tiene forma no es evidencia (falla
+     * cerrado). Salen en el orden de {@see MEASURE_KEYS}.
      *
-     * @return array{calls:int,guardViolations:int,sealMismatches:int,driftEvents:int,unknownProviderCalls:int,budgetBreaches:int}|null
+     * @return array{calls:int,guardViolations:int,sealMismatches:int,driftEvents:int,unknownProviderCalls:int,budgetBreaches:int,missingPostCall:int}|null
      */
     public static function validMeasures(mixed $r): ?array
     {
-        if (! is_array($r)) {
+        if (! is_array($r) || count($r) !== count(self::MEASURE_KEYS)) {
             return null;
         }
         $out = [];
-        foreach (['calls', ...self::ZERO_COUNTS] as $clave) {
-            if (! is_int($r[$clave] ?? null) || $r[$clave] < 0) {
+        foreach (self::MEASURE_KEYS as $clave) {
+            if (! array_key_exists($clave, $r) || ! is_int($r[$clave]) || $r[$clave] < 0) {
                 return null;
             }
             $out[$clave] = $r[$clave];

@@ -9,6 +9,7 @@ use App\Models\Voice\VoiceContact;
 use App\Models\Voice\VoiceExclusion;
 use App\Models\Voice\VoiceRneCheck;
 use App\Services\Telephony\VoiceContacts;
+use App\Services\Telephony\VoiceNumberGuard;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Carbon;
@@ -107,6 +108,8 @@ class VoiceCrmRoutesTest extends TestCase
             'voice.outbound.enabled' => true, 'voice.twilio.enabled' => true, 'voice.twilio.daily_call_cap' => 3, 'voice.limits.daily_budget_usd' => '5',
             'voice.elevenlabs.enabled' => true, 'voice.elevenlabs.api_key' => 'clave-de-prueba', 'voice.elevenlabs.agent_id' => 'agent_verificacion', 'voice.elevenlabs.region' => 'default',
         ]);
+        // B8-g: «todo abierto» incluye el número que llama vigilado (una conciliación reciente que cuadra).
+        VoiceNumberGuard::rememberObservation(self::PHONE_NUMBER_ID, true, false);
         $cuerpo = ['clientRequestId' => (string) Str::uuid(), 'target' => ['kind' => 'canary', 'uuid' => $canario]];
         $r = $this->postJson('/api/admin/voice/calls', $cuerpo, $this->adminWithPermissions([self::PLACE]))->assertStatus(409);
         // La constante cierra las llamadas; VERIFIED no se puede derivar sin la evidencia del Studio (falla cerrado).
@@ -125,14 +128,19 @@ class VoiceCrmRoutesTest extends TestCase
         $this->postJson('/api/admin/voice/calls', ['clientRequestId' => (string) Str::uuid(), 'target' => ['kind' => 'canary', 'uuid' => (string) Str::uuid()]], $persona)->assertStatus(404)->assertJsonPath('code', 'target_not_found');
     }
 
-    public function test_la_misma_peticion_de_la_misma_persona_es_duplicate_request_y_para_otro_destino_client_request_reused(): void
+    public function test_la_misma_peticion_de_la_misma_persona_devuelve_la_misma_fila_y_para_otro_destino_client_request_reused(): void
     {
         $canario = $this->activeVoiceCanary();
         $yo = $this->person(Admin::ROLE_SUPER_ADMIN, 'Pide llamadas');
         $crid = (string) Str::uuid();
-        $this->voiceCall('outbound', 'requested', ['canary_number_uuid' => $canario, 'requested_by_admin_id' => $yo->id, 'client_request_id' => $crid]);
-        $r = $this->postJson('/api/admin/voice/calls', ['clientRequestId' => $crid, 'target' => ['kind' => 'canary', 'uuid' => $canario]], $this->actingAsAdmin($yo))->assertStatus(409);
-        $this->assertSame('duplicate_request', last($r->json('reasons')));
+        $previa = $this->voiceCall('outbound', 'requested', ['canary_number_uuid' => $canario, 'requested_by_admin_id' => $yo->id, 'client_request_id' => $crid]);
+        // B8-h (TEST8-c H-4): la repetición es 200 con la MISMA fila (DF-G5); la idempotencia se resuelve antes de la política,
+        // así que ni la constante cerrada ni la frecuencia de 1 al día que ocupa la propia llamada la convierten en 409.
+        $r = $this->postJson('/api/admin/voice/calls', ['clientRequestId' => $crid, 'target' => ['kind' => 'canary', 'uuid' => $canario]], $this->actingAsAdmin($yo))->assertOk();
+        $this->assertTrue($r->json('duplicate'));
+        $this->assertSame($previa->uuid, $r->json('call.uuid'));
+        $this->assertNull($r->json('reasons'), 'no se evaluó la política');
+        $this->assertSame(1, VoiceCall::query()->count());
         $otro = $this->activeVoiceCanary('+573000000032');
         $this->postJson('/api/admin/voice/calls', ['clientRequestId' => $crid, 'target' => ['kind' => 'canary', 'uuid' => $otro]], $this->actingAsAdmin($yo))->assertStatus(409)->assertJsonPath('code', 'client_request_reused');
     }

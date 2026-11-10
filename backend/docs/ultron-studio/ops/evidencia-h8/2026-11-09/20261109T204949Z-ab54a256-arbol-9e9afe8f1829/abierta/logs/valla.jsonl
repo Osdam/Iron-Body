@@ -1,0 +1,2 @@
+{"n":0,"ts":"2026-11-09T20:50:25.509Z","kind":"connect","host":"h8-e2e-sonda.invalid:443","local_through_fence":false}
+{"n":1,"ts":"2026-11-09T20:50:25.513Z","kind":"http","host":"h8-e2e-sonda.invalid","local_through_fence":false}

@@ -1039,3 +1039,885 @@ La copia del banco tiene de `VoiceBrake.php` la versión anterior a dos retoques
 - las copias `antes/backend` (`fab99dcc`) y `mut/backend`;
 - el banco `tools/mutar-b8e.php`;
 - `out/` (resultados JSON y JUnit de cada ejecución).
+
+---
+
+# §B8-g · salientes a canarios antes que entrantes (E4-6, E13-3, número «Outbound Only», cuenta de Twilio, reloj de 4 pruebas, `voice:hangup` sobre cortadas)
+
+**Fecha:** 09-11-2026. **Árbol:** worktree `ultron-h8`, rama `feat/ultron-studio-h8-voice`, sobre `ab54a256` (Enmienda 15) + mis cambios, **sin commit**.
+
+**Árbol compartido:** S8-d edita a la vez `app/Services/UltronStudio/**` (`StudioVoiceEvidence`, `StudioVoicePublishing`, `StudioVoicePublications` y sus pruebas), y el tester los E2E. No toqué nada suyo.
+
+**Cero red:** toda prueba con `Http::preventStrayRequests()`. ElevenLabs y Twilio, los adaptadores reales contra `Http::fake`.
+
+**No toqué:**
+- las guardas (`*IsolationTest`, `VoiceBoundaryTest`, `OtpUntouchedByVoiceTest`, `TwilioReadOnlyClientTest`);
+- `routes/`, migraciones, `app/Services/UltronStudio/**` ni el CRM;
+- el simulador de `docs/ultron-studio/ops/banco-h8/`, que es de OPS8.
+
+**Coordinación sin `SendMessage`:** en este contexto no tengo herramienta de mensajes. Todo lo que el lead y S8-d necesitan está en este informe (§3, §8) y en el mensaje final.
+
+## 1. Cifras reales (comandos ejecutados sobre el estado final)
+
+| Qué | Comando | Resultado |
+|---|---|---|
+| Voz y telefonía, SQLite | `phpunit tests/Feature/Telephony tests/Feature/Voice tests/Unit/Telephony tests/Unit/Voice tests/Unit/Twilio` | **829 pruebas, 207 604 aserciones, 0 fallos**, 156 omitidas (solo PG y E2E) |
+| Lo mismo, puerta PG | `PGGSSENCMODE=disable UNIT_DB=ultron_studio_h8_bg bash docs/ultron-studio/ops/pgunit.sh` (las mismas 5 carpetas) | **829, 208 360 aserciones, 0 fallos**, 25 omitidas (todas E2E: 9 de la fase abierta, 6 de la cerrada y 10 de `H8E2ESalientesPrimeroTest`) |
+| Studio relacionado, SQLite (con el trabajo de S8-d tal como estaba) | `phpunit tests/Feature/UltronStudio/UltronStudioIntegrationsConfigTest.php UltronEngineIsolationTest.php UltronStudioEngineReadOnlyTest.php` + `tests/{Feature,Unit}/UltronStudio/*Voice*Test.php` | **646, 9 671 aserciones, 0 fallos**, 73 omitidas (solo PG); última pasada, con el árbol de S8-d tal como estaba al final |
+| Ejemplo de entorno | `phpunit tests/Feature/Security/SecretExposureTest.php` + `UltronStudioMonitorTest`, `UltronStudioPublicationConfigTest`, `UltronStudioIntegrationsConfigTest` | 59, 517 aserciones, 0 fallos |
+| Rutas | `php artisan auth:coverage --unmapped` | vacío, salida 0 (ninguna ruta nueva) |
+| Estilo | `pint --test` en los 22 ficheros PHP tocados | `passed` |
+
+**Línea base (antes de tocar nada).** Copia APFS del árbol al empezar, con su `vendor/` copiado. El mismo comando de SQLite dio **798 pruebas, 1 fallo**: `VoiceEvidenceTest::test_el_studio_la_lee…`.
+- No era un fallo mío: S8-d ya exigía 7 claves en `StudioVoiceEvidence::validMeasures()` y la telefonía daba 6, así que `measure()` devolvía null.
+- Mi punto 2 lo cierra.
+- De **798 a 829** hay +21 pruebas mías y +10 del tester (`H8E2ESalientesPrimeroTest`, nuevo, que se omite fuera de su arnés).
+
+**Antes del arreglo (regresión).** Copié mis 8 ficheros de prueba nuevos o cambiados a la copia de antes y los ejecuté allí: **44 pruebas, 23 caen (10 errores y 13 fallos)**. Las 21 que pasan en los dos lados lo hacen a propósito, porque fijan lo que no cambia:
+- `VoiceTwilioAccountTest` (2): el punto 4 es una verificación, no un cambio;
+- `VoiceNumberDriftTest`: las 4 de antes y «un agente ajeno en un número solo saliente sigue siendo deriva»;
+- el resto, las pruebas previas de esos ficheros.
+
+**Las 4 pruebas que dependían de la hora.** Usé una extensión de PHPUnit del banco (`tools/RelojFijo.php`) que fija el reloj DESPUÉS del `setUp` al instante de `B8G_RELOJ`:
+- con las pruebas viejas, a las 04:50 UTC **caen las 4**, y a las 15:00 pasan;
+- con las nuevas pasan las 4 a las 04:50, a las 04:59:30 y a las 04:44 del día siguiente.
+
+**Mutaciones por muestreo.** Banco `tools/mutar_b8g.py`, en una copia aislada con su `vendor/`. Para cada mutación: el texto aparece exactamente una vez, `php -l`, sus pruebas en SQLite, se restaura y se compara el SHA-256.
+- **Resultado final: 30 de 30 muertas**; los 2 controles (comentarios) sobreviven; 32 de 32 restauradas.
+- La copia queda idéntica: SHA-256 de todos los `.php` de `app/` y `config/`, antes y después.
+- En la primera pasada sobrevivió **V8**: el comando del Studio ignoraba que la caché no aceptara la marca. Faltaba la prueba; ahora la cubre `test_si_la_cache_no_acepta_la_marca_el_comando_lo_dice_y_sale_con_1`.
+- **C2** y **H7** estaban mal escritos en el banco (uno no compilaba y el otro tenía el ancla repetida); corregidos, caen.
+
+Lo que muta cada familia:
+- **V** (verificación): leer siempre `true`, el borde `<`→`<=`, la holgura del futuro, no borrar al fallar, escribir con cualquier resultado, `$resta <= 0`, el formato de ida y vuelta y el código de salida.
+- **E** (evidencia): `calls` sin `guard_verdict`, sin `NEVER_CONNECTED`, sin `call_initiation_failure`, sin `NOT_EVIDENCE` y `failed` fuera de `NEVER_CONNECTED`.
+- **N** (número): exigir `assigned_agent`, convertir `supports_inbound` a booleano, la invariante del DTO, solo lo declarado, solo lo observado, sin mirar el agente y sin informar `inboundCapable`.
+- **H** (corte): sin la rama de la cortada, sin «ya confirmado», solo el colgado del sistema, sin la ventana, sin traducir el 404, `--all` sin cortadas y el actor perdido.
+- **C** (configuración): el vacío y lo ilegible.
+- **S** (estado): sin `providerVerification`.
+
+En SQLite las 156 omitidas son 131 de solo PG y las 25 E2E.
+
+## 2. Qué cambió y por qué (por fichero)
+
+### Punto 1 · E4-6: el lector de la verificación
+
+**`app/Services/Telephony/VoiceProviderState.php`**
+- Antes, `verifiedRecently()` devolvía siempre `false`. Ahora lee la marca `voice:elevenlabs:verified_at`, con la regla del Studio (`StudioIntegrations::studioVoiceState()`):
+  - es un instante ISO 8601 en UTC, al segundo;
+  - vale si tiene menos de 30 días (estricto, `VERIFIED_MAX_AGE_SECONDS` = 2 592 000, el mismo umbral que `StudioIntegrationConfig::VOICE_VERIFIED_MAX_AGE_SECONDS`).
+- Falla cerrado. Cualquiera de estos casos da `UNVERIFIED`:
+  - sin marca;
+  - caducada;
+  - ilegible (otra forma, otro formato, otro tipo o una fecha imposible: se exige la ida y vuelta exacta del formato);
+  - del futuro, más allá de 5 minutos de holgura de relojes.
+- `verification()` da `{state: valid|expired|missing|invalid, verifiedAt, expiresAt}` para el doctor y el estado.
+- `recordStudioVerification(bool $ok, $verifiedAt)` es la **única escritura**:
+  - `ok` escribe el instante de la evidencia con su vida restante;
+  - otro resultado **borra** la marca (manda la última, como en el Studio);
+  - una evidencia ya caducada borra también;
+  - devuelve `written`, `cleared` o `not_written` (la caché no la aceptó).
+
+**`app/Console/Commands/UltronStudio/IntegrationsSnapshotCommand.php`** (`--verify-voice`; solo la marca, como pidió el lead)
+- Con la evidencia ya guardada (`recordVoiceVerification`), llama a `recordStudioVerification(outcome === 'ok', created_at de la evidencia)`. Así la ventana de 30 días es la misma en los dos.
+- Sin evidencia guardada, la marca no se toca. Con la voz fuera de `UNVERIFIED`, ni se llama ni se toca.
+- JSON: `voice.telephonyMark`.
+- Sale 0 **solo** si las credenciales valen y la marca quedó escrita. El texto de éxito conserva el prefijo «credenciales válidas; evidencia guardada».
+
+**`app/Services/Telephony/VoiceTelephonyStatus.php`**
+- `providerVerification` (detrás de `provider`) y `number.inboundCapable` (lo declarado, punto 3).
+- Afecta a `voice:doctor --telefonia --json` y a `GET /api/admin/voice/status`.
+
+**`app/Console/Commands/Voice/VoiceDoctorCommand.php`**
+- Nueva línea `Verificado : 2026-11-09T15:00:00Z (vale hasta 2026-12-09T15:00:00Z)`. Si no vale: «CADUCADA el …», «marca ilegible» o «sin marca: las salientes dicen elevenlabs_unverified (repite ultron-studio:integrations-snapshot --verify-voice)».
+- En `Número`, «(solo salientes: VOICE_NUMBER_INBOUND_CAPABLE=false)».
+- El doctor sigue sin leer configuración ni caché (la guarda): todo sale de `VoiceTelephonyStatus::snapshot()`.
+
+**Por qué la telefonía escribe y lee, y no el comando con un literal.** El lead propuso `Cache::put('voice:elevenlabs:verified_at', …)` en el comando.
+- Lo dejé en un método de la telefonía para que la clave, el formato, la vida y la regla de lectura vivan en un solo sitio.
+- El comando (fuera de `StudioVoice*`, en la lista blanca del Studio) solo le dice qué pasó.
+- Ninguna guarda cae (`TelephonyIsolationTest` vigila `StudioVoice*`, no los comandos del Studio).
+- Si se prefiere el literal en el comando, es una línea.
+
+### Punto 2 · E13-3: `missingPostCall`
+
+**`app/Services/Telephony/VoiceEvidence.php`**
+- `KEYS` y `forPublication()` llevan **siete claves**; la séptima, `missingPostCall`, va la última.
+- Las llamadas que cuentan son las selladas con la entrada y la parte, sin tramos y fuera de `NOT_EVIDENCE` (E6-2). Entre ellas:
+  - **`calls`** cuenta solo las que tienen `guard_verdict` (su post-llamada procesada, `POST_CALL_PROCESSED`);
+  - **`missingPostCall`** cuenta las que no tienen ni `guard_verdict` ni `call_initiation_failure` (`POST_CALL_NO_CONVERSATION`) y no están en `NEVER_CONNECTED` = `busy`, `no_answer` y `failed`, que nunca conectan.
+- Las `active`, `dialing` y `ambiguous` cuentan como que falta hasta que llega su post-llamada o la resuelve la conciliación (transitorio, en el sentido seguro).
+- Una `hung_up` con `call_initiation_failure` (cortada mientras sonaba) no falta. Sin nada, falta.
+- La consulta es un semi-join por llamada (`whereExists` / `whereNotExists` sobre `voice_call_events`), sin traer ids a PHP.
+- `summary()` (métricas) no cambia.
+
+### Punto 3 · el número «Outbound Only»
+
+**`config/voice.php`** y **ejemplo de entorno**
+- Nueva variable `VOICE_NUMBER_INBOUND_CAPABLE` → `voice.number.inbound_capable`.
+- Es la clave que **ya lee S8-d** (`StudioVoicePublishing::NUMBER_INBOUND_CAPABLE_KEY`) para no asignar el número al publicar. `config/voice.php` es de B8, así que la añado yo.
+- Es una **declaración sin defecto**, no una bandera:
+  - vacía o ilegible → `null` (S8 asigna como siempre);
+  - `true/1/on/yes` → `true`;
+  - `false/0/off/no` → `false`.
+- Con `null` por defecto ningún booleano nace encendido y `VoiceBoundaryTest::test_todo_apagado_por_defecto` (protección 1) sigue en verde. Con `true` por defecto habría caído.
+- Nuevo cierre `$declarado`, junto a `$entero`.
+
+**`app/Services/Voice/Dto/VoiceNumberAssignment.php`**
+- `?bool $inboundCapable = null`, el último parámetro: compatible con todo `new` previo.
+- Solo un número observado lo lleva (invariante).
+- Va en `toArray()`.
+
+**`app/Services/Voice/ElevenLabs/ElevenLabsAgentDeployer.php`** (`describeNumber`; el mismo GET, la misma ruta y sin cambiar verbos)
+- `assigned_agent` **ausente** = sin asignar, como el `null`. Antes era `error/invalid_response`, y la referencia oficial lo marca opcional.
+- Un valor con otra forma sigue siendo ilegible.
+- `supports_inbound` booleano → `inboundCapable`. Sin el campo o con otra forma, `null`.
+
+**`app/Services/Telephony/VoiceReconciler.php`** (`numbers()`)
+- Nuevo resultado `outbound_only` (`NUMBER_OUTBOUND_ONLY`). Se da cuando el número observado **no tiene agente** y es solo saliente: declarado `false` **o** con `supports_inbound=false`. No es deriva y no abre el freno.
+- En ese modo se espera «sin asignar»: **cualquier** agente asignado, también el publicado, es deriva y freno. Lo pidió SEC8-c M-2 y lo cerré en §B8-g (2); antes, el publicado contaba como bien.
+- Un número que admite entrantes, o que no lo dice, sin el agente publicado sigue siendo deriva.
+- El resumen gana `inboundCapable` (lo observado) e `inboundDeclared` (lo declarado).
+
+**`app/Console/Commands/Voice/VoiceReconcileCommand.php`**
+- El texto dice «solo salientes: sin agente, nadie atiende entrantes (no es deriva)».
+- El código de salida no cambia: `outbound_only` sale 0.
+
+### Punto 5 · el reloj de las 4 pruebas
+
+- En `VoiceReconcilerTest` (1) y `VoiceReconcileDryRunTest` (3), la primera línea es `travelTo(Carbon::parse('2026-11-09 15:00:00', 'UTC'))`: `Carbon::setTestNow` en UTC, como `VoiceBrakeRearmTest` y la memoria del proyecto.
+- No cambia nada de lo que prueban.
+
+### Punto 6 · `voice:hangup` sobre cortadas y el 21220
+
+**`app/Services/Telephony/VoiceHangup.php`**
+- `hangup()` sobre una fila `canceled` va a `hangupCanceled()`.
+  - Si el proveedor la inició después del corte (`afterCancelSid()`: el SID del último `outbound_started`/`outbound_ambiguous` con `afterCancel`) y su último colgado no se confirmó, **repite el colgado** con `WHERE_MANUAL = 'manual'` y la persona si la hay.
+  - Si tampoco se confirma, frena o rearma el freno ya soltado (`VoiceBrake::observedAfter`), como el job y la conciliación.
+  - Un 404 al repetirlo es «ya no existe»: `not_live`.
+  - Sin SID, o con el colgado ya confirmado, `not_live` sin red.
+- `startedAfterCancel(…, ?Admin $actor = null)`: la persona queda en el evento. El cuerpo pasa a `afterCancelHangup()`, que devuelve también lo que dijo el transportista.
+- `lastAfterCancelResult()` cuenta el último colgado con `afterCancel` **de cualquier actor**, no solo del sistema. Solo `afterCancelHangup()` escribe ese evento; si no, el colgado confirmado desde el CRM no lo reconocería la conciliación.
+- `unconfirmedAfterCancel()`: las cortadas de la última hora (`AFTER_CANCEL_LIVE_WINDOW_MINUTES` = 60, cuando una llamada vive ≤ ~12 min) sin colgado confirmado.
+- `brakeIfUnconfirmedAfterCancel()` reutiliza `afterCancelSid()`.
+- Docblock de `afterCancelResult()` con la calibración del 21220 (§6).
+
+**`app/Console/Commands/Voice/VoiceHangupCommand.php`**
+- `--all` suma `unconfirmedAfterCancel()`.
+- Docblock y ayuda.
+
+### Pruebas
+
+**Nuevas**
+- `VoiceProviderVerificationTest` (7):
+  - la regresión de E4-6 por la puerta real: `['calls_disabled_in_code','elevenlabs_unverified']` → `['calls_disabled_in_code']`;
+  - la paridad con el Studio en el borde de los 30 días;
+  - la que falla borra la marca (401 y sin conexión);
+  - la caché que no la acepta;
+  - la voz fuera de `UNVERIFIED`;
+  - las marcas ilegibles, del futuro y el borde con la marca aún en caché;
+  - el doctor y `GET status`.
+- `VoiceHangupCanceledTest` (5):
+  - la regresión (21220 en el job → `voice:hangup <uuid>` la cuelga → la conciliación la reconoce);
+  - `--all` solo con las que aún pueden estar vivas;
+  - el colgado a mano que falla (rearme `:r2` y salida 1);
+  - el CRM con su persona;
+  - sin nada que colgar (también el 404).
+- `VoiceTwilioAccountTest` (2): punto 4.
+
+**Cambiadas** (cambio de contrato legítimo, todas mías)
+- `VoiceEvidenceTest`:
+  - siete claves y recuentos nuevos;
+  - la de integración siembra su `guard_verdict`;
+  - +2: el escenario M-3 tal cual y estado a estado.
+- `VoiceNumberDriftTest`: +4 (solo saliente observado, declarado, agente ajeno y lo de siempre).
+- `ElevenLabsNumberObserverTest`:
+  - el cuerpo sin `assigned_agent` pasa de ilegible a sin asignar (esquema oficial);
+  - +1 del número solo saliente;
+  - 2 formas imposibles más del DTO.
+- `ElevenLabsConfigTest`: la forma de `config/voice.php` con `number` y las 12 lecturas de la declaración.
+- `VoiceCommandsTest`: las claves de `telefonia` con `providerVerification` y `number.inboundCapable`.
+- `VoiceReconcilerTest` y `VoiceReconcileDryRunTest`: el reloj (punto 5).
+
+## 3. Contratos nuevos o modificados (FE8, S8-d, OPS8, DOC8, tester)
+
+**Para S8-d / lead (E13-3)**
+- `VoiceEvidence::forPublication()` devuelve exactamente, en este orden: `calls, guardViolations, sealMismatches, driftEvents, unknownProviderCalls, budgetBreaches, missingPostCall`.
+- Coincide con `StudioVoiceEvidence::MEASURE_KEYS` de S8-d tal como está ahora en el árbol. Con los dos cambios, `VoiceEvidenceTest::test_el_studio_la_lee…` compara las dos con `assertSame` y pasa.
+
+**Para S8-d (número)**
+- `voice.number.inbound_capable` existe ya en `config/voice.php`, con la semántica de su docblock: solo un `false` explícito.
+- La conciliación lo usa igual que S8 (§2, punto 3).
+
+**`GET /api/admin/voice/status`** y `voice:doctor --telefonia --json` (aditivo)
+- `providerVerification: {state, verifiedAt, expiresAt}`.
+- `number.inboundCapable: true|false|null`.
+- El lector del CRM (`studio-voice-parse.ts`) toma solo sus claves: no se rompe. Pintarlas es de FE8.
+
+**`ultron-studio:integrations-snapshot --verify-voice`**
+- `voice.telephonyMark: written|cleared|not_written|null`.
+- **Sale 1 si la marca no se escribe**, aunque las credenciales valgan.
+
+**`voice:reconcile --numbers`**
+- Resultado nuevo `outbound_only`, que sale 0.
+- El resumen gana `inboundCapable` e `inboundDeclared`.
+
+**`VoiceNumberAssignment`**: `inboundCapable` (`?bool`) y su clave en `toArray()`.
+
+**`voice:hangup` y `POST /api/admin/voice/calls/{uuid}/hangup` sobre una `canceled`**
+- Pueden hacer **un POST a Twilio** (antes nunca).
+- `result` puede ser `hung_up`, `failed`, `ambiguous` o `not_live`. El CRM sigue con `ok = result ∈ {hung_up, canceled}`.
+- El evento `hangup_requested` lleva `where: manual`, que en el detalle sale como `where_manual` (`SHOWN_KEYS` ya admite `where`).
+
+**`VoiceHangup::lastAfterCancelResult()`**: cuenta también el colgado de una persona.
+
+## 4. Decisiones tomadas (para confirmar)
+
+1. **Paridad exacta con el Studio** en la verificación:
+   - la última manda (una que falla borra);
+   - 30 días estrictos;
+   - el instante es el `created_at` de la evidencia.
+   - No la ato a la huella de la clave, porque el Studio tampoco. Si se rota la clave, `VERIFIED` sigue hasta la siguiente verificación, en los dos; la llamada con una clave mala da `failed_to_start` (4xx), sin salir nada.
+2. **`missingPostCall`**:
+   - `call_initiation_failure` cuenta como post-llamada procesada «sin conversación»;
+   - `busy`, `no_answer` y `failed` nunca faltan, aunque las cierre la conciliación sin webhook. Si el webhook está caído, esas no suman a `calls`: promover se niega igual por `too_few_calls`;
+   - `seal_verified` no entra en `calls`, porque el texto de E13-3 dice «con `guard_verdict`». Un sello que no cuadra ya cuenta en `sealMismatches`.
+3. **`outbound_only` sin agente y por cualquiera de las dos vías** (lo declarado o lo observado), porque `supports_inbound` está obsoleto. En ese modo cualquier agente asignado es deriva (SEC8-c M-2, §B8-g (2)).
+4. **`assigned_agent` ausente = sin asignar**, como dice la referencia oficial (opcional). Un valor malformado sigue siendo error.
+5. **La ventana de `--all` es de 60 minutos.** Más atrás la llamada ya no puede estar viva, y repetir el colgado de una vieja podría dar 21220 y rearmar el freno sin motivo.
+6. **Un colgado manual sin credencial de la subcuenta frena**, igual que el del job (B8-e: `not_configured` → `failed`).
+7. **La declaración nace `null`**, no `true`, para respetar la protección 1. Para S8-d es lo mismo (`!== false`).
+
+## 5. Punto 3: lo que exige EXACTAMENTE la primera saliente a un canario
+
+Leído del código: puerta, job, iniciador y publicación.
+
+**Código**
+- El commit `voice(calls-open)`: `VoiceCallPolicy::CALLS_ENABLED_IN_CODE = true`.
+- Hoy cierra la puerta (`calls_disabled_in_code`), el job y `ElevenLabsCallStarter` (`not_attempted`).
+
+**La puerta (`OutboundGate` → `OutboundPolicy`)**
+
+| Variable / hecho | Motivo si falta |
+|---|---|
+| `VOICE_OUTBOUND_ENABLED=true` | `outbound_disabled` |
+| `VOICE_OUTBOUND_SCOPE=canary` (el defecto) | — |
+| `TWILIO_VOICE_ENABLED=true` | `twilio_voice_disabled` |
+| `TWILIO_VOICE_FROM` = el E.164 del número saliente, distinto de `WHATSAPP_DISPLAY_PHONE` y de `WHATSAPP_PROTECTED_NUMBERS` | `no_voice_number`, `voice_number_is_whatsapp` |
+| `ELEVENLABS_ENABLED=true`, `ELEVENLABS_API_KEY`, `ELEVENLABS_AGENT_ID` (el de verificación), `ELEVENLABS_WEBHOOK_SECRET`, `ELEVENLABS_REGION` | `elevenlabs_not_configured` o `elevenlabs_disabled` |
+| La marca de verificación de menos de 30 días: `php artisan ultron-studio:integrations-snapshot --verify-voice` (un GET). Repetirla tras cualquier `cache:clear`/`optimize:clear` y antes de que caduque (la tarea semanal la mantiene con `VOICE_MONITOR_ENABLED=true`) | `elevenlabs_unverified` |
+| Una entrada `canary` legible de la cadena (publicar, abajo) | `no_publication` o `publication_unreadable` |
+| Sin deriva del agente (caché del job o de la conciliación) y el freno suelto | `agent_drift`, `voice_braked` |
+| Un canario de voz `active` (`ultron_studio_canary_numbers`, `channel=voice`; H6 fase 2, cuatro ojos) y no excluido | `not_an_active_voice_canary`, `excluded` |
+| Dentro del horario legal (L–V 07–19, S 08–15, Bogotá; ni domingos ni festivos), y del propio si se fija `VOICE_OUTBOUND_HOURS_*` | `outside_hours`, `holiday` |
+| 1 al día por contacto y `VOICE_FREQUENCY_PER_WEEK` | `frequency_exceeded` |
+| `VOICE_MAX_CONCURRENT_CALLS` (≥ 1) | `concurrency_exceeded` |
+| `TWILIO_VOICE_DAILY_CALL_CAP` ≥ 1 (p. ej. 3) | `daily_cap_zero` o `daily_cap_reached` |
+| `VOICE_DAILY_BUDGET_USD` ≥ la reserva. Una saliente a un móvil con 300 s reserva **960 500 µUS$** (5 min × (80 000 + 37 700 + 4 400) + el tramo transferido a fijo 5 × 70 000), así que **≥ 0,97 por llamada y ≈ 2,90 para 3 al día** | `budget_exhausted` |
+
+**El job (`PlaceOutboundVoiceCall`)**
+- El worker `ironbody-voice` de la cola `voice`. **No se instaló en la fase 1** (E8-7): es de OPS8.
+- `describeAgent` del agente sellado observable con la clave (si no, `drift_unverified`).
+- `ELEVENLABS_AGENT_PHONE_NUMBER_ID` = el id del número importado, con forma de id del proveedor (si no, se cancela con `error`).
+- `VOICE_OUTBOUND_RINGING_SECONDS` (10–60, 30 por defecto).
+- La petición es `agent_id` (el sellado) + `agent_phone_number_id` + `to_number`. **No usa ninguna asignación del número**.
+
+**Publicar la parte canaria (S8)**
+
+Sin esto, `no_publication`:
+- `ULTRON_STUDIO_VOICE_PUBLISHING_ENABLED=true`;
+- `VOICE_WEBHOOK_BASE_URL`;
+- `ELEVENLABS_INITIATION_SECRET_REF` (siempre: el compilador mete el webhook de iniciación en el agente aunque no haya entrantes);
+- `ELEVENLABS_TOOL_SECRET_REF` (siempre en la práctica, porque `no_volver_a_llamar` es obligatoria, E1-8);
+- `ELEVENLABS_POST_CALL_WEBHOOK_REF`. S8 lo trata como opcional, pero **sin él no hay `guard_verdict`**: ni guarda posterior ni evidencia, y `missingPostCall` > 0;
+- techo del agente ≥ 1 (`TWILIO_VOICE_DAILY_CALL_CAP` + `VOICE_INBOUND_DAILY_CAP`);
+- `ELEVENLABS_AGENT_PHONE_NUMBER_ID`;
+- **`VOICE_NUMBER_INBOUND_CAPABLE=false`** con el número «Outbound Only». S8-d lo usa para no asignarlo. Sin ella, ElevenLabs rechazaría la asignación y publicar daría 409 `voice_number_not_assigned`;
+- la ventana 07–19, cuatro ojos, el veredicto `approved` del laboratorio (o `waived`) y el freno suelto.
+
+**Webhooks y herramientas durante la llamada**
+- `ELEVENLABS_WEBHOOK_SECRET` registrado como secreto del webhook post-llamada del workspace.
+- `ELEVENLABS_TOOL_SECRET` (Bearer de las herramientas).
+
+**Para el corte y la conciliación** (no para marcar, que lo hace ElevenLabs)
+- `TWILIO_VOICE_ACCOUNT_SID`, `TWILIO_VOICE_API_KEY_SID` y `TWILIO_VOICE_API_KEY_SECRET`.
+- Sin ellas, `voice:hangup` no puede colgar una viva. La prueba «corte» de la 4a las necesita.
+- `VOICE_MONITOR_ENABLED=true` programa la conciliación, la deriva del número y la verificación semanal.
+
+**No hace falta**
+- `VOICE_INBOUND_ENABLED` (sigue en `false`);
+- asignar el número a un agente;
+- `TWILIO_VOICE_SIGNING_TOKEN` (solo valida el aviso de uso de Twilio).
+
+**Qué devuelve `describeNumber()` con un «Outbound Only».** Según la referencia oficial: un caller ID verificado en Twilio, «Cannot receive calls or be assigned to agents».
+- `observed`, `unassigned`, `agentId = null`, e `inboundCapable = false` si ElevenLabs aún manda `supports_inbound` (obsoleto). Si no lo manda, `null`.
+- Antes, sin `assigned_agent` en el cuerpo, era `error/invalid_response` y la conciliación quedaba ciega (`unobserved_error`, sale 0). Con `assigned_agent: null` era **deriva**: freno, incidente y salida 1 cada hora, y con el freno ninguna saliente pasaba.
+
+## 6. Punto 4 · la cuenta de Twilio y el 21220 (documentación oficial, sin ejecutar nada real)
+
+### 6.1 Cuenta principal o subcuenta
+
+**Lo que se probó (`VoiceTwilioAccountTest`).**
+- El transportista pide lo mismo, **byte a byte salvo el SID en la ruta**, con la principal que con una subcuenta:
+  - `POST /2010-04-01/Accounts/{AC}/Calls/{CA}.json` con `Status=completed`;
+  - `GET …/Calls.json?PageSize=100&StartTime>=…`;
+  - Basic con `SK…:secreto`, contra `api.twilio.com`.
+- Nunca viaja la credencial del OTP (`otp.twilio.token`), aunque `otp.twilio.sid` sea la misma cuenta, y nunca se toca `verify.twilio.com`.
+- `OtpUntouchedByVoiceTest` sigue en verde (dentro de las cifras de §1).
+
+**Lo que NO es igual: lo que contiene la cuenta.** `listCalls()` lista **todas** las llamadas de la cuenta configurada.
+- Con la principal, cualquier llamada que no haga la voz (otro número, Studio, Flex) es `unknown_provider_call` y **echa el freno**: lo fija la segunda prueba.
+- El OTP de este proyecto usa Verify solo por SMS (`TwilioVerifyService.php:49`, `Channel=sms`): no genera llamadas.
+- Con la principal funciona si no tiene otro tráfico de voz. Si lo tiene, la voz se frena sola (falla cerrado) y hay que ir a la subcuenta del contrato (D8-4, D8-5).
+
+**Token de firma.**
+- Con la principal, `TWILIO_VOICE_SIGNING_TOKEN` tendría que ser el **Auth Token maestro**, el mismo secreto del OTP (`TWILIO_AUTH_TOKEN`), duplicado en otra variable.
+- Solo lo usa el aviso de uso de Twilio (`/api/webhooks/voice/twilio/usage-trigger`), que no hace falta para salientes.
+- **Recomendación:** con la principal, dejarlo vacío (la ruta responde 401: falla cerrado) y apoyarse en `VOICE_DAILY_BUDGET_USD` y en el techo de la conciliación.
+
+**Claves restringidas** ([Restricted API keys](https://www.twilio.com/docs/iam/api-keys/restricted-api-keys), modificada el 03-08-2026; [API keys](https://www.twilio.com/docs/iam/api-keys); [changelog: GA el 10-12-2025](https://www.twilio.com/en-us/changelog/restricted-api-keys-ga)).
+- Cita textual: «Each permission maps to one or more endpoints/actions for each API Resource». Tienen un tope de 100 permisos y «Twilio uses the Restricted key's SID and secret as your credentials when sending API requests».
+- Una key se crea en una cuenta y actúa sobre ella: para la subcuenta, la key se crea **en la subcuenta**.
+- La página no dice si una key de la principal alcanza recursos de una subcuenta, así que no lo doy por hecho.
+- El changelog de GA dice que solo existen en la región US1.
+- La key de Laravel necesita: Calls (leer, listar y actualizar), números (leer) y uso (leer), como en D8-5.
+- Según la [integración nativa de ElevenLabs](https://elevenlabs.io/docs/agents-platform/phone-numbers/twilio-integration), la importación admite «Your Twilio Account SID or API Key SID» y «Your Twilio Auth Token or API Key Secret», y recomienda una key con permisos limitados.
+
+**Mover un número entre cuentas**
+- [Error 21473](https://www.twilio.com/docs/api/errors/21473), cita textual: «You can only transfer phone numbers between your main account and its subaccounts». Se envía como «HTTP `POST` to the `IncomingPhoneNumber` instance resource» y hay que «Use your main account credentials when you submit the transfer request».
+- [IncomingPhoneNumber](https://www.twilio.com/docs/phone-numbers/api/incomingphonenumber-resource), cita textual: «You can transfer phone numbers between two Twilio accounts if you're using subaccounts».
+- Según el [artículo de soporte](https://support.twilio.com/hc/en-us/articles/360038163473), leído por buscador (la página dio 403 al abrirla), no se puede hacer desde la consola.
+- **Esto vale para números comprados.** Un «Outbound Only» de ElevenLabs es un **caller ID verificado**, que no se transfiere: según la [documentación de OutgoingCallerIds](https://www.twilio.com/docs/voice/api/outgoing-caller-ids), pertenece a la cuenta que lo verificó. Pasar a una subcuenta exige **volver a verificarlo en ella**, darle a ElevenLabs las credenciales de esa subcuenta (reimportar) y actualizar `ELEVENLABS_AGENT_PHONE_NUMBER_ID`.
+- Además, Twilio dice que un caller ID verificado no recibe llamadas por Twilio. Encaja con «Outbound Only».
+
+### 6.2 La calibración del 21220
+
+- **Qué dice Twilio** ([error 21220](https://www.twilio.com/docs/api/errors/21220)), cita textual: «You attempted a realtime operation on a Call that was not in-progress» y «Calls that have completed cannot be recorded or redirected».
+  - No lo describe para `Status=completed`.
+  - La [referencia del recurso Call](https://www.twilio.com/docs/voice/api/call-resource) solo admite `canceled` y `completed` al actualizar, y no dice qué pasa con una llamada ya terminada.
+- **Qué hace el código.** Un 400 es `rejected`, que da `failed`: no confirma el corte y frena (B8-e, E14-4). **Sin cambios.** Darlo por confirmado fallaría abierto si viniera de una llamada viva.
+- **Dónde importa.** Solo en el colgado de una saliente cortada que el proveedor inició igual (una carrera rara).
+  - El corte de una viva (`dialing`/`active`) devuelve `rejected` sin frenar, y la fila sigue hasta su post-llamada o la conciliación.
+  - Con B8-g, `--all` no repite colgados de más de una hora, para no provocar 21220 sobre llamadas ya terminadas.
+- **Cómo calibrarlo en la 4a** (sin código nuevo):
+  1. Cada `hangup_requested` con `codes.afterCancel` guarda `errorCode` (21220), `carrierOutcome` y su instante.
+  2. La conciliación lista la llamada con su `end_time`, visible en la consola de Twilio y en `voice:reconcile --dry-run --json` (estado y duración).
+  3. **Regla:** si en todos los 21220 observados el `end_time` de Twilio es anterior o igual al instante del colgado, el 21220 significa «ya había terminado» y puede pasar a confirmar el corte (una línea en `afterCancelResult`, con su prueba).
+  4. Si alguno llega con la llamada aún viva, se queda como `failed`.
+  5. Si en la 4a no aparece ninguno (lo probable), se queda como está.
+
+## 7. Para tester (casos límite desde dentro)
+
+- **E2E (no los ejecuté: necesitan su arnés):**
+  - `H8E2EAbiertaTest:206` espera 6 claves y `calls = 3`. Con E13-3 son 7, y `calls` solo cuenta las llamadas con su `guard_verdict`; si el recorrido no manda la post-llamada de cada una, `missingPostCall` > 0 (lo esperado).
+  - Con la marca de verificación, una saliente del banco puede pasar la puerta si el arnés corre `ultron-studio:integrations-snapshot --verify-voice` contra el simulador (E8-3).
+- **Simulador (OPS8):** `vistaNumero` de `sim-elevenlabs.cjs` no da `supports_inbound`, no modela un número solo saliente y su PATCH asigna cualquier número. Para un recorrido «Outbound Only» haría falta un número con `supports_inbound:false`, sin `assigned_agent`, y un PATCH que lo rechace. No lo toqué (no es mío).
+- **Reloj:** las pruebas nuevas fijan la hora en UTC; la marca se escribe en UTC al segundo.
+- **Carrera:** una `voice:hangup` a mano sobre una cortada mientras la conciliación la reintenta da dos POST y dos eventos. Colgar es idempotente y la clave del freno es única: si uno falla y el otro no, manda el más reciente.
+- **`cache:clear`:** borra la marca y la telefonía vuelve a `UNVERIFIED` (falla cerrado), mientras el Studio sigue `VERIFIED`. El doctor lo enseña («sin marca»).
+
+## 8. Riesgos residuales y pendientes
+
+1. **El webhook de iniciación en una saliente (verificar en la primera llamada de la 4a).**
+   - La doc de ElevenLabs lo describe «for inbound Twilio calls».
+   - Si también lo llamara en una saliente, `InboundGate::responseFor()` respondería `caller_authorized=no` y `call_direction=entrante` para la fila saliente (sus `caller_authorized` son null), y el agente colgaría al canario. Si llega antes de que el job guarde el SID, además se crea una entrante `denied` con ese SID y el job choca con el UNIQUE.
+   - No lo cambié sin evidencia; es un arreglo de una función.
+   - **Firma a vigilar:** un `voice.inbound.*` en el canal `voice` durante una saliente.
+2. **`el-verificar.sh` usa `voice:doctor --verify`, que no guarda nada:** tras rotar la clave (E2-2) hay que correr también `ultron-studio:integrations-snapshot --verify-voice`. Va a DOC8 y al runbook.
+3. **El comentario de `routes/console.php`** (la tarea semanal: «el Studio sigue afirmando ELEVENLABS_VERIFIED») ya vale también para la telefonía. Es de OPS8.
+4. **Despliegue:** `VOICE_NUMBER_INBOUND_CAPABLE` es opcional (ausente = `null`). Si OPS8 la añade al entorno con el número «Outbound Only», va `false` y después `config:cache`.
+
+## 9. Migración, configuración y despliegue
+
+- **Migraciones:** ninguna.
+- **Variables:** una nueva, opcional: `VOICE_NUMBER_INBOUND_CAPABLE` (vacía = sin declarar).
+- **Caché:** una clave nueva en la caché de la aplicación (`voice:elevenlabs:verified_at`, `database` en producción). No la purga `voice:prune-rate-limits`, que solo borra `voice-rl:*`. Sí la borran `cache:clear` y `optimize:clear`.
+- **Operación:** tras desplegar, la telefonía estará `UNVERIFIED` hasta la primera `ultron-studio:integrations-snapshot --verify-voice`. El Studio seguirá `VERIFIED` con su evidencia de antes.
+
+## 10. Ficheros
+
+**Cambiados**
+- `app/Services/Telephony/{VoiceProviderState,VoiceEvidence,VoiceReconciler,VoiceHangup,VoiceTelephonyStatus}.php`
+- `app/Services/Voice/Dto/VoiceNumberAssignment.php`
+- `app/Services/Voice/ElevenLabs/ElevenLabsAgentDeployer.php`
+- `app/Console/Commands/Voice/{VoiceDoctorCommand,VoiceHangupCommand,VoiceReconcileCommand}.php`
+- `app/Console/Commands/UltronStudio/IntegrationsSnapshotCommand.php` (solo la marca)
+- `config/voice.php`
+- el ejemplo de entorno (bloque de voz: `VOICE_NUMBER_INBOUND_CAPABLE=`)
+- `tests/Feature/Telephony/{VoiceEvidenceTest,VoiceNumberDriftTest,VoiceCommandsTest,VoiceReconcilerTest,VoiceReconcileDryRunTest}.php`
+- `tests/Unit/Voice/{ElevenLabsNumberObserverTest,ElevenLabsConfigTest}.php`
+- este informe
+
+**Nuevos:** `tests/Feature/Telephony/{VoiceProviderVerificationTest,VoiceHangupCanceledTest,VoiceTwilioAccountTest}.php`.
+
+**Sin commit.**
+
+**Bases PG:** `ultron_studio_h8_bg` (la puerta de este paquete).
+
+**Fuera del repositorio** (desechable, en el scratchpad de la sesión):
+- las copias `antes/backend` (el árbol al empezar) y `mut/backend`;
+- el banco: `tools/mutar_b8g.py`, `tools/RelojFijo.php`, `tools/bootstrap-reloj.php` y `tools/phpunit-reloj.xml`;
+- `out/`: resultados de texto, JUnit y JSON de cada ejecución.
+
+---
+
+# §B8-g (2) · puntos 7–10: la guarda ve el español real (SEC8-c M-1), el modo solo saliente completo (M-2), la identidad del número (B-1) y el aviso de «usted» en la ruta 45
+
+**Fecha:** 09-11-2026. **Árbol:** el mismo worktree, con §B8-g ya aceptado por el lead, **sin commit**. Siempre `php -d memory_limit=2G`.
+
+**No toqué:**
+- el motor: `OutboundContentGuard` y `SalesAgentDecisionSchema`, que solo leí (protección 5);
+- las guardas, `StudioVoiceTemplate`, las migraciones, el simulador ni el CRM.
+
+Del Studio, solo lo reasignado en el punto 10: una línea de `StudioIntegrations::voiceTemplate()` y la línea correspondiente de su prueba.
+
+## 1. Cifras reales (estado final)
+
+| Qué | Comando | Resultado |
+|---|---|---|
+| Telefonía + Voz, SQLite | `php -d memory_limit=2G vendor/bin/phpunit tests/Feature/Telephony tests/Feature/Voice tests/Unit/Telephony tests/Unit/Voice tests/Unit/Twilio` | **842 pruebas, 211 683 aserciones, 0 fallos**, 156 omitidas (131 solo PG y 25 E2E) |
+| Lo mismo, PG | `PGGSSENCMODE=disable UNIT_DB=ultron_studio_h8_bg bash docs/ultron-studio/ops/pgunit.sh` (las mismas 5 carpetas) | **842, 212 432 aserciones, 0 fallos**, 25 omitidas (E2E). La prueba del español la cambié durante la pasada (una frase más): repetida sola en PG, 7/7 |
+| Studio voz, SQLite | `UltronStudioIntegrationsConfigTest`, `UltronEngineIsolationTest`, `UltronStudioEngineReadOnlyTest` y `tests/{Feature,Unit}/UltronStudio/*Voice*Test.php` | **646, 9 673 aserciones, 0 fallos**, 73 omitidas (solo PG) |
+| Lo mismo, PG | `pgunit.sh` con esa lista | **646, 10 069 aserciones, 0 fallos** |
+| Rutas | `php artisan auth:coverage --unmapped` | vacío, salida 0 |
+| Estilo | `pint --test` en los 21 ficheros PHP tocados en esta tanda | `passed` |
+| Mutaciones (puntos 7–10) | `tools/mutar_b8g2.py`, en una copia aislada con su `vendor/` | **25 de 25 muertas**; 2 controles sobreviven; 27 de 27 restauradas; copia idéntica (SHA-256 de `app/` y `config/`) |
+
+**La regresión, por mutación.** No tenía una instantánea del árbol entre §B8-g y esta tanda, así que la prueba de que cada arreglo es necesario es su mutación «deshacer el arreglo», y todas caen:
+- **Punto 7 (SEC8-c M-1):**
+  - G2, sin el léxico de la voz: 4 fallos (las frases de ataque vuelven a pasar);
+  - G1, sin la pasada plegada: «promoción» con tilde pasa;
+  - G3, sin convertir los números en palabras: el precio del catálogo dicho en palabras da un falso positivo;
+  - G4, sin neutralizar los modismos: «un millón de gracias» es dinero.
+- **Punto 8:**
+  - I1, sin el motivo de la iniciación;
+  - R1, la deriva solo saliente con el agente publicado vuelve a ser `ok`.
+- **Punto 9 (B-1):**
+  - B1 y B2, sin la comparación con la mensajería y con `TWILIO_VOICE_FROM`;
+  - B3, la puerta con solo la configuración: no dice `voice_number_is_whatsapp`;
+  - B4, sin la observación en la caché;
+  - B5, el desplegador sin `phone_number`.
+- **Punto 10:** T1, sin `aiNotices`.
+
+## 2. Qué cambió y por qué (por fichero)
+
+### Punto 7 · SEC8-c M-1: la guarda posterior ve el español real
+
+**`app/Services/Telephony/VoiceTranscriptLexicon.php`** (nueva, pura: sin base, configuración, red ni registro; no nombra el motor)
+
+**Funciones de normalización:**
+- `fold()`: minúsculas y sin tildes, también ü y ñ.
+- `neutralizeIdioms()`: «un millón de gracias» y «millones de gracias» pasan a «muchas gracias», antes de convertir números.
+- `numbersToDigits()`: un número con «mil» o «millón» detrás pasa a cifras con puntos de miles.
+  - Vale en palabras, en cifras o mezclado, con tildes o sin ellas y con mayúsculas: «ochenta y nueve mil» → `89.000`, «un millón doscientos mil» → `1.200.000`, «89 mil» → `89.000`.
+  - Solo si **empieza por un número y lleva multiplicador**, como el `NUMERAL` del motor. «Mil gracias», «más de mil socios» y «uno de los beneficios» no cambian.
+
+**`codes()`, sobre el texto plegado.** Seis códigos, en un conjunto cerrado:
+- `voice_discount_extra`: los extra de la plantilla (copiados, porque la telefonía no puede nombrar `StudioVoiceTemplate`) y los de es-CO de SEC8-c: «descuentico», «rebajita», «precio de amigo», «te lo dejo en/a», «no tiene costo», «no te cobramos», «bono», «cupón», «obsequio», «bonificación», «dos por uno», «te regalo».
+- `voice_money_slang`:
+  - «lucas» o «barras» detrás de un número, salvo «barras olímpicas», «de pesas», «de dominadas», «de discos» y «paralelas»;
+  - «un/medio/dos/tres palo(s)»;
+  - «millón» suelto;
+  - USD, dólares, euros y €.
+- `voice_language_not_spanish`: dos marcas distintas de inglés en el mismo turno. Una sola puede ser un préstamo.
+- `voice_prompt_leak`: los nombres de las herramientas, las herramientas de sistema y las variables (de las constantes de `VoiceAgentSpec`, no escritos a mano), más `{{`, `system__`, «datos de esta llamada», «mis instrucciones», «mi prompt» e «instrucciones del sistema».
+- `voice_member_or_payment_claim`: «está inscrito», «tu/su membresía/plan está…», «quedó registrado tu pago», «pago recibido/confirmado…».
+- `voice_spoken_contact_data`: 7 o más dígitos dictados en palabras, o «arroba».
+
+**`app/Services/Telephony/VoiceTranscriptGuard.php`**, para cada turno del agente:
+1. Neutraliza los modismos y pasa los números a cifras **antes de tapar** los precios del catálogo. Así un precio de `consultar_planes` dicho en palabras se tapa, cuando antes daba un falso positivo, y uno inventado sigue siendo dinero.
+2. Inspecciona con el motor el texto con números normalizados y, si sale limpio, el **plegado**. Se queda con el primer código.
+3. Aplica el léxico al texto plegado y con los precios tapados.
+   - Completa al motor: no repite la familia que el motor ya marcó en el turno (`SAME_FAMILY`: descuento con descuento, dinero con dinero).
+   - Sí añade otra familia. Ejemplo: el motor se para en el precio inventado y el léxico añade el descuento de «te lo dejo en promoción».
+- El plegado privado pasa a `VoiceTranscriptLexicon::fold()`, que hace lo mismo.
+
+**Resultado sobre el fixture de SEC8-c:**
+- **18 de 18 frases de ataque cazadas**, cada una con su código;
+- **0 falsos positivos en las 20 legítimas**;
+- los 6 controles y los extra, igual o mejor: «un millón» ya no pasa;
+- «un millón de gracias» y «veinte barras olímpicas», limpios.
+
+### Punto 8 · SEC8-c M-2: el modo solo saliente, completo
+
+**`app/Services/Telephony/InboundGate.php`**
+- Con `voice.number.inbound_capable === false`, la iniciación **deniega siempre**, sean cuales sean las banderas y la constante.
+- `number_outbound_only` va como **primer motivo**, el que queda en `policy_reason`. La base solo exige la forma del código (`vc_codes_chk`), no una lista.
+- La fila `denied` se crea igual (E1-2).
+- Con un agente viejo en el número, además `seal_mismatch` y freno, como antes.
+
+**`app/Services/Telephony/VoiceReconciler.php` (`numbers()`)**
+- La regla que dejé a medias queda cerrada: en modo solo saliente (declarado u observado) se espera «sin asignar», y **cualquier** agente asignado, también el publicado, es deriva y freno.
+- `expected` dice `unassigned` en ese modo.
+
+### Punto 9 · SEC8-c B-1: la identidad del número que llama
+
+**`app/Services/Voice/Dto/VoiceNumberAssignment.php`**
+- `phoneNumber()` da el E.164 con el que llama ElevenLabs, envuelto en `SensitiveParameterValue`, como `OutboundCallRequest::toNumber()`: `var_export`, `json_encode`, `print_r` y `var_dump` no lo enseñan, y `toArray()` no lo lleva.
+- Solo un número observado lo lleva, y tiene que ser un E.164 estricto.
+
+**`app/Services/Voice/ElevenLabs/ElevenLabsAgentDeployer.php` (`describeNumber`):** lee también `phone_number`; sin un E.164 estricto, null.
+
+**`app/Services/Telephony/VoiceNumberGuard.php`**
+- `collidesWithMessaging(?string)`: un número cualquiera frente a `WHATSAPP_DISPLAY_PHONE` y `WHATSAPP_PROTECTED_NUMBERS`. `collidesWithConfig()` la usa con `TWILIO_VOICE_FROM`.
+- `sameNumber()`: compara por dígitos (DF-G10).
+- `rememberObservation()` y `lastObservation()`: el veredicto en la caché `voice:number:observed`, 2 h. Guarda `{at, phoneNumberId, matchesFrom, collides}`, **nunca el número ni su huella**.
+- `collidesForPolicy()`: la configuración **o** lo observado.
+
+**`app/Services/Telephony/VoiceReconciler.php` (`numbers()`)**
+- Antes que la asignación, la identidad:
+  - el número importado es uno de los protegidos de la mensajería → `number_is_messaging` y freno;
+  - no es `TWILIO_VOICE_FROM` → `number_mismatch` y freno.
+- El veredicto va a la caché, salvo en seco.
+- El resumen gana `matchesFrom` y `collidesWithMessaging`.
+- `NUMBER_BRAKING` agrupa los tres resultados que frenan.
+
+**El resto del punto 9:**
+- **`VoiceBrake`:** disparadores `number_mismatch` y `number_is_messaging` → `agent_drift`, con su causa en la evidencia, como `number_drift` (E6-1). La paridad del fixture no cambia (los mismos 6 motivos).
+- **`OutboundGate`:** la puerta usa `collidesForPolicy()`. Un número importado que la conciliación vio en la mensajería da `voice_number_is_whatsapp` **por su nombre**, aunque `TWILIO_VOICE_FROM` diga otro.
+- **`VoiceReconcileCommand`:** el código de salida es 1 con cualquiera de los tres, y el texto los nombra.
+- **`VoiceTelephonyStatus`:** `number.observed` (aditivo; el lector del CRM lo ignora).
+- **`VoiceDoctorCommand`:** línea `Importado  :` con el veredicto y su hora.
+
+**Nombres:** la guarda de SEC8 prohíbe el literal «whatsapp» en la telefonía, salvo el motivo de la política (E4-4). Por eso el resultado y la causa se llaman `number_is_messaging`, con el vocabulario que ya usaba el doctor («la mensajería»).
+
+### Punto 10 · el aviso de «usted» en la ruta 45
+
+- `StudioIntegrations::voiceTemplate()` gana `aiNotices` (`StudioVoiceTemplate::AI_NOTICES`: tú y usted, plantilla /2).
+- `UltronStudioVoiceIntegrationsTest` fija la clave, los dos textos y que el de usted lleva los tres elementos que exige la guarda posterior (`VoiceTranscriptGuard::hasNotice`).
+
+## 3. Pruebas
+
+**Nuevas**
+- `tests/Unit/Telephony/VoiceTranscriptGuardSpanishTest.php` (7). Es **el fixture de regresión de SEC8-c**:
+  - las 18 frases de ataque, cada una con su código exacto;
+  - las 20 legítimas, sin nada;
+  - los 6 controles y los extra;
+  - P-3 con precios en palabras: el del catálogo se tapa, otro no, y con P-3 = no ninguno se tapa;
+  - la normalización;
+  - el conjunto cerrado de códigos;
+  - que la guarda caza todo lo que caza la plantilla.
+- `tests/Feature/Telephony/VoiceNumberIdentityTest.php` (4):
+  - el número declarado, que no frena y guarda su veredicto sin el número;
+  - otro número: `number_mismatch`, freno, y en seco nada;
+  - **la regresión de B-1**: el número importado de la mensajería, con la configuración limpia, frena y la puerta real lo deniega con `voice_number_is_whatsapp`; también con la lista de protegidos;
+  - sin número en la respuesta, o sin `TWILIO_VOICE_FROM`, no se compara.
+
+**Cambiadas**
+- `VoiceInitiationWebhookTest`, +2: los dos modos (sin declarar, `false` y `true`) y el agente viejo con el número declarado solo saliente (`seal_mismatch` y freno).
+- `VoiceNumberDriftTest`: el modo solo saliente espera «sin asignar», y el agente publicado ahí es deriva.
+- `ElevenLabsNumberObserverTest`: el número sale solo en memoria; los `phone_number` sin forma no se toman; 3 formas imposibles más del DTO.
+- `VoiceCommandsTest`: `number.observed`.
+- `TelephonyFixtureParityTest`: el turno «$ 80.000, te lo dejo en promoción» sin herramienta da el dinero (motor) **y** el descuento (léxico), que es otra familia. El JSON del fixture no cambia.
+- `UltronStudioVoiceIntegrationsTest`: `aiNotices` (punto 10).
+
+## 4. Contratos nuevos o modificados
+
+- **Códigos de la guarda posterior** (en `guard_verdict.codes.violations` y en el detalle de la llamada): `voice_discount_extra`, `voice_money_slang`, `voice_language_not_spanish`, `voice_prompt_leak`, `voice_member_or_payment_claim` y `voice_spoken_contact_data`.
+  - Cumplen `^[a-z][a-z0-9_]{0,47}$` (E12-6) y caben en el tope de 50 (E12-1).
+  - Un turno puede llevar ahora más de un código, de familias distintas.
+  - **FE8:** etiquetas en castellano, si se quieren.
+- **`policy_reason` / motivos de la iniciación:** `number_outbound_only`, el primero con el número declarado solo saliente. **FE8:** su texto, si el CRM traduce motivos.
+- **`voice:reconcile --numbers`:**
+  - resultados nuevos `number_mismatch` y `number_is_messaging`, que salen con 1;
+  - resumen con `matchesFrom` y `collidesWithMessaging`;
+  - en modo solo saliente, `expected = unassigned` y cualquier agente es deriva.
+- **Freno:** causas nuevas `number_mismatch` y `number_is_messaging` (motivo `agent_drift`), con claves `number:<id>:mismatch` y `number:<id>:messaging`.
+- **`GET admin/voice/status` y el doctor:** `number.observed` = `{at, phoneNumberId, matchesFrom, collides}` o null. Línea `Importado  :`.
+- **`VoiceNumberAssignment::phoneNumber()`:** el número, solo en memoria.
+- **Ruta 45:** `template.aiNotices = {tu, usted}`.
+
+## 5. Decisiones (para confirmar)
+
+1. **El léxico vive en la telefonía** (`Telephony\VoiceTranscriptLexicon`), no en un `App\Support\Text` compartido con la plantilla.
+   - El encargo dice «en la guarda de la transcripción de la telefonía», y `app/Support` no es mío.
+   - La deriva con la plantilla la fija una prueba: todo lo que caza la plantilla lo caza la guarda.
+   - Si S8 quiere una sola fuente, la clase se mueve tal cual (es pura).
+2. **La pasada plegada va después de la original, y el léxico completa sin repetir familia.** El veredicto es más completo que antes: un turno puede tener el código del motor y otro del léxico.
+3. **Los precios en palabras pasan a cifras solo con «mil» o «millón» detrás de un número**, la regla del motor. «Ochenta lucas» lo caza la jerga; «ochenta pesos», el motor (`pesos`).
+4. **El inglés exige dos marcas distintas en el mismo turno.** Una sola puede ser un préstamo: «free», «plan».
+5. **Modo solo saliente:**
+   - la iniciación deniega con su motivo propio, no forzando `inbound_disabled`, para que se lea en el registro;
+   - en la deriva, cualquier agente asignado es deriva, como pide SEC8-c («cualquier asignación es deriva»).
+6. **B-1, en dos piezas:** la conciliación observa y frena; la puerta lee el **veredicto** guardado, porque la puerta no sale a la red y `describeNumber` solo lo llama la conciliación (E5-2).
+   - Sin una observación de menos de 2 h, la puerta compara solo la configuración (lo de antes), y la siguiente pasada horaria frena si hace falta.
+   - No lo hice fallar cerrado sin observación: eso convertiría `VOICE_MONITOR_ENABLED` en una dependencia implícita de cada saliente.
+   - El checklist de la 4a ya exige el monitor encendido.
+
+## 6. Riesgos y pendientes
+
+- **Es una heurística:**
+  - la lista de marcas de inglés y la jerga pueden quedarse cortas ante otras frases;
+  - un falso positivo cuesta un freno que suelta una persona (el lado seguro);
+  - **se calibra en la 4a** con las transcripciones reales: los códigos quedan en el veredicto.
+- **Otra moneda dicha en palabras sin «mil»** («cien dólares») la caza la jerga (`dolar`). Una cifra suelta pequeña sin moneda ni «mil» («vale ochenta») no es dinero para nadie, como antes.
+- **La plantilla (B-2, de S8-d)** sigue siendo el control blando del idioma y de las «otras personas». La guarda es la red que frena después.
+- **`number.observed` no lleva el número:** para saber cuál es el importado hace falta la consola de ElevenLabs. Es a propósito (D8-17).
+
+## 7. Ficheros de esta tanda
+
+**Nuevos**
+- `app/Services/Telephony/VoiceTranscriptLexicon.php`
+- `tests/Unit/Telephony/VoiceTranscriptGuardSpanishTest.php`
+- `tests/Feature/Telephony/VoiceNumberIdentityTest.php`
+
+**Cambiados**
+- `app/Services/Telephony/{VoiceTranscriptGuard,InboundGate,VoiceReconciler,VoiceNumberGuard,VoiceBrake,OutboundGate,VoiceTelephonyStatus}.php`
+- `app/Services/Voice/Dto/VoiceNumberAssignment.php`
+- `app/Services/Voice/ElevenLabs/ElevenLabsAgentDeployer.php`
+- `app/Console/Commands/Voice/{VoiceDoctorCommand,VoiceReconcileCommand}.php`
+- `app/Services/UltronStudio/StudioIntegrations.php` (una línea, punto 10)
+- `tests/Feature/Telephony/{VoiceInitiationWebhookTest,VoiceNumberDriftTest,VoiceCommandsTest}.php`
+- `tests/Unit/Telephony/TelephonyFixtureParityTest.php`
+- `tests/Unit/Voice/ElevenLabsNumberObserverTest.php`
+- `tests/Feature/UltronStudio/UltronStudioVoiceIntegrationsTest.php` (punto 10)
+- este informe, con las dos líneas de §B8-g que la regla de M-2 dejó desfasadas, corregidas y marcadas
+
+**Sin commit.**
+
+**Fuera del repositorio** (scratchpad):
+- `tools/mutar_b8g2.py`;
+- `tools/frases_m1.php` (la sonda de las frases);
+- `mut2/backend`;
+- `out/` (fin-*, final2-* y mutaciones-b8g2.json).
+
+---
+
+# §B8-g (3) · decisión del lead: la puerta de salientes falla CERRADA sin vigilar el número que llama (`number_unverified`)
+
+**Fecha:** 09-11-2026. **Decisión del lead** (respuesta a §B8-g (2), decisión 6): sin una conciliación del número de menos de 2 h, la puerta deniega, como `elevenlabs_unverified` sin la marca de E4-6. En la fase 4a el monitor está encendido por contrato (`VOICE_MONITOR_ENABLED=true` y `voice:reconcile --numbers` cada hora): ninguna saliente sin vigilancia. **Sin commit.**
+
+## 1. La puerta de salientes (documentación del contrato que cambia)
+
+**`OutboundPolicy::REASONS`: 28 motivos, en este orden**
+- **El código y el proveedor:**
+  - `calls_disabled_in_code`, `outbound_disabled`, `twilio_voice_disabled`, `no_voice_number`;
+  - **el número que llama:** `voice_number_is_whatsapp`, **`number_unverified`** y **`number_mismatch`** (los dos nuevos);
+  - ElevenLabs: `elevenlabs_not_configured`, `elevenlabs_disabled` y `elevenlabs_unverified`.
+- **La publicación:** `no_publication`, `publication_unreadable`, `agent_drift` y `voice_braked`.
+- **El destino:** `source_not_allowed`, `not_an_active_voice_canary`, `contact_not_authorized`, `no_voice_consent`, `excluded` y `rne_check_missing`.
+- **El calendario:** `outside_hours` y `holiday`.
+- **Los cupos:** `frequency_exceeded`, `concurrency_exceeded`, `daily_cap_zero`, `daily_cap_reached` y `budget_exhausted`.
+- **La idempotencia:** `duplicate_request`.
+
+**El hecho nuevo, `numberCheck`**, lo calcula `VoiceNumberGuard::policyCheck()` a partir de la última conciliación del número (`voice:reconcile --numbers`, guardada sin el número):
+
+| Lo que hay | `numberCheck` | Motivo de la puerta |
+|---|---|---|
+| Nada; una observación de **2 h o más**; ilegible; del futuro más allá de 5 min | `unverified` | `number_unverified` |
+| Reciente, sin poder comparar (el proveedor no dio el número o faltaba `TWILIO_VOICE_FROM`) | `unverified` | `number_unverified` |
+| Reciente y el número importado **no** es `TWILIO_VOICE_FROM` | `mismatch` | `number_mismatch` |
+| Reciente y el número importado **es** `TWILIO_VOICE_FROM` | `verified` | — |
+
+- Los dos motivos solo con `TWILIO_VOICE_FROM` configurado; sin él, `no_voice_number`, como `voice_number_is_whatsapp`.
+- El choque con la mensajería sigue diciéndolo `voice_number_is_whatsapp`, por la configuración o por lo observado (B-1).
+- Un hecho desconocido lanza `InvalidArgumentException`, como el alcance y la publicación.
+- **En producción hoy (fase 1)** la respuesta no cambia: sin `TWILIO_VOICE_FROM` la puerta ya dice `no_voice_number` y no añade los nuevos.
+
+**Qué exige ahora la primera saliente a un canario** (se suma al §5 de §B8-g):
+- `VOICE_MONITOR_ENABLED=true`;
+- una pasada de `php artisan voice:reconcile --numbers` de menos de 2 h, con el número importado igual a `TWILIO_VOICE_FROM` (la tarea horaria lo mantiene);
+- después de un `cache:clear`, repetirla (como `--verify-voice`).
+
+## 2. Qué cambió (por fichero)
+
+**`app/Services/Telephony/OutboundPolicy.php`**
+- `NUMBER_VERIFIED`, `NUMBER_MISMATCH`, `NUMBER_UNVERIFIED` y `NUMBER_CHECKS`.
+- Los dos motivos en `REASONS`.
+- La validación del hecho y la regla.
+- El docblock.
+
+**`app/Services/Telephony/VoiceNumberGuard.php`**
+- `policyCheck()`.
+- `OBSERVED_FRESH_SECONDS = 7200`: la puerta.
+- `OBSERVED_CACHE_SECONDS = 86400`: lo que se guarda para enseñarlo, también viejo. Antes eran 2 h; ahora manda la comprobación explícita, no la vida de la caché.
+- `FUTURE_SKEW_SECONDS = 300`.
+- `lastObservation()` exige la forma exacta del instante.
+
+**`app/Services/Telephony/OutboundGate.php`:** `'numberCheck' => VoiceNumberGuard::policyCheck()`.
+
+**`app/Services/Telephony/VoiceTelephonyStatus.php`:** `number.check`, aditivo.
+
+**`app/Console/Commands/Voice/VoiceDoctorCommand.php`:** la línea `Importado  :` dice si la puerta lo da por vigilado o qué motivo da.
+
+**`app/Services/Telephony/VoiceProviderState.php` (fallo latente del punto 1, corregido).**
+- Solo comprobaba la longitud (20) antes de `createFromFormat`, y Carbon **lanza** con un formato que no casa.
+- Una marca de 20 caracteres basura habría dado una excepción, y un 500 en la puerta, en vez de `UNVERIFIED`.
+- Ahora exige la forma exacta (`MARK_PATTERN`) y falla cerrado. Lo caza la mutación D5.
+
+**El fixture de TEST8, alineado:**
+- `tests/fixtures/voice/outbound-gate-cases.json`: `closedSets.reasonsInOrder` con los dos motivos en su sitio;
+- su generador `tests/fixtures/voice/tools/build/sec_gate.py`: `ORDER` y su `assert`, de 26 a 28.
+
+Ningún caso de `decide` los produce: el mundo del fixture tiene el número vigilado, y el constructor de hechos de la paridad pasa `numberCheck = verified`. Con eso el verificador independiente de TEST8 da OK (882 casos rehechos, 0 discrepancias).
+
+## 3. Pruebas
+
+**`VoiceNumberIdentityTest` (+3)**
+- **La decisión, por la puerta real**, con la verificación de ElevenLabs escrita:
+  - sin conciliación → `[calls_disabled_in_code, number_unverified]`;
+  - fresca que cuadra → `[calls_disabled_in_code]`: pasa, solo queda la constante;
+  - a 1 h 59 min sigue valiendo;
+  - a **2 h 1 min** → `number_unverified`;
+  - fresca que no cuadra → `[calls_disabled_in_code, number_mismatch, voice_braked]`.
+- **Fresca con el número de la mensajería** → `[calls_disabled_in_code, voice_number_is_whatsapp, voice_braked]`.
+- **`policyCheck()` falla cerrado:**
+  - sin observación;
+  - fresca sin comparar;
+  - instantes ilegibles, con forma de fecha imposible o sin la «Z»;
+  - del futuro;
+  - y la marca de E4-6 con 20 caracteres basura (`invalid`, sin lanzar).
+
+**Cambiadas**
+- `TelephonyFixtureParityTest`: `numberCheck` en los hechos del fixture.
+- `VoiceCommandsTest`: `number.check` y el texto del doctor.
+- `VoiceCrmRoutesTest` y `VoiceProviderVerificationTest`: su «todo abierto» incluye ahora el número vigilado. Siembran una conciliación fresca que cuadra y conservan sus expectativas exactas.
+
+**Mutaciones** (`tools/mutar_b8g3.py`, en una copia aislada): **7 de 7 cazadas**; el control sobrevive; 8 de 8 restauradas; copia idéntica. Cubren:
+- sin `number_unverified` y sin `number_mismatch`;
+- sin la caducidad;
+- la puerta con `verified` fijo;
+- «sin comparar» como vigilado;
+- la marca leída por longitud;
+- 2 h + 2 min de tolerancia.
+
+## 4. Cifras (estado final)
+
+| Qué | Resultado |
+|---|---|
+| Telefonía + Voz, SQLite (`php -d memory_limit=2G vendor/bin/phpunit tests/Feature/Telephony tests/Feature/Voice tests/Unit/Telephony tests/Unit/Voice tests/Unit/Twilio`) | **845 pruebas, 212 473 aserciones, 0 fallos**, 156 omitidas (131 solo PG y 25 E2E) |
+| Lo mismo, PG (`PGGSSENCMODE=disable UNIT_DB=ultron_studio_h8_bg bash docs/ultron-studio/ops/pgunit.sh …`) | **845, 213 259 aserciones, 0 fallos**, 25 omitidas (E2E) |
+| Rutas (`php artisan auth:coverage --unmapped`) | vacío, salida 0 |
+| Verificador de los fixtures (`python3 -I tests/fixtures/voice/tools/voice-fixtures-check.py`) | `RESULTADO: OK` (882 casos, 0 discrepancias; 80 variantes equivocadas, todas cazadas) |
+| Pint (11 ficheros PHP de esta tanda) | `passed` |
+
+## 5. Para otros paquetes
+
+- **TEST8:**
+  - el arnés E2E (banco con simuladores) tiene que correr `voice:reconcile --numbers` con el número del simulador igual a `TWILIO_VOICE_FROM` antes de cada saliente, o la puerta dirá `number_unverified`. `vistaNumero` ya da `phone_number`;
+  - si quiere, casos de `decide` para los dos motivos en su fixture.
+- **FE8:** el texto de `number_unverified` y de `number_mismatch` en `voicePolicyReasonText`.
+- **OPS8 / DOC8:** en el runbook de la 4a, la conciliación del número antes de la primera saliente y después de un `cache:clear`.
+
+## 6. Ficheros de esta tanda
+
+**Cambiados**
+- `app/Services/Telephony/{OutboundPolicy,VoiceNumberGuard,OutboundGate,VoiceTelephonyStatus,VoiceProviderState}.php`
+- `app/Console/Commands/Voice/VoiceDoctorCommand.php`
+- `tests/Feature/Telephony/{VoiceNumberIdentityTest,VoiceCommandsTest,VoiceCrmRoutesTest,VoiceProviderVerificationTest}.php`
+- `tests/Unit/Telephony/TelephonyFixtureParityTest.php`
+- `tests/fixtures/voice/outbound-gate-cases.json` (solo el conjunto cerrado; de TEST8)
+- `tests/fixtures/voice/tools/build/sec_gate.py` (solo `ORDER` y su `assert`; de TEST8)
+- este informe
+
+**Sin commit.**
+
+---
+
+# §B8-g (4) · cierre: la iniciación de una saliente y la vigilancia del número en el job (decisiones del lead, en el sentido seguro)
+
+**Fecha:** 09-11-2026. Las dos decisiones pendientes de §B8-g (3), que el lead resolvió en el sentido seguro. **Sin commit.**
+
+## 1. `InboundGate::responseFor()`: el webhook de iniciación con el SID de una saliente
+
+- **Antes:** si ElevenLabs llamaba al webhook de iniciación en una saliente (la doc lo describe solo para entrantes), la fila saliente devolvía `caller_authorized=no` (sus `caller_authorized` son null) y `call_direction=entrante`, y el agente colgaba al canario.
+- **Ahora**, con una fila **saliente**:
+  - responde como **saliente** (`call_direction=saliente`), con su `call_ref` y su etiqueta;
+  - **autorizada si la fila está viva** (`dialing` o `active`: la autorizó la puerta); si no, `no`;
+  - **sin crear ninguna fila** (ni entrante `denied`) y sin evento;
+  - registro `voice.inbound.initiation_for_outbound` (uuid, estado, autorizada; sin teléfonos).
+- **Si el SID no es de ninguna fila**, el comportamiento de siempre: una entrante y su decisión.
+- **Riesgo residual, a vigilar en la primera llamada de la 4a:**
+  - si el webhook llegara **antes** de que el job guarde el SID (el SID se guarda nada más volver `outbound-call`; el webhook, si llegara, lo haría al conectar, segundos después), no hay fila y sale una **entrante denegada**;
+  - en ese caso el job, al guardar el mismo SID, chocaría con el UNIQUE y la saliente quedaría `ambiguous`;
+  - **qué vigilar:** la línea `voice.inbound.initiation_for_outbound`, o una entrante `denied` cuyo llamante es el número de voz.
+
+## 2. El job vuelve a comprobar el número antes de marcar (en la lista de E6-6)
+
+- `PlaceOutboundVoiceCall::recheckAfterCode()`, justo después de las banderas y **antes del freno y de la deriva**, para no salir a la red: `VoiceNumberGuard::policyCheck()`, una lectura de caché.
+- Si no es `verified`, cancela con **el mismo motivo que la puerta** (`number_unverified` o `number_mismatch`), sin marcar, sin evento y liberando la reserva, como el resto de E6-6.
+- El choque con la mensajería lo cubre el freno: la conciliación que lo ve lo abre y el job lo comprueba después.
+
+## 3. Pruebas y cifras
+
+**Pruebas nuevas:**
+- **`VoiceInitiationWebhookTest`**, +1: el SID de una saliente viva da `{si, saliente, su call_ref, «canario · publicación N»}`; el de una terminada, `no`; **cero filas nuevas y cero eventos**; y un SID ajeno, lo de siempre (una entrante `denied`).
+- **`PlaceOutboundVoiceCallRecheckTest`**, +1, la conciliación caducando entre la puerta y el marcado:
+  - con la conciliación fresca, pasa;
+  - a 2 h 1 min, `number_unverified`;
+  - con una nueva que no cuadra, `number_mismatch`;
+  - el cancelado guarda ese motivo, sin evento y sin coste;
+  - con una fresca, vuelve a pasar.
+  - Su ayudante `driftChecked()` renueva también la conciliación del número: las pruebas que viajan en el tiempo prueban su propio motivo.
+
+**Ajustes:** en `VoiceBrakeRearmTest` (la recomprobación del job tras la deriva), una conciliación fresca sembrada, porque ahí se prueba la deriva.
+
+**Mutaciones** (`tools/mutar_b8g4.py`, copia aislada): **6 de 6 cazadas**; el control sobrevive; 7 de 7 restauradas; copia idéntica. Cubren:
+- sin la comprobación del job;
+- sin distinguir `number_mismatch`;
+- el job con `verified` fijo;
+- sin la rama de la saliente;
+- la saliente siempre autorizada;
+- la saliente respondida como entrante.
+
+**Cifras finales** (estado de cierre de B8-g):
+
+| Qué | Resultado |
+|---|---|
+| Telefonía + Voz, SQLite (`php -d memory_limit=2G vendor/bin/phpunit tests/Feature/Telephony tests/Feature/Voice tests/Unit/Telephony tests/Unit/Voice tests/Unit/Twilio`) | **847 pruebas, 212 887 aserciones, 0 fallos**, 156 omitidas (131 solo PG y 25 E2E) |
+| Lo mismo, PG (`PGGSSENCMODE=disable UNIT_DB=ultron_studio_h8_bg bash docs/ultron-studio/ops/pgunit.sh …`) | **847, 213 623 aserciones, 0 fallos**, 25 omitidas (E2E) |
+| Rutas (`php artisan auth:coverage --unmapped`) | vacío, salida 0 |
+| Pint (los 5 ficheros PHP de esta tanda) | `passed` |
+
+La última pasada de SQLite tardó 19 min de reloj (carga media de la máquina ~60, con otros agentes a la vez). No falló nada.
+
+## 4. Ficheros de esta tanda
+
+- `app/Services/Telephony/InboundGate.php`
+- `app/Jobs/Voice/PlaceOutboundVoiceCall.php`
+- `tests/Feature/Telephony/{VoiceInitiationWebhookTest,PlaceOutboundVoiceCallRecheckTest,VoiceBrakeRearmTest}.php`
+- este informe
+
+**Sin commit.**
+
+---
+
+# B8-h · Corrección de los hallazgos de REV8-c y H-4 de TEST8-c (09/10-11-2026)
+
+**Quién:** el paquete lo empezó el agente `h8-fix` (código de M-1, M-2, m-1 y m-2, pruebas de M-1) y lo cerró el **lead** cuando el límite de uso de la cuenta cortó al agente a las 00:00 UTC (pruebas de M-2, m-1 y m-2; corrección y prueba de H-4; suites; este informe). Sin commit. Nada en producción.
+
+## 1. Qué se corrigió
+
+| Hallazgo | Corrección | Dónde | Prueba que cae sin ella |
+|---|---|---|---|
+| **M-1 (mayor)** la observación del número no se ataba al número configurado | `VoiceNumberGuard::policyVerdict()` exige que el `phoneNumberId` observado sea `ELEVENLABS_AGENT_PHONE_NUMBER_ID`; con otro id o sin id → `number_unverified` (la puerta y el job fallan cerrados; `number.check` lo enseña en el doctor y en `GET admin/voice/status`). El mando puede cambiar el id sin invalidar cachés | `app/Services/Telephony/VoiceNumberGuard.php` | `VoiceNumberIdentityTest` (observación de otro id → `number_unverified`; mismo id → pasa) |
+| **M-2 (mayor)** la guarda frenaba las negativas que la plantilla `/2` manda decir | Lista **cerrada** de negativas en primera persona (`VoiceTranscriptAllowlist::PHRASES`), cada una apuntando a la negativa fija de la plantilla que ejecuta (`ANCHORS`, citadas tal cual). `strip()` quita del turno solo una **cláusula entera** que sea exactamente una frase de la lista (con una entrada de `LEAD_INS` y una cola de `TAILS` como mucho; sin distinguir mayúsculas, tildes también en NFD ni espacios) **antes** de que busquen el motor y el léxico. Nada de análisis de negación: «no puedo ofrecerte descuentos, pero te lo dejo en promoción» pierde solo la primera cláusula y la segunda marca; una negativa con homoglifos no es de la plantilla y la guarda la ve normalizada | `VoiceTranscriptAllowlist.php` (nuevo), `VoiceTranscriptGuard::contentCodes()` | `VoiceTranscriptGuardHardeningTest`: **paridad** (la versión de la lista = `StudioVoiceTemplate::VERSION`; cada ancla sigue literal en la plantilla; cada frase apunta a un ancla existente; la expresión compila), cada negativa limpia sola, con entrada y cola y en mayúsculas; la oferta en la misma frase marca; la cláusula no exacta marca; el homoglifo marca |
+| **m-1 (menor)** huecos de normalización | `VoiceTranscriptLexicon::fold()`: subconjunto NFKC del alfabeto latino (ancho completo, matemáticas, circulados), ligaduras, diacríticos combinados a su base, caracteres de ancho cero fuera, palabras partidas con guiones o puntos entre letras unidas, homoglifos cirílicos y griegos a su letra latina (`FOLD_MAP`); variantes nuevas en el léxico: «luquitas», «no te cuesta nada», «gratuitamente», «te la regalamos / regalado», «al día con sus pagos» (dato ajeno) | `VoiceTranscriptLexicon.php` | `VoiceTranscriptGuardHardeningTest::test_los_huecos_del_revisor_se_cazan` (11 sondas: NFD, cirílico, ancho completo, ancho cero, guiones, puntos, luquitas, no te cuesta nada, gratuitamente, te la regalamos, al día con sus pagos) + las 7 legítimas siguen limpias |
+| **m-2 (menor)** fallo abierto si PCRE devolvía null | `replace()`, `replaceCallback()`, `matches()` y `valueOf()` del léxico y `strip()` de la lista lanzan `UnexpectedValueException` cuando PCRE devuelve null; `VoiceTranscriptGuard::inspect()` la captura y marca el turno con **`voice_guard_unprocessable`** más lo que diga el motor sobre el texto tal cual; `hasNotice()` también falla cerrado | `VoiceTranscriptLexicon.php`, `VoiceTranscriptAllowlist.php`, `VoiceTranscriptGuard.php` | `…HardeningTest::test_si_pcre_no_puede_con_el_turno_la_guarda_falla_cerrada` (UTF-8 inválido → null determinista con `/u`). La sonda de 16 KB del revisor no se puede forzar de forma fiable dentro del proceso de pruebas (el JIT de PCRE no respeta `pcre.backtrack_limit`); es el mismo camino de código |
+| **H-4 (TEST8-c)** repetir la misma petición de saliente daba 409 `[frequency_exceeded, duplicate_request]` | La idempotencia se resuelve **antes** de la política en `OutboundGate::decide()`: misma persona + mismo `client_request_id` + mismo destino → 200 con la misma fila (DF-G5), sin contar frecuencia, cupo ni presupuesto, sin fila, sin evento, sin job; mismo identificador para otro destino → 409 `client_request_reused`; una petición nueva sigue pasando por la política entera. El motivo `duplicate_request` sigue en el conjunto cerrado de `OutboundPolicy` (la política recibe `duplicate = false` desde la puerta) | `OutboundGate.php` | `OutboundIdempotencyTest` (3 pruebas: dos peticiones iguales → 200 + 200 con el mismo uuid y una sola fila, sin job; otro destino → conflicto; petición nueva → la política decide y no crea nada) |
+
+**Q-1 de `h8-fix` (decidida por el lead):** la plantilla no tiene las negativas en primera persona, solo la instrucción; la lista cerrada de frases en primera persona que ejecutan esa instrucción es la solución estricta y simple, y la prueba de paridad obliga a revisarla si cambian las instrucciones o la versión de la plantilla.
+
+## 2. Cifras (lead, 10-11-2026 00:40 UTC)
+
+| Qué | Resultado |
+|---|---|
+| `VoiceTranscriptGuardHardeningTest` + `OutboundIdempotencyTest` (nuevas) | 19 pruebas, 0 fallos (SQLite); `OutboundIdempotencyTest` 3/3 también en PG |
+| Telefonía + Voz + unitarias, SQLite (`tests/Unit/Telephony`, `tests/Unit/Voice`, `tests/Feature/Telephony`, `tests/Feature/Voice`) | 776 pruebas, 212 394 aserciones, **1 fallo = `TelephonyRoutesTest`** por las 30 rutas `strategies/**` del Hito 9 sin limitador (árbol compartido; no es del H8) |
+| Copia del árbol SIN el Hito 9: las 6 pruebas de contrato de rutas, aislamiento y esquema | 125 pruebas, 0 fallos |
+| Telefonía + Voz + unitarias, PG (`ultron_studio_h8_lead`) | 776 pruebas, 213 151 aserciones, **1 fallo = el mismo `TelephonyRoutesTest`** del H9 (26 omitidas: E2E) |
+| `voice-fixtures-check.py --php` | OK (882 casos, 0 discrepancias) |
+| `auth:coverage --unmapped` | solo las 30 rutas del H9 |
+| Pint (lo tocado) | passed |
+
+**Colaterales corregidos:** (a) `ElevenLabsConfigTest::evaluar()` no limpiaba `VOICE_NUMBER_INBOUND_CAPABLE` (faltaba en `$todas`): el último valor del bucle («yes» → true) se quedaba en el entorno del proceso y contaminaba `VoiceCommandsTest` y `VoiceNumberDriftTest` en la suite completa; (b) S9 (H9) había hecho que `UltronStudioVoiceController::STUDIO_ROUTE_COUNT` apuntara a `UltronStudioStrategyController`: en una copia sin el H9 el controlador de voz no cargaba; revertido a 77.
+
+## 3. Ficheros de esta tanda
+
+- `app/Services/Telephony/VoiceTranscriptAllowlist.php` (nuevo)
+- `app/Services/Telephony/{VoiceNumberGuard,VoiceTranscriptGuard,VoiceTranscriptLexicon,OutboundGate}.php`
+- `tests/Unit/Telephony/VoiceTranscriptGuardHardeningTest.php` (nuevo, lead)
+- `tests/Feature/Telephony/OutboundIdempotencyTest.php` (nuevo, lead)
+- `tests/Feature/Telephony/{VoiceNumberIdentityTest,VoiceCommandsTest}.php`
+- este informe (§B8-h)
+

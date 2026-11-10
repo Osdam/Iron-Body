@@ -8,7 +8,8 @@ Busca, en cada fichero (texto o binario, también dentro de los directorios, rec
     claves de Twilio, la credencial maestra sintética del OTP), la APP_KEY (en base64 y cruda en hex) y los tokens de
     sesión de las cuentas del E2E;
   - los CENTINELAS de los simuladores (van dentro de las transcripciones: Laravel no las guarda, D8-17 y P-8);
-  - los TELÉFONOS de la ejecución en claro (canarios, el del guion de la transcripción y el contacto 4b), con y sin «+»;
+  - los TELÉFONOS de la ejecución en claro (canarios, el del guion de la transcripción, los contactos 4b, la llamada
+    sembrada solo en Twilio y el que no es canario), con y sin «+»;
     los últimos 4 dígitos se permiten (D8-17).
 Sale con 1 si encuentra algo.
 """
@@ -53,7 +54,7 @@ def main(argv):
             t = f.read().strip()
         if t:
             buscar['sesión ' + nombre] = t.encode()
-    for e164 in ('+573000000011', '+573000000012', '+573000000019', '+573000000071', '+573000000077'):
+    for e164 in ('+573000000011', '+573000000012', '+573000000019', '+573000000071', '+573000000072', '+573000000077', '+573000000099'):
         buscar['teléfono …' + e164[-4:]] = e164.encode()
         buscar['teléfono …' + e164[-4:] + ' (sin +)'] = e164[1:].encode()
         buscar['teléfono …' + e164[-4:] + ' (nacional)'] = e164[3:].encode()

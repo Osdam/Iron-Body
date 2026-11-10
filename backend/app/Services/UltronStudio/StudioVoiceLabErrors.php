@@ -123,15 +123,16 @@ final class StudioVoiceLabErrors
     }
 
     /**
-     * Los destinos de transferencia van EN CLARO en la carga del agente
-     * (D8-14): hace falta el descifrado del perfil de voz (S8-b). Hasta
-     * enlazarlo, un perfil con destinos no se prueba aquí.
+     * E10-10: los destinos de transferencia van EN CLARO en la carga del agente
+     * (D8-14) y este servidor no puede descifrarlos (una `APP_KEY` rotada): el
+     * mismo código que al publicar. Antes de reservar nada.
      */
-    public static function transfersNotSupported(): UltronStudioException
+    public static function destinationsUnreadable(): UltronStudioException
     {
         return new UltronStudioException(
-            'Este perfil tiene destinos de transferencia y el laboratorio hablado todavía no los puede montar en el agente de prueba.',
-            'voice_lab_transfers_not_supported',
+            'Los destinos de transferencia del perfil no se pueden leer en este servidor: crea otra revisión del perfil.',
+            'voice_destinations_unreadable',
+            409,
         );
     }
 

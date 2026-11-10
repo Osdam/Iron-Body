@@ -27,10 +27,15 @@ use Throwable;
  * ({@see StudioVoiceCompiler::profileContent()}): al crear, al enviar y al
  * aprobar, con el mismo motivo y el mismo campo que daría al compilar (422
  * `voice_compile_refused`). Lo que no decide quien escribe lo pone el servidor:
- * el formato, el idioma (`es`), el AVISO de la plantilla vigente (P-9, E1-3:
- * aprobar un perfil es aprobar también ese texto exacto), y la grabación y el
- * audio guardado APAGADOS (P-7, P-8; columnas `record_calls` y `record_voice`
- * forzadas a false, E3-3).
+ * el formato, el idioma (`es`), el AVISO de la plantilla vigente en el trato
+ * del perfil (P-9, E1-3: aprobar un perfil es aprobar también ese texto
+ * exacto), y la grabación y el audio guardado APAGADOS (P-7, P-8; columnas
+ * `record_calls` y `record_voice` forzadas a false, E3-3).
+ *
+ * EL TRATO (S8-d, `addressForm`, opcional): `tu` por defecto o `usted`. El de
+ * tú NO se escribe en el contenido (es la ausencia del campo): así un perfil
+ * de tú tiene la forma y la huella de siempre y el CRM, cuyo lector del
+ * contenido es cerrado, lo sigue enseñando. Uno de usted lleva el campo.
  *
  * LOS DESTINOS DE TRANSFERENCIA (D8-14, D8-17, como mucho 3): en el contenido
  * solo su alias y la HUELLA `voice-phone` de su teléfono ({@see phoneHash()});
@@ -65,8 +70,8 @@ final class StudioVoiceProfiles
 
     public const PER_PAGE_MAX = 50;
 
-    /** Los campos que escribe quien crea el perfil; el resto lo pone el servidor. */
-    public const INPUT_FIELDS = ['voiceId', 'greetings', 'holes', 'maxDurationSeconds', 'tools', 'systemTools', 'transfer', 'privacy', 'voicemail'];
+    /** Los campos que escribe quien crea el perfil (`addressForm`, opcional: S8-d); el resto lo pone el servidor. */
+    public const INPUT_FIELDS = ['voiceId', 'greetings', 'holes', 'maxDurationSeconds', 'tools', 'systemTools', 'transfer', 'privacy', 'voicemail', 'addressForm'];
 
     /** Un destino, como lo escribe quien crea el perfil: el teléfono va en claro hasta cifrarlo. */
     public const DESTINATION_INPUT_FIELDS = ['alias', 'phone'];
@@ -450,11 +455,14 @@ final class StudioVoiceProfiles
         usort($destinos, static fn (array $a, array $b): int => strcmp($a['alias'], $b['alias']));
 
         $privacidad = is_array($input['privacy'] ?? null) ? $input['privacy'] : [];
+        // S8-d: el trato. Tú es la ausencia del campo; otro valor que no sea
+        // `usted` pasa tal cual para que el compilador lo rechace con su campo.
+        $trato = $input['addressForm'] ?? StudioVoiceTemplate::ADDRESS_TU;
         $contenido = [
             'format' => StudioVoiceCompiler::PROFILE_FORMAT,
             'voiceId' => $input['voiceId'] ?? null,
             'language' => StudioVoiceTemplate::LANGUAGE,
-            'aiNotice' => StudioVoiceTemplate::AI_NOTICE,
+            'aiNotice' => is_string($trato) && array_key_exists($trato, StudioVoiceTemplate::AI_NOTICES) ? StudioVoiceTemplate::aiNotice($trato) : StudioVoiceTemplate::AI_NOTICE,
             'greetings' => $input['greetings'] ?? null,
             'holes' => $input['holes'] ?? null,
             'maxDurationSeconds' => $input['maxDurationSeconds'] ?? null,
@@ -470,6 +478,9 @@ final class StudioVoiceProfiles
             ],
             'voicemail' => $input['voicemail'] ?? null,
         ];
+        if ($trato !== StudioVoiceTemplate::ADDRESS_TU) {
+            $contenido['addressForm'] = $trato;
+        }
 
         return [$contenido, $destinos];
     }

@@ -62,6 +62,9 @@ abstract class H8StackE2ETestCase extends TestCase
         }
 
         $puertos = [self::$ctx['ports']['api'], self::$ctx['ports']['elevenlabs'], self::$ctx['ports']['twilio'], self::$ctx['ports']['valla']];
+        if (isset(self::$ctx['ports']['api2'])) {
+            $puertos[] = (int) self::$ctx['ports']['api2'];
+        }
         Http::preventStrayRequests();
         Http::allowStrayRequests(array_map(static fn (int $p): string => "http://127.0.0.1:{$p}/*", $puertos));
         $this->fallos = [];
@@ -123,13 +126,13 @@ abstract class H8StackE2ETestCase extends TestCase
      * @param  array<string, mixed>  $cuerpo
      * @param  array<string, mixed>  $consulta
      */
-    protected function api(string $metodo, string $ruta, ?string $quien, array $cuerpo = [], array $consulta = []): Response
+    protected function api(string $metodo, string $ruta, ?string $quien, array $cuerpo = [], array $consulta = [], ?string $base = null): Response
     {
         $peticion = Http::acceptJson()->timeout(60);
         if ($quien !== null) {
             $peticion = $peticion->withToken($this->token($quien));
         }
-        $url = self::$ctx['api'].'/api/'.ltrim($ruta, '/');
+        $url = ($base ?? self::$ctx['api']).'/api/'.ltrim($ruta, '/');
         $enviar = static fn (): Response => match (strtoupper($metodo)) {
             'GET' => $peticion->get($url, $consulta),
             'POST' => $peticion->post($url.($consulta === [] ? '' : '?'.http_build_query($consulta)), $cuerpo),
@@ -438,6 +441,26 @@ abstract class H8StackE2ETestCase extends TestCase
         }
     }
 
+    /**
+     * COSTURA DE DATOS (solo la base desechable del banco): una sentencia como el SUPERUSUARIO del clúster local, con
+     * los disparadores de solo inserción apagados en ESTA transacción (`session_replication_role = replica`). La usa la
+     * fase «salientes» para simular el paso del tiempo de la evidencia del canario (`created_at` de la entrada). Se
+     * niega fuera de una base `ultron_studio_h8_e2e*` en 127.0.0.1. Devuelve las filas afectadas.
+     */
+    protected function comoSuperusuario(string $q): int
+    {
+        $d = self::$ctx['db'];
+        $this->must('costura de datos: solo en la base desechable del E2E en 127.0.0.1', preg_match('/^ultron_studio_h8_e2e[a-z0-9_]{0,40}$/D', (string) $d['database']) === 1
+            && in_array((string) $d['host'], ['127.0.0.1', 'localhost'], true), $d['database']);
+        $pdo = new PDO("pgsql:host={$d['host']};port={$d['port']};dbname={$d['database']}", (string) $d['reader'], '', [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+        $pdo->beginTransaction();
+        $pdo->exec('SET LOCAL session_replication_role = replica');
+        $n = (int) $pdo->exec($q);
+        $pdo->commit();
+
+        return $n;
+    }
+
     // ── La copia del árbol: artisan, el ayudante y el emisor del laboratorio ─
 
     /**
@@ -476,10 +499,10 @@ abstract class H8StackE2ETestCase extends TestCase
         return $r;
     }
 
-    /** @param  list<string>  $args  @return array<string, mixed> */
-    protected function ayudante(array $args): array
+    /** @param  list<string>  $args  @param  array<string, string>  $extra  @return array<string, mixed> */
+    protected function ayudante(array $args, array $extra = []): array
     {
-        $r = $this->proceso([(string) self::$ctx['php'], (string) self::$ctx['helpers']['ayudante'], (string) self::$ctx['backend'], ...$args]);
+        $r = $this->proceso([(string) self::$ctx['php'], (string) self::$ctx['helpers']['ayudante'], (string) self::$ctx['backend'], ...$args], $extra);
         $this->must('ayudante '.$args[0].' sale con 0', $r['code'] === 0, mb_substr($r['err'], 0, 400));
 
         return json_decode(trim($r['out']), true, 64, JSON_THROW_ON_ERROR);
@@ -491,13 +514,88 @@ abstract class H8StackE2ETestCase extends TestCase
      *
      * @return array{code:int, out:string, err:string}
      */
-    protected function workerDeUnTrabajo(?string $instante): array
+    protected function workerDeUnTrabajo(?string $instante, array $entorno = []): array
     {
-        $extra = $instante === null ? [] : ['H8_E2E_RELOJ_OBJETIVO' => $instante, 'H8_E2E_VENDOR' => self::$ctx['backend'].'/vendor/autoload.php'];
-
-        return $this->artisanCopia(['queue:work', 'voice', '--queue=voice-e2e', '--stop-when-empty', '--tries=1', '--timeout=60'], $extra,
+        $extra = $entorno + ($instante === null ? [] : ['H8_E2E_RELOJ_OBJETIVO' => $instante, 'H8_E2E_VENDOR' => self::$ctx['backend'].'/vendor/autoload.php']);
+        // B8-g (`number_unverified`): el job vuelve a exigir una observación del número de menos de 2 h, medida con SU
+        // reloj. Con el reloj desplazado, la del reloj real es «vieja» (o del futuro): se observa con el MISMO reloj justo
+        // antes, y después otra vez con el real, para que la puerta (reloj real) siga viéndola reciente.
+        if ($instante !== null) {
+            $o = $this->observarNumero($instante, $entorno);
+            $this->must('la observación del número con el reloj del job cuadra (number_verified)', ($o['policy'] ?? null) === 'verified', $o);
+        }
+        $r = $this->artisanCopia(['queue:work', 'voice', '--queue=voice-e2e', '--stop-when-empty', '--tries=1', '--timeout=60'], $extra,
             $instante === null ? null : (string) self::$ctx['helpers']['reloj']);
+        if ($instante !== null) {
+            $o = $this->observarNumero(null, $entorno);
+            $this->must('la observación del número con el reloj real vuelve a cuadrar (number_verified)', ($o['policy'] ?? null) === 'verified', $o);
+        }
+
+        return $r;
     }
+
+    /**
+     * La parte de NÚMEROS de la conciliación (`ayudante.php observar-numero`: `VoiceReconciler::numbers()`, el método de
+     * `voice:reconcile --numbers`) con el reloj real o el desplazado a `$instante`. Devuelve su resumen (sin el número).
+     *
+     * @param  array<string, string>  $entorno
+     * @return array<string, mixed>
+     */
+    protected function observarNumero(?string $instante = null, array $entorno = []): array
+    {
+        $php = [(string) self::$ctx['php']];
+        $extra = $entorno;
+        if ($instante !== null) {
+            $php = [...$php, '-d', 'auto_prepend_file='.self::$ctx['helpers']['reloj']];
+            $extra += ['H8_E2E_RELOJ_OBJETIVO' => $instante, 'H8_E2E_VENDOR' => self::$ctx['backend'].'/vendor/autoload.php'];
+        }
+        $r = $this->proceso([...$php, (string) self::$ctx['helpers']['ayudante'], (string) self::$ctx['backend'], 'observar-numero'], $extra);
+        $this->must('ayudante observar-numero sale con 0', $r['code'] === 0, mb_substr($r['err'], 0, 300));
+
+        return json_decode(trim((string) strrchr("\n".trim($r['out']), "\n")), true, 64, JSON_THROW_ON_ERROR);
+    }
+
+    /**
+     * Una SEGUNDA API de la misma copia (misma base, misma caché, mismas sesiones) en `ports.api2`, con variables que
+     * mandan sobre el `.env` (Laravel no pisa las que ya trae el proceso): la fase «salientes» la usa para la parte 4b
+     * (`VOICE_OUTBOUND_SCOPE=contacts`) sin parar la pila. `php -S` directo, como `artisan serve` por dentro (sin un
+     * nieto que quede vivo), con la red por la valla. La para {@see pararApi2()}; el arnés mata lo que quede en el puerto.
+     *
+     * @param  array<string, string>  $extra
+     */
+    protected function iniciarApi2(array $extra): string
+    {
+        $puerto = (int) self::$ctx['ports']['api2'];
+        $this->pararApi2();
+        $entorno = ['PATH' => (string) getenv('PATH'), 'HOME' => (string) getenv('HOME'), 'LC_ALL' => 'C', 'PGGSSENCMODE' => 'disable'] + self::$ctx['red'] + $extra;
+        $env = array_map(static fn (string $k, string $v): string => "{$k}={$v}", array_keys($entorno), array_values($entorno));
+        $servidor = self::$ctx['backend'].'/vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php';
+        self::$api2 = new Process(['/usr/bin/env', '-i', ...$env, (string) self::$ctx['php'], '-S', "127.0.0.1:{$puerto}", $servidor], self::$ctx['backend'].'/public', null, null, null);
+        self::$api2->start();
+        $base = "http://127.0.0.1:{$puerto}";
+        $listo = false;
+        for ($i = 0; $i < 60 && ! $listo; $i++) {
+            usleep(250_000);
+            try {
+                $listo = Http::timeout(2)->acceptJson()->get($base.'/api/admin/voice/status')->status() === 401;
+            } catch (\Throwable) {
+                $listo = false;
+            }
+        }
+        $this->must("segunda API en :{$puerto} (la misma copia, con ".implode(', ', array_keys($extra)).')', $listo, mb_substr(self::$api2->getErrorOutput(), 0, 300));
+
+        return $base;
+    }
+
+    protected function pararApi2(): void
+    {
+        if (self::$api2 !== null) {
+            self::$api2->stop(5);
+            self::$api2 = null;
+        }
+    }
+
+    private static ?Process $api2 = null;
 
     // ── Recorridos comunes a las dos fases ──────────────────────────────────
 
@@ -757,8 +855,14 @@ abstract class H8StackE2ETestCase extends TestCase
         return ['call' => $c, 'post' => $p];
     }
 
-    /** Espera (sondeando la base) a que una llamada salga de `requested`. Devuelve el estado. */
-    protected function esperarEstado(string $uuid, float $segundos = 15.0): ?string
+    /**
+     * Espera (sondeando la base) a que una llamada salga de `requested`. Devuelve el estado.
+     *
+     * 30 s (Enmienda 14, E14-2): con 15 s, en una máquina recién despertada el worker residente tardó más en tomar el
+     * job y el paso g cayó en las dos fases (la fila acabó `canceled` con el motivo correcto, fuera de plazo). El job
+     * real tiene `--timeout=60`; 30 s es la mitad, y una fila que sigue `requested` a los 30 s es un fallo de verdad.
+     */
+    protected function esperarEstado(string $uuid, float $segundos = 30.0): ?string
     {
         $fin = microtime(true) + $segundos;
         do {

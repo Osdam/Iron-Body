@@ -32,6 +32,13 @@
 # persona en cada pasada (un POST que responde 409). No toca la sonda de Twilio.
 # Ensayo local: APP_DIR, SMOKE_API, SMOKE_RUN_AS="", SMOKE_PSQL, SMOKE_WORKDIR, SMOKE_PY, SMOKE_H6_PY, SMOKE_BUDGETS,
 # SMOKE_ADMIN_ID, SMOKE_VALLA_STATS y SMOKE_LOGS (ver banco-h8/README.md).
+# FASES (OPS8-c, 09-11-2026): SMOKE_PHASE=1 (por defecto, lo de arriba sin cambios) · 2a (el laboratorio hablado encendido,
+# sin llamadas: constante cerrada, entrantes, salientes, Twilio Voice y publicar apagados) · 4a (salientes a canarios:
+# constante abierta, salientes, Twilio Voice, publicar y el monitor de voz encendidos, entrantes apagadas). En 2a y 4a el
+# programador se espera con las tareas de los monitores que estén encendidos (4 de voz, 2 del Studio), la telefonía con
+# las condiciones de su fase (smoke-h8.py, «FASES») y, con el monitor de voz encendido, el canal `voice` admite además las
+# líneas de sus tareas programadas (voice.reconcile*, voice.prune*). La regla «sin filas positivas» no cambia: el smoke
+# no abre sesiones del laboratorio ni publica (smoke-h8.py las omite con su bandera encendida).
 set -euo pipefail
 export LC_ALL=C
 
@@ -46,6 +53,7 @@ RUN_AS="${SMOKE_RUN_AS-www-data}"
 PSQL="${SMOKE_PSQL:-sudo -u postgres psql -X -Atq -d ironbody}"
 LOGS="${SMOKE_LOGS:-$APP_DIR/storage/logs}"
 VALLA="${SMOKE_VALLA_STATS:-}"
+FASE="${SMOKE_PHASE:-1}"
 SMOKE_EMAIL=studio-smoke@ironbodyneiva.cloud
 # Lo que tiene que decir voice:doctor --telefonia en la fase 1 (el mismo que el paso 10 de deploy-h8-backend-fase1.sh).
 TEL_FASE1="estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=0 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=no subcuenta=no proveedor=ELEVENLABS_UNVERIFIED"
@@ -54,6 +62,7 @@ TEL_FASE1="estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=0 cadena=ca
 RECHAZOS="voice.inbound.unauthorized voice.post_call.rejected voice.tool.unauthorized voice.twilio.usage_rejected"
 
 [[ "$ADMIN_ID" =~ ^[0-9]+$ ]] || { echo "SMOKE_ADMIN_ID no es un número"; exit 2; }
+case "$FASE" in 1|2a|4a) ;; *) echo "SMOKE_PHASE = 1 | 2a | 4a"; exit 2 ;; esac
 if [ -n "$RUN_AS" ] && [ "$(id -u)" != 0 ]; then echo "en el servidor se ejecuta como root"; exit 2; fi
 for b in python3 php openssl curl join; do command -v "$b" > /dev/null || { echo "falta $b"; exit 2; }; done
 [ -f "$PY" ] || { echo "no encuentro $PY"; exit 2; }
@@ -178,24 +187,55 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "== Smoke del Hito 8 (fase 1) · $(date -u +%Y-%m-%dT%H:%M:%SZ) · $API"
+echo "== Smoke del Hito 8 (fase $FASE) · $(date -u +%Y-%m-%dT%H:%M:%SZ) · $API"
 echo "OK      presupuestos de rendimiento válidos: $PRES ($BUD)"
 
 # 1. La voz apagada en la configuración efectiva, y el programador: schedule:list sale con 0, sin tareas del Studio ni de voz.
 CONF=$(tinker_line '^\{"calls_in_code":(true|false),.*\}$' 'echo json_encode(["calls_in_code" => App\Services\Voice\VoiceCallPolicy::CALLS_ENABLED_IN_CODE, "inbound" => config("voice.inbound.enabled"), "outbound" => config("voice.outbound.enabled"), "lab" => config("voice.lab.enabled"), "voice_monitor" => config("voice.monitor.enabled"), "publishing" => config("ultron_studio.voice.publishing_enabled"), "twilio_voice" => config("voice.twilio.enabled"), "studio_monitor" => config("ultron_studio.monitor.enabled")]), PHP_EOL;') \
   || { echo "FALLO   no se pudo leer la configuración efectiva de la voz (tinker falló o no es la forma esperada; su salida no se imprime). No se ejecuta el smoke."; FINAL=1; exit 1; }
-[ "$CONF" = '{"calls_in_code":false,"inbound":false,"outbound":false,"lab":false,"voice_monitor":false,"publishing":false,"twilio_voice":false,"studio_monitor":false}' ] \
-  || { echo "FALLO   la voz no está toda apagada ($CONF): este smoke es el de la fase 1. No se ejecuta."; FINAL=1; exit 1; }
-echo "OK      voz apagada: $CONF"
+# Lo que tiene que valer cada bandera en la fase (sin la clave: cualquiera); los monitores fijan el programador esperado.
+fase_conf() { printf '%s' "$CONF" | FASE="$FASE" python3 -I -c '
+import json, os, sys
+d = json.load(sys.stdin)
+espera = {"2a": {"calls_in_code": False, "inbound": False, "outbound": False, "lab": True, "publishing": False, "twilio_voice": False},
+          "4a": {"calls_in_code": True, "inbound": False, "outbound": True, "publishing": True, "twilio_voice": True, "voice_monitor": True}}[os.environ["FASE"]]
+mal = ["%s=%s" % (k, json.dumps(d.get(k))) for k, v in espera.items() if d.get(k) is not v]
+print(("MAL " + " ".join(mal)) if mal else ("OK %d %d" % (2 if d.get("studio_monitor") else 0, 4 if d.get("voice_monitor") else 0)))'; }
+if [ "$FASE" = 1 ]; then
+  [ "$CONF" = '{"calls_in_code":false,"inbound":false,"outbound":false,"lab":false,"voice_monitor":false,"publishing":false,"twilio_voice":false,"studio_monitor":false}' ] \
+    || { echo "FALLO   la voz no está toda apagada ($CONF): este smoke es el de la fase 1. No se ejecuta."; FINAL=1; exit 1; }
+  echo "OK      voz apagada: $CONF"
+  ESP_STUDIO=0; ESP_VOZ=0
+else
+  FC=$(fase_conf)
+  case "$FC" in
+    "OK "*) read -r _ ESP_STUDIO ESP_VOZ <<< "$FC"; echo "OK      configuración de la voz de la fase $FASE: $CONF" ;;
+    *) echo "FALLO   la configuración de la voz no es la de la fase $FASE (${FC#MAL }): $CONF. No se ejecuta."; FINAL=1; exit 1 ;;
+  esac
+fi
 PROG=$(programador)
 case "$PROG" in
   "FALLO "*) echo "FALLO   schedule:list no sale con 0 (código ${PROG#FALLO }; su salida no se imprime): sin poder leer el programador no se ejecuta el smoke"; FINAL=1; exit 1 ;;
   ILEGIBLE) echo "FALLO   schedule:list no devolvió la lista JSON de tareas. No se ejecuta el smoke."; FINAL=1; exit 1 ;;
 esac
 read -r _TOTAL STUDIO VOZ <<< "$PROG"
-if [ "$STUDIO $VOZ" = "0 0" ]; then echo "OK      el programador: $_TOTAL tareas, ninguna del Studio ni de voz"; else echo "FALLO   el programador tiene $STUDIO tareas del Studio y $VOZ de voz (esperado 0 y 0 con los dos monitores apagados)"; FINAL=1; fi
+if [ "$STUDIO $VOZ" = "$ESP_STUDIO $ESP_VOZ" ]; then
+  echo "OK      el programador: $_TOTAL tareas, $STUDIO del Studio y $VOZ de voz (las de los monitores encendidos)"
+else
+  echo "FALLO   el programador tiene $STUDIO tareas del Studio y $VOZ de voz (esperado $ESP_STUDIO y $ESP_VOZ con los monitores de la fase $FASE)"; FINAL=1
+fi
 TEL=$(telefonia)
-if [ "$TEL" = "$TEL_FASE1" ]; then echo "OK      voice:doctor --telefonia (sin red): $TEL"; else echo "FALLO   voice:doctor --telefonia: [$TEL] (esperado [$TEL_FASE1])"; FINAL=1; fi
+if [ "$FASE" = 1 ]; then
+  if [ "$TEL" = "$TEL_FASE1" ]; then echo "OK      voice:doctor --telefonia (sin red): $TEL"; else echo "FALLO   voice:doctor --telefonia: [$TEL] (esperado [$TEL_FASE1])"; FINAL=1; fi
+else
+  # 2a: constante cerrada, cadena sin entradas, freno suelto, cupos de llamadas a 0. 4a: constante abierta, parte canary
+  # vigente y rest sin entradas, freno suelto, salientes ≥ 1 con presupuesto y entrantes a 0, número y subcuenta puestos.
+  case "$FASE" in
+    2a) PATRON='^estado=[A-Z_]+ constante=cerrada encendidas=[1-2] cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=(si|no) subcuenta=(si|no) proveedor=[A-Z_]+$' ;;
+    4a) PATRON='^estado=[A-Z_]+ constante=abierta encendidas=[3-4] cadena=canary:ok,rest:none freno=suelto cupos=[1-9][0-9]*/0/[1-9][0-9]* numero=si subcuenta=si proveedor=[A-Z_]+$' ;;
+  esac
+  if [[ "$TEL" =~ $PATRON ]]; then echo "OK      voice:doctor --telefonia (sin red), la de la fase $FASE: $TEL"; else echo "FALLO   voice:doctor --telefonia: [$TEL] (no es la de la fase $FASE)"; FINAL=1; fi
+fi
 MONI0=$(monitor_integraciones)
 case ",$MONI0," in
   *",config_drift:"*) echo "FALLO   el monitor del H7 ve deriva de la configuración autorizada antes del smoke: [$MONI0]"; FINAL=1 ;;
@@ -245,7 +285,7 @@ unset HASH
 set +e
 SMOKE_API="$API" SMOKE_EMAIL="$SMOKE_EMAIL" SMOKE_PW="$SMOKE_PW" SMOKE_CANARY_ID="$CANARIO" SMOKE_SECRET_SALT="$SAL" \
   SMOKE_SECRET_DIGESTS="${HUELLAS:-}" SMOKE_TOKEN_FILE="$HDR" SMOKE_H6_PY="$PY6" SMOKE_BUDGETS="$BUD" \
-  SMOKE_BUDGETS_OUT="${SMOKE_BUDGETS_OUT:-}" PYTHONIOENCODING=utf-8 PYTHONDONTWRITEBYTECODE=1 \
+  SMOKE_BUDGETS_OUT="${SMOKE_BUDGETS_OUT:-}" SMOKE_PHASE="$FASE" PYTHONIOENCODING=utf-8 PYTHONDONTWRITEBYTECODE=1 \
   python3 "$PY" superadmin
 RC1=$?
 set -e
@@ -273,6 +313,8 @@ fi
 VOZ_NUEVAS=$(nuevas voice "$VOZ_LOG_ANTES")
 NOMBRES=$(printf '%s\n' "$VOZ_NUEVAS" | sed -nE 's/^\[[^]]*\] [A-Za-z0-9_-]+\.([A-Z]+): ([a-z0-9_.]+).*$/\1 \2/p' | sort | uniq -c | awk '{printf "%s×%s(%s) ", $3, $1, $2}')
 OTRAS=$(printf '%s\n' "$VOZ_NUEVAS" | sed -nE 's/^\[[^]]*\] [A-Za-z0-9_-]+\.[A-Z]+: ([a-z0-9_.]+).*$/\1/p' | sort -u | grep -vxF -f <(tr ' ' '\n' <<< "$RECHAZOS") | tr '\n' ' ' || true)
+# Con el monitor de voz encendido (2a/4a), sus tareas programadas escriben en el canal: no son actividad del smoke.
+[ "${ESP_VOZ:-0}" = 0 ] || OTRAS=$(tr ' ' '\n' <<< "$OTRAS" | grep -vE '^voice\.(reconcile|prune)' | tr '\n' ' ' | sed 's/^ *//; s/ *$//' || true)
 SIN_FORMA=$(printf '%s\n' "$VOZ_NUEVAS" | grep -c . || true)
 CON_FORMA=$(printf '%s\n' "$VOZ_NUEVAS" | grep -cE '^\[[^]]*\] [A-Za-z0-9_-]+\.[A-Z]+: [a-z0-9_.]+' || true)
 if [ -z "$OTRAS" ] && [ "$SIN_FORMA" = "$CON_FORMA" ] && ! printf '%s\n' "$VOZ_NUEVAS" | grep -qE '\.(ERROR|CRITICAL|ALERT|EMERGENCY):'; then

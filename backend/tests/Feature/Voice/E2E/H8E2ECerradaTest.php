@@ -31,6 +31,8 @@ final class H8E2ECerradaTest extends H8StackE2ETestCase
         $st = $this->telefonia('GET', 'status', 'a');
         $this->check('GET admin/voice/status: 200 y las banderas encendidas', $st->status() === 200 && $st->json('flags.inbound') === true && $st->json('flags.outbound') === true, self::resumen($st, 'flags'));
         $this->check('GET admin/voice/status: ya no informa flags.publishing (E4-1, E6-10)', ! array_key_exists('publishing', (array) $st->json('flags')), $st->json('flags'));
+        $this->check('E4-6 (B8-g): la verificación del arranque (--verify-voice contra el simulador) dejó el proveedor VERIFICADO, con su marca vigente', $st->json('provider') === 'ELEVENLABS_VERIFIED'
+            && $st->json('providerVerification.state') === 'valid', self::resumen($st, 'provider', 'providerVerification'));
         $nadie = $this->telefonia('GET', 'status', null);
         $this->check('GET admin/voice/status sin token → 401', $nadie->status() === 401, self::resumen($nadie));
         $this->prepararCanarios();
@@ -125,7 +127,8 @@ final class H8E2ECerradaTest extends H8StackE2ETestCase
         $r = $this->telefonia('POST', 'calls', 'a', ['clientRequestId' => self::uuid(), 'target' => ['kind' => 'canary', 'uuid' => $canario]]);
         $motivos = (array) $r->json('reasons');
         $this->check('POST admin/voice/calls → 409 outbound_denied con calls_disabled_in_code el primero', $r->status() === 409 && $r->json('code') === 'outbound_denied' && ($motivos[0] ?? null) === 'calls_disabled_in_code', self::resumen($r, 'reasons'));
-        $this->check('y además, acumulados: elevenlabs_unverified (E4-6) y no_publication', in_array('elevenlabs_unverified', $motivos, true) && in_array('no_publication', $motivos, true), $motivos);
+        $this->check('y además, acumulado: no_publication; sin elevenlabs_unverified (E4-6: el proveedor quedó verificado en el arranque)', ! in_array('elevenlabs_unverified', $motivos, true)
+            && in_array('no_publication', $motivos, true), $motivos);
         $this->check('SQL: ninguna fila de saliente', (int) $this->valor("SELECT count(*) FROM voice_calls WHERE direction = 'outbound'") === $filas, null);
 
         // F-5: sin publicación, una saliente no puede existir ni escrita a mano (la base exige el sello aplicado).

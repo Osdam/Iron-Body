@@ -56,7 +56,7 @@ function prohibidos(ctx, extra = {}) {
     out[`teléfono …${e164.slice(-4)} (sin +)`] = e164.slice(1);
     out[`teléfono …${e164.slice(-4)} (nacional)`] = e164.slice(3);
   }
-  out['URL firmada (conversation_signature)'] = 'conversation_signature';
+  out['URL firmada (su firma)'] = 'conversation_signature';
   Object.assign(out, extra);
   return out;
 }
@@ -112,10 +112,21 @@ async function sim(ctx, cual, control, q = {}) {
 }
 
 /** El ayudante del arnés (costuras documentadas en su README), con el entorno limpio de la pila y la valla. */
-function ayudante(ctx, args, extraEnv = {}) {
+function ayudante(ctx, args, extraEnv = {}, prepend = null) {
   const env = { PATH: process.env.PATH, HOME: process.env.HOME, LC_ALL: 'C', PGGSSENCMODE: 'disable', ...ctx.h.red, ...extraEnv };
-  const out = execFileSync(ctx.h.php, [ctx.h.helpers.ayudante, ctx.h.backend, ...args], { cwd: ctx.h.backend, env, encoding: 'utf8', timeout: 120000 });
+  const php = prepend ? ['-d', `auto_prepend_file=${prepend}`] : [];
+  const out = execFileSync(ctx.h.php, [...php, ctx.h.helpers.ayudante, ctx.h.backend, ...args], { cwd: ctx.h.backend, env, encoding: 'utf8', timeout: 120000 });
   return JSON.parse(out.trim().split('\n').pop());
+}
+
+/**
+ * B8-g (`number_unverified`): la observación del número importado (la parte de números de la conciliación) con el reloj
+ * real o con el desplazado a `instante` (el de un worker de un trabajo con `reloj.php`), como `observarNumero()` del E2E
+ * del backend. Devuelve su resumen (sin el número).
+ */
+function observarNumero(ctx, instante = null) {
+  const env = instante ? { H8_E2E_RELOJ_OBJETIVO: instante, H8_E2E_VENDOR: `${ctx.h.backend}/vendor/autoload.php` } : {};
+  return ayudante(ctx, ['observar-numero'], env, instante ? ctx.h.helpers.reloj : null);
 }
 
 /** Un `artisan` de la copia del arnés (p. ej. el worker de UN trabajo con el reloj desplazado). */
@@ -221,8 +232,9 @@ async function sesion(browser, ctx, inf, quien, opciones = {}) {
   cdp.on('Network.requestWillBeSent', (e) => {
     const r = rutaSinValores(e.request.url);
     if (r.scheme === 'data' || r.scheme === 'blob') return;
-    peticiones.set(e.requestId, { method: e.request.method, ...r, url: e.request.url, post: e.request.postData || '' });
     const linea = { ts: new Date().toISOString(), quien, kind: 'http', method: e.request.method, scheme: r.scheme, host: r.host, path: r.path, type: e.type };
+    // El estado HTTP y Retry-After se anotan en la MISMA línea al llegar la respuesta (registro de red de la evidencia).
+    peticiones.set(e.requestId, { method: e.request.method, ...r, url: e.request.url, post: e.request.postData || '', linea });
     s.red.push(linea);
     // Lo que el navegador ENVÍA: ni secretos, ni la URL firmada, ni teléfonos (salvo en el formulario que los pide).
     const permitidos = opciones.excepcionesEnvio ? opciones.excepcionesEnvio(e.request.method, r.path) : [];
@@ -238,6 +250,9 @@ async function sesion(browser, ctx, inf, quien, opciones = {}) {
     if (!p) return;
     p.status = e.response.status;
     p.mime = e.response.mimeType;
+    p.linea.status = e.response.status;
+    const ra = Object.entries(e.response.headers || {}).find(([k]) => k.toLowerCase() === 'retry-after');
+    if (ra) p.linea.retryAfter = String(ra[1]).slice(0, 8);
     if (p.host === new URL(ctx.proxyApi).host && p.status >= 500) s.api5xx.push(`${p.method} ${p.path} ${p.status}`);
   });
   cdp.on('Network.loadingFinished', async (e) => {
@@ -346,9 +361,20 @@ async function escribir(s, selector, valorTexto) {
   await h.type(String(valorTexto));
 }
 
-async function elegir(s, selector, valorOpcion) {
+/**
+ * Elige una opción de un `<select>`. Espera a que ESA opción exista (las listas del CRM llegan después de pintar el
+ * control: `page.select` sobre una opción que aún no está no hace nada y no falla) y comprueba que quedó elegida.
+ */
+async function elegir(s, selector, valorOpcion, ms = T(30000)) {
   await s.page.waitForSelector(selector, { visible: true });
-  return s.page.select(selector, valorOpcion);
+  if (valorOpcion) {
+    const op = `${selector} option[value=${JSON.stringify(String(valorOpcion))}]`;
+    await s.page.waitForSelector(op, { timeout: ms });
+  }
+  await s.page.select(selector, valorOpcion);
+  const elegido = await leer(s, `const e = document.querySelector(${JSON.stringify(selector)}); return e ? e.value : null;`);
+  if (elegido !== valorOpcion) throw new Requisito(`${selector}: la opción ${String(valorOpcion).slice(0, 8)}… no quedó elegida (${String(elegido).slice(0, 8)})`);
+  return elegido;
 }
 
 /** Captura de pantalla de la página entera en la evidencia. */
@@ -399,7 +425,12 @@ async function barrerPagina(s, inf, excepto = []) {
   const { auth_token: _t, ...resto } = v.sesion;
   out.almacenamiento = [...new Set([...fugas(JSON.stringify(v.local), inf.prohib, excepto), ...fugas(JSON.stringify(resto), inf.prohib, excepto)])];
   out.url = fugas(v.url, inf.prohib, ['sesión ' + s.quien]);
-  out.consola = [...new Set(s.consola.flatMap((m) => [...fugas(m.text, inf.prohib, ['sesión ' + s.quien]), ...e164s(m.text).map((x) => 'E.164 ' + x)]))];
+  // La consola de la PÁGINA: sin las líneas que escribe el propio Chrome por la red (CDP Log, fuente `network`, p. ej.
+  // «WebSocket connection to 'wss://…' failed», la limitación del navegador que anota FE8-3 §3.3); esas van aparte.
+  const deChrome = new Set((s.log || []).filter((e) => e.source === 'network').map((e) => e.text));
+  const etiquetas = (lista) => [...new Set(lista.flatMap((m) => [...fugas(m.text, inf.prohib, ['sesión ' + s.quien]), ...e164s(m.text).map((x) => 'E.164 ' + x)]))];
+  out.consola = etiquetas(s.consola.filter((m) => !deChrome.has(m.text)));
+  out.consolaDeChrome = etiquetas(s.consola.filter((m) => deChrome.has(m.text)));
   // Lo mismo, separado por quién lo escribió: el propio Chrome (p. ej. «WebSocket connection to … failed», source=network)
   // o el código de la página (source=javascript / console-api).
   out.consolaPorFuente = {};
@@ -422,6 +453,6 @@ function guardarRed(ctx, sesiones) {
 }
 
 module.exports = {
-  T, dormir, cargar, prohibidos, fugas, e164s, sql, valor, api, sim, ayudante, artisan, uuid, Informe, Requisito, lanzar, sesion, leer, esperar,
+  T, dormir, cargar, prohibidos, fugas, e164s, sql, valor, api, sim, ayudante, observarNumero, artisan, uuid, Informe, Requisito, lanzar, sesion, leer, esperar,
   texto, ir, pestana, clic, escribir, elegir, captura, desborde, focoAtrapado, barrerPagina, innerHtml, guardarRed, ES_LOCAL, NORMALIZA,
 };

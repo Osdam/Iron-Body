@@ -15,13 +15,18 @@ use Illuminate\Console\Command;
  * cancela sin red. Funciona con la voz apagada. Sin la credencial de la
  * subcuenta no puede colgar en Twilio: lo dice y sale con 1.
  *
+ * E12-5 (B8-g): una saliente ya CORTADA (`canceled`) que el proveedor inició
+ * igual y cuyo colgado no se confirmó se vuelve a colgar (por su uuid, o con
+ * `--all` si se cortó hace menos de una hora: las que aún pueden estar vivas);
+ * si tampoco se confirma, freno. Sin eso, una cortada no tiene nada que colgar.
+ *
  * `--all` exige `--confirm`. Imprime uuids y resultados, nunca números.
  */
 class VoiceHangupCommand extends Command
 {
     protected $signature = 'voice:hangup
         {call? : el uuid de la llamada}
-        {--all : todas las llamadas en curso (dialing y active) y las pedidas sin marcar}
+        {--all : todas las llamadas en curso (dialing y active), las pedidas sin marcar y las cortadas que el proveedor inició igual sin colgado confirmado}
         {--confirm : obligatorio con --all}';
 
     protected $description = 'Corte de emergencia de la voz (D8-20 nivel 0b): cuelga en Twilio una llamada o todas las que estén en curso. Nunca imprime números.';
@@ -47,6 +52,7 @@ class VoiceHangupCommand extends Command
 
         $llamadas = $todas
             ? VoiceCall::query()->whereIn('status', [VoiceCall::STATUS_REQUESTED, VoiceCall::STATUS_DIALING, VoiceCall::STATUS_ACTIVE])->whereNull('transfer_of_call_id')->orderBy('id')->get()
+                ->concat(VoiceHangup::unconfirmedAfterCancel())
             : VoiceCall::query()->where('uuid', strtolower((string) $uuid))->get();
         if ($llamadas->isEmpty()) {
             $this->line($todas ? 'No hay llamadas en curso.' : 'Esa llamada no existe.');

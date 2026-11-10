@@ -60,6 +60,14 @@ use LogicException;
  *  - `transfer_to_number` exige `solicitar_humano` (D8-14);
  *  - buzón: solo `hang_up` (P-10 recomendado): dejar un mensaje exige otra
  *    plantilla con su texto aprobado.
+ *
+ * S8-d (09-11-2026): el TRATO es del perfil (`addressForm`, opcional y
+ * cerrado: `tu` por defecto o `usted`, {@see PROFILE_OPTIONAL_FIELDS}); el
+ * aviso del perfil tiene que ser el de su trato (`notice_mismatch` si no) y
+ * la plantilla `/2` pone la sección fija de español de Colombia y la de
+ * seguridad, que {@see assertRenderedTexts()} exige tal cual. `VERSION` sigue
+ * en `/1`: la versión y la huella de la plantilla viajan en la especificación
+ * (cambian el `specHash`) y ningún agente real se compiló (E2-9).
  */
 final class StudioVoiceCompiler
 {
@@ -96,6 +104,14 @@ final class StudioVoiceCompiler
         'format', 'voiceId', 'language', 'aiNotice', 'greetings', 'holes', 'maxDurationSeconds',
         'tools', 'systemTools', 'transfer', 'privacy', 'voicemail',
     ];
+
+    /**
+     * Los campos OPCIONALES del contenido (S8-d), también cerrados:
+     * `addressForm`, el trato (`tu` o `usted`, {@see StudioVoiceTemplate::ADDRESS_FORMS}).
+     * Sin él, el trato es de tú: un perfil anterior a S8-d conserva su huella y
+     * compila como antes (con la plantilla de hoy).
+     */
+    public const PROFILE_OPTIONAL_FIELDS = ['addressForm'];
 
     public const GREETING_FIELDS = ['inbound', 'outbound'];
 
@@ -227,6 +243,7 @@ final class StudioVoiceCompiler
             'tone' => $parametros['tone'],
             'goal' => $parametros['goal'],
             'fallback' => $parametros['fallback'],
+            'addressForm' => $perfil['addressForm'],
             'inboundGreeting' => $perfil['greetings']['inbound'],
             'outboundGreeting' => $perfil['greetings']['outbound'],
             'holes' => $perfil['holes'],
@@ -234,7 +251,7 @@ final class StudioVoiceCompiler
             'transfer' => in_array(StudioVoiceTemplate::SYSTEM_TRANSFER, $perfil['systemTools'], true),
             'forbiddenPhrases' => $frases,
         ]);
-        self::assertRenderedTexts($textos);
+        self::assertRenderedTexts($textos, $perfil['addressForm']);
 
         $catalogo = StudioVoiceTemplate::serverTools();
         $spec = [
@@ -433,7 +450,7 @@ final class StudioVoiceCompiler
 
     /**
      * @param  array{uuid:string,status:string,contentHash:string,content:array<string,mixed>,createdBy:int,approvedBy:int|null}  $p
-     * @return array{voiceId:string,greetings:array{inbound:string,outbound:string},holes:array<string,string>,maxDurationSeconds:int,tools:list<string>,systemTools:list<string>,destinations:list<array{alias:string,phoneHash:string}>,privacy:array{retentionDays:int,storeAudio:bool,recording:bool},voicemail:string}
+     * @return array{voiceId:string,addressForm:string,greetings:array{inbound:string,outbound:string},holes:array<string,string>,maxDurationSeconds:int,tools:list<string>,systemTools:list<string>,destinations:list<array{alias:string,phoneHash:string}>,privacy:array{retentionDays:int,storeAudio:bool,recording:bool},voicemail:string}
      */
     private static function checkProfile(array $p, string $purpose, int $maxCallSeconds): array
     {
@@ -465,13 +482,13 @@ final class StudioVoiceCompiler
      * mismo motivo y el mismo campo antes de que el perfil llegue a compilarse.
      *
      * @param  array<string,mixed>  $c
-     * @return array{voiceId:string,greetings:array{inbound:string,outbound:string},holes:array<string,string>,maxDurationSeconds:int,tools:list<string>,systemTools:list<string>,destinations:list<array{alias:string,phoneHash:string}>,privacy:array{retentionDays:int,storeAudio:bool,recording:bool},voicemail:string}
+     * @return array{voiceId:string,addressForm:string,greetings:array{inbound:string,outbound:string},holes:array<string,string>,maxDurationSeconds:int,tools:list<string>,systemTools:list<string>,destinations:list<array{alias:string,phoneHash:string}>,privacy:array{retentionDays:int,storeAudio:bool,recording:bool},voicemail:string}
      *
      * @throws UltronStudioException 422 `voice_compile_refused`
      */
     public static function profileContent(array $c, int $maxCallSeconds): array
     {
-        self::closedKeys($c, self::PROFILE_FIELDS, 'profile.content');
+        self::closedKeys($c, self::PROFILE_FIELDS, 'profile.content', self::PROFILE_OPTIONAL_FIELDS);
 
         if ($c['format'] !== self::PROFILE_FORMAT) {
             throw self::refusal('profile_field_invalid', 'profile.content.format');
@@ -489,11 +506,18 @@ final class StudioVoiceCompiler
             throw self::refusal('profile_field_invalid', 'profile.content.voiceId');
         }
 
-        // P-9: el aviso fijo, aprobado con el perfil, es el de la plantilla vigente.
+        // S8-d: el trato, de un conjunto cerrado; sin él, de tú. Antes que el
+        // aviso, que tiene una forma por trato.
+        $trato = array_key_exists('addressForm', $c) ? $c['addressForm'] : StudioVoiceTemplate::ADDRESS_TU;
+        if (! is_string($trato) || ! array_key_exists($trato, StudioVoiceTemplate::ADDRESS_FORMS)) {
+            throw self::refusal('profile_field_invalid', 'profile.content.addressForm');
+        }
+
+        // P-9: el aviso fijo, aprobado con el perfil, es el de la plantilla vigente (en su trato).
         if (! is_string($c['aiNotice']) || trim($c['aiNotice']) === '') {
             throw self::refusal('notice_missing', 'profile.content.aiNotice');
         }
-        if ($c['aiNotice'] !== StudioVoiceTemplate::AI_NOTICE) {
+        if ($c['aiNotice'] !== StudioVoiceTemplate::aiNotice($trato)) {
             throw self::refusal('notice_mismatch', 'profile.content.aiNotice');
         }
 
@@ -561,6 +585,7 @@ final class StudioVoiceCompiler
 
         return [
             'voiceId' => $c['voiceId'],
+            'addressForm' => $trato,
             'greetings' => $saludos,
             'holes' => $huecos,
             'maxDurationSeconds' => $duracion,
@@ -709,16 +734,18 @@ final class StudioVoiceCompiler
     }
 
     /**
-     * Exactamente esas claves: una de más es `profile_field_unknown` y una que
-     * falta, `required_field_empty`, con su ruta.
+     * Exactamente esas claves (más, si están, las de `$optional`): una de más
+     * es `profile_field_unknown` y una que falta, `required_field_empty`, con
+     * su ruta.
      *
      * @param  array<array-key,mixed>  $value
      * @param  list<string>  $keys
+     * @param  list<string>  $optional
      */
-    private static function closedKeys(array $value, array $keys, string $base): void
+    private static function closedKeys(array $value, array $keys, string $base, array $optional = []): void
     {
         foreach (array_keys($value) as $clave) {
-            if (! in_array($clave, $keys, true)) {
+            if (! in_array($clave, $keys, true) && ! in_array($clave, $optional, true)) {
                 // La ruta de un campo inventado no repite un texto largo: se recorta.
                 throw self::refusal('profile_field_unknown', $base.'.'.mb_substr((string) $clave, 0, 40, 'UTF-8'));
             }
@@ -828,14 +855,20 @@ final class StudioVoiceCompiler
      * Lo que devolvió la plantilla: el aviso primero, y como únicas `{{…}}`
      * las variables declaradas (nunca una `system__…`: el teléfono de quien
      * llama es una de ellas), sin llaves sueltas, invisibles ni datos de
-     * contacto. Un fallo aquí es un error de la plantilla, no del perfil.
+     * contacto; y la sección fija de idioma y trato y la de seguridad, tal
+     * cual (S8-d). Un fallo aquí es un error de la plantilla, no del perfil.
      *
      * @param  array{firstMessage:string,systemPrompt:string}  $textos
      */
-    private static function assertRenderedTexts(array $textos): void
+    private static function assertRenderedTexts(array $textos, string $addressForm): void
     {
-        if (StudioVoiceTemplate::AI_NOTICE === '' || $textos['firstMessage'] !== StudioVoiceTemplate::AI_NOTICE) {
+        $aviso = StudioVoiceTemplate::aiNotice($addressForm);
+        if ($aviso === '' || $textos['firstMessage'] !== $aviso) {
             throw new LogicException('La plantilla de voz no empieza por el aviso de IA.');
+        }
+        if (! str_contains($textos['systemPrompt'], StudioVoiceTemplate::languageSection($addressForm))
+            || ! str_contains($textos['systemPrompt'], StudioVoiceTemplate::securitySection())) {
+            throw new LogicException('La plantilla de voz no lleva sus secciones fijas de idioma y de seguridad.');
         }
         foreach ($textos as $texto) {
             preg_match_all('/\{\{([^{}]*)\}\}/', $texto, $m);

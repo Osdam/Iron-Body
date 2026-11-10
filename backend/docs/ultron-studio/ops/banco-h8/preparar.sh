@@ -1,6 +1,9 @@
 #!/bin/bash
 # Copias del banco del Hito 8 de deploy-h8-backend-fase1.sh y de ironbody-migrate-propuesta.sh (el migrador del banco,
-# como en el H7) en $B/root. Solo cambian rutas, psql, la URL, los roles (iron → h5_owner, iron_app → h5_app), los dueños
+# como en el H7) en $B/root, y (OPS8-c) de los tres de las fases 2 → 4a: h8-voice-scope.sh (el mando),
+# h8-secrets-register.sh (contra el simulador de ElevenLabs) y h8-twilio-check.sh (contra el de Twilio). En estos tres
+# solo cambia su bloque «lo propio de producción» (rutas, URL, usuarios, cerrojo, hosts de los proveedores) y la
+# comprobación de root. Solo cambian rutas, psql, la URL, los roles (iron → h5_owner, iron_app → h5_app), los dueños
 # esperados (root/www-data → el usuario del Mac), el canal del registro, la comprobación de root, el directorio del
 # registro y el valor de PREVIO (el de la «producción» del banco). La LÓGICA es la del repo: cada sustitución tiene que
 # encontrar su texto exacto (si un script del repo cambia y una ya no casa, preparar FALLA en vez de ensayar otra cosa)
@@ -14,10 +17,11 @@ URL="http://127.0.0.1:$BANCO_PORT/api"
 BPSQL="psql -X -Atq -v ON_ERROR_STOP=1 -h $PG_HOST -p $PG_PORT -U $PG_USER -d $BANCO_DB"
 PHPBIN=$(command -v php)
 mkdir -p "$B/root"
-python3 -I - "$OPS" "$B" "$ME" "$URL" "$BPSQL" "$PHPBIN" "$PREVIO_BANCO" <<'PY'
+GRUPO=$(id -gn)
+python3 -I - "$OPS" "$B" "$ME" "$URL" "$BPSQL" "$PHPBIN" "$PREVIO_BANCO" "$GRUPO" "$PUERTO_EL" "$PUERTO_TW" <<'PY'
 import re
 import sys
-ops, b, me, url, bpsql, php, previo = sys.argv[1:8]
+ops, b, me, url, bpsql, php, previo, grupo, puerto_el, puerto_tw = sys.argv[1:11]
 def sustituye(nombre, reglas):
     s = open(f'{ops}/{nombre}', encoding='utf-8').read()
     for viejo, nuevo, veces in reglas:
@@ -76,9 +80,29 @@ migrador = sustituye('ironbody-migrate-propuesta.sh', comunes + [
     ('LOG_CHANNEL=stderr PGOPTIONS="$PGOPT"', 'LOG_CHANNEL=stderr ULTRON_STUDIO_DB_APP_ROLE=h5_app PGOPTIONS="$PGOPT"', 1),
 ])
 open(f'{b}/root/ironbody-migrate', 'w', encoding='utf-8').write(migrador)
+# OPS8-c: los tres de las fases 2 → 4a. El bloque «lo propio de producción» de cada uno y la comprobación de root.
+propio = [('APPDIR=/var/www/api/backend', f'APPDIR={b}/api/backend', 1), ('WWW=www-data', f'WWW={me}', 1), ('[ "$(id -u)" = 0 ]', 'true', 1)]
+mando = sustituye('h8-voice-scope.sh', propio + [
+    ('API=https://api.ironbodyneiva.cloud/api', f'API={url}', 1), ('ROOT_U=root', f'ROOT_U={me}', 1), ('ROOT_G=root', f'ROOT_G={grupo}', 1),
+    ('COPIAS=/root', f'COPIAS={b}/root', 1), ('CERROJO=/run/lock/h8-voice-scope.lock', f'CERROJO={b}/run/h8-voice-scope.lock', 1),
+    ('NIVEL_ERROR=production.ERROR', 'NIVEL_ERROR=local.ERROR', 1),
+])
+open(f'{b}/root/h8-voice-scope.sh', 'w', encoding='utf-8').write(mando)
+registro = sustituye('h8-secrets-register.sh', propio + [
+    ('API=https://api.ironbodyneiva.cloud/api', f'API={url}', 1), ('ROOT_U=root', f'ROOT_U={me}', 1), ('ROOT_G=root', f'ROOT_G={grupo}', 1),
+    ('COPIAS=/root', f'COPIAS={b}/root', 1), ('CERROJO=/run/lock/h8-voice-scope.lock', f'CERROJO={b}/run/h8-voice-scope.lock', 1),
+    ('EL_BASE_DEFAULT=https://api.elevenlabs.io', f'EL_BASE_DEFAULT=http://127.0.0.1:{puerto_el}', 1),
+    ('EL_BASE_EU=https://api.eu.residency.elevenlabs.io', f'EL_BASE_EU=http://127.0.0.1:{puerto_el}', 1),
+])
+open(f'{b}/root/h8-secrets-register.sh', 'w', encoding='utf-8').write(registro)
+twilio = sustituye('h8-twilio-check.sh', propio + [
+    ('TW_API=https://api.twilio.com', f'TW_API=http://127.0.0.1:{puerto_tw}', 1),
+    ('TW_NUMBERS=https://numbers.twilio.com', f'TW_NUMBERS=http://127.0.0.1:{puerto_tw}', 1),
+])
+open(f'{b}/root/h8-twilio-check.sh', 'w', encoding='utf-8').write(twilio)
 PY
-chmod 700 "$B/root/deploy-h8-backend-fase1.sh" "$B/root/ironbody-migrate"
-for f in deploy-h8-backend-fase1.sh:deploy-h8-backend-fase1.sh ironbody-migrate-propuesta.sh:ironbody-migrate; do
+chmod 700 "$B/root/deploy-h8-backend-fase1.sh" "$B/root/ironbody-migrate" "$B/root/h8-voice-scope.sh" "$B/root/h8-secrets-register.sh" "$B/root/h8-twilio-check.sh"
+for f in deploy-h8-backend-fase1.sh:deploy-h8-backend-fase1.sh ironbody-migrate-propuesta.sh:ironbody-migrate h8-voice-scope.sh:h8-voice-scope.sh h8-secrets-register.sh:h8-secrets-register.sh h8-twilio-check.sh:h8-twilio-check.sh; do
   o=${f%%:*}; c=${f#*:}
   bash -n "$B/root/$c"
   echo "== $o → $B/root/$c: $(diff "$OPS/$o" "$B/root/$c" | grep -c '^>' || true) líneas con sustituciones del banco"

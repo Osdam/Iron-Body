@@ -14,6 +14,7 @@ use App\Services\Voice\NullVoiceAgentDeployer;
 use App\Services\Voice\VoiceAdapters;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Factory;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
 use Tests\Feature\Telephony\Support\VoiceFixtures;
@@ -145,6 +146,10 @@ class VoiceReconcilerTest extends TestCase
 
     public function test_una_pedida_vieja_que_perdio_su_job_pasa_a_ambigua_y_el_techo_de_gasto_frena(): void
     {
+        // E14-5 (B8-g): el reloj congelado EN UTC (Carbon::setTestNow; en otra zona Carbon leería las fechas de la base en
+        // esa zona). Con la hora real, entre las 04:44 y las 05:00 UTC el viaje de 16 minutos cruzaba la medianoche de
+        // Bogotá y lo comprometido del día nuevo era 0: el techo no saltaba.
+        $this->travelTo(Carbon::parse('2026-11-09 15:00:00', 'UTC'));
         $vieja = $this->voiceCall('outbound', 'requested');
         $this->travel(16)->minutes();
         config(['voice.limits.daily_budget_usd' => '0.5']);   // 500 000 µUS$ < la reserva de 610 500

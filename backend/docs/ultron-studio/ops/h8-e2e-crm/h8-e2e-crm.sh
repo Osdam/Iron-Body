@@ -22,7 +22,8 @@
 # parada limpia de TODO y la evidencia en `ops/evidencia-h8/<fecha>/crm-<sello>-<backend>-<crm>/`.
 #
 # Variables: H8_CRM_DIR (el worktree del CRM; por defecto ../Iron-Body_Front) · H8_CRM_REF (HEAD) · H8_E2E_REF (HEAD del
-#   backend, lo lee el arnés) · H8_CRM_EVIDENCIA (1) · CHROME_PATH · H8_CRM_NG_ESPERA (900 s) · H8_CRM_HOLD=1 (deja la
+#   backend, lo lee el arnés) · H8_E2E_ARBOL=1 (el backend del árbol de trabajo, lo lee el arnés) · H8_CRM_EVIDENCIA (1) ·
+#   CHROME_PATH · H8_CRM_NG_ESPERA (900 s) · H8_CRM_HOLD=1 (deja la
 #   pila y el CRM en pie al terminar los guiones, hasta SIGTERM).
 # Trampas: las del arnés (README de h8-e2e) y las del CRM (README de este directorio).
 set -euo pipefail
@@ -63,15 +64,23 @@ for p in "$NG_PORT" "$PROXY_PORT"; do
 done
 CRM_SHA=$(git -C "$CRM_REPO" rev-parse --verify "$CRM_REF^{commit}")
 BE_SHA=$(git -C "$WT" rev-parse --verify "${H8_E2E_REF:-HEAD}^{commit}")
+# H8_E2E_ARBOL=1 (la lee el arnés): el backend del árbol de trabajo sobre HEAD; la misma huella que calcula el arnés.
+BE_ID=${BE_SHA:0:8}
+if [ -n "${H8_E2E_FUENTE:-}" ]; then
+  # H8_E2E_FUENTE (la lee el arnés): la copia del backend de una ejecución anterior; su huella va en el nombre de esa ejecución.
+  BE_ID="$BE_ID-arbol-$(basename "$(dirname "$H8_E2E_FUENTE")" | sed -n 's/.*-arbol-\([0-9a-f]\{12\}\)$/\1/p')"
+elif [ "${H8_E2E_ARBOL:-0}" = 1 ]; then
+  BE_ID="$BE_ID-arbol-$( { git -C "$WT" diff --binary HEAD -- backend; git -C "$WT" ls-files -o --exclude-standard -z -- backend | (cd "$WT" && xargs -0 shasum -a 256); } | shasum -a 256 | cut -c1-12)"
+fi
 SELLO=$(date -u +%Y%m%dT%H%M%SZ)
 mkdir -p "$BASE_DIR"
-RUN="$BASE_DIR/run-$SELLO-${BE_SHA:0:8}-${CRM_SHA:0:7}"
+RUN="$BASE_DIR/run-$SELLO-$BE_ID-${CRM_SHA:0:7}"
 FE="$BASE_DIR/crm-${CRM_SHA:0:12}"
 case "$(python3 -I -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$BASE_DIR")/" in "$WT"/*|"$CRM_REPO"/*) muere "la ejecución no puede vivir dentro de un repo" ;; esac
 umask 077
 mkdir -p "$RUN"/{logs,run,capturas,red}
 T0=$(date +%s)
-echo "== E2E CRM H8 · $(hora) · backend ${BE_SHA:0:8} · CRM ${CRM_SHA:0:7} · fase $FASE · guiones: ${GUIONES[*]} · $RUN"
+echo "== E2E CRM H8 · $(hora) · backend $BE_ID · CRM ${CRM_SHA:0:7} · fase $FASE · guiones: ${GUIONES[*]} · $RUN"
 
 # ── Procesos (las trampas del arnés: el PID real, y parar nietos, hijos y padre) ──────────────────────────────────────
 arranca() { # nombre directorio orden…
@@ -231,14 +240,14 @@ for l in open(sys.argv[1]):
 print(f"{ok + ko} comprobaciones ({ok} OK, {ko} FALLO)")' "$RUN/checks-crm.jsonl")
 GUIONES_SHA=$(cat "$AQUI"/*.cjs | shasum -a 256 | cut -c1-16)
 {
-  echo "E2E CRM H8 · backend ${BE_SHA:0:8} ($BE_SHA) · CRM ${CRM_SHA:0:7} ($CRM_SHA) · fase $FASE · $(hora) · $DUR s"
+  echo "E2E CRM H8 · backend $BE_ID ($BE_SHA$([ "${H8_E2E_ARBOL:-0}" = 1 ] && echo " + el árbol de trabajo sin confirmar")$([ -n "${H8_E2E_FUENTE:-}" ] && echo " + el árbol de trabajo sin confirmar, relanzado desde la copia de una ejecución anterior")) · CRM ${CRM_SHA:0:7} ($CRM_SHA) · fase $FASE · $(hora) · $DUR s"
   echo "guiones (sha256 de ops/h8-e2e-crm/*.cjs): $GUIONES_SHA"
   echo "$RECUENTO"
   echo "hash de resultados (sha256 de las comprobaciones ordenadas: fase, paso, nombre, ok): $HASH"
 } > "$RUN/resumen.txt"
 cat "$RUN/resumen.txt"
 if [ "$EVIDENCIA" = 1 ]; then
-  EV="$OPS/evidencia-h8/$(date -u +%Y-%m-%d)/crm-$SELLO-${BE_SHA:0:8}-${CRM_SHA:0:7}"
+  EV="$OPS/evidencia-h8/$(date -u +%Y-%m-%d)/crm-$SELLO-$BE_ID-${CRM_SHA:0:7}"
   mkdir -p "$EV/capturas" "$EV/red" "$EV/logs"
   cp "$RUN/resumen.txt" "$RUN/checks-crm.jsonl" "$RUN/barrido.txt" "$RUN"/stats-*.json "$EV/"
   cp "$RUN"/capturas/*.png "$EV/capturas/" 2> /dev/null || true

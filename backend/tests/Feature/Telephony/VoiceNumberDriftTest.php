@@ -22,6 +22,12 @@ use Tests\TestCase;
  * importado en ElevenLabs (`describeNumber`, solo GET) con el de la parte
  * `canary` de la cadena; si difieren, freno (`number_drift`, guardado como
  * `agent_drift`) e incidente de IRON GUARD. Sin red (`Http::fake`).
+ *
+ * B8-g (salientes antes que entrantes): un número «Outbound Only» (caller ID
+ * verificado en Twilio; declarado con `VOICE_NUMBER_INBOUND_CAPABLE=false` o
+ * con `supports_inbound: false` en ElevenLabs) no se puede asignar a ningún
+ * agente: sin agente es `outbound_only` y no abre el freno; un agente ajeno en
+ * él sigue siendo deriva.
  */
 class VoiceNumberDriftTest extends TestCase
 {
@@ -45,13 +51,15 @@ class VoiceNumberDriftTest extends TestCase
      * no es lo que se prueba aquí (la cubre VoiceReconcilerTest): su lectura
      * da 404, que no abre nada.
      */
-    private function provider(?string $agente): void
+    /** @param  array<string, mixed>  $extra  campos del número (p. ej. `supports_inbound`); con `sinAgente`, la respuesta no trae `assigned_agent` */
+    private function provider(?string $agente, array $extra = [], bool $sinAgente = false): void
     {
+        $numero = ['phone_number' => self::VOICE_FROM, 'phone_number_id' => self::PHONE_NUMBER_ID, 'provider' => 'twilio']
+            + ($sinAgente ? [] : ['assigned_agent' => $agente === null ? null : ['agent_id' => $agente, 'agent_name' => 'x']]) + $extra;
         Http::swap(new Factory);
         Http::preventStrayRequests();
         Http::fake([
-            self::SIM.'/v1/convai/phone-numbers/'.self::PHONE_NUMBER_ID => Http::response(['phone_number' => self::VOICE_FROM, 'phone_number_id' => self::PHONE_NUMBER_ID,
-                'assigned_agent' => $agente === null ? null : ['agent_id' => $agente, 'agent_name' => 'x']], 200),
+            self::SIM.'/v1/convai/phone-numbers/'.self::PHONE_NUMBER_ID => Http::response($numero, 200),
             self::SIM.'/v1/convai/agents/*' => Http::response(['detail' => 'x'], 404),
         ]);
     }
@@ -110,6 +118,78 @@ class VoiceNumberDriftTest extends TestCase
 
         $this->provider('agent_fuera_de_laravel_02');
         $this->assertSame(['drift', 'assigned', 'unassigned', 1], [($r = $this->reconcile())['result'], $r['observed'], $r['expected'], $r['code']]);
+        $this->assertTrue(VoiceBrake::isOpen());
+    }
+
+    /**
+     * B8-g, la regresión: el número importado «Outbound Only» (ElevenLabs no lo
+     * deja asignar a ningún agente) con una publicación canaria viva. Antes era
+     * deriva: freno, incidente y el comando con 1 cada hora, y con el freno
+     * ninguna saliente pasaba la puerta (`voice_braked`).
+     */
+    public function test_un_numero_solo_saliente_sin_agente_no_es_deriva_ni_abre_el_freno(): void
+    {
+        $pub = $this->publishVoice();
+        $this->provider(null, ['supports_inbound' => false, 'supports_outbound' => true]);
+
+        $r = $this->reconcile();
+        $this->assertSame([0, 'outbound_only', 'unassigned', 'unassigned', $pub['seq'], 'observed', false, null, false],
+            [$r['code'], $r['result'], $r['observed'], $r['expected'], $r['seq'], $r['outcome'], $r['inboundCapable'], $r['inboundDeclared'], $r['brakeOpened']]);
+        $this->assertFalse(VoiceBrake::isOpen());
+        $this->assertSame(0, VoiceBrakeEntry::query()->count());
+        $this->assertSame(0, Incident::query()->where('source', 'voice')->count());
+
+        // En seco, lo mismo: no echaría nada.
+        Artisan::call('voice:reconcile', ['--numbers' => true, '--json' => true, '--dry-run' => true]);
+        $seco = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR)['number'];
+        $this->assertSame(['outbound_only', false], [$seco['result'], $seco['wouldOpenBrake']]);
+
+        // Y en texto lo dice por su nombre.
+        Artisan::call('voice:reconcile', ['--numbers' => true]);
+        $this->assertStringContainsString('solo salientes', Artisan::output());
+    }
+
+    /**
+     * B8-g: lo DECLARADO (`VOICE_NUMBER_INBOUND_CAPABLE=false`, lo que lee S8 para
+     * no asignar al publicar) basta aunque el proveedor no lo diga (el campo es
+     * obsoleto y `assigned_agent`, opcional).
+     */
+    public function test_declarado_solo_saliente_basta_aunque_el_proveedor_no_lo_diga(): void
+    {
+        $this->publishVoice();
+        config(['voice.number.inbound_capable' => false]);
+        $this->provider(null, [], sinAgente: true);
+
+        $r = $this->reconcile();
+        $this->assertSame([0, 'outbound_only', 'unassigned', null, false, false], [$r['code'], $r['result'], $r['observed'], $r['inboundCapable'], $r['inboundDeclared'], $r['brakeOpened']]);
+        $this->assertFalse(VoiceBrake::isOpen());
+    }
+
+    /** B8-g: solo saliente no es un salvoconducto: un agente que no es el publicado en el número sigue siendo deriva. */
+    public function test_un_numero_solo_saliente_con_un_agente_ajeno_sigue_siendo_deriva(): void
+    {
+        $this->publishVoice();
+        $this->provider('agent_fuera_de_laravel_03', ['supports_inbound' => false]);
+        $r = $this->reconcile();
+        $this->assertSame([1, 'drift', 'assigned', true], [$r['code'], $r['result'], $r['observed'], $r['brakeOpened']]);
+        $this->assertTrue(VoiceBrake::isOpen());
+
+        // SEC8-c M-2: declarado solo saliente, ni el agente publicado vale: publicar no asigna, así que es deriva.
+        $this->provider(self::SEALED_AGENT);
+        config(['voice.number.inbound_capable' => false]);
+        $this->assertSame(['drift', 'unassigned', 2], [($r = $this->reconcile())['result'], $r['expected'], VoiceBrakeEntry::query()->where('kind', 'open')->count()]);
+    }
+
+    /** B8-g: lo de siempre no cambia: un número que admite entrantes (o que no lo dice) sin el agente publicado es deriva. */
+    public function test_un_numero_que_admite_entrantes_sin_el_agente_publicado_sigue_siendo_deriva(): void
+    {
+        $this->publishVoice();
+        foreach ([['supports_inbound' => true], []] as $i => $extra) {
+            $this->provider(null, $extra);
+            $r = $this->reconcile();
+            $this->assertSame([1, 'drift', 'unassigned', 'assigned'], [$r['code'], $r['result'], $r['observed'], $r['expected']], (string) json_encode($extra));
+            $this->assertSame($extra === [] ? null : true, $r['inboundCapable']);
+        }
         $this->assertTrue(VoiceBrake::isOpen());
     }
 

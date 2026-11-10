@@ -8,7 +8,7 @@ Ensayo, **en el Mac**, de la voz y la telefonía del H8 contra una «producción
   - todo proceso PHP del banco (la API, el worker y cada orden de artisan) sale por la **valla**, un proxy que bloquea y anota todo destino que no sea esta máquina.
 - **Vive fuera del repo**: lleva un volcado, un fichero de entorno sintético y las piezas de los simuladores. Las herramientas se niegan a montarlo dentro.
 
-Es la parte **OPS8-a** del contrato (`ULTRON_STUDIO_H8_CONTRACT.md`, fila OPS8). El despliegue de la fase 1, el smoke y el mando de alcance (`deploy-h8-backend-fase1.sh`, `smoke-run-h8.sh` y `h8-voice-scope.sh`) son de **OPS8-b**, tras la puerta 1. Hasta entonces, `ensayar.sh desplegar|smoke|alcance` responde que aún no existen.
+Es la parte **OPS8-a** del contrato (`ULTRON_STUDIO_H8_CONTRACT.md`, fila OPS8). El despliegue de la fase 1, el smoke y el mando de alcance (`deploy-h8-backend-fase1.sh`, `smoke-run-h8.sh` y `h8-voice-scope.sh`) son de **OPS8-b**, tras la puerta 1. Hasta entonces, `ensayar.sh desplegar|smoke|alcance` respondía que aún no existían *(los tres existen desde OPS8-b y OPS8-c)*.
 
 ## Qué hay aquí
 
@@ -18,6 +18,7 @@ Es la parte **OPS8-a** del contrato (`ULTRON_STUDIO_H8_CONTRACT.md`, fila OPS8).
 | `montar.sh` | Monta el banco (abajo) |
 | `sembrar.sh` | La cuenta del smoke; con `--canarios-voz`, dos canarios de voz activos |
 | `ensayar.sh` | Arranca y para la pila; ensaya la valla, el `voice:doctor`, el worker de voz y el cierre |
+| `ensayar-ops8c.sh` | (OPS8-c) El ensayo del mando, el registro de secretos y la comprobación de Twilio (abajo, «OPS8-c») |
 | `sim-elevenlabs.cjs` | Simulador de ElevenLabs: lado proveedor (13 rutas) y emisor hacia Laravel |
 | `sim-twilio.cjs` | Simulador de la subcuenta de voz de Twilio: 10 rutas y el emisor de avisos de gasto |
 | `sim-comun.cjs` | Lo comparten los dos: registro, fallos inyectables, firmas y emisión solo a `127.0.0.1` |
@@ -374,3 +375,44 @@ bash ensayar.sh "$B" smoke                          # ver informe-devops.md §OP
 - **Pruebas propias:** `node sim-pruebas.cjs`, **78 OK · 0 FALLO** (73 de antes y 5 nuevas). Provocan a propósito 50 violaciones de ElevenLabs (antes 46) y 22 de Twilio.
 
 **F-6 (TEST8-b), en `sim-comun.cjs`:** `pareceDatoPersonal` ya no toma la cola de un uuid por un teléfono: los uuid se quitan enteros y un número no puede llevar letras ni dígitos pegados. La detección de teléfonos reales no cambia. Medido sobre 20 000 uuid aleatorios: antes 57 falsos, ahora 0. `sim-pruebas.cjs`: 80 OK.
+
+## OPS8-c (09-11-2026): el mando, el registro de secretos y la comprobación de Twilio
+
+**Órdenes nuevas de `ensayar.sh`** (cada una rehace con `preparar.sh` la copia del banco del script, que solo cambia su bloque «lo propio de producción» y la comprobación de root):
+
+| Orden | Qué hace |
+|---|---|
+| `alcance <orden del mando…>` | `h8-voice-scope.sh` del repo contra la «producción» del banco, con RED |
+| `secretos [opciones…]` | `h8-secrets-register.sh` contra el simulador de ElevenLabs |
+| `twilio [--dias=N]` | `h8-twilio-check.sh` contra el simulador de Twilio |
+| `constante abrir\|cerrar` | Gira `CALLS_ENABLED_IN_CODE` **solo en el clon del banco** (`$B/api`) con un commit `voice(calls-open): banco: …` de una línea; «cerrar» lo deshace con un `git revert` (sin reescribir). Nunca en el árbol compartido (protección 2) |
+| `piezas-twilio <fichero>` | Escribe en un fichero 600 las tres piezas secretas de Twilio del banco (de `sim/piezas.conf`) para `alcance fase 2 secreto`; nada pasa por la línea de órdenes |
+
+**`ensayar-ops8c.sh <banco>`:** el ensayo completo y reproducible (banco montado, en marcha, con E1-12, sembrado y con la fase 1 desplegada). Recorre las negativas del mando, la fase 2 (base, registro, número y piezas secretas), la comprobación de Twilio escenario a escenario, el monitor (con la conciliación en seco que se niega con una llamada ajena), publicar con su vuelta atrás exacta byte a byte, el laboratorio, la expectativa y las llamadas con la constante girada en el clon, el worker y el presupuesto. Termina con 0 violaciones nuevas en los dos simuladores y la valla sin hosts de fuera. Cada orden queda en `$B/logs/ensayo-ops8c-<fecha>.txt` (600, sin secretos: las huellas se comparan dentro del script).
+
+**Cambios del simulador de ElevenLabs** (18 rutas: las 13 de antes y 5 nuevas, verificadas en la referencia oficial el 09-11-2026):
+
+| Verbo | Ruta | Id |
+|---|---|---|
+| `GET` | `/v1/convai/secrets` (`page_size`, `cursor`, `search`, `dependency_limit`) | `secrets_list` |
+| `POST` | `/v1/convai/secrets` (`{type: new, name, value}`) | `secrets_create` |
+| `PATCH` | `/v1/convai/secrets/{secret_id}` (`{type: update, name, value}`) | `secrets_update` |
+| `GET` | `/v1/workspace/webhooks` (`include_usages`) | `webhooks_list` |
+| `POST` | `/v1/workspace/webhooks` (`{settings: {auth_type, name, webhook_url}}` → `{webhook_id, webhook_secret}`: el secreto lo GENERA el simulador, como ElevenLabs) | `webhooks_create` |
+
+- **Violaciones nuevas:** `secret_request_shape`, `secret_name_not_ours`, `secret_duplicate_name`, `secret_tool_not_bearer`, `secret_update_name_changed`, `webhook_request_shape`, `webhook_auth_not_hmac`, `webhook_url_not_post_call` (la base canónica `TW_SIGN_BASE` + la ruta de la post-llamada), `webhook_name_not_ours`, `webhook_duplicate_name` y `webhook_custom_headers`. Borrar secretos o webhooks no está: es una violación (el registro nunca borra).
+- **Los emisores usan lo registrado, como ElevenLabs:** la iniciación manda el valor del secreto que cita el agente (`request_headers['X-Voice-Initiation-Secret'].secret_id`), la herramienta su `Authorization` y la post-llamada firma con el secreto del webhook de `workspace_overrides.webhooks.post_call_webhook_id`. Si el agente no cita nada registrado aquí, el de las piezas, como antes: el E2E de TEST8 no cambia.
+- **`/__state?secrets=1`:** lo registrado con la HUELLA sha256 de cada valor, nunca el valor (el oráculo del ensayo la compara con la del fichero de entorno).
+
+**Cambios del simulador de Twilio** (13 rutas):
+
+| Verbo | Ruta | Id | Quién puede |
+|---|---|---|---|
+| `GET` | `/2010-04-01/Accounts/{sid}/OutgoingCallerIds.json` | `caller_ids_list` | Laravel y ElevenLabs |
+| `GET` | `/2010-04-01/Accounts/{sid}/Messages.json` (`PageSize`) | `messages_list` | **Nadie de la voz: SONDA.** La denegación (401) no es violación; se cuenta en `sondasDenegadas` |
+| `GET` | `/v2/RegulatoryCompliance/Bundles/{BundleSid}` (sin cuenta en la ruta) | `bundles_get` | Laravel |
+
+- **Control `/__numero`:** `tipo=comprado|caller_id` (el número sale de los comprados y aparece como caller ID verificado: el «Outbound Only»), `bundle=none|aprobado|pendiente`, `voice_url=elevenlabs|otra|vacia`, `address=none|local`, `sms_laravel=0|1` (una key de la voz MAL HECHA, con permisos de mensajería: la sonda la tiene que cazar) y `cuenta=madre|subcuenta` (`owner_account_sid` de la ficha: la propia o la del OTP). `/__reset?state=1` lo devuelve todo a su defecto.
+- Crear o verificar un caller ID (`POST OutgoingCallerIds.json`) sigue sin estar: 405.
+
+**Pruebas propias:** `node sim-pruebas.cjs`, **88 OK · 0 FALLO · 0 OMITIDO** (80 de antes y 8 nuevas en la sección L; 2 ajustadas: la superficie de ElevenLabs pasa de 13 a 18 rutas y el ejemplo de «ruta no listada» de Twilio pasa a ser la ficha de un caller ID). Provocan a propósito 62 violaciones de ElevenLabs y 23 de Twilio.

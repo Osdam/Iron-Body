@@ -5,6 +5,7 @@ namespace App\Services\UltronStudio;
 use App\Exceptions\UltronStudioException;
 use App\Models\UltronStudio\StudioVersion;
 use App\Models\UltronStudio\StudioVersionReview;
+use App\Models\UltronStudio\StudioVoiceProfile;
 use App\Services\Voice\Dto\VoiceAgentPayload;
 use App\Services\Voice\Dto\VoiceAgentSpec;
 use App\Services\Voice\Dto\VoiceAgentTarget;
@@ -14,9 +15,11 @@ use App\Services\Voice\Dto\VoiceLabSession;
 use App\Services\Voice\ElevenLabs\ElevenLabsAgentMapper;
 use App\Services\Voice\VoiceAdapters;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use JsonException;
 use stdClass;
+use Throwable;
 
 /**
  * Los AGENTES DE LABORATORIO del laboratorio hablado (contrato H8, D8-7 y
@@ -50,8 +53,28 @@ use stdClass;
  *
  * DATOS PERSONALES: la carga lleva en claro el prompt y, si los hubiera, los
  * destinos de transferencia; vive en memoria y se descarta. De ella se guardan
- * solo las huellas. Los perfiles con destinos todavía no se prueban aquí (ver
- * {@see StudioVoiceLabErrors::transfersNotSupported()}).
+ * solo las huellas.
+ *
+ * LOS DESTINOS DE TRANSFERENCIA (E10-10, S8-d): un perfil con destinos SÍ se
+ * prueba aquí, con la MISMA compilación que se publicará (el `specHash` que
+ * exige la puerta P-19). Los números se descifran en memoria
+ * ({@see StudioVoiceProfiles::transferNumbers()}), se comprueban contra los
+ * destinos aprobados de la especificación (R-07,
+ * {@see StudioVoiceCompiler::assertDestinationsMatch()}) y van en la carga
+ * del agente de laboratorio (`transfer_to_number` en conferencia), como en la
+ * publicación. EL LABORATORIO NO TRANSFIERE DE VERDAD, por dos razones que no
+ * dependen del modelo:
+ *  - la sesión es una conversación web (URL firmada), no una llamada, y
+ *    ElevenLabs solo ofrece `transfer_to_number` en llamadas telefónicas
+ *    (documentación oficial: «only available for phone calls»);
+ *  - `solicitar_humano` llega a Laravel con el `conversation_id` de la sesión,
+ *    que no es una llamada de `voice_calls`: la herramienta responde con su
+ *    negativa neutra (`call_not_found`) y el prompt manda no pasar la llamada
+ *    sin un «sí» de esa herramienta. Si el interlocutor pide una persona, el
+ *    agente le dice que ahora no hay nadie disponible y que puede escribir a
+ *    Iron Body por WhatsApp (lo que se evalúa en el laboratorio).
+ * El agente de laboratorio deja `transfer_destination_hashes` en NULL (E7-3):
+ * nunca entra en la cadena de publicación.
  */
 final class StudioVoiceLabAgents
 {
@@ -84,7 +107,7 @@ final class StudioVoiceLabAgents
      *
      * @return array{version:StudioVersion,profile:stdClass,spec:VoiceAgentSpec,payload:VoiceAgentPayload,provider:string}
      *
-     * @throws UltronStudioException 404 (versión o perfil), 422 `voice_compile_refused`, 409 (duración, destinos)
+     * @throws UltronStudioException 404 (versión o perfil), 422 `voice_compile_refused`, 409 (duración, destinos ilegibles)
      */
     public function prepare(string $versionUuid, string $profileUuid, StudioVoiceLabConfig $cfg): array
     {
@@ -95,13 +118,7 @@ final class StudioVoiceLabAgents
             ->first(['id', 'uuid', 'label', 'revision', 'status', 'content', 'content_hash', 'created_by_admin_id', 'reviewed_by_admin_id', 'transfer_count'])
             ?? throw StudioVoiceLabErrors::profileNotFound();
 
-        // D8-14: los destinos van en claro en la carga; sin el descifrado del
-        // perfil (S8-b) no se monta la transferencia. Antes de compilar: el
-        // compilador no ve teléfonos.
-        if ((int) $perfil->transfer_count > 0) {
-            throw StudioVoiceLabErrors::transfersNotSupported();
-        }
-
+        // El compilador no ve teléfonos: los destinos son alias y huellas.
         $compilada = StudioVoiceCompiler::compile(self::versionInput($version), self::profileInput($perfil), $cfg->perCallMaxSeconds, StudioVoiceCompiler::PURPOSE_LAB);
         $spec = VoiceAgentSpec::fromCompiled($compilada);
 
@@ -118,9 +135,41 @@ final class StudioVoiceLabAgents
             'version' => $version,
             'profile' => $perfil,
             'spec' => $spec,
-            'payload' => ElevenLabsAgentMapper::payload($spec, self::target($cfg)),
+            'payload' => ElevenLabsAgentMapper::payload($spec, self::target($cfg, self::transferNumbers($perfil, $spec))),
             'provider' => $proveedor,
         ];
+    }
+
+    /**
+     * E10-10: los teléfonos de los destinos aprobados, DESCIFRADOS EN MEMORIA
+     * para la carga (D8-14: «en claro solo dentro de la carga compilada») y
+     * comprobados contra la especificación (R-07: exactamente los aprobados,
+     * cada uno con su huella). Sin destinos, nada que descifrar. Nunca se
+     * guardan, se devuelven ni se registran.
+     *
+     * @return array<string, string> ref (huella) → E.164
+     *
+     * @throws UltronStudioException 409 `voice_destinations_unreadable`, 422 `transfer_destination_not_in_profile`
+     */
+    private static function transferNumbers(stdClass $perfil, VoiceAgentSpec $spec): array
+    {
+        if ($spec->transferDestinations() === []) {
+            return [];
+        }
+        try {
+            // El modelo de S8 trae el cast cifrado; la lectura es la misma que al publicar.
+            $numeros = StudioVoiceProfiles::transferNumbers(StudioVoiceProfile::query()->findOrFail((int) $perfil->id));
+        } catch (Throwable $e) {
+            // Tragado a propósito (sin el mensaje, que podría llevar el texto
+            // cifrado): una `APP_KEY` rotada deja los destinos ilegibles y el
+            // perfil hay que volver a crearlo. Nada se ha reservado todavía.
+            Log::warning('ultron_studio.voice_lab_destinations_unreadable', ['error_class' => class_basename($e)]);
+
+            throw StudioVoiceLabErrors::destinationsUnreadable();
+        }
+        StudioVoiceCompiler::assertDestinationsMatch($spec->toArray(), $numeros, StudioVoiceProfiles::phoneHash(...));
+
+        return $numeros;
     }
 
     /**
@@ -288,9 +337,12 @@ final class StudioVoiceLabAgents
      * Dónde y con qué límites se despliega el agente de laboratorio. Sin
      * número; `call_limits` de una conversación a la vez y una al día: el
      * agente es de una sola sesión. El del simulador apunta a un dominio que
-     * no resuelve: sus huellas existen, sus URL nunca se llaman.
+     * no resuelve: sus huellas existen, sus URL nunca se llaman. Los destinos
+     * de transferencia, descifrados y comprobados (E10-10), como al publicar.
+     *
+     * @param  array<string, string>  $transferNumbers  ref → E.164
      */
-    private static function target(StudioVoiceLabConfig $cfg): VoiceAgentTarget
+    private static function target(StudioVoiceLabConfig $cfg, #[\SensitiveParameter] array $transferNumbers): VoiceAgentTarget
     {
         if ($cfg->isElevenLabs()) {
             return new VoiceAgentTarget(
@@ -301,6 +353,7 @@ final class StudioVoiceLabAgents
                 $cfg->postCallWebhookRef,
                 1,
                 StudioVoiceLabConfig::LAB_CONCURRENCY,
+                $transferNumbers,
             );
         }
 
@@ -312,6 +365,7 @@ final class StudioVoiceLabAgents
             null,
             1,
             StudioVoiceLabConfig::LAB_CONCURRENCY,
+            $transferNumbers,
         );
     }
 

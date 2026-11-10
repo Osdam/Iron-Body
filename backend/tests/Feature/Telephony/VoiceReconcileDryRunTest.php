@@ -24,6 +24,7 @@ use App\Services\Voice\VoiceAgentDeployer;
 use App\Services\Voice\VoiceNumberObserver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Factory;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -103,6 +104,10 @@ class VoiceReconcileDryRunTest extends TestCase
 
     public function test_en_seco_una_desconocida_se_informa_y_la_base_no_cambia_y_despues_pasa_lo_anunciado(): void
     {
+        // E14-5 (B8-g): el reloj congelado EN UTC (Carbon::setTestNow; en otra zona Carbon leería las fechas de la base en
+        // esa zona). Con la hora real, entre las 04:44 y las 05:00 UTC el viaje de 16 minutos cruzaba la medianoche de
+        // Bogotá y lo comprometido del día nuevo era 0.
+        $this->travelTo(Carbon::parse('2026-11-09 15:00:00', 'UTC'));
         $this->fixturePage();
         $this->voiceCall('outbound', 'requested', ['remote' => '+573000000090']);   // perderá su job
         $this->travel(16)->minutes();
@@ -189,6 +194,10 @@ class VoiceReconcileDryRunTest extends TestCase
 
     public function test_en_seco_el_techo_cuenta_el_estado_que_dejaria_la_pasada(): void
     {
+        // E14-5 (B8-g): el reloj congelado EN UTC (Carbon::setTestNow; en otra zona Carbon leería las fechas de la base en
+        // esa zona). Con la hora real, entre las 04:44 y las 05:00 UTC el viaje de 16 minutos cruzaba la medianoche de
+        // Bogotá y lo comprometido del día nuevo era 0.
+        $this->travelTo(Carbon::parse('2026-11-09 15:00:00', 'UTC'));
         // 0,50 US$: con la reserva (610 500) se pasaría; con lo que deja la pasada (12 000), no.
         [$seco, $plan] = $this->busyPass('0.5');
         $this->assertSame([1, false, false, 0], [$seco['known'], $seco['costCap'], $plan['wouldOpenBrake'], $seco['stuckDialing']]);
@@ -197,6 +206,10 @@ class VoiceReconcileDryRunTest extends TestCase
 
     public function test_en_seco_el_techo_cuenta_el_precio_que_sumaria_la_pasada(): void
     {
+        // E14-5 (B8-g): el reloj congelado EN UTC (Carbon::setTestNow; en otra zona Carbon leería las fechas de la base en
+        // esa zona). Con la hora real, entre las 04:44 y las 05:00 UTC el viaje de 16 minutos cruzaba la medianoche de
+        // Bogotá y lo comprometido del día nuevo era 0.
+        $this->travelTo(Carbon::parse('2026-11-09 15:00:00', 'UTC'));
         // 0,01 US$ (10 000): sin el precio que suma la pasada, 0; con él, 12 000: se pasa y echaría el freno.
         [$seco, $plan] = $this->busyPass('0.01');
         $this->assertSame([true, true], [$seco['costCap'], $plan['wouldOpenBrake']]);

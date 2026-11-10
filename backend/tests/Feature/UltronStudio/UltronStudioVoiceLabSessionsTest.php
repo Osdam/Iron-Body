@@ -455,7 +455,7 @@ class UltronStudioVoiceLabSessionsTest extends TestCase
 
     // ── Lo que el laboratorio no prueba y la forma ──────────────────────────
 
-    public function test_la_duracion_el_compilador_los_destinos_y_los_404(): void
+    public function test_la_duracion_el_compilador_y_los_404(): void
     {
         $this->voiceLabFake(['voice.lab.max_session_seconds' => 120]);
         $tina = $this->tester();
@@ -475,9 +475,8 @@ class UltronStudioVoiceLabSessionsTest extends TestCase
         $r = $this->openSession($tina, $version->uuid, $conDinero, null, 0)->assertStatus(422)->assertJsonPath('reason', 'text_money');
         $this->assertStringNotContainsString('99.000', $r->getContent());
 
-        // Los destinos de transferencia todavía no se montan en el agente de prueba.
-        $this->openSession($tina, $version->uuid, $this->seedProfile($ana, null, 'submitted', [], 1), null, 0)->assertStatus(409)
-            ->assertJsonPath('code', 'voice_lab_transfers_not_supported');
+        // Los destinos de transferencia ya se montan en el agente de prueba (E10-10, S8-d):
+        // `UltronStudioVoiceLabTransferTest`.
 
         $perfil = $this->seedProfile($ana, null, 'submitted');
         $this->openSession($tina, (string) Str::uuid(), $perfil, null, 0)->assertStatus(404)->assertJsonPath('code', 'version_not_found');

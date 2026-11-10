@@ -972,6 +972,89 @@ class StudioVoiceCompilerTest extends TestCase
         $this->assertLessThanOrEqual(VoiceAgentSpec::MAX_RETENTION_DAYS, C::MAX_RETENTION_DAYS);
     }
 
+    // ── S8-d: el idioma y el trato ──────────────────────────────────────────
+
+    /** El contenido válido con trato de usted: el campo y su aviso. */
+    private static function deUsted(): array
+    {
+        return ['addressForm' => 'usted', 'aiNotice' => T::AI_NOTICE_USTED] + self::contenido();
+    }
+
+    public function test_s8d_todo_agente_compilado_habla_espanol_de_colombia_desde_el_aviso(): void
+    {
+        foreach (['tú (sin el campo)' => self::perfil(), 'usted' => self::perfil(self::deUsted())] as $nombre => $perfil) {
+            $s = self::compilar(null, $perfil)['spec'];
+            $this->assertSame('es', $s['language'], $nombre);
+            $this->assertStringContainsString(T::languageSection($perfil['content']['addressForm'] ?? 'tu'), $s['systemPrompt'], $nombre);
+            $this->assertStringContainsString(T::securitySection(), $s['systemPrompt'], $nombre);
+            $this->assertStringStartsWith('Hola, '.($nombre === 'usted' ? 'le' : 'te').' habla el asistente virtual de Iron Body Workout', $s['firstMessage'], $nombre);
+            // Y el lector estricto de B8 lo acepta con la misma huella.
+            $this->assertSame(VoiceAgentSpec::fromCompiled(self::compilar(null, $perfil))->specHash, self::compilar(null, $perfil)['specHash'], $nombre);
+        }
+    }
+
+    public function test_s8d_el_trato_lo_elige_el_perfil_y_sin_el_campo_es_de_tu(): void
+    {
+        $tu = self::compilar()['spec'];
+        $this->assertSame(T::AI_NOTICE, $tu['firstMessage']);
+        $this->assertStringContainsString(T::ADDRESS_FORMS['tu'], $tu['systemPrompt']);
+        $this->assertStringNotContainsString(T::ADDRESS_FORMS['usted'], $tu['systemPrompt']);
+
+        // Escribir `tu` es lo mismo que no escribirlo: el mismo prompt (otra huella de perfil, por su contenido).
+        $explicito = self::compilar(null, self::perfil(['addressForm' => 'tu'] + self::contenido()))['spec'];
+        $this->assertSame([$tu['firstMessage'], $tu['systemPrompt']], [$explicito['firstMessage'], $explicito['systemPrompt']]);
+
+        $usted = self::compilar(null, self::perfil(self::deUsted()))['spec'];
+        $this->assertSame(T::AI_NOTICE_USTED, $usted['firstMessage']);
+        $this->assertStringContainsString(T::ADDRESS_FORMS['usted'], $usted['systemPrompt']);
+        $this->assertStringNotContainsString(T::ADDRESS_FORMS['tu'], $usted['systemPrompt']);
+        $this->assertNotSame(self::compilar()['specHash'], self::compilar(null, self::perfil(self::deUsted()))['specHash']);
+
+        // Un perfil anterior a S8-d (sin el campo) conserva su huella: la del contenido tal cual.
+        $this->assertSame(C::profileHash(self::contenido()), self::perfil()['contentHash']);
+        $this->assertArrayNotHasKey('addressForm', self::contenido());
+        $this->assertSame(['addressForm'], C::PROFILE_OPTIONAL_FIELDS);
+    }
+
+    /** @return iterable<string, array{array<string,mixed>, string, string}> */
+    public static function tratosMalos(): iterable
+    {
+        foreach (['vos' => 'vos', 'mayúsculas' => 'USTED', 'vacío' => '', 'ustedes' => 'ustedes', 'con espacio' => 'tu '] as $nombre => $valor) {
+            yield $nombre => [['addressForm' => $valor] + self::contenido(), 'profile_field_invalid', 'profile.content.addressForm'];
+        }
+        yield 'null' => [['addressForm' => null] + self::contenido(), 'profile_field_invalid', 'profile.content.addressForm'];
+        yield 'lista' => [['addressForm' => ['usted']] + self::contenido(), 'profile_field_invalid', 'profile.content.addressForm'];
+        // El aviso es el de SU trato: el de tú en un perfil de usted (y al revés) no vale.
+        yield 'usted con el aviso de tú' => [['addressForm' => 'usted'] + self::contenido(), 'notice_mismatch', 'profile.content.aiNotice'];
+        yield 'tú con el aviso de usted' => [['aiNotice' => T::AI_NOTICE_USTED] + self::contenido(), 'notice_mismatch', 'profile.content.aiNotice'];
+        // El trato va antes que el aviso (que depende de él) y después de la voz.
+        yield 'trato malo y aviso vacío' => [['addressForm' => 'vos', 'aiNotice' => ''] + self::contenido(), 'profile_field_invalid', 'profile.content.addressForm'];
+        yield 'voz mala y trato malo' => [['addressForm' => 'vos', 'voiceId' => 'no válida'] + self::contenido(), 'profile_field_invalid', 'profile.content.voiceId'];
+    }
+
+    #[DataProvider('tratosMalos')]
+    public function test_s8d_un_trato_fuera_del_conjunto_se_niega_con_su_campo(array $contenido, string $motivo, string $campo): void
+    {
+        $e = $this->negativa(static fn () => self::compilar(null, self::perfil($contenido)));
+        $this->assertSame(['reason' => $motivo, 'field' => $campo], $e->payload);
+        // Y con la misma negativa al crear el perfil (la función que usa S8-b).
+        try {
+            C::profileContent($contenido, 600);
+            $this->fail('profileContent aceptó un trato malo');
+        } catch (UltronStudioException $e2) {
+            $this->assertSame($e->payload, $e2->payload);
+        }
+    }
+
+    public function test_s8d_el_campo_opcional_no_abre_la_puerta_a_otros(): void
+    {
+        $e = $this->negativa(static fn () => self::compilar(null, self::perfil(['idioma' => 'en'] + self::contenido())));
+        $this->assertSame(['reason' => 'profile_field_unknown', 'field' => 'profile.content.idioma'], $e->payload);
+        // El idioma sigue siendo un conjunto cerrado de uno: `es`.
+        $e = $this->negativa(static fn () => self::compilar(null, self::perfil(self::con('language', 'en'))));
+        $this->assertSame(['reason' => 'profile_field_invalid', 'field' => 'profile.content.language'], $e->payload);
+    }
+
     /** @param  array<array-key,mixed>  $a */
     private static function reverseKeys(array $a): array
     {

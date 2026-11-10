@@ -21,8 +21,17 @@
  *   GET    /v1/convai/conversations/{conversation_id}        [pc] leer
  *   DELETE /v1/convai/conversations/{conversation_id}        [pc] borrar (supresión 1581, D8-17): APAGADA por defecto
  *   GET    /v1/convai/conversation/get-signed-url?agent_id=  [v]  URL firmada del laboratorio hablado (D8-23, ≤ 15 min)
+ *   GET    /v1/convai/secrets                                [v]  listar secretos del workspace (OPS8-c, h8-secrets-register.sh)
+ *   POST   /v1/convai/secrets                                [v]  crear un secreto ({type: new, name, value})
+ *   PATCH  /v1/convai/secrets/{secret_id}                    [v]  cambiar su valor ({type: update, name, value})
+ *   GET    /v1/workspace/webhooks                            [v]  listar los webhooks del workspace
+ *   POST   /v1/workspace/webhooks                            [v]  crear el webhook HMAC (devuelve el secreto que GENERA ElevenLabs)
+ *   ([v] OPS8-c = verificadas por OPS8-c en la referencia oficial el 09-11-2026: secrets/list, create, update; webhooks/list, create.)
  * NO están (violaciones): PATCH o DELETE de un agente (D8-7: un agente no se modifica nunca; B8-a no tiene ninguno),
- * importar números (POST phone-numbers: es del propietario, C-A1), listar o borrar herramientas, y cualquier otra.
+ * importar números (POST phone-numbers: es del propietario, C-A1), listar o borrar herramientas, BORRAR secretos o
+ * webhooks (el registro nunca borra), y cualquier otra.
+ * Los EMISORES usan el secreto que cita el agente (`secret_id` de la iniciación y de cada herramienta; el webhook de
+ * `workspace_overrides.webhooks.post_call_webhook_id`) si está registrado aquí, como ElevenLabs; si no, el de las piezas.
  *
  * LADO EMISOR (simulador → Laravel, solo a 127.0.0.1), por el control:
  *   /__inbound      una entrante: crea la llamada en el simulador de Twilio y hace el webhook de iniciación (D8-11)
@@ -86,7 +95,16 @@ const RUTAS = [
   { id: 'conversations_get', method: 'GET', re: /^\/v1\/convai\/conversations\/([^/]+)$/, plantilla: '/v1/convai/conversations/{conversation_id}', doc: 'por confirmar' },
   { id: 'conversations_delete', method: 'DELETE', re: /^\/v1\/convai\/conversations\/([^/]+)$/, plantilla: '/v1/convai/conversations/{conversation_id}', doc: 'por confirmar (D8-17); apagada por defecto' },
   { id: 'signed_url', method: 'GET', re: /^\/v1\/convai\/conversation\/get-signed-url$/, plantilla: '/v1/convai/conversation/get-signed-url', doc: 'verificada (B8-a)', query: ['agent_id'] },
+  { id: 'secrets_list', method: 'GET', re: /^\/v1\/convai\/secrets$/, plantilla: '/v1/convai/secrets', doc: 'verificada (OPS8-c, 09-11-2026)', query: ['page_size', 'cursor', 'search', 'dependency_limit'] },
+  { id: 'secrets_create', method: 'POST', re: /^\/v1\/convai\/secrets$/, plantilla: '/v1/convai/secrets', doc: 'verificada (OPS8-c, 09-11-2026)' },
+  { id: 'secrets_update', method: 'PATCH', re: /^\/v1\/convai\/secrets\/([^/]+)$/, plantilla: '/v1/convai/secrets/{secret_id}', doc: 'verificada (OPS8-c, 09-11-2026)' },
+  { id: 'webhooks_list', method: 'GET', re: /^\/v1\/workspace\/webhooks$/, plantilla: '/v1/workspace/webhooks', doc: 'verificada (OPS8-c, 09-11-2026)', query: ['include_usages'] },
+  { id: 'webhooks_create', method: 'POST', re: /^\/v1\/workspace\/webhooks$/, plantilla: '/v1/workspace/webhooks', doc: 'verificada (OPS8-c, 09-11-2026)' },
 ];
+
+/** Los nombres que usa el registro de OPS8-c (h8-secrets-register.sh); otro nombre es una violación. */
+const SECRETOS_REGISTRO = { herramientas: 'ironbody-voz-herramientas', iniciacion: 'ironbody-voz-iniciacion' };
+const WEBHOOK_REGISTRO = 'ironbody-voz-post-llamada';
 
 /** Conjunto cerrado de violaciones, con la cláusula que las funda. El cierre de un ensayo exige 0. */
 const VIOLACIONES = {
@@ -153,6 +171,17 @@ const VIOLACIONES = {
   post_call_bad_signature_accepted: 'Laravel aceptó (2xx) un webhook post-llamada con la firma mala, caducada o del futuro (D8-16)',
   laravel_webhook_disabled: 'el webhook post-llamada quedó DESACTIVADO por 10 fallos seguidos (auditoría §d.1, R-9)',
   control_method: 'verbo distinto de GET en el control',
+  secret_request_shape: 'secreto sin {type: new|update, name, value} de texto (referencia oficial, 09-11-2026)',
+  secret_name_not_ours: 'secreto con un nombre fuera de los del registro (ironbody-voz-herramientas, ironbody-voz-iniciacion)',
+  secret_duplicate_name: 'crear un secreto con un nombre que ya existe (el registro mira antes con GET; nunca duplica)',
+  secret_tool_not_bearer: 'el secreto de las herramientas no vale «Bearer …» (la cabecera Authorization entera, D8-16)',
+  secret_update_name_changed: 'PATCH de un secreto con otro nombre (el registro solo cambia el valor)',
+  webhook_request_shape: 'webhook sin {settings: {auth_type, name, webhook_url}}',
+  webhook_auth_not_hmac: 'webhook post-llamada que no es HMAC (D8-16: ElevenLabs-Signature)',
+  webhook_url_not_post_call: 'webhook cuya URL no es la base canónica + /api/webhooks/voice/elevenlabs/post-call (D8-16)',
+  webhook_name_not_ours: 'webhook con un nombre distinto de ironbody-voz-post-llamada',
+  webhook_duplicate_name: 'crear un webhook con un nombre que ya existe (el registro mira antes con GET)',
+  webhook_custom_headers: 'cabeceras propias en el webhook (el registro no manda ninguna: solo HMAC)',
 };
 
 // ── Firma del webhook post-llamada (forma del H6; algoritmo de §I6.4) ───────────────────────────
@@ -469,6 +498,8 @@ if (require.main === module) {
     estado.urls = [];
     estado.webhook = { fallosSeguidos: 0, ultimaBuena: null, desactivado: false };
     estado.derivas = 0;
+    estado.secretos = new Map(); // secret_id → { name, value, creado, cambios } (OPS8-c: el registro de secretos)
+    estado.webhooksWs = new Map(); // webhook_id → { name, url, secret, creado } (OPS8-c: el webhook post-llamada)
     // El agente de verificación (D8-5): inerte, sin número; lo usa `voice:doctor --verify`.
     estado.agentes.set(P.EL_VERIFY_AGENT_ID, { payload: { name: 'Verificación (banco, inerte)', tags: ['verificacion'], conversation_config: { agent: { first_message: 'Agente de verificación: no atiende llamadas.', language: 'es' } } }, creado: C.ahoraS(), usos: 0 });
     // El número importado (C-A1, lo hace el propietario en la fase 2): sin agente.
@@ -498,6 +529,41 @@ if (require.main === module) {
   const activas = (agentId) => [...estado.conversaciones.values()].filter((c) => c.agentId === agentId && ['initiated', 'in-progress'].includes(c.status)).length;
   const deHoy = (agentId) => [...estado.conversaciones.values()].filter((c) => c.agentId === agentId && new Date(c.started * 1000).toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10)).length;
   const cursor = (n) => Buffer.from(`o:${n}`).toString('base64url');
+  /** Quién cita un secreto (la forma de `used_by` de la referencia oficial). */
+  function usosSecreto(id) {
+    const herramientas = [...estado.herramientas.entries()].filter(([, h]) => Object.values(h.tool_config?.api_schema?.request_headers ?? {}).some((v) => C.esObjeto(v) && v.secret_id === id)).map(([tid, h]) => ({ type: 'available', access_level: 'admin', created_at_unix_secs: h.creada ?? 0, id: tid, name: h.tool_config?.name ?? '' }));
+    const agentes = [...estado.agentes.entries()].filter(([, a]) => Object.values(a.payload?.platform_settings?.workspace_overrides?.conversation_initiation_client_data_webhook?.request_headers ?? {}).some((v) => C.esObjeto(v) && v.secret_id === id)).map(([aid, a]) => ({ type: 'available', access_level: 'admin', created_at_unix_secs: a.creado, id: aid, name: a.payload?.name ?? '' }));
+    return { tools: herramientas, agents: agentes, others: agentes.length ? ['conversation_initiation_webhook'] : [], tools_has_more: false, agents_has_more: false, phone_numbers: [], phone_numbers_has_more: false };
+  }
+  const cabeceraRef = (cabeceras, nombre) => {
+    for (const [k, v] of Object.entries(cabeceras ?? {})) if (k.toLowerCase() === nombre && C.esObjeto(v) && typeof v.secret_id === 'string') return v.secret_id;
+    return null;
+  };
+  /** El valor que mandaría ElevenLabs en la iniciación: el del secreto que cita el agente si está aquí; si no, el de las piezas. */
+  const secretoIniciacion = (agente) => estado.secretos.get(cabeceraRef(agente?.payload?.platform_settings?.workspace_overrides?.conversation_initiation_client_data_webhook?.request_headers, CABECERA_INICIACION))?.value ?? P.EL_INITIATION_SECRET;
+  /** La cabecera Authorization de una herramienta del agente de la conversación: la del secreto que cita, o «Bearer <pieza>». */
+  function autorizacionHerramienta(c, tool) {
+    const ag = c ? estado.agentes.get(c.agentId) : null;
+    if (ag) {
+      const h = herramientasDe(ag.payload, estado.herramientas);
+      for (const t of [...h.enLinea, ...h.resueltas]) {
+        let ruta = null;
+        try {
+          ruta = new URL(String(t?.api_schema?.url ?? t?.url)).pathname;
+        } catch {
+          /* URL no válida: no es esta */
+        }
+        if (t?.type === 'webhook' && ruta === `${LARAVEL.tools}${tool}`) {
+          const x = estado.secretos.get(cabeceraRef(t.api_schema?.request_headers, 'authorization'));
+          if (x) return x.value;
+        }
+      }
+    }
+    return `Bearer ${P.EL_TOOL_SECRET}`;
+  }
+  /** El secreto con el que firma la post-llamada: el del webhook que cita el agente si se creó aquí; si no, el de las piezas. */
+  const secretoPostLlamada = (agentId) => estado.webhooksWs.get(estado.agentes.get(agentId ?? '')?.payload?.platform_settings?.workspace_overrides?.webhooks?.post_call_webhook_id ?? '')?.secret ?? P.EL_WEBHOOK_SECRET;
+  const huella = (v) => crypto.createHash('sha256').update(String(v)).digest('hex');
   const desdeCursor = (s) => {
     if (s === null) return 0;
     const m = /^o:(\d{1,6})$/.exec(Buffer.from(s, 'base64url').toString('utf8'));
@@ -595,6 +661,66 @@ if (require.main === module) {
       if (Object.hasOwn(ctx.json, 'agent_id')) n.agente = ag ?? null;
       ctx.e.agentId = n.agente;
       return { status: 200, body: vistaNumero(n) };
+    },
+    secrets_list(ctx) {
+      const q = ctx.u.searchParams;
+      const tam = q.has('page_size') ? Number(q.get('page_size')) : 100;
+      if (!(Number.isInteger(tam) && tam >= 1 && tam <= 100)) return error422('page_size', 'must be between 1 and 100');
+      const desde = desdeCursor(q.get('cursor'));
+      if (desde === null) return error(400, 'invalid_cursor', 'Invalid cursor');
+      const pref = q.get('search') ?? '';
+      const todos = [...estado.secretos.entries()].filter(([, x]) => x.name.startsWith(pref)).sort((a, b) => a[1].creado - b[1].creado);
+      const pagina = todos.slice(desde, desde + tam).map(([id, x]) => ({ type: 'stored', secret_id: id, name: x.name, used_by: usosSecreto(id) }));
+      const mas = desde + tam < todos.length;
+      return { status: 200, body: { secrets: pagina, next_cursor: mas ? cursor(desde + tam) : null } };
+    },
+    secrets_create(ctx) {
+      const b = ctx.json;
+      if (b.type !== 'new' || typeof b.name !== 'string' || b.name === '' || typeof b.value !== 'string' || b.value === '') {
+        ctx.v.push('secret_request_shape');
+        return error422('body', 'type, name and value are required');
+      }
+      if (!Object.values(SECRETOS_REGISTRO).includes(b.name)) ctx.v.push('secret_name_not_ours');
+      if ([...estado.secretos.values()].some((x) => x.name === b.name)) ctx.v.push('secret_duplicate_name');
+      if (b.name === SECRETOS_REGISTRO.herramientas && !/^Bearer \S{16,}$/.test(b.value)) ctx.v.push('secret_tool_not_bearer');
+      const id = C.idEleven('sec');
+      estado.secretos.set(id, { name: b.name, value: b.value, creado: Date.now(), cambios: 0 });
+      return { status: 200, body: { type: 'stored', secret_id: id, name: b.name } };
+    },
+    secrets_update(ctx) {
+      const x = estado.secretos.get(ctx.params[0]);
+      if (!x) return error(404, 'secret_not_found', 'Secret not found');
+      const b = ctx.json;
+      if (b.type !== 'update' || typeof b.name !== 'string' || typeof b.value !== 'string' || b.value === '') {
+        ctx.v.push('secret_request_shape');
+        return error422('body', 'type, name and value are required');
+      }
+      if (b.name !== x.name) ctx.v.push('secret_update_name_changed');
+      if (x.name === SECRETOS_REGISTRO.herramientas && !/^Bearer \S{16,}$/.test(b.value)) ctx.v.push('secret_tool_not_bearer');
+      x.value = b.value;
+      x.cambios++;
+      return { status: 200, body: { type: 'stored', secret_id: ctx.params[0], name: x.name } };
+    },
+    webhooks_list() {
+      return { status: 200, body: { webhooks: [...estado.webhooksWs.entries()].map(([id, w]) => ({ name: w.name, webhook_id: id, webhook_url: w.url, is_disabled: false, is_auto_disabled: estado.webhook.desactivado, created_at_unix: Math.floor(w.creado / 1000), auth_type: 'hmac', usage: null })) } };
+    },
+    webhooks_create(ctx) {
+      const st = ctx.json.settings;
+      if (!C.esObjeto(st) || typeof st.name !== 'string' || typeof st.webhook_url !== 'string' || typeof st.auth_type !== 'string') {
+        ctx.v.push('webhook_request_shape');
+        return error422('settings', 'auth_type, name and webhook_url are required');
+      }
+      if (st.auth_type !== 'hmac') ctx.v.push('webhook_auth_not_hmac');
+      if (st.name !== WEBHOOK_REGISTRO) ctx.v.push('webhook_name_not_ours');
+      if ([...estado.webhooksWs.values()].some((w) => w.name === st.name)) ctx.v.push('webhook_duplicate_name');
+      if (st.request_headers !== undefined && st.request_headers !== null) ctx.v.push('webhook_custom_headers');
+      const base = (P.TW_SIGN_BASE || '').replace(/\/+$/, '');
+      if (!/^https:\/\//.test(st.webhook_url) || !st.webhook_url.endsWith(LARAVEL.postCall) || (base && st.webhook_url !== base + LARAVEL.postCall)) ctx.v.push('webhook_url_not_post_call');
+      const id = C.idEleven('wh');
+      // El secreto lo GENERA ElevenLabs y solo lo enseña al crear (referencia oficial: webhook_secret en la respuesta).
+      const secreto = `wsec_${crypto.randomBytes(24).toString('hex')}`;
+      estado.webhooksWs.set(id, { name: st.name, url: st.webhook_url, secret: secreto, creado: Date.now() });
+      return { status: 200, body: { webhook_id: id, webhook_secret: secreto } };
     },
     async outbound_call(ctx) {
       const b = ctx.json;
@@ -819,6 +945,8 @@ if (require.main === module) {
           return a ? ok(res, { agent: vistaAgente(q.get('agent_id')), uses: a.usos }) : C.json(res, 404, { ok: false, error: 'no existe' });
         }
         if (q.has('tool_id')) return estado.herramientas.has(q.get('tool_id')) ? ok(res, vistaHerramienta(q.get('tool_id'))) : C.json(res, 404, { ok: false, error: 'no existe' });
+        // OPS8-c: lo registrado, con la HUELLA sha256 del valor (nunca el valor): el banco la compara con la del entorno.
+        if (q.has('secrets')) return ok(res, { secrets: [...estado.secretos.entries()].map(([id, x]) => ({ secret_id: id, name: x.name, sha256: huella(x.value), updates: x.cambios })), webhooks: [...estado.webhooksWs.entries()].map(([id, w]) => ({ webhook_id: id, name: w.name, url: w.url, sha256: huella(w.secret) })) });
         return ok(res, { agents: [...estado.agentes.keys()], numbers: [...estado.numeros.values()].map((n) => ({ id: n.phone_number_id, agent: n.agente })), conversations: [...estado.conversaciones.values()].map((c) => ({ id: c.conversation_id, status: c.status, direction: c.direction, agentId: c.agentId, callSid: c.callSid, origin: c.origin })) });
       }
       case '/__config':
@@ -969,7 +1097,7 @@ if (require.main === module) {
     const datos = { caller_id: from, agent_id: numero.agente, called_number: numero.phone_number, call_sid: callSid, conversation_id: c.conversation_id };
     if (variante === 'oversize') datos.relleno = 'x'.repeat(9000);
     const cab = { 'Content-Type': 'application/json' };
-    cab[CABECERA_INICIACION] = variante === 'no_secret' ? null : variante === 'bad_secret' ? crypto.randomBytes(24).toString('hex') : P.EL_INITIATION_SECRET;
+    cab[CABECERA_INICIACION] = variante === 'no_secret' ? null : variante === 'bad_secret' ? crypto.randomBytes(24).toString('hex') : secretoIniciacion(agente);
     const r = await C.emitir({ base: P.LARAVEL_BASE, path: LARAVEL.initiation, cabeceras: cab, cuerpo: JSON.stringify(datos), timeoutMs: ajustes.initiationTimeoutMs });
     const v = [];
     let dv = null;
@@ -1055,7 +1183,8 @@ if (require.main === module) {
     }
     const { cuerpo, desde } = cuerpoHerramienta(tool, c, params);
     if (variante === 'oversize') cuerpo.relleno = 'x'.repeat(9000);
-    const auth = { valid: `Bearer ${P.EL_TOOL_SECRET}`, no_auth: null, bad_bearer: `Bearer ${crypto.randomBytes(24).toString('hex')}`, basic_scheme: `Basic ${Buffer.from(`elevenlabs:${P.EL_TOOL_SECRET}`).toString('base64')}`, unknown_tool: `Bearer ${P.EL_TOOL_SECRET}`, oversize: `Bearer ${P.EL_TOOL_SECRET}` }[variante];
+    const buena = autorizacionHerramienta(c, tool);
+    const auth = { valid: buena, no_auth: null, bad_bearer: `Bearer ${crypto.randomBytes(24).toString('hex')}`, basic_scheme: `Basic ${Buffer.from(`elevenlabs:${buena.replace(/^Bearer /, '')}`).toString('base64')}`, unknown_tool: buena, oversize: buena }[variante];
     const r = await C.emitir({ base: P.LARAVEL_BASE, path: `${LARAVEL.tools}${tool}`, cabeceras: { 'Content-Type': 'application/json', Authorization: auth }, cuerpo: JSON.stringify(cuerpo), timeoutMs: 10000 });
     const v = [];
     const aceptada = typeof r.status === 'number' && r.status >= 200 && r.status < 300;
@@ -1094,7 +1223,7 @@ if (require.main === module) {
     try {
       const now = q.has('now') ? Number(q.get('now')) : C.ahoraS();
       if (!Number.isInteger(now) || now < 0) throw new Error('now no válido');
-      w = postCall({ variant: q.get('variant') ?? 'valid', type: q.get('type') ?? 'post_call_transcription', now, secret: P.EL_WEBHOOK_SECRET, agentId: q.get('agent_id') ?? c?.agentId ?? P.EL_VERIFY_AGENT_ID, conv: c, centinela: CENTINELA, transcript: q.get('transcript') ?? 'limpio', versionId: q.get('version_id'), branchId: q.get('branch_id'), reason: q.get('reason') });
+      w = postCall({ variant: q.get('variant') ?? 'valid', type: q.get('type') ?? 'post_call_transcription', now, secret: secretoPostLlamada(q.get('agent_id') ?? c?.agentId), agentId: q.get('agent_id') ?? c?.agentId ?? P.EL_VERIFY_AGENT_ID, conv: c, centinela: CENTINELA, transcript: q.get('transcript') ?? 'limpio', versionId: q.get('version_id'), branchId: q.get('branch_id'), reason: q.get('reason') });
     } catch (err) {
       return mal(res, err.message, { variants: Object.keys(VARIANTS), types: [...TYPES, ...TYPES_NULL], scripts: GUIONES });
     }

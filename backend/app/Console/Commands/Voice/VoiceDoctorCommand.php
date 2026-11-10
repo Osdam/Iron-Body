@@ -2,6 +2,8 @@
 
 namespace App\Console\Commands\Voice;
 
+use App\Services\Telephony\VoiceNumberGuard;
+use App\Services\Telephony\VoiceProviderState;
 use App\Services\Telephony\VoiceTelephonyStatus;
 use App\Services\Voice\ElevenLabs\ElevenLabsConfig;
 use App\Services\Voice\VoiceCallPolicy;
@@ -137,9 +139,41 @@ class VoiceDoctorCommand extends Command
         $this->line('Banderas   : entrantes '.$si($t['flags']['inbound']).' · salientes '.$si($t['flags']['outbound']).' ('.$t['scopes']['outbound'].') · Twilio Voice '.$si($t['flags']['twilioVoice'])
             .' · laboratorio '.$si($t['flags']['lab']).' · monitor '.$si($t['flags']['monitor']));
         $this->line('Proveedor  : '.$t['provider']);
+        // E4-6 (B8-g): la verificación que da `VERIFIED` a las salientes, con su fecha (la marca del Studio).
+        $v = $t['providerVerification'];
+        $repite = 'repite ultron-studio:integrations-snapshot --verify-voice';
+        $this->line('Verificado : '.match ($v['state']) {
+            VoiceProviderState::MARK_VALID => $v['verifiedAt'].' (vale hasta '.$v['expiresAt'].')',
+            VoiceProviderState::MARK_EXPIRED => $v['verifiedAt'].' · CADUCADA el '.$v['expiresAt'].': '.$repite,
+            VoiceProviderState::MARK_INVALID => 'marca ilegible: '.$repite,
+            default => 'sin marca: las salientes dicen elevenlabs_unverified ('.$repite.')',
+        });
         $this->line('Número     : '.($t['number']['configured'] ? 'configurado' : 'sin configurar (TWILIO_VOICE_FROM)')
             .($t['number']['collidesWithMessaging'] ? ' · CHOCA con un número protegido de la mensajería del motor (config/meta.php): la política deniega las salientes por nombre' : '')
-            .' · número importado '.$si($t['number']['importedNumberIdConfigured']).' · subcuenta (corte y conciliación) '.$si($t['carrierConfigured']));
+            .' · número importado '.$si($t['number']['importedNumberIdConfigured'])
+            .($t['number']['inboundCapable'] === false ? ' (solo salientes: VOICE_NUMBER_INBOUND_CAPABLE=false)' : '')
+            .' · subcuenta (corte y conciliación) '.$si($t['carrierConfigured']));
+        // SEC8-c B-1: el número con el que llama ElevenLabs, según la última conciliación (sin el número).
+        $o = $t['number']['observed'];
+        $this->line('Importado  : '.match (true) {
+            $o === null => 'sin observar (voice:reconcile --numbers lo compara con TWILIO_VOICE_FROM y con los protegidos de la mensajería)',
+            $o['collides'] === true => 'ES UN NÚMERO PROTEGIDO DE LA MENSAJERÍA (freno) · '.$o['at'],
+            $o['matchesFrom'] === false => 'NO es el de TWILIO_VOICE_FROM (freno) · '.$o['at'],
+            $o['matchesFrom'] === true => 'es el de TWILIO_VOICE_FROM y no es de la mensajería · '.$o['at'],
+            default => 'sin comparar (falta TWILIO_VOICE_FROM o el proveedor no dio el número) · '.$o['at'],
+        }.match ($t['number']['check']) {
+            'verified' => ' · la puerta lo da por vigilado',
+            'mismatch' => ' · la puerta dice number_mismatch',
+            // B8-h (REV8-c M-1): con su motivo (`number.checkReason`).
+            default => ' · la puerta dice number_unverified ('.match ($t['number']['checkReason']) {
+                VoiceNumberGuard::CHECK_REASON_OTHER_NUMBER_ID => 'la conciliación es de otro ELEVENLABS_AGENT_PHONE_NUMBER_ID que el configurado: repite voice:reconcile --numbers',
+                VoiceNumberGuard::CHECK_REASON_STALE => 'la conciliación tiene 2 h o más: repite voice:reconcile --numbers',
+                VoiceNumberGuard::CHECK_REASON_FUTURE => 'la conciliación tiene fecha del futuro: revisa el reloj y repite voice:reconcile --numbers',
+                VoiceNumberGuard::CHECK_REASON_UNREADABLE => 'conciliación ilegible: repite voice:reconcile --numbers',
+                VoiceNumberGuard::CHECK_REASON_UNCOMPARED => 'sin poder comparar el importado con TWILIO_VOICE_FROM',
+                default => 'sin una conciliación de menos de 2 h que cuadre',
+            }.')',
+        });
         if (is_array($t['publication'])) {
             foreach ($t['publication'] as $parte => $p) {
                 $this->line(sprintf('Cadena     : %s %s%s%s', $parte, $p['status'], $p['seq'] === null ? '' : ' · seq '.$p['seq'], $p['reason'] === null ? '' : ' · '.$p['reason']));

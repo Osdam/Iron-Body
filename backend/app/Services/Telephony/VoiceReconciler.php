@@ -71,7 +71,11 @@ use Illuminate\Support\Facades\Log;
  * la parte `canary` de la cadena (en el H8 las entrantes son solo de canarios,
  * E2-8; sin entrada o con la parte apagada, ninguno). Si difieren: freno
  * (`number_drift`, que la base guarda como `agent_drift`) e incidente. La
- * iniciación lo vigila además llamada a llamada (DF-E12).
+ * iniciación lo vigila además llamada a llamada (DF-E12). Un número «Outbound
+ * Only» (B8-g: declarado con `VOICE_NUMBER_INBOUND_CAPABLE=false` o con
+ * `supports_inbound = false` en el proveedor) no se puede asignar a ningún
+ * agente: sin agente es `outbound_only` y no abre nada; un agente ajeno en él
+ * sigue siendo deriva.
  */
 final class VoiceReconciler
 {
@@ -515,13 +519,44 @@ final class VoiceReconciler
     public const NUMBER_EXPECTED_UNKNOWN = 'expected_unknown';
 
     /**
+     * B8-g: el número es «Outbound Only» (caller ID verificado en Twilio:
+     * ElevenLabs no lo deja asignar a ningún agente ni recibe llamadas) y no
+     * tiene agente. Las salientes usan el agente sellado de su entrada, nunca
+     * el del número: no es deriva y no abre el freno.
+     */
+    public const NUMBER_OUTBOUND_ONLY = 'outbound_only';
+
+    /** SEC8-c B-1: el número importado (con el que llama ElevenLabs) no es `TWILIO_VOICE_FROM`. Freno. */
+    public const NUMBER_MISMATCH = 'number_mismatch';
+
+    /** SEC8-c B-1: el número importado es uno de la mensajería del motor (protección 6), diga lo que diga `TWILIO_VOICE_FROM`. Freno. */
+    public const NUMBER_IS_MESSAGING = 'number_is_messaging';
+
+    /** Los resultados del número que abren el freno (y hacen salir el comando con 1). */
+    public const NUMBER_BRAKING = [self::NUMBER_DRIFT, self::NUMBER_MISMATCH, self::NUMBER_IS_MESSAGING];
+
+    /**
      * La deriva del número (E2-3, E4-8). Solo GET; sin el id del número
      * importado o sin el proveedor configurado, sin red.
+     *
+     * Un número SOLO SALIENTE (B8-g; declarado `false` en
+     * `voice.number.inbound_capable` o con `supports_inbound = false` en el
+     * proveedor) sin agente es {@see NUMBER_OUTBOUND_ONLY}: la falta del agente
+     * de la parte canaria no es deriva, porque no se le puede asignar. Con un
+     * agente, la regla de siempre (el publicado, bien; otro, deriva). El
+     * resumen lleva los dos: `inboundCapable` (lo que dice el proveedor; null si
+     * no lo dice) e `inboundDeclared` (lo declarado; null sin declarar).
      *
      * En seco (E10-9), `brakeOpened` es false y `wouldOpenBrake` dice si se
      * abriría (y queda en {@see dryRunReport()}).
      *
-     * @return array{result: string, observed: string, expected: string, seq: ?int, outcome: ?string, brakeOpened: bool, wouldOpenBrake?: bool}
+     * Antes que la asignación, la IDENTIDAD del número (SEC8-c B-1): el E.164
+     * con el que llama ElevenLabs tiene que ser `TWILIO_VOICE_FROM`
+     * (`number_mismatch`) y no uno de la mensajería (`number_is_messaging`, protección
+     * 6); si no, freno. El veredicto (nunca el número) queda en la caché para la
+     * política (`VoiceNumberGuard::rememberObservation()`); en seco, no.
+     *
+     * @return array{result: string, observed: string, expected: string, seq: ?int, outcome: ?string, inboundCapable: ?bool, inboundDeclared: ?bool, matchesFrom: ?bool, collidesWithMessaging: ?bool, brakeOpened: bool, wouldOpenBrake?: bool}
      */
     public function numbers(VoiceNumberObserver $observer, bool $dryRun = false): array
     {
@@ -531,8 +566,11 @@ final class VoiceReconciler
         $esperado = $parte->ok() ? $parte->providerAgentId : null;
         $esperadoEstado = $parte->status === VoicePublishedPart::STATUS_UNREADABLE ? VoiceNumberAssignment::STATE_UNKNOWN
             : ($esperado === null ? VoiceNumberAssignment::STATE_UNASSIGNED : VoiceNumberAssignment::STATE_ASSIGNED);
+        $declarado = config('voice.number.inbound_capable');
+        $declarado = is_bool($declarado) ? $declarado : null;
         $resumen = ['result' => self::NUMBER_NOT_CONFIGURED, 'observed' => VoiceNumberAssignment::STATE_UNKNOWN, 'expected' => $esperadoEstado,
-            'seq' => $parte->seq, 'outcome' => null, 'brakeOpened' => false];
+            'seq' => $parte->seq, 'outcome' => null, 'inboundCapable' => null, 'inboundDeclared' => $declarado,
+            'matchesFrom' => null, 'collidesWithMessaging' => null, 'brakeOpened' => false];
         if (! is_string($id) || trim($id) === '') {
             return $resumen;
         }
@@ -542,12 +580,43 @@ final class VoiceReconciler
         $o = $observer->describeNumber(trim($id));
         $resumen['outcome'] = $o->outcome;
         $resumen['observed'] = $o->state();
+        $resumen['inboundCapable'] = $o->inboundCapable;
+        // SEC8-c M-2: un número «Outbound Only» (declarado o visto) se espera SIN agente: publicar no lo asigna y
+        // ElevenLabs no lo deja asignar. Cualquier agente en él, también el publicado, es deriva.
+        $soloSaliente = $declarado === false || $o->inboundCapable === false;
+        if ($soloSaliente) {
+            $esperado = null;
+            $resumen['expected'] = VoiceNumberAssignment::STATE_UNASSIGNED;
+        }
+        // SEC8-c B-1: el número con el que llama ElevenLabs (solo en memoria) frente a `TWILIO_VOICE_FROM` y a los de
+        // WhatsApp. Se queda el veredicto, nunca el número: la política lo lee (VoiceNumberGuard::collidesForPolicy()).
+        $desde = config('voice.twilio.from');
+        $coincide = VoiceNumberGuard::sameNumber($o->phoneNumber(), VoicePhone::isE164($desde) ? $desde : null);
+        $choca = $o->phoneNumber() !== null && VoiceNumberGuard::collidesWithMessaging($o->phoneNumber());
+        if ($o->outcome === VoiceNumberAssignment::OUTCOME_OBSERVED) {
+            $resumen['matchesFrom'] = $coincide;
+            $resumen['collidesWithMessaging'] = $choca;
+            if (! $this->dryRun) {
+                VoiceNumberGuard::rememberObservation((string) $o->phoneNumberId, $coincide, $choca);
+            }
+        }
+        $identidad = ['where' => 'reconcile', 'part' => self::NUMBER_PART, 'seq' => $parte->seq];
         if ($o->outcome !== VoiceNumberAssignment::OUTCOME_OBSERVED) {
             $resumen['result'] = 'unobserved_'.$o->outcome;
-        } elseif ($esperadoEstado === VoiceNumberAssignment::STATE_UNKNOWN) {
+        } elseif ($choca) {
+            // Protección 6: con el número de WhatsApp no se llama ni se atiende, aunque `TWILIO_VOICE_FROM` diga otro.
+            $resumen['result'] = self::NUMBER_IS_MESSAGING;
+            $abre = $this->brake('number_is_messaging', 'number:'.$o->phoneNumberId.':messaging', $identidad, VoiceBrake::observedAfter($observada));
+            $resumen['brakeOpened'] = $abre && ! $this->dryRun;
+        } elseif ($coincide === false) {
+            // El número importado no es el declarado: lo que se revisó (la guarda de WhatsApp, el expediente) no es lo que llama.
+            $resumen['result'] = self::NUMBER_MISMATCH;
+            $abre = $this->brake('number_mismatch', 'number:'.$o->phoneNumberId.':mismatch', $identidad, VoiceBrake::observedAfter($observada));
+            $resumen['brakeOpened'] = $abre && ! $this->dryRun;
+        } elseif (! $soloSaliente && $esperadoEstado === VoiceNumberAssignment::STATE_UNKNOWN) {
             $resumen['result'] = self::NUMBER_EXPECTED_UNKNOWN;
         } elseif ($o->agentId === $esperado) {
-            $resumen['result'] = self::NUMBER_OK;
+            $resumen['result'] = $soloSaliente ? self::NUMBER_OUTBOUND_ONLY : self::NUMBER_OK;
         } else {
             $resumen['result'] = self::NUMBER_DRIFT;
             // Una observación nueva, posterior a una suelta, la rearma (E10-6, SEC8-b B-2).

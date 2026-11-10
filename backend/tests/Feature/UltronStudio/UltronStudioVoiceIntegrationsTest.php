@@ -3,6 +3,7 @@
 namespace Tests\Feature\UltronStudio;
 
 use App\Models\Admin;
+use App\Services\Telephony\VoiceTranscriptGuard;
 use App\Services\UltronStudio\StudioAccess;
 use App\Services\UltronStudio\StudioIntegrationConfig;
 use App\Services\UltronStudio\StudioIntegrations;
@@ -124,6 +125,7 @@ class UltronStudioVoiceIntegrationsTest extends TestCase
             'version' => StudioVoiceTemplate::VERSION,
             'hash' => StudioVoiceTemplate::hash(),
             'aiNotice' => StudioVoiceTemplate::AI_NOTICE,
+            'aiNotices' => StudioVoiceTemplate::AI_NOTICES,
             'greetingMax' => StudioVoiceTemplate::GREETING_MAX,
             'textMin' => StudioVoiceTemplate::TEXT_MIN,
             'holes' => StudioVoiceTemplate::HOLES,
@@ -161,6 +163,10 @@ class UltronStudioVoiceIntegrationsTest extends TestCase
         $conTransferencia = self::profileContentWithTransfer();
         $conTransferencia['transfer']['destinations'] = array_map(static fn (int $i): array => ['alias' => "Destino {$i}", 'phone' => '+57601000009'.$i], range(1, $plantilla['limits']['transferDestinations']['max'] + 1));
         $this->createProfile($root, $conTransferencia)->assertStatus(422)->assertJsonValidationErrors(['content.transfer.destinations']);
+
+        // Los dos avisos (tú y usted) son los de la plantilla, y el de usted lleva los tres elementos que exige la guarda posterior.
+        $this->assertSame(['tu' => StudioVoiceTemplate::AI_NOTICE, 'usted' => StudioVoiceTemplate::AI_NOTICE_USTED], $plantilla['aiNotices']);
+        $this->assertTrue(VoiceTranscriptGuard::hasNotice($plantilla['aiNotices']['usted']));
 
         // La misma para cualquier sesión, y sin teléfonos ni secretos (la huella de la plantilla aparte: es hexadecimal).
         $this->assertSame($plantilla, $this->integrations('GET', 'voice', $this->person(Admin::ROLE_ADMINISTRADOR, 'Ana'))->json('data.template'));

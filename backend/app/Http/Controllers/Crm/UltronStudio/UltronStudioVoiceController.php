@@ -122,9 +122,11 @@ class UltronStudioVoiceController extends Controller
      *
      * `content` = `{voiceId, greetings{inbound, outbound}, holes{presentation,
      * closing}, maxDurationSeconds, tools[], systemTools[], transfer{destinations:
-     * [{alias, phone(E.164)}]}, privacy{retentionDays}, voicemail}`. El formato,
-     * el idioma, el aviso y la privacidad apagada los pone el servidor. 201 con
-     * el perfil; 200 `replayed` si se repite.
+     * [{alias, phone(E.164)}]}, privacy{retentionDays}, voicemail, addressForm?}`.
+     * El formato, el idioma, el aviso (el del trato) y la privacidad apagada los
+     * pone el servidor. `addressForm` (S8-d), opcional: `tu` (por defecto) o
+     * `usted`; otro valor, 422 del compilador con su campo. 201 con el perfil;
+     * 200 `replayed` si se repite.
      */
     public function storeProfile(Request $request, StudioVoiceProfiles $profiles): JsonResponse
     {
@@ -157,6 +159,7 @@ class UltronStudioVoiceController extends Controller
             'content.privacy.storeAudio' => ['sometimes', 'boolean'],
             'content.privacy.recording' => ['sometimes', 'boolean'],
             'content.voicemail' => $texto(20),
+            'content.addressForm' => ['sometimes', 'string', 'max:10'],
         ]);
 
         $resultado = $profiles->create($access, $request, strtolower($data['clientRequestId']), $data['label'], $data['basedOn'] ?? null, $request->input('content'));

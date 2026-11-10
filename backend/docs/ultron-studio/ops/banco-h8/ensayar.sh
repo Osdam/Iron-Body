@@ -20,7 +20,17 @@
 #                                                          (preparar.sh), con RED: el ensayo del paso 0 o el despliegue
 #   bash ensayar.sh <banco> smoke [<id de admin>]          (OPS8-b) smoke-run-h8.sh del REPO con las variables locales y
 #                                                          la valla como prueba estricta de cero red
-#   bash ensayar.sh <banco> alcance                        el mando de las fases 2–4b: todavía no existe
+#   bash ensayar.sh <banco> alcance <orden del mando…>     (OPS8-c) la copia del banco de h8-voice-scope.sh, con RED
+#   bash ensayar.sh <banco> secretos [opciones…]           (OPS8-c) la de h8-secrets-register.sh contra el simulador de
+#                                                          ElevenLabs (rutas de secretos y webhooks, OPS8-c)
+#   bash ensayar.sh <banco> twilio [--dias=N]              (OPS8-c) la de h8-twilio-check.sh contra el de Twilio
+#   bash ensayar.sh <banco> constante abrir|cerrar         (OPS8-c) gira la constante de llamadas SOLO en el clon de la
+#                                                          «producción» del banco, con un commit `voice(calls-open):` de
+#                                                          una línea (protección 2: nunca en el árbol compartido), y
+#                                                          recarga la caché; «cerrar» lo deshace con un revert
+#   bash ensayar.sh <banco> piezas-twilio <fichero>        (OPS8-c) escribe en <fichero> (600) las tres piezas secretas de
+#                                                          Twilio del banco (de sim/piezas.conf) para «alcance fase 2
+#                                                          secreto»; nada pasa por la línea de órdenes
 # Sin banco: node sim-pruebas.cjs (las pruebas propias de los simuladores y la valla).
 . "$(dirname "$0")/comun.sh"
 B=$(banco_dir "${1:-}")
@@ -296,7 +306,39 @@ E112
       SMOKE_BUDGETS="${SMOKE_BUDGETS:-$OPS/perf-h8/presupuestos-h8.json}" SMOKE_BUDGETS_OUT="${SMOKE_BUDGETS_OUT:-}" \
       SMOKE_VALLA_STATS="http://127.0.0.1:$PUERTO_VALLA/__stats" SMOKE_LOGS="$BE/storage/logs" bash "$OPS/smoke-run-h8.sh" ;;
 
-  alcance)
-    muere "«alcance» es el mando de las fases 2–4b (h8-voice-scope.sh): todavía no existe (pendiente de OPS8)" ;;
-  *) muere "uso: bash ensayar.sh <banco> arrancar|parar|estado|valla|doctor|worker …|cierre|e112|desplegar [--solo-comprobar]|smoke [<id>]" ;;
+  alcance|secretos|twilio)
+    case "$ORDEN" in alcance) S=h8-voice-scope.sh ;; secretos) S=h8-secrets-register.sh ;; twilio) S=h8-twilio-check.sh ;; esac
+    bash "$AQUI/preparar.sh" "$B" > /dev/null
+    export "${RED[@]}"
+    exec bash "$B/root/$S" "$@" ;;
+  constante)
+    P="$B/api/backend/app/Services/Voice/VoiceCallPolicy.php"
+    case "${1:-}" in
+      abrir)
+        [ "$(grep -cE '^[[:space:]]*public const CALLS_ENABLED_IN_CODE = false;[[:space:]]*$' "$P" || true)" = 1 ] || muere "la constante no está cerrada (una declaración = false) en $P"
+        sed -i '' -E 's/^([[:space:]]*public const CALLS_ENABLED_IN_CODE = )false;/\1true;/' "$P"
+        git -C "$B/api" -c user.name=banco -c user.email=banco@local commit -q -m "voice(calls-open): banco: abre las llamadas en el clon del banco (ensayo de OPS8-c; nunca en el repo)" -- backend/app/Services/Voice/VoiceCallPolicy.php ;;
+      cerrar)
+        [[ "$(git -C "$B/api" log -1 --format=%s)" =~ ^voice\(calls-open\):\ banco ]] || muere "el último commit del clon no es el giro del banco: no se deshace nada a ciegas"
+        git -C "$B/api" -c user.name=banco -c user.email=banco@local revert --no-edit HEAD > /dev/null ;;   # sin reescribir: un commit nuevo
+      *) muere "uso: bash ensayar.sh <banco> constante abrir|cerrar" ;;
+    esac
+    ( cd "$BE" && env "${RED[@]}" php artisan config:cache -q && chmod 600 bootstrap/cache/config.php )
+    echo "constante en el clon del banco: $(grep -oE 'CALLS_ENABLED_IN_CODE = (true|false)' "$P") · último commit: $(git -C "$B/api" log -1 --format='%h %s' | cut -c1-80)" ;;
+  piezas-twilio)
+    F=${1:?fichero de salida}
+    ( umask 077; python3 -I - "$B/sim/piezas.conf" "$F" <<'PZT'
+import sys
+p = {}
+for l in open(sys.argv[1], encoding='utf-8'):
+    l = l.strip()
+    if l and not l.startswith('#') and '=' in l:
+        k, v = l.split('=', 1)
+        p[k.strip()] = v.strip()
+with open(sys.argv[2], 'w', encoding='utf-8') as f:
+    f.write(f"TWILIO_VOICE_API_KEY_SID={p['TW_LARAVEL_KEY_SID']}\nTWILIO_VOICE_API_KEY_SECRET={p['TW_LARAVEL_KEY_SECRET']}\nTWILIO_VOICE_SIGNING_TOKEN={p['TW_SIGNING_TOKEN']}\n")
+print('   tres piezas secretas de Twilio del banco en el fichero (sin valores en pantalla)')
+PZT
+    chmod 600 "$F" ) ;;
+  *) muere "uso: bash ensayar.sh <banco> arrancar|parar|estado|valla|doctor|worker …|cierre|e112|desplegar [--solo-comprobar]|smoke [<id>]|alcance …|secretos …|twilio …|constante abrir|cerrar|piezas-twilio <fichero>" ;;
 esac

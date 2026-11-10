@@ -4,6 +4,7 @@ namespace App\Services\Voice\ElevenLabs;
 
 use App\Services\Voice\Dto\VoiceAgentObservation;
 use App\Services\Voice\Dto\VoiceAgentPayload;
+use App\Services\Voice\Dto\VoiceAgentSpec;
 use App\Services\Voice\Dto\VoiceDeployResult;
 use App\Services\Voice\Dto\VoiceIds;
 use App\Services\Voice\Dto\VoiceNumberAssignment;
@@ -259,9 +260,19 @@ final class ElevenLabsAgentDeployer implements VoiceAgentDeployer, VoiceNumberOb
 
     /**
      * E4-8: a qué agente apunta el número importado. Solo GET, UNA petición;
-     * del cuerpo solo se toma `assigned_agent.agent_id` (el teléfono que trae
-     * la respuesta no sale de aquí). Sin la bandera o sin todas las piezas,
-     * «desconocido» sin red.
+     * del cuerpo solo se toman `assigned_agent.agent_id` y `supports_inbound`
+     * (el teléfono y la etiqueta que trae la respuesta no salen de aquí). Sin la
+     * bandera o sin todas las piezas, «desconocido» sin red.
+     *
+     * B8-g, con la referencia oficial (`GET /v1/convai/phone-numbers/{id}`,
+     * comprobada el 09-11-2026): `assigned_agent` es OPCIONAL (un objeto o
+     * null), así que su ausencia es «sin asignar», como el null; un valor con
+     * otra forma sigue siendo ilegible. `supports_inbound` (booleano, obsoleto,
+     * por defecto true) da `inboundCapable`: un número «Outbound Only» (caller
+     * ID verificado en Twilio) dice false; sin el campo, null. Y `phone_number`
+     * (SEC8-c B-1), el E.164 con el que ElevenLabs llama de verdad, sale solo
+     * en memoria ({@see VoiceNumberAssignment::phoneNumber()}); sin un E.164
+     * estricto, null.
      */
     public function describeNumber(string $phoneNumberId): VoiceNumberAssignment
     {
@@ -302,17 +313,21 @@ final class ElevenLabsAgentDeployer implements VoiceAgentDeployer, VoiceNumberOb
             return new VoiceNumberAssignment($resultado, $phoneNumberId, null, $http, null);
         }
         $numero = self::jsonObject($respuesta);
-        if ($numero === null || ! array_key_exists('assigned_agent', $numero)) {
+        if ($numero === null) {
             return new VoiceNumberAssignment(VoiceNumberAssignment::OUTCOME_ERROR, $phoneNumberId, null, $http, VoiceNumberAssignment::REASON_INVALID_RESPONSE);
         }
-        $asignado = $numero['assigned_agent'];
+        // Ausente (el campo es opcional) o null: sin asignar.
+        $asignado = $numero['assigned_agent'] ?? null;
         $agente = is_array($asignado) ? VoiceIds::providerIdOrNull($asignado['agent_id'] ?? null) : null;
         if ($asignado !== null && $agente === null) {
             // Un agente asignado sin id legible no es «sin asignar»: no se sabe.
             return new VoiceNumberAssignment(VoiceNumberAssignment::OUTCOME_ERROR, $phoneNumberId, null, $http, VoiceNumberAssignment::REASON_INVALID_RESPONSE);
         }
+        $entrantes = $numero['supports_inbound'] ?? null;
+        $llama = is_string($numero['phone_number'] ?? null) && preg_match(VoiceAgentSpec::E164_PATTERN, $numero['phone_number']) === 1 ? $numero['phone_number'] : null;
+        unset($numero);
 
-        return new VoiceNumberAssignment(VoiceNumberAssignment::OUTCOME_OBSERVED, $phoneNumberId, $agente, $http, null);
+        return new VoiceNumberAssignment(VoiceNumberAssignment::OUTCOME_OBSERVED, $phoneNumberId, $agente, $http, null, is_bool($entrantes) ? $entrantes : null, $llama);
     }
 
     // ── Piezas puras ────────────────────────────────────────────────────────

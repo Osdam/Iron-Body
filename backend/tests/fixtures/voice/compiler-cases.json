@@ -144,10 +144,10 @@
     "compiler": {
       "class": "App\\Services\\UltronStudio\\StudioVoiceCompiler",
       "version": "ultron-voice-compiler/1",
-      "compilerSha256": "62c25a98849ba6c03f78854e91c00606ce460371703a7ae023dcc20facdbd79c",
-      "templateSha256": "b584cd903f93b863286b5c642ceeec1fe2065bb62d68296b77529b66502fbd2d",
-      "templateVersion": "ultron-voice-template/1",
-      "templateHash": "6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e",
+      "compilerSha256": "28e3385a1184a66ab5dbb51e84e426956e75dc89e9ad314fb165614036ed6954",
+      "templateSha256": "24069130cf8e42b24429ace078be0db7419c61902508601d93f230467e31d682",
+      "templateVersion": "ultron-voice-template/2",
+      "templateHash": "b60c71c291146ce96d05eb404898516a930b08768ece07bdefd5b4755f6caa15",
       "aiNotice": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento.",
       "php": "8.3.33"
     },
@@ -297,7 +297,7 @@
           "payloadHashIsSha256OfCanonicalPayload": true
         },
         "realCompiler": {
-          "specHash": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+          "specHash": "d3a8ea0d09817a67a5080d843cf7f838ac90a2720b086c88733ea2265cab8101",
           "voiceProfileHash": "9785318f83a28b8d2bf2e521d4ea810cb2dafc0182b987c902804cd80bed800a",
           "decision": "DF-C12"
         }
@@ -422,7 +422,7 @@
           "payloadHashIsSha256OfCanonicalPayload": true
         },
         "realCompiler": {
-          "specHash": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+          "specHash": "d3a8ea0d09817a67a5080d843cf7f838ac90a2720b086c88733ea2265cab8101",
           "voiceProfileHash": "9785318f83a28b8d2bf2e521d4ea810cb2dafc0182b987c902804cd80bed800a",
           "decision": "DF-C12"
         }
@@ -547,7 +547,7 @@
           "payloadHashIsSha256OfCanonicalPayload": true
         },
         "realCompiler": {
-          "specHash": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+          "specHash": "d3a8ea0d09817a67a5080d843cf7f838ac90a2720b086c88733ea2265cab8101",
           "voiceProfileHash": "9785318f83a28b8d2bf2e521d4ea810cb2dafc0182b987c902804cd80bed800a",
           "decision": "DF-C12"
         }
@@ -657,7 +657,7 @@
           "payloadHashIsSha256OfCanonicalPayload": true
         },
         "realCompiler": {
-          "specHash": "c42d1689c76a38c2b3fefb6200660833583a0782654745a92c2ea29e32879ef8",
+          "specHash": "cf285954b18e3f0981ea5be2eb37e57853c0a792a4a25903e222963a55657067",
           "voiceProfileHash": "8e08c32dba469e4763aa5119f3f92f5a87153a14a5117687ada12a49a56bee64",
           "decision": "DF-C12"
         }
@@ -796,7 +796,7 @@
           "payloadHashIsSha256OfCanonicalPayload": true
         },
         "realCompiler": {
-          "specHash": "de336c2f58538d2bfbbdd5a251b270578404264043b5d53c4510c819f4a032b8",
+          "specHash": "6584124f80897ca84700874b809aad124e2829f5c17423c227c543e504c64fbe",
           "voiceProfileHash": "6b54cb401a13e70f02be767a43b1a704f077198317c4c4b830f5e147af7b420c",
           "decision": "DF-C12"
         }
@@ -921,7 +921,7 @@
           "payloadHashIsSha256OfCanonicalPayload": true
         },
         "realCompiler": {
-          "specHash": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+          "specHash": "d3a8ea0d09817a67a5080d843cf7f838ac90a2720b086c88733ea2265cab8101",
           "voiceProfileHash": "9785318f83a28b8d2bf2e521d4ea810cb2dafc0182b987c902804cd80bed800a",
           "decision": "DF-C12"
         }
@@ -1046,7 +1046,7 @@
           "payloadHashIsSha256OfCanonicalPayload": true
         },
         "realCompiler": {
-          "specHash": "e651a53e13a614df4b6231dd80d93f339ce962f388d19cf0da46dc79e86e282f",
+          "specHash": "177f368704c654504fab46c73ec7fd3e391c9e7c91dccb9ee83c241b9dbc2e9e",
           "voiceProfileHash": "aec1a19d1b9a4a6e5c0f3e73234009fb87aac8e1b7852d32b127373e94aa8032",
           "decision": "DF-C12"
         }
@@ -1171,7 +1171,7 @@
           "payloadHashIsSha256OfCanonicalPayload": true
         },
         "realCompiler": {
-          "specHash": "927b1c5d61f00fa22fa1cc40e75a97d68438a908512fc1599c15feaed588b3c7",
+          "specHash": "fa7e74a3e9e107f45ff604db9768ee1f012dd63ec8131371d5934a039548d369",
           "voiceProfileHash": "ba481fffc5e83daa2a4f8964371b768a5cda9eff0b675e164bfef11a40c83d56",
           "decision": "DF-C12"
         }
@@ -1296,7 +1296,7 @@
           "payloadHashIsSha256OfCanonicalPayload": true
         },
         "realCompiler": {
-          "specHash": "eda59526488b593b77f96664609d73b4a07e5e748ba74d0ba7ce2dbd93661f09",
+          "specHash": "12f14095edad7d56ed69396d564c51fbf0f90e42e634654ea0cbdcba3bdf2ef2",
           "voiceProfileHash": "a81a4cf3db4cf19eb1e7f8abed7d0caa595481403cd16e45ae29ba0dc9a7aaea",
           "decision": "DF-C12"
         }
@@ -1402,7 +1402,7 @@
           "payloadHashIsSha256OfCanonicalPayload": true
         },
         "realCompiler": {
-          "specHash": "4ba9c83ceeb825264fa3e7cdb89abf5502e6549a5dba495ff20bbad9411575a7",
+          "specHash": "2f57151b0d74dc62cf97ee26a791895ef515311cb3014bc63d5c12f6f0e111a3",
           "voiceProfileHash": "34ba8f91dc8b5dc28047acb012207654af604a1c4c3c3c49c7d74ba39700a761",
           "decision": "DF-C12"
         }
@@ -1525,7 +1525,7 @@
           "payloadHashIsSha256OfCanonicalPayload": true
         },
         "realCompiler": {
-          "specHash": "bc0f0fd51ead75dae1d2daa4aabedf467d61a3429e280fa0238e116b2f49fc60",
+          "specHash": "9314c86fe8b534de0994a2771a43b9d1a1f9fd0bc6cdce6bd87c829aa20d8b6c",
           "voiceProfileHash": "d42d3a9df3bcd5bc11de5cbdd0a88cbac4c83f05df6da9f70524a0fc7853d160",
           "decision": "DF-C12"
         }
@@ -1650,7 +1650,7 @@
           "payloadHashIsSha256OfCanonicalPayload": true
         },
         "realCompiler": {
-          "specHash": "caddfd27d6925518504e7aa2746cf7cecf6b43bcf61cdefc707d23fe2d2dcfc6",
+          "specHash": "8a549886558d53c061db639653b5cc7387054a47f27e987119f0351e22f22ae1",
           "voiceProfileHash": "6a706f33a185d4423861311e6c43b50c7f3ea9a21e82af6b4ba3aa2946593995",
           "decision": "DF-C12"
         }
@@ -1775,7 +1775,7 @@
           "payloadHashIsSha256OfCanonicalPayload": true
         },
         "realCompiler": {
-          "specHash": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+          "specHash": "d3a8ea0d09817a67a5080d843cf7f838ac90a2720b086c88733ea2265cab8101",
           "voiceProfileHash": "9785318f83a28b8d2bf2e521d4ea810cb2dafc0182b987c902804cd80bed800a",
           "decision": "DF-C12"
         }
@@ -5882,7 +5882,7 @@
         "http": 422,
         "realCompiler": {
           "compiles": true,
-          "specHash": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+          "specHash": "d3a8ea0d09817a67a5080d843cf7f838ac90a2720b086c88733ea2265cab8101",
           "knownMismatch": "el compilador no lee handoffAliases: R-07 se aplica al desplegar (StudioVoiceCompiler::assertDestinationsMatch)",
           "decision": "DF-C12"
         }
@@ -7674,8 +7674,8 @@
       "expected": {
         "sameSpecHash": true,
         "realCompiler": {
-          "specHashA": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
-          "specHashB": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+          "specHashA": "d3a8ea0d09817a67a5080d843cf7f838ac90a2720b086c88733ea2265cab8101",
+          "specHashB": "d3a8ea0d09817a67a5080d843cf7f838ac90a2720b086c88733ea2265cab8101",
           "decision": "DF-C12"
         }
       }
@@ -7815,8 +7815,8 @@
       "expected": {
         "sameSpecHash": true,
         "realCompiler": {
-          "specHashA": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
-          "specHashB": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+          "specHashA": "d3a8ea0d09817a67a5080d843cf7f838ac90a2720b086c88733ea2265cab8101",
+          "specHashB": "d3a8ea0d09817a67a5080d843cf7f838ac90a2720b086c88733ea2265cab8101",
           "decision": "DF-C12"
         }
       }
@@ -7955,8 +7955,8 @@
       "expected": {
         "sameSpecHash": false,
         "realCompiler": {
-          "specHashA": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
-          "specHashB": "070b04226e0514a69d2c833fef7824c3fcd541eff88ae3b30ce98a3073e692f6",
+          "specHashA": "d3a8ea0d09817a67a5080d843cf7f838ac90a2720b086c88733ea2265cab8101",
+          "specHashB": "02d1be5cd262b0e0776672bd73b244d9aa0475870261f0f0b623d9d491ed18ed",
           "decision": "DF-C12"
         }
       }
@@ -8096,8 +8096,8 @@
       "expected": {
         "sameSpecHash": true,
         "realCompiler": {
-          "specHashA": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
-          "specHashB": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+          "specHashA": "d3a8ea0d09817a67a5080d843cf7f838ac90a2720b086c88733ea2265cab8101",
+          "specHashB": "d3a8ea0d09817a67a5080d843cf7f838ac90a2720b086c88733ea2265cab8101",
           "decision": "DF-C12"
         }
       }
@@ -8237,8 +8237,8 @@
       "expected": {
         "sameSpecHash": true,
         "realCompiler": {
-          "specHashA": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
-          "specHashB": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+          "specHashA": "d3a8ea0d09817a67a5080d843cf7f838ac90a2720b086c88733ea2265cab8101",
+          "specHashB": "d3a8ea0d09817a67a5080d843cf7f838ac90a2720b086c88733ea2265cab8101",
           "decision": "DF-C12"
         }
       }
@@ -8386,8 +8386,8 @@
       "expected": {
         "sameSpecHash": true,
         "realCompiler": {
-          "specHashA": "052e37d94c46d073475cb24c41a33375d6cf1f0151e8e64e1d7be1f52ac63081",
-          "specHashB": "052e37d94c46d073475cb24c41a33375d6cf1f0151e8e64e1d7be1f52ac63081",
+          "specHashA": "7acb659f8b8e47bc5022bf05543d7554e19e6d551ad3198aa884d3809bd6b948",
+          "specHashB": "7acb659f8b8e47bc5022bf05543d7554e19e6d551ad3198aa884d3809bd6b948",
           "decision": "DF-C12"
         }
       }
@@ -8527,8 +8527,8 @@
       "expected": {
         "sameSpecHash": true,
         "realCompiler": {
-          "specHashA": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
-          "specHashB": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+          "specHashA": "d3a8ea0d09817a67a5080d843cf7f838ac90a2720b086c88733ea2265cab8101",
+          "specHashB": "d3a8ea0d09817a67a5080d843cf7f838ac90a2720b086c88733ea2265cab8101",
           "decision": "DF-C12"
         }
       }
@@ -8667,8 +8667,8 @@
       "expected": {
         "sameSpecHash": false,
         "realCompiler": {
-          "specHashA": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
-          "specHashB": "a378e380211aeb2f1733be98326f5ca3dea8a655999ed56fde286a96764c978d",
+          "specHashA": "d3a8ea0d09817a67a5080d843cf7f838ac90a2720b086c88733ea2265cab8101",
+          "specHashB": "827efc3b027357c1ffeb45f8f0b8f32a802e7136014507c069cbe7375b54f38d",
           "decision": "DF-C12"
         }
       }
@@ -8807,8 +8807,8 @@
       "expected": {
         "sameSpecHash": false,
         "realCompiler": {
-          "specHashA": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
-          "specHashB": "75b39e003665ee9ca7ce9e17a82cdeb60ab69057e0f21e1a446cfac5a64f46e8",
+          "specHashA": "d3a8ea0d09817a67a5080d843cf7f838ac90a2720b086c88733ea2265cab8101",
+          "specHashB": "daa42a75163c105d14719a447fc3f28f8fb072f579ce7d3e8a240f24f57541c4",
           "decision": "DF-C12"
         }
       }
@@ -8947,8 +8947,8 @@
       "expected": {
         "sameSpecHash": false,
         "realCompiler": {
-          "specHashA": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
-          "specHashB": "1c800bc006aba757afe7765daf98cb5b94da2563094c8dfa5e857bc2b0912fe2",
+          "specHashA": "d3a8ea0d09817a67a5080d843cf7f838ac90a2720b086c88733ea2265cab8101",
+          "specHashB": "aad9dc83c221b6219211d4b6f8019c9d6cc49ac0aed548d40fe03ef0a794a93f",
           "decision": "DF-C12"
         }
       }
@@ -9086,8 +9086,8 @@
       "expected": {
         "sameSpecHash": false,
         "realCompiler": {
-          "specHashA": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
-          "specHashB": "bc0f0fd51ead75dae1d2daa4aabedf467d61a3429e280fa0238e116b2f49fc60",
+          "specHashA": "d3a8ea0d09817a67a5080d843cf7f838ac90a2720b086c88733ea2265cab8101",
+          "specHashB": "9314c86fe8b534de0994a2771a43b9d1a1f9fd0bc6cdce6bd87c829aa20d8b6c",
           "decision": "DF-C12"
         }
       }
@@ -9226,8 +9226,8 @@
       "expected": {
         "sameSpecHash": false,
         "realCompiler": {
-          "specHashA": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
-          "specHashB": "e143a4ca3ec0735fab281aab821bd6551b10475b510a308caeee13992e315e7c",
+          "specHashA": "d3a8ea0d09817a67a5080d843cf7f838ac90a2720b086c88733ea2265cab8101",
+          "specHashB": "58ccbade7fe4852777cd5ca4be47ac0ae24d2037f77a71ce701f0c6d07b8666d",
           "decision": "DF-C12"
         }
       }
@@ -9366,8 +9366,8 @@
       "expected": {
         "sameSpecHash": false,
         "realCompiler": {
-          "specHashA": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
-          "specHashB": "caddfd27d6925518504e7aa2746cf7cecf6b43bcf61cdefc707d23fe2d2dcfc6",
+          "specHashA": "d3a8ea0d09817a67a5080d843cf7f838ac90a2720b086c88733ea2265cab8101",
+          "specHashB": "8a549886558d53c061db639653b5cc7387054a47f27e987119f0351e22f22ae1",
           "decision": "DF-C12"
         }
       }
@@ -9506,8 +9506,8 @@
       "expected": {
         "sameSpecHash": false,
         "realCompiler": {
-          "specHashA": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
-          "specHashB": "03f4f2b23d3955f6ff9d073673978363a42238a926fcebdfae72b7b4903689d5",
+          "specHashA": "d3a8ea0d09817a67a5080d843cf7f838ac90a2720b086c88733ea2265cab8101",
+          "specHashB": "9ba3e7f322cb718f7a272c385e0aff85fd51f1ac4fa5458204bd28c1b65bfcae",
           "decision": "DF-C12"
         }
       }
@@ -9646,7 +9646,7 @@
       "expected": {
         "sameSpecHash": false,
         "realCompiler": {
-          "specHashA": "61c8b0d8fc8345cb3d19375fefb1eea345a89447b83f9473fffa9ce0a125569b",
+          "specHashA": "d3a8ea0d09817a67a5080d843cf7f838ac90a2720b086c88733ea2265cab8101",
           "notApplicable": "la versión del compilador es una constante",
           "decision": "DF-C12"
         }

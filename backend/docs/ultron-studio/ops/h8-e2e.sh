@@ -3,14 +3,18 @@
 # puertas», paso 3, y Enmienda 6, E6-11). Nunca toca producción ni sale a la red: ElevenLabs y Twilio son los
 # simuladores de OPS8 (`ops/banco-h8/`) en 127.0.0.1, con los adaptadores REALES apuntados a ellos (nunca los nulos).
 #
-#   bash backend/docs/ultron-studio/ops/h8-e2e.sh [cerrada|abierta|ambas]        (desde la raíz del worktree; ambas por defecto)
+#   bash backend/docs/ultron-studio/ops/h8-e2e.sh [cerrada|abierta|ambas|salientes|todas]   (desde la raíz del worktree; ambas por defecto)
 #
 # Por cada fase, en una COPIA del árbol (`git archive` del commit, fuera del repo; protección 2 del contrato):
 #   cerrada  el código tal cual (CALLS_ENABLED_IN_CODE = false) con TODAS las banderas encendidas: la constante es la
 #            única cerradura que queda, y tiene que cerrar sola (publicar se detiene sin asignar el número, las entrantes
 #            dicen «no», las salientes dan 409 y nada sale a la red);
 #   abierta  la copia del banco con la constante en true (el único cambio: se comprueba con diff), y los recorridos
-#            a–h del paso 3 (perfil, laboratorio, publicar, entrantes, evidencia, freno, revertir, apagar y salientes).
+#            a–h del paso 3 (perfil, laboratorio, publicar, entrantes, evidencia, freno, revertir, apagar y salientes);
+#   salientes  (TEST8-c, E14-5) la copia del banco como la abierta pero con la configuración de la fase 4a SIN la 3
+#            (`VOICE_INBOUND_ENABLED=false`): salientes primero hasta promover, la parte 4b con una segunda API en
+#            :$H8_E2E_PUERTO_API2 (alcance contacts) y los bloqueos de seguridad de las cuatro rutas públicas.
+#   todas    cerrada, abierta y salientes.
 # Y en cada una: PostgreSQL desechable con el modelo de roles de producción (dueño que migra, aplicación con solo DML y
 # el REVOKE de DB8), las migraciones del H8, la valla (proxy que bloquea y anota todo lo que no es 127.0.0.1), los dos
 # simuladores, `artisan serve --no-reload` (4 workers), el worker REAL de la cola `voice`, tres cuentas creadas aquí
@@ -22,9 +26,14 @@
 # los 3 días; la evidencia va al repo, sin secretos: el barrido también la recorre).
 #
 # Variables: H8_E2E_REF (HEAD) · H8_E2E_DIR (~/.cache/ironbody-h8-e2e) · H8_E2E_PG_PORT (55432) · H8_E2E_DB
-#   (ultron_studio_h8_e2e) · H8_E2E_PUERTO_API|_EL|_TW|_VALLA (8401–8404) · H8_E2E_VENTANA (07:00-19:00: la ventana de
+#   (ultron_studio_h8_e2e) · H8_E2E_PUERTO_API|_EL|_TW|_VALLA (8401–8404) · H8_E2E_PUERTO_API2 (8405: la segunda API de la
+#   fase salientes; solo la arranca su prueba) · H8_E2E_VENTANA (07:00-19:00: la ventana de
 #   publicar de P-25; vacía = sin ventana) · H8_E2E_HOLD=1 (deja la pila de UNA fase en pie hasta SIGTERM, para
-#   desarrollar) · H8_E2E_EVIDENCIA (1: copia la evidencia al repo).
+#   desarrollar) · H8_E2E_EVIDENCIA (1: copia la evidencia al repo) · H8_E2E_ARBOL=1 (TEST8-c: el backend del ÁRBOL DE
+#   TRABAJO sobre HEAD, con los cambios sin confirmar, copiado UNA vez; su huella va en el nombre de la ejecución y en
+#   el resumen. Los simuladores siguen siendo los del commit) · H8_E2E_FUENTE=<run>/fuente (TEST8-c: relanza sobre la
+#   MISMA copia del backend que sacó una ejecución anterior en tree mode, la que está en su `fuente/`; para repetir o
+#   mutar exactamente el código de una evidencia cuando el árbol ya cambió).
 # Trampas conocidas (README del E2E del CRM): PID de la subshell, nietos de `php -S`, `--no-reload`, PGGSSENCMODE en
 # macOS, el fichero de ejemplo de entorno no vale como entorno, bash 3.2, `http_proxy` en minúsculas bajo `php -S`.
 set -euo pipefail
@@ -45,9 +54,12 @@ P_API=${H8_E2E_PUERTO_API:-8401}
 P_EL=${H8_E2E_PUERTO_EL:-8402}
 P_TW=${H8_E2E_PUERTO_TW:-8403}
 P_VA=${H8_E2E_PUERTO_VALLA:-8404}
+P_API2=${H8_E2E_PUERTO_API2:-8405}
 VENTANA=${H8_E2E_VENTANA-07:00-19:00}
 HOLD=${H8_E2E_HOLD:-0}
 EVIDENCIA=${H8_E2E_EVIDENCIA:-1}
+ARBOL=${H8_E2E_ARBOL:-0}
+FUENTE_DIR=${H8_E2E_FUENTE:-}
 ROL_DUENO=h8e2e_owner
 ROL_APP=h8e2e_app
 PHP=$(command -v php)
@@ -55,20 +67,35 @@ PHP=$(command -v php)
 muere() { echo "h8-e2e: $*" >&2; exit 1; }
 psql_su() { psql -X -q -v ON_ERROR_STOP=1 -h "$PG_HOST" -p "$PG_PORT" -U "$PG_SU" "$@"; }
 hora() { date -u +%Y-%m-%dT%H:%M:%SZ; }
-case "$FASES" in cerrada) LISTA="cerrada" ;; abierta) LISTA="abierta" ;; ambas) LISTA="cerrada abierta" ;; *) muere "uso: h8-e2e.sh [cerrada|abierta|ambas]" ;; esac
-[ "$HOLD" = 1 ] && [ "$FASES" = ambas ] && muere "H8_E2E_HOLD=1 necesita UNA fase (cerrada o abierta)"
+case "$FASES" in cerrada) LISTA="cerrada" ;; abierta) LISTA="abierta" ;; ambas) LISTA="cerrada abierta" ;; salientes) LISTA="salientes" ;; todas) LISTA="cerrada abierta salientes" ;;
+  *) muere "uso: h8-e2e.sh [cerrada|abierta|ambas|salientes|todas]" ;; esac
+case "$FASES" in ambas|todas) [ "$HOLD" = 1 ] && muere "H8_E2E_HOLD=1 necesita UNA fase (cerrada, abierta o salientes)" ;; esac
 [[ "$DB" =~ ^ultron_studio_h8_e2e[a-z0-9_]{0,40}$ ]] || muere "H8_E2E_DB tiene que empezar por ultron_studio_h8_e2e (se BORRA y se recrea)"
 
 # ── 0. Requisitos: herramientas, puertos libres, PG, vendor, fuera del repo ─────────────────────────────────────────
 for b in php node psql pg_dump git lsof shasum python3 curl openssl; do command -v "$b" > /dev/null || muere "falta $b"; done
 [ -d "$BE/vendor" ] || muere "falta $BE/vendor (composer install en el worktree)"
-for p in "$P_API" "$P_EL" "$P_TW" "$P_VA"; do
+for p in "$P_API" "$P_EL" "$P_TW" "$P_VA" "$P_API2"; do
   [[ "$p" =~ ^[0-9]+$ ]] && [ "$p" -ge 8400 ] || muere "puerto no válido: $p"
   if lsof -nP -iTCP:"$p" -sTCP:LISTEN > /dev/null 2>&1; then muere "el puerto $p está ocupado: no arranco encima de un proceso ajeno (¿el banco de OPS8? ensayar.sh <banco> parar)"; fi
 done
 psql_su -d postgres -Atc "SELECT 1" > /dev/null || muere "no hay PostgreSQL en $PG_HOST:$PG_PORT (ops/pgunit.sh lo levanta)"
 SHA=$(git -C "$WT" rev-parse --verify "$REF^{commit}")
 CORTO=$(git -C "$WT" rev-parse --short=8 "$SHA")
+ARBOL_SHA=""
+if [ -n "$FUENTE_DIR" ]; then
+  [ "$ARBOL" != 1 ] && [ "$REF" = HEAD ] || muere "H8_E2E_FUENTE no se combina con H8_E2E_ARBOL ni con H8_E2E_REF"
+  [ -f "$FUENTE_DIR/backend/artisan" ] || muere "H8_E2E_FUENTE tiene que ser el fuente/ de una ejecución (con backend/artisan): $FUENTE_DIR"
+  case "$(python3 -I -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$FUENTE_DIR")/" in "$WT"/*) muere "H8_E2E_FUENTE no puede estar dentro del repo" ;; esac
+  ARBOL_SHA=$(basename "$(dirname "$FUENTE_DIR")" | sed -n 's/.*-arbol-\([0-9a-f]\{12\}\)$/\1/p')
+  [ -n "$ARBOL_SHA" ] || muere "H8_E2E_FUENTE: no reconozco la huella en el nombre de la ejecución ($FUENTE_DIR)"
+  CORTO="$CORTO-arbol-$ARBOL_SHA"
+elif [ "$ARBOL" = 1 ]; then
+  [ "$REF" = HEAD ] || muere "H8_E2E_ARBOL=1 copia el árbol de trabajo sobre HEAD: no admite H8_E2E_REF"
+  # La huella del árbol: el diff de backend/ respecto de HEAD y el contenido de los ficheros sin seguimiento no ignorados.
+  ARBOL_SHA=$( { git -C "$WT" diff --binary HEAD -- backend; git -C "$WT" ls-files -o --exclude-standard -z -- backend | (cd "$WT" && xargs -0 shasum -a 256); } | shasum -a 256 | cut -c1-12)
+  CORTO="$CORTO-arbol-$ARBOL_SHA"
+fi
 SELLO=$(date -u +%Y%m%dT%H%M%SZ)
 mkdir -p "$BASE_DIR"
 RUN="$BASE_DIR/run-$SELLO-$CORTO"
@@ -102,7 +129,7 @@ parar_todo() {
   local n p
   for n in muestreo worker api sim-elevenlabs sim-twilio valla; do para "$n"; done
   sleep 0.5
-  for p in "$P_API" "$P_EL" "$P_TW" "$P_VA"; do
+  for p in "$P_API" "$P_EL" "$P_TW" "$P_VA" "$P_API2"; do
     [ -z "$(escuchando "$p")" ] || { echo "AVISO   el puerto $p sigue ocupado (pid $(escuchando "$p")): lo paro"; kill -KILL $(escuchando "$p") 2> /dev/null || true; }
   done
   PARADO=1
@@ -111,9 +138,41 @@ trap 'rc=$?; parar_todo; exit $rc' EXIT
 trap 'echo "h8-e2e: interrumpido"; exit 130' INT TERM
 
 # ── 1. Las dos copias del árbol (trampa 5: git archive desde la raíz) ───────────────────────────────────────────────
+# El backend de la ejecución se saca UNA vez (`$RUN/fuente`) y cada fase lo clona: dos copias tomadas en momentos
+# distintos del árbol de trabajo podrían no ser iguales (otro agente guarda entre una y otra).
+fuente() {
+  mkdir -p "$RUN/fuente"
+  if [ -n "$FUENTE_DIR" ]; then
+    cp -cR "$FUENTE_DIR/backend" "$RUN/fuente/backend" 2> /dev/null || cp -R "$FUENTE_DIR/backend" "$RUN/fuente/backend"
+    echo "   la copia del backend de una ejecución anterior (huella $ARBOL_SHA): $FUENTE_DIR"
+    return
+  fi
+  if [ "$ARBOL" != 1 ]; then
+    git -C "$WT" archive --format=tar "$SHA" backend | tar -xf - -C "$RUN/fuente"
+    return
+  fi
+  python3 -I - "$WT" "$RUN/fuente" <<'PY' || muere "no se pudo copiar el árbol de trabajo"
+import os, shutil, subprocess, sys
+wt, dest = sys.argv[1:3]
+lista = subprocess.run(['git', '-C', wt, 'ls-files', '-c', '-o', '--exclude-standard', '-z', '--', 'backend'], capture_output=True, check=True).stdout
+n = 0
+for rel in lista.decode().split('\0'):
+    src = os.path.join(wt, rel)
+    if not rel or not (os.path.isfile(src) or os.path.islink(src)):
+        continue  # borrado en el árbol: no viaja
+    d = os.path.join(dest, rel)
+    os.makedirs(os.path.dirname(d), exist_ok=True)
+    if os.path.islink(src):
+        os.symlink(os.readlink(src), d)
+    else:
+        shutil.copy2(src, d)
+    n += 1
+print(f'   árbol de trabajo: {n} ficheros de backend/ (versionados y sin seguimiento no ignorados)')
+PY
+}
 copia() { # destino; deja $1/backend con el vendor (clonado en APFS) y las pruebas del E2E del árbol de trabajo
   mkdir -p "$1"
-  git -C "$WT" archive --format=tar "$SHA" backend | tar -xf - -C "$1"
+  cp -cR "$RUN/fuente/backend" "$1/backend" 2> /dev/null || cp -R "$RUN/fuente/backend" "$1/backend"
   [ -f "$1/backend/artisan" ] && [ -f "$1/backend/composer.lock" ] || muere "la copia $1 salió vacía"
   cp -cR "$BE/vendor" "$1/backend/vendor" 2> /dev/null || cp -R "$BE/vendor" "$1/backend/vendor"
   # Las pruebas del E2E (TEST8-b) aún sin confirmar: van a la copia tal como están en el árbol de trabajo.
@@ -122,19 +181,36 @@ copia() { # destino; deja $1/backend con el vendor (clonado en APFS) y las prueb
   mkdir -p "$1/backend/storage/logs" "$1/backend/storage/framework/cache" "$1/backend/storage/framework/sessions" "$1/backend/storage/framework/views" "$1/backend/bootstrap/cache"
 }
 echo "== 1. copias de $CORTO"
+fuente
 copia "$RUN/cerrada"
 copia "$RUN/abierta"
 POL=app/Services/Voice/VoiceCallPolicy.php
 grep -c 'public const CALLS_ENABLED_IN_CODE = false;' "$RUN/abierta/backend/$POL" | grep -qx 1 || muere "la constante no está en false exactamente una vez en $POL"
 sed -i '' 's/public const CALLS_ENABLED_IN_CODE = false;/public const CALLS_ENABLED_IN_CODE = true;/' "$RUN/abierta/backend/$POL"
-DIF=$(diff -r -q -x vendor "$RUN/cerrada/backend" "$RUN/abierta/backend" || true)
-[ "$DIF" = "Files $RUN/cerrada/backend/$POL and $RUN/abierta/backend/$POL differ" ] || muere "la copia abierta difiere en algo más que la constante: $DIF"
-LINEAS=$(diff "$RUN/cerrada/backend/$POL" "$RUN/abierta/backend/$POL" | grep -c '^[<>]' || true)
-[ "$LINEAS" = 2 ] || muere "el giro de la constante no es de UNA línea ($LINEAS líneas de diff)"
+case " $LISTA " in *" salientes "*)
+  copia "$RUN/salientes"
+  sed -i '' 's/public const CALLS_ENABLED_IN_CODE = false;/public const CALLS_ENABLED_IN_CODE = true;/' "$RUN/salientes/backend/$POL" ;;
+esac
+for AB in abierta salientes; do
+  [ -d "$RUN/$AB/backend" ] || continue
+  DIF=$(diff -r -q -x vendor "$RUN/cerrada/backend" "$RUN/$AB/backend" || true)
+  [ "$DIF" = "Files $RUN/cerrada/backend/$POL and $RUN/$AB/backend/$POL differ" ] || muere "la copia $AB difiere en algo más que la constante: $DIF"
+  LINEAS=$(diff "$RUN/cerrada/backend/$POL" "$RUN/$AB/backend/$POL" | grep -c '^[<>]' || true)
+  [ "$LINEAS" = 2 ] || muere "el giro de la constante no es de UNA línea en la copia $AB ($LINEAS líneas de diff)"
+done
 diff "$RUN/cerrada/backend/$POL" "$RUN/abierta/backend/$POL" > "$RUN/giro-constante.diff" || true
-echo "   cerrada: el commit tal cual · abierta: el commit + el giro de UNA línea ($LINEAS líneas cambiadas en el diff: una fuera y una dentro, solo $POL)"
+ORIGEN="el commit"; [ -n "$ARBOL_SHA" ] && ORIGEN="el árbol de trabajo sobre HEAD (huella $ARBOL_SHA)"
+echo "   cerrada: $ORIGEN tal cual · abierta: lo mismo + el giro de UNA línea ($LINEAS líneas cambiadas en el diff: una fuera y una dentro, solo $POL)"
 PRUEBAS_SHA=$(cat "$BE"/tests/Feature/Voice/E2E/*.php | shasum -a 256 | cut -c1-16)
-SIMS_SHA=$(cat "$BANCO"/sim-comun.cjs "$BANCO"/sim-elevenlabs.cjs "$BANCO"/sim-twilio.cjs "$BANCO"/valla.cjs | shasum -a 256 | cut -c1-16)   # los simuladores son del árbol de trabajo (OPS8)
+# Los simuladores y la valla, DEL COMMIT como el backend (TEST8-c): OPS8 los cambia en el árbol de trabajo mientras otros
+# corren el E2E, y un simulador a medias tumbaría una pasada sin culpa del código. Se usan los de `$SHA`.
+mkdir -p "$RUN/banco-h8"
+git -C "$WT" archive --format=tar "$SHA" backend/docs/ultron-studio/ops/banco-h8 | tar -xf - -C "$RUN/banco-h8" --strip-components=5
+for s in sim-comun.cjs sim-elevenlabs.cjs sim-twilio.cjs valla.cjs; do [ -f "$RUN/banco-h8/$s" ] || muere "falta $s en el commit $CORTO"; done
+BANCO="$RUN/banco-h8"
+SIMS_SHA=$(cat "$BANCO"/sim-comun.cjs "$BANCO"/sim-elevenlabs.cjs "$BANCO"/sim-twilio.cjs "$BANCO"/valla.cjs | shasum -a 256 | cut -c1-16)
+SIMS_ARBOL=$(cd "$OPS/banco-h8" && cat sim-comun.cjs sim-elevenlabs.cjs sim-twilio.cjs valla.cjs | shasum -a 256 | cut -c1-16)
+[ "$SIMS_SHA" = "$SIMS_ARBOL" ] || echo "   AVISO: los simuladores del árbol de trabajo ($SIMS_ARBOL) no son los del commit ($SIMS_SHA): se usan los del commit"
 
 # ── 2. Piezas SINTÉTICAS de la ejecución (600; nunca en la línea de órdenes ni en la salida) ─────────────────────────
 hex() { openssl rand -hex "$1"; }
@@ -171,10 +247,10 @@ PZ
 chmod 600 "$RUN/sim/piezas.conf"
 
 # El fichero de entorno de una copia: la plantilla del E2E con las piezas (trampa 3: nunca el de ejemplo del repo).
-entorno() { # copia alcance
-  python3 -I - "$AQUI/entorno-banco.ejemplo" "$RUN/sim/piezas.conf" "$1/backend/.env" "$2" <<'PY'
+entorno() { # copia alcance entrantes(true|false)
+  python3 -I - "$AQUI/entorno-banco.ejemplo" "$RUN/sim/piezas.conf" "$1/backend/.env" "$2" "${3:-true}" <<'PY'
 import base64, os, sys
-plantilla, piezas, destino, alcance = sys.argv[1:5]
+plantilla, piezas, destino, alcance, entrantes = sys.argv[1:6]
 p = {}
 for l in open(piezas, encoding='utf-8'):
     l = l.strip()
@@ -184,7 +260,7 @@ mapa = {k: p[k] for k in ('EL_API_KEY', 'EL_VERIFY_AGENT_ID', 'EL_WEBHOOK_SECRET
                          'TW_ACCOUNT_SID', 'TW_LARAVEL_KEY_SID', 'TW_LARAVEL_KEY_SECRET', 'TW_SIGNING_TOKEN', 'TW_MASTER_SID', 'TW_MASTER_TOKEN', 'TW_VERIFY_SID')}
 mapa.update({'APP_KEY': 'base64:' + base64.b64encode(os.urandom(32)).decode(), 'PUERTO_API': os.environ['P_API'], 'PUERTO_EL': os.environ['P_EL'],
              'PUERTO_TW': os.environ['P_TW'], 'PG_PORT': os.environ['PG_PORT'], 'DB': os.environ['DB'], 'DB_APP': os.environ['ROL_APP'],
-             'VENTANA': os.environ['VENTANA'], 'ALCANCE_SALIENTES': alcance})
+             'VENTANA': os.environ['VENTANA'], 'ALCANCE_SALIENTES': alcance, 'ENTRANTES': entrantes})
 texto = open(plantilla, encoding='utf-8').read()
 for k, v in mapa.items():
     texto = texto.replace('@@' + k + '@@', v)
@@ -227,7 +303,9 @@ fase() {
     -c "ALTER DEFAULT PRIVILEGES FOR ROLE $ROL_DUENO IN SCHEMA public GRANT SELECT, UPDATE, USAGE ON SEQUENCES TO $ROL_APP;"
 
   # 3.2 Entorno y migraciones (las del H8 incluidas) como el dueño, sin red (proxy a un puerto cerrado).
-  entorno "$RUN/$FASE" canary
+  local ENTRANTES=true
+  [ "$FASE" = salientes ] && ENTRANTES=false   # la fase 4a sin la 3 (TEST8-c)
+  entorno "$RUN/$FASE" canary "$ENTRANTES"
   local SINRED=(PATH="$PATH" HOME="$HOME" LC_ALL=C PGGSSENCMODE=disable http_proxy=http://127.0.0.1:9 https_proxy=http://127.0.0.1:9
     HTTP_PROXY=http://127.0.0.1:9 HTTPS_PROXY=http://127.0.0.1:9 no_proxy=127.0.0.1,localhost NO_PROXY=127.0.0.1,localhost)
   (cd "$COPIA" && env -i "${SINRED[@]}" DB_USERNAME="$ROL_DUENO" "$PHP" artisan migrate --force -q) > "$F/logs/migrate.out" 2>&1 || { tail -20 "$F/logs/migrate.out"; muere "las migraciones fallaron ($FASE)"; }
@@ -242,14 +320,14 @@ import json, sys
 d = json.load(open(sys.argv[1])); fase, pel, ptw, db, app = sys.argv[2:7]
 espera = {
     'appEnv': 'local', 'production': False, 'db': {'database': db, 'user': app},
-    'callsEnabledInCode': fase == 'abierta',
+    'callsEnabledInCode': fase in ('abierta', 'salientes'), 'inboundEnabled': fase != 'salientes',
     'elevenlabsBase': f'http://127.0.0.1:{pel}', 'twilioBase': f'http://127.0.0.1:{ptw}', 'twilioConfigured': True,
     'providerState': 'ELEVENLABS_UNVERIFIED', 'queueVoice': 'database', 'outboundScope': 'canary',
 }
 mal = {k: (d.get(k), v) for k, v in espera.items() if d.get(k) != v}
 if mal:
     print('preflight: ' + json.dumps(mal, ensure_ascii=False)); sys.exit(1)
-print(f"   preflight: local · {db} como {app} · constante {d['callsEnabledInCode']} · EL y Twilio → 127.0.0.1 · {d['providerState']}")
+print(f"   preflight: local · {db} como {app} · constante {d['callsEnabledInCode']} · entrantes {d['inboundEnabled']} · EL y Twilio → 127.0.0.1 · {d['providerState']}")
 PY
 
   # 3.4 La valla, los simuladores (con los registros de esta fase), la API y el worker real de `voice`.
@@ -306,7 +384,7 @@ import json, os
 ctx = {
     'phase': '$FASE', 'sha': '$SHA', 'api': 'http://127.0.0.1:$P_API', 'backend': '$COPIA', 'php': '$PHP', 'run': '$F',
     'checksFile': '$F/checks-$FASE.jsonl', 'pieces': '$RUN/sim/piezas.conf',
-    'ports': {'api': $P_API, 'elevenlabs': $P_EL, 'twilio': $P_TW, 'valla': $P_VA},
+    'ports': {'api': $P_API, 'elevenlabs': $P_EL, 'twilio': $P_TW, 'valla': $P_VA, 'api2': $P_API2},
     'db': {'host': '$PG_HOST', 'port': $PG_PORT, 'database': '$DB', 'reader': '$PG_SU', 'app': '$ROL_APP', 'owner': '$ROL_DUENO'},
     'tokens': {k: '$RUN/tokens/$FASE/token-' + k for k in ('a', 'b', 'c')},
     'accounts': json.load(open('$F/cuentas.json'))['accounts'],
@@ -327,8 +405,9 @@ PY
   # 3.8 Los recorridos: PHPUnit en la copia, contra la pila.
   local CLASE=H8E2ECerradaTest
   [ "$FASE" = abierta ] && CLASE=H8E2EAbiertaTest
+  [ "$FASE" = salientes ] && CLASE=H8E2ESalientesPrimeroTest
   echo "   recorridos: tests/Feature/Voice/E2E/$CLASE.php"
-  (cd "$COPIA" && env -i PATH="$PATH" HOME="$HOME" LC_ALL=C PGGSSENCMODE=disable H8_E2E_CONTEXT="$F/context.json" "$PHP" -d memory_limit=1G \
+  (cd "$COPIA" && env -i PATH="$PATH" HOME="$HOME" LC_ALL=C PGGSSENCMODE=disable H8_E2E_CONTEXT="$F/context.json" "$PHP" -d memory_limit=2G \
     vendor/bin/phpunit --no-coverage --do-not-cache-result --log-junit "$F/junit-$FASE.xml" "tests/Feature/Voice/E2E/$CLASE.php") > "$F/phpunit.out" 2>&1 && est=0 || est=$?
   tail -n 25 "$F/phpunit.out" | sed 's/^/   │ /'
 
@@ -432,9 +511,9 @@ filas = sorted(json.dumps({k: d[k] for k in ("phase", "step", "check", "ok")}, e
 print(hashlib.sha256("\n".join(filas).encode()).hexdigest())')
 FALLOS_TOT=$(cat "$RUN"/*/checks-*.jsonl | python3 -I -c 'import json, sys; print(sum(1 for l in sys.stdin if l.strip() and json.loads(l)["ok"] is not True))')
 {
-  echo "E2E H8 · backend $CORTO ($SHA) · $(hora) · $DUR s"
+  echo "E2E H8 · backend $CORTO ($SHA$([ -n "$ARBOL_SHA" ] && echo " + el árbol de trabajo sin confirmar, huella $ARBOL_SHA$([ -n "$FUENTE_DIR" ] && echo ", relanzado desde su copia")")) · $(hora) · $DUR s"
   echo "pruebas del E2E (sha256 de tests/Feature/Voice/E2E/*.php): $PRUEBAS_SHA"
-  echo "simuladores y valla de ops/banco-h8 (sha256 de los 4 .cjs, del árbol de trabajo): $SIMS_SHA"
+  echo "simuladores y valla de ops/banco-h8 (sha256 de los 4 .cjs, DEL COMMIT ${SHA:0:8}; los del árbol de trabajo: $SIMS_ARBOL): $SIMS_SHA"
   printf '%s' "$RESUMENES"
   echo "comprobaciones que fallaron: $FALLOS_TOT"
   echo "hash de resultados (sha256 de las comprobaciones ordenadas: fase, paso, nombre, ok): $HASH"

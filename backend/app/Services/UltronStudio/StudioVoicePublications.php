@@ -491,13 +491,17 @@ final class StudioVoicePublications
 
     /**
      * `VoicePublicationEntryDto`: sin el texto firmado (lo identifica su
-     * huella), sin ids internos y sin el id del proveedor en claro.
+     * huella), sin ids internos y sin el id del proveedor en claro. `number`
+     * (S8-d): en una entrada `publish`, lo que pasó con el número al publicar
+     * (`{action, outcome}`, p. ej. `not_applicable_outbound_only` con un número
+     * solo saliente); null en las demás y en las anteriores a S8-d.
      *
      * @return array<string, mixed>
      */
     public static function entryDto(StudioVoicePublication $p): array
     {
         $modo = is_array($p->lab_gate) ? ($p->lab_gate['mode'] ?? null) : null;
+        $numero = $p->action === StudioVoicePublication::ACTION_PUBLISH && is_array($p->evidence) && is_array($p->evidence['number'] ?? null) ? $p->evidence['number'] : null;
 
         return [
             'uuid' => (string) $p->uuid,
@@ -508,6 +512,10 @@ final class StudioVoicePublications
             'shortHash' => substr((string) $p->effective_hash, 0, 8),
             'labGate' => $p->action === StudioVoicePublication::ACTION_PUBLISH && is_string($modo) ? ['mode' => $modo] : null,
             'evidence' => $p->action === StudioVoicePublication::ACTION_PROMOTE && is_array($p->evidence) ? $p->evidence : null,
+            'number' => $numero === null ? null : [
+                'action' => is_string($numero['action'] ?? null) ? $numero['action'] : null,
+                'outcome' => is_string($numero['outcome'] ?? null) ? $numero['outcome'] : null,
+            ],
             'actor' => ['name' => (string) $p->actor_name, 'role' => $p->actor_role],
             'reason' => $p->reason,
             'at' => $p->created_at?->toIso8601String(),

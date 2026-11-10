@@ -44,6 +44,15 @@ $entero = static function (string $clave, int $defecto): int {
     return preg_match('/^-?\d+$/', $valor) === 1 ? (int) $valor : $defecto;
 };
 
+/*
+ * Una DECLARACIÓN del entorno sin defecto (no una bandera): vacía, ausente o
+ * ilegible → null («no declarada»); `true`, `1`, `on` o `yes` → true; `false`,
+ * `0`, `off` o `no` → false. Así ningún booleano nace encendido (protección 1).
+ */
+$declarado = static function (mixed $valor): ?bool {
+    return $valor === null || (is_string($valor) && trim($valor) === '') ? null : filter_var($valor, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+};
+
 return [
 
     'elevenlabs' => [
@@ -140,6 +149,17 @@ return [
     // host SIN ruta), con la que se calculan las firmas de Twilio (base + la
     // URI tal como llega, nunca fullUrl()) y las URL que llama ElevenLabs.
     'webhook_base_url' => env('VOICE_WEBHOOK_BASE_URL'),
+
+    // H8, B8-g/S8-d (salientes antes que entrantes): ¿admite ENTRANTES el número
+    // importado en ElevenLabs? Un número «Outbound Only» (un caller ID
+    // verificado en Twilio) no se puede asignar a ningún agente: con `false`
+    // publicar no lo asigna y la deriva del número no cuenta su falta de agente
+    // como deriva (un agente ajeno en él, sí). Sin declarar (vacío o ilegible)
+    // es null, que se trata como «admite» (lo de siempre): solo un `false`,
+    // `0`, `off` o `no` explícito dice «solo saliente». No enciende nada.
+    'number' => [
+        'inbound_capable' => $declarado(env('VOICE_NUMBER_INBOUND_CAPABLE')),
+    ],
 
     // H8, D8-11: entrantes. Apagadas, la iniciación responde caller_authorized = no.
     'inbound' => [

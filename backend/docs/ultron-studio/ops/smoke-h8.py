@@ -45,6 +45,15 @@ Variables: SMOKE_API · SMOKE_H6_PY (smoke-h6.py, del que se toma el detector) �
            SMOKE_EXPECT_VOICE_STATE (por defecto ELEVENLABS_VERIFIED, E1-12).
 Código: 0 todo OK · 1 algún FALLO · 3 sin fallos pero con algo OMITIDO · 2 uso incorrecto (también un JSON de
 presupuestos ausente o mal formado: no se hace ninguna petición).
+
+FASES (OPS8-c, 09-11-2026): SMOKE_PHASE = 1 (por defecto: todo lo de arriba, sin cambios) · 2a (el laboratorio hablado
+encendido, sin llamadas: la constante cerrada, entrantes, salientes y Twilio Voice apagados, la cadena sin entradas, los
+cupos de llamadas a 0; las piezas de la fase 2 y el monitor de voz, informativos) · 4a (salientes a canarios: la
+constante ABIERTA, salientes y Twilio Voice encendidos, entrantes apagadas, el monitor de voz encendido, la parte canary
+de la cadena «ok» y la rest «none», cupo de salientes ≥ 1 con presupuesto > 0 y entrantes a 0, el número, el id importado
+y la subcuenta puestos, publicar encendido). En 2a y 4a el smoke sigue SIN FILAS POSITIVAS: con su bandera encendida,
+NO llama a crear una sesión del laboratorio, ni a cerrarla o juzgarla, ni a publicar o promover (OMITIDO, con el
+motivo): esas rutas escriben o gastan. Las lecturas del laboratorio y de la cadena se comprueban con su fase.
 Cupos: 1 login (8/min por IP); lecturas con sesión ≤ 90 en cualquier minuto (cupo 120); escrituras con sesión ≤ 25 por
 minuto (cupo 30); el cubo de la evidencia (publicar, promover y la evidencia del canario comparten
 `ultron-studio-evidence`, 10/min por persona) ≤ 8 por minuto; 1 POST del laboratorio hablado por pasada (su limitador
@@ -70,6 +79,17 @@ FAKE = '00000000-0000-4000-8000-0000000008a8'
 ZEROS64 = '0' * 64
 NO_STORE = 'no-store, private'
 EXPECT_VOICE_STATE = os.environ.get('SMOKE_EXPECT_VOICE_STATE', 'ELEVENLABS_VERIFIED').strip()
+FASE = os.environ.get('SMOKE_PHASE', '1').strip() or '1'
+# Lo que tiene que decir la telefonía en cada fase. None = cualquiera (se informa). Ver la cabecera, «FASES».
+ESPERA = {
+    '1': {'calls': False, 'flags': {'inbound': False, 'outbound': False, 'twilioVoice': False, 'lab': False, 'monitor': False},
+          'cadena': 'none', 'cupos': 'cero', 'piezas': 'ninguna', 'publicar': False, 'listas_vacias': True},
+    '2a': {'calls': False, 'flags': {'inbound': False, 'outbound': False, 'twilioVoice': False, 'lab': True, 'monitor': None},
+           'cadena': 'none', 'cupos': 'cero', 'piezas': None, 'publicar': False, 'listas_vacias': False},   # la prueba O-2 de la iniciación deja una fila denied
+    '4a': {'calls': True, 'flags': {'inbound': False, 'outbound': True, 'twilioVoice': True, 'lab': None, 'monitor': True},
+           'cadena': 'canario', 'cupos': 'salientes', 'piezas': 'completas', 'publicar': True, 'listas_vacias': False},
+}
+VIVO = {'lab': False, 'publicar': False}   # lo que la API dice de verdad (lo leen las rutas del Studio para no escribir)
 VOICE_CAPS = 7   # las 7 llaves de D8-22 en `can` de la ruta 45
 # Cupos con sesión por minuto (por debajo de los del servidor) y cubos: lectura (Studio 120/min y telefonía
 # throttle:120,1), escritura (30/min y throttle:30,1) y la evidencia (10/min por persona: la comparten publicar,
@@ -359,28 +379,58 @@ def check_telephony_with_session(sm, token):
     flags = b.get('flags') if ok else None
     pub = b.get('publication') if ok else None
     lim = b.get('limits') if ok else None
+    E = ESPERA[FASE]
     if sm.check('GET admin/voice/status → 200', ok, f'HTTP {st}'):
-        sm.check('la constante de las llamadas, cerrada (VoiceCallPolicy::CALLS_ENABLED_IN_CODE = false)', b.get('callsEnabledInCode') is False, str(b.get('callsEnabledInCode')))
-        sm.check('las 5 banderas de la voz apagadas (entrantes, salientes, Twilio Voice, laboratorio, monitor)',
-                 isinstance(flags, dict) and set(flags) == {'inbound', 'outbound', 'twilioVoice', 'lab', 'monitor'} and all(v is False for v in flags.values()),
-                 json.dumps(flags))
+        VIVO['lab'] = isinstance(flags, dict) and flags.get('lab') is True
+        sm.check('la constante de las llamadas, ' + ('ABIERTA (el commit voice(calls-open) desplegado, fase 4a)' if E['calls'] else 'cerrada (VoiceCallPolicy::CALLS_ENABLED_IN_CODE = false)'),
+                 b.get('callsEnabledInCode') is E['calls'], str(b.get('callsEnabledInCode')))
+        if FASE == '1':
+            sm.check('las 5 banderas de la voz apagadas (entrantes, salientes, Twilio Voice, laboratorio, monitor)',
+                     isinstance(flags, dict) and set(flags) == {'inbound', 'outbound', 'twilioVoice', 'lab', 'monitor'} and all(v is False for v in flags.values()),
+                     json.dumps(flags))
+        else:
+            fijas = {k: v for k, v in E['flags'].items() if v is not None}
+            sm.check(f'banderas de la fase {FASE}: ' + ', '.join(f'{k} {"sí" if v else "no"}' for k, v in fijas.items()),
+                     isinstance(flags, dict) and set(flags) == {'inbound', 'outbound', 'twilioVoice', 'lab', 'monitor'} and all(flags.get(k) is v for k, v in fijas.items()),
+                     json.dumps(flags))
         sm.check('sin flags.publishing en la telefonía (E4-1: la bandera de publicar vive en el Studio)', isinstance(flags, dict) and 'publishing' not in flags)
-        sm.check('la cadena de voz sin entradas (canary y rest: none) y el freno suelto',
-                 isinstance(pub, dict) and all(isinstance(pub.get(k), dict) and pub[k].get('status') == 'none' for k in ('canary', 'rest')) and b.get('brakeOpen') is False,
-                 f'{json.dumps({k: (pub or {}).get(k, {}).get("status") for k in ("canary", "rest")})} · freno {b.get("brakeOpen")}')
-        sm.check('cupos y presupuesto a 0 (salientes al día, entrantes al día, µUS$ al día)',
-                 isinstance(lim, dict) and lim.get('outboundDailyCap') == 0 and lim.get('inboundDailyCap') == 0 and lim.get('dailyBudgetMicros') == 0,
-                 json.dumps({k: (lim or {}).get(k) for k in ('outboundDailyCap', 'inboundDailyCap', 'dailyBudgetMicros')}))
+        if E['cadena'] == 'none':
+            sm.check('la cadena de voz sin entradas (canary y rest: none) y el freno suelto',
+                     isinstance(pub, dict) and all(isinstance(pub.get(k), dict) and pub[k].get('status') == 'none' for k in ('canary', 'rest')) and b.get('brakeOpen') is False,
+                     f'{json.dumps({k: (pub or {}).get(k, {}).get("status") for k in ("canary", "rest")})} · freno {b.get("brakeOpen")}')
+        else:
+            sm.check('la cadena de voz con la parte canary vigente (ok) y la rest sin entradas (none), y el freno suelto',
+                     isinstance(pub, dict) and (pub.get('canary') or {}).get('status') == 'ok' and (pub.get('rest') or {}).get('status') == 'none' and b.get('brakeOpen') is False,
+                     f'{json.dumps({k: (pub or {}).get(k, {}).get("status") for k in ("canary", "rest")})} · freno {b.get("brakeOpen")}')
+        if E['cupos'] == 'cero':
+            sm.check('cupos y presupuesto a 0 (salientes al día, entrantes al día, µUS$ al día)',
+                     isinstance(lim, dict) and lim.get('outboundDailyCap') == 0 and lim.get('inboundDailyCap') == 0 and lim.get('dailyBudgetMicros') == 0,
+                     json.dumps({k: (lim or {}).get(k) for k in ('outboundDailyCap', 'inboundDailyCap', 'dailyBudgetMicros')}))
+        else:
+            sm.check('cupo de salientes ≥ 1 con presupuesto > 0 y entrantes a 0 (fase 4a)',
+                     isinstance(lim, dict) and isinstance(lim.get('outboundDailyCap'), int) and lim['outboundDailyCap'] >= 1 and lim.get('inboundDailyCap') == 0
+                     and isinstance(lim.get('dailyBudgetMicros'), int) and lim['dailyBudgetMicros'] > 0,
+                     json.dumps({k: (lim or {}).get(k) for k in ('outboundDailyCap', 'inboundDailyCap', 'dailyBudgetMicros')}))
         num = b.get('number') if isinstance(b.get('number'), dict) else {}
-        sm.check('sin número de voz, sin número importado y sin subcuenta de Twilio (piezas de la fase 2)',
-                 num.get('configured') is False and num.get('importedNumberIdConfigured') is False and b.get('carrierConfigured') is False,
-                 f'{json.dumps(num)} · subcuenta {b.get("carrierConfigured")}')
+        piezas = f'{json.dumps(num)} · subcuenta {b.get("carrierConfigured")}'
+        if E['piezas'] == 'ninguna':
+            sm.check('sin número de voz, sin número importado y sin subcuenta de Twilio (piezas de la fase 2)',
+                     num.get('configured') is False and num.get('importedNumberIdConfigured') is False and b.get('carrierConfigured') is False, piezas)
+        elif E['piezas'] == 'completas':
+            sm.check('el número de voz, el id importado y la subcuenta de Twilio puestos, y el número no es de WhatsApp',
+                     num.get('configured') is True and num.get('importedNumberIdConfigured') is True and b.get('carrierConfigured') is True and num.get('collidesWithMessaging') is not True, piezas)
+        else:
+            sm.info('piezas de la fase 2 (informativo en la 2a: el laboratorio no las necesita)', piezas)
         sm.info('proveedor según la telefonía', f'{b.get("provider")} (E4-6: dice UNVERIFIED hasta que B8 añada su lector de la verificación, antes de la fase 3)')
     for rel, label in [('/calls', 'llamadas'), ('/contacts', 'contactos')]:
         st, b, _ = sm.call('GET', V + rel, token=token)
         meta = b.get('meta') if isinstance(b, dict) else None
-        sm.check(f'GET admin/voice{rel} → 200, {label} vacíos', st == 200 and isinstance(b.get('data'), list) and b['data'] == [] and isinstance(meta, dict) and meta.get('total') == 0,
-                 f'HTTP {st} · total {(meta or {}).get("total")}')
+        if ESPERA[FASE]['listas_vacias'] or rel == '/contacts':
+            sm.check(f'GET admin/voice{rel} → 200, {label} vacíos', st == 200 and isinstance(b.get('data'), list) and b['data'] == [] and isinstance(meta, dict) and meta.get('total') == 0,
+                     f'HTTP {st} · total {(meta or {}).get("total")}')
+        else:
+            sm.check(f'GET admin/voice{rel} → 200 (fase {FASE}: puede haber llamadas de canarios)', st == 200 and isinstance(b.get('data'), list) and isinstance(meta, dict),
+                     f'HTTP {st} · total {(meta or {}).get("total")}')
     st, b, _ = sm.call('GET', V + f'/calls/{FAKE}', token=token)
     sm.check('GET admin/voice/calls/<inventado> → 404 call_not_found', st == 404 and code_of(b) == 'call_not_found', f'HTTP {st} {code_of(b) or ""}'.strip())
     st, b, _ = sm.call('GET', V + '/metrics', token=token)
@@ -438,9 +488,25 @@ def check_studio_without_session(sm):
     sm.check(f'las {len(STUDIO_ROUTES)} rutas nuevas del Studio sin sesión → 401 (8 GET y 13 POST)', not bad, ', '.join(bad)[:240])
 
 
+# Con su bandera encendida, estas rutas escriben o gastan: el smoke no las llama (OMITIDO con el motivo).
+ESCRIBEN_CON_LAB = {('POST', 'voice-lab/sessions'), ('POST', f'voice-lab/sessions/{FAKE}/end'), ('POST', f'voice-lab/sessions/{FAKE}/verdict')}
+ESCRIBEN_CON_PUBLICAR = {('POST', 'voice/publish'), ('POST', 'voice/promote')}
+# Con el laboratorio encendido, sus lecturas responden de verdad: la lista 200 y una sesión inventada 404.
+LAB_ENCENDIDO = {('GET', 'voice-lab/sessions'): (200, None), ('GET', f'voice-lab/sessions/{FAKE}'): (404, None)}
+
+
 def check_studio_with_session(sm, token):
     bad, vistos = [], {}
+    publicar_vivo = ESPERA[FASE]['publicar']
     for method, rel, body, want, code in STUDIO_ROUTES:
+        if VIVO['lab'] and (method, rel) in ESCRIBEN_CON_LAB:
+            sm.skip(f'{method} {S}/{rel.replace(FAKE, "<inventado>")}', 'laboratorio hablado encendido: abrir, cerrar o juzgar una sesión escribe o gasta; el smoke no lo hace')
+            continue
+        if publicar_vivo and (method, rel) in ESCRIBEN_CON_PUBLICAR:
+            sm.skip(f'{method} {S}/{rel}', 'publicar la voz encendido: publicar o promover escribe en la cadena y crea agentes; el smoke no lo hace')
+            continue
+        if VIVO['lab'] and (method, rel) in LAB_ENCENDIDO:
+            want, code = LAB_ENCENDIDO[(method, rel)]
         buckets = None
         if rel in ('voice/publish', 'voice/promote'):
             buckets = ('write', 'evidence')
@@ -450,18 +516,28 @@ def check_studio_with_session(sm, token):
         vistos[(method, rel)] = b
         if st != want or (code is not None and code_of(b) != code):
             bad.append(f'{method} {rel.replace(FAKE, "<inventado>")}={st} {code_of(b) or ""} (esperado {want}{" " + code if code else ""})')
-    sm.check(f'las {len(STUDIO_ROUTES)} rutas nuevas del Studio con sesión: lecturas 200, inventados 404, laboratorio 409 voice_lab_disabled, '
-             f'publicar y promover 409 voice_publishing_disabled, el resto 422 antes de escribir', not bad, ' · '.join(bad)[:400])
+    sm.check(f'las {len(vistos)} rutas nuevas del Studio con sesión que no escriben en la fase {FASE}: lecturas 200, inventados 404, '
+             + ('laboratorio 409 voice_lab_disabled, ' if not VIVO['lab'] else 'laboratorio encendido (lista 200, inventada 404), ')
+             + ('publicar y promover 409 voice_publishing_disabled, ' if not publicar_vivo else '')
+             + 'el resto 422 antes de escribir', not bad, ' · '.join(bad)[:400])
     perfiles = data_of(vistos.get(('GET', 'voice/profiles')))
-    sm.check('GET voice/profiles: ningún perfil de voz', isinstance(perfiles, dict) and perfiles.get('data') == [] and perfiles.get('total') == 0,
-             f'total {(perfiles or {}).get("total") if isinstance(perfiles, dict) else "?"}')
+    if FASE == '1':
+        sm.check('GET voice/profiles: ningún perfil de voz', isinstance(perfiles, dict) and perfiles.get('data') == [] and perfiles.get('total') == 0,
+                 f'total {(perfiles or {}).get("total") if isinstance(perfiles, dict) else "?"}')
+    else:
+        sm.info('GET voice/profiles (informativo desde la fase 2: el laboratorio y la publicación usan perfiles)', f'total {(perfiles or {}).get("total") if isinstance(perfiles, dict) else "?"}')
     pubs = data_of(vistos.get(('GET', 'voice/publications')))
     publishing = pubs.get('publishing') if isinstance(pubs, dict) else None
     historial = pubs.get('history') if isinstance(pubs, dict) else None
-    sm.check('GET voice/publications: publicar apagado (voice_publishing_disabled) y la cadena de voz sin entradas',
-             isinstance(publishing, dict) and publishing.get('enabled') is False and publishing.get('code') == 'voice_publishing_disabled'
-             and isinstance(historial, dict) and historial.get('total') == 0,
-             f'publicar {json.dumps({k: (publishing or {}).get(k) for k in ("enabled", "code")})} · entradas {(historial or {}).get("total") if isinstance(historial, dict) else "?"}')
+    if not publicar_vivo:
+        sm.check('GET voice/publications: publicar apagado (voice_publishing_disabled) y la cadena de voz sin entradas',
+                 isinstance(publishing, dict) and publishing.get('enabled') is False and publishing.get('code') == 'voice_publishing_disabled'
+                 and isinstance(historial, dict) and historial.get('total') == 0,
+                 f'publicar {json.dumps({k: (publishing or {}).get(k) for k in ("enabled", "code")})} · entradas {(historial or {}).get("total") if isinstance(historial, dict) else "?"}')
+    else:
+        sm.check('GET voice/publications: publicar ENCENDIDO y la cadena de voz con al menos una entrada (la del canario)',
+                 isinstance(publishing, dict) and publishing.get('enabled') is True and isinstance(historial, dict) and isinstance(historial.get('total'), int) and historial['total'] >= 1,
+                 f'publicar {json.dumps({k: (publishing or {}).get(k) for k in ("enabled", "code")})} · entradas {(historial or {}).get("total") if isinstance(historial, dict) else "?"}')
     lab = data_of(vistos.get(('GET', 'voice-lab/status')))
     sm.info('GET voice-lab/status', json.dumps({k: lab.get(k) for k in ('enabled', 'driver', 'state', 'code') if isinstance(lab, dict) and k in lab})[:160] if isinstance(lab, dict) else 'sin datos')
     st, b, _ = sm.call('GET', f'{S}/integrations/voice', token=token, label=f'{S}/integrations/voice')
@@ -471,7 +547,8 @@ def check_studio_with_session(sm, token):
         sm.check(f'ruta 45: ElevenLabs en {EXPECT_VOICE_STATE} (E1-12; lo afirma el Studio con la verificación de menos de 30 días)',
                  el.get('state') == EXPECT_VOICE_STATE, str(el.get('state')))
         pb = d.get('publishing') if isinstance(d.get('publishing'), dict) else {}
-        sm.check('ruta 45: publicar la voz apagado (publishing.enabled false, E4-1)', pb.get('enabled') is False, json.dumps({k: pb.get(k) for k in ('available', 'enabled', 'code')}))
+        sm.check('ruta 45: publicar la voz ' + ('encendido (publishing.enabled true, fase 4a)' if ESPERA[FASE]['publicar'] else 'apagado (publishing.enabled false, E4-1)'),
+                 pb.get('enabled') is ESPERA[FASE]['publicar'], json.dumps({k: pb.get(k) for k in ('available', 'enabled', 'code')}))
         can = d.get('can') if isinstance(d.get('can'), dict) else {}
         sm.check(f'ruta 45: «can» con las {VOICE_CAPS} llaves de D8-22, todas true para el Super Admin', len(can) == VOICE_CAPS and all(v is True for v in can.values()),
                  ', '.join(f'{k}={v}' for k, v in sorted(can.items()))[:200])
@@ -585,6 +662,9 @@ def main(argv):
     if not re.fullmatch(r'ELEVENLABS_[A-Z_]{3,20}', EXPECT_VOICE_STATE):
         print('SMOKE_EXPECT_VOICE_STATE no es un estado de ElevenLabs')
         return 2
+    if FASE not in ESPERA:
+        print('SMOKE_PHASE = 1 | 2a | 4a')
+        return 2
     try:
         h6 = load_h6()
     except (OSError, ImportError, SyntaxError) as e:
@@ -598,7 +678,7 @@ def main(argv):
         print(f'no se pudieron cargar los presupuestos de {origen} ({detalle}): SMOKE_BUDGETS=…')
         return 2
     sm = Smoke(h6, canary, bytes.fromhex(salt_hex) if salt_hex else b'', h6.parse_digests(digests_raw))
-    print(f'== Smoke del Hito 8 (fase 1) · {part} · {API}', flush=True)
+    print(f'== Smoke del Hito 8 (fase {FASE}) · {part} · {API}', flush=True)
     # El login PRIMERO: las rutas del CRM de la telefonía usan `throttle:120,1` y `throttle:30,1` y exigen la sesión
     # en el controlador, así que cada petición ANÓNIMA suma en el cubo por IP que Laravel comparte con el login del
     # CRM (`throttle:8,1`). Medido en el banco (OPS8-b): 13 anónimas antes del login → el login da 429.

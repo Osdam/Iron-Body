@@ -22,6 +22,11 @@ use Tests\Unit\Voice\Support\FreshHttpFake;
  *    host oficial en `production`.
  *  - Del cuerpo solo sale el agente asignado: ni el teléfono ni la etiqueta.
  *  - Cada fallo es un resultado (nunca lanza por la red).
+ *  - B8-g, con la referencia oficial (09-11-2026): `assigned_agent` es
+ *    OPCIONAL (su ausencia es «sin asignar», como el null) y
+ *    `supports_inbound` (obsoleto, por defecto true) da `inboundCapable`: un
+ *    número «Outbound Only» (caller ID verificado en Twilio) no admite
+ *    entrantes ni agente.
  */
 class ElevenLabsNumberObserverTest extends TestCase
 {
@@ -75,9 +80,11 @@ class ElevenLabsNumberObserverTest extends TestCase
         Http::assertSentCount(1);
         [$peticion] = Http::recorded()[0];
         $this->assertSame(['GET', 'https://api.elevenlabs.io/v1/convai/phone-numbers/phnum_0001', [self::CLAVE]], [$peticion->method(), $peticion->url(), $peticion->header('xi-api-key')]);
-        $volcado = (string) json_encode($r->toArray()).var_export($r, true);
+        // SEC8-c B-1: el número con el que llama sale SOLO en memoria, para compararlo; ningún volcado lo enseña.
+        $this->assertSame('+576010000009', $r->phoneNumber());
+        $volcado = (string) json_encode($r->toArray()).json_encode($r).var_export($r, true).print_r($r, true);
         foreach (['+576010000009', '6010000009', 'Recepción', 'Ultron voz', self::CLAVE] as $s) {
-            $this->assertStringNotContainsString($s, $volcado, 'del cuerpo solo sale el agente');
+            $this->assertStringNotContainsString($s, $volcado, 'del cuerpo solo salen el agente y, en memoria, el número');
         }
     }
 
@@ -92,7 +99,11 @@ class ElevenLabsNumberObserverTest extends TestCase
             $r = $d->describeNumber('phnum_0001');
             $this->assertSame([$resultado, 'unknown', $http], [$r->outcome, $r->state(), $r->httpStatus], "HTTP {$http}");
         }
-        foreach ([['no es json', 200], [['phone_number_id' => 'phnum_0001'], 200], [['assigned_agent' => ['agent_id' => '../x']], 200], [['assigned_agent' => 'agent_1'], 200]] as [$cuerpo, $http]) {
+        // Sin `assigned_agent` (opcional en la referencia oficial): sin asignar, no ilegible (B8-g).
+        self::freshFake(['*' => Http::response(['phone_number_id' => 'phnum_0001'], 200)]);
+        $this->assertSame(['observed', 'unassigned', null, null], [($r = $d->describeNumber('phnum_0001'))->outcome, $r->state(), $r->agentId, $r->inboundCapable]);
+
+        foreach ([['no es json', 200], [['assigned_agent' => ['agent_id' => '../x']], 200], [['assigned_agent' => 'agent_1'], 200], [['assigned_agent' => []], 200]] as [$cuerpo, $http]) {
             self::freshFake(['*' => Http::response($cuerpo, $http)]);
             $this->assertSame(['error', 'invalid_response'], [$d->describeNumber('phnum_0001')->outcome, $d->describeNumber('phnum_0001')->reason], (string) json_encode($cuerpo));
         }
@@ -102,6 +113,41 @@ class ElevenLabsNumberObserverTest extends TestCase
         self::freshFake();
         $this->assertSame(['error', 'invalid_request'], [$d->describeNumber('../x')->outcome, $d->describeNumber('../x')->reason]);
         Http::assertNothingSent();
+    }
+
+    /**
+     * B8-g: el número «Outbound Only» tal como lo describe la referencia
+     * oficial de ElevenLabs (un caller ID verificado en Twilio: «Cannot
+     * receive calls or be assigned to agents»): sin agente y con
+     * `supports_inbound: false`. `supports_inbound` solo cuenta como booleano.
+     */
+    public function test_un_numero_solo_saliente_se_lee_sin_agente_y_sin_entrantes(): void
+    {
+        $d = new ElevenLabsAgentDeployer;
+        $solo = ['provider' => 'twilio', 'label' => 'Iron Body salientes', 'phone_number' => '+576010000009', 'phone_number_id' => 'phnum_0001',
+            'supports_inbound' => false, 'supports_outbound' => true];
+        foreach ([$solo, $solo + ['assigned_agent' => null]] as $cuerpo) {
+            self::freshFake(['*' => Http::response($cuerpo, 200)]);
+            $r = $d->describeNumber('phnum_0001');
+            $this->assertSame(['observed', 'unassigned', null, false], [$r->outcome, $r->state(), $r->agentId, $r->inboundCapable], (string) json_encode(array_keys($cuerpo)));
+            $this->assertFalse($r->toArray()['inboundCapable']);
+            $this->assertStringNotContainsString('6010000009', (string) json_encode($r->toArray()), 'del cuerpo no sale el teléfono');
+        }
+
+        // `phone_number` sin un E.164 estricto: no se toma (no se compara).
+        foreach (['6010000009', '+57 601 000 0009', 12345678, null] as $raro) {
+            self::freshFake(['*' => Http::response(['phone_number_id' => 'phnum_0001', 'phone_number' => $raro], 200)]);
+            $this->assertSame(['observed', null], [($r = $d->describeNumber('phnum_0001'))->outcome, $r->phoneNumber()], (string) json_encode($raro));
+        }
+
+        // Comprado (admite entrantes) y asignado; y sin el campo (obsoleto): no se sabe.
+        self::freshFake(['*' => Http::response(['phone_number_id' => 'phnum_0001', 'supports_inbound' => true, 'assigned_agent' => ['agent_id' => 'agent_canary_0003', 'agent_name' => 'x']], 200)]);
+        $this->assertSame([true, 'agent_canary_0003'], [($r = $d->describeNumber('phnum_0001'))->inboundCapable, $r->agentId]);
+        foreach ([[], ['supports_inbound' => 'false'], ['supports_inbound' => 0], ['supports_inbound' => null]] as $extra) {
+            self::freshFake(['*' => Http::response(['phone_number_id' => 'phnum_0001', 'assigned_agent' => null] + $extra, 200)]);
+            $this->assertNull($d->describeNumber('phnum_0001')->inboundCapable, 'solo un booleano dice si admite entrantes: '.json_encode($extra));
+        }
+        Http::assertSentCount(1);
     }
 
     public function test_el_dto_no_admite_formas_imposibles(): void
@@ -114,6 +160,13 @@ class ElevenLabsNumberObserverTest extends TestCase
             ['not_configured', 'phnum_1', null, null, null],
             ['observed', 'phnum_1', '../x', 200, null],
             ['error', 'phnum_1', null, 700, null],
+            // B8-g: solo un número observado dice si admite entrantes.
+            ['error', 'phnum_1', null, 500, null, false],
+            ['not_configured', null, null, null, null, true],
+            // SEC8-c B-1: solo un número observado lleva su E.164, y estricto.
+            ['error', 'phnum_1', null, 500, null, null, '+576010000009'],
+            ['observed', 'phnum_1', null, 200, null, null, '6010000009'],
+            ['observed', 'phnum_1', null, 200, null, null, '+57 601 000 0009'],
         ] as $args) {
             try {
                 new VoiceNumberAssignment(...$args);

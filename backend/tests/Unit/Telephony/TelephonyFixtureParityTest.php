@@ -118,6 +118,8 @@ class TelephonyFixtureParityTest extends TestCase
             'placedToday' => $f['quotas']['placedToday'],
             'budgetFits' => $f['quotas']['budgetFits'],
             'duplicate' => $f['request']['clientRequestIdSeenForSamePerson'],
+            // B8-g: el mundo del fixture tiene el número que llama vigilado (una conciliación reciente que cuadra).
+            'numberCheck' => OutboundPolicy::NUMBER_VERIFIED,
         ];
     }
 
@@ -340,12 +342,13 @@ class TelephonyFixtureParityTest extends TestCase
             ['index' => 4, 'text' => 'El plan cuesta $ 80.000, te lo dejo en promoción, entra a x.co', 'tools' => [], 'transfers' => [], 'planResults' => []],
         ];
         $this->assertSame([['turn' => 4, 'code' => 'machine_reply_invented_discount']], VoiceTranscriptGuard::inspect($turnos, null));
-        // Sin la llamada a la herramienta, la cifra es la violación.
+        // Sin la llamada a la herramienta, la cifra es la violación. B8-g (SEC8-c M-1): el motor se para en la cifra y el
+        // léxico de la voz añade el descuento del mismo turno («te lo dejo en promoción»), que es de otra familia.
         $turnos[1]['planResults'] = [];
-        $this->assertSame([['turn' => 4, 'code' => 'voice_money_not_from_tool']], VoiceTranscriptGuard::inspect($turnos, null));
+        $this->assertSame([['turn' => 4, 'code' => 'voice_money_not_from_tool'], ['turn' => 4, 'code' => 'voice_discount_extra']], VoiceTranscriptGuard::inspect($turnos, null));
         // Con P-3 = nunca, tampoco vale la de la herramienta.
         $turnos[1]['planResults'] = ['{"planes":[{"nombre":"Mensual","precio":"$ 80.000"}]}'];
-        $this->assertSame([['turn' => 4, 'code' => 'voice_money_not_from_tool']], VoiceTranscriptGuard::inspect($turnos, null, pricesFromToolAllowed: false));
+        $this->assertSame([['turn' => 4, 'code' => 'voice_money_not_from_tool'], ['turn' => 4, 'code' => 'voice_discount_extra']], VoiceTranscriptGuard::inspect($turnos, null, pricesFromToolAllowed: false));
     }
 
     public function test_una_transferencia_a_un_destino_aprobado_no_es_violacion(): void

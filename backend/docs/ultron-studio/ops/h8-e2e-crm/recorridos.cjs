@@ -47,7 +47,19 @@ const SIN_LEYENDO = (sel) => `return !!document.querySelector(${JSON.stringify(s
       // Los teléfonos solo viajan en el formulario que los pide (alta de un contacto) y solo en esa petición.
       excepcionesEnvio: (m, p) => (m === 'POST' && p === '/api/admin/voice/contacts' ? ['teléfono …0071', 'teléfono …0071 (sin +)', 'teléfono …0071 (nacional)'] : []),
       // La URL firmada viaja, por diseño, en la respuesta de abrir la sesión del laboratorio (y con ella el id del agente).
-      excepcionesCuerpo: (m, p) => (m === 'POST' && p === '/api/admin/ultron-studio/voice-lab/sessions' ? ['URL firmada (conversation_signature)', 'agente de laboratorio (id completo)'] : []),
+      // El id del agente viaja ENTERO, por diseño, en el SessionDto del laboratorio (LAB8 §2.4) y en la telefonía (el
+      // agente sellado de cada llamada y el de la parte vigente: `GET admin/voice/status`, `calls`, `calls/{uuid}`); el
+      // CRM lo enmascara al leer (D-F13). El Studio (`voice/publications`) ya lo manda enmascarado: observación O-3 del
+      // informe §TEST8-c. Se admite solo en esas respuestas y se sigue exigiendo que no llegue nunca al DOM.
+      excepcionesCuerpo: (m, p) => {
+        const lab = ['agente de laboratorio (id completo)', 'agente de laboratorio 1 (id completo)'];
+        if (m === 'POST' && p === '/api/admin/ultron-studio/voice-lab/sessions') return ['URL firmada (su firma)', ...lab];
+        if (p.startsWith('/api/admin/ultron-studio/voice-lab/sessions')) return lab;
+        // La fila de una llamada (`VoiceCallsQuery::row`) es la misma en la lista, el detalle y la respuesta de pedirla
+        // (202 de la puerta o 200 de la repetición, alcanzables desde E4-6).
+        if ((m === 'GET' && (p === '/api/admin/voice/status' || p.startsWith('/api/admin/voice/calls'))) || (m === 'POST' && p === '/api/admin/voice/calls')) return ['agente publicado (id completo)'];
+        return [];
+      },
       ...opciones,
     });
     todas.push(s);
@@ -72,6 +84,19 @@ const SIN_LEYENDO = (sel) => `return !!document.querySelector(${JSON.stringify(s
     await L.dormir(300);
   };
   const enviarDialogo = (s, sel) => L.clic(s, `[role=dialog][aria-modal=true] ${sel}`);
+  // El horario legal de las salientes (D8-15: lunes a viernes 07–19, sábados 08–15, Bogotá, sin domingos ni festivos), con
+  // los festivos del fixture de TEST8-a: un oráculo INDEPENDIENTE del código (el mismo que `calendarioLegal()` del backend).
+  const calendarioLegal = (ahora) => {
+    const b = new Date(ahora.getTime() - 5 * 3600 * 1000); // Colombia no cambia de hora
+    const fx = JSON.parse(fs.readFileSync(path.join(ctx.h.backend, 'tests/fixtures/voice/holidays-co-2026-2028.json'), 'utf8'));
+    const dia = b.toISOString().slice(0, 10);
+    const festivo = (fx.years?.[dia.slice(0, 4)] || []).some((x) => x.date === dia);
+    const sem = b.getUTCDay(); // 0 domingo … 6 sábado
+    const seg = b.getUTCHours() * 3600 + b.getUTCMinutes() * 60 + b.getUTCSeconds();
+    const dentro = (sem >= 1 && sem <= 5 && seg >= 7 * 3600 && seg < 19 * 3600) || (sem === 6 && seg >= 8 * 3600 && seg < 15 * 3600);
+    const motivos = [...(dentro ? [] : ['outside_hours']), ...(festivo ? ['holiday'] : [])];
+    return { fuera: motivos.length > 0, motivos };
+  };
 
   try {
     // ── 0. Precondiciones de hitos anteriores (API) ──────────────────────────────────────────────────────────────
@@ -212,69 +237,134 @@ const SIN_LEYENDO = (sel) => `return !!document.querySelector(${JSON.stringify(s
       await L.captura(b, ctx, 'perfil-previa-1440');
     });
 
-    // ── 4. Laboratorio: Ana abre (micrófono falso), el emisor del simulador cierra, Ana cuenta, Beto juzga ────────
+    // ── 4. Laboratorio: Ana abre (micrófono falso con permiso), el emisor del simulador cierra, Beto juzga ────────
+    //
+    // El simulador firma URLs `ws://127.0.0.1:<puerto>` (el banco no tiene TLS) y el lector del CRM solo acepta
+    // `wss://` (`studio-voice-parse.ts:1110`): con la URL tal cual, el CRM NO se conecta (lo comprueba la sesión 1, que
+    // Ana cierra contando lo que pasó). Para ejercer la conexión (sesión 2), el navegador reescribe el esquema de la
+    // respuesta 201 a `wss://` (CDP Fetch, como la costura de `spec_changed`): el cliente oficial abre el WebSocket
+    // con la URL firmada del simulador, que falla el TLS (el simulador no modela el WebSocket, igual que en el E2E del
+    // backend) y la sesión la cierra la post-llamada web del emisor del simulador.
     await paso('laboratorio', async () => {
       const [v, p, spec] = [requiere('version'), requiere('perfil'), requiere('spec')];
       const a = S.a;
+      const sesionesSql = "SELECT s.uuid, s.status, s.end_reason, a.provider AS mode, a.provider_agent_id, a.spec_hash FROM ultron_studio_voice_lab_sessions s JOIN ultron_studio_voice_agents a ON a.id = s.agent_id ORDER BY s.id";
       inf.must('Ana: pestaña Laboratorio', await L.pestana(a, ctx, 'laboratorio', SIN_LEYENDO('[data-laboratorio-estado]')));
       inf.check('laboratorio disponible, en modo elevenlabs (el adaptador real contra el simulador)', (await atr(a, '[data-laboratorio-estado]', 'data-disponible')) === 'si'
         && (await atr(a, '[data-laboratorio-estado]', 'data-modo')) === 'elevenlabs', [await atr(a, '[data-laboratorio-estado]', 'data-disponible'), await atr(a, '[data-laboratorio-estado]', 'data-modo')]);
       inf.check('antes de abrir se ven la reserva de esta sesión, lo que queda hoy y el cupo', !!(await L.texto(a, '[data-laboratorio-reserva]')) && !!(await L.texto(a, '[data-laboratorio-queda]')) && !!(await L.texto(a, '[data-laboratorio-cupo]')),
         [await L.texto(a, '[data-laboratorio-reserva]'), await L.texto(a, '[data-laboratorio-cupo]')]);
+
+      // Sesión 1: la URL del simulador tal cual (ws://).
       await L.elegir(a, '[data-laboratorio-version]', v);
       await L.elegir(a, '[data-laboratorio-perfil]', p);
-      const n0 = L.valor(ctx, 'SELECT count(*) FROM ultron_studio_voice_lab_sessions');
-      const red0 = a.red.length;
-      inf.must('«Abrir la sesión»', await L.clic(a, '[data-laboratorio-abrir-enviar]'));
+      const n0 = L.sql(ctx, sesionesSql).length;
+      const red1 = a.red.length;
+      inf.must('«Abrir la sesión» (sesión 1)', await L.clic(a, '[data-laboratorio-abrir-enviar]'));
+      const err1 = await L.esperar(a, `const e = document.querySelector('[data-laboratorio-error-abrir]'); return e ? e.textContent.trim() : (document.querySelector('[data-laboratorio-vivo]') ? 'VIVA' : null);`, L.T(30000));
+      const s1 = L.sql(ctx, sesionesSql).slice(n0)[0];
+      inf.must('SQL: el servidor abrió la sesión 1 (open, elevenlabs, la huella previsualizada)', !!s1 && s1.status === 'open' && s1.mode === 'elevenlabs' && s1.spec_hash === spec, s1 && { status: s1.status, mode: s1.mode });
+      inf.prohib['agente de laboratorio 1 (id completo)'] = s1.provider_agent_id;
+      const ws1 = a.red.slice(red1).filter((r) => r.kind === 'websocket');
+      inf.check('sesión 1: el CRM NO se conecta a una URL firmada sin TLS (ws:// del simulador): lo dice y no abre ningún WebSocket', !!err1 && err1 !== 'VIVA' && /forma esperada/.test(err1) && ws1.length === 0,
+        { error: err1, websockets: ws1.length });
+      await L.captura(a, ctx, 'laboratorio-sesion1-sin-tls-1440');
+      // Ana cuenta lo que pasó (la sesión abierta sí se lee): la cierra `tester_ended` con lo observado.
+      inf.must('Ana: «Contar lo que pasó» en la sesión 1', await L.pestana(a, ctx, 'laboratorio', SIN_LEYENDO(`li[data-sesion="${s1.uuid}"] [data-sesion-terminar]`))
+        && await L.clic(a, `li[data-sesion="${s1.uuid}"] [data-sesion-terminar]`));
+      inf.must('el formulario de lo observado se abre', !!(await L.esperar(a, SIN_LEYENDO('[data-laboratorio-contar] [data-observacion^="objectives:"]'))));
+      const marcas = await L.leer(a, `return [...document.querySelectorAll('[data-laboratorio-contar] [data-observacion^="objectives:"]')].slice(0, 2).map((e) => e.getAttribute('data-observacion'));`);
+      for (const m of marcas) await a.page.click(`[data-laboratorio-contar] [data-observacion="${m}"]`);
+      inf.must('Ana guarda lo observado', await L.clic(a, '[data-laboratorio-contar-enviar]'));
+      inf.check('… la sesión 1 enseña lo observado', !!(await L.esperar(a, SIN_LEYENDO(`li[data-sesion="${s1.uuid}"] [data-sesion-observado]`))), marcas);
+      const f1 = L.sql(ctx, 'SELECT status, end_reason FROM ultron_studio_voice_lab_sessions WHERE uuid = $1', [s1.uuid])[0];
+      inf.check('SQL: la sesión 1 queda ended por tester_ended', f1?.status === 'ended' && f1.end_reason === 'tester_ended', f1);
+      inf.check('Ana no tiene «Aprobar» en su propia sesión (cuatro ojos)', !(await existe(a, `li[data-sesion="${s1.uuid}"] [data-sesion-aprobar]`)), await L.texto(a, `li[data-sesion="${s1.uuid}"]`));
+
+      // Sesión 2: la misma URL firmada con el esquema `wss://` (costura del navegador sobre la respuesta 201).
+      inf.must('Ana: pestaña Laboratorio (sesión 2)', await L.pestana(a, ctx, 'laboratorio', SIN_LEYENDO('[data-laboratorio-abrir-enviar]')));
+      await L.elegir(a, '[data-laboratorio-version]', v);
+      await L.elegir(a, '[data-laboratorio-perfil]', p);
+      let reescritas = 0;
+      await a.cdp.send('Fetch.enable', { patterns: [{ urlPattern: '*/api/admin/ultron-studio/voice-lab/sessions', requestStage: 'Response' }] });
+      const sigue = async (id) => { try { await a.cdp.send('Fetch.continueResponse', { requestId: id }); } catch { try { await a.cdp.send('Fetch.continueRequest', { requestId: id }); } catch { /* resuelta */ } } };
+      const reescribe = async (e) => {
+        if (e.request.method !== 'POST' || e.responseStatusCode !== 201) return sigue(e.requestId);
+        try {
+          const b = await a.cdp.send('Fetch.getResponseBody', { requestId: e.requestId });
+          const j = JSON.parse(b.base64Encoded ? Buffer.from(b.body, 'base64').toString('utf8') : b.body);
+          const u = j?.data?.connection?.signedUrl;
+          if (typeof u === 'string' && u.startsWith('ws://')) { j.data.connection.signedUrl = `wss://${u.slice(5)}`; reescritas++; }
+          await a.cdp.send('Fetch.fulfillRequest', { requestId: e.requestId, responseCode: 201, responseHeaders: e.responseHeaders, body: Buffer.from(JSON.stringify(j)).toString('base64') });
+        } catch { await sigue(e.requestId); }
+      };
+      a.cdp.on('Fetch.requestPaused', reescribe);
+      const red2 = a.red.length;
+      const n1 = L.sql(ctx, sesionesSql).length;
+      inf.must('«Abrir la sesión» (sesión 2)', await L.clic(a, '[data-laboratorio-abrir-enviar]'));
       const viva = await L.esperar(a, `return document.querySelector('[data-laboratorio-vivo]')?.getAttribute('data-estado') || (document.querySelector('[data-laboratorio-error-abrir]') ? 'error:' + document.querySelector('[data-laboratorio-error-abrir]').textContent.trim() : null);`, L.T(30000));
-      inf.check('la sesión se abre en el CRM (franja en vivo)', !!viva && !String(viva).startsWith('error:'), viva);
       await L.dormir(3000);
-      const ses = L.sql(ctx, "SELECT s.uuid, s.status, a.provider AS mode, a.provider_agent_id, a.spec_hash FROM ultron_studio_voice_lab_sessions s JOIN ultron_studio_voice_agents a ON a.id = s.agent_id ORDER BY s.id DESC LIMIT 1")[0];
-      inf.must('SQL: una sesión nueva del laboratorio (abierta, elevenlabs)', L.valor(ctx, 'SELECT count(*) FROM ultron_studio_voice_lab_sessions') === n0 + 1 && ses?.mode === 'elevenlabs', ses && { status: ses.status, mode: ses.mode });
-      inf.prohib['agente de laboratorio (id completo)'] = ses.provider_agent_id;
-      E.labSesion = ses.uuid;
-      inf.check('el agente del laboratorio lleva la MISMA huella que se previsualizó', ses.spec_hash === spec, [String(ses.spec_hash).slice(0, 12), String(spec).slice(0, 12)]);
-      const nuevas = a.red.slice(red0);
+      a.cdp.off('Fetch.requestPaused', reescribe);
+      await a.cdp.send('Fetch.disable');
+      const abierta = !!viva && !String(viva).startsWith('error:');
+      inf.check('sesión 2: el CRM abre la conversación (franja en vivo) con la URL firmada en wss://', abierta && reescritas === 1, abierta ? { estado: await atr(a, '[data-laboratorio-vivo]', 'data-estado'), reescritas } : {
+        viva, reescritas, boton: await L.texto(a, '[data-laboratorio-abrir-enviar]'), errores: a.errores.slice(-3),
+        consola: a.consola.slice(-6).map((m) => `${m.type}: ${m.text.slice(0, 160)}`), chrome: (a.log || []).slice(-6).map((e) => `${e.source}/${e.level}: ${e.text.slice(0, 160)}`),
+      });
+      if (!abierta) await L.captura(a, ctx, 'laboratorio-no-abre-1440');
+      const s2 = L.sql(ctx, sesionesSql).slice(n1)[0];
+      inf.must('SQL: una sesión 2 del laboratorio (abierta, elevenlabs, la MISMA huella previsualizada)', !!s2 && s2.status === 'open' && s2.mode === 'elevenlabs' && s2.spec_hash === spec, s2 && { status: s2.status, mode: s2.mode });
+      inf.prohib['agente de laboratorio (id completo)'] = s2.provider_agent_id;
+      E.labSesion = s2.uuid;
+      const nuevas = a.red.slice(red2);
       const post = nuevas.filter((r) => r.method === 'POST' && r.path === '/api/admin/ultron-studio/voice-lab/sessions');
       const ws = nuevas.filter((r) => r.kind === 'websocket');
       inf.check('una sola petición de abrir (POST voice-lab/sessions)', post.length === 1, post.length);
-      inf.check('el cliente abre el WebSocket con la URL firmada del SIMULADOR (127.0.0.1, agent_id y conversation_signature)', ws.length >= 1 && ws.every((w) => w.host === `127.0.0.1:${ctx.h.ports.elevenlabs}`)
+      inf.check('el cliente oficial abre el WebSocket con la URL firmada del SIMULADOR (wss://127.0.0.1, agent_id y conversation_signature)', ws.length >= 1 && ws.every((w) => w.scheme === 'wss' && w.host === `127.0.0.1:${ctx.h.ports.elevenlabs}`)
         && /^\/v1\/convai\/conversation\?(.*&)?agent_id=…&conversation_signature=…/.test(ws[0].path), ws.map((w) => `${w.scheme}://${w.host}${w.path}`));
-      inf.check('SQL: la URL firmada no se guarda en la sesión', L.valor(ctx, "SELECT count(*) FROM ultron_studio_voice_lab_sessions WHERE row_to_json(ultron_studio_voice_lab_sessions)::text LIKE '%conversation_signature%'") === 0, null);
+      inf.check('el WebSocket falla (el simulador no habla TLS ni modela la conversación) y el CRM lo enseña sin reintentar', (await L.esperar(a, `return document.querySelector('[data-laboratorio-vivo]')?.getAttribute('data-estado') === 'failed';`, L.T(20000))) === true
+        && a.red.slice(red2).filter((r) => r.method === 'POST' && r.path === '/api/admin/ultron-studio/voice-lab/sessions').length === 1, await L.texto(a, '[data-laboratorio-conexion]'));
+      inf.check('SQL: la URL firmada no se guarda en ninguna sesión', L.valor(ctx, "SELECT count(*) FROM ultron_studio_voice_lab_sessions WHERE row_to_json(ultron_studio_voice_lab_sessions)::text LIKE '%conversation_signature%'") === 0, null);
       const bar = await L.barrerPagina(a, inf);
       inf.check('laboratorio abierto: ni la URL firmada ni el id completo del agente en el DOM, el almacenamiento ni la URL del navegador', bar.dom.length === 0 && bar.almacenamiento.length === 0 && bar.url.length === 0, bar);
       inf.check('laboratorio abierto: la consola de la PÁGINA no lleva la URL firmada', !(bar.consolaPorFuente.javascript || []).length && !(bar.consolaPorFuente['console-api'] || []).length, bar.consolaPorFuente);
       E.consolaChromeLab = bar.consolaPorFuente;
-      await L.captura(a, ctx, 'laboratorio-sesion-viva-1440');
+      await L.captura(a, ctx, 'laboratorio-sesion2-1440');
+
       // El emisor del simulador: la post-llamada web firmada de la conversación que registró la URL firmada.
-      const pc = await L.sim(ctx, 'elevenlabs', 'emit/post-call', { web: '1', agent_id: ses.provider_agent_id });
+      const pc = await L.sim(ctx, 'elevenlabs', 'emit/post-call', { web: '1', agent_id: s2.provider_agent_id });
       inf.check('emisor del simulador: post-llamada web → 200', (pc.deliveries?.[0]?.status ?? pc.laravel?.status) === 200, { http: pc._http, d: pc.deliveries?.[0]?.status });
-      const cerrada = await (async () => { for (let i = 0; i < 50; i++) { const st = L.valor(ctx, 'SELECT status FROM ultron_studio_voice_lab_sessions WHERE uuid = $1', [ses.uuid]); if (st !== 'open') return st; await L.dormir(200); } return 'open'; })();
-      inf.check('SQL: la sesión se cierra por el informe del proveedor', cerrada !== 'open', cerrada);
+      const cerrada = await (async () => { for (let i = 0; i < 50; i++) { const st = L.sql(ctx, 'SELECT status, end_reason FROM ultron_studio_voice_lab_sessions WHERE uuid = $1', [s2.uuid])[0]; if (st.status !== 'open') return st; await L.dormir(200); } return { status: 'open' }; })();
+      inf.check('SQL: la sesión 2 se cierra por el informe del proveedor (provider_report)', cerrada.status === 'ended' && cerrada.end_reason === 'provider_report', cerrada);
       inf.check('el informe del laboratorio no abre el freno ni deja unknown_provider_call', L.valor(ctx, "SELECT count(*) FROM voice_brakes WHERE kind = 'open'") === 0
         && L.valor(ctx, "SELECT count(*) FROM voice_call_events WHERE kind = 'unknown_provider_call'") === 0, null);
-      await L.pestana(a, ctx, 'laboratorio', SIN_LEYENDO(`[data-sesion="${ses.uuid}"]`));
-      const est = await atr(a, `[data-sesion="${ses.uuid}"]`, 'data-estado');
-      inf.check('el CRM enseña la sesión cerrada', est === cerrada, est);
-      inf.must('Ana: «Contar lo que viste»', await L.clic(a, `[data-sesion="${ses.uuid}"] [data-sesion-terminar]`));
-      await L.esperar(a, SIN_LEYENDO('[data-laboratorio-contar]'));
-      const marcas = await L.leer(a, `return [...document.querySelectorAll('[data-laboratorio-contar] [data-observacion^="objectives:"]')].slice(0, 2).map((e) => e.getAttribute('data-observacion'));`);
-      for (const m of marcas) await a.page.click(`[data-observacion="${m}"]`);
-      inf.must('Ana guarda lo que vio', await L.clic(a, '[data-laboratorio-contar-enviar]'));
-      inf.check('… y la sesión enseña lo observado', !!(await L.esperar(a, SIN_LEYENDO(`[data-sesion="${ses.uuid}"] [data-sesion-observado]`))), marcas);
-      inf.check('Ana no tiene «Aprobar» en su propia sesión', !(await existe(a, `[data-sesion="${ses.uuid}"] [data-sesion-aprobar]`)), await L.texto(a, `[data-sesion="${ses.uuid}"] [data-motivo-accion="verdict"]`));
+      // Lo que ve su DUEÑA: el servidor le ofrece contar lo que pasó (LAB8: `end` cabe en una sesión terminada sin
+      // veredicto ni lo observado); el lector del CRM lo tiene por incoherente (`studio-voice-parse.ts:1035`).
+      await L.pestana(a, ctx, 'laboratorio', `return !!document.querySelector('li[data-sesion="${s2.uuid}"]') || /ilegible/.test(document.querySelector('#vt-panel-laboratorio')?.textContent || '');`);
+      const apiA = await L.api(ctx, 'a', 'GET', 'admin/ultron-studio/voice-lab/sessions?page=1&per_page=20');
+      const dtoA = (apiA.json?.data?.data || []).find((x) => x.uuid === s2.uuid);
+      inf.check('Ana (su dueña) ve en el CRM la sesión 2 cerrada por el proveedor', (await atr(a, `li[data-sesion="${s2.uuid}"]`, 'data-estado')) === 'ended', {
+        crm: await L.leer(a, `return [...document.querySelectorAll('#vt-panel-laboratorio .lab-alert, #vt-panel-laboratorio [role=alert]')].map((e) => e.textContent.trim()).slice(0, 3);`),
+        servidor: dtoA && { status: dtoA.status, endReason: dtoA.endReason, actionsEnd: dtoA.actions?.end, reported: dtoA.metrics?.reported, verdict: dtoA.verdict },
+      });
+      await L.captura(a, ctx, 'laboratorio-sesion2-cerrada-ana-1440');
+
+      // El veredicto, de OTRA identidad (Beto), sobre la huella ENTERA que se ve.
       const b = S.b;
-      inf.must('Beto: pestaña Laboratorio', await L.pestana(b, ctx, 'laboratorio', SIN_LEYENDO(`[data-sesion="${ses.uuid}"] [data-sesion-aprobar]`)));
-      await b.page.click(`[data-sesion="${ses.uuid}"] [data-sesion-aprobar]`);
+      inf.must('Beto: pestaña Laboratorio', await L.pestana(b, ctx, 'laboratorio', SIN_LEYENDO(`li[data-sesion="${s2.uuid}"] [data-sesion-aprobar]`)));
+      inf.check('Beto ve la sesión 2 cerrada por el proveedor, con su duración (64 s) y su coste', (await atr(b, `li[data-sesion="${s2.uuid}"]`, 'data-estado')) === 'ended'
+        && /1 min 0?4 s|64 s|1:04/.test(String(await L.texto(b, `li[data-sesion="${s2.uuid}"] [data-sesion-cuentas]`))), await L.texto(b, `li[data-sesion="${s2.uuid}"] [data-sesion-cuentas]`));
+      await b.page.click(`li[data-sesion="${s2.uuid}"] [data-sesion-aprobar]`);
       inf.must('el diálogo del veredicto se abre', await L.esperar(b, hayDialogo('[data-sesion-aprobar-dialogo]')));
       const huella = await L.texto(b, '[data-veredicto-huella] .vl-huella');
       inf.check('el veredicto enseña la huella ENTERA que se juzga, la del perfil previsualizado', huella === spec, String(huella).slice(0, 16));
       const fv = await L.focoAtrapado(b, 20, 6);
       inf.check('diálogo del veredicto: el foco no sale', fv.ok, fv);
-      inf.must('Beto aprueba la sesión', await enviarDialogo(b, '[data-sesion-aprobar-enviar]'));
-      inf.check('… y la sesión enseña el veredicto aprobado', !!(await L.esperar(b, SIN_LEYENDO(`[data-sesion="${ses.uuid}"] [data-sesion-veredicto][data-valor="approved"]`))), null);
-      const vr = L.sql(ctx, 'SELECT s.verdict AS decision, s.verdict_by_admin_id AS reviewer_admin_id, a.spec_hash FROM ultron_studio_voice_lab_sessions s JOIN ultron_studio_voice_agents a ON a.id = s.agent_id WHERE s.uuid = $1', [ses.uuid])[0];
+      inf.must('Beto aprueba la sesión 2', await enviarDialogo(b, '[data-sesion-aprobar-enviar]'));
+      inf.check('… y la sesión enseña el veredicto aprobado', !!(await L.esperar(b, SIN_LEYENDO(`li[data-sesion="${s2.uuid}"] [data-sesion-veredicto][data-valor="approved"]`))), null);
+      const vr = L.sql(ctx, 'SELECT s.verdict AS decision, s.verdict_by_admin_id AS reviewer_admin_id, a.spec_hash FROM ultron_studio_voice_lab_sessions s JOIN ultron_studio_voice_agents a ON a.id = s.agent_id WHERE s.uuid = $1', [s2.uuid])[0];
       inf.check('SQL: veredicto approved de Beto sobre la MISMA huella', vr?.decision === 'approved' && vr.reviewer_admin_id === ctx.h.accounts.b.id && vr.spec_hash === spec, vr && { d: vr.decision, r: vr.reviewer_admin_id });
+      await L.captura(b, ctx, 'laboratorio-veredicto-beto-1440');
     });
 
     // ── 5. Publicar en canario con la huella (Beto): primero un spec_changed, luego 201 ─────────────────────────
@@ -378,12 +468,14 @@ const SIN_LEYENDO = (sel) => `return !!document.querySelector(${JSON.stringify(s
       const a = S.a;
       inf.must('Ana: pestaña Llamadas', await L.pestana(a, ctx, 'llamadas', `return document.querySelectorAll('[data-llamada][data-direccion="inbound"]').length >= 3;`));
       const remotos = await L.leer(a, `${L.NORMALIZA} return [...document.querySelectorAll('[data-llamada][data-direccion="inbound"] [data-llamada-remoto]')].map((e) => n(e.textContent));`);
-      inf.check('las 3 entrantes: alias del canario + 4 dígitos (nunca el número)', remotos.length === 3 && remotos.every((t) => /Canario de voz 1/.test(t) && /0011/.test(t) && !/3000000011/.test(t)), remotos);
+      // El servidor no manda del otro extremo más que los 4 últimos dígitos: ni el número, ni la huella, ni el alias de
+      // un canario (`VoiceCallsQuery.php:13`, D8-22 «sin datos personales»). El alias se ve donde se elige a quién llamar.
+      inf.check('las 3 entrantes: solo los 4 últimos dígitos del canario (ni el número ni el alias)', remotos.length === 3 && remotos.every((t) => /0011/.test(t) && !/3000000011/.test(t) && !/Canario de voz/.test(t)), remotos);
       const u = E.entrantes[0];
       inf.must('abrir el detalle de una', await L.clic(a, `[data-llamada="${u}"] [data-llamada-eventos]`));
       await L.esperar(a, SIN_LEYENDO(`[data-llamada="${u}"] [data-llamada-detalle] [data-evento]`));
       const det = await L.api(ctx, 'a', 'GET', `admin/voice/calls/${u}`);
-      const evApi = det.json?.data?.events ?? det.json?.data?.call?.events ?? det.json?.events ?? [];
+      const evApi = det.json?.call?.events ?? [];
       const evDom = await L.leer(a, `${L.NORMALIZA} return [...document.querySelectorAll('[data-llamada="${u}"] [data-llamada-detalle] [data-evento]')].map((e) => ({ k: e.getAttribute('data-evento'), t: n(e.textContent) }));`);
       const codigos = evApi.flatMap((e) => (Array.isArray(e.codes) ? e.codes : []));
       inf.check('detalle: el CRM enseña TODOS los eventos de la API (eventos descartados = 0)', evApi.length > 0 && evDom.length === evApi.length
@@ -501,13 +593,52 @@ const SIN_LEYENDO = (sel) => `return !!document.querySelector(${JSON.stringify(s
       const fd = await L.focoAtrapado(a, 16, 5);
       inf.check('diálogo de pedir una llamada: el foco no sale', fd.ok, fd);
       await L.esperar(a, SIN_LEYENDO(`[data-saliente-canario="${can[0]}"]`));
+      // El control es un radio; lo que se lee es su etiqueta (alias, máscara y «canario de voz activo»).
+      const opciones = await L.leer(a, `${L.NORMALIZA} return [...document.querySelectorAll('[data-saliente-canario]')].map((e) => n(e.closest('label')?.textContent));`);
+      inf.check('el diálogo de pedir una llamada enseña cada canario por su alias y sus 4 dígitos (nunca el número)', opciones.length === 2
+        && opciones.some((t) => /Canario de voz 1/.test(t) && /0011/.test(t)) && opciones.some((t) => /Canario de voz 2/.test(t) && /0012/.test(t)) && opciones.every((t) => !/30000000\d\d/.test(t)), opciones);
       await a.page.click(`[data-saliente-canario="${can[0]}"]`);
+      // E4-6 (B8-g): con la verificación del arranque, la puerta ya no dice elevenlabs_unverified. Fuera del horario legal
+      // (oráculo propio con el fixture de festivos de TEST8-a) se niega con EXACTAMENTE el calendario; dentro, deja pasar.
+      const cal = calendarioLegal(new Date());
+      // B8-g (`number_unverified`): la puerta exige una conciliación del número de menos de 2 h que cuadre con
+      // TWILIO_VOICE_FROM; la de verdad, con el reloj real, antes de pedir la saliente.
+      const cn = L.artisan(ctx, ['voice:reconcile', '--numbers', '--json']);
+      let numero = null;
+      try { numero = JSON.parse(cn.out).number ?? null; } catch { /* sin JSON */ }
+      inf.check('voice:reconcile --numbers antes de pedir la saliente: el número importado cuadra con TWILIO_VOICE_FROM', numero?.matchesFrom === true && numero?.result === 'ok', numero);
+      const tw0g = await statsTw();
       await enviarDialogo(a, '[data-saliente-enviar]');
-      const motivos = await L.esperar(a, `const r = document.querySelector('[data-saliente-rechazo]'); return r ? [...r.querySelectorAll('[data-saliente-motivo]')].map((e) => e.getAttribute('data-saliente-motivo')) : null;`, L.T(20000));
-      inf.check('la puerta no deja pasar la saliente (E4-6): el CRM enseña los motivos, con elevenlabs_unverified', Array.isArray(motivos) && motivos.includes('elevenlabs_unverified'), motivos);
-      inf.check('… y no se escribe ninguna fila', L.valor(ctx, "SELECT count(*) FROM voice_calls WHERE direction = 'outbound'") === n0, null);
-      await a.page.keyboard.press('Escape');
-      await L.esperar(a, sinDialogo, L.T(5000));
+      if (cal.fuera) {
+        const motivos = await L.esperar(a, `const r = document.querySelector('[data-saliente-rechazo]'); return r ? [...r.querySelectorAll('[data-saliente-motivo]')].map((e) => e.getAttribute('data-saliente-motivo')) : null;`, L.T(20000));
+        inf.check(`la puerta (fuera del horario legal) no deja pasar la saliente: el CRM enseña EXACTAMENTE ${cal.motivos.join(', ')} (sin elevenlabs_unverified: E4-6)`, JSON.stringify(motivos) === JSON.stringify(cal.motivos), motivos);
+        inf.check('… y no se escribe ninguna fila', L.valor(ctx, "SELECT count(*) FROM voice_calls WHERE direction = 'outbound'") === n0, null);
+        await a.page.keyboard.press('Escape');
+        await L.esperar(a, sinDialogo, L.T(5000));
+      } else {
+        // Dentro del horario: pedir desde el CRM → la puerta real (202) → el job en `voice` → el worker RESIDENTE marca.
+        const aviso = await L.esperar(a, `const e = document.querySelector('[data-voz-saliente-pedida]'); return e ? e.textContent.replace(/\\s+/g, ' ').trim() : null;`, L.T(20000));
+        inf.check('la puerta (dentro del horario legal, proveedor verificado) deja pasar la saliente: el CRM cierra el diálogo y avisa con los 4 dígitos', !!aviso && /0011/.test(aviso) && !/3000000011/.test(aviso)
+          && (await L.leer(a, sinDialogo)) === true, aviso);
+        const g = L.sql(ctx, "SELECT uuid, status, stamp_state, requested_by_admin_id FROM voice_calls WHERE direction = 'outbound' ORDER BY id DESC LIMIT 1")[0];
+        inf.must('SQL: la fila de la puerta, sellada y pedida por Ana', L.valor(ctx, "SELECT count(*) FROM voice_calls WHERE direction = 'outbound'") === n0 + 1 && g?.stamp_state === 'applied'
+          && g.requested_by_admin_id === ctx.h.accounts.a.id, g && { status: g.status, sello: g.stamp_state });
+        const marcada = await (async () => { for (let i = 0; i < 150; i++) { const st = L.valor(ctx, 'SELECT status FROM voice_calls WHERE uuid = $1', [g.uuid]); if (st !== 'requested') return st; await L.dormir(200); } return 'requested'; })();
+        inf.check('el worker residente (reloj real) la marca: dialing', marcada === 'dialing', marcada);
+        await L.pestana(a, ctx, 'llamadas', SIN_LEYENDO(`[data-llamada="${g.uuid}"] [data-llamada-colgar]`));
+        inf.check('… y el CRM la enseña marcando', (await atr(a, `[data-llamada="${g.uuid}"]`, 'data-estado')) === 'dialing', await atr(a, `[data-llamada="${g.uuid}"]`, 'data-estado'));
+        const tw1g = await statsTw();
+        await a.page.click(`[data-llamada="${g.uuid}"] [data-llamada-colgar]`);
+        inf.must('el diálogo de cortar se abre (la saliente de la puerta)', await L.esperar(a, hayDialogo('[data-colgar-dialogo]')));
+        await enviarDialogo(a, '[data-colgar-enviar]');
+        await L.esperar(a, sinDialogo, L.T(15000));
+        await L.dormir(1500);
+        const eg = L.valor(ctx, 'SELECT status FROM voice_calls WHERE uuid = $1', [g.uuid]);
+        inf.check('cortar desde el CRM la saliente que pidió el CRM: hung_up con UNA petición a Twilio', eg === 'hung_up' && delta(tw1g, await statsTw()).requests === 1 && delta(tw0g, tw1g).requests >= 1, { estado: eg });
+        const convG = L.valor(ctx, 'SELECT provider_conversation_id FROM voice_calls WHERE uuid = $1', [g.uuid]);
+        if (convG) await L.sim(ctx, 'elevenlabs', 'emit/post-call', { conversation_id: convG });
+        E.salientePuerta = g.uuid;
+      }
       // requested (costura de la fila sellada, sin despachar)
       const r1 = L.ayudante(ctx, ['saliente', 'canary', can[0], L.uuid(), String(ctx.h.accounts.a.id), '0']);
       const u1 = r1.call;
@@ -527,8 +658,14 @@ const SIN_LEYENDO = (sel) => `return !!document.querySelector(${JSON.stringify(s
       const r2 = L.ayudante(ctx, ['saliente', 'canary', can[1], L.uuid(), String(ctx.h.accounts.a.id), '0']);
       const u2 = r2.call;
       L.ayudante(ctx, ['despachar', u2, 'voice-e2e']);
+      // El job vuelve a exigir la observación del número de menos de 2 h, medida con SU reloj (B8-g): con el mismo reloj
+      // desplazado justo antes, y después otra vez con el real (la puerta sigue con el reloj real).
+      const o1 = L.observarNumero(ctx, MARTES_EN_HORARIO);
+      inf.must('la observación del número con el reloj del job cuadra', o1?.policy === 'verified', o1);
       const w = L.artisan(ctx, ['queue:work', 'voice', '--queue=voice-e2e', '--stop-when-empty', '--tries=1', '--timeout=60'],
         { H8_E2E_RELOJ_OBJETIVO: MARTES_EN_HORARIO, H8_E2E_VENDOR: `${ctx.h.backend}/vendor/autoload.php` }, ctx.h.helpers.reloj);
+      const o2 = L.observarNumero(ctx);
+      inf.check('… y con el reloj real vuelve a cuadrar', o2?.policy === 'verified', o2);
       const e2 = L.valor(ctx, 'SELECT status FROM voice_calls WHERE uuid = $1', [u2]);
       inf.must('la saliente marca (dialing) con el worker de un trabajo en horario', e2 === 'dialing', { estado: e2, worker: w.code });
       const tw1 = await statsTw();
@@ -544,25 +681,41 @@ const SIN_LEYENDO = (sel) => `return !!document.querySelector(${JSON.stringify(s
       await L.captura(a, ctx, 'llamadas-cortadas-1440');
     });
 
-    // ── 12. El 429 de la telefonía con retry_after (Carla agota su cubo de lectura) ──────────────────────────────
+    // ── 12. El 429 de la telefonía con retry_after (Carla agota su cubo de lectura, 120/min por persona, E9-4) ─────
     await paso('429', async () => {
+      // En paralelo (tandas de 40; `php -S` atiende 4 a la vez y el resto espera en su cola): 140 lecturas SECUENCIALES, o
+      // en tandas de 20, no caben en la ventana de 60 s del cubo si la máquina va cargada (visto a carga 36–70 el 09-11) y
+      // el cubo se renueva antes de agotarse.
       let r = null;
-      for (let i = 0; i < 140; i++) {
-        r = await L.api(ctx, 'c', 'GET', 'admin/voice/status');
-        if (r.status === 429) break;
+      for (let tanda = 0; tanda < 5 && r?.status !== 429; tanda++) {
+        const rs = await Promise.all(Array.from({ length: 40 }, () => L.api(ctx, 'c', 'GET', 'admin/voice/status')));
+        r = rs.find((x) => x.status === 429) ?? rs[rs.length - 1];
       }
-      inf.must('el limitador de lectura responde 429 con retry_after', r?.status === 429 && Number.isInteger(r.json?.retry_after), { status: r?.status, retry_after: r?.json?.retry_after, header: r?.headers?.['retry-after'] });
+      const t429 = Date.now();
+      inf.must('el limitador de lectura responde 429 con el cuerpo uniforme (code too_many_requests, retry_after) y Retry-After igual', r?.status === 429 && r.json?.code === 'too_many_requests'
+        && Number.isInteger(r.json?.retry_after) && r.json.retry_after > 0 && r.json.retry_after <= 60 && String(r.json.retry_after) === String(r.headers?.['retry-after']),
+        { status: r?.status, code: r?.json?.code, retry_after: r?.json?.retry_after, header: r?.headers?.['retry-after'] });
       const ra = r.json.retry_after;
       const c = S.c;
       const red0 = c.red.length;
       await L.ir(c, ctx, '/marketing/ultron-studio/voz?pestana=llamadas');
       const msg = await L.esperar(c, `const e = document.querySelector('[data-llamadas-error], #vt-panel-llamadas [role=alert]'); return e ? e.textContent.replace(/\\s+/g, ' ').trim() : null;`, L.T(30000));
-      const nums = (String(msg).match(/\d+/g) || []).map(Number);
-      inf.check('el CRM dice el 429 con los segundos de retry_after', !!msg && nums.some((n) => n <= ra && n >= ra - 15), { msg: String(msg).slice(0, 200), retry_after: ra });
+      // E9-4 / FE8-3: el CRM enseña el MENSAJE DEL SERVIDOR del 429 (y lee retry_after sin gastar la clave). Los
+      // segundos no forman parte de ese mensaje: si la pantalla los dice o no, queda en el detalle (observación).
+      inf.check('el CRM enseña el aviso del 429 con el mensaje del servidor', !!msg && msg.includes(String(r.json.message || '').replace(/\s+/g, ' ').trim()),
+        { msg: String(msg).slice(0, 200), servidor: r.json.message, retry_after: ra, diceLosSegundos: /\d/.test(String(msg)) });
+      const vistas = c.red.slice(red0).filter((x) => x.method === 'GET' && x.path.startsWith('/api/admin/voice/'));
+      inf.check('el navegador recibió el 429 de la API (registro de red, con Retry-After)', vistas.some((x) => x.status === 429 && Number(x.retryAfter) > 0),
+        vistas.map((x) => `${x.path} ${x.status ?? '?'} ${x.retryAfter ?? ''}`).slice(0, 8));
       await L.dormir(4000);
       const llamadas = c.red.slice(red0).filter((x) => x.method === 'GET' && x.path.startsWith('/api/admin/voice/calls'));
       inf.check('sin reintentos automáticos mientras dura la espera', llamadas.length <= 1, llamadas.length);
       await L.captura(c, ctx, 'llamadas-429-carla-1440');
+      // El cubo de Carla se vacía antes de seguir (las transversales la usan): espera lo que dijo el servidor.
+      const resta = ra * 1000 - (Date.now() - t429) + 1500;
+      if (resta > 0) await L.dormir(resta);
+      const otra = await L.api(ctx, 'c', 'GET', 'admin/voice/status');
+      inf.check('pasado retry_after, Carla vuelve a leer (200)', otra.status === 200, otra.status);
     });
 
     // ── 13. «Firefox»: sin la restricción sampleRate, ni sesión ni gasto ──────────────────────────────────────────
@@ -634,7 +787,8 @@ const SIN_LEYENDO = (sel) => `return !!document.querySelector(${JSON.stringify(s
       const fuera = Object.keys(hosts).filter((h) => !/:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(h));
       const fuentes = ['http:https://fonts.googleapis.com', 'http:https://fonts.gstatic.com'];
       inf.check('red del navegador: ninguna petición fuera de 127.0.0.1 salvo las fuentes de Google del index.html (anteriores al H8; no resuelven)', fuera.every((h) => fuentes.includes(h)), { hosts });
-      inf.check('red del navegador: el WebSocket del laboratorio solo contra el simulador', Object.keys(hosts).filter((h) => h.startsWith('websocket:')).every((h) => h === `websocket:ws://127.0.0.1:${ctx.h.ports.elevenlabs}`), Object.keys(hosts).filter((h) => h.startsWith('websocket:')));
+      const sockets = Object.keys(hosts).filter((h) => h.startsWith('websocket:'));
+      inf.check('red del navegador: el WebSocket del laboratorio solo contra el simulador, y solo con TLS (wss)', sockets.length > 0 && sockets.every((h) => h === `websocket:wss://127.0.0.1:${ctx.h.ports.elevenlabs}`), sockets);
       fs.writeFileSync(path.join(ctx.red, 'hosts-navegador.json'), JSON.stringify(hosts, null, 1));
       if (E.consolaChromeLab) fs.writeFileSync(path.join(ctx.red, 'consola-laboratorio-por-fuente.json'), JSON.stringify(E.consolaChromeLab, null, 1));
     } catch (e) {

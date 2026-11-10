@@ -406,6 +406,8 @@ final class StudioIntegrations
             'version' => StudioVoiceTemplate::VERSION,
             'hash' => StudioVoiceTemplate::hash(),
             'aiNotice' => StudioVoiceTemplate::AI_NOTICE,
+            // El aviso de cada trato del perfil (`tu` y `usted`, plantilla /2): el CRM enseña el del trato elegido.
+            'aiNotices' => StudioVoiceTemplate::AI_NOTICES,
             'greetingMax' => StudioVoiceTemplate::GREETING_MAX,
             'textMin' => StudioVoiceTemplate::TEXT_MIN,
             'holes' => StudioVoiceTemplate::HOLES,

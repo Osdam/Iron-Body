@@ -9,6 +9,7 @@ use App\Models\Voice\VoiceBrakeEntry;
 use App\Models\Voice\VoiceCall;
 use App\Services\Telephony\OutboundGate;
 use App\Services\Telephony\VoiceBrake;
+use App\Services\Telephony\VoiceNumberGuard;
 use App\Services\Telephony\VoiceReconciler;
 use App\Services\Voice\Dto\VoiceAgentObservation;
 use App\Services\Voice\Dto\VoiceAgentPayload;
@@ -182,6 +183,8 @@ class VoiceBrakeRearmTest extends TestCase
 
         // El job, con el veredicto de ANTES de soltar en su caché: cancela por deriva, pero no es una observación nueva.
         config(['voice.outbound.enabled' => true, 'voice.twilio.enabled' => true]);
+        // B8-g: el número que llama, vigilado (el job lo vuelve a mirar antes que la deriva); aquí se prueba la deriva.
+        VoiceNumberGuard::rememberObservation(self::PHONE_NUMBER_ID, true, false);
         $llamada = $this->voiceCall('outbound', 'requested');
         $motivo = (new ReflectionMethod(PlaceOutboundVoiceCall::class, 'recheckAfterCode'))->invoke(new PlaceOutboundVoiceCall((int) $llamada->id), VoiceCall::query()->findOrFail($llamada->id));
         $this->assertSame('agent_drift', $motivo);

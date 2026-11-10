@@ -4,6 +4,7 @@ namespace App\Services\Telephony;
 
 use App\Models\MarketingMessage;
 use App\Services\Marketing\OutboundContentGuard;
+use UnexpectedValueException;
 
 /**
  * La guarda POSTERIOR de la voz (contrato H8, D8-10 capa 4; fixture
@@ -28,6 +29,34 @@ use App\Services\Marketing\OutboundContentGuard;
  *    (su huella `voice-phone`); sin la lista de aprobados, ninguno lo es:
  *    `voice_transfer_not_approved` (imposible por configuración, se
  *    comprueba igual).
+ *
+ * EL ESPAÑOL REAL DEL MODELO (SEC8-c M-1, B8-g; {@see VoiceTranscriptLexicon}).
+ * La guarda del motor compara precio y descuento sin plegar tildes y no
+ * conoce la jerga de Colombia, el inglés ni lo propio de la voz. Por eso, sin
+ * tocar el motor, cada turno se inspecciona:
+ *  1. con los modismos neutralizados y los precios en palabras pasados a cifras
+ *     («ochenta y nueve mil» → «89.000»), antes de tapar los del catálogo: así
+ *     un precio de `consultar_planes` dicho en palabras se tapa, y uno
+ *     inventado sigue siendo dinero;
+ *  2. si el motor no ve nada, otra vez PLEGADO (minúsculas y sin tildes): el
+ *     primer código de los dos;
+ *  3. y con el léxico propio de la voz sobre el texto plegado (sus códigos,
+ *     cada uno una vez por turno), que completa al motor: un código del léxico
+ *     de la misma familia que el que ya dio el motor (descuento o dinero) no
+ *     se repite.
+ *
+ * B8-h (REV8-c):
+ *  - M-2: antes de buscar nada, las negativas que manda la plantilla (una lista
+ *    cerrada de cláusulas exactas, {@see VoiceTranscriptAllowlist}) salen del
+ *    turno; el resto se busca igual que antes;
+ *  - m-1: el plegado es la forma NORMALIZADA (sin marcas, sin invisibles, sin
+ *    ancho completo ni homoglifos) y se busca en todas las formas de
+ *    {@see VoiceTranscriptLexicon::variants()} (también con las palabras
+ *    partidas unidas): el motor, en orden, hasta el primer código; el léxico,
+ *    en todas;
+ *  - m-2: si PCRE no puede evaluar algo del turno, el turno NO pasa por limpio:
+ *    `voice_guard_unprocessable` (freno, como cualquier violación) y, además, el
+ *    motor sobre el texto tal cual, como antes de B8-g.
  */
 final class VoiceTranscriptGuard
 {
@@ -37,7 +66,16 @@ final class VoiceTranscriptGuard
 
     public const CODE_TRANSFER_NOT_APPROVED = 'voice_transfer_not_approved';
 
+    /** B8-h (REV8-c m-2): la guarda no pudo evaluar el turno (p. ej., PCRE agotó su pila con un turno enorme). Falla cerrado. */
+    public const CODE_UNPROCESSABLE = 'voice_guard_unprocessable';
+
     public const TRANSFER_TOOL = 'transfer_to_number';
+
+    /** SEC8-c M-1: el código del léxico de la voz que sobra si el motor ya marcó el turno con uno de su familia. */
+    private const SAME_FAMILY = [
+        VoiceTranscriptLexicon::CODE_DISCOUNT_EXTRA => [OutboundContentGuard::CODE_INVENTED_DISCOUNT],
+        VoiceTranscriptLexicon::CODE_MONEY_SLANG => [self::CODE_MONEY_NOT_FROM_TOOL],
+    ];
 
     /** Lo que el aviso tiene que decir (D8-17), sin tildes ni mayúsculas. */
     public const NOTICE_ELEMENTS = [['asistente virtual'], ['inteligencia artificial'], ['no quieres recibir mas llamadas', 'no recibir mas llamadas']];
@@ -73,11 +111,20 @@ final class VoiceTranscriptGuard
                 // Y se inspecciona como los demás: el modelo pudo seguir hablando en el mismo turno.
             }
 
-            $texto = $pricesFromToolAllowed ? self::maskApproved($turno['text'], $cifras) : $turno['text'];
             $transfiere = in_array(self::TRANSFER_TOOL, $turno['tools'], true);
-            $veredicto = $guarda->inspect($texto, MarketingMessage::SENDER_AI, $transfiere);
-            if (($veredicto['safe'] ?? true) !== true && is_string($veredicto['code'] ?? null)) {
-                $codigo = $veredicto['code'] === OutboundContentGuard::CODE_INVENTED_PRICE ? self::CODE_MONEY_NOT_FROM_TOOL : $veredicto['code'];
+            try {
+                $codigos = self::contentCodes($guarda, $turno['text'], $pricesFromToolAllowed ? $cifras : [], $transfiere);
+            } catch (UnexpectedValueException) {
+                // REV8-c m-2: PCRE no pudo con el turno (límite de pila o de retroceso, UTF-8 inválido). Antes el turno
+                // quedaba vacío y pasaba por limpio; ahora es una violación con su código, más lo que diga el motor sobre
+                // el texto tal cual (lo que hacía la guarda antes de B8-g), sin tapar precios: en duda, más estricto.
+                $codigos = [self::CODE_UNPROCESSABLE];
+                $delMotor = self::engineCode($guarda, $turno['text'], $transfiere);
+                if ($delMotor !== null) {
+                    $codigos[] = $delMotor;
+                }
+            }
+            foreach ($codigos as $codigo) {
                 $violaciones[] = ['turn' => $turno['index'], 'code' => $codigo];
             }
 
@@ -93,9 +140,69 @@ final class VoiceTranscriptGuard
         return $violaciones;
     }
 
+    /**
+     * Los códigos del CONTENIDO de un turno (el motor y el léxico; las
+     * transferencias van aparte), en orden: el del motor primero, si lo hay.
+     *
+     * @param  array<string, true>  $cifras  las del catálogo que se tapan ([] = ninguna, P-3 = no)
+     * @return list<string>
+     *
+     * @throws UnexpectedValueException si PCRE no puede evaluar el turno (REV8-c m-2)
+     */
+    private static function contentCodes(OutboundContentGuard $guarda, string $texto, array $cifras, bool $transfiere): array
+    {
+        // REV8-c M-2: las negativas que manda la plantilla salen ANTES de buscar (solo cláusulas exactas de la lista).
+        $base = VoiceTranscriptAllowlist::strip($texto);
+        // SEC8-c M-1: los precios en palabras pasan a cifras ANTES de tapar los del catálogo. REV8-c m-1: en el texto tal
+        // cual y en cada forma normalizada.
+        $cifrar = static fn (string $t): string => VoiceTranscriptLexicon::numbersToDigits(VoiceTranscriptLexicon::neutralizeIdioms($t));
+        $normalizadas = array_map($cifrar, VoiceTranscriptLexicon::variants($base));
+        $formas = array_values(array_unique([$cifrar($base), ...$normalizadas]));
+
+        // El motor, forma a forma, hasta el primer código (las de antes primero: su código no cambia).
+        $delMotor = null;
+        foreach ($formas as $forma) {
+            $delMotor = self::engineCode($guarda, self::maskApproved($forma, $cifras), $transfiere);
+            if ($delMotor !== null) {
+                break;
+            }
+        }
+
+        // El léxico de la voz, en todas las formas normalizadas, completa al motor: no repite la familia que el motor ya
+        // marcó en el turno. Cada código una vez, en el orden del conjunto cerrado.
+        $delLexico = [];
+        foreach ($normalizadas as $forma) {
+            $delLexico = [...$delLexico, ...VoiceTranscriptLexicon::codes(self::maskApproved($forma, $cifras))];
+        }
+        $codigos = $delMotor === null ? [] : [$delMotor];
+        foreach (VoiceTranscriptLexicon::CODES as $codigo) {
+            if (in_array($codigo, $delLexico, true) && ($delMotor === null || ! in_array($delMotor, self::SAME_FAMILY[$codigo] ?? [], true))) {
+                $codigos[] = $codigo;
+            }
+        }
+
+        return $codigos;
+    }
+
+    /** El código del motor para un texto (el precio inventado, con el nombre de la voz), o null si está limpio. */
+    private static function engineCode(OutboundContentGuard $guarda, string $texto, bool $transfiere): ?string
+    {
+        $veredicto = $guarda->inspect($texto, MarketingMessage::SENDER_AI, $transfiere);
+        if (($veredicto['safe'] ?? true) === true || ! is_string($veredicto['code'] ?? null)) {
+            return null;
+        }
+
+        return $veredicto['code'] === OutboundContentGuard::CODE_INVENTED_PRICE ? self::CODE_MONEY_NOT_FROM_TOOL : $veredicto['code'];
+    }
+
+    /** ¿Lleva el aviso? Un texto que no se puede normalizar (REV8-c m-2) no lo lleva: falla cerrado. */
     public static function hasNotice(string $text): bool
     {
-        $t = self::fold($text);
+        try {
+            $t = VoiceTranscriptLexicon::fold($text);
+        } catch (UnexpectedValueException) {
+            return false;
+        }
         foreach (self::NOTICE_ELEMENTS as $alternativas) {
             $esta = false;
             foreach ($alternativas as $frase) {
@@ -119,14 +226,22 @@ final class VoiceTranscriptGuard
         return array_values(array_unique(array_filter(array_map(self::digitsOf(...), $m[0]), static fn (string $d): bool => $d !== '')));
     }
 
-    /** @param  array<string, true>  $cifras */
+    /**
+     * @param  array<string, true>  $cifras
+     *
+     * @throws UnexpectedValueException si PCRE falla (REV8-c m-2: antes devolvía '' y el motor veía un turno vacío)
+     */
     private static function maskApproved(string $text, array $cifras): string
     {
         if ($cifras === []) {
             return $text;
         }
+        $tapado = preg_replace_callback(self::MONEY, static fn (array $m): string => isset($cifras[self::digitsOf($m[0])]) ? self::MASK : $m[0], $text);
+        if ($tapado === null) {
+            throw new UnexpectedValueException('La guarda no pudo tapar los precios del turno (PCRE: '.preg_last_error_msg().').');
+        }
 
-        return (string) preg_replace_callback(self::MONEY, static fn (array $m): string => isset($cifras[self::digitsOf($m[0])]) ? self::MASK : $m[0], $text);
+        return $tapado;
     }
 
     private static function digitsOf(string $expresion): string
@@ -134,12 +249,5 @@ final class VoiceTranscriptGuard
         $sinCentavos = (string) preg_replace('/,\d{1,2}(?=\D*$)/u', '', $expresion);
 
         return ltrim((string) preg_replace('/\D+/', '', $sinCentavos), '0');
-    }
-
-    private static function fold(string $text): string
-    {
-        $t = mb_strtolower($text, 'UTF-8');
-
-        return strtr($t, ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n']);
     }
 }

@@ -38,6 +38,8 @@
       "twilio_voice_disabled",
       "no_voice_number",
       "voice_number_is_whatsapp",
+      "number_unverified",
+      "number_mismatch",
       "elevenlabs_not_configured",
       "elevenlabs_disabled",
       "elevenlabs_unverified",

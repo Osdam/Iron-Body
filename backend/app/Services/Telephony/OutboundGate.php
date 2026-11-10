@@ -85,6 +85,12 @@ final class OutboundGate
         if ($previa !== null && ($previa->target_source !== $destino['source'] || ($destino['canaryUuid'] ?? null) !== $previa->canary_number_uuid || ($destino['contactId'] ?? null) !== $previa->voice_contact_id)) {
             throw TelephonyException::conflict('client_request_reused', 'Ese identificador de petición ya se usó para otro destino.');
         }
+        if ($previa !== null) {
+            // TEST8-c H-4 (B8-h): la idempotencia se resuelve ANTES de la política. La petición original ya pasó la puerta;
+            // repetirla devuelve la misma fila (DF-G5) sin volver a contar frecuencia, cupo ni presupuesto. Antes la propia
+            // llamada contaba para la frecuencia de 1 al día y el 200 no era alcanzable: 409 [frequency_exceeded, duplicate_request].
+            return ['http' => 200, 'body' => ['ok' => true, 'duplicate' => true, 'call' => VoiceCallsQuery::row($previa)]];
+        }
 
         // 2. El número, solo en memoria.
         $numero = $destino['number'] instanceof SensitiveParameterValue ? $destino['number']->getValue() : null;
@@ -103,7 +109,10 @@ final class OutboundGate
             'outboundEnabled' => config('voice.outbound.enabled') === true,
             'twilioVoiceEnabled' => config('voice.twilio.enabled') === true,
             'voiceFromConfigured' => VoicePhone::isE164(config('voice.twilio.from')),
-            'voiceNumberCollides' => VoiceNumberGuard::collidesWithConfig(),
+            // D8-5 + SEC8-c B-1: la configuración o el número importado que observó la conciliación.
+            'voiceNumberCollides' => VoiceNumberGuard::collidesForPolicy(),
+            // B8-g (decisión del lead): sin una conciliación del número de menos de 2 h que cuadre, cerrado.
+            'numberCheck' => VoiceNumberGuard::policyCheck(),
             'providerState' => VoiceProviderState::current(),
             'publication' => $parte->policyState(),
             'agentDrift' => $parte->ok() && Cache::get(self::DRIFT_CACHE_PREFIX.$parte->providerAgentId) === true,
@@ -116,12 +125,9 @@ final class OutboundGate
             'dailyCap' => (int) config('voice.twilio.daily_call_cap', 0),
             'placedToday' => VoiceCallFacts::outboundPlacedOn($dia),
             'budgetFits' => $cabe,
-            'duplicate' => $previa !== null,
+            'duplicate' => false, // la idempotencia ya se resolvió arriba (H-4); el motivo sigue en el conjunto cerrado de la política
         ]);
 
-        if ($previa !== null && $decision['reasons'] === [OutboundPolicy::REASON_DUPLICATE]) {
-            return ['http' => 200, 'body' => ['ok' => true, 'duplicate' => true, 'call' => VoiceCallsQuery::row($previa)]];
-        }
         if (! $decision['allowed']) {
             Log::channel('voice')->info('voice.outbound.denied', ['reasons' => $decision['reasons'], 'actor_admin_id' => $actor->id, 'target_kind' => $targetKind]);
 

@@ -59,8 +59,14 @@ class VoiceReconcileCommand extends Command
             $this->line('Techo gasto : '.($resumen['costCap'] ? 'SUPERADO (freno)' : 'dentro'));
             if (isset($resumen['number'])) {
                 $n = $resumen['number'];
-                $this->line('Número      : '.($n['result'] === VoiceReconciler::NUMBER_DRIFT ? 'DERIVA (freno)' : $n['result'])
-                    .' · apunta: '.$n['observed'].' · debería: '.$n['expected']);
+                $this->line('Número      : '.match ($n['result']) {
+                    VoiceReconciler::NUMBER_DRIFT => 'DERIVA (freno)',
+                    VoiceReconciler::NUMBER_MISMATCH => 'NO ES EL DE TWILIO_VOICE_FROM (freno)',
+                    VoiceReconciler::NUMBER_IS_MESSAGING => 'ES UN NÚMERO PROTEGIDO DE LA MENSAJERÍA (freno)',
+                    default => $n['result'],
+                }
+                    .' · apunta: '.$n['observed'].' · debería: '.$n['expected']
+                    .($n['result'] === VoiceReconciler::NUMBER_OUTBOUND_ONLY ? ' · solo salientes: sin agente, nadie atiende entrantes (no es deriva)' : ''));
             }
             if ($seco) {
                 $w = $resumen['would'];
@@ -71,7 +77,7 @@ class VoiceReconcileCommand extends Command
                     .' · transiciones: '.$w['transitions'].' · precios: '.$w['costs']);
             }
         }
-        $derivaDelNumero = ($resumen['number']['result'] ?? null) === VoiceReconciler::NUMBER_DRIFT;
+        $derivaDelNumero = in_array($resumen['number']['result'] ?? null, VoiceReconciler::NUMBER_BRAKING, true);
 
         return $resumen['unknown'] === 0 && ! $resumen['costCap'] && ! in_array('drift', $resumen['drift'], true) && ! $derivaDelNumero ? self::SUCCESS : self::FAILURE;
     }

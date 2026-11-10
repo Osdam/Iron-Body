@@ -1650,7 +1650,7 @@ En las fases siguientes, cada mando reescribe esta expectativa con la de su fase
 
 ### Fases 2 → 3 → 4a → 4b
 
-Cada fase pide **autorización escrita** del propietario, con su entorno, su impacto y su vuelta atrás declarados antes (protección 13). Ninguna se encadena con la siguiente sin su criterio de entrada. **El mando `h8-voice-scope.sh` está pendiente (OPS8):** mueve las banderas en el mismo fichero, con copia previa y `config:cache` como `www-data`, como `h7-monitor-scope.sh`. Sin él no se enciende ninguna fase: las ediciones a mano del entorno de producción no son el procedimiento.
+Cada fase pide **autorización escrita** del propietario, con su entorno, su impacto y su vuelta atrás declarados antes (protección 13). Ninguna se encadena con la siguiente sin su criterio de entrada. **El mando es `ops/h8-voice-scope.sh` (OPS8-c, 09-11-2026; ensayado en el banco, abajo, «OPS8-c»):** mueve solo las claves de cada orden en el mismo fichero, con copia previa y `config:cache` como `www-data`, como `h7-monitor-scope.sh`, y se niega a encender llamadas sin el commit `voice(calls-open)` desplegado. Sin él no se enciende ninguna fase: las ediciones a mano del entorno de producción no son el procedimiento. *(Hasta el 09-11-2026 decía «pendiente (OPS8)».)*
 
 | Fase | Criterio de entrada | Qué se enciende o se pone | Expectativa del monitor | Vuelta atrás |
 |---|---|---|---|---|
@@ -1693,17 +1693,114 @@ Cada fase pide **autorización escrita** del propietario, con su entorno, su imp
 4. **Solo entonces** se revoca la clave vieja en la consola.
 5. La configuración autorizada se reconoce otra vez, porque cambia la huella de la clave.
 
-**Registrar en ElevenLabs los dos secretos propios (el del webhook y el de las herramientas) sin imprimirlos.** E1-12 los generó en el servidor, y aún no están registrados.
-- **Preferido: por la API, desde el servidor.** Ninguna persona ve el valor, ni pasa por un terminal, un chat o un registro.
-  - PHP lee el secreto y la clave de la configuración y se los pasa a `curl` por la entrada estándar (`--data-binary @-`, con la cabecera de la clave desde un fichero de cabeceras en 600 dentro de un `mktemp -d` en 700). Nunca en la línea de órdenes, que verían `ps` y el historial.
-  - ElevenLabs devuelve el **id** del secreto, que no es secreto y va a `ELEVENLABS_TOOL_SECRET_REF`. El del webhook va a `ELEVENLABS_POST_CALL_WEBHOOK_REF`.
-  - **[Por confirmar en la referencia oficial el día que se haga]:** la ruta exacta (`/v1/convai/secrets`), si un webhook HMAC admite un secreto propio o lo genera ElevenLabs, y la forma de la respuesta.
-- **Si la consola es la única vía:** el propietario abre su propia sesión SSH y lee el valor una sola vez en su pantalla (`sudo -u www-data php -r '…'`). Lo pega en la consola y limpia el terminal (`clear` y fuera del historial). Nunca lo copia a un chat, una nota ni un ticket.
-- **Si ElevenLabs genera el del webhook:** se hace al revés. El propietario lo pega en un `read -rs` (sin eco) del mando de la fase 2, que lo escribe en el entorno sin imprimirlo.
-- Después, en los dos casos:
-  - `voice:doctor` dice las piezas por nombre, sin valores;
-  - el smoke compara los cuerpos con las huellas saladas de los secretos del servidor;
-  - un secreto que haya pasado por el chat se da por quemado y se rota.
+**Registrar en ElevenLabs los dos secretos propios y el webhook post-llamada, sin imprimirlos: `ops/h8-secrets-register.sh` (OPS8-c, 09-11-2026).** E1-12 generó en el servidor el secreto de las herramientas y el del webhook; ninguno está registrado y el de iniciación no existe todavía (lo genera el script).
+- **Verificado en la referencia oficial el 09-11-2026** (sustituye a los «[por confirmar]» de OPS8-b; fuentes: `elevenlabs.io/docs/api-reference/workspace/secrets/{list,create,update}` y `…/webhooks/{list,create}`, y la guía `eleven-agents/workflows/post-call-webhooks`):
+  - `GET /v1/convai/secrets?search=<prefijo>&page_size=…&cursor=…` → `{secrets: [{type: stored, secret_id, name, used_by}], next_cursor}`; `POST /v1/convai/secrets` `{type: new, name, value}` → `{secret_id}`; `PATCH /v1/convai/secrets/{secret_id}` `{type: update, name, value}` cambia el valor **sin cambiar el id** (los agentes que lo citan siguen valiendo).
+  - `GET /v1/workspace/webhooks` y `POST /v1/workspace/webhooks` `{settings: {auth_type: hmac, name, webhook_url}}` → `{webhook_id, webhook_secret}`. **El secreto HMAC lo genera ElevenLabs** («the shared secret generated upon creation of the webhook») y solo lo enseña al crearlo: el script lo escribe en `ELEVENLABS_WEBHOOK_SECRET` (sustituye al de E1-12, que nunca se registró) sin pasar por un terminal.
+  - El agente cita el webhook **por agente** (`platform_settings.workspace_overrides.webhooks.post_call_webhook_id`, que ya compila `ElevenLabsAgentMapper` con `ELEVENLABS_POST_CALL_WEBHOOK_REF`): el script no toca la configuración del workspace ni ningún agente. Un webhook que falla 10 veces seguidas sin una entrega buena en 7 días se desactiva solo.
+- **Nombres fijos:** los secretos `ironbody-voz-herramientas` (valor `Bearer <ELEVENLABS_TOOL_SECRET>`: la cabecera `Authorization` entera que compara `VoiceToolAuth`) e `ironbody-voz-iniciacion` (valor `ELEVENLABS_INITIATION_SECRET`, la cabecera `X-Voice-Initiation-Secret` de `VoiceInitiationAuth`); el webhook `ironbody-voz-post-llamada` → `<VOICE_WEBHOOK_BASE_URL>/api/webhooks/voice/elevenlabs/post-call`.
+- **Cómo lo hace:** las peticiones salen de un proceso PHP de `www-data` con la extensión curl (la clave, en una cabecera en memoria; nunca en la línea de órdenes, `ps` ni el historial); su salida va **directa** al escritor del fichero de entorno (python aislado, como root, escritura atómica que conserva dueño y modo), de modo que el secreto del webhook no pasa por la pantalla. Antes de crear nada lista por nombre: **nunca duplica**; si la lista falla, no crea nada. **Nunca borra** nada en ElevenLabs.
+- **Uso:** primero `bash /root/h8-secrets-register.sh --solo-comprobar` (solo GET: dice qué existe y qué haría; código 3 si falta algo), después sin opciones. Si un secreto con su nombre ya existe con otro id que el del entorno, se para con «FALTA DECIDIR»: `--actualizar` sube el valor del entorno a ese id; `--reusar` escribe su id sin tocar el valor (solo si se sabe que el valor es el del entorno).
+- **Permisos de la clave** (API keys de ElevenLabs, «Scope restriction»): `convai_read` y `convai_write` (secretos) y `webhooks_write` (webhooks) **[por confirmar en la consola qué permiso exige `GET /v1/workspace/webhooks`]**. La clave de Laravel no necesita `webhooks_write`: lo recomendable es **una clave de usuario temporal**, con caducidad de 15 minutos (la mínima de la consola) y solo esos permisos, en un fichero 600 de root, con `--clave-fichero=/root/el-registro.txt` (el script lo destruye al terminar).
+- **Si la consola es la única vía para el webhook:** el propietario lo crea en la consola con el **nombre exacto** y la URL de arriba, ve su secreto una vez y, en su propia sesión SSH, ejecuta `bash /root/h8-secrets-register.sh --webhook-consola`: lo pega en un `read -rs` (sin eco, fuera del historial), y el script busca el id por nombre (GET) y escribe id y secreto. Nunca por el chat, una nota ni un ticket.
+- **Ojo con `el-verificar.sh` después del registro:** regenera `ELEVENLABS_WEBHOOK_SECRET` y `ELEVENLABS_TOOL_SECRET` (`el-verificar.sh:24-34`). En la fase 2 se ejecuta **antes** del registro (rotación, arriba), y entonces no rompe nada. **Para una rotación posterior** rompería la post-llamada (ElevenLabs firma con el secreto que generó, que ya no estaría en el entorno; a los 10 fallos desactiva el webhook) y las herramientas hasta `--actualizar`. **[PENDIENTE: un `--solo-clave` en `el-verificar.sh` que no toque los dos secretos; dueño: lead/OPS8.]**
+- **Después:** `voice:doctor` dice las piezas por nombre, sin valores; la configuración autorizada **se reconoce otra vez** (cambian las huellas de voz); el smoke compara los cuerpos con las huellas saladas de los secretos del servidor; un secreto que haya pasado por el chat se da por quemado y se rota.
+- **Vuelta atrás:** el fichero de entorno, con la orden que imprime (`install` de la copia previa `/root/env-pre-voice-secretos-<fecha>` y la caché). Lo creado en ElevenLabs se queda: si hay que quitarlo, el propietario en la consola, sabiendo que un agente que lo cite deja de autenticar.
+
+### OPS8-c (09-11-2026): los tres scripts de las fases 2 → 4a
+
+Nuevo rumbo del propietario (09-11-2026): **prioridad a las salientes**. Ya importó en ElevenLabs el número empresarial de Iron Body como «Outbound Only» y una llamada real salió por Twilio (desde la consola de ElevenLabs, fuera de Laravel). Los tres scripts están en `ops/`, se copian a `/root` como los de la fase 1 y se ensayaron en el banco (`ops/banco-h8/ensayar-ops8c.sh`; cifras en `plans/informes-h8/informe-devops.md`, §OPS8-c). **Ninguno se ha ejecutado en el servidor.**
+
+| Script | Qué hace | Red | Autorización | Vuelta atrás |
+|---|---|---|---|---|
+| `h8-voice-scope.sh` (el mando) | `estado` (sin red); `lab on/off`; `fase 2 set` (piezas NO secretas: `VOICE_WEBHOOK_BASE_URL`, `ELEVENLABS_AGENT_PHONE_NUMBER_ID`, `TWILIO_VOICE_FROM`, `TWILIO_VOICE_ACCOUNT_SID`, las tres `*_REF` y `VOICE_NUMBER_INBOUND_CAPABLE`); `fase 2 secreto <fichero 600>` (la key de Laravel y el token de firma de Twilio, nunca por argumentos); `salientes on/off`; `entrantes on/off`; `monitor on/off`; `publicar on/off`; `expectativa fase1/fase2/llamadas` | Solo `monitor on` (una conciliación **en seco**: lecturas a Twilio y ElevenLabs) | La de cada fase; **apagar no espera a nadie** (nivel 0 de D8-20) | La orden contraria («vuelta atrás funcional») o la exacta que imprime (la copia previa `/root/env-pre-voice-<orden>-<fecha>` y la caché) |
+| `h8-secrets-register.sh` | Registra los dos secretos y crea el webhook post-llamada (arriba) | Sí: GET y, sin `--solo-comprobar`, POST/PATCH a ElevenLabs | **Fase 2, escrita** (crea recursos en la cuenta real) | El fichero, con la orden que imprime; lo creado en ElevenLabs se queda |
+| `h8-twilio-check.sh` | Comprueba la cuenta y el número de la voz con la key restringida y da el **veredicto** «misma cuenta» frente a «subcuenta» (abajo) | Solo GET a Twilio | La de la fase 2 (lee la cuenta real) | No escribe nada |
+
+```bash
+# desde el Mac, con el repo en el commit que se va a usar
+scp backend/docs/ultron-studio/ops/{h8-voice-scope.sh,h8-secrets-register.sh,h8-twilio-check.sh} ironbody-vps:/root/
+ssh ironbody-vps 'chmod 700 /root/h8-voice-scope.sh /root/h8-secrets-register.sh /root/h8-twilio-check.sh && bash /root/h8-voice-scope.sh estado'
+```
+
+**Lo que el mando exige y comprueba en cada orden que escribe:** el fichero de entorno, un fichero normal (nunca un enlace) de `www-data` en 600 **o** de `root:www-data` en 640 (C-14: así sirve antes y después de la propuesta de `ironbody-migrate`); cada clave una sola vez; copia previa 600 de root que nunca se sobrescribe; solo las claves de la orden, en una escritura atómica que conserva dueño y modo; que parsea; `config:cache` como `www-data` con `umask 077`; que la configuración efectiva cambió **solo** en lo pedido y que el motor, el H4–H7 y ElevenLabs siguen igual; que el fichero es la copia salvo esas claves; el programador (±4 tareas de voz solo con `monitor`); `queue:restart` y los workers como antes (13, o 14 con `ironbody-voice`), dos lecturas; 401 sin token; 0 ERROR nuevos. «APLICADO» solo con 0 desvíos. **Se niega** (código 2, sin tocar nada): a `salientes on`/`entrantes on` sin la constante abierta en el código desplegado (en ejecución, una sola declaración anclada `= true;` y el último commit del fichero `voice(calls-open):`); a `salientes on` sin `ironbody-voice` en RUNNING, sin número, id importado, subcuenta y su key, con el número de WhatsApp o con un presupuesto que no cubre ni una llamada (la reserva de `VoiceCostGuard::reserveMicros`: 0,6105 US$ a un móvil sin transferencia con 300 s; 1,122 US$ a un fijo con transferencia); a `entrantes on` con el número declarado «Outbound Only»; a `lab on --driver=elevenlabs` sin las tres referencias y la base, o sin `ELEVENLABS_VERIFIED` en el Studio; a cambiar piezas con llamadas encendidas; a `monitor on` si la conciliación en seco echaría el freno (salvo `--acepta-freno`); a `expectativa <fase>` si `integrations-doctor` no la confirma.
+
+### Fase 2a: solo el laboratorio hablado (sin teléfono)
+
+**Criterio de entrada:** la fase 1 estable 24 h (desde el 10-11-2026 a las 12:06 UTC); el plan de pago de ElevenLabs con agentes (P-22); la clave rotada (E2-2); P-21 decidido; la **autorización escrita** de la 2a (coste: los minutos del laboratorio, dentro del techo). No hace falta Twilio, ni el número, ni la constante: **ninguna llamada telefónica**.
+
+1. **Respaldo** con el bloque del paso 1 de la fase 1 (`BK=/var/backups/ironbody/ultron-studio-h8-fase2a-$TS`).
+2. **Rotación de la clave de ElevenLabs** (E2-2, arriba): clave nueva con `convai_read` y `convai_write`, cupo de créditos y, si la consola lo admite, la IP del servidor en su lista → `bash /root/el-verificar.sh /root/el-clave.txt <agent_id>` → «ELEVENLABS VERIFICACIÓN TERMINADA» → revocar la vieja → reconocer la configuración.
+3. **La base de los webhooks:** `bash /root/h8-voice-scope.sh fase 2 set VOICE_WEBHOOK_BASE_URL=https://api.ironbodyneiva.cloud` → `MANDO fase2-set APLICADO`.
+4. **Secretos y webhook:** `bash /root/h8-secrets-register.sh --solo-comprobar` (esperado: código 3, «no existe: se crearía» en los tres y «se generaría» el de iniciación) → `bash /root/h8-secrets-register.sh --clave-fichero=/root/el-registro.txt` (la clave temporal de 15 min, si la de producción no tiene `webhooks_write`) → `SECRETOS Y WEBHOOK REGISTRADOS` → otra vez `--solo-comprobar`: `TODO REGISTRADO`.
+5. **Reconocer la configuración autorizada** (Studio → Integraciones → Voz): cambiaron las huellas de voz.
+6. `bash /root/h8-voice-scope.sh estado`: las tres referencias y la base presentes, ElevenLabs `ELEVENLABS_VERIFIED` en el Studio, todo lo demás apagado.
+7. **Encender:** `bash /root/h8-voice-scope.sh lab on --driver=elevenlabs --presupuesto-dia=1.00 --presupuesto-sesion=0.50 --sesiones-dia=3 --segundos=300` → `MANDO lab-on APLICADO` (techos del script: 5 US$ al día, 1 US$ por sesión, 10 sesiones, 300 s).
+8. **Smoke:** `SMOKE_PHASE=2a bash /root/smoke-run-h8.sh` (abajo, «Smoke de las fases 2a y 4a»).
+9. **Primera sesión** (el propietario, Super Admin con `ultron.voice_lab_run`): CRM → Studio → Voz → Laboratorio hablado, ≤ 5 min. Después: la sesión se cierra con el informe del proveedor (el oyente de E8-1), el coste queda dentro del presupuesto, ningún `voice.post_call.rejected` en `storage/logs/voice-*.log` (si aparece, el secreto del webhook no casa: paso 4) y el veredicto lo da **otra** identidad.
+10. **Vuelta atrás:** `bash /root/h8-voice-scope.sh lab off` (bandera, driver `fake` y los dos presupuestos a 0: los cuatro cerrojos). Cada sesión crea un agente de laboratorio en ElevenLabs que se queda (E4-9, D8-7).
+
+### Fase 4a-primero: salientes a canarios SIN pasar por la fase 3 (nuevo rumbo, 09-11-2026)
+
+El contrato ponía la 4a después de la 3 («la fase 3 estable 24 h»). Hacer la 4a primero **cambia ese criterio de entrada**: lo decide el propietario por escrito y se registra como enmienda. Lo que no cambia es la puerta: **`OutboundPolicy` deniega, en este orden, si falta cualquiera de estas cosas** (`app/Services/Telephony/OutboundPolicy.php`; D8-12):
+
+| # | La puerta pide | De dónde sale | Dueño |
+|---|---|---|---|
+| 1 | La constante abierta (`calls_disabled_in_code`) | El commit de una línea `voice(calls-open): …` con la autorización escrita citada, desplegado | Propietario + lead |
+| 2 | Salientes y Twilio Voice encendidos (`outbound_disabled`, `twilio_voice_disabled`) | `salientes on` | El mando |
+| 3 | El número y que no sea de WhatsApp (`no_voice_number`, `voice_number_is_whatsapp`) | `fase 2 set TWILIO_VOICE_FROM=…` | El mando (lo comprueba antes de escribir) |
+| 4 | ElevenLabs verificado **en la telefonía** (`elevenlabs_unverified`) | El lector de la última verificación (E4-6), en curso en **B8-g**: hasta desplegarlo, toda saliente falla cerrada | B8-g + despliegue |
+| 5 | La publicación canary vigente, sin deriva del agente y sin freno (`no_publication`, `publication_unreadable`, `agent_drift`, `voice_braked`) | Perfil de voz aprobado (cuatro ojos) + veredicto del laboratorio de **otra** identidad (puerta `required`) + `publicar on` + publicar el canario con su `expectedSpecHash` | Propietario y otra persona |
+| 6 | El destino es un canario de voz **activo** (`not_an_active_voice_canary`) | El registro de canarios del H6 (fase 2 del H6: quien tiene el teléfono registra; otra persona autoriza y activa) | Propietario + segunda persona (P-24) |
+| 7 | Horario legal y no festivo (`outside_hours`, `holiday`) | L-V 07:00–19:00, sábados 08:00–15:00 (Bogotá), sin domingos ni los 19 festivos | — |
+| 8 | Frecuencia, concurrencia, cupo y presupuesto (`frequency_exceeded`, `concurrency_exceeded`, `daily_cap_zero`, `daily_cap_reached`, `budget_exhausted`) | 1 al día por contacto; `salientes on --cupo=1 --presupuesto=2.00` (la reserva de una llamada a un móvil es 0,6105 US$) | El mando |
+| 9 | No duplicada (`duplicate_request`) | `client_request_id` del CRM | — |
+
+**Además, fuera de la puerta:** el worker `ironbody-voice` (sin él, la saliente se queda en `requested`); la key restringida de Laravel en la cuenta de la voz (sin ella no hay corte de emergencia ni conciliación); el número importado en ElevenLabs **con una key restringida, nunca con el Account SID + Auth Token**; y, con un número «Outbound Only», **la declaración `VOICE_NUMBER_INBOUND_CAPABLE=false`** (código de B8-g/S8-d, en curso): sin ella, publicar el canario intenta asignarle el agente y la deriva del número (`voice:reconcile --numbers`) echaría el freno.
+
+**Permisos de las keys de Twilio** (los nombres exactos de los PDF de permisos de las «Restricted API keys», leídos el 09-11-2026):
+- **Laravel** (`TWILIO_VOICE_API_KEY_SID/SECRET`): `/twilio/voice/calls/list`, `/twilio/voice/calls/read`, `/twilio/voice/calls/update` (colgar), `twilio/phone-numbers/active-numbers/list`, `twilio/phone-numbers/active-numbers/read`, `/twilio/voice/outgoing-caller-ids/list` (para encontrar un caller ID verificado), `/twilio/billing/usage/read`; opcionales para la comprobación: `/twilio/iam/accounts/read` y `twilio/phone-numbers/regulatory-compliance.bundles/read`. **Ninguno de `twilio/messaging/*`**.
+- **ElevenLabs** (la de la importación): lo que pida su integración **[por confirmar con la cuenta real: crear, leer, listar y actualizar llamadas, y leer números y caller ID]**; para entrantes ElevenLabs pide además el Auth Token de la cuenta (`account_auth_token`, referencia `phone-numbers/create`), que con un número «Outbound Only» no hace falta.
+
+**El orden exacto** (cada paso, con su autorización y su verificación antes del siguiente):
+1. **Rotar la clave de ElevenLabs** (E2-2; fase 2a, paso 2).
+2. **La base y el registro de secretos y webhook** (fase 2a, pasos 3–5). *La base va antes del registro porque la URL del webhook la necesita.*
+3. **Las variables de Twilio y del número:**
+   - el propietario crea las keys restringidas (arriba) en la cuenta que decida el veredicto (abajo) y deja en `/root/tw-voz.txt` (600, root) `TWILIO_VOICE_API_KEY_SID=…`, `TWILIO_VOICE_API_KEY_SECRET=…` y, si la quiere, `TWILIO_VOICE_SIGNING_TOKEN=…` → `bash /root/h8-voice-scope.sh fase 2 secreto /root/tw-voz.txt` (lo destruye al aplicar);
+   - `bash /root/h8-voice-scope.sh fase 2 set TWILIO_VOICE_ACCOUNT_SID=AC… TWILIO_VOICE_FROM=+57… ELEVENLABS_AGENT_PHONE_NUMBER_ID=…` y, con el código de B8-g/S8-d desplegado, `VOICE_NUMBER_INBOUND_CAPABLE=false`;
+   - `bash /root/h8-twilio-check.sh` → el veredicto (abajo) y ningún FALLO;
+   - reconocer la configuración autorizada; `bash /root/h8-voice-scope.sh expectativa fase2` si el monitor del H7 está encendido.
+4. **El mando:** `monitor on` (la conciliación; **la llamada de prueba del 09-11 cae dentro de su ventana de 48 h hasta el 11-11 a la misma hora**: antes de eso, el mando se niega y habría que encender con `--acepta-freno` y soltar el freno con la nota de la causa), `publicar on`, `lab on` (fase 2a).
+5. **Laboratorio y publicación:** primera sesión y veredicto de otra identidad (fase 2a, 9) → perfil de voz aprobado → publicar el canario (CRM → Studio → Voz → Publicar, con su `expectedSpecHash`) → `estado`: cadena `canary:ok`.
+6. **Llamadas:** el commit `voice(calls-open)` desplegado (con el despliegue del código de B8-g/S8-d) → instalar `ironbody-voice` (`docs/ops/supervisor/ironbody-voice.conf`; antes, `ensayar.sh worker comprobar` en el banco con ese código: 14 RUNNING) → `bash /root/h8-voice-scope.sh salientes on --cupo=1 --presupuesto=2.00` → `SMOKE_PHASE=4a bash /root/smoke-run-h8.sh` → **la primera saliente, al propietario como canario**, desde el CRM («Voz y telefonía» → llamada saliente), en horario.
+7. **Después de la llamada:** la fila en `voice_calls` pasa `requested → dialing → active → completed`; la post-llamada procesada (evento `guard_verdict`, sin violaciones) y su coste; `voice:reconcile --dry-run --json` con `unknown` 0 y sin freno; en el registro de voz, ningún rechazo. Con el cupo 1, una segunda petición el mismo día da `daily_cap_reached`: es lo esperado.
+
+**Vuelta atrás de la 4a:** nivel 0 `bash /root/h8-voice-scope.sh salientes off` (cupo y presupuesto a 0; Twilio Voice apagado si las entrantes lo están); 0b `sudo -u www-data php artisan voice:hangup --all --confirm`; 1 revertir la publicación (Studio); 2 voz apagada; 3 revocar las keys en las consolas y quitar la importación del número; 4 el código anterior (la constante cerrada vuelve con él).
+
+### Smoke de las fases 2a y 4a (`SMOKE_PHASE`)
+
+`SMOKE_PHASE=1` (por defecto) es el de la fase 1 sin cambios. Con `2a` o `4a`, el lanzador y `smoke-h8.py` comprueban el estado de su fase y **siguen sin filas positivas**: con su bandera encendida no abren, cierran ni juzgan sesiones del laboratorio y no publican ni promueven (OMITIDO, con el motivo), porque escriben o gastan.
+
+| | 2a (laboratorio) | 4a (salientes a canarios) |
+|---|---|---|
+| Configuración efectiva | constante cerrada; entrantes, salientes, Twilio Voice y publicar apagados; laboratorio encendido | constante abierta; salientes, Twilio Voice, publicar y monitor de voz encendidos; entrantes apagadas |
+| Programador | +4 de voz si el monitor de voz está encendido; +2 del Studio si lo está el del H7 | Ídem (el de voz, encendido) |
+| `voice:doctor --telefonia` | cadena `none/none`, freno suelto, cupos `0/0/0` | cadena `canary:ok,rest:none`, freno suelto, salientes ≥ 1 con presupuesto, entrantes 0, número y subcuenta |
+| `GET admin/voice/status` | banderas de la fase; piezas de la fase 2, informativas | banderas de la fase; número, id importado y subcuenta puestos, sin WhatsApp |
+| Studio | laboratorio: lista 200 e inventada 404; sus 3 POST, OMITIDOS; publicar y promover 409 | publicar y promover, OMITIDOS; `voice/publications` con publicar encendido y ≥ 1 entrada |
+| Canal `voice` | los 4 rechazos y, con el monitor de voz, sus tareas (`voice.reconcile*`, `voice.prune*`) | ídem |
+| Código esperado | 3 (los OMITIDOS) y 0 FALLO | 3 (los OMITIDOS) y 0 FALLO |
+
+### El número empresarial y la cuenta de Twilio: ¿se reutiliza sin comprar ni crear subcuenta?
+
+`bash /root/h8-twilio-check.sh` lo responde con la key restringida y da el veredicto. Lo que dice la documentación oficial (leída el 09-11-2026):
+- **«Outbound Only» en ElevenLabs = un caller ID verificado en Twilio** («Ideal for using your existing business number for outbound AI calls»): sirve para **salientes sin comprar nada**, pero **no recibe llamadas ni se asigna a un agente**. La fase 3 (entrantes) exigiría un número comprado o portado. *Fuente: `elevenlabs.io/docs/eleven-agents/phone-numbers/twilio-integration/native-integration`.*
+- **Misma cuenta con keys restringidas:** técnicamente posible, pero **no es lo que pide el contrato** (D8-4, D8-5) y tiene costes concretos: la conciliación lista **todas** las llamadas de la cuenta (48 h, sin filtrar por número), así que toda llamada de voz que no pida Laravel echa el freno; validar los avisos de gasto de voz exigiría el Auth Token **maestro** (el del OTP) en `TWILIO_VOICE_SIGNING_TOKEN` (se deja vacío: sin avisos de Twilio para la voz); los techos de gasto de Twilio se comparten con el OTP. Solo sería aceptable con 0 llamadas ajenas, la importación de ElevenLabs hecha con una key `SK…` restringida, el token de firma vacío y una **enmienda del contrato con el visto bueno de security**.
+- **Subcuenta (recomendada):** crearla no tiene coste propio (el uso se factura a la cuenta madre; *fuente: `twilio.com/docs/iam/api/subaccounts`, «Billing»*). Las keys se crean **dentro** de la subcuenta («Main account API Keys are only available to access main account resources»). Y el número **no se compra**:
+  - **si es un caller ID verificado** (el caso de hoy), no se traslada: se **verifica otra vez en la subcuenta** (`POST /2010-04-01/Accounts/{SUBCUENTA}/OutgoingCallerIds.json` con `PhoneNumber`: Twilio llama al número del negocio y se teclea el código de 6 dígitos; *fuente: `twilio.com/docs/voice/api/outgoing-caller-ids`*), se reimporta en ElevenLabs con la key de la subcuenta y se quita la importación vieja;
+  - **si fuera un número comprado**, se traslada con `POST /2010-04-01/Accounts/{MADRE}/IncomingPhoneNumbers/{PN…}.json` y `AccountSid={SUBCUENTA}`, con las credenciales de la cuenta madre; si exige dirección, se crea antes en la subcuenta; Trust Hub y A2P se reenvían; un remitente de WhatsApp conectado no se mueve. *Fuente: `twilio.com/docs/iam/api/subaccounts#exchanging-numbers`.*
+- **Lo que el script no puede ver:** con qué credencial importó el propietario el número en ElevenLabs. Si fue con el **Account SID + Auth Token** de la cuenta madre, ElevenLabs tiene la credencial maestra del OTP: hay que **reimportarlo con una key `SK…` restringida** y, tras B-6 (el OTP en su key restringida), rotar el Auth Token. Pregunta para el propietario antes de cualquier fase.
+- **La llamada de prueba del 09-11:** salió por la cuenta de Twilio fuera de Laravel. Si esa cuenta es la de la voz, la primera conciliación dentro de las 48 h siguientes la vería como `unknown_provider_call` y echaría el freno: `monitor on` lo comprueba en seco y se niega.
 
 ### Política de respaldos del H8 (E3-7)
 

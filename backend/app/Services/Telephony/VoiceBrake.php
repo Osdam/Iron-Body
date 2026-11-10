@@ -57,6 +57,9 @@ final class VoiceBrake
      * colgado no se confirma (`hangup_failed`, {@see VoiceHangup::startedAfterCancel()})
      * es una llamada que nadie controla: se guarda como `unknown_provider_call`
      * (con la clave de la conciliación para ese SID) y la evidencia dice la causa.
+     * B8-g (SEC8-c B-1): el número importado que no es `TWILIO_VOICE_FROM`
+     * (`number_mismatch`) o que es uno de la mensajería (`number_is_messaging`), como
+     * `agent_drift` con su causa.
      */
     public const TRIGGERS = [
         'guard_violation' => 'guard_violation',
@@ -67,6 +70,10 @@ final class VoiceBrake
         'unknown_provider_call' => 'unknown_provider_call',
         'number_drift' => 'agent_drift',
         'hangup_failed' => 'unknown_provider_call',
+        // B8-g (SEC8-c B-1): el número importado (con el que llama ElevenLabs) no es `TWILIO_VOICE_FROM`, o es uno de
+        // WhatsApp. Como `number_drift`: el número no es el gobernado; la base no tiene otro motivo.
+        'number_mismatch' => 'agent_drift',
+        'number_is_messaging' => 'agent_drift',
     ];
 
     public const NOTE_MAX = 300;

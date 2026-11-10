@@ -42,12 +42,21 @@ use Throwable;
  *     {@see destinationHashes()});
  *  3. `describeAgent`: la proyección observada tiene que ser la compilada; si
  *     no, el agente queda `rejected` y no se publica;
- *  4. `assignNumber`: la parte canaria atiende las entrantes ({@see INBOUND_PART});
+ *  4. `assignNumber`: la parte canaria atiende las entrantes ({@see INBOUND_PART}),
+ *     SOLO si el número importado las admite ({@see numberInboundCapable()}).
+ *     Un número «Outbound Only» de ElevenLabs (un caller ID verificado en
+ *     Twilio) no se puede asignar a ningún agente: con
+ *     `VOICE_NUMBER_INBOUND_CAPABLE=false` no se pide nada al proveedor y la
+ *     entrada dice `not_applicable_outbound_only` ({@see NUMBER_NOT_APPLICABLE});
+ *     las salientes usan el agente sellado de la entrada, nunca el del número;
  *  5. la entrada firmada de la cadena, en una transacción con el cerrojo de la
- *     cadena, y `serves_canary` movido al agente nuevo (primero soltar).
+ *     cadena, y `serves_canary` movido al agente nuevo (primero soltar). Lo que
+ *     pasó con el número va en su `evidence` (`{number: {action, outcome}}`),
+ *     que no se firma (como `lab_gate`).
  *  Si la cabeza se movió mientras se desplegaba, 409 `publication_moved`: el
  *  agente nuevo queda desplegado y sin parte (inerte) y el número vuelve al
- *  agente que diga la cadena (compensación, {@see restoreNumber()}).
+ *  agente que diga la cadena (compensación, {@see restoreNumber()}; con un
+ *  número solo saliente no hay nada que devolver).
  *
  * PROMOVER lleva el agente de la parte canaria a la parte `rest`, con la
  * evidencia del canario medida en el servidor (D8-19, P-16;
@@ -88,7 +97,13 @@ use Throwable;
  * antes de compilar; revertir y apagar sin nada que revertir o apagar, 409 sin
  * red. Solo `assignNumber` (desde aquí y desde ningún otro sitio, guarda de
  * SEC8) toca el número; con `CALLS_ENABLED_IN_CODE = false` asignar un agente
- * es `not_attempted` sin red (B8) y publicar se detiene (fallo cerrado).
+ * es `not_attempted` sin red (B8) y publicar se detiene (fallo cerrado). Con un
+ * número solo saliente no se asigna nada, así que publicar no consulta la
+ * constante: las llamadas siguen cerradas por ella en la puerta de salientes.
+ *
+ * EL LIBRO DEL STUDIO: cada entrada deja su evento (`voice_publication.*`) con
+ * el actor, la versión (`contentHash` y su uuid), el perfil (uuid y huella) y
+ * la huella de la especificación del agente ({@see traceOf()}).
  */
 final class StudioVoicePublishing
 {
@@ -110,6 +125,18 @@ final class StudioVoicePublishing
      * sigue al agente de la parte canaria.
      */
     public const INBOUND_PART = StudioVoicePublication::SCOPE_CANARY;
+
+    /**
+     * Si el número importado admite entrantes (`VOICE_NUMBER_INBOUND_CAPABLE`,
+     * de la telefonía en `config/voice.php`). Solo un `false` explícito dice
+     * «solo saliente»: sin la clave se intenta asignar como siempre, y un
+     * número que no lo admite lo rechaza el proveedor (409
+     * `voice_number_not_assigned`: falla cerrado, nunca se omite en silencio).
+     */
+    public const NUMBER_INBOUND_CAPABLE_KEY = 'voice.number.inbound_capable';
+
+    /** El resultado del número cuando es «Outbound Only»: no se le pide nada al proveedor. */
+    public const NUMBER_NOT_APPLICABLE = 'not_applicable_outbound_only';
 
     public const DEFAULT_MAX_CALL_SECONDS = 300;
 
@@ -146,6 +173,15 @@ final class StudioVoicePublishing
     public static function labGateMode(): string
     {
         return config('ultron_studio.voice.lab_gate') === self::LAB_WAIVED ? self::LAB_WAIVED : self::LAB_REQUIRED;
+    }
+
+    /**
+     * ¿Admite entrantes el número importado? Solo un `false` explícito de
+     * {@see NUMBER_INBOUND_CAPABLE_KEY} dice que no (ver la constante).
+     */
+    public static function numberInboundCapable(): bool
+    {
+        return config(self::NUMBER_INBOUND_CAPABLE_KEY) !== false;
     }
 
     /** `VOICE_PER_CALL_MAX_SECONDS` efectivo, recortado a 60–600 (D8-15). */
@@ -261,35 +297,43 @@ final class StudioVoicePublishing
 
         $agente = $this->deployedAgent($access, $clientRequestId, $version, $perfil, $spec, $payload);
 
-        $asignacion = $this->deployer()->assignNumber((string) $numeroId, (string) $agente->provider_agent_id);
-        if ($asignacion->outcome !== VoiceDeployResult::OUTCOME_ASSIGNED) {
-            // Nada se publica. Si el proveedor pudo quedarse a medias (sin
-            // respuesta, o con el número en otro agente), el número vuelve al
-            // que diga la cadena; si no lo tocó, no se le pide nada más.
-            if (in_array($asignacion->outcome, [VoiceDeployResult::OUTCOME_AMBIGUOUS, VoiceDeployResult::OUTCOME_ERROR], true)) {
-                $this->restoreNumber($numeroId);
-            }
+        // D8-7 paso 5: la parte canaria atiende las entrantes… si el número las
+        // admite. Uno «Outbound Only» no se asigna (no se puede): sin red.
+        $entrantes = self::numberInboundCapable();
+        if ($entrantes) {
+            $asignacion = $this->deployer()->assignNumber((string) $numeroId, (string) $agente->provider_agent_id);
+            if ($asignacion->outcome !== VoiceDeployResult::OUTCOME_ASSIGNED) {
+                // Nada se publica. Si el proveedor pudo quedarse a medias (sin
+                // respuesta, o con el número en otro agente), el número vuelve al
+                // que diga la cadena; si no lo tocó, no se le pide nada más.
+                if (in_array($asignacion->outcome, [VoiceDeployResult::OUTCOME_AMBIGUOUS, VoiceDeployResult::OUTCOME_ERROR], true)) {
+                    $this->restoreNumber($numeroId);
+                }
 
-            throw new UltronStudioException(
-                'No se pudo asignar el número de voz al agente nuevo: no se publica. El agente queda desplegado y sin uso.',
-                'voice_number_not_assigned', 409,
-                ['outcome' => $asignacion->outcome, 'reason' => $asignacion->reason, 'agent' => StudioVoicePublications::agentDto($agente)],
-            );
+                throw new UltronStudioException(
+                    'No se pudo asignar el número de voz al agente nuevo: no se publica. El agente queda desplegado y sin uso.',
+                    'voice_number_not_assigned', 409,
+                    ['outcome' => $asignacion->outcome, 'reason' => $asignacion->reason, 'agent' => StudioVoicePublications::agentDto($agente)],
+                );
+            }
+            $numero = ['action' => 'assigned', 'outcome' => $asignacion->outcome, 'reason' => $asignacion->reason];
+        } else {
+            $numero = self::numberNotApplicable('assigned');
         }
 
         try {
-            $filas = DB::transaction(function () use ($access, $request, $clientRequestId, $agente, $puerta, $note, $cabezaAntes, $firma, $version, $perfil): array {
+            $filas = DB::transaction(function () use ($access, $request, $clientRequestId, $agente, $puerta, $note, $cabezaAntes, $firma, $version, $perfil, $numero): array {
                 $cabeza = $this->lockedHead($cabezaAntes);
                 $ahora = now();
                 $fila = StudioVoicePublications::insertEntry(StudioVoicePublication::ACTION_PUBLISH, StudioVoicePublication::SCOPE_CANARY, $agente, $cabeza, $ahora,
-                    $access, $clientRequestId, $puerta, null, $note, null, $firma);
+                    $access, $clientRequestId, $puerta, ['number' => ['action' => $numero['action'], 'outcome' => $numero['outcome']]], $note, null, $firma);
                 $this->serve($agente, StudioVoicePublication::SCOPE_CANARY);
 
                 $this->audit->record($request, $access->actor, 'voice_publication.published', StudioAuditEvent::SUBJECT_INTEGRATION, $fila->uuid,
                     "Publicó la voz en canario: «{$version->label}» con el perfil «{$perfil->label}» (entrada {$fila->seq})", [
                         'toStatus' => 'canary',
                         'contentHash' => $version->content_hash,
-                        'diff' => ['seq' => (int) $fila->seq, 'agent' => $agente->uuid, 'specHash' => $agente->spec_hash, 'labGate' => $puerta['mode']],
+                        'diff' => ['seq' => (int) $fila->seq, 'agent' => $agente->uuid, 'labGate' => $puerta['mode'], 'number' => $numero['outcome']] + self::traceOf($agente),
                     ]);
 
                 return [$fila];
@@ -302,7 +346,7 @@ final class StudioVoicePublishing
             throw $e instanceof UniqueConstraintViolationException ? $this->conflictRefusal($e) : $e;
         }
 
-        return $this->written($filas, $agente, ['action' => 'assigned', 'outcome' => $asignacion->outcome, 'reason' => $asignacion->reason]);
+        return $this->written($filas, $agente, $numero);
     }
 
     // ── Promover (POST voice/promote) ───────────────────────────────────────
@@ -365,7 +409,8 @@ final class StudioVoicePublishing
                 $this->audit->record($request, $access->actor, 'voice_publication.promoted', StudioAuditEvent::SUBJECT_INTEGRATION, $fila->uuid,
                     "Promovió la voz del canario al resto (entrada {$fila->seq})", [
                         'toStatus' => 'rest',
-                        'diff' => ['seq' => (int) $fila->seq, 'agent' => $agente->uuid, 'fromEntry' => $canario?->uuid, 'evidenceHash' => $evidencia['evaluation']['evidenceHash']],
+                        'contentHash' => $agente->studio_content_hash,
+                        'diff' => ['seq' => (int) $fila->seq, 'agent' => $agente->uuid, 'fromEntry' => $canario?->uuid, 'evidenceHash' => $evidencia['evaluation']['evidenceHash']] + self::traceOf($agente),
                     ]);
 
                 return [$fila];
@@ -424,7 +469,8 @@ final class StudioVoicePublishing
                 $this->audit->record($request, $access->actor, 'voice_publication.rolled_back', StudioAuditEvent::SUBJECT_INTEGRATION, $fila->uuid,
                     'Revirtió la voz ('.$part.") al agente anterior (entrada {$fila->seq})", [
                         'toStatus' => $part,
-                        'diff' => ['seq' => (int) $fila->seq, 'agent' => $agente->uuid, 'from' => $actual->uuid, 'restores' => $vuelve->uuid, 'reason' => $reason],
+                        'contentHash' => $agente->studio_content_hash,
+                        'diff' => ['seq' => (int) $fila->seq, 'agent' => $agente->uuid, 'from' => $actual->uuid, 'restores' => $vuelve->uuid, 'reason' => $reason] + self::traceOf($agente),
                     ]);
 
                 return [$fila];
@@ -459,10 +505,15 @@ final class StudioVoicePublishing
     private function offGated(StudioAccess $access, Request $request, string $clientRequestId, string $reason): array
     {
         $partes = [];
+        // Lo que se apaga, para el libro: cada parte con la traza de su agente.
+        $apagados = [];
         foreach (StudioVoicePublication::SCOPES as $parte) {
             $actual = StudioVoicePublications::current($parte);
             if ($actual !== null && $actual->agent_id !== null) {
                 $partes[] = $parte;
+                if ($actual->agent !== null) {
+                    $apagados[] = ['part' => $parte, 'agent' => (string) $actual->agent->uuid] + self::traceOf($actual->agent);
+                }
             }
         }
         if ($partes === []) {
@@ -472,7 +523,7 @@ final class StudioVoicePublishing
         $cabezaAntes = (int) (StudioVoicePublications::head()?->seq ?? 0);
 
         try {
-            $filas = DB::transaction(function () use ($access, $request, $clientRequestId, $reason, $partes, $cabezaAntes, $firma): array {
+            $filas = DB::transaction(function () use ($access, $request, $clientRequestId, $reason, $partes, $apagados, $cabezaAntes, $firma): array {
                 $cabeza = $this->lockedHead($cabezaAntes);
                 $ahora = now();
                 $filas = [];
@@ -488,7 +539,7 @@ final class StudioVoicePublishing
                 $this->audit->record($request, $access->actor, 'voice_publication.off', StudioAuditEvent::SUBJECT_INTEGRATION, $filas[0]->uuid,
                     'Apagó la voz ('.implode(' y ', $partes).')', [
                         'toStatus' => 'off',
-                        'diff' => ['seqs' => array_map(static fn (StudioVoicePublication $f): int => (int) $f->seq, $filas), 'parts' => $partes, 'reason' => $reason],
+                        'diff' => ['seqs' => array_map(static fn (StudioVoicePublication $f): int => (int) $f->seq, $filas), 'parts' => $partes, 'reason' => $reason, 'turnedOff' => $apagados],
                     ]);
 
                 return $filas;
@@ -697,7 +748,8 @@ final class StudioVoicePublishing
     /**
      * Apunta el número al agente (o lo deja sin agente) después de escribir la
      * cadena, en el sentido seguro: un fallo no deshace la entrada, se informa
-     * y lo vigila la deriva del número (E2-3).
+     * y lo vigila la deriva del número (E2-3). Un número solo saliente no
+     * apunta a ningún agente: `not_applicable_outbound_only`, sin red.
      *
      * @return array{action:string,outcome:string,reason:string|null}
      */
@@ -707,6 +759,9 @@ final class StudioVoicePublishing
         $accion = $providerAgentId === null ? 'unassigned' : 'assigned';
         if ($numero === null) {
             return ['action' => $accion, 'outcome' => VoiceDeployResult::OUTCOME_NOT_CONFIGURED, 'reason' => null];
+        }
+        if (! self::numberInboundCapable()) {
+            return self::numberNotApplicable($accion);
         }
         $r = $this->deployer()->assignNumber($numero, $providerAgentId);
         if ($r->outcome !== VoiceDeployResult::OUTCOME_ASSIGNED) {
@@ -723,7 +778,8 @@ final class StudioVoicePublishing
      */
     private function restoreNumber(?string $numeroId): void
     {
-        if ($numeroId === null) {
+        // Un número solo saliente nunca se asignó: no hay nada que devolver.
+        if ($numeroId === null || ! self::numberInboundCapable()) {
             return;
         }
         try {
@@ -736,6 +792,39 @@ final class StudioVoicePublishing
             // una compensación y la deriva del número la vigila. Solo la clase.
             Log::warning('ultron_studio.voice_number_not_restored', ['error_class' => class_basename($e)]);
         }
+    }
+
+    /**
+     * El número de un número «Outbound Only»: lo que se habría hecho
+     * (`$action`) y que no aplica, sin pedir nada al proveedor.
+     *
+     * @return array{action:string,outcome:string,reason:null}
+     */
+    private static function numberNotApplicable(string $action): array
+    {
+        return ['action' => $action, 'outcome' => self::NUMBER_NOT_APPLICABLE, 'reason' => null];
+    }
+
+    /**
+     * La traza de un agente para el libro del Studio: la versión (uuid y
+     * huella del contenido), el perfil (uuid y huella) y la compilación
+     * (huella de la especificación y versión del compilador). Sin teléfonos,
+     * sin el id del proveedor y sin textos.
+     *
+     * @return array{specHash:string,compilerVersion:string,version:string|null,versionHash:string,profile:string|null,profileHash:string}
+     */
+    private static function traceOf(StudioVoiceAgent $agente): array
+    {
+        $agente->loadMissing(['version:id,uuid', 'profile:id,uuid']);
+
+        return [
+            'specHash' => (string) $agente->spec_hash,
+            'compilerVersion' => (string) $agente->compiler_version,
+            'version' => $agente->version?->uuid,
+            'versionHash' => (string) $agente->studio_content_hash,
+            'profile' => $agente->profile?->uuid,
+            'profileHash' => (string) $agente->voice_profile_hash,
+        ];
     }
 
     /** El agente no tiene deriva (D8-21): lo que se observa es lo que se verificó al desplegar. */

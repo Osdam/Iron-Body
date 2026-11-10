@@ -1,0 +1,6 @@
+E2E H8 · backend ab54a256-arbol-ace6becff7a1 (ab54a256089a8b560f00238bb314623f0b122d8b + el árbol de trabajo sin confirmar, huella ace6becff7a1) · 2026-11-09T20:53:17Z · 89 s
+pruebas del E2E (sha256 de tests/Feature/Voice/E2E/*.php): 000a6d427e429d11
+simuladores y valla de ops/banco-h8 (sha256 de los 4 .cjs, DEL COMMIT ab54a256; los del árbol de trabajo: 3791625ad9fe282c): 9c87835600b7afdf
+salientes: pruebas 10 (10 OK, 0 FALLO, 0 OMITIDAS) · comprobaciones 205 (205 OK, 0 FALLO) · 65 s
+comprobaciones que fallaron: 0
+hash de resultados (sha256 de las comprobaciones ordenadas: fase, paso, nombre, ok): 8f75effb55b32f67219f03b17e19296da7eb3e0f1f0ec4f92073135b78c0de51

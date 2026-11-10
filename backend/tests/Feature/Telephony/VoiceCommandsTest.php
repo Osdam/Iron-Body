@@ -57,7 +57,16 @@ class VoiceCommandsTest extends TestCase
         }
         $this->assertSame(0, Artisan::call('voice:doctor', ['--telefonia' => true, '--json' => true]));
         $json = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
-        $this->assertSame(['callsEnabledInCode', 'flags', 'scopes', 'provider', 'number', 'carrierConfigured', 'publication', 'brakeOpen', 'limits', 'schedule', 'facts', 'transferDirectory', 'today'], array_keys($json['telefonia']));
+        // B8-g: `providerVerification` (E4-6, la marca de la verificación con su fecha) y, en `number`, lo declarado de las entrantes.
+        $this->assertSame(['callsEnabledInCode', 'flags', 'scopes', 'provider', 'providerVerification', 'number', 'carrierConfigured', 'publication', 'brakeOpen', 'limits', 'schedule', 'facts', 'transferDirectory', 'today'], array_keys($json['telefonia']));
+        $this->assertSame(['state' => 'missing', 'verifiedAt' => null, 'expiresAt' => null], $json['telefonia']['providerVerification']);
+        // B8-h (REV8-c M-1): `checkReason`, aditivo, dice por qué.
+        $this->assertSame(['configured', 'collidesWithMessaging', 'importedNumberIdConfigured', 'inboundCapable', 'observed', 'check', 'checkReason'], array_keys($json['telefonia']['number']));
+        $this->assertNull($json['telefonia']['number']['observed'], 'sin una conciliación del número, sin observar');
+        $this->assertSame('unverified', $json['telefonia']['number']['check'], 'y la puerta lo da por no vigilado (falla cerrado)');
+        $this->assertSame('no_observation', $json['telefonia']['number']['checkReason']);
+        $this->assertStringContainsString('la puerta dice number_unverified', $texto);
+        $this->assertNull($json['telefonia']['number']['inboundCapable'], 'sin declarar');
         $this->assertFalse($json['telefonia']['callsEnabledInCode']);
         foreach (['xi-centinela', self::INITIATION_SECRET, self::TOOL_SECRET, self::WEBHOOK_SECRET, '+576010000090', '576010000090'] as $s) {
             $this->assertStringNotContainsString($s, $texto.json_encode($json), "la salida lleva «{$s}»");

@@ -2,14 +2,17 @@
 #   decide         · OutboundPolicy con los hechos ya calculados: cada motivo aislado, el orden y las combinaciones
 #   whatsappGuard  · voice_number_is_whatsapp (D8-5)
 #   job            · PlaceOutboundVoiceCall: relectura de la cabeza, deriva, freno y la respuesta de ElevenLabs
+# B8-g (decisión del lead, 09-11-2026): la identidad vigilada del número que llama (number_unverified, number_mismatch).
+# Ningún caso de `decide` los produce: el mundo del fixture tiene el número vigilado (numberCheck = verified).
 ORDER = ["calls_disabled_in_code", "outbound_disabled", "twilio_voice_disabled", "no_voice_number", "voice_number_is_whatsapp",
+         "number_unverified", "number_mismatch",
          "elevenlabs_not_configured", "elevenlabs_disabled", "elevenlabs_unverified",
          "no_publication", "publication_unreadable", "agent_drift", "voice_braked",
          "source_not_allowed", "not_an_active_voice_canary", "contact_not_authorized", "no_voice_consent", "excluded", "rne_check_missing",
          "outside_hours", "holiday",
          "frequency_exceeded", "concurrency_exceeded", "daily_cap_zero", "daily_cap_reached", "budget_exhausted",
          "duplicate_request"]
-assert len(ORDER) == len(set(ORDER)) == 26
+assert len(ORDER) == len(set(ORDER)) == 28
 
 OG = Fixture("outbound-gate-cases.json", header(
     "outbound-gate-cases.json",

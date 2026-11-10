@@ -100,8 +100,9 @@ TWILIO_VOICE_BASE_URL=http://127.0.0.1:@@PUERTO_TW@@
 # `fullUrl()` (la del simulador de Twilio, TW_SIGN_BASE).
 VOICE_WEBHOOK_BASE_URL=https://api.ironbody-banco.invalid
 
-# Entrantes y salientes encendidas (alcance canario; la parte 4b cambia VOICE_OUTBOUND_SCOPE a `contacts`).
-VOICE_INBOUND_ENABLED=true
+# Entrantes y salientes encendidas (alcance canario; la parte 4b cambia VOICE_OUTBOUND_SCOPE a `contacts`). La fase
+# «salientes» del arnés (TEST8-c) apaga las entrantes: la 4a sin la 3.
+VOICE_INBOUND_ENABLED=@@ENTRANTES@@
 VOICE_INBOUND_DAILY_CAP=12
 VOICE_OUTBOUND_ENABLED=true
 VOICE_OUTBOUND_SCOPE=@@ALCANCE_SALIENTES@@

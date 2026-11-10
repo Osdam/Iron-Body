@@ -3,8 +3,11 @@
 namespace App\Services\UltronStudio;
 
 use App\Exceptions\UltronStudioException;
+use App\Models\UltronStudio\StudioAuditEvent;
 use App\Models\UltronStudio\StudioVersion;
 use App\Models\UltronStudio\StudioVoiceLabSession;
+use App\Services\Voice\Dto\VoiceAgentPayload;
+use App\Services\Voice\Dto\VoiceAgentSpec;
 use App\Services\Voice\Dto\VoiceIds;
 use App\Services\Voice\Dto\VoiceWebhookVerdict;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -47,6 +50,12 @@ use Throwable;
  * LA URL FIRMADA: una por sesión, caduca a los 15 minutos, va UNA vez en la
  * respuesta de quien abrió la sesión y no se guarda (solo cuándo caduca). Una
  * repetición de la misma petición devuelve la sesión SIN la URL.
+ *
+ * EL LIBRO DEL STUDIO (S8-d): abrir una sesión deja `voice_lab.session_opened`
+ * en la MISMA transacción que la reserva y la fila (o las dos o ninguna), con
+ * quien la abrió, la huella de la especificación, la versión y el perfil (uuid
+ * y huella), el modo y la reserva; nunca la URL, un teléfono ni un texto. El
+ * veredicto deja el suyo ({@see StudioVoiceLabVerdicts}).
  *
  * CERRAR, de tres maneras, y siempre con la reserva liquidada:
  *  - quien la abrió ({@see end()}), con lo que observó (códigos de conjuntos
@@ -156,7 +165,10 @@ final class StudioVoiceLabSessions
         'fake_mode' => 'Una sesión del simulador no admite veredicto: no habló ningún agente.',
     ];
 
-    public function __construct(private readonly StudioVoiceLabAgents $agents) {}
+    public function __construct(
+        private readonly StudioVoiceLabAgents $agents,
+        private readonly StudioAudit $audit,
+    ) {}
 
     /** La bandera: apagada, todo `voice-lab/*` salvo el estado es 409 `voice_lab_disabled`. */
     public static function assertEnabled(): void
@@ -311,7 +323,7 @@ final class StudioVoiceLabSessions
                 $agente = $this->agents->insertPending($preparado, $yo, $clientRequestId);
                 $ahora = now();
 
-                return StudioVoiceLabSession::query()->forceCreate([
+                $sesion = StudioVoiceLabSession::query()->forceCreate([
                     'client_request_id' => $clientRequestId,
                     'agent_id' => $agente,
                     'status' => StudioVoiceLabSession::STATUS_OPEN,
@@ -325,6 +337,9 @@ final class StudioVoiceLabSessions
                     'status_changed_at' => $ahora,
                     'updated_at' => $ahora,
                 ]);
+                $this->recordOpened($access, $sesion, $preparado);
+
+                return $sesion;
             });
         } catch (UniqueConstraintViolationException) {
             // La misma llave llegó dos veces a la vez y un índice único paró a la
@@ -369,6 +384,37 @@ final class StudioVoiceLabSessions
         }
 
         return ['session' => $sesion->fresh() ?? $sesion, 'replayed' => false, 'signedUrl' => $url['signedUrl']];
+    }
+
+    /**
+     * El evento del libro al abrir (S8-d), dentro de la transacción de la
+     * reserva: el actor, la huella, la versión y el perfil, el modo y la
+     * reserva. Sin URL, teléfonos ni textos.
+     *
+     * @param  array{version:StudioVersion,profile:stdClass,spec:VoiceAgentSpec,payload:VoiceAgentPayload,provider:string}  $preparado
+     */
+    private function recordOpened(StudioAccess $access, StudioVoiceLabSession $sesion, array $preparado): void
+    {
+        $spec = $preparado['spec'];
+        $version = $preparado['version'];
+        $perfil = $preparado['profile'];
+        $this->audit->record(null, $access->actor, 'voice_lab.session_opened', StudioAuditEvent::SUBJECT_INTEGRATION, (string) $sesion->uuid,
+            "Abrió una sesión del laboratorio hablado: «{$version->label}» con el perfil «{$perfil->label}» (".($preparado['provider'] === StudioVoiceLabAgents::PROVIDER_FAKE ? 'simulador' : 'ElevenLabs').')', [
+                'toStatus' => StudioVoiceLabSession::STATUS_OPEN,
+                'contentHash' => (string) $version->content_hash,
+                'diff' => [
+                    'specHash' => $spec->specHash,
+                    'compilerVersion' => $spec->compilerVersion(),
+                    'version' => (string) $version->uuid,
+                    'versionHash' => (string) $version->content_hash,
+                    'profile' => (string) $perfil->uuid,
+                    'profileHash' => (string) $perfil->content_hash,
+                    'provider' => $preparado['provider'],
+                    'reservedMicros' => (int) $sesion->reserved_micros,
+                    'maxSeconds' => (int) $sesion->max_seconds,
+                    'transferDestinations' => count($spec->transferDestinations()),
+                ],
+            ]);
     }
 
     // ── POST voice-lab/sessions/{uuid}/end ──────────────────────────────────

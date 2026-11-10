@@ -205,11 +205,11 @@ const salienteValida = (agentId, to = TEL_CANARIO, extra = {}) => C.mezclar({
 const respuestaIniciacion = (si = 'si') => ({ status: 200, body: { type: 'conversation_initiation_client_data', dynamic_variables: { caller_authorized: si, call_direction: 'entrante', call_ref: crypto.randomUUID(), version_label: 'v-banco-1' } } });
 
 // ══ A. ElevenLabs: superficie y autenticación ═════════════════════════════════════════════════
-caso('EL · el control (/__stats, /__surface) responde y no cuenta como petición; superficie de 13 rutas', async () => {
+caso('EL · el control (/__stats, /__surface) responde y no cuenta como petición; superficie de 18 rutas (13 + 5 de OPS8-c)', async () => {
   const s = await statsEl();
   const sup = await ctl(BASE_EL, '/__surface');
   assert.equal(s.requests, 0);
-  assert.equal(sup.routes.length, 13);
+  assert.equal(sup.routes.length, 18);
   assert.equal((await statsEl()).requests, 0);
 });
 caso('EL · ruta no listada → 404 y violación unknown_route', async () => {
@@ -666,13 +666,14 @@ caso('EL → L · herramienta con un teléfono en la respuesta, y una sin Bearer
 });
 
 // ══ G. Twilio ═══════════════════════════════════════════════════════════════════════════════════
-caso('TW · rutas no listadas (caller ID, crear un aviso de gasto) → 404 y unknown_route; DELETE → 405', async () => {
+caso('TW · rutas no listadas (la ficha de un caller ID, crear un aviso de gasto) → 404 y unknown_route; crear o verificar un caller ID y DELETE → 405', async () => {
   const { d } = await nuevas(statsTw, async () => {
-    assert.equal((await tw('GET', `${ACC}/OutgoingCallerIds.json`)).status, 404);
+    assert.equal((await tw('GET', `${ACC}/OutgoingCallerIds/${C.sidTwilio('PN')}.json`)).status, 404);
     assert.equal((await tw('POST', `${ACC}/Usage/Triggers.json`, { form: { TriggerValue: '1' } })).status, 404);
+    assert.equal((await tw('POST', `${ACC}/OutgoingCallerIds.json`, { form: { PhoneNumber: TEL_OTRO } })).status, 405);
     return tw('DELETE', `${ACC}/Calls/${ESTADO.callSid}.json`);
   });
-  assert.deepEqual(d, { unknown_route: 2, method_not_allowed: 1 });
+  assert.deepEqual(d, { unknown_route: 2, method_not_allowed: 2 });
 });
 caso('TW · la cuenta madre en la ruta → account_sid_mismatch', async () => {
   const { r, d } = await nuevas(statsTw, () => tw('GET', `/2010-04-01/Accounts/${PZ.TW_MASTER_SID}/Calls.json`));
@@ -926,6 +927,152 @@ caso('VALLA · tráfico local que entra POR la valla se marca local_through_fenc
     q.end();
   });
   assert.equal((await ctl(BASE_VALLA, '/__stats')).localThroughFence, 1);
+});
+
+// ══ L. OPS8-c: secretos y webhook de ElevenLabs; caller ID, sonda de mensajes y bundle de Twilio ════════════════
+const sha = (v) => crypto.createHash('sha256').update(v).digest('hex');
+const REG = { herramientas: `Bearer ${hex(32)}`, iniciacion: hex(32) };
+caso('EL · OPS8-c · secretos: lista vacía; crear los dos → ids; la lista por prefijo los da con used_by; /__state solo da su huella', async () => {
+  const { d } = await nuevas(statsEl, async () => {
+    const v = await el('GET', '/v1/convai/secrets?search=ironbody-voz-&page_size=100');
+    assert.equal(v.status, 200);
+    assert.deepEqual(v.json.secrets, []);
+    const h = await el('POST', '/v1/convai/secrets', { body: { type: 'new', name: 'ironbody-voz-herramientas', value: REG.herramientas } });
+    const i = await el('POST', '/v1/convai/secrets', { body: { type: 'new', name: 'ironbody-voz-iniciacion', value: REG.iniciacion } });
+    assert.equal(h.status, 200);
+    assert.equal(h.json.type, 'stored');
+    assert.match(h.json.secret_id, /^sec_[0-9a-z]+$/);
+    ESTADO.secretoH = h.json.secret_id;
+    ESTADO.secretoI = i.json.secret_id;
+    const l = await el('GET', '/v1/convai/secrets?search=ironbody-voz-');
+    assert.deepEqual(l.json.secrets.map((x) => x.name).sort(), ['ironbody-voz-herramientas', 'ironbody-voz-iniciacion']);
+    assert.ok(l.json.secrets.every((x) => x.value === undefined && Array.isArray(x.used_by.tools)));
+    assert.equal(l.json.next_cursor, null);
+  });
+  assert.deepEqual(d, {});
+  const st = await ctl(BASE_EL, '/__state?secrets=1');
+  assert.equal(st.secrets.find((x) => x.secret_id === ESTADO.secretoH).sha256, sha(REG.herramientas));
+  assert.equal(st.secrets.find((x) => x.secret_id === ESTADO.secretoI).sha256, sha(REG.iniciacion));
+  assert.ok(!JSON.stringify(st).includes(REG.iniciacion) && !JSON.stringify(st).includes(REG.herramientas));
+});
+caso('EL · OPS8-c · violaciones del registro: nombre repetido, ajeno, forma mala, herramientas sin Bearer, PATCH con otro nombre', async () => {
+  const { d } = await nuevas(statsEl, async () => {
+    await el('POST', '/v1/convai/secrets', { body: { type: 'new', name: 'ironbody-voz-herramientas', value: REG.herramientas } });
+    await el('POST', '/v1/convai/secrets', { body: { type: 'new', name: 'otra-cosa', value: hex(16) } });
+    assert.equal((await el('POST', '/v1/convai/secrets', { body: { type: 'nuevo', name: 'x', value: 'y' } })).status, 422);
+    await el('PATCH', `/v1/convai/secrets/${ESTADO.secretoH}`, { body: { type: 'update', name: 'ironbody-voz-herramientas', value: hex(20) } });
+    await el('PATCH', `/v1/convai/secrets/${ESTADO.secretoI}`, { body: { type: 'update', name: 'otro-nombre', value: REG.iniciacion } });
+  });
+  assert.deepEqual(d, { secret_duplicate_name: 1, secret_name_not_ours: 1, secret_request_shape: 1, secret_tool_not_bearer: 1, secret_update_name_changed: 1 });
+  // Vuelta a lo registrado (el PATCH cambia el valor y conserva el id).
+  const r = await el('PATCH', `/v1/convai/secrets/${ESTADO.secretoH}`, { body: { type: 'update', name: 'ironbody-voz-herramientas', value: REG.herramientas } });
+  assert.equal(r.json.secret_id, ESTADO.secretoH);
+  const st = await ctl(BASE_EL, '/__state?secrets=1');
+  const h = st.secrets.find((x) => x.secret_id === ESTADO.secretoH);
+  assert.equal(h.sha256, sha(REG.herramientas));
+  assert.equal(h.updates, 2);
+  assert.equal((await el('PATCH', `/v1/convai/secrets/sec_noexiste`, { body: { type: 'update', name: 'x', value: 'y' } })).status, 404);
+});
+caso('EL · OPS8-c · webhook HMAC con la URL canónica → webhook_id y el secreto que GENERA; la lista no lo enseña; violaciones de forma', async () => {
+  const url = `${BASE_CANONICA}/api/webhooks/voice/elevenlabs/post-call`;
+  const { d: d0 } = await nuevas(statsEl, async () => {
+    assert.deepEqual((await el('GET', '/v1/workspace/webhooks')).json.webhooks, []);
+    const c = await el('POST', '/v1/workspace/webhooks', { body: { settings: { auth_type: 'hmac', name: 'ironbody-voz-post-llamada', webhook_url: url } } });
+    assert.equal(c.status, 200);
+    assert.match(c.json.webhook_id, /^wh_[0-9a-z]+$/);
+    assert.match(c.json.webhook_secret, /^wsec_[0-9a-f]{48}$/);
+    ESTADO.webhookWs = c.json;
+    const l = (await el('GET', '/v1/workspace/webhooks?include_usages=false')).json.webhooks;
+    assert.equal(l.length, 1);
+    assert.deepEqual([l[0].name, l[0].webhook_id, l[0].webhook_url, l[0].auth_type, l[0].is_disabled], ['ironbody-voz-post-llamada', c.json.webhook_id, url, 'hmac', false]);
+    assert.ok(!JSON.stringify(l).includes(c.json.webhook_secret));
+  });
+  assert.deepEqual(d0, {});
+  const { d } = await nuevas(statsEl, async () => {
+    await el('POST', '/v1/workspace/webhooks', { body: { settings: { auth_type: 'oauth2', name: 'x-ajeno', webhook_url: url } } });
+    await el('POST', '/v1/workspace/webhooks', { body: { settings: { auth_type: 'hmac', name: 'ironbody-voz-post-llamada', webhook_url: 'https://otro.invalid/api/webhooks/voice/elevenlabs/post-call' } } });
+    await el('POST', '/v1/workspace/webhooks', { body: { settings: { auth_type: 'hmac', name: 'x-ajeno-2', webhook_url: url, request_headers: { 'x-api-key': 'k' } } } });
+    assert.equal((await el('POST', '/v1/workspace/webhooks', { body: { settings: 'no' } })).status, 422);
+  });
+  assert.deepEqual(d, { webhook_auth_not_hmac: 1, webhook_name_not_ours: 2, webhook_duplicate_name: 1, webhook_url_not_post_call: 1, webhook_custom_headers: 1, webhook_request_shape: 1 });
+  SECRETOS.push(REG.herramientas, REG.iniciacion, ESTADO.webhookWs.webhook_secret);   // HIGIENE: tampoco en los registros
+});
+caso('EL → L · OPS8-c · los emisores usan lo REGISTRADO: iniciación y herramienta con el valor de su secret_id, post-llamada firmada con el secreto del webhook creado', async () => {
+  const h = await el('POST', '/v1/convai/tools', { body: { tool_config: herramientaCompilada('consultar_horarios', { api_schema: { request_headers: { Authorization: { secret_id: ESTADO.secretoH } } } }) } });
+  const a = await el('POST', '/v1/convai/agents/create', { body: agenteCompilado([h.json.id], { platform_settings: { workspace_overrides: { conversation_initiation_client_data_webhook: { request_headers: { 'X-Voice-Initiation-Secret': { secret_id: ESTADO.secretoI } } }, webhooks: { post_call_webhook_id: ESTADO.webhookWs.webhook_id } } } }) });
+  assert.equal(a.status, 200);
+  const antes = (await el('GET', `/v1/convai/phone-numbers/${PZ.EL_PHONE_NUMBER_ID}`)).json.assigned_agent?.agent_id ?? null;
+  await el('PATCH', `/v1/convai/phone-numbers/${PZ.EL_PHONE_NUMBER_ID}`, { body: { agent_id: a.json.agent_id } });
+  reglas.set(EL.LARAVEL.initiation, () => respuestaIniciacion('si'));
+  reglas.delete(EL.LARAVEL.postCall);
+  try {
+    const { d } = await nuevas(statsEl, async () => {
+      let n = recibido.length;
+      const r = await ctl(BASE_EL, `/__inbound?from=${encodeURIComponent(TEL_CANARIO)}`);
+      assert.equal(recibido[n].headers['x-voice-initiation-secret'], REG.iniciacion);
+      n = recibido.length;
+      await ctl(BASE_EL, `/__tool?conversation_id=${r.conversation_id}&tool=consultar_horarios`);
+      assert.equal(recibido[n].headers.authorization, REG.herramientas);
+      n = recibido.length;
+      await ctl(BASE_EL, `/__emit/post-call?conversation_id=${r.conversation_id}&variant=valid`);
+      const m = /^t=(\d+),v0=([0-9a-f]{64})$/.exec(recibido[n].headers['elevenlabs-signature']);
+      assert.ok(m);
+      assert.equal(C.hmacHex(ESTADO.webhookWs.webhook_secret, `${m[1]}.${recibido[n].raw}`), m[2]);
+      assert.notEqual(C.hmacHex(PZ.EL_WEBHOOK_SECRET, `${m[1]}.${recibido[n].raw}`), m[2]);
+    });
+    assert.deepEqual(d, {});
+    const usados = (await el('GET', '/v1/convai/secrets?search=ironbody-voz-iniciacion')).json.secrets[0].used_by;
+    assert.deepEqual([usados.agents.map((x) => x.id), usados.others], [[a.json.agent_id], ['conversation_initiation_webhook']]);
+  } finally {
+    reglas.delete(EL.LARAVEL.initiation);
+    await el('PATCH', `/v1/convai/phone-numbers/${PZ.EL_PHONE_NUMBER_ID}`, { body: { agent_id: antes } });
+  }
+});
+caso('TW · OPS8-c · caller ID: comprado → lista de caller ID vacía; /__numero?tipo=caller_id → sale de los comprados y aparece como caller ID', async () => {
+  const { d } = await nuevas(statsTw, async () => {
+    assert.equal((await tw('GET', `${ACC}/OutgoingCallerIds.json?PageSize=100`)).json.outgoing_caller_ids.length, 0);
+    assert.equal((await ctl(BASE_TW, '/__numero?tipo=caller_id')).tipo, 'caller_id');
+    assert.equal((await tw('GET', `${ACC}/IncomingPhoneNumbers.json?PageSize=100`)).json.incoming_phone_numbers.length, 0);
+    const ci = (await tw('GET', `${ACC}/OutgoingCallerIds.json?PageSize=100`)).json.outgoing_caller_ids;
+    assert.deepEqual(ci.map((x) => x.phone_number), [PZ.VOICE_NUMBER]);
+    assert.equal((await tw('GET', `${ACC}/OutgoingCallerIds.json`, { cred: CRED.elevenlabs })).status, 200);
+    assert.equal((await tw('GET', `${ACC}/IncomingPhoneNumbers/${PZ.TW_VOICE_NUMBER_SID}.json`)).status, 404);
+  });
+  assert.deepEqual(d, {});
+  await ctl(BASE_TW, '/__numero?tipo=comprado');
+});
+caso('TW · OPS8-c · sonda de mensajes: las keys de la voz → 401 SIN violación (sondasDenegadas); una key mal hecha (sms_laravel=1) → 200', async () => {
+  const a = (await statsTw()).sondasDenegadas ?? 0;
+  const { d } = await nuevas(statsTw, async () => {
+    assert.equal((await tw('GET', `${ACC}/Messages.json?PageSize=1`)).status, 401);
+    assert.equal((await tw('GET', `${ACC}/Messages.json?PageSize=1`, { cred: CRED.elevenlabs })).status, 401);
+    await ctl(BASE_TW, '/__numero?sms_laravel=1');
+    assert.equal((await tw('GET', `${ACC}/Messages.json?PageSize=1`)).status, 200);
+    await ctl(BASE_TW, '/__numero?sms_laravel=0');
+  });
+  assert.deepEqual(d, {});
+  assert.equal((await statsTw()).sondasDenegadas - a, 2);
+});
+caso('TW · OPS8-c · bundle y dirección: /__numero?bundle=aprobado → bundle_sid en el número y GET del bundle (sin cuenta en la ruta) con su estado', async () => {
+  const { d } = await nuevas(statsTw, async () => {
+    await ctl(BASE_TW, '/__numero?bundle=pendiente&address=local&voice_url=otra');
+    const n = (await tw('GET', `${ACC}/IncomingPhoneNumbers.json`)).json.incoming_phone_numbers[0];
+    assert.match(n.bundle_sid, /^BU[0-9a-f]{32}$/);
+    assert.equal(n.address_requirements, 'local');
+    assert.equal(new URL(n.voice_url).host, 'ivr.banco.invalid');
+    assert.equal((await tw('GET', `/v2/RegulatoryCompliance/Bundles/${n.bundle_sid}`)).json.status, 'pending-review');
+    await ctl(BASE_TW, '/__numero?bundle=aprobado');
+    assert.equal((await tw('GET', `/v2/RegulatoryCompliance/Bundles/${(await tw('GET', `${ACC}/IncomingPhoneNumbers.json`)).json.incoming_phone_numbers[0].bundle_sid}`)).json.status, 'twilio-approved');
+    assert.equal((await tw('GET', `/v2/RegulatoryCompliance/Bundles/${C.sidTwilio('BU')}`)).status, 404);
+  });
+  assert.deepEqual(d, {});
+  await ctl(BASE_TW, '/__numero?bundle=none&address=none&voice_url=elevenlabs');
+});
+caso('TW · OPS8-c · /__numero?cuenta=madre → la ficha de la cuenta dice owner_account_sid = la propia (cuenta madre); subcuenta → la del OTP', async () => {
+  await ctl(BASE_TW, '/__numero?cuenta=madre');
+  assert.equal((await tw('GET', `${ACC}.json`)).json.owner_account_sid, PZ.TW_ACCOUNT_SID);
+  await ctl(BASE_TW, '/__numero?cuenta=subcuenta');
+  assert.equal((await tw('GET', `${ACC}.json`)).json.owner_account_sid, PZ.TW_MASTER_SID);
 });
 
 // ══ K. Registro, control y arranque ════════════════════════════════════════════════════════════

@@ -20,14 +20,21 @@ use Illuminate\Support\Str;
  *  1. Un cuerpo autenticado pero mal formado (sin `call_sid` o sin
  *     `conversation_id`) se deniega explícitamente, sin fila (DF-E6).
  *  2. Idempotente por `call_sid`: la misma iniciación otra vez devuelve la
- *     misma respuesta y no crea otra fila.
+ *     misma respuesta y no crea otra fila. Si el SID es el de una SALIENTE de
+ *     Laravel (B8-g), responde como saliente y no crea nada
+ *     ({@see responseFor()}).
  *  3. Dentro del cerrojo de la puerta: la cadena (la parte `canary`), el
  *     llamante (el registro de canarios, solo lectura), el freno, la
  *     concurrencia y el cupo del día → `InboundPolicy`. Además, la puerta
  *     deniega un `called_number` que no es el número de voz (DF-E13) y un
  *     `agent_id` que no es el sellado de la parte vigente (DF-E12: además,
  *     `seal_mismatch` y freno: alguien cambió a qué agente apunta el número,
- *     E2-3).
+ *     E2-3). Con el número declarado SOLO SALIENTE
+ *     (`VOICE_NUMBER_INBOUND_CAPABLE=false`; B8-g, SEC8-c M-2) deniega SIEMPRE,
+ *     sean cuales sean las banderas y la constante, con
+ *     `number_outbound_only` como primer motivo: un «Outbound Only» no recibe
+ *     llamadas, así que si llega una iniciación, o el número no es lo que se
+ *     declaró o la lanzó otro.
  *  4. TODA iniciación deja su fila (E1-2): `active` si se autoriza, `denied`
  *     si no, con el sello, la huella y los 4 dígitos del que llama (nunca el
  *     número; con el caller ID oculto, ninguno de los dos, DF-E17) y su
@@ -45,6 +52,9 @@ final class InboundGate
     public const REASON_WRONG_CALLED_NUMBER = 'wrong_called_number';
 
     public const REASON_SEAL_MISMATCH = 'seal_mismatch';
+
+    /** B8-g (SEC8-c M-2): el número importado está declarado «Outbound Only»: ninguna entrante, nunca. */
+    public const REASON_NUMBER_OUTBOUND_ONLY = 'number_outbound_only';
 
     public const MAX_DEPTH = 8;
 
@@ -109,6 +119,11 @@ final class InboundGate
             'inboundDailyCap' => (int) config('voice.inbound.daily_cap', 0),
         ]);
         $motivos = $decision['reasons'];
+        // B8-g (SEC8-c M-2): con el número declarado solo saliente no se atiende ninguna entrante, sean cuales sean las
+        // banderas y la constante. Es el primer motivo (el que queda en `policy_reason`).
+        if (config('voice.number.inbound_capable') === false) {
+            array_unshift($motivos, self::REASON_NUMBER_OUTBOUND_ONLY);
+        }
 
         $numero = config('voice.twilio.from');
         if (! is_string($numero) || ! VoicePhone::isE164($numero) || ! is_string($llamado) || ! hash_equals($numero, $llamado)) {
@@ -165,23 +180,45 @@ final class InboundGate
         return self::response($autorizada ? VoiceAgentSpec::CALLER_AUTHORIZED : VoiceAgentSpec::CALLER_NOT_AUTHORIZED, (string) $llamada->call_ref, $parte->versionLabel());
     }
 
-    /** @return array<string, mixed> la respuesta de una fila ya creada (la misma iniciación otra vez) */
+    /**
+     * La respuesta de una fila ya creada: la misma iniciación otra vez, o
+     * (B8-g, decisión del lead) una SALIENTE. La doc de ElevenLabs describe el
+     * webhook de iniciación solo para entrantes; si lo llamara en una saliente
+     * que inició Laravel, su SID ya está en la fila (se guarda al volver la
+     * petición y el webhook llega al conectar): se responde como saliente, con
+     * la autorización de esa fila (viva: la autorizó la puerta; si no, no), y
+     * NO se crea ninguna entrante `denied`. Riesgo residual: si el webhook
+     * llegara ANTES de que el job guarde el SID, no hay fila y sale una
+     * entrante denegada (a vigilar en la primera llamada de la 4a: la línea
+     * `voice.inbound.initiation_for_outbound` o una `denied` con el número de voz
+     * como llamante).
+     *
+     * @return array<string, mixed>
+     */
     private static function responseFor(VoiceCall $llamada): array
     {
         $parte = $llamada->part === VoicePublishedConfig::PART_REST ? 'resto' : 'canario';
         $etiqueta = $llamada->stamp_state === 'applied' ? "{$parte} · publicación {$llamada->voice_publication_seq}" : "{$parte} · sin publicación";
 
+        if ($llamada->direction === VoiceCall::DIRECTION_OUTBOUND) {
+            $viva = in_array($llamada->status, [VoiceCall::STATUS_DIALING, VoiceCall::STATUS_ACTIVE], true);
+            Log::channel('voice')->warning('voice.inbound.initiation_for_outbound', ['call_uuid' => $llamada->uuid, 'status' => $llamada->status, 'authorized' => $viva]);
+
+            return self::response($viva ? VoiceAgentSpec::CALLER_AUTHORIZED : VoiceAgentSpec::CALLER_NOT_AUTHORIZED, (string) $llamada->call_ref, $etiqueta,
+                VoiceAgentSpec::DIRECTION_OUTBOUND);
+        }
+
         return self::response($llamada->caller_authorized === true ? VoiceAgentSpec::CALLER_AUTHORIZED : VoiceAgentSpec::CALLER_NOT_AUTHORIZED, (string) $llamada->call_ref, $etiqueta);
     }
 
     /** @return array<string, mixed> */
-    private static function response(string $autorizado, string $callRef, string $etiqueta): array
+    private static function response(string $autorizado, string $callRef, string $etiqueta, string $direccion = VoiceAgentSpec::DIRECTION_INBOUND): array
     {
         return [
             'type' => self::RESPONSE_TYPE,
             'dynamic_variables' => [
                 VoiceAgentSpec::VAR_CALLER_AUTHORIZED => $autorizado,
-                VoiceAgentSpec::VAR_CALL_DIRECTION => VoiceAgentSpec::DIRECTION_INBOUND,
+                VoiceAgentSpec::VAR_CALL_DIRECTION => $direccion,
                 VoiceAgentSpec::VAR_CALL_REF => $callRef,
                 VoiceAgentSpec::VAR_VERSION_LABEL => $etiqueta,
             ],

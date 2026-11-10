@@ -29,6 +29,12 @@
  *       asignar el número (que con la constante cerrada nunca llega). Sin ella no puede existir una fila sellada.
  *   php ayudante.php <backend> olvidar-deriva <provider_agent_id>
  *       Borra la caché de deriva de un agente (la deja el job con el reloj desplazado; ver el informe).
+ *   php ayudante.php <backend> observar-numero
+ *       La parte de NÚMEROS de la conciliación (`VoiceReconciler::numbers()`, el mismo método de
+ *       `voice:reconcile --numbers`, contra el simulador) SIN la de llamadas: deja en la caché la observación del número
+ *       importado que la puerta y el job exigen de menos de 2 h (B8-g, `number_unverified`). Existe para el reloj
+ *       DESPLAZADO de los workers de un trabajo (`reloj.php`): la observación tiene que ser «reciente» con SU reloj, y la
+ *       conciliación completa con ese reloj pasaría a `ambiguous` las filas `requested`. Imprime el resumen, sin el número.
  *   php ayudante.php <backend> revocar
  *       Revoca las sesiones de las cuentas del E2E (al parar).
  */
@@ -49,8 +55,10 @@ use App\Services\Telephony\VoiceCanaryDirectory;
 use App\Services\Telephony\VoiceCostGuard;
 use App\Services\Telephony\VoiceEvents;
 use App\Services\Telephony\VoiceLocks;
+use App\Services\Telephony\VoiceNumberGuard;
 use App\Services\Telephony\VoicePhone;
 use App\Services\Telephony\VoicePublishedConfig;
+use App\Services\Telephony\VoiceReconciler;
 use App\Services\Twilio\TwilioVoiceCarrier;
 use App\Services\UltronStudio\StudioAccess;
 use App\Services\UltronStudio\StudioIntegrations;
@@ -59,6 +67,7 @@ use App\Services\UltronStudio\StudioVoiceLabConfig;
 use App\Services\UltronStudio\StudioVoicePublications;
 use App\Services\UltronStudio\StudioVoicePublishing;
 use App\Services\Voice\ElevenLabs\ElevenLabsConfig;
+use App\Services\Voice\VoiceAdapters;
 use App\Services\Voice\VoiceCallContext;
 use App\Services\Voice\VoiceCallPolicy;
 use App\Services\Voice\VoiceProviders;
@@ -107,6 +116,7 @@ switch ($orden) {
             'production' => app()->isProduction(),
             'db' => ['database' => $base, 'user' => (string) config('database.connections.pgsql.username')],
             'callsEnabledInCode' => VoiceCallPolicy::CALLS_ENABLED_IN_CODE,
+            'inboundEnabled' => config('voice.inbound.enabled') === true,
             'elevenlabsBase' => $el->baseUrl(),
             'twilioBase' => $baseTwilio(),
             'twilioConfigured' => TwilioVoiceCarrier::configured(),
@@ -270,6 +280,12 @@ switch ($orden) {
         });
         $salida(['ok' => true, 'entry' => (string) $fila->uuid, 'seq' => (int) $fila->seq, 'scope' => (string) $fila->scope]);
 
+    case 'observar-numero':
+        $r = app(VoiceReconciler::class)->numbers(VoiceAdapters::numberObserver());
+        $salida(['ok' => true, 'at' => now()->utc()->format('Y-m-d\TH:i:s\Z'), 'result' => $r['result'] ?? null, 'matchesFrom' => $r['matchesFrom'] ?? null,
+            'collidesWithMessaging' => $r['collidesWithMessaging'] ?? null, 'observed' => $r['observed'] ?? null, 'expected' => $r['expected'] ?? null,
+            'brakeOpened' => $r['brakeOpened'] ?? null, 'policy' => VoiceNumberGuard::policyCheck()]);
+
     case 'olvidar-deriva':
         $agente = (string) ($argv[3] ?? '');
         $salida(['ok' => true, 'forgotten' => Cache::forget(OutboundGate::DRIFT_CACHE_PREFIX.$agente)]);
@@ -280,6 +296,6 @@ switch ($orden) {
         $salida(['ok' => true, 'sessionsDeleted' => $n]);
 
     default:
-        fwrite(STDERR, "ayudante: orden desconocida (preflight|cuentas|plan|saliente|despachar|cadena-canaria|olvidar-deriva|revocar)\n");
+        fwrite(STDERR, "ayudante: orden desconocida (preflight|cuentas|plan|saliente|despachar|cadena-canaria|observar-numero|olvidar-deriva|revocar)\n");
         exit(2);
 }

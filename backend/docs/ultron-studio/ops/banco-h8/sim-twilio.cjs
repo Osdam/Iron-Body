@@ -26,7 +26,12 @@
  *   POST /2010-04-01/Accounts/{sid}/IncomingPhoneNumbers/{PN}.json   actualizar (solo ElevenLabs: la importación)
  *   GET  /2010-04-01/Accounts/{sid}/Usage/Records.json            uso
  *   GET  /2010-04-01/Accounts/{sid}/Usage/Records/{Today|Yesterday|ThisMonth|LastMonth|Daily|Monthly}.json
- * Crear avisos de gasto (`Usage/Triggers`), caller ID, Monitor, Conferences, Recordings… no están: violaciones.
+ *   GET  /2010-04-01/Accounts/{sid}/OutgoingCallerIds.json        caller ID verificados (OPS8-c: el número «Outbound Only»)
+ *   GET  /2010-04-01/Accounts/{sid}/Messages.json                 SONDA de OPS8-c (h8-twilio-check.sh): ninguna key de la voz
+ *                                                                 tiene permiso; la denegación (401) NO es violación
+ *   GET  /v2/RegulatoryCompliance/Bundles/{BU}                    el bundle regulatorio del número (host numbers.twilio.com)
+ * Crear avisos de gasto (`Usage/Triggers`), crear o verificar caller ID, Monitor, Conferences, Recordings… no están:
+ * violaciones. El número de voz es, según el control /__numero, un número COMPRADO (por defecto) o un CALLER ID verificado.
  *
  * EMISOR: /__emit/usage-trigger firma con `X-Twilio-Signature` (HMAC-SHA1 del token de la SUBCUENTA) sobre la BASE
  * CANÓNICA (`TW_SIGN_BASE`, la de `VOICE_WEBHOOK_BASE_URL`) + la URI tal como se envía, y lo manda a `LARAVEL_BASE`
@@ -58,11 +63,14 @@ const RUTAS = [
   { id: 'numbers_update', method: 'POST', re: /^\/2010-04-01\/Accounts\/([^/]+)\/IncomingPhoneNumbers\/([^/]+)\.json$/, plantilla: '/2010-04-01/Accounts/{sid}/IncomingPhoneNumbers/{PhoneNumberSid}.json' },
   { id: 'usage_records', method: 'GET', re: /^\/2010-04-01\/Accounts\/([^/]+)\/Usage\/Records\.json$/, plantilla: '/2010-04-01/Accounts/{sid}/Usage/Records.json', query: CONSULTA_USO },
   { id: 'usage_records_sub', method: 'GET', re: /^\/2010-04-01\/Accounts\/([^/]+)\/Usage\/Records\/(Today|Yesterday|ThisMonth|LastMonth|Daily|Monthly)\.json$/, plantilla: '/2010-04-01/Accounts/{sid}/Usage/Records/{Periodo}.json', query: CONSULTA_USO },
+  { id: 'caller_ids_list', method: 'GET', re: /^\/2010-04-01\/Accounts\/([^/]+)\/OutgoingCallerIds\.json$/, plantilla: '/2010-04-01/Accounts/{sid}/OutgoingCallerIds.json', query: ['PageSize', 'Page', 'PageToken'] },
+  { id: 'messages_list', method: 'GET', re: /^\/2010-04-01\/Accounts\/([^/]+)\/Messages\.json$/, plantilla: '/2010-04-01/Accounts/{sid}/Messages.json', query: ['PageSize'], sonda: true },
+  { id: 'bundles_get', method: 'GET', re: /^\/v2\/RegulatoryCompliance\/Bundles\/([^/]+)$/, plantilla: '/v2/RegulatoryCompliance/Bundles/{BundleSid}', sinCuenta: true },
 ];
 const TODAS = new Set(RUTAS.map((r) => r.id));
 const PERMISOS = {
-  laravel_key: new Set(['account_get', 'calls_list', 'calls_get', 'calls_update', 'numbers_list', 'numbers_get', 'usage_records', 'usage_records_sub']),
-  elevenlabs_key: new Set(['calls_create', 'calls_list', 'calls_get', 'calls_update', 'numbers_list', 'numbers_get', 'numbers_update']),
+  laravel_key: new Set(['account_get', 'calls_list', 'calls_get', 'calls_update', 'numbers_list', 'numbers_get', 'usage_records', 'usage_records_sub', 'caller_ids_list', 'bundles_get']),
+  elevenlabs_key: new Set(['calls_create', 'calls_list', 'calls_get', 'calls_update', 'numbers_list', 'numbers_get', 'numbers_update', 'caller_ids_list']),
   signing_token: TODAS,
   master: TODAS,
 };
@@ -147,7 +155,8 @@ if (require.main === module) {
   function sembrar() {
     estado.llamadas = new Map();
     estado.tokens = new Set();
-    estado.numero = { sid: P.TW_VOICE_NUMBER_SID, phone: P.VOICE_NUMBER, voiceUrl: 'https://api.elevenlabs.invalid/twilio/inbound_call', updates: 0 };
+    estado.numero = { sid: P.TW_VOICE_NUMBER_SID, phone: P.VOICE_NUMBER, voiceUrl: 'https://api.elevenlabs.invalid/twilio/inbound_call', updates: 0, tipo: 'comprado', bundle: null, address: 'none', smsLaravel: false };
+    estado.cuentaMadre = false; // OPS8-c: /__numero?cuenta=madre → la cuenta de voz se presenta como cuenta MADRE
   }
   sembrar();
 
@@ -186,7 +195,7 @@ if (require.main === module) {
   function vistaNumero() {
     const n = estado.numero;
     return {
-      account_sid: SID, address_requirements: 'none', api_version: '2010-04-01', beta: false, capabilities: { voice: true, sms: false, mms: false, fax: false },
+      account_sid: SID, address_requirements: n.address, address_sid: null, bundle_sid: n.bundle ? n.bundle.sid : null, identity_sid: null, trunk_sid: null, emergency_status: 'Inactive', api_version: '2010-04-01', beta: false, capabilities: { voice: true, sms: false, mms: false, fax: false },
       date_created: C.fechaTwilio(Date.now() - 30 * 86400000), date_updated: C.fechaTwilio(Date.now() - 86400000), friendly_name: 'Voz Iron Body (banco)',
       origin: 'twilio', phone_number: n.phone, sid: n.sid, status: 'in-use', sms_url: '', status_callback: '', uri: `${uriCuenta}/IncomingPhoneNumbers/${n.sid}.json`,
       voice_application_sid: '', voice_caller_id_lookup: false, voice_method: 'POST', voice_receive_mode: 'voice', voice_url: n.voiceUrl,
@@ -289,7 +298,7 @@ if (require.main === module) {
   // ── Manejadores ─────────────────────────────────────────────────────────────────────────────
   const H = {
     account_get(ctx) {
-      const c = { date_created: C.fechaTwilio(Date.now() - 60 * 86400000), date_updated: C.fechaTwilio(Date.now() - 86400000), friendly_name: 'Voz (banco)', owner_account_sid: P.TW_MASTER_SID, sid: SID, status: 'active', subresource_uris: { calls: `${uriCuenta}/Calls.json`, incoming_phone_numbers: `${uriCuenta}/IncomingPhoneNumbers.json` }, type: 'Full', uri: `${uriCuenta}.json` };
+      const c = { date_created: C.fechaTwilio(Date.now() - 60 * 86400000), date_updated: C.fechaTwilio(Date.now() - 86400000), friendly_name: 'Voz (banco)', owner_account_sid: estado.cuentaMadre ? SID : P.TW_MASTER_SID, sid: SID, status: 'active', subresource_uris: { calls: `${uriCuenta}/Calls.json`, incoming_phone_numbers: `${uriCuenta}/IncomingPhoneNumbers.json` }, type: 'Full', uri: `${uriCuenta}.json` };
       // Como la de verdad: quien entra con el token de la cuenta lo recibe en la ficha (y tiene que descartarlo).
       return { status: 200, body: ctx.cred === 'signing_token' ? { auth_token: P.TW_SIGNING_TOKEN, ...c } : c };
     },
@@ -340,10 +349,26 @@ if (require.main === module) {
     numbers_list(ctx) {
       const p = leerPagina(ctx.u.searchParams, ctx.v);
       if (p.error) return p.error;
-      return { status: 200, body: pagina([vistaNumero()], 'incoming_phone_numbers', p.tam, p.pag, `${uriCuenta}/IncomingPhoneNumbers.json`) };
+      return { status: 200, body: pagina(estado.numero.tipo === 'comprado' ? [vistaNumero()] : [], 'incoming_phone_numbers', p.tam, p.pag, `${uriCuenta}/IncomingPhoneNumbers.json`) };
     },
     numbers_get(ctx) {
-      return ctx.params[1] === estado.numero.sid ? { status: 200, body: vistaNumero() } : errorTwilio(404, 20404, 'The requested resource was not found');
+      return ctx.params[1] === estado.numero.sid && estado.numero.tipo === 'comprado' ? { status: 200, body: vistaNumero() } : errorTwilio(404, 20404, 'The requested resource was not found');
+    },
+    caller_ids_list(ctx) {
+      const p = leerPagina(ctx.u.searchParams, ctx.v);
+      if (p.error) return p.error;
+      const n = estado.numero;
+      const ci = n.tipo === 'caller_id' ? [{ account_sid: SID, date_created: C.fechaTwilio(Date.now() - 2 * 86400000), date_updated: C.fechaTwilio(Date.now() - 86400000), friendly_name: 'Iron Body (banco)', phone_number: n.phone, sid: `PN${crypto.createHash('sha256').update(`ci:${n.phone}`).digest('hex').slice(0, 32)}`, uri: `${uriCuenta}/OutgoingCallerIds/PN.json` }] : [];
+      return { status: 200, body: pagina(ci, 'outgoing_caller_ids', p.tam, p.pag, `${uriCuenta}/OutgoingCallerIds.json`) };
+    },
+    messages_list(ctx) {
+      // Solo llega aquí quien tiene permiso (master/signing_token, que ya son violación, o la key de Laravel si el banco
+      // simula una key mal hecha con /__numero?sms_laravel=1): una lista vacía, como una cuenta sin mensajes.
+      return { status: 200, body: pagina([], 'messages', 50, 0, `${uriCuenta}/Messages.json`) };
+    },
+    bundles_get(ctx) {
+      const b = estado.numero.bundle;
+      return b && ctx.params[0] === b.sid ? { status: 200, body: { sid: b.sid, account_sid: SID, status: b.status, friendly_name: 'Iron Body (banco)', regulation_sid: `RN${'0'.repeat(32)}`, valid_until: null } } : errorTwilio(404, 20404, 'The requested resource was not found');
     },
     numbers_update(ctx) {
       if (ctx.params[1] !== estado.numero.sid) return errorTwilio(404, 20404, 'The requested resource was not found');
@@ -406,7 +431,7 @@ if (require.main === module) {
       v.push('unknown_route');
       return fin(errorTwilio(404, 20404, 'The requested resource was not found'));
     }
-    if (params[0] !== SID) {
+    if (!ruta.sinCuenta && params[0] !== SID) {
       v.push('account_sid_mismatch');
       return fin(errorTwilio(404, 20404, 'The requested resource was not found'));
     }
@@ -425,7 +450,13 @@ if (require.main === module) {
     if (e.credential === 'master') v.push('master_credential_used');
     if (e.credential === 'unknown') registro.stats.authRejected++;
     if (['none', 'mixed', 'unknown'].includes(e.credential)) return fin(errorTwilio(401, 20003, 'Authenticate'));
-    if (!PERMISOS[e.credential].has(ruta.id)) {
+    if (ruta.sonda && e.credential === 'laravel_key' && estado.numero.smsLaravel) {
+      /* el banco simula una key de la voz MAL HECHA (con permisos de mensajería): la sonda la tiene que cazar */
+    } else if (ruta.sonda && !PERMISOS[e.credential].has(ruta.id)) {
+      // La SONDA de OPS8-c: que la key de la voz no pueda leer mensajes es lo esperado; la denegación no es violación.
+      registro.stats.sondasDenegadas = (registro.stats.sondasDenegadas ?? 0) + 1;
+      return fin(errorTwilio(401, 20003, 'Authenticate'));
+    } else if (!PERMISOS[e.credential].has(ruta.id)) {
       if (e.credential === 'laravel_key') v.push(ruta.id === 'calls_create' ? 'call_create_by_laravel' : ruta.id === 'numbers_update' ? 'number_update_by_laravel' : `permission_denied:${ruta.id}`);
       else v.push(`permission_denied:${ruta.id}`);
       return fin(errorTwilio(401, 20003, 'Authenticate'));
@@ -523,6 +554,27 @@ if (require.main === module) {
       }
       case '/__emit/usage-trigger':
         return emitirAviso(res, q);
+      case '/__numero': {
+        // OPS8-c: el escenario del número de voz para h8-twilio-check.sh. tipo=comprado|caller_id, bundle=none|aprobado|
+        // pendiente, voice_url=elevenlabs|otra|vacia, address=none|local, sms_laravel=0|1 (una key de la voz mal hecha),
+        // cuenta=madre|subcuenta (owner_account_sid de la ficha: la propia o la del OTP).
+        const n = estado.numero;
+        if (q.has('tipo')) { if (!['comprado', 'caller_id'].includes(q.get('tipo'))) return mal(res, 'tipo = comprado|caller_id'); n.tipo = q.get('tipo'); }
+        if (q.has('bundle')) {
+          const b = q.get('bundle');
+          if (!['none', 'aprobado', 'pendiente'].includes(b)) return mal(res, 'bundle = none|aprobado|pendiente');
+          n.bundle = b === 'none' ? null : { sid: `BU${crypto.createHash('sha256').update(`bu:${n.phone}`).digest('hex').slice(0, 32)}`, status: b === 'aprobado' ? 'twilio-approved' : 'pending-review' };
+        }
+        if (q.has('voice_url')) {
+          const w = q.get('voice_url');
+          if (!['elevenlabs', 'otra', 'vacia'].includes(w)) return mal(res, 'voice_url = elevenlabs|otra|vacia');
+          n.voiceUrl = { elevenlabs: 'https://api.elevenlabs.io/twilio/inbound_call', otra: 'https://ivr.banco.invalid/voz', vacia: '' }[w];
+        }
+        if (q.has('address')) { if (!['none', 'local'].includes(q.get('address'))) return mal(res, 'address = none|local'); n.address = q.get('address'); }
+        if (q.has('sms_laravel')) n.smsLaravel = q.get('sms_laravel') === '1';
+        if (q.has('cuenta')) { if (!['madre', 'subcuenta'].includes(q.get('cuenta'))) return mal(res, 'cuenta = madre|subcuenta'); estado.cuentaMadre = q.get('cuenta') === 'madre'; }
+        return ok(res, { ok: true, cuenta: estado.cuentaMadre ? 'madre' : 'subcuenta', tipo: n.tipo, bundle: n.bundle ? n.bundle.status : null, voiceUrl: n.voiceUrl ? new URL(n.voiceUrl).host : null, address: n.address, smsLaravel: n.smsLaravel });
+      }
       default:
         return C.json(res, 404, { ok: false, error: 'control desconocido' });
     }

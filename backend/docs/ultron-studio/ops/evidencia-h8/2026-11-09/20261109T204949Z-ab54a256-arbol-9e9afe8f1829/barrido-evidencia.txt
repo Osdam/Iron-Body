@@ -1,0 +1,4 @@
+con las piezas, la APP_KEY y los tokens de la fase cerrada:
+barrido: 37 valores buscados en 35 ficheros
+con las piezas, la APP_KEY y los tokens de la fase abierta:
+barrido: 37 valores buscados en 35 ficheros

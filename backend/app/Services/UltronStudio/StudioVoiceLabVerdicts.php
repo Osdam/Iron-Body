@@ -2,6 +2,7 @@
 
 namespace App\Services\UltronStudio;
 
+use App\Models\UltronStudio\StudioAuditEvent;
 use App\Models\UltronStudio\StudioVersion;
 use App\Models\UltronStudio\StudioVoiceLabSession;
 use Illuminate\Support\Carbon;
@@ -28,9 +29,16 @@ use Illuminate\Support\Facades\DB;
  *
  * {@see latestFor()} es la lectura de la puerta de publicación de S8-b: vive
  * aquí, en el único servicio que nombra el veredicto, y publicar no lo nombra.
+ *
+ * EL LIBRO DEL STUDIO (S8-d): el veredicto deja `voice_lab.verdict_recorded`
+ * en su misma transacción, con quien lo dio, la decisión, la huella de la
+ * especificación y la versión y el perfil (uuid y huella). La nota NO se
+ * copia (es texto libre y el libro no se puede vaciar): solo si la hay.
  */
 final class StudioVoiceLabVerdicts
 {
+    public function __construct(private readonly StudioAudit $audit) {}
+
     public function record(StudioAccess $access, StudioVoiceLabSession $session, string $decision, ?string $note, string $specHash): StudioVoiceLabSession
     {
         $access->require(StudioAccess::APPROVE);
@@ -70,6 +78,24 @@ final class StudioVoiceLabVerdicts
             ])) {
                 throw StudioVoiceLabErrors::verdictExists();
             }
+
+            $version = StudioVersion::query()->whereKey($agente->studio_version_id)->first(['id', 'uuid']);
+            $perfil = DB::table(StudioVoiceLabAgents::PROFILES)->where('id', $agente->voice_profile_id)->first(['uuid']);
+            $this->audit->record(null, $access->actor, 'voice_lab.verdict_recorded', StudioAuditEvent::SUBJECT_INTEGRATION, (string) $fila->uuid,
+                'Dio su veredicto sobre una sesión del laboratorio hablado: '.($decision === StudioVoiceLabSession::VERDICT_REJECTED ? 'rechazada' : 'aprobada'), [
+                    'toStatus' => $decision,
+                    'contentHash' => (string) $agente->studio_content_hash,
+                    'diff' => [
+                        'verdict' => $decision,
+                        'specHash' => (string) $agente->spec_hash,
+                        'compilerVersion' => (string) $agente->compiler_version,
+                        'version' => $version?->uuid,
+                        'versionHash' => (string) $agente->studio_content_hash,
+                        'profile' => $perfil?->uuid,
+                        'profileHash' => (string) $agente->voice_profile_hash,
+                        'hasNote' => $note !== null,
+                    ],
+                ]);
         });
 
         return $session->fresh() ?? $session;

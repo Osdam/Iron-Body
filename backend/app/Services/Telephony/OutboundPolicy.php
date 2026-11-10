@@ -22,6 +22,11 @@ use InvalidArgumentException;
  * Acumula TODOS los motivos que apliquen, en el orden cerrado de
  * {@see REASONS} (DF-G1):
  *  - el código y el proveedor; `voice_number_is_whatsapp` solo si hay número;
+ *    y con número, su IDENTIDAD vigilada (B8-g, SEC8-c B-1 y la decisión del
+ *    lead): sin una conciliación del número importado de menos de 2 h que
+ *    cuadre con `TWILIO_VOICE_FROM`, `number_unverified` (falla cerrado, como
+ *    `elevenlabs_unverified` sin la marca de E4-6); si la reciente dice que
+ *    no es ese número, `number_mismatch`;
  *  - la publicación (`agent_drift` solo con la publicación legible);
  *  - el destino: un origen fuera de {canary_registry, voice_contacts} da solo
  *    `source_not_allowed` (DF-G2); en `canary`, un canario de voz `active`;
@@ -36,7 +41,7 @@ use InvalidArgumentException;
 final class OutboundPolicy
 {
     public const REASONS = [
-        'calls_disabled_in_code', 'outbound_disabled', 'twilio_voice_disabled', 'no_voice_number', 'voice_number_is_whatsapp',
+        'calls_disabled_in_code', 'outbound_disabled', 'twilio_voice_disabled', 'no_voice_number', 'voice_number_is_whatsapp', 'number_unverified', 'number_mismatch',
         'elevenlabs_not_configured', 'elevenlabs_disabled', 'elevenlabs_unverified',
         'no_publication', 'publication_unreadable', 'agent_drift', 'voice_braked',
         'source_not_allowed', 'not_an_active_voice_canary', 'contact_not_authorized', 'no_voice_consent', 'excluded', 'rne_check_missing',
@@ -47,6 +52,20 @@ final class OutboundPolicy
 
     /** Lo único que se toma de la política del H6: el código y el proveedor. */
     public const FROM_H6 = ['calls_disabled_in_code', 'twilio_voice_disabled', 'no_voice_number', 'elevenlabs_not_configured', 'elevenlabs_disabled', 'elevenlabs_unverified'];
+
+    /**
+     * B8-g: lo que la puerta sabe del número importado (el que de verdad llama),
+     * por la última conciliación del número (`VoiceNumberGuard::policyCheck()`):
+     * reciente y es `TWILIO_VOICE_FROM`; reciente y no lo es; o sin vigilar
+     * (sin conciliación de menos de 2 h, o sin poder comparar).
+     */
+    public const NUMBER_VERIFIED = 'verified';
+
+    public const NUMBER_MISMATCH = 'mismatch';
+
+    public const NUMBER_UNVERIFIED = 'unverified';
+
+    public const NUMBER_CHECKS = [self::NUMBER_VERIFIED, self::NUMBER_MISMATCH, self::NUMBER_UNVERIFIED];
 
     public const SCOPE_CANARY = 'canary';
 
@@ -66,7 +85,7 @@ final class OutboundPolicy
     ];
 
     /**
-     * @param  array{outboundEnabled: bool, twilioVoiceEnabled: bool, voiceFromConfigured: bool, voiceNumberCollides: bool, providerState: string,
+     * @param  array{outboundEnabled: bool, twilioVoiceEnabled: bool, voiceFromConfigured: bool, voiceNumberCollides: bool, numberCheck: string, providerState: string,
      *               publication: string, agentDrift: bool, braked: bool,
      *               scope: string, source: string, canary: ?string, contactAuthorized: bool, voiceConsent: bool, excluded: bool, rneCheckMissing: bool,
      *               outsideHours: bool, holiday: bool,
@@ -83,6 +102,9 @@ final class OutboundPolicy
         }
         if (! in_array($f['publication'], InboundPolicy::PUBLICATION_STATES, true)) {
             throw new InvalidArgumentException('Estado de publicación desconocido.');
+        }
+        if (! in_array($f['numberCheck'] ?? null, self::NUMBER_CHECKS, true)) {
+            throw new InvalidArgumentException('Estado de la vigilancia del número desconocido.');
         }
 
         // 1. El código y el proveedor, de la política del H6 (que valida sus conjuntos cerrados).
@@ -101,6 +123,12 @@ final class OutboundPolicy
         }
         if ($f['voiceFromConfigured'] === true && $f['voiceNumberCollides'] === true) {
             $motivos[] = 'voice_number_is_whatsapp';
+        }
+        // B8-g: ninguna saliente sin vigilar el número que de verdad llama (falla cerrado).
+        if ($f['voiceFromConfigured'] === true && $f['numberCheck'] === self::NUMBER_UNVERIFIED) {
+            $motivos[] = 'number_unverified';
+        } elseif ($f['voiceFromConfigured'] === true && $f['numberCheck'] === self::NUMBER_MISMATCH) {
+            $motivos[] = 'number_mismatch';
         }
 
         // 2. La publicación.

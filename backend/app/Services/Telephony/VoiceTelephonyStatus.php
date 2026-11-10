@@ -38,6 +38,7 @@ final class VoiceTelephonyStatus
             $freno = null;
             $metricas = ['error_class' => $e::class];
         }
+        $vigilancia = VoiceNumberGuard::policyVerdict();
 
         return [
             'callsEnabledInCode' => VoiceCallPolicy::CALLS_ENABLED_IN_CODE,
@@ -50,10 +51,22 @@ final class VoiceTelephonyStatus
             ],
             'scopes' => ['inbound' => (string) config('voice.inbound.scope', 'canary'), 'outbound' => (string) config('voice.outbound.scope', 'canary')],
             'provider' => VoiceProviderState::current(),
+            // E4-6 (B8-g): la marca de la última verificación del Studio, con su fecha (sin ella, `UNVERIFIED`).
+            'providerVerification' => VoiceProviderState::verification(),
             'number' => [
                 'configured' => VoicePhone::isE164(config('voice.twilio.from')),
                 'collidesWithMessaging' => VoiceNumberGuard::collidesWithConfig(),
                 'importedNumberIdConfigured' => is_string(config('voice.elevenlabs.agent_phone_number_id')) && config('voice.elevenlabs.agent_phone_number_id') !== '',
+                // B8-g: lo DECLARADO (`VOICE_NUMBER_INBOUND_CAPABLE`): false = «Outbound Only»; null = sin declarar (admite).
+                'inboundCapable' => is_bool(config('voice.number.inbound_capable')) ? config('voice.number.inbound_capable') : null,
+                // SEC8-c B-1: lo último que vio la conciliación del número importado (sin el número), o null.
+                // REV8-c (segunda mirada) H-5: sin el identificador del proveedor; solo si es la del número configurado.
+                'observed' => self::observedForStatus(VoiceNumberGuard::lastObservation()),
+                // Lo que la puerta concluye de ella: `verified`, `mismatch` o `unverified` (sin una de menos de 2 h).
+                'check' => $vigilancia['check'],
+                // B8-h (REV8-c M-1), aditivo: por qué (`VoiceNumberGuard::CHECK_REASONS`; null con `verified`). P. ej.
+                // `other_number_id`: la observación es de otro ELEVENLABS_AGENT_PHONE_NUMBER_ID que el configurado.
+                'checkReason' => $vigilancia['reason'],
             ],
             'carrierConfigured' => TwilioVoiceCarrier::configured(),
             'publication' => $partes,
@@ -73,6 +86,29 @@ final class VoiceTelephonyStatus
             'facts' => ['hoursConfigured' => (string) config('voice.facts.site', '') !== '' && (string) config('voice.facts.hours', '') !== ''],
             'transferDirectory' => VoiceTransferDirectory::countsByPart($leidas),
             'today' => $metricas,
+        ];
+    }
+
+    /**
+     * REV8-c (segunda mirada) H-5: la observación del número para el estado SIN el
+     * identificador del proveedor (`phoneNumberId`): cuándo fue, si es la del número
+     * configurado y qué concluyó. El identificador solo lo usa la puerta por dentro.
+     *
+     * @param  array{at: string, phoneNumberId: string, matchesFrom: ?bool, collides: bool}|null  $o
+     * @return array{at: string, matchesConfigured: bool, matchesFrom: ?bool, collides: bool}|null
+     */
+    private static function observedForStatus(?array $o): ?array
+    {
+        if ($o === null) {
+            return null;
+        }
+        $configurado = config('voice.elevenlabs.agent_phone_number_id');
+
+        return [
+            'at' => $o['at'],
+            'matchesConfigured' => is_string($configurado) && $configurado !== '' && $o['phoneNumberId'] === $configurado,
+            'matchesFrom' => $o['matchesFrom'],
+            'collides' => $o['collides'],
         ];
     }
 }

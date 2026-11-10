@@ -7,6 +7,7 @@ use App\Models\Voice\VoiceCall;
 use App\Models\Voice\VoiceCallEvent;
 use App\Services\Voice\Dto\CarrierResult;
 use App\Services\Voice\TelephonyCarrier;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Client\StrayRequestException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -30,6 +31,13 @@ use Throwable;
  *    la cancelación no aplica y el corte sigue por la vía de una llamada viva.
  * Y FALLA CERRADO (E12-5, B8-e): si el colgado de la que se inició después
  * del corte no se confirma, el freno se echa en el acto.
+ *
+ * UNA CORTADA SE PUEDE VOLVER A COLGAR A MANO (E12-5, B8-g: `voice:hangup` y el
+ * CRM): si el proveedor la inició después del corte (su SID en el evento con
+ * `afterCancel`) y su último colgado no se confirmó, cortarla repite el colgado
+ * con {@see startedAfterCancel()} (`where: manual`, con la persona si la hay),
+ * que también frena si no se confirma. Sin SID, o con el colgado ya
+ * confirmado, no hay nada que colgar (`not_live`, sin red).
  */
 final class VoiceHangup
 {
@@ -59,10 +67,22 @@ final class VoiceHangup
     /** Los únicos que CONFIRMAN el corte: sin uno de estos, freno y la conciliación no la reconoce. */
     public const AFTER_CANCEL_CONFIRMED = [self::RESULT_HUNG_UP, CarrierResult::OUTCOME_NOT_FOUND];
 
-    /** Quién cuelga después del corte: el job al volver del proveedor, o la conciliación que la ve viva. */
+    /** Quién cuelga después del corte: el job al volver del proveedor, la conciliación que la ve viva o una persona (B8-g). */
     public const WHERE_JOB = 'outbound_job';
 
     public const WHERE_RECONCILE = 'reconcile';
+
+    public const WHERE_MANUAL = 'manual';
+
+    /**
+     * B8-g: cuánto después del corte puede seguir viva una saliente que el
+     * proveedor inició igual. El job vuelve en ≤ 30 s, el timbre dura ≤ 60 s y
+     * la llamada ≤ 600 s (`VOICE_PER_CALL_MAX_SECONDS`, techo del esquema): unos
+     * 12 minutos. `voice:hangup --all` repite el colgado de las de esta
+     * ventana; las anteriores ya no pueden estar vivas y las vigila la
+     * conciliación (desconocidas y freno).
+     */
+    public const AFTER_CANCEL_LIVE_WINDOW_MINUTES = 60;
 
     /** La causa del freno de un colgado sin confirmar (motivo `unknown_provider_call`, {@see VoiceBrake::TRIGGERS}). */
     public const BRAKE_CAUSE = 'hangup_failed';
@@ -86,6 +106,9 @@ final class VoiceHangup
             }
             // Ya no estaba pedida (E10-5): si el job la marcó entre tanto, se corta como una viva.
             $llamada = VoiceCall::query()->find($id) ?? $llamada;
+        }
+        if ($llamada->status === VoiceCall::STATUS_CANCELED) {
+            return self::hangupCanceled($llamada, $carrier, $actor);
         }
         if (! in_array($llamada->status, [VoiceCall::STATUS_DIALING, VoiceCall::STATUS_ACTIVE], true)) {
             return ['result' => self::RESULT_NOT_LIVE, 'carrier' => null, 'status' => (string) $llamada->status];
@@ -123,12 +146,24 @@ final class VoiceHangup
      * ninguna de las dos duplica la apertura. Se rearma si, ya soltado, un
      * intento posterior vuelve a fallar ({@see VoiceBrake::observedAfter()}).
      *
-     * La llaman el job al volver del proveedor y la conciliación que la ve viva
-     * (`$where`), siempre FUERA de una transacción: sin cerrojo durante la red.
+     * La llaman el job al volver del proveedor, la conciliación que la ve viva
+     * y, B8-g, una persona que vuelve a cortar la cortada (`$where`; su
+     * identidad en el evento, `$actor`), siempre FUERA de una transacción: sin
+     * cerrojo durante la red.
      *
      * @return string `hung_up`, `not_found`, `failed` o `ambiguous`
      */
-    public static function startedAfterCancel(VoiceCall $llamada, string $callSid, TelephonyCarrier $carrier, string $where = self::WHERE_JOB): string
+    public static function startedAfterCancel(VoiceCall $llamada, string $callSid, TelephonyCarrier $carrier, string $where = self::WHERE_JOB, ?Admin $actor = null): string
+    {
+        return self::afterCancelHangup($llamada, $callSid, $carrier, $where, $actor)['result'];
+    }
+
+    /**
+     * El cuerpo de {@see startedAfterCancel()}, con lo que dijo el transportista.
+     *
+     * @return array{result: string, carrier: ?string}
+     */
+    private static function afterCancelHangup(VoiceCall $llamada, string $callSid, TelephonyCarrier $carrier, string $where, ?Admin $actor): array
     {
         $intento = now();
         $r = null;
@@ -147,9 +182,13 @@ final class VoiceHangup
         $resultado = $r === null ? self::AFTER_CANCEL_AMBIGUOUS : self::afterCancelResult($r->outcome);
         $confirmado = in_array($resultado, self::AFTER_CANCEL_CONFIRMED, true);
 
-        DB::transaction(static function () use ($llamada, $callSid, $where, $r, $fallo, $resultado, $confirmado, $intento): void {
-            $evento = VoiceEvents::record('hangup_requested', (int) $llamada->id, VoiceCallEvent::PROVIDER_LARAVEL, null, [
-                'actor_type' => VoiceCallEvent::ACTOR_SYSTEM, 'outcome' => $resultado,
+        $quien = $actor === null
+            ? ['actor_type' => VoiceCallEvent::ACTOR_SYSTEM]
+            : ['actor_type' => VoiceCallEvent::ACTOR_ADMIN, 'actor_admin_id' => $actor->id, 'actor_name' => (string) $actor->name, 'actor_role' => $actor->role];
+
+        DB::transaction(static function () use ($llamada, $callSid, $where, $r, $fallo, $resultado, $confirmado, $intento, $quien): void {
+            $evento = VoiceEvents::record('hangup_requested', (int) $llamada->id, VoiceCallEvent::PROVIDER_LARAVEL, null, $quien + [
+                'outcome' => $resultado,
                 'codes' => ['carrierStatus' => $r?->providerStatus, 'http' => $r?->httpStatus, 'errorCode' => $r?->providerErrorCode, 'afterCancel' => true,
                     'callSid' => $callSid, 'carrierOutcome' => $r?->outcome]
                     + ($fallo === null ? [] : ['error_class' => $fallo::class])
@@ -161,20 +200,91 @@ final class VoiceHangup
             }
         });
 
-        $contexto = ['call_uuid' => $llamada->uuid, 'where' => $where, 'outcome' => $resultado, 'carrier_outcome' => $r?->outcome];
+        $contexto = ['call_uuid' => $llamada->uuid, 'where' => $where, 'outcome' => $resultado, 'carrier_outcome' => $r?->outcome]
+            + ($actor === null ? [] : ['actor_admin_id' => $actor->id]);
         if ($confirmado) {
             Log::channel('voice')->warning('voice.hangup.after_cancel', $contexto);
         } else {
             Log::channel('voice')->error('voice.hangup.after_cancel_failed', $contexto + ($fallo === null ? [] : ['error_class' => $fallo::class]));
         }
 
-        return $resultado;
+        return ['result' => $resultado, 'carrier' => $r?->outcome];
+    }
+
+    /**
+     * E12-5 (B8-g): cortar una saliente ya CORTADA. Si el proveedor la inició
+     * después del corte y su último colgado no se confirmó, se repite el
+     * colgado (`where: manual`), que frena si tampoco se confirma. Si no hay
+     * SID o ya se confirmó, no hay nada que colgar: `not_live`, sin red. La
+     * fila no cambia (un final no cambia, DB8).
+     *
+     * @return array{result: string, carrier: ?string, status: string}
+     */
+    private static function hangupCanceled(VoiceCall $llamada, TelephonyCarrier $carrier, ?Admin $actor): array
+    {
+        $sid = self::afterCancelSid($llamada);
+        if ($sid === null || in_array(self::lastAfterCancelResult((int) $llamada->id, $sid), self::AFTER_CANCEL_CONFIRMED, true)) {
+            return ['result' => self::RESULT_NOT_LIVE, 'carrier' => null, 'status' => (string) $llamada->status];
+        }
+        $r = self::afterCancelHangup($llamada, $sid, $carrier, self::WHERE_MANUAL, $actor);
+
+        return [
+            // Ya no existe (404): nada que colgar, como una que no está viva.
+            'result' => $r['result'] === CarrierResult::OUTCOME_NOT_FOUND ? self::RESULT_NOT_LIVE : $r['result'],
+            'carrier' => $r['carrier'],
+            'status' => self::status((int) $llamada->id),
+        ];
+    }
+
+    /**
+     * B8-g: el SID de la llamada que el proveedor inició DESPUÉS del corte de
+     * esta saliente (el último evento `outbound_started`/`outbound_ambiguous`
+     * con `afterCancel`), o null si no lo hubo.
+     */
+    public static function afterCancelSid(VoiceCall $llamada): ?string
+    {
+        if ($llamada->status !== VoiceCall::STATUS_CANCELED) {
+            return null;
+        }
+
+        return VoiceCallEvent::query()->where('call_id', $llamada->id)->whereIn('kind', self::AFTER_CANCEL_START_KINDS)->orderByDesc('id')->limit(20)->get(['codes'])
+            ->map(static fn (VoiceCallEvent $e): mixed => is_array($e->codes) && ($e->codes['afterCancel'] ?? false) === true ? ($e->codes['callSid'] ?? null) : null)
+            ->first(static fn (mixed $s): bool => is_string($s));
+    }
+
+    /**
+     * B8-g (`voice:hangup --all`): las salientes CORTADAS dentro de
+     * {@see AFTER_CANCEL_LIVE_WINDOW_MINUTES} que el proveedor inició igual y
+     * cuyo último colgado no se confirmó: las que aún pueden estar vivas.
+     *
+     * @return Collection<int, VoiceCall>
+     */
+    public static function unconfirmedAfterCancel(): Collection
+    {
+        return VoiceCall::query()->where('status', VoiceCall::STATUS_CANCELED)->where('direction', VoiceCall::DIRECTION_OUTBOUND)->whereNull('transfer_of_call_id')
+            ->where('status_changed_at', '>=', now()->subMinutes(self::AFTER_CANCEL_LIVE_WINDOW_MINUTES))
+            ->orderBy('id')->get()
+            ->filter(static function (VoiceCall $c): bool {
+                $sid = self::afterCancelSid($c);
+
+                return $sid !== null && ! in_array(self::lastAfterCancelResult((int) $c->id, $sid), self::AFTER_CANCEL_CONFIRMED, true);
+            })
+            ->values();
     }
 
     /**
      * E12-5 (B8-e): lo que dijo el transportista → el resultado del colgado
      * después del corte. Lo que no confirma el corte, en el sentido seguro: un
      * resultado que no se conoce es `failed`.
+     *
+     * EL 21220 (E14-4; calibración documentada en B8-g, `informe-backend.md`
+     * §B8-g): un 400 con el código 21220 («Invalid call state»: la operación en
+     * tiempo real llegó a una llamada que no está `in-progress`) es `rejected` →
+     * `failed`, y frena. La referencia oficial no lo describe para
+     * `Status=completed` (solo grabar o redirigir una llamada terminada); darlo
+     * por confirmado fallaría abierto si viniera de una llamada viva. Se queda
+     * así hasta medirlo en la fase 4a con respuestas reales (el código queda en
+     * `codes.errorCode` del evento y Twilio da el `end_time` en la conciliación).
      */
     public static function afterCancelResult(string $carrierOutcome): string
     {
@@ -197,14 +307,17 @@ final class VoiceHangup
     }
 
     /**
-     * E12-5 (B8-e): el resultado del ÚLTIMO colgado del sistema de esa saliente
-     * cortada con ese SID (el más reciente manda: un reintento que falla anula
+     * E12-5 (B8-e): el resultado del ÚLTIMO colgado después del corte de esa
+     * saliente con ese SID (el más reciente manda: un reintento que falla anula
      * un «colgada» anterior), o null si nunca se colgó (el proceso murió antes).
+     * Del sistema (el job, la conciliación, `voice:hangup`) o, B8-g, de una
+     * persona que la volvió a cortar desde el CRM: solo
+     * {@see afterCancelHangup()} escribe un `hangup_requested` con `afterCancel`.
      */
     public static function lastAfterCancelResult(int $callId, string $callSid): ?string
     {
         $ultimo = VoiceCallEvent::query()->where('call_id', $callId)->where('kind', 'hangup_requested')
-            ->where('actor_type', VoiceCallEvent::ACTOR_SYSTEM)->orderByDesc('id')->limit(200)->get(['outcome', 'codes'])
+            ->orderByDesc('id')->limit(200)->get(['outcome', 'codes'])
             ->first(static fn (VoiceCallEvent $e): bool => is_array($e->codes) && ($e->codes['afterCancel'] ?? false) === true && ($e->codes['callSid'] ?? null) === $callSid);
 
         return $ultimo?->outcome;
@@ -219,12 +332,7 @@ final class VoiceHangup
      */
     public static function brakeIfUnconfirmedAfterCancel(VoiceCall $llamada): bool
     {
-        if ($llamada->status !== VoiceCall::STATUS_CANCELED) {
-            return false;
-        }
-        $sid = VoiceCallEvent::query()->where('call_id', $llamada->id)->whereIn('kind', self::AFTER_CANCEL_START_KINDS)->orderByDesc('id')->limit(20)->get(['codes'])
-            ->map(static fn (VoiceCallEvent $e): mixed => is_array($e->codes) && ($e->codes['afterCancel'] ?? false) === true ? ($e->codes['callSid'] ?? null) : null)
-            ->first(static fn (mixed $s): bool => is_string($s));
+        $sid = self::afterCancelSid($llamada);
         if ($sid === null || in_array(self::lastAfterCancelResult((int) $llamada->id, $sid), self::AFTER_CANCEL_CONFIRMED, true)) {
             return false;
         }

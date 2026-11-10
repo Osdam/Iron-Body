@@ -6,6 +6,393 @@
 **Alcance tocado:** solo `tests/fixtures/voice/**` y este informe.
 **Sin commit** y sin tocar el índice. **Producción:** nada tocado. **Red:** ninguna. **Suites del repo:** no lancé ninguna (máquina compartida).
 
+## §TEST8-c (cierre del Hito 8, E14-5): E2E del CRM ejecutado, «salientes primero» demostrado y bloqueos de seguridad contra la pila — con 2 hallazgos reales abiertos
+
+**Fecha:** 09-11-2026, 19:16–23:05 UTC.
+**Base:**
+- validación sobre HEAD `ab54a256` (la fase 1 desplegada);
+- pasadas FINALES sobre el **árbol de trabajo** encima de HEAD (`H8_E2E_ARBOL=1`): S8-d completo y B8-g a medias (E13-3 `missingPostCall` y E4-6, el lector de la verificación), sin confirmar, como pidió el lead a las 20:31Z. Cada resumen lleva la huella del árbol que probó;
+- CRM `45dd73a`, sin cambios.
+
+**Sin commit.** Nada de producción, proveedores reales ni credenciales: todo en 127.0.0.1 (la valla y `lsof` del arnés, y `--host-resolver-rules` en Chrome).
+
+### Resultado (salida real)
+
+| Pasada | Backend | Pruebas | Comprobaciones | Hash de resultados | Evidencia (`ops/evidencia-h8/2026-11-09/`) |
+|---|---|---|---|---|---|
+| **`todas` FINAL, con la regla del número** (23:15–23:20Z, 286 s) | árbol `de13b6ea9120` (con `number_unverified` y `number_mismatch`) | cerrada 6/6 · abierta 8/9 · salientes 11/11 | 113/113 · 298/300 · 247/247 | `e89902bd0461fe16…` | `20261109T231516Z-ab54a256-arbol-de13b6ea9120` |
+| **CRM FINAL, con la regla del número** (23:20–23:55Z, 2 091 s) | árbol `7d049021efba` + CRM `45dd73a` | — | 281 (278 OK, 3 FALLO: H-1, H-5 y el 429 por carga) | `11a41779290e77d1…` | `crm-20261109T232017Z-ab54a256-arbol-7d049021efba-45dd73a` (sha256 `3b471f58…`) |
+| `ambas`, final anterior (20:49–20:51Z, 104 s) | árbol `9e9afe8f1829` | cerrada 6/6 · abierta 8/9 | 113/113 · 281/283 | `3c872c8d20a882d2…` | `20261109T204949Z-ab54a256-arbol-9e9afe8f1829` |
+| `salientes`, final anterior (20:51–20:53Z, 89 s) | árbol `ace6becff7a1` | 10/10 | 205/205 | `8f75effb55b32f67…` | `20261109T205148Z-ab54a256-arbol-ace6becff7a1` |
+| **CRM, la última** (`abierta recorridos`, 22:31–22:58Z, 1 633 s) | copia `ace6becff7a1` (`H8_E2E_FUENTE`) + CRM `45dd73a` | — | 264 (262 OK, 2 FALLO) | `a376900b283434d5…` | `crm-20261109T223141Z-ab54a256-arbol-ace6becff7a1-45dd73a` (sha256 `ebaf3252…`) |
+| CRM, primera final (20:53–21:05Z, 739 s) | árbol `3e5e371a92dd` | — | 282 (280 OK, 2 FALLO) | `daa5aa386efb561d…` | `crm-20261109T205328Z-ab54a256-arbol-3e5e371a92dd-45dd73a` (13 MB, sha256 `9fd34a0b…`) |
+| CRM, repetición PARADA (21:06–21:38Z) | árbol `bb1781c15ef7` (ya con `number_unverified`) | — | 247/257 al pararla | — | ninguna: el lanzador solo copia la evidencia al terminar |
+| CRM sobre la copia congelada (21:59–22:17Z, 1 061 s) | copia `ace6becff7a1` (`H8_E2E_FUENTE`) | — | 278 (276 OK, 2 FALLO) | `3f444631581db495…` | `crm-20261109T215924Z-ab54a256-arbol-ace6becff7a1-45dd73a` (sha256 `7d93b982…`) |
+| CRM sobre la copia congelada, degradada (22:17–22:31Z, carga ~80) | copia `ace6becff7a1` | — | 183 (178 OK, 5 FALLO) | `2a43437feba816ab…` | `crm-20261109T221726Z-ab54a256-arbol-ace6becff7a1-45dd73a` (sha256 `34091224…`) |
+| `ambas` sobre HEAD (validación, 19:20Z) | `ab54a256` | 6/6 · 8/9 | 112/112 · 281/283 | `f285af3c0fcdf940…` | sin evidencia (rojo de H-3, del E2E) |
+| `salientes` sobre HEAD (19:50Z) | `ab54a256` | 10/10 | 192/192 | `691eb04e7eac46d2…` | sin evidencia |
+| CRM sobre HEAD (19:51Z; la de las 19:35Z, con el guion aún sin corregir: 277, 269 OK) | `ab54a256` + `45dd73a` | — | 278 (276 OK, 2 FALLO: H-1 y un selector mío) | `8806b39104d3bf0f…` | sin evidencia |
+
+**Los rojos de producto de las pasadas finales son hallazgos reales:**
+- **H-4**, en la abierta. Según el lead, lo corrigió él (E16-25) después de estas pasadas; no lo he vuelto a ejercer;
+- **H-1**, en el CRM: falla igual en las 8 pasadas del CRM de hoy que llegaron al laboratorio. Lo corrige el frontend;
+- **H-5**, en el CRM sobre el árbol actual: nuevo con B8-g, ver Hallazgos.
+
+**El 429 del CRM sobre el árbol actual** volvió a caer por carga (35): las lecturas de Carla van directas a la API, y 8 tandas de 20 no cupieron en la ventana de 60 s. El limitador no cambió (`AppServiceProvider.php:725`, 120/min por persona). El paso lanza ahora tandas de 40.
+
+**El CRM no tiene una pasada sin otros rojos.** Las pasadas del CRM coincidieron con suites de otros agentes: carga de la máquina de 40 a 105, y la API de la pila hasta 25 s de mediana. Pero entre las pasadas completas, cada comprobación del recorrido pasó al menos una vez, con el guion corregido. En la última:
+- en verde, todo hasta las transversales: perfil, previa, laboratorio salvo H-1, publicar, cadena, llamadas, costes, contactos, freno, `salientes` por la puerta real, `429` y «Firefox»;
+- las de red y navegador, también en verde;
+- el rojo de entorno: Chrome perdió la página de Carla (`TargetCloseError: Session closed`) en sus últimas 5 pestañas, que pasaron en las pasadas anteriores.
+
+**Las otras pasadas finales del CRM y por qué se repitieron** (quedan las 4 evidencias del CRM, unos 42 MB en total, sobre todo capturas: que el lead decida cuáles confirmar):
+- **La primera** (`3e5e371a92dd`) tuvo un rojo **mío**: la respuesta 202 de `POST admin/voice/calls`, alcanzable desde E4-6, lleva la misma fila de llamada con el id del agente entero que ya admitía en los GET (O-3). Corregí la lista de excepciones.
+- **La de la copia congelada** (21:59Z) tuvo un rojo **de entorno**. Con la máquina a carga 70, 140 lecturas secuenciales de Carla ya no cupieron en la ventana de 60 s del limitador, así que no hubo 429 y el paso se cortó. El paso lanza ahora las lecturas en tandas paralelas de 20.
+
+**El cierre, en verde en las cinco fases:**
+- 0 violaciones del contrato en los dos simuladores;
+- la valla, sin hosts;
+- `lsof`, 0 líneas fuera de 127.0.0.1;
+- 0 `ERROR`;
+- `failed_jobs` y colas vacíos;
+- barrido limpio de registros, base, respuestas y evidencia;
+- en el CRM, los 6 puertos libres al parar.
+
+**Los simuladores son los del commit** (`9c878356…`), no los del árbol: OPS8-c los está cambiando ahí (`3791625a…`, el registro de secretos y webhooks).
+
+**sha256 de los directorios de evidencia del backend** (todos sus ficheros, ordenados, como el lanzador del CRM):
+- `ambas`: `0c15da75…`;
+- `salientes`: `5bbff5c3…`.
+
+### El árbol se movió durante la tanda (B8-g a medias): qué es evidencia y qué no
+
+- **Huellas.** Cada pasada final congela el árbol en su `fuente/`. Entre las 20:49 y las 20:53Z las tres (`9e9afe8f1829`, `ace6becff7a1` y `3e5e371a92dd`) tienen lo que el lead describió a las 20:31Z:
+  - E13-3: siete claves y `calls` con `guard_verdict`;
+  - E4-6: el lector de la verificación;
+  - `VOICE_NUMBER_INBOUND_CAPABLE`.
+- **Lo nuevo de B8-g, después de las 20:53Z.** La puerta y el job exigen una conciliación del número importado de menos de 2 h que cuadre (`number_unverified` y `number_mismatch`; `VoiceNumberGuard::policyCheck()`).
+- **Lo que rompe en el banco, aunque el código no esté mal:**
+  - en la repetición del CRM (`bb1781c15ef7`), la saliente pedida desde el CRM dentro del horario dio 409 `["number_unverified"]` (`voice.outbound.denied` en el registro de la pila);
+  - los workers de UN trabajo del banco corren con el reloj desplazado a un martes (`reloj.php`), unas 19 h por delante. El job mide la edad de la observación con ese `now()`: toda saliente del banco se cancelaría por `number_unverified`.
+- **Adaptación: HECHA** después del aviso del lead, ver §0. La pasada final de las 23:15Z ya la lleva.
+- **La repetición del CRM la paré yo a las 21:38Z.** Además del árbol nuevo:
+  - la máquina estaba a carga 70–105 por las suites de otros agentes;
+  - la API tardaba unos 25 s de mediana (también `/api/health`), con los 4 workers de `php -S` copados por los SSE de notificaciones, y 2 respuestas 5xx;
+  - las pestañas dejaban de pintarse.
+  No es evidencia.
+- **Para repetir sobre el código exacto de una evidencia** cuando el árbol ya cambió: `H8_E2E_FUENTE=<run>/fuente` (lo usan los mutantes del árbol y la pasada final del CRM).
+
+### 0. La regla del número de B8-g (21:05Z): adaptado, y sus dos motivos demostrados
+
+B8-g añade que la puerta y el job fallen cerrados sin una conciliación del número importado de menos de 2 h que cuadre con `TWILIO_VOICE_FROM` (`number_unverified` y `number_mismatch`).
+
+**Adaptación:**
+- **Fase abierta:** el paso g corre `voice:reconcile --numbers` con el reloj real antes de las salientes.
+- **Workers de un trabajo:** observan el número con SU reloj desplazado justo antes del job y con el real justo después. Usan `ayudante.php observar-numero`, que ejecuta `VoiceReconciler::numbers()`, el mismo método de `--numbers`, sin la parte de llamadas: la conciliación completa con el reloj desplazado pasaría a `ambiguous` las filas `requested`. Lo hace `workerDeUnTrabajo()`, en todos los sitios que lo usan.
+- **CRM:** el paso `salientes` corre `voice:reconcile --numbers` antes de pedir la saliente y observa el número alrededor del worker desplazado de la costura `dialing`.
+
+**Los dos motivos, contra la pila (fase `salientes`):**
+- **`number_unverified`:** sin ninguna conciliación, la puerta falla cerrado; tras `voice:reconcile --numbers` (`matchesFrom: true`) desaparece. Paso 0.
+- **`number_mismatch`:** una observación con `TWILIO_VOICE_FROM` cambiado SOLO en ese proceso (el número importado del simulador ya no cuadra) echa el freno; la puerta dice `number_mismatch` y `voice_braked`; restaurada y suelta, desaparece. Va en su propio paso, g2, después de promover: su freno, abierto antes de publicar, caería en la ventana que la costura de tiempo retrasa 25 h y contaría como `drift_events` (visto en la primera validación de las 23:06Z).
+
+Los casos de `decide` del fixture los actualizó B8-g (`outbound-gate-cases.json`, `sec_gate.py`); no los toqué.
+
+**Pint** (condición m-3 de REV8-c): `H8E2ESalientesPrimeroTest.php` fallaba por una importación (`fully_qualified_strict_types`, `ordered_imports`). Corregido: `pint --test tests/Feature/Voice/E2E/` → `passed`. En la suite normal, el fichero da 11 omitidas (sin el arnés no hay pila: no es un verde); con el arnés, la fase `salientes` final (23:15Z) pasa con ese fichero ya formateado.
+
+### 1. `esperarEstado` a 30 s, y el rojo que escondía el horario (H-3, del E2E, corregido)
+
+- `H8StackE2ETestCase::esperarEstado()`: de 15 a 30 s (E14-2; el job tiene `--timeout=60`).
+- **H-3.** La primera pasada de hoy (14:20 de Bogotá) fue la primera DENTRO del horario legal. Todas las anteriores fueron de noche o en domingo.
+  - El worker residente marcó de verdad su saliente, así que hubo dos `outbound-call`.
+  - El paso h esperaba siempre una.
+  - Ahora cuenta las que marcó el job (`salientesMarcadas`).
+- **E4-6 sobre el árbol.** El `--verify-voice` del arranque deja la marca y el proveedor queda `ELEVENLABS_VERIFIED`. El paso g de la abierta usa ahora la **puerta real** con el reloj real:
+  - **fuera del horario:** 409 con EXACTAMENTE el calendario;
+  - **dentro:** 202 → la fila sellada → el worker residente marca → `completed`, más el reintento del mismo `clientRequestId` (H-4).
+- La cerrada y la abierta comprueban la marca vigente en el paso 0. La cerrada ya no espera `elevenlabs_unverified` acumulado.
+- **E13-3 (B8-g).** El paso d de la abierta espera las **siete** claves: `calls` 3 y `missingPostCall` 0.
+
+### 2. El E2E del CRM, terminado y ejecutado contra la pila del arnés
+
+`ops/h8-e2e-crm/`: 17 pasos y hasta 282 comprobaciones.
+
+**Cuatro ojos con las dos cuentas.**
+- **Perfil:** Ana lo crea, sin «Aprobar» en lo suyo, y Beto lo aprueba.
+- **Previsualizar:** la huella del CRM es la de `compile-preview`, sin red.
+- **Laboratorio** (ver abajo).
+- **Publicar** con `expectedSpecHash`:
+  - el 409 `spec_changed` es real, provocado alterando la huella en el navegador (CDP);
+  - un solo POST, sin reintento;
+  - el botón se desactiva hasta volver a previsualizar;
+  - después, 201.
+- **Publicación (Carla):** el id del agente enmascarado y sin acciones.
+- **Llamadas:**
+  - 3 entrantes del simulador, con solo los 4 dígitos;
+  - el detalle con TODOS los eventos de la API (0 descartados);
+  - códigos en lista plana.
+- **Costes.**
+- **Contactos:**
+  - Ana carga el consentimiento y no puede confirmarlo (el servidor lo niega y el CRM lo dice);
+  - Beto lo confirma;
+  - exclusión.
+- **Freno:** lo abre el `seal_mismatch` del simulador. Carla lo ve y no lo suelta; Ana lo suelta con nota.
+- **Salientes:**
+  - el diálogo enseña alias + 4 dígitos;
+  - **dentro del horario**, pedir desde el CRM → la puerta real (202) → el job del worker residente → `dialing` → **cortarla desde el CRM** (`hung_up`, UNA petición a Twilio). Fuera del horario, el CRM enseña EXACTAMENTE el calendario;
+  - además, cortar una `requested` (sin tocar Twilio) y una `dialing` (UNA petición).
+- **429 con `retry_after`:**
+  - cuerpo uniforme y `Retry-After` iguales;
+  - el CRM enseña el mensaje del servidor;
+  - el navegador recibe el 429;
+  - sin reintentos;
+  - pasado `retry_after`, 200.
+- **«Firefox»** (sin `sampleRate`): ni sesión, ni micrófono pedido, ni gasto.
+
+**Transversales:**
+- las 7 pestañas × 3 cuentas a 390 y 1 440 px, sin desplazamiento horizontal;
+- sin teléfonos, secretos, URL firmada ni id completo del agente en el DOM, el almacenamiento, la URL ni la consola de la página;
+- ninguna escritura de `innerHTML`;
+- foco atrapado en los 9 diálogos;
+- botones = `can` para las 3 cuentas.
+
+**En la evidencia:** capturas (62) y registro de red con estado y `Retry-After`.
+
+**Laboratorio (micrófono falso con permiso):**
+- **La sesión 1** usa la URL firmada del simulador tal cual. Es `ws://`: el banco no tiene TLS.
+  - El CRM se niega («la respuesta del servidor no tiene la forma esperada») y no abre ningún WebSocket.
+  - Su lector solo acepta `wss://` (`studio-voice-parse.ts:1110`). Correcto.
+  - Ana cuenta lo que pasó: `tester_ended`.
+- **La sesión 2** reescribe en el navegador el esquema de la respuesta 201 a `wss://` (costura CDP, como `spec_changed`).
+  - El cliente oficial abre el WebSocket con la URL firmada del simulador (`wss://127.0.0.1:8402/…agent_id=…&conversation_signature=…`).
+  - El TLS falla: el simulador no lo modela.
+  - El CRM lo enseña sin reintentar. La URL firmada no queda en ninguna parte.
+  - La post-llamada web del emisor del simulador la cierra (`provider_report`, 64 s, coste prorrateado).
+  - Beto da el veredicto sobre la huella ENTERA.
+  - **Ana no ve su sesión: H-1.**
+
+**El cuelgue «Esperando el micrófono…» de la pasada a medias del 09-11 05:02Z no se reprodujo.** `getUserMedia` resolvió en Chrome 156 headless con los mismos argumentos, aislado y en el CRM.
+
+### 3. Los bloqueos de seguridad, contra la pila (nunca `Http::fake`)
+
+Fase nueva **`salientes`** (`H8E2ESalientesPrimeroTest`, 10 pasos), salvo donde se dice.
+
+| Bloqueo | Cómo se demuestra | Dónde |
+|---|---|---|
+| Credencial mala en las 4 públicas | 18 variantes de los emisores de los simuladores → 401 en todas, y ni llamadas, ni eventos, ni frenos, ni exclusiones:<br>· iniciación: `bad_secret`, `no_secret`<br>· herramientas: `bad_bearer`, `no_auth`, `basic_scheme`<br>· post-llamada: `mismatch_secret`, `mismatch_body`, `expired`, `from_future`, `missing`, `no_v0`<br>· aviso de Twilio: `wrong_token`, `master_token`, `tampered_param`, `extra_param`, `missing_header`, `scheme_flip`, `signed_over_real_url` | `salientes` h |
+| Cupo por ruta | Cubo de fallos `ruta\|IP\|fallo`:<br>· 401 hasta 30 por minuto (contando los 3 anteriores) y entonces 429 con `Retry-After`<br>· una credencial BUENA sigue pasando<br>· el cubo es por ruta: la iniciación sigue en 401<br><br>Techo GLOBAL de la ruta del aviso de Twilio (60/min): con avisos distintos, 429 en el 51 (más los 10 del cupo por llamada) | `salientes` h |
+| Cupo por llamada | · iniciación: 10/min por `call_sid` → la 11 en 429, UNA fila<br>· post-llamada: 10/min por evento (`post_call_audio`, que se descarta: UN `post_call_audio_discarded`) → la 11 en 429, y el webhook sigue activo<br>· aviso de Twilio: 10/min por `IdempotencyToken`, persistido UNA vez<br>· herramientas: 20 `ok` (la base), luego `tool_quota_exceeded`, y la 61 del minuto en 429 | `salientes` h y g |
+| Consentimiento sin confirmar | Segunda API con alcance `contacts` (parte 4b):<br>· la puerta da EXACTAMENTE `no_voice_consent` + `rne_check_missing` (+ calendario)<br>· Ana no confirma lo que cargó (403 `four_eyes_required`); Beto sí<br>· con consentimiento y RNE, ningún motivo del destino (con el freno echado para no crear la llamada: solo `voice_braked`)<br>· **TOCTOU:** el consentimiento revocado DESPUÉS de encolar → el job la cancela con `no_voice_consent`, sin petición | `salientes` f |
+| Exclusión | · el contacto excluido → la puerta dice `excluded`<br>· la exclusión manual tras encolar → el job cancela | `salientes` f; abierta g |
+| `no_volver_a_llamar` | En una SALIENTE viva → excluye el número SELLADO (…0011): la puerta dice `excluded` y el job la cancela sin petición. En una entrante | `salientes` g; abierta c |
+| El freno cierra herramientas | · con el freno echado por una llamada que solo está en Twilio, la herramienta de una saliente viva responde `voice_braked` (200, mensaje neutro)<br>· en una entrante | `salientes` g; abierta e |
+| Cuatro ojos | · veredicto: Ana 403, otra huella 409, definitivo<br>· publicar: Ana 403 `four_eyes_required` y Carla 403<br>· promover: Ana 403<br>· consentimiento: Ana 403<br>· en el CRM, los botones = `can` | las tres fases y el CRM |
+| E4-6 falla cerrado (nuevo, B8-g) | · tras `--verify-voice`, `VERIFIED` con marca vigente<br>· una verificación con la clave MALA (401 del simulador) borra la marca → `UNVERIFIED` y la puerta vuelve a decir `elevenlabs_unverified`<br>· la buena la escribe otra vez | `salientes` 0 |
+
+### 4. «Salientes primero» (la 4a sin la 3): no depende de nada de las entrantes
+
+**La fase `salientes`:**
+- la copia del banco con la constante abierta (el mismo giro de UNA línea, comprobado con `diff`);
+- `VOICE_INBOUND_ENABLED=false` y salientes con alcance `canary`.
+
+**El servidor deduce la fase 4a.** El recorrido completo:
+- **publicar en canario:** el número se asigna; ElevenLabs lo usa como origen;
+- **una entrante del canario oye «no»** (`inbound_disabled`, con su fila);
+- **tres salientes al canario por el JOB real** contra los dos simuladores:
+  - ElevenLabs crea la llamada en Twilio con SU credencial;
+  - marcar → contestar → herramienta → post-llamada firmada → `completed` + `seal_verified`, y su precio;
+  - ninguna pasa por el webhook de iniciación;
+- **la evidencia (E13-3)** con la tercera saliente viva y sin post-llamada:
+  - `calls` 2, `missingPostCall` 1;
+  - fallan `too_soon`, `too_few_calls` y `missing_post_call`;
+  - promover → 409;
+- **con la costura de tiempo** (la entrada canaria 25 h atrás):
+  - siguen `too_few_calls` y `missing_post_call`;
+  - promover → 409 por `missing_post_call`;
+- **llega la post-llamada tardía:** `calls` 3, `missingPostCall` 0, la evidencia PASA;
+- **promover:**
+  - Ana 403;
+  - Beto con la huella vieja → `evidence_changed`;
+  - Beto → 201: entrada 2 `promote` `rest`, el agente sirve al resto y la cadena verifica;
+  - promover solo LEE el agente en ElevenLabs.
+
+**Dependencias de PLAN, no de código,** si el propietario elige la 4a antes de la 3:
+- el contrato pone «la fase 3 estable 24 h» como criterio de la 4a;
+- el giro de la constante (`voice(calls-open)`) figura en la fase 3;
+- E4-6 estaba previsto «antes de la fase 3» (E14-5). Ya está en el árbol (B8-g): sin él, toda saliente es 409 `elevenlabs_unverified`.
+
+### Mutantes (cada uno en la COPIA de una pila retenida, nunca en el árbol)
+
+**Sobre HEAD: 8 de 8 cazados (fase `salientes`).**
+
+| Mutante | Fichero | Rojas | La primera |
+|---|---|---|---|
+| M1 sin `no_voice_consent` | `OutboundPolicy.php` | 4 | la puerta 4b; y el JOB marcó al contacto revocado |
+| M2 cupo de herramientas 60 → 600 | `VoiceRateLimits.php` | 1 | el 429 en la 61 |
+| M3 sin el cubo de fallos | `VoiceRateLimits.php` | 1 | el 429 tras 30 fallos |
+| M4 sin el tope de 20 | `VoiceTools.php` | 1 | `tool_quota_exceeded` desde la 21 |
+| M5 la evidencia solo cuenta entrantes | `VoiceEvidence.php` | 10 | los recuentos de las salientes |
+| M6 sin la bandera de entrantes | `InboundPolicy.php` | 6 | la entrante del canario oye «sí» |
+| M7 `excluded` siempre falso | `OutboundGate.php` | 4 | la puerta y el job marcan al excluido |
+| M8 sin la firma del aviso | `TwilioVoiceUsageTriggerController.php` | 5 | credencial mala aceptada |
+
+**Sobre el árbol: 11 de 11 cazados, con la línea base sin mutar en verde.**
+
+- **Base:** la MISMA copia de la evidencia final de `salientes` (`H8_E2E_FUENTE=…run-20261109T205148Z-ab54a256-arbol-ace6becff7a1/fuente`).
+- **Hora:** 21:41–21:59Z.
+- **Carga de la máquina:** la columna «carga», en el momento de cada uno.
+
+| Mutante | Fichero | Rojas | De | Carga | La primera |
+|---|---|---|---|---|---|
+| M0 línea base, sin mutar | — | 0 | 195 | 15,4 | — |
+| M1 sin `no_voice_consent` | `OutboundPolicy.php` | 4 | 195 | 8,8 | la puerta 4b, y el job marcó al contacto revocado |
+| M2 cupo de herramientas 60 → 600 | `VoiceRateLimits.php` | 1 | 195 | 6,1 | el 429 en la 61 |
+| M3 sin el cubo de fallos | `VoiceRateLimits.php` | 1 | 195 | 4,2 | el 429 tras 30 fallos |
+| M4 sin el tope de 20 | `VoiceTools.php` | 1 | 195 | 4,3 | `tool_quota_exceeded` desde la 21 |
+| M5 la evidencia solo cuenta entrantes | `VoiceEvidence.php` | 13 | 183 | 5,2 | los recuentos E13-3 |
+| **M9 `missingPostCall` siempre 0** (E13-3) | `VoiceEvidence.php` | 5 | 195 | 7,1 | `calls` 2 y `missingPostCall` 1 |
+| **M10 `calls` sin exigir la post-llamada** (E13-3) | `VoiceEvidence.php` | 4 | 195 | 10,2 | ídem |
+| **M11 la marca de E4-6 vale siempre** | `VoiceProviderState.php` | 1 | 195 | 8,9 | la verificación mala no vuelve a `UNVERIFIED` |
+| M6 sin la bandera de entrantes | `InboundPolicy.php` | 13 | 183 | 15,5 | la entrante del canario oye «sí» |
+| M7 `excluded` siempre falso | `OutboundGate.php` | 4 | 195 | 8,5 | la puerta y el job marcan al excluido |
+| M8 sin la firma del aviso | `TwilioVoiceUsageTriggerController.php` | 5 | 195 | 6,5 | credencial mala aceptada |
+
+**La regla del número (B8-g), sobre la copia de la pasada final `de13b6ea9120`, sin la ventana de publicar (00:00Z):**
+
+| Mutante | Fichero | Rojas | De | La primera |
+|---|---|---|---|---|
+| M0 línea base, sin mutar | — | 0 | 237 | — |
+| **M12 `policyCheck()` siempre «verificado»** | `VoiceNumberGuard.php` | 2 | 237 | sin conciliación no dice `number_unverified` (paso 0) y con otro número no dice `number_mismatch` (g2) |
+
+El modo retenido no ejecuta el cierre del arnés (las 10 comprobaciones de la valla, `lsof`, el registro, las colas y el barrido). Por eso salen 195 y no 205.
+
+M5 y M6 cortan pasos enteros: 183.
+
+### Hallazgos (con dueño)
+
+#### H-1 (real, frontend/FE8; LAB8 si el lead cambia el contrato)
+
+**El CRM esconde a su dueña la sesión del laboratorio que cierra el proveedor.**
+
+- **Dónde:** `Iron-Body_Front/src/app/modules/ultron-studio/studio-voice-parse.ts:1035`. El lector rechaza `actions.end.allowed && status !== 'open'` como incoherente.
+- **Qué manda el servidor (LAB8 §2.4, `StudioVoiceLabSessions.php:913-920`):** permite a la dueña contar lo que pasó en una sesión `ended` sin veredicto ni lo observado («fallida o con veredicto: 409»).
+- **Petición:** `GET /api/admin/ultron-studio/voice-lab/sessions?page=1&per_page=20`, como Ana, tras la post-llamada del proveedor.
+- **Respuesta:** `status: "ended", endReason: "provider_report", actions.end: {allowed: true}, actions.verdict: {allowed: false, code: "four_eyes_required"}, metrics.reported: {provider: true, tester: false}, verdict: null`.
+- **Efecto:**
+  - en el CRM de Ana, «1 sesión llegó ilegible y no se enseña»; no puede «Contar lo que pasó»;
+  - Beto la ve (para él `end.allowed` es false) y da el veredicto: **no bloquea publicar**;
+  - en la fase 2 real, TODA conversación del laboratorio acaba con la post-llamada del proveedor, así que su dueña siempre la pierde de la lista.
+- **Arreglo propuesto:** admitir `end.allowed` en una sesión `ended` sin veredicto ni `reported.tester`, y un ejemplo de ese estado en `backend-voice.testing.ts`, que hoy no lo tiene.
+- Lo demuestran tres pasadas del CRM.
+
+#### H-4 (real, backend/B8)
+
+**La idempotencia de la puerta de salientes no devuelve la misma fila.**
+
+- **Dónde:** `OutboundGate::decide()` (`app/Services/Telephony/OutboundGate.php:82-123`).
+  - Calcula los hechos CON la propia llamada original: la frecuencia de 1 al día por número, la concurrencia y `placedToday`.
+  - Solo devuelve 200 si el ÚNICO motivo es `duplicate_request`.
+  - Así, el reintento idéntico de una petición ACEPTADA nunca recibe «200 con la fila existente» (DF-G5 y el docblock de `OutboundGate`). Con la frecuencia legal por defecto, ese camino es inalcanzable.
+- **Petición:** `POST /api/admin/voice/calls` dos veces, con el mismo `clientRequestId`, la misma persona y el mismo canario, dentro del horario y con el proveedor verificado.
+- **Respuesta:**
+  - la primera, 202 `{call: {status: requested}}`;
+  - la segunda, **409** `outbound_denied` con `reasons: ["frequency_exceeded","duplicate_request"]`, en el registro `voice.outbound.denied` de la pasada.
+- **Efecto:** no se coloca una segunda llamada (la seguridad se mantiene). Pero el reintento del CRM tras un 429 o un corte (I-1 reutiliza la clave) enseñaría «La política de salientes no permite esta llamada» con la llamada en curso.
+- **Por qué no lo vio la suite:** el fixture del contrato (`outbound-gate-cases.json` `decide[28]`, de TEST8-a) modela el reintento con `frequencyExceeded: false` y `activeOrDialing: 0`, sin el efecto de la original. La política pura está bien; lo que falla es cómo `OutboundGate` le calcula los hechos.
+- **Arreglo propuesto (B8):** con `$previa` aceptada, devolver su fila (o calcular los hechos sin ella). La comprobación del E2E (abierta, paso g, rama «dentro del horario») queda en rojo como regresión.
+
+#### H-5 (B8-g, minimización; que lo juzgue security)
+
+**`GET admin/voice/status` entrega al navegador el id del número importado en ElevenLabs.**
+
+- **Dónde:** `VoiceTelephonyStatus::snapshot()`, `'observed' => VoiceNumberGuard::lastObservation()`.
+- **Qué entrega:** devuelve la observación de la caché ENTERA: `{at, phoneNumberId, matchesFrom, collides}`. `phoneNumberId` es el `phnum_…` de ElevenLabs (la pieza `EL_PHONE_NUMBER_ID` del banco).
+- **Es nuevo con B8-g:** en `HEAD` el estado no lleva `observed`.
+- **Peso:** no es el número ni un secreto, y el CRM no lo enseña (el barrido del DOM pasa). Pero el E2E lo tenía en la lista de piezas que no deben llegar al navegador, como los SID de Twilio, y el CRM no lo usa.
+- **Petición y respuesta:** `GET /api/admin/voice/status` (Ana), 200, con la etiqueta `EL_PHONE_NUMBER_ID` en el cuerpo (registro de red de la evidencia del CRM final).
+- **Propuesta:** quitar `phoneNumberId` del DTO, o enmascararlo como el id del agente en el Studio.
+
+#### H-2 (banco, OPS8)
+
+- El simulador firma la URL del laboratorio con `ws://` y el CRM exige `wss://`.
+- En el banco, el CRM no puede abrir una conversación sin la costura del navegador.
+- **Propuesta:** un oyente TLS con certificado propio en el simulador (y `--ignore-certificate-errors` solo en el Chrome del E2E).
+- No bloquea: el CRM hace bien en negarse.
+
+#### H-3 (del E2E, corregido)
+
+El paso h de la abierta, ver §1.
+
+### Observaciones (no bloquean)
+
+**O-3 (B8/LAB8, minimización).** El id del agente viaja ENTERO en:
+- la telefonía: `GET admin/voice/status`, `calls` y `calls/{uuid}`, y el 202 de `POST calls`;
+- el `SessionDto` del laboratorio.
+
+El Studio (`voice/publications`) ya lo manda enmascarado, y el CRM lo enmascara al leer (D-F13). No es un secreto ni dato personal. El E2E lo admite solo en esas respuestas y exige que nunca llegue al DOM (no llega).
+
+**O-4 (S8/B8; que lo juzgue security).** La evidencia toma `since` de la columna `created_at` de la entrada canaria (`StudioVoiceEvidence.php:103`):
+- la firma no la cubre;
+- `rowMatches` (`StudioVoicePublications.php:569`) no la compara con el `published_at` del JSON firmado.
+
+Quien tenga el superusuario o el dueño de la base puede retrasarla y saltarse las 24 h de P-16 con la cadena verificando. Lo demuestra la costura de tiempo de la fase `salientes`. La aplicación no puede (`REVOKE UPDATE`).
+
+**Propuesta:** usar `published_at` firmado, o compararlo.
+
+**O-5 (FE, UX).** El 429 de la telefonía cumple E9-4: el mensaje del servidor, sin reintentos y sin gastar la clave. Pero el CRM no dice los segundos y «Reintentar» sigue activo durante la espera. El panel del H6 sí espera `retry_after`.
+
+**O-6 (FE, compatibilidad con B8-g).** El CRM `45dd73a` (en producción) lee la evidencia sin romper con la séptima clave: la ignora. Enseña `missing_post_call` como «No basta (motivo: missing_post_call)». Faltan su texto y el recuento.
+
+**O-7 (OPS8-c).** `VOICE_NUMBER_INBOUND_CAPABLE` (B8-g):
+- el simulador no modela un número solo saliente;
+- el E2E deja la variable sin declarar (`null`);
+- el deployer lee `supports_inbound` si viene; el simulador del commit no lo manda.
+
+No se bloquea (instrucción del lead).
+
+**O-8 (banco).** Lo que el arnés NO puede ejercer con la segunda API: una saliente a un CONTACTO que pase la puerta y la marque el worker residente. Ese worker es del alcance canario del banco y la cancelaría `not_an_active_voice_canary`, que es un artefacto. La parte 4b llega hasta «la puerta ya no tiene motivos del destino» y la TOCTOU por el job con alcance `contacts`.
+
+### Lo que no se pudo probar sin servicios reales (o sigue sin cubrir)
+
+**Sin servicios reales:**
+- la voz real: audio, micrófono físico, el WebSocket con TLS contra ElevenLabs y su latencia;
+- la verificación real de ElevenLabs (la de E4-6 es contra el simulador);
+- los precios y `metadata.cost` reales;
+- la desactivación real del webhook;
+- el p95 < 300 ms de la iniciación en producción;
+- la CSP en el servidor;
+- el número con su expediente regulatorio, la importación del número (C-A1) y los destinos de transferencia (E10-10);
+- el RNE real;
+- lectores de pantalla y móviles reales (solo el ancho de 390 px);
+- Firefox real (simulado quitando `sampleRate`).
+
+**Sin cubrir, aunque el banco lo permite** (fuera de esta tanda):
+- buzón, comunicando, sin respuesta y duplicada de las salientes (`/__fault`, `/__call`);
+- `frequency_exceeded` de un contacto en un día distinto;
+- `daily_cap_reached`, `concurrency_exceeded` y `budget_exhausted`;
+- promover desde el CRM: necesita 24 h o la costura de tiempo, que solo usa el backend;
+- la parte 4b con el número solo saliente.
+
+**La rama «fuera del horario legal» de la puerta real** (el paso g de la abierta y el paso `salientes` del CRM, tras E4-6) **no se ejerció hoy:** todas las pasadas finales cayeron entre las 14:20 y las 17:58 de Bogotá, un lunes no festivo. La tiene que cubrir una pasada de noche o en domingo; la anterior a E4-6 sí la cubría.
+
+**La pasada sobre el árbol prueba trabajo sin confirmar** (B8-g a 6/9). Cuando B8-g se confirme, hay que repetir `ambas`, `salientes` y el CRM sobre ese commit (el arnés admite `H8_E2E_REF`; sin `H8_E2E_ARBOL`).
+
+### Ficheros (sin commit)
+
+**Modificados:**
+- `tests/Feature/Voice/E2E/H8StackE2ETestCase.php`
+- `tests/Feature/Voice/E2E/H8E2EAbiertaTest.php`
+- `tests/Feature/Voice/E2E/H8E2ECerradaTest.php`
+- `docs/ultron-studio/ops/h8-e2e.sh`
+- `docs/ultron-studio/ops/h8-e2e/{README.md, ayudante.php, barrido.py, entorno-banco.ejemplo}`
+- `docs/ultron-studio/ops/h8-e2e-crm/{h8-e2e-crm.sh, lib.cjs, recorridos.cjs, README.md}`
+- este informe
+
+**Nuevo:** `tests/Feature/Voice/E2E/H8E2ESalientesPrimeroTest.php`.
+
+**Evidencia:** los directorios de la tabla, en `ops/evidencia-h8/2026-11-09/`.
+
+**Sin tocar:** `app/`, `config/`, `routes/` ni el CRM.
+
 ## §TEST8-b (paso 3, parte 1: E2E con simuladores) — LISTO; falta la pasada final tras B8-c (F-1)
 
 **Fecha:** 08-11-2026 (21:40–22:15 UTC). **Base:** `2b3c2936` (HEAD: commit «OPS8-b», con el simulador de ElevenLabs al
@@ -691,4 +1078,8 @@ Tres pasadas el mismo día, todas con evidencia en `ops/evidencia-h8/2026-11-09/
 | 11:53 y 11:54 UTC (`…T115302Z` y `…T115426Z`, `7824cce7`), en caliente | **cerrada 6/6 (112), abierta 9/9 (283)**; hashes `a49db7d0…` y `20bc13a1…` | — |
 
 Pendiente para TEST8 antes de la fase 2: `esperarEstado` a 30 s (Enmienda 14, E14-2).
+
+## Cierre del lead (10-11-2026 02:05 UTC): regresión global de TEST8-c
+
+El proceso de la regresión sobrevivió al corte del agente y terminó: **14 061 pruebas, 311 928 aserciones, 59 rojos, 362 omitidas** (copia del árbol sin las rutas del H9). Contra `tests/baseline-failures.txt`: 55 conocidos, 0 causados por el H9, **0 nuevos del H8**; los 4 restantes explicados en la Enmienda 16, E16-29 (dos por la contaminación de entorno ya corregida, dos artefactos de la copia: PDF no versionado y copia sin `.git`). El lado «línea base» no se completa: la lista de la base ya existe y el commit no depende de él.
 

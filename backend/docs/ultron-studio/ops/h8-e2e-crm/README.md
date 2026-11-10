@@ -28,8 +28,17 @@ nombre salvo 127.0.0.1 y localhost (`--host-resolver-rules`).
    `sha256-evidencia.txt` con el hash de cada fichero).
 
 Variables: `H8_E2E_VENTANA` (la del arnés: vacía = sin ventana de publicar; por defecto 07:00–19:00 de Bogotá, que de
-noche cierra publicar) · `H8_E2E_REF` · `H8_CRM_DIR` · `H8_CRM_REF` · `H8_CRM_EVIDENCIA` · `H8_CRM_HOLD` ·
-`CHROME_PATH` · `H8_CRM_PASOS=a,b` (solo esos pasos de `recorridos.cjs`).
+noche cierra publicar) · `H8_E2E_REF` · `H8_E2E_ARBOL=1` y `H8_E2E_FUENTE=<ejecución>/fuente` (las lee el arnés: el
+backend del árbol de trabajo, o la copia de una ejecución anterior; su huella va en el nombre de la evidencia) ·
+`H8_CRM_DIR` · `H8_CRM_REF` · `H8_CRM_EVIDENCIA` · `H8_CRM_HOLD` · `CHROME_PATH` · `H8_CRM_PASOS=a,b` (solo esos pasos de
+`recorridos.cjs`).
+
+**Las salientes desde el CRM dependen de la hora** (E4-6, B8-g): con el proveedor verificado, fuera del horario legal la
+puerta se niega con EXACTAMENTE el calendario (oráculo propio con el fixture de festivos); dentro, deja pasar y el paso
+corta desde el CRM la saliente que marcó el worker residente. Las dos ramas quedan en el registro con su nombre.
+
+**Parar a mano:** SIGTERM al proceso de `node` del guion y después al lanzador (bash no atiende la señal hasta que
+termina lo que tiene en primer plano); su trampa para la pila y el CRM y libera los 6 puertos.
 
 ## Las piezas
 
@@ -59,10 +68,27 @@ el barrido del almacenamiento excluye.
   edición que cambie la compilación del mismo par sin un despliegue. Se provoca alterando en el navegador (CDP `Fetch`)
   la huella de la PRIMERA petición de publicar; el 409 `spec_changed` es el real del servidor.
 - **«Firefox»:** no está instalado. Se simula en Chrome quitando `sampleRate` de `getSupportedConstraints()`.
+- **La URL firmada del laboratorio (TEST8-c):** el simulador firma `ws://127.0.0.1:<puerto>` (el banco no tiene TLS) y
+  el lector del CRM solo acepta `wss://` (`studio-voice-parse.ts:1110`; bien hecho: nunca conecta sin TLS). La sesión 1
+  usa la URL tal cual y comprueba que el CRM se niega sin abrir ningún WebSocket (Ana la cierra contando lo que pasó).
+  La sesión 2 reescribe en el navegador el esquema de la respuesta 201 a `wss://` (CDP `Fetch` en la fase de respuesta,
+  como la costura de `spec_changed`): el cliente oficial abre el WebSocket con la URL firmada del simulador, falla el
+  TLS (el simulador no modela la conversación) y la sesión la cierra la post-llamada web del emisor.
+- **El id del agente por la red:** viaja entero, por diseño, en el `SessionDto` del laboratorio y en la telefonía
+  (`GET admin/voice/status`, `calls`, `calls/{uuid}`); el CRM lo enmascara al leer (D-F13). Se admite SOLO en esas
+  respuestas y se exige que nunca llegue al DOM (observación O-3 del informe §TEST8-c).
+- **El registro de llamadas** enseña del otro extremo solo los 4 últimos dígitos: el servidor no manda el alias de un
+  canario (`VoiceCallsQuery.php:13`). El alias con sus 4 dígitos se ve al elegir a quién llamar (diálogo de la saliente).
+- **El 429 de la telefonía** (E9-4): el CRM enseña el MENSAJE del servidor y no reintenta solo; el mensaje no dice los
+  segundos (queda en el detalle de la comprobación). El paso espera `retry_after` antes de seguir con Carla.
 
 ## Trampas
 
 - `page.evaluate` de puppeteer cuenta como gesto del usuario: las lecturas van por CDP con `userGesture: false`.
+- `page.select` sobre una opción que todavía no existe no hace nada y no falla: `elegir()` espera a ESA opción y
+  comprueba que quedó elegida (era la causa del rojo de «Firefox» de la pasada a medias del 09-11).
+- La consola que ve puppeteer mezcla la de la página con lo que escribe Chrome por la red (CDP `Log`, fuente
+  `network`): la URL de un WebSocket que falló la escribe Chrome, no la página. `barrerPagina()` las separa.
 - `waitForSelector(…, {hidden})` falla con `ib-dialog` (el host mide 0×0): el diálogo es el `[role=dialog][aria-modal]`.
 - Angular mete `&ngsp;` (U+E500) entre elementos: el texto se normaliza antes de comparar.
 - La consola de Chrome escribe por su cuenta la URL de un WebSocket que falla (`source: network`): se separa de lo que

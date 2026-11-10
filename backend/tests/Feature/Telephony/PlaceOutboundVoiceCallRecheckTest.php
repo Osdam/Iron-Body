@@ -11,6 +11,7 @@ use App\Services\Telephony\OutboundGate;
 use App\Services\Telephony\OutboundPolicy;
 use App\Services\Telephony\VoiceContacts;
 use App\Services\Telephony\VoiceCostGuard;
+use App\Services\Telephony\VoiceNumberGuard;
 use App\Services\Voice\Dto\OutboundCallRequest;
 use App\Services\Voice\Dto\OutboundCallResult;
 use App\Services\Voice\VoiceCallStarter;
@@ -65,12 +66,17 @@ class PlaceOutboundVoiceCallRecheckTest extends TestCase
         $this->beto = $this->person(Admin::ROLE_SUPER_ADMIN, 'Beto Confirma');
     }
 
-    /** La deriva ya comprobada (sin deriva) en la caché del job: el paso 4 no sale a la red. */
+    /**
+     * La deriva ya comprobada (sin deriva) en la caché del job: el paso 4 no sale
+     * a la red. Y (B8-g) el número que llama vigilado ahora: una conciliación
+     * reciente que cuadra, que también caduca al viajar en el tiempo.
+     */
     private function driftChecked(): void
     {
         foreach ([self::SEALED_AGENT, self::REST_AGENT] as $agente) {
             Cache::put(OutboundGate::DRIFT_CACHE_PREFIX.$agente, false, OutboundGate::DRIFT_CACHE_SECONDS);
         }
+        VoiceNumberGuard::rememberObservation(self::PHONE_NUMBER_ID, true, false);
     }
 
     private function recheck(VoiceCall $llamada): ?string
@@ -209,6 +215,41 @@ class PlaceOutboundVoiceCallRecheckTest extends TestCase
         $this->travelTo(Carbon::parse('2026-12-08 10:00:00', 'America/Bogota'));
         $this->driftChecked();
         $this->assertSame('holiday', $this->recheck($llamada));
+    }
+
+    /**
+     * B8-g (decisión del lead, en la lista de E6-6): el job vuelve a comprobar
+     * el número que llama justo antes de marcar. La puerta la dejó pasar con
+     * una conciliación fresca; si caduca (2 h) antes de que corra el job, o la
+     * siguiente dice que el número no es `TWILIO_VOICE_FROM`, se cancela con el
+     * mismo motivo de la puerta, sin marcar, sin red y sin evento.
+     */
+    public function test_si_la_conciliacion_del_numero_caduca_entre_la_puerta_y_el_marcado_se_cancela_sin_marcar(): void
+    {
+        $canaria = $this->canaryCall();
+        $this->assertNull($this->recheck($canaria), 'con la conciliación fresca, pasa');
+
+        // Caduca entre la puerta y el job: `number_unverified`, antes de mirar la deriva (sin red).
+        $this->travel(121)->minutes();
+        $this->assertSame('number_unverified', $this->recheck($canaria));
+
+        // Una nueva que dice que el importado no es el declarado: `number_mismatch`.
+        VoiceNumberGuard::rememberObservation(self::PHONE_NUMBER_ID, false, false);
+        $this->assertSame('number_mismatch', $this->recheck($canaria));
+
+        // Y se cancela con ese motivo: sin marcar, sin evento y liberando la reserva.
+        $dia = VoiceCostGuard::budgetDay(now());
+        $estado = (new ReflectionMethod(PlaceOutboundVoiceCall::class, 'cancel'))->invoke(new PlaceOutboundVoiceCall((int) $canaria->id), $canaria, 'number_mismatch');
+        $fila = VoiceCall::query()->findOrFail($canaria->id);
+        $this->assertSame(['canceled', 'canceled', 'number_mismatch'], [$estado, $fila->status, $fila->policy_reason]);
+        $this->assertSame(0, VoiceCallEvent::query()->where('call_id', $canaria->id)->count());
+        $this->assertSame(0, VoiceCostGuard::committedMicros($dia), 'cancelada: sin coste');
+
+        // Con una fresca que cuadra, vuelve a pasar (con la deriva comprobada otra vez en su caché de 5 min).
+        $otra = $this->voiceCall('outbound', 'requested', ['canary_number_uuid' => $this->activeVoiceCanary('+573000000032'), 'remote' => '+573000000032']);
+        $this->driftChecked();
+        $this->assertNull($this->recheck($otra));
+        Http::assertNothingSent();
     }
 
     public function test_cancelar_por_un_motivo_del_destino_no_marca_no_deja_evento_y_libera_la_reserva(): void
