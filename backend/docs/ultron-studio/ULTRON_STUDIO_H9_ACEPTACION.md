@@ -1,6 +1,6 @@
 # ULTRON STUDIO · Hito 9 · Matriz de aceptación (lead, 10-11-2026)
 
-**Veredicto al escribirla (06:00 UTC):** el código del Hito 9 está **completo, revisado y verificado en local**; la fase 1 (todo apagado) es desplegable con cero bloqueantes y solo espera la orden escrita del propietario (dada el 10-11: «haz commit y push y despliegue cuando termine todo»). Tres paquetes de cierre siguen en curso (E2E desde el CRM, rendimiento, documentación operativa): las filas marcadas **pendiente** se actualizan al llegar.
+**Veredicto (10-11-2026, tras el despliegue):** el Hito 9 está **completo, revisado, verificado y DESPLEGADO en su fase 1 (todo apagado)**: backend `ce7c150` y CRM `9572426` en producción con cero desvíos, smoke en verde y las 15 banderas apagadas (L9-76). Estado: **READY** para la fase 2 (sombra) en cuanto el propietario encienda las banderas por el mando, con las condiciones de §5. Los tres paquetes de cierre que no entregaron (E2E desde el CRM, rendimiento, documentación operativa) se pararon y quedan como pendientes de la fase 2: las filas marcadas **pendiente** lo dicen.
 
 **Lectura del estado:** `READY` = listo y con evidencia · `READY_FOR_PAID_PLAN` = listo salvo lo que exige el plan de pago (solo Hito 8) · `BLOCKED` = depende de una decisión o acción del propietario · `pendiente` = en curso.
 
