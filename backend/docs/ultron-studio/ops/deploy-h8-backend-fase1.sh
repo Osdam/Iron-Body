@@ -67,7 +67,7 @@ done
 # Si producción se mueve antes del despliegue, el paso 0 aborta («producción no está en …»): se vuelve a leer, se revisa
 # qué entró y se fija aquí en otro commit. Con «pendiente», --solo-comprobar lee el HEAD y lo imprime, y el despliegue se
 # niega.
-PREVIO=32a2560
+PREVIO=fe29126   # la fase 1 está en producción desde el 09-11-2026 12:06 UTC (E15); el despliegue 1b (cierre integral, E16) parte de ella
 # Los commits AJENOS al H8 entre PREVIO y origin/main que producción todavía no tiene se comparan por su PARCHE, no por
 # su hash (una reescritura de la rama puede dejar copias con otro hash de commits que ya están en producción, y esas no
 # cuentan). Hoy queda uno: 7c84cb5 («Un cobro que no da vigencia no es la membresía de nadie»: MembershipRebuilder y su
