@@ -1,0 +1,1555 @@
+# ULTRON STUDIO · Hito 9 (autonomía comercial omnicanal, orquestación y estrategias configurables): contrato — BORRADOR para congelar
+
+**Estado: BORRADOR del `architect` para que el lead lo congele.** Nada de esto rige hasta congelarlo con las decisiones del propietario (§17). **Fecha:** 09-11-2026. **Base:** rama `feat/ultron-studio-h8-voice` en los dos repos; backend `ab54a256` (el árbol trae 7 ficheros del H8 modificados sin confirmar y `ULTRON_STUDIO_H8_COMPLETITUD.md` sin seguimiento: este contrato no los toca); producción: backend `fe29126` y CRM `45dd73a` (H8 en fase 1, todo apagado, desde el 09-11-2026 12:06 UTC). **Forma:** la del contrato del H8. **Entrega objetivo:** 15-11-2026 (domingo): seis días de trabajo desde hoy.
+
+**Marcas:**
+- **[P9-n]**: decisión del propietario (§17). Las marcadas **antes de implementar** cambian el código del 15-11; las demás, solo una fase.
+- **[por confirmar]**: no verificado (en producción, en la documentación oficial o con asesoría legal).
+- **[supuesto]**: lo que el contrato da por hecho para poder avanzar; si resulta falso, cambia el paquete que se indica.
+- Las citas `ruta:línea` son del árbol de la rama en la fecha de arriba (backend salvo que diga CRM).
+
+---
+
+## 0. Resumen en una página
+
+**Qué es el H9.** Una **capa de orquestación configurable** («motor de autonomía comercial») que se apoya en lo que ya existe —los hechos del CRM y del motor comercial, las puertas de los canales y el gobierno del Studio— y añade lo que falta: estrategias configurables sin código, condiciones tipadas, simulación explicable, un planificador duradero, una política de contacto omnicanal con precedencia, resultados normalizados con seguimientos y un panel con **PARADA GLOBAL**.
+
+**Qué no es.** No es un segundo motor comercial (no reescribe `NextBestActionEngine` ni escribe sus tablas), no es un segundo agente de WhatsApp (ULTRON Legacy no se toca), no es un segundo agente de voz (la voz sigue siendo la del H8 y su única puerta), y no rehace ninguno de los ocho hitos.
+
+**Decisiones de arquitectura (D9-*):**
+1. **D9-1:** capa nueva sobre el motor existente, con adaptadores de solo lectura hacia él; las tablas `commercial_*` no se escriben (§4).
+2. **D9-2:** dos espacios de nombres: `App\Services\Outreach` (ejecución) y `App\Services\UltronStudio\StudioStrateg*` (gobierno). En código se llaman **estrategias**, porque «campaña» ya significa «campaña de Meta» desde el H6 [P9-2].
+3. **D9-3 a D9-6:** catálogo cerrado de eventos y de hechos, y una gramática de condiciones tipada (AND/OR/NOT, intervalos, fechas relativas, transiciones, existencia/ausencia de eventos, recuentos y último resultado) con lógica de tres valores y traza explicable. Nunca SQL, expresiones regulares ni código desde la interfaz.
+4. **D9-7:** la precedencia N1–N7 del propietario es una escalera pura: un nivel inferior solo restringe, nunca levanta lo que negó uno superior.
+5. **D9-8:** planificador de nueve etapas, todas filas en la base, con idempotencia por ocurrencia, cerrojos por persona, reserva atómica de presupuesto y reevaluación justo antes de despachar (TOCTOU, como E6-6 del H8).
+6. **D9-9:** canales: WhatsApp solo por la puerta de Laravel que ya existe (`MarketingMessageDispatcher` → outbox) con un método nuevo de plantillas; voz solo por `OutboundGate` del H8 con una entrada nueva para estrategias publicadas (enmienda del H8); canal **asistido** (una persona ejecuta lo que ULTRON decidió) y canal **simulado** (sombra).
+7. **D9-10:** 18 resultados normalizados (conjunto cerrado) y una máquina de seguimientos en la que **la IA solo puede frenar o derivar, nunca acelerar** [P9-6].
+8. **D9-11:** gobierno con el ciclo del H5 copiado: cadena firmada propia, **cuatro ojos por persona verificada** [P9-4], canario, promoción con evidencia, pausa y reversión.
+
+**El recorte honesto del 15-11 (§12) [P9-3]:**
+- **Compromiso mínimo (M):** contrato, fixtures, esquema, núcleo puro, gobierno hasta publicar en canario, planificador **en sombra** con PARADA GLOBAL, API y sección del CRM (constructor, simulación, plantillas y panel). Nada sale hacia ninguna persona.
+- **Objetivo (O):** M más el **canal asistido** (bandeja del personal con resultados y seguimientos), el historial por persona y el despliegue de la fase 1 (todo apagado), si el propietario lo ordena.
+- **Siguientes (S):** el envío automático de WhatsApp por plantillas (W9), el registro de consentimientos por finalidad y canal (C9), el clasificador de respuestas (AI9), la voz por estrategia (V9, que exige las fases 4a/4b del H8), los eventos especiales del gimnasio y el canal de notificaciones de la app (EV9), y las estrategias de fábrica equivalentes a las reglas del motor actual (NBA9).
+
+**Por qué no hay envío real el 15-11.** No es por el código:
+- las plantillas de Meta no están aprobadas;
+- la mayoría de los socios no tiene autorización registrada para WhatsApp comercial (§1.6);
+- las fases 2–4b del H8 esperan dependencias externas;
+- falta el visto bueno legal (Ley 1581/2012 y Ley 2300/2023);
+- los cuatro ojos reales exigen una segunda persona vinculada.
+
+Construir el envío antes que eso solo crea superficie de riesgo.
+
+---
+
+## 1. Estado real (inventario verificado)
+
+### 1.1 Detecciones y eventos que ya existen
+
+| Pieza | Cuándo corre | Qué detecta | Qué emite y hacia dónde | Bandera | Papel en el H9 |
+|---|---|---|---|---|---|
+| `commercial:scan` (`app/Console/Commands/ScanCommercialFacts.php:45-70`; `routes/console.php:319-322`) | Cada hora | 4 familias: ventana de renovación con umbral fijo `commercial.thresholds.renewal_window_days` = 10 (`:79-110`, `config/commercial.php:59`), vencida ayer (`:113-138`), inactividad ≥ 14 días con membresía vigente (`:148-193`) y enlace de pago abandonado (`:202-235`) | `commercial_events`, por `CommercialEventRecorder`, idempotente por una clave con fecha (`:238-251`) | `COMMERCIAL_EVENTS_ENABLED` (`config/commercial.php:25`) | **Fuente de hechos de solo lectura.** Sus ventanas son fijas: el H9 no depende de ellas para las ventanas configurables (D9-3) |
+| 8 *observers* de `app/Observers/Commercial/*` (registrados en `app/Providers/CommercialEventServiceProvider.php:75`) | Al cambiar el modelo | Pagos, membresías, asistencias, citas, facturas, leads, conversaciones, socios | `commercial_events`: 19 de los 27 eventos de `CommercialVocabulary::EVENTS` (`app/Services/Commercial/CommercialVocabulary.php:232-244`) | La misma | Fuente de hechos (eventos `crm_fact`) |
+| `commercial:evaluate-pending` + `EvaluateCommercialSubject` (`routes/console.php:329-332`; `app/Jobs/Commercial/EvaluateCommercialSubject.php:55-120`) | Cada 10 min y al registrar un hecho | Las 12 reglas fijas de `NextBestActionEngine::decide()` (`app/Services/Commercial/NextBestActionEngine.php:76-89`) | `commercial_opportunities`: **un objetivo** por persona; cierra los demás que abrió el motor (`:232-260`) | `COMMERCIAL_NBA_ENABLED` (`config/commercial.php:19`) | Lectura: el objetivo abierto del motor es un hecho (`nba.open_goal`). **Nunca se escribe** (D9-1) |
+| `commercial-alerts` (`routes/console.php:344-346`; `app/Services/Commercial/CommercialAlertService.php`) | Cada 15 min | Pagos pendientes, rechazos, conversaciones sin respuesta, oportunidades vencidas, pauta desactualizada | `commercial_alerts`. «Nada de esto escribe a nadie» | — | Sin cambio |
+| `OpportunityExecutor` (`app/Services/Commercial/OpportunityExecutor.php:41-139`) | **Nunca**: no tiene llamadores en `app/` ni `routes/` (solo `tests/Feature/Commercial/CommercialE2ETest.php`) | — | Herramientas comerciales (enlace de pago, escalar…) tras `COMMERCIAL_AUTONOMY_ENABLED` (`config/commercial.php:30`; `app/Services/Commercial/Tools/ToolExecutor.php:133`) | — | **Hecho clave:** el motor actual decide pero nadie ejecuta su decisión de forma proactiva |
+| `marketing:dispatch-followups` (`app/Console/Commands/DispatchMarketingFollowups.php`; `routes/console.php:244-250`) | Cada 10 min, solo con `MARKETING_FOLLOWUPS_SCHEDULER` | `marketing_followups` vencidos | Los mensajes y tareas quedan **retenidos** (`:108-110`); las llamadas solo crean `marketing_calls`, sin Twilio (`:126-139`) | `marketing.agent_enabled` + `marketing.followups.dispatch_enabled` (`:43-45`) | Lectura de seguimientos autorizados (`lead.followup_due`), con exclusión mutua (D9-8) |
+| `ironbody:detect-membership-expiring` → `ironbody:emit-automation-events --only=membership.expiring` (`routes/console.php:103-104`; `DetectMembershipExpiring.php:16`) | 09:00 | Vence en ≤ 3 días | `automation_events` → `SendAutomationEventToN8n` (HMAC; `config/automation.php:42-55`) → n8n → `POST /api/internal/automation/notify-member` (`routes/api.php:1879-1888`) → notificación de la app | `N8N_ENABLED` | **No se toca.** Es una notificación de la app, no WhatsApp |
+| `ironbody:detect-overdue-receivables` (`routes/console.php:100-101`; `DetectOverdueReceivables.php`) | 06:00 | Cartera: vence mañana, vence hoy, vencida, saldada (`app/Services/Caja/ReceivableDueNotifier.php:40-44`) | `automation_events`, idempotente por generación del saldo | — | Lectura (hechos `receivable.*`, finalidad **cobranza**) |
+| `notifications:membership-expiring --days=3` y `notifications:membership-expired --days=7` (`routes/console.php:25-35`) | 08:00 y 08:05 | Vencimientos | Notificaciones de la app (`NotificationService`) | — | No se tocan |
+| `notifications:class-reminders`, `classes:renew`, `valuations:process-reminders` (`routes/console.php:41-44`, `:88-91`, `:293-296`) | 15 min, hora, minuto | Clases y valoraciones | Notificaciones y renovación de reservas | — | Lectura de la agenda (hechos `class.*`, `valuation.*`) |
+| `subscriptions:charge-due` (`routes/console.php:215-220`) | 06:00, solo con `WOMPI_RECURRING_ENABLED` | Suscripciones vencidas | Cobro automático | — | Hecho `subscription.*` (lectura) |
+| ULTRON (WhatsApp, **reactivo**): `UltronEventEmitter` → `SendUltronEventToN8n` → n8n → `ai/decide` y `ai/commit` (`routes/marketing.php:90-93`) → `MarketingMessageDispatcher::dispatchWhatsapp` (`app/Services/Marketing/Ultron/UltronCommitService.php:1665`, `:2108`, `:2306`, `:2829`) | Por mensaje entrante | — | Respuesta por el outbox | `MARKETING_ULTRON_ENABLED`, solo en la conversación canaria (memoria del proyecto: 273) | **Intacto.** Nunca inicia una conversación |
+
+**Consecuencia.** Conviven tres detectores de «vencimiento» con ventanas distintas: 3 días en la app, 10 en el motor y 3 en n8n. Ninguno contacta por WhatsApp o voz por iniciativa propia. El H9 no los cambia: lee los hechos con ventanas configurables por estrategia.
+
+### 1.2 El motor comercial: qué reutiliza el H9 y qué no
+
+**Se reutiliza, en solo lectura y por adaptadores enumerados (D9-2):**
+
+| Pieza | Para qué |
+|---|---|
+| `CommercialVocabulary` (`CommercialVocabulary.php:21-295`) | Objetivos (18), acciones (15), segmentos (18), eventos (27) y `GOAL_PRIORITY`, como conjuntos cerrados. El H9 no inventa objetivos |
+| `CommercialSubject::build()` (`app/Services/Commercial/CommercialSubject.php:105`) | La foto de hechos por persona: membresía, asistencia, dinero, conversación, `isContactable()` (`:442`) y `acceptsCommercialOffers()` (`:455`) |
+| `CommercialSubjectResolver` (`app/Services/Commercial/CommercialSubjectResolver.php:27-95`) | Unir lead y socio en una persona |
+| `commercial_events` | Lectura por cursor |
+| `commercial_opportunities` | Lectura del objetivo abierto |
+
+**No se reutiliza como escritura, y por qué:**
+- **`commercial_opportunities`.** `NextBestActionEngine::evaluate()` busca la oportunidad existente **por objetivo, sin filtrar por `created_by`** (`NextBestActionEngine.php:137-149`) y la sobrescribe (`:171-183`). Una fila del H9 con el mismo objetivo la secuestraría el motor.
+- **`commercial_events`.** `CommercialEventRecorder` rechaza eventos fuera del vocabulario (`app/Services/Commercial/CommercialEventRecorder.php:80-86`), y todo evento registrado se encola para que lo evalúe el motor (`:154-171`). Escribir ahí los resultados del H9 dispararía decisiones del motor actual.
+
+**`ContactPolicy`** (`app/Services/Commercial/ContactPolicy.php:43-85`) tiene cuatro barreras:
+- el *opt-out* y el *opt-out* comercial;
+- la persona al mando;
+- la frecuencia: IA proactiva en WhatsApp, 48 h entre mensajes y 2 por semana, contados por conversación (`:92-140`; `config/commercial.php:73-83`);
+- las horas de silencio, de 21:00 a 08:00 de Bogotá (`:146-172`).
+
+Además exige plantilla pasadas 24 h (`:181-188`). Solo cubre WhatsApp y depende de un `CommercialOpportunity`. **El H9 toma su configuración como suelo** de su presupuesto de contacto omnicanal (D9-7) y lo prueba con paridad, sin llamarla.
+
+### 1.3 Las puertas de los canales
+
+**WhatsApp:**
+- **`MarketingMessageDispatcher::dispatchWhatsapp`** (`app/Services/Marketing/MarketingMessageDispatcher.php:32-41`) es la única puerta de salida y solo envía **texto**. Sus guardas:
+  - `canReplyReactively()` (`:48-51`);
+  - solo WhatsApp (`:53-56`);
+  - el *opt-out* por teléfono normalizado entre leads hermanos (`:64-88`);
+  - la pausa del agente.
+
+  Después crea `marketing_messages` y entrega por el outbox (`:165-177`).
+- **`WhatsappOutboxService::deliver`** (`app/Services/Marketing/WhatsappOutboxService.php:54`) es idempotente por `meta_message_id`, con reintentos acotados y los estados `queued`, `sent`, `failed`, `dead` y `dry_run` (`:29-41`). Solo entrega texto y adjuntos.
+- **`MetaMessagingService::sendWhatsappTemplate`** (`app/Services/Meta/MetaMessagingService.php:89-104`) existe **sin ningún llamador**. Hoy no hay camino para escribir primero ni para retomar pasadas 24 h: Meta solo lo admite con plantilla aprobada (`ContactPolicy.php:174-188`).
+- **`POST /api/internal/marketing/send-message`** (`routes/api.php:1893-1899`; `app/Http/Controllers/Api/Internal/InternalMarketingController.php:170-250`) envía texto por el despachador. Su `X-Idempotency-Key` «TODAVÍA NO deduplica» (`:181-195`).
+- **Frenos que ya existen:**
+  - la pausa global del agente (`app/Services/Marketing/MarketingAgentSwitch.php:20-35`): nada que redacte la máquina (`sender_type = ai`) llega a Meta;
+  - el freno de ULTRON (`app/Services/Marketing/Ultron/UltronAbortLatch.php:12-22`): solo apaga, y soltarlo es humano.
+
+**Voz (H8, fase 1 en producción, todo apagado):**
+- **`OutboundGate::request(Admin $actor, …)`** (`app/Services/Telephony/OutboundGate.php:60`) exige **una persona**. Los destinos son un canario o un `voice_contacts`, y `OutboundPolicy` decide con 26 motivos cerrados (`app/Services/Telephony/OutboundPolicy.php:38-46`).
+- El job revalida justo antes de marcar con `targetFacts()` (`OutboundGate.php:185`).
+- **La base admite dos solicitantes** (`vc_requester_chk`, `database/migrations/2026_11_10_100002_create_voice_tables.php:377-379`):
+  - `admin`, con identidad y `client_request_id`;
+  - `system`, solo para reintentos (`attempt > 1`).
+
+  Hay una saliente viva por número (`vc_one_live_outbound`, `:449`).
+- **El dominio `telephony` está en `SHARED_TOKEN_EXCLUDED_DOMAINS`:** «una automatización no llama» (`app/Support/Access/CrmPermission.php:254-266`).
+- **`VoiceFrequency`:** 1 al día, no configurable; 2 por semana, en ventana móvil (`app/Services/Telephony/VoiceFrequency.php:26-28`, `:74-78`). Solo cuenta voz: la regla semanal entre canales ([P-15] del H8) **no existe**.
+- **`VoiceLeadSignals`** es el único adaptador hacia los leads (`app/Services/Telephony/VoiceLeadSignals.php:14-28`).
+- **`OutboundSchedule` y `ColombianHolidays`** son puros: la ventana legal es la de `OutboundSchedule::LEGAL` (`app/Services/Telephony/OutboundSchedule.php:29`) y los 19 festivos los da `ColombianHolidays::forYear()` (`app/Services/Telephony/ColombianHolidays.php:93`). **El H9 los reutiliza** (D9-7).
+- **Estado:** `CALLS_ENABLED_IN_CODE = false`; las fases 2–4b esperan al propietario (`ULTRON_STUDIO_H8_COMPLETITUD.md`, «Orden de activación»).
+
+**Notificaciones de la app:** `AppNotificationService`, por n8n `notify-member`. **No es un canal del H9 el 15-11** ([P9-23]).
+
+### 1.4 El Studio y su gobierno (H3–H8)
+
+**Las diez capas** (`app/Services/UltronStudio/StudioCatalog.php:254-417`): `knowledge`, `persona`, `intent`, `context`, `memory`, `strategy`, `rules`, `composer`, `integrations` y `governance`. El catálogo está **congelado** en `2026-10-19.1` (`StudioCatalog.php:37`; protección 11 del H8).
+
+**Reglas:**
+- Las del código son R-01…R-12 (`StudioCatalog.php:176-199`).
+- Las S-NNN no tienen efecto.
+- La gramática de condiciones de G (`app/Services/UltronStudio/StudioRuleCoherence.php:20-29`, `:63-72`, `:117-128`; como mucho 3 `when` y 3 `then`, 4 096 bytes) habla de **la configuración del grafo** (`config:capa.clave`, `edge:Exx`, `text#frase`), **no de personas**.
+
+  El H9 necesita su propia gramática, con el mismo estilo: pura, sin expresiones regulares del usuario, con un fixture compartido con el CRM y el servidor como autoridad.
+
+**Versiones:**
+- 10 estados (`app/Services/UltronStudio/StudioVersionStatus.php:24-35`);
+- cuatro ojos **por cuenta**;
+- cadena `ultron_studio_publications` firmada con la subclave `ultron-studio-publication` (`app/Services/Marketing/Ultron/UltronPublishedConfig.php:110`);
+- canario y promoción con evidencia;
+- ventana de 07:00 a 19:00;
+- puerta del laboratorio.
+
+**Precedente del H8.** La voz es un **artefacto aparte** (el perfil) con **su propia cadena** (subclave `ultron-studio-voice-chain`, E1-4 del H8) y referencia inmutable a la versión del Studio. El H9 copia ese patrón.
+
+**Canarios del H6:**
+- `StudioCanaryNumbers`, con canales `whatsapp` y `voice` (`app/Services/UltronStudio/StudioCanaryPhone.php:32-36`);
+- huella `PhoneFingerprint` con la etiqueta `ultron-canary-phone/1`, que la voz lee por un adaptador (`app/Services/Telephony/VoiceCanaryDirectory.php`).
+
+**Libro.** `ultron_studio_audit_events`, con 7 sujetos en el CHECK `usae_subject_type_chk` (`app/Models/UltronStudio/StudioAuditEvent.php:41-57`).
+
+**Rutas del Studio.** `STUDIO_ROUTE_COUNT = 77` (`app/Http/Controllers/Crm/UltronStudio/UltronStudioVoiceController.php:86`), vigilado por tres pruebas.
+
+**Cuatro ojos «reales».** Hoy no se pueden hacer cumplir:
+- `admins` no tiene vínculo con una persona (ni `identity_id` ni `staff_profile_id`);
+- sí existe `identities` (`app/Models/Identity.php`) y `staff_profiles.identity_id` (`database/migrations/2026_10_11_700001_create_staff_profiles_table.php:38`).
+
+La hoja de ruta ya lo registra: «Cuatro ojos por cuenta, no por persona».
+
+### 1.5 Permisos y observabilidad
+
+**Permisos:**
+- El catálogo tiene `ultron.*`, `telephony.*` y `marketing.agent.manage` (`app/Support/Access/PermissionCatalog.php:124-170`).
+- El token compartido solo lee, y nunca los dominios excluidos (`CrmPermission.php:225-266`).
+- `AuthorizationMap` deniega por defecto y `auth:coverage` lo comprueba.
+
+**Observabilidad:**
+- IRON GUARD: `IncidentRecorder::record()` (`app/Services/IronGuard/IncidentRecorder.php:29`).
+- El monitor del Studio (`routes/console.php:390-418`) y el de la voz (`:430-469`), apagados por bandera.
+- Los carriles de cola (`config/queue.php:231-254`): `commercial` P4, `voice` P1.
+
+### 1.6 Consentimientos que existen hoy
+
+**Leads de WhatsApp:**
+- `marketing_leads.consent_status` (`granted`, `denied`, `pending` o `unknown`) y `do_not_contact` (`app/Models/MarketingLead.php:37-43`).
+- `canContactProactively()` exige `granted` y que no haya *opt-out* (`:121`).
+- El expediente está en `marketing_consent_events` (`app/Models/MarketingConsentEvent.php`), **sin finalidad ni canal**.
+
+**Socios.** `member_legal_consents` tiene `data_processing`, términos y contrato (`app/Models/MemberLegalConsent.php:10-20`), **sin una autorización explícita de contacto comercial por canal** [por confirmar con asesoría si alguna cláusula del contrato la cubre: P9-15].
+
+**Voz:**
+- `voice_consents` (`purpose = commercial`, `channel = voice_call`, cuatro ojos), `voice_exclusions` y `voice_rne_checks`, todas de solo inserción;
+- en el H8, el consentimiento de WhatsApp **no vale** para la voz.
+
+**Consecuencia.** Un socio inscrito en recepción que nunca escribió por WhatsApp **no tiene hoy ninguna autorización registrada** para que se le contacte por WhatsApp o por voz con fines comerciales. La política del H9 lo trata como `no_consent` (N1) hasta que [P9-14] y [P9-15] digan otra cosa.
+
+### 1.7 Lo que falta (el hueco que cubre el H9)
+
+1. Estrategias configurables. Hoy todo umbral es una variable de entorno o código (`config/commercial.php:49-83`; `NextBestActionEngine::RENEWAL_WINDOW_DAYS = 10`, `:42`).
+2. Una gramática de condiciones sobre personas y hechos.
+3. Ejecución proactiva: `OpportunityExecutor` no se llama y los seguimientos de mensaje quedan retenidos.
+4. El envío de plantillas de WhatsApp.
+5. Voz por automatización: la puerta solo admite personas.
+6. Frecuencia omnicanal e historial unificado por persona.
+7. Resultados normalizados y seguimientos gobernados por regla.
+8. Consentimiento por finalidad y canal (socios y cobranza).
+9. Cuatro ojos por persona.
+10. Una parada global de la automatización proactiva. Hoy hay frenos por motor: ULTRON, el agente y la voz.
+11. Actividades especiales del gimnasio como fuente de audiencia: solo existen clases, valoraciones y citas.
+
+---
+
+## 2. Objetivo y alcance
+
+**Objetivo.** ULTRON actúa como asesor comercial autónomo, y **Laravel es la única autoridad** sobre:
+- **a quién** se contacta, **por qué**, **cuándo** y **por qué canal**;
+- **con qué contenido aprobado**;
+- **qué se hace con el resultado**.
+
+Todo eso se configura en el Studio sin código, con versiones inmutables gobernadas a cuatro ojos por personas distintas. Una vez aprobada, publicada y activada una estrategia, el sistema ejecuta sin intervención manual por contacto, siempre dentro de la ley, del consentimiento, de los frenos y de los presupuestos.
+
+**Dentro del H9 (contrato completo; el recorte por fechas está en §12):**
+- el catálogo extensible de eventos y hechos;
+- la gramática de condiciones;
+- estrategias, secuencias y plantillas versionadas;
+- la simulación explicable;
+- el planificador duradero;
+- la política de contacto omnicanal con precedencia;
+- la selección de canal determinista;
+- los resultados normalizados y los seguimientos;
+- el gobierno (borrador → validación → simulación → versión inmutable → revisión → aprobación independiente → canario → supervisión → promoción → pausa → reversión);
+- los cuatro ojos por persona;
+- los permisos;
+- el panel y la PARADA GLOBAL;
+- el cumplimiento (Ley 1581/2012 y Ley 2300/2023);
+- la sección «Automatizaciones comerciales» del CRM;
+- las puertas de WhatsApp y de voz, con su diseño cerrado aquí y su implementación en los paquetes W9 y V9.
+
+**Fuera del H9:**
+- cambiar lo que ULTRON (WhatsApp reactivo) dice o hace;
+- el flujo de n8n;
+- el OTP;
+- el agente de voz del H8 (su compilador solo cambia en V9, con su enmienda);
+- reescribir o apagar el motor comercial actual;
+- llamadas por lotes de ElevenLabs;
+- cualquier texto libre generado por un modelo en un contacto **iniciado** por el sistema (solo plantillas aprobadas);
+- importar listas externas de teléfonos;
+- contactar a referencias o terceros (Ley 2300, art. 4).
+
+---
+
+## 3. Protecciones intocables (no se retiran en este hito)
+
+1. **Todo nace apagado.**
+   - `COMMERCIAL_AUTOMATION_ENABLED=false`, la bandera maestra.
+   - `COMMERCIAL_AUTOMATION_MODE=off`, con `off`, `shadow` o `live`; cualquier otro valor es `off`.
+   - `COMMERCIAL_AUTOMATION_SCHEDULER_ENABLED=false`: nada se programa.
+   - Banderas por canal en `false` y presupuestos y topes en `0`.
+   - `ULTRON_STUDIO_STRATEGIES_PUBLISHING_ENABLED=false`: publicar y promover responden 409.
+   - Solo `true`, `1`, `on` o `yes` encienden (el mismo `filter_var` que `config/voice.php` y `config/ultron_studio.php:83`).
+2. **Constante de código.** `OutreachSendGate::SENDS_ENABLED_IN_CODE = false`:
+   - es un literal, una sola vez, vigilado por la guarda de SEC9;
+   - mientras sea `false`, el modo `live` solo admite el canal asistido y el simulado; ningún mensaje ni llamada automática sale hacia una persona;
+   - se gira **solo** en un commit de una línea, `outreach(sends-open): …`, que cita la autorización escrita del propietario;
+   - nunca se gira en el árbol compartido para probar: como en el H8, la vía permitida se ensaya en una copia del banco.
+3. **Laravel decide; los modelos solo clasifican.**
+   - OpenAI y ElevenLabs no eligen destinatarios, canales, horas, contenidos ni pasos, y no levantan ninguna regla.
+   - Un clasificador (AI9, apagado) solo puede producir resultados del conjunto cerrado que **frenan o derivan** (D9-10).
+   - En el H9 no hay texto libre de un modelo en un contacto iniciado por el sistema.
+4. **Puertas únicas de los canales:**
+   - WhatsApp solo por `MarketingMessageDispatcher` → `WhatsappOutboxService` (método nuevo de plantillas, W9);
+   - voz solo por `OutboundGate` (entrada nueva de estrategias, V9).
+   - El espacio `App\Services\Outreach` no nombra `MetaMessagingService`, `WhatsappOutboxService`, `ElevenLabs*`, `Twilio*` ni `Http::`. Lo vigila una guarda estática de SEC9.
+5. **ULTRON Legacy intacto:**
+   - puerta de diff vacía en `app/Services/Marketing/Ultron/**`, `app/Jobs/SendUltronEventToN8n.php`, `app/Http/Controllers/Api/Internal/**`, `routes/marketing.php` y `config/marketing.php`;
+   - la cadena `ultron_studio_publications` y `UltronPublishedConfig` no cambian;
+   - `MARKETING_ULTRON_STUDIO_CONFIG` no gobierna el H9;
+   - el canario 273 no se mueve.
+   - El H9 nunca escribe en `marketing_*` salvo **a través** del despachador en W9, que crea el mensaje como hoy.
+6. **Motor comercial intacto:**
+   - puerta de diff vacía en `app/Services/Commercial/**`, `app/Jobs/Commercial/**`, `app/Observers/Commercial/**` y `config/commercial.php`;
+   - el H9 no escribe en `commercial_opportunities`, `commercial_segments`, `commercial_events`, `commercial_alerts` ni `commercial_approvals`;
+   - lee por los adaptadores enumerados (D9-2).
+7. **n8n de producción intacto.** El 15-11 no hay workflow nuevo, ni tipos nuevos en `automation.event_types` (`config/automation.php:73-88`), ni llamadas del H9 a las rutas internas firmadas.
+8. **OTP intacto.** La protección 4 del H8 sigue igual, y el H9 no lee `otp.*` ni `voice.twilio.*`.
+9. **Voz del H8 intacta hasta V9:**
+   - `CALLS_ENABLED_IN_CODE`, `OutboundPolicy::REASONS`, las tablas `voice_*` y sus guardas no cambian el 15-11;
+   - V9 es una **enmienda del contrato del H8** (D9-9.3) con su propia revisión de seguridad.
+10. **Datos personales:**
+    - Sin teléfonos, nombres, documentos ni textos de mensajes en decisiones, trazas, resultados, logs, eventos del libro ni listas del CRM.
+    - La persona se nombra por su `subject_key` interno (`m:<member_id>` o `l:<lead_id>`) y, fuera del servidor, por un seudónimo `subject_ref` (HMAC con su propia subclave `outreach-subject/1`).
+    - Las trazas guardan valores **derivados** (días, recuentos, enumerados y booleanos), nunca fechas de nacimiento ni importes de deuda.
+    - La supresión de la Ley 1581 se amplía a las tablas nuevas (OPS9).
+11. **Migraciones aditivas e inertes:**
+    - crear las tablas no enciende nada;
+    - `down()` se niega con datos y **nunca `migrate:rollback` en producción**;
+    - las tablas de solo inserción, con `REVOKE UPDATE, DELETE` del rol `iron_app`, la comprobación posterior y la guarda de producción del patrón DB7/DB8;
+    - la puerta de PostgreSQL es obligatoria.
+12. **Sin gasto sin control.** Cada canal que gasta lleva **cuatro cerrojos independientes**:
+    - la bandera;
+    - el modo `live` con la constante;
+    - el presupuesto diario mayor que 0;
+    - la credencial o aprobación externa presente (la plantilla aprobada por Meta, la publicación de voz).
+
+    Encima, una **reserva atómica** contra el techo del día de Bogotá.
+13. **Ley (lectura del `architect`, no asesoría legal).** Detalle en D9-15.
+    - Horario de la Ley 2300, art. 3, aplicable a la publicidad y a las llamadas comerciales por su art. 5, parágrafo 3: de lunes a viernes de 07:00 a 19:00 y sábados de 08:00 a 15:00, ni domingos ni festivos.
+    - Como mucho **un contacto al día por persona sumando todos los canales**.
+    - La regla semanal entre canales, por [P9-8].
+    - Autorización expresa por **finalidad y canal**.
+    - Una forma fácil y efectiva de dejar de recibir mensajes en cada contacto.
+    - Los menores, excluidos.
+    - **Tener el teléfono no autoriza nada.**
+14. **Producción.** Ninguna fase sin orden escrita del propietario.
+15. **El catálogo del Studio `2026-10-19.1` sigue congelado.** El catálogo del H9 es otro (`OutreachCatalog`, D9-3).
+
+---
+
+## 4. Decisiones de arquitectura
+
+### D9-1 · Posición: una capa de orquestación sobre el motor existente (opción A)
+
+| Opción | Qué es | A favor | En contra |
+|---|---|---|---|
+| **A (recomendada)** | Capa nueva (`Outreach`). Lee los hechos del motor (`CommercialSubject`, `commercial_events`) y su objetivo abierto (`nba.open_goal`); usa su vocabulario cerrado; escribe solo sus tablas; ejecuta por las puertas de los canales que ya existen | No toca el motor ni su panel de Supervisión ni sus pruebas. Admite varias estrategias por persona (el motor solo tiene un objetivo, `NextBestActionEngine.php:209-260`). Cada cosa es reversible por bandera | Hay dos «decisores»: el motor (fijo, que hoy no ejecuta nada) y el H9 (configurable). Se mitiga con el presupuesto de contacto común (D9-7) y con NBA9: las reglas del motor pasan a estrategias de fábrica con prueba de paridad |
+| B | Volver configurables las 12 reglas de `NextBestActionEngine` | Un solo decisor | Rompe su modelo de un objetivo por persona y `supersedeOthers`. Cambia la semántica de un módulo que alimenta Supervisión y el contexto del Inbox (`app/Services/Marketing/InboxContextService.php:254-282`). Riesgo alto con 6 días |
+| C | Encender `COMMERCIAL_AUTONOMY_ENABLED` y conectar `OpportunityExecutor` | Poco código | No es configurable sin código. Solo ejecuta herramientas (enlace de pago, cita), no contactos. Ignora consentimiento por canal, voz y frecuencia omnicanal |
+
+→ **Recomendación: A** [P9-1].
+
+«No duplicar», en concreto:
+- el H9 **no reimplementa** en código ninguna regla del motor;
+- o lee su decisión (`nba.open_goal`), o se configura un equivalente como **datos** (NBA9).
+
+**Riesgo residual:** encender `COMMERCIAL_AUTONOMY_ENABLED` con el H9 en `live` haría que dos sistemas actuaran sobre las mismas personas. **Regla:** el H9 en `live` exige `commercial.autonomy_enabled = false` (motivo N2 `legacy_autonomy_on`).
+
+### D9-2 · Espacios de nombres, nombres y fronteras
+
+**Nombres [P9-2].** En código, permisos y tablas, la campaña configurable se llama **estrategia** (`strategy`): «campaña» ya significa campaña de Meta en `marketing_campaigns`, `StudioCampaignLinks` y `ultron.campaigns_manage` (H6). En la interfaz: «Campañas automáticas (estrategias)».
+
+| Espacio | Qué es | Frontera verificable (SEC9) |
+|---|---|---|
+| `App\Services\Outreach\Core` (nuevo, **puro**) | Catálogo, canonicalizador y evaluador de condiciones, escalera de políticas, presupuesto de contacto, selector de canal, tabla de resultados, máquina de seguimientos, forma canónica y firma de la cadena de estrategias | Sin base de datos, HTTP, log, caché, configuración ni reloj (`now` entra como argumento). Lo prueban los fixtures (como `StudioRuleCoherence`) |
+| `App\Services\Outreach\Facts` (nuevo) | **Adaptadores enumerados de solo lectura**, un fichero por fuente: socio y membresía (`users.membership_end_date`, `CommercialSubject`), asistencia, pagos y suscripciones, cartera, leads y conversaciones, seguimientos de mercadeo, agenda (clases y valoraciones), objetivo del motor, historial de contactos (`marketing_messages` y `voice_calls`), consentimientos (lead, `voice_consents`, `voice_exclusions`, `voice_rne_checks`) y canarios (`StudioCanaryNumber`, por huella) | Cada fichero solo hace `select`/`count`/`exists`/`value`/`pluck`. Sin `create`, `update`, `insert`, `delete`, `save` ni `forceFill`. Lista cerrada de ficheros y de tablas por fichero. **Única excepción enumerada:** `Facts\OperationalBrakes` es el único fichero que llama, en lectura, a `UltronAbortLatch::engaged()` (`app/Services/Marketing/Ultron/UltronAbortLatch.php`), `MarketingAgentSwitch::isPaused()` (`app/Services/Marketing/MarketingAgentSwitch.php:87`) y `VoiceBrake::isOpen()` (`app/Services/Telephony/VoiceBrake.php:94`), para N2; nunca a `open`, `release`, `set` ni `openOrRearm` |
+| `App\Services\Outreach` (resto, nuevo) | Planificador, despachador, frenos, presupuesto, canales (`SimulatedChannel`, `AssistedChannel` y, en W9/V9, `WhatsappTemplateChannel` y `VoiceStrategyChannel`), ingesta de resultados, monitor, conciliador e historial | No importa `App\Services\Marketing\Ultron\*` (salvo a través de `Facts\OperationalBrakes`), `App\Services\Commercial\Tools\*`, `App\Services\Meta\*`, `App\Services\Voice\*` ni `App\Services\Twilio\*`. De `Telephony`, solo `OutboundSchedule`, `ColombianHolidays` y `VoiceFrequency` (puras) y, en V9, `OutboundGate::requestForStrategy`. Del Studio, solo el puente `OutreachPublishedStrategies` (lector de la cadena, como `VoicePublishedConfig` en E4-3 del H8) |
+| `App\Services\UltronStudio\StudioStrateg*`, `StudioMessageTemplates` y `StudioPersonBindings` (nuevos) | **Gobierno:** estrategias, borradores, versiones, revisiones, simulaciones, plantillas, cadena de publicaciones, evidencia del canario y vínculos cuenta → persona | Del espacio `Outreach`, solo `Outreach\Core` (puro: validación, evaluación de simulaciones, firma) y los servicios enumerados de lectura de métricas para la evidencia (como E2-6 del H8). Nunca escribe en `outreach_*` |
+| Puertas de los canales (en W9 y V9, no el 15-11) | `MarketingMessageDispatcher::dispatchWhatsappTemplate` (Marketing) y `OutboundGate::requestForStrategy` (Telephony) | **Diff enumerado** en cada paquete, con su guarda y la regresión completa de Legacy y del H8 |
+
+### D9-3 · Catálogo de eventos (extensible, cerrado por versión)
+
+`OutreachCatalog::VERSION = 'outreach-catalog/2026-11-10.1'` y su huella; cambiar cualquier dato obliga a subir la versión, como `StudioCatalog`. Un **evento** es lo que abre la posibilidad de inscribir a una persona en una estrategia. Hay cuatro clases:
+
+| Clase | Origen | Cómo se lee | Ejemplos (15-11) |
+|---|---|---|---|
+| `crm_fact` | Las filas de `commercial_events` (vocabulario de 27) | Por cursor monótono (`outreach_cursors`, D9-8). Si `COMMERCIAL_EVENTS_ENABLED` está apagada en producción, la fuente queda **sin datos** y el panel lo dice [por confirmar el valor en producción] | `payment_failed`, `payment_expired`, `membership_expired`, `appointment_completed`, `lead_qualified`, `human_requested` (este último solo puede **detener**: D9-7, N6) |
+| `periodic` | Barridos que evalúan hechos actuales con **parámetros por estrategia** | `outreach:sweep`, con la cadencia que declara el catálogo; prefiltro indexado definido en código y evaluación por persona | `membership.expiring_window {daysBefore: 1..60}`, `membership.expired_window {daysAfterMin, daysAfterMax ≤ 365}`, `member.inactive {days ≥ 7}`, `receivable.overdue {daysMin, daysMax}` (cobranza), `payment_link.abandoned {graceHours}`, `lead.followup_due` (seguimientos autorizados de `marketing_followups`), `valuation.outdated {days}`, `class.upcoming_with_capacity {withinDays ≤ 14}` |
+| `outcome` | Resultados del propio H9 (D9-10) | Al registrar un resultado | `no_answer`, `replied` y `callback_requested` abren el siguiente paso **solo si la secuencia lo permite** |
+| `integration` (W9/V9) | Estados de Meta (entregado, leído, fallido), mensajes entrantes posteriores y estados de `voice_calls` | Normalizadores por canal (D9-10) | — |
+
+**Cada entrada del catálogo declara:**
+- `key` y su versión;
+- la clase;
+- el **esquema de parámetros**, tipado y con mínimos y máximos;
+- el resolvedor de sujeto: socio o lead, unificados como `EvaluateCommercialSubject::lockKey()` (`EvaluateCommercialSubject.php:136-148`): el socio manda si existe;
+- la **clave de ciclo** (`cycleKey`), es decir, la identidad de la ocurrencia. Por ejemplo:
+  - `exp:<membership_end_date>` para la ventana de vencimiento;
+  - la semana ISO para la inactividad, como `ScanCommercialFacts.php:188`;
+  - `rcv:<receivable_id>:<generación>` para la cartera, como `DetectOverdueReceivables`;
+  - `tx:<payment_transaction_id>` para un enlace abandonado;
+- los hechos que garantiza;
+- la **finalidad** posible: `commercial`, `collections` o `service`;
+- la clase de coste (barrido barato o caro);
+- los requisitos (tablas y banderas).
+
+**Extensibilidad, la frontera de «sin código».** La interfaz **compone** eventos y hechos del catálogo con parámetros. Un tipo de evento o un hecho **nuevo** exige:
+- un adaptador;
+- una entrada del catálogo;
+- su fixture;
+- subir la versión.
+
+Es decir, un commit revisado, nunca la interfaz. Los cambios del catálogo son **aditivos**: retirar un hecho exige una versión mayor, y las estrategias que lo usan quedan en `catalog_incompatible` (denegadas, no reinterpretadas) hasta que se reaprueben.
+
+**Conflicto con `marketing:dispatch-followups`.** `lead.followup_due` solo se activa si `marketing.followups.scheduler_enabled = false`; si no, N2 `legacy_followups_active`. Evita que dos sistemas trabajen el mismo seguimiento.
+
+### D9-4 · Catálogo de hechos (tipados)
+
+**Tipos:** `bool`, `int`, `decimal`, `enum` (con dominio cerrado), `duration` y `date_relative` (siempre como días o horas desde «ahora» en Bogotá).
+
+**El valor nulo es «desconocido»:** nunca 0 ni `false` (D9-5).
+
+**Hechos iniciales.** Lista cerrada; TEST9-a la fija en `tests/fixtures/outreach/catalog-snapshot.json`:
+
+| Grupo | Hechos |
+|---|---|
+| Persona | `subject.is_member`, `subject.is_lead`, `subject.is_minor` (con la fecha de nacimiento: solo se expone el booleano), `subject.has_whatsapp_identity` (lead con conversación de WhatsApp), `subject.has_voice_contact` |
+| Membresía | `membership.active`, `membership.days_to_expiry`, `membership.days_since_expiry`, `membership.plan_id` (enum del catálogo de planes vendibles), `membership.plan_duration_days`, `membership.days_as_member`, `membership.frozen` |
+| Asistencia | `attendance.days_since_last`, `attendance.count_last_30d`, `attendance.weekly_rate` |
+| Dinero | `payment.has_pending_link`, `payment.pending_link_age_hours`, `payment.declined_last_7d`, `payment.approved_count`, `subscription.active`, `subscription.failed_attempts` |
+| Cartera (solo `collections`) | `receivable.has_overdue`, `receivable.overdue_days_max`, `receivable.count_overdue`. **Sin importes en trazas**: solo tramos (`0-7`, `8-30`, `31-90`, `>90`) |
+| Prospecto | `lead.temperature` (enum), `lead.commercial_phase` (enum de `CommercialPhaseMachine`), `lead.days_since_last_inbound`, `lead.followup_due` (bool), `lead.consent_status` (enum) |
+| Conversación | `conversation.human_in_control`, `conversation.window_open` (< 24 h desde el último entrante) |
+| Agenda | `valuation.days_since_last`, `valuation.has_upcoming`, `class.reserved_next_7d`, `class.attended_type_last_60d` (enum de tipos) |
+| Motor | `nba.open_goal` (enum de `CommercialVocabulary::GOALS` o nulo) |
+| Historial | `contact.count{channel?, purpose?, strategy?, within}`, `contact.days_since_last{channel?, purpose?}`, `contact.last_outcome{channel?, strategy?}` (enum de D9-10). Cuentan los contactos del H9, los salientes proactivos de la IA en `marketing_messages` y las salientes de `voice_calls`, **nunca** las respuestas a algo que preguntó la persona (como `ContactPolicy.php:112-116`) |
+| Transiciones | `transition(entity, from, to, within)` sobre las máquinas cerradas: membresía (`active`, `expired`, `frozen`), pago (`pending`, `approved`, `declined`, `expired`) y fase comercial del lead. Se lee de `commercial_events` y del estado actual |
+
+### D9-5 · Gramática de condiciones (tipada, validada y explicable)
+
+**Forma.** Un árbol JSON canónico, `outreach-conditions/1`. Nodos:
+- **Lógicos:** `{"all": […]}` (AND), `{"any": […]}` (OR) y `{"not": nodo}`.
+- **Comparación:** `{"fact": "<clave>", "args": {…}?, "op": "<operador>", "value": …}`.
+- **Eventos:** `{"event": "<clave del vocabulario>", "op": "exists"|"absent", "within": {"n": 30, "unit": "days"}, "where": {…}?}`.
+- **Recuentos:** `{"count": {"of": "contact"|"event:<clave>", "filter": {…}, "within": {…}}, "op": "lte", "value": 2}`.
+- **Último resultado:** `{"fact": "contact.last_outcome", "args": {"channel": "whatsapp"}, "op": "in", "value": ["no_answer", "delivered"]}`.
+- **Transición** (estado anterior/actual): `{"transition": {"entity": "membership", "from": "active", "to": "expired", "within": {"n": 7, "unit": "days"}}}`.
+
+**Operadores por tipo** (los que no aparecen son 422):
+
+| Tipo | Operadores |
+|---|---|
+| `bool` | `eq` |
+| `int`, `decimal` | `eq`, `neq`, `lt`, `lte`, `gt`, `gte`, `between {min, max, minInclusive, maxInclusive}` |
+| `enum` | `eq`, `neq`, `in`, `not_in` (≤ 50 valores del dominio) |
+| `date_relative` | `within_next {n, unit}`, `within_last {n, unit}`, `more_than_ago {n, unit}`, `between_days {min, max}` (días con signo) |
+| cualquiera | `is_known`, `is_unknown` |
+
+**Unidades:** `hours`, `days` y `weeks`. **Sin meses**, que son ambiguos.
+
+**Lógica de tres valores.**
+- Un hecho desconocido hace `unknown` la comparación.
+- `all` es `false` si algún hijo es `false`, `unknown` si alguno es `unknown` y ninguno `false`, y si no `true`.
+- `any` es `true` si alguno es `true`.
+- `not unknown = unknown`.
+- **Solo `true` inscribe.** `unknown` deja a la persona fuera con el motivo `insufficient_facts`, que va a los recuentos y no a una fila (D9-8). Es el lado seguro.
+
+**Límites:**
+
+| Límite | Valor |
+|---|---|
+| Profundidad | ≤ 5 |
+| Nodos | ≤ 50 |
+| JSON canónico | ≤ 8 192 bytes |
+| Ventanas | ≤ 730 días |
+| Recuentos | ≤ 100 |
+| Literales | Números finitos, cadenas solo de dominios enumerados |
+
+Nada más: **ninguna** cadena libre, expresión regular, SQL, nombre de columna, aritmética ni referencia a otro hecho como valor. La validación devuelve un 422 con **todas** las claves a la vez, como `StudioRuleCoherence::canonicalize()`.
+
+**Canonicalización.**
+- Claves ordenadas, números normalizados y duraciones en su unidad declarada.
+- Los `all`/`any` de un solo hijo se colapsan.
+- Los hijos **no** se reordenan: el orden es parte de la explicación.
+
+La huella es el sha256 del JSON canónico (`StudioContentHasher::canonicalJson`).
+
+**Evaluación.**
+- `ConditionEvaluator::evaluate(Ast, FactSnapshot, now): Result{value, trace}`, **pura y determinista**.
+- La traza es una lista de `{path, kind, fact?, args?, observed, op, expected, result}`. En `observed`, un valor derivado sin datos personales: un número de días, un recuento, un enumerado o un booleano.
+- Misma entrada → misma salida y misma `traceHash` (test 9).
+
+**Prefiltros.** Algunos hechos (`membership.days_to_expiry`, `receivable.overdue_days_max`, `attendance.days_since_last`…) declaran en código un prefiltro indexado. Los compila el adaptador a partir del árbol, **solo** para los nodos que estén en una conjunción en la raíz, y sirven para no recorrer la base entera. **El veredicto siempre lo da el evaluador puro.**
+
+**Paridad con el CRM.** El CRM valida la **forma** en vivo con un espejo TypeScript (`commercial-automation-conditions.ts`) contra `tests/fixtures/outreach/conditions-cases.json`, que escribe TEST9-a desde el contrato. **Evaluar** lo hace solo el servidor (la simulación, D9-12).
+
+### D9-6 · Estrategias, secuencias y plantillas
+
+**Contenido de una versión de estrategia** (`strategy-content/1`, JSON canónico ≤ 32 KB):
+
+| Campo | Qué es |
+|---|---|
+| `goal` | Uno de `CommercialVocabulary::GOALS`. Su prioridad base es `GOAL_PRIORITY` (`CommercialVocabulary.php:271-290`) |
+| `purpose` | `commercial`, `collections` o `service`. Inmutable por estrategia. Cobranza y comercial nunca se mezclan (D9-15) |
+| `priority` | 1–100. Desempata entre estrategias (D9-8) |
+| `trigger` | Un evento del catálogo con sus parámetros validados contra su esquema |
+| `audience` | Una condición (D9-5): **a quién** |
+| `exclusions` | Una condición: **a quién no**. Se evalúa después de la audiencia; las exclusiones globales de N1 y N2 se añaden siempre y no se pueden quitar |
+| `success` | Una condición que da el objetivo por **cumplido**. Por ejemplo, para `renew`, `membership.days_to_expiry gt 30` o el evento `membership_renewed` dentro de la inscripción. Se reevalúa antes de cada paso: si se cumple, la inscripción cierra `completed`/`converted` y se cancelan sus trabajos |
+| `sequence` | ≤ 6 pasos (detalle abajo) |
+| `limits` | Contactos por inscripción (≤ 6), duración de la inscripción (≤ 60 días), inscripciones nuevas al día (≤ un tope del servidor), contactos al día de la estrategia y enfriamiento tras salir antes de volver a inscribir (días) |
+| `schedule` | Días y franjas permitidos. Solo pueden **estrechar** la ventana legal y la propia [P9-17] |
+| `canary` | El canal del registro de canarios que define el alcance canario (D9-11) |
+| `studio` | La referencia inmutable a la «versión comercial aprobada» (D9-11) |
+
+**Cada paso de la secuencia lleva:**
+- `id`;
+- `delay`: un intervalo desde la inscripción o desde el resultado anterior;
+- `channels`: una lista **ordenada**, de 1 a 3, entre `whatsapp_template`, `voice_call` y `assisted:{whatsapp|voice}`;
+- `templates`: una referencia `uuid` + `hash` por canal;
+- `guard`: una condición opcional que se reevalúa antes de despachar;
+- `on`: un mapa de resultado a transición, restringido por la tabla de D9-10.
+
+**Plantillas versionadas** (`ultron_studio_message_templates`, cuatro ojos, inmutables una vez aprobadas):
+
+| Canal | Contenido | Reglas |
+|---|---|---|
+| `whatsapp` | `metaName`, `language` (`es`/`es_CO`), `category` (`utility` o `marketing`), `bodyPreview` (el texto exacto que aprobó Meta; solo para mostrar y comparar) y `variables` (posición → **marcador cerrado**: `first_name` [P9-13], `plan_name`, `membership_end_date_text`, `days_to_expiry`, `gym_name`, `class_name`, `class_time_text`; nunca un importe salvo `PLAN_PRICE` del catálogo, R-01) | `optOutLine: true` obligatorio (el texto dice cómo dejar de recibir mensajes, Ley 2300 art. 5 par. 2). Cobranza solo `utility` y sin ofertas; comercial solo `marketing`. `bodyPreview` pasa la guarda de descuentos (R-02), URLs (R-03) e invisibles (`PlainText` estricto) |
+| `assisted` | `medium` (`whatsapp` o `voice`) y `script` (≤ 600 caracteres, `PlainText` estricto, sin datos de contacto ni importes) | Es el guion que ve el personal |
+| `voice` (V9) | `purposeKey`, en una lista cerrada que compila el H8 (`ultron-voice-template/2`) | Depende de la enmienda del H8 |
+
+Los marcadores los resuelve **Laravel** al despachar, con los hechos de ese instante. Una plantilla no se edita: se crea su versión siguiente.
+
+### D9-7 · Precedencia de políticas: la escalera N1–N7
+
+`PolicyLadder::decide(facts, context, now): {allowed, level, reasons[], retryAt?}`. Es **pura** y recorre los niveles **en orden**.
+- El primer nivel que niega decide.
+- Los inferiores **solo pueden restringir más** (excluir, retrasar o estrechar); nunca levantan una negativa de un nivel superior.
+- La traza registra cada nivel evaluado; los posteriores a la negativa, como `not_evaluated`.
+
+Los motivos son un conjunto cerrado, con este orden y estos códigos:
+
+| Nivel | Qué manda | Motivos (cerrados) | Fuente |
+|---|---|---|---|
+| **N1 · Seguridad, ley y consentimiento** | Lo que ninguna configuración puede levantar | `calendar_outside_legal_hours`, `calendar_sunday`, `calendar_holiday` (`OutboundSchedule::evaluate`, `ColombianHolidays`); `no_consent_for_purpose_channel`, `consent_denied`, `do_not_contact`, `do_not_contact_sibling` (la misma regla que `MarketingMessageDispatcher.php:64-88`), `commercial_opt_out` (solo para `commercial`, `CommercialSubject.php:455`), `voice_excluded`, `rne_check_missing` (voz), `subject_minor`, `daily_contact_limit` (1 al día **sumando canales y finalidades**), `cross_channel_week_rule` [P9-8], `collections_channel_week_rule` (cobranza: tras un contacto directo, un solo canal en la semana; Ley 2300, art. 3), `unknown_subject` | Adaptadores de `Facts`; `ContactBudget` (abajo) |
+| **N2 · Exclusiones y frenos globales** | Decisiones de operación que solo apagan | `master_flag_off`, `mode_off`, `outreach_brake_global`, `outreach_brake_channel`, `outreach_brake_strategy`, `ultron_abort_latch` y `marketing_agent_paused` (WhatsApp), `voice_braked` (voz, leído por `VoiceBrake::isOpen`), `human_in_control` (conversación tomada por una persona), `legacy_autonomy_on` (D9-1), `legacy_followups_active` (D9-3), `global_suppression` (C9) | Configuración, `outreach_brakes`, `UltronAbortLatch::engaged()`, `MarketingAgentSwitch`, `VoiceBrake` (lectura) |
+| **N3 · Versión comercial aprobada** | Lo que declara la versión del Studio que referencia la estrategia (D9-11.4) | `studio_reference_invalid` (la huella no cuadra), `payment_links_disabled` (un paso con plantilla de enlace de pago y `rules.paymentLinksEnabled = false`), `template_violates_restriction` (R-01 precio, R-02 descuento, R-03 URL, R-06 promesa; comprobado al validar y otra vez al despachar), `canary_only_declared` (`governance.canaryOnly` limita la estrategia a su alcance canario) | Versión del Studio referenciada; validador de plantillas |
+| **N4 · Configuración del canal** | El estado real del canal | `sends_disabled_in_code`, `channel_disabled`, `channel_not_live`, `template_not_approved`, `template_category_mismatch`, `no_whatsapp_identity`, `no_voice_contact`, `voice_policy:<motivo>` (los 26 de `OutboundPolicy`, en V9), `budget_zero`, `budget_exhausted`, `channel_daily_cap`, `assisted_capacity_reached` | `config/outreach.php`, presupuesto, registro de plantillas, `OutboundPolicy` (V9) |
+| **N5 · Estrategia aprobada** | Lo publicado de esa estrategia | `strategy_not_published`, `strategy_paused`, `chain_unreadable`, `canary_scope_mismatch`, `outside_strategy_schedule`, `max_touches_reached`, `strategy_daily_cap`, `enrollment_window_over`, `cooldown_active`, `step_guard_false` | Cadena (D9-11.3), contenido de la versión |
+| **N6 · Contexto verificado del contacto** | Los hechos de este instante | `success_reached` (sale como `converted`), `context_changed` (la audiencia ya no se cumple), `human_requested_recently` (el evento `human_requested` en los últimos N días: se para y se deriva), `purpose_conflict_today` (otra finalidad ya contactó hoy), `lower_priority` (D9-8, etapa 3) | Hechos reevaluados |
+| **N7 · Instrucciones conversacionales** | Lo que la persona dijo, ya normalizado (D9-10) | `callback_scheduled` (pidió que se le contacte en otro momento: se aplaza **dentro** de N1–N6 y la ventana de la inscripción; si cae fuera, `enrollment_window_over`), `preference_applied` (pidió un canal: se reordena **solo** entre los permitidos), `instruction_ignored_by_policy` | Resultados `callback_requested` y preferencias registradas |
+
+**Presupuesto de contacto omnicanal** (`ContactBudget`, puro, alimenta N1). Cuenta como contacto:
+- los trabajos del H9 que salieron en `live`;
+- los salientes **proactivos** de la IA en `marketing_messages`, es decir, `sender_type = ai` con `metadata.kind` distinto de `reply`, como `ContactPolicy.php:104-116`;
+- las salientes de `voice_calls` en los estados de `VoiceFrequency::COUNTED_STATUSES`;
+- los contactos asistidos registrados.
+
+**Nunca** cuentan las respuestas a lo que preguntó la persona, ni los trabajos `simulated`. Toma como **suelo la más estricta** de:
+
+| Límite | Valor |
+|---|---|
+| Al día | 1, sumando canales y finalidades |
+| A la semana | `min(commercial.contact_limits.max_proactive_per_week, voice.outbound.frequency.per_week)`; hoy, 2 |
+| Horas entre contactos | `commercial.contact_limits.min_hours_between`; hoy, 48 |
+| Ventana horaria | La intersección de las horas de silencio de `ContactPolicy` (21:00–08:00) con la Ley 2300: **de lunes a viernes de 08:00 a 19:00 y sábados de 08:00 a 15:00**, sin domingos ni festivos |
+
+La configuración del H9 solo puede **endurecer** estos valores. Prueba de paridad: con historiales solo de WhatsApp generados por propiedad, todo lo que `ContactPolicy` negaría por frecuencia u horario, `ContactBudget` también lo niega.
+
+### D9-8 · Planificador duradero (nueve etapas, todo en filas)
+
+| Etapa | Dónde | Qué hace | Escribe | Idempotencia y cerrojos |
+|---|---|---|---|---|
+| **1 · Detección** | `outreach:ingest` (cada 5 min) y `outreach:sweep` (cada 15 min; cada disparador con su cadencia del catálogo) | Lee `commercial_events` por cursor y barre los disparadores de las estrategias en `CANARY` o `PUBLISHED` (puente de la cadena) | `outreach_runs` (una por pasada), `outreach_cursors` (al final, solo hacia delante) | Cursor monótono (disparador); ≤ 500 personas por estrategia y pasada (como `commercial:scan --limit`) |
+| **2 · Evaluación** | En la pasada, por candidato | Hechos (solo los que usa la estrategia) → `audience` → `exclusions` → `success` | Con `false` o `unknown`, **nada** (solo recuentos de la pasada). Con `true`: `outreach_enrollments` y `outreach_decisions` (`enroll`) | UNIQUE `(strategy_id, subject_key, cycle_key, mode)`; índice parcial de una inscripción activa por `(strategy_id, subject_key, mode)`; cerrojo por persona `outreach:subject:<subject_key>` (30 s; la misma unificación socio-lead que `EvaluateCommercialSubject.php:136-148`, con otra clave) |
+| **3 · Priorización** | Por persona y día | Si califica en varias estrategias: (1) nunca dos finalidades el mismo día; (2) `service` > `collections` > `commercial` [P9-7]; (3) `priority`; (4) `GOAL_PRIORITY`; (5) `uuid` de la estrategia (estable) | `outreach_decisions` (`defer`: `lower_priority`) | Determinista; fixture `priority-cases.json` |
+| **4 · Autorización** | `PolicyLadder` + `ContactBudget` | N1–N7 | `outreach_decisions` (`deny` o `defer` con `retryAt`) | — |
+| **5 · Planificación** | `ChannelSelector` (D9-9) + reserva | Canal; `not_before` = la siguiente franja permitida + un desfase **determinista** por huella de la persona (reparte carga sin azar); `expires_at`; reserva de unidades y micros del día de Bogotá | `outreach_jobs` (`planned`) | `idempotency_key = sha256(enrollment_uuid \| paso \| intento)` UNIQUE; **un trabajo vivo por persona** (índice parcial sobre `planned`, `claimed` y `dispatching`); cerrojo consultivo de presupuesto por canal y día (patrón `VoiceLocks`) |
+| **6 · Reevaluación** | `outreach:dispatch` (cada minuto, ≤ 50 trabajos) | Reclama los vencidos (`FOR UPDATE SKIP LOCKED` en PG; UPDATE condicionado en SQLite) y **repite todo**: banderas, constante, frenos, el estado de la estrategia en la cadena (si cambió: `canceled: strategy_moved`), hechos y `success`, N1–N7, presupuesto y ventana | `outreach_jobs` (`claimed` → `dispatching` o `canceled`) y `outreach_decisions` (`cancel`) | Transiciones solo hacia delante (disparador). Es la regla E6-6 del H8 |
+| **7 · Ejecución** | Adaptador del canal | **Una** petición, sin reintentos automáticos. Un `ambiguous` no se reintenta: se concilia | `outreach_jobs` (`started`, `simulated`, `failed_to_start` o `ambiguous`; la referencia del proveedor, una sola vez) | La clave del trabajo viaja al canal: en W9, `metadata.outreach_job_uuid` más la regla de `meta_message_id`; en V9, `client_request_id` |
+| **8 · Resultado** | `outreach:ingest` y el personal (asistido) | Normaliza a D9-10 | `outreach_outcomes` | UNIQUE `(enrollment_id, source, source_key)` |
+| **9 · Seguimiento** | `FollowUpMachine` (pura) | Aplica el `on` del paso dentro de la tabla de D9-10 | `outreach_enrollments` (paso, estado); un `outreach_jobs` nuevo | **Un reintento de negocio es una fila nueva** (`attempt + 1`), nunca el mismo trabajo (como D8-12 del H8) |
+
+**Durabilidad.** Si un proceso muere, las filas quedan en estados no finales. `outreach:reconcile` (cada 10 min):
+- `claimed` o `dispatching` con más de 10 min → `ambiguous`, e incidente;
+- `planned` con `expires_at` vencido → `expired`, liberando la reserva;
+- inscripciones con `window_ends_at` vencido → `expired`, con el resultado `no_response`.
+
+Nunca reenvía nada solo.
+
+**PARADA GLOBAL y pausas.** Se comprueban en las etapas 1, 4 y 6.
+- Con un freno abierto no nacen inscripciones (solo recuentos) y el despachador no reclama.
+- Los trabajos `planned` **esperan**. Al soltar el freno, los que sigan vigentes pasan otra vez por la etapa 6; los vencidos, a `expired`.
+
+**Reversión y no retroactividad.**
+- Una entrada `pause` o `rollback` en la cadena hace que la etapa 6 cancele los trabajos pendientes de esa estrategia (`strategy_moved`), y un barrido los cancela antes.
+- Las inscripciones de la versión revertida pasan a `canceled`.
+- Lo ya enviado no se «deshace».
+- La versión nueva empieza inscripciones nuevas con sus claves de ciclo, y el presupuesto de contacto cuenta el historial: no hay doble contacto.
+
+**Sombra (`mode = shadow`).**
+- Es la misma tubería; la etapa 7 usa `SimulatedChannel` (`simulated`, resultado `not_attempted`).
+- `mode` forma parte de las claves únicas: sombra y `live` no chocan.
+- Un trabajo simulado **nunca** cuenta como contacto.
+- Tras el primer paso simulado, la inscripción espera hasta su ventana y vence (`no_response`).
+- En sombra, N4 registra como **avisos** (no niega) `channel_disabled`, `sends_disabled_in_code` y los presupuestos, para enseñar qué pasaría en `live`. Todo lo demás se aplica igual.
+
+**Volumen.** Solo las personas que califican dejan filas: las que no, solo cuentan en `outreach_runs.counts`. Las decisiones quedan acotadas por inscripciones × pasos × ~3.
+
+### D9-9 · Integración omnicanal
+
+**9.1 Canales (conjunto cerrado):** `simulated`, `assisted` (con `medium` `whatsapp` o `voice`), `whatsapp_template` (W9) y `voice_call` (V9). `app_push` queda para EV9 [P9-23].
+
+**9.2 Selección determinista.** `ChannelSelector::choose(pasos.channels, elegibilidad) → {canal | ninguno, motivosPorCanal}`.
+- Recorre la lista **ordenada** del paso y elige el primer canal elegible. Un canal es elegible si pasan:
+  - N1: consentimiento para (finalidad, canal) y calendario;
+  - N2: frenos del canal;
+  - N3;
+  - N4;
+  - el presupuesto de contacto.
+- Si ninguno lo es y algún canal solo falla por **tiempo** (calendario o frecuencia): `defer` al `retryAt` más temprano.
+- Si no: `deny`, con los motivos de cada canal.
+
+Sin azar ni empates posibles. El CRM enseña «por qué este canal y no aquel» desde la traza.
+
+**9.3 WhatsApp (diseño cerrado aquí; implementación en W9) [P9-5].**
+
+| Opción | Qué es | A favor | En contra |
+|---|---|---|---|
+| W-A | Laravel decide y emite un evento a n8n, que manda la plantilla | No toca Marketing | n8n necesitaría credenciales de Meta y enviaría **fuera** del outbox: sin el *opt-out* de los leads hermanos, sin la pausa del agente, sin la idempotencia por `meta_message_id` y sin el Inbox como historial. Un salto más sin valor; hoy n8n no tiene red con nosotros |
+| **W-B (recomendada)** | Puerta nueva **en Laravel**: `MarketingMessageDispatcher::dispatchWhatsappTemplate(MarketingLead, OutreachTemplateMessage, string $outreachJobUuid)` y una rama de plantillas en `WhatsappOutboxService::deliver` (con `MetaMessagingService::sendWhatsappTemplate`, que ya existe) | Una sola puerta de WhatsApp con todas sus guardas: `canReplyReactively`, `canContactProactively` (nuevo en esta ruta), *opt-out* de hermanos, pausa del agente y simulacro si Meta está apagado. El mensaje vive en `marketing_messages` y el personal lo ve en el Inbox | Diff en `app/Services/Marketing/**` (enumerado abajo), con la regresión completa de Legacy |
+| W-C | `Outreach` llama a Meta directamente | — | Rechazada: duplica el outbox y se salta R-11 |
+
+**Detalle de W-B:**
+- `sender_type = ai`: la pausa del agente la detiene, que es lo que se quiere.
+- `metadata = {kind: 'outreach_template', template: {name, language, hash}, outreach_job_uuid}`.
+- Idempotente por `outreach_job_uuid`: se busca bajo cerrojo antes de insertar y se mantiene la regla de `meta_message_id`.
+- **Diff permitido:**
+  - `MarketingMessageDispatcher.php` (el método nuevo);
+  - `WhatsappOutboxService.php` (la rama de plantillas);
+  - un DTO nuevo, `app/Services/Marketing/OutreachTemplateMessage.php`.
+
+  Nada más: la puerta de diff de W9 lo comprueba. **Sin ruta nueva:** la puerta interna firmada (`automation.internal`) no la alcanza (`InternalSecretAuthoritySurfaceTest` se amplía).
+- **Socios sin lead de WhatsApp:** `no_whatsapp_identity` (N4) hasta [P9-14]. Crear leads para socios cambiaría las métricas de captación de Meta y dispararía `MarketingLeadCommercialObserver`; no se hace por la puerta de atrás.
+- **Las respuestas** entran por el camino de siempre: ULTRON en la conversación canaria y el Inbox humano en las demás. El H9 solo las **lee** como resultado (`replied`).
+- **Precio por mensaje:** Meta cobra cada mensaje entregado según su categoría. Variables `OUTREACH_WHATSAPP_PRICE_{MARKETING,UTILITY}_USD` y su fecha, como los precios de voz [por confirmar las tarifas de Colombia en la página oficial de Meta].
+
+**9.4 Voz (diseño cerrado aquí; implementación en V9 como enmienda del H8) [P9-16].**
+- **Entrada nueva** `OutboundGate::requestForStrategy(StrategyCallRequest)`. Recorre el **mismo** `decide()`, con todos los motivos de `OutboundPolicy`, la reserva de coste y la revalidación del job sin cambios.
+- **Solicitante nuevo:** `requested_by_type = 'strategy'`, sin `admin`, con `client_request_id` = el uuid del trabajo del H9, más la columna nullable `outreach_job_uuid` (UNIQUE). Hay que reescribir `vc_requester_chk`: DROP + ADD en la misma transacción, con su recuento.
+- **Destinos:** `voice_contacts` con consentimiento (alcance `contacts`), o el registro de canarios cuando la estrategia está en canario.
+- **Principio.** El token compartido sigue sin poder llamar (`telephony` sigue excluido). «Una automatización no llama» pasa a ser «**solo una estrategia publicada a cuatro ojos por personas distintas llama, por la puerta**».
+- **Requisitos de V9:**
+  - la Enmienda 16 del contrato del H8;
+  - la revisión de SEC;
+  - la evidencia de la fase 4a del H8 y la 4b activa;
+  - el visto bueno legal.
+- **Finalidad de la llamada:** `ultron-voice-template/2` añade la variable dinámica `purposeKey`, de una lista cerrada compilada en el agente (agentes nuevos, D8-7). Hasta entonces, las estrategias de voz se **simulan**.
+
+**9.5 Asistido (15-11, objetivo O).**
+- Un trabajo `assisted` que sale (`started`) aparece en la **bandeja asistida** con:
+  - la estrategia y el objetivo;
+  - el motivo (el resumen de la traza);
+  - el guion de la plantilla;
+  - el plazo dentro de la franja legal;
+  - un enlace a la ficha de la persona en el CRM, protegida por los permisos que ya existen.
+
+  **La API del H9 no devuelve teléfonos.**
+- Una persona lo **reclama** (una vez) y registra el resultado del conjunto cerrado (fuente `staff`).
+- La política aplicó horario, frecuencia y consentimiento **del medio** (WhatsApp o voz). La persona sigue siendo responsable del contacto real.
+- Es el primer valor sin envío automático.
+
+**9.6 Historial omnicanal unificado (modelo de lectura, sin tabla duplicada).** `GET people/{subjectRef}/timeline` compone en orden temporal:
+- los trabajos y resultados del H9: canal, estrategia, paso, motivo, resultado y siguiente acción;
+- los mensajes de WhatsApp proactivos y de respuesta, **solo metadatos**: dirección, tipo de remitente, tipo, estado, **sin cuerpo**;
+- las llamadas: dirección, estado, duración y sello, **sin número**;
+- las conversiones (un subconjunto de `commercial_events`);
+- los frenos que le afectaron.
+
+Cada entrada: `{at, channel, direction, strategy?, reason, result, nextAction?}`. Paginado, ≤ 50.
+
+### D9-10 · Resultados normalizados (conjunto cerrado) y máquina de seguimientos
+
+**Transiciones posibles** (conjunto cerrado): `next_step`, `retry_step` (el mismo paso, `attempt + 1`, ≤ 2), `wait {n, unit ≤ 14 días}`, `end_success`, `end_exit` y `handoff_human`.
+
+La estrategia elige **una** de las permitidas por resultado. Si no dice nada, rige la marcada con *.
+
+| Resultado | Grupo | Fuentes (15-11 / W9 / V9 / AI9) | Transiciones permitidas |
+|---|---|---|---|
+| `blocked` | entrega | política (no salió nada) | `wait`*, `end_exit` |
+| `not_attempted` | entrega | simulado | ninguna: en sombra, la inscripción espera su ventana |
+| `failed` | entrega | canal (4xx definitivo, `failed_to_start`) | `retry_step` (≤ 1), `next_step`, `end_exit`* |
+| `ambiguous` | entrega | canal | ninguna automática: se concilia; después rige la del resultado conciliado |
+| `sent` | entrega | W9, V9 | no terminal: se espera |
+| `delivered` | entrega | W9 | no terminal |
+| `read` | entrega | W9 | no terminal |
+| `no_answer` | entrega | V9 (`busy`, `no_answer`, buzón), asistido | `retry_step`, `next_step`, `wait`, `end_exit`* |
+| `answered` | respuesta | V9, asistido | `next_step`, `end_success`, `handoff_human`, `end_exit`* |
+| `replied` | respuesta | W9 (entrante posterior al contacto) | `handoff_human`*, `end_exit`. **Nunca** otro contacto automático: la conversación sigue con ULTRON o con una persona |
+| `callback_requested` | respuesta | asistido, AI9 | `wait`*, `end_exit` (N7: dentro de N1–N6) |
+| `human_requested` | respuesta | asistido, W9, V9 (`solicitar_humano`), AI9 | `handoff_human`* (única) |
+| `not_interested` | respuesta | asistido, AI9 | `end_exit`* (única) + enfriamiento |
+| `wrong_person` | respuesta | asistido, V9, AI9 | `end_exit`* (única) + supresión de ese canal para la persona (C9) |
+| `opted_out` | respuesta | asistido, W9 (*opt-out* del lead), V9 (`no_volver_a_llamar`), AI9 | `end_exit`* (única) + supresión por finalidad y canal. **Ninguna estrategia lo anula** |
+| `appointment_booked` | negocio | `crm_fact` (`appointment_created`), asistido | `end_success`*, `next_step` |
+| `converted` | negocio | `success` reevaluado, `crm_fact` | `end_success`* (única) |
+| `no_response` | negocio | sistema (ventana vencida) | `end_exit`* (única) |
+
+**Regla asimétrica de la IA [P9-6].** Un resultado con `source = classifier` solo puede llevar a `end_exit`, `handoff_human` o `wait`: **nunca** a `next_step` ni a `retry_step`.
+- Un `opted_out` del clasificador se acepta con un umbral bajo, porque frena.
+- Los demás exigen el umbral alto y nunca crean contactos.
+
+Lo fija `outcome-transitions.json` (TEST9-a).
+
+**Estados de una inscripción** (cerrados, solo hacia delante):
+- `active` y `waiting`;
+- los finales: `completed`, `exited`, `opted_out`, `handed_off`, `expired` y `canceled`.
+
+`handed_off` deja la persona a una persona del equipo: la inscripción termina, y en `live` puede abrir una tarea asistida si la estrategia lo pide.
+
+### D9-11 · Gobierno: el ciclo del H5, copiado sin compartir tablas
+
+**11.0 Del encargo a la implementación:**
+
+| Paso del propietario | Implementación |
+|---|---|
+| Borrador | `ultron_studio_strategies.draft_json`, editable con `baseRevision` (UPDATE condicionado, como el borrador del H5) |
+| Validación | `POST strategies/{uuid}/validate`, **pura** (`StrategyValidator`): esquema, catálogo, condiciones, plantillas aprobadas con su huella, coherencia finalidad-categoría, N3 contra la versión del Studio referenciada y límites. Resultado: bloqueantes y avisos |
+| Simulación | Sobre el borrador (iterativa) y, **obligatoria**, sobre la huella exacta de la versión antes de aprobar (D9-12) |
+| Versión inmutable | `POST strategies/{uuid}/versions` congela el JSON canónico → `VALIDATED`, o `REVIEW_REQUIRED` si hay avisos; 422 si hay bloqueantes. El contenido no cambia nunca (disparador) |
+| Revisión | Quien revisa ve la diferencia con la versión anterior (como `StudioContentDiff`) y el resumen de la simulación |
+| Aprobación independiente | `approve` o `reject` de **otra persona** (11.2), reconociendo exactamente los avisos. Exige una simulación sin bloqueantes sobre la misma huella |
+| Canario | `publish`: ventana de 07:00 a 19:00 de Bogotá, bandera, publica una persona distinta de la autora, `expectedContentHash`. Escribe una entrada en la cadena y pasa la versión a `CANARY` |
+| Supervisión | Evidencia medida en el servidor: ≥ 24 h, ≥ N contactos que salieron (3 por defecto, mínimo 1), 0 negativas de N1 detectadas después, 0 `ambiguous` sin resolver, tasa de *opt-out* ≤ umbral y presupuesto dentro. Se ve en el panel |
+| Promoción | `promote`, con `evidenceHash` y cuatro ojos → `PUBLISHED`. La publicada anterior pasa a `RETIRED` |
+| Pausa | `pause` (siempre, con motivo) y `resume` (con el permiso y la ventana de publicar): entradas de la cadena |
+| Reversión | `rollback`: la versión pasa a `ROLLED_BACK` y la anterior `RETIRED` vuelve a `PUBLISHED` si es íntegra. Si no hay ninguna, la estrategia queda apagada |
+| Archivo | `archive`, solo sin versiones `CANARY` ni `PUBLISHED` |
+
+**11.1 Estados.** Los de `StudioVersionStatus` (9 alcanzables; `VALIDATING` sigue inalcanzable), sin valores nuevos, en su propia tabla y con su propio CHECK. Como mucho una versión `CANARY` y una `PUBLISHED` **por estrategia** (índices únicos parciales).
+
+**11.2 Cuatro ojos por persona [P9-4].**
+- **La regla.** Una cuenta solo puede aprobar, publicar, promover o reanudar una estrategia, y aprobar una plantilla, si tiene un **vínculo verificado** con una fila de `identities`.
+- **Se comparan personas, no cuentas:**
+  - aprueba alguien distinto de la autora;
+  - publica alguien distinto de la autora;
+  - promueve alguien distinto de la autora (la decisión 6 del H5: basta con ser distinto de la autora).
+- **El vínculo** (`ultron_studio_person_bindings`):
+  - lo crea `ultron.person_bindings_manage` para **otra** cuenta;
+  - lo verifica una segunda persona ya vinculada, distinta de la vinculada y de quien lo creó;
+  - se revoca una vez y no se borra.
+- **Las dos primeras personas** se vinculan solo por consola (`ultron-studio:person-bindings --bootstrap`), con la autorización escrita del propietario y el evento en el libro, como el T1 del H6.
+- **Tres capas:** el servicio, el CHECK `approved_by_person_id <> created_by_person_id` en la base y el libro.
+- **Dos cuentas de la misma persona** comparten la identidad, y por eso no se aprueban entre sí: es justo lo que pide el encargo.
+- Revocar y volver a vincular en poco tiempo deja un aviso en el libro.
+- **Alternativa:** el control organizativo del H5 (solo por cuenta). No cumple el encargo.
+
+**11.3 La cadena firmada `ultron_studio_strategy_publications`.**
+- Una entrada por acción sobre una estrategia; `seq` global = cabeza + 1.
+- `prev_hash` = sha256 del mensaje canónico anterior (el patrón de E2-7 del H8). `CHECK (seq >= 1)`, solo inserción y `REVOKE`.
+- **Mensaje firmado** (JSON canónico con las claves ordenadas, sin espacios, UTF-8; aquí partido en líneas para leerlo):
+
+  ```json
+  {"action":"publish","actedByPerson":"<uuid identidad>","approvedByPerson":"<uuid identidad>","contract":"ultron-strategy-config/1","issuedAt":"2026-11-14T15:04:05Z","prevHash":"<64 hex>","seq":12,
+   "state":{"canary":{"contentHash":"<64 hex>","version":"<uuid>"},"rest":null,"status":"active"},
+   "strategy":{"key":"renovacion-7d","purpose":"commercial","uuid":"<uuid>"}}
+  ```
+
+- **Firma:** HMAC-SHA256 con una subclave derivada de la `APP_KEY` de etiqueta **`ultron-studio-strategy-chain`**, distinta de `ultron-studio-publication` y de `ultron-studio-voice-chain`: una firma no vale en otro dominio.
+- **Una sola implementación**, en `Outreach\Core\StrategyChainSignature` (pura). El Studio la recibe como `Closure`, como en el H5 y el H8.
+- **El lector** `OutreachPublishedStrategies` es el puente del lado de la ejecución:
+  - lee la última entrada de cada estrategia viva y verifica su firma y su eslabón;
+  - **nunca lanza**;
+  - si falla, esa estrategia queda en `chain_unreadable` (N5) y se abre un incidente;
+  - si la cabeza no verifica, se niegan todas y se abre el freno global de forma automática.
+
+  `outreach:monitor` verifica la cadena entera periódicamente.
+
+**11.4 La «versión comercial aprobada» (N3) y su referencia inmutable.**
+- Cada versión de estrategia guarda `studio_ref`:
+  - `{kind: 'version', uuid, contentHash}` de una versión del Studio en `APPROVED`, `CANARY` o `PUBLISHED`, la misma regla que E1-7 del H8;
+  - o, si no hay ninguna aprobada, `{kind: 'baseline', catalogVersion, catalogHash}` de `LEGACY_BASELINE_V1` [P9-10].
+- Al publicar se comprueba la **integridad** de la referencia (la huella), no su estado actual: no hay retroactividad.
+- N3 lee de esa referencia las declaraciones (`rules.paymentLinksEnabled`, `governance.canaryOnly`) y las restricciones R-xx.
+
+**11.5 El libro.** `ultron_studio_audit_events`, con cuatro sujetos nuevos: `strategy`, `strategy_version`, `message_template` y `person_binding`. Hay que ampliar el CHECK `usae_subject_type_chk` (DB9, como el H6). Eventos: `created`, `draft_saved`, `version_created`, `validated`, `simulated`, `approved`, `rejected`, `published`, `promoted`, `paused`, `resumed`, `rolled_back`, `archived`, `template_*` y `binding_*`.
+
+**11.6 El canario de una estrategia.**
+- En `CANARY`, en `live`, la estrategia solo alcanza a personas cuyo teléfono (del lead o del socio) coincide por huella (`PhoneFingerprint`, `ultron-canary-phone/1`) con un número **activo** del registro del H6 **del canal del paso** (WhatsApp o voz). En el asistido, el del medio.
+- Exige la fase 2 del H6: escrituras encendidas y dos personas.
+- En sombra se evalúa la audiencia entera y se anota `would_scope`.
+
+### D9-12 · Simulación explicable y reproducible
+
+| Tipo | Entrada | Qué hace | Qué queda guardado |
+|---|---|---|---|
+| `synthetic` | Hasta 50 personas sintéticas del CRM, con valores de hechos tipados (y, si se quiere, consentimiento, calendario e historial sintéticos) | Núcleo puro: condiciones, escalera, selector y proyección de la secuencia. Devuelve, por persona, la decisión, la traza y el texto explicativo | `ultron_studio_strategy_simulations`: huella de la entrada, huella del resultado y recuentos. Sin datos reales |
+| `sample` | El prefiltro del disparador **ahora**. Muestra determinista de hasta 200 personas reales | En **solo lectura**: sin inscripciones, trabajos ni reservas. Devuelve recuentos por decisión, nivel, motivo y canal; el volumen diario estimado frente a los topes; el coste estimado por canal; y hasta 50 trazas de ejemplo con `subjectRef` (seudónimo), **sin nombres ni teléfonos** | Solo recuentos y huellas (nunca las trazas por persona). Permiso `commercial_automation.simulate_real` |
+
+**Hallazgos.**
+- Bloqueantes:
+  - audiencia vacía;
+  - audiencia mayor que el tope diario × la ventana (saturación);
+  - todos negados por consentimiento;
+  - plantilla no aprobada;
+  - finalidad incoherente con la categoría;
+  - horario fuera de la ventana legal.
+- Avisos: el resto.
+
+**Puerta.** Aprobar exige una simulación sobre la misma huella **sin bloqueantes**.
+
+**Reproducibilidad.** Toda decisión de producción guarda su foto de hechos derivados, la huella de la foto, la versión del evaluador y la del catálogo. `outreach:replay <decision_uuid>` la vuelve a evaluar y tiene que dar la **misma** `traceHash` (prueba 9).
+
+### D9-13 · Permisos (RBAC) [P9-21]
+
+| Llave | Qué permite | Por defecto |
+|---|---|---|
+| `ultron.strategies_edit` | Crear estrategias y plantillas, editar el borrador, validar, simular con datos sintéticos, congelar versiones y enviarlas a revisión | Super Admin y Administrador |
+| `ultron.approve` (existente) | Aprobar o rechazar versiones de estrategia y plantillas **de otra persona** | Como hoy |
+| `ultron.strategies_publish` | Publicar en canario, promover y reanudar | **Solo Super Admin** |
+| `ultron.strategies_rollback` | Pausar y revertir (el sentido seguro) | Super Admin y Administrador |
+| `ultron.person_bindings_manage` | Crear, verificar y revocar vínculos cuenta → persona, nunca el propio | **Solo Super Admin** |
+| `commercial_automation.view` | Panel, estado, métricas, inscripciones, decisiones y trabajos, sin datos personales | Super Admin y Administrador |
+| `commercial_automation.simulate_real` | Simulación sobre una muestra real (seudonimizada) | Super Admin por defecto (es una muestra de personas reales; el propietario la reparte a mano desde Roles; enmendado en L9-63, m-4) |
+| `commercial_automation.timeline_view` | El historial de una persona (metadatos, sin cuerpos ni números) | Super Admin y Administrador |
+| `commercial_automation.assisted_work` | Reclamar trabajos asistidos y registrar su resultado | Super Admin y Administrador [P9-12: ¿Recepción o asesores?] |
+| `commercial_automation.stop` | **PARADA GLOBAL** y pausas por canal o estrategia (el sentido seguro) | Super Admin y Administrador |
+| `commercial_automation.release` | Soltar frenos, con una nota | **Solo Super Admin**. Nadie suelta un freno que abrió él mismo [P9-20] |
+
+- El dominio `commercial_automation` se añade a `SHARED_TOKEN_EXCLUDED_DOMAINS` (`CrmPermission.php:266`): el token de automatizaciones no lee ni actúa.
+- Cada ruta, una por una, en `AuthorizationMap` (denegar por defecto), y cada controlador exige una persona.
+- **BOLA/IDOR:**
+  - todo recurso de la ejecución se nombra por `uuid`;
+  - el historial, por `subjectRef` (HMAC, no enumerable);
+  - las listas, paginadas (≤ 50) y sin datos personales;
+  - los accesos al historial quedan en el libro.
+
+### D9-14 · Observabilidad y PARADA GLOBAL
+
+**Panel** (`GET status` y `GET metrics`):
+- banderas, modo, constante, frenos abiertos (los del H9 y, en lectura, el de ULTRON, la pausa del agente y el freno de voz) y el estado de la cadena;
+- por estrategia: inscripciones por estado, trabajos por estado, embudo de resultados, negativas por nivel y motivo, saturación del presupuesto de contacto y coste por canal y día;
+- la salud de las fuentes: cursor de `commercial_events`, último barrido y fuentes sin datos;
+- las últimas pasadas y sus errores.
+
+**Monitor** (`outreach:monitor`, cada 10 min, tras su bandera). **Solo apaga**. Abre un freno de forma automática (y un incidente de IRON GUARD, fuente `outreach`) ante:
+
+| Situación | Freno |
+|---|---|
+| Tasa de *opt-out* de una estrategia > umbral en 24 h [P9-20] | De esa estrategia |
+| Tasa de fallos de un canal > umbral | De ese canal |
+| Techo de gasto superado | De ese canal |
+| Un mensaje o llamada con metadatos del H9 sin su trabajo (`unknown_send`) | **Global** |
+| La cadena ilegible | Global o de la estrategia |
+| Una estrategia con trabajos vivos sin estar publicada (deriva) | De esa estrategia |
+
+**Nunca se suelta solo** (las reglas 1 y 2 de `UltronAbortLatch.php:12-22`).
+
+**PARADA GLOBAL:**
+- **Cómo se acciona:**
+  - el botón del panel (`commercial_automation.stop`), que pide un motivo;
+  - la orden `php artisan outreach:stop --all --reason=…`;
+  - en el nivel 0, la bandera maestra.
+- **Efecto:**
+  - en ≤ 1 pasada del despachador (≈ 60 s) no se reclama ni sale nada nuevo;
+  - las peticiones que ya están en el proveedor no se pueden recoger: W9 depende de Meta, y V9 tiene el corte del H8 (`voice:hangup`), que el H9 no acciona;
+  - la respuesta dice cuántos trabajos quedaron retenidos.
+- **Soltarla:** una persona con `commercial_automation.release`, con una nota. Los retenidos pasan otra vez por la etapa 6.
+
+### D9-15 · Cumplimiento (lectura del `architect`; el visto bueno es de asesoría legal) [P9-15, P9-22]
+
+**Ley 2300 de 2023.**
+- **Art. 3** (cobranza):
+  - de lunes a viernes de 07:00 a 19:00 y sábados de 08:00 a 15:00, sin domingos ni festivos;
+  - tras un contacto directo, «no podrá ser contactado… mediante varios canales dentro de una misma semana ni en más de una ocasión durante el mismo día».
+- **Art. 5:** extiende las reglas a la publicidad y a los ofrecimientos comerciales por mensajes de texto, aplicaciones de mensajería, correo y llamadas.
+  - Parágrafo 2: no se puede obligar a aceptar mensajes comerciales; hace falta consentimiento expreso; y una forma fácil y efectiva de darse de baja en cualquier momento.
+  - Parágrafo 3: los mensajes y llamadas comerciales solo se envían en el horario del art. 3.
+- **Art. 4:** no se contacta a referencias.
+- **Art. 9:** sancionan la SFC y la SIC.
+- **Fuentes:** el texto en el normograma de la DIAN y en el Gestor Normativo de Función Pública, consultados el 09-11-2026. El efecto de la sentencia C-278 de 2024 sobre estos artículos, [por confirmar].
+
+**Lo que fija el H9:**
+- El calendario legal y los festivos de `OutboundSchedule` y `ColombianHolidays`.
+- **Como mucho un contacto al día por persona sumando todos los canales y finalidades**.
+- **Cobranza:** tras un contacto directo, un solo canal en la semana.
+- **Comercial:** la misma regla, como lectura estricta [P9-8].
+- Una baja efectiva en cada contacto: la línea de baja en cada plantilla, la palabra de baja en las respuestas (W9) y `no_volver_a_llamar` en la voz.
+- El RNE para las llamadas (H8).
+- Nunca referencias ni terceros.
+
+**Ley 1581 de 2012.**
+- Autorización **previa, expresa e informada** para la **finalidad**.
+- Cada estrategia declara su finalidad, y cada plantilla identifica a Iron Body y su propósito.
+- Revocación en cualquier momento (`opted_out` con supresión inmediata).
+- Datos mínimos: hechos derivados, sin datos sensibles.
+- Menores excluidos (N1 `subject_minor`): con la fecha de nacimiento del socio o la marca de menor detectado. En un lead sin fecha queda desconocido y no se infiere; cómo tratarlo lo decide la asesoría [P9-15].
+- Supresión: OPS9 amplía `ops/supresion-1581.sql` con las tablas `outreach_*`; las huellas, por un marcador.
+- Encargados: Meta, para W9; OpenAI, para AI9, con `store: false`, solo el texto de la respuesta y sin otros datos de la persona.
+
+**Matriz de consentimiento (finalidad × canal).** Se niega por defecto, y toda señal negativa de cualquier fuente gana.
+
+| Finalidad \ Canal | WhatsApp | Voz | Asistido (medio) |
+|---|---|---|---|
+| `commercial` | Hoy: lead con `consent_status = granted` y sin *opt-out* (`MarketingLead::canContactProactively`). Socios sin lead: **ninguna** hasta [P9-14] y C9 | `voice_consents` (`purpose = commercial`) del H8 | El del medio |
+| `collections` | **Ninguna hoy** [P9-15]: la autorización comercial no vale para cobranza (Ley 2300, art. 2: canales autorizados para eso) | Ídem | Ídem |
+| `service` (recordatorios de clase o valoración que pidió la persona) | Lead con conversación y ventana abierta, o la autorización de C9 | No en el H9 | El del medio |
+
+**Tener el teléfono no autoriza nada:** ningún hecho de «tiene teléfono» habilita un canal.
+
+**Comercial frente a cobranza [P9-7]:**
+- finalidades cerradas e inmutables por estrategia;
+- nunca las dos el mismo día a la misma persona;
+- la cobranza solo con plantillas `utility`, sin ofertas ni descuentos y con hechos `receivable.*` en tramos;
+- por defecto, **no hay contacto comercial a quien tenga cartera vencida de más de N días** (N3/N6, configurable).
+
+### D9-16 · Rendimiento (lo mide PERF9 antes de optimizar)
+
+Presupuestos propuestos, que PERF9 fija con medidas:
+
+| Operación | Presupuesto |
+|---|---|
+| Barrido de 5 000 personas por estrategia | < 60 s |
+| Evaluador puro, por persona | p95 < 2 ms |
+| Pasada del despachador (≤ 50 trabajos simulados o asistidos) | < 10 s |
+| Simulación `sample` (200) | p95 < 5 s |
+| Historial | p95 < 300 ms |
+| Métricas | p95 < 500 ms |
+
+Sin N+1: los hechos se cargan por lotes por adaptador. Los índices los define DB9.
+
+---
+
+## 5. Vinculación con las diez capas
+
+Las diez capas siguen siendo las de `StudioCatalog.php:254-417`, sin capas nuevas ni significados cambiados. Lo que controla cada una en el H9 y cómo queda fijada la versión usada:
+
+| Capa | Qué controla en el H9 | Referencia inmutable en cada decisión o trabajo |
+|---|---|---|
+| `knowledge` | Los marcadores de las plantillas (`plan_name`, `PLAN_PRICE`, horarios y sede) los resuelve Laravel con el catálogo vigente (R-01); nada de cifras en el texto | `template_hash` + la versión del Studio referenciada (`studio_ref`) |
+| `persona` | El tono de las plantillas (revisado a cuatro ojos) y, en voz, el perfil aprobado del H8 | `template_hash`; en V9, el sello de la llamada (`voice_publication_seq`, `provider_agent_id`) |
+| `intent` | La clasificación de **respuestas** a un contacto (AI9): conjunto cerrado, solo frena o deriva | `outcome.source = classifier` + la versión del clasificador |
+| `context` | La foto de hechos de la persona en el instante de decidir y de despachar | `facts_hash` + `facts_json` (derivados) + `evaluated_at` |
+| `memory` | El historial de contactos y el último resultado, que alimentan condiciones y frecuencia | Los recuentos y el último resultado quedan en `facts_json` |
+| `strategy` | La estrategia: objetivo, finalidad, disparador, audiencia, exclusiones, éxito, secuencia, límites y horario | `strategy_version_uuid` + `content_hash` + `publication_seq` + `part` (`canary`/`rest`) |
+| `rules` | R-01…R-12 del código (N3) y la escalera N1–N7; las reglas S-NNN siguen sin efecto | `studio_ref` + `evaluator_version` (constante del código) + `catalog_version` |
+| `composer` | El render de la plantilla con marcadores cerrados; **ningún texto libre** de un modelo | `template_version_uuid` + `template_hash` |
+| `integrations` | Las puertas de los canales (W9/V9), el asistido, los presupuestos y el estado de Meta, Twilio y ElevenLabs | `channel` + la referencia del proveedor (`marketing_message_id`, `voice_call_id`) |
+| `governance` | Versiones, cuatro ojos por persona, cadena, canario, frenos, PARADA GLOBAL y evidencia | `publication_seq` + `approved_by_person_id` + el freno vigente en la traza |
+
+**El sello.** Cada `outreach_decisions` y cada `outreach_jobs` lleva estas columnas, que no cambian nunca (disparador):
+- `strategy_version_id` y `content_hash`;
+- `publication_seq` y `part`;
+- `studio_ref_kind`, `studio_version_uuid` y `studio_content_hash`;
+- `catalog_version` y `evaluator_version`;
+- `template_version_id` y `template_hash`;
+- `mode`.
+
+Un trabajo usa lo que tenía su versión al planificarse. Si la cadena cambia, se cancela (`strategy_moved`), nunca se reinterpreta.
+
+---
+
+## 6. Contratos de datos (esquema mínimo; DB9 lo refina y lo congela con el lead)
+
+**Convenciones (las de DB5–DB8):**
+- tablas nuevas con prefijo propio: `ultron_studio_strategy_*`, `ultron_studio_message_templates` y `ultron_studio_person_bindings` para el gobierno; `outreach_*` para la ejecución;
+- CHECK de dominio y de forma **en PostgreSQL**, y su espejo en el modelo y en el servicio;
+- disparadores de solo inserción con una función nueva `outreach_forbid()` para `outreach_*`, y la de F (`ultron_studio_forbid()`, sin cambios) para las del Studio;
+- disparadores de transiciones solo hacia delante y de «se escribe una vez»;
+- `REVOKE UPDATE, DELETE` de `iron_app` en las de solo inserción, con la comprobación posterior y la guarda de producción de DB7;
+- `lock_timeout` para no bloquear;
+- disparadores espejo en SQLite;
+- `down()` que se niega con datos;
+- ninguna función `SECURITY DEFINER`;
+- recuentos antes y después para OPS9;
+- migraciones `2026_11_1x_1000xx_*` (DB9 fija los nombres).
+
+### 6.1 Gobierno (Studio)
+
+| Tabla | Tipo | Columnas y restricciones mínimas |
+|---|---|---|
+| `ultron_studio_strategies` | Identidad + borrador compartido | `uuid` UNIQUE; `key` UNIQUE (`^[a-z0-9][a-z0-9_-]{2,47}$`, inmutable); `name` (≤ 80, `PlainText` estricto); `purpose` (`commercial`, `collections` o `service`; inmutable); `draft_json` (≤ 32 KB) con `draft_revision`, `draft_updated_by_admin_id` y `draft_updated_at`; `archived_at` (una vez); autoría (instantánea sin FK, como F). Sin DELETE |
+| `ultron_studio_strategy_versions` | Contenido inmutable con ciclo de vida | `uuid`; `strategy_id` FK RESTRICT; `number` (UNIQUE con `strategy_id`); `content_json` (texto canónico ≤ 32 KB, **nunca** `json`/`jsonb`); `content_hash` (comprobado en la base contra los bytes guardados, como E3-2 del H8); `catalog_version`, `evaluator_version`; `studio_ref_kind` (`version` o `baseline`), `studio_version_uuid` NULL, `studio_content_hash`; `status` (los 9 alcanzables de `StudioVersionStatus`, CHECK; transiciones del grafo de 11.0 por disparador); `validation_json`; `simulation_uuid` y `simulation_hash` NULL; `created_by_admin_id` y `created_by_person_id`, `approved_by_admin_id` y `approved_by_person_id` NULL; `status_changed_at`. CHECK de cuatro ojos: `approved_by_person_id IS NULL OR approved_by_person_id <> created_by_person_id`, y lo mismo por cuenta. Índices únicos parciales: una `CANARY` y una `PUBLISHED` por `strategy_id`. Columnas de contenido inmutables |
+| `ultron_studio_strategy_reviews` | Solo inserción; una por versión | `version_id` UNIQUE; `decision` (`approved` o `rejected`); `acknowledged_warnings` (json); `note` (≤ 500, `PlainText` estricto); quien revisa (cuenta y persona); `created_at` |
+| `ultron_studio_strategy_simulations` | Solo inserción | `uuid`; `version_id` NULL (NULL = simulación del borrador); `content_hash`; `kind` (`synthetic` o `sample`); `input_hash`; `sample_size` (≤ 200); `result_json` (recuentos y hallazgos, ≤ 16 KB, **sin trazas por persona**); `result_hash`; `blocking_findings` (≥ 0); quién; `created_at` |
+| `ultron_studio_message_templates` | Una fila por versión de plantilla | `uuid`; `key` + `number` (UNIQUE); `channel` (`whatsapp`, `assisted` o `voice`); `purpose`; `content_json` (canónico, ≤ 8 KB); `content_hash`; `status` (`DRAFT`, `APPROVED`, `REJECTED` o `RETIRED`; solo hacia delante); autoría y aprobación por cuenta y persona; CHECK de cuatro ojos. El contenido es inmutable. **Sin el estado de Meta en el 15-11**: llega en W9, con su tabla de solo inserción `ultron_studio_template_meta_checks` |
+| `ultron_studio_strategy_publications` | **Cadena de solo inserción** | `uuid`; `seq` UNIQUE, `CHECK (seq >= 1)`; `prev_hash`; `client_request_id` UNIQUE; `action` (`publish`, `promote`, `pause`, `resume`, `rollback` o `retire`); `strategy_id` FK; `version_id` NULL; `effective_json` (los **bytes exactos** firmados, `text`); `effective_hash`; `signature`; `evidence` (json, al promover, sin ids ni textos); `reason` (≤ 500; obligatorio en `pause` y `rollback`, por CHECK); quién actúa (instantánea). Disparador «cabeza + 1 encadenada» (como `uspub_chain_next`); `REVOKE UPDATE, DELETE` |
+| `ultron_studio_person_bindings` | Vínculo cuenta → persona | `uuid`; `admin_id`; `identity_id` FK RESTRICT a `identities`; `created_by_admin_id`; `verified_by_admin_id` y `verified_by_identity_id` NULL; `verified_at` (una vez); `revoked_at` y `revoked_by_admin_id` (una vez); `revoke_reason` (≤ 500). CHECK: `verified_by_admin_id <> admin_id`, `verified_by_identity_id <> identity_id` y `created_by_admin_id <> admin_id`. Índice único parcial: `admin_id` sin revocar. La identidad es inmutable. Sin DELETE |
+| `ultron_studio_audit_events` (existente) | Libro | **Ampliación** del CHECK `usae_subject_type_chk` a `strategy`, `strategy_version`, `message_template` y `person_binding` (DROP + ADD en la misma transacción, como en el H6) |
+
+### 6.2 Ejecución (`outreach_*`)
+
+| Tabla | Tipo | Columnas y restricciones mínimas |
+|---|---|---|
+| `outreach_runs` | Una fila por pasada; se cierra una vez | `uuid`; `kind` (`ingest`, `sweep`, `dispatch`, `monitor`, `reconcile` o `replay`); `mode` (`shadow` o `live`); `strategy_id` NULL; `trigger_key` NULL; `started_at`; `finished_at` (una vez); `status` (`running` → `completed`, `failed` o `aborted`); `counts` (json acotado: evaluados, `false`, `unknown`, inscritos, negados por nivel); `error_code` |
+| `outreach_cursors` | Marcas de agua | `source` PK (`commercial_events`, …); `last_id` (**solo crece**, por disparador); `updated_at` |
+| `outreach_enrollments` | Persona × versión de estrategia × ciclo | `uuid`; `strategy_id`, `strategy_version_id`, `publication_seq`, `part`; `subject_key` (CHECK `^(m\|l):[0-9]+$`); `member_id` y `lead_id` NULL (sin FK hacia el motor: referencias, como `voice_contacts`); `cycle_key` (≤ 96); `purpose`; `status` (los 8 de D9-10, solo hacia delante); `step_index`; `touches` (0–6); `next_due_at`; `window_ends_at`; `last_outcome` NULL; `exit_reason` NULL (código); `mode`; el sello inmutable. UNIQUE `(strategy_id, subject_key, cycle_key, mode)`. Índice único parcial: una `active`/`waiting` por `(strategy_id, subject_key, mode)` |
+| `outreach_decisions` | **Solo inserción** | `uuid`; `run_id` NULL; `enrollment_id` NULL; `subject_key`; `kind` (`enroll`, `exclude`, `deny`, `defer`, `plan`, `cancel`, `exit` o `handoff`); `level` (`N1`…`N7` o NULL); `reasons` (json, ≤ 16 códigos del conjunto cerrado); `retry_at` NULL; `facts_json` (≤ 4 KB, derivados) y `facts_hash`; `trace_json` (≤ 16 KB) y `trace_hash`; el sello; `evaluated_at`; `mode` |
+| `outreach_jobs` | Acciones planificadas, con estados | `uuid`; `enrollment_id` FK; `subject_key`; `step_index`; `attempt` (≥ 1); `channel` (`simulated`, `assisted`, `whatsapp_template` o `voice_call`); `medium` NULL (el del asistido); `template_version_id` + `template_hash`; `idempotency_key` UNIQUE; `status` (`planned` → `claimed` → `dispatching` → `started`, `simulated`, `failed_to_start` o `ambiguous`; desde `planned` o `claimed`, también `canceled` o `expired`; solo hacia delante, y un estado final no cambia); `not_before`; `expires_at`; `budget_day` (fecha de Bogotá); `reserved_units`; `reserved_micros` (≥ 0); `cancel_reason` (código); `marketing_message_id`, `voice_call_id` y `assisted_claimed_by_admin_id` (cada uno **una vez**); `mode`; el sello inmutable. Índice único parcial: **un trabajo vivo por persona** (`subject_key`, `mode`) con `status` en `planned`, `claimed` o `dispatching` |
+| `outreach_outcomes` | **Solo inserción** | `uuid`; `job_id` NULL; `enrollment_id`; `outcome` (los 18 de D9-10, CHECK); `source` (`simulated`, `staff`, `crm_fact`, `system`, `meta_status`, `inbound_message`, `voice_call` o `classifier`); `source_key` (≤ 96); `deterministic` (bool); `confidence` (NULL salvo `classifier`, CHECK); `detail_code` NULL; `recorded_by_admin_id` (solo `staff`, CHECK); `occurred_at`. UNIQUE `(enrollment_id, source, source_key)` |
+| `outreach_brakes` | Se abre y se suelta, una vez cada cosa | `uuid`; `scope` (`global`, `strategy` o `channel`); `scope_ref` NULL (el uuid de la estrategia o el canal; CHECK según el alcance); `reason` (`manual`, `opt_out_spike`, `failure_spike`, `budget_breach`, `unknown_send`, `chain_unreadable`, `drift` o `legal_hold`); `note` (≤ 500); `opened_by_type` (`person` o `system`) y `opened_by_admin_id`; `opened_at`; `released_at`, `released_by_admin_id` y `release_note`, **una vez** (disparador «se suelta una vez», como `voice_brakes`). CHECK: quien suelta no es quien abrió [P9-20]. Sin DELETE |
+
+**Siguientes:**
+- `outreach_consents` (C9): autorizaciones por finalidad y canal, de solo inserción, con cuatro ojos cuando las carga una persona;
+- `ultron_studio_template_meta_checks` (W9);
+- las columnas de `voice_calls` de V9.
+
+### 6.3 Tablas existentes
+
+**Se leen**, solo por los adaptadores de `Outreach\Facts` o por el puente:
+- `users` (`membership_end_date`, plan), `members`, `plans`;
+- `attendances`, `payment_transactions`, `membership_subscriptions`, `receivables`, `receivable_payments`;
+- `marketing_leads`, `marketing_conversations`, `marketing_messages` (y sus estados), `marketing_followups`, `marketing_consent_events`;
+- `commercial_events`, `commercial_opportunities`;
+- `class_sessions`, `class_reservations`, `my_classes`, `valuation_appointments`, `physical_evaluations`, `marketing_appointments`;
+- `voice_contacts`, `voice_consents`, `voice_exclusions`, `voice_rne_checks`, `voice_calls`;
+- `ultron_studio_canary_numbers`, `ultron_studio_versions`;
+- `identities`, `staff_profiles`.
+
+**Se escriben solo a través de una puerta existente**, en W9 y V9, nunca el 15-11:
+- `marketing_messages`, por `MarketingMessageDispatcher` (W9);
+- `voice_calls` y `voice_call_events`, por `OutboundGate` (V9).
+
+**Nunca las escribe el H9:**
+- `commercial_*`;
+- `marketing_leads`, `marketing_conversations`, `marketing_followups`, `marketing_calls`, `marketing_ai_actions`, `marketing_automation_events`;
+- `automation_events`;
+- `ultron_studio_publications`, `ultron_studio_voice_*`, `ultron_studio_canary_numbers`;
+- `voice_*` (salvo la puerta de V9);
+- `users`, `members` y cualquier tabla de pagos, caja o agenda.
+
+**Migración de datos: ninguna.** Todo es nuevo. El H9 no copia consentimientos ni historiales: los lee cuando decide.
+
+---
+
+## 7. API (el lead fija la lista y la numeración)
+
+**Studio** (añadidas a `routes/ultron-studio.php`, con el tope de 64 KB, `AuthorizationMap` y una persona). Marcas: [M] compromiso del 15-11, [O] objetivo, [S] siguientes.
+
+| # | Ruta | Permiso | Notas |
+|---|---|---|---|
+| 1 | `GET strategies/catalog` [M] | `ultron.view` | Eventos, hechos, operadores, canales, resultados, transiciones y límites, con su versión y su huella |
+| 2 | `GET strategies` [M] | `ultron.view` | Lista paginada con el estado de gobierno y el de la cadena |
+| 3 | `POST strategies` [M] | `ultron.strategies_edit` | Idempotente por `clientRequestId` |
+| 4 | `GET strategies/{uuid}` [M] | `ultron.view` | Borrador, versiones y estado |
+| 5 | `PUT strategies/{uuid}/draft` [M] | `ultron.strategies_edit` | Con `baseRevision`; 409 `draft_moved` |
+| 6 | `POST strategies/{uuid}/validate` [M] | `ultron.strategies_edit` | Pura, sin escritura |
+| 7 | `POST strategies/{uuid}/versions` [M] | `ultron.strategies_edit` | Congela; 422 con todas las claves |
+| 8 | `GET strategy-versions/{uuid}` [M] | `ultron.view` | Contenido, diferencias, validación y simulaciones |
+| 9 | `POST strategy-versions/{uuid}/simulations` [M] | `ultron.strategies_edit` (`synthetic`), `commercial_automation.simulate_real` (`sample`) | Con limitador (como el del H4) |
+| 10 | `GET strategy-versions/{uuid}/simulations` [M] | `ultron.view` | |
+| 11 | `POST strategy-versions/{uuid}/approve` [M] | `ultron.approve` + persona distinta | Reconoce exactamente los avisos |
+| 12 | `POST strategy-versions/{uuid}/reject` [M] | Ídem | |
+| 13 | `POST strategy-versions/{uuid}/publish` [M] | `ultron.strategies_publish` + persona distinta | Bandera, ventana y `expectedContentHash`; 409 `strategies_publishing_disabled` |
+| 14 | `POST strategy-versions/{uuid}/promote` [S] | Ídem | `evidenceHash`; la evidencia real solo existe con envíos (W9 o asistido) |
+| 15 | `POST strategies/{uuid}/pause` [M] | `ultron.strategies_rollback` | Siempre, con motivo |
+| 16 | `POST strategies/{uuid}/resume` [M] | `ultron.strategies_publish` | Ventana |
+| 17 | `POST strategies/{uuid}/rollback` [M] | `ultron.strategies_rollback` | Siempre, con motivo |
+| 18 | `GET strategies/{uuid}/publications` [M] | `ultron.view` | `verified` por entrada (como B7-c) |
+| 19 | `GET strategy-versions/{uuid}/canary-evidence` [O] | `ultron.view` | |
+| 20 | `POST strategies/{uuid}/archive` [M] | `ultron.strategies_edit` | |
+| 21 | `GET templates` [M] | `ultron.view` | |
+| 22 | `POST templates` [M] | `ultron.strategies_edit` | Versión nueva de una clave |
+| 23 | `GET templates/{uuid}` [M] | `ultron.view` | |
+| 24 | `POST templates/{uuid}/approve` [M] | `ultron.approve` + persona distinta | |
+| 25 | `POST templates/{uuid}/reject` [M] | Ídem | |
+| 26 | `GET person-bindings` [M] | `ultron.person_bindings_manage` | Sin documento: solo `identityRef` (huella) y el nombre del perfil |
+| 27 | `POST person-bindings` [M] | Ídem | Nunca para la propia cuenta |
+| 28 | `POST person-bindings/{uuid}/verify` [M] | Ídem + persona distinta | |
+| 29 | `POST person-bindings/{uuid}/revoke` [M] | Ídem | Con motivo |
+
+`STUDIO_ROUTE_COUNT` pasa de 77 a **106**. Lo actualiza S9 en el mismo commit que las rutas, con su guarda (la regla E2-6 del H8).
+
+**Ejecución** (fichero propio **`routes/commercial-automation.php`**, montado en `bootstrap/app.php` como `routes/voice.php`; prefijo `/api/admin/commercial-automation`; tope de cuerpo de 64 KB, `no-store` y `AuthorizationMap`):
+
+| # | Ruta | Permiso | Notas |
+|---|---|---|---|
+| E1 | `GET status` [M] | `commercial_automation.view` | Banderas, modo, constante, frenos (los propios y los ajenos en lectura), cadena y fuentes |
+| E2 | `GET metrics` [M] | Ídem | Por estrategia, canal, nivel y motivo |
+| E3 | `GET enrollments` [M] | Ídem | Paginada; `subjectRef`, sin datos personales |
+| E4 | `GET enrollments/{uuid}` [M] | Ídem | Con sus decisiones, trabajos y resultados |
+| E5 | `GET decisions/{uuid}` [M] | Ídem | La traza y su texto |
+| E6 | `GET jobs` [M] | Ídem | Paginada |
+| E7 | `GET brakes` [M] | Ídem | |
+| E8 | `POST brakes` [M] | `commercial_automation.stop` | **PARADA GLOBAL** (`scope: global`), o por estrategia o canal; motivo obligatorio |
+| E9 | `POST brakes/{uuid}/release` [M] | `commercial_automation.release` + persona distinta de quien lo abrió | Nota obligatoria |
+| E10 | `GET people/{subjectRef}/timeline` [O] | `commercial_automation.timeline_view` | Queda en el libro |
+| E11 | `GET assisted/queue` [O] | `commercial_automation.assisted_work` | Sin teléfonos; con un enlace a la ficha |
+| E12 | `POST assisted/{jobUuid}/claim` [O] | Ídem | Una vez |
+| E13 | `POST assisted/{jobUuid}/outcome` [O] | Ídem + quien reclamó | Resultado del conjunto cerrado; idempotente por `clientRequestId` |
+
+En total, **42 rutas**: 29 del Studio y 13 de ejecución. Con el compromiso mínimo (M), 36: 27 del Studio y 9 de ejecución. Ninguna es pública ni recibe webhooks el 15-11: los normalizadores de Meta y de voz (W9 y V9) leen tablas que ya existen.
+
+---
+
+## 8. CRM: sección «Automatizaciones comerciales»
+
+- **Ruta y módulo.** `marketing/automatizaciones`, en un módulo nuevo y diferido (`src/app/modules/commercial-automation/**`, CRM), con su entrada de menú bajo Mercadeo. La guarda de ruta usa los permisos; el servidor decide.
+- **Estilos.** Hojas propias por componente: `ultron-studio.scss` no crece (F-4).
+- **Fuentes de la página.** Habla con las dos API: la de gobierno del Studio y la de ejecución.
+
+| Pestaña | Qué hace | Marca |
+|---|---|---|
+| **Panel** | Estado (banderas, modo, constante, cadena y fuentes); botón **PARADA GLOBAL**, con confirmación y motivo, siempre visible para quien tiene `stop`; frenos abiertos y soltar (con nota); métricas por estrategia y canal; negativas por nivel N1–N7; coste del día | [M] |
+| **Estrategias** | Lista con el estado de gobierno (borrador, versiones, canario, publicada, pausada) y sus acciones según `can` | [M] |
+| **Constructor** | Disparador (con el formulario de parámetros que da el esquema del catálogo); **constructor visual de condiciones** (árbol AND/OR/NOT con controles tipados por hecho, sin texto libre); exclusiones; éxito; **editor de secuencias** (pasos, retrasos, canales por orden, plantilla por canal y mapa de resultados limitado a las transiciones permitidas); límites; horario; validación en vivo con el espejo y el fixture | [M] |
+| **Simulación** | Sintética (formulario de personas de prueba) y sobre muestra real; recuentos por decisión, nivel, motivo y canal; trazas explicadas en frases (`commercial-automation-trace-text.ts`, con fixture); hallazgos; «por qué este canal y no aquel» | [M] |
+| **Plantillas** | Versiones por clave; vista previa de los marcadores; cuatro ojos; avisos de categoría, finalidad y línea de baja | [M] |
+| **Gobierno** | Revisión con diferencias, aprobar o rechazar (persona distinta), publicar, pausar, reanudar y revertir; la cadena con `verified`; la evidencia del canario | [M]; evidencia [O] |
+| **Bandeja asistida** | Trabajos `assisted` vigentes; reclamar; guion; enlace a la ficha; registrar el resultado | [O] |
+| **Historial por persona** | Línea de tiempo omnicanal (metadatos) | [O] |
+| **Vínculos de personas** | Solo con `ultron.person_bindings_manage` | [M] |
+
+**Accesibilidad.** Foco visible, navegación por teclado en el constructor (árbol con roles ARIA), contraste y textos de los motivos en español claro. El catálogo de permisos del CRM se regenera desde `PermissionCatalog` con el procedimiento del H6.
+
+---
+
+## 9. Banderas, vuelta atrás por niveles y aislamiento
+
+### 9.1 Banderas
+
+Todas nacen apagadas o en 0, y solo `true`, `1`, `on` o `yes` las encienden.
+- Las de ejecución van en `config/outreach.php` (dueño: B9-run).
+- Las de gobierno, en el bloque `strategies` de `config/ultron_studio.php` (dueño: S9).
+
+| Variable | Defecto | Qué enciende |
+|---|---|---|
+| `COMMERCIAL_AUTOMATION_ENABLED` | `false` | La maestra. Apagada, nada de `outreach:*` hace trabajo (las órdenes salen con 0 y lo dicen) |
+| `COMMERCIAL_AUTOMATION_MODE` | `off` | `shadow` (todo simulado) o `live` (los canales encendidos y permitidos por la constante) |
+| `COMMERCIAL_AUTOMATION_SCHEDULER_ENABLED` | `false` | El bloque propio de `routes/console.php`, que solo programa si está encendida |
+| `COMMERCIAL_AUTOMATION_ASSISTED_ENABLED` | `false` | El canal asistido en `live` |
+| `COMMERCIAL_AUTOMATION_ASSISTED_DAILY_CAP` | `0` | Trabajos asistidos al día |
+| `COMMERCIAL_AUTOMATION_WHATSAPP_ENABLED` | `false` | W9 |
+| `COMMERCIAL_AUTOMATION_WHATSAPP_DAILY_BUDGET_USD` | `0` | W9 |
+| `COMMERCIAL_AUTOMATION_WHATSAPP_DAILY_CAP` | `0` | W9 |
+| `COMMERCIAL_AUTOMATION_VOICE_ENABLED` | `false` | V9. Además rigen todas las del H8 |
+| `COMMERCIAL_AUTOMATION_MONITOR_ENABLED` | `false` | `outreach:monitor` (autoapertura de frenos) |
+| `COMMERCIAL_AUTOMATION_CLASSIFIER_ENABLED` | `false` | AI9 |
+| `COMMERCIAL_AUTOMATION_OWN_HOURS` | vacío (= el legal) | Horario propio, solo más estricto [P9-17] |
+| `ULTRON_STUDIO_STRATEGIES_PUBLISHING_ENABLED` | `false` | Publicar, promover y reanudar (409 si está apagada). **Pausar y revertir no dependen de ella** (como H5 §A5.3) |
+| `ULTRON_STUDIO_STRATEGIES_PUBLISH_WINDOW` | `07:00-19:00` | Ventana de Bogotá para publicar y promover |
+| `ULTRON_STUDIO_STRATEGIES_CANARY_MIN_HOURS` / `_MIN_TOUCHES` | `24` / `3` | Mínimos duros: 1 h y 1 contacto |
+| `ULTRON_STUDIO_STRATEGIES_SIMULATION_GATE` | `required` | Solo el propietario puede poner `waived`, y queda escrito en la publicación |
+| Constante `OutreachSendGate::SENDS_ENABLED_IN_CODE` | `false` | Envío automático hacia personas (W9 y V9) |
+
+### 9.2 Vuelta atrás por niveles
+
+| Nivel | Qué | Efecto | Requiere |
+|---|---|---|---|
+| 0 | `COMMERCIAL_AUTOMATION_ENABLED=false`, o `MODE=off`, y caché como `www-data` (`umask 077`, `chmod 600`) | Nada planifica ni despacha. Los trabajos `planned` esperan y vencen | El mando `h9-outreach-scope.sh` (OPS9, con copia previa; admite 600 y 640, como C-14) |
+| 0b | **PARADA GLOBAL** (`POST brakes`, scope `global`, o `outreach:stop --all`) | Lo mismo, sin tocar el entorno, en ≤ 60 s y con rastro | `commercial_automation.stop` |
+| 1 | Pausar o revertir una estrategia (cadena) | Cancela los trabajos pendientes de esa estrategia | `ultron.strategies_rollback`, siempre, sin ventana |
+| 2 | Canal apagado (`…_WHATSAPP_ENABLED`, `…_VOICE_ENABLED`, `…_ASSISTED_ENABLED`) o su freno | El selector salta a otro canal o aplaza | El mando, o `stop` con alcance de canal |
+| 3 | Código: el commit anterior | Las tablas quedan y `down()` se niega | Orden del propietario |
+| 4 | En los proveedores (W9/V9): las palancas del H8 y de Meta | El canal queda muerto físicamente | El propietario |
+
+### 9.3 Aislamiento
+
+**De ULTRON Legacy y del WhatsApp de producción:**
+- puerta de diff vacía (protección 5) y sin imports de `App\Services\Marketing\Ultron\*` (guarda estática), salvo la lectura de `UltronAbortLatch::engaged()` en `Facts\OperationalBrakes` (D9-2);
+- el H9 no lee ni escribe `ultron_studio_publications`, y la llave `MARKETING_ULTRON_STUDIO_CONFIG` no lo gobierna;
+- ningún turno de ULTRON se sella con una estrategia;
+- en W9, los mensajes del H9 pasan por las mismas guardas que hoy (la pausa del agente los detiene) y las respuestas siguen el camino de siempre;
+- `UltronEngineIsolationTest` gana en su lista blanca, **solo**, las migraciones del H9 y el puente `OutreachPublishedStrategies` (SEC9, como E4-3 del H8).
+
+**De n8n:**
+- ni un evento ni una ruta interna nueva;
+- `automation.event_types` no cambia;
+- el H9 no usa `automation.internal_secret`;
+- prueba estática: `Outreach` no nombra `SendAutomationEventToN8n`, `AutomationEventService`, `SendUltronEventToN8n` ni `config('automation.*')`.
+
+**Del OTP:** la protección 4 del H8, en las dos direcciones (`Outreach` no lee `otp.*` ni `voice.twilio.*`).
+
+**Del motor comercial:**
+- puerta de diff vacía (protección 6);
+- los adaptadores de `Facts` solo leen;
+- prueba: ninguna escritura del H9 llega a `commercial_*` (SEC9, con un *listener* de consultas en las pruebas de integración).
+
+**De la voz del H8:** el 15-11, cero diff en `app/Services/{Voice,Telephony}/**` salvo **lecturas** de `OutboundSchedule`, `ColombianHolidays` y `VoiceFrequency` (puras) y de `VoiceBrake::isOpen` (por `Facts\OperationalBrakes`).
+
+**Cero red** con las banderas por defecto **y con la configuración real de producción**: como `UltronStudioIntegrationsNoNetworkTest` y `VoiceProductionNoNetworkTest`, con `Http::preventStrayRequests()`.
+
+---
+
+## 10. Impacto: contratos que cambian (para que nadie los cambie por la puerta de atrás)
+
+| Contrato | Cambio | Consumidores | Quién lo cambia |
+|---|---|---|---|
+| `StudioAuditEvent::SUBJECT_TYPES` y CHECK `usae_subject_type_chk` | 7 → 11 sujetos | El panel de auditoría del Studio (CRM, sus filtros) y las pruebas que cuentan objetos `ultron_studio_%` (el Anexo A de DB8) | DB9 (migración) + S9 (modelo) + FE9 (filtro) + el lead (literales de las pruebas de recuento, como E3-8) |
+| `STUDIO_ROUTE_COUNT` (77) | → 106 | `UltronStudioEngineReadOnlyTest`, `UltronStudioIntegrationsPermissionsTest` y `UltronStudioVoiceRoutesTest` | S9 (la constante, en el mismo commit) |
+| `PermissionCatalog` y `CrmPermission` | +10 llaves; `commercial_automation` en `SHARED_TOKEN_EXCLUDED_DOMAINS` | El enum y el catálogo del CRM (se regeneran), la pantalla de Roles y `readOnly()` | B9-run (dueño único de `app/Support/Access/**`) |
+| `AuthorizationMap` | +42 rutas | `auth:coverage` | B9-run |
+| `bootstrap/app.php` | Monta `routes/commercial-automation.php` | — | B9-run |
+| `routes/console.php` | Bloque propio bajo `outreach.scheduler.enabled`, **nunca** dentro del monitor del Studio ni del de voz (m-3 del H7, E2-6 del H8) | El recuento `TAREAS` de los scripts del H7/H8: no cambia con la bandera apagada; con ella encendida, OPS9 actualiza el valor esperado | OPS9 |
+| `.env.example` | El bloque del H9, apagado | Despliegue y mandos | B9-run (los demás le pasan sus variables) |
+| `UltronEngineIsolationTest` (lista blanca) | + las migraciones del H9 y el puente | La guarda del motor | SEC9, nunca quien implementa |
+| `ops/supresion-1581.sql` | La sección del H9 | El runbook de supresión | OPS9 + `database-specialist` |
+| **W9:** `MarketingMessageDispatcher`, `WhatsappOutboxService` | Método de plantillas y rama del outbox (diff enumerado) | ULTRON (`UltronCommitService`), `send-message` interna, respuesta manual del Inbox, outbox de reintentos | W9 + SEC + la regresión de Legacy |
+| **V9:** `OutboundGate`, `vc_requester_chk`, `voice_calls.outreach_job_uuid`, `OutboundPolicy` (sin motivos nuevos), `VoiceCallsQuery` (etiqueta del solicitante), el fixture `outbound-gate-cases.json`, el comentario «una automatización no llama» (`CrmPermission.php:254-266`) y la lista de llamadas del CRM | Entrada de estrategias y solicitante `strategy` | Las suites y el E2E del H8 y la pestaña de llamadas del CRM | V9 + DB (V9) + SEC + TEST, con **la Enmienda 16 del H8** |
+
+---
+
+## 11. Paquetes, dueños y ficheros exclusivos
+
+**Ningún fichero tiene dos dueños a la vez.** Los traspasos están al final de la sección.
+
+| Paquete | Agente | Qué | Ficheros exclusivos |
+|---|---|---|---|
+| **ARQ9** | `architect` | Este contrato. Arbitra las dudas de interpretación durante la ejecución (las propuestas de enmienda las firma el lead) | `docs/ultron-studio/ULTRON_STUDIO_H9_CONTRACT.md` (hasta que el lead lo congele) |
+| **TEST9-a** | `tester` | **Primero los fixtures, desde el contrato:** `catalog-snapshot.json`, `conditions-cases.json` (forma, canonicalización, tres valores y trazas), `policy-ladder-cases.json` (un bloque por nivel), `contact-budget-cases.json` (con la paridad con `ContactPolicy`), `channel-selection-cases.json`, `priority-cases.json`, `outcome-transitions.json`, `strategy-content-cases.json`, `strategy-chain-vectors.json` (mensaje canónico, `prev_hash` y firma, con una clave de prueba) y `calendar-cases.json` (con los límites de las 08:00, las 19:00, el sábado a las 15:00 y los lunes festivos) | `tests/fixtures/outreach/**`, `plans/informes-h9/informe-tester.md` |
+| **DB9** | `database-specialist` | Las 14 tablas de §6 y la ampliación del CHECK del libro: CHECK, únicos, índices parciales, disparadores (solo inserción, hacia delante, una vez, cadena, cursor monótono, huella del contenido), `REVOKE` con su comprobación, guarda de producción, `lock_timeout`, espejo en SQLite, ida y vuelta, `down()` que se niega y recuentos para OPS9 | `database/migrations/2026_11_1*_create_ultron_studio_strategy_tables.php`, `…_create_outreach_tables.php`, `…_extend_ultron_studio_audit_subjects.php` y sus guardas; `tests/Feature/Outreach/Schema/**`; `tests/Feature/UltronStudio/UltronStudioStrategySchemaTest.php`; `plans/informes-h9/informe-db.md` |
+| **B9-core** | `backend` | El núcleo **puro**: `OutreachCatalog`, `ConditionCanonicalizer`, `ConditionEvaluator` (tres valores y traza), `PolicyLadder`, `ContactBudget`, `ChannelSelector`, `PriorityArbiter`, `OutcomeTable`, `FollowUpMachine`, `StrategyContent` (lector estricto del JSON), `StrategyChainSignature` y `DecisionTraceText` (los textos que espeja el CRM) | `app/Services/Outreach/Core/**`, `tests/Unit/Outreach/Core/**`, `plans/informes-h9/informe-core.md` |
+| **B9-facts** | `backend` (otra instancia) | Los adaptadores de solo lectura de D9-2 (uno por fuente), la unificación de la persona (`subject_key`) y su seudónimo (`subject_ref`, subclave `outreach-subject/1`), los prefiltros indexados, la foto de hechos por lotes y el modelo de lectura del historial | `app/Services/Outreach/Facts/**`, `app/Services/Outreach/Subjects/**`, `tests/Unit/Outreach/Facts/**`, `tests/Feature/Outreach/Facts/**`, `plans/informes-h9/informe-facts.md` |
+| **S9** | `backend` (otra instancia) | El gobierno: estrategias y borrador, `StrategyValidator`, versiones, revisiones, simulaciones (con el núcleo y los hechos), plantillas, cadena y publicación (publicar, promover, pausar, reanudar, revertir, archivar), evidencia del canario, vínculos de personas y su arranque por consola, eventos del libro y la constante de rutas | `app/Services/UltronStudio/StudioStrateg*.php`, `StudioMessageTemplates.php`, `StudioPersonBindings.php`; `app/Models/UltronStudio/StudioStrateg*.php`, `StudioMessageTemplate.php`, `StudioPersonBinding.php`; `app/Models/UltronStudio/StudioAuditEvent.php` (solo `SUBJECT_TYPES`); `app/Http/Controllers/Crm/UltronStudio/UltronStudio{Strategy,MessageTemplate,PersonBinding}Controller.php`; `app/Http/Controllers/Crm/UltronStudio/UltronStudioVoiceController.php` (**solo** `STUDIO_ROUTE_COUNT`); `routes/ultron-studio.php`; `config/ultron_studio.php` (**solo** el bloque `strategies`); `app/Console/Commands/UltronStudio/PersonBindingsCommand.php`; `tests/Feature/UltronStudio/*Strateg*`, `*MessageTemplate*` y `*PersonBinding*`; `tests/Unit/UltronStudio/*Strateg*`; `plans/informes-h9/informe-studio.md` |
+| **B9-run** | `backend` (otra instancia, desde la puerta 1) | La ejecución: el planificador (ingesta, barrido, prioridad, autorización y plan), el despachador (reevaluación y ejecución), los canales `SimulatedChannel` y `AssistedChannel`, `OutreachSendGate`, frenos, presupuesto, conciliación, monitor, `replay`, el puente `OutreachPublishedStrategies`, la ingesta de resultados (`staff`, `crm_fact` y `system`), los modelos, los controladores de ejecución y las órdenes `outreach:*` | `app/Services/Outreach/**` (salvo `Core`, `Facts` y `Subjects`), `app/Models/Outreach/**`, `app/Http/Controllers/Crm/Outreach/**`, `app/Console/Commands/Outreach/**`, `config/outreach.php`, `routes/commercial-automation.php`, `bootstrap/app.php`, `app/Support/Access/{PermissionCatalog,CrmPermission,AuthorizationMap}.php`, el bloque del H9 de `.env.example`, `tests/Feature/Outreach/**` (salvo `Schema/**`, `Facts/**` y las guardas de SEC9), `plans/informes-h9/informe-backend.md` |
+| **FE9** | `frontend` | La sección de §8 | CRM: `src/app/modules/commercial-automation/**` (con `commercial-automation-conditions.ts` y `commercial-automation-trace-text.ts` y sus specs contra los fixtures exportados), el bloque de la ruta en `src/app/app.routes.ts`, el menú, el enum o catálogo de permisos regenerado [ruta por confirmar] y `e2e/h9-*` de la UI (con TEST9-b); en el backend, `plans/informes-h9/informe-front.md` |
+| **SEC9** | `security` + `api-security-specialist` | **Primero el modelo de amenazas** (paso 1); después la revisión por ruta (BOLA/IDOR en inscripciones, decisiones, historial y bandeja; BFLA en gobierno y frenos; cuatro ojos por persona; datos personales en trazas y respuestas; la Ley 1581). **Escribe las guardas** | `tests/Unit/Outreach/OutreachIsolationTest.php` (imports, puertas, `Http::`, n8n, OTP, Ultron), `tests/Feature/Outreach/OutreachBoundaryTest.php` (rutas, permisos, tope de cuerpo, `no-store` y una persona), `tests/Feature/Outreach/OutreachLegacyUntouchedTest.php` (puertas de diff y cero escrituras en `commercial_*` y `marketing_*`), `tests/Feature/UltronStudio/StudioStrategyIsolationTest.php`, la lista blanca de `tests/Feature/UltronStudio/UltronEngineIsolationTest.php` (**solo** las líneas del H9), `tests/Feature/Outreach/OutreachNoNetworkTest.php`, `plans/informes-h9/informe-security.md` e `informe-api-security.md` |
+| **TEST9-b/c** | `tester` | La matriz de §13 (las que no tienen otro dueño), el E2E en sombra y asistido con la pila real, la puerta de PostgreSQL con carreras, las mutaciones y la regresión por nombre | `tests/**/*H9*Test.php` nuevos, `e2e/h9-*` en el CRM, `plans/informes-h9/informe-tester.md` |
+| **OPS9** | `devops` | El despliegue de la fase 1 (detecta migraciones ya aplicadas por otro); `h9-schema-check.sql`; el smoke; el mando `h9-outreach-scope.sh` (con copia previa; admite 600 y 640); el bloque del programador; la supresión 1581 del H9; los respaldos; el runbook | `ops/{deploy-h9-backend-fase1.sh,h9-schema-check.sql,smoke-h9.py,smoke-run-h9.sh,h9-outreach-scope.sh,banco-h9/**}`, la sección del H9 de `ops/supresion-1581.sql`, `routes/console.php` (**solo** el bloque del H9), `plans/informes-h9/informe-devops.md` |
+| **PERF9** | `performance-specialist` | Medir antes de optimizar: los presupuestos de D9-16 y el tamaño del chunk del CRM | `plans/informes-h9/informe-performance.md`, `ops/perf-h9/**` (los cambios de código, solo a través de su dueño) |
+| **DOC9** | `documentation-specialist` (al final) | `ULTRON_STUDIO_AUTOMATIZACION.md` (qué es, cómo se gobierna y qué no hace); al día: la guía de administración, la lista operativa, DEPLOYMENT_PLAN y ROLLBACK del H9, la fila 9 de la hoja de ruta, FINAL_REPORT, SECURITY, BACKEND, VISUAL y `ops/README.md` | `docs/ultron-studio/*.md` (salvo este contrato), `ops/README.md` |
+| **REV9** | `reviewer` (al final) | Revisión independiente de los dos repos. Con un bloqueante abierto no se despliega | `plans/informes-h9/informe-reviewer.md` |
+
+**Siguientes** (cada uno con su enmienda, su paso 0 y sus puertas):
+
+| Paquete | Agentes | Qué | Exige |
+|---|---|---|---|
+| **W9** | `backend` + `security` + `tester` | La puerta de WhatsApp por plantillas (D9-9.3), `WhatsappTemplateChannel`, los normalizadores (`meta_status`, `inbound_message` y la palabra de baja), `ultron_studio_template_meta_checks` y la evidencia real del canario | [P9-5], [P9-13], plantillas aprobadas por Meta, [P9-15], visto bueno legal y la constante abierta |
+| **C9** | `backend` + `database-specialist` + `security` + `frontend` | `outreach_consents` (finalidad × canal, cuatro ojos), la captura de autorizaciones de socios y el camino de identidad de WhatsApp para socios sin lead | [P9-14], [P9-15], asesoría |
+| **AI9** | `backend` + `security` | El clasificador de respuestas (conjunto cerrado, regla asimétrica, `store: false`, solo el texto de la respuesta) | [P9-6], la clave o proyecto de OpenAI y su presupuesto |
+| **V9** | `backend` + `database-specialist` + `security` + `tester` | La entrada de estrategias en `OutboundGate`, `vc_requester_chk`, `purposeKey` en la plantilla de voz v2 y los normalizadores de `voice_calls` | La Enmienda 16 del H8, la 4a con evidencia, la 4b, [P9-16] y el visto bueno legal |
+| **EV9** | `backend` + `frontend` | Actividades especiales del gimnasio (fuente nueva) y el canal `app_push` | [P9-23] |
+| **NBA9** | `architect` + `backend` + `tester` | Estrategias de fábrica equivalentes a las 12 reglas del motor, con prueba de paridad, y la propuesta de retirar sus reglas fijas | [P9-1] |
+
+**Traspasos:**
+- `app/Support/Access/**`, `bootstrap/app.php` y `.env.example`: solo B9-run; S9 y los demás le pasan sus rutas, permisos y variables.
+- `routes/ultron-studio.php`: solo S9.
+- `config/ultron_studio.php`: solo S9 (bloque `strategies`), nunca a la vez que otro.
+- `routes/console.php`: solo OPS9.
+- `app/Services/Outreach/Core/**` es de B9-core: los demás lo **usan** y, si necesitan un cambio, lo piden por el lead.
+- Las guardas estáticas: solo SEC9. Si una guarda falla, quien implementa no la toca y avisa al lead.
+
+**Para cada paquete:**
+- pruebas en verde en SQLite y, lo que aplique, en la puerta de PostgreSQL (`UNIT_DB=ultron_studio_h9_<paquete>`);
+- Pint en lo tocado;
+- `Http::preventStrayRequests()` en toda prueba con red;
+- informe en `plans/informes-h9/`;
+- **sin commit**: el lead confirma por paquete.
+
+---
+
+## 12. Orden de ejecución, puertas y calendario al 15-11 (banco local; nunca envíos reales)
+
+| Paso | Cuándo (propuesto) | Quién | Qué | Puerta al terminar |
+|---|---|---|---|---|
+| **0** | 09-11 noche – 10-11 mañana | Lead | Congelar el contrato con las decisiones **antes de implementar** (§17) como supuestos; abrir `plans/informes-h9/`; leer en producción, en solo lectura, `COMMERCIAL_EVENTS_ENABLED`, `COMMERCIAL_NBA_ENABLED`, `COMMERCIAL_AUTONOMY_ENABLED`, `MARKETING_FOLLOWUPS_SCHEDULER`, el número de cuentas con `ultron.approve` y de personas reales, y si hay versiones del Studio `APPROVED` | — |
+| **1**, en paralelo (sin ficheros compartidos) | 10-11 – 11-11 | TEST9-a, DB9, B9-core, B9-facts, S9-a (`StrategyValidator`, plantillas y modelos puros sobre `Core`), SEC9-a (modelo de amenazas y guardas) y OPS9-a (banco y mando) | Fixtures; esquema; núcleo puro; adaptadores; validación del Studio | **Puerta 1 (primer verde):** el núcleo en verde contra los fixtures; las migraciones de ida y vuelta en SQLite y PG con los recuentos; las guardas de SEC9 en verde; las puertas de diff de Legacy, motor comercial, n8n, OTP y voz **vacías**; cero red |
+| **2** | 12-11 – 13-11 | B9-run, S9-b (versiones, simulaciones, cadena, publicación, pausa, reversión y vínculos) y FE9 (desde los fixtures y los DTO del contrato) | Planificador en sombra; despachador; frenos y PARADA GLOBAL; API; gobierno completo | **Puerta 2:** las suites Feature en SQLite y la puerta de PG (carreras de inscripción, trabajo vivo, reserva y cadena); `auth:coverage` vacío; el tope de cuerpo en las 42 rutas; cero red con la configuración de producción; el E2E en sombra del backend (una estrategia de punta a punta: barrido → decisión → trabajo simulado) |
+| **3** | 14-11 | FE9 completo; TEST9-b (E2E con el CRM y la pila real, en sombra y asistido); PERF9; mutaciones | — | **Puerta 3:** E2E en verde; mutaciones de lo nuevo cazadas; suite completa y build del CRM sin rojos nuevos frente a la línea base (`ops/suite-compare.sh`) |
+| **4** | 15-11 | SEC9-b (código final), TEST9-c (regresión por nombre contra `origin/main` del día; Marketing con `MARKETING_ULTRON_STUDIO_CONFIG` en `off` y en `all`; Commercial; Studio; Telephony; Legacy: acta del canario, vigía e `InternalSecretAuthoritySurfaceTest`), DOC9 y REV9 | — | **Puerta 4:** REV9 sin bloqueantes. Entonces, la fase 1, con orden escrita |
+
+**El primer punto en verde** es la puerta 1 (11-11): el núcleo es demostrable sin base de datos ni red.
+
+**Calendario y realismo.** Seis días es el plazo más corto de la serie: la fase 1 del H8 llevó del 03-11 al 09-11 con más paquetes que estos, y el equipo tiene a la vez las fases 2–4 del H8. Si el lead lo prefiere, el **corte del 15-11** se queda en estas tres opciones:
+
+| Corte | Qué entra el 15-11 | Qué pasa a la semana siguiente |
+|---|---|---|
+| **M (compromiso mínimo, recomendado)** | Pasos 0–3 con puertas 1–3 en verde: esquema, núcleo, gobierno hasta publicar, planificador en sombra, PARADA GLOBAL, API [M] y CRM [M]. SEC9-b y REV9 empiezan | REV9 sin bloqueantes y fase 1 (todo apagado) |
+| **O (objetivo)** | M + canal asistido + historial + evidencia del canario + puerta 4 + fase 1 desplegada el 15-11 con orden escrita | — |
+| **S (siguientes)** | — | W9 → C9 → AI9 → V9 → EV9 → NBA9, cada uno con su enmienda y sus puertas; W9 y C9 primero, porque son los que permiten el envío automático por WhatsApp |
+
+---
+
+## 13. Matriz de pruebas
+
+### 13.1 Las 26 pruebas mínimas (texto literal del propietario, 09-11-2026)
+
+Congeladas por el lead con el texto literal del encargo. Las pruebas que el `architect` había reconstruido y que no coinciden con estas pasan a §13.2 (siguen siendo obligatorias). Cada fila nombra el paquete dueño y el fichero; los códigos de decisión son los del conjunto cerrado de D9-10 y D9-7.
+
+| # | Prueba del propietario | Qué tiene que pasar | Paquete y fichero |
+|---|---|---|---|
+| 1 | Miembro próximo a vencer con regla de anticipación configurable | `membership.expiring_window {daysBefore: N}` inscribe a quien vence en N días y no a quien vence en N+1; una versión nueva con otro N cambia la audiencia sin desplegar | B9-run · `H9ExpiringWindowTest.php` |
+| 2 | Miembro cuya membresía vence hoy | `daysBefore: 0` inscribe a quien vence hoy (día de Bogotá) y a nadie más; el mismo día no se repite | B9-run · `H9ExpiringTodayTest.php` |
+| 3 | Miembro vencido hace determinado número de días | `membership.expired_window {min..max}` respeta el intervalo cerrado en los dos extremos | B9-run · `H9ExpiredWindowTest.php` |
+| 4 | Miembro que renueva antes del contacto | Entre planificar y despachar renueva: el trabajo pasa a `canceled` (`success_reached`) sin llamar al canal; lo registra la reevaluación | B9-run · `H9RecheckBeforeDispatchTest.php` |
+| 5 | Miembro con dos campañas simultáneas | Un solo trabajo vivo por persona (índice parcial); la segunda estrategia queda `defer` (`lower_priority` o `daily_contact_limit`); nunca dos contactos el mismo día | B9-run + TEST9 · `H9ConcurrentStrategiesTest.php` (PG) |
+| 6 | Prospecto con solicitud expresa de seguimiento | `lead.followup_due` con `consent_status = granted` se inscribe; sin ella, `no_consent_for_purpose_channel` (N1) | B9-facts + B9-core · `H9LeadFollowupTest.php` |
+| 7 | Invitación a evento con segmento autorizado | `class.upcoming_with_capacity` (y `valuation.outdated`) inscribe solo al segmento elegible y excluye a quien ya tiene reserva o valoración próxima; nunca a toda la base | B9-facts + B9-run · `H9EventSegmentTest.php` |
+| 8 | Persona sin consentimiento para llamadas | Canal voz denegado en N1 (`no_consent_for_purpose_channel`); si hay otro canal autorizado, el selector lo toma; si no, asistido o `deny` | B9-core · `H9PolicyLadderN1Test.php` |
+| 9 | Persona con autorización para WhatsApp, pero no para voz | El selector elige WhatsApp y nunca voz; la traza lo explica | B9-core · `H9ChannelSelectorTest.php` |
+| 10 | Persona que solicita no recibir más contactos | `opted_out` → `end_exit`, supresión inmediata, cancelación de todos los trabajos pendientes de todas las estrategias, diga lo que diga la estrategia | B9-run · `H9OptOutTest.php` |
+| 11 | Contacto previamente gestionado por otro canal | Tras un contacto directo, un solo canal en la ventana (P9-8): el segundo canal queda `defer` (`cross_channel_week_rule`); el historial unificado lo muestra | B9-run · `H9CrossChannelDedupTest.php` |
+| 12 | Reglas contradictorias entre campañas | Dos estrategias con reglas opuestas sobre la misma persona: gana la escalera (N1–N7) y la prioridad; la traza nombra la regla que decidió; nunca dos contactos | B9-core · `H9ConflictingStrategiesTest.php` |
+| 13 | Dos workers evaluando la misma oportunidad | Carrera real en PG: una inscripción y un trabajo (idempotencia por ocurrencia + cerrojo por persona) | B9-run + TEST9 · `H9IdempotencyRaceTest.php` (PG) |
+| 14 | Evento duplicado | La misma ocurrencia entregada dos veces produce una sola inscripción (`occurrence_key` único) | B9-run · `H9DuplicateEventTest.php` |
+| 15 | Cambio de estado mientras el job espera | La audiencia deja de cumplirse (`context_changed`) o aparece una exclusión: el despacho cancela sin contactar | B9-run · `H9RecheckBeforeDispatchTest.php` |
+| 16 | Presupuesto diario agotado | Reserva atómica: con presupuesto para N, exactamente N en paralelo (PG); el siguiente `budget_exhausted`; cancelar o vencer libera la reserva | B9-run + TEST9 · `H9BudgetReservationTest.php` (PG) |
+| 17 | Horario o día no permitido | Domingo, festivo (Ley 2578 incluida), fuera del horario legal (Ley 2300) o del propio: `defer` al primer hueco permitido, nunca contacto | B9-core · `H9ScheduleTest.php` |
+| 18 | Error de Twilio | El canal voz (puerta del H8) devuelve error: resultado `failed` con el detalle del proveedor en la traza, sin reintento fuera de la regla, freno si supera el umbral (P9-20) | B9-run · `H9ProviderErrorsTest.php` |
+| 19 | Error de ElevenLabs | Igual que 18 por el otro proveedor; el trabajo no queda vivo | B9-run · `H9ProviderErrorsTest.php` |
+| 20 | n8n no disponible | El canal WhatsApp (outbox de Laravel) no depende de n8n para decidir: el envío queda `queued`/`failed` según la puerta y nunca se duplica al recuperarse | B9-run · `H9ProviderErrorsTest.php` |
+| 21 | Respuesta conversacional ambigua | Clasificación `ambiguous` → veredicto `needs_review` (no es un resultado del conjunto cerrado): para la secuencia y crea una tarea asistida; ninguna acción automática (regla asimétrica P9-6) | B9-core · `H9OutcomeTableTest.php` |
+| 22 | Resultado que requiere revisión humana | el resultado `human_requested` o el veredicto `needs_review` crean una tarea de la bandeja asistida y paran la secuencia; no se promete una transferencia inexistente | B9-run · `H9AssistedQueueTest.php` |
+| 23 | Cancelación inmediata de una campaña | Pausar o archivar una estrategia cancela sus trabajos pendientes en la pasada siguiente y no toca lo ya enviado | S9 + B9-run · `H9PauseCancelTest.php` |
+| 24 | Restauración segura después de una falla | Un worker que muere a mitad deja el trabajo recuperable: `outreach:replay` y la conciliación lo cierran sin duplicar ni perder la reserva | B9-run + TEST9 · `H9RecoveryTest.php` (PG) |
+| 25 | Reversión de una versión aprobada | Revertir cancela las inscripciones y trabajos de la versión revertida, no toca lo enviado y la restaurada empieza con cursor nuevo; la cadena solo crece | S9 · `H9RollbackTest.php` |
+| 26 | Nueva estrategia creada desde el CRM sin modificar el motor | En la pila real: crear, validar, simular, aprobar (cuatro ojos) y publicar en canario una estrategia nueva con hechos y condiciones ya registrados, sin tocar código ni desplegar; el planificador la ejecuta en sombra | TEST9-b (E2E) · `e2e/h9-nueva-estrategia` |
+
+### 13.2 Pruebas transversales (obligatorias, aparte de las 26)
+
+| # | Prueba | Paquete |
+|---|---|---|
+| T1 | **Gobierno y cuatro ojos reales.** La autora no aprueba, publica ni promueve. **Dos cuentas vinculadas a la misma persona tampoco.** Una cuenta sin vínculo verificado no aprueba. Un vínculo no se verifica a sí mismo. Las ventanas se respetan. La cadena firmada verifica; una entrada manipulada (UPDATE crudo, rechazado en PG; o una firma rota) → `chain_unreadable` y freno | S9 + DB9 + SEC9 |
+| T2 | **Canario y promoción.** En `CANARY` solo se alcanza a personas con un número canario activo del canal; promover exige la evidencia (horas, contactos, cero incidencias) y cuatro ojos | S9 + B9-run |
+| T3 | **Aislamiento de Legacy, n8n, OTP, motor comercial y voz.** Puertas de diff vacías; guardas estáticas; ninguna escritura en `commercial_*` ni en `marketing_*` (con un *listener* de consultas); el canario 273 y la cadena del H5 sin cambios | SEC9 |
+| T4 | **Cero red** con las banderas por defecto y con la configuración de producción | SEC9 |
+| T5 | **Datos personales.** Ninguna respuesta, traza, log, evento del libro ni resultado lleva teléfono, nombre, documento, cuerpo de mensaje ni importe; la supresión 1581 del H9 ensayada en el banco | SEC9 + OPS9 |
+| T6 | **Permisos, BOLA y BFLA.** Cada ruta con su llave; el token compartido no entra; `subjectRef` no enumerable; la bandeja solo para quien reclamó | SEC9 + B9-run |
+| T7 | **Esquema en PG.** CHECK, solo inserción, hacia delante, una vez, cadena y cursor; `REVOKE` comprobado (42501); `down()` que se niega | DB9 |
+| T8 | **Regresión por nombre:** Marketing (≈ 5 011) con la llave del motor en `off` y en `all`; Commercial (incluido `CommercialE2ETest`); Studio; Telephony; E2E de las specs del CRM | TEST9-c |
+| T9 | **Paridad con `ContactPolicy`** (D9-7): lo que ella niega por frecuencia u horario, el H9 también | B9-core |
+
+| T10 | **Gramática completa.** AND, OR, NOT, igualdad y desigualdad, intervalos cerrados en los dos extremos, fechas relativas en días de Bogotá, transición (estado anterior y actual), existencia y ausencia de eventos, recuento de contactos previos y resultado del último contacto; lógica de tres valores (`unknown` no es `false`); la misma condición en otro orden da la misma huella canónica | B9-core |
+| T11 | **Nada sin tipar.** 422 con todas las claves de error a la vez ante un hecho fuera del catálogo, un operador que no corresponde al tipo, una cadena libre, algo que parezca SQL o una expresión regular, profundidad o tamaño excesivos; nunca se evalúa nada que no haya pasado la validación | B9-core + S9 |
+| T12 | **Simulación explicable y reproducible.** La misma versión y la misma foto de hechos dan la misma decisión y la misma `traceHash` (también con `outreach:replay`); las trazas, los recuentos y las respuestas no llevan datos personales, solo `subject_ref` | B9-core + S9 + B9-run |
+| T13 | **Selección de canal determinista.** Con [WhatsApp, voz, asistido]: sin autorización de WhatsApp, voz si hay `voice_consents`; sin las dos, asistido; sin el medio del asistido, `deny` con todos los motivos; el orden declarado en la estrategia solo reordena entre canales permitidos | B9-core |
+| T14 | **Resultados normalizados por fuente.** Cada fuente del 15-11 (`simulated`, `staff`, `crm_fact`, `system`) produce un resultado del conjunto cerrado de D9-10; un código desconocido se ignora y se registra como incidente; un duplicado de la misma fuente se descarta sin avanzar la secuencia | B9-run |
+| T15 | **PARADA GLOBAL y pausas.** Abrir el freno global detiene la planificación y el despacho en la pasada siguiente; los trabajos pendientes esperan y no salen; soltarlo exige una persona distinta de quien lo abrió y una nota; la pausa por estrategia y por canal se comportan igual en su ámbito | B9-run + S9 |
+| T16 | **Precedencia N1 (ley y consentimiento).** Domingo, festivo (incluido el lunes trasladado y los de la Ley 2578), sábado a las 15:00, 07:59 de un lunes, menor de edad, `do_not_contact` de un lead hermano, sin consentimiento por finalidad y canal: `deny`/`defer` en N1 y ningún nivel inferior lo levanta | B9-core |
+| T17 | **Precedencia N2 (exclusiones y frenos globales).** Freno global, freno de canal, `UltronAbortLatch`, agente pausado, freno de voz, una persona al mando, `COMMERCIAL_AUTONOMY_ENABLED = false`: nada sale, con el motivo exacto | B9-core + B9-run |
+| T18 | **Precedencia N3 (versión comercial aprobada).** Una referencia del Studio que no cuadra → `studio_reference_invalid`; un paso con plantilla de enlace de pago con `paymentLinksEnabled = false` → denegado | B9-core + S9 |
+| T19 | **Precedencia N4 (configuración del canal).** Con el canal apagado, la constante en `false`, la plantilla sin aprobar o la categoría que no cuadra, el selector salta al siguiente canal permitido; si no queda ninguno, `deny` | B9-core |
+| T20 | **Precedencia N5 (estrategia aprobada).** El tope de contactos, la ventana, el horario propio, el enfriamiento y el alcance canario se cumplen aunque N6 o N7 «quieran» más contactos | B9-core |
+| T21 | **Precedencia N6 (contexto verificado).** Un objetivo ya cumplido sale como `converted`; `human_requested` reciente → derivar y parar; la audiencia que dejó de cumplirse → `context_changed` | B9-core + B9-run |
+| T22 | **Precedencia N7 (instrucciones conversacionales).** «Llámame el domingo» aplaza al primer hueco legal permitido, nunca al domingo; «mejor por WhatsApp» solo reordena entre los canales permitidos; ninguna instrucción conversacional levanta una negación de N1–N6 | B9-core |
+| T23 | **Seguimientos solo si la regla lo permite.** `no_answer` → `next_step` solo si `on.no_answer` lo dice; un resultado desconocido no avanza; la máquina nunca acorta un intervalo mínimo | B9-core |
+
+*Correspondencia con la numeración antigua de este apartado (informes y briefs anteriores al 20:30 UTC del 09-11): «#7 gramática» = T10, «#8 sin tipar» = T11, «#9 reproducible» = T12, «#10 canal» = T13, «#15 PARADA GLOBAL» = T15, «#17 resultados» = T14, «#18 seguimientos» = T23, «#19–#25 precedencia N1–N7» = T16–T22. Lo demás de la matriz reconstruida coincide con una fila literal de §13.1.*
+
+### 13.3 Casos límite que TEST9 cubre en los fixtures
+
+- **Calendario:** la medianoche de Bogotá; 07:59, 08:00, 18:59 y 19:00 de un día laborable; el sábado a las 14:59 y a las 15:00; los lunes festivos trasladados; la Ley 2578 de 2026 (Chiquinquirá, «por confirmar», E2-1 del H8); el 29 de febrero.
+- **Fechas:** `membership_end_date` nulo; vencida y renovada el mismo día [el tipo exacto de la columna, por confirmar: DB9 lo verifica].
+- **Identidad:** un socio con dos leads (el *opt-out* de un hermano); un lead convertido en socio (la clave unificada, el socio manda); un teléfono compartido por una familia (callan los dos: la regla de `MarketingMessageDispatcher.php:79-84`).
+- **Edad:** un menor que cumple 18 hoy.
+- **Prioridad:** dos estrategias con la misma prioridad (desempata el uuid).
+- **Presupuesto:** exactamente igual al tope.
+- **Carreras:**
+  - un resultado que llega antes de que el trabajo quede `started`;
+  - una reversión durante `dispatching`;
+  - un freno durante la pasada del despachador;
+  - un reloj inyectado distinto del de la base (el puro nunca lee el reloj).
+- **Catálogo:** una versión antigua con un hecho retirado (`catalog_incompatible`).
+
+---
+
+## 14. Fases de despliegue
+
+| Fase | Qué queda | Criterio para entrar | Coste | Autoriza |
+|---|---|---|---|---|
+| **1. Todo apagado** | Código y migraciones; todas las banderas apagadas; la constante en `false`; el bloque del programador sin tareas; el smoke con cero red; los recuentos del esquema | La puerta 4 | 0 | El propietario (orden de despliegue) |
+| **2. Sombra** | `MODE=shadow`, el programador y el monitor encendidos; estrategias aprobadas y publicadas en canario por dos personas vinculadas; ≥ 7 días mirando decisiones y volúmenes [P9-11]. **Ni un contacto** | La fase 1 estable 24 h; las dos primeras personas vinculadas (por consola); [P9-17] y [P9-18] decididos | 0 | **Autorización escrita** |
+| **3. Asistido** | `MODE=live` con solo el asistido encendido y su tope diario; la bandeja la trabaja el personal; resultados `staff`; evidencia del canario y promoción | La sombra sin hallazgos; [P9-12] decidido | Horas del personal | **Autorización escrita** |
+| **4. WhatsApp automático en canario** | W9 desplegado; la constante abierta (`outreach(sends-open)`); plantillas aprobadas por Meta; números canarios de WhatsApp activos (fase 2 del H6); presupuesto y tope pequeños | W9 con sus puertas; [P9-13] a [P9-15] decididos; **visto bueno legal** | Por mensaje, dentro del techo | **Autorización escrita** |
+| **5. WhatsApp a la audiencia autorizada** | Promoción con evidencia; topes según [P9-18] | La fase 4 estable y la evidencia | Ídem | **Autorización escrita** |
+| **6. Voz por estrategia** | V9 desplegado (Enmienda 16 del H8) | Las fases 4a y 4b del H8 activas; [P9-16]; visto bueno legal | Por minuto, dentro del techo | **Autorización escrita** |
+
+---
+
+## 15. Criterio de cierre
+
+**`HITO_9_COMPLETED`** cuando:
+- TEST9, DB9, B9-core, B9-facts, S9, B9-run, FE9, SEC9, OPS9, PERF9 y DOC9 están confirmados y REV9 no tiene bloqueantes;
+- la fase 1 está en producción, y la 2 (sombra) y la 3 (asistido) se ejecutaron con su evidencia;
+- la documentación cubre el hito.
+
+El envío automático (W9 en adelante) se cierra en su propia enmienda y no condiciona este cierre.
+
+**Si una dependencia externa lo impide:** **`HITO_9_IMPLEMENTED_WITH_EXTERNAL_DEPENDENCY`**, con esta matriz al día. Nunca se declara un hecho lo que es una dependencia.
+
+| Dependencia externa | Bloquea | Dueño |
+|---|---|---|
+| Una segunda persona real con acceso y su vínculo verificado (y las dos primeras por consola) | Aprobar y publicar (fase 2) | Propietario |
+| Las decisiones de §17 «antes de una fase» | Fases 2–6 | Propietario |
+| Plantillas aprobadas por Meta, con su categoría | Fase 4 | Propietario + Meta |
+| Autorizaciones por finalidad y canal de socios (C9) y fuente válida (asesoría) | Fases 4–6 para socios | Propietario + asesoría |
+| Las fases 2 del H6 y 4a/4b del H8 | Canario de WhatsApp (4) y voz (6) | Propietario |
+| El visto bueno legal (Ley 1581, Ley 2300, RNE y encargados) | Cualquier envío automático | Propietario + asesoría |
+
+---
+
+## 16. Riesgos y puntos de no retorno
+
+| # | Riesgo | Impacto | Mitigación en el contrato |
+|---|---|---|---|
+| R9-1 | **Contactar sin una autorización válida por finalidad y canal** (Ley 1581 y Ley 2300). La mayoría de los socios no tiene autorización registrada (§1.6), y la de WhatsApp de un lead no dice finalidad | Sanción de la SIC y daño de reputación; es irreversible | Negar por defecto (N1); la matriz de D9-15; la sombra y el asistido primero; el envío automático solo con C9, el visto bueno legal y la constante abierta en un commit con autorización |
+| R9-2 | **Daño colateral sobre WhatsApp Legacy y el número compartido.** W9 toca `app/Services/Marketing/**`. Además, la calidad del número en Meta baja con bloqueos y bajas, y Meta puede limitar el número: afectaría a ULTRON y a todo el Inbox | Pérdida del canal de ventas de hoy | W9 fuera del 15-11, con diff enumerado y regresión de Legacy; canario por números del H6; topes pequeños; autoapertura del freno por pico de *opt-out* o de fallos; plantillas `utility` para cobranza |
+| R9-3 | **Calendario.** Seis días, con el equipo también en las fases del H8 y los cortes por límite de uso (E3-8 y E4-11 del H8) | Puertas sin cerrar o calidad comprometida | Corte M/O/S (§12); ficheros exclusivos para paralelizar; el núcleo puro primero (puerta 1, 11-11); nada sale hacia personas en ninguna rama del 15-11 |
+| R9-4 | **Enmendar el principio del H8** «una automatización no llama» (V9) | Llamadas automáticas a quien no debe | V9 aparte, tras la 4a con evidencia y la 4b; solo estrategias publicadas a cuatro ojos por personas distintas; todos los motivos de `OutboundPolicy` intactos; revisión de SEC; Enmienda 16 del H8 |
+| R9-5 | **Dos decisores sobre la misma persona:** el motor actual, si alguien enciende su autonomía, y el H9 | Contactos duplicados o contradictorios | `legacy_autonomy_on` (N2); el presupuesto de contacto cuenta todos los salientes proactivos de la IA; NBA9 |
+| R9-6 | **Cuatro ojos «reales» dependen de datos de identidad del personal** (Ley 1581 para empleados) y de una segunda persona | Gobierno bloqueado, o vínculos mal hechos | Vínculo mínimo (solo la identidad, sin copiar el documento); arranque por consola con autorización; el riesgo de bloqueo es conocido desde el H5 |
+| R9-7 | **Volumen y rendimiento** de los barridos sobre todos los socios | Base saturada en las horas pico (memoria del pool de FPM) | Prefiltros indexados; ≤ 500 por pasada; barridos fuera de la franja pico (cadencia del catálogo); PERF9 mide antes |
+| R9-8 | **El motor en `off` en producción no alimenta `commercial_events`** (`COMMERCIAL_EVENTS_ENABLED` [por confirmar]) | Disparadores `crm_fact` sin datos | Los periódicos no dependen de él; el panel enseña las fuentes sin datos; paso 0 del lead |
+| R9-9 | **Clasificador mal calibrado** (AI9) | Contactos indebidos | Regla asimétrica: la IA solo frena o deriva |
+
+**Puntos de no retorno:**
+1. Un mensaje o una llamada que salió hacia una persona: no se puede deshacer.
+2. Enviar una plantilla a Meta para su revisión: queda registrada en su cuenta.
+3. Las migraciones en producción: son aditivas, `down()` se niega y nunca hay `rollback`.
+4. Las entradas de la cadena, los resultados, las decisiones y los frenos: son de solo inserción.
+5. Un vínculo cuenta → persona verificado: se revoca, no se borra.
+
+Todo lo anterior a (1) es reversible por banderas, pausa o reversión.
+
+---
+
+## 17. Decisiones del propietario
+
+**Antes de implementar** (cambian el código del 15-11; el lead las congela como supuestos si el propietario no responde a tiempo):
+
+| Id | Decisión | Recomendación |
+|---|---|---|
+| **P9-1** | Posición del H9 respecto al motor comercial | **A**: una capa sobre el motor, sin escribir sus tablas ni reescribir sus reglas (D9-1); NBA9 para converger |
+| **P9-2** | Nombre en código y permisos | **«Estrategia»** (`strategy`); en la interfaz, «Campañas automáticas (estrategias)». Evita el choque con las campañas de Meta del H6 |
+| **P9-3** | Recorte del 15-11 | **M comprometido y O como objetivo**; el envío automático en los siguientes (§12) |
+| **P9-4** | Cuatro ojos | **Por persona verificada** (vínculo cuenta → identidad, arranque por consola). La alternativa del H5 (por cuenta) no cumple el encargo |
+| **P9-5** | Diseño de la puerta de WhatsApp (para W9) | **W-B**: Laravel, por el despachador con un método de plantillas y un diff enumerado (no n8n) |
+| **P9-6** | Papel de la IA en los resultados | **Solo frena o deriva** (regla asimétrica), apagada por defecto |
+| **P9-7** | Comercial frente a cobranza | **Finalidades cerradas**; nunca las dos el mismo día; cobranza solo con `utility` y sin ofertas; sin contacto comercial a quien tenga cartera vencida de más de N días (N = 15 propuesto) |
+| **P9-8** | Frecuencia por defecto | **La lectura estricta**: 1 contacto al día por persona sumando canales; tras un contacto directo, un solo canal en la semana; como mucho 2 a la semana; 48 h entre contactos. Solo se puede endurecer. Pendiente de asesoría |
+| **P9-9** | Qué se guarda y cuánto tiempo | **Solo las decisiones de personas que califican**, con trazas acotadas sin datos personales; retención de 18 meses, con supresión 1581 |
+| **P9-10** | La «versión comercial aprobada» sin una versión del Studio aprobada | **Permitir la línea base** (`LEGACY_BASELINE_V1`) como referencia, marcada en la estrategia; en cuanto exista una versión aprobada, las versiones nuevas la referencian |
+
+**Antes de una fase:**
+
+| Id | Decisión | Recomendación |
+|---|---|---|
+| **P9-11** | Sombra (fase 2) | ≥ 7 días en sombra antes del asistido; las dos primeras personas vinculadas por consola |
+| **P9-12** | Asistido (fase 3) | Quién trabaja la bandeja (Administrador y, si se quiere, los asesores comerciales) y cuántos trabajos al día |
+| **P9-13** | Plantillas de WhatsApp | Su contenido, categoría e idioma; si `first_name` puede ir como variable; quién las registra en Meta; precio por mensaje y techo diario |
+| **P9-14** | Socios sin lead de WhatsApp | Cómo se recoge su autorización (en el contrato, un formulario o la app) y cómo se crea su identidad de WhatsApp sin tocar la atribución de Meta (C9) |
+| **P9-15** | Fuentes válidas de autorización por finalidad y canal | Con asesoría legal. Hasta entonces: WhatsApp comercial solo con `consent_status = granted`; voz solo con `voice_consents`; **cobranza, ninguna** |
+| **P9-16** | Voz por estrategia | Sí, como Enmienda 16 del H8, solo después de la 4a con evidencia, la 4b y el visto bueno legal |
+| **P9-17** | Horario propio | Más estricto que la ley, por ejemplo de lunes a viernes de 09:00 a 18:00 y sábados de 09:00 a 13:00 |
+| **P9-18** | Topes | Por canal y día, por estrategia y día, inscripciones nuevas al día y presupuesto en US$ |
+| **P9-19** | Canario y promoción | 24 h, 3 contactos, 0 incidencias, cuatro ojos; los números canarios de WhatsApp activos (fase 2 del H6) |
+| **P9-20** | Frenos | Umbrales de autoapertura (*opt-out* > 5 % en 24 h; fallos > 20 %) y si quien abrió un freno puede soltarlo (se recomienda que no) |
+| **P9-21** | Reparto por defecto de las 10 llaves (D9-13) | La tabla de D9-13 |
+| **P9-22** | Visto bueno legal general | Antes de cualquier envío automático: Ley 1581, Ley 2300 (arts. 2, 3 y 5), RNE y contratos con los encargados (Meta y OpenAI) |
+| **P9-23** | Eventos especiales del gimnasio y notificaciones de la app como canal | Para después (EV9): el 15-11, clases y valoraciones como eventos |
+| **P9-24** | Encender `COMMERCIAL_EVENTS_ENABLED` (eventos y transiciones del motor comercial) antes de la fase de sombra | **Sí, antes de la sombra**, tras leer qué escribe (`commercial_events`) y su coste; sin ella las condiciones de eventos dan `unknown` (L9-26) |
+
+---
+
+## 18. Supuestos y preguntas abiertas
+
+**Supuestos** (si alguno es falso, cambia el paquete que se indica):
+1. **[supuesto]** En producción, `COMMERCIAL_AUTONOMY_ENABLED=false` y `MARKETING_FOLLOWUPS_SCHEDULER=false`. Los dice `docs/ops/AUDITORIA-PRE-META.md:195` para la autonomía; el lead lo confirma en el paso 0. Si alguna está encendida, N2 lo niega y B9-run no cambia.
+2. **[supuesto]** `COMMERCIAL_EVENTS_ENABLED` en producción, desconocido. Si está apagada, los disparadores `crm_fact` quedan sin datos, y los periódicos no dependen de ella (R9-8).
+3. **[supuesto]** `users.membership_end_date` es una fecha sin hora y se compara en días de Bogotá. DB9 lo verifica; si es `datetime`, B9-facts normaliza.
+4. **[supuesto]** No hay versiones del Studio `APPROVED` en producción (el H5 está en la fase 1). De ahí [P9-10].
+5. **[supuesto]** Hoy hay una sola persona real con permisos de aprobar o publicar. De ahí la dependencia externa de §15.
+6. **[supuesto]** La matriz de §13.1 corresponde a las 26 del encargo (reconstruida desde el resumen).
+7. **[supuesto]** El H9 sale de la rama del H8 **cuando el lead haya confirmado el trabajo del H8 en curso**. El 09-11-2026, mientras se escribía este contrato, el árbol compartido recibía cambios de otros agentes del H8 (B8-g, S8-d y OPS8-c: unos 60 ficheros modificados y 15 nuevos, ninguno de este contrato). Dos de esos ficheros los toca también el H9: `app/Http/Controllers/Crm/UltronStudio/UltronStudioVoiceController.php` (S9, solo `STUDIO_ROUTE_COUNT`, hoy 77) y `.env.example` (B9-run, solo el bloque del H9). Si al congelar ha cambiado el recuento de rutas del Studio, §7 y §10 se ajustan al valor nuevo + 29.
+
+**Preguntas que cambian el plan:**
+1. **¿El texto literal de las 26 pruebas del propietario coincide con §13.1?** El lead las reconcilia antes de congelar: es la única pregunta que bloquea el paso 0.
+2. **¿Corte M u O para el 15-11?** ([P9-3]). Cambia si la fase 1 se despliega el 15-11 o la semana siguiente.
+3. **¿Cuatro ojos por persona ya en el 15-11?** ([P9-4]). Si el propietario elige el control organizativo, sobran una tabla, 4 rutas y la orden de arranque, y el encargo no queda cumplido en ese punto.
+
+**Fuentes externas consultadas el 09-11-2026:**
+- Ley 2300 de 2023 (arts. 1–5 y 9): normograma de la DIAN (`normograma.dian.gov.co/dian/compilacion/docs/ley_2300_2023.htm`) y Gestor Normativo de Función Pública (`funcionpublica.gov.co/eva/gestornormativo/norma.php?i=213990`).
+- Precios por mensaje y categorías de plantillas de WhatsApp Business: documentación de Meta (`developers.facebook.com/documentation/business-messaging/whatsapp/pricing`).
+
+Las tarifas de Colombia y la política de *opt-in* de Meta quedan **[por confirmar]** en W9.
+
+## Congelación (lead, 09-11-2026 20:30 UTC)
+
+El contrato queda **congelado** para empezar el paso 1 con estos supuestos, que el propietario puede cambiar por escrito (cada cambio será una enmienda):
+
+| Decisión | Supuesto adoptado (= recomendación del `architect`) |
+|---|---|
+| P9-1 | Opción **A**: capa sobre el motor comercial existente; las tablas `commercial_*` no se escriben |
+| P9-2 | **«Estrategia»** en código y permisos; en la interfaz «Campañas automáticas (estrategias)» |
+| P9-3 | Corte **M comprometido, O como objetivo** para el 15-11; W9/C9/AI9/V9/EV9/NBA9 después, cada uno con su enmienda |
+| P9-4 | Cuatro ojos **por persona verificada** (vínculo cuenta → identidad, arranque por consola) |
+| P9-5 | WhatsApp por la puerta de Laravel (`MarketingMessageDispatcher` → outbox, método de plantillas), nunca por n8n |
+| P9-6 | La IA **solo frena o deriva**; apagada por defecto |
+| P9-7 | Finalidades cerradas; comercial y cobranza nunca el mismo día; cobranza solo `utility`; sin contacto comercial con cartera vencida > 15 días |
+| P9-8 | Frecuencia estricta: 1 contacto/día/persona sumando canales; 1 canal por semana tras contacto directo; ≤ 2/semana; 48 h entre contactos; solo endurecible |
+| P9-9 | Se guardan solo decisiones de personas que califican, con trazas sin datos personales; 18 meses y supresión 1581 |
+| P9-10 | `LEGACY_BASELINE_V1` como referencia comercial mientras no exista una versión del Studio aprobada |
+
+Además, del encargo literal del propietario: autorizado **diseñar, implementar y probar en local**; **no** autorizado desplegar, llamar, enviar, activar campañas, consumir servicios externos, comprar, destruir, tocar ULTRON Legacy, WhatsApp/n8n en producción ni el OTP, ni commit/push/deploy sin orden expresa. Todo nace apagado y con reversión. §13.1 reconciliada con las 26 pruebas literales; las reconstruidas pasan a §13.2.
+
+**Paso 0 leído en producción (solo lectura, 09-11-2026 20:35 UTC):** `COMMERCIAL_NBA_ENABLED`, `COMMERCIAL_EVENTS_ENABLED`, `COMMERCIAL_AUTONOMY_ENABLED` y `MARKETING_FOLLOWUPS_SCHEDULER` = `false` (el motor comercial detecta pero no ejecuta ni programa nada); `commercial_opportunities` = 0 filas; `marketing_leads` = 837, de los cuales 86 con `consent_status = granted` (el universo hoy autorizable por WhatsApp comercial; los socios de recepción no tienen autorización registrada, riesgo 1 de §16).
+
+## Decisiones del lead durante el paso 1 (09-11-2026, desde 20:40 UTC)
+
+Respuestas a las dudas que los paquetes dejan como «Q-n para el lead». Mandan sobre §6 donde lo detallan. Siempre la opción más estricta compatible con el contrato.
+
+| Id | Paquete | Duda | Decisión |
+|---|---|---|---|
+| L9-1 | DB9 Q-1 | ¿Tabla de ocurrencias de eventos? | **No.** `occurrence_key` UNIQUE en `outreach_enrollments`; una tabla aparte guardaría filas de quien no califica (P9-9) |
+| L9-2 | DB9 Q-2 | Reserva de presupuesto | **Sí, tabla de contadores** (día de Bogotá × alcance estrategia/canal) con `UPDATE … WHERE reserved + n <= cap` y `CHECK (reserved <= cap)`: la reserva atómica de D9-8 no depende del cerrojo consultivo. B9-run reserva y libera solo por esa tabla |
+| L9-3 | DB9 Q-3 | Evidencia del canario, catálogo por versión, historial, incidentes | **Sin tablas nuevas:** la evidencia va en la cadena (`evidence`, como el H8); el catálogo por versión es `catalog_version` con CHECK de forma; el **historial unificado por persona es un modelo de lectura** (consulta indexada por `subject_key` sobre decisiones, trabajos y resultados), no una tabla, y `outreach_outcomes` debe llevar lo que el historial necesita (canal, estrategia, motivo, resultado, próxima acción); los incidentes usan el `IncidentRecorder` existente |
+| L9-4 | DB9 Q-4 | `subject_ref` | **Se guarda** (64 hex, indexado) junto a `subject_key`, derivado con la subclave `outreach-subject/1` del contrato. Rotar la clave de la aplicación lo deja obsoleto: OPS9 lo documenta en el runbook (rederivar en lote, nunca a mano) |
+| L9-5 | DB9 Q-5 | Retención de 18 meses | **Columna «una vez» de supresión** (`*_redacted_at`) con el CHECK de `subject_key` admitiendo la forma suprimida y sin chocar con los UNIQUE |
+| L9-6 | DB9 Q-6 | FK a `identities` | **Solo** en `person_bindings.identity_id`; los demás `*_person_id` son instantánea sin FK (como los actores del Studio). Añadir la FK pide SHARE ROW EXCLUSIVE sobre una tabla viva: con `lock_timeout` 5 s cae limpia (55P03) y se reintenta; OPS9 lo pone en el runbook de la fase 1 (hora de poco tráfico) |
+| L9-7 | DB9 Q-7 | Frenos a cuatro ojos | **Cuentas y personas distintas**, las dos (P9-4 y P9-20): quien abre un freno no lo suelta, ni con otra cuenta |
+| L9-8 | TEST9-a Q-1 | Nombres de fixtures | `outcome-transitions.json` y `strategy-chain-vectors.json` (los nombres del contrato); B9-core los lee así |
+| L9-9 | TEST9-a Q-2 | Límites de D9-7 sin código en N1 | Se añaden al conjunto cerrado de N1: `weekly_contact_limit` (2 por semana) y `min_hours_between_contacts` (48 h); paridad con `ContactPolicy` |
+| L9-10 | TEST9-a Q-3 | Código del segundo canal en la semana | `cross_channel_week_rule` (el literal `cross_channel_cooldown` de §13.1 #11 queda corregido) |
+| L9-11 | TEST9-a Q-4 | `daysBefore` | De 0 a 60 (el 0 es «vence hoy», prueba #2); D9-3 queda enmendado |
+| L9-12 | TEST9-a Q-5 | Resultados fuera del conjunto cerrado | Un error del proveedor es `failed` (con el detalle del proveedor en la traza); `needs_review` es un **veredicto** que para la secuencia y crea una tarea asistida, no un resultado |
+| L9-13 | TEST9-a Q-6 | Dominios de `plans` y `class_types` | Viven en la base; el validador recibe una instantánea de sus valores |
+| L9-14 | TEST9-a Q-7 | Tipos de los hechos | Los fija `catalog-snapshot.json` (41 eventos, 42 hechos; `catalogHash` `4580c447…` en `2026-11-10.1` y `ce5fcdab…` en `2026-11-10.2`, L9-33); se añaden tres hechos `date_relative`: `membership.end_date`, `valuation.next_date`, `lead.last_inbound_at` |
+| L9-15 | TEST9-a Q-8 | Horario propio | Código propio **`calendar_outside_own_hours` en N5**, distinto de `calendar_outside_legal_hours` (N1): la traza distingue la ley de la política propia |
+| L9-16 | TEST9-a Q-9 | Canales no vivos en sombra | En sombra, `channel_not_live` es aviso (permite simular WhatsApp y voz antes de W9/V9); en los modos vivos es negativa |
+| L9-17 | TEST9-a Q-10 | Socio sin fecha de nacimiento | `unknown`: no se infiere ni se niega; la asesoría legal decide si debe negarse (P9-15) |
+| L9-18 | TEST9-a Q-11, Q-12 | Umbrales del clasificador; tope de inscripciones | 50 y 90 sobre 100 (solo AI9); `limits.newEnrollmentsPerDay ≤ 500` (el tope de la pasada de D9-8) |
+| L9-19 | TEST9-a Q-13 | Canonicalización | «Otro orden» = orden de las claves y de los valores de `in`; los hijos no se reordenan (otra huella, mismo valor: `equivalence`) |
+| L9-20 | TEST9-a Q-14 | Regla de P9-7 (cartera vencida) | Entra en la escalera en **N6** como `collections_overdue_blocks_commercial`, con el hecho `receivable.*` como `policyInput`; umbral `outreach.collections.commercial_block_days` = 15 por defecto, la estrategia solo puede endurecerlo |
+| L9-21 | TEST9-a Q-15 | `catalog_incompatible` | Nivel **N3** (referencias del Studio, junto a `studio_reference_invalid`) |
+| L9-22 | TEST9-a Q-16 | «Contacto directo» (Ley 2300 art. 3) | Cualquier contacto contado, también un intento sin respuesta (lectura estricta); la asesoría puede acotarlo |
+| L9-23 | TEST9-a Q-17 | Mensaje firmado de la cadena | Se firma el **canónico ordenado por bytes** (el ejemplo de D9-11.3 no es canónico); `approvedByPerson` es null en pausa, reanudación, reversión y retiro; `status ∈ {active, paused, off}` |
+| L9-24 | TEST9-a Q-18 | `enrollment_window_over` | Sale de N7 con ese motivo, como dice D9-7 |
+| L9-25 | TEST9-a O-3, O-4, O-5 | Textos de traza, `subject_ref`, consecuencias de la escalera | B9-core exporta `trace-text-cases.json` desde su implementación (los textos en español que FE9 espeja; el lead los revisa); `subject_ref` son los 64 hex completos (L9-4) y B9-facts aporta sus vectores; la tabla de qué trabajo se cancela y cuál espera (`waitsForRelease`, `effect`) la fija B9-run en su informe |
+| L9-26 | B9-facts Q-1 | Eventos y transiciones con `COMMERCIAL_EVENTS_ENABLED` apagada (como hoy en producción) | Salen «sin datos»: toda condición que los use da `unknown` y no inscribe. Las condiciones de hechos (vencimientos, cartera, asistencia, clases, valoraciones) funcionan sin eventos. Encender esa bandera antes de la fase de sombra es decisión del propietario (**P9-24**), tras revisar qué escribe y cuánto cuesta |
+| L9-27 | B9-facts Q-8 | Dos prospectos con el mismo teléfono | Son dos personas (el teléfono no une personas), pero el tope de un contacto al día se aplica **también por teléfono**: la foto expone `phone_ref` (HMAC del teléfono normalizado con la subclave `outreach-phone/1`, 64 hex, o `unknown`) y `ContactBudget` niega con `daily_contact_limit` si ese `phone_ref` ya tuvo un contacto hoy; con `unknown` no se cruza |
+| L9-28 | B9-facts Q-5, Q-6 | Lecturas fuera de §6.3 | `marketing_ai_actions` entra en §6.3 como tabla de **solo lectura** (señales `do_not_contact`); `Outreach\Facts` importa las reglas puras del H8 (calendario Ley 2300, festivos, frecuencia de voz) y `PaymentController::PAID_STATUSES`; SEC9 las añade a su lista permitida |
+| L9-29 | B9-facts (para DB9) | Índices que los prefiltros dan por hechos y no existen | Tercera migración `2026_11_12_100003_add_outreach_read_indexes.php`, solo índices: `users(membership_end_date)`, `payment_transactions(user_id)`, `class_reservations(member_id)`, `voice_contacts(source_type, source_id)` y uno en `receivables` por la columna que filtra el prefiltro; en PG `CREATE INDEX CONCURRENTLY IF NOT EXISTS` con `$withinTransaction = false`; OPS9 la ejecuta en hora de poco tráfico. Clave de ciclo de clases: `cls:{class_id}:{session_date}` (la fila de sesión solo nace al iniciar la clase) |
+| L9-30 | B9-facts (cierre) | `phone_ref` y `phone_refs`; tope por teléfono | La foto expone `phone_ref` (número principal: el del prospecto más reciente con número válido o el de la ficha de socio) y `phone_refs` (todos, ordenados), HMAC con `outreach-phone/1` y la normalización de la puerta de WhatsApp; un fijo cuenta como sin teléfono (sin normalización de fijos por ahora; V9 lo revisa). `ContactBudget` aplica el tope diario con la **lista completa**; B9-run guarda `phone_ref` en el trabajo y la tabla de contadores (L9-2) admite el ámbito `phone` por día de Bogotá; índice `outreach_jobs(phone_ref, budget_day)` |
+| L9-31 | B9-facts (cierre) | Índices refinados para la migración 100003 | `users(membership_end_date)` (o parcial sin congelados), `payment_transactions(user_id, status)`, `class_reservations(member_id, session_date)`, `receivables(status, due_at)`, `voice_contacts(source_type, source_id)`; los existentes, comprobados con `pg_indexes` (`informe-backend-facts.md` §8.1) |
+| L9-32 | B9-core (cierre); verificado por el lead en la fuente oficial | Horario legal frente a la ventana del H9 | La **Ley 2300 de 2023, art. 3**, permite contactar de lunes a viernes de **07:00 a 19:00** y sábados de **08:00 a 15:00**, nunca domingos ni festivos; una vez al día; sin varios canales en la misma semana tras un contacto directo. La ventana N1 del H9 es **más estricta**: ley ∩ horas de silencio de `ContactPolicy` (21:00–08:00) = lunes a viernes [08:00, 19:00) y sábados [08:00, 15:00), semiabierta (paridad T9). Los textos de las trazas no atribuyen a la ley el límite de las 08:00: dicen «horario permitido» y aclaran que la ley permite desde las 07:00 entre semana |
+| L9-33 | B9-core (cierre) | `phone` en la escalera; catálogo `2026-11-10.2` | `ContactBudget::check()` y `PolicyLadder` reciben `phone = {refs, contacts}` como entrada **opcional** (hacerla obligatoria rompería B9-facts y el fixture); **B9-run y S9 (simulación) la pasan siempre**: teléfono desconocido = `refs: []` (nunca el literal `unknown`). La clave de ciclo de clases (L9-29) lleva el catálogo a `outreach-catalog/2026-11-10.2` (huella `ce5fcdab…`, `keyVersion` 2 del evento de clases): TEST9-a regenera `catalog-snapshot.json`, `conditions-cases.json` y `strategy-content-cases.json`. Texto de las trazas: «las horas de silencio del gimnasio terminan a las 08:00» (`config/commercial.php` `quiet_hours_start` 21, `quiet_hours_end` 8) |
+| L9-34 | DB9 (cierre); lead | Ramas y el parche de recuentos (Anexo A de DB9) | El árbol de trabajo comparte el cierre del H8 y el H9 sin confirmar. **Orden de commits (cuando el propietario lo ordene):** primero el cierre del H8 **solo con rutas del H8** sobre `feat/ultron-studio-h8-voice` → `main`; después una rama nueva **`feat/ultron-studio-h9`** desde ese HEAD con todo lo del H9 (`Outreach/**`, `StudioStrateg*`, `Stream/**`, migraciones `2026_11_12_*`, fixtures y pruebas del H9, `ops/*h9*`, `plans/informes-h9/`, los contratos y guías del H9). El **parche del Anexo A** de DB9 (las 4 pruebas que cuentan objetos `ultron_studio_%`: PG 68/84/6/18 → 123/137/9/25, SQLite 55 → 108 disparadores, libro de 7 a 11 sujetos) **no se aplica en el árbol hasta la rama del H9**, porque esas pruebas son ficheros del H8 y romperían su regresión; mientras tanto esas 9–10 pruebas están en rojo en el árbol compartido con las migraciones del H9 presentes (conocido). Recuentos de DB9 para `h9-schema-check.sql`: `ultron_studio_%` 123 disparadores / 137 CHECK / 9 parciales / 25 tablas (gobierno del H9: 55 / 53 / 3 / 7); `outreach_%` 51 / 75 / 3 / 8; 33 funciones nuevas sin SECURITY DEFINER; `ultron_studio_forbid()` md5 `4ad748b5f17f09b398f7f641c197d7ee` sin cambio; privilegios de la aplicación `ra---` en las 5 tablas de solo inserción y `raw--` en las 10 con estado (sin DELETE); SQLite: Studio 108 disparadores, `outreach_%` 46, parciales 9 y 3 |
+| L9-35 | DB9 (cierre) | Índice `voice_contacts (source_type, source_id)` | **Se pospone a V9** con su enmienda: la protección 9 dice que las tablas `voice_*` no cambian el 15-11, y la ida y vuelta de `VoiceSchemaTest` (DB8) falla si se añade ahora; la tabla está vacía hoy. La 100003 crea 4 índices (`users(membership_end_date)` sin parcial porque una consulta busca también `IS NULL`; `payment_transactions(user_id, status)`; `class_reservations(member_id, session_date)`; `receivables(status, due_at)`), idempotente y rehace índices inválidos. OPS9 mide tamaños en el paso 0 con la consulta de solo lectura de `informe-db.md` §13 y aplica la 100003 como paso aparte |
+| L9-36 | S9 (en curso); lead | Fronteras con los ficheros del H5–H8 | **Ningún paquete del H9 modifica ficheros existentes del H5–H8** (controladores, servicios, pruebas, rutas de voz) salvo los traspasos de §11. S9 había cambiado `UltronStudioVoiceController::STUDIO_ROUTE_COUNT` para que apuntara a su propia clase: en una copia sin el H9 el controlador de voz fallaba con «clase no encontrada» y el commit del cierre del H8 habría roto producción. El lead lo revirtió (77, el total del H8). El total con estrategias vive en S9 (`STUDIO_ROUTE_COUNT_WITH_STRATEGIES`), y las pruebas que atan el total a las rutas reales (`UltronStudioVoiceRoutesTest`, `UltronStudioLabNoEngineEffectsTest`, `TelephonyRoutesTest`) se adaptan **en la rama del H9** sumando esa constante, nunca cambiando el 77. Las 30 rutas de S9 necesitan limitadores con nombre y su mapa en `AuthorizationMap` (hoy `auth:coverage --unmapped` las lista) |
+| L9-37 | S9 (cierre) Q-1, Q-2, Q-6 | Controladores, rutas y limitadores del gobierno | Controladores en `Crm/UltronStudio/UltronStudioStrateg*Controller.php` (la lista blanca de `UltronEngineIsolationTest` solo admite ese espacio); **30 rutas bajo `strategies/**`** (las 29 de §7 + `POST strategies/{uuid}/simulations`, la simulación del borrador); total del Studio con estrategias **107**, en `UltronStudioStrategyController::STUDIO_ROUTE_COUNT_WITH_STRATEGIES`; limitadores con nombre `ultron-studio-read` / `-write` / `-evidence`. La tabla ruta → llave está en `informe-studio.md` §2 |
+| L9-38 | S9 Q-3, Q-5 | Lo que toca ficheros del H5–H8 se hace **en la rama del H9**, nunca en el árbol compartido antes del commit del H8 | Ampliar `StudioAuditEvent::SUBJECT_TYPES` con `strategy`, `strategy_version`, `message_template` y `person_binding` (hoy el libro los escribe pero `GET audit?subjectType=…` los rechaza con 422: limitación conocida hasta la rama); añadir las 30 rutas a `AuthorizationMap` y las 6 variables `ULTRON_STUDIO_STRATEGIES_*` al ejemplo de entorno (bloques literales en `informe-studio.md` §2); adaptar las 10 pruebas del H5–H8 que atan el total de rutas (`informe-studio.md` §6.3 y §7.3) sumando la constante de S9. Hasta entonces esas pruebas están en rojo en el árbol compartido y S9 tiene una prueba que falla a propósito |
+| L9-39 | S9 Q-4, Q-13 | Persona verificada también para pausar, revertir, congelar una versión y crear una plantilla | Sin persona verificada no hay mensaje firmable (L9-23) ni comparación de personas al aprobar (dos cuentas de la misma persona se colarían). Una cuenta sin vínculo **sí** puede echar la **PARADA GLOBAL** (freno de B9-run) |
+| L9-40 | S9 Q-7, Q-8 | Evidencia del canario y hechos reales en la simulación | Promover falla cerrado sin evidencia real (solo existe con envíos: asistido o W9); la simulación sobre muestra real usa `Outreach\Facts` **en solo lectura** desde `StudioStrategySimulator` (lista en `informe-studio.md` §6.4): SEC9 lo admite en su lista blanca con prueba de solo lectura; el resto del Studio sigue limitado a `Outreach\Core` (D9-2) |
+| L9-41 | S9 Q-9, Q-10, Q-11, Q-12, Q-16 | Correspondencias y marcadores | Una sola correspondencia disparador → prefiltro, **de B9-run**, usada por el barrido y por la simulación (mientras, S9 usa [hoy, hoy + `daysBefore`]); marcador cerrado nuevo `payment_link` en plantillas (lo resuelve W9; con `paymentLinksEnabled = false` bloquea en N3); `purposeKey` de voz = un objetivo de `OutreachCatalog::GOALS` hasta la lista de la Enmienda 16 del H8; las restricciones R-01/02/03/06 las decide el servidor (`StudioMessageTemplates::restrictionViolations()`) y FE9 solo las espeja para la experiencia; `human_requested` reciente = **30 días**, el mismo valor en B9-run |
+| L9-42 | S9 Q-14, Q-15 | Estados | Publicar con la estrategia en pausa → 409 `strategy_paused`; con otra versión en canario → 409 `canary_in_progress`; `retire` no se usa (archivar exige que no quede nada vivo) |
+| L9-43 | SSE9-b (paso 1); lead | Dónde vive el canal SSE | Corrige el «Paquete SSE9»: el controlador va en **`app/Http/Controllers/Crm/UltronStudio/UltronStudioStreamController.php`** (la lista blanca de `UltronEngineIsolationTest`) y la ruta en **`routes/ultron-studio.php`** (bloque propio al final; `routes/api.php` es zona del motor y además va en el commit del H8). La guarda de aislamiento **no se toca**. La entrada de `AuthorizationMap` (`GET admin/ultron-studio/stream` → `ultron.view`) y la variable `ULTRON_STUDIO_STREAM_ENABLED=false` del ejemplo de entorno las añade el lead en la rama del H9 junto con las 30 rutas de S9 (L9-38). El recuento del canal es una constante propia (`ROUTE_COUNT = 1`); las pruebas que suman el total del Studio se adaptan en la rama del H9 |
+| L9-44 | OPS9-a (paso 1); vincula a B9-run | Contrato del mando `h9-outreach-scope.sh` con la ejecución | **B9-run adopta tal cual** lo que el mando ya da por hecho: claves de `config/outreach.php` `outreach.enabled`, `.mode` (`shadow`/`live`), `.scheduler.enabled`, `.monitor.enabled`, `.assisted.{enabled,daily_cap}`, `.whatsapp.{enabled,daily_cap,daily_budget_usd}`, `.voice.enabled`, `.classifier.enabled`, `.own_hours`; órdenes `outreach:monitor` y `outreach:stop --all --reason=` disponibles desde la fase 1 (sin ellas el mando se niega a encender nada); el bloque del programador programa 2 tareas con `SCHEDULER` encendido (+1 con `MONITOR`); la constante **`OutreachSendGate::SENDS_ENABLED_IN_CODE`** nace `false` y solo se abre con un commit cuyo mensaje empiece por **`outreach(sends-open):`** (el mando lo comprueba en ejecución y en el fichero, como `voice(calls-open)` en el H8). Niveles del mando: `apagar` → `parada-global --motivo=` → `sombra on` → `asistido on --cupo=N` → `canal whatsapp|voz on` (exigen constante abierta y `mode=live`) → `programador|monitor|clasificador`, `horario set` (dentro de 08:00–19:00), las 6 de S9 (`gobierno`, `publicar`, `ventana`, `canario`, `simulacion`) y `stream on|off` (SSE9) |
+| L9-45 | Arreglo de Facts con DB9 (lead vía `h9-facts-fix`) | Las tres pruebas de B9-facts que suponían que DB9 no existía | Hecho: `SubjectTimelineTest` con filas reales de `OutreachSchemaFixtures`; `SubjectTimeline::outcomes()` filtra por `outreach_outcomes.subject_key` (índice `oout_subject_idx`, plan comprobado en PG) y toma `strategy_id`, `channel`, `next_action` y `next_action_at` del resultado; `AgendaEngineHistoryFactsTest` con aserción honesta (`outreach_history = true` con las tablas presentes) y caso de ausencia por `down()` en transacción; `ContactHistoryFacts` memoriza la detección de la fuente por conexión (39 consultas por lote, 43 la primera del proceso; tope 40). Decisiones: la `nextAction` del historial es la **transición registrada de D9-10** (vocabulario del conjunto cerrado, no `follow_up` deducido; FE9 la muestra con el diccionario de `DecisionTraceText`); el `reason` de una entrada `outcome` es el **detalle** (`detail_code`); el motivo de la política vive en la decisión y su traza. 51/51 en SQLite y PG |
+| L9-46 | OPS9-a (paso 2); vincula a B9-run | Nombres de las órdenes, programador y la 100003 en el despliegue | Órdenes: **`outreach:sweep`** (cada 10 min), **`outreach:dispatch`** (cada minuto), **`outreach:monitor`** (cada 10 min), **`outreach:stop --all --reason=`**, `outreach:reconcile`, `outreach:replay`, `outreach:suppress-subject`; el bloque del programador vive en `routes/console.php` **comentado** hasta que B9-run registre las órdenes (OPS9 lo descomenta). `h9-schema-check.sql` verificado contra la base de DB9 (123/137/9/25; outreach 51/75/3/8; 33 funciones; libro con 11 sujetos; 4 índices válidos) y contra el banco del H8 (68/84/6/18). `deploy-h9-backend-fase1.sh`: paso 0 reconoce `tipo(ultron-studio-h9):` y **aborta si ve `outreach(sends-open):` en la fase 1**; puerta de diff de §9.3; constante de envío comprobada cerrada; migraciones ya aplicadas detectadas; modo `--indices` para la 100003 (se niega de 06:00 a 22:00 de Bogotá salvo `--acepta-hora`, aborta con transacciones > 30 s, `lock_timeout` 60 s, 3 intentos). **Limitación aceptada:** `ironbody-migrate` no admite `--path`, así que en la fase 1 la 100003 se aplica en la misma pasada si el tráfico lo permite y, si cae por `lock_timeout`, el despliegue sigue (son índices de lectura) y deja la orden del paso aparte; la fase 1 se hace en la ventana de poco tráfico (07:03 Bogotá, como el H8). Un `--solo=<migración>` en el `ironbody-migrate` del servidor (fichero de OPS7, propiedad del propietario) queda propuesto como mejora, no para el 15-11 |
+| L9-47 | OPS9-a (paso 3) Q-3; vincula a B9-run y FE9 | La API de la ejecución con la maestra apagada | `GET …/status` responde **200 siempre** (observabilidad: `enabled`, `mode` = `off|shadow|live`, `sendsEnabledInCode`, frenos abiertos, última pasada, tareas programadas); el resto de rutas de la ejecución (listas y POST) → **409 `outreach_disabled`**, como S9 con `strategies_disabled`; `POST brakes` con cuerpo vacío → 422 (el freno exige motivo); la **PARADA GLOBAL por consola** (`outreach:stop --all --reason=`) funciona siempre. Prefijo de rutas: lo fija B9-run en su informe (probable `admin/ultron-studio/outreach/**`). Smoke del H9 (OPS9-a): fase 1 «sin filas positivas» (30 rutas de S9 → 401 sin sesión y 409 con la maestra apagada; canal SSE → 409 `stream_disabled`; ejecución → status/listas/422 del freno), fase 2 una pasada `outreach:sweep` + `outreach:dispatch` sin envíos (`marketing_messages`, `voice_calls`, colas y las 25 tablas del Studio iguales; 0 trabajos en modo `live`), ensayado contra un simulador local (21 OK · 2 OMITIDO) |
+| L9-48 | SSE9-f (pasos 1–4); lead | Dónde queda el trabajo del CRM y qué va en cada commit | SSE9-f trabajó en el worktree `ultron-h8` del CRM (rama `feat/ultron-studio-h8-voice`) por orden del lead; **no se porta** a `feat/ultron-studio-sse`. El commit del CRM del cierre del H8 incluye H-1 (parser), FE8-4 (textos, `missingPostCall` como medida opcional, `entries[].number`, `not_applicable_outbound_only`, selector del trato) **y el cliente SSE con su cableado, dormidos**: sin el servidor del canal (404 hoy, 409 con la bandera apagada mañana) el CRM se queda en sondeo sin ruido (spec obligatorio). El módulo `src/app/modules/commercial-automation/**` (FE9), su ruta y su entrada de menú se excluyen y van a la rama del H9. Regla para el CRM compartido: cada agente deja el árbol compilando (`tsc -p tsconfig.app.json --noEmit`) al soltar ficheros |
+| L9-49 | DB9 (cierre definitivo) | La comparación de la suite completa con y sin DB9 | **No concluida:** el sistema mató las dos ejecuciones por falta de memoria al 93 % (sin DB9) y al 91 % (con DB9) con la máquina saturada por otros agentes; hasta el corte, SQLite: sin DB9 14 134 resultados (5 F / 55 E), con DB9 14 254 (13 F / 56 E), compatibles con los 9 recuentos + 3 de Facts esperados, pero sin demostración una a una. Lo verificado sí: 531 casos propios (0 fallos, SQLite y PG), las 4 pruebas de recuentos con el Anexo A → 0 fallos, esquema de la voz del H8 → 0 fallos, `tests/Unit/Outreach` → 0 fallos, mutaciones 66/66. **Decisión:** no se repite ahora; la regresión por nombre del H9 la hace **TEST9 en la puerta 3** con la máquina libre, **por directorios y con un JUnit por tramo** (para que otro corte no lo pierda todo). Regla operativa desde hoy: no más de dos suites completas a la vez en la máquina; las pasadas pesadas con `memory_limit=4G` se evitan mientras corran otras |
+| L9-50 | B9-run (parte 1) | PARADA GLOBAL por consola y puente con el Studio | `outreach:stop --all --reason= [--strategy=|--channel=] [--by=]` registra la parada como **actor de sistema** (la misma vía que el monitor; nunca una cuenta centinela), con el motivo y el `--by` informativo; **soltar** solo por la API a cuatro ojos (otra cuenta y otra persona verificada, L9-7). `OutreachPublishedStrategies` lee las tablas del Studio por SQL y verifica la cadena con `Core\StrategyChainSignature` (como `VoicePublishedConfig` en el H8) e importa solo `StudioStrategyValidator::studioReference` y las ayudas puras de `StudioMessageTemplates` (SEC9 lo admite en su lista). `OutreachMonitor` solo apaga (cadena, deriva, opt-out, fallos, gasto); `unknown_send` queda para W9/V9 **(enmendada por L9-63: la parada por consola se registra como `person` con la cuenta de `--by` o la centinela 0; el actor `system` queda para el monitor)** |
+| L9-51 | SEC9-a (paso 1) | La guarda de aislamiento del motor y la ventana del Studio hacia la ejecución | `UltronEngineIsolationTest` gana, en bloques «Hito 9» separables (todo su diff es del H9 y va a la rama del H9): las dos migraciones de DB9 por ruta exacta (Anexo B), `config/ultron_studio_stream.php` por ruta exacta, los tres lectores de `Outreach\Facts` (`CanaryFacts`, `ContactHistoryFacts`, `SubjectTimeline`) como excepción por fichero (solo las tablas `ultron_studio_*` de su propia constante `TABLES`, ninguna clase ni config del Studio, nunca `ultron_studio_publications` ni `ultron_studio_voice_*`, sin escrituras ni bloqueos), y, por §9.3 y D9-2, el puente `Run/OutreachPublishedStrategies.php` (solo dos importaciones puras) y `Run/OutreachTables.php` (cinco nombres de tabla). La propiedad «el puente es el único fichero de la ejecución que mira tablas del Studio» pasa a **lista cerrada de lectores** que fija `OutreachIsolationTest` (puente, `OutreachTables`, y `OutreachMonitor`/`OutreachStop` solo por `OutreachTables::STRATEGIES`). Rojos restantes de la guarda en el árbol compartido: el canal SSE hasta que SSE9-b lo mueva (L9-43) y el recuento 108 ≠ 77 (rama del H9) |
+| L9-52 | OPS9-a (cierre) Q-1..Q-8 | Operación del H9 | **Entregado y ensayado en un banco local** (`~/.cache/ironbody-banco-h9`, origen con dos commits como manda L9-34): paso 0 en verde, despliegue con esquema `123 137 9 25 · 51 75 3 8` al primer intento (la 100003 entró en la misma pasada), 15 variables escritas, mando `gobierno on/off` con copia previa y vuelta atrás, smoke 15 OK · 2 FALLO · 2 OMITIDO donde los fallos son las 30 rutas de S9 sin entrada en `AuthorizationMap` (403 + `auth:admin:unmapped_route`): se cierran en la rama del H9 (L9-38). Decisiones: **Q-1** basta la franja de poco tráfico para el 15-11 (el `--solo=` queda como mejora, L9-46); **Q-2** y **Q-3** resueltas en L9-46 y L9-47; **Q-4** la supresión 1581 va en **dos pasos**: `outreach:suppress-subject` solo lee y prepara (lista lo que se redactará y escribe el SQL), y OPS la ejecuta como dueño con `DISABLE TRIGGER USER` bajo orden escrita; **Q-5** sí: fila `system.personal_data_redacted` en el libro, sin datos personales; **Q-6** la supresión conserva los seudónimos (`subject_ref`, `phone_ref`) con la marca `opted_out` como lápida, para que la persona redactada no vuelva a ser contactada; **Q-7** `apagar` (nivel 0) también pone los topes a 0 y apaga el clasificador; **Q-8** el paso aparte de la 100003 se ejecuta de 22:00 a 06:00 de Bogotá. Pendientes con dueño (`informe-devops.md` §8): H-1 mapa ×30 (rama H9), H-2/H-3/H-4 piezas de B9-run (rutas, 64 KB, `no-store`, órdenes, DTO de `status`), H-5 presupuestos de PERF9, H-6 fijar `PREVIO` tras el cierre del H8, H-8 sección H9 de `supresion-1581.sql`, H-9 plan de despliegue y vuelta atrás (DOC9) |
+| L9-53 | SSE9-f (cierre) | El cliente del canal en el CRM | Entregado en el worktree `ultron-h8` del CRM: `services/studio-stream.service.ts` (+17 specs), `ultron-studio/studio-live-indicator`, H-1 del parser, FE8-4 y el cableado en 16 ficheros del Studio. Verificado en copia aislada (HEAD + SSE9-f, sin el módulo de FE9): **1 184/1 184 specs**, `tsc` limpio, `ng build` producción exit 0 (`ultron-studio-page` 719,75 → 720,70 kB; `studio-voice-page` 304,68 → 310,70 kB; chunk nuevo del canal 10,28 kB; total JS +17,8 kB, +0,27 %). **Dormido por spec**: 404/409/403 → sondeo en el acto, sin relectura, reintento 30 s → 2 min, nada en consola; al aparecer la ruta entra solo. La prueba de paridad D8-12 del CRM espera ahora los 26 motivos del banco + `number_unverified` y `number_mismatch` tras `voice_number_is_whatsapp` (volver a `toEqual` al regenerar el banco con B8-g). Pendientes: Q-3 (resuelta por SSE9-b con `resync: false`), el panel de monitor e incidentes no existe en el CRM (el tema queda disponible), `missingPostCall` se lee opcional hasta desplegar B8-g |
+| L9-54 | B9-run (parte 2) | Huella de la traza y la sombra sin eventos | El `trace_hash` de `outreach_decisions` es **el `traceHash` de `Core\DecisionTrace`** (el mismo que la simulación de S9 y FE9); el envoltorio `[traza]` en array solo cumple `odec_trace_chk` (DB9) y queda como Q para la rama (ampliar el CHECK a objeto o fijar el array como forma canónica sin cambiar la huella); prueba de paridad simulación ↔ planificación. Con `COMMERCIAL_EVENTS_ENABLED=false` (producción hoy) N6 niega todo por `human_requested_recently` desconocido: **encender los eventos del motor comercial es requisito de la fase de sombra (P9-24)** y `outreach:sweep` y `status` lo dicen explícitamente (`eventsEnabled: false → N6 deniega`). Hallazgos de la puerta PG resueltos por B9-run: `pause`/`resume` exigen `version_id` nulo en la cadena |
+| L9-55 | SSE9-b (cierre), SEC9-a (paso 3), B9-run (parte 3) | Canal cerrado, aislamiento dinámico y decisiones del despachador | **SSE9-b cerrado:** 32 pruebas / 297 aserciones en SQLite y PG; `UltronEngineIsolationTest` sin fallos nuevos (solo el recuento 108 ≠ 77, rama del H9); `ready` con `resync` solo cuando hace falta releer y detección de commits tardíos por recuento (resuelve la Q-3 de SSE9-f); temas `outreach.*` pendientes de B9-run; bloques literales para la rama en `informe-sse-backend.md` §9; su suite completa quedó al 81 % por la tregua de memoria (la regresión del H9 la hace TEST9, L9-49). **SEC9-a paso 3:** `OutreachIsolationTest` (5 pruebas, 820 aserciones) recorre el gobierno entero, la foto de hechos, el puente, el monitor, la parada, la suelta a cuatro ojos y los 11 temas SSE: 558 sentencias, 32 escrituras solo en las tablas propias, cero red con banderas por defecto y con configuración de producción, puerta de diff vacía en Legacy/n8n/OTP/motor, datos personales sembrados ausentes de respuestas y eventos. Q-1 aceptada: `ultron_studio_strategies` la leen, solo en joins de lectura, los seis ficheros de `Run/` que la guarda imprime (lista cerrada; un séptimo o una escritura la hacen caer). **B9-run parte 3** (25/25 en SQLite y PG): reclamación `FOR UPDATE … SKIP LOCKED`, reevaluación TOCTOU completa, canales simulado y asistido, puertas vacías de WhatsApp y voz (`failed_to_start` + `channel_not_live`), conciliación (`ambiguous` tras 10 min, `expired`, `no_response`), `replay`, bandeja asistida idempotente; decisión estricta: un `deny` permanente deja la inscripción en `blocked` esperando (`on.blocked`, por defecto `wait`, se re-mira cada ≥ 24 h), `context_changed` sale con `end_exit` |
+| L9-56 | SEC9-a (cierre) | Guardas estáticas, riesgos mayores y Q-1/Q-2 | **SEC9-a cerrado:** `ULTRON_STUDIO_H9_AMENAZAS.md` (STRIDE por 9 superficies, canal SSE incluido), `OutreachIsolationTest` (5 pruebas, 927 aserciones), `tests/Feature/Outreach/Guards/*` (5 guardas, 19 pruebas), edición del H9 en `UltronEngineIsolationTest` e `informe-security.md`; 29 verdes de 33: las 4 rojas son «de rutas» y de otros dueños (`Run/OutreachRoutes.php` de B9-run importa controladores del Studio: 3 pruebas; recuento 108 ≠ 77: rama del H9, L9-38). **Q-1 (L9-51) cerrada como lista exacta de 9 lectores** de `ultron_studio_strategies` (los 6 de `Run/` más `Run/AssistedQueue`, `Run/OutreachReadModels` y `Commands/Outreach/OutreachSuppressSubjectCommand`), solo joins de lectura comprobados estáticamente; un décimo o una escritura hacen caer la guarda. **Q-2 decidida: `Run/OutreachRoutes.php` desaparece**; las rutas de la ejecución viven al final de `routes/ultron-studio.php` y sus controladores en `Crm/UltronStudio/` (como el canal). **Riesgos mayores para la rama y el propietario:** R-1 el tique del canal (heredado del CRM) viaja en la URL, vale 300 s, no es de un solo uso y `EnsureAdminAuth` lo acepta también en `*/face-image/*` → recomendación fuera del H9: tique de un uso o TTL 60 s + `Referrer-Policy: no-referrer` (P9-25, no bloquea la fase 1); R-2 en la rama del H9 el mapa de las 31 rutas (30 de S9 + canal) y de las 13 de B9-run va **en el mismo commit** que la exclusión del dominio `commercial_automation` del token compartido (`CrmPermission::SHARED_TOKEN_EXCLUDED_DOMAINS`), vaciando `PENDING_IN_H9_BRANCH` y `SHARED_TOKEN_DOMAIN_PENDING` de `OutreachRoutesMapGuardTest`; R-3 `ops/supresion-1581.sql` no conoce `outreach_{enrollments,jobs,decisions,outcomes}` (`subject_key`/`phone_ref`, `redacted_at`) y rotar `APP_KEY` deja la cadena firmada en `signature_mismatch` (freno global, fallo cerrado): OPS9 amplía el script y documenta la rotación. Bajos: límite del canal por tique acota reconexiones, no concurrencia (`limit_conn` en nginx, OPS9); `deploy-h9-backend-fase1.sh:107-111` aún admite la ruta vieja del canal. Pendiente al cerrar B9-run: `outreach:sweep|dispatch|reconcile|replay|suppress-subject` y las 13 rutas en `exercise()`, y revisión BOLA/IDOR de esas rutas (TEST9/REV9). Sin pasada de mutaciones (declarado) |
+| L9-57 | B9-run (partes 4–5) | Decisiones Q-1..Q-8 de la ejecución y cierre de rutas | Partes 4–5 en disco: `OutcomeRecorder` + `FollowUpScheduler` (D9-10; `opted_out` cancela lo vivo de la persona y la suprime vía `SubjectSuppressions`), `AssistedQueue` (bandeja sin teléfonos; reclamar una vez; resultado `staff` idempotente), `OutreachReadModels`, controladores `UltronStudioOutreachController` y `UltronStudioOutreachAssistedController` (13 rutas E1–E13 bajo `admin/ultron-studio/outreach/**`, montadas con una línea al final de `routes/ultron-studio.php`; `Run/OutreachRoutes.php` eliminado: Q-2 de SEC9-a cumplida), temas SSE `outreach.{runs,jobs,outcomes,brakes}`, comandos `outreach:reconcile|replay|suppress-subject`; `tests/Feature/Outreach/Run` 45 pruebas en SQLite (643 aserciones), 44 en PG, pendiente `OutreachRaceTest` (#16, solo PG). **Decisiones del lead:** Q-1 el puente es el único sitio que importa S9 (incluidas `StudioStrategyValidator::studioReference` y `StudioMessageTemplates::usesPaymentLink/violationsOf`); Q-3 `human_requested` → `handed_off` sin tarea nueva (el Inbox es el camino); **Q-4 enmienda D9-13:** el acceso al historial queda en el log de la aplicación (`outreach.timeline.viewed` con cuenta y seudónimo), no en el libro, porque la ejecución no escribe tablas del Studio; Q-5 carreras de nivel base en DB9 y la reserva real en `OutreachRaceTest`; Q-6 `unknown_send` de W9/V9 se lee por `Facts`; Q-7 con `COMMERCIAL_EVENTS_ENABLED=false` N6 niega todo (L9-26, P9-24); Q-8 catálogo de permisos, mapa y exclusión del token compartido van juntos en un único commit de la rama (R-2). B9-run asume, al estar SEC9-a cerrado, la sustitución de los 4 `PendingTopic` de `StreamTopics::defaults()` y la ampliación de `exercise()` en `OutreachIsolationTest` con las 13 rutas y los 5 comandos |
+| L9-58 | B9-run (Q-9) | Despacho sin worker nuevo | `outreach:dispatch` sin `--inline` encola cada trabajo reclamado en el carril `commercial`; sin consumidor, los trabajos quedan `claimed` y la conciliación los marca `ambiguous` con incidente a los 10 min. **Decisión:** el programador lleva `outreach:dispatch --inline` cada minuto (≤ 50 por pasada, cada uno en su transacción), suficiente para sombra y asistido y sin cola ni worker nuevos; el carril `commercial` y `DispatchOutreachJob` quedan para la fase en vivo, cuando el propietario decida añadir el worker (OPS). Nombres del programador confirmados por B9-run: `outreach:sweep` (10 min), `outreach:dispatch --inline` (1 min), `outreach:monitor` (10 min), con `withoutOverlapping(10)` + `onOneServer()`; el bloque de OPS9 sigue comentado en `routes/console.php` (inerte, `schedule:list` no lo lista) y lo activa el lead en la rama del H9 detrás de las banderas. Corrección de B9-run: de las 2 rojas de `Strategies`, una es el recuento 108 ≠ 107 (la constante de S9 no cuenta la ruta del canal; L9-38) y la otra el mapa sin llaves de `strategies/**` |
+| L9-59 | Lead (integración, 10-11 03:30 UTC) | La integración del H9 en el árbol (sin commit; B9-run cerrado y parado al declararse terminado) | Aplicada con un guion idempotente (`h9-integrar.py`, 19 ficheros): (1) las 13 rutas de la ejecución montadas con `UltronStudioOutreachController::routes()` al final del grupo `admin/ultron-studio` (antes del bloque del canal); (2) los 4 `PendingTopic` de `StreamTopics::defaults()` sustituidos por `Outreach{Runs,Jobs,Outcomes,Brakes}Topic`; (3) `AuthorizationMap::OVERRIDES` +44 (canal → `ultron.view`; 30 del gobierno; 13 de la ejecución); (4) `PermissionCatalog`: dominio `commercial_automation` (etiqueta «Automatización comercial») + 10 llaves (4 `ultron.strategies_*`/`person_bindings_manage` y 6 `commercial_automation.*`) con etiqueta y descripción; (5) `CrmPermission`: `commercial_automation` en `SHARED_TOKEN_EXCLUDED_DOMAINS` **en el mismo cambio** que el mapa (R-2) y, solo Super Admin por defecto, `ultron.strategies_publish`, `ultron.person_bindings_manage`, `commercial_automation.simulate_real` y `commercial_automation.release` (pausar, revertir, frenos y PARADA GLOBAL sí se reparten: dirección segura); (6) ejemplo de entorno: `ULTRON_STUDIO_STREAM_ENABLED=false`, las 6 `ULTRON_STUDIO_STRATEGIES_*` y las 12 `COMMERCIAL_AUTOMATION_*`, todo apagado; (7) el bloque del programador de OPS9 descomentado detrás de sus banderas con `outreach:dispatch --inline` (L9-58); (8) las pruebas del canal vuelven a probar la puerta del mapa (sin `withoutMiddleware`) y la guarda exige `ultron.view`; (9) `StudioAuditEvent::SUBJECT_TYPES` +4 (`strategy`, `strategy_version`, `message_template`, `person_binding`); (10) `StudioRouteCount::TOTAL` = 77 + 30 + 1 + 13 = **121** (el 77 del H8 intacto) y las 6 guardas de recuento comparan con él; (11) `OutreachRoutesMapGuardTest` con la lista de pendientes vacía y el dominio excluido. Comprobado: `auth:coverage --unmapped` vacío (salida 0), `route:list` del Studio = 121, Pint en verde. Pendiente (TEST9): ampliar `OutreachIsolationTest::exercise()` con las 13 rutas y los 5 comandos (B9-run no lo hizo antes de cerrar) |
+| L9-60 | Lead (adaptaciones L9-38, 10-11 03:40–04:10 UTC) | Las guardas del H4–H8 que el Hito 9 hacía caer, adaptadas SUMANDO (nunca cambiando el 77 ni los recuentos del H8) | Tras la integración, `tests/Feature/UltronStudio` + `tests/Feature/Outreach` dieron 2 000 pruebas con 19 rojas, todas del H9 sobre guardas anteriores. **Adaptaciones:** (a) **Anexo A de DB9** aplicado tal cual (`git apply`, 4 ficheros): recuentos del Studio con el H9 (PG disparadores 68 → 123, CHECK 84 → 137; SQLite 55 → 108), los 9 índices parciales (`uspb_one_active`, `ussv_one_canary`, `ussv_one_published` nuevos) y los 11 sujetos del libro; (b) la **guarda del canal** exige que los 11 temas declaren su ruta de lista y que los 4 `outreach.*` sean los adaptadores reales (`OutreachTopic`, permiso `commercial_automation.view` = el del mapa), y ya no admite ningún `PendingTopic` (resuelve el hallazgo de la revisión automática de seguridad sobre `StreamTopics`); la prueba de la bandera del canal espera 403 `forbidden` del mapa para el token compartido (antes del `person_required` del controlador); (c) el **monitor va plano** dentro del bloque del programador (la guarda de SEC9-a solo admite órdenes `outreach:*` con argumentos literales; la orden comprueba su propia bandera); (d) los **4 contratos de rutas del H4–H8** (`UltronStudioEngineReadOnlyTest`, `UltronStudioIntegrationsParityHttpTest`, `UltronStudioLabNoEngineEffectsTest`, `UltronStudioPermissionsTest`) excluyen `strategies/**`, `stream` y `outreach/**`, que tienen sus propias pruebas; el recorrido del motor sigue siendo el 77; (e) **catálogo de permisos:** pesos de orden para las 10 acciones nuevas (las del H9 detrás de las del H8 dentro de `ultron`; en `commercial_automation`: ver, historial, simular, bandeja, parar, soltar), 19 filas de `ultron`, y `commercial_automation.simulate_real` declarado en `AuthorizationMap::CONTROLLER_ENFORCED` porque ninguna ruta lo nombra (viaja en la simulación sintética y lo exige el controlador con `sample: real`): sin eso la pantalla de Roles no podría concederlo. **Comprobado:** cobertura de autorización, aislamiento de voz y token compartido 40/40; esquema + aislamiento del motor + guardas + gobierno 218 OK (80 omitidas, solo PG); contratos de rutas 477 OK; permisos 32 OK; canal 32 OK; `route:list` del Studio 121; `auth:coverage --unmapped` vacío. Queda la regresión completa del backend sobre el árbol integrado (L9-49, TEST9) |
+| L9-61 | FE9 (entrega final) | La sección del CRM «Campañas automáticas (estrategias)» en `marketing/automatizaciones` | Entregada sin commit: 25 ficheros TS de producción (11 048 líneas), 3 SCSS, 12 specs (**440/440** en verde), 4 de `testing/`, 6 fixtures espejados byte a byte con manifiesto, ruta en `app.routes.ts` (tras la bandera `ultronStudioPreviewEnabled` y `ultron.view`), entrada del menú en `app.html`, arnés `e2e/h9-ui/capture-h9.mjs`; `tsc` de app y specs en 0; `ng build` de producción exit 0 con el chunk perezoso `commercial-automation-page` de 385,58 kB en crudo / 83,27 kB transferidos (inicial +0,27 kB); 22 capturas (9 vistas × 1440/390, cajón de inscripción con las frases del servidor, diálogo de PARADA GLOBAL, gobierno apagado) en `plans/informes-h9/capturas-fe9/`; informe `informe-frontend.md`. Consume las 30 rutas del gobierno y las 13 de la ejecución con los cuerpos exactos de B9-run; 409 `strategies_disabled` y 404 sin código son ESTADOS (`strategies_unavailable` / `execution_unavailable`), no errores. **Decisiones del lead:** Q-1 las llaves de D9-13 viven en una constante del módulo hasta regenerar el catálogo de permisos del CRM en la rama (ya están en `PermissionCatalog`, L9-59); Q-3 misma bandera para la ruta; Q-4 sin Prettier (como el Studio); Q-5 la ficha de la persona desde la bandeja enlaza a `/users` o a la bandeja de mercadeo (no hay ruta de ficha por id). Lo «pendiente ajeno» que listó (montar rutas, mapa, token compartido, temas del canal) ya estaba hecho en L9-59 |
+| L9-62 | Lead (regresión completa, 03:18–03:40 UTC del 10-11) | La puerta 3 de L9-49: la suite completa del backend sobre el árbol integrado (SQLite) | **15 763 pruebas, 384 670 aserciones, 55 errores + 1 fallo, 573 omitidas (solo PG), 8 avisos de PHPUnit; 22 minutos.** Frente a la regresión del H8 (E16-29: 14 061 pruebas, 59 rojos) hay 1 702 pruebas más (las del H9) y 3 rojos menos. Clasificación contra `tests/baseline-failures.txt` (119 entradas): 55 de los 56 están en la línea base (`MemberContractTest` 28, `FiscalReconciliationTest` 12, `FactusPayloadNoVatTest` 10, `EmissionBlockedTest` 2, `ProductionEmissionGuardTest` 2, `PricingV2SalesAndPaymentsTest` 1: el fallo, 422 «el plan cuesta 80 000 y el cobro es de 95 200», ajeno). El único fuera de la línea base, `MemberContractTest::test_register_with_the_email_of_another_member_creates_its_own_account`, cae por la misma causa de entorno que sus 28 hermanos (`file_get_contents` de la plantilla de contrato ausente en `storage/app/private/contract_templates`, `MemberContractTest.php:28`): la prueba se añadió el 16-10 (`6850b81d`), después de escribir la línea base, y no toca nada del H9. **Ningún rojo del Studio, de la voz, de la telefonía ni del H9: cero rojos nuevos por la integración.** Pendiente menor: añadir esa prueba a la línea base (TEST9) |
+| L9-63 | REV9 (primera mirada, 05:20 UTC del 10-11) | Veredicto **APROBADO CON CONDICIONES, 0 bloqueantes**; decisiones del lead sobre M-1..M-3 y m-1..m-6 | Verificado ejecutando por el revisor: 121 rutas, `auth:coverage --unmapped` vacío, 0 tareas `outreach` con las banderas por defecto, 7 órdenes, 10 llaves en el catálogo y su reparto, token compartido excluido, 69 + 109 pruebas en verde, `tsc` del CRM en 0, greps de aislamiento. **M-1 (actor de la parada por consola):** se enmienda L9-50: la PARADA GLOBAL por consola se registra como actor `person` con la cuenta de `--by` cuando se da y, si no, con la cuenta centinela 0 que ninguna persona posee, de modo que soltar siempre exige otra cuenta real con `release` y nota; el actor `system` queda para las causas del monitor (`obrk_cause_scope_chk`); un actor de sistema para `manual` sería una enmienda de DB9 en un hito siguiente. **M-2 (guiones de OPS9 ajenos al árbol integrado):** el lead revierte el reformateo de Pint en `routes/console.php` (HEAD intacto, el bloque del H9 solo añade) y abre OPS9-b: rutas reales (`ultron-studio/outreach/**`, canal en `Crm/UltronStudio`), total 121, 3 tareas con el programador encendido, `PREVIO=a608450`, retirar la admisión de la ruta vieja del canal (B-2), re-ensayo del banco con el árbol integrado; condición antes de fijar el despliegue. **M-3 (cobertura declarada ≠ real):** condición de la fase 2 (sombra), no de la fase 1: TEST9-c escribe las pruebas que faltan (#23/#25 cancelación en la etapa 6 por pausa y reversión, #6/#7 de punta a punta, umbrales del monitor #18, #13 a nivel de ejecución) y corrige la tabla de cobertura de `informe-run.md`; #26 (E2E) y `exercise()` siguen en TEST9-b. **m-1:** se quitan los dos `withoutMiddleware` (S9 fixtures y `OutreachApiTest`): las 44 rutas pasan por la puerta real. **m-2:** `person` y `script` de la bandeja solo para quien reclamó (lo decide el lead en el código si el CRM lo tolera; si no, enmienda del modelo de amenazas). **m-3:** comentario de `routes/console.php` corregido. **m-4:** `commercial_automation.simulate_real` solo Super Admin por defecto (es muestra real de personas): se enmienda la tabla de D9-13, no el código. **m-5:** OPS9-b: sección del H9 en `supresion-1581.sql` y runbook de rotación de `APP_KEY`, antes de la fase 2. **m-6:** nombres del personal en `openedBy`/`claimedBy`: patrón del libro (H5), aceptado. REV9 queda en espera para una segunda mirada tras las correcciones |
+| L9-64 | Lead (correcciones de REV9, 05:30–05:50 UTC del 10-11) | Lo que el lead corrigió en el árbol (sin commit) | **M-2a:** `routes/console.php` = HEAD intacto + el bloque del H9 (el reformateo de Pint revertido; `git diff --numstat HEAD` = 48 añadidas, 0 borradas; `php -l` limpio; 0 tareas `outreach` con las banderas por defecto). **m-1:** quitados los `withoutMiddleware(EnforceAdminAuthorization)` de `Strategies/StrategyFixtures.php` y de `Run/OutreachApiTest.php`; las 44 rutas pasan por la puerta real en las pruebas HTTP; el token compartido recibe 403 `forbidden` del mapa antes del `person_required` del controlador (la prueba del panel lo dice así); gobierno + API 42/42. **m-2:** `AssistedQueue::dto()` recibe el id de quien mira: `person` y `script` solo para quien reclamó (en `claim`, `outcome` y en su lista); en `all`/`unclaimed` y para cualquier otra persona van en null; el CRM ya los trataba como opcionales (`person: PersonMetaDto | null`, `script: string | null`); la prueba 22 de `OutreachOutcomesTest` comprueba la regla; `tests/Feature/Outreach/Run` 45/45 (1 omitida, PG). **m-3:** comentario de `routes/console.php` corregido. **m-4:** tabla de D9-13 enmendada (`simulate_real` solo Super Admin por defecto). Pendientes de otros: M-2b/c/d y m-5 (OPS9-b), M-3 (TEST9-c), #26 y `exercise()` (TEST9-b), segunda mirada (REV9) |
+| L9-65 | TEST9-c (defecto D-1) y lead (corrección, 06:20 UTC del 10-11) | Las inscripciones en espera no volvían a tocar nunca | **Defecto:** `OutreachStore::dueEnrollments()` (`:129`) filtraba `status = 'active'`, pero toda transición `wait` de `FollowUpMachine` (`:101`) deja `status = 'waiting'` y `FollowUpScheduler::apply()` (`:84-97`) lo escribe con su `next_due_at`; nada en `Run/**` reactivaba `waiting` y el conciliador solo las vencía al final de la ventana. Afectaba a las negativas permanentes con `on.blocked = wait` (N1/N3/N4/N5: la autorización que llega después no se aprovechaba), a `callback_requested` (la llamada pedida por el personal nunca se programaba) y a `no_answer` con `wait`; el camino N2 (`waitsForRelease`) no, porque deja `active`. Contradecía el PHPDoc de `FollowUpScheduler` y de `dueEnrollments()` e `informe-run.md` §3.4. **Corrección mínima del lead (B9-run cerrado):** `dueEnrollments()` por `OutreachTables::ENROLLMENT_OPEN_STATUSES` (`active` y `waiting`) y, al crear el trabajo, `OutreachPlanner` devuelve `waiting → active` (transición que el grafo de DB9 permite). **Regresión:** las dos pruebas de TEST9-c en `H9LeadFollowupTest` (autorización tardía aprovechada a las 24 h; `callback_requested` programado a su hora), de rojas a verdes; `tests/Feature/Outreach/Run` 63/63 (2 omitidas, PG). REV9 lo revisa en la tercera mirada. Hallazgo menor anotado por TEST9-c: `OutreachMonitor::run()` sin argumento usa el reloj real, no `Carbon::setTestNow()` (las pruebas le pasan `now()`) |
+| L9-66 | REV9 (segunda mirada: M-4, m-7) y lead (corrección, 06:50 UTC del 10-11) | Inscripciones huérfanas tras revertir y la bandeja frente a inscripciones cerradas | **M-4 (mayor, condición de la fase 2):** las inscripciones abiertas que esperan la ventana (`next_due_at = NULL`, lo normal en sombra tras el primer paso simulado) no se cancelaban al revertir o retirar la versión: el barrido solo recorre estrategias vivas y toca inscripciones vencidas; seguían `active` bajo una versión `ROLLED_BACK` hasta `window_ends_at` (≤ 60 días), contra D9-8 («las inscripciones de la versión revertida pasan a `canceled`») y #25, y el índice `oenr_one_open` impedía reinscribir a esa persona. **Corrección del lead:** `OutreachReconciler::cancelOrphanedByChain()` (tras `expirePlanned`, antes de `expireWindows`; clave `canceledByChain` en la pasada): toda inscripción abierta cuya versión/parte no esté viva o no sea `runnable()`, y sin trabajo vivo, se cierra `canceled` con `strategy_moved` o `catalog_incompatible`; las que tienen trabajo vivo las cierra el despachador al reclamar; con la cadena ilegible la pasada falla en voz alta (no se decide nada). `H9RollbackTest` cambia de expectativa (TEST9-c): tras revertir, `canceled`; con solo pausa, sigue `active`. **m-7 (menor, fase 3):** la bandeja listaba trabajos `started` cuya inscripción ya estaba cerrada y `recordOutcome` los aceptaba. **Corrección:** `AssistedQueue::QUEUE_ENROLLMENT_STATUSES = ['active', 'waiting', 'handed_off']` (una derivada a persona sigue viva en la bandeja); `queue()` excluye el resto; `claim()` y `recordOutcome()` responden 409 `enrollment_closed`, siempre DESPUÉS de la repetición idempotente (la misma petición devuelve lo mismo aunque la inscripción ya se cerrara con ese resultado). `tests/Feature/Outreach/Run` + `Guards`: 80/82; las 2 rojas son de otros: `H9RollbackTest:234` (expectativa a cambiar por TEST9-c) y la guarda de la supresión 1581 (OPS9-b está añadiendo la sección del H9 a `supresion-1581.sql`; la guarda se adapta al cerrar) |
+| L9-67 | TEST9-c y OPS9-b (cierres, 07:00 UTC del 10-11) | Cobertura de M-3, guiones al árbol integrado y decisiones Q-9..Q-12 | **TEST9-c cerrado:** 18 pruebas nuevas (405 aserciones) en `tests/Feature/Outreach/Run` (`H9PauseCancelTest` #23, `H9RollbackTest` #25 y el borde §13.3, `H9LeadFollowupTest` #6 con la regresión de D-1, `H9EventSegmentTest` #7, `H9MonitorThresholdsTest` #18, `H9IdempotencyRaceTest` #13 con dos procesos reales del planificador tras una barrera de `pg_advisory_lock`); directorio `Run` 63/63 en SQLite y en PG; tabla de cobertura §0.1 de `informe-run.md` número a número; `informe-tester-c.md`. Observaciones: O-1 (ocurrencia única por ciclo, L9-1), O-3 (monitor antes que despachador → freno `drift`, nada sale) y O-4 (archivar con versiones vivas lo impide la base) confirmadas; O-2 superada por M-4 (L9-66): `H9RollbackTest` se ajusta a `canceled`. **OPS9-b cerrado:** `deploy-h9-backend-fase1.sh`, `smoke-h9.py`, `smoke-run-h9.sh`, `h9-outreach-scope.sh` y `banco-h9` conocen el árbol integrado (rutas `ultron-studio/outreach/**`, canal en `Crm/UltronStudio`, total 121 = `121 30 13 9 4 1`, 3 tareas con el programador, `console.php` solo añade, `PREVIO=a608450`, B-2 retirado, `DispatchOutreachJob` admitido por ruta exacta); banco A (`PREVIO=HEAD`) y B (`PREVIO=a608450` con `--acepta-main`) EN VERDE (esquema `123 137 9 25 51 75 3 8`, 14/14, smoke 28 OK · 0 FALLO · 1 OMITIDO, parada global aplicada); `supresion-1581.sql` +276/−16 con las 7 tablas del gobierno, la autoría del personal y el bloque por persona (`:subject`, `:phone_refs`), ensayado en seco y con redacción real; runbook `ops/ROTACION_APP_KEY_H9.md` (la cadena es global: rotar `APP_KEY` deja `chain_unreadable` permanente; ventana segura = fase 1); evidencia en `ops/evidencia-h9/2026-11-10/ops9b/`. **Decisiones del lead:** Q-9 sí (enmienda de §9.3: `app/Jobs/Outreach/DispatchOutreachJob.php` por ruta exacta); Q-10 se mantiene (patrón del libro, m-6); Q-11 la rama del H9 nace de `main` (incluye `a921fbb` y `307ad51`, documentación del H8): en el despliegue real se pasan con `--acepta-main`, decisión del propietario en el momento; Q-12 riesgo aceptado y registrado hasta la fase 2 (re-anclaje por época de clave y `outreach:rederive-refs` quedan como enmienda futura; la rotación de `APP_KEY` solo en fase 1). H-10: la guarda `OutreachPersonalDataGuardTest` vacía `SUPPRESSION_PENDING_OPS9` (lead). H-12: en la fase en vivo se vigila el carril `commercial` sin confundirlo con el motor (OPS, fase 3). **H-15 (contrato ≠ código):** L9-47 exige 409 `outreach_disabled` en las 12 rutas de la ejecución distintas de `status` con la maestra apagada y B9-run no lo implementó (`OutreachException::disabled()` sin llamadores): el lead lo implementa (ver L9-68) |
+| L9-68 | Lead (H-15 de OPS9-b, 07:15 UTC del 10-11) | La puerta de L9-47 en la API de la ejecución | B9-run no la había implementado (`OutreachException::disabled()` sin llamadores): con la maestra apagada las 12 rutas distintas de `status` respondían 200/404/422. **Ahora:** `UltronStudioOutreachController` y `UltronStudioOutreachAssistedController` llaman a `requireEnabled()` tras la llave (401/403 van antes): si `COMMERCIAL_AUTOMATION_ENABLED` no está encendida, **409 `outreach_disabled`** sin escribir nada; `GET outreach/status` sigue 200 siempre; la PARADA GLOBAL por consola funciona siempre (L9-50/L9-63). `OutreachApiTest` lo comprueba (metrics 409 → 200 al encender; `POST brakes` 409 y 0 frenos con la maestra apagada, 422 con cuerpo inválido al encenderla): 5/5. El CRM ya conocía el código (`commercial-automation-api.types.ts:1094`) y trata los 409 de la sección como estados. OPS9-b adapta el smoke y el mando (fase 1: 409 en esas 12, `status` 200) y re-ensaya; TEST9-b enciende la maestra en `exercise()` y añade la comprobación del 409 |
+| L9-69 | REV9 (M-5, m-8, m-9, Q-M4) y lead (corrección, 07:40 UTC del 10-11) | Huérfana ≠ cadena que no verifica | **M-5 (mayor, condición antes de conciliar en sombra):** el paso de L9-66 cancelaba cuando la entrada de la cadena dejaba de VERIFICAR (`runnable()` exige `chainReadable()`), con la etiqueta `catalog_incompatible`, cada minuto y sin frenos: rotar `APP_KEY` o un `row_mismatch` transitorio habría cancelado en ≤ 60 s toda la audiencia en sombra, de forma irreversible (la ocurrencia del ciclo se consume), contra D9-11.3 (negar y frenar, no cancelar) y D9-3. La conflación ya existía en el planificador (solo vencidas) y en el despachador (solo el trabajo reclamado). **Corrección del lead, una sola regla en los tres sitios** (`LiveStrategy::orphanReason()`): versión fuera del estado vivo de su parte (reversión, retirada, promoción de la parte canario) → `strategy_moved`; cadena que verifica pero contenido ilegible → `catalog_incompatible`; cadena que NO verifica → null: no se cancela nada; el planificador deja esperar la inscripción (+15 min, `waiting`), el despachador cancela el trabajo con `chain_unreadable` (N5, código ya existente en la escalera) y la inscripción ESPERA, y el conciliador no la toca; N5 niega y el monitor frena hasta que la cadena vuelva a leerse. **Q-M4 decidida:** la promoción (canario → resto) deja sin vida la parte canario: sus inscripciones sin trabajo vivo se cancelan `strategy_moved` (como ya hacían el planificador con las vencidas y el despachador con los trabajos); las personas tocadas en canario no vuelven a entrar en el mismo ciclo (L9-1), que es lo deseado. **m-8:** la pasada normal solo lee los pares (versión, parte) con inscripciones abiertas (agregado sobre `oenr_version_idx`) y trae filas solo de los huérfanos. **m-9 (menor, pendiente de B9-run en fase 2):** ni esa cancelación ni la del planificador dejan decisión `cancel` en la línea de tiempo (el despachador sí). `tests/Feature/Outreach/Run` 64/64 tras el cambio; TEST9-c añade las pruebas de la firma rota (nada se cancela; espera), del contenido ilegible (`catalog_incompatible`) y de la promoción |
+| L9-70 | REV9 (tercera mirada, §14 de `informe-reviewer.md`) | Veredicto final del revisor | **APROBADO CON CONDICIONES, 0 bloqueantes.** Verificado ejecutando por el revisor: Run + Guards + OutreachIsolationTest + Strategies 120/120 (2 omitidas, PG); `bash -n` de los guiones y `py_compile` del smoke; `SHA256SUMS` de la evidencia de OPS9-b; `git status` vacío en las zonas protegidas (Marketing, Commercial, Telephony, Voice, Jobs/Commercial, Observers, Controllers/Api, rutas y config ajenas, StudioCatalog, composer); `console.php` 48/0; `requireEnabled()` en 12 métodos tras la llave. Leído y conforme: las 19 pruebas de TEST9-c, L9-66, los guiones y la supresión de OPS9-b, el runbook de rotación. **Condiciones por fase** (las marcadas ✓ ya estaban resueltas cuando escribió §14, por el cruce con L9-69; el revisor las verifica y actualiza su §14): fase 1 → re-ensayo del banco con el smoke del 409 (OPS9-b, en curso), la orden escrita del propietario, la marca de L9-50 ✓. Fase 2 (sombra) → M-5 ✓ (L9-69), Q-M4 ✓ (L9-69), m-8 ✓, exercise() con las 13 rutas y los 5 comandos y el E2E #26 (TEST9-b, en curso), m-9 (B9-run), H-1 (reloj del monitor), P9-24 y las dos primeras personas vinculadas por consola, PERF9 (presupuestos del smoke), R-1 del runbook de rotación antes de rotar `APP_KEY`. Fase 3 → m-7 ✓, P9-12. «Nada de lo abierto abre una vía hacia una persona» |
+| L9-71 | OPS9-b (cierre tras L9-68, 07:50 UTC del 10-11) | El smoke y el mando con la puerta 409; banco A re-ensayado | `smoke-h9.py`: fase 1 exige 409 `outreach_disabled` en las 12 rutas distintas de `status` (lecturas, cuerpos vacíos y uuids inventados incluidos: la puerta va tras la llave y antes de validar o buscar), `status` 200 siempre, con la maestra encendida 200/404/422, presupuestos con 409 → OMITIDO, la verdad la toma de `data.config.enabled`; `h9-outreach-scope.sh` enseña el 409 en el nivel 0. Banco A remontado con el árbol actual: paso 0 EN VERDE, despliegue COMPLETADO (`121 30 13 9 4 1`, programador `27 0 0 0`, 0 ERROR), índices nada que hacer, esquema 14/14, smoke **27 OK · 0 FALLO · 1 OMITIDO** (presupuestos de PERF9; una comprobación menos que antes porque con la maestra apagada no hay listas que leer), lanzador 8 OK, parada global aplicada con la maestra apagada (frenos 0 → 1), `apagar` nada que escribir, cierre 2/2. Evidencia `ops/evidencia-h9/2026-11-10/ops9b/` (60 ficheros + `SHA256SUMS`, barrido de secretos 0). Decisiones Q-9..Q-12 aplicadas (`--acepta-main=a921fbb,307ad51` ensayado en el banco B). Siguen abiertos para otros: H-11 (4 tablas `ultron_studio_voice_*` sin política de supresión: OPS8/H8), H-12 (vigilar el carril `commercial` en la fase en vivo), H-14 (rotación de `APP_KEY` sin re-anclaje: riesgo aceptado hasta la fase 2), H-16 (otro trabajo bajo `app/Jobs/Outreach` aborta el paso 0 hasta admitirlo). Agente cerrado |
+| L9-72 | REV9 (m-10, §15) y lead (corrección, 08:10 UTC del 10-11) | El par ausente bajo una cabeza que no verifica | **m-10 (menor; solo por manipulación de la cadena a nivel de dueño de la base):** `chainStates()` toma el `state` de la cabeza aunque `verifyRow` haya fallado, y una entrada de reversión o retirada FALSIFICADA (inserción cruda con firma inválida, `row_mismatch`, o una cabeza que nombra una versión inexistente) deja el par (versión, parte) ausente: en los tres sitios `$live === null` → `strategy_moved` sin pasar por `orphanReason()`: cancelación irreversible por justo la manipulación que la firma existe para neutralizar (D9-11.3). **Corrección del lead:** el puente expone `unverifiedStrategyIds()` (estrategias no archivadas cuya cabeza no verifica: `verified` ni `ok` ni «sin cadena»); con el par ausente y la estrategia en esa lista, el conciliador no toca nada (los pares se agrupan ahora por estrategia, versión y parte), el planificador deja esperar la inscripción (+15 min, `waiting`) y el despachador cancela el trabajo con `chain_unreadable` (N5, `wait: true`) y la inscripción espera. Run + Guards + OutreachIsolationTest 88/88 (2 omitidas). TEST9-c añade la variante de la entrada falsificada a su prueba de firma rota |
+| L9-73 | REV9 (cierre de la tercera mirada, §16 de `informe-reviewer.md`, 08:20 UTC del 10-11) | Veredicto definitivo y cierre del revisor | **APROBADO CON CONDICIONES, 0 bloqueantes. Fase 1 (todo apagado): queda SOLO la orden escrita del propietario.** Verificado por el revisor: L9-69 (§15), la marca de L9-50, el smoke del 409 (`smoke-h9.py` :452-459, :474-486, :508, :520, :632-635; mando :299, :659, :681), la evidencia `banco-a-L9-68/` con `SHA256SUMS` de 60 entradas, y una pasada final Run + Guards + Strategies 115/115 (2 omitidas, PG). Condiciones definitivas de la fase 2 (sombra): TEST9-b (`exercise()` con las 13 rutas y las 5 órdenes; E2E #26), las pruebas de TEST9-c sobre L9-69/L9-72 (firma rota con la variante de la entrada de reversión falsificada, contenido ilegible, promoción), m-9 (decisión `cancel` en la línea de tiempo, B9-run), H-1 (reloj del monitor), P9-24 y las dos primeras personas vinculadas por consola, PERF9 (presupuestos), R-1 del runbook de rotación antes de rotar `APP_KEY`. Fase 3: m-7 hecho; P9-12. Nota del lead: su §16 lista m-10 como pendiente porque se escribió antes de leer L9-72; el código ya lo lleva en los tres sitios y las pruebas de TEST9-c lo fijan. No ejecutado por el revisor: puerta PG, el banco (solo su evidencia), E2E, mutaciones, producción. Hallazgos que cambiaron código u operación: M-1..M-5, m-1..m-4, m-7, m-8; abiertos m-9 (fase 2). Agente cerrado por el lead |
+| L9-74 | TEST9-c (cierre definitivo, 08:30 UTC del 10-11) | Las pruebas de L9-69 y L9-72 | `tests/Feature/Outreach/Run/H9ChainOrphansTest.php`, 5 pruebas (SQLite 5/140, PG 5/139): (1) firma rota con estado bien formado (`signature_mismatch`): conciliador 0, planificador espera, despachador `chain_unreadable` y la inscripción espera; con un `resume` firmado todo sigue; (2) **entrada de reversión FALSIFICADA en la cabeza** (inserción cruda, firma inválida): par ausente, estrategia en `unverifiedStrategyIds()`, nada se cancela ni consume ocurrencia; al retirar la fila el dueño de la base (la aplicación no puede: `usspub_forbid_delete`) la cadena vuelve a verificar y todo sigue; (3) rotación literal de `APP_KEY`: nadie cancela hasta que vuelve la clave; (4) cadena que verifica con contenido ilegible (`catalog_incompatible`): los tres sitios cancelan; (5) promoción firmada (Q-M4): canario sin trabajo vivo `strategy_moved` en la conciliación, con trabajo vivo lo cierra el despachador, el resto entra con la `seq` nueva, nadie vuelve a entrar en el ciclo. Directorio `Run`: SQLite 69/1 168 (2 omitidas, las carreras), PG 69/1 261/0. En total TEST9-c: 24 pruebas nuevas, 581 aserciones. Pendiente registrado: la carrera #13 en el banco de OPS9. Agente cerrado |
+| L9-75 | Lead (integración del CRM, 09:30 UTC del 10-11) | Las diez llaves del H9 en el CRM (Q-1 de FE9) | `php artisan permissions:export` regeneró `src/app/models/backend-permission-catalog.ts` (121 permisos, +10 del H9 y sus valores por rol, sin ningún otro cambio); `permissions.enum.ts` +10 miembros (`ULTRON_STRATEGIES_*`, `ULTRON_PERSON_BINDINGS_MANAGE`, `COMMERCIAL_AUTOMATION_*`); la política por defecto del CRM (`access-control.service.ts`, espejo de `CrmPermission::byRole`) excluye del Administrador las cuatro solo-Super-Admin (`strategies_publish`, `person_bindings_manage`, `simulate_real`, `release`); `CA_PERMISSIONS` del módulo apunta ahora a `Permission.*` y su prueba «todavía no están en el enum» pasa a «las once están»; `permission-contract.spec.ts` espera diecinueve llaves `ultron.*`. `tsc` 0; specs del contrato + paridad de voz + módulo de automatizaciones: 491 OK. **Rojo preexistente, ajeno al H9:** `access-control.moderation.spec.ts` falla 6/14 también en un checkout limpio de `e0f7983` (el commit publicado): la prueba es contradictoria consigo misma (afirma y niega `MODERATION_MANAGE` en el mismo caso) y el enum solo tiene 2 miembros `moderation.*` frente a 8 del catálogo; queda como hallazgo para su dueño fuera de este hito |
+
+## Paquete SSE9 · Tiempo real del Studio por Server-Sent Events (encargo del propietario, 09-11-2026 20:50 UTC)
+
+**Encargo literal:** «que todos los endpoints o APIs tengan el SSE». **Interpretación del lead:** un **canal SSE único del Studio con temas por módulo**, al que se suscribe cada panel del CRM; las API de lectura siguen existiendo para la carga inicial y como respaldo cuando el canal está apagado o cae. Nace apagado (`ULTRON_STUDIO_STREAM_ENABLED=false`) y tiene reversión (apagar la bandera: el CRM vuelve solo al sondeo).
+
+**Reutiliza lo que ya existe** (no se inventa otra infraestructura): `app/Support/SseStream.php`, el tique de `GET admin/stream-ticket` (`StreamTicketController`) y el patrón de `MembershipRealtimeController::stream` en el backend y de `src/app/services/membership-stream.service.ts` en el CRM; el laboratorio ya emite `GET …/lab/events` (se conserva; el canal único reexpone su tema).
+
+**Contrato del canal (v1):**
+- **Ruta:** `GET /api/admin/ultron-studio/stream?ticket=<tique>&topics=a,b,c`. Permiso base `ultron.view`; cada tema exige además el permiso del GET de lista de su módulo según `AuthorizationMap`; un tema no permitido se omite en silencio y se registra en el log de auditoría del Studio (no se revela su existencia).
+- **Temas:** `ledger` (cola del libro `ultron_studio_audit_events` por id creciente, filtrada por los `subject_type` que el tema y el permiso admiten), `voice.calls`, `voice.brake`, `voice.reconcile`, `voice.publications`, `voice.lab`, `monitor.incidents`, `outreach.runs`, `outreach.jobs`, `outreach.outcomes`, `outreach.brakes`. Los `outreach.*` los implementa **B9-run** sobre el registro de adaptadores de SSE9 (interfaz `StreamTopic` con `cursor()` y `since(cursor, limit)`); hasta entonces responden vacíos.
+- **Evento:** `id` = cursor monótono por tema con la forma `<tema>:<id>`; `event` = nombre del tema; `data` = JSON `{type, id, state, at}` (UTC ISO-8601) más `hash` o `ref` cuando el módulo los tenga. **Nunca** teléfono, nombre, documento, cuerpo de mensaje, importe ni secreto; el actor solo por id y rol.
+- **Reanudación** con `Last-Event-ID` (por tema); **latido** `: ping` cada 15 s; conexión máxima 55 s (el cliente reconecta con retroceso exponencial de 1 a 30 s); **límite por tique** con un limitador con nombre (`studio-stream`, como los de voz); con la bandera apagada, **409 `stream_disabled`** y el CRM vuelve al sondeo.
+- **Sin red saliente y sin escritura** en ninguna tabla: solo lecturas por cursor, con `limit` acotado y consultas indexadas.
+
+**Ficheros exclusivos:**
+- **SSE9-b** (`backend`): `app/Http/Controllers/Crm/UltronStudio/UltronStudioStreamController.php` (L9-43), `app/Services/UltronStudio/Stream/**`, un bloque propio al final de `routes/ultron-studio.php` (L9-43; S9 ya cerrado), `config/ultron_studio_stream.php`, `tests/Feature/UltronStudio/Stream/**`, `plans/informes-h9/informe-sse-backend.md`. La entrada de `AuthorizationMap` y la variable del ejemplo de entorno las añade el lead en la rama del H9.
+- **SSE9-f** (`frontend`, en el worktree `_worktrees/ultron-h9/Iron-Body_Front`, rama `feat/ultron-studio-sse` desde `main`): `src/app/services/studio-stream.service.ts` y su spec; el cableado en los paneles del Studio (voz: llamadas, freno, conciliación, publicaciones, evidencia y laboratorio; monitor e incidentes; versiones y publicaciones); y los textos de **FE8-4** (`missing_post_call`, `voice_destinations_unreadable`, la medida `missingPostCall`, `entries[].number`, `not_applicable_outbound_only`, selector del trato `content.addressForm`); `plans/informes-h9/informe-sse-frontend.md`. **FE9** consumirá el mismo servicio para el panel del H9.
+- **SEC9** revisa el canal: BOLA por tema, datos personales en eventos, límite por tique, tique en la URL (vida corta, un solo uso o ventana corta, nunca en logs).
+
+**Pruebas (T24, SSE):** con la bandera apagada, 409 y el CRM sondea; con ella, un evento del libro llega al cliente en menos de 2 s; `Last-Event-ID` no repite ni pierde; un tema sin permiso no emite ni se revela; un evento nunca lleva datos personales (prueba con una fila sembrada con teléfono, nombre y cuerpo); el latido y el cierre a los 55 s; el limitador por tique; cero red saliente; `auth:coverage --unmapped` vacío.
+

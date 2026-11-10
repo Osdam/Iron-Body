@@ -1,0 +1,16 @@
+# OPS9-b · evidencia del re-ensayo del banco del Hito 9 con el árbol integrado (10-11-2026, 04:26–04:35 UTC)
+
+Árbol: `_worktrees/ultron-h8/Iron-Body/backend`, HEAD `307ad51` + el H9 sin confirmar (154 ficheros bajo app/config/routes/database/.env.example). Sin commit, nada en el VPS, cero red (la valla del H8). Informe: `plans/informes-h9/informe-devops.md` §11.
+
+| Carpeta | Qué | Resultado |
+|---|---|---|
+| `banco-a/` | Banco con `PREVIO=HEAD` (307ad51 → ESPERADO d6d9d7f): montar, arrancar, sembrar (5 socios sintéticos), valla, paso 0, `todo`, mando (`estado`, `parada-global`, `estado`, `programador on`, `monitor on`, `apagar`), cierre | paso 0 EN VERDE · despliegue COMPLETADO (0 desvíos) · índices NADA QUE HACER (4 0) · esquema 14/14 · smoke 28 OK · 0 FALLO · 1 OMITIDO (presupuestos de PERF9) + lanzador 8 OK · cierre 2/2 · mando: parada-global APLICADO (frenos globales 0 → 1), programador on 27 0 0 0 → 30 0 0 3, monitor on 30 0 0 3 → 30 0 0 3, apagar → 27 0 0 0 |
+| `banco-a-primera-pasada/` | La misma secuencia ANTES de dos correcciones | paso 0 abortaba por `app/Jobs/Outreach/DispatchOutreachJob.php` en la puerta (ahora admitido como fichero exacto) y el smoke daba 1 FALLO en «listas vacías» (enrollments y jobs paginan: `data.data`); se conserva como traza de las dos correcciones |
+| `banco-b/` | Banco con `BANCO_PREVIO=a608450` (lo que sirve producción hoy): paso 0 sin y con `--acepta-main`, despliegue, esquema | sin aceptar: código 3, `FALTA DECIDIR [307ad51,a921fbb]` (los dos commits de documentación del H8) · con `--acepta-main=a921fbb,307ad51`: EN VERDE · despliegue COMPLETADO (121 30 13 9 4 1; programador 27 0 0 0; 0 ERROR) · esquema 14/14 |
+| `sql/` | `supresion-1581.sql` ampliado: en seco contra la base de DB9 (4 casos) y la redacción REAL en el banco A con `fixture-1581.sh` | en seco: 0 columnas del H9 sin política (los 32 avisos son de `ultron_studio_voice_*`, H8), validaciones 22023 · real: aborto 55000 con filas vivas sin tocar nada; después 1/2/1/1 filas en forma suprimida + 1 contador, bloque A sobre `ultron_studio_strategies` (3 campos), 174 disparadores activos antes y después, 2 filas en el libro, `outreach:suppress-subject` en seco → 0 filas |
+
+Ningún fichero de esta carpeta lleva valores del fichero de entorno, tokens, contraseñas ni teléfonos reales (los `+57 300 00 0xxxx` y `@banco.invalid` son la convención sintética del banco). Huellas en `SHA256SUMS`.
+
+## Re-ensayo con la puerta de L9-68 (`banco-a-L9-68/`, 04:45–04:47 UTC)
+
+El lead implementó la puerta de L9-47 (`requireEnabled()` tras la llave en `UltronStudioOutreachController` y `UltronStudioOutreachAssistedController`): con la maestra apagada, las 12 rutas de la ejecución distintas de `GET status` responden 409 `outreach_disabled`. Banco A remontado desde el árbol actual (ESPERADO 162876c): paso 0 EN VERDE · despliegue COMPLETADO (121 30 13 9 4 1; 27 0 0 0; 0 ERROR) · índices NADA QUE HACER · esquema 14/14 · smoke **27 OK · 0 FALLO · 1 OMITIDO** (`status` 200; las otras 12 → 409 `outreach_disabled`; sin sesión 13 → 401; presupuestos OMITIDOS) · `estado` enseña el 409 · `parada-global` APLICADO con la maestra apagada (frenos globales 0 → 1) · `apagar` nada que escribir · cierre 2/2.
