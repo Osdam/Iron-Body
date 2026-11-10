@@ -1,0 +1,1019 @@
+{
+  "fixture": "strategy-chain-vectors.json",
+  "version": 1,
+  "contract": "backend/docs/ultron-studio/ULTRON_STUDIO_H9_CONTRACT.md (congelado por el lead el 09-11-2026 20:30 UTC; §13.2 renumerado T1–T23)",
+  "contractSections": [
+    "D9-11.3 (cadena ultron_studio_strategy_publications: seq global = cabeza + 1, prev_hash = sha256 del mensaje canónico anterior, CHECK seq ≥ 1, solo inserción; mensaje firmado = JSON canónico con las claves ordenadas; HMAC-SHA256 con la subclave de la APP_KEY de etiqueta ultron-studio-strategy-chain, distinta de ultron-studio-publication y de ultron-studio-voice-chain; una sola implementación en Outreach\\Core\\StrategyChainSignature)",
+    "D9-11.0 (publicar, promover, pausar, reanudar, revertir)",
+    "§6.1 (action ∈ publish, promote, pause, resume, rollback, retire)",
+    "§13.2 T1 (una entrada manipulada → chain_unreadable)"
+  ],
+  "generatedBy": "tests/fixtures/outreach/tools/build/build.py (python3 -I), con los casos a mano en sec_*.py",
+  "checkedBy": "tests/Unit/Outreach/FixturesSanityTest.php (forma, unicidad, canonicalización y huellas, sin código del motor)",
+  "readme": "tests/fixtures/outreach/README.md",
+  "basisLegend": {
+    "contrato": "Lo dice el contrato H9 tal cual (contractRef).",
+    "ley": "Lo dice la ley citada (Ley 2300 de 2023, Ley 1581 de 2012, Ley 51 de 1983, Ley 2578 de 2026).",
+    "codigo-existente": "Lo hace hoy el código que el contrato manda reutilizar o igualar (ContactPolicy, OutboundSchedule, ColombianHolidays, VoiceFrequency, StudioContentHasher…); la cita va en contractRef.",
+    "supuesto-lead": "Sigue un supuesto de la congelación del lead (P9-n), que el propietario puede cambiar.",
+    "decision-fixture": "El contrato no lo fija: lo decide este fixture (campo decision; README §Decisiones). Lo congela el lead."
+  },
+  "sources": [
+    {
+      "what": "El contrato del H9 (D9-3 a D9-11, §5, §6, §13 y la Congelación)",
+      "url": "backend/docs/ultron-studio/ULTRON_STUDIO_H9_CONTRACT.md",
+      "consulted": "09-11-2026, en este árbol (sin seguimiento: lo congela el lead)",
+      "how": "Lectura completa; cada caso cita su sección en contractRef."
+    },
+    {
+      "what": "La derivación de la subclave y la firma del H5 y la cadena de voz del H8 (el patrón que D9-11.3 copia)",
+      "url": "backend/app/Services/Marketing/Ultron/UltronPublishedConfig.php (subkey, signatureFor) y backend/tests/fixtures/voice/voice-chain-vectors.json (E1-4/E2-7 del H8)",
+      "consulted": "09-11-2026, en este árbol",
+      "how": "k = HMAC-SHA256(clave = APP_KEY cruda con base64: decodificado, mensaje = etiqueta); firma = hex(HMAC-SHA256(k, mensaje)) en minúscula; el mensaje es el JSON canónico tal cual, sin prefijo de contrato (como la cadena de voz, E2-7)."
+    },
+    {
+      "what": "JSON canónico y su sha256",
+      "url": "backend/app/Services/UltronStudio/StudioContentHasher.php (canonicalJson, hash)",
+      "consulted": "09-11-2026, en este árbol (sin cambios desde el H5)",
+      "how": "Claves ordenadas por bytes a todos los niveles, listas en su orden, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES; rechaza los decimales. El generador lo reproduce y FixturesSanityTest lo cruza con la clase real."
+    }
+  ],
+  "syntheticData": "Ningún dato real: ids, uuids, claves y personas inventados; las personas se nombran por subject_key sintético (m:<id>, l:<id>); sin teléfonos, nombres, documentos ni importes.",
+  "namingNote": "El encargo de TEST9-a lo llama chain-vectors.json; el contrato (§11) lo llama strategy-chain-vectors.json: se entrega con el nombre del contrato (L9-8).",
+  "keys": {
+    "appKeyBase64": "base64:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+    "appKeyRaw": "h6-fixture-app-key-NOT-A-SECRET!",
+    "chainLabel": "ultron-studio-strategy-chain",
+    "h5Label": "ultron-studio-publication",
+    "voiceLabel": "ultron-studio-voice-chain",
+    "chainSubkeyHex": "a310c0000e5bb2514ed9345e09787ceb41dfe62519e01c779ba421553add571f",
+    "chainSubkeyHexFromRawAppKey": "c59a088c6419ad21ac2ac98045d664865d526464a9c55dda7847706249797944",
+    "h5SubkeyHex": "3059c3cdeeb5cc101c324228c5246f7814b638efe63cbd07da2ccf050a5271c3",
+    "voiceSubkeyHex": "9674d702032875b7122655638eb51cc374fa7d352747ea222edf16f56d84c775"
+  },
+  "algorithm": {
+    "subkey": "k = HMAC-SHA256(clave = APP_KEY cruda (base64: decodificado), mensaje = 'ultron-studio-strategy-chain'), 32 bytes",
+    "message": "JSON canónico (StudioContentHasher::canonicalJson) de las 9 claves de D9-11.3, ni una más ni una menos; el ejemplo del contrato las escribe en otro orden para leerlo, pero canónico = ordenadas por bytes (actedByPerson va antes que action)",
+    "entryHash": "sha256 hex del mensaje; es el prevHash de la entrada siguiente (de cualquier estrategia: la cadena es global)",
+    "signature": "hex(HMAC-SHA256(k, mensaje)): 64 hexadecimales en minúscula, sin prefijo",
+    "genesis": "la primera entrada (seq = 1) lleva prevHash = 64 ceros"
+  },
+  "closedSets": {
+    "keys": [
+      "actedByPerson",
+      "action",
+      "approvedByPerson",
+      "contract",
+      "issuedAt",
+      "prevHash",
+      "seq",
+      "state",
+      "strategy"
+    ],
+    "actions": [
+      "pause",
+      "promote",
+      "publish",
+      "resume",
+      "retire",
+      "rollback"
+    ],
+    "statuses": [
+      "active",
+      "off",
+      "paused"
+    ],
+    "purposes": [
+      "collections",
+      "commercial",
+      "service"
+    ],
+    "verifyResults": [
+      "ok",
+      "malformed",
+      "not_canonical",
+      "signature_malformed",
+      "signature_mismatch",
+      "seq_gap",
+      "chain_broken"
+    ]
+  },
+  "decisions": {
+    "DF-V1": "prevHash = entryHash de la entrada anterior de la cadena GLOBAL = sha256 de su mensaje canónico (no su firma), como E2-7 del H8.",
+    "DF-V2": "issuedAt en UTC y al segundo («Y-m-d\\TH:i:s\\Z»): sin fracciones ni otro desfase.",
+    "DF-V3": "(Ratificada por el lead: L9-23.) state = {canary: {contentHash, version} | null, rest: {contentHash, version} | null, status: active | paused | off}; status off exige canary y rest null; publish exige canary; approvedByPerson es la identidad que aprobó la versión en publish y promote, y null en pause, resume, rollback y retire (no hay aprobación); actedByPerson nunca es null.",
+    "DF-V4": "El lector exige que los bytes guardados SEAN el JSON canónico de su contenido (recanonicaliza y compara); si no, not_canonical aunque la firma cuadre.",
+    "DF-V5": "La firma son 64 hex en minúscula; otra forma es signature_malformed.",
+    "DF-V6": "Orden del lector: forma (malformed) → canónico (not_canonical) → forma de la firma → firma (signature_mismatch) → seq = anterior + 1 (seq_gap) → prevHash = entryHash anterior (chain_broken). El primer fallo deniega; OutreachPublishedStrategies lo traduce a chain_unreadable (N5) y nunca lanza (D9-11.3)."
+  },
+  "counts": {
+    "chain": 7,
+    "subkey": 4,
+    "verify": 35,
+    "total": 46
+  },
+  "chain": [
+    {
+      "name": "chain · entry · seq 1 · publicar en canario la v1 de A (génesis: prevHash = 64 ceros)",
+      "kind": "entry",
+      "contractRef": "D9-11.0 (canario), D9-11.3",
+      "basis": "contrato",
+      "decision": "DF-V1",
+      "entry": {
+        "actedByPerson": "1d000000-0000-4000-8000-000000000003",
+        "action": "publish",
+        "approvedByPerson": "1d000000-0000-4000-8000-000000000002",
+        "contract": "ultron-strategy-config/1",
+        "issuedAt": "2026-11-14T15:04:05Z",
+        "prevHash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "seq": 1,
+        "state": {
+          "canary": {
+            "contentHash": "1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451",
+            "version": "6a000000-0000-4000-8000-000000000001"
+          },
+          "rest": null,
+          "status": "active"
+        },
+        "strategy": {
+          "key": "renovacion-7d",
+          "purpose": "commercial",
+          "uuid": "5a000000-0000-4000-8000-000000000001"
+        }
+      },
+      "expected": {
+        "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"publish\",\"approvedByPerson\":\"1d000000-0000-4000-8000-000000000002\",\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-14T15:04:05Z\",\"prevHash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":1,\"state\":{\"canary\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"rest\":null,\"status\":\"active\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+        "entryHash": "71526592fa8991ce85eb9f178ecf66bda76f2142b5395e9b4ebcb8bd10783a91",
+        "signature": "87ac653e6e929d3083ac9f5dc7356b1e9f68639adb551931c65bc0cf39e50140",
+        "prevHashIsPreviousEntryHash": true
+      }
+    },
+    {
+      "name": "chain · entry · seq 2 · publicar en canario la v1 de B (otra estrategia: la cadena es global)",
+      "kind": "entry",
+      "contractRef": "D9-11.3 (seq global)",
+      "basis": "contrato",
+      "decision": "DF-V1",
+      "entry": {
+        "actedByPerson": "1d000000-0000-4000-8000-000000000003",
+        "action": "publish",
+        "approvedByPerson": "1d000000-0000-4000-8000-000000000002",
+        "contract": "ultron-strategy-config/1",
+        "issuedAt": "2026-11-14T15:30:00Z",
+        "prevHash": "71526592fa8991ce85eb9f178ecf66bda76f2142b5395e9b4ebcb8bd10783a91",
+        "seq": 2,
+        "state": {
+          "canary": {
+            "contentHash": "bf2c547cf79f1482f9b169348cd938bb57526fe8456de9a5834628ad266eb77f",
+            "version": "6b000000-0000-4000-8000-000000000001"
+          },
+          "rest": null,
+          "status": "active"
+        },
+        "strategy": {
+          "key": "cobranza-8-30",
+          "purpose": "collections",
+          "uuid": "5b000000-0000-4000-8000-000000000002"
+        }
+      },
+      "expected": {
+        "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"publish\",\"approvedByPerson\":\"1d000000-0000-4000-8000-000000000002\",\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-14T15:30:00Z\",\"prevHash\":\"71526592fa8991ce85eb9f178ecf66bda76f2142b5395e9b4ebcb8bd10783a91\",\"seq\":2,\"state\":{\"canary\":{\"contentHash\":\"bf2c547cf79f1482f9b169348cd938bb57526fe8456de9a5834628ad266eb77f\",\"version\":\"6b000000-0000-4000-8000-000000000001\"},\"rest\":null,\"status\":\"active\"},\"strategy\":{\"key\":\"cobranza-8-30\",\"purpose\":\"collections\",\"uuid\":\"5b000000-0000-4000-8000-000000000002\"}}",
+        "entryHash": "f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2",
+        "signature": "93f9c4004059e8067ee7a4e0182e8e4b99a14c2c16ebbe866f0279913e2125d4",
+        "prevHashIsPreviousEntryHash": true
+      }
+    },
+    {
+      "name": "chain · entry · seq 3 · promover la v1 de A a rest",
+      "kind": "entry",
+      "contractRef": "D9-11.0 (promoción)",
+      "basis": "contrato",
+      "decision": "DF-V1",
+      "entry": {
+        "actedByPerson": "1d000000-0000-4000-8000-000000000003",
+        "action": "promote",
+        "approvedByPerson": "1d000000-0000-4000-8000-000000000002",
+        "contract": "ultron-strategy-config/1",
+        "issuedAt": "2026-11-16T14:00:00Z",
+        "prevHash": "f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2",
+        "seq": 3,
+        "state": {
+          "canary": null,
+          "rest": {
+            "contentHash": "1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451",
+            "version": "6a000000-0000-4000-8000-000000000001"
+          },
+          "status": "active"
+        },
+        "strategy": {
+          "key": "renovacion-7d",
+          "purpose": "commercial",
+          "uuid": "5a000000-0000-4000-8000-000000000001"
+        }
+      },
+      "expected": {
+        "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"promote\",\"approvedByPerson\":\"1d000000-0000-4000-8000-000000000002\",\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-16T14:00:00Z\",\"prevHash\":\"f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2\",\"seq\":3,\"state\":{\"canary\":null,\"rest\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"status\":\"active\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+        "entryHash": "fa7fbc4873c160cf0b32d7af230b6280f69cc4d37210c418a534629cfcb1a7d2",
+        "signature": "e0a1dbf0f540f41ff33cbf71473d79019b565b9decc4419ece79bd47503a0202",
+        "prevHashIsPreviousEntryHash": true
+      }
+    },
+    {
+      "name": "chain · entry · seq 4 · publicar en canario la v2 de A con la v1 en rest",
+      "kind": "entry",
+      "contractRef": "D9-11.0",
+      "basis": "contrato",
+      "decision": "DF-V1",
+      "entry": {
+        "actedByPerson": "1d000000-0000-4000-8000-000000000003",
+        "action": "publish",
+        "approvedByPerson": "1d000000-0000-4000-8000-000000000002",
+        "contract": "ultron-strategy-config/1",
+        "issuedAt": "2026-11-17T14:00:00Z",
+        "prevHash": "fa7fbc4873c160cf0b32d7af230b6280f69cc4d37210c418a534629cfcb1a7d2",
+        "seq": 4,
+        "state": {
+          "canary": {
+            "contentHash": "9e1998deebe8252451cc5c36d0f608ccaa10fcf6e86aed24938d66530fd56c7d",
+            "version": "6a000000-0000-4000-8000-000000000002"
+          },
+          "rest": {
+            "contentHash": "1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451",
+            "version": "6a000000-0000-4000-8000-000000000001"
+          },
+          "status": "active"
+        },
+        "strategy": {
+          "key": "renovacion-7d",
+          "purpose": "commercial",
+          "uuid": "5a000000-0000-4000-8000-000000000001"
+        }
+      },
+      "expected": {
+        "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"publish\",\"approvedByPerson\":\"1d000000-0000-4000-8000-000000000002\",\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-17T14:00:00Z\",\"prevHash\":\"fa7fbc4873c160cf0b32d7af230b6280f69cc4d37210c418a534629cfcb1a7d2\",\"seq\":4,\"state\":{\"canary\":{\"contentHash\":\"9e1998deebe8252451cc5c36d0f608ccaa10fcf6e86aed24938d66530fd56c7d\",\"version\":\"6a000000-0000-4000-8000-000000000002\"},\"rest\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"status\":\"active\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+        "entryHash": "25c7eccf2831c74f6284091b653ed5782694ca472ab1bcb82b2309f622eb5edc",
+        "signature": "3550cca44281092bcdf002177b66e9be949966815b97b2d447a82e7a8096b49b",
+        "prevHashIsPreviousEntryHash": true
+      }
+    },
+    {
+      "name": "chain · entry · seq 5 · pausar A (sin aprobación)",
+      "kind": "entry",
+      "contractRef": "D9-11.0 (pausa, siempre)",
+      "basis": "decision-fixture",
+      "decision": "DF-V3",
+      "entry": {
+        "actedByPerson": "1d000000-0000-4000-8000-000000000001",
+        "action": "pause",
+        "approvedByPerson": null,
+        "contract": "ultron-strategy-config/1",
+        "issuedAt": "2026-11-17T16:00:00Z",
+        "prevHash": "25c7eccf2831c74f6284091b653ed5782694ca472ab1bcb82b2309f622eb5edc",
+        "seq": 5,
+        "state": {
+          "canary": {
+            "contentHash": "9e1998deebe8252451cc5c36d0f608ccaa10fcf6e86aed24938d66530fd56c7d",
+            "version": "6a000000-0000-4000-8000-000000000002"
+          },
+          "rest": {
+            "contentHash": "1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451",
+            "version": "6a000000-0000-4000-8000-000000000001"
+          },
+          "status": "paused"
+        },
+        "strategy": {
+          "key": "renovacion-7d",
+          "purpose": "commercial",
+          "uuid": "5a000000-0000-4000-8000-000000000001"
+        }
+      },
+      "expected": {
+        "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000001\",\"action\":\"pause\",\"approvedByPerson\":null,\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-17T16:00:00Z\",\"prevHash\":\"25c7eccf2831c74f6284091b653ed5782694ca472ab1bcb82b2309f622eb5edc\",\"seq\":5,\"state\":{\"canary\":{\"contentHash\":\"9e1998deebe8252451cc5c36d0f608ccaa10fcf6e86aed24938d66530fd56c7d\",\"version\":\"6a000000-0000-4000-8000-000000000002\"},\"rest\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"status\":\"paused\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+        "entryHash": "38cc4bcd057daf657eb930c483d63f887167ffe97e76a3a47f9a034ac095f007",
+        "signature": "3d9870c5387acca7d66c42830ffa1fd292042f990fd30e19523e48c7e71c66f7",
+        "prevHashIsPreviousEntryHash": true
+      }
+    },
+    {
+      "name": "chain · entry · seq 6 · revertir la v2 de A: vuelve la v1 en rest",
+      "kind": "entry",
+      "contractRef": "D9-11.0 (reversión), #25",
+      "basis": "decision-fixture",
+      "decision": "DF-V3",
+      "entry": {
+        "actedByPerson": "1d000000-0000-4000-8000-000000000001",
+        "action": "rollback",
+        "approvedByPerson": null,
+        "contract": "ultron-strategy-config/1",
+        "issuedAt": "2026-11-17T16:10:00Z",
+        "prevHash": "38cc4bcd057daf657eb930c483d63f887167ffe97e76a3a47f9a034ac095f007",
+        "seq": 6,
+        "state": {
+          "canary": null,
+          "rest": {
+            "contentHash": "1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451",
+            "version": "6a000000-0000-4000-8000-000000000001"
+          },
+          "status": "active"
+        },
+        "strategy": {
+          "key": "renovacion-7d",
+          "purpose": "commercial",
+          "uuid": "5a000000-0000-4000-8000-000000000001"
+        }
+      },
+      "expected": {
+        "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000001\",\"action\":\"rollback\",\"approvedByPerson\":null,\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-17T16:10:00Z\",\"prevHash\":\"38cc4bcd057daf657eb930c483d63f887167ffe97e76a3a47f9a034ac095f007\",\"seq\":6,\"state\":{\"canary\":null,\"rest\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"status\":\"active\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+        "entryHash": "4ccbeb8eefe8ecef1c32ca68a4686fbe44b1e0603c12f46078252c997de4cfd4",
+        "signature": "898117cd672c17712476f4fde776bc818457ccf32505a18241ae6018fd413a38",
+        "prevHashIsPreviousEntryHash": true
+      }
+    },
+    {
+      "name": "chain · entry · seq 7 · retirar B: apagada",
+      "kind": "entry",
+      "contractRef": "§6.1 (retire)",
+      "basis": "decision-fixture",
+      "decision": "DF-V3",
+      "entry": {
+        "actedByPerson": "1d000000-0000-4000-8000-000000000003",
+        "action": "retire",
+        "approvedByPerson": null,
+        "contract": "ultron-strategy-config/1",
+        "issuedAt": "2026-11-18T13:00:00Z",
+        "prevHash": "4ccbeb8eefe8ecef1c32ca68a4686fbe44b1e0603c12f46078252c997de4cfd4",
+        "seq": 7,
+        "state": {
+          "canary": null,
+          "rest": null,
+          "status": "off"
+        },
+        "strategy": {
+          "key": "cobranza-8-30",
+          "purpose": "collections",
+          "uuid": "5b000000-0000-4000-8000-000000000002"
+        }
+      },
+      "expected": {
+        "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"retire\",\"approvedByPerson\":null,\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-18T13:00:00Z\",\"prevHash\":\"4ccbeb8eefe8ecef1c32ca68a4686fbe44b1e0603c12f46078252c997de4cfd4\",\"seq\":7,\"state\":{\"canary\":null,\"rest\":null,\"status\":\"off\"},\"strategy\":{\"key\":\"cobranza-8-30\",\"purpose\":\"collections\",\"uuid\":\"5b000000-0000-4000-8000-000000000002\"}}",
+        "entryHash": "bed9937f50394b01a3f9b41c3ae31c2f5faa2d34185766ad6fb933d0c86139ea",
+        "signature": "d3748fc1e17f2427768dee143fbdf7beb84c40757e81d59817a47c0f132c9dc2",
+        "prevHashIsPreviousEntryHash": true
+      }
+    }
+  ],
+  "subkey": [
+    {
+      "name": "subkey · derive · subclave de la cadena de estrategias con la APP_KEY base64: (bytes 00..1f)",
+      "kind": "derive",
+      "contractRef": "D9-11.3",
+      "basis": "contrato",
+      "appKey": "base64:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+      "label": "ultron-studio-strategy-chain",
+      "expected": {
+        "subkeyHex": "a310c0000e5bb2514ed9345e09787ceb41dfe62519e01c779ba421553add571f"
+      }
+    },
+    {
+      "name": "subkey · derive · con una APP_KEY sin base64: (se usa tal cual, como Laravel)",
+      "kind": "derive",
+      "contractRef": "D9-11.3",
+      "basis": "contrato",
+      "appKey": "h6-fixture-app-key-NOT-A-SECRET!",
+      "label": "ultron-studio-strategy-chain",
+      "expected": {
+        "subkeyHex": "c59a088c6419ad21ac2ac98045d664865d526464a9c55dda7847706249797944"
+      }
+    },
+    {
+      "name": "subkey · derive · la del H5 (ultron-studio-publication) es otra",
+      "kind": "derive",
+      "contractRef": "D9-11.3 («una firma no vale en otro dominio»)",
+      "basis": "contrato",
+      "appKey": "base64:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+      "label": "ultron-studio-publication",
+      "expected": {
+        "subkeyHex": "3059c3cdeeb5cc101c324228c5246f7814b638efe63cbd07da2ccf050a5271c3",
+        "differsFromChain": true
+      }
+    },
+    {
+      "name": "subkey · derive · la de la voz del H8 (ultron-studio-voice-chain) es otra",
+      "kind": "derive",
+      "contractRef": "D9-11.3",
+      "basis": "contrato",
+      "appKey": "base64:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+      "label": "ultron-studio-voice-chain",
+      "expected": {
+        "subkeyHex": "9674d702032875b7122655638eb51cc374fa7d352747ea222edf16f56d84c775",
+        "differsFromChain": true
+      }
+    }
+  ],
+  "verify": [
+    {
+      "name": "verify · read · la entrada seq 1 verifica",
+      "kind": "read",
+      "contractRef": "D9-11.3",
+      "basis": "contrato",
+      "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"publish\",\"approvedByPerson\":\"1d000000-0000-4000-8000-000000000002\",\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-14T15:04:05Z\",\"prevHash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":1,\"state\":{\"canary\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"rest\":null,\"status\":\"active\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+      "signature": "87ac653e6e929d3083ac9f5dc7356b1e9f68639adb551931c65bc0cf39e50140",
+      "previous": null,
+      "expected": {
+        "result": "ok",
+        "denies": false,
+        "n5Reason": null
+      }
+    },
+    {
+      "name": "verify · read · la entrada seq 2 verifica",
+      "kind": "read",
+      "contractRef": "D9-11.3",
+      "basis": "contrato",
+      "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"publish\",\"approvedByPerson\":\"1d000000-0000-4000-8000-000000000002\",\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-14T15:30:00Z\",\"prevHash\":\"71526592fa8991ce85eb9f178ecf66bda76f2142b5395e9b4ebcb8bd10783a91\",\"seq\":2,\"state\":{\"canary\":{\"contentHash\":\"bf2c547cf79f1482f9b169348cd938bb57526fe8456de9a5834628ad266eb77f\",\"version\":\"6b000000-0000-4000-8000-000000000001\"},\"rest\":null,\"status\":\"active\"},\"strategy\":{\"key\":\"cobranza-8-30\",\"purpose\":\"collections\",\"uuid\":\"5b000000-0000-4000-8000-000000000002\"}}",
+      "signature": "93f9c4004059e8067ee7a4e0182e8e4b99a14c2c16ebbe866f0279913e2125d4",
+      "previous": {
+        "seq": 1,
+        "entryHash": "71526592fa8991ce85eb9f178ecf66bda76f2142b5395e9b4ebcb8bd10783a91"
+      },
+      "expected": {
+        "result": "ok",
+        "denies": false,
+        "n5Reason": null
+      }
+    },
+    {
+      "name": "verify · read · la entrada seq 3 verifica",
+      "kind": "read",
+      "contractRef": "D9-11.3",
+      "basis": "contrato",
+      "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"promote\",\"approvedByPerson\":\"1d000000-0000-4000-8000-000000000002\",\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-16T14:00:00Z\",\"prevHash\":\"f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2\",\"seq\":3,\"state\":{\"canary\":null,\"rest\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"status\":\"active\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+      "signature": "e0a1dbf0f540f41ff33cbf71473d79019b565b9decc4419ece79bd47503a0202",
+      "previous": {
+        "seq": 2,
+        "entryHash": "f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2"
+      },
+      "expected": {
+        "result": "ok",
+        "denies": false,
+        "n5Reason": null
+      }
+    },
+    {
+      "name": "verify · read · la entrada seq 4 verifica",
+      "kind": "read",
+      "contractRef": "D9-11.3",
+      "basis": "contrato",
+      "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"publish\",\"approvedByPerson\":\"1d000000-0000-4000-8000-000000000002\",\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-17T14:00:00Z\",\"prevHash\":\"fa7fbc4873c160cf0b32d7af230b6280f69cc4d37210c418a534629cfcb1a7d2\",\"seq\":4,\"state\":{\"canary\":{\"contentHash\":\"9e1998deebe8252451cc5c36d0f608ccaa10fcf6e86aed24938d66530fd56c7d\",\"version\":\"6a000000-0000-4000-8000-000000000002\"},\"rest\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"status\":\"active\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+      "signature": "3550cca44281092bcdf002177b66e9be949966815b97b2d447a82e7a8096b49b",
+      "previous": {
+        "seq": 3,
+        "entryHash": "fa7fbc4873c160cf0b32d7af230b6280f69cc4d37210c418a534629cfcb1a7d2"
+      },
+      "expected": {
+        "result": "ok",
+        "denies": false,
+        "n5Reason": null
+      }
+    },
+    {
+      "name": "verify · read · la entrada seq 5 verifica",
+      "kind": "read",
+      "contractRef": "D9-11.3",
+      "basis": "contrato",
+      "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000001\",\"action\":\"pause\",\"approvedByPerson\":null,\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-17T16:00:00Z\",\"prevHash\":\"25c7eccf2831c74f6284091b653ed5782694ca472ab1bcb82b2309f622eb5edc\",\"seq\":5,\"state\":{\"canary\":{\"contentHash\":\"9e1998deebe8252451cc5c36d0f608ccaa10fcf6e86aed24938d66530fd56c7d\",\"version\":\"6a000000-0000-4000-8000-000000000002\"},\"rest\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"status\":\"paused\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+      "signature": "3d9870c5387acca7d66c42830ffa1fd292042f990fd30e19523e48c7e71c66f7",
+      "previous": {
+        "seq": 4,
+        "entryHash": "25c7eccf2831c74f6284091b653ed5782694ca472ab1bcb82b2309f622eb5edc"
+      },
+      "expected": {
+        "result": "ok",
+        "denies": false,
+        "n5Reason": null
+      }
+    },
+    {
+      "name": "verify · read · la entrada seq 6 verifica",
+      "kind": "read",
+      "contractRef": "D9-11.3",
+      "basis": "contrato",
+      "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000001\",\"action\":\"rollback\",\"approvedByPerson\":null,\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-17T16:10:00Z\",\"prevHash\":\"38cc4bcd057daf657eb930c483d63f887167ffe97e76a3a47f9a034ac095f007\",\"seq\":6,\"state\":{\"canary\":null,\"rest\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"status\":\"active\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+      "signature": "898117cd672c17712476f4fde776bc818457ccf32505a18241ae6018fd413a38",
+      "previous": {
+        "seq": 5,
+        "entryHash": "38cc4bcd057daf657eb930c483d63f887167ffe97e76a3a47f9a034ac095f007"
+      },
+      "expected": {
+        "result": "ok",
+        "denies": false,
+        "n5Reason": null
+      }
+    },
+    {
+      "name": "verify · read · la entrada seq 7 verifica",
+      "kind": "read",
+      "contractRef": "D9-11.3",
+      "basis": "contrato",
+      "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"retire\",\"approvedByPerson\":null,\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-18T13:00:00Z\",\"prevHash\":\"4ccbeb8eefe8ecef1c32ca68a4686fbe44b1e0603c12f46078252c997de4cfd4\",\"seq\":7,\"state\":{\"canary\":null,\"rest\":null,\"status\":\"off\"},\"strategy\":{\"key\":\"cobranza-8-30\",\"purpose\":\"collections\",\"uuid\":\"5b000000-0000-4000-8000-000000000002\"}}",
+      "signature": "d3748fc1e17f2427768dee143fbdf7beb84c40757e81d59817a47c0f132c9dc2",
+      "previous": {
+        "seq": 6,
+        "entryHash": "4ccbeb8eefe8ecef1c32ca68a4686fbe44b1e0603c12f46078252c997de4cfd4"
+      },
+      "expected": {
+        "result": "ok",
+        "denies": false,
+        "n5Reason": null
+      }
+    },
+    {
+      "name": "verify · read · firmada con la subclave del H5 → signature_mismatch",
+      "kind": "read",
+      "contractRef": "D9-11.3 («una firma no vale en otro dominio»)",
+      "basis": "contrato",
+      "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"promote\",\"approvedByPerson\":\"1d000000-0000-4000-8000-000000000002\",\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-16T14:00:00Z\",\"prevHash\":\"f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2\",\"seq\":3,\"state\":{\"canary\":null,\"rest\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"status\":\"active\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+      "signature": "7ff0e54cc51900ecb1c6e1f72c281516dee346dd7f22514e80a1b16972bb038d",
+      "previous": {
+        "seq": 2,
+        "entryHash": "f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2"
+      },
+      "expected": {
+        "result": "signature_mismatch",
+        "denies": true,
+        "n5Reason": "chain_unreadable"
+      }
+    },
+    {
+      "name": "verify · read · firmada con la subclave de la voz del H8 → signature_mismatch",
+      "kind": "read",
+      "contractRef": "D9-11.3",
+      "basis": "contrato",
+      "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"promote\",\"approvedByPerson\":\"1d000000-0000-4000-8000-000000000002\",\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-16T14:00:00Z\",\"prevHash\":\"f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2\",\"seq\":3,\"state\":{\"canary\":null,\"rest\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"status\":\"active\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+      "signature": "70c5f951c86bb418baf51db721e8230a4425c840728b1235967132f8a5dd06f1",
+      "previous": {
+        "seq": 2,
+        "entryHash": "f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2"
+      },
+      "expected": {
+        "result": "signature_mismatch",
+        "denies": true,
+        "n5Reason": "chain_unreadable"
+      }
+    },
+    {
+      "name": "verify · read · firmada con el prefijo de contrato del H5 («ultron-strategy-config/1\\n» + mensaje) → signature_mismatch",
+      "kind": "read",
+      "contractRef": "D9-11.3",
+      "basis": "decision-fixture",
+      "decision": "DF-V6",
+      "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"promote\",\"approvedByPerson\":\"1d000000-0000-4000-8000-000000000002\",\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-16T14:00:00Z\",\"prevHash\":\"f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2\",\"seq\":3,\"state\":{\"canary\":null,\"rest\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"status\":\"active\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+      "signature": "312e2d8f48b694e79df1b8de5a195c8d072f07f52a04a2533b7c26dd6a7e8ed4",
+      "previous": {
+        "seq": 2,
+        "entryHash": "f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2"
+      },
+      "expected": {
+        "result": "signature_mismatch",
+        "denies": true,
+        "n5Reason": "chain_unreadable"
+      }
+    },
+    {
+      "name": "verify · read · firmada con otra APP_KEY (rotada) → signature_mismatch",
+      "kind": "read",
+      "contractRef": "D9-11.3",
+      "basis": "contrato",
+      "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"promote\",\"approvedByPerson\":\"1d000000-0000-4000-8000-000000000002\",\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-16T14:00:00Z\",\"prevHash\":\"f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2\",\"seq\":3,\"state\":{\"canary\":null,\"rest\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"status\":\"active\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+      "signature": "55725030783e0378a005658e43a328d2dcbfa32f505be928cbbb9ed26fbf0bee",
+      "previous": {
+        "seq": 2,
+        "entryHash": "f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2"
+      },
+      "expected": {
+        "result": "signature_mismatch",
+        "denies": true,
+        "n5Reason": "chain_unreadable"
+      }
+    },
+    {
+      "name": "verify · read · un carácter del contentHash cambiado con la firma original (UPDATE crudo, T1) → signature_mismatch",
+      "kind": "read",
+      "contractRef": "T1 («una entrada manipulada»)",
+      "basis": "contrato",
+      "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"promote\",\"approvedByPerson\":\"1d000000-0000-4000-8000-000000000002\",\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-16T14:00:00Z\",\"prevHash\":\"f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2\",\"seq\":3,\"state\":{\"canary\":null,\"rest\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b450\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"status\":\"active\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+      "signature": "e0a1dbf0f540f41ff33cbf71473d79019b565b9decc4419ece79bd47503a0202",
+      "previous": {
+        "seq": 2,
+        "entryHash": "f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2"
+      },
+      "expected": {
+        "result": "signature_mismatch",
+        "denies": true,
+        "n5Reason": "chain_unreadable"
+      }
+    },
+    {
+      "name": "verify · read · bytes con sangría aunque la firma cuadre con ellos → not_canonical",
+      "kind": "read",
+      "contractRef": "D9-11.3",
+      "basis": "decision-fixture",
+      "decision": "DF-V4",
+      "message": "{\n \"actedByPerson\": \"1d000000-0000-4000-8000-000000000003\",\n \"action\": \"promote\",\n \"approvedByPerson\": \"1d000000-0000-4000-8000-000000000002\",\n \"contract\": \"ultron-strategy-config/1\",\n \"issuedAt\": \"2026-11-16T14:00:00Z\",\n \"prevHash\": \"f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2\",\n \"seq\": 3,\n \"state\": {\n  \"canary\": null,\n  \"rest\": {\n   \"contentHash\": \"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\n   \"version\": \"6a000000-0000-4000-8000-000000000001\"\n  },\n  \"status\": \"active\"\n },\n \"strategy\": {\n  \"key\": \"renovacion-7d\",\n  \"purpose\": \"commercial\",\n  \"uuid\": \"5a000000-0000-4000-8000-000000000001\"\n }\n}",
+      "signature": "1aba513c02cc62a4c1dcf38bc0b5ae24bd30d5d4f104edb378104cf9bbe181ad",
+      "previous": {
+        "seq": 2,
+        "entryHash": "f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2"
+      },
+      "expected": {
+        "result": "not_canonical",
+        "denies": true,
+        "n5Reason": "chain_unreadable"
+      }
+    },
+    {
+      "name": "verify · read · claves en otro orden (como el ejemplo del contrato) aunque la firma cuadre → not_canonical",
+      "kind": "read",
+      "contractRef": "D9-11.3",
+      "basis": "decision-fixture",
+      "decision": "DF-V4",
+      "message": "{\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"},\"state\":{\"canary\":null,\"rest\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"status\":\"active\"},\"seq\":3,\"prevHash\":\"f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2\",\"issuedAt\":\"2026-11-16T14:00:00Z\",\"contract\":\"ultron-strategy-config/1\",\"approvedByPerson\":\"1d000000-0000-4000-8000-000000000002\",\"action\":\"promote\",\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\"}",
+      "signature": "a2e09f0c135ed4436f6b6aa389e0c305cc102732d9ae36baea80067c33080f9f",
+      "previous": {
+        "seq": 2,
+        "entryHash": "f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2"
+      },
+      "expected": {
+        "result": "not_canonical",
+        "denies": true,
+        "n5Reason": "chain_unreadable"
+      }
+    },
+    {
+      "name": "verify · read · la firma en mayúsculas → signature_malformed",
+      "kind": "read",
+      "contractRef": "D9-11.3",
+      "basis": "decision-fixture",
+      "decision": "DF-V5",
+      "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"promote\",\"approvedByPerson\":\"1d000000-0000-4000-8000-000000000002\",\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-16T14:00:00Z\",\"prevHash\":\"f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2\",\"seq\":3,\"state\":{\"canary\":null,\"rest\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"status\":\"active\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+      "signature": "E0A1DBF0F540F41FF33CBF71473D79019B565B9DECC4419ECE79BD47503A0202",
+      "previous": {
+        "seq": 2,
+        "entryHash": "f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2"
+      },
+      "expected": {
+        "result": "signature_malformed",
+        "denies": true,
+        "n5Reason": "chain_unreadable"
+      }
+    },
+    {
+      "name": "verify · read · la firma de 63 caracteres → signature_malformed",
+      "kind": "read",
+      "contractRef": "D9-11.3",
+      "basis": "decision-fixture",
+      "decision": "DF-V5",
+      "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"promote\",\"approvedByPerson\":\"1d000000-0000-4000-8000-000000000002\",\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-16T14:00:00Z\",\"prevHash\":\"f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2\",\"seq\":3,\"state\":{\"canary\":null,\"rest\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"status\":\"active\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+      "signature": "e0a1dbf0f540f41ff33cbf71473d79019b565b9decc4419ece79bd47503a020",
+      "previous": {
+        "seq": 2,
+        "entryHash": "f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2"
+      },
+      "expected": {
+        "result": "signature_malformed",
+        "denies": true,
+        "n5Reason": "chain_unreadable"
+      }
+    },
+    {
+      "name": "verify · read · seq 3 detrás de una cabeza con seq 3 → seq_gap",
+      "kind": "read",
+      "contractRef": "D9-11.3 (cabeza + 1)",
+      "basis": "contrato",
+      "decision": "DF-V6",
+      "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"promote\",\"approvedByPerson\":\"1d000000-0000-4000-8000-000000000002\",\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-16T14:00:00Z\",\"prevHash\":\"f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2\",\"seq\":3,\"state\":{\"canary\":null,\"rest\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"status\":\"active\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+      "signature": "e0a1dbf0f540f41ff33cbf71473d79019b565b9decc4419ece79bd47503a0202",
+      "previous": {
+        "seq": 3,
+        "entryHash": "f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2"
+      },
+      "expected": {
+        "result": "seq_gap",
+        "denies": true,
+        "n5Reason": "chain_unreadable"
+      }
+    },
+    {
+      "name": "verify · read · seq 4 directamente detrás de seq 2 → seq_gap",
+      "kind": "read",
+      "contractRef": "D9-11.3",
+      "basis": "contrato",
+      "decision": "DF-V6",
+      "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"publish\",\"approvedByPerson\":\"1d000000-0000-4000-8000-000000000002\",\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-17T14:00:00Z\",\"prevHash\":\"fa7fbc4873c160cf0b32d7af230b6280f69cc4d37210c418a534629cfcb1a7d2\",\"seq\":4,\"state\":{\"canary\":{\"contentHash\":\"9e1998deebe8252451cc5c36d0f608ccaa10fcf6e86aed24938d66530fd56c7d\",\"version\":\"6a000000-0000-4000-8000-000000000002\"},\"rest\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"status\":\"active\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+      "signature": "3550cca44281092bcdf002177b66e9be949966815b97b2d447a82e7a8096b49b",
+      "previous": {
+        "seq": 2,
+        "entryHash": "f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2"
+      },
+      "expected": {
+        "result": "seq_gap",
+        "denies": true,
+        "n5Reason": "chain_unreadable"
+      }
+    },
+    {
+      "name": "verify · read · prevHash que no es el de la anterior → chain_broken",
+      "kind": "read",
+      "contractRef": "D9-11.3",
+      "basis": "contrato",
+      "decision": "DF-V6",
+      "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"promote\",\"approvedByPerson\":\"1d000000-0000-4000-8000-000000000002\",\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-16T14:00:00Z\",\"prevHash\":\"f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2\",\"seq\":3,\"state\":{\"canary\":null,\"rest\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"status\":\"active\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+      "signature": "e0a1dbf0f540f41ff33cbf71473d79019b565b9decc4419ece79bd47503a0202",
+      "previous": {
+        "seq": 2,
+        "entryHash": "09f6029f0f0ad34b103ad079a08a8910510e55b01348b87d2a8c7f3ecb2ff2ff"
+      },
+      "expected": {
+        "result": "chain_broken",
+        "denies": true,
+        "n5Reason": "chain_unreadable"
+      }
+    },
+    {
+      "name": "verify · read · prevHash = la FIRMA de la anterior (no su huella) → chain_broken",
+      "kind": "read",
+      "contractRef": "D9-11.3",
+      "basis": "decision-fixture",
+      "decision": "DF-V1",
+      "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"promote\",\"approvedByPerson\":\"1d000000-0000-4000-8000-000000000002\",\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-16T14:00:00Z\",\"prevHash\":\"93f9c4004059e8067ee7a4e0182e8e4b99a14c2c16ebbe866f0279913e2125d4\",\"seq\":3,\"state\":{\"canary\":null,\"rest\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"status\":\"active\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+      "signature": "bb2d39b2b400c31ef63d195486ec26fe0ec78177ff6778086bba11893b5697a7",
+      "previous": {
+        "seq": 2,
+        "entryHash": "f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2"
+      },
+      "expected": {
+        "result": "chain_broken",
+        "denies": true,
+        "n5Reason": "chain_unreadable"
+      }
+    },
+    {
+      "name": "verify · read · prevHash = la huella de la última de la MISMA estrategia y no de la anterior global → chain_broken",
+      "kind": "read",
+      "contractRef": "D9-11.3 (seq global)",
+      "basis": "decision-fixture",
+      "decision": "DF-V1",
+      "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"promote\",\"approvedByPerson\":\"1d000000-0000-4000-8000-000000000002\",\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-16T14:00:00Z\",\"prevHash\":\"71526592fa8991ce85eb9f178ecf66bda76f2142b5395e9b4ebcb8bd10783a91\",\"seq\":3,\"state\":{\"canary\":null,\"rest\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"status\":\"active\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+      "signature": "3fef03d07779970a5e2a758182106edaab3838d725ec08a4cae6d5d288f37f03",
+      "previous": {
+        "seq": 2,
+        "entryHash": "f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2"
+      },
+      "expected": {
+        "result": "chain_broken",
+        "denies": true,
+        "n5Reason": "chain_unreadable"
+      }
+    },
+    {
+      "name": "verify · read · la génesis sin los 64 ceros → chain_broken",
+      "kind": "read",
+      "contractRef": "D9-11.3",
+      "basis": "contrato",
+      "decision": "DF-V6",
+      "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"publish\",\"approvedByPerson\":\"1d000000-0000-4000-8000-000000000002\",\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-14T15:04:05Z\",\"prevHash\":\"92fa18a4717c7589fde18c7fbfc5c68589c00084935c4bb75849c36aa85c573e\",\"seq\":1,\"state\":{\"canary\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"rest\":null,\"status\":\"active\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+      "signature": "13554f86d528f2a995ba6bf7065ebe46251e410f382215d05dec515d5807c1f9",
+      "previous": null,
+      "expected": {
+        "result": "chain_broken",
+        "denies": true,
+        "n5Reason": "chain_unreadable"
+      }
+    },
+    {
+      "name": "verify · read · una clave de más (reason) → malformed",
+      "kind": "read",
+      "contractRef": "D9-11.3",
+      "basis": "decision-fixture",
+      "decision": "DF-V6",
+      "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"promote\",\"approvedByPerson\":\"1d000000-0000-4000-8000-000000000002\",\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-16T14:00:00Z\",\"prevHash\":\"f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2\",\"reason\":\"x\",\"seq\":3,\"state\":{\"canary\":null,\"rest\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"status\":\"active\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+      "signature": "d15e166645b05c1690760371350d8727005090edbf2b6d8b314e0bb632db528b",
+      "previous": {
+        "seq": 2,
+        "entryHash": "f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2"
+      },
+      "expected": {
+        "result": "malformed",
+        "denies": true,
+        "n5Reason": "chain_unreadable"
+      }
+    },
+    {
+      "name": "verify · read · falta actedByPerson → malformed",
+      "kind": "read",
+      "contractRef": "D9-11.3",
+      "basis": "decision-fixture",
+      "decision": "DF-V6",
+      "message": "{\"action\":\"promote\",\"approvedByPerson\":\"1d000000-0000-4000-8000-000000000002\",\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-16T14:00:00Z\",\"prevHash\":\"f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2\",\"seq\":3,\"state\":{\"canary\":null,\"rest\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"status\":\"active\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+      "signature": "e6e13c9c7745365e484e8a2e5fe3c4bc6073924e967d65671cd85d29df3ca4bb",
+      "previous": {
+        "seq": 2,
+        "entryHash": "f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2"
+      },
+      "expected": {
+        "result": "malformed",
+        "denies": true,
+        "n5Reason": "chain_unreadable"
+      }
+    },
+    {
+      "name": "verify · read · contract de otra versión → malformed",
+      "kind": "read",
+      "contractRef": "D9-11.3",
+      "basis": "decision-fixture",
+      "decision": "DF-V6",
+      "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"promote\",\"approvedByPerson\":\"1d000000-0000-4000-8000-000000000002\",\"contract\":\"ultron-strategy-config/2\",\"issuedAt\":\"2026-11-16T14:00:00Z\",\"prevHash\":\"f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2\",\"seq\":3,\"state\":{\"canary\":null,\"rest\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"status\":\"active\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+      "signature": "7324cf7431504c932724cc0647afbfe02e8dfed82d088ef2553821c52a7d3e9b",
+      "previous": {
+        "seq": 2,
+        "entryHash": "f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2"
+      },
+      "expected": {
+        "result": "malformed",
+        "denies": true,
+        "n5Reason": "chain_unreadable"
+      }
+    },
+    {
+      "name": "verify · read · issuedAt con milisegundos → malformed",
+      "kind": "read",
+      "contractRef": "D9-11.3",
+      "basis": "decision-fixture",
+      "decision": "DF-V2",
+      "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"promote\",\"approvedByPerson\":\"1d000000-0000-4000-8000-000000000002\",\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-16T14:00:00.123Z\",\"prevHash\":\"f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2\",\"seq\":3,\"state\":{\"canary\":null,\"rest\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"status\":\"active\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+      "signature": "a56f862924ba87c937a9e5831b22b534489d4f92c83a4457c8d5e9c85fe63215",
+      "previous": {
+        "seq": 2,
+        "entryHash": "f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2"
+      },
+      "expected": {
+        "result": "malformed",
+        "denies": true,
+        "n5Reason": "chain_unreadable"
+      }
+    },
+    {
+      "name": "verify · read · issuedAt con desfase de Bogotá en vez de Z → malformed",
+      "kind": "read",
+      "contractRef": "D9-11.3",
+      "basis": "decision-fixture",
+      "decision": "DF-V2",
+      "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"promote\",\"approvedByPerson\":\"1d000000-0000-4000-8000-000000000002\",\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-16T09:00:00-05:00\",\"prevHash\":\"f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2\",\"seq\":3,\"state\":{\"canary\":null,\"rest\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"status\":\"active\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+      "signature": "d3892a192a1b4e6e9e8fb368932a7157cfb92a5bc4325d753d5170d24a88f388",
+      "previous": {
+        "seq": 2,
+        "entryHash": "f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2"
+      },
+      "expected": {
+        "result": "malformed",
+        "denies": true,
+        "n5Reason": "chain_unreadable"
+      }
+    },
+    {
+      "name": "verify · read · seq como texto → malformed",
+      "kind": "read",
+      "contractRef": "D9-11.3",
+      "basis": "decision-fixture",
+      "decision": "DF-V6",
+      "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"promote\",\"approvedByPerson\":\"1d000000-0000-4000-8000-000000000002\",\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-16T14:00:00Z\",\"prevHash\":\"f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2\",\"seq\":\"3\",\"state\":{\"canary\":null,\"rest\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"status\":\"active\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+      "signature": "65dbcf518d48cb5e1f1ce143c1c70b794939be96b4c46e1877b5f604d702e565",
+      "previous": {
+        "seq": 2,
+        "entryHash": "f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2"
+      },
+      "expected": {
+        "result": "malformed",
+        "denies": true,
+        "n5Reason": "chain_unreadable"
+      }
+    },
+    {
+      "name": "verify · read · action desconocida (archive no es de la cadena) → malformed",
+      "kind": "read",
+      "contractRef": "D9-11.3",
+      "basis": "decision-fixture",
+      "decision": "DF-V3",
+      "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"archive\",\"approvedByPerson\":\"1d000000-0000-4000-8000-000000000002\",\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-16T14:00:00Z\",\"prevHash\":\"f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2\",\"seq\":3,\"state\":{\"canary\":null,\"rest\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"status\":\"active\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+      "signature": "f383888f9d6341522c14112ff0b6a108a53e994d316f9e7de1c5c14dd57618d1",
+      "previous": {
+        "seq": 2,
+        "entryHash": "f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2"
+      },
+      "expected": {
+        "result": "malformed",
+        "denies": true,
+        "n5Reason": "chain_unreadable"
+      }
+    },
+    {
+      "name": "verify · read · status desconocido → malformed",
+      "kind": "read",
+      "contractRef": "D9-11.3",
+      "basis": "decision-fixture",
+      "decision": "DF-V3",
+      "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"promote\",\"approvedByPerson\":\"1d000000-0000-4000-8000-000000000002\",\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-16T14:00:00Z\",\"prevHash\":\"f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2\",\"seq\":3,\"state\":{\"canary\":null,\"rest\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"status\":\"live\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+      "signature": "3fb8d95a3b89eadcfcc9ca050ed49587214e7f7aab1324ff5547fd447817faa2",
+      "previous": {
+        "seq": 2,
+        "entryHash": "f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2"
+      },
+      "expected": {
+        "result": "malformed",
+        "denies": true,
+        "n5Reason": "chain_unreadable"
+      }
+    },
+    {
+      "name": "verify · read · off con una versión en rest → malformed",
+      "kind": "read",
+      "contractRef": "D9-11.3",
+      "basis": "decision-fixture",
+      "decision": "DF-V3",
+      "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"retire\",\"approvedByPerson\":null,\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-18T13:00:00Z\",\"prevHash\":\"4ccbeb8eefe8ecef1c32ca68a4686fbe44b1e0603c12f46078252c997de4cfd4\",\"seq\":7,\"state\":{\"canary\":null,\"rest\":{\"contentHash\":\"bf2c547cf79f1482f9b169348cd938bb57526fe8456de9a5834628ad266eb77f\",\"version\":\"6b000000-0000-4000-8000-000000000001\"},\"status\":\"off\"},\"strategy\":{\"key\":\"cobranza-8-30\",\"purpose\":\"collections\",\"uuid\":\"5b000000-0000-4000-8000-000000000002\"}}",
+      "signature": "40f633d4ebaf7209777ee7e454c59c4830ec8f61e6f66deb989aad2565d50b4c",
+      "previous": {
+        "seq": 6,
+        "entryHash": "4ccbeb8eefe8ecef1c32ca68a4686fbe44b1e0603c12f46078252c997de4cfd4"
+      },
+      "expected": {
+        "result": "malformed",
+        "denies": true,
+        "n5Reason": "chain_unreadable"
+      }
+    },
+    {
+      "name": "verify · read · publish sin canary → malformed",
+      "kind": "read",
+      "contractRef": "D9-11.3",
+      "basis": "decision-fixture",
+      "decision": "DF-V3",
+      "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"publish\",\"approvedByPerson\":\"1d000000-0000-4000-8000-000000000002\",\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-14T15:04:05Z\",\"prevHash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":1,\"state\":{\"canary\":null,\"rest\":null,\"status\":\"active\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+      "signature": "0efdcf568ea616679ffc27a355886089e3a5f782abfc2e30deda6e7663853e26",
+      "previous": null,
+      "expected": {
+        "result": "malformed",
+        "denies": true,
+        "n5Reason": "chain_unreadable"
+      }
+    },
+    {
+      "name": "verify · read · publish sin approvedByPerson → malformed",
+      "kind": "read",
+      "contractRef": "D9-11.3",
+      "basis": "decision-fixture",
+      "decision": "DF-V3",
+      "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"publish\",\"approvedByPerson\":null,\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-14T15:04:05Z\",\"prevHash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":1,\"state\":{\"canary\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"rest\":null,\"status\":\"active\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+      "signature": "fba2fda2396b672ca177a6fd11d0baf10aa00a97ab939858917378f790dabf69",
+      "previous": null,
+      "expected": {
+        "result": "malformed",
+        "denies": true,
+        "n5Reason": "chain_unreadable"
+      }
+    },
+    {
+      "name": "verify · read · finalidad inventada en strategy → malformed",
+      "kind": "read",
+      "contractRef": "D9-11.3",
+      "basis": "decision-fixture",
+      "decision": "DF-V3",
+      "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"promote\",\"approvedByPerson\":\"1d000000-0000-4000-8000-000000000002\",\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-16T14:00:00Z\",\"prevHash\":\"f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2\",\"seq\":3,\"state\":{\"canary\":null,\"rest\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"status\":\"active\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"marketing\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+      "signature": "c33b5f8681fa8f876485a6a477e4d9d6f6438aebdea816d6d8fc6e00521e4eeb",
+      "previous": {
+        "seq": 2,
+        "entryHash": "f4146eec0ff3a713fad0e7f382057b67607de510c2849ff2e5f70fbc4978c9b2"
+      },
+      "expected": {
+        "result": "malformed",
+        "denies": true,
+        "n5Reason": "chain_unreadable"
+      }
+    },
+    {
+      "name": "verify · read · seq 0 (CHECK seq ≥ 1) → malformed",
+      "kind": "read",
+      "contractRef": "D9-11.3 (CHECK seq ≥ 1)",
+      "basis": "contrato",
+      "decision": "DF-V6",
+      "message": "{\"actedByPerson\":\"1d000000-0000-4000-8000-000000000003\",\"action\":\"publish\",\"approvedByPerson\":\"1d000000-0000-4000-8000-000000000002\",\"contract\":\"ultron-strategy-config/1\",\"issuedAt\":\"2026-11-14T15:04:05Z\",\"prevHash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"seq\":0,\"state\":{\"canary\":{\"contentHash\":\"1b3f09984c8c88e332845178312f1f56ada0b5e5e6031f62b67c9a52bc83b451\",\"version\":\"6a000000-0000-4000-8000-000000000001\"},\"rest\":null,\"status\":\"active\"},\"strategy\":{\"key\":\"renovacion-7d\",\"purpose\":\"commercial\",\"uuid\":\"5a000000-0000-4000-8000-000000000001\"}}",
+      "signature": "8ebf235657ebdcf29357a19f3fd531b2d6ff3bcb04068d4450e038d6858e8296",
+      "previous": null,
+      "expected": {
+        "result": "malformed",
+        "denies": true,
+        "n5Reason": "chain_unreadable"
+      }
+    }
+  ]
+}

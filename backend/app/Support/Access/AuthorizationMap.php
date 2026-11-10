@@ -812,6 +812,61 @@ final class AuthorizationMap
         'POST api/admin/ultron-studio/voice-lab/sessions' => CrmPermission::ULTRON_VOICE_LAB_RUN,
         'POST api/admin/ultron-studio/voice-lab/sessions/{uuid}/end' => CrmPermission::ULTRON_VOICE_LAB_RUN,
         'POST api/admin/ultron-studio/voice-lab/sessions/{uuid}/verdict' => 'ultron.approve',
+        // ULTRON STUDIO · Hito 9, paquete SSE9: el canal SSE único del Studio
+        // (routes/ultron-studio.php, bloque propio al final; se abre con el vale). La
+        // puerta es la base del Studio, `ultron.view`; dentro, cada tema exige el
+        // permiso del GET de lista de su módulo y el que falta se omite.
+        'GET api/admin/ultron-studio/stream' => 'ultron.view',
+        // ULTRON STUDIO · Hito 9, paquete S9: el gobierno de estrategias comerciales
+        // (30 rutas; contrato H9 §6 y D9-13; UltronStudioStrategyController::ROUTES).
+        // Publicar, promover y reanudar son de quien publica; pausar y revertir, la
+        // dirección segura; los vínculos de personas llevan datos personales.
+        'GET api/admin/ultron-studio/strategies/catalog' => 'ultron.view',
+        'GET api/admin/ultron-studio/strategies' => 'ultron.view',
+        'POST api/admin/ultron-studio/strategies' => 'ultron.strategies_edit',
+        'GET api/admin/ultron-studio/strategies/{uuid}' => 'ultron.view',
+        'PUT api/admin/ultron-studio/strategies/{uuid}/draft' => 'ultron.strategies_edit',
+        'POST api/admin/ultron-studio/strategies/{uuid}/validate' => 'ultron.strategies_edit',
+        'POST api/admin/ultron-studio/strategies/{uuid}/versions' => 'ultron.strategies_edit',
+        'POST api/admin/ultron-studio/strategies/{uuid}/simulations' => 'ultron.strategies_edit',
+        'GET api/admin/ultron-studio/strategies/versions/{uuid}' => 'ultron.view',
+        'POST api/admin/ultron-studio/strategies/versions/{uuid}/simulations' => 'ultron.strategies_edit',
+        'GET api/admin/ultron-studio/strategies/versions/{uuid}/simulations' => 'ultron.view',
+        'POST api/admin/ultron-studio/strategies/versions/{uuid}/approve' => 'ultron.approve',
+        'POST api/admin/ultron-studio/strategies/versions/{uuid}/reject' => 'ultron.approve',
+        'POST api/admin/ultron-studio/strategies/versions/{uuid}/publish' => 'ultron.strategies_publish',
+        'POST api/admin/ultron-studio/strategies/versions/{uuid}/promote' => 'ultron.strategies_publish',
+        'GET api/admin/ultron-studio/strategies/versions/{uuid}/canary-evidence' => 'ultron.view',
+        'POST api/admin/ultron-studio/strategies/{uuid}/pause' => 'ultron.strategies_rollback',
+        'POST api/admin/ultron-studio/strategies/{uuid}/resume' => 'ultron.strategies_publish',
+        'POST api/admin/ultron-studio/strategies/{uuid}/rollback' => 'ultron.strategies_rollback',
+        'GET api/admin/ultron-studio/strategies/{uuid}/publications' => 'ultron.view',
+        'POST api/admin/ultron-studio/strategies/{uuid}/archive' => 'ultron.strategies_edit',
+        'GET api/admin/ultron-studio/strategies/templates' => 'ultron.view',
+        'POST api/admin/ultron-studio/strategies/templates' => 'ultron.strategies_edit',
+        'GET api/admin/ultron-studio/strategies/templates/{uuid}' => 'ultron.view',
+        'POST api/admin/ultron-studio/strategies/templates/{uuid}/approve' => 'ultron.approve',
+        'POST api/admin/ultron-studio/strategies/templates/{uuid}/reject' => 'ultron.approve',
+        'GET api/admin/ultron-studio/strategies/person-bindings' => 'ultron.person_bindings_manage',
+        'POST api/admin/ultron-studio/strategies/person-bindings' => 'ultron.person_bindings_manage',
+        'POST api/admin/ultron-studio/strategies/person-bindings/{uuid}/verify' => 'ultron.person_bindings_manage',
+        'POST api/admin/ultron-studio/strategies/person-bindings/{uuid}/revoke' => 'ultron.person_bindings_manage',
+        // ULTRON STUDIO · Hito 9, paquete B9-run: la ejecución (13 rutas; contrato H9
+        // §7 E1–E13; UltronStudioOutreachController::authorizationMap()). El dominio
+        // `commercial_automation` está excluido del token compartido (D9-13).
+        'GET api/admin/ultron-studio/outreach/status' => 'commercial_automation.view',
+        'GET api/admin/ultron-studio/outreach/metrics' => 'commercial_automation.view',
+        'GET api/admin/ultron-studio/outreach/enrollments' => 'commercial_automation.view',
+        'GET api/admin/ultron-studio/outreach/enrollments/{uuid}' => 'commercial_automation.view',
+        'GET api/admin/ultron-studio/outreach/decisions/{uuid}' => 'commercial_automation.view',
+        'GET api/admin/ultron-studio/outreach/jobs' => 'commercial_automation.view',
+        'GET api/admin/ultron-studio/outreach/brakes' => 'commercial_automation.view',
+        'POST api/admin/ultron-studio/outreach/brakes' => 'commercial_automation.stop',
+        'POST api/admin/ultron-studio/outreach/brakes/{uuid}/release' => 'commercial_automation.release',
+        'GET api/admin/ultron-studio/outreach/people/{subjectRef}/timeline' => 'commercial_automation.timeline_view',
+        'GET api/admin/ultron-studio/outreach/assisted/queue' => 'commercial_automation.assisted_work',
+        'POST api/admin/ultron-studio/outreach/assisted/{uuid}/claim' => 'commercial_automation.assisted_work',
+        'POST api/admin/ultron-studio/outreach/assisted/{uuid}/outcome' => 'commercial_automation.assisted_work',
 
         // VOZ Y TELEFONÍA · Hito 8 (D8-22, «API»): el CRM de la telefonía en
         // routes/voice.php. El registro, las métricas y el estado, con
@@ -962,6 +1017,11 @@ final class AuthorizationMap
         'cash.gym.view',
         'cash.gym.operate',
         'cash.gym.manage',
+        // Hito 9 (S9, D9-13): simular una estrategia sobre una MUESTRA REAL de
+        // personas viaja por la misma ruta que la simulación sintética
+        // (`POST strategies/versions/{uuid}/simulations`, `ultron.strategies_edit`);
+        // el controlador exige además esta llave cuando `sample` es `real`.
+        'commercial_automation.simulate_real',
     ];
 
     /**

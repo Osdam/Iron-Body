@@ -1,0 +1,2959 @@
+{
+  "fixture": "contact-budget-cases.json",
+  "version": 1,
+  "contract": "backend/docs/ultron-studio/ULTRON_STUDIO_H9_CONTRACT.md (congelado por el lead el 09-11-2026 20:30 UTC; §13.2 renumerado T1–T23)",
+  "contractSections": [
+    "D9-7 (ContactBudget: qué cuenta, qué nunca cuenta y el suelo: 1 al día sumando canales y finalidades, min(2, 2) a la semana, 48 h entre contactos, ventana horaria; la configuración solo endurece; paridad con ContactPolicy)",
+    "D9-7 N1 (daily_contact_limit, cross_channel_week_rule, collections_channel_week_rule)",
+    "D9-15 y P9-8 (tras un contacto directo, un solo canal en la semana; cobranza y comercial)",
+    "§13.1 #5 y #11, §13.2 T9, §13.3 (presupuesto exactamente igual al tope)"
+  ],
+  "generatedBy": "tests/fixtures/outreach/tools/build/build.py (python3 -I), con los casos a mano en sec_*.py",
+  "checkedBy": "tests/Unit/Outreach/FixturesSanityTest.php (forma, unicidad, canonicalización y huellas, sin código del motor)",
+  "readme": "tests/fixtures/outreach/README.md",
+  "basisLegend": {
+    "contrato": "Lo dice el contrato H9 tal cual (contractRef).",
+    "ley": "Lo dice la ley citada (Ley 2300 de 2023, Ley 1581 de 2012, Ley 51 de 1983, Ley 2578 de 2026).",
+    "codigo-existente": "Lo hace hoy el código que el contrato manda reutilizar o igualar (ContactPolicy, OutboundSchedule, ColombianHolidays, VoiceFrequency, StudioContentHasher…); la cita va en contractRef.",
+    "supuesto-lead": "Sigue un supuesto de la congelación del lead (P9-n), que el propietario puede cambiar.",
+    "decision-fixture": "El contrato no lo fija: lo decide este fixture (campo decision; README §Decisiones). Lo congela el lead."
+  },
+  "sources": [
+    {
+      "what": "El contrato del H9 (D9-3 a D9-11, §5, §6, §13 y la Congelación)",
+      "url": "backend/docs/ultron-studio/ULTRON_STUDIO_H9_CONTRACT.md",
+      "consulted": "09-11-2026, en este árbol (sin seguimiento: lo congela el lead)",
+      "how": "Lectura completa; cada caso cita su sección en contractRef."
+    },
+    {
+      "what": "ContactPolicy: frecuencia (48 h y 2 por semana, contados en los 7 días anteriores con created_at ≥ now − 7 d, solo salientes de la IA que no son respuesta) y horas de silencio 21:00–08:00 de Bogotá",
+      "url": "backend/app/Services/Commercial/ContactPolicy.php:92-172 y backend/config/commercial.php:73-83",
+      "consulted": "09-11-2026, en este árbol (Carbon 3.11.4: diffInHours devuelve decimales; a las 48 h justas ya no niega)",
+      "how": "contact_policy_ref() del generador la reproduce para la sección parity; el propio ContactPolicy necesita base y configuración, así que la paridad se prueba contra este modelo y contra los literales."
+    },
+    {
+      "what": "VoiceFrequency (lo que cuenta de voice_calls y el tope semanal de voz)",
+      "url": "backend/app/Services/Telephony/VoiceFrequency.php:26-92",
+      "consulted": "09-11-2026, en este árbol",
+      "how": "PER_DAY = 1; per_week acotado a [1, 2]; su ventana móvil es (now − 7 d, now] — la de ContactPolicy es [now − 7 d, now]: el H9 usa la de ContactPolicy, la más estricta (DF-B3)."
+    }
+  ],
+  "syntheticData": "Ningún dato real: ids, uuids, claves y personas inventados; las personas se nombran por subject_key sintético (m:<id>, l:<id>); sin teléfonos, nombres, documentos ni importes.",
+  "floor": {
+    "perDay": 1,
+    "perWeek": 2,
+    "minHoursBetween": 48
+  },
+  "countedSources": [
+    "ai_proactive",
+    "outreach",
+    "voice_call"
+  ],
+  "notCountedSources": [
+    "ai_reply",
+    "inbound",
+    "simulated"
+  ],
+  "reasonOrder": [
+    "calendar_outside_legal_hours",
+    "calendar_sunday",
+    "calendar_holiday",
+    "daily_contact_limit",
+    "weekly_contact_limit",
+    "min_hours_between_contacts",
+    "cross_channel_week_rule",
+    "collections_channel_week_rule"
+  ],
+  "interface": {
+    "check": "ContactBudget::check(history, now, purpose, medium, limits) → {allowed, reasons (en reasonOrder), releaseAt {motivo: instante}, retryAt, counts {today, rolling7}}. Todos sus motivos son temporales: si niega, aplaza (defer). Solo la ley y la frecuencia: el horario propio es N5 (L9-15).",
+    "history": "[{at (UTC, Z), medium: whatsapp|voice, purpose, source}]: source ∈ countedSources cuenta; notCountedSources nunca (respuestas a la persona, entrantes, simulados). Lo posterior a now no cuenta."
+  },
+  "decisions": {
+    "DF-B1": "Cuentan los salientes de outreach live (también los asistidos, por su medio), los proactivos de la IA (sender_type = ai y metadata.kind ≠ reply) y las salientes de voice_calls contadas; nunca ai_reply, inbound ni simulated (D9-7).",
+    "DF-B2": "«Al día» es el día de Bogotá de now; daily_contact_limit se suelta a las 00:00 de Bogotá del día siguiente (y el calendario lo lleva a las 08:00).",
+    "DF-B3": "«A la semana» y la regla de un canal son los 7 días móviles CERRADOS [now − 7 d, now], como ContactPolicy (created_at ≥ now − 7 d): un contacto de hace exactamente 7 días todavía cuenta; deja de contar 1 s después (instantes al segundo). Es más estricta que la semana de calendario y que la ventana (now − 7 d, now] de VoiceFrequency.",
+    "DF-B4": "Dos códigos para dos límites de D9-7: weekly_contact_limit (≤ 2 por semana) y min_hours_between_contacts (48 h; a las 48 h justas ya no niega, como ContactPolicy). Van en N1 después de daily_contact_limit (ratificada por el lead: L9-9).",
+    "DF-B5": "Regla de un canal (P9-8, Ley 2300 art. 3): si en [now − 7 d, now] hubo un contacto contado por OTRO medio (whatsapp frente a voice; el asistido cuenta por su medio), niega; con finalidad collections el código es collections_channel_week_rule y con commercial o service, cross_channel_week_rule (L9-10). Cuenta cualquier contacto contado como «directo», de cualquier finalidad, también un intento sin respuesta (ratificada por el lead: L9-22).",
+    "DF-B6": "retryAt = el primer hueco LEGAL (calendar-cases.json §nextSlot sin horario propio ni de la estrategia) a partir del más tardío entre now y los releaseAt; es el primer instante en que ContactBudget deja de negar si no hay contactos nuevos. La escalera calcula su propio retryAt con el horario propio y el de la estrategia (DF-L3).",
+    "DF-B7": "Límites efectivos: perDay = 1 siempre; perWeek = min(commercial.max_proactive_per_week, VoiceFrequency::perWeekFromConfig()) y el del H9, si es entero, solo lo baja (acotado a ≥ 1); minHoursBetween = commercial.min_hours_between y el del H9, si es entero, solo lo sube. Un valor no entero se ignora (como perWeekFromConfig).",
+    "DF-B8": "Paridad (T9): con historiales solo de WhatsApp, si ContactPolicy niega por frecuencia (too_soon_since_last_contact, weekly_contact_limit_reached) o por horario (quiet_hours), ContactBudget niega también. Al revés no hace falta: el H9 es más estricto (domingos, festivos, 19:00–21:00, otros medios)."
+  },
+  "counts": {
+    "effectiveLimits": 9,
+    "check": 26,
+    "parity": 50,
+    "total": 85
+  },
+  "effectiveLimits": [
+    {
+      "name": "effectiveLimits · limits · los valores de hoy: 1 al día, 2 a la semana, 48 h",
+      "kind": "limits",
+      "contractRef": "D9-7 («la configuración del H9 solo puede endurecer»)",
+      "basis": "contrato",
+      "config": {},
+      "expected": {
+        "perDay": 1,
+        "perWeek": 2,
+        "minHoursBetween": 48
+      }
+    },
+    {
+      "name": "effectiveLimits · limits · el H9 pide 3 por semana: no afloja (sigue 2)",
+      "kind": "limits",
+      "contractRef": "D9-7 («la configuración del H9 solo puede endurecer»)",
+      "basis": "decision-fixture",
+      "decision": "DF-B7",
+      "config": {
+        "h9_per_week": 3
+      },
+      "expected": {
+        "perDay": 1,
+        "perWeek": 2,
+        "minHoursBetween": 48
+      }
+    },
+    {
+      "name": "effectiveLimits · limits · el H9 pide 1 por semana: endurece",
+      "kind": "limits",
+      "contractRef": "D9-7 («la configuración del H9 solo puede endurecer»)",
+      "basis": "decision-fixture",
+      "decision": "DF-B7",
+      "config": {
+        "h9_per_week": 1
+      },
+      "expected": {
+        "perDay": 1,
+        "perWeek": 1,
+        "minHoursBetween": 48
+      }
+    },
+    {
+      "name": "effectiveLimits · limits · el H9 pide 0 por semana: se acota a 1",
+      "kind": "limits",
+      "contractRef": "D9-7 («la configuración del H9 solo puede endurecer»)",
+      "basis": "decision-fixture",
+      "decision": "DF-B7",
+      "config": {
+        "h9_per_week": 0
+      },
+      "expected": {
+        "perDay": 1,
+        "perWeek": 1,
+        "minHoursBetween": 48
+      }
+    },
+    {
+      "name": "effectiveLimits · limits · el H9 pide 24 h entre contactos: no afloja (sigue 48)",
+      "kind": "limits",
+      "contractRef": "D9-7 («la configuración del H9 solo puede endurecer»)",
+      "basis": "decision-fixture",
+      "decision": "DF-B7",
+      "config": {
+        "h9_min_hours": 24
+      },
+      "expected": {
+        "perDay": 1,
+        "perWeek": 2,
+        "minHoursBetween": 48
+      }
+    },
+    {
+      "name": "effectiveLimits · limits · el H9 pide 72 h: endurece",
+      "kind": "limits",
+      "contractRef": "D9-7 («la configuración del H9 solo puede endurecer»)",
+      "basis": "decision-fixture",
+      "decision": "DF-B7",
+      "config": {
+        "h9_min_hours": 72
+      },
+      "expected": {
+        "perDay": 1,
+        "perWeek": 2,
+        "minHoursBetween": 72
+      }
+    },
+    {
+      "name": "effectiveLimits · limits · el motor comercial afloja a 5 por semana: manda la voz (2)",
+      "kind": "limits",
+      "contractRef": "D9-7 («la configuración del H9 solo puede endurecer»)",
+      "basis": "decision-fixture",
+      "decision": "DF-B7",
+      "config": {
+        "commercial_per_week": 5
+      },
+      "expected": {
+        "perDay": 1,
+        "perWeek": 2,
+        "minHoursBetween": 48
+      }
+    },
+    {
+      "name": "effectiveLimits · limits · el motor comercial endurece a 1 por semana: el suelo baja a 1",
+      "kind": "limits",
+      "contractRef": "D9-7 («la configuración del H9 solo puede endurecer»)",
+      "basis": "decision-fixture",
+      "decision": "DF-B7",
+      "config": {
+        "commercial_per_week": 1
+      },
+      "expected": {
+        "perDay": 1,
+        "perWeek": 1,
+        "minHoursBetween": 48
+      }
+    },
+    {
+      "name": "effectiveLimits · limits · un valor del H9 que no es entero se ignora",
+      "kind": "limits",
+      "contractRef": "D9-7 («la configuración del H9 solo puede endurecer»)",
+      "basis": "decision-fixture",
+      "decision": "DF-B7",
+      "config": {
+        "h9_per_week": "3",
+        "h9_min_hours": true
+      },
+      "expected": {
+        "perDay": 1,
+        "perWeek": 2,
+        "minHoursBetween": 48
+      }
+    }
+  ],
+  "check": [
+    {
+      "name": "check · budget · sin historial, martes 10:00 → permitido",
+      "kind": "budget",
+      "contractRef": "D9-7 (ContactBudget)",
+      "basis": "contrato",
+      "history": [],
+      "now": "2026-11-10T15:00:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2,
+        "minHoursBetween": 48
+      },
+      "expected": {
+        "allowed": true,
+        "reasons": [],
+        "releaseAt": {},
+        "retryAt": null,
+        "counts": {
+          "today": 0,
+          "rolling7": 0
+        }
+      }
+    },
+    {
+      "name": "check · budget · un contacto hoy a las 08:30 por WhatsApp → daily (1 al día) y 48 h; vuelve el jueves 08:30",
+      "kind": "budget",
+      "contractRef": "D9-7 (ContactBudget)",
+      "basis": "contrato",
+      "decision": "DF-B2",
+      "history": [
+        {
+          "at": "2026-11-10T13:30:00Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-10T15:00:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2,
+        "minHoursBetween": 48
+      },
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "daily_contact_limit",
+          "min_hours_between_contacts"
+        ],
+        "releaseAt": {
+          "daily_contact_limit": "2026-11-11T05:00:00Z",
+          "min_hours_between_contacts": "2026-11-12T13:30:00Z"
+        },
+        "retryAt": "2026-11-12T13:30:00Z",
+        "counts": {
+          "today": 1,
+          "rolling7": 1
+        }
+      }
+    },
+    {
+      "name": "check · budget · un contacto hoy por VOZ y se pide WhatsApp → daily (sumando canales), 48 h y la regla de un canal",
+      "kind": "budget",
+      "contractRef": "D9-7 (1 al día sumando canales), P9-8, #11",
+      "basis": "decision-fixture",
+      "decision": "DF-B5",
+      "history": [
+        {
+          "at": "2026-11-10T13:30:00Z",
+          "medium": "voice",
+          "purpose": "commercial",
+          "source": "voice_call"
+        }
+      ],
+      "now": "2026-11-10T15:00:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2,
+        "minHoursBetween": 48
+      },
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "daily_contact_limit",
+          "min_hours_between_contacts",
+          "cross_channel_week_rule"
+        ],
+        "releaseAt": {
+          "daily_contact_limit": "2026-11-11T05:00:00Z",
+          "min_hours_between_contacts": "2026-11-12T13:30:00Z",
+          "cross_channel_week_rule": "2026-11-17T13:30:01Z"
+        },
+        "retryAt": "2026-11-17T13:30:01Z",
+        "counts": {
+          "today": 1,
+          "rolling7": 1
+        }
+      }
+    },
+    {
+      "name": "check · budget · un contacto de COBRANZA hoy y se pide comercial → daily (sumando finalidades)",
+      "kind": "budget",
+      "contractRef": "D9-7 (sumando finalidades), P9-7",
+      "basis": "decision-fixture",
+      "decision": "DF-B2",
+      "history": [
+        {
+          "at": "2026-11-10T13:30:00Z",
+          "medium": "whatsapp",
+          "purpose": "collections",
+          "source": "outreach"
+        }
+      ],
+      "now": "2026-11-10T15:00:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2,
+        "minHoursBetween": 48
+      },
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "daily_contact_limit",
+          "min_hours_between_contacts"
+        ],
+        "releaseAt": {
+          "daily_contact_limit": "2026-11-11T05:00:00Z",
+          "min_hours_between_contacts": "2026-11-12T13:30:00Z"
+        },
+        "retryAt": "2026-11-12T13:30:00Z",
+        "counts": {
+          "today": 1,
+          "rolling7": 1
+        }
+      }
+    },
+    {
+      "name": "check · budget · una respuesta de la IA hoy (ai_reply) no cuenta",
+      "kind": "budget",
+      "contractRef": "D9-7 («nunca cuentan las respuestas»)",
+      "basis": "contrato",
+      "decision": "DF-B1",
+      "history": [
+        {
+          "at": "2026-11-10T13:30:00Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_reply"
+        }
+      ],
+      "now": "2026-11-10T15:00:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2,
+        "minHoursBetween": 48
+      },
+      "expected": {
+        "allowed": true,
+        "reasons": [],
+        "releaseAt": {},
+        "retryAt": null,
+        "counts": {
+          "today": 0,
+          "rolling7": 0
+        }
+      }
+    },
+    {
+      "name": "check · budget · un trabajo simulado hoy no cuenta",
+      "kind": "budget",
+      "contractRef": "D9-7 («ni los trabajos simulated»), D9-8 (sombra)",
+      "basis": "contrato",
+      "decision": "DF-B1",
+      "history": [
+        {
+          "at": "2026-11-10T13:30:00Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "simulated"
+        }
+      ],
+      "now": "2026-11-10T15:00:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2,
+        "minHoursBetween": 48
+      },
+      "expected": {
+        "allowed": true,
+        "reasons": [],
+        "releaseAt": {},
+        "retryAt": null,
+        "counts": {
+          "today": 0,
+          "rolling7": 0
+        }
+      }
+    },
+    {
+      "name": "check · budget · un entrante de la persona no cuenta",
+      "kind": "budget",
+      "contractRef": "D9-7 (ContactBudget)",
+      "basis": "decision-fixture",
+      "decision": "DF-B1",
+      "history": [
+        {
+          "at": "2026-11-10T13:30:00Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "inbound"
+        }
+      ],
+      "now": "2026-11-10T15:00:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2,
+        "minHoursBetween": 48
+      },
+      "expected": {
+        "allowed": true,
+        "reasons": [],
+        "releaseAt": {},
+        "retryAt": null,
+        "counts": {
+          "today": 0,
+          "rolling7": 0
+        }
+      }
+    },
+    {
+      "name": "check · budget · un contacto posterior a now no cuenta (reloj inyectado)",
+      "kind": "budget",
+      "contractRef": "§13.3 (reloj inyectado)",
+      "basis": "decision-fixture",
+      "decision": "DF-B3",
+      "history": [
+        {
+          "at": "2026-11-10T16:00:00Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-10T15:00:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2,
+        "minHoursBetween": 48
+      },
+      "expected": {
+        "allowed": true,
+        "reasons": [],
+        "releaseAt": {},
+        "retryAt": null,
+        "counts": {
+          "today": 0,
+          "rolling7": 0
+        }
+      }
+    },
+    {
+      "name": "check · budget · ayer a las 18:00: 48 h → vuelve el jueves 18:00",
+      "kind": "budget",
+      "contractRef": "D9-7 (48 h), ContactPolicy.php:122-128",
+      "basis": "codigo-existente",
+      "decision": "DF-B4",
+      "history": [
+        {
+          "at": "2026-11-09T23:00:00Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-10T15:00:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2,
+        "minHoursBetween": 48
+      },
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "min_hours_between_contacts"
+        ],
+        "releaseAt": {
+          "min_hours_between_contacts": "2026-11-11T23:00:00Z"
+        },
+        "retryAt": "2026-11-11T23:00:00Z",
+        "counts": {
+          "today": 0,
+          "rolling7": 1
+        }
+      }
+    },
+    {
+      "name": "check · budget · hace 47 h 59 min → niega",
+      "kind": "budget",
+      "contractRef": "ContactPolicy.php:122-128",
+      "basis": "codigo-existente",
+      "decision": "DF-B4",
+      "history": [
+        {
+          "at": "2026-11-08T15:01:00Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-10T15:00:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2,
+        "minHoursBetween": 48
+      },
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "min_hours_between_contacts"
+        ],
+        "releaseAt": {
+          "min_hours_between_contacts": "2026-11-10T15:01:00Z"
+        },
+        "retryAt": "2026-11-10T15:01:00Z",
+        "counts": {
+          "today": 0,
+          "rolling7": 1
+        }
+      }
+    },
+    {
+      "name": "check · budget · hace exactamente 48 h → ya no niega (como ContactPolicy)",
+      "kind": "budget",
+      "contractRef": "ContactPolicy.php:123 (diffInHours < 48)",
+      "basis": "codigo-existente",
+      "decision": "DF-B4",
+      "history": [
+        {
+          "at": "2026-11-08T15:00:00Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-10T15:00:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2,
+        "minHoursBetween": 48
+      },
+      "expected": {
+        "allowed": true,
+        "reasons": [],
+        "releaseAt": {},
+        "retryAt": null,
+        "counts": {
+          "today": 0,
+          "rolling7": 1
+        }
+      }
+    },
+    {
+      "name": "check · budget · dos contactos en la semana (el tope exacto, §13.3) → weekly; se suelta 7 d + 1 s después del más antiguo",
+      "kind": "budget",
+      "contractRef": "D9-7 (2 a la semana), §13.3 (exactamente igual al tope)",
+      "basis": "decision-fixture",
+      "decision": "DF-B3",
+      "history": [
+        {
+          "at": "2026-11-04T15:00:00Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-11-06T16:00:00Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-10T15:00:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2,
+        "minHoursBetween": 48
+      },
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "weekly_contact_limit"
+        ],
+        "releaseAt": {
+          "weekly_contact_limit": "2026-11-11T15:00:01Z"
+        },
+        "retryAt": "2026-11-11T15:00:01Z",
+        "counts": {
+          "today": 0,
+          "rolling7": 2
+        }
+      }
+    },
+    {
+      "name": "check · budget · dos contactos y el más antiguo hace EXACTAMENTE 7 días → todavía cuenta",
+      "kind": "budget",
+      "contractRef": "ContactPolicy.php:108 (created_at ≥ now − 7 d)",
+      "basis": "codigo-existente",
+      "decision": "DF-B3",
+      "history": [
+        {
+          "at": "2026-11-03T15:00:00Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-11-06T16:00:00Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-10T15:00:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2,
+        "minHoursBetween": 48
+      },
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "weekly_contact_limit"
+        ],
+        "releaseAt": {
+          "weekly_contact_limit": "2026-11-10T15:00:01Z"
+        },
+        "retryAt": "2026-11-10T15:00:01Z",
+        "counts": {
+          "today": 0,
+          "rolling7": 2
+        }
+      }
+    },
+    {
+      "name": "check · budget · dos contactos y el más antiguo hace 7 días y 1 s → ya no cuenta",
+      "kind": "budget",
+      "contractRef": "ContactPolicy.php:108",
+      "basis": "codigo-existente",
+      "decision": "DF-B3",
+      "history": [
+        {
+          "at": "2026-11-03T14:59:59Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-11-06T16:00:00Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-10T15:00:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2,
+        "minHoursBetween": 48
+      },
+      "expected": {
+        "allowed": true,
+        "reasons": [],
+        "releaseAt": {},
+        "retryAt": null,
+        "counts": {
+          "today": 0,
+          "rolling7": 1
+        }
+      }
+    },
+    {
+      "name": "check · budget · un solo contacto en la semana (debajo del tope) → permitido",
+      "kind": "budget",
+      "contractRef": "D9-7 (ContactBudget)",
+      "basis": "decision-fixture",
+      "decision": "DF-B3",
+      "history": [
+        {
+          "at": "2026-11-06T16:00:00Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-10T15:00:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2,
+        "minHoursBetween": 48
+      },
+      "expected": {
+        "allowed": true,
+        "reasons": [],
+        "releaseAt": {},
+        "retryAt": null,
+        "counts": {
+          "today": 0,
+          "rolling7": 1
+        }
+      }
+    },
+    {
+      "name": "check · budget · tres contactos en la semana (legado) → se suelta cuando salen DOS",
+      "kind": "budget",
+      "contractRef": "D9-7 (ContactBudget)",
+      "basis": "decision-fixture",
+      "decision": "DF-B3",
+      "history": [
+        {
+          "at": "2026-11-03T17:00:00Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-11-05T17:00:00Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-11-07T17:00:00Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-10T15:00:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2,
+        "minHoursBetween": 48
+      },
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "weekly_contact_limit"
+        ],
+        "releaseAt": {
+          "weekly_contact_limit": "2026-11-12T17:00:01Z"
+        },
+        "retryAt": "2026-11-12T17:00:01Z",
+        "counts": {
+          "today": 0,
+          "rolling7": 3
+        }
+      }
+    },
+    {
+      "name": "check · budget · con el H9 endurecido a 1 por semana, un contacto ya basta",
+      "kind": "budget",
+      "contractRef": "D9-7 (ContactBudget)",
+      "basis": "decision-fixture",
+      "decision": "DF-B7",
+      "history": [
+        {
+          "at": "2026-11-06T16:00:00Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-10T15:00:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 1,
+        "minHoursBetween": 48
+      },
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "weekly_contact_limit"
+        ],
+        "releaseAt": {
+          "weekly_contact_limit": "2026-11-13T16:00:01Z"
+        },
+        "retryAt": "2026-11-13T16:00:01Z",
+        "counts": {
+          "today": 0,
+          "rolling7": 1
+        }
+      }
+    },
+    {
+      "name": "check · budget · regla de un canal: WhatsApp el viernes y ahora se pide voz → cross_channel_week_rule hasta el viernes siguiente + 1 s (#11)",
+      "kind": "budget",
+      "contractRef": "P9-8, #11 de §13.1",
+      "basis": "decision-fixture",
+      "decision": "DF-B5",
+      "history": [
+        {
+          "at": "2026-11-06T16:00:00Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-10T15:00:00Z",
+      "purpose": "commercial",
+      "medium": "voice",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2,
+        "minHoursBetween": 48
+      },
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "cross_channel_week_rule"
+        ],
+        "releaseAt": {
+          "cross_channel_week_rule": "2026-11-13T16:00:01Z"
+        },
+        "retryAt": "2026-11-13T16:00:01Z",
+        "counts": {
+          "today": 0,
+          "rolling7": 1
+        }
+      }
+    },
+    {
+      "name": "check · budget · regla de un canal en cobranza: el mismo caso con collections → collections_channel_week_rule",
+      "kind": "budget",
+      "contractRef": "D9-15 (Ley 2300, art. 3)",
+      "basis": "ley",
+      "decision": "DF-B5",
+      "history": [
+        {
+          "at": "2026-11-06T16:00:00Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "outreach"
+        }
+      ],
+      "now": "2026-11-10T15:00:00Z",
+      "purpose": "collections",
+      "medium": "voice",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2,
+        "minHoursBetween": 48
+      },
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "collections_channel_week_rule"
+        ],
+        "releaseAt": {
+          "collections_channel_week_rule": "2026-11-13T16:00:01Z"
+        },
+        "retryAt": "2026-11-13T16:00:01Z",
+        "counts": {
+          "today": 0,
+          "rolling7": 1
+        }
+      }
+    },
+    {
+      "name": "check · budget · regla de un canal con finalidad service → cross_channel_week_rule",
+      "kind": "budget",
+      "contractRef": "D9-7 (ContactBudget)",
+      "basis": "decision-fixture",
+      "decision": "DF-B5",
+      "history": [
+        {
+          "at": "2026-11-06T16:00:00Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-10T15:00:00Z",
+      "purpose": "service",
+      "medium": "voice",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2,
+        "minHoursBetween": 48
+      },
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "cross_channel_week_rule"
+        ],
+        "releaseAt": {
+          "cross_channel_week_rule": "2026-11-13T16:00:01Z"
+        },
+        "retryAt": "2026-11-13T16:00:01Z",
+        "counts": {
+          "today": 0,
+          "rolling7": 1
+        }
+      }
+    },
+    {
+      "name": "check · budget · el mismo medio no activa la regla de un canal",
+      "kind": "budget",
+      "contractRef": "D9-7 (ContactBudget)",
+      "basis": "decision-fixture",
+      "decision": "DF-B5",
+      "history": [
+        {
+          "at": "2026-11-06T16:00:00Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-10T15:00:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2,
+        "minHoursBetween": 48
+      },
+      "expected": {
+        "allowed": true,
+        "reasons": [],
+        "releaseAt": {},
+        "retryAt": null,
+        "counts": {
+          "today": 0,
+          "rolling7": 1
+        }
+      }
+    },
+    {
+      "name": "check · budget · un asistido por voz cuenta como voz: se pide WhatsApp → regla de un canal",
+      "kind": "budget",
+      "contractRef": "D9-7 (ContactBudget)",
+      "basis": "decision-fixture",
+      "decision": "DF-B5",
+      "history": [
+        {
+          "at": "2026-11-06T16:00:00Z",
+          "medium": "voice",
+          "purpose": "commercial",
+          "source": "outreach"
+        }
+      ],
+      "now": "2026-11-10T15:00:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2,
+        "minHoursBetween": 48
+      },
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "cross_channel_week_rule"
+        ],
+        "releaseAt": {
+          "cross_channel_week_rule": "2026-11-13T16:00:01Z"
+        },
+        "retryAt": "2026-11-13T16:00:01Z",
+        "counts": {
+          "today": 0,
+          "rolling7": 1
+        }
+      }
+    },
+    {
+      "name": "check · budget · domingo 10:00 sin historial → calendar_sunday, vuelve el lunes 08:00",
+      "kind": "budget",
+      "contractRef": "D9-7 (ventana horaria), #17",
+      "basis": "decision-fixture",
+      "decision": "DF-B6",
+      "history": [],
+      "now": "2026-11-08T15:00:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2,
+        "minHoursBetween": 48
+      },
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "calendar_sunday"
+        ],
+        "releaseAt": {},
+        "retryAt": "2026-11-09T13:00:00Z",
+        "counts": {
+          "today": 0,
+          "rolling7": 0
+        }
+      }
+    },
+    {
+      "name": "check · budget · viernes 19:30 con un contacto hoy → calendario, daily y 48 h; vuelve el martes 17-11 08:00 (48 h hasta el domingo y el lunes 16-11 es festivo)",
+      "kind": "budget",
+      "contractRef": "D9-7, #17",
+      "basis": "decision-fixture",
+      "decision": "DF-B6",
+      "history": [
+        {
+          "at": "2026-11-13T14:00:00Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-14T00:30:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2,
+        "minHoursBetween": 48
+      },
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "calendar_outside_legal_hours",
+          "daily_contact_limit",
+          "min_hours_between_contacts"
+        ],
+        "releaseAt": {
+          "daily_contact_limit": "2026-11-14T05:00:00Z",
+          "min_hours_between_contacts": "2026-11-15T14:00:00Z"
+        },
+        "retryAt": "2026-11-17T13:00:00Z",
+        "counts": {
+          "today": 1,
+          "rolling7": 1
+        }
+      }
+    },
+    {
+      "name": "check · budget · martes 08:30 sin historial → permitido: la ley ya abrió; el horario propio no es del presupuesto (es N5)",
+      "kind": "budget",
+      "contractRef": "D9-7, L9-15",
+      "basis": "supuesto-lead",
+      "decision": "DF-B6",
+      "history": [],
+      "now": "2026-11-10T13:30:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2,
+        "minHoursBetween": 48
+      },
+      "expected": {
+        "allowed": true,
+        "reasons": [],
+        "releaseAt": {},
+        "retryAt": null,
+        "counts": {
+          "today": 0,
+          "rolling7": 0
+        }
+      }
+    },
+    {
+      "name": "check · budget · todo a la vez: domingo, contacto de voz hoy y otro el viernes por WhatsApp; se pide WhatsApp",
+      "kind": "budget",
+      "contractRef": "D9-7 (ContactBudget)",
+      "basis": "decision-fixture",
+      "decision": "DF-B6",
+      "history": [
+        {
+          "at": "2026-11-13T15:00:00Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-11-15T14:30:00Z",
+          "medium": "voice",
+          "purpose": "commercial",
+          "source": "voice_call"
+        }
+      ],
+      "now": "2026-11-15T16:00:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "limits": {
+        "perDay": 1,
+        "perWeek": 2,
+        "minHoursBetween": 48
+      },
+      "expected": {
+        "allowed": false,
+        "reasons": [
+          "calendar_sunday",
+          "daily_contact_limit",
+          "weekly_contact_limit",
+          "min_hours_between_contacts",
+          "cross_channel_week_rule"
+        ],
+        "releaseAt": {
+          "daily_contact_limit": "2026-11-16T05:00:00Z",
+          "weekly_contact_limit": "2026-11-20T15:00:01Z",
+          "min_hours_between_contacts": "2026-11-17T14:30:00Z",
+          "cross_channel_week_rule": "2026-11-22T14:30:01Z"
+        },
+        "retryAt": "2026-11-23T13:00:00Z",
+        "counts": {
+          "today": 1,
+          "rolling7": 2
+        }
+      }
+    }
+  ],
+  "parity": [
+    {
+      "name": "parity · whatsapp · borde 48 h: a las 47:59 niegan los dos",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-11-08T15:01:00Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-10T15:00:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": true,
+          "reason": "too_soon_since_last_contact",
+          "retryAt": "2026-11-10T15:01:00Z"
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "min_hours_between_contacts"
+          ],
+          "retryAt": "2026-11-10T15:01:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · borde 48 h: a las 48:00 no niega ninguno",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-11-08T15:00:00Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-10T15:00:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": false,
+          "reason": null,
+          "retryAt": null
+        },
+        "contactBudget": {
+          "allowed": true,
+          "reasons": [],
+          "retryAt": null
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · borde semanal: el más antiguo a 7 d justos → niegan los dos",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-11-03T15:00:00Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-11-06T16:00:00Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-10T15:00:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": true,
+          "reason": "weekly_contact_limit_reached",
+          "retryAt": "2026-11-10T15:00:00Z"
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "weekly_contact_limit"
+          ],
+          "retryAt": "2026-11-10T15:00:01Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · borde semanal: el más antiguo a 7 d + 1 s → no niega ninguno",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-11-03T14:59:59Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-11-06T16:00:00Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-10T15:00:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": false,
+          "reason": null,
+          "retryAt": null
+        },
+        "contactBudget": {
+          "allowed": true,
+          "reasons": [],
+          "retryAt": null
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · las respuestas no cuentan para ninguno",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-11-09T23:00:00Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_reply"
+        },
+        {
+          "at": "2026-11-08T23:00:00Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_reply"
+        }
+      ],
+      "now": "2026-11-10T15:00:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": false,
+          "reason": null,
+          "retryAt": null
+        },
+        "contactBudget": {
+          "allowed": true,
+          "reasons": [],
+          "retryAt": null
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · silencio: 20:59 permite ContactPolicy y niega el H9 (Ley 2300: hasta las 19:00)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [],
+      "now": "2026-11-11T01:59:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": false,
+          "reason": null,
+          "retryAt": null
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "calendar_outside_legal_hours"
+          ],
+          "retryAt": "2026-11-11T13:00:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · silencio: 21:00 niegan los dos",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [],
+      "now": "2026-11-11T02:00:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": true,
+          "reason": "quiet_hours",
+          "retryAt": "2026-11-11T13:00:00Z"
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "calendar_outside_legal_hours"
+          ],
+          "retryAt": "2026-11-11T13:00:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · silencio: 07:59 niegan los dos",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [],
+      "now": "2026-11-10T12:59:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": true,
+          "reason": "quiet_hours",
+          "retryAt": "2026-11-10T13:00:00Z"
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "calendar_outside_legal_hours"
+          ],
+          "retryAt": "2026-11-10T13:00:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · 08:00 no niega ninguno",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [],
+      "now": "2026-11-10T13:00:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": false,
+          "reason": null,
+          "retryAt": null
+        },
+        "contactBudget": {
+          "allowed": true,
+          "reasons": [],
+          "retryAt": null
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · domingo 10:00: ContactPolicy permite y el H9 niega (más estricto)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [],
+      "now": "2026-11-08T15:00:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": false,
+          "reason": null,
+          "retryAt": null
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "calendar_sunday"
+          ],
+          "retryAt": "2026-11-09T13:00:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 01 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-11-02T03:25:07Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_reply"
+        }
+      ],
+      "now": "2026-11-09T00:23:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": false,
+          "reason": null,
+          "retryAt": null
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "calendar_sunday"
+          ],
+          "retryAt": "2026-11-09T13:00:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 02 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-11-08T23:01:49Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_reply"
+        },
+        {
+          "at": "2026-11-09T01:22:29Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-12T22:21:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": false,
+          "reason": null,
+          "retryAt": null
+        },
+        "contactBudget": {
+          "allowed": true,
+          "reasons": [],
+          "retryAt": null
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 03 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-11-03T01:12:11Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-11-04T05:37:17Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-11-05T09:32:40Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-11-07T23:07:49Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_reply"
+        }
+      ],
+      "now": "2026-11-09T16:04:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": true,
+          "reason": "weekly_contact_limit_reached",
+          "retryAt": "2026-11-10T01:12:11Z"
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "weekly_contact_limit"
+          ],
+          "retryAt": "2026-11-11T13:00:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 04 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-10-31T10:10:56Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-07T06:41:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": true,
+          "reason": "quiet_hours",
+          "retryAt": "2026-11-07T13:00:00Z"
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "calendar_outside_legal_hours"
+          ],
+          "retryAt": "2026-11-07T13:00:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 05 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-11-12T15:56:18Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_reply"
+        }
+      ],
+      "now": "2026-11-14T12:45:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": true,
+          "reason": "quiet_hours",
+          "retryAt": "2026-11-14T13:00:00Z"
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "calendar_outside_legal_hours"
+          ],
+          "retryAt": "2026-11-14T13:00:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 06 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-10-28T21:40:37Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_reply"
+        },
+        {
+          "at": "2026-11-06T00:36:52Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_reply"
+        }
+      ],
+      "now": "2026-11-06T21:41:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": false,
+          "reason": null,
+          "retryAt": null
+        },
+        "contactBudget": {
+          "allowed": true,
+          "reasons": [],
+          "retryAt": null
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 07 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [],
+      "now": "2026-11-13T04:16:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": true,
+          "reason": "quiet_hours",
+          "retryAt": "2026-11-13T13:00:00Z"
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "calendar_outside_legal_hours"
+          ],
+          "retryAt": "2026-11-13T13:00:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 08 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-10-26T09:15:28Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-04T01:39:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": false,
+          "reason": null,
+          "retryAt": null
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "calendar_outside_legal_hours"
+          ],
+          "retryAt": "2026-11-04T13:00:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 09 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-11-05T05:48:25Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_reply"
+        }
+      ],
+      "now": "2026-11-11T00:36:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": false,
+          "reason": null,
+          "retryAt": null
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "calendar_outside_legal_hours"
+          ],
+          "retryAt": "2026-11-11T13:00:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 10 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [],
+      "now": "2026-11-06T07:57:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": true,
+          "reason": "quiet_hours",
+          "retryAt": "2026-11-06T13:00:00Z"
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "calendar_outside_legal_hours"
+          ],
+          "retryAt": "2026-11-06T13:00:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 11 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-10-28T09:28:17Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_reply"
+        },
+        {
+          "at": "2026-10-30T15:22:01Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-11-01T10:49:36Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-11-06T03:22:42Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-07T03:17:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": true,
+          "reason": "too_soon_since_last_contact",
+          "retryAt": "2026-11-08T03:22:42Z"
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "calendar_outside_legal_hours",
+            "weekly_contact_limit",
+            "min_hours_between_contacts"
+          ],
+          "retryAt": "2026-11-09T13:00:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 12 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-10-27T12:59:12Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_reply"
+        }
+      ],
+      "now": "2026-11-05T12:27:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": true,
+          "reason": "quiet_hours",
+          "retryAt": "2026-11-05T13:00:00Z"
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "calendar_outside_legal_hours"
+          ],
+          "retryAt": "2026-11-05T13:00:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 13 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-11-08T06:06:46Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-09T02:56:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": true,
+          "reason": "too_soon_since_last_contact",
+          "retryAt": "2026-11-10T06:06:46Z"
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "calendar_sunday",
+            "daily_contact_limit",
+            "min_hours_between_contacts"
+          ],
+          "retryAt": "2026-11-10T13:00:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 14 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-11-08T00:13:44Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-11-08T08:31:30Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-15T13:21:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": false,
+          "reason": null,
+          "retryAt": null
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "calendar_sunday"
+          ],
+          "retryAt": "2026-11-17T13:00:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 15 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-11-03T07:51:57Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-12T10:51:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": true,
+          "reason": "quiet_hours",
+          "retryAt": "2026-11-12T13:00:00Z"
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "calendar_outside_legal_hours"
+          ],
+          "retryAt": "2026-11-12T13:00:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 16 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-11-07T01:05:57Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-11-10T15:04:33Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-11-12T12:17:29Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-12T16:49:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": true,
+          "reason": "too_soon_since_last_contact",
+          "retryAt": "2026-11-14T12:17:29Z"
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "daily_contact_limit",
+            "weekly_contact_limit",
+            "min_hours_between_contacts"
+          ],
+          "retryAt": "2026-11-17T15:04:34Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 17 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-10-26T21:05:48Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_reply"
+        },
+        {
+          "at": "2026-10-29T09:12:15Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-02T07:00:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": true,
+          "reason": "quiet_hours",
+          "retryAt": "2026-11-02T13:00:00Z"
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "calendar_holiday"
+          ],
+          "retryAt": "2026-11-03T13:00:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 18 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [],
+      "now": "2026-11-10T04:40:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": true,
+          "reason": "quiet_hours",
+          "retryAt": "2026-11-10T13:00:00Z"
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "calendar_outside_legal_hours"
+          ],
+          "retryAt": "2026-11-10T13:00:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 19 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [],
+      "now": "2026-11-03T04:00:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": true,
+          "reason": "quiet_hours",
+          "retryAt": "2026-11-03T13:00:00Z"
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "calendar_holiday"
+          ],
+          "retryAt": "2026-11-03T13:00:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 20 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [],
+      "now": "2026-11-12T17:25:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": false,
+          "reason": null,
+          "retryAt": null
+        },
+        "contactBudget": {
+          "allowed": true,
+          "reasons": [],
+          "retryAt": null
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 21 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [],
+      "now": "2026-11-05T09:29:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": true,
+          "reason": "quiet_hours",
+          "retryAt": "2026-11-05T13:00:00Z"
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "calendar_outside_legal_hours"
+          ],
+          "retryAt": "2026-11-05T13:00:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 22 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [],
+      "now": "2026-11-11T14:54:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": false,
+          "reason": null,
+          "retryAt": null
+        },
+        "contactBudget": {
+          "allowed": true,
+          "reasons": [],
+          "retryAt": null
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 23 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-10-27T06:58:42Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-02T15:20:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": false,
+          "reason": null,
+          "retryAt": null
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "calendar_holiday"
+          ],
+          "retryAt": "2026-11-03T13:00:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 24 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-11-06T14:30:04Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-11-09T09:23:29Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-11-12T06:21:21Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-15T02:13:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": true,
+          "reason": "weekly_contact_limit_reached",
+          "retryAt": "2026-11-16T09:23:29Z"
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "calendar_outside_legal_hours",
+            "weekly_contact_limit"
+          ],
+          "retryAt": "2026-11-17T13:00:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 25 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-10-30T19:12:56Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-11-02T23:29:19Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-11-08T17:43:57Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-09T17:10:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": true,
+          "reason": "too_soon_since_last_contact",
+          "retryAt": "2026-11-10T17:43:57Z"
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "weekly_contact_limit",
+            "min_hours_between_contacts"
+          ],
+          "retryAt": "2026-11-10T17:43:57Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 26 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-10-30T15:30:53Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-07T06:14:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": true,
+          "reason": "quiet_hours",
+          "retryAt": "2026-11-07T13:00:00Z"
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "calendar_outside_legal_hours"
+          ],
+          "retryAt": "2026-11-07T13:00:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 27 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-10-27T18:02:03Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_reply"
+        },
+        {
+          "at": "2026-10-27T22:09:53Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-11-01T16:17:49Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-03T23:56:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": false,
+          "reason": null,
+          "retryAt": null
+        },
+        "contactBudget": {
+          "allowed": true,
+          "reasons": [],
+          "retryAt": null
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 28 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-10-29T18:49:05Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_reply"
+        }
+      ],
+      "now": "2026-11-07T01:28:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": false,
+          "reason": null,
+          "retryAt": null
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "calendar_outside_legal_hours"
+          ],
+          "retryAt": "2026-11-07T13:00:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 29 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [],
+      "now": "2026-11-16T01:06:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": false,
+          "reason": null,
+          "retryAt": null
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "calendar_sunday"
+          ],
+          "retryAt": "2026-11-17T13:00:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 30 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-11-07T09:50:34Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_reply"
+        },
+        {
+          "at": "2026-11-12T02:11:30Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-11-13T14:41:06Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-14T07:54:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": true,
+          "reason": "too_soon_since_last_contact",
+          "retryAt": "2026-11-15T14:41:06Z"
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "calendar_outside_legal_hours",
+            "weekly_contact_limit",
+            "min_hours_between_contacts"
+          ],
+          "retryAt": "2026-11-19T13:00:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 31 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [],
+      "now": "2026-11-13T14:16:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": false,
+          "reason": null,
+          "retryAt": null
+        },
+        "contactBudget": {
+          "allowed": true,
+          "reasons": [],
+          "retryAt": null
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 32 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [],
+      "now": "2026-11-07T12:32:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": true,
+          "reason": "quiet_hours",
+          "retryAt": "2026-11-07T13:00:00Z"
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "calendar_outside_legal_hours"
+          ],
+          "retryAt": "2026-11-07T13:00:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 33 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-11-08T11:56:10Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-11-13T11:24:00Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-14T09:20:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": true,
+          "reason": "too_soon_since_last_contact",
+          "retryAt": "2026-11-15T11:24:00Z"
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "calendar_outside_legal_hours",
+            "weekly_contact_limit",
+            "min_hours_between_contacts"
+          ],
+          "retryAt": "2026-11-17T13:00:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 34 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-11-06T02:09:01Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-11-09T04:15:17Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-11-10T10:26:26Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-15T13:07:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": true,
+          "reason": "weekly_contact_limit_reached",
+          "retryAt": "2026-11-16T04:15:17Z"
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "calendar_sunday",
+            "weekly_contact_limit"
+          ],
+          "retryAt": "2026-11-17T13:00:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 35 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-11-05T11:54:00Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_reply"
+        },
+        {
+          "at": "2026-11-12T00:54:26Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-11-14T01:13:40Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-14T17:36:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": true,
+          "reason": "too_soon_since_last_contact",
+          "retryAt": "2026-11-16T01:13:40Z"
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "weekly_contact_limit",
+            "min_hours_between_contacts"
+          ],
+          "retryAt": "2026-11-19T13:00:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 36 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-10-27T23:14:48Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-10-30T12:44:34Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-10-31T09:21:59Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_reply"
+        },
+        {
+          "at": "2026-11-01T07:40:46Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-05T01:58:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": true,
+          "reason": "weekly_contact_limit_reached",
+          "retryAt": "2026-11-06T12:44:34Z"
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "calendar_outside_legal_hours",
+            "weekly_contact_limit"
+          ],
+          "retryAt": "2026-11-06T13:00:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 37 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-10-28T05:35:21Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-10-28T23:50:51Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-11-03T19:55:33Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-04T16:38:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": true,
+          "reason": "too_soon_since_last_contact",
+          "retryAt": "2026-11-05T19:55:33Z"
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "weekly_contact_limit",
+            "min_hours_between_contacts"
+          ],
+          "retryAt": "2026-11-05T19:55:33Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 38 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-11-04T03:22:20Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-11-04T11:37:20Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-11-12T16:13:17Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-13T09:01:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": true,
+          "reason": "too_soon_since_last_contact",
+          "retryAt": "2026-11-14T16:13:17Z"
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "calendar_outside_legal_hours",
+            "min_hours_between_contacts"
+          ],
+          "retryAt": "2026-11-14T16:13:17Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 39 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-11-04T19:22:55Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-11-09T06:17:54Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-11-09T23:04:48Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        }
+      ],
+      "now": "2026-11-11T15:20:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": true,
+          "reason": "too_soon_since_last_contact",
+          "retryAt": "2026-11-11T23:04:48Z"
+        },
+        "contactBudget": {
+          "allowed": false,
+          "reasons": [
+            "weekly_contact_limit",
+            "min_hours_between_contacts"
+          ],
+          "retryAt": "2026-11-17T13:00:00Z"
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    },
+    {
+      "name": "parity · whatsapp · generado 40 (semilla 20261110)",
+      "kind": "whatsapp",
+      "contractRef": "D9-7 (prueba de paridad), T9",
+      "basis": "decision-fixture",
+      "decision": "DF-B8",
+      "history": [
+        {
+          "at": "2026-10-26T21:19:57Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-10-27T05:42:50Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_proactive"
+        },
+        {
+          "at": "2026-10-28T17:38:24Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_reply"
+        },
+        {
+          "at": "2026-11-04T07:17:44Z",
+          "medium": "whatsapp",
+          "purpose": "commercial",
+          "source": "ai_reply"
+        }
+      ],
+      "now": "2026-11-05T21:02:00Z",
+      "purpose": "commercial",
+      "medium": "whatsapp",
+      "expected": {
+        "contactPolicy": {
+          "denied": false,
+          "reason": null,
+          "retryAt": null
+        },
+        "contactBudget": {
+          "allowed": true,
+          "reasons": [],
+          "retryAt": null
+        },
+        "implication": "si contactPolicy.denied, contactBudget.allowed = false"
+      }
+    }
+  ]
+}

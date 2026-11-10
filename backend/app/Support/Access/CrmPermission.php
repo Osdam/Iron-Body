@@ -263,7 +263,7 @@ final class CrmPermission
      * Se compara el PRIMER segmento de la clave: `valuations.view_all` y
      * cualquier `valuations.algo.view` futuro quedan fuera igual.
      */
-    public const SHARED_TOKEN_EXCLUDED_DOMAINS = [...self::PERSONNEL_DOMAINS, 'valuations', 'ultron', 'telephony'];
+    public const SHARED_TOKEN_EXCLUDED_DOMAINS = [...self::PERSONNEL_DOMAINS, 'valuations', 'ultron', 'telephony', 'commercial_automation'];
 
     /**
      * Permisos por defecto de cada rol del sistema.
@@ -320,6 +320,15 @@ final class CrmPermission
             self::ULTRON_VOICE_LAB_RUN,
             self::TELEPHONY_CALL_PLACE,
             self::TELEPHONY_CONTACTS_MANAGE,
+            // Hito 9 (D9-13): publicar estrategias comerciales, los vínculos de
+            // personas (datos personales), la simulación sobre muestra real y
+            // soltar frenos: solo Super Admin por defecto; se reparten a mano.
+            // Pausar, revertir, echar frenos y la PARADA GLOBAL sí llegan: son
+            // la dirección segura.
+            'ultron.strategies_publish',
+            'ultron.person_bindings_manage',
+            'commercial_automation.simulate_real',
+            'commercial_automation.release',
             // Corregir medio o importe de un cobro y devolver dinero (de un
             // cobro o de una venta): dinero que sale de la caja o que cambia de
             // medio en un arqueo. Llegan nuevas y se reparten a mano.

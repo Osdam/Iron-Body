@@ -2,7 +2,7 @@
 
 namespace Tests\Feature\UltronStudio;
 
-use App\Http\Controllers\Crm\UltronStudio\UltronStudioVoiceController;
+use App\Http\Controllers\Crm\UltronStudio\StudioRouteCount;
 use App\Models\Admin;
 use App\Support\Access\AuthorizationMap;
 use App\Support\Access\CrmPermission;
@@ -87,7 +87,7 @@ class UltronStudioIntegrationsPermissionsTest extends TestCase
         ksort($real);
 
         $this->assertSame($esperado, $real);
-        $this->assertSame(UltronStudioVoiceController::STUDIO_ROUTE_COUNT, $todas);
+        $this->assertSame(StudioRouteCount::TOTAL, $todas);
         // La sonda lleva su propio limitador además del de escritura.
         $sonda = collect(Route::getRoutes()->getRoutes())->first(fn ($r) => $r->uri() === 'api/admin/ultron-studio/integrations/twilio/probe');
         $this->assertContains('throttle:ultron-studio-probe', $sonda->gatherMiddleware());

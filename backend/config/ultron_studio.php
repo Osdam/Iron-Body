@@ -286,6 +286,62 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Gobierno de las estrategias (Hito 9, paquete S9)
+    |--------------------------------------------------------------------------
+    | Contrato: docs/ultron-studio/ULTRON_STUDIO_H9_CONTRACT.md, D9-11, §7 y
+    | §9.1. Es REGISTRO del Studio: nada de aquí ejecuta, planifica ni envía; la
+    | ejecución (`config/outreach.php`) es de B9-run y solo lee la cadena
+    | firmada `ultron_studio_strategy_publications`.
+    |
+    | TODO NACE APAGADO (protección 1). Solo `true` (o 1/on/yes) enciende:
+    |  - `enabled`: sin ella, TODAS las rutas `strategies/**` responden 409
+    |    `strategies_disabled` (también las lecturas);
+    |  - `publishing_enabled`: publicar, promover y reanudar responden 409
+    |    `strategies_publishing_disabled`. Pausar y revertir NO dependen de
+    |    ella (deshacer no puede depender de la llave que permite cambiar).
+    | La ventana es propia (`ULTRON_STUDIO_STRATEGIES_PUBLISH_WINDOW`), con la
+    | misma forma que la del Hito 5: sin la variable, 07:00-19:00; vacía, sin
+    | ventana; mal escrita, la del contrato.
+    */
+    'strategies' => [
+
+        'enabled' => filter_var(env('ULTRON_STUDIO_STRATEGIES_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+
+        'publishing_enabled' => filter_var(env('ULTRON_STUDIO_STRATEGIES_PUBLISHING_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+
+        'window' => (static function (): string {
+            $defecto = '07:00-19:00';
+            $valor = env('ULTRON_STUDIO_STRATEGIES_PUBLISH_WINDOW');
+            if (! is_string($valor)) {
+                return $defecto;
+            }
+            $valor = trim($valor);
+            if ($valor === '') {
+                return '';
+            }
+            if (preg_match('/^([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-3]):([0-5]\d)$/', $valor, $m) === 1
+                && (int) $m[1] * 60 + (int) $m[2] < (int) $m[3] * 60 + (int) $m[4]) {
+                return $valor;
+            }
+
+            return $defecto;
+        })(),
+
+        // La evidencia mínima del canario para promover (D9-11, P9-19): horas
+        // desde la publicación en canario (1–168) y contactos que salieron
+        // (1–100). Fuera del rango, se recorta; vacío o no entero, el defecto.
+        'canary_min_hours' => min(168, max(1, $entero('ULTRON_STUDIO_STRATEGIES_CANARY_MIN_HOURS', 24))),
+        'canary_min_touches' => min(100, max(1, $entero('ULTRON_STUDIO_STRATEGIES_CANARY_MIN_TOUCHES', 3))),
+
+        // `required` (defecto): aprobar exige una simulación SIN BLOQUEANTES
+        // sobre la misma huella (D9-12). `waived` solo lo decide el propietario
+        // y queda escrito en la publicación. Cualquier otro valor, `required`.
+        'simulation_gate' => strtolower(trim((string) env('ULTRON_STUDIO_STRATEGIES_SIMULATION_GATE', 'required'))) === 'waived' ? 'waived' : 'required',
+
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Monitor (Hito 7)
     |--------------------------------------------------------------------------
     | Contrato: docs/ultron-studio/ULTRON_STUDIO_H7_CONTRACT.md, OPS7 (a).

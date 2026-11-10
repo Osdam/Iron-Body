@@ -1,0 +1,565 @@
+{
+  "fixture": "priority-cases.json",
+  "version": 1,
+  "contract": "backend/docs/ultron-studio/ULTRON_STUDIO_H9_CONTRACT.md (congelado por el lead el 09-11-2026 20:30 UTC; §13.2 renumerado T1–T23)",
+  "contractSections": [
+    "D9-8 etapa 3 (por persona y día: (1) nunca dos finalidades el mismo día; (2) service > collections > commercial [P9-7]; (3) priority; (4) GOAL_PRIORITY; (5) uuid de la estrategia, estable)",
+    "D9-6 (priority 1–100; goal de CommercialVocabulary::GOALS)",
+    "§13.1 #5 (dos campañas simultáneas) y #12 (reglas contradictorias); §13.3 (misma prioridad: desempata el uuid)"
+  ],
+  "generatedBy": "tests/fixtures/outreach/tools/build/build.py (python3 -I), con los casos a mano en sec_*.py",
+  "checkedBy": "tests/Unit/Outreach/FixturesSanityTest.php (forma, unicidad, canonicalización y huellas, sin código del motor)",
+  "readme": "tests/fixtures/outreach/README.md",
+  "basisLegend": {
+    "contrato": "Lo dice el contrato H9 tal cual (contractRef).",
+    "ley": "Lo dice la ley citada (Ley 2300 de 2023, Ley 1581 de 2012, Ley 51 de 1983, Ley 2578 de 2026).",
+    "codigo-existente": "Lo hace hoy el código que el contrato manda reutilizar o igualar (ContactPolicy, OutboundSchedule, ColombianHolidays, VoiceFrequency, StudioContentHasher…); la cita va en contractRef.",
+    "supuesto-lead": "Sigue un supuesto de la congelación del lead (P9-n), que el propietario puede cambiar.",
+    "decision-fixture": "El contrato no lo fija: lo decide este fixture (campo decision; README §Decisiones). Lo congela el lead."
+  },
+  "sources": [
+    {
+      "what": "El contrato del H9 (D9-3 a D9-11, §5, §6, §13 y la Congelación)",
+      "url": "backend/docs/ultron-studio/ULTRON_STUDIO_H9_CONTRACT.md",
+      "consulted": "09-11-2026, en este árbol (sin seguimiento: lo congela el lead)",
+      "how": "Lectura completa; cada caso cita su sección en contractRef."
+    },
+    {
+      "what": "GOAL_PRIORITY",
+      "url": "backend/app/Services/Commercial/CommercialVocabulary.php:271-290",
+      "consulted": "09-11-2026, en este árbol",
+      "how": "Copiada literalmente (18 objetivos; a más número, más prioridad)."
+    }
+  ],
+  "syntheticData": "Ningún dato real: ids, uuids, claves y personas inventados; las personas se nombran por subject_key sintético (m:<id>, l:<id>); sin teléfonos, nombres, documentos ni importes.",
+  "goalPriority": {
+    "escalate": 95,
+    "recover_payment_link": 90,
+    "collect_payment": 85,
+    "activate_membership": 80,
+    "recover_satisfaction": 78,
+    "renew": 75,
+    "close_plan": 70,
+    "resolve_objection": 65,
+    "reactivate": 60,
+    "complete_onboarding": 55,
+    "increase_adherence": 50,
+    "book_assessment": 48,
+    "book_visit": 45,
+    "upgrade": 40,
+    "link_app": 35,
+    "cross_sell": 30,
+    "collect_data": 25,
+    "request_referral": 20
+  },
+  "purposeRank": [
+    "service",
+    "collections",
+    "commercial"
+  ],
+  "interface": {
+    "arbitrate": "PriorityArbiter::arbitrate(candidates [{uuid, purpose, priority, goal}], todayPurpose|null) → {winner|null, ranking (las que pueden salir hoy, de mejor a peor), deferred [{uuid, reason}]}"
+  },
+  "decisions": {
+    "DF-P1": "A más `priority`, antes (como GOAL_PRIORITY); a igualdad de todo, el uuid menor por orden de bytes (en minúscula).",
+    "DF-P2": "todayPurpose es la finalidad que la persona ya tiene hoy (un trabajo planificado o un contacto): las candidatas de otra finalidad quedan defer con purpose_conflict_today aunque tengan más rango; sin todayPurpose, la ganadora fija la finalidad del día y las de otra finalidad salen purpose_conflict_today, las de la misma lower_priority."
+  },
+  "counts": {
+    "arbitrate": 14,
+    "total": 14
+  },
+  "arbitrate": [
+    {
+      "name": "arbitrate · person-day · una sola estrategia → gana sin aplazar a nadie",
+      "kind": "person-day",
+      "contractRef": "D9-8 etapa 3",
+      "basis": "contrato",
+      "candidates": [
+        {
+          "uuid": "50000001-0000-4000-8000-000000000001",
+          "purpose": "commercial",
+          "priority": 50,
+          "goal": "renew"
+        }
+      ],
+      "todayPurpose": null,
+      "expected": {
+        "winner": "50000001-0000-4000-8000-000000000001",
+        "ranking": [
+          "50000001-0000-4000-8000-000000000001"
+        ],
+        "deferred": []
+      }
+    },
+    {
+      "name": "arbitrate · person-day · #5: dos campañas comerciales: gana la de más priority; la otra lower_priority",
+      "kind": "person-day",
+      "contractRef": "#5 de §13.1",
+      "basis": "decision-fixture",
+      "decision": "DF-P1",
+      "candidates": [
+        {
+          "uuid": "50000001-0000-4000-8000-000000000001",
+          "purpose": "commercial",
+          "priority": 40,
+          "goal": "renew"
+        },
+        {
+          "uuid": "50000002-0000-4000-8000-000000000002",
+          "purpose": "commercial",
+          "priority": 70,
+          "goal": "renew"
+        }
+      ],
+      "todayPurpose": null,
+      "expected": {
+        "winner": "50000002-0000-4000-8000-000000000002",
+        "ranking": [
+          "50000002-0000-4000-8000-000000000002",
+          "50000001-0000-4000-8000-000000000001"
+        ],
+        "deferred": [
+          {
+            "uuid": "50000001-0000-4000-8000-000000000001",
+            "reason": "lower_priority"
+          }
+        ]
+      }
+    },
+    {
+      "name": "arbitrate · person-day · misma priority: decide GOAL_PRIORITY (recover_payment_link 90 > renew 75)",
+      "kind": "person-day",
+      "contractRef": "D9-8 etapa 3",
+      "basis": "contrato",
+      "candidates": [
+        {
+          "uuid": "50000001-0000-4000-8000-000000000001",
+          "purpose": "commercial",
+          "priority": 50,
+          "goal": "renew"
+        },
+        {
+          "uuid": "50000002-0000-4000-8000-000000000002",
+          "purpose": "commercial",
+          "priority": 50,
+          "goal": "recover_payment_link"
+        }
+      ],
+      "todayPurpose": null,
+      "expected": {
+        "winner": "50000002-0000-4000-8000-000000000002",
+        "ranking": [
+          "50000002-0000-4000-8000-000000000002",
+          "50000001-0000-4000-8000-000000000001"
+        ],
+        "deferred": [
+          {
+            "uuid": "50000001-0000-4000-8000-000000000001",
+            "reason": "lower_priority"
+          }
+        ]
+      }
+    },
+    {
+      "name": "arbitrate · person-day · misma priority y mismo objetivo: desempata el uuid menor (§13.3)",
+      "kind": "person-day",
+      "contractRef": "§13.3",
+      "basis": "decision-fixture",
+      "decision": "DF-P1",
+      "candidates": [
+        {
+          "uuid": "50000009-0000-4000-8000-000000000009",
+          "purpose": "commercial",
+          "priority": 50,
+          "goal": "renew"
+        },
+        {
+          "uuid": "50000004-0000-4000-8000-000000000004",
+          "purpose": "commercial",
+          "priority": 50,
+          "goal": "renew"
+        }
+      ],
+      "todayPurpose": null,
+      "expected": {
+        "winner": "50000004-0000-4000-8000-000000000004",
+        "ranking": [
+          "50000004-0000-4000-8000-000000000004",
+          "50000009-0000-4000-8000-000000000009"
+        ],
+        "deferred": [
+          {
+            "uuid": "50000009-0000-4000-8000-000000000009",
+            "reason": "lower_priority"
+          }
+        ]
+      }
+    },
+    {
+      "name": "arbitrate · person-day · service gana a commercial aunque tenga menos priority",
+      "kind": "person-day",
+      "contractRef": "P9-7, D9-8 etapa 3",
+      "basis": "contrato",
+      "candidates": [
+        {
+          "uuid": "50000001-0000-4000-8000-000000000001",
+          "purpose": "commercial",
+          "priority": 100,
+          "goal": "renew"
+        },
+        {
+          "uuid": "50000002-0000-4000-8000-000000000002",
+          "purpose": "service",
+          "priority": 1,
+          "goal": "book_assessment"
+        }
+      ],
+      "todayPurpose": null,
+      "expected": {
+        "winner": "50000002-0000-4000-8000-000000000002",
+        "ranking": [
+          "50000002-0000-4000-8000-000000000002",
+          "50000001-0000-4000-8000-000000000001"
+        ],
+        "deferred": [
+          {
+            "uuid": "50000001-0000-4000-8000-000000000001",
+            "reason": "purpose_conflict_today"
+          }
+        ]
+      }
+    },
+    {
+      "name": "arbitrate · person-day · collections gana a commercial",
+      "kind": "person-day",
+      "contractRef": "P9-7",
+      "basis": "contrato",
+      "candidates": [
+        {
+          "uuid": "50000001-0000-4000-8000-000000000001",
+          "purpose": "commercial",
+          "priority": 90,
+          "goal": "renew"
+        },
+        {
+          "uuid": "50000002-0000-4000-8000-000000000002",
+          "purpose": "collections",
+          "priority": 10,
+          "goal": "collect_payment"
+        }
+      ],
+      "todayPurpose": null,
+      "expected": {
+        "winner": "50000002-0000-4000-8000-000000000002",
+        "ranking": [
+          "50000002-0000-4000-8000-000000000002",
+          "50000001-0000-4000-8000-000000000001"
+        ],
+        "deferred": [
+          {
+            "uuid": "50000001-0000-4000-8000-000000000001",
+            "reason": "purpose_conflict_today"
+          }
+        ]
+      }
+    },
+    {
+      "name": "arbitrate · person-day · service gana a collections",
+      "kind": "person-day",
+      "contractRef": "P9-7",
+      "basis": "contrato",
+      "candidates": [
+        {
+          "uuid": "50000001-0000-4000-8000-000000000001",
+          "purpose": "collections",
+          "priority": 50,
+          "goal": "collect_payment"
+        },
+        {
+          "uuid": "50000002-0000-4000-8000-000000000002",
+          "purpose": "service",
+          "priority": 50,
+          "goal": "book_assessment"
+        }
+      ],
+      "todayPurpose": null,
+      "expected": {
+        "winner": "50000002-0000-4000-8000-000000000002",
+        "ranking": [
+          "50000002-0000-4000-8000-000000000002",
+          "50000001-0000-4000-8000-000000000001"
+        ],
+        "deferred": [
+          {
+            "uuid": "50000001-0000-4000-8000-000000000001",
+            "reason": "purpose_conflict_today"
+          }
+        ]
+      }
+    },
+    {
+      "name": "arbitrate · person-day · tres: service, commercial alta y commercial baja → service; las comerciales purpose_conflict_today",
+      "kind": "person-day",
+      "contractRef": "P9-7",
+      "basis": "contrato",
+      "candidates": [
+        {
+          "uuid": "50000001-0000-4000-8000-000000000001",
+          "purpose": "commercial",
+          "priority": 90,
+          "goal": "renew"
+        },
+        {
+          "uuid": "50000002-0000-4000-8000-000000000002",
+          "purpose": "service",
+          "priority": 50,
+          "goal": "book_assessment"
+        },
+        {
+          "uuid": "50000003-0000-4000-8000-000000000003",
+          "purpose": "commercial",
+          "priority": 10,
+          "goal": "renew"
+        }
+      ],
+      "todayPurpose": null,
+      "expected": {
+        "winner": "50000002-0000-4000-8000-000000000002",
+        "ranking": [
+          "50000002-0000-4000-8000-000000000002",
+          "50000001-0000-4000-8000-000000000001",
+          "50000003-0000-4000-8000-000000000003"
+        ],
+        "deferred": [
+          {
+            "uuid": "50000001-0000-4000-8000-000000000001",
+            "reason": "purpose_conflict_today"
+          },
+          {
+            "uuid": "50000003-0000-4000-8000-000000000003",
+            "reason": "purpose_conflict_today"
+          }
+        ]
+      }
+    },
+    {
+      "name": "arbitrate · person-day · hoy ya hay cobranza: las comerciales no salen aunque haya una sola (purpose_conflict_today)",
+      "kind": "person-day",
+      "contractRef": "P9-7 («nunca las dos el mismo día»)",
+      "basis": "decision-fixture",
+      "decision": "DF-P2",
+      "candidates": [
+        {
+          "uuid": "50000001-0000-4000-8000-000000000001",
+          "purpose": "commercial",
+          "priority": 50,
+          "goal": "renew"
+        }
+      ],
+      "todayPurpose": "collections",
+      "expected": {
+        "winner": null,
+        "ranking": [],
+        "deferred": [
+          {
+            "uuid": "50000001-0000-4000-8000-000000000001",
+            "reason": "purpose_conflict_today"
+          }
+        ]
+      }
+    },
+    {
+      "name": "arbitrate · person-day · hoy ya hay comercial: de las candidatas, solo compiten las comerciales",
+      "kind": "person-day",
+      "contractRef": "P9-7",
+      "basis": "decision-fixture",
+      "decision": "DF-P2",
+      "candidates": [
+        {
+          "uuid": "50000001-0000-4000-8000-000000000001",
+          "purpose": "service",
+          "priority": 50,
+          "goal": "book_assessment"
+        },
+        {
+          "uuid": "50000002-0000-4000-8000-000000000002",
+          "purpose": "commercial",
+          "priority": 10,
+          "goal": "renew"
+        },
+        {
+          "uuid": "50000003-0000-4000-8000-000000000003",
+          "purpose": "commercial",
+          "priority": 20,
+          "goal": "renew"
+        }
+      ],
+      "todayPurpose": "commercial",
+      "expected": {
+        "winner": "50000003-0000-4000-8000-000000000003",
+        "ranking": [
+          "50000003-0000-4000-8000-000000000003",
+          "50000002-0000-4000-8000-000000000002"
+        ],
+        "deferred": [
+          {
+            "uuid": "50000002-0000-4000-8000-000000000002",
+            "reason": "lower_priority"
+          },
+          {
+            "uuid": "50000001-0000-4000-8000-000000000001",
+            "reason": "purpose_conflict_today"
+          }
+        ]
+      }
+    },
+    {
+      "name": "arbitrate · person-day · #12: reglas contradictorias (una quiere renovar, otra reactivar) con la misma priority → gana renew (75 > 60)",
+      "kind": "person-day",
+      "contractRef": "#12 de §13.1",
+      "basis": "contrato",
+      "candidates": [
+        {
+          "uuid": "50000001-0000-4000-8000-000000000001",
+          "purpose": "commercial",
+          "priority": 50,
+          "goal": "reactivate"
+        },
+        {
+          "uuid": "50000002-0000-4000-8000-000000000002",
+          "purpose": "commercial",
+          "priority": 50,
+          "goal": "renew"
+        }
+      ],
+      "todayPurpose": null,
+      "expected": {
+        "winner": "50000002-0000-4000-8000-000000000002",
+        "ranking": [
+          "50000002-0000-4000-8000-000000000002",
+          "50000001-0000-4000-8000-000000000001"
+        ],
+        "deferred": [
+          {
+            "uuid": "50000001-0000-4000-8000-000000000001",
+            "reason": "lower_priority"
+          }
+        ]
+      }
+    },
+    {
+      "name": "arbitrate · person-day · el uuid desempata por bytes, no por el número: «5000000a…» va después de «50000009…»",
+      "kind": "person-day",
+      "contractRef": "§13.3",
+      "basis": "decision-fixture",
+      "decision": "DF-P1",
+      "candidates": [
+        {
+          "uuid": "5000000a-0000-4000-8000-00000000000a",
+          "purpose": "commercial",
+          "priority": 50,
+          "goal": "renew"
+        },
+        {
+          "uuid": "50000009-0000-4000-8000-000000000009",
+          "purpose": "commercial",
+          "priority": 50,
+          "goal": "renew"
+        }
+      ],
+      "todayPurpose": null,
+      "expected": {
+        "winner": "50000009-0000-4000-8000-000000000009",
+        "ranking": [
+          "50000009-0000-4000-8000-000000000009",
+          "5000000a-0000-4000-8000-00000000000a"
+        ],
+        "deferred": [
+          {
+            "uuid": "5000000a-0000-4000-8000-00000000000a",
+            "reason": "lower_priority"
+          }
+        ]
+      }
+    },
+    {
+      "name": "arbitrate · person-day · la priority manda antes que GOAL_PRIORITY",
+      "kind": "person-day",
+      "contractRef": "D9-8 etapa 3 (orden 3 antes que 4)",
+      "basis": "contrato",
+      "candidates": [
+        {
+          "uuid": "50000001-0000-4000-8000-000000000001",
+          "purpose": "commercial",
+          "priority": 60,
+          "goal": "escalate"
+        },
+        {
+          "uuid": "50000002-0000-4000-8000-000000000002",
+          "purpose": "commercial",
+          "priority": 61,
+          "goal": "request_referral"
+        }
+      ],
+      "todayPurpose": null,
+      "expected": {
+        "winner": "50000002-0000-4000-8000-000000000002",
+        "ranking": [
+          "50000002-0000-4000-8000-000000000002",
+          "50000001-0000-4000-8000-000000000001"
+        ],
+        "deferred": [
+          {
+            "uuid": "50000001-0000-4000-8000-000000000001",
+            "reason": "lower_priority"
+          }
+        ]
+      }
+    },
+    {
+      "name": "arbitrate · person-day · el orden de llegada no importa (determinista)",
+      "kind": "person-day",
+      "contractRef": "D9-8 («determinista»)",
+      "basis": "contrato",
+      "candidates": [
+        {
+          "uuid": "50000003-0000-4000-8000-000000000003",
+          "purpose": "commercial",
+          "priority": 50,
+          "goal": "renew"
+        },
+        {
+          "uuid": "50000001-0000-4000-8000-000000000001",
+          "purpose": "commercial",
+          "priority": 50,
+          "goal": "renew"
+        },
+        {
+          "uuid": "50000002-0000-4000-8000-000000000002",
+          "purpose": "commercial",
+          "priority": 50,
+          "goal": "renew"
+        }
+      ],
+      "todayPurpose": null,
+      "expected": {
+        "winner": "50000001-0000-4000-8000-000000000001",
+        "ranking": [
+          "50000001-0000-4000-8000-000000000001",
+          "50000002-0000-4000-8000-000000000002",
+          "50000003-0000-4000-8000-000000000003"
+        ],
+        "deferred": [
+          {
+            "uuid": "50000002-0000-4000-8000-000000000002",
+            "reason": "lower_priority"
+          },
+          {
+            "uuid": "50000003-0000-4000-8000-000000000003",
+            "reason": "lower_priority"
+          }
+        ]
+      }
+    }
+  ]
+}

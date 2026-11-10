@@ -404,7 +404,8 @@ class UltronStudioEngineReadOnlyTest extends TestCase
         // Y lo que se recorrió son exactamente las rutas del Studio.
         $todas = [];
         foreach (Route::getRoutes() as $route) {
-            if (str_starts_with($route->uri(), 'api/admin/ultron-studio')) {
+            // Las 44 del Hito 9 (strategies/**, stream, outreach/**) tienen las suyas (L9-38): Strategies/UltronStudioStrategyRoutesTest, Stream/* y Outreach/Guards/*.
+            if (str_starts_with($route->uri(), 'api/admin/ultron-studio') && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/strategies') && $route->uri() !== 'api/admin/ultron-studio/stream' && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/outreach/')) {
                 $todas[] = AuthorizationMap::routeKey($route);
             }
         }

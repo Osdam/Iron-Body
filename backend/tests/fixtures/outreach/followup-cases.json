@@ -1,0 +1,1370 @@
+{
+  "fixture": "followup-cases.json",
+  "version": 1,
+  "contract": "backend/docs/ultron-studio/ULTRON_STUDIO_H9_CONTRACT.md (congelado por el lead el 09-11-2026 20:30 UTC; §13.2 renumerado T1–T23)",
+  "contractSections": [
+    "D9-8 etapa 9 (FollowUpMachine pura: aplica el `on` del paso dentro de la tabla de D9-10; un reintento de negocio es una fila nueva, attempt + 1)",
+    "D9-10 (transiciones next_step, retry_step ≤ 2, wait {n, unit ≤ 14 días}, end_success, end_exit, handoff_human; estados solo hacia delante)",
+    "D9-6 (delay: un intervalo desde la inscripción o desde el resultado anterior; limits: ≤ 6 contactos, ventana ≤ 60 días)",
+    "§13.2 T23 (no_answer → next_step solo si on.no_answer lo dice; un resultado desconocido no avanza; nunca acorta un intervalo mínimo)",
+    "§13.1 #17 y T22"
+  ],
+  "generatedBy": "tests/fixtures/outreach/tools/build/build.py (python3 -I), con los casos a mano en sec_*.py",
+  "checkedBy": "tests/Unit/Outreach/FixturesSanityTest.php (forma, unicidad, canonicalización y huellas, sin código del motor)",
+  "readme": "tests/fixtures/outreach/README.md",
+  "basisLegend": {
+    "contrato": "Lo dice el contrato H9 tal cual (contractRef).",
+    "ley": "Lo dice la ley citada (Ley 2300 de 2023, Ley 1581 de 2012, Ley 51 de 1983, Ley 2578 de 2026).",
+    "codigo-existente": "Lo hace hoy el código que el contrato manda reutilizar o igualar (ContactPolicy, OutboundSchedule, ColombianHolidays, VoiceFrequency, StudioContentHasher…); la cita va en contractRef.",
+    "supuesto-lead": "Sigue un supuesto de la congelación del lead (P9-n), que el propietario puede cambiar.",
+    "decision-fixture": "El contrato no lo fija: lo decide este fixture (campo decision; README §Decisiones). Lo congela el lead."
+  },
+  "sources": [
+    {
+      "what": "El contrato del H9 (D9-3 a D9-11, §5, §6, §13 y la Congelación)",
+      "url": "backend/docs/ultron-studio/ULTRON_STUDIO_H9_CONTRACT.md",
+      "consulted": "09-11-2026, en este árbol (sin seguimiento: lo congela el lead)",
+      "how": "Lectura completa; cada caso cita su sección en contractRef."
+    },
+    {
+      "what": "La resolución de cada resultado",
+      "url": "tests/fixtures/outreach/outcome-transitions.json (resolve)",
+      "consulted": "09-11-2026",
+      "how": "Cada caso resuelve primero el resultado con la misma referencia y después aplica la máquina."
+    }
+  ],
+  "syntheticData": "Ningún dato real: ids, uuids, claves y personas inventados; las personas se nombran por subject_key sintético (m:<id>, l:<id>); sin teléfonos, nombres, documentos ni importes.",
+  "interface": {
+    "apply": "FollowUpMachine::apply(enrollment {status, stepIndex, attempt, touches, enrolledAt, windowEndsAt}, steps [{id, delay {n, unit, from}}], resolution (OutcomeTable::resolve), now, extras {waitFor, callbackAt, maxTouches, ownHours, schedule}) → {status, stepIndex, attempt, nextJob {stepIndex, attempt, notBefore} | null, reason}"
+  },
+  "decisions": {
+    "DF-F1": "next_step planifica el paso siguiente con intento 1; retry_step y wait planifican el MISMO paso con intento + 1 (una fila nueva); wait deja la inscripción en waiting y el resto en active.",
+    "DF-F2": "notBefore = primer hueco permitido desde el más tardío entre now, base + delay del paso planificado (base = enrolledAt si from = enrollment, now si from = previous), now + la espera pedida y la hora que pidió la persona. Duraciones exactas (1 día = 24 h). Nunca antes: la máquina no acorta el retraso mínimo (T23).",
+    "DF-F3": "Si no quedan pasos, la inscripción espera su ventana sin trabajo (D9-8: después vence con no_response); si el notBefore cae en o después del fin de la ventana, tampoco hay trabajo.",
+    "DF-F4": "Con touches ≥ el tope de contactos (6), no se planifica nada y la inscripción sale (exited, max_touches_reached), aunque el resultado pidiera seguir.",
+    "DF-F5": "Un resultado ignorado (outcome_ignored) o sin transición (non_terminal: not_attempted, ambiguous, sent, delivered, read) no cambia nada.",
+    "DF-O3": "Clasificador (AI9): confidence entera de 0 a 100; opted_out se acepta desde 50 (umbral bajo) y el resto desde 90 (umbral alto); por debajo, o con la etiqueta ambiguous, needs_review: sin resultado del conjunto, la secuencia para y se abre una tarea asistida (transition handoff_human, #21 y #22). Ratificada por el lead: L9-12 (needs_review es un veredicto, no un resultado) y L9-18 (umbrales 50 y 90, solo AI9).",
+    "DF-O6": "retry_step cuenta intentos: failed admite 1 reintento (attempt ≤ 2) y no_answer 2 (attempt ≤ 3); agotados, rige la de por defecto.",
+    "DF-O7": "Estado de la inscripción: el de la transición (statusByTransition), salvo opted_out → opted_out y no_response → expired (D9-8: la ventana vencida cierra como expired con no_response). Los resultados sin transición (not_attempted, ambiguous, sent, delivered, read) no cambian el estado."
+  },
+  "counts": {
+    "apply": 22,
+    "total": 22
+  },
+  "apply": [
+    {
+      "name": "apply · machine · no_answer SIN regla: no avanza (end_exit) (T23)",
+      "kind": "machine",
+      "contractRef": "T23",
+      "basis": "contrato",
+      "enrollment": {
+        "status": "active",
+        "stepIndex": 0,
+        "attempt": 1,
+        "touches": 1,
+        "enrolledAt": "2026-11-09T15:00:00Z",
+        "windowEndsAt": "2026-11-30T05:00:00Z"
+      },
+      "steps": [
+        {
+          "id": "s1",
+          "delay": {
+            "n": 0,
+            "unit": "hours",
+            "from": "enrollment"
+          }
+        },
+        {
+          "id": "s2",
+          "delay": {
+            "n": 2,
+            "unit": "days",
+            "from": "previous"
+          }
+        },
+        {
+          "id": "s3",
+          "delay": {
+            "n": 1,
+            "unit": "weeks",
+            "from": "enrollment"
+          }
+        }
+      ],
+      "outcome": "no_answer",
+      "source": "staff",
+      "now": "2026-11-10T15:00:00Z",
+      "expected": {
+        "resolution": {
+          "verdict": "apply",
+          "transition": "end_exit"
+        },
+        "status": "exited",
+        "stepIndex": 0,
+        "attempt": 1,
+        "nextJob": null,
+        "reason": "closed"
+      }
+    },
+    {
+      "name": "apply · machine · no_answer con on.no_answer = next_step: paso 2 dentro de 2 días (jueves 10:00)",
+      "kind": "machine",
+      "contractRef": "T23",
+      "basis": "decision-fixture",
+      "decision": "DF-F2",
+      "enrollment": {
+        "status": "active",
+        "stepIndex": 0,
+        "attempt": 1,
+        "touches": 1,
+        "enrolledAt": "2026-11-09T15:00:00Z",
+        "windowEndsAt": "2026-11-30T05:00:00Z"
+      },
+      "steps": [
+        {
+          "id": "s1",
+          "delay": {
+            "n": 0,
+            "unit": "hours",
+            "from": "enrollment"
+          }
+        },
+        {
+          "id": "s2",
+          "delay": {
+            "n": 2,
+            "unit": "days",
+            "from": "previous"
+          }
+        },
+        {
+          "id": "s3",
+          "delay": {
+            "n": 1,
+            "unit": "weeks",
+            "from": "enrollment"
+          }
+        }
+      ],
+      "outcome": "no_answer",
+      "source": "staff",
+      "now": "2026-11-10T15:00:00Z",
+      "on": {
+        "no_answer": "next_step"
+      },
+      "expected": {
+        "resolution": {
+          "verdict": "apply",
+          "transition": "next_step"
+        },
+        "status": "active",
+        "stepIndex": 1,
+        "attempt": 1,
+        "nextJob": {
+          "stepIndex": 1,
+          "attempt": 1,
+          "notBefore": "2026-11-12T15:00:00Z"
+        },
+        "reason": "next_step"
+      }
+    },
+    {
+      "name": "apply · machine · no_answer con retry_step: el mismo paso, intento 2 (fila nueva)",
+      "kind": "machine",
+      "contractRef": "D9-8 etapa 9, D9-10",
+      "basis": "decision-fixture",
+      "decision": "DF-F1",
+      "enrollment": {
+        "status": "active",
+        "stepIndex": 0,
+        "attempt": 1,
+        "touches": 1,
+        "enrolledAt": "2026-11-09T15:00:00Z",
+        "windowEndsAt": "2026-11-30T05:00:00Z"
+      },
+      "steps": [
+        {
+          "id": "s1",
+          "delay": {
+            "n": 0,
+            "unit": "hours",
+            "from": "enrollment"
+          }
+        },
+        {
+          "id": "s2",
+          "delay": {
+            "n": 2,
+            "unit": "days",
+            "from": "previous"
+          }
+        },
+        {
+          "id": "s3",
+          "delay": {
+            "n": 1,
+            "unit": "weeks",
+            "from": "enrollment"
+          }
+        }
+      ],
+      "outcome": "no_answer",
+      "source": "staff",
+      "now": "2026-11-10T15:00:00Z",
+      "on": {
+        "no_answer": "retry_step"
+      },
+      "expected": {
+        "resolution": {
+          "verdict": "apply",
+          "transition": "retry_step"
+        },
+        "status": "active",
+        "stepIndex": 0,
+        "attempt": 2,
+        "nextJob": {
+          "stepIndex": 0,
+          "attempt": 2,
+          "notBefore": "2026-11-10T15:00:00Z"
+        },
+        "reason": "retry_step"
+      }
+    },
+    {
+      "name": "apply · machine · un resultado desconocido no avanza (T23)",
+      "kind": "machine",
+      "contractRef": "T23",
+      "basis": "decision-fixture",
+      "decision": "DF-F5",
+      "enrollment": {
+        "status": "active",
+        "stepIndex": 0,
+        "attempt": 1,
+        "touches": 1,
+        "enrolledAt": "2026-11-09T15:00:00Z",
+        "windowEndsAt": "2026-11-30T05:00:00Z"
+      },
+      "steps": [
+        {
+          "id": "s1",
+          "delay": {
+            "n": 0,
+            "unit": "hours",
+            "from": "enrollment"
+          }
+        },
+        {
+          "id": "s2",
+          "delay": {
+            "n": 2,
+            "unit": "days",
+            "from": "previous"
+          }
+        },
+        {
+          "id": "s3",
+          "delay": {
+            "n": 1,
+            "unit": "weeks",
+            "from": "enrollment"
+          }
+        }
+      ],
+      "outcome": "maybe_later",
+      "source": "staff",
+      "now": "2026-11-10T15:00:00Z",
+      "expected": {
+        "resolution": {
+          "verdict": "ignore",
+          "transition": null
+        },
+        "status": "active",
+        "stepIndex": 0,
+        "attempt": 1,
+        "nextJob": null,
+        "reason": "outcome_ignored"
+      }
+    },
+    {
+      "name": "apply · machine · not_attempted en sombra: no cambia nada",
+      "kind": "machine",
+      "contractRef": "D9-8 etapa 9, D9-10",
+      "basis": "decision-fixture",
+      "decision": "DF-F5",
+      "enrollment": {
+        "status": "active",
+        "stepIndex": 0,
+        "attempt": 1,
+        "touches": 1,
+        "enrolledAt": "2026-11-09T15:00:00Z",
+        "windowEndsAt": "2026-11-30T05:00:00Z"
+      },
+      "steps": [
+        {
+          "id": "s1",
+          "delay": {
+            "n": 0,
+            "unit": "hours",
+            "from": "enrollment"
+          }
+        },
+        {
+          "id": "s2",
+          "delay": {
+            "n": 2,
+            "unit": "days",
+            "from": "previous"
+          }
+        },
+        {
+          "id": "s3",
+          "delay": {
+            "n": 1,
+            "unit": "weeks",
+            "from": "enrollment"
+          }
+        }
+      ],
+      "outcome": "not_attempted",
+      "source": "simulated",
+      "now": "2026-11-10T15:00:00Z",
+      "expected": {
+        "resolution": {
+          "verdict": "apply",
+          "transition": null
+        },
+        "status": "active",
+        "stepIndex": 0,
+        "attempt": 1,
+        "nextJob": null,
+        "reason": "non_terminal"
+      }
+    },
+    {
+      "name": "apply · machine · callback_requested (wait) para el domingo: el mismo paso, intento 2, el martes 17-11 08:00 (aplazamiento legal; el lunes es festivo)",
+      "kind": "machine",
+      "contractRef": "T22, T23",
+      "basis": "decision-fixture",
+      "decision": "DF-F2",
+      "enrollment": {
+        "status": "active",
+        "stepIndex": 0,
+        "attempt": 1,
+        "touches": 1,
+        "enrolledAt": "2026-11-09T15:00:00Z",
+        "windowEndsAt": "2026-11-30T05:00:00Z"
+      },
+      "steps": [
+        {
+          "id": "s1",
+          "delay": {
+            "n": 0,
+            "unit": "hours",
+            "from": "enrollment"
+          }
+        },
+        {
+          "id": "s2",
+          "delay": {
+            "n": 2,
+            "unit": "days",
+            "from": "previous"
+          }
+        },
+        {
+          "id": "s3",
+          "delay": {
+            "n": 1,
+            "unit": "weeks",
+            "from": "enrollment"
+          }
+        }
+      ],
+      "outcome": "callback_requested",
+      "source": "staff",
+      "now": "2026-11-10T15:00:00Z",
+      "callbackAt": "2026-11-15T16:00:00Z",
+      "expected": {
+        "resolution": {
+          "verdict": "apply",
+          "transition": "wait"
+        },
+        "status": "waiting",
+        "stepIndex": 0,
+        "attempt": 2,
+        "nextJob": {
+          "stepIndex": 0,
+          "attempt": 2,
+          "notBefore": "2026-11-17T13:00:00Z"
+        },
+        "reason": "wait"
+      }
+    },
+    {
+      "name": "apply · machine · la persona pide que la llamen en 1 hora pero el paso exige 2 días: manda el paso (nunca acorta, T23)",
+      "kind": "machine",
+      "contractRef": "T23 («nunca acorta un intervalo mínimo»)",
+      "basis": "decision-fixture",
+      "decision": "DF-F2",
+      "enrollment": {
+        "status": "active",
+        "stepIndex": 0,
+        "attempt": 1,
+        "touches": 1,
+        "enrolledAt": "2026-11-09T15:00:00Z",
+        "windowEndsAt": "2026-11-30T05:00:00Z"
+      },
+      "steps": [
+        {
+          "id": "s1",
+          "delay": {
+            "n": 0,
+            "unit": "hours",
+            "from": "enrollment"
+          }
+        },
+        {
+          "id": "s2",
+          "delay": {
+            "n": 2,
+            "unit": "days",
+            "from": "previous"
+          }
+        },
+        {
+          "id": "s3",
+          "delay": {
+            "n": 1,
+            "unit": "weeks",
+            "from": "enrollment"
+          }
+        }
+      ],
+      "outcome": "answered",
+      "source": "staff",
+      "now": "2026-11-10T15:00:00Z",
+      "on": {
+        "answered": "next_step"
+      },
+      "callbackAt": "2026-11-10T16:00:00Z",
+      "expected": {
+        "resolution": {
+          "verdict": "apply",
+          "transition": "next_step"
+        },
+        "status": "active",
+        "stepIndex": 1,
+        "attempt": 1,
+        "nextJob": {
+          "stepIndex": 1,
+          "attempt": 1,
+          "notBefore": "2026-11-12T15:00:00Z"
+        },
+        "reason": "next_step"
+      }
+    },
+    {
+      "name": "apply · machine · blocked (wait por defecto) con espera de 3 días: el mismo paso el viernes 13-11 10:00",
+      "kind": "machine",
+      "contractRef": "D9-8 etapa 9, D9-10",
+      "basis": "decision-fixture",
+      "decision": "DF-F2",
+      "enrollment": {
+        "status": "active",
+        "stepIndex": 0,
+        "attempt": 1,
+        "touches": 1,
+        "enrolledAt": "2026-11-09T15:00:00Z",
+        "windowEndsAt": "2026-11-30T05:00:00Z"
+      },
+      "steps": [
+        {
+          "id": "s1",
+          "delay": {
+            "n": 0,
+            "unit": "hours",
+            "from": "enrollment"
+          }
+        },
+        {
+          "id": "s2",
+          "delay": {
+            "n": 2,
+            "unit": "days",
+            "from": "previous"
+          }
+        },
+        {
+          "id": "s3",
+          "delay": {
+            "n": 1,
+            "unit": "weeks",
+            "from": "enrollment"
+          }
+        }
+      ],
+      "outcome": "blocked",
+      "source": "system",
+      "now": "2026-11-10T15:00:00Z",
+      "waitFor": {
+        "n": 3,
+        "unit": "days"
+      },
+      "expected": {
+        "resolution": {
+          "verdict": "apply",
+          "transition": "wait"
+        },
+        "status": "waiting",
+        "stepIndex": 0,
+        "attempt": 2,
+        "nextJob": {
+          "stepIndex": 0,
+          "attempt": 2,
+          "notBefore": "2026-11-13T15:00:00Z"
+        },
+        "reason": "wait"
+      }
+    },
+    {
+      "name": "apply · machine · next_step cuyo retraso cae en sábado 15:30 → lunes 08:00",
+      "kind": "machine",
+      "contractRef": "#17, D9-7 (aplazamiento legal)",
+      "basis": "decision-fixture",
+      "decision": "DF-F2",
+      "enrollment": {
+        "status": "active",
+        "stepIndex": 0,
+        "attempt": 1,
+        "touches": 1,
+        "enrolledAt": "2026-11-05T14:00:00Z",
+        "windowEndsAt": "2026-11-30T05:00:00Z"
+      },
+      "steps": [
+        {
+          "id": "s1",
+          "delay": {
+            "n": 0,
+            "unit": "hours",
+            "from": "enrollment"
+          }
+        },
+        {
+          "id": "s2",
+          "delay": {
+            "n": 2,
+            "unit": "days",
+            "from": "previous"
+          }
+        },
+        {
+          "id": "s3",
+          "delay": {
+            "n": 1,
+            "unit": "weeks",
+            "from": "enrollment"
+          }
+        }
+      ],
+      "outcome": "answered",
+      "source": "staff",
+      "now": "2026-11-05T20:30:00Z",
+      "on": {
+        "answered": "next_step"
+      },
+      "expected": {
+        "resolution": {
+          "verdict": "apply",
+          "transition": "next_step"
+        },
+        "status": "active",
+        "stepIndex": 1,
+        "attempt": 1,
+        "nextJob": {
+          "stepIndex": 1,
+          "attempt": 1,
+          "notBefore": "2026-11-09T13:00:00Z"
+        },
+        "reason": "next_step"
+      }
+    },
+    {
+      "name": "apply · machine · paso 3 con delay desde la inscripción (1 semana desde el 09-11 10:00 → lunes 16-11 festivo → martes 08:00)",
+      "kind": "machine",
+      "contractRef": "D9-8 etapa 9, D9-10",
+      "basis": "decision-fixture",
+      "decision": "DF-F2",
+      "enrollment": {
+        "status": "active",
+        "stepIndex": 1,
+        "attempt": 1,
+        "touches": 2,
+        "enrolledAt": "2026-11-09T15:00:00Z",
+        "windowEndsAt": "2026-11-30T05:00:00Z"
+      },
+      "steps": [
+        {
+          "id": "s1",
+          "delay": {
+            "n": 0,
+            "unit": "hours",
+            "from": "enrollment"
+          }
+        },
+        {
+          "id": "s2",
+          "delay": {
+            "n": 2,
+            "unit": "days",
+            "from": "previous"
+          }
+        },
+        {
+          "id": "s3",
+          "delay": {
+            "n": 1,
+            "unit": "weeks",
+            "from": "enrollment"
+          }
+        }
+      ],
+      "outcome": "answered",
+      "source": "staff",
+      "now": "2026-11-10T15:00:00Z",
+      "on": {
+        "answered": "next_step"
+      },
+      "expected": {
+        "resolution": {
+          "verdict": "apply",
+          "transition": "next_step"
+        },
+        "status": "active",
+        "stepIndex": 2,
+        "attempt": 1,
+        "nextJob": {
+          "stepIndex": 2,
+          "attempt": 1,
+          "notBefore": "2026-11-17T13:00:00Z"
+        },
+        "reason": "next_step"
+      }
+    },
+    {
+      "name": "apply · machine · con horario de la estrategia (10:00–12:00): el paso 2 a las 10:00 del jueves sigue a las 10:00",
+      "kind": "machine",
+      "contractRef": "D9-8 etapa 9, D9-10",
+      "basis": "decision-fixture",
+      "decision": "DF-F2",
+      "enrollment": {
+        "status": "active",
+        "stepIndex": 0,
+        "attempt": 1,
+        "touches": 1,
+        "enrolledAt": "2026-11-09T15:00:00Z",
+        "windowEndsAt": "2026-11-30T05:00:00Z"
+      },
+      "steps": [
+        {
+          "id": "s1",
+          "delay": {
+            "n": 0,
+            "unit": "hours",
+            "from": "enrollment"
+          }
+        },
+        {
+          "id": "s2",
+          "delay": {
+            "n": 2,
+            "unit": "days",
+            "from": "previous"
+          }
+        },
+        {
+          "id": "s3",
+          "delay": {
+            "n": 1,
+            "unit": "weeks",
+            "from": "enrollment"
+          }
+        }
+      ],
+      "outcome": "answered",
+      "source": "staff",
+      "now": "2026-11-10T15:00:00Z",
+      "on": {
+        "answered": "next_step"
+      },
+      "schedule": {
+        "days": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "windows": [
+          {
+            "from": 600,
+            "to": 720
+          }
+        ]
+      },
+      "expected": {
+        "resolution": {
+          "verdict": "apply",
+          "transition": "next_step"
+        },
+        "status": "active",
+        "stepIndex": 1,
+        "attempt": 1,
+        "nextJob": {
+          "stepIndex": 1,
+          "attempt": 1,
+          "notBefore": "2026-11-12T15:00:00Z"
+        },
+        "reason": "next_step"
+      }
+    },
+    {
+      "name": "apply · machine · con horario de la estrategia (14:00–16:00): el paso 2 pasa a las 14:00 del jueves",
+      "kind": "machine",
+      "contractRef": "D9-8 etapa 9, D9-10",
+      "basis": "decision-fixture",
+      "decision": "DF-F2",
+      "enrollment": {
+        "status": "active",
+        "stepIndex": 0,
+        "attempt": 1,
+        "touches": 1,
+        "enrolledAt": "2026-11-09T15:00:00Z",
+        "windowEndsAt": "2026-11-30T05:00:00Z"
+      },
+      "steps": [
+        {
+          "id": "s1",
+          "delay": {
+            "n": 0,
+            "unit": "hours",
+            "from": "enrollment"
+          }
+        },
+        {
+          "id": "s2",
+          "delay": {
+            "n": 2,
+            "unit": "days",
+            "from": "previous"
+          }
+        },
+        {
+          "id": "s3",
+          "delay": {
+            "n": 1,
+            "unit": "weeks",
+            "from": "enrollment"
+          }
+        }
+      ],
+      "outcome": "answered",
+      "source": "staff",
+      "now": "2026-11-10T15:00:00Z",
+      "on": {
+        "answered": "next_step"
+      },
+      "schedule": {
+        "days": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "windows": [
+          {
+            "from": 840,
+            "to": 960
+          }
+        ]
+      },
+      "expected": {
+        "resolution": {
+          "verdict": "apply",
+          "transition": "next_step"
+        },
+        "status": "active",
+        "stepIndex": 1,
+        "attempt": 1,
+        "nextJob": {
+          "stepIndex": 1,
+          "attempt": 1,
+          "notBefore": "2026-11-12T19:00:00Z"
+        },
+        "reason": "next_step"
+      }
+    },
+    {
+      "name": "apply · machine · último paso y next_step: sin trabajo, espera su ventana (vencerá con no_response)",
+      "kind": "machine",
+      "contractRef": "D9-8 etapa 9, D9-10",
+      "basis": "decision-fixture",
+      "decision": "DF-F3",
+      "enrollment": {
+        "status": "active",
+        "stepIndex": 2,
+        "attempt": 1,
+        "touches": 3,
+        "enrolledAt": "2026-11-09T15:00:00Z",
+        "windowEndsAt": "2026-11-30T05:00:00Z"
+      },
+      "steps": [
+        {
+          "id": "s1",
+          "delay": {
+            "n": 0,
+            "unit": "hours",
+            "from": "enrollment"
+          }
+        },
+        {
+          "id": "s2",
+          "delay": {
+            "n": 2,
+            "unit": "days",
+            "from": "previous"
+          }
+        },
+        {
+          "id": "s3",
+          "delay": {
+            "n": 1,
+            "unit": "weeks",
+            "from": "enrollment"
+          }
+        }
+      ],
+      "outcome": "answered",
+      "source": "staff",
+      "now": "2026-11-10T15:00:00Z",
+      "on": {
+        "answered": "next_step"
+      },
+      "expected": {
+        "resolution": {
+          "verdict": "apply",
+          "transition": "next_step"
+        },
+        "status": "waiting",
+        "stepIndex": 2,
+        "attempt": 1,
+        "nextJob": null,
+        "reason": "sequence_done_waits_window"
+      }
+    },
+    {
+      "name": "apply · machine · el siguiente hueco cae después de la ventana: sin trabajo",
+      "kind": "machine",
+      "contractRef": "D9-8 etapa 9, D9-10",
+      "basis": "decision-fixture",
+      "decision": "DF-F3",
+      "enrollment": {
+        "status": "active",
+        "stepIndex": 0,
+        "attempt": 1,
+        "touches": 1,
+        "enrolledAt": "2026-11-09T15:00:00Z",
+        "windowEndsAt": "2026-11-12T14:00:00Z"
+      },
+      "steps": [
+        {
+          "id": "s1",
+          "delay": {
+            "n": 0,
+            "unit": "hours",
+            "from": "enrollment"
+          }
+        },
+        {
+          "id": "s2",
+          "delay": {
+            "n": 2,
+            "unit": "days",
+            "from": "previous"
+          }
+        },
+        {
+          "id": "s3",
+          "delay": {
+            "n": 1,
+            "unit": "weeks",
+            "from": "enrollment"
+          }
+        }
+      ],
+      "outcome": "answered",
+      "source": "staff",
+      "now": "2026-11-10T15:00:00Z",
+      "on": {
+        "answered": "next_step"
+      },
+      "expected": {
+        "resolution": {
+          "verdict": "apply",
+          "transition": "next_step"
+        },
+        "status": "waiting",
+        "stepIndex": 0,
+        "attempt": 1,
+        "nextJob": null,
+        "reason": "window_over_no_job"
+      }
+    },
+    {
+      "name": "apply · machine · tope de contactos alcanzado: sale aunque la regla pida seguir",
+      "kind": "machine",
+      "contractRef": "T20, D9-6 (≤ 6)",
+      "basis": "decision-fixture",
+      "decision": "DF-F4",
+      "enrollment": {
+        "status": "active",
+        "stepIndex": 0,
+        "attempt": 1,
+        "touches": 6,
+        "enrolledAt": "2026-11-09T15:00:00Z",
+        "windowEndsAt": "2026-11-30T05:00:00Z"
+      },
+      "steps": [
+        {
+          "id": "s1",
+          "delay": {
+            "n": 0,
+            "unit": "hours",
+            "from": "enrollment"
+          }
+        },
+        {
+          "id": "s2",
+          "delay": {
+            "n": 2,
+            "unit": "days",
+            "from": "previous"
+          }
+        },
+        {
+          "id": "s3",
+          "delay": {
+            "n": 1,
+            "unit": "weeks",
+            "from": "enrollment"
+          }
+        }
+      ],
+      "outcome": "answered",
+      "source": "staff",
+      "now": "2026-11-10T15:00:00Z",
+      "on": {
+        "answered": "next_step"
+      },
+      "expected": {
+        "resolution": {
+          "verdict": "apply",
+          "transition": "next_step"
+        },
+        "status": "exited",
+        "stepIndex": 0,
+        "attempt": 1,
+        "nextJob": null,
+        "reason": "max_touches_reached"
+      }
+    },
+    {
+      "name": "apply · machine · opted_out: estado opted_out, sin trabajo (#10)",
+      "kind": "machine",
+      "contractRef": "#10 de §13.1",
+      "basis": "contrato",
+      "enrollment": {
+        "status": "active",
+        "stepIndex": 0,
+        "attempt": 1,
+        "touches": 1,
+        "enrolledAt": "2026-11-09T15:00:00Z",
+        "windowEndsAt": "2026-11-30T05:00:00Z"
+      },
+      "steps": [
+        {
+          "id": "s1",
+          "delay": {
+            "n": 0,
+            "unit": "hours",
+            "from": "enrollment"
+          }
+        },
+        {
+          "id": "s2",
+          "delay": {
+            "n": 2,
+            "unit": "days",
+            "from": "previous"
+          }
+        },
+        {
+          "id": "s3",
+          "delay": {
+            "n": 1,
+            "unit": "weeks",
+            "from": "enrollment"
+          }
+        }
+      ],
+      "outcome": "opted_out",
+      "source": "staff",
+      "now": "2026-11-10T15:00:00Z",
+      "expected": {
+        "resolution": {
+          "verdict": "apply",
+          "transition": "end_exit"
+        },
+        "status": "opted_out",
+        "stepIndex": 0,
+        "attempt": 1,
+        "nextJob": null,
+        "reason": "closed"
+      }
+    },
+    {
+      "name": "apply · machine · opted_out aunque la estrategia diga next_step: opted_out (#10)",
+      "kind": "machine",
+      "contractRef": "#10 de §13.1",
+      "basis": "contrato",
+      "enrollment": {
+        "status": "active",
+        "stepIndex": 0,
+        "attempt": 1,
+        "touches": 1,
+        "enrolledAt": "2026-11-09T15:00:00Z",
+        "windowEndsAt": "2026-11-30T05:00:00Z"
+      },
+      "steps": [
+        {
+          "id": "s1",
+          "delay": {
+            "n": 0,
+            "unit": "hours",
+            "from": "enrollment"
+          }
+        },
+        {
+          "id": "s2",
+          "delay": {
+            "n": 2,
+            "unit": "days",
+            "from": "previous"
+          }
+        },
+        {
+          "id": "s3",
+          "delay": {
+            "n": 1,
+            "unit": "weeks",
+            "from": "enrollment"
+          }
+        }
+      ],
+      "outcome": "opted_out",
+      "source": "staff",
+      "now": "2026-11-10T15:00:00Z",
+      "on": {
+        "opted_out": "next_step"
+      },
+      "expected": {
+        "resolution": {
+          "verdict": "apply",
+          "transition": "end_exit"
+        },
+        "status": "opted_out",
+        "stepIndex": 0,
+        "attempt": 1,
+        "nextJob": null,
+        "reason": "closed"
+      }
+    },
+    {
+      "name": "apply · machine · human_requested: handed_off, sin trabajo (#22)",
+      "kind": "machine",
+      "contractRef": "#22 de §13.1",
+      "basis": "contrato",
+      "enrollment": {
+        "status": "active",
+        "stepIndex": 0,
+        "attempt": 1,
+        "touches": 1,
+        "enrolledAt": "2026-11-09T15:00:00Z",
+        "windowEndsAt": "2026-11-30T05:00:00Z"
+      },
+      "steps": [
+        {
+          "id": "s1",
+          "delay": {
+            "n": 0,
+            "unit": "hours",
+            "from": "enrollment"
+          }
+        },
+        {
+          "id": "s2",
+          "delay": {
+            "n": 2,
+            "unit": "days",
+            "from": "previous"
+          }
+        },
+        {
+          "id": "s3",
+          "delay": {
+            "n": 1,
+            "unit": "weeks",
+            "from": "enrollment"
+          }
+        }
+      ],
+      "outcome": "human_requested",
+      "source": "staff",
+      "now": "2026-11-10T15:00:00Z",
+      "expected": {
+        "resolution": {
+          "verdict": "apply",
+          "transition": "handoff_human"
+        },
+        "status": "handed_off",
+        "stepIndex": 0,
+        "attempt": 1,
+        "nextJob": null,
+        "reason": "closed"
+      }
+    },
+    {
+      "name": "apply · machine · converted: completed",
+      "kind": "machine",
+      "contractRef": "#4 de §13.1",
+      "basis": "contrato",
+      "enrollment": {
+        "status": "active",
+        "stepIndex": 0,
+        "attempt": 1,
+        "touches": 1,
+        "enrolledAt": "2026-11-09T15:00:00Z",
+        "windowEndsAt": "2026-11-30T05:00:00Z"
+      },
+      "steps": [
+        {
+          "id": "s1",
+          "delay": {
+            "n": 0,
+            "unit": "hours",
+            "from": "enrollment"
+          }
+        },
+        {
+          "id": "s2",
+          "delay": {
+            "n": 2,
+            "unit": "days",
+            "from": "previous"
+          }
+        },
+        {
+          "id": "s3",
+          "delay": {
+            "n": 1,
+            "unit": "weeks",
+            "from": "enrollment"
+          }
+        }
+      ],
+      "outcome": "converted",
+      "source": "system",
+      "now": "2026-11-10T15:00:00Z",
+      "expected": {
+        "resolution": {
+          "verdict": "apply",
+          "transition": "end_success"
+        },
+        "status": "completed",
+        "stepIndex": 0,
+        "attempt": 1,
+        "nextJob": null,
+        "reason": "closed"
+      }
+    },
+    {
+      "name": "apply · machine · no_response: expired",
+      "kind": "machine",
+      "contractRef": "D9-8 etapa 9, D9-10",
+      "basis": "decision-fixture",
+      "decision": "DF-O7",
+      "enrollment": {
+        "status": "active",
+        "stepIndex": 0,
+        "attempt": 1,
+        "touches": 1,
+        "enrolledAt": "2026-11-09T15:00:00Z",
+        "windowEndsAt": "2026-11-30T05:00:00Z"
+      },
+      "steps": [
+        {
+          "id": "s1",
+          "delay": {
+            "n": 0,
+            "unit": "hours",
+            "from": "enrollment"
+          }
+        },
+        {
+          "id": "s2",
+          "delay": {
+            "n": 2,
+            "unit": "days",
+            "from": "previous"
+          }
+        },
+        {
+          "id": "s3",
+          "delay": {
+            "n": 1,
+            "unit": "weeks",
+            "from": "enrollment"
+          }
+        }
+      ],
+      "outcome": "no_response",
+      "source": "system",
+      "now": "2026-11-10T15:00:00Z",
+      "expected": {
+        "resolution": {
+          "verdict": "apply",
+          "transition": "end_exit"
+        },
+        "status": "expired",
+        "stepIndex": 0,
+        "attempt": 1,
+        "nextJob": null,
+        "reason": "closed"
+      }
+    },
+    {
+      "name": "apply · machine · clasificador con la etiqueta ambiguous: needs_review → handed_off, sin trabajo (#21)",
+      "kind": "machine",
+      "contractRef": "#21 de §13.1",
+      "basis": "decision-fixture",
+      "decision": "DF-O3",
+      "enrollment": {
+        "status": "active",
+        "stepIndex": 0,
+        "attempt": 1,
+        "touches": 1,
+        "enrolledAt": "2026-11-09T15:00:00Z",
+        "windowEndsAt": "2026-11-30T05:00:00Z"
+      },
+      "steps": [
+        {
+          "id": "s1",
+          "delay": {
+            "n": 0,
+            "unit": "hours",
+            "from": "enrollment"
+          }
+        },
+        {
+          "id": "s2",
+          "delay": {
+            "n": 2,
+            "unit": "days",
+            "from": "previous"
+          }
+        },
+        {
+          "id": "s3",
+          "delay": {
+            "n": 1,
+            "unit": "weeks",
+            "from": "enrollment"
+          }
+        }
+      ],
+      "outcome": "ambiguous",
+      "source": "classifier",
+      "now": "2026-11-10T15:00:00Z",
+      "confidence": 97,
+      "expected": {
+        "resolution": {
+          "verdict": "needs_review",
+          "transition": "handoff_human"
+        },
+        "status": "handed_off",
+        "stepIndex": 0,
+        "attempt": 1,
+        "nextJob": null,
+        "reason": "closed"
+      }
+    },
+    {
+      "name": "apply · machine · failed con retry_step en el intento 2: agotado (≤ 1) → exited",
+      "kind": "machine",
+      "contractRef": "D9-8 etapa 9, D9-10",
+      "basis": "decision-fixture",
+      "decision": "DF-O6",
+      "enrollment": {
+        "status": "active",
+        "stepIndex": 0,
+        "attempt": 2,
+        "touches": 1,
+        "enrolledAt": "2026-11-09T15:00:00Z",
+        "windowEndsAt": "2026-11-30T05:00:00Z"
+      },
+      "steps": [
+        {
+          "id": "s1",
+          "delay": {
+            "n": 0,
+            "unit": "hours",
+            "from": "enrollment"
+          }
+        },
+        {
+          "id": "s2",
+          "delay": {
+            "n": 2,
+            "unit": "days",
+            "from": "previous"
+          }
+        },
+        {
+          "id": "s3",
+          "delay": {
+            "n": 1,
+            "unit": "weeks",
+            "from": "enrollment"
+          }
+        }
+      ],
+      "outcome": "failed",
+      "source": "system",
+      "now": "2026-11-10T15:00:00Z",
+      "on": {
+        "failed": "retry_step"
+      },
+      "expected": {
+        "resolution": {
+          "verdict": "apply",
+          "transition": "end_exit"
+        },
+        "status": "exited",
+        "stepIndex": 0,
+        "attempt": 2,
+        "nextJob": null,
+        "reason": "closed"
+      }
+    }
+  ]
+}

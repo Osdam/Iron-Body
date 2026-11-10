@@ -2,7 +2,10 @@
 
 namespace Tests\Feature\UltronStudio;
 
-use App\Http\Controllers\Crm\UltronStudio\UltronStudioVoiceController;
+use App\Http\Controllers\Crm\UltronStudio\StudioRouteCount;
+use App\Services\Outreach\Facts\CanaryFacts;
+use App\Services\Outreach\Facts\ContactHistoryFacts;
+use App\Services\Outreach\Facts\SubjectTimeline;
 use App\Services\UltronStudio\StudioPublishing;
 use Illuminate\Support\Facades\Route;
 use RecursiveDirectoryIterator;
@@ -59,6 +62,25 @@ use Tests\TestCase;
  * por patrón hasta que DB8 fije sus nombres. Los trabajos de la voz
  * (`app/Jobs/Voice/`) no son del motor. El resto de la frontera de la
  * telefonía está en `Tests\Feature\Telephony\TelephonyIsolationTest`.
+ *
+ * HITO 9 (contrato H9, §9.3, D9-2, L9-28, L9-40, L9-43; SEC9-a): la
+ * automatización comercial (`App\Services\Outreach`) NO entra en la lista
+ * blanca. Entran por ruta exacta las dos migraciones de DB9 (Anexo B de su
+ * informe) y la configuración del canal SSE del Studio
+ * (`config/ultron_studio_stream.php`, un fichero del Studio como
+ * `config/ultron_studio.php`). Lo demás son excepciones por fichero, como las
+ * del H8: los tres adaptadores de `Outreach\Facts` que leen tablas del Studio
+ * (los canarios y el historial: solo las tablas `ultron_studio_*` de SU lista
+ * `TABLES`, como cadena, sin escrituras; `FactsReadOnlyTest` lo prueba con un
+ * escuchador), el puente `Outreach\Run\OutreachPublishedStrategies` («como
+ * E4-3 del H8»: dos ayudas puras del Studio, una vez cada una) y los nombres
+ * de las cinco tablas del gobierno que la ejecución lee
+ * (`Outreach\Run\OutreachTables`, sin código). `Outreach\Core` no nombra el
+ * Studio (es puro). El recuento de rutas (77 → 107 con las 30 de S9 y 108 con
+ * el canal SSE) y la posición del controlador SSE se adaptan EN LA RAMA DEL H9
+ * (L9-36, L9-38, L9-43), no aquí. La frontera de escritura y de red del H9
+ * está en `Tests\Feature\UltronStudio\OutreachIsolationTest` y en
+ * `tests/Feature/Outreach/Guards/`.
  */
 class UltronEngineIsolationTest extends TestCase
 {
@@ -98,6 +120,91 @@ class UltronEngineIsolationTest extends TestCase
         'database/migrations/2026_11_10_100001_create_ultron_studio_voice_tables.php',
         'database/migrations/2026_11_10_100002_create_voice_tables.php',
     ];
+
+    /**
+     * Hito 9 (contrato H9, §9.3; DB9, Anexo B): la migración del gobierno de
+     * las estrategias (sus tablas `ultron_studio_*` y la ampliación del libro)
+     * y la de la ejecución `outreach_*` (sus FKs al gobierno). Rutas exactas,
+     * sin comodín, como REV8 m-2. La 100003 (índices de lectura) no nombra el
+     * Studio y no hace falta.
+     */
+    private const ALLOWED_H9_MIGRATIONS = [
+        'database/migrations/2026_11_12_100001_create_ultron_studio_strategy_tables.php',
+        'database/migrations/2026_11_12_100002_create_outreach_tables.php',
+    ];
+
+    /**
+     * Hito 9 (paquete SSE9, L9-43): la configuración del canal SSE del Studio
+     * es un fichero del Studio, como `config/ultron_studio.php`. Ruta exacta.
+     */
+    private const ALLOWED_H9_STUDIO_FILES = ['config/ultron_studio_stream.php'];
+
+    /**
+     * Hito 9 (L9-28, L9-40; SEC9-a): los tres adaptadores de `Outreach\Facts`
+     * que LEEN tablas del Studio: los canarios y los dos del historial
+     * (estrategias y versiones). No entran en la lista blanca: cada uno solo
+     * puede nombrar, como cadena (con o sin alias `as x`), las tablas
+     * `ultron_studio_*` de SU lista `TABLES` —la misma que `FactsReadOnlyTest`
+     * vigila con un escuchador de consultas—, ninguna clase del Studio ni su
+     * configuración, nunca la cadena del motor, y sin llamadas que escriban o
+     * bloqueen ({@see test_hito_9_los_lectores_de_facts_y_el_puente_solo_leen_sus_tablas()}).
+     */
+    private const FACTS_READERS = [
+        'app/Services/Outreach/Facts/CanaryFacts.php' => CanaryFacts::class,
+        'app/Services/Outreach/Facts/ContactHistoryFacts.php' => ContactHistoryFacts::class,
+        'app/Services/Outreach/Facts/SubjectTimeline.php' => SubjectTimeline::class,
+    ];
+
+    /**
+     * Hito 9 (contrato H9, D9-2 y §9.3: «el puente `OutreachPublishedStrategies`
+     * (SEC9, como E4-3 del H8)»): el lector de la cadena firmada de estrategias
+     * desde la ejecución. Lo único del Studio que puede nombrar son las dos
+     * ayudas PURAS cuya única implementación vive en el Studio (la referencia
+     * comercial de N3 y las restricciones de las plantillas), una vez cada
+     * una; las tablas las toma de {@see H9_TABLE_NAMES}, nunca por su cuenta.
+     * Sin escrituras ni bloqueos.
+     */
+    private const H9_BRIDGE = 'app/Services/Outreach/Run/OutreachPublishedStrategies.php';
+
+    private const H9_BRIDGE_REFERENCES = [
+        'T_NAME_QUALIFIED App\\Services\\UltronStudio\\StudioMessageTemplates',
+        'T_NAME_QUALIFIED App\\Services\\UltronStudio\\StudioStrategyValidator',
+    ];
+
+    /**
+     * Hito 9: los nombres de las cinco tablas del gobierno que la ejecución
+     * LEE, una sola vez en `Outreach`, como constantes y sin código. Exactamente
+     * estas, como cadena, y ninguna otra del Studio (nunca
+     * `ultron_studio_publications`, la cadena del motor, ni las de la voz).
+     */
+    private const H9_TABLE_NAMES = 'app/Services/Outreach/Run/OutreachTables.php';
+
+    private const H9_TABLE_NAMES_REFERENCES = [
+        "T_CONSTANT_ENCAPSED_STRING 'ultron_studio_strategies'",
+        "T_CONSTANT_ENCAPSED_STRING 'ultron_studio_strategy_versions'",
+        "T_CONSTANT_ENCAPSED_STRING 'ultron_studio_strategy_publications'",
+        "T_CONSTANT_ENCAPSED_STRING 'ultron_studio_message_templates'",
+        "T_CONSTANT_ENCAPSED_STRING 'ultron_studio_person_bindings'",
+    ];
+
+    /**
+     * Hito 9 (Paquete SSE9: «los `outreach.*` los implementa B9-run sobre el
+     * registro de adaptadores de SSE9 (interfaz `StreamTopic`)»): los temas de
+     * la ejecución pueden importar del Studio SOLO la interfaz del canal y su
+     * evento (con su cursor y su contador), nada más: ni tablas, ni
+     * configuración, ni otras clases.
+     */
+    private const OUTREACH_STREAM_DIR = 'app/Services/Outreach/Run/Stream/';
+
+    private const OUTREACH_STREAM_REFERENCES = [
+        'T_NAME_QUALIFIED App\\Services\\UltronStudio\\Stream\\StreamTopic',
+        'T_NAME_QUALIFIED App\\Services\\UltronStudio\\Stream\\StreamEvent',
+        'T_NAME_QUALIFIED App\\Services\\UltronStudio\\Stream\\StreamCursors',
+        'T_NAME_QUALIFIED App\\Services\\UltronStudio\\Stream\\StreamCountable',
+    ];
+
+    /** Hito 9: todo el PHP de la automatización comercial, para la prueba de que nada más de ella nombra el Studio. */
+    private const OUTREACH_ZONES = ['app/Services/Outreach', 'app/Console/Commands/Outreach', 'app/Jobs/Outreach'];
 
     /**
      * Hito 8 (Enmienda 8, E8-1; Enmienda 9, E9-1): el arranque de la aplicación
@@ -201,6 +308,7 @@ class UltronEngineIsolationTest extends TestCase
         $dentro = 0;
         $lectorVisto = false;
         $programadorVisto = false;
+        $lectoresDeFacts = 0;
 
         foreach ($this->phpFiles() as $relativa) {
             $hallazgos = $this->references(base_path($relativa));
@@ -235,15 +343,32 @@ class UltronEngineIsolationTest extends TestCase
             if (str_starts_with($relativa, self::TELEPHONY_DIR) && array_diff($this->sinLinea($hallazgos), self::TELEPHONY_STUDIO_REFERENCES) === []) {
                 continue;
             }
+            // Hito 9 (SEC9-a): los tres lectores de Facts (solo las tablas de su lista, como cadena),
+            // el puente (sus dos ayudas puras, una vez cada una) y los nombres de las cinco tablas.
+            if (isset(self::FACTS_READERS[$relativa]) && $this->onlyOwnStudioTables($hallazgos, self::FACTS_READERS[$relativa])) {
+                $lectoresDeFacts++;
+
+                continue;
+            }
+            if ($relativa === self::H9_BRIDGE && $this->ordenadas($this->sinLinea($hallazgos)) === $this->ordenadas(self::H9_BRIDGE_REFERENCES)) {
+                continue;
+            }
+            if ($relativa === self::H9_TABLE_NAMES && $this->ordenadas($this->sinLinea($hallazgos)) === $this->ordenadas(self::H9_TABLE_NAMES_REFERENCES)) {
+                continue;
+            }
+            if (str_starts_with($relativa, self::OUTREACH_STREAM_DIR) && array_diff($this->sinLinea($hallazgos), self::OUTREACH_STREAM_REFERENCES) === []) {
+                continue;
+            }
             $fuera[$relativa] = $hallazgos;
         }
 
-        $this->assertSame([], $fuera, "Código fuera del Studio que lo nombra (el motor solo puede leer ultron_studio_publications, desde UltronPublishedConfig; el programador, solo la bandera del monitor, una vez):\n".json_encode($fuera, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        $this->assertSame([], $fuera, "Código fuera del Studio que lo nombra (el motor solo puede leer ultron_studio_publications, desde UltronPublishedConfig; el programador, solo la bandera del monitor, una vez; la automatización comercial, solo por sus tres lectores de Facts, el puente y OutreachTables):\n".json_encode($fuera, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
         // La prueba ve lo que tiene que ver: si el rastreo dejara de encontrar
         // las referencias legítimas, no estaría comprobando nada.
         $this->assertGreaterThanOrEqual(17, $dentro);
         $this->assertTrue($lectorVisto, 'El rastreo no vio la única lectura del motor sobre el Studio.');
         $this->assertTrue($programadorVisto, 'El rastreo no vio la bandera del monitor en el programador.');
+        $this->assertSame(count(self::FACTS_READERS), $lectoresDeFacts, 'El rastreo no vio a los tres lectores de Facts (si alguno dejó de leer el Studio, sobra en FACTS_READERS).');
     }
 
     /**
@@ -325,6 +450,71 @@ class UltronEngineIsolationTest extends TestCase
         foreach (self::ALLOWED as $permitido) {
             $this->assertFileExists(base_path(rtrim($permitido, '/')), "La lista blanca nombra algo que no existe: {$permitido}");
         }
+        // Hito 9: las rutas exactas de DB9 y del canal SSE tampoco pueden envejecer (un nombre cambiado dejaría la excepción muerta y la migración fuera).
+        foreach ([...self::ALLOWED_H9_MIGRATIONS, ...self::ALLOWED_H9_STUDIO_FILES, ...array_keys(self::FACTS_READERS), self::H9_BRIDGE, self::H9_TABLE_NAMES] as $permitido) {
+            $this->assertFileExists(base_path($permitido), "La lista blanca del Hito 9 nombra algo que no existe: {$permitido}");
+        }
+    }
+
+    /**
+     * Hito 9 (L9-28, L9-40, §9.3; SEC9-a): por dentro, cada lector de Facts
+     * nombra del Studio SOLO tablas de su lista `TABLES` (la que
+     * `FactsReadOnlyTest` prueba con un escuchador: ni otras tablas ni una
+     * escritura), ninguna clase del Studio ni su configuración, nunca la cadena
+     * del motor, y ninguna llamada que escriba o bloquee. El puente, lo mismo
+     * con sus dos ayudas puras y sin nombrar tablas por su cuenta;
+     * `OutreachTables` no tiene código. Y fuera de esos cinco ficheros, nada de
+     * la automatización comercial nombra el Studio (`Core` es puro; `Run` lee
+     * por el puente). Lo que cada uno ejecuta de verdad lo mira
+     * `OutreachIsolationTest` con un escuchador de consultas.
+     */
+    public function test_hito_9_los_lectores_de_facts_y_el_puente_solo_leen_sus_tablas(): void
+    {
+        foreach (self::FACTS_READERS as $relativa => $clase) {
+            $ruta = base_path($relativa);
+            $this->assertFileExists($ruta);
+            $referencias = $this->references($ruta);
+            $this->assertNotSame([], $referencias, "{$relativa} ya no nombra el Studio: sobra en FACTS_READERS.");
+            $this->assertTrue($this->onlyOwnStudioTables($referencias, $clase), "{$relativa} nombra del Studio algo que no es una tabla de su lista TABLES:\n".implode("\n", $referencias));
+            $codigo = $this->codeOnly($ruta);
+            $this->assertStringNotContainsString('UltronStudio', $codigo, "{$relativa} importa una clase del Studio.");
+            $this->assertStringNotContainsString('ultron_studio.', $codigo, "{$relativa} lee la configuración del Studio.");
+            $this->assertStringNotContainsString('ultron_studio_publications', $codigo, "{$relativa} lee la cadena del motor.");
+            $this->assertStringNotContainsString('ultron_studio_voice_', $codigo, "{$relativa} lee las tablas de la voz.");
+            $this->assertSame([], array_values(array_intersect($this->calledMethods($ruta), self::WRITE_CALLS)), "{$relativa} escribe o bloquea.");
+        }
+
+        $puente = base_path(self::H9_BRIDGE);
+        $this->assertFileExists($puente);
+        $this->assertSame($this->ordenadas(self::H9_BRIDGE_REFERENCES), $this->ordenadas($this->sinLinea($this->references($puente))), 'El puente nombra del Studio algo más que sus dos ayudas puras.');
+        $this->assertSame([], array_values(array_intersect($this->calledMethods($puente), self::WRITE_CALLS)), 'El puente escribe o bloquea.');
+        $this->assertStringNotContainsString('ultron_studio_', $this->codeOnly($puente), 'El puente nombra una tabla por su cuenta: los nombres viven en OutreachTables.');
+
+        $nombres = base_path(self::H9_TABLE_NAMES);
+        $this->assertFileExists($nombres);
+        $this->assertSame($this->ordenadas(self::H9_TABLE_NAMES_REFERENCES), $this->ordenadas($this->sinLinea($this->references($nombres))), 'OutreachTables nombra otras tablas del Studio.');
+        $this->assertSame([], $this->calledMethods($nombres), 'OutreachTables tiene código: solo son nombres.');
+
+        $otros = [];
+        foreach (self::OUTREACH_ZONES as $zona) {
+            if (! is_dir(base_path($zona))) {
+                continue;
+            }
+            foreach ($this->phpFiles([$zona]) as $relativa) {
+                if (isset(self::FACTS_READERS[$relativa]) || in_array($relativa, [self::H9_BRIDGE, self::H9_TABLE_NAMES], true)) {
+                    continue;
+                }
+                $referencias = $this->references(base_path($relativa));
+                // Los temas `outreach.*` del canal SSE: solo la interfaz del canal (Paquete SSE9).
+                if (str_starts_with($relativa, self::OUTREACH_STREAM_DIR) && array_diff($this->sinLinea($referencias), self::OUTREACH_STREAM_REFERENCES) === []) {
+                    continue;
+                }
+                if ($referencias !== []) {
+                    $otros[$relativa] = $referencias;
+                }
+            }
+        }
+        $this->assertSame([], $otros, "Más ficheros de la automatización comercial nombran el Studio:\n".json_encode($otros, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
     /**
@@ -409,7 +599,7 @@ class UltronEngineIsolationTest extends TestCase
         // de la publicación del Hito 5 (contrato H5 §A7) y las 18 de las
         // integraciones del Hito 6 (contrato H6 §I7.1).
         // Y las 21 del Hito 8 (contrato H8, «API»): la lista, en la constante (E2-6).
-        $this->assertSame(UltronStudioVoiceController::STUDIO_ROUTE_COUNT, $delStudio);
+        $this->assertSame(StudioRouteCount::TOTAL, $delStudio);
     }
 
     /**
@@ -549,6 +739,30 @@ class UltronEngineIsolationTest extends TestCase
     }
 
     /**
+     * Hito 9 (SEC9-a): ¿todo lo que este lector de Facts nombra del Studio son
+     * tablas `ultron_studio_*` de su lista `TABLES`, como cadena (con o sin
+     * alias `as x`)? Una clase del Studio, su configuración u otra tabla lo
+     * delatan. Una lista sin tablas del Studio no admite nada.
+     *
+     * @param  list<string>  $referencias
+     * @param  class-string  $clase
+     */
+    private function onlyOwnStudioTables(array $referencias, string $clase): bool
+    {
+        $propias = array_values(array_filter((array) constant($clase.'::TABLES'), static fn ($t): bool => is_string($t) && str_starts_with($t, 'ultron_studio_')));
+        if ($propias === [] || $referencias === []) {
+            return false;
+        }
+        foreach ($this->sinLinea($referencias) as $referencia) {
+            if (preg_match("/^T_CONSTANT_ENCAPSED_STRING '(ultron_studio_[a-z_]+)( as [a-z_]+)?'$/", $referencia, $m) !== 1 || ! in_array($m[1], $propias, true)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * Hito 8 (E8-1, E9-1; SEC8-b): en el arranque, el laboratorio hablado solo
      * se nombra para registrar su oyente. El `use` sin alias (justo `use …;`),
      * el nombre corto una sola vez y esa vez dentro de {@see LAB_LISTENER_CALL}.
@@ -631,7 +845,8 @@ class UltronEngineIsolationTest extends TestCase
             }
         }
 
-        return false;
+        // Hito 9: las dos migraciones de DB9 y la configuración del canal SSE, por ruta exacta.
+        return in_array($relativa, self::ALLOWED_H9_MIGRATIONS, true) || in_array($relativa, self::ALLOWED_H9_STUDIO_FILES, true);
     }
 
     /** Hito 8: lo que vive en una zona del motor sin ser del motor (los trabajos de la voz). */

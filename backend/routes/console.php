@@ -467,3 +467,51 @@ if ((bool) config('voice.monitor.enabled', false)) {
         ->withoutOverlapping(10)
         ->onOneServer();
 }
+
+// ── Automatización comercial: el planificador del H9 (contrato H9 §9.1, D9-8, D9-14, D9-16; paquete OPS9) ──
+// INERTE por defecto: solo se agenda con sus banderas. Bloque activado en la rama
+// del Hito 9 con los tres nombres confirmados por B9-run (L9-58, L9-60). El mando
+// h9-outreach-scope.sh cuenta 3 tareas con el programador encendido (el monitor va
+// plano y comprueba su propia bandera) y smoke-run-h9.sh exige 0 con él apagado.
+// Es un bloque PROPIO (como el de la voz, E2-6 del H8): nunca dentro del del
+// monitor del Studio. Solo se agenda si COMMERCIAL_AUTOMATION_SCHEDULER_ENABLED=true
+// (y solo `true`, 1, on o yes); el monitor, además, con
+// COMMERCIAL_AUTOMATION_MONITOR_ENABLED. Las órdenes revalidan la maestra
+// (COMMERCIAL_AUTOMATION_ENABLED) en cada pasada: apagada, salen con 0 y lo dicen
+// (§9.1). Vuelta atrás = la bandera en false + config:cache (nivel 0 de §9.2), o
+// la PARADA GLOBAL (`outreach:stop --all`), que no toca el entorno. Con
+// COMMERCIAL_AUTOMATION_MODE=shadow todo es simulado: ni un contacto ni red saliente.
+if ((bool) config('outreach.scheduler.enabled', false)) {
+    // El barrido (etapas 1–5 de D9-8): ingesta de eventos y hechos por lotes,
+    // prefiltros indexados, evaluación, prioridad y plan. Cada 10 minutos: los
+    // hechos se miden en días y el tope es de 500 inscripciones por pasada
+    // (L9-18). Diez minutos de cerrojo, no las 24 h por defecto (lección del vigía).
+    Schedule::command('outreach:sweep')
+        ->everyTenMinutes()
+        ->withoutOverlapping(10)
+        ->onOneServer();
+
+    // El despacho (etapas 6–9): reevaluación en el instante, autorización,
+    // reserva atómica del presupuesto (L9-2) y ejecución por el canal (en sombra,
+    // SimulatedChannel). Cada minuto: la PARADA GLOBAL promete ≤ 60 s (D9-14) y
+    // el plan trabaja con `not_before`. ≤ 50 trabajos por pasada (D9-16).
+    // L9-58: en línea (≤ 50 por pasada, cada uno en su transacción): sin cola ni
+    // worker nuevos hasta la fase en vivo; sin consumidor del carril `commercial`,
+    // lo encolado quedaría `claimed` y la conciliación lo marcaría `ambiguous`.
+    Schedule::command('outreach:dispatch --inline')
+        ->everyMinute()
+        ->withoutOverlapping(10)
+        ->onOneServer();
+
+    // El monitor (D9-14): SOLO apaga. Abre frenos (de estrategia, de canal o
+    // global) e incidentes de IRON GUARD (fuente `outreach`) ante opt-out, fallos,
+    // gasto, `unknown_send`, la cadena ilegible o una estrategia a la deriva; nunca
+    // suelta nada. Cada 10 minutos, tras su propia bandera.
+    // Va plano dentro del bloque (la guarda de SEC9-a solo admite órdenes outreach:*
+    // con argumentos literales): la propia orden comprueba su bandera,
+    // outreach.monitor.enabled, además de la maestra; apagadas, sale con 0 y lo dice.
+    Schedule::command('outreach:monitor')
+        ->everyTenMinutes()
+        ->withoutOverlapping(10)
+        ->onOneServer();
+}

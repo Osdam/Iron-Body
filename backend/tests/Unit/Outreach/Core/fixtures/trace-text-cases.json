@@ -1,0 +1,1010 @@
+{
+    "fixture": "trace-text-cases.json",
+    "version": 1,
+    "contract": "backend/docs/ultron-studio/ULTRON_STUDIO_H9_CONTRACT.md (§8 «Simulación» y «Accesibilidad»; L9-25)",
+    "generatedBy": "B9-core: DecisionTraceText::export() y DecisionTraceText::explain() sobre decisiones reales de PolicyLadder y ChannelSelector (backend/tests/Unit/Outreach/Core/tools/export-trace-text-cases.php)",
+    "readme": "Lo que FE9 espeja. dictionary: textos por código, niveles, veredictos, plantillas y reservas de explain(). text: text(code) en los casos raros (voice_policy:<motivo> usa el texto de voice_policy; un código desconocido es null). explain: explain(ladder, channel) → frases, en ese orden; solo se leen verdict, level, reasons, retryAt, warnings y effect de la escalera, y perChannel y annotations del selector. retryAt se escribe en Bogotá (dd-mm-aaaa y HH:mm). Entradas sintéticas: sin datos de personas.",
+    "catalogVersion": "outreach-catalog/2026-11-10.2",
+    "dictionaryHash": "e58ae10699e96899a07a27f5bc4b9f359fe0c9c61e428c2d27b206a32172f1c5",
+    "dictionary": {
+        "format": "outreach-trace-text/1",
+        "timeZone": "America/Bogota",
+        "voicePolicyPrefix": "voice_policy:",
+        "levels": {
+            "N1": "Seguridad, ley y consentimiento",
+            "N2": "Exclusiones y frenos globales",
+            "N3": "Versión comercial aprobada",
+            "N4": "Configuración del canal",
+            "N5": "Estrategia aprobada",
+            "N6": "Contexto verificado del contacto",
+            "N7": "Instrucciones de la persona"
+        },
+        "verdicts": {
+            "allow": "Se permite el contacto",
+            "defer": "Se aplaza el contacto",
+            "deny": "No se contacta",
+            "selected": "Se elige el canal",
+            "apply": "Se aplica el resultado",
+            "needs_review": "Necesita revisión humana",
+            "ignore": "Se ignora el resultado"
+        },
+        "texts": {
+            "ambiguous": "No se sabe si salió: se concilia.",
+            "answered": "Contestó.",
+            "appointment_booked": "Agendó una cita.",
+            "assisted_capacity_reached": "La bandeja asistida llegó a su tope de hoy.",
+            "assisted_task": "Se abre una tarea en la bandeja asistida.",
+            "blocked": "Bloqueado por la política: no salió nada.",
+            "budget_exhausted": "El presupuesto del día del canal está agotado.",
+            "budget_zero": "El presupuesto o el tope del canal es cero.",
+            "calendar_holiday": "Es festivo: la ley no permite contactar.",
+            "calendar_outside_legal_hours": "Fuera del horario permitido: de lunes a viernes de 08:00 a 19:00 y sábados de 08:00 a 15:00 (la Ley 2300 permite desde las 07:00 entre semana; las horas de silencio del gimnasio terminan a las 08:00).",
+            "calendar_outside_own_hours": "Fuera del horario propio del gimnasio (más estricto que la ley).",
+            "calendar_sunday": "Es domingo: la ley no permite contactar.",
+            "callback_requested": "Pidió que se le contacte después.",
+            "callback_scheduled": "La persona pidió que se le contacte en otro momento.",
+            "canary_only_declared": "La versión comercial limita la estrategia a su alcance canario.",
+            "canary_scope_mismatch": "La estrategia está en canario y la persona no está en su alcance.",
+            "cancel_context_changed": "Se cancela el trabajo: el contexto cambió.",
+            "cancel_pending_all_strategies": "Se cancelan sus trabajos pendientes de todas las estrategias.",
+            "catalog_incompatible": "La estrategia usa un dato que el catálogo vigente ya no tiene: no se reinterpreta.",
+            "chain_broken": "La cadena está rota.",
+            "chain_unreadable": "No se puede verificar la publicación de la estrategia.",
+            "channel_daily_cap": "El canal llegó a su tope de hoy.",
+            "channel_disabled": "El canal está apagado.",
+            "channel_not_live": "El canal todavía no está disponible.",
+            "closed": "La inscripción se cierra.",
+            "collections_channel_week_rule": "Cobranza: esta semana ya se le contactó por otro medio.",
+            "collections_overdue_blocks_commercial": "Tiene cartera vencida (o no se pudo comprobar): no se le hacen ofertas comerciales.",
+            "commercial_opt_out": "La persona pidió no recibir ofertas comerciales.",
+            "consent_denied": "La persona negó la autorización para este medio.",
+            "context_changed": "La persona ya no cumple la audiencia o aparece una exclusión.",
+            "converted": "Objetivo cumplido.",
+            "cooldown": "Empieza el enfriamiento antes de volver a inscribirla.",
+            "cooldown_active": "La persona está en enfriamiento tras salir de esta estrategia.",
+            "cross_channel_week_rule": "Esta semana ya se le contactó por otro medio: solo se puede usar ese mismo.",
+            "daily_contact_limit": "Ya hubo un contacto hoy con la persona o con su teléfono (como mucho uno al día sumando todos los canales y finalidades).",
+            "delivered": "Entregado.",
+            "do_not_contact": "La persona pidió que no se le contacte.",
+            "do_not_contact_sibling": "Otro registro con el mismo teléfono pidió que no se le contacte.",
+            "end_exit": "Termina sin éxito.",
+            "end_success": "Termina con éxito.",
+            "enroll": "Cumple la audiencia: se inscribe.",
+            "enrollment_final": "La inscripción ya terminó.",
+            "enrollment_window_over": "El contacto no cabe en la ventana de la inscripción.",
+            "excluded": "Cumple una exclusión.",
+            "exit_converted": "La inscripción cierra como objetivo cumplido.",
+            "failed": "Falló el envío.",
+            "global_suppression": "La persona está en la lista de supresión.",
+            "handoff": "Se deriva a una persona del equipo.",
+            "handoff_human": "Se deriva a una persona del equipo.",
+            "human_in_control": "Una persona del equipo lleva la conversación.",
+            "human_requested": "Pidió hablar con una persona.",
+            "human_requested_recently": "La persona pidió hablar con alguien hace poco: se para y se deriva.",
+            "instruction_ignored_by_policy": "Lo que pidió la persona no cabe en las reglas: manda el orden del paso.",
+            "insufficient_facts": "Faltan datos para decidir: no se inscribe.",
+            "legacy_autonomy_on": "La autonomía del motor comercial anterior está encendida.",
+            "legacy_followups_active": "Los seguimientos de mercadeo anteriores están programados: se evita trabajar el mismo seguimiento dos veces.",
+            "lower_priority": "Otra estrategia tiene prioridad hoy.",
+            "malformed": "La publicación no tiene la forma de la cadena.",
+            "marketing_agent_paused": "El agente de mercadeo está en pausa.",
+            "master_flag_off": "La automatización comercial está apagada.",
+            "max_touches_reached": "Se llegó al máximo de contactos de esta inscripción.",
+            "min_hours_between_contacts": "No han pasado las horas mínimas desde el último contacto.",
+            "mode_off": "El modo de la automatización está en apagado.",
+            "next_step": "Pasa al siguiente paso.",
+            "no_answer": "Sin respuesta.",
+            "no_consent_for_purpose_channel": "No hay autorización registrada para esta finalidad por este medio.",
+            "no_response": "La ventana venció sin respuesta.",
+            "no_voice_contact": "La persona no tiene un contacto de voz registrado.",
+            "no_whatsapp_identity": "La persona no tiene una conversación de WhatsApp registrada.",
+            "non_terminal": "Resultado intermedio: no cambia nada.",
+            "not_attempted": "Simulado: no se intentó.",
+            "not_canonical": "Los bytes de la publicación no son los canónicos.",
+            "not_in_audience": "No cumple la audiencia.",
+            "not_interested": "No le interesa.",
+            "ok": "La publicación verifica.",
+            "opted_out": "Pidió no recibir más contactos.",
+            "outcome_ignored": "El resultado no cuenta: no avanza.",
+            "outreach_brake_channel": "El canal está frenado.",
+            "outreach_brake_global": "Está activa la PARADA GLOBAL.",
+            "outreach_brake_strategy": "La estrategia está frenada.",
+            "outside_strategy_schedule": "Fuera del horario de la estrategia.",
+            "payment_links_disabled": "La versión comercial no permite enlaces de pago.",
+            "preference_applied": "Se usa el medio que prefirió la persona.",
+            "purpose_conflict_today": "Hoy ya hay un contacto de otra finalidad.",
+            "read": "Leído.",
+            "reconcile": "Se concilia con el proveedor antes de seguir.",
+            "replied": "Respondió.",
+            "retry_step": "Se reintenta el mismo paso.",
+            "rne_check_missing": "Falta la consulta del Registro de Números Excluidos para llamar.",
+            "sends_disabled_in_code": "El envío automático está cerrado en el código.",
+            "sent": "Enviado.",
+            "seq_gap": "Falta un eslabón de la cadena.",
+            "sequence_done_waits_window": "No quedan pasos: la inscripción espera a que venza.",
+            "signature_malformed": "La firma no tiene forma.",
+            "signature_mismatch": "La firma no cuadra.",
+            "step_guard_false": "La condición del paso no se cumple.",
+            "strategy_daily_cap": "La estrategia llegó a su tope de contactos de hoy.",
+            "strategy_not_published": "La estrategia no está publicada.",
+            "strategy_paused": "La estrategia está en pausa.",
+            "studio_reference_invalid": "La versión comercial de referencia no cuadra con su huella.",
+            "subject_minor": "La persona es menor de edad.",
+            "success_reached": "El objetivo ya está cumplido.",
+            "suppress_channel": "Se suprime ese medio para la persona.",
+            "suppress_purpose_channel": "Se suprime esa finalidad por ese medio.",
+            "template_category_mismatch": "La categoría de la plantilla no corresponde a la finalidad.",
+            "template_not_approved": "La plantilla no está aprobada.",
+            "template_violates_restriction": "La plantilla incumple una regla de la versión comercial (precio, descuento, enlace o promesa).",
+            "ultron_abort_latch": "El freno de ULTRON está echado.",
+            "unknown_subject": "No se puede identificar a la persona.",
+            "voice_braked": "El freno de voz está echado.",
+            "voice_excluded": "La persona está excluida de las llamadas.",
+            "voice_policy": "La política de llamadas no lo permite.",
+            "wait": "Se espera y se vuelve a intentar.",
+            "weekly_contact_limit": "Ya tiene el máximo de contactos de los últimos 7 días.",
+            "window_over_no_job": "El siguiente hueco cae fuera de la ventana: no hay más contactos.",
+            "wrong_person": "No era la persona."
+        },
+        "templates": {
+            "header": "{verdict}.",
+            "headerWithLevel": "{verdict} ({level} · {levelLabel}).",
+            "retryAt": "Se vuelve a intentar el {date} a las {time} (Bogotá).",
+            "warning": "Aviso: {text}",
+            "channel": "Canal {channel}: {verdict}.",
+            "channelWithReasons": "Canal {channel}: {verdict} — {reasons}"
+        },
+        "fallbacks": {
+            "verdict": "Decisión",
+            "reason": "Motivo sin texto.",
+            "warning": "sin texto.",
+            "effect": "Efecto sin texto.",
+            "annotation": "Anotación sin texto."
+        }
+    },
+    "text": [
+        {
+            "code": "voice_policy",
+            "expected": "La política de llamadas no lo permite."
+        },
+        {
+            "code": "voice_policy:outside_window",
+            "expected": "La política de llamadas no lo permite."
+        },
+        {
+            "code": "calendar_outside_own_hours",
+            "expected": "Fuera del horario propio del gimnasio (más estricto que la ley)."
+        },
+        {
+            "code": "daily_contact_limit",
+            "expected": "Ya hubo un contacto hoy con la persona o con su teléfono (como mucho uno al día sumando todos los canales y finalidades)."
+        },
+        {
+            "code": "zzz_unknown",
+            "expected": null
+        }
+    ],
+    "explain": [
+        {
+            "name": "permitido",
+            "synthetic": false,
+            "ladder": {
+                "verdict": "allow",
+                "allowed": true,
+                "level": null,
+                "reasons": [],
+                "retryAt": null,
+                "waitsForRelease": false,
+                "effect": null,
+                "levels": [
+                    {
+                        "level": "N1",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N2",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N3",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N4",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N5",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N6",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N7",
+                        "status": "pass"
+                    }
+                ],
+                "warnings": []
+            },
+            "channel": null,
+            "expected": [
+                "Se permite el contacto."
+            ]
+        },
+        {
+            "name": "N1 niega: autorización negada y «no contactar»",
+            "synthetic": false,
+            "ladder": {
+                "verdict": "deny",
+                "allowed": false,
+                "level": "N1",
+                "reasons": [
+                    "consent_denied",
+                    "do_not_contact"
+                ],
+                "retryAt": null,
+                "waitsForRelease": false,
+                "effect": null,
+                "levels": [
+                    {
+                        "level": "N1",
+                        "status": "deny"
+                    },
+                    {
+                        "level": "N2",
+                        "status": "not_evaluated"
+                    },
+                    {
+                        "level": "N3",
+                        "status": "not_evaluated"
+                    },
+                    {
+                        "level": "N4",
+                        "status": "not_evaluated"
+                    },
+                    {
+                        "level": "N5",
+                        "status": "not_evaluated"
+                    },
+                    {
+                        "level": "N6",
+                        "status": "not_evaluated"
+                    },
+                    {
+                        "level": "N7",
+                        "status": "not_evaluated"
+                    }
+                ],
+                "warnings": []
+            },
+            "channel": null,
+            "expected": [
+                "No se contacta (N1 · Seguridad, ley y consentimiento).",
+                "La persona negó la autorización para este medio.",
+                "La persona pidió que no se le contacte."
+            ]
+        },
+        {
+            "name": "N1 aplaza: hubo un contacto hace dos horas (tope diario y 48 h)",
+            "synthetic": false,
+            "ladder": {
+                "verdict": "defer",
+                "allowed": false,
+                "level": "N1",
+                "reasons": [
+                    "daily_contact_limit",
+                    "min_hours_between_contacts"
+                ],
+                "retryAt": "2026-11-12T13:00:00Z",
+                "waitsForRelease": false,
+                "effect": null,
+                "levels": [
+                    {
+                        "level": "N1",
+                        "status": "defer"
+                    },
+                    {
+                        "level": "N2",
+                        "status": "not_evaluated"
+                    },
+                    {
+                        "level": "N3",
+                        "status": "not_evaluated"
+                    },
+                    {
+                        "level": "N4",
+                        "status": "not_evaluated"
+                    },
+                    {
+                        "level": "N5",
+                        "status": "not_evaluated"
+                    },
+                    {
+                        "level": "N6",
+                        "status": "not_evaluated"
+                    },
+                    {
+                        "level": "N7",
+                        "status": "not_evaluated"
+                    }
+                ],
+                "warnings": []
+            },
+            "channel": null,
+            "expected": [
+                "Se aplaza el contacto (N1 · Seguridad, ley y consentimiento).",
+                "Ya hubo un contacto hoy con la persona o con su teléfono (como mucho uno al día sumando todos los canales y finalidades).",
+                "No han pasado las horas mínimas desde el último contacto.",
+                "Se vuelve a intentar el 12-11-2026 a las 08:00 (Bogotá)."
+            ]
+        },
+        {
+            "name": "N1 aplaza: su teléfono ya tuvo un contacto hoy (L9-27)",
+            "synthetic": false,
+            "ladder": {
+                "verdict": "defer",
+                "allowed": false,
+                "level": "N1",
+                "reasons": [
+                    "daily_contact_limit"
+                ],
+                "retryAt": "2026-11-11T13:00:00Z",
+                "waitsForRelease": false,
+                "effect": null,
+                "levels": [
+                    {
+                        "level": "N1",
+                        "status": "defer"
+                    },
+                    {
+                        "level": "N2",
+                        "status": "not_evaluated"
+                    },
+                    {
+                        "level": "N3",
+                        "status": "not_evaluated"
+                    },
+                    {
+                        "level": "N4",
+                        "status": "not_evaluated"
+                    },
+                    {
+                        "level": "N5",
+                        "status": "not_evaluated"
+                    },
+                    {
+                        "level": "N6",
+                        "status": "not_evaluated"
+                    },
+                    {
+                        "level": "N7",
+                        "status": "not_evaluated"
+                    }
+                ],
+                "warnings": []
+            },
+            "channel": null,
+            "expected": [
+                "Se aplaza el contacto (N1 · Seguridad, ley y consentimiento).",
+                "Ya hubo un contacto hoy con la persona o con su teléfono (como mucho uno al día sumando todos los canales y finalidades).",
+                "Se vuelve a intentar el 11-11-2026 a las 08:00 (Bogotá)."
+            ]
+        },
+        {
+            "name": "N1 niega: domingo con el horario propio mal configurado (sin hueco)",
+            "synthetic": false,
+            "ladder": {
+                "verdict": "deny",
+                "allowed": false,
+                "level": "N1",
+                "reasons": [
+                    "calendar_sunday"
+                ],
+                "retryAt": null,
+                "waitsForRelease": false,
+                "effect": null,
+                "levels": [
+                    {
+                        "level": "N1",
+                        "status": "deny"
+                    },
+                    {
+                        "level": "N2",
+                        "status": "not_evaluated"
+                    },
+                    {
+                        "level": "N3",
+                        "status": "not_evaluated"
+                    },
+                    {
+                        "level": "N4",
+                        "status": "not_evaluated"
+                    },
+                    {
+                        "level": "N5",
+                        "status": "not_evaluated"
+                    },
+                    {
+                        "level": "N6",
+                        "status": "not_evaluated"
+                    },
+                    {
+                        "level": "N7",
+                        "status": "not_evaluated"
+                    }
+                ],
+                "warnings": []
+            },
+            "channel": null,
+            "expected": [
+                "No se contacta (N1 · Seguridad, ley y consentimiento).",
+                "Es domingo: la ley no permite contactar."
+            ]
+        },
+        {
+            "name": "N2 espera: PARADA GLOBAL",
+            "synthetic": false,
+            "ladder": {
+                "verdict": "deny",
+                "allowed": false,
+                "level": "N2",
+                "reasons": [
+                    "outreach_brake_global"
+                ],
+                "retryAt": null,
+                "waitsForRelease": true,
+                "effect": null,
+                "levels": [
+                    {
+                        "level": "N1",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N2",
+                        "status": "deny"
+                    },
+                    {
+                        "level": "N3",
+                        "status": "not_evaluated"
+                    },
+                    {
+                        "level": "N4",
+                        "status": "not_evaluated"
+                    },
+                    {
+                        "level": "N5",
+                        "status": "not_evaluated"
+                    },
+                    {
+                        "level": "N6",
+                        "status": "not_evaluated"
+                    },
+                    {
+                        "level": "N7",
+                        "status": "not_evaluated"
+                    }
+                ],
+                "warnings": []
+            },
+            "channel": null,
+            "expected": [
+                "No se contacta (N2 · Exclusiones y frenos globales).",
+                "Está activa la PARADA GLOBAL."
+            ]
+        },
+        {
+            "name": "N3 niega: referencia que no cuadra y catálogo incompatible",
+            "synthetic": false,
+            "ladder": {
+                "verdict": "deny",
+                "allowed": false,
+                "level": "N3",
+                "reasons": [
+                    "studio_reference_invalid",
+                    "catalog_incompatible"
+                ],
+                "retryAt": null,
+                "waitsForRelease": false,
+                "effect": null,
+                "levels": [
+                    {
+                        "level": "N1",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N2",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N3",
+                        "status": "deny"
+                    },
+                    {
+                        "level": "N4",
+                        "status": "not_evaluated"
+                    },
+                    {
+                        "level": "N5",
+                        "status": "not_evaluated"
+                    },
+                    {
+                        "level": "N6",
+                        "status": "not_evaluated"
+                    },
+                    {
+                        "level": "N7",
+                        "status": "not_evaluated"
+                    }
+                ],
+                "warnings": []
+            },
+            "channel": null,
+            "expected": [
+                "No se contacta (N3 · Versión comercial aprobada).",
+                "La versión comercial de referencia no cuadra con su huella.",
+                "La estrategia usa un dato que el catálogo vigente ya no tiene: no se reinterpreta."
+            ]
+        },
+        {
+            "name": "N4 niega: voz con el envío cerrado en código y la política de llamadas",
+            "synthetic": false,
+            "ladder": {
+                "verdict": "deny",
+                "allowed": false,
+                "level": "N4",
+                "reasons": [
+                    "sends_disabled_in_code",
+                    "voice_policy:outside_window",
+                    "budget_zero"
+                ],
+                "retryAt": null,
+                "waitsForRelease": false,
+                "effect": null,
+                "levels": [
+                    {
+                        "level": "N1",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N2",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N3",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N4",
+                        "status": "deny"
+                    },
+                    {
+                        "level": "N5",
+                        "status": "not_evaluated"
+                    },
+                    {
+                        "level": "N6",
+                        "status": "not_evaluated"
+                    },
+                    {
+                        "level": "N7",
+                        "status": "not_evaluated"
+                    }
+                ],
+                "warnings": []
+            },
+            "channel": null,
+            "expected": [
+                "No se contacta (N4 · Configuración del canal).",
+                "El envío automático está cerrado en el código.",
+                "La política de llamadas no lo permite.",
+                "El presupuesto o el tope del canal es cero."
+            ]
+        },
+        {
+            "name": "sombra: los avisos de N4 no niegan",
+            "synthetic": false,
+            "ladder": {
+                "verdict": "allow",
+                "allowed": true,
+                "level": null,
+                "reasons": [],
+                "retryAt": null,
+                "waitsForRelease": false,
+                "effect": null,
+                "levels": [
+                    {
+                        "level": "N1",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N2",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N3",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N4",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N5",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N6",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N7",
+                        "status": "pass"
+                    }
+                ],
+                "warnings": [
+                    {
+                        "level": "N4",
+                        "reason": "sends_disabled_in_code"
+                    },
+                    {
+                        "level": "N4",
+                        "reason": "budget_zero"
+                    }
+                ]
+            },
+            "channel": null,
+            "expected": [
+                "Se permite el contacto.",
+                "Aviso: El envío automático está cerrado en el código.",
+                "Aviso: El presupuesto o el tope del canal es cero."
+            ]
+        },
+        {
+            "name": "N5 aplaza: fuera del horario propio (L9-15)",
+            "synthetic": false,
+            "ladder": {
+                "verdict": "defer",
+                "allowed": false,
+                "level": "N5",
+                "reasons": [
+                    "calendar_outside_own_hours"
+                ],
+                "retryAt": "2026-11-10T14:00:00Z",
+                "waitsForRelease": false,
+                "effect": null,
+                "levels": [
+                    {
+                        "level": "N1",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N2",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N3",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N4",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N5",
+                        "status": "defer"
+                    },
+                    {
+                        "level": "N6",
+                        "status": "not_evaluated"
+                    },
+                    {
+                        "level": "N7",
+                        "status": "not_evaluated"
+                    }
+                ],
+                "warnings": []
+            },
+            "channel": null,
+            "expected": [
+                "Se aplaza el contacto (N5 · Estrategia aprobada).",
+                "Fuera del horario propio del gimnasio (más estricto que la ley).",
+                "Se vuelve a intentar el 10-11-2026 a las 09:00 (Bogotá)."
+            ]
+        },
+        {
+            "name": "N6 niega y deriva: pidió una persona y tiene cartera vencida",
+            "synthetic": false,
+            "ladder": {
+                "verdict": "deny",
+                "allowed": false,
+                "level": "N6",
+                "reasons": [
+                    "human_requested_recently",
+                    "collections_overdue_blocks_commercial"
+                ],
+                "retryAt": null,
+                "waitsForRelease": false,
+                "effect": "handoff",
+                "levels": [
+                    {
+                        "level": "N1",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N2",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N3",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N4",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N5",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N6",
+                        "status": "deny"
+                    },
+                    {
+                        "level": "N7",
+                        "status": "not_evaluated"
+                    }
+                ],
+                "warnings": []
+            },
+            "channel": null,
+            "expected": [
+                "No se contacta (N6 · Contexto verificado del contacto).",
+                "La persona pidió hablar con alguien hace poco: se para y se deriva.",
+                "Tiene cartera vencida (o no se pudo comprobar): no se le hacen ofertas comerciales.",
+                "Se deriva a una persona del equipo."
+            ]
+        },
+        {
+            "name": "N6 cierra: objetivo cumplido",
+            "synthetic": false,
+            "ladder": {
+                "verdict": "deny",
+                "allowed": false,
+                "level": "N6",
+                "reasons": [
+                    "success_reached"
+                ],
+                "retryAt": null,
+                "waitsForRelease": false,
+                "effect": "exit_converted",
+                "levels": [
+                    {
+                        "level": "N1",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N2",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N3",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N4",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N5",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N6",
+                        "status": "deny"
+                    },
+                    {
+                        "level": "N7",
+                        "status": "not_evaluated"
+                    }
+                ],
+                "warnings": []
+            },
+            "channel": null,
+            "expected": [
+                "No se contacta (N6 · Contexto verificado del contacto).",
+                "El objetivo ya está cumplido.",
+                "La inscripción cierra como objetivo cumplido."
+            ]
+        },
+        {
+            "name": "N7 aplaza: pidió que lo contacten el jueves a las 15:00",
+            "synthetic": false,
+            "ladder": {
+                "verdict": "defer",
+                "allowed": false,
+                "level": "N7",
+                "reasons": [
+                    "callback_scheduled"
+                ],
+                "retryAt": "2026-11-12T20:00:00Z",
+                "waitsForRelease": false,
+                "effect": null,
+                "levels": [
+                    {
+                        "level": "N1",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N2",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N3",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N4",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N5",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N6",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N7",
+                        "status": "defer"
+                    }
+                ],
+                "warnings": []
+            },
+            "channel": null,
+            "expected": [
+                "Se aplaza el contacto (N7 · Instrucciones de la persona).",
+                "La persona pidió que se le contacte en otro momento.",
+                "Se vuelve a intentar el 12-11-2026 a las 15:00 (Bogotá)."
+            ]
+        },
+        {
+            "name": "selector: pidió voz, la voz está frenada y sale el asistido",
+            "synthetic": false,
+            "ladder": {
+                "verdict": "allow",
+                "allowed": true,
+                "level": null,
+                "reasons": [],
+                "retryAt": null,
+                "waitsForRelease": false,
+                "effect": null,
+                "levels": [
+                    {
+                        "level": "N1",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N2",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N3",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N4",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N5",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N6",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N7",
+                        "status": "pass"
+                    }
+                ],
+                "warnings": []
+            },
+            "channel": {
+                "verdict": "selected",
+                "channel": "assisted:whatsapp",
+                "retryAt": null,
+                "order": [
+                    "whatsapp_template",
+                    "voice_call",
+                    "assisted:whatsapp"
+                ],
+                "annotations": [
+                    "instruction_ignored_by_policy"
+                ],
+                "perChannel": [
+                    {
+                        "channel": "whatsapp_template",
+                        "verdict": "deny",
+                        "level": "N4",
+                        "reasons": [
+                            "template_not_approved",
+                            "budget_zero"
+                        ],
+                        "retryAt": null
+                    },
+                    {
+                        "channel": "voice_call",
+                        "verdict": "deny",
+                        "level": "N2",
+                        "reasons": [
+                            "voice_braked"
+                        ],
+                        "retryAt": null
+                    },
+                    {
+                        "channel": "assisted:whatsapp",
+                        "verdict": "allow",
+                        "level": null,
+                        "reasons": [],
+                        "retryAt": null
+                    }
+                ]
+            },
+            "expected": [
+                "Se permite el contacto.",
+                "Canal whatsapp_template: No se contacta — La plantilla no está aprobada. El presupuesto o el tope del canal es cero.",
+                "Canal voice_call: No se contacta — El freno de voz está echado.",
+                "Canal assisted:whatsapp: Se permite el contacto.",
+                "Lo que pidió la persona no cabe en las reglas: manda el orden del paso."
+            ]
+        },
+        {
+            "name": "reservas: códigos sin texto (sintético)",
+            "synthetic": true,
+            "ladder": {
+                "verdict": "deny",
+                "level": "N9",
+                "reasons": [
+                    "zzz_unknown"
+                ],
+                "retryAt": null,
+                "warnings": [
+                    {
+                        "level": "N4",
+                        "reason": "zzz_unknown"
+                    }
+                ],
+                "effect": "zzz_unknown"
+            },
+            "channel": {
+                "perChannel": [
+                    {
+                        "channel": "voice_call",
+                        "verdict": "zzz_unknown",
+                        "level": null,
+                        "reasons": [
+                            "zzz_unknown"
+                        ],
+                        "retryAt": null
+                    }
+                ],
+                "annotations": [
+                    "zzz_unknown"
+                ]
+            },
+            "expected": [
+                "No se contacta.",
+                "Motivo sin texto.",
+                "Aviso: sin texto.",
+                "Efecto sin texto.",
+                "Canal voice_call: zzz_unknown — zzz_unknown",
+                "Anotación sin texto."
+            ]
+        }
+    ]
+}

@@ -3,6 +3,7 @@
 namespace App\Models\UltronStudio;
 
 use App\Services\UltronStudio\StudioAudit;
+use App\Services\UltronStudio\StudioStrategyConfig;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use LogicException;
@@ -57,6 +58,9 @@ class StudioAuditEvent extends Model
     public const SUBJECT_TYPES = [
         self::SUBJECT_DRAFT, self::SUBJECT_VERSION, self::SUBJECT_RULE, self::SUBJECT_SYSTEM,
         self::SUBJECT_CAMPAIGN_LINK, self::SUBJECT_CANARY_NUMBER, self::SUBJECT_INTEGRATION,
+        // Hito 9 (S9; DB9 Anexo A amplió el CHECK): los sujetos del gobierno de estrategias.
+        StudioStrategyConfig::SUBJECT_STRATEGY, StudioStrategyConfig::SUBJECT_STRATEGY_VERSION,
+        StudioStrategyConfig::SUBJECT_MESSAGE_TEMPLATE, StudioStrategyConfig::SUBJECT_PERSON_BINDING,
     ];
 
     public const ACTOR_ADMIN = 'admin';

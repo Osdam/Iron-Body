@@ -1,0 +1,2586 @@
+{
+  "fixture": "outcome-transitions.json",
+  "version": 1,
+  "contract": "backend/docs/ultron-studio/ULTRON_STUDIO_H9_CONTRACT.md (congelado por el lead el 09-11-2026 20:30 UTC; §13.2 renumerado T1–T23)",
+  "contractSections": [
+    "D9-10 (18 resultados normalizados, transiciones permitidas por resultado y la de por defecto; la regla asimétrica de la IA; estados de la inscripción)",
+    "D9-8 etapas 8 y 9 (resultado y seguimiento)",
+    "§6.2 (outreach_outcomes.source: 8 fuentes; confidence solo con classifier)",
+    "§13.1 #10 (opted_out siempre end_exit), #21 (clasificación ambigua → needs_review), #22 (revisión humana → bandeja asistida y para la secuencia); §13.2 T14, T23"
+  ],
+  "generatedBy": "tests/fixtures/outreach/tools/build/build.py (python3 -I), con los casos a mano en sec_*.py",
+  "checkedBy": "tests/Unit/Outreach/FixturesSanityTest.php (forma, unicidad, canonicalización y huellas, sin código del motor)",
+  "readme": "tests/fixtures/outreach/README.md",
+  "basisLegend": {
+    "contrato": "Lo dice el contrato H9 tal cual (contractRef).",
+    "ley": "Lo dice la ley citada (Ley 2300 de 2023, Ley 1581 de 2012, Ley 51 de 1983, Ley 2578 de 2026).",
+    "codigo-existente": "Lo hace hoy el código que el contrato manda reutilizar o igualar (ContactPolicy, OutboundSchedule, ColombianHolidays, VoiceFrequency, StudioContentHasher…); la cita va en contractRef.",
+    "supuesto-lead": "Sigue un supuesto de la congelación del lead (P9-n), que el propietario puede cambiar.",
+    "decision-fixture": "El contrato no lo fija: lo decide este fixture (campo decision; README §Decisiones). Lo congela el lead."
+  },
+  "sources": [
+    {
+      "what": "El contrato del H9 (D9-3 a D9-11, §5, §6, §13 y la Congelación)",
+      "url": "backend/docs/ultron-studio/ULTRON_STUDIO_H9_CONTRACT.md",
+      "consulted": "09-11-2026, en este árbol (sin seguimiento: lo congela el lead)",
+      "how": "Lectura completa; cada caso cita su sección en contractRef."
+    }
+  ],
+  "syntheticData": "Ningún dato real: ids, uuids, claves y personas inventados; las personas se nombran por subject_key sintético (m:<id>, l:<id>); sin teléfonos, nombres, documentos ni importes.",
+  "namingNote": "El encargo de TEST9-a lo llama outcome-cases.json; el contrato (D9-10 y §11) lo llama outcome-transitions.json: se entrega con el nombre del contrato (L9-8).",
+  "sources15_11": [
+    "crm_fact",
+    "simulated",
+    "staff",
+    "system"
+  ],
+  "allSources": [
+    "classifier",
+    "crm_fact",
+    "inbound_message",
+    "meta_status",
+    "simulated",
+    "staff",
+    "system",
+    "voice_call"
+  ],
+  "classifierSafeTransitions": [
+    "end_exit",
+    "handoff_human",
+    "wait"
+  ],
+  "classifierThresholds": {
+    "low": 50,
+    "high": 90
+  },
+  "retryMax": {
+    "failed": 1,
+    "no_answer": 2
+  },
+  "statusByTransition": {
+    "next_step": "active",
+    "retry_step": "active",
+    "wait": "waiting",
+    "end_success": "completed",
+    "end_exit": "exited",
+    "handoff_human": "handed_off"
+  },
+  "enrollmentStatuses": [
+    "active",
+    "waiting",
+    "completed",
+    "exited",
+    "opted_out",
+    "handed_off",
+    "expired",
+    "canceled"
+  ],
+  "interface": {
+    "resolve": "OutcomeTable::resolve(outcome, source, confidence|null, on {resultado: transición}|null, attempt) → {verdict: apply|needs_review|ignore, outcome|null, transition|null, enrollmentStatus|null, effects, incident}"
+  },
+  "decisions": {
+    "DF-O1": "(Ratificada por el lead: L9-12: un error del proveedor es failed, con el detalle en la traza.) Fuentes de cada resultado, traducidas a los 8 códigos de outreach_outcomes.source: «política» → system; «canal» → system el 15-11 (failed_to_start, ambiguous), meta_status en W9 y voice_call en V9; «asistido» → staff; «W9 entrante/opt-out del lead» → inbound_message; «success reevaluado» y «ventana vencida» → system.",
+    "DF-O2": "Un código fuera de los 18, o una fuente que ese resultado no admite, se ignora y deja incidente (T14); la secuencia no avanza.",
+    "DF-O3": "Clasificador (AI9): confidence entera de 0 a 100; opted_out se acepta desde 50 (umbral bajo) y el resto desde 90 (umbral alto); por debajo, o con la etiqueta ambiguous, needs_review: sin resultado del conjunto, la secuencia para y se abre una tarea asistida (transition handoff_human, #21 y #22). Ratificada por el lead: L9-12 (needs_review es un veredicto, no un resultado) y L9-18 (umbrales 50 y 90, solo AI9).",
+    "DF-O4": "Con source classifier la transición elegida solo puede ser end_exit, handoff_human o wait; si la estrategia o el defecto dicen otra, se usa el defecto si es una de esas y, si no, end_exit.",
+    "DF-O5": "Si el `on` de la estrategia pide una transición que ese resultado no admite (la validación ya debería haberla rechazado), rige la de por defecto y queda incidente. opted_out siempre end_exit, diga lo que diga la estrategia (#10).",
+    "DF-O6": "retry_step cuenta intentos: failed admite 1 reintento (attempt ≤ 2) y no_answer 2 (attempt ≤ 3); agotados, rige la de por defecto.",
+    "DF-O7": "Estado de la inscripción: el de la transición (statusByTransition), salvo opted_out → opted_out y no_response → expired (D9-8: la ventana vencida cierra como expired con no_response). Los resultados sin transición (not_attempted, ambiguous, sent, delivered, read) no cambian el estado.",
+    "DF-O8": "Efectos: opted_out → cancelar los trabajos pendientes de TODAS las estrategias y suprimir finalidad y canal (#10); wrong_person → suprimir ese canal; not_interested → enfriamiento; human_requested y needs_review → tarea asistida; ambiguous → conciliar."
+  },
+  "counts": {
+    "matrix": 108,
+    "resolve": 41,
+    "total": 149
+  },
+  "table": {
+    "ambiguous": {
+      "group": "delivery",
+      "sources": [
+        "system"
+      ],
+      "allowed": [],
+      "default": null,
+      "effects": [
+        "reconcile"
+      ]
+    },
+    "answered": {
+      "group": "response",
+      "sources": [
+        "staff",
+        "voice_call"
+      ],
+      "allowed": [
+        "end_exit",
+        "end_success",
+        "handoff_human",
+        "next_step"
+      ],
+      "default": "end_exit",
+      "effects": []
+    },
+    "appointment_booked": {
+      "group": "business",
+      "sources": [
+        "crm_fact",
+        "staff"
+      ],
+      "allowed": [
+        "end_success",
+        "next_step"
+      ],
+      "default": "end_success",
+      "effects": []
+    },
+    "blocked": {
+      "group": "delivery",
+      "sources": [
+        "system"
+      ],
+      "allowed": [
+        "end_exit",
+        "wait"
+      ],
+      "default": "wait",
+      "effects": []
+    },
+    "callback_requested": {
+      "group": "response",
+      "sources": [
+        "classifier",
+        "staff"
+      ],
+      "allowed": [
+        "end_exit",
+        "wait"
+      ],
+      "default": "wait",
+      "effects": []
+    },
+    "converted": {
+      "group": "business",
+      "sources": [
+        "crm_fact",
+        "system"
+      ],
+      "allowed": [
+        "end_success"
+      ],
+      "default": "end_success",
+      "effects": []
+    },
+    "delivered": {
+      "group": "delivery",
+      "sources": [
+        "meta_status"
+      ],
+      "allowed": [],
+      "default": null,
+      "effects": []
+    },
+    "failed": {
+      "group": "delivery",
+      "sources": [
+        "meta_status",
+        "system",
+        "voice_call"
+      ],
+      "allowed": [
+        "end_exit",
+        "next_step",
+        "retry_step"
+      ],
+      "default": "end_exit",
+      "effects": []
+    },
+    "human_requested": {
+      "group": "response",
+      "sources": [
+        "classifier",
+        "inbound_message",
+        "staff",
+        "voice_call"
+      ],
+      "allowed": [
+        "handoff_human"
+      ],
+      "default": "handoff_human",
+      "effects": [
+        "assisted_task"
+      ]
+    },
+    "no_answer": {
+      "group": "delivery",
+      "sources": [
+        "staff",
+        "voice_call"
+      ],
+      "allowed": [
+        "end_exit",
+        "next_step",
+        "retry_step",
+        "wait"
+      ],
+      "default": "end_exit",
+      "effects": []
+    },
+    "no_response": {
+      "group": "business",
+      "sources": [
+        "system"
+      ],
+      "allowed": [
+        "end_exit"
+      ],
+      "default": "end_exit",
+      "effects": []
+    },
+    "not_attempted": {
+      "group": "delivery",
+      "sources": [
+        "simulated"
+      ],
+      "allowed": [],
+      "default": null,
+      "effects": []
+    },
+    "not_interested": {
+      "group": "response",
+      "sources": [
+        "classifier",
+        "staff"
+      ],
+      "allowed": [
+        "end_exit"
+      ],
+      "default": "end_exit",
+      "effects": [
+        "cooldown"
+      ]
+    },
+    "opted_out": {
+      "group": "response",
+      "sources": [
+        "classifier",
+        "inbound_message",
+        "staff",
+        "voice_call"
+      ],
+      "allowed": [
+        "end_exit"
+      ],
+      "default": "end_exit",
+      "effects": [
+        "cancel_pending_all_strategies",
+        "suppress_purpose_channel"
+      ]
+    },
+    "read": {
+      "group": "delivery",
+      "sources": [
+        "meta_status"
+      ],
+      "allowed": [],
+      "default": null,
+      "effects": []
+    },
+    "replied": {
+      "group": "response",
+      "sources": [
+        "inbound_message"
+      ],
+      "allowed": [
+        "end_exit",
+        "handoff_human"
+      ],
+      "default": "handoff_human",
+      "effects": []
+    },
+    "sent": {
+      "group": "delivery",
+      "sources": [
+        "meta_status",
+        "voice_call"
+      ],
+      "allowed": [],
+      "default": null,
+      "effects": []
+    },
+    "wrong_person": {
+      "group": "response",
+      "sources": [
+        "classifier",
+        "staff",
+        "voice_call"
+      ],
+      "allowed": [
+        "end_exit"
+      ],
+      "default": "end_exit",
+      "effects": [
+        "suppress_channel"
+      ]
+    }
+  },
+  "matrix": [
+    {
+      "name": "matrix · on · ambiguous → end_exit: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "ambiguous",
+      "transition": "end_exit",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · ambiguous → end_success: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "ambiguous",
+      "transition": "end_success",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · ambiguous → handoff_human: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "ambiguous",
+      "transition": "handoff_human",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · ambiguous → next_step: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "ambiguous",
+      "transition": "next_step",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · ambiguous → retry_step: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "ambiguous",
+      "transition": "retry_step",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · ambiguous → wait: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "ambiguous",
+      "transition": "wait",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · answered → end_exit: permitida",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "answered",
+      "transition": "end_exit",
+      "expected": {
+        "allowed": true,
+        "isDefault": true,
+        "error": null
+      }
+    },
+    {
+      "name": "matrix · on · answered → end_success: permitida",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "answered",
+      "transition": "end_success",
+      "expected": {
+        "allowed": true,
+        "isDefault": false,
+        "error": null
+      }
+    },
+    {
+      "name": "matrix · on · answered → handoff_human: permitida",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "answered",
+      "transition": "handoff_human",
+      "expected": {
+        "allowed": true,
+        "isDefault": false,
+        "error": null
+      }
+    },
+    {
+      "name": "matrix · on · answered → next_step: permitida",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "answered",
+      "transition": "next_step",
+      "expected": {
+        "allowed": true,
+        "isDefault": false,
+        "error": null
+      }
+    },
+    {
+      "name": "matrix · on · answered → retry_step: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "answered",
+      "transition": "retry_step",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · answered → wait: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "answered",
+      "transition": "wait",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · appointment_booked → end_exit: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "appointment_booked",
+      "transition": "end_exit",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · appointment_booked → end_success: permitida",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "appointment_booked",
+      "transition": "end_success",
+      "expected": {
+        "allowed": true,
+        "isDefault": true,
+        "error": null
+      }
+    },
+    {
+      "name": "matrix · on · appointment_booked → handoff_human: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "appointment_booked",
+      "transition": "handoff_human",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · appointment_booked → next_step: permitida",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "appointment_booked",
+      "transition": "next_step",
+      "expected": {
+        "allowed": true,
+        "isDefault": false,
+        "error": null
+      }
+    },
+    {
+      "name": "matrix · on · appointment_booked → retry_step: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "appointment_booked",
+      "transition": "retry_step",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · appointment_booked → wait: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "appointment_booked",
+      "transition": "wait",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · blocked → end_exit: permitida",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "blocked",
+      "transition": "end_exit",
+      "expected": {
+        "allowed": true,
+        "isDefault": false,
+        "error": null
+      }
+    },
+    {
+      "name": "matrix · on · blocked → end_success: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "blocked",
+      "transition": "end_success",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · blocked → handoff_human: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "blocked",
+      "transition": "handoff_human",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · blocked → next_step: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "blocked",
+      "transition": "next_step",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · blocked → retry_step: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "blocked",
+      "transition": "retry_step",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · blocked → wait: permitida",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "blocked",
+      "transition": "wait",
+      "expected": {
+        "allowed": true,
+        "isDefault": true,
+        "error": null
+      }
+    },
+    {
+      "name": "matrix · on · callback_requested → end_exit: permitida",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "callback_requested",
+      "transition": "end_exit",
+      "expected": {
+        "allowed": true,
+        "isDefault": false,
+        "error": null
+      }
+    },
+    {
+      "name": "matrix · on · callback_requested → end_success: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "callback_requested",
+      "transition": "end_success",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · callback_requested → handoff_human: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "callback_requested",
+      "transition": "handoff_human",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · callback_requested → next_step: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "callback_requested",
+      "transition": "next_step",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · callback_requested → retry_step: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "callback_requested",
+      "transition": "retry_step",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · callback_requested → wait: permitida",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "callback_requested",
+      "transition": "wait",
+      "expected": {
+        "allowed": true,
+        "isDefault": true,
+        "error": null
+      }
+    },
+    {
+      "name": "matrix · on · converted → end_exit: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "converted",
+      "transition": "end_exit",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · converted → end_success: permitida",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "converted",
+      "transition": "end_success",
+      "expected": {
+        "allowed": true,
+        "isDefault": true,
+        "error": null
+      }
+    },
+    {
+      "name": "matrix · on · converted → handoff_human: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "converted",
+      "transition": "handoff_human",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · converted → next_step: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "converted",
+      "transition": "next_step",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · converted → retry_step: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "converted",
+      "transition": "retry_step",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · converted → wait: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "converted",
+      "transition": "wait",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · delivered → end_exit: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "delivered",
+      "transition": "end_exit",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · delivered → end_success: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "delivered",
+      "transition": "end_success",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · delivered → handoff_human: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "delivered",
+      "transition": "handoff_human",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · delivered → next_step: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "delivered",
+      "transition": "next_step",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · delivered → retry_step: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "delivered",
+      "transition": "retry_step",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · delivered → wait: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "delivered",
+      "transition": "wait",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · failed → end_exit: permitida",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "failed",
+      "transition": "end_exit",
+      "expected": {
+        "allowed": true,
+        "isDefault": true,
+        "error": null
+      }
+    },
+    {
+      "name": "matrix · on · failed → end_success: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "failed",
+      "transition": "end_success",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · failed → handoff_human: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "failed",
+      "transition": "handoff_human",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · failed → next_step: permitida",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "failed",
+      "transition": "next_step",
+      "expected": {
+        "allowed": true,
+        "isDefault": false,
+        "error": null
+      }
+    },
+    {
+      "name": "matrix · on · failed → retry_step: permitida",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "failed",
+      "transition": "retry_step",
+      "expected": {
+        "allowed": true,
+        "isDefault": false,
+        "error": null
+      }
+    },
+    {
+      "name": "matrix · on · failed → wait: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "failed",
+      "transition": "wait",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · human_requested → end_exit: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "human_requested",
+      "transition": "end_exit",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · human_requested → end_success: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "human_requested",
+      "transition": "end_success",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · human_requested → handoff_human: permitida",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "human_requested",
+      "transition": "handoff_human",
+      "expected": {
+        "allowed": true,
+        "isDefault": true,
+        "error": null
+      }
+    },
+    {
+      "name": "matrix · on · human_requested → next_step: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "human_requested",
+      "transition": "next_step",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · human_requested → retry_step: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "human_requested",
+      "transition": "retry_step",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · human_requested → wait: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "human_requested",
+      "transition": "wait",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · no_answer → end_exit: permitida",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "no_answer",
+      "transition": "end_exit",
+      "expected": {
+        "allowed": true,
+        "isDefault": true,
+        "error": null
+      }
+    },
+    {
+      "name": "matrix · on · no_answer → end_success: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "no_answer",
+      "transition": "end_success",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · no_answer → handoff_human: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "no_answer",
+      "transition": "handoff_human",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · no_answer → next_step: permitida",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "no_answer",
+      "transition": "next_step",
+      "expected": {
+        "allowed": true,
+        "isDefault": false,
+        "error": null
+      }
+    },
+    {
+      "name": "matrix · on · no_answer → retry_step: permitida",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "no_answer",
+      "transition": "retry_step",
+      "expected": {
+        "allowed": true,
+        "isDefault": false,
+        "error": null
+      }
+    },
+    {
+      "name": "matrix · on · no_answer → wait: permitida",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "no_answer",
+      "transition": "wait",
+      "expected": {
+        "allowed": true,
+        "isDefault": false,
+        "error": null
+      }
+    },
+    {
+      "name": "matrix · on · no_response → end_exit: permitida",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "no_response",
+      "transition": "end_exit",
+      "expected": {
+        "allowed": true,
+        "isDefault": true,
+        "error": null
+      }
+    },
+    {
+      "name": "matrix · on · no_response → end_success: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "no_response",
+      "transition": "end_success",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · no_response → handoff_human: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "no_response",
+      "transition": "handoff_human",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · no_response → next_step: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "no_response",
+      "transition": "next_step",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · no_response → retry_step: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "no_response",
+      "transition": "retry_step",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · no_response → wait: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "no_response",
+      "transition": "wait",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · not_attempted → end_exit: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "not_attempted",
+      "transition": "end_exit",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · not_attempted → end_success: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "not_attempted",
+      "transition": "end_success",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · not_attempted → handoff_human: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "not_attempted",
+      "transition": "handoff_human",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · not_attempted → next_step: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "not_attempted",
+      "transition": "next_step",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · not_attempted → retry_step: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "not_attempted",
+      "transition": "retry_step",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · not_attempted → wait: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "not_attempted",
+      "transition": "wait",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · not_interested → end_exit: permitida",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "not_interested",
+      "transition": "end_exit",
+      "expected": {
+        "allowed": true,
+        "isDefault": true,
+        "error": null
+      }
+    },
+    {
+      "name": "matrix · on · not_interested → end_success: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "not_interested",
+      "transition": "end_success",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · not_interested → handoff_human: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "not_interested",
+      "transition": "handoff_human",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · not_interested → next_step: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "not_interested",
+      "transition": "next_step",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · not_interested → retry_step: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "not_interested",
+      "transition": "retry_step",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · not_interested → wait: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "not_interested",
+      "transition": "wait",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · opted_out → end_exit: permitida",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "opted_out",
+      "transition": "end_exit",
+      "expected": {
+        "allowed": true,
+        "isDefault": true,
+        "error": null
+      }
+    },
+    {
+      "name": "matrix · on · opted_out → end_success: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "opted_out",
+      "transition": "end_success",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · opted_out → handoff_human: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "opted_out",
+      "transition": "handoff_human",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · opted_out → next_step: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "opted_out",
+      "transition": "next_step",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · opted_out → retry_step: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "opted_out",
+      "transition": "retry_step",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · opted_out → wait: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "opted_out",
+      "transition": "wait",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · read → end_exit: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "read",
+      "transition": "end_exit",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · read → end_success: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "read",
+      "transition": "end_success",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · read → handoff_human: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "read",
+      "transition": "handoff_human",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · read → next_step: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "read",
+      "transition": "next_step",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · read → retry_step: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "read",
+      "transition": "retry_step",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · read → wait: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "read",
+      "transition": "wait",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · replied → end_exit: permitida",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "replied",
+      "transition": "end_exit",
+      "expected": {
+        "allowed": true,
+        "isDefault": false,
+        "error": null
+      }
+    },
+    {
+      "name": "matrix · on · replied → end_success: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "replied",
+      "transition": "end_success",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · replied → handoff_human: permitida",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "replied",
+      "transition": "handoff_human",
+      "expected": {
+        "allowed": true,
+        "isDefault": true,
+        "error": null
+      }
+    },
+    {
+      "name": "matrix · on · replied → next_step: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "replied",
+      "transition": "next_step",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · replied → retry_step: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "replied",
+      "transition": "retry_step",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · replied → wait: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "replied",
+      "transition": "wait",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · sent → end_exit: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "sent",
+      "transition": "end_exit",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · sent → end_success: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "sent",
+      "transition": "end_success",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · sent → handoff_human: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "sent",
+      "transition": "handoff_human",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · sent → next_step: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "sent",
+      "transition": "next_step",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · sent → retry_step: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "sent",
+      "transition": "retry_step",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · sent → wait: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "sent",
+      "transition": "wait",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · wrong_person → end_exit: permitida",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "wrong_person",
+      "transition": "end_exit",
+      "expected": {
+        "allowed": true,
+        "isDefault": true,
+        "error": null
+      }
+    },
+    {
+      "name": "matrix · on · wrong_person → end_success: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "wrong_person",
+      "transition": "end_success",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · wrong_person → handoff_human: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "wrong_person",
+      "transition": "handoff_human",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · wrong_person → next_step: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "wrong_person",
+      "transition": "next_step",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · wrong_person → retry_step: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "wrong_person",
+      "transition": "retry_step",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    },
+    {
+      "name": "matrix · on · wrong_person → wait: no",
+      "kind": "on",
+      "contractRef": "D9-10 (tabla)",
+      "basis": "contrato",
+      "outcome": "wrong_person",
+      "transition": "wait",
+      "expected": {
+        "allowed": false,
+        "isDefault": false,
+        "error": "transition_not_allowed"
+      }
+    }
+  ],
+  "resolve": [
+    {
+      "name": "resolve · outcome · simulated → not_attempted, sin transición (la inscripción espera su ventana)",
+      "kind": "outcome",
+      "contractRef": "T14, D9-8 (sombra)",
+      "basis": "contrato",
+      "outcome": "not_attempted",
+      "source": "simulated",
+      "confidence": null,
+      "on": null,
+      "attempt": 1,
+      "expected": {
+        "verdict": "apply",
+        "outcome": "not_attempted",
+        "transition": null,
+        "enrollmentStatus": null,
+        "effects": [],
+        "incident": false
+      }
+    },
+    {
+      "name": "resolve · outcome · staff → answered, por defecto end_exit",
+      "kind": "outcome",
+      "contractRef": "T14",
+      "basis": "contrato",
+      "outcome": "answered",
+      "source": "staff",
+      "confidence": null,
+      "on": null,
+      "attempt": 1,
+      "expected": {
+        "verdict": "apply",
+        "outcome": "answered",
+        "transition": "end_exit",
+        "enrollmentStatus": "exited",
+        "effects": [],
+        "incident": false
+      }
+    },
+    {
+      "name": "resolve · outcome · staff → answered con on.answered = next_step",
+      "kind": "outcome",
+      "contractRef": "T14, T23",
+      "basis": "contrato",
+      "outcome": "answered",
+      "source": "staff",
+      "confidence": null,
+      "on": {
+        "answered": "next_step"
+      },
+      "attempt": 1,
+      "expected": {
+        "verdict": "apply",
+        "outcome": "answered",
+        "transition": "next_step",
+        "enrollmentStatus": "active",
+        "effects": [],
+        "incident": false
+      }
+    },
+    {
+      "name": "resolve · outcome · staff → no_answer sin regla: end_exit (no avanza solo, T23)",
+      "kind": "outcome",
+      "contractRef": "T23 («solo si on.no_answer lo dice»)",
+      "basis": "contrato",
+      "outcome": "no_answer",
+      "source": "staff",
+      "confidence": null,
+      "on": null,
+      "attempt": 1,
+      "expected": {
+        "verdict": "apply",
+        "outcome": "no_answer",
+        "transition": "end_exit",
+        "enrollmentStatus": "exited",
+        "effects": [],
+        "incident": false
+      }
+    },
+    {
+      "name": "resolve · outcome · staff → no_answer con on.no_answer = next_step: avanza (T23)",
+      "kind": "outcome",
+      "contractRef": "T23",
+      "basis": "contrato",
+      "outcome": "no_answer",
+      "source": "staff",
+      "confidence": null,
+      "on": {
+        "no_answer": "next_step"
+      },
+      "attempt": 1,
+      "expected": {
+        "verdict": "apply",
+        "outcome": "no_answer",
+        "transition": "next_step",
+        "enrollmentStatus": "active",
+        "effects": [],
+        "incident": false
+      }
+    },
+    {
+      "name": "resolve · outcome · staff → no_answer con retry_step en el intento 2: reintenta",
+      "kind": "outcome",
+      "contractRef": "D9-10",
+      "basis": "decision-fixture",
+      "decision": "DF-O6",
+      "outcome": "no_answer",
+      "source": "staff",
+      "confidence": null,
+      "on": {
+        "no_answer": "retry_step"
+      },
+      "attempt": 2,
+      "expected": {
+        "verdict": "apply",
+        "outcome": "no_answer",
+        "transition": "retry_step",
+        "enrollmentStatus": "active",
+        "effects": [],
+        "incident": false
+      }
+    },
+    {
+      "name": "resolve · outcome · staff → no_answer con retry_step en el intento 3: agotado, rige el defecto (end_exit)",
+      "kind": "outcome",
+      "contractRef": "D9-10",
+      "basis": "decision-fixture",
+      "decision": "DF-O6",
+      "outcome": "no_answer",
+      "source": "staff",
+      "confidence": null,
+      "on": {
+        "no_answer": "retry_step"
+      },
+      "attempt": 3,
+      "expected": {
+        "verdict": "apply",
+        "outcome": "no_answer",
+        "transition": "end_exit",
+        "enrollmentStatus": "exited",
+        "effects": [],
+        "incident": false
+      }
+    },
+    {
+      "name": "resolve · outcome · system → failed con retry_step en el intento 1: reintenta (≤ 1)",
+      "kind": "outcome",
+      "contractRef": "D9-10",
+      "basis": "decision-fixture",
+      "decision": "DF-O6",
+      "outcome": "failed",
+      "source": "system",
+      "confidence": null,
+      "on": {
+        "failed": "retry_step"
+      },
+      "attempt": 1,
+      "expected": {
+        "verdict": "apply",
+        "outcome": "failed",
+        "transition": "retry_step",
+        "enrollmentStatus": "active",
+        "effects": [],
+        "incident": false
+      }
+    },
+    {
+      "name": "resolve · outcome · system → failed con retry_step en el intento 2: agotado → end_exit",
+      "kind": "outcome",
+      "contractRef": "D9-10",
+      "basis": "decision-fixture",
+      "decision": "DF-O6",
+      "outcome": "failed",
+      "source": "system",
+      "confidence": null,
+      "on": {
+        "failed": "retry_step"
+      },
+      "attempt": 2,
+      "expected": {
+        "verdict": "apply",
+        "outcome": "failed",
+        "transition": "end_exit",
+        "enrollmentStatus": "exited",
+        "effects": [],
+        "incident": false
+      }
+    },
+    {
+      "name": "resolve · outcome · staff → callback_requested: por defecto wait",
+      "kind": "outcome",
+      "contractRef": "D9-10",
+      "basis": "contrato",
+      "outcome": "callback_requested",
+      "source": "staff",
+      "confidence": null,
+      "on": null,
+      "attempt": 1,
+      "expected": {
+        "verdict": "apply",
+        "outcome": "callback_requested",
+        "transition": "wait",
+        "enrollmentStatus": "waiting",
+        "effects": [],
+        "incident": false
+      }
+    },
+    {
+      "name": "resolve · outcome · staff → human_requested: handoff_human (la única) y tarea asistida (#22)",
+      "kind": "outcome",
+      "contractRef": "#22 de §13.1",
+      "basis": "contrato",
+      "outcome": "human_requested",
+      "source": "staff",
+      "confidence": null,
+      "on": null,
+      "attempt": 1,
+      "expected": {
+        "verdict": "apply",
+        "outcome": "human_requested",
+        "transition": "handoff_human",
+        "enrollmentStatus": "handed_off",
+        "effects": [
+          "assisted_task"
+        ],
+        "incident": false
+      }
+    },
+    {
+      "name": "resolve · outcome · staff → not_interested: end_exit con enfriamiento",
+      "kind": "outcome",
+      "contractRef": "D9-10",
+      "basis": "contrato",
+      "outcome": "not_interested",
+      "source": "staff",
+      "confidence": null,
+      "on": null,
+      "attempt": 1,
+      "expected": {
+        "verdict": "apply",
+        "outcome": "not_interested",
+        "transition": "end_exit",
+        "enrollmentStatus": "exited",
+        "effects": [
+          "cooldown"
+        ],
+        "incident": false
+      }
+    },
+    {
+      "name": "resolve · outcome · staff → wrong_person: end_exit y supresión del canal",
+      "kind": "outcome",
+      "contractRef": "D9-10",
+      "basis": "contrato",
+      "outcome": "wrong_person",
+      "source": "staff",
+      "confidence": null,
+      "on": null,
+      "attempt": 1,
+      "expected": {
+        "verdict": "apply",
+        "outcome": "wrong_person",
+        "transition": "end_exit",
+        "enrollmentStatus": "exited",
+        "effects": [
+          "suppress_channel"
+        ],
+        "incident": false
+      }
+    },
+    {
+      "name": "resolve · outcome · staff → opted_out: end_exit, estado opted_out, cancela todo y suprime (#10)",
+      "kind": "outcome",
+      "contractRef": "#10 de §13.1",
+      "basis": "decision-fixture",
+      "decision": "DF-O8",
+      "outcome": "opted_out",
+      "source": "staff",
+      "confidence": null,
+      "on": null,
+      "attempt": 1,
+      "expected": {
+        "verdict": "apply",
+        "outcome": "opted_out",
+        "transition": "end_exit",
+        "enrollmentStatus": "opted_out",
+        "effects": [
+          "cancel_pending_all_strategies",
+          "suppress_purpose_channel"
+        ],
+        "incident": false
+      }
+    },
+    {
+      "name": "resolve · outcome · opted_out con on.opted_out = next_step: se ignora la estrategia (end_exit) e incidente (#10)",
+      "kind": "outcome",
+      "contractRef": "#10 («diga lo que diga la estrategia»)",
+      "basis": "decision-fixture",
+      "decision": "DF-O5",
+      "outcome": "opted_out",
+      "source": "staff",
+      "confidence": null,
+      "on": {
+        "opted_out": "next_step"
+      },
+      "attempt": 1,
+      "expected": {
+        "verdict": "apply",
+        "outcome": "opted_out",
+        "transition": "end_exit",
+        "enrollmentStatus": "opted_out",
+        "effects": [
+          "cancel_pending_all_strategies",
+          "suppress_purpose_channel"
+        ],
+        "incident": true
+      }
+    },
+    {
+      "name": "resolve · outcome · crm_fact → appointment_booked: end_success",
+      "kind": "outcome",
+      "contractRef": "D9-10",
+      "basis": "contrato",
+      "outcome": "appointment_booked",
+      "source": "crm_fact",
+      "confidence": null,
+      "on": null,
+      "attempt": 1,
+      "expected": {
+        "verdict": "apply",
+        "outcome": "appointment_booked",
+        "transition": "end_success",
+        "enrollmentStatus": "completed",
+        "effects": [],
+        "incident": false
+      }
+    },
+    {
+      "name": "resolve · outcome · crm_fact → converted: end_success",
+      "kind": "outcome",
+      "contractRef": "D9-10",
+      "basis": "contrato",
+      "outcome": "converted",
+      "source": "crm_fact",
+      "confidence": null,
+      "on": null,
+      "attempt": 1,
+      "expected": {
+        "verdict": "apply",
+        "outcome": "converted",
+        "transition": "end_success",
+        "enrollmentStatus": "completed",
+        "effects": [],
+        "incident": false
+      }
+    },
+    {
+      "name": "resolve · outcome · system → converted (success reevaluado): end_success (#4)",
+      "kind": "outcome",
+      "contractRef": "#4 de §13.1",
+      "basis": "contrato",
+      "outcome": "converted",
+      "source": "system",
+      "confidence": null,
+      "on": null,
+      "attempt": 1,
+      "expected": {
+        "verdict": "apply",
+        "outcome": "converted",
+        "transition": "end_success",
+        "enrollmentStatus": "completed",
+        "effects": [],
+        "incident": false
+      }
+    },
+    {
+      "name": "resolve · outcome · system → no_response: end_exit y estado expired",
+      "kind": "outcome",
+      "contractRef": "D9-10",
+      "basis": "decision-fixture",
+      "decision": "DF-O7",
+      "outcome": "no_response",
+      "source": "system",
+      "confidence": null,
+      "on": null,
+      "attempt": 1,
+      "expected": {
+        "verdict": "apply",
+        "outcome": "no_response",
+        "transition": "end_exit",
+        "enrollmentStatus": "expired",
+        "effects": [],
+        "incident": false
+      }
+    },
+    {
+      "name": "resolve · outcome · system → blocked: wait por defecto",
+      "kind": "outcome",
+      "contractRef": "D9-10",
+      "basis": "contrato",
+      "outcome": "blocked",
+      "source": "system",
+      "confidence": null,
+      "on": null,
+      "attempt": 1,
+      "expected": {
+        "verdict": "apply",
+        "outcome": "blocked",
+        "transition": "wait",
+        "enrollmentStatus": "waiting",
+        "effects": [],
+        "incident": false
+      }
+    },
+    {
+      "name": "resolve · outcome · system → ambiguous: sin transición automática; se concilia",
+      "kind": "outcome",
+      "contractRef": "D9-10",
+      "basis": "contrato",
+      "outcome": "ambiguous",
+      "source": "system",
+      "confidence": null,
+      "on": null,
+      "attempt": 1,
+      "expected": {
+        "verdict": "apply",
+        "outcome": "ambiguous",
+        "transition": null,
+        "enrollmentStatus": null,
+        "effects": [
+          "reconcile"
+        ],
+        "incident": false
+      }
+    },
+    {
+      "name": "resolve · outcome · staff no puede producir converted → ignore e incidente (T14)",
+      "kind": "outcome",
+      "contractRef": "T14",
+      "basis": "decision-fixture",
+      "decision": "DF-O2",
+      "outcome": "converted",
+      "source": "staff",
+      "confidence": null,
+      "on": null,
+      "attempt": 1,
+      "expected": {
+        "verdict": "ignore",
+        "outcome": null,
+        "transition": null,
+        "enrollmentStatus": null,
+        "effects": [],
+        "incident": true
+      }
+    },
+    {
+      "name": "resolve · outcome · simulated no puede producir answered → ignore",
+      "kind": "outcome",
+      "contractRef": "T14",
+      "basis": "decision-fixture",
+      "decision": "DF-O2",
+      "outcome": "answered",
+      "source": "simulated",
+      "confidence": null,
+      "on": null,
+      "attempt": 1,
+      "expected": {
+        "verdict": "ignore",
+        "outcome": null,
+        "transition": null,
+        "enrollmentStatus": null,
+        "effects": [],
+        "incident": true
+      }
+    },
+    {
+      "name": "resolve · outcome · un código desconocido (maybe_later) → ignore e incidente (T14)",
+      "kind": "outcome",
+      "contractRef": "T14",
+      "basis": "decision-fixture",
+      "decision": "DF-O2",
+      "outcome": "maybe_later",
+      "source": "staff",
+      "confidence": null,
+      "on": null,
+      "attempt": 1,
+      "expected": {
+        "verdict": "ignore",
+        "outcome": null,
+        "transition": null,
+        "enrollmentStatus": null,
+        "effects": [],
+        "incident": true
+      }
+    },
+    {
+      "name": "resolve · outcome · una fuente desconocida (n8n) → ignore",
+      "kind": "outcome",
+      "contractRef": "T14, §6.2",
+      "basis": "decision-fixture",
+      "decision": "DF-O2",
+      "outcome": "answered",
+      "source": "n8n",
+      "confidence": null,
+      "on": null,
+      "attempt": 1,
+      "expected": {
+        "verdict": "ignore",
+        "outcome": null,
+        "transition": null,
+        "enrollmentStatus": null,
+        "effects": [],
+        "incident": true
+      }
+    },
+    {
+      "name": "resolve · outcome · staff → replied: replied solo lo produce inbound_message → ignore",
+      "kind": "outcome",
+      "contractRef": "D9-10",
+      "basis": "decision-fixture",
+      "decision": "DF-O1",
+      "outcome": "replied",
+      "source": "staff",
+      "confidence": null,
+      "on": null,
+      "attempt": 1,
+      "expected": {
+        "verdict": "ignore",
+        "outcome": null,
+        "transition": null,
+        "enrollmentStatus": null,
+        "effects": [],
+        "incident": true
+      }
+    },
+    {
+      "name": "resolve · outcome · on con una transición no permitida (answered → wait): rige el defecto e incidente",
+      "kind": "outcome",
+      "contractRef": "D9-10",
+      "basis": "decision-fixture",
+      "decision": "DF-O5",
+      "outcome": "answered",
+      "source": "staff",
+      "confidence": null,
+      "on": {
+        "answered": "wait"
+      },
+      "attempt": 1,
+      "expected": {
+        "verdict": "apply",
+        "outcome": "answered",
+        "transition": "end_exit",
+        "enrollmentStatus": "exited",
+        "effects": [],
+        "incident": true
+      }
+    },
+    {
+      "name": "resolve · outcome · W9: inbound_message → replied: handoff_human (nunca otro contacto automático)",
+      "kind": "outcome",
+      "contractRef": "D9-10",
+      "basis": "contrato",
+      "outcome": "replied",
+      "source": "inbound_message",
+      "confidence": null,
+      "on": null,
+      "attempt": 1,
+      "expected": {
+        "verdict": "apply",
+        "outcome": "replied",
+        "transition": "handoff_human",
+        "enrollmentStatus": "handed_off",
+        "effects": [],
+        "incident": false
+      }
+    },
+    {
+      "name": "resolve · outcome · W9: replied con on.replied = end_exit",
+      "kind": "outcome",
+      "contractRef": "D9-10",
+      "basis": "contrato",
+      "outcome": "replied",
+      "source": "inbound_message",
+      "confidence": null,
+      "on": {
+        "replied": "end_exit"
+      },
+      "attempt": 1,
+      "expected": {
+        "verdict": "apply",
+        "outcome": "replied",
+        "transition": "end_exit",
+        "enrollmentStatus": "exited",
+        "effects": [],
+        "incident": false
+      }
+    },
+    {
+      "name": "resolve · outcome · W9: meta_status → delivered: no terminal",
+      "kind": "outcome",
+      "contractRef": "D9-10",
+      "basis": "contrato",
+      "outcome": "delivered",
+      "source": "meta_status",
+      "confidence": null,
+      "on": null,
+      "attempt": 1,
+      "expected": {
+        "verdict": "apply",
+        "outcome": "delivered",
+        "transition": null,
+        "enrollmentStatus": null,
+        "effects": [],
+        "incident": false
+      }
+    },
+    {
+      "name": "resolve · outcome · V9: voice_call → no_answer (buzón): end_exit por defecto",
+      "kind": "outcome",
+      "contractRef": "D9-10",
+      "basis": "contrato",
+      "outcome": "no_answer",
+      "source": "voice_call",
+      "confidence": null,
+      "on": null,
+      "attempt": 1,
+      "expected": {
+        "verdict": "apply",
+        "outcome": "no_answer",
+        "transition": "end_exit",
+        "enrollmentStatus": "exited",
+        "effects": [],
+        "incident": false
+      }
+    },
+    {
+      "name": "resolve · outcome · clasificador: etiqueta ambiguous → needs_review, para y tarea asistida (#21)",
+      "kind": "outcome",
+      "contractRef": "#21 de §13.1, P9-6",
+      "basis": "decision-fixture",
+      "decision": "DF-O3",
+      "outcome": "ambiguous",
+      "source": "classifier",
+      "confidence": 99,
+      "on": null,
+      "attempt": 1,
+      "expected": {
+        "verdict": "needs_review",
+        "outcome": null,
+        "transition": "handoff_human",
+        "enrollmentStatus": "handed_off",
+        "effects": [
+          "assisted_task"
+        ],
+        "incident": false
+      }
+    },
+    {
+      "name": "resolve · outcome · clasificador: opted_out con 55 (umbral bajo) → se acepta",
+      "kind": "outcome",
+      "contractRef": "D9-10 («un opted_out del clasificador se acepta con un umbral bajo»)",
+      "basis": "decision-fixture",
+      "decision": "DF-O3",
+      "outcome": "opted_out",
+      "source": "classifier",
+      "confidence": 55,
+      "on": null,
+      "attempt": 1,
+      "expected": {
+        "verdict": "apply",
+        "outcome": "opted_out",
+        "transition": "end_exit",
+        "enrollmentStatus": "opted_out",
+        "effects": [
+          "cancel_pending_all_strategies",
+          "suppress_purpose_channel"
+        ],
+        "incident": false
+      }
+    },
+    {
+      "name": "resolve · outcome · clasificador: opted_out con 49 → needs_review",
+      "kind": "outcome",
+      "contractRef": "D9-10",
+      "basis": "decision-fixture",
+      "decision": "DF-O3",
+      "outcome": "opted_out",
+      "source": "classifier",
+      "confidence": 49,
+      "on": null,
+      "attempt": 1,
+      "expected": {
+        "verdict": "needs_review",
+        "outcome": null,
+        "transition": "handoff_human",
+        "enrollmentStatus": "handed_off",
+        "effects": [
+          "assisted_task"
+        ],
+        "incident": false
+      }
+    },
+    {
+      "name": "resolve · outcome · clasificador: not_interested con 89 (por debajo del alto) → needs_review",
+      "kind": "outcome",
+      "contractRef": "D9-10",
+      "basis": "decision-fixture",
+      "decision": "DF-O3",
+      "outcome": "not_interested",
+      "source": "classifier",
+      "confidence": 89,
+      "on": null,
+      "attempt": 1,
+      "expected": {
+        "verdict": "needs_review",
+        "outcome": null,
+        "transition": "handoff_human",
+        "enrollmentStatus": "handed_off",
+        "effects": [
+          "assisted_task"
+        ],
+        "incident": false
+      }
+    },
+    {
+      "name": "resolve · outcome · clasificador: not_interested con 90 → end_exit",
+      "kind": "outcome",
+      "contractRef": "D9-10",
+      "basis": "decision-fixture",
+      "decision": "DF-O3",
+      "outcome": "not_interested",
+      "source": "classifier",
+      "confidence": 90,
+      "on": null,
+      "attempt": 1,
+      "expected": {
+        "verdict": "apply",
+        "outcome": "not_interested",
+        "transition": "end_exit",
+        "enrollmentStatus": "exited",
+        "effects": [
+          "cooldown"
+        ],
+        "incident": false
+      }
+    },
+    {
+      "name": "resolve · outcome · clasificador: callback_requested con la estrategia pidiendo wait → wait (permitida a la IA)",
+      "kind": "outcome",
+      "contractRef": "D9-10 (regla asimétrica)",
+      "basis": "contrato",
+      "decision": "DF-O4",
+      "outcome": "callback_requested",
+      "source": "classifier",
+      "confidence": 95,
+      "on": {
+        "callback_requested": "wait"
+      },
+      "attempt": 1,
+      "expected": {
+        "verdict": "apply",
+        "outcome": "callback_requested",
+        "transition": "wait",
+        "enrollmentStatus": "waiting",
+        "effects": [],
+        "incident": false
+      }
+    },
+    {
+      "name": "resolve · outcome · clasificador: sin confidence → needs_review",
+      "kind": "outcome",
+      "contractRef": "D9-10",
+      "basis": "decision-fixture",
+      "decision": "DF-O3",
+      "outcome": "callback_requested",
+      "source": "classifier",
+      "confidence": null,
+      "on": null,
+      "attempt": 1,
+      "expected": {
+        "verdict": "needs_review",
+        "outcome": null,
+        "transition": "handoff_human",
+        "enrollmentStatus": "handed_off",
+        "effects": [
+          "assisted_task"
+        ],
+        "incident": false
+      }
+    },
+    {
+      "name": "resolve · outcome · clasificador: human_requested con 95 → handoff_human",
+      "kind": "outcome",
+      "contractRef": "D9-10",
+      "basis": "contrato",
+      "outcome": "human_requested",
+      "source": "classifier",
+      "confidence": 95,
+      "on": null,
+      "attempt": 1,
+      "expected": {
+        "verdict": "apply",
+        "outcome": "human_requested",
+        "transition": "handoff_human",
+        "enrollmentStatus": "handed_off",
+        "effects": [
+          "assisted_task"
+        ],
+        "incident": false
+      }
+    },
+    {
+      "name": "resolve · outcome · clasificador: no puede producir answered (no es fuente) → ignore",
+      "kind": "outcome",
+      "contractRef": "D9-10",
+      "basis": "decision-fixture",
+      "decision": "DF-O2",
+      "outcome": "answered",
+      "source": "classifier",
+      "confidence": 99,
+      "on": null,
+      "attempt": 1,
+      "expected": {
+        "verdict": "ignore",
+        "outcome": null,
+        "transition": null,
+        "enrollmentStatus": null,
+        "effects": [],
+        "incident": true
+      }
+    },
+    {
+      "name": "resolve · outcome · clasificador: callback_requested con on = next_step (ni la tabla ni la regla asimétrica lo permiten) → wait e incidente",
+      "kind": "outcome",
+      "contractRef": "D9-10 (regla asimétrica, P9-6)",
+      "basis": "decision-fixture",
+      "decision": "DF-O5",
+      "outcome": "callback_requested",
+      "source": "classifier",
+      "confidence": 95,
+      "on": {
+        "callback_requested": "next_step"
+      },
+      "attempt": 1,
+      "expected": {
+        "verdict": "apply",
+        "outcome": "callback_requested",
+        "transition": "wait",
+        "enrollmentStatus": "waiting",
+        "effects": [],
+        "incident": true
+      }
+    }
+  ]
+}

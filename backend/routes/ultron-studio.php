@@ -6,8 +6,13 @@ use App\Http\Controllers\Crm\UltronStudio\UltronStudioController;
 use App\Http\Controllers\Crm\UltronStudio\UltronStudioIntegrationController;
 use App\Http\Controllers\Crm\UltronStudio\UltronStudioLabController;
 use App\Http\Controllers\Crm\UltronStudio\UltronStudioLabScenarioController;
+use App\Http\Controllers\Crm\UltronStudio\UltronStudioOutreachController;
 use App\Http\Controllers\Crm\UltronStudio\UltronStudioPublicationController;
 use App\Http\Controllers\Crm\UltronStudio\UltronStudioRuleController;
+use App\Http\Controllers\Crm\UltronStudio\UltronStudioStrategyController;
+use App\Http\Controllers\Crm\UltronStudio\UltronStudioStrategyPersonBindingController;
+use App\Http\Controllers\Crm\UltronStudio\UltronStudioStrategyTemplateController;
+use App\Http\Controllers\Crm\UltronStudio\UltronStudioStreamController;
 use App\Http\Controllers\Crm\UltronStudio\UltronStudioVersionController;
 use App\Http\Controllers\Crm\UltronStudio\UltronStudioVoiceController;
 use App\Http\Controllers\Crm\UltronStudio\UltronStudioVoiceLabController;
@@ -210,4 +215,71 @@ Route::prefix('admin/ultron-studio')->middleware(LimitRequestBodySize::class.':6
         Route::post('voice-lab/sessions/{uuid}/end', [UltronStudioVoiceLabController::class, 'end'])->whereUuid('uuid');
         Route::post('voice-lab/sessions/{uuid}/verdict', [UltronStudioVoiceLabController::class, 'verdict'])->whereUuid('uuid');
     });
+
+    /*
+    | Hito 9 (docs/ultron-studio/ULTRON_STUDIO_H9_CONTRACT.md, §7; paquete S9):
+    | el GOBIERNO DE LAS ESTRATEGIAS, `strategies/**`, 30 rutas (107 en total).
+    | La lista con su permiso, una a una, es UltronStudioStrategyController::ROUTES.
+    | Cerraduras: la puerta (AuthorizationMap) → una persona → la bandera maestra
+    | (409 `strategies_disabled` en TODAS, también las lecturas) → la llave → la
+    | persona VERIFICADA y los cuatro ojos por persona → la bandera de publicar
+    | (publicar, promover y reanudar: 409 `strategies_publishing_disabled`).
+    | `validate` es pura (con las lecturas). Simular escribe una fila y lee
+    | hasta 200 personas: además del cupo de escritura, el limitador de las
+    | lecturas caras (`ultron-studio-evidence`), como la evidencia y promover.
+    | Las rutas con {uuid} van con `whereUuid`: no chocan con los literales
+    | (`catalog`, `versions`, `templates`, `person-bindings`). CERO RED.
+    */
+    Route::middleware('throttle:ultron-studio-read')->group(function (): void {
+        Route::get('strategies/catalog', [UltronStudioStrategyController::class, 'catalog']);
+        Route::get('strategies', [UltronStudioStrategyController::class, 'index']);
+        Route::get('strategies/templates', [UltronStudioStrategyTemplateController::class, 'index']);
+        Route::get('strategies/templates/{uuid}', [UltronStudioStrategyTemplateController::class, 'show'])->whereUuid('uuid');
+        Route::get('strategies/person-bindings', [UltronStudioStrategyPersonBindingController::class, 'index']);
+        Route::get('strategies/versions/{uuid}', [UltronStudioStrategyController::class, 'showVersion'])->whereUuid('uuid');
+        Route::get('strategies/versions/{uuid}/simulations', [UltronStudioStrategyController::class, 'simulations'])->whereUuid('uuid');
+        Route::get('strategies/versions/{uuid}/canary-evidence', [UltronStudioStrategyController::class, 'evidence'])->whereUuid('uuid')->middleware('throttle:ultron-studio-evidence');
+        Route::get('strategies/{uuid}', [UltronStudioStrategyController::class, 'show'])->whereUuid('uuid');
+        Route::get('strategies/{uuid}/publications', [UltronStudioStrategyController::class, 'publications'])->whereUuid('uuid');
+        Route::post('strategies/{uuid}/validate', [UltronStudioStrategyController::class, 'validateDraft'])->whereUuid('uuid');
+    });
+
+    Route::middleware('throttle:ultron-studio-write')->group(function (): void {
+        Route::post('strategies', [UltronStudioStrategyController::class, 'store']);
+        Route::put('strategies/{uuid}/draft', [UltronStudioStrategyController::class, 'saveDraft'])->whereUuid('uuid');
+        Route::post('strategies/{uuid}/versions', [UltronStudioStrategyController::class, 'freeze'])->whereUuid('uuid');
+        Route::post('strategies/{uuid}/simulations', [UltronStudioStrategyController::class, 'simulateDraft'])->whereUuid('uuid')->middleware('throttle:ultron-studio-evidence');
+        Route::post('strategies/{uuid}/pause', [UltronStudioStrategyController::class, 'pause'])->whereUuid('uuid');
+        Route::post('strategies/{uuid}/resume', [UltronStudioStrategyController::class, 'resume'])->whereUuid('uuid');
+        Route::post('strategies/{uuid}/rollback', [UltronStudioStrategyController::class, 'rollback'])->whereUuid('uuid');
+        Route::post('strategies/{uuid}/archive', [UltronStudioStrategyController::class, 'archive'])->whereUuid('uuid');
+        Route::post('strategies/versions/{uuid}/simulations', [UltronStudioStrategyController::class, 'simulateVersion'])->whereUuid('uuid')->middleware('throttle:ultron-studio-evidence');
+        Route::post('strategies/versions/{uuid}/approve', [UltronStudioStrategyController::class, 'approve'])->whereUuid('uuid');
+        Route::post('strategies/versions/{uuid}/reject', [UltronStudioStrategyController::class, 'reject'])->whereUuid('uuid');
+        Route::post('strategies/versions/{uuid}/publish', [UltronStudioStrategyController::class, 'publish'])->whereUuid('uuid');
+        Route::post('strategies/versions/{uuid}/promote', [UltronStudioStrategyController::class, 'promote'])->whereUuid('uuid')->middleware('throttle:ultron-studio-evidence');
+        Route::post('strategies/templates', [UltronStudioStrategyTemplateController::class, 'store']);
+        Route::post('strategies/templates/{uuid}/approve', [UltronStudioStrategyTemplateController::class, 'approve'])->whereUuid('uuid');
+        Route::post('strategies/templates/{uuid}/reject', [UltronStudioStrategyTemplateController::class, 'reject'])->whereUuid('uuid');
+        Route::post('strategies/person-bindings', [UltronStudioStrategyPersonBindingController::class, 'store']);
+        Route::post('strategies/person-bindings/{uuid}/verify', [UltronStudioStrategyPersonBindingController::class, 'verify'])->whereUuid('uuid');
+        Route::post('strategies/person-bindings/{uuid}/revoke', [UltronStudioStrategyPersonBindingController::class, 'revoke'])->whereUuid('uuid');
+    });
+
+    // Hito 9 · B9-run: la ejecución (13 rutas outreach/**; contrato H9 §7 E1–E13, L9-43).
+    UltronStudioOutreachController::routes();
+});
+
+/*
+| Hito 9 (docs/ultron-studio/ULTRON_STUDIO_H9_CONTRACT.md, «Paquete SSE9»; L9-43):
+| el CANAL SSE ÚNICO del Studio, 1 ruta (UltronStudioStreamController::ROUTE_COUNT).
+| Un GET por pestaña del CRM con temas por módulo; solo lee; cero red. Se abre con
+| el vale (`?ticket=`, que EnsureAdminAuth admite en las rutas que terminan en `/stream`). Puerta
+| `ultron.view` en AuthorizationMap (la entrada va en la rama del Hito 9) → una
+| persona → la bandera (409 `stream_disabled`) → el permiso de la lista de cada
+| tema. Limitador propio por tique (`studio-stream`, declarado en el controlador).
+| Mismo tope de cuerpo que el resto del Studio, por uniformidad (es un GET).
+*/
+Route::prefix('admin/ultron-studio')->middleware(LimitRequestBodySize::class.':65536')->group(function (): void {
+    Route::get('stream', [UltronStudioStreamController::class, 'stream']);
 });

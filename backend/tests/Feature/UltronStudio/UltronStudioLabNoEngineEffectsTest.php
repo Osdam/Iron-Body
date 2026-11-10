@@ -321,7 +321,9 @@ class UltronStudioLabNoEngineEffectsTest extends TestCase
             // hablado lleva a propósito el limitador del laboratorio de texto).
             if (str_starts_with($route->uri(), 'api/admin/ultron-studio') && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/lab/')
                 && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/integrations/')
-                && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/voice/') && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/voice-lab/')) {
+                && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/voice/') && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/voice-lab/')
+                // Las 44 del Hito 9 (strategies/**, stream, outreach/**) tienen las suyas (L9-38): Strategies/UltronStudioStrategyRoutesTest, Stream/* y Outreach/Guards/*.
+                && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/strategies') && $route->uri() !== 'api/admin/ultron-studio/stream' && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/outreach/')) {
                 $clave = AuthorizationMap::routeKey($route);
                 if (array_key_exists($clave, $h5)) {
                     $deH5[$clave] = AuthorizationMap::resolve($route);

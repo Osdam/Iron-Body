@@ -558,7 +558,9 @@ class UltronStudioIntegrationsParityHttpTest extends TestCase
         if ($caso['kind'] === 'legacy') {
             // Hito 8: las 21 de la voz tienen su propia matriz (UltronStudioVoiceRoutesTest).
             $todas = collect(app('router')->getRoutes()->getRoutes())->filter(fn ($r) => str_starts_with($r->uri(), 'api/admin/ultron-studio')
-                && ! str_starts_with($r->uri(), 'api/admin/ultron-studio/voice/') && ! str_starts_with($r->uri(), 'api/admin/ultron-studio/voice-lab/'));
+                && ! str_starts_with($r->uri(), 'api/admin/ultron-studio/voice/') && ! str_starts_with($r->uri(), 'api/admin/ultron-studio/voice-lab/')
+                // Las 44 del Hito 9 (strategies/**, stream, outreach/**) tienen las suyas (L9-38): Strategies/UltronStudioStrategyRoutesTest, Stream/* y Outreach/Guards/*.
+                && ! str_starts_with($r->uri(), 'api/admin/ultron-studio/strategies') && $r->uri() !== 'api/admin/ultron-studio/stream' && ! str_starts_with($r->uri(), 'api/admin/ultron-studio/outreach/'));
             $this->assertCount($caso['expected']['studioRoutesTotal'], $todas);
             $this->assertCount($caso['count'], $todas->reject(fn ($r) => str_starts_with($r->uri(), 'api/admin/ultron-studio/integrations/')));
 

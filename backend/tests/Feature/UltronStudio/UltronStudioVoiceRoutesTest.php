@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\UltronStudio;
 
+use App\Http\Controllers\Crm\UltronStudio\StudioRouteCount;
 use App\Http\Controllers\Crm\UltronStudio\UltronStudioVoiceController as C;
 use App\Http\Middleware\LimitRequestBodySize;
 use App\Models\Admin;
@@ -56,7 +57,7 @@ class UltronStudioVoiceRoutesTest extends TestCase
                 $delStudio[AuthorizationMap::routeKey($route)] = $route;
             }
         }
-        $this->assertCount(C::STUDIO_ROUTE_COUNT, $delStudio);
+        $this->assertCount(StudioRouteCount::TOTAL, $delStudio);
 
         foreach (self::nuevas() as [$metodo, $ruta]) {
             $clave = "{$metodo} api/admin/ultron-studio/{$ruta}";

@@ -1,0 +1,1844 @@
+{
+  "fixture": "channel-selection-cases.json",
+  "version": 1,
+  "contract": "backend/docs/ultron-studio/ULTRON_STUDIO_H9_CONTRACT.md (congelado por el lead el 09-11-2026 20:30 UTC; §13.2 renumerado T1–T23)",
+  "contractSections": [
+    "D9-9.2 (selección determinista: recorre la lista ordenada del paso y elige el primer canal elegible; si ninguno y alguno solo falla por tiempo, defer al retryAt más temprano; si no, deny con los motivos de cada canal)",
+    "D9-7 N7 (preference_applied: se reordena solo entre los permitidos; instruction_ignored_by_policy)",
+    "§13.1 #8 (sin consentimiento de voz) y #9 (WhatsApp sí, voz no); §13.2 T13, T19, T22"
+  ],
+  "generatedBy": "tests/fixtures/outreach/tools/build/build.py (python3 -I), con los casos a mano en sec_*.py",
+  "checkedBy": "tests/Unit/Outreach/FixturesSanityTest.php (forma, unicidad, canonicalización y huellas, sin código del motor)",
+  "readme": "tests/fixtures/outreach/README.md",
+  "basisLegend": {
+    "contrato": "Lo dice el contrato H9 tal cual (contractRef).",
+    "ley": "Lo dice la ley citada (Ley 2300 de 2023, Ley 1581 de 2012, Ley 51 de 1983, Ley 2578 de 2026).",
+    "codigo-existente": "Lo hace hoy el código que el contrato manda reutilizar o igualar (ContactPolicy, OutboundSchedule, ColombianHolidays, VoiceFrequency, StudioContentHasher…); la cita va en contractRef.",
+    "supuesto-lead": "Sigue un supuesto de la congelación del lead (P9-n), que el propietario puede cambiar.",
+    "decision-fixture": "El contrato no lo fija: lo decide este fixture (campo decision; README §Decisiones). Lo congela el lead."
+  },
+  "sources": [
+    {
+      "what": "El contrato del H9 (D9-3 a D9-11, §5, §6, §13 y la Congelación)",
+      "url": "backend/docs/ultron-studio/ULTRON_STUDIO_H9_CONTRACT.md",
+      "consulted": "09-11-2026, en este árbol (sin seguimiento: lo congela el lead)",
+      "how": "Lectura completa; cada caso cita su sección en contractRef."
+    },
+    {
+      "what": "El veredicto de la escalera por canal",
+      "url": "tests/fixtures/outreach/policy-ladder-cases.json (baseInput y su referencia)",
+      "consulted": "09-11-2026",
+      "how": "Cada canal se evalúa con baseInput + el patch del caso + {channel}; el selector solo mira verdict, level, reasons y retryAt."
+    }
+  ],
+  "syntheticData": "Ningún dato real: ids, uuids, claves y personas inventados; las personas se nombran por subject_key sintético (m:<id>, l:<id>); sin teléfonos, nombres, documentos ni importes.",
+  "interface": {
+    "choose": "ChannelSelector::choose(channels (orden del paso), perChannel {canal: {verdict, level, reasons, retryAt}}, preferredMedium|null) → {verdict: selected|defer|deny, channel|null, retryAt|null, order (el orden efectivo), annotations, perChannel (en el orden declarado, para la traza «por qué este canal y no aquel»)}"
+  },
+  "decisions": {
+    "DF-L5": "N4 en sombra: sends_disabled_in_code, channel_disabled, channel_not_live, budget_zero, budget_exhausted, channel_daily_cap y assisted_capacity_reached son avisos (D9-8 nombra los tres primeros y «los presupuestos»; channel_not_live se añade para que una estrategia de WhatsApp o voz se pueda simular antes de W9/V9; ratificada por el lead: L9-16). La plantilla sin aprobar o de otra categoría niega igual en sombra.",
+    "DF-S1": "Preferencia de la persona (N7): si algún canal de su medio está permitido, los de ese medio pasan delante conservando su orden relativo (preference_applied); si ninguno de su medio está permitido, se ignora (instruction_ignored_by_policy) y manda el orden del paso. Nunca levanta una negativa.",
+    "DF-S2": "Sin canal permitido: defer si al menos un canal sale defer (solo falla por tiempo), con el retryAt más temprano de esos; si todos niegan, deny con los motivos de cada canal (perChannel). Sin azar ni empates: a igualdad manda el orden."
+  },
+  "counts": {
+    "choose": 18,
+    "total": 18
+  },
+  "choose": [
+    {
+      "name": "choose · select · 15-11: WhatsApp y voz automáticos no salen (constante y canal sin implementar) → el asistido",
+      "kind": "select",
+      "contractRef": "T13, T19, D9-9.5",
+      "basis": "contrato",
+      "channels": [
+        "whatsapp_template",
+        "voice_call",
+        "assisted:whatsapp"
+      ],
+      "preferredMedium": null,
+      "perChannel": {
+        "whatsapp_template": {
+          "verdict": "deny",
+          "level": "N4",
+          "reasons": [
+            "sends_disabled_in_code",
+            "channel_not_live",
+            "budget_zero"
+          ],
+          "retryAt": null
+        },
+        "voice_call": {
+          "verdict": "deny",
+          "level": "N4",
+          "reasons": [
+            "sends_disabled_in_code",
+            "channel_not_live",
+            "budget_zero"
+          ],
+          "retryAt": null
+        },
+        "assisted:whatsapp": {
+          "verdict": "allow",
+          "level": null,
+          "reasons": [],
+          "retryAt": null
+        }
+      },
+      "ladderPatchByChannel": {
+        "whatsapp_template": {
+          "flags": {
+            "channelLive": false
+          },
+          "channel": "whatsapp_template"
+        },
+        "voice_call": {
+          "flags": {
+            "channelLive": false
+          },
+          "channel": "voice_call"
+        },
+        "assisted:whatsapp": {
+          "flags": {
+            "channelLive": true
+          },
+          "channel": "assisted:whatsapp"
+        }
+      },
+      "expected": {
+        "verdict": "selected",
+        "channel": "assisted:whatsapp",
+        "retryAt": null,
+        "order": [
+          "whatsapp_template",
+          "voice_call",
+          "assisted:whatsapp"
+        ],
+        "annotations": [],
+        "perChannel": [
+          {
+            "channel": "whatsapp_template",
+            "verdict": "deny",
+            "level": "N4",
+            "reasons": [
+              "sends_disabled_in_code",
+              "channel_not_live",
+              "budget_zero"
+            ],
+            "retryAt": null
+          },
+          {
+            "channel": "voice_call",
+            "verdict": "deny",
+            "level": "N4",
+            "reasons": [
+              "sends_disabled_in_code",
+              "channel_not_live",
+              "budget_zero"
+            ],
+            "retryAt": null
+          },
+          {
+            "channel": "assisted:whatsapp",
+            "verdict": "allow",
+            "level": null,
+            "reasons": [],
+            "retryAt": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "choose · select · #9: autorización de WhatsApp y no de voz → WhatsApp, nunca voz (aunque el paso ponga la voz primero)",
+      "kind": "select",
+      "contractRef": "#9 de §13.1, T13",
+      "basis": "contrato",
+      "channels": [
+        "voice_call",
+        "whatsapp_template"
+      ],
+      "preferredMedium": null,
+      "perChannel": {
+        "voice_call": {
+          "verdict": "deny",
+          "level": "N1",
+          "reasons": [
+            "no_consent_for_purpose_channel"
+          ],
+          "retryAt": null
+        },
+        "whatsapp_template": {
+          "verdict": "allow",
+          "level": null,
+          "reasons": [],
+          "retryAt": null
+        }
+      },
+      "ladderPatchByChannel": {
+        "voice_call": {
+          "flags": {
+            "sendsEnabledInCode": true
+          },
+          "budget": {
+            "dailyBudgetMicros": 1000000,
+            "channelDailyCap": 10,
+            "costMicros": 5000
+          },
+          "consent": {
+            "voice": "none"
+          },
+          "channel": "voice_call"
+        },
+        "whatsapp_template": {
+          "flags": {
+            "sendsEnabledInCode": true
+          },
+          "budget": {
+            "dailyBudgetMicros": 1000000,
+            "channelDailyCap": 10,
+            "costMicros": 5000
+          },
+          "consent": {
+            "voice": "none"
+          },
+          "channel": "whatsapp_template"
+        }
+      },
+      "expected": {
+        "verdict": "selected",
+        "channel": "whatsapp_template",
+        "retryAt": null,
+        "order": [
+          "voice_call",
+          "whatsapp_template"
+        ],
+        "annotations": [],
+        "perChannel": [
+          {
+            "channel": "voice_call",
+            "verdict": "deny",
+            "level": "N1",
+            "reasons": [
+              "no_consent_for_purpose_channel"
+            ],
+            "retryAt": null
+          },
+          {
+            "channel": "whatsapp_template",
+            "verdict": "allow",
+            "level": null,
+            "reasons": [],
+            "retryAt": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "choose · select · #8: sin consentimiento de voz → voz denegada en N1 y el selector toma WhatsApp",
+      "kind": "select",
+      "contractRef": "#8 de §13.1",
+      "basis": "contrato",
+      "channels": [
+        "voice_call",
+        "whatsapp_template",
+        "assisted:whatsapp"
+      ],
+      "preferredMedium": null,
+      "perChannel": {
+        "voice_call": {
+          "verdict": "deny",
+          "level": "N1",
+          "reasons": [
+            "no_consent_for_purpose_channel"
+          ],
+          "retryAt": null
+        },
+        "whatsapp_template": {
+          "verdict": "allow",
+          "level": null,
+          "reasons": [],
+          "retryAt": null
+        },
+        "assisted:whatsapp": {
+          "verdict": "allow",
+          "level": null,
+          "reasons": [],
+          "retryAt": null
+        }
+      },
+      "ladderPatchByChannel": {
+        "voice_call": {
+          "flags": {
+            "sendsEnabledInCode": true
+          },
+          "budget": {
+            "dailyBudgetMicros": 1000000,
+            "channelDailyCap": 10,
+            "costMicros": 5000
+          },
+          "consent": {
+            "voice": "none"
+          },
+          "channel": "voice_call"
+        },
+        "whatsapp_template": {
+          "flags": {
+            "sendsEnabledInCode": true
+          },
+          "budget": {
+            "dailyBudgetMicros": 1000000,
+            "channelDailyCap": 10,
+            "costMicros": 5000
+          },
+          "consent": {
+            "voice": "none"
+          },
+          "channel": "whatsapp_template"
+        },
+        "assisted:whatsapp": {
+          "flags": {
+            "sendsEnabledInCode": true
+          },
+          "budget": {
+            "dailyBudgetMicros": 1000000,
+            "channelDailyCap": 10,
+            "costMicros": 5000
+          },
+          "consent": {
+            "voice": "none"
+          },
+          "channel": "assisted:whatsapp"
+        }
+      },
+      "expected": {
+        "verdict": "selected",
+        "channel": "whatsapp_template",
+        "retryAt": null,
+        "order": [
+          "voice_call",
+          "whatsapp_template",
+          "assisted:whatsapp"
+        ],
+        "annotations": [],
+        "perChannel": [
+          {
+            "channel": "voice_call",
+            "verdict": "deny",
+            "level": "N1",
+            "reasons": [
+              "no_consent_for_purpose_channel"
+            ],
+            "retryAt": null
+          },
+          {
+            "channel": "whatsapp_template",
+            "verdict": "allow",
+            "level": null,
+            "reasons": [],
+            "retryAt": null
+          },
+          {
+            "channel": "assisted:whatsapp",
+            "verdict": "allow",
+            "level": null,
+            "reasons": [],
+            "retryAt": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "choose · select · #8: sin consentimiento de voz ni WhatsApp automático disponible → el asistido por WhatsApp",
+      "kind": "select",
+      "contractRef": "#8 de §13.1 («si no, asistido»)",
+      "basis": "contrato",
+      "channels": [
+        "voice_call",
+        "whatsapp_template",
+        "assisted:whatsapp"
+      ],
+      "preferredMedium": null,
+      "perChannel": {
+        "voice_call": {
+          "verdict": "deny",
+          "level": "N1",
+          "reasons": [
+            "no_consent_for_purpose_channel"
+          ],
+          "retryAt": null
+        },
+        "whatsapp_template": {
+          "verdict": "deny",
+          "level": "N4",
+          "reasons": [
+            "sends_disabled_in_code",
+            "budget_zero"
+          ],
+          "retryAt": null
+        },
+        "assisted:whatsapp": {
+          "verdict": "allow",
+          "level": null,
+          "reasons": [],
+          "retryAt": null
+        }
+      },
+      "ladderPatchByChannel": {
+        "voice_call": {
+          "consent": {
+            "voice": "none"
+          },
+          "channel": "voice_call"
+        },
+        "whatsapp_template": {
+          "consent": {
+            "voice": "none"
+          },
+          "channel": "whatsapp_template"
+        },
+        "assisted:whatsapp": {
+          "consent": {
+            "voice": "none"
+          },
+          "channel": "assisted:whatsapp"
+        }
+      },
+      "expected": {
+        "verdict": "selected",
+        "channel": "assisted:whatsapp",
+        "retryAt": null,
+        "order": [
+          "voice_call",
+          "whatsapp_template",
+          "assisted:whatsapp"
+        ],
+        "annotations": [],
+        "perChannel": [
+          {
+            "channel": "voice_call",
+            "verdict": "deny",
+            "level": "N1",
+            "reasons": [
+              "no_consent_for_purpose_channel"
+            ],
+            "retryAt": null
+          },
+          {
+            "channel": "whatsapp_template",
+            "verdict": "deny",
+            "level": "N4",
+            "reasons": [
+              "sends_disabled_in_code",
+              "budget_zero"
+            ],
+            "retryAt": null
+          },
+          {
+            "channel": "assisted:whatsapp",
+            "verdict": "allow",
+            "level": null,
+            "reasons": [],
+            "retryAt": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "choose · select · T13: sin autorización de WhatsApp → voz si hay voice_consents",
+      "kind": "select",
+      "contractRef": "T13",
+      "basis": "contrato",
+      "channels": [
+        "whatsapp_template",
+        "voice_call",
+        "assisted:whatsapp"
+      ],
+      "preferredMedium": null,
+      "perChannel": {
+        "whatsapp_template": {
+          "verdict": "deny",
+          "level": "N1",
+          "reasons": [
+            "no_consent_for_purpose_channel"
+          ],
+          "retryAt": null
+        },
+        "voice_call": {
+          "verdict": "allow",
+          "level": null,
+          "reasons": [],
+          "retryAt": null
+        },
+        "assisted:whatsapp": {
+          "verdict": "deny",
+          "level": "N1",
+          "reasons": [
+            "no_consent_for_purpose_channel"
+          ],
+          "retryAt": null
+        }
+      },
+      "ladderPatchByChannel": {
+        "whatsapp_template": {
+          "flags": {
+            "sendsEnabledInCode": true
+          },
+          "budget": {
+            "dailyBudgetMicros": 1000000,
+            "channelDailyCap": 10,
+            "costMicros": 5000
+          },
+          "consent": {
+            "whatsapp": "none"
+          },
+          "channel": "whatsapp_template"
+        },
+        "voice_call": {
+          "flags": {
+            "sendsEnabledInCode": true
+          },
+          "budget": {
+            "dailyBudgetMicros": 1000000,
+            "channelDailyCap": 10,
+            "costMicros": 5000
+          },
+          "consent": {
+            "whatsapp": "none"
+          },
+          "channel": "voice_call"
+        },
+        "assisted:whatsapp": {
+          "flags": {
+            "sendsEnabledInCode": true
+          },
+          "budget": {
+            "dailyBudgetMicros": 1000000,
+            "channelDailyCap": 10,
+            "costMicros": 5000
+          },
+          "consent": {
+            "whatsapp": "none"
+          },
+          "channel": "assisted:whatsapp"
+        }
+      },
+      "expected": {
+        "verdict": "selected",
+        "channel": "voice_call",
+        "retryAt": null,
+        "order": [
+          "whatsapp_template",
+          "voice_call",
+          "assisted:whatsapp"
+        ],
+        "annotations": [],
+        "perChannel": [
+          {
+            "channel": "whatsapp_template",
+            "verdict": "deny",
+            "level": "N1",
+            "reasons": [
+              "no_consent_for_purpose_channel"
+            ],
+            "retryAt": null
+          },
+          {
+            "channel": "voice_call",
+            "verdict": "allow",
+            "level": null,
+            "reasons": [],
+            "retryAt": null
+          },
+          {
+            "channel": "assisted:whatsapp",
+            "verdict": "deny",
+            "level": "N1",
+            "reasons": [
+              "no_consent_for_purpose_channel"
+            ],
+            "retryAt": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "choose · select · T13: sin autorización de WhatsApp ni de voz → nadie (el asistido exige el consentimiento de su medio): deny con todos los motivos",
+      "kind": "select",
+      "contractRef": "T13 («sin el medio del asistido, deny con todos los motivos»), D9-9.5",
+      "basis": "contrato",
+      "channels": [
+        "whatsapp_template",
+        "voice_call",
+        "assisted:whatsapp",
+        "assisted:voice"
+      ],
+      "preferredMedium": null,
+      "perChannel": {
+        "whatsapp_template": {
+          "verdict": "deny",
+          "level": "N1",
+          "reasons": [
+            "no_consent_for_purpose_channel"
+          ],
+          "retryAt": null
+        },
+        "voice_call": {
+          "verdict": "deny",
+          "level": "N1",
+          "reasons": [
+            "no_consent_for_purpose_channel"
+          ],
+          "retryAt": null
+        },
+        "assisted:whatsapp": {
+          "verdict": "deny",
+          "level": "N1",
+          "reasons": [
+            "no_consent_for_purpose_channel"
+          ],
+          "retryAt": null
+        },
+        "assisted:voice": {
+          "verdict": "deny",
+          "level": "N1",
+          "reasons": [
+            "no_consent_for_purpose_channel"
+          ],
+          "retryAt": null
+        }
+      },
+      "ladderPatchByChannel": {
+        "whatsapp_template": {
+          "flags": {
+            "sendsEnabledInCode": true
+          },
+          "budget": {
+            "dailyBudgetMicros": 1000000,
+            "channelDailyCap": 10,
+            "costMicros": 5000
+          },
+          "consent": {
+            "whatsapp": "none",
+            "voice": "none"
+          },
+          "channel": "whatsapp_template"
+        },
+        "voice_call": {
+          "flags": {
+            "sendsEnabledInCode": true
+          },
+          "budget": {
+            "dailyBudgetMicros": 1000000,
+            "channelDailyCap": 10,
+            "costMicros": 5000
+          },
+          "consent": {
+            "whatsapp": "none",
+            "voice": "none"
+          },
+          "channel": "voice_call"
+        },
+        "assisted:whatsapp": {
+          "flags": {
+            "sendsEnabledInCode": true
+          },
+          "budget": {
+            "dailyBudgetMicros": 1000000,
+            "channelDailyCap": 10,
+            "costMicros": 5000
+          },
+          "consent": {
+            "whatsapp": "none",
+            "voice": "none"
+          },
+          "channel": "assisted:whatsapp"
+        },
+        "assisted:voice": {
+          "flags": {
+            "sendsEnabledInCode": true
+          },
+          "budget": {
+            "dailyBudgetMicros": 1000000,
+            "channelDailyCap": 10,
+            "costMicros": 5000
+          },
+          "consent": {
+            "whatsapp": "none",
+            "voice": "none"
+          },
+          "channel": "assisted:voice"
+        }
+      },
+      "expected": {
+        "verdict": "deny",
+        "channel": null,
+        "retryAt": null,
+        "order": [
+          "whatsapp_template",
+          "voice_call",
+          "assisted:whatsapp",
+          "assisted:voice"
+        ],
+        "annotations": [],
+        "perChannel": [
+          {
+            "channel": "whatsapp_template",
+            "verdict": "deny",
+            "level": "N1",
+            "reasons": [
+              "no_consent_for_purpose_channel"
+            ],
+            "retryAt": null
+          },
+          {
+            "channel": "voice_call",
+            "verdict": "deny",
+            "level": "N1",
+            "reasons": [
+              "no_consent_for_purpose_channel"
+            ],
+            "retryAt": null
+          },
+          {
+            "channel": "assisted:whatsapp",
+            "verdict": "deny",
+            "level": "N1",
+            "reasons": [
+              "no_consent_for_purpose_channel"
+            ],
+            "retryAt": null
+          },
+          {
+            "channel": "assisted:voice",
+            "verdict": "deny",
+            "level": "N1",
+            "reasons": [
+              "no_consent_for_purpose_channel"
+            ],
+            "retryAt": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "choose · select · todos los canales solo fallan por tiempo (domingo) → defer al lunes 08:00",
+      "kind": "select",
+      "contractRef": "D9-9.2, #17",
+      "basis": "contrato",
+      "channels": [
+        "whatsapp_template",
+        "voice_call",
+        "assisted:whatsapp"
+      ],
+      "preferredMedium": null,
+      "perChannel": {
+        "whatsapp_template": {
+          "verdict": "defer",
+          "level": "N1",
+          "reasons": [
+            "calendar_sunday"
+          ],
+          "retryAt": "2026-11-09T13:00:00Z"
+        },
+        "voice_call": {
+          "verdict": "defer",
+          "level": "N1",
+          "reasons": [
+            "calendar_sunday"
+          ],
+          "retryAt": "2026-11-09T13:00:00Z"
+        },
+        "assisted:whatsapp": {
+          "verdict": "defer",
+          "level": "N1",
+          "reasons": [
+            "calendar_sunday"
+          ],
+          "retryAt": "2026-11-09T13:00:00Z"
+        }
+      },
+      "ladderPatchByChannel": {
+        "whatsapp_template": {
+          "flags": {
+            "sendsEnabledInCode": true
+          },
+          "budget": {
+            "dailyBudgetMicros": 1000000,
+            "channelDailyCap": 10,
+            "costMicros": 5000
+          },
+          "now": "2026-11-08T15:00:00Z",
+          "channel": "whatsapp_template"
+        },
+        "voice_call": {
+          "flags": {
+            "sendsEnabledInCode": true
+          },
+          "budget": {
+            "dailyBudgetMicros": 1000000,
+            "channelDailyCap": 10,
+            "costMicros": 5000
+          },
+          "now": "2026-11-08T15:00:00Z",
+          "channel": "voice_call"
+        },
+        "assisted:whatsapp": {
+          "flags": {
+            "sendsEnabledInCode": true
+          },
+          "budget": {
+            "dailyBudgetMicros": 1000000,
+            "channelDailyCap": 10,
+            "costMicros": 5000
+          },
+          "now": "2026-11-08T15:00:00Z",
+          "channel": "assisted:whatsapp"
+        }
+      },
+      "expected": {
+        "verdict": "defer",
+        "channel": null,
+        "retryAt": "2026-11-09T13:00:00Z",
+        "order": [
+          "whatsapp_template",
+          "voice_call",
+          "assisted:whatsapp"
+        ],
+        "annotations": [],
+        "perChannel": [
+          {
+            "channel": "whatsapp_template",
+            "verdict": "defer",
+            "level": "N1",
+            "reasons": [
+              "calendar_sunday"
+            ],
+            "retryAt": "2026-11-09T13:00:00Z"
+          },
+          {
+            "channel": "voice_call",
+            "verdict": "defer",
+            "level": "N1",
+            "reasons": [
+              "calendar_sunday"
+            ],
+            "retryAt": "2026-11-09T13:00:00Z"
+          },
+          {
+            "channel": "assisted:whatsapp",
+            "verdict": "defer",
+            "level": "N1",
+            "reasons": [
+              "calendar_sunday"
+            ],
+            "retryAt": "2026-11-09T13:00:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "name": "choose · select · uno niega por consentimiento y otro solo por frecuencia → defer al retryAt del de frecuencia",
+      "kind": "select",
+      "contractRef": "D9-9.2",
+      "basis": "decision-fixture",
+      "decision": "DF-S2",
+      "channels": [
+        "whatsapp_template",
+        "voice_call"
+      ],
+      "preferredMedium": null,
+      "perChannel": {
+        "whatsapp_template": {
+          "verdict": "defer",
+          "level": "N1",
+          "reasons": [
+            "min_hours_between_contacts"
+          ],
+          "retryAt": "2026-11-11T23:00:00Z"
+        },
+        "voice_call": {
+          "verdict": "deny",
+          "level": "N1",
+          "reasons": [
+            "no_consent_for_purpose_channel",
+            "min_hours_between_contacts",
+            "cross_channel_week_rule"
+          ],
+          "retryAt": null
+        }
+      },
+      "ladderPatchByChannel": {
+        "whatsapp_template": {
+          "flags": {
+            "sendsEnabledInCode": true
+          },
+          "budget": {
+            "dailyBudgetMicros": 1000000,
+            "channelDailyCap": 10,
+            "costMicros": 5000
+          },
+          "consent": {
+            "voice": "none"
+          },
+          "history": [
+            {
+              "at": "2026-11-09T23:00:00Z",
+              "medium": "whatsapp",
+              "purpose": "commercial",
+              "source": "ai_proactive"
+            }
+          ],
+          "channel": "whatsapp_template"
+        },
+        "voice_call": {
+          "flags": {
+            "sendsEnabledInCode": true
+          },
+          "budget": {
+            "dailyBudgetMicros": 1000000,
+            "channelDailyCap": 10,
+            "costMicros": 5000
+          },
+          "consent": {
+            "voice": "none"
+          },
+          "history": [
+            {
+              "at": "2026-11-09T23:00:00Z",
+              "medium": "whatsapp",
+              "purpose": "commercial",
+              "source": "ai_proactive"
+            }
+          ],
+          "channel": "voice_call"
+        }
+      },
+      "expected": {
+        "verdict": "defer",
+        "channel": null,
+        "retryAt": "2026-11-11T23:00:00Z",
+        "order": [
+          "whatsapp_template",
+          "voice_call"
+        ],
+        "annotations": [],
+        "perChannel": [
+          {
+            "channel": "whatsapp_template",
+            "verdict": "defer",
+            "level": "N1",
+            "reasons": [
+              "min_hours_between_contacts"
+            ],
+            "retryAt": "2026-11-11T23:00:00Z"
+          },
+          {
+            "channel": "voice_call",
+            "verdict": "deny",
+            "level": "N1",
+            "reasons": [
+              "no_consent_for_purpose_channel",
+              "min_hours_between_contacts",
+              "cross_channel_week_rule"
+            ],
+            "retryAt": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "choose · select · dos canales aplazados: gana el retryAt más temprano",
+      "kind": "select",
+      "contractRef": "D9-9.2 («al retryAt más temprano»)",
+      "basis": "decision-fixture",
+      "decision": "DF-S2",
+      "channels": [
+        "whatsapp_template",
+        "voice_call"
+      ],
+      "preferredMedium": null,
+      "perChannel": {
+        "whatsapp_template": {
+          "verdict": "defer",
+          "level": "N1",
+          "reasons": [
+            "min_hours_between_contacts"
+          ],
+          "retryAt": "2026-11-11T23:00:00Z"
+        },
+        "voice_call": {
+          "verdict": "defer",
+          "level": "N1",
+          "reasons": [
+            "min_hours_between_contacts",
+            "cross_channel_week_rule"
+          ],
+          "retryAt": "2026-11-17T13:00:00Z"
+        }
+      },
+      "ladderPatchByChannel": {
+        "whatsapp_template": {
+          "flags": {
+            "sendsEnabledInCode": true
+          },
+          "budget": {
+            "dailyBudgetMicros": 1000000,
+            "channelDailyCap": 10,
+            "costMicros": 5000
+          },
+          "history": [
+            {
+              "at": "2026-11-09T23:00:00Z",
+              "medium": "whatsapp",
+              "purpose": "commercial",
+              "source": "ai_proactive"
+            }
+          ],
+          "channel": "whatsapp_template"
+        },
+        "voice_call": {
+          "flags": {
+            "sendsEnabledInCode": true
+          },
+          "budget": {
+            "dailyBudgetMicros": 1000000,
+            "channelDailyCap": 10,
+            "costMicros": 5000
+          },
+          "history": [
+            {
+              "at": "2026-11-09T23:00:00Z",
+              "medium": "whatsapp",
+              "purpose": "commercial",
+              "source": "ai_proactive"
+            }
+          ],
+          "channel": "voice_call",
+          "strategy": {
+            "cooldownUntil": "2026-11-13T14:00:00Z"
+          }
+        }
+      },
+      "expected": {
+        "verdict": "defer",
+        "channel": null,
+        "retryAt": "2026-11-11T23:00:00Z",
+        "order": [
+          "whatsapp_template",
+          "voice_call"
+        ],
+        "annotations": [],
+        "perChannel": [
+          {
+            "channel": "whatsapp_template",
+            "verdict": "defer",
+            "level": "N1",
+            "reasons": [
+              "min_hours_between_contacts"
+            ],
+            "retryAt": "2026-11-11T23:00:00Z"
+          },
+          {
+            "channel": "voice_call",
+            "verdict": "defer",
+            "level": "N1",
+            "reasons": [
+              "min_hours_between_contacts",
+              "cross_channel_week_rule"
+            ],
+            "retryAt": "2026-11-17T13:00:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "name": "choose · select · freno del canal WhatsApp → salta a voz",
+      "kind": "select",
+      "contractRef": "§9.2 nivel 2, T19",
+      "basis": "contrato",
+      "channels": [
+        "whatsapp_template",
+        "voice_call",
+        "assisted:whatsapp"
+      ],
+      "preferredMedium": null,
+      "perChannel": {
+        "whatsapp_template": {
+          "verdict": "deny",
+          "level": "N2",
+          "reasons": [
+            "outreach_brake_channel"
+          ],
+          "retryAt": null
+        },
+        "voice_call": {
+          "verdict": "allow",
+          "level": null,
+          "reasons": [],
+          "retryAt": null
+        },
+        "assisted:whatsapp": {
+          "verdict": "allow",
+          "level": null,
+          "reasons": [],
+          "retryAt": null
+        }
+      },
+      "ladderPatchByChannel": {
+        "whatsapp_template": {
+          "flags": {
+            "sendsEnabledInCode": true
+          },
+          "budget": {
+            "dailyBudgetMicros": 1000000,
+            "channelDailyCap": 10,
+            "costMicros": 5000
+          },
+          "channel": "whatsapp_template",
+          "brakes": {
+            "channel": true
+          }
+        },
+        "voice_call": {
+          "flags": {
+            "sendsEnabledInCode": true
+          },
+          "budget": {
+            "dailyBudgetMicros": 1000000,
+            "channelDailyCap": 10,
+            "costMicros": 5000
+          },
+          "channel": "voice_call"
+        },
+        "assisted:whatsapp": {
+          "flags": {
+            "sendsEnabledInCode": true
+          },
+          "budget": {
+            "dailyBudgetMicros": 1000000,
+            "channelDailyCap": 10,
+            "costMicros": 5000
+          },
+          "channel": "assisted:whatsapp"
+        }
+      },
+      "expected": {
+        "verdict": "selected",
+        "channel": "voice_call",
+        "retryAt": null,
+        "order": [
+          "whatsapp_template",
+          "voice_call",
+          "assisted:whatsapp"
+        ],
+        "annotations": [],
+        "perChannel": [
+          {
+            "channel": "whatsapp_template",
+            "verdict": "deny",
+            "level": "N2",
+            "reasons": [
+              "outreach_brake_channel"
+            ],
+            "retryAt": null
+          },
+          {
+            "channel": "voice_call",
+            "verdict": "allow",
+            "level": null,
+            "reasons": [],
+            "retryAt": null
+          },
+          {
+            "channel": "assisted:whatsapp",
+            "verdict": "allow",
+            "level": null,
+            "reasons": [],
+            "retryAt": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "choose · select · plantilla de WhatsApp sin aprobar → salta al siguiente permitido",
+      "kind": "select",
+      "contractRef": "T19",
+      "basis": "contrato",
+      "channels": [
+        "whatsapp_template",
+        "voice_call",
+        "assisted:whatsapp"
+      ],
+      "preferredMedium": null,
+      "perChannel": {
+        "whatsapp_template": {
+          "verdict": "deny",
+          "level": "N4",
+          "reasons": [
+            "template_not_approved"
+          ],
+          "retryAt": null
+        },
+        "voice_call": {
+          "verdict": "allow",
+          "level": null,
+          "reasons": [],
+          "retryAt": null
+        },
+        "assisted:whatsapp": {
+          "verdict": "allow",
+          "level": null,
+          "reasons": [],
+          "retryAt": null
+        }
+      },
+      "ladderPatchByChannel": {
+        "whatsapp_template": {
+          "flags": {
+            "sendsEnabledInCode": true
+          },
+          "budget": {
+            "dailyBudgetMicros": 1000000,
+            "channelDailyCap": 10,
+            "costMicros": 5000
+          },
+          "channel": "whatsapp_template",
+          "step": {
+            "templateApproved": false
+          }
+        },
+        "voice_call": {
+          "flags": {
+            "sendsEnabledInCode": true
+          },
+          "budget": {
+            "dailyBudgetMicros": 1000000,
+            "channelDailyCap": 10,
+            "costMicros": 5000
+          },
+          "channel": "voice_call"
+        },
+        "assisted:whatsapp": {
+          "flags": {
+            "sendsEnabledInCode": true
+          },
+          "budget": {
+            "dailyBudgetMicros": 1000000,
+            "channelDailyCap": 10,
+            "costMicros": 5000
+          },
+          "channel": "assisted:whatsapp"
+        }
+      },
+      "expected": {
+        "verdict": "selected",
+        "channel": "voice_call",
+        "retryAt": null,
+        "order": [
+          "whatsapp_template",
+          "voice_call",
+          "assisted:whatsapp"
+        ],
+        "annotations": [],
+        "perChannel": [
+          {
+            "channel": "whatsapp_template",
+            "verdict": "deny",
+            "level": "N4",
+            "reasons": [
+              "template_not_approved"
+            ],
+            "retryAt": null
+          },
+          {
+            "channel": "voice_call",
+            "verdict": "allow",
+            "level": null,
+            "reasons": [],
+            "retryAt": null
+          },
+          {
+            "channel": "assisted:whatsapp",
+            "verdict": "allow",
+            "level": null,
+            "reasons": [],
+            "retryAt": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "choose · select · el asistido apagado y los automáticos sin implementar → deny",
+      "kind": "select",
+      "contractRef": "T19 («si no queda ninguno, deny»)",
+      "basis": "contrato",
+      "channels": [
+        "whatsapp_template",
+        "voice_call",
+        "assisted:whatsapp"
+      ],
+      "preferredMedium": null,
+      "perChannel": {
+        "whatsapp_template": {
+          "verdict": "deny",
+          "level": "N4",
+          "reasons": [
+            "sends_disabled_in_code",
+            "channel_not_live",
+            "budget_zero"
+          ],
+          "retryAt": null
+        },
+        "voice_call": {
+          "verdict": "deny",
+          "level": "N4",
+          "reasons": [
+            "sends_disabled_in_code",
+            "channel_not_live",
+            "budget_zero"
+          ],
+          "retryAt": null
+        },
+        "assisted:whatsapp": {
+          "verdict": "deny",
+          "level": "N4",
+          "reasons": [
+            "channel_disabled"
+          ],
+          "retryAt": null
+        }
+      },
+      "ladderPatchByChannel": {
+        "whatsapp_template": {
+          "flags": {
+            "channelLive": false
+          },
+          "channel": "whatsapp_template"
+        },
+        "voice_call": {
+          "flags": {
+            "channelLive": false
+          },
+          "channel": "voice_call"
+        },
+        "assisted:whatsapp": {
+          "flags": {
+            "channelLive": true,
+            "channelEnabled": false
+          },
+          "channel": "assisted:whatsapp"
+        }
+      },
+      "expected": {
+        "verdict": "deny",
+        "channel": null,
+        "retryAt": null,
+        "order": [
+          "whatsapp_template",
+          "voice_call",
+          "assisted:whatsapp"
+        ],
+        "annotations": [],
+        "perChannel": [
+          {
+            "channel": "whatsapp_template",
+            "verdict": "deny",
+            "level": "N4",
+            "reasons": [
+              "sends_disabled_in_code",
+              "channel_not_live",
+              "budget_zero"
+            ],
+            "retryAt": null
+          },
+          {
+            "channel": "voice_call",
+            "verdict": "deny",
+            "level": "N4",
+            "reasons": [
+              "sends_disabled_in_code",
+              "channel_not_live",
+              "budget_zero"
+            ],
+            "retryAt": null
+          },
+          {
+            "channel": "assisted:whatsapp",
+            "verdict": "deny",
+            "level": "N4",
+            "reasons": [
+              "channel_disabled"
+            ],
+            "retryAt": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "choose · select · «mejor por voz» con los dos permitidos → voz delante (preference_applied)",
+      "kind": "select",
+      "contractRef": "T22, D9-7 N7",
+      "basis": "decision-fixture",
+      "decision": "DF-S1",
+      "channels": [
+        "whatsapp_template",
+        "voice_call"
+      ],
+      "preferredMedium": "voice",
+      "perChannel": {
+        "whatsapp_template": {
+          "verdict": "allow",
+          "level": null,
+          "reasons": [],
+          "retryAt": null
+        },
+        "voice_call": {
+          "verdict": "allow",
+          "level": null,
+          "reasons": [],
+          "retryAt": null
+        }
+      },
+      "ladderPatchByChannel": {
+        "whatsapp_template": {
+          "flags": {
+            "sendsEnabledInCode": true
+          },
+          "budget": {
+            "dailyBudgetMicros": 1000000,
+            "channelDailyCap": 10,
+            "costMicros": 5000
+          },
+          "channel": "whatsapp_template"
+        },
+        "voice_call": {
+          "flags": {
+            "sendsEnabledInCode": true
+          },
+          "budget": {
+            "dailyBudgetMicros": 1000000,
+            "channelDailyCap": 10,
+            "costMicros": 5000
+          },
+          "channel": "voice_call"
+        }
+      },
+      "expected": {
+        "verdict": "selected",
+        "channel": "voice_call",
+        "retryAt": null,
+        "order": [
+          "voice_call",
+          "whatsapp_template"
+        ],
+        "annotations": [
+          "preference_applied"
+        ],
+        "perChannel": [
+          {
+            "channel": "whatsapp_template",
+            "verdict": "allow",
+            "level": null,
+            "reasons": [],
+            "retryAt": null
+          },
+          {
+            "channel": "voice_call",
+            "verdict": "allow",
+            "level": null,
+            "reasons": [],
+            "retryAt": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "choose · select · «mejor por WhatsApp» con WhatsApp denegado → se ignora (instruction_ignored_by_policy) y sale voz",
+      "kind": "select",
+      "contractRef": "T22 («solo reordena entre los permitidos»)",
+      "basis": "decision-fixture",
+      "decision": "DF-S1",
+      "channels": [
+        "whatsapp_template",
+        "voice_call"
+      ],
+      "preferredMedium": "whatsapp",
+      "perChannel": {
+        "whatsapp_template": {
+          "verdict": "deny",
+          "level": "N1",
+          "reasons": [
+            "consent_denied"
+          ],
+          "retryAt": null
+        },
+        "voice_call": {
+          "verdict": "allow",
+          "level": null,
+          "reasons": [],
+          "retryAt": null
+        }
+      },
+      "ladderPatchByChannel": {
+        "whatsapp_template": {
+          "flags": {
+            "sendsEnabledInCode": true
+          },
+          "budget": {
+            "dailyBudgetMicros": 1000000,
+            "channelDailyCap": 10,
+            "costMicros": 5000
+          },
+          "consent": {
+            "whatsapp": "denied"
+          },
+          "channel": "whatsapp_template"
+        },
+        "voice_call": {
+          "flags": {
+            "sendsEnabledInCode": true
+          },
+          "budget": {
+            "dailyBudgetMicros": 1000000,
+            "channelDailyCap": 10,
+            "costMicros": 5000
+          },
+          "consent": {
+            "whatsapp": "denied"
+          },
+          "channel": "voice_call"
+        }
+      },
+      "expected": {
+        "verdict": "selected",
+        "channel": "voice_call",
+        "retryAt": null,
+        "order": [
+          "whatsapp_template",
+          "voice_call"
+        ],
+        "annotations": [
+          "instruction_ignored_by_policy"
+        ],
+        "perChannel": [
+          {
+            "channel": "whatsapp_template",
+            "verdict": "deny",
+            "level": "N1",
+            "reasons": [
+              "consent_denied"
+            ],
+            "retryAt": null
+          },
+          {
+            "channel": "voice_call",
+            "verdict": "allow",
+            "level": null,
+            "reasons": [],
+            "retryAt": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "choose · select · preferencia de un medio sin canales en el paso → se ignora",
+      "kind": "select",
+      "contractRef": "T22",
+      "basis": "decision-fixture",
+      "decision": "DF-S1",
+      "channels": [
+        "whatsapp_template",
+        "assisted:whatsapp"
+      ],
+      "preferredMedium": "voice",
+      "perChannel": {
+        "whatsapp_template": {
+          "verdict": "allow",
+          "level": null,
+          "reasons": [],
+          "retryAt": null
+        },
+        "assisted:whatsapp": {
+          "verdict": "allow",
+          "level": null,
+          "reasons": [],
+          "retryAt": null
+        }
+      },
+      "ladderPatchByChannel": {
+        "whatsapp_template": {
+          "flags": {
+            "sendsEnabledInCode": true
+          },
+          "budget": {
+            "dailyBudgetMicros": 1000000,
+            "channelDailyCap": 10,
+            "costMicros": 5000
+          },
+          "channel": "whatsapp_template"
+        },
+        "assisted:whatsapp": {
+          "flags": {
+            "sendsEnabledInCode": true
+          },
+          "budget": {
+            "dailyBudgetMicros": 1000000,
+            "channelDailyCap": 10,
+            "costMicros": 5000
+          },
+          "channel": "assisted:whatsapp"
+        }
+      },
+      "expected": {
+        "verdict": "selected",
+        "channel": "whatsapp_template",
+        "retryAt": null,
+        "order": [
+          "whatsapp_template",
+          "assisted:whatsapp"
+        ],
+        "annotations": [
+          "instruction_ignored_by_policy"
+        ],
+        "perChannel": [
+          {
+            "channel": "whatsapp_template",
+            "verdict": "allow",
+            "level": null,
+            "reasons": [],
+            "retryAt": null
+          },
+          {
+            "channel": "assisted:whatsapp",
+            "verdict": "allow",
+            "level": null,
+            "reasons": [],
+            "retryAt": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "choose · select · preferencia que no levanta un N1: todos denegados → deny aunque la persona lo pidiera",
+      "kind": "select",
+      "contractRef": "T22 («ninguna instrucción conversacional levanta una negación de N1–N6»)",
+      "basis": "decision-fixture",
+      "decision": "DF-S1",
+      "channels": [
+        "whatsapp_template",
+        "voice_call"
+      ],
+      "preferredMedium": "voice",
+      "perChannel": {
+        "whatsapp_template": {
+          "verdict": "deny",
+          "level": "N1",
+          "reasons": [
+            "do_not_contact_sibling"
+          ],
+          "retryAt": null
+        },
+        "voice_call": {
+          "verdict": "deny",
+          "level": "N1",
+          "reasons": [
+            "do_not_contact_sibling"
+          ],
+          "retryAt": null
+        }
+      },
+      "ladderPatchByChannel": {
+        "whatsapp_template": {
+          "flags": {
+            "sendsEnabledInCode": true
+          },
+          "budget": {
+            "dailyBudgetMicros": 1000000,
+            "channelDailyCap": 10,
+            "costMicros": 5000
+          },
+          "optOut": {
+            "siblingDoNotContact": true
+          },
+          "channel": "whatsapp_template"
+        },
+        "voice_call": {
+          "flags": {
+            "sendsEnabledInCode": true
+          },
+          "budget": {
+            "dailyBudgetMicros": 1000000,
+            "channelDailyCap": 10,
+            "costMicros": 5000
+          },
+          "optOut": {
+            "siblingDoNotContact": true
+          },
+          "channel": "voice_call"
+        }
+      },
+      "expected": {
+        "verdict": "deny",
+        "channel": null,
+        "retryAt": null,
+        "order": [
+          "whatsapp_template",
+          "voice_call"
+        ],
+        "annotations": [
+          "instruction_ignored_by_policy"
+        ],
+        "perChannel": [
+          {
+            "channel": "whatsapp_template",
+            "verdict": "deny",
+            "level": "N1",
+            "reasons": [
+              "do_not_contact_sibling"
+            ],
+            "retryAt": null
+          },
+          {
+            "channel": "voice_call",
+            "verdict": "deny",
+            "level": "N1",
+            "reasons": [
+              "do_not_contact_sibling"
+            ],
+            "retryAt": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "choose · select · un solo canal permitido en la lista → ese",
+      "kind": "select",
+      "contractRef": "D9-9.2",
+      "basis": "contrato",
+      "channels": [
+        "assisted:voice"
+      ],
+      "preferredMedium": null,
+      "perChannel": {
+        "assisted:voice": {
+          "verdict": "allow",
+          "level": null,
+          "reasons": [],
+          "retryAt": null
+        }
+      },
+      "ladderPatchByChannel": {
+        "assisted:voice": {
+          "channel": "assisted:voice"
+        }
+      },
+      "expected": {
+        "verdict": "selected",
+        "channel": "assisted:voice",
+        "retryAt": null,
+        "order": [
+          "assisted:voice"
+        ],
+        "annotations": [],
+        "perChannel": [
+          {
+            "channel": "assisted:voice",
+            "verdict": "allow",
+            "level": null,
+            "reasons": [],
+            "retryAt": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "choose · select · sombra: el primer canal (WhatsApp automático) sale simulado aunque la constante esté cerrada",
+      "kind": "select",
+      "contractRef": "D9-8 (sombra), D9-9.4 («hasta entonces, se simulan»)",
+      "basis": "decision-fixture",
+      "decision": "DF-L5",
+      "channels": [
+        "whatsapp_template",
+        "voice_call",
+        "assisted:whatsapp"
+      ],
+      "preferredMedium": null,
+      "perChannel": {
+        "whatsapp_template": {
+          "verdict": "allow",
+          "level": null,
+          "reasons": [],
+          "retryAt": null
+        },
+        "voice_call": {
+          "verdict": "allow",
+          "level": null,
+          "reasons": [],
+          "retryAt": null
+        },
+        "assisted:whatsapp": {
+          "verdict": "allow",
+          "level": null,
+          "reasons": [],
+          "retryAt": null
+        }
+      },
+      "ladderPatchByChannel": {
+        "whatsapp_template": {
+          "flags": {
+            "mode": "shadow",
+            "channelLive": false
+          },
+          "channel": "whatsapp_template"
+        },
+        "voice_call": {
+          "flags": {
+            "mode": "shadow",
+            "channelLive": false
+          },
+          "channel": "voice_call"
+        },
+        "assisted:whatsapp": {
+          "flags": {
+            "mode": "shadow",
+            "channelLive": false
+          },
+          "channel": "assisted:whatsapp"
+        }
+      },
+      "expected": {
+        "verdict": "selected",
+        "channel": "whatsapp_template",
+        "retryAt": null,
+        "order": [
+          "whatsapp_template",
+          "voice_call",
+          "assisted:whatsapp"
+        ],
+        "annotations": [],
+        "perChannel": [
+          {
+            "channel": "whatsapp_template",
+            "verdict": "allow",
+            "level": null,
+            "reasons": [],
+            "retryAt": null
+          },
+          {
+            "channel": "voice_call",
+            "verdict": "allow",
+            "level": null,
+            "reasons": [],
+            "retryAt": null
+          },
+          {
+            "channel": "assisted:whatsapp",
+            "verdict": "allow",
+            "level": null,
+            "reasons": [],
+            "retryAt": null
+          }
+        ]
+      }
+    }
+  ]
+}

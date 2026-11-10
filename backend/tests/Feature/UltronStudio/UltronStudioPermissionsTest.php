@@ -127,7 +127,9 @@ class UltronStudioPermissionsTest extends TestCase
             // UltronStudioIntegrationsPermissionsTest.
             // Las 21 de la voz (Hito 8), también: UltronStudioVoiceRoutesTest.
             if (str_starts_with($route->uri(), 'api/admin/ultron-studio') && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/integrations/')
-                && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/voice/') && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/voice-lab/')) {
+                && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/voice/') && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/voice-lab/')
+                // Las 44 del Hito 9 (strategies/**, stream, outreach/**) tienen las suyas (L9-38): Strategies/UltronStudioStrategyRoutesTest, Stream/* y Outreach/Guards/*.
+                && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/strategies') && $route->uri() !== 'api/admin/ultron-studio/stream' && ! str_starts_with($route->uri(), 'api/admin/ultron-studio/outreach/')) {
                 $real[AuthorizationMap::routeKey($route)] = AuthorizationMap::resolve($route);
             }
         }
@@ -287,8 +289,9 @@ class UltronStudioPermissionsTest extends TestCase
         // `lab_manage` (6.4) y `lab_run` (6.6) van entre reglas y aprobar. Las
         // cuatro del Hito 6 van detrás (las prueba UltronStudioIntegrationsPermissionsTest).
         $this->assertSame(self::STUDIO_KEYS, array_slice(array_column($filas, 'key'), 0, 8));
-        // + las 4 del Hito 6 y las 3 del Hito 8 (D8-22: voice_manage, voice_publish y voice_lab_run).
-        $this->assertCount(15, $filas);
+        // + las 4 del Hito 6, las 3 del Hito 8 (D8-22: voice_manage, voice_publish y voice_lab_run)
+        // y las 4 del Hito 9 (strategies_edit, strategies_publish, strategies_rollback y person_bindings_manage; L9-59), al final.
+        $this->assertCount(19, $filas);
         $this->assertSame('ULTRON Studio', $filas[0]['domain_label']);
         $this->assertSame('account_tree', $filas[0]['domain_icon']);
         $porLlave = array_column($filas, null, 'key');

@@ -1,0 +1,1017 @@
+{
+  "fixture": "calendar-cases.json",
+  "version": 1,
+  "contract": "backend/docs/ultron-studio/ULTRON_STUDIO_H9_CONTRACT.md (congelado por el lead el 09-11-2026 20:30 UTC; §13.2 renumerado T1–T23)",
+  "contractSections": [
+    "D9-7 (N1: calendar_outside_legal_hours, calendar_sunday, calendar_holiday; OutboundSchedule::evaluate y ColombianHolidays)",
+    "L9-15 (el horario propio tiene su código, calendar_outside_own_hours, en N5)",
+    "D9-7 (ContactBudget: «Ventana horaria» = horas de silencio de ContactPolicy ∩ Ley 2300: L–V 08:00–19:00 y S 08:00–15:00, sin domingos ni festivos)",
+    "D9-6 (schedule: solo estrecha la ventana legal y la propia) y P9-17 (horario propio, solo más estricto)",
+    "§13.1 #17 (defer al primer hueco permitido), §13.2 T16 y T22, §13.3 (07:59, 08:00, 18:59, 19:00, sábado 14:59 y 15:00, lunes festivos, Ley 2578, 29 de febrero, medianoche de Bogotá)"
+  ],
+  "generatedBy": "tests/fixtures/outreach/tools/build/build.py (python3 -I), con los casos a mano en sec_*.py",
+  "checkedBy": "tests/Unit/Outreach/FixturesSanityTest.php (forma, unicidad, canonicalización y huellas, sin código del motor)",
+  "readme": "tests/fixtures/outreach/README.md",
+  "basisLegend": {
+    "contrato": "Lo dice el contrato H9 tal cual (contractRef).",
+    "ley": "Lo dice la ley citada (Ley 2300 de 2023, Ley 1581 de 2012, Ley 51 de 1983, Ley 2578 de 2026).",
+    "codigo-existente": "Lo hace hoy el código que el contrato manda reutilizar o igualar (ContactPolicy, OutboundSchedule, ColombianHolidays, VoiceFrequency, StudioContentHasher…); la cita va en contractRef.",
+    "supuesto-lead": "Sigue un supuesto de la congelación del lead (P9-n), que el propietario puede cambiar.",
+    "decision-fixture": "El contrato no lo fija: lo decide este fixture (campo decision; README §Decisiones). Lo congela el lead."
+  },
+  "sources": [
+    {
+      "what": "El contrato del H9 (D9-3 a D9-11, §5, §6, §13 y la Congelación)",
+      "url": "backend/docs/ultron-studio/ULTRON_STUDIO_H9_CONTRACT.md",
+      "consulted": "09-11-2026, en este árbol (sin seguimiento: lo congela el lead)",
+      "how": "Lectura completa; cada caso cita su sección en contractRef."
+    },
+    {
+      "what": "La ventana legal, los intervalos semiabiertos y el horario propio que falla cerrado",
+      "url": "backend/app/Services/Telephony/OutboundSchedule.php (LEGAL, evaluate, windows) y backend/app/Services/Commercial/ContactPolicy.php:146-172 (horas de silencio 21:00–08:00)",
+      "consulted": "09-11-2026, en este árbol",
+      "how": "Mismas reglas: [abre, cierra) en minutos de Bogotá, el horario propio es la intersección y uno mal escrito deja todo fuera."
+    },
+    {
+      "what": "Los festivos 2026–2028 (Ley 51 de 1983, móviles de Pascua y Ley 2578 de 2026, por confirmar)",
+      "url": "backend/tests/fixtures/voice/holidays-co-2026-2028.json (TEST8-a) y backend/app/Services/Telephony/ColombianHolidays.php",
+      "consulted": "09-11-2026, en este árbol",
+      "how": "Recalculados con la regla en el generador y comparados fecha a fecha con el fixture del H8 (assert): 19 por año. La aprobación del propietario sigue pendiente (D8-15)."
+    }
+  ],
+  "syntheticData": "Ningún dato real: ids, uuids, claves y personas inventados; las personas se nombran por subject_key sintético (m:<id>, l:<id>); sin teléfonos, nombres, documentos ni importes.",
+  "timezone": "America/Bogota (UTC−05:00 todo el año)",
+  "n1Windows": {
+    "weekdays": [
+      480,
+      1140
+    ],
+    "saturday": [
+      480,
+      900
+    ],
+    "sunday": null,
+    "holidays": null,
+    "note": "Minutos de Bogotá, [abre, cierra). 07:00–07:59 es legal por la Ley 2300 pero está en las horas de silencio de ContactPolicy: fuera."
+  },
+  "shapes": {
+    "ownHours": "null (sin horario propio) | 'invalid' (mal configurado: todo fuera) | {weekdays: [abre, cierra] | null, saturday: [abre, cierra] | null}",
+    "schedule": "null | {days: [días ISO 1..6], windows: [{from, to}] en minutos de Bogotá}: el horario de la estrategia (D9-6), solo estrecha"
+  },
+  "decisions": {
+    "DF-W1": "La ventana de N1 es la intersección de la Ley 2300 con las horas de silencio de ContactPolicy: L–V [08:00, 19:00) y S [08:00, 15:00); semiabierta (las 19:00:00 y las 15:00:00 ya están fuera).",
+    "DF-W2": "Motivos de N1: en domingo solo calendar_sunday; en festivo calendar_holiday (y calendar_sunday si además es domingo); calendar_outside_legal_hours solo en un día hábil fuera de su franja legal.",
+    "DF-W3": "El primer hueco: si el instante ya está dentro, es él mismo; si no, la apertura siguiente al minuto exacto, saltando domingos, festivos y días sin franja; con horario de la estrategia, la intersección.",
+    "DF-W4": "Horario propio mal configurado ('invalid') = ninguna franja, como OutboundSchedule (falla cerrado): calendar_outside_own_hours siempre que la ley se cumpla.",
+    "DF-W5": "El horario propio (P9-17) tiene su código, calendar_outside_own_hours, en N5 y no en N1 (ratificada por el lead: L9-15): la traza distingue la ley de la política propia. Se evalúa solo cuando la ley ya se cumple (si no, decide N1); el primer hueco (nextSlot) sí lo tiene en cuenta."
+  },
+  "counts": {
+    "holidays": 3,
+    "window": 27,
+    "nextSlot": 18,
+    "total": 48
+  },
+  "holidays": [
+    {
+      "name": "holidays · year · 2026: 19 festivos (con Chiquinquirá, Ley 2578)",
+      "kind": "year",
+      "contractRef": "D9-7 (ColombianHolidays), E2-1 del H8",
+      "basis": "ley",
+      "year": 2026,
+      "expected": {
+        "dates": [
+          "2026-01-01",
+          "2026-01-12",
+          "2026-03-23",
+          "2026-04-02",
+          "2026-04-03",
+          "2026-05-01",
+          "2026-05-18",
+          "2026-06-08",
+          "2026-06-15",
+          "2026-06-29",
+          "2026-07-13",
+          "2026-07-20",
+          "2026-08-07",
+          "2026-08-17",
+          "2026-10-12",
+          "2026-11-02",
+          "2026-11-16",
+          "2026-12-08",
+          "2026-12-25"
+        ],
+        "count": 19
+      }
+    },
+    {
+      "name": "holidays · year · 2027: 19 festivos (con Chiquinquirá, Ley 2578)",
+      "kind": "year",
+      "contractRef": "D9-7 (ColombianHolidays), E2-1 del H8",
+      "basis": "ley",
+      "year": 2027,
+      "expected": {
+        "dates": [
+          "2027-01-01",
+          "2027-01-11",
+          "2027-03-22",
+          "2027-03-25",
+          "2027-03-26",
+          "2027-05-01",
+          "2027-05-10",
+          "2027-05-31",
+          "2027-06-07",
+          "2027-07-05",
+          "2027-07-12",
+          "2027-07-20",
+          "2027-08-07",
+          "2027-08-16",
+          "2027-10-18",
+          "2027-11-01",
+          "2027-11-15",
+          "2027-12-08",
+          "2027-12-25"
+        ],
+        "count": 19
+      }
+    },
+    {
+      "name": "holidays · year · 2028: 19 festivos (con Chiquinquirá, Ley 2578)",
+      "kind": "year",
+      "contractRef": "D9-7 (ColombianHolidays), E2-1 del H8",
+      "basis": "ley",
+      "year": 2028,
+      "expected": {
+        "dates": [
+          "2028-01-01",
+          "2028-01-10",
+          "2028-03-20",
+          "2028-04-13",
+          "2028-04-14",
+          "2028-05-01",
+          "2028-05-29",
+          "2028-06-19",
+          "2028-06-26",
+          "2028-07-03",
+          "2028-07-10",
+          "2028-07-20",
+          "2028-08-07",
+          "2028-08-21",
+          "2028-10-16",
+          "2028-11-06",
+          "2028-11-13",
+          "2028-12-08",
+          "2028-12-25"
+        ],
+        "count": 19
+      }
+    }
+  ],
+  "window": [
+    {
+      "name": "window · instant · martes 07:59 → fuera (silencio de ContactPolicy aunque la Ley 2300 abra a las 07:00)",
+      "kind": "instant",
+      "contractRef": "D9-7 N1, §13.3",
+      "basis": "decision-fixture",
+      "decision": "DF-W1",
+      "now": "2026-11-10T12:59:00Z",
+      "ownHours": null,
+      "expected": {
+        "inside": false,
+        "n1": [
+          "calendar_outside_legal_hours"
+        ],
+        "n5": [],
+        "bogota": "2026-11-10 07:59:00",
+        "weekday": "martes"
+      }
+    },
+    {
+      "name": "window · instant · martes 07:30 → fuera",
+      "kind": "instant",
+      "contractRef": "D9-7 N1, §13.3",
+      "basis": "decision-fixture",
+      "decision": "DF-W1",
+      "now": "2026-11-10T12:30:00Z",
+      "ownHours": null,
+      "expected": {
+        "inside": false,
+        "n1": [
+          "calendar_outside_legal_hours"
+        ],
+        "n5": [],
+        "bogota": "2026-11-10 07:30:00",
+        "weekday": "martes"
+      }
+    },
+    {
+      "name": "window · instant · martes 08:00:00 → dentro",
+      "kind": "instant",
+      "contractRef": "D9-7 N1, §13.3",
+      "basis": "decision-fixture",
+      "decision": "DF-W1",
+      "now": "2026-11-10T13:00:00Z",
+      "ownHours": null,
+      "expected": {
+        "inside": true,
+        "n1": [],
+        "n5": [],
+        "bogota": "2026-11-10 08:00:00",
+        "weekday": "martes"
+      }
+    },
+    {
+      "name": "window · instant · martes 18:59:59 → dentro",
+      "kind": "instant",
+      "contractRef": "D9-7 N1, §13.3",
+      "basis": "decision-fixture",
+      "decision": "DF-W1",
+      "now": "2026-11-10T23:59:59Z",
+      "ownHours": null,
+      "expected": {
+        "inside": true,
+        "n1": [],
+        "n5": [],
+        "bogota": "2026-11-10 18:59:59",
+        "weekday": "martes"
+      }
+    },
+    {
+      "name": "window · instant · martes 19:00:00 → fuera (semiabierto)",
+      "kind": "instant",
+      "contractRef": "D9-7 N1, §13.3",
+      "basis": "decision-fixture",
+      "decision": "DF-W1",
+      "now": "2026-11-11T00:00:00Z",
+      "ownHours": null,
+      "expected": {
+        "inside": false,
+        "n1": [
+          "calendar_outside_legal_hours"
+        ],
+        "n5": [],
+        "bogota": "2026-11-10 19:00:00",
+        "weekday": "martes"
+      }
+    },
+    {
+      "name": "window · instant · lunes 07:59 → fuera (T16)",
+      "kind": "instant",
+      "contractRef": "T16, §13.3",
+      "basis": "decision-fixture",
+      "decision": "DF-W1",
+      "now": "2026-11-09T12:59:00Z",
+      "ownHours": null,
+      "expected": {
+        "inside": false,
+        "n1": [
+          "calendar_outside_legal_hours"
+        ],
+        "n5": [],
+        "bogota": "2026-11-09 07:59:00",
+        "weekday": "lunes"
+      }
+    },
+    {
+      "name": "window · instant · sábado 14:59:59 → dentro",
+      "kind": "instant",
+      "contractRef": "D9-7 N1, §13.3",
+      "basis": "decision-fixture",
+      "decision": "DF-W1",
+      "now": "2026-11-14T19:59:59Z",
+      "ownHours": null,
+      "expected": {
+        "inside": true,
+        "n1": [],
+        "n5": [],
+        "bogota": "2026-11-14 14:59:59",
+        "weekday": "sábado"
+      }
+    },
+    {
+      "name": "window · instant · sábado 15:00:00 → fuera (T16)",
+      "kind": "instant",
+      "contractRef": "T16, §13.3",
+      "basis": "decision-fixture",
+      "decision": "DF-W1",
+      "now": "2026-11-14T20:00:00Z",
+      "ownHours": null,
+      "expected": {
+        "inside": false,
+        "n1": [
+          "calendar_outside_legal_hours"
+        ],
+        "n5": [],
+        "bogota": "2026-11-14 15:00:00",
+        "weekday": "sábado"
+      }
+    },
+    {
+      "name": "window · instant · sábado 07:59 → fuera",
+      "kind": "instant",
+      "contractRef": "D9-7 N1, §13.3",
+      "basis": "decision-fixture",
+      "decision": "DF-W1",
+      "now": "2026-11-14T12:59:00Z",
+      "ownHours": null,
+      "expected": {
+        "inside": false,
+        "n1": [
+          "calendar_outside_legal_hours"
+        ],
+        "n5": [],
+        "bogota": "2026-11-14 07:59:00",
+        "weekday": "sábado"
+      }
+    },
+    {
+      "name": "window · instant · domingo 10:00 → solo calendar_sunday",
+      "kind": "instant",
+      "contractRef": "T16, #17",
+      "basis": "decision-fixture",
+      "decision": "DF-W2",
+      "now": "2026-11-15T15:00:00Z",
+      "ownHours": null,
+      "expected": {
+        "inside": false,
+        "n1": [
+          "calendar_sunday"
+        ],
+        "n5": [],
+        "bogota": "2026-11-15 10:00:00",
+        "weekday": "domingo"
+      }
+    },
+    {
+      "name": "window · instant · domingo 23:59:59 → calendar_sunday",
+      "kind": "instant",
+      "contractRef": "D9-7 N1, §13.3",
+      "basis": "decision-fixture",
+      "decision": "DF-W2",
+      "now": "2026-11-16T04:59:59Z",
+      "ownHours": null,
+      "expected": {
+        "inside": false,
+        "n1": [
+          "calendar_sunday"
+        ],
+        "n5": [],
+        "bogota": "2026-11-15 23:59:59",
+        "weekday": "domingo"
+      }
+    },
+    {
+      "name": "window · instant · medianoche: el domingo 23:59 de Bogotá ya es lunes en UTC → sigue siendo domingo",
+      "kind": "instant",
+      "contractRef": "§13.3 (la medianoche de Bogotá)",
+      "basis": "decision-fixture",
+      "decision": "DF-W2",
+      "now": "2026-11-16T04:59:00Z",
+      "ownHours": null,
+      "expected": {
+        "inside": false,
+        "n1": [
+          "calendar_sunday"
+        ],
+        "n5": [],
+        "bogota": "2026-11-15 23:59:00",
+        "weekday": "domingo"
+      }
+    },
+    {
+      "name": "window · instant · lunes festivo trasladado (Independencia de Cartagena, 11-11 → 16-11-2026) 10:00 → calendar_holiday",
+      "kind": "instant",
+      "contractRef": "T16 (lunes trasladado), §13.3",
+      "basis": "ley",
+      "decision": "DF-W2",
+      "now": "2026-11-16T15:00:00Z",
+      "ownHours": null,
+      "expected": {
+        "inside": false,
+        "n1": [
+          "calendar_holiday"
+        ],
+        "n5": [],
+        "bogota": "2026-11-16 10:00:00",
+        "weekday": "lunes"
+      }
+    },
+    {
+      "name": "window · instant · lunes festivo trasladado (Todos los Santos, 01-11 → 02-11-2026)",
+      "kind": "instant",
+      "contractRef": "D9-7 N1, §13.3",
+      "basis": "ley",
+      "decision": "DF-W2",
+      "now": "2026-11-02T14:00:00Z",
+      "ownHours": null,
+      "expected": {
+        "inside": false,
+        "n1": [
+          "calendar_holiday"
+        ],
+        "n5": [],
+        "bogota": "2026-11-02 09:00:00",
+        "weekday": "lunes"
+      }
+    },
+    {
+      "name": "window · instant · el 11-11-2026 (miércoles) no es festivo: se trasladó al lunes → dentro",
+      "kind": "instant",
+      "contractRef": "D9-7 N1, §13.3",
+      "basis": "ley",
+      "decision": "DF-W1",
+      "now": "2026-11-11T15:00:00Z",
+      "ownHours": null,
+      "expected": {
+        "inside": true,
+        "n1": [],
+        "n5": [],
+        "bogota": "2026-11-11 10:00:00",
+        "weekday": "miércoles"
+      }
+    },
+    {
+      "name": "window · instant · Ley 2578: Chiquinquirá trasladada al lunes 13-07-2026 → calendar_holiday (por confirmar)",
+      "kind": "instant",
+      "contractRef": "T16 (Ley 2578), E2-1 del H8",
+      "basis": "ley",
+      "decision": "DF-W2",
+      "now": "2026-07-13T15:00:00Z",
+      "ownHours": null,
+      "expected": {
+        "inside": false,
+        "n1": [
+          "calendar_holiday"
+        ],
+        "n5": [],
+        "bogota": "2026-07-13 10:00:00",
+        "weekday": "lunes"
+      }
+    },
+    {
+      "name": "window · instant · Ley 2578: el jueves 09-07-2026 (fecha de origen) no es festivo",
+      "kind": "instant",
+      "contractRef": "D9-7 N1, §13.3",
+      "basis": "ley",
+      "decision": "DF-W1",
+      "now": "2026-07-09T15:00:00Z",
+      "ownHours": null,
+      "expected": {
+        "inside": true,
+        "n1": [],
+        "n5": [],
+        "bogota": "2026-07-09 10:00:00",
+        "weekday": "jueves"
+      }
+    },
+    {
+      "name": "window · instant · festivo en sábado (01-05-2027) 10:00 → calendar_holiday",
+      "kind": "instant",
+      "contractRef": "D9-7 N1, §13.3",
+      "basis": "ley",
+      "decision": "DF-W2",
+      "now": "2027-05-01T15:00:00Z",
+      "ownHours": null,
+      "expected": {
+        "inside": false,
+        "n1": [
+          "calendar_holiday"
+        ],
+        "n5": [],
+        "bogota": "2027-05-01 10:00:00",
+        "weekday": "sábado"
+      }
+    },
+    {
+      "name": "window · instant · Jueves Santo 25-03-2027 → calendar_holiday",
+      "kind": "instant",
+      "contractRef": "D9-7 N1, §13.3",
+      "basis": "ley",
+      "decision": "DF-W2",
+      "now": "2027-03-25T15:00:00Z",
+      "ownHours": null,
+      "expected": {
+        "inside": false,
+        "n1": [
+          "calendar_holiday"
+        ],
+        "n5": [],
+        "bogota": "2027-03-25 10:00:00",
+        "weekday": "jueves"
+      }
+    },
+    {
+      "name": "window · instant · 29-02-2028 (martes, bisiesto) 10:00 → dentro",
+      "kind": "instant",
+      "contractRef": "§13.3 (el 29 de febrero)",
+      "basis": "decision-fixture",
+      "decision": "DF-W1",
+      "now": "2028-02-29T15:00:00Z",
+      "ownHours": null,
+      "expected": {
+        "inside": true,
+        "n1": [],
+        "n5": [],
+        "bogota": "2028-02-29 10:00:00",
+        "weekday": "martes"
+      }
+    },
+    {
+      "name": "window · instant · viernes 31-12-2027 18:30 → dentro",
+      "kind": "instant",
+      "contractRef": "D9-7 N1, §13.3",
+      "basis": "decision-fixture",
+      "decision": "DF-W1",
+      "now": "2027-12-31T23:30:00Z",
+      "ownHours": null,
+      "expected": {
+        "inside": true,
+        "n1": [],
+        "n5": [],
+        "bogota": "2027-12-31 18:30:00",
+        "weekday": "viernes"
+      }
+    },
+    {
+      "name": "window · instant · horario propio L–V 09:00–18:00: martes 08:30 → la ley se cumple, fuera del propio (N5)",
+      "kind": "instant",
+      "contractRef": "P9-17, L9-15",
+      "basis": "supuesto-lead",
+      "decision": "DF-W5",
+      "now": "2026-11-10T13:30:00Z",
+      "ownHours": {
+        "weekdays": [
+          540,
+          1080
+        ],
+        "saturday": [
+          540,
+          780
+        ]
+      },
+      "expected": {
+        "inside": false,
+        "n1": [],
+        "n5": [
+          "calendar_outside_own_hours"
+        ],
+        "bogota": "2026-11-10 08:30:00",
+        "weekday": "martes"
+      }
+    },
+    {
+      "name": "window · instant · horario propio: martes 17:59 → dentro",
+      "kind": "instant",
+      "contractRef": "P9-17",
+      "basis": "decision-fixture",
+      "decision": "DF-W1",
+      "now": "2026-11-10T22:59:00Z",
+      "ownHours": {
+        "weekdays": [
+          540,
+          1080
+        ],
+        "saturday": [
+          540,
+          780
+        ]
+      },
+      "expected": {
+        "inside": true,
+        "n1": [],
+        "n5": [],
+        "bogota": "2026-11-10 17:59:00",
+        "weekday": "martes"
+      }
+    },
+    {
+      "name": "window · instant · horario propio S 09:00–13:00: sábado 13:00 → fuera del propio (N5), la ley abre hasta las 15:00",
+      "kind": "instant",
+      "contractRef": "P9-17, L9-15",
+      "basis": "supuesto-lead",
+      "decision": "DF-W5",
+      "now": "2026-11-14T18:00:00Z",
+      "ownHours": {
+        "weekdays": [
+          540,
+          1080
+        ],
+        "saturday": [
+          540,
+          780
+        ]
+      },
+      "expected": {
+        "inside": false,
+        "n1": [],
+        "n5": [
+          "calendar_outside_own_hours"
+        ],
+        "bogota": "2026-11-14 13:00:00",
+        "weekday": "sábado"
+      }
+    },
+    {
+      "name": "window · instant · horario propio que intenta ampliar (06:00–21:00): no amplía, 07:30 sigue fuera por LEY (N1; N5 ni se mira)",
+      "kind": "instant",
+      "contractRef": "P9-17 («solo más estricto»), D9-6, L9-15",
+      "basis": "decision-fixture",
+      "decision": "DF-W5",
+      "now": "2026-11-10T12:30:00Z",
+      "ownHours": {
+        "weekdays": [
+          360,
+          1260
+        ],
+        "saturday": [
+          360,
+          1260
+        ]
+      },
+      "expected": {
+        "inside": false,
+        "n1": [
+          "calendar_outside_legal_hours"
+        ],
+        "n5": [],
+        "bogota": "2026-11-10 07:30:00",
+        "weekday": "martes"
+      }
+    },
+    {
+      "name": "window · instant · horario propio sin sábado: sábado 10:00 → fuera del propio (N5)",
+      "kind": "instant",
+      "contractRef": "P9-17, L9-15",
+      "basis": "supuesto-lead",
+      "decision": "DF-W5",
+      "now": "2026-11-14T15:00:00Z",
+      "ownHours": {
+        "weekdays": [
+          540,
+          1080
+        ],
+        "saturday": null
+      },
+      "expected": {
+        "inside": false,
+        "n1": [],
+        "n5": [
+          "calendar_outside_own_hours"
+        ],
+        "bogota": "2026-11-14 10:00:00",
+        "weekday": "sábado"
+      }
+    },
+    {
+      "name": "window · instant · horario propio mal configurado: todo fuera del propio (falla cerrado)",
+      "kind": "instant",
+      "contractRef": "P9-17, OutboundSchedule (DF-P2 del H8), L9-15",
+      "basis": "decision-fixture",
+      "decision": "DF-W4",
+      "now": "2026-11-10T15:00:00Z",
+      "ownHours": "invalid",
+      "expected": {
+        "inside": false,
+        "n1": [],
+        "n5": [
+          "calendar_outside_own_hours"
+        ],
+        "bogota": "2026-11-10 10:00:00",
+        "weekday": "martes"
+      }
+    }
+  ],
+  "nextSlot": [
+    {
+      "name": "nextSlot · slot · dentro: el mismo instante, sin redondear",
+      "kind": "slot",
+      "contractRef": "§13.1 #17, T22",
+      "basis": "decision-fixture",
+      "decision": "DF-W3",
+      "from": "2026-11-10T15:15:37Z",
+      "ownHours": null,
+      "schedule": null,
+      "expected": {
+        "at": "2026-11-10T15:15:37Z",
+        "bogota": "2026-11-10 10:15:37",
+        "weekday": "martes"
+      }
+    },
+    {
+      "name": "nextSlot · slot · lunes 07:59 → lunes 08:00",
+      "kind": "slot",
+      "contractRef": "§13.1 #17, T22",
+      "basis": "decision-fixture",
+      "decision": "DF-W3",
+      "from": "2026-11-09T12:59:00Z",
+      "ownHours": null,
+      "schedule": null,
+      "expected": {
+        "at": "2026-11-09T13:00:00Z",
+        "bogota": "2026-11-09 08:00:00",
+        "weekday": "lunes"
+      }
+    },
+    {
+      "name": "nextSlot · slot · viernes 19:00 → sábado 08:00",
+      "kind": "slot",
+      "contractRef": "§13.1 #17, T22",
+      "basis": "decision-fixture",
+      "decision": "DF-W3",
+      "from": "2026-11-14T00:00:00Z",
+      "ownHours": null,
+      "schedule": null,
+      "expected": {
+        "at": "2026-11-14T13:00:00Z",
+        "bogota": "2026-11-14 08:00:00",
+        "weekday": "sábado"
+      }
+    },
+    {
+      "name": "nextSlot · slot · sábado 15:00 → lunes 08:00 (el domingo no)",
+      "kind": "slot",
+      "contractRef": "§13.1 #17, T22",
+      "basis": "decision-fixture",
+      "decision": "DF-W3",
+      "from": "2026-11-07T20:00:00Z",
+      "ownHours": null,
+      "schedule": null,
+      "expected": {
+        "at": "2026-11-09T13:00:00Z",
+        "bogota": "2026-11-09 08:00:00",
+        "weekday": "lunes"
+      }
+    },
+    {
+      "name": "nextSlot · slot · domingo 10:00 → lunes 08:00 (#17)",
+      "kind": "slot",
+      "contractRef": "§13.1 #17, T22",
+      "basis": "decision-fixture",
+      "decision": "DF-W3",
+      "from": "2026-11-08T15:00:00Z",
+      "ownHours": null,
+      "schedule": null,
+      "expected": {
+        "at": "2026-11-09T13:00:00Z",
+        "bogota": "2026-11-09 08:00:00",
+        "weekday": "lunes"
+      }
+    },
+    {
+      "name": "nextSlot · slot · domingo antes de un lunes festivo (15-11-2026) → martes 17-11 08:00",
+      "kind": "slot",
+      "contractRef": "§13.1 #17, T22",
+      "basis": "ley",
+      "decision": "DF-W3",
+      "from": "2026-11-15T15:00:00Z",
+      "ownHours": null,
+      "schedule": null,
+      "expected": {
+        "at": "2026-11-17T13:00:00Z",
+        "bogota": "2026-11-17 08:00:00",
+        "weekday": "martes"
+      }
+    },
+    {
+      "name": "nextSlot · slot · lunes festivo 16-11-2026 10:00 → martes 08:00",
+      "kind": "slot",
+      "contractRef": "§13.1 #17, T22",
+      "basis": "ley",
+      "decision": "DF-W3",
+      "from": "2026-11-16T15:00:00Z",
+      "ownHours": null,
+      "schedule": null,
+      "expected": {
+        "at": "2026-11-17T13:00:00Z",
+        "bogota": "2026-11-17 08:00:00",
+        "weekday": "martes"
+      }
+    },
+    {
+      "name": "nextSlot · slot · Ley 2578: lunes 13-07-2026 → martes 14-07 08:00",
+      "kind": "slot",
+      "contractRef": "§13.1 #17, T22",
+      "basis": "ley",
+      "decision": "DF-W3",
+      "from": "2026-07-13T14:00:00Z",
+      "ownHours": null,
+      "schedule": null,
+      "expected": {
+        "at": "2026-07-14T13:00:00Z",
+        "bogota": "2026-07-14 08:00:00",
+        "weekday": "martes"
+      }
+    },
+    {
+      "name": "nextSlot · slot · jueves 24-12-2026 19:30 → sábado 26-12 08:00 (Navidad viernes)",
+      "kind": "slot",
+      "contractRef": "§13.1 #17, T22",
+      "basis": "ley",
+      "decision": "DF-W3",
+      "from": "2026-12-25T00:30:00Z",
+      "ownHours": null,
+      "schedule": null,
+      "expected": {
+        "at": "2026-12-26T13:00:00Z",
+        "bogota": "2026-12-26 08:00:00",
+        "weekday": "sábado"
+      }
+    },
+    {
+      "name": "nextSlot · slot · miércoles santo 24-03-2027 20:00 → sábado 27-03 08:00 (jueves y viernes santos)",
+      "kind": "slot",
+      "contractRef": "§13.1 #17, T22",
+      "basis": "ley",
+      "decision": "DF-W3",
+      "from": "2027-03-25T01:00:00Z",
+      "ownHours": null,
+      "schedule": null,
+      "expected": {
+        "at": "2027-03-27T13:00:00Z",
+        "bogota": "2027-03-27 08:00:00",
+        "weekday": "sábado"
+      }
+    },
+    {
+      "name": "nextSlot · slot · jueves 31-12-2026 19:00 → sábado 02-01-2027 08:00 (Año Nuevo viernes)",
+      "kind": "slot",
+      "contractRef": "§13.1 #17, T22",
+      "basis": "ley",
+      "decision": "DF-W3",
+      "from": "2027-01-01T00:00:00Z",
+      "ownHours": null,
+      "schedule": null,
+      "expected": {
+        "at": "2027-01-02T13:00:00Z",
+        "bogota": "2027-01-02 08:00:00",
+        "weekday": "sábado"
+      }
+    },
+    {
+      "name": "nextSlot · slot · medianoche: domingo 23:30 de Bogotá (lunes 04:30Z) → lunes 08:00 de Bogotá",
+      "kind": "slot",
+      "contractRef": "§13.3 (la medianoche de Bogotá)",
+      "basis": "decision-fixture",
+      "decision": "DF-W3",
+      "from": "2026-11-09T04:30:00Z",
+      "ownHours": null,
+      "schedule": null,
+      "expected": {
+        "at": "2026-11-09T13:00:00Z",
+        "bogota": "2026-11-09 08:00:00",
+        "weekday": "lunes"
+      }
+    },
+    {
+      "name": "nextSlot · slot · 29-02-2028 20:00 → miércoles 01-03 08:00",
+      "kind": "slot",
+      "contractRef": "§13.3 (el 29 de febrero)",
+      "basis": "decision-fixture",
+      "decision": "DF-W3",
+      "from": "2028-03-01T01:00:00Z",
+      "ownHours": null,
+      "schedule": null,
+      "expected": {
+        "at": "2028-03-01T13:00:00Z",
+        "bogota": "2028-03-01 08:00:00",
+        "weekday": "miércoles"
+      }
+    },
+    {
+      "name": "nextSlot · slot · con horario propio: martes 08:30 → 09:00",
+      "kind": "slot",
+      "contractRef": "P9-17",
+      "basis": "decision-fixture",
+      "decision": "DF-W3",
+      "from": "2026-11-10T13:30:00Z",
+      "ownHours": {
+        "weekdays": [
+          540,
+          1080
+        ],
+        "saturday": [
+          540,
+          780
+        ]
+      },
+      "schedule": null,
+      "expected": {
+        "at": "2026-11-10T14:00:00Z",
+        "bogota": "2026-11-10 09:00:00",
+        "weekday": "martes"
+      }
+    },
+    {
+      "name": "nextSlot · slot · con horario propio: sábado 13:30 → martes 17-11 09:00 (el lunes 16-11 es festivo)",
+      "kind": "slot",
+      "contractRef": "P9-17",
+      "basis": "decision-fixture",
+      "decision": "DF-W3",
+      "from": "2026-11-14T18:30:00Z",
+      "ownHours": {
+        "weekdays": [
+          540,
+          1080
+        ],
+        "saturday": [
+          540,
+          780
+        ]
+      },
+      "schedule": null,
+      "expected": {
+        "at": "2026-11-17T14:00:00Z",
+        "bogota": "2026-11-17 09:00:00",
+        "weekday": "martes"
+      }
+    },
+    {
+      "name": "nextSlot · slot · con horario de la estrategia (martes a jueves 10:00–12:00): lunes 09:00 → martes 10:00",
+      "kind": "slot",
+      "contractRef": "D9-6 (schedule), N5",
+      "basis": "decision-fixture",
+      "decision": "DF-W3",
+      "from": "2026-11-09T14:00:00Z",
+      "ownHours": null,
+      "schedule": {
+        "days": [
+          2,
+          3,
+          4
+        ],
+        "windows": [
+          {
+            "from": 600,
+            "to": 720
+          }
+        ]
+      },
+      "expected": {
+        "at": "2026-11-10T15:00:00Z",
+        "bogota": "2026-11-10 10:00:00",
+        "weekday": "martes"
+      }
+    },
+    {
+      "name": "nextSlot · slot · con dos franjas de la estrategia: 12:30 → 14:00",
+      "kind": "slot",
+      "contractRef": "D9-6 (schedule), N5",
+      "basis": "decision-fixture",
+      "decision": "DF-W3",
+      "from": "2026-11-10T17:30:00Z",
+      "ownHours": null,
+      "schedule": {
+        "days": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "windows": [
+          {
+            "from": 600,
+            "to": 720
+          },
+          {
+            "from": 840,
+            "to": 960
+          }
+        ]
+      },
+      "expected": {
+        "at": "2026-11-10T19:00:00Z",
+        "bogota": "2026-11-10 14:00:00",
+        "weekday": "martes"
+      }
+    },
+    {
+      "name": "nextSlot · slot · franja de la estrategia que se sale de la ley (18:00–20:00): solo cuenta hasta las 19:00",
+      "kind": "slot",
+      "contractRef": "D9-6 («solo pueden estrechar»)",
+      "basis": "decision-fixture",
+      "decision": "DF-W3",
+      "from": "2026-11-11T00:00:00Z",
+      "ownHours": null,
+      "schedule": {
+        "days": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "windows": [
+          {
+            "from": 1080,
+            "to": 1200
+          }
+        ]
+      },
+      "expected": {
+        "at": "2026-11-11T23:00:00Z",
+        "bogota": "2026-11-11 18:00:00",
+        "weekday": "miércoles"
+      }
+    }
+  ]
+}

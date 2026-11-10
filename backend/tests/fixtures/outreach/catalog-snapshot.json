@@ -1,0 +1,3040 @@
+{
+  "fixture": "catalog-snapshot.json",
+  "version": 1,
+  "contract": "backend/docs/ultron-studio/ULTRON_STUDIO_H9_CONTRACT.md (congelado por el lead el 09-11-2026 20:30 UTC; §13.2 renumerado T1–T23)",
+  "contractSections": [
+    "D9-3 (catálogo de eventos: cuatro clases, parámetros tipados, clave de ciclo, finalidad, coste; extensible solo por commit)",
+    "D9-4 (catálogo de hechos tipados; null = desconocido)",
+    "D9-5 (operadores por tipo, unidades, límites)",
+    "D9-6 (canales de los pasos)",
+    "D9-10 (los 18 resultados y las 6 transiciones)",
+    "§7 #1 (GET strategies/catalog: versión y huella)"
+  ],
+  "generatedBy": "tests/fixtures/outreach/tools/build/build.py (python3 -I), con los casos a mano en sec_*.py",
+  "checkedBy": "tests/Unit/Outreach/FixturesSanityTest.php (forma, unicidad, canonicalización y huellas, sin código del motor)",
+  "readme": "tests/fixtures/outreach/README.md",
+  "basisLegend": {
+    "contrato": "Lo dice el contrato H9 tal cual (contractRef).",
+    "ley": "Lo dice la ley citada (Ley 2300 de 2023, Ley 1581 de 2012, Ley 51 de 1983, Ley 2578 de 2026).",
+    "codigo-existente": "Lo hace hoy el código que el contrato manda reutilizar o igualar (ContactPolicy, OutboundSchedule, ColombianHolidays, VoiceFrequency, StudioContentHasher…); la cita va en contractRef.",
+    "supuesto-lead": "Sigue un supuesto de la congelación del lead (P9-n), que el propietario puede cambiar.",
+    "decision-fixture": "El contrato no lo fija: lo decide este fixture (campo decision; README §Decisiones). Lo congela el lead."
+  },
+  "sources": [
+    {
+      "what": "El contrato del H9 (D9-3 a D9-11, §5, §6, §13 y la Congelación)",
+      "url": "backend/docs/ultron-studio/ULTRON_STUDIO_H9_CONTRACT.md",
+      "consulted": "09-11-2026, en este árbol (sin seguimiento: lo congela el lead)",
+      "how": "Lectura completa; cada caso cita su sección en contractRef."
+    },
+    {
+      "what": "JSON canónico y su sha256",
+      "url": "backend/app/Services/UltronStudio/StudioContentHasher.php (canonicalJson, hash)",
+      "consulted": "09-11-2026, en este árbol (sin cambios desde el H5)",
+      "how": "Claves ordenadas por bytes a todos los niveles, listas en su orden, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES; rechaza los decimales. El generador lo reproduce y FixturesSanityTest lo cruza con la clase real."
+    },
+    {
+      "what": "Los conjuntos cerrados del motor que el H9 reutiliza en solo lectura",
+      "url": "backend/app/Services/Commercial/CommercialVocabulary.php (GOALS, EVENTS); backend/app/Services/Marketing/CommercialPhaseMachine.php (PHASES); backend/app/Services/Marketing/SalesAgentDecisionSchema.php (TEMPERATURES); backend/app/Models/MarketingLead.php (CONSENT_STATUSES)",
+      "consulted": "09-11-2026, en este árbol",
+      "how": "Copiados literalmente (18 objetivos, 27 eventos, 18 fases, 5 temperaturas, 4 estados de consentimiento) y ordenados por bytes en la exportación."
+    }
+  ],
+  "syntheticData": "Ningún dato real: ids, uuids, claves y personas inventados; las personas se nombran por subject_key sintético (m:<id>, l:<id>); sin teléfonos, nombres, documentos ni importes.",
+  "catalogVersion": "outreach-catalog/2026-11-10.2",
+  "catalogHash": "ce5fcdab1e1265b70a1e7133b3eeccbd62bb2ab690acfa11a700ad6779a13039",
+  "catalogCanonicalBytes": 28347,
+  "hashRule": "catalogHash = sha256(StudioContentHasher::canonicalJson(catalog)). OutreachCatalog::export() tiene que devolver exactamente `catalog` (mismas claves, mismos valores, mismas listas en el mismo orden). Cambiar cualquier dato de `catalog` obliga a subir `version` (D9-3).",
+  "exportRules": [
+    "Toda lista de claves va ordenada por bytes (eventos, hechos, dominios cerrados, operadores, finalidades, resultados por code), salvo `buckets` (en su orden) y `units` (days, hours, weeks).",
+    "Todo evento y todo hecho llevan SIEMPRE todas sus claves (null o [] cuando no aplican): la forma es uniforme.",
+    "Un dominio dinámico se escribe {\"dynamic\": \"plans\"|\"class_types\"}; sus valores no están en el catálogo (DF-T5).",
+    "`annotations` y `policyInputs` NO entran en la huella."
+  ],
+  "decisions": {
+    "DF-K3": "valuation.outdated sin valoración previa: valuation.days_since_last desconocido → no inscribe (lado seguro).",
+    "DF-K5": "Claves de ciclo: ce:{commercial_event_id} · exp:{membership_end_date Y-m-d} · inact:{semana ISO del día de Bogotá, «o-\\WW»} · rcv:{receivable_id}:{generación} · tx:{payment_transaction_id} · fu:{marketing_followup_id} · cls:{class_id}:{session_date Y-m-d} (L9-29) · val:{id de la última valoración} · job:{outreach_job_uuid}. Sin el dato (p. ej. membership_end_date nulo) no hay clave y no se inscribe.",
+    "DF-K6": "Compatibilidad: una versión es compatible si cada hecho que usa existe en el catálogo vigente y cada evento existe con la misma keyVersion; si no, catalog_incompatible (nivel N3 de la escalera, ratificada por el lead: L9-21) con la lista de lo que falta («fact:<clave>», «event:<clave>» o «event:<clave>@<keyVersion>»), ordenada por bytes. La cadena de versión del catálogo no decide sola (los cambios son aditivos)."
+  },
+  "counts": {
+    "compatibility": 6,
+    "cycleKeys": 15,
+    "total": 21
+  },
+  "catalog": {
+    "contactFilters": [
+      {
+        "name": "channel",
+        "domain": [
+          "voice",
+          "whatsapp"
+        ]
+      },
+      {
+        "name": "outcome",
+        "domain": [
+          "ambiguous",
+          "answered",
+          "appointment_booked",
+          "blocked",
+          "callback_requested",
+          "converted",
+          "delivered",
+          "failed",
+          "human_requested",
+          "no_answer",
+          "no_response",
+          "not_attempted",
+          "not_interested",
+          "opted_out",
+          "read",
+          "replied",
+          "sent",
+          "wrong_person"
+        ]
+      },
+      {
+        "name": "purpose",
+        "domain": [
+          "collections",
+          "commercial",
+          "service"
+        ]
+      },
+      {
+        "name": "strategy",
+        "domain": [
+          "other",
+          "self"
+        ]
+      }
+    ],
+    "contract": "outreach-catalog-export/1",
+    "dynamicDomains": [
+      "class_types",
+      "plans"
+    ],
+    "entities": {
+      "lead_phase": [
+        "BARRIER_DISCOVERY",
+        "BUYING_SIGNAL",
+        "CLOSING",
+        "DISCOVERY",
+        "DO_NOT_CONTACT",
+        "FOLLOW_UP",
+        "GOAL_DISCOVERY",
+        "HUMAN_HANDOFF",
+        "LOST",
+        "NEW_LEAD",
+        "NURTURE",
+        "OBJECTION_HANDLING",
+        "PAYMENT_HANDOFF",
+        "QUALIFICATION",
+        "RAPPORT",
+        "RECOMMENDATION",
+        "VALUE_BUILDING",
+        "WON"
+      ],
+      "membership": [
+        "active",
+        "expired",
+        "frozen"
+      ],
+      "payment": [
+        "approved",
+        "declined",
+        "expired",
+        "pending"
+      ]
+    },
+    "eventClasses": [
+      "crm_fact",
+      "integration",
+      "outcome",
+      "periodic"
+    ],
+    "events": [
+      {
+        "attrs": [],
+        "available": true,
+        "cadenceMinutes": null,
+        "class": "crm_fact",
+        "conditionUsable": true,
+        "cost": "cheap",
+        "cycleKey": "ce:{commercial_event_id}",
+        "key": "app_linked",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [
+          "commercial"
+        ],
+        "subject": "member_or_lead",
+        "triggerable": true
+      },
+      {
+        "attrs": [],
+        "available": true,
+        "cadenceMinutes": null,
+        "class": "crm_fact",
+        "conditionUsable": true,
+        "cost": "cheap",
+        "cycleKey": "ce:{commercial_event_id}",
+        "key": "appointment_completed",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [
+          "commercial",
+          "service"
+        ],
+        "subject": "member_or_lead",
+        "triggerable": true
+      },
+      {
+        "attrs": [],
+        "available": true,
+        "cadenceMinutes": null,
+        "class": "crm_fact",
+        "conditionUsable": true,
+        "cost": "cheap",
+        "cycleKey": "ce:{commercial_event_id}",
+        "key": "appointment_created",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [
+          "commercial",
+          "service"
+        ],
+        "subject": "member_or_lead",
+        "triggerable": true
+      },
+      {
+        "attrs": [],
+        "available": true,
+        "cadenceMinutes": null,
+        "class": "crm_fact",
+        "conditionUsable": true,
+        "cost": "cheap",
+        "cycleKey": "ce:{commercial_event_id}",
+        "key": "attendance_milestone",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [
+          "commercial"
+        ],
+        "subject": "member_or_lead",
+        "triggerable": true
+      },
+      {
+        "attrs": [],
+        "available": true,
+        "cadenceMinutes": 60,
+        "class": "periodic",
+        "conditionUsable": false,
+        "cost": "expensive",
+        "cycleKey": "cls:{class_id}:{session_date}",
+        "key": "class.upcoming_with_capacity",
+        "keyVersion": 2,
+        "paramConstraints": [],
+        "params": [
+          {
+            "max": 14,
+            "min": 1,
+            "name": "withinDays",
+            "required": true,
+            "type": "int",
+            "unit": "days"
+          }
+        ],
+        "purposes": [
+          "commercial"
+        ],
+        "subject": "member",
+        "triggerable": true
+      },
+      {
+        "attrs": [],
+        "available": true,
+        "cadenceMinutes": null,
+        "class": "crm_fact",
+        "conditionUsable": true,
+        "cost": "cheap",
+        "cycleKey": "ce:{commercial_event_id}",
+        "key": "complaint_created",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [],
+        "subject": "member_or_lead",
+        "triggerable": false
+      },
+      {
+        "attrs": [],
+        "available": true,
+        "cadenceMinutes": null,
+        "class": "crm_fact",
+        "conditionUsable": true,
+        "cost": "cheap",
+        "cycleKey": "ce:{commercial_event_id}",
+        "key": "customer_satisfied",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [
+          "commercial"
+        ],
+        "subject": "member_or_lead",
+        "triggerable": true
+      },
+      {
+        "attrs": [],
+        "available": true,
+        "cadenceMinutes": null,
+        "class": "crm_fact",
+        "conditionUsable": true,
+        "cost": "cheap",
+        "cycleKey": "ce:{commercial_event_id}",
+        "key": "first_checkin",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [
+          "commercial"
+        ],
+        "subject": "member_or_lead",
+        "triggerable": true
+      },
+      {
+        "attrs": [],
+        "available": true,
+        "cadenceMinutes": null,
+        "class": "crm_fact",
+        "conditionUsable": true,
+        "cost": "cheap",
+        "cycleKey": "ce:{commercial_event_id}",
+        "key": "human_requested",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [],
+        "subject": "member_or_lead",
+        "triggerable": false
+      },
+      {
+        "attrs": [],
+        "available": true,
+        "cadenceMinutes": null,
+        "class": "crm_fact",
+        "conditionUsable": true,
+        "cost": "cheap",
+        "cycleKey": "ce:{commercial_event_id}",
+        "key": "inactivity_detected",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [
+          "commercial"
+        ],
+        "subject": "member_or_lead",
+        "triggerable": true
+      },
+      {
+        "attrs": [],
+        "available": false,
+        "cadenceMinutes": null,
+        "class": "integration",
+        "conditionUsable": false,
+        "cost": "cheap",
+        "cycleKey": "msg:{marketing_message_id}",
+        "key": "integration.inbound_message",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [],
+        "subject": "member_or_lead",
+        "triggerable": false
+      },
+      {
+        "attrs": [],
+        "available": false,
+        "cadenceMinutes": null,
+        "class": "integration",
+        "conditionUsable": false,
+        "cost": "cheap",
+        "cycleKey": "msg:{marketing_message_id}:{status}",
+        "key": "integration.meta_status",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [],
+        "subject": "member_or_lead",
+        "triggerable": false
+      },
+      {
+        "attrs": [],
+        "available": false,
+        "cadenceMinutes": null,
+        "class": "integration",
+        "conditionUsable": false,
+        "cost": "cheap",
+        "cycleKey": "call:{voice_call_id}:{status}",
+        "key": "integration.voice_call_status",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [],
+        "subject": "member_or_lead",
+        "triggerable": false
+      },
+      {
+        "attrs": [],
+        "available": true,
+        "cadenceMinutes": null,
+        "class": "crm_fact",
+        "conditionUsable": true,
+        "cost": "cheap",
+        "cycleKey": "ce:{commercial_event_id}",
+        "key": "invoice_rejected",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [
+          "service"
+        ],
+        "subject": "member_or_lead",
+        "triggerable": true
+      },
+      {
+        "attrs": [],
+        "available": true,
+        "cadenceMinutes": null,
+        "class": "crm_fact",
+        "conditionUsable": true,
+        "cost": "cheap",
+        "cycleKey": "ce:{commercial_event_id}",
+        "key": "invoice_requested",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [
+          "service"
+        ],
+        "subject": "member_or_lead",
+        "triggerable": true
+      },
+      {
+        "attrs": [],
+        "available": true,
+        "cadenceMinutes": null,
+        "class": "crm_fact",
+        "conditionUsable": true,
+        "cost": "cheap",
+        "cycleKey": "ce:{commercial_event_id}",
+        "key": "invoice_validated",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [
+          "service"
+        ],
+        "subject": "member_or_lead",
+        "triggerable": true
+      },
+      {
+        "attrs": [],
+        "available": true,
+        "cadenceMinutes": 15,
+        "class": "periodic",
+        "conditionUsable": false,
+        "cost": "cheap",
+        "cycleKey": "fu:{marketing_followup_id}",
+        "key": "lead.followup_due",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [
+          "commercial"
+        ],
+        "subject": "lead",
+        "triggerable": true
+      },
+      {
+        "attrs": [],
+        "available": true,
+        "cadenceMinutes": null,
+        "class": "crm_fact",
+        "conditionUsable": true,
+        "cost": "cheap",
+        "cycleKey": "ce:{commercial_event_id}",
+        "key": "lead_created",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [
+          "commercial"
+        ],
+        "subject": "member_or_lead",
+        "triggerable": true
+      },
+      {
+        "attrs": [],
+        "available": true,
+        "cadenceMinutes": null,
+        "class": "crm_fact",
+        "conditionUsable": true,
+        "cost": "cheap",
+        "cycleKey": "ce:{commercial_event_id}",
+        "key": "lead_qualified",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [
+          "commercial"
+        ],
+        "subject": "member_or_lead",
+        "triggerable": true
+      },
+      {
+        "attrs": [],
+        "available": true,
+        "cadenceMinutes": 60,
+        "class": "periodic",
+        "conditionUsable": false,
+        "cost": "expensive",
+        "cycleKey": "inact:{bogota_iso_week}",
+        "key": "member.inactive",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [
+          {
+            "max": 365,
+            "min": 7,
+            "name": "days",
+            "required": true,
+            "type": "int",
+            "unit": "days"
+          }
+        ],
+        "purposes": [
+          "commercial"
+        ],
+        "subject": "member",
+        "triggerable": true
+      },
+      {
+        "attrs": [],
+        "available": true,
+        "cadenceMinutes": 60,
+        "class": "periodic",
+        "conditionUsable": false,
+        "cost": "cheap",
+        "cycleKey": "exp:{membership_end_date}",
+        "key": "membership.expired_window",
+        "keyVersion": 1,
+        "paramConstraints": [
+          {
+            "left": "daysAfterMin",
+            "op": "lte",
+            "right": "daysAfterMax"
+          }
+        ],
+        "params": [
+          {
+            "max": 365,
+            "min": 1,
+            "name": "daysAfterMax",
+            "required": true,
+            "type": "int",
+            "unit": "days"
+          },
+          {
+            "max": 365,
+            "min": 1,
+            "name": "daysAfterMin",
+            "required": true,
+            "type": "int",
+            "unit": "days"
+          }
+        ],
+        "purposes": [
+          "commercial"
+        ],
+        "subject": "member",
+        "triggerable": true
+      },
+      {
+        "attrs": [],
+        "available": true,
+        "cadenceMinutes": 60,
+        "class": "periodic",
+        "conditionUsable": false,
+        "cost": "cheap",
+        "cycleKey": "exp:{membership_end_date}",
+        "key": "membership.expiring_window",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [
+          {
+            "max": 60,
+            "min": 0,
+            "name": "daysBefore",
+            "required": true,
+            "type": "int",
+            "unit": "days"
+          }
+        ],
+        "purposes": [
+          "commercial"
+        ],
+        "subject": "member",
+        "triggerable": true
+      },
+      {
+        "attrs": [],
+        "available": true,
+        "cadenceMinutes": null,
+        "class": "crm_fact",
+        "conditionUsable": true,
+        "cost": "cheap",
+        "cycleKey": "ce:{commercial_event_id}",
+        "key": "membership_activated",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [
+          "commercial"
+        ],
+        "subject": "member_or_lead",
+        "triggerable": true
+      },
+      {
+        "attrs": [],
+        "available": true,
+        "cadenceMinutes": null,
+        "class": "crm_fact",
+        "conditionUsable": true,
+        "cost": "cheap",
+        "cycleKey": "ce:{commercial_event_id}",
+        "key": "membership_expired",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [
+          "commercial"
+        ],
+        "subject": "member_or_lead",
+        "triggerable": true
+      },
+      {
+        "attrs": [],
+        "available": true,
+        "cadenceMinutes": null,
+        "class": "crm_fact",
+        "conditionUsable": true,
+        "cost": "cheap",
+        "cycleKey": "ce:{commercial_event_id}",
+        "key": "membership_renewed",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [
+          "commercial"
+        ],
+        "subject": "member_or_lead",
+        "triggerable": true
+      },
+      {
+        "attrs": [],
+        "available": true,
+        "cadenceMinutes": null,
+        "class": "crm_fact",
+        "conditionUsable": true,
+        "cost": "cheap",
+        "cycleKey": "ce:{commercial_event_id}",
+        "key": "objection_raised",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [
+          "commercial"
+        ],
+        "subject": "member_or_lead",
+        "triggerable": true
+      },
+      {
+        "attrs": [],
+        "available": true,
+        "cadenceMinutes": null,
+        "class": "crm_fact",
+        "conditionUsable": true,
+        "cost": "cheap",
+        "cycleKey": "ce:{commercial_event_id}",
+        "key": "offer_presented",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [
+          "commercial"
+        ],
+        "subject": "member_or_lead",
+        "triggerable": true
+      },
+      {
+        "attrs": [],
+        "available": true,
+        "cadenceMinutes": null,
+        "class": "crm_fact",
+        "conditionUsable": true,
+        "cost": "cheap",
+        "cycleKey": "ce:{commercial_event_id}",
+        "key": "offer_rejected",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [
+          "commercial"
+        ],
+        "subject": "member_or_lead",
+        "triggerable": true
+      },
+      {
+        "attrs": [],
+        "available": true,
+        "cadenceMinutes": null,
+        "class": "outcome",
+        "conditionUsable": false,
+        "cost": "cheap",
+        "cycleKey": "job:{outreach_job_uuid}",
+        "key": "outcome.callback_requested",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [],
+        "subject": "member_or_lead",
+        "triggerable": false
+      },
+      {
+        "attrs": [],
+        "available": true,
+        "cadenceMinutes": null,
+        "class": "outcome",
+        "conditionUsable": false,
+        "cost": "cheap",
+        "cycleKey": "job:{outreach_job_uuid}",
+        "key": "outcome.no_answer",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [],
+        "subject": "member_or_lead",
+        "triggerable": false
+      },
+      {
+        "attrs": [],
+        "available": true,
+        "cadenceMinutes": null,
+        "class": "outcome",
+        "conditionUsable": false,
+        "cost": "cheap",
+        "cycleKey": "job:{outreach_job_uuid}",
+        "key": "outcome.replied",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [],
+        "subject": "member_or_lead",
+        "triggerable": false
+      },
+      {
+        "attrs": [
+          {
+            "domain": {
+              "dynamic": "plans"
+            },
+            "name": "plan_id",
+            "type": "enum"
+          }
+        ],
+        "available": true,
+        "cadenceMinutes": null,
+        "class": "crm_fact",
+        "conditionUsable": true,
+        "cost": "cheap",
+        "cycleKey": "ce:{commercial_event_id}",
+        "key": "payment_approved",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [
+          "commercial"
+        ],
+        "subject": "member_or_lead",
+        "triggerable": true
+      },
+      {
+        "attrs": [
+          {
+            "domain": {
+              "dynamic": "plans"
+            },
+            "name": "plan_id",
+            "type": "enum"
+          }
+        ],
+        "available": true,
+        "cadenceMinutes": null,
+        "class": "crm_fact",
+        "conditionUsable": true,
+        "cost": "cheap",
+        "cycleKey": "ce:{commercial_event_id}",
+        "key": "payment_expired",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [
+          "commercial"
+        ],
+        "subject": "member_or_lead",
+        "triggerable": true
+      },
+      {
+        "attrs": [
+          {
+            "domain": {
+              "dynamic": "plans"
+            },
+            "name": "plan_id",
+            "type": "enum"
+          }
+        ],
+        "available": true,
+        "cadenceMinutes": null,
+        "class": "crm_fact",
+        "conditionUsable": true,
+        "cost": "cheap",
+        "cycleKey": "ce:{commercial_event_id}",
+        "key": "payment_failed",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [
+          "commercial"
+        ],
+        "subject": "member_or_lead",
+        "triggerable": true
+      },
+      {
+        "attrs": [],
+        "available": true,
+        "cadenceMinutes": 15,
+        "class": "periodic",
+        "conditionUsable": false,
+        "cost": "cheap",
+        "cycleKey": "tx:{payment_transaction_id}",
+        "key": "payment_link.abandoned",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [
+          {
+            "max": 168,
+            "min": 1,
+            "name": "graceHours",
+            "required": true,
+            "type": "int",
+            "unit": "hours"
+          }
+        ],
+        "purposes": [
+          "commercial"
+        ],
+        "subject": "member",
+        "triggerable": true
+      },
+      {
+        "attrs": [
+          {
+            "domain": {
+              "dynamic": "plans"
+            },
+            "name": "plan_id",
+            "type": "enum"
+          }
+        ],
+        "available": true,
+        "cadenceMinutes": null,
+        "class": "crm_fact",
+        "conditionUsable": true,
+        "cost": "cheap",
+        "cycleKey": "ce:{commercial_event_id}",
+        "key": "payment_link_created",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [
+          "commercial"
+        ],
+        "subject": "member_or_lead",
+        "triggerable": true
+      },
+      {
+        "attrs": [
+          {
+            "domain": {
+              "dynamic": "plans"
+            },
+            "name": "plan_id",
+            "type": "enum"
+          }
+        ],
+        "available": true,
+        "cadenceMinutes": null,
+        "class": "crm_fact",
+        "conditionUsable": true,
+        "cost": "cheap",
+        "cycleKey": "ce:{commercial_event_id}",
+        "key": "payment_pending",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [
+          "commercial"
+        ],
+        "subject": "member_or_lead",
+        "triggerable": true
+      },
+      {
+        "attrs": [],
+        "available": true,
+        "cadenceMinutes": 60,
+        "class": "periodic",
+        "conditionUsable": false,
+        "cost": "cheap",
+        "cycleKey": "rcv:{receivable_id}:{generation}",
+        "key": "receivable.overdue",
+        "keyVersion": 1,
+        "paramConstraints": [
+          {
+            "left": "daysMin",
+            "op": "lte",
+            "right": "daysMax"
+          }
+        ],
+        "params": [
+          {
+            "max": 730,
+            "min": 1,
+            "name": "daysMax",
+            "required": true,
+            "type": "int",
+            "unit": "days"
+          },
+          {
+            "max": 730,
+            "min": 1,
+            "name": "daysMin",
+            "required": true,
+            "type": "int",
+            "unit": "days"
+          }
+        ],
+        "purposes": [
+          "collections"
+        ],
+        "subject": "member",
+        "triggerable": true
+      },
+      {
+        "attrs": [],
+        "available": true,
+        "cadenceMinutes": null,
+        "class": "crm_fact",
+        "conditionUsable": true,
+        "cost": "cheap",
+        "cycleKey": "ce:{commercial_event_id}",
+        "key": "referral_opportunity",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [
+          "commercial"
+        ],
+        "subject": "member_or_lead",
+        "triggerable": true
+      },
+      {
+        "attrs": [],
+        "available": true,
+        "cadenceMinutes": null,
+        "class": "crm_fact",
+        "conditionUsable": true,
+        "cost": "cheap",
+        "cycleKey": "ce:{commercial_event_id}",
+        "key": "renewal_window_opened",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [],
+        "purposes": [
+          "commercial"
+        ],
+        "subject": "member_or_lead",
+        "triggerable": true
+      },
+      {
+        "attrs": [],
+        "available": true,
+        "cadenceMinutes": 60,
+        "class": "periodic",
+        "conditionUsable": false,
+        "cost": "expensive",
+        "cycleKey": "val:{last_valuation_id}",
+        "key": "valuation.outdated",
+        "keyVersion": 1,
+        "paramConstraints": [],
+        "params": [
+          {
+            "max": 730,
+            "min": 1,
+            "name": "days",
+            "required": true,
+            "type": "int",
+            "unit": "days"
+          }
+        ],
+        "purposes": [
+          "commercial"
+        ],
+        "subject": "member",
+        "triggerable": true
+      }
+    ],
+    "facts": [
+      {
+        "args": [],
+        "buckets": null,
+        "domain": null,
+        "group": "attendance",
+        "key": "attendance.count_last_30d",
+        "max": 1000,
+        "min": 0,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "int",
+        "unit": "count"
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": null,
+        "group": "attendance",
+        "key": "attendance.days_since_last",
+        "max": 36500,
+        "min": 0,
+        "nullable": true,
+        "prefilter": true,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "duration",
+        "unit": "days"
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": null,
+        "group": "attendance",
+        "key": "attendance.weekly_rate",
+        "max": 10000,
+        "min": 0,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": 2,
+        "trace": "value",
+        "type": "decimal",
+        "unit": "visits_per_week"
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": {
+          "dynamic": "class_types"
+        },
+        "group": "agenda",
+        "key": "class.attended_type_last_60d",
+        "max": null,
+        "min": null,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "enum",
+        "unit": null
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": null,
+        "group": "agenda",
+        "key": "class.reserved_next_7d",
+        "max": null,
+        "min": null,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "bool",
+        "unit": null
+      },
+      {
+        "args": [
+          {
+            "domain": [
+              "voice",
+              "whatsapp"
+            ],
+            "name": "channel",
+            "required": false,
+            "type": "enum"
+          },
+          {
+            "domain": [
+              "collections",
+              "commercial",
+              "service"
+            ],
+            "name": "purpose",
+            "required": false,
+            "type": "enum"
+          },
+          {
+            "domain": [
+              "other",
+              "self"
+            ],
+            "name": "strategy",
+            "required": false,
+            "type": "enum"
+          },
+          {
+            "domain": null,
+            "name": "within",
+            "required": true,
+            "type": "window"
+          }
+        ],
+        "buckets": null,
+        "domain": null,
+        "group": "history",
+        "key": "contact.count",
+        "max": 100,
+        "min": 0,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "int",
+        "unit": "count"
+      },
+      {
+        "args": [
+          {
+            "domain": [
+              "voice",
+              "whatsapp"
+            ],
+            "name": "channel",
+            "required": false,
+            "type": "enum"
+          },
+          {
+            "domain": [
+              "collections",
+              "commercial",
+              "service"
+            ],
+            "name": "purpose",
+            "required": false,
+            "type": "enum"
+          }
+        ],
+        "buckets": null,
+        "domain": null,
+        "group": "history",
+        "key": "contact.days_since_last",
+        "max": 36500,
+        "min": 0,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "duration",
+        "unit": "days"
+      },
+      {
+        "args": [
+          {
+            "domain": [
+              "voice",
+              "whatsapp"
+            ],
+            "name": "channel",
+            "required": false,
+            "type": "enum"
+          },
+          {
+            "domain": [
+              "other",
+              "self"
+            ],
+            "name": "strategy",
+            "required": false,
+            "type": "enum"
+          }
+        ],
+        "buckets": null,
+        "domain": [
+          "ambiguous",
+          "answered",
+          "appointment_booked",
+          "blocked",
+          "callback_requested",
+          "converted",
+          "delivered",
+          "failed",
+          "human_requested",
+          "no_answer",
+          "no_response",
+          "not_attempted",
+          "not_interested",
+          "opted_out",
+          "read",
+          "replied",
+          "sent",
+          "wrong_person"
+        ],
+        "group": "history",
+        "key": "contact.last_outcome",
+        "max": null,
+        "min": null,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "enum",
+        "unit": null
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": null,
+        "group": "conversation",
+        "key": "conversation.human_in_control",
+        "max": null,
+        "min": null,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "bool",
+        "unit": null
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": null,
+        "group": "conversation",
+        "key": "conversation.window_open",
+        "max": null,
+        "min": null,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "bool",
+        "unit": null
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": [
+          "BARRIER_DISCOVERY",
+          "BUYING_SIGNAL",
+          "CLOSING",
+          "DISCOVERY",
+          "DO_NOT_CONTACT",
+          "FOLLOW_UP",
+          "GOAL_DISCOVERY",
+          "HUMAN_HANDOFF",
+          "LOST",
+          "NEW_LEAD",
+          "NURTURE",
+          "OBJECTION_HANDLING",
+          "PAYMENT_HANDOFF",
+          "QUALIFICATION",
+          "RAPPORT",
+          "RECOMMENDATION",
+          "VALUE_BUILDING",
+          "WON"
+        ],
+        "group": "lead",
+        "key": "lead.commercial_phase",
+        "max": null,
+        "min": null,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "enum",
+        "unit": null
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": [
+          "denied",
+          "granted",
+          "pending",
+          "unknown"
+        ],
+        "group": "lead",
+        "key": "lead.consent_status",
+        "max": null,
+        "min": null,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "enum",
+        "unit": null
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": null,
+        "group": "lead",
+        "key": "lead.days_since_last_inbound",
+        "max": 36500,
+        "min": 0,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "duration",
+        "unit": "days"
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": null,
+        "group": "lead",
+        "key": "lead.followup_due",
+        "max": null,
+        "min": null,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "bool",
+        "unit": null
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": null,
+        "group": "lead",
+        "key": "lead.last_inbound_at",
+        "max": 0,
+        "min": -87600,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "date_relative",
+        "unit": "hours"
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": [
+          "cold",
+          "hot",
+          "risk",
+          "very_hot",
+          "warm"
+        ],
+        "group": "lead",
+        "key": "lead.temperature",
+        "max": null,
+        "min": null,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "enum",
+        "unit": null
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": null,
+        "group": "membership",
+        "key": "membership.active",
+        "max": null,
+        "min": null,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "bool",
+        "unit": null
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": null,
+        "group": "membership",
+        "key": "membership.days_as_member",
+        "max": 36500,
+        "min": 0,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "duration",
+        "unit": "days"
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": null,
+        "group": "membership",
+        "key": "membership.days_since_expiry",
+        "max": 3650,
+        "min": -3650,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "int",
+        "unit": "days"
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": null,
+        "group": "membership",
+        "key": "membership.days_to_expiry",
+        "max": 3650,
+        "min": -3650,
+        "nullable": true,
+        "prefilter": true,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "int",
+        "unit": "days"
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": null,
+        "group": "membership",
+        "key": "membership.end_date",
+        "max": 3650,
+        "min": -3650,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "date_relative",
+        "unit": "days"
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": null,
+        "group": "membership",
+        "key": "membership.frozen",
+        "max": null,
+        "min": null,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "bool",
+        "unit": null
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": null,
+        "group": "membership",
+        "key": "membership.plan_duration_days",
+        "max": 3650,
+        "min": 1,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "int",
+        "unit": "days"
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": {
+          "dynamic": "plans"
+        },
+        "group": "membership",
+        "key": "membership.plan_id",
+        "max": null,
+        "min": null,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "enum",
+        "unit": null
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": [
+          "activate_membership",
+          "book_assessment",
+          "book_visit",
+          "close_plan",
+          "collect_data",
+          "collect_payment",
+          "complete_onboarding",
+          "cross_sell",
+          "escalate",
+          "increase_adherence",
+          "link_app",
+          "reactivate",
+          "recover_payment_link",
+          "recover_satisfaction",
+          "renew",
+          "request_referral",
+          "resolve_objection",
+          "upgrade"
+        ],
+        "group": "engine",
+        "key": "nba.open_goal",
+        "max": null,
+        "min": null,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "enum",
+        "unit": null
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": null,
+        "group": "money",
+        "key": "payment.approved_count",
+        "max": 100000,
+        "min": 0,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "int",
+        "unit": "count"
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": null,
+        "group": "money",
+        "key": "payment.declined_last_7d",
+        "max": 1000,
+        "min": 0,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "int",
+        "unit": "count"
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": null,
+        "group": "money",
+        "key": "payment.has_pending_link",
+        "max": null,
+        "min": null,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "bool",
+        "unit": null
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": null,
+        "group": "money",
+        "key": "payment.pending_link_age_hours",
+        "max": 8760,
+        "min": 0,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "duration",
+        "unit": "hours"
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": null,
+        "group": "receivable",
+        "key": "receivable.count_overdue",
+        "max": 1000,
+        "min": 0,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "int",
+        "unit": "count"
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": null,
+        "group": "receivable",
+        "key": "receivable.has_overdue",
+        "max": null,
+        "min": null,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "bool",
+        "unit": null
+      },
+      {
+        "args": [],
+        "buckets": [
+          {
+            "label": "0-7",
+            "max": 7,
+            "min": 0
+          },
+          {
+            "label": "8-30",
+            "max": 30,
+            "min": 8
+          },
+          {
+            "label": "31-90",
+            "max": 90,
+            "min": 31
+          },
+          {
+            "label": ">90",
+            "max": null,
+            "min": 91
+          }
+        ],
+        "domain": null,
+        "group": "receivable",
+        "key": "receivable.overdue_days_max",
+        "max": 36500,
+        "min": 0,
+        "nullable": true,
+        "prefilter": true,
+        "purposes": [
+          "collections"
+        ],
+        "scale": null,
+        "trace": "bucket",
+        "type": "int",
+        "unit": "days"
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": null,
+        "group": "subject",
+        "key": "subject.has_voice_contact",
+        "max": null,
+        "min": null,
+        "nullable": false,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "bool",
+        "unit": null
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": null,
+        "group": "subject",
+        "key": "subject.has_whatsapp_identity",
+        "max": null,
+        "min": null,
+        "nullable": false,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "bool",
+        "unit": null
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": null,
+        "group": "subject",
+        "key": "subject.is_lead",
+        "max": null,
+        "min": null,
+        "nullable": false,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "bool",
+        "unit": null
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": null,
+        "group": "subject",
+        "key": "subject.is_member",
+        "max": null,
+        "min": null,
+        "nullable": false,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "bool",
+        "unit": null
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": null,
+        "group": "subject",
+        "key": "subject.is_minor",
+        "max": null,
+        "min": null,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "bool",
+        "unit": null
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": null,
+        "group": "money",
+        "key": "subscription.active",
+        "max": null,
+        "min": null,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "bool",
+        "unit": null
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": null,
+        "group": "money",
+        "key": "subscription.failed_attempts",
+        "max": 1000,
+        "min": 0,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "int",
+        "unit": "count"
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": null,
+        "group": "agenda",
+        "key": "valuation.days_since_last",
+        "max": 36500,
+        "min": 0,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "duration",
+        "unit": "days"
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": null,
+        "group": "agenda",
+        "key": "valuation.has_upcoming",
+        "max": null,
+        "min": null,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "bool",
+        "unit": null
+      },
+      {
+        "args": [],
+        "buckets": null,
+        "domain": null,
+        "group": "agenda",
+        "key": "valuation.next_date",
+        "max": 3650,
+        "min": 0,
+        "nullable": true,
+        "prefilter": false,
+        "purposes": [
+          "collections",
+          "commercial",
+          "service"
+        ],
+        "scale": null,
+        "trace": "value",
+        "type": "date_relative",
+        "unit": "days"
+      }
+    ],
+    "followUpTransitions": [
+      "end_exit",
+      "end_success",
+      "handoff_human",
+      "next_step",
+      "retry_step",
+      "wait"
+    ],
+    "grammar": "outreach-conditions/1",
+    "limits": {
+      "maxCanonicalBytes": 8192,
+      "maxCount": 100,
+      "maxDepth": 5,
+      "maxEnumValues": 50,
+      "maxNodes": 50,
+      "maxWindowDays": 730
+    },
+    "operators": {
+      "any": [
+        "is_known",
+        "is_unknown"
+      ],
+      "bool": [
+        "eq"
+      ],
+      "count": [
+        "between",
+        "eq",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "neq"
+      ],
+      "date_relative": [
+        "between_days",
+        "more_than_ago",
+        "within_last",
+        "within_next"
+      ],
+      "decimal": [
+        "between",
+        "eq",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "neq"
+      ],
+      "duration": [
+        "between",
+        "eq",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "neq"
+      ],
+      "enum": [
+        "eq",
+        "in",
+        "neq",
+        "not_in"
+      ],
+      "event": [
+        "absent",
+        "exists"
+      ],
+      "int": [
+        "between",
+        "eq",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "neq"
+      ]
+    },
+    "outcomes": [
+      {
+        "code": "ambiguous",
+        "group": "delivery"
+      },
+      {
+        "code": "answered",
+        "group": "response"
+      },
+      {
+        "code": "appointment_booked",
+        "group": "business"
+      },
+      {
+        "code": "blocked",
+        "group": "delivery"
+      },
+      {
+        "code": "callback_requested",
+        "group": "response"
+      },
+      {
+        "code": "converted",
+        "group": "business"
+      },
+      {
+        "code": "delivered",
+        "group": "delivery"
+      },
+      {
+        "code": "failed",
+        "group": "delivery"
+      },
+      {
+        "code": "human_requested",
+        "group": "response"
+      },
+      {
+        "code": "no_answer",
+        "group": "delivery"
+      },
+      {
+        "code": "no_response",
+        "group": "business"
+      },
+      {
+        "code": "not_attempted",
+        "group": "delivery"
+      },
+      {
+        "code": "not_interested",
+        "group": "response"
+      },
+      {
+        "code": "opted_out",
+        "group": "response"
+      },
+      {
+        "code": "read",
+        "group": "delivery"
+      },
+      {
+        "code": "replied",
+        "group": "response"
+      },
+      {
+        "code": "sent",
+        "group": "delivery"
+      },
+      {
+        "code": "wrong_person",
+        "group": "response"
+      }
+    ],
+    "purposes": [
+      "collections",
+      "commercial",
+      "service"
+    ],
+    "stepChannels": [
+      {
+        "key": "assisted:voice",
+        "channel": "assisted",
+        "medium": "voice"
+      },
+      {
+        "key": "assisted:whatsapp",
+        "channel": "assisted",
+        "medium": "whatsapp"
+      },
+      {
+        "key": "voice_call",
+        "channel": "voice_call",
+        "medium": "voice"
+      },
+      {
+        "key": "whatsapp_template",
+        "channel": "whatsapp_template",
+        "medium": "whatsapp"
+      }
+    ],
+    "types": [
+      "bool",
+      "date_relative",
+      "decimal",
+      "duration",
+      "enum",
+      "int"
+    ],
+    "unitDays": {
+      "days": 1,
+      "weeks": 7
+    },
+    "unitHours": {
+      "days": 24,
+      "hours": 1,
+      "weeks": 168
+    },
+    "units": [
+      "days",
+      "hours",
+      "weeks"
+    ],
+    "version": "outreach-catalog/2026-11-10.2"
+  },
+  "annotations": {
+    "events": [
+      {
+        "key": "app_linked",
+        "source": "commercial_events (cursor monótono outreach_cursors; COMMERCIAL_EVENTS_ENABLED apagada = fuente sin datos)"
+      },
+      {
+        "key": "appointment_completed",
+        "source": "commercial_events (cursor monótono outreach_cursors; COMMERCIAL_EVENTS_ENABLED apagada = fuente sin datos)"
+      },
+      {
+        "key": "appointment_created",
+        "source": "commercial_events (cursor monótono outreach_cursors; COMMERCIAL_EVENTS_ENABLED apagada = fuente sin datos)"
+      },
+      {
+        "key": "attendance_milestone",
+        "source": "commercial_events (cursor monótono outreach_cursors; COMMERCIAL_EVENTS_ENABLED apagada = fuente sin datos)"
+      },
+      {
+        "key": "class.upcoming_with_capacity",
+        "note": "Una sesión con cupo dentro de withinDays; la clave de ciclo es la sesión (una inscripción por persona y sesión). #7 de §13.1.",
+        "source": "outreach:sweep con el prefiltro indexado de su hecho"
+      },
+      {
+        "key": "complaint_created",
+        "note": "No es disparador (DF-K4): una queja no abre un contacto automático; sí se puede leer en condiciones.",
+        "source": "commercial_events (cursor monótono outreach_cursors; COMMERCIAL_EVENTS_ENABLED apagada = fuente sin datos)"
+      },
+      {
+        "key": "customer_satisfied",
+        "source": "commercial_events (cursor monótono outreach_cursors; COMMERCIAL_EVENTS_ENABLED apagada = fuente sin datos)"
+      },
+      {
+        "key": "first_checkin",
+        "source": "commercial_events (cursor monótono outreach_cursors; COMMERCIAL_EVENTS_ENABLED apagada = fuente sin datos)"
+      },
+      {
+        "key": "human_requested",
+        "note": "Solo puede DETENER (D9-3, D9-7 N6 human_requested_recently): nunca es disparador.",
+        "source": "commercial_events (cursor monótono outreach_cursors; COMMERCIAL_EVENTS_ENABLED apagada = fuente sin datos)"
+      },
+      {
+        "key": "inactivity_detected",
+        "source": "commercial_events (cursor monótono outreach_cursors; COMMERCIAL_EVENTS_ENABLED apagada = fuente sin datos)"
+      },
+      {
+        "key": "integration.inbound_message",
+        "source": "W9/V9: no disponible el 15-11"
+      },
+      {
+        "key": "integration.meta_status",
+        "source": "W9/V9: no disponible el 15-11"
+      },
+      {
+        "key": "integration.voice_call_status",
+        "source": "W9/V9: no disponible el 15-11"
+      },
+      {
+        "key": "invoice_rejected",
+        "source": "commercial_events (cursor monótono outreach_cursors; COMMERCIAL_EVENTS_ENABLED apagada = fuente sin datos)"
+      },
+      {
+        "key": "invoice_requested",
+        "source": "commercial_events (cursor monótono outreach_cursors; COMMERCIAL_EVENTS_ENABLED apagada = fuente sin datos)"
+      },
+      {
+        "key": "invoice_validated",
+        "source": "commercial_events (cursor monótono outreach_cursors; COMMERCIAL_EVENTS_ENABLED apagada = fuente sin datos)"
+      },
+      {
+        "key": "lead.followup_due",
+        "note": "Seguimientos autorizados de marketing_followups. Solo si marketing.followups.scheduler_enabled = false; si no, N2 legacy_followups_active (D9-3). #6 de §13.1.",
+        "source": "outreach:sweep con el prefiltro indexado de su hecho"
+      },
+      {
+        "key": "lead_created",
+        "source": "commercial_events (cursor monótono outreach_cursors; COMMERCIAL_EVENTS_ENABLED apagada = fuente sin datos)"
+      },
+      {
+        "key": "lead_qualified",
+        "source": "commercial_events (cursor monótono outreach_cursors; COMMERCIAL_EVENTS_ENABLED apagada = fuente sin datos)"
+      },
+      {
+        "key": "member.inactive",
+        "note": "attendance.days_since_last ≥ days con membresía vigente; la clave de ciclo es la semana ISO del día de Bogotá (como ScanCommercialFacts.php:188).",
+        "source": "outreach:sweep con el prefiltro indexado de su hecho"
+      },
+      {
+        "key": "membership.expired_window",
+        "note": "membership.days_since_expiry ∈ [daysAfterMin, daysAfterMax], cerrado en los dos extremos (#3 de §13.1). daysAfterMin ≥ 1: quien vence hoy todavía no ha vencido (DF-K2).",
+        "source": "outreach:sweep con el prefiltro indexado de su hecho"
+      },
+      {
+        "key": "membership.expiring_window",
+        "note": "membership.days_to_expiry ∈ [0, daysBefore] (DF-K1). daysBefore admite 0 por #2 de §13.1 aunque D9-3 diga 1..60 (DF-K1, L9-11).",
+        "source": "outreach:sweep con el prefiltro indexado de su hecho"
+      },
+      {
+        "key": "membership_activated",
+        "source": "commercial_events (cursor monótono outreach_cursors; COMMERCIAL_EVENTS_ENABLED apagada = fuente sin datos)"
+      },
+      {
+        "key": "membership_expired",
+        "source": "commercial_events (cursor monótono outreach_cursors; COMMERCIAL_EVENTS_ENABLED apagada = fuente sin datos)"
+      },
+      {
+        "key": "membership_renewed",
+        "source": "commercial_events (cursor monótono outreach_cursors; COMMERCIAL_EVENTS_ENABLED apagada = fuente sin datos)"
+      },
+      {
+        "key": "objection_raised",
+        "source": "commercial_events (cursor monótono outreach_cursors; COMMERCIAL_EVENTS_ENABLED apagada = fuente sin datos)"
+      },
+      {
+        "key": "offer_presented",
+        "source": "commercial_events (cursor monótono outreach_cursors; COMMERCIAL_EVENTS_ENABLED apagada = fuente sin datos)"
+      },
+      {
+        "key": "offer_rejected",
+        "source": "commercial_events (cursor monótono outreach_cursors; COMMERCIAL_EVENTS_ENABLED apagada = fuente sin datos)"
+      },
+      {
+        "key": "outcome.callback_requested",
+        "source": "resultados del propio H9 (D9-10)"
+      },
+      {
+        "key": "outcome.no_answer",
+        "source": "resultados del propio H9 (D9-10)"
+      },
+      {
+        "key": "outcome.replied",
+        "source": "resultados del propio H9 (D9-10)"
+      },
+      {
+        "key": "payment_approved",
+        "source": "commercial_events (cursor monótono outreach_cursors; COMMERCIAL_EVENTS_ENABLED apagada = fuente sin datos)"
+      },
+      {
+        "key": "payment_expired",
+        "source": "commercial_events (cursor monótono outreach_cursors; COMMERCIAL_EVENTS_ENABLED apagada = fuente sin datos)"
+      },
+      {
+        "key": "payment_failed",
+        "source": "commercial_events (cursor monótono outreach_cursors; COMMERCIAL_EVENTS_ENABLED apagada = fuente sin datos)"
+      },
+      {
+        "key": "payment_link.abandoned",
+        "note": "Enlace de pago pendiente con edad ≥ graceHours (como commercial.thresholds.payment_link_grace_hours).",
+        "source": "outreach:sweep con el prefiltro indexado de su hecho"
+      },
+      {
+        "key": "payment_link_created",
+        "source": "commercial_events (cursor monótono outreach_cursors; COMMERCIAL_EVENTS_ENABLED apagada = fuente sin datos)"
+      },
+      {
+        "key": "payment_pending",
+        "source": "commercial_events (cursor monótono outreach_cursors; COMMERCIAL_EVENTS_ENABLED apagada = fuente sin datos)"
+      },
+      {
+        "key": "receivable.overdue",
+        "note": "receivable.overdue_days_max ∈ [daysMin, daysMax]; finalidad collections (D9-15).",
+        "source": "outreach:sweep con el prefiltro indexado de su hecho"
+      },
+      {
+        "key": "referral_opportunity",
+        "source": "commercial_events (cursor monótono outreach_cursors; COMMERCIAL_EVENTS_ENABLED apagada = fuente sin datos)"
+      },
+      {
+        "key": "renewal_window_opened",
+        "source": "commercial_events (cursor monótono outreach_cursors; COMMERCIAL_EVENTS_ENABLED apagada = fuente sin datos)"
+      },
+      {
+        "key": "valuation.outdated",
+        "note": "valuation.days_since_last ≥ days; sin valoración previa el hecho es desconocido y no inscribe (DF-K3).",
+        "source": "outreach:sweep con el prefiltro indexado de su hecho"
+      }
+    ],
+    "facts": [
+      {
+        "key": "attendance.count_last_30d",
+        "source": "Outreach\\Facts\\Attendance (attendances)"
+      },
+      {
+        "key": "attendance.days_since_last",
+        "source": "Outreach\\Facts\\Attendance (attendances)"
+      },
+      {
+        "key": "attendance.weekly_rate",
+        "source": "Outreach\\Facts\\Attendance (attendances)",
+        "note": "decimal con scale 2: el valor y los literales son ENTEROS en centésimas (2,50 visitas/semana = 250) (DF-T4)."
+      },
+      {
+        "key": "class.attended_type_last_60d",
+        "source": "Outreach\\Facts\\Agenda (class_sessions, class_reservations, classes, valuation_appointments, physical_evaluations)",
+        "note": "Dominio dinámico `class_types` (classes.type normalizado). Un solo valor: el tipo más asistido en 60 días, empate por orden de bytes (DF-T5, L9-13)."
+      },
+      {
+        "key": "class.reserved_next_7d",
+        "source": "Outreach\\Facts\\Agenda (class_sessions, class_reservations, classes, valuation_appointments, physical_evaluations)"
+      },
+      {
+        "key": "contact.count",
+        "source": "Outreach\\Facts\\ContactHistory (outreach_jobs live, marketing_messages proactivos de la IA, voice_calls salientes contadas): snapshot.contacts",
+        "note": "Lo calcula el evaluador desde snapshot.contacts; `within` obligatorio; `strategy` ∈ {self, other} y sin él cuentan todas (DF-C9)."
+      },
+      {
+        "key": "contact.days_since_last",
+        "source": "Outreach\\Facts\\ContactHistory (outreach_jobs live, marketing_messages proactivos de la IA, voice_calls salientes contadas): snapshot.contacts",
+        "note": "Días de Bogotá desde el contacto más reciente que casa; sin contactos, desconocido."
+      },
+      {
+        "key": "contact.last_outcome",
+        "source": "Outreach\\Facts\\ContactHistory (outreach_jobs live, marketing_messages proactivos de la IA, voice_calls salientes contadas): snapshot.contacts",
+        "note": "El resultado del contacto más reciente que casa; sin contactos, o con su resultado aún sin registrar, desconocido."
+      },
+      {
+        "key": "conversation.human_in_control",
+        "source": "Outreach\\Facts\\Leads (marketing_conversations)"
+      },
+      {
+        "key": "conversation.window_open",
+        "source": "Outreach\\Facts\\Leads (marketing_conversations)"
+      },
+      {
+        "key": "lead.commercial_phase",
+        "source": "Outreach\\Facts\\Leads (marketing_leads, marketing_conversations, marketing_followups)"
+      },
+      {
+        "key": "lead.consent_status",
+        "source": "Outreach\\Facts\\Leads (marketing_leads, marketing_conversations, marketing_followups)"
+      },
+      {
+        "key": "lead.days_since_last_inbound",
+        "source": "Outreach\\Facts\\Leads (marketing_leads, marketing_conversations, marketing_followups)"
+      },
+      {
+        "key": "lead.followup_due",
+        "source": "Outreach\\Facts\\Leads (marketing_leads, marketing_conversations, marketing_followups)"
+      },
+      {
+        "key": "lead.last_inbound_at",
+        "source": "Outreach\\Facts\\Leads (marketing_leads, marketing_conversations, marketing_followups)",
+        "note": "NUEVO (DF-T2): el último entrante como date_relative en horas (≤ 0: siempre en el pasado)."
+      },
+      {
+        "key": "lead.temperature",
+        "source": "Outreach\\Facts\\Leads (marketing_leads, marketing_conversations, marketing_followups)"
+      },
+      {
+        "key": "membership.active",
+        "source": "Outreach\\Facts\\Membership (users.membership_end_date, plan; CommercialSubject)"
+      },
+      {
+        "key": "membership.days_as_member",
+        "source": "Outreach\\Facts\\Membership (users.membership_end_date, plan; CommercialSubject)"
+      },
+      {
+        "key": "membership.days_since_expiry",
+        "source": "Outreach\\Facts\\Membership (users.membership_end_date, plan; CommercialSubject)",
+        "note": "Con signo: hoy − fecha de fin (= −days_to_expiry) (DF-T3)."
+      },
+      {
+        "key": "membership.days_to_expiry",
+        "source": "Outreach\\Facts\\Membership (users.membership_end_date, plan; CommercialSubject)",
+        "note": "Con signo: fecha de fin − hoy, en días de Bogotá (hoy = 0, vencida ayer = −1). Admite gt/lt (el ejemplo de D9-6 usa `gt 30`)."
+      },
+      {
+        "key": "membership.end_date",
+        "source": "Outreach\\Facts\\Membership (users.membership_end_date, plan; CommercialSubject)",
+        "note": "NUEVO (DF-T2): la misma fecha como date_relative (desplazamiento con signo en días de Bogotá), para los operadores relativos."
+      },
+      {
+        "key": "membership.frozen",
+        "source": "Outreach\\Facts\\Membership (users.membership_end_date, plan; CommercialSubject)"
+      },
+      {
+        "key": "membership.plan_duration_days",
+        "source": "Outreach\\Facts\\Membership (users.membership_end_date, plan; CommercialSubject)"
+      },
+      {
+        "key": "membership.plan_id",
+        "source": "Outreach\\Facts\\Membership (users.membership_end_date, plan; CommercialSubject)",
+        "note": "Dominio dinámico `plans` (planes vendibles): el validador recibe la instantánea del dominio (DF-T5, L9-13)."
+      },
+      {
+        "key": "nba.open_goal",
+        "source": "Outreach\\Facts\\EngineGoal (commercial_opportunities, solo lectura)",
+        "note": "Sin objetivo abierto es null = desconocido (D9-4: «o nulo»): para pedir «sin objetivo» se usa is_unknown (DF-T7)."
+      },
+      {
+        "key": "payment.approved_count",
+        "source": "Outreach\\Facts\\Payments (payment_transactions, membership_subscriptions)"
+      },
+      {
+        "key": "payment.declined_last_7d",
+        "source": "Outreach\\Facts\\Payments (payment_transactions, membership_subscriptions)"
+      },
+      {
+        "key": "payment.has_pending_link",
+        "source": "Outreach\\Facts\\Payments (payment_transactions, membership_subscriptions)"
+      },
+      {
+        "key": "payment.pending_link_age_hours",
+        "source": "Outreach\\Facts\\Payments (payment_transactions, membership_subscriptions)"
+      },
+      {
+        "key": "receivable.count_overdue",
+        "source": "Outreach\\Facts\\Receivables (receivables, receivable_payments)"
+      },
+      {
+        "key": "receivable.has_overdue",
+        "source": "Outreach\\Facts\\Receivables (receivables, receivable_payments)"
+      },
+      {
+        "key": "receivable.overdue_days_max",
+        "source": "Outreach\\Facts\\Receivables (receivables, receivable_payments)",
+        "note": "En la traza, `observed` es el tramo (0-7, 8-30, 31-90, >90), nunca el número (D9-4: «solo tramos») (DF-T6)."
+      },
+      {
+        "key": "subject.has_voice_contact",
+        "source": "Outreach\\Subjects (CommercialSubjectResolver, identities); subject.is_minor desde la fecha de nacimiento, solo el booleano"
+      },
+      {
+        "key": "subject.has_whatsapp_identity",
+        "source": "Outreach\\Subjects (CommercialSubjectResolver, identities); subject.is_minor desde la fecha de nacimiento, solo el booleano"
+      },
+      {
+        "key": "subject.is_lead",
+        "source": "Outreach\\Subjects (CommercialSubjectResolver, identities); subject.is_minor desde la fecha de nacimiento, solo el booleano"
+      },
+      {
+        "key": "subject.is_member",
+        "source": "Outreach\\Subjects (CommercialSubjectResolver, identities); subject.is_minor desde la fecha de nacimiento, solo el booleano"
+      },
+      {
+        "key": "subject.is_minor",
+        "source": "Outreach\\Subjects (CommercialSubjectResolver, identities); subject.is_minor desde la fecha de nacimiento, solo el booleano"
+      },
+      {
+        "key": "subscription.active",
+        "source": "Outreach\\Facts\\Payments (payment_transactions, membership_subscriptions)"
+      },
+      {
+        "key": "subscription.failed_attempts",
+        "source": "Outreach\\Facts\\Payments (payment_transactions, membership_subscriptions)"
+      },
+      {
+        "key": "valuation.days_since_last",
+        "source": "Outreach\\Facts\\Agenda (class_sessions, class_reservations, classes, valuation_appointments, physical_evaluations)"
+      },
+      {
+        "key": "valuation.has_upcoming",
+        "source": "Outreach\\Facts\\Agenda (class_sessions, class_reservations, classes, valuation_appointments, physical_evaluations)"
+      },
+      {
+        "key": "valuation.next_date",
+        "source": "Outreach\\Facts\\Agenda (class_sessions, class_reservations, classes, valuation_appointments, physical_evaluations)",
+        "note": "NUEVO (DF-T2): la próxima valoración agendada como date_relative en días (≥ 0)."
+      }
+    ]
+  },
+  "policyInputs": {
+    "note": "Entradas de PolicyLadder/ContactBudget/ChannelSelector que NO son hechos de condiciones: un árbol que las nombre da unknown_fact. Su forma exacta la fija policy-ladder-cases.json (baseInput).",
+    "personFacts": [
+      {
+        "key": "consent.<purpose>.<medium>",
+        "type": "enum",
+        "domain": [
+          "denied",
+          "granted",
+          "none"
+        ],
+        "note": "Matriz finalidad × medio de D9-15; null o ausente = none (deniega por defecto)."
+      },
+      {
+        "key": "optout.do_not_contact",
+        "type": "bool"
+      },
+      {
+        "key": "optout.sibling_do_not_contact",
+        "type": "bool"
+      },
+      {
+        "key": "optout.commercial",
+        "type": "bool"
+      },
+      {
+        "key": "voice.excluded",
+        "type": "bool"
+      },
+      {
+        "key": "voice.rne_ok",
+        "type": "bool"
+      },
+      {
+        "key": "subject.known",
+        "type": "bool"
+      },
+      {
+        "key": "subject.is_minor",
+        "type": "bool"
+      },
+      {
+        "key": "conversation.human_in_control",
+        "type": "bool"
+      },
+      {
+        "key": "receivable.known",
+        "type": "bool",
+        "note": "false = la fuente de cartera no se pudo leer: bloquea lo comercial (DF-L12)."
+      },
+      {
+        "key": "receivable.overdueDaysMax",
+        "type": "int",
+        "note": "null = sin cartera vencida; para N6 collections_overdue_blocks_commercial (L9-20)."
+      }
+    ],
+    "serverConfig": [
+      {
+        "key": "outreach.collections.commercial_block_days",
+        "type": "int",
+        "default": 15,
+        "note": "P9-7 y L9-20: sin contacto comercial con cartera vencida de más de N días; la estrategia solo puede bajarlo (limits.commercialBlockOverdueDays)."
+      }
+    ],
+    "context": [
+      "flags (maestra, modo, canales, constante, autonomía y seguimientos del motor)",
+      "frenos (global, canal, estrategia, ULTRON, agente, voz)",
+      "estrategia publicada y su cadena",
+      "referencia del Studio",
+      "plantillas",
+      "presupuestos y topes"
+    ]
+  },
+  "compatibility": [
+    {
+      "name": "compatibility · version · todos los hechos y el evento existen con su keyVersion → compatible",
+      "kind": "version",
+      "contractRef": "D9-3 (los cambios son aditivos; retirar un hecho → catalog_incompatible)",
+      "basis": "decision-fixture",
+      "decision": "DF-K6",
+      "used": {
+        "catalogVersion": "outreach-catalog/2026-11-10.2",
+        "facts": [
+          "membership.days_to_expiry",
+          "contact.count"
+        ],
+        "events": [
+          {
+            "key": "membership.expiring_window",
+            "keyVersion": 1
+          }
+        ]
+      },
+      "expected": {
+        "result": "compatible",
+        "missing": [],
+        "level": null
+      }
+    },
+    {
+      "name": "compatibility · version · una versión de un catálogo anterior que solo usa claves vigentes → compatible (los cambios son aditivos)",
+      "kind": "version",
+      "contractRef": "D9-3 (los cambios son aditivos; retirar un hecho → catalog_incompatible)",
+      "basis": "decision-fixture",
+      "decision": "DF-K6",
+      "used": {
+        "catalogVersion": "outreach-catalog/2026-11-01.1",
+        "facts": [
+          "attendance.days_since_last"
+        ],
+        "events": [
+          {
+            "key": "member.inactive",
+            "keyVersion": 1
+          }
+        ]
+      },
+      "expected": {
+        "result": "compatible",
+        "missing": [],
+        "level": null
+      }
+    },
+    {
+      "name": "compatibility · version · un hecho retirado (membership.legacy_segment) → catalog_incompatible, denegada y no reinterpretada (§13.3)",
+      "kind": "version",
+      "contractRef": "D9-3 (los cambios son aditivos; retirar un hecho → catalog_incompatible)",
+      "basis": "decision-fixture",
+      "decision": "DF-K6",
+      "used": {
+        "catalogVersion": "outreach-catalog/2026-11-01.1",
+        "facts": [
+          "membership.legacy_segment",
+          "membership.active"
+        ],
+        "events": [
+          {
+            "key": "membership.expiring_window",
+            "keyVersion": 1
+          }
+        ]
+      },
+      "expected": {
+        "result": "catalog_incompatible",
+        "missing": [
+          "fact:membership.legacy_segment"
+        ],
+        "level": "N3"
+      }
+    },
+    {
+      "name": "compatibility · version · un evento con otra keyVersion → catalog_incompatible",
+      "kind": "version",
+      "contractRef": "D9-3 (los cambios son aditivos; retirar un hecho → catalog_incompatible)",
+      "basis": "decision-fixture",
+      "decision": "DF-K6",
+      "used": {
+        "catalogVersion": "outreach-catalog/2026-11-10.2",
+        "facts": [],
+        "events": [
+          {
+            "key": "membership.expiring_window",
+            "keyVersion": 2
+          }
+        ]
+      },
+      "expected": {
+        "result": "catalog_incompatible",
+        "missing": [
+          "event:membership.expiring_window@2"
+        ],
+        "level": "N3"
+      }
+    },
+    {
+      "name": "compatibility · version · un evento que no existe y un hecho retirado: los dos, ordenados por bytes",
+      "kind": "version",
+      "contractRef": "D9-3 (los cambios son aditivos; retirar un hecho → catalog_incompatible)",
+      "basis": "decision-fixture",
+      "decision": "DF-K6",
+      "used": {
+        "catalogVersion": "outreach-catalog/2026-11-10.2",
+        "facts": [
+          "subject.vip"
+        ],
+        "events": [
+          {
+            "key": "gym.special_event",
+            "keyVersion": 1
+          }
+        ]
+      },
+      "expected": {
+        "result": "catalog_incompatible",
+        "missing": [
+          "event:gym.special_event",
+          "fact:subject.vip"
+        ],
+        "level": "N3"
+      }
+    },
+    {
+      "name": "compatibility · version · una entrada de policyInputs no es un hecho del catálogo (consent.commercial.whatsapp) → catalog_incompatible",
+      "kind": "version",
+      "contractRef": "D9-3 (los cambios son aditivos; retirar un hecho → catalog_incompatible)",
+      "basis": "decision-fixture",
+      "decision": "DF-K6",
+      "used": {
+        "catalogVersion": "outreach-catalog/2026-11-10.2",
+        "facts": [
+          "consent.commercial.whatsapp"
+        ],
+        "events": []
+      },
+      "expected": {
+        "result": "catalog_incompatible",
+        "missing": [
+          "fact:consent.commercial.whatsapp"
+        ],
+        "level": "N3"
+      }
+    }
+  ],
+  "cycleKeys": [
+    {
+      "name": "cycleKeys · derive · ventana de vencimiento: exp:<fecha de fin>",
+      "kind": "derive",
+      "contractRef": "D9-3 (exp:<membership_end_date>)",
+      "basis": "contrato",
+      "decision": "DF-K5",
+      "event": "membership.expiring_window",
+      "occurrence": {
+        "membership_end_date": "2026-11-17"
+      },
+      "now": "2026-11-10T15:00:00Z",
+      "expected": {
+        "cycleKey": "exp:2026-11-17",
+        "enrolls": true
+      }
+    },
+    {
+      "name": "cycleKeys · derive · vencida: la misma forma exp:<fecha de fin> (otra estrategia, otra fila)",
+      "kind": "derive",
+      "contractRef": "D9-3 (clave de ciclo), D9-8 etapa 2 (UNIQUE strategy, subject, cycle, mode)",
+      "basis": "decision-fixture",
+      "decision": "DF-K5",
+      "event": "membership.expired_window",
+      "occurrence": {
+        "membership_end_date": "2026-11-03"
+      },
+      "now": "2026-11-10T15:00:00Z",
+      "expected": {
+        "cycleKey": "exp:2026-11-03",
+        "enrolls": true
+      }
+    },
+    {
+      "name": "cycleKeys · derive · membership_end_date nulo: sin clave de ciclo y no se inscribe (§13.3)",
+      "kind": "derive",
+      "contractRef": "D9-3 (clave de ciclo), D9-8 etapa 2 (UNIQUE strategy, subject, cycle, mode)",
+      "basis": "decision-fixture",
+      "decision": "DF-K5",
+      "event": "membership.expiring_window",
+      "occurrence": {
+        "membership_end_date": null
+      },
+      "now": "2026-11-10T15:00:00Z",
+      "expected": {
+        "cycleKey": null,
+        "enrolls": false
+      }
+    },
+    {
+      "name": "cycleKeys · derive · inactividad: la semana ISO del día de Bogotá (martes 10-11-2026 → 2026-W46)",
+      "kind": "derive",
+      "contractRef": "D9-3 (la semana ISO para la inactividad, como ScanCommercialFacts.php:188)",
+      "basis": "contrato",
+      "decision": "DF-K5",
+      "event": "member.inactive",
+      "occurrence": {},
+      "now": "2026-11-10T15:00:00Z",
+      "expected": {
+        "cycleKey": "inact:2026-W46",
+        "enrolls": true
+      }
+    },
+    {
+      "name": "cycleKeys · derive · inactividad el domingo 03-01-2027 23:30 de Bogotá (lunes 04:30 UTC): todavía 2026-W53, no 2027-W01",
+      "kind": "derive",
+      "contractRef": "D9-3 (clave de ciclo), D9-8 etapa 2 (UNIQUE strategy, subject, cycle, mode)",
+      "basis": "decision-fixture",
+      "decision": "DF-K5",
+      "event": "member.inactive",
+      "occurrence": {},
+      "now": "2027-01-04T04:30:00Z",
+      "expected": {
+        "cycleKey": "inact:2026-W53",
+        "enrolls": true
+      }
+    },
+    {
+      "name": "cycleKeys · derive · inactividad el lunes 04-01-2027 00:00 de Bogotá: 2027-W01",
+      "kind": "derive",
+      "contractRef": "D9-3 (clave de ciclo), D9-8 etapa 2 (UNIQUE strategy, subject, cycle, mode)",
+      "basis": "decision-fixture",
+      "decision": "DF-K5",
+      "event": "member.inactive",
+      "occurrence": {},
+      "now": "2027-01-04T05:00:00Z",
+      "expected": {
+        "cycleKey": "inact:2027-W01",
+        "enrolls": true
+      }
+    },
+    {
+      "name": "cycleKeys · derive · inactividad el jueves 31-12-2026: 2026 tiene 53 semanas ISO (2026-W53)",
+      "kind": "derive",
+      "contractRef": "D9-3 (clave de ciclo), D9-8 etapa 2 (UNIQUE strategy, subject, cycle, mode)",
+      "basis": "decision-fixture",
+      "decision": "DF-K5",
+      "event": "member.inactive",
+      "occurrence": {},
+      "now": "2026-12-31T17:00:00Z",
+      "expected": {
+        "cycleKey": "inact:2026-W53",
+        "enrolls": true
+      }
+    },
+    {
+      "name": "cycleKeys · derive · cartera: rcv:<id>:<generación>",
+      "kind": "derive",
+      "contractRef": "D9-3 (rcv:<receivable_id>:<generación>, como DetectOverdueReceivables)",
+      "basis": "contrato",
+      "decision": "DF-K5",
+      "event": "receivable.overdue",
+      "occurrence": {
+        "receivable_id": 812,
+        "generation": 3
+      },
+      "now": "2026-11-10T15:00:00Z",
+      "expected": {
+        "cycleKey": "rcv:812:3",
+        "enrolls": true
+      }
+    },
+    {
+      "name": "cycleKeys · derive · cartera sin generación: sin clave",
+      "kind": "derive",
+      "contractRef": "D9-3 (clave de ciclo), D9-8 etapa 2 (UNIQUE strategy, subject, cycle, mode)",
+      "basis": "decision-fixture",
+      "decision": "DF-K5",
+      "event": "receivable.overdue",
+      "occurrence": {
+        "receivable_id": 812,
+        "generation": null
+      },
+      "now": "2026-11-10T15:00:00Z",
+      "expected": {
+        "cycleKey": null,
+        "enrolls": false
+      }
+    },
+    {
+      "name": "cycleKeys · derive · enlace abandonado: tx:<payment_transaction_id>",
+      "kind": "derive",
+      "contractRef": "D9-3 (tx:<payment_transaction_id>)",
+      "basis": "contrato",
+      "decision": "DF-K5",
+      "event": "payment_link.abandoned",
+      "occurrence": {
+        "payment_transaction_id": 5521
+      },
+      "now": "2026-11-10T15:00:00Z",
+      "expected": {
+        "cycleKey": "tx:5521",
+        "enrolls": true
+      }
+    },
+    {
+      "name": "cycleKeys · derive · hecho del CRM: ce:<commercial_event_id> (la misma ocurrencia entregada dos veces da la misma clave, #14)",
+      "kind": "derive",
+      "contractRef": "D9-3, #14 de §13.1 (occurrence_key único)",
+      "basis": "decision-fixture",
+      "decision": "DF-K5",
+      "event": "payment_failed",
+      "occurrence": {
+        "commercial_event_id": 90017
+      },
+      "now": "2026-11-10T15:00:00Z",
+      "expected": {
+        "cycleKey": "ce:90017",
+        "enrolls": true
+      }
+    },
+    {
+      "name": "cycleKeys · derive · seguimiento de mercadeo: fu:<marketing_followup_id>",
+      "kind": "derive",
+      "contractRef": "D9-3 (clave de ciclo), D9-8 etapa 2 (UNIQUE strategy, subject, cycle, mode)",
+      "basis": "decision-fixture",
+      "decision": "DF-K5",
+      "event": "lead.followup_due",
+      "occurrence": {
+        "marketing_followup_id": 77
+      },
+      "now": "2026-11-10T15:00:00Z",
+      "expected": {
+        "cycleKey": "fu:77",
+        "enrolls": true
+      }
+    },
+    {
+      "name": "cycleKeys · derive · clase con cupo: cls:<class_id>:<session_date> (L9-29, keyVersion 2)",
+      "kind": "derive",
+      "contractRef": "L9-29 (la fila de sesión solo nace al iniciar la clase)",
+      "basis": "supuesto-lead",
+      "decision": "DF-K5",
+      "event": "class.upcoming_with_capacity",
+      "occurrence": {
+        "class_id": 3301,
+        "session_date": "2026-11-14"
+      },
+      "now": "2026-11-10T15:00:00Z",
+      "expected": {
+        "cycleKey": "cls:3301:2026-11-14",
+        "enrolls": true
+      }
+    },
+    {
+      "name": "cycleKeys · derive · valoración desactualizada: val:<id de la última valoración>",
+      "kind": "derive",
+      "contractRef": "D9-3 (clave de ciclo), D9-8 etapa 2 (UNIQUE strategy, subject, cycle, mode)",
+      "basis": "decision-fixture",
+      "decision": "DF-K5",
+      "event": "valuation.outdated",
+      "occurrence": {
+        "last_valuation_id": 4410
+      },
+      "now": "2026-11-10T15:00:00Z",
+      "expected": {
+        "cycleKey": "val:4410",
+        "enrolls": true
+      }
+    },
+    {
+      "name": "cycleKeys · derive · valoración desactualizada sin valoración previa: sin clave (DF-K3)",
+      "kind": "derive",
+      "contractRef": "D9-3 (clave de ciclo), D9-8 etapa 2 (UNIQUE strategy, subject, cycle, mode)",
+      "basis": "decision-fixture",
+      "decision": "DF-K3",
+      "event": "valuation.outdated",
+      "occurrence": {
+        "last_valuation_id": null
+      },
+      "now": "2026-11-10T15:00:00Z",
+      "expected": {
+        "cycleKey": null,
+        "enrolls": false
+      }
+    }
+  ]
+}

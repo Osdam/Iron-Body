@@ -55,6 +55,7 @@ final class PermissionCatalog
         'ultron' => ['label' => 'ULTRON Studio', 'icon' => 'account_tree', 'hint' => 'Borradores, versiones, reglas, aprobaciones y publicaciones del agente comercial. El motor solo anota la versión publicada: no cambia lo que dice ni hace'],
         // Hito 8 (D8-22): la voz por teléfono, gobernada por Laravel.
         'telephony' => ['label' => 'Voz y telefonía', 'icon' => 'call', 'hint' => 'Registro de llamadas de voz sin datos personales, la puerta de salientes, el corte y los contactos con consentimiento de voz'],
+        'commercial_automation' => ['label' => 'Automatización comercial', 'icon' => 'campaign', 'hint' => 'Campañas configurables de ULTRON Studio (Hito 9): panel, inscripciones y trabajos, frenos y PARADA GLOBAL, bandeja asistida e historial por seudónimo. Nace apagada y nunca contacta a nadie sin sus banderas'],
         'content' => ['label' => 'Contenido de la app', 'icon' => 'smartphone', 'hint' => 'Eventos, anuncios, rachas y notificaciones push'],
         'moderation' => ['label' => 'Moderación', 'icon' => 'gavel', 'hint' => 'Historias, lives y sanciones de comunidad'],
         'nutrition' => ['label' => 'Nutrición', 'icon' => 'nutrition', 'hint' => 'Catálogo de alimentos'],
@@ -168,6 +169,16 @@ final class PermissionCatalog
         'telephony.view' => 'Ver el registro de llamadas',
         'telephony.call_place' => 'Pedir llamadas salientes y colgar',
         'telephony.contacts_manage' => 'Administrar contactos de voz y su consentimiento',
+        'ultron.strategies_edit' => 'Editar estrategias y plantillas comerciales (borradores, versiones y simulaciones)',
+        'ultron.strategies_publish' => 'Publicar, promover y reanudar estrategias comerciales',
+        'ultron.strategies_rollback' => 'Pausar y revertir estrategias comerciales',
+        'ultron.person_bindings_manage' => 'Administrar vínculos de personas con estrategias',
+        'commercial_automation.view' => 'Ver la automatización comercial (panel, inscripciones, trabajos y frenos)',
+        'commercial_automation.simulate_real' => 'Simular estrategias sobre una muestra real de personas',
+        'commercial_automation.timeline_view' => 'Ver el historial de contactos de una persona (por seudónimo)',
+        'commercial_automation.assisted_work' => 'Atender la bandeja asistida (reclamar y registrar resultados)',
+        'commercial_automation.stop' => 'Echar frenos y la PARADA GLOBAL de la automatización comercial',
+        'commercial_automation.release' => 'Soltar frenos de la automatización comercial',
     ];
 
     /**
@@ -242,6 +253,16 @@ final class PermissionCatalog
         'telephony.view' => 'Ver el registro de llamadas de voz (sin números: solo los 4 últimos dígitos), su sello, sus eventos, las métricas y los costes del día.',
         'telephony.call_place' => 'Pedir una llamada saliente a un destino autorizado (la política de Laravel decide) y colgar una llamada en curso. No llega por defecto al Administrador.',
         'telephony.contacts_manage' => 'Registrar contactos de voz, cargar y confirmar su consentimiento (cuatro ojos: lo confirma otra persona), revocarlo, excluir números y anotar consultas al Registro de Números Excluidos. Son datos personales. No llega por defecto al Administrador.',
+        'ultron.strategies_edit' => 'Crear y editar estrategias comerciales y sus plantillas de mensaje: borrador, validación, versiones y simulaciones sintéticas. Nada de esto contacta a nadie; cada cambio queda en la auditoría del Studio.',
+        'ultron.strategies_publish' => 'Publicar una versión aprobada de estrategia en canario, promoverla y reanudarla. Exige la bandera de publicación, la ventana horaria y los cuatro ojos: quien aprueba no publica.',
+        'ultron.strategies_rollback' => 'Pausar una estrategia publicada o revertirla a la versión anterior. Es la dirección segura: nunca enciende nada.',
+        'ultron.person_bindings_manage' => 'Registrar, verificar y revocar los vínculos entre personas y estrategias. Llevan datos personales: solo Super Admin por defecto.',
+        'commercial_automation.view' => 'Abrir el panel de la automatización comercial: banderas, frenos, métricas, pasadas, inscripciones con sus trazas y trabajos, sin teléfonos ni nombres.',
+        'commercial_automation.simulate_real' => 'Simular una estrategia sobre una muestra real de personas (solo lectura, seudónimos): a quién tocaría y por qué, sin contactar a nadie. Solo Super Admin por defecto.',
+        'commercial_automation.timeline_view' => 'Ver el historial de contactos automáticos de una persona por su seudónimo. Cada consulta queda en el registro de la aplicación.',
+        'commercial_automation.assisted_work' => 'Trabajar la bandeja asistida: reclamar una tarea, atenderla por el canal que indique y registrar su resultado. Quien reclama es quien registra.',
+        'commercial_automation.stop' => 'Echar un freno de estrategia, de canal o la PARADA GLOBAL con un motivo. Para en menos de un minuto y nunca enciende nada.',
+        'commercial_automation.release' => 'Soltar un freno con una nota (cuatro ojos: no lo suelta quien lo echó). Solo Super Admin por defecto.',
     ];
 
     /**
@@ -336,13 +357,17 @@ final class PermissionCatalog
     /**
      * Ver primero, administrar al final. Leer la matriz de menos a más
      * privilegio es lo que permite entender un rol de un vistazo.
+     * Las acciones del Hito 9 (estrategias, vínculos y automatización comercial)
+     * van detrás de las del Hito 8 dentro de `ultron`, para no mover las
+     * anteriores (L9-59); en `commercial_automation`: ver, historial, simular,
+     * bandeja, parar y, al final, soltar frenos.
      *
      * @param  list<array{key:string,action:string}>  $permisos
      * @return list<array{key:string,action:string}>
      */
     private static function sortActions(array $permisos): array
     {
-        $orden = ['view' => 0, 'view_all' => 0.5, 'stock' => 0.6, 'cost' => 0.7, 'use' => 1, 'create' => 2, 'operate' => 2, 'edit' => 3, 'update' => 3, 'edit_draft' => 3, 'cancel' => 4, 'correct' => 4.2, 'refund' => 4.4, 'complete' => 4.5, 'archive' => 5, 'delete' => 5, 'manage_rules' => 6, 'lab_manage' => 6.4, 'lab_run' => 6.6, 'approve' => 7, 'publish' => 8, 'rollback' => 8.2, 'campaigns_manage' => 8.3, 'canary_manage' => 8.35, 'canary_authorize' => 8.4, 'integrations_manage' => 8.45, 'voice_manage' => 8.5, 'voice_lab_run' => 8.55, 'voice_publish' => 8.6, 'call_place' => 2, 'contacts_manage' => 8.7, 'manage_availability' => 8, 'manage_settings' => 8.5, 'manage' => 9];
+        $orden = ['view' => 0, 'view_all' => 0.5, 'stock' => 0.6, 'cost' => 0.7, 'use' => 1, 'create' => 2, 'operate' => 2, 'edit' => 3, 'update' => 3, 'edit_draft' => 3, 'cancel' => 4, 'correct' => 4.2, 'refund' => 4.4, 'complete' => 4.5, 'archive' => 5, 'delete' => 5, 'manage_rules' => 6, 'lab_manage' => 6.4, 'lab_run' => 6.6, 'approve' => 7, 'publish' => 8, 'rollback' => 8.2, 'campaigns_manage' => 8.3, 'canary_manage' => 8.35, 'canary_authorize' => 8.4, 'integrations_manage' => 8.45, 'voice_manage' => 8.5, 'voice_lab_run' => 8.55, 'voice_publish' => 8.6, 'call_place' => 2, 'contacts_manage' => 8.7, 'manage_availability' => 8, 'manage_settings' => 8.5, 'strategies_edit' => 8.62, 'strategies_rollback' => 8.64, 'strategies_publish' => 8.66, 'person_bindings_manage' => 8.68, 'timeline_view' => 0.8, 'simulate_real' => 1.5, 'assisted_work' => 2.5, 'stop' => 4.6, 'release' => 8.8, 'manage' => 9];
         usort($permisos, fn ($a, $b) => ($orden[$a['action']] ?? 5) <=> ($orden[$b['action']] ?? 5));
 
         return $permisos;
