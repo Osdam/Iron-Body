@@ -92,7 +92,7 @@ Nota: una primera pasada con los 128 MB por defecto del CLI murió por memoria e
 | Fase | Código | Operación (mandos, runbook, smoke) | Qué falta para activar |
 |---|---|---|---|
 | **1 · todo apagado** | En producción: fase 1 (`fe29126` / `45dd73a`, 09-11 12:06 UTC) y despliegue 1b del cierre integral (`a608450` / `e0f7983`, 10-11 02:20–02:24 UTC) | Hecho (E15, E16-30, E16-31) | — (vigilancia a 24 h de la fase 1 el 10-11 ≥ 12:06 UTC) |
-| **1b · código del cierre integral** | **Listo**: regresión global sin rojos nuevos del H8 (E16-29) y segunda mirada del revisor aprobada (E16-27). Falta la orden del propietario; antes de desplegar, repetir los E2E sobre el commit | Guion de la fase 1 reutilizable | Orden de commit, push y despliegue |
+| **1b · código del cierre integral** | **En producción** desde el 10-11-2026 02:20–02:24 UTC (backend `a608450`, CRM `e0f7983`; E16-30, E16-31): regresión global sin rojos nuevos del H8 (E16-29), segunda mirada del revisor aprobada (E16-27) y E2E repetidos sobre el commit antes de desplegar | Guion de la fase 1 reutilizado (`PREVIO=fe29126`, despliegue solo de código) | — (lectura a 24 h el 11-11 ≥ 02:24 UTC) |
 | **2 · credenciales y número** | Listo | `el-verificar.sh` (+ `--solo-clave`), `h8-secrets-register.sh`, `h8-twilio-check.sh`, `h8-voice-scope.sh fase 2` | D-1, D-2, D-3, D-5 |
 | **2a · laboratorio hablado** | Listo (4 cerrojos, destinos, libro) | Runbook «Fase 2a», `SMOKE_PHASE=2a`, `h8-voice-scope.sh lab on` | D-4, D-6, D-7 y autorización escrita; la primera sesión real consume créditos |
 | **3 · entrantes en canario** | Listo | Runbook de la fase 3 (plan de despliegue) | **Imposible con el número actual** (D-10) |
