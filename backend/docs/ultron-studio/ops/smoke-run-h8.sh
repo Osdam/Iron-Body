@@ -97,7 +97,8 @@ except Exception:
     sys.exit(0)
 c = [str(x.get("command", "")) for x in r]
 voz = [x for x in c if re.search(r"(?<![a-z])voice:", x) or "--verify-voice" in x]
-print(len(r), sum(1 for x in c if "ultron-studio:" in x and x not in voz), len(voz))' 2>/dev/null || echo ILEGIBLE
+# La sincronización de las plantillas de Meta (ola M-1) tiene su propia bandera y su mando: no es una tarea de los monitores.
+print(len(r), sum(1 for x in c if "ultron-studio:" in x and x not in voz and "ultron-studio:meta-templates-sync" not in x), len(voz))' 2>/dev/null || echo ILEGIBLE
 }
 # OPS8-e: las tareas de voz del código desplegado con el monitor de voz encendido: 4, o 5 con voice:webhook-health (B-T5).
 tareas_voz() { local n; n=$(artisan list --raw 2>/dev/null | grep -c '^voice:webhook-health[[:space:]]' || true); [ "${n:-0}" -ge 1 ] && echo 5 || echo 4; }

@@ -12,6 +12,8 @@
 #   bash m1.sh <banco> crm <commit>      el version.json del CRM «publicado» (file://$B/crm)
 #   bash m1.sh <banco> desplegar [opciones de deploy-m1-backend.sh]   la copia del banco, con la RED y los SMOKE_*
 #   bash m1.sh <banco> mandos            E2 y su vuelta con los dos mandos del repo (copias del banco) y la trampa de M1-B
+#   bash m1.sh <banco> plantillas        el mando de las banderas de Meta (plantillas/meta-templates-scope.sh): off → read →
+#                                         full → read → off, rechazos, fallo forzado, smokes en read y la copia fiel
 # Orden del ensayo completo (RUNBOOK_M1.md §6): montar → ola → crm <commit del CRM de la ola> → desplegar
 # --solo-comprobar → desplegar → mandos → (ensayar.sh parar). NO se ejecuta sin la orden del lead (la Mac tiene 8 GB).
 # Variables: las de montar.sh (BANCO_DB, BANCO_PORT, BANCO_PUERTO_VALLA, BANCO_PG_PORT).
@@ -183,6 +185,69 @@ print(json.dumps(reglas))' "$B" "$me" "$url" "${m##*:}" "$nombre" "psql -X -Atq 
 mando() { ( export PATH="$B/bin-mandos:$PATH" "${RED[@]}"; bash "$B/root/$1" "${@:2}" ); }
 clave_prompts() { ( cd "$B/api/backend" && env "${RED[@]}" php artisan tinker --execute='echo config("marketing.ultron.studio_prompts"), PHP_EOL;' 2>/dev/null | tail -1 ); }
 
+# ── El mando de las plantillas de Meta (plantillas/meta-templates-scope.sh) ──────────────────────────────────────────
+# Dos copias del banco: la FIEL (solo las rutas, los usuarios y la URL: conserva las expectativas de producción, PM-6, y
+# tiene que negarse aquí: el banco es «local» con el doble) y la DEL BANCO (además «local» y «fake», y BANCO_FALLA=1
+# fuerza el fallo en la lectura de después). La lógica es la del repo.
+preparar_plantillas() {
+  cargar_banco "$B"
+  local me grupo url comunes
+  me=$(whoami); grupo=$(id -gn); url="http://127.0.0.1:$BANCO_PORT/api"
+  preparar_mandos > /dev/null   # los adaptadores de sed -i y shred en $B/bin-mandos
+  comunes=$(python3 -I -c 'import json, sys
+b, me, grupo, url = sys.argv[1:5]
+print(json.dumps([
+  ["[ \"$(id -u)\" = 0 ] || { echo \"se ejecuta como root", "true || { echo \"se ejecuta como root", 1],
+  ["APPDIR=/var/www/api/backend\n", f"APPDIR={b}/api/backend\n", 1],
+  ["API=https://api.ironbodyneiva.cloud/api\n", f"API={url}\n", 1],
+  ["WWW=www-data\n", f"WWW={me}\n", 1], ["ROOT_U=root\n", f"ROOT_U={me}\n", 1], ["ROOT_G=root\n", f"ROOT_G={grupo}\n", 1],
+  ["COPIAS=/root\n", f"COPIAS={b}/root\n", 1], ["CERROJOS=/run/lock\n", f"CERROJOS={b}/run\n", 1],
+]))' "$B" "$me" "$grupo" "$url")
+  copia "$OPS/plantillas/meta-templates-scope.sh" "$B/root/meta-templates-scope-fiel.sh" "$comunes"
+  copia "$OPS/plantillas/meta-templates-scope.sh" "$B/root/meta-templates-scope.sh" "$(python3 -I -c 'import json, sys
+r = json.loads(sys.argv[1]) + [
+  ["EXIGE_ENTORNO=production", "EXIGE_ENTORNO=local", 1], ["EXIGE_DRIVER=graph", "EXIGE_DRIVER=fake", 1],
+  ["DESPUES=$(leer)", "DESPUES=$(leer); [ -z \"${BANCO_FALLA:-}\" ] || DESPUES=falla-forzada-del-banco", 1]]
+print(json.dumps(r))' "$comunes")"
+  local f
+  for f in meta-templates-scope.sh meta-templates-scope-fiel.sh; do
+    ! grep -v '^[[:space:]]*#' "$B/root/$f" | grep -nE '/var/www|(^|[^A-Za-z0-9_./-])/root/|/run/lock' || muere "la copia del banco $f todavía nombra rutas o usuarios de producción: el mando cambió"
+  done
+  echo "   copias del banco del mando de plantillas: la FIEL (8 sustituciones: rutas, usuarios y URL) y la del banco (11: además «local», «fake» y el fallo forzado)"
+}
+pon_env() { # CLAVE VALOR en el entorno SINTÉTICO del banco (fuera del mando: para preparar un estado) y config:cache
+  python3 -I - "$B/api/backend/.env" "$1" "$2" <<'PY'
+import re, sys
+p, k, v = sys.argv[1:4]
+s = open(p, encoding="utf-8").read()
+s, n = re.subn(r"^([ \t]*)" + k + r"=.*$", lambda m: m.group(1) + k + "=" + v, s, count=1, flags=re.M)
+if n == 0:
+    s = s.rstrip("\n") + "\n  " + k + "=" + v + "\n"
+open(p, "w", encoding="utf-8").write(s)
+PY
+  cache_banco
+}
+cache_banco() { ( cd "$B/api/backend" && env "${RED[@]}" php artisan config:cache -q && chmod 600 bootstrap/cache/config.php ); }
+banderas() { ( cd "$B/api/backend" && env "${RED[@]}" php artisan tinker --execute='$s = "App\\Services\\UltronStudio\\StudioMetaTemplates"; echo json_encode([$s::enabled(), $s::syncEnabled(), $s::submitEnabled()]), PHP_EOL;' 2>/dev/null | tail -1 ); }
+# Un paso del ensayo: la orden, su salida sangrada y el caso (código esperado y un texto que tiene que salir).
+paso() { # nombre código_esperado texto_esperado orden…
+  local nombre=$1 esperado=$2 texto=$3 salida rc
+  shift 3
+  salida=$("$@" 2>&1); rc=$?
+  printf '%s\n' "$salida" | sed "s#$B#\$B#g; s/^/      /"
+  caso "$nombre" "$([ "$rc" = "$esperado" ] && printf '%s' "$salida" | grep -qF -- "$texto" && echo 0 || echo 1)" "código $rc"
+}
+igual() { caso "$1" "$(cmp -s "$B/api/backend/.env" "$2" && echo 0 || echo 1)"; }
+modo640() { caso "$1: el modo del fichero de entorno sigue en 640" "$([ "$(stat -c '%a' "$B/api/backend/.env")" = 640 ] && echo 0 || echo 1)" "$(stat -c '%a' "$B/api/backend/.env")"; }
+smoke_h8_banco() { # fase → el lanzador del H8 del árbol, con las variables del banco (como ensayar.sh smoke para el H9)
+  mkdir -p "$B/smokework8"
+  env "${RED[@]}" APP_DIR="$B/api/backend" SMOKE_API="http://127.0.0.1:$BANCO_PORT/api" SMOKE_RUN_AS= \
+    SMOKE_PSQL="psql -X -Atq -h $PG_HOST -p $PG_PORT -U $PG_USER -d $BANCO_DB" SMOKE_WORKDIR="$B/smokework8" \
+    SMOKE_PY="$OPS/smoke-h8.py" SMOKE_H6_PY="$OPS/smoke-h6.py" SMOKE_BUDGETS="$OPS/perf-h8/presupuestos-h8.json" \
+    SMOKE_ADMIN_ID="$ADMIN_ID" SMOKE_PHASE="$1" SMOKE_VALLA_STATS="http://127.0.0.1:$PUERTO_VALLA/__stats" \
+    SMOKE_LOGS="$B/api/backend/storage/logs" bash "$OPS/smoke-run-h8.sh"
+}
+
 case "$ORDEN" in
   montar)
     [ ! -e "$B" ] || muere "ya existe $B: bash $AQUI/ensayar.sh $B parar && rm -rf $B"
@@ -245,5 +310,78 @@ case "$ORDEN" in
     set -e
     echo "$((CASOS - FALLOS)) OK · $FALLOS FALLO"
     [ "$FALLOS" = 0 ] ;;
-  *) muere "uso: bash m1.sh <banco> montar | ola | respaldo | crm <commit> | desplegar [opciones] | mandos" ;;
+  plantillas)
+    # El mando de las banderas de Meta: off → read → full → read → off, los rechazos (copia fiel, off → full, estado
+    # actual equivocado, full sin META_ENABLED, mezcla), un fallo forzado a medias, dos idas y vueltas idénticas byte a
+    # byte en 640, los smokes del H9 (read) y del H8 en read, registros en 600 y la copia que queda. Deja el banco como
+    # estaba (el fichero de entorno del principio y su modo).
+    cargar_banco "$B"
+    [ "$(git -C "$B/api" rev-parse --short=7 HEAD)" = "$ESPERADO" ] || muere "el banco no está desplegado ($ESPERADO): primero bash $0 $B desplegar"
+    [ -n "$(lsof -nP -iTCP:"$BANCO_PORT" -sTCP:LISTEN 2>/dev/null)" ] || bash "$AQUI/ensayar.sh" "$B" arrancar
+    preparar_plantillas
+    set +e
+    ENVF="$B/api/backend/.env"; MODO_ORIG=$(stat -c '%a' "$ENVF")
+    rm -f "$B"/root/env-pre-plantillas-* "$B"/root/meta-templates-scope-2*.log
+    install -m 600 "$ENVF" "$B/root/env-ref-p0"; chmod 640 "$ENVF"
+    caso "partida: las tres banderas apagadas (las escribió el despliegue)" "$([ "$(banderas)" = '[false,false,false]' ] && echo 0 || echo 1)" "$(banderas)"
+    echo "#### rechazos sin tocar nada"
+    paso "copia FIEL (expectativas de producción): «read off» en el banco se niega por PM-6 (no es graph en production)" 1 "tiene que ser «graph» en «production»" mando meta-templates-scope-fiel.sh read off
+    igual "  … y el fichero de entorno no cambió" "$B/root/env-ref-p0"
+    paso "«full off» se niega (off → full directo no: primero read)" 2 "off → full directo no" mando meta-templates-scope.sh full off
+    paso "estado actual equivocado («read full» con off) se niega y dice los tres valores" 1 "maestra=false sincronización=false envío=false" mando meta-templates-scope.sh read full
+    igual "  … y el fichero de entorno no cambió" "$B/root/env-ref-p0"
+    echo "#### primera ida y vuelta: off → read → off (sin META_ENABLED)"
+    paso "P1: «read off» → APLICADO (la sincronización en el programador, la orden en seco sin red)" 0 "PLANTILLAS DE META read APLICADO" mando meta-templates-scope.sh read off
+    caso "  … banderas efectivas read" "$([ "$(banderas)" = '[true,true,false]' ] && echo 0 || echo 1)" "$(banderas)"
+    modo640 "P1"
+    install -m 600 "$ENVF" "$B/root/env-ref-p1"
+    paso "«full read» se niega sin META_ENABLED (el código lo exige para enviar)" 1 "META_ENABLED tiene que estar en true" mando meta-templates-scope.sh full read
+    igual "  … y el fichero de entorno no cambió" "$B/root/env-ref-p1"
+    paso "vuelta de P1: «off read» → APLICADO" 0 "PLANTILLAS DE META off APLICADO" mando meta-templates-scope.sh off read
+    igual "primera ida y vuelta: el fichero de entorno idéntico byte a byte al de partida" "$B/root/env-ref-p0"
+    modo640 "primera ida y vuelta"
+    echo "#### segunda ida y vuelta: off → read → full → read → off (con META_ENABLED, puesto fuera del mando)"
+    pon_env META_ENABLED true; chmod 640 "$ENVF"; install -m 600 "$ENVF" "$B/root/env-ref-p2"
+    paso "P1: «read off» → APLICADO" 0 "PLANTILLAS DE META read APLICADO" mando meta-templates-scope.sh read off
+    echo "#### smokes en read (SMOKE_EXPECT_META_TEMPLATES=read)"
+    S9=$(SMOKE_EXPECT_M1=1 SMOKE_EXPECT_META_TEMPLATES=read bash "$AQUI/ensayar.sh" "$B" smoke "" 2 2>&1); r9=$?
+    printf '%s\n' "$S9" | grep -E '^(FALLO|OMITIDO|RESUMEN|SMOKE|OK      (meta/|enviar|la sonda|las 4|recuento|cuerpos \([0-9]+\): sin claves prohibidas))|^INFO    (meta/|POST strategies)' | sed 's/^/      /'
+    caso "smoke del H9 en read: 0 FALLO (código 0 o 3: el OMITIDO conocido de PERF9)" "$( { [ "$r9" = 0 ] || [ "$r9" = 3 ]; } && ! printf '%s' "$S9" | grep -q '^FALLO' && echo 0 || echo 1)" "código $r9"
+    echo "   pausa de 65 s (el cupo de inicios de sesión por IP)"; sleep 65
+    S8=$(smoke_h8_banco 2a 2>&1); r8=$?
+    printf '%s\n' "$S8" | grep -E '^(FALLO|RESUMEN|SMOKE|OK      el programador)' | sed 's/^/      /'
+    caso "smoke del H8 en read: el programador sin la sincronización de Meta como tarea de monitor, y ningún FALLO salvo el conocido del banco (ElevenLabs)" \
+      "$(printf '%s' "$S8" | grep -q '^OK      el programador' && [ "$(printf '%s\n' "$S8" | grep '^FALLO' | grep -vc 'ELEVENLABS_VERIFIED')" = 0 ] && echo 0 || echo 1)" "código $r8"
+    paso "P2: «full read» → APLICADO" 0 "PLANTILLAS DE META full APLICADO" mando meta-templates-scope.sh full read
+    caso "  … banderas efectivas full" "$([ "$(banderas)" = '[true,true,true]' ] && echo 0 || echo 1)" "$(banderas)"
+    modo640 "P2"
+    install -m 600 "$ENVF" "$B/root/env-ref-full"
+    echo "#### una MEZCLA (envío sin sincronización, N-1) puesta a mano fuera del mando: se niega sin tocar nada"
+    pon_env ULTRON_STUDIO_META_TEMPLATES_SYNC_ENABLED false; install -m 600 "$ENVF" "$B/root/env-ref-mezcla"
+    paso "con la mezcla, «read full» se niega y dice los tres valores" 1 "MEZCLA que este mando no admite (maestra=true sincronización=false envío=true)" mando meta-templates-scope.sh read full
+    igual "  … y el fichero de entorno no cambió" "$B/root/env-ref-mezcla"
+    install -m 640 "$B/root/env-ref-full" "$ENVF"; cache_banco
+    echo "#### fallo forzado a medias (BANCO_FALLA=1: la lectura de después no es la pedida)"
+    export BANCO_FALLA=1
+    paso "M1-B: «read full» con el fallo → código 1, FALLO A MEDIAS (etapa 2) y restaurado y COMPROBADO" 1 "restaurado y COMPROBADO" mando meta-templates-scope.sh read full
+    unset BANCO_FALLA
+    igual "  … el fichero de entorno idéntico byte a byte al de antes del fallo" "$B/root/env-ref-full"
+    modo640 "tras el fallo"
+    caso "  … las banderas efectivas siguen en full (caché regenerada con el estado anterior)" "$([ "$(banderas)" = '[true,true,true]' ] && echo 0 || echo 1)" "$(banderas)"
+    caso "  … la copia del intento fallido se conserva" "$(ls "$B"/root/env-pre-plantillas-read-* > /dev/null 2>&1 && echo 0 || echo 1)"
+    paso "vuelta de P2: «read full» → APLICADO" 0 "PLANTILLAS DE META read APLICADO" mando meta-templates-scope.sh read full
+    paso "vuelta de P1: «off read» → APLICADO (sin la sincronización en el programador)" 0 "PLANTILLAS DE META off APLICADO" mando meta-templates-scope.sh off read
+    igual "segunda ida y vuelta: el fichero de entorno idéntico byte a byte al de su partida" "$B/root/env-ref-p2"
+    modo640 "segunda ida y vuelta"
+    LOGS_MAL=$(for f in "$B"/root/meta-templates-scope-2*.log; do [ "$(stat -c '%a' "$f")" = 600 ] || echo "$f"; done | wc -l | tr -d ' ')
+    caso "los registros del mando en 600 ($(ls "$B"/root/meta-templates-scope-2*.log | wc -l | tr -d ' ') registros)" "$([ "$LOGS_MAL" = 0 ] && echo 0 || echo 1)" "$LOGS_MAL fuera de 600"
+    QUEDAN=$(ls "$B"/root/env-pre-plantillas-* 2>/dev/null | wc -l | tr -d ' ')
+    caso "copias con secretos que quedan: solo la del fallo (las aplicadas sin desvíos se borran)" "$([ "$QUEDAN" = 1 ] && echo 0 || echo 1)" "$QUEDAN"
+    install -m "$MODO_ORIG" "$B/root/env-ref-p0" "$ENVF"; cache_banco
+    caso "el banco vuelve a su fichero de entorno de partida (sin META_ENABLED) y a su modo" "$(cmp -s "$ENVF" "$B/root/env-ref-p0" && [ "$(stat -c '%a' "$ENVF")" = "$MODO_ORIG" ] && echo 0 || echo 1)"
+    rm -f "$B"/root/env-ref-p* "$B/root/env-ref-full" "$B/root/env-ref-mezcla" "$B"/root/env-pre-plantillas-*
+    set -e
+    echo "$((CASOS - FALLOS)) OK · $FALLOS FALLO"
+    [ "$FALLOS" = 0 ] ;;
+  *) muere "uso: bash m1.sh <banco> montar | ola | respaldo | crm <commit> | desplegar [opciones] | mandos | plantillas" ;;
 esac

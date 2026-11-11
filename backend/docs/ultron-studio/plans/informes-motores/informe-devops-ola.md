@@ -581,3 +581,155 @@ cd /var/www/api/backend; for i in $(seq 1 15); do
 
 **Vuelta atrás:** la imprime el propio guion con el respaldo de ese día (`RUNBOOK_M1.md` §4). Primero el código (a
 `728f208`), luego las cachés; el esquema se queda; nunca `migrate:rollback`. El CRM no hace falta volverlo.
+
+---
+
+## Mando de plantillas (`ops/plantillas/meta-templates-scope.sh`)
+
+**11-11, 14:38–15:00 UTC. Banco local, NO producción.** Mismo banco del segundo ensayo: `b1959a05` desplegado, H9 en
+sombra y laboratorio hablado 2a. No toca el código de la aplicación ni las pruebas: el estado se lee por `artisan
+tinker` con los métodos públicos que ya existen (`StudioMetaTemplates::enabled()/syncEnabled()/submitEnabled()/
+driver()`, `wabaId()`, el `configurationProblem()` del cliente, `MetaAuthService::enabled()/credentialSource()`).
+**No hace falta nada nuevo del código.**
+
+### Qué hace
+
+- **Interfaz:** `meta-templates-scope.sh <nuevo> <actual>`, con tres estados y ninguno más:
+  - `off` = `false false false`;
+  - `read` = maestra y sincronización encendidas, envío apagado;
+  - `full` = las tres.
+
+  No existe «enviar sin sincronizar» (N-1). `off → full` directo no se admite: primero `read`. `full → off` sí, como
+  vuelta de urgencia.
+- **Antes de tocar nada** (si algo falla, aborta y lo dice):
+  - el código con las 4 rutas de Meta en la caché y 125 en el Studio;
+  - las tres claves, una vez cada una en el fichero;
+  - el estado de hoy, igual en el fichero y en la configuración efectiva, igual a `<actual>` y nunca una mezcla. Si
+    no, dice los tres valores efectivos;
+  - para `read`/`full`: cliente efectivo **Graph en `production`** (PM-6), y la WABA y el token **«presente»** tal
+    como los lee el código (nunca su valor);
+  - para `full`: `META_ENABLED` efectivo en true.
+- **Las garantías de `motores-prompts-scope.sh`:**
+  - los tres cerrojos comunes (`ironbody-env`, `h8-voice-scope`, `h9-outreach-scope`);
+  - registro `/root/meta-templates-scope-<ts>.log` en 600;
+  - copia previa en 600; el fichero parsea antes de la caché;
+  - `config:cache` como `www-data` con `umask 077` y la caché en 600 sin `chmod` de root (MB-1);
+  - `queue:restart` y espera de 13 o 14 workers;
+  - trampa que restaura el fichero y la caché si falla a medias y lo **comprueba** releyendo la configuración (MB-3);
+  - `curl --max-time 20 … || c=000`;
+  - la copia se borra al terminar sin desvíos, con purga de las `env-pre-plantillas-*` de más de 14 días.
+
+  Todo lo propio de producción (rutas, usuarios, URL y las dos expectativas de PM-6) está en un solo bloque: el banco
+  sustituye solo ese bloque.
+- **Después:**
+  - la configuración efectiva es la pedida;
+  - `schedule:list` enseña `ultron-studio:meta-templates-sync` con `*/5 * * * *` solo en `read`/`full`;
+  - `ultron-studio:meta-templates-sync --dry-run --json` sale con 0: `disabled` en `off`; en `read`/`full`,
+    `nothing_to_watch`, `ok` o `partial` (se dicen las vigiladas y las peticiones);
+  - workers; `status` y `meta/status` sin token → 401;
+  - `publication-check` y la traza de los prompts iguales que antes.
+
+### Resultado: 34 OK · 0 FALLO (`banco-h9/m1.sh <banco> plantillas`)
+
+| Bloque | Casos |
+|---|---|
+| Rechazos sin tocar nada | La **copia fiel** (las expectativas de producción tal cual) se niega en el banco: «para «read» el cliente efectivo tiene que ser «graph» en «production» (PM-6): hay «fake» en «local»» · `full off` → código 2 · `<actual>` equivocado → «el estado de hoy es «off», no «full» (maestra=false sincronización=false envío=false)» · `full read` sin `META_ENABLED` → «… tiene que estar en true …» · una **mezcla** puesta a mano (envío sin sincronización) → «MEZCLA que este mando no admite (maestra=true sincronización=false envío=true)». En todos, el fichero de entorno queda idéntico |
+| Primera ida y vuelta `off → read → off` | APLICADO las dos veces · banderas efectivas `[true,true,false]` · fichero **idéntico byte a byte** al de partida y en **640** |
+| Segunda ida y vuelta `off → read → full → read → off` (con `META_ENABLED`, puesto fuera del mando) | APLICADO las cuatro veces · `[true,true,true]` en `full` · fichero idéntico byte a byte al de su partida y en 640 · programador `1 */5_*_*_*_*` en `read`/`full` y `0 -` en `off` · la orden en seco con código 0: `disabled` en `off` y `nothing_to_watch` en `read`/`full`, 0 peticiones a Meta |
+| Fallo forzado a medias (`BANCO_FALLA=1` en la lectura de después) | código 1 · «FALLO A MEDIAS (etapa 2)» · «restaurado y COMPROBADO» · el fichero idéntico al de antes del fallo, en 640 · las banderas efectivas siguen en `full` · se conserva solo la copia del fallo |
+| Smokes en `read` | H9 (`SMOKE_EXPECT_META_TEMPLATES=read`): **31 OK · 0 FALLO · 1 OMITIDO** (PERF9), ninguna fila a nombre de la cuenta y las 35 tablas iguales. H8 (2a): el programador cuenta bien (la sincronización no es tarea de monitor) y solo el FALLO conocido del banco (ElevenLabs) |
+| Registros y copias | 11 registros del mando, los 11 en 600 · queda una sola copia con secretos (la del fallo) · el banco vuelve a su fichero de partida y a su modo |
+| Smoke del H9 en `off` (aparte, con el smoke nuevo) | 32 OK · 0 FALLO · 1 OMITIDO: el estado del despliegue no se rompe |
+| Valla (`ensayar.sh cierre`) | cero red saliente en todo |
+
+### Lo que encontré y corregí (en ops; el código, intacto)
+
+1. **`smoke-h9.py`: «Comprobar ahora» deja una fila con el módulo encendido.** En la primera pasada salió 33/34. El
+   smoke del H9 en `read` dio `ultron_studio_audit_events=0→1`: un `person_binding.required_denied` a nombre de la
+   cuenta del smoke.
+   - La causa: `POST …/meta/refresh` llega a la puerta de la persona verificada (`StudioMetaTemplates.php:481` →
+     `StudioPersonBindings.php:117`), que por diseño del H9 deja en el libro el intento denegado. La cuenta 32 no
+     tiene vínculo.
+   - **No es un defecto del código.** El smoke ya no toca «Comprobar ahora» en `read`/`full`, igual que la sonda;
+     enviar con cuerpo vacío sí, porque da 422 antes del servicio.
+   - Para api-security, como información: cualquier Super Admin sin vínculo que pulse «Comprobar ahora» deja esa
+     fila, que es lo esperado.
+2. **`smoke-run-h8.sh:100`** contaba `ultron-studio:meta-templates-sync` como tarea de los monitores del Studio: en
+   `read`/`full` habría sido un FALLO falso. Ya no la cuenta.
+3. **`smoke-h9.py` / `smoke-run-h9.sh`:** expectativa nueva `SMOKE_EXPECT_META_TEMPLATES=off|read|full`.
+   - Sin la variable se comporta como en el despliegue: `off`, y además ni sonda ni envíos.
+   - Con ella: las tres banderas del estado; la sonda y los envíos, informativos; la sonda y «Comprobar ahora» no se
+     tocan con el módulo encendido.
+   - Probado sin red en 9 escenarios: la prueba falla si el smoke llamara a la sonda o a «Comprobar ahora» con el
+     módulo encendido.
+4. **El mando:** el mensaje del aborto por lectura fallida concatenaba la lectura en bruto (sin secretos: solo lleva
+   «presente»/«falta»). Corregido y probado con otro fallo forzado aislado: restaurado y COMPROBADO, el fichero
+   idéntico.
+
+### Lo que el banco no prueba
+
+- **El camino positivo de PM-6, la WABA y el token.** El banco es `local` con el doble, así que allí solo se probó el
+  rechazo (la copia fiel). En producción el mando dirá «presente» o «falta» antes de tocar nada.
+- **El valor real de `META_ENABLED` en producción.** Si no está en true, P2 se niega sola.
+- **La sincronización programada corriendo**: no hay cron en el banco.
+- `flock` y `shred` reales, root, y el bash del servidor.
+
+### Ojo con los smokes de E0 en `read` y `full`
+
+`deploy-m1-backend.sh --solo-smoke` toma los smokes del checkout desplegado (`7b4ca01`), que exigen el módulo
+**apagado**. En `read`/`full` darían FALLO falso en el H9 y en el H8. Para P1 y P2, los smokes nuevos se copian del
+commit `<C>` que trae el mando (`RUNBOOK_M1.md` §5).
+
+`deploy-m1-backend.sh` **no cambia** (sigue en `d91e779f…`).
+
+### Huellas (sha256, tal como quedan en el árbol)
+
+| Fichero | sha256 |
+|---|---|
+| `ops/plantillas/meta-templates-scope.sh` | `1fc3693596a13f7a3157f1fcbadc75a1e243fb7385d244633bcf421b45dbe6d9` |
+| `ops/smoke-h9.py` | `5601e04390cae483cdc38b222ce4f00a3e2b3b70ce5c5ab4d18d249c3bb35062` |
+| `ops/smoke-run-h9.sh` | `218fa0f3e2c0ad8837af65f6991bcd40ffbcc8cc93b22ec2eb51ca15b8082270` |
+| `ops/smoke-run-h8.sh` | `c738f96b39ed8b71d06fa3e11f4921a2d4a9fe99e72f5edbce4892c7d8ca6216` |
+| `ops/smoke-h8.py` (sin cambios) | `a75c9ab67c723336cf25cc098a67628ef94896e2d879dd9cb31acd2ae090f252` |
+| `ops/smoke-h6.py` (sin cambios) | `29f67d84294a3ddbf6ef9f7f175e1c6e2df31f631d2a1cb103b629845f3ec39a` |
+| `ops/banco-h9/m1.sh` | `6c61bd6b566837562bb5d025456f896f8f5be1015fae8c9335362bb410790e98` |
+
+### Órdenes exactas de producción (cada etapa con la orden escrita del propietario; después de E0)
+
+`<C>` = el commit de `main` que trae `plantillas/meta-templates-scope.sh` (tu próximo `ops+docs`). El Mac, en la raíz
+`Iron-Body/`; el servidor, como root, en `tmux`.
+
+```bash
+# ── 0 · Mac: el mando y los smokes DEL COMMIT, con su huella
+git fetch -q origin && C=<C> && O=backend/docs/ultron-studio/ops
+git show "$C:$O/plantillas/meta-templates-scope.sh" | shasum -a 256                     # = 1fc36935… si no lo tocaste
+git show "$C:$O/plantillas/meta-templates-scope.sh" | ssh ironbody-vps 'umask 077; cat > /root/meta-templates-scope.sh && chmod 700 /root/meta-templates-scope.sh && sha256sum /root/meta-templates-scope.sh'
+copia_smokes() {   # se rehace antes de cada pasada: los lanzadores borran sus copias al terminar
+  for f in smoke-run-h9.sh smoke-h9.py smoke-h6.py; do git show "$C:$O/$f" | ssh ironbody-vps "umask 077; mkdir -p /root/smoke-p-h9 && cat > /root/smoke-p-h9/$f"; done
+  for f in smoke-run-h8.sh smoke-h8.py smoke-h6.py; do git show "$C:$O/$f" | ssh ironbody-vps "umask 077; mkdir -p /root/smoke-p-h8 && cat > /root/smoke-p-h8/$f"; done
+  git show "$C:$O/perf-h8/presupuestos-h8.json" | ssh ironbody-vps 'umask 077; cat > /root/smoke-p-h8/presupuestos-h8.json'
+}
+copia_smokes
+
+# ── P1 · servidor: off → read
+bash /root/meta-templates-scope.sh read off
+#   antes de tocar: «0. desde off (maestra=false …) · entorno production · cliente graph v25.0 · credencial … · WABA presente · token presente · META_ENABLED …»
+#   → «PLANTILLAS DE META read APLICADO»; programador «1 */5_*_*_*_*»; en seco «código 0 · nothing_to_watch» (u ok/partial)
+SMOKE_WORKDIR=/root/smoke-p-h9 SMOKE_PHASE=2 SMOKE_EXPECT_M1=1 SMOKE_EXPECT_META_TEMPLATES=read bash /root/smoke-p-h9/smoke-run-h9.sh   # 0 FALLO
+sleep 120; SMOKE_WORKDIR=/root/smoke-p-h8 SMOKE_PHASE=2a bash /root/smoke-p-h8/smoke-run-h8.sh                                            # 0 FALLO
+#   después: la primera pasada programada sin ERROR; una sonda de permisos desde el CRM → ok (RUNBOOK_M1.md §5, P1)
+
+# ── P2 · servidor: read → full (otra orden; IRREVERSIBLE en Meta lo que se envíe)
+#   (Mac: copia_smokes otra vez)
+bash /root/meta-templates-scope.sh full read
+#   → se niega si META_ENABLED no está en true; si no, «PLANTILLAS DE META full APLICADO»
+SMOKE_WORKDIR=/root/smoke-p-h9 SMOKE_PHASE=2 SMOKE_EXPECT_M1=1 SMOKE_EXPECT_META_TEMPLATES=full bash /root/smoke-p-h9/smoke-run-h9.sh   # 0 FALLO
+
+# ── Vuelta atrás (cada una deja la copia borrada si sale bien; si no, dice dónde está)
+bash /root/meta-templates-scope.sh read full     # deja de enviar; lo enviado sigue en Meta y se sigue leyendo
+bash /root/meta-templates-scope.sh off read      # todo apagado: 409 meta_templates_disabled; el canal de W9 lee la última fila
+bash /root/meta-templates-scope.sh off full      # de urgencia, de una vez
+```
+
+Si el mando aborta antes de tocar nada (requisito, estado, mezcla), no hay nada que deshacer. Si sale «CON N
+DESVÍOS», el estado nuevo **está aplicado**: aclarar el desvío y, si hace falta, la vuelta atrás de arriba.

@@ -76,6 +76,7 @@ TABLAS_STUDIO="${SMOKE_EXPECT_STUDIO_TABLES:-27}"
 TABLAS_OUT=8
 M1="${SMOKE_EXPECT_M1:-}"
 LLAVE_PROMPTS="${SMOKE_PROMPTS_KEY:-off}"
+META_ESPERADO="${SMOKE_EXPECT_META_TEMPLATES:-}"   # el estado del mando de plantillas: vacío (= off del despliegue) · off · read · full
 SMOKE_EMAIL=studio-smoke@ironbodyneiva.cloud
 
 [[ "$ADMIN_ID" =~ ^[0-9]+$ ]] || { echo "SMOKE_ADMIN_ID no es un número"; exit 2; }
@@ -84,6 +85,7 @@ case "$FASE" in 1|2) ;; *) echo "SMOKE_PHASE = 1 | 2"; exit 2 ;; esac
 [[ "$TABLAS_STUDIO" =~ ^[0-9]+$ ]] || { echo "SMOKE_EXPECT_STUDIO_TABLES no es un número"; exit 2; }
 case "$M1" in ""|1) ;; *) echo "SMOKE_EXPECT_M1 = 1 o vacía"; exit 2 ;; esac
 case "$LLAVE_PROMPTS" in off|canary) ;; *) echo "SMOKE_PROMPTS_KEY = off | canary"; exit 2 ;; esac
+case "$META_ESPERADO" in ""|off|read|full) ;; *) echo "SMOKE_EXPECT_META_TEMPLATES = off | read | full"; exit 2 ;; esac
 [[ "$SWEEP" =~ ^outreach:[a-z-]+(\ --[a-z-]+)*$ ]] && [[ "$DISPATCH" =~ ^outreach:[a-z-]+(\ --[a-z-]+)*$ ]] || { echo "SMOKE_SWEEP_CMD y SMOKE_DISPATCH_CMD tienen que ser órdenes outreach:<nombre> [--opción …] (sin valores)"; exit 2; }
 if [ -n "$RUN_AS" ] && [ "$(id -u)" != 0 ]; then echo "en el servidor se ejecuta como root"; exit 2; fi
 for b in python3 php openssl curl join; do command -v "$b" > /dev/null || { echo "falta $b"; exit 2; }; done
@@ -310,7 +312,7 @@ unset HASH
 set +e
 SMOKE_API="$API" SMOKE_EMAIL="$SMOKE_EMAIL" SMOKE_PW="$SMOKE_PW" SMOKE_CANARY_ID="$CANARIO" SMOKE_SECRET_SALT="$SAL" \
   SMOKE_SECRET_DIGESTS="${HUELLAS:-}" SMOKE_TOKEN_FILE="$HDR" SMOKE_H6_PY="$PY6" SMOKE_BUDGETS="$BUD" \
-  SMOKE_BUDGETS_OUT="${SMOKE_BUDGETS_OUT:-}" SMOKE_PHASE="$FASE" SMOKE_EXPECT_M1="$M1" SMOKE_PROMPTS_KEY="$LLAVE_PROMPTS" \
+  SMOKE_BUDGETS_OUT="${SMOKE_BUDGETS_OUT:-}" SMOKE_PHASE="$FASE" SMOKE_EXPECT_M1="$M1" SMOKE_PROMPTS_KEY="$LLAVE_PROMPTS" SMOKE_EXPECT_META_TEMPLATES="$META_ESPERADO" \
   PYTHONIOENCODING=utf-8 PYTHONDONTWRITEBYTECODE=1 python3 "$PY" superadmin
 RC1=$?
 set -e

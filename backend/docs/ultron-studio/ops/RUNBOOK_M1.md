@@ -202,6 +202,83 @@ restaura solo el fichero de entorno y la caché (M1-B). Termina en `ALCANCE cana
 `bash /root/h5-engine-scope.sh off canary`.
 *Ojo:* `h5-engine-scope.sh canary` abre también la llave de publicar del H5: desde E2 se puede publicar desde el CRM.
 
+### P1 y P2 · las plantillas de Meta desde el CRM (mando `plantillas/meta-templates-scope.sh`)
+
+Independientes de E1–E5 (no tocan ni n8n ni los prompts), pero **después de E0** y cada una con su orden escrita.
+Tres estados y ninguno más: `off` (lo que deja el despliegue) · `read` (maestra y sincronización: el CRM ve el estado de
+las plantillas en Meta y no envía nada) · `full` (además, enviar desde el CRM). **No existe «enviar sin sincronizar»**
+(N-1: un envío que se quedara en SENDING no se recuperaría desde el CRM). `off → full` directo no se admite. Banderas
+a mano, nunca: solo el mando (sus garantías y su ensayo: `informe-devops-ola.md`, «Mando de plantillas»).
+
+**Antes de P1, una vez:** el mando y los smokes que conocen `read`/`full` todavía no están en el checkout de
+producción (llegan en un commit de docs posterior a E0). Se llevan del COMMIT `<C>` que los trae, con su huella
+(la del mando, `1fc36935…`, en `informe-devops-ola.md`, «Mando de plantillas», con las órdenes completas):
+
+```bash
+# Mac (raíz Iron-Body/): C = el commit de main que trae plantillas/meta-templates-scope.sh
+O=backend/docs/ultron-studio/ops
+git show "$C:$O/plantillas/meta-templates-scope.sh" | ssh ironbody-vps 'umask 077; cat > /root/meta-templates-scope.sh && chmod 700 /root/meta-templates-scope.sh && sha256sum /root/meta-templates-scope.sh'
+for f in smoke-run-h9.sh smoke-h9.py smoke-h6.py; do git show "$C:$O/$f" | ssh ironbody-vps "umask 077; mkdir -p /root/smoke-p-h9 && cat > /root/smoke-p-h9/$f"; done
+for f in smoke-run-h8.sh smoke-h8.py smoke-h6.py; do git show "$C:$O/$f" | ssh ironbody-vps "umask 077; mkdir -p /root/smoke-p-h8 && cat > /root/smoke-p-h8/$f"; done
+git show "$C:$O/perf-h8/presupuestos-h8.json" | ssh ironbody-vps 'umask 077; cat > /root/smoke-p-h8/presupuestos-h8.json'
+```
+
+Los smokes, en cualquier momento de P1/P2 (los lanzadores borran sus copias al terminar; rehacer las copias para otra
+pasada; ≥ 2 min entre uno y otro):
+
+```bash
+SMOKE_WORKDIR=/root/smoke-p-h9 SMOKE_PHASE=2 SMOKE_EXPECT_M1=1 SMOKE_EXPECT_META_TEMPLATES=read bash /root/smoke-p-h9/smoke-run-h9.sh   # o =full
+SMOKE_WORKDIR=/root/smoke-p-h8 SMOKE_PHASE=2a bash /root/smoke-p-h8/smoke-run-h8.sh
+```
+
+Sin esas copias, `deploy-m1-backend.sh --solo-smoke` toma los smokes de E0, que exigen el módulo APAGADO: en `read` y
+`full` darían un FALLO falso en el H9 («el módulo en off») y en el H8 (la sincronización contada como tarea de monitor).
+
+#### P1 · `off → read`
+
+```bash
+bash /root/meta-templates-scope.sh read off
+```
+
+- **Requisitos que comprueba solo** (si falta uno, aborta sin tocar nada y lo dice): el código con las 4 rutas de Meta
+  y 125 en el Studio; las tres claves una vez en el fichero; el estado de hoy `off` en el fichero Y en la
+  configuración efectiva; el cliente efectivo **Graph en `production`** (PM-6); la cuenta de WhatsApp (WABA) y el token
+  **«presente»** tal como los lee el código (nunca su valor).
+- **Termina en** `PLANTILLAS DE META read APLICADO`. Lo que dice por el camino: la configuración efectiva
+  `maestra=true sincronización=true envío=false`; el programador con `1 */5_*_*_*_*` (la sincronización cada 5 minutos);
+  la orden en seco con código 0 y `nothing_to_watch` (o `ok`/`partial` si ya hay plantillas registradas a mano: 1–3
+  GET de lectura); workers; 401; publication-check y la traza de los prompts iguales.
+- **Qué mirar después** (15 min y al día siguiente):
+  - la primera pasada programada: en `laravel*.log`, ningún ERROR de `ultron_studio.meta_templates.*`; si la orden
+    sale con 1 (Meta falló en toda la pasada) el programador lo deja en el registro cada 5 minutos;
+  - en el CRM, la pestaña «Plantillas» enseña la conexión como Graph v25.0 y configurada; una persona con
+    `ultron.integrations_manage` y su vínculo verificado lanza **una** sonda de permisos desde la pestaña
+    (`POST strategies/templates/meta/probe`: 2 GET de lectura; enfriamiento de 300 s) → `ok` con
+    `whatsapp_business_management`; con `missing_permission` o `no_waba_access`, P2 espera a que se arregle en Meta;
+  - `ultron_studio_template_meta_checks`: filas nuevas solo si hay plantillas vigiladas que cambiaron en Meta;
+  - el smoke del H9 con `SMOKE_EXPECT_META_TEMPLATES=read`: 0 FALLO.
+- **Vuelta atrás:** `bash /root/meta-templates-scope.sh off read` (las rutas vuelven a 409 `meta_templates_disabled`,
+  la sincronización sale del programador; el canal de W9 sigue leyendo la última fila registrada).
+
+#### P2 · `read → full`
+
+```bash
+bash /root/meta-templates-scope.sh full read
+```
+
+- **Requisitos:** P1 con su evidencia (pasadas sin error, la sonda `ok`); `META_ENABLED` efectivo en true (lo
+  comprueba el mando: el código lo exige para enviar); la orden escrita del propietario sabiendo que **enviar es
+  irreversible en Meta** (una plantilla aprobada solo se borra, y su nombre queda bloqueado 30 días).
+- **Termina en** `PLANTILLAS DE META full APLICADO`: `maestra=true sincronización=true envío=true`; programador y orden
+  en seco como en P1.
+- **Qué mirar en el primer envío real** (lo hace una persona desde el CRM con una versión aprobada a cuatro ojos):
+  el envío pasa de `SENDING` a `SUBMITTED` (o `FAILED` con el error de Meta, nunca un 5xx); la sincronización lo lleva
+  a `PENDING` y después a `APPROVED` o `REJECTED`; **V-1**: si Meta retocó el texto, la fila sale `components_mismatch`
+  y el canal NO usa la plantilla (falla cerrado). Un `SENDING` de más de 120 s pasa a `UNKNOWN` y la reconciliación lo
+  busca por nombre.
+- **Vuelta atrás:** `bash /root/meta-templates-scope.sh read full` (no se envía nada nuevo; lo enviado sigue en Meta y
+  se sigue leyendo). De urgencia, todo: `bash /root/meta-templates-scope.sh off full`.
+
 ### E3–E5 · publicar y revertir desde el CRM (dos personas)
 
 - **Requisitos:** G7 (una segunda persona real con cuenta propia: quien publica ≠ autora; no hay atajo) y G6 (la
@@ -261,8 +338,7 @@ Las órdenes de producción válidas están en `informe-devops-ola.md`, «Segund
 
 ## 7. Lo que NO es de este runbook
 
-- Encender las plantillas de Meta (`ULTRON_STUDIO_META_TEMPLATES_ENABLED`, `_SUBMIT_`, `_SYNC_`): otra orden, con la
-  revisión de security y api-security pendiente (`informe-backend.md` §8) y sabiendo que enviar es irreversible.
+- Encender las plantillas de Meta **a mano**: solo con el mando (§5, P1 y P2), cada etapa con su orden escrita.
 - `php artisan ultron:prompts-n8n` **no se ejecuta en producción**: escribe en el checkout; los artefactos ya viajan
   en el repositorio.
 - La política de copias del fichero de entorno (`/root/env-pre-*`): propuesta en `informe-devops-ola.md` §4.3,

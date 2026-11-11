@@ -111,6 +111,12 @@ PROMPTS_BASE = 'n8n-29de5119'
 LEGACY_BUNDLE = '3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902'
 PROMPT_STATES = {'applied', 'legacy', 'engine_fallback', 'mismatch', 'legacy_drift', 'not_reported', 'unverified', 'stamp_error', None}
 TURN_KEYS = {'at', 'declared', 'offered', 'observed', 'state'}
+# El estado ESPERADO de las plantillas de Meta (el mando plantillas/meta-templates-scope.sh): off (por defecto) · read · full.
+# Sin la variable, off con lo de un módulo que nunca se ha usado (sin sonda en 24 h y sin envíos): el despliegue de la ola.
+# Con ella, la sonda y los envíos se informan (en read/full el CRM los usa); las tres banderas, siempre las del estado.
+META_EXPECT_RAW = os.environ.get('SMOKE_EXPECT_META_TEMPLATES', '').strip()
+META_EXPECT = META_EXPECT_RAW or 'off'
+META_FLAGS = {'off': (False, False, False), 'read': (True, True, False), 'full': (True, True, True)}   # enabled, sync, submit
 META_ROUTES = [('GET', 'strategies/templates/meta/status', None), ('POST', 'strategies/templates/meta/probe', None),
                ('POST', f'strategies/templates/{FAKE}/meta/submit', {}), ('POST', f'strategies/templates/{FAKE}/meta/refresh', None)]
 
@@ -666,17 +672,29 @@ def check_m1_meta_with_session(sm, token):
         d = data_of(b)
         if sm.check('GET strategies/templates/meta/status → 200 (responde también con el módulo apagado)', st == 200 and isinstance(d, dict),
                     f'HTTP {st} {code_of(b) or ""}'.strip()):
-            flags = {k: d.get(k) for k in ('enabled', 'submitEnabled', 'syncEnabled')}
-            cerrado = sm.check('meta/status: el módulo apagado (enabled, submitEnabled y syncEnabled en false)',
-                               all(v is False for v in flags.values()), json.dumps(flags))
+            flags = {k: d.get(k) for k in ('enabled', 'syncEnabled', 'submitEnabled')}
+            como_toca = sm.check(f'meta/status: el módulo en «{META_EXPECT}» (enabled, syncEnabled, submitEnabled = {", ".join(json.dumps(v) for v in META_FLAGS[META_EXPECT])})',
+                                 tuple(flags.values()) == META_FLAGS[META_EXPECT], json.dumps(flags))
+            cerrado = como_toca and META_EXPECT == 'off'
             subs = d.get('submissions')
-            sm.check('meta/status: ninguna sonda en 24 h y ningún envío a Meta', d.get('lastProbe') is None and isinstance(subs, dict) and all(v == 0 for v in subs.values()),
-                     f'lastProbe={"null" if d.get("lastProbe") is None else "sí"} submissions={json.dumps(subs)[:120]}')
+            detalle = f'lastProbe={"null" if d.get("lastProbe") is None else "sí"} submissions={json.dumps(subs)[:120]}'
+            if META_EXPECT == 'off' and not META_EXPECT_RAW:
+                sm.check('meta/status: ninguna sonda en 24 h y ningún envío a Meta', d.get('lastProbe') is None and isinstance(subs, dict) and all(v == 0 for v in subs.values()), detalle)
+            else:
+                sm.info(f'meta/status: la última sonda y los envíos (informativo con SMOKE_EXPECT_META_TEMPLATES={META_EXPECT})', detalle)
             sm.info('meta/status (informativo, sin secretos)', json.dumps({k: d.get(k) for k in ('driver', 'graphVersion', 'configured', 'configurationProblem', 'credentialSource', 'metaEnabled')})[:200])
     bad = []
     for method, rel, body in META_ROUTES[1:]:
         if rel.endswith('/probe') and not cerrado:
-            sm.skip('POST strategies/templates/meta/probe', 'no consta que el módulo esté apagado: la sonda hablaría con Meta y el smoke no la toca')
+            if VIVO['strategies'] and META_EXPECT != 'off':
+                sm.info('POST strategies/templates/meta/probe', f'no se toca con el módulo en «{META_EXPECT}»: hablaría con Meta')
+            else:
+                sm.skip('POST strategies/templates/meta/probe', 'no consta que el módulo esté apagado: la sonda hablaría con Meta y el smoke no la toca')
+            continue
+        if rel.endswith('/refresh') and not cerrado and VIVO['strategies']:
+            # Con el módulo encendido, «Comprobar ahora» llega a la puerta de la persona verificada, que deja en el libro el
+            # intento denegado de la cuenta del smoke (`person_binding.required_denied`): sería una fila a su nombre.
+            sm.info(f'POST strategies/templates/<inventado>/meta/refresh', f'no se toca con el módulo en «{META_EXPECT}»: la puerta de la persona dejaría en el libro el intento denegado de la cuenta del smoke')
             continue
         st, b, _ = sm.call(method, f'{S}/{rel}', body, token, label=f'{S}/{rel}')
         if not VIVO['strategies']:
@@ -690,7 +708,7 @@ def check_m1_meta_with_session(sm, token):
         if not ok:
             bad.append(f'{method} {rel.replace(FAKE, "<inventado>")}={st} {code_of(b) or ""}'.strip())
     esperado = 'strategies_disabled' if not VIVO['strategies'] else ('meta_templates_disabled' if cerrado else '403/404/409/422')
-    sm.check(f'{"la sonda, enviar y comprobar" if cerrado else "enviar y comprobar"} de las plantillas de Meta con sesión → {esperado} (nada sale hacia Meta, ninguna fila)',
+    sm.check(f'{"la sonda, enviar y comprobar" if cerrado else "enviar (cuerpo vacío: 422 antes del servicio)"} de las plantillas de Meta con sesión → {esperado} (nada sale hacia Meta, ninguna fila)',
              not bad, ' · '.join(bad)[:300])
 
 
@@ -825,6 +843,9 @@ def main(argv):
         return 2
     if FASE not in ESPERA:
         print('SMOKE_PHASE = 1 | 2')
+        return 2
+    if META_EXPECT not in META_FLAGS:
+        print('SMOKE_EXPECT_META_TEMPLATES = off | read | full')
         return 2
     try:
         h6 = load_h6()
