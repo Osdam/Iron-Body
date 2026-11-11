@@ -7,6 +7,7 @@ use App\Models\Voice\VoiceCall;
 use App\Models\Voice\VoiceCallEvent;
 use App\Models\Voice\VoiceExclusion;
 use App\Services\Telephony\VoiceBrake;
+use App\Services\Telephony\VoiceTools;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
@@ -173,6 +174,80 @@ class VoiceToolsTest extends TestCase
         $this->voiceCall('outbound', 'active', ['provider_conversation_id' => 'conv_h8fx_0031', 'provider_call_sid' => 'CA000000000000000000000000a800001f']);
         $this->rawPost('/api/voice/tools/consultar_horarios', '{"conversation_id":"conv_h8fx_0031","call_ref":"00000000-0000-4000-8000-000000000999"}', ['Authorization' => 'Bearer '.self::TOOL_SECRET])
             ->assertOk()->assertJson(['ok' => false, 'verdict' => 'call_not_found']);
+    }
+
+    /**
+     * E18-9 (P-1 de la revisión de seguridad de E18-8): las llamadas en curso que ya tienen sus ids, por la forma que
+     * tienen de ellos (DB8, `vc_provider_binding_chk`: una saliente que marcó lleva al menos uno), y los cuerpos que
+     * traen OTRA conversación con su `call_ref`: el del laboratorio hablado (conversación web, sin `call_sid`) y uno
+     * con forma de llamada de Twilio. El tercer valor es el ÚNICO id que tiene la llamada (null: los dos).
+     *
+     * @return array<string, array{0: string, 1: array<string, string>, 2: ?string}>
+     */
+    public static function foreignConversationCases(): array
+    {
+        $web = ['conversation_id' => 'conv_h8fx_0099'];
+        $twilio = ['conversation_id' => 'conv_h8fx_0099', 'call_sid' => 'CA000000000000000000000000a8000063'];
+        $out = [];
+        foreach (['consultar_planes', 'no_volver_a_llamar'] as $herramienta) {
+            $out["{$herramienta} · conversación web ajena · llamada con sus dos ids"] = [$herramienta, $web, null];
+            $out["{$herramienta} · conversación y llamada de Twilio ajenas · llamada con sus dos ids"] = [$herramienta, $twilio, null];
+            $out["{$herramienta} · conversación web ajena · saliente con solo su call_sid"] = [$herramienta, $web, 'provider_call_sid'];
+            $out["{$herramienta} · conversación web ajena · saliente con solo su conversación"] = [$herramienta, $web, 'provider_conversation_id'];
+        }
+
+        return $out;
+    }
+
+    /**
+     * E18-9: el último recurso por `call_ref` es para la saliente cuyo job aún no guardó los ids. Una llamada que ya
+     * tiene los suyos NO se encuentra por su `call_ref` desde otra conversación (en el laboratorio hablado ese valor lo
+     * pone el navegador): la negativa de siempre, sin gastar su cupo, sin excluir su número y sin dejar evento.
+     *
+     * @param  array<string, string>  $cuerpo
+     */
+    #[DataProvider('foreignConversationCases')]
+    public function test_el_call_ref_de_una_llamada_que_ya_tiene_sus_ids_no_la_encuentra_desde_otra_conversacion(string $herramienta, array $cuerpo, ?string $soloId): void
+    {
+        $ids = ['provider_conversation_id' => 'conv_h8fx_0031', 'provider_call_sid' => 'CA000000000000000000000000a800001f'];
+        $llamada = $soloId === null
+            ? $this->voiceCall('outbound', 'active', $ids + ['tool_calls' => 3])
+            : $this->outboundWithOneProviderId('active', $soloId, $ids[$soloId], 3);
+        $antes = VoiceCall::query()->findOrFail($llamada->id);
+        $this->assertSame($soloId === null ? $ids : [$soloId => $ids[$soloId]],
+            array_filter(['provider_conversation_id' => $antes->provider_conversation_id, 'provider_call_sid' => $antes->provider_call_sid]), 'la llamada ya tiene sus ids del proveedor');
+
+        $this->rawPost('/api/voice/tools/'.$herramienta, (string) json_encode($cuerpo + ['call_ref' => $llamada->call_ref]), ['Authorization' => 'Bearer '.self::TOOL_SECRET])
+            ->assertOk()->assertExactJson(['ok' => false, 'verdict' => 'call_not_found', 'message' => VoiceTools::NEUTRAL]);
+
+        $despues = VoiceCall::query()->findOrFail($llamada->id);
+        $this->assertSame([3, 'active'], [$despues->tool_calls, $despues->status], 'la llamada no gastó cupo ni cambió de estado');
+        $this->assertSame([$antes->provider_conversation_id, $antes->provider_call_sid], [$despues->provider_conversation_id, $despues->provider_call_sid], 'ni sus ids');
+        $this->assertSame(0, VoiceExclusion::query()->count(), 'ninguna exclusión de su número');
+        $this->assertSame(0, VoiceCallEvent::query()->count(), 'call_not_found sin llamada no deja evento');
+        Http::assertNothingSent();
+    }
+
+    /**
+     * E18-9, el caso legítimo que el último recurso protege: la saliente que el proveedor ya inició y cuyo job aún no
+     * guardó los ids (`requested`, o `ambiguous` hasta la conciliación; DB8 no le admite ninguno) se sigue encontrando
+     * por su `call_ref`, venga el cuerpo como venga. Sigue sin responder (no está en curso), pero el rechazo queda
+     * atado a ELLA.
+     */
+    public function test_la_saliente_que_aun_no_guardo_sus_ids_se_sigue_encontrando_por_su_call_ref(): void
+    {
+        foreach (['requested', 'ambiguous'] as $i => $estado) {
+            $llamada = $this->voiceCall('outbound', $estado, ['remote' => '+57300000004'.$i]);
+            $this->assertSame([null, null], [$llamada->provider_conversation_id, $llamada->provider_call_sid], "{$estado}: sin ids del proveedor");
+            foreach ([['conversation_id' => "conv_h8fx_007{$i}"], ['conversation_id' => "conv_h8fx_008{$i}", 'call_sid' => 'CA000000000000000000000000a80000e'.$i]] as $cuerpo) {
+                $this->rawPost('/api/voice/tools/no_volver_a_llamar', (string) json_encode($cuerpo + ['call_ref' => $llamada->call_ref]), ['Authorization' => 'Bearer '.self::TOOL_SECRET])
+                    ->assertOk()->assertExactJson(['ok' => false, 'verdict' => 'call_not_active', 'message' => VoiceTools::NEUTRAL]);
+            }
+            $this->assertSame([['tool_call', 'no_volver_a_llamar', 'call_not_active'], ['tool_call', 'no_volver_a_llamar', 'call_not_active']],
+                VoiceCallEvent::query()->where('call_id', $llamada->id)->orderBy('id')->get()->map(static fn (VoiceCallEvent $e): array => [$e->kind, $e->tool, $e->outcome])->all(),
+                "{$estado}: el rechazo queda atado a la saliente que encontró su call_ref");
+        }
+        $this->assertSame(0, VoiceExclusion::query()->count());
     }
 
     public function test_consultar_planes_solo_da_los_vendibles_con_el_precio_exacto_y_consultar_horarios_sin_hechos_no_inventa(): void

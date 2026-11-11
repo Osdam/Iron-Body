@@ -5,6 +5,7 @@ namespace App\Services\Telephony;
 use App\Models\Voice\VoiceCall;
 use App\Models\Voice\VoiceCallEvent;
 use App\Services\Voice\Dto\VoiceWebhookVerdict;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -250,7 +251,13 @@ final class VoicePostCall
 
     /**
      * La fila de la llamada: por conversación, por la llamada de Twilio o por
-     * `call_ref` (el `user_id` de la saliente).
+     * `call_ref` (el `user_id` de la saliente). E18-9 (P-1 de la revisión de
+     * seguridad de E18-8): por `call_ref` solo una fila cuyos ids del
+     * proveedor, si ya tiene alguno, son los del cuerpo; es decir, la saliente
+     * cuyo job aún no los guardó (DF-S2). Una post-llamada de otra
+     * conversación (la del laboratorio hablado, cuyo `call_ref` pone el
+     * navegador) no se ata a una llamada que ya tiene los suyos: sigue el
+     * camino de una conversación desconocida. Lo mismo en `VoiceTools::find()`.
      */
     private static function find(VoiceWebhookVerdict $v, bool $lock = false): ?VoiceCall
     {
@@ -259,6 +266,9 @@ final class VoicePostCall
                 continue;
             }
             $q = VoiceCall::query()->where($columna, $valor)->whereNull('transfer_of_call_id');
+            if ($columna === 'call_ref') {
+                $q = self::withoutOtherIds($q, $v->conversationId, $v->callSid);
+            }
             $fila = ($lock ? $q->lockForUpdate() : $q)->first();
             if ($fila !== null) {
                 return $fila;
@@ -266,6 +276,24 @@ final class VoicePostCall
         }
 
         return null;
+    }
+
+    /**
+     * E18-9: los ids del proveedor que la fila ya tenga son los del cuerpo
+     * (tras no encontrarla por ellos: no tiene ninguno). Va en el filtro, no
+     * después: no se bloquea una llamada ajena, y si el job guarda los ids
+     * mientras se espera su cerrojo, PostgreSQL vuelve a evaluar el filtro
+     * sobre la fila nueva y la sigue encontrando si son estos. El mismo filtro
+     * que `VoiceTools::withoutOtherIds()`.
+     *
+     * @param  Builder<VoiceCall>  $q
+     * @return Builder<VoiceCall>
+     */
+    private static function withoutOtherIds(Builder $q, ?string $conversacion, ?string $sid): Builder
+    {
+        return $q
+            ->where(static fn (Builder $w) => $w->whereNull('provider_conversation_id')->when($conversacion !== null, static fn (Builder $w) => $w->orWhere('provider_conversation_id', $conversacion)))
+            ->where(static fn (Builder $w) => $w->whereNull('provider_call_sid')->when($sid !== null, static fn (Builder $w) => $w->orWhere('provider_call_sid', $sid)));
     }
 
     /**

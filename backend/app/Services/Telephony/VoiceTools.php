@@ -8,6 +8,7 @@ use App\Models\Voice\VoiceCallEvent;
 use App\Models\Voice\VoiceExclusion;
 use App\Services\Voice\Dto\VoiceAgentSpec;
 use App\Services\Voice\Dto\VoiceIds;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -209,7 +210,9 @@ final class VoiceTools
         if ($fila === null) {
             // Una saliente que el proveedor ya inició y cuyo job aún no guardó los
             // ids: solo su `call_ref` la encuentra (y seguirá `requested`: no responde).
-            return $cuerpo['call_ref'] === null ? null : (clone $q)->where('call_ref', $cuerpo['call_ref'])->first();
+            // E18-9: SOLO esa. Una fila con otro id del proveedor es otra llamada.
+            return $cuerpo['call_ref'] === null ? null
+                : self::withoutOtherIds((clone $q)->where('call_ref', $cuerpo['call_ref']), $cuerpo['conversation_id'], $cuerpo['call_sid'])->first();
         }
         // El `call_ref` de las variables, si viene, tiene que ser el de ESA llamada.
         if ($cuerpo['call_ref'] !== null && ! hash_equals((string) $fila->call_ref, $cuerpo['call_ref'])) {
@@ -217,6 +220,29 @@ final class VoiceTools
         }
 
         return $fila;
+    }
+
+    /**
+     * E18-9 (P-1 de la revisión de seguridad de E18-8): el último recurso por
+     * `call_ref` solo encuentra una fila cuyos ids del proveedor, si ya tiene
+     * alguno, son los del cuerpo. Tras no encontrarla por conversación ni por
+     * `call_sid`, eso es una fila SIN ids: la saliente cuyo job aún no los
+     * guardó (`requested`, o `ambiguous` hasta la conciliación; DB8 no le
+     * admite ninguno). Una que ya tiene OTRA conversación u OTRA llamada de
+     * Twilio no se alcanza con su `call_ref`: en el laboratorio hablado ese
+     * valor lo pone el navegador. Va en el filtro, no después: no se bloquea
+     * una llamada ajena, y si el job guarda los ids mientras se espera su
+     * cerrojo, PostgreSQL vuelve a evaluar el filtro sobre la fila nueva y la
+     * sigue encontrando si son los del cuerpo. Lo mismo en `VoicePostCall::find()`.
+     *
+     * @param  Builder<VoiceCall>  $q
+     * @return Builder<VoiceCall>
+     */
+    private static function withoutOtherIds(Builder $q, ?string $conversacion, ?string $sid): Builder
+    {
+        return $q
+            ->where(static fn (Builder $w) => $w->whereNull('provider_conversation_id')->when($conversacion !== null, static fn (Builder $w) => $w->orWhere('provider_conversation_id', $conversacion)))
+            ->where(static fn (Builder $w) => $w->whereNull('provider_call_sid')->when($sid !== null, static fn (Builder $w) => $w->orWhere('provider_call_sid', $sid)));
     }
 
     /**

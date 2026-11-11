@@ -279,6 +279,25 @@ trait VoiceFixtures
         return VoiceCall::query()->findOrFail($id);
     }
 
+    /**
+     * Una saliente en curso (`dialing` o `active`) con UN SOLO id del proveedor, el que el job guardó porque fue el
+     * único que devolvió el proveedor (DB8, `vc_provider_binding_chk`: una saliente que marcó lleva al menos uno). Los
+     * disparadores fijan cada id una sola vez, así que se escribe solo ese al marcar, y el cupo cuando ya está en curso.
+     */
+    protected function outboundWithOneProviderId(string $status, string $column, string $value, int $toolCalls = 0, array $o = []): VoiceCall
+    {
+        $id = (int) $this->voiceCall('outbound', 'requested', $o)->id;
+        DB::table('voice_calls')->where('id', $id)->update(['status' => 'dialing', 'started_at' => now(), $column => $value, 'status_changed_at' => now()]);
+        if ($status === 'active') {
+            DB::table('voice_calls')->where('id', $id)->update(['status' => 'active', 'status_changed_at' => now()]);
+        }
+        if ($toolCalls > 0) {
+            DB::table('voice_calls')->where('id', $id)->update(['tool_calls' => $toolCalls]);
+        }
+
+        return VoiceCall::query()->findOrFail($id);
+    }
+
     /** El JSON canónico de una entrada (para comprobar lo que guarda la cadena). */
     protected function canonical(array $entry): string
     {

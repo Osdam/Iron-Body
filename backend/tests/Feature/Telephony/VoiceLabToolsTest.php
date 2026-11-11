@@ -11,6 +11,7 @@ use App\Models\Voice\VoiceExclusion;
 use App\Services\Telephony\VoiceBrake;
 use App\Services\Telephony\VoiceTools;
 use App\Services\UltronStudio\StudioVoiceLabSessions;
+use App\Services\UltronStudio\StudioVoiceTemplate;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Routing\Middleware\ThrottleRequests;
@@ -73,6 +74,9 @@ class VoiceLabToolsTest extends TestCase
 
     /** El secreto de las herramientas de {@see VoiceLabFixtures::elevenLabsLikeProduction()}. */
     private const LAB_TOOL_SECRET = 'tool-centinela-laboratorio';
+
+    /** El secreto del webhook post-llamada de {@see VoiceLabFixtures::elevenLabsLikeProduction()}. */
+    private const LAB_WEBHOOK_SECRET = 'whsec-centinela-laboratorio';
 
     private const CONVERSATION = 'conv_lab_herramientas_0001';
 
@@ -314,6 +318,51 @@ class VoiceLabToolsTest extends TestCase
         $this->assertSame(0, VoiceCall::query()->findOrFail($llamada->id)->tool_calls, 'la llamada real no gastó cupo');
         $this->assertSame(0, VoiceCallEvent::query()->count(), 'call_not_found sin llamada no deja evento, como siempre');
         $this->assertSame(1, $this->toolRequests($d['uuid']));
+    }
+
+    /**
+     * E18-9 (P-1 de la revisión de seguridad de E18-8): el `call_ref` de la conversación lo pone el NAVEGADOR. Quien
+     * abre una sesión y cambia esa variable por el `call_ref` de una llamada real en curso no alcanza esa llamada:
+     * ninguna de las cuatro herramientas la toca y la post-llamada del ensayo vuelve al laboratorio, no a la llamada.
+     * La sesión, con SU uuid, sigue respondiendo las dos de lectura.
+     */
+    public function test_el_call_ref_de_una_llamada_real_puesto_en_la_conversacion_del_laboratorio_no_la_alcanza(): void
+    {
+        $d = $this->openLab();
+        $llamada = $this->voiceCall('outbound', 'active', ['provider_conversation_id' => 'conv_h8fx_0031', 'provider_call_sid' => 'CA000000000000000000000000a800001f']);
+
+        foreach (VoiceTools::TOOLS as $herramienta) {
+            $this->tool($herramienta, (string) $llamada->call_ref)->assertOk()
+                ->assertExactJson(['ok' => false, 'verdict' => 'call_not_found', 'message' => VoiceTools::NEUTRAL]);
+        }
+        $fila = VoiceCall::query()->findOrFail($llamada->id);
+        $this->assertSame([0, 'active'], [$fila->tool_calls, $fila->status], 'la llamada real no gastó cupo ni cambió');
+        $this->assertSame(0, VoiceExclusion::query()->count(), 'ninguna exclusión de su número');
+        $this->assertSame(0, VoiceCallEvent::query()->count(), 'ningún evento');
+        $this->assertNull($this->toolRequests($d['uuid']), 'ni el cupo de la sesión');
+
+        // Con su propio uuid, la sesión sigue respondiendo las dos de lectura.
+        $this->tool('consultar_planes', $d['uuid'])->assertOk()->assertJsonPath('verdict', 'ok');
+        $this->tool('consultar_horarios', $d['uuid'])->assertOk()->assertJsonPath('verdict', 'ok');
+        $this->assertSame(2, $this->toolRequests($d['uuid']));
+
+        // La post-llamada del ensayo, firmada como ElevenLabs, con el `call_ref` cambiado: vuelve al laboratorio.
+        $cuerpo = (string) json_encode(['type' => 'post_call_transcription', 'event_timestamp' => now()->getTimestamp(), 'data' => [
+            'agent_id' => $d['agent']['providerAgentId'], 'conversation_id' => self::CONVERSATION, 'status' => 'done',
+            'transcript' => [['role' => 'agent', 'message' => StudioVoiceTemplate::AI_NOTICE, 'tool_calls' => [], 'tool_results' => []]],
+            'metadata' => ['call_duration_secs' => 40],
+            'conversation_initiation_client_data' => ['dynamic_variables' => ['call_ref' => (string) $llamada->call_ref]],
+        ]], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $this->rawPost('/api/webhooks/voice/elevenlabs/post-call', $cuerpo, ['ElevenLabs-Signature' => $this->elevenSignature($cuerpo, null, self::LAB_WEBHOOK_SECRET)])
+            ->assertOk()->assertExactJson(['ok' => true, 'lab' => 'recorded']);
+
+        $despues = VoiceCall::query()->findOrFail($llamada->id);
+        $this->assertSame(['active', null, null, null, 'conv_h8fx_0031'],
+            [$despues->status, $despues->observed_agent_id, $despues->seal_verified, $despues->duration_seconds, $despues->provider_conversation_id],
+            'la transcripción del ensayo no se ata a la llamada real: ni estado, ni sello, ni duración, ni conversación');
+        $this->assertSame(0, VoiceCallEvent::query()->count(), 'ni post_call_transcription, ni guard_verdict, ni seal_mismatch');
+        $this->assertFalse(VoiceBrake::isOpen());
+        $this->assertSame('ended', $this->voiceLab('GET', "sessions/{$d['uuid']}", $this->tina)->assertOk()->json('data.status'), 'el informe cerró SU sesión');
     }
 
     public function test_el_contador_sobrevive_al_cierre_por_quien_la_abrio_y_al_informe_del_proveedor(): void
