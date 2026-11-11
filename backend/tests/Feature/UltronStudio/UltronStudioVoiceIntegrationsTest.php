@@ -187,6 +187,12 @@ class UltronStudioVoiceIntegrationsTest extends TestCase
         $this->assertSame('1', StudioIntegrations::voicePhase($t([]))['id']);
         $this->assertSame('1', StudioIntegrations::voicePhase($t(['providerState' => 'ELEVENLABS_VERIFIED', 'subaccountReady' => true]))['id'], 'sin número importado no es la 2');
         $this->assertSame('2', StudioIntegrations::voicePhase($t(['providerState' => 'ELEVENLABS_UNVERIFIED', 'subaccountReady' => true, 'numberImported' => true]))['id']);
+        // E18-7: con credenciales y el laboratorio hablado encendido, pero sin la telefonía, es la 2a (ya no «todo apagado»).
+        $this->assertSame('2a', StudioIntegrations::voicePhase($t(['providerState' => 'ELEVENLABS_VERIFIED']), true)['id']);
+        $this->assertSame('2a', StudioIntegrations::voicePhase($t(['providerState' => 'ELEVENLABS_UNVERIFIED', 'subaccountReady' => true]), true)['id']);
+        $this->assertSame('1', StudioIntegrations::voicePhase($t([]), true)['id'], 'sin credenciales, el laboratorio no cambia la fase');
+        $this->assertSame('1', StudioIntegrations::voicePhase($t(['providerState' => 'ELEVENLABS_VERIFIED']), false)['id'], 'con el laboratorio apagado sigue en la 1');
+        $this->assertSame('2', StudioIntegrations::voicePhase($t(['providerState' => 'ELEVENLABS_VERIFIED', 'subaccountReady' => true, 'numberImported' => true]), true)['id'], 'con la telefonía lista manda la 2');
         $this->assertSame('3', StudioIntegrations::voicePhase($t(['inbound' => ['enabled' => true]]))['id']);
         $this->assertSame('4a', StudioIntegrations::voicePhase($t(['inbound' => ['enabled' => true], 'outbound' => ['enabled' => true]]))['id']);
         $this->assertSame('4b', StudioIntegrations::voicePhase($t(['outbound' => ['enabled' => true, 'scope' => 'contacts']]))['id']);

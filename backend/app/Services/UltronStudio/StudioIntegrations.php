@@ -360,7 +360,7 @@ final class StudioIntegrations
         // `{available:false}` y una línea de log (nunca un valor inventado).
         $telefonia = self::block('telephonyState', fn (): array => self::voiceTelephony($codigo));
         $panel['telephonyState'] = $telefonia;
-        $panel['phase'] = ($telefonia['available'] ?? false) === true ? self::voicePhase($telefonia) : null;
+        $panel['phase'] = ($telefonia['available'] ?? false) === true ? self::voicePhase($telefonia, self::voiceLabOpen()) : null;
         $panel['brake'] = self::block('brake', fn (): array => ['state' => StudioVoiceEvidence::brakeState()]);
         $panel['publishing'] = self::block('publishing', fn (): array => StudioVoicePublishing::status());
         $panel['publication'] = self::block('publication', fn (): array => StudioVoicePublications::state());
@@ -453,13 +453,16 @@ final class StudioIntegrations
      * La fase del despliegue que se DEDUCE de la configuración (contrato H8,
      * «Fases de despliegue»), pura: 4b con salientes a contactos, 4a con
      * salientes a canarios, 3 con entrantes, 2 con ElevenLabs con credenciales
-     * y la subcuenta y el número listos, y 1 en cualquier otro caso. Es una
-     * lectura, no una autorización: cada fase la autoriza el propietario.
+     * y la subcuenta y el número listos, 2a con credenciales y el laboratorio
+     * hablado encendido contra ElevenLabs pero todavía sin la telefonía
+     * (enmienda E18-7: con el laboratorio encendido no se puede decir «todo
+     * apagado»), y 1 en cualquier otro caso. Es una lectura, no una
+     * autorización: cada fase la autoriza el propietario.
      *
      * @param  array<string,mixed>  $telephony
      * @return array{id:string,basis:string}
      */
-    public static function voicePhase(array $telephony): array
+    public static function voicePhase(array $telephony, bool $labOpen = false): array
     {
         $credenciales = in_array($telephony['providerState'] ?? null, [VoiceProviderStatus::STATE_UNVERIFIED, VoiceProviderStatus::STATE_VERIFIED], true);
         $id = match (true) {
@@ -467,10 +470,23 @@ final class StudioIntegrations
             ($telephony['outbound']['enabled'] ?? false) === true => '4a',
             ($telephony['inbound']['enabled'] ?? false) === true => '3',
             $credenciales && ($telephony['subaccountReady'] ?? false) === true && ($telephony['numberImported'] ?? false) === true => '2',
+            $credenciales && $labOpen => '2a',
             default => '1',
         };
 
         return ['id' => $id, 'basis' => 'config'];
+    }
+
+    /** El laboratorio hablado está encendido contra ElevenLabs (su bandera y su driver; el presupuesto y la credencial los dice su propia pantalla). */
+    private static function voiceLabOpen(): bool
+    {
+        try {
+            $cfg = StudioVoiceLabConfig::current();
+
+            return $cfg->enabled && $cfg->isElevenLabs();
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     /**
