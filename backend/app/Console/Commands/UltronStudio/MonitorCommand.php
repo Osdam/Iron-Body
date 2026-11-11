@@ -5,9 +5,14 @@ namespace App\Console\Commands\UltronStudio;
 use App\Models\Incident;
 use App\Services\IronGuard\IncidentRecorder;
 use App\Services\Observability\QueueHealthService;
+use App\Services\UltronStudio\StudioCanaryMeasures;
+use App\Services\UltronStudio\StudioEngineReadings;
 use App\Services\UltronStudio\StudioIntegrationConfig;
 use App\Services\UltronStudio\StudioIntegrations;
+use App\Services\UltronStudio\StudioPublicationDeclaration;
 use App\Services\UltronStudio\StudioPublications;
+use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Formatter\OutputFormatter;
@@ -26,7 +31,15 @@ use Throwable;
  *    configuración autorizada por una persona (`GET integrations/config`, H6
  *    §I5.3; sin reconocimiento previo no hay deriva posible);
  *  - `queues`: la de `queue:health` (un carril sin atender o saturado, o con
- *    un trabajo reservado huérfano, B-T16).
+ *    un trabajo reservado huérfano, B-T16);
+ *  - `prompts` (alerta M1-A de la Enmienda M-1, H5 M1-13): los turnos de la
+ *    conversación canaria cuyo sello de prompts es `mismatch` (n8n aplicó
+ *    otra cosa que lo ofrecido) o `legacy_drift` (los prompts Legacy de n8n
+ *    ya no son los de la base), los mismos que `ultron:prompt-trace` y
+ *    `status.engine.prompts` pintan en rojo. Solo los de la media hora
+ *    anterior ({@see promptsWindow()}), así que cada pasada programada mira
+ *    turnos que ninguna otra miró. Con la llave de prompts del motor en `off`
+ *    no vigila y lo dice (`prompts_off`).
  *
  * No lanza esos comandos por dentro: `Artisan::call` pisaría la salida de
  * quien llamó al monitor con `Artisan::call`.
@@ -36,7 +49,7 @@ use Throwable;
  *
  * DERIVA → IRON GUARD: con algo que no cuadra abre o suma al incidente de su
  * clase con `IncidentRecorder` (fuente `ultron_studio`; `publication_drift`,
- * `integrations_drift` o `monitor_check_failed`), igual que los detectores de
+ * `integrations_drift`, `prompts_drift` o `monitor_check_failed`), igual que los detectores de
  * `iron-guard:scan`: la misma deriva repetida es UN incidente con más
  * ocurrencias. Las colas NO abren incidente propio: `iron-guard:scan` ya abre
  * `queue_unattended` y `queue_backlog` por carril (y `queue_reserved_orphaned`
@@ -45,12 +58,14 @@ use Throwable;
  *
  * Solo lee y solo informa: no frena, no revierte, no llama a ningún proveedor
  * y no notifica fuera de IRON GUARD. El Studio no revierte solo por deriva
- * (H5 §A6): eso lo decide una persona. Nunca imprime ids de conversación,
- * textos, valores declarados ni secretos: estados, códigos y nombres.
+ * (H5 §A6): eso lo decide una persona. Un `mismatch` tampoco frena el motor
+ * (E15 del plan de motores; M1-A solo pide la alerta). Nunca imprime ids de
+ * conversación, textos, valores declarados ni secretos: estados, códigos,
+ * nombres, recuentos y huellas recortadas a 8 caracteres.
  */
 class MonitorCommand extends Command
 {
-    public const CHECKS = ['publication', 'integrations', 'queues'];
+    public const CHECKS = ['publication', 'integrations', 'queues', 'prompts'];
 
     public const SOURCE = 'ultron_studio';
 
@@ -58,7 +73,32 @@ class MonitorCommand extends Command
 
     public const KIND_INTEGRATIONS = 'integrations_drift';
 
+    public const KIND_PROMPTS = 'prompts_drift';
+
     public const KIND_CHECK_FAILED = 'monitor_check_failed';
+
+    /**
+     * M1-A: la ventana de `prompts`, en minutos. Es la cadencia del monitor en
+     * routes/console.php (`everyThirtyMinutes()`; una prueba ata las dos):
+     * cada pasada programada mira la media hora anterior y la siguiente,
+     * la media hora después, sin huecos ni solapes.
+     */
+    public const PROMPTS_WINDOW_MINUTES = 30;
+
+    /**
+     * M1-A: la ventana termina estos minutos antes del inicio de la media hora
+     * de la pasada. Un turno se fecha (`created_at`) al guardarse, dentro de
+     * la transacción del commit: con la ventana cortada en la media hora
+     * exacta, un turno fechado a las 09:59:59 que se confirma a las 10:00:01
+     * no lo vería la pasada de las 10:00 (aún sin confirmar) ni la de las
+     * 10:30 (fuera de su ventana). Con la gracia lo ve la siguiente.
+     */
+    public const PROMPTS_GRACE_MINUTES = 2;
+
+    /** Qué mirar a mano ante un `prompts_drift`, y qué hacer (RUNBOOK_M1 §5, «Qué vigilar»). */
+    private const PROMPTS_COMMAND = 'php artisan ultron:prompt-trace --last=20';
+
+    private const PROMPTS_RUNBOOK = 'backend/docs/ultron-studio/ops/RUNBOOK_M1.md';
 
     /** Lo que significa «no se pudo comprobar» (distinto de «comprobado y no cuadra»). */
     private const UNCHECKED = ['check_failed', 'expectation_invalid'];
@@ -67,11 +107,11 @@ class MonitorCommand extends Command
     private const SAFE = '/^[A-Za-z0-9_.\-]{1,60}$/D';
 
     protected $signature = 'ultron-studio:monitor
-        {--check=* : publication, integrations o queues (por defecto, las tres)}
+        {--check=* : publication, integrations, queues o prompts (por defecto, las cuatro)}
         {--dry-run : solo lee: no abre ni actualiza incidentes}
         {--json : el resultado en JSON}';
 
-    protected $description = 'Vigila ULTRON STUDIO: publicación frente al motor, integraciones frente a lo esperado y colas. Sale 1 si algo no cuadra y abre o suma al incidente de IRON GUARD de su clase.';
+    protected $description = 'Vigila ULTRON STUDIO: publicación frente al motor, integraciones frente a lo esperado, colas y los prompts que n8n aplicó en la canaria. Sale 1 si algo no cuadra y abre o suma al incidente de IRON GUARD de su clase.';
 
     public function handle(IncidentRecorder $recorder): int
     {
@@ -91,6 +131,7 @@ class MonitorCommand extends Command
                     'publication' => $this->publication(),
                     'integrations' => $this->integrations(),
                     'queues' => $this->queues(),
+                    'prompts' => $this->prompts(),
                 };
             } catch (Throwable $e) {
                 // Sin el mensaje (puede llevar SQL): solo la clase. Las demás siguen.
@@ -261,6 +302,72 @@ class MonitorCommand extends Command
     }
 
     /**
+     * M1-A (H5 M1-13): los turnos de la conversación canaria de la ventana
+     * ({@see promptsWindow()}) con un sello de prompts de alerta, sobre
+     * {@see StudioCanaryMeasures::promptAlerts()}. Cada estado con al menos un
+     * turno es un problema (`mismatch`, `legacy_drift`). Con la llave de
+     * prompts del motor en `off` no lee nada (`prompts_off`); sin canario
+     * configurado, tampoco hay turnos que mirar (`no_canary`). Una lectura que
+     * falla la recoge `handle()` como `check_failed`.
+     *
+     * @return array<string,mixed>
+     */
+    private function prompts(): array
+    {
+        $llave = StudioEngineReadings::promptsKey();
+        [$desde, $hasta] = self::promptsWindow(now());
+        $base = [
+            'key' => $llave,
+            'window' => ['from' => StudioPublicationDeclaration::utc($desde), 'to' => StudioPublicationDeclaration::utc($hasta)],
+        ];
+
+        $sinMirar = static fn (string $motivo): array => ['ok' => true, 'status' => 'not_watched', 'problems' => [], 'reason' => $motivo]
+            + $base + ['turns' => null, 'byState' => null, 'fingerprints' => []];
+
+        if ($llave !== StudioEngineReadings::PROMPTS_CANARY) {
+            // La versión publicada no gobierna los prompts de nadie: no hay
+            // nada que el Studio haya ofrecido y que n8n pudiera aplicar mal.
+            return $sinMirar('prompts_off');
+        }
+        $alertas = app(StudioCanaryMeasures::class)->promptAlerts($desde, $hasta);
+        if ($alertas === null) {
+            return $sinMirar('no_canary');
+        }
+
+        $problemas = array_keys(array_filter($alertas['byState'], static fn (int $n): bool => $n > 0));
+        sort($problemas, SORT_STRING);
+
+        return [
+            'ok' => $problemas === [],
+            'status' => $problemas === [] ? 'ok' : 'drift',
+            'problems' => $problemas,
+            'reason' => null,
+        ] + $base + $alertas;
+    }
+
+    /**
+     * M1-A: la ventana [desde, hasta) de `prompts` para una pasada que corre en
+     * `$now`: la media hora que termina {@see PROMPTS_GRACE_MINUTES} antes del
+     * inicio de la media hora de `$now` (a las 10:00:04, de 09:28 a 09:58; a
+     * las 10:30:02, de 09:58 a 10:28). Alineada con la cadencia del
+     * programador, y no «los últimos 30 minutos»: una pasada que arranca unos
+     * segundos más tarde mira lo mismo, así que ningún turno cae entre dos
+     * pasadas programadas ni lo cuentan dos. Una pasada a mano SIN `--dry-run`
+     * repite la ventana de la última programada (y suma una ocurrencia al
+     * mismo incidente): a mano, en seco.
+     *
+     * @return array{0:CarbonInterface,1:CarbonInterface}
+     */
+    public static function promptsWindow(CarbonInterface $now): array
+    {
+        $inicio = CarbonImmutable::instance($now)->startOfMinute();
+        $inicio = $inicio->subMinutes($inicio->minute % self::PROMPTS_WINDOW_MINUTES);
+        $hasta = $inicio->subMinutes(self::PROMPTS_GRACE_MINUTES);
+
+        return [$hasta->subMinutes(self::PROMPTS_WINDOW_MINUTES), $hasta];
+    }
+
+    /**
      * El incidente de IRON GUARD de una comprobación que no cuadra, o null si
      * no le toca al monitor (las colas son de `iron-guard:scan`).
      *
@@ -275,7 +382,11 @@ class MonitorCommand extends Command
 
         $problemas = array_values(array_map('strval', (array) ($r['problems'] ?? [])));
         sort($problemas);
-        $comando = $check === 'publication' ? 'php artisan ultron-studio:publication-check' : 'php artisan ultron-studio:integrations-doctor --expect=…';
+        $comando = match ($check) {
+            'publication' => 'php artisan ultron-studio:publication-check',
+            'prompts' => self::PROMPTS_COMMAND,
+            default => 'php artisan ultron-studio:integrations-doctor --expect=…',
+        };
 
         if (array_diff($problemas, self::UNCHECKED) === []) {
             return [
@@ -286,6 +397,32 @@ class MonitorCommand extends Command
                 // Medio: no hay una deriva comprobada, falta la comprobación.
                 'severity' => Incident::SEVERITY_MEDIUM,
                 'evidence' => ['check' => $check, 'problems' => $problemas, 'status' => $r['status'] ?? null, 'error_class' => $r['error'] ?? null, 'check_command' => 'php artisan ultron-studio:monitor --check='.$check.' --dry-run'],
+            ];
+        }
+
+        if ($check === 'prompts') {
+            return [
+                'source' => self::SOURCE,
+                'kind' => self::KIND_PROMPTS,
+                // La clase son los estados, nunca el turno ni la ventana: la misma
+                // deriva en pasadas seguidas suma ocurrencias al mismo incidente.
+                'fingerprint_keys' => $problemas,
+                'title' => 'Los prompts que n8n aplicó en la conversación canaria no son los esperados (M1-A): '.implode(', ', $problemas),
+                // Alto, como la deriva de la publicación: cambia lo que ULTRON dice en la
+                // canaria. No crítico: el motor sigue respondiendo (y no se frena, E15).
+                'severity' => Incident::SEVERITY_HIGH,
+                // Solo estados, recuentos, la ventana y huellas de 8: ni la conversación,
+                // ni filas, ni ejecuciones, ni textos (de la persona o de los prompts).
+                'evidence' => [
+                    'check' => $check,
+                    'problems' => $problemas,
+                    'check_command' => $comando,
+                    'runbook' => self::PROMPTS_RUNBOOK,
+                    'window' => $r['window'] ?? null,
+                    'turns' => $r['turns'] ?? null,
+                    'by_state' => $r['byState'] ?? null,
+                    'fingerprints' => $r['fingerprints'] ?? [],
+                ],
             ];
         }
 
@@ -322,6 +459,11 @@ class MonitorCommand extends Command
             'publication' => isset($r['state']) ? " · llave del motor {$r['envScope']} · estado {$r['state']}".($r['head'] === null ? ' · sin cabeza (Legacy)' : " · cabeza {$r['head']['seq']} ".($r['head']['signatureOk'] ? 'verifica' : 'NO verifica')) : '',
             'integrations' => isset($r['configStates']) ? ' · configuración: '.implode(', ', array_map(static fn ($p, $e) => "{$p} {$e}", array_keys($r['configStates']), $r['configStates'])) : '',
             'queues' => isset($r['lanes']) ? " · {$r['lanes']} carriles" : '',
+            'prompts' => isset($r['window']) ? " · llave de prompts {$r['key']} · ventana {$r['window']['from']} a {$r['window']['to']}".(
+                $r['reason'] !== null
+                    ? " · no se vigila ({$r['reason']})"
+                    : " · {$r['turns']} turnos de la canaria".implode('', array_map(static fn (string $e, int $n): string => " · {$e} {$n}", array_keys($r['byState']), $r['byState']))
+            ) : '',
             default => '',
         };
     }

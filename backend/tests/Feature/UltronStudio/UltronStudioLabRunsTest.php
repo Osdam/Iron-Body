@@ -59,6 +59,25 @@ class UltronStudioLabRunsTest extends TestCase
         $this->root = $this->person(Admin::ROLE_SUPER_ADMIN, 'Root');
     }
 
+    /**
+     * La franja de fidelidad (contrato H4 §A7, enmendado tras la Enmienda M-1;
+     * INC-1, T6 de la auditoría de cierre): el literal exacto en el estado y en
+     * el detalle de una ejecución, calculado al leer. Ya no dice que el motor no
+     * lea el Studio (falso desde M-1 en la canaria).
+     */
+    public function test_la_fidelidad_es_el_literal_del_contrato_en_el_estado_y_en_cada_ejecucion(): void
+    {
+        $literal = 'Simulación del Studio: un modelo de laboratorio, con instrucciones propias, interpreta la versión completa, incluido lo que el WhatsApp real no aplica o aplica solo en parte («Si no entiende» y las reglas S-NNN). No es ULTRON: no usa sus cinco prompts ni su modelo. Cómo responde ULTRON de verdad se comprueba en un turno real de la conversación canaria.';
+        $this->assertSame($literal, StudioLabRuns::FIDELITY);
+        $this->assertStringNotContainsString('el motor no lee el Studio', $literal);
+
+        Queue::fake();
+        $this->labFake();
+        $this->assertSame($literal, $this->lab('GET', 'status', $this->ana)->assertOk()->json('data.fidelity'));
+        $uuid = $this->launch($this->root, ['kind' => 'baseline'], ['C-01'])->assertCreated()->json('data.uuid');
+        $this->assertSame($literal, $this->lab('GET', "runs/{$uuid}", $this->ana)->assertOk()->json('data.fidelity'));
+    }
+
     public function test_estimar_no_escribe_nada_y_trae_su_forma(): void
     {
         $this->labOpenAi();

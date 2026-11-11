@@ -154,8 +154,10 @@ class UltronStudioMonitorTest extends TestCase
 
         $this->assertSame(0, $codigo);
         $this->assertTrue($r['ok']);
-        $this->assertSame(['publication', 'integrations', 'queues'], array_keys($r['checks']));
+        $this->assertSame(['publication', 'integrations', 'queues', 'prompts'], array_keys($r['checks']));
         $this->assertSame([], $r['checks']['publication']['problems']);
+        // M1-A: con la llave de prompts del motor en `off` (la de la suite) no se vigila, y lo dice.
+        $this->assertSame([true, 'not_watched', 'prompts_off'], [$r['checks']['prompts']['ok'], $r['checks']['prompts']['status'], $r['checks']['prompts']['reason']]);
         $this->assertNull($r['checks']['publication']['head'], 'cadena vacía: Legacy');
         $this->assertSame(['meta_ads', 'twilio', 'voice'], array_keys($r['checks']['integrations']['configStates']));
         $this->assertNotContains('drift', $r['checks']['integrations']['configStates']);

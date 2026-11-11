@@ -51,7 +51,13 @@ final class StudioLabRuns
     /** La llave de lanzar y cancelar ejecuciones (decisión 2 del lead). */
     public const LAB_RUN = 'ultron.lab_run';
 
-    public const FIDELITY = 'Simulación del Studio: un actor de laboratorio interpreta la versión. No es ULTRON: el motor no lee el Studio y sus prompts viven en n8n.';
+    /**
+     * La franja de fidelidad (`lab/status` y el detalle de una ejecución): se
+     * calcula al leer, no se guarda con la ejecución. Literal del contrato del
+     * H4 (§A7), enmendado tras la Enmienda M-1 (INC-1, T6 de la auditoría de
+     * cierre): desde M-1 el motor sí lee la versión publicada en la canaria.
+     */
+    public const FIDELITY = 'Simulación del Studio: un modelo de laboratorio, con instrucciones propias, interpreta la versión completa, incluido lo que el WhatsApp real no aplica o aplica solo en parte («Si no entiende» y las reglas S-NNN). No es ULTRON: no usa sus cinco prompts ni su modelo. Cómo responde ULTRON de verdad se comprueba en un turno real de la conversación canaria.';
 
     public const DISABLED_MESSAGE = 'El laboratorio está apagado en el servidor.';
 

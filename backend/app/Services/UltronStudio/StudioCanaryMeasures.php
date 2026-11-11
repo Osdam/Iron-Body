@@ -43,6 +43,12 @@ use Throwable;
  *
  * Sin canario configurado no hay conversación que contar: cero turnos y un
  * acta sin JSON.
+ *
+ * Enmienda M-1: también los últimos turnos con su sello de prompts
+ * ({@see promptTurns()}, para `status.engine.prompts`) y, para la alerta M1-A
+ * del monitor del H7, los turnos de una ventana con un sello de alerta
+ * ({@see promptAlerts()}). Con las mismas reglas: solo lee, y solo cuenta o
+ * recorta.
  */
 final class StudioCanaryMeasures
 {
@@ -63,6 +69,21 @@ final class StudioCanaryMeasures
         'datos_personales',
         'negaciones_de_un_cobro_disponible',
     ];
+
+    /**
+     * M1-A (H5 M1-13): los estados del sello de prompts
+     * (`metadata.studio_prompts.state`) que abren el incidente del monitor: n8n
+     * aplicó otra cosa que lo ofrecido (`mismatch`) o los prompts Legacy ya no
+     * son los de la base (`legacy_drift`). Son `UltronPromptStamp::MISMATCH` y
+     * `LEGACY_DRIFT` (una prueba los ata), en orden alfabético.
+     */
+    public const PROMPT_ALERT_STATES = ['legacy_drift', 'mismatch'];
+
+    /** De los turnos de alerta, cuántos de los más recientes se leen para sacar sus huellas cortas (el recuento es exacto aparte). */
+    public const PROMPT_ALERT_SAMPLE = 20;
+
+    /** Como mucho, cuántas combinaciones distintas de huellas se devuelven. */
+    public const PROMPT_ALERT_FINGERPRINTS = 5;
 
     /** Los motivos de `fallback` que reconoce el reparto (§A4.4). */
     private const FALLBACK_REASONS = ['contract_unknown', 'hash_mismatch', 'malformed', 'read_failed', 'signature_invalid', 'table_missing'];
@@ -147,6 +168,92 @@ final class StudioCanaryMeasures
             })
             ->values()
             ->all();
+    }
+
+    /**
+     * M1-A (H5 M1-13), para el monitor del H7: los turnos de la conversación
+     * canaria (`source_type` del mensaje entrante, como {@see promptTurns()})
+     * con `created_at` en [`$from`, `$to`) y, de ellos, los que llevan un sello
+     * de prompts de alerta ({@see PROMPT_ALERT_STATES}).
+     *
+     *  - `turns`: todos los turnos de la canaria en la ventana (se miró algo);
+     *  - `byState`: cuántos de cada estado de alerta, siempre con las dos claves;
+     *  - `fingerprints`: de los {@see PROMPT_ALERT_SAMPLE} turnos de alerta más
+     *    recientes, las {@see PROMPT_ALERT_FINGERPRINTS} primeras combinaciones
+     *    distintas (de la más reciente hacia atrás; se devuelven ordenadas) de
+     *    estado, versión ofrecida y huellas ofrecida y observada, recortadas a
+     *    8 caracteres.
+     *
+     * SIN DATOS DE NADIE, como `promptTurns()`: ni el id de la conversación
+     * (solo filtra), ni ids de filas o de ejecuciones, ni textos, ni el motivo
+     * libre de nada. Dos lecturas (el recuento, y la muestra solo si hay algo
+     * que contar). Sin canario configurado, null. Un fallo de lectura se
+     * propaga (el monitor lo convierte en `check_failed`).
+     *
+     * @return array{turns:int,byState:array<string,int>,fingerprints:list<array{state:string,version8:?string,offered8:?string,observed8:?string}>}|null
+     */
+    public function promptAlerts(CarbonInterface $from, CarbonInterface $to): ?array
+    {
+        $canario = $this->canaryConversation();
+        if ($canario === null) {
+            return null;
+        }
+
+        $ventana = static fn () => MarketingAiAction::query()
+            ->where('conversation_id', $canario)
+            ->where('source_type', UltronSource::INBOUND_MESSAGE)
+            ->where('created_at', '>=', $from)
+            ->where('created_at', '<', $to);
+
+        // El recuento: UNA consulta con sumas condicionadas, con la ruta JSON
+        // de la gramática de la conexión (como `turns()`).
+        $consulta = $ventana()->toBase();
+        $estado = $consulta->getGrammar()->wrap('metadata->studio_prompts->state');
+        $columnas = ['count(*) as turns'];
+        $valores = [];
+        foreach (self::PROMPT_ALERT_STATES as $i => $alerta) {
+            $columnas[] = "sum(case when {$estado} = ? then 1 else 0 end) as alert_{$i}";
+            $valores[] = $alerta;
+        }
+        $fila = (array) $consulta->selectRaw(implode(', ', $columnas), $valores)->first();
+
+        $porEstado = [];
+        foreach (self::PROMPT_ALERT_STATES as $i => $alerta) {
+            $porEstado[$alerta] = (int) ($fila["alert_{$i}"] ?? 0);
+        }
+
+        $huellas = [];
+        if (array_sum($porEstado) > 0) {
+            $muestra = $ventana()
+                ->whereIn('metadata->studio_prompts->state', self::PROMPT_ALERT_STATES)
+                ->orderByDesc('id')
+                ->limit(self::PROMPT_ALERT_SAMPLE)
+                ->get(['id', 'metadata']);
+            foreach ($muestra as $turno) {
+                $meta = is_array($turno->metadata) ? $turno->metadata : [];
+                $sello = is_array($meta['studio_prompts'] ?? null) ? $meta['studio_prompts'] : [];
+                $ofrecida = is_array($sello['offered'] ?? null) ? $sello['offered'] : [];
+                $observada = is_array($sello['observed'] ?? null) ? $sello['observed'] : [];
+                $huella = [
+                    'state' => (string) self::word($sello['state'] ?? null),
+                    'version8' => self::short($ofrecida['version'] ?? null),
+                    'offered8' => self::short($ofrecida['bundleHash'] ?? null),
+                    'observed8' => self::short($observada['bundleHash'] ?? null),
+                ];
+                // Del más reciente al más antiguo: las primeras combinaciones distintas.
+                $huellas[implode('|', array_map('strval', $huella))] ??= $huella;
+                if (count($huellas) >= self::PROMPT_ALERT_FINGERPRINTS) {
+                    break;
+                }
+            }
+            ksort($huellas, SORT_STRING);
+        }
+
+        return [
+            'turns' => (int) ($fila['turns'] ?? 0),
+            'byState' => $porEstado,
+            'fingerprints' => array_values($huellas),
+        ];
     }
 
     /** Los 8 primeros caracteres de un uuid o una huella, solo si son hexadecimales (o guiones). */

@@ -187,11 +187,12 @@ class UltronStudioMonitorDriftAndFailuresH7Test extends TestCase
         // En seco: lo dice y no anota nada.
         [$codigo, $r, $salida] = $this->monitor(['--dry-run' => true]);
         $this->assertSame(1, $codigo);
-        $this->assertSame(['publication', 'integrations', 'queues'], array_keys($r['checks']), 'las tres se comprobaron');
+        $this->assertSame(['publication', 'integrations', 'queues', 'prompts'], array_keys($r['checks']), 'las cuatro se comprobaron');
         $this->assertSame([false, 'error', ['check_failed'], 'RuntimeException'],
             [$r['checks']['publication']['ok'], $r['checks']['publication']['status'], $r['checks']['publication']['problems'], $r['checks']['publication']['error']]);
         $this->assertTrue($r['checks']['integrations']['ok']);
         $this->assertTrue($r['checks']['queues']['ok']);
+        $this->assertTrue($r['checks']['prompts']['ok']);
         $this->assertSame(0, Incident::query()->count());
         $this->assertStringNotContainsString('centinela-h7', $salida);
 
