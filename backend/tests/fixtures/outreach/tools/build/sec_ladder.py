@@ -1,7 +1,7 @@
 # policy-ladder-cases.json · PolicyLadder::decide (D9-7; §13.1 #8, #9, #12, #17; §13.2 T16–T22)
 #   n1 … n7     · un bloque por nivel: cada caso parte de BASE (todo permitido) y cambia lo que dice su `patch`
 #   precedence  · lo que un nivel inferior NO puede levantar y el primer nivel que niega decide
-#   shadow      · en sombra, N4 (y el alcance canario y la autonomía del motor) avisan en lugar de negar (D9-8)
+#   shadow      · en sombra, N4 (y el alcance canario —N3 «solo canario» y N5— y la autonomía del motor) avisan en lugar de negar (D9-8, D9-11.6)
 # Salida: {verdict: allow|deny|defer, allowed, level, reasons (los del nivel que decide, en el orden del contrato),
 #          retryAt (solo defer), waitsForRelease (N2), effect (N6), levels [N1..N7 con pass/deny/defer/not_evaluated], warnings}
 import copy
@@ -26,7 +26,7 @@ TEMPORAL = {"calendar_outside_legal_hours", "calendar_sunday", "calendar_holiday
             "calendar_outside_own_hours", "outside_strategy_schedule", "strategy_daily_cap", "cooldown_active", "purpose_conflict_today", "lower_priority",
             "callback_scheduled"}
 SHADOW_WARN = {"sends_disabled_in_code", "channel_disabled", "channel_not_live", "budget_zero", "budget_exhausted", "channel_daily_cap",
-               "assisted_capacity_reached", "canary_scope_mismatch", "legacy_autonomy_on"}
+               "assisted_capacity_reached", "canary_only_declared", "canary_scope_mismatch", "legacy_autonomy_on"}
 PAID = {"whatsapp_template", "voice_call"}
 MEDIUM = {"assisted:voice": "voice", "assisted:whatsapp": "whatsapp", "voice_call": "voice", "whatsapp_template": "whatsapp"}
 N7_ANNOTATIONS = ["preference_applied", "instruction_ignored_by_policy"]
@@ -299,6 +299,7 @@ PL = Fixture("policy-ladder-cases.json", header(
     ["D9-7 (la escalera N1–N7: pura, en orden, el primer nivel que niega decide, los inferiores solo restringen; motivos cerrados por nivel)",
      "D9-8 (etapas 4 y 6: la misma escalera al planificar y al despachar; sombra: N4 avisa; los frenos retienen)", "D9-9.5 (asistido: horario, frecuencia y consentimiento del medio)",
      "D9-15 (matriz de consentimiento finalidad × canal; menores; cobranza sin autorización hoy)", "D9-1 (legacy_autonomy_on en live)",
+     "D9-11.6 (en sombra se evalúa la audiencia entera: el alcance canario de N3 y N5 es aviso, «would_scope»)",
      "§13.1 #4, #5, #8, #9, #11, #12, #15, #17; §13.2 T16–T22"],
     [SOURCE_CONTRACT,
      {"what": "El calendario y el presupuesto de contacto de N1", "url": "tests/fixtures/outreach/calendar-cases.json y contact-budget-cases.json (este mismo paquete)",
@@ -323,7 +324,7 @@ PL = Fixture("policy-ladder-cases.json", header(
         "DF-L4": "N2: master_flag_off, mode_off y los frenos retienen (waitsForRelease = true): el trabajo planificado espera, no se cancela (D9-8). ultron_abort_latch y marketing_agent_paused aplican al medio WhatsApp (también al asistido); voice_braked al medio voz; human_in_control a todos los medios; legacy_autonomy_on solo en live (en sombra, aviso); legacy_followups_active solo a las estrategias con disparador lead.followup_due.",
         "DF-L5": "N4 en sombra: sends_disabled_in_code, channel_disabled, channel_not_live, budget_zero, budget_exhausted, channel_daily_cap y assisted_capacity_reached son avisos (D9-8 nombra los tres primeros y «los presupuestos»; channel_not_live se añade para que una estrategia de WhatsApp o voz se pueda simular antes de W9/V9; ratificada por el lead: L9-16). La plantilla sin aprobar o de otra categoría niega igual en sombra.",
         "DF-L6": "N4: sends_disabled_in_code solo en whatsapp_template y voice_call (el asistido sale con la constante cerrada, protección 2); budget_zero = presupuesto o tope del canal en 0 (en el asistido, su tope diario); budget_exhausted si lo reservado + el coste supera el presupuesto; los topes diarios se sueltan a las 00:00 de Bogotá. no_whatsapp_identity y no_voice_contact también en el asistido de su medio.",
-        "DF-L7": "N5: canary_scope_mismatch (parte canary y la persona fuera del alcance) es aviso en sombra («would_scope», D9-11.6); step_guard_false con la guarda false o unknown (solo true deja pasar); outside_strategy_schedule y cooldown_active aplazan; max_touches_reached y enrollment_window_over niegan.",
+        "DF-L7": "El canario en sombra (D9-11.6: «se evalúa la audiencia entera y se anota would_scope»): canary_scope_mismatch de N5 (parte canary y la persona fuera del alcance) y canary_only_declared de N3 (governance.canaryOnly, que toda versión del Studio declara por R-12) son avisos; en vivo, también en el asistido, los dos niegan igual (N3: I-1 de la auditoría de cierre B, aprobada por el lead el 11-11-2026). N5: step_guard_false con la guarda false o unknown (solo true deja pasar); outside_strategy_schedule y cooldown_active aplazan; max_touches_reached y enrollment_window_over niegan.",
         "DF-L8": "N6: context_changed si la audiencia ya no es true o las exclusiones ya no son false (unknown incluido); effect: success_reached → exit_converted (la inscripción cierra como converted, #4), human_requested_recently → handoff, context_changed → cancel_context_changed (#15). purpose_conflict_today y lower_priority aplazan al día siguiente.",
         "DF-L9": "N7: una petición de la persona de que la contacten más tarde (callbackAt posterior a now) aplaza al primer hueco legal a partir de esa hora (callback_scheduled); si ese hueco cae en o después del fin de la ventana de la inscripción, deny con enrollment_window_over (D9-7). Una hora ya pasada se ignora. preference_applied e instruction_ignored_by_policy son anotaciones del selector de canal, no motivos que nieguen (channel-selection-cases.json). Ratificada por el lead: L9-24.",
         "DF-L10": "N1: subject_minor solo con la marca de menor true; desconocido (lead o socio sin fecha) no se infiere ni se niega (ratificada por el lead: L9-17; la asesoría decide si debe negarse). commercial_opt_out solo con finalidad commercial. voice_excluded y rne_check_missing solo con el medio voz (también el asistido). Consentimiento del medio para la finalidad del caso: none o ausente → no_consent_for_purpose_channel; denied → consent_denied.",
@@ -443,6 +444,9 @@ LAD("n3", "plantilla que viola R-02 (descuento) al despachar → deny", {"studio
     ref="D9-7 N3")
 LAD("n3", "governance.canaryOnly y la persona fuera del alcance canario → deny", {"studio": {"canaryOnly": True}, "strategy": {"inCanaryScope": False}},
     DENY("N3", ["canary_only_declared"]), ref="D9-7 N3")
+LAD("n3", "governance.canaryOnly en el asistido de voz y la persona sin alcance canario conocido (null) → deny", {"channel": "assisted:voice", "studio": {"canaryOnly": True},
+                                                                                                                 "strategy": {"inCanaryScope": None}},
+    DENY("N3", ["canary_only_declared"]), ref="D9-7 N3, D9-11.6 («en el asistido, el del medio»)", decision="DF-L7")
 
 # ── N4 · configuración del canal (T19) ──────────────────────────────────────
 LAD("n4", "plantilla de WhatsApp en live con la constante cerrada → deny", {"channel": "whatsapp_template",
@@ -606,6 +610,26 @@ LAD("shadow", "en sombra el consentimiento se aplica igual", deep_merge(SH, {"co
 LAD("shadow", "en sombra el canario no limita: se anota would_scope (aviso) y allow", deep_merge(SH, {"strategy": {"part": "canary", "inCanaryScope": False}}),
     dict(ALLOW, warnings=[{"level": "N5", "reason": "canary_scope_mismatch"}]), ref="D9-11.6 («en sombra se evalúa la audiencia entera»)",
     basis="decision-fixture", decision="DF-L7")
+LAD("shadow", "en sombra «solo canario» (governance.canaryOnly) tampoco limita: se anota en N3 y en N5 (would_scope) y allow",
+    deep_merge(SH, {"studio": {"canaryOnly": True}, "strategy": {"part": "canary", "inCanaryScope": False}}),
+    dict(ALLOW, warnings=[{"level": "N3", "reason": "canary_only_declared"}, {"level": "N5", "reason": "canary_scope_mismatch"}]),
+    ref="D9-11.6 («en sombra se evalúa la audiencia entera y se anota would_scope»)", decision="DF-L7")
+LAD("shadow", "plantilla de WhatsApp en sombra, «solo canario» y la persona sin alcance canario conocido: el aviso de N3 y los de N4 → allow",
+    deep_merge(SH, {"channel": "whatsapp_template", "studio": {"canaryOnly": True}, "strategy": {"inCanaryScope": None}}),
+    dict(ALLOW, warnings=[{"level": "N3", "reason": "canary_only_declared"}, {"level": "N4", "reason": "sends_disabled_in_code"},
+                          {"level": "N4", "reason": "budget_zero"}]),
+    ref="D9-11.6, D9-8 (sombra: N4 avisa)", decision="DF-L7")
+LAD("shadow", "en sombra con «solo canario» la persona canaria no deja aviso", deep_merge(SH, {"studio": {"canaryOnly": True}, "strategy": {"part": "canary"}}),
+    dict(ALLOW, warnings=[]), ref="D9-11.6", decision="DF-L7")
+LAD("shadow", "en sombra con «solo canario» el consentimiento sigue negando antes (N1) y N3 ni se evalúa",
+    deep_merge(SH, {"consent": {"whatsapp": "none"}, "studio": {"canaryOnly": True}, "strategy": {"inCanaryScope": False}}),
+    DENY("N1", ["no_consent_for_purpose_channel"], warnings=[]), ref="D9-7 («el primer nivel que niega decide»), D9-11.6", decision="DF-L7")
+LAD("shadow", "en sombra con «solo canario» el freno global sigue reteniendo antes (N2) y N3 ni se evalúa",
+    deep_merge(SH, {"brakes": {"global": True}, "studio": {"canaryOnly": True}, "strategy": {"inCanaryScope": False}}),
+    DENY("N2", ["outreach_brake_global"], waitsForRelease=True, warnings=[]), ref="D9-8 (PARADA GLOBAL), D9-11.6", decision="DF-L7")
+LAD("shadow", "en sombra con «solo canario» lo demás de N3 sigue negando: la referencia del Studio que no cuadra → deny N3 sin el canario entre los motivos",
+    deep_merge(SH, {"studio": {"canaryOnly": True, "referenceValid": False}, "strategy": {"inCanaryScope": False}}),
+    DENY("N3", ["studio_reference_invalid"], warnings=[{"level": "N3", "reason": "canary_only_declared"}]), ref="D9-7 N3, D9-11.6", decision="DF-L7")
 LAD("shadow", "en sombra la autonomía del motor encendida es aviso", deep_merge(SH, {"flags": {"legacyAutonomy": True}}),
     dict(ALLOW, warnings=[{"level": "N2", "reason": "legacy_autonomy_on"}]), ref="D9-1 (la regla es para live)", basis="decision-fixture", decision="DF-L4")
 LAD("shadow", "en sombra el freno global retiene igual", deep_merge(SH, {"brakes": {"global": True}}), DENY("N2", ["outreach_brake_global"], waitsForRelease=True),

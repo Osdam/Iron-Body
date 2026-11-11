@@ -42,7 +42,8 @@ final class OutreachReadModels
             $r = DB::table(OutreachTables::RUNS)->where('kind', $kind)->orderByDesc('id')->first(['uuid', 'status', 'started_at', 'finished_at', 'error_code', 'counts']);
             $ultimas[$kind] = $r === null ? null : [
                 'uuid' => (string) $r->uuid, 'status' => (string) $r->status, 'startedAt' => self::iso($r->started_at), 'finishedAt' => self::iso($r->finished_at),
-                'errorCode' => $r->error_code, 'counts' => is_string($r->counts) ? json_decode($r->counts, true) : $r->counts,
+                // I-4: la posición del barrido lleva ids internos; se guarda, pero no sale.
+                'errorCode' => $r->error_code, 'counts' => OutreachRuns::publicCounts(is_string($r->counts) ? json_decode($r->counts, true) : $r->counts),
             ];
         }
         $cursores = DB::table(OutreachTables::CURSORS)->get(['source', 'last_id', 'updated_at'])->map(static fn (object $c): array => ['source' => (string) $c->source, 'lastId' => (int) $c->last_id, 'updatedAt' => self::iso($c->updated_at)])->all();
@@ -68,6 +69,8 @@ final class OutreachReadModels
                 'assistedQueue' => (int) DB::table(OutreachTables::JOBS.' as j')->where('j.mode', OutreachConfig::MODE_LIVE)->where('j.channel', 'assisted')->where('j.status', 'started')
                     ->whereNotExists(fn ($w) => $w->from(OutreachTables::OUTCOMES.' as o')->whereColumn('o.job_id', 'j.id')->where('o.source', 'staff'))->count(),
             ],
+            // Aditivo (cierre del H9): solo un recuento, para quien ya puede leer este estado.
+            'personBindings' => $this->bridge->verifiedBindingsCount(),
             'can' => $access->capabilities(),
             'at' => RelativeTime::format($now),
         ];

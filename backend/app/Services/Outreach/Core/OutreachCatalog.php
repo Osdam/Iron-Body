@@ -40,8 +40,13 @@ use DateTimeInterface;
  */
 final class OutreachCatalog
 {
-    /** `.2` (L9-29): la clave de ciclo de las clases es `cls:{class_id}:{session_date}` (keyVersion 2). */
-    public const VERSION = 'outreach-catalog/2026-11-10.2';
+    /**
+     * `2026-11-11.1` (I-5 de la auditoría de cierre B): los eventos sin emisor
+     * ({@see EVENTS_WITHOUT_EMITTER}) dejan de estar disponibles como
+     * disparador. Antes, `2026-11-10.2` (L9-29): la clave de ciclo de las clases
+     * es `cls:{class_id}:{session_date}` (keyVersion 2).
+     */
+    public const VERSION = 'outreach-catalog/2026-11-11.1';
 
     /** La forma de {@see export()}. */
     public const EXPORT_CONTRACT = 'outreach-catalog-export/1';
@@ -179,6 +184,22 @@ final class OutreachCatalog
         'offer_rejected' => ['commercial'], 'payment_approved' => ['commercial'], 'payment_expired' => ['commercial'], 'payment_failed' => ['commercial'],
         'payment_link_created' => ['commercial'], 'payment_pending' => ['commercial'], 'referral_opportunity' => ['commercial'], 'renewal_window_opened' => ['commercial'],
     ];
+
+    /**
+     * I-5 (auditoría de cierre B, 11-11-2026): los eventos del vocabulario que
+     * HOY nadie registra en `commercial_events`. No los registra ningún
+     * observador de `app/Observers/Commercial` ni `commercial:scan`, y
+     * tampoco ninguna ruta interna de las que llama n8n.
+     *  - Van con `available: false` y `triggerable: false`, como los de
+     *    integración (un disparador siempre está disponible): el constructor
+     *    no los ofrece y una estrategia no los acepta como disparador
+     *    (`trigger_not_allowed`). Conservan su finalidad posible.
+     *  - Siguen legibles en condiciones, donde valen «no ocurrió» mientras
+     *    nadie los emita.
+     *  - `OutreachCatalogEmittersTest` lo ata a los emisores reales: quien le dé
+     *    un emisor a uno de ellos lo saca de aquí y sube {@see VERSION}.
+     */
+    public const EVENTS_WITHOUT_EMITTER = ['complaint_created', 'customer_satisfied', 'objection_raised', 'offer_presented', 'offer_rejected', 'referral_opportunity'];
 
     /** Los eventos del vocabulario que llevan el plan como atributo filtrable (`where`). */
     public const PAYMENT_EVENTS = ['payment_approved', 'payment_expired', 'payment_failed', 'payment_link_created', 'payment_pending'];
@@ -458,10 +479,11 @@ final class OutreachCatalog
         foreach (self::CRM_EVENTS as $clave => $finalidades) {
             $eventos[] = $evento($clave, self::CLASS_CRM_FACT, [
                 'attrs' => in_array($clave, self::PAYMENT_EVENTS, true) ? $plan : [],
+                'available' => ! in_array($clave, self::EVENTS_WITHOUT_EMITTER, true),
                 'conditionUsable' => true,
                 'cycleKey' => 'ce:{commercial_event_id}',
                 'purposes' => $finalidades,
-                'triggerable' => $finalidades !== [],
+                'triggerable' => $finalidades !== [] && ! in_array($clave, self::EVENTS_WITHOUT_EMITTER, true),
             ]);
         }
         $periodico = static fn (string $key, string $cycleKey, array $params, string $subject, int $cadence, string $cost, array $purposes, array $constraints = []): array => $evento($key, self::CLASS_PERIODIC, [

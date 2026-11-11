@@ -20,6 +20,22 @@ final class OutreachRuns
 
     public const MAX_COUNTS_BYTES = 4096;
 
+    /**
+     * I-4: la POSICIÓN del barrido de una estrategia y un disparador vive en
+     * los recuentos de su última pasada `sweep` COMPLETADA: desde dónde empezó
+     * (`cursorFrom`) y desde dónde empieza la siguiente (`cursorNext`; `''` =
+     * se acabó la vuelta y la siguiente empieza otra). Una pasada fallida o
+     * abortada no la mueve. Son posiciones de {@see TriggerPrefilters::pageFrom()}
+     * y llevan ids internos (de socios, cartera, pagos o seguimientos), así que
+     * no salen de la base: {@see publicCounts()}.
+     */
+    public const SWEEP_CURSOR_FROM = 'cursorFrom';
+
+    public const SWEEP_CURSOR_NEXT = 'cursorNext';
+
+    /** Los recuentos que se guardan pero no se enseñan (ni en la API ni en la salida de las órdenes). */
+    public const PRIVATE_COUNT_KEYS = [self::SWEEP_CURSOR_FROM, self::SWEEP_CURSOR_NEXT];
+
     /** Abre una pasada. `$mode` es `shadow` o `live` (nunca `off`: con `off` no se abre ninguna). */
     public function open(string $kind, string $mode, DateTimeInterface $now, ?int $strategyId = null, ?string $triggerKey = null): int
     {
@@ -72,6 +88,35 @@ final class OutreachRuns
         $codigo = ltrim($codigo, '0123456789_');
 
         return substr($codigo === '' ? 'error' : $codigo, 0, 48);
+    }
+
+    /**
+     * Los recuentos que se pueden enseñar: sin {@see PRIVATE_COUNT_KEYS}.
+     *
+     * @param  array<string, mixed>|null  $counts
+     * @return array<string, mixed>|null
+     */
+    public static function publicCounts(?array $counts): ?array
+    {
+        return $counts === null ? null : array_diff_key($counts, array_flip(self::PRIVATE_COUNT_KEYS));
+    }
+
+    /**
+     * Desde dónde sigue el barrido de una estrategia y un disparador en un modo:
+     * `cursorNext` de su última pasada COMPLETADA, o `''` (el principio) si no
+     * hay ninguna o no trae posición (las de antes de I-4). Las pasadas
+     * `failed`, `aborted` o aún `running` no cuentan: si una muere a mitad, la
+     * siguiente repite su página, nunca avanza en falso.
+     */
+    public function sweepPosition(int $strategyId, string $triggerKey, string $mode): string
+    {
+        $counts = DB::table(OutreachTables::RUNS)->where('kind', 'sweep')->where('strategy_id', $strategyId)->where('trigger_key', $triggerKey)
+            ->where('mode', $mode)->where('status', 'completed')->orderByDesc('id')->value('counts');
+        $c = is_string($counts) ? json_decode($counts, true) : null;
+        $p = is_array($c) ? ($c[self::SWEEP_CURSOR_NEXT] ?? '') : '';
+
+        // Algo que no sea una cadena corta es una posición ilegible: se empieza de nuevo (se repasa, no se salta).
+        return is_string($p) && strlen($p) <= 64 ? $p : '';
     }
 
     /**

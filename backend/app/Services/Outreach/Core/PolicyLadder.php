@@ -34,7 +34,9 @@ use InvalidArgumentException;
  *    suelte (`waitsForRelease`), no se cancela. ULTRON y la pausa del agente
  *    aplican al medio WhatsApp; el freno de voz al medio voz.
  *  - N3: la versión comercial aprobada (referencia, catálogo compatible —L9-21—,
- *    enlaces de pago, R-xx, canario).
+ *    enlaces de pago, R-xx, canario). En SOMBRA, «solo canario»
+ *    (`canary_only_declared`) es AVISO: se evalúa la audiencia entera y se
+ *    anota quién quedaría fuera (D9-11.6, `would_scope`); en vivo, niega.
  *  - N4 (DF-L5, DF-L6): el canal; en SOMBRA la constante, el canal apagado o
  *    sin implementar y los presupuestos son AVISOS. Un canal automático sin
  *    presupuesto, sin tope o sin COSTE por envío (la tarifa de WhatsApp, la
@@ -90,8 +92,8 @@ final class PolicyLadder
 
     /** Lo que en sombra se anota sin negar (`shadowWarnings` del fixture). */
     public const SHADOW_WARNINGS = [
-        'assisted_capacity_reached', 'budget_exhausted', 'budget_zero', 'canary_scope_mismatch', 'channel_daily_cap', 'channel_disabled',
-        'channel_not_live', 'legacy_autonomy_on', 'sends_disabled_in_code',
+        'assisted_capacity_reached', 'budget_exhausted', 'budget_zero', 'canary_only_declared', 'canary_scope_mismatch', 'channel_daily_cap',
+        'channel_disabled', 'channel_not_live', 'legacy_autonomy_on', 'sends_disabled_in_code',
     ];
 
     /** Anotaciones del selector (N7), no motivos que nieguen. */
@@ -182,7 +184,7 @@ final class PolicyLadder
             $r = match ($nivel) {
                 'N1' => self::n1($in, $ahora, $medio),
                 'N2' => self::n2($in, $medio, $modo),
-                'N3' => self::n3($in),
+                'N3' => self::n3($in, $sombra),
                 'N4' => self::n4($in, $ahora, $medio, $sombra),
                 'N5' => self::n5($in, $ahora, $sombra),
                 'N6' => self::n6($in, $ahora),
@@ -317,10 +319,11 @@ final class PolicyLadder
     }
 
     /** @return array{reasons: list<string>, release: array<string, DateTimeImmutable>, warnings: list<string>} */
-    private static function n3(array $in): array
+    private static function n3(array $in, bool $sombra): array
     {
         $s = $in['studio'];
         $motivos = [];
+        $avisos = [];
         if (! $s['referenceValid']) {
             $motivos[] = 'studio_reference_invalid';
         }
@@ -335,10 +338,11 @@ final class PolicyLadder
             $motivos[] = 'template_violates_restriction';
         }
         if ($s['canaryOnly'] && $in['strategy']['inCanaryScope'] !== true) {
-            $motivos[] = 'canary_only_declared';
+            // D9-11.6: en sombra se evalúa la audiencia entera y se anota quién quedaría fuera (`would_scope`); fuera de la sombra, niega.
+            $sombra ? $avisos[] = 'canary_only_declared' : $motivos[] = 'canary_only_declared';
         }
 
-        return ['reasons' => $motivos, 'release' => [], 'warnings' => []];
+        return ['reasons' => $motivos, 'release' => [], 'warnings' => $avisos];
     }
 
     /** @return array{reasons: list<string>, release: array<string, DateTimeImmutable>, warnings: list<string>} */

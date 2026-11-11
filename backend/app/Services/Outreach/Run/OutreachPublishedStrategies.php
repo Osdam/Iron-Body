@@ -228,6 +228,26 @@ final class OutreachPublishedStrategies
         return ['identityId' => (int) $fila->identity_id, 'identityUuid' => strtolower((string) $fila->identity_uuid)];
     }
 
+    /**
+     * Los vínculos de persona VERIFICADOS y vivos (sin revocar), el `verified`
+     * de `StudioPersonBindings` (`:359`), contados de dos maneras y sin datos
+     * personales (ni cuentas ni identidades):
+     *  - `verified`: cuántos vínculos (una persona con dos cuentas, L9-7,
+     *    cuenta dos);
+     *  - `persons`: cuántas identidades DISTINTAS tienen al menos uno, que es
+     *    lo que cuentan los cuatro ojos («hacen falta dos personas vinculadas
+     *    (hay N)»).
+     * El panel los necesita sin la lista de vínculos, que exige un permiso alto.
+     *
+     * @return array{verified: int, persons: int}
+     */
+    public function verifiedBindingsCount(): array
+    {
+        $vivos = static fn () => DB::table(OutreachTables::PERSON_BINDINGS)->whereNotNull('verified_at')->whereNull('revoked_at');
+
+        return ['verified' => $vivos()->count(), 'persons' => $vivos()->distinct()->count('identity_id')];
+    }
+
     /** ¿Son la misma persona? Por cuenta O por identidad: cualquiera de las dos basta para negar (P9-4, L9-7). */
     public static function samePerson(int $adminA, ?int $identityA, int $adminB, ?int $identityB): bool
     {

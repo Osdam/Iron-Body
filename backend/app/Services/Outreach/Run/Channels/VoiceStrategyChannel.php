@@ -25,9 +25,11 @@ use Throwable;
  * El despachador ya recorrió la escalera N1–N7 justo antes (TOCTOU); aun así,
  * ANTES de pedir nada el canal exige, por su cuenta (defensa en profundidad):
  *  0. la voz DECLARADA viva en `OutreachSendGate::LIVE_CHANNELS`
- *     (`channel_not_live`, lo mismo que dice la escalera): V9 implementa el
- *     canal pero NO lo declara; añadir `voice_call` a esa lista es la decisión
- *     del lead (con su guarda y los ganchos del presupuesto de voz);
+ *     (`channel_not_live`, lo mismo que dice la escalera). `voice_call` ya
+ *     está declarada ahí (L9-81). Declarada significa implementada, no
+ *     abierta: la cierran la constante del paso 3, la de la voz del H8
+ *     (`VoiceCallPolicy::CALLS_ENABLED_IN_CODE`), el interruptor del paso 2 y
+ *     los cupos y presupuestos de la voz;
  *  1. el trabajo de voz y en vivo (`channel_mismatch`);
  *  2. la maestra en `live` (`mode_off`) y `COMMERCIAL_AUTOMATION_VOICE_ENABLED`
  *     (`channel_disabled`);

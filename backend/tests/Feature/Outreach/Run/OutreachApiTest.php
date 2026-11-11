@@ -8,6 +8,8 @@ use App\Models\Admin;
 use App\Models\RolePermission;
 use App\Services\Outreach\Run\OutreachAccess;
 use App\Services\Outreach\Run\OutreachDispatcher;
+use App\Services\Outreach\Run\OutreachPlanner;
+use App\Services\Outreach\Run\OutreachRuns;
 use App\Support\Access\RolePermissionPolicy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -105,6 +107,67 @@ class OutreachApiTest extends TestCase
         $this->getJson(self::BASE.'outreach/metrics', $this->as($gente['ana']))->assertStatus(409)->assertJsonPath('code', 'outreach_disabled');
         config(['outreach.enabled' => true, 'outreach.mode' => 'shadow']);
         $this->getJson(self::BASE.'outreach/metrics', $this->as($gente['ana']))->assertOk()->assertJsonPath('data.mode', 'shadow');
+    }
+
+    /**
+     * Cierre del H9: el estado lleva el recuento de vínculos de persona
+     * VERIFICADOS y vivos (para que el panel diga «hacen falta dos personas
+     * vinculadas (hay N)» sin la lista, que exige un permiso alto). Solo un
+     * entero: ni cuentas, ni identidades, ni nombres. Aditivo: lo demás no cambia.
+     */
+    public function test_el_estado_cuenta_los_vinculos_verificados_y_vivos_y_solo_eso(): void
+    {
+        $gente = $this->threePeople();
+        $vivos = static fn (): int => DB::table('ultron_studio_person_bindings')->whereNotNull('verified_at')->whereNull('revoked_at')->count();
+        $personas = static fn (): int => DB::table('ultron_studio_person_bindings')->whereNotNull('verified_at')->whereNull('revoked_at')->distinct()->count('identity_id');
+        $base = $vivos();
+        $this->assertGreaterThanOrEqual(3, $base, 'Ana, Beto y Caro');
+        $this->assertSame(3, $personas(), 'tres personas, tengan las cuentas que tengan');
+
+        $r = $this->getJson(self::BASE.'outreach/status', $this->as($gente['ana']))->assertOk();
+        $this->assertSame(['verified' => $base, 'persons' => 3], $r->json('data.personBindings'));
+
+        // Dani es una SEGUNDA cuenta de Ana (la misma identidad, L9-7): un vínculo más, la misma persona.
+        $this->secondAccountOfAna();
+        $this->assertSame(['verified' => $base + 1, 'persons' => 3], $this->getJson(self::BASE.'outreach/status', $this->as($gente['ana']))->assertOk()->json('data.personBindings'));
+        $base++;
+        $this->assertSame(['config', 'brakes', 'chain', 'sources', 'live', 'personBindings', 'can', 'at'], array_keys($r->json('data')), 'aditivo: las claves de siempre, en su sitio');
+
+        // Uno pendiente de verificar no cuenta; uno revocado deja de contar.
+        $nueva = $this->unboundAccount();
+        $this->insertBinding((int) $nueva->id, $this->insertIdentity(), ['created_by_admin_id' => 1, 'created_by_name' => 'Ana']);
+        DB::table('ultron_studio_person_bindings')->where('admin_id', 3)->whereNull('revoked_at')
+            ->update(['revoked_at' => now(), 'revoked_by_admin_id' => 1, 'revoked_by_name' => 'Ana', 'revoke_reason' => 'Prueba del recuento', 'updated_at' => now()]);
+        $this->assertSame($base - 1, $vivos());
+        $caroSigue = DB::table('ultron_studio_person_bindings')->where('identity_id', $this->identityOf('caro'))->whereNotNull('verified_at')->whereNull('revoked_at')->exists();
+        $this->assertSame(['verified' => $base - 1, 'persons' => $caroSigue ? 3 : 2], $this->getJson(self::BASE.'outreach/status', $this->as($gente['ana']))->assertOk()->json('data.personBindings'));
+
+        // Lo ve quien puede leer el estado, y nadie más.
+        $this->getJson(self::BASE.'outreach/status', $this->adminWithPermissions([OutreachAccess::STOP]))->assertStatus(403)->assertJsonPath('required_permission', OutreachAccess::VIEW);
+    }
+
+    /**
+     * I-4: la posición del barrido (ids internos de personas, cartera, pagos o
+     * seguimientos) se guarda en los recuentos de la pasada, pero el estado no
+     * la enseña: el resto de los recuentos, sí.
+     */
+    public function test_el_estado_no_ensena_la_posicion_del_barrido(): void
+    {
+        $gente = $this->threePeople();
+        $this->runFlags('shadow', ['outreach.sweep.batch' => 1]);
+        $this->liveStrategy($this->validContent($this->assistedTemplate()));
+        $this->expiringMember(self::utcAt(self::NOW), 3);
+        $this->expiringMember(self::utcAt(self::NOW), 4);
+        (new OutreachPlanner)->sweep(now(), true);
+        $guardados = json_decode((string) DB::table('outreach_runs')->where('kind', 'sweep')->value('counts'), true);
+        $this->assertArrayHasKey(OutreachRuns::SWEEP_CURSOR_NEXT, $guardados, 'en la base, sí');
+
+        $r = $this->getJson(self::BASE.'outreach/status', $this->as($gente['ana']))->assertOk();
+        $recuentos = $r->json('data.sources.latestRuns.sweep.counts');
+        $this->assertSame(OutreachRuns::publicCounts($guardados), $recuentos);
+        $this->assertSame([1, 1, true], [$recuentos['candidates'], $recuentos['enrolled'], $recuentos['more']]);
+        $this->assertStringNotContainsString('cursorFrom', $r->getContent());
+        $this->assertStringNotContainsString('cursorNext', $r->getContent());
     }
 
     public function test_la_parada_global_y_soltar_a_cuatro_ojos_por_http(): void

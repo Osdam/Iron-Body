@@ -549,7 +549,8 @@ class OutreachIsolationTest extends TestCase
         // Con la maestra encendida en el modo del test (sombra en el 1; `live` con todo encendido en el 2), sobre
         // la canaria que S9 acaba de publicar. Los tres socios vencen en 3, 4 y 5 días y se inscriben. El limpio es
         // canario y tiene WhatsApp autorizado: se planifica y se despacha (en sombra, simulado; en vivo, a la bandeja
-        // asistida). El socio 0 no es canario: lo niega N3. El 1 no tiene WhatsApp: lo niega N1 y su supresión 1581 lo cierra.
+        // asistida). El socio 0 no es canario: en vivo lo niega N3; en sombra «solo canario» es un aviso (I-1, D9-11.6) y lo
+        // niega su cartera vencida (N6). El 1 no tiene WhatsApp: lo niega N1 y su supresión 1581 lo cierra.
         $enVivo = OutreachConfig::isLive();
         $tramos['run-cli'] = $this->capture(function (): void {
             [$codigo, $salida] = $this->orden('outreach:sweep', ['--force' => true, '--json' => true]);
@@ -567,7 +568,12 @@ class OutreachIsolationTest extends TestCase
         $trabajo = (string) DB::table('outreach_jobs')->where('id', $plan->job_id)->value('uuid');
         $inscripcion = DB::table('outreach_enrollments')->where('id', $plan->enrollment_id)->first(['uuid', 'subject_ref']);
         $negadas = DB::table('outreach_decisions')->where('kind', 'deny')->orderBy('id')->pluck('level', 'subject_key')->all();
-        $this->assertSame([$claves[0] => 'N3', $claves[1] => 'N1'], $negadas, 'el socio 0 no es canario (N3) y el 1 no tiene WhatsApp (N1)');
+        // I-1 (D9-11.6): en sombra, «solo canario» es un aviso de N3 y la escalera sigue: al socio 0 lo niega su cartera
+        // vencida (N6). En vivo, N3 lo niega por no ser canario, como siempre. El socio 1 no tiene WhatsApp (N1) en los dos.
+        $this->assertSame([$claves[0] => $enVivo ? 'N3' : 'N6', $claves[1] => 'N1'], $negadas, 'el socio 0 no es canario (N3 en vivo; en sombra, su cartera en N6) y el 1 no tiene WhatsApp (N1)');
+        $socio0 = DB::table('outreach_decisions')->where('kind', 'deny')->where('subject_key', $claves[0])->first(['reasons', 'trace_json']);
+        $this->assertSame($enVivo ? ['canary_only_declared'] : ['collections_overdue_blocks_commercial'], json_decode((string) $socio0->reasons, true));
+        $this->assertSame($enVivo ? [] : [['level' => 'N3', 'reason' => 'canary_only_declared'], ['level' => 'N5', 'reason' => 'canary_scope_mismatch']], json_decode((string) $socio0->trace_json, true)[0]['policy']['assisted:whatsapp']['output']['warnings']);
 
         $tramos['run-cli'] = [...$tramos['run-cli'], ...$this->capture(function () use ($enVivo, $plan, $claves): void {
             // Los normalizadores van antes del despacho (el orden del programador). La canaria es asistida: aquí no hay

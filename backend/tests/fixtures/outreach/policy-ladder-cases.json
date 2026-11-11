@@ -8,6 +8,7 @@
     "D9-9.5 (asistido: horario, frecuencia y consentimiento del medio)",
     "D9-15 (matriz de consentimiento finalidad × canal; menores; cobranza sin autorización hoy)",
     "D9-1 (legacy_autonomy_on en live)",
+    "D9-11.6 (en sombra se evalúa la audiencia entera: el alcance canario de N3 y N5 es aviso, «would_scope»)",
     "§13.1 #4, #5, #8, #9, #11, #12, #15, #17; §13.2 T16–T22"
   ],
   "generatedBy": "tests/fixtures/outreach/tools/build/build.py (python3 -I), con los casos a mano en sec_*.py",
@@ -140,6 +141,7 @@
     "assisted_capacity_reached",
     "budget_exhausted",
     "budget_zero",
+    "canary_only_declared",
     "canary_scope_mismatch",
     "channel_daily_cap",
     "channel_disabled",
@@ -275,7 +277,7 @@
     "DF-L4": "N2: master_flag_off, mode_off y los frenos retienen (waitsForRelease = true): el trabajo planificado espera, no se cancela (D9-8). ultron_abort_latch y marketing_agent_paused aplican al medio WhatsApp (también al asistido); voice_braked al medio voz; human_in_control a todos los medios; legacy_autonomy_on solo en live (en sombra, aviso); legacy_followups_active solo a las estrategias con disparador lead.followup_due.",
     "DF-L5": "N4 en sombra: sends_disabled_in_code, channel_disabled, channel_not_live, budget_zero, budget_exhausted, channel_daily_cap y assisted_capacity_reached son avisos (D9-8 nombra los tres primeros y «los presupuestos»; channel_not_live se añade para que una estrategia de WhatsApp o voz se pueda simular antes de W9/V9; ratificada por el lead: L9-16). La plantilla sin aprobar o de otra categoría niega igual en sombra.",
     "DF-L6": "N4: sends_disabled_in_code solo en whatsapp_template y voice_call (el asistido sale con la constante cerrada, protección 2); budget_zero = presupuesto o tope del canal en 0 (en el asistido, su tope diario); budget_exhausted si lo reservado + el coste supera el presupuesto; los topes diarios se sueltan a las 00:00 de Bogotá. no_whatsapp_identity y no_voice_contact también en el asistido de su medio.",
-    "DF-L7": "N5: canary_scope_mismatch (parte canary y la persona fuera del alcance) es aviso en sombra («would_scope», D9-11.6); step_guard_false con la guarda false o unknown (solo true deja pasar); outside_strategy_schedule y cooldown_active aplazan; max_touches_reached y enrollment_window_over niegan.",
+    "DF-L7": "El canario en sombra (D9-11.6: «se evalúa la audiencia entera y se anota would_scope»): canary_scope_mismatch de N5 (parte canary y la persona fuera del alcance) y canary_only_declared de N3 (governance.canaryOnly, que toda versión del Studio declara por R-12) son avisos; en vivo, también en el asistido, los dos niegan igual (N3: I-1 de la auditoría de cierre B, aprobada por el lead el 11-11-2026). N5: step_guard_false con la guarda false o unknown (solo true deja pasar); outside_strategy_schedule y cooldown_active aplazan; max_touches_reached y enrollment_window_over niegan.",
     "DF-L8": "N6: context_changed si la audiencia ya no es true o las exclusiones ya no son false (unknown incluido); effect: success_reached → exit_converted (la inscripción cierra como converted, #4), human_requested_recently → handoff, context_changed → cancel_context_changed (#15). purpose_conflict_today y lower_priority aplazan al día siguiente.",
     "DF-L9": "N7: una petición de la persona de que la contacten más tarde (callbackAt posterior a now) aplaza al primer hueco legal a partir de esa hora (callback_scheduled); si ese hueco cae en o después del fin de la ventana de la inscripción, deny con enrollment_window_over (D9-7). Una hora ya pasada se ignora. preference_applied e instruction_ignored_by_policy son anotaciones del selector de canal, no motivos que nieguen (channel-selection-cases.json). Ratificada por el lead: L9-24.",
     "DF-L10": "N1: subject_minor solo con la marca de menor true; desconocido (lead o socio sin fecha) no se infiere ni se niega (ratificada por el lead: L9-17; la asesoría decide si debe negarse). commercial_opt_out solo con finalidad commercial. voice_excluded y rne_check_missing solo con el medio voz (también el asistido). Consentimiento del medio para la finalidad del caso: none o ausente → no_consent_for_purpose_channel; denied → consent_denied.",
@@ -286,14 +288,14 @@
   "counts": {
     "n1": 24,
     "n2": 17,
-    "n3": 7,
+    "n3": 8,
     "n4": 13,
     "n5": 16,
     "n6": 17,
     "n7": 6,
     "precedence": 9,
-    "shadow": 7,
-    "total": 116
+    "shadow": 13,
+    "total": 123
   },
   "n1": [
     {
@@ -8173,6 +8175,175 @@
           "chainReadable": true,
           "part": "rest",
           "inCanaryScope": false,
+          "schedule": null,
+          "touches": 0,
+          "maxTouches": 6,
+          "dailyCap": 50,
+          "usedToday": 0,
+          "enrollmentWindowEndsAt": "2026-11-30T05:00:00Z",
+          "cooldownUntil": null,
+          "stepGuard": "true"
+        },
+        "context": {
+          "success": "false",
+          "audience": "true",
+          "exclusions": "false",
+          "humanRequestedRecently": false,
+          "otherPurposeToday": false,
+          "lowerPriority": false
+        },
+        "conversational": {
+          "callbackAt": null
+        }
+      },
+      "expected": {
+        "verdict": "deny",
+        "allowed": false,
+        "level": "N3",
+        "reasons": [
+          "canary_only_declared"
+        ],
+        "retryAt": null,
+        "waitsForRelease": false,
+        "effect": null,
+        "levels": [
+          {
+            "level": "N1",
+            "status": "pass"
+          },
+          {
+            "level": "N2",
+            "status": "pass"
+          },
+          {
+            "level": "N3",
+            "status": "deny"
+          },
+          {
+            "level": "N4",
+            "status": "not_evaluated"
+          },
+          {
+            "level": "N5",
+            "status": "not_evaluated"
+          },
+          {
+            "level": "N6",
+            "status": "not_evaluated"
+          },
+          {
+            "level": "N7",
+            "status": "not_evaluated"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "name": "n3 · n3 · governance.canaryOnly en el asistido de voz y la persona sin alcance canario conocido (null) → deny",
+      "kind": "n3",
+      "contractRef": "D9-7 N3, D9-11.6 («en el asistido, el del medio»)",
+      "basis": "contrato",
+      "decision": "DF-L7",
+      "patch": {
+        "channel": "assisted:voice",
+        "studio": {
+          "canaryOnly": true
+        },
+        "strategy": {
+          "inCanaryScope": null
+        }
+      },
+      "input": {
+        "now": "2026-11-10T15:00:00Z",
+        "purpose": "commercial",
+        "channel": "assisted:voice",
+        "subject": {
+          "known": true,
+          "isMinor": false
+        },
+        "consent": {
+          "voice": "granted",
+          "whatsapp": "granted"
+        },
+        "optOut": {
+          "commercial": false,
+          "doNotContact": false,
+          "siblingDoNotContact": false
+        },
+        "voice": {
+          "excluded": false,
+          "rneOk": true
+        },
+        "history": [],
+        "limits": {
+          "perDay": 1,
+          "perWeek": 2,
+          "minHoursBetween": 48
+        },
+        "ownHours": null,
+        "flags": {
+          "master": true,
+          "mode": "live",
+          "channelEnabled": true,
+          "channelLive": true,
+          "sendsEnabledInCode": false,
+          "legacyAutonomy": false,
+          "legacyFollowupsScheduler": false
+        },
+        "brakes": {
+          "global": false,
+          "channel": false,
+          "strategy": false,
+          "ultronAbortLatch": false,
+          "marketingAgentPaused": false,
+          "voiceBrake": false
+        },
+        "conversation": {
+          "humanInControl": false
+        },
+        "globalSuppression": false,
+        "studio": {
+          "referenceValid": true,
+          "catalogCompatible": true,
+          "paymentLinksEnabled": true,
+          "canaryOnly": true,
+          "templateViolations": []
+        },
+        "receivable": {
+          "known": true,
+          "overdueDaysMax": null
+        },
+        "collectionsBlock": {
+          "serverDays": 15,
+          "strategyDays": null
+        },
+        "step": {
+          "usesPaymentLink": false,
+          "templateApproved": true,
+          "templateCategoryMatches": true
+        },
+        "identity": {
+          "voiceContact": true,
+          "whatsapp": true
+        },
+        "voicePolicyReasons": [],
+        "budget": {
+          "dailyBudgetMicros": 0,
+          "reservedTodayMicros": 0,
+          "costMicros": 0,
+          "channelDailyCap": 0,
+          "channelUsedToday": 0,
+          "assistedDailyCap": 20,
+          "assistedUsedToday": 0
+        },
+        "strategy": {
+          "trigger": "membership.expiring_window",
+          "published": true,
+          "paused": false,
+          "chainReadable": true,
+          "part": "rest",
+          "inCanaryScope": null,
           "schedule": null,
           "touches": 0,
           "maxTouches": 6,
@@ -19206,6 +19377,1062 @@
           {
             "level": "N5",
             "reason": "canary_scope_mismatch"
+          }
+        ]
+      }
+    },
+    {
+      "name": "shadow · shadow · en sombra «solo canario» (governance.canaryOnly) tampoco limita: se anota en N3 y en N5 (would_scope) y allow",
+      "kind": "shadow",
+      "contractRef": "D9-11.6 («en sombra se evalúa la audiencia entera y se anota would_scope»)",
+      "basis": "contrato",
+      "decision": "DF-L7",
+      "patch": {
+        "flags": {
+          "mode": "shadow"
+        },
+        "studio": {
+          "canaryOnly": true
+        },
+        "strategy": {
+          "part": "canary",
+          "inCanaryScope": false
+        }
+      },
+      "input": {
+        "now": "2026-11-10T15:00:00Z",
+        "purpose": "commercial",
+        "channel": "assisted:whatsapp",
+        "subject": {
+          "known": true,
+          "isMinor": false
+        },
+        "consent": {
+          "voice": "granted",
+          "whatsapp": "granted"
+        },
+        "optOut": {
+          "commercial": false,
+          "doNotContact": false,
+          "siblingDoNotContact": false
+        },
+        "voice": {
+          "excluded": false,
+          "rneOk": true
+        },
+        "history": [],
+        "limits": {
+          "perDay": 1,
+          "perWeek": 2,
+          "minHoursBetween": 48
+        },
+        "ownHours": null,
+        "flags": {
+          "master": true,
+          "mode": "shadow",
+          "channelEnabled": true,
+          "channelLive": true,
+          "sendsEnabledInCode": false,
+          "legacyAutonomy": false,
+          "legacyFollowupsScheduler": false
+        },
+        "brakes": {
+          "global": false,
+          "channel": false,
+          "strategy": false,
+          "ultronAbortLatch": false,
+          "marketingAgentPaused": false,
+          "voiceBrake": false
+        },
+        "conversation": {
+          "humanInControl": false
+        },
+        "globalSuppression": false,
+        "studio": {
+          "referenceValid": true,
+          "catalogCompatible": true,
+          "paymentLinksEnabled": true,
+          "canaryOnly": true,
+          "templateViolations": []
+        },
+        "receivable": {
+          "known": true,
+          "overdueDaysMax": null
+        },
+        "collectionsBlock": {
+          "serverDays": 15,
+          "strategyDays": null
+        },
+        "step": {
+          "usesPaymentLink": false,
+          "templateApproved": true,
+          "templateCategoryMatches": true
+        },
+        "identity": {
+          "voiceContact": true,
+          "whatsapp": true
+        },
+        "voicePolicyReasons": [],
+        "budget": {
+          "dailyBudgetMicros": 0,
+          "reservedTodayMicros": 0,
+          "costMicros": 0,
+          "channelDailyCap": 0,
+          "channelUsedToday": 0,
+          "assistedDailyCap": 20,
+          "assistedUsedToday": 0
+        },
+        "strategy": {
+          "trigger": "membership.expiring_window",
+          "published": true,
+          "paused": false,
+          "chainReadable": true,
+          "part": "canary",
+          "inCanaryScope": false,
+          "schedule": null,
+          "touches": 0,
+          "maxTouches": 6,
+          "dailyCap": 50,
+          "usedToday": 0,
+          "enrollmentWindowEndsAt": "2026-11-30T05:00:00Z",
+          "cooldownUntil": null,
+          "stepGuard": "true"
+        },
+        "context": {
+          "success": "false",
+          "audience": "true",
+          "exclusions": "false",
+          "humanRequestedRecently": false,
+          "otherPurposeToday": false,
+          "lowerPriority": false
+        },
+        "conversational": {
+          "callbackAt": null
+        }
+      },
+      "expected": {
+        "verdict": "allow",
+        "allowed": true,
+        "level": null,
+        "reasons": [],
+        "retryAt": null,
+        "waitsForRelease": false,
+        "effect": null,
+        "levels": [
+          {
+            "level": "N1",
+            "status": "pass"
+          },
+          {
+            "level": "N2",
+            "status": "pass"
+          },
+          {
+            "level": "N3",
+            "status": "pass"
+          },
+          {
+            "level": "N4",
+            "status": "pass"
+          },
+          {
+            "level": "N5",
+            "status": "pass"
+          },
+          {
+            "level": "N6",
+            "status": "pass"
+          },
+          {
+            "level": "N7",
+            "status": "pass"
+          }
+        ],
+        "warnings": [
+          {
+            "level": "N3",
+            "reason": "canary_only_declared"
+          },
+          {
+            "level": "N5",
+            "reason": "canary_scope_mismatch"
+          }
+        ]
+      }
+    },
+    {
+      "name": "shadow · shadow · plantilla de WhatsApp en sombra, «solo canario» y la persona sin alcance canario conocido: el aviso de N3 y los de N4 → allow",
+      "kind": "shadow",
+      "contractRef": "D9-11.6, D9-8 (sombra: N4 avisa)",
+      "basis": "contrato",
+      "decision": "DF-L7",
+      "patch": {
+        "flags": {
+          "mode": "shadow"
+        },
+        "channel": "whatsapp_template",
+        "studio": {
+          "canaryOnly": true
+        },
+        "strategy": {
+          "inCanaryScope": null
+        }
+      },
+      "input": {
+        "now": "2026-11-10T15:00:00Z",
+        "purpose": "commercial",
+        "channel": "whatsapp_template",
+        "subject": {
+          "known": true,
+          "isMinor": false
+        },
+        "consent": {
+          "voice": "granted",
+          "whatsapp": "granted"
+        },
+        "optOut": {
+          "commercial": false,
+          "doNotContact": false,
+          "siblingDoNotContact": false
+        },
+        "voice": {
+          "excluded": false,
+          "rneOk": true
+        },
+        "history": [],
+        "limits": {
+          "perDay": 1,
+          "perWeek": 2,
+          "minHoursBetween": 48
+        },
+        "ownHours": null,
+        "flags": {
+          "master": true,
+          "mode": "shadow",
+          "channelEnabled": true,
+          "channelLive": true,
+          "sendsEnabledInCode": false,
+          "legacyAutonomy": false,
+          "legacyFollowupsScheduler": false
+        },
+        "brakes": {
+          "global": false,
+          "channel": false,
+          "strategy": false,
+          "ultronAbortLatch": false,
+          "marketingAgentPaused": false,
+          "voiceBrake": false
+        },
+        "conversation": {
+          "humanInControl": false
+        },
+        "globalSuppression": false,
+        "studio": {
+          "referenceValid": true,
+          "catalogCompatible": true,
+          "paymentLinksEnabled": true,
+          "canaryOnly": true,
+          "templateViolations": []
+        },
+        "receivable": {
+          "known": true,
+          "overdueDaysMax": null
+        },
+        "collectionsBlock": {
+          "serverDays": 15,
+          "strategyDays": null
+        },
+        "step": {
+          "usesPaymentLink": false,
+          "templateApproved": true,
+          "templateCategoryMatches": true
+        },
+        "identity": {
+          "voiceContact": true,
+          "whatsapp": true
+        },
+        "voicePolicyReasons": [],
+        "budget": {
+          "dailyBudgetMicros": 0,
+          "reservedTodayMicros": 0,
+          "costMicros": 0,
+          "channelDailyCap": 0,
+          "channelUsedToday": 0,
+          "assistedDailyCap": 20,
+          "assistedUsedToday": 0
+        },
+        "strategy": {
+          "trigger": "membership.expiring_window",
+          "published": true,
+          "paused": false,
+          "chainReadable": true,
+          "part": "rest",
+          "inCanaryScope": null,
+          "schedule": null,
+          "touches": 0,
+          "maxTouches": 6,
+          "dailyCap": 50,
+          "usedToday": 0,
+          "enrollmentWindowEndsAt": "2026-11-30T05:00:00Z",
+          "cooldownUntil": null,
+          "stepGuard": "true"
+        },
+        "context": {
+          "success": "false",
+          "audience": "true",
+          "exclusions": "false",
+          "humanRequestedRecently": false,
+          "otherPurposeToday": false,
+          "lowerPriority": false
+        },
+        "conversational": {
+          "callbackAt": null
+        }
+      },
+      "expected": {
+        "verdict": "allow",
+        "allowed": true,
+        "level": null,
+        "reasons": [],
+        "retryAt": null,
+        "waitsForRelease": false,
+        "effect": null,
+        "levels": [
+          {
+            "level": "N1",
+            "status": "pass"
+          },
+          {
+            "level": "N2",
+            "status": "pass"
+          },
+          {
+            "level": "N3",
+            "status": "pass"
+          },
+          {
+            "level": "N4",
+            "status": "pass"
+          },
+          {
+            "level": "N5",
+            "status": "pass"
+          },
+          {
+            "level": "N6",
+            "status": "pass"
+          },
+          {
+            "level": "N7",
+            "status": "pass"
+          }
+        ],
+        "warnings": [
+          {
+            "level": "N3",
+            "reason": "canary_only_declared"
+          },
+          {
+            "level": "N4",
+            "reason": "sends_disabled_in_code"
+          },
+          {
+            "level": "N4",
+            "reason": "budget_zero"
+          }
+        ]
+      }
+    },
+    {
+      "name": "shadow · shadow · en sombra con «solo canario» la persona canaria no deja aviso",
+      "kind": "shadow",
+      "contractRef": "D9-11.6",
+      "basis": "contrato",
+      "decision": "DF-L7",
+      "patch": {
+        "flags": {
+          "mode": "shadow"
+        },
+        "studio": {
+          "canaryOnly": true
+        },
+        "strategy": {
+          "part": "canary"
+        }
+      },
+      "input": {
+        "now": "2026-11-10T15:00:00Z",
+        "purpose": "commercial",
+        "channel": "assisted:whatsapp",
+        "subject": {
+          "known": true,
+          "isMinor": false
+        },
+        "consent": {
+          "voice": "granted",
+          "whatsapp": "granted"
+        },
+        "optOut": {
+          "commercial": false,
+          "doNotContact": false,
+          "siblingDoNotContact": false
+        },
+        "voice": {
+          "excluded": false,
+          "rneOk": true
+        },
+        "history": [],
+        "limits": {
+          "perDay": 1,
+          "perWeek": 2,
+          "minHoursBetween": 48
+        },
+        "ownHours": null,
+        "flags": {
+          "master": true,
+          "mode": "shadow",
+          "channelEnabled": true,
+          "channelLive": true,
+          "sendsEnabledInCode": false,
+          "legacyAutonomy": false,
+          "legacyFollowupsScheduler": false
+        },
+        "brakes": {
+          "global": false,
+          "channel": false,
+          "strategy": false,
+          "ultronAbortLatch": false,
+          "marketingAgentPaused": false,
+          "voiceBrake": false
+        },
+        "conversation": {
+          "humanInControl": false
+        },
+        "globalSuppression": false,
+        "studio": {
+          "referenceValid": true,
+          "catalogCompatible": true,
+          "paymentLinksEnabled": true,
+          "canaryOnly": true,
+          "templateViolations": []
+        },
+        "receivable": {
+          "known": true,
+          "overdueDaysMax": null
+        },
+        "collectionsBlock": {
+          "serverDays": 15,
+          "strategyDays": null
+        },
+        "step": {
+          "usesPaymentLink": false,
+          "templateApproved": true,
+          "templateCategoryMatches": true
+        },
+        "identity": {
+          "voiceContact": true,
+          "whatsapp": true
+        },
+        "voicePolicyReasons": [],
+        "budget": {
+          "dailyBudgetMicros": 0,
+          "reservedTodayMicros": 0,
+          "costMicros": 0,
+          "channelDailyCap": 0,
+          "channelUsedToday": 0,
+          "assistedDailyCap": 20,
+          "assistedUsedToday": 0
+        },
+        "strategy": {
+          "trigger": "membership.expiring_window",
+          "published": true,
+          "paused": false,
+          "chainReadable": true,
+          "part": "canary",
+          "inCanaryScope": true,
+          "schedule": null,
+          "touches": 0,
+          "maxTouches": 6,
+          "dailyCap": 50,
+          "usedToday": 0,
+          "enrollmentWindowEndsAt": "2026-11-30T05:00:00Z",
+          "cooldownUntil": null,
+          "stepGuard": "true"
+        },
+        "context": {
+          "success": "false",
+          "audience": "true",
+          "exclusions": "false",
+          "humanRequestedRecently": false,
+          "otherPurposeToday": false,
+          "lowerPriority": false
+        },
+        "conversational": {
+          "callbackAt": null
+        }
+      },
+      "expected": {
+        "verdict": "allow",
+        "allowed": true,
+        "level": null,
+        "reasons": [],
+        "retryAt": null,
+        "waitsForRelease": false,
+        "effect": null,
+        "levels": [
+          {
+            "level": "N1",
+            "status": "pass"
+          },
+          {
+            "level": "N2",
+            "status": "pass"
+          },
+          {
+            "level": "N3",
+            "status": "pass"
+          },
+          {
+            "level": "N4",
+            "status": "pass"
+          },
+          {
+            "level": "N5",
+            "status": "pass"
+          },
+          {
+            "level": "N6",
+            "status": "pass"
+          },
+          {
+            "level": "N7",
+            "status": "pass"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "name": "shadow · shadow · en sombra con «solo canario» el consentimiento sigue negando antes (N1) y N3 ni se evalúa",
+      "kind": "shadow",
+      "contractRef": "D9-7 («el primer nivel que niega decide»), D9-11.6",
+      "basis": "contrato",
+      "decision": "DF-L7",
+      "patch": {
+        "flags": {
+          "mode": "shadow"
+        },
+        "consent": {
+          "whatsapp": "none"
+        },
+        "studio": {
+          "canaryOnly": true
+        },
+        "strategy": {
+          "inCanaryScope": false
+        }
+      },
+      "input": {
+        "now": "2026-11-10T15:00:00Z",
+        "purpose": "commercial",
+        "channel": "assisted:whatsapp",
+        "subject": {
+          "known": true,
+          "isMinor": false
+        },
+        "consent": {
+          "voice": "granted",
+          "whatsapp": "none"
+        },
+        "optOut": {
+          "commercial": false,
+          "doNotContact": false,
+          "siblingDoNotContact": false
+        },
+        "voice": {
+          "excluded": false,
+          "rneOk": true
+        },
+        "history": [],
+        "limits": {
+          "perDay": 1,
+          "perWeek": 2,
+          "minHoursBetween": 48
+        },
+        "ownHours": null,
+        "flags": {
+          "master": true,
+          "mode": "shadow",
+          "channelEnabled": true,
+          "channelLive": true,
+          "sendsEnabledInCode": false,
+          "legacyAutonomy": false,
+          "legacyFollowupsScheduler": false
+        },
+        "brakes": {
+          "global": false,
+          "channel": false,
+          "strategy": false,
+          "ultronAbortLatch": false,
+          "marketingAgentPaused": false,
+          "voiceBrake": false
+        },
+        "conversation": {
+          "humanInControl": false
+        },
+        "globalSuppression": false,
+        "studio": {
+          "referenceValid": true,
+          "catalogCompatible": true,
+          "paymentLinksEnabled": true,
+          "canaryOnly": true,
+          "templateViolations": []
+        },
+        "receivable": {
+          "known": true,
+          "overdueDaysMax": null
+        },
+        "collectionsBlock": {
+          "serverDays": 15,
+          "strategyDays": null
+        },
+        "step": {
+          "usesPaymentLink": false,
+          "templateApproved": true,
+          "templateCategoryMatches": true
+        },
+        "identity": {
+          "voiceContact": true,
+          "whatsapp": true
+        },
+        "voicePolicyReasons": [],
+        "budget": {
+          "dailyBudgetMicros": 0,
+          "reservedTodayMicros": 0,
+          "costMicros": 0,
+          "channelDailyCap": 0,
+          "channelUsedToday": 0,
+          "assistedDailyCap": 20,
+          "assistedUsedToday": 0
+        },
+        "strategy": {
+          "trigger": "membership.expiring_window",
+          "published": true,
+          "paused": false,
+          "chainReadable": true,
+          "part": "rest",
+          "inCanaryScope": false,
+          "schedule": null,
+          "touches": 0,
+          "maxTouches": 6,
+          "dailyCap": 50,
+          "usedToday": 0,
+          "enrollmentWindowEndsAt": "2026-11-30T05:00:00Z",
+          "cooldownUntil": null,
+          "stepGuard": "true"
+        },
+        "context": {
+          "success": "false",
+          "audience": "true",
+          "exclusions": "false",
+          "humanRequestedRecently": false,
+          "otherPurposeToday": false,
+          "lowerPriority": false
+        },
+        "conversational": {
+          "callbackAt": null
+        }
+      },
+      "expected": {
+        "verdict": "deny",
+        "allowed": false,
+        "level": "N1",
+        "reasons": [
+          "no_consent_for_purpose_channel"
+        ],
+        "retryAt": null,
+        "waitsForRelease": false,
+        "effect": null,
+        "levels": [
+          {
+            "level": "N1",
+            "status": "deny"
+          },
+          {
+            "level": "N2",
+            "status": "not_evaluated"
+          },
+          {
+            "level": "N3",
+            "status": "not_evaluated"
+          },
+          {
+            "level": "N4",
+            "status": "not_evaluated"
+          },
+          {
+            "level": "N5",
+            "status": "not_evaluated"
+          },
+          {
+            "level": "N6",
+            "status": "not_evaluated"
+          },
+          {
+            "level": "N7",
+            "status": "not_evaluated"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "name": "shadow · shadow · en sombra con «solo canario» el freno global sigue reteniendo antes (N2) y N3 ni se evalúa",
+      "kind": "shadow",
+      "contractRef": "D9-8 (PARADA GLOBAL), D9-11.6",
+      "basis": "contrato",
+      "decision": "DF-L7",
+      "patch": {
+        "flags": {
+          "mode": "shadow"
+        },
+        "brakes": {
+          "global": true
+        },
+        "studio": {
+          "canaryOnly": true
+        },
+        "strategy": {
+          "inCanaryScope": false
+        }
+      },
+      "input": {
+        "now": "2026-11-10T15:00:00Z",
+        "purpose": "commercial",
+        "channel": "assisted:whatsapp",
+        "subject": {
+          "known": true,
+          "isMinor": false
+        },
+        "consent": {
+          "voice": "granted",
+          "whatsapp": "granted"
+        },
+        "optOut": {
+          "commercial": false,
+          "doNotContact": false,
+          "siblingDoNotContact": false
+        },
+        "voice": {
+          "excluded": false,
+          "rneOk": true
+        },
+        "history": [],
+        "limits": {
+          "perDay": 1,
+          "perWeek": 2,
+          "minHoursBetween": 48
+        },
+        "ownHours": null,
+        "flags": {
+          "master": true,
+          "mode": "shadow",
+          "channelEnabled": true,
+          "channelLive": true,
+          "sendsEnabledInCode": false,
+          "legacyAutonomy": false,
+          "legacyFollowupsScheduler": false
+        },
+        "brakes": {
+          "global": true,
+          "channel": false,
+          "strategy": false,
+          "ultronAbortLatch": false,
+          "marketingAgentPaused": false,
+          "voiceBrake": false
+        },
+        "conversation": {
+          "humanInControl": false
+        },
+        "globalSuppression": false,
+        "studio": {
+          "referenceValid": true,
+          "catalogCompatible": true,
+          "paymentLinksEnabled": true,
+          "canaryOnly": true,
+          "templateViolations": []
+        },
+        "receivable": {
+          "known": true,
+          "overdueDaysMax": null
+        },
+        "collectionsBlock": {
+          "serverDays": 15,
+          "strategyDays": null
+        },
+        "step": {
+          "usesPaymentLink": false,
+          "templateApproved": true,
+          "templateCategoryMatches": true
+        },
+        "identity": {
+          "voiceContact": true,
+          "whatsapp": true
+        },
+        "voicePolicyReasons": [],
+        "budget": {
+          "dailyBudgetMicros": 0,
+          "reservedTodayMicros": 0,
+          "costMicros": 0,
+          "channelDailyCap": 0,
+          "channelUsedToday": 0,
+          "assistedDailyCap": 20,
+          "assistedUsedToday": 0
+        },
+        "strategy": {
+          "trigger": "membership.expiring_window",
+          "published": true,
+          "paused": false,
+          "chainReadable": true,
+          "part": "rest",
+          "inCanaryScope": false,
+          "schedule": null,
+          "touches": 0,
+          "maxTouches": 6,
+          "dailyCap": 50,
+          "usedToday": 0,
+          "enrollmentWindowEndsAt": "2026-11-30T05:00:00Z",
+          "cooldownUntil": null,
+          "stepGuard": "true"
+        },
+        "context": {
+          "success": "false",
+          "audience": "true",
+          "exclusions": "false",
+          "humanRequestedRecently": false,
+          "otherPurposeToday": false,
+          "lowerPriority": false
+        },
+        "conversational": {
+          "callbackAt": null
+        }
+      },
+      "expected": {
+        "verdict": "deny",
+        "allowed": false,
+        "level": "N2",
+        "reasons": [
+          "outreach_brake_global"
+        ],
+        "retryAt": null,
+        "waitsForRelease": true,
+        "effect": null,
+        "levels": [
+          {
+            "level": "N1",
+            "status": "pass"
+          },
+          {
+            "level": "N2",
+            "status": "deny"
+          },
+          {
+            "level": "N3",
+            "status": "not_evaluated"
+          },
+          {
+            "level": "N4",
+            "status": "not_evaluated"
+          },
+          {
+            "level": "N5",
+            "status": "not_evaluated"
+          },
+          {
+            "level": "N6",
+            "status": "not_evaluated"
+          },
+          {
+            "level": "N7",
+            "status": "not_evaluated"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "name": "shadow · shadow · en sombra con «solo canario» lo demás de N3 sigue negando: la referencia del Studio que no cuadra → deny N3 sin el canario entre los motivos",
+      "kind": "shadow",
+      "contractRef": "D9-7 N3, D9-11.6",
+      "basis": "contrato",
+      "decision": "DF-L7",
+      "patch": {
+        "flags": {
+          "mode": "shadow"
+        },
+        "studio": {
+          "canaryOnly": true,
+          "referenceValid": false
+        },
+        "strategy": {
+          "inCanaryScope": false
+        }
+      },
+      "input": {
+        "now": "2026-11-10T15:00:00Z",
+        "purpose": "commercial",
+        "channel": "assisted:whatsapp",
+        "subject": {
+          "known": true,
+          "isMinor": false
+        },
+        "consent": {
+          "voice": "granted",
+          "whatsapp": "granted"
+        },
+        "optOut": {
+          "commercial": false,
+          "doNotContact": false,
+          "siblingDoNotContact": false
+        },
+        "voice": {
+          "excluded": false,
+          "rneOk": true
+        },
+        "history": [],
+        "limits": {
+          "perDay": 1,
+          "perWeek": 2,
+          "minHoursBetween": 48
+        },
+        "ownHours": null,
+        "flags": {
+          "master": true,
+          "mode": "shadow",
+          "channelEnabled": true,
+          "channelLive": true,
+          "sendsEnabledInCode": false,
+          "legacyAutonomy": false,
+          "legacyFollowupsScheduler": false
+        },
+        "brakes": {
+          "global": false,
+          "channel": false,
+          "strategy": false,
+          "ultronAbortLatch": false,
+          "marketingAgentPaused": false,
+          "voiceBrake": false
+        },
+        "conversation": {
+          "humanInControl": false
+        },
+        "globalSuppression": false,
+        "studio": {
+          "referenceValid": false,
+          "catalogCompatible": true,
+          "paymentLinksEnabled": true,
+          "canaryOnly": true,
+          "templateViolations": []
+        },
+        "receivable": {
+          "known": true,
+          "overdueDaysMax": null
+        },
+        "collectionsBlock": {
+          "serverDays": 15,
+          "strategyDays": null
+        },
+        "step": {
+          "usesPaymentLink": false,
+          "templateApproved": true,
+          "templateCategoryMatches": true
+        },
+        "identity": {
+          "voiceContact": true,
+          "whatsapp": true
+        },
+        "voicePolicyReasons": [],
+        "budget": {
+          "dailyBudgetMicros": 0,
+          "reservedTodayMicros": 0,
+          "costMicros": 0,
+          "channelDailyCap": 0,
+          "channelUsedToday": 0,
+          "assistedDailyCap": 20,
+          "assistedUsedToday": 0
+        },
+        "strategy": {
+          "trigger": "membership.expiring_window",
+          "published": true,
+          "paused": false,
+          "chainReadable": true,
+          "part": "rest",
+          "inCanaryScope": false,
+          "schedule": null,
+          "touches": 0,
+          "maxTouches": 6,
+          "dailyCap": 50,
+          "usedToday": 0,
+          "enrollmentWindowEndsAt": "2026-11-30T05:00:00Z",
+          "cooldownUntil": null,
+          "stepGuard": "true"
+        },
+        "context": {
+          "success": "false",
+          "audience": "true",
+          "exclusions": "false",
+          "humanRequestedRecently": false,
+          "otherPurposeToday": false,
+          "lowerPriority": false
+        },
+        "conversational": {
+          "callbackAt": null
+        }
+      },
+      "expected": {
+        "verdict": "deny",
+        "allowed": false,
+        "level": "N3",
+        "reasons": [
+          "studio_reference_invalid"
+        ],
+        "retryAt": null,
+        "waitsForRelease": false,
+        "effect": null,
+        "levels": [
+          {
+            "level": "N1",
+            "status": "pass"
+          },
+          {
+            "level": "N2",
+            "status": "pass"
+          },
+          {
+            "level": "N3",
+            "status": "deny"
+          },
+          {
+            "level": "N4",
+            "status": "not_evaluated"
+          },
+          {
+            "level": "N5",
+            "status": "not_evaluated"
+          },
+          {
+            "level": "N6",
+            "status": "not_evaluated"
+          },
+          {
+            "level": "N7",
+            "status": "not_evaluated"
+          }
+        ],
+        "warnings": [
+          {
+            "level": "N3",
+            "reason": "canary_only_declared"
           }
         ]
       }

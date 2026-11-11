@@ -501,6 +501,8 @@ SINVALID("una queja (complaint_created) no abre un contacto automático", mut(["
          [("content.trigger.event", "trigger_not_allowed")], basis="decision-fixture", decision="DF-K4")
 SINVALID("disparador de integración (W9) el 15-11", mut(["trigger"], {"event": "integration.meta_status"}), [("content.trigger.event", "trigger_not_allowed")],
          basis="decision-fixture", decision="DF-E3")
+SINVALID("disparador sin emisor (customer_satisfied, no disponible: I-5) → trigger_not_allowed", mut(["trigger"], {"event": "customer_satisfied"}),
+         [("content.trigger.event", "trigger_not_allowed")], basis="decision-fixture", decision="DF-K4")
 SINVALID("disparador de cobranza en una estrategia comercial", mut(["trigger"], {"event": "receivable.overdue", "params": {"daysMin": 1, "daysMax": 30}}),
          [("content.trigger.event", "purpose_mismatch")], ref="D9-15 (cobranza y comercial nunca se mezclan)")
 SINVALID("daysBefore 61 y un parámetro de más", mut(["trigger"], {"event": "membership.expiring_window", "params": {"daysBefore": 61, "hour": 9}}),

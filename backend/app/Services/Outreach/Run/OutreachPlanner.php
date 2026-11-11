@@ -32,7 +32,9 @@ use Throwable;
  *  1 · DETECCIÓN: {@see sweep()} barre cada disparador periódico de las
  *     estrategias vivas con su cadencia del catálogo por la ÚNICA
  *     correspondencia disparador → prefiltro ({@see TriggerPrefilters}, L9-41),
- *     ≤ 500 personas por estrategia y pasada; {@see ingest()} lee
+ *     ≤ 500 personas por estrategia y pasada, y cada pasada sigue donde acabó
+ *     la anterior hasta recorrer la audiencia entera y vuelve a empezar (I-4,
+ *     {@see OutreachRuns::sweepPosition()}); {@see ingest()} lee
  *     `commercial_events` por un cursor monótono (por modo) y lo avanza al
  *     final. Con la PARADA GLOBAL echada no nace ninguna inscripción (la
  *     pasada queda `aborted` con su motivo); con el freno de una estrategia,
@@ -134,10 +136,18 @@ final class OutreachPlanner
             $salida['runs'][] = $run;
             $recuentos = [];
             try {
-                $pagina = $this->prefilters->page($live->trigger(), $ahora, OutreachConfig::sweepBatch(), 0) ?? ['candidates' => [], 'next' => null];
+                // I-4: cada pasada sigue donde acabó la última completada de esta estrategia, disparador y modo.
+                $desde = $this->runs->sweepPosition($live->strategyId, $disparador, $modo);
+                $pagina = $this->prefilters->pageFrom($live->trigger(), $ahora, $desde, OutreachConfig::sweepBatch()) ?? ['candidates' => [], 'next' => ''];
+                if ($desde !== '' && $pagina['candidates'] === [] && $pagina['next'] === '') {
+                    // Lo que quedaba de la vuelta ya no está (salió de la ventana): esta misma pasada empieza la siguiente.
+                    $desde = '';
+                    $pagina = $this->prefilters->pageFrom($live->trigger(), $ahora, $desde, OutreachConfig::sweepBatch()) ?? ['candidates' => [], 'next' => ''];
+                }
                 $recuentos = $this->evaluateCandidates($live, $pagina['candidates'], $ahora, $run, $modo);
-                $recuentos['more'] = $pagina['next'] !== null;
-                $this->runs->complete($run, $ahora, $recuentos);
+                $recuentos['more'] = $pagina['next'] !== '';
+                // La posición se escribe SOLO al completar: si algo falla antes, la siguiente pasada repite esta página.
+                $this->runs->complete($run, $ahora, $recuentos + [OutreachRuns::SWEEP_CURSOR_FROM => $desde, OutreachRuns::SWEEP_CURSOR_NEXT => $pagina['next']]);
             } catch (Throwable $e) {
                 $this->runs->fail($run, $ahora, $recuentos, OutreachRuns::errorCode($e));
 

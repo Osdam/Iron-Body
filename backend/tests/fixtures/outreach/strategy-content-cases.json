@@ -133,8 +133,8 @@
     "value_out_of_range",
     "window_out_of_range"
   ],
-  "catalogVersion": "outreach-catalog/2026-11-10.2",
-  "catalogHash": "ce5fcdab1e1265b70a1e7133b3eeccbd62bb2ab690acfa11a700ad6779a13039",
+  "catalogVersion": "outreach-catalog/2026-11-11.1",
+  "catalogHash": "079930a2a391f318ee7812a9b6e6fcce893458987ecbf5a14ec37d0232a86e11",
   "dynamicDomains": {
     "class_types": [
       "boxeo",
@@ -223,13 +223,13 @@
     "DF-E8": "studio: kind version exige uuid (minúscula) y contentHash (64 hex); kind baseline exige catalogVersion (AAAA-MM-DD.N) y catalogHash (64 hex). canary = {channel: whatsapp|voice}.",
     "DF-K1": "membership.expiring_window inscribe si membership.days_to_expiry ∈ [0, daysBefore] (ventana, no el día exacto); daysBefore ∈ [0, 60]: el 0 lo exige #2 de §13.1 (ratificada por el lead: L9-11, D9-3 queda enmendado).",
     "DF-K2": "membership.expired_window exige daysAfterMin ≥ 1 (quien vence hoy no ha vencido) y daysAfterMin ≤ daysAfterMax; los dos extremos cerrados (#3).",
-    "DF-K4": "Disparadores: los 27 eventos del vocabulario son legibles en condiciones; human_requested (contrato) y complaint_created (este fixture) no son disparadores. Finalidad: service solo appointment_* e invoice_*; collections solo receivable.overdue; el resto, commercial."
+    "DF-K4": "Disparadores: los 27 eventos del vocabulario son legibles en condiciones; human_requested (contrato) y complaint_created (este fixture) no son disparadores. Finalidad: service solo appointment_* e invoice_*; collections solo receivable.overdue; el resto, commercial. Disponibilidad (I-5 de la auditoría de cierre B, 11-11-2026): los que hoy nadie registra en commercial_events (complaint_created, customer_satisfied, objection_raised, offer_presented, offer_rejected, referral_opportunity) van con available = false y triggerable = false, como los de integración (un disparador siempre está disponible): el constructor no los ofrece y una estrategia no los acepta como disparador (trigger_not_allowed); conservan su finalidad posible, siguen legibles en condiciones y no cuentan en la compatibilidad (DF-K6)."
   },
   "counts": {
     "valid": 13,
-    "invalid": 40,
+    "invalid": 41,
     "versions": 5,
-    "total": 58
+    "total": 59
   },
   "valid": [
     {
@@ -5373,6 +5373,161 @@
         "priority": 60,
         "trigger": {
           "event": "integration.meta_status"
+        },
+        "audience": {
+          "all": [
+            {
+              "fact": "membership.active",
+              "op": "eq",
+              "value": true
+            },
+            {
+              "fact": "membership.frozen",
+              "op": "eq",
+              "value": false
+            }
+          ]
+        },
+        "exclusions": {
+          "event": "human_requested",
+          "op": "exists",
+          "within": {
+            "n": 30,
+            "unit": "days"
+          }
+        },
+        "success": {
+          "any": [
+            {
+              "fact": "membership.days_to_expiry",
+              "op": "gt",
+              "value": 30
+            },
+            {
+              "event": "membership_renewed",
+              "op": "exists",
+              "within": {
+                "n": 14,
+                "unit": "days"
+              }
+            }
+          ]
+        },
+        "sequence": [
+          {
+            "id": "aviso",
+            "delay": {
+              "n": 0,
+              "unit": "hours",
+              "from": "enrollment"
+            },
+            "channels": [
+              "whatsapp_template",
+              "assisted:whatsapp"
+            ],
+            "templates": {
+              "whatsapp_template": {
+                "uuid": "7e000000-0000-4000-8000-000000000001",
+                "hash": "bcce572e0184bc1222445d9af9a29cef431cfd446df3944a20cc882319293291"
+              },
+              "assisted:whatsapp": {
+                "uuid": "7e000000-0000-4000-8000-000000000002",
+                "hash": "e872f0f6729442dc9c3d516cc230bd13d7072fadb5f0b039e84c381979c5bd0a"
+              }
+            },
+            "on": {
+              "no_answer": "next_step",
+              "answered": "end_success"
+            }
+          },
+          {
+            "id": "recordatorio",
+            "delay": {
+              "n": 3,
+              "unit": "days",
+              "from": "previous"
+            },
+            "channels": [
+              "assisted:whatsapp"
+            ],
+            "templates": {
+              "assisted:whatsapp": {
+                "uuid": "7e000000-0000-4000-8000-000000000002",
+                "hash": "e872f0f6729442dc9c3d516cc230bd13d7072fadb5f0b039e84c381979c5bd0a"
+              }
+            },
+            "guard": {
+              "fact": "membership.days_to_expiry",
+              "op": "gte",
+              "value": 0
+            },
+            "on": {
+              "callback_requested": "wait"
+            },
+            "waitFor": {
+              "n": 2,
+              "unit": "days"
+            }
+          }
+        ],
+        "limits": {
+          "maxTouches": 3,
+          "enrollmentDays": 14,
+          "newEnrollmentsPerDay": 100,
+          "contactsPerDay": 50,
+          "cooldownDays": 30
+        },
+        "schedule": {
+          "days": [
+            5,
+            1,
+            2,
+            3,
+            4
+          ],
+          "windows": [
+            {
+              "from": 540,
+              "to": 1080
+            }
+          ]
+        },
+        "canary": {
+          "channel": "whatsapp"
+        },
+        "studio": {
+          "kind": "baseline",
+          "catalogVersion": "2026-10-19.1",
+          "catalogHash": "daba7fc96f8369c08847531a4d09988e8226d0a3bcfff10f6ed7c3b902ef6acc"
+        }
+      },
+      "expected": {
+        "http": 422,
+        "canonical": null,
+        "errors": [
+          {
+            "key": "content.trigger.event",
+            "code": "trigger_not_allowed"
+          }
+        ],
+        "errorKeys": [
+          "content.trigger.event"
+        ]
+      }
+    },
+    {
+      "name": "invalid · content · disparador sin emisor (customer_satisfied, no disponible: I-5) → trigger_not_allowed",
+      "kind": "content",
+      "contractRef": "D9-6",
+      "basis": "decision-fixture",
+      "decision": "DF-K4",
+      "input": {
+        "format": "strategy-content/1",
+        "goal": "renew",
+        "purpose": "commercial",
+        "priority": 60,
+        "trigger": {
+          "event": "customer_satisfied"
         },
         "audience": {
           "all": [

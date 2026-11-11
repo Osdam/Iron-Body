@@ -33,6 +33,10 @@ use DateTimeInterface;
  *
  * Los disparadores `crm_fact` no tienen prefiltro: llegan por el cursor de
  * `commercial_events` ({@see OutreachPlanner::ingest()}); aquí devuelven null.
+ *
+ * I-4: el barrido pide sus páginas con {@see pageFrom()} desde una POSICIÓN
+ * (keyset), para que pasadas sucesivas recorran la audiencia entera; la
+ * guarda la pasada ({@see OutreachRuns::SWEEP_CURSOR_NEXT}).
  */
 final class TriggerPrefilters
 {
@@ -42,6 +46,12 @@ final class TriggerPrefilters
     ];
 
     public const PAGE = 500;
+
+    /** La posición en `class.upcoming_with_capacity`: `<session_date>:<class_id>:<users.id>` (I-4). */
+    private const CLASS_POSITION = '/^(\d{4}-\d{2}-\d{2}):([1-9]\d{0,18}):(\d{1,19})$/D';
+
+    /** La posición en los disparadores por id: el último id de la página anterior (I-4). */
+    private const ID_POSITION = '/^[1-9]\d{0,18}$/D';
 
     public function __construct(
         private readonly MembershipFacts $membership = new MembershipFacts,
@@ -88,34 +98,96 @@ final class TriggerPrefilters
             'payment_link.abandoned' => $this->payments->abandonedLinks($now, $n('graceHours', 1), $limite, $after),
             'lead.followup_due' => $this->leads->followupsDue($now, $limite, $after),
             'valuation.outdated' => $this->valuations->outdated($now, $n('days', 1), $limite, $after),
-            'class.upcoming_with_capacity' => $this->classCandidates($now, $n('withinDays', 1), $limite),
+            'class.upcoming_with_capacity' => self::flagNext($this->classCandidates($now, $n('withinDays', 1), $limite)),
             default => null,
         };
     }
 
     /**
-     * Las clases con cupo en la ventana y, por cada una, las personas a las
-     * que se podría invitar (≤ `$limit` en total; `next` = 1 si quedaron más).
+     * I-4: una página desde una POSICIÓN del barrido, para que las pasadas
+     * sucesivas de una estrategia recorran su audiencia entera: keyset, sin
+     * saltarse a nadie ni repetir a nadie dentro de una vuelta.
      *
+     * La posición es opaca para quien llama y solo la produce esta clase:
+     *  - `''` = el principio de una vuelta;
+     *  - el último id de la página anterior, en los disparadores por id;
+     *  - `<session_date>:<class_id>:<users.id>` en
+     *    `class.upcoming_with_capacity`, cuyas ocurrencias van por fecha y
+     *    clase, y dentro de cada una por `users.id`.
+     *
+     * `next` es la posición de la página siguiente; `''` si esta llegó al
+     * final, y la próxima pasada empieza otra vuelta. Una posición que no se
+     * entiende (de otra forma de disparador, o estropeada) empieza desde el
+     * principio: se repasa a alguien, pero nunca se salta a nadie.
+     *
+     * @param  array{event: string, params?: array<string, int>}  $trigger
+     * @return array{candidates: list<Candidate>, next: string}|null null = sin prefiltro
+     */
+    public function pageFrom(array $trigger, DateTimeInterface $now, string $position, int $limit = self::PAGE): ?array
+    {
+        $evento = (string) ($trigger['event'] ?? '');
+        if ($evento === 'class.upcoming_with_capacity') {
+            $p = is_array($trigger['params'] ?? null) ? $trigger['params'] : [];
+            $desde = preg_match(self::CLASS_POSITION, $position, $m) === 1 ? [$m[1], (int) $m[2], (int) $m[3]] : null;
+            $r = $this->classCandidates($now, is_int($p['withinDays'] ?? null) ? $p['withinDays'] : 1, max(1, min(self::PAGE, $limit)), $desde);
+
+            return ['candidates' => $r['candidates'], 'next' => $r['next'] ?? ''];
+        }
+        $r = $this->page($trigger, $now, $limit, preg_match(self::ID_POSITION, $position) === 1 ? (int) $position : 0);
+
+        return $r === null ? null : ['candidates' => $r['candidates'], 'next' => $r['next'] === null ? '' : (string) $r['next']];
+    }
+
+    /**
+     * @param  array{candidates: list<Candidate>, next: string|null}  $r
      * @return array{candidates: list<Candidate>, next: int|null}
      */
-    private function classCandidates(DateTimeInterface $now, int $withinDays, int $limit): array
+    private static function flagNext(array $r): array
+    {
+        // `page()` conserva su forma: en las clases `next` solo dice si quedaron más (1); la posición la da `pageFrom()`.
+        return ['candidates' => $r['candidates'], 'next' => $r['next'] === null ? null : 1];
+    }
+
+    /**
+     * Las clases con cupo en la ventana y, por cada una, las personas a las
+     * que se podría invitar (≤ `$limit` en total). Las ocurrencias van por
+     * `(session_date, class_id)` ({@see ClassFacts::upcomingWithCapacity()}) y,
+     * dentro de cada una, por `users.id`. Con `$from`, se empieza justo
+     * después de esa posición: las ocurrencias anteriores ya se recorrieron
+     * en esta vuelta. `next` es la posición donde seguir, o null si se llegó
+     * al final.
+     *
+     * @param  array{0: string, 1: int, 2: int}|null  $from  `[session_date, class_id, users.id]`
+     * @return array{candidates: list<Candidate>, next: string|null}
+     */
+    private function classCandidates(DateTimeInterface $now, int $withinDays, int $limit, ?array $from = null): array
     {
         $todos = [];
-        $mas = false;
         foreach ($this->classes->upcomingWithCapacity($now, $withinDays) as $o) {
             if ($o['available'] <= 0) {
                 continue;
             }
-            $r = $this->classes->candidatesForOccurrence($now, (int) $o['class_id'], (string) $o['session_date'], $o['class_session_id'], $limit - count($todos));
+            $ocurrencia = [(string) $o['session_date'], (int) $o['class_id']];
+            $despues = 0;
+            if ($from !== null) {
+                $orden = $ocurrencia <=> [$from[0], $from[1]];
+                if ($orden < 0) {
+                    continue;
+                }
+                $despues = $orden === 0 ? $from[2] : 0;
+            }
+            $resto = $limit - count($todos);
+            if ($resto <= 0) {
+                return ['candidates' => $todos, 'next' => "{$ocurrencia[0]}:{$ocurrencia[1]}:{$despues}"];
+            }
+            $r = $this->classes->candidatesForOccurrence($now, $ocurrencia[1], $ocurrencia[0], $o['class_session_id'], $resto, $despues);
             $todos = [...$todos, ...$r['candidates']];
-            if (count($todos) >= $limit) {
-                $mas = true;
-
-                break;
+            if ($r['next'] !== null) {
+                // La página de esta ocurrencia se llenó: lo que queda de ella va en la página siguiente.
+                return ['candidates' => $todos, 'next' => "{$ocurrencia[0]}:{$ocurrencia[1]}:{$r['next']}"];
             }
         }
 
-        return ['candidates' => $todos, 'next' => $mas ? 1 : null];
+        return ['candidates' => $todos, 'next' => null];
     }
 }

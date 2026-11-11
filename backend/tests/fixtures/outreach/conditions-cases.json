@@ -40,8 +40,8 @@
     }
   ],
   "syntheticData": "Ningún dato real: ids, uuids, claves y personas inventados; las personas se nombran por subject_key sintético (m:<id>, l:<id>); sin teléfonos, nombres, documentos ni importes.",
-  "catalogVersion": "outreach-catalog/2026-11-10.2",
-  "catalogHash": "ce5fcdab1e1265b70a1e7133b3eeccbd62bb2ab690acfa11a700ad6779a13039",
+  "catalogVersion": "outreach-catalog/2026-11-11.1",
+  "catalogHash": "079930a2a391f318ee7812a9b6e6fcce893458987ecbf5a14ec37d0232a86e11",
   "grammar": "outreach-conditions/1",
   "dynamicDomains": {
     "class_types": [
