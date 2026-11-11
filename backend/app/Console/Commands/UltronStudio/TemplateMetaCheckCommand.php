@@ -34,6 +34,13 @@ use Symfony\Component\Console\Output\OutputInterface;
  * no con el Studio (un rechazo o una pausa en Meta también se registran). El
  * texto del fichero NUNCA se imprime ni se guarda: solo su huella. Sin red.
  * Sale con 2 si los datos no valen o falta la persona, con 0 si no.
+ *
+ * PLANTILLAS DE META DESDE EL CRM (PLANTILLAS_META_PLAN §5.6; L9-96): se niega,
+ * también en seco y sin escribir nada, si la versión tiene encabezado, pie o
+ * botones (`components_require_meta_sync`) o si se envió a Meta desde el CRM y
+ * su envío sigue vivo (`meta_sync_owns_template`): de esas se ocupa la
+ * sincronización (`ultron-studio:meta-templates-sync`), que sí lee los
+ * componentes.
  */
 class TemplateMetaCheckCommand extends Command
 {
@@ -157,7 +164,7 @@ class TemplateMetaCheckCommand extends Command
         $this->line('Petición    : '.$f['client_request_id'].($resultado !== null ? ' · fila '.$resultado['uuid'] : ''));
         $marca = static fn (bool $b): string => $b ? 'casa' : 'NO casa';
         $this->line('Con el Studio: nombre '.$marca($c['fields']['metaName']).' · idioma '.$marca($c['fields']['language']).' · categoría '.$marca($c['fields']['category'])
-            .' · texto '.$marca($c['fields']['body']).' · estado '.($c['fields']['status'] ? 'APPROVED' : 'no APPROVED'));
+            .' · texto '.$marca($c['fields']['body']).' · estado '.($c['fields']['status'] ? 'APPROVED' : 'no APPROVED').' · componentes '.$marca($c['fields']['components']));
         $acepta = $resultado['channelAccepts'] ?? $c['channelAccepts'];
         $this->line($acepta
             ? ($resultado === null ? 'Canal       : con esta como la última comprobación, el canal de WhatsApp ACEPTARÁ la plantilla.' : 'Canal       : el canal de WhatsApp ACEPTA la plantilla (lo dice el puente de la ejecución).')

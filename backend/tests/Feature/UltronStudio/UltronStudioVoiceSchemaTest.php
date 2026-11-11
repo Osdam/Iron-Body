@@ -202,14 +202,14 @@ class UltronStudioVoiceSchemaTest extends TestCase
     ];
 
     /** Todos los del Studio, con el H8: 44 + 24 y 50 + 34 en PG; 32 + 23 en SQLite. */
-    private const PG_STUDIO_TRIGGERS = 127;  // + W9 4
+    private const PG_STUDIO_TRIGGERS = 137;  // + W9 4 + plantillas de Meta 10
 
-    private const PG_STUDIO_CHECKS = 141;  // + W9 4
+    private const PG_STUDIO_CHECKS = 153;  // + W9 4 + plantillas de Meta 12
 
-    private const SQLITE_STUDIO_TRIGGERS = 111;  // + W9 3
+    private const SQLITE_STUDIO_TRIGGERS = 120;  // + W9 3 + plantillas de Meta 9
 
     /** Los parciales de todo el Studio: los 4 de H5/H6 y los 2 de los agentes. */
-    private const STUDIO_PARTIAL_INDEXES = ['uscl_one_active', 'uscn_one_live', 'uspb_one_active', 'ussv_one_canary', 'ussv_one_published', 'usv_one_canary', 'usv_one_published', 'usva_one_canary', 'usva_one_rest'];
+    private const STUDIO_PARTIAL_INDEXES = ['uscl_one_active', 'uscn_one_live', 'usmsub_one_live_per_meta_name', 'usmsub_one_live_per_template', 'uspb_one_active', 'ussv_one_canary', 'ussv_one_published', 'usv_one_canary', 'usv_one_published', 'usva_one_canary', 'usva_one_rest'];
 
     private const FORBID_MD5 = '4ad748b5f17f09b398f7f641c197d7ee';
 

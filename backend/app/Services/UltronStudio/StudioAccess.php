@@ -65,6 +65,13 @@ final class StudioAccess
     /** Reconocer la configuración vigente y lanzar la sonda de solo lectura de Twilio. */
     public const INTEGRATIONS_MANAGE = 'ultron.integrations_manage';
 
+    /**
+     * Plantillas de WhatsApp de Meta desde el CRM (PLANTILLAS_META_PLAN §5.10;
+     * L9-96, D9-13): enviar a Meta una versión aprobada por otra persona y
+     * «Comprobar ahora». Solo Super Admin por defecto (CrmPermission).
+     */
+    public const META_TEMPLATES_SUBMIT = 'ultron.meta_templates_submit';
+
     /** @var array<string, true>|null */
     private ?array $granted = null;
 

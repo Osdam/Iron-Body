@@ -6,6 +6,7 @@ use App\Http\Controllers\Crm\UltronStudio\UltronStudioController;
 use App\Http\Controllers\Crm\UltronStudio\UltronStudioIntegrationController;
 use App\Http\Controllers\Crm\UltronStudio\UltronStudioLabController;
 use App\Http\Controllers\Crm\UltronStudio\UltronStudioLabScenarioController;
+use App\Http\Controllers\Crm\UltronStudio\UltronStudioMetaTemplateController;
 use App\Http\Controllers\Crm\UltronStudio\UltronStudioOutreachController;
 use App\Http\Controllers\Crm\UltronStudio\UltronStudioPublicationController;
 use App\Http\Controllers\Crm\UltronStudio\UltronStudioRuleController;
@@ -268,6 +269,14 @@ Route::prefix('admin/ultron-studio')->middleware(LimitRequestBodySize::class.':6
 
     // Hito 9 · B9-run: la ejecución (13 rutas outreach/**; contrato H9 §7 E1–E13, L9-43).
     UltronStudioOutreachController::routes();
+
+    // Plantillas de WhatsApp de Meta desde el CRM (PLANTILLAS_META_PLAN §5.8.1; L9-96):
+    // 4 rutas (de 121 a 125), la lista con su llave en UltronStudioMetaTemplateController::ROUTES.
+    // Cerraduras: la puerta → una persona → la maestra de estrategias (409 `strategies_disabled`)
+    // → la maestra del módulo (409 `meta_templates_disabled`, salvo `status`) → la llave → la
+    // persona verificada; enviar, además, su bandera y META_ENABLED. La red, solo por el cliente
+    // neutro de app/Services/Meta/Templates (con el doble por defecto fuera de producción).
+    UltronStudioMetaTemplateController::routes();
 });
 
 /*

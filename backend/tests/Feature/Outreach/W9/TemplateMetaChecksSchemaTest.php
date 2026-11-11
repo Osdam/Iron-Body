@@ -34,9 +34,9 @@ class TemplateMetaChecksSchemaTest extends TestCase
         $columnas = Schema::getColumnListing(self::TABLE);
         sort($columnas);
         $this->assertSame([
-            'category', 'checked_at', 'client_request_id', 'created_at', 'id', 'language', 'meta_body_hash', 'meta_name', 'meta_template_id',
-            'recorded_by_admin_id', 'recorded_by_name', 'status', 'template_content_hash', 'template_id', 'uuid',
-        ], $columnas, 'del texto de Meta, solo su huella; de quien registra, la instantánea del personal');
+            'category', 'checked_at', 'client_request_id', 'created_at', 'id', 'language', 'meta_body_hash', 'meta_components_hash', 'meta_name', 'meta_template_id',
+            'recorded_by_admin_id', 'recorded_by_name', 'source', 'status', 'submission_id', 'template_content_hash', 'template_id', 'uuid',
+        ], $columnas, 'del texto de Meta, solo su huella; de quien registra, la instantánea del personal (L9-96: + source, submission_id y meta_components_hash, 2026_11_15_100002)');
     }
 
     public function test_solo_insercion_y_de_una_plantilla_de_whatsapp_a_su_huella_exacta(): void
@@ -62,7 +62,8 @@ class TemplateMetaChecksSchemaTest extends TestCase
         $plantilla = $this->whatsappTemplate();
         $hash = (string) DB::table('ultron_studio_message_templates')->where('id', $plantilla)->value('content_hash');
         foreach ([
-            'ustmc_status_chk' => ['status' => 'PENDING'],
+            // L9-96 (2026_11_15_100002): PENDING y los demás estados de Meta ya son del dominio; este no.
+            'ustmc_status_chk' => ['status' => 'INVENTADO'],
             'ustmc_language_chk' => ['language' => 'en_US'],
             // Cabe en la columna (10) y no es del dominio: así salta el CHECK y no el tamaño (22001).
             'ustmc_category_chk' => ['category' => 'promo'],
@@ -79,7 +80,8 @@ class TemplateMetaChecksSchemaTest extends TestCase
         foreach ([['meta_body_hash' => 'no-hex'], ['meta_template_id' => 'abc'], ['recorded_by_name' => '  '], ['checked_at' => now()->addDay()]] as $cambio) {
             $this->assertRejected(fn () => DB::transaction(fn () => DB::table(self::TABLE)->insert(array_merge($this->row($plantilla, $hash), $cambio))), 'forma: '.json_encode(array_keys($cambio)));
         }
-        $this->assertSame(4, (int) DB::scalar('SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid WHERE NOT t.tgisinternal AND c.relname = ?', [self::TABLE]));
+        // W9 4 + ustmc_submission_of_template (L9-96, 2026_11_15_100002).
+        $this->assertSame(5, (int) DB::scalar('SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid WHERE NOT t.tgisinternal AND c.relname = ?', [self::TABLE]));
         $this->assertSame(0, (int) DB::scalar('SELECT count(*) FROM pg_proc WHERE proname = ? AND prosecdef', ['ultron_studio_chk_ustmc_template_of_whatsapp']), 'sin SECURITY DEFINER');
         $this->assertSame(1, (int) DB::scalar("SELECT count(*) FROM pg_proc WHERE proname = 'ultron_studio_forbid'"), 'la de F, una y sin redeclarar');
     }

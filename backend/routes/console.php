@@ -550,3 +550,22 @@ if ((bool) config('outreach.scheduler.enabled', false)) {
         ->withoutOverlapping(10)
         ->onOneServer();
 }
+
+// ── ULTRON STUDIO · Plantillas de WhatsApp de Meta desde el CRM (PLANTILLAS_META_PLAN §5.5 y §5.12; L9-96) ──
+// Un bloque PROPIO, nunca dentro del monitor del Studio (como la voz y el H9): la
+// sincronización por sondeo lee en Meta el estado de las plantillas enviadas desde
+// el CRM (y de las registradas a mano) y registra, sola, lo que cambió en
+// `ultron_studio_template_meta_checks`, que es lo que lee el canal de W9. 1–3 GET a
+// Graph por pasada (unas 864 al día como mucho, frente a 5 000 por hora de Meta).
+// INERTE por defecto: solo se agenda con ULTRON_STUDIO_META_TEMPLATES_SYNC_ENABLED=true
+// (y solo `true`, 1, on o yes); la orden revalida además la maestra
+// (ULTRON_STUDIO_META_TEMPLATES_ENABLED) en cada pasada: apagada, sale con 0 y lo
+// dice. Lo único que esta bandera programa es esa orden, sin argumentos (enmienda
+// de la guarda del programador: UltronEngineIsolationTest). Vuelta atrás = la
+// bandera en false + config:cache. Diez minutos de cerrojo, no las 24 h por defecto.
+if ((bool) config('ultron_studio.meta_templates.sync_enabled', false)) {
+    Schedule::command('ultron-studio:meta-templates-sync')
+        ->everyFiveMinutes()
+        ->withoutOverlapping(10)
+        ->onOneServer();
+}

@@ -851,6 +851,15 @@ final class AuthorizationMap
         'POST api/admin/ultron-studio/strategies/person-bindings' => 'ultron.person_bindings_manage',
         'POST api/admin/ultron-studio/strategies/person-bindings/{uuid}/verify' => 'ultron.person_bindings_manage',
         'POST api/admin/ultron-studio/strategies/person-bindings/{uuid}/revoke' => 'ultron.person_bindings_manage',
+        // ULTRON STUDIO · Plantillas de WhatsApp de Meta desde el CRM (4 rutas; L9-96,
+        // PLANTILLAS_META_PLAN §5.8.1 y §5.10; UltronStudioMetaTemplateController::ROUTES).
+        // El estado, con la base del Studio; la sonda de permisos (solo lectura), con la llave
+        // de las integraciones; enviar a Meta y «Comprobar ahora», con la llave nueva, que no
+        // llega por defecto al Administrador (CrmPermission).
+        'GET api/admin/ultron-studio/strategies/templates/meta/status' => 'ultron.view',
+        'POST api/admin/ultron-studio/strategies/templates/meta/probe' => 'ultron.integrations_manage',
+        'POST api/admin/ultron-studio/strategies/templates/{uuid}/meta/submit' => 'ultron.meta_templates_submit',
+        'POST api/admin/ultron-studio/strategies/templates/{uuid}/meta/refresh' => 'ultron.meta_templates_submit',
         // ULTRON STUDIO · Hito 9, paquete B9-run: la ejecución (13 rutas; contrato H9
         // §7 E1–E13; UltronStudioOutreachController::authorizationMap()). El dominio
         // `commercial_automation` está excluido del token compartido (D9-13).

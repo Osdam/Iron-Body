@@ -129,6 +129,8 @@ class UltronStudioStrategyController extends Controller
                 'markersForbiddenByPurpose' => StudioMessageTemplates::MARKERS_FORBIDDEN_BY_PURPOSE,
                 'bodyMax' => StudioMessageTemplates::BODY_MAX,
                 'scriptMax' => StudioMessageTemplates::SCRIPT_MAX,
+                // Aditivo (plantillas de Meta, §5.1): el contenido ampliado de WhatsApp.
+                'meta' => StudioMessageTemplates::metaCatalog(),
             ],
             'traceText' => DecisionTraceText::export(),
             'studioBaseline' => ['catalogVersion' => StudioCatalog::VERSION, 'catalogHash' => StudioCatalog::hash()],

@@ -330,6 +330,10 @@ final class CrmPermission
             'ultron.person_bindings_manage',
             'commercial_automation.simulate_real',
             'commercial_automation.release',
+            // Plantillas de WhatsApp de Meta desde el CRM (L9-96, PLANTILLAS_META_PLAN
+            // §5.10): enviar crea plantillas reales en la cuenta de WhatsApp del gimnasio
+            // (irreversible) y da fe de lo que Meta responde. Solo Super Admin por defecto.
+            'ultron.meta_templates_submit',
             // Corregir medio o importe de un cobro y devolver dinero (de un
             // cobro o de una venta): dinero que sale de la caja o que cambia de
             // medio en un arqueo. Llegan nuevas y se reparten a mano.

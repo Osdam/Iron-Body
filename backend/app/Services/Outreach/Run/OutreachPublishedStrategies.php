@@ -350,13 +350,21 @@ final class OutreachPublishedStrategies
      * posteriores (otra fila) la dejan sin aprobar. Nunca lanza: sin poder
      * leerla, no (falla cerrado).
      *
+     * Y LOS COMPONENTES (plantillas de Meta desde el CRM, PLANTILLAS_META_PLAN
+     * §5.3; enmienda de la protección 12 en L9-96): una fila SIN huella de
+     * componentes (la orden manual) solo vale para una plantilla de solo
+     * cuerpo, como hasta hoy; una CON huella (la sincronización) tiene que
+     * casar con la del contenido (encabezado, pie y botones, con la ayuda pura
+     * `componentsFingerprint`). Así, editar los botones en el administrador de
+     * Meta no se salta los cuatro ojos.
+     *
      * @param  array{id: int, hash: string, content: array<string, mixed>}  $template  {@see approvedWhatsappTemplate()}
      */
     public function metaApproved(array $template): bool
     {
         try {
             $f = DB::table(OutreachTables::TEMPLATE_META_CHECKS)->where('template_id', $template['id'])->orderByDesc('id')
-                ->first(['status', 'template_content_hash', 'meta_name', 'language', 'category', 'meta_body_hash']);
+                ->first(['status', 'template_content_hash', 'meta_name', 'language', 'category', 'meta_body_hash', 'meta_components_hash']);
         } catch (Throwable $e) {
             Log::error('outreach.bridge.meta_check_unreadable', ['template_id' => $template['id'], 'error_class' => $e::class]);
 
@@ -372,7 +380,29 @@ final class OutreachPublishedStrategies
             && (string) $f->meta_name === ($c['metaName'] ?? null)
             && (string) $f->language === ($c['language'] ?? null)
             && (string) $f->category === ($c['category'] ?? null)
-            && hash_equals((string) $f->meta_body_hash, hash('sha256', $c['bodyPreview']));
+            && hash_equals((string) $f->meta_body_hash, hash('sha256', $c['bodyPreview']))
+            && self::componentsMatch($f->meta_components_hash, $c, $template['id']);
+    }
+
+    /**
+     * La regla de los componentes de {@see metaApproved()}: sin huella en la
+     * fila, la plantilla no puede tener componentes; con huella, tienen que
+     * casar. Nunca lanza: si la huella no se puede calcular, no casa (falla
+     * cerrado) y queda en el registro.
+     *
+     * @param  array<string, mixed>  $content
+     */
+    private static function componentsMatch(mixed $huella, array $content, int $templateId): bool
+    {
+        try {
+            return $huella === null
+                ? ! StudioMessageTemplates::hasComponents($content)
+                : hash_equals((string) $huella, StudioMessageTemplates::componentsFingerprint($content));
+        } catch (Throwable $e) {
+            Log::error('outreach.bridge.components_unreadable', ['template_id' => $templateId, 'error_class' => $e::class]);
+
+            return false;
+        }
     }
 
     /**

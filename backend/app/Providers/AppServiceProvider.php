@@ -667,6 +667,26 @@ class AppServiceProvider extends ServiceProvider
             Limit::perHour(6)->by($persona($request))->response($sonda),
             Limit::perHour(20)->by('ultron-studio-net:'.ClientNetwork::of($request->ip()))->response($sonda),
         ]);
+
+        // La sonda de permisos de Meta (plantillas de WhatsApp): los mismos topes
+        // que la de Twilio, pero su propio cubo y su propio texto (PM-2). Antes
+        // compartía el de Twilio: una gastaba el cupo de la otra y su 429
+        // hablaba de Twilio. El nombre del limitador va en la clave del cubo.
+        $sondaMeta = $demasiadas('Demasiadas comprobaciones de Meta seguidas. Espera antes de lanzar otra.');
+        RateLimiter::for('ultron-studio-meta-probe', fn (Request $request) => [
+            Limit::perHour(6)->by($persona($request))->response($sondaMeta),
+            Limit::perHour(20)->by('ultron-studio-net:'.ClientNetwork::of($request->ip()))->response($sondaMeta),
+        ]);
+
+        // Plantillas de WhatsApp de Meta desde el CRM (PLANTILLAS_META_PLAN §5.8.1; L9-96):
+        // enviar a Meta (un POST que crea una plantilla real) y «Comprobar ahora» (un GET)
+        // salen a Graph. Además del cupo de escritura, un techo por HORA: 20 por PERSONA y
+        // 60 por red, en su propio cubo (Meta admite 100 creaciones por hora y cuenta).
+        $plantillasMeta = $demasiadas('Demasiados envíos o comprobaciones de plantillas de Meta en una hora. Espera antes de seguir.');
+        RateLimiter::for('ultron-studio-meta', fn (Request $request) => [
+            Limit::perHour(20)->by($persona($request))->response($plantillasMeta),
+            Limit::perHour(60)->by('ultron-studio-net:'.ClientNetwork::of($request->ip()))->response($plantillasMeta),
+        ]);
     }
 
     /**

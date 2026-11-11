@@ -41,12 +41,27 @@ use Illuminate\Support\Str;
  *
  * IDEMPOTENTE por `client_request_id`: repetir con el mismo y los mismos
  * hechos devuelve la fila de antes sin escribir; con otros hechos, 409.
+ *
+ * PLANTILLAS DE META DESDE EL CRM (PLANTILLAS_META_PLAN §5.3 y §5.6; enmienda
+ * de la protección 12 y de D-5 en L9-96): la tabla gana filas `meta_api`, que
+ * escribe la sincronización (`StudioMetaTemplates`), con la huella de los
+ * componentes. {@see compare()} mira también esa huella (`components_mismatch`,
+ * la misma regla que el puente) y la orden MANUAL se niega, sin escribir, en
+ * dos casos: la versión tiene encabezado, pie o botones
+ * (`components_require_meta_sync`: solo la sincronización sabe leerlos) o se
+ * envió a Meta desde el CRM y su envío sigue vivo (`meta_sync_owns_template`).
  */
 final class StudioTemplateMetaChecks
 {
     public const TABLE = 'ultron_studio_template_meta_checks';
 
     public const TEMPLATES = 'ultron_studio_message_templates';
+
+    /** Los envíos a Meta desde el CRM (plantillas de Meta, §5.7.1): con uno vivo, la orden manual se niega. */
+    public const SUBMISSIONS = 'ultron_studio_meta_template_submissions';
+
+    /** El estado de un envío que libera la versión (todos los demás están vivos). */
+    public const SUBMISSION_FAILED = 'FAILED';
 
     /** Los estados de una plantilla en Meta (el CHECK `ustmc_status_chk` de la migración). */
     public const STATUSES = ['APPROVED', 'REJECTED', 'PAUSED', 'DISABLED'];
@@ -70,6 +85,7 @@ final class StudioTemplateMetaChecks
         'language' => 'language_mismatch',
         'category' => 'category_mismatch',
         'body' => 'body_mismatch',
+        'components' => 'components_mismatch',
         'status' => 'meta_status_not_approved',
     ];
 
@@ -145,6 +161,15 @@ final class StudioTemplateMetaChecks
         if ((string) $plantilla->channel !== StudioMessageTemplates::CHANNEL_WHATSAPP) {
             throw new UltronStudioException('Solo las plantillas de WhatsApp tienen correspondencia en Meta.', 'template_not_whatsapp', 422);
         }
+        $contenido = json_decode((string) $plantilla->content_json, true);
+        $contenido = is_array($contenido) ? $contenido : [];
+        // Plantillas de Meta desde el CRM (§5.6): dos casos que ya no son de esta orden.
+        if (StudioMessageTemplates::hasComponents($contenido)) {
+            throw new UltronStudioException('Esta versión tiene encabezado, pie o botones: lo que dice Meta de ella lo registra la sincronización, no esta orden.', 'components_require_meta_sync', 409);
+        }
+        if (DB::table(self::SUBMISSIONS)->where('template_id', (int) $plantilla->id)->where('state', '<>', self::SUBMISSION_FAILED)->exists()) {
+            throw new UltronStudioException('Esta versión se envió a Meta desde el CRM: lo que dice Meta de ella lo registra la sincronización.', 'meta_sync_owns_template', 409);
+        }
         $persona = $this->checker($in['by']);
 
         $fila = [
@@ -161,7 +186,6 @@ final class StudioTemplateMetaChecks
             'recorded_by_admin_id' => (int) $persona->id,
             'recorded_by_name' => self::staffName($persona),
         ];
-        $contenido = json_decode((string) $plantilla->content_json, true);
 
         return [
             'row' => $fila,
@@ -169,7 +193,7 @@ final class StudioTemplateMetaChecks
                 'id' => (int) $plantilla->id, 'uuid' => (string) $plantilla->uuid, 'key' => (string) $plantilla->key, 'number' => (int) $plantilla->number,
                 'purpose' => (string) $plantilla->purpose, 'status' => (string) $plantilla->status, 'contentHash' => (string) $plantilla->content_hash,
             ],
-            'comparison' => self::compare($fila, $plantilla, is_array($contenido) ? $contenido : []),
+            'comparison' => self::compare($fila, $plantilla, $contenido),
             'latest' => $this->latest((int) $plantilla->id),
         ];
     }
@@ -231,7 +255,9 @@ final class StudioTemplateMetaChecks
      * mismas condiciones que el puente: la plantilla APROBADA en el Studio,
      * de bytes que casan con su huella y con la categoría de su finalidad; la
      * comprobación `APPROVED`, de esa huella y con el mismo nombre, idioma,
-     * categoría y texto (`bodyPreview`).
+     * categoría y texto (`bodyPreview`), y con los mismos componentes: sin
+     * huella de componentes en la fila (`meta_components_hash`, la orden
+     * manual), la plantilla no puede tenerlos; con ella, tiene que casar.
      *
      * @param  array<string, mixed>  $row  la fila de {@see plan()}
      * @param  array<string, mixed>  $content
@@ -244,6 +270,9 @@ final class StudioTemplateMetaChecks
             'language' => ($content['language'] ?? null) === $row['language'],
             'category' => ($content['category'] ?? null) === $row['category'],
             'body' => is_string($content['bodyPreview'] ?? null) && hash_equals(hash('sha256', $content['bodyPreview']), (string) $row['meta_body_hash']),
+            'components' => ($row['meta_components_hash'] ?? null) === null
+                ? ! StudioMessageTemplates::hasComponents($content)
+                : hash_equals((string) $row['meta_components_hash'], StudioMessageTemplates::componentsFingerprint($content)),
             'status' => $row['status'] === self::STATUS_APPROVED,
         ];
         $motivos = [];
@@ -292,12 +321,14 @@ final class StudioTemplateMetaChecks
     public function latest(int $templateId): ?array
     {
         $f = DB::table(self::TABLE)->where('template_id', $templateId)->orderByDesc('id')
-            ->first(['uuid', 'status', 'meta_name', 'language', 'category', 'meta_template_id', 'template_content_hash', 'checked_at', 'recorded_by_name']);
+            ->first(['uuid', 'status', 'meta_name', 'language', 'category', 'meta_template_id', 'template_content_hash', 'checked_at', 'recorded_by_name', 'source']);
 
         return $f === null ? null : [
             'uuid' => (string) $f->uuid, 'status' => (string) $f->status, 'metaName' => (string) $f->meta_name, 'language' => (string) $f->language,
             'category' => (string) $f->category, 'metaTemplateId' => $f->meta_template_id, 'templateContentHash' => (string) $f->template_content_hash,
             'checkedAt' => RelativeTime::format(new DateTimeImmutable((string) $f->checked_at, new \DateTimeZone('UTC'))), 'recordedBy' => (string) $f->recorded_by_name,
+            // Aditivo (plantillas de Meta): quién escribió la fila, la orden manual o la sincronización.
+            'source' => (string) ($f->source ?? 'manual'),
         ];
     }
 

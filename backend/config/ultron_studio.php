@@ -67,6 +67,26 @@ $paises = static function (): array {
     return $lista === [] ? ['57'] : $lista;
 };
 
+/*
+ * Los dominios admitidos en los botones de URL de las plantillas de Meta
+ * (PLANTILLAS_META_PLAN §5.1 y §5.11; Q1 de L9-96: solo estáticos y solo
+ * hacia el dominio propio): una lista separada por comas de nombres de host
+ * EXACTOS (sin esquema, puerto ni ruta; sin comodines: `www.` se escribe
+ * aparte). Lo que no tiene forma de host se descarta. Vacía o sin la
+ * variable: no se admiten botones de URL.
+ */
+$hostsDeUrl = static function (): array {
+    $lista = [];
+    foreach (explode(',', (string) env('ULTRON_STUDIO_META_TEMPLATES_URL_HOSTS', '')) as $host) {
+        $host = strtolower(trim($host));
+        if (preg_match('/^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/D', $host) === 1 && ! in_array($host, $lista, true)) {
+            $lista[] = $host;
+        }
+    }
+
+    return $lista;
+};
+
 return [
 
     /*
@@ -337,6 +357,59 @@ return [
         // sobre la misma huella (D9-12). `waived` solo lo decide el propietario
         // y queda escrito en la publicación. Cualquier otro valor, `required`.
         'simulation_gate' => strtolower(trim((string) env('ULTRON_STUDIO_STRATEGIES_SIMULATION_GATE', 'required'))) === 'waived' ? 'waived' : 'required',
+
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Plantillas de WhatsApp de Meta desde el CRM
+    |--------------------------------------------------------------------------
+    | Plan: docs/ultron-studio/plans/PLANTILLAS_META_PLAN.md §5.11; contrato
+    | H9, L9-96 (D9-6 ampliado, protección 12, D-5, §9.1).
+    |
+    | Enviar a Meta una versión APROBADA a cuatro ojos de una plantilla de
+    | WhatsApp del Studio y registrar sola lo que Meta responde en
+    | `ultron_studio_template_meta_checks` (lo que lee el canal de W9). El
+    | webhook, el outbox y la puerta de Marketing no se tocan.
+    |
+    | TODO NACE APAGADO (protección 1). Solo `true` (o 1/on/yes) enciende:
+    |  - `enabled`: la maestra. Apagada, las rutas `strategies/templates/meta/**`
+    |    y `…/{uuid}/meta/**` responden 409 `meta_templates_disabled` (salvo
+    |    `GET …/meta/status`, que responde 200) y la sincronización sale con 0;
+    |  - `submit_enabled`: lo ÚNICO que escribe en Meta (crea plantillas en la
+    |    cuenta de WhatsApp del gimnasio); además exige `META_ENABLED=true`;
+    |  - `sync_enabled`: programa `ultron-studio:meta-templates-sync` cada 5
+    |    minutos (bloque propio de routes/console.php).
+    | `driver`: `fake` (por defecto: sin red) o `graph`. En `production` es
+    | SIEMPRE `graph` (el doble no se construye) y fuera de `local`/`testing`
+    | también. Fuera de producción, `graph` solo habla con `graph_base` (el
+    | simulador del E2E) y se niega a graph.facebook.com; esa base tiene que
+    | ser `https://` o `http://` a 127.0.0.1 o localhost, y lleva siempre el
+    | portador fijo `simulator`, nunca el token real (PM-1).
+    | `graph_version`: la de ESTE módulo (Q4: `v25.0`), sin depender de
+    | `META_GRAPH_VERSION`; mal escrita, la de por defecto.
+    | `url_hosts` (Q1) y `phone_button` (Q2: el número es el del gimnasio de la
+    | configuración, `legal.privacy_phone`, nunca uno tecleado): solo afectan a
+    | las versiones NUEVAS (el contenido se valida al crearlo).
+    */
+    'meta_templates' => [
+
+        'enabled' => filter_var(env('ULTRON_STUDIO_META_TEMPLATES_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+
+        'submit_enabled' => filter_var(env('ULTRON_STUDIO_META_TEMPLATES_SUBMIT_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+
+        'sync_enabled' => filter_var(env('ULTRON_STUDIO_META_TEMPLATES_SYNC_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+
+        'driver' => strtolower(trim((string) env('ULTRON_STUDIO_META_TEMPLATES_DRIVER', 'fake'))),
+
+        'graph_version' => preg_match('/^v[1-9][0-9]?\.[0-9]$/D', $versionGraph = trim((string) env('ULTRON_STUDIO_META_TEMPLATES_GRAPH_VERSION', ''))) === 1 ? $versionGraph : 'v25.0',
+
+        // SE IGNORA EN `production` (el cliente usa siempre https://graph.facebook.com).
+        'graph_base' => env('ULTRON_STUDIO_META_TEMPLATES_GRAPH_BASE'),
+
+        'url_hosts' => $hostsDeUrl(),
+
+        'phone_button' => filter_var(env('ULTRON_STUDIO_META_TEMPLATES_PHONE_BUTTON', false), FILTER_VALIDATE_BOOLEAN),
 
     ],
 
