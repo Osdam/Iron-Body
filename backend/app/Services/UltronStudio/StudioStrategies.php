@@ -119,7 +119,7 @@ final class StudioStrategies
                 $actual = $s->refresh();
 
                 throw new UltronStudioException('El borrador cambió en otra pestaña o lo cambió otra persona. Recarga para ver lo guardado.', 'draft_moved', 409, [
-                    'current' => self::draftDto($actual),
+                    'current' => self::draftApiDto($actual),
                 ]);
             }
             $this->audit->record($request, $access->actor, 'strategy.draft_saved', StudioStrategyConfig::SUBJECT_STRATEGY, $s->uuid,
@@ -237,7 +237,7 @@ final class StudioStrategies
         $vivo = $cadena['status'] !== StudioStrategyPublications::STATUS_OFF;
 
         return self::summaryDto($s) + [
-            'draft' => self::draftDto($s),
+            'draft' => self::draftApiDto($s),
             'versions' => $versiones->map(static fn (StudioStrategyVersion $v): array => StudioStrategyVersions::summaryDto($v))->all(),
             'chain' => self::chainSummary($cadena),
             'can' => $can,
@@ -279,6 +279,24 @@ final class StudioStrategies
         }
 
         return ['revision' => (int) $s->draft_revision, 'content' => $contenido, 'updatedAt' => $s->draft_updated_at?->toIso8601String()];
+    }
+
+    /**
+     * El borrador para la API: el JSON guardado TAL CUAL, con sus objetos como objetos (H9-E2E-1 del E2E #26, L9-84).
+     * `draftDto()` decodifica en arrays para el código del servidor (validar, simular, congelar), y así el `{}` del
+     * alta salía como `[]`, que el CRM rechaza con razón: la API promete un objeto o `null`.
+     *
+     * @return array{revision:int,content:mixed,updatedAt:string|null}
+     */
+    public static function draftApiDto(StudioStrategy $s): array
+    {
+        $dto = self::draftDto($s);
+        if ($dto['content'] !== null && is_string($s->draft_json)) {
+            // Ya decodificó una vez sin error: el mismo texto, ahora sin `assoc`.
+            $dto['content'] = json_decode($s->draft_json, false, 64, JSON_THROW_ON_ERROR);
+        }
+
+        return $dto;
     }
 
     /**

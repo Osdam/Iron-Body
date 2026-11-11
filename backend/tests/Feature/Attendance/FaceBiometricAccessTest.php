@@ -210,7 +210,8 @@ class FaceBiometricAccessTest extends TestCase
 
     public function test_el_vale_de_una_persona_sigue_abriendo_la_imagen(): void
     {
-        $ticket = $this->getJson('/api/admin/stream-ticket', $this->recepcion())
+        // El vale de las fotos se pide para ESA finalidad (P9-25).
+        $ticket = $this->getJson('/api/admin/stream-ticket?scope=face-image', $this->recepcion())
             ->assertOk()
             ->json('data.ticket');
 
@@ -218,6 +219,18 @@ class FaceBiometricAccessTest extends TestCase
         $res = $this->get($this->imagen().'?ticket='.urlencode($ticket))->assertOk();
 
         $this->assertSame(self::IMAGEN, $res->streamedContent());
+    }
+
+    public function test_el_vale_de_un_stream_no_abre_la_imagen(): void
+    {
+        // Antes el mismo vale abría los streams y las fotos biométricas.
+        $ticket = $this->getJson('/api/admin/stream-ticket', $this->recepcion())
+            ->assertOk()
+            ->json('data.ticket');
+
+        $this->get($this->imagen().'?ticket='.urlencode($ticket))
+            ->assertStatus(403)
+            ->assertJsonPath('code', 'admin_ticket_invalid');
     }
 
     public function test_el_token_compartido_no_obtiene_un_vale(): void

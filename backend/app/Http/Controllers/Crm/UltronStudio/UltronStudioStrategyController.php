@@ -196,7 +196,7 @@ class UltronStudioStrategyController extends Controller
         ]);
         $s = $strategies->saveDraft($access, $request, $uuid, (int) $data['baseRevision'], (array) $request->input('draft'));
 
-        return response()->json(['ok' => true, 'data' => ['strategy' => StudioStrategies::summaryDto($s), 'draft' => StudioStrategies::draftDto($s)]]);
+        return response()->json(['ok' => true, 'data' => ['strategy' => StudioStrategies::summaryDto($s), 'draft' => StudioStrategies::draftApiDto($s)]]);
     }
 
     /**

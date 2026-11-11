@@ -2,7 +2,9 @@
 
 namespace App\Services\UltronStudio\Stream;
 
+use App\Models\AdminSession;
 use App\Services\Admin\AdminSessionService;
+use App\Services\Admin\StreamTicketService;
 use App\Support\Access\AdminActor;
 use App\Support\Network\ClientNetwork;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -13,11 +15,13 @@ use Illuminate\Support\Facades\RateLimiter;
  * El limitador CON NOMBRE del canal, `studio-stream` (contrato H9, «Paquete
  * SSE9»: «límite por tique, como los de voz»).
  *
- * Cubo por TIQUE cuando la conexión se abre con el vale (`?ticket=`, la forma
- * normal desde el navegador), identificado por una huella del vale, nunca por
- * el vale en claro; por PERSONA cuando llega con la cabecera `Authorization`
- * (pruebas, herramientas); y un cubo propio por red para lo que no trae
- * credencial resoluble (en la práctica la puerta ya lo rechazó antes). Una
+ * Cubo por PERSONA: la de la sesión del vale cuando la conexión se abre con
+ * él (`?ticket=`, la forma normal desde el navegador; se lee sin canjearlo y
+ * nunca se usa el vale en la clave) y la de la sesión cuando llega con la
+ * cabecera `Authorization` (pruebas, herramientas); y un cubo propio por red
+ * para lo que no trae credencial resoluble (en la práctica la puerta ya lo
+ * rechazó antes). Hasta P9-25 el cubo era el vale; desde que es de un solo uso
+ * cada reconexión estrena uno, y un cubo por vale no frenaba nada. Una
  * pestaña abre una conexión cada 55 s y reconecta con retroceso: el tope
  * (`ultron_studio_stream.rate.per_minute`, 30) deja sitio a varias pestañas
  * y corta un bucle de reconexión roto.
@@ -52,12 +56,21 @@ final class StreamRateLimit
         });
     }
 
-    /** El cubo: huella del vale, o la persona, o la red. */
+    /** El cubo: la persona (del vale o de la cabecera), o la red. */
     public static function key(Request $request): string
     {
         $ticket = $request->query('ticket');
         if (is_string($ticket) && $ticket !== '') {
-            return self::NAME.':ticket:'.substr(hash('sha256', $ticket), 0, 32);
+            // El vale es de un solo uso (P9-25) y cada reconexión estrena uno:
+            // un cubo por vale ya no frenaría un bucle de reconexión. El cubo es
+            // la persona de la sesión del vale, leída SIN canjearlo (la puerta lo
+            // canjea después). Uno ilegible no es una credencial: va a su red.
+            $sid = app(StreamTicketService::class)->peekSessionId($ticket);
+            $id = $sid === null ? null : AdminSession::query()->whereKey($sid)->value('admin_id');
+
+            return $id !== null
+                ? self::NAME.':admin:'.(int) $id
+                : self::NAME.':anon:'.ClientNetwork::of($request->ip());
         }
 
         $admin = AdminActor::from($request);

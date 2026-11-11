@@ -6,8 +6,10 @@ use App\Http\Middleware\EnsureAdminAuth;
 use App\Models\Admin;
 use App\Models\AdminSession;
 use App\Services\Admin\AdminSessionService;
+use App\Services\Admin\StreamTicketService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Crypt;
 use Tests\TestCase;
 
 /**
@@ -86,7 +88,7 @@ class AdminAuthTest extends TestCase
     public function test_logout_revoca_la_sesion(): void
     {
         $admin = $this->makeAdmin();
-        $issued = app(\App\Services\Admin\AdminSessionService::class)->issueSession($admin);
+        $issued = app(AdminSessionService::class)->issueSession($admin);
         $headers = ['Authorization' => 'Bearer '.$issued['token']];
 
         $this->postJson('/api/admin/auth/logout', [], $headers)->assertOk();
@@ -122,11 +124,98 @@ class AdminAuthTest extends TestCase
     {
         $admin = $this->makeAdmin();
         $issued = app(AdminSessionService::class)->issueSession($admin);
-        $ticket = app(\App\Services\Admin\StreamTicketService::class)->issue($issued['session'])['ticket'];
+        $ticket = app(StreamTicketService::class)->issue($issued['session'])['ticket'];
 
         $request = Request::create('/api/admin/exercises/stream', 'GET', ['ticket' => $ticket]);
 
         $this->assertNull(EnsureAdminAuth::challenge($request)); // pasa (autenticado)
+    }
+
+    // ── P9-25: un solo uso, vida corta y finalidad ─────────────────────────
+    //
+    // Antes el vale valía 5 minutos, se podía repetir y abría cualquier stream
+    // y las fotos biométricas: quien leyera el access.log a tiempo entraba como
+    // esa sesión. Cada prueba arma peticiones NUEVAS, como llegarían dos
+    // conexiones distintas.
+
+    private function vale(string $scope = StreamTicketService::SCOPE_STREAM): string
+    {
+        $issued = app(AdminSessionService::class)->issueSession($this->makeAdmin(['email' => 'vale-'.uniqid().'@ironbody.test']));
+
+        return app(StreamTicketService::class)->issue($issued['session'], $scope)['ticket'];
+    }
+
+    private function conVale(string $path, string $ticket): Request
+    {
+        return Request::create($path, 'GET', ['ticket' => $ticket]);
+    }
+
+    public function test_el_vale_es_de_un_solo_uso(): void
+    {
+        $ticket = $this->vale();
+
+        $this->assertNull(EnsureAdminAuth::challenge($this->conVale('/api/admin/exercises/stream', $ticket)));
+
+        // La misma URL leída del access.log, otra vez y en otro stream: ya no abre.
+        foreach (['/api/admin/exercises/stream', '/api/admin/earnings/stream'] as $path) {
+            $rechazo = EnsureAdminAuth::challenge($this->conVale($path, $ticket));
+            $this->assertNotNull($rechazo, "el vale gastado abrió {$path}");
+            $this->assertSame(403, $rechazo->getStatusCode());
+            $this->assertSame('admin_ticket_invalid', json_decode($rechazo->getContent(), true)['code']);
+        }
+    }
+
+    public function test_las_guardas_de_una_misma_peticion_canjean_el_vale_una_sola_vez(): void
+    {
+        // ProtectAdminPaths, EnforceAdminAuthorization y `auth.admin` llaman a
+        // la guarda sobre la MISMA petición: la segunda pasada no puede gastar
+        // el vale otra vez ni rechazarlo por gastado.
+        $ticket = $this->vale();
+        $peticion = $this->conVale('/api/admin/memberships/stream', $ticket);
+
+        $this->assertNull(EnsureAdminAuth::challenge($peticion));
+        $this->assertNull(EnsureAdminAuth::challenge($peticion));
+        $this->assertNull(EnsureAdminAuth::challenge($peticion));
+
+        // Eso no lo hace reutilizable: otra petición con el mismo vale no entra.
+        $this->assertSame(403, EnsureAdminAuth::challenge($this->conVale('/api/admin/memberships/stream', $ticket))?->getStatusCode());
+    }
+
+    public function test_el_vale_de_stream_no_abre_las_fotos_ni_el_de_las_fotos_un_stream_y_no_se_gasta(): void
+    {
+        $deStream = $this->vale(StreamTicketService::SCOPE_STREAM);
+        $deFoto = $this->vale(StreamTicketService::SCOPE_FACE_IMAGE);
+
+        $this->assertSame(403, EnsureAdminAuth::challenge($this->conVale('/api/attendances/face-image/7', $deStream))?->getStatusCode());
+        $this->assertSame(403, EnsureAdminAuth::challenge($this->conVale('/api/admin/exercises/stream', $deFoto))?->getStatusCode());
+        $this->assertSame(403, EnsureAdminAuth::challenge($this->conVale('/api/attendances/stream', $deFoto))?->getStatusCode());
+
+        // Probarlo en la ruta equivocada no se lo gasta a quien lo pidió.
+        $this->assertNull(EnsureAdminAuth::challenge($this->conVale('/api/admin/exercises/stream', $deStream)));
+        $this->assertNull(EnsureAdminAuth::challenge($this->conVale('/api/attendances/face-image/7', $deFoto)));
+    }
+
+    public function test_el_vale_vive_un_minuto(): void
+    {
+        $this->assertLessThanOrEqual(60, StreamTicketService::TTL_SECONDS);
+
+        $aTiempo = $this->vale();
+        $tarde = $this->vale();
+        $this->travel(StreamTicketService::TTL_SECONDS - 1)->seconds();
+        $this->assertNull(EnsureAdminAuth::challenge($this->conVale('/api/admin/exercises/stream', $aTiempo)));
+
+        $this->travel(2)->seconds();
+        $this->assertSame(403, EnsureAdminAuth::challenge($this->conVale('/api/admin/exercises/stream', $tarde))?->getStatusCode());
+    }
+
+    public function test_un_vale_del_formato_anterior_no_abre_aunque_no_haya_caducado(): void
+    {
+        // Lo que hoy puede estar en el access.log: {sid, exp} sin finalidad ni jti.
+        $issued = app(AdminSessionService::class)->issueSession($this->makeAdmin());
+        $anterior = Crypt::encryptString(json_encode(['sid' => $issued['session']->id, 'exp' => now()->addMinutes(5)->getTimestamp()]));
+
+        $this->assertSame(403, EnsureAdminAuth::challenge($this->conVale('/api/admin/exercises/stream', $anterior))?->getStatusCode());
+        $this->assertSame(403, EnsureAdminAuth::challenge($this->conVale('/api/attendances/face-image/7', $anterior))?->getStatusCode());
     }
 
     public function test_token_por_query_no_vale_fuera_de_stream(): void
@@ -145,7 +234,7 @@ class AdminAuthTest extends TestCase
     public function test_sesion_caducada_no_autentica(): void
     {
         $admin = $this->makeAdmin();
-        $issued = app(\App\Services\Admin\AdminSessionService::class)->issueSession($admin);
+        $issued = app(AdminSessionService::class)->issueSession($admin);
 
         // Forzamos caducidad en el pasado.
         AdminSession::query()->update(['expires_at' => now()->subMinute()]);

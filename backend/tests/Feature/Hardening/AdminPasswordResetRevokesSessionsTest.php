@@ -86,7 +86,8 @@ class AdminPasswordResetRevokesSessionsTest extends TestCase
             $this->getJson('/api/admin/auth/me', ['Authorization' => 'Bearer '.$token])
                 ->assertStatus(403)->assertJsonPath('code', 'admin_token_invalid');
         }
-        $this->assertNull(app(StreamTicketService::class)->resolve($vale), 'el vale de SSE sobrevivió a su sesión');
+        // Vigente, sin usar y de su finalidad: solo puede fallar por la sesión revocada.
+        $this->assertNull(app(StreamTicketService::class)->redeem($vale, StreamTicketService::SCOPE_STREAM), 'el vale de SSE sobrevivió a su sesión');
         $this->assertSame(['password_reset', 'password_reset'], AdminSession::query()->where('admin_id', $ana->id)->where('revoked_reason', 'password_reset')->pluck('revoked_reason')->all());
         $this->assertSame('logout', $cerrada->fresh()->revoked_reason);
         $this->assertNull($caducada->fresh()->revoked_at);

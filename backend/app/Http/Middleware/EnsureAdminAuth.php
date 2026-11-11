@@ -26,6 +26,15 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class EnsureAdminAuth
 {
+    /**
+     * Huella del vale que ya autenticó ESTA petición. La guarda corre hasta tres
+     * veces por petición (ProtectAdminPaths, EnforceAdminAuthorization y el
+     * alias `auth.admin`) y el vale es de un solo uso: la primera lo canjea y
+     * las siguientes reconocen el mismo vale en vez de gastarlo otra vez. Es un
+     * atributo del servidor; el cliente no puede ponerlo.
+     */
+    private const TICKET_ATTRIBUTE = 'auth_admin_ticket';
+
     public function handle(Request $request, Closure $next): Response
     {
         if ($response = self::challenge($request)) {
@@ -53,21 +62,33 @@ class EnsureAdminAuth
         // Antes se aceptaba `?token=` con el token real, y nginx registra la
         // línea de petición entera: quedaban en claro en access.log y en sus
         // rotaciones, y quien pudiera leerlos tenía sesión de administrador.
-        // El vale caduca en minutos y sólo abre streams, así que filtrarlo ya
-        // no entrega la sesión. Ver StreamTicketService.
-        if (! $token && ($request->is('*/stream') || $request->is('*/face-image/*'))) {
+        // El vale caduca en un minuto, se gasta al primer uso y solo abre las
+        // rutas EXACTAS de su finalidad (la lista cerrada de canales SSE o la
+        // foto biométrica) y solo con GET: lo decide la ruta que atiende la
+        // petición, no el camino (SC-6). Filtrarlo ya no entrega la sesión ni
+        // abre lo demás; en una ruta que no lo admite ni se mira (no se gasta).
+        // Ver StreamTicketService::ROUTES.
+        $scope = $token ? null : StreamTicketService::scopeFor($request);
+        if ($scope !== null) {
             $ticket = $request->query('ticket');
             if (is_string($ticket) && $ticket !== '') {
-                $session = app(StreamTicketService::class)->resolve($ticket);
+                $huella = hash('sha256', $ticket);
+                if ($request->attributes->get(self::TICKET_ATTRIBUTE) === $huella
+                    && $request->attributes->get('auth_admin') instanceof Admin) {
+                    return null;
+                }
+
+                $session = app(StreamTicketService::class)->redeem($ticket, $scope);
                 $admin = $session?->admin;
                 if ($session && $admin instanceof Admin && $admin->isActive()) {
                     $request->attributes->set('auth_admin', $admin);
                     $request->attributes->set('auth_admin_session', $session);
+                    $request->attributes->set(self::TICKET_ATTRIBUTE, $huella);
 
                     return null;
                 }
 
-                return self::deny($request, 'admin_ticket_invalid', 'Vale de stream inválido o caducado.', 403);
+                return self::deny($request, 'admin_ticket_invalid', 'Vale inválido, caducado, ya usado o de otra finalidad.', 403);
             }
         }
 

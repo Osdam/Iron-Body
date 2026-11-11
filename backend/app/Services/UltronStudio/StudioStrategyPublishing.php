@@ -6,12 +6,15 @@ use App\Exceptions\UltronStudioException;
 use App\Models\UltronStudio\StudioStrategy;
 use App\Models\UltronStudio\StudioStrategyPublication;
 use App\Models\UltronStudio\StudioStrategyVersion;
+use App\Services\Outreach\Core\OutreachCatalog;
 use App\Services\Outreach\Core\StrategyContent;
 use App\Services\Outreach\Facts\CatalogDomains;
+use App\Support\Access\CrmPermission;
 use Closure;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use JsonException;
 
 /**
  * PUBLICAR, PROMOVER, PAUSAR, REANUDAR Y REVERTIR UNA ESTRATEGIA (contrato H9,
@@ -38,6 +41,10 @@ use Illuminate\Support\Facades\DB;
  *    `seq`: la ejecución empieza con cursor nuevo).
  *  - REANUDAR (`ultron.strategies_publish`): bandera y ventana, como publicar.
  *
+ * LO QUE LLAMA EXIGE LA AUTORIDAD DE LLAMAR (SC-4 de la revisión de seguridad
+ * del cierre): publicar, promover o reanudar algo con un paso `voice_call`
+ * pide además `telephony.call_place` a quien lo hace ({@see assertVoiceAuthority()}).
+ *
  * NO RETROACTIVO: lo enviado no se toca; la cadena solo crece; la ejecución
  * (B9-run) cancela los trabajos pendientes de lo pausado o revertido en la
  * pasada siguiente (`strategy_moved`).
@@ -52,6 +59,16 @@ final class StudioStrategyPublishing
     public const REASON_MIN = 5;
 
     public const REASON_MAX = 500;
+
+    /**
+     * La llave que ADEMÁS exige publicar, promover o reanudar una estrategia
+     * que llama sola: la misma que pedir una llamada a mano (D8-22). Sin
+     * permiso nuevo (SC-4).
+     */
+    public const VOICE_AUTHORITY = CrmPermission::TELEPHONY_CALL_PLACE;
+
+    /** El 403 cuando falta {@see VOICE_AUTHORITY} (código cerrado, estable para el CRM). */
+    public const CODE_VOICE_AUTHORITY_REQUIRED = 'voice_authority_required';
 
     /**
      * @param  Closure(string):string|null  $signer  solo las pruebas lo pasan: en producción, {@see StudioStrategyPublications::signer()}
@@ -79,6 +96,7 @@ final class StudioStrategyPublishing
         $estrategia = $this->strategyOf($version);
         $persona = $this->persons->requirePerson($access, $request, 'strategy_version.publish', StudioStrategyConfig::SUBJECT_STRATEGY_VERSION, $version->uuid);
         $this->assertNotAuthor($access, $request, $version, $persona, StudioStrategyPublication::ACTION_PUBLISH);
+        $this->assertVoiceAuthority($access, $request, StudioStrategyPublication::ACTION_PUBLISH, StudioStrategyConfig::SUBJECT_STRATEGY_VERSION, (string) $version->uuid, [$version]);
         StudioStrategyConfig::assertWindow(now());
         if ($version->status !== StudioVersionStatus::Approved->value) {
             throw UltronStudioException::invalidTransition((string) $version->status, StudioVersionStatus::from((string) $version->status)->label(), 'publicar', [StudioVersionStatus::Approved->value]);
@@ -119,6 +137,7 @@ final class StudioStrategyPublishing
         $estrategia = $this->strategyOf($version);
         $persona = $this->persons->requirePerson($access, $request, 'strategy_version.promote', StudioStrategyConfig::SUBJECT_STRATEGY_VERSION, $version->uuid);
         $this->assertNotAuthor($access, $request, $version, $persona, StudioStrategyPublication::ACTION_PROMOTE);
+        $this->assertVoiceAuthority($access, $request, StudioStrategyPublication::ACTION_PROMOTE, StudioStrategyConfig::SUBJECT_STRATEGY_VERSION, (string) $version->uuid, [$version]);
         StudioStrategyConfig::assertWindow(now());
         if ($version->status !== StudioVersionStatus::Canary->value) {
             throw UltronStudioException::invalidTransition((string) $version->status, StudioVersionStatus::from((string) $version->status)->label(), 'promover', [StudioVersionStatus::Canary->value]);
@@ -184,8 +203,10 @@ final class StudioStrategyPublishing
         }
         StudioStrategies::assertNotArchived($estrategia);
         $persona = $this->persons->requirePerson($access, $request, 'strategy.resume', StudioStrategyConfig::SUBJECT_STRATEGY, $estrategia->uuid);
-        StudioStrategyConfig::assertWindow(now());
+        // El estado se lee antes de la ventana (es solo lectura) para saber QUÉ se reanuda: la autoridad va antes que el reloj.
         $estado = StudioStrategyPublications::stateOf($estrategia);
+        $this->assertVoiceAuthority($access, $request, StudioStrategyPublication::ACTION_RESUME, StudioStrategyConfig::SUBJECT_STRATEGY, (string) $estrategia->uuid, self::liveVersions($estrategia, $estado));
+        StudioStrategyConfig::assertWindow(now());
         self::assertReadable($estado);
         if ($estado['status'] !== StudioStrategyPublications::STATUS_PAUSED) {
             throw new UltronStudioException('Solo se reanuda una estrategia en pausa.', 'strategy_not_paused', 409, ['status' => $estado['status']]);
@@ -343,6 +364,110 @@ final class StudioStrategyPublishing
             'Intentó '.($accion === StudioStrategyPublication::ACTION_PROMOTE ? 'promover' : 'publicar').' una versión propia (la misma cuenta o la misma persona)', ['diff' => ['action' => $accion]]);
 
         throw UltronStudioException::publicationFourEyesRequired($accion);
+    }
+
+    /**
+     * SC-4: lo que LLAMA exige también la autoridad de llamar. Con la Enmienda
+     * 17 del H8 una estrategia publicada llama sola por su canal y la puerta;
+     * sin esto, quien tiene `ultron.strategies_publish` pero no podría pedir
+     * ni una llamada a mano (D8-22) haría que el sistema llamara. Si alguna de
+     * las versiones que la acción deja vivas tiene un paso `voice_call`, quien
+     * actúa necesita además {@see VOICE_AUTHORITY}. Lo asistido
+     * (`assisted:voice`) no llama solo: lo hace una persona con su propia llave,
+     * y una versión solo de WhatsApp o asistida sigue igual. El intento queda en
+     * el libro (una fila por persona, sujeto y evento cada 10 min).
+     *
+     * @param  list<StudioStrategyVersion|null>  $versiones  null = la cadena nombra una versión que no se encuentra (cuenta como si llamara)
+     *
+     * @throws UltronStudioException 403 `voice_authority_required`
+     */
+    private function assertVoiceAuthority(StudioAccess $access, Request $request, string $accion, string $subjectType, string $subjectUuid, array $versiones): void
+    {
+        $llama = false;
+        foreach ($versiones as $v) {
+            if (self::hasVoiceStep($v)) {
+                $llama = true;
+                break;
+            }
+        }
+        if (! $llama || $access->can(self::VOICE_AUTHORITY)) {
+            return;
+        }
+        $verbo = match ($accion) {
+            StudioStrategyPublication::ACTION_PROMOTE => 'promover',
+            StudioStrategyPublication::ACTION_RESUME => 'reanudar',
+            default => 'publicar',
+        };
+        $this->audit->recordDenied($request, $access->actor, $subjectType.'.voice_authority_denied', $subjectType, $subjectUuid,
+            "Intentó {$verbo} una estrategia con pasos de llamada sin el permiso de pedir llamadas", ['diff' => ['action' => $accion]]);
+
+        throw new UltronStudioException(
+            'Esta estrategia hace llamadas automáticas: publicarla, promoverla o reanudarla exige además el permiso «Pedir llamadas salientes y colgar».',
+            self::CODE_VOICE_AUTHORITY_REQUIRED,
+            403,
+            ['required_permission' => self::VOICE_AUTHORITY],
+        );
+    }
+
+    /**
+     * ¿Llama esta versión? Sí si algún paso de su `sequence` declara el canal
+     * `voice_call`. Lee los bytes GUARDADOS, sin reinterpretarlos; publicar y
+     * promover comprueban después su integridad entera. FALLA CERRADO: unos
+     * bytes que no casan con su huella, que no son JSON o sin la forma de
+     * `strategy-content/1`, o una versión que no se encuentra, cuentan como
+     * si llamaran (lo peor que pasa es pedir la llave de más).
+     */
+    public static function hasVoiceStep(?StudioStrategyVersion $v): bool
+    {
+        if ($v === null) {
+            return true;
+        }
+        $json = (string) $v->content_json;
+        if (! hash_equals((string) $v->content_hash, hash('sha256', $json))) {
+            return true;
+        }
+        try {
+            $contenido = json_decode($json, true, 64, JSON_THROW_ON_ERROR);
+        } catch (JsonException) {
+            // Tragado a propósito: unos bytes ilegibles cuentan como si llamaran (falla cerrado).
+            return true;
+        }
+        $pasos = is_array($contenido) ? ($contenido['sequence'] ?? null) : null;
+        if (! is_array($pasos)) {
+            return true;
+        }
+        foreach ($pasos as $paso) {
+            $canales = is_array($paso) ? ($paso['channels'] ?? null) : null;
+            if (! is_array($canales) || in_array(OutreachCatalog::CHANNEL_VOICE_CALL, $canales, true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Las versiones que REANUDAR deja vivas: las de las partes `canary` y
+     * `rest` del estado de la cadena. Una parte que nombra una versión que no
+     * está (o con una forma que no se entiende) va como null: cuenta como si
+     * llamara ({@see hasVoiceStep()}).
+     *
+     * @param  array<string,mixed>  $estado  {@see StudioStrategyPublications::stateOf()}
+     * @return list<StudioStrategyVersion|null>
+     */
+    private static function liveVersions(StudioStrategy $estrategia, array $estado): array
+    {
+        $versiones = [];
+        foreach ([StudioStrategyPublication::PART_CANARY, StudioStrategyPublication::PART_REST] as $parte) {
+            $p = $estado[$parte] ?? null;
+            if ($p === null) {
+                continue;
+            }
+            $uuid = is_array($p) && is_string($p['version'] ?? null) ? $p['version'] : null;
+            $versiones[] = $uuid === null ? null : StudioStrategyVersion::query()->where('uuid', $uuid)->where('strategy_id', $estrategia->id)->first();
+        }
+
+        return $versiones;
     }
 
     /** Lo que se vio es lo que se publica: si la huella cambió, 409 `content_changed` con las dos. */
