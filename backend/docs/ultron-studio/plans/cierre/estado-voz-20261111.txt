@@ -1,0 +1,19 @@
+== estado de la voz (configuración efectiva del proceso CLI, la misma caché que el web; sin valores de secretos)
+   código desplegado: HEAD 2687119 · constante de llamadas: cerrada
+   salientes: no · alcance canary · cupo/día 0 · presupuesto/día 0 US$ · Twilio Voice no
+   entrantes: no · cupo/día 0
+   laboratorio hablado: sí · driver elevenlabs · presupuesto/día 3.00 US$ · por sesión 1.00 US$ · 300 s · 5 sesiones/día
+   monitor de voz: sí · publicar la voz (Studio): sí · monitor del H7: sí (expectativa: twilio:connected_otp_only,twilio_voice:not_configured,elevenlabs:ELEVENLABS_VERIFIED)
+   piezas no secretas: VOICE_WEBHOOK_BASE_URL https://api.ironbodyneiva.cloud · ELEVENLABS_AGENT_PHONE_NUMBER_ID — · TWILIO_VOICE_FROM — · TWILIO_VOICE_ACCOUNT_SID —
+   referencias (ids, no secretos): herramientas kamkGnyTO6r2B9cO3EzP · iniciación uLQzXuYqc3n8loCO3uZA · webhook post-llamada 8782487b46c14b00835a53d9a02deb42
+   secretos (solo presencia): ELEVENLABS_API_KEY presente · ELEVENLABS_WEBHOOK_SECRET presente · ELEVENLABS_TOOL_SECRET presente · ELEVENLABS_INITIATION_SECRET presente · TWILIO_VOICE_API_KEY_SID falta · TWILIO_VOICE_API_KEY_SECRET falta · TWILIO_VOICE_SIGNING_TOKEN falta
+   número de voz igual a uno de WhatsApp: no · ElevenLabs según el Studio: ELEVENLABS_VERIFIED
+   el número admite entrantes (VOICE_NUMBER_INBOUND_CAPABLE): sin declarar (se trata como «admite»)
+   reserva por saliente (VoiceCostGuard): 0.6105 US$ a un móvil sin transferencia · 1.1220 US$ a un fijo con transferencia
+   contactos de voz (alta y consentimiento, VOICE_CONTACTS_ENABLED, B-T4): no (409 voice_contacts_disabled; revocar, excluir y el RNE siguen)
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=2 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=no importado=no subcuenta=no whatsapp=no proveedor=ELEVENLABS_VERIFIED
+   hechos de consultar_horarios (huellas, nunca el texto): sede: 31 bytes, sha256 f219af8ac5fd… · horario: 150 bytes, sha256 d2aa16e9f9cf… · líneas en el fichero: VOICE_FACTS_SITE 1, VOICE_FACTS_HOURS 1 · la herramienta los dice: sí (bash /root/h8-voice-scope.sh hechos …)
+   programador (total · del Studio · de voz): 53 3 5 (de voz: 5 con el monitor de voz encendido, 0 apagado)
+   workers (RUNNING · BACKOFF/FATAL): 14 0 · ironbody-voice en RUNNING: 1 (lo exige «salientes on»)
+   fichero de entorno: www-data:www-data 600 (C-14: www-data 600 o root:www-data 640)
+   integrations-doctor confirma la expectativa del monitor del H7: sí

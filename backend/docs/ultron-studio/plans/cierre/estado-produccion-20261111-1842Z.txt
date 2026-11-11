@@ -1,0 +1,50 @@
+### hora UTC 2026-11-11T18:42:42Z · API 2687119 · CRM {"commit":"b07eda5","dirty":false,"builtAt":"2026-11-11T14:4
+### workers:  14 RUNNING  · programas: ironbody-agent ironbody-commercial ironbody-lab ironbody-media ironbody-voice ironbody-whatsapp 
+### migraciones pendientes: 0
+### H9 (mando, estado) ###
+== estado de la automatización comercial del H9 (configuración efectiva del proceso CLI, la misma caché que el web; sin valores del fichero de entorno)
+   código desplegado: HEAD 2687119 · constante de envío (OutreachSendGate): cerrada · clase: App\Services\Outreach\Run\OutreachSendGate
+   fase deducida: 2 (sombra: todo simulado, ni un contacto)
+   nivel 0 · maestra COMMERCIAL_AUTOMATION_ENABLED: sí · modo: shadow · programador: sí · monitor: sí
+   asistido: no · tope/día 0
+   WhatsApp (W9): no · tope/día 0 · presupuesto/día 0 US$ · precio por mensaje: marketing 0, utilidad 0 US$ (0 = budget_zero) · clase sí · declarado sí
+   voz por estrategia (V9): no · cupo/día 0 · techo/día 0 US$ · reserva/llamada 0 US$ (cualquiera en 0 = budget_zero) · clase sí · declarado sí
+   clasificador (AI9): no
+   horario propio (COMMERCIAL_AUTOMATION_OWN_HOURS): el legal (vacío)
+   gobierno del Studio (S9): strategies/** sí · publicar/promover/reanudar sí · ventana 07:00-19:00 · canario ≥ 24 h y ≥ 3 contactos · simulación required
+   tiempo real del Studio (SSE9, ULTRON_STUDIO_STREAM_ENABLED): sí
+   base (solo lectura): frenos abiertos 0 (globales 0) · trabajos vivos 0 · pasadas 1787 · personas vinculadas y verificadas 0 · versiones en canario o publicadas 0 · tablas del H9 presentes 2/2
+   reservado hoy en vivo por canal: nada
+   órdenes outreach:* desplegadas: outreach:dispatch outreach:monitor outreach:reconcile outreach:replay outreach:stop outreach:suppress-subject outreach:sweep outreach:voice-outcomes outreach:whatsapp-outcomes (encender exige: outreach:monitor outreach:stop)
+   programador (total · del Studio · de voz · de outreach): 48 3 0 5 (de outreach: 5 con el programador encendido, 0 apagado; el monitor no cambia el recuento)
+   workers (RUNNING · BACKOFF/FATAL): 14 0
+   fichero de entorno: www-data:www-data 600 (C-14: www-data 600 o root:www-data 640)
+   motor comercial (P9-24; el mando solo mueve los eventos, con `eventos`): eventos sí · NBA no · autonomía no
+   motor, Legacy, H4–H7 y voz del H8 (informativo; el mando no los toca salvo COMMERCIAL_EVENTS_ENABLED): {"engine_scope":"canary","ultron_enabled":true,"canary_set":true,"followups_scheduler":false,"commercial_deployed":true,"commercial_nba":false,"commercial_events":true,"commercial_autonomy":false,"studio_publishing":true,"studio_monitor":true,"studio_lab":true,"integrations_writes":true,"voice_publishing":false
+### H9: contenido (recuentos) ###
+estrategias | 0
+vínculos de persona | 0
+outreach_runs 24 h: dispatch / shadow / completed | 809
+outreach_runs 24 h: reconcile / shadow / completed | 809
+outreach_runs 24 h: ingest / shadow / completed | 89
+outreach_runs 24 h: monitor / shadow / completed | 80
+outreach_opportunities: ERROR:  relation "outreach_opportunities" does not exist
+outreach_decisions: 0
+outreach_jobs: 0
+outreach_enrollments: 0
+outreach_events: ERROR:  relation "outreach_events" does not exist
+### H5/H4: versiones, publicaciones, laboratorio de texto ###
+versiones del Studio por estado: APPROVED | 1
+publicaciones | 0
+ejecuciones del laboratorio de texto | 1
+veredictos del laboratorio de texto | 0
+reglas del Studio por estado: active | 12
+### H6: canarios, campañas, instantáneas ###
+ultron_studio_campaign_links ultron_studio_canary_numbers ultron_studio_integration_snapshots 
+### H8: voz ###
+perfiles de voz por estado: approved | 2
+sesiones del laboratorio hablado por estado: ended | 3
+veredictos del laboratorio hablado | 0
+llamadas de voz | 0
+contactos de voz | 0
+ultron_studio_voice_agents ultron_studio_voice_lab_sessions ultron_studio_voice_profiles ultron_studio_voice_publications 

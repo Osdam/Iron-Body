@@ -1,0 +1,80 @@
+{
+ "uuid": "c9f00a50-851e-43a9-bcdd-6f6cfd7e7c75",
+ "status": "ended",
+ "statusLabel": "Terminada",
+ "expired": false,
+ "deadline": null,
+ "mode": "elevenlabs",
+ "version": {
+  "uuid": "ad1f1562-6c53-4bc0-b98b-e220088195d2",
+  "label": "ULTRON Studio - Canario V1 - Pruebas",
+  "status": "APPROVED",
+  "shortHash": "d2361ab5"
+ },
+ "profile": {
+  "uuid": "44c66fbe-4e75-4552-b22b-49b5acb335da",
+  "label": "Sofia Medellin",
+  "revision": 3,
+  "status": "submitted",
+  "shortHash": "fa955ebb"
+ },
+ "agent": {
+  "uuid": "7348fc10-f444-4b6a-be70-83de7aaf5e18",
+  "status": "deployed",
+  "specHash": "25d502ac169d9864ef8e65919ff9951b169399141609dfe18eb35772bd70b452",
+  "compilerVersion": "ultron-voice-compiler/1",
+  "providerAgentId": "…gahh"
+ },
+ "maxSeconds": 300,
+ "budget": {
+  "day": "2026-11-11",
+  "reservedMicros": 400000,
+  "costMicros": 129334
+ },
+ "connection": {
+  "issued": true,
+  "expiresAt": "2026-11-11T19:10:25+00:00"
+ },
+ "metrics": {
+  "durationSeconds": 97,
+  "windowSeconds": 104,
+  "interruptions": null,
+  "objectives": [],
+  "restrictions": {
+   "respected": true,
+   "broken": [],
+   "guardViolations": []
+  },
+  "errors": [],
+  "toolCalls": [
+   "consultar_horarios",
+   "consultar_planes",
+   "end_call"
+  ],
+  "reported": {
+   "provider": true,
+   "tester": false
+  }
+ },
+ "endReason": "provider_report",
+ "endReasonLabel": "Llegó el informe del proveedor al terminar la conversación.",
+ "createdBy": {
+  "name": "Studio smoke (temporal)",
+  "role": "Super Admin"
+ },
+ "mine": true,
+ "createdAt": "2026-11-11T18:55:19+00:00",
+ "startedAt": "2026-11-11T18:55:25+00:00",
+ "endedAt": "2026-11-11T18:57:09+00:00",
+ "verdict": null,
+ "actions": {
+  "end": {
+   "allowed": true
+  },
+  "verdict": {
+   "allowed": false,
+   "code": "four_eyes_required",
+   "message": "Nadie emite el veredicto sobre la sesión que abrió: tiene que hacerlo otra persona."
+  }
+ }
+}

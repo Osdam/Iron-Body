@@ -1,0 +1,130 @@
+##### php artisan ultron-studio:integrations-doctor
+Escrituras: encendidas · sonda de Twilio: encendida
+meta_ads: connected_read (estado ok)
+twilio: connected_otp_only (estado ok)
+twilio_voice: not_configured
+canaries: registry (coherencia engine_canary_not_registered)
+elevenlabs: connected_read (código ELEVENLABS_VERIFIED)
+Las banderas son las del proceso web, con su caché de configuración.
+(código de salida: 0)
+##### php artisan meta:doctor
++------------------------------+--------+
+| access_token                 | SET    |
+| app_secret                   | SET    |
+| verify_token                 | SET    |
+| webhook_secret               | SET    |
+| whatsapp_business_account_id | SET    |
+| whatsapp_phone_number_id     | SET    |
+| whatsapp_display_phone       | SET    |
++------------------------------+--------+
+
+auth_configured     : yes
+envío real permitido: yes (real)
+send_mode           : real
+webhook a registrar : https://api.ironbodyneiva.cloud/api/webhooks/meta
+
+── Webhook entrante (Fase 4-A) ──
+GET route            : yes
+POST route           : yes
+verify_token         : SET
+webhook_secret       : SET
+inbound_auto_analyze : false
+inbound_auto_execute : false
+effective_mode       : real
+
+Sugerencias:
+  → Configuración completa: el envío real de WhatsApp está habilitado.
+
+Listo para envío real controlado.
+(código de salida: 0)
+##### php artisan marketing:meta-ads-check
+| Zona configurada (***9023)     | OK        | META_AD_ACCOUNT_TIMEZONE: America/Bogota                                                     |
+| Moneda COP (***9023)           | OK        | moneda: COP                                                                                  |
+| Cuenta activa (***9023)        | OK        | estado: ACTIVE                                                                               |
+| Cuenta conectada (***5856)     | OK        | Meta: ***5856 · conectada: ***5856                                           |
+| Nombre esperado (***5856)      | OK        | Meta: «IRONBODY cuenta publicitaria» (sin nombre esperado)                                   |
+| Zona horaria del CRM (***5856) | OK        | cuenta: America/Bogota (UTC-5) · CRM: America/Bogota                                         |
+| Zona configurada (***5856)     | OK        | META_AD_ACCOUNT_TIMEZONE: America/Bogota                                                     |
+| Moneda COP (***5856)           | OK        | moneda: COP                                                                                  |
+| Cuenta activa (***5856)        | OK        | estado: ACTIVE                                                                               |
+| Misma moneda en todas          | OK        | monedas: COP                                                                                 |
+| Misma zona en todas            | OK        | zonas: America/Bogota                                                                        |
++--------------------------------+-----------+----------------------------------------------------------------------------------------------+
+META_ACCOUNT_ID=***4714
+META_ACCOUNT_NAME=IronBody2
+META_ACCOUNT_TIMEZONE=America/Bogota
+META_ACCOUNT_CURRENCY=COP
+META_ACCOUNT_ID=***9023
+META_ACCOUNT_NAME=Fredy Medina
+META_ACCOUNT_TIMEZONE=America/Bogota
+META_ACCOUNT_CURRENCY=COP
+META_ACCOUNT_ID=***5856
+META_ACCOUNT_NAME=IRONBODY cuenta publicitaria
+META_ACCOUNT_TIMEZONE=America/Bogota
+META_ACCOUNT_CURRENCY=COP
+META_ACCOUNTS_CONNECTED=3
+TOKEN_SCOPES_OK=YES
+ADS_READ=YES
+Las cuentas son las esperadas y el token puede leerlas.
+(código de salida: 0)
+##### php artisan marketing:agent-doctor
+── IRON BODY · Agente Comercial WhatsApp · Doctor ──
+
++----------------------+----+------------------+--------------------------------------------------------------------------------------------+
+| Chequeo              | OK | Estado           | Detalle                                                                                    |
++----------------------+----+------------------+--------------------------------------------------------------------------------------------+
+| Cerebro OpenAI       | ✓  | openai           | Responder efectivo: openai                                                                 |
+| Meta / WhatsApp      | ✓  | real             | Envío WhatsApp: real                                                                       |
+| Base de conocimiento | ✓  | 25 items activos | Categorías recomendadas faltantes: ninguna                                                 |
+| Plan mensual         | ✓  | encontrado       | Plan mensual: Plan Valera                                                                  |
+| Wompi (pago)         | ✓  | PRODUCTIVO       | Wompi env: production · checkout configurado · links sandbox como reales: N/A (productivo) |
+| Auto-ejecución       | ✓  | off              | MARKETING_AGENT_ENABLED=false · INBOUND_AUTO_ANALYZE=false · INBOUND_AUTO_EXECUTE=false    |
++----------------------+----+------------------+--------------------------------------------------------------------------------------------+
+
+Sugerencias:
+  → OpenAI listo (Laravel valida y ejecuta).
+  → Meta/WhatsApp configurado para envío real.
+  → Base de conocimiento activa.
+  → Plan mensual disponible (fuente de precio para el agente).
+  → Wompi productivo: el agente puede entregar links reales.
+  → Auto-ejecución OFF (modo seguro): el agente analiza/propone pero no ejecuta solo.
+
+Garantías de seguridad:
+  ✓ Wompi productivo: los links entregados son reales.
+  ✓ El agente NUNCA activa membresías ni marca pagos como aprobados (eso es exclusivo del webhook Wompi aprobado).
+  ✓ Casos sensibles (humano, lesión, queja, pago fallido, factura) se marcan needs_human y detienen la automatización.
+
+Agente listo para operar (6/6 chequeos en verde).
+(código de salida: 0)
+##### php artisan marketing:knowledge-doctor
+── IRON BODY · Base de Conocimiento Comercial · Doctor ──
+total items         : 26
+activos             : 25
+active_plans_count  : 14
+prompt con knowledge: yes
+version             : 25:***2024
+
++--------------------+-------+
+| Categoría (activa) | Items |
++--------------------+-------+
+| business_identity  | 2     |
+| tone               | 2     |
+| payment_policy     | 3     |
+| membership_policy  | 2     |
+| invoice_policy     | 1     |
+| restrictions       | 1     |
+| objections         | 4     |
+| faq                | 4     |
+| human_escalation   | 1     |
+| location           | 1     |
+| schedule           | 1     |
+| brand_copy         | 3     |
++--------------------+-------+
+
+El prompt del cerebro está recibiendo conocimiento real.
+(código de salida: 0)
+##### php artisan security:check-secret-exposure
+Ningún fichero con credenciales está expuesto.
+  Logs: solo storage/logs/*.log legibles por cualquiera. Reconoce: CLAVE=valor al principio de la línea (también con espacios, comillas o export); CLAVE=valor en mitad de la línea (pegado al =, o entre comillas); "CLAVE":"valor
+  NO mira: en mitad de la línea, CLAVE = valor sin comillas y separado del = (se confundiría con el texto que sigue); un valor partido en varias líneas o codificado (base64, URL, \u…); CLAVE: valor (YAML, cabeceras) ni Author
+(código de salida: 0)

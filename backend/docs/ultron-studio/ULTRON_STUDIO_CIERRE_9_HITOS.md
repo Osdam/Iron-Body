@@ -1,10 +1,10 @@
 # ULTRON STUDIO FULL · Cierre de los nueve hitos (fases 5 a 8 del encargo del 10-11-2026)
 
-**Estado del documento:** la **sección 0 es lo vigente** (11-11-2026, 18:20 UTC). Las secciones 1 a 13 son el borrador del 10-11 y quedan como historia: donde contradigan a la sección 0, manda la sección 0. Los hechos de la sección 0 salen de las filas L9-103 a L9-110 del contrato del H9, de la Enmienda M-1 del contrato del H5 y de la Enmienda 18 del contrato del H8 (E18-8 a E18-10).
+**Estado del documento:** la **sección 0 es lo vigente** (11-11-2026, 19:00 UTC). Las secciones 1 a 13 son el borrador del 10-11 y quedan como historia: donde contradigan a la sección 0, manda la sección 0. Los hechos de la sección 0 salen de las filas L9-103 a L9-111 del contrato del H9, de la Enmienda M-1 del contrato del H5 y de la Enmienda 18 del contrato del H8 (E18-8 a E18-10).
 
 ---
 
-## 0. Estado vigente (11-11-2026, 18:20 UTC)
+## 0. Estado vigente (11-11-2026, 19:00 UTC)
 
 ### 0.1 Qué hay en producción
 
@@ -18,6 +18,7 @@
 | Prompts de WhatsApp | llave en `canary`; sin nada publicado todavía la canaria recibe los de siempre (`legacy · no_publication`) |
 | Plantillas de Meta | `full`: crear, aprobar, enviar a Meta y ver el estado desde el CRM; sincronización cada 5 minutos |
 | Laboratorio hablado | encendido (fase 2a), perfil «Sofia Medellin» revisión 2; con una sesión abierta atiende las dos consultas de solo lectura (E18-8); la sede y el horario, fijados (E18-10) |
+| Monitor de voz y publicación de voz | **encendidos** el 11-11 18:47 UTC con el mando de voz; publicar exige todavía versión y perfil aprobados, veredicto del laboratorio de otra persona y ventana |
 | Monitor de integraciones (H7) | **encendido** desde el 11-11 18:14 UTC, con la expectativa de hoy; primera pasada: «El Studio cuadra», 0 incidentes |
 | Autonomía comercial (H9) | en **sombra** desde el 11-11 05:23 UTC: decide y registra, no envía nada |
 | Envíos y llamadas automáticos | cerrados por dos constantes del código (`SENDS_ENABLED_IN_CODE` y `CALLS_ENABLED_IN_CODE` en `false`) |
@@ -30,7 +31,7 @@ Etiquetas: **OPERATIVO Y PROBADO** (funciona en producción y hay una prueba rea
 | Frente | Componente | Etiqueta | Evidencia o qué falta |
 |---|---|---|---|
 | A · Voz | Laboratorio hablado desde el CRM con Sofía | **OPERATIVO Y PROBADO** | Sesión real del 11-11 11:37 UTC: aviso de IA, entiende, responde, se despide y cuelga; 67 s, US$ 0,09 (L9-103; `ops/evidencia-h8/2026-11-11/`) |
-| A · Voz | Que Sofía informe planes y horarios en el laboratorio | **EN INTEGRACIÓN** | Hecho y desplegado el 11-11: el código (E18-8, `0d65694`, con revisión de seguridad) y la sede y el horario en producción (E18-10; leído por reflexión: `consultar_horarios` disponible y `consultar_planes` con 14 planes y su precio). **Falta lo que no es código:** una revisión 3 del perfil con las dos herramientas (la revisión 2 solo tiene «no volver a llamar»), que crea y aprueba el propietario con otra persona; después, una sesión real, en la que se verá además qué manda ElevenLabs como `call_sid` en una conversación web (si fuera un texto vacío, la consulta daría 422 y la línea `voice.tool.invalid_schema` lo diría) |
+| A · Voz | Que Sofía informe planes y horarios en el laboratorio | **OPERATIVO Y PROBADO** (sesión real del 11-11 18:55 UTC con la revisión 3 del perfil, enviada a revisión: consultó planes, precios, sede y horario, y coinciden con la base; evidencia en `ops/evidencia-h8/2026-11-11/laboratorio-sesion-real/intento-4-…`). Para PUBLICAR esa revisión falta que otra persona la apruebe. Historia del mismo día: | Hecho y desplegado el 11-11: el código (E18-8, `0d65694`, con revisión de seguridad) y la sede y el horario en producción (E18-10; leído por reflexión: `consultar_horarios` disponible y `consultar_planes` con 14 planes y su precio). **Falta lo que no es código:** una revisión 3 del perfil con las dos herramientas (la revisión 2 solo tiene «no volver a llamar»), que crea y aprueba el propietario con otra persona; después, una sesión real, en la que se verá además qué manda ElevenLabs como `call_sid` en una conversación web (si fuera un texto vacío, la consulta daría 422 y la línea `voice.tool.invalid_schema` lo diría) |
 | A · Voz | Publicación canaria de la voz y primera llamada saliente | **BLOQUEADO** | Decisión de Twilio (subcuenta o clave restringida solo de voz), un veredicto del laboratorio dado por otra cuenta y la autorización expresa para esa llamada. El arreglo de seguridad que era obligatorio antes de la primera llamada (E18-9: el `call_ref` de una llamada no la alcanza desde otra conversación) está desplegado (`99f8bb2`) |
 | A · Voz | Llamadas entrantes | **BLOQUEADO** | La cuenta de Twilio no tiene números propios |
 | A · Voz | Rotar la clave de ElevenLabs que pasó por el chat | **BLOQUEADO** | La genera el propietario en ElevenLabs; el mando de registro ya existe |
@@ -55,7 +56,8 @@ Etiquetas: **OPERATIVO Y PROBADO** (funciona en producción y hay una prueba rea
 - CRM: batería completa sobre `89a24f9`, 4 184 pruebas con los 16 fallos de la línea base; después, el módulo de plantillas entero en cada cambio (552 pruebas en 18 ficheros en `b07eda5`).
 - Smokes en producción, en el estado de hoy: H9 30 OK · 0 FALLO · 1 OMITIDO; H8 48 OK · 0 FALLO · 3 OMITIDOS (el del H8, repetido tras E18-8).
 - Voz, tras E18-8 y E18-9: las 15 guardas estáticas (138), telefonía 477 (137 omitidas, las de PostgreSQL), voz y telefonía unitarias 366 y laboratorio hablado 42, en verde.
-- **No probado:** un turno real con una versión PUBLICADA (E3–E5; con los prompts de siempre sí, L9-109); una plantilla enviada a Meta real; una sesión real del laboratorio con las herramientas de consulta (falta la revisión 3 del perfil); la batería completa del backend sobre el commit final (se corrieron las guardas y los módulos tocados); PostgreSQL para los cambios de la tarde del 11-11.
+- Baterías completas sobre los commits finales (`6f9d463` y `5f2a454`): backend 17 412 pruebas, 0 regresiones (solo la línea base); CRM 4 184 pruebas, los 16 fallos de la línea base.
+- **No probado:** un turno real con una versión PUBLICADA (E3–E5; con los prompts de siempre sí, L9-109); una plantilla enviada a Meta real; una publicación de voz; una llamada; PostgreSQL para los cambios de la tarde del 11-11.
 - **Hallazgo aparte, sin tocar:** `UltronStudioVoiceLabSessionsTest::test_la_lista_filtra_y_pagina_sin_consultas_por_fila` es intermitente (1 de 40), igual con el código anterior.
 
 ### 0.4 Lo que falta, y de quién depende
