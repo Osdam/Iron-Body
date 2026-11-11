@@ -610,6 +610,58 @@ class TelephonyIsolationTest extends TestCase
         $this->assertSame(1, $this->veces($arranque, self::OYENTE), "el arranque registra exactamente Event::listen(VoicePostCall::LAB_EVENT, [StudioVoiceLabSessions::class, 'recordProviderReport'])");
     }
 
+    // ── 9b. Las herramientas de solo lectura del laboratorio hablado (Enmienda 18, E18-8) ──
+
+    /** Quien pregunta: las herramientas, cuando la telefonía no reconoce la conversación. */
+    private const ENTREGA_DE_LA_CONSULTA = 'app/Services/Telephony/VoiceTools.php';
+
+    private const NOMBRE_DE_LA_CONSULTA = 'voice.lab.tool_call';
+
+    /** La única entrega, en `VoiceTools::lab()`. */
+    private const ENTREGA_CONSULTA = ['event', '(', 'self', '::', 'LAB_TOOL_EVENT', ','];
+
+    /** El único oyente, exacto. */
+    private const OYENTE_CONSULTA = ['Event', '::', 'listen', '(', 'VoiceTools', '::', 'LAB_TOOL_EVENT', ',', '[', 'StudioVoiceLabSessions', '::', 'class', ',', "'answerToolCall'", ']', ')', ';'];
+
+    /**
+     * E18-8: una herramienta de SOLO LECTURA de una conversación que la telefonía no conoce solo recibe datos si el
+     * laboratorio dice que es una sesión suya, abierta y vigente (`VoiceTools::LAB_COUNTED`). Un segundo oyente que
+     * respondiera eso daría el catálogo a cualquier cuerpo que trajera el secreto, y otro sitio que disparara el
+     * evento gastaría el cupo de una sesión sin que nadie hubiera preguntado. Fijado igual que el informe (§9):
+     *  - el nombre del evento, una vez y solo en su constante (`VoiceTools::LAB_TOOL_EVENT`);
+     *  - la constante, solo en VoiceTools (su declaración y UNA entrega) y en el arranque (UN oyente exacto:
+     *    `Event::listen(VoiceTools::LAB_TOOL_EVENT, [StudioVoiceLabSessions::class, 'answerToolCall'])`).
+     * Los oyentes con un nombre literal de voz o comodín ya los prohíbe §9 para todo el código.
+     */
+    public function test_la_consulta_del_laboratorio_tiene_una_sola_entrega_y_un_solo_oyente(): void
+    {
+        $nombres = [];
+        $constantes = [];
+        foreach ($this->php('app', 'bootstrap', 'routes', 'config') as $relativa => $ruta) {
+            foreach ($this->tokens($ruta) as $i => $t) {
+                if ($t[0] === T_CONSTANT_ENCAPSED_STRING && $this->literal($t[1]) === self::NOMBRE_DE_LA_CONSULTA) {
+                    $nombres[] = $relativa;
+                }
+                if ($t[0] === T_STRING && $t[1] === 'LAB_TOOL_EVENT') {
+                    $constantes[$relativa][] = $i;
+                }
+            }
+        }
+
+        $this->assertSame([self::ENTREGA_DE_LA_CONSULTA], $nombres, 'el nombre del evento, una vez y solo en VoiceTools::LAB_TOOL_EVENT');
+        $this->assertSame([self::ARRANQUE, self::ENTREGA_DE_LA_CONSULTA], array_keys($constantes),
+            'LAB_TOOL_EVENT, solo en la telefonía que pregunta y en el arranque que registra su oyente');
+
+        $entrega = $this->tokens(base_path(self::ENTREGA_DE_LA_CONSULTA));
+        $this->assertCount(2, $constantes[self::ENTREGA_DE_LA_CONSULTA], 'en VoiceTools, LAB_TOOL_EVENT solo en su declaración y en su entrega');
+        $this->assertSame(1, $this->veces($entrega, ['const', 'LAB_TOOL_EVENT', '=']), 'VoiceTools declara LAB_TOOL_EVENT una vez');
+        $this->assertSame(1, $this->veces($entrega, self::ENTREGA_CONSULTA), 'VoiceTools pregunta al laboratorio UNA vez (lab)');
+
+        $arranque = $this->tokens(base_path(self::ARRANQUE));
+        $this->assertCount(1, $constantes[self::ARRANQUE], 'en el arranque, LAB_TOOL_EVENT solo en su oyente');
+        $this->assertSame(1, $this->veces($arranque, self::OYENTE_CONSULTA), "el arranque registra exactamente Event::listen(VoiceTools::LAB_TOOL_EVENT, [StudioVoiceLabSessions::class, 'answerToolCall'])");
+    }
+
     /**
      * Cuántas veces aparece la secuencia de textos de tokens (sin espacios ni comentarios).
      *

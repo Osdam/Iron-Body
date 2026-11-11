@@ -62,6 +62,10 @@ class VoiceLabPostCallWiringTest extends TestCase
 
         $this->assertSame([[StudioVoiceLabSessions::class, 'recordProviderReport']], $oyentes,
             'un único oyente, el del laboratorio: sin él, cada conversación del laboratorio echa el freno; dos, lo registrarían dos veces');
+        // A-1 de la revisión de seguridad de E18-8: `getRawListeners()` no ve los comodines (`listen(['*'], …)`), y uno que
+        // respondiera `recorded` apagaría el freno de toda conversación desconocida. Un solo oyente, comodines incluidos.
+        $this->assertFalse(Event::hasWildcardListeners(VoicePostCall::LAB_EVENT), 'ningún comodín escucha el informe del laboratorio');
+        $this->assertCount(1, Event::getListeners(VoicePostCall::LAB_EVENT), 'un solo oyente, comodines incluidos');
     }
 
     public function test_una_post_llamada_firmada_del_laboratorio_cierra_su_sesion_sin_freno_ni_llamada_desconocida(): void

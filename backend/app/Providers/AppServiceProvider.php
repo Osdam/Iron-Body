@@ -38,6 +38,7 @@ use App\Services\Marketing\SalesAiConfig;
 use App\Services\Meta\WhatsappIntegrationRegistry;
 use App\Services\Observability\QueueHealthService;
 use App\Services\Telephony\VoicePostCall;
+use App\Services\Telephony\VoiceTools;
 use App\Services\UltronStudio\StudioVoiceLabSessions;
 use App\Services\Wompi\WompiConfigValidator;
 use App\Support\Access\AdminActor;
@@ -771,6 +772,10 @@ class AppServiceProvider extends ServiceProvider
     private function oyenteDelLaboratorioHablado(): void
     {
         Event::listen(VoicePostCall::LAB_EVENT, [StudioVoiceLabSessions::class, 'recordProviderReport']);
+        // E18-8 (contrato H8, Enmienda 18): las dos herramientas de SOLO LECTURA en una sesión abierta del laboratorio.
+        // El mismo puente y la misma regla: la telefonía pregunta por su evento con nombre y el Studio contesta; sin
+        // este oyente, o si la sesión no es suya, la negativa de siempre (falla cerrado).
+        Event::listen(VoiceTools::LAB_TOOL_EVENT, [StudioVoiceLabSessions::class, 'answerToolCall']);
     }
 
     /**

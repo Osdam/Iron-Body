@@ -32,6 +32,13 @@ use Illuminate\Support\Facades\Log;
  *  4. La herramienta, atada a ESA llamada: `no_volver_a_llamar` excluye el
  *     número SELLADO de la llamada que pide (su huella), nunca uno que llegue
  *     como parámetro (hallazgo A-8 de SEC8).
+ *
+ * EL LABORATORIO HABLADO (contrato H8, Enmienda 18, E18-8): sin llamada que
+ * lo reconozca, un cuerpo de una conversación WEB (sin `call_sid`) que la
+ * telefonía no conoce y cuyo `call_ref` es el uuid de una sesión del
+ * laboratorio ABIERTA y vigente recibe las dos herramientas de SOLO LECTURA
+ * ({@see LAB_TOOLS}), con los mismos datos que una llamada ({@see lab()}).
+ * Todo lo demás, la negativa de siempre (`call_not_found`).
  */
 final class VoiceTools
 {
@@ -43,6 +50,35 @@ final class VoiceTools
 
     public const NEUTRAL = 'No puedo consultar eso en este momento. Ofrece a la persona que la llamen más tarde o que escriba al gimnasio.';
 
+    /**
+     * E18-8: lo único que se atiende en el laboratorio hablado, las dos de
+     * SOLO LECTURA (información comercial: el catálogo vendible, la sede y el
+     * horario). `solicitar_humano` y `no_volver_a_llamar` no: no hay llamada,
+     * ni destino, ni número que excluir.
+     */
+    public const LAB_TOOLS = [VoiceAgentSpec::TOOL_CONSULTAR_PLANES, VoiceAgentSpec::TOOL_CONSULTAR_HORARIOS];
+
+    /**
+     * E18-8: el evento CON NOMBRE con el que la telefonía pregunta al
+     * laboratorio hablado si un `call_ref` es una sesión SUYA abierta y
+     * vigente (la telefonía no nombra el Studio: TelephonyIsolationTest; el
+     * Studio escucha, como con `VoicePostCall::LAB_EVENT`). Se entrega
+     * deteniéndose en la primera respuesta. Carga: el `call_ref` (uuid ya
+     * validado), si la petición cuenta en el cupo (no con el freno echado) y
+     * el cupo, el mismo que el de una llamada ({@see VoiceCall::MAX_TOOL_CALLS}).
+     * Sin oyente, o si no es suya, la negativa de siempre (falla cerrado).
+     */
+    public const LAB_TOOL_EVENT = 'voice.lab.tool_call';
+
+    /** E18-8: la sesión es suya, abierta y vigente, y la petición contó en su cupo. */
+    public const LAB_COUNTED = 'counted';
+
+    /** E18-8: la sesión es suya, abierta y vigente; no se contó (se preguntó con el freno echado). */
+    public const LAB_OPEN = 'open';
+
+    /** E18-8: la sesión es suya, abierta y vigente, pero ya agotó su cupo. */
+    public const LAB_QUOTA_EXCEEDED = 'quota_exceeded';
+
     /** @return array{http: int, body: array<string, mixed>} */
     public function handle(string $tool, string $rawBody): array
     {
@@ -51,13 +87,20 @@ final class VoiceTools
         }
         $cuerpo = self::body($rawBody);
         if ($cuerpo === null) {
+            // A-2 (revisión de seguridad de E18-8): el rechazo deja su línea, con los NOMBRES de las claves recibidas y el
+            // motivo, nunca un valor. Sin ella, un cuerpo que el proveedor mande con otra forma en una conversación web
+            // (un `call_sid` vacío, por ejemplo) solo se vería en su panel. El esquema no se relaja.
+            // El motivo se calcula FUERA de la llamada de registro: en ella no se nombra un cuerpo crudo (guarda de D8-4).
+            $motivo = self::schemaProblem($rawBody);
+            Log::channel('voice')->warning('voice.tool.invalid_schema', ['tool' => $tool] + $motivo);
+
             return ['http' => 422, 'body' => ['ok' => false, 'verdict' => 'invalid_schema']];
         }
 
         return DB::transaction(function () use ($tool, $cuerpo): array {
             $llamada = self::find($cuerpo);
             if ($llamada === null) {
-                return self::refused('call_not_found', null, $tool);
+                return self::lab($tool, $cuerpo) ?? self::refused('call_not_found', null, $tool);
             }
             $id = (int) $llamada->id;
             if (! in_array($llamada->status, VoiceCall::TOOL_STATUSES, true) || ($llamada->direction === VoiceCall::DIRECTION_INBOUND && $llamada->caller_authorized !== true)) {
@@ -119,6 +162,40 @@ final class VoiceTools
         return ['conversation_id' => $conversacion, 'call_sid' => $sid, 'call_ref' => $ref];
     }
 
+    /**
+     * Por qué un cuerpo no pasa el esquema, SIN sus valores (A-2): los nombres de las claves recibidas (como mucho
+     * ocho y solo las que tienen forma de nombre: llegan de fuera), cuál falla y la forma de lo que trae (vacío,
+     * un texto de N caracteres u otro tipo).
+     *
+     * @return array{keys: list<string>, problem: string, shape?: string}
+     */
+    private static function schemaProblem(string $rawBody): array
+    {
+        $datos = json_decode($rawBody, true, 4);
+        if (! is_array($datos) || ($datos !== [] && array_is_list($datos))) {
+            return ['keys' => [], 'problem' => 'not_an_object'];
+        }
+        $claves = array_values(array_filter(array_map('strval', array_keys($datos)), static fn (string $k): bool => preg_match('/^[A-Za-z_][A-Za-z0-9_]{0,39}$/D', $k) === 1));
+        sort($claves, SORT_STRING);
+        $claves = array_slice($claves, 0, 8);
+        if (array_diff(array_keys($datos), self::BODY_KEYS) !== []) {
+            return ['keys' => $claves, 'problem' => 'unexpected_keys'];
+        }
+        $formas = ['conversation_id' => VoiceIds::isProviderId(...), 'call_sid' => VoiceIds::isCallSid(...), 'call_ref' => VoiceIds::isUuid(...)];
+        foreach ($formas as $clave => $vale) {
+            $valor = $datos[$clave] ?? null;
+            if ($valor !== null && ! $vale($valor)) {
+                return ['keys' => $claves, 'problem' => $clave, 'shape' => match (true) {
+                    $valor === '' => 'empty',
+                    is_string($valor) => 'string:'.min(strlen($valor), 999),
+                    default => gettype($valor),
+                }];
+            }
+        }
+
+        return ['keys' => $claves, 'problem' => 'no_call_ids'];
+    }
+
     /** @param  array{conversation_id: ?string, call_sid: ?string, call_ref: ?string}  $cuerpo */
     private static function find(array $cuerpo): ?VoiceCall
     {
@@ -142,13 +219,58 @@ final class VoiceTools
         return $fila;
     }
 
+    /**
+     * E18-8: una herramienta de SOLO LECTURA en una conversación del
+     * laboratorio hablado, o null si no lo es (y el cuerpo sigue el camino de
+     * siempre, `call_not_found`, sin distinguir una sesión que no existe de
+     * una cerrada, fallida o caducada: nadie con el secreto enumera sesiones).
+     *
+     * Solo se pregunta al laboratorio por una de {@see LAB_TOOLS}, con su
+     * `call_ref`, sin `call_sid` (una conversación web: sin llamada de Twilio,
+     * como el informe del laboratorio en `VoicePostCall`) y de una
+     * conversación que la telefonía no conoce (la de una llamada con otro
+     * `call_ref` no se vuelve del laboratorio). El mismo orden que una
+     * llamada: la sesión, el freno, el cupo. Nada se escribe en `voice_*`; el
+     * cupo lo lleva la sesión.
+     *
+     * @param  array{conversation_id: ?string, call_sid: ?string, call_ref: ?string}  $cuerpo
+     * @return array{http: int, body: array<string, mixed>}|null
+     */
+    private static function lab(string $tool, array $cuerpo): ?array
+    {
+        if (! in_array($tool, self::LAB_TOOLS, true) || $cuerpo['call_ref'] === null || $cuerpo['call_sid'] !== null || $cuerpo['conversation_id'] === null) {
+            return null;
+        }
+        if (VoiceCall::query()->where('provider_conversation_id', $cuerpo['conversation_id'])->exists()) {
+            return null;
+        }
+        $frenado = VoiceBrake::isOpen();
+        $respuesta = event(self::LAB_TOOL_EVENT, [$cuerpo['call_ref'], ! $frenado, VoiceCall::MAX_TOOL_CALLS], true);
+
+        return match (true) {
+            $frenado && $respuesta === self::LAB_OPEN => self::refused('voice_braked', null, $tool, true),
+            ! $frenado && $respuesta === self::LAB_QUOTA_EXCEEDED => self::refused('tool_quota_exceeded', null, $tool, true),
+            ! $frenado && $respuesta === self::LAB_COUNTED => self::labAnswer($tool),
+            default => null,
+        };
+    }
+
+    /** @return array{http: int, body: array<string, mixed>} E18-8: la respuesta de una sesión del laboratorio, los mismos datos que en una llamada */
+    private static function labAnswer(string $tool): array
+    {
+        $respuesta = $tool === VoiceAgentSpec::TOOL_CONSULTAR_PLANES ? self::plans() : self::hours();
+        Log::channel('voice')->info('voice.tool', ['tool' => $tool, 'verdict' => self::VERDICT_OK, 'lab' => true]);
+
+        return ['http' => 200, 'body' => ['ok' => true, 'verdict' => self::VERDICT_OK] + $respuesta];
+    }
+
     /** @return array{http: int, body: array<string, mixed>} */
-    private static function refused(string $verdict, ?int $callId, string $tool): array
+    private static function refused(string $verdict, ?int $callId, string $tool, bool $lab = false): array
     {
         if ($callId !== null) {
             VoiceEvents::record('tool_call', $callId, VoiceCallEvent::PROVIDER_ELEVENLABS, null, ['tool' => $tool, 'outcome' => $verdict]);
         }
-        Log::channel('voice')->info('voice.tool', ['tool' => $tool, 'verdict' => $verdict]);
+        Log::channel('voice')->info('voice.tool', ['tool' => $tool, 'verdict' => $verdict] + ($lab ? ['lab' => true] : []));
 
         return ['http' => 200, 'body' => ['ok' => false, 'verdict' => $verdict, 'message' => self::NEUTRAL]];
     }

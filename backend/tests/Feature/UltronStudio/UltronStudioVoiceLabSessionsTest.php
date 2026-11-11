@@ -272,8 +272,9 @@ class UltronStudioVoiceLabSessionsTest extends TestCase
         $this->assertEqualsWithDelta(now()->addSeconds(900)->getTimestamp(), Carbon::parse($d['connection']['expiresAt'])->getTimestamp(), 2);
         // E18-1: las variables de la conversación viajan con la URL firmada (y solo con ella). Sin ellas ElevenLabs cierra
         // la conversación con 1008 «Missing required dynamic variables in tools» (producción, 11-11-2026); y con
-        // `caller_authorized = no` el agente solo diría que no está disponible.
-        $this->assertSame(['call_direction' => 'saliente', 'call_ref' => 'laboratorio', 'caller_authorized' => 'si', 'version_label' => 'laboratorio'], $d['connection']['dynamicVariables']);
+        // `caller_authorized = no` el agente solo diría que no está disponible. E18-8: `call_ref` es el uuid de la sesión
+        // (las herramientas de consulta del laboratorio la reconocen por él; el literal `laboratorio` no pasaba su esquema).
+        $this->assertSame(['call_direction' => 'saliente', 'call_ref' => $d['uuid'], 'caller_authorized' => 'si', 'version_label' => 'laboratorio'], $d['connection']['dynamicVariables']);
         $this->assertSame(['issued', 'expiresAt', 'signedUrl', 'dynamicVariables'], array_keys($d['connection']), 'la conexión no lleva nada más');
         // 180 s a 0,10 US$/min.
         $this->assertSame(300000, $d['budget']['reservedMicros']);

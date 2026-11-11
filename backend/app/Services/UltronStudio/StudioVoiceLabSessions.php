@@ -545,6 +545,63 @@ final class StudioVoiceLabSessions
         });
     }
 
+    // ── Las herramientas de consulta (E18-8) ────────────────────────────────
+
+    /**
+     * La telefonía pregunta si el `call_ref` de una herramienta de SOLO
+     * LECTURA es una sesión de este laboratorio (contrato H8, Enmienda 18,
+     * E18-8; el evento con nombre `voice.lab.tool_call`, la telefonía no
+     * nombra el Studio). El `call_ref` de la conversación del laboratorio es
+     * el uuid de su sesión ({@see conversationVariables()}).
+     *
+     * Es suya si el laboratorio está ENCENDIDO y la sesión está ABIERTA, sin
+     * veredicto, con su conexión emitida, todavía VIGENTE (la URL caduca y la
+     * conversación más larga empieza, como tarde, entonces: `url_expires_at` +
+     * `max_seconds`) y su agente es de ElevenLabs y está desplegado. Si no,
+     * null: la telefonía responde su negativa de siempre, sin distinguir por
+     * qué.
+     *
+     * Con `$count`, la petición cuenta en el CUPO de la sesión (el mismo que
+     * el de una llamada, `$quota`), en `guard_codes.toolRequests` y detrás del
+     * cerrojo de la fila: dos peticiones a la vez no pasan las dos el último
+     * hueco. Sin `$count` (el freno de voz está echado) solo se contesta.
+     * Nada más se escribe.
+     *
+     * @return string|null `counted` | `open` | `quota_exceeded` (VoiceTools::LAB_*), o null si no es una sesión suya abierta y vigente
+     */
+    public function answerToolCall(string $callRef, bool $count, int $quota): ?string
+    {
+        $uuid = strtolower($callRef);
+        if (! VoiceIds::isUuid($uuid) || ! StudioVoiceLabConfig::current()->enabled) {
+            return null;
+        }
+
+        return DB::transaction(function () use ($uuid, $count, $quota): ?string {
+            $fila = StudioVoiceLabSession::query()->where('uuid', $uuid)->lockForUpdate()->first();
+            if ($fila === null || ! $fila->isOpen() || $fila->verdict !== null || $fila->url_expires_at === null
+                || $fila->url_expires_at->copy()->addSeconds((int) $fila->max_seconds)->lt(now())) {
+                return null;
+            }
+            $agente = StudioVoiceLabAgents::find((int) $fila->agent_id);
+            if ($agente === null || $agente->purpose !== StudioVoiceLabAgents::PURPOSE_LAB || $agente->provider !== StudioVoiceLabAgents::PROVIDER_ELEVENLABS
+                || $agente->status !== StudioVoiceLabAgents::STATUS_DEPLOYED) {
+                return null;
+            }
+            if (! $count) {
+                return 'open';
+            }
+            $hallazgos = self::findingsOf($fila);
+            $atendidas = $hallazgos['toolRequests'] ?? 0;
+            if ($atendidas >= $quota) {
+                return 'quota_exceeded';
+            }
+            $hallazgos['toolRequests'] = $atendidas + 1;
+
+            return StudioVoiceLabSession::advance((int) $fila->id, [StudioVoiceLabSession::STATUS_OPEN], ['guard_codes' => $hallazgos, 'updated_at' => now()])
+                ? 'counted' : null;
+        });
+    }
+
     // ── Lecturas ────────────────────────────────────────────────────────────
 
     /**
@@ -661,9 +718,12 @@ final class StudioVoiceLabSessions
 
     /**
      * Los hallazgos guardados de una sesión, con su forma: lo que informó el
-     * proveedor y lo que contó quien probó (cada uno, null si no llegó).
+     * proveedor y lo que contó quien probó (cada uno, null si no llegó) y,
+     * solo si el servidor atendió alguna, cuántas herramientas de consulta
+     * contaron en su cupo (`toolRequests`, E18-8). Quien reescribe
+     * `guard_codes` parte de aquí, así que el contador no se pierde.
      *
-     * @return array{format:string,provider:?array{conversations:list<array{id:string,durationSeconds:?int}>,toolCalls:list<string>,guard:?list<array{code:string,turn:int}>},tester:?array{objectives:list<string>,restrictionsBroken:list<string>,interruptions:int,errors:list<string>}}
+     * @return array{format:string,provider:?array{conversations:list<array{id:string,durationSeconds:?int}>,toolCalls:list<string>,guard:?list<array{code:string,turn:int}>},tester:?array{objectives:list<string>,restrictionsBroken:list<string>,interruptions:int,errors:list<string>},toolRequests?:int}
      */
     public static function findingsOf(StudioVoiceLabSession $s): array
     {
@@ -673,7 +733,7 @@ final class StudioVoiceLabSessions
             'format' => self::FINDINGS_FORMAT,
             'provider' => is_array($g['provider'] ?? null) ? $g['provider'] : null,
             'tester' => is_array($g['tester'] ?? null) ? $g['tester'] : null,
-        ];
+        ] + (is_int($g['toolRequests'] ?? null) && $g['toolRequests'] > 0 ? ['toolRequests' => $g['toolRequests']] : []);
     }
 
     // ── Internos ────────────────────────────────────────────────────────────
@@ -854,9 +914,6 @@ final class StudioVoiceLabSessions
         return ['agents' => $agentes, 'versions' => $versiones, 'profiles' => $perfiles];
     }
 
-    /** El `call_ref` de la conversación del laboratorio: no es un uuid ni el de ninguna llamada (las herramientas responden `call_not_found`). */
-    public const CONVERSATION_CALL_REF = 'laboratorio';
-
     /** La etiqueta de versión de la conversación del laboratorio (en las llamadas es «canario · publicación N»). */
     public const CONVERSATION_VERSION_LABEL = 'laboratorio';
 
@@ -874,17 +931,21 @@ final class StudioVoiceLabSessions
      * `caller_authorized = no` el agente solo diría que no está disponible.
      *
      * Se ensaya la llamada SALIENTE a una persona autorizada: lo que el agente
-     * hará en la fase 4a. `call_ref` no es de ninguna llamada: una herramienta
-     * que el agente use en el laboratorio recibe la negativa neutra
-     * (`call_not_found`) y no escribe nada.
+     * hará en la fase 4a. `call_ref` es el UUID DE LA SESIÓN (E18-8): no es el
+     * de ninguna llamada, así que la telefonía no encuentra ninguna y le
+     * pregunta al laboratorio ({@see answerToolCall()}). Con la sesión abierta
+     * y vigente atiende las dos herramientas de solo lectura (planes y
+     * horario); cualquier otra recibe la negativa neutra (`call_not_found`) y
+     * no escribe nada. Antes era el literal `laboratorio`, que no pasaba el
+     * esquema estricto de las herramientas (422 `invalid_schema`).
      *
      * @return array<string, string> exactamente {@see VoiceAgentSpec::VARIABLES}
      */
-    public static function conversationVariables(): array
+    public static function conversationVariables(string $sessionUuid): array
     {
         return [
             VoiceAgentSpec::VAR_CALL_DIRECTION => VoiceAgentSpec::DIRECTION_OUTBOUND,
-            VoiceAgentSpec::VAR_CALL_REF => self::CONVERSATION_CALL_REF,
+            VoiceAgentSpec::VAR_CALL_REF => $sessionUuid,
             VoiceAgentSpec::VAR_CALLER_AUTHORIZED => VoiceAgentSpec::CALLER_AUTHORIZED,
             VoiceAgentSpec::VAR_VERSION_LABEL => self::CONVERSATION_VERSION_LABEL,
         ];
@@ -949,7 +1010,7 @@ final class StudioVoiceLabSessions
             'connection' => [
                 'issued' => $s->url_expires_at !== null,
                 'expiresAt' => $s->url_expires_at?->toIso8601String(),
-            ] + ($signedUrl !== null ? ['signedUrl' => $signedUrl, 'dynamicVariables' => self::conversationVariables()] : []),
+            ] + ($signedUrl !== null ? ['signedUrl' => $signedUrl, 'dynamicVariables' => self::conversationVariables((string) $s->uuid)] : []),
             'metrics' => [
                 'durationSeconds' => $s->duration_seconds,
                 // Desde la URL hasta el cierre: la ventana, no lo que se habló.

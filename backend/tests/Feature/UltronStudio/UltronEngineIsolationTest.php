@@ -226,8 +226,10 @@ class UltronEngineIsolationTest extends TestCase
      * registra el oyente del evento `voice.lab.post_call` de la telefonía hacia
      * el laboratorio hablado del Studio. Es la única clase del Studio que puede
      * nombrar, SOLO en este fichero y EXACTAMENTE así (SEC8-b): el `use` sin
-     * alias, una vez, y el nombre corto una sola vez, dentro de
-     * {@see LAB_LISTENER_CALL}. Nada más del laboratorio desde el arranque.
+     * alias, una vez, y el nombre corto una vez dentro de cada una de las dos
+     * llamadas admitidas, {@see LAB_LISTENER_CALL} y, desde la Enmienda 18 del
+     * H8 (E18-8, decisión del lead del 11-11-2026 con revisión de seguridad),
+     * {@see LAB_TOOL_LISTENER_CALL}. Nada más del laboratorio desde el arranque.
      */
     private const LAB_LISTENER = 'app/Providers/AppServiceProvider.php';
 
@@ -235,6 +237,9 @@ class UltronEngineIsolationTest extends TestCase
 
     /** El único uso del laboratorio en el arranque, token a token (sin espacios ni comentarios). */
     private const LAB_LISTENER_CALL = ['Event', '::', 'listen', '(', 'VoicePostCall', '::', 'LAB_EVENT', ',', '[', 'StudioVoiceLabSessions', '::', 'class', ',', "'recordProviderReport'", ']', ')', ';'];
+
+    /** E18-8: el oyente de las herramientas de solo lectura del laboratorio hablado, token a token. */
+    private const LAB_TOOL_LISTENER_CALL = ['Event', '::', 'listen', '(', 'VoiceTools', '::', 'LAB_TOOL_EVENT', ',', '[', 'StudioVoiceLabSessions', '::', 'class', ',', "'answerToolCall'", ']', ')', ';'];
 
     /**
      * Hito 8 (contrato H8, D8-8): el lector de la cadena de voz. No está en la
@@ -864,20 +869,39 @@ class UltronEngineIsolationTest extends TestCase
 
     /**
      * Hito 8 (E8-1, E9-1; SEC8-b): en el arranque, el laboratorio hablado solo
-     * se nombra para registrar su oyente. El `use` sin alias (justo `use …;`),
-     * el nombre corto una sola vez y esa vez dentro de {@see LAB_LISTENER_CALL}.
+     * se nombra para registrar sus oyentes. El `use` sin alias (justo `use …;`)
+     * y el nombre corto exactamente DOS veces: una dentro de
+     * {@see LAB_LISTENER_CALL} y otra dentro de {@see LAB_TOOL_LISTENER_CALL}
+     * (E18-8). Ni una tercera aparición, ni una llamada repetida, ni otra forma.
      */
     private function onlyTheLabListener(string $ruta): bool
     {
         $textos = array_map(fn ($t) => is_array($t) ? $t[1] : $t, $this->significantTokens($ruta));
         $usos = array_keys($textos, 'App\\Services\\UltronStudio\\StudioVoiceLabSessions', true);
         $cortos = array_keys($textos, 'StudioVoiceLabSessions', true);
-        if (count($usos) !== 1 || ($textos[$usos[0] - 1] ?? null) !== 'use' || ($textos[$usos[0] + 1] ?? null) !== ';' || count($cortos) !== 1) {
+        $llamadas = [self::LAB_LISTENER_CALL, self::LAB_TOOL_LISTENER_CALL];
+        if (count($usos) !== 1 || ($textos[$usos[0] - 1] ?? null) !== 'use' || ($textos[$usos[0] + 1] ?? null) !== ';' || count($cortos) !== count($llamadas)) {
             return false;
         }
-        $inicio = $cortos[0] - (int) array_search('StudioVoiceLabSessions', self::LAB_LISTENER_CALL, true);
+        // Cada aparición del nombre corto, dentro de UNA de las llamadas admitidas; cada llamada, una sola vez.
+        $vistas = [];
+        foreach ($cortos as $posicion) {
+            $encaja = null;
+            foreach ($llamadas as $i => $llamada) {
+                $inicio = $posicion - (int) array_search('StudioVoiceLabSessions', $llamada, true);
+                if ($inicio >= 0 && array_slice($textos, $inicio, count($llamada)) === $llamada) {
+                    $encaja = $i;
 
-        return $inicio >= 0 && array_slice($textos, $inicio, count(self::LAB_LISTENER_CALL)) === self::LAB_LISTENER_CALL;
+                    break;
+                }
+            }
+            if ($encaja === null || in_array($encaja, $vistas, true)) {
+                return false;
+            }
+            $vistas[] = $encaja;
+        }
+
+        return true;
     }
 
     /**
