@@ -32,7 +32,7 @@
 | `app/Services/UltronStudio/StudioMetaTemplates.php` | Configuración, estado, sonda, enviar, «Comprobar ahora», sincronización y los bloques `meta` de los DTO (§3) |
 | `app/Models/UltronStudio/StudioMetaTemplateSubmission.php` | `$guarded = ['*']`. Solo cambian las columnas mutables de la migración; el estado solo avanza, FAILED es definitivo, el id de Meta se fija una vez y no se borra |
 | `app/Http/Controllers/Crm/UltronStudio/UltronStudioMetaTemplateController.php` | Las 4 rutas, con `ROUTES`, `ROUTE_COUNT = 4`, `routes()` (su bloque) y `authorizationMap()`, con el patrón de `UltronStudioOutreachController` |
-| `app/Console/Commands/UltronStudio/MetaTemplatesSyncCommand.php` | `ultron-studio:meta-templates-sync [--dry-run] [--json] [--template=<uuid>]`. Sale siempre con 0, salvo un `--template` que no es un uuid (sale con 2) |
+| `app/Console/Commands/UltronStudio/MetaTemplatesSyncCommand.php` | `ultron-studio:meta-templates-sync [--dry-run] [--json] [--template=<uuid>]`. Sale con 0, salvo un `--template` que no es un uuid (sale con 2) y, desde el cierre del M-3 del reviewer (`informe-be-fixes-2.md`), una pasada en la que Meta falla entera (`meta_failed`: sale con 1; `partial` sale con 0 y dice cuántas quedaron sin comprobar, `unresolved` en `--json`) |
 | `tests/Unit/Meta/Templates/GraphWhatsappTemplateClientTest.php` | 43 pruebas (§7) |
 | `tests/Unit/Meta/Templates/FakeWhatsappTemplateClientTest.php` | 20 pruebas: R7, escenarios, fábrica y sonda |
 | `tests/Feature/UltronStudio/MetaTemplates/MetaTemplateW9AmendmentTest.php` | 7 pruebas del paso 2 |

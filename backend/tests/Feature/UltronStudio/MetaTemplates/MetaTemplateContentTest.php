@@ -259,7 +259,8 @@ class MetaTemplateContentTest extends TestCase
         $this->assertContains(['key' => 'content.buttons.0.type', 'code' => 'button_type_disabled'], self::errores(self::bien(['buttons' => [$llamar]])));
         $this->assertFalse(T::metaCatalog()['urlButtons']);
         $this->assertFalse(T::metaCatalog()['phoneButton']);
-        $this->assertNull(T::metaCatalog()['phoneNumber']);
+        $this->assertNull(T::metaCatalog()['phoneLast4']);
+        $this->assertArrayNotHasKey('phoneNumber', T::metaCatalog(), 'ningún cuerpo del Studio lleva una clave de teléfono (§I2 del H6)');
 
         $this->conBotonesEspeciales();
         $r = T::content('whatsapp', 'commercial', self::bien(['buttons' => [$url, $llamar]]));
@@ -273,7 +274,9 @@ class MetaTemplateContentTest extends TestCase
         // El host se compara en minúsculas.
         $this->assertSame([], self::errores(self::bien(['buttons' => [['url' => 'https://IronBodyNeiva.Cloud/planes'] + $url]])));
         $this->assertSame(['ironbodyneiva.cloud'], T::metaCatalog()['urlHosts']);
-        $this->assertSame('573143455483', T::metaCatalog()['phoneNumber']);
+        // Del número del gimnasio, el catálogo solo dice sus cuatro últimas cifras (§I2 del H6).
+        $this->assertSame('5483', T::metaCatalog()['phoneLast4']);
+        $this->assertStringNotContainsString('3143455483', (string) json_encode(T::metaCatalog()));
 
         // Con la bandera encendida pero sin un número válido en la configuración: no se inventa uno.
         config(['legal.privacy_phone' => 'sin número']);
@@ -544,7 +547,72 @@ class MetaTemplateContentTest extends TestCase
         $this->assertSame(['headerMax' => 60, 'footerMax' => 60, 'buttonTextMax' => 25, 'buttonsMax' => 3], array_intersect_key($catalogo, array_flip(['headerMax', 'footerMax', 'buttonTextMax', 'buttonsMax'])));
         $this->assertFalse($catalogo['urlButtons']);
         $this->assertFalse($catalogo['phoneButton']);
+        $this->assertNull($catalogo['phoneLast4']);
+        $this->assertArrayNotHasKey('phoneNumber', $catalogo);
         // La lista de siempre sigue ahí.
         $this->assertSame(T::MARKERS, $this->s9('GET', 'strategies/catalog', $ana)->json('data.templates.markers'));
+    }
+
+    /**
+     * §I2 del contrato del H6: ningún cuerpo del Studio lleva un teléfono ni
+     * una clave de teléfono. El número del botón «Llamar» es el del gimnasio
+     * (publicado), y aun así solo salen sus cuatro últimas cifras. Lo
+     * guardado no cambia: es lo que se aprueba y lo que se envía a Meta. (El
+     * smoke del H9 lo encontró en el banco: `phoneNumber` en el catálogo.)
+     */
+    public function test_con_el_boton_llamar_ningun_cuerpo_lleva_el_numero_del_gimnasio_ni_una_clave_de_telefono(): void
+    {
+        $this->conBotonesEspeciales();
+        [$ana, $beto] = $this->bootstrapPair();
+        $contenido = self::bien(['buttons' => [
+            ['type' => 'QUICK_REPLY', 'text' => 'Darme de baja', 'role' => 'opt_out'],
+            ['type' => 'PHONE_NUMBER', 'text' => 'Llamar', 'phone' => '+57 314 3455483'],
+        ]]);
+        $creada = $this->s9('POST', 'strategies/templates', $ana, ['clientRequestId' => (string) Str::uuid(), 'key' => 'renovacion-llamar', 'channel' => 'whatsapp', 'purpose' => 'commercial',
+            'content' => $contenido])->assertCreated();
+        $uuid = (string) $creada->json('data.uuid');
+
+        // Lo guardado lleva el número entero y su huella es la de siempre.
+        $json = (string) DB::table('ultron_studio_message_templates')->where('uuid', $uuid)->value('content_json');
+        $this->assertSame(['phone' => '573143455483', 'text' => 'Llamar', 'type' => 'PHONE_NUMBER'], json_decode($json, true)['buttons'][1]);
+        $this->assertSame(hash('sha256', $json), $creada->json('data.contentHash'));
+        $this->assertSame(T::content('whatsapp', 'commercial', $contenido)['hash'], $creada->json('data.contentHash'));
+        $this->assertTrue($creada->json('data.integrity'));
+
+        $cuerpos = [
+            'crear' => $creada,
+            'detalle' => $this->s9('GET', "strategies/templates/{$uuid}", $ana)->assertOk(),
+            'lista' => $this->s9('GET', 'strategies/templates', $ana)->assertOk(),
+            'catálogo' => $this->s9('GET', 'strategies/catalog', $ana)->assertOk(),
+            'aprobar' => $this->s9('POST', "strategies/templates/{$uuid}/approve", $beto, ['note' => 'Revisada.'])->assertOk(),
+        ];
+        // Las claves de teléfono que el detector del smoke del H6 prohíbe en cualquier cuerpo (smoke-h6.py, FORBIDDEN_KEYS).
+        $prohibidas = ['phone', 'telefono', 'phone_hash', 'phoneHash', 'phone_encrypted', 'phoneEncrypted', 'phone_e164', 'e164', 'to_phone', 'from_phone', 'toPhone', 'fromPhone', 'phone_number', 'phoneNumber'];
+        foreach ($cuerpos as $nombre => $r) {
+            $texto = (string) $r->getContent();
+            $this->assertStringNotContainsString('3143455483', $texto, "{$nombre}: el número del gimnasio sale en el cuerpo.");
+            foreach ($prohibidas as $clave) {
+                $this->assertStringNotContainsString('"'.$clave.'"', $texto, "{$nombre}: el cuerpo lleva la clave «{$clave}».");
+            }
+        }
+
+        foreach (['crear', 'detalle', 'aprobar'] as $nombre) {
+            $d = $cuerpos[$nombre]->json('data');
+            $this->assertSame(['text' => 'Llamar', 'type' => 'PHONE_NUMBER', 'phoneLast4' => '5483'], $d['content']['buttons'][1], $nombre);
+            $this->assertSame(['type' => 'PHONE_NUMBER', 'text' => 'Llamar', 'phoneLast4' => '5483'], $d['waPreview']['buttons'][1], $nombre);
+            // El resto del contenido sale tal cual.
+            $this->assertSame(['role' => 'opt_out', 'text' => 'Darme de baja', 'type' => 'QUICK_REPLY'], $d['content']['buttons'][0], $nombre);
+            $this->assertSame(array_diff_key(json_decode($json, true), ['buttons' => 1]), array_diff_key($d['content'], ['buttons' => 1]), $nombre);
+        }
+        $meta = $cuerpos['catálogo']->json('data.templates.meta');
+        $this->assertTrue($meta['phoneButton']);
+        $this->assertSame('5483', $meta['phoneLast4']);
+
+        // Sin botón de llamada, el contenido sale byte a byte como se guardó.
+        $this->assertSame(self::BIEN, T::publicContent(self::BIEN));
+        $this->assertSame(['bodyPreview' => 'x', 'buttons' => 'raro'], T::publicContent(['bodyPreview' => 'x', 'buttons' => 'raro']));
+        $this->assertNull(T::last4(null));
+        $this->assertNull(T::last4('1234567'));
+        $this->assertSame('5483', T::last4('+57 (314) 345-5483'));
     }
 }

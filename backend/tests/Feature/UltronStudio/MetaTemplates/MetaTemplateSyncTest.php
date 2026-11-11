@@ -311,6 +311,70 @@ class MetaTemplateSyncTest extends TestCase
         $this->assertSame('meta_failed', Cache::get('ultron-studio:meta-templates:last-sync')['outcome']);
     }
 
+    /**
+     * M-3 (revisión de la ola): el código de salida de la orden. Bien → 0; alguna versión sin comprobar
+     * (`partial`) → 0, pero lo dice (el recuento en la salida y `unresolved` en `--json`); Meta falla para
+     * TODA la pasada (`meta_failed`) → 1, que el programador ve como un fallo. Apagada, 0 como siempre.
+     */
+    public function test_la_orden_sale_con_1_si_meta_falla_en_toda_la_pasada_y_con_0_si_falla_en_parte_diciendolo(): void
+    {
+        $t = $this->enviada('aprobar_salida_v1');
+        $otra = $this->enviada('aprobar_salida_otra_v1');
+
+        // Bien: 0 y nada sin comprobar.
+        $this->assertSame(0, Artisan::call('ultron-studio:meta-templates-sync', ['--json' => true]));
+        $r = json_decode(Artisan::output(), true);
+        $this->assertSame(['ok', 2, 0], [$r['outcome'], $r['watched'], $r['unresolved']]);
+        $this->assertSame(0, Artisan::call('ultron-studio:meta-templates-sync'));
+        $this->assertStringNotContainsString('Sin comprobar', Artisan::output());
+
+        // Graph (el simulador): la lista contesta sin la primera y su lectura suelta falla; la otra sale en la lista.
+        $id = (string) $this->submissionOf($t)->meta_template_id;
+        $componentes = T::metaPayload(json_decode($otra->content_json, true))['components'];
+        $deLaOtra = ['id' => (string) $this->submissionOf($otra)->meta_template_id, 'name' => 'aprobar_salida_otra_v1', 'language' => 'es_CO', 'status' => 'APPROVED',
+            'category' => 'MARKETING', 'components' => $componentes, 'quality_score' => ['score' => 'GREEN']];
+        $cae = false;
+        $this->metaFlags(driver: 'graph', base: 'http://127.0.0.1:8097');
+        config(['meta.access_token' => 'EAAtokenDeLaPruebaDeSalida1']);
+        Http::fake(function (HttpRequest $p) use (&$cae, $deLaOtra) {
+            $ruta = (string) parse_url($p->url(), PHP_URL_PATH);
+            if ($cae || ! str_ends_with($ruta, '/message_templates')) {
+                return Http::response(['error' => ['code' => 2, 'message' => 'Service temporarily unavailable']], 500);
+            }
+
+            return Http::response(['data' => [$deLaOtra]]);
+        });
+
+        $this->assertSame(0, Artisan::call('ultron-studio:meta-templates-sync', ['--json' => true]), 'en parte: 0');
+        $r = json_decode(Artisan::output(), true);
+        $this->assertSame(['partial', 1], [$r['outcome'], $r['unresolved']]);
+        $this->assertSame([(string) $t->uuid => 'unresolved', (string) $otra->uuid => null], array_column(array_map(static fn (array $f): array => ['uuid' => $f['uuid'], 'note' => $f['note'] ?? null], $r['templates']), 'note', 'uuid'));
+        Http::assertSent(fn (HttpRequest $p): bool => str_ends_with((string) parse_url($p->url(), PHP_URL_PATH), '/'.$id));
+        $this->assertSame(0, Artisan::call('ultron-studio:meta-templates-sync'));
+        $texto = Artisan::output();
+        $this->assertStringContainsString('PASADA HECHA EN PARTE', $texto);
+        $this->assertStringContainsString('Sin comprobar en esta pasada: 1 (sale con 0', $texto);
+
+        // Meta falla para toda la pasada: 1, en JSON y en texto, sin inventar nada.
+        $cae = true;
+        $filas = [count($this->checksOf($t)), count($this->checksOf($otra))];
+        $this->assertSame(1, Artisan::call('ultron-studio:meta-templates-sync', ['--json' => true]));
+        $r = json_decode(Artisan::output(), true);
+        $this->assertSame(['meta_failed', 'server', 0], [$r['outcome'], $r['error'], $r['unresolved']]);
+        $this->assertSame(1, Artisan::call('ultron-studio:meta-templates-sync'));
+        $texto = Artisan::output();
+        $this->assertStringContainsString('META FALLÓ', $texto);
+        $this->assertStringContainsString('Sale con 1.', $texto);
+        $this->assertSame(1, Artisan::call('ultron-studio:meta-templates-sync', ['--dry-run' => true]), 'en seco, lo mismo');
+        $this->assertSame($filas, [count($this->checksOf($t)), count($this->checksOf($otra))]);
+
+        // Con la sincronización apagada, 0 como siempre y sin red.
+        $antes = count(Http::recorded());
+        $this->metaFlags(sync: false);
+        $this->assertSame(0, Artisan::call('ultron-studio:meta-templates-sync'));
+        $this->assertCount($antes, Http::recorded());
+    }
+
     public function test_v2_si_la_version_de_graph_no_conoce_rejected_reason_se_lee_otra_vez_sin_el(): void
     {
         $t = $this->approvedMeta('renovacion_v2_campos');

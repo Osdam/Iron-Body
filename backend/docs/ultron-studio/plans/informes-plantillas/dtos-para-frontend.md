@@ -284,13 +284,13 @@ interface TemplateMetaDetail extends TemplateMetaSummary {
 
 ### 5.4 Catálogo: `GET strategies/catalog` → `data.templates.meta`
 
-Real, con `ULTRON_STUDIO_META_TEMPLATES_URL_HOSTS=ironbodyneiva.cloud` y el botón «Llamar» encendido (por defecto: `urlButtons: false`, `urlHosts: []`, `phoneButton: false`, `phoneNumber: null`):
+Real, con `ULTRON_STUDIO_META_TEMPLATES_URL_HOSTS=ironbodyneiva.cloud` y el botón «Llamar» encendido (por defecto: `urlButtons: false`, `urlHosts: []`, `phoneButton: false`, `phoneLast4: null`):
 
 ```json
 {
   "headerFormats": ["TEXT"], "headerMax": 60, "footerMax": 60, "buttonTextMax": 25, "buttonsMax": 3, "urlButtonsMax": 2,
   "urlMax": 200, "exampleMax": 40, "buttonTypes": ["PHONE_NUMBER", "QUICK_REPLY", "URL"],
-  "urlButtons": true, "urlHosts": ["ironbodyneiva.cloud"], "phoneButton": true, "phoneNumber": "573143455483",
+  "urlButtons": true, "urlHosts": ["ironbodyneiva.cloud"], "phoneButton": true, "phoneLast4": "5483",
   "optOutLabels": ["Darme de baja", "No más mensajes", "Detener promociones"],
   "examples": { "class_name": "Spinning", "class_time_text": "mañana a las 6:00 p. m.", "days_to_expiry": "5", "first_name": "Laura",
     "gym_name": "Iron Body", "membership_end_date_text": "15 de diciembre", "payment_link": "el enlace de pago",
@@ -300,6 +300,8 @@ Real, con `ULTRON_STUDIO_META_TEMPLATES_URL_HOSTS=ironbodyneiva.cloud` y el bot�
 ```
 
 El botón «Llamar» se crea con `{ "type": "PHONE_NUMBER", "text": "Llamar" }` (sin número: el servidor pone el del gimnasio; si llega otro, 422 `phone_not_allowed`).
+
+**El número no sale del servidor (L9-105; contrato del H6, §I2: ningún cuerpo del Studio lleva un teléfono ni una clave de teléfono).** El catálogo dice `phoneLast4` (las cuatro últimas cifras del número del gimnasio, o `null`); en el detalle, el botón «Llamar» sale como `{ "type": "PHONE_NUMBER", "text": "Llamar", "phoneLast4": "5483" }` tanto en `content.buttons` como en `waPreview.buttons` (`StudioMessageTemplates::publicContent()` y `waPreview()`). Lo guardado (`content_json`, con el número entero) y su huella no cambian: son lo que se aprueba y lo que se envía a Meta. El CRM no devuelve `phoneLast4` al guardar.
 
 ---
 

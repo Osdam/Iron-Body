@@ -19,12 +19,20 @@ use Symfony\Component\Console\Output\OutputInterface;
  * (1–3 GET por pasada) y registra, sola, lo que cambió en
  * `ultron_studio_template_meta_checks`, que es lo que lee el canal de W9.
  *
- * SALE SIEMPRE CON 0 salvo un `--template` que no es un uuid (2): con la
- * maestra o la sincronización apagadas («apagado»), sin la cuenta o su
- * credencial («sin configurar»), sin nada que vigilar, o si Meta falla (lo
- * último registrado sigue mandando: no se inventa nada). Con el doble
- * (`fake`) no hay red. La programa un bloque PROPIO de routes/console.php,
- * cada 5 minutos tras `ULTRON_STUDIO_META_TEMPLATES_SYNC_ENABLED`.
+ * CÓDIGO DE SALIDA (M-3 de la revisión de la ola; decisión del lead que
+ * enmienda §5.5.7 del plan):
+ *  - 1 si Meta falla para TODA la pasada (`meta_failed`: no respondió o
+ *    respondió error a la lectura de la lista). Lo último registrado sigue
+ *    mandando (no se inventa nada); el programador lo ve como un fallo y lo
+ *    reporta en el registro de la aplicación, cada pasada que falle;
+ *  - 0 con `partial` (alguna versión no se pudo comprobar y queda para la
+ *    siguiente), pero lo dice: cuántas en la salida y `unresolved` en `--json`;
+ *  - 0 si todo fue bien, con la maestra o la sincronización apagadas
+ *    («apagado»), sin la cuenta o su credencial («sin configurar») o sin nada
+ *    que vigilar;
+ *  - 2 con un `--template` que no es un uuid.
+ * Con el doble (`fake`) no hay red. La programa un bloque PROPIO de
+ * routes/console.php, cada 5 minutos tras `ULTRON_STUDIO_META_TEMPLATES_SYNC_ENABLED`.
  */
 class MetaTemplatesSyncCommand extends Command
 {
@@ -60,16 +68,22 @@ class MetaTemplatesSyncCommand extends Command
         }
 
         $r = $meta->sync($plantilla, (bool) $this->option('dry-run'), now());
+        $codigo = $r['outcome'] === 'meta_failed' ? self::FAILURE : self::SUCCESS;
+        $sinComprobar = count(array_filter($r['templates'], static fn (array $f): bool => ($f['note'] ?? null) === 'unresolved'));
 
         if ($this->option('json')) {
-            $this->output->writeln((string) json_encode($r, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT), OutputInterface::OUTPUT_RAW);
+            $this->output->writeln((string) json_encode($r + ['unresolved' => $sinComprobar], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT), OutputInterface::OUTPUT_RAW);
 
-            return self::SUCCESS;
+            return $codigo;
         }
 
         $this->info('── ULTRON Studio · sincronización de las plantillas de Meta ──');
-        $this->line(($r['dryRun'] ? 'EN SECO (no se escribe nada). ' : '').(self::OUTCOME_TEXT[$r['outcome']] ?? $r['outcome']));
+        $resultado = ($r['dryRun'] ? 'EN SECO (no se escribe nada). ' : '').(self::OUTCOME_TEXT[$r['outcome']] ?? $r['outcome']);
+        $codigo === self::FAILURE ? $this->error($resultado.' Sale con 1.') : $this->line($resultado);
         $this->line("Vigiladas: {$r['watched']} · peticiones a Meta: {$r['requests']}".($r['error'] !== null ? " · motivo: {$r['error']}" : ''));
+        if ($sinComprobar > 0) {
+            $this->warn("Sin comprobar en esta pasada: {$sinComprobar} (sale con 0: la siguiente pasada vuelve a intentarlo).");
+        }
         foreach ($r['templates'] as $f) {
             $this->line(sprintf(
                 '  %s v%d · %s → %s%s%s%s',
@@ -80,6 +94,6 @@ class MetaTemplatesSyncCommand extends Command
             ));
         }
 
-        return self::SUCCESS;
+        return $codigo;
     }
 }

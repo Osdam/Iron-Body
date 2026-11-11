@@ -572,10 +572,15 @@ final class StudioMessageTemplates
                 continue;
             }
             $boton = ['type' => $b['type'], 'text' => $b['text']];
-            foreach (['role', 'url', 'phone'] as $k) {
+            foreach (['role', 'url'] as $k) {
                 if (is_string($b[$k] ?? null)) {
                     $boton[$k] = $b[$k];
                 }
+            }
+            // El número del botón «Llamar» no sale del servidor: solo sus cuatro últimas cifras (§I2 del H6).
+            $ultimas = self::last4($b['phone'] ?? null);
+            if ($ultimas !== null) {
+                $boton['phoneLast4'] = $ultimas;
             }
             $botones[] = $boton;
         }
@@ -626,8 +631,10 @@ final class StudioMessageTemplates
     /**
      * `templates.meta` del catálogo (`GET strategies/catalog`, aditivo): los
      * límites del contenido ampliado, qué botones admite el servidor (Q1, Q2),
-     * las etiquetas de baja y los ejemplos ficticios por defecto. El número
-     * del gimnasio es el publicado (`legal.privacy_phone`), no un secreto.
+     * las etiquetas de baja y los ejemplos ficticios por defecto. Del número
+     * del gimnasio (`legal.privacy_phone`) solo salen sus cuatro últimas
+     * cifras (`phoneLast4`): ningún cuerpo del Studio lleva un teléfono (§I2
+     * del contrato del H6), aunque este sea el publicado.
      *
      * @return array<string, mixed>
      */
@@ -646,7 +653,7 @@ final class StudioMessageTemplates
             'urlButtons' => self::urlHosts() !== [],
             'urlHosts' => self::urlHosts(),
             'phoneButton' => self::gymPhone() !== null,
-            'phoneNumber' => self::gymPhone(),
+            'phoneLast4' => self::last4(self::gymPhone()),
             'optOutLabels' => self::OPT_OUT_LABELS,
             'examples' => self::META_EXAMPLES,
             'wordsPerVariable' => self::WORDS_PER_VARIABLE,
@@ -852,7 +859,7 @@ final class StudioMessageTemplates
         };
 
         return self::summaryDto($t) + [
-            'content' => $contenido,
+            'content' => self::publicContent($contenido),
             'preview' => self::preview((string) $t->channel, $contenido),
             // Aditivo (plantillas de Meta, §5.8.2): la vista previa estructurada y el bloque de Meta; solo WhatsApp.
             'waPreview' => (string) $t->channel === self::CHANNEL_WHATSAPP ? self::waPreview($contenido) : null,
@@ -1351,6 +1358,45 @@ final class StudioMessageTemplates
         $digitos = preg_replace('/\D+/', '', (string) config(self::GYM_PHONE_CONFIG, ''));
 
         return is_string($digitos) && preg_match('/^[1-9][0-9]{7,14}$/D', $digitos) === 1 ? $digitos : null;
+    }
+
+    /**
+     * Las cuatro últimas cifras de un teléfono (null si no lo es): la única
+     * forma en que un número sale en un cuerpo del Studio (§I2 del contrato
+     * del H6), también el del gimnasio.
+     */
+    public static function last4(mixed $telefono): ?string
+    {
+        $digitos = is_string($telefono) ? (string) preg_replace('/\D+/', '', $telefono) : '';
+
+        return strlen($digitos) >= 8 ? substr($digitos, -4) : null;
+    }
+
+    /**
+     * El contenido de una plantilla TAL COMO SALE del servidor: el guardado,
+     * salvo que el número del botón «Llamar» se queda en sus cuatro últimas
+     * cifras (`phoneLast4`). Lo guardado y su huella no cambian: son lo que se
+     * aprobó y lo que se envía a Meta.
+     *
+     * @param  array<string, mixed>  $content
+     * @return array<string, mixed>
+     */
+    public static function publicContent(array $content): array
+    {
+        if (! is_array($content['buttons'] ?? null)) {
+            return $content;
+        }
+        $content['buttons'] = array_map(static function (mixed $b): mixed {
+            if (! is_array($b) || ! array_key_exists('phone', $b)) {
+                return $b;
+            }
+            $ultimas = self::last4($b['phone']);
+            unset($b['phone']);
+
+            return $ultimas === null ? $b : $b + ['phoneLast4' => $ultimas];
+        }, $content['buttons']);
+
+        return $content;
     }
 
     /**

@@ -38,7 +38,7 @@ const H = (c) => c.repeat(64).slice(0, 64);
 // ── Catálogo con `templates.meta` (§5.4), botones de URL y «Llamar» encendidos (Q1 y Q2 de L9-96) ──
 const metaCatalogo = {
   headerFormats: ['TEXT'], headerMax: 60, footerMax: 60, buttonTextMax: 25, buttonsMax: 3, urlButtonsMax: 2, urlMax: 200, exampleMax: 40,
-  buttonTypes: ['PHONE_NUMBER', 'QUICK_REPLY', 'URL'], urlButtons: true, urlHosts: ['ironbodyneiva.cloud'], phoneButton: true, phoneNumber: '573143455483',
+  buttonTypes: ['PHONE_NUMBER', 'QUICK_REPLY', 'URL'], urlButtons: true, urlHosts: ['ironbodyneiva.cloud'], phoneButton: true, phoneLast4: '5483',
   optOutLabels: ['Darme de baja', 'No más mensajes', 'Detener promociones'],
   examples: { class_name: 'Spinning', class_time_text: 'mañana a las 6:00 p. m.', days_to_expiry: '5', first_name: 'Laura', gym_name: 'Iron Body', membership_end_date_text: '15 de diciembre', payment_link: 'el enlace de pago', plan_name: 'Plan Trimestral', plan_price: 'el valor de tu plan' },
   wordsPerVariable: 4,

@@ -445,7 +445,7 @@ final class StudioMetaTemplates
                 throw $this->submitBlocker($t, $contenido) ?? new UltronStudioException('Esta versión ya tiene un envío a Meta en curso.', self::CODE_ALREADY_SUBMITTED, 409);
             }
 
-            $resultado = $this->createAtMeta($envio, $waba, $payload);
+            $resultado = $this->createAtMeta($envio, $waba, $payload, $t, $request, $access->actor);
             $this->settleCreate($envio, $resultado, $t, $request, $access->actor);
 
             // Si Meta la aprobó en el acto (raro, pero posible), se lee ya para sus huellas (§5.4).
@@ -807,16 +807,23 @@ final class StudioMetaTemplates
     }
 
     /** El POST, sin dejar el envío en SENDING pase lo que pase. */
-    private function createAtMeta(Submission $envio, string $waba, array $payload): TemplateApiResult
+    private function createAtMeta(Submission $envio, string $waba, array $payload, StudioMessageTemplate $t, ?Request $request, ?Admin $actor): TemplateApiResult
     {
         try {
             return $this->client()->create($waba, $payload);
         } catch (InvalidArgumentException $e) {
             // El cliente rechazó la plantilla ANTES de la red (no salió nada): es
             // un contenido que el validador del Studio dejó pasar. Se cierra el
-            // envío y se dice, nunca se reintenta.
-            $envio->forceFill(['state' => Submission::STATE_FAILED])->save();
+            // envío y se dice, nunca se reintenta. El cierre lleva su evento,
+            // como los de settleCreate() (M-2): estado y libro juntos o ninguno
+            // (si el proceso muere a mitad, el SENDING lo recoge staleSending()).
             Log::error('ultron_studio.meta_templates.payload_refused', ['submission_uuid' => (string) $envio->uuid, 'error_class' => $e::class]);
+            DB::transaction(function () use ($envio, $t, $request, $actor): void {
+                $envio->forceFill(['state' => Submission::STATE_FAILED])->save();
+                $this->audit->record($request, $actor, 'meta_template.submit_failed', self::SUBJECT, (string) $t->uuid,
+                    "No se envió a Meta la versión {$t->number} de la plantilla «{$t->key}»: Meta no la admitiría tal como está guardada",
+                    ['fromStatus' => Submission::STATE_SENDING, 'toStatus' => Submission::STATE_FAILED, 'diff' => ['detail' => 'payload_refused']], self::SYSTEM_SYNC);
+            });
 
             throw new UltronStudioException('Meta no admitiría esta plantilla tal como está guardada: crea una versión nueva.', 'meta_payload_invalid', 422);
         } catch (Throwable $e) {

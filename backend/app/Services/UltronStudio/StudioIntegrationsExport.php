@@ -129,7 +129,7 @@ final class StudioIntegrationsExport
     private static function sets(): array
     {
         return [
-            'classification' => ['connected_read', 'connected_otp_only', 'degraded', 'disabled', 'not_configured', 'registry'],
+            'classification' => self::classifications(),
             'metaConnectionState' => StudioMetaCampaigns::CONNECTION_STATES,
             'metaConnectionReason' => ['missing_access_token', 'missing_ad_account_id', 'invalid_ad_account_id', 'invalid_timezone', 'sync_disabled', 'stale', 'failed'],
             'metaEffectiveStatusFilter' => StudioMetaCampaigns::STATUS_FILTERS,
@@ -155,6 +155,24 @@ final class StudioIntegrationsExport
             'elevenlabsSignature' => ElevenLabsWebhookSignature::RESULTS,
             'voicePolicyReason' => VoiceCallPolicy::REASONS,
         ];
+    }
+
+    /**
+     * El conjunto cerrado `classification`: lo que algún bloque puede afirmar,
+     * de la MISMA fuente que `providerClassifications`
+     * ({@see StudioIntegrations::PROVIDER_CLASSIFICATIONS}), para que el
+     * fixture no se contradiga. Primero las seis de §I2 en su orden de
+     * siempre; después, las que llegaron más tarde, en el orden en que salen
+     * en la fuente (Hito 8, D8-21: `connected_voice`, al final, como el CRM).
+     *
+     * @return list<string>
+     */
+    private static function classifications(): array
+    {
+        $deI2 = ['connected_read', 'connected_otp_only', 'degraded', 'disabled', 'not_configured', 'registry'];
+        $todas = array_values(array_unique(array_merge(...array_values(StudioIntegrations::PROVIDER_CLASSIFICATIONS))));
+
+        return [...array_values(array_intersect($deI2, $todas)), ...array_values(array_diff($todas, $deI2))];
     }
 
     /** @return list<array{key:string,label:string,help:?string,administrator:bool}> */

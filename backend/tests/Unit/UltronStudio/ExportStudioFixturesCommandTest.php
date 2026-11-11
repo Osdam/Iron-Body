@@ -136,6 +136,11 @@ class ExportStudioFixturesCommandTest extends TestCase
         $this->assertSame(json_decode((string) json_encode(StudioIntegrationsExport::shapes()), true), $h6, 'lo mismo que el servidor, en el mismo orden');
         $this->assertSame(['ultron.campaigns_manage', 'ultron.canary_manage', 'ultron.canary_authorize', 'ultron.integrations_manage'], array_column($h6['permissions'], 'key'));
         $this->assertSame([true, true, false, false], array_column($h6['permissions'], 'administrator'));
+        // El conjunto cerrado de clasificaciones no contradice a `providerClassifications` del mismo fichero:
+        // las seis de §I2 en su orden y, al final, `connected_voice` (Hito 8, D8-21), como el CRM.
+        $this->assertSame(['connected_read', 'connected_otp_only', 'degraded', 'disabled', 'not_configured', 'registry', 'connected_voice'], $h6['sets']['classification']);
+        $this->assertEqualsCanonicalizing(array_values(array_unique(array_merge(...array_values($h6['providerClassifications'])))), $h6['sets']['classification'],
+            'exactamente lo que algún bloque puede afirmar: ni una de más ni una de menos');
         $this->assertCount(22, $h6['errors'], 'los 15 códigos nuevos de I7.3 y los 7 reutilizados');
         $this->assertSame(['status', 'statusDegraded', 'metaCampaigns', 'metaCampaignsNotConfigured', 'links', 'linkWrite', 'linkDeactivated', 'canaries', 'canariesUnreadable',
             'canaryWrite', 'twilio', 'twilioCalls', 'probe', 'voice', 'config', 'acknowledgement'], array_keys($h6['examples']));

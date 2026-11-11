@@ -4,21 +4,32 @@ namespace Tests\Feature\UltronStudio\MetaTemplates;
 
 use App\Models\Admin;
 use App\Models\UltronStudio\StudioMetaTemplateSubmission as Submission;
+use App\Services\Meta\MetaAuthService;
+use App\Services\Meta\Templates\FakeWhatsappTemplateClient;
+use App\Services\Meta\Templates\TemplateApiResult;
 use App\Services\Meta\Templates\TemplateRequestGuard;
+use App\Services\Meta\Templates\WhatsappTemplateClient;
 use App\Services\Outreach\Core\CanonicalJson;
+use App\Services\UltronStudio\StudioAudit;
 use App\Services\UltronStudio\StudioMessageTemplates as T;
+use App\Services\UltronStudio\StudioMetaTemplates;
 use App\Services\UltronStudio\StudioTemplateMetaChecks;
 use GuzzleHttp\Exception\ConnectException;
 use GuzzleHttp\Promise\Create;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as HttpRequest;
+use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
+use RuntimeException;
 use Tests\TestCase;
+use Throwable;
 
 /**
  * PLANTILLAS DE META · PASO 3, ENVIAR (PLANTILLAS_META_PLAN §5.4, §5.8; L9-96):
@@ -30,7 +41,10 @@ use Tests\TestCase;
  *  - la misma petición repetida no vuelve a enviar; otra con el mismo id, 409;
  *  - dos envíos a la vez hacen UN solo POST (cerrojo e índice único);
  *  - un tiempo agotado deja UNKNOWN; la sincronización la encuentra o, a los 15
- *    minutos, la da por no creada.
+ *    minutos, la da por no creada;
+ *  - los dos caminos raros del cliente, en el servicio (M-2 y M-4 de la revisión
+ *    de la ola): rechaza la plantilla antes de la red (422, FAILED y su evento de
+ *    cierre) o revienta (UNKNOWN, sin segundo POST y sin filtrar el mensaje).
  * Con el doble (sin red) salvo donde se prueba el POST con `Http::fake`.
  */
 class MetaTemplateSubmitTest extends TestCase
@@ -284,6 +298,135 @@ class MetaTemplateSubmitTest extends TestCase
         $this->assertSame('FAILED', $this->submissionOf($pierde)->state);
         $this->assertSame(['allowed' => true], $this->meta('GET', "strategies/templates/{$pierde->uuid}", $this->ana)->json('data.meta.actions.submit'), 'FAILED libera la versión');
         $this->assertSame([], $this->checksOf($pierde));
+    }
+
+    /**
+     * El doble de siempre, salvo `create()`: lanza lo que se le dé y cuenta las veces. Queda en el contenedor
+     * como EL servicio de plantillas de Meta (el controlador y el detalle lo resuelven de ahí).
+     */
+    private function clienteQueLanza(Throwable $e): WhatsappTemplateClient
+    {
+        $cliente = new class(new FakeWhatsappTemplateClient(Cache::store()), $e) implements WhatsappTemplateClient
+        {
+            public int $creates = 0;
+
+            public function __construct(private readonly WhatsappTemplateClient $doble, private readonly Throwable $e) {}
+
+            public function configurationProblem(): ?string
+            {
+                return $this->doble->configurationProblem();
+            }
+
+            public function create(string $wabaId, array $payload): TemplateApiResult
+            {
+                $this->creates++;
+
+                throw $this->e;
+            }
+
+            public function find(string $templateId, array $fields): TemplateApiResult
+            {
+                return $this->doble->find($templateId, $fields);
+            }
+
+            public function findByName(string $wabaId, string $name, ?string $language, array $fields): TemplateApiResult
+            {
+                return $this->doble->findByName($wabaId, $name, $language, $fields);
+            }
+
+            public function list(string $wabaId, array $fields, ?string $after = null, int $limit = self::MAX_PAGE_SIZE): TemplateApiResult
+            {
+                return $this->doble->list($wabaId, $fields, $after, $limit);
+            }
+
+            public function permissions(): TemplateApiResult
+            {
+                return $this->doble->permissions();
+            }
+        };
+        $this->app->instance(StudioMetaTemplates::class, new StudioMetaTemplates(app(StudioAudit::class), app(MetaAuthService::class), $cliente));
+
+        return $cliente;
+    }
+
+    /** @return list<string> lo que se escribe en el registro de la aplicación mientras corre `$hacer` (mensaje y contexto) */
+    private function registrosDe(callable $hacer): array
+    {
+        $registros = [];
+        Event::listen(MessageLogged::class, function (MessageLogged $m) use (&$registros): void {
+            $registros[] = $m->message.' '.json_encode($m->context);
+        });
+        $hacer();
+
+        return $registros;
+    }
+
+    /**
+     * M-2 y M-4 (revisión de la ola), en el SERVICIO por la ruta: el cliente rechaza la plantilla ANTES de la red
+     * (`InvalidArgumentException`: el validador del Studio dejó pasar algo que el guardián del cliente no admite).
+     * 422 `meta_payload_invalid` sin el texto de la excepción, el envío FAILED y EXACTAMENTE un evento de cierre en
+     * el libro (`meta_template.submit_failed`, `detail: payload_refused`), sin datos de Meta ni textos libres.
+     */
+    public function test_si_el_cliente_rechaza_la_plantilla_antes_de_la_red_es_422_failed_y_un_solo_evento_de_cierre(): void
+    {
+        $cliente = $this->clienteQueLanza(new InvalidArgumentException('detalle interno del guardián: components[2].buttons[0]'));
+        $t = $this->approvedMeta('aprobar_rechazo_local_v1');
+
+        $registros = $this->registrosDe(function () use ($t, &$r): void {
+            $r = $this->submitMeta($t)->assertStatus(422)->assertJsonPath('code', 'meta_payload_invalid');
+        });
+
+        $this->assertSame(1, $cliente->creates);
+        $this->assertStringNotContainsString('guardián', $r->getContent());
+        $this->assertStringNotContainsString('components[2]', $r->getContent());
+        $envio = $this->submissionOf($t);
+        $this->assertSame('FAILED', $envio->state);
+        $this->assertSame([null, null, null, null], [$envio->meta_template_id, $envio->error_code, $envio->error_subcode, $envio->error_user_message], 'sin datos de Meta: no salió nada');
+        $eventos = $this->eventsOf($t);
+        $this->assertSame(['meta_template.submit_requested', 'meta_template.submit_failed'], array_slice($eventos, -2), 'el historial ya no se queda en submit_requested');
+        $cierres = array_values(array_intersect($eventos, ['meta_template.submitted', 'meta_template.submit_failed', 'meta_template.submit_unknown']));
+        $this->assertSame(['meta_template.submit_failed'], $cierres, 'exactamente un cierre');
+        $cierre = DB::table('ultron_studio_audit_events')->where('subject_uuid', $t->uuid)->where('event', 'meta_template.submit_failed')->first();
+        $this->assertSame(['SENDING', 'FAILED', (int) $this->ana->id], [$cierre->from_status, $cierre->to_status, (int) $cierre->actor_admin_id]);
+        $this->assertSame(['detail' => 'payload_refused'], json_decode((string) $cierre->diff, true));
+        $this->assertStringNotContainsString('guardián', $cierre->summary.(string) $cierre->metadata);
+        $this->assertSame('meta_template.submit_failed', $this->meta('GET', "strategies/templates/{$t->uuid}", $this->ana)->assertOk()->json('data.meta.timeline.0.event'));
+        // El registro de la aplicación tiene su línea, con la clase y sin el mensaje.
+        $this->assertCount(1, array_filter($registros, static fn (string $l): bool => str_starts_with($l, 'ultron_studio.meta_templates.payload_refused ')));
+        $this->assertSame([], array_values(array_filter($registros, static fn (string $l): bool => str_contains($l, 'guardián'))));
+    }
+
+    /**
+     * M-4 (revisión de la ola), en el SERVICIO por la ruta: el cliente revienta con algo que no es de la red (rompe
+     * su contrato), así que no se sabe si la petición salió. El envío queda UNKNOWN (201, con su evento), la misma
+     * petición repetida NO vuelve a llamar a `create()` y ni la respuesta, ni el libro, ni el registro llevan el
+     * mensaje de la excepción.
+     */
+    public function test_si_el_cliente_revienta_queda_unknown_sin_segundo_post_al_repetir_y_sin_filtrar_el_mensaje(): void
+    {
+        $cliente = $this->clienteQueLanza(new RuntimeException('SQLSTATE[08006] host=db-interno.ironbody usuario=ironbody_app'));
+        $t = $this->approvedMeta('aprobar_revienta_v1');
+        $peticion = (string) Str::uuid();
+
+        $registros = $this->registrosDe(function () use ($t, $peticion, &$r, &$repetida): void {
+            $r = $this->submitMeta($t, peticion: $peticion)->assertCreated();
+            $repetida = $this->submitMeta($t, peticion: $peticion)->assertOk()->assertJsonPath('replayed', true);
+        });
+
+        $this->assertSame(1, $cliente->creates, 'un solo POST: la misma petición no vuelve a enviar');
+        $this->assertSame(['UNKNOWN', 'UNKNOWN'], [$r->json('data.meta.state'), $repetida->json('data.meta.state')]);
+        $this->assertSame(['allowed' => false, 'code' => 'already_submitted'], $r->json('data.meta.actions.submit'), 'no se vuelve a enviar a ciegas');
+        $this->assertSame(1, Submission::query()->count());
+        $this->assertSame(['meta_template.submit_requested', 'meta_template.submit_unknown'], array_slice($this->eventsOf($t), -2));
+        $this->assertCount(1, array_filter($registros, static fn (string $l): bool => str_starts_with($l, 'ultron_studio.meta_templates.create_crashed ')));
+        foreach ([$r->getContent(), $repetida->getContent(), json_encode(DB::table('ultron_studio_audit_events')->get()), json_encode(Submission::query()->get()), implode("\n", $registros)] as $texto) {
+            $this->assertStringNotContainsString('SQLSTATE', $texto);
+            $this->assertStringNotContainsString('db-interno', $texto);
+            $this->assertStringNotContainsString('ironbody_app', $texto);
+        }
+        // Una petición nueva tampoco: la versión tiene un envío vivo (UNKNOWN).
+        $this->submitMeta($t)->assertStatus(409)->assertJsonPath('code', 'already_submitted');
+        $this->assertSame(1, $cliente->creates);
     }
 
     public function test_un_rechazo_de_la_peticion_queda_failed_con_el_error_de_meta_y_libera_la_version(): void
