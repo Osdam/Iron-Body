@@ -212,6 +212,21 @@ class Plan extends Model
         return array_merge(self::defaultFeatures(), $stored);
     }
 
+    /**
+     * ¿El plan incluye clases? Lo decide el módulo «Clases» (Módulos de la app),
+     * que es la ÚNICA puerta real: con él apagado no se reserva ni desde la app
+     * ni desde el mostrador ({@see \App\Services\Classes\ClassBookingService::hasClassesFeature()}).
+     *
+     * NO es la columna `access_classes` («Acceso a clases» en el CRM antiguo):
+     * nunca la aplicó nadie y ya no se edita. Se conserva por su historia, y
+     * quien describa el plan a un cliente tiene que decir lo que el plan da de
+     * verdad, no lo que dice esa columna.
+     */
+    public function includesClasses(): bool
+    {
+        return (bool) ($this->resolvedFeatures()['classes'] ?? false);
+    }
+
     public function getMonthsAttribute(): int
     {
         return max(1, (int) round(((int) $this->duration_days) / 30));

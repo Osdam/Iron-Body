@@ -95,7 +95,9 @@ final class GymFactsProvider
                 'duration_days' => (int) $p->duration_days,
                 'benefits' => array_values($p->benefitsArray()),
                 'tier' => $p->tier,
-                'access_classes' => (bool) $p->access_classes,
+                // Lo que el plan da de verdad (módulo «Clases»), no la columna
+                // `access_classes`. Ver Plan::includesClasses().
+                'access_classes' => $p->includesClasses(),
                 'restrictions' => $p->restrictions,
             ])->all();
     }

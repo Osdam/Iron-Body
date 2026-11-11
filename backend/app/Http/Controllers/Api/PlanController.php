@@ -29,6 +29,14 @@ class PlanController extends Controller
     /** Estados de pago que cuentan como cobrados (vocabulario mixto ES/EN). */
     private const PAID_STATUSES = PaymentController::PAID_STATUSES;
 
+    /**
+     * Ventana en la que la pista de refresco de las capacidades de IA no se
+     * repite a un socio que ya recibió una. El CRM guarda un plan con un PATCH
+     * y, a continuación, un PUT de capacidades: sin esto, un guardado que cambia
+     * las dos cosas le haría pedir su estado dos veces seguidas.
+     */
+    private const AI_HINT_DEDUP_SECONDS = 10;
+
     public function __construct(private readonly IronAiMembershipAccessService $aiAccess) {}
 
     /**
@@ -208,20 +216,23 @@ class PlanController extends Controller
     {
         $data = $this->validatedData($request, true, $plan);
 
-        // Un plan archivado no vuelve a la venta ni a la app por la edición:
-        // eso es «Reactivar», que comprueba que se pueda vender y lo audita.
-        if ($plan->isArchived() && (($data['active'] ?? false) || ($data['visible_in_app'] ?? false))) {
-            throw PlanArchiveException::archivedEdit();
-        }
+        $plan = DB::transaction(function () use ($request, $plan, $data): Plan {
+            $plan = $this->lockedPlan($plan);
 
-        if (array_key_exists('features', $data)) {
-            $data['features'] = array_merge(
-                $plan->resolvedFeatures(),
-                is_array($data['features']) ? $data['features'] : []
-            );
-        }
+            // Un plan archivado no vuelve a la venta ni a la app por la edición:
+            // eso es «Reactivar», que comprueba que se pueda vender y lo audita.
+            if ($plan->isArchived() && (($data['active'] ?? false) || ($data['visible_in_app'] ?? false))) {
+                throw PlanArchiveException::archivedEdit();
+            }
 
-        DB::transaction(function () use ($request, $plan, $data): void {
+            $funcionesAntes = self::memberFacingFeatures($plan);
+            if (array_key_exists('features', $data)) {
+                $data['features'] = array_merge(
+                    $plan->resolvedFeatures(),
+                    is_array($data['features']) ? $data['features'] : []
+                );
+            }
+
             $previoPlan = $plan->getOriginal();
             $plan->update($data);
 
@@ -239,9 +250,15 @@ class PlanController extends Controller
                 'metadata' => $this->eventMetadata($plan, 'plan.updated') + ['price' => (string) $plan->price],
             ]);
 
-            if (array_key_exists('features', $data)) {
-                $this->notifyPlanMembers($plan);
+            // Lo único del plan que lee la app del socio es su mapa de funciones
+            // (`/member/app-state` → Member::resolvedFeatures()). El CRM manda
+            // `features` en CADA guardado, también cuando solo cambia el precio:
+            // avisar entonces a cada socio solo le hacía volver a pedir lo mismo.
+            if (self::memberFacingFeatures($plan) !== $funcionesAntes) {
+                $this->notifyPlanMembersAfterCommit($plan->name);
             }
+
+            return $plan;
         });
 
         return response()->json($this->payload($plan));
@@ -445,7 +462,10 @@ class PlanController extends Controller
             $featureRules
         ));
 
-        DB::transaction(function () use ($request, $plan, $data): void {
+        $plan = DB::transaction(function () use ($request, $plan, $data): Plan {
+            $plan = $this->lockedPlan($plan);
+            $funcionesAntes = self::memberFacingFeatures($plan);
+
             $plan->features = array_merge($plan->resolvedFeatures(), $data['features']);
             $plan->save();
 
@@ -457,8 +477,13 @@ class PlanController extends Controller
                 'metadata' => $this->eventMetadata($plan, 'plan.updated'),
             ]);
 
-            // La señal privada de la app también pertenece a esta mutación.
-            $this->notifyPlanMembers($plan);
+            // La señal privada de la app también pertenece a esta mutación, y
+            // solo si de verdad cambió algo que la app lee.
+            if (self::memberFacingFeatures($plan) !== $funcionesAntes) {
+                $this->notifyPlanMembersAfterCommit($plan->name);
+            }
+
+            return $plan;
         });
 
         return response()->json([
@@ -557,6 +582,11 @@ class PlanController extends Controller
         }
 
         $row = DB::transaction(function () use ($request, $plan, $columns): MembershipAiCapability {
+            // Se serializa con los demás guardados del MISMO plan: el CRM manda
+            // este PUT justo después del PATCH, y dos pestañas pueden hacerlo a
+            // la vez sobre una fila que aún no existe.
+            $plan = $this->lockedPlan($plan);
+
             $row = MembershipAiCapability::updateOrCreate(
                 ['membership_plan_id' => $plan->id],
                 array_merge($columns, [
@@ -574,7 +604,14 @@ class PlanController extends Controller
                 'metadata' => $this->eventMetadata($plan, 'plan.updated'),
             ]);
 
-            $this->notifyPlanMembers($plan);
+            // Las capacidades de IA NO viajan en `app-state`: la app las pide a
+            // `/iron-ai/access` cada vez que abre IRON IA. La señal es solo una
+            // pista de refresco, así que sale únicamente si la fila cambió y no
+            // se repite a quien acaba de recibir una (el PATCH del mismo
+            // guardado, que sale unos milisegundos antes).
+            if ($row->wasRecentlyCreated || $row->wasChanged()) {
+                $this->notifyPlanMembersAfterCommit($plan->name, self::AI_HINT_DEDUP_SECONDS);
+            }
 
             return $row;
         });
@@ -681,19 +718,59 @@ class PlanController extends Controller
     }
 
     /**
-     * Emite una señal real-time (SSE) a cada miembro activo del plan tras cambiar
-     * sus features o capacidades de IA. El cliente recibe `app_state.updated`,
-     * refresca /member/app-state y reevalúa el gating de módulos sin reiniciar.
+     * La fila del plan, releída bajo cerrojo dentro de la transacción en curso.
+     *
+     * Dos guardados del mismo plan a la vez (dos pestañas, un doble clic, un
+     * reintento de red) leían cada uno el plan de ANTES: el segundo pisaba las
+     * funciones del primero al mezclarlas, y ninguno podía saber qué había
+     * cambiado de verdad. Bloqueada, la mezcla de funciones y la comparación
+     * de antes/después parten de lo último confirmado, y los guardados del
+     * mismo plan se hacen de uno en uno. (Las reglas de acceso que falten en
+     * una edición PARCIAL se completan antes, en validatedData(), con la
+     * lectura previa; el CRM manda siempre las cuatro.) `FOR NO KEY UPDATE` no
+     * choca con el `FOR KEY SHARE` que piden los cobros al referenciar el
+     * plan: vender no espera a esto. (SQLite no tiene cerrojos de fila y la
+     * cláusula no se emite.)
      */
-    private function notifyPlanMembers(Plan $plan): void
+    private function lockedPlan(Plan $plan): Plan
     {
-        User::where('plan', $plan->name)
-            ->whereHas('appMember')
-            ->with('appMember')
-            ->get()
-            ->each(function (User $user): void {
-                RealtimeEvents::features((int) $user->appMember->id);
-            });
+        return Plan::query()->whereKey($plan->getKey())->lock('for no key update')->firstOrFail();
+    }
+
+    /**
+     * Las funciones del plan tal como las ve el socio (`/member/app-state` las
+     * saca de Member::resolvedFeatures()), normalizadas para compararlas:
+     * booleanas y en orden fijo.
+     *
+     * @return array<string, bool>
+     */
+    private static function memberFacingFeatures(Plan $plan): array
+    {
+        $funciones = array_map(fn (mixed $valor): bool => (bool) $valor, $plan->resolvedFeatures());
+        ksort($funciones);
+
+        return $funciones;
+    }
+
+    /**
+     * Avisa a los socios de app del plan de que su estado cambió, DESPUÉS de
+     * confirmar la transacción en curso (o al momento si no hay ninguna).
+     *
+     * Antes se avisaba dentro de la transacción, socio a socio (un INSERT y un
+     * DELETE por cada uno): guardar un plan de 4.000 socios tardaba ~5 s por
+     * petición, con la fila del plan bloqueada todo ese tiempo, y si algo
+     * fallaba después la app ya había recibido una señal de un cambio que no
+     * existía. Ahora: si la transacción se revierte, no sale nada; si se
+     * confirma, sale en bloque ({@see RealtimeEvents::featuresForPlanMembers()}),
+     * fuera de cerrojos, y nunca rompe el guardado ya confirmado.
+     *
+     * @param  int|null  $skipIfSignaledWithinSeconds  no repetir a quien ya recibió la señal
+     */
+    private function notifyPlanMembersAfterCommit(string $planName, ?int $skipIfSignaledWithinSeconds = null): void
+    {
+        DB::afterCommit(static function () use ($planName, $skipIfSignaledWithinSeconds): void {
+            RealtimeEvents::featuresForPlanMembers($planName, $skipIfSignaledWithinSeconds);
+        });
     }
 
     private function validatedData(Request $request, bool $updating, ?Plan $plan = null): array

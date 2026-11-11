@@ -142,7 +142,7 @@ class MarketingKnowledgeBaseService
             ->orderByDesc('is_recommended')
             ->orderBy('sort_order')
             ->get(['id', 'name', 'price', 'duration_days', 'benefits', 'tier',
-                'original_price', 'is_recommended', 'badge', 'access_classes', 'restrictions'])
+                'original_price', 'is_recommended', 'badge', 'features', 'restrictions'])
             ->map(fn (Plan $p) => [
                 'id' => $p->id,
                 'name' => $p->name,
@@ -157,7 +157,11 @@ class MarketingKnowledgeBaseService
                     : null,
                 'is_recommended' => (bool) $p->is_recommended,
                 'badge' => $p->badge,
-                'access_classes' => (bool) $p->access_classes,
+                // Clave de siempre (la leen el estratega y el redactor), valor
+                // de verdad: el módulo «Clases», que es lo que deja reservar.
+                // La columna `access_classes` no la aplicaba nadie y llegaba en
+                // `true` a planes sin clases.
+                'access_classes' => $p->includesClasses(),
                 'restrictions' => $p->restrictions,
             ])->all();
     }
