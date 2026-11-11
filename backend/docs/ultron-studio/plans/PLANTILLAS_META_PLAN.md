@@ -592,7 +592,7 @@ sequenceDiagram
      - La idempotencia la da `client_request_id = UUIDv5(espacio fijo, template_id | tupla | id de la última fila)`, con `ramsey/uuid`, que ya está en vendor.
      - Así dos pasadas a la vez chocan en el UNIQUE y la segunda se repite; y un ir y volver (APPROVED → PAUSED → APPROVED) deja tres filas.
    - La calidad **no** crea filas de comprobación, porque el canal no la usa; sí actualiza el envío y deja un evento.
-7. **Si Meta falla** (autorización, permisos, ritmo, servidor, red), la pasada termina con 0, deja el resultado (`outcome`) y **no inventa estados**: lo último registrado sigue mandando. Deja el registro `ultron_studio.meta_templates.sync_failed` con el código, sin cuerpos ni token.
+7. **Si Meta falla** (autorización, permisos, ritmo, servidor, red), la pasada deja el resultado (`outcome`) y **no inventa estados**: lo último registrado sigue mandando. **Código de salida (M-3 de la revisión, L9-105):** 1 si Meta falla en TODA la pasada (`meta_failed`; el programador la registra como tarea fallida, una línea ERROR cada 5 minutos mientras dure) y 0 si falla solo en parte (`partial`: dice cuántas quedaron sin comprobar, `unresolved` en `--json`). Deja el registro `ultron_studio.meta_templates.sync_failed` con el código, sin cuerpos ni token.
 
 **Frecuencia y coste:**
 - cada 5 minutos, `withoutOverlapping(10)` y `onOneServer()`;
@@ -711,7 +711,7 @@ waPreview: { header: string | null; body: string; footer: string | null;
 meta: {
   submission: null | {
     uuid: string; state: 'SENDING' | 'SUBMITTED' | 'FAILED' | 'UNKNOWN';
-    metaTemplateId: string | null; metaStatus: string | null; metaCategory: string | null;
+    metaTemplateRef: string | null; metaStatus: string | null; metaCategory: string | null;
     correctCategory: string | null; rejectedReason: string | null;
     quality: 'GREEN' | 'YELLOW' | 'RED' | 'UNKNOWN' | null;
     matchesStudio: boolean | null; mismatch: string[]; attesterUnavailable: boolean;
@@ -1069,7 +1069,7 @@ Cada paso es pequeño y se verifica por sí solo. Entre corchetes, el agente.
   2. En Configuración del negocio de Meta, confirmar que el usuario del sistema o la integración tienen la WABA con permiso para administrar plantillas (Q5).
   3. Encender la maestra (también hace falta `ULTRON_STUDIO_STRATEGIES_ENABLED` para crear y aprobar versiones) → «Comprobar permisos» → `ok`.
   4. Una plantilla de prueba de **servicio** (utility) → la aprueba otra persona → encender el envío → enviar → «Comprobar ahora» hasta que Meta conteste. La primera respuesta real confirma V-1 y V-2.
-  5. Encender la sincronización.
+  5. Encender la sincronización. **Corrección de la segunda revisión (N-1 de `informe-reviewer-ola-2.md`):** la sincronización se enciende ANTES o A LA VEZ que el envío, nunca después: con el envío encendido y la sincronización apagada, un envío que se quede en `SENDING` no se recupera desde el CRM. El mando de las banderas (`ops/plantillas/meta-templates-scope.sh`) solo tiene los estados `off`, `read` (maestra y sincronización) y `full` (además, el envío).
   6. W9 sigue cerrado por la constante: una plantilla «lista» no envía nada.
 - **La vuelta atrás:**
   - nivel 0: las banderas en `false` y la caché como `www-data`;

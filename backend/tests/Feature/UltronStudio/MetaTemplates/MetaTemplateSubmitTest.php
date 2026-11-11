@@ -81,7 +81,13 @@ class MetaTemplateSubmitTest extends TestCase
         $this->assertSame('SUBMITTED', $r->json('data.meta.state'));
         $this->assertSame('PENDING', $r->json('data.meta.status'));
         $this->assertFalse($r->json('data.meta.campaignReady'));
-        $this->assertMatchesRegularExpression('/^[0-9]+$/', (string) $r->json('data.meta.submission.metaTemplateId'));
+        // El id de Meta se guarda entero y NO sale del servidor: solo su referencia `***NNNN` (§I2 del H6; N-2 de la segunda revisión).
+        $idMeta = (string) $this->submissionOf($t)->meta_template_id;
+        $this->assertMatchesRegularExpression('/^[0-9]{10,}$/', $idMeta);
+        $this->assertSame('***'.substr($idMeta, -4), $r->json('data.meta.submission.metaTemplateRef'));
+        $this->assertArrayNotHasKey('metaTemplateId', $r->json('data.meta.submission'));
+        $this->assertStringNotContainsString($idMeta, (string) $r->getContent());
+        $this->assertStringNotContainsString($idMeta, (string) $this->meta('GET', "strategies/templates/{$t->uuid}", $this->ana)->assertOk()->getContent());
         $this->assertSame(['name' => 'Ana Autora', 'role' => Admin::ROLE_SUPER_ADMIN], $r->json('data.meta.submission.submittedBy'));
         $this->assertSame(['allowed' => false, 'code' => 'already_submitted'], $r->json('data.meta.actions.submit'));
         $this->assertSame(['allowed' => true], $r->json('data.meta.actions.refresh'));
@@ -270,7 +276,7 @@ class MetaTemplateSubmitTest extends TestCase
         $r = $this->submitMeta($t)->assertCreated();
 
         $this->assertSame('UNKNOWN', $r->json('data.meta.state'));
-        $this->assertNull($r->json('data.meta.submission.metaTemplateId'));
+        $this->assertNull($r->json('data.meta.submission.metaTemplateRef'));
         Http::assertSentCount(1);
         $this->assertSame(['allowed' => false, 'code' => 'already_submitted'], $r->json('data.meta.actions.submit'), 'no se vuelve a enviar a ciegas');
         $this->assertContains('meta_template.submit_unknown', $this->eventsOf($t));
@@ -354,7 +360,8 @@ class MetaTemplateSubmitTest extends TestCase
     {
         $registros = [];
         Event::listen(MessageLogged::class, function (MessageLogged $m) use (&$registros): void {
-            $registros[] = $m->message.' '.json_encode($m->context);
+            // Sin escapar: con `\u00e1` la búsqueda de un texto con tilde no casaría nunca (R2-1 de la segunda revisión).
+            $registros[] = $m->message.' '.json_encode($m->context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         });
         $hacer();
 
@@ -393,7 +400,7 @@ class MetaTemplateSubmitTest extends TestCase
         $this->assertSame('meta_template.submit_failed', $this->meta('GET', "strategies/templates/{$t->uuid}", $this->ana)->assertOk()->json('data.meta.timeline.0.event'));
         // El registro de la aplicación tiene su línea, con la clase y sin el mensaje.
         $this->assertCount(1, array_filter($registros, static fn (string $l): bool => str_starts_with($l, 'ultron_studio.meta_templates.payload_refused ')));
-        $this->assertSame([], array_values(array_filter($registros, static fn (string $l): bool => str_contains($l, 'guardián'))));
+        $this->assertSame([], array_values(array_filter($registros, static fn (string $l): bool => str_contains($l, 'guardián') || str_contains($l, 'components[2]'))));
     }
 
     /**

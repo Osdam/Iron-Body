@@ -7,6 +7,7 @@ use App\Models\Admin;
 use App\Models\UltronStudio\StudioAuditEvent;
 use App\Models\UltronStudio\StudioMessageTemplate;
 use App\Models\UltronStudio\StudioMetaTemplateSubmission as Submission;
+use App\Services\Marketing\Attribution\LeadSourceClassifier;
 use App\Services\Meta\MetaAuthService;
 use App\Services\Meta\Templates\MetaTemplate;
 use App\Services\Meta\Templates\TemplateApiErrors;
@@ -1380,7 +1381,9 @@ final class StudioMetaTemplates
             'metaName' => (string) $s->meta_name,
             'language' => (string) $s->language,
             'category' => (string) $s->category,
-            'metaTemplateId' => $s->meta_template_id,
+            // El id de Meta no sale del servidor (§I2 del contrato del H6): solo su referencia legible `***NNNN`.
+            // En el Administrador de WhatsApp la plantilla se busca por su nombre y su idioma.
+            'metaTemplateRef' => LeadSourceClassifier::maskId($s->meta_template_id === null ? null : (string) $s->meta_template_id),
             'metaStatus' => $s->meta_status,
             'metaCategory' => $s->meta_category,
             'correctCategory' => $s->meta_correct_category,

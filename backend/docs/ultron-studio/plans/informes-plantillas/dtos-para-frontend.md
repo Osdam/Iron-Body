@@ -121,7 +121,7 @@
         "metaName": "pausar_renovacion_v1",
         "language": "es_CO",
         "category": "marketing",
-        "metaTemplateId": "1688186126583244",
+        "metaTemplateRef": "***3244",
         "metaStatus": "PENDING",
         "metaCategory": "MARKETING",
         "correctCategory": null,
@@ -157,7 +157,7 @@
   "submission": {
     "uuid": "9747dbbe-1945-4f2b-af3e-f19442dbe99c",
     "state": "FAILED",
-    "metaTemplateId": null,
+    "metaTemplateRef": null,
     "metaStatus": null,
     "error": { "code": 100, "subcode": null, "message": "El doble de Meta rechaza a propósito las plantillas cuyo nombre empieza por fallar_." },
     "…": "el resto de campos, null",
@@ -171,7 +171,7 @@
 ```
 
   `error.message` es el `error_user_msg` de Meta **ya saneado** (una línea, ≤ 300; sin tokens ni números largos): se puede pintar tal cual. `FAILED` libera la versión: `actions.submit` vuelve a `allowed`.
-- **Sin respuesta de Meta** (tiempo agotado): `meta.state = "UNKNOWN"`, `submission.metaTemplateId = null`. Texto del plan: «No sabemos si Meta la recibió; se comprobará sola en unos minutos. No la vuelvas a enviar.» (`actions.submit` dice `already_submitted`.)
+- **Sin respuesta de Meta** (tiempo agotado): `meta.state = "UNKNOWN"`, `submission.metaTemplateRef = null`. Texto del plan: «No sabemos si Meta la recibió; se comprobará sola en unos minutos. No la vuelvas a enviar.» (`actions.submit` dice `already_submitted`.)
 
 ## 4. `POST strategies/templates/{uuid}/meta/refresh` («Comprobar ahora», sin cuerpo)
 
@@ -224,7 +224,7 @@ Gana `meta` (null si no es de WhatsApp). `waPreview` (del paso 1b) ya estaba. Ej
     "metaName": "pausar_renovacion_v1",
     "language": "es_CO",
     "category": "marketing",
-    "metaTemplateId": "1688186126583244",
+    "metaTemplateRef": "***3244",
     "metaStatus": "PAUSED",
     "metaCategory": "MARKETING",
     "correctCategory": null,
@@ -265,7 +265,7 @@ interface TemplateMetaDetail extends TemplateMetaSummary {
   submission: null | {
     uuid: string; state: 'SENDING' | 'SUBMITTED' | 'FAILED' | 'UNKNOWN';
     metaName: string; language: 'es' | 'es_CO'; category: 'marketing' | 'utility';
-    metaTemplateId: string | null; metaStatus: string | null; metaCategory: string | null;
+    metaTemplateRef: string | null; metaStatus: string | null; metaCategory: string | null;
     correctCategory: string | null; rejectedReason: string | null;
     quality: 'GREEN' | 'YELLOW' | 'RED' | 'UNKNOWN' | null;
     matchesStudio: boolean | null; mismatch: string[]; attesterUnavailable: boolean;
@@ -300,6 +300,8 @@ Real, con `ULTRON_STUDIO_META_TEMPLATES_URL_HOSTS=ironbodyneiva.cloud` y el bot�
 ```
 
 El botón «Llamar» se crea con `{ "type": "PHONE_NUMBER", "text": "Llamar" }` (sin número: el servidor pone el del gimnasio; si llega otro, 422 `phone_not_allowed`).
+
+**El id de Meta tampoco sale del servidor (L9-106; N-2 de la segunda revisión).** `meta.submission.metaTemplateRef` es la referencia legible `***NNNN` (`LeadSourceClassifier::maskId`, la misma de las cuentas y campañas del H6); el id entero se queda en `ultron_studio_meta_template_submissions.meta_template_id`. En el Administrador de WhatsApp la plantilla se busca por su nombre y su idioma.
 
 **El número no sale del servidor (L9-105; contrato del H6, §I2: ningún cuerpo del Studio lleva un teléfono ni una clave de teléfono).** El catálogo dice `phoneLast4` (las cuatro últimas cifras del número del gimnasio, o `null`); en el detalle, el botón «Llamar» sale como `{ "type": "PHONE_NUMBER", "text": "Llamar", "phoneLast4": "5483" }` tanto en `content.buttons` como en `waPreview.buttons` (`StudioMessageTemplates::publicContent()` y `waPreview()`). Lo guardado (`content_json`, con el número entero) y su huella no cambian: son lo que se aprueba y lo que se envía a Meta. El CRM no devuelve `phoneLast4` al guardar.
 
