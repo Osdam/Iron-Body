@@ -1,0 +1,7 @@
+e66f7b26394b5aa5640da516da938b6d89bc37c6ad65b436f1e8ec31b989c7b9  ./barrido-evidencia.txt
+088be32a1e55334c48da9f525278883306af2eecba29bac261e8ade573c43fec  ./guion-A-borrador-como-lista.out
+214a30fa60ec74611cb0e35fb9453f9feae8e616b65656f52ac31f875f82e8c9  ./guion-B-simulacion-con-null.out
+1189628ede5ab4f8f3537bb126a90a1c43777f57961afd5d483f76e7b01df064  ./guion-C-parada-sin-explicacion.out
+b220fad4794beb02e30eb93db5d65b143a4268eadcd749eea2e8bea4d0c87ac0  ./guion-D-url-arreglada.out
+0c1987956dcc976f43d5cffd8f0af46460f3938bfae9e626b7fcb6e185965b60  ./mutaciones.log
+2214f739351bbb3f4afe07d908ce25391ceac5275443b06a2dc6e25793173fdb  ./mutar-h9.sh

@@ -1,0 +1,84 @@
+── humo
+  OK    Ana abre «Campañas automáticas»
+  OK    a: chips del gobierno (encendido, publicar, persona vinculada) — {"gobierno":"toggle_on Gobierno encendido","publicar":"rocket_launch Publicar: ventana abierta","persona":"how_to_reg Persona vinculada","parada":"","cadena":""}
+  OK    a: canal en vivo conectado (SSE) — live
+  OK    Beto abre «Campañas automáticas»
+  OK    b: chips del gobierno (encendido, publicar, persona vinculada) — {"gobierno":"toggle_on Gobierno encendido","publicar":"rocket_launch Publicar: ventana abierta","persona":"how_to_reg Persona vinculada","parada":"","cadena":""}
+  OK    b: canal en vivo conectado (SSE) — live
+  OK    el panel enseña el modo sombra y la constante de envío cerrada
+  OK    GET outreach/status: maestra, sombra, constante cerrada — {"status":200,"config":{"enabled":true,"mode":"shadow","sends":false}}
+── plantillas
+  OK    Ana abre Plantillas
+  OK    Ana ve «Nueva versión de plantilla»
+  OK    Ana crea la plantilla en borrador
+  OK    la plantilla existe en borrador — {"status":"DRAFT","canal":"assisted","finalidad":"commercial"}
+  OK    Ana (autora) no puede aprobar su plantilla (ni botón ni servidor) — {"boton":false,"servidor":{"allowed":false,"code":"four_eyes_required"}}
+  OK    Beto abre Plantillas
+  OK    Beto abre la plantilla de Ana
+  OK    Beto ve «Aprobar»
+  OK    Beto confirma la aprobación
+  OK    la plantilla queda APROBADA por Beto (cuatro ojos por persona) — {"status":"APPROVED","revisor":"Beto Revisor (E2E H9)"}
+── e1
+  OK    Ana ve «Nueva estrategia»
+  OK    Ana crea la estrategia
+  OK    H9-E2E-1: al crearla, el CRM lee el alta (201) y abre el constructor
+  OK    la estrategia nueva existe en el servidor (por su clave) y tiene uuid — {"uuid":"b644ace8-1541-40a7-aabe-a4d80ff10699","clave":"renovacion-7d-025540"}
+  OK    H9-E2E-1: el constructor que abre tras el alta es el de la estrategia nueva (su clave en el título) — {"titulo":"Renovación a 7 días (E2E) renovacion-7d-025540","clave":"renovacion-7d-025540"}
+  OK    H9-E2E-1: el detalle trae el borrador vacío como objeto (`"content":{}`) o null, nunca `[]` — {"status":200,"contenidoCrudo":"{}","revision":1}
+  OK    la estrategia nueva aparece en la lista de Estrategias
+  OK    H9-E2E-1: abierta después desde la lista, el constructor carga el borrador vacío sin error — {"resultado":"ok"}
+  OK    la forma en vivo es válida (espejo del servidor, sin texto libre)
+  OK    Ana guarda el borrador
+  OK    el borrador queda guardado — ["check_circle Borrador guardado (revisión 2). close"]
+  OK    Ana valida en el servidor
+  OK    el servidor contesta la validación
+  OK    el servidor: sin bloqueantes y la misma huella que la forma en vivo — {"servidor":"verified Sin bloqueantes · 1 aviso(s) · huella 81c9cc11f807cca5…","enVivo":"81c9cc11f807cca5"}
+  OK    Ana abre «Simular»
+  OK    la pestaña Simulación queda lista
+  OK    la simulación del BORRADOR pasa (sin bloqueantes) con las decisiones esperadas por persona — {"pasa":"si","decisiones":{"p-autorizada":"plan","p-negada":"deny","p-sin-eventos":"plan"},"esperadas":{"p-autorizada":"plan","p-negada":"deny","p-sin-eventos":"plan"}}
+  OK    H9-E2E-2: el CRM manda `events: []` y `contacts: []` (listas vacías, no null) por cada persona de prueba
+  OK    H9-E2E-2: ninguna persona de prueba sin eventos se niega por «pidió hablar con alguien» (ni en la frase ni en los recuentos) — {"conLaFrase":[],"recuentosPorMotivo":{"consent_denied":1},"hallazgo":"H9-E2E-2"}
+  OK    H9-E2E-2: la persona de prueba autorizada y SIN eventos se planifica (`plan`), como la del caso positivo
+  OK    Ana congela la versión
+  OK    la versión 1 existe y su huella es la de la forma en vivo — {"status":"REVIEW_REQUIRED","huella":"81c9cc11f807cca5","enVivo":"81c9cc11f807cca5"}
+  OK    la pestaña Simulación queda lista
+  OK    la simulación de la VERSIÓN pasa (sin bloqueantes): la puerta de aprobar — {"pasa":"si","decisiones":{"p-autorizada":"plan","p-negada":"deny","p-sin-eventos":"plan"}}
+  OK    Ana (autora) no ve «Aprobar» y el servidor tampoco se lo permite — {"boton":false,"servidor":{"allowed":false,"code":"four_eyes_required"}}
+  OK    Beto abre la versión
+  OK    Beto ve «Aprobar»
+  OK    se abre el diálogo de aprobar
+  OK    Beto confirma la aprobación
+  OK    la versión queda APROBADA por otra persona — {"status":"APPROVED","avisosReconocidos":1,"avisos":["check_circle Versión aprobada. close"]}
+  OK    Beto ve «Publicar en canario»
+  OK    el diálogo enseña la huella que se publica
+  OK    Beto confirma la publicación
+  OK    la cadena tiene la entrada `publish` VERIFICADA con la huella del diálogo y el canario activo
+── url
+  OK    Ana pulsa «Abrir» en la fila de vencimientos
+  OK    el constructor abre vencimientos
+  OK    H9-E2E-4: abierta con «Abrir» desde la lista, la URL lleva la estrategia (?estrategia=<uuid>) para F5 y enlaces — {"url":{"pestana":"constructor","estrategia":"b644ace8-1541-40a7-aabe-a4d80ff10699"},"esperada":"b644ace8-1541-40a7-aabe-a4d80ff10699","hallazgo":"H9-E2E-4"}
+  OK    Ana ve «Nueva estrategia» (con vencimientos elegida en la URL)
+  OK    Ana crea la estrategia nueva
+  OK    el constructor abre la nueva
+  OK    la estrategia nueva existe en el servidor — url-f5-025540
+  OK    H9-E2E-4: con otra estrategia elegida, tras crear una nueva y recargar (F5) el constructor sigue en la nueva
+── barrido
+  OK    a · panel: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    a · estrategias: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    a · plantillas: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    a · bandeja: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    a · vinculos: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    a: ningún nombre ni teléfono sintético en las respuestas de la API ni en los eventos SSE — {"cuerposBarridos":183,"eventosSSE":21,"fugas":[]}
+  OK    a: 0 hosts fuera de 127.0.0.1 alcanzados (los intentos mueren en el resolver) — {"peticiones":921,"intentosFuera":17,"hostsIntentados":["fonts.googleapis.com"],"alcanzadas":[]}
+  OK    a: ninguna respuesta 5xx de la API (salvo 502 dentro del reinicio deliberado de la fase asistida) — {"fuera":[],"durante502DelReinicio":0}
+  OK    a: ningún error de página — []
+  OK    b · panel: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    b · estrategias: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    b · plantillas: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    b · bandeja: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    b · vinculos: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    b: ningún nombre ni teléfono sintético en las respuestas de la API ni en los eventos SSE — {"cuerposBarridos":134,"eventosSSE":17,"fugas":[]}
+  OK    b: 0 hosts fuera de 127.0.0.1 alcanzados (los intentos mueren en el resolver) — {"peticiones":620,"intentosFuera":11,"hostsIntentados":["fonts.googleapis.com"],"alcanzadas":[]}
+  OK    b: ninguna respuesta 5xx de la API (salvo 502 dentro del reinicio deliberado de la fase asistida) — {"fuera":[],"durante502DelReinicio":0}
+  OK    b: ningún error de página — []
+  → 78/78 OK en 129 s

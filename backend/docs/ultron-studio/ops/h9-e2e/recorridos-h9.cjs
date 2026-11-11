@@ -17,6 +17,7 @@
  *   pausa       Beto pausa la campaña de prospectos; la pasada siguiente no la ejecuta
  *   asistido    (desviación documentada) modo `live` con el asistido encendido: una socia nueva, la bandeja,
  *               reclamar y registrar el resultado
+ *   url         H9-E2E-4: abrir una estrategia la deja en la URL (F5 y enlaces), también con otra ya elegida
  *   barrido     DOM, almacenamiento, consola y red de las dos sesiones; hosts; respuestas de la API y eventos SSE
  */
 'use strict';
@@ -87,6 +88,33 @@ async function avisos(s) {
 
 /** El diálogo abierto (el panel `[role=dialog][aria-modal]`). */
 const DIALOGO = '[role=dialog][aria-modal=true]';
+
+/** El título del constructor (nombre y clave de la estrategia que tiene abierta). */
+const TITULO_CONSTRUCTOR = '[data-ca-constructor] h2, [data-ca-constructor] .ig-h2';
+const tituloConstructor = (s) => L.texto(s, TITULO_CONSTRUCTOR);
+
+/** La estrategia de esa clave según la API (la lista de Ana), con reintentos. */
+async function creadaPorClave(clave) {
+  for (let i = 0; i < 20; i++) {
+    const r = await L.api(ctx, 'a', 'GET', 'admin/ultron-studio/strategies?per_page=50');
+    const x = (r.json?.data?.data ?? []).find((e) => e.key === clave);
+    if (x) return x;
+    await L.dormir(500);
+  }
+  return null;
+}
+
+/** La pestaña y la estrategia de la URL de una sesión, esperando hasta `ms` a que la estrategia sea `uuid`. */
+async function urlDe(s, uuid, ms) {
+  const fin = Date.now() + ms;
+  let u;
+  do {
+    u = await L.leer(s, `const u = new URL(location.href); return { pestana: u.searchParams.get('pestana'), estrategia: u.searchParams.get('estrategia') };`);
+    if (u.estrategia === uuid) return u;
+    await L.dormir(250);
+  } while (Date.now() < fin);
+  return u;
+}
 
 /** Escribe el motivo en un `ib-reason-dialog` y confirma. */
 async function motivoYConfirmar(s, texto) {
@@ -230,14 +258,12 @@ async function simularEn(c, uuid, objetivo, prefijoFoto) {
       if (!tag) throw new L.Requisito(`simulación: el hecho ${hecho} no apareció`);
       await poner(A, `return document.querySelector(${sel(`${fsP} [aria-label="${hecho}"]`)});`, String(v), tag === 'SELECT' ? 'change' : 'input');
     }
-    // COSTURA H9-E2E-2: un evento reciente inocuo para que la fuente de eventos conste como leída (sin él, N6 niega).
-    if (p.evento && !(await L.leer(A, `return !!document.querySelector(${sel(`${fsP} [data-ca-sim-evento="0"]`)});`))) {
-      if (!(await L.clic(A, `${fsP} [data-ca-sim-evento-anadir]`))) throw new L.Requisito('no se pudo añadir el evento de prueba');
-      await hay(A, `${fsP} [data-ca-sim-evento="0"] select`, L.T(5000));
-      await poner(A, `return document.querySelector(${sel(`${fsP} [data-ca-sim-evento="0"] select`)});`, p.evento);
-    }
+    // Sin eventos ni contactos (ya no hay costura H9-E2E-2): «sin ellos, y se sabe».
+    const conEventos = await L.leer(A, `return document.querySelectorAll(${sel(`${fsP} [data-ca-sim-evento]`)}).length;`);
+    if (conEventos) throw new L.Requisito(`simulación: la persona ${p.ref} tiene ${conEventos} evento(s) y el guion no añadió ninguno`);
   }
   await foto(A, `${prefijoFoto}-ana-simulacion-personas`);
+  const enviadasAntes = A.simulaciones.length;
   if (!(await L.clic(A, '[data-ca-sim-lanzar]'))) throw new L.Requisito('no se pudo lanzar la simulación');
   const antes = await L.leer(A, `return document.querySelector('[data-ca-sim-resultado]')?.outerHTML.length ?? 0;`);
   void antes;
@@ -248,7 +274,15 @@ async function simularEn(c, uuid, objetivo, prefijoFoto) {
   await L.dormir(300);
   const textos = await L.leer(A, `${L.NORMALIZA} return Object.fromEntries([...document.querySelectorAll('[data-ca-sim-persona-resultado]')].map((d) => [d.getAttribute('data-ca-sim-persona-resultado'), n(d.innerText).slice(0, 600)]));`);
   await foto(A, `${prefijoFoto}-ana-simulacion-resultado`);
-  return { pasa, decisiones, textos };
+  // Lo que mandó el navegador (CDP, solo la FORMA de `events` y `contacts` por persona de prueba; ver lib-h9 `sesion`).
+  const enviadas = A.simulaciones.slice(enviadasAntes);
+  return { pasa, decisiones, textos, enviada: enviadas.length === 1 ? enviadas[0] : { peticiones: enviadas.length, formas: enviadas.map((e) => e.formas) } };
+}
+
+/** ¿Cada persona de prueba viajó con `events: []` y `contacts: []` (listas vacías), nunca null ni ausentes? */
+function listasVacias(enviada) {
+  const f = enviada?.formas;
+  return Array.isArray(f) && f.length > 0 && f.every((p) => p.events === 'lista(0)' && p.contacts === 'lista(0)');
 }
 
 /**
@@ -265,39 +299,31 @@ async function cicloEstrategia(c) {
   await poner(A, `return document.querySelector('[data-ca-crear-finalidad]');`, 'commercial');
   await foto(A, `${c.n}-01-ana-crea-estrategia`);
   inf.must('Ana crea la estrategia', await L.clic(A, '[data-ca-crear-enviar]'));
-  let enConstructor = await hay(A, '[data-ca-constructor]', L.T(30000));
-  let uuid = enConstructor ? await L.leer(A, `return new URL(location.href).searchParams.get('estrategia');`) : null;
-  if (!enConstructor) {
-    // HALLAZGO H9-E2E-1 (informe §B): el alta responde 201, pero el CRM no puede leer la respuesta: el servidor manda
-    // `draft.content: []` (lista) para el borrador vacío y el CRM exige un objeto o null.
-    const aviso = await avisos(A);
-    await foto(A, `${c.n}-01b-ana-alta-sin-constructor`);
-    inf.check('al crearla, el CRM abre el constructor', false, { aviso, hallazgo: 'H9-E2E-1' });
-    let creada = null;
-    for (let i = 0; i < 20 && !creada; i++) {
-      const r = await L.api(ctx, 'a', 'GET', 'admin/ultron-studio/strategies?per_page=50');
-      creada = (r.json?.data?.data ?? []).find((x) => x.key === clave) ?? null;
-      if (!creada) await L.dormir(500);
-    }
-    inf.must('el servidor sí creó la estrategia (aunque el CRM no pudo leer la respuesta)', !!creada, creada && { uuid: creada.uuid, clave: creada.key });
-    uuid = creada.uuid;
-    const det = await L.api(ctx, 'a', 'GET', `admin/ultron-studio/strategies/${uuid}`);
-    const contenido = det.json?.data?.draft?.content;
-    inf.check('el detalle trae `draft.content` como objeto o null (lo que exige el CRM)', contenido === null || (typeof contenido === 'object' && !Array.isArray(contenido)), { contenido, hallazgo: 'H9-E2E-1' });
-    await L.pagina(A, ctx, `constructor&estrategia=${uuid}`);
-    const errCons = await hay(A, '[data-ca-constructor-error]', L.T(30000));
-    await foto(A, `${c.n}-01c-ana-constructor-no-abre`);
-    inf.check('el constructor abre la estrategia recién creada (borrador vacío)', !errCons, { error: errCons ? await L.texto(A, '[data-ca-constructor-error]') : null, hallazgo: 'H9-E2E-1' });
-    // COSTURA (README): Ana guarda por la API un borrador mínimo (un objeto) para que el CRM pueda abrirla; el resto sigue
-    // en el navegador. No toca el código ni la base por detrás: es la misma ruta que usa «Guardar borrador».
-    const put = await L.api(ctx, 'a', 'PUT', `admin/ultron-studio/strategies/${uuid}/draft`, { baseRevision: det.json.data.draft.revision, draft: { format: 'strategy-content/1' } });
-    inf.must('COSTURA H9-E2E-1: Ana guarda por la API un borrador mínimo {format} (PUT draft, 200)', put.status === 200, put.status);
-    await L.pagina(A, ctx, `constructor&estrategia=${uuid}`);
-    enConstructor = await hay(A, '[data-ca-constructor]', L.T(30000));
-    inf.must('con el borrador mínimo, el constructor abre la estrategia', enConstructor, await avisos(A));
-  }
-  inf.must('la estrategia tiene uuid', /^[0-9a-f-]{36}$/.test(String(uuid)), uuid);
+  // REGRESIÓN H9-E2E-1 (informe §B.2; corregido en L9-84 con `StudioStrategies::draftApiDto()`): el alta (201) traía el
+  // borrador vacío como `"content":[]` y el CRM no abría el constructor ni entonces ni después desde la lista. Sin
+  // costura: TODO el alta se hace en el navegador, y cada síntoma del hallazgo queda como comprobación.
+  const enConstructor = await hay(A, '[data-ca-constructor]', L.T(30000));
+  if (!enConstructor) await foto(A, `${c.n}-01b-ana-alta-sin-constructor`);
+  inf.must('H9-E2E-1: al crearla, el CRM lee el alta (201) y abre el constructor', enConstructor, enConstructor ? undefined : { aviso: await avisos(A), hallazgo: 'H9-E2E-1' });
+  // El uuid, por su clave en la API: la URL no lo lleva tras abrir una estrategia (H9-E2E-4, paso `url`).
+  const creada = await creadaPorClave(clave);
+  inf.must('la estrategia nueva existe en el servidor (por su clave) y tiene uuid', !!creada && /^[0-9a-f-]{36}$/.test(String(creada.uuid)), creada && { uuid: creada.uuid, clave: creada.key });
+  const uuid = creada.uuid;
   estado.estrategias[c.n] = { uuid, clave };
+  const titulo = await tituloConstructor(A);
+  inf.check('H9-E2E-1: el constructor que abre tras el alta es el de la estrategia nueva (su clave en el título)', (titulo || '').includes(clave), { titulo, clave });
+  await foto(A, `${c.n}-01b-ana-constructor-tras-el-alta`);
+  // El JSON CRUDO del detalle: el borrador vacío es un OBJETO (`{}`) o null; nunca una lista (`[]`).
+  const det = await L.api(ctx, 'a', 'GET', `admin/ultron-studio/strategies/${uuid}`);
+  const crudo = (det.texto.match(/"draft"\s*:\s*\{[^{}]*?"content"\s*:\s*(\{\}|\[\]|null)/) || [])[1] ?? '(otro: ¿borrador no vacío?)';
+  inf.check('H9-E2E-1: el detalle trae el borrador vacío como objeto (`"content":{}`) o null, nunca `[]`', det.status === 200 && (crudo === '{}' || crudo === 'null'), { status: det.status, contenidoCrudo: crudo, revision: det.json?.data?.draft?.revision });
+  // Abrirla DESPUÉS desde la lista (el segundo síntoma): Estrategias → «Abrir» de su fila → el constructor, sin error.
+  if (!(await L.pagina(A, ctx, 'estrategias'))) throw new L.Requisito('la pestaña Estrategias no volvió a quedar lista');
+  inf.must('la estrategia nueva aparece en la lista de Estrategias', await hay(A, `[data-ca-abrir="${uuid}"]`, L.T(20000)));
+  await L.clic(A, `[data-ca-abrir="${uuid}"]`);
+  const abre = await L.esperar(A, `if (document.querySelector('[data-ca-constructor-error]')) return 'error'; const t = document.querySelector(${sel(TITULO_CONSTRUCTOR)}); return t && t.textContent.includes(${sel(clave)}) ? 'ok' : null;`, L.T(30000));
+  await foto(A, `${c.n}-01c-ana-abre-desde-la-lista`);
+  inf.must('H9-E2E-1: abierta después desde la lista, el constructor carga el borrador vacío sin error', abre === 'ok', abre === 'error' ? { error: await L.texto(A, '[data-ca-constructor-error]'), hallazgo: 'H9-E2E-1' } : { resultado: abre ?? 'no apareció' });
 
   // 2. El constructor: objetivo, prioridad, disparador y parámetros, condiciones, secuencia y canario.
   await poner(A, `return document.querySelector('[data-ca-goal]');`, c.goal);
@@ -335,13 +361,17 @@ async function cicloEstrategia(c) {
   inf.must('Ana abre «Simular»', await L.clic(A, '[data-ca-ir-simulacion]'));
   const sb = await simularEn(c, uuid, 'draft', `${c.n}-04`);
   inf.check('la simulación del BORRADOR pasa (sin bloqueantes) con las decisiones esperadas por persona', sb.pasa === 'si' && decisionesComoSeEsperan(sb.decisiones, c.decisionesSimuladas), { pasa: sb.pasa, decisiones: sb.decisiones, esperadas: c.decisionesSimuladas });
+  // REGRESIÓN H9-E2E-2 (informe §B.2; corregido en L9-84, `ca-simulation.ts`): sin la costura del evento inocuo, ninguna
+  // persona de prueba lleva eventos. El CRM tiene que mandar listas vacías (no null) y ninguna puede salir negada en N6
+  // por «pidió hablar con alguien» (`human_requested_recently`), que era la explicación falsa.
+  inf.check('H9-E2E-2: el CRM manda `events: []` y `contacts: []` (listas vacías, no null) por cada persona de prueba', listasVacias(sb.enviada), { hallazgo: 'H9-E2E-2', ...sb.enviada });
+  const rb = ultimaSimulacion(uuid);
+  const porMotivo = rb?.counts?.byReason ?? null;
+  const falsas = Object.entries(sb.textos).filter(([, t]) => /pidió hablar con alguien/i.test(t)).map(([ref]) => ref);
+  inf.check('H9-E2E-2: ninguna persona de prueba sin eventos se niega por «pidió hablar con alguien» (ni en la frase ni en los recuentos)', !falsas.length && !(porMotivo && porMotivo.human_requested_recently), { conLaFrase: falsas, recuentosPorMotivo: porMotivo, hallazgo: 'H9-E2E-2' });
   if (c.sinEventos) {
-    // HALLAZGO H9-E2E-2: una persona de prueba SIN eventos se manda con `events: null` y N6 la niega como si hubiera
-    // pedido hablar con alguien (`human_requested_recently`).
-    const r = ultimaSimulacion(uuid);
     const texto = sb.textos['p-sin-eventos'] || '';
-    inf.check('una persona de prueba sin eventos no se niega por «pidió hablar con alguien» (human_requested_recently)', sb.decisiones['p-sin-eventos'] !== 'deny' || !/pidió hablar con alguien/i.test(texto),
-      { decision: sb.decisiones['p-sin-eventos'], frase: texto.slice(0, 300), recuentosPorMotivo: r?.counts?.byReason ?? null, hallazgo: 'H9-E2E-2' });
+    inf.check('H9-E2E-2: la persona de prueba autorizada y SIN eventos se planifica (`plan`), como la del caso positivo', sb.decisiones['p-sin-eventos'] === 'plan', { decision: sb.decisiones['p-sin-eventos'], frase: texto.slice(0, 300), hallazgo: 'H9-E2E-2' });
   }
 
   // 5. Congelar la versión (exige el borrador guardado y la forma válida).
@@ -427,6 +457,12 @@ PASOS.humo = async () => {
     inf.check(`${s.quien}: chips del gobierno (encendido, publicar, persona vinculada)`, !!chips.gobierno && !!chips.persona && /vinculad|verificad/i.test(chips.persona || ''), chips);
     const vivo = await L.esperar(s, `return document.querySelector('[data-ca-live]')?.getAttribute('data-ca-live') === 'live' ? 'live' : null;`, L.T(30000));
     inf.check(`${s.quien}: canal en vivo conectado (SSE)`, vivo === 'live', await L.leer(s, `return document.querySelector('[data-ca-live]')?.getAttribute('data-ca-live');`));
+    // L9-79 (la ola): «Estado de activación» encima del panel, con las siete funciones de las campañas. Terminada su
+    // lectura (la insignia «Leyendo…» desaparece), cada una tiene un estado (o «Sin estado» si no puede leerlo).
+    await L.esperar(s, `const p = document.querySelector('[data-activacion-panel="campanas"]'); return !!p && !p.querySelector('[data-activacion-leyendo]');`, L.T(30000));
+    const act = await L.leer(s, `return [...document.querySelectorAll('[data-activacion-panel="campanas"] [data-activacion]')].map((e) => ({ id: e.getAttribute('data-activacion'), estado: e.getAttribute('data-estado'), lectura: e.getAttribute('data-lectura'), leyendo: !!e.querySelector('[data-activacion-leyendo]') }));`);
+    inf.check(`${s.quien}: «Estado de activación» con las 7 funciones de las campañas, cada una con su estado (ninguna se queda en «Leyendo…»)`,
+      act.length === 7 && act.every((r) => !r.leyendo && (!!r.estado || r.lectura === 'unreadable')), act.map((r) => [r.id, r.estado || r.lectura]));
   }
   await L.esperar(A, `return (document.querySelector('[data-ca-banderas]')?.innerText || '').length > 40;`, L.T(30000));
   const banderas = await L.texto(A, '[data-ca-banderas]');
@@ -491,8 +527,8 @@ PASOS.plantillas = async () => {
 };
 
 const SIM_SOCIOS = [
-  { ref: 'p-autorizada', whatsapp: 'granted', canario: true, evento: 'app_linked', hechos: [['membership.active', 'true'], ['membership.frozen', 'false'], ['membership.days_to_expiry', 7]] },
-  { ref: 'p-negada', whatsapp: 'denied', canario: true, evento: 'app_linked', hechos: [['membership.active', 'true'], ['membership.frozen', 'false'], ['membership.days_to_expiry', 7]] },
+  { ref: 'p-autorizada', whatsapp: 'granted', canario: true, hechos: [['membership.active', 'true'], ['membership.frozen', 'false'], ['membership.days_to_expiry', 7]] },
+  { ref: 'p-negada', whatsapp: 'denied', canario: true, hechos: [['membership.active', 'true'], ['membership.frozen', 'false'], ['membership.days_to_expiry', 7]] },
   { ref: 'p-sin-eventos', whatsapp: 'granted', canario: true, hechos: [['membership.active', 'true'], ['membership.frozen', 'false'], ['membership.days_to_expiry', 7]] },
 ];
 
@@ -507,7 +543,8 @@ PASOS.e1 = async () => {
       { id: 'seguimiento', retraso: { n: 2, unit: 'days' }, on: { no_answer: 'end_exit', answered: 'end_success' } },
     ],
     simulacion: SIM_SOCIOS,
-    decisionesSimuladas: { 'p-autorizada': 'plan', 'p-negada': 'deny' },
+    // Nadie lleva eventos: la autorizada y la «sin eventos» se planifican; la negada cae en N1 (H9-E2E-2).
+    decisionesSimuladas: { 'p-autorizada': 'plan', 'p-negada': 'deny', 'p-sin-eventos': 'plan' },
     sinEventos: true,
   });
 };
@@ -520,10 +557,11 @@ PASOS.e2 = async () => {
     exito: [['class.reserved_next_7d', 'eq', 'true']],
     pasos: [{ id: 'invitacion', on: { answered: 'end_success', no_answer: 'end_exit' } }],
     simulacion: [
-      { ref: 'p-sin-reserva', whatsapp: 'granted', canario: true, evento: 'app_linked', hechos: [['membership.active', 'true'], ['class.reserved_next_7d', 'false']] },
-      { ref: 'p-con-reserva', whatsapp: 'granted', canario: true, evento: 'app_linked', hechos: [['membership.active', 'true'], ['class.reserved_next_7d', 'true']] },
+      { ref: 'p-sin-reserva', whatsapp: 'granted', canario: true, hechos: [['membership.active', 'true'], ['class.reserved_next_7d', 'false']] },
+      { ref: 'p-con-reserva', whatsapp: 'granted', canario: true, hechos: [['membership.active', 'true'], ['class.reserved_next_7d', 'true']] },
     ],
-    decisionesSimuladas: null,
+    // Sin eventos (H9-E2E-2): la que no reservó se planifica; la que ya reservó queda fuera de la audiencia.
+    decisionesSimuladas: { 'p-sin-reserva': 'plan', 'p-con-reserva': 'exclude' },
   });
 };
 
@@ -535,10 +573,11 @@ PASOS.e3 = async () => {
     exito: [['lead.commercial_phase', 'eq', 'WON']],
     pasos: [{ id: 'seguimiento', on: { answered: 'end_success', no_answer: 'end_exit' } }],
     simulacion: [
-      { ref: 'l-autorizado', whatsapp: 'granted', canario: true, evento: 'app_linked', hechos: [['subject.is_lead', 'true'], ['lead.followup_due', 'true'], ['lead.commercial_phase', 'FOLLOW_UP']] },
-      { ref: 'l-sin-permiso', whatsapp: 'missing', canario: true, evento: 'app_linked', hechos: [['subject.is_lead', 'true'], ['lead.followup_due', 'true'], ['lead.commercial_phase', 'FOLLOW_UP']] },
+      { ref: 'l-autorizado', whatsapp: 'granted', canario: true, hechos: [['subject.is_lead', 'true'], ['lead.followup_due', 'true'], ['lead.commercial_phase', 'FOLLOW_UP']] },
+      { ref: 'l-sin-permiso', whatsapp: 'missing', canario: true, hechos: [['subject.is_lead', 'true'], ['lead.followup_due', 'true'], ['lead.commercial_phase', 'FOLLOW_UP']] },
     ],
-    decisionesSimuladas: null,
+    // Sin eventos (H9-E2E-2): el autorizado se planifica; el que no tiene autorización se niega (N1).
+    decisionesSimuladas: { 'l-autorizado': 'plan', 'l-sin-permiso': 'deny' },
   });
 };
 
@@ -654,9 +693,15 @@ PASOS.parada = async () => {
   const disp = motor(['outreach:dispatch', '--inline', '--json']);
   fs.writeFileSync(path.join(ctx.run, 'logs', 'consola-dispatch-con-parada.out'), `reloj del motor: ${disp.reloj}\n${disp.out}\n${disp.err || ''}`);
   inf.check('con la PARADA GLOBAL el despacho por consola no reclama nada', disp.code === 0 && /"claimed"\s*:\s*0|"stopped"|global|parada/i.test(disp.out), disp.out.slice(0, 300));
-  // Ana no puede soltar su propia parada (persona distinta): lo intenta desde el navegador.
+  // REGRESIÓN H9-E2E-3 (informe §B.5; corregido en L9-84 con la opción «el botón explica»): el panel ofrecía «Soltar la
+  // parada» a quien la echó sin decirle que no puede. Ahora, junto al botón, dice quién la echó y que la suelta otra
+  // persona (cuatro ojos). El botón sigue (el DTO del freno no trae `actions.release`; mejora pendiente en L9-84).
   const anaVeBoton = await L.leer(A, `return !!document.querySelector('[data-ca-parada-soltar]');`);
-  inf.check('a quien abrió la parada no se le ofrece soltarla (el botón no aparece)', !anaVeBoton, { boton: anaVeBoton, hallazgo: 'H9-E2E-3 (menor, UX)' });
+  const nota = async (s) => L.texto(s, '[data-ca-parada-cuatro-ojos]');
+  const explica = (t) => !!t && t.includes(`La echó ${abierta.openedBy?.name}.`) && /no puede soltarla/.test(t) && /la suelta otra persona/.test(t) && /cuatro ojos/.test(t);
+  const notaAna = await nota(A);
+  inf.check('H9-E2E-3: junto a «Soltar la parada», el panel le dice a quien la echó que la echó ella y que la suelta OTRA persona (cuatro ojos)', anaVeBoton && explica(notaAna), { boton: anaVeBoton, explicacion: notaAna, abrio: abierta.openedBy?.name, hallazgo: 'H9-E2E-3' });
+  await foto(A, 'd-01a-ana-ve-quien-suelta-la-parada');
   if (anaVeBoton) {
     await L.clic(A, '[data-ca-parada-soltar]');
     await motivoYConfirmar(A, 'Intento de soltar mi propia parada desde el CRM (debe rechazarse).');
@@ -669,8 +714,11 @@ PASOS.parada = async () => {
   }
   const intento = await L.api(ctx, 'a', 'POST', `admin/ultron-studio/outreach/brakes/${abierta.uuid}/release`, { note: 'Intento de soltar mi propia parada', clientRequestId: L.uuid() });
   inf.check('la API rechaza la suelta por la misma persona (403 four_eyes_required)', intento.status === 403 && intento.json?.code === 'four_eyes_required', { servidor: intento.status, codigo: intento.json?.code });
-  // Beto la suelta desde el panel con nota.
+  // Beto la suelta desde el panel con nota. Antes: la explicación nombra a quien la ECHÓ (Ana), no a quien mira.
   await L.pagina(B, ctx, 'panel');
+  await hay(B, '[data-ca-parada-cuatro-ojos]', L.T(20000));
+  const notaBeto = await nota(B);
+  inf.check('H9-E2E-3: a otra persona (Beto) la explicación le nombra a quien la echó (Ana), no a quien mira', explica(notaBeto) && !notaBeto.includes(B.usuario.name), { explicacion: notaBeto, mira: B.usuario.name, hallazgo: 'H9-E2E-3' });
   inf.must('Beto ve «Soltar la parada»', await L.clic(B, '[data-ca-parada-soltar]', L.T(20000)));
   await foto(B, 'd-02-beto-soltar-parada-dialogo');
   await motivoYConfirmar(B, 'Suelta tras la verificación del E2E: la parada se comportó como se esperaba.');
@@ -776,6 +824,47 @@ PASOS.asistido = async () => {
   fs.writeFileSync(path.join(ctx.filas, 'tras-asistido.json'), JSON.stringify(filasEjecucion(), null, 1));
 };
 
+/**
+ * HALLAZGO H9-E2E-4 (nuevo en la certificación de la ola; menor, FE9): abrir una estrategia no la deja en la URL.
+ * `abrirEstrategia()` (`commercial-automation-page.ts:260-263`) navega con `?estrategia=<uuid>` y, sin esperar, `elegir()`
+ * navega otra vez con `?pestana=constructor` (las dos con `queryParamsHandling: 'merge'`): la segunda sustituye a la
+ * primera y su mezcla parte de la URL de antes. El constructor abre bien (la elección va por `session.select`), pero la
+ * URL no lleva la estrategia (F5 o un enlace la pierden) y, si había OTRA elegida, sigue apuntando a la anterior: F5
+ * cambia en silencio la estrategia que se estaba editando. Va al final para no tocar el flujo de e1–e3.
+ */
+PASOS.url = async () => {
+  const e1 = estado.estrategias.e1;
+  if (!e1) throw new L.Requisito('falta la estrategia de vencimientos (paso e1)');
+  // 1. «Abrir» desde la lista: la URL tiene que llevar la estrategia abierta.
+  if (!(await L.pagina(A, ctx, 'estrategias'))) throw new L.Requisito('la pestaña Estrategias no quedó lista');
+  inf.must('Ana pulsa «Abrir» en la fila de vencimientos', await L.clic(A, `[data-ca-abrir="${e1.uuid}"]`, L.T(20000)));
+  inf.must('el constructor abre vencimientos', !!(await L.esperar(A, `const t = document.querySelector(${sel(TITULO_CONSTRUCTOR)}); return !!t && t.textContent.includes(${sel(e1.clave)});`, L.T(30000))));
+  const u1 = await urlDe(A, e1.uuid, L.T(10000));
+  inf.check('H9-E2E-4: abierta con «Abrir» desde la lista, la URL lleva la estrategia (?estrategia=<uuid>) para F5 y enlaces', u1.estrategia === e1.uuid, { url: u1, esperada: e1.uuid, hallazgo: 'H9-E2E-4' });
+  await foto(A, 'u-01-ana-abierta-desde-la-lista');
+  // 2. Con OTRA estrategia elegida en la URL, Ana crea una nueva (queda en borrador) y recarga: ¿sigue en la nueva?
+  await A.page.goto(`${ctx.crmUrl}/marketing/automatizaciones?pestana=estrategias&estrategia=${e1.uuid}`, { waitUntil: 'domcontentloaded', timeout: L.T(120000) });
+  if (!(await L.esperar(A, `const p = document.querySelector('[data-ca-pagina]'); return !!p && p.getAttribute('data-ca-fase') === 'ready';`, L.T(60000)))) throw new L.Requisito('la página no quedó lista');
+  const clave = `url-f5-${SELLO}`;
+  inf.must('Ana ve «Nueva estrategia» (con vencimientos elegida en la URL)', await L.clic(A, '[data-ca-estrategias-crear]'));
+  await L.escribir(A, '[data-ca-crear-clave]', clave);
+  await L.escribir(A, '[data-ca-crear-nombre]', 'Estrategia de la prueba de la URL (E2E)');
+  await poner(A, `return document.querySelector('[data-ca-crear-finalidad]');`, 'commercial');
+  inf.must('Ana crea la estrategia nueva', await L.clic(A, '[data-ca-crear-enviar]'));
+  inf.must('el constructor abre la nueva', !!(await L.esperar(A, `const t = document.querySelector(${sel(TITULO_CONSTRUCTOR)}); return !!t && t.textContent.includes(${sel(clave)});`, L.T(30000))));
+  const nueva = await creadaPorClave(clave);
+  inf.must('la estrategia nueva existe en el servidor', !!nueva, clave);
+  const antes = await urlDe(A, nueva.uuid, L.T(10000));
+  await foto(A, 'u-02-ana-nueva-antes-de-f5');
+  await A.page.reload({ waitUntil: 'domcontentloaded', timeout: L.T(120000) });
+  await L.esperar(A, `const p = document.querySelector('[data-ca-pagina]'); return !!p && p.getAttribute('data-ca-fase') === 'ready';`, L.T(60000));
+  const tras = await L.esperar(A, `const t = document.querySelector(${sel(TITULO_CONSTRUCTOR)}); return t ? t.textContent : (document.querySelector('[data-ca-pestana-sin-estrategia]') ? '(sin estrategia elegida)' : null);`, L.T(30000));
+  await foto(A, 'u-03-ana-tras-f5');
+  const enLaNueva = String(tras || '').includes(clave);
+  inf.check('H9-E2E-4: con otra estrategia elegida, tras crear una nueva y recargar (F5) el constructor sigue en la nueva', antes.estrategia === nueva.uuid && enLaNueva,
+    { urlAntesDeF5: antes, nueva: nueva.uuid, anterior: e1.uuid, laUrlApuntaA: antes.estrategia === nueva.uuid ? 'la nueva' : antes.estrategia === e1.uuid ? 'la ANTERIOR' : antes.estrategia, constructorTrasF5: String(tras || '').replace(/\s+/g, ' ').trim().slice(0, 160), hallazgo: 'H9-E2E-4' });
+};
+
 PASOS.barrido = async () => {
   for (const s of [A, B]) {
     for (const q of ['panel', 'estrategias', 'plantillas', 'bandeja', 'vinculos']) {
@@ -802,7 +891,7 @@ PASOS.barrido = async () => {
 // ── Orden ───────────────────────────────────────────────────────────────────────────────────────────────────────
 (async () => {
   const lista = (process.env.H9_PASOS || ctx.steps || '').split(',').map((x) => x.trim()).filter(Boolean);
-  const orden = ['humo', 'plantillas', 'e1', 'e2', 'e3', 'consola', 'panel', 'parada', 'pausa', 'asistido', 'barrido'].filter((p) => !lista.length || lista.includes(p) || p === 'humo' || p === 'barrido');
+  const orden = ['humo', 'plantillas', 'e1', 'e2', 'e3', 'consola', 'panel', 'parada', 'pausa', 'asistido', 'url', 'barrido'].filter((p) => !lista.length || lista.includes(p) || p === 'humo' || p === 'barrido');
   const browser = await L.lanzar(ctx);
   A = await L.sesion(browser, ctx, inf, 'a');
   B = await L.sesion(browser, ctx, inf, 'b');

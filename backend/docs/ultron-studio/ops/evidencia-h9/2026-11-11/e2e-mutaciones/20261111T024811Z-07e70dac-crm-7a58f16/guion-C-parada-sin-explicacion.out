@@ -1,0 +1,40 @@
+── humo
+  OK    Ana abre «Campañas automáticas»
+  OK    a: chips del gobierno (encendido, publicar, persona vinculada) — {"gobierno":"toggle_on Gobierno encendido","publicar":"rocket_launch Publicar: ventana abierta","persona":"how_to_reg Persona vinculada","parada":"","cadena":""}
+  OK    a: canal en vivo conectado (SSE) — live
+  OK    Beto abre «Campañas automáticas»
+  OK    b: chips del gobierno (encendido, publicar, persona vinculada) — {"gobierno":"toggle_on Gobierno encendido","publicar":"rocket_launch Publicar: ventana abierta","persona":"how_to_reg Persona vinculada","parada":"","cadena":""}
+  OK    b: canal en vivo conectado (SSE) — live
+  OK    el panel enseña el modo sombra y la constante de envío cerrada
+  OK    GET outreach/status: maestra, sombra, constante cerrada — {"status":200,"config":{"enabled":true,"mode":"shadow","sends":false}}
+── parada
+  OK    Ana ve el botón PARADA GLOBAL
+  OK    la PARADA GLOBAL queda abierta, a nombre de Ana — {"alcance":"global","abierta":{"type":"person","name":"Ana Autora (E2E H9)"},"motivo":"manual"}
+  OK    el panel de Beto, abierto, ve la PARADA GLOBAL sin recargar (canal en vivo `outreach.brakes`) — {"activaEnBeto":true,"eventos":1}
+  OK    con la PARADA GLOBAL el despacho por consola no reclama nada
+  FALLO H9-E2E-3: junto a «Soltar la parada», el panel le dice a quien la echó que la echó ella y que la suelta OTRA persona (cuatro ojos) — {"boton":true,"explicacion":"","abrio":"Ana Autora (E2E H9)","hallazgo":"H9-E2E-3"}
+  OK    el servidor rechaza que Ana suelte su propia parada y la parada sigue abierta — {"mensaje":"Nadie suelta un freno que abrió: tiene que soltarlo otra persona, con otra cuenta."}
+  OK    la API rechaza la suelta por la misma persona (403 four_eyes_required) — {"servidor":403,"codigo":"four_eyes_required"}
+  FALLO H9-E2E-3: a otra persona (Beto) la explicación le nombra a quien la echó (Ana), no a quien mira — {"explicacion":"","mira":"Beto Revisor (E2E H9)","hallazgo":"H9-E2E-3"}
+  OK    Beto ve «Soltar la parada»
+  OK    Beto suelta la PARADA GLOBAL con nota (otra persona) — {"suelta":true,"por":"Beto Revisor (E2E H9)","nota":true}
+── barrido
+  OK    a · panel: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    a · estrategias: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    a · plantillas: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    a · bandeja: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    a · vinculos: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    a: ningún nombre ni teléfono sintético en las respuestas de la API ni en los eventos SSE — {"cuerposBarridos":99,"eventosSSE":14,"fugas":[]}
+  OK    a: 0 hosts fuera de 127.0.0.1 alcanzados (los intentos mueren en el resolver) — {"peticiones":408,"intentosFuera":7,"hostsIntentados":["fonts.googleapis.com"],"alcanzadas":[]}
+  OK    a: ninguna respuesta 5xx de la API (salvo 502 dentro del reinicio deliberado de la fase asistida) — {"fuera":[],"durante502DelReinicio":0}
+  OK    a: ningún error de página — []
+  OK    b · panel: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    b · estrategias: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    b · plantillas: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    b · bandeja: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    b · vinculos: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    b: ningún nombre ni teléfono sintético en las respuestas de la API ni en los eventos SSE — {"cuerposBarridos":137,"eventosSSE":21,"fugas":[]}
+  OK    b: 0 hosts fuera de 127.0.0.1 alcanzados (los intentos mueren en el resolver) — {"peticiones":499,"intentosFuera":8,"hostsIntentados":["fonts.googleapis.com"],"alcanzadas":[]}
+  OK    b: ninguna respuesta 5xx de la API (salvo 502 dentro del reinicio deliberado de la fase asistida) — {"fuera":[],"durante502DelReinicio":0}
+  OK    b: ningún error de página — []
+  → 34/36 OK en 141 s

@@ -33,7 +33,8 @@
 #   TRABAJO sobre HEAD, con los cambios sin confirmar, copiado UNA vez; su huella va en el nombre de la ejecución y en
 #   el resumen. Los simuladores siguen siendo los del commit) · H8_E2E_FUENTE=<run>/fuente (TEST8-c: relanza sobre la
 #   MISMA copia del backend que sacó una ejecución anterior en tree mode, la que está en su `fuente/`; para repetir o
-#   mutar exactamente el código de una evidencia cuando el árbol ya cambió).
+#   mutar exactamente el código de una evidencia cuando el árbol ya cambió) · H8_E2E_CONTACTOS (false: la bandera
+#   VOICE_CONTACTS_ENABLED de B-T4 en el entorno de la copia; el E2E del CRM la pone en true para la pestaña Contactos).
 # Trampas conocidas (README del E2E del CRM): PID de la subshell, nietos de `php -S`, `--no-reload`, PGGSSENCMODE en
 # macOS, el fichero de ejemplo de entorno no vale como entorno, bash 3.2, `http_proxy` en minúsculas bajo `php -S`.
 set -euo pipefail
@@ -57,6 +58,7 @@ P_VA=${H8_E2E_PUERTO_VALLA:-8404}
 P_API2=${H8_E2E_PUERTO_API2:-8405}
 VENTANA=${H8_E2E_VENTANA-07:00-19:00}
 HOLD=${H8_E2E_HOLD:-0}
+CONTACTOS=${H8_E2E_CONTACTOS:-false}
 EVIDENCIA=${H8_E2E_EVIDENCIA:-1}
 ARBOL=${H8_E2E_ARBOL:-0}
 FUENTE_DIR=${H8_E2E_FUENTE:-}
@@ -70,6 +72,7 @@ hora() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 case "$FASES" in cerrada) LISTA="cerrada" ;; abierta) LISTA="abierta" ;; ambas) LISTA="cerrada abierta" ;; salientes) LISTA="salientes" ;; todas) LISTA="cerrada abierta salientes" ;;
   *) muere "uso: h8-e2e.sh [cerrada|abierta|ambas|salientes|todas]" ;; esac
 case "$FASES" in ambas|todas) [ "$HOLD" = 1 ] && muere "H8_E2E_HOLD=1 necesita UNA fase (cerrada, abierta o salientes)" ;; esac
+case "$CONTACTOS" in true|false) ;; *) muere "H8_E2E_CONTACTOS: true o false" ;; esac
 [[ "$DB" =~ ^ultron_studio_h8_e2e[a-z0-9_]{0,40}$ ]] || muere "H8_E2E_DB tiene que empezar por ultron_studio_h8_e2e (se BORRA y se recrea)"
 
 # ── 0. Requisitos: herramientas, puertos libres, PG, vendor, fuera del repo ─────────────────────────────────────────
@@ -260,7 +263,7 @@ mapa = {k: p[k] for k in ('EL_API_KEY', 'EL_VERIFY_AGENT_ID', 'EL_WEBHOOK_SECRET
                          'TW_ACCOUNT_SID', 'TW_LARAVEL_KEY_SID', 'TW_LARAVEL_KEY_SECRET', 'TW_SIGNING_TOKEN', 'TW_MASTER_SID', 'TW_MASTER_TOKEN', 'TW_VERIFY_SID')}
 mapa.update({'APP_KEY': 'base64:' + base64.b64encode(os.urandom(32)).decode(), 'PUERTO_API': os.environ['P_API'], 'PUERTO_EL': os.environ['P_EL'],
              'PUERTO_TW': os.environ['P_TW'], 'PG_PORT': os.environ['PG_PORT'], 'DB': os.environ['DB'], 'DB_APP': os.environ['ROL_APP'],
-             'VENTANA': os.environ['VENTANA'], 'ALCANCE_SALIENTES': alcance, 'ENTRANTES': entrantes})
+             'VENTANA': os.environ['VENTANA'], 'ALCANCE_SALIENTES': alcance, 'ENTRANTES': entrantes, 'CONTACTOS': os.environ['CONTACTOS']})
 texto = open(plantilla, encoding='utf-8').read()
 for k, v in mapa.items():
     texto = texto.replace('@@' + k + '@@', v)
@@ -271,7 +274,7 @@ with os.fdopen(fd, 'w', encoding='utf-8') as f:
     f.write(texto)
 PY
 }
-export P_API P_EL P_TW PG_PORT DB ROL_APP VENTANA
+export P_API P_EL P_TW PG_PORT DB ROL_APP VENTANA CONTACTOS
 
 # El entorno de TODO proceso PHP de la copia: limpio (env -i) y con la red por la valla (trampa 32: también en minúsculas).
 VALLA="http://127.0.0.1:$P_VA"

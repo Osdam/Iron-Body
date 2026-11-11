@@ -170,7 +170,9 @@ echo "   ng serve :$NG_PORT (pid $(cat "$RUN/run/ng.pid")) compilando en paralel
 
 # ── 2. La pila del arnés del backend, retenida (H8_E2E_HOLD=1, sin copiar su evidencia: la de aquí es otra) ─────────
 echo "== 2. pila del arnés (fase $FASE, retenida)"
-arranca arnes "$WT" env H8_E2E_HOLD=1 H8_E2E_EVIDENCIA=0 bash "$OPS/h8-e2e.sh" "$FASE"
+# H8_E2E_CONTACTOS=true: la bandera de B-T4 (`VOICE_CONTACTS_ENABLED`, apagada hasta la 4b) encendida en la copia, para
+# que el paso «contactos» ejerza el alta, el consentimiento a cuatro ojos y la exclusión (apagada, el alta da 409).
+arranca arnes "$WT" env H8_E2E_HOLD=1 H8_E2E_EVIDENCIA=0 H8_E2E_CONTACTOS=true bash "$OPS/h8-e2e.sh" "$FASE"
 CTX=""
 for _ in $(seq 1 900); do
   CTX=$(sed -n 's/^== PILA EN PIE (H8_E2E_HOLD=1): H8_E2E_CONTEXT=\([^ ]*\) .*/\1/p' "$RUN/logs/arnes.out" | head -1)
@@ -212,7 +214,8 @@ EST=0
 for g in "${GUIONES[@]}"; do
   echo "== guion $g · $(hora)"
   # Sin «|| true» detrás de la tubería: ese `true` pisaba PIPESTATUS y «los guiones salieron con 0» salía siempre en
-  # verde (corregido el 10-11 por el tester final del H9; informe-tester-final §B-T6).
+  # verde (B-T6; corregido en el commit de la ola, 07e70dac; demostrado con bash 3.2 y con un guion que falla de verdad:
+  # informe-tester-final.md, §B.5 y «C · Certificación sobre los commits de la ola»).
   set +e
   node "$AQUI/$g.cjs" "$RUN/crm-context.json" 2>&1 | tee "$RUN/logs/guion-$g.out" | sed 's/^/   /'
   GEST=${PIPESTATUS[0]}

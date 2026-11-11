@@ -1,0 +1,46 @@
+{
+ "sello": "033201",
+ "plantilla": "1595393c-0469-4a56-a1a0-a856b43775aa",
+ "estrategias": {
+  "e1": {
+   "uuid": "193c53b4-4953-4f39-8819-2e4cab0cb792",
+   "clave": "renovacion-7d-033201"
+  },
+  "e2": {
+   "uuid": "86255f6c-d22c-4b32-a516-6d70290808ab",
+   "clave": "invitacion-clase-033201"
+  },
+  "e3": {
+   "uuid": "c4db5735-2408-46e7-a90b-d53b0f54d213",
+   "clave": "seguimiento-prospectos-033201"
+  }
+ },
+ "versiones": {
+  "e1": "54a7a781-9636-4b79-8737-1e23c6a113e7",
+  "e2": "fd903c49-9280-4d23-b222-66e4cf9a46b0",
+  "e3": "d6dbd188-9200-4efd-9094-761618397116"
+ },
+ "traceHash": "e304a7a9cc7543a7cd75621bb802327e8645d608ad19ece16a412af71447f7d1",
+ "sse": {
+  "a": {
+   "abiertos": 43,
+   "eventos": 70,
+   "temas": {
+    "ready": 43,
+    "outreach.jobs": 8,
+    "outreach.outcomes": 3,
+    "outreach.runs": 14,
+    "outreach.brakes": 2
+   }
+  },
+  "b": {
+   "abiertos": 37,
+   "eventos": 41,
+   "temas": {
+    "ready": 37,
+    "outreach.brakes": 2,
+    "outreach.runs": 2
+   }
+  }
+ }
+}

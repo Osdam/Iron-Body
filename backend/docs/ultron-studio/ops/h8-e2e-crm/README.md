@@ -58,12 +58,21 @@ el barrido del almacenamiento excluye.
 
 ## Costuras y lo que es precondición
 
+- **La bandera de contactos de B-T4 (la ola del H9).** `VOICE_CONTACTS_ENABLED` (apagada hasta la fase 4b) cierra el alta
+  y el consentimiento con 409 `voice_contacts_disabled`. El lanzador arranca la pila con `H8_E2E_CONTACTOS=true` (la
+  plantilla `entorno-banco.ejemplo` la pone en el entorno de la copia; el E2E del backend la deja en `false`) para que
+  el paso «contactos» ejerza el alta, los cuatro ojos y la exclusión; `preparacion` comprueba `flags.contacts`.
+- **«Estado de activación» (L9-79).** En las transversales, la pestaña Estado de cada cuenta tiene que enseñar las seis
+  funciones de la voz con su estado (o «Sin estado»), sin ninguna atascada en «Leyendo…».
 - **Precondiciones de hitos anteriores, por la API:** los dos canarios de voz del H6 (Ana registra; Beto autoriza y
   activa) y la versión del Studio del H5 (Ana la crea; Beto la aprueba). No son de esta sección.
 - **Lo que viene de fuera** (entrantes, herramientas, fin de llamada, post-llamadas, el sello roto, la post-llamada web
   del laboratorio): el control GET de los simuladores (`/__inbound`, `/__tool`, `/__call`, `/__emit/post-call`).
 - **Salientes en `requested` y `dialing`:** las costuras del arnés (`ayudante.php saliente` y `despachar`, el worker de
-  UN trabajo de `voice-e2e` con `reloj.php` en un martes a las 10:00). La puerta del CRM no deja pasar ninguna (E4-6).
+  UN trabajo de `voice-e2e` con `reloj.php` en el PRÓXIMO día hábil a las 10:00 de Bogotá, sin los festivos del fixture
+  y siempre en el futuro). La puerta del CRM no deja pasar ninguna (E4-6). Era una fecha fija (martes 10-11-2026 10:00):
+  desde el 10-11 a las 15:00Z el reloj del worker quedaba por DETRÁS del `available_at` del trabajo (hora real), el
+  worker no lo veía y la saliente se quedaba en `requested` (pasada de B-T6 del 11-11).
 - **`spec_changed`:** un perfil y una versión aprobados son inmutables, así que entre previsualizar y publicar no hay
   edición que cambie la compilación del mismo par sin un despliegue. Se provoca alterando en el navegador (CDP `Fetch`)
   la huella de la PRIMERA petición de publicar; el 409 `spec_changed` es el real del servidor.

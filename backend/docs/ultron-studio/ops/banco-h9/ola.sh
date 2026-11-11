@@ -41,7 +41,8 @@ ola_commit() { # el commit de la ola en $B/src (main) y ESPERADO/PREVIO en banco
       mkdir -p "$(dirname "$f")"; cp -R "$WT/$f" "$f"; n=$((n + 1))
     done < <(git -C "$WT" status --porcelain --untracked-files=all)
     git add -A backend
-    $G commit -q -m "wip(ultron-studio-h9): banco: la ola del cierre sin confirmar ($n ficheros)"
+    # Con el árbol ya confirmado (n = 0) no hay commit «wip»: la ola son los commits reales del lead.
+    if [ "$n" -gt 0 ]; then $G commit -q -m "wip(ultron-studio-h9): banco: la ola del cierre sin confirmar ($n ficheros)"; fi
     $G branch -q -f main HEAD
     echo "   ola: $(git rev-parse --short=7 HEAD) sobre $(git -C "$WT" rev-parse --short=7 HEAD) con $n ficheros sin confirmar del árbol" )
   local esp
@@ -196,7 +197,7 @@ PY
         mkdir -p "$(dirname "$f")"; cp -R "$FRONT/$f" "$f"; n=$((n + 1))
       done < <(git -C "$FRONT" status --porcelain --untracked-files=all)
       git add -A
-      $G commit -q -m "wip(ultron-studio-h9): banco: el CRM de la ola sin confirmar ($n ficheros)"
+      if [ "$n" -gt 0 ]; then $G commit -q -m "wip(ultron-studio-h9): banco: el CRM de la ola sin confirmar ($n ficheros)"; fi
       git push -q origin HEAD:main
       git fetch -q origin
       echo "   CRM de la ola: $(git rev-parse --short=7 HEAD) sobre $(git -C "$FRONT" rev-parse --short=7 HEAD) con $n ficheros sin confirmar" )

@@ -1,0 +1,216 @@
+── humo
+  OK    Ana abre «Campañas automáticas»
+  OK    a: chips del gobierno (encendido, publicar, persona vinculada) — {"gobierno":"toggle_on Gobierno encendido","publicar":"rocket_launch Publicar: ventana abierta","persona":"how_to_reg Persona vinculada","parada":"","cadena":""}
+  OK    a: canal en vivo conectado (SSE) — live
+  OK    a: «Estado de activación» con las 7 funciones de las campañas, cada una con su estado (ninguna se queda en «Leyendo…») — [["gobierno","operativa"],["sombra","contractual"],["asistido","contractual"],["whatsapp","proveedor"],["voz","contractual"],["en-vivo","operativa"],["programador","lista"]]
+  OK    Beto abre «Campañas automáticas»
+  OK    b: chips del gobierno (encendido, publicar, persona vinculada) — {"gobierno":"toggle_on Gobierno encendido","publicar":"rocket_launch Publicar: ventana abierta","persona":"how_to_reg Persona vinculada","parada":"","cadena":""}
+  OK    b: canal en vivo conectado (SSE) — live
+  OK    b: «Estado de activación» con las 7 funciones de las campañas, cada una con su estado (ninguna se queda en «Leyendo…») — [["gobierno","operativa"],["sombra","contractual"],["asistido","contractual"],["whatsapp","proveedor"],["voz","contractual"],["en-vivo","operativa"],["programador","lista"]]
+  OK    el panel enseña el modo sombra y la constante de envío cerrada
+  OK    GET outreach/status: maestra, sombra, constante cerrada — {"status":200,"config":{"enabled":true,"mode":"shadow","sends":false}}
+── plantillas
+  OK    Ana abre Plantillas
+  OK    Ana ve «Nueva versión de plantilla»
+  OK    Ana crea la plantilla en borrador
+  OK    la plantilla existe en borrador — {"status":"DRAFT","canal":"assisted","finalidad":"commercial"}
+  OK    Ana (autora) no puede aprobar su plantilla (ni botón ni servidor) — {"boton":false,"servidor":{"allowed":false,"code":"four_eyes_required"}}
+  OK    Beto abre Plantillas
+  OK    Beto abre la plantilla de Ana
+  OK    Beto ve «Aprobar»
+  OK    Beto confirma la aprobación
+  OK    la plantilla queda APROBADA por Beto (cuatro ojos por persona) — {"status":"APPROVED","revisor":"Beto Revisor (E2E H9)"}
+── e1
+  OK    Ana ve «Nueva estrategia»
+  OK    Ana crea la estrategia
+  OK    H9-E2E-1: al crearla, el CRM lee el alta (201) y abre el constructor
+  OK    la estrategia nueva existe en el servidor (por su clave) y tiene uuid — {"uuid":"193c53b4-4953-4f39-8819-2e4cab0cb792","clave":"renovacion-7d-033201"}
+  OK    H9-E2E-1: el constructor que abre tras el alta es el de la estrategia nueva (su clave en el título) — {"titulo":"Renovación a 7 días (E2E) renovacion-7d-033201","clave":"renovacion-7d-033201"}
+  OK    H9-E2E-1: el detalle trae el borrador vacío como objeto (`"content":{}`) o null, nunca `[]` — {"status":200,"contenidoCrudo":"{}","revision":1}
+  OK    la estrategia nueva aparece en la lista de Estrategias
+  OK    H9-E2E-1: abierta después desde la lista, el constructor carga el borrador vacío sin error — {"resultado":"ok"}
+  OK    la forma en vivo es válida (espejo del servidor, sin texto libre)
+  OK    Ana guarda el borrador
+  OK    el borrador queda guardado — ["check_circle Borrador guardado (revisión 2). close"]
+  OK    Ana valida en el servidor
+  OK    el servidor contesta la validación
+  OK    el servidor: sin bloqueantes y la misma huella que la forma en vivo — {"servidor":"verified Sin bloqueantes · 1 aviso(s) · huella 22af3ed5e1a70c3b…","enVivo":"22af3ed5e1a70c3b"}
+  OK    Ana abre «Simular»
+  OK    la pestaña Simulación queda lista
+  OK    la simulación del BORRADOR pasa (sin bloqueantes) con las decisiones esperadas por persona — {"pasa":"si","decisiones":{"p-autorizada":"plan","p-negada":"deny","p-sin-eventos":"plan"},"esperadas":{"p-autorizada":"plan","p-negada":"deny","p-sin-eventos":"plan"}}
+  OK    H9-E2E-2: el CRM manda `events: []` y `contacts: []` (listas vacías, no null) por cada persona de prueba
+  OK    H9-E2E-2: ninguna persona de prueba sin eventos se niega por «pidió hablar con alguien» (ni en la frase ni en los recuentos) — {"conLaFrase":[],"recuentosPorMotivo":{"consent_denied":1},"hallazgo":"H9-E2E-2"}
+  OK    H9-E2E-2: la persona de prueba autorizada y SIN eventos se planifica (`plan`), como la del caso positivo
+  OK    Ana congela la versión
+  OK    la versión 1 existe y su huella es la de la forma en vivo — {"status":"REVIEW_REQUIRED","huella":"22af3ed5e1a70c3b","enVivo":"22af3ed5e1a70c3b"}
+  OK    la pestaña Simulación queda lista
+  OK    la simulación de la VERSIÓN pasa (sin bloqueantes): la puerta de aprobar — {"pasa":"si","decisiones":{"p-autorizada":"plan","p-negada":"deny","p-sin-eventos":"plan"}}
+  OK    Ana (autora) no ve «Aprobar» y el servidor tampoco se lo permite — {"boton":false,"servidor":{"allowed":false,"code":"four_eyes_required"}}
+  OK    Beto abre la versión
+  OK    Beto ve «Aprobar»
+  OK    se abre el diálogo de aprobar
+  OK    Beto confirma la aprobación
+  OK    la versión queda APROBADA por otra persona — {"status":"APPROVED","avisosReconocidos":1,"avisos":["check_circle Versión aprobada. close"]}
+  OK    Beto ve «Publicar en canario»
+  OK    el diálogo enseña la huella que se publica
+  OK    Beto confirma la publicación
+  OK    la cadena tiene la entrada `publish` VERIFICADA con la huella del diálogo y el canario activo
+── e2
+  OK    Ana ve «Nueva estrategia»
+  OK    Ana crea la estrategia
+  OK    H9-E2E-1: al crearla, el CRM lee el alta (201) y abre el constructor
+  OK    la estrategia nueva existe en el servidor (por su clave) y tiene uuid — {"uuid":"86255f6c-d22c-4b32-a516-6d70290808ab","clave":"invitacion-clase-033201"}
+  OK    H9-E2E-1: el constructor que abre tras el alta es el de la estrategia nueva (su clave en el título) — {"titulo":"Invitación a clase con cupo (E2E) invitacion-clase-033201","clave":"invitacion-clase-033201"}
+  OK    H9-E2E-1: el detalle trae el borrador vacío como objeto (`"content":{}`) o null, nunca `[]` — {"status":200,"contenidoCrudo":"{}","revision":1}
+  OK    la estrategia nueva aparece en la lista de Estrategias
+  OK    H9-E2E-1: abierta después desde la lista, el constructor carga el borrador vacío sin error — {"resultado":"ok"}
+  OK    la forma en vivo es válida (espejo del servidor, sin texto libre)
+  OK    Ana guarda el borrador
+  OK    el borrador queda guardado — ["check_circle Borrador guardado (revisión 2). close"]
+  OK    Ana valida en el servidor
+  OK    el servidor contesta la validación
+  OK    el servidor: sin bloqueantes y la misma huella que la forma en vivo — {"servidor":"verified Sin bloqueantes · 1 aviso(s) · huella 46d3b58b82b92aaa…","enVivo":"46d3b58b82b92aaa"}
+  OK    Ana abre «Simular»
+  OK    la pestaña Simulación queda lista
+  OK    la simulación del BORRADOR pasa (sin bloqueantes) con las decisiones esperadas por persona — {"pasa":"si","decisiones":{"p-sin-reserva":"plan","p-con-reserva":"exclude"},"esperadas":{"p-sin-reserva":"plan","p-con-reserva":"exclude"}}
+  OK    H9-E2E-2: el CRM manda `events: []` y `contacts: []` (listas vacías, no null) por cada persona de prueba
+  OK    H9-E2E-2: ninguna persona de prueba sin eventos se niega por «pidió hablar con alguien» (ni en la frase ni en los recuentos) — {"conLaFrase":[],"recuentosPorMotivo":{"not_in_audience":1},"hallazgo":"H9-E2E-2"}
+  OK    Ana congela la versión
+  OK    la versión 1 existe y su huella es la de la forma en vivo — {"status":"REVIEW_REQUIRED","huella":"46d3b58b82b92aaa","enVivo":"46d3b58b82b92aaa"}
+  OK    la pestaña Simulación queda lista
+  OK    la simulación de la VERSIÓN pasa (sin bloqueantes): la puerta de aprobar — {"pasa":"si","decisiones":{"p-sin-reserva":"plan","p-con-reserva":"exclude"}}
+  OK    Ana (autora) no ve «Aprobar» y el servidor tampoco se lo permite — {"boton":false,"servidor":{"allowed":false,"code":"four_eyes_required"}}
+  OK    Beto abre la versión
+  OK    Beto ve «Aprobar»
+  OK    se abre el diálogo de aprobar
+  OK    Beto confirma la aprobación
+  OK    la versión queda APROBADA por otra persona — {"status":"APPROVED","avisosReconocidos":1,"avisos":["check_circle Versión aprobada. close"]}
+  OK    Beto ve «Publicar en canario»
+  OK    el diálogo enseña la huella que se publica
+  OK    Beto confirma la publicación
+  OK    la cadena tiene la entrada `publish` VERIFICADA con la huella del diálogo y el canario activo
+── e3
+  OK    Ana ve «Nueva estrategia»
+  OK    Ana crea la estrategia
+  OK    H9-E2E-1: al crearla, el CRM lee el alta (201) y abre el constructor
+  OK    la estrategia nueva existe en el servidor (por su clave) y tiene uuid — {"uuid":"c4db5735-2408-46e7-a90b-d53b0f54d213","clave":"seguimiento-prospectos-033201"}
+  OK    H9-E2E-1: el constructor que abre tras el alta es el de la estrategia nueva (su clave en el título) — {"titulo":"Seguimiento de prospectos autorizados (E2E) seguimiento-prospectos-033201","clave":"seguimiento-prospectos-033201"}
+  OK    H9-E2E-1: el detalle trae el borrador vacío como objeto (`"content":{}`) o null, nunca `[]` — {"status":200,"contenidoCrudo":"{}","revision":1}
+  OK    la estrategia nueva aparece en la lista de Estrategias
+  OK    H9-E2E-1: abierta después desde la lista, el constructor carga el borrador vacío sin error — {"resultado":"ok"}
+  OK    la forma en vivo es válida (espejo del servidor, sin texto libre)
+  OK    Ana guarda el borrador
+  OK    el borrador queda guardado — ["check_circle Borrador guardado (revisión 2). close"]
+  OK    Ana valida en el servidor
+  OK    el servidor contesta la validación
+  OK    el servidor: sin bloqueantes y la misma huella que la forma en vivo — {"servidor":"verified Sin bloqueantes · 1 aviso(s) · huella 2b2827a03e2f2196…","enVivo":"2b2827a03e2f2196"}
+  OK    Ana abre «Simular»
+  OK    la pestaña Simulación queda lista
+  OK    la simulación del BORRADOR pasa (sin bloqueantes) con las decisiones esperadas por persona — {"pasa":"si","decisiones":{"l-autorizado":"plan","l-sin-permiso":"deny"},"esperadas":{"l-autorizado":"plan","l-sin-permiso":"deny"}}
+  OK    H9-E2E-2: el CRM manda `events: []` y `contacts: []` (listas vacías, no null) por cada persona de prueba
+  OK    H9-E2E-2: ninguna persona de prueba sin eventos se niega por «pidió hablar con alguien» (ni en la frase ni en los recuentos) — {"conLaFrase":[],"recuentosPorMotivo":{"no_consent_for_purpose_channel":1},"hallazgo":"H9-E2E-2"}
+  OK    Ana congela la versión
+  OK    la versión 1 existe y su huella es la de la forma en vivo — {"status":"REVIEW_REQUIRED","huella":"2b2827a03e2f2196","enVivo":"2b2827a03e2f2196"}
+  OK    la pestaña Simulación queda lista
+  OK    la simulación de la VERSIÓN pasa (sin bloqueantes): la puerta de aprobar — {"pasa":"si","decisiones":{"l-autorizado":"plan","l-sin-permiso":"deny"}}
+  OK    Ana (autora) no ve «Aprobar» y el servidor tampoco se lo permite — {"boton":false,"servidor":{"allowed":false,"code":"four_eyes_required"}}
+  OK    Beto abre la versión
+  OK    Beto ve «Aprobar»
+  OK    se abre el diálogo de aprobar
+  OK    Beto confirma la aprobación
+  OK    la versión queda APROBADA por otra persona — {"status":"APPROVED","avisosReconocidos":1,"avisos":["check_circle Versión aprobada. close"]}
+  OK    Beto ve «Publicar en canario»
+  OK    el diálogo enseña la huella que se publica
+  OK    Beto confirma la publicación
+  OK    la cadena tiene la entrada `publish` VERIFICADA con la huella del diálogo y el canario activo
+── consola
+  OK    Ana abre el panel antes de la pasada
+  OK    outreach:sweep por consola sale con 0 — h9-e2e reloj: desfase de 41083 s (solo Carbon en este proceso)
+
+  OK    el canal en vivo entrega al panel abierto los eventos `outreach.runs` de la pasada (sin recargar) — {"antes":0,"despues":4,"temas":{"ready":27,"outreach.jobs":4,"outreach.outcomes":2,"outreach.runs":4}}
+  OK    S1 (vence en 7, autorizada, canario) queda inscrita en vencimientos — [{"uuid":"cbf8bec3-3da1-464f-a938-e34c1c5ffd7f","estrategia":"renovacion-7d-033201","subject_key":"m:1","status":"active","mode":"shadow","part":"canary","persona":"S1"}]
+  OK    S3 (vence en 8) NO entra en vencimientos (ventana de 7)
+  OK    L1 (seguimiento vencido, autorizado) queda inscrito en prospectos — [{"uuid":"0e4225aa-7ed2-404e-830d-a615779d22a6","estrategia":"seguimiento-prospectos-033201","subject_key":"l:6","status":"active","mode":"shadow","part":"canary","persona":"L1"}]
+  OK    S6 (ya reservó la clase) NO entra en la invitación a clase
+  OK    S2 (autorización denegada): la escalera niega en N1 con `consent_denied` — [{"nivel":"N1","motivos":["consent_denied"]}]
+  OK    L2 (sin autorización expresa): N1 niega `no_consent_for_purpose_channel` — [{"nivel":"N1","motivos":["no_consent_for_purpose_channel"]}]
+  OK    el barrido planifica trabajos en sombra (uno por persona como mucho)
+  OK    outreach:dispatch --inline por consola sale con 0 — h9-e2e reloj: desfase de 41801 s (solo Carbon en este proceso)
+
+  OK    el despacho deja los trabajos SIMULADOS (sombra: canal `simulated`, nada sale)
+  OK    cada trabajo simulado tiene su resultado `not_attempted` (detalle `shadow_mode`) — [{"outcome":"blocked","source":"system","channel":null,"detail_code":null,"n":2},{"outcome":"not_attempted","source":"simulated","channel":"simulated","detail_code":null,"n":4}]
+  OK    las pasadas `sweep` y `dispatch` constan como completadas
+── panel
+  OK    el panel enseña la última pasada de barrido y de despacho
+  OK    la tabla de inscripciones lista las del barrido — {"enDom":8,"enBase":8}
+  OK    la tabla de trabajos enseña los simulados
+  OK    Ana abre la inscripción de S1
+  OK    el detalle de la inscripción se abre
+  OK    la decisión se explica en frases y su traceHash coincide con la base
+── parada
+  OK    Ana ve el botón PARADA GLOBAL
+  OK    la PARADA GLOBAL queda abierta, a nombre de Ana — {"alcance":"global","abierta":{"type":"person","name":"Ana Autora (E2E H9)"},"motivo":"manual"}
+  OK    el panel de Beto, abierto, ve la PARADA GLOBAL sin recargar (canal en vivo `outreach.brakes`) — {"activaEnBeto":true,"eventos":1}
+  OK    con la PARADA GLOBAL el despacho por consola no reclama nada
+  OK    H9-E2E-3: junto a «Soltar la parada», el panel le dice a quien la echó que la echó ella y que la suelta OTRA persona (cuatro ojos)
+  OK    el servidor rechaza que Ana suelte su propia parada y la parada sigue abierta — {"mensaje":"Nadie suelta un freno que abrió: tiene que soltarlo otra persona, con otra cuenta."}
+  OK    la API rechaza la suelta por la misma persona (403 four_eyes_required) — {"servidor":403,"codigo":"four_eyes_required"}
+  OK    H9-E2E-3: a otra persona (Beto) la explicación le nombra a quien la echó (Ana), no a quien mira — {"explicacion":"La echó Ana Autora (E2E H9). Quien la echó no puede soltarla: la suelta otra persona y el servidor lo exige (cuatro ojos).","mira":"Beto Revisor (E2E H9)","hallazgo":"H9-E2E-3"}
+  OK    Beto ve «Soltar la parada»
+  OK    Beto suelta la PARADA GLOBAL con nota (otra persona) — {"suelta":true,"por":"Beto Revisor (E2E H9)","nota":true}
+── pausa
+  OK    Beto abre el gobierno de la campaña de prospectos
+  OK    Beto ve «Pausar»
+  OK    la cadena registra la pausa VERIFICADA y la estrategia queda en pausa
+  OK    tras la pausa, la pasada no planifica nada de la campaña pausada — {"codigo":0,"planificados":0}
+── asistido
+  OK    la API vuelve en modo live con el asistido encendido (solo la copia local)
+  OK    tras el reinicio, todos los procesos de la API llevan la valla — {"procesos":17,"conValla":17}
+  OK    preflight: modo live, asistido encendido y constante de envío cerrada — {"modo":"live","asistido":true,"cupo":20,"constante":false}
+  OK    siembra de la fase asistida (una socia nueva que vence en 7 días) — {"ok":true,"phase":"asistido","bogotaToday":"2026-11-11","people":8}
+  OK    outreach:sweep (live) sale con 0 — h9-e2e reloj: desfase de 41961 s (solo Carbon en este proceso)
+
+  OK    S4 queda planificada en live por el canal asistido
+  OK    outreach:dispatch --inline (live) sale con 0 — h9-e2e reloj: desfase de 42382 s (solo Carbon en este proceso)
+
+  OK    el trabajo asistido queda abierto en la bandeja (`started`) — {"uuid":"093b815e-62e3-4c3c-bda5-8157ad7d8a64","status":"started","channel":"assisted"}
+  OK    Beto abre la bandeja asistida
+  OK    el trabajo aparece en la bandeja
+  OK    antes de reclamar, la bandeja no enseña la ficha ni el guion (m-2)
+  OK    Beto reclama el trabajo
+  OK    tras reclamar, aparece «Registrar el resultado»
+  OK    quien reclamó ve el guion y el enlace a la ficha — {"guion":true,"ficha":true}
+  OK    Ana no ve el guion, la ficha ni el botón de resultado del trabajo de Beto — {"guion":false,"ficha":false,"reclamar":false,"resultado":false}
+  OK    se abre el formulario del resultado
+  OK    Beto registra el resultado
+  OK    el resultado del personal queda registrado (`answered`, fuente `staff`) y la tarea sale de la bandeja — {"status":"started","outcome":"answered","source":"staff","enLaBandeja":false}
+  OK    la inscripción sigue el mapa de resultados (answered → end_success) — {"status":"completed","last_outcome":"answered"}
+── url
+  OK    Ana pulsa «Abrir» en la fila de vencimientos
+  OK    el constructor abre vencimientos
+  FALLO H9-E2E-4: abierta con «Abrir» desde la lista, la URL lleva la estrategia (?estrategia=<uuid>) para F5 y enlaces — {"url":{"pestana":"constructor","estrategia":null},"esperada":"193c53b4-4953-4f39-8819-2e4cab0cb792","hallazgo":"H9-E2E-4"}
+  OK    Ana ve «Nueva estrategia» (con vencimientos elegida en la URL)
+  OK    Ana crea la estrategia nueva
+  OK    el constructor abre la nueva
+  OK    la estrategia nueva existe en el servidor — url-f5-033201
+  FALLO H9-E2E-4: con otra estrategia elegida, tras crear una nueva y recargar (F5) el constructor sigue en la nueva — {"urlAntesDeF5":{"pestana":"constructor","estrategia":"193c53b4-4953-4f39-8819-2e4cab0cb792"},"nueva":"dcca1034-1048-4ef3-a697-afc6cf680545","anterior":"193c53b4-4953-4f39-8819-2e4cab0cb792","laUrlApuntaA":"la ANTERIOR","constructorTrasF5":"Renovación a 7 días (E2E) renovacion-7d-033201","hallazgo":"H9-E2E-4"}
+── barrido
+  OK    a · panel: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    a · estrategias: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    a · plantillas: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    a · bandeja: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    a · vinculos: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    a: ningún nombre ni teléfono sintético en las respuestas de la API ni en los eventos SSE — {"cuerposBarridos":405,"eventosSSE":70,"fugas":[]}
+  OK    a: 0 hosts fuera de 127.0.0.1 alcanzados (los intentos mueren en el resolver) — {"peticiones":1844,"intentosFuera":33,"hostsIntentados":["fonts.googleapis.com"],"alcanzadas":[]}
+  OK    a: ninguna respuesta 5xx de la API (salvo 502 dentro del reinicio deliberado de la fase asistida) — {"fuera":[],"durante502DelReinicio":2}
+  OK    a: ningún error de página — []
+  OK    b · panel: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    b · estrategias: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    b · plantillas: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    b · bandeja: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    b · vinculos: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    b: ningún nombre ni teléfono sintético en las respuestas de la API ni en los eventos SSE — {"cuerposBarridos":319,"eventosSSE":41,"fugas":[]}
+  OK    b: 0 hosts fuera de 127.0.0.1 alcanzados (los intentos mueren en el resolver) — {"peticiones":1332,"intentosFuera":23,"hostsIntentados":["fonts.googleapis.com"],"alcanzadas":[]}
+  OK    b: ninguna respuesta 5xx de la API (salvo 502 dentro del reinicio deliberado de la fase asistida) — {"fuera":[],"durante502DelReinicio":0}
+  OK    b: ningún error de página — []
+  → 197/199 OK en 280 s

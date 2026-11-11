@@ -1,0 +1,13 @@
+GNU bash, version 3.2.57(1)-release (arm64-apple-darwin25)
+   salida del guion
+VIEJO: guion con 0 -> EST=0
+   salida del guion
+NUEVO: guion con 0 -> EST=0
+   salida del guion
+VIEJO: guion con 1 -> EST=0
+   salida del guion
+NUEVO: guion con 1 -> EST=1
+   salida del guion
+VIEJO: guion con 2 -> EST=0
+   salida del guion
+NUEVO: guion con 2 -> EST=1

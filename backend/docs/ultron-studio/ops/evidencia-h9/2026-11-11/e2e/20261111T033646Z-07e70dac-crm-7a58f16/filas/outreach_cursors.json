@@ -1,0 +1,14 @@
+[
+    {
+        "source": "commercial_events:live",
+        "last_id": 0,
+        "created_at": "2026-11-11 15:11:02",
+        "updated_at": "2026-11-11 15:11:02"
+    },
+    {
+        "source": "commercial_events:shadow",
+        "last_id": 0,
+        "created_at": "2026-11-11 15:00:01",
+        "updated_at": "2026-11-11 15:00:01"
+    }
+]

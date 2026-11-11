@@ -1,0 +1,459 @@
+{
+ "inscripciones": [
+  {
+   "uuid": "04495634-6bbe-4eb2-858f-de5e021cc80c",
+   "estrategia": "renovacion-7d-033700",
+   "subject_key": "m:1",
+   "status": "active",
+   "mode": "shadow",
+   "part": "canary",
+   "persona": "S1"
+  },
+  {
+   "uuid": "db2224b2-5893-43bd-9ee0-ee35dce19b46",
+   "estrategia": "renovacion-7d-033700",
+   "subject_key": "m:2",
+   "status": "waiting",
+   "mode": "shadow",
+   "part": "canary",
+   "persona": "S2"
+  },
+  {
+   "uuid": "f02cf550-82c3-4c6c-a7a4-b722a737efa3",
+   "estrategia": "invitacion-clase-033700",
+   "subject_key": "m:1",
+   "status": "active",
+   "mode": "shadow",
+   "part": "canary",
+   "persona": "S1"
+  },
+  {
+   "uuid": "7a277375-8913-498c-8943-73220414d25f",
+   "estrategia": "invitacion-clase-033700",
+   "subject_key": "m:2",
+   "status": "active",
+   "mode": "shadow",
+   "part": "canary",
+   "persona": "S2"
+  },
+  {
+   "uuid": "61939830-7457-44bf-b0e5-fab2d9cf2f68",
+   "estrategia": "invitacion-clase-033700",
+   "subject_key": "m:3",
+   "status": "active",
+   "mode": "shadow",
+   "part": "canary",
+   "persona": "S3"
+  },
+  {
+   "uuid": "2919699f-bb34-48f4-84e1-bb63dc684f3a",
+   "estrategia": "invitacion-clase-033700",
+   "subject_key": "m:4",
+   "status": "active",
+   "mode": "shadow",
+   "part": "canary",
+   "persona": "S5"
+  },
+  {
+   "uuid": "9f385a54-d99d-45cf-8ee3-3302aec7f5a9",
+   "estrategia": "seguimiento-prospectos-033700",
+   "subject_key": "l:6",
+   "status": "active",
+   "mode": "shadow",
+   "part": "canary",
+   "persona": "L1"
+  },
+  {
+   "uuid": "4c60d552-9950-4027-ab82-0e445031d1bb",
+   "estrategia": "seguimiento-prospectos-033700",
+   "subject_key": "l:7",
+   "status": "waiting",
+   "mode": "shadow",
+   "part": "canary",
+   "persona": "L2"
+  }
+ ],
+ "decisiones": [
+  {
+   "uuid": "f7bcbec2-0380-43dd-b43f-0b68ca971ee2",
+   "estrategia": "renovacion-7d-033700",
+   "subject_key": "m:1",
+   "kind": "enroll",
+   "level": null,
+   "reasons": [],
+   "trace_hash": "ba2b4eb14f37009f20e551f01403a1ec74abf309b0b75370fd4c9e33f6e9e73c",
+   "persona": "S1"
+  },
+  {
+   "uuid": "6aba6c3c-2f4d-4cd1-81b9-a6b056a58d52",
+   "estrategia": "renovacion-7d-033700",
+   "subject_key": "m:2",
+   "kind": "enroll",
+   "level": null,
+   "reasons": [],
+   "trace_hash": "ba2b4eb14f37009f20e551f01403a1ec74abf309b0b75370fd4c9e33f6e9e73c",
+   "persona": "S2"
+  },
+  {
+   "uuid": "c8c56d6b-834d-4812-ac95-fa53d7d45f33",
+   "estrategia": "invitacion-clase-033700",
+   "subject_key": "m:1",
+   "kind": "enroll",
+   "level": null,
+   "reasons": [],
+   "trace_hash": "44b10af76fa9f7ebe0ba43c0302c81f57a3a5707db8240c1791fca503c2075c3",
+   "persona": "S1"
+  },
+  {
+   "uuid": "ba5bfd44-d988-400c-8ab6-de8f5cb589b1",
+   "estrategia": "invitacion-clase-033700",
+   "subject_key": "m:2",
+   "kind": "enroll",
+   "level": null,
+   "reasons": [],
+   "trace_hash": "44b10af76fa9f7ebe0ba43c0302c81f57a3a5707db8240c1791fca503c2075c3",
+   "persona": "S2"
+  },
+  {
+   "uuid": "816506ca-95d6-49ba-9967-0b58be01d5c4",
+   "estrategia": "invitacion-clase-033700",
+   "subject_key": "m:3",
+   "kind": "enroll",
+   "level": null,
+   "reasons": [],
+   "trace_hash": "44b10af76fa9f7ebe0ba43c0302c81f57a3a5707db8240c1791fca503c2075c3",
+   "persona": "S3"
+  },
+  {
+   "uuid": "d2188df4-a7ed-46e9-8536-5a0870b632d6",
+   "estrategia": "invitacion-clase-033700",
+   "subject_key": "m:4",
+   "kind": "enroll",
+   "level": null,
+   "reasons": [],
+   "trace_hash": "44b10af76fa9f7ebe0ba43c0302c81f57a3a5707db8240c1791fca503c2075c3",
+   "persona": "S5"
+  },
+  {
+   "uuid": "42509bca-c88c-4f54-8afb-83551a60a542",
+   "estrategia": "seguimiento-prospectos-033700",
+   "subject_key": "l:6",
+   "kind": "enroll",
+   "level": null,
+   "reasons": [],
+   "trace_hash": "6e961627780b8047580a7b6015caf51a197b30ce357165cdafe2d90b6e110584",
+   "persona": "L1"
+  },
+  {
+   "uuid": "41bd7a99-5f56-4ad9-b738-669962320169",
+   "estrategia": "seguimiento-prospectos-033700",
+   "subject_key": "l:7",
+   "kind": "enroll",
+   "level": null,
+   "reasons": [],
+   "trace_hash": "492101ac8d84152c1daf09f03dd89db46d6b583282b3c8cb1ef2ce0dac4a67d3",
+   "persona": "L2"
+  },
+  {
+   "uuid": "7f51a04c-429b-45ca-ba86-2184597cf504",
+   "estrategia": "renovacion-7d-033700",
+   "subject_key": "m:1",
+   "kind": "plan",
+   "level": null,
+   "reasons": [],
+   "trace_hash": "e562743c715eaa7f719fd777d7ce433d22e22e0bade9b5ab7ee348af1abbe8ec",
+   "persona": "S1"
+  },
+  {
+   "uuid": "a4813917-b75c-4ba4-9041-04c1402cc7d4",
+   "estrategia": "invitacion-clase-033700",
+   "subject_key": "m:1",
+   "kind": "defer",
+   "level": "N6",
+   "reasons": [
+    "lower_priority"
+   ],
+   "trace_hash": "ad7642a6f0031809e0f166c21ce82ad827d78b8f3dca7f2118a5ec75addb91b4",
+   "persona": "S1"
+  },
+  {
+   "uuid": "2ceb1ad6-210c-4828-a756-5072f0a85da4",
+   "estrategia": "renovacion-7d-033700",
+   "subject_key": "m:2",
+   "kind": "deny",
+   "level": "N1",
+   "reasons": [
+    "consent_denied"
+   ],
+   "trace_hash": "ab2834dc0d3ab7fbbe2d0edf68305f104f49257bb1f828e5f429f6ade92b93f4",
+   "persona": "S2"
+  },
+  {
+   "uuid": "39053819-5127-480d-a958-859c9d1cd16e",
+   "estrategia": "invitacion-clase-033700",
+   "subject_key": "m:2",
+   "kind": "defer",
+   "level": "N6",
+   "reasons": [
+    "lower_priority"
+   ],
+   "trace_hash": "ad7642a6f0031809e0f166c21ce82ad827d78b8f3dca7f2118a5ec75addb91b4",
+   "persona": "S2"
+  },
+  {
+   "uuid": "fbf5e716-2524-4e82-b35f-aaecc024da00",
+   "estrategia": "invitacion-clase-033700",
+   "subject_key": "m:3",
+   "kind": "plan",
+   "level": null,
+   "reasons": [],
+   "trace_hash": "e53272ba2597192c8a4be42300bc9b1019c75d92ef8c0b432ccc489ce292105d",
+   "persona": "S3"
+  },
+  {
+   "uuid": "c5fe7e81-8b1b-43b6-8389-c8d142778445",
+   "estrategia": "invitacion-clase-033700",
+   "subject_key": "m:4",
+   "kind": "plan",
+   "level": null,
+   "reasons": [],
+   "trace_hash": "425070637219594105b8721740c189627a58985918b173876d606ea583957872",
+   "persona": "S5"
+  },
+  {
+   "uuid": "407af178-e436-45b9-85e4-542cbc6b7026",
+   "estrategia": "seguimiento-prospectos-033700",
+   "subject_key": "l:6",
+   "kind": "plan",
+   "level": null,
+   "reasons": [],
+   "trace_hash": "fbd822924ce1ef22313aafe4b0c4f57e59362515adf9cf90debe8d8355fcb87f",
+   "persona": "L1"
+  },
+  {
+   "uuid": "46eaaaff-79f5-41b5-9da1-e98eb7f9f941",
+   "estrategia": "seguimiento-prospectos-033700",
+   "subject_key": "l:7",
+   "kind": "deny",
+   "level": "N1",
+   "reasons": [
+    "no_consent_for_purpose_channel"
+   ],
+   "trace_hash": "60ab61c6d3b061fecf324ec94adce67c5ddb3907c7764a97cd2a7c4f8a8d7319",
+   "persona": "L2"
+  }
+ ],
+ "trabajos": [
+  {
+   "uuid": "18dc984b-8275-4e7f-8d19-01e35789e615",
+   "estrategia": "renovacion-7d-033700",
+   "subject_key": "m:1",
+   "channel": "simulated",
+   "status": "simulated",
+   "mode": "shadow",
+   "not_before": "2026-11-11T15:05:01",
+   "persona": "S1"
+  },
+  {
+   "uuid": "3217f7ae-936d-4cc1-901a-e0fb4aaf1ea4",
+   "estrategia": "invitacion-clase-033700",
+   "subject_key": "m:3",
+   "channel": "simulated",
+   "status": "simulated",
+   "mode": "shadow",
+   "not_before": "2026-11-11T15:01:01",
+   "persona": "S3"
+  },
+  {
+   "uuid": "7ad91d5d-974e-4df9-9bf6-49f8fdf2d707",
+   "estrategia": "invitacion-clase-033700",
+   "subject_key": "m:4",
+   "channel": "simulated",
+   "status": "simulated",
+   "mode": "shadow",
+   "not_before": "2026-11-11T15:04:01",
+   "persona": "S5"
+  },
+  {
+   "uuid": "ba6b52a9-1bdf-45e6-8366-0ae47dc2d7cb",
+   "estrategia": "seguimiento-prospectos-033700",
+   "subject_key": "l:6",
+   "channel": "simulated",
+   "status": "simulated",
+   "mode": "shadow",
+   "not_before": "2026-11-11T15:08:01",
+   "persona": "L1"
+  }
+ ],
+ "pasadas": [
+  {
+   "uuid": "878ff782-03a3-4fd4-b338-e22cb04ea52c",
+   "kind": "ingest",
+   "status": "completed",
+   "counts": {
+    "cursor_to": 0,
+    "events": 0,
+    "outcomes": 0,
+    "strategies": 0
+   }
+  },
+  {
+   "uuid": "e1f7db42-7587-48cc-9c5c-11e2cd528c06",
+   "kind": "sweep",
+   "status": "completed",
+   "counts": {
+    "already_enrolled": 0,
+    "candidates": 2,
+    "cooldown": 0,
+    "daily_enrollment_cap": 0,
+    "enrolled": 2,
+    "evaluated": 2,
+    "excluded": 0,
+    "insufficient_facts": 0,
+    "more": false,
+    "no_cycle_key": 0,
+    "not_in_audience": 0,
+    "open_enrollment": 0,
+    "success_reached": 0,
+    "unknown_subject": 0
+   }
+  },
+  {
+   "uuid": "d438544c-85b7-4ad3-aff3-955fc783d850",
+   "kind": "sweep",
+   "status": "completed",
+   "counts": {
+    "already_enrolled": 0,
+    "candidates": 4,
+    "cooldown": 0,
+    "daily_enrollment_cap": 0,
+    "enrolled": 4,
+    "evaluated": 4,
+    "excluded": 0,
+    "insufficient_facts": 0,
+    "more": false,
+    "no_cycle_key": 0,
+    "not_in_audience": 0,
+    "open_enrollment": 0,
+    "success_reached": 0,
+    "unknown_subject": 0
+   }
+  },
+  {
+   "uuid": "c72726d7-b79d-4f43-b562-904c4c9c9a7b",
+   "kind": "sweep",
+   "status": "completed",
+   "counts": {
+    "already_enrolled": 0,
+    "candidates": 2,
+    "cooldown": 0,
+    "daily_enrollment_cap": 0,
+    "enrolled": 2,
+    "evaluated": 2,
+    "excluded": 0,
+    "insufficient_facts": 0,
+    "more": false,
+    "no_cycle_key": 0,
+    "not_in_audience": 0,
+    "open_enrollment": 0,
+    "success_reached": 0,
+    "unknown_subject": 0
+   }
+  },
+  {
+   "uuid": "a4d9f4c9-087f-4314-9a19-fa9bbc3aaa74",
+   "kind": "reconcile",
+   "status": "completed",
+   "counts": {
+    "ambiguous": 0,
+    "canceledByChain": 0,
+    "expiredEnrollments": 0,
+    "expiredJobs": 0
+   }
+  },
+  {
+   "uuid": "25e5c120-1da7-45b3-aee7-53f66ce0411f",
+   "kind": "dispatch",
+   "status": "completed",
+   "counts": {
+    "claimed": 4,
+    "results": {
+     "simulated": 4
+    }
+   }
+  },
+  {
+   "uuid": "ad37d677-cb09-468b-a3ae-59a3611ecb46",
+   "kind": "reconcile",
+   "status": "completed",
+   "counts": {
+    "ambiguous": 0,
+    "canceledByChain": 0,
+    "expiredEnrollments": 0,
+    "expiredJobs": 0
+   }
+  },
+  {
+   "uuid": "1f5efcda-4424-4497-8233-c226fb3eb039",
+   "kind": "dispatch",
+   "status": "aborted",
+   "counts": {
+    "claimed": 0,
+    "retained": 0
+   }
+  },
+  {
+   "uuid": "0a24f884-0d18-4035-8d54-6e8ebee48454",
+   "kind": "ingest",
+   "status": "completed",
+   "counts": {
+    "cursor_to": 0,
+    "events": 0,
+    "outcomes": 0,
+    "strategies": 0
+   }
+  },
+  {
+   "uuid": "38a3a492-9717-4bb6-97b3-b88d5c024ba3",
+   "kind": "sweep",
+   "status": "completed",
+   "counts": {
+    "already_enrolled": 2,
+    "candidates": 2,
+    "cooldown": 0,
+    "daily_enrollment_cap": 0,
+    "enrolled": 0,
+    "evaluated": 0,
+    "excluded": 0,
+    "insufficient_facts": 0,
+    "more": false,
+    "no_cycle_key": 0,
+    "not_in_audience": 0,
+    "open_enrollment": 0,
+    "success_reached": 0,
+    "unknown_subject": 0
+   }
+  },
+  {
+   "uuid": "f9e0ddcb-8814-4bbf-8e24-42922ac5133f",
+   "kind": "sweep",
+   "status": "completed",
+   "counts": {
+    "already_enrolled": 4,
+    "candidates": 4,
+    "cooldown": 0,
+    "daily_enrollment_cap": 0,
+    "enrolled": 0,
+    "evaluated": 0,
+    "excluded": 0,
+    "insufficient_facts": 0,
+    "more": false,
+    "no_cycle_key": 0,
+    "not_in_audience": 0,
+    "open_enrollment": 0,
+    "success_reached": 0,
+    "unknown_subject": 0
+   }
+  }
+ ]
+}

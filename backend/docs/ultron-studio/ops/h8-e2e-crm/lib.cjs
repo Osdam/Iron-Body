@@ -335,7 +335,9 @@ async function pestana(s, ctx, id, listo) {
   const ok = await esperar(s, `return !!document.querySelector('#vt-panel-${id}:not([hidden])') && document.querySelector('[data-voz-pestana="${id}"]')?.getAttribute('aria-selected') === 'true';`, T(90000));
   if (!ok) return false;
   // Listo: lo pedido, y además que el panel no siga «Leyendo…» (estados de carga con role=status).
-  const cargado = `return ![...document.querySelectorAll('#vt-panel-${id} [role=status], #vt-panel-${id} .lab-empty')].some((e) => /^Leyendo/.test((e.textContent || '').trim()));`;
+  // Y el «Estado de activación» (L9-79, en la pestaña Estado) terminado de leer: su insignia «Leyendo…» empieza por el
+  // nombre del icono (`hourglass_top`) y la expresión de arriba no la ve (pasada de B-T6 del 11-11).
+  const cargado = `return ![...document.querySelectorAll('#vt-panel-${id} [role=status], #vt-panel-${id} .lab-empty')].some((e) => /^Leyendo/.test((e.textContent || '').trim())) && !document.querySelector('#vt-panel-${id} [data-activacion-leyendo]');`;
   if (!(await esperar(s, cargado, T(45000)))) return false;
   if (listo) return !!(await esperar(s, listo, T(30000)));
   await dormir(300);

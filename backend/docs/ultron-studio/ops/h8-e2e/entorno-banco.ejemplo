@@ -106,6 +106,10 @@ VOICE_INBOUND_ENABLED=@@ENTRANTES@@
 VOICE_INBOUND_DAILY_CAP=12
 VOICE_OUTBOUND_ENABLED=true
 VOICE_OUTBOUND_SCOPE=@@ALCANCE_SALIENTES@@
+# Alta de contactos de voz y su consentimiento (auditoría B-T4, `VOICE_CONTACTS_ENABLED`; apagada hasta la fase 4b:
+# apagada, 409 `voice_contacts_disabled`). Apagada en el E2E del backend (su parte 4b la enciende solo en la segunda
+# API); el E2E del CRM la enciende con H8_E2E_CONTACTOS=true para ejercer la pestaña Contactos.
+VOICE_CONTACTS_ENABLED=@@CONTACTOS@@
 VOICE_MAX_CONCURRENT_CALLS=2
 VOICE_PER_CALL_MAX_SECONDS=300
 VOICE_DAILY_BUDGET_USD=60

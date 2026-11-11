@@ -272,7 +272,7 @@ async function sesion(browser, ctx, inf, quien) {
   const usuario = { id: u.id, name: u.name, email: u.email, role: u.role, permissions: u.permissions ?? [] };
   const bctx = await browser.createBrowserContext();
   const page = await bctx.newPage();
-  const s = { quien, page, bctx, usuario, red: [], consola: [], errores: [], api5xx: [], api4xx: [], fugasRed: [], cuerpos: 0, sse: { abiertos: 0, eventos: 0, temas: {} } };
+  const s = { quien, page, bctx, usuario, red: [], consola: [], errores: [], api5xx: [], api4xx: [], fugasRed: [], cuerpos: 0, sse: { abiertos: 0, eventos: 0, temas: {} }, simulaciones: [] };
   const cdp = await page.createCDPSession();
   s.cdp = cdp;
   await cdp.send('Network.enable', { maxPostDataSize: 65536 });
@@ -286,6 +286,22 @@ async function sesion(browser, ctx, inf, quien) {
     s.red.push(linea);
     const f = [...fugas(e.request.url, inf.prohib, ['sesión ' + quien]), ...fugas(e.request.postData || '', inf.prohib)];
     if (f.length) s.fugasRed.push({ dir: 'envío', method: e.request.method, path: r.path, labels: [...new Set(f)] });
+    // La simulación sintética que manda el navegador (H9-E2E-2): solo la FORMA de `events` y `contacts` de cada persona
+    // de prueba (lista con su longitud, null o ausente) y su referencia sintética; nunca el resto del cuerpo.
+    if (e.request.method === 'POST' && /^\/api\/admin\/ultron-studio\/strategies\/(versions\/)?[0-9a-f-]{36}\/simulations$/.test(r.path)) {
+      const forma = (v) => (Array.isArray(v) ? `lista(${v.length})` : v === undefined ? 'ausente' : v === null ? 'null' : typeof v);
+      const anotar = (texto, origen) => {
+        let cuerpo = null;
+        try { cuerpo = JSON.parse(texto || 'null'); } catch { cuerpo = null; }
+        const gente = Array.isArray(cuerpo?.people) ? cuerpo.people : null;
+        s.simulaciones.push({ ts: linea.ts, path: r.path, kind: cuerpo?.kind ?? null, origen,
+          formas: gente ? gente.map((p) => ({ ref: String(p?.ref ?? '').slice(0, 40), events: forma(p?.events), contacts: forma(p?.contacts) })) : null });
+      };
+      const entradas = (e.request.postDataEntries || []).map((x) => Buffer.from(x.bytes || '', 'base64').toString('utf8')).join('');
+      if (e.request.postData) anotar(e.request.postData, 'postData');
+      else if (entradas) anotar(entradas, 'postDataEntries');
+      else cdp.send('Network.getRequestPostData', { requestId: e.requestId }).then((b) => anotar(b.postData, 'getRequestPostData')).catch(() => anotar(null, 'sin cuerpo legible'));
+    }
   });
   cdp.on('Network.webSocketCreated', (e) => {
     const r = rutaSinValores(e.url);

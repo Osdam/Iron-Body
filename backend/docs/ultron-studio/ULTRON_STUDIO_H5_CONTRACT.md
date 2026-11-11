@@ -391,3 +391,20 @@ El riesgo R6 del plan (`plans/ULTRON_STUDIO_H5_PLAN.md` §9) dice que, tras rota
 - **Caracteres invisibles (AS-5).** `PlainText` deja pasar invisibles que no están en su lista (U+00AD, U+061C, U+180E, U+2028, U+2060 y las etiquetas U+E0000–E007F, entre otros). Desde H5 acaban en `ultron_studio_publications.reason`, que no se puede editar ni borrar. Decisión del propietario; mejor antes de la fase 2.
 
 **AS-4 / H-1 (doble envío intercalado con la misma `clientRequestId`): corregido en `96397ea`** (`StudioPublications::orReplayed()`: el reintento que cruza la confirmación de su gemela recibe 200 `replayed`, §A5.1 paso 3, en las cuatro escrituras; 38 carreras reales en PostgreSQL, `UltronStudioPublicationRaceTest`). Una llave reutilizada con otro cuerpo o por otra persona sigue siendo `client_request_reused`.
+
+## Enmienda M-1 (lead, 11-11-2026 05:45 UTC): la versión publicada GOBIERNA los prompts de ULTRON por WhatsApp (de la opción A a la aplicación real)
+
+Encargo del propietario del 11-11 («un cambio aprobado y publicado en ULTRON Studio debe reflejarse en una ejecución canaria real del motor; si todavía requiere editar un prompt independiente en n8n, la integración no puede declararse terminada»). Responde a B-A1 y a Q6 de la auditoría. **El texto normativo de esta enmienda son las secciones B.3 a B.8 y D de `plans/STUDIO_MOTORES_PLAN.md` (arquitecto, 11-11), que el lead congela aquí como contrato**, con estas decisiones:
+
+| Id | Qué | Decisión del lead |
+|---|---|---|
+| M1-1 | Opción | La (1) del plan: Laravel compila los cinco prompts (base del repositorio idéntica byte a byte al flujo vivo de n8n `29de5119`, más parches anclados por cada valor gobernado) y los entrega en `decide` solo si la huella recalculada es la firmada al publicar; n8n los usa y, si no los recibe o no cuadran, usa los de siempre. Los prompts dejan de editarse a mano en n8n (G1, G10) |
+| M1-2 | Alcance de esta entrega (G2) | Gobiernan `persona.tone`, `persona.emojis`, `persona.maxChars` y `strategy.goal`. `intent.fallback` y las reglas S-NNN **siguen sin efecto en WhatsApp** (texto libre del personal en un prompt de producción es un paquete aparte, con un laboratorio que use los prompts reales): se dice así en el CRM y en el informe |
+| M1-3 | Textos de los parches (G3) | Aprobados los borradores de B.3 tal cual (`UltronPromptCompiler::VERSION = 1`). El propietario puede cambiarlos después: versión nueva del compilador y nueva publicación |
+| M1-4 | Línea base (G4) | Aceptada: el valor de la línea base significa «como hoy» (`compile(línea base) === base` byte a byte) |
+| M1-5 | Contratos | Publicación `ultron-engine-config/2` (aditiva; Legacy siempre en `/1`); `decide` con `prompt_contract` negociado y `studio_prompts`; `commit` con el bloque opcional `prompts` y el sello `metadata.studio_prompts` (estados `applied`, `legacy`, `engine_fallback`, `mismatch`, `legacy_drift`, `not_reported`, `unverified`); llave `MARKETING_ULTRON_STUDIO_PROMPTS` (`off` por defecto, `canary`); todo falla hacia Legacy y nunca deja un turno mudo |
+| M1-6 | Frontera A9 enmendada | El motor lee una tabla del Studio desde una clase; la invocan el commit (sello) y `UltronPromptOffer` (oferta de prompts en `decide`). El Studio importa del motor solo `UltronPromptBase` y `UltronPromptCompiler`, puros |
+| M1-7 | Puerta del laboratorio (G6) | Se mantiene `required` (no se renuncia a un control): antes de publicar V2, una ejecución real del laboratorio del H4 sobre esa versión y el veredicto de otra persona; así se cierra además la validación 2 del H4. Si el propietario prefiere `waived` para las publicaciones de aceptación, lo decide él y queda escrito en cada publicación |
+| M1-8 | Alcance del cambio en n8n | Hoy el flujo «Commercial Advisor» solo lo recorre la conversación canaria (`UltronEventEmitter.php:84-87`): el cambio no toca a ningún cliente. Vuelta atrás por el historial de versiones de n8n, nunca reimportando el respaldo |
+| M1-9 | Calendario | Se adelanta un día: construir el 11-11 y el 12-11, activar el 12-11 y el 13-11, con las etapas E0–E5 del plan, solo en la conversación canaria |
+

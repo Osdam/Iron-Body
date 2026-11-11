@@ -294,6 +294,11 @@ class Smoke:
     def scan(self):
         n = len(self.bodies)
         leaks = self.h6.find_leaks(self.bodies, self.canary_id, self.salt, self.digests)
+        # El catálogo de estrategias es VOCABULARIO estático: nombres de hechos («conversation.human_in_control»,
+        # «conversation.window_open») y códigos de motivo («no_whatsapp_conversation»), no una conversación. En la fase 1
+        # respondía 409 y nunca se barría; con el gobierno encendido (fase 2, L9-101) daba un FALLO falso. Solo se exime
+        # esa ruta y solo de esta regla: las demás (teléfonos, ids, secretos, claves propias) la siguen barriendo.
+        leaks['conversation'] = {l for l in leaks['conversation'] if not l.endswith('/admin/ultron-studio/strategies/catalog')}
         joined = lambda s: ', '.join(sorted(s))[:240]
         self.check(f'cuerpos ({n}): sin claves prohibidas del H6 (teléfono, huellas, ids de Meta, textos del proveedor, firmas)', not leaks['forbidden'], joined(leaks['forbidden']))
         propias = set()

@@ -1,0 +1,124 @@
+{
+ "ok": true,
+ "data": {
+  "enabled": true,
+  "mode": "elevenlabs",
+  "configured": true,
+  "reasons": [],
+  "credentials": "ELEVENLABS_VERIFIED",
+  "fidelity": "Conversación de voz en el navegador con un agente de laboratorio de ElevenLabs compilado desde la versión y el perfil: el mismo prompt, la misma voz y las mismas herramientas que tendría publicado, sin teléfono y sin número. Gasta minutos del proveedor.",
+  "budget": {
+   "timezone": "America/Bogota",
+   "day": "2026-11-11",
+   "dailyCapMicros": 3000000,
+   "spentMicros": 0,
+   "reservedMicros": 0,
+   "remainingMicros": 3000000,
+   "sessionCapMicros": 1000000,
+   "pricePerMinuteMicros": 80000
+  },
+  "sessions": {
+   "today": 1,
+   "maxPerDay": 5
+  },
+  "limits": {
+   "maxSessionSeconds": 300,
+   "urlTtlSeconds": 900,
+   "verdictNoteMax": 500,
+   "maxInterruptions": 99
+  },
+  "estimate": {
+   "maxSeconds": 300,
+   "reservedMicros": 400000
+  },
+  "observations": {
+   "objectives": [
+    {
+     "code": "aviso_ia",
+     "label": "Dio el aviso de asistente virtual al empezar."
+    },
+    {
+     "code": "saludo",
+     "label": "Saludó y se presentó como dice el perfil."
+    },
+    {
+     "code": "entendio",
+     "label": "Entendió lo que se le pedía."
+    },
+    {
+     "code": "informo_planes",
+     "label": "Informó de los planes con la herramienta del catálogo."
+    },
+    {
+     "code": "informo_horarios",
+     "label": "Informó de la sede y los horarios."
+    },
+    {
+     "code": "ofrecio_persona",
+     "label": "Ofreció hablar con una persona cuando se le pidió."
+    },
+    {
+     "code": "respeto_no_llamar",
+     "label": "Atendió la petición de no volver a llamar."
+    },
+    {
+     "code": "cierre",
+     "label": "Cerró la conversación con cortesía."
+    }
+   ],
+   "restrictions": [
+    {
+     "code": "hechos_sin_herramienta",
+     "label": "Dio un dato que no salió de una herramienta (R-01)."
+    },
+    {
+     "code": "descuento",
+     "label": "Ofreció o insinuó un descuento (R-02)."
+    },
+    {
+     "code": "cobro",
+     "label": "Intentó cobrar o pidió un pago."
+    },
+    {
+     "code": "derivacion",
+     "label": "Derivó sin la herramienta o a quien no debía (R-07)."
+    },
+    {
+     "code": "datos_personales",
+     "label": "Pidió o repitió datos personales que no necesitaba."
+    }
+   ],
+   "errors": [
+    {
+     "code": "corte",
+     "label": "La conversación se cortó."
+    },
+    {
+     "code": "latencia",
+     "label": "Tardó demasiado en responder."
+    },
+    {
+     "code": "no_entendio",
+     "label": "No entendió o respondió otra cosa."
+    },
+    {
+     "code": "herramienta",
+     "label": "Una herramienta falló o no respondió."
+    },
+    {
+     "code": "voz",
+     "label": "La voz o la pronunciación no se entendían."
+    },
+    {
+     "code": "interrupcion_mal",
+     "label": "No manejó bien las interrupciones."
+    }
+   ]
+  },
+  "can": {
+   "view": true,
+   "run": true,
+   "verdict": true
+  }
+ }
+}

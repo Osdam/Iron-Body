@@ -1,0 +1,11 @@
+== E2E H8 · 2026-11-11T03:52:02Z · 07e70dac (07e70dac) · fases: abierta · /Users/alejodev/.cache/ironbody-h8-e2e/run-20261111T035202Z-07e70dac
+== 1. copias de 07e70dac
+   cerrada: el commit tal cual · abierta: lo mismo + el giro de UNA línea (2 líneas cambiadas en el diff: una fuera y una dentro, solo app/Services/Voice/VoiceCallPolicy.php)
+== fase abierta · 2026-11-11T03:52:13Z
+   migraciones: 337 · tablas de voz: 11
+   preflight: local · ultron_studio_h8_e2e como h8e2e_app · constante True · entrantes True · EL y Twilio → 127.0.0.1 · ELEVENLABS_UNVERIFIED
+   pila: valla :8404 · ElevenLabs :8402 · Twilio :8403 · API :8401 (5 procesos de php -S con la valla) · worker voice (pid 89066)
+   valla: sondas → ConnectionException 403 (esperado: ConnectionException 403)
+   cuentas: a=1 (Super Admin), b=2 (Super Admin), c=3 (Administrador) · verificación de voz: {"snapshots": [{"provider": "meta_ads", "fingerprint": "f015334fcc0cd0cdcf04c08a26f4c6162f8daf15ceb2baed7d02c3ee0d9d4bff", "recorded": true, "uuid": "420e5d55-4
+== PILA EN PIE (H8_E2E_HOLD=1): H8_E2E_CONTEXT=/Users/alejodev/.cache/ironbody-h8-e2e/run-20261111T035202Z-07e70dac/abierta/context.json · parar con SIGTERM a este proceso (88658)
+h8-e2e: interrumpido

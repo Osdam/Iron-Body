@@ -78,16 +78,17 @@ Nombres «… Sintetica … E2E», correos en `.invalid`, teléfonos 300 999 01x
 
 | Paso | Qué demuestra desde el navegador |
 |---|---|
-| `humo` | Las dos sesiones abren `marketing/automatizaciones`; chips del gobierno y de la persona vinculada; canal en vivo `live`; el panel dice sombra y constante cerrada |
+| `humo` | Las dos sesiones abren `marketing/automatizaciones`; chips del gobierno y de la persona vinculada; canal en vivo `live`; «Estado de activación» con las 7 funciones de las campañas, cada una con su estado (L9-79); el panel dice sombra y constante cerrada |
 | `plantillas` | Ana crea la plantilla asistida (guion sin datos de contacto); ni el botón ni el servidor le dejan aprobarla; Beto la aprueba |
-| `e1` | Vencimientos (`membership.expiring_window`, 7 días) con audiencia, éxito y DOS pasos: `aviso` con `no_answer → wait` + `waitFor` 2 días y `no_response → end_exit`, y `seguimiento` a los 2 días. Ana crea (H9-E2E-1, abajo), guarda, valida en el servidor (misma huella que la forma en vivo), simula el borrador (una persona `plan`, otra `deny` en N1, y la de H9-E2E-2), congela y simula la VERSIÓN (la puerta de aprobar); Ana no puede aprobar; Beto reconoce los avisos, aprueba y publica en canario (huella del diálogo = la de la versión; entrada `publish` VERIFICADA en la cadena) |
+| `e1` | Vencimientos (`membership.expiring_window`, 7 días) con audiencia, éxito y DOS pasos: `aviso` con `no_answer → wait` + `waitFor` 2 días y `no_response → end_exit`, y `seguimiento` a los 2 días. Ana crea desde el navegador (el constructor abre la nueva; el detalle trae `"content":{}`; abierta después desde la lista, carga: H9-E2E-1), guarda, valida en el servidor (misma huella que la forma en vivo), simula el borrador SIN eventos (dos `plan`, una `deny` en N1; listas vacías en la petición y ninguna negativa por «pidió hablar con alguien»: H9-E2E-2), congela y simula la VERSIÓN (la puerta de aprobar); Ana no puede aprobar; Beto reconoce los avisos, aprueba y publica en canario (huella del diálogo = la de la versión; entrada `publish` VERIFICADA en la cadena) |
 | `e2` | Lo mismo con `class.upcoming_with_capacity` |
 | `e3` | Lo mismo con `lead.followup_due` |
 | `consola` | Con el panel de Ana abierto, `outreach:sweep` por consola: el canal en vivo trae `outreach.runs` sin recargar; filas de inscripciones y decisiones (N1 con su motivo); después `outreach:dispatch --inline`: trabajos `simulated` y resultados `not_attempted` |
 | `panel` | El panel enseña las pasadas, las inscripciones y los trabajos; la decisión se explica en frases y su `traceHash` es el de la base |
-| `parada` | Con el panel de Beto abierto, Ana echa la PARADA GLOBAL: a Beto le llega sola (`outreach.brakes`); el despacho no reclama nada; Ana intenta soltarla desde el CRM y el servidor se lo niega (H9-E2E-3); Beto la suelta con nota |
+| `parada` | Con el panel de Beto abierto, Ana echa la PARADA GLOBAL: a Beto le llega sola (`outreach.brakes`); el despacho no reclama nada; junto a «Soltar la parada» el panel dice quién la echó y que la suelta otra persona, a Ana y a Beto (H9-E2E-3); Ana lo intenta igual desde el CRM y el servidor se lo niega; Beto la suelta con nota |
 | `pausa` | Beto pausa la campaña de prospectos (entrada `pause` verificada); la pasada siguiente (`--force`) no la planifica |
 | `asistido` | (Desviación, abajo) modo `live` con el asistido: S4 llega a la bandeja; antes de reclamar no hay ficha ni guion; Beto reclama, ve el guion y la ficha, Ana no; Beto registra `answered` y la inscripción cierra |
+| `url` | (H9-E2E-4, abajo) «Abrir» desde la lista deja la estrategia en la URL; con otra elegida en la URL, crear una nueva y recargar (F5) sigue en la nueva |
 | `barrido` | DOM, almacenamiento, URL y consola de las dos sesiones en 5 pestañas; cuerpos de TODAS las respuestas de la API y eventos SSE; 0 hosts fuera de 127.0.0.1; 0 respuestas 5xx; 0 errores de página |
 
 ## Desviaciones y costuras (todas a la vista en la evidencia)
@@ -116,12 +117,24 @@ Nombres «… Sintetica … E2E», correos en `.invalid`, teléfonos 300 999 01x
   disparador (15–60 min) omitiría la estrategia; `--force` es la opción de la orden para eso.
 - **El reinicio de la API** (fase asistida) corta los canales SSE abiertos: los 502 del proxy DENTRO de esa ventana
   (`reinicios-api.jsonl`, 5 s de margen; `cinco-xx.py`) no cuentan como 5xx, y se dicen aparte. Cualquier otro 5xx sí.
-- **H9-E2E-1 (alta de estrategias).** El alta responde 201 pero el CRM no puede leer la respuesta (`draft.content: []`):
-  el guion lo deja en ROJO y sigue con un borrador mínimo `{"format":"strategy-content/1"}` guardado por la API como Ana
-  (`PUT strategies/{uuid}/draft`, la misma ruta que «Guardar borrador»).
-- **H9-E2E-2 (simulación sintética).** Las personas de prueba que deben planificarse llevan un evento inocuo
-  (`app_linked` hace 24 h): sin eventos, el CRM manda `events: null` y N6 las niega. Una tercera persona sin eventos deja
-  el hallazgo en ROJO en cada vuelta.
+- **Sin costuras para los hallazgos de la vuelta del 11-11 (L9-84).** El borrador mínimo por la API (H9-E2E-1) y el
+  evento inocuo de las personas de prueba (H9-E2E-2) se quitaron el 11-11 al certificar la ola: el alta y la simulación
+  se hacen enteras en el navegador. Cada síntoma queda como comprobación con `hallazgo` en el detalle:
+  - **H9-E2E-1:** al crear, el CRM abre el constructor de ESA estrategia (su clave en el título); `GET strategies/{uuid}`
+    trae `"content":{}` (o `null`) en el JSON crudo, nunca `[]`; abierta después con «Abrir» desde la lista, carga sin
+    `[data-ca-constructor-error]`.
+  - **H9-E2E-2:** ninguna persona de prueba lleva eventos; la petición que manda el navegador (CDP, solo la forma) lleva
+    `events: []` y `contacts: []` por persona; las autorizadas salen `plan`, y nadie sale negado por «pidió hablar con
+    alguien» (ni en la frase ni en `counts.byReason.human_requested_recently`).
+  - **H9-E2E-3:** junto a «Soltar la parada», `[data-ca-parada-cuatro-ojos]` dice «La echó <quien la abrió>» y que la
+    suelta otra persona (cuatro ojos), a quien la echó y a otra persona (que no se nombra a sí misma). El botón sigue a la
+    vista (L9-84 eligió explicar; el DTO del freno sin `actions.release` queda como mejora): Ana lo intenta y el servidor
+    se lo niega.
+- **H9-E2E-4 (nuevo, 11-11; menor, FE9).** Abrir una estrategia no la deja en la URL: `abrirEstrategia()`
+  (`commercial-automation-page.ts:260-263` del CRM) navega con `?estrategia=` y enseguida `elegir()` vuelve a navegar con
+  `?pestana=constructor` (los dos con `merge`); la segunda sustituye a la primera y mezcla con la URL de antes. El
+  constructor abre bien (va por `session.select`), pero F5 o un enlace la pierden y, con OTRA elegida en la URL, F5
+  cambia en silencio a la anterior. El guion toma el uuid de la API por su clave y lo comprueba aparte, en el paso `url`.
 - **CRM compilado en vez de `ng serve`.** Con la máquina cargada, la primera compilación del servidor de desarrollo no
   terminaba en 10 minutos por vuelta. El resultado (`development`, mismo `environment.ts`) se compila una vez por commit.
 
@@ -147,8 +160,19 @@ fichero en cada petición. El 10-11 se retiró la guarda de cuatro ojos al solta
 `if (false && …)`): el guion pasó a ROJO en «la API rechaza la suelta por la misma persona (403 four_eyes_required)»
 (la API dio 500) y la parada siguió abierta porque la base la paró con `obrk_four_eyes_chk` (defensa en profundidad).
 
+El 11-11, sobre los commits de la ola (pila retenida; el guion de las mutaciones y su salida en
+`ops/evidencia-h9/2026-11-11/e2e-mutaciones/20261111T024811Z-07e70dac-crm-7a58f16/`; informe §C): A) en la copia del
+backend, `draftApiDto()` sin su arreglo (`if (false && …)`) ⇒ ROJO «H9-E2E-1: al crearla, el CRM lee el alta (201)…» con
+el texto del hallazgo; B) en una copia del CRM compilado, la simulación vuelve a mandar `null` sin eventos ⇒ 4 ROJOS
+(las tres de H9-E2E-2 y las decisiones esperadas: `human_requested_recently` ×2); C) la frase de los cuatro ojos vacía
+⇒ los 2 ROJOS de H9-E2E-3; D) al revés, `abrirEstrategia()` con UNA navegación (estrategia y pestaña juntas) ⇒ las 2
+de H9-E2E-4 en VERDE (78/78): el paso `url` no está siempre en rojo y la causa raíz es la doble navegación.
+
 ## Última vuelta
 
-`ops/evidencia-h9/2026-11-11/e2e/20261111T001701Z-d701b0c8-crm-9572426/` (backend `d701b0c8`, CRM `9572426`): 194
-comprobaciones, 182 OK y 12 FALLO, todos de los hallazgos H9-E2E-1/2/3; hash de resultados `ae61f029…`, idéntico en dos
-vueltas seguidas. Informe: `plans/informes-h9/informe-tester-final.md` §B.
+`ops/evidencia-h9/2026-11-11/e2e/20261111T033646Z-07e70dac-crm-7a58f16/` (backend `07e70dac`, CRM `7a58f16`: los commits de
+la ola; arnés `f0bd0d632482b9cd`): 208 comprobaciones, 205 OK y 3 FALLO (H9-E2E-4 ×2 y, por ellas, «el guion salió con
+0»); H9-E2E-1/2/3 en verde sin costuras y el «Estado de activación» de Campañas con sus 7 funciones; hash de resultados
+`4d403da7…`, idéntico en dos vueltas seguidas (`20261111T033147Z` y `20261111T033646Z`).
+La anterior, sobre el código desplegado (`d701b0c8` + CRM `9572426`): 194, 182 OK y 12 FALLO, todos de H9-E2E-1/2/3
+(`…/20261111T001701Z-d701b0c8-crm-9572426/`). Informe: `plans/informes-h9/informe-tester-final.md` §B y §C.

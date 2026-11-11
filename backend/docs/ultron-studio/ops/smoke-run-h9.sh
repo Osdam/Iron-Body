@@ -326,7 +326,9 @@ if [ "$FASE" = 2 ]; then
       # Sin comillas a propósito: la orden lleva sus opciones (validadas arriba: solo outreach:<nombre> y --opción).
       # shellcheck disable=SC2086
       set +e; SAL=$(artisan $o 2>&1); rc=$?; set -e
-      printf '%s\n' "$SAL" | grep -vE '[0-9]{10,}' | grep -E '^[[:print:]]{0,240}$' | head -8 | sed 's/^/        /'
+      # Solo para enseñar la salida: con LC_ALL=C, [[:print:]] no casa las líneas con tildes o «·» (todas las del despacho) y,
+      # sin ninguna línea, el grep sale con 1 y `set -e -o pipefail` mataba el lanzador sin decir nada (L9-101).
+      { printf '%s\n' "$SAL" | grep -vE '[0-9]{10,}' | grep -E '^[[:print:]]{0,240}$' | head -8 | sed 's/^/        /'; } || true
       if [ "$rc" = 0 ]; then echo "OK      $o salió con 0"; else echo "FALLO   $o salió con $rc"; RC3=1; fi
     done
     ENV_DESPUES=$(sql "$Q_ENVIOS"); COLAS_DESPUES2=$(sql "$Q_COLAS"); VALLA_DESPUES2=$(valla); LIVE=$(sql "$Q_LIVE")

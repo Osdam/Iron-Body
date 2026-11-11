@@ -1,0 +1,28 @@
+[
+    {
+        "id": 1,
+        "uuid": "beb116d3-ee42-49f5-bb7d-711f626ad70f",
+        "client_request_id": "1605212b-a45d-4ebc-aa88-02794e1484ef",
+        "key": "aviso-asistido-033700",
+        "number": 1,
+        "channel": "assisted",
+        "purpose": "commercial",
+        "category": null,
+        "content_json": "{\"medium\":\"whatsapp\",\"script\":\"Hola, te saluda el equipo del gimnasio. Tu plan está por terminar y queremos ayudarte a seguir entrenando. ¿Te cuento las opciones para renovarlo?\"}",
+        "content_hash": "5cfe7b8de20da8578c0c457ac7d5635e7b8f1de64b86d64f3bab2bcdd9b8a540",
+        "status": "APPROVED",
+        "created_by_admin_id": 1,
+        "created_by_name": "Ana Autora (E2E H9)",
+        "created_by_role": "Super Admin",
+        "created_by_person_id": 1,
+        "created_at": "2026-11-11 03:37:06",
+        "reviewed_by_admin_id": 2,
+        "reviewed_by_name": "Beto Revisor (E2E H9)",
+        "reviewed_by_role": "Super Admin",
+        "reviewed_by_person_id": 2,
+        "reviewed_at": "2026-11-11 03:37:48",
+        "review_note": null,
+        "status_changed_at": "2026-11-11 03:37:48",
+        "updated_at": "2026-11-11 03:37:48"
+    }
+]

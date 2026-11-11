@@ -1,0 +1,4 @@
+E2E CRM H8 · backend 07e70dac (07e70dac1f258b8a96a3f8771fb29af7ba5d312a) · CRM 7a58f16 (7a58f16198bda333640589feb626f7196af4f649) · fase abierta · 2026-11-11T04:06:34Z · 873 s
+guiones (sha256 de ops/h8-e2e-crm/*.cjs): 48084b6ef68a7481
+282 comprobaciones (280 OK, 2 FALLO)
+hash de resultados (sha256 de las comprobaciones ordenadas: fase, paso, nombre, ok): 55de27e15fbe115324f4c7fb719abfab686a3e09ad79aac6924c61b32ed039fb

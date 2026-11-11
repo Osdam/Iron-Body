@@ -1,0 +1,2 @@
+crm-20261111T025841Z-07e70dac-7a58f16: «los guiones salieron con 0» → FALLO (código 1)
+crm-20261111T030937Z-07e70dac-7a58f16: «los guiones salieron con 0» → OK (código 0)

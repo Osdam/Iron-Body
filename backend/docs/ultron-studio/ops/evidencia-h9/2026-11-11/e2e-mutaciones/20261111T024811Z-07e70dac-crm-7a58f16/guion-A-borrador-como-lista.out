@@ -1,0 +1,46 @@
+── humo
+  OK    Ana abre «Campañas automáticas»
+  OK    a: chips del gobierno (encendido, publicar, persona vinculada) — {"gobierno":"toggle_on Gobierno encendido","publicar":"rocket_launch Publicar: ventana abierta","persona":"how_to_reg Persona vinculada","parada":"","cadena":""}
+  OK    a: canal en vivo conectado (SSE) — live
+  OK    Beto abre «Campañas automáticas»
+  OK    b: chips del gobierno (encendido, publicar, persona vinculada) — {"gobierno":"toggle_on Gobierno encendido","publicar":"rocket_launch Publicar: ventana abierta","persona":"how_to_reg Persona vinculada","parada":"","cadena":""}
+  OK    b: canal en vivo conectado (SSE) — live
+  OK    el panel enseña el modo sombra y la constante de envío cerrada
+  OK    GET outreach/status: maestra, sombra, constante cerrada — {"status":200,"config":{"enabled":true,"mode":"shadow","sends":false}}
+── plantillas
+  OK    Ana abre Plantillas
+  OK    Ana ve «Nueva versión de plantilla»
+  OK    Ana crea la plantilla en borrador
+  OK    la plantilla existe en borrador — {"status":"DRAFT","canal":"assisted","finalidad":"commercial"}
+  OK    Ana (autora) no puede aprobar su plantilla (ni botón ni servidor) — {"boton":false,"servidor":{"allowed":false,"code":"four_eyes_required"}}
+  OK    Beto abre Plantillas
+  OK    Beto abre la plantilla de Ana
+  OK    Beto ve «Aprobar»
+  OK    Beto confirma la aprobación
+  OK    la plantilla queda APROBADA por Beto (cuatro ojos por persona) — {"status":"APPROVED","revisor":"Beto Revisor (E2E H9)"}
+── e1
+  OK    Ana ve «Nueva estrategia»
+  OK    Ana crea la estrategia
+  FALLO H9-E2E-1: al crearla, el CRM lee el alta (201) y abre el constructor — {"aviso":["La respuesta del servidor no tiene la forma esperada: el Studio no la usa."],"hallazgo":"H9-E2E-1"}
+  FALLO el paso «e1» terminó sin excepción — H9-E2E-1: al crearla, el CRM lee el alta (201) y abre el constructor
+  (paso imprescindible: el guion se detiene; el barrido final sí corre)
+── barrido
+  OK    a · panel: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    a · estrategias: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    a · plantillas: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    a · bandeja: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    a · vinculos: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    a: ningún nombre ni teléfono sintético en las respuestas de la API ni en los eventos SSE — {"cuerposBarridos":113,"eventosSSE":15,"fugas":[]}
+  OK    a: 0 hosts fuera de 127.0.0.1 alcanzados (los intentos mueren en el resolver) — {"peticiones":512,"intentosFuera":9,"hostsIntentados":["fonts.googleapis.com"],"alcanzadas":[]}
+  OK    a: ninguna respuesta 5xx de la API (salvo 502 dentro del reinicio deliberado de la fase asistida) — {"fuera":[],"durante502DelReinicio":0}
+  OK    a: ningún error de página — []
+  OK    b · panel: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    b · estrategias: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    b · plantillas: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    b · bandeja: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    b · vinculos: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    b: ningún nombre ni teléfono sintético en las respuestas de la API ni en los eventos SSE — {"cuerposBarridos":107,"eventosSSE":16,"fugas":[]}
+  OK    b: 0 hosts fuera de 127.0.0.1 alcanzados (los intentos mueren en el resolver) — {"peticiones":468,"intentosFuera":8,"hostsIntentados":["fonts.googleapis.com"],"alcanzadas":[]}
+  OK    b: ninguna respuesta 5xx de la API (salvo 502 dentro del reinicio deliberado de la fase asistida) — {"fuera":[],"durante502DelReinicio":0}
+  OK    b: ningún error de página — []
+  → 38/40 OK en 162 s

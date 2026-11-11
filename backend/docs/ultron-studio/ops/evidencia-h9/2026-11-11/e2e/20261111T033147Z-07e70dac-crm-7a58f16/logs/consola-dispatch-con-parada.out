@@ -1,0 +1,20 @@
+reloj del motor: 2026-11-11T15:13:01.000Z
+{
+    "reconcile": {
+        "skipped": false,
+        "ambiguous": 0,
+        "expiredJobs": 0,
+        "expiredEnrollments": 0,
+        "canceledByChain": 0,
+        "run": 7
+    },
+    "dispatch": {
+        "skipped": true,
+        "reason": "outreach_brake_global",
+        "claimed": 0,
+        "results": [],
+        "run": 8
+    }
+}
+
+h9-e2e reloj: desfase de 41855 s (solo Carbon en este proceso)

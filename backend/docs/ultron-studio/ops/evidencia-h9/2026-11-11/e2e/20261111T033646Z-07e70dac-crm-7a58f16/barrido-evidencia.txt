@@ -1,0 +1,1 @@
+barrido: 44 valores buscados (8 personas sintéticas, APP_KEY y sesiones) en 104 ficheros

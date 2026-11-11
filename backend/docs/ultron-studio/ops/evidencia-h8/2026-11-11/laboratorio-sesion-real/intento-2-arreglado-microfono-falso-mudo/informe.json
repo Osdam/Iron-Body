@@ -1,0 +1,929 @@
+{
+ "inicio": "2026-11-11T11:29:53.187Z",
+ "pasos": [
+  {
+   "t": "0.7",
+   "nombre": "API: voice-lab/status",
+   "ok": true,
+   "dato": {
+    "claves": [
+     "budget",
+     "can",
+     "configured",
+     "credentials",
+     "enabled",
+     "estimate",
+     "fidelity",
+     "limits",
+     "mode",
+     "observations",
+     "reasons",
+     "sessions"
+    ],
+    "enabled": true,
+    "mode": "elevenlabs",
+    "reasons": []
+   }
+  },
+  {
+   "t": "1.1",
+   "nombre": "API: sesiones antes",
+   "ok": true,
+   "dato": {
+    "total": 1
+   }
+  },
+  {
+   "t": "9.6",
+   "nombre": "CRM de producción: pestaña Laboratorio pintada",
+   "ok": true,
+   "dato": null
+  },
+  {
+   "t": "10.7",
+   "nombre": "laboratorio disponible en modo elevenlabs",
+   "ok": true,
+   "dato": {
+    "disponible": "si",
+    "modo": "elevenlabs",
+    "estado": "Abrir una sesión lock_open Los cuatro cerrojos están abiertos Modo ElevenLabs: gasta minutos del proveedor Esta sesión reserva US$ 0,40 (hasta 5 min de conversación) Queda hoy US$ 3,00 de US$ 3,00; US$ 0,00 reservado ahora; tope por sesión US$ 1,00 Tus sesiones de hoy 1 de 5 (2026-11-11, hora de Bogotá) La conexión vale 15 min desde que se abre, una sola vez Conversación de voz en el navegador con un agente de laboratorio de ElevenLabs compilado desde la versión y el perfil: el mismo prompt, la misma voz y las mismas herramientas que tendría publicado, sin teléfono y sin número. Gasta minutos del proveedor. Versión del Studio Elige una versión ULTRON Studio - Canario V1 - Pruebas (Aprobada, d2361ab5) Perfil de voz Elige un perfil enviado o aprobado Sofia Medellin (revisión 2, aprobado) ULTRON Voice - Iron Body Neiva - Canario V1 (revisión 1, aprobado) mic Al abrir la sesión, el navegador te pide el micrófono. Tu voz va solo a ElevenLabs para esta conversación; Laravel no guarda ni audio ni transcripción. Se ensaya una llamada saliente a una persona autorizada: el agente abre con su aviso y su saludo de llamada saliente. mic Abrir la sesión y hablar (reserva US$ 0,40)",
+    "cerrojos": null
+   }
+  },
+  {
+   "t": "10.7",
+   "nombre": "se ven la reserva, lo que queda hoy y el cupo",
+   "ok": true,
+   "dato": {
+    "reserva": "US$ 0,40 (hasta 5 min de conversación)",
+    "queda": "US$ 3,00 de US$ 3,00; US$ 0,00 reservado ahora; tope por sesión US$ 1,00",
+    "cupo": "1 de 5 (2026-11-11, hora de Bogotá)"
+   }
+  },
+  {
+   "t": "10.8",
+   "nombre": "elegida la versión",
+   "ok": true,
+   "dato": "ULTRON Studio - Canario V1 - Pruebas (Aprobada, d2361ab5)"
+  },
+  {
+   "t": "10.8",
+   "nombre": "elegida la perfil",
+   "ok": true,
+   "dato": "Sofia Medellin (revisión 2, aprobado)"
+  },
+  {
+   "t": "11.8",
+   "nombre": "botón «Abrir la sesión»",
+   "ok": true,
+   "dato": {
+    "texto": "mic Abrir la sesión y hablar (reserva US$ 0,40)",
+    "deshabilitado": false
+   }
+  },
+  {
+   "t": "16.3",
+   "nombre": "la sesión se abre (franja en vivo)",
+   "ok": true,
+   "dato": {
+    "estado": "connecting",
+    "tardo_ms": 4537
+   }
+  },
+  {
+   "t": "17.8",
+   "nombre": "conversación CONECTADA con el agente (WebSocket real)",
+   "ok": true,
+   "dato": {
+    "estado": "connected",
+    "conexion": "Conectado. El agente empieza con el aviso de asistente virtual.",
+    "tardo_ms": 6050,
+    "ws": [
+     {
+      "t": "16.9",
+      "u": "wss://api.elevenlabs.io/v1/convai/conversation?agent_id=…&conversation_signature=…&source=…&version=…"
+     }
+    ]
+   }
+  },
+  {
+   "t": "18.4",
+   "nombre": "API: la sesión nueva existe en el servidor",
+   "ok": true,
+   "dato": {
+    "uuid8": "fc3b1a49",
+    "status": "open",
+    "endReason": null,
+    "mode": "elevenlabs",
+    "metrics": {
+     "durationSeconds": null,
+     "windowSeconds": 2,
+     "interruptions": null,
+     "objectives": [],
+     "restrictions": {
+      "respected": null,
+      "broken": [],
+      "guardViolations": null
+     },
+     "errors": [],
+     "toolCalls": [],
+     "reported": {
+      "provider": false,
+      "tester": false
+     }
+    },
+    "verdict": null,
+    "actions": {
+     "end": {
+      "allowed": true
+     },
+     "verdict": {
+      "allowed": false,
+      "code": "voice_lab_session_not_reviewable",
+      "message": "Solo se emite el veredicto sobre una sesión terminada: esta sigue abierta o no llegó a abrirse."
+     }
+    },
+    "claves": [
+     "actions",
+     "agent",
+     "budget",
+     "connection",
+     "createdAt",
+     "createdBy",
+     "deadline",
+     "endReason",
+     "endReasonLabel",
+     "endedAt",
+     "expired",
+     "maxSeconds",
+     "metrics",
+     "mine",
+     "mode",
+     "profile",
+     "startedAt",
+     "status",
+     "statusLabel",
+     "uuid",
+     "verdict",
+     "version"
+    ]
+   }
+  },
+  {
+   "t": "69.7",
+   "nombre": "la conversación terminó sola antes de colgar",
+   "ok": true,
+   "dato": {
+    "estado": "ended",
+    "conexion": "El agente terminó la conversación. Cuenta lo que pasó para cerrar la sesión."
+   }
+  },
+  {
+   "t": "69.7",
+   "nombre": "tras colgar",
+   "ok": true,
+   "dato": {
+    "estado": "ended",
+    "conexion": "El agente terminó la conversación. Cuenta lo que pasó para cerrar la sesión.",
+    "wsCerrados": 1
+   }
+  },
+  {
+   "t": "75.6",
+   "nombre": "la sesión se CIERRA por el informe del proveedor (post-llamada)",
+   "ok": true,
+   "dato": {
+    "uuid8": "fc3b1a49",
+    "status": "ended",
+    "endReason": "provider_report",
+    "mode": "elevenlabs",
+    "metrics": {
+     "durationSeconds": 52,
+     "windowSeconds": 55,
+     "interruptions": null,
+     "objectives": [],
+     "restrictions": {
+      "respected": true,
+      "broken": [],
+      "guardViolations": []
+     },
+     "errors": [],
+     "toolCalls": [
+      "end_call"
+     ],
+     "reported": {
+      "provider": true,
+      "tester": false
+     }
+    },
+    "verdict": null,
+    "actions": {
+     "end": {
+      "allowed": true
+     },
+     "verdict": {
+      "allowed": false,
+      "code": "four_eyes_required",
+      "message": "Nadie emite el veredicto sobre la sesión que abrió: tiene que hacerlo otra persona."
+     }
+    },
+    "claves": [
+     "actions",
+     "agent",
+     "budget",
+     "connection",
+     "createdAt",
+     "createdBy",
+     "deadline",
+     "endReason",
+     "endReasonLabel",
+     "endedAt",
+     "expired",
+     "maxSeconds",
+     "metrics",
+     "mine",
+     "mode",
+     "profile",
+     "startedAt",
+     "status",
+     "statusLabel",
+     "uuid",
+     "verdict",
+     "version"
+    ]
+   }
+  },
+  {
+   "t": "76.7",
+   "nombre": "el CRM enseña la sesión en la lista",
+   "ok": true,
+   "dato": {
+    "estado": "ended",
+    "cuentas": "Duró 52 s; reserva US$ 0,40, coste US$ 0,07; 1 llamadas a herramientas",
+    "fila": "stop_circle Terminada ULTRON Studio - Canario V1 - Pruebas, perfil «Sofia Medellin» (revisión 2) La abrió Studio smoke (temporal) (tú) el 11/11/2026, 6:30 a. m., en ElevenLabs. Llegó el informe del proveedor al terminar la conversación. Agente …bq1e, compilación 095c530e1349 Duró 52 s; reserva US$ 0"
+   }
+  }
+ ],
+ "red": [
+  {
+   "t": "7.0",
+   "m": "GET",
+   "u": "https://ironbodyneiva.cloud/marketing/ultron-studio/voz?pestana=…",
+   "s": 200
+  },
+  {
+   "t": "8.1",
+   "m": "OPTIONS",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/auth/me",
+   "s": 204
+  },
+  {
+   "t": "8.1",
+   "m": "OPTIONS",
+   "u": "https://api.ironbodyneiva.cloud/api/health",
+   "s": 204
+  },
+  {
+   "t": "8.1",
+   "m": "OPTIONS",
+   "u": "https://api.ironbodyneiva.cloud/api/health",
+   "s": 204
+  },
+  {
+   "t": "8.1",
+   "m": "OPTIONS",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/stream-ticket?scope=…",
+   "s": 204
+  },
+  {
+   "t": "8.1",
+   "m": "OPTIONS",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/notifications?category=…&page=…&per_page=…",
+   "s": 204
+  },
+  {
+   "t": "8.1",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/auth/me",
+   "s": 200
+  },
+  {
+   "t": "8.1",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/health",
+   "s": 200
+  },
+  {
+   "t": "8.1",
+   "m": "GET",
+   "u": "https://ironbodyneiva.cloud/version.json?t=…",
+   "s": 200
+  },
+  {
+   "t": "8.1",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/health",
+   "s": 200
+  },
+  {
+   "t": "8.1",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/stream-ticket?scope=…",
+   "s": 200
+  },
+  {
+   "t": "8.1",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/notifications?category=…&page=…&per_page=…",
+   "s": 200
+  },
+  {
+   "t": "8.2",
+   "m": "GET",
+   "u": "https://ironbodyneiva.cloud/assets/crm/mesajes.json",
+   "s": 200
+  },
+  {
+   "t": "8.2",
+   "m": "GET",
+   "u": "https://ironbodyneiva.cloud/assets/crm/user.json",
+   "s": 200
+  },
+  {
+   "t": "8.2",
+   "m": "GET",
+   "u": "https://ironbodyneiva.cloud/assets/crm/notificacion.json",
+   "s": 200
+  },
+  {
+   "t": "8.2",
+   "m": "GET",
+   "u": "https://ironbodyneiva.cloud/assets/lottie/iron-assistant.json",
+   "s": 200
+  },
+  {
+   "t": "8.2",
+   "m": "GET",
+   "u": "https://ironbodyneiva.cloud/assets/lottie/iron-assistant.json",
+   "s": 200
+  },
+  {
+   "t": "8.2",
+   "m": "GET",
+   "u": "https://ironbodyneiva.cloud/assets/crm/accesosrapidos.json",
+   "s": 200
+  },
+  {
+   "t": "8.5",
+   "m": "OPTIONS",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/integrations/voice",
+   "s": 204
+  },
+  {
+   "t": "8.5",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/integrations/voice",
+   "s": 200
+  },
+  {
+   "t": "8.9",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/notifications/stream?ticket=…",
+   "s": 200
+  },
+  {
+   "t": "9.5",
+   "m": "OPTIONS",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/voice-lab/status",
+   "s": 204
+  },
+  {
+   "t": "9.5",
+   "m": "OPTIONS",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/voice-lab/sessions?page=…&per_page=…",
+   "s": 204
+  },
+  {
+   "t": "9.5",
+   "m": "OPTIONS",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/versions?page=…&per_page=…&status=…",
+   "s": 204
+  },
+  {
+   "t": "9.5",
+   "m": "OPTIONS",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/voice/profiles?page=…&per_page=…",
+   "s": 204
+  },
+  {
+   "t": "9.5",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/voice-lab/status",
+   "s": 200
+  },
+  {
+   "t": "9.5",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/voice-lab/sessions?page=…&per_page=…",
+   "s": 200
+  },
+  {
+   "t": "9.5",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/versions?page=…&per_page=…&status=…",
+   "s": 200
+  },
+  {
+   "t": "9.5",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/voice/profiles?page=…&per_page=…",
+   "s": 200
+  },
+  {
+   "t": "9.5",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/stream-ticket?scope=…",
+   "s": 200
+  },
+  {
+   "t": "9.5",
+   "m": "OPTIONS",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/stream-ticket?scope=…",
+   "s": 204
+  },
+  {
+   "t": "10.1",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/stream?ticket=…&topics=…",
+   "s": 200
+  },
+  {
+   "t": "10.4",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/voice-lab/status",
+   "s": 200
+  },
+  {
+   "t": "10.4",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/voice-lab/sessions?page=…&per_page=…",
+   "s": 200
+  },
+  {
+   "t": "10.4",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/integrations/voice",
+   "s": 200
+  },
+  {
+   "t": "11.9",
+   "m": "OPTIONS",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/voice-lab/sessions",
+   "s": 204
+  },
+  {
+   "t": "11.9",
+   "m": "POST",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/voice-lab/sessions",
+   "s": 201
+  },
+  {
+   "t": "13.8",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/voice-lab/status",
+   "s": 200
+  },
+  {
+   "t": "13.8",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/voice-lab/sessions?page=…&per_page=…",
+   "s": 200
+  },
+  {
+   "t": "16.1",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/voice-lab/sessions?page=…&per_page=…",
+   "s": 200
+  },
+  {
+   "t": "16.1",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/voice-lab/status",
+   "s": 200
+  },
+  {
+   "t": "16.8",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/voice-lab/status",
+   "s": 200
+  },
+  {
+   "t": "16.8",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/voice-lab/sessions?page=…&per_page=…",
+   "s": 200
+  },
+  {
+   "t": "18.1",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/notifications/unread-count",
+   "s": 200
+  },
+  {
+   "t": "18.1",
+   "m": "OPTIONS",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/notifications/unread-count",
+   "s": 204
+  },
+  {
+   "t": "28.1",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/notifications/unread-count",
+   "s": 200
+  },
+  {
+   "t": "31.3",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/stream-ticket?scope=…",
+   "s": 200
+  },
+  {
+   "t": "31.3",
+   "m": "OPTIONS",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/stream-ticket?scope=…",
+   "s": 204
+  },
+  {
+   "t": "31.6",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/notifications/stream?after_id=…&ticket=…",
+   "s": 200
+  },
+  {
+   "t": "38.1",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/notifications/unread-count",
+   "s": 200
+  },
+  {
+   "t": "48.1",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/notifications/unread-count",
+   "s": 200
+  },
+  {
+   "t": "53.8",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/stream-ticket?scope=…",
+   "s": 200
+  },
+  {
+   "t": "53.8",
+   "m": "OPTIONS",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/stream-ticket?scope=…",
+   "s": 204
+  },
+  {
+   "t": "54.0",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/notifications/stream?after_id=…&ticket=…",
+   "s": 200
+  },
+  {
+   "t": "58.1",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/notifications/unread-count",
+   "s": 200
+  },
+  {
+   "t": "66.4",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/stream-ticket?scope=…",
+   "s": 200
+  },
+  {
+   "t": "66.4",
+   "m": "OPTIONS",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/stream-ticket?scope=…",
+   "s": 204
+  },
+  {
+   "t": "66.6",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/stream?after=…&ticket=…&topics=…",
+   "s": 200
+  },
+  {
+   "t": "68.1",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/notifications/unread-count",
+   "s": 200
+  },
+  {
+   "t": "69.4",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/voice-lab/sessions?page=…&per_page=…",
+   "s": 200
+  },
+  {
+   "t": "73.3",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/voice-lab/status",
+   "s": 200
+  },
+  {
+   "t": "73.3",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/voice-lab/sessions?page=…&per_page=…",
+   "s": 200
+  },
+  {
+   "t": "75.6",
+   "m": "GET",
+   "u": "https://ironbodyneiva.cloud/marketing/ultron-studio/voz?pestana=…",
+   "s": 200
+  },
+  {
+   "t": "76.0",
+   "m": "OPTIONS",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/stream-ticket?scope=…",
+   "s": 204
+  },
+  {
+   "t": "76.0",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/auth/me",
+   "s": 200
+  },
+  {
+   "t": "76.0",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/health",
+   "s": 200
+  },
+  {
+   "t": "76.0",
+   "m": "GET",
+   "u": "https://ironbodyneiva.cloud/version.json?t=…",
+   "s": 200
+  },
+  {
+   "t": "76.0",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/health",
+   "s": 200
+  },
+  {
+   "t": "76.0",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/stream-ticket?scope=…",
+   "s": 200
+  },
+  {
+   "t": "76.0",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/notifications?category=…&page=…&per_page=…",
+   "s": 200
+  },
+  {
+   "t": "76.0",
+   "m": "GET",
+   "u": "https://ironbodyneiva.cloud/assets/crm/notificacion.json",
+   "s": 200
+  },
+  {
+   "t": "76.0",
+   "m": "GET",
+   "u": "https://ironbodyneiva.cloud/assets/crm/mesajes.json",
+   "s": 200
+  },
+  {
+   "t": "76.0",
+   "m": "GET",
+   "u": "https://ironbodyneiva.cloud/assets/crm/accesosrapidos.json",
+   "s": 200
+  },
+  {
+   "t": "76.0",
+   "m": "GET",
+   "u": "https://ironbodyneiva.cloud/assets/crm/user.json",
+   "s": 200
+  },
+  {
+   "t": "76.0",
+   "m": "GET",
+   "u": "https://ironbodyneiva.cloud/assets/lottie/iron-assistant.json",
+   "s": 200
+  },
+  {
+   "t": "76.0",
+   "m": "GET",
+   "u": "https://ironbodyneiva.cloud/assets/lottie/iron-assistant.json",
+   "s": 200
+  },
+  {
+   "t": "76.0",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/integrations/voice",
+   "s": 200
+  },
+  {
+   "t": "76.4",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/voice-lab/status",
+   "s": 200
+  },
+  {
+   "t": "76.4",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/voice-lab/sessions?page=…&per_page=…",
+   "s": 200
+  },
+  {
+   "t": "76.4",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/versions?page=…&per_page=…&status=…",
+   "s": 200
+  },
+  {
+   "t": "76.4",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/voice/profiles?page=…&per_page=…",
+   "s": 200
+  },
+  {
+   "t": "76.4",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/stream-ticket?scope=…",
+   "s": 200
+  },
+  {
+   "t": "76.4",
+   "m": "OPTIONS",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/stream-ticket?scope=…",
+   "s": 204
+  },
+  {
+   "t": "76.4",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/notifications/stream?ticket=…",
+   "s": 200
+  },
+  {
+   "t": "76.6",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/stream?ticket=…&topics=…",
+   "s": 200
+  },
+  {
+   "t": "76.8",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/voice-lab/status",
+   "s": 200
+  },
+  {
+   "t": "76.8",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/voice-lab/sessions?page=…&per_page=…",
+   "s": 200
+  },
+  {
+   "t": "76.8",
+   "m": "GET",
+   "u": "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/integrations/voice",
+   "s": 200
+  }
+ ],
+ "ws": {
+  "creados": [
+   {
+    "t": "16.9",
+    "u": "wss://api.elevenlabs.io/v1/convai/conversation?agent_id=…&conversation_signature=…&source=…&version=…"
+   }
+  ],
+  "cerrados": 1,
+  "recibidos": {
+   "conversation_initiation_metadata": 1,
+   "audio": 15,
+   "agent_response": 4,
+   "ping": 30,
+   "user_transcript": 3,
+   "agent_tool_response": 1
+  },
+  "enviados": {
+   "conversation_initiation_client_data": 1,
+   "user_audio_chunk": 1616,
+   "pong": 30
+  },
+  "bytesAudioRecibidos": 216294,
+  "bytesAudioEnviados": 416928,
+  "inicio": {
+   "t": "17.6",
+   "conversacion": "…5csj",
+   "salida": "ulaw_8000",
+   "entrada": "ulaw_8000"
+  }
+ },
+ "dialogo": [
+  {
+   "t": "18.6",
+   "quien": "agente",
+   "texto": "Hola, te habla el asistente virtual de Iron Body Workout, un sistema de inteligencia artificial. Te atiendo para informarte sobre nuestros planes y servicios, y tus datos se tratan según nuestra política de privacidad. Si no quieres recibir más llamadas o prefieres hablar con una persona, dímelo en cualquier momento."
+  },
+  {
+   "t": "44.1",
+   "quien": "persona",
+   "texto": "..."
+  },
+  {
+   "t": "44.1",
+   "quien": "agente",
+   "texto": "Hola, ¿sigues ahí? ¿En qué puedo ayudarte?"
+  },
+  {
+   "t": "54.6",
+   "quien": "persona",
+   "texto": "..."
+  },
+  {
+   "t": "54.6",
+   "quien": "agente",
+   "texto": "¿Sigues ahí?"
+  },
+  {
+   "t": "63.6",
+   "quien": "persona",
+   "texto": "..."
+  },
+  {
+   "t": "63.7",
+   "quien": "agente",
+   "texto": "Gracias por tu tiempo. Fue un gusto conversar contigo. Que tengas un excelente día."
+  },
+  {
+   "t": "69.4",
+   "quien": "agent_tool_response",
+   "texto": "{\"agent_tool_response\":{\"tool_name\":\"end_call\",\"tool_call_id\":\"end_call_83d1d1648cd0496ea75fe7f1a6707655\",\"tool_type\":\"system\",\"is_error\":false,\"is_blocked\":false,\"event_id\":281,\"is_called\":true,\"stat"
+  }
+ ],
+ "linea": [
+  {
+   "t": "17.6",
+   "ws": "handshake",
+   "status": 101
+  },
+  {
+   "t": "18.4",
+   "estado": "connected",
+   "habla": "speaking"
+  },
+  {
+   "t": "36.4",
+   "estado": "connected",
+   "habla": "listening"
+  },
+  {
+   "t": "44.5",
+   "estado": "connected",
+   "habla": "speaking"
+  },
+  {
+   "t": "47.0",
+   "estado": "connected",
+   "habla": "listening"
+  },
+  {
+   "t": "55.0",
+   "estado": "connected",
+   "habla": "speaking"
+  },
+  {
+   "t": "55.5",
+   "estado": "connected",
+   "habla": "listening"
+  },
+  {
+   "t": "64.1",
+   "estado": "connected",
+   "habla": "speaking"
+  },
+  {
+   "t": "69.1",
+   "estado": "connected",
+   "habla": "listening"
+  },
+  {
+   "t": "69.6",
+   "ws": "cerrado"
+  },
+  {
+   "t": "69.6",
+   "estado": "ended",
+   "habla": "nadie"
+  }
+ ],
+ "consola": [],
+ "errores": [],
+ "sesionUuid": "fc3b1a49-1e64-4f3e-82b2-49a1d83ba23b",
+ "fin": "2026-11-11T11:31:10.361Z"
+}

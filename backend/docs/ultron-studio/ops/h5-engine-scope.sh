@@ -82,9 +82,17 @@ esac
 sudo -u www-data php artisan queue:restart -q
 supervisorctl restart 'ironbody-lab:*' > /dev/null
 sleep 8
-RUNNING=$(supervisorctl status | grep -c RUNNING || true); MAL=$(supervisorctl status | grep -c 'BACKOFF\|FATAL' || true)
-echo "3. workers RUNNING: $RUNNING · BACKOFF/FATAL: $MAL"
-[ "$RUNNING" = 13 ] && [ "$MAL" = 0 ] || desvio "workers: $RUNNING RUNNING y $MAL en BACKOFF/FATAL (esperado 13 y 0)"
+# 13 programas de producción y, desde el 11-11-2026, ironbody-voice si el H8 lo instaló (como h6 y h7). El reinicio
+# de las colas deja algún worker unos segundos en STARTING: se espera hasta 45 s antes de darlo por desvío.
+W_ESPERADOS=$( n=$(supervisorctl status 2>/dev/null | grep -c '^ironbody-voice:' || true); [ "${n:-0}" -ge 1 ] && echo 14 || echo 13 )
+HASTA=$(( $(date +%s) + 45 ))
+while :; do
+  RUNNING=$(supervisorctl status | grep -c RUNNING || true); MAL=$(supervisorctl status | grep -c 'BACKOFF\|FATAL' || true)
+  { [ "$RUNNING" = "$W_ESPERADOS" ] && [ "$MAL" = 0 ]; } || [ "$(date +%s)" -ge "$HASTA" ] && break
+  sleep 3
+done
+echo "3. workers RUNNING: $RUNNING · BACKOFF/FATAL: $MAL (esperado $W_ESPERADOS y 0)"
+[ "$RUNNING" = "$W_ESPERADOS" ] && [ "$MAL" = 0 ] || desvio "workers: $RUNNING RUNNING y $MAL en BACKOFF/FATAL (esperado $W_ESPERADOS y 0)"
 c=$(curl -s -o /dev/null -w '%{http_code}' https://api.ironbodyneiva.cloud/api/admin/ultron-studio/status)
 echo "4. status sin token → $c"; [ "$c" = 401 ] || desvio "status sin token respondió $c"
 if sudo -u www-data php artisan ultron-studio:publication-check > /dev/null 2>&1; then echo "5. publication-check: 0 (cuadra)"; else desvio "publication-check no sale con 0: ver «sudo -u www-data php artisan ultron-studio:publication-check»"; fi

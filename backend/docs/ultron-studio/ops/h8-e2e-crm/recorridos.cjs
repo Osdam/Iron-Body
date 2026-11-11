@@ -16,13 +16,30 @@ const path = require('node:path');
 const L = require('./lib.cjs');
 
 const PESTANAS = ['estado', 'perfil', 'publicacion', 'llamadas', 'costes', 'contactos', 'laboratorio'];
-const MARTES_EN_HORARIO = '2026-11-10T10:00:00-05:00';
+// El reloj del worker de UN trabajo (`reloj.php`): el PRÓXIMO día hábil (lunes a viernes, sin los festivos del fixture de
+// TEST8-a) a las 10:00 de Bogotá, siempre en el futuro (se calcula al cargar el contexto). Era una fecha fija (martes
+// 10-11-2026 10:00): desde el 10-11 a las 15:00Z quedó en el PASADO y el worker, con `now()` por detrás del
+// `available_at` del trabajo (hora real), no lo veía: la saliente se quedaba en `requested` (B-T6, 11-11).
+let EN_HORARIO = null;
+function proximoHabilEnHorario(ctx) {
+  const fx = JSON.parse(fs.readFileSync(path.join(ctx.h.backend, 'tests/fixtures/voice/holidays-co-2026-2028.json'), 'utf8'));
+  const festivo = (ymd) => (fx.years?.[ymd.slice(0, 4)] || []).some((x) => x.date === ymd);
+  const d = new Date(Date.now() - 5 * 3600 * 1000); // Bogotá (sin horario de verano)
+  for (let i = 0; i < 30; i++) {
+    d.setUTCDate(d.getUTCDate() + 1);
+    const ymd = d.toISOString().slice(0, 10);
+    const sem = d.getUTCDay();
+    if (sem >= 1 && sem <= 5 && !festivo(ymd)) return `${ymd}T10:00:00-05:00`;
+  }
+  throw new Error('no hay un día hábil en los próximos 30 días del fixture');
+}
 const PERFIL = 'Voz del E2E del CRM';
 const SIN_LEYENDO = (sel) => `return !!document.querySelector(${JSON.stringify(sel)});`;
 
 (async () => {
   const ctx = L.cargar(process.argv[2]);
   const inf = new L.Informe(ctx, L.prohibidos(ctx));
+  EN_HORARIO = proximoHabilEnHorario(ctx);
   const elegidos = (process.env.H8_CRM_PASOS || '').split(',').map((x) => x.trim()).filter(Boolean);
   const E = {};
   const S = {};
@@ -134,6 +151,10 @@ const SIN_LEYENDO = (sel) => `return !!document.querySelector(${JSON.stringify(s
       }
       inf.check('ruta 45: Ana y Beto con las 7 llaves; Carla con menos', Object.values(E.can.a).filter(Boolean).length === 7 && Object.values(E.can.b).filter(Boolean).length === 7
         && Object.values(E.can.c).filter(Boolean).length < 7, { a: E.can.a, c: E.can.c });
+      // B-T4 (L9-82): el alta de contactos tiene su bandera (`VOICE_CONTACTS_ENABLED`, apagada hasta la 4b). El lanzador
+      // la enciende en la copia (H8_E2E_CONTACTOS=true) para que el paso «contactos» ejerza el alta y los cuatro ojos.
+      const vs = await L.api(ctx, 'a', 'GET', 'admin/voice/status');
+      inf.check('banco: el alta de contactos (B-T4, flags.contacts) está encendida para el paso «contactos»', vs.status === 200 && vs.json?.flags?.contacts === true, { status: vs.status, flags: vs.json?.flags ?? null });
       for (const q of ['a', 'b', 'c']) S[q] = await sesionDe(q);
     });
 
@@ -654,16 +675,17 @@ const SIN_LEYENDO = (sel) => `return !!document.querySelector(${JSON.stringify(s
       const e1 = L.valor(ctx, 'SELECT status FROM voice_calls WHERE uuid = $1', [u1]);
       inf.check('cortar una requested: sale de requested sin tocar Twilio', e1 !== 'requested' && delta(tw0, await statsTw()).requests === 0, e1);
       inf.check('… y el CRM lo enseña', (await L.esperar(a, `return document.querySelector('[data-llamada="${u1}"]')?.getAttribute('data-estado') === ${JSON.stringify(e1)};`, L.T(15000))) === true, await atr(a, `[data-llamada="${u1}"]`, 'data-estado'));
-      // dialing: la fila sellada, despachada a `voice-e2e` y el worker de UN trabajo con el reloj en un martes a las 10
+      // dialing: la fila sellada, despachada a `voice-e2e` y el worker de UN trabajo con el reloj en el próximo día hábil a
+      // las 10:00 de Bogotá (EN_HORARIO, siempre en el futuro)
       const r2 = L.ayudante(ctx, ['saliente', 'canary', can[1], L.uuid(), String(ctx.h.accounts.a.id), '0']);
       const u2 = r2.call;
       L.ayudante(ctx, ['despachar', u2, 'voice-e2e']);
       // El job vuelve a exigir la observación del número de menos de 2 h, medida con SU reloj (B8-g): con el mismo reloj
       // desplazado justo antes, y después otra vez con el real (la puerta sigue con el reloj real).
-      const o1 = L.observarNumero(ctx, MARTES_EN_HORARIO);
+      const o1 = L.observarNumero(ctx, EN_HORARIO);
       inf.must('la observación del número con el reloj del job cuadra', o1?.policy === 'verified', o1);
       const w = L.artisan(ctx, ['queue:work', 'voice', '--queue=voice-e2e', '--stop-when-empty', '--tries=1', '--timeout=60'],
-        { H8_E2E_RELOJ_OBJETIVO: MARTES_EN_HORARIO, H8_E2E_VENDOR: `${ctx.h.backend}/vendor/autoload.php` }, ctx.h.helpers.reloj);
+        { H8_E2E_RELOJ_OBJETIVO: EN_HORARIO, H8_E2E_VENDOR: `${ctx.h.backend}/vendor/autoload.php` }, ctx.h.helpers.reloj);
       const o2 = L.observarNumero(ctx);
       inf.check('… y con el reloj real vuelve a cuadrar', o2?.policy === 'verified', o2);
       const e2 = L.valor(ctx, 'SELECT status FROM voice_calls WHERE uuid = $1', [u2]);
@@ -686,15 +708,21 @@ const SIN_LEYENDO = (sel) => `return !!document.querySelector(${JSON.stringify(s
       // En paralelo (tandas de 40; `php -S` atiende 4 a la vez y el resto espera en su cola): 140 lecturas SECUENCIALES, o
       // en tandas de 20, no caben en la ventana de 60 s del cubo si la máquina va cargada (visto a carga 36–70 el 09-11) y
       // el cubo se renueva antes de agotarse.
+      // El cubo cuenta 60 s desde su primera lectura: con la API del banco lenta (4 workers de `php -S`, máquina compartida),
+      // 5 tandas fijas de 40 se repartían entre DOS ventanas, cada una por debajo de 120, y no llegaba el 429 (pasada de B-T6
+      // del 11-11: 89 + 123 lecturas en dos minutos). Se siguen lanzando tandas hasta el 429, con un tope de tiempo.
       let r = null;
-      for (let tanda = 0; tanda < 5 && r?.status !== 429; tanda++) {
+      let lecturas = 0;
+      const t0429 = Date.now();
+      for (let tanda = 0; r?.status !== 429 && (tanda < 5 || Date.now() - t0429 < L.T(180000)); tanda++) {
         const rs = await Promise.all(Array.from({ length: 40 }, () => L.api(ctx, 'c', 'GET', 'admin/voice/status')));
+        lecturas += rs.length;
         r = rs.find((x) => x.status === 429) ?? rs[rs.length - 1];
       }
       const t429 = Date.now();
       inf.must('el limitador de lectura responde 429 con el cuerpo uniforme (code too_many_requests, retry_after) y Retry-After igual', r?.status === 429 && r.json?.code === 'too_many_requests'
         && Number.isInteger(r.json?.retry_after) && r.json.retry_after > 0 && r.json.retry_after <= 60 && String(r.json.retry_after) === String(r.headers?.['retry-after']),
-        { status: r?.status, code: r?.json?.code, retry_after: r?.json?.retry_after, header: r?.headers?.['retry-after'] });
+        { status: r?.status, code: r?.json?.code, retry_after: r?.json?.retry_after, header: r?.headers?.['retry-after'], lecturas, segundos: Math.round((t429 - t0429) / 1000) });
       const ra = r.json.retry_after;
       const c = S.c;
       const red0 = c.red.length;
@@ -764,6 +792,13 @@ const SIN_LEYENDO = (sel) => `return !!document.querySelector(${JSON.stringify(s
               inf.check(`${q} · ${t}: ningún teléfono completo, URL firmada ni secreto en DOM, almacenamiento, URL ni consola de la página`, bar.dom.length === 0 && bar.almacenamiento.length === 0 && bar.url.length === 0 && pag.length === 0 && !bar.tokenEnDom, bar);
               const ih = await L.innerHtml(s);
               inf.check(`${q} · ${t}: ninguna escritura de innerHTML/outerHTML/insertAdjacentHTML/document.write`, ih.length === 0, ih.slice(0, 3));
+              if (t === 'estado') {
+                // L9-79 (la ola): «Estado de activación» encima de «La línea», con las seis funciones de la voz. Cada cuenta
+                // ve las seis con un estado (o «Sin estado» si no puede leerlo) y ninguna se queda en «Leyendo…».
+                const act = await L.leer(s, `return [...document.querySelectorAll('[data-activacion-panel="voz"] [data-activacion]')].map((e) => ({ id: e.getAttribute('data-activacion'), estado: e.getAttribute('data-estado'), lectura: e.getAttribute('data-lectura'), leyendo: !!e.querySelector('[data-activacion-leyendo]') }));`);
+                inf.check(`${q} · estado: «Estado de activación» con las 6 funciones de la voz, cada una con su estado (ninguna se queda en «Leyendo…»)`,
+                  act.length === 6 && act.every((r) => !r.leyendo && (!!r.estado || r.lectura === 'unreadable')), act);
+              }
             }
             await L.captura(s, ctx, `${q}-${t}-${w}`);
           }
