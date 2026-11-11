@@ -5,6 +5,7 @@ namespace App\Console\Commands\Voice;
 use App\Services\Telephony\VoiceNumberGuard;
 use App\Services\Telephony\VoiceProviderState;
 use App\Services\Telephony\VoiceTelephonyStatus;
+use App\Services\Telephony\VoiceWebhookHealth;
 use App\Services\Voice\ElevenLabs\ElevenLabsConfig;
 use App\Services\Voice\VoiceCallPolicy;
 use App\Services\Voice\VoiceCheckResult;
@@ -137,7 +138,9 @@ class VoiceDoctorCommand extends Command
         $this->info('── Voz · telefonía (H8) ──');
         $this->line('Constante  : '.($t['callsEnabledInCode'] ? 'ABIERTA' : 'cerrada').' (la de VoiceCallPolicy: las llamadas en el código)');
         $this->line('Banderas   : entrantes '.$si($t['flags']['inbound']).' · salientes '.$si($t['flags']['outbound']).' ('.$t['scopes']['outbound'].') · Twilio Voice '.$si($t['flags']['twilioVoice'])
-            .' · laboratorio '.$si($t['flags']['lab']).' · monitor '.$si($t['flags']['monitor']));
+            .' · laboratorio '.$si($t['flags']['lab']).' · monitor '.$si($t['flags']['monitor'])
+            // Auditoría B-T4: dar de alta contactos y cargar o confirmar su consentimiento (VOICE_CONTACTS_ENABLED, fase 4b).
+            .' · contactos '.$si($t['flags']['contacts']));
         $this->line('Proveedor  : '.$t['provider']);
         // E4-6 (B8-g): la verificación que da `VERIFIED` a las salientes, con su fecha (la marca del Studio).
         $v = $t['providerVerification'];
@@ -174,6 +177,13 @@ class VoiceDoctorCommand extends Command
                 default => 'sin una conciliación de menos de 2 h que cuadre',
             }.')',
         });
+        // Auditoría B-T5 (D8-21, decisión f): el último veredicto de la salud del webhook, sin red.
+        $wh = $t['webhookHealth'];
+        $this->line('Webhook    : '.match (true) {
+            $wh === null => 'sin comprobar (voice:webhook-health; la programa el monitor de voz, VOICE_MONITOR_ENABLED)',
+            $wh['state'] === VoiceWebhookHealth::STATE_OK => 'coincide con Laravel · '.$wh['checkedAt'],
+            default => 'NO COINCIDE: '.implode(', ', $wh['problems']).' · '.$wh['checkedAt'],
+        }.($wh === null ? '' : ' · última entrega buena '.($wh['lastGoodDeliveryAt'] ?? 'ninguna')));
         if (is_array($t['publication'])) {
             foreach ($t['publication'] as $parte => $p) {
                 $this->line(sprintf('Cadena     : %s %s%s%s', $parte, $p['status'], $p['seq'] === null ? '' : ' · seq '.$p['seq'], $p['reason'] === null ? '' : ' · '.$p['reason']));

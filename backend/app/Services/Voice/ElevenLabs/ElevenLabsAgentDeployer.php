@@ -8,10 +8,13 @@ use App\Services\Voice\Dto\VoiceAgentSpec;
 use App\Services\Voice\Dto\VoiceDeployResult;
 use App\Services\Voice\Dto\VoiceIds;
 use App\Services\Voice\Dto\VoiceNumberAssignment;
+use App\Services\Voice\Dto\VoiceSecretList;
+use App\Services\Voice\Dto\VoiceWebhookList;
 use App\Services\Voice\VoiceAgentDeployer;
 use App\Services\Voice\VoiceCallPolicy;
 use App\Services\Voice\VoiceNumberObserver;
 use App\Services\Voice\VoiceProviderStatus;
+use App\Services\Voice\VoiceWebhookObserver;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Http\Client\StrayRequestException;
@@ -27,6 +30,13 @@ use Throwable;
  *  - `PATCH /v1/convai/phone-numbers/{phone_number_id}` (`{agent_id}`);
  *  - `GET  /v1/convai/phone-numbers/{phone_number_id}` (→ `assigned_agent`),
  *    para la deriva del número (Enmienda 4, E4-8; {@see VoiceNumberObserver}).
+ *  - Auditoría B-T5 (D8-21, decisión (f); {@see VoiceWebhookObserver}), las
+ *    dos que comprobó OPS8-c en la referencia oficial el 09-11-2026
+ *    (`ops/h8-secrets-register.sh`): `GET /v1/workspace/webhooks` (→
+ *    `{webhooks: [{webhook_id, webhook_url, is_disabled, is_auto_disabled,
+ *    auth_type, …}]}`) y `GET /v1/convai/secrets?page_size=` (→ `{secrets:
+ *    [{type, secret_id, name, used_by}], next_cursor}`), para la salud del
+ *    webhook. Sin el valor de ningún secreto: el proveedor no lo devuelve.
  *
  * Reglas:
  *  - Antes de salir vuelve a mirar la configuración: si el estado no es
@@ -45,7 +55,7 @@ use Throwable;
  *    necesita el giro.
  *  - Nunca modifica un agente: no hay ningún PATCH ni DELETE de agentes.
  */
-final class ElevenLabsAgentDeployer implements VoiceAgentDeployer, VoiceNumberObserver
+final class ElevenLabsAgentDeployer implements VoiceAgentDeployer, VoiceNumberObserver, VoiceWebhookObserver
 {
     public const CREATE_AGENT_PATH = '/v1/convai/agents/create';
 
@@ -54,6 +64,15 @@ final class ElevenLabsAgentDeployer implements VoiceAgentDeployer, VoiceNumberOb
     public const TOOLS_PATH = '/v1/convai/tools';
 
     public const PHONE_NUMBERS_PATH = '/v1/convai/phone-numbers/';
+
+    /** B-T5: la lista de webhooks del workspace (solo GET). */
+    public const WEBHOOKS_PATH = '/v1/workspace/webhooks';
+
+    /** B-T5: la lista de secretos guardados del workspace (solo GET; nunca devuelve valores). */
+    public const SECRETS_PATH = '/v1/convai/secrets';
+
+    /** B-T5: UNA página de secretos (la del registro de OPS8-c); si hay más, la lectura lo dice (`truncated`). */
+    public const SECRETS_PAGE_SIZE = 100;
 
     public const CONNECT_TIMEOUT_SECONDS = 5;
 
@@ -330,7 +349,140 @@ final class ElevenLabsAgentDeployer implements VoiceAgentDeployer, VoiceNumberOb
         return new VoiceNumberAssignment(VoiceNumberAssignment::OUTCOME_OBSERVED, $phoneNumberId, $agente, $http, null, is_bool($entrantes) ? $entrantes : null, $llama);
     }
 
+    /**
+     * Auditoría B-T5: los webhooks del workspace, un GET. De cada uno solo su
+     * id, la URL de entrega, si está desactivado (a mano o solo) y su
+     * autenticación; un elemento sin id legible hace ilegible la lista entera
+     * (no se puede afirmar que el de la referencia falte o esté).
+     */
+    public function describeWebhooks(): VoiceWebhookList
+    {
+        $config = ElevenLabsConfig::fromConfig();
+        $base = $config->baseUrl();
+        if ($config->status()->state !== VoiceProviderStatus::STATE_UNVERIFIED || $base === null) {
+            return VoiceWebhookList::unknown();
+        }
+        $espera = $config->timeoutSeconds();
+
+        try {
+            $respuesta = Http::withHeaders(['xi-api-key' => trim((string) config('voice.elevenlabs.api_key'))])
+                ->acceptJson()
+                ->withoutRedirecting()
+                ->connectTimeout(min(self::CONNECT_TIMEOUT_SECONDS, $espera))
+                ->timeout($espera)
+                ->get($base.self::WEBHOOKS_PATH);
+        } catch (StrayRequestException $e) {
+            throw $e;
+        } catch (ConnectionException) {
+            return new VoiceWebhookList(VoiceWebhookList::OUTCOME_UNREACHABLE, [], null, null);
+        } catch (Throwable) {
+            return new VoiceWebhookList(VoiceWebhookList::OUTCOME_ERROR, [], null, null);
+        }
+
+        [$fallo, $http] = self::listFailure($respuesta);
+        if ($fallo !== null) {
+            return new VoiceWebhookList($fallo, [], $http, null);
+        }
+        $lista = self::jsonObject($respuesta)['webhooks'] ?? null;
+        if (! is_array($lista) || ! array_is_list($lista)) {
+            return new VoiceWebhookList(VoiceWebhookList::OUTCOME_ERROR, [], $http, VoiceWebhookList::REASON_INVALID_RESPONSE);
+        }
+        $webhooks = [];
+        foreach ($lista as $w) {
+            $id = is_array($w) ? VoiceIds::providerIdOrNull($w['webhook_id'] ?? null) : null;
+            if ($id === null) {
+                return new VoiceWebhookList(VoiceWebhookList::OUTCOME_ERROR, [], $http, VoiceWebhookList::REASON_INVALID_RESPONSE);
+            }
+            $url = $w['webhook_url'] ?? null;
+            $auth = $w['auth_type'] ?? null;
+            $webhooks[] = [
+                'id' => $id,
+                'url' => is_string($url) && $url !== '' && strlen($url) <= VoiceWebhookList::URL_MAX ? $url : null,
+                'disabled' => is_bool($w['is_disabled'] ?? null) ? $w['is_disabled'] : null,
+                'autoDisabled' => is_bool($w['is_auto_disabled'] ?? null) ? $w['is_auto_disabled'] : null,
+                'authType' => is_string($auth) && preg_match(VoiceWebhookList::AUTH_TYPE_PATTERN, $auth) === 1 ? $auth : null,
+            ];
+        }
+        unset($lista);
+
+        return new VoiceWebhookList(VoiceWebhookList::OUTCOME_OBSERVED, $webhooks, $http, null);
+    }
+
+    /**
+     * Auditoría B-T5: los ids de los secretos guardados del workspace, un GET
+     * de una página. Ni nombres ni valores salen de aquí. Un elemento sin id
+     * legible hace ilegible la lista entera.
+     */
+    public function describeSecrets(): VoiceSecretList
+    {
+        $config = ElevenLabsConfig::fromConfig();
+        $base = $config->baseUrl();
+        if ($config->status()->state !== VoiceProviderStatus::STATE_UNVERIFIED || $base === null) {
+            return VoiceSecretList::unknown();
+        }
+        $espera = $config->timeoutSeconds();
+
+        try {
+            $respuesta = Http::withHeaders(['xi-api-key' => trim((string) config('voice.elevenlabs.api_key'))])
+                ->acceptJson()
+                ->withoutRedirecting()
+                ->connectTimeout(min(self::CONNECT_TIMEOUT_SECONDS, $espera))
+                ->timeout($espera)
+                ->get($base.self::SECRETS_PATH, ['page_size' => self::SECRETS_PAGE_SIZE]);
+        } catch (StrayRequestException $e) {
+            throw $e;
+        } catch (ConnectionException) {
+            return new VoiceSecretList(VoiceSecretList::OUTCOME_UNREACHABLE, [], false, null, null);
+        } catch (Throwable) {
+            return new VoiceSecretList(VoiceSecretList::OUTCOME_ERROR, [], false, null, null);
+        }
+
+        [$fallo, $http] = self::listFailure($respuesta);
+        if ($fallo !== null) {
+            return new VoiceSecretList($fallo, [], false, $http, null);
+        }
+        $cuerpo = self::jsonObject($respuesta);
+        $lista = $cuerpo['secrets'] ?? null;
+        if (! is_array($lista) || ! array_is_list($lista)) {
+            return new VoiceSecretList(VoiceSecretList::OUTCOME_ERROR, [], false, $http, VoiceSecretList::REASON_INVALID_RESPONSE);
+        }
+        $ids = [];
+        foreach ($lista as $secreto) {
+            $id = is_array($secreto) ? VoiceIds::providerIdOrNull($secreto['secret_id'] ?? null) : null;
+            if ($id === null) {
+                return new VoiceSecretList(VoiceSecretList::OUTCOME_ERROR, [], false, $http, VoiceSecretList::REASON_INVALID_RESPONSE);
+            }
+            $ids[] = $id;
+        }
+        $siguiente = $cuerpo['next_cursor'] ?? null;
+        unset($cuerpo, $lista);
+
+        return new VoiceSecretList(VoiceSecretList::OUTCOME_OBSERVED, $ids, is_string($siguiente) && $siguiente !== '', $http, null);
+    }
+
     // ── Piezas puras ────────────────────────────────────────────────────────
+
+    /**
+     * B-T5: el resultado de un GET de lista que no es 2xx (401/403 →
+     * auth_failed; 404 → not_found; otro → error), o null si lo es; y el
+     * estado HTTP.
+     *
+     * @return array{0: ?string, 1: ?int}
+     */
+    private static function listFailure(Response $respuesta): array
+    {
+        $estado = $respuesta->status();
+        $http = $estado >= 100 && $estado <= 599 ? $estado : null;
+        if ($estado >= 200 && $estado <= 299) {
+            return [null, $http];
+        }
+
+        return [match (true) {
+            $estado === 401, $estado === 403 => VoiceWebhookList::OUTCOME_AUTH_FAILED,
+            $estado === 404 => VoiceWebhookList::OUTCOME_NOT_FOUND,
+            default => VoiceWebhookList::OUTCOME_ERROR,
+        }, $http];
+    }
 
     /**
      * El resultado de una creación: 2xx con el id → `created`; 2xx sin él,

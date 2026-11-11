@@ -63,7 +63,10 @@ final class VoiceTools
             if (! in_array($llamada->status, VoiceCall::TOOL_STATUSES, true) || ($llamada->direction === VoiceCall::DIRECTION_INBOUND && $llamada->caller_authorized !== true)) {
                 return self::refused('call_not_active', $id, $tool);
             }
-            if (VoiceBrake::isOpen()) {
+            // Una baja dicha de viva voz (Ley 2300, la revocación oral) se acepta SIEMPRE, también con el freno echado:
+            // el freno para las llamadas y las demás herramientas, nunca una revocación (E17-8; tras SC-3 el freno salta
+            // también por el webhook post-llamada, y una llamada en curso no puede perder su «no me vuelvan a llamar»).
+            if ($tool !== VoiceAgentSpec::TOOL_NO_VOLVER_A_LLAMAR && VoiceBrake::isOpen()) {
                 return self::refused('voice_braked', $id, $tool);
             }
             if ($llamada->tool_calls >= VoiceCall::MAX_TOOL_CALLS) {

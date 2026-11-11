@@ -51,7 +51,8 @@ final class H8E2ESalientesPrimeroTest extends H8StackE2ETestCase
 
     private const CONTACTO = '+573000000071';
 
-    private const ENTORNO_4B = ['VOICE_OUTBOUND_SCOPE' => 'contacts'];
+    /** La segunda API de la 4b: el alcance `contacts` y la bandera para dar de alta contactos (auditoría B-T4). */
+    private const ENTORNO_4B = ['VOICE_OUTBOUND_SCOPE' => 'contacts', 'VOICE_CONTACTS_ENABLED' => 'true'];
 
     public function test_0_la_fase_es_la_4a_sin_entrantes_y_los_canarios_de_voz_se_registran(): void
     {

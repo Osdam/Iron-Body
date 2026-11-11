@@ -58,7 +58,10 @@ class VoiceCommandsTest extends TestCase
         $this->assertSame(0, Artisan::call('voice:doctor', ['--telefonia' => true, '--json' => true]));
         $json = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
         // B8-g: `providerVerification` (E4-6, la marca de la verificación con su fecha) y, en `number`, lo declarado de las entrantes.
-        $this->assertSame(['callsEnabledInCode', 'flags', 'scopes', 'provider', 'providerVerification', 'number', 'carrierConfigured', 'publication', 'brakeOpen', 'limits', 'schedule', 'facts', 'transferDirectory', 'today'], array_keys($json['telefonia']));
+        // Auditoría B-T5 (aditivo): `webhookHealth`, el último veredicto de voice:webhook-health (null: nunca corrió).
+        $this->assertSame(['callsEnabledInCode', 'flags', 'scopes', 'provider', 'providerVerification', 'number', 'carrierConfigured', 'webhookHealth', 'publication', 'brakeOpen', 'limits', 'schedule', 'facts', 'transferDirectory', 'today'], array_keys($json['telefonia']));
+        $this->assertNull($json['telefonia']['webhookHealth']);
+        $this->assertStringContainsString('Webhook    : sin comprobar', $texto);
         $this->assertSame(['state' => 'missing', 'verifiedAt' => null, 'expiresAt' => null], $json['telefonia']['providerVerification']);
         // B8-h (REV8-c M-1): `checkReason`, aditivo, dice por qué.
         $this->assertSame(['configured', 'collidesWithMessaging', 'importedNumberIdConfigured', 'inboundCapable', 'observed', 'check', 'checkReason'], array_keys($json['telefonia']['number']));

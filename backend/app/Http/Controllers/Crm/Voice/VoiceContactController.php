@@ -22,6 +22,11 @@ use Illuminate\Support\Facades\Validator;
  * Consentimiento a CUATRO OJOS (E3-4): `POST contacts/{uuid}/consents` lo
  * carga una persona y `POST contacts/{uuid}/consents/confirm` lo confirma
  * OTRA; `POST contacts/{uuid}/revoke` lo revoca sin esperar a nadie.
+ *
+ * Auditoría B-T4: dar de alta, cargar y confirmar exigen además
+ * `VOICE_CONTACTS_ENABLED` (apagada hasta la fase 4b). Se comprueba tras el
+ * permiso y ANTES de validar el cuerpo: apagada, 409 `voice_contacts_disabled`
+ * sea cual sea el cuerpo y sin escribir. El servicio lo vuelve a comprobar.
  */
 class VoiceContactController extends Controller
 {
@@ -36,6 +41,7 @@ class VoiceContactController extends Controller
     public function store(Request $request, VoiceContacts $contactos): JsonResponse
     {
         $actor = VoiceActor::require($request, CrmPermission::TELEPHONY_CONTACTS_MANAGE);
+        VoiceContacts::assertEnabled();
         $d = $this->validated($request->all(), [
             'clientRequestId' => ['required', 'string', 'uuid'],
             'number' => ['required', 'string', 'max:32'],
@@ -51,6 +57,7 @@ class VoiceContactController extends Controller
     public function requestConsent(Request $request, string $uuid, VoiceContacts $contactos): JsonResponse
     {
         $actor = VoiceActor::require($request, CrmPermission::TELEPHONY_CONTACTS_MANAGE);
+        VoiceContacts::assertEnabled();
         $d = $this->validated($request->all(), [
             'source' => ['required', 'string', 'in:'.implode(',', VoiceContacts::PERSON_SOURCES)],
             'evidence' => ['required', 'string', 'min:3', 'max:'.VoiceContacts::EVIDENCE_MAX],
@@ -62,6 +69,7 @@ class VoiceContactController extends Controller
     public function confirmConsent(Request $request, string $uuid, VoiceContacts $contactos): JsonResponse
     {
         $actor = VoiceActor::require($request, CrmPermission::TELEPHONY_CONTACTS_MANAGE);
+        VoiceContacts::assertEnabled();
         $d = $this->validated($request->all(), ['clientRequestId' => ['required', 'string', 'uuid']]);
 
         return response()->json($contactos->confirmConsent($actor, $uuid, $d['clientRequestId']), 201);

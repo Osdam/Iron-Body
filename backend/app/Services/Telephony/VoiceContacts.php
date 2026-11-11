@@ -31,6 +31,14 @@ use Illuminate\Support\Facades\Log;
  *
  * Idempotente por `client_request_id`. Los textos (evidencia, nota,
  * referencia) son PlainText estricto y sin teléfonos ni correos.
+ *
+ * BANDERA (auditoría B-T4; fase 4b, D-12): registrar un contacto, cargar su
+ * consentimiento y confirmarlo exigen `voice.contacts.enabled`
+ * (`VOICE_CONTACTS_ENABLED`, apagada). Apagada, las tres dan 409
+ * `voice_contacts_disabled` ANTES de leer o escribir nada; se comprueba aquí
+ * (vale para cualquier llamador) y el controlador lo repite tras el permiso,
+ * para que el 409 llegue antes que un 422. Revocar, excluir y las consultas
+ * al RNE no la miran: solo restringen las salientes.
  */
 final class VoiceContacts
 {
@@ -38,8 +46,31 @@ final class VoiceContacts
 
     public const REF_MAX = 120;
 
+    /** B-T4: el código del 409 con la bandera apagada (estable; lo lee el CRM). */
+    public const CODE_DISABLED = 'voice_contacts_disabled';
+
     /** Lo que una persona puede cargar: el formulario escrito o la evidencia de una persona del equipo. */
     public const PERSON_SOURCES = VoiceConsentRule::PERSON_SOURCES;
+
+    /** B-T4: ¿se pueden registrar contactos y cargar o confirmar su consentimiento? (`VOICE_CONTACTS_ENABLED`). */
+    public static function enabled(): bool
+    {
+        return config('voice.contacts.enabled') === true;
+    }
+
+    /**
+     * B-T4: con la bandera apagada, 409 `voice_contacts_disabled` sin leer ni
+     * escribir nada.
+     *
+     * @throws TelephonyException 409
+     */
+    public static function assertEnabled(): void
+    {
+        if (! self::enabled()) {
+            throw TelephonyException::conflict(self::CODE_DISABLED,
+                'Registrar contactos de voz y cargar o confirmar su consentimiento está apagado en el servidor hasta la fase 4b (visto bueno legal).');
+        }
+    }
 
     // ── Lecturas para la política ────────────────────────────────────────────
 
@@ -74,6 +105,7 @@ final class VoiceContacts
      */
     public function register(Admin $actor, array $in): array
     {
+        self::assertEnabled();
         $leido = StudioCanaryPhone::parse($in['number'], StudioCanaryPhone::CHANNEL_VOICE, [StudioCanaryPhone::COLOMBIA]);
         if (($leido['ok'] ?? false) !== true) {
             throw TelephonyException::invalid(['number' => [(string) ($leido['error'] ?? StudioCanaryPhone::INVALID_FORMAT)]]);
@@ -129,6 +161,7 @@ final class VoiceContacts
      */
     public function requestConsent(Admin $actor, string $contactUuid, array $in): array
     {
+        self::assertEnabled();
         $contacto = self::contact($contactUuid);
         self::assertText('evidence', $in['evidence'], self::EVIDENCE_MAX);
         if (! in_array($in['source'], self::PERSON_SOURCES, true)) {
@@ -160,6 +193,7 @@ final class VoiceContacts
      */
     public function confirmConsent(Admin $actor, string $contactUuid, string $clientRequestId): array
     {
+        self::assertEnabled();
         $crid = strtolower($clientRequestId);
         $previo = VoiceConsent::query()->where('client_request_id', $crid)->first();
         if ($previo !== null) {

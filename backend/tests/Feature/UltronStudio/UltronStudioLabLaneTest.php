@@ -37,7 +37,8 @@ class UltronStudioLabLaneTest extends TestCase
 
     public function test_la_conexion_del_carril_y_retry_after_mayor_que_el_timeout(): void
     {
-        $this->assertSame(['connection' => 'lab', 'queue' => 'studio-lab', 'priority' => 5, 'slo_wait_ms' => 600000, 'unattended_after_seconds' => 300], config('queue.lanes.lab'));
+        // B-T16 (H-7 de OPS7): el carril vigila además los trabajos reservados de un worker muerto (`watch_reserved`).
+        $this->assertSame(['connection' => 'lab', 'queue' => 'studio-lab', 'priority' => 5, 'slo_wait_ms' => 600000, 'unattended_after_seconds' => 300, 'watch_reserved' => true], config('queue.lanes.lab'));
         $conexion = config('queue.connections.lab');
         $this->assertSame(['database', 'studio-lab', 300, false], [$conexion['driver'], $conexion['queue'], $conexion['retry_after'], $conexion['after_commit']]);
         $this->assertSame(config('queue.connections.database.table'), $conexion['table'], 'la misma tabla jobs');

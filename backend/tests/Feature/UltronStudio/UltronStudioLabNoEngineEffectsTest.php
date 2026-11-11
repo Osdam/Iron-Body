@@ -210,13 +210,15 @@ class UltronStudioLabNoEngineEffectsTest extends TestCase
     public function test_el_detector_de_secretos_expuestos_conoce_la_clave_del_laboratorio(): void
     {
         $comando = app(CheckSecretExposure::class);
-        $detecta = new \ReflectionMethod($comando, 'containsRealSecret');
+        // B-T17 (L9-82) cambió el detector booleano por la lista de NOMBRES de las claves con valor de verdad: la
+        // aserción es ahora más estricta (que sea ESTA clave la detectada), no más laxa.
+        $detecta = new \ReflectionMethod($comando, 'realSecretKeys');
         $fichero = tempnam(sys_get_temp_dir(), 'lab-env');
         try {
             file_put_contents($fichero, "APP_NAME=Iron\nULTRON_STUDIO_LAB_OPENAI_API_KEY=".self::SENTINEL_KEY."\n");
-            $this->assertTrue($detecta->invoke($comando, $fichero), 'una clave del laboratorio de verdad es un secreto');
+            $this->assertContains('ULTRON_STUDIO_LAB_OPENAI_API_KEY', $detecta->invoke($comando, $fichero), 'una clave del laboratorio de verdad es un secreto');
             file_put_contents($fichero, "APP_NAME=Iron\nULTRON_STUDIO_LAB_OPENAI_API_KEY=\n");
-            $this->assertFalse($detecta->invoke($comando, $fichero), 'vacía es un ejemplo');
+            $this->assertSame([], $detecta->invoke($comando, $fichero), 'vacía es un ejemplo');
         } finally {
             @unlink($fichero);
         }

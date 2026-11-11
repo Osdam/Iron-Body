@@ -85,6 +85,11 @@ class VoiceIsolationTest extends TestCase
         // E5-2 (Enmienda 5; E4-8): la observación del número, interfaz propia de
         // solo lectura (su nulo entra por {@see NULO}; su DTO, por `Dto/`).
         'VoiceNumberObserver.php',
+        // Auditoría B-T5 (D8-21, decisión f; h8-hardening, PENDIENTE DEL VISTO
+        // BUENO DE SEC8): la lectura del webhook post-llamada y de los secretos
+        // del workspace, interfaz propia de solo lectura, como la del número
+        // (su nulo entra por {@see NULO}; sus DTO, por `Dto/`).
+        'VoiceWebhookObserver.php',
         // Los DTO neutros, si no van en `Dto/`.
         'CarrierCallsPage.php',
         'CarrierResult.php',
@@ -123,6 +128,8 @@ class VoiceIsolationTest extends TestCase
         'VoiceLabSessionIssuer' => ['signedSessionUrl'],
         // E5-2: un solo método, de lectura.
         'VoiceNumberObserver' => ['describeNumber'],
+        // B-T5: dos métodos, de lectura.
+        'VoiceWebhookObserver' => ['describeSecrets', 'describeWebhooks'],
     ];
 
     /** Los comandos de voz: el doctor del H6 y los del H8 (`voice:hangup`, `voice:reconcile`); los nombres de consola, en `VoiceBoundaryTest`. */
@@ -167,7 +174,9 @@ class VoiceIsolationTest extends TestCase
      */
     private const RED = [
         self::PROVEEDOR => ['verifyCredentials' => ['get']],
-        self::DESPLEGADOR => ['createAgent' => ['post'], 'describeAgent' => ['get'], 'assignNumber' => ['patch', 'post'], 'describeNumber' => ['get']],
+        self::DESPLEGADOR => ['createAgent' => ['post'], 'describeAgent' => ['get'], 'assignNumber' => ['patch', 'post'], 'describeNumber' => ['get'],
+            // B-T5 (pendiente del visto bueno de SEC8): la salud del webhook, un GET a la lista de webhooks y otro a la de secretos.
+            'describeWebhooks' => ['get'], 'describeSecrets' => ['get']],
         self::INICIADOR => ['startOutbound' => ['post']],
         self::EMISOR => ['signedSessionUrl' => ['get']],
         self::TRANSPORTISTA => ['hangup' => ['post'], 'listCalls' => ['get']],
@@ -185,6 +194,8 @@ class VoiceIsolationTest extends TestCase
         self::DESPLEGADOR.'::assignNumber', self::TRANSPORTISTA.'::hangup', self::TRANSPORTISTA.'::listCalls',
         // E5-2: el GET del número, uno.
         self::DESPLEGADOR.'::describeNumber',
+        // B-T5: un GET cada una.
+        self::DESPLEGADOR.'::describeWebhooks', self::DESPLEGADOR.'::describeSecrets',
     ];
 
     /** E5-2: el único fichero que llama a `describeNumber` (`VoiceReconciler::numbers()`, desde `voice:reconcile --numbers`). */
@@ -192,6 +203,15 @@ class VoiceIsolationTest extends TestCase
 
     /** E5-2: adónde va el GET de `describeNumber` (`ElevenLabsAgentDeployer::PHONE_NUMBERS_PATH` + el id codificado). */
     private const RUTA_DEL_NUMERO = '/v1/convai/phone-numbers/';
+
+    /**
+     * B-T5 (SC-11 del cierre): el único fichero que llama a `describeWebhooks` y
+     * a `describeSecrets` (`VoiceWebhookHealth::run()`, desde `voice:webhook-health`).
+     */
+    private const OBSERVA_EL_WEBHOOK = 'app/Services/Telephony/VoiceWebhookHealth.php';
+
+    /** B-T5: adónde va cada GET (`ElevenLabsAgentDeployer::WEBHOOKS_PATH` y `SECRETS_PATH`), y nada más. */
+    private const RUTAS_DEL_WEBHOOK = ['describeWebhooks' => ['WEBHOOKS_PATH', '/v1/workspace/webhooks'], 'describeSecrets' => ['SECRETS_PATH', '/v1/convai/secrets']];
 
     /** La cadena del GET del H6, exacta. */
     private const CADENA_H6 = ['withHeaders', 'acceptJson', 'withoutRedirecting', 'connectTimeout', 'timeout', 'get'];
@@ -760,6 +780,56 @@ class VoiceIsolationTest extends TestCase
         $this->assertStringContainsString('PHONE_NUMBERS_PATH', $codigo, 'describeNumber pide otra ruta que la del número (E5-2)');
         $this->assertStringContainsString('rawurlencode', $codigo, 'describeNumber pone el id del número en la ruta sin codificar (E5-2)');
         $this->assertMatchesRegularExpression('/const PHONE_NUMBERS_PATH = \''.preg_quote(self::RUTA_DEL_NUMERO, '/').'\';/', self::codigo($desplegador), 'la ruta del número no es '.self::RUTA_DEL_NUMERO.' (E5-2)');
+    }
+
+    /**
+     * B-T5 (D8-21, decisión f), como E5-2: el webhook post-llamada y los
+     * secretos del workspace se observan con UN GET a su ruta y solo desde la
+     * salud del webhook. Nadie más llama a `describeWebhooks` ni a
+     * `describeSecrets` (con `->`, `?->` o `::`; también los cierres de
+     * `routes/console.php`), nadie los nombra en una cadena (una llamada
+     * dinámica), y cada GET va a la ruta de su constante: ni otra ruta del
+     * proveedor ni una URL armada a mano. SC-11 del cierre: la guarda vivía solo
+     * en la prueba de la funcionalidad (y solo barría `app/`); aquí no se pierde
+     * si esa prueba se quita. El verbo, la petición única, las redirecciones y
+     * los reintentos los mira {@see test_la_red_solo_sale_de_los_metodos_enumerados()}.
+     */
+    public function test_el_webhook_y_los_secretos_se_observan_con_un_get_a_su_ruta_y_solo_desde_la_salud_del_webhook(): void
+    {
+        $llaman = [];
+        foreach (self::php('app', 'routes') as $relativa => $ruta) {
+            $codigo = (string) file_get_contents($ruta);
+            if (stripos($codigo, 'describeWebhooks') === false && stripos($codigo, 'describeSecrets') === false) {
+                continue;
+            }
+            $tokens = self::tokens($ruta);
+            foreach ($tokens as $i => $t) {
+                foreach (array_keys(self::RUTAS_DEL_WEBHOOK) as $metodo) {
+                    if ($t[0] === T_STRING && $t[1] === $metodo && in_array(self::anterior($tokens, $i)[0] ?? null, [T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR, T_DOUBLE_COLON], true)) {
+                        $llaman[$metodo][$relativa] = true;
+                    }
+                    if ($t[0] === T_CONSTANT_ENCAPSED_STRING && strcasecmp(self::literal($t[1]), $metodo) === 0) {
+                        $this->fail("{$relativa} nombra {$metodo} en una cadena: solo VoiceWebhookHealth la llama, y de forma directa (B-T5)");
+                    }
+                }
+            }
+        }
+        foreach (array_keys(self::RUTAS_DEL_WEBHOOK) as $metodo) {
+            $this->assertSame([self::OBSERVA_EL_WEBHOOK], array_keys($llaman[$metodo] ?? []), "{$metodo} se llama solo desde VoiceWebhookHealth (B-T5): ".implode(', ', array_keys($llaman[$metodo] ?? [])));
+        }
+
+        $desplegador = self::raiz().'/'.self::DESPLEGADOR;
+        foreach (self::RUTAS_DEL_WEBHOOK as $metodo => [$constante, $rutaOficial]) {
+            $codigo = self::codigoDeMetodo($desplegador, $metodo);
+            // `codigoDeMetodo()` une los tokens con espacios: la forma se mira con espacios opcionales.
+            $this->assertSame(1, preg_match_all('/->\s*get\s*\(\s*\$base\s*\.\s*self\s*::\s*'.$constante.'\b/', $codigo), "{$metodo} no pide su ruta ({$constante}) exactamente una vez (B-T5)");
+            foreach (self::RUTAS_DEL_WEBHOOK as [$otra]) {
+                if ($otra !== $constante) {
+                    $this->assertStringNotContainsString($otra, $codigo, "{$metodo} pide la ruta de la otra lectura (B-T5)");
+                }
+            }
+            $this->assertMatchesRegularExpression('/const '.$constante.' = \''.preg_quote($rutaOficial, '/').'\';/', self::codigo($desplegador), "la ruta de {$metodo} no es {$rutaOficial} (B-T5)");
+        }
     }
 
     // ── Rutas y pruebas ─────────────────────────────────────────────────────

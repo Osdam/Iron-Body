@@ -39,6 +39,12 @@ final class VoiceAdapters
         return self::elevenLabsReady() ? new ElevenLabsAgentDeployer : new NullVoiceNumberObserver;
     }
 
+    /** Auditoría B-T5: quien lee los webhooks y los secretos del workspace (el desplegador de ElevenLabs, solo sus GET), o el nulo. */
+    public static function webhookObserver(): VoiceWebhookObserver
+    {
+        return self::elevenLabsReady() ? new ElevenLabsAgentDeployer : new NullVoiceWebhookObserver;
+    }
+
     public static function callStarter(): VoiceCallStarter
     {
         return self::elevenLabsReady() ? new ElevenLabsCallStarter : new NullVoiceCallStarter;

@@ -23,6 +23,13 @@ use Illuminate\Support\Facades\Schema;
  * configuración. Lo que importa es si el trabajo AVANZA, y eso se ve en dos
  * señales que no se pueden falsear: el latido que deja cada job al terminar, y
  * la edad del trabajo más viejo que sigue esperando.
+ *
+ * Auditoría B-T16 (H-7 de OPS7): esas dos señales no ven a un worker que MUERE
+ * con un trabajo reservado (la espera solo cuenta los trabajos sin reservar).
+ * En los carriles con `watch_reserved` se mira además la tercera: un trabajo
+ * reservado hace más que el `retry_after` de su conexión (y un margen) sin un
+ * latido del carril desde que se reservó es un trabajo HUÉRFANO
+ * (`looks_orphaned`).
  */
 class QueueHealthService
 {
@@ -31,6 +38,17 @@ class QueueHealthService
 
     /** Contador de jobs terminados por minuto y carril. */
     private const RATE_KEY = 'queue:rate:';
+
+    /**
+     * B-T16: margen sobre el `retry_after` antes de llamar huérfano a un
+     * trabajo reservado. Un worker VIVO recoge un trabajo con la reserva
+     * vencida en su siguiente sondeo (segundos): el margen evita avisar en esa
+     * ventana.
+     */
+    public const ORPHAN_MARGIN_SECONDS = 60;
+
+    /** B-T16: cuántos trabajos huérfanos se miran por carril y pasada (cada worker muerto deja uno). */
+    public const ORPHANS_MAX = 20;
 
     /**
      * Registra que un carril acaba de terminar un trabajo.
@@ -90,6 +108,10 @@ class QueueHealthService
         $heartbeat = Cache::get(self::HEARTBEAT_KEY.$queue);
         $lastSeenSeconds = $heartbeat !== null ? max(0, now()->timestamp - (int) $heartbeat) : null;
 
+        $watchReserved = ($lane['watch_reserved'] ?? false) === true;
+        $retryAfter = $this->retryAfter($lane);
+        $orphans = $watchReserved && $retryAfter !== null ? $this->orphanedReservations($queue, $retryAfter, $heartbeat) : [];
+
         $failedLastHour = 0;
         if (Schema::hasTable('failed_jobs')) {
             $failedLastHour = DB::table('failed_jobs')
@@ -110,7 +132,70 @@ class QueueHealthService
             'failed_last_hour' => $failedLastHour,
             'looks_unattended' => $this->looksUnattended($backlog, $oldestSeconds, $lastSeenSeconds, $this->unattendedAfter($lane)),
             'breaching_slo' => $this->breachingSlo($oldestSeconds, (int) ($lane['slo_wait_ms'] ?? 0)),
+            // B-T16, aditivo: los trabajos reservados cuyo worker murió con ellos (solo en los carriles con `watch_reserved`).
+            'watch_reserved' => $watchReserved,
+            'retry_after_seconds' => $retryAfter,
+            'orphaned_reserved' => count($orphans),
+            'orphaned_jobs' => $orphans,
+            'looks_orphaned' => $orphans !== [],
         ];
+    }
+
+    /**
+     * B-T16: el `retry_after` de la conexión del carril (el tiempo tras el que
+     * la cola da por muerto un trabajo reservado y deja que otro worker lo
+     * tome), o null si no hay uno positivo.
+     *
+     * @param  array<string, mixed>  $lane
+     */
+    private function retryAfter(array $lane): ?int
+    {
+        $conexion = $lane['connection'] ?? null;
+        $valor = is_string($conexion) ? config('queue.connections.'.$conexion.'.retry_after') : null;
+
+        return is_int($valor) && $valor > 0 ? $valor : null;
+    }
+
+    /**
+     * B-T16: los trabajos RESERVADOS de la cola hace más de `retry_after` +
+     * {@see ORPHAN_MARGIN_SECONDS} sin un latido del carril DESDE QUE SE
+     * RESERVARON. Hacen falta las dos condiciones: una reserva vieja con un
+     * latido posterior dice que hay un worker vivo en el carril (la recogerá
+     * él en su siguiente sondeo); sin latido posterior, el que la tenía murió y
+     * nadie más atiende. Solo ids, segundos e intentos: ni la carga del
+     * trabajo ni sus datos.
+     *
+     * @return list<array{id: int, reserved_seconds: int, attempts: int}>
+     */
+    private function orphanedReservations(string $queue, int $retryAfter, mixed $heartbeat): array
+    {
+        if (! Schema::hasTable('jobs')) {
+            return [];
+        }
+
+        $ahora = now()->timestamp;
+        $filas = DB::table('jobs')
+            ->where('queue', $queue)
+            ->whereNotNull('reserved_at')
+            ->where('reserved_at', '<=', $ahora - $retryAfter - self::ORPHAN_MARGIN_SECONDS)
+            ->orderBy('reserved_at')
+            ->orderBy('id')
+            ->limit(self::ORPHANS_MAX)
+            ->get(['id', 'reserved_at', 'attempts']);
+
+        $huerfanos = [];
+        foreach ($filas as $fila) {
+            if ($heartbeat !== null && (int) $heartbeat > (int) $fila->reserved_at) {
+                continue; // alguien terminó un trabajo de este carril después: hay un worker vivo
+            }
+            $huerfanos[] = [
+                'id' => (int) $fila->id,
+                'reserved_seconds' => max(0, $ahora - (int) $fila->reserved_at),
+                'attempts' => (int) $fila->attempts,
+            ];
+        }
+
+        return $huerfanos;
     }
 
     /**

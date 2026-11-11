@@ -221,7 +221,8 @@ class ElevenLabsConfigTest extends TestCase
             'monitor' => ['enabled' => false],
             'transfer' => ['staff_hours' => ['weekdays' => '', 'saturday' => '']],
             'facts' => ['site' => '', 'hours' => ''],
-            'contacts' => ['rne_validity_days' => 0],
+            // Auditoría B-T4: dar de alta contactos y cargar o confirmar su consentimiento, apagado (fase 4b).
+            'contacts' => ['enabled' => false, 'rne_validity_days' => 0],
             'prices' => ['as_of' => '2026-11-03', 'elevenlabs' => 80000, 'twilio_outbound_mobile_co' => 37700, 'twilio_outbound_landline_co' => 70000,
                 'twilio_inbound_local_co' => 94500, 'twilio_media_streams' => 4400],
             'limits' => ['max_concurrent_calls' => 1, 'per_call_max_seconds' => 300, 'daily_budget_usd' => '0'],
@@ -229,7 +230,7 @@ class ElevenLabsConfigTest extends TestCase
 
         // H8, B8-b: las banderas de E2-4 y del monitor, con el mismo filter_var; los recortes y la semana.
         foreach (['true' => true, 'on' => true, 'false' => false, '' => false, 'si' => false] as $valor => $esperado) {
-            foreach (['VOICE_LAB_ENABLED' => 'lab', 'VOICE_MONITOR_ENABLED' => 'monitor'] as $variable => $bloque) {
+            foreach (['VOICE_LAB_ENABLED' => 'lab', 'VOICE_MONITOR_ENABLED' => 'monitor', 'VOICE_CONTACTS_ENABLED' => 'contacts'] as $variable => $bloque) {
                 $this->assertSame($esperado, self::evaluar([$variable => (string) $valor])[$bloque]['enabled'], "{$variable}={$valor}");
             }
         }
@@ -344,7 +345,9 @@ class ElevenLabsConfigTest extends TestCase
             'VOICE_LAB_DRIVER', 'VOICE_LAB_DAILY_BUDGET_USD', 'VOICE_LAB_SESSION_BUDGET_USD', 'VOICE_LAB_MAX_SESSION_SECONDS', 'VOICE_LAB_MAX_SESSIONS_PER_DAY',
             // B8-g, la declaración del número. B8-h: faltaba en esta lista, así que el último valor del bucle («yes» → true) se quedaba
             // en el entorno del proceso y se filtraba a las pruebas siguientes (el doctor y la deriva lo leían como declarado).
-            'VOICE_NUMBER_INBOUND_CAPABLE'];
+            'VOICE_NUMBER_INBOUND_CAPABLE',
+            // Auditoría B-T4: la bandera de los contactos (si faltara aquí, el último valor del bucle se filtraría como en B8-h).
+            'VOICE_CONTACTS_ENABLED'];
         $antes = [];
         foreach ($todas as $nombre) {
             $antes[$nombre] = [$_SERVER[$nombre] ?? null, $_ENV[$nombre] ?? null, getenv($nombre)];

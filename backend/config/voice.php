@@ -265,7 +265,16 @@ return [
     // H8, D8-18 [P-14]: días que vale una consulta al RNE; entero 0–365. Con 0
     // (el defecto mientras P-14 no se decida) ninguna vale: el alcance
     // `contacts` da siempre `rne_check_missing`.
+    //
+    // Auditoría B-T4 (fase 4b, D-12): REGISTRAR contactos de voz y CARGAR o
+    // CONFIRMAR su consentimiento tiene su propia bandera, apagada hasta el
+    // visto bueno legal (Ley 1581, Ley 2300 y RNE) y hasta que la supresión de
+    // la Ley 1581 cubra las tablas de voz. Apagada, esas tres escrituras dan
+    // 409 `voice_contacts_disabled` sin escribir; las lecturas, revocar,
+    // excluir y las consultas al RNE siguen (solo restringen). Solo `true`, 1,
+    // on o yes la encienden; la mueve el mando (`h8-voice-scope.sh`).
     'contacts' => [
+        'enabled' => filter_var(env('VOICE_CONTACTS_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
         'rne_validity_days' => min(365, max(0, $entero('VOICE_RNE_VALIDITY_DAYS', 0))),
     ],
 

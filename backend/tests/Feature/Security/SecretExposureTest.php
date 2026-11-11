@@ -39,7 +39,10 @@ class SecretExposureTest extends TestCase
         $this->assertNotSame(200, $response->getStatusCode(), "La ruta {$path} devolvió 200.");
 
         $body = $response->getContent() ?: '';
-        foreach (['APP_KEY=', 'DB_PASSWORD=', 'META_ACCESS_TOKEN=', 'OPENAI_API_KEY=', 'WOMPI_PRIVATE_KEY='] as $marker) {
+        foreach (['APP_KEY=', 'DB_PASSWORD=', 'META_ACCESS_TOKEN=', 'OPENAI_API_KEY=', 'WOMPI_PRIVATE_KEY=',
+            // Auditoría B-T17: las claves de la voz (ElevenLabs y Twilio Voice).
+            'ELEVENLABS_API_KEY=', 'ELEVENLABS_WEBHOOK_SECRET=', 'ELEVENLABS_TOOL_SECRET=', 'ELEVENLABS_INITIATION_SECRET=',
+            'TWILIO_VOICE_API_KEY_SECRET=', 'TWILIO_VOICE_SIGNING_TOKEN='] as $marker) {
             $this->assertStringNotContainsString($marker, $body, "Se filtró {$marker} en {$path}");
         }
     }
@@ -61,6 +64,10 @@ class SecretExposureTest extends TestCase
             'git' => ['/.git/config'],
             'log de laravel' => ['/storage/logs/laravel.log'],
             'log del canal' => ['/storage/logs/channel.log'],
+            // Auditoría B-T17: el log de la voz (0664, como el del canal), entero y el del día.
+            'log de la voz' => ['/storage/logs/voice.log'],
+            'log de la voz del día' => ['/storage/logs/voice-2026-11-10.log'],
+            'log de la voz por traversal' => ['/%2e%2e/storage/logs/voice.log'],
         ];
     }
 

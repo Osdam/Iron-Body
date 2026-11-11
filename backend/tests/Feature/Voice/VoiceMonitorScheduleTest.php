@@ -13,10 +13,11 @@ use Tests\TestCase;
  * E6-5; OPS8-b): un bloque PROPIO de `routes/console.php` bajo
  * `voice.monitor.enabled`, nunca dentro del del monitor del Studio (m-3 del
  * H7). Con la bandera apagada no se programa ninguna tarea de voz; encendida,
- * exactamente tres: la conciliación cada 10 minutos (cinco pasadas sin
+ * exactamente cinco: la conciliación cada 10 minutos (cinco pasadas sin
  * `--numbers` y la sexta, en el minuto 0, con él), la deriva del número cada
- * hora y la verificación semanal de ElevenLabs. Ninguna toca el bloque del
- * Studio ni depende de su bandera.
+ * hora, la purga diaria de los límites (E8-6), la salud del webhook cada hora
+ * en el minuto 5 (auditoría B-T5) y la verificación semanal de ElevenLabs.
+ * Ninguna toca el bloque del Studio ni depende de su bandera.
  */
 class VoiceMonitorScheduleTest extends TestCase
 {
@@ -64,7 +65,7 @@ class VoiceMonitorScheduleTest extends TestCase
         }
     }
 
-    public function test_con_la_bandera_encendida_exactamente_las_cuatro_tareas_de_voz(): void
+    public function test_con_la_bandera_encendida_exactamente_las_cinco_tareas_de_voz(): void
     {
         config(['voice.monitor.enabled' => true, 'ultron_studio.monitor.enabled' => false]);
         $porOrden = [];
@@ -76,14 +77,16 @@ class VoiceMonitorScheduleTest extends TestCase
         $ordenes = array_keys($porOrden);
         sort($ordenes, SORT_STRING);
         $this->assertSame(
-            ['ultron-studio:integrations-snapshot --verify-voice', 'voice:prune-rate-limits', 'voice:reconcile', 'voice:reconcile --numbers'],
+            ['ultron-studio:integrations-snapshot --verify-voice', 'voice:prune-rate-limits', 'voice:reconcile', 'voice:reconcile --numbers', 'voice:webhook-health'],
             $ordenes,
-            'la conciliación, la del número, la purga diaria de los límites (E8-6) y la verificación semanal; nada más',
+            'la conciliación, la del número, la purga diaria de los límites (E8-6), la salud del webhook (B-T5) y la verificación semanal; nada más',
         );
 
         // Cada 10 minutos en total, sin dos a la vez en el mismo minuto: cinco sin --numbers y la del minuto 0 con él.
         $this->assertSame('10,20,30,40,50 * * * *', $porOrden['voice:reconcile']->expression);
         $this->assertSame('0 * * * *', $porOrden['voice:reconcile --numbers']->expression);
+        // B-T5: la salud del webhook cada hora, en el minuto 5 (ni con la del número ni con la conciliación).
+        $this->assertSame('5 * * * *', $porOrden['voice:webhook-health']->expression);
         // La purga de los límites caducados (E8-6): a las 04:40 de Bogotá.
         $this->assertSame('40 4 * * *', $porOrden['voice:prune-rate-limits']->expression);
         $this->assertSame('America/Bogota', $porOrden['voice:prune-rate-limits']->timezone);
@@ -108,10 +111,10 @@ class VoiceMonitorScheduleTest extends TestCase
             config(['voice.monitor.enabled' => $voz, 'ultron_studio.monitor.enabled' => $studio]);
             $eventos = $this->scheduled();
             $caso = 'voz '.($voz ? 'on' : 'off').' · Studio '.($studio ? 'on' : 'off');
-            // Cuatro tareas de voz (E8-6 añadió la purga diaria de los límites).
-            $this->assertCount($voz ? 4 : 0, array_filter($eventos, self::isVoiceTask(...)), $caso);
+            // Cinco tareas de voz (E8-6 añadió la purga diaria de los límites; B-T5, la salud del webhook).
+            $this->assertCount($voz ? 5 : 0, array_filter($eventos, self::isVoiceTask(...)), $caso);
             $this->assertCount($studio ? 2 : 0, array_filter($eventos, self::isStudioMonitorTask(...)), $caso.': el monitor del Studio sigue con sus 2');
-            $this->assertCount($base + ($voz ? 4 : 0) + ($studio ? 2 : 0), $eventos, $caso.': nada más cambia en el programador');
+            $this->assertCount($base + ($voz ? 5 : 0) + ($studio ? 2 : 0), $eventos, $caso.': nada más cambia en el programador');
         }
     }
 

@@ -285,7 +285,7 @@ El texto exacto de cada una está en la cabecera `decisions` del fichero que la 
 
 ## Lo que no cubre, y por qué
 
-- **Los valores de `specHash` de cualquier plantilla futura.** `realCompiler` es la de hoy: `ultron-voice-template/1`, con el aviso de E1-3, sha256 de la plantilla `b584cd90…`. Si cambia a propósito, se reexporta y se revisa.
+- **Los valores de `specHash` de cualquier plantilla futura.** `realCompiler` es la de hoy: `ultron-voice-template/3` (P-M2, 10-11-2026: las negativas exactas; antes `/2` de S8-d y `/1`), con el aviso de E1-3, huella de la plantilla `aa8d8f80…` y sha256 del fichero `6011f48b…` (los dos en `realCompilerExport.compiler`). Si cambia a propósito, se reexporta y se revisa: con la `/3` solo cambiaron la cabecera de la plantilla y las 43 huellas de las compilaciones válidas y de las relaciones; ningún motivo, perfil ni aviso.
 - **La carga y la proyección de ElevenLabs** (B8) y la deriva.
 - **Lo que no es puro:**
   - disparadores y `REVOKE` en PostgreSQL;

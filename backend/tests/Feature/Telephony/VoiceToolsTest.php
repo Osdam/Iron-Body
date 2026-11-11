@@ -156,6 +156,18 @@ class VoiceToolsTest extends TestCase
         $this->assertSame(2, VoiceCall::query()->findOrFail($llamada->id)->tool_calls, 'cada petición cuenta en el cupo');
     }
 
+    public function test_con_el_freno_echado_la_baja_dicha_se_acepta_y_las_demas_herramientas_no(): void
+    {
+        // E17-8: el freno (por ejemplo `webhook_unhealthy`, SC-3) nunca impide registrar una revocación oral.
+        $llamada = $this->voiceCall('outbound', 'active', ['provider_conversation_id' => 'conv_h8fx_0031', 'provider_call_sid' => 'CA000000000000000000000000a800001f']);
+        VoiceBrake::open('guard_violation', 'guard:prueba-baja-con-freno', []);
+        $this->rawPost('/api/voice/tools/consultar_horarios', '{"conversation_id":"conv_h8fx_0031"}', ['Authorization' => 'Bearer '.self::TOOL_SECRET])->assertOk()->assertJson(['verdict' => 'voice_braked']);
+        $this->rawPost('/api/voice/tools/no_volver_a_llamar', '{"conversation_id":"conv_h8fx_0031"}', ['Authorization' => 'Bearer '.self::TOOL_SECRET])->assertOk()->assertJson(['ok' => true, 'excluido' => true]);
+        $exclusion = VoiceExclusion::query()->sole();
+        $this->assertSame([$llamada->remote_hash, 'spoken_opt_out', $llamada->id], [$exclusion->phone_hash, $exclusion->source, $exclusion->call_id]);
+        $this->assertTrue(VoiceBrake::isOpen(), 'aceptar la baja no suelta el freno');
+    }
+
     public function test_un_call_ref_que_no_es_el_de_la_llamada_no_la_encuentra(): void
     {
         $this->voiceCall('outbound', 'active', ['provider_conversation_id' => 'conv_h8fx_0031', 'provider_call_sid' => 'CA000000000000000000000000a800001f']);

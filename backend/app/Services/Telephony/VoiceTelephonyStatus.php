@@ -48,6 +48,8 @@ final class VoiceTelephonyStatus
                 'twilioVoice' => config('voice.twilio.enabled') === true,
                 'lab' => config('voice.lab.enabled') === true,
                 'monitor' => config('voice.monitor.enabled') === true,
+                // Auditoría B-T4, aditivo: registrar contactos y cargar o confirmar su consentimiento (`VOICE_CONTACTS_ENABLED`).
+                'contacts' => VoiceContacts::enabled(),
             ],
             'scopes' => ['inbound' => (string) config('voice.inbound.scope', 'canary'), 'outbound' => (string) config('voice.outbound.scope', 'canary')],
             'provider' => VoiceProviderState::current(),
@@ -69,6 +71,9 @@ final class VoiceTelephonyStatus
                 'checkReason' => $vigilancia['reason'],
             ],
             'carrierConfigured' => TwilioVoiceCarrier::configured(),
+            // Auditoría B-T5 (D8-21, decisión f), aditivo: el último veredicto de `voice:webhook-health` (sin URL, ids ni
+            // secretos; null si nunca corrió o caducó). Lo deja la orden con el monitor de voz encendido; aquí no hay red.
+            'webhookHealth' => VoiceWebhookHealth::lastVerdict(),
             'publication' => $partes,
             'brakeOpen' => $freno,
             'limits' => [

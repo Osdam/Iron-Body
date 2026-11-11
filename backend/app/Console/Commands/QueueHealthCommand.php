@@ -13,6 +13,10 @@ use Illuminate\Console\Command;
  * Supervisor, que es la pregunta equivocada: un worker puede estar arrancado y
  * bloqueado, o vivo pero escuchando la cola equivocada. Esto dice si el trabajo
  * AVANZA, que es lo que importa.
+ *
+ * Auditoría B-T16 (H-7 de OPS7): también un worker que murió con un trabajo
+ * RESERVADO (`huérfanos`, en los carriles que lo vigilan): sin trabajo nuevo
+ * detrás, la espera no lo delata.
  */
 class QueueHealthCommand extends Command
 {
@@ -31,7 +35,7 @@ class QueueHealthCommand extends Command
         }
 
         $this->table(
-            ['carril', 'cola', 'P', 'pendientes', 'en curso', 'más viejo', 'último latido', 'jobs/min', 'fallos 1h', 'estado'],
+            ['carril', 'cola', 'P', 'pendientes', 'en curso', 'más viejo', 'último latido', 'jobs/min', 'fallos 1h', 'huérfanos', 'estado'],
             collect($snapshot)->map(fn (array $l, string $name) => [
                 $name,
                 $l['queue'],
@@ -42,6 +46,7 @@ class QueueHealthCommand extends Command
                 $l['last_processed_seconds_ago'] === null ? '—' : $l['last_processed_seconds_ago'].'s',
                 $l['jobs_last_minute'],
                 $l['failed_last_hour'],
+                ($l['watch_reserved'] ?? false) === true ? $l['orphaned_reserved'] : '—',
                 $this->estado($l),
             ])->values()->all(),
         );
@@ -49,19 +54,29 @@ class QueueHealthCommand extends Command
         // Salida distinta de cero cuando algo está mal: así se puede colgar de
         // un cron o de un check externo sin tener que interpretar el texto.
         $problemas = collect($snapshot)->filter(
-            fn (array $l) => $l['looks_unattended'] || $l['breaching_slo'],
+            fn (array $l) => $l['looks_unattended'] || $l['breaching_slo'] || ($l['looks_orphaned'] ?? false),
         );
 
         if ($problemas->isNotEmpty()) {
             $this->newLine();
             foreach ($problemas as $name => $l) {
-                $this->warn(sprintf(
-                    '· %s: %s',
-                    $name,
-                    $l['looks_unattended']
-                        ? 'hay trabajo esperando y nadie lo procesa. Comprobar que su worker está arrancado.'
-                        : 'los workers están vivos pero no dan: es capacidad, no avería.',
-                ));
+                if ($l['looks_unattended'] || $l['breaching_slo']) {
+                    $this->warn(sprintf(
+                        '· %s: %s',
+                        $name,
+                        $l['looks_unattended']
+                            ? 'hay trabajo esperando y nadie lo procesa. Comprobar que su worker está arrancado.'
+                            : 'los workers están vivos pero no dan: es capacidad, no avería.',
+                    ));
+                }
+                if ($l['looks_orphaned'] ?? false) {
+                    $this->warn(sprintf(
+                        '· %s: %d trabajo(s) reservado(s) hace más de %d s (su retry_after) sin un latido del carril: el worker murió con el trabajo en la mano. Comprobar que su worker está arrancado; sin worker, nadie lo rescata.',
+                        $name,
+                        $l['orphaned_reserved'],
+                        $l['retry_after_seconds'],
+                    ));
+                }
             }
 
             return self::FAILURE;
@@ -76,6 +91,10 @@ class QueueHealthCommand extends Command
     {
         if ($lane['looks_unattended']) {
             return 'SIN WORKER';
+        }
+
+        if ($lane['looks_orphaned'] ?? false) {
+            return 'WORKER MUERTO';
         }
 
         if ($lane['breaching_slo']) {

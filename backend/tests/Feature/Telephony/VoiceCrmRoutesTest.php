@@ -179,6 +179,8 @@ class VoiceCrmRoutesTest extends TestCase
 
     public function test_contactos_con_consentimiento_a_cuatro_ojos_revocacion_exclusion_y_rne(): void
     {
+        // La fase 4b, con su bandera (auditoría B-T4; apagada, lo prueba VoiceContactsFlagTest).
+        config(['voice.contacts.enabled' => true]);
         $ana = $this->person(Admin::ROLE_SUPER_ADMIN, 'Ana Contactos');
         $beto = $this->person(Admin::ROLE_SUPER_ADMIN, 'Beto Confirma');
         $comoAna = $this->actingAsAdmin($ana);

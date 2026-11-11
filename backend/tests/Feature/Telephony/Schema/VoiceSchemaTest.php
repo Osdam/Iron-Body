@@ -19,9 +19,10 @@ use Tests\TestCase;
  *
  *  · Columnas, tipos y nulos; ninguna guarda un teléfono en claro, una
  *    transcripción ni audio (D8-17).
- *  · Recuentos y nombres: PG 27 disparadores, 51 CHECK y 3 índices únicos
- *    parciales; SQLite 21 disparadores y los mismos 3 parciales, con el mismo
- *    WHERE.
+ *  · Recuentos y nombres: PG 27 disparadores, 51 CHECK y 4 índices únicos
+ *    parciales (los 3 de DB8 y, desde SC-13 del cierre, el de «una llamada
+ *    por trabajo», `2026_11_14_100002`); SQLite 21 disparadores y los mismos 4
+ *    parciales, con el mismo WHERE.
  *  · La función de guarda es PROPIA (`voice_forbid()`, «voice: …»), no la de F,
  *    y la de F no cambia; la migración no nombra el Studio ni el motor y sus
  *    FKs no salen de `voice_*` (D8-2, protección 5).
@@ -243,12 +244,15 @@ class VoiceSchemaTest extends TestCase
 
     /** Los índices únicos parciales y su WHERE, en cada motor (PG lo reescribe; SQLite lo guarda tal cual). */
     private const PARTIAL_INDEXES_PG = [
+        // SC-13 del cierre (2026_11_14_100002): una llamada por trabajo de estrategia (D-V9-2).
+        'vc_one_call_per_strategy_job' => "((requested_by_type)::text = 'strategy'::text)",
         'vc_one_live_outbound' => "(((direction)::text = 'outbound'::text) AND (transfer_of_call_id IS NULL) AND ((status)::text = ANY ((ARRAY['requested'::character varying, 'ambiguous'::character varying, 'dialing'::character varying, 'active'::character varying])::text[])))",
         'vct_one_live' => "((status)::text <> 'retired'::text)",
         'vex_one_opt_out_per_call' => "((source)::text = 'spoken_opt_out'::text)",
     ];
 
     private const PARTIAL_INDEXES_SQLITE = [
+        'vc_one_call_per_strategy_job' => "requested_by_type = 'strategy'",
         'vc_one_live_outbound' => "direction = 'outbound' AND transfer_of_call_id IS NULL AND status IN ('requested', 'ambiguous', 'dialing', 'active')",
         'vct_one_live' => "status <> 'retired'",
         'vex_one_opt_out_per_call' => "source = 'spoken_opt_out'",
@@ -452,6 +456,14 @@ class VoiceSchemaTest extends TestCase
             }
 
             $m->up();
+            // V9 amplía `vc_requester_chk` en su propia migración (2026_11_13_100001): como en un `migrate` real, se vuelve a
+            // aplicar antes de comparar (G-8 de V9, L9-81; en SQLite no hace nada). El recuento de 51 no cambia.
+            (require database_path('migrations/2026_11_13_100001_allow_strategy_requester_on_voice_calls.php'))->up();
+            // SC-3 del cierre (R8-12) amplía `vbr_reason_chk` con `webhook_unhealthy` en la suya (2026_11_14_100001), igual:
+            // DROP + ADD del mismo nombre; en SQLite no hace nada. El recuento de 51 no cambia.
+            (require database_path('migrations/2026_11_14_100001_allow_webhook_unhealthy_reason_on_voice_brakes.php'))->up();
+            // SC-13 del cierre: el índice parcial de «una llamada por trabajo» (2026_11_14_100002), en los dos motores.
+            (require database_path('migrations/2026_11_14_100002_add_one_call_per_strategy_job_index_on_voice_calls.php'))->up();
             $this->assertSame($h8, $this->voiceFootprint(), 'up() no dejó lo mismo que la primera vez');
             // Y las guardas vuelven a funcionar.
             $id = $this->insertOutbound();

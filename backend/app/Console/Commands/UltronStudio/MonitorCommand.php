@@ -25,7 +25,8 @@ use Throwable;
  *    la expectativa de `ultron_studio.monitor.expect`, y la deriva de la
  *    configuración autorizada por una persona (`GET integrations/config`, H6
  *    §I5.3; sin reconocimiento previo no hay deriva posible);
- *  - `queues`: la de `queue:health` (un carril sin atender o saturado).
+ *  - `queues`: la de `queue:health` (un carril sin atender o saturado, o con
+ *    un trabajo reservado huérfano, B-T16).
  *
  * No lanza esos comandos por dentro: `Artisan::call` pisaría la salida de
  * quien llamó al monitor con `Artisan::call`.
@@ -38,7 +39,8 @@ use Throwable;
  * `integrations_drift` o `monitor_check_failed`), igual que los detectores de
  * `iron-guard:scan`: la misma deriva repetida es UN incidente con más
  * ocurrencias. Las colas NO abren incidente propio: `iron-guard:scan` ya abre
- * `queue_unattended` y `queue_backlog` por carril, y duplicarlos sería ruido.
+ * `queue_unattended` y `queue_backlog` por carril (y `queue_reserved_orphaned`
+ * por trabajo, B-T16), y duplicarlos sería ruido.
  * `--dry-run` solo lee (despliegue, smoke, quien opere).
  *
  * Solo lee y solo informa: no frena, no revierte, no llama a ningún proveedor
@@ -248,6 +250,10 @@ class MonitorCommand extends Command
                 $problemas[] = self::safe((string) $nombre).':unattended';
             } elseif (($carril['breaching_slo'] ?? false) === true) {
                 $problemas[] = self::safe((string) $nombre).':saturated';
+            }
+            // B-T16 (H-7 de OPS7): un worker muerto con un trabajo reservado; el incidente lo abre iron-guard:scan, por trabajo.
+            if (($carril['looks_orphaned'] ?? false) === true) {
+                $problemas[] = self::safe((string) $nombre).':orphaned';
             }
         }
 

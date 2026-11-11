@@ -46,9 +46,10 @@ use UnexpectedValueException;
  *     se repite.
  *
  * B8-h (REV8-c):
- *  - M-2: antes de buscar nada, las negativas que manda la plantilla (una lista
- *    cerrada de cláusulas exactas, {@see VoiceTranscriptAllowlist}) salen del
- *    turno; el resto se busca igual que antes;
+ *  - M-2 (cerrada con P-M2: la plantilla `/3` fija la frase exacta de cada
+ *    negativa): antes de buscar nada, esas frases (una lista cerrada de
+ *    cláusulas exactas, {@see VoiceTranscriptAllowlist}, nunca en pregunta:
+ *    r-2) salen del turno; el resto se busca igual que antes;
  *  - m-1: el plegado es la forma NORMALIZADA (sin marcas, sin invisibles, sin
  *    ancho completo ni homoglifos) y se busca en todas las formas de
  *    {@see VoiceTranscriptLexicon::variants()} (también con las palabras

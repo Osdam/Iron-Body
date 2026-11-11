@@ -5,6 +5,7 @@ namespace Tests\Feature\Telephony;
 use App\Jobs\Voice\PlaceOutboundVoiceCall;
 use App\Models\Admin;
 use App\Models\Voice\VoiceCall;
+use App\Models\Voice\VoiceContact;
 use App\Services\Voice\VoiceProviders;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Middleware\ThrottleRequests;
@@ -91,6 +92,11 @@ class VoiceProductionNoNetworkTest extends TestCase
         }
         $canario = $this->activeVoiceCanaryInProduction();
         $this->postJson('/api/admin/voice/calls', ['clientRequestId' => (string) Str::uuid(), 'target' => ['kind' => 'canary', 'uuid' => $canario]], $root)->assertStatus(409);
+        // Auditoría B-T4: con la configuración de producción de hoy, dar de alta un contacto da 409 sin escribir; la 4b lo enciende.
+        $this->postJson('/api/admin/voice/contacts', ['clientRequestId' => (string) Str::uuid(), 'number' => '+57 300 000 0051', 'source' => ['type' => 'manual', 'id' => null]], $root)
+            ->assertStatus(409)->assertJsonPath('code', 'voice_contacts_disabled');
+        $this->assertSame(0, VoiceContact::query()->count());
+        config(['voice.contacts.enabled' => true]);
         $contacto = $this->postJson('/api/admin/voice/contacts', ['clientRequestId' => (string) Str::uuid(), 'number' => '+57 300 000 0051', 'source' => ['type' => 'manual', 'id' => null]], $root)->assertCreated()->json('contact.uuid');
         $this->postJson('/api/admin/voice/calls', ['clientRequestId' => (string) Str::uuid(), 'target' => ['kind' => 'contact', 'uuid' => $contacto]], $root)->assertStatus(409);
         $this->postJson("/api/admin/voice/contacts/{$contacto}/consents", ['source' => 'written_form', 'evidence' => 'Formulario firmado'], $root)->assertStatus(202);

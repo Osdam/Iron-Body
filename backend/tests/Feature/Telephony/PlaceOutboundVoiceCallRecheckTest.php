@@ -99,7 +99,8 @@ class PlaceOutboundVoiceCallRecheckTest extends TestCase
      */
     private function contactCall(?Carbon $rneCheckedAt = null): array
     {
-        config(['voice.outbound.scope' => 'contacts']);
+        // La fase 4b: el alcance `contacts` y, para darlos de alta, su bandera (auditoría B-T4).
+        config(['voice.outbound.scope' => 'contacts', 'voice.contacts.enabled' => true]);
         $contactos = app(VoiceContacts::class);
         $uuid = (string) $contactos->register($this->ana, ['clientRequestId' => (string) Str::uuid(), 'number' => self::CONTACT_PHONE, 'sourceType' => 'manual', 'sourceId' => null])['contact']['uuid'];
         $contactos->requestConsent($this->ana, $uuid, ['source' => 'written_form', 'evidence' => 'Formulario firmado en recepción']);

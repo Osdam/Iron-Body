@@ -12,11 +12,13 @@ use Tests\TestCase;
 /**
  * REV8-c M-2, m-1 y m-2 (B8-h, cerrado por el lead): LA GUARDA ENDURECIDA.
  *
- *  - M-2: las negativas que MANDA la plantilla de voz `/2` («No puedo
- *    ofrecerte descuentos») no son violaciones: salen del turno antes de buscar
- *    (lista cerrada de cláusulas exactas, {@see VoiceTranscriptAllowlist}) y
- *    una prueba de PARIDAD exige que cada negativa citada siga literal en la
- *    plantilla y que la versión de la plantilla sea la que la lista conoce.
+ *  - M-2: las negativas que MANDA la plantilla de voz (desde la `/3`, P-M2,
+ *    palabra por palabra: «No puedo ofrecerte descuentos ni promociones») no
+ *    son violaciones: salen del turno antes de buscar (lista cerrada de
+ *    cláusulas exactas, {@see VoiceTranscriptAllowlist}) y una prueba de
+ *    PARIDAD exige que cada petición citada siga literal en la plantilla y que
+ *    la versión de la plantilla sea la que la lista conoce (la paridad en los
+ *    dos sentidos y las 15 negativas naturales, en `VoiceTranscriptRefusalsTest`).
  *    Nada de análisis de negación: una oferta en la misma frase sigue marcando.
  *  - m-1: los huecos de normalización del revisor (tildes combinadas, homoglifos
  *    cirílicos, ancho completo, espacios de ancho cero, palabras partidas) y las

@@ -226,13 +226,22 @@ return [
     | parezca desatendido. Sin la clave, el global de
     | `observability.queues.unattended_after_seconds` (120 s). El laboratorio
     | declara el suyo: un paso tarda hasta 150 s y su worker es uno solo.
+    |
+    | `watch_reserved` (opcional; auditoría B-T16, H-7 de OPS7): vigilar los
+    | trabajos RESERVADOS que llevan más que el `retry_after` de su conexión
+    | (y un margen) sin un latido del carril desde que se reservaron: su
+    | worker murió con el trabajo en la mano y, si nadie lo relanza, nadie lo
+    | rescata. La espera de arriba solo cuenta trabajos SIN reservar, así que
+    | sin esto `queue:health`, el monitor e IRON GUARD no lo veían. Va en los
+    | carriles de un solo worker y poco tráfico (voz, comercial y el
+    | laboratorio), donde ningún trabajo nuevo delata la avería.
     */
 
     'lanes' => [
         'whatsapp' => ['connection' => 'whatsapp', 'queue' => env('QUEUE_WHATSAPP', 'whatsapp-high'), 'priority' => 0, 'slo_wait_ms' => 500],
         'agent' => ['connection' => 'agent', 'queue' => env('QUEUE_AGENT', 'agent'), 'priority' => 2, 'slo_wait_ms' => 30000],
         'media' => ['connection' => 'media', 'queue' => env('QUEUE_MEDIA', 'media'), 'priority' => 3, 'slo_wait_ms' => 60000],
-        'commercial' => ['connection' => 'commercial', 'queue' => env('QUEUE_COMMERCIAL', 'commercial'), 'priority' => 4, 'slo_wait_ms' => 300000],
+        'commercial' => ['connection' => 'commercial', 'queue' => env('QUEUE_COMMERCIAL', 'commercial'), 'priority' => 4, 'slo_wait_ms' => 300000, 'watch_reserved' => true],
         'billing' => ['connection' => 'billing', 'queue' => env('FACTUS_QUEUE', 'billing'), 'priority' => 4, 'slo_wait_ms' => 300000],
         // Nadie espera al laboratorio con un cliente al otro lado: diez minutos.
         // Desatendido a partir de 300 s sin latido (60–3600; vacío o no
@@ -248,10 +257,11 @@ return [
 
                 return preg_match('/^-?\d+$/', $valor) === 1 ? min(3600, max(60, (int) $valor)) : 300;
             })(),
+            'watch_reserved' => true,
         ],
         // La voz (H8): quien pidió la saliente espera a que suene. Desatendido a
         // los 120 s (el global): con todo apagado el carril no recibe trabajos.
-        'voice' => ['connection' => 'voice', 'queue' => 'voice', 'priority' => 1, 'slo_wait_ms' => 5000],
+        'voice' => ['connection' => 'voice', 'queue' => 'voice', 'priority' => 1, 'slo_wait_ms' => 5000, 'watch_reserved' => true],
     ],
 
     /*

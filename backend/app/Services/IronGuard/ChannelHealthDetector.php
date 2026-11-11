@@ -66,6 +66,9 @@ class ChannelHealthDetector
             // otros cuatro funcionan y por fuera todo parezca normal.
             'unattendedQueues',
             'queueBacklog',
+            // Y el que no deja cola detrás: un worker que muere con un trabajo
+            // reservado (auditoría B-T16, H-7 de OPS7).
+            'orphanedReservations',
             // Los respaldos los hace systemd, pero si fallan en silencio es como
             // no tenerlos. Esto los mira.
             'backupsUnhealthy',
@@ -546,6 +549,68 @@ class ChannelHealthDetector
                 'hint' => 'Hay workers vivos pero no dan: es capacidad, no avería.',
             ],
         ]);
+    }
+
+    /**
+     * Un trabajo RESERVADO cuyo worker murió con él en la mano (auditoría
+     * B-T16, H-7 de OPS7).
+     *
+     * Ninguna de las dos de arriba lo ve: la espera solo cuenta los trabajos
+     * sin reservar, y en un carril de un solo worker y poco tráfico (la voz,
+     * el comercial, el laboratorio) no llega trabajo nuevo que la delate.
+     * Supervisor suele relanzar el worker y el trabajo vuelve tras su
+     * `retry_after`; si el worker no vuelve, nadie avisaba.
+     *
+     * UN incidente por TRABAJO (código estable `queue_reserved_orphaned`;
+     * huella: el carril y el id del trabajo): la misma avería vista en cada
+     * pasada suma ocurrencias en el mismo incidente, y dos workers muertos son
+     * dos incidentes. Cada carril aporta como mucho
+     * `QueueHealthService::ORPHANS_MAX` por pasada. Solo ids, segundos e
+     * intentos: ni la carga del trabajo ni sus datos.
+     */
+    private function orphanedReservations(): ?Incident
+    {
+        $snapshot = app(QueueHealthService::class)->snapshot();
+
+        $huerfanos = collect($snapshot)->filter(fn (array $lane) => ($lane['looks_orphaned'] ?? false) === true);
+
+        if ($huerfanos->isEmpty()) {
+            return null;
+        }
+
+        $abiertos = [];
+
+        foreach ($huerfanos->sortBy('priority') as $nombre => $lane) {
+            foreach ((array) $lane['orphaned_jobs'] as $trabajo) {
+                $abiertos[] = $this->recorder->record([
+                    'source' => 'queue',
+                    'kind' => 'queue_reserved_orphaned',
+                    'fingerprint_keys' => [(string) $nombre, (string) $trabajo['id']],
+                    'title' => sprintf(
+                        'El trabajo %d de la cola %s lleva %d s reservado sin que su worker dé señales',
+                        $trabajo['id'], $lane['queue'], $trabajo['reserved_seconds'],
+                    ),
+                    // Como el carril sin atender: la decide a quién afecta.
+                    'severity' => ((int) $lane['priority']) <= 1
+                        ? Incident::SEVERITY_CRITICAL
+                        : Incident::SEVERITY_HIGH,
+                    'evidence' => [
+                        'lane' => (string) $nombre,
+                        'queue' => $lane['queue'],
+                        'job_id' => $trabajo['id'],
+                        'attempts' => $trabajo['attempts'],
+                        'reserved_seconds' => $trabajo['reserved_seconds'],
+                        'retry_after_seconds' => $lane['retry_after_seconds'],
+                        'last_processed_seconds_ago' => $lane['last_processed_seconds_ago'],
+                        'check_command' => 'php artisan queue:health',
+                        // Se nombra el arreglo, no se ejecuta: borrar o reencolar a ciegas podría repetir un trabajo de tries=1.
+                        'hint' => 'El worker de ese carril murió con el trabajo reservado: comprobar que está arrancado (supervisorctl status). Al volver, la cola lo retoma tras su retry_after (uno de un solo intento pasa a fallidos).',
+                    ],
+                ]);
+            }
+        }
+
+        return $abiertos[0] ?? null;
     }
 
     /**

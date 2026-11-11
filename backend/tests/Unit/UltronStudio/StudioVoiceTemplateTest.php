@@ -30,18 +30,22 @@ use ReflectionClassConstant;
  *    principio a fin, sin cambiar de idioma), el trato del perfil (tú o
  *    usted, con su aviso), el saludo del perfil justo después del aviso, los
  *    hechos solo de las herramientas, «no volver a llamar» sin insistir y la
- *    defensa explícita que responde en español que no puede.
+ *    defensa explícita que responde en español que no puede;
+ *  - P-M2 (`/3`): la sección FIJA de las negativas exactas, con la frase de
+ *    cada trato, va en el prompt justo antes de SEGURIDAD y entra en la huella
+ *    (la paridad con la guarda posterior, en `VoiceTranscriptRefusalsTest`).
  */
 class StudioVoiceTemplateTest extends TestCase
 {
     /**
-     * La huella de `ultron-voice-template/2` (S8-d). Si cambia un texto, una
+     * La huella de `ultron-voice-template/3` (P-M2). Si cambia un texto, una
      * opción o una comprobación, se sube VERSION y se fija aquí la nueva:
-     * nunca se cambia esta sin cambiar la versión. (La `/1` era
-     * `6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e`;
-     * ningún agente real se compiló con ella, E2-9.)
+     * nunca se cambia esta sin cambiar la versión. (La `/2` era
+     * `b60c71c291146ce96d05eb404898516a930b08768ece07bdefd5b4755f6caa15` y la
+     * `/1`, `6914e2e1ff772ef865b2e9d5fd7f85fc536e0a8c9f2be595009897c465dd456e`;
+     * ningún agente real se compiló con la `/1`, E2-9.)
      */
-    private const HASH_V2 = 'b60c71c291146ce96d05eb404898516a930b08768ece07bdefd5b4755f6caa15';
+    private const HASH_V3 = 'aa8d8f80d8abb43f20d30327c3e0998d127086a1c16ca1d24bb0fc88195aa7b4';
 
     public function test_el_aviso_es_el_texto_de_e1_3_del_contrato(): void
     {
@@ -61,8 +65,8 @@ class StudioVoiceTemplateTest extends TestCase
 
     public function test_la_huella_esta_fijada_para_su_version(): void
     {
-        $this->assertSame('ultron-voice-template/2', T::VERSION);
-        $this->assertSame(self::HASH_V2, T::hash(), 'La plantilla cambió: sube StudioVoiceTemplate::VERSION y fija aquí la huella nueva.');
+        $this->assertSame('ultron-voice-template/3', T::VERSION);
+        $this->assertSame(self::HASH_V3, T::hash(), 'La plantilla cambió: sube StudioVoiceTemplate::VERSION y fija aquí la huella nueva.');
         $this->assertMatchesRegularExpression('/^[0-9a-f]{64}$/', T::hash());
     }
 
@@ -171,6 +175,41 @@ class StudioVoiceTemplateTest extends TestCase
         }
     }
 
+    public function test_las_negativas_exactas_van_en_el_prompt_con_la_frase_de_su_trato(): void
+    {
+        // P-M2: cuatro peticiones, cada una con su frase de tú y de usted (una cláusula, sin cifras ni comillas).
+        $this->assertSame(['discounts', 'prices', 'payments', 'instructions'], array_keys(T::REFUSALS));
+        foreach (T::REFUSALS as $tema => $negativa) {
+            $this->assertSame(['when', 'tu', 'usted'], array_keys($negativa), $tema);
+            foreach ($negativa as $texto) {
+                $this->assertSame($texto, trim($texto), $tema);
+                $this->assertDoesNotMatchRegularExpression('/[0-9«»{}]/u', $texto, $tema);
+            }
+            foreach (['tu', 'usted'] as $trato) {
+                $this->assertDoesNotMatchRegularExpression('/[.,;:!?¡¿…"“”()\[\]\x{2013}\x{2014}\n]/u', $negativa[$trato], "{$tema}: una sola cláusula");
+            }
+            $this->assertNotSame($negativa['tu'], $negativa['usted'], "{$tema}: cada trato tiene su frase");
+        }
+        foreach (array_keys(T::ADDRESS_FORMS) as $trato) {
+            $seccion = T::refusalSection($trato);
+            $prompt = T::render(['addressForm' => $trato] + self::base())['systemPrompt'];
+            $this->assertStringContainsString($seccion, $prompt, 'la sección va tal cual en el prompt');
+            $this->assertStringStartsWith('NEGATIVAS EXACTAS (fijo: se dicen palabra por palabra)', $seccion);
+            foreach (T::REFUSALS as $negativa) {
+                $this->assertStringContainsString('- Si te piden '.$negativa['when'].', responde exactamente: «'.$negativa[$trato].'.»', $seccion);
+            }
+            $this->assertStringContainsString('dices la frase entera, con esas mismas palabras, sin cambiarla por otra parecida y sin convertirla en pregunta', $seccion);
+            // Justo antes de SEGURIDAD, que sigue cerrando el prompt; y sin dinero (R-01).
+            $this->assertStringEndsWith($seccion."\n\n".T::securitySection(), $prompt);
+            $this->assertSame(0, preg_match(T::PRICE_PATTERN, $seccion));
+        }
+        // Un trato es su frase y nada más: el resto de la sección es igual.
+        $sinFrases = static fn (string $trato): string => str_replace(array_column(T::REFUSALS, $trato), '', T::refusalSection($trato));
+        $this->assertSame($sinFrases('tu'), $sinFrases('usted'));
+        $this->expectException(InvalidArgumentException::class);
+        T::refusalSection('vos');
+    }
+
     public function test_la_huella_firma_las_secciones_fijas(): void
     {
         // Las secciones fijas son funciones: la huella las firma tal como salen,
@@ -180,6 +219,8 @@ class StudioVoiceTemplateTest extends TestCase
         $this->assertStringContainsString("'sections' => [", $codigo);
         $this->assertStringContainsString("'security' => self::securitySection()", $codigo);
         $this->assertStringContainsString('self::languageSection($trato)', $codigo);
+        $this->assertStringContainsString("'refusals' => array_map(", $codigo);
+        $this->assertStringContainsString('self::refusalSection($trato)', $codigo);
         $this->assertStringContainsString("'aiNotices' => self::AI_NOTICES", $codigo);
         $this->assertStringContainsString("'addressForms' => self::ADDRESS_FORMS", $codigo);
     }
