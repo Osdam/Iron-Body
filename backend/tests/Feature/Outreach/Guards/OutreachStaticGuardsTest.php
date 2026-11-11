@@ -47,6 +47,10 @@ class OutreachStaticGuardsTest extends TestCase
         'config/outreach.php', 'config/ultron_studio_stream.php',
         // El registro de lo que aprobó Meta (W9 gancho 4, b9-cierre; L9-88): vive en el Studio y corre en producción.
         'app/Services/UltronStudio/StudioTemplateMetaChecks.php', 'app/Console/Commands/UltronStudio/TemplateMetaCheckCommand.php',
+        // L9-96 (plantillas de Meta desde el CRM; plan §6, paso 5): lo del Studio que no hace red directa (la red va por
+        // el cliente neutro `App\Services\Meta\Templates`, zona neutra de UltronEngineIsolationTest) y su modelo.
+        'app/Services/UltronStudio/StudioMetaTemplates.php', 'app/Http/Controllers/Crm/UltronStudio/UltronStudioMetaTemplateController.php',
+        'app/Console/Commands/UltronStudio/MetaTemplatesSyncCommand.php', 'app/Models/UltronStudio/StudioMetaTemplateSubmission.php',
     ];
 
     private const GATE = 'app/Services/Outreach/Run/OutreachSendGate.php';
@@ -112,6 +116,8 @@ class OutreachStaticGuardsTest extends TestCase
         'app/Models/UltronStudio/StudioStrategy.php', 'app/Models/UltronStudio/StudioStrategyVersion.php', 'app/Models/UltronStudio/StudioStrategyPublication.php',
         'app/Models/UltronStudio/StudioStrategyReview.php', 'app/Models/UltronStudio/StudioStrategySimulation.php', 'app/Models/UltronStudio/StudioMessageTemplate.php',
         'app/Models/UltronStudio/StudioPersonBinding.php',
+        // L9-96: los envíos de plantillas a Meta.
+        'app/Models/UltronStudio/StudioMetaTemplateSubmission.php',
     ];
 
     public function test_la_constante_de_envio_es_un_literal_false_declarado_una_vez_y_leido_solo_por_su_puerta(): void

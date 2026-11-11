@@ -36,6 +36,15 @@
 # Cupos: 3 pasadas por minuto como mucho (login, 8/min por IP).
 # Ensayo local: APP_DIR, SMOKE_API, SMOKE_RUN_AS="", SMOKE_PSQL, SMOKE_WORKDIR, SMOKE_PY, SMOKE_H6_PY, SMOKE_BUDGETS,
 # SMOKE_ADMIN_ID, SMOKE_VALLA_STATS y SMOKE_LOGS (ver banco-h9/README.md).
+# OLA M-1 + PLANTILLAS DE META (deploy-m1-backend.sh, informe-devops-ola.md §3): las tablas ultron_studio_* del código de
+# ese commit son 27 (+ ultron_studio_meta_template_submissions). Con SMOKE_EXPECT_M1=1 (lo pone el despliegue de la ola):
+# `ultron:prompt-trace` tiene que dar la llave de SMOKE_PROMPTS_KEY (off por defecto: exactamente «off legacy
+# prompts_off»; canary: la oferta se informa) y smoke-h9.py exige
+# `status.engine.prompts` y las 4 rutas de las plantillas de Meta cerradas y sin red. FASE 2 con el programador vivo:
+# `outreach:dispatch --inline` (con su conciliación) corre cada minuto y abre DOS filas en `outreach_runs` por pasada, y el
+# barrido y el monitor otra cada 10 minutos; durante los ~2 minutos del smoke eso no es del smoke. Solo en la fase 2 y
+# solo en `outreach_runs`: si las filas nuevas son TODAS pasadas en sombra de las que programa el bloque del H9, se
+# informan y no son FALLO; cualquier otra tabla que cambie, o una pasada que no sea en sombra, sigue siendo FALLO.
 set -euo pipefail
 export LC_ALL=C
 
@@ -60,16 +69,21 @@ DISPATCH="${SMOKE_DISPATCH_CMD:-outreach:dispatch --inline}"
 # Tareas outreach:* que el programador tiene que enseñar en la fase 2 (el bloque del H9 de routes/console.php: barrido,
 # los dos normalizadores de W9 y V9, despacho y monitor; L9-81). En la fase 1, 0.
 TAREAS_SOMBRA="${SMOKE_EXPECT_OUTREACH_TASKS:-5}"
-# Tablas ultron_studio_* del código de ESTE commit: las 25 de la fase 1 (18 del H5–H8 y 7 del gobierno del H9) y la de
-# W9 (ultron_studio_template_meta_checks, migración 2026_11_13_200001; L9-80, OPS9-c). outreach_*: 8.
-TABLAS_STUDIO="${SMOKE_EXPECT_STUDIO_TABLES:-26}"
+# Tablas ultron_studio_* del código de ESTE commit: las 25 de la fase 1 (18 del H5–H8 y 7 del gobierno del H9), la de
+# W9 (ultron_studio_template_meta_checks, migración 2026_11_13_200001; L9-80, OPS9-c) y la de los envíos a Meta
+# (ultron_studio_meta_template_submissions, migración 2026_11_15_100001; ola M-1, informe-db.md §2.1). outreach_*: 8.
+TABLAS_STUDIO="${SMOKE_EXPECT_STUDIO_TABLES:-27}"
 TABLAS_OUT=8
+M1="${SMOKE_EXPECT_M1:-}"
+LLAVE_PROMPTS="${SMOKE_PROMPTS_KEY:-off}"
 SMOKE_EMAIL=studio-smoke@ironbodyneiva.cloud
 
 [[ "$ADMIN_ID" =~ ^[0-9]+$ ]] || { echo "SMOKE_ADMIN_ID no es un número"; exit 2; }
 case "$FASE" in 1|2) ;; *) echo "SMOKE_PHASE = 1 | 2"; exit 2 ;; esac
 [[ "$TAREAS_SOMBRA" =~ ^[0-9]+$ ]] || { echo "SMOKE_EXPECT_OUTREACH_TASKS no es un número"; exit 2; }
 [[ "$TABLAS_STUDIO" =~ ^[0-9]+$ ]] || { echo "SMOKE_EXPECT_STUDIO_TABLES no es un número"; exit 2; }
+case "$M1" in ""|1) ;; *) echo "SMOKE_EXPECT_M1 = 1 o vacía"; exit 2 ;; esac
+case "$LLAVE_PROMPTS" in off|canary) ;; *) echo "SMOKE_PROMPTS_KEY = off | canary"; exit 2 ;; esac
 [[ "$SWEEP" =~ ^outreach:[a-z-]+(\ --[a-z-]+)*$ ]] && [[ "$DISPATCH" =~ ^outreach:[a-z-]+(\ --[a-z-]+)*$ ]] || { echo "SMOKE_SWEEP_CMD y SMOKE_DISPATCH_CMD tienen que ser órdenes outreach:<nombre> [--opción …] (sin valores)"; exit 2; }
 if [ -n "$RUN_AS" ] && [ "$(id -u)" != 0 ]; then echo "en el servidor se ejecuta como root"; exit 2; fi
 for b in python3 php openssl curl join; do command -v "$b" > /dev/null || { echo "falta $b"; exit 2; }; done
@@ -145,6 +159,9 @@ Q_COLAS="SELECT CASE WHEN to_regclass('public.jobs') IS NULL THEN 'sin_tabla' EL
 # después de la pasada en sombra. Solo las que existan.
 Q_ENVIOS="SELECT coalesce(string_agg(t || '=' || (xpath('/row/n/text()', query_to_xml(format('SELECT count(*) AS n FROM public.%I', t), false, true, '')))[1]::text, ' ' ORDER BY t), '') FROM unnest(ARRAY['marketing_messages', 'voice_calls', 'voice_call_events']) AS t WHERE to_regclass('public.' || t) IS NOT NULL;"
 Q_LIVE="SELECT CASE WHEN to_regclass('public.outreach_jobs') IS NULL THEN 'sin_tabla' ELSE (SELECT count(*) FROM outreach_jobs WHERE mode = 'live')::text END;"
+# La última pasada de `outreach_runs` antes del smoke (fase 2: las pasadas programadas de la sombra, ver la cabecera).
+Q_RUNS_MAX="SELECT CASE WHEN to_regclass('public.outreach_runs') IS NULL THEN '-' ELSE (SELECT coalesce(max(id), 0) FROM outreach_runs)::text END;"
+KINDS_PROGRAMADAS="'dispatch', 'reconcile', 'sweep', 'ingest', 'monitor'"
 
 umask 077
 TMPD=$(mktemp -d "$WORK/.smoke-h9.XXXXXX")
@@ -232,6 +249,23 @@ else
 fi
 ORDENES=$(ordenes_outreach)
 echo "INFO    órdenes outreach:* desplegadas: ${ORDENES:-ninguna}"
+# Ola M-1: la traza de los prompts (solo lectura; sin ids ni textos): «llave oferta motivo».
+if [ "$M1" = 1 ]; then
+  TRAZA=$(artisan ultron:prompt-trace --json --last=1 2>/dev/null | python3 -I -c '
+import json, sys
+try:
+    t = json.load(sys.stdin)
+    c = t.get("current") or {}
+    r = c.get("reason")
+    print(t.get("key"), c.get("mode"), r if r is not None else "versión-" + str(c.get("version"))[:8])
+except Exception:
+    print("ILEGIBLE")' 2>/dev/null) || TRAZA="FALLO"
+  if [ "$LLAVE_PROMPTS" = off ]; then
+    if [ "$TRAZA" = "off legacy prompts_off" ]; then echo "OK      ultron:prompt-trace con la llave de prompts apagada: $TRAZA"; else echo "FALLO   ultron:prompt-trace: [$TRAZA] (esperado «off legacy prompts_off»)"; FINAL=1; fi
+  else
+    case "$TRAZA" in "canary "*) echo "OK      ultron:prompt-trace con la llave de prompts en canary: $TRAZA" ;; *) echo "FALLO   ultron:prompt-trace: [$TRAZA] (esperada la llave canary)"; FINAL=1 ;; esac
+  fi
+fi
 
 # 2. ¿Tiene el motor canario? El id se queda en esta variable: nunca se imprime.
 if CANARIO=$(tinker_line '^([0-9]+|none)$' '$c = config("marketing.ultron.canary_conversation_id"); echo $c === null ? "none" : (int) $c, PHP_EOL;'); then
@@ -254,6 +288,7 @@ N_STUDIO=$(tr ' ' '\n' <<< "$ANTES" | grep -c '^ultron_studio_' || true)
 N_OUT=$(tr ' ' '\n' <<< "$ANTES" | grep -c '^outreach_' || true)
 [ "$N_STUDIO $N_OUT" = "$TABLAS_STUDIO $TABLAS_OUT" ] && echo "OK      $TABLAS_STUDIO tablas ultron_studio_* y $TABLAS_OUT outreach_* en la base" || { echo "FALLO   tablas en la base: $N_STUDIO ultron_studio_* y $N_OUT outreach_* (esperado $TABLAS_STUDIO y $TABLAS_OUT: ¿están desplegadas la fase 1 del H9 y la migración de W9 de este commit? El smoke tiene que ser el del commit desplegado). No se ejecuta el smoke."; FINAL=1; exit 1; }
 APP_LOG_ANTES=$(lineas laravel); OUT_LOG_ANTES=$(lineas outreach)
+RUNS_MAX_ANTES=$(sql "$Q_RUNS_MAX" 2> /dev/null || echo '-')
 VALLA_ANTES=$(valla)
 # Vigía informativo en el servidor: sockets de PHP hacia las IP de Meta, ElevenLabs y Twilio mientras corre el smoke.
 if [ -z "$VALLA" ] && command -v ss > /dev/null && command -v getent > /dev/null; then
@@ -275,8 +310,8 @@ unset HASH
 set +e
 SMOKE_API="$API" SMOKE_EMAIL="$SMOKE_EMAIL" SMOKE_PW="$SMOKE_PW" SMOKE_CANARY_ID="$CANARIO" SMOKE_SECRET_SALT="$SAL" \
   SMOKE_SECRET_DIGESTS="${HUELLAS:-}" SMOKE_TOKEN_FILE="$HDR" SMOKE_H6_PY="$PY6" SMOKE_BUDGETS="$BUD" \
-  SMOKE_BUDGETS_OUT="${SMOKE_BUDGETS_OUT:-}" SMOKE_PHASE="$FASE" PYTHONIOENCODING=utf-8 PYTHONDONTWRITEBYTECODE=1 \
-  python3 "$PY" superadmin
+  SMOKE_BUDGETS_OUT="${SMOKE_BUDGETS_OUT:-}" SMOKE_PHASE="$FASE" SMOKE_EXPECT_M1="$M1" SMOKE_PROMPTS_KEY="$LLAVE_PROMPTS" \
+  PYTHONIOENCODING=utf-8 PYTHONDONTWRITEBYTECODE=1 python3 "$PY" superadmin
 RC1=$?
 set -e
 
@@ -291,8 +326,20 @@ if DESPUES=$(sql "$Q_TABLAS") && DESPUES_CUENTA=$(sql "$Q_CUENTA") && INC_DESPUE
     echo "OK      recuento exacto de las $((TABLAS_STUDIO + TABLAS_OUT)) tablas ($TABLAS_STUDIO del Studio y $TABLAS_OUT de outreach) igual antes y después: ninguna escritura, ningún freno, ninguna inscripción"
   else
     CAMBIOS=$(join -t= -1 1 -2 1 <(tr ' ' '\n' <<< "$ANTES" | sort) <(tr ' ' '\n' <<< "$DESPUES" | sort) | awk -F= '$2 != $3 {printf "%s=%s→%s  ", $1, $2, $3}')
-    echo "FALLO   una tabla del Studio o de outreach cambió durante el smoke (el smoke no escribe; ¿alguien usó el Studio a la vez, o el programador en sombra?): $CAMBIOS"
-    RC2=1
+    # Fase 2 (ver la cabecera): si SOLO cambió outreach_runs, creció exactamente en las pasadas nuevas y todas son en
+    # sombra y de las que programa el bloque del H9, son del programador, no del smoke.
+    OTRAS=$(join -t= -1 1 -2 1 <(tr ' ' '\n' <<< "$ANTES" | sort) <(tr ' ' '\n' <<< "$DESPUES" | sort) | awk -F= '$2 != $3 && $1 != "outreach_runs" {n++} END {print n + 0}')
+    CRECE=$(join -t= -1 1 -2 1 <(tr ' ' '\n' <<< "$ANTES" | sort) <(tr ' ' '\n' <<< "$DESPUES" | sort) | awk -F= '$1 == "outreach_runs" {print $3 - $2}')
+    PROGRAMADAS=""
+    if [ "$FASE" = 2 ] && [ "$OTRAS" = 0 ] && [[ "$RUNS_MAX_ANTES" =~ ^[0-9]+$ ]] && [[ "${CRECE:-x}" =~ ^[1-9][0-9]*$ ]]; then
+      PROGRAMADAS=$(sql "SELECT count(*)||' '||count(*) FILTER (WHERE NOT (mode = 'shadow' AND kind IN ($KINDS_PROGRAMADAS))) FROM outreach_runs WHERE id > $RUNS_MAX_ANTES;" 2> /dev/null || echo "")
+    fi
+    if [ -n "$PROGRAMADAS" ] && [ "$PROGRAMADAS" = "$CRECE 0" ]; then
+      echo "OK      recuento exacto de las $((TABLAS_STUDIO + TABLAS_OUT)) tablas igual antes y después salvo outreach_runs +$CRECE: TODAS pasadas en sombra del programador (dispatch y su conciliación cada minuto; barrido y monitor cada 10), ninguna del smoke"
+    else
+      echo "FALLO   una tabla del Studio o de outreach cambió durante el smoke (el smoke no escribe; ¿alguien usó el Studio a la vez, o el programador en sombra?): $CAMBIOS${PROGRAMADAS:+ · pasadas nuevas (total · no programadas o no en sombra): $PROGRAMADAS}"
+      RC2=1
+    fi
   fi
   if [ "$INC_ANTES" = "$INC_DESPUES" ]; then echo "OK      incidentes de IRON GUARD (ultron_studio y outreach; filas · ocurrencias): $INC_DESPUES, los mismos"; else echo "FALLO   incidentes: $INC_ANTES → $INC_DESPUES durante el smoke"; RC2=1; fi
   if [ "$COLAS_DESPUES" = "$COLAS_ANTES" ]; then echo "OK      colas (outreach* / whatsapp+voice+marketing): $COLAS_DESPUES, las mismas"; else echo "FALLO   colas: $COLAS_ANTES → $COLAS_DESPUES durante el smoke"; RC2=1; fi

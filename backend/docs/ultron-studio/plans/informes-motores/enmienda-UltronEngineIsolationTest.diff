@@ -1,0 +1,35 @@
+--- a/tests/Feature/UltronStudio/UltronEngineIsolationTest.php
++++ b/tests/Feature/UltronStudio/UltronEngineIsolationTest.php
+@@ -294,8 +294,12 @@
+ 
+     private const ENGINE_READER_REFERENCES = ["T_CONSTANT_ENCAPSED_STRING 'ultron_studio_publications'"];
+ 
+-    /** Fuera del Studio, los únicos que nombran al lector: él mismo y el commit, que sella (§A9). */
++    /**
++     * Fuera del Studio, los únicos que nombran al lector: él mismo, el commit, que
++     * sella (§A9), y la oferta de prompts de `decide` (Enmienda M-1, M1-6).
++     */
+     private const ENGINE_READER_NAMERS = [
++        'app/Services/Marketing/Ultron/Prompts/UltronPromptOffer.php',
+         'app/Services/Marketing/Ultron/UltronCommitService.php',
+         self::ENGINE_READER,
+     ];
+@@ -550,7 +554,17 @@
+                 $nombran[] = $relativa;
+             }
+         }
+-        $this->assertSame(self::ENGINE_READER_NAMERS, $nombran, 'Fuera del Studio, solo el commit invoca al lector.');
++        $this->assertSame(self::ENGINE_READER_NAMERS, $nombran, 'Fuera del Studio, solo el commit y la oferta de prompts invocan al lector.');
++    }
++
++    /**
++     * Enmienda M-1 (plan de motores §B.5): la llave de los prompts nace apagada;
++     * solo `canary` la enciende (`all` incluido, todo lo demás es `off`). Se
++     * evalúa config/marketing.php SIN la variable en el entorno.
++     */
++    public function test_la_llave_de_los_prompts_vale_off_por_defecto(): void
++    {
++        $this->assertSame('off', $this->configWithout('config/marketing.php', 'MARKETING_ULTRON_STUDIO_PROMPTS')['ultron']['studio_prompts']);
+     }
+ 
+     /**

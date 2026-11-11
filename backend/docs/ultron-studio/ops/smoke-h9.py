@@ -53,6 +53,15 @@ presupuestos dado y mal formado: no se hace ninguna petición).
 FASES: SMOKE_PHASE = 1 (todo apagado: lo de arriba) · 2 (sombra: `GET status` con modo shadow, la constante cerrada, el
 asistido y los canales apagados; el gobierno puede estar encendido y el smoke lo lee de `GET strategies/catalog`). En
 las dos el smoke sigue SIN FILAS POSITIVAS.
+
+OLA M-1 + PLANTILLAS DE META (SMOKE_EXPECT_M1=1, lo pone deploy-m1-backend.sh; vacía = se comprueba si está y, si no,
+OMITIDO): `GET status` del Studio trae `engine.prompts` con la llave de SMOKE_PROMPTS_KEY (off: `current` legacy con
+`prompts_off`, la base n8n-29de5119, el compilador 1, la huella Legacy y como mucho 20 turnos sin ids ni textos; solo
+ese subárbol entra en el barrido de fugas); las 4 rutas de las plantillas de Meta sin sesión → 401; con sesión y las
+estrategias apagadas → 409 strategies_disabled; con las estrategias encendidas y el módulo apagado: `meta/status` → 200
+con `enabled`, `submitEnabled` y `syncEnabled` en false, sin sonda ni envíos, y las otras 3 → 409
+meta_templates_disabled. La SONDA solo se toca si `meta/status` acaba de decir que el módulo está apagado (encendido,
+hablaría con Meta: queda OMITIDA); enviar va con un cuerpo vacío y comprobar con un uuid inventado: nunca un 2xx.
 Cupos: 1 login (8/min por IP); lecturas con sesión ≤ 90 en cualquier minuto (cupo 120); escrituras con sesión ≤ 25 por
 minuto (cupo 30); el cubo de la evidencia (las simulaciones, promover y la evidencia del canario comparten
 `ultron-studio-evidence`, 10/min por persona) ≤ 8 por minuto. Si hace falta, el smoke espera. Dura unos 2 minutos.
@@ -84,7 +93,7 @@ ESPERA = {
     '1': {'enabled': False, 'mode': 'off', 'strategies': False, 'stream': False, 'listas_vacias': True},
     '2': {'enabled': True, 'mode': 'shadow', 'strategies': None, 'stream': None, 'listas_vacias': False},
 }
-VIVO = {'strategies': False, 'publishing': None, 'exec': False, 'exec_enabled': False, 'stream_route': False}   # lo que la API dice de verdad
+VIVO = {'strategies': False, 'publishing': None, 'exec': False, 'exec_enabled': False, 'stream_route': False, 'meta_route': None}   # lo que la API dice de verdad
 # Cupos con sesión por minuto (por debajo de los del servidor) y cubos: lectura (ultron-studio-read 120/min), escritura
 # (ultron-studio-write 30/min) y la evidencia (ultron-studio-evidence 10/min por persona: la comparten las dos
 # simulaciones, promover y GET canary-evidence).
@@ -95,6 +104,15 @@ EVIDENCE_PATHS = {f'{S}/strategies/versions/{FAKE}/canary-evidence', f'{S}/strat
 # Claves que una respuesta del H9 no lleva nunca (P9-9, E3, SSE9): la persona solo como `subjectRef` (huella).
 H9_FORBIDDEN_KEYS = {'subject_key', 'subjectKey', 'member_id', 'memberId', 'document', 'documentNumber', 'document_number',
                      'email', 'full_name', 'fullName', 'body', 'message_body', 'messageBody'}
+# La ola M-1 + plantillas de Meta (ver la cabecera). Constantes de informe-bm.md §3 y dtos-studio-prompts.md §2.
+M1 = os.environ.get('SMOKE_EXPECT_M1', '').strip() == '1'
+PROMPTS_KEY = os.environ.get('SMOKE_PROMPTS_KEY', 'off').strip() or 'off'
+PROMPTS_BASE = 'n8n-29de5119'
+LEGACY_BUNDLE = '3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902'
+PROMPT_STATES = {'applied', 'legacy', 'engine_fallback', 'mismatch', 'legacy_drift', 'not_reported', 'unverified', 'stamp_error', None}
+TURN_KEYS = {'at', 'declared', 'offered', 'observed', 'state'}
+META_ROUTES = [('GET', 'strategies/templates/meta/status', None), ('POST', 'strategies/templates/meta/probe', None),
+               ('POST', f'strategies/templates/{FAKE}/meta/submit', {}), ('POST', f'strategies/templates/{FAKE}/meta/refresh', None)]
 
 
 def load_h6():
@@ -587,6 +605,109 @@ def check_stream_without_ticket(sm):
     sm.check('GET ultron-studio/stream sin tique → 401 (o 409 si la bandera va antes del tique)', st in (401, 409), f'HTTP {st} {code_of(b) or ""}'.strip())
 
 
+# ── La ola M-1 + plantillas de Meta (deploy-m1-backend.sh; ver la cabecera) ─────────────────────────────────────
+
+def check_m1_prompts(sm, token):
+    """`GET status` → `data.engine.prompts` (dtos-studio-prompts.md §2). Solo ese subárbol entra en el barrido de fugas:
+    el resto de `status` lo barren los smokes del H5 y del H7, con sus propias reglas."""
+    st, b, _ = sm.call('GET', f'{S}/status', token=token, label=f'{S}/status', keep=False)
+    d = data_of(b)
+    eng = d.get('engine') if st == 200 and isinstance(d, dict) else None
+    if not isinstance(eng, dict):
+        sm.check('GET ultron-studio/status → 200 con data.engine', False, f'HTTP {st} {code_of(b) or ""}'.strip())
+        return
+    pr = eng.get('prompts')
+    if not isinstance(pr, dict):
+        if M1:
+            sm.check('status: engine.prompts presente (Enmienda M-1; si su lectura falla la clave no viene: mirar el log)', False, 'ausente')
+        else:
+            sm.skip('status: engine.prompts (Enmienda M-1)', 'no viene: código anterior a la ola')
+        return
+    sm.bodies.append((f'GET {S}/status · engine.prompts', json.dumps(pr, ensure_ascii=False), pr))
+    cur = pr.get('current') if isinstance(pr.get('current'), dict) else {}
+    sm.check(f'status: engine.prompts.key = {PROMPTS_KEY}', pr.get('key') == PROMPTS_KEY, f'key={json.dumps(pr.get("key"))}')
+    sm.check(f'status: engine.prompts con la base {PROMPTS_BASE}, el compilador 1 y la huella Legacy {LEGACY_BUNDLE[:8]}…',
+             pr.get('base') == PROMPTS_BASE and pr.get('compiler') == 1 and pr.get('legacyBundleHash') == LEGACY_BUNDLE,
+             f'base={json.dumps(pr.get("base"))} compiler={json.dumps(pr.get("compiler"))} legacy={str(pr.get("legacyBundleHash"))[:8]}')
+    if PROMPTS_KEY == 'off':
+        sm.check('status: engine.prompts.current con la llave apagada = legacy por prompts_off, sin versión ni huella (decide no ofrece nada)',
+                 cur == {'mode': 'legacy', 'version': None, 'bundleHash': None, 'reason': 'prompts_off'}, json.dumps(cur)[:160])
+    else:
+        sm.info('status: engine.prompts.current (llave en canary)', json.dumps({k: cur.get(k) for k in ('mode', 'reason')}))
+    turnos = pr.get('lastTurns')
+    malos = []
+    if not isinstance(turnos, list) or len(turnos) > 20:
+        malos.append(f'lastTurns={type(turnos).__name__}')
+    else:
+        for i, t in enumerate(turnos):
+            if not (isinstance(t, dict) and set(t) == TURN_KEYS and re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}Z', str(t.get('at', '')))
+                    and t.get('state') in PROMPT_STATES):
+                malos.append(f'turno {i}')
+    sm.check('status: engine.prompts.lastTurns ≤ 20 y cada turno solo {at, declared, offered, observed, state} (sin ids ni textos)', not malos,
+             ', '.join(malos)[:200] if malos else f'{len(turnos)} turnos')
+
+
+def check_m1_meta_with_session(sm, token):
+    """Las 4 rutas de las plantillas de Meta con sesión: cerradas y sin red (dtos-para-frontend.md §0, «Cerraduras»)."""
+    st, b, _ = sm.call('GET', f'{S}/strategies/templates/meta/status', token=token, label=f'{S}/strategies/templates/meta/status')
+    if st == 404:
+        VIVO['meta_route'] = False
+        if M1:
+            sm.check('GET strategies/templates/meta/status existe (las 4 rutas de las plantillas de Meta: 121 → 125)', False, 'HTTP 404')
+        else:
+            sm.skip('las 4 rutas de las plantillas de Meta', 'HTTP 404: código anterior a la ola')
+        return
+    VIVO['meta_route'] = True
+    cerrado = False   # True solo si consta que NADA de estas rutas puede hablar con Meta
+    if not VIVO['strategies']:
+        cerrado = sm.check('GET strategies/templates/meta/status con las estrategias apagadas → 409 strategies_disabled (la puerta va antes del módulo)',
+                           st == 409 and code_of(b) == 'strategies_disabled', f'HTTP {st} {code_of(b) or ""}'.strip())
+    else:
+        d = data_of(b)
+        if sm.check('GET strategies/templates/meta/status → 200 (responde también con el módulo apagado)', st == 200 and isinstance(d, dict),
+                    f'HTTP {st} {code_of(b) or ""}'.strip()):
+            flags = {k: d.get(k) for k in ('enabled', 'submitEnabled', 'syncEnabled')}
+            cerrado = sm.check('meta/status: el módulo apagado (enabled, submitEnabled y syncEnabled en false)',
+                               all(v is False for v in flags.values()), json.dumps(flags))
+            subs = d.get('submissions')
+            sm.check('meta/status: ninguna sonda en 24 h y ningún envío a Meta', d.get('lastProbe') is None and isinstance(subs, dict) and all(v == 0 for v in subs.values()),
+                     f'lastProbe={"null" if d.get("lastProbe") is None else "sí"} submissions={json.dumps(subs)[:120]}')
+            sm.info('meta/status (informativo, sin secretos)', json.dumps({k: d.get(k) for k in ('driver', 'graphVersion', 'configured', 'configurationProblem', 'credentialSource', 'metaEnabled')})[:200])
+    bad = []
+    for method, rel, body in META_ROUTES[1:]:
+        if rel.endswith('/probe') and not cerrado:
+            sm.skip('POST strategies/templates/meta/probe', 'no consta que el módulo esté apagado: la sonda hablaría con Meta y el smoke no la toca')
+            continue
+        st, b, _ = sm.call(method, f'{S}/{rel}', body, token, label=f'{S}/{rel}')
+        if not VIVO['strategies']:
+            ok = st == 409 and code_of(b) == 'strategies_disabled'
+        elif cerrado:
+            ok = st == 409 and code_of(b) == 'meta_templates_disabled'
+        else:
+            ok = st in (403, 404, 409, 422)   # módulo encendido: cuerpo vacío o uuid inventado; nunca se aplica nada
+        if 200 <= st < 300:
+            ok = False
+        if not ok:
+            bad.append(f'{method} {rel.replace(FAKE, "<inventado>")}={st} {code_of(b) or ""}'.strip())
+    esperado = 'strategies_disabled' if not VIVO['strategies'] else ('meta_templates_disabled' if cerrado else '403/404/409/422')
+    sm.check(f'{"la sonda, enviar y comprobar" if cerrado else "enviar y comprobar"} de las plantillas de Meta con sesión → {esperado} (nada sale hacia Meta, ninguna fila)',
+             not bad, ' · '.join(bad)[:300])
+
+
+def check_m1_meta_without_session(sm):
+    if VIVO.get('meta_route') is False:
+        return
+    bad = []
+    for method, rel, body in META_ROUTES:
+        st, _, _ = sm.call(method, f'{S}/{rel}', body, label=f'{S}/{rel}')
+        if st != 401:
+            bad.append(f'{method} {rel.replace(FAKE, "<inventado>")}={st}')
+    if bad and all(x.endswith('=404') for x in bad) and not M1:
+        sm.skip('las 4 rutas de las plantillas de Meta sin sesión', 'HTTP 404: código anterior a la ola')
+        return
+    sm.check(f'las {len(META_ROUTES)} rutas de las plantillas de Meta sin sesión → 401', not bad, ', '.join(bad)[:240])
+
+
 # ── Presupuestos (GET con sesión) ──────────────────────────────────────────────────────────────────────────────
 
 def measure(sm, token, rel, label, samples):
@@ -728,6 +849,8 @@ def main(argv):
         check_exec_with_session(sm, token)
         check_strategies_with_session(sm, token)
         check_stream_with_session(sm, token)
+        check_m1_prompts(sm, token)
+        check_m1_meta_with_session(sm, token)
         if budgets is not None:
             check_budgets(sm, token, budgets, origen, huella)
         else:
@@ -735,6 +858,7 @@ def main(argv):
     check_strategies_without_session(sm)
     check_exec_without_session(sm)
     check_stream_without_ticket(sm)
+    check_m1_meta_without_session(sm)
     sm.scan()
     c = sm.counts
     print(f"RESUMEN ({part}): {c['OK']} OK · {c['FALLO']} FALLO · {c['OMITIDO']} OMITIDO", flush=True)

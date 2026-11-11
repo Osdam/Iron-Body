@@ -1,0 +1,39 @@
+--- a/backend/app/Services/UltronStudio/StudioCatalog.php	2026-11-11 07:03:23
++++ b/backend/app/Services/UltronStudio/StudioCatalog.php	2026-11-11 07:03:23
+@@ -34,7 +34,7 @@
+  */
+ final class StudioCatalog
+ {
+-    public const VERSION = '2026-10-19.1';
++    public const VERSION = '2026-11-12.1';
+ 
+     /** Nombre de la línea base del código y del lote de reglas que se importa de él. */
+     public const BASELINE_LABEL = 'LEGACY_BASELINE_V1';
+@@ -683,14 +683,14 @@
+                 'strictFacts' => self::binding('fixed', 'declared', true, 'Fijo en código: el motor solo afirma hechos verificados y el precio sale del catálogo (R-01). No se puede desactivar.', 'Código (no configurable)', ['declaredValue' => true]),
+             ],
+             'persona' => [
+-                'tone' => self::binding('proposal', 'none', false, 'Sin mando en el motor: el tono sale de los prompts de n8n y de los ítems de tono y brand_copy aprobados en la base de conocimiento.', 'Prompts de n8n y base de conocimiento'),
+-                'emojis' => self::binding('proposal', 'none', false, 'Sin interruptor en el motor: la guardia de estilo solo anota los mensajes con más de 2 emojis, sin impedirlos.', 'Prompts de n8n'),
+-                'maxChars' => self::binding('proposal', 'none', false, 'Sin límite en el motor: la guardia de estilo solo anota los mensajes de más de 900 caracteres, sin cortarlos.', 'Prompts de n8n'),
++                'tone' => self::binding('proposal', 'none', false, 'Con la llave de prompts del servidor encendida, el tono de la versión publicada entra en los prompts de Composer y Critic (y de sus reintentos), solo en la conversación canaria. Con ella apagada, el tono sale de los prompts de siempre y de los ítems de tono y brand_copy aprobados en la base de conocimiento.', 'Versión publicada (con la llave de prompts) y base de conocimiento'),
++                'emojis' => self::binding('proposal', 'none', false, 'Con la llave de prompts del servidor encendida, «sin emojis» entra en los prompts de Composer y Critic, solo en la conversación canaria. La guardia de estilo del servidor solo anota los mensajes con más de 2 emojis, sin impedirlos.', 'Versión publicada (con la llave de prompts)'),
++                'maxChars' => self::binding('proposal', 'none', false, 'Con la llave de prompts del servidor encendida, el tope publicado entra en los prompts de Composer y Critic, solo en la conversación canaria: orienta al modelo, no corta. La guardia de estilo solo anota los mensajes de más de 900 caracteres.', 'Versión publicada (con la llave de prompts)'),
+             ],
+             'intent' => [
+                 // `entorno` en el borrador significa «lo que tenga el motor»: no se marca «≠ motor».
+                 'driver' => self::binding('env_flag', 'live', true, 'Qué cerebro clasifica cada mensaje. El motor lo elige por entorno (hermes → openai → reglas) y el inspector enseña el valor efectivo que lee el servidor.', 'Entorno (despliegue)', ['engineOption' => 'entorno']),
+-                'fallback' => self::binding('proposal', 'none', false, 'Sin mando en el CRM: qué hacer con una intención ambigua lo decide el prompt del Strategist en n8n.', 'Prompt del Strategist (n8n)'),
++                'fallback' => self::binding('proposal', 'none', false, 'Sin efecto en WhatsApp, también con la llave de prompts: derivar a un asesor solo lo autoriza el servidor cuando la persona lo pide con palabras (R-07), y la versión publicada no cambia el prompt del Strategist en este punto.', 'Código (no configurable desde el Studio)'),
+             ],
+             'context' => [
+                 'windowTurns' => self::binding('fixed', 'declared', true, 'Fijo en código: el motor pasa siempre los últimos 10 mensajes, con las cifras y los enlaces redactados.', $codigo, ['declaredValue' => 10]),
+@@ -699,7 +699,7 @@
+                 'useLeadProfile' => self::binding('fixed', 'declared', true, 'Fijo en código: el motor usa siempre la ficha del prospecto (origen, temperatura, ciclo de vida y acuerdos previos).', $codigo, ['declaredValue' => true]),
+             ],
+             'strategy' => [
+-                'goal' => self::binding('proposal', 'none', false, 'Sin mando en el CRM: hacia dónde orienta cada conversación lo decide el prompt del Strategist en n8n.', 'Prompt del Strategist (n8n)'),
++                'goal' => self::binding('proposal', 'none', false, 'Con la llave de prompts del servidor encendida, el objetivo de la versión publicada entra en el prompt del Strategist, solo en la conversación canaria. Con ella apagada, manda el prompt de siempre (venta consultiva con día de cortesía).', 'Versión publicada (con la llave de prompts)'),
+                 // Los nombres de los planes no se comparan con las etiquetas del borrador.
+                 'offerPriority' => self::binding('engine_data', 'live', false, 'Lo que se cotiza sale de los planes vendibles: primero el plan insignia y luego por su orden. El Studio enseña solo sus nombres y no los compara con esta lista.', 'Módulo de Planes del CRM'),
+                 'discountsAllowed' => self::binding('fixed', 'declared', true, 'Fijo en código: ningún descuento pasa el commit (R-02), «gratis», «2x1» y «precio especial» incluidos.', $codigo, ['declaredValue' => false]),

@@ -291,11 +291,16 @@ class UltronStudioPermissionsTest extends TestCase
         $this->assertSame(self::STUDIO_KEYS, array_slice(array_column($filas, 'key'), 0, 8));
         // + las 4 del Hito 6, las 3 del Hito 8 (D8-22: voice_manage, voice_publish y voice_lab_run)
         // y las 4 del Hito 9 (strategies_edit, strategies_publish, strategies_rollback y person_bindings_manage; L9-59), al final.
-        $this->assertCount(19, $filas);
+        // Plantillas de Meta desde el CRM (L9-96, D9-13 crece; PLANTILLAS_META_PLAN §5.10): + meta_templates_submit, la última.
+        $this->assertCount(20, $filas);
+        $this->assertSame('ultron.meta_templates_submit', $filas[19]['key']);
         $this->assertSame('ULTRON Studio', $filas[0]['domain_label']);
         $this->assertSame('account_tree', $filas[0]['domain_icon']);
         $porLlave = array_column($filas, null, 'key');
         $this->assertSame('Ver ULTRON Studio', $porLlave['ultron.view']['label']);
+        // Enmienda M-1: la ayuda de ver dice lo que hace el motor con la llave de prompts apagada y encendida.
+        $this->assertStringEndsWith('Verlo no cambia lo que ULTRON dice ni hace. Con la llave de prompts del servidor apagada, el motor solo anota en cada turno la versión publicada; con ella encendida, la versión publicada en canario gobierna el tono, los emojis, la longitud y el objetivo de los mensajes de la conversación canaria.', (string) $porLlave['ultron.view']['help']);
+        $this->assertStringNotContainsString('ver o cambiar cosas aquí no cambia lo que dice ni hace', (string) $porLlave['ultron.view']['help']);
         $this->assertSame('Aprobar o rechazar versiones de otra persona', $porLlave['ultron.approve']['label']);
         $this->assertStringContainsString('Nadie aprueba lo que creó', (string) $porLlave['ultron.approve']['help']);
         $this->assertStringContainsString('emitir el veredicto del laboratorio sobre ejecuciones de versiones ajenas', (string) $porLlave['ultron.approve']['help']);
@@ -303,8 +308,14 @@ class UltronStudioPermissionsTest extends TestCase
         $this->assertSame('Lanzar ejecuciones del laboratorio (consume presupuesto)', $porLlave['ultron.lab_run']['label']);
         $this->assertStringContainsString('No llega por defecto al Administrador', (string) $porLlave['ultron.lab_run']['help']);
         // Hito 5 (contrato H5 §A11): el texto obligatorio, en la ayuda de publicar.
-        $this->assertStringStartsWith('Publicar registra esta versión como la configuración oficial de ULTRON y el motor la anota en cada turno. En este hito no cambia lo que ULTRON dice ni hace.', (string) $porLlave['ultron.publish']['help']);
-        $this->assertStringContainsString('En este hito no cambia lo que ULTRON dice ni hace.', (string) $porLlave['ultron.rollback']['help']);
+        // Enmienda M-1 (plan de motores §D): con la llave de prompts encendida,
+        // publicar y revertir SÍ cambian lo que ULTRON dice en la canaria; la
+        // ayuda ya no puede afirmar lo contrario sin condición.
+        $this->assertStringStartsWith('Publicar registra esta versión como la configuración oficial de ULTRON y el motor la anota en cada turno. Con la llave de prompts del servidor encendida, además cambia lo que ULTRON dice en la conversación canaria (tono, emojis, longitud y objetivo comercial); con ella apagada, no cambia lo que dice ni hace.', (string) $porLlave['ultron.publish']['help']);
+        $this->assertStringContainsString('Con la llave de prompts del servidor encendida, la conversación canaria vuelve a los prompts anteriores (o a los de siempre); con ella apagada, no cambia lo que ULTRON dice ni hace.', (string) $porLlave['ultron.rollback']['help']);
+        foreach (['ultron.publish', 'ultron.rollback'] as $llave) {
+            $this->assertStringNotContainsString('En este hito no cambia lo que ULTRON dice ni hace.', (string) $porLlave[$llave]['help']);
+        }
         $this->assertStringContainsString('No depende de las llaves que permiten publicar', (string) $porLlave['ultron.rollback']['help']);
         foreach (['ultron.publish', 'ultron.rollback'] as $llave) {
             $this->assertStringContainsString('No llega por defecto al Administrador', (string) $porLlave[$llave]['help']);

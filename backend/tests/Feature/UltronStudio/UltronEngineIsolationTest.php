@@ -81,6 +81,12 @@ use Tests\TestCase;
  * (L9-36, L9-38, L9-43), no aquí. La frontera de escritura y de red del H9
  * está en `Tests\Feature\UltronStudio\OutreachIsolationTest` y en
  * `tests/Feature/Outreach/Guards/`.
+ *
+ * L9-96 (plantillas de Meta desde el CRM, plan §5.12 y §6 paso 5): el
+ * programador nombra una SEGUNDA bandera, la de la sincronización con Meta, en
+ * un bloque propio, con su propia prueba (una vez, condición entera de un `if`
+ * sin `else`, y exactamente su orden). El cliente de plantillas de Meta
+ * (`App\Services\Meta\Templates`) es una zona neutra.
  */
 class UltronEngineIsolationTest extends TestCase
 {
@@ -108,6 +114,8 @@ class UltronEngineIsolationTest extends TestCase
         'database/migrations/2026_11_01_100002_add_ultron_studio_integration_guards.php',
         // Hito 7 (contrato H7, DB7): el endurecimiento de las tablas de solo inserción.
         'database/migrations/2026_11_02_100001_add_ultron_studio_hardening.php',
+        // Enmienda M-1 del H5 (plans/STUDIO_MOTORES_PLAN.md §B.4): `uspub_engine_contract_chk` admite /1 y /2.
+        'database/migrations/2026_11_16_100001_allow_engine_config_v2_in_ultron_studio_publications.php',
     ];
 
     /**
@@ -133,6 +141,9 @@ class UltronEngineIsolationTest extends TestCase
         'database/migrations/2026_11_12_100002_create_outreach_tables.php',
         // W9: la correspondencia de las plantillas del Studio con Meta (`ultron_studio_template_meta_checks`).
         'database/migrations/2026_11_13_200001_create_ultron_studio_template_meta_checks_table.php',
+        // L9-96 (plantillas de Meta desde el CRM): los envíos a Meta y la ampliación de las comprobaciones.
+        'database/migrations/2026_11_15_100001_create_ultron_studio_meta_template_submissions_table.php',
+        'database/migrations/2026_11_15_100002_add_meta_api_source_to_ultron_studio_template_meta_checks.php',
     ];
 
     /**
@@ -268,7 +279,25 @@ class UltronEngineIsolationTest extends TestCase
 
     private const SCHEDULER_FLAG = "'ultron_studio.monitor.enabled'";
 
-    private const SCHEDULER_REFERENCES = ['T_CONSTANT_ENCAPSED_STRING '.self::SCHEDULER_FLAG];
+    /** La condición exacta del `if` del monitor, token a token y sin espacios: la bandera sola, sin `||` ni nada más (decisión del lead, 11-11). */
+    private const SCHEDULER_CONDITION = "if((bool)config('ultron_studio.monitor.enabled',false))";
+
+    /**
+     * L9-96 (plantillas de Meta desde el CRM; plan §5.12, enmienda nombrada de
+     * la guarda): la bandera de la sincronización por sondeo, en un bloque
+     * PROPIO. Como la del monitor, una vez y como cadena; lo que condiciona lo
+     * mira {@see test_la_bandera_de_las_plantillas_de_meta_solo_programa_su_sincronizacion()}.
+     */
+    private const SCHEDULER_META_FLAG = "'ultron_studio.meta_templates.sync_enabled'";
+
+    /** En el orden en que aparecen en el fichero: el monitor y, después, las plantillas de Meta. */
+    private const SCHEDULER_REFERENCES = ['T_CONSTANT_ENCAPSED_STRING '.self::SCHEDULER_FLAG, 'T_CONSTANT_ENCAPSED_STRING '.self::SCHEDULER_META_FLAG];
+
+    /** La condición exacta del `if` de las plantillas de Meta, token a token y sin espacios: la bandera sola, sin `||` ni nada más. */
+    private const SCHEDULER_META_CONDITION = "if((bool)config('ultron_studio.meta_templates.sync_enabled',false))";
+
+    /** Lo ÚNICO que la bandera de las plantillas de Meta programa, token a token y sin espacios: su orden, sin argumentos. */
+    private const SCHEDULER_META_STATEMENT = "Schedule::command('ultron-studio:meta-templates-sync')->everyFiveMinutes()->withoutOverlapping(10)->onOneServer()";
 
     /**
      * Lo único que la bandera puede programar: una orden del Studio con su
@@ -277,8 +306,11 @@ class UltronEngineIsolationTest extends TestCase
      */
     private const SCHEDULER_STATEMENT = "/^Schedule::command\\('ultron-studio:[a-z0-9-]+'\\)(->[A-Za-z]+\\(('[^']*'|\\d+)?(,('[^']*'|\\d+))*\\))*$/";
 
-    /** Hito 6: las clases neutras del hito. Ni el motor las nombra ni ellas nombran el Studio. */
-    private const NEUTRAL_ZONES = ['app/Services/Voice', 'app/Services/Twilio', 'app/Support/Privacy/PhoneFingerprint.php'];
+    /**
+     * Hito 6: las clases neutras del hito. Ni el motor las nombra ni ellas nombran el Studio.
+     * L9-96 (plan de plantillas §6, paso 5): el cliente neutro de plantillas de Meta (`App\Services\Meta\Templates`).
+     */
+    private const NEUTRAL_ZONES = ['app/Services/Voice', 'app/Services/Twilio', 'app/Support/Privacy/PhoneFingerprint.php', 'app/Services/Meta/Templates'];
 
     /**
      * El lector del motor (contrato H5 §A4). No está en la lista blanca: lo único
@@ -289,8 +321,12 @@ class UltronEngineIsolationTest extends TestCase
 
     private const ENGINE_READER_REFERENCES = ["T_CONSTANT_ENCAPSED_STRING 'ultron_studio_publications'"];
 
-    /** Fuera del Studio, los únicos que nombran al lector: él mismo y el commit, que sella (§A9). */
+    /**
+     * Fuera del Studio, los únicos que nombran al lector: él mismo, el commit, que
+     * sella (§A9), y la oferta de prompts de `decide` (Enmienda M-1, M1-6).
+     */
     private const ENGINE_READER_NAMERS = [
+        'app/Services/Marketing/Ultron/Prompts/UltronPromptOffer.php',
         'app/Services/Marketing/Ultron/UltronCommitService.php',
         self::ENGINE_READER,
     ];
@@ -366,12 +402,12 @@ class UltronEngineIsolationTest extends TestCase
             $fuera[$relativa] = $hallazgos;
         }
 
-        $this->assertSame([], $fuera, "Código fuera del Studio que lo nombra (el motor solo puede leer ultron_studio_publications, desde UltronPublishedConfig; el programador, solo la bandera del monitor, una vez; la automatización comercial, solo por sus tres lectores de Facts, el puente y OutreachTables):\n".json_encode($fuera, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        $this->assertSame([], $fuera, "Código fuera del Studio que lo nombra (el motor solo puede leer ultron_studio_publications, desde UltronPublishedConfig; el programador, solo la bandera del monitor y la de las plantillas de Meta, una vez cada una; la automatización comercial, solo por sus tres lectores de Facts, el puente y OutreachTables):\n".json_encode($fuera, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
         // La prueba ve lo que tiene que ver: si el rastreo dejara de encontrar
         // las referencias legítimas, no estaría comprobando nada.
         $this->assertGreaterThanOrEqual(17, $dentro);
         $this->assertTrue($lectorVisto, 'El rastreo no vio la única lectura del motor sobre el Studio.');
-        $this->assertTrue($programadorVisto, 'El rastreo no vio la bandera del monitor en el programador.');
+        $this->assertTrue($programadorVisto, 'El rastreo no vio las banderas del monitor y de las plantillas de Meta en el programador.');
         $this->assertSame(count(self::FACTS_READERS), $lectoresDeFacts, 'El rastreo no vio a los tres lectores de Facts (si alguno dejó de leer el Studio, sobra en FACTS_READERS).');
     }
 
@@ -381,26 +417,76 @@ class UltronEngineIsolationTest extends TestCase
      * programa son solo órdenes del Studio. Un trabajo del motor condicionado
      * al Studio —dentro del bloque, en un `else`, con otra clave o con la misma
      * bandera repetida (esto último ya lo caza el rastreo global)— la hace caer.
+     * Desde L9-96 (11-11), como la de Meta: la bandera es la condición ENTERA
+     * del `if` (un `|| true` o una negación programarían con ella apagada).
      */
     public function test_la_bandera_del_monitor_solo_programa_ordenes_del_studio(): void
+    {
+        ['condicion' => $condicion, 'sentencias' => $sentencias] = $this->schedulerFlagBlock(self::SCHEDULER_FLAG, 'del monitor');
+
+        // La bandera es la condición ENTERA: un `|| true` o una negación lo programarían con ella apagada.
+        $this->assertSame(self::SCHEDULER_CONDITION, $condicion, 'La condición del if del monitor es la bandera y nada más.');
+        $ajenas = array_values(array_filter($sentencias, static fn (string $s): bool => preg_match(self::SCHEDULER_STATEMENT, $s) !== 1));
+        $this->assertSame([], $ajenas, 'La bandera del monitor programa algo que no es una orden del Studio.');
+        // El monitor y la instantánea de las integraciones: si el rastreo no
+        // los viera, no estaría comprobando nada.
+        $this->assertGreaterThanOrEqual(2, count($sentencias));
+    }
+
+    /**
+     * L9-96 (plan de plantillas §5.12; enmienda nombrada de la guarda del
+     * programador): la bandera de la sincronización con Meta aparece UNA vez,
+     * es la condición ENTERA de un `if` con su bloque y sin `else`, y ese
+     * bloque programa EXACTAMENTE una sentencia: la orden de la sincronización
+     * con su frecuencia y sus cerrojos, sin argumentos. Una segunda orden, un
+     * trabajo del motor, un `else`, un argumento o una condición con algo más
+     * que la bandera (que la programaría con ella apagada) la hacen caer.
+     */
+    public function test_la_bandera_de_las_plantillas_de_meta_solo_programa_su_sincronizacion(): void
+    {
+        $this->assertFileExists(base_path(self::SCHEDULER));
+        $veces = 0;
+        foreach ($this->significantTokens(base_path(self::SCHEDULER)) as $t) {
+            if (is_array($t) && $t[0] === T_CONSTANT_ENCAPSED_STRING && $t[1] === self::SCHEDULER_META_FLAG) {
+                $veces++;
+            }
+        }
+        $this->assertSame(1, $veces, 'La bandera de las plantillas de Meta aparece una sola vez en el programador.');
+
+        ['condicion' => $condicion, 'sentencias' => $sentencias] = $this->schedulerFlagBlock(self::SCHEDULER_META_FLAG, 'de las plantillas de Meta');
+
+        $this->assertSame(self::SCHEDULER_META_CONDITION, $condicion, 'La condición del if de las plantillas de Meta es la bandera y nada más.');
+        $this->assertSame([self::SCHEDULER_META_STATEMENT], $sentencias, 'La bandera de las plantillas de Meta programa algo más (o algo distinto) que su sincronización.');
+    }
+
+    /**
+     * El bloque que condiciona una bandera del programador (H7, OPS7; L9-96):
+     * la bandera es la condición de UN `if` con su bloque entre llaves y sin
+     * `else`. Devuelve la condición (desde el `if` hasta la llave, sin
+     * espacios) y las sentencias del bloque (sin espacios ni comentarios).
+     *
+     * @return array{condicion: string, sentencias: list<string>}
+     */
+    private function schedulerFlagBlock(string $flag, string $cual): array
     {
         $this->assertFileExists(base_path(self::SCHEDULER));
         $tokens = $this->significantTokens(base_path(self::SCHEDULER));
 
         $bandera = null;
         foreach ($tokens as $i => $t) {
-            if (is_array($t) && $t[0] === T_CONSTANT_ENCAPSED_STRING && $t[1] === self::SCHEDULER_FLAG) {
+            if (is_array($t) && $t[0] === T_CONSTANT_ENCAPSED_STRING && $t[1] === $flag) {
                 $bandera = $i;
                 break;
             }
         }
-        $this->assertNotNull($bandera, 'El programador no nombra la bandera del monitor.');
+        $this->assertNotNull($bandera, "El programador no nombra la bandera {$cual}.");
 
         // Es la condición de un `if`: hacia atrás, el `if` antes que el final de otra sentencia.
         for ($i = $bandera - 1; $i >= 0 && ! (is_array($tokens[$i]) && $tokens[$i][0] === T_IF); $i--) {
-            $this->assertNotContains($tokens[$i], [';', '{', '}'], 'La bandera del monitor no es la condición de un if.');
+            $this->assertNotContains($tokens[$i], [';', '{', '}'], "La bandera {$cual} no es la condición de un if.");
         }
-        $this->assertGreaterThanOrEqual(0, $i, 'La bandera del monitor no es la condición de un if.');
+        $this->assertGreaterThanOrEqual(0, $i, "La bandera {$cual} no es la condición de un if.");
+        $si = $i;
 
         // Su bloque, entre llaves.
         for ($abre = $bandera + 1; isset($tokens[$abre]) && $tokens[$abre] !== '{'; $abre++) {
@@ -417,7 +503,12 @@ class UltronEngineIsolationTest extends TestCase
         }
         $this->assertNotNull($cierra, 'El bloque de la bandera no se cierra.');
         $siguiente = $tokens[$cierra + 1] ?? null;
-        $this->assertFalse(is_array($siguiente) && in_array($siguiente[0], [T_ELSE, T_ELSEIF], true), 'La bandera del monitor lleva un else: con ella apagada se programaría otra cosa.');
+        $this->assertFalse(is_array($siguiente) && in_array($siguiente[0], [T_ELSE, T_ELSEIF], true), "La bandera {$cual} lleva un else: con ella apagada se programaría otra cosa.");
+
+        $condicion = '';
+        for ($j = $si; $j < $abre; $j++) {
+            $condicion .= is_array($tokens[$j]) ? $tokens[$j][1] : $tokens[$j];
+        }
 
         // Lo que programa, sentencia a sentencia (sin espacios ni comentarios).
         $sentencias = [''];
@@ -429,13 +520,8 @@ class UltronEngineIsolationTest extends TestCase
             }
             $sentencias[array_key_last($sentencias)] .= is_array($tokens[$j]) ? $tokens[$j][1] : $tokens[$j];
         }
-        $sentencias = array_values(array_filter($sentencias, static fn (string $s): bool => $s !== ''));
 
-        $ajenas = array_values(array_filter($sentencias, static fn (string $s): bool => preg_match(self::SCHEDULER_STATEMENT, $s) !== 1));
-        $this->assertSame([], $ajenas, 'La bandera del monitor programa algo que no es una orden del Studio.');
-        // El monitor y la instantánea de las integraciones: si el rastreo no
-        // los viera, no estaría comprobando nada.
-        $this->assertGreaterThanOrEqual(2, count($sentencias));
+        return ['condicion' => $condicion, 'sentencias' => array_values(array_filter($sentencias, static fn (string $s): bool => $s !== ''))];
     }
 
     public function test_las_zonas_del_motor_estan_limpias_y_la_lista_blanca_no_esta_vieja(): void
@@ -545,7 +631,17 @@ class UltronEngineIsolationTest extends TestCase
                 $nombran[] = $relativa;
             }
         }
-        $this->assertSame(self::ENGINE_READER_NAMERS, $nombran, 'Fuera del Studio, solo el commit invoca al lector.');
+        $this->assertSame(self::ENGINE_READER_NAMERS, $nombran, 'Fuera del Studio, solo el commit y la oferta de prompts invocan al lector.');
+    }
+
+    /**
+     * Enmienda M-1 (plan de motores §B.5): la llave de los prompts nace apagada;
+     * solo `canary` la enciende (`all` incluido, todo lo demás es `off`). Se
+     * evalúa config/marketing.php SIN la variable en el entorno.
+     */
+    public function test_la_llave_de_los_prompts_vale_off_por_defecto(): void
+    {
+        $this->assertSame('off', $this->configWithout('config/marketing.php', 'MARKETING_ULTRON_STUDIO_PROMPTS')['ultron']['studio_prompts']);
     }
 
     /**
