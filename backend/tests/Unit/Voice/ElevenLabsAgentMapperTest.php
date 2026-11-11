@@ -188,6 +188,11 @@ class ElevenLabsAgentMapperTest extends TestCase
         yield 'una transferencia ciega' => [static fn (array $a, array $h): array => [M::with($a, 'conversation_config.agent.prompt.built_in_tools.transfer_to_number.params.transfers.1.transfer_type', 'blind'), $h], 'agent.builtInTools.transfer_to_number.transfers'];
         yield 'una base de conocimiento añadida' => [static fn (array $a, array $h): array => [M::with($a, 'conversation_config.agent.prompt.knowledge_base', [['id' => 'kb1']]), $h], 'agent.knowledgeBaseCount'];
         yield 'un flujo añadido' => [static fn (array $a, array $h): array => [M::with($a, 'workflow.nodes', ['n1' => ['type' => 'start']]), $h], 'workflowNodeCount'];
+        yield 'un nodo añadido al flujo por defecto' => [static fn (array $a, array $h): array => [M::with($a, 'workflow.nodes.n1', ['type' => 'override_agent', 'edge_order' => []]), $h], 'workflowNodeCount'];
+        yield 'el nodo de inicio con una arista' => [static fn (array $a, array $h): array => [M::with($a, 'workflow.nodes.start_node.edge_order', ['e1']), $h], 'workflowNodeCount'];
+        yield 'aristas en el flujo por defecto' => [static fn (array $a, array $h): array => [M::with($a, 'workflow.edges', ['e1' => ['source' => 'start_node', 'target' => 'n1']]), $h], 'workflowNodeCount'];
+        yield 'un subgrafo en el flujo por defecto' => [static fn (array $a, array $h): array => [M::with($a, 'workflow.subgraphs', ['s1' => ['name' => 'otro']]), $h], 'workflowNodeCount'];
+        yield 'el nodo de inicio con otro tipo' => [static fn (array $a, array $h): array => [M::with($a, 'workflow.nodes.start_node.type', 'override_agent'), $h], 'workflowNodeCount'];
         yield 'otro idioma añadido' => [static fn (array $a, array $h): array => [M::with($a, 'conversation_config.language_presets', ['en' => ['overrides' => []]]), $h], 'languagePresetCount'];
         yield 'una herramienta de más' => [static fn (array $a, array $h): array => [$a, $h + ['cobrar' => ['type' => 'webhook', 'name' => 'cobrar']]], 'tools.cobrar'];
         yield 'una herramienta de menos' => [static function (array $a, array $h): array {
@@ -262,7 +267,8 @@ class ElevenLabsAgentMapperTest extends TestCase
         $agente['platform_settings']['overrides']['conversation_config_override']['conversation'] = ['text_only' => false];
         $agente['platform_settings']['overrides']['conversation_config_override']['tts']['stability'] = false;
         $agente['platform_settings']['widget'] = ['variant' => 'full'];
-        $agente['workflow'] = ['edges' => [], 'nodes' => []];
+        // El flujo POR DEFECTO que ElevenLabs devuelve en todo agente (API real, 11-11-2026): un nodo de inicio y nada más.
+        $agente['workflow'] = ['edges' => [], 'nodes' => ['start_node' => ['type' => 'start', 'position' => ['x' => 0.0, 'y' => 0.0], 'edge_order' => [], 'parent_subgraph_id' => null]], 'subgraphs' => [], 'prevent_subagent_loops' => false];
         $agente['phone_numbers'] = [];
 
         foreach ($herramientas as $nombre => $h) {

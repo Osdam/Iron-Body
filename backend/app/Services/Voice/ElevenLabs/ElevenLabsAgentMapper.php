@@ -295,7 +295,7 @@ final class ElevenLabsAgentMapper
                 'customLlm' => ($prompt['custom_llm'] ?? null) !== null,
             ],
             'languagePresetCount' => count(self::arr($cc['language_presets'] ?? null)),
-            'workflowNodeCount' => count(self::arr(self::at($agent, 'workflow.nodes'))),
+            'workflowNodeCount' => self::workflowNodeCount($agent),
             'tts' => [
                 'voiceId' => self::scalar(self::at($cc, 'tts.voice_id')),
                 'modelId' => self::scalar(self::at($cc, 'tts.model_id')),
@@ -502,6 +502,30 @@ final class ElevenLabsAgentMapper
     private static function arr(mixed $valor): array
     {
         return is_array($valor) ? $valor : [];
+    }
+
+    /**
+     * Los nodos de flujo que cuentan como deriva. ElevenLabs devuelve en TODO agente un flujo por defecto que no hace
+     * nada: un único nodo `start_node` de tipo `start`, sin aristas ni subgrafos (observado con la API real el
+     * 11-11-2026 en los agentes del workspace y en el primer agente de laboratorio; el banco lo modelaba vacío y por
+     * eso el primer despliegue real salía `agent_drift`). Ese flujo, y solo ese, cuenta 0. Cualquier otro cuenta todos
+     * sus nodos, y como mínimo 1 si trae aristas o subgrafos: un flujo añadido siempre se ve.
+     *
+     * @param  array<string, mixed>  $agent
+     */
+    private static function workflowNodeCount(array $agent): int
+    {
+        $flujo = self::arr($agent['workflow'] ?? null);
+        $nodos = self::arr($flujo['nodes'] ?? null);
+        $conAristas = self::arr($flujo['edges'] ?? null) !== [] || self::arr($flujo['subgraphs'] ?? null) !== [];
+        if (! $conAristas && array_keys($nodos) === ['start_node']) {
+            $inicio = self::arr($nodos['start_node']);
+            if (($inicio['type'] ?? null) === 'start' && self::arr($inicio['edge_order'] ?? null) === []) {
+                return 0;
+            }
+        }
+
+        return max(count($nodos), $conAristas ? 1 : 0);
     }
 
     /** Un escalar tal cual (texto, booleano, entero) o null; un decimal, normalizado; lo demás, null. */
