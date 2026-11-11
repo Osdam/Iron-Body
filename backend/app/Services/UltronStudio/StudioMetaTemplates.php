@@ -7,7 +7,6 @@ use App\Models\Admin;
 use App\Models\UltronStudio\StudioAuditEvent;
 use App\Models\UltronStudio\StudioMessageTemplate;
 use App\Models\UltronStudio\StudioMetaTemplateSubmission as Submission;
-use App\Services\Marketing\Attribution\LeadSourceClassifier;
 use App\Services\Meta\MetaAuthService;
 use App\Services\Meta\Templates\MetaTemplate;
 use App\Services\Meta\Templates\TemplateApiErrors;
@@ -1368,6 +1367,18 @@ final class StudioMetaTemplates
         return is_array($c) ? $c : [];
     }
 
+    /**
+     * La referencia legible de un id de Meta (`***NNNN`): la misma forma que la de las cuentas y las campañas del H6
+     * (`LeadSourceClassifier::maskId`), escrita aquí para que este servicio NO nombre una clase del motor (guarda del
+     * H5, `UltronStudioEngineReadOnlyTest`: solo los adaptadores de su lista pueden hacerlo).
+     */
+    public static function maskedRef(?string $id): ?string
+    {
+        $id = trim((string) $id);
+
+        return $id === '' ? null : '***'.substr($id, -4);
+    }
+
     /** @return array<string, mixed> */
     public static function submissionDto(Submission $s): array
     {
@@ -1383,7 +1394,7 @@ final class StudioMetaTemplates
             'category' => (string) $s->category,
             // El id de Meta no sale del servidor (§I2 del contrato del H6): solo su referencia legible `***NNNN`.
             // En el Administrador de WhatsApp la plantilla se busca por su nombre y su idioma.
-            'metaTemplateRef' => LeadSourceClassifier::maskId($s->meta_template_id === null ? null : (string) $s->meta_template_id),
+            'metaTemplateRef' => self::maskedRef($s->meta_template_id === null ? null : (string) $s->meta_template_id),
             'metaStatus' => $s->meta_status,
             'metaCategory' => $s->meta_category,
             'correctCategory' => $s->meta_correct_category,

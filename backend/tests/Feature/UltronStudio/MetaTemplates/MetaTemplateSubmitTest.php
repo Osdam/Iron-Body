@@ -4,6 +4,7 @@ namespace Tests\Feature\UltronStudio\MetaTemplates;
 
 use App\Models\Admin;
 use App\Models\UltronStudio\StudioMetaTemplateSubmission as Submission;
+use App\Services\Marketing\Attribution\LeadSourceClassifier;
 use App\Services\Meta\MetaAuthService;
 use App\Services\Meta\Templates\FakeWhatsappTemplateClient;
 use App\Services\Meta\Templates\TemplateApiResult;
@@ -85,6 +86,10 @@ class MetaTemplateSubmitTest extends TestCase
         $idMeta = (string) $this->submissionOf($t)->meta_template_id;
         $this->assertMatchesRegularExpression('/^[0-9]{10,}$/', $idMeta);
         $this->assertSame('***'.substr($idMeta, -4), $r->json('data.meta.submission.metaTemplateRef'));
+        // La misma forma que la referencia de las cuentas y las campañas del H6 (el servicio no nombra esa clase del motor).
+        foreach ([$idMeta, ' 1688186126583244 ', '12', '', null] as $caso) {
+            $this->assertSame(LeadSourceClassifier::maskId($caso), StudioMetaTemplates::maskedRef($caso));
+        }
         $this->assertArrayNotHasKey('metaTemplateId', $r->json('data.meta.submission'));
         $this->assertStringNotContainsString($idMeta, (string) $r->getContent());
         $this->assertStringNotContainsString($idMeta, (string) $this->meta('GET', "strategies/templates/{$t->uuid}", $this->ana)->assertOk()->getContent());
