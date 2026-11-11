@@ -840,6 +840,74 @@ caso('TW → L · un Laravel que lo acepta todo: las 8 variantes «rejected» da
   reglas.delete(TW.LARAVEL_AVISOS);
 });
 
+// ══ OPS8-e · la cuenta maestra del OTP: la sonda de la rotación del token y el aviso de gasto del OTP ═══════════
+const MAE = `/2010-04-01/Accounts/${PZ.TW_MASTER_SID}.json`;
+const CURL = { 'User-Agent': 'curl/8.7.1' };
+caso('TW · OPS8-e · la sonda de la rotación (curl, usuario de la cuenta maestra) con el token principal → 200 y la ficha, sin violación', async () => {
+  const { r, d } = await nuevas(statsTw, () => tw('GET', MAE, { cred: CRED.maestra, headers: CURL }));
+  assert.equal(r.status, 200);
+  assert.equal(r.json.sid, PZ.TW_MASTER_SID);
+  assert.equal(r.json.status, 'active');
+  assert.deepEqual(d, {});
+});
+caso('TW · OPS8-e · la sonda con un token que no es de la cuenta → 401 sin violación', async () => {
+  const { r, d } = await nuevas(statsTw, () => tw('GET', MAE, { cred: basic(PZ.TW_MASTER_SID, hex(16)), headers: CURL }));
+  assert.equal(r.status, 401);
+  assert.deepEqual(d, {});
+});
+caso('TW · OPS8-e · la ficha maestra pedida sin curl (como Laravel) o con la key de Laravel → account_sid_mismatch, como antes', async () => {
+  const a = await nuevas(statsTw, () => tw('GET', MAE, { cred: CRED.maestra }));
+  assert.equal(a.r.status, 404);
+  assert.deepEqual(a.d, { account_sid_mismatch: 1 });
+  const b = await nuevas(statsTw, () => tw('GET', MAE, { cred: CRED.laravel, headers: CURL }));
+  assert.equal(b.r.status, 404);
+  assert.deepEqual(b.d, { account_sid_mismatch: 1 });
+});
+caso('TW → L · OPS8-e · destino=otp: el aviso del OTP va a /api/webhooks/twilio/usage-trigger, de la cuenta maestra, firmado con su PRINCIPAL sobre la URL real', async () => {
+  reglas.set(TW.LARAVEL_AVISOS_OTP, () => ({ status: 200, body: { ok: true } }));
+  const n = recibido.length;
+  const r = await ctl(BASE_TW, '/__emit/usage-trigger?variant=valid&destino=otp');
+  assert.equal(r.destino, 'otp');
+  assert.equal(r.deliveries[0].status, 200);
+  const e = recibido[n];
+  const pares = [...new URLSearchParams(e.raw).entries()];
+  assert.equal(e.url, TW.LARAVEL_AVISOS_OTP);
+  assert.equal(new URLSearchParams(e.raw).get('AccountSid'), PZ.TW_MASTER_SID);
+  assert.equal(e.headers['x-twilio-signature'], C.firmaTwilio(PZ.TW_MASTER_TOKEN, `${BASE_L}${e.url}`, pares));
+  assert.equal((await pedir(BASE_TW, 'GET', '/__emit/usage-trigger?variant=wrong_token&destino=otp')).status, 400);
+  reglas.delete(TW.LARAVEL_AVISOS_OTP);
+});
+caso('TW · OPS8-e · /__maestro: el secundario vale junto al principal; promocionado, el viejo da 401, el aviso del OTP se firma con el nuevo y la maestra contra la subcuenta sigue siendo violación', async () => {
+  const nuevo = hex(16);
+  assert.equal((await pedir(BASE_TW, 'GET', '/__maestro?secundario=xyz')).status, 400);
+  assert.equal((await pedir(BASE_TW, 'GET', `/__maestro?secundario=${PZ.TW_MASTER_TOKEN}`)).status, 400);
+  assert.equal((await pedir(BASE_TW, 'GET', '/__maestro?promocionar=1')).status, 409);
+  const sec = await ctl(BASE_TW, `/__maestro?secundario=${nuevo}`);
+  assert.equal(sec.secundario, true);
+  assert.equal((await tw('GET', MAE, { cred: basic(PZ.TW_MASTER_SID, nuevo), headers: CURL })).status, 200);
+  assert.equal((await tw('GET', MAE, { cred: CRED.maestra, headers: CURL })).status, 200);
+  const pr = await ctl(BASE_TW, '/__maestro?promocionar=1');
+  assert.deepEqual([pr.secundario, pr.promociones, pr.principalOriginal], [false, 1, false]);
+  assert.ok(!JSON.stringify([sec, pr]).includes(nuevo) && !JSON.stringify([sec, pr]).includes(PZ.TW_MASTER_TOKEN), 'el control no devuelve tokens');
+  const { r, d } = await nuevas(statsTw, () => tw('GET', MAE, { cred: CRED.maestra, headers: CURL }));
+  assert.equal(r.status, 401);
+  assert.deepEqual(d, {});
+  assert.equal((await tw('GET', MAE, { cred: basic(PZ.TW_MASTER_SID, nuevo), headers: CURL })).json.auth_token, nuevo);
+  reglas.set(TW.LARAVEL_AVISOS_OTP, () => ({ status: 200, body: { ok: true } }));
+  const n = recibido.length;
+  await ctl(BASE_TW, '/__emit/usage-trigger?variant=valid&destino=otp');
+  const e = recibido[n];
+  assert.equal(e.headers['x-twilio-signature'], C.firmaTwilio(nuevo, `${BASE_L}${e.url}`, [...new URLSearchParams(e.raw).entries()]));
+  reglas.delete(TW.LARAVEL_AVISOS_OTP);
+  const m = await nuevas(statsTw, () => tw('GET', `${ACC}.json`, { cred: basic(PZ.TW_MASTER_SID, nuevo) }));
+  assert.deepEqual(m.d, { master_credential_used: 1 });
+  // Vuelta al principal original (lo que siguen usando las demás pruebas), por la misma vía.
+  await ctl(BASE_TW, `/__maestro?secundario=${PZ.TW_MASTER_TOKEN}`);
+  const vuelta = await ctl(BASE_TW, '/__maestro?promocionar=1');
+  assert.deepEqual([vuelta.promociones, vuelta.principalOriginal], [2, true]);
+  assert.equal((await tw('GET', MAE, { cred: basic(PZ.TW_MASTER_SID, nuevo), headers: CURL })).status, 401);
+});
+
 // ══ I. Oráculo PHP del H6 para la firma de ElevenLabs (las 21 variantes) ═══════════════════════
 caso('EL · las 21 variantes del emisor, verificadas por la clase REAL del H6 (ElevenLabsWebhookSignature::verify)', async () => {
   const auto = path.join(BACKEND, 'vendor', 'autoload.php');

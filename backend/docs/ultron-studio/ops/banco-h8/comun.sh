@@ -43,6 +43,9 @@ d = json.load(sys.stdin)
 for p in sys.argv[1].split("."):
     d = d.get(p) if isinstance(d, dict) else None
 print(json.dumps(d) if isinstance(d, (dict, list)) else ("" if d is None else d))' "$1"; }
+# OPS8-e: las tareas de voz que programa el código DEL BANCO con VOICE_MONITOR_ENABLED: 4, o 5 si trae voice:webhook-health
+# (B-T5 de h8-hardening). Se lee del código (artisan list), como tareas_voz de h8-voice-scope.sh: nunca un número fijo.
+tareas_voz_banco() { local n; n=$(cd "$1/api/backend" && php artisan list --raw 2> /dev/null | grep -c '^voice:webhook-health[[:space:]]' || true); [ "${n:-0}" -ge 1 ] && echo 5 || echo 4; }
 # Resultado de un caso de ensayo: «OK|FALLO nombre [detalle]»; FALLOS cuenta los fallos.
 FALLOS=0; CASOS=0
 caso() { CASOS=$((CASOS + 1)); if [ "$2" = 0 ]; then echo "OK      $1${3:+  [$3]}"; else echo "FALLO   $1${3:+  [$3]}"; FALLOS=$((FALLOS + 1)); fi; }

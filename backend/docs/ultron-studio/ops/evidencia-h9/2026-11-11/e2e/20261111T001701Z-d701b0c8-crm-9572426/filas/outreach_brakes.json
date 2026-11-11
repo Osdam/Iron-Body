@@ -1,0 +1,23 @@
+[
+    {
+        "id": 1,
+        "uuid": "eeb8b572-2d72-489e-8b30-7f28a1270403",
+        "client_request_id": "c9369510-528c-4b21-9f9d-43a51917d29a",
+        "scope": "global",
+        "scope_ref": null,
+        "reason": "manual",
+        "note": "Parada de prueba del E2E del H9: verificar que se detiene todo y que la suelta otra persona.",
+        "opened_by_type": "person",
+        "opened_by_admin_id": 1,
+        "opened_by_name": "Ana Autora (E2E H9)",
+        "opened_by_person_id": 1,
+        "opened_at": "2026-11-11 00:28:35",
+        "released_at": "2026-11-11 00:28:45",
+        "released_by_admin_id": 2,
+        "released_by_name": "Beto Revisor (E2E H9)",
+        "released_by_person_id": 2,
+        "release_note": "Suelta tras la verificación del E2E: la parada se comportó como se esperaba.",
+        "created_at": "2026-11-11 00:28:35",
+        "updated_at": "2026-11-11 00:28:45"
+    }
+]

@@ -1,0 +1,9 @@
+reloj del motor: 2026-11-11T15:15:02.000Z
+── Automatización comercial · pasada ──
+Ingesta     : 0 evento(s) · cursor → 0 · resultados: 0
+Barrido     : 2 estrategia(s)
+  36d0a81d · candidatos 2 · evaluados 0 · inscritos 0 · fuera 0
+  67bc3236 · candidatos 4 · evaluados 0 · inscritos 0 · fuera 0
+Planificado : tocaban 0 · trabajos 0 · aplazadas 0 · esperan 0 · negadas 0 · convertidas 0 · derivadas 0 · salidas 0 · canceladas 0
+
+h9-e2e reloj: desfase de 53172 s (solo Carbon en este proceso)

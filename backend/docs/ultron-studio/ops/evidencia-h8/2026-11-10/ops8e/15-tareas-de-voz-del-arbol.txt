@@ -1,0 +1,5 @@
+# OPS8-e · B-T5 de h8-hardening: las tareas de voz que programa el código del ÁRBOL (feat/ultron-studio-h9, con el trabajo sin commit de h8-hardening) y el del banco (a608450). Solo lectura: schedule:list con la configuración fresca (APP_CONFIG_CACHE a un fichero que no existe), CACHE_STORE=array y VOICE_MONITOR_ENABLED por el entorno del proceso. 2026-11-11 02:07 UTC
+árbol · VOICE_MONITOR_ENABLED=false · total 27 · de voz 0 · 
+árbol · VOICE_MONITOR_ENABLED=true · total 32 · de voz 5 · ultron-studio:integrations-snapshot --verify-voice | voice:prune-rate-limits | voice:reconcile | voice:reconcile --numbers | voice:webhook-health
+árbol · artisan list: voice:webhook-health registrada: 1 → tareas_voz() de h8-voice-scope.sh = 5
+banco (a608450) · tareas_voz_banco = 4

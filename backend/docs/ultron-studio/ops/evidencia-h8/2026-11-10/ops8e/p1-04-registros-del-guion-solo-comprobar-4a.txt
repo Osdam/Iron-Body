@@ -1,0 +1,180 @@
+
+════ h8-fase4a-comprobar-20261110-233312.log
+== deploy-h8-backend-fase1.sh · 2026-11-10T23:33:12Z · ESPERADO=45a514c · PREVIO=fe29126 · BK=/Users/alejodev/.cache/ironbody-banco-h8-ops8e/bk-4a-sin-fase2-20261110-233300 · --solo-comprobar · MODO 4a (voice(calls-open)) · --sin-worker · registro /Users/alejodev/.cache/ironbody-banco-h8-ops8e/root/h8-fase4a-comprobar-20261110-233312.log
+== AUTORIZACIÓN ESCRITA (referencia que cita el commit): «OPS8E-AUT-4A-20261110»
+0. comprobaciones previas (solo lectura; si algo falla, no se toca nada):
+   modo 4a · base a608450 (el commit del respaldo; contiene PREVIO=fe29126) · producción en a608450
+   4a: origin/main = 45a514c «voice(calls-open): banco OPS8-e: abre las llamadas salientes (ensayo; » · un solo padre · cita la autorización · diff: SOLO la constante en backend/app/Services/Voice/VoiceCallPolicy.php (1 línea, false → true) · 0 commit(s) de solo documentación antes de él
+   sin migraciones entre a608450 y origin/main (la 4a no trae ninguna)
+   constante: cerrada en a608450 (producción) → abierta en 45a514c (una declaración anclada en cada lado)
+   respaldo /Users/alejodev/.cache/ironbody-banco-h8-ops8e/bk-4a-sin-fase2-20261110-233300: 238 tablas con datos · 700/600 de root · huella del volcado comprobada
+ABORTA: la fase 2 no está completa (presencia en el entorno; no se imprime ningún valor): faltan ELEVENLABS_INITIATION_SECRET ELEVENLABS_TOOL_SECRET_REF ELEVENLABS_INITIATION_SECRET_REF ELEVENLABS_POST_CALL_WEBHOOK_REF VOICE_WEBHOOK_BASE_URL TWILIO_VOICE_ACCOUNT_SID TWILIO_VOICE_API_KEY_SID TWILIO_VOICE_API_KEY_SECRET TWILIO_VOICE_FROM ELEVENLABS_AGENT_PHONE_NUMBER_ID. La 4a abre la constante con las piezas de ElevenLabs y de Twilio ya puestas, registradas y reconocidas (runbook «Fase 4a-primero», pasos 1–3)
+
+════ h8-fase4a-comprobar-20261110-235527.log
+== deploy-h8-backend-fase1.sh · 2026-11-10T23:55:27Z · ESPERADO=f2c9e2d · PREVIO=fe29126 · BK=/Users/alejodev/.cache/ironbody-banco-h8-ops8e/bk-4a-20261110-235525 · --solo-comprobar · MODO 4a (voice(calls-open)) · --sin-worker · registro /Users/alejodev/.cache/ironbody-banco-h8-ops8e/root/h8-fase4a-comprobar-20261110-235527.log
+== AUTORIZACIÓN ESCRITA (referencia que cita el commit): «OTRA-AUTORIZACION-99»
+0. comprobaciones previas (solo lectura; si algo falla, no se toca nada):
+   modo 4a · base a608450 (el commit del respaldo; contiene PREVIO=fe29126) · producción en a608450
+ABORTA: el mensaje del commit f2c9e2d no cita la autorización «OTRA-AUTORIZACION-99»: la orden escrita del propietario va citada en el commit (protección 2) y la de --autorizacion tiene que ser la misma
+
+════ h8-fase4a-comprobar-20261110-235528.log
+== deploy-h8-backend-fase1.sh · 2026-11-10T23:55:28Z · ESPERADO=f2c9e2d · PREVIO=fe29126 · BK=/Users/alejodev/.cache/ironbody-banco-h8-ops8e/bk-4a-20261110-235525 · --solo-comprobar · MODO 4a (voice(calls-open)) · --sin-worker · registro /Users/alejodev/.cache/ironbody-banco-h8-ops8e/root/h8-fase4a-comprobar-20261110-235528.log
+== AUTORIZACIÓN ESCRITA (referencia que cita el commit): «OPS8E-AUT-4A-20261110»
+0. comprobaciones previas (solo lectura; si algo falla, no se toca nada):
+   modo 4a · base a608450 (el commit del respaldo; contiene PREVIO=fe29126) · producción en a608450
+   4a: origin/main = f2c9e2d «voice(calls-open): banco OPS8-e: abre las llamadas salientes (ensayo; » · un solo padre · cita la autorización · diff: SOLO la constante en backend/app/Services/Voice/VoiceCallPolicy.php (1 línea, false → true) · 1 commit(s) de solo documentación antes de él
+   sin migraciones entre a608450 y origin/main (la 4a no trae ninguna)
+   PENDIENTE DE DECISIÓN: commits de solo documentación que viajarían con la 4a: 9d23bca «docs(ultron-studio-h9): banco OPS8-e: registro de un desplie»
+   constante: cerrada en a608450 (producción) → abierta en f2c9e2d (una declaración anclada en cada lado)
+   respaldo /Users/alejodev/.cache/ironbody-banco-h8-ops8e/bk-4a-20261110-235525: 238 tablas con datos · 700/600 de root · huella del volcado comprobada
+   fase 2 completa (presencia, sin valores): 14 piezas de ElevenLabs y de Twilio · ELEVENLABS_ENABLED=true · TWILIO_VOICE_SIGNING_TOKEN presente (opcional) · VOICE_NUMBER_INBOUND_CAPABLE =false («Outbound Only» declarado) · salientes, entrantes, Twilio Voice, cupos y presupuesto cerrados
+   AVISO: TWILIO_VOICE_BASE_URL está en el entorno: en production se ignora (hosts oficiales siempre)
+   AVISO: ELEVENLABS_BASE_URL está en el entorno: en production se ignora (hosts oficiales siempre)
+   worker ironbody-voice: NO instalado (--sin-worker declarado): 13 programas; «salientes on» se negará hasta instalarlo
+   rutas en la caché ahora (informativo en una reanudación): [77 18 8 10 15 6 13 5 8 4]
+   verificación de voz: ok · ELEVENLABS_VERIFIED hasta 2026-12-10T23:45 UTC (quedan 719 h)
+   configuración efectiva antes de la 4a (laboratorio, monitor de voz y publicar, informativos): {"calls_in_code":false,"inbound":false,"outbound":false,"lab":true,"monitor":true,"publishing":true,"twilio_voice":false,"twilio_from_set":true,"imported_number_set":true,"outbound_cap":0,"inbound_cap":0,"budget":"0","lab_driver":"elevenlabs","lab_budget":"1.00","h8_pieces":10,"queue_voice":"database","studio_monitor":false}
+   voice:doctor --telefonia antes: estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=2 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=si subcuenta=si proveedor=ELEVENLABS_VERIFIED
+   HEAD a608450 limpio · sin migraciones pendientes · puerta: [] · esquema [68 84 6 18 27 51 3 7] (la referencia del paso 3) · guardas del H8 en la base: ok · función de F · rutas [77 18 8 10 15 6 13 5 8 4] · programador 31 tareas, 0 del Studio, 4 de voz · workers 13/0 · facturación activa
+   filas de las 11 tablas del H8 (informativo; el despliegue no escribe: el paso 4 compara): ultron_studio_voice_agents=2 ultron_studio_voice_lab_sessions=2 ultron_studio_voice_profiles=1 ultron_studio_voice_publications=0 voice_brakes=0 voice_call_events=0 voice_calls=0 voice_consents=0 voice_contacts=0 voice_exclusions=0 voice_rne_checks=0
+   iron_app en libro · asociaciones · canarios · instantáneas · cadena (SELECT/INSERT/UPDATE/DELETE/TRUNCATE): true/true/false/false/false true/true/true/true/false true/true/true/true/false true/true/false/false/false true/true/false/false/false
+   filas cadena · libro · instantáneas · versiones: 0 27 11 1 · colas fallidas: 0 · sellos studio: 0 · incidentes ultron_studio: 0
+   motor, H4–H7 y voz (informativo; no cambia): {"engine_scope":"off","publishing_enabled":false,"lab_gate":"required","lab_enabled":true,"lab_driver":"fake","canary_set":true,"ultron_enabled":true,"writes_enabled":false,"probe_enabled":false,"monitor_enabled":false,"elevenlabs_enabled":true,"twilio_voice_enabled":false,"voice":{"provider":"elevenlabs","state":"ELEVENLABS_UNVERIFIED","enabled":true,"missing":[],"region":"default"},"studio_voice":"ELEVENLABS_VERIFIED"}
+   integrations-doctor twilio:connected_otp_only,twilio_voice:disabled,elevenlabs:ELEVENLABS_VERIFIED: 0 · monitor del H7 en seco, integraciones: [ok] (informativo; tiene que seguir igual)
+   el fichero de entorno parsea (antes de tocar nada)
+COMPROBACIONES PREVIAS LEÍDAS, FALTA DECIDIR los commits de solo documentación [9d23bca] (no se ha tocado nada): el despliegue solo sigue con --acepta-main=9d23bca (decisión del propietario) o cuando se hayan desplegado antes
+
+════ h8-fase4a-comprobar-20261110-235533.log
+== deploy-h8-backend-fase1.sh · 2026-11-10T23:55:33Z · ESPERADO=f2c9e2d · PREVIO=fe29126 · BK=/Users/alejodev/.cache/ironbody-banco-h8-ops8e/bk-4a-20261110-235525 · --solo-comprobar · MODO 4a (voice(calls-open)) · --sin-worker · registro /Users/alejodev/.cache/ironbody-banco-h8-ops8e/root/h8-fase4a-comprobar-20261110-235533.log
+== AUTORIZACIÓN ESCRITA (referencia que cita el commit): «OPS8E-AUT-4A-20261110»
+0. comprobaciones previas (solo lectura; si algo falla, no se toca nada):
+   modo 4a · base a608450 (el commit del respaldo; contiene PREVIO=fe29126) · producción en a608450
+   4a: origin/main = f2c9e2d «voice(calls-open): banco OPS8-e: abre las llamadas salientes (ensayo; » · un solo padre · cita la autorización · diff: SOLO la constante en backend/app/Services/Voice/VoiceCallPolicy.php (1 línea, false → true) · 1 commit(s) de solo documentación antes de él
+   sin migraciones entre a608450 y origin/main (la 4a no trae ninguna)
+ABORTA: --acepta-main=a608450: ese commit no está entre los de solo documentación que traería el merge desde a608450 (¿otro HEAD u otro PREVIO?): no se acepta nada a ciegas
+
+════ h8-fase4a-comprobar-20261110-235534.log
+== deploy-h8-backend-fase1.sh · 2026-11-10T23:55:34Z · ESPERADO=f2c9e2d · PREVIO=fe29126 · BK=/Users/alejodev/.cache/ironbody-banco-h8-ops8e/bk-4a-20261110-235525 · --solo-comprobar · MODO 4a (voice(calls-open)) · registro /Users/alejodev/.cache/ironbody-banco-h8-ops8e/root/h8-fase4a-comprobar-20261110-235534.log
+== AUTORIZACIÓN ESCRITA (referencia que cita el commit): «OPS8E-AUT-4A-20261110»
+0. comprobaciones previas (solo lectura; si algo falla, no se toca nada):
+   modo 4a · base a608450 (el commit del respaldo; contiene PREVIO=fe29126) · producción en a608450
+   4a: origin/main = f2c9e2d «voice(calls-open): banco OPS8-e: abre las llamadas salientes (ensayo; » · un solo padre · cita la autorización · diff: SOLO la constante en backend/app/Services/Voice/VoiceCallPolicy.php (1 línea, false → true) · 1 commit(s) de solo documentación antes de él
+   sin migraciones entre a608450 y origin/main (la 4a no trae ninguna)
+   commits de solo documentación ACEPTADOS por el propietario con --acepta-main (viajan con el despliegue): 9d23bca (docs(ultron-studio-h9): banco OPS8-e: registro de un desplie)
+   constante: cerrada en a608450 (producción) → abierta en f2c9e2d (una declaración anclada en cada lado)
+   respaldo /Users/alejodev/.cache/ironbody-banco-h8-ops8e/bk-4a-20261110-235525: 238 tablas con datos · 700/600 de root · huella del volcado comprobada
+   fase 2 completa (presencia, sin valores): 14 piezas de ElevenLabs y de Twilio · ELEVENLABS_ENABLED=true · TWILIO_VOICE_SIGNING_TOKEN presente (opcional) · VOICE_NUMBER_INBOUND_CAPABLE =false («Outbound Only» declarado) · salientes, entrantes, Twilio Voice, cupos y presupuesto cerrados
+   AVISO: TWILIO_VOICE_BASE_URL está en el entorno: en production se ignora (hosts oficiales siempre)
+   AVISO: ELEVENLABS_BASE_URL está en el entorno: en production se ignora (hosts oficiales siempre)
+ABORTA: ironbody-voice no está en RUNNING (0): instalarlo antes (docs/ops/supervisor/ironbody-voice.conf, con su autorización; runbook 4a) o declarar --sin-worker (entonces «salientes on» se negará hasta instalarlo)
+
+════ h8-fase4a-comprobar-20261110-235536.log
+== deploy-h8-backend-fase1.sh · 2026-11-10T23:55:36Z · ESPERADO=f2c9e2d · PREVIO=fe29126 · BK=/Users/alejodev/.cache/ironbody-banco-h8-ops8e/bk-4a-20261110-235525 · --solo-comprobar · MODO 4a (voice(calls-open)) · --sin-worker · registro /Users/alejodev/.cache/ironbody-banco-h8-ops8e/root/h8-fase4a-comprobar-20261110-235536.log
+== AUTORIZACIÓN ESCRITA (referencia que cita el commit): «OPS8E-AUT-4A-20261110»
+0. comprobaciones previas (solo lectura; si algo falla, no se toca nada):
+   modo 4a · base a608450 (el commit del respaldo; contiene PREVIO=fe29126) · producción en a608450
+   4a: origin/main = f2c9e2d «voice(calls-open): banco OPS8-e: abre las llamadas salientes (ensayo; » · un solo padre · cita la autorización · diff: SOLO la constante en backend/app/Services/Voice/VoiceCallPolicy.php (1 línea, false → true) · 1 commit(s) de solo documentación antes de él
+   sin migraciones entre a608450 y origin/main (la 4a no trae ninguna)
+   commits de solo documentación ACEPTADOS por el propietario con --acepta-main (viajan con el despliegue): 9d23bca (docs(ultron-studio-h9): banco OPS8-e: registro de un desplie)
+   constante: cerrada en a608450 (producción) → abierta en f2c9e2d (una declaración anclada en cada lado)
+   respaldo /Users/alejodev/.cache/ironbody-banco-h8-ops8e/bk-4a-20261110-235525: 238 tablas con datos · 700/600 de root · huella del volcado comprobada
+   fase 2 completa (presencia, sin valores): 14 piezas de ElevenLabs y de Twilio · ELEVENLABS_ENABLED=true · TWILIO_VOICE_SIGNING_TOKEN presente (opcional) · VOICE_NUMBER_INBOUND_CAPABLE =false («Outbound Only» declarado) · salientes, entrantes, Twilio Voice, cupos y presupuesto cerrados
+   AVISO: TWILIO_VOICE_BASE_URL está en el entorno: en production se ignora (hosts oficiales siempre)
+   AVISO: ELEVENLABS_BASE_URL está en el entorno: en production se ignora (hosts oficiales siempre)
+   worker ironbody-voice: NO instalado (--sin-worker declarado): 13 programas; «salientes on» se negará hasta instalarlo
+   rutas en la caché ahora (informativo en una reanudación): [77 18 8 10 15 6 13 5 8 4]
+   verificación de voz: ok · ELEVENLABS_VERIFIED hasta 2026-12-10T23:45 UTC (quedan 719 h)
+   configuración efectiva antes de la 4a (laboratorio, monitor de voz y publicar, informativos): {"calls_in_code":false,"inbound":false,"outbound":false,"lab":true,"monitor":true,"publishing":true,"twilio_voice":false,"twilio_from_set":true,"imported_number_set":true,"outbound_cap":0,"inbound_cap":0,"budget":"0","lab_driver":"elevenlabs","lab_budget":"1.00","h8_pieces":10,"queue_voice":"database","studio_monitor":false}
+   voice:doctor --telefonia antes: estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=2 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=si subcuenta=si proveedor=ELEVENLABS_VERIFIED
+   HEAD a608450 limpio · sin migraciones pendientes · puerta: [] · esquema [68 84 6 18 27 51 3 7] (la referencia del paso 3) · guardas del H8 en la base: ok · función de F · rutas [77 18 8 10 15 6 13 5 8 4] · programador 31 tareas, 0 del Studio, 4 de voz · workers 13/0 · facturación activa
+   filas de las 11 tablas del H8 (informativo; el despliegue no escribe: el paso 4 compara): ultron_studio_voice_agents=2 ultron_studio_voice_lab_sessions=2 ultron_studio_voice_profiles=1 ultron_studio_voice_publications=0 voice_brakes=0 voice_call_events=0 voice_calls=0 voice_consents=0 voice_contacts=0 voice_exclusions=0 voice_rne_checks=0
+   iron_app en libro · asociaciones · canarios · instantáneas · cadena (SELECT/INSERT/UPDATE/DELETE/TRUNCATE): true/true/false/false/false true/true/true/true/false true/true/true/true/false true/true/false/false/false true/true/false/false/false
+   filas cadena · libro · instantáneas · versiones: 0 27 11 1 · colas fallidas: 0 · sellos studio: 0 · incidentes ultron_studio: 0
+   motor, H4–H7 y voz (informativo; no cambia): {"engine_scope":"off","publishing_enabled":false,"lab_gate":"required","lab_enabled":true,"lab_driver":"fake","canary_set":true,"ultron_enabled":true,"writes_enabled":false,"probe_enabled":false,"monitor_enabled":false,"elevenlabs_enabled":true,"twilio_voice_enabled":false,"voice":{"provider":"elevenlabs","state":"ELEVENLABS_UNVERIFIED","enabled":true,"missing":[],"region":"default"},"studio_voice":"ELEVENLABS_VERIFIED"}
+   integrations-doctor twilio:connected_otp_only,twilio_voice:disabled,elevenlabs:ELEVENLABS_VERIFIED: 0 · monitor del H7 en seco, integraciones: [ok] (informativo; tiene que seguir igual)
+   el fichero de entorno parsea (antes de tocar nada)
+COMPROBACIONES PREVIAS EN VERDE · MODO 4a · autorización «OPS8E-AUT-4A-20261110» (no se ha tocado nada)
+
+════ h8-fase4a-comprobar-20261110-235542.log
+== deploy-h8-backend-fase1.sh · 2026-11-10T23:55:42Z · ESPERADO=27588fd · PREVIO=fe29126 · BK=/Users/alejodev/.cache/ironbody-banco-h8-ops8e/bk-4a-20261110-235525 · --solo-comprobar · MODO 4a (voice(calls-open)) · --sin-worker · registro /Users/alejodev/.cache/ironbody-banco-h8-ops8e/root/h8-fase4a-comprobar-20261110-235542.log
+== AUTORIZACIÓN ESCRITA (referencia que cita el commit): «OPS8E-AUT-4A-20261110»
+0. comprobaciones previas (solo lectura; si algo falla, no se toca nada):
+   modo 4a · base a608450 (el commit del respaldo; contiene PREVIO=fe29126) · producción en a608450
+ABORTA: el commit 27588fd no es de una línea (numstat: [2 2 backend/app/Services/Voice/VoiceCallPolicy.php])
+
+════ h8-fase4a-comprobar-20261110-235544.log
+== deploy-h8-backend-fase1.sh · 2026-11-10T23:55:44Z · ESPERADO=d2309bc · PREVIO=fe29126 · BK=/Users/alejodev/.cache/ironbody-banco-h8-ops8e/bk-4a-20261110-235525 · --solo-comprobar · MODO 4a (voice(calls-open)) · --sin-worker · registro /Users/alejodev/.cache/ironbody-banco-h8-ops8e/root/h8-fase4a-comprobar-20261110-235544.log
+== AUTORIZACIÓN ESCRITA (referencia que cita el commit): «OPS8E-AUT-4A-20261110»
+0. comprobaciones previas (solo lectura; si algo falla, no se toca nada):
+   modo 4a · base a608450 (el commit del respaldo; contiene PREVIO=fe29126) · producción en a608450
+ABORTA: el commit d2309bc no cambia solo backend/app/Services/Voice/VoiceCallPolicy.php (un fichero, modificado, modo 100644): [backend/app/Services/Voice/VoiceCallPolicy.php backend/config/voice.php ]
+
+════ h8-fase4a-comprobar-20261110-235545.log
+== deploy-h8-backend-fase1.sh · 2026-11-10T23:55:45Z · ESPERADO=1c32968 · PREVIO=fe29126 · BK=/Users/alejodev/.cache/ironbody-banco-h8-ops8e/bk-4a-20261110-235525 · --solo-comprobar · MODO 4a (voice(calls-open)) · --sin-worker · registro /Users/alejodev/.cache/ironbody-banco-h8-ops8e/root/h8-fase4a-comprobar-20261110-235545.log
+== AUTORIZACIÓN ESCRITA (referencia que cita el commit): «OPS8E-AUT-4A-20261110»
+0. comprobaciones previas (solo lectura; si algo falla, no se toca nada):
+   modo 4a · base a608450 (el commit del respaldo; contiene PREVIO=fe29126) · producción en a608450
+ABORTA: el cambio del commit 1c32968 no es exactamente la declaración «public const CALLS_ENABLED_IN_CODE = false;» → «… = true;» con la misma sangría
+
+════ h8-fase4a-comprobar-20261110-235548.log
+== deploy-h8-backend-fase1.sh · 2026-11-10T23:55:48Z · ESPERADO=9af2d4f · PREVIO=fe29126 · BK=/Users/alejodev/.cache/ironbody-banco-h8-ops8e/bk-4a-20261110-235525 · --solo-comprobar · MODO 4a (voice(calls-open)) · --sin-worker · registro /Users/alejodev/.cache/ironbody-banco-h8-ops8e/root/h8-fase4a-comprobar-20261110-235548.log
+== AUTORIZACIÓN ESCRITA (referencia que cita el commit): «OPS8E-AUT-4A-20261110»
+0. comprobaciones previas (solo lectura; si algo falla, no se toca nada):
+   modo 4a · base a608450 (el commit del respaldo; contiene PREVIO=fe29126) · producción en a608450
+ABORTA: la punta de origin/main (9af2d4f) no es un commit «voice(calls-open): …» (asunto: «feat(voz): abre las llamadas»): el modo 4a solo despliega ese commit
+
+════ h8-fase4a-comprobar-20261110-235549.log
+== deploy-h8-backend-fase1.sh · 2026-11-10T23:55:49Z · ESPERADO=853bb4f · PREVIO=fe29126 · BK=/Users/alejodev/.cache/ironbody-banco-h8-ops8e/bk-4a-20261110-235525 · --solo-comprobar · MODO 4a (voice(calls-open)) · --sin-worker · registro /Users/alejodev/.cache/ironbody-banco-h8-ops8e/root/h8-fase4a-comprobar-20261110-235549.log
+== AUTORIZACIÓN ESCRITA (referencia que cita el commit): «OPS8E-AUT-4A-20261110»
+0. comprobaciones previas (solo lectura; si algo falla, no se toca nada):
+   modo 4a · base a608450 (el commit del respaldo; contiene PREVIO=fe29126) · producción en a608450
+ABORTA: entre a608450 y el commit de la 4a hay cambios fuera de la documentación (backend/app/Services/Telephony/VoiceCostGuard.php): en la 4a no viaja nada más que la constante; lo demás se despliega antes por su vía
+
+════ h8-fase4a-comprobar-20261110-235551.log
+== deploy-h8-backend-fase1.sh · 2026-11-10T23:55:51Z · ESPERADO=54a2274 · PREVIO=fe29126 · BK=/Users/alejodev/.cache/ironbody-banco-h8-ops8e/bk-4a-20261110-235525 · --solo-comprobar · MODO 4a (voice(calls-open)) · --sin-worker · registro /Users/alejodev/.cache/ironbody-banco-h8-ops8e/root/h8-fase4a-comprobar-20261110-235551.log
+== AUTORIZACIÓN ESCRITA (referencia que cita el commit): «OPS8E-AUT-4A-20261110»
+0. comprobaciones previas (solo lectura; si algo falla, no se toca nada):
+   modo 4a · base a608450 (el commit del respaldo; contiene PREVIO=fe29126) · producción en a608450
+ABORTA: hay 2 commits «voice(calls-open):» entre a608450 y origin/main: se admite exactamente uno
+
+════ h8-fase4a-comprobar-20261110-235555.log
+== deploy-h8-backend-fase1.sh · 2026-11-10T23:55:55Z · ESPERADO=f2c9e2d · PREVIO=fe29126 · BK=/Users/alejodev/.cache/ironbody-banco-h8-ops8e/bk-4a-20261110-235525 · --solo-comprobar · MODO 4a (voice(calls-open)) · --sin-worker · registro /Users/alejodev/.cache/ironbody-banco-h8-ops8e/root/h8-fase4a-comprobar-20261110-235555.log
+== AUTORIZACIÓN ESCRITA (referencia que cita el commit): «OPS8E-AUT-4A-20261110»
+0. comprobaciones previas (solo lectura; si algo falla, no se toca nada):
+   modo 4a · base a608450 (el commit del respaldo; contiene PREVIO=fe29126) · producción en a608450
+   4a: origin/main = f2c9e2d «voice(calls-open): banco OPS8-e: abre las llamadas salientes (ensayo; » · un solo padre · cita la autorización · diff: SOLO la constante en backend/app/Services/Voice/VoiceCallPolicy.php (1 línea, false → true) · 1 commit(s) de solo documentación antes de él
+   sin migraciones entre a608450 y origin/main (la 4a no trae ninguna)
+   commits de solo documentación ACEPTADOS por el propietario con --acepta-main (viajan con el despliegue): 9d23bca (docs(ultron-studio-h9): banco OPS8-e: registro de un desplie)
+   constante: cerrada en a608450 (producción) → abierta en f2c9e2d (una declaración anclada en cada lado)
+   respaldo /Users/alejodev/.cache/ironbody-banco-h8-ops8e/bk-4a-20261110-235525: 238 tablas con datos · 700/600 de root · huella del volcado comprobada
+   fase 2 completa (presencia, sin valores): 14 piezas de ElevenLabs y de Twilio · ELEVENLABS_ENABLED=true · TWILIO_VOICE_SIGNING_TOKEN presente (opcional) · VOICE_NUMBER_INBOUND_CAPABLE =false («Outbound Only» declarado) · salientes, entrantes, Twilio Voice, cupos y presupuesto cerrados
+   AVISO: TWILIO_VOICE_BASE_URL está en el entorno: en production se ignora (hosts oficiales siempre)
+   AVISO: ELEVENLABS_BASE_URL está en el entorno: en production se ignora (hosts oficiales siempre)
+ABORTA: --sin-worker, pero ironbody-voice está en RUNNING: quitar --sin-worker (el worker ya está instalado); no se despliega con una declaración que no es verdad
+
+════ h8-fase4a-comprobar-20261110-235558.log
+== deploy-h8-backend-fase1.sh · 2026-11-10T23:55:58Z · ESPERADO=f2c9e2d · PREVIO=fe29126 · BK=/Users/alejodev/.cache/ironbody-banco-h8-ops8e/bk-4a-20261110-235525 · --solo-comprobar · MODO 4a (voice(calls-open)) · registro /Users/alejodev/.cache/ironbody-banco-h8-ops8e/root/h8-fase4a-comprobar-20261110-235558.log
+== AUTORIZACIÓN ESCRITA (referencia que cita el commit): «OPS8E-AUT-4A-20261110»
+0. comprobaciones previas (solo lectura; si algo falla, no se toca nada):
+   modo 4a · base a608450 (el commit del respaldo; contiene PREVIO=fe29126) · producción en a608450
+   4a: origin/main = f2c9e2d «voice(calls-open): banco OPS8-e: abre las llamadas salientes (ensayo; » · un solo padre · cita la autorización · diff: SOLO la constante en backend/app/Services/Voice/VoiceCallPolicy.php (1 línea, false → true) · 1 commit(s) de solo documentación antes de él
+   sin migraciones entre a608450 y origin/main (la 4a no trae ninguna)
+   commits de solo documentación ACEPTADOS por el propietario con --acepta-main (viajan con el despliegue): 9d23bca (docs(ultron-studio-h9): banco OPS8-e: registro de un desplie)
+   constante: cerrada en a608450 (producción) → abierta en f2c9e2d (una declaración anclada en cada lado)
+   respaldo /Users/alejodev/.cache/ironbody-banco-h8-ops8e/bk-4a-20261110-235525: 238 tablas con datos · 700/600 de root · huella del volcado comprobada
+   fase 2 completa (presencia, sin valores): 14 piezas de ElevenLabs y de Twilio · ELEVENLABS_ENABLED=true · TWILIO_VOICE_SIGNING_TOKEN presente (opcional) · VOICE_NUMBER_INBOUND_CAPABLE =false («Outbound Only» declarado) · salientes, entrantes, Twilio Voice, cupos y presupuesto cerrados
+   AVISO: TWILIO_VOICE_BASE_URL está en el entorno: en production se ignora (hosts oficiales siempre)
+   AVISO: ELEVENLABS_BASE_URL está en el entorno: en production se ignora (hosts oficiales siempre)
+   worker ironbody-voice: en RUNNING (14 programas)
+   rutas en la caché ahora (informativo en una reanudación): [77 18 8 10 15 6 13 5 8 4]
+   verificación de voz: ok · ELEVENLABS_VERIFIED hasta 2026-12-10T23:45 UTC (quedan 719 h)
+   configuración efectiva antes de la 4a (laboratorio, monitor de voz y publicar, informativos): {"calls_in_code":false,"inbound":false,"outbound":false,"lab":true,"monitor":true,"publishing":true,"twilio_voice":false,"twilio_from_set":true,"imported_number_set":true,"outbound_cap":0,"inbound_cap":0,"budget":"0","lab_driver":"elevenlabs","lab_budget":"1.00","h8_pieces":10,"queue_voice":"database","studio_monitor":false}
+   voice:doctor --telefonia antes: estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=2 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=si subcuenta=si proveedor=ELEVENLABS_VERIFIED
+   HEAD a608450 limpio · sin migraciones pendientes · puerta: [] · esquema [68 84 6 18 27 51 3 7] (la referencia del paso 3) · guardas del H8 en la base: ok · función de F · rutas [77 18 8 10 15 6 13 5 8 4] · programador 31 tareas, 0 del Studio, 4 de voz · workers 14/0 · facturación activa
+   filas de las 11 tablas del H8 (informativo; el despliegue no escribe: el paso 4 compara): ultron_studio_voice_agents=2 ultron_studio_voice_lab_sessions=2 ultron_studio_voice_profiles=1 ultron_studio_voice_publications=0 voice_brakes=0 voice_call_events=0 voice_calls=0 voice_consents=0 voice_contacts=0 voice_exclusions=0 voice_rne_checks=0
+   iron_app en libro · asociaciones · canarios · instantáneas · cadena (SELECT/INSERT/UPDATE/DELETE/TRUNCATE): true/true/false/false/false true/true/true/true/false true/true/true/true/false true/true/false/false/false true/true/false/false/false
+   filas cadena · libro · instantáneas · versiones: 0 27 11 1 · colas fallidas: 0 · sellos studio: 0 · incidentes ultron_studio: 0
+   motor, H4–H7 y voz (informativo; no cambia): {"engine_scope":"off","publishing_enabled":false,"lab_gate":"required","lab_enabled":true,"lab_driver":"fake","canary_set":true,"ultron_enabled":true,"writes_enabled":false,"probe_enabled":false,"monitor_enabled":false,"elevenlabs_enabled":true,"twilio_voice_enabled":false,"voice":{"provider":"elevenlabs","state":"ELEVENLABS_UNVERIFIED","enabled":true,"missing":[],"region":"default"},"studio_voice":"ELEVENLABS_VERIFIED"}
+   integrations-doctor twilio:connected_otp_only,twilio_voice:disabled,elevenlabs:ELEVENLABS_VERIFIED: 0 · monitor del H7 en seco, integraciones: [ok] (informativo; tiene que seguir igual)
+   el fichero de entorno parsea (antes de tocar nada)
+COMPROBACIONES PREVIAS EN VERDE · MODO 4a · autorización «OPS8E-AUT-4A-20261110» (no se ha tocado nada)

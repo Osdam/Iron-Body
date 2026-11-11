@@ -17,6 +17,7 @@
 | Hito 6. Integraciones comerciales (Meta Ads en lectura y asociación campaña ↔ versión, panel del OTP de Twilio y sonda GET, números canarios como registro, configuración autorizada por huellas y voz con ElevenLabs preparada sin activar) | **DESPLEGADO EN FASE 1** (`HITO_6_DEPLOYED_PHASE_1`, 02-11-2026 04:37–04:57 UTC: backend `1e5f9a0`, CRM `16c433c`; escrituras, sonda y voz apagadas; E2E 660/660, `reviewer` APROBADO CON OBSERVACIONES, smoke 78 + 26 OK; fase 2 pendiente del propietario). El backend está completo y revisado sin bloqueantes por `security` y `api-security-specialist` (Enmiendas 3 y 4); el tester de backend, 45/45 carreras en PostgreSQL; las puertas finales del lead sobre `e3a0fdd`, SQLite 2879 OK y PostgreSQL 2455 OK. Clasificación real: Meta Ads conectada en lectura, Twilio solo para OTP, Twilio Voice no configurada, canarios como registro y ElevenLabs `ELEVENLABS_NOT_CONFIGURED`. Detalle en «Hito 6» más abajo |
 | Hito 7. Seguridad y producción (endurecimiento de la cadena y de los privilegios, `no-store`, tope temprano, `verified`, invisibles, sesiones, monitor, supresión Ley 1581, `ironbody-migrate` sin root, rendimiento y regresión) | **EN PRODUCCIÓN desde el 03-11-2026 (`HITO_7_COMPLETED`, con desviación documentada)**: commit final `d688418`, producción `cfcd0d1`; entró por un despliegue manual ajeno y el lead lo verificó y regularizó a las 20:03 UTC (ver «Hito 7: ejecución real» en `ULTRON_STUDIO_DEPLOYMENT_PLAN.md`): DB7, B7, SEC7 (con la corrección de M-1 y m-3, `601398c`), OPS7 (con `1c76a7f`, `0d43401`, `7c838ca` y `2139e00`), PERF7 con F-1 y F-2 (`e2411e3`) y TEST7 fases A, B y C (`cdade1e`) confirmados; REV7, primera pasada (`3fbb155`): APROBADO CON OBSERVACIONES, sin bloqueantes, y sus cuatro observaciones corregidas; segunda pasada (`4166d94`): APROBADO CON OBSERVACIONES, sin bloqueantes ni mayores abiertos, con dos menores nuevos: m-4 (abierto) y m-5 (corregido en `285a585`). Fase D de TEST7 hecha (`6399d9e`): 0 rojos nuevos, 239 pruebas nuevas, E2E 660/660. La tercera pasada de DOC7 la revisó el lead contra el §9.6 de REV7. `TAREAS=39` está fijado en el despliegue y en el smoke (`57b1178` y `08bdd1d`). Detalle en «Hito 7» más abajo |
 | Hito 8. Voz y telefonía (Twilio Programmable Voice + ElevenLabs ElevenAgents con Laravel como única puerta: agente inmutable por publicación, cadena de voz firmada, catálogo cerrado de herramientas, conciliación y deriva, freno automático, laboratorio hablado, consentimientos y salientes de la fase 4) | **EN PRODUCCIÓN EN LA FASE 1 (todo apagado) desde el 09-11-2026 12:06 UTC; implementado y verificado el 08-11-2026: 11 tablas, 38 rutas, 4 comandos, 4 tareas; puertas 1–3 y regresión global en verde; E2E con simuladores 15/15 (hash `6ee260ef…`); fase 1 ensayada en el banco. Fases 2–4b pendientes de las dependencias externas del propietario.** Ver `ULTRON_STUDIO_H8_VOZ.md`, `ULTRON_STUDIO_H8_RIESGOS.md` y el plan, «Hito 8» |
+| Hito 9. Autonomía comercial omnicanal: estrategias configurables con condiciones tipadas, simulación explicable, gobierno a cuatro ojos por persona verificada con cadena firmada, planificador en sombra, bandeja asistida, frenos y PARADA GLOBAL; canales automáticos por WhatsApp (W9) y voz (V9) | **EN PRODUCCIÓN EN LA FASE 1 (todo apagado) desde el 10-11-2026, 20:21–20:27 UTC** (backend `ce7c150`, CRM `9572426`): 15 tablas, 44 rutas nuevas (el Studio pasa a 121), 7 órdenes `outreach:*` y 15 variables apagadas; smoke 37 OK · 0 FALLO · 1 OMITIDO; vigilancia de 15 minutos sin incidencias; REV9 aprobado con condiciones, 0 bloqueantes (L9-73, L9-76, L9-77). **Las fases 2 (sombra) y 3 (asistido) están sin ejecutar.** W9, V9 y el resto del cierre están terminados en el árbol, sin commit ni guion de despliegue. Ver «Hito 9», abajo, y `ULTRON_STUDIO_H9_COMPLETITUD.md` |
 | Siguientes (rotuladas «G–R» antes de que G pasara a ser el control funcional): Meta, Twilio, canarios, ElevenLabs, vínculo versión↔conversación (el laboratorio y la evaluación con IA son el Hito 4; el sello de la versión declarada en cada turno, el Hito 5) | **NO EMPEZADOS** (autorizados como construcción, no como activación). *(Actualización del 01-11-2026: Meta, Twilio, canarios y ElevenLabs son el Hito 6, en la fila de arriba. Las llamadas, T2 y T3 siguen sin empezar.)* |
 
 ### Los siete hitos, de un vistazo (02-11-2026)
@@ -888,4 +889,69 @@ Vista previa protegida publicada el **18-10-2026 02:56 UTC** siguiendo `ULTRON_S
 **Verificado.** Puertas 1–4 del contrato; regresión global sin rojos nuevos frente a `main` (13 931 pruebas); E2E de 15 recorridos contra simuladores (0 red externa, 0 violaciones; evidencia en `ops/evidencia-h8/`); fase 1 ensayada en banco sobre el commit final (paso 0, despliegue completo y smoke 49 OK); revisión de seguridad completa (sin hallazgos críticos, altos ni medios abiertos); revisión independiente REV8: **aprobado con condiciones**, condiciones cerradas (Enmiendas 13 y 14).
 
 **Qué falta.** Las dependencias externas del propietario para las pruebas físicas (plan de pago de ElevenLabs con telefonía, subcuenta y número de Twilio con el bundle regulatorio, rotación de la clave y registro de los dos secretos, dos cuentas reales del CRM) y las fases 2 → 4b con sus puertas. Pendientes técnicos con dueño y momento: Enmienda 14, E14-5. Riesgos: `ULTRON_STUDIO_H8_RIESGOS.md`. Manual: `ULTRON_STUDIO_H8_VOZ.md`. Guía: `ULTRON_STUDIO_GUIA_ADMINISTRACION.md` §14. Operación: `ULTRON_STUDIO_CHECKLIST_OPERATIVO.md` §5 y `ULTRON_STUDIO_DEPLOYMENT_PLAN.md`, «Hito 8».
+
+## Hito 9. Autonomía comercial omnicanal (10/11-11-2026)
+
+**Qué es.** Una capa de orquestación sobre el motor comercial existente, que no escribe sus tablas. El personal configura **estrategias** desde el CRM, sin código. Cada estrategia tiene:
+- un disparador de un catálogo cerrado de 8: vencimientos, membresías vencidas, clases con cupo, seguimientos de prospectos, inactividad, enlaces de pago abandonados, cartera vencida y valoraciones desactualizadas;
+- condiciones tipadas, con lógica de tres valores y una traza explicable;
+- secuencias con seguimientos y plantillas.
+
+**Cómo se gobiernan y cómo se ejecutan:**
+- Se simulan y se aprueban **a cuatro ojos por persona verificada**: dos cuentas de la misma persona no se aprueban entre sí.
+- Se publican en canario sobre una cadena firmada propia, se promueven con evidencia medida en el servidor y se pueden pausar o revertir.
+- La ejecución decide con una escalera de precedencia N1–N7, en la que lo legal y el consentimiento van primero, y registra cada decisión.
+- En **sombra** solo simula. En **asistido**, una persona del personal contacta y registra el resultado. Los canales **automáticos** son WhatsApp por plantillas (W9) y voz por la puerta de salientes del H8 (V9).
+- Tiene PARADA GLOBAL, frenos por estrategia y por canal, y un monitor que **solo apaga**.
+
+**Nada de esto cambia lo que ULTRON Legacy dice o hace por WhatsApp**, y nada ha contactado a nadie.
+
+**Estado: la fase 1 está desplegada (todo apagado).**
+- **No es `HITO_9_COMPLETED`:** el contrato exige además la sombra y el asistido ejecutados con su evidencia, y PERF9 confirmado (§15).
+- **Producción:** desde el 10-11-2026, entre las 20:21 y las 20:27 UTC (L9-76 y L9-77).
+  - Backend `ce7c150` (commits `4ad9cb5` esquema, `e4a44b9` código y `ce7c150` documentación y operación); respaldo `ultron-studio-h9-fase1-20261110-202129`; 0 desvíos.
+  - CRM `9572426`: la sección «Campañas automáticas (estrategias)» en `/marketing/automatizaciones` y las 10 llaves del H9.
+- **Lo que entró:**
+  - 15 tablas vacías, con su esquema `123 137 9 25 51 75 3 8`;
+  - 44 rutas nuevas (el Studio pasa de 77 a 121);
+  - 7 órdenes `outreach:*`;
+  - el bloque del programador sin tareas;
+  - las 15 variables apagadas;
+  - la constante `OutreachSendGate::SENDS_ENABLED_IN_CODE = false`.
+- Contrato: `ULTRON_STUDIO_H9_CONTRACT.md` (D9-1…D9-16, P9-1…P9-24 y las decisiones del lead L9-1…L9-83); matriz de aceptación: `ULTRON_STUDIO_H9_ACEPTACION.md`.
+
+**Verificado:**
+- **Pruebas de la fase 1:**
+  - regresión completa de 15 787 pruebas con los mismos 56 rojos de la línea base y 0 nuevos;
+  - núcleo: 962 pruebas y 803 casos de fixtures con paridad byte a byte con el CRM;
+  - ejecución: 69/69 en SQLite y en PostgreSQL, incluida la carrera #13 con dos procesos reales;
+  - gobierno: 32; canal SSE: 32/32; aislamiento: 558 sentencias, 32 escrituras solo en las tablas propias y cero red;
+  - CRM: 440/440 y 491 con las llaves.
+- **Revisión independiente REV9:** **aprobado con condiciones, 0 bloqueantes** (L9-73).
+- **Smoke en producción:** 37 OK · 0 FALLO · 1 OMITIDO (los presupuestos de PERF9).
+- **Terminado después en el árbol, sin commit ni despliegue:**
+  - W9: 37/37 en SQLite y en PostgreSQL; regresión dirigida de Legacy 328/328;
+  - V9 con la Enmienda 17 del H8: 71 pruebas en los dos motores y la vía abierta 25/25 en una copia;
+  - el vale de un solo uso del canal en vivo (P9-25): 83/83;
+  - el panel «Estado de activación» del CRM;
+  - el endurecimiento del H8 (B-T4, B-T5, B-T16 y B-T17);
+  - la supresión de la Ley 1581 de la voz.
+  - Detalle en `ULTRON_STUDIO_H9_COMPLETITUD.md` §2.
+
+**Qué falta:**
+- **Propio, antes de la sombra:**
+  - H9-E2E-1: una estrategia creada desde el CRM no se abre en el constructor, porque el backend responde `content: []` (`app/Services/UltronStudio/StudioStrategies.php:274`). Está desplegado y dormido.
+  - El E2E #26, en curso: 182 de 194 comprobaciones en la última vuelta.
+  - `exercise()` con las 13 rutas y las 5 órdenes.
+  - PERF9.
+  - m-9 y H-1, en curso.
+  - Un procedimiento para encender `COMMERCIAL_EVENTS_ENABLED` (P9-24).
+  - El guion de despliegue de lo terminado en el árbol (G-9).
+- **Del propietario:**
+  - la segunda persona real y las dos primeras vinculadas por consola;
+  - P9-24, P9-17, P9-18 y P9-12;
+  - la fase 2 del H6, con números canarios activos (sin ella, una estrategia en canario no alcanza a nadie en vivo);
+  - para los canales automáticos: las plantillas aprobadas por Meta, los consentimientos por finalidad y canal (C9), el visto bueno legal, el commit `outreach(sends-open):` y, para la voz, las fases 4a y 4b del H8 (que exigen el plan de pago de ElevenLabs).
+
+Lista consolidada en `ULTRON_STUDIO_H9_COMPLETITUD.md` §6. Operación: `ops/RUNBOOK_H9.md` (etapas 4 a 7) y `ULTRON_STUDIO_DEPLOYMENT_PLAN.md`, «Hito 9».
 

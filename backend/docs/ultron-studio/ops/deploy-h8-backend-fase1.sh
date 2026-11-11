@@ -28,37 +28,80 @@
 # Cada aserción que falla se dice y el script termina con 1; «DESPLIEGUE H8 FASE 1 (BACKEND) COMPLETADO» solo sale con 0
 # desvíos. Nunca imprime valores del fichero de entorno, ni secretos, ni la salida de un tinker que no case con lo
 # esperado. Todo lo que imprime queda además en /root/h8-fase1-<fecha UTC>.log (600, root).
-# Uso: bash /root/deploy-h8-backend-fase1.sh <commit esperado (7 cifras)> <directorio del respaldo de hoy> [--solo-comprobar] [--acepta-main=<commit>[,<commit>…]]
+# Uso: bash /root/deploy-h8-backend-fase1.sh <commit esperado (7 cifras)> <directorio del respaldo de hoy> [--solo-comprobar] [--acepta-main=<commit>[,<commit>…]] [--fase=4a --autorizacion=<referencia> [--sin-worker]]
 #   --solo-comprobar: ejecuta solo el paso 0 (lecturas y git fetch) y sale; es el ensayo en el servidor.
 #   --acepta-main=…: los commits AJENOS al H8 (de origin/main) que producción no tiene y que viajarían con el merge, que
 #     el propietario acepta desplegar con el H8 EN ESE MOMENTO (decisión del lead del 08-11-2026; hoy, 7c84cb5). Sin la
 #     bandera, el paso 0 los lista y el despliegue aborta; un commit aceptado que no esté entre ellos también aborta.
+# MODO 4a (OPS8-e, 10-11-2026; B-T1 de la auditoría de los 9 hitos): `--fase=4a --autorizacion=<referencia escrita>`
+#   despliega el commit `voice(calls-open): …` y NADA MÁS. El modo normal (sin --fase) sigue exigiendo la constante
+#   `false` en origin/main, como siempre. El modo 4a, en el paso 0 y sin tocar nada, exige:
+#   · base = el commit del respaldo de hoy ($BK/api-commit.txt, el que lee la vuelta atrás): producción está en él (o ya
+#     en el commit de la 4a: reanudación) y CONTIENE PREVIO (el código del H8 desplegado);
+#   · origin/main = <commit esperado> = ese commit `voice(calls-open): ` (asunto exacto al principio), con un solo padre,
+#     cuyo mensaje cita LITERALMENTE la referencia de --autorizacion, y cuyo diff es SOLO la línea de la constante en
+#     backend/app/Services/Voice/VoiceCallPolicy.php (modo 100644, 1 línea fuera y 1 dentro: `= false;` → `= true;`,
+#     misma sangría); exactamente un commit `voice(calls-open):` en el tramo, historia lineal (ningún merge);
+#   · lo demás que traiga el tramo, SOLO documentación (backend/docs/, docs/ o *.md de la raíz), commit a commit, y
+#     cada uno aceptado con --acepta-main (con --solo-comprobar se listan como «FALTA DECIDIR»): cualquier otro cambio
+#     ABORTA. Ninguna migración;
+#   · la fase 2 completa: las piezas de ElevenLabs y de Twilio presentes (presencia, nunca valores), ELEVENLABS_ENABLED,
+#     la telefonía verificada (voice:doctor --telefonia: proveedor ELEVENLABS_VERIFIED; el Studio, ELEVENLABS_VERIFIED con
+#     su marca vigente), integrations-doctor con la expectativa de la fase 2 y sin deriva de la configuración autorizada;
+#   · las llamadas cerradas (salientes, entrantes, Twilio Voice, cupos y presupuesto): «salientes on» va DESPUÉS;
+#   · el worker ironbody-voice en RUNNING (14 programas), o --sin-worker declarado (13; «salientes on» se negará hasta
+#     instalarlo). Declararlo con el worker en RUNNING, o no declararlo sin él, aborta.
+#   No escribe el fichero de entorno ni migra. Comprueba después que SOLO cambió la constante (configuración efectiva,
+#   telefonía, rutas, programador, esquema, filas, huellas, entorno = respaldo byte a byte). La referencia de la
+#   autorización queda en el registro (cabecera y cierre). Registro: /root/h8-fase4a[-comprobar]-<fecha UTC>.log.
 # VUELTA ATRÁS (ULTRON_STUDIO_DEPLOYMENT_PLAN.md, «Hito 8», y ULTRON_STUDIO_ROLLBACK.md): la fase 1 no enciende nada,
 # así que no hay bandera que bajar. Código: `git checkout -q --detach $(cat $BK/api-commit.txt)` como root con umask 022
 # (solo si producción sigue en el commit del H8), config:cache y route:cache como www-data, queue:restart. Las 11 tablas
 # QUEDAN (vacías y sin lector; D8-20, nivel 4): NUNCA `migrate:rollback` en producción; quitarlas es de
 # database-specialist con autorización del propietario. Volver el código no es volver los datos.
+# Vuelta atrás de la 4a: primero el nivel 0 (`h8-voice-scope.sh salientes off`: con la constante abierta, las banderas
+# siguen cerrando); cerrar la constante es el nivel 4: el mismo `git checkout -q --detach $(cat $BK/api-commit.txt)` (solo
+# si producción sigue en el commit de la 4a), las cachés y queue:restart; después, en el repo, un commit que revierta la
+# línea (sin reescribir la historia) antes del siguiente despliegue, y no volver a `git checkout main` en el servidor
+# mientras main lleve la constante abierta. La 4a no cambia datos: no hay nada que restaurar de la base.
 set -euo pipefail
 export LC_ALL=C
 umask 022
 g() { git "$@"; }
-uso() { echo "uso: bash /root/deploy-h8-backend-fase1.sh <commit esperado (7 cifras)> <directorio del respaldo de hoy> [--solo-comprobar] [--acepta-main=<commit>[,<commit>…]]"; }
-[ "$#" -ge 2 ] && [ "$#" -le 4 ] || { uso; echo "no se ha tocado nada"; exit 2; }
+uso() { echo "uso: bash /root/deploy-h8-backend-fase1.sh <commit esperado (7 cifras)> <directorio del respaldo de hoy> [--solo-comprobar] [--acepta-main=<commit>[,<commit>…]] [--fase=4a --autorizacion=<referencia escrita> [--sin-worker]]"; }
+[ "$#" -ge 2 ] && [ "$#" -le 7 ] || { uso; echo "no se ha tocado nada"; exit 2; }
 ESPERADO="$1"
 BK="$2"
 shift 2
 SOLO_COMPROBAR=""
 ACEPTA=""
+FASE=""
+AUTORIZACION=""
+SIN_WORKER=""
 for a in "$@"; do
   case "$a" in
     --solo-comprobar) [ -z "$SOLO_COMPROBAR" ] || { echo "--solo-comprobar repetido; no se ha tocado nada"; exit 2; }; SOLO_COMPROBAR=--solo-comprobar ;;
     --acepta-main=*) [ -z "$ACEPTA" ] || { echo "--acepta-main repetido; no se ha tocado nada"; exit 2; }
                      ACEPTA=${a#--acepta-main=}
                      [[ "$ACEPTA" =~ ^[0-9a-f]{7}(,[0-9a-f]{7})*$ ]] || { echo "--acepta-main va con commits de 7 cifras separados por comas (los que imprime el paso 0); no se ha tocado nada"; exit 2; } ;;
-    *) echo "argumento desconocido: $a (se admiten --solo-comprobar y --acepta-main=<commit>[,…]); no se ha tocado nada"; exit 2 ;;
+    --fase=*) [ -z "$FASE" ] || { echo "--fase repetido; no se ha tocado nada"; exit 2; }
+              FASE=${a#--fase=}
+              [ "$FASE" = 4a ] || { echo "--fase solo admite 4a (el commit voice(calls-open)); no se ha tocado nada"; exit 2; } ;;
+    --autorizacion=*) [ -z "$AUTORIZACION" ] || { echo "--autorizacion repetido; no se ha tocado nada"; exit 2; }
+                      AUTORIZACION=${a#--autorizacion=}
+                      # La referencia de la orden escrita del propietario (se cita en el commit y queda en el registro). ASCII
+                      # imprimible acotado: va al registro y a un grep -F; nunca se evalúa.
+                      [[ "$AUTORIZACION" =~ ^[A-Za-z0-9][A-Za-z0-9\ ._:/#()-]{5,119}$ ]] || { echo "--autorizacion: la referencia escrita de la orden del propietario, de 6 a 120 caracteres (letras sin tilde, cifras, espacio y . _ : / # ( ) -), la misma que cita el commit; no se ha tocado nada"; exit 2; } ;;
+    --sin-worker) [ -z "$SIN_WORKER" ] || { echo "--sin-worker repetido; no se ha tocado nada"; exit 2; }; SIN_WORKER=--sin-worker ;;
+    *) echo "argumento desconocido: $a (se admiten --solo-comprobar, --acepta-main=<commit>[,…], --fase=4a, --autorizacion=<referencia> y --sin-worker); no se ha tocado nada"; exit 2 ;;
   esac
 done
 [[ "$ESPERADO" =~ ^[0-9a-f]{7}$ ]] || { echo "el commit esperado va con 7 cifras hexadecimales (git rev-parse --short=7 origin/main); no se ha tocado nada"; exit 2; }
+if [ "$FASE" = 4a ]; then
+  [ -n "$AUTORIZACION" ] || { echo "--fase=4a exige --autorizacion=<referencia escrita de la orden del propietario> (la que cita el commit voice(calls-open)); no se ha tocado nada"; exit 2; }
+else
+  [ -z "$AUTORIZACION" ] && [ -z "$SIN_WORKER" ] || { echo "--autorizacion y --sin-worker solo van con --fase=4a (el modo normal no despliega la constante abierta); no se ha tocado nada"; exit 2; }
+fi
 [ "$(id -u)" = 0 ] || { echo "se ejecuta como root en el servidor; no se ha tocado nada"; exit 2; }
 # PREVIO = lo que sirve producción ANTES del H8. Leído en el servidor el 08-11-2026 por devops con la autorización del
 # lead (solo lectura: `git rev-parse HEAD` y `migrate:status | tail`): 32a2560 («El barrido dice de quién es cada
@@ -67,7 +110,12 @@ done
 # Si producción se mueve antes del despliegue, el paso 0 aborta («producción no está en …»): se vuelve a leer, se revisa
 # qué entró y se fija aquí en otro commit. Con «pendiente», --solo-comprobar lee el HEAD y lo imprime, y el despliegue se
 # niega.
-PREVIO=fe29126   # la fase 1 está en producción desde el 09-11-2026 12:06 UTC (E15); el despliegue 1b (cierre integral, E16) parte de ella
+# OPS8-e (10-11-2026, pendiente (b) de E16-30): a608450 es el código del H8 en producción desde el despliegue 1b
+# (10-11-2026 02:19 UTC). Desde las 20:22 UTC producción sirve ce7c150 (fase 1 del H9, L9-76), que contiene a608450:
+# el modo normal aborta en el paso 0 («producción no está en a608450…») hasta que se fije aquí lo que sirva producción
+# (y vería los commits del H9 como ajenos), que es lo que debe hacer. El modo 4a no exige que producción ESTÉ en PREVIO
+# sino que lo CONTENGA; su base es el commit del respaldo de hoy ($BK/api-commit.txt).
+PREVIO=a608450   # el despliegue 1b (cierre integral, E16-30); la fase 1 entró el 09-11-2026 12:06 UTC (E15) en fe29126
 # Los commits AJENOS al H8 entre PREVIO y origin/main que producción todavía no tiene se comparan por su PARCHE, no por
 # su hash (una reescritura de la rama puede dejar copias con otro hash de commits que ya están en producción, y esas no
 # cuentan). Hoy queda uno: 7c84cb5 («Un cobro que no da vigencia no es la membresía de nadie»: MembershipRebuilder y su
@@ -103,10 +151,12 @@ API=https://api.ironbodyneiva.cloud/api
 PSQL="sudo -u postgres psql -X -Atq -v ON_ERROR_STOP=1 -d ironbody"
 LOGDIR=/root
 TS=$(date -u +%Y%m%d-%H%M%S)
-[ "$SOLO_COMPROBAR" = --solo-comprobar ] && LOG="$LOGDIR/h8-fase1-comprobar-$TS.log" || LOG="$LOGDIR/h8-fase1-$TS.log"
+[ "$FASE" = 4a ] && NOMBRE=h8-fase4a || NOMBRE=h8-fase1
+[ "$SOLO_COMPROBAR" = --solo-comprobar ] && LOG="$LOGDIR/$NOMBRE-comprobar-$TS.log" || LOG="$LOGDIR/$NOMBRE-$TS.log"
 ( umask 077; : > "$LOG" ) || { echo "no se pudo crear el registro $LOG; no se ha tocado nada"; exit 2; }
 exec > >(tee -a "$LOG") 2>&1
-echo "== deploy-h8-backend-fase1.sh · $(date -u +%Y-%m-%dT%H:%M:%SZ) · ESPERADO=$ESPERADO · PREVIO=$PREVIO · BK=$BK${SOLO_COMPROBAR:+ · $SOLO_COMPROBAR} · registro $LOG"
+echo "== deploy-h8-backend-fase1.sh · $(date -u +%Y-%m-%dT%H:%M:%SZ) · ESPERADO=$ESPERADO · PREVIO=$PREVIO · BK=$BK${SOLO_COMPROBAR:+ · $SOLO_COMPROBAR}${FASE:+ · MODO 4a (voice(calls-open))}${SIN_WORKER:+ · $SIN_WORKER} · registro $LOG"
+[ "$FASE" != 4a ] || echo "== AUTORIZACIÓN ESCRITA (referencia que cita el commit): «$AUTORIZACION»"
 aborta() { echo "ABORTA: $*"; exit 1; }
 DESVIOS=0
 desvio() { echo "   ✗ $*"; DESVIOS=$((DESVIOS + 1)); }
@@ -128,6 +178,20 @@ PIEZAS_E112="ELEVENLABS_API_KEY ELEVENLABS_AGENT_ID ELEVENLABS_WEBHOOK_SECRET EL
 # Lo que afirma el Studio en la fase 1 (E1-12): Twilio solo OTP, sin voz de Twilio y ElevenLabs verificado (la última
 # verificación «ok» tiene menos de 30 días). Si ha caducado, el paso 0 aborta y dice cómo seguir.
 EXPECT_FASE1=twilio:connected_otp_only,twilio_voice:not_configured,elevenlabs:ELEVENLABS_VERIFIED
+# Modo 4a: la expectativa de la fase 2 (las piezas de Twilio puestas y Twilio Voice apagado: `h8-voice-scope.sh expectativa
+# fase2`), la que tiene que seguir confirmando integrations-doctor antes y después de girar la constante.
+EXPECT_FASE2=twilio:connected_otp_only,twilio_voice:disabled,elevenlabs:ELEVENLABS_VERIFIED
+[ "$FASE" = 4a ] && EXPECT=$EXPECT_FASE2 || EXPECT=$EXPECT_FASE1
+# Las piezas que la fase 2 deja puestas antes de la 4a (presencia; nunca un valor): las de E1-12, el registro de secretos
+# y webhook (las tres referencias, el secreto de iniciación y la base) y las de Twilio y el número (h8-voice-scope.sh
+# «fase 2 set/secreto»). TWILIO_VOICE_SIGNING_TOKEN es opcional (con subcuenta; informativa).
+PIEZAS_4A="ELEVENLABS_API_KEY ELEVENLABS_AGENT_ID ELEVENLABS_WEBHOOK_SECRET ELEVENLABS_TOOL_SECRET ELEVENLABS_INITIATION_SECRET ELEVENLABS_TOOL_SECRET_REF ELEVENLABS_INITIATION_SECRET_REF ELEVENLABS_POST_CALL_WEBHOOK_REF VOICE_WEBHOOK_BASE_URL TWILIO_VOICE_ACCOUNT_SID TWILIO_VOICE_API_KEY_SID TWILIO_VOICE_API_KEY_SECRET TWILIO_VOICE_FROM ELEVENLABS_AGENT_PHONE_NUMBER_ID"
+# El fichero y las dos formas de la declaración (anclada, una sola línea; REV8 m-4): el único cambio que admite la 4a.
+P_POLITICA=backend/app/Services/Voice/VoiceCallPolicy.php
+LINEA_CERRADA='^[[:space:]]*public const CALLS_ENABLED_IN_CODE = false;[[:space:]]*$'
+LINEA_ABIERTA='^[[:space:]]*public const CALLS_ENABLED_IN_CODE = true;[[:space:]]*$'
+# Lo único que puede acompañar al commit de la 4a: documentación (no la ejecuta nadie desde el checkout de producción).
+DOCS_4A='^(backend/docs/|docs/)|^[^/]+\.md$'
 ENVF=/var/www/api/backend/.env
 cuenta_var() { grep -Ec "^[[:space:]]*(export[[:space:]]+)?$1[[:space:]]*=" "$ENVF" || true; }
 valor_var() { grep -E "^[[:space:]]*(export[[:space:]]+)?$1[[:space:]]*=" "$ENVF" | sed -E "s/^[[:space:]]*(export[[:space:]]+)?$1[[:space:]]*=[[:space:]]*//; s/[[:space:]]+\$//; s/^\"(.*)\"\$/\\1/"; }
@@ -147,16 +211,38 @@ presencia() { # CLAVE → falta | vacia | presente | repetida (sin imprimir el v
 }
 LOGS=/var/www/api/backend/storage/logs
 lineas_log() { local f; for f in "$LOGS"/laravel*.log; do [ -f "$f" ] && echo "$f $(wc -l < "$f" | tr -d ' ')"; done; return 0; }
-workers() {
-  local hasta s r m
+workers() { # <segundos> [<RUNNING esperados: 13 por defecto, 14 con ironbody-voice>] → «RUNNING MAL»
+  local hasta s r m n=${2:-13}
   hasta=$(( $(date +%s) + $1 ))
   while :; do
     s=$(supervisorctl status 2>/dev/null || true)
     r=$(printf '%s\n' "$s" | grep -c RUNNING || true)
     m=$(printf '%s\n' "$s" | grep -cE 'BACKOFF|FATAL' || true)
-    if { [ "$r" = 13 ] && [ "$m" = 0 ]; } || [ "$(date +%s)" -ge "$hasta" ]; then echo "$r $m"; return 0; fi
+    if { [ "$r" = "$n" ] && [ "$m" = 0 ]; } || [ "$(date +%s)" -ge "$hasta" ]; then echo "$r $m"; return 0; fi
     sleep 2
   done
+}
+# ironbody-voice en RUNNING (0 o 1): el modo 4a lo exige, salvo --sin-worker declarado.
+worker_voz() { supervisorctl status 2>/dev/null | grep -E '^ironbody-voice:' | grep -c RUNNING || true; }
+# voice:doctor --telefonia --json (sin red), en una línea; «?» si no se puede leer. El paso 10 (los dos modos) y el
+# paso 0 del modo 4a (proveedor ELEVENLABS_VERIFIED: la verificación de la telefonía, E4-6).
+telefonia() {
+  artisan voice:doctor --telefonia --json 2>/dev/null | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    t = d["telefonia"]
+    f = t["flags"]
+    pub = t.get("publication") or {}
+    l = t["limits"]
+    print("estado=%s constante=%s encendidas=%d cadena=%s freno=%s cupos=%s/%s/%s numero=%s subcuenta=%s proveedor=%s" % (
+        d.get("state"), "abierta" if t.get("callsEnabledInCode") else "cerrada", sum(1 for v in f.values() if v is True),
+        ",".join("%s:%s" % (k, (pub.get(k) or {}).get("status")) for k in ("canary", "rest")),
+        {True: "echado", False: "suelto"}.get(t.get("brakeOpen"), "?"), l.get("outboundDailyCap"), l.get("inboundDailyCap"),
+        l.get("dailyBudgetMicros"), "si" if (t.get("number") or {}).get("configured") else "no",
+        "si" if t.get("carrierConfigured") else "no", t.get("provider")))
+except Exception:
+    print("?")' 2>/dev/null || echo '?'
 }
 # Las rutas en la caché de rutas, en una línea (o «?»): Studio total · integraciones · sus GET · sus POST · voice/* ·
 # voice-lab/* · telefonía del CRM (/api/admin/voice) · sus GET · sus POST · públicas de la voz (webhooks y herramientas).
@@ -265,12 +351,83 @@ Q_PRIV_H7="SELECT string_agg(has_table_privilege('iron_app', 'public.' || t, 'SE
 Q_FILAS_H7="SELECT (SELECT count(*) FROM ultron_studio_publications)||' '||(SELECT count(*) FROM ultron_studio_audit_events)||' '||(SELECT count(*) FROM ultron_studio_integration_snapshots)||' '||(SELECT count(*) FROM ultron_studio_versions);"
 # Los trabajos en la cola de la voz (E1-10: la conexión `voice`, driver database): 0 siempre en la fase 1.
 Q_COLA_VOZ="SELECT CASE WHEN to_regclass('public.jobs') IS NULL THEN 'sin_tabla' ELSE (SELECT count(*) FROM jobs WHERE queue = 'voice')::text END;"
+# Modo 4a, paso 0: las guardas del H8 en la base (las del paso 4, que la 4a no toca) ANTES de girar nada. «ok» o el primer
+# desvío (solo nombres, recuentos, dueños y privilegios; nunca datos).
+invariantes_h8() {
+  local v
+  v=$($PSQL -c "$Q_FUNC") || { echo "no se pudieron leer las funciones del H8 (psql)"; return 0; }
+  [ "$v" = "$FUNC_ESPERADO" ] || { echo "funciones del H8 [$v], esperado [$FUNC_ESPERADO]"; return 0; }
+  v=$($PSQL -c "$Q_APAGADOS") || { echo "no se pudieron leer los disparadores (psql)"; return 0; }
+  [ "$v" = 0 ] || { echo "$v disparadores apagados en ultron_studio_* o voice_*"; return 0; }
+  v=$($PSQL -c "$Q_HUELLA") || { echo "no se pudo leer ultron_studio_forbid() (psql)"; return 0; }
+  [ "$v" = "$HUELLA_F" ] || { echo "ultron_studio_forbid() no es la de F (md5 $v)"; return 0; }
+  v=$($PSQL -c "$Q_DUENOS_H8") || { echo "no se pudieron leer los dueños de las tablas del H8 (psql)"; return 0; }
+  [ "$v" = "$DUENOS_ESPERADO" ] || { echo "dueños de las tablas del H8 [$v]"; return 0; }
+  v=$($PSQL -c "$Q_PRIV_H8") || { echo "no se pudieron leer los privilegios de iron_app en el H8 (psql)"; return 0; }
+  [ "$v" = "$PRIV_H8_ESPERADO" ] || { echo "privilegios de iron_app en las tablas del H8 [$v], esperado [$PRIV_H8_ESPERADO]"; return 0; }
+  echo ok
+}
+# Modo 4a, paso 0 (B-T1): el tramo BASE..origin/main es el commit `voice(calls-open):` de una línea y, como mucho,
+# commits de SOLO documentación, cada uno aceptado con --acepta-main. Deja en AJENOS los de documentación sin aceptar y
+# en ACEPTADOS_VISTOS los aceptados; aborta ante cualquier otra cosa. Lee git, no toca nada.
+comprueba_4a_git() {
+  local punta asunto mensaje padres raw num cuerpo menos mas esperado_mas n_voz c lista fuera_docs fuera
+  [ -z "$(g rev-list --merges "$BASE..origin/main")" ] || aborta "hay commits de fusión entre $BASE y origin/main: el modo 4a solo admite historia lineal (una fusión puede esconder cambios que ningún diff de commit enseña)"
+  punta=$(g rev-parse origin/main)
+  asunto=$(g log -1 --format=%s "$punta")
+  [[ "$asunto" =~ ^voice\(calls-open\):\  ]] || aborta "la punta de origin/main ($ESPERADO) no es un commit «voice(calls-open): …» (asunto: «${asunto:0:90}»): el modo 4a solo despliega ese commit"
+  padres=$(g rev-list --parents -n 1 "$punta" | wc -w | tr -d ' ')
+  [ "$padres" = 2 ] || aborta "el commit $ESPERADO tiene $((padres - 1)) padres: el de la 4a tiene uno solo"
+  # Sin «grep -q» en tubería: con pipefail, el SIGPIPE de git daría «no cita» aunque citara.
+  mensaje=$(g log -1 --format=%B "$punta")
+  grep -qF -- "$AUTORIZACION" <<< "$mensaje" || aborta "el mensaje del commit $ESPERADO no cita la autorización «$AUTORIZACION»: la orden escrita del propietario va citada en el commit (protección 2) y la de --autorizacion tiene que ser la misma"
+  n_voz=$(g log --format=%s "$BASE..origin/main" | grep -cE '^voice\(calls-open\):' || true)
+  [ "$n_voz" = 1 ] || aborta "hay $n_voz commits «voice(calls-open):» entre $BASE y origin/main: se admite exactamente uno"
+  # El diff del commit de la 4a: un fichero, modificado, modo 100644 en los dos lados, sin renombrar, una línea fuera y una
+  # dentro, y esas dos líneas son la declaración anclada `= false;` → `= true;` con la misma sangría.
+  raw=$(g diff --raw --no-renames --no-abbrev "$punta^" "$punta")
+  [ "$(printf '%s\n' "$raw" | grep -c .)" = 1 ] && [[ "$raw" =~ ^:100644\ 100644\ [0-9a-f]{40}\ [0-9a-f]{40}\ M$'\t'"$P_POLITICA"$ ]] \
+    || aborta "el commit $ESPERADO no cambia solo $P_POLITICA (un fichero, modificado, modo 100644): [$(printf '%s\n' "$raw" | awk -F'\t' '{print $NF}' | tr '\n' ' ')]"
+  num=$(g diff --numstat "$punta^" "$punta")
+  [ "$num" = "1	1	$P_POLITICA" ] || aborta "el commit $ESPERADO no es de una línea (numstat: [$(printf '%s' "$num" | tr '\t\n' '  ')])"
+  cuerpo=$(g diff -U0 "$punta^" "$punta" -- "$P_POLITICA" | sed -n '/^@@ /,$p' | tail -n +2)
+  menos=$(printf '%s\n' "$cuerpo" | sed -n 1p); mas=$(printf '%s\n' "$cuerpo" | sed -n 2p)
+  esperado_mas=${menos#-}; esperado_mas=${esperado_mas/= false;/= true;}
+  [ "$(printf '%s\n' "$cuerpo" | grep -c .)" = 2 ] && [ "${menos:0:1}" = - ] && [ "${mas:0:1}" = + ] \
+    && [[ "${menos#-}" =~ $LINEA_CERRADA ]] && [[ "${mas#+}" =~ $LINEA_ABIERTA ]] && [ "${mas#+}" = "$esperado_mas" ] \
+    || aborta "el cambio del commit $ESPERADO no es exactamente la declaración «public const CALLS_ENABLED_IN_CODE = false;» → «… = true;» con la misma sangría"
+  # Lo demás del tramo (BASE..punta^): SOLO documentación, commit a commit; cada uno, aceptado con --acepta-main.
+  lista=$(g diff --name-only --no-renames "$BASE" "$punta^")   # si git falla, set -e para aquí: nunca «vacío» por error
+  fuera=$(printf '%s\n' "$lista" | grep -vE "$DOCS_4A" | grep . || true)
+  [ -z "$fuera" ] || aborta "entre $BASE y el commit de la 4a hay cambios fuera de la documentación ($(printf '%s' "$fuera" | head -5 | tr '\n' ' ')): en la 4a no viaja nada más que la constante; lo demás se despliega antes por su vía"
+  for c in $(g rev-list --reverse "$BASE..$punta^"); do
+    lista=$(g diff-tree --no-commit-id --name-only -r --no-renames "$c")
+    fuera_docs=$(printf '%s\n' "$lista" | grep -vE "$DOCS_4A" | grep . || true)
+    [ -z "$fuera_docs" ] || aborta "el commit ${c:0:7} («$(g log -1 --format=%s "$c" | cut -c1-60)») toca algo fuera de la documentación ($(printf '%s' "$fuera_docs" | head -3 | tr '\n' ' ')): en la 4a no viaja nada más que la constante"
+    case ",$ACEPTA," in *",${c:0:7},"*) ACEPTADOS_VISTOS="$ACEPTADOS_VISTOS ${c:0:7}" ;; *) AJENOS="$AJENOS ${c:0:7}" ;; esac
+  done
+  echo "   4a: origin/main = $ESPERADO «${asunto:0:70}» · un solo padre · cita la autorización · diff: SOLO la constante en $P_POLITICA (1 línea, false → true) · $(g rev-list --count "$BASE..$punta^") commit(s) de solo documentación antes de él"
+}
 
 echo "0. comprobaciones previas (solo lectura; si algo falla, no se toca nada):"
 cd /var/www/api
 g fetch -q origin
 ACTUAL=$(g rev-parse --short=7 HEAD)
-if [ "$PREVIO" = pendiente ]; then
+if [ "$FASE" = 4a ]; then
+  # Modo 4a: la base es lo que servía producción al hacer el respaldo de hoy (api-commit.txt, el mismo que usa la vuelta
+  # atrás), y tiene que contener PREVIO (el código del H8 desplegado). Producción está en ella o, si una ejecución
+  # anterior se cortó tras el merge, ya en el commit de la 4a.
+  ANTES_4A=$(cat "$BK/api-commit.txt" 2>/dev/null || true)
+  [[ "$ANTES_4A" =~ ^[0-9a-f]{40}$ ]] || aborta "$BK/api-commit.txt no es un commit de 40 cifras: el modo 4a fija su base en el commit del respaldo de hoy (el bloque del respaldo lo escribe: git -C /var/www/api rev-parse HEAD > \$BK/api-commit.txt)"
+  BASE=${ANTES_4A:0:7}
+  case "$ACTUAL" in
+    "$BASE")     REANUDA=0 ;;
+    "$ESPERADO") REANUDA=1; echo "   reanudación: el código ya está en $ESPERADO (una ejecución anterior de la 4a se cortó tras el merge); se repiten las comprobaciones" ;;
+    *) aborta "producción ($ACTUAL) no está en el commit del respaldo ($BASE) ni en el de la 4a ($ESPERADO): rehacer el respaldo con lo que sirve producción hoy" ;;
+  esac
+  g merge-base --is-ancestor "$PREVIO" "$BASE" || aborta "producción ($BASE) no contiene PREVIO=$PREVIO (el código del H8 desplegado en el 1b): la 4a solo se despliega sobre el H8"
+  echo "   modo 4a · base $BASE (el commit del respaldo; contiene PREVIO=$PREVIO) · producción en $ACTUAL"
+elif [ "$PREVIO" = pendiente ]; then
   # Solo en --solo-comprobar (arriba se niega lo demás): se comprueba todo contra el HEAD de hoy, para fijarlo después.
   BASE=$ACTUAL; REANUDA=0
   echo "   PREVIO sin fijar: producción está en $ACTUAL; las comprobaciones se hacen contra él"
@@ -286,10 +443,19 @@ MODIFICADOS=$(g status --porcelain --untracked-files=no | wc -l | tr -d ' ')
 [ "$MODIFICADOS" = 0 ] || aborta "el checkout de producción tiene $MODIFICADOS cambios locales"
 [ "$(g rev-parse --short=7 origin/main)" = "$ESPERADO" ] || aborta "origin/main es $(g rev-parse --short=7 origin/main), no $ESPERADO"
 g merge-base --is-ancestor "$BASE" origin/main || aborta "origin/main no es avance rápido desde $BASE"
+AJENOS=""
+ACEPTADOS_VISTOS=""
+if [ "$FASE" = 4a ]; then
+  comprueba_4a_git
+fi
 NUEVAS=$(g diff --name-only --diff-filter=AMDR "$BASE" origin/main -- backend/database/migrations | sort | tr '\n' ' ')
-if [ -z "$NUEVAS" ]; then
+if [ -z "$NUEVAS" ] && [ "$FASE" = 4a ]; then
+  echo "   sin migraciones entre $BASE y origin/main (la 4a no trae ninguna)"
+elif [ -z "$NUEVAS" ]; then
   # Despliegue solo de código (1b, E16): las dos migraciones del H8 ya estaban en PREVIO (fase 1). Nada nuevo que migrar.
   echo "   sin migraciones nuevas entre $BASE y origin/main: las dos del Hito 8 ya estaban en $BASE (despliegue solo de código)"
+elif [ "$FASE" = 4a ]; then
+  aborta "migraciones entre $BASE y origin/main: [$NUEVAS]. La 4a no trae ninguna"
 elif [ "$NUEVAS" != "$MIGRACIONES" ]; then
   AJENAS=""
   for f in $NUEVAS; do case " $MIGRACIONES " in *" $f "*) ;; *) AJENAS="$AJENAS ${f##*/}" ;; esac; done
@@ -297,29 +463,33 @@ elif [ "$NUEVAS" != "$MIGRACIONES" ]; then
 fi
 # Los commits ajenos que traería el merge y que producción no tiene: por parche (`git patch-id --stable`) frente a los
 # últimos 400 commits de producción. Los del H8 se reconocen por su prefijo (`tipo(ultron-studio-h8):` y el giro de la
-# constante, `voice(calls-open):`).
-EN_PROD=$(g log --no-merges -p --max-count=400 "$BASE" | g patch-id --stable | awk '{print $1}' | sort -u)
-AJENOS=""
-ACEPTADOS_VISTOS=""
-while read -r pid cid; do
-  [ -n "${cid:-}" ] || continue
-  grep -qxF "$pid" <<< "$EN_PROD" && continue
-  # Los commits del hito llevan el prefijo `tipo(ultron-studio-h8):` o `voice(calls-open):`; el tipo puede ser compuesto
-  # con barras (`docs/test/ops(ultron-studio-h8):`, commits del lead): C-1 de REV8 lo detectó como «ajeno» por error.
-  [[ "$(g log -1 --format=%s "$cid")" =~ ^[a-z]+(/[a-z]+)*\((ultron-studio-h8|calls-open)\): ]] && continue
-  case ",$ACEPTA," in *",${cid:0:7},"*) ACEPTADOS_VISTOS="$ACEPTADOS_VISTOS ${cid:0:7}"; continue ;; esac
-  AJENOS="$AJENOS ${cid:0:7}"
-done < <(g log --no-merges -p "$BASE..origin/main" | g patch-id --stable)
+# constante, `voice(calls-open):`). En el modo 4a no: ahí TODO lo que no es la constante (solo documentación) se acepta
+# uno a uno (comprueba_4a_git ya dejó AJENOS y ACEPTADOS_VISTOS).
+if [ "$FASE" != 4a ]; then
+  EN_PROD=$(g log --no-merges -p --max-count=400 "$BASE" | g patch-id --stable | awk '{print $1}' | sort -u)
+  while read -r pid cid; do
+    [ -n "${cid:-}" ] || continue
+    grep -qxF "$pid" <<< "$EN_PROD" && continue
+    # Los commits del hito llevan el prefijo `tipo(ultron-studio-h8):` o `voice(calls-open):`; el tipo puede ser compuesto
+    # con barras (`docs/test/ops(ultron-studio-h8):`, commits del lead): C-1 de REV8 lo detectó como «ajeno» por error.
+    [[ "$(g log -1 --format=%s "$cid")" =~ ^[a-z]+(/[a-z]+)*\((ultron-studio-h8|calls-open)\): ]] && continue
+    case ",$ACEPTA," in *",${cid:0:7},"*) ACEPTADOS_VISTOS="$ACEPTADOS_VISTOS ${cid:0:7}"; continue ;; esac
+    AJENOS="$AJENOS ${cid:0:7}"
+  done < <(g log --no-merges -p "$BASE..origin/main" | g patch-id --stable)
+fi
 for c in ${ACEPTA//,/ }; do
-  case " $ACEPTADOS_VISTOS " in *" $c "*) ;; *) aborta "--acepta-main=$c: ese commit no está entre los ajenos que traería el merge desde $BASE (¿otro HEAD u otro PREVIO?): no se acepta nada a ciegas" ;; esac
+  case " $ACEPTADOS_VISTOS " in *" $c "*) ;; *) aborta "--acepta-main=$c: ese commit no está entre los $([ "$FASE" = 4a ] && echo 'de solo documentación' || echo ajenos) que traería el merge desde $BASE (¿otro HEAD u otro PREVIO?): no se acepta nada a ciegas" ;; esac
 done
-[ -z "$ACEPTADOS_VISTOS" ] || echo "   commits ajenos ACEPTADOS por el propietario con --acepta-main (viajan con el H8):$ACEPTADOS_VISTOS ($(for c in $ACEPTADOS_VISTOS; do g log -1 --format='%s' "$c" | cut -c1-60; done | paste -sd '|' -))"
+[ "$FASE" = 4a ] && QUE_AJENO="de solo documentación que viajarían con la 4a" || QUE_AJENO="ajenos al H8 que producción no tiene y viajarían con el merge"
+[ -z "$ACEPTADOS_VISTOS" ] || echo "   commits $([ "$FASE" = 4a ] && echo 'de solo documentación' || echo ajenos) ACEPTADOS por el propietario con --acepta-main (viajan con el despliegue):$ACEPTADOS_VISTOS ($(for c in $ACEPTADOS_VISTOS; do g log -1 --format='%s' "$c" | cut -c1-60; done | paste -sd '|' -))"
 FALTA_DECIDIR=""
 if [ -n "$AJENOS" ]; then
   LISTA="$(for c in $AJENOS; do printf '%s «%s» · ' "$c" "$(g log -1 --format='%s' "$c" | cut -c1-60)"; done)"
   if [ "$SOLO_COMPROBAR" = --solo-comprobar ]; then
     FALTA_DECIDIR=$(echo $AJENOS | tr ' ' ',')
-    echo "   PENDIENTE DE DECISIÓN: commits ajenos al H8 que producción no tiene y viajarían con el merge: ${LISTA% · }"
+    echo "   PENDIENTE DE DECISIÓN: commits $QUE_AJENO: ${LISTA% · }"
+  elif [ "$FASE" = 4a ]; then
+    aborta "commits $QUE_AJENO entre $BASE y origin/main: ${LISTA% · }. En la 4a no viaja nada sin decisión expresa: o se despliegan antes, o el propietario los acepta ahora con --acepta-main=$(echo $AJENOS | tr ' ' ',')"
   else
     aborta "commits ajenos al H8 entre $BASE y origin/main que producción no tiene: ${LISTA% · }. El H8 no despliega trabajo de otros sin decisión expresa: o su dueño lo despliega antes por su vía, o el propietario lo acepta ahora con --acepta-main=$(echo $AJENOS | tr ' ' ',')"
   fi
@@ -335,8 +505,21 @@ BORRADAS=$(g diff --numstat "$BASE" origin/main -- backend/routes/console.php | 
 POLITICA_EN_ORIGEN=$(g show "origin/main:backend/app/Services/Voice/VoiceCallPolicy.php" 2>/dev/null || true)
 CONSTANTE_EN_ORIGEN=$(printf '%s\n' "$POLITICA_EN_ORIGEN" | { grep -cE '^[[:space:]]*public const CALLS_ENABLED_IN_CODE = false;[[:space:]]*$' || true; })
 CONSTANTE_ABIERTA=$(printf '%s\n' "$POLITICA_EN_ORIGEN" | { grep -cE 'CALLS_ENABLED_IN_CODE[[:space:]]*=[[:space:]]*true' || true; })
-# REV8 m-4: la declaración anclada (una línea exacta) y ninguna coincidencia de «= true» en todo el fichero, ni en comentarios.
-[ "$CONSTANTE_EN_ORIGEN" = 1 ] && [ "$CONSTANTE_ABIERTA" = 0 ] || aborta "VoiceCallPolicy::CALLS_ENABLED_IN_CODE no es exactamente false en origin/main ($ESPERADO; declaraciones=false: $CONSTANTE_EN_ORIGEN, apariciones de true: $CONSTANTE_ABIERTA): la fase 1 no despliega la constante abierta"
+if [ "$FASE" = 4a ]; then
+  # Modo 4a (B-T1): en la base, cerrada (una declaración anclada `= false;` y ningún «= true»); en origin/main, abierta
+  # (una declaración anclada `= true;` y ningún «= false»), como la lee el mando antes de «salientes on».
+  POLITICA_EN_BASE=$(g show "$BASE:$P_POLITICA" 2>/dev/null || true)
+  CERRADA_EN_BASE=$(printf '%s\n' "$POLITICA_EN_BASE" | { grep -cE "$LINEA_CERRADA" || true; })
+  TRUE_EN_BASE=$(printf '%s\n' "$POLITICA_EN_BASE" | { grep -cE 'CALLS_ENABLED_IN_CODE[[:space:]]*=[[:space:]]*true' || true; })
+  ABIERTA_EN_ORIGEN=$(printf '%s\n' "$POLITICA_EN_ORIGEN" | { grep -cE "$LINEA_ABIERTA" || true; })
+  FALSE_EN_ORIGEN=$(printf '%s\n' "$POLITICA_EN_ORIGEN" | { grep -cE 'CALLS_ENABLED_IN_CODE[[:space:]]*=[[:space:]]*false' || true; })
+  [ "$CERRADA_EN_BASE $TRUE_EN_BASE" = "1 0" ] || aborta "en producción ($BASE) la constante no está exactamente cerrada (declaraciones=false: $CERRADA_EN_BASE, apariciones de true: $TRUE_EN_BASE)"
+  [ "$ABIERTA_EN_ORIGEN $FALSE_EN_ORIGEN" = "1 0" ] || aborta "en origin/main ($ESPERADO) la constante no está exactamente abierta (declaraciones=true: $ABIERTA_EN_ORIGEN, apariciones de false: $FALSE_EN_ORIGEN)"
+  echo "   constante: cerrada en $BASE (producción) → abierta en $ESPERADO (una declaración anclada en cada lado)"
+else
+  # REV8 m-4: la declaración anclada (una línea exacta) y ninguna coincidencia de «= true» en todo el fichero, ni en comentarios.
+  [ "$CONSTANTE_EN_ORIGEN" = 1 ] && [ "$CONSTANTE_ABIERTA" = 0 ] || aborta "VoiceCallPolicy::CALLS_ENABLED_IN_CODE no es exactamente false en origin/main ($ESPERADO; declaraciones=false: $CONSTANTE_EN_ORIGEN, apariciones de true: $CONSTANTE_ABIERTA): la fase 1 no despliega la constante abierta (el commit voice(calls-open) se despliega con --fase=4a --autorizacion=<referencia>)"
+fi
 case "$(cat "$BK/api-commit.txt" 2>/dev/null)" in
   "$BASE"*) ;;
   *) aborta "$BK/api-commit.txt no es $BASE (la vuelta atrás del código lo lee; si el respaldo se rehizo en una reanudación, escribirlo con: git -C /var/www/api rev-parse $BASE > $BK/api-commit.txt)" ;;
@@ -348,8 +531,47 @@ esac
 sha256sum -c --status "$BK/ironbody.dump.sha256" || aborta "el volcado no coincide con su ironbody.dump.sha256"
 TABLAS=$(pg_restore -l "$BK/ironbody.dump" | grep -c 'TABLE DATA' || true)
 [ "$TABLAS" -ge "$MIN_TABLAS" ] || aborta "el volcado solo lista $TABLAS tablas con datos (al menos $MIN_TABLAS; contarlas a mano antes de pensar en bajar el umbral)"
-if [ "$REANUDA" = 0 ]; then cmp -s "$ENVF" "$BK/env.backup" || aborta "el fichero de entorno cambió desde el respaldo: rehacer el respaldo (env.backup tiene que ser el de partida)"; fi
+# La 4a no escribe el fichero de entorno: tiene que ser el del respaldo también en una reanudación.
+if [ "$REANUDA" = 0 ] || [ "$FASE" = 4a ]; then cmp -s "$ENVF" "$BK/env.backup" || aborta "el fichero de entorno cambió desde el respaldo: rehacer el respaldo (env.backup tiene que ser el de partida)"; fi
 echo "   respaldo $BK: $TABLAS tablas con datos · 700/600 de root · huella del volcado comprobada"
+if [ "$FASE" = 4a ]; then
+  # La fase 2 completa (presencia; nunca un valor) y las llamadas cerradas: la 4a solo gira la constante; «salientes on»
+  # (que exige la constante abierta) va después, con su autorización.
+  FALTAN=""
+  for k in $PIEZAS_4A; do
+    case "$(presencia "$k")" in
+      presente) ;;
+      repetida) aborta "$k está repetida en el entorno: deduplicar a mano (no se imprime)" ;;
+      *) FALTAN="$FALTAN $k" ;;
+    esac
+  done
+  [ -z "$FALTAN" ] || aborta "la fase 2 no está completa (presencia en el entorno; no se imprime ningún valor): faltan$FALTAN. La 4a abre la constante con las piezas de ElevenLabs y de Twilio ya puestas, registradas y reconocidas (runbook «Fase 4a-primero», pasos 1–3)"
+  case "$(estado_var ELEVENLABS_ENABLED true)" in igual) ;; *) aborta "ELEVENLABS_ENABLED no está en true (o está repetida): sin ElevenLabs encendido la telefonía no funciona (E1-12)" ;; esac
+  case "$(presencia TWILIO_VOICE_SIGNING_TOKEN)" in repetida) aborta "TWILIO_VOICE_SIGNING_TOKEN está repetida en el entorno: deduplicar a mano (no se imprime)" ;; esac
+  for kv in VOICE_OUTBOUND_ENABLED=false VOICE_INBOUND_ENABLED=false TWILIO_VOICE_ENABLED=false TWILIO_VOICE_DAILY_CALL_CAP=0 VOICE_INBOUND_DAILY_CAP=0 VOICE_DAILY_BUDGET_USD=0; do
+    case "$(estado_var "${kv%%=*}" "${kv#*=}")" in
+      falta|igual) ;;
+      *) aborta "${kv%%=*} no está en ${kv#*=} (o está repetida; no se imprime): la 4a abre la constante con las llamadas cerradas; «salientes on» va DESPUÉS de este despliegue (es la orden que exige la constante abierta)" ;;
+    esac
+  done
+  case "$(estado_var ELEVENLABS_REGION default)" in falta|igual) ;; *) aborta "ELEVENLABS_REGION existe con otro valor o repetida: revisar a mano (E1-12 la dejó en default)" ;; esac
+  echo "   fase 2 completa (presencia, sin valores): $(echo $PIEZAS_4A | wc -w | tr -d ' ') piezas de ElevenLabs y de Twilio · ELEVENLABS_ENABLED=true · TWILIO_VOICE_SIGNING_TOKEN $(presencia TWILIO_VOICE_SIGNING_TOKEN) (opcional) · VOICE_NUMBER_INBOUND_CAPABLE $(estado_var VOICE_NUMBER_INBOUND_CAPABLE false | sed 's/^igual$/=false («Outbound Only» declarado)/') · salientes, entrantes, Twilio Voice, cupos y presupuesto cerrados"
+  for k in TWILIO_VOICE_BASE_URL ELEVENLABS_BASE_URL; do
+    case "$(presencia "$k")" in presente|repetida) echo "   AVISO: $k está en el entorno: en production se ignora (hosts oficiales siempre)" ;; esac
+  done
+  # El worker de la cola voice (la conf en docs/ops/supervisor/ironbody-voice.conf): instalado, o declarado que no.
+  VOZ_RUN=$(worker_voz)
+  if [ -n "$SIN_WORKER" ]; then
+    [ "$VOZ_RUN" = 0 ] || aborta "--sin-worker, pero ironbody-voice está en RUNNING: quitar --sin-worker (el worker ya está instalado); no se despliega con una declaración que no es verdad"
+    W_ESPERADOS=13
+    echo "   worker ironbody-voice: NO instalado (--sin-worker declarado): 13 programas; «salientes on» se negará hasta instalarlo"
+  else
+    [ "$VOZ_RUN" = 1 ] || aborta "ironbody-voice no está en RUNNING ($VOZ_RUN): instalarlo antes (docs/ops/supervisor/ironbody-voice.conf, con su autorización; runbook 4a) o declarar --sin-worker (entonces «salientes on» se negará hasta instalarlo)"
+    W_ESPERADOS=14
+    echo "   worker ironbody-voice: en RUNNING (14 programas)"
+  fi
+else
+W_ESPERADOS=13
 [ -z "$(tail -c1 "$ENVF")" ] || echo "   el fichero de entorno no acaba en salto de línea: se añadirá uno antes de las claves"
 for kv in $VARS; do
   case "$(estado_var "${kv%%=*}" "${kv#*=}")" in
@@ -370,25 +592,44 @@ case "$(presencia ELEVENLABS_BASE_URL)" in presente|repetida) echo "   AVISO: EL
 OTRAS=$(grep -oE "^[[:space:]]*(export[[:space:]]+)?(VOICE_|ULTRON_STUDIO_VOICE_|QUEUE_VOICE_)[A-Z0-9_]+" "$ENVF" | sed -E 's/^[[:space:]]*(export[[:space:]]+)?//' | sort -u | grep -vxE "$CLAVES_H8|VOICE_WEBHOOK_BASE_URL" | tr '\n' ' ' || true)
 [ -z "$OTRAS" ] || echo "   AVISO: otras claves de la voz ya en el entorno (solo nombres; la fase 1 no las escribe, la configuración efectiva del paso 7 dice si encienden algo): $OTRAS"
 echo "   claves de la fase 1 ausentes o iguales · ninguna pieza del H8 ni del número"
+fi   # fin de las comprobaciones del entorno del modo normal (las 9 claves de la fase 1 y ninguna pieza)
 MIG_REG=$($PSQL -c "$Q_MIG_H8") || aborta "no se pudo leer la tabla migrations (psql)"
 case "$MIG_REG" in
   "")                       ESQ_PARTIDA=$ESQ_ANTES; YA_APLICADAS=0 ;;
   "$MIG_H8_1")              ESQ_PARTIDA=$ESQ_MEDIO; YA_APLICADAS=0; echo "   AVISO: la $MIG_H8_1 ya está aplicada y la $MIG_H8_2 no (una ejecución cortada o un migrate ajeno): se aplica la que falta" ;;
-  "$MIG_H8_1 $MIG_H8_2")    ESQ_PARTIDA=$ESQ_DESPUES; YA_APLICADAS=1; echo "   AVISO: las dos migraciones del H8 YA están aplicadas (otro despliegue o un migrate ajeno, como en el H7): no se vuelve a migrar; el esquema se comprueba igual" ;;
+  "$MIG_H8_1 $MIG_H8_2")    ESQ_PARTIDA=$ESQ_DESPUES; YA_APLICADAS=1; [ "$FASE" = 4a ] || echo "   AVISO: las dos migraciones del H8 YA están aplicadas (otro despliegue o un migrate ajeno, como en el H7): no se vuelve a migrar; el esquema se comprueba igual" ;;
   *) aborta "registro de migraciones del H8 inesperado: [$MIG_REG] (la 100002 sin la 100001): PARAR y avisar a database-specialist" ;;
 esac
+[ "$FASE" != 4a ] || [ "$YA_APLICADAS" = 1 ] || aborta "la 4a se despliega sobre el H8 con sus dos migraciones aplicadas, y la base registra [$MIG_REG]"
+# B-T7 (OPS8-e): «las 11 tablas vacías» solo es la expectativa del PRIMER despliegue (el que las crea). Si ya existían
+# (1b, reanudación, 4a), el Studio ya pudo escribir en ellas (un perfil de voz aprobado: E16-30) y lo que se exige es que
+# el despliegue no escriba: las filas de antes = las de después (paso 4).
+[ "$YA_APLICADAS" = 1 ] && PRIMER_DESPLIEGUE=0 || PRIMER_DESPLIEGUE=1
+FILAS8_0=""
+[ "$PRIMER_DESPLIEGUE" = 1 ] || FILAS8_0=$($PSQL -c "$Q_FILAS_H8") || aborta "no se pudieron contar las filas de las tablas del H8 (psql)"
 APLICADAS=$($PSQL -c "$Q_MIGRACIONES" | sort -u) || aborta "no se pudo leer la tabla migrations (psql)"
 # Pendientes = los ficheros de migración de origin/main (solo el primer nivel, como los carga Laravel) que la base no
 # tiene registrados. Es lo que aplicaría ironbody-migrate: tiene que ser exactamente lo que falta del H8.
 PENDIENTES=$(comm -23 <(g ls-tree --name-only origin/main -- backend/database/migrations/ | sed -n 's#^backend/database/migrations/\([^/]*\)\.php$#\1#p' | sort -u) <(printf '%s\n' "$APLICADAS") | tr '\n' ' ')
 ESPERADAS=""; for m in $MIG_H8_1 $MIG_H8_2; do case " $MIG_REG " in *" $m "*) ;; *) ESPERADAS="$ESPERADAS$m " ;; esac; done
 [ "$PENDIENTES" = "$ESPERADAS" ] || aborta "migraciones pendientes en origin/main frente a la base: [$PENDIENTES] (esperadas, solo las del H8 que faltan: [$ESPERADAS]). ironbody-migrate aplicaría TODAS: lo ajeno se despliega antes por su vía"
+if [ "$FASE" = 4a ]; then
+  # La 4a no migra: el esquema de hoy (con lo que hayan añadido hitos posteriores, p. ej. las 7 tablas ultron_studio_* del
+  # H9) es la referencia del paso 3, y las guardas del H8 se comprueban por nombre, como en el paso 4.
+  PRE=$($PSQL -c "$Q_ESQUEMA") || aborta "no se pudo leer el esquema (psql)"
+  ESQ0=$PRE
+  INV0=$(invariantes_h8)
+  [ "$INV0" = ok ] || aborta "las guardas del H8 en la base no son las del despliegue ($INV0): PARAR y avisar a database-specialist (h8-schema-check.sql)"
+else
 PRE=$($PSQL -c "${Q_ESQUEMA%;}||' '||(SELECT pg_get_userbyid(proowner) FROM pg_proc WHERE proname = 'ultron_studio_forbid')||' '||(SELECT tableowner FROM pg_tables WHERE schemaname = 'public' AND tablename = 'ultron_studio_versions')||' '||has_schema_privilege('iron', 'public', 'CREATE')||' '||(SELECT count(*) FROM pg_roles WHERE rolname = 'iron_app');") || aborta "no se pudo leer el esquema de partida (psql; ¿existe el rol iron?)"
 [ "$PRE" = "$ESQ_PARTIDA iron iron true 1" ] || aborta "esquema de partida inesperado: [$PRE] (esperado [$ESQ_PARTIDA iron iron true 1]: disparadores, CHECK, parciales y tablas de ultron_studio_* y voice_*, dueños de F y de versiones, CREATE del dueño y el rol iron_app). Con voice_* distinto de 0 antes de migrar hay tablas que no son del H8; sin iron_app, en production las migraciones FALLAN (REVOKE); con otro dueño, 42501"
+fi
 HUELLA=$($PSQL -c "$Q_HUELLA") || aborta "no se pudo leer ultron_studio_forbid() (psql)"
 [ "$HUELLA" = "$HUELLA_F" ] || aborta "ultron_studio_forbid() no es la de F (md5 $HUELLA, esperado $HUELLA_F): PARAR y avisar a database-specialist"
+if [ "$FASE" != 4a ]; then   # la 4a no migra: los cerrojos de escritura sobre versiones no le afectan
 BLOQ=$($PSQL -c "$Q_BLOQ") || aborta "no se pudieron leer los cerrojos (psql)"
 [ "$BLOQ" = 0 ] || aborta "$BLOQ cerrojos de escritura sobre ultron_studio_versions (la FK de la 100001 pide SHARE ROW EXCLUSIVE y cae por 55P03 con un escritor abierto): esperar y repetir; quién, con h8-schema-check.sql"
+fi
 PRIV7_0=$($PSQL -c "$Q_PRIV_H7") || aborta "no se pudieron leer los privilegios de iron_app en el H7 (psql)"
 FILAS7_0=$($PSQL -c "$Q_FILAS_H7") || aborta "no se pudieron contar las filas del Studio (psql)"
 RUTAS0=$(rutas)
@@ -402,10 +643,11 @@ case "$PROG0" in
   ILEGIBLE) aborta "schedule:list no devolvió la lista JSON de tareas: sin poder leer el programador no se despliega" ;;
 esac
 read -r TOTAL0 STUDIO0 VOZ0 <<< "$PROG0"
-[ "$STUDIO0 $VOZ0" = "0 0" ] || aborta "el programador tiene $STUDIO0 tareas del Studio y $VOZ0 de voz antes de desplegar (esperado 0 y 0: el monitor del H7 apagado y la voz sin programar)"
+# En la 4a el monitor de voz (4 tareas) y el del H7 (2) pueden estar encendidos: lo que se exige es que no cambien.
+[ "$FASE" = 4a ] || [ "$STUDIO0 $VOZ0" = "0 0" ] || aborta "el programador tiene $STUDIO0 tareas del Studio y $VOZ0 de voz antes de desplegar (esperado 0 y 0: el monitor del H7 apagado y la voz sin programar)"
 PREVIA_ANTES=$(leer_previa)
 [ -n "$PREVIA_ANTES" ] || aborta "no se pudo leer la configuración efectiva del motor, del H4–H7 y de la voz (tinker falló; su salida no se imprime)"
-case "$PREVIA_ANTES" in *'"monitor_enabled":false'*) ;; *) aborta "el monitor del H7 no está apagado: la fase 1 del H8 se despliega con el monitor apagado (su expectativa no es aún la de la fase; ver el plan)" ;; esac
+[ "$FASE" = 4a ] || case "$PREVIA_ANTES" in *'"monitor_enabled":false'*) ;; *) aborta "el monitor del H7 no está apagado: la fase 1 del H8 se despliega con el monitor apagado (su expectativa no es aún la de la fase; ver el plan)" ;; esac
 case "$PREVIA_ANTES" in
   *'"studio_voice":"ELEVENLABS_VERIFIED"'*) ;;
   *) aborta "el Studio no afirma ELEVENLABS_VERIFIED (lo que dejó E1-12): $(printf '%s' "$PREVIA_ANTES" | grep -oE '"studio_voice":"[A-Z_]+"'). Si la última verificación tiene más de 30 días, renovarla es UN GET con la clave de producción (\`ultron-studio:integrations-snapshot --verify-voice\`, con autorización; E2-2 pide rotar esa clave antes de la fase 2) o desplegar con otra expectativa, decisión del lead" ;;
@@ -416,13 +658,34 @@ case "$VER" in
          [ "$HORAS" -ge 24 ] || echo "   AVISO: ELEVENLABS_VERIFIED caduca en menos de 24 h: el doctor del paso 11 podría cambiar durante el despliegue; renovarla antes (con autorización) o asumirlo" ;;
   *) aborta "no se pudo leer la última verificación de voz del Studio, o no es ok ([$VER])" ;;
 esac
-DOC0=0; artisan ultron-studio:integrations-doctor --expect="$EXPECT_FASE1" > /dev/null 2>&1 || DOC0=$?
-[ "$DOC0" = 0 ] || aborta "integrations-doctor --expect=$EXPECT_FASE1 no sale con 0 (código $DOC0): el punto de partida no es el de E1-12; ejecutarlo a mano como www-data y aclararlo"
+DOC0=0; artisan ultron-studio:integrations-doctor --expect="$EXPECT" > /dev/null 2>&1 || DOC0=$?
+[ "$DOC0" = 0 ] || aborta "integrations-doctor --expect=$EXPECT no sale con 0 (código $DOC0): el punto de partida no es el $([ "$FASE" = 4a ] && echo 'de la fase 2 completa (las piezas de Twilio puestas y Twilio Voice apagado)' || echo 'de E1-12'); ejecutarlo a mano como www-data y aclararlo"
 MONI0=$(monitor_integraciones)
 [ "$MONI0" != "?" ] || aborta "el monitor del H7 en seco (integraciones) no devolvió un resultado legible"
-case ",$MONI0," in *",config_drift:"*) aborta "el monitor del H7 ya ve deriva de la configuración autorizada antes de desplegar ([$MONI0]): aclararlo antes (GET integrations/config)" ;; esac
-W0=$(workers 20)
-[ "$W0" = "13 0" ] || aborta "workers antes de empezar: $W0 (RUNNING, BACKOFF/FATAL; esperado 13 0): no se despliega sobre un sistema degradado"
+case ",$MONI0," in *",config_drift:"*) aborta "el monitor del H7 ya ve deriva de la configuración autorizada antes de desplegar ([$MONI0]): aclararlo antes (GET integrations/config)$([ "$FASE" = 4a ] && echo '; en la 4a: reconocer la configuración tras las piezas de Twilio (runbook 4a, paso 3)')" ;; esac
+W0=$(workers 20 "$W_ESPERADOS")
+[ "$W0" = "$W_ESPERADOS 0" ] || aborta "workers antes de empezar: $W0 (RUNNING, BACKOFF/FATAL; esperado $W_ESPERADOS 0): no se despliega sobre un sistema degradado"
+if [ "$FASE" = 4a ]; then
+  # Lo que dice la aplicación antes de girar la constante: la fase 2 completa y las llamadas cerradas (el laboratorio,
+  # el monitor de voz y publicar pueden estar encendidos: informativos, y tienen que seguir igual en el paso 7).
+  # En una reanudación el merge ya está hecho: la aplicación ya ve la constante abierta (lo demás, igual).
+  [ "$REANUDA" = 1 ] && CONST_ANTES=abierta || CONST_ANTES=cerrada
+  H8_0=$(leer_h8)
+  [ -n "$H8_0" ] || aborta "no se pudo leer la configuración efectiva del H8 (tinker falló; su salida no se imprime)"
+  MAL=$(printf '%s' "$H8_0" | CONST_ANTES="$CONST_ANTES" python3 -I -c '
+import json, os, sys
+d = json.load(sys.stdin)
+esp = {"calls_in_code": os.environ["CONST_ANTES"] == "abierta", "inbound": False, "outbound": False, "twilio_voice": False, "twilio_from_set": True,
+       "imported_number_set": True, "outbound_cap": 0, "inbound_cap": 0, "budget": "0", "queue_voice": "database"}
+print(" ".join("%s=%s" % (k, json.dumps(d.get(k))) for k, v in esp.items() if type(d.get(k)) is not type(v) or d.get(k) != v))' 2>/dev/null || echo '?')
+  [ -z "$MAL" ] || aborta "la configuración efectiva no es la de antes de la 4a (fase 2 completa, llamadas cerradas, cola voice): $MAL"
+  TEL0=$(telefonia)
+  [[ "$TEL0" =~ ^estado=[A-Z_]+\ constante=$CONST_ANTES\ encendidas=[0-9]+\ cadena=[a-z_:,]+\ freno=(suelto|echado)\ cupos=0/0/0\ numero=si\ subcuenta=si\ proveedor=ELEVENLABS_VERIFIED$ ]] \
+    || aborta "voice:doctor --telefonia no es el de una fase 2 completa: [$TEL0] (esperado: constante $CONST_ANTES, cupos 0/0/0, número y subcuenta, y la telefonía con ElevenLabs verificado: proveedor=ELEVENLABS_VERIFIED; sin esa verificación (el-verificar.sh, E4-6) toda saliente falla cerrada)"
+  case "$TEL0" in *"freno=echado"*) echo "   AVISO: el freno de la voz está echado: la puerta denegará voice_braked hasta que una persona con ultron.voice_publish lo suelte con la nota de la causa" ;; esac
+  echo "   configuración efectiva antes de la 4a (laboratorio, monitor de voz y publicar, informativos): $H8_0"
+  echo "   voice:doctor --telefonia antes: $TEL0"
+fi
 FACT=$(systemctl is-active ironbody-billing-worker 2>/dev/null || true)
 [ "$FACT" = active ] || aborta "ironbody-billing-worker no está activo antes de empezar ($FACT)"
 LOG_ANTES=$(lineas_log)
@@ -430,21 +693,28 @@ FALLIDAS_ANTES=$($PSQL -c "SELECT count(*) FROM failed_jobs;") || aborta "no se 
 SELLOS_ANTES=$($PSQL -c "SELECT count(*) FROM marketing_ai_actions WHERE metadata ? 'studio';") || aborta "no se pudo leer marketing_ai_actions (psql)"
 INST_ANTES=$($PSQL -c "SELECT count(*) FROM ultron_studio_integration_snapshots;") || aborta "no se pudieron contar las instantáneas (psql)"
 INCID_ANTES=$($PSQL -c "SELECT count(*) FROM incidents WHERE source = 'ultron_studio';") || aborta "no se pudieron contar los incidentes (psql)"
+if [ "$FASE" = 4a ]; then
+  echo "   HEAD $ACTUAL limpio · sin migraciones pendientes · puerta: [${EN_PUERTA% }] · esquema [$PRE] (la referencia del paso 3) · guardas del H8 en la base: ok · función de F · rutas [$RUTAS0] · programador $TOTAL0 tareas, $STUDIO0 del Studio, $VOZ0 de voz · workers $W_ESPERADOS/0 · facturación activa"
+  echo "   filas de las 11 tablas del H8 (informativo; el despliegue no escribe: el paso 4 compara): $FILAS8_0"
+else
 echo "   HEAD $ACTUAL limpio · migraciones del H8: 2 en el diff, pendientes [${PENDIENTES% }]$([ "$YA_APLICADAS" = 1 ] && echo ' (ya aplicadas por otro)') · puerta: [${EN_PUERTA% }] (todas nombradas por el contrato) · esquema [$PRE] · función de F · sin escritores de versiones · rutas [$RUTAS0] · programador $TOTAL0 tareas, 0 del Studio, 0 de voz · workers 13/0 · facturación activa"
+fi
 echo "   iron_app en libro · asociaciones · canarios · instantáneas · cadena (SELECT/INSERT/UPDATE/DELETE/TRUNCATE): $PRIV7_0"
 echo "   filas cadena · libro · instantáneas · versiones: $FILAS7_0 · colas fallidas: $FALLIDAS_ANTES · sellos studio: $SELLOS_ANTES · incidentes ultron_studio: $INCID_ANTES"
 echo "   motor, H4–H7 y voz (informativo; no cambia): $PREVIA_ANTES"
-echo "   integrations-doctor $EXPECT_FASE1: 0 · monitor del H7 en seco, integraciones: [$MONI0] (informativo; tiene que seguir igual)"
-case "$MONI0" in ok) ;; *) echo "   AVISO: la expectativa del monitor del H7 no es la de la fase 1 (E1-12): antes de ENCENDERLO, ULTRON_STUDIO_MONITOR_EXPECT=$EXPECT_FASE1 (decisión del lead; ver el plan, «Hito 8», fase 1)" ;; esac
+echo "   integrations-doctor $EXPECT: 0 · monitor del H7 en seco, integraciones: [$MONI0] (informativo; tiene que seguir igual)"
+case "$MONI0" in ok) ;; *) echo "   AVISO: la expectativa del monitor del H7 no es la de la fase $([ "$FASE" = 4a ] && echo '2 (las piezas de Twilio puestas)' || echo '1 (E1-12)'): antes de ENCENDERLO, bash /root/h8-voice-scope.sh expectativa $([ "$FASE" = 4a ] && echo fase2 || echo fase1) (ULTRON_STUDIO_MONITOR_EXPECT=$EXPECT; ver el plan, «Hito 8»)" ;; esac
 sudo -u www-data php -r 'require "/var/www/api/backend/vendor/autoload.php"; try { Dotenv\Dotenv::createArrayBacked("/var/www/api/backend")->load(); } catch (Throwable $e) { fwrite(STDERR, get_class($e).PHP_EOL); exit(1); }' \
   || aborta "el fichero de entorno de producción NO parsea antes de empezar: aclararlo antes de desplegar (no se ha tocado nada)"
 echo "   el fichero de entorno parsea (antes de tocar nada)"
 if [ "$SOLO_COMPROBAR" = --solo-comprobar ]; then
   if [ -n "$FALTA_DECIDIR" ]; then
-    echo "COMPROBACIONES PREVIAS LEÍDAS, FALTA DECIDIR los commits ajenos [$FALTA_DECIDIR] (no se ha tocado nada): el despliegue solo sigue con --acepta-main=$FALTA_DECIDIR (decisión del propietario) o cuando su dueño los haya desplegado"
+    echo "COMPROBACIONES PREVIAS LEÍDAS, FALTA DECIDIR los commits $([ "$FASE" = 4a ] && echo 'de solo documentación' || echo ajenos) [$FALTA_DECIDIR] (no se ha tocado nada): el despliegue solo sigue con --acepta-main=$FALTA_DECIDIR (decisión del propietario) o cuando $([ "$FASE" = 4a ] && echo 'se hayan desplegado antes' || echo 'su dueño los haya desplegado')"
     exit 3
   elif [ "$PREVIO" = pendiente ]; then
     echo "COMPROBACIONES PREVIAS LEÍDAS, FALTA FIJAR PREVIO=$ACTUAL (no se ha tocado nada): revisar lo que entró en producción desde el H7 (git log --oneline cfcd0d1..$ACTUAL), fijarlo en deploy-h8-backend-fase1.sh en un commit, volver a copiarlo y repetir --solo-comprobar"
+  elif [ "$FASE" = 4a ]; then
+    echo "COMPROBACIONES PREVIAS EN VERDE · MODO 4a · autorización «$AUTORIZACION» (no se ha tocado nada)"
   else
     echo "COMPROBACIONES PREVIAS EN VERDE (no se ha tocado nada)"
   fi
@@ -454,19 +724,30 @@ fi
 g merge -q --ff-only origin/main
 HEAD=$(g rev-parse --short=7 HEAD)
 [ "$HEAD" = "$ESPERADO" ] || aborta "HEAD $HEAD no es $ESPERADO"
-echo "1. código: HEAD=$HEAD"
+echo "1. código: HEAD=$HEAD$([ "$FASE" = 4a ] && echo " · voice(calls-open) desplegado con la autorización «$AUTORIZACION»")"
 ILEGIBLES=0; REVISADOS=0
-CAMBIADOS=$(g diff --name-only "$PREVIO" HEAD) || aborta "git diff --name-only $PREVIO HEAD falló: no se puede comprobar la lectura por www-data"
+# BASE = PREVIO en el modo normal (PREVIO «pendiente» no llega aquí); en el modo 4a, el commit del respaldo.
+CAMBIADOS=$(g diff --name-only "$BASE" HEAD) || aborta "git diff --name-only $BASE HEAD falló: no se puede comprobar la lectura por www-data"
 while IFS= read -r f; do
   [ -n "$f" ] || continue
   [ -e "$f" ] || continue
   REVISADOS=$((REVISADOS + 1))
   sudo -u www-data test -r "$f" || { echo "   ✗ www-data no puede leer $f ($(stat -c '%U:%G %a' "$f"))"; ILEGIBLES=$((ILEGIBLES + 1)); }
 done <<< "$CAMBIADOS"
-[ "$REVISADOS" -gt 0 ] || aborta "la comprobación de lectura no revisó ningún fichero (el diff $PREVIO..HEAD salió vacío): algo no cuadra"
-[ "$ILEGIBLES" = 0 ] || aborta "$ILEGIBLES de $REVISADOS ficheros del merge no los lee www-data: chmod 644 (ficheros) / 755 (directorios) sobre git diff --name-only $PREVIO HEAD antes de seguir; relanzar este mismo script (reanuda)"
+[ "$REVISADOS" -gt 0 ] || aborta "la comprobación de lectura no revisó ningún fichero (el diff $BASE..HEAD salió vacío): algo no cuadra"
+[ "$ILEGIBLES" = 0 ] || aborta "$ILEGIBLES de $REVISADOS ficheros del merge no los lee www-data: chmod 644 (ficheros) / 755 (directorios) sobre git diff --name-only $BASE HEAD antes de seguir; relanzar este mismo script (reanuda)"
 echo "   los $REVISADOS ficheros del merge son legibles por www-data"
 cd backend
+if [ "$FASE" = 4a ]; then
+  echo "2. variables: ninguna (la 4a no escribe el fichero de entorno; las salientes las enciende después el mando, con su autorización)"
+  cmp -s "$ENVF" "$BK/env.backup" || aborta "el fichero de entorno ya no es el del respaldo (lo cambió alguien durante el despliegue): aclararlo antes de seguir; NO se ha hecho route:cache"
+  echo "   el fichero de entorno es el del respaldo, byte a byte"
+  echo "3. migraciones: ninguna (la 4a no trae ninguna; las dos del H8 ya estaban)"
+  INTENTO=0; RC=0
+  ESQ=$($PSQL -c "$Q_ESQUEMA") || aborta "no se pudo leer el esquema (psql); relanzar este mismo script (reanuda)"
+  [ "$ESQ" = "$ESQ0" ] || aborta "el esquema cambió durante el despliegue: antes [$ESQ0] · ahora [$ESQ]; NO se ha hecho route:cache; PARAR y avisar a database-specialist"
+  echo "   esquema [$ESQ]: el mismo que en el paso 0"
+else
 echo "2. variables (5 interruptores y 4 cerrojos de gasto de la voz, apagados):"
 [ -z "$(tail -c1 "$ENVF")" ] || printf '\n' >> "$ENVF"
 for kv in $VARS; do
@@ -502,6 +783,7 @@ else
 fi
 echo "   esquema [$ESQ]: 68 disparadores · 84 CHECK · 6 parciales · 18 tablas del Studio; 27 · 51 · 3 · 7 de la telefonía (intento $INTENTO)"
 [ "$RC" = 0 ] || desvio "ironbody-migrate salió con $RC aunque el esquema cuadra: revisar su salida (arriba) antes de dar la fase por buena"
+fi   # fin de los pasos 2 y 3 del modo normal
 echo "4. esquema del Hito 8 (antes de servir las rutas nuevas):"
 FUNC=$($PSQL -c "$Q_FUNC")
 echo "   funciones nuevas (número · SECURITY DEFINER · dueños): $FUNC"
@@ -515,7 +797,15 @@ PRIV8=$($PSQL -c "$Q_PRIV_H8")
 echo "   iron_app en las 11 tablas (r SELECT · a INSERT · w UPDATE · d DELETE · D TRUNCATE · s secuencia): $PRIV8"
 [ "$PRIV8" = "$PRIV_H8_ESPERADO" ] || aborta "privilegios de iron_app en las tablas del H8 [$PRIV8], esperado [$PRIV_H8_ESPERADO] (ra en las 6 de solo inserción, rawd en las 5 con estados). NO se ha hecho route:cache; avisar a database-specialist"
 FILAS8=$($PSQL -c "$Q_FILAS_H8")
-[ "$FILAS8" = "$FILAS_H8_ESPERADAS" ] && echo "   las 11 tablas del H8, vacías" || desvio "filas en las tablas del H8 [$FILAS8]: la fase 1 no escribe nada (¿alguien usó la voz?)"
+if [ "$PRIMER_DESPLIEGUE" = 1 ]; then
+  # Las acaba de crear este despliegue: vacías.
+  [ "$FILAS8" = "$FILAS_H8_ESPERADAS" ] && echo "   las 11 tablas del H8, vacías (primer despliegue: las acaba de crear)" || desvio "filas en las tablas del H8 [$FILAS8]: la fase 1 no escribe nada (¿alguien usó la voz?)"
+else
+  # B-T7 (OPS8-e): ya existían; el Studio desplegado puede haber escrito en ellas (E16-30: un perfil de voz aprobado), así
+  # que el recuento es informativo y lo que se exige es que el despliegue no escriba: las mismas filas que en el paso 0.
+  [ "$FILAS8" = "$FILAS8_0" ] && echo "   filas de las 11 tablas del H8, las mismas que en el paso 0 (informativo desde la fase 1; el despliegue no escribe): $FILAS8" \
+    || desvio "las filas de las tablas del H8 cambiaron durante el despliegue: antes [$FILAS8_0] · después [$FILAS8] (el despliegue no escribe: ¿alguien usó la voz a la vez?)"
+fi
 PRIV7=$($PSQL -c "$Q_PRIV_H7")
 [ "$PRIV7" = "$PRIV7_0" ] && echo "   iron_app en las 5 tablas del H6/H7: igual que antes" || desvio "los privilegios de iron_app en las tablas del H6/H7 cambiaron: antes [$PRIV7_0] · después [$PRIV7]"
 FILAS7=$($PSQL -c "$Q_FILAS_H7")
@@ -534,30 +824,42 @@ sudo -u www-data php artisan queue:restart -q
 RUTAS=$(rutas)
 COBERTURA=$(artisan auth:coverage --unmapped 2>&1 | tr -d '\n' | cut -c1-80 || true)
 echo "6. rutas (Studio · integraciones · GET · POST · voz · laboratorio · telefonía · GET · POST · públicas): $RUTAS · auth:coverage --unmapped → [$COBERTURA]"
+if [ "$FASE" = 4a ]; then
+  [ "$RUTAS" = "$RUTAS0" ] || desvio "rutas [$RUTAS] (antes [$RUTAS0]: la 4a no cambia ninguna ruta)"
+else
 [ "$RUTAS" = "77 18 8 10 15 6 13 5 8 4" ] || desvio "rutas [$RUTAS] (esperado [77 18 8 10 15 6 13 5 8 4])"
+fi
 [ -z "$COBERTURA" ] || desvio "auth:coverage --unmapped no está vacío"
 echo "7. configuración efectiva:"
 H8=$(leer_h8)
 case "$H8" in '{"calls_in_code"'*) echo "   $H8" ;; *) echo "   (tinker no devolvió la configuración del H8; su salida no se imprime)" ;; esac
+if [ "$FASE" = 4a ]; then
+  # Lo único que cambia la 4a: la constante. Todo lo demás (banderas, cerrojos, piezas, cola) igual que en el paso 0.
+  ESPERADA_4A=${H8_0/'"calls_in_code":false'/'"calls_in_code":true'}
+  [ "$H8" = "$ESPERADA_4A" ] && echo "   solo cambió la constante: calls_in_code false → true (lo demás, igual que en el paso 0)" \
+    || { desvio "la configuración efectiva del H8 cambió en algo más que la constante"; echo "     antes:    $H8_0"; echo "     esperada: $ESPERADA_4A"; }
+else
 [ "$H8" = "$ESPERADA_H8" ] || { desvio "la configuración efectiva del H8 no es la de la fase 1 (todo apagado)"; echo "     esperada: $ESPERADA_H8"; }
+fi
 PREVIA=$(leer_previa)
 [ "$PREVIA" = "$PREVIA_ANTES" ] && echo "   motor, H4–H7 y voz (proveedor y Studio) iguales que antes del despliegue" || desvio "la configuración del motor, del H4–H7 o el estado de la voz cambió: antes $PREVIA_ANTES · después ${PREVIA:-ilegible}"
 PROG=$(programador)
+[ "$FASE" = 4a ] && PROG_ESPERADO="$TOTAL0 $STUDIO0 $VOZ0" || PROG_ESPERADO="$TOTAL0 0 0"
 case "$PROG" in
   "FALLO "*) desvio "schedule:list no sale con 0 (código ${PROG#FALLO }; su salida no se imprime): no se puede comprobar el programador (m-1)" ;;
   ILEGIBLE) desvio "schedule:list no devolvió la lista JSON de tareas: no se puede comprobar el programador" ;;
-  *) echo "   programador (total · del Studio · de voz): $PROG (esperado $TOTAL0 0 0: con VOICE_MONITOR_ENABLED apagada el bloque de voz no programa nada)"
-     [ "$PROG" = "$TOTAL0 0 0" ] || desvio "el programador da [$PROG] y se esperaba [$TOTAL0 0 0]" ;;
+  *) echo "   programador (total · del Studio · de voz): $PROG (esperado $PROG_ESPERADO: $([ "$FASE" = 4a ] && echo 'el mismo que en el paso 0; la 4a no programa nada' || echo 'con VOICE_MONITOR_ENABLED apagada el bloque de voz no programa nada'))"
+     [ "$PROG" = "$PROG_ESPERADO" ] || desvio "el programador da [$PROG] y se esperaba [$PROG_ESPERADO]" ;;
 esac
 COLA=$($PSQL -c "$Q_COLA_VOZ")
-[ "$COLA" = 0 ] || [ "$COLA" = sin_tabla ] && echo "   cola voice: $COLA trabajos (E1-10; la fase 1 no despacha nada a la voz)" || desvio "hay $COLA trabajos en la cola voice: nada debería despacharse con todo apagado (y la fase 1 no instala ironbody-voice)"
+[ "$COLA" = 0 ] || [ "$COLA" = sin_tabla ] && echo "   cola voice: $COLA trabajos (E1-10; $([ "$FASE" = 4a ] && echo 'con las salientes cerradas nada se despacha a la voz' || echo 'la fase 1 no despacha nada a la voz'))" || desvio "hay $COLA trabajos en la cola voice: nada debería despacharse con las llamadas cerradas"
 sleep 6
-W1=$(workers 45); sleep 8; W2=$(workers 45)
-echo "8. workers (RUNNING · BACKOFF/FATAL), dos lecturas separadas: [$W1] y [$W2] (13: ironbody-voice NO se instala en la fase 1)"
-[ "$W1" = "13 0" ] && [ "$W2" = "13 0" ] || desvio "workers [$W1] y [$W2] (esperado 13 0 las dos veces)"
+W1=$(workers 45 "$W_ESPERADOS"); sleep 8; W2=$(workers 45 "$W_ESPERADOS")
+echo "8. workers (RUNNING · BACKOFF/FATAL), dos lecturas separadas: [$W1] y [$W2] ($W_ESPERADOS: ironbody-voice $([ "$W_ESPERADOS" = 14 ] && echo 'instalado' || echo 'NO instalado'))"
+[ "$W1" = "$W_ESPERADOS 0" ] && [ "$W2" = "$W_ESPERADOS 0" ] || desvio "workers [$W1] y [$W2] (esperado $W_ESPERADOS 0 las dos veces)"
 PIDS_DESPUES=$(supervisorctl status 2>/dev/null | grep -oE 'pid [0-9]+' | sort || true)
 NUEVOS=$(comm -13 <(printf '%s\n' "$PIDS_ANTES") <(printf '%s\n' "$PIDS_DESPUES") | grep -c pid || true)
-echo "   INFO: workers con pid nuevo tras queue:restart: $NUEVOS de 13 (el resto termina su trabajo antes de reiniciarse; se reinician además cada hora)"
+echo "   INFO: workers con pid nuevo tras queue:restart: $NUEVOS de $W_ESPERADOS (el resto termina su trabajo antes de reiniciarse; se reinician además cada hora)"
 FACT=$(systemctl is-active ironbody-billing-worker 2>/dev/null || true)
 [ "$FACT" = active ] || desvio "ironbody-billing-worker: $FACT"
 echo "9. sanidad:"
@@ -603,35 +905,33 @@ echo "   monitor en seco, integraciones: [$MONI] (antes [$MONI0])"
 case ",$MONI," in *",config_drift:"*) desvio "el monitor ve deriva de la configuración autorizada tras el despliegue: la fase 1 no tiene que cambiar ninguna huella (S8-b 9)" ;; esac
 INCID=$($PSQL -c "SELECT count(*) FROM incidents WHERE source = 'ultron_studio';")
 [ "$INCID" = "$INCID_ANTES" ] && echo "   incidentes ultron_studio: $INCID (los mismos)" || desvio "incidentes ultron_studio: $INCID_ANTES → $INCID durante el despliegue"
+if [ "$FASE" = 4a ]; then
+  # La 4a no escribe el fichero de entorno: el respaldo, byte a byte.
+  cmp -s "$ENVF" "$BK/env.backup" && echo "   fichero de entorno idéntico al respaldo (la 4a no lo toca)" || desvio "el fichero de entorno difiere del respaldo: la 4a no escribe nada en él (comparar a mano sin imprimir valores)"
+else
 P="^[[:space:]]*(export[[:space:]]+)?($CLAVES_H8)[[:space:]]*="
 if cmp -s <(grep -vE "$P" "$ENVF" | sed '/^$/d') <(grep -vE "$P" "$BK/env.backup" | sed '/^$/d'); then echo "   fichero de entorno igual al respaldo salvo las 9 claves del Hito 8"; else desvio "el fichero de entorno difiere del respaldo en algo más que las claves del Hito 8 (comparar a mano sin imprimir valores)"; fi
 N=0; for kv in $VARS; do if [ "$(estado_var "${kv%%=*}" "${kv#*=}")" = igual ]; then N=$((N + 1)); fi; done
 [ "$N" = 9 ] || desvio "solo $N de las 9 claves del Hito 8 están una vez y con su valor"
-echo "10. voice:doctor --telefonia (sin red; la telefonía dice ELEVENLABS_UNVERIFIED a propósito hasta la fase 3, E4-6):"
-TEL=$(artisan voice:doctor --telefonia --json 2>/dev/null | python3 -c '
-import json, sys
-try:
-    d = json.load(sys.stdin)
-    t = d["telefonia"]
-    f = t["flags"]
-    pub = t.get("publication") or {}
-    l = t["limits"]
-    print("estado=%s constante=%s encendidas=%d cadena=%s freno=%s cupos=%s/%s/%s numero=%s subcuenta=%s proveedor=%s" % (
-        d.get("state"), "abierta" if t.get("callsEnabledInCode") else "cerrada", sum(1 for v in f.values() if v is True),
-        ",".join("%s:%s" % (k, (pub.get(k) or {}).get("status")) for k in ("canary", "rest")),
-        {True: "echado", False: "suelto"}.get(t.get("brakeOpen"), "?"), l.get("outboundDailyCap"), l.get("inboundDailyCap"),
-        l.get("dailyBudgetMicros"), "si" if (t.get("number") or {}).get("configured") else "no",
-        "si" if t.get("carrierConfigured") else "no", t.get("provider")))
-except Exception:
-    print("?")' 2>/dev/null || echo '?')
+fi
+if [ "$FASE" = 4a ]; then
+  echo "10. voice:doctor --telefonia (sin red): el de la fase 2 con la constante abierta y nada más"
+else
+  echo "10. voice:doctor --telefonia (sin red; la telefonía dice ELEVENLABS_UNVERIFIED a propósito hasta la fase 3, E4-6):"
+fi
+TEL=$(telefonia)
 echo "   $TEL"
+if [ "$FASE" = 4a ]; then
+  [ "$TEL" = "${TEL0/constante=cerrada/constante=abierta}" ] || desvio "voice:doctor --telefonia cambió en algo más que la constante: antes [$TEL0] · después [$TEL]"
+else
 [ "$TEL" = "estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=0 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=no subcuenta=no proveedor=ELEVENLABS_UNVERIFIED" ] \
   || desvio "voice:doctor --telefonia no es el de la fase 1 (esperado: estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=0 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=no subcuenta=no proveedor=ELEVENLABS_UNVERIFIED)"
-echo "11. integrations-doctor e integrations-snapshot (E1-12; S8-b 9: la huella de voz no cambia):"
-if artisan ultron-studio:integrations-doctor --expect="$EXPECT_FASE1" > /dev/null 2>&1; then
-  echo "   twilio connected_otp_only · twilio_voice not_configured · elevenlabs ELEVENLABS_VERIFIED: 0"
+fi
+echo "11. integrations-doctor e integrations-snapshot (S8-b 9: la huella de voz no cambia; $([ "$FASE" = 4a ] && echo 'la constante no entra en ella' || echo 'E1-12')):"
+if artisan ultron-studio:integrations-doctor --expect="$EXPECT" > /dev/null 2>&1; then
+  echo "   $(printf '%s' "$EXPECT" | tr ',' '\n' | sed 's/:/ /' | paste -sd '·' - | sed 's/·/ · /g'): 0"
 else
-  desvio "integrations-doctor no confirma $EXPECT_FASE1"
+  desvio "integrations-doctor no confirma $EXPECT"
 fi
 if artisan ultron-studio:integrations-doctor --expect=meta_ads:connected_read > /dev/null 2>&1; then
   echo "   meta_ads connected_read: 0"
@@ -660,4 +960,11 @@ ERRORES=$((ERRORES - ESPERADOS))
 echo "12. laravel.log ERROR desde el inicio del despliegue: $ERRORES$([ "$ESPERADOS" = 0 ] || echo " (más $ESPERADOS del 55P03 reintentado en el paso 3, esperados)")"; [ "$ERRORES" = 0 ] || desvio "$ERRORES errores en el log desde el inicio"
 [ "$(g -C /var/www/api status --porcelain --untracked-files=no | wc -l | tr -d ' ')" = 0 ] || desvio "el checkout tiene cambios tras el despliegue"
 echo "   registro de esta ejecución: $LOG"
-if [ "$DESVIOS" = 0 ]; then echo "DESPLIEGUE H8 FASE 1 (BACKEND) COMPLETADO"; else echo "DESPLIEGUE H8 FASE 1 (BACKEND) CON $DESVIOS DESVÍOS: no seguir con el CRM ni con el smoke hasta aclararlos"; exit 1; fi
+if [ "$FASE" = 4a ]; then
+  if [ "$DESVIOS" = 0 ]; then
+    echo "DESPLIEGUE H8 FASE 4a (voice(calls-open) $ESPERADO, autorización «$AUTORIZACION») COMPLETADO"
+    echo "   las llamadas siguen cerradas por las banderas: lo siguiente, cada paso con su autorización (runbook «Fase 4a-primero»): $([ -n "$SIN_WORKER" ] && echo 'instalar ironbody-voice (14 RUNNING) → ')bash /root/h8-voice-scope.sh salientes on --cupo=1 --presupuesto=2.00 → reconocer la configuración (H-25) → expectativa llamadas si el monitor del H7 está encendido → publicar el canario (en ventana) → SMOKE_PHASE=4a"
+  else
+    echo "DESPLIEGUE H8 FASE 4a (voice(calls-open) $ESPERADO, autorización «$AUTORIZACION») CON $DESVIOS DESVÍOS: no encender las salientes hasta aclararlos (la vuelta atrás del código, en la cabecera)"; exit 1
+  fi
+elif [ "$DESVIOS" = 0 ]; then echo "DESPLIEGUE H8 FASE 1 (BACKEND) COMPLETADO"; else echo "DESPLIEGUE H8 FASE 1 (BACKEND) CON $DESVIOS DESVÍOS: no seguir con el CRM ni con el smoke hasta aclararlos"; exit 1; fi

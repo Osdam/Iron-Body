@@ -1,0 +1,39 @@
+OK    admite [AUT-4A-2026-11-12]
+OK    admite [orden del propietario 12-11-2026 14:05 UTC]
+OK    admite [Chat 12 (propietario) 2026/11/12]
+OK    rechaza [#12 (chat) 2026/11/12]
+OK    rechaza [x]
+OK    rechaza [AUT$(id)]
+OK    rechaza [AUT;ls]
+OK    rechaza [AUT-4A con tilde á]
+OK    rechaza [AUT`id`]
+OK    rechaza [#AUT-12345]
+OK    rechaza [AUT|cat]
+OK    rechaza [AUT'x']
+OK    rechaza [AUT-4A~X]
+OK    sustitución de la constante en el JSON: {"calls_in_code":true,"inbound":false,"outbound":false}
+OK    raw del cambio legítimo casa
+OK    un fichero añadido no casa
+OK    un cambio de modo (755) no casa
+OK    otra ruta (sufijo) no casa
+OK    la ruta es literal (sin comodines)
+OK    telefonía de una fase 2 completa casa
+OK    telefonía sin verificar no casa
+OK    con salientes encendidas no casa
+OK    sin número no casa
+OK    telefonía esperada tras la 4a
+OK    línea esperada tras el giro: [    public const CALLS_ENABLED_IN_CODE = true;]
+OK    las dos formas ancladas casan
+OK    con comentario detrás no casa
+OK    documentación: backend/docs/ultron-studio/X.md
+OK    documentación: docs/a/b.txt
+OK    documentación: README.md
+OK    documentación: backend/docs/ops/supervisor/ironbody-voice.conf
+OK    no es documentación: backend/app/X.php
+OK    no es documentación: backend/README.md
+OK    no es documentación: frontend/a.md
+OK    no es documentación: backend/config/voice.php
+OK    no es documentación: n8n/x.json
+OK    no es documentación: backend/docsX/a.md
+OK    case detrás de || funciona
+== 0 FALLO

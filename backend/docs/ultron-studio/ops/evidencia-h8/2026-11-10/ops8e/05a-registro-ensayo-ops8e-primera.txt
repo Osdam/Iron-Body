@@ -1,0 +1,322 @@
+════ 0 · h7 estado (solo lectura): el monitor apagado, su expectativa, si se confirma, el crontab (B-4) y el fichero (C-14) · código 0
+configuración efectiva del monitor (proceso CLI, la misma caché que el programador): monitor=off
+{"monitor_enabled":false,"monitor_expect_default":false}
+schedule:list (total · del Studio): 27 0 (encendido: 2 del Studio; apagado: 0)
+/Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/h7-monitor-scope.sh: command substitution: line 155: syntax error near unexpected token `newline'
+/Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/h7-monitor-scope.sh: command substitution: line 155: `case "$ANTES" in *'"monitor_expect_default":true'*'
+expectativa del monitor: twilio:connected_otp_only,twilio_voice:disabled,elevenlabs:ELEVENLABS_VERIFIED echo ' (la del código, sin ULTRON_STUDIO_MONITOR_EXPECT)' ;; esac) · la confirma el estado de hoy (monitor en seco, integraciones): NO (encendido, la primera pasada abriría un incidente: fijar la de la etapa con bash /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/h8-voice-scope.sh expectativa fase1|fase2|llamadas)
+schedule:run en el crontab de root: 0 · en el de www-data: 0 (B-4: tiene que ser el de www-data; ver el plan de despliegue)
+fichero de entorno: alejodev:staff 600 (C-14: www-data 600 o root:www-data 640)
+════ 1 · B-T13 · h7 on con deriva de la configuración autorizada (salientes off sin reconocer, H-25) → NO SE APLICA (código 2) · código 2
+NO SE APLICA (no se ha tocado nada): el monitor en seco (integraciones) no sale con 0 con la expectativa de hoy (twilio:connected_otp_only,twilio_voice:disabled,elevenlabs:ELEVENLABS_VERIFIED): encendido, su primera pasada abriría un incidente. Fijar la de la etapa con bash /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/h8-voice-scope.sh expectativa fase1|fase2|llamadas (el plan de despliegue, «Hito 8», dice cuál toca; la del código no vale desde E1-12) y, si hay deriva, reconocer la configuración autorizada; después, repetir
+════ API b GET admin/ultron-studio/integrations/config
+{"http":200,"body":{"ok":true,"data":{"providers":[{"provider":"meta_ads","state":"never_authorized","effective":{"token":{"present":true,"fp":"0119e0f2"},"accounts":[{"ref":"***1001"},{"ref":"***2002"},{"ref":"***3003"}],"graphVersion":"v26.0","syncEnabled":true,"syncDays":7,"staleMinutes":180,"timezone":"America/Bogota"},"effectiveFingerprint":"b29e8ee96b64d0d478f1be3ed6f07b7bbe68a9d16f6b3464247524d3a42fc5e3","authorized":null,"observed":{"uuid":"7386e513-5c87-45c4-8c5f-675a9440547e","fingerprint":"b29e8ee96b64d0d478f1be3ed6f07b7bbe68a9d16f6b3464247524d3a42fc5e3","at":"2026-11-11T00:31:52+00:00"},"drift":[]},{"provider":"twilio","state":"never_authorized","effective":{"otpDriver":"twilio","accountSid":{"present":true,"source":"TWILIO_SID","ref":"AC…b905"},"authToken":{"present":true,"s
+════ API b POST admin/ultron-studio/integrations/config/acknowledge
+{"http":201,"body":{"ok":true,"data":{"replayed":false,"snapshot":{"uuid":"7918b212-2e6a-4630-8d48-09409b3fce37","provider":"voice","fingerprint":"99909252f01c00c784095c34217421ab2b68ddc62b42e996f2c09e66d1237ac6","at":"2026-11-11T01:05:29+00:00","by":{"name":"Beto Revisor (OPS8-d)","role":"Super Admin"},"note":"OPS8-e: reconocer tras salientes off (H-25)"}}}}
+════ 1 · B-T13 · h7 estado: el estado de hoy ya confirma la expectativa · código 0
+configuración efectiva del monitor (proceso CLI, la misma caché que el programador): monitor=off
+{"monitor_enabled":false,"monitor_expect_default":false}
+schedule:list (total · del Studio): 27 0 (encendido: 2 del Studio; apagado: 0)
+/Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/h7-monitor-scope.sh: command substitution: line 155: syntax error near unexpected token `newline'
+/Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/h7-monitor-scope.sh: command substitution: line 155: `case "$ANTES" in *'"monitor_expect_default":true'*'
+expectativa del monitor: twilio:connected_otp_only,twilio_voice:disabled,elevenlabs:ELEVENLABS_VERIFIED echo ' (la del código, sin ULTRON_STUDIO_MONITOR_EXPECT)' ;; esac) · la confirma el estado de hoy (monitor en seco, integraciones): sí
+schedule:run en el crontab de root: 0 · en el de www-data: 0 (B-4: tiene que ser el de www-data; ver el plan de despliegue)
+fichero de entorno: alejodev:staff 600 (C-14: www-data 600 o root:www-data 640)
+════ 2 · B-T13 · sin ULTRON_STUDIO_MONITOR_EXPECT (la del código: ELEVENLABS_NOT_CONFIGURED) → h7 on se niega (código 2) · código 2
+NO SE APLICA (no se ha tocado nada): el monitor en seco (integraciones) no sale con 0 con la expectativa de hoy (twilio:connected_otp_only,twilio_voice:not_configured,elevenlabs:ELEVENLABS_NOT_CONFIGURED): encendido, su primera pasada abriría un incidente. Fijar la de la etapa con bash /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/h8-voice-scope.sh expectativa fase1|fase2|llamadas (el plan de despliegue, «Hito 8», dice cuál toca; la del código no vale desde E1-12) y, si hay deriva, reconocer la configuración autorizada; después, repetir
+════ 2 · B-T13 · h7 estado: la del código y NO confirmada · código 0
+configuración efectiva del monitor (proceso CLI, la misma caché que el programador): monitor=off
+{"monitor_enabled":false,"monitor_expect_default":true}
+schedule:list (total · del Studio): 27 0 (encendido: 2 del Studio; apagado: 0)
+/Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/h7-monitor-scope.sh: command substitution: line 155: syntax error near unexpected token `newline'
+/Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/h7-monitor-scope.sh: command substitution: line 155: `case "$ANTES" in *'"monitor_expect_default":true'*'
+expectativa del monitor: twilio:connected_otp_only,twilio_voice:not_configured,elevenlabs:ELEVENLABS_NOT_CONFIGURED echo ' (la del código, sin ULTRON_STUDIO_MONITOR_EXPECT)' ;; esac) · la confirma el estado de hoy (monitor en seco, integraciones): NO (encendido, la primera pasada abriría un incidente: fijar la de la etapa con bash /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/h8-voice-scope.sh expectativa fase1|fase2|llamadas)
+schedule:run en el crontab de root: 0 · en el de www-data: 0 (B-4: tiene que ser el de www-data; ver el plan de despliegue)
+fichero de entorno: alejodev:staff 600 (C-14: www-data 600 o root:www-data 640)
+════ 2 · la vía: h8-voice-scope.sh expectativa fase2 (integrations-doctor la confirma) → APLICADO · código 0
+0. expectativa-fase2 · copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-voice-expectativa-fase2-20261111-010534 (600, alejodev) · fichero alejodev:staff 600 · programador 27 0 0 · workers 13 0 · constante cerrada
+   ULTRON_STUDIO_MONITOR_EXPECT añadida
+1. claves escritas (sin valores): ULTRON_STUDIO_MONITOR_EXPECT · fichero alejodev:staff 600
+2. el fichero parsea · caché: alejodev 600
+3. configuración efectiva, antes → después (sin valores de secretos): expect: "twilio:connected_otp_only,twilio_voice:not_configured,elevenlabs:ELEVENLABS_NOT_CONFIGURED" → "twilio:connected_otp_only,twilio_voice:disabled,elevenlabs:ELEVENLABS_VERIFIED"
+   motor, H4–H7 y ElevenLabs (proveedor y Studio) sin cambios
+   el fichero de entorno es la copia previa salvo 1 clave(s) de la orden
+4. programador (total · del Studio · de voz): 27 0 0 → 27 0 0 (esperado 27 0 0)
+5. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+6. admin/voice/status sin token → 401
+7. local.ERROR en laravel*.log: 0 → 0
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=0 cadena=canary:ok,rest:none freno=suelto cupos=0/0/0 numero=si importado=si subcuenta=si whatsapp=no proveedor=ELEVENLABS_VERIFIED
+   vuelta atrás exacta (el fichero de antes): install -m 600 -o alejodev -g staff /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-voice-expectativa-fase2-20261111-010534 /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/api/backend/.env && cd /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+MANDO expectativa-fase2 APLICADO (copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-voice-expectativa-fase2-20261111-010534)
+════ 2 · B-T13 · h7 on off con la expectativa confirmada → APLICADO (programador +2) · código 0
+   expectativa del monitor: twilio:connected_otp_only,twilio_voice:disabled,elevenlabs:ELEVENLABS_VERIFIED (el estado de hoy la confirma: monitor en seco, integraciones, 0)
+0. monitor: off → on · copia previa del fichero de entorno: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-h7-monitor-on-20261111-010551 (600, root) · fichero alejodev:staff 600 · programador (total · del Studio): 27 0
+1. ULTRON_STUDIO_MONITOR_ENABLED=true (fichero alejodev 600)
+2. caché: alejodev 600
+   {"monitor_enabled":true,"monitor_expect_default":false}
+   motor, H4, H5 y H6 sin cambios
+3. programador (total · del Studio): 27 0 → 29 2 (esperado 29 2: las 2 tareas del Studio aparecen y nada más cambia)
+4. workers (RUNNING · BACKOFF/FATAL), dos lecturas separadas: [13 0] y [13 0] (esperado 13 0: 13)
+5. status sin token → 401
+   INFO: ultron-studio:monitor --dry-run (publicación e integraciones): 0, la primera pasada no debería abrir incidente
+   INFO (H-1): schedule:run no aparece en el crontab de root ni en el de www-data (¿systemd o /etc/cron.d?): comprobar quién lo ejecuta
+   siguiente, a mano: la primera pasada real: sudo -u www-data php artisan ultron-studio:monitor → 0 y ningún incidente ultron_studio nuevo
+MANDO monitor → on APLICADO (copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-h7-monitor-on-20261111-010551)
+════ 2 · h7 off on (la vuelta atrás de nivel 2) → APLICADO · código 0
+0. monitor: on → off · copia previa del fichero de entorno: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-h7-monitor-off-20261111-010607 (600, root) · fichero alejodev:staff 600 · programador (total · del Studio): 29 2
+1. ULTRON_STUDIO_MONITOR_ENABLED=false (fichero alejodev 600)
+2. caché: alejodev 600
+   {"monitor_enabled":false,"monitor_expect_default":false}
+   motor, H4, H5 y H6 sin cambios
+3. programador (total · del Studio): 29 2 → 27 0 (esperado 27 0: las 2 tareas del Studio desaparecen y nada más cambia)
+4. workers (RUNNING · BACKOFF/FATAL), dos lecturas separadas: [13 0] y [13 0] (esperado 13 0: 13)
+5. status sin token → 401
+MANDO monitor → off APLICADO (copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-h7-monitor-off-20261111-010607)
+════ 3 · B-T14 · h7 on off con el fichero en 640 → APLICADO · código 0
+   expectativa del monitor: twilio:connected_otp_only,twilio_voice:disabled,elevenlabs:ELEVENLABS_VERIFIED (el estado de hoy la confirma: monitor en seco, integraciones, 0)
+0. monitor: off → on · copia previa del fichero de entorno: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-h7-monitor-on-20261111-010623 (600, root) · fichero alejodev:staff 640 · programador (total · del Studio): 27 0
+1. ULTRON_STUDIO_MONITOR_ENABLED=true (fichero alejodev 640)
+2. caché: alejodev 600
+   {"monitor_enabled":true,"monitor_expect_default":false}
+   motor, H4, H5 y H6 sin cambios
+3. programador (total · del Studio): 27 0 → 29 2 (esperado 29 2: las 2 tareas del Studio aparecen y nada más cambia)
+4. workers (RUNNING · BACKOFF/FATAL), dos lecturas separadas: [13 0] y [13 0] (esperado 13 0: 13)
+5. status sin token → 401
+   INFO: ultron-studio:monitor --dry-run (publicación e integraciones): 0, la primera pasada no debería abrir incidente
+   INFO (H-1): schedule:run no aparece en el crontab de root ni en el de www-data (¿systemd o /etc/cron.d?): comprobar quién lo ejecuta
+   siguiente, a mano: la primera pasada real: sudo -u www-data php artisan ultron-studio:monitor → 0 y ningún incidente ultron_studio nuevo
+MANDO monitor → on APLICADO (copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-h7-monitor-on-20261111-010623)
+════ 3 · B-T14 · h7 off on (APAGAR) con el fichero en 644 → ABORTA sin tocar nada (644 sigue sin admitirse) · código 1
+ABORTA: el fichero de entorno no es un fichero normal de alejodev en 600 ni de alejodev:staff en 640 (es alejodev:staff 644; C-14, N-4 de security): corregirlo a mano antes de tocar nada
+════ 3 · B-T14 · h6 writes on off con el fichero en 644 → ABORTA sin tocar nada · código 1
+ABORTA: el fichero de entorno no es un fichero normal de alejodev en 600 ni de alejodev:staff en 640 (es alejodev:staff 644; C-14, N-4 de security): corregirlo a mano antes de tocar nada
+════ 3 · B-T14 · h7 off on (APAGAR) con el fichero en 640 → APLICADO · código 0
+0. monitor: on → off · copia previa del fichero de entorno: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-h7-monitor-off-20261111-010640 (600, root) · fichero alejodev:staff 640 · programador (total · del Studio): 29 2
+1. ULTRON_STUDIO_MONITOR_ENABLED=false (fichero alejodev 640)
+2. caché: alejodev 600
+   {"monitor_enabled":false,"monitor_expect_default":false}
+   motor, H4, H5 y H6 sin cambios
+3. programador (total · del Studio): 29 2 → 27 0 (esperado 27 0: las 2 tareas del Studio desaparecen y nada más cambia)
+4. workers (RUNNING · BACKOFF/FATAL), dos lecturas separadas: [13 0] y [13 0] (esperado 13 0: 13)
+5. status sin token → 401
+MANDO monitor → off APLICADO (copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-h7-monitor-off-20261111-010640)
+════ 3 · B-T14 · h6 writes on off con el fichero en 640 → APLICADO · código 0
+0. writes: off → on · copia previa del fichero de entorno: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-h6-writes-on-20261111-010655 (600, root) · fichero alejodev:staff 640
+1. ULTRON_STUDIO_INTEGRATIONS_WRITES_ENABLED=true (fichero alejodev 640)
+2. caché: alejodev 600
+   {"writes_enabled":true,"probe_enabled":false,"probe_cooldown_s":300,"probe_credential":"otp","probe_base_set":false,"canary_max_active":3,"canary_max_live":10,"canary_country_codes":["57"],"campaign_links_max_active":50,"twilio_aliases":{"sid_source":"TWILIO_SID","token_source":"TWILIO_TOKEN","sid_consistent":true,"token_consistent":true},"elevenlabs_enabled":true,"twilio_voice_enabled":false,"twilio_voice_from_set":true,"twilio_voice_daily_cap":0,"voice":{"provider":"elevenlabs","state":"ELEVENLABS_UNVERIFIED","enabled":true,"missing":[],"region":"default"}}
+   motor, H4 y H5 sin cambios
+3. workers (RUNNING · BACKOFF/FATAL), dos lecturas separadas: [13 0] y [13 0] (esperado 13 0: 13)
+4. integrations/status sin token → 401
+5. instantánea de sistema: observadas 6 → 6 (solo inserta si la huella de un proveedor cambió)
+   la vista del proceso web (flags de GET integrations/status) la comprueba el smoke: SMOKE_PHASE=2 bash /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/smoke-run-h6.sh
+   T1 con personas reales (quien tiene el teléfono registra; otra persona autoriza y activa): la cuenta de smoke nunca sirve para el T1 real
+MANDO writes → on APLICADO (copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-h6-writes-on-20261111-010655)
+════ 3 · B-T14 · h6 writes off on (APAGAR) con el fichero en 640 → APLICADO · código 0
+0. writes: on → off · copia previa del fichero de entorno: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-h6-writes-off-20261111-010711 (600, root) · fichero alejodev:staff 640
+1. ULTRON_STUDIO_INTEGRATIONS_WRITES_ENABLED=false (fichero alejodev 640)
+2. caché: alejodev 600
+   {"writes_enabled":false,"probe_enabled":false,"probe_cooldown_s":300,"probe_credential":"otp","probe_base_set":false,"canary_max_active":3,"canary_max_live":10,"canary_country_codes":["57"],"campaign_links_max_active":50,"twilio_aliases":{"sid_source":"TWILIO_SID","token_source":"TWILIO_TOKEN","sid_consistent":true,"token_consistent":true},"elevenlabs_enabled":true,"twilio_voice_enabled":false,"twilio_voice_from_set":true,"twilio_voice_daily_cap":0,"voice":{"provider":"elevenlabs","state":"ELEVENLABS_UNVERIFIED","enabled":true,"missing":[],"region":"default"}}
+   motor, H4 y H5 sin cambios
+3. workers (RUNNING · BACKOFF/FATAL), dos lecturas separadas: [13 0] y [13 0] (esperado 13 0: 13)
+4. integrations/status sin token → 401
+5. instantánea de sistema: observadas 6 → 6 (solo inserta si la huella de un proveedor cambió)
+   la vista del proceso web (flags de GET integrations/status) la comprueba el smoke: SMOKE_PHASE=2 bash /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/smoke-run-h6.sh
+MANDO writes → off APLICADO (copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-h6-writes-off-20261111-010711)
+════ 4 · worker instalar: 13 → 14 programas · código 0
+reread: ironbody-voice: available  · update: ironbody-voice: added process group 
+programas RUNNING: 14 (14 con el worker de voz)
+════ 4 · h7 on off con ironbody-voice instalado → APLICADO, esperado 14 0 · código 0
+   expectativa del monitor: twilio:connected_otp_only,twilio_voice:disabled,elevenlabs:ELEVENLABS_VERIFIED (el estado de hoy la confirma: monitor en seco, integraciones, 0)
+0. monitor: off → on · copia previa del fichero de entorno: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-h7-monitor-on-20261111-010727 (600, root) · fichero alejodev:staff 600 · programador (total · del Studio): 27 0
+1. ULTRON_STUDIO_MONITOR_ENABLED=true (fichero alejodev 600)
+2. caché: alejodev 600
+   {"monitor_enabled":true,"monitor_expect_default":false}
+   motor, H4, H5 y H6 sin cambios
+3. programador (total · del Studio): 27 0 → 29 2 (esperado 29 2: las 2 tareas del Studio aparecen y nada más cambia)
+4. workers (RUNNING · BACKOFF/FATAL), dos lecturas separadas: [14 0] y [14 0] (esperado 14 0: 13 y ironbody-voice)
+5. status sin token → 401
+   INFO: ultron-studio:monitor --dry-run (publicación e integraciones): 0, la primera pasada no debería abrir incidente
+   INFO (H-1): schedule:run no aparece en el crontab de root ni en el de www-data (¿systemd o /etc/cron.d?): comprobar quién lo ejecuta
+   siguiente, a mano: la primera pasada real: sudo -u www-data php artisan ultron-studio:monitor → 0 y ningún incidente ultron_studio nuevo
+MANDO monitor → on APLICADO (copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-h7-monitor-on-20261111-010727)
+════ 4 · h7 off on con 14 → APLICADO · código 0
+0. monitor: on → off · copia previa del fichero de entorno: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-h7-monitor-off-20261111-010743 (600, root) · fichero alejodev:staff 600 · programador (total · del Studio): 29 2
+1. ULTRON_STUDIO_MONITOR_ENABLED=false (fichero alejodev 600)
+2. caché: alejodev 600
+   {"monitor_enabled":false,"monitor_expect_default":false}
+   motor, H4, H5 y H6 sin cambios
+3. programador (total · del Studio): 29 2 → 27 0 (esperado 27 0: las 2 tareas del Studio desaparecen y nada más cambia)
+4. workers (RUNNING · BACKOFF/FATAL), dos lecturas separadas: [14 0] y [14 0] (esperado 14 0: 13 y ironbody-voice)
+5. status sin token → 401
+MANDO monitor → off APLICADO (copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-h7-monitor-off-20261111-010743)
+════ 4 · h6 writes on off con 14 → APLICADO · código 0
+0. writes: off → on · copia previa del fichero de entorno: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-h6-writes-on-20261111-010759 (600, root) · fichero alejodev:staff 600
+1. ULTRON_STUDIO_INTEGRATIONS_WRITES_ENABLED=true (fichero alejodev 600)
+2. caché: alejodev 600
+   {"writes_enabled":true,"probe_enabled":false,"probe_cooldown_s":300,"probe_credential":"otp","probe_base_set":false,"canary_max_active":3,"canary_max_live":10,"canary_country_codes":["57"],"campaign_links_max_active":50,"twilio_aliases":{"sid_source":"TWILIO_SID","token_source":"TWILIO_TOKEN","sid_consistent":true,"token_consistent":true},"elevenlabs_enabled":true,"twilio_voice_enabled":false,"twilio_voice_from_set":true,"twilio_voice_daily_cap":0,"voice":{"provider":"elevenlabs","state":"ELEVENLABS_UNVERIFIED","enabled":true,"missing":[],"region":"default"}}
+   motor, H4 y H5 sin cambios
+3. workers (RUNNING · BACKOFF/FATAL), dos lecturas separadas: [14 0] y [14 0] (esperado 14 0: 13 y ironbody-voice)
+4. integrations/status sin token → 401
+5. instantánea de sistema: observadas 6 → 6 (solo inserta si la huella de un proveedor cambió)
+   la vista del proceso web (flags de GET integrations/status) la comprueba el smoke: SMOKE_PHASE=2 bash /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/smoke-run-h6.sh
+   T1 con personas reales (quien tiene el teléfono registra; otra persona autoriza y activa): la cuenta de smoke nunca sirve para el T1 real
+MANDO writes → on APLICADO (copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-h6-writes-on-20261111-010759)
+════ 4 · h6 writes off on con 14 → APLICADO · código 0
+0. writes: on → off · copia previa del fichero de entorno: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-h6-writes-off-20261111-010815 (600, root) · fichero alejodev:staff 600
+1. ULTRON_STUDIO_INTEGRATIONS_WRITES_ENABLED=false (fichero alejodev 600)
+2. caché: alejodev 600
+   {"writes_enabled":false,"probe_enabled":false,"probe_cooldown_s":300,"probe_credential":"otp","probe_base_set":false,"canary_max_active":3,"canary_max_live":10,"canary_country_codes":["57"],"campaign_links_max_active":50,"twilio_aliases":{"sid_source":"TWILIO_SID","token_source":"TWILIO_TOKEN","sid_consistent":true,"token_consistent":true},"elevenlabs_enabled":true,"twilio_voice_enabled":false,"twilio_voice_from_set":true,"twilio_voice_daily_cap":0,"voice":{"provider":"elevenlabs","state":"ELEVENLABS_UNVERIFIED","enabled":true,"missing":[],"region":"default"}}
+   motor, H4 y H5 sin cambios
+3. workers (RUNNING · BACKOFF/FATAL), dos lecturas separadas: [14 0] y [14 0] (esperado 14 0: 13 y ironbody-voice)
+4. integrations/status sin token → 401
+5. instantánea de sistema: observadas 6 → 6 (solo inserta si la huella de un proveedor cambió)
+   la vista del proceso web (flags de GET integrations/status) la comprueba el smoke: SMOKE_PHASE=2 bash /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/smoke-run-h6.sh
+MANDO writes → off APLICADO (copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-h6-writes-off-20261111-010815)
+════ 4 · worker retirar: 14 → 13 · código 0
+reread: ironbody-voice: disappeared  · update: ironbody-voice: stopped ironbody-voice: removed process group 
+programas RUNNING: 13 (13 sin el worker de voz)
+════ 5 · estado del mando de la voz con el código del banco: no lee la bandera de contactos · código 0
+== estado de la voz (configuración efectiva del proceso CLI, la misma caché que el web; sin valores de secretos)
+   código desplegado: HEAD a608450 · constante de llamadas: cerrada
+   salientes: no · alcance canary · cupo/día 0 · presupuesto/día 0 US$ · Twilio Voice no
+   entrantes: no · cupo/día 0
+   laboratorio hablado: no · driver fake · presupuesto/día 0 US$ · por sesión 0 US$ · 300 s · 3 sesiones/día
+   monitor de voz: no · publicar la voz (Studio): no · monitor del H7: no (expectativa: twilio:connected_otp_only,twilio_voice:disabled,elevenlabs:ELEVENLABS_VERIFIED)
+   piezas no secretas: VOICE_WEBHOOK_BASE_URL https://api.ironbody-banco.invalid · ELEVENLABS_AGENT_PHONE_NUMBER_ID phnum_6d4f4c6b9253e2f3 · TWILIO_VOICE_FROM …0090 · TWILIO_VOICE_ACCOUNT_SID AC…7ee7
+   referencias (ids, no secretos): herramientas sec_4324g7w93fyf9mnjq00vpzb9qe · iniciación sec_gf5gfm9fh1a8sdtyndp405kxd9 · webhook post-llamada wh_a8qtwrad20s46b7sds30cwhvdv
+   secretos (solo presencia): ELEVENLABS_API_KEY presente · ELEVENLABS_WEBHOOK_SECRET presente · ELEVENLABS_TOOL_SECRET presente · ELEVENLABS_INITIATION_SECRET presente · TWILIO_VOICE_API_KEY_SID presente · TWILIO_VOICE_API_KEY_SECRET presente · TWILIO_VOICE_SIGNING_TOKEN presente
+   número de voz igual a uno de WhatsApp: no · ElevenLabs según el Studio: ELEVENLABS_VERIFIED
+   el número admite entrantes (VOICE_NUMBER_INBOUND_CAPABLE): NO: «Outbound Only» declarado
+   reserva por saliente (VoiceCostGuard): 0.6105 US$ a un móvil sin transferencia · 1.1220 US$ a un fijo con transferencia
+   contactos de voz (alta y consentimiento, VOICE_CONTACTS_ENABLED, B-T4): el código desplegado no lee la bandera (antes de B-T4: el alta no tiene bandera)
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=0 cadena=canary:ok,rest:none freno=suelto cupos=0/0/0 numero=si importado=si subcuenta=si whatsapp=no proveedor=ELEVENLABS_VERIFIED
+   programador (total · del Studio · de voz): 27 0 0 (de voz: 4 con el monitor de voz encendido, 0 apagado)
+   workers (RUNNING · BACKOFF/FATAL): 13 0 · ironbody-voice en RUNNING: 0 (lo exige «salientes on»)
+   fichero de entorno: alejodev:staff 600 (C-14: www-data 600 o root:www-data 640)
+   integrations-doctor confirma la expectativa del monitor del H7: sí
+════ 5 · contactos on con un código que no lee VOICE_CONTACTS_ENABLED → NO SE APLICA (código 2) · código 2
+NO SE APLICA (no se ha tocado nada): el código desplegado no lee VOICE_CONTACTS_ENABLED (B-T4): desplegar antes ese código; escribirla ahora no tendría efecto
+════ 5 · contactos off con ese código → NO SE APLICA (código 2) · código 2
+NO SE APLICA (no se ha tocado nada): el código desplegado no lee VOICE_CONTACTS_ENABLED (B-T4): desplegar antes ese código; escribirla ahora no tendría efecto
+════ código de B-T4 copiado al banco (sha256 de los 4 ficheros)
+cff26fd44d442b56ad1902a4dddf78184d0584c8e89b905247b98f12a6be9a65  config/voice.php
+deb92c47b5660b1398e53451a554ba8532ef96b3149e6b26e3a7006c04aed7af  app/Services/Telephony/VoiceContacts.php
+e45532ea95ea1d0d3dab48d0631bb0f2418f84f62484b2878f06d2df560b99d9  app/Http/Controllers/Crm/Voice/VoiceContactController.php
+c7fc4f69a7608e663ff4f8c636478b0a1ea99b364e8b55efc5fdf677c9b928b7  app/Services/Telephony/VoiceTelephonyStatus.php
+════ 5 · con el código de B-T4: estado la enseña apagada · código 0
+== estado de la voz (configuración efectiva del proceso CLI, la misma caché que el web; sin valores de secretos)
+   código desplegado: HEAD a608450 · constante de llamadas: cerrada
+   salientes: no · alcance canary · cupo/día 0 · presupuesto/día 0 US$ · Twilio Voice no
+   entrantes: no · cupo/día 0
+   laboratorio hablado: no · driver fake · presupuesto/día 0 US$ · por sesión 0 US$ · 300 s · 3 sesiones/día
+   monitor de voz: no · publicar la voz (Studio): no · monitor del H7: no (expectativa: twilio:connected_otp_only,twilio_voice:disabled,elevenlabs:ELEVENLABS_VERIFIED)
+   piezas no secretas: VOICE_WEBHOOK_BASE_URL https://api.ironbody-banco.invalid · ELEVENLABS_AGENT_PHONE_NUMBER_ID phnum_6d4f4c6b9253e2f3 · TWILIO_VOICE_FROM …0090 · TWILIO_VOICE_ACCOUNT_SID AC…7ee7
+   referencias (ids, no secretos): herramientas sec_4324g7w93fyf9mnjq00vpzb9qe · iniciación sec_gf5gfm9fh1a8sdtyndp405kxd9 · webhook post-llamada wh_a8qtwrad20s46b7sds30cwhvdv
+   secretos (solo presencia): ELEVENLABS_API_KEY presente · ELEVENLABS_WEBHOOK_SECRET presente · ELEVENLABS_TOOL_SECRET presente · ELEVENLABS_INITIATION_SECRET presente · TWILIO_VOICE_API_KEY_SID presente · TWILIO_VOICE_API_KEY_SECRET presente · TWILIO_VOICE_SIGNING_TOKEN presente
+   número de voz igual a uno de WhatsApp: no · ElevenLabs según el Studio: ELEVENLABS_VERIFIED
+   el número admite entrantes (VOICE_NUMBER_INBOUND_CAPABLE): NO: «Outbound Only» declarado
+   reserva por saliente (VoiceCostGuard): 0.6105 US$ a un móvil sin transferencia · 1.1220 US$ a un fijo con transferencia
+   contactos de voz (alta y consentimiento, VOICE_CONTACTS_ENABLED, B-T4): no (409 voice_contacts_disabled; revocar, excluir y el RNE siguen)
+   voice:doctor --telefonia (sin red): ?
+?
+   programador (total · del Studio · de voz): 27 0 0 (de voz: 4 con el monitor de voz encendido, 0 apagado)
+   workers (RUNNING · BACKOFF/FATAL): 13 0 · ironbody-voice en RUNNING: 0 (lo exige «salientes on»)
+   fichero de entorno: alejodev:staff 600 (C-14: www-data 600 o root:www-data 640)
+   integrations-doctor confirma la expectativa del monitor del H7: sí
+════ API a GET admin/voice/status
+{"http":500,"body":{"message":"Server Error"}}
+════ API a POST admin/voice/contacts
+{"http":409,"body":{"ok":false,"code":"voice_contacts_disabled","message":"Registrar contactos de voz y cargar o confirmar su consentimiento está apagado en el servidor hasta la fase 4b (visto bueno legal)."}}
+════ 5 · contactos on → MANDO contactos-on APLICADO (contacts: false → true) · código 0
+0. contactos-on · copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-voice-contactos-on-20261111-010837 (600, alejodev) · fichero alejodev:staff 600 · programador 27 0 0 · workers 13 0 · constante cerrada
+   VOICE_CONTACTS_ENABLED añadida
+1. claves escritas (sin valores): VOICE_CONTACTS_ENABLED · fichero alejodev:staff 600
+2. el fichero parsea · caché: alejodev 600
+3. configuración efectiva, antes → después (sin valores de secretos): contacts: false → true
+   motor, H4–H7 y ElevenLabs (proveedor y Studio) sin cambios
+   el fichero de entorno es la copia previa salvo 1 clave(s) de la orden
+4. programador (total · del Studio · de voz): 27 0 0 → 27 0 0 (esperado 27 0 0)
+5. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+6. admin/voice/status sin token → 401
+7. local.ERROR en laravel*.log: 2 → 2
+   voice:doctor --telefonia (sin red): ?
+?
+   AVISO (B-T4): es de la fase 4b: el visto bueno legal (D-12) y la supresión de la Ley 1581 que cubra las tablas de voz (B-T3) van ANTES; llamar a un contacto exige además VOICE_OUTBOUND_SCOPE=contacts, una publicación promovida a rest y el RNE (P-14). Alta y consentimiento siguen a cuatro ojos
+   vuelta atrás exacta (el fichero de antes): install -m 600 -o alejodev -g staff /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-voice-contactos-on-20261111-010837 /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/api/backend/.env && cd /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+   vuelta atrás funcional: bash /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/h8-voice-scope.sh contactos off
+MANDO contactos-on APLICADO (copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-voice-contactos-on-20261111-010837)
+════ API a POST admin/voice/contacts
+{"http":422,"body":{"ok":false,"code":"validation_failed","message":"Revisa los datos enviados.","errors":{"clientRequestId":["invalid"],"number":["invalid"],"source":["invalid"],"source.type":["invalid"]}}}
+════ 5 · contactos off → MANDO contactos-off APLICADO · código 0
+0. contactos-off · copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-voice-contactos-off-20261111-010855 (600, alejodev) · fichero alejodev:staff 600 · programador 27 0 0 · workers 13 0 · constante cerrada
+   VOICE_CONTACTS_ENABLED sustituida
+1. claves escritas (sin valores): VOICE_CONTACTS_ENABLED · fichero alejodev:staff 600
+2. el fichero parsea · caché: alejodev 600
+3. configuración efectiva, antes → después (sin valores de secretos): contacts: true → false
+   motor, H4–H7 y ElevenLabs (proveedor y Studio) sin cambios
+   el fichero de entorno es la copia previa salvo 1 clave(s) de la orden
+4. programador (total · del Studio · de voz): 27 0 0 → 27 0 0 (esperado 27 0 0)
+5. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+6. admin/voice/status sin token → 401
+7. local.ERROR en laravel*.log: 3 → 3
+   voice:doctor --telefonia (sin red): ?
+?
+   AVISO (B-T4): alta, carga y confirmación del consentimiento responden 409 voice_contacts_disabled; leer, revocar, excluir y el RNE siguen (solo restringen)
+   vuelta atrás exacta (el fichero de antes): install -m 600 -o alejodev -g staff /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-voice-contactos-off-20261111-010855 /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/api/backend/.env && cd /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+MANDO contactos-off APLICADO (copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-voice-contactos-off-20261111-010855)
+════ API a POST admin/voice/contacts
+{"http":409,"body":{"ok":false,"code":"voice_contacts_disabled","message":"Registrar contactos de voz y cargar o confirmar su consentimiento está apagado en el servidor hasta la fase 4b (visto bueno legal)."}}
+{"ok":true,"sessionsDeleted":2}
+════ 6 · estado del mando de la voz: las tareas de voz con el monitor encendido, leídas del código (a608450: 4) · código 0
+== estado de la voz (configuración efectiva del proceso CLI, la misma caché que el web; sin valores de secretos)
+   código desplegado: HEAD a608450 · constante de llamadas: cerrada
+   salientes: no · alcance canary · cupo/día 0 · presupuesto/día 0 US$ · Twilio Voice no
+   entrantes: no · cupo/día 0
+   laboratorio hablado: no · driver fake · presupuesto/día 0 US$ · por sesión 0 US$ · 300 s · 3 sesiones/día
+   monitor de voz: no · publicar la voz (Studio): no · monitor del H7: no (expectativa: twilio:connected_otp_only,twilio_voice:disabled,elevenlabs:ELEVENLABS_VERIFIED)
+   piezas no secretas: VOICE_WEBHOOK_BASE_URL https://api.ironbody-banco.invalid · ELEVENLABS_AGENT_PHONE_NUMBER_ID phnum_6d4f4c6b9253e2f3 · TWILIO_VOICE_FROM …0090 · TWILIO_VOICE_ACCOUNT_SID AC…7ee7
+   referencias (ids, no secretos): herramientas sec_4324g7w93fyf9mnjq00vpzb9qe · iniciación sec_gf5gfm9fh1a8sdtyndp405kxd9 · webhook post-llamada wh_a8qtwrad20s46b7sds30cwhvdv
+   secretos (solo presencia): ELEVENLABS_API_KEY presente · ELEVENLABS_WEBHOOK_SECRET presente · ELEVENLABS_TOOL_SECRET presente · ELEVENLABS_INITIATION_SECRET presente · TWILIO_VOICE_API_KEY_SID presente · TWILIO_VOICE_API_KEY_SECRET presente · TWILIO_VOICE_SIGNING_TOKEN presente
+   número de voz igual a uno de WhatsApp: no · ElevenLabs según el Studio: ELEVENLABS_VERIFIED
+   el número admite entrantes (VOICE_NUMBER_INBOUND_CAPABLE): NO: «Outbound Only» declarado
+   reserva por saliente (VoiceCostGuard): 0.6105 US$ a un móvil sin transferencia · 1.1220 US$ a un fijo con transferencia
+   contactos de voz (alta y consentimiento, VOICE_CONTACTS_ENABLED, B-T4): el código desplegado no lee la bandera (antes de B-T4: el alta no tiene bandera)
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=0 cadena=canary:ok,rest:none freno=suelto cupos=0/0/0 numero=si importado=si subcuenta=si whatsapp=no proveedor=ELEVENLABS_VERIFIED
+   programador (total · del Studio · de voz): 27 0 0 (de voz: 4 con el monitor de voz encendido, 0 apagado)
+   workers (RUNNING · BACKOFF/FATAL): 13 0 · ironbody-voice en RUNNING: 0 (lo exige «salientes on»)
+   fichero de entorno: alejodev:staff 600 (C-14: www-data 600 o root:www-data 640)
+   integrations-doctor confirma la expectativa del monitor del H7: sí
+════ 6 · monitor on (--acepta-freno por si la saliente del ensayo sigue en la ventana de 48 h) → APLICADO · código 0
+   conciliación en seco (voice:reconcile --dry-run --numbers, código 0): desconocidas=0 conocidas=1 ambiguas_sin_job=0 atascadas=0 techo=dentro numero=outbound_only haria_freno=no causas=—
+0. monitor-on · copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-voice-monitor-on-20261111-010915 (600, alejodev) · fichero alejodev:staff 600 · programador 27 0 0 · workers 13 0 · constante cerrada
+   VOICE_MONITOR_ENABLED sustituida
+1. claves escritas (sin valores): VOICE_MONITOR_ENABLED · fichero alejodev:staff 600
+2. el fichero parsea · caché: alejodev 600
+3. configuración efectiva, antes → después (sin valores de secretos): monitor: false → true
+   motor, H4–H7 y ElevenLabs (proveedor y Studio) sin cambios
+   el fichero de entorno es la copia previa salvo 1 clave(s) de la orden
+4. programador (total · del Studio · de voz): 27 0 0 → 31 0 4 (esperado 31 0 4)
+5. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+6. admin/voice/status sin token → 401
+7. local.ERROR en laravel*.log: 4 → 4
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=1 cadena=canary:ok,rest:none freno=suelto cupos=0/0/0 numero=si importado=si subcuenta=si whatsapp=no proveedor=ELEVENLABS_VERIFIED
+   AVISO: la primera pasada corre en el siguiente minuto 10/20/30/40/50 (la del número, a la hora en punto): mirar entonces voice:reconcile --dry-run --json y el freno
+   vuelta atrás exacta (el fichero de antes): install -m 600 -o alejodev -g staff /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-voice-monitor-on-20261111-010915 /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/api/backend/.env && cd /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+   vuelta atrás funcional: bash /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/h8-voice-scope.sh monitor off
+MANDO monitor-on APLICADO (copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-voice-monitor-on-20261111-010915)
+════ 6 · monitor off → APLICADO (programador −4) · código 0
+0. monitor-off · copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-voice-monitor-off-20261111-010932 (600, alejodev) · fichero alejodev:staff 600 · programador 31 0 4 · workers 13 0 · constante cerrada
+   VOICE_MONITOR_ENABLED sustituida
+1. claves escritas (sin valores): VOICE_MONITOR_ENABLED · fichero alejodev:staff 600
+2. el fichero parsea · caché: alejodev 600
+3. configuración efectiva, antes → después (sin valores de secretos): monitor: true → false
+   motor, H4–H7 y ElevenLabs (proveedor y Studio) sin cambios
+   el fichero de entorno es la copia previa salvo 1 clave(s) de la orden
+4. programador (total · del Studio · de voz): 31 0 4 → 27 0 0 (esperado 27 0 0)
+5. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+6. admin/voice/status sin token → 401
+7. local.ERROR en laravel*.log: 4 → 4
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=0 cadena=canary:ok,rest:none freno=suelto cupos=0/0/0 numero=si importado=si subcuenta=si whatsapp=no proveedor=ELEVENLABS_VERIFIED
+   vuelta atrás exacta (el fichero de antes): install -m 600 -o alejodev -g staff /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-voice-monitor-off-20261111-010932 /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/api/backend/.env && cd /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+MANDO monitor-off APLICADO (copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-voice-monitor-off-20261111-010932)

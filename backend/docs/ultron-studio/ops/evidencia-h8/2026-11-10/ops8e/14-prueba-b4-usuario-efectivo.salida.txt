@@ -1,0 +1,12 @@
+OK    www-data=1
+OK    root=1
+OK    www-data=1
+OK    ninguna
+OK    www-data=1
+OK    root=1
+OK    www-data=1
+OK    root=1 www-data=1
+OK    www-data=1
+OK    www-data=1
+OK    ninguna
+11 OK · 0 FALLO

@@ -1,3 +1,10 @@
+-- ═══ INTEGRADA (10-11-2026, database-specialist, B-T3): estos cambios YA ESTÁN en `supresion-1581.sql` («HITO 8 · LA
+-- VOZ»), probados en PostgreSQL 14 por tests/Feature/Telephony/Schema/VoiceSuppression1581Test.php. NO aplicarlos otra
+-- vez. Se integraron con correcciones (el cifrado de un retirado ya es NULL y no se escribe; lab_gate entra en la política;
+-- las llamadas de una estrategia no se buscan por texto; lo vivo se avisa en seco y aborta en real; los textos, enlaces y
+-- proveedores de esa persona se informan): la lista, en plans/informes-h8/informe-db-1581-voz.md §4 («Diferencias con la
+-- propuesta de OPS8-d»). Esto queda como historia de la propuesta.
+--
 -- supresion-1581-voz.propuesta.sql · ULTRON STUDIO · Hito 8 · PROPUESTA de OPS8-d (10-11-2026): la sección de VOZ de
 -- `supresion-1581.sql`. NO ES EJECUTABLE TAL CUAL ni está aplicada: son los cambios EXACTOS que hay que hacer en
 -- `supresion-1581.sql` (que hoy cubre solo las 14 tablas `ultron_studio_*` del H4–H7 y NO MIRA ninguna de las 11

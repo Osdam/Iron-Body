@@ -1,0 +1,86 @@
+[
+    {
+        "id": 1,
+        "budget_day": "2026-11-11",
+        "scope": "channel:assisted",
+        "mode": "live",
+        "cap_units": 20,
+        "cap_micros": 0,
+        "reserved_units": 4,
+        "reserved_micros": 0,
+        "created_at": "2026-11-11 15:16:04",
+        "updated_at": "2026-11-11 15:16:04"
+    },
+    {
+        "id": 2,
+        "budget_day": "2026-11-11",
+        "scope": "strategy:36d0a81d-c7ed-4a5c-86aa-b7176ec25c15",
+        "mode": "live",
+        "cap_units": 50,
+        "cap_micros": 0,
+        "reserved_units": 2,
+        "reserved_micros": 0,
+        "created_at": "2026-11-11 15:16:04",
+        "updated_at": "2026-11-11 15:16:04"
+    },
+    {
+        "id": 3,
+        "budget_day": "2026-11-11",
+        "scope": "phone:3967fa6e3a753405b2056163ad2f1597011ebf3546b65f658b58dc8013c03a71",
+        "mode": "live",
+        "cap_units": 1,
+        "cap_micros": 0,
+        "reserved_units": 1,
+        "reserved_micros": 0,
+        "created_at": "2026-11-11 15:16:04",
+        "updated_at": "2026-11-11 15:16:04"
+    },
+    {
+        "id": 6,
+        "budget_day": "2026-11-11",
+        "scope": "phone:c4142fc7209269bf0951fe685fac2c3e82e652f6d616c1d529411a199246a824",
+        "mode": "live",
+        "cap_units": 1,
+        "cap_micros": 0,
+        "reserved_units": 1,
+        "reserved_micros": 0,
+        "created_at": "2026-11-11 15:16:04",
+        "updated_at": "2026-11-11 15:16:04"
+    },
+    {
+        "id": 8,
+        "budget_day": "2026-11-11",
+        "scope": "strategy:67bc3236-4a73-423f-96de-735b5b6d7d76",
+        "mode": "live",
+        "cap_units": 50,
+        "cap_micros": 0,
+        "reserved_units": 2,
+        "reserved_micros": 0,
+        "created_at": "2026-11-11 15:16:04",
+        "updated_at": "2026-11-11 15:16:04"
+    },
+    {
+        "id": 9,
+        "budget_day": "2026-11-11",
+        "scope": "phone:c7b38c1aef5556b9d5e46fadda36d8969231bbc13ca0afe9443aa3300990f092",
+        "mode": "live",
+        "cap_units": 1,
+        "cap_micros": 0,
+        "reserved_units": 1,
+        "reserved_micros": 0,
+        "created_at": "2026-11-11 15:16:04",
+        "updated_at": "2026-11-11 15:16:04"
+    },
+    {
+        "id": 12,
+        "budget_day": "2026-11-11",
+        "scope": "phone:1b5b3ee20df4720dec17d5830838cef59484d2334cb1e5b403d45410bea7a613",
+        "mode": "live",
+        "cap_units": 1,
+        "cap_micros": 0,
+        "reserved_units": 1,
+        "reserved_micros": 0,
+        "created_at": "2026-11-11 15:16:04",
+        "updated_at": "2026-11-11 15:16:04"
+    }
+]

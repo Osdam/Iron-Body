@@ -8,8 +8,10 @@
 #   · `voice:doctor --telefonia --json` (sin red): el estado de la fase 1;
 #   · el monitor del H7 en seco, solo integraciones: sin deriva de la configuración autorizada (S8-b 9) y el mismo
 #     veredicto antes y después;
-#   · la base: recuento EXACTO de todas las tablas ultron_studio_* (18) y voice_* (7) antes y después, filas que nombran
-#     a la cuenta en cualquier columna *admin_id, los incidentes de IRON GUARD del Studio y la cola `voice`;
+#   · la base: recuento EXACTO de todas las tablas ultron_studio_* (18 del H5–H8 y las de hitos posteriores: 7 del H9) y
+#     voice_* (7) antes y después, filas que nombran a la cuenta en cualquier columna *admin_id, los incidentes de IRON
+#     GUARD del Studio y la cola `voice` (B-T7, OPS8-e: la fase 1 se reconoce por las 11 tablas del H8, por nombre, y
+#     el número de perfiles de voz de ANTES del smoke decide si «ningún perfil» es estricto: smoke-h8.py);
 #   · CERO RED SALIENTE durante el smoke: estricto por la base y el registro (ningún agente, ninguna instantánea nueva,
 #     ningún evento de llamada; en el canal `voice`, solo los 4 rechazos esperados de las rutas públicas) y, en el
 #     banco, por la valla (SMOKE_VALLA_STATS: ni un bloqueo nuevo). En el servidor, además, un muestreo informativo de
@@ -35,7 +37,8 @@
 # FASES (OPS8-c, 09-11-2026): SMOKE_PHASE=1 (por defecto, lo de arriba sin cambios) · 2a (el laboratorio hablado encendido,
 # sin llamadas: constante cerrada, entrantes, salientes, Twilio Voice y publicar apagados) · 4a (salientes a canarios:
 # constante abierta, salientes, Twilio Voice, publicar y el monitor de voz encendidos, entrantes apagadas). En 2a y 4a el
-# programador se espera con las tareas de los monitores que estén encendidos (4 de voz, 2 del Studio), la telefonía con
+# programador se espera con las tareas de los monitores que estén encendidos (4 de voz —5 con voice:webhook-health, B-T5—,
+# 2 del Studio), la telefonía con
 # las condiciones de su fase (smoke-h8.py, «FASES») y, con el monitor de voz encendido, el canal `voice` admite además las
 # líneas de sus tareas programadas (voice.reconcile*, voice.prune*). La regla «sin filas positivas» no cambia: el smoke
 # no abre sesiones del laboratorio ni publica (smoke-h8.py las omite con su bandera encendida).
@@ -96,6 +99,8 @@ c = [str(x.get("command", "")) for x in r]
 voz = [x for x in c if re.search(r"(?<![a-z])voice:", x) or "--verify-voice" in x]
 print(len(r), sum(1 for x in c if "ultron-studio:" in x and x not in voz), len(voz))' 2>/dev/null || echo ILEGIBLE
 }
+# OPS8-e: las tareas de voz del código desplegado con el monitor de voz encendido: 4, o 5 con voice:webhook-health (B-T5).
+tareas_voz() { local n; n=$(artisan list --raw 2>/dev/null | grep -c '^voice:webhook-health[[:space:]]' || true); [ "${n:-0}" -ge 1 ] && echo 5 || echo 4; }
 tinker_line() {
   local salida
   salida=$(artisan tinker --execute="$2" 2>&1 | tail -1) || true
@@ -194,13 +199,13 @@ echo "OK      presupuestos de rendimiento válidos: $PRES ($BUD)"
 CONF=$(tinker_line '^\{"calls_in_code":(true|false),.*\}$' 'echo json_encode(["calls_in_code" => App\Services\Voice\VoiceCallPolicy::CALLS_ENABLED_IN_CODE, "inbound" => config("voice.inbound.enabled"), "outbound" => config("voice.outbound.enabled"), "lab" => config("voice.lab.enabled"), "voice_monitor" => config("voice.monitor.enabled"), "publishing" => config("ultron_studio.voice.publishing_enabled"), "twilio_voice" => config("voice.twilio.enabled"), "studio_monitor" => config("ultron_studio.monitor.enabled")]), PHP_EOL;') \
   || { echo "FALLO   no se pudo leer la configuración efectiva de la voz (tinker falló o no es la forma esperada; su salida no se imprime). No se ejecuta el smoke."; FINAL=1; exit 1; }
 # Lo que tiene que valer cada bandera en la fase (sin la clave: cualquiera); los monitores fijan el programador esperado.
-fase_conf() { printf '%s' "$CONF" | FASE="$FASE" python3 -I -c '
+fase_conf() { printf '%s' "$CONF" | FASE="$FASE" TV="$(tareas_voz)" python3 -I -c '
 import json, os, sys
 d = json.load(sys.stdin)
 espera = {"2a": {"calls_in_code": False, "inbound": False, "outbound": False, "lab": True, "publishing": False, "twilio_voice": False},
           "4a": {"calls_in_code": True, "inbound": False, "outbound": True, "publishing": True, "twilio_voice": True, "voice_monitor": True}}[os.environ["FASE"]]
 mal = ["%s=%s" % (k, json.dumps(d.get(k))) for k, v in espera.items() if d.get(k) is not v]
-print(("MAL " + " ".join(mal)) if mal else ("OK %d %d" % (2 if d.get("studio_monitor") else 0, 4 if d.get("voice_monitor") else 0)))'; }
+print(("MAL " + " ".join(mal)) if mal else ("OK %d %d" % (2 if d.get("studio_monitor") else 0, int(os.environ["TV"]) if d.get("voice_monitor") else 0)))'; }
 if [ "$FASE" = 1 ]; then
   [ "$CONF" = '{"calls_in_code":false,"inbound":false,"outbound":false,"lab":false,"voice_monitor":false,"publishing":false,"twilio_voice":false,"studio_monitor":false}' ] \
     || { echo "FALLO   la voz no está toda apagada ($CONF): este smoke es el de la fase 1. No se ejecuta."; FINAL=1; exit 1; }
@@ -262,7 +267,21 @@ ANTES=$(sql "$Q_TABLAS") && ANTES_CUENTA=$(sql "$Q_CUENTA") && INC_ANTES=$(sql "
   || { echo "FALLO   no se pudo leer la base (psql). No se ejecuta el smoke."; FINAL=1; exit 1; }
 N_STUDIO=$(tr ' ' '\n' <<< "$ANTES" | grep -c '^ultron_studio_' || true)
 N_VOZ=$(tr ' ' '\n' <<< "$ANTES" | grep -c '^voice_' || true)
-[ "$N_STUDIO $N_VOZ" = "18 7" ] && echo "OK      18 tablas ultron_studio_* y 7 voice_* en la base" || { echo "FALLO   tablas en la base: $N_STUDIO ultron_studio_* y $N_VOZ voice_* (esperado 18 y 7: ¿está desplegada la fase 1?). No se ejecuta el smoke."; FINAL=1; exit 1; }
+# B-T7 (OPS8-e): «18 y 7» exactas dejó de valer con el H9 (7 tablas ultron_studio_* de las estrategias, en producción desde
+# el 10-11-2026): lo que dice si la fase 1 del H8 está desplegada son sus 11 tablas, por nombre; las voice_* son todas del
+# H8 (7); del Studio, al menos las 18 del H5–H8 (las de hitos posteriores se cuentan y se vigilan igual: el recuento
+# exacto de antes y después cubre TODAS las ultron_studio_* y voice_*).
+TABLAS_H8="ultron_studio_voice_agents ultron_studio_voice_lab_sessions ultron_studio_voice_profiles ultron_studio_voice_publications voice_brakes voice_call_events voice_calls voice_consents voice_contacts voice_exclusions voice_rne_checks"
+FALTAN_H8=""; for t in $TABLAS_H8; do case " $ANTES " in *" $t="*) ;; *) FALTAN_H8="$FALTAN_H8 $t" ;; esac; done
+if [ -z "$FALTAN_H8" ] && [ "$N_VOZ" = 7 ] && [ "$N_STUDIO" -ge 18 ]; then
+  echo "OK      las 11 tablas del H8 en la base · $N_STUDIO ultron_studio_* (18 del H5–H8$([ "$N_STUDIO" = 18 ] || echo " y $((N_STUDIO - 18)) de hitos posteriores")) y 7 voice_*"
+else
+  echo "FALLO   tablas en la base: $N_STUDIO ultron_studio_* y $N_VOZ voice_*${FALTAN_H8:+; faltan del H8:$FALTAN_H8} (esperado: las 11 del H8, 7 voice_* y al menos 18 del Studio: ¿está desplegada la fase 1?). No se ejecuta el smoke."; FINAL=1; exit 1
+fi
+N_TABLAS=$((N_STUDIO + N_VOZ))
+# B-T7: cuántos perfiles de voz había ANTES del smoke (de la base, no de la API): con 0, «ningún perfil» es estricto (primer
+# despliegue o voz sin usar); con alguno, el Studio desplegado ya los creó (E16-30) y el smoke lo dice como información.
+PERFILES_ANTES=$(tr ' ' '\n' <<< "$ANTES" | sed -n 's/^ultron_studio_voice_profiles=\([0-9][0-9]*\)$/\1/p')
 VOZ_LOG_ANTES=$(lineas voice); APP_LOG_ANTES=$(lineas laravel)
 VALLA_ANTES=$(valla)
 # Vigía informativo en el servidor: sockets de PHP hacia las IP de ElevenLabs mientras corre el smoke (ss de iproute2).
@@ -285,7 +304,8 @@ unset HASH
 set +e
 SMOKE_API="$API" SMOKE_EMAIL="$SMOKE_EMAIL" SMOKE_PW="$SMOKE_PW" SMOKE_CANARY_ID="$CANARIO" SMOKE_SECRET_SALT="$SAL" \
   SMOKE_SECRET_DIGESTS="${HUELLAS:-}" SMOKE_TOKEN_FILE="$HDR" SMOKE_H6_PY="$PY6" SMOKE_BUDGETS="$BUD" \
-  SMOKE_BUDGETS_OUT="${SMOKE_BUDGETS_OUT:-}" SMOKE_PHASE="$FASE" PYTHONIOENCODING=utf-8 PYTHONDONTWRITEBYTECODE=1 \
+  SMOKE_BUDGETS_OUT="${SMOKE_BUDGETS_OUT:-}" SMOKE_PHASE="$FASE" SMOKE_VOICE_PROFILES_BEFORE="${PERFILES_ANTES:-}" \
+  PYTHONIOENCODING=utf-8 PYTHONDONTWRITEBYTECODE=1 \
   python3 "$PY" superadmin
 RC1=$?
 set -e
@@ -298,7 +318,7 @@ echo "== Base, registros y red (solo lectura)"
 if DESPUES=$(sql "$Q_TABLAS") && DESPUES_CUENTA=$(sql "$Q_CUENTA") && INC_DESPUES=$(sql "$Q_INCIDENTES") && COLA_DESPUES=$(sql "$Q_COLA_VOZ"); then
   if [ "$ANTES_CUENTA" = "$DESPUES_CUENTA" ]; then echo "OK      ninguna fila nueva de ultron_studio_* ni de voice_* nombra a la cuenta $ADMIN_ID"; else echo "FALLO   filas que nombran a la cuenta: antes [$ANTES_CUENTA] · después [$DESPUES_CUENTA]"; RC2=1; fi
   if [ "$ANTES" = "$DESPUES" ]; then
-    echo "OK      recuento exacto de las 25 tablas (18 del Studio y 7 de la voz) igual antes y después: ninguna escritura, ningún agente, ninguna instantánea, ningún evento de llamada"
+    echo "OK      recuento exacto de las $N_TABLAS tablas ($N_STUDIO del Studio y $N_VOZ de la voz) igual antes y después: ninguna escritura, ningún agente, ninguna instantánea, ningún evento de llamada"
   else
     CAMBIOS=$(join -t= -1 1 -2 1 <(tr ' ' '\n' <<< "$ANTES" | sort) <(tr ' ' '\n' <<< "$DESPUES" | sort) | awk -F= '$2 != $3 {printf "%s=%s→%s  ", $1, $2, $3}')
     echo "FALLO   una tabla del Studio o de la voz cambió durante el smoke (el smoke no escribe; ¿alguien usó el Studio a la vez?): $CAMBIOS"

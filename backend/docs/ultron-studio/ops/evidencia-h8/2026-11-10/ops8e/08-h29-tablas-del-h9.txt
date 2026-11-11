@@ -1,0 +1,4 @@
+bash · base ultron_studio_banco_h9_ops (esquema del H9): 25 ultron_studio_* y 7 voice_*
+VIEJA («18 y 7»): FALLO → «No se ejecuta el smoke»
+NUEVA: OK · las 11 tablas del H8 por nombre · 25 ultron_studio_* (18 del H5–H8 y 7 posteriores) y 7 voice_*
+posteriores: ultron_studio_message_templates ultron_studio_person_bindings ultron_studio_strategies ultron_studio_strategy_publications ultron_studio_strategy_reviews ultron_studio_strategy_simulations ultron_studio_strategy_versions 

@@ -1,0 +1,85 @@
+== deploy-h8-backend-fase1.sh → /Users/alejodev/.cache/ironbody-banco-h8-ops8e/root/deploy-h8-backend-fase1.sh: 24 líneas con sustituciones del banco
+== ironbody-migrate-propuesta.sh → /Users/alejodev/.cache/ironbody-banco-h8-ops8e/root/ironbody-migrate: 26 líneas con sustituciones del banco
+== h8-voice-scope.sh → /Users/alejodev/.cache/ironbody-banco-h8-ops8e/root/h8-voice-scope.sh: 9 líneas con sustituciones del banco
+== h8-secrets-register.sh → /Users/alejodev/.cache/ironbody-banco-h8-ops8e/root/h8-secrets-register.sh: 10 líneas con sustituciones del banco
+== h8-twilio-check.sh → /Users/alejodev/.cache/ironbody-banco-h8-ops8e/root/h8-twilio-check.sh: 5 líneas con sustituciones del banco
+== h7-monitor-scope.sh → /Users/alejodev/.cache/ironbody-banco-h8-ops8e/root/h7-monitor-scope.sh: 17 líneas con sustituciones del banco
+== h6-integrations-scope.sh → /Users/alejodev/.cache/ironbody-banco-h8-ops8e/root/h6-integrations-scope.sh: 17 líneas con sustituciones del banco
+== deploy-h8-backend-fase1.sh · 2026-11-10T23:56:02Z · ESPERADO=f2c9e2d · PREVIO=fe29126 · BK=/Users/alejodev/.cache/ironbody-banco-h8-ops8e/bk-4a-20261110-235525 · MODO 4a (voice(calls-open)) · registro /Users/alejodev/.cache/ironbody-banco-h8-ops8e/root/h8-fase4a-20261110-235602.log
+== AUTORIZACIÓN ESCRITA (referencia que cita el commit): «OPS8E-AUT-4A-20261110»
+0. comprobaciones previas (solo lectura; si algo falla, no se toca nada):
+   modo 4a · base a608450 (el commit del respaldo; contiene PREVIO=fe29126) · producción en a608450
+   4a: origin/main = f2c9e2d «voice(calls-open): banco OPS8-e: abre las llamadas salientes (ensayo; » · un solo padre · cita la autorización · diff: SOLO la constante en backend/app/Services/Voice/VoiceCallPolicy.php (1 línea, false → true) · 1 commit(s) de solo documentación antes de él
+   sin migraciones entre a608450 y origin/main (la 4a no trae ninguna)
+   commits de solo documentación ACEPTADOS por el propietario con --acepta-main (viajan con el despliegue): 9d23bca (docs(ultron-studio-h9): banco OPS8-e: registro de un desplie)
+   constante: cerrada en a608450 (producción) → abierta en f2c9e2d (una declaración anclada en cada lado)
+   respaldo /Users/alejodev/.cache/ironbody-banco-h8-ops8e/bk-4a-20261110-235525: 238 tablas con datos · 700/600 de root · huella del volcado comprobada
+   fase 2 completa (presencia, sin valores): 14 piezas de ElevenLabs y de Twilio · ELEVENLABS_ENABLED=true · TWILIO_VOICE_SIGNING_TOKEN presente (opcional) · VOICE_NUMBER_INBOUND_CAPABLE =false («Outbound Only» declarado) · salientes, entrantes, Twilio Voice, cupos y presupuesto cerrados
+   AVISO: TWILIO_VOICE_BASE_URL está en el entorno: en production se ignora (hosts oficiales siempre)
+   AVISO: ELEVENLABS_BASE_URL está en el entorno: en production se ignora (hosts oficiales siempre)
+   worker ironbody-voice: en RUNNING (14 programas)
+   rutas en la caché ahora (informativo en una reanudación): [77 18 8 10 15 6 13 5 8 4]
+   verificación de voz: ok · ELEVENLABS_VERIFIED hasta 2026-12-10T23:45 UTC (quedan 719 h)
+   configuración efectiva antes de la 4a (laboratorio, monitor de voz y publicar, informativos): {"calls_in_code":false,"inbound":false,"outbound":false,"lab":true,"monitor":true,"publishing":true,"twilio_voice":false,"twilio_from_set":true,"imported_number_set":true,"outbound_cap":0,"inbound_cap":0,"budget":"0","lab_driver":"elevenlabs","lab_budget":"1.00","h8_pieces":10,"queue_voice":"database","studio_monitor":false}
+   voice:doctor --telefonia antes: estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=2 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=si subcuenta=si proveedor=ELEVENLABS_VERIFIED
+   HEAD a608450 limpio · sin migraciones pendientes · puerta: [] · esquema [68 84 6 18 27 51 3 7] (la referencia del paso 3) · guardas del H8 en la base: ok · función de F · rutas [77 18 8 10 15 6 13 5 8 4] · programador 31 tareas, 0 del Studio, 4 de voz · workers 14/0 · facturación activa
+   filas de las 11 tablas del H8 (informativo; el despliegue no escribe: el paso 4 compara): ultron_studio_voice_agents=2 ultron_studio_voice_lab_sessions=2 ultron_studio_voice_profiles=1 ultron_studio_voice_publications=0 voice_brakes=0 voice_call_events=0 voice_calls=0 voice_consents=0 voice_contacts=0 voice_exclusions=0 voice_rne_checks=0
+   iron_app en libro · asociaciones · canarios · instantáneas · cadena (SELECT/INSERT/UPDATE/DELETE/TRUNCATE): true/true/false/false/false true/true/true/true/false true/true/true/true/false true/true/false/false/false true/true/false/false/false
+   filas cadena · libro · instantáneas · versiones: 0 27 11 1 · colas fallidas: 0 · sellos studio: 0 · incidentes ultron_studio: 0
+   motor, H4–H7 y voz (informativo; no cambia): {"engine_scope":"off","publishing_enabled":false,"lab_gate":"required","lab_enabled":true,"lab_driver":"fake","canary_set":true,"ultron_enabled":true,"writes_enabled":false,"probe_enabled":false,"monitor_enabled":false,"elevenlabs_enabled":true,"twilio_voice_enabled":false,"voice":{"provider":"elevenlabs","state":"ELEVENLABS_UNVERIFIED","enabled":true,"missing":[],"region":"default"},"studio_voice":"ELEVENLABS_VERIFIED"}
+   integrations-doctor twilio:connected_otp_only,twilio_voice:disabled,elevenlabs:ELEVENLABS_VERIFIED: 0 · monitor del H7 en seco, integraciones: [ok] (informativo; tiene que seguir igual)
+   el fichero de entorno parsea (antes de tocar nada)
+1. código: HEAD=f2c9e2d · voice(calls-open) desplegado con la autorización «OPS8E-AUT-4A-20261110»
+   los 2 ficheros del merge son legibles por www-data
+2. variables: ninguna (la 4a no escribe el fichero de entorno; las salientes las enciende después el mando, con su autorización)
+   el fichero de entorno es el del respaldo, byte a byte
+3. migraciones: ninguna (la 4a no trae ninguna; las dos del H8 ya estaban)
+   esquema [68 84 6 18 27 51 3 7]: el mismo que en el paso 0
+4. esquema del Hito 8 (antes de servir las rutas nuevas):
+   funciones nuevas (número · SECURITY DEFINER · dueños): 4 0 ultron_studio_voice_publication_agents:h5_owner,ultron_studio_voice_publication_chain:h5_owner,voice_brake_release:h5_owner,voice_forbid:h5_owner
+   iron_app en las 11 tablas (r SELECT · a INSERT · w UPDATE · d DELETE · D TRUNCATE · s secuencia): ultron_studio_voice_agents=rawd-s ultron_studio_voice_lab_sessions=rawd-s ultron_studio_voice_profiles=rawd-s ultron_studio_voice_publications=ra---s voice_brakes=ra---s voice_call_events=ra---s voice_calls=rawd-s voice_consents=ra---s voice_contacts=rawd-s voice_exclusions=ra---s voice_rne_checks=ra---s
+   filas de las 11 tablas del H8, las mismas que en el paso 0 (informativo desde la fase 1; el despliegue no escribe): ultron_studio_voice_agents=2 ultron_studio_voice_lab_sessions=2 ultron_studio_voice_profiles=1 ultron_studio_voice_publications=0 voice_brakes=0 voice_call_events=0 voice_calls=0 voice_consents=0 voice_contacts=0 voice_exclusions=0 voice_rne_checks=0
+   iron_app en las 5 tablas del H6/H7: igual que antes
+   filas de la cadena, el libro, las instantáneas y versiones: 0 27 11 1 (las mismas)
+5. cachés y workers:
+   cachés: alejodev 600 · alejodev 600
+6. rutas (Studio · integraciones · GET · POST · voz · laboratorio · telefonía · GET · POST · públicas): 77 18 8 10 15 6 13 5 8 4 · auth:coverage --unmapped → []
+7. configuración efectiva:
+   {"calls_in_code":true,"inbound":false,"outbound":false,"lab":true,"monitor":true,"publishing":true,"twilio_voice":false,"twilio_from_set":true,"imported_number_set":true,"outbound_cap":0,"inbound_cap":0,"budget":"0","lab_driver":"elevenlabs","lab_budget":"1.00","h8_pieces":10,"queue_voice":"database","studio_monitor":false}
+   solo cambió la constante: calls_in_code false → true (lo demás, igual que en el paso 0)
+   motor, H4–H7 y voz (proveedor y Studio) iguales que antes del despliegue
+   programador (total · del Studio · de voz): 31 0 4 (esperado 31 0 4: el mismo que en el paso 0; la 4a no programa nada)
+   cola voice: 0 trabajos (E1-10; con las salientes cerradas nada se despacha a la voz)
+8. workers (RUNNING · BACKOFF/FATAL), dos lecturas separadas: [14 0] y [14 0] (14: ironbody-voice instalado)
+   INFO: workers con pid nuevo tras queue:restart: 0 de 14 (el resto termina su trabajo antes de reiniciarse; se reinician además cada hora)
+9. sanidad:
+   HEAD admin/voice/status sin token → 401 · Cache-Control: no-store, private
+   HEAD admin/voice/calls sin token → 401 · Cache-Control: no-store, private
+   HEAD admin/ultron-studio/voice/publications sin token → 401 · Cache-Control: no-store, private
+   HEAD admin/ultron-studio/voice-lab/status sin token → 401 · Cache-Control: no-store, private
+   HEAD admin/ultron-studio/status sin token → 401 · Cache-Control: no-store, private
+   POST webhooks/voice/elevenlabs/initiation sin credencial → 401
+   POST webhooks/voice/elevenlabs/post-call sin credencial → 401
+   POST voice/tools/consultar_planes sin credencial → 401
+   POST webhooks/voice/twilio/usage-trigger sin firma → 401
+   POST iniciación con 9 000 bytes sin credencial → 413 (tope de 8 KB antes de autenticar)
+   POST versions con 70 000 bytes sin token → 413 "code":"payload_too_large"
+   usage-trigger del OTP sin firma → 403 (falla cerrada; T-1, intacto)
+   colas fallidas: 0 (antes 0)
+   sellos studio en marketing_ai_actions (motor en off): 0
+   security:check-secret-exposure: OK
+   ultron-studio:publication-check: 0 (cuadra)
+   ultron-studio:monitor --dry-run (publicación): 0
+   monitor en seco, integraciones: [ok] (antes [ok])
+   incidentes ultron_studio: 0 (los mismos)
+   fichero de entorno idéntico al respaldo (la 4a no lo toca)
+10. voice:doctor --telefonia (sin red): el de la fase 2 con la constante abierta y nada más
+   estado=ELEVENLABS_UNVERIFIED constante=abierta encendidas=2 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=si subcuenta=si proveedor=ELEVENLABS_VERIFIED
+11. integrations-doctor e integrations-snapshot (S8-b 9: la huella de voz no cambia; la constante no entra en ella):
+   twilio connected_otp_only�twilio_voice disabled�elevenlabs ELEVENLABS_VERIFIED: 0
+   INFO: meta_ads sale degraded (dato viejo, pasada fallida o sincronización apagada): se informa, no es un fallo del despliegue
+   instantáneas: 11 → 11
+12. laravel.log ERROR desde el inicio del despliegue: 0
+   registro de esta ejecución: /Users/alejodev/.cache/ironbody-banco-h8-ops8e/root/h8-fase4a-20261110-235602.log
+DESPLIEGUE H8 FASE 4a (voice(calls-open) f2c9e2d, autorización «OPS8E-AUT-4A-20261110») COMPLETADO
+   las llamadas siguen cerradas por las banderas: lo siguiente, cada paso con su autorización (runbook «Fase 4a-primero»): bash /root/h8-voice-scope.sh salientes on --cupo=1 --presupuesto=2.00 → reconocer la configuración (H-25) → expectativa llamadas si el monitor del H7 está encendido → publicar el canario (en ventana) → SMOKE_PHASE=4a

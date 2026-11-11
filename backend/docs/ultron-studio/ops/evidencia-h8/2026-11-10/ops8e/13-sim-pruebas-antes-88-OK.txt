@@ -1,0 +1,91 @@
+# simuladores: ElevenLabs :58471 · Twilio :58470 · valla :58469 · receptor (Laravel) :58468
+OK       EL · el control (/__stats, /__surface) responde y no cuenta como petición; superficie de 18 rutas (13 + 5 de OPS8-c)
+OK       EL · ruta no listada → 404 y violación unknown_route
+OK       EL · verbo no listado (DELETE de un agente) → 405 y violación method_not_allowed
+OK       EL · sin xi-api-key → 401 y violación no_api_key
+OK       EL · clave equivocada → 401 y authRejected, sin violación
+OK       EL · Authorization junto a la clave → 200 y violación authorization_header_present
+OK       EL · clave en la consulta y consulta no listada → api_key_in_query y unexpected_query:foo
+OK       EL · GET del agente de verificación como el adaptador del H6: 200, ulaw_8000 en tts y asr, 0 violaciones
+OK       EL · crear las herramientas compiladas (POST /v1/convai/tools) y el agente con sus tool_ids → ids con forma, 0 violaciones
+OK       EL · leer el agente y sus herramientas (lo que hace describeAgent): lo compilado intacto y valores por defecto fuera de la proyección
+OK       EL · herramientas que el compilador nunca debería producir → 6 violaciones, una por herramienta
+OK       EL · agente con ráfaga, sin end_call, con una de sistema fuera del catálogo y un tool_id inventado → 4 violaciones
+OK       EL · transferencia ciega con 4 destinos y caller_authorized = «si» por defecto → 3 violaciones
+OK       EL · webhook de iniciación del agente en otra ruta y con el secreto en claro → 2 violaciones; audio guardado y retención ilimitada → 2
+OK       EL · max_duration_seconds fuera de 60–7200 → 422 como ElevenLabs, sin violación
+OK       EL · listar agentes: forma {agents, has_more, next_cursor}, paginación por cursor; page_size=0 → 422
+OK       EL · deriva «en el panel»: /__drift cambia el first_message del agente y la URL de una herramienta, y los GET lo enseñan
+OK       EL · PATCH o DELETE de un agente → 405 y method_not_allowed (D8-7: un agente no se modifica nunca)
+OK       EL · números: listar (el importado), leer, desconocido → 404; importar (POST) → 405 y violación
+OK       EL · asignar el agente al número ({agent_id}); con algo más que agent_id → number_patch_beyond_agent
+OK       EL · saliente conforme → 200 {success, conversation_id, callSid}; la llamada existe en Twilio, creada con la credencial de ElevenLabs
+OK       EL · saliente con grabación, grabación de Twilio, override y variables de más con un teléfono → 5 violaciones
+OK       EL · saliente con call_direction ≠ «saliente» y version_label con llaves (E1-5) → 2 violaciones
+OK       EL · saliente mal formada (to_number sin E.164) → 422 y outbound_malformed; agente desconocido → 404 sin violación
+OK       EL · escenario success_false: 200 con success=false y sin ids (Laravel tiene que leerlo como rechazo)
+OK       EL · fallo inyectado 500 una vez en outbound_call → 500 y la siguiente vuelve a 200 (faultsServed +1)
+OK       EL · lentitud (delay 1500 ms) con un cliente de 300 ms: el cliente agota el tiempo y NO hay llamada (sin efecto)
+OK       EL · hang_after_effect: el cliente agota el tiempo pero la llamada SÍ existe en ElevenLabs y en Twilio (el ambiguo)
+OK       EL · agent_concurrency_limit = 1: con una activa, la segunda saliente → 429
+OK       EL · leer la conversación: metadata.phone_call.call_sid = callSid; sin transcripción mientras no termina
+OK       EL+TW · contestada y completada (65 s): conversación done y llamada completed con precio −2 min × (0,0377 + 0,0044)
+OK       EL+TW · transferencia en conferencia: el tramo al destino es una llamada HIJA (parent_call_sid) con su precio (DF-W4)
+OK       EL · listar conversaciones por agente; un filtro no listado → unexpected_query:foo
+OK       EL · DELETE de una conversación: apagado → 403 y violación; encendido para el ensayo 1581 → 200
+OK       EL · URL firmada del laboratorio: ws://127.0.0.1 con conversation_signature; sin agent_id → 422 y agent_id_pattern
+OK       COMÚN · F-6: un uuid (también con una cola de 10 dígitos) no es un teléfono; 20 000 uuid aleatorios → 0
+OK       COMÚN · F-6: los teléfonos de prueba siguen detectándose (E.164, móvil y fijo de Colombia, con separadores) y los correos
+OK       EL · la URL firmada registra una conversación WEB del laboratorio (sin número ni call_sid; D8-23)
+OK       EL · postCall puro de una conversación web: sin metadata.phone_call, firma verificable; call_initiation_failure web → error
+OK       EL → L · post-llamada válida: cabecera ElevenLabs-Signature verificable sobre el cuerpo CRUDO, centinela y teléfono dentro
+OK       EL → L · Laravel que acepta (2xx) una firma caducada → violación post_call_bad_signature_accepted
+OK       EL → L · desactivación automática: 10 entregas buenas con 500 seguidas → laravel_webhook_disabled; la 11.ª no sale
+OK       EL → L · con una entrega buena de hace 2 días, 10 fallos NO desactivan (la regla de los 7 días)
+OK       EL → L · iniciación conforme: secreto en su cabecera, los 5 campos oficiales; caller_authorized=si → conversación viva
+OK       EL → L · respuesta de iniciación sin call_direction (la forma de antes de E1-5) → 2 violaciones
+OK       EL → L · post-llamada WEB (web=1&agent_id=): la de la URL firmada, sin phone_call, firmada sobre el cuerpo crudo
+OK       EL → L · respuesta de iniciación con override, clave de más y el teléfono → 3 violaciones
+OK       EL → L · Laravel caído en la iniciación: fail_mode=defaults usa el «no» del agente (cuelga corto); abort → no arranca
+OK       EL → L · Laravel que acepta (200) una iniciación con el secreto malo → initiation_bad_secret_accepted
+OK       EL → L · herramienta: Bearer del secreto; conversation_id y call_sid rellenados desde el esquema compilado (C-A3)
+OK       EL → L · herramienta con un teléfono en la respuesta, y una sin Bearer aceptada → 2 violaciones
+OK       TW · rutas no listadas (la ficha de un caller ID, crear un aviso de gasto) → 404 y unknown_route; crear o verificar un caller ID y DELETE → 405
+OK       TW · la cuenta madre en la ruta → account_sid_mismatch
+OK       TW · credencial maestra y token de firma contra la API → se atienden y son violaciones; la ficha solo lleva auth_token con el token
+OK       TW · sin Basic → 401 y no_basic_auth; mezclada → credential_mixed; desconocida → 401 sin violación
+OK       TW · Laravel creando una llamada → 401 y call_create_by_laravel (opción A: solo la crea ElevenLabs)
+OK       TW · colgar (Status=completed): en curso → completed; otra vez → 200 idempotente; sonando → canceled
+OK       TW · Laravel actualizando una llamada con Url (redirigirla) → call_update_beyond_hangup
+OK       TW · listar llamadas: PageSize=1 da next_page_uri con PageToken; seguirlo → 200; token falso → 400 y page_token_forged; To= → phone_in_query:To
+OK       TW · números: listar y leer con la key de Laravel → 200; cambiarlo → 401 y number_update_by_laravel
+OK       TW · uso de hoy: totalprice = la suma de los precios de las llamadas completadas (y count de calls)
+OK       TW · fallo 503 inyectado en calls_list → 503 y luego 200; llamada sembrada (nadie la pidió) aparece en el listado
+OK       TW · firmaTwilio reproduce el vector oficial (documentación «Webhooks security»)
+OK       TW · firmaTwilio reproduce el vector oficial (pruebas de los SDK (RequestValidator))
+OK       TW · firmaTwilio reproduce el vector oficial (pruebas de los SDK (bodySHA256))
+OK       TW · bodySHA256 del vector oficial = sha256 del cuerpo {"property": "value", "boolean": true}
+OK       TW · diferencial contra una implementación en Python: 8 casos (claves repetidas, duplicados, UTF-8, sin parámetros)
+OK       TW → L · aviso de gasto válido: firma sobre la BASE CANÓNICA https (no la URL real) con el token de la subcuenta
+OK       TW → L · replay: dos entregas idénticas con el mismo IdempotencyToken; query_order llega con la consulta intacta (b=2&a=1)
+OK       TW → L · un Laravel que lo acepta todo: las 8 variantes «rejected» dan 8 violaciones usage_trigger_bad_signature_accepted
+OK       EL · las 21 variantes del emisor, verificadas por la clase REAL del H6 (ElevenLabsWebhookSignature::verify)
+OK       TEST8-a · twilio-signature-vectors.json: firmaTwilio reproduce TODOS los vectores de cálculo (los 6 oficiales incluidos)
+OK       TEST8-a · elevenlabs-webhook-vectors.json: el firmador del simulador da la MISMA cabecera en todos los válidos canónicos
+OK       TEST8-a · formas: post-llamada (data y metadata), iniciación (cabecera y campos), herramienta y aviso de gasto, clave por clave
+OK       VALLA · proxy http a un host de fuera → 403 y su host anotado; CONNECT (https) → 403 anotado; nada pasa
+OK       VALLA · tráfico local que entra POR la valla se marca local_through_fence (no_proxy no respetado)
+OK       EL · OPS8-c · secretos: lista vacía; crear los dos → ids; la lista por prefijo los da con used_by; /__state solo da su huella
+OK       EL · OPS8-c · violaciones del registro: nombre repetido, ajeno, forma mala, herramientas sin Bearer, PATCH con otro nombre
+OK       EL · OPS8-c · webhook HMAC con la URL canónica → webhook_id y el secreto que GENERA; la lista no lo enseña; violaciones de forma
+OK       EL → L · OPS8-c · los emisores usan lo REGISTRADO: iniciación y herramienta con el valor de su secret_id, post-llamada firmada con el secreto del webhook creado
+OK       TW · OPS8-c · caller ID: comprado → lista de caller ID vacía; /__numero?tipo=caller_id → sale de los comprados y aparece como caller ID
+OK       TW · OPS8-c · sonda de mensajes: las keys de la voz → 401 SIN violación (sondasDenegadas); una key mal hecha (sms_laravel=1) → 200
+OK       TW · OPS8-c · bundle y dirección: /__numero?bundle=aprobado → bundle_sid en el número y GET del bundle (sin cuenta en la ruta) con su estado
+OK       TW · OPS8-c · /__numero?cuenta=madre → la ficha de la cuenta dice owner_account_sid = la propia (cuenta madre); subcuenta → la del OTP
+OK       CTL · un POST al control → 405 y violación control_method (en los dos simuladores)
+OK       CTL · /__reset?state=1 vacía el estado del dominio y NO las violaciones
+OK       ARRANQUE · se niegan: piezas en 644, LARAVEL_BASE fuera de 127.0.0.1, --host 0.0.0.0 (código 2)
+OK       HIGIENE · los registros JSONL (dos simuladores y valla) no llevan secretos, teléfonos, centinelas ni cuerpos; ficheros en 600
+# violaciones provocadas a propósito: ElevenLabs 62 · Twilio 23 (las pruebas las cuentan una a una)
+88 OK · 0 FALLO · 0 OMITIDO

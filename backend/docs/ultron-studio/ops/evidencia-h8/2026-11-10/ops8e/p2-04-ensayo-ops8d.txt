@@ -1,0 +1,96 @@
+2026-11-11T00:05:11Z
+19:05  up 27 days,  3:05, 3 users, load averages: 5.53 8.23 55.88
+== ensayo OPS8-d · banco /Users/alejodev/.cache/ironbody-banco-h8-ops8e2 · «producción» a608450 · registro /Users/alejodev/.cache/ironbody-banco-h8-ops8e2/logs/ensayo-ops8d-20261111-000511.txt
+   reloj desplazado de la costura (publicar y la saliente): se fija al arrancar la segunda API, en la 4a (H-35)
+OK      0 · cuentas de los cuatro ojos: Ana (2) y Beto (3), Super Admin activas, con sesión (tokens en 600)
+OK      0 · dos canarios de voz activos sembrados (sin teléfonos en la salida)
+OK      0 · mando · estado de partida: constante cerrada, todo apagado, ElevenLabs VERIFIED en el Studio  [código 0]
+OK      0 · estado: salientes apagadas y ELEVENLABS_VERIFIED
+OK      0 · mando · expectativa fase1 (monitor del H7 apagado; integrations-doctor la confirma) → APLICADA  [código 0]
+OK      0 · B-T1 · el modo NORMAL con voice(calls-open) en origin/main → aborta (la fase 1 no despliega la constante abierta)  [código 1]
+OK      0 · la «producción» del banco vuelve a su main (a608450) sin cambios locales
+OK      0 · B-T1 · el modo 4a con la fase 2 sin hacer → aborta (la fase 2 no está completa; no se ha tocado nada)  [código 1]
+OK      0 · perfil de voz con la fase 1: Ana lo crea (201, draft)  [HTTP 201 ]
+OK      0 · perfil: Ana no aprueba el suyo (403)  [HTTP 403]
+OK      0 · perfil: Beto lo aprueba (approved)  [HTTP 200 approved]
+OK      0 · B-T7 · SMOKE_PHASE=1 con un perfil de voz aprobado: código 3, 0 FALLO, 1 OMITIDO (el presupuesto del laboratorio apagado) y el perfil como información  [código 3 · PRESUPUESTOS: 10 OK · 0 FALLO · 1 OMITIDO · 82 s (de ellos 52 s esperando a los cupos) RESUMEN (superadmin): 48 OK · 0 FALLO · 1 OMITIDO ]
+OK      0 · B-T7 (A/B) · el smoke-h8.py de antes, en el mismo estado: exactamente 1 FALLO funcional, «ningún perfil de voz»  [código 1 · FALLO   GET voice/profiles: ningún perfil de voz  [total 1] FALLO   presupuesto GET admin/voice/metrics: máximo 582.6 > 290  [n 5 · repetida: la primera medida dio mediana 287.1 > 280, máximo 762.2 > 290 · calibración: p50 ≤ 240 · p95 ≤ 874] PRESUPUESTOS: 9 OK · 1 FALLO · 1 OMITIDO · 1]
+OK      1 · rotación «en la consola»: el simulador rechaza la clave VIEJA (401) y acepta la NUEVA (200)
+OK      1 · el-verificar.sh <fichero de la clave> <agent_id> (modo completo, ANTES del registro) → VERIFICACIÓN TERMINADA  [código 0]
+OK      1 · el-verificar: modo completo y credenciales válidas contra el simulador
+OK      1 · el-verificar: el fichero de la clave se destruyó y la clave del entorno es la nueva (sin imprimirla)
+OK      1 · el-verificar (modo completo): regeneró los dos secretos propios (webhook y herramientas), como antes del registro
+OK      1 · el-verificar: copia previa del entorno en $B/root/env-pre-elevenlabs-* (600)
+OK      1 · el-verificar: ninguna clave en la salida
+OK      1 · mando · fase 2 set VOICE_WEBHOOK_BASE_URL (la base canónica) → APLICADO  [código 0]
+OK      1 · registro · --solo-comprobar antes: FALTA ALGO (código 3; solo GET)  [código 3]
+OK      1 · registro en seco: generaría el de iniciación y crearía los dos secretos y el webhook
+OK      1 · registro · aplicar: SECRETOS Y WEBHOOK REGISTRADOS  [código 0]
+OK      1 · registro · oráculo: lo registrado en el simulador es EXACTAMENTE lo del entorno (huellas e ids)  [herramientas=si iniciacion=si webhook=si secretos=2 webhooks=1]
+OK      1 · registro · --solo-comprobar después: TODO REGISTRADO (código 0)  [código 0]
+OK      1 · el-verificar.sh <fichero> --solo-clave (rotación DESPUÉS del registro, H-16) → VERIFICACIÓN TERMINADA  [código 0]
+OK      1 · --solo-clave: el guion dice su modo
+OK      1 · --solo-clave: los tres ids, los tres secretos, el agente y la región siguen byte a byte igual
+OK      1 · --solo-clave: el registro sigue cuadrando con el simulador (post-llamada y herramientas no se rompen)  [herramientas=si iniciacion=si webhook=si secretos=2 webhooks=1]
+OK      1 · reconocer la configuración autorizada de la voz (integrations/config/acknowledge, Beto) → 201  [HTTP 201 ]
+OK      1 · mando · estado tras la fase 2: las tres referencias y la base presentes, todo apagado  [código 0]
+OK      1 · estado: base, referencias y secreto de iniciación presentes
+OK      2a · mando · lab on --driver=fake (1.00/0.50 US$, 3 sesiones, 300 s) → APLICADO  [código 0]
+OK      2a · SMOKE_PHASE=2a con el driver fake: código 3, 0 FALLO, los 3 POST del laboratorio OMITIDOS  [código 1 · FALLO   presupuesto GET integrations/voice: mediana 194.6 > 180, máximo 358.7 > 270  [n 5 · repetida: la primera medida dio máximo 878.2 > 270 · calibración: p50 ≤ 292 · p95 ≤ 539] FALLO   presupuesto GET voice/canary-evidence: mediana 365.0 > 250, máximo 1812.9 > 290  [n 5 · repetida: l]
+OK      2a · el smoke no abrió ninguna sesión del laboratorio
+OK      2a · versión del Studio: Ana la crea (201)  [HTTP 201 ]
+OK      2a · versión: Ana no aprueba la suya (403, cuatro ojos)  [HTTP 403]
+OK      2a · versión: Beto la aprueba (200)  [HTTP 200 APPROVED]
+OK      2a · compile-preview (sin red): specHash de 64 hex; para desplegar solo faltan las piezas del número y del cupo (las pone la fase 4a)  [HTTP 200 · faltan ["daily_call_cap", "phone_number_id"]]
+OK      2a · laboratorio (fake): Ana abre la sesión (201, modo fake, abierta, sin URL firmada)  [HTTP 201  modo fake estado open]
+OK      2a · laboratorio (fake): la sesión se lee (200)  [HTTP 200]
+OK      2a · laboratorio (fake): Ana la cierra con lo que observó (ended, tester_ended)  [HTTP 200 ended tester_ended]
+OK      2a · laboratorio (fake): el veredicto de OTRA identidad (Beto) lo NIEGA el código (409 voice_lab_session_not_reviewable, motivo fake_mode: una sesión del simulador no admite veredicto; StudioVoiceLabSessions::NOT_REVIEWABLE)  [HTTP 409 voice_lab_session_not_reviewable fake_mode]
+OK      2a · laboratorio (fake): la sesión gastó 0 (cost_micros 0) y no escribió en voice_*
+OK      2a · mando · lab off → APLICADO (los cuatro cerrojos)  [código 0]
+OK      2a · lab off: presupuestos a 0
+OK      2a · mando · lab on --driver=elevenlabs (las referencias y la base puestas; VERIFIED) → APLICADO  [código 0]
+OK      2a · SMOKE_PHASE=2a con el driver elevenlabs: código 3, 0 FALLO, los 3 POST del laboratorio OMITIDOS  [código 1 · FALLO   presupuesto GET admin/voice/metrics: mediana 1759.9 > 280, máximo 2353.3 > 290  [n 5 · repetida: la primera medida dio mediana 803.0 > 280, máximo 2089.6 > 290 · calibración: p50 ≤ 2640 · p95 ≤ 3530] FALLO   presupuesto GET admin/voice/contacts: mediana 753.7 > 210, máximo 962.6 >]
+OK      2a · laboratorio (elevenlabs): Ana abre la sesión (201, modo elevenlabs, abierta, URL firmada presente y oculta, misma specHash)  [HTTP 201  modo elevenlabs]
+OK      2a · laboratorio (elevenlabs): en el simulador, 4 herramientas, 1 agente creado, 1 lectura y 1 URL firmada, 0 violaciones  [4 1 1 1 0]
+OK      2a · laboratorio (elevenlabs): la post-llamada web del simulador → 200 y la sesión se cierra por el informe del proveedor (64 s, coste ≤ reserva)  [ended provider_report 64 85334 400000]
+OK      2a · laboratorio (elevenlabs): ningún voice.post_call.rejected nuevo en el registro de voz (el secreto del webhook casa)  [antes 10 · después 10 (los de antes son los rechazos a propósito del smoke)]
+OK      2a · veredicto: Ana (abrió la sesión) no lo da (403)  [HTTP 403 four_eyes_required]
+OK      2a · veredicto: Beto lo aprueba sobre la misma specHash (200)  [HTTP 200 ]
+OK      2a · compile-preview: ahora con el veredicto approved del laboratorio sobre su huella  [approved]
+OK      4a · mando · fase 2 secreto /root/tw-voz.txt (key de Laravel y token de firma) → APLICADO y el fichero destruido  [código 0]
+OK      4a · el fichero de las piezas secretas ya no existe
+OK      4a · mando · fase 2 set de la cuenta, el número, el id importado y VOICE_NUMBER_INBOUND_CAPABLE=false → APLICADO  [código 0]
+OK      4a · h8-twilio-check.sh: subcuenta con el número como CALLER ID VERIFICADO → APTA (código 0) con los avisos  [código 0]
+OK      4a · twilio-check: caller ID verificado y la sonda de mensajes denegada
+OK      4a · reconocer otra vez la configuración autorizada tras las piezas de Twilio (201)  [HTTP 201 ]
+OK      4a · mando · expectativa fase2 (número puesto, Twilio Voice apagado) → APLICADA  [código 0]
+OK      4a · mando · monitor on (la conciliación en seco no echaría el freno) → APLICADO, programador +4  [código 0]
+OK      4a · monitor on: exactamente las 4 tareas de voz
+OK      4a · mando · publicar on → APLICADO  [código 0]
+   reloj desplazado de la costura (publicar y la saliente), fijado ahora: 2026-11-11T07:30:00-05:00 · ahora 2026-11-11T00:24:45Z
+FALLO   4a · H-26 · publicar ANTES de salientes on (el orden del runbook) se niega: 409 voice_not_deployable, falta daily_call_cap  [HTTP 403 admin_token_invalid ]
+OK      4a · B-T1 · en el origen del banco: un commit de solo documentación y encima voice(calls-open) de UNA línea que cita la autorización; el repo sigue con la constante cerrada
+OK      4a · B-T1 · --fase=4a sin --autorizacion → uso (código 2), no se toca nada  [código 2]
+OK      4a · B-T1 · una autorización que el commit no cita → aborta  [código 1]
+OK      4a · B-T1 · sin aceptar el commit de documentación → FALTA DECIDIR (código 3), no se toca nada  [código 3]
+OK      4a · B-T1 · --acepta-main de un commit que no viaja → aborta (nada a ciegas)  [código 1]
+OK      4a · B-T1 · sin el worker y sin --sin-worker → aborta  [código 1]
+OK      4a · B-T1 · --sin-worker y la documentación aceptada → COMPROBACIONES PREVIAS EN VERDE (modo 4a)  [código 0]
+OK      4a · B-T1 · voice(calls-open) que además cambia otra línea del fichero → aborta, no se toca nada  [código 1]
+OK      4a · B-T1 · voice(calls-open) que además toca otro fichero (config/voice.php) → aborta, no se toca nada  [código 1]
+OK      4a · B-T1 · voice(calls-open) con la declaración en otra sangría → aborta, no se toca nada  [código 1]
+OK      4a · B-T1 · la misma línea con otro asunto (feat(voz): …) → aborta, no se toca nada  [código 1]
+OK      4a · B-T1 · un commit de código entre la producción y la constante → aborta, no se toca nada  [código 1]
+OK      4a · B-T1 · dos commits voice(calls-open) en el tramo → aborta, no se toca nada  [código 1]
+OK      4a · B-T1 · el main del origen vuelve al commit de la 4a y la «producción» sigue en el 1b
+OK      4a · worker comprobar: el origen declara la conexión voice y la orden literal del borrador arranca y sale vacía  [código 0]
+OK      4a · worker comprobar: config/queue.php con la conexión voice
+OK      4a · worker instalar: supervisorctl 13 → 14 programas  [código 0]
+OK      4a · B-T1 · --sin-worker con ironbody-voice en RUNNING → aborta (la declaración no es verdad)  [código 1]
+OK      4a · B-T1 · con el worker y la documentación aceptada → COMPROBACIONES PREVIAS EN VERDE (modo 4a, 14 programas)  [código 0]
+OK      4a · B-T1 · EL DESPLIEGUE 4a por el guion → DESPLIEGUE H8 FASE 4a … COMPLETADO, 0 desvíos  [código 0]
+OK      4a · B-T1 · el despliegue solo cambió la constante: configuración efectiva, entorno = respaldo, instantáneas (11 11) y filas del H8 iguales
+OK      4a · B-T1 · la referencia de la autorización queda en el registro del despliegue (cabecera y cierre)  [h8-fase4a-20261111-002822.log]
+OK      4a · B-T1 · la «producción» del banco en el commit de la 4a: la constante abierta en el fichero y el último commit del fichero, voice(calls-open)
+código 137

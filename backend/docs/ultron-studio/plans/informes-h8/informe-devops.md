@@ -483,3 +483,29 @@ Las de `ULTRON_STUDIO_H8_PREPARACION_PLAN_PAGO.md` §2 (comando exacto, qué cam
 ## Dónde queda el banco
 
 `~/.cache/ironbody-banco-h8-ops8d` (base `ultron_studio_banco_h8_ops8d`, puertos 8431–8434 y 8435 para la segunda API), **parado** tras la última pasada, con la fase 1b desplegada. Para repetir: `bash ops/banco-h8/ensayar.sh <banco> arrancar && bash ops/banco-h8/ensayar-ops8d.sh <banco>` (devuelve el entorno al de partida, cierra la constante, retira el worker y vacía los simuladores; con un banco recién montado la evidencia es más limpia). Para limpiarlo: `bash ops/banco-h8/ensayar.sh <banco> parar`, `rm -rf <banco>` y `dropdb -h 127.0.0.1 -p 55432 -U ironbody ultron_studio_banco_h8_ops8d`. El PostgreSQL desechable lo arrancó otro agente: no lo toqué. Los bancos `ironbody-banco-h8`, `-ops8b` y `-ops8c` de tandas anteriores siguen montados y parados, sin tocar.
+
+# §OPS8-e (10/11-11-2026) · B-T1, B-T7, B-T13 (y B-4), B-T14, `contactos on|off`, la rotación del token maestro del OTP y las 5 tareas de voz
+
+**El informe completo está en `plans/informes-h8/informe-ops8e.md`** (qué cambió por brecha, qué se ensayó, qué no se verificó, las acciones pendientes con sus comandos y los riesgos). Este es el resumen.
+
+**Entorno: solo local, no es producción.** No se ejecutó nada en el servidor ni contra los proveedores, no hay commit y no se tocó ningún fichero de la aplicación.
+
+- **B-T1 🔒:** `deploy-h8-backend-fase1.sh --fase=4a --autorizacion=<ref> [--sin-worker]` despliega solo el commit `voice(calls-open)` de una línea, con la fase 2 completa. El modo normal sigue exigiendo `false`, y `PREVIO=a608450`. Ensayado: el despliegue 4a salió COMPLETADO con 0 desvíos en tres bancos, con 14 negativos y la vuelta atrás del código.
+- **B-T7:** «11 tablas vacías» y «ningún perfil» solo son estrictos la primera vez. **H-29:** el smoke del H8 abortaría hoy en producción por las 7 tablas del H9 («18 y 7»); ya corregido.
+- **B-T13:** `h7-monitor-scope.sh on` se niega sin expectativa confirmada; la tabla por etapa está en el plan («Fase 4a-primero»). **B-4 no es una brecha:** según la lectura del lead, `schedule:run` corre desde el crontab de root con `sudo -u www-data`. El mando mira ahora el usuario efectivo y solo avisa si algo corre de verdad como root.
+- **B-T14:** 600 de `www-data` o 640 de `root:www-data` en los mandos del H6 y del H7, también al apagar; 13 o 14 workers.
+- **Contactos (B-T4):** `h8-voice-scope.sh contactos on|off` con `VOICE_CONTACTS_ENABLED` / `flags.contacts`, comprobados contra el código final de `h8-hardening`.
+- **B-T5:** con el árbol actual, el monitor de voz programa **5** tareas (27 → 32). El mando y el smoke las leen del código, y los ensayos del banco ya no fijan 4.
+- **Punto 7:** `ops/h8-otp-token-rotate.sh` (`estado`, `rotar`, `vuelta`) rota el Auth Token maestro de Twilio del OTP. Escribe las dos claves con su sangría. Antes de escribir comprueba que la caché es igual al fichero y hace un GET de solo lectura con el token nuevo. Si Twilio ya no acepta el viejo, la vuelta atrás se niega. El procedimiento, con los pasos del propietario (consola de Twilio, la vista web antes de promocionar, ElevenLabs con una credencial restringida), está en `docs/ops/ROTACION-CREDENCIALES.md`.
+
+**Cifras:**
+- `ensayar-ops8d.sh`: **127 OK · 0 FALLO**.
+- `ensayar-ops8e.sh`: **55 OK · 0 FALLO**, tres veces.
+- `ensayar-otp-token.sh`: **49 OK · 0 FALLO**.
+- `sim-pruebas.cjs`: **93 OK · 0 FALLO**.
+- Pruebas aisladas: 38/0, 14/0 y 11/0.
+- Evidencia: `ops/evidencia-h8/2026-11-10/ops8e/`, 71 ficheros; el barrido de secretos no deja nada a revisar.
+
+**Hallazgos nuevos:** H-29 a H-39, en el informe.
+
+**Lo más urgente que queda abierto:** C-8 (`opcache.validate_timestamps` del FPM), decisivo para la rotación y para todos los mandos; el comando de solo lectura está en el informe. Y la revisión de `security` de B-T1 y del mando de la rotación.

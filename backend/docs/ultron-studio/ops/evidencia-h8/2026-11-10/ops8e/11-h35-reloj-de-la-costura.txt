@@ -1,0 +1,5 @@
+== OPS8-e · H-35 · la marca de verificación de ElevenLabs (E4-6) frente al reloj congelado de la costura del banco (1.ª pasada, banco ops8e) · solo lectura · 2026-11-11T00:06:06Z
+   reloj desplazado de la costura (publicar y la saliente): 2026-11-10T18:29:45-05:00 · ahora 2026-11-10T23:29:53Z
+FALLO   4a · la puerta (POST admin/voice/calls, en horario por el reloj desplazado): 202 y la fila requested  [HTTP 409 outbound_denied ["elevenlabs_unverified"]]
+marca: 2026-11-10T23:45:29Z · reloj de la costura: 2026-11-10T23:29:45Z · la marca va 944 s por delante (holgura 300 s) · con ese reloj: ELEVENLABS_UNVERIFIED · con el reloj real: ELEVENLABS_VERIFIED
+corrección (arnés del banco): el reloj de la costura se fija al arrancar la segunda API (fija_reloj), después de la verificación de la fase 2

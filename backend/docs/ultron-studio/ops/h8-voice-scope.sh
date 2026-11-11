@@ -15,9 +15,10 @@
 #   bash /root/h8-voice-scope.sh salientes off                               nivel 0 de D8-20 para las salientes
 #   bash /root/h8-voice-scope.sh entrantes on --cupo=N                       fase 3
 #   bash /root/h8-voice-scope.sh entrantes off                               nivel 0 de D8-20 para las entrantes
-#   bash /root/h8-voice-scope.sh monitor on [--acepta-freno] | off           VOICE_MONITOR_ENABLED (las 4 tareas voice:*)
+#   bash /root/h8-voice-scope.sh monitor on [--acepta-freno] | off           VOICE_MONITOR_ENABLED (las tareas voice:*: 4, o 5)
 #   bash /root/h8-voice-scope.sh publicar on|off                             ULTRON_STUDIO_VOICE_PUBLISHING_ENABLED (E4-1)
 #   bash /root/h8-voice-scope.sh expectativa fase1|fase2|llamadas            ULTRON_STUDIO_MONITOR_EXPECT del monitor del H7
+#   bash /root/h8-voice-scope.sh contactos on|off                            VOICE_CONTACTS_ENABLED (B-T4: alta de contactos y su consentimiento; fase 4b)
 #
 # Se ejecuta EN EL SERVIDOR como root, con la fase 1 desplegada y la AUTORIZACIÓN ESCRITA de la fase (protección 13);
 # apagar («off») es la vuelta atrás de nivel 0 y no espera a nadie. Cada orden que escribe: el fichero de entorno tiene que
@@ -27,7 +28,7 @@
 # tuvieran (dos espacios si faltan), en una escritura atómica que conserva dueño y modo → el fichero parsea → config:cache
 # como www-data con umask 077 (caché de www-data, 600, nunca un enlace) → la configuración efectiva cambió SOLO en lo
 # pedido y el motor, el H4–H7 y el estado de ElevenLabs siguen igual → el fichero es la copia salvo esas claves → el
-# programador cambia solo si la orden es «monitor» (±4 tareas de voz) → queue:restart → los workers como antes, dos
+# programador cambia solo si la orden es «monitor» (±4 tareas de voz; ±5 con voice:webhook-health) → queue:restart → los workers como antes, dos
 # lecturas → 401 sin token → 0 ERROR nuevos. Imprime el antes y el después SIN VALORES DE SECRETOS (presencia, nombres,
 # referencias no secretas y los cuatro últimos dígitos del número y de la cuenta) y la orden exacta de vuelta atrás.
 # «APLICADO» solo sale con 0 desvíos; con alguno, código 1 y la vuelta atrás. Códigos: 0 hecho o nada que hacer, 1 aborto
@@ -51,7 +52,9 @@
 #   · monitor on, si `voice:reconcile --dry-run --numbers` (lecturas a los proveedores, no escribe nada) dice que la
 #     primera pasada echaría el freno, salvo --acepta-freno (p. ej. la llamada de prueba del propietario en la ventana de
 #     48 h de la conciliación: cada llamada de la cuenta sin su fila es `unknown_provider_call` y echa el freno);
-#   · expectativa <fase>, si integrations-doctor no confirma esa expectativa con el estado de ahora.
+#   · expectativa <fase>, si integrations-doctor no confirma esa expectativa con el estado de ahora;
+#   · contactos on|off, si el código desplegado no lee VOICE_CONTACTS_ENABLED (B-T4, OPS8-e: sin ella, escribirla no
+#     tendría efecto). «contactos on» es de la fase 4b (visto bueno legal D-12 y la supresión 1581 de la voz, B-T3, antes).
 # Nunca imprime valores del fichero de entorno ni la salida de un tinker que no case con lo esperado. No toca las claves de
 # ElevenLabs (rotación: el-verificar.sh; secretos y webhook: h8-secrets-register.sh), ni el motor, ni el H4–H7, ni la
 # publicación, ni el freno. No reinicia FPM (el proceso web lee la caché en cada petición) ni ningún programa de supervisor.
@@ -70,7 +73,7 @@ CERROJO=/run/lock/h8-voice-scope.lock
 NIVEL_ERROR=production.ERROR
 
 uso() {
-  sed -n '8,20p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '8,21p' "$0" | sed 's/^# \{0,1\}//'
 }
 aborta() { echo "ABORTA: $*"; exit 1; }
 niega() { echo "NO SE APLICA (no se ha tocado nada): $*"; exit 2; }
@@ -91,7 +94,7 @@ ENVF="$APPDIR/.env"
 # Las referencias, la base y el id del número importado no son secretos (config/voice.php) y salen tal cual.
 leer_voz() {
   local l
-  l=$(sudo -u "$WWW" php artisan tinker --execute='$e = "voice.elevenlabs."; $t = "voice.twilio."; $l = "voice.lab."; $hay = fn ($v) => is_string($v) && trim($v) !== ""; $txt = fn ($v) => is_string($v) && trim($v) !== "" ? trim($v) : null; $u4 = fn ($v) => is_string($v) && strlen(trim($v)) >= 4 ? substr(trim($v), -4) : null; $p = (array) config("voice.prices"); $max = (int) config("voice.limits.per_call_max_seconds"); echo json_encode(["calls_in_code" => App\Services\Voice\VoiceCallPolicy::CALLS_ENABLED_IN_CODE, "inbound" => config("voice.inbound.enabled"), "inbound_cap" => config("voice.inbound.daily_cap"), "outbound" => config("voice.outbound.enabled"), "outbound_scope" => config("voice.outbound.scope"), "outbound_cap" => config($t."daily_call_cap"), "budget" => (string) config("voice.limits.daily_budget_usd"), "twilio_voice" => config($t."enabled"), "lab" => config($l."enabled"), "lab_driver" => config($l."driver"), "lab_budget" => (string) config($l."daily_budget_usd"), "lab_session_budget" => (string) config($l."session_budget_usd"), "lab_max_seconds" => config($l."max_session_seconds"), "lab_sessions" => config($l."max_sessions_per_day"), "monitor" => config("voice.monitor.enabled"), "publishing" => config("ultron_studio.voice.publishing_enabled"), "webhook_base" => $txt(config("voice.webhook_base_url")), "phone_number_id" => $txt(config($e."agent_phone_number_id")), "from_last4" => $u4(config($t."from")), "account_last4" => $u4(config($t."account_sid")), "tool_ref" => $txt(config($e."tool_secret_ref")), "initiation_ref" => $txt(config($e."initiation_secret_ref")), "post_call_ref" => $txt(config($e."post_call_webhook_ref")), "s_api_key" => $hay(config($e."api_key")), "s_webhook" => $hay(config($e."webhook_secret")), "s_tool" => $hay(config($e."tool_secret")), "s_initiation" => $hay(config($e."initiation_secret")), "s_twilio_key_sid" => $hay(config($t."api_key_sid")), "s_twilio_key_secret" => $hay(config($t."api_key_secret")), "s_signing" => $hay(config($t."signing_token")), "expect" => $txt(config("ultron_studio.monitor.expect")), "h7_monitor" => config("ultron_studio.monitor.enabled"), "whatsapp_collision" => App\Services\Telephony\VoiceNumberGuard::collidesWithConfig(), "reserve_min_micros" => App\Services\Telephony\VoiceCostGuard::reserveMicros("mobile", $max, null, $p), "reserve_max_micros" => App\Services\Telephony\VoiceCostGuard::reserveMicros("landline", $max, "landline", $p), "studio_voice" => App\Services\UltronStudio\StudioIntegrations::voiceState(), "number_decl_known" => is_array(config("voice.number")), "number_inbound_capable" => config("voice.number.inbound_capable")]), PHP_EOL;' 2>&1 | tail -1) || true
+  l=$(sudo -u "$WWW" php artisan tinker --execute='$e = "voice.elevenlabs."; $t = "voice.twilio."; $l = "voice.lab."; $hay = fn ($v) => is_string($v) && trim($v) !== ""; $txt = fn ($v) => is_string($v) && trim($v) !== "" ? trim($v) : null; $u4 = fn ($v) => is_string($v) && strlen(trim($v)) >= 4 ? substr(trim($v), -4) : null; $p = (array) config("voice.prices"); $max = (int) config("voice.limits.per_call_max_seconds"); echo json_encode(["calls_in_code" => App\Services\Voice\VoiceCallPolicy::CALLS_ENABLED_IN_CODE, "inbound" => config("voice.inbound.enabled"), "inbound_cap" => config("voice.inbound.daily_cap"), "outbound" => config("voice.outbound.enabled"), "outbound_scope" => config("voice.outbound.scope"), "outbound_cap" => config($t."daily_call_cap"), "budget" => (string) config("voice.limits.daily_budget_usd"), "twilio_voice" => config($t."enabled"), "lab" => config($l."enabled"), "lab_driver" => config($l."driver"), "lab_budget" => (string) config($l."daily_budget_usd"), "lab_session_budget" => (string) config($l."session_budget_usd"), "lab_max_seconds" => config($l."max_session_seconds"), "lab_sessions" => config($l."max_sessions_per_day"), "monitor" => config("voice.monitor.enabled"), "publishing" => config("ultron_studio.voice.publishing_enabled"), "webhook_base" => $txt(config("voice.webhook_base_url")), "phone_number_id" => $txt(config($e."agent_phone_number_id")), "from_last4" => $u4(config($t."from")), "account_last4" => $u4(config($t."account_sid")), "tool_ref" => $txt(config($e."tool_secret_ref")), "initiation_ref" => $txt(config($e."initiation_secret_ref")), "post_call_ref" => $txt(config($e."post_call_webhook_ref")), "s_api_key" => $hay(config($e."api_key")), "s_webhook" => $hay(config($e."webhook_secret")), "s_tool" => $hay(config($e."tool_secret")), "s_initiation" => $hay(config($e."initiation_secret")), "s_twilio_key_sid" => $hay(config($t."api_key_sid")), "s_twilio_key_secret" => $hay(config($t."api_key_secret")), "s_signing" => $hay(config($t."signing_token")), "expect" => $txt(config("ultron_studio.monitor.expect")), "h7_monitor" => config("ultron_studio.monitor.enabled"), "whatsapp_collision" => App\Services\Telephony\VoiceNumberGuard::collidesWithConfig(), "reserve_min_micros" => App\Services\Telephony\VoiceCostGuard::reserveMicros("mobile", $max, null, $p), "reserve_max_micros" => App\Services\Telephony\VoiceCostGuard::reserveMicros("landline", $max, "landline", $p), "studio_voice" => App\Services\UltronStudio\StudioIntegrations::voiceState(), "number_decl_known" => is_array(config("voice.number")), "number_inbound_capable" => config("voice.number.inbound_capable"), "contacts" => config("voice.contacts.enabled")]), PHP_EOL;' 2>&1 | tail -1) || true
   case "$l" in '{"calls_in_code":'*) printf '%s\n' "$l" ;; esac
 }
 # Lo que el mando NO toca y tiene que seguir igual: el motor, el H4, el H5, el H6, el monitor del H7 y el estado de
@@ -152,6 +155,10 @@ workers() {
   done
 }
 worker_voz() { supervisorctl status 2>/dev/null | grep -E '^ironbody-voice:' | grep -c RUNNING || true; }
+# OPS8-e: las tareas de voz que programa el código DESPLEGADO con VOICE_MONITOR_ENABLED: 4 (las dos conciliaciones, la
+# poda y la verificación semanal de ElevenLabs), o 5 si el código trae voice:webhook-health (B-T5, h8-hardening). Se lee
+# del código (artisan list), no se supone: así el mando vale antes y después de desplegar B-T5 sin aflojar la cuenta exacta.
+tareas_voz() { local n; n=$(sudo -u "$WWW" php artisan list --raw 2>/dev/null | grep -c '^voice:webhook-health[[:space:]]' || true); [ "${n:-0}" -ge 1 ] && echo 5 || echo 4; }
 errores_log() { local n=0 f; for f in "$APPDIR"/storage/logs/laravel*.log; do [ -f "$f" ] && n=$((n + $(grep -c "$NIVEL_ERROR" "$f" || true))); done; echo "$n"; }
 # El fichero de entorno: un fichero normal, de www-data en 600 o de root:www-data en 640 (C-14), nunca un enlace.
 fichero_ok() {
@@ -274,9 +281,10 @@ s = [("ELEVENLABS_API_KEY", "s_api_key"), ("ELEVENLABS_WEBHOOK_SECRET", "s_webho
 print("   secretos (solo presencia): " + " · ".join("%s %s" % (n, "presente" if d.get(k) else "falta") for n, k in s))
 print("   número de voz igual a uno de WhatsApp: %s · ElevenLabs según el Studio: %s" % ("SÍ (la política deniega por nombre)" if d.get("whatsapp_collision") else "no", x("studio_voice")))
 print("   el número admite entrantes (VOICE_NUMBER_INBOUND_CAPABLE): %s" % ({True: "sí (declarado)", False: "NO: «Outbound Only» declarado", None: "sin declarar (se trata como «admite»)"}.get(d.get("number_inbound_capable"), "?") if d.get("number_decl_known") else "el código desplegado no lee la declaración (B8-g/S8-d)"))
-print("   reserva por saliente (VoiceCostGuard): %.4f US$ a un móvil sin transferencia · %.4f US$ a un fijo con transferencia" % (d.get("reserve_min_micros", 0) / 1e6, d.get("reserve_max_micros", 0) / 1e6))'
+print("   reserva por saliente (VoiceCostGuard): %.4f US$ a un móvil sin transferencia · %.4f US$ a un fijo con transferencia" % (d.get("reserve_min_micros", 0) / 1e6, d.get("reserve_max_micros", 0) / 1e6))
+print("   contactos de voz (alta y consentimiento, VOICE_CONTACTS_ENABLED, B-T4): %s" % {True: "SÍ (fase 4b)", False: "no (409 voice_contacts_disabled; revocar, excluir y el RNE siguen)"}.get(d.get("contacts"), "el código desplegado no lee la bandera (antes de B-T4: el alta no tiene bandera)"))'
   echo "   voice:doctor --telefonia (sin red): $(telefonia)"
-  P=$(programador); echo "   programador (total · del Studio · de voz): $P (de voz: 4 con el monitor de voz encendido, 0 apagado)"
+  P=$(programador); echo "   programador (total · del Studio · de voz): $P (de voz: $(tareas_voz) con el monitor de voz encendido, 0 apagado)"
   echo "   workers (RUNNING · BACKOFF/FATAL): $(workers 999 0) · ironbody-voice en RUNNING: $(worker_voz) (lo exige «salientes on»)"
   if fichero_ok; then echo "   fichero de entorno: $(stat -c '%U:%G %a' "$ENVF") (C-14: www-data 600 o root:www-data 640)"; else echo "   fichero de entorno: $(stat -c '%U:%G %a' "$ENVF" 2>/dev/null || echo '?') — NO ADMITIDO (C-14): ninguna orden que escriba seguirá"; fi
   E=$(printf '%s' "$ANTES" | python3 -I -c 'import json, sys; print(json.load(sys.stdin).get("expect") or "")')
@@ -425,7 +433,7 @@ print(json.dumps(out, sort_keys=True))' "$SECRETOS_FICHERO" 2>&1) || niega "$CAM
     ORDEN=monitor-$2; V=$([ "$2" = on ] && echo true || echo false)
     for a in "${@:3}"; do case "$a" in --acepta-freno) [ "$2" = on ] || niega "--acepta-freno solo con «monitor on»"; ACEPTA_FRENO=1 ;; *) niega "argumento desconocido: $a" ;; esac; done
     CAMBIOS=$(json_de "VOICE_MONITOR_ENABLED=$V")
-    [ "$2" = on ] && PROG_DELTA=4 || PROG_DELTA=-4
+    TV=$(tareas_voz); [ "$2" = on ] && PROG_DELTA=$TV || PROG_DELTA=-$TV
     [ "$2" = off ] || VUELTA_FUNCIONAL="bash $0 monitor off" ;;
   "publicar on"|"publicar off")
     ORDEN=publicar-$2; [ "$#" = 2 ] || { uso; exit 2; }
@@ -441,6 +449,13 @@ print(json.dumps(out, sort_keys=True))' "$SECRETOS_FICHERO" 2>&1) || niega "$CAM
     sudo -u "$WWW" php artisan ultron-studio:integrations-doctor --expect="$EXP" > /dev/null 2>&1 \
       || niega "integrations-doctor no confirma «$EXP» con el estado de hoy: con el monitor del H7 encendido abriría un incidente (ejecutarlo a mano como www-data para ver qué difiere)"
     CAMBIOS=$(json_de "ULTRON_STUDIO_MONITOR_EXPECT=$EXP") ;;
+  "contactos on"|"contactos off")
+    # B-T4 (OPS8-e): la bandera de h8-hardening (config/voice.php, `voice.contacts.enabled`). Si el código desplegado no la
+    # lee, escribirla no tendría efecto: se niega (también «off»; sin la bandera, el alta no tiene cerrojo en el código).
+    ORDEN=contactos-$2; [ "$#" = 2 ] || { uso; exit 2; }
+    case "$(campo contacts)" in true|false) ;; *) niega "el código desplegado no lee VOICE_CONTACTS_ENABLED (B-T4): desplegar antes ese código; escribirla ahora no tendría efecto" ;; esac
+    CAMBIOS=$(json_de "VOICE_CONTACTS_ENABLED=$([ "$2" = on ] && echo true || echo false)")
+    [ "$2" = off ] || VUELTA_FUNCIONAL="bash $0 contactos off" ;;
   *) uso; exit 2 ;;
 esac
 [ -n "$CAMBIOS" ] || aborta "no se calcularon los cambios"
@@ -543,7 +558,7 @@ mapa = {
     "ELEVENLABS_INITIATION_SECRET_REF": ("initiation_ref", str), "ELEVENLABS_POST_CALL_WEBHOOK_REF": ("post_call_ref", str),
     "TWILIO_VOICE_API_KEY_SID": ("s_twilio_key_sid", lambda v: True), "TWILIO_VOICE_API_KEY_SECRET": ("s_twilio_key_secret", lambda v: True),
     "TWILIO_VOICE_SIGNING_TOKEN": ("s_signing", lambda v: True), "ULTRON_STUDIO_MONITOR_EXPECT": ("expect", str),
-    "VOICE_NUMBER_INBOUND_CAPABLE": ("number_inbound_capable", booleano),
+    "VOICE_NUMBER_INBOUND_CAPABLE": ("number_inbound_capable", booleano), "VOICE_CONTACTS_ENABLED": ("contacts", booleano),
 }
 esperado = {}
 for k, v in c.items():
@@ -621,6 +636,10 @@ case "$ORDEN" in
     echo "   AVISO: un número «Outbound Only» (Verified Caller ID) no recibe llamadas: comprobarlo antes con h8-twilio-check.sh" ;;
   monitor-on)
     echo "   AVISO: la primera pasada corre en el siguiente minuto 10/20/30/40/50 (la del número, a la hora en punto): mirar entonces voice:reconcile --dry-run --json y el freno" ;;
+  contactos-on)
+    echo "   AVISO (B-T4): es de la fase 4b: el visto bueno legal (D-12) y la supresión de la Ley 1581 que cubra las tablas de voz (B-T3) van ANTES; llamar a un contacto exige además VOICE_OUTBOUND_SCOPE=contacts, una publicación promovida a rest y el RNE (P-14). Alta y consentimiento siguen a cuatro ojos" ;;
+  contactos-off)
+    echo "   AVISO (B-T4): alta, carga y confirmación del consentimiento responden 409 voice_contacts_disabled; leer, revocar, excluir y el RNE siguen (solo restringen)" ;;
 esac
 echo "   vuelta atrás exacta (el fichero de antes): $VUELTA"
 [ -z "$VUELTA_FUNCIONAL" ] || echo "   vuelta atrás funcional: $VUELTA_FUNCIONAL"

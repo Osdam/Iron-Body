@@ -42,7 +42,9 @@ en otra cosa).
 Uso:   SMOKE_EMAIL=… SMOKE_PW=… python3 smoke-h8.py superadmin        (la contraseña SOLO por entorno, nunca en argv)
 Variables: SMOKE_API · SMOKE_H6_PY (smoke-h6.py, del que se toma el detector) · SMOKE_BUDGETS · SMOKE_BUDGETS_OUT ·
            SMOKE_CANARY_ID · SMOKE_SECRET_SALT y SMOKE_SECRET_DIGESTS (como el H6) · SMOKE_TOKEN_FILE ·
-           SMOKE_EXPECT_VOICE_STATE (por defecto ELEVENLABS_VERIFIED, E1-12).
+           SMOKE_EXPECT_VOICE_STATE (por defecto ELEVENLABS_VERIFIED, E1-12) · SMOKE_VOICE_PROFILES_BEFORE (B-T7, OPS8-e:
+           los perfiles de voz de la base ANTES del smoke, que pone el lanzador; con 0, «ningún perfil» es estricto en la
+           fase 1; con alguno, o sin el dato, es informativo: la fase 1 ya desplegada admite perfiles aprobados, E16-30).
 Código: 0 todo OK · 1 algún FALLO · 3 sin fallos pero con algo OMITIDO · 2 uso incorrecto (también un JSON de
 presupuestos ausente o mal formado: no se hace ninguna petición).
 
@@ -80,6 +82,11 @@ ZEROS64 = '0' * 64
 NO_STORE = 'no-store, private'
 EXPECT_VOICE_STATE = os.environ.get('SMOKE_EXPECT_VOICE_STATE', 'ELEVENLABS_VERIFIED').strip()
 FASE = os.environ.get('SMOKE_PHASE', '1').strip() or '1'
+# B-T7 (OPS8-e): los perfiles de voz que la base tenía ANTES del smoke (lo pasa el lanzador, que cuenta la tabla). «0» hace
+# estricta la expectativa «ningún perfil» de la fase 1; otro número (o sin el dato) la deja en información.
+PERFILES_ANTES = os.environ.get('SMOKE_VOICE_PROFILES_BEFORE', '').strip()
+if not re.fullmatch(r'[0-9]{1,9}', PERFILES_ANTES):
+    PERFILES_ANTES = ''
 # Lo que tiene que decir la telefonía en cada fase. None = cualquiera (se informa). Ver la cabecera, «FASES».
 ESPERA = {
     '1': {'calls': False, 'flags': {'inbound': False, 'outbound': False, 'twilioVoice': False, 'lab': False, 'monitor': False},
@@ -89,7 +96,11 @@ ESPERA = {
     '4a': {'calls': True, 'flags': {'inbound': False, 'outbound': True, 'twilioVoice': True, 'lab': None, 'monitor': True},
            'cadena': 'canario', 'cupos': 'salientes', 'piezas': 'completas', 'publicar': True, 'listas_vacias': False},
 }
-VIVO = {'lab': False, 'publicar': False}   # lo que la API dice de verdad (lo leen las rutas del Studio para no escribir)
+VIVO = {'lab': False, 'publicar': False, 'contacts': None}   # lo que la API dice de verdad (lo leen las rutas del Studio para no escribir)
+# Las 5 banderas de la telefonía del H8 (GET admin/voice/status, `flags`); el código de B-T4 añade `contacts`.
+BANDERAS = {'inbound', 'outbound', 'twilioVoice', 'lab', 'monitor'}
+# Las tres escrituras de contactos que cierra VOICE_CONTACTS_ENABLED (B-T4): alta, carga y confirmación del consentimiento.
+ESCRIBEN_CONTACTOS = {'/admin/voice/contacts', f'/admin/voice/contacts/{FAKE}/consents', f'/admin/voice/contacts/{FAKE}/consents/confirm'}
 VOICE_CAPS = 7   # las 7 llaves de D8-22 en `can` de la ruta 45
 # Cupos con sesión por minuto (por debajo de los del servidor) y cubos: lectura (Studio 120/min y telefonía
 # throttle:120,1), escritura (30/min y throttle:30,1) y la evidencia (10/min por persona: la comparten publicar,
@@ -382,16 +393,21 @@ def check_telephony_with_session(sm, token):
     E = ESPERA[FASE]
     if sm.check('GET admin/voice/status → 200', ok, f'HTTP {st}'):
         VIVO['lab'] = isinstance(flags, dict) and flags.get('lab') is True
+        # B-T4 (h8-hardening): el código nuevo añade `contacts` (registrar contactos y su consentimiento,
+        # VOICE_CONTACTS_ENABLED); el de antes no la tiene. Se admiten los dos y, si está, tiene que estar APAGADA: es de la
+        # fase 4b, y ninguna de las fases de este smoke (1, 2a, 4a) la enciende.
+        VIVO['contacts'] = flags.get('contacts') if isinstance(flags, dict) else None
+        conjunto = isinstance(flags, dict) and set(flags) in (BANDERAS, BANDERAS | {'contacts'}) and flags.get('contacts', False) is False
         sm.check('la constante de las llamadas, ' + ('ABIERTA (el commit voice(calls-open) desplegado, fase 4a)' if E['calls'] else 'cerrada (VoiceCallPolicy::CALLS_ENABLED_IN_CODE = false)'),
                  b.get('callsEnabledInCode') is E['calls'], str(b.get('callsEnabledInCode')))
         if FASE == '1':
-            sm.check('las 5 banderas de la voz apagadas (entrantes, salientes, Twilio Voice, laboratorio, monitor)',
-                     isinstance(flags, dict) and set(flags) == {'inbound', 'outbound', 'twilioVoice', 'lab', 'monitor'} and all(v is False for v in flags.values()),
+            sm.check('las 5 banderas de la voz apagadas (entrantes, salientes, Twilio Voice, laboratorio, monitor) y la de contactos, si el código la tiene',
+                     conjunto and all(v is False for v in flags.values()),
                      json.dumps(flags))
         else:
             fijas = {k: v for k, v in E['flags'].items() if v is not None}
-            sm.check(f'banderas de la fase {FASE}: ' + ', '.join(f'{k} {"sí" if v else "no"}' for k, v in fijas.items()),
-                     isinstance(flags, dict) and set(flags) == {'inbound', 'outbound', 'twilioVoice', 'lab', 'monitor'} and all(flags.get(k) is v for k, v in fijas.items()),
+            sm.check(f'banderas de la fase {FASE}: ' + ', '.join(f'{k} {"sí" if v else "no"}' for k, v in fijas.items()) + ' (contactos, si el código la tiene: no)',
+                     conjunto and all(flags.get(k) is v for k, v in fijas.items()),
                      json.dumps(flags))
         sm.check('sin flags.publishing en la telefonía (E4-1: la bandera de publicar vive en el Studio)', isinstance(flags, dict) and 'publishing' not in flags)
         if E['cadena'] == 'none':
@@ -438,12 +454,20 @@ def check_telephony_with_session(sm, token):
              st == 200 and isinstance(b, dict) and b.get('live') == 0 and b.get('ambiguous') == 0 and b.get('brakeOpen') is False,
              f'HTTP {st} · vivas {(b or {}).get("live")} · ambiguas {(b or {}).get("ambiguous")}')
     bad = []
+    # B-T4: con la bandera de contactos APAGADA (código nuevo), dar de alta, cargar y confirmar el consentimiento responden
+    # 409 voice_contacts_disabled ANTES de validar el cuerpo; sin la bandera en el código (el de antes), 422 como las demás.
+    cerradas = VIVO.get('contacts') is False
     for path in [V + '/calls', V + '/contacts', V + f'/contacts/{FAKE}/consents', V + f'/contacts/{FAKE}/consents/confirm',
                  V + f'/contacts/{FAKE}/revoke', V + '/exclusions', V + '/rne-checks']:
         st, b, _ = sm.call('POST', path, {}, token)
-        if not (st == 422 and code_of(b) == 'validation_failed'):
+        if cerradas and path in ESCRIBEN_CONTACTOS:
+            if not (st == 409 and code_of(b) == 'voice_contacts_disabled'):
+                bad.append(f'{path.replace(FAKE, "<inventado>")}={st} {code_of(b) or ""} (esperado 409 voice_contacts_disabled)')
+        elif not (st == 422 and code_of(b) == 'validation_failed'):
             bad.append(f'{path.replace(FAKE, "<inventado>")}={st} {code_of(b) or ""}')
-    sm.check('las 7 POST de la telefonía con un cuerpo vacío → 422 validation_failed (antes de la puerta: nada se escribe)', not bad, ', '.join(bad)[:240])
+    sm.check('las 7 POST de la telefonía con un cuerpo vacío → 422 validation_failed (antes de la puerta: nada se escribe)'
+             + ('; con la bandera de contactos apagada, alta, carga y confirmación del consentimiento → 409 voice_contacts_disabled antes de validar' if cerradas else ''),
+             not bad, ', '.join(bad)[:240])
     st, b, _ = sm.call('POST', V + f'/calls/{FAKE}/hangup', {}, token)
     sm.check('POST admin/voice/calls/<inventado>/hangup → 404 call_not_found (antes de hablar con Twilio)', st == 404 and code_of(b) == 'call_not_found', f'HTTP {st} {code_of(b) or ""}'.strip())
 
@@ -521,11 +545,20 @@ def check_studio_with_session(sm, token):
              + ('publicar y promover 409 voice_publishing_disabled, ' if not publicar_vivo else '')
              + 'el resto 422 antes de escribir', not bad, ' · '.join(bad)[:400])
     perfiles = data_of(vistos.get(('GET', 'voice/profiles')))
-    if FASE == '1':
-        sm.check('GET voice/profiles: ningún perfil de voz', isinstance(perfiles, dict) and perfiles.get('data') == [] and perfiles.get('total') == 0,
-                 f'total {(perfiles or {}).get("total") if isinstance(perfiles, dict) else "?"}')
+    total = (perfiles or {}).get('total') if isinstance(perfiles, dict) else '?'
+    if FASE == '1' and PERFILES_ANTES == '0':
+        # B-T7 (OPS8-e): estricto solo cuando la base no tenía ningún perfil antes del smoke (el primer despliegue, o la voz
+        # sin usar): entonces la API tampoco puede enseñar ninguno.
+        sm.check('GET voice/profiles: ningún perfil de voz (la base no tenía ninguno antes del smoke)',
+                 isinstance(perfiles, dict) and perfiles.get('data') == [] and perfiles.get('total') == 0, f'total {total}')
+    elif FASE == '1':
+        # Con la fase 1 ya desplegada el Studio puede crear y aprobar perfiles (E16-30: el perfil 1, aprobado el 09-11): no
+        # es un fallo del despliegue. Lo que el smoke no puede hacer es escribir, y eso lo exige el lanzador con el
+        # recuento exacto de todas las tablas antes y después.
+        sm.info('GET voice/profiles (informativo: la fase 1 ya desplegada admite perfiles creados en el Studio; ninguna escritura del smoke: el recuento exacto del lanzador)',
+                f'total {total} en la API · {PERFILES_ANTES or "? (sin el recuento del lanzador)"} en la base antes del smoke')
     else:
-        sm.info('GET voice/profiles (informativo desde la fase 2: el laboratorio y la publicación usan perfiles)', f'total {(perfiles or {}).get("total") if isinstance(perfiles, dict) else "?"}')
+        sm.info('GET voice/profiles (informativo desde la fase 2: el laboratorio y la publicación usan perfiles)', f'total {total}')
     pubs = data_of(vistos.get(('GET', 'voice/publications')))
     publishing = pubs.get('publishing') if isinstance(pubs, dict) else None
     historial = pubs.get('history') if isinstance(pubs, dict) else None

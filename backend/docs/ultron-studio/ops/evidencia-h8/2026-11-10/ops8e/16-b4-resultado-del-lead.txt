@@ -1,0 +1,14 @@
+# B-4 · resultado de la comprobación de SOLO LECTURA hecha por el lead en producción (mensaje al equipo, 11-11-2026).
+# Transcrito tal como lo comunicó el lead; OPS8-e no entró al servidor y no lo ha verificado por su cuenta.
+
+crontab de root (la línea de schedule:run):
+    * * * * * cd /var/www/api/backend && sudo -u www-data /usr/bin/php artisan schedule:run >> storage/logs/schedule.log
+crontab de www-data: no tiene
+/etc/cron.d: ningún fichero con artisan
+
+Conclusión (lead): el programador corre efectivamente como www-data. Correcto: no es una brecha. No hay nada que mover
+(el paso 6b de ironbody-migrate-propuesta.sh no hace falta para esto).
+
+Consecuencia en el repo (OPS8-e): h7-monitor-scope.sh mira ahora el usuario EFECTIVO de cada línea activa de schedule:run
+(root con «sudo -u www-data» cuenta como www-data); con esta línea, `estado` diría «www-data=1 · correcto: sí, nada corre
+como root». Prueba de la lógica con 11 crontabs sintéticos: 14-prueba-b4-usuario-efectivo.*.

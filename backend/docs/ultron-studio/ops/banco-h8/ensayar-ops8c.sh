@@ -216,9 +216,10 @@ ctl_tw '/__numero?sms_laravel=0' > /dev/null
 
 # ── 5. Monitor, publicar, laboratorio y expectativa ─────────────────────────────────────────────────────────────
 paso "mando · monitor on con una llamada ajena en la ventana → se niega (la primera pasada echaría el freno)" 2 'echaría el freno' "${E[@]}" alcance monitor on
-paso "mando · monitor on --acepta-freno → APLICADO, programador +4 tareas de voz" 0 'MANDO monitor-on APLICADO' "${E[@]}" alcance monitor on --acepta-freno
-printf '%s' "$SALIDA" | grep -qE '4\. programador .* → [0-9]+ 0 4 \(esperado' && caso "mando · el programador ganó exactamente las 4 tareas de voz" 0 || caso "mando · programador +4" 1
-paso "mando · monitor off → APLICADO, programador −4" 0 'MANDO monitor-off APLICADO' "${E[@]}" alcance monitor off
+TV=$(tareas_voz_banco "$B")   # OPS8-e: 4, o 5 con voice:webhook-health (B-T5), leídas del código del banco
+paso "mando · monitor on --acepta-freno → APLICADO, programador +$TV tareas de voz" 0 'MANDO monitor-on APLICADO' "${E[@]}" alcance monitor on --acepta-freno
+printf '%s' "$SALIDA" | grep -qE '4\. programador .* → [0-9]+ 0 '"$TV"' \(esperado' && caso "mando · el programador ganó exactamente las $TV tareas de voz del código" 0 || caso "mando · programador +$TV" 1
+paso "mando · monitor off → APLICADO, programador −$TV" 0 'MANDO monitor-off APLICADO' "${E[@]}" alcance monitor off
 ctl_tw '/__reset?state=1' > /dev/null
 paso "mando · monitor on sin llamadas ajenas → la conciliación en seco no echaría el freno → APLICADO" 0 'MANDO monitor-on APLICADO' "${E[@]}" alcance monitor on
 paso "mando · monitor off" 0 'MANDO monitor-off APLICADO' "${E[@]}" alcance monitor off

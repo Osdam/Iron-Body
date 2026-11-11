@@ -1,0 +1,44 @@
+[
+    {
+        "id": 1,
+        "uuid": "4802d360-bec3-4489-ba04-ffe17c5f8e22",
+        "version_id": 1,
+        "decision": "approved",
+        "content_hash": "868326f5bb4dcd10de0eeecd6677b317daf85e1f58b25c2bfb05061d9da7aa27",
+        "acknowledged_warnings": "[\"canary_only_declared@content.studio\"]",
+        "note": null,
+        "reviewer_admin_id": 2,
+        "reviewer_name": "Beto Revisor (E2E H9)",
+        "reviewer_role": "Super Admin",
+        "reviewer_person_id": 2,
+        "created_at": "2026-11-11 00:22:24"
+    },
+    {
+        "id": 2,
+        "uuid": "1653ad2d-1016-4ec5-8dc0-d464c9856f12",
+        "version_id": 2,
+        "decision": "approved",
+        "content_hash": "5761b0c40347f62066ba1501a4c397e87c99bf799b34b21068fb16445c62d987",
+        "acknowledged_warnings": "[\"canary_only_declared@content.studio\"]",
+        "note": null,
+        "reviewer_admin_id": 2,
+        "reviewer_name": "Beto Revisor (E2E H9)",
+        "reviewer_role": "Super Admin",
+        "reviewer_person_id": 2,
+        "created_at": "2026-11-11 00:25:35"
+    },
+    {
+        "id": 3,
+        "uuid": "c2c22f80-0c74-47b1-90d1-913b60dbf000",
+        "version_id": 3,
+        "decision": "approved",
+        "content_hash": "52c84f0c8efc2badb68e39fd97c78756f0e718046ff87fa763d83288577dac9f",
+        "acknowledged_warnings": "[\"canary_only_declared@content.studio\"]",
+        "note": null,
+        "reviewer_admin_id": 2,
+        "reviewer_name": "Beto Revisor (E2E H9)",
+        "reviewer_role": "Super Admin",
+        "reviewer_person_id": 2,
+        "created_at": "2026-11-11 00:28:19"
+    }
+]

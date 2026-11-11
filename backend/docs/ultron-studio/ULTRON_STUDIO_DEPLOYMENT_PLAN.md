@@ -1779,6 +1779,33 @@ El contrato ponía la 4a después de la 3 («la fase 3 estable 24 h»). Hacer la
 
 **Vuelta atrás de la 4a:** nivel 0 `bash /root/h8-voice-scope.sh salientes off` (cupo y presupuesto a 0; Twilio Voice apagado si las entrantes lo están); 0b `sudo -u www-data php artisan voice:hangup --all --confirm`; 1 revertir la publicación (Studio); 2 voz apagada; 3 revocar las keys en las consolas y quitar la importación del número; 4 el código anterior (la constante cerrada vuelve con él).
 
+**OPS8-e (10-11-2026): el commit `voice(calls-open)` ya tiene guion (B-T1), y la expectativa del monitor del H7 por etapa (B-T13).** *Ensayado en el banco con el código de `a608450` (`ops/banco-h8/ensayar-ops8d.sh` y `ensayar-ops8e.sh`; cifras en `plans/informes-h8/informe-ops8e.md` (resumen en `informe-devops.md`, §OPS8-e); evidencia en `ops/evidencia-h8/2026-11-10/ops8e/`). Nada se ha ejecutado en el servidor.* Sustituye, para el paso «`voice(calls-open)` desplegado», a «su despliegue con el guion de la fase 1»: el modo normal de ese guion lo rechaza (y lo sigue rechazando). *Actualizada el 11-11-2026: B-4 comprobado (abajo); el informe completo de OPS8-e está en `plans/informes-h8/informe-ops8e.md`; B-6 (la rotación del token maestro de Twilio del OTP, P-4: recomendada antes de las piezas de Twilio de la fase 2) tiene mando, `ops/h8-otp-token-rotate.sh`, ensayado en el banco, y su procedimiento con los pasos del propietario en `docs/ops/ROTACION-CREDENCIALES.md` (nota OPS8-e).*
+
+1. **El commit** (lead, con la orden escrita del propietario): uno solo, encima de lo que sirve producción; asunto `voice(calls-open): …`; en el mensaje, la referencia literal de la autorización (p. ej. `Autorización escrita del propietario: <referencia>`); el diff, **solo** la línea `public const CALLS_ENABLED_IN_CODE = false;` → `= true;` de `backend/app/Services/Voice/VoiceCallPolicy.php`, con la misma sangría. Antes de desplegar, `h8-e2e.sh todas` sobre ese commit. Entre lo que sirve producción y él **solo** puede haber commits de documentación (`backend/docs/`, `docs/` o un `*.md` de la raíz; hoy, `d701b0c`): cualquier commit de código pendiente en `main` (por ejemplo, el de B-T4 o el de W9/V9) se despliega antes por su vía; con él en medio, la 4a aborta.
+2. **Respaldo** con el bloque del paso 1 de la fase 1, con `BK=/var/backups/ironbody/ultron-studio-h8-fase4a-$TS`: su `api-commit.txt` es la base de la 4a y la de su vuelta atrás.
+3. **El guion nuevo, en `/root`:** desde el Mac, con el repo en el commit de la 4a, `scp backend/docs/ultron-studio/ops/deploy-h8-backend-fase1.sh ironbody-vps:/root/` y las huellas comparadas (`shasum -a 256` en el Mac, `sha256sum` en el servidor).
+4. `bash /root/deploy-h8-backend-fase1.sh <commit, 7 cifras> "$BK" --fase=4a --autorizacion='<referencia>' --acepta-main=<commits de documentación> --solo-comprobar` → `COMPROBACIONES PREVIAS EN VERDE · MODO 4a`. Sin `--acepta-main`, código 3 y «FALTA DECIDIR» con la lista de los commits de documentación que viajarían. Con el worker aún sin instalar, `--sin-worker` (declararlo con el worker en RUNNING, o no declararlo sin él, aborta).
+5. Lo mismo sin `--solo-comprobar` → `DESPLIEGUE H8 FASE 4a (voice(calls-open) <commit>, autorización «<referencia>») COMPLETADO`. No escribe el fichero de entorno ni migra; comprueba que **solo** cambió la constante (la configuración efectiva, `voice:doctor --telefonia`, las rutas, el programador, el esquema, las filas del H8, las instantáneas y el fichero de entorno idéntico al respaldo). La referencia queda en `/root/h8-fase4a-<fecha UTC>.log` (cabecera y cierre).
+6. Después, en el orden de H-26: el worker (si se usó `--sin-worker`) → `salientes on --cupo=1 --presupuesto=2.00` → reconocer la configuración (H-25) → `expectativa llamadas` (si el monitor del H7 está encendido) → la publicación canaria, en ventana → `SMOKE_PHASE=4a`, que comprueba por HTTP que el proceso web ve la constante abierta (el guion la comprueba en el proceso CLI y reinicia los workers).
+
+**Qué exige el paso 0 del modo 4a** (si falta algo, aborta sin tocar nada): producción en el commit del respaldo (o ya en el de la 4a: reanudación) y conteniendo `PREVIO=a608450`; `origin/main` = el commit dado, con un solo padre, el asunto `voice(calls-open): `, la cita literal de `--autorizacion`, el diff de una línea descrito arriba y ningún otro `voice(calls-open):` en el tramo; historia lineal; ninguna migración; la fase 2 completa por presencia (las 14 piezas de ElevenLabs y de Twilio, `ELEVENLABS_ENABLED=true`), la telefonía verificada (`voice:doctor --telefonia` con `proveedor=ELEVENLABS_VERIFIED`, número y subcuenta, cupos `0/0/0`), `integrations-doctor` con la expectativa de la fase 2 y sin deriva de la configuración autorizada; las llamadas cerradas (salientes, entrantes, Twilio Voice, cupos y presupuesto); el respaldo de menos de 2 h con su huella y el fichero de entorno igual a él; las guardas del H8 en la base (funciones, disparadores, dueños y privilegios de `iron_app`).
+
+**Vuelta atrás de este despliegue:** nivel 0, `salientes off` (con la constante abierta, las banderas siguen cerrando: abrirla no llama a nadie). Nivel 4 (cerrar la constante), solo si producción sigue en el commit de la 4a: `( cd /var/www/api && umask 022 && git checkout -q --detach "$(cat "$BK/api-commit.txt")" )`, `config:cache` y `route:cache` como `www-data` (cachés 600), `queue:restart`; después, en el repo, un commit que revierta la línea (sin reescribir la historia) antes del siguiente despliegue, y nunca `git checkout main` en el servidor mientras `main` lleve la constante abierta. La 4a no cambia datos.
+
+**El modo normal** sigue exigiendo la constante `false` en `origin/main` (ensayado: aborta). `PREVIO=a608450` (el pendiente (b) de E16-30): como producción sirve hoy `ce7c150` (fase 1 del H9, L9-77), el modo normal aborta en su paso 0 hasta volver a fijar `PREVIO` con lo que sirva producción, que es lo que debe hacer; el modo 4a solo exige que producción contenga `a608450`.
+
+**Expectativa del monitor del H7 en cada etapa (B-T13).** `h7-monitor-scope.sh on` ahora **se niega** (código 2, sin tocar nada) si el monitor en seco de las integraciones no sale con 0: es decir, si la expectativa de hoy no la confirma `integrations-doctor` o si hay deriva de la configuración autorizada. La expectativa del código (`elevenlabs:ELEVENLABS_NOT_CONFIGURED`) ya no es la de producción desde E1-12; la vía para fijar la de cada etapa es el mando de la voz, que solo la escribe si `integrations-doctor` la confirma. `h7-monitor-scope.sh estado` enseña la expectativa, si el estado de hoy la confirma y en qué crontab corre `schedule:run`. Apagar el monitor nunca depende de esto.
+
+| Etapa (`ULTRON_STUDIO_ACTIVACION_POR_ETAPAS.md`) | Qué hay | `bash /root/h8-voice-scope.sh expectativa …` | `ULTRON_STUDIO_MONITOR_EXPECT` |
+|---|---|---|---|
+| Hoy, y la etapa 0 hasta la 0.5 (clave rotada, base, secretos y webhook) | Twilio solo para el OTP; ninguna pieza de Twilio Voice | `fase1` | `twilio:connected_otp_only,twilio_voice:not_configured,elevenlabs:ELEVENLABS_VERIFIED` |
+| Desde la 0.6 (keys, cuenta y número de Twilio) hasta la 2.2, y con la 4a ya desplegada mientras las salientes sigan apagadas | Las piezas de Twilio Voice puestas y `TWILIO_VOICE_ENABLED=false` | `fase2` | `twilio:connected_otp_only,twilio_voice:disabled,elevenlabs:ELEVENLABS_VERIFIED` |
+| Desde la 2.3 (`salientes on`) y la etapa 3 | `TWILIO_VOICE_ENABLED=true` | `llamadas` | `twilio:connected_otp_only,twilio_voice:connected_voice,elevenlabs:ELEVENLABS_VERIFIED` |
+| Tras `salientes off` (vuelta atrás), con las entrantes apagadas | `TWILIO_VOICE_ENABLED=false` | `fase2` | la de la fase 2 |
+| La marca `ELEVENLABS_VERIFIED` caducada (vale 30 días; hoy, hasta el 03-12-2026 a las 22:55 UTC, D-11) | El Studio pasa a `ELEVENLABS_UNVERIFIED` | ninguna la confirma: renovar antes la verificación (`el-verificar.sh` o `integrations-snapshot --verify-voice`, con autorización) | — |
+
+Tras cada cambio que mueva la huella de la voz (la rotación, las piezas, `salientes on` y `off`), **reconocer la configuración autorizada**: sin eso, `config_drift:voice` y el mando del H7 se niega a encenderse. **B-4, comprobado (lectura del lead en producción, 11-11-2026):** `schedule:run` corre desde el crontab de root **con `sudo -u www-data`** (`* * * * * cd /var/www/api/backend && sudo -u www-data /usr/bin/php artisan schedule:run >> storage/logs/schedule.log`); `www-data` no tiene crontab y `/etc/cron.d` no tiene ninguna línea de `artisan`. El programador corre de verdad como `www-data`: **correcto, no es una brecha, y no hay nada que mover** (la H-1 de OPS7, más arriba, es para una línea de root SIN `sudo`). `h7-monitor-scope.sh estado` dice ahora el usuario EFECTIVO de cada línea (en producción, `www-data=1 · correcto: sí`) y solo avisa si algo corre de verdad como root.
+
 ### Smoke de las fases 2a y 4a (`SMOKE_PHASE`)
 
 `SMOKE_PHASE=1` (por defecto) es el de la fase 1 sin cambios. Con `2a` o `4a`, el lanzador y `smoke-h8.py` comprueban el estado de su fase y **siguen sin filas positivas**: con su bandera encendida no abren, cierran ni juzgan sesiones del laboratorio y no publican ni promueven (OMITIDO, con el motivo), porque escriben o gastan.
@@ -1845,6 +1872,143 @@ supervisorctl status | grep -c RUNNING                                          
 | 55P03 en la migración | Un escritor de `ultron_studio_versions` (alguien guardando en el Studio) | El script reintenta 3 veces. Si se agota, `h8-schema-check.sql` para ver quién y **relanzar el mismo comando** (reanuda) |
 | El login del smoke da 429 | Más de 8 logins por minuto desde la IP del servidor. *(Corregido el 08-11-2026: desde B8-c las peticiones anónimas a la telefonía ya no cuentan en ese cubo; bloqueante 4, resuelto)* | Esperar un minuto. La cuenta queda en reposo |
 | El smoke informa de que nginx corta la post-llamada de 1 MB | `client_max_body_size` menor que el tope | Subirlo antes de la fase 3 (cambio de nginx con autorización: `nginx -t` y `reload`) |
+
+## Hito 9 (automatización comercial): runbook por fases — FASE 1 EJECUTADA el 10-11-2026 (20:21–20:27 UTC); fases 2 → 6 sin ejecutar
+
+**Estado (11-11-2026, DOC9):**
+- **La fase 1 está en producción** desde el 10-11-2026: backend `ce7c150`, entre las 20:21 y las 20:27 UTC según el reloj del servidor; CRM `9572426`. Todo está apagado y la vigilancia de 15 minutos no encontró incidencias (contrato H9, L9-76 y L9-77).
+- **Las fases 2 → 6 no se han ejecutado.** Su procedimiento operativo está en **`ops/RUNBOOK_H9.md`** (etapas 4 a 7 de `ULTRON_STUDIO_ACTIVACION_POR_ETAPAS.md`), y lo que falta para cada una, en `ULTRON_STUDIO_H9_COMPLETITUD.md`.
+- **Lo terminado después en el árbol** (W9, V9, P9-25, el panel de activación del CRM, el endurecimiento del H8 y la supresión 1581 de la voz) **no tiene todavía guion de despliegue** (abajo).
+
+### Fase 1 (todo apagado): qué entró y qué no
+
+| Pieza | Qué cambió | Quién lo nota |
+|---|---|---|
+| Migración `2026_11_12_100001` | 7 tablas de gobierno `ultron_studio_*` (estrategias, versiones, revisiones, simulaciones, plantillas de mensaje, cadena de publicaciones y vínculos de personas) y el libro del Studio, que pasa a 11 sujetos | Nadie |
+| Migración `2026_11_12_100002` | 8 tablas de ejecución: `outreach_runs`, `outreach_enrollments`, `outreach_decisions`, `outreach_jobs`, `outreach_outcomes`, `outreach_brakes`, `outreach_budget_counters` y `outreach_cursors` | Nadie |
+| Migración `2026_11_12_100003` | 4 índices de lectura `CONCURRENTLY` sobre tablas que ya existían: `users(membership_end_date)`, `payment_transactions(user_id, status)`, `class_reservations(member_id, session_date)` y `receivables(status, due_at)` | Nadie (solo rendimiento) |
+| 44 rutas nuevas bajo `api/admin/ultron-studio` | 30 de `strategies/**`, 1 del canal SSE (`stream`) y 13 de `outreach/**`: el Studio pasa de 77 a **121** (`StudioRouteCount::TOTAL`). Todas cerradas: 409 con sus banderas apagadas (salvo `GET outreach/status`, que responde 200) y 401 sin credencial | El CRM nuevo |
+| `routes/console.php` | Bloque del H9 bajo `COMMERCIAL_AUTOMATION_SCHEDULER_ENABLED` con 3 tareas (`outreach:sweep`, `outreach:dispatch --inline` y `outreach:monitor`), **apagado**: no programa nada | Nadie |
+| 15 variables explícitas | Las 11 de la ejecución apagadas o a 0 (`COMMERCIAL_AUTOMATION_ENABLED`, `…_MODE=off`, `…_SCHEDULER_ENABLED`, `…_ASSISTED_ENABLED`, `…_ASSISTED_DAILY_CAP`, `…_WHATSAPP_ENABLED`, `…_WHATSAPP_DAILY_BUDGET_USD`, `…_WHATSAPP_DAILY_CAP`, `…_VOICE_ENABLED`, `…_MONITOR_ENABLED` y `…_CLASSIFIER_ENABLED`); `ULTRON_STUDIO_STRATEGIES_ENABLED` y `…_PUBLISHING_ENABLED` a `false`; `ULTRON_STUDIO_STRATEGIES_SIMULATION_GATE=required`; `ULTRON_STUDIO_STREAM_ENABLED=false` (`ops/deploy-h9-backend-fase1.sh:143`). La ventana, los mínimos del canario y el horario propio quedan en el valor por defecto del código | Nadie |
+| CRM | La sección «Campañas automáticas (estrategias)» (`/marketing/automatizaciones`, 9 pestañas) y las 10 llaves del H9 en el catálogo de permisos | Quien tenga `ultron.view`: la ve apagada |
+
+**Qué NO entró:**
+- La constante `OutreachSendGate::SENDS_ENABLED_IN_CODE` sigue en `false`, y el paso 0 aborta si viaja un commit `outreach(sends-open):` (`ops/deploy-h9-backend-fase1.sh:400`).
+- No se encendió ninguna bandera.
+- No se instaló ningún worker: el despacho va en línea (L9-58).
+- No se ejecutó `composer install`.
+- No se tocó nginx, el DNS, TLS ni el crontab.
+- El motor comercial, ULTRON Legacy, el WhatsApp de producción, n8n, el OTP y la voz del H8 quedan fuera, por las puertas de diff del paso 0 (`:96-108`).
+
+### Fase 1: ejecución (10-11-2026; lead, por orden escrita del propietario)
+
+Lo que se ejecutó, según el registro de L9-76. *Las órdenes son las del uso del guion; el registro completo está en el servidor.*
+
+1. **Respaldo:** `/var/backups/ironbody/ultron-studio-h9-fase1-20261110-202129`, con 238 tablas, 44 MB y modos 700/600; producción estaba antes en `a608450`. El guion lee de ese directorio `env.backup`, para comparar el fichero de entorno, y `api-commit.txt`, para la vuelta atrás.
+2. **Ensayo en el servidor**, de solo lectura salvo el `git fetch`. Terminó **EN VERDE**:
+   ```bash
+   bash /root/deploy-h9-backend-fase1.sh ce7c150 /var/backups/ironbody/ultron-studio-h9-fase1-20261110-202129 --solo-comprobar --acepta-main=a921fbb,307ad51,5a10d51
+   ```
+   Los tres commits aceptados eran documentación del H8 que producción no tenía; los decidió el propietario en el momento.
+3. **Despliegue:** la misma orden sin `--solo-comprobar` → **COMPLETADO, 0 desvíos**. Resultado:
+   - las 15 variables escritas apagadas;
+   - las 3 migraciones aplicadas (100001 en 302 ms, 100002 en 325 ms y 100003 en 42 ms, con los 4 índices válidos);
+   - esquema `123 137 9 25 51 75 3 8`, 33 funciones sin SECURITY DEFINER, 15 tablas vacías y privilegios de `iron_app` comprobados uno a uno;
+   - rutas `121 30 13 9 4 1` y programador `39 0 0 0`;
+   - workers 13/0 con pid nuevo y sanidad HTTP 401/413/403;
+   - el fichero de entorno igual al respaldo salvo las 15 claves, y 0 ERROR.
+   - Registro: `/root/h9-fase1-20261110-202243.log`.
+4. **Smoke:** `bash /root/smoke-run-h9.sh` → **37 OK · 0 FALLO · 1 OMITIDO** (los presupuestos de PERF9, que no existen). Código 3, por la omisión.
+5. **CRM**, desde el Mac con el árbol limpio:
+   ```bash
+   bash deploy-h8-crm-fase1.sh 9572426 e0f7983
+   ```
+   Hizo el respaldo `crm-pre-h8-9572426-20261110-202503`, `rsync` sin borrado y dejó `version.json` en `9572426`.
+6. **Vigilancia de 15 minutos** (L9-77): quince lecturas iguales; 13 workers en RUNNING; 0 respuestas 5xx en las últimas 2 000 líneas de nginx; `failed_jobs` en 2, las mismas de antes; 0 filas en `outreach_*`; 0 incidentes; ningún ERROR nuevo.
+
+**El paso aparte de la 100003** (`--indices`, entre las 22:00 y las 06:00 de Bogotá) **no hizo falta**: entró en la misma pasada.
+
+### Después de la fase 1: a las 24 horas (solo lectura)
+
+**Pendiente:** la lectura del 11-11-2026 hacia las 20:27 UTC no consta.
+- **Qué leer:** lo mismo que la vigilancia de L9-77, más el estado del mando (`bash /root/h9-outreach-scope.sh estado`).
+- **Qué esperar:** `fase deducida: 1 (todo apagado)`, 0 frenos, 0 trabajos y la constante cerrada.
+
+**Es la precondición P1 de la etapa 4** (`ops/RUNBOOK_H9.md` §3.1).
+
+### Lo terminado en el árbol después de la fase 1: SIN VÍA DE DESPLIEGUE (No implementado)
+
+**Qué está en el árbol** (`ULTRON_STUDIO_H9_COMPLETITUD.md` §2), en la rama `feat/ultron-studio-h9`, sin commit:
+- W9, con la migración `2026_11_13_200001`, que crea la tabla 16;
+- V9, con la migración `2026_11_13_100001`: `ALTER TABLE voice_calls` solo en PostgreSQL;
+- P9-25 (backend y CRM);
+- el panel de activación del CRM;
+- el endurecimiento del H8 (L9-82);
+- la supresión 1581 de la voz (L9-83).
+
+**`deploy-h9-backend-fase1.sh` no puede desplegarlo:**
+- su `PREVIO` es `a608450` (`:88`), y producción está en `ce7c150`;
+- su puerta de diff exige cero cambios en `app/Services/Marketing`, `Voice`, `Telephony` y `config/voice.php` (`:104-108`), y estas piezas los tocan.
+- El gancho G-9 de V9 lo asigna a `devops` (L9-81).
+
+*Propuesto para el guion siguiente, sin implementar:*
+- `PREVIO=ce7c150`.
+- Una puerta de diff con los ficheros **enumerados** de W9, V9 y L9-82 (`informe-w9.md` §2, `informe-v9.md` §2 y `informe-backend-h8e.md`).
+- Las 2 migraciones nuevas, con los recuentos del Anexo A de W9 (PostgreSQL: +4 disparadores, +4 CHECK y +1 tabla en `ultron_studio_%`).
+- El programador con **5** tareas del H9 si está encendido, y 0 si no.
+- El mando y el smoke del mismo commit.
+- **El orden de P9-25: primero el CRM, después recargar las pestañas de recepción y del punto facial, y después el backend** (`plans/informes-h9/informe-p9-25.md` §4).
+
+**Antes de desplegar**, además:
+- la revisión de seguridad de la Enmienda 17 del H8 y de L9-82 (sec-cierre, en curso);
+- la revisión independiente;
+- la regresión completa;
+- la orden escrita del propietario.
+
+### Fases 2 → 6
+
+| Fase (contrato §14) | Etapa (`ULTRON_STUDIO_ACTIVACION_POR_ETAPAS.md`) | Mando | Runbook |
+|---|---|---|---|
+| 2 · Sombra (≥ 7 días) | 4 | `gobierno on`, `publicar on`, `ventana`, `canario`, `horario`, `sombra on` y `stream on` | `ops/RUNBOOK_H9.md` §3 |
+| 3 · Asistido | 5 | `asistido on --cupo=N` | §4 |
+| 4–5 · WhatsApp automático | 6.1–6.3 | `canal whatsapp on --cupo=N --presupuesto=USD`, tras el commit `outreach(sends-open):` | §5 |
+| 6 · Voz por estrategia | 6.4 | `canal voz on`, con las fases 4a y 4b del H8 activas | §5 |
+
+### Vuelta atrás de la fase 1
+
+**No hay bandera que bajar:** todo está apagado.
+
+**Código (nivel 3).** Solo si producción sigue en el commit del H9; si se desplegó otra cosa después, se planea un revert con `devops`. Tomado de la cabecera del guion, `ops/deploy-h9-backend-fase1.sh:47-53`; **no ejecutado**:
+
+```bash
+BK=/var/backups/ironbody/ultron-studio-h9-fase1-20261110-202129; FASE1=ce7c150
+[ "$(git -C /var/www/api rev-parse HEAD)" = "$(git -C /var/www/api rev-parse "$FASE1")" ] || { echo "producción ya no está en el commit del H9: no hacer checkout"; exit 1; }
+( cd /var/www/api && umask 022 && git checkout -q --detach "$(cat "$BK/api-commit.txt")" )      # a608450
+cd /var/www/api/backend && sudo -u www-data sh -c 'umask 077; php artisan config:cache -q && php artisan route:cache -q'
+stat -c '%U %a %F' bootstrap/cache/config.php bootstrap/cache/routes-v7.php                      # www-data 600 regular file
+sudo -u www-data php artisan queue:restart
+sudo -u www-data php artisan route:list --path=admin/ultron-studio --json | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))'   # 77
+supervisorctl status | grep -c RUNNING                                                            # 13
+```
+
+**Lo que no vuelve:**
+- Las 15 tablas quedan vacías y sin lector. **Nunca `migrate:rollback` en producción**: `down()` se niega si hay filas. Quitarlas es de `database-specialist`, con autorización.
+- Los 4 índices de la 100003 se pueden retirar con `DROP INDEX CONCURRENTLY`, sin tocar datos.
+- Las 15 variables quedan, y el código anterior no las lee.
+- **Volver el código no es volver los datos.**
+
+**CRM:** la orden que imprimió `deploy-h8-crm-fase1.sh`, que restaura `index.html` y `version.json`.
+
+### Incidencias previsibles en el próximo despliegue del H9
+
+| Síntoma (texto del guion) | Causa | Qué hacer |
+|---|---|---|
+| `COMPROBACIONES PREVIAS LEÍDAS, FALTA FIJAR PREVIO=<commit>` | Producción ya no está en `a608450`: hoy está en `ce7c150` | Revisar lo que entró (`git log --oneline a608450..<commit>`), fijar `PREVIO` en un commit, volver a copiar el guion y repetir `--solo-comprobar` (`:506`) |
+| `… FALTA DECIDIR los commits ajenos […]` | Hay commits de `main` que producción no tiene | Decisión del propietario: `--acepta-main=<commits>`, o que su dueño los despliegue antes (`:503`) |
+| `el commit … abre la constante de envío (outreach(sends-open):) …` | Viaja el commit de la etapa 6 | Nunca en este guion (`:400`). Hace falta un guion propio, que todavía no existe |
+| `la puerta de diff tiene ficheros que el contrato del H9 no nombra …` | W9, V9 o L9-82 en el tramo | El guion siguiente (G-9); no relajar la puerta a mano (`:422`) |
+| 55P03 en una migración | Un escritor de las tablas afectadas | El guion reintenta 3 veces; si se agota, relanzar el mismo comando, que reanuda |
+| `la 100003 (índices CONCURRENTLY) NO quedó aplicada …` | `lock_timeout` con tráfico | El paso aparte `--indices` entre las 22:00 y las 06:00 de Bogotá (`:576`, `:718`) |
 
 ## Fases siguientes (no incluidas aquí)
 

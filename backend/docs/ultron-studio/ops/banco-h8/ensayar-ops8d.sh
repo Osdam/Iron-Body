@@ -28,6 +28,17 @@
 # reloj.php) al siguiente día hábil a las 07:30 de Bogotá (OPS8D_RELOJ lo fija). El resto (el mando, el registro, el
 # smoke, la conciliación) corre con el reloj real. En producción no hay nada que desplazar: se publica y se llama en
 # horario.
+# OPS8-e (10-11-2026, auditoría de los 9 hitos): B-T1, la constante ya NO se gira a mano en el clon de la «producción»:
+# el commit `voice(calls-open):` de una línea se hace en el ORIGEN del banco ($B/src, nunca en el repo), encima de un
+# commit de solo documentación (como d701b0c en producción), y lo despliega deploy-h8-backend-fase1.sh en modo
+# `--fase=4a --autorizacion=<ref>` con su respaldo, tras sus casos negativos (sin autorización, otra autorización, sin
+# aceptar la documentación, sin worker, el worker con --sin-worker, una línea más, otro fichero, un commit de código antes,
+# otro asunto, dos commits de la constante, otra sangría, un --acepta-main a ciegas, la fase 2 incompleta y el modo
+# normal con la constante abierta); la vuelta atrás del código es la del runbook (checkout del commit del respaldo,
+# cachés y queue:restart). B-T7: con la fase 1 (todo apagado) se crea y aprueba un perfil de voz, como en producción
+# (E16-30), y SMOKE_PHASE=1 tiene que salir sin FALLO (OPS8E_SMOKE_VIEJO=<smoke-h8.py> pasa además el de antes, que daba
+# 1 FALLO). Necesita un banco recién montado (la «producción» y el origen en el 1b): la cadena de voz conserva la
+# publicación de una pasada anterior y el smoke 2a exige la cadena vacía.
 # Cada paso dice OK o FALLO con el código de salida y la línea que lo decide; la salida completa queda en
 # $B/logs/ensayo-ops8d-<fecha>.txt (600; sin secretos: las huellas se comparan aquí y solo sale «sí» o «no»).
 # Requisitos: el banco montado con «producción» en fe29126 y origen a608450 (BANCO_PREVIO=fe29126 montar.sh … a608450),
@@ -172,7 +183,13 @@ INICIAL="$B/root/env-ensayo-ops8d-inicial"
 restaura_inicial() {
   if [ ! -f "$INICIAL" ]; then
     ( umask 077; { cat "$B/bk/env.backup"; [ -z "$(tail -c1 "$B/bk/env.backup")" ] || printf '\n'
-      for kv in VOICE_INBOUND_ENABLED=false VOICE_OUTBOUND_ENABLED=false VOICE_LAB_ENABLED=false VOICE_MONITOR_ENABLED=false ULTRON_STUDIO_VOICE_PUBLISHING_ENABLED=false VOICE_INBOUND_DAILY_CAP=0 VOICE_DAILY_BUDGET_USD=0 VOICE_LAB_DAILY_BUDGET_USD=0 VOICE_LAB_DRIVER=fake; do printf '  %s\n' "$kv"; done; } > "$INICIAL" )
+      for kv in VOICE_INBOUND_ENABLED=false VOICE_OUTBOUND_ENABLED=false VOICE_LAB_ENABLED=false VOICE_MONITOR_ENABLED=false ULTRON_STUDIO_VOICE_PUBLISHING_ENABLED=false VOICE_INBOUND_DAILY_CAP=0 VOICE_DAILY_BUDGET_USD=0 VOICE_LAB_DAILY_BUDGET_USD=0 VOICE_LAB_DRIVER=fake; do printf '  %s\n' "$kv"; done
+      # H-36 (OPS8-e), COSTURA del banco como TWILIO_VOICE_BASE_URL: la sesión de administración caduca a las 12 h de crearse
+      # (expires_at con el reloj real; config/admin.php) y la segunda API corre con el reloj desplazado al siguiente día hábil:
+      # con el ensayo empezado entre las ~19:30 y las 07:00 de Bogotá (o en fin de semana) el salto pasa de 12 h y la segunda
+      # API ve las sesiones caducadas (403 admin_token_invalid; pasó el 10-11-2026 a las 19:10). 72 h cubren el salto más
+      # largo (viernes 18:30 → lunes 07:30). En producción no hay costura de reloj.
+      printf '  %s\n' ADMIN_SESSION_TTL_MINUTES=4320; } > "$INICIAL" )
   fi
   install -m 600 "$INICIAL" "$ENVB"
   ( cd "$BE" && env "${RED[@]}" php artisan config:cache -q && chmod 600 bootstrap/cache/config.php )
@@ -264,8 +281,16 @@ while not dentro(t):
 print(t.isoformat())
 PY
 }
-OBJETIVO=${OPS8D_RELOJ:-$(reloj_objetivo)}
-RELOJ_ENV=("H8_E2E_RELOJ_OBJETIVO=$OBJETIVO" "H8_E2E_VENDOR=$BE/vendor/autoload.php")
+# H-35 (OPS8-e): el reloj de la costura se fija AL USARLO (al arrancar la segunda API, en la 4a), no al empezar: si el
+# ensayo empieza dentro del horario, «ahora» es el instante del arranque, ANTERIOR a la verificación de ElevenLabs de la
+# fase 2, y con ese reloj la marca de E4-6 queda «en el futuro» (más allá de los 300 s de holgura): la telefonía falla
+# cerrada (elevenlabs_unverified) y la puerta deniega. Pasó el 10-11-2026 (ensayo de las 18:29 de Bogotá).
+OBJETIVO=""; RELOJ_ENV=()
+fija_reloj() {
+  OBJETIVO=${OPS8D_RELOJ:-$(reloj_objetivo)}
+  RELOJ_ENV=("H8_E2E_RELOJ_OBJETIVO=$OBJETIVO" "H8_E2E_VENDOR=$BE/vendor/autoload.php")
+  echo "   reloj desplazado de la costura (publicar y la saliente), fijado ahora: $OBJETIVO · ahora $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+}
 # Un proceso PHP de la «producción» del banco con el reloj desplazado (y la red por la valla).
 php_reloj() { ( cd "$BE" && env "${RED[@]}" "${RELOJ_ENV[@]}" "$PHPBIN" -d auto_prepend_file="$RELOJ" "$@" 2> >(grep -v 'h8-e2e reloj' >&2) ); }
 php_real() { ( cd "$BE" && env "${RED[@]}" "$PHPBIN" "$@" ); }
@@ -301,10 +326,14 @@ smoke() { RC_SMOKE=0; SALIDA=$(env SMOKE_PHASE="$1" "${E[@]}" smoke 2>&1) || RC_
 # El veredicto FUNCIONAL del smoke: ningún FALLO que no sea de un presupuesto de rendimiento (los de PERF8 están medidos en
 # el servidor; en el Mac, con otros agentes trabajando, un GET puede pasar de su techo: se dice aparte y no cuenta como fallo
 # de la secuencia), los OMITIDOS esperados y el marcador repetido N veces. Con un presupuesto fallido el smoke sale con 1.
+# OPS8-e: los FALLO de TIEMPO son los presupuestos de PERF8 (perf-h8/presupuestos-h8.json): las rutas y public401.maxMs, el «401
+# en menos de N ms» de las públicas, que sale del mismo fichero. En el Mac con otros agentes (carga media > 100 el 10-11-2026)
+# no se pueden medir; en producción el smoke no cambia (ahí son FALLO). Sin «printf | grep -q»: SIGPIPE con pipefail.
+TIEMPO='^FALLO   (presupuesto|las 4 públicas responden el 401 en menos de)'
 smoke_ok() { # <etiqueta> <omitidos esperados> <patrón extra que tiene que repetirse N veces> <N>
   local funcionales presupuestos
-  funcionales=$(printf '%s' "$SALIDA" | grep '^FALLO' | grep -vc '^FALLO   presupuesto'); presupuestos=$(printf '%s' "$SALIDA" | grep -c '^FALLO   presupuesto')
-  { [ "$RC_SMOKE" = 3 ] || { [ "$RC_SMOKE" = 1 ] && [ "$presupuestos" -gt 0 ]; }; } && [ "$funcionales" = 0 ] && printf '%s' "$SALIDA" | grep -qE "RESUMEN \(superadmin\): [0-9]+ OK · $presupuestos FALLO · $2 OMITIDO" && [ "$(printf '%s' "$SALIDA" | grep -c "$3")" = "$4" ] && echo 0 || echo 1
+  funcionales=$(grep '^FALLO' <<< "$SALIDA" | grep -vEc "$TIEMPO" || true); presupuestos=$(grep -Ec "$TIEMPO" <<< "$SALIDA" || true)
+  { [ "$RC_SMOKE" = 3 ] || { [ "$RC_SMOKE" = 1 ] && [ "$presupuestos" -gt 0 ]; }; } && [ "$funcionales" = 0 ] && grep -qE "RESUMEN \(superadmin\): [0-9]+ OK · $presupuestos FALLO · $2 OMITIDO" <<< "$SALIDA" && [ "$(grep -c "$3" <<< "$SALIDA" || true)" = "$4" ] && echo 0 || echo 1
 }
 resumen_smoke() { printf '%s' "$SALIDA" | grep -E 'RESUMEN|^FALLO|PRESUPUESTOS' | head -4 | tr '\n' ' ' | cut -c1-300; }
 # Cuántas líneas del registro de voz casan con un patrón (los smokes dejan a propósito rechazos: se compara antes y después).
@@ -328,13 +357,38 @@ reconocer_voz() { # <nota> → 0 si quedó reconocida (201), 1 si no; deja la hu
   return 1
 }
 
+# ── OPS8-e: commits fabricados en el ORIGEN del banco (nunca en el repo ni en el árbol de trabajo) ──────────────────
+P_POLITICA=backend/app/Services/Voice/VoiceCallPolicy.php
+GIRO='s/^([[:space:]]*public const CALLS_ENABLED_IN_CODE = )false;/\1true;/'
+# hace_commit <padre> <mensaje> <ruta> <sed -E> [<ruta> <sed -E>]… → el sha del commit nuevo en $B/src (con fontanería:
+# índice temporal, hash-object y commit-tree; no mueve ninguna rama ni toca ningún árbol de trabajo).
+hace_commit() {
+  local padre=$1 msg=$2 idx="$B/run/indice-ops8e.$$" ruta expr blob arbol
+  shift 2
+  rm -f "$idx"
+  GIT_INDEX_FILE="$idx" git -C "$B/src" read-tree "$padre"
+  while [ "$#" -ge 2 ]; do
+    ruta=$1; expr=$2; shift 2
+    blob=$(git -C "$B/src" show "$padre:$ruta" | sed -E "$expr" | git -C "$B/src" hash-object -w --stdin)
+    GIT_INDEX_FILE="$idx" git -C "$B/src" update-index --cacheinfo "100644,$blob,$ruta"
+  done
+  arbol=$(GIT_INDEX_FILE="$idx" git -C "$B/src" write-tree)
+  rm -f "$idx"
+  git -C "$B/src" -c user.name=banco -c user.email=banco@local commit-tree "$arbol" -p "$padre" -m "$msg"
+}
+origen_a() { git -C "$B/src" update-ref refs/heads/main "$1"; }   # el main del ORIGEN del banco (su propio clon)
+corto() { git -C "$B/src" rev-parse --short=7 "$1"; }
 # ── 0. Punto de partida: entorno de la fase 1, constante cerrada, worker retirado, simuladores vacíos, cuentas ────
-grep -qE 'CALLS_ENABLED_IN_CODE = true;' "$BE/app/Services/Voice/VoiceCallPolicy.php" && "${E[@]}" constante cerrar >> "$LOG" 2>&1
+# OPS8-e: un banco recién montado (la «producción» y el main del origen, en el commit del 1b). Una pasada anterior deja la
+# publicación canaria en la cadena (el smoke 2a exige la cadena vacía) y el origen con el commit de la constante.
+[ "$(git -C "$B/api" rev-parse --short=7 HEAD)" = "$ESPERADO" ] && [ "$(git -C "$B/src" rev-parse --short=7 main)" = "$ESPERADO" ] \
+  || muere "el ensayo necesita la «producción» y el main del origen en $ESPERADO (un banco recién montado: ver banco-h8/README.md, §OPS8-d y §OPS8-e); hoy: «producción» $(git -C "$B/api" rev-parse --short=7 HEAD), origen $(git -C "$B/src" rev-parse --short=7 main)"
+[ "$(git -C "$B/api" status --porcelain --untracked-files=no | wc -l | tr -d ' ')" = 0 ] || muere "el clon de la «producción» del banco tiene cambios locales"
 [ ! -f "$B/sup-voz-instalado" ] || "${E[@]}" worker retirar >> "$LOG" 2>&1
 api2_parar
 restaura_inicial
 echo "== ensayo OPS8-d · banco $B · «producción» $(git -C "$B/api" rev-parse --short=7 HEAD) · registro $LOG"
-echo "   reloj desplazado de la costura (publicar y la saliente): $OBJETIVO · ahora $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+echo "   reloj desplazado de la costura (publicar y la saliente): se fija al arrancar la segunda API, en la 4a (H-35)"
 ctl_el '/__reset?state=1' > /dev/null; ctl_tw '/__reset?state=1' > /dev/null
 R=$(php_real "$AYUDANTE" "$BE" cuentas "$TOK" 2>> "$LOG") || muere "no se pudieron crear las cuentas de los cuatro ojos (ver $LOG)"
 ANA=$(jc accounts.a "$R"); BETO=$(jc accounts.b "$R")
@@ -344,6 +398,40 @@ caso "0 · dos canarios de voz activos sembrados (sin teléfonos en la salida)" 
 paso "0 · mando · estado de partida: constante cerrada, todo apagado, ElevenLabs VERIFIED en el Studio" 0 'constante de llamadas: cerrada' "${E[@]}" alcance estado
 printf '%s' "$SALIDA" | grep -q 'salientes: no' && printf '%s' "$SALIDA" | grep -q 'ElevenLabs según el Studio: ELEVENLABS_VERIFIED' && caso "0 · estado: salientes apagadas y ELEVENLABS_VERIFIED" 0 || caso "0 · estado: salientes apagadas y ELEVENLABS_VERIFIED" 1
 paso "0 · mando · expectativa fase1 (monitor del H7 apagado; integrations-doctor la confirma) → APLICADA" 0 'MANDO expectativa-fase1 APLICADO' "${E[@]}" alcance expectativa fase1
+
+# ── 0b. OPS8-e · B-T1 desde el punto de partida: el modo normal sigue negando la constante abierta; el 4a exige la fase 2 ─
+AUT="OPS8E-AUT-4A-$(date -u +%Y%m%d)"   # la referencia de la orden escrita del propietario (simulada en el banco)
+MSG_VOZ=$(printf 'voice(calls-open): banco OPS8-e: abre las llamadas salientes (ensayo; nunca en el repo)\n\nAutorización escrita del propietario: %s' "$AUT")
+BASE1B=$(git -C "$B/api" rev-parse HEAD)
+VOZ0=$(hace_commit "$BASE1B" "$MSG_VOZ" "$P_POLITICA" "$GIRO")
+origen_a "$VOZ0"
+# El modo NORMAL con la «producción» en PREVIO (la del banco) y la constante abierta en origin/main: llega a E10-7 y aborta.
+git -C "$B/api" checkout -q --detach "$PREVIO_BANCO"
+paso "0 · B-T1 · el modo NORMAL con voice(calls-open) en origin/main → aborta (la fase 1 no despliega la constante abierta)" 1 'la fase 1 no despliega la constante abierta' "${E[@]}" desplegar --esperado="$(corto "$VOZ0")" --solo-comprobar
+git -C "$B/api" checkout -q main
+caso "0 · la «producción» del banco vuelve a su main ($ESPERADO) sin cambios locales" "$([ "$(git -C "$B/api" rev-parse --short=7 HEAD)" = "$ESPERADO" ] && [ "$(git -C "$B/api" status --porcelain --untracked-files=no | wc -l | tr -d ' ')" = 0 ] && echo 0 || echo 1)"
+BK0="$B/bk-4a-sin-fase2-$(date -u +%Y%m%d-%H%M%S)"
+"${E[@]}" respaldo "$BK0" >> "$LOG" 2>&1
+paso "0 · B-T1 · el modo 4a con la fase 2 sin hacer → aborta (la fase 2 no está completa; no se ha tocado nada)" 1 'la fase 2 no está completa' "${E[@]}" desplegar --fase=4a --autorizacion="$AUT" --esperado="$(corto "$VOZ0")" --respaldo="$BK0" --sin-worker --solo-comprobar
+origen_a "$BASE1B"
+
+# ── 0c. OPS8-e · B-T7: un perfil de voz creado y aprobado a cuatro ojos con TODO APAGADO (como el perfil 1 de producción,
+# E16-30), y el smoke de la fase 1 tiene que seguir sin FALLO: el perfil es información; la ausencia de escrituras la exige
+# el lanzador con el recuento exacto. (El perfil lo usa después la fase 2a.)
+PERFIL_JSON='{"voiceId":"pNInz6obpgDQGcFmaJgB","greetings":{"inbound":"¿En qué te puedo ayudar hoy?","outbound":"Te llamo porque pediste información de Iron Body."},"holes":{"presentation":"Te ayudo con planes, horarios y la sede.","closing":"Gracias por tu tiempo."},"maxDurationSeconds":300,"tools":["consultar_planes","consultar_horarios","solicitar_humano","no_volver_a_llamar"],"systemTools":["end_call"],"transfer":{"destinations":[]},"privacy":{"retentionDays":30},"voicemail":"hang_up"}'
+api a POST admin/ultron-studio/voice/profiles "{\"clientRequestId\":\"$(uuid)\",\"label\":\"Voz del ensayo OPS8-d\",\"content\":$PERFIL_JSON}"
+PERFIL=$(jc body.data.uuid); caso "0 · perfil de voz con la fase 1: Ana lo crea (201, draft)" "$([ "$(jc http)" = 201 ] && [ -n "$PERFIL" ] && echo 0 || echo 1)" "HTTP $(jc http) $(jc body.code)"
+api a POST "admin/ultron-studio/voice/profiles/$PERFIL/submit"
+api a POST "admin/ultron-studio/voice/profiles/$PERFIL/approve"; caso "0 · perfil: Ana no aprueba el suyo (403)" "$([ "$(jc http)" = 403 ] && echo 0 || echo 1)" "HTTP $(jc http)"
+api b POST "admin/ultron-studio/voice/profiles/$PERFIL/approve"; caso "0 · perfil: Beto lo aprueba (approved)" "$([ "$(jc http)" = 200 ] && [ "$(jc body.data.status)" = approved ] && echo 0 || echo 1)" "HTTP $(jc http) $(jc body.data.status)"
+smoke 1 1-con-perfil
+caso "0 · B-T7 · SMOKE_PHASE=1 con un perfil de voz aprobado: código 3, 0 FALLO, 1 OMITIDO (el presupuesto del laboratorio apagado) y el perfil como información" "$(smoke_ok 1 1 'GET voice/profiles (informativo: la fase 1 ya desplegada' 1)" "código $RC_SMOKE · $(resumen_smoke)"
+if [ -n "${OPS8E_SMOKE_VIEJO:-}" ]; then
+  # A/B: el smoke-h8.py de antes de OPS8-e en el MISMO estado (lo que pasó en producción el 10-11, E16-30).
+  RC_SMOKE=0; SALIDA=$(env BANCO_SMOKE_PY="$OPS8E_SMOKE_VIEJO" SMOKE_PHASE=1 "${E[@]}" smoke 2>&1) || RC_SMOKE=$?
+  { echo "════ smoke fase 1 con el smoke-h8.py de antes · código $RC_SMOKE"; printf '%s\n' "$SALIDA"; } >> "$LOG"; printf '%s\n' "$SALIDA" > "$B/logs/ensayo-ops8d-smoke-1-con-perfil-smoke-de-antes.txt"
+  caso "0 · B-T7 (A/B) · el smoke-h8.py de antes, en el mismo estado: exactamente 1 FALLO funcional, «ningún perfil de voz»" "$([ "$(grep '^FALLO' <<< "$SALIDA" | grep -vEc "$TIEMPO" || true)" = 1 ] && grep -q '^FALLO   GET voice/profiles: ningún perfil de voz' <<< "$SALIDA" && echo 0 || echo 1)" "código $RC_SMOKE · $(resumen_smoke)"
+fi
 
 # ── 1. FASE 2: rotación de la clave, la base, el registro, --solo-clave, reconocer ─────────────────────────────────
 prepara_el_verificar
@@ -395,12 +483,7 @@ VERSION=$(jc body.data.uuid); caso "2a · versión del Studio: Ana la crea (201)
 api a POST "admin/ultron-studio/versions/$VERSION/submit"; AVISOS=$(jc body.data.warnings); [ -n "$AVISOS" ] || AVISOS='[]'
 api a POST "admin/ultron-studio/versions/$VERSION/approve" "{\"acknowledgedWarnings\":$AVISOS}"; caso "2a · versión: Ana no aprueba la suya (403, cuatro ojos)" "$([ "$(jc http)" = 403 ] && echo 0 || echo 1)" "HTTP $(jc http)"
 api b POST "admin/ultron-studio/versions/$VERSION/approve" "{\"acknowledgedWarnings\":$AVISOS}"; caso "2a · versión: Beto la aprueba (200)" "$([ "$(jc http)" = 200 ] && echo 0 || echo 1)" "HTTP $(jc http) $(jc body.data.status)"
-PERFIL_JSON='{"voiceId":"pNInz6obpgDQGcFmaJgB","greetings":{"inbound":"¿En qué te puedo ayudar hoy?","outbound":"Te llamo porque pediste información de Iron Body."},"holes":{"presentation":"Te ayudo con planes, horarios y la sede.","closing":"Gracias por tu tiempo."},"maxDurationSeconds":300,"tools":["consultar_planes","consultar_horarios","solicitar_humano","no_volver_a_llamar"],"systemTools":["end_call"],"transfer":{"destinations":[]},"privacy":{"retentionDays":30},"voicemail":"hang_up"}'
-api a POST admin/ultron-studio/voice/profiles "{\"clientRequestId\":\"$(uuid)\",\"label\":\"Voz del ensayo OPS8-d\",\"content\":$PERFIL_JSON}"
-PERFIL=$(jc body.data.uuid); caso "2a · perfil de voz: Ana lo crea (201, draft)" "$([ "$(jc http)" = 201 ] && [ -n "$PERFIL" ] && echo 0 || echo 1)" "HTTP $(jc http) $(jc body.code)"
-api a POST "admin/ultron-studio/voice/profiles/$PERFIL/submit"
-api a POST "admin/ultron-studio/voice/profiles/$PERFIL/approve"; caso "2a · perfil: Ana no aprueba el suyo (403)" "$([ "$(jc http)" = 403 ] && echo 0 || echo 1)" "HTTP $(jc http)"
-api b POST "admin/ultron-studio/voice/profiles/$PERFIL/approve"; caso "2a · perfil: Beto lo aprueba (approved)" "$([ "$(jc http)" = 200 ] && [ "$(jc body.data.status)" = approved ] && echo 0 || echo 1)" "HTTP $(jc http) $(jc body.data.status)"
+# El perfil de voz, aprobado a cuatro ojos en el punto de partida (0c, B-T7: como el de producción, con la fase 1).
 api a POST admin/ultron-studio/voice/compile-preview "{\"versionUuid\":\"$VERSION\",\"profileUuid\":\"$PERFIL\"}"
 SPEC=$(jc body.data.specHash); FALTAN=$(jc body.data.deployable.missing)
 caso "2a · compile-preview (sin red): specHash de 64 hex; para desplegar solo faltan las piezas del número y del cupo (las pone la fase 4a)" "$([ "$(jc http)" = 200 ] && [[ "$SPEC" =~ ^[0-9a-f]{64}$ ]] && python3 -I -c 'import json, sys; sys.exit(0 if set(json.loads(sys.argv[1] or "[]")) <= {"daily_call_cap", "phone_number_id"} else 1)' "$FALTAN" && echo 0 || echo 1)" "HTTP $(jc http) · faltan $FALTAN"
@@ -447,9 +530,11 @@ printf '%s' "$SALIDA" | grep -q 'CALLER ID VERIFICADO' && printf '%s' "$SALIDA" 
 reconocer_voz "OPS8-d: cuenta y número de Twilio en el banco" && R=0 || R=1
 caso "4a · reconocer otra vez la configuración autorizada tras las piezas de Twilio (201)" "$R" "HTTP $(jc http) $(jc body.code)"
 paso "4a · mando · expectativa fase2 (número puesto, Twilio Voice apagado) → APLICADA" 0 'MANDO expectativa-fase2 APLICADO' "${E[@]}" alcance expectativa fase2
-paso "4a · mando · monitor on (la conciliación en seco no echaría el freno) → APLICADO, programador +4" 0 'MANDO monitor-on APLICADO' "${E[@]}" alcance monitor on
-printf '%s' "$SALIDA" | grep -qE '4\. programador .* → [0-9]+ 0 4 \(esperado' && caso "4a · monitor on: exactamente las 4 tareas de voz" 0 || caso "4a · monitor on: +4" 1
+TV=$(tareas_voz_banco "$B")   # OPS8-e: 4, o 5 con voice:webhook-health (B-T5), leídas del código del banco
+paso "4a · mando · monitor on (la conciliación en seco no echaría el freno) → APLICADO, programador +$TV" 0 'MANDO monitor-on APLICADO' "${E[@]}" alcance monitor on
+printf '%s' "$SALIDA" | grep -qE '4\. programador .* → [0-9]+ 0 '"$TV"' \(esperado' && caso "4a · monitor on: exactamente las $TV tareas de voz del código" 0 || caso "4a · monitor on: +$TV" 1
 paso "4a · mando · publicar on → APLICADO" 0 'MANDO publicar-on APLICADO' "${E[@]}" alcance publicar on
+fija_reloj
 api2_arrancar
 anota "segunda API (:$PUERTO_API2) con el reloj desplazado a $OBJETIVO" "$(head -3 "$B/logs/api2.out" 2>/dev/null)"
 PUB="{\"versionUuid\":\"$VERSION\",\"profileUuid\":\"$PERFIL\",\"expectedSpecHash\":\"$SPEC\"}"
@@ -458,11 +543,55 @@ PUB="{\"versionUuid\":\"$VERSION\",\"profileUuid\":\"$PERFIL\",\"expectedSpecHas
 # orden del runbook (publicar en el paso 5, salientes on en el 6) da 409 voice_not_deployable. Primero salientes on.
 api b POST admin/ultron-studio/voice/publish "{\"clientRequestId\":\"$(uuid)\",${PUB#\{}" "$API2"
 caso "4a · H-26 · publicar ANTES de salientes on (el orden del runbook) se niega: 409 voice_not_deployable, falta daily_call_cap" "$([ "$(jc http)" = 409 ] && [ "$(jc body.code)" = voice_not_deployable ] && [ "$(jc body.missing)" = '["daily_call_cap"]' ] && echo 0 || echo 1)" "HTTP $(jc http) $(jc body.code) $(jc body.missing)"
-"${E[@]}" constante abrir >> "$LOG" 2>&1
-caso "4a · la constante abierta SOLO en el clon del banco con un commit voice(calls-open): (nunca en el repo)" "$(grep -qE 'CALLS_ENABLED_IN_CODE = true;' "$BE/app/Services/Voice/VoiceCallPolicy.php" && [[ "$(git -C "$B/api" log -1 --format=%s)" =~ ^voice\(calls-open\): ]] && ! grep -qE 'CALLS_ENABLED_IN_CODE = true;' "$WT/backend/app/Services/Voice/VoiceCallPolicy.php" && echo 0 || echo 1)"
+# ── B-T1 (OPS8-e): el commit voice(calls-open) lo despliega el guion en modo 4a, nunca una mano ──────────────────────
+# En el ORIGEN del banco: un commit de SOLO documentación (como d701b0c, que producción no tiene) y, encima, el de la
+# constante (una línea, cita la autorización). Nunca en el repo: el árbol de trabajo sigue con la constante cerrada.
+BASE4A=$(git -C "$B/api" rev-parse HEAD)
+DOCS=$(hace_commit "$BASE4A" "docs(ultron-studio-h9): banco OPS8-e: registro de un despliegue (solo documentación, como d701b0c)" backend/docs/ultron-studio/ULTRON_STUDIO_H8_CONTRACT.md '$s/$/ <!-- banco OPS8-e -->/')
+VOZ=$(hace_commit "$DOCS" "$MSG_VOZ" "$P_POLITICA" "$GIRO")
+origen_a "$VOZ"
+BK4A="$B/bk-4a-$(date -u +%Y%m%d-%H%M%S)"
+"${E[@]}" respaldo "$BK4A" >> "$LOG" 2>&1
+caso "4a · B-T1 · en el origen del banco: un commit de solo documentación y encima voice(calls-open) de UNA línea que cita la autorización; el repo sigue con la constante cerrada" "$([ "$(git -C "$B/src" rev-parse main)" = "$VOZ" ] && [ "$(git -C "$B/src" diff --numstat "$VOZ^" "$VOZ")" = "1	1	$P_POLITICA" ] && [[ "$(git -C "$B/src" log -1 --format=%B "$VOZ")" == *"$AUT"* ]] && ! grep -qE 'CALLS_ENABLED_IN_CODE = true;' "$WT/backend/app/Services/Voice/VoiceCallPolicy.php" && echo 0 || echo 1)"
+d4a() { "${E[@]}" desplegar --fase=4a --respaldo="$BK4A" "$@"; }
+V7=$(corto "$VOZ"); D7=$(corto "$DOCS")
+paso "4a · B-T1 · --fase=4a sin --autorizacion → uso (código 2), no se toca nada" 2 'exige --autorizacion' d4a --esperado="$V7" --solo-comprobar
+paso "4a · B-T1 · una autorización que el commit no cita → aborta" 1 'no cita la autorización' d4a --autorizacion=OTRA-AUTORIZACION-99 --esperado="$V7" --acepta-main="$D7" --sin-worker --solo-comprobar
+paso "4a · B-T1 · sin aceptar el commit de documentación → FALTA DECIDIR (código 3), no se toca nada" 3 'FALTA DECIDIR los commits de solo documentación' d4a --autorizacion="$AUT" --esperado="$V7" --sin-worker --solo-comprobar
+paso "4a · B-T1 · --acepta-main de un commit que no viaja → aborta (nada a ciegas)" 1 'no se acepta nada a ciegas' d4a --autorizacion="$AUT" --esperado="$V7" --acepta-main="$D7,$(corto "$BASE4A")" --sin-worker --solo-comprobar
+paso "4a · B-T1 · sin el worker y sin --sin-worker → aborta" 1 'ironbody-voice no está en RUNNING' d4a --autorizacion="$AUT" --esperado="$V7" --acepta-main="$D7" --solo-comprobar
+paso "4a · B-T1 · --sin-worker y la documentación aceptada → COMPROBACIONES PREVIAS EN VERDE (modo 4a)" 0 'COMPROBACIONES PREVIAS EN VERDE · MODO 4a' d4a --autorizacion="$AUT" --esperado="$V7" --acepta-main="$D7" --sin-worker --solo-comprobar
+# Lo que NO puede pasar: cada commit, un momento como main del origen (después vuelve a VOZ).
+no_pasa() { # <nombre> <patrón ERE del aborto> <commit>
+  origen_a "$3"
+  paso "4a · B-T1 · $1 → aborta, no se toca nada" 1 "$2" d4a --autorizacion="$AUT" --esperado="$(corto "$3")" --acepta-main="$D7" --sin-worker --solo-comprobar
+  origen_a "$VOZ"
+}
+no_pasa "voice(calls-open) que además cambia otra línea del fichero" 'no es de una línea' "$(hace_commit "$DOCS" "$MSG_VOZ" "$P_POLITICA" "$GIRO; s/EN ESTE HITO NUNCA PERMITE NADA/EN ESTE HITO PERMITE/")"
+no_pasa "voice(calls-open) que además toca otro fichero (config/voice.php)" 'no cambia solo' "$(hace_commit "$DOCS" "$MSG_VOZ" "$P_POLITICA" "$GIRO" backend/config/voice.php '1s/$/ /')"
+no_pasa "voice(calls-open) con la declaración en otra sangría" 'no es exactamente la declaración' "$(hace_commit "$DOCS" "$MSG_VOZ" "$P_POLITICA" 's/^[[:space:]]*public const CALLS_ENABLED_IN_CODE = false;/  public const CALLS_ENABLED_IN_CODE = true;/')"
+no_pasa "la misma línea con otro asunto (feat(voz): …)" 'no es un commit «voice\(calls-open\)' "$(hace_commit "$DOCS" "$(printf 'feat(voz): abre las llamadas\n\nAutorización escrita del propietario: %s' "$AUT")" "$P_POLITICA" "$GIRO")"
+CODIGO=$(hace_commit "$DOCS" "fix(ultron-studio-h8): banco OPS8-e: un cambio de código antes de la constante" backend/app/Services/Telephony/VoiceCostGuard.php '1s/$/ /')
+no_pasa "un commit de código entre la producción y la constante" 'fuera de la documentación' "$(hace_commit "$CODIGO" "$MSG_VOZ" "$P_POLITICA" "$GIRO")"
+VOZ_A=$(hace_commit "$DOCS" "$(printf 'voice(calls-open): banco OPS8-e: un primer commit «de la constante» que solo toca documentación\n\nAutorización escrita del propietario: %s' "$AUT")" backend/docs/ultron-studio/ULTRON_STUDIO_H8_CONTRACT.md '$s/$/ x/')
+no_pasa "dos commits voice(calls-open) en el tramo" 'commits «voice\(calls-open\):» entre' "$(hace_commit "$VOZ_A" "$MSG_VOZ" "$P_POLITICA" "$GIRO")"
+caso "4a · B-T1 · el main del origen vuelve al commit de la 4a y la «producción» sigue en el 1b" "$([ "$(git -C "$B/src" rev-parse main)" = "$VOZ" ] && [ "$(git -C "$B/api" rev-parse HEAD)" = "$BASE4A" ] && echo 0 || echo 1)"
+# El worker (runbook 4a; la Activación lo pone ANTES de la constante): comprobar e instalar, y con él la 4a de verdad.
 paso "4a · worker comprobar: el origen declara la conexión voice y la orden literal del borrador arranca y sale vacía" 0 'la orden del borrador arranca' "${E[@]}" worker comprobar
 printf '%s' "$SALIDA" | grep -q 'declara la conexión voice' && caso "4a · worker comprobar: config/queue.php con la conexión voice" 0 || caso "4a · worker comprobar: conexión voice" 1
 paso "4a · worker instalar: supervisorctl 13 → 14 programas" 0 'programas RUNNING: 14' "${E[@]}" worker instalar
+paso "4a · B-T1 · --sin-worker con ironbody-voice en RUNNING → aborta (la declaración no es verdad)" 1 'sin-worker, pero ironbody-voice está en RUNNING' d4a --autorizacion="$AUT" --esperado="$V7" --acepta-main="$D7" --sin-worker --solo-comprobar
+paso "4a · B-T1 · con el worker y la documentación aceptada → COMPROBACIONES PREVIAS EN VERDE (modo 4a, 14 programas)" 0 'COMPROBACIONES PREVIAS EN VERDE · MODO 4a' d4a --autorizacion="$AUT" --esperado="$V7" --acepta-main="$D7" --solo-comprobar
+paso "4a · B-T1 · EL DESPLIEGUE 4a por el guion → DESPLIEGUE H8 FASE 4a … COMPLETADO, 0 desvíos" 0 'DESPLIEGUE H8 FASE 4a .*COMPLETADO' d4a --autorizacion="$AUT" --esperado="$V7" --acepta-main="$D7"
+printf '%s\n' "$SALIDA" > "$B/logs/ensayo-ops8d-despliegue-4a.txt"
+# Sin «printf | grep -q» sobre la salida del despliegue (grande): con pipefail, un SIGPIPE daría un FALLO falso.
+INST=$(sed -n 's/^   instantáneas: \([0-9][0-9]*\) → \([0-9][0-9]*\)$/\1 \2/p' <<< "$SALIDA")
+grep -q 'solo cambió la constante: calls_in_code false → true' <<< "$SALIDA" && grep -q 'fichero de entorno idéntico al respaldo' <<< "$SALIDA" \
+  && [ -n "$INST" ] && [ "${INST% *}" = "${INST#* }" ] && grep -q 'filas de las 11 tablas del H8, las mismas que en el paso 0' <<< "$SALIDA" \
+  && caso "4a · B-T1 · el despliegue solo cambió la constante: configuración efectiva, entorno = respaldo, instantáneas ($INST) y filas del H8 iguales" 0 || caso "4a · B-T1 · el despliegue solo cambió la constante" 1 "instantáneas [$INST]"
+REG4A=$(ls -t "$B"/root/h8-fase4a-2*.log 2>/dev/null | head -1)
+caso "4a · B-T1 · la referencia de la autorización queda en el registro del despliegue (cabecera y cierre)" "$([ -n "$REG4A" ] && [ "$(grep -cF "$AUT" "$REG4A")" -ge 2 ] && echo 0 || echo 1)" "${REG4A##*/}"
+caso "4a · B-T1 · la «producción» del banco en el commit de la 4a: la constante abierta en el fichero y el último commit del fichero, voice(calls-open)" "$([ "$(git -C "$B/api" rev-parse HEAD)" = "$VOZ" ] && grep -qE '^[[:space:]]*public const CALLS_ENABLED_IN_CODE = true;[[:space:]]*$' "$BE/app/Services/Voice/VoiceCallPolicy.php" && [[ "$(git -C "$B/api" log -1 --format=%s -- "$P_POLITICA")" =~ ^voice\(calls-open\): ]] && echo 0 || echo 1)"
 paso "4a · mando · salientes on --cupo=1 --presupuesto=2.00 → APLICADO (alcance canary, 14 workers)" 0 'MANDO salientes-on APLICADO' "${E[@]}" alcance salientes on --cupo=1 --presupuesto=2.00
 printf '%s' "$SALIDA" | grep -q '(esperado 14 0 las dos veces)' && printf '%s' "$SALIDA" | grep -q 'outbound_cap: 0 → 1' && caso "4a · salientes on: 14 workers y cupo 1" 0 || caso "4a · salientes on: 14 workers y cupo 1" 1
 paso "4a · mando · expectativa llamadas (Twilio Voice conectado) → APLICADA" 0 'MANDO expectativa-llamadas APLICADO' "${E[@]}" alcance expectativa llamadas
@@ -520,10 +649,16 @@ api2_parar
 paso "4a · vuelta atrás · salientes off → APLICADO (cupo y presupuesto a 0, Twilio Voice apagado)" 0 'MANDO salientes-off APLICADO' "${E[@]}" alcance salientes off
 paso "4a · vuelta atrás · expectativa fase2 (Twilio Voice otra vez disabled) → APLICADA" 0 'MANDO expectativa-fase2 APLICADO' "${E[@]}" alcance expectativa fase2
 paso "4a · vuelta atrás · publicar off → APLICADO" 0 'MANDO publicar-off APLICADO' "${E[@]}" alcance publicar off
-paso "4a · vuelta atrás · monitor off → APLICADO (programador −4)" 0 'MANDO monitor-off APLICADO' "${E[@]}" alcance monitor off
+paso "4a · vuelta atrás · monitor off → APLICADO (programador −$TV)" 0 'MANDO monitor-off APLICADO' "${E[@]}" alcance monitor off
 paso "4a · vuelta atrás · lab off → APLICADO" 0 'MANDO lab-off APLICADO' "${E[@]}" alcance lab off
 paso "4a · vuelta atrás · worker retirar: 14 → 13" 0 'programas RUNNING: 13' "${E[@]}" worker retirar
-"${E[@]}" constante cerrar >> "$LOG" 2>&1
+# B-T1 (OPS8-e): la vuelta atrás del código de la 4a es la del runbook (nivel 4), solo si la «producción» sigue en el commit
+# de la 4a: checkout del commit del respaldo (umask 022), config:cache y route:cache, y queue:restart.
+if [ "$(git -C "$B/api" rev-parse HEAD)" = "$VOZ" ]; then
+  ( cd "$B/api" && umask 022 && git checkout -q --detach "$(cat "$BK4A/api-commit.txt")" )
+  ( cd "$BE" && env "${RED[@]}" php artisan config:cache -q && env "${RED[@]}" php artisan route:cache -q && chmod 600 bootstrap/cache/config.php bootstrap/cache/routes-v7.php && env "${RED[@]}" php artisan queue:restart -q ) >> "$LOG" 2>&1
+fi
+caso "4a · vuelta atrás · el código de antes de la 4a (checkout del commit del respaldo, cachés, queue:restart): la constante cerrada en el fichero" "$([ "$(git -C "$B/api" rev-parse HEAD)" = "$(cat "$BK4A/api-commit.txt")" ] && grep -qE '^[[:space:]]*public const CALLS_ENABLED_IN_CODE = false;[[:space:]]*$' "$BE/app/Services/Voice/VoiceCallPolicy.php" && echo 0 || echo 1)"
 paso "4a · vuelta atrás · estado final: constante cerrada y todo apagado" 0 'constante de llamadas: cerrada' "${E[@]}" alcance estado
 printf '%s' "$SALIDA" | grep -q 'salientes: no' && printf '%s' "$SALIDA" | grep -q 'laboratorio hablado: no' && printf '%s' "$SALIDA" | grep -q 'monitor de voz: no' && caso "4a · todo apagado al terminar" 0 || caso "4a · todo apagado al terminar" 1
 php_real "$AYUDANTE" "$BE" revocar >> "$LOG" 2>&1 || true

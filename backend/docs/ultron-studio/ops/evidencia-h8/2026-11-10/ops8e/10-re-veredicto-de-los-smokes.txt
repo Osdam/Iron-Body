@@ -1,0 +1,6 @@
+== OPS8-e · re-veredicto de los smokes de la 3.ª pasada (banco ops8e3; regla: los FALLO de tiempo —presupuestos de PERF8 y public401.maxMs— aparte) · carga media 14–30
+1-con-perfil     FUNCIONAL OK · código 1 · 39 OK · 9 FALLO · 1 OMITIDO · FALLO de tiempo 9 · funcionales 0 · «GET voice/profiles (informativo: la fase» ×1
+2a-fake          FUNCIONAL OK · código 1 · 37 OK · 11 FALLO · 3 OMITIDO · FALLO de tiempo 11 · funcionales 0 · «laboratorio hablado encendido: abrir, ce» ×3
+2a-elevenlabs    FUNCIONAL OK · código 1 · 46 OK · 2 FALLO · 3 OMITIDO · FALLO de tiempo 2 · funcionales 0 · «laboratorio hablado encendido: abrir, ce» ×3
+4a               FUNCIONAL OK · código 3 · 49 OK · 0 FALLO · 5 OMITIDO · FALLO de tiempo 0 · funcionales 0 · «publicar la voz encendido: publicar o pr» ×2
+1 (de antes)     FALLO funcionales: 1 → FALLO   GET voice/profiles: ningún perfil de voz  [total 1]

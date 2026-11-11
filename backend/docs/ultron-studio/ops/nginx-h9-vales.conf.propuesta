@@ -1,0 +1,111 @@
+# nginx · Hito 9 (cierre) · SC-8 de la revisión de seguridad del cierre (plans/informes-h9/informe-sec-cierre.md) ·
+# PROPUESTA de OPS9-c (11-11-2026). NO ESTÁ APLICADA en el servidor. Entra con la autorización escrita del propietario,
+# `nginx -t` y `systemctl reload nginx` (recarga: no corta conexiones), y su vuelta atrás es restaurar el vhost, retirar
+# el fichero nuevo y recargar (§4). El vhost real no está en el repo: lo que sigue son las líneas que se añaden donde se
+# indica, y §0 dice qué leer ANTES para adaptarlas a lo que hay hoy (sin adivinar).
+#
+# QUÉ RESUELVE. El vale de un solo uso (P9-25, L9-78; ≤ 60 s) viaja en la URL, `?ticket=…`, en las 12 rutas que lo
+# admiten (StreamTicketService::ROUTES: once canales SSE `…/stream` —diez bajo /api/admin y /api/attendances/stream— y
+# /api/attendances/face-image/{userId}), porque EventSource e <img> no mandan cabeceras. El formato `combined` escribe la
+# línea de petición ENTERA ($request), con el vale. En el camino normal el vale ya está gastado cuando nginx escribe la
+# línea (registra al terminar; la guarda lo canjea al empezar), pero NO cuando la petición no llega a PHP o PHP no lo
+# canjea: el 429 del limitador del Studio (va antes de la guarda), 502/503/504 y 499 (el cliente corta antes). Entonces
+# el vale queda legible y válido ≤ 60 s en el access.log, y uno de `face-image` abre UNA foto de CUALQUIER socio (SC-8).
+# Con esta propuesta, cualquier petición cuya query lleve `ticket=` se registra con el MISMO formato que combined pero con
+# la ruta SIN la query; todas las demás, exactamente como hoy.
+#
+# QUÉ NO RESUELVE, y por qué. El error_log: nginx no tiene formato configurable para él. En un fallo de upstream (502,
+# 504, «upstream timed out», «connect() failed») escribe `request: "GET …?ticket=… HTTP/2.0"` y eso no se puede filtrar
+# con configuración. Lo que sí hay (§5): leer quién puede leer los registros, que el SSE no caduque por plazo en nginx, y
+# la corrección de fondo, que es de la aplicación (el vale fuera de la URL).
+#
+# Por qué un `map` sobre $request_uri y no un `location`: las rutas de Laravel entran por `location /` → try_files →
+# redirección interna a /index.php → `location ~ \.php$`. El access_log que se aplica es el del location donde TERMINA la
+# petición (el de PHP), y $uri vale ahí «/index.php». $request_uri es la URI ORIGINAL (no cambia con la redirección
+# interna), y `access_log … if=` se evalúa al registrar: funciona sea cual sea el location.
+
+# ── §0 · ANTES, en solo lectura (como root en el servidor) ─────────────────────────────────────────────────────────
+#   nginx -v                                                   # ≥ 1.7.0 (access_log … if=); Ubuntu trae 1.18–1.24
+#   TS=$(date -u +%Y%m%dT%H%M%SZ); ( umask 077; nginx -T > /root/nginx-T-antes-$TS.txt 2>&1 )   # foto completa (600)
+#   grep -nE 'log_format|access_log|error_log|include' /root/nginx-T-antes-$TS.txt
+#     · ¿con qué FORMATO y en qué FICHERO registra hoy el server de api.ironbodyneiva.cloud? (si no declara access_log,
+#       hereda el del bloque http: en Debian, `access_log /var/log/nginx/access.log;` = combined). Las dos líneas de §2
+#       usan ESE fichero y, la primera, ESE formato.
+#     · ¿algún `location` de ese server (sobre todo el de PHP, `~ \.php$`) declara su propio access_log? Si sí, las dos
+#       líneas de §2 van TAMBIÉN dentro de ese location (un access_log en un location anula los heredados del server).
+#     · ¿nginx.conf incluye /etc/nginx/conf.d/*.conf dentro de `http { }`? (Debian y Ubuntu, sí). Si no, el bloque de §1
+#       va al principio del fichero del vhost, FUERA de `server { }` (los `map` y `log_format` solo valen en http).
+#   ls -l /var/log/nginx/                                       # quién lee los registros (Debian: www-data:adm 640)
+#   El fichero del vhost de la API (leído el 06-10-2026: /etc/nginx/sites-available/api, enlazado en sites-enabled;
+#   confirmarlo en la foto de arriba antes de tocarlo).
+
+# ── §1 · Fichero NUEVO /etc/nginx/conf.d/ironbody-vales.conf (contexto http; 644 root:root) ───────────────────────
+# 1 si la query de la petición original lleva un parámetro `ticket` (en cualquier ruta: hoy son 12, mañana pueden ser
+# más; el nombre del parámetro es el único que lee EnsureAdminAuth, `$request->query('ticket')`). La emisión del vale
+# (`GET /api/admin/stream-ticket?scope=…`) NO casa: no lleva `ticket=` en la query, y su `?scope=` se sigue registrando
+# (deploy-h9-backend-cierre.sh lo usa para ver si quedan pestañas con el CRM viejo).
+map $request_uri $ironbody_vale_en_url {
+    "~*[?&]ticket="  1;
+    default          0;
+}
+map $ironbody_vale_en_url $ironbody_registro_normal {
+    1        0;
+    default  1;
+}
+# La ruta de la petición original sin la query (sin descodificar, como la escribe combined).
+map $request_uri $ironbody_ruta_sin_query {
+    "~^(?<ironbody_ruta>[^?]*)"  $ironbody_ruta;
+    default                       $request_uri;
+}
+# Las mismas columnas que `combined` (el estado sigue siendo $9 para `awk '{print $9}'`, como en L9-77), con la ruta sin
+# la query en la línea de petición. Si el formato de hoy NO es combined (§0), este se calca de ese, cambiando solo
+# "$request" por "$request_method $ironbody_ruta_sin_query $server_protocol".
+log_format ironbody_sin_vale '$remote_addr - $remote_user [$time_local] "$request_method $ironbody_ruta_sin_query $server_protocol" '
+                             '$status $body_bytes_sent "$http_referer" "$http_user_agent"';
+
+# ── §2 · En el `server { … }` de api.ironbodyneiva.cloud (y en cada `location` que declare su propio access_log, §0) ──
+# SUSTITUYEN a la línea access_log que tenga hoy (o se añaden si hoy hereda la del bloque http): dos líneas, mismo fichero.
+# La primera registra TODO lo que no lleva vale, con el formato de hoy; la segunda, lo que lo lleva, sin la query.
+access_log /var/log/nginx/access.log combined if=$ironbody_registro_normal;
+access_log /var/log/nginx/access.log ironbody_sin_vale if=$ironbody_vale_en_url;
+# Nada más cambia: ni error_log, ni los tiempos, ni el resto del vhost. El vhost del CRM (ironbodyneiva.cloud) no recibe
+# vales (van al host de la API): no se toca.
+
+# ── §3 · Aplicar y PROBAR (con la autorización escrita) ───────────────────────────────────────────────────────────
+#   TS=$(date -u +%Y%m%dT%H%M%SZ); install -d -m 700 /etc/nginx/respaldos
+#   cp -a /etc/nginx/sites-available/api /etc/nginx/respaldos/api-$TS                      # el vhost de antes
+#   (crear /etc/nginx/conf.d/ironbody-vales.conf con §1 y editar el vhost con §2)
+#   nginx -t                                                    # «syntax is ok» y «test is successful»; si no, §4 y nada más
+#   systemctl reload nginx                                      # recarga: no corta conexiones (ni los SSE abiertos)
+#   V=PRUEBA-OPS9C-NO-ES-UN-VALE-$TS                            # una cadena cualquiera: NO es un vale (no se canjea nada)
+#   curl -s -o /dev/null -w '%{http_code}\n' "https://api.ironbodyneiva.cloud/api/admin/ultron-studio/stream?ticket=$V&topics=ledger"   # 401
+#   curl -s -o /dev/null -w '%{http_code}\n' "https://api.ironbodyneiva.cloud/api/attendances/face-image/1?ticket=$V"                     # 401 o 403
+#   curl -s -o /dev/null -w '%{http_code}\n' "https://api.ironbodyneiva.cloud/api/admin/stream-ticket?scope=stream"                       # 401
+#   sleep 1
+#   grep -c "$V" /var/log/nginx/access.log                     # 0: la cadena de prueba NO está en el registro
+#   tail -n 200 /var/log/nginx/access.log | grep -c '"GET /api/admin/ultron-studio/stream HTTP'        # ≥ 1: la línea está, sin query
+#   tail -n 200 /var/log/nginx/access.log | grep -c '"GET /api/attendances/face-image/1 HTTP'          # ≥ 1: ídem
+#   tail -n 200 /var/log/nginx/access.log | grep -c '"GET /api/admin/stream-ticket?scope=stream HTTP'  # ≥ 1: lo demás, CON su query
+#   grep -c "$V" /var/log/nginx/error.log                      # 0 (un 401 no es un error de nginx)
+#   tail -n 200 /var/log/nginx/access.log | awk '{print $9}' | sort | uniq -c   # los estados siguen en la columna 9
+# Y en uso real, durante la vigilancia: en recepción y en el punto facial las fotos y el canal en vivo siguen cargando
+# (nginx no toca la petición, solo cómo la escribe), y `grep -c 'ticket=' /var/log/nginx/access.log` deja de crecer.
+# Las líneas viejas con vales no hace falta limpiarlas: cada vale vale ≤ 60 s y una sola vez, y los del formato anterior
+# a P9-25 ({sid, exp}) ya no abren nada.
+
+# ── §4 · VUELTA ATRÁS (un paso; el respaldo nunca se borra) ────────────────────────────────────────────────────────
+#   install -m 644 -o root -g root /etc/nginx/respaldos/api-$TS /etc/nginx/sites-available/api
+#   mv /etc/nginx/conf.d/ironbody-vales.conf /etc/nginx/respaldos/ironbody-vales.conf.retirado-$TS
+#   nginx -t && systemctl reload nginx
+#   tail -n 20 /var/log/nginx/access.log                       # el formato de antes
+# Como el resto de cambios de nginx de este servidor, dejarlo además en un guion de una línea,
+# /etc/nginx/respaldos/vuelta-atras-vales-$TS.sh (700), con esas cuatro órdenes.
+
+# ── §5 · Lo que queda fuera de nginx (para su dueño; no se aplica aquí) ─────────────────────────────────────────────
+#   · El error_log (arriba): un 502/504 con vale en la URL deja el vale en error.log. Mitigación operativa: que solo lo
+#     lean root y adm (§0, `ls -l`), y que nginx no corte por plazo un SSE vivo (el del Studio cierra a los 55 s y los
+#     genéricos a los 20 s; fastcgi_read_timeout por defecto es 60 s: comprobar en la foto de §0 que nadie lo bajó).
+#   · La corrección de fondo es de la aplicación (dueño de P9-25 y frontend): las fotos por `fetch` con la cabecera
+#     Authorization y un `blob:` (sin vale en la URL; exige `img-src blob:` en la CSP del CRM, que la propuesta del H8,
+#     nginx-h8-voz.conf.propuesta, todavía no lleva) y atar el vale de la foto al `userId` de su ruta. Con eso SC-8 se
+#     cierra también para el error_log.

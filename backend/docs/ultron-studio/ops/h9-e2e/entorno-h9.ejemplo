@@ -1,0 +1,85 @@
+# Entorno del E2E del Hito 9 (prueba #26, TEST9-b). PLANTILLA: el arnés `ops/h9-e2e/h9-e2e.sh` la copia en el fichero
+# de entorno de la COPIA del backend (fuera del repo, 600) y sustituye cada marcador entre arrobas dobles por un valor
+# de la ejecución (la APP_KEY es aleatoria, generada en esa máquina y nunca impresa). Este fichero no lleva secretos.
+#
+# Lo que NO es la producción, a propósito:
+#  - APP_ENV=local y una base PostgreSQL DESECHABLE en 127.0.0.1 con el modelo de roles de producción.
+#  - Las banderas del Hito 9 ENCENDIDAS solo aquí (las de la orden del lead del 10-11): gobierno, publicar, la maestra,
+#    el modo, los eventos del motor comercial y el canal en vivo. La constante `OutreachSendGate::SENDS_ENABLED_IN_CODE`
+#    sigue en `false` (el arnés lo comprueba antes de arrancar): ningún envío automático hacia personas.
+#  - La fase «asistido» del arnés cambia SOLO tres líneas de este fichero en la copia (modo `live`, asistido encendido y
+#    su cupo) para que la bandeja asistida tenga trabajo: el canal asistido es trabajo de una persona, no un envío; los
+#    canales de WhatsApp y voz siguen apagados y, además, son puertas vacías hasta W9/V9.
+#  - Todo lo demás apagado: n8n/Meta, ULTRON, voz, telefonía, Factus, monitor y programador. La red de todo proceso PHP
+#    sale por la valla (`http_proxy` en el entorno del proceso), que no deja pasar nada.
+
+APP_NAME=IronBody
+APP_ENV=local
+APP_KEY=@@APP_KEY@@
+APP_DEBUG=false
+APP_URL=http://127.0.0.1:@@PUERTO_API@@
+LOG_CHANNEL=single
+LOG_LEVEL=debug
+
+# PostgreSQL desechable: el dueño migra; la aplicación solo hace DML (el rol del REVOKE de DB7/DB8/DB9).
+DB_CONNECTION=pgsql
+DB_HOST=127.0.0.1
+DB_PORT=@@PG_PORT@@
+DB_DATABASE=@@DB@@
+DB_USERNAME=@@DB_APP@@
+DB_PASSWORD=
+ULTRON_STUDIO_DB_APP_ROLE=@@DB_APP@@
+
+# Como producción: limitadores y cerrojos entre procesos de verdad.
+CACHE_STORE=database
+QUEUE_CONNECTION=database
+SESSION_DRIVER=database
+MAIL_MAILER=log
+BROADCAST_CONNECTION=log
+
+# Fuera del alcance del E2E (apagado).
+OTP_DRIVER=dev
+OTP_EXPOSE_CODE=false
+META_ENABLED=false
+MARKETING_ULTRON_ENABLED=false
+MARKETING_ULTRON_STUDIO_CONFIG=off
+ULTRON_STUDIO_PUBLISHING_ENABLED=false
+ULTRON_STUDIO_LAB_ENABLED=false
+ULTRON_STUDIO_MONITOR_ENABLED=false
+ULTRON_STUDIO_INTEGRATIONS_WRITES_ENABLED=false
+ULTRON_STUDIO_TWILIO_PROBE_ENABLED=false
+ULTRON_STUDIO_VOICE_PUBLISHING_ENABLED=false
+ULTRON_STUDIO_CANARY_COUNTRY_CODES=57
+ELEVENLABS_ENABLED=false
+TWILIO_VOICE_ENABLED=false
+VOICE_INBOUND_ENABLED=false
+VOICE_OUTBOUND_ENABLED=false
+VOICE_LAB_ENABLED=false
+VOICE_MONITOR_ENABLED=false
+FACTUS_ENABLED=false
+LIVE_ENABLED=false
+PULSE_ENABLED=false
+TELESCOPE_ENABLED=false
+NIGHTWATCH_ENABLED=false
+
+# Hito 9: gobierno (S9). Ventana de publicar: la del contrato (07:00-19:00 de Bogotá) o vacía (sin ventana).
+ULTRON_STUDIO_STRATEGIES_ENABLED=true
+ULTRON_STUDIO_STRATEGIES_PUBLISHING_ENABLED=true
+ULTRON_STUDIO_STRATEGIES_PUBLISH_WINDOW=@@VENTANA@@
+ULTRON_STUDIO_STRATEGIES_SIMULATION_GATE=required
+
+# Hito 9: ejecución (B9-run), los eventos del motor comercial (P9-24) y el canal en vivo (SSE9).
+COMMERCIAL_AUTOMATION_ENABLED=true
+COMMERCIAL_AUTOMATION_MODE=@@MODO@@
+COMMERCIAL_EVENTS_ENABLED=true
+ULTRON_STUDIO_STREAM_ENABLED=true
+COMMERCIAL_AUTOMATION_ASSISTED_ENABLED=@@ASISTIDO@@
+COMMERCIAL_AUTOMATION_ASSISTED_DAILY_CAP=@@ASISTIDO_CUPO@@
+COMMERCIAL_AUTOMATION_SCHEDULER_ENABLED=false
+COMMERCIAL_AUTOMATION_MONITOR_ENABLED=false
+COMMERCIAL_AUTOMATION_WHATSAPP_ENABLED=false
+COMMERCIAL_AUTOMATION_WHATSAPP_DAILY_CAP=0
+COMMERCIAL_AUTOMATION_WHATSAPP_DAILY_BUDGET_USD=0
+COMMERCIAL_AUTOMATION_VOICE_ENABLED=false
+COMMERCIAL_AUTOMATION_CLASSIFIER_ENABLED=false
+COMMERCIAL_AUTOMATION_OWN_HOURS=

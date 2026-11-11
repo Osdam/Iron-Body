@@ -1,0 +1,314 @@
+════ 0 · estado (solo lectura): las claves con sangría 2, caché = fichero, GET 200 con el token efectivo, workers 13 0 · código 0
+== estado del token del OTP (sin valores; solo lectura)
+   fichero de entorno: alejodev:staff 600 (C-14: www-data 600 o root:www-data 640)
+   TWILIO_TOKEN: línea 20, sangría 2, sin export, sin comillas, 32 car.
+   TWILIO_AUTH_TOKEN: línea 21, sangría 2, sin export, sin comillas, 32 car.
+   TWILIO_SID: línea 18, sangría 2, sin export, sin comillas, 34 car.
+   TWILIO_ACCOUNT_SID: línea 19, sangría 2, sin export, sin comillas, 34 car.
+   configuración efectiva (la caché): driver=twilio · cuenta AC109c4631… · token 32 car. · fuente TWILIO_TOKEN · alias del token coherentes · Verify VA+32 · base api.twilio.com · envío encendido
+   la caché y el fichero: iguales (bloque a bloque y el token): un config:cache no cambiaría nada
+   Twilio, GET de solo lectura a la ficha de la cuenta con el token EFECTIVO: 200 cuenta=si estado=active tipo=Full
+   Studio · Twilio: authorized · huella del token en el Studio 5f4ec82e
+   la voz: no usa la cuenta del OTP · su token de firma no es este token
+   monitor del H7: apagado
+   workers (RUNNING · BACKOFF/FATAL): 13 0
+════ API b GET admin/ultron-studio/integrations/config
+{"http":200,"body":{"ok":true,"data":{"providers":[{"provider":"meta_ads","state":"never_authorized","effective":{"token":{"present":true,"fp":"0119e0f2"},"accounts":[{"ref":"***1001"},{"ref":"***2002"},{"ref":"***3003"}],"graphVersion":"v26.0","syncEnabled":true,"syncDays":7,"staleMinutes":180,"timezone":"America/Bogota"},"effectiveFingerprint":"b29e8ee96b64d0d478f1be3ed6f07b7bbe68a9d16f6b3464247524d3a42fc5e3","authorized":null,"observed":{"uuid":"7386e513-5c87-45c4-8c5f-675a9440547e","fingerprint":"b29e8ee96b64d0d478f1be3ed6f07b7bbe68a9d16f6b3464247524d3a42fc5e3","at":"2026-11-11T00:31:52+00:00"},"drift":[]},{"provider":"twilio","state":"authorized","effective":{"otpDriver":"twilio","accountSid":{"present":true,"source":"TWILIO_SID","ref":"AC…b905"},"authToken":{"present":true,"source"
+════ Studio · Twilio al empezar (vista web)
+authorized 5f4ec82e -
+════ 1 · el token por argumento → 2 · código 2
+NO SE APLICA (no se ha tocado nada): eso parece un token o una asignación: NUNCA por argumentos (quedaría en ps y en el historial). Va en un fichero 600 de root; si ya se tecleó, el token está quemado: pedir otro en la consola
+════ 1 · el fichero del token en 644 → 2 · código 2
+== h8-otp-token-rotate.sh rotar · 2026-11-11 01:58:23 UTC
+NO SE APLICA (no se ha tocado nada): /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/otp-token-nuevo tiene que ser de alejodev y 600 (es alejodev 644)
+════ 1 · 31 hex → 2 (forma) · código 2
+== h8-otp-token-rotate.sh rotar · 2026-11-11 01:58:24 UTC
+NO SE APLICA (no se ha tocado nada): la línea no tiene la forma de un Auth Token de Twilio (32 hex en minúscula; no se imprime)
+AVISO: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/otp-token-nuevo sigue en disco (600, root): repetir la orden o destruirlo con shred -u cuando ya no haga falta
+════ 1 · en mayúsculas → 2 (forma) · código 2
+== h8-otp-token-rotate.sh rotar · 2026-11-11 01:58:24 UTC
+NO SE APLICA (no se ha tocado nada): la línea no tiene la forma de un Auth Token de Twilio (32 hex en minúscula; no se imprime)
+AVISO: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/otp-token-nuevo sigue en disco (600, root): repetir la orden o destruirlo con shred -u cuando ya no haga falta
+════ 1 · dos líneas → 2 · código 2
+== h8-otp-token-rotate.sh rotar · 2026-11-11 01:58:25 UTC
+NO SE APLICA (no se ha tocado nada): el fichero del token tiene que traer UNA línea con el token (trae 2)
+AVISO: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/otp-token-nuevo sigue en disco (600, root): repetir la orden o destruirlo con shred -u cuando ya no haga falta
+════ 1 · un token que Twilio no conoce (TWILIO_AUTH_TOKEN=…, sin secundario) → 2 (401) · código 2
+== h8-otp-token-rotate.sh rotar · 2026-11-11 01:58:25 UTC
+0. fichero del token: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/otp-token-nuevo (alejodev 600, una línea, 32 hex; no se imprime)
+   fichero de entorno: alejodev:staff 600 · las claves (sin valores):
+   TWILIO_TOKEN: línea 20, sangría 2, sin export, sin comillas, 32 car.
+   TWILIO_AUTH_TOKEN: línea 21, sangría 2, sin export, sin comillas, 32 car.
+   TWILIO_SID: línea 18, sangría 2, sin export, sin comillas, 34 car.
+   TWILIO_ACCOUNT_SID: línea 19, sangría 2, sin export, sin comillas, 34 car.
+   configuración efectiva: driver=twilio · cuenta AC109c4631… · token 32 car. · fuente TWILIO_TOKEN · alias del token coherentes · Verify VA+32 · base api.twilio.com · envío encendido
+   la caché y el fichero: iguales (bloque a bloque y el token): config:cache solo cambiará el token
+   el token nuevo es distinto del actual: sí
+   Twilio, GET de solo lectura a la ficha de la cuenta AC109c4631… con el token NUEVO: 401 cuenta=no estado=401 tipo=-
+NO SE APLICA (no se ha tocado nada): Twilio rechaza el token nuevo (401): no es de esta cuenta, está mal copiado o ya no existe
+AVISO: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/otp-token-nuevo sigue en disco (600, root): repetir la orden o destruirlo con shred -u cuando ya no haga falta
+════ 1 · el fichero de entorno en 644 → 2 (C-14) · código 2
+== h8-otp-token-rotate.sh rotar · 2026-11-11 01:58:28 UTC
+0. fichero del token: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/otp-token-nuevo (alejodev 600, una línea, 32 hex; no se imprime)
+NO SE APLICA (no se ha tocado nada): el fichero de entorno no es un fichero normal de alejodev en 600 ni de alejodev:alejodev en 640 (es alejodev:staff 644): C-14
+AVISO: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/otp-token-nuevo sigue en disco (600, root): repetir la orden o destruirlo con shred -u cuando ya no haga falta
+════ 1 · TWILIO_TOKEN repetida en el fichero de entorno → 2 · código 2
+== h8-otp-token-rotate.sh rotar · 2026-11-11 01:58:28 UTC
+0. fichero del token: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/otp-token-nuevo (alejodev 600, una línea, 32 hex; no se imprime)
+NO SE APLICA (no se ha tocado nada): TWILIO_TOKEN aparece 2 veces y TWILIO_AUTH_TOKEN 1 (gana la última): deduplicar antes (scripts/rotation/dedupe-env-keys.sh)
+AVISO: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/otp-token-nuevo sigue en disco (600, root): repetir la orden o destruirlo con shred -u cuando ya no haga falta
+════ 1 · un cambio sin cachear en otro bloque (APP_NAME) → 2: config:cache lo publicaría · código 2
+== h8-otp-token-rotate.sh rotar · 2026-11-11 01:58:29 UTC
+0. fichero del token: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/otp-token-nuevo (alejodev 600, una línea, 32 hex; no se imprime)
+   fichero de entorno: alejodev:staff 600 · las claves (sin valores):
+   TWILIO_TOKEN: línea 20, sangría 2, sin export, sin comillas, 32 car.
+   TWILIO_AUTH_TOKEN: línea 21, sangría 2, sin export, sin comillas, 32 car.
+   TWILIO_SID: línea 18, sangría 2, sin export, sin comillas, 34 car.
+   TWILIO_ACCOUNT_SID: línea 19, sangría 2, sin export, sin comillas, 34 car.
+   configuración efectiva: driver=twilio · cuenta AC109c4631… · token 32 car. · fuente TWILIO_TOKEN · alias del token coherentes · Verify VA+32 · base api.twilio.com · envío encendido
+NO SE APLICA (no se ha tocado nada): la caché y el fichero de entorno difieren en: app,cache,database,logging,mail,session. Un config:cache publicaría eso junto con el token: aclararlo antes (un cambio a medias de otro mando o una edición a mano)
+AVISO: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/otp-token-nuevo sigue en disco (600, root): repetir la orden o destruirlo con shred -u cuando ya no haga falta
+════ 1 · el token del fichero no es el de la caché → 2 · código 2
+== h8-otp-token-rotate.sh rotar · 2026-11-11 01:58:30 UTC
+0. fichero del token: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/otp-token-nuevo (alejodev 600, una línea, 32 hex; no se imprime)
+   fichero de entorno: alejodev:staff 600 · las claves (sin valores):
+   TWILIO_TOKEN: línea 20, sangría 2, sin export, sin comillas, 32 car.
+   TWILIO_AUTH_TOKEN: línea 21, sangría 2, sin export, sin comillas, 32 car.
+   TWILIO_SID: línea 18, sangría 2, sin export, sin comillas, 34 car.
+   TWILIO_ACCOUNT_SID: línea 19, sangría 2, sin export, sin comillas, 34 car.
+   configuración efectiva: driver=twilio · cuenta AC109c4631… · token 32 car. · fuente TWILIO_TOKEN · alias del token coherentes · Verify VA+32 · base api.twilio.com · envío encendido
+NO SE APLICA (no se ha tocado nada): el token del fichero de entorno NO es el que tiene la caché: un config:cache cambiaría el token del OTP por otro (o lo dejaría sin token). Aclararlo antes
+AVISO: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/otp-token-nuevo sigue en disco (600, root): repetir la orden o destruirlo con shred -u cuando ya no haga falta
+════ 1 · vuelta con un fichero que no es una copia de este mando → 2 · código 2
+== h8-otp-token-rotate.sh vuelta · 2026-11-11 01:58:32 UTC
+NO SE APLICA (no se ha tocado nada): la vuelta atrás lee una copia previa de este mando (/Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-otp-token-…), no /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/api/backend/.env
+════ 1 · el token de ahora → 0, nada que escribir · código 0
+== h8-otp-token-rotate.sh rotar · 2026-11-11 01:58:32 UTC
+0. fichero del token: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/otp-token-nuevo (alejodev 600, una línea, 32 hex; no se imprime)
+   fichero de entorno: alejodev:staff 600 · las claves (sin valores):
+   TWILIO_TOKEN: línea 20, sangría 2, sin export, sin comillas, 32 car.
+   TWILIO_AUTH_TOKEN: línea 21, sangría 2, sin export, sin comillas, 32 car.
+   TWILIO_SID: línea 18, sangría 2, sin export, sin comillas, 34 car.
+   TWILIO_ACCOUNT_SID: línea 19, sangría 2, sin export, sin comillas, 34 car.
+   configuración efectiva: driver=twilio · cuenta AC109c4631… · token 32 car. · fuente TWILIO_TOKEN · alias del token coherentes · Verify VA+32 · base api.twilio.com · envío encendido
+   la caché y el fichero: iguales (bloque a bloque y el token): config:cache solo cambiará el token
+== rotar: la configuración y el fichero ya tienen ese token; nada que escribir
+   /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/otp-token-nuevo destruido
+════ 2 · rotar --solo-comprobar → 0 EN VERDE, nada escrito · código 0
+== h8-otp-token-rotate.sh rotar · 2026-11-11 01:58:34 UTC · SOLO COMPROBAR (no se escribe nada)
+0. fichero del token: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/otp-token-nuevo (alejodev 600, una línea, 32 hex; no se imprime)
+   fichero de entorno: alejodev:staff 600 · las claves (sin valores):
+   TWILIO_TOKEN: línea 20, sangría 2, sin export, sin comillas, 32 car.
+   TWILIO_AUTH_TOKEN: línea 21, sangría 2, sin export, sin comillas, 32 car.
+   TWILIO_SID: línea 18, sangría 2, sin export, sin comillas, 34 car.
+   TWILIO_ACCOUNT_SID: línea 19, sangría 2, sin export, sin comillas, 34 car.
+   configuración efectiva: driver=twilio · cuenta AC109c4631… · token 32 car. · fuente TWILIO_TOKEN · alias del token coherentes · Verify VA+32 · base api.twilio.com · envío encendido
+   la caché y el fichero: iguales (bloque a bloque y el token): config:cache solo cambiará el token
+   el token nuevo es distinto del actual: sí
+   Twilio, GET de solo lectura a la ficha de la cuenta AC109c4631… con el token NUEVO: 200 cuenta=si estado=active tipo=Full
+   Twilio, el mismo GET con el token ACTUAL: 200 cuenta=si estado=active tipo=Full (sigue vivo: la vuelta atrás existe hasta que se promocione el nuevo)
+   workers: 13 0 · Studio · Twilio: authorized · huella del token en el Studio 5f4ec82e · monitor del H7: apagado
+COMPROBACIÓN EN VERDE: nada escrito (--solo-comprobar); /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/otp-token-nuevo sigue en disco para la orden de verdad
+════ 2 · rotar → APLICADO · código 0
+== h8-otp-token-rotate.sh rotar · 2026-11-11 01:58:36 UTC
+0. fichero del token: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/otp-token-nuevo (alejodev 600, una línea, 32 hex; no se imprime)
+   fichero de entorno: alejodev:staff 600 · las claves (sin valores):
+   TWILIO_TOKEN: línea 20, sangría 2, sin export, sin comillas, 32 car.
+   TWILIO_AUTH_TOKEN: línea 21, sangría 2, sin export, sin comillas, 32 car.
+   TWILIO_SID: línea 18, sangría 2, sin export, sin comillas, 34 car.
+   TWILIO_ACCOUNT_SID: línea 19, sangría 2, sin export, sin comillas, 34 car.
+   configuración efectiva: driver=twilio · cuenta AC109c4631… · token 32 car. · fuente TWILIO_TOKEN · alias del token coherentes · Verify VA+32 · base api.twilio.com · envío encendido
+   la caché y el fichero: iguales (bloque a bloque y el token): config:cache solo cambiará el token
+   el token nuevo es distinto del actual: sí
+   Twilio, GET de solo lectura a la ficha de la cuenta AC109c4631… con el token NUEVO: 200 cuenta=si estado=active tipo=Full
+   Twilio, el mismo GET con el token ACTUAL: 200 cuenta=si estado=active tipo=Full (sigue vivo: la vuelta atrás existe hasta que se promocione el nuevo)
+   workers: 13 0 · Studio · Twilio: authorized · huella del token en el Studio 5f4ec82e · monitor del H7: apagado
+1. copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-otp-token-20261111-015838 (600, alejodev) · fichero alejodev:staff 600
+   TWILIO_AUTH_TOKEN sustituida
+   TWILIO_TOKEN sustituida
+   el fichero es la copia previa salvo las líneas de TWILIO_TOKEN y TWILIO_AUTH_TOKEN
+2. el fichero parsea · caché: alejodev 600
+3. configuración efectiva: driver=twilio · cuenta AC109c4631… · token 32 car. · fuente TWILIO_TOKEN · alias del token coherentes · Verify VA+32 · base api.twilio.com · envío encendido
+   el token efectivo es el nuevo (comparado, no impreso)
+   el resto de la configuración, igual bloque a bloque (driver, cuenta, Verify, voz, H4–H7…)
+   la caché y el fichero: iguales
+   Studio · Twilio: authorized · huella del token en el Studio 5f4ec82e → drift (deriva: authToken) · huella del token en el Studio 0c896e30
+4. Twilio, GET de solo lectura con el token EFECTIVO de Laravel (la caché nueva): 200 cuenta=si estado=active tipo=Full
+5. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+6. admin/voice/status sin token → 401
+7. local.ERROR en laravel*.log: 4 → 4
+   VISTA DEL PROCESO WEB (antes de seguir; el mando no la ve: C-8): en el CRM, Studio → Integraciones → Twilio (o GET admin/ultron-studio/integrations/config) la huella del token tiene que ser 0c896e30 y el estado «drift» en authToken. Si sigue la de antes (5f4ec82e), el FPM no ve la caché nueva: NO promocionar; recargarlo con autorización (systemctl reload php8.3-fpm, como install-meta-ads-token.sh) y volver a mirar
+   AVISO (propietario, ahora): un inicio de sesión real con OTP desde una sesión nueva (un SMS de Verify). Con el secundario sin promocionar valen los dos tokens: esta prueba no distingue el viejo del nuevo; la que lo distingue es la de después de promocionar
+   AVISO (propietario, en cuanto la vista web cuadre, sin dejar pasar horas): promocionar el token en la consola de Twilio. Hasta entonces Twilio firma con el principal viejo y el aviso de gasto del OTP (webhooks/twilio/usage-trigger) responde 403. Al promocionar, el viejo deja de valer: la vuelta atrás deja de existir. Confirmarlo con: bash /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/h8-otp-token-rotate.sh vuelta /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-otp-token-20261111-015838 --solo-comprobar (tiene que negarse con 401) y repetir el inicio de sesión con OTP
+   AVISO (propietario): ElevenLabs guarda el token VIEJO como secreto del workspace (twilio_token_account_AC109c4631…): al promocionar deja de valer y el número importado deja de poder llamar. Rehacer la importación con una credencial RESTRINGIDA (D-2/D-3 y B-6: key de solo voz o subcuenta (b′)), NO con este token maestro nuevo: si no, el nuevo queda en la misma custodia que el viejo (A-1/H-14)
+   AVISO: reconocer otra vez la configuración de Twilio en el Studio cuando la vista web cuadre (con el monitor del H7 encendido, config_drift:twilio salta hasta entonces)
+   vuelta atrás exacta (el fichero de antes; solo mientras Twilio acepte el token viejo): install -m 600 -o alejodev -g staff /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-otp-token-20261111-015838 /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/api/backend/.env && cd /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+   vuelta atrás funcional (solo el token, comprobado contra Twilio antes de escribir): bash /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/h8-otp-token-rotate.sh vuelta /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-otp-token-20261111-015838
+   /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/otp-token-nuevo destruido (el token nuevo solo queda en el fichero de entorno y en la caché, las dos 600; el viejo, en la copia previa)
+MANDO otp-token-rotar APLICADO (copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-otp-token-20261111-015838)
+════ API b GET admin/ultron-studio/integrations/config
+{"http":200,"body":{"ok":true,"data":{"providers":[{"provider":"meta_ads","state":"never_authorized","effective":{"token":{"present":true,"fp":"0119e0f2"},"accounts":[{"ref":"***1001"},{"ref":"***2002"},{"ref":"***3003"}],"graphVersion":"v26.0","syncEnabled":true,"syncDays":7,"staleMinutes":180,"timezone":"America/Bogota"},"effectiveFingerprint":"b29e8ee96b64d0d478f1be3ed6f07b7bbe68a9d16f6b3464247524d3a42fc5e3","authorized":null,"observed":{"uuid":"7386e513-5c87-45c4-8c5f-675a9440547e","fingerprint":"b29e8ee96b64d0d478f1be3ed6f07b7bbe68a9d16f6b3464247524d3a42fc5e3","at":"2026-11-11T00:31:52+00:00"},"drift":[]},{"provider":"twilio","state":"drift","effective":{"otpDriver":"twilio","accountSid":{"present":true,"source":"TWILIO_SID","ref":"AC…b905"},"authToken":{"present":true,"source":"TWI
+════ 2 · vuelta --solo-comprobar → 0 EN VERDE (el token viejo sigue vivo) · código 0
+== h8-otp-token-rotate.sh vuelta · 2026-11-11 01:58:56 UTC · SOLO COMPROBAR (no se escribe nada)
+0. copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-otp-token-20261111-015838 (alejodev 600; la copia no se toca)
+   fichero de entorno: alejodev:staff 600 · las claves (sin valores):
+   TWILIO_TOKEN: línea 20, sangría 2, sin export, sin comillas, 32 car.
+   TWILIO_AUTH_TOKEN: línea 21, sangría 2, sin export, sin comillas, 32 car.
+   TWILIO_SID: línea 18, sangría 2, sin export, sin comillas, 34 car.
+   TWILIO_ACCOUNT_SID: línea 19, sangría 2, sin export, sin comillas, 34 car.
+   configuración efectiva: driver=twilio · cuenta AC109c4631… · token 32 car. · fuente TWILIO_TOKEN · alias del token coherentes · Verify VA+32 · base api.twilio.com · envío encendido
+   la caché y el fichero: iguales (bloque a bloque y el token): config:cache solo cambiará el token
+   el token de la copia es distinto del actual: sí
+   Twilio, GET de solo lectura a la ficha de la cuenta AC109c4631… con el token DE LA COPIA: 200 cuenta=si estado=active tipo=Full
+   Twilio, el mismo GET con el token de ahora: 200 cuenta=si estado=active tipo=Full
+   workers: 13 0 · Studio · Twilio: drift (deriva: authToken) · huella del token en el Studio 0c896e30 · monitor del H7: apagado
+COMPROBACIÓN EN VERDE: nada escrito (--solo-comprobar)
+════ 2 · vuelta → APLICADO · código 0
+== h8-otp-token-rotate.sh vuelta · 2026-11-11 01:58:58 UTC
+0. copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-otp-token-20261111-015838 (alejodev 600; la copia no se toca)
+   fichero de entorno: alejodev:staff 600 · las claves (sin valores):
+   TWILIO_TOKEN: línea 20, sangría 2, sin export, sin comillas, 32 car.
+   TWILIO_AUTH_TOKEN: línea 21, sangría 2, sin export, sin comillas, 32 car.
+   TWILIO_SID: línea 18, sangría 2, sin export, sin comillas, 34 car.
+   TWILIO_ACCOUNT_SID: línea 19, sangría 2, sin export, sin comillas, 34 car.
+   configuración efectiva: driver=twilio · cuenta AC109c4631… · token 32 car. · fuente TWILIO_TOKEN · alias del token coherentes · Verify VA+32 · base api.twilio.com · envío encendido
+   la caché y el fichero: iguales (bloque a bloque y el token): config:cache solo cambiará el token
+   el token de la copia es distinto del actual: sí
+   Twilio, GET de solo lectura a la ficha de la cuenta AC109c4631… con el token DE LA COPIA: 200 cuenta=si estado=active tipo=Full
+   Twilio, el mismo GET con el token de ahora: 200 cuenta=si estado=active tipo=Full
+   workers: 13 0 · Studio · Twilio: drift (deriva: authToken) · huella del token en el Studio 0c896e30 · monitor del H7: apagado
+1. copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-otp-token-vuelta-20261111-015900 (600, alejodev) · fichero alejodev:staff 600
+   TWILIO_AUTH_TOKEN sustituida
+   TWILIO_TOKEN sustituida
+   el fichero es la copia previa salvo las líneas de TWILIO_TOKEN y TWILIO_AUTH_TOKEN
+2. el fichero parsea · caché: alejodev 600
+3. configuración efectiva: driver=twilio · cuenta AC109c4631… · token 32 car. · fuente TWILIO_TOKEN · alias del token coherentes · Verify VA+32 · base api.twilio.com · envío encendido
+   el token efectivo es el de la copia (comparado, no impreso)
+   el resto de la configuración, igual bloque a bloque (driver, cuenta, Verify, voz, H4–H7…)
+   la caché y el fichero: iguales
+   Studio · Twilio: drift (deriva: authToken) · huella del token en el Studio 0c896e30 → authorized · huella del token en el Studio 5f4ec82e
+4. Twilio, GET de solo lectura con el token EFECTIVO de Laravel (la caché nueva): 200 cuenta=si estado=active tipo=Full
+5. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+6. admin/voice/status sin token → 401
+7. local.ERROR en laravel*.log: 4 → 4
+   VISTA DEL PROCESO WEB (antes de seguir; el mando no la ve: C-8): en el CRM, Studio → Integraciones → Twilio (o GET admin/ultron-studio/integrations/config) la huella del token tiene que ser 5f4ec82e. Si sigue la de antes (0c896e30), el FPM no ve la caché nueva: NO promocionar; recargarlo con autorización (systemctl reload php8.3-fpm, como install-meta-ads-token.sh) y volver a mirar
+   vuelta atrás exacta (el fichero de antes; solo mientras Twilio acepte el token viejo): install -m 600 -o alejodev -g staff /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-otp-token-vuelta-20261111-015900 /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/api/backend/.env && cd /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+MANDO otp-token-vuelta APLICADO (copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-otp-token-vuelta-20261111-015900)
+════ API b GET admin/ultron-studio/integrations/config
+{"http":200,"body":{"ok":true,"data":{"providers":[{"provider":"meta_ads","state":"never_authorized","effective":{"token":{"present":true,"fp":"0119e0f2"},"accounts":[{"ref":"***1001"},{"ref":"***2002"},{"ref":"***3003"}],"graphVersion":"v26.0","syncEnabled":true,"syncDays":7,"staleMinutes":180,"timezone":"America/Bogota"},"effectiveFingerprint":"b29e8ee96b64d0d478f1be3ed6f07b7bbe68a9d16f6b3464247524d3a42fc5e3","authorized":null,"observed":{"uuid":"7386e513-5c87-45c4-8c5f-675a9440547e","fingerprint":"b29e8ee96b64d0d478f1be3ed6f07b7bbe68a9d16f6b3464247524d3a42fc5e3","at":"2026-11-11T00:31:52+00:00"},"drift":[]},{"provider":"twilio","state":"authorized","effective":{"otpDriver":"twilio","accountSid":{"present":true,"source":"TWILIO_SID","ref":"AC…b905"},"authToken":{"present":true,"source"
+════ API b POST admin/ultron-studio/integrations/config/acknowledge
+{"http":201,"body":{"ok":true,"data":{"replayed":false,"snapshot":{"uuid":"d09a0baa-a030-419e-afac-54c01c5313b0","provider":"twilio","fingerprint":"6beae26fdc0b2727dd6d09e23c911c0ded7ebc983a636b66d6130395352a9da7","at":"2026-11-11T01:59:18+00:00","by":{"name":"Beto Revisor (OPS8-d)","role":"Super Admin"},"note":"ensayo OPS8-e: Twilio reconocida antes de rotar"}}}}
+════ API b GET admin/ultron-studio/integrations/config
+{"http":200,"body":{"ok":true,"data":{"providers":[{"provider":"meta_ads","state":"never_authorized","effective":{"token":{"present":true,"fp":"0119e0f2"},"accounts":[{"ref":"***1001"},{"ref":"***2002"},{"ref":"***3003"}],"graphVersion":"v26.0","syncEnabled":true,"syncDays":7,"staleMinutes":180,"timezone":"America/Bogota"},"effectiveFingerprint":"b29e8ee96b64d0d478f1be3ed6f07b7bbe68a9d16f6b3464247524d3a42fc5e3","authorized":null,"observed":{"uuid":"7386e513-5c87-45c4-8c5f-675a9440547e","fingerprint":"b29e8ee96b64d0d478f1be3ed6f07b7bbe68a9d16f6b3464247524d3a42fc5e3","at":"2026-11-11T00:31:52+00:00"},"drift":[]},{"provider":"twilio","state":"authorized","effective":{"otpDriver":"twilio","accountSid":{"present":true,"source":"TWILIO_SID","ref":"AC…b905"},"authToken":{"present":true,"source"
+════ 3 · rotar → APLICADO · código 0
+== h8-otp-token-rotate.sh rotar · 2026-11-11 01:59:19 UTC
+0. fichero del token: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/otp-token-nuevo (alejodev 600, una línea, 32 hex; no se imprime)
+   fichero de entorno: alejodev:staff 600 · las claves (sin valores):
+   TWILIO_TOKEN: línea 20, sangría 2, sin export, sin comillas, 32 car.
+   TWILIO_AUTH_TOKEN: línea 21, sangría 2, sin export, sin comillas, 32 car.
+   TWILIO_SID: línea 18, sangría 2, sin export, sin comillas, 34 car.
+   TWILIO_ACCOUNT_SID: línea 19, sangría 2, sin export, sin comillas, 34 car.
+   configuración efectiva: driver=twilio · cuenta AC109c4631… · token 32 car. · fuente TWILIO_TOKEN · alias del token coherentes · Verify VA+32 · base api.twilio.com · envío encendido
+   la caché y el fichero: iguales (bloque a bloque y el token): config:cache solo cambiará el token
+   el token nuevo es distinto del actual: sí
+   Twilio, GET de solo lectura a la ficha de la cuenta AC109c4631… con el token NUEVO: 200 cuenta=si estado=active tipo=Full
+   Twilio, el mismo GET con el token ACTUAL: 200 cuenta=si estado=active tipo=Full (sigue vivo: la vuelta atrás existe hasta que se promocione el nuevo)
+   workers: 13 0 · Studio · Twilio: authorized · huella del token en el Studio 5f4ec82e · monitor del H7: apagado
+1. copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-otp-token-20261111-015921 (600, alejodev) · fichero alejodev:staff 600
+   TWILIO_AUTH_TOKEN sustituida
+   TWILIO_TOKEN sustituida
+   el fichero es la copia previa salvo las líneas de TWILIO_TOKEN y TWILIO_AUTH_TOKEN
+2. el fichero parsea · caché: alejodev 600
+3. configuración efectiva: driver=twilio · cuenta AC109c4631… · token 32 car. · fuente TWILIO_TOKEN · alias del token coherentes · Verify VA+32 · base api.twilio.com · envío encendido
+   el token efectivo es el nuevo (comparado, no impreso)
+   el resto de la configuración, igual bloque a bloque (driver, cuenta, Verify, voz, H4–H7…)
+   la caché y el fichero: iguales
+   Studio · Twilio: authorized · huella del token en el Studio 5f4ec82e → drift (deriva: authToken) · huella del token en el Studio d5b10961
+4. Twilio, GET de solo lectura con el token EFECTIVO de Laravel (la caché nueva): 200 cuenta=si estado=active tipo=Full
+5. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+6. admin/voice/status sin token → 401
+7. local.ERROR en laravel*.log: 4 → 4
+   VISTA DEL PROCESO WEB (antes de seguir; el mando no la ve: C-8): en el CRM, Studio → Integraciones → Twilio (o GET admin/ultron-studio/integrations/config) la huella del token tiene que ser d5b10961 y el estado «drift» en authToken. Si sigue la de antes (5f4ec82e), el FPM no ve la caché nueva: NO promocionar; recargarlo con autorización (systemctl reload php8.3-fpm, como install-meta-ads-token.sh) y volver a mirar
+   AVISO (propietario, ahora): un inicio de sesión real con OTP desde una sesión nueva (un SMS de Verify). Con el secundario sin promocionar valen los dos tokens: esta prueba no distingue el viejo del nuevo; la que lo distingue es la de después de promocionar
+   AVISO (propietario, en cuanto la vista web cuadre, sin dejar pasar horas): promocionar el token en la consola de Twilio. Hasta entonces Twilio firma con el principal viejo y el aviso de gasto del OTP (webhooks/twilio/usage-trigger) responde 403. Al promocionar, el viejo deja de valer: la vuelta atrás deja de existir. Confirmarlo con: bash /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/h8-otp-token-rotate.sh vuelta /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-otp-token-20261111-015921 --solo-comprobar (tiene que negarse con 401) y repetir el inicio de sesión con OTP
+   AVISO (propietario): ElevenLabs guarda el token VIEJO como secreto del workspace (twilio_token_account_AC109c4631…): al promocionar deja de valer y el número importado deja de poder llamar. Rehacer la importación con una credencial RESTRINGIDA (D-2/D-3 y B-6: key de solo voz o subcuenta (b′)), NO con este token maestro nuevo: si no, el nuevo queda en la misma custodia que el viejo (A-1/H-14)
+   AVISO: reconocer otra vez la configuración de Twilio en el Studio cuando la vista web cuadre (con el monitor del H7 encendido, config_drift:twilio salta hasta entonces)
+   vuelta atrás exacta (el fichero de antes; solo mientras Twilio acepte el token viejo): install -m 600 -o alejodev -g staff /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-otp-token-20261111-015921 /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/api/backend/.env && cd /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+   vuelta atrás funcional (solo el token, comprobado contra Twilio antes de escribir): bash /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/h8-otp-token-rotate.sh vuelta /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-otp-token-20261111-015921
+   /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/otp-token-nuevo destruido (el token nuevo solo queda en el fichero de entorno y en la caché, las dos 600; el viejo, en la copia previa)
+MANDO otp-token-rotar APLICADO (copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-otp-token-20261111-015921)
+════ API b GET admin/ultron-studio/integrations/config
+{"http":200,"body":{"ok":true,"data":{"providers":[{"provider":"meta_ads","state":"never_authorized","effective":{"token":{"present":true,"fp":"0119e0f2"},"accounts":[{"ref":"***1001"},{"ref":"***2002"},{"ref":"***3003"}],"graphVersion":"v26.0","syncEnabled":true,"syncDays":7,"staleMinutes":180,"timezone":"America/Bogota"},"effectiveFingerprint":"b29e8ee96b64d0d478f1be3ed6f07b7bbe68a9d16f6b3464247524d3a42fc5e3","authorized":null,"observed":{"uuid":"7386e513-5c87-45c4-8c5f-675a9440547e","fingerprint":"b29e8ee96b64d0d478f1be3ed6f07b7bbe68a9d16f6b3464247524d3a42fc5e3","at":"2026-11-11T00:31:52+00:00"},"drift":[]},{"provider":"twilio","state":"drift","effective":{"otpDriver":"twilio","accountSid":{"present":true,"source":"TWILIO_SID","ref":"AC…b905"},"authToken":{"present":true,"source":"TWI
+════ 3 · vuelta --solo-comprobar tras promocionar → 2 (401): confirma la promoción · código 2
+== h8-otp-token-rotate.sh vuelta · 2026-11-11 01:59:38 UTC · SOLO COMPROBAR (no se escribe nada)
+0. copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-otp-token-20261111-015921 (alejodev 600; la copia no se toca)
+   fichero de entorno: alejodev:staff 600 · las claves (sin valores):
+   TWILIO_TOKEN: línea 20, sangría 2, sin export, sin comillas, 32 car.
+   TWILIO_AUTH_TOKEN: línea 21, sangría 2, sin export, sin comillas, 32 car.
+   TWILIO_SID: línea 18, sangría 2, sin export, sin comillas, 34 car.
+   TWILIO_ACCOUNT_SID: línea 19, sangría 2, sin export, sin comillas, 34 car.
+   configuración efectiva: driver=twilio · cuenta AC109c4631… · token 32 car. · fuente TWILIO_TOKEN · alias del token coherentes · Verify VA+32 · base api.twilio.com · envío encendido
+   la caché y el fichero: iguales (bloque a bloque y el token): config:cache solo cambiará el token
+   el token de la copia es distinto del actual: sí
+   Twilio, GET de solo lectura a la ficha de la cuenta AC109c4631… con el token DE LA COPIA: 401 cuenta=no estado=401 tipo=-
+NO SE APLICA (no se ha tocado nada): Twilio ya no acepta el token de la copia (401): se promocionó el nuevo (o se revocó). La vuelta atrás no existe: el camino es seguir con el token de ahora
+════ 3 · vuelta tras promocionar → 2, sin tocar nada · código 2
+== h8-otp-token-rotate.sh vuelta · 2026-11-11 01:59:39 UTC
+0. copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-otp-token-20261111-015921 (alejodev 600; la copia no se toca)
+   fichero de entorno: alejodev:staff 600 · las claves (sin valores):
+   TWILIO_TOKEN: línea 20, sangría 2, sin export, sin comillas, 32 car.
+   TWILIO_AUTH_TOKEN: línea 21, sangría 2, sin export, sin comillas, 32 car.
+   TWILIO_SID: línea 18, sangría 2, sin export, sin comillas, 34 car.
+   TWILIO_ACCOUNT_SID: línea 19, sangría 2, sin export, sin comillas, 34 car.
+   configuración efectiva: driver=twilio · cuenta AC109c4631… · token 32 car. · fuente TWILIO_TOKEN · alias del token coherentes · Verify VA+32 · base api.twilio.com · envío encendido
+   la caché y el fichero: iguales (bloque a bloque y el token): config:cache solo cambiará el token
+   el token de la copia es distinto del actual: sí
+   Twilio, GET de solo lectura a la ficha de la cuenta AC109c4631… con el token DE LA COPIA: 401 cuenta=no estado=401 tipo=-
+NO SE APLICA (no se ha tocado nada): Twilio ya no acepta el token de la copia (401): se promocionó el nuevo (o se revocó). La vuelta atrás no existe: el camino es seguir con el token de ahora
+════ 3 · estado: GET 200 con el token efectivo y el Studio en drift · código 0
+== estado del token del OTP (sin valores; solo lectura)
+   fichero de entorno: alejodev:staff 600 (C-14: www-data 600 o root:www-data 640)
+   TWILIO_TOKEN: línea 20, sangría 2, sin export, sin comillas, 32 car.
+   TWILIO_AUTH_TOKEN: línea 21, sangría 2, sin export, sin comillas, 32 car.
+   TWILIO_SID: línea 18, sangría 2, sin export, sin comillas, 34 car.
+   TWILIO_ACCOUNT_SID: línea 19, sangría 2, sin export, sin comillas, 34 car.
+   configuración efectiva (la caché): driver=twilio · cuenta AC109c4631… · token 32 car. · fuente TWILIO_TOKEN · alias del token coherentes · Verify VA+32 · base api.twilio.com · envío encendido
+   la caché y el fichero: iguales (bloque a bloque y el token): un config:cache no cambiaría nada
+   Twilio, GET de solo lectura a la ficha de la cuenta con el token EFECTIVO: 200 cuenta=si estado=active tipo=Full
+   Studio · Twilio: drift (deriva: authToken) · huella del token en el Studio d5b10961
+   la voz: no usa la cuenta del OTP · su token de firma no es este token
+   monitor del H7: apagado
+   workers (RUNNING · BACKOFF/FATAL): 13 0
+════ 4 · vuelta con la copia de la rotación B (el token original) → APLICADO · código 0
+== h8-otp-token-rotate.sh vuelta · 2026-11-11 01:59:42 UTC
+0. copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-otp-token-20261111-015921 (alejodev 600; la copia no se toca)
+   fichero de entorno: alejodev:staff 600 · las claves (sin valores):
+   TWILIO_TOKEN: línea 20, sangría 2, sin export, sin comillas, 32 car.
+   TWILIO_AUTH_TOKEN: línea 21, sangría 2, sin export, sin comillas, 32 car.
+   TWILIO_SID: línea 18, sangría 2, sin export, sin comillas, 34 car.
+   TWILIO_ACCOUNT_SID: línea 19, sangría 2, sin export, sin comillas, 34 car.
+   configuración efectiva: driver=twilio · cuenta AC109c4631… · token 32 car. · fuente TWILIO_TOKEN · alias del token coherentes · Verify VA+32 · base api.twilio.com · envío encendido
+   la caché y el fichero: iguales (bloque a bloque y el token): config:cache solo cambiará el token
+   el token de la copia es distinto del actual: sí
+   Twilio, GET de solo lectura a la ficha de la cuenta AC109c4631… con el token DE LA COPIA: 200 cuenta=si estado=active tipo=Full
+   AVISO: el mismo GET con el token ACTUAL da 401 cuenta=no estado=401 tipo=-: Twilio ya no lo acepta (¿promocionado o revocado?). El OTP está fallando ahora mismo y la vuelta atrás no existiría
+   workers: 13 0 · Studio · Twilio: drift (deriva: authToken) · huella del token en el Studio d5b10961 · monitor del H7: apagado
+1. copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-otp-token-vuelta-20261111-015943 (600, alejodev) · fichero alejodev:staff 600
+   TWILIO_AUTH_TOKEN sustituida
+   TWILIO_TOKEN sustituida
+   el fichero es la copia previa salvo las líneas de TWILIO_TOKEN y TWILIO_AUTH_TOKEN
+2. el fichero parsea · caché: alejodev 600
+3. configuración efectiva: driver=twilio · cuenta AC109c4631… · token 32 car. · fuente TWILIO_TOKEN · alias del token coherentes · Verify VA+32 · base api.twilio.com · envío encendido
+   el token efectivo es el de la copia (comparado, no impreso)
+   el resto de la configuración, igual bloque a bloque (driver, cuenta, Verify, voz, H4–H7…)
+   la caché y el fichero: iguales
+   Studio · Twilio: drift (deriva: authToken) · huella del token en el Studio d5b10961 → authorized · huella del token en el Studio 5f4ec82e
+4. Twilio, GET de solo lectura con el token EFECTIVO de Laravel (la caché nueva): 200 cuenta=si estado=active tipo=Full
+5. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+6. admin/voice/status sin token → 401
+7. local.ERROR en laravel*.log: 4 → 4
+   VISTA DEL PROCESO WEB (antes de seguir; el mando no la ve: C-8): en el CRM, Studio → Integraciones → Twilio (o GET admin/ultron-studio/integrations/config) la huella del token tiene que ser 5f4ec82e. Si sigue la de antes (d5b10961), el FPM no ve la caché nueva: NO promocionar; recargarlo con autorización (systemctl reload php8.3-fpm, como install-meta-ads-token.sh) y volver a mirar
+   vuelta atrás exacta (el fichero de antes; solo mientras Twilio acepte el token viejo): install -m 600 -o alejodev -g staff /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-otp-token-vuelta-20261111-015943 /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/api/backend/.env && cd /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+MANDO otp-token-vuelta APLICADO (copia previa: /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/root/env-pre-otp-token-vuelta-20261111-015943)
+════ API b GET admin/ultron-studio/integrations/config
+{"http":200,"body":{"ok":true,"data":{"providers":[{"provider":"meta_ads","state":"never_authorized","effective":{"token":{"present":true,"fp":"0119e0f2"},"accounts":[{"ref":"***1001"},{"ref":"***2002"},{"ref":"***3003"}],"graphVersion":"v26.0","syncEnabled":true,"syncDays":7,"staleMinutes":180,"timezone":"America/Bogota"},"effectiveFingerprint":"b29e8ee96b64d0d478f1be3ed6f07b7bbe68a9d16f6b3464247524d3a42fc5e3","authorized":null,"observed":{"uuid":"7386e513-5c87-45c4-8c5f-675a9440547e","fingerprint":"b29e8ee96b64d0d478f1be3ed6f07b7bbe68a9d16f6b3464247524d3a42fc5e3","at":"2026-11-11T00:31:52+00:00"},"drift":[]},{"provider":"twilio","state":"authorized","effective":{"otpDriver":"twilio","accountSid":{"present":true,"source":"TWILIO_SID","ref":"AC…b905"},"authToken":{"present":true,"source"

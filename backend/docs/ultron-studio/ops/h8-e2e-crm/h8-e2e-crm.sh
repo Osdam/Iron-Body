@@ -24,7 +24,9 @@
 # Variables: H8_CRM_DIR (el worktree del CRM; por defecto ../Iron-Body_Front) · H8_CRM_REF (HEAD) · H8_E2E_REF (HEAD del
 #   backend, lo lee el arnés) · H8_E2E_ARBOL=1 (el backend del árbol de trabajo, lo lee el arnés) · H8_CRM_EVIDENCIA (1) ·
 #   CHROME_PATH · H8_CRM_NG_ESPERA (900 s) · H8_CRM_HOLD=1 (deja la
-#   pila y el CRM en pie al terminar los guiones, hasta SIGTERM).
+#   pila y el CRM en pie al terminar los guiones, hasta SIGTERM) · H8_CRM_ARBOL=1 (el CRM del ÁRBOL DE TRABAJO sobre su
+#   HEAD: los ficheros versionados con su contenido de ahora y los sin seguimiento no ignorados; su huella va en el
+#   nombre de la ejecución, de la evidencia y en el resumen, como H8_E2E_ARBOL en el backend; no admite H8_CRM_REF).
 # Trampas: las del arnés (README de h8-e2e) y las del CRM (README de este directorio).
 set -euo pipefail
 export LC_ALL=C PGGSSENCMODE=disable
@@ -72,15 +74,23 @@ if [ -n "${H8_E2E_FUENTE:-}" ]; then
 elif [ "${H8_E2E_ARBOL:-0}" = 1 ]; then
   BE_ID="$BE_ID-arbol-$( { git -C "$WT" diff --binary HEAD -- backend; git -C "$WT" ls-files -o --exclude-standard -z -- backend | (cd "$WT" && xargs -0 shasum -a 256); } | shasum -a 256 | cut -c1-12)"
 fi
+CRM_ID=${CRM_SHA:0:7}
+CRM_ARBOL_SHA=""
+if [ "${H8_CRM_ARBOL:-0}" = 1 ]; then
+  [ "$CRM_REF" = HEAD ] || muere "H8_CRM_ARBOL=1 copia el árbol de trabajo del CRM sobre su HEAD: no admite H8_CRM_REF"
+  # La huella del árbol del CRM: el diff respecto de HEAD y el contenido de los ficheros sin seguimiento no ignorados.
+  CRM_ARBOL_SHA=$( { git -C "$CRM_REPO" diff --binary HEAD; git -C "$CRM_REPO" ls-files -o --exclude-standard -z | (cd "$CRM_REPO" && xargs -0 shasum -a 256); } | shasum -a 256 | cut -c1-12)
+  CRM_ID="$CRM_ID-arbol-$CRM_ARBOL_SHA"
+fi
 SELLO=$(date -u +%Y%m%dT%H%M%SZ)
 mkdir -p "$BASE_DIR"
-RUN="$BASE_DIR/run-$SELLO-$BE_ID-${CRM_SHA:0:7}"
-FE="$BASE_DIR/crm-${CRM_SHA:0:12}"
+RUN="$BASE_DIR/run-$SELLO-$BE_ID-$CRM_ID"
+FE="$BASE_DIR/crm-${CRM_SHA:0:12}${CRM_ARBOL_SHA:+-arbol-$CRM_ARBOL_SHA}"
 case "$(python3 -I -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$BASE_DIR")/" in "$WT"/*|"$CRM_REPO"/*) muere "la ejecución no puede vivir dentro de un repo" ;; esac
 umask 077
 mkdir -p "$RUN"/{logs,run,capturas,red}
 T0=$(date +%s)
-echo "== E2E CRM H8 · $(hora) · backend $BE_ID · CRM ${CRM_SHA:0:7} · fase $FASE · guiones: ${GUIONES[*]} · $RUN"
+echo "== E2E CRM H8 · $(hora) · backend $BE_ID · CRM $CRM_ID · fase $FASE · guiones: ${GUIONES[*]} · $RUN"
 
 # ── Procesos (las trampas del arnés: el PID real, y parar nietos, hijos y padre) ──────────────────────────────────────
 arranca() { # nombre directorio orden…
@@ -125,10 +135,33 @@ trap 'rc=$?; parar_todo; exit $rc' EXIT
 trap 'echo "h8-e2e-crm: interrumpido"; exit 130' INT TERM
 
 # ── 1. El CRM: copia del commit en una ruta estable, node_modules enlazado, ng serve ─────────────────────────────────
-echo "== 1. CRM ${CRM_SHA:0:7} en $FE"
+echo "== 1. CRM $CRM_ID en $FE"
 mkdir -p "$FE"
 # Se reextrae entero en cada ejecución (deshace cualquier cambio a mano en la copia); la caché de Angular se queda.
-git -C "$CRM_REPO" archive --format=tar "$CRM_SHA" | tar -x -C "$FE"
+if [ -z "$CRM_ARBOL_SHA" ]; then
+  git -C "$CRM_REPO" archive --format=tar "$CRM_SHA" | tar -x -C "$FE"
+else
+  python3 -I - "$CRM_REPO" "$FE" <<'PY' || muere "no se pudo copiar el árbol de trabajo del CRM"
+import os, shutil, subprocess, sys
+repo, dest = sys.argv[1:3]
+lista = subprocess.run(['git', '-C', repo, 'ls-files', '-c', '-o', '--exclude-standard', '-z'], capture_output=True, check=True).stdout
+n = 0
+for rel in lista.decode().split('\0'):
+    src = os.path.join(repo, rel)
+    if not rel or not (os.path.isfile(src) or os.path.islink(src)):
+        continue  # borrado en el árbol: no viaja
+    d = os.path.join(dest, rel)
+    os.makedirs(os.path.dirname(d), exist_ok=True)
+    if os.path.lexists(d):
+        os.remove(d)
+    if os.path.islink(src):
+        os.symlink(os.readlink(src), d)
+    else:
+        shutil.copy2(src, d)
+    n += 1
+print(f'   árbol de trabajo del CRM: {n} ficheros (versionados y sin seguimiento no ignorados)')
+PY
+fi
 [ -f "$FE/angular.json" ] && [ -f "$FE/e2e/ultron-studio/proxy.cjs" ] || muere "la copia del CRM salió vacía"
 ln -sfn "$CRM_REPO/node_modules" "$FE/node_modules"
 grep -q "apiBaseUrl: 'http://127.0.0.1:$PROXY_PORT/api'" "$FE/src/environments/environment.ts" || muere "environment.ts no apunta la API a 127.0.0.1:$PROXY_PORT"
@@ -178,8 +211,13 @@ PY
 EST=0
 for g in "${GUIONES[@]}"; do
   echo "== guion $g · $(hora)"
-  node "$AQUI/$g.cjs" "$RUN/crm-context.json" 2>&1 | tee "$RUN/logs/guion-$g.out" | sed 's/^/   /' || true
-  [ "${PIPESTATUS[0]}" = 0 ] || EST=1
+  # Sin «|| true» detrás de la tubería: ese `true` pisaba PIPESTATUS y «los guiones salieron con 0» salía siempre en
+  # verde (corregido el 10-11 por el tester final del H9; informe-tester-final §B-T6).
+  set +e
+  node "$AQUI/$g.cjs" "$RUN/crm-context.json" 2>&1 | tee "$RUN/logs/guion-$g.out" | sed 's/^/   /'
+  GEST=${PIPESTATUS[0]}
+  set -e
+  [ "$GEST" = 0 ] || EST=1
 done
 
 if [ "$HOLD" = 1 ]; then
@@ -240,14 +278,14 @@ for l in open(sys.argv[1]):
 print(f"{ok + ko} comprobaciones ({ok} OK, {ko} FALLO)")' "$RUN/checks-crm.jsonl")
 GUIONES_SHA=$(cat "$AQUI"/*.cjs | shasum -a 256 | cut -c1-16)
 {
-  echo "E2E CRM H8 · backend $BE_ID ($BE_SHA$([ "${H8_E2E_ARBOL:-0}" = 1 ] && echo " + el árbol de trabajo sin confirmar")$([ -n "${H8_E2E_FUENTE:-}" ] && echo " + el árbol de trabajo sin confirmar, relanzado desde la copia de una ejecución anterior")) · CRM ${CRM_SHA:0:7} ($CRM_SHA) · fase $FASE · $(hora) · $DUR s"
+  echo "E2E CRM H8 · backend $BE_ID ($BE_SHA$([ "${H8_E2E_ARBOL:-0}" = 1 ] && echo " + el árbol de trabajo sin confirmar")$([ -n "${H8_E2E_FUENTE:-}" ] && echo " + el árbol de trabajo sin confirmar, relanzado desde la copia de una ejecución anterior")) · CRM $CRM_ID ($CRM_SHA${CRM_ARBOL_SHA:+ + el árbol de trabajo sin confirmar del CRM}) · fase $FASE · $(hora) · $DUR s"
   echo "guiones (sha256 de ops/h8-e2e-crm/*.cjs): $GUIONES_SHA"
   echo "$RECUENTO"
   echo "hash de resultados (sha256 de las comprobaciones ordenadas: fase, paso, nombre, ok): $HASH"
 } > "$RUN/resumen.txt"
 cat "$RUN/resumen.txt"
 if [ "$EVIDENCIA" = 1 ]; then
-  EV="$OPS/evidencia-h8/$(date -u +%Y-%m-%d)/crm-$SELLO-$BE_ID-${CRM_SHA:0:7}"
+  EV="$OPS/evidencia-h8/$(date -u +%Y-%m-%d)/crm-$SELLO-$BE_ID-$CRM_ID"
   mkdir -p "$EV/capturas" "$EV/red" "$EV/logs"
   cp "$RUN/resumen.txt" "$RUN/checks-crm.jsonl" "$RUN/barrido.txt" "$RUN"/stats-*.json "$EV/"
   cp "$RUN"/capturas/*.png "$EV/capturas/" 2> /dev/null || true

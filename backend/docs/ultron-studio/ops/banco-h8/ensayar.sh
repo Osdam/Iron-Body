@@ -18,6 +18,16 @@
 #                                                          ELEVENLABS_VERIFIED); rehace el respaldo de partida
 #   bash ensayar.sh <banco> desplegar [--solo-comprobar] [--acepta-main=…]  (OPS8-b) la copia del banco de deploy-h8-backend-fase1.sh
 #                                                          (preparar.sh), con RED: el ensayo del paso 0 o el despliegue
+#                                                          (OPS8-e) y el modo 4a: --fase=4a --autorizacion=<ref> [--sin-worker],
+#                                                          con --esperado=<commit> y --respaldo=<dir> (por defecto, los del
+#                                                          banco: $ESPERADO y $B/bk)
+#   bash ensayar.sh <banco> respaldo <dir dentro del banco>  (OPS8-e) un respaldo con el formato del runbook (api-commit.txt,
+#                                                          volcado y su huella, env.backup; 700/600); nunca sobrescribe uno
+#   bash ensayar.sh <banco> h6|h7 <orden del mando…>       (OPS8-e) las copias del banco de h6-integrations-scope.sh y de
+#                                                          h7-monitor-scope.sh (B-T13, B-T14), con RED
+#   bash ensayar.sh <banco> otp <orden del mando…>         (OPS8-e) la copia del banco de h8-otp-token-rotate.sh (la
+#                                                          rotación del token del OTP) contra la cuenta maestra del
+#                                                          simulador de Twilio, con RED
 #   bash ensayar.sh <banco> smoke [<id de admin>]          (OPS8-b) smoke-run-h8.sh del REPO con las variables locales y
 #                                                          la valla como prueba estricta de cero red
 #   bash ensayar.sh <banco> alcance <orden del mando…>     (OPS8-c) la copia del banco de h8-voice-scope.sh, con RED
@@ -291,10 +301,31 @@ E112
 
   desplegar)
     bash "$AQUI/preparar.sh" "$B"
-    EXTRA=()
-    for a in "$@"; do case "$a" in --solo-comprobar|--acepta-main=*) EXTRA+=("$a") ;; *) muere "opción desconocida: $a" ;; esac; done
+    EXTRA=(); ESP=$ESPERADO; BKD="$B/bk"
+    for a in "$@"; do
+      case "$a" in
+        --solo-comprobar|--acepta-main=*|--fase=*|--autorizacion=*|--sin-worker) EXTRA+=("$a") ;;
+        --esperado=*) ESP=${a#--esperado=} ;;
+        --respaldo=*) BKD=${a#--respaldo=} ;;
+        *) muere "opción desconocida: $a" ;;
+      esac
+    done
     export "${RED[@]}"
-    exec bash "$B/root/deploy-h8-backend-fase1.sh" "$ESPERADO" "$B/bk" ${EXTRA[@]+"${EXTRA[@]}"} ;;
+    exec bash "$B/root/deploy-h8-backend-fase1.sh" "$ESP" "$BKD" ${EXTRA[@]+"${EXTRA[@]}"} ;;
+  respaldo)
+    # OPS8-e: el respaldo del modo 4a (o de cualquier ensayo) con el formato del bloque del paso 1 del runbook, dentro del
+    # banco. Nunca sobrescribe uno (como en producción: un respaldo no se borra ni se pisa).
+    D=${1:?directorio del respaldo (dentro del banco)}
+    case "$D" in "$B"/*) ;; *) muere "el respaldo del banco vive dentro del banco ($B)" ;; esac
+    [ ! -e "$D" ] || muere "ya existe $D: un respaldo no se sobrescribe"
+    ( umask 077
+      mkdir -p "$D"
+      git -C "$B/api" rev-parse HEAD > "$D/api-commit.txt"
+      pg_dump -Fc -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" "$BANCO_DB" > "$D/ironbody.dump"
+      shasum -a 256 "$D/ironbody.dump" > "$D/ironbody.dump.sha256"   # con la ruta absoluta, como el runbook
+      install -m 600 "$BE/.env" "$D/env.backup"
+      chmod 700 "$D"; chmod 600 "$D"/* )
+    echo "respaldo del banco en $D: «producción» $(cut -c1-7 "$D/api-commit.txt") · $(pg_restore -l "$D/ironbody.dump" | grep -c 'TABLE DATA') tablas con datos · 700/600" ;;
 
   smoke)
     ID=${1:-${ADMIN_ID:-}}
@@ -302,12 +333,12 @@ E112
     mkdir -p "$B/smokework"
     exec env "${RED[@]}" APP_DIR="$BE" SMOKE_API="http://127.0.0.1:$BANCO_PORT/api" SMOKE_RUN_AS= \
       SMOKE_PSQL="psql -X -Atq -h $PG_HOST -p $PG_PORT -U $PG_USER -d $BANCO_DB" SMOKE_WORKDIR="$B/smokework" \
-      SMOKE_PY="$OPS/smoke-h8.py" SMOKE_H6_PY="$OPS/smoke-h6.py" SMOKE_ADMIN_ID="$ID" \
+      SMOKE_PY="${BANCO_SMOKE_PY:-$OPS/smoke-h8.py}" SMOKE_H6_PY="$OPS/smoke-h6.py" SMOKE_ADMIN_ID="$ID" \
       SMOKE_BUDGETS="${SMOKE_BUDGETS:-$OPS/perf-h8/presupuestos-h8.json}" SMOKE_BUDGETS_OUT="${SMOKE_BUDGETS_OUT:-}" \
       SMOKE_VALLA_STATS="http://127.0.0.1:$PUERTO_VALLA/__stats" SMOKE_LOGS="$BE/storage/logs" bash "$OPS/smoke-run-h8.sh" ;;
 
-  alcance|secretos|twilio)
-    case "$ORDEN" in alcance) S=h8-voice-scope.sh ;; secretos) S=h8-secrets-register.sh ;; twilio) S=h8-twilio-check.sh ;; esac
+  alcance|secretos|twilio|h6|h7|otp)
+    case "$ORDEN" in alcance) S=h8-voice-scope.sh ;; secretos) S=h8-secrets-register.sh ;; twilio) S=h8-twilio-check.sh ;; h6) S=h6-integrations-scope.sh ;; h7) S=h7-monitor-scope.sh ;; otp) S=h8-otp-token-rotate.sh ;; esac
     bash "$AQUI/preparar.sh" "$B" > /dev/null
     export "${RED[@]}"
     exec bash "$B/root/$S" "$@" ;;
@@ -340,5 +371,5 @@ with open(sys.argv[2], 'w', encoding='utf-8') as f:
 print('   tres piezas secretas de Twilio del banco en el fichero (sin valores en pantalla)')
 PZT
     chmod 600 "$F" ) ;;
-  *) muere "uso: bash ensayar.sh <banco> arrancar|parar|estado|valla|doctor|worker …|cierre|e112|desplegar [--solo-comprobar]|smoke [<id>]|alcance …|secretos …|twilio …|constante abrir|cerrar|piezas-twilio <fichero>" ;;
+  *) muere "uso: bash ensayar.sh <banco> arrancar|parar|estado|valla|doctor|worker …|cierre|e112|desplegar [--solo-comprobar] [--fase=4a …]|respaldo <dir>|smoke [<id>]|alcance …|secretos …|twilio …|h6 …|h7 …|constante abrir|cerrar|piezas-twilio <fichero>" ;;
 esac

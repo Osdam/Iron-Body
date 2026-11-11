@@ -1,9 +1,10 @@
 -- supresion-1581.sql · ULTRON STUDIO · Ley 1581 de 2012 (habeas data): SUPRESIÓN por REDACCIÓN, nunca por borrado.
 --
 -- Qué hace: busca los datos personales de UNA persona (un texto: nombre, correo…), de UN teléfono, de UN número canario
--- (por su huella) o de UNA persona del personal (por su id de administrador) en las 14 tablas ultron_studio_* del
--- H3–H7 (y, desde el Hito 9, en las 7 del gobierno de estrategias y en la autoría del personal de outreach_*: ver
--- «HITO 9» abajo) y los sustituye por «[suprimido]». No borra filas: el libro, la cadena, el laboratorio y las instantáneas son de solo
+-- (por su huella), de UN número de la voz (por su huella `voice-phone`) o de UNA persona del personal (por su id de
+-- administrador) en las 14 tablas ultron_studio_* del H3–H7 (y, desde el Hito 9, en las 7 del gobierno de estrategias y
+-- en la autoría del personal de outreach_*: ver «HITO 9» abajo; y, desde el Hito 8, en las 11 tablas de la voz: ver
+-- «HITO 8 · LA VOZ» abajo) y los sustituye por «[suprimido]». No borra filas: el libro, la cadena, el laboratorio y las instantáneas son de solo
 -- inserción por diseño, y una fila menos rompería la cadena de publicaciones y los recuentos de auditoría.
 --
 -- EN SECO POR DEFECTO (:dry = 1): transacción READ ONLY que solo CUENTA, por tabla y columna, y termina en ROLLBACK.
@@ -14,9 +15,11 @@
 -- y al final comprueba que no queda ninguna coincidencia, que todos los disparadores del Studio están como estaban y
 -- deja UNA fila en el libro (event system.personal_data_redacted, con recuentos y el radicado, nunca el dato). Si algo
 -- falla, la transacción entera se deshace: nunca queda un disparador apagado ni una redacción a medias.
--- ALTER TABLE … DISABLE TRIGGER es transaccional y toma ACCESS EXCLUSIVE sobre esa tabla hasta el COMMIT: nadie más
--- ve la tabla sin su disparador; las lecturas del Studio esperan unos milisegundos (lock_timeout 5 s: si alguien la
--- tiene, aborta entero sin cambiar nada y se repite). No toca la definición de ningún disparador ni de ninguna función.
+-- ALTER TABLE … DISABLE TRIGGER es transaccional y toma SHARE ROW EXCLUSIVE sobre esa tabla hasta el COMMIT (PG 14,
+-- comprobado en pg_locks el 10-11-2026; hasta entonces este párrafo decía ACCESS EXCLUSIVE): nadie más ve la tabla sin su
+-- disparador; las ESCRITURAS de la aplicación en esa tabla esperan unos milisegundos y las lecturas no esperan
+-- (lock_timeout 5 s: si una transacción abierta ya escribió en ella, aborta entero sin cambiar nada y se repite). No toca
+-- la definición de ningún disparador ni de ninguna función.
 --
 -- EL LABORATORIO: reply, checks y judge de cada caso entran en results_hash, que se recalcula al emitir el veredicto.
 -- Con veredicto ya emitido, redactarlos no cambia nada (la puerta de publicar mira el veredicto y la huella de la
@@ -41,6 +44,10 @@
 --                                    números REVOCADOS (uno vivo aborta: su huella la usa la coherencia con el motor):
 --                                    alias → «suprimido», huella → una huella aleatoria (64 hex), 4 dígitos → 0000.
 --                                    IRREVERSIBLE: la huella original no se puede «desredactar» ni recalcular
+--   \set voice_phone_hash '<64 hex>' la huella `voice-phone` de un número de la VOZ (Hito 8; NO es la del canario: la
+--                                    calcula la aplicación con App\Services\Telephony\VoicePhone::hash, runbook paso 2b).
+--                                    Contactos solo RETIRADOS y llamadas solo TERMINADAS (lo vivo aborta): huella → una
+--                                    aleatoria (64 hex), 4 dígitos → 0000. IRREVERSIBLE. Ver «HITO 8 · LA VOZ» abajo
 --   \set admin_id 42                 una persona del PERSONAL: su nombre en cada instantánea de autoría (actor_name,
 --                                    created_by_name, reviewer_name…) y su IP y navegador en el libro. Quita la
 --                                    trazabilidad nominal de lo que hizo (queda el id): decisión del propietario
@@ -81,6 +88,52 @@
 --                                    los calcula la aplicación (PhoneRef::fromRaw, por la entrada estándar), nunca a mano
 --   Una solicitud de un socio o prospecto suele llevar los dos bloques en la misma pasada (:term/:phone para los textos
 --   del Studio y :subject para la automatización comercial); el libro recibe una fila por bloque que redacte algo.
+--
+-- HITO 8 · LA VOZ (B-T3 del cierre integral, database-specialist, 10-11-2026; contrato H8 D8-17 y D8-18; H-24 de
+-- ULTRON_STUDIO_H8_PREPARACION_PLAN_PAGO.md). Integra, con las correcciones de su informe, la propuesta de OPS8-d
+-- (`supresion-1581-voz.propuesta.sql`). Probado en PostgreSQL 14 por tests/Feature/Telephony/Schema/
+-- VoiceSuppression1581Test.php (`UNIT_DB=ultron_studio_1581_voz docs/ultron-studio/ops/pgunit.sh <esa prueba>`); la
+-- política columna a columna está en plans/informes-h8/informe-db-1581-voz.md. El bloque de TEXTO de arriba conoce
+-- también las 11 tablas de la voz: las 4 del gobierno (ultron_studio_voice_profiles, _agents, _publications,
+-- _lab_sessions; su guarda es ultron_studio_forbid) y las 7 de la telefonía (voice_contacts, voice_consents, voice_calls,
+-- voice_call_events, voice_exclusions, voice_brakes, voice_rne_checks; su guarda es voice_forbid).
+--   · Por :term y :phone: los textos libres (notas, motivos, evidencias, la etiqueta y la nota de revisión de un perfil,
+--     la nota de un veredicto, el motivo y la puerta de una publicación de voz) y los nombres del personal.
+--     voice_calls.requested_by_name solo en las llamadas que pidió una PERSONA (requested_by_type = 'admin'): la de una
+--     estrategia (V9) es «Estrategia <clave>», tiene su CHECK y no es un dato personal. Se INFORMAN y no se redactan:
+--     ultron_studio_voice_publications.effective_json (firmado: la cadena de voz), ultron_studio_voice_profiles.content
+--     (content_hash) y transfer_destinations_encrypted (cifrado: SQL no ve dentro) y
+--     ultron_studio_voice_agents.transfer_destination_hashes (parte de la compilación del agente).
+--   · Por :voice_phone_hash (la huella del número, no un texto): voice_contacts (solo RETIRADOS; su cifrado ya es NULL:
+--     lo obliga vct_cipher_chk), voice_exclusions, voice_rne_checks y voice_calls.remote_* (solo TERMINADAS) pasan a
+--     una huella aleatoria (64 hex: vct_phone_chk, vex_phone_chk, vrne_phone_chk, vc_remote_chk) y a 4 dígitos 0000 donde
+--     los hay. Un contacto sin retirar o una llamada viva (requested, ambiguous, dialing, active) con esa huella: en seco
+--     se avisa («VIVO»); con :dry 0 ABORTA sin tocar nada (retirar el contacto desde el CRM; colgar la llamada o esperar a
+--     que termine o se concilie). Una exclusión redactada deja de aplicarse a ese número (D8-18: solo la quita la
+--     supresión). Por la huella también SE INFORMA, sin redactar: los destinos de transferencia compilados con ese número
+--     (perfil y agente: el remedio es una revisión nueva del perfil sin ese destino), los textos libres de esa persona
+--     que NO casan con :term/:phone (motivo de retirada, evidencia de cada consentimiento —la prueba de la
+--     autorización—, nota de cada exclusión y referencia de cada consulta al RNE: repetir con el texto, o decide el
+--     propietario), los enlaces al motor que se conservan (voice_contacts.source_id: vct_source_chk no admite una forma
+--     suprimida) y lo que guardan los proveedores (provider_conversation_id en ElevenLabs y provider_call_sid en Twilio:
+--     se borra allí, paso del runbook por confirmar). Esos recuentos van a la fila del libro (`voice_informed`).
+--   · :admin_id cubre también la autoría del personal en las 11 tablas (17 columnas *_name con su *_admin_id).
+--   · voice_forbid entra en la lista blanca de funciones cuyos disparadores de UPDATE se apagan SOLO dentro de la
+--     transacción y SOLO si saltarían (los de INSERT de la cadena de voz y del freno —usvpub_chain_next,
+--     usvpub_agents_for_calls, vbr_release_targets_open— ni se miran), y los tres recorridos (el recuento de disparadores
+--     activos antes y después, el aviso de «columna sin política» y la redacción) miran también voice\_%.
+--   Un mismo número puede tener DOS huellas en esta base: la del registro de canarios (:phone_hash, PhoneFingerprint) y la
+--   de la voz (:voice_phone_hash, VoicePhone). Suprimirlo del todo pide las dos; si las dos son iguales, una está mal
+--   calculada y el guion aborta.
+--   La huella de voz sin que el número pase por la pantalla, la línea de órdenes ni el historial (paso 2b; devops lo
+--   lleva al runbook §10 de informe-devops-h7.md; la orden, probada en local contra la clase real el 10-11-2026):
+--     install -m 600 /dev/null /root/supresion/<radicado>.tel        # y escribir dentro el E.164, una línea, con un editor
+--     sudo -u www-data php /var/www/api/backend/artisan tinker --execute='echo App\Services\Telephony\VoicePhone::hash(trim((string) fgets(STDIN))), PHP_EOL;' \
+--       < /root/supresion/<radicado>.tel 2>/dev/null | tail -1 > /root/supresion/<radicado>.vhash   # (umask 077)
+--     printf "\\set voice_phone_hash '%s'\n" "$(cat /root/supresion/<radicado>.vhash)" >> /root/supresion/<radicado>.psql
+--     shred -u /root/supresion/<radicado>.tel /root/supresion/<radicado>.vhash
+--   Antes de :dry 0, la pasada en seco tiene que enseñar «voice_contacts por huella de voz · N fila(s)» con N > 0 si la
+--   persona fue contacto: con 0 en todo, la huella está mal calculada (otra APP_KEY, otro formato del número).
 
 \set ON_ERROR_STOP 1
 \set VERBOSITY terse
@@ -125,6 +178,10 @@
 \else
   \set phone_refs ''
 \endif
+\if :{?voice_phone_hash}
+\else
+  \set voice_phone_hash ''
+\endif
 
 -- Los valores viajan al bloque DO por variables de sesión (psql no sustituye variables dentro de $$…$$). Ni esta
 -- consulta ni el bloque los imprimen.
@@ -137,7 +194,8 @@ SELECT set_config('supresion.dry', :'dry', false) IS NOT NULL AS _a,
        set_config('supresion.phone_hash', :'phone_hash', false) IS NOT NULL AS _g,
        set_config('supresion.admin_id', :'admin_id', false) IS NOT NULL AS _h,
        set_config('supresion.subject', :'subject', false) IS NOT NULL AS _i,
-       set_config('supresion.phone_refs', :'phone_refs', false) IS NOT NULL AS _j \gset
+       set_config('supresion.phone_refs', :'phone_refs', false) IS NOT NULL AS _j,
+       set_config('supresion.voice_phone_hash', :'voice_phone_hash', false) IS NOT NULL AS _k \gset
 
 \if :dry
   \echo '== Supresión Ley 1581 · EN SECO (READ ONLY): solo recuentos; termina en ROLLBACK'
@@ -159,12 +217,16 @@ DECLARE
     v_phone     text := current_setting('supresion.phone');
     v_cc        text := current_setting('supresion.cc');
     v_hash      text := lower(current_setting('supresion.phone_hash'));
+    v_vhash     text := lower(current_setting('supresion.voice_phone_hash'));
     v_admin_txt text := current_setting('supresion.admin_id');
     v_subject   text := current_setting('supresion.subject');
     v_admin     bigint;
     v_marca     constant text := '[suprimido]';
     v_sep       constant text := '[[:space:].()-]*';
-    -- La política: qué columna se redacta (r) y cuál solo se informa (i, firmada o con huella).
+    -- Los estados vivos de una llamada (D8-13): con uno de ellos y esa huella, la redacción aborta.
+    v_voz_viva  constant text[] := ARRAY['requested', 'ambiguous', 'dialing', 'active'];
+    -- La política: qué columna se redacta (r) y cuál solo se informa (i, firmada o con huella). Un cuarto elemento,
+    -- opcional, acota las FILAS en las que se busca (SQL constante de este fichero, nunca un parámetro).
     v_politica  constant jsonb := '[
         ["ultron_studio_audit_events", "summary", "r"], ["ultron_studio_audit_events", "diff", "r"],
         ["ultron_studio_audit_events", "metadata", "r"], ["ultron_studio_audit_events", "actor_name", "r"],
@@ -216,7 +278,26 @@ DECLARE
         ["ultron_studio_strategy_reviews", "note", "r"], ["ultron_studio_strategy_reviews", "acknowledged_warnings", "r"],
         ["ultron_studio_strategy_reviews", "reviewer_name", "r"],
         ["ultron_studio_strategy_publications", "reason", "r"], ["ultron_studio_strategy_publications", "evidence", "r"],
-        ["ultron_studio_strategy_publications", "actor_name", "r"], ["ultron_studio_strategy_publications", "effective_json", "i"]
+        ["ultron_studio_strategy_publications", "actor_name", "r"], ["ultron_studio_strategy_publications", "effective_json", "i"],
+        ["ultron_studio_voice_profiles", "label", "r"], ["ultron_studio_voice_profiles", "review_note", "r"],
+        ["ultron_studio_voice_profiles", "created_by_name", "r"], ["ultron_studio_voice_profiles", "submitted_by_name", "r"],
+        ["ultron_studio_voice_profiles", "reviewed_by_name", "r"], ["ultron_studio_voice_profiles", "content", "i"],
+        ["ultron_studio_voice_profiles", "transfer_destinations_encrypted", "i"],
+        ["ultron_studio_voice_agents", "created_by_name", "r"], ["ultron_studio_voice_agents", "transfer_destination_hashes", "i"],
+        ["ultron_studio_voice_publications", "reason", "r"], ["ultron_studio_voice_publications", "evidence", "r"],
+        ["ultron_studio_voice_publications", "lab_gate", "r"], ["ultron_studio_voice_publications", "actor_name", "r"],
+        ["ultron_studio_voice_publications", "effective_json", "i"],
+        ["ultron_studio_voice_lab_sessions", "verdict_note", "r"], ["ultron_studio_voice_lab_sessions", "verdict_by_name", "r"],
+        ["ultron_studio_voice_lab_sessions", "created_by_name", "r"],
+        ["voice_contacts", "consent_request_evidence", "r"], ["voice_contacts", "retire_reason", "r"],
+        ["voice_contacts", "registered_by_name", "r"], ["voice_contacts", "consent_requested_by_name", "r"],
+        ["voice_contacts", "retired_by_name", "r"],
+        ["voice_rne_checks", "evidence_ref", "r"], ["voice_rne_checks", "actor_name", "r"],
+        ["voice_calls", "requested_by_name", "r", "requested_by_type = ''admin''"],
+        ["voice_call_events", "codes", "r"], ["voice_call_events", "actor_name", "r"],
+        ["voice_consents", "evidence", "r"], ["voice_consents", "recorded_by_name", "r"], ["voice_consents", "confirmed_by_name", "r"],
+        ["voice_exclusions", "note", "r"], ["voice_exclusions", "actor_name", "r"],
+        ["voice_brakes", "note", "r"], ["voice_brakes", "evidence", "r"], ["voice_brakes", "actor_name", "r"]
     ]';
     -- La autoría de una persona del personal: [tabla, columna del nombre, columna del id].
     v_autoria_def constant jsonb := '[
@@ -240,7 +321,16 @@ DECLARE
         ["ultron_studio_strategy_publications", "actor_name", "actor_admin_id"],
         ["outreach_brakes", "opened_by_name", "opened_by_admin_id"], ["outreach_brakes", "released_by_name", "released_by_admin_id"],
         ["outreach_jobs", "assisted_claimed_by_name", "assisted_claimed_by_admin_id"],
-        ["outreach_outcomes", "recorded_by_name", "recorded_by_admin_id"]
+        ["outreach_outcomes", "recorded_by_name", "recorded_by_admin_id"],
+        ["ultron_studio_voice_profiles", "created_by_name", "created_by_admin_id"], ["ultron_studio_voice_profiles", "submitted_by_name", "submitted_by_admin_id"],
+        ["ultron_studio_voice_profiles", "reviewed_by_name", "reviewed_by_admin_id"], ["ultron_studio_voice_agents", "created_by_name", "created_by_admin_id"],
+        ["ultron_studio_voice_publications", "actor_name", "actor_admin_id"], ["ultron_studio_voice_lab_sessions", "verdict_by_name", "verdict_by_admin_id"],
+        ["ultron_studio_voice_lab_sessions", "created_by_name", "created_by_admin_id"],
+        ["voice_contacts", "registered_by_name", "registered_by_admin_id"], ["voice_contacts", "consent_requested_by_name", "consent_requested_by_admin_id"],
+        ["voice_contacts", "retired_by_name", "retired_by_admin_id"], ["voice_rne_checks", "actor_name", "actor_admin_id"],
+        ["voice_calls", "requested_by_name", "requested_by_admin_id"], ["voice_call_events", "actor_name", "actor_admin_id"],
+        ["voice_consents", "recorded_by_name", "recorded_by_admin_id"], ["voice_consents", "confirmed_by_name", "confirmed_by_admin_id"],
+        ["voice_exclusions", "actor_name", "actor_admin_id"], ["voice_brakes", "actor_name", "actor_admin_id"]
     ]';
     -- Columnas de texto o JSON que no llevan datos personales (enumeraciones, códigos, huellas, ids, roles).
     v_neutras   constant text[] := ARRAY['event', 'subject_type', 'actor_type', 'actor_role', 'from_status', 'to_status', 'status',
@@ -253,7 +343,19 @@ DECLARE
         'catalog_hash', 'target_content_hash', 'version_content_hash', 'results_hash',
         -- Hito 9: claves, versiones, huellas y roles del gobierno de estrategias.
         'key', 'purpose', 'simulation_gate', 'studio_ref_kind', 'evaluator_version', 'prev_hash', 'input_hash', 'result_hash',
-        'simulation_hash', 'studio_content_hash', 'reviewed_by_role', 'approved_by_role'];
+        'simulation_hash', 'studio_content_hash', 'reviewed_by_role', 'approved_by_role',
+        -- Hito 8: códigos, estados, ids del proveedor, huellas de la compilación y roles de la voz. Las huellas y los 4
+        -- dígitos del teléfono (remote_*, phone_*) no se buscan como texto: van por :voice_phone_hash.
+        'direction', 'target_source', 'stamp_state', 'policy_reason', 'termination_reason', 'end_reason', 'failure_code',
+        'guard_codes', 'verdict', 'language', 'compiler_version', 'provider_agent_id', 'provider_conversation_id',
+        'provider_call_sid', 'observed_agent_id', 'observed_version_id', 'observed_branch_id', 'observed_hash', 'spec_hash',
+        'payload_hash', 'projection_hash', 'voice_profile_hash', 'remote_hash', 'remote_last4', 'source_type',
+        'consent_request_source', 'requested_by_type', 'requested_by_role', 'submitted_by_role', 'verdict_by_role',
+        'recorded_by_role', 'confirmed_by_role', 'retired_by_role', 'consent_requested_by_role'];
+    -- Lo mismo, pero solo en ESA tabla (el nombre de la columna es texto libre en otras: reason, result, scope…).
+    v_neutras_tc constant text[] := ARRAY['voice_brakes.reason', 'voice_brakes.open_key', 'voice_rne_checks.result',
+        'voice_rne_checks.method', 'voice_call_events.tool', 'voice_call_events.provider_event_key', 'voice_calls.part',
+        'ultron_studio_voice_publications.scope'];
     v_res       text[] := '{}';
     v_tipos     text[] := '{}';
     v_digits    text;
@@ -276,6 +378,11 @@ DECLARE
     v_expr      text;
     v_set       text;
     v_trig      text;
+    v_filtro    text;
+    -- Hito 8: lo que se redacta por la huella de voz (tabla → filas), lo vivo que lo impide y lo que solo se informa.
+    v_voz       jsonb := '{}';
+    v_voz_vivos bigint := 0;
+    v_voz_info  jsonb := '{}';
 BEGIN
     -- ── 0. Entradas y entorno ──────────────────────────────────────────────────────────────────────────────
     IF current_user <> v_owner THEN
@@ -287,13 +394,13 @@ BEGIN
     IF v_radicado !~ '^[A-Za-z0-9._-]{3,40}$' THEN
         RAISE EXCEPTION 'supresión: falta :radicado o no tiene la forma [A-Za-z0-9._-]{3,40}' USING ERRCODE = '22023';
     END IF;
-    IF v_term = '' AND v_phone = '' AND v_hash = '' AND v_admin_txt = '' THEN
+    IF v_term = '' AND v_phone = '' AND v_hash = '' AND v_vhash = '' AND v_admin_txt = '' THEN
         IF v_subject <> '' THEN
             -- Hito 9: solo la supresión por persona de la automatización comercial (el bloque siguiente).
             RAISE NOTICE 'radicado % · sin término, teléfono, huella ni personal: este bloque no busca nada; sigue el bloque del Hito 9 (subject)', v_radicado;
             RETURN;
         END IF;
-        RAISE EXCEPTION 'supresión: nada que buscar (term, phone, phone_hash, admin_id o, para la automatización comercial del Hito 9, subject)' USING ERRCODE = '22023';
+        RAISE EXCEPTION 'supresión: nada que buscar (term, phone, phone_hash, voice_phone_hash, admin_id o, para la automatización comercial del Hito 9, subject)' USING ERRCODE = '22023';
     END IF;
     IF v_term <> '' THEN
         IF char_length(btrim(v_term)) < 4 THEN
@@ -328,6 +435,20 @@ BEGIN
         END IF;
         v_tipos := v_tipos || 'phone_hash'::text;
     END IF;
+    IF v_vhash <> '' THEN
+        IF v_vhash !~ '^[0-9a-f]{64}$' THEN
+            RAISE EXCEPTION 'supresión: :voice_phone_hash no son 64 hexadecimales' USING ERRCODE = '22023';
+        END IF;
+        IF v_vhash = v_hash THEN
+            RAISE EXCEPTION 'supresión: :voice_phone_hash y :phone_hash son la misma huella: una de las dos está mal calculada (la de la voz es VoicePhone::hash, la del canario PhoneFingerprint::of; son etiquetas distintas)'
+                USING ERRCODE = '22023';
+        END IF;
+        IF to_regclass('public.voice_contacts') IS NULL OR to_regclass('public.voice_calls') IS NULL
+           OR to_regclass('public.voice_exclusions') IS NULL OR to_regclass('public.voice_rne_checks') IS NULL THEN
+            RAISE EXCEPTION 'supresión: :voice_phone_hash sin las tablas de la voz en esta base (¿el Hito 8 sin migrar?)' USING ERRCODE = '42P01';
+        END IF;
+        v_tipos := v_tipos || 'voice_phone_hash'::text;
+    END IF;
     IF v_admin_txt <> '' THEN
         IF v_admin_txt !~ '^[1-9][0-9]{0,17}$' THEN
             RAISE EXCEPTION 'supresión: :admin_id no es un id' USING ERRCODE = '22023';
@@ -336,17 +457,18 @@ BEGIN
         v_tipos := v_tipos || 'admin_id'::text;
     END IF;
     SELECT count(*) INTO v_antes FROM pg_trigger tg JOIN pg_class c ON c.oid = tg.tgrelid
-     WHERE NOT tg.tgisinternal AND (c.relname LIKE 'ultron\_studio\_%' OR c.relname LIKE 'outreach\_%') AND tg.tgenabled = 'O';
-    RAISE NOTICE 'radicado % · búsquedas: % · disparadores del Studio y de outreach activos: % · modo: %',
+     WHERE NOT tg.tgisinternal AND (c.relname LIKE 'ultron\_studio\_%' OR c.relname LIKE 'outreach\_%' OR c.relname LIKE 'voice\_%') AND tg.tgenabled = 'O';
+    RAISE NOTICE 'radicado % · búsquedas: % · disparadores del Studio, de outreach y de la voz activos: % · modo: %',
         v_radicado, array_to_string(v_tipos, ', '), v_antes, CASE WHEN v_dry THEN 'en seco' ELSE 'redacción' END;
 
     -- ── 1. Columnas de texto o JSON que la política no conoce: se avisa (una columna nueva no se salta en silencio)
     FOR r IN
         SELECT c.table_name::text AS tbl, c.column_name::text AS col
           FROM information_schema.columns c
-         WHERE c.table_schema = 'public' AND c.table_name LIKE 'ultron\_studio\_%'
+         WHERE c.table_schema = 'public' AND (c.table_name LIKE 'ultron\_studio\_%' OR c.table_name LIKE 'voice\_%')
            AND c.data_type IN ('text', 'character varying', 'character', 'json', 'jsonb')
            AND c.column_name <> ALL (v_neutras)
+           AND (c.table_name || '.' || c.column_name) <> ALL (v_neutras_tc)
            AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(v_politica) e WHERE e->>0 = c.table_name AND e->>1 = c.column_name)
          ORDER BY 1, 2
     LOOP
@@ -355,7 +477,7 @@ BEGIN
 
     -- ── 2. Inventario: cuántas filas casan, por columna (nunca qué) ────────────────────────────────────────
     FOR r IN
-        SELECT e->>0 AS tbl, e->>1 AS col, e->>2 AS pol, c.data_type::text AS tipo,
+        SELECT e->>0 AS tbl, e->>1 AS col, e->>2 AS pol, e->>3 AS filtro, c.data_type::text AS tipo,
                c.data_type IN ('json', 'jsonb') AS es_json, c.character_maximum_length AS maxlen
           FROM jsonb_array_elements(v_politica) e
           JOIN information_schema.columns c ON c.table_schema = 'public' AND c.table_name = e->>0 AND c.column_name = e->>1
@@ -365,12 +487,14 @@ BEGIN
         IF array_length(v_res, 1) IS NOT NULL THEN
             -- JSON: se busca en su forma jsonb, con los textos ya decodificados («Pérez» se lee «Pérez»).
             v_expr := CASE WHEN r.es_json THEN format('%I::jsonb::text', r.col) ELSE format('%I', r.col) END;
-            EXECUTE format('SELECT count(*) FROM public.%I WHERE %I IS NOT NULL AND %s ~* ANY ($1)', r.tbl, r.col, v_expr)
+            -- Hito 8: el filtro de filas de la política (p. ej. solo las llamadas que pidió una persona).
+            v_filtro := CASE WHEN r.filtro IS NULL THEN '' ELSE ' AND (' || r.filtro || ')' END;
+            EXECUTE format('SELECT count(*) FROM public.%I WHERE %I IS NOT NULL AND %s ~* ANY ($1)%s', r.tbl, r.col, v_expr, v_filtro)
                INTO v_n USING v_res;
         END IF;
         IF v_n > 0 THEN
             v_hallazgos := v_hallazgos || jsonb_build_array(jsonb_build_object('tbl', r.tbl, 'col', r.col, 'pol', r.pol,
-                'tipo', r.tipo, 'es_json', r.es_json, 'maxlen', r.maxlen, 'filas', v_n));
+                'tipo', r.tipo, 'es_json', r.es_json, 'maxlen', r.maxlen, 'filas', v_n, 'filtro', r.filtro));
             RAISE NOTICE '  %.% · % fila(s) · %', r.tbl, r.col, v_n,
                 CASE r.pol WHEN 'r' THEN CASE WHEN v_dry THEN 'se redactaría' ELSE 'se redacta' END
                            ELSE 'NO SE REDACTA (firmada o con huella): versión nueva sin el dato; decide el propietario' END;
@@ -391,7 +515,7 @@ BEGIN
     SELECT count(*) INTO v_n FROM jsonb_array_elements(v_politica) e
      WHERE NOT EXISTS (SELECT 1 FROM information_schema.columns c WHERE c.table_schema = 'public' AND c.table_name = e->>0 AND c.column_name = e->>1);
     IF v_n > 0 THEN
-        RAISE NOTICE '  (% columnas de la política no existen en esta base: un esquema anterior al Hito 6 o al 4)', v_n;
+        RAISE NOTICE '  (% columnas de la política no existen en esta base: un esquema anterior al Hito 9, al 8, al 6 o al 4)', v_n;
     END IF;
 
     -- El número canario por su huella: solo revocados.
@@ -406,6 +530,87 @@ BEGIN
         IF v_n > 0 THEN
             v_tablas := array_append(v_tablas, 'ultron_studio_canary_numbers');
             v_total := v_total + v_n;
+        END IF;
+    END IF;
+
+    -- Hito 8 · un número de la VOZ por su huella `voice-phone`: contactos solo retirados y llamadas solo terminadas. Lo vivo
+    -- se avisa aquí y, con :dry 0, aborta antes de tocar nada (más abajo).
+    IF v_vhash <> '' THEN
+        SELECT count(*), count(*) FILTER (WHERE status <> 'retired') INTO v_n, v_resto
+          FROM public.voice_contacts WHERE phone_hash = v_vhash;
+        RAISE NOTICE '  voice_contacts por huella de voz · % fila(s), % sin retirar', v_n, v_resto;
+        IF v_resto > 0 THEN
+            RAISE NOTICE '  VIVO: % contacto(s) de voz sin retirar con esa huella: retirarlo primero desde el CRM (su cifrado solo se vacía al retirarlo: vct_cipher_chk)', v_resto;
+        END IF;
+        v_voz_vivos := v_voz_vivos + v_resto;
+        v_voz := v_voz || jsonb_build_object('voice_contacts', v_n - v_resto);
+        SELECT count(*), count(*) FILTER (WHERE status = ANY (v_voz_viva)) INTO v_n, v_resto
+          FROM public.voice_calls WHERE remote_hash = v_vhash;
+        RAISE NOTICE '  voice_calls.remote_hash por huella de voz · % fila(s), % viva(s)', v_n, v_resto;
+        IF v_resto > 0 THEN
+            RAISE NOTICE '  VIVO: % llamada(s) en curso con esa huella (requested, ambiguous, dialing o active): colgarla, o esperar a que termine o se concilie', v_resto;
+        END IF;
+        v_voz_vivos := v_voz_vivos + v_resto;
+        v_voz := v_voz || jsonb_build_object('voice_calls', v_n - v_resto);
+        SELECT count(*) INTO v_n FROM public.voice_exclusions WHERE phone_hash = v_vhash;
+        RAISE NOTICE '  voice_exclusions por huella de voz · % fila(s) · %', v_n,
+            CASE WHEN v_n = 0 THEN 'nada' WHEN v_dry THEN 'se redactaría (la exclusión dejaría de aplicarse a ese número: D8-18)'
+                 ELSE 'se redacta (la exclusión deja de aplicarse a ese número: D8-18)' END;
+        v_voz := v_voz || jsonb_build_object('voice_exclusions', v_n);
+        SELECT count(*) INTO v_n FROM public.voice_rne_checks WHERE phone_hash = v_vhash;
+        RAISE NOTICE '  voice_rne_checks por huella de voz · % fila(s)', v_n;
+        v_voz := v_voz || jsonb_build_object('voice_rne_checks', v_n);
+        FOR r IN SELECT key AS tbl, value::bigint AS n FROM jsonb_each_text(v_voz) ORDER BY 1 LOOP
+            IF r.n > 0 THEN
+                v_tablas := array_append(v_tablas, r.tbl);
+                v_total := v_total + r.n;
+            END IF;
+        END LOOP;
+
+        -- Lo que se INFORMA por la huella y no se redacta (recuentos; van también a la fila del libro).
+        --  a) la huella en la configuración compilada: un destino de transferencia (perfil y agente, con content_hash y
+        --     projection_hash): el remedio es una revisión nueva del perfil sin ese destino; la vieja queda como evidencia.
+        SELECT count(*) INTO v_n FROM public.ultron_studio_voice_profiles WHERE strpos(content::text, v_vhash) > 0;
+        IF v_n > 0 THEN
+            v_voz_info := v_voz_info || jsonb_build_object('ultron_studio_voice_profiles.content (destino de transferencia)', v_n);
+        END IF;
+        SELECT count(*) INTO v_n FROM public.ultron_studio_voice_agents WHERE strpos(coalesce(transfer_destination_hashes::text, ''), v_vhash) > 0;
+        IF v_n > 0 THEN
+            v_voz_info := v_voz_info || jsonb_build_object('ultron_studio_voice_agents.transfer_destination_hashes', v_n);
+        END IF;
+        --  b) los textos libres de esa persona que NO casan con :term/:phone (los que casan ya están en el inventario):
+        --     ni se ven ni se adivinan desde aquí; repetir con el texto (el CRM los enseña) o decide el propietario
+        --     (la evidencia de un consentimiento es la prueba de la autorización).
+        SELECT count(*) INTO v_n FROM (
+                SELECT retire_reason AS t FROM public.voice_contacts WHERE phone_hash = v_vhash AND retire_reason IS NOT NULL
+                UNION ALL SELECT consent_request_evidence FROM public.voice_contacts WHERE phone_hash = v_vhash AND consent_request_evidence IS NOT NULL
+                UNION ALL SELECT s.evidence FROM public.voice_consents s JOIN public.voice_contacts k ON k.id = s.contact_id WHERE k.phone_hash = v_vhash
+                UNION ALL SELECT note FROM public.voice_exclusions WHERE phone_hash = v_vhash AND note IS NOT NULL
+                UNION ALL SELECT evidence_ref FROM public.voice_rne_checks WHERE phone_hash = v_vhash
+            ) q
+         WHERE array_length(v_res, 1) IS NULL OR NOT (q.t ~* ANY (v_res));
+        IF v_n > 0 THEN
+            v_voz_info := v_voz_info || jsonb_build_object('textos de esa persona que no casan con term/phone', v_n);
+        END IF;
+        --  c) los enlaces al motor (lead o socio) y lo que guardan los proveedores (se borra allí, no aquí).
+        SELECT count(*) INTO v_n FROM public.voice_contacts WHERE phone_hash = v_vhash AND source_id IS NOT NULL;
+        IF v_n > 0 THEN
+            v_voz_info := v_voz_info || jsonb_build_object('voice_contacts.source_id (enlace al motor; se conserva)', v_n);
+        END IF;
+        SELECT count(*) FILTER (WHERE provider_conversation_id IS NOT NULL), count(*) FILTER (WHERE provider_call_sid IS NOT NULL)
+          INTO v_n, v_resto FROM public.voice_calls WHERE remote_hash = v_vhash;
+        IF v_n > 0 THEN
+            v_voz_info := v_voz_info || jsonb_build_object('voice_calls.provider_conversation_id (ElevenLabs)', v_n);
+        END IF;
+        IF v_resto > 0 THEN
+            v_voz_info := v_voz_info || jsonb_build_object('voice_calls.provider_call_sid (Twilio)', v_resto);
+        END IF;
+        IF v_voz_info <> '{}' THEN
+            RAISE NOTICE '  se INFORMA y no se redacta (huella en la configuración compilada, textos sin casar, enlaces y proveedores): %', v_voz_info::text;
+        END IF;
+        SELECT count(*) INTO v_n FROM public.ultron_studio_voice_profiles WHERE transfer_destinations_encrypted IS NOT NULL;
+        IF v_n > 0 THEN
+            RAISE NOTICE '  (% perfil(es) de voz con destinos cifrados: SQL no ve dentro; un destino se reconoce por su huella en el contenido del perfil y en el agente)', v_n;
         END IF;
     END IF;
 
@@ -440,12 +645,24 @@ BEGIN
         RAISE NOTICE 'EN SECO: nada ha cambiado. Para redactar: \set dry 0 en el fichero de parámetros, tras un respaldo fresco.';
         RETURN;
     END IF;
+    -- Hito 8: con algo VIVO de la voz con esa huella no se redacta nada (ni de la voz ni del resto: todo o nada).
+    IF v_voz_vivos > 0 THEN
+        RAISE EXCEPTION 'supresión: % fila(s) VIVAS de la voz con esa huella (contactos sin retirar o llamadas en curso): retirar el contacto desde el CRM y colgar la llamada o esperar a que termine; después, esta redacción', v_voz_vivos
+            USING ERRCODE = '55000';
+    END IF;
 
     -- ── 3. Redacción, tabla a tabla, con sus disparadores de UPDATE apagados SOLO en esta transacción ─────────
     SELECT coalesce(array_agg(DISTINCT x ORDER BY x), '{}') INTO v_tablas
       FROM (SELECT h->>'tbl' AS x FROM jsonb_array_elements(v_hallazgos) h WHERE h->>'pol' = 'r'
             UNION SELECT a->>'tbl' FROM jsonb_array_elements(v_autoria) a
             UNION SELECT u FROM unnest(v_tablas) AS u) q;
+    -- Toda tabla que se va a tocar es del dueño: si no, ALTER TABLE fallaría a mitad de camino (y lo desharía todo);
+    -- mejor decirlo antes de empezar.
+    FOREACH v_tabla IN ARRAY v_tablas LOOP
+        IF (SELECT tableowner FROM pg_tables WHERE schemaname = 'public' AND tablename = v_tabla) IS DISTINCT FROM v_owner THEN
+            RAISE EXCEPTION 'supresión: % tiene coincidencias y no es de % (el rol dueño es otro): no se redacta nada', v_tabla, v_owner USING ERRCODE = '42501';
+        END IF;
+    END LOOP;
     FOREACH v_tabla IN ARRAY v_tablas LOOP
         v_apagados := '{}';
         -- Hito 9 (OPS9-b): las columnas que el UPDATE de esta tabla va a nombrar. Un disparador «BEFORE UPDATE OF col…»
@@ -457,6 +674,11 @@ BEGIN
             UNION SELECT a->>'nombre' FROM jsonb_array_elements(v_autoria) a WHERE a->>'tbl' = v_tabla AND a->>'nombre' <> 'ip_address+user_agent'
             UNION SELECT unnest(ARRAY['ip_address', 'user_agent']) WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(v_autoria) a WHERE a->>'tbl' = v_tabla AND a->>'nombre' = 'ip_address+user_agent')
             UNION SELECT unnest(ARRAY['alias', 'phone_hash', 'phone_last4', 'phone_encrypted']) WHERE v_tabla = 'ultron_studio_canary_numbers' AND v_hash <> ''
+            -- Hito 8: las huellas y los 4 dígitos de la voz, solo en las tablas con filas por esa huella. El cifrado de un
+            -- contacto retirado ya es NULL (vct_cipher_chk): no se nombra, y vct_cipher_only_shrinks no se apaga.
+            UNION SELECT unnest(ARRAY['phone_hash', 'phone_last4']) WHERE v_tabla IN ('voice_contacts', 'voice_exclusions') AND coalesce((v_voz->>v_tabla)::bigint, 0) > 0
+            UNION SELECT 'phone_hash' WHERE v_tabla = 'voice_rne_checks' AND coalesce((v_voz->>v_tabla)::bigint, 0) > 0
+            UNION SELECT unnest(ARRAY['remote_hash', 'remote_last4']) WHERE v_tabla = 'voice_calls' AND coalesce((v_voz->>v_tabla)::bigint, 0) > 0
         ) q;
         FOR t IN
             SELECT tg.tgname::text AS tgname, p.proname::text AS proname
@@ -467,7 +689,7 @@ BEGIN
                     OR EXISTS (SELECT 1 FROM unnest(tg.tgattr::int2[]) u(n) JOIN pg_attribute a ON a.attrelid = tg.tgrelid AND a.attnum = u.n WHERE a.attname = ANY (v_cols)))
              ORDER BY tg.tgname
         LOOP
-            IF t.proname NOT IN ('ultron_studio_forbid', 'ultron_studio_lab_forbid', 'outreach_forbid') THEN
+            IF t.proname NOT IN ('ultron_studio_forbid', 'ultron_studio_lab_forbid', 'outreach_forbid', 'voice_forbid') THEN
                 RAISE EXCEPTION 'supresión: %.% es un disparador de UPDATE con otra función (%) que saltaría con las columnas [%]: no se apaga lo que no se conoce; avisar a database-specialist', v_tabla, t.tgname, t.proname, array_to_string(v_cols, ', ')
                     USING ERRCODE = '55000';
             END IF;
@@ -480,10 +702,11 @@ BEGIN
         -- 3a. Textos y JSON que casan con el término o con el teléfono. Cada búsqueda se aplica sobre el resultado de
         --     la anterior; un JSON vuelve a validarse al convertirlo (si no lo fuera, la transacción entera se deshace).
         FOR r IN
-            SELECT h->>'col' AS col, h->>'tipo' AS tipo, (h->>'es_json')::boolean AS es_json, (h->>'maxlen')::int AS maxlen
+            SELECT h->>'col' AS col, h->>'tipo' AS tipo, (h->>'es_json')::boolean AS es_json, (h->>'maxlen')::int AS maxlen, h->>'filtro' AS filtro
               FROM jsonb_array_elements(v_hallazgos) h WHERE h->>'tbl' = v_tabla AND h->>'pol' = 'r' ORDER BY 1
         LOOP
             v_expr := CASE WHEN r.es_json THEN format('%I::jsonb::text', r.col) ELSE format('%I', r.col) END;
+            v_filtro := CASE WHEN r.filtro IS NULL THEN '' ELSE ' AND (' || r.filtro || ')' END;
             v_set := v_expr;
             FOR k IN 1 .. array_length(v_res, 1) LOOP
                 v_set := format('regexp_replace(%s, $1[%s], $2, ''gi'')', v_set, k);
@@ -491,7 +714,7 @@ BEGIN
             v_set := CASE WHEN r.es_json THEN format('(%s)::jsonb::%s', v_set, r.tipo)
                           WHEN r.maxlen IS NOT NULL THEN format('left(%s, %s)', v_set, r.maxlen)
                           ELSE v_set END;
-            EXECUTE format('UPDATE public.%I SET %I = %s WHERE %I IS NOT NULL AND %s ~* ANY ($1)', v_tabla, r.col, v_set, r.col, v_expr)
+            EXECUTE format('UPDATE public.%I SET %I = %s WHERE %I IS NOT NULL AND %s ~* ANY ($1)%s', v_tabla, r.col, v_set, r.col, v_expr, v_filtro)
                USING v_res, v_marca;
             GET DIAGNOSTICS v_n = ROW_COUNT;
             v_cuentas := v_cuentas || jsonb_build_object(v_tabla || '.' || r.col, v_n);
@@ -507,6 +730,45 @@ BEGIN
              WHERE phone_hash = v_hash AND status = 'revoked';
             GET DIAGNOSTICS v_n = ROW_COUNT;
             v_cuentas := v_cuentas || jsonb_build_object('ultron_studio_canary_numbers.phone_hash+phone_last4+alias', v_n);
+        END IF;
+
+        -- 3b-voz (Hito 8). Un número de la voz por su huella: una huella aleatoria por fila (64 hex, como exigen sus CHECK)
+        -- y 4 dígitos 0000 donde los hay. Solo contactos retirados y llamadas terminadas (lo vivo ya abortó arriba; si algo
+        -- se volvió vivo entre medias, la comprobación final lo ve y lo deshace todo). El cifrado de un contacto retirado ya
+        -- es NULL (lo obliga vct_cipher_chk): no se escribe.
+        IF v_vhash <> '' AND coalesce((v_voz->>v_tabla)::bigint, 0) > 0 THEN
+            CASE v_tabla
+                WHEN 'voice_contacts' THEN
+                    UPDATE public.voice_contacts
+                       SET phone_hash = encode(sha256(convert_to('suprimido:' || uuid::text || ':' || gen_random_uuid()::text, 'UTF8')), 'hex'),
+                           phone_last4 = '0000'
+                     WHERE phone_hash = v_vhash AND status = 'retired';
+                    GET DIAGNOSTICS v_n = ROW_COUNT;
+                    v_cuentas := v_cuentas || jsonb_build_object('voice_contacts.phone_hash+phone_last4', v_n);
+                WHEN 'voice_exclusions' THEN
+                    UPDATE public.voice_exclusions
+                       SET phone_hash = encode(sha256(convert_to('suprimido:' || uuid::text || ':' || gen_random_uuid()::text, 'UTF8')), 'hex'),
+                           phone_last4 = '0000'
+                     WHERE phone_hash = v_vhash;
+                    GET DIAGNOSTICS v_n = ROW_COUNT;
+                    v_cuentas := v_cuentas || jsonb_build_object('voice_exclusions.phone_hash+phone_last4', v_n);
+                WHEN 'voice_rne_checks' THEN
+                    UPDATE public.voice_rne_checks
+                       SET phone_hash = encode(sha256(convert_to('suprimido:' || uuid::text || ':' || gen_random_uuid()::text, 'UTF8')), 'hex')
+                     WHERE phone_hash = v_vhash;
+                    GET DIAGNOSTICS v_n = ROW_COUNT;
+                    v_cuentas := v_cuentas || jsonb_build_object('voice_rne_checks.phone_hash', v_n);
+                WHEN 'voice_calls' THEN
+                    -- vc_remote_chk: huella y 4 dígitos van juntos; una saliente los exige; se quedan puestos.
+                    UPDATE public.voice_calls
+                       SET remote_hash = encode(sha256(convert_to('suprimido:' || uuid::text || ':' || gen_random_uuid()::text, 'UTF8')), 'hex'),
+                           remote_last4 = '0000'
+                     WHERE remote_hash = v_vhash AND status <> ALL (v_voz_viva);
+                    GET DIAGNOSTICS v_n = ROW_COUNT;
+                    v_cuentas := v_cuentas || jsonb_build_object('voice_calls.remote_hash+remote_last4', v_n);
+                ELSE
+                    NULL;
+            END CASE;
         END IF;
 
         -- 3c. La autoría de una persona del personal (el id se queda: es la referencia a su cuenta).
@@ -532,21 +794,31 @@ BEGIN
 
     -- ── 4. Comprobaciones antes del COMMIT (si una falla, se deshace todo) ─────────────────────────────────
     SELECT count(*) INTO v_despues FROM pg_trigger tg JOIN pg_class c ON c.oid = tg.tgrelid
-     WHERE NOT tg.tgisinternal AND (c.relname LIKE 'ultron\_studio\_%' OR c.relname LIKE 'outreach\_%') AND tg.tgenabled = 'O';
+     WHERE NOT tg.tgisinternal AND (c.relname LIKE 'ultron\_studio\_%' OR c.relname LIKE 'outreach\_%' OR c.relname LIKE 'voice\_%') AND tg.tgenabled = 'O';
     IF v_despues <> v_antes THEN
         RAISE EXCEPTION 'supresión: % disparadores activos antes y % después: se deshace todo', v_antes, v_despues USING ERRCODE = '55000';
     END IF;
     v_resto := 0;
     FOR r IN
-        SELECT h->>'tbl' AS tbl, h->>'col' AS col, (h->>'es_json')::boolean AS es_json
+        SELECT h->>'tbl' AS tbl, h->>'col' AS col, (h->>'es_json')::boolean AS es_json, h->>'filtro' AS filtro
           FROM jsonb_array_elements(v_hallazgos) h WHERE h->>'pol' = 'r'
     LOOP
         v_expr := CASE WHEN r.es_json THEN format('%I::jsonb::text', r.col) ELSE format('%I', r.col) END;
-        EXECUTE format('SELECT count(*) FROM public.%I WHERE %I IS NOT NULL AND %s ~* ANY ($1)', r.tbl, r.col, v_expr) INTO v_n USING v_res;
+        v_filtro := CASE WHEN r.filtro IS NULL THEN '' ELSE ' AND (' || r.filtro || ')' END;
+        EXECUTE format('SELECT count(*) FROM public.%I WHERE %I IS NOT NULL AND %s ~* ANY ($1)%s', r.tbl, r.col, v_expr, v_filtro) INTO v_n USING v_res;
         v_resto := v_resto + v_n;
     END LOOP;
     IF v_hash <> '' THEN
         v_resto := v_resto + (SELECT count(*) FROM public.ultron_studio_canary_numbers WHERE phone_hash = v_hash);
+    END IF;
+    -- Hito 8: ni una fila con la huella de voz en las cuatro tablas que la guardan (tampoco una que se volviera viva
+    -- entre el inventario y aquí: entonces se deshace todo y se repite). El cifrado no hace falta mirarlo: solo se
+    -- redactan contactos retirados y vct_cipher_chk obliga a que un retirado lo tenga a NULL.
+    IF v_vhash <> '' THEN
+        v_resto := v_resto + (SELECT count(*) FROM public.voice_contacts WHERE phone_hash = v_vhash)
+                           + (SELECT count(*) FROM public.voice_exclusions WHERE phone_hash = v_vhash)
+                           + (SELECT count(*) FROM public.voice_rne_checks WHERE phone_hash = v_vhash)
+                           + (SELECT count(*) FROM public.voice_calls WHERE remote_hash = v_vhash);
     END IF;
     FOR r IN
         SELECT a->>'tbl' AS tbl, a->>'nombre' AS nombre, a->>'id_col' AS id_col FROM jsonb_array_elements(v_autoria) a
@@ -574,9 +846,10 @@ BEGIN
             json_build_object('radicado', v_radicado, 'searches', to_json(v_tipos), 'fields', v_cuentas::json,
                               'not_redacted_signed', (SELECT coalesce(json_object_agg((h->>'tbl') || '.' || (h->>'col'), (h->>'filas')::bigint), '{}'::json)
                                                         FROM jsonb_array_elements(v_hallazgos) h WHERE h->>'pol' = 'i'),
+                              'voice_informed', v_voz_info::json,
                               'tool', 'docs/ultron-studio/ops/supresion-1581.sql'),
             NULL, NULL, (now() AT TIME ZONE 'UTC'));
-    RAISE NOTICE 'redactado: % · disparadores del Studio y de outreach activos: % (los mismos que antes) · quedan 0 coincidencias · 1 fila en el libro (system.personal_data_redacted)',
+    RAISE NOTICE 'redactado: % · disparadores del Studio, de outreach y de la voz activos: % (los mismos que antes) · quedan 0 coincidencias · 1 fila en el libro (system.personal_data_redacted)',
         v_cuentas::text, v_despues;
 END
 $supresion$;
@@ -647,8 +920,8 @@ BEGIN
     v_refs := ARRAY(SELECT DISTINCT x FROM unnest(v_refs || v_scopes) AS x ORDER BY x);
     v_scopes := ARRAY(SELECT 'phone:' || x FROM unnest(v_refs) AS x);
     SELECT count(*) INTO v_antes FROM pg_trigger tg JOIN pg_class c ON c.oid = tg.tgrelid
-     WHERE NOT tg.tgisinternal AND (c.relname LIKE 'ultron\_studio\_%' OR c.relname LIKE 'outreach\_%') AND tg.tgenabled = 'O';
-    RAISE NOTICE 'Hito 9 · radicado % · supresión por persona (su clave no se imprime) · seudónimos de teléfono: % · disparadores del Studio y de outreach activos: % · modo: %',
+     WHERE NOT tg.tgisinternal AND (c.relname LIKE 'ultron\_studio\_%' OR c.relname LIKE 'outreach\_%' OR c.relname LIKE 'voice\_%') AND tg.tgenabled = 'O';
+    RAISE NOTICE 'Hito 9 · radicado % · supresión por persona (su clave no se imprime) · seudónimos de teléfono: % · disparadores del Studio, de outreach y de la voz activos: % · modo: %',
         v_radicado, coalesce(array_length(v_refs, 1), 0), v_antes, CASE WHEN v_dry THEN 'en seco' ELSE 'redacción' END;
 
     -- ── 1. Inventario (cuántas, nunca cuáles) ──────────────────────────────────────────────────────────────
@@ -723,7 +996,7 @@ BEGIN
 
     -- ── 3. Comprobaciones antes del COMMIT (si una falla, se deshace todo) ─────────────────────────────────
     SELECT count(*) INTO v_despues FROM pg_trigger tg JOIN pg_class c ON c.oid = tg.tgrelid
-     WHERE NOT tg.tgisinternal AND (c.relname LIKE 'ultron\_studio\_%' OR c.relname LIKE 'outreach\_%') AND tg.tgenabled = 'O';
+     WHERE NOT tg.tgisinternal AND (c.relname LIKE 'ultron\_studio\_%' OR c.relname LIKE 'outreach\_%' OR c.relname LIKE 'voice\_%') AND tg.tgenabled = 'O';
     IF v_despues <> v_antes THEN
         RAISE EXCEPTION 'supresión H9: % disparadores activos antes y % después: se deshace todo', v_antes, v_despues USING ERRCODE = '55000';
     END IF;
@@ -759,5 +1032,5 @@ $supresion_h9$;
   \echo '== EN SECO: ROLLBACK, nada ha cambiado.'
 \else
   COMMIT;
-  \echo '== SUPRESIÓN CONFIRMADA (COMMIT). Siguen: publication-check, el registro del radicado y las copias (runbook §10, pasos 7 y 8); con :subject, además `php artisan outreach:suppress-subject <clave>` en seco → 0 filas (OPS9-b).'
+  \echo '== SUPRESIÓN CONFIRMADA (COMMIT). Siguen: publication-check, el registro del radicado y las copias (runbook §10, pasos 7 y 8); con :subject, además `php artisan outreach:suppress-subject <clave>` en seco → 0 filas (OPS9-b); con :voice_phone_hash, además `php artisan voice:doctor --telefonia` (la cadena de voz por partes, ok), la misma pasada en seco → 0 campos y lo que la fila del libro deja en voice_informed (proveedores, textos sin casar, enlaces al motor).'
 \endif

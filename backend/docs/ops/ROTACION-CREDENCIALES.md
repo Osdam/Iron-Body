@@ -106,3 +106,59 @@ ls -t /root/ironbody-rotation/env-backups/     # copias, 0600 root
 El Inbox, la analítica y la supervisión **no** aceptan `ADMIN_API_TOKEN`: exigen
 una sesión de administrador real. El smoke emite una efímera y la revoca al
 terminar.
+
+## Twilio: el Auth Token maestro del OTP (nota OPS8-e, 11-11-2026)
+
+*Preparación autorizada por el propietario; **nada se ha ejecutado en el
+servidor**. Mando: `docs/ultron-studio/ops/h8-otp-token-rotate.sh` (se copia a
+`/root` cuando se vaya a usar). Ensayado en el banco del Hito 8 contra un
+simulador de Twilio que rota como la consola (secundario y promoción):
+`docs/ultron-studio/ops/banco-h8/ensayar-otp-token.sh`, 49 OK · 0 FALLO. El
+informe: `docs/ultron-studio/plans/informes-h8/informe-ops8e.md`.*
+
+**Por qué.** El número de voz (…5483) se importó en ElevenLabs con este token:
+el workspace lo guarda como secreto (`twilio_token_account_AC936142bc…`, A-1 /
+H-14 de `ULTRON_STUDIO_PROVEEDORES_ESTADO_REAL.md`). Es la recomendación B-6 del
+roadmap (P-4 del contrato del H8: antes de la fase 2).
+
+**Qué cambia.** `otp.twilio.token` lee `TWILIO_TOKEN` y, si no está,
+`TWILIO_AUTH_TOKEN`: hoy existen las dos y el mando cambia las que haya, cada
+una con su sangría (las de este servidor llevan dos espacios: por eso `grep
+^TWILIO_` no las ve) y sin añadir ninguna. Lo notan: el OTP (Verify y SMS), la
+firma del aviso de gasto del OTP (`webhooks/twilio/usage-trigger`), la huella de
+Twilio del Studio (pasa a «drift» en `authToken` hasta reconocerla) y ElevenLabs.
+
+**Por qué no usa `lib-env.sh`.** Cumple sus tres reglas (el valor nunca por
+`argv`; la credencial nueva se prueba antes de escribir, con un GET de solo
+lectura a la ficha de la cuenta; copia previa y vuelta atrás), pero su
+`env_set` no ve `export CLAVE=` ni `CLAVE =` y añade la clave que falta (con dos
+alias, cambiaría cuál gana), y `reload_consumers` reinicia `php8.3-fpm` y todo
+supervisor. El mando no reinicia nada: `config:cache` como `www-data` y
+`queue:restart`, como los mandos del Hito 8. Además se niega si la caché no es
+igual al fichero de entorno (un `config:cache` publicaría otros cambios a medias,
+o dejaría el OTP sin token).
+
+| Paso | Quién | Qué |
+|---|---|---|
+| 0 | lead, solo lectura | `bash /root/h8-otp-token-rotate.sh estado`: las claves con su forma (sin valores), caché = fichero, un GET con el token de ahora, la voz y el Studio. Y C-8: `opcache.validate_timestamps` del FPM (comando en el informe) |
+| 1 | propietario | Consola de Twilio, cuenta del OTP, Auth Tokens: crear el token **secundario** (sin promocionarlo) |
+| 2 | operador (root) | El fichero del token, sin que pase por la pantalla ni el historial: `( umask 077; read -rsp 'token: ' T; echo; printf '%s\n' "$T" > /root/otp-token-nuevo; unset T )` |
+| 3 | operador | `bash /root/h8-otp-token-rotate.sh rotar /root/otp-token-nuevo --solo-comprobar` → `COMPROBACIÓN EN VERDE` (GET 200 con el nuevo y con el de ahora) |
+| 4 | operador, con la orden escrita | Lo mismo sin `--solo-comprobar` → `MANDO otp-token-rotar APLICADO`. Destruye el fichero del token e imprime la copia previa (`/root/env-pre-otp-token-<fecha>`), la huella nueva del Studio y las dos vueltas atrás |
+| 5 | propietario | **La vista del proceso web** (el mando no la ve): CRM → Studio → Integraciones → Twilio con la huella del token que imprimió el mando (y «drift» en `authToken` si estaba reconocida). Si sigue la de antes, el FPM no ve la caché nueva (C-8): **no promocionar**; recargarlo con autorización (`systemctl reload php8.3-fpm`, como `install-meta-ads-token.sh`) y volver a mirar |
+| 6 | propietario | Un inicio de sesión con OTP (un SMS). Con el secundario sin promocionar valen los dos tokens: esta prueba aún no los distingue |
+| 7 | propietario, enseguida | **Promocionar** el secundario en la consola. El viejo deja de valer: desde aquí **no hay vuelta atrás**. Hasta este paso, Twilio firma con el principal viejo y el aviso de gasto del OTP responde 403: la ventana entre el paso 4 y el 7 tiene que ser de minutos |
+| 8 | operador | `bash /root/h8-otp-token-rotate.sh vuelta /root/env-pre-otp-token-<fecha> --solo-comprobar` tiene que **negarse con 401** (confirma la promoción). Otro inicio de sesión con OTP: ahora sí prueba el token nuevo |
+| 9 | propietario | Studio → Integraciones → Twilio: reconocer la configuración (con el monitor del H7 encendido, `config_drift:twilio` hasta entonces) |
+| 10 | propietario | **ElevenLabs:** desde el paso 7 el secreto del workspace con el token viejo no vale y el número importado no puede llamar. Rehacer la importación con una credencial **restringida** (D-2 / D-3 / B-6: key de solo voz o subcuenta (b′)), **no** con el token maestro nuevo, que si no queda en la misma custodia que el viejo. Borrar después el secreto viejo del workspace |
+
+**Vuelta atrás.** Antes del paso 7: `bash /root/h8-otp-token-rotate.sh vuelta
+<copia previa>` (solo el token; antes de escribir comprueba con un GET que
+Twilio sigue aceptando el de la copia) o la vuelta exacta que imprime el mando
+(la copia previa entera). Después del paso 7 no existe: si algo falla, el camino
+es un token nuevo (pasos 1 a 8).
+
+**Si la voz usara la cuenta del OTP** y su token de firma
+(`TWILIO_VOICE_SIGNING_TOKEN`) fuera este, el mando lo avisa: al promocionar
+habría que cambiarlo con `h8-voice-scope.sh fase 2 secreto`, con las llamadas
+apagadas. Hoy no es el caso: las piezas `TWILIO_VOICE_*` no existen.

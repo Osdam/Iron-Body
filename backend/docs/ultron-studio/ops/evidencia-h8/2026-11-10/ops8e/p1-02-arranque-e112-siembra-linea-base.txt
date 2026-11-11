@@ -1,0 +1,19 @@
+2026-11-10T23:25:16Z
+== arrancar
+banco en marcha: valla :8444 · ElevenLabs :8442 · Twilio :8443 · API :8441 (status sin token → 401)
+código 0
+== e112
+   piezas de E1-12 en el entorno del banco: ELEVENLABS_ENABLED, ELEVENLABS_API_KEY, ELEVENLABS_AGENT_ID, ELEVENLABS_WEBHOOK_SECRET, ELEVENLABS_TOOL_SECRET, ELEVENLABS_REGION (sin valores)
+OK      integrations-snapshot --verify-voice contra el simulador: credentials_ok  [credentials_ok]
+OK      una sola petición al simulador de ElevenLabs y ninguna por la valla
+OK      el Studio afirma ELEVENLABS_VERIFIED y el proveedor neutro ELEVENLABS_UNVERIFIED (E1-12)  [ELEVENLABS_VERIFIED · ELEVENLABS_UNVERIFIED]
+OK      respaldo de partida rehecho (env.backup = el entorno de E1-12, volcado nuevo con su huella)
+4 OK · 0 FALLO
+código 0
+== sembrar --canarios-voz
+cuenta de smoke: id 1 (Super Admin, inactiva)
+canarios de voz: 2 activos (últimos 4: 0011 y 0012)
+   en la base: 2 canarios de voz activos con el teléfono cifrado
+código 0
+== import-baseline
+código 0

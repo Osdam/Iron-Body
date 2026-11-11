@@ -1,0 +1,15 @@
+OK    código ANTERIOR (5 banderas, 422 en las 7 POST): banderas OK
+OK    código ANTERIOR: las 7 POST OK
+OK    código NUEVO, contactos apagados: banderas OK (6 claves, contacts=false)
+OK    código NUEVO, contactos apagados: alta/carga/confirmación 409 voice_contacts_disabled → OK
+OK    código NUEVO, contactos apagados: el texto lo dice
+OK    código NUEVO, contactos apagados pero 422 (incoherente) → FALLO
+OK    contactos ENCENDIDOS en la fase 1 → FALLO de banderas
+OK    una bandera desconocida → FALLO de banderas
+OK    fase 1 · base sin perfiles y la API sin perfiles → estricto, OK
+OK    fase 1 · base sin perfiles y la API con uno → estricto, FALLO
+OK    fase 1 · base con 1 perfil (E16-30) → informativo, sin FALLO
+OK    fase 1 · sin el recuento del lanzador → informativo
+OK    fase 2a · perfiles siempre informativos
+OK    SMOKE_VOICE_PROFILES_BEFORE mal formado → se ignora (informativo)
+== 0 FALLO

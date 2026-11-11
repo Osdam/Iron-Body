@@ -6,16 +6,17 @@
 #     programador, el monitor, el asistido, los canales, el clasificador, el gobierno del Studio, publicar y el canal
 #     SSE) y la constante de envío cerrada; el programador con `schedule:list` y su código de salida aparte: 0 tareas
 #     outreach:* (fase 1) o las del bloque del H9 (fase 2);
-#   · la base: recuento EXACTO de todas las tablas ultron_studio_* (25) y outreach_* (8) antes y después, filas que
+#   · la base: recuento EXACTO de todas las tablas ultron_studio_* (26: las 25 de la fase 1 y la de W9) y outreach_* (8)
+#     antes y después (SMOKE_EXPECT_STUDIO_TABLES), filas que
 #     nombran a la cuenta en cualquier columna *admin_id, los incidentes de IRON GUARD del Studio y de outreach y las
 #     colas outreach*;
-#   · CERO RED SALIENTE durante el smoke: estricto por la base y el registro (ninguna fila nueva en 33 tablas, ningún
+#   · CERO RED SALIENTE durante el smoke: estricto por la base y el registro (ninguna fila nueva en las 34 tablas, ningún
 #     ERROR) y, en el banco, por la valla (SMOKE_VALLA_STATS: ni un bloqueo nuevo). En el servidor, además, un muestreo
 #     informativo de los sockets de PHP hacia Meta, ElevenLabs y Twilio (débil: las IP de una CDN se comparten);
 #   · FASE 2 (sombra): tras el smoke, UNA pasada del barrido y del despacho a mano (las órdenes de B9-run, por defecto
 #     outreach:sweep y outreach:dispatch --inline, las mismas del bloque del programador, L9-58; SMOKE_SWEEP_CMD y
 #     SMOKE_DISPATCH_CMD) y la prueba de que NO HUBO ENVÍOS: las
-#     25 tablas del Studio iguales, marketing_messages y voice_calls iguales, las colas whatsapp/voice/outreach sin
+#     26 tablas del Studio iguales, marketing_messages y voice_calls iguales, las colas whatsapp/voice/outreach sin
 #     trabajos nuevos, 0 trabajos outreach_jobs en modo live, la valla sin bloqueos nuevos y ningún ERROR. Si las
 #     órdenes no existen, la pasada queda OMITIDA (código 3) y lo dice.
 # Se ejecuta EN EL SERVIDOR como root, tras copiar a /root/ este fichero, smoke-h9.py, smoke-h6.py (del que smoke-h9.py
@@ -57,13 +58,18 @@ SWEEP="${SMOKE_SWEEP_CMD:-outreach:sweep}"
 # `claimed` hasta que la conciliación lo marcara `ambiguous`.
 DISPATCH="${SMOKE_DISPATCH_CMD:-outreach:dispatch --inline}"
 # Tareas outreach:* que el programador tiene que enseñar en la fase 2 (el bloque del H9 de routes/console.php: barrido,
-# despacho y monitor). En la fase 1, 0.
-TAREAS_SOMBRA="${SMOKE_EXPECT_OUTREACH_TASKS:-3}"
+# los dos normalizadores de W9 y V9, despacho y monitor; L9-81). En la fase 1, 0.
+TAREAS_SOMBRA="${SMOKE_EXPECT_OUTREACH_TASKS:-5}"
+# Tablas ultron_studio_* del código de ESTE commit: las 25 de la fase 1 (18 del H5–H8 y 7 del gobierno del H9) y la de
+# W9 (ultron_studio_template_meta_checks, migración 2026_11_13_200001; L9-80, OPS9-c). outreach_*: 8.
+TABLAS_STUDIO="${SMOKE_EXPECT_STUDIO_TABLES:-26}"
+TABLAS_OUT=8
 SMOKE_EMAIL=studio-smoke@ironbodyneiva.cloud
 
 [[ "$ADMIN_ID" =~ ^[0-9]+$ ]] || { echo "SMOKE_ADMIN_ID no es un número"; exit 2; }
 case "$FASE" in 1|2) ;; *) echo "SMOKE_PHASE = 1 | 2"; exit 2 ;; esac
 [[ "$TAREAS_SOMBRA" =~ ^[0-9]+$ ]] || { echo "SMOKE_EXPECT_OUTREACH_TASKS no es un número"; exit 2; }
+[[ "$TABLAS_STUDIO" =~ ^[0-9]+$ ]] || { echo "SMOKE_EXPECT_STUDIO_TABLES no es un número"; exit 2; }
 [[ "$SWEEP" =~ ^outreach:[a-z-]+(\ --[a-z-]+)*$ ]] && [[ "$DISPATCH" =~ ^outreach:[a-z-]+(\ --[a-z-]+)*$ ]] || { echo "SMOKE_SWEEP_CMD y SMOKE_DISPATCH_CMD tienen que ser órdenes outreach:<nombre> [--opción …] (sin valores)"; exit 2; }
 if [ -n "$RUN_AS" ] && [ "$(id -u)" != 0 ]; then echo "en el servidor se ejecuta como root"; exit 2; fi
 for b in python3 php openssl curl join; do command -v "$b" > /dev/null || { echo "falta $b"; exit 2; }; done
@@ -246,7 +252,7 @@ ANTES=$(sql "$Q_TABLAS") && ANTES_CUENTA=$(sql "$Q_CUENTA") && INC_ANTES=$(sql "
   || { echo "FALLO   no se pudo leer la base (psql). No se ejecuta el smoke."; FINAL=1; exit 1; }
 N_STUDIO=$(tr ' ' '\n' <<< "$ANTES" | grep -c '^ultron_studio_' || true)
 N_OUT=$(tr ' ' '\n' <<< "$ANTES" | grep -c '^outreach_' || true)
-[ "$N_STUDIO $N_OUT" = "25 8" ] && echo "OK      25 tablas ultron_studio_* y 8 outreach_* en la base" || { echo "FALLO   tablas en la base: $N_STUDIO ultron_studio_* y $N_OUT outreach_* (esperado 25 y 8: ¿está desplegada la fase 1 del H9?). No se ejecuta el smoke."; FINAL=1; exit 1; }
+[ "$N_STUDIO $N_OUT" = "$TABLAS_STUDIO $TABLAS_OUT" ] && echo "OK      $TABLAS_STUDIO tablas ultron_studio_* y $TABLAS_OUT outreach_* en la base" || { echo "FALLO   tablas en la base: $N_STUDIO ultron_studio_* y $N_OUT outreach_* (esperado $TABLAS_STUDIO y $TABLAS_OUT: ¿están desplegadas la fase 1 del H9 y la migración de W9 de este commit? El smoke tiene que ser el del commit desplegado). No se ejecuta el smoke."; FINAL=1; exit 1; }
 APP_LOG_ANTES=$(lineas laravel); OUT_LOG_ANTES=$(lineas outreach)
 VALLA_ANTES=$(valla)
 # Vigía informativo en el servidor: sockets de PHP hacia las IP de Meta, ElevenLabs y Twilio mientras corre el smoke.
@@ -274,7 +280,7 @@ SMOKE_API="$API" SMOKE_EMAIL="$SMOKE_EMAIL" SMOKE_PW="$SMOKE_PW" SMOKE_CANARY_ID
 RC1=$?
 set -e
 
-# 6. Fotografía después y comparación: el smoke no escribe en ninguna de las 33 tablas, en ninguna fase.
+# 6. Fotografía después y comparación: el smoke no escribe en ninguna de las tablas del Studio y de outreach, en ninguna fase.
 RC2=0
 # El vigía muere por SIGTERM y su `wait` devuelve 143: con `set -e` eso tumbaba el lanzador (lección del H8, 09-11-2026).
 [ -z "$VIGIA_PID" ] || { kill "$VIGIA_PID" 2> /dev/null; wait "$VIGIA_PID" 2> /dev/null || true; VIGIA_PID=""; }
@@ -282,7 +288,7 @@ echo "== Base, registros y red (solo lectura)"
 if DESPUES=$(sql "$Q_TABLAS") && DESPUES_CUENTA=$(sql "$Q_CUENTA") && INC_DESPUES=$(sql "$Q_INCIDENTES") && COLAS_DESPUES=$(sql "$Q_COLAS"); then
   if [ "$ANTES_CUENTA" = "$DESPUES_CUENTA" ]; then echo "OK      ninguna fila nueva de ultron_studio_* ni de outreach_* nombra a la cuenta $ADMIN_ID"; else echo "FALLO   filas que nombran a la cuenta: antes [$ANTES_CUENTA] · después [$DESPUES_CUENTA]"; RC2=1; fi
   if [ "$ANTES" = "$DESPUES" ]; then
-    echo "OK      recuento exacto de las 33 tablas (25 del Studio y 8 de outreach) igual antes y después: ninguna escritura, ningún freno, ninguna inscripción"
+    echo "OK      recuento exacto de las $((TABLAS_STUDIO + TABLAS_OUT)) tablas ($TABLAS_STUDIO del Studio y $TABLAS_OUT de outreach) igual antes y después: ninguna escritura, ningún freno, ninguna inscripción"
   else
     CAMBIOS=$(join -t= -1 1 -2 1 <(tr ' ' '\n' <<< "$ANTES" | sort) <(tr ' ' '\n' <<< "$DESPUES" | sort) | awk -F= '$2 != $3 {printf "%s=%s→%s  ", $1, $2, $3}')
     echo "FALLO   una tabla del Studio o de outreach cambió durante el smoke (el smoke no escribe; ¿alguien usó el Studio a la vez, o el programador en sombra?): $CAMBIOS"
@@ -328,7 +334,7 @@ if [ "$FASE" = 2 ]; then
     if [ "$ENV_ANTES" = "$ENV_DESPUES" ]; then echo "OK      sin envíos: marketing_messages, voice_calls y voice_call_events iguales [$ENV_DESPUES]"; else echo "FALLO   la pasada en sombra ESCRIBIÓ en una tabla de envío: antes [$ENV_ANTES] · después [$ENV_DESPUES]"; RC3=1; fi
     if [ "$LIVE" = 0 ] || [ "$LIVE" = sin_tabla ]; then echo "OK      trabajos outreach_jobs en modo live: $LIVE"; else echo "FALLO   hay $LIVE trabajos en modo live tras una pasada en SOMBRA"; RC3=1; fi
     if [ "$COLAS_ANTES2" = "$COLAS_DESPUES2" ]; then echo "OK      colas (outreach* / whatsapp+voice+marketing) sin trabajos nuevos: $COLAS_DESPUES2"; else echo "FALLO   colas: $COLAS_ANTES2 → $COLAS_DESPUES2 tras la pasada en sombra"; RC3=1; fi
-    if [ "$STUDIO_ANTES" = "$STUDIO_DESPUES" ]; then echo "OK      las 25 tablas del Studio iguales tras la pasada (la ejecución no escribe en el gobierno)"; else echo "FALLO   una tabla del Studio cambió con la pasada en sombra"; RC3=1; fi
+    if [ "$STUDIO_ANTES" = "$STUDIO_DESPUES" ]; then echo "OK      las $TABLAS_STUDIO tablas del Studio iguales tras la pasada (la ejecución no escribe en el gobierno)"; else echo "FALLO   una tabla del Studio cambió con la pasada en sombra"; RC3=1; fi
     if [ -n "$VALLA" ]; then
       if [ "$VALLA_ANTES2" != "?" ] && [ "$VALLA_ANTES2" = "$VALLA_DESPUES2" ]; then echo "OK      cero red saliente en la pasada (valla): bloqueos $VALLA_ANTES2 → $VALLA_DESPUES2"; else echo "FALLO   la valla vio salidas en la pasada en sombra: $VALLA_ANTES2 → $VALLA_DESPUES2"; RC3=1; fi
     fi

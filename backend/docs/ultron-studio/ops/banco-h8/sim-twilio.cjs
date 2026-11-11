@@ -37,6 +37,16 @@
  * CANÓNICA (`TW_SIGN_BASE`, la de `VOICE_WEBHOOK_BASE_URL`) + la URI tal como se envía, y lo manda a `LARAVEL_BASE`
  * (127.0.0.1): un validador que use `fullUrl()` falla con la firma buena, que es justo lo que D8-4 prohíbe.
  *
+ * CUENTA MAESTRA (OPS8-e, la del OTP; solo para ensayar h8-otp-token-rotate.sh): GET /2010-04-01/Accounts/{TW_MASTER_SID}.json
+ * pedido con curl (User-Agent `curl/…`) y usuario TW_MASTER_SID responde la ficha con el token PRINCIPAL o con el SECUNDARIO
+ * (200, sin violación: es la sonda de solo lectura de la rotación), y con otro token, 401 (sin violación). Cualquier otra
+ * petición a la cuenta maestra sigue siendo `account_sid_mismatch`, y la credencial maestra contra la subcuenta,
+ * `master_credential_used`, como antes. /__maestro hace la rotación como la consola: `secundario=<32 hex>` (vale junto al
+ * principal), `promocionar=1` (el secundario pasa a principal y el viejo deja de valer) y `secundario=borrar`; nunca
+ * devuelve un token. /__emit/usage-trigger?destino=otp manda el aviso de gasto del OTP (`/api/webhooks/twilio/usage-trigger`,
+ * TwilioUsageTriggerController, que valida con otp.twilio.token sobre fullUrl()) firmado como Twilio, con el token PRINCIPAL
+ * de la cuenta maestra sobre LARAVEL_BASE: entre escribir el token nuevo y promocionarlo, Laravel lo rechaza.
+ *
  * Precios de las llamadas: los de la auditoría §d.2 (leídos el 03-11-2026, «$» sin código de moneda).
  * Uso: node sim-twilio.cjs --config <piezas en 600> --log <registro.jsonl> --port <n|0>
  */
@@ -47,6 +57,7 @@ const C = require('./sim-comun.cjs');
 const NOMBRE = 'sim-twilio';
 const MAX_CUERPO = 64 * 1024;
 const LARAVEL_AVISOS = '/api/webhooks/voice/twilio/usage-trigger'; // D8-16
+const LARAVEL_AVISOS_OTP = '/api/webhooks/twilio/usage-trigger'; // OPS8-e: el del OTP (cuenta maestra)
 const TARIFAS = { inbound: 0.0945, outbound_mobile: 0.0377, outbound_fixed: 0.07, media_streams: 0.0044 };
 const ESTADOS = ['queued', 'ringing', 'in-progress', 'completed', 'busy', 'failed', 'no-answer', 'canceled'];
 const FINALES = new Set(['completed', 'busy', 'failed', 'no-answer', 'canceled']);
@@ -133,7 +144,7 @@ function paramsAviso({ sid, utSid, categoria = 'totalprice', triggerBy = 'price'
   ];
 }
 
-module.exports = { RUTAS, VIOLACIONES, VARIANTES_AVISO, TARIFAS, PERMISOS, paramsAviso, LARAVEL_AVISOS };
+module.exports = { RUTAS, VIOLACIONES, VARIANTES_AVISO, TARIFAS, PERMISOS, paramsAviso, LARAVEL_AVISOS, LARAVEL_AVISOS_OTP };
 
 // ── Servidor ─────────────────────────────────────────────────────────────────────────────────────
 if (require.main === module) {
@@ -157,10 +168,29 @@ if (require.main === module) {
     estado.tokens = new Set();
     estado.numero = { sid: P.TW_VOICE_NUMBER_SID, phone: P.VOICE_NUMBER, voiceUrl: 'https://api.elevenlabs.invalid/twilio/inbound_call', updates: 0, tipo: 'comprado', bundle: null, address: 'none', smsLaravel: false };
     estado.cuentaMadre = false; // OPS8-c: /__numero?cuenta=madre → la cuenta de voz se presenta como cuenta MADRE
+    estado.maestro = { primario: P.TW_MASTER_TOKEN, secundario: null, promociones: 0 }; // OPS8-e: la rotación del OTP
   }
   sembrar();
 
   const errorTwilio = (status, code, message) => ({ status, body: { code, message, more_info: `https://www.twilio.com/docs/errors/${code}`, status }, extra: status === 401 ? { 'WWW-Authenticate': 'Basic realm="Twilio API"' } : {} });
+
+  // OPS8-e: los tokens VIGENTES de la cuenta maestra (el principal y, mientras exista, el secundario), como en Twilio.
+  const tokensMaestros = () => [estado.maestro.primario, estado.maestro.secundario].filter((t) => typeof t === 'string' && t !== '');
+  /** La credencial de la sonda de la rotación: null si el usuario no es la cuenta maestra; si lo es, 'master_probe' o 'unknown'. */
+  function credencialMaestra(cabecera) {
+    const m = /^Basic\s+([A-Za-z0-9+/=]+)$/.exec(cabecera ?? '');
+    if (!m) return null;
+    const plano = Buffer.from(m[1], 'base64').toString('utf8');
+    const i = plano.indexOf(':');
+    if (i < 0 || !C.igual(plano.slice(0, i), P.TW_MASTER_SID)) return null;
+    return tokensMaestros().some((t) => C.igual(plano.slice(i + 1), t)) ? 'master_probe' : 'unknown';
+  }
+  /** La ficha de la cuenta maestra. Como la de verdad, lleva el token PRINCIPAL: quien la lee tiene que descartarlo. */
+  const fichaMaestra = () => ({
+    auth_token: estado.maestro.primario, date_created: C.fechaTwilio(Date.now() - 400 * 86400000), date_updated: C.fechaTwilio(Date.now() - 86400000),
+    friendly_name: 'OTP (banco)', owner_account_sid: P.TW_MASTER_SID, sid: P.TW_MASTER_SID, status: 'active', type: 'Full',
+    uri: `/2010-04-01/Accounts/${P.TW_MASTER_SID}.json`,
+  });
 
   function credencial(cabecera) {
     const m = /^Basic\s+([A-Za-z0-9+/=]+)$/.exec(cabecera ?? '');
@@ -172,7 +202,8 @@ if (require.main === module) {
     const p = plano.slice(i + 1);
     const pares = [
       ['laravel_key', P.TW_LARAVEL_KEY_SID, P.TW_LARAVEL_KEY_SECRET], ['elevenlabs_key', P.TW_EL_KEY_SID, P.TW_EL_KEY_SECRET],
-      ['signing_token', SID, P.TW_SIGNING_TOKEN], ['master', P.TW_MASTER_SID, P.TW_MASTER_TOKEN], ['master', SID, P.TW_MASTER_TOKEN],
+      ['signing_token', SID, P.TW_SIGNING_TOKEN],
+      ...tokensMaestros().flatMap((t) => [['master', P.TW_MASTER_SID, t], ['master', SID, t]]),
     ];
     for (const [clase, usr, sec] of pares) if (C.igual(u, usr) && C.igual(p, sec)) return clase;
     if (pares.some(([, usr]) => C.igual(u, usr)) && pares.some(([, , sec]) => C.igual(p, sec))) return 'mixed';
@@ -431,6 +462,20 @@ if (require.main === module) {
       v.push('unknown_route');
       return fin(errorTwilio(404, 20404, 'The requested resource was not found'));
     }
+    // OPS8-e: la sonda de solo lectura de h8-otp-token-rotate.sh (curl, usuario de la cuenta maestra). Lo demás, como antes.
+    if (ruta.id === 'account_get' && params[0] === P.TW_MASTER_SID && /^curl\//.test(String(req.headers['user-agent'] ?? ''))) {
+      const cm = credencialMaestra(req.headers.authorization);
+      if (cm === 'unknown') {
+        e.credential = 'unknown';
+        registro.stats.authRejected++;
+        return fin(errorTwilio(401, 20003, 'Authenticate'));
+      }
+      if (cm === 'master_probe') {
+        e.credential = 'master_probe';
+        registro.stats.sondasMaestra = (registro.stats.sondasMaestra ?? 0) + 1;
+        return fin({ status: 200, body: fichaMaestra() });
+      }
+    }
     if (!ruta.sinCuenta && params[0] !== SID) {
       v.push('account_sid_mismatch');
       return fin(errorTwilio(404, 20404, 'The requested resource was not found'));
@@ -554,6 +599,23 @@ if (require.main === module) {
       }
       case '/__emit/usage-trigger':
         return emitirAviso(res, q);
+      case '/__maestro': {
+        // OPS8-e: la rotación del Auth Token de la cuenta maestra, como en la consola de Twilio. Nunca devuelve un token.
+        const m = estado.maestro;
+        if (q.has('secundario')) {
+          const t = q.get('secundario') ?? '';
+          if (t === 'borrar') m.secundario = null;
+          else if (/^[0-9a-f]{32}$/.test(t) && !C.igual(t, m.primario)) m.secundario = t;
+          else return mal(res, 'secundario = <32 hex distinto del principal>|borrar');
+        }
+        if (q.get('promocionar') === '1') {
+          if (!m.secundario) return C.json(res, 409, { ok: false, error: 'no hay secundario que promocionar' });
+          m.primario = m.secundario;
+          m.secundario = null;
+          m.promociones++;
+        }
+        return ok(res, { ok: true, secundario: m.secundario !== null, promociones: m.promociones, principalOriginal: C.igual(m.primario, P.TW_MASTER_TOKEN), sondas: registro.stats.sondasMaestra ?? 0 });
+      }
       case '/__numero': {
         // OPS8-c: el escenario del número de voz para h8-twilio-check.sh. tipo=comprado|caller_id, bundle=none|aprobado|
         // pendiente, voice_url=elevenlabs|otra|vacia, address=none|local, sms_laravel=0|1 (una key de la voz mal hecha),
@@ -584,12 +646,18 @@ if (require.main === module) {
     const variante = q.get('variant') ?? 'valid';
     const V = VARIANTES_AVISO[variante];
     if (!V) return mal(res, 'variante desconocida', { variants: Object.keys(VARIANTES_AVISO) });
-    let pares = paramsAviso({ sid: SID, utSid: C.sidTwilio('UT'), categoria: q.get('category') ?? 'totalprice', triggerBy: q.get('trigger_by') ?? 'price', triggerValue: q.get('trigger_value') ?? '4.00', currentValue: q.get('current_value') ?? '4.12', recurring: q.get('recurring') ?? 'daily' });
+    // OPS8-e: destino=otp → el aviso del OTP (cuenta maestra), firmado como Twilio: con el token PRINCIPAL vigente y sobre
+    // la URL que ve Laravel (fullUrl()). Solo la variante válida: las malas ya las cubre el de la voz.
+    const destino = q.get('destino') ?? 'voz';
+    if (!['voz', 'otp'].includes(destino)) return mal(res, 'destino = voz|otp');
+    const otp = destino === 'otp';
+    if (otp && variante !== 'valid') return mal(res, 'destino=otp solo con variant=valid');
+    let pares = paramsAviso({ sid: otp ? P.TW_MASTER_SID : SID, utSid: C.sidTwilio('UT'), categoria: q.get('category') ?? 'totalprice', triggerBy: q.get('trigger_by') ?? 'price', triggerValue: q.get('trigger_value') ?? '4.00', currentValue: q.get('current_value') ?? '4.12', recurring: q.get('recurring') ?? 'daily' });
     if (V.repeated) pares = [...pares, ['Tag', 'b'], ['Tag', 'a']];
     const consulta = V.query ?? '';
-    let ruta = `${LARAVEL_AVISOS}${consulta ? `?${consulta}` : ''}`;
-    const token = V.token === 'master' ? P.TW_MASTER_TOKEN : V.token === 'random' ? crypto.randomBytes(16).toString('hex') : P.TW_SIGNING_TOKEN;
-    let base = BASE_FIRMA;
+    let ruta = `${otp ? LARAVEL_AVISOS_OTP : LARAVEL_AVISOS}${consulta ? `?${consulta}` : ''}`;
+    const token = otp || V.token === 'master' ? estado.maestro.primario : V.token === 'random' ? crypto.randomBytes(16).toString('hex') : P.TW_SIGNING_TOKEN;
+    let base = otp ? P.LARAVEL_BASE.replace(/\/+$/, '') : BASE_FIRMA;
     if (V.scheme) base = base.startsWith('https:') ? `http:${base.slice(6)}` : `https:${base.slice(5)}`;
     if (V.real) base = P.LARAVEL_BASE.replace(/\/+$/, '');
     let cuerpo;
@@ -615,10 +683,10 @@ if (require.main === module) {
       const r = await C.emitir({ base: P.LARAVEL_BASE, path: ruta, cabeceras: cab, cuerpo, timeoutMs: 10000 });
       const v = [];
       if (V.expected === 'rejected' && typeof r.status === 'number' && r.status >= 200 && r.status < 300) v.push('usage_trigger_bad_signature_accepted');
-      registro.emision({ target: 'usage_trigger', variant: variante, status: r.status, ms: Math.round(r.ms * 10) / 10, violations: v });
+      registro.emision({ target: otp ? 'usage_trigger_otp' : 'usage_trigger', variant: variante, status: r.status, ms: Math.round(r.ms * 10) / 10, violations: v });
       entregas.push({ status: r.status, ms: Math.round(r.ms * 10) / 10, violations: v });
     }
-    return ok(res, { variant: variante, expected: V.expected, signedOver: `${base}${ruta}`, deliveries: entregas });
+    return ok(res, { variant: variante, destino, expected: V.expected, signedOver: `${base}${ruta}`, deliveries: entregas });
   }
 
   const servidor = http.createServer((req, res) => {

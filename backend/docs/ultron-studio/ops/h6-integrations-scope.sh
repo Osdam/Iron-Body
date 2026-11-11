@@ -7,11 +7,13 @@
 # Sin el estado actual no se toca nada: se imprime la configuración efectiva y se sale con 2. Si el estado actual no
 # coincide con la configuración efectiva, tampoco.
 # Se ejecuta EN EL SERVIDOR como root, con la fase 1 del H6 desplegada y la autorización que corresponda (fase 2:
-# autorización del 25-10-2026; vuelta atrás: inmediata). Orden: copia previa 600 del fichero de entorno en /root →
+# autorización del 25-10-2026; vuelta atrás: inmediata). Orden: el fichero de entorno, un fichero normal de www-data en
+# 600 o de root:www-data en 640 (C-14, OPS8-e; también al apagar) → copia previa 600 del fichero de entorno en /root →
 # la llave (con la sangría que tuviera; dos espacios si falta), reescrita sobre el mismo fichero para conservar dueño
 # y modo → el fichero parsea → config:cache como www-data con umask 077 y 600 → la configuración efectiva es la
-# pedida y lo demás no cambió → queue:restart → 13/0 workers dos veces → 401 → instantánea de sistema (registra el
-# cambio de huella: `probe` cambia la de Twilio; `writes`, ninguna). «APLICADO» solo sale con 0 desvíos.
+# pedida y lo demás no cambió → queue:restart → 13/0 workers dos veces (14/0 con ironbody-voice instalado, fase 4a del
+# H8) → 401 → instantánea de sistema (registra el cambio de huella: `probe` cambia la de Twilio; `writes`, ninguna).
+# «APLICADO» solo sale con 0 desvíos.
 # Nunca imprime valores del fichero de entorno ni la salida de un tinker que no case con lo esperado. No toca el
 # motor, ni la pausa, ni el freno, ni el canario, ni las claves de Twilio, Meta o ElevenLabs. No reinicia FPM ni
 # ningún programa de supervisor: estas dos llaves solo las lee el proceso web, que lee la caché en cada petición.
@@ -70,16 +72,30 @@ set_var() {
     printf '  %s=%s\n' "$1" "$2" >> "$ENVF"
   fi
 }
-workers() { # 13 RUNNING y 0 BACKOFF/FATAL, esperando hasta $1 s; imprime «RUNNING MAL»
+workers() { # $2 RUNNING y 0 BACKOFF/FATAL, esperando hasta $1 s; imprime «RUNNING MAL»
   local hasta s r m
   hasta=$(( $(date +%s) + $1 ))
   while :; do
     s=$(supervisorctl status 2>/dev/null || true)
     r=$(printf '%s\n' "$s" | grep -c RUNNING || true)
     m=$(printf '%s\n' "$s" | grep -cE 'BACKOFF|FATAL' || true)
-    if { [ "$r" = 13 ] && [ "$m" = 0 ]; } || [ "$(date +%s)" -ge "$hasta" ]; then echo "$r $m"; return 0; fi
+    if { [ "$r" = "$2" ] && [ "$m" = 0 ]; } || [ "$(date +%s)" -ge "$hasta" ]; then echo "$r $m"; return 0; fi
     sleep 2
   done
+}
+# OPS8-e: los programas de supervisor esperados son 13, o 14 si el worker de la voz (ironbody-voice, fase 4a del H8) está
+# instalado (aparece en supervisorctl, en el estado que sea: si no está en RUNNING, la comprobación de después lo dice).
+programas_esperados() { local n; n=$(supervisorctl status 2>/dev/null | grep -c '^ironbody-voice:' || true); [ "${n:-0}" -ge 1 ] && echo 14 || echo 13; }
+# C-14 (B-T14 de la auditoría de los 9 hitos, OPS8-e): el fichero de entorno, un fichero normal (nunca un enlace) de
+# www-data en 600 o de root:www-data en 640 (la propuesta de ironbody-migrate, paso 3b; B-3), como h8-voice-scope.sh.
+# Nada más se admite: ni otro dueño, ni otro grupo, ni otro modo. Vale para encender y para apagar.
+ENV_600=www-data
+ENV_640=root:www-data
+fichero_ok() {
+  [ -f "$ENVF" ] && [ ! -L "$ENVF" ] || return 1
+  [ "$(stat -c '%U %a' "$ENVF")" = "$ENV_600 600" ] && return 0
+  [ "$(stat -c '%U:%G %a' "$ENVF")" = "$ENV_640 640" ] && return 0
+  return 1
 }
 instantaneas() { ( cd / && sudo -u postgres psql -X -Atq -v ON_ERROR_STOP=1 -d ironbody -c "SELECT count(*) FROM ultron_studio_integration_snapshots WHERE kind = 'config' AND actor_type = 'system';" ) 2>/dev/null || echo '?'; }
 
@@ -107,7 +123,8 @@ DESDE_B=$(booleano "$DESDE"); NUEVO_B=$(booleano "$VALOR")
 ESPERADA=${ANTES/"\"$CAMPO\":$DESDE_B"/"\"$CAMPO\":$NUEVO_B"}
 [ "$ESPERADA" != "$ANTES" ] || aborta "no se pudo calcular la configuración esperada (¿cambió la forma de la lectura?)"
 DUENO=$(stat -c '%U:%G' "$ENVF"); MODO=$(stat -c '%a' "$ENVF")
-[ "$MODO" = 600 ] || aborta "el fichero de entorno tiene modo $MODO y se exige 600 (N-4 de security): corregirlo a mano antes de tocar nada"
+fichero_ok || aborta "el fichero de entorno no es un fichero normal de $ENV_600 en 600 ni de $ENV_640 en 640 (es $DUENO $MODO; C-14, N-4 de security): corregirlo a mano antes de tocar nada"
+W_ESPERADOS=$(programas_esperados)
 TS=$(date -u +%Y%m%d-%H%M%S)
 COPIA="/root/env-pre-h6-$MANDO-$VALOR-$TS"
 install -m 600 -o root -g root "$ENVF" "$COPIA"
@@ -152,9 +169,9 @@ MOTOR=$(leer_motor)
 [ "$MOTOR" = "$MOTOR_ANTES" ] && echo "   motor, H4 y H5 sin cambios" || desvio "la configuración del motor, del H4 o del H5 cambió: antes $MOTOR_ANTES · después ${MOTOR:-ilegible}"
 sudo -u www-data php artisan queue:restart -q
 sleep 6
-W1=$(workers 45); sleep 8; W2=$(workers 45)
-echo "3. workers (RUNNING · BACKOFF/FATAL), dos lecturas separadas: [$W1] y [$W2]"
-[ "$W1" = "13 0" ] && [ "$W2" = "13 0" ] || desvio "workers [$W1] y [$W2] (esperado 13 0 las dos veces)"
+W1=$(workers 45 "$W_ESPERADOS"); sleep 8; W2=$(workers 45 "$W_ESPERADOS")
+echo "3. workers (RUNNING · BACKOFF/FATAL), dos lecturas separadas: [$W1] y [$W2] (esperado $W_ESPERADOS 0: 13$([ "$W_ESPERADOS" = 14 ] && echo ' y ironbody-voice'))"
+[ "$W1" = "$W_ESPERADOS 0" ] && [ "$W2" = "$W_ESPERADOS 0" ] || desvio "workers [$W1] y [$W2] (esperado $W_ESPERADOS 0 las dos veces)"
 c=$(curl -s -o /dev/null -w '%{http_code}' -H 'Accept: application/json' "$API/admin/ultron-studio/integrations/status")
 echo "4. integrations/status sin token → $c"; [ "$c" = 401 ] || desvio "integrations/status sin token respondió $c (esperado 401)"
 if [ "$DESVIOS" = 0 ]; then

@@ -1,0 +1,4 @@
+2026-11-11T00:30:00Z
+19:30  up 27 days,  3:30, 4 users, load averages: 36.85 31.30 32.73
+banco: la constante no está cerrada en la «producción» del banco: correr antes ensayar-ops8d.sh hasta su vuelta atrás
+código 1

@@ -1,6 +1,7 @@
 #!/bin/bash
 # Copias del banco del Hito 8 de deploy-h8-backend-fase1.sh y de ironbody-migrate-propuesta.sh (el migrador del banco,
-# como en el H7) en $B/root, y (OPS8-c) de los tres de las fases 2 → 4a: h8-voice-scope.sh (el mando),
+# como en el H7) en $B/root, (OPS8-e) de los mandos del H6 y del H7 (h6-integrations-scope.sh y h7-monitor-scope.sh: B-T13 y
+# B-T14) y del de la rotación del token del OTP (h8-otp-token-rotate.sh, contra la cuenta maestra del simulador), y (OPS8-c) de los tres de las fases 2 → 4a: h8-voice-scope.sh (el mando),
 # h8-secrets-register.sh (contra el simulador de ElevenLabs) y h8-twilio-check.sh (contra el de Twilio). En estos tres
 # solo cambia su bloque «lo propio de producción» (rutas, URL, usuarios, cerrojo, hosts de los proveedores) y la
 # comprobación de root. Solo cambian rutas, psql, la URL, los roles (iron → h5_owner, iron_app → h5_app), los dueños
@@ -100,9 +101,32 @@ twilio = sustituye('h8-twilio-check.sh', propio + [
     ('TW_NUMBERS=https://numbers.twilio.com', f'TW_NUMBERS=http://127.0.0.1:{puerto_tw}', 1),
 ])
 open(f'{b}/root/h8-twilio-check.sh', 'w', encoding='utf-8').write(twilio)
+# OPS8-e: el mando de la rotación del token maestro del OTP, contra la cuenta maestra del simulador de Twilio.
+otp = sustituye('h8-otp-token-rotate.sh', propio + [
+    ('API=https://api.ironbodyneiva.cloud/api', f'API={url}', 1), ('ROOT_U=root', f'ROOT_U={me}', 1), ('ROOT_G=root', f'ROOT_G={grupo}', 1),
+    ('COPIAS=/root', f'COPIAS={b}/root', 1), ('CERROJO=/run/lock/h8-voice-scope.lock', f'CERROJO={b}/run/h8-voice-scope.lock', 1),
+    ('NIVEL_ERROR=production.ERROR', 'NIVEL_ERROR=local.ERROR', 1),
+    ('TWILIO_API=https://api.twilio.com', f'TWILIO_API=http://127.0.0.1:{puerto_tw}', 1),
+])
+open(f'{b}/root/h8-otp-token-rotate.sh', 'w', encoding='utf-8').write(otp)
+# OPS8-e: los mandos del H6 y del H7 (B-T13 y B-T14), como banco-h7/preparar.sh: la copia previa y el temporal al /root del
+# banco, install sin -o root, la caché «de www-data» (el usuario del Mac) y los dueños admitidos del fichero de entorno:
+# 600 del usuario del Mac o 640 del usuario y su grupo (en el servidor, www-data 600 o root:www-data 640). crontab -l -u …
+# falla sin privilegios en el Mac: B-4 sale como «ninguna» (el usuario efectivo de schedule:run no se puede leer).
+for nombre, extra in [('h7-monitor-scope.sh', []), ('h6-integrations-scope.sh', [('sudo -u postgres psql -X -Atq -v ON_ERROR_STOP=1 -d ironbody', bpsql, 1)])]:
+    copia = sustituye(nombre, comunes + extra + [
+        ('https://api.ironbodyneiva.cloud/api', url, 1),
+        ('[ "$(id -u)" = 0 ]', 'true', 1),
+        ('/root/', f'{b}/root/', 0),
+        ('install -m 600 -o root -g root', 'install -m 600', 1),
+        ('= www-data ]', f'= {me} ]', 1),
+        ('ENV_600=www-data', f'ENV_600={me}', 1),
+        ('ENV_640=root:www-data', f'ENV_640={me}:{grupo}', 1),
+    ])
+    open(f'{b}/root/{nombre}', 'w', encoding='utf-8').write(copia)
 PY
-chmod 700 "$B/root/deploy-h8-backend-fase1.sh" "$B/root/ironbody-migrate" "$B/root/h8-voice-scope.sh" "$B/root/h8-secrets-register.sh" "$B/root/h8-twilio-check.sh"
-for f in deploy-h8-backend-fase1.sh:deploy-h8-backend-fase1.sh ironbody-migrate-propuesta.sh:ironbody-migrate h8-voice-scope.sh:h8-voice-scope.sh h8-secrets-register.sh:h8-secrets-register.sh h8-twilio-check.sh:h8-twilio-check.sh; do
+chmod 700 "$B/root/deploy-h8-backend-fase1.sh" "$B/root/ironbody-migrate" "$B/root/h8-voice-scope.sh" "$B/root/h8-secrets-register.sh" "$B/root/h8-twilio-check.sh" "$B/root/h7-monitor-scope.sh" "$B/root/h6-integrations-scope.sh" "$B/root/h8-otp-token-rotate.sh"
+for f in deploy-h8-backend-fase1.sh:deploy-h8-backend-fase1.sh ironbody-migrate-propuesta.sh:ironbody-migrate h8-voice-scope.sh:h8-voice-scope.sh h8-secrets-register.sh:h8-secrets-register.sh h8-twilio-check.sh:h8-twilio-check.sh h7-monitor-scope.sh:h7-monitor-scope.sh h6-integrations-scope.sh:h6-integrations-scope.sh h8-otp-token-rotate.sh:h8-otp-token-rotate.sh; do
   o=${f%%:*}; c=${f#*:}
   bash -n "$B/root/$c"
   echo "== $o → $B/root/$c: $(diff "$OPS/$o" "$B/root/$c" | grep -c '^>' || true) líneas con sustituciones del banco"

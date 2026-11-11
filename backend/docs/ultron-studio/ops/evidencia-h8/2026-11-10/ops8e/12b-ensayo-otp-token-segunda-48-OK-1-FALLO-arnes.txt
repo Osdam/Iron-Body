@@ -1,0 +1,51 @@
+== ensayo de la rotación del token del OTP · banco /Users/alejodev/.cache/ironbody-banco-h8-ops8e3 · registro /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/logs/ensayo-otp-token-20261111-015819.txt
+OK      0 · el OTP del banco es la cuenta maestra del simulador (cuenta y token, comparados sin imprimirlos)
+OK      0 · el simulador: el token original es el principal y no hay secundario  [{"ok":true,"secundario":false,"promociones":2,"principalOriginal":true,"sondas":8}]
+OK      0 · cuentas con sesión para leer la vista web (tokens en 600)
+OK      0 · estado (solo lectura): las claves con sangría 2, caché = fichero, GET 200 con el token efectivo, workers 13 0  [código 0]
+OK      0 · estado: TWILIO_TOKEN y TWILIO_AUTH_TOKEN encontrados con su sangría (lo que «grep ^TWILIO_» no ve)
+OK      0 · el aviso de gasto del OTP, firmado como Twilio con el principal → 200
+OK      1 · el token por argumento → 2  [código 2]
+OK      1 · el fichero del token en 644 → 2  [código 2]
+OK      1 · 31 hex → 2 (forma)  [código 2]
+OK      1 · en mayúsculas → 2 (forma)  [código 2]
+OK      1 · dos líneas → 2  [código 2]
+OK      1 · un token que Twilio no conoce (TWILIO_AUTH_TOKEN=…, sin secundario) → 2 (401)  [código 2]
+OK      1 · el fichero de entorno en 644 → 2 (C-14)  [código 2]
+OK      1 · TWILIO_TOKEN repetida en el fichero de entorno → 2  [código 2]
+OK      1 · un cambio sin cachear en otro bloque (APP_NAME) → 2: config:cache lo publicaría  [código 2]
+OK      1 · el token del fichero no es el de la caché → 2  [código 2]
+OK      1 · vuelta con un fichero que no es una copia de este mando → 2  [código 2]
+OK      1 · el token de ahora → 0, nada que escribir  [código 0]
+OK      1 · …y el fichero del token, destruido
+OK      1 · tras los negativos, el fichero de entorno es byte a byte el del principio
+OK      2 · consola (simulada): el token nuevo como secundario
+OK      2 · rotar --solo-comprobar → 0 EN VERDE, nada escrito  [código 0]
+OK      2 · …GET 200 con el NUEVO y con el ACTUAL; el fichero de entorno intacto y el del token en disco
+OK      2 · rotar → APLICADO  [código 0]
+OK      2 · …las dos claves, el resto de la configuración igual, caché = fichero, GET 200 con el efectivo, workers, 401, 0 ERROR
+OK      2 · …el fichero del token destruido y la copia previa 600 byte a byte el fichero de antes  [env-pre-otp-token-20261111-015838]
+OK      2 · el fichero: solo cambian las dos líneas, con el token nuevo, sangría 2 y sin export  [solo las líneas del token (20,21) · TWILIO_TOKEN=nuevo,sangría 2,sin export TWILIO_AUTH_TOKEN=nuevo,sangría 2,sin export]
+OK      2 · vista web (la API del banco): la huella de Twilio del Studio es la que dijo el mando  [authorized 5f4ec82e - → drift 0c896e30 authToken (mando: 0c896e30)]
+OK      2 · ventana: sin promocionar, Twilio firma con el principal viejo → el aviso de gasto del OTP da 403
+OK      2 · vuelta --solo-comprobar → 0 EN VERDE (el token viejo sigue vivo)  [código 0]
+OK      2 · vuelta → APLICADO  [código 0]
+OK      2 · tras la vuelta: el fichero de entorno byte a byte el del principio, la copia intacta y el aviso otra vez 200
+OK      3 · Twilio reconocida en el Studio (201) → authorized  [authorized 5f4ec82e -]
+OK      3 · rotar → APLICADO  [código 0]
+OK      3 · …el Studio pasa de authorized a drift en authToken y el mando pide reconocer
+OK      3 · vista web: drift en authToken con la huella nueva  [drift d5b10961 authToken]
+FALLO   3 · consola (simulada): promocionar → el original ya no es el principal  [{"ok":true,"secundario":false,"promociones":3,"principalOriginal":false,"sondas":22}]
+OK      3 · promocionado: el aviso de gasto del OTP, firmado ya con el nuevo, da 200
+OK      3 · vuelta --solo-comprobar tras promocionar → 2 (401): confirma la promoción  [código 2]
+OK      3 · vuelta tras promocionar → 2, sin tocar nada  [código 2]
+OK      3 · …el fichero de entorno, el mismo que tras rotar
+OK      3 · estado: GET 200 con el token efectivo y el Studio en drift  [código 0]
+OK      3 · …estado enseña la deriva
+OK      4 · simulador: el token original otra vez principal  [{"ok":true,"secundario":false,"promociones":4,"principalOriginal":true,"sondas":23}]
+OK      4 · vuelta con la copia de la rotación B (el token original) → APLICADO  [código 0]
+OK      4 · el fichero de entorno byte a byte el del principio y el Studio otra vez authorized  [authorized 5f4ec82e -]
+OK      4 · el aviso de gasto del OTP, 200
+OK      4 · el simulador: 0 violaciones nuevas (las sondas de la cuenta maestra no lo son)  [violaciones 0 → 0 · sondas 8 → 25]
+OK      5 · el registro del ensayo, los de Laravel, el del simulador y el de la valla sin ningún token  [limpio (5 ficheros, 3 tokens buscados)]
+48 OK · 1 FALLO · registro /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/logs/ensayo-otp-token-20261111-015819.txt

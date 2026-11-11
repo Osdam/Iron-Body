@@ -1,0 +1,60 @@
+2026-11-11T01:17:20Z
+20:17  up 27 days,  4:17, 3 users, load averages: 2.94 4.78 8.74
+== ensayo OPS8-e · banco /Users/alejodev/.cache/ironbody-banco-h8-ops8e3 · «producción» a608450 · registro /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/logs/ensayo-ops8e-20261111-011720.txt
+OK      0 · cuentas de los cuatro ojos con sesión (tokens en 600)
+OK      0 · h7 estado (solo lectura): el monitor apagado, su expectativa, si se confirma, el crontab (B-4) y el fichero (C-14)  [código 0]
+OK      0 · B-T13 · estado enseña la expectativa de la fase 2 (la que dejó la vuelta atrás de ensayar-ops8d.sh)
+OK      0 · B-4 · estado dice en qué crontab corre schedule:run (en el Mac, sin permiso para -u: 0 y 0)
+OK      0 · C-14 · estado admite el fichero en 600
+OK      1 · mando · fase 2 set VOICE_WEBHOOK_BASE_URL a otra base (mueve la huella de la voz: deriva)  [código 0]
+OK      1 · B-T13 · h7 on con deriva de la configuración autorizada (la provocada con el mando) → NO SE APLICA (código 2)  [código 2]
+OK      1 · el fichero de entorno no cambió (huella antes y después) y no hubo copia previa
+OK      1 · mando · la base de los webhooks de vuelta a la canónica del banco  [código 0]
+OK      1 · reconocer la configuración autorizada de la voz (Beto) → 201  [HTTP 201 ]
+OK      1 · B-T13 · h7 estado: el estado de hoy ya confirma la expectativa  [código 0]
+OK      2 · B-T13 · sin ULTRON_STUDIO_MONITOR_EXPECT (la del código: ELEVENLABS_NOT_CONFIGURED) → h7 on se niega (código 2)  [código 2]
+OK      2 · el fichero de entorno no cambió
+OK      2 · B-T13 · h7 estado: la del código y NO confirmada  [código 0]
+OK      2 · la vía: h8-voice-scope.sh expectativa fase2 (integrations-doctor la confirma) → APLICADO  [código 0]
+OK      2 · B-T13 · h7 on off con la expectativa confirmada → APLICADO (programador +2)  [código 0]
+OK      2 · on: dice la expectativa confirmada y las 2 tareas del Studio
+OK      2 · h7 off on (la vuelta atrás de nivel 2) → APLICADO  [código 0]
+OK      3 · el fichero de entorno del banco en 640 (alejodev:staff)  [alejodev:staff 640]
+OK      3 · B-T14 · h7 on off con el fichero en 640 → APLICADO  [código 0]
+OK      3 · tras escribir, el fichero sigue en 640 (mismo dueño, grupo y modo)  [alejodev:staff 640]
+OK      3 · B-T14 · h7 off on (APAGAR) con el fichero en 644 → ABORTA sin tocar nada (644 sigue sin admitirse)  [código 1]
+OK      3 · con 644, el fichero no cambió
+OK      3 · B-T14 · h6 writes on off con el fichero en 644 → ABORTA sin tocar nada  [código 1]
+OK      3 · B-T14 · h7 off on (APAGAR) con el fichero en 640 → APLICADO  [código 0]
+OK      3 · B-T14 · h6 writes on off con el fichero en 640 → APLICADO  [código 0]
+OK      3 · B-T14 · h6 writes off on (APAGAR) con el fichero en 640 → APLICADO  [código 0]
+OK      3 · el fichero sigue en 640 tras los cuatro cambios  [alejodev:staff 640]
+OK      4 · worker instalar: 13 → 14 programas  [código 0]
+OK      4 · h7 on off con ironbody-voice instalado → APLICADO, esperado 14 0  [código 0]
+OK      4 · h7 on: workers esperados 14
+OK      4 · h7 off on con 14 → APLICADO  [código 0]
+OK      4 · h6 writes on off con 14 → APLICADO  [código 0]
+OK      4 · h6 writes on: workers esperados 14
+OK      4 · h6 writes off on con 14 → APLICADO  [código 0]
+OK      4 · worker retirar: 14 → 13  [código 0]
+OK      5 · estado del mando de la voz con el código del banco: no lee la bandera de contactos  [código 0]
+OK      5 · contactos on con un código que no lee VOICE_CONTACTS_ENABLED → NO SE APLICA (código 2)  [código 2]
+OK      5 · contactos off con ese código → NO SE APLICA (código 2)  [código 2]
+OK      5 · el fichero de entorno no cambió
+OK      5 · con el código de B-T4: estado la enseña apagada  [código 0]
+OK      5 · GET admin/voice/status: flags.contacts = false (lo que lee el smoke)  [HTTP 200 contacts=false]
+OK      5 · con la bandera apagada, el alta de un contacto → 409 voice_contacts_disabled ANTES de validar  [HTTP 409 voice_contacts_disabled]
+OK      5 · contactos on → MANDO contactos-on APLICADO (contacts: false → true)  [código 0]
+OK      5 · on: solo cambió contacts y avisa de la fase 4b
+OK      5 · con la bandera encendida, el alta con un cuerpo vacío → 422 validation_failed (valida; nada se escribe)  [HTTP 422 validation_failed]
+OK      5 · contactos off → MANDO contactos-off APLICADO  [código 0]
+OK      5 · apagada otra vez → 409 voice_contacts_disabled  [HTTP 409 voice_contacts_disabled]
+OK      5 · ninguna fila en voice_contacts (las tres peticiones no escribieron nada)  [0]
+OK      5 · el clon de la «producción» vuelve a su código (git status limpio)
+OK      6 · estado del mando de la voz: las tareas de voz con el monitor encendido, leídas del código (a608450: 4)  [código 0]
+OK      6 · monitor on (--acepta-freno por si la saliente del ensayo sigue en la ventana de 48 h) → APLICADO  [código 0]
+OK      6 · monitor on: exactamente las 4 tareas de voz del código del banco
+OK      6 · monitor off → APLICADO (programador −4)  [código 0]
+OK      cierre · el registro del ensayo no lleva piezas, tokens ni teléfonos  [limpio]
+55 OK · 0 FALLO · registro /Users/alejodev/.cache/ironbody-banco-h8-ops8e3/logs/ensayo-ops8e-20261111-011720.txt
+código 0

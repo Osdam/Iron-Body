@@ -6,8 +6,15 @@
 #   bash /root/h7-monitor-scope.sh estado      solo lee e imprime la configuración efectiva y el programador
 # Sin el estado actual no se toca nada: se imprime la configuración efectiva y se sale con 2. Si el estado actual no
 # coincide con la configuración efectiva, tampoco. Calcado de h6-integrations-scope.sh.
+# OPS8-e (10-11-2026, auditoría de los 9 hitos): B-T13, «on» se NIEGA (código 2, sin tocar nada) si el monitor en seco
+# de las integraciones no sale con 0 con la expectativa de hoy (la del código, ELEVENLABS_NOT_CONFIGURED, ya no es la de
+# producción desde E1-12): la expectativa de cada etapa se fija con `h8-voice-scope.sh expectativa fase1|fase2|llamadas`;
+# «estado» la enseña, dice si el estado de hoy la confirma y quién ejecuta DE VERDAD schedule:run (B-4). B-T14 (C-14): el
+# fichero de entorno puede ser de www-data en 600 o de root:www-data en 640, también al apagar. Los workers esperados son
+# 13, o 14 con ironbody-voice instalado (fase 4a del H8). Apagar nunca depende de la expectativa.
 # Se ejecuta EN EL SERVIDOR como root, con el H7 desplegado y la autorización del propietario (encender: la que pide
-# el contrato; apagar: inmediata). Orden: copia previa 600 del fichero de entorno en /root (exige el fichero en 600) →
+# el contrato; apagar: inmediata). Orden: copia previa 600 del fichero de entorno en /root (exige el fichero de www-data en
+# 600 o de root:www-data en 640) →
 # la llave (con la sangría que tuviera; dos espacios si falta), reescrita sobre el mismo fichero para conservar inodo,
 # dueño y modo → el fichero parsea → config:cache como www-data con umask 077; la caché, de www-data, 600 y nunca un
 # enlace (H-5: el chmod, si hace falta, lo hace www-data) → la configuración efectiva es la pedida y lo demás no cambió
@@ -90,17 +97,72 @@ set_var() {
     printf '  %s=%s\n' "$1" "$2" >> "$ENVF"
   fi
 }
-workers() { # 13 RUNNING y 0 BACKOFF/FATAL, esperando hasta $1 s; imprime «RUNNING MAL»
+workers() { # $2 RUNNING y 0 BACKOFF/FATAL, esperando hasta $1 s; imprime «RUNNING MAL»
   local hasta s r m
   hasta=$(( $(date +%s) + $1 ))
   while :; do
     s=$(supervisorctl status 2>/dev/null || true)
     r=$(printf '%s\n' "$s" | grep -c RUNNING || true)
     m=$(printf '%s\n' "$s" | grep -cE 'BACKOFF|FATAL' || true)
-    if { [ "$r" = 13 ] && [ "$m" = 0 ]; } || [ "$(date +%s)" -ge "$hasta" ]; then echo "$r $m"; return 0; fi
+    if { [ "$r" = "$2" ] && [ "$m" = 0 ]; } || [ "$(date +%s)" -ge "$hasta" ]; then echo "$r $m"; return 0; fi
     sleep 2
   done
 }
+# OPS8-e: los programas de supervisor esperados son 13, o 14 si el worker de la voz (ironbody-voice, fase 4a del H8) está
+# instalado (aparece en supervisorctl, en el estado que sea: si no está en RUNNING, la comprobación de después lo dice).
+programas_esperados() { local n; n=$(supervisorctl status 2>/dev/null | grep -c '^ironbody-voice:' || true); [ "${n:-0}" -ge 1 ] && echo 14 || echo 13; }
+# C-14 (B-T14 de la auditoría de los 9 hitos, OPS8-e): el fichero de entorno, un fichero normal (nunca un enlace) de
+# www-data en 600 o de root:www-data en 640 (la propuesta de ironbody-migrate, paso 3b; B-3), como h8-voice-scope.sh.
+# Nada más se admite: ni otro dueño, ni otro grupo, ni otro modo. Vale para encender y para apagar (nivel 2).
+ENV_600=www-data
+ENV_640=root:www-data
+fichero_ok() {
+  [ -f "$ENVF" ] && [ ! -L "$ENVF" ] || return 1
+  [ "$(stat -c '%U %a' "$ENVF")" = "$ENV_600 600" ] && return 0
+  [ "$(stat -c '%U:%G %a' "$ENVF")" = "$ENV_640 640" ] && return 0
+  return 1
+}
+niega() { echo "NO SE APLICA (no se ha tocado nada): $*"; exit 2; }
+# B-T13 (OPS8-e): la expectativa del monitor (ULTRON_STUDIO_MONITOR_EXPECT; la del código si no hay ninguna). No es un
+# secreto: proveedor:estado separados por comas. Lo que no tenga esa forma sale como «?».
+leer_expectativa() {
+  local l
+  l=$(sudo -u www-data php artisan tinker --execute='echo (string) config("ultron_studio.monitor.expect"), PHP_EOL;' 2>&1 | tail -1) || true
+  [[ "$l" =~ ^[a-z_]{1,40}:[A-Za-z_]{1,40}(,[a-z_]{1,40}:[A-Za-z_]{1,40}){0,9}$ ]] && printf '%s\n' "$l" || echo '?'
+}
+# ¿Confirma el estado de hoy esa expectativa (y no hay deriva de la configuración autorizada)? El monitor en seco, solo
+# integraciones: 0 = la primera pasada no abriría incidente por ellas. No escribe nada.
+expectativa_confirmada() { sudo -u www-data php artisan ultron-studio:monitor --check=integrations --dry-run > /dev/null 2>&1; }
+# H-1 / B-4: ¿quién ejecuta DE VERDAD schedule:run? El usuario EFECTIVO de cada línea activa: en el crontab de root, una
+# línea con «sudo -u www-data» (o runuser -u) corre como www-data —es lo que hay en producción, comprobado por el lead
+# el 11-11-2026: «cd /var/www/api/backend && sudo -u www-data /usr/bin/php artisan schedule:run», y www-data sin crontab—;
+# en /etc/crontab y /etc/cron.d el usuario es el sexto campo. Salida: «root=N www-data=M …» o «ninguna». Solo es un
+# problema lo que corra como root (el monitor y la instantánea escribirían como root).
+quien_programa() {
+  { for u in root www-data; do printf '#@crontab %s\n' "$u"; crontab -l -u "$u" 2> /dev/null || true; done
+    for f in /etc/crontab /etc/cron.d/*; do if [ -f "$f" ]; then printf '#@sistema %s\n' "$f"; cat "$f" 2> /dev/null || true; fi; done; } | python3 -I -c '
+import re, sys
+de, sistema, ef = None, False, {}
+for l in sys.stdin.read().splitlines():
+    if l.startswith("#@crontab "):
+        de, sistema = l.split(" ", 1)[1], False
+        continue
+    if l.startswith("#@sistema "):
+        de, sistema = None, True
+        continue
+    s = l.strip()
+    if not s or s.startswith("#") or "schedule:run" not in s or re.match(r"^[A-Za-z_][A-Za-z0-9_]*[ \t]*=", s):
+        continue
+    c = s.split()
+    n = 1 if s.startswith("@") else 5
+    usuario = (c[n] if len(c) > n else "?") if sistema else de
+    orden = " ".join(c[n + 1:] if sistema else c[n:])
+    m = re.search(r"\b(?:sudo|runuser)\b(?:\s+-[A-Za-tv-z]\S*)*\s+-u\s*([a-z_][a-z0-9_-]*)", orden)
+    ef[m.group(1) if m else usuario] = ef.get(m.group(1) if m else usuario, 0) + 1
+print(" ".join("%s=%d" % kv for kv in sorted(ef.items())) or "ninguna")'
+}
+# Las que corren como root (0 si ninguna).
+como_root() { local q; q=$(quien_programa); case " $q " in *" root="*) q=${q#*root=}; echo "${q%% *}" ;; *) echo 0 ;; esac; }
 
 ANTES=$(leer)
 [ -n "$ANTES" ] || aborta "no se pudo leer la configuración efectiva del monitor (¿está desplegado el H7?; la salida de tinker no se imprime)"
@@ -114,6 +176,17 @@ if [ "$VALOR" = estado ]; then
     ILEGIBLE) echo "schedule:list no devolvió la lista JSON de tareas"; exit 1 ;;
   esac
   echo "schedule:list (total · del Studio): $PROG0 (encendido: 2 del Studio; apagado: 0)"
+  # B-T13 (OPS8-e): la expectativa y si el estado de hoy la confirma; quién ejecuta el programador (B-4); el fichero (C-14).
+  EXP=$(leer_expectativa)
+  if expectativa_confirmada; then CONF=sí; else CONF="NO (encendido, la primera pasada abriría un incidente: fijar la de la etapa con bash /root/h8-voice-scope.sh expectativa fase1|fase2|llamadas)"; fi
+  # Sin «case» dentro de $(…) en una cadena: el bash 3.2 cierra la sustitución en el «)» del patrón (visto en el banco).
+  DEL_CODIGO=""
+  case "$ANTES" in *'"monitor_expect_default":true'*) DEL_CODIGO=' (la del código, sin ULTRON_STUDIO_MONITOR_EXPECT)' ;; esac
+  echo "expectativa del monitor: $EXP$DEL_CODIGO · la confirma el estado de hoy (monitor en seco, integraciones): $CONF"
+  QP=$(quien_programa)
+  if [ "$(como_root)" != 0 ]; then QV="NO: alguna línea corre como root (el monitor y la instantánea escribirían como root)"; elif [ "$QP" = ninguna ]; then QV="no se ve ninguna línea (¿systemd, otro usuario o sin permiso para leer los crontab?)"; else QV="sí, nada corre como root"; fi
+  echo "schedule:run (B-4), usuario efectivo de cada línea activa (crontab de root y de www-data, /etc/crontab y /etc/cron.d; root con «sudo -u www-data» cuenta como www-data): $QP · correcto: $QV"
+  if fichero_ok; then echo "fichero de entorno: $(stat -c '%U:%G %a' "$ENVF") (C-14: www-data 600 o root:www-data 640)"; else echo "fichero de entorno: $(stat -c '%U:%G %a' "$ENVF" 2>/dev/null || echo '?') — NO ADMITIDO (C-14): el mando no tocará nada"; fi
   exit 0
 fi
 if [ -z "$DESDE" ]; then
@@ -141,7 +214,16 @@ ESPERADA=${ANTES/"\"monitor_enabled\":$DESDE_B"/"\"monitor_enabled\":$NUEVO_B"}
 TOTAL0=${PROG0%% *}
 [ "$VALOR" = on ] && PROG_ESPERADA="$((TOTAL0 + 2)) 2" || PROG_ESPERADA="$((TOTAL0 - 2)) 0"
 DUENO=$(stat -c '%U:%G' "$ENVF"); MODO=$(stat -c '%a' "$ENVF")
-[ "$MODO" = 600 ] || aborta "el fichero de entorno tiene modo $MODO y se exige 600 (N-4 de security): corregirlo a mano antes de tocar nada"
+fichero_ok || aborta "el fichero de entorno no es un fichero normal de $ENV_600 en 600 ni de $ENV_640 en 640 (es $DUENO $MODO; C-14, N-4 de security): corregirlo a mano antes de tocar nada"
+if [ "$VALOR" = on ]; then
+  # B-T13 (OPS8-e): encendido con una expectativa que el estado de hoy no confirma (la del código, ELEVENLABS_NOT_CONFIGURED,
+  # dejó de serlo con E1-12), la primera pasada abre un incidente integrations_drift. La vía para fijarla es el mando de la
+  # voz, que solo la escribe si integrations-doctor la confirma. Apagar nunca se condiciona a esto.
+  EXP=$(leer_expectativa)
+  expectativa_confirmada || niega "el monitor en seco (integraciones) no sale con 0 con la expectativa de hoy ($EXP): encendido, su primera pasada abriría un incidente. Fijar la de la etapa con bash /root/h8-voice-scope.sh expectativa fase1|fase2|llamadas (el plan de despliegue, «Hito 8», dice cuál toca; la del código no vale desde E1-12) y, si hay deriva, reconocer la configuración autorizada; después, repetir"
+  echo "   expectativa del monitor: $EXP (el estado de hoy la confirma: monitor en seco, integraciones, 0)"
+fi
+W_ESPERADOS=$(programas_esperados)
 TS=$(date -u +%Y%m%d-%H%M%S)
 COPIA="/root/env-pre-h7-monitor-$VALOR-$TS"
 install -m 600 -o root -g root "$ENVF" "$COPIA"
@@ -184,9 +266,9 @@ case "$PROG" in
 esac
 sudo -u www-data php artisan queue:restart -q || desvio "queue:restart no salió con 0"
 sleep 6
-W1=$(workers 45); sleep 8; W2=$(workers 45)
-echo "4. workers (RUNNING · BACKOFF/FATAL), dos lecturas separadas: [$W1] y [$W2]"
-[ "$W1" = "13 0" ] && [ "$W2" = "13 0" ] || desvio "workers [$W1] y [$W2] (esperado 13 0 las dos veces)"
+W1=$(workers 45 "$W_ESPERADOS"); sleep 8; W2=$(workers 45 "$W_ESPERADOS")
+echo "4. workers (RUNNING · BACKOFF/FATAL), dos lecturas separadas: [$W1] y [$W2] (esperado $W_ESPERADOS 0: 13$([ "$W_ESPERADOS" = 14 ] && echo ' y ironbody-voice'))"
+[ "$W1" = "$W_ESPERADOS 0" ] && [ "$W2" = "$W_ESPERADOS 0" ] || desvio "workers [$W1] y [$W2] (esperado $W_ESPERADOS 0 las dos veces)"
 c=$(curl -s -o /dev/null -w '%{http_code}' -H 'Accept: application/json' "$API/admin/ultron-studio/status" || true)
 echo "5. status sin token → $c"; [ "$c" = 401 ] || desvio "status sin token respondió $c (esperado 401)"
 if [ "$VALOR" = on ]; then
@@ -197,15 +279,13 @@ if [ "$VALOR" = on ]; then
   else
     echo "   INFO: ultron-studio:monitor --dry-run (publicación e integraciones) NO sale con 0: la primera pasada programada abrirá o sumará un incidente; verlo a mano: sudo -u www-data php artisan ultron-studio:monitor --dry-run"
   fi
-  # H-1 (informe-devops-h7.md §8): con schedule:run en el crontab de root, el monitor corre como root cada 30 min.
-  # Sin «grep -q» en tubería: con pipefail, el SIGPIPE del que escribe daría «no» aunque casara.
-  en_crontab() { local c; c=$(crontab -l -u "$1" 2> /dev/null || true); printf '%s\n' "$c" | grep -v '^[[:space:]]*#' | grep -c 'schedule:run' || true; }
-  if [ "$(en_crontab root)" != 0 ]; then
-    echo "   AVISO (H-1): schedule:run está en el crontab de root: el monitor y la instantánea correrán como root (pasarlo al de www-data es el paso 6b de ironbody-migrate-propuesta.sh)"
-  elif [ "$(en_crontab www-data)" != 0 ]; then
-    echo "   INFO (H-1): schedule:run está en el crontab de www-data"
+  # H-1 (informe-devops-h7.md §8) / B-4: lo que importa es el usuario EFECTIVO de schedule:run (quien_programa, arriba).
+  if [ "$(como_root)" != 0 ]; then
+    echo "   AVISO (H-1): una línea activa de schedule:run corre como root ($(quien_programa)): el monitor y la instantánea correrán como root (que corra como www-data: «sudo -u www-data» en la línea de root, o el crontab de www-data)"
+  elif [ "$(quien_programa)" != ninguna ]; then
+    echo "   INFO (H-1 / B-4): schedule:run corre como $(quien_programa) (correcto)"
   else
-    echo "   INFO (H-1): schedule:run no aparece en el crontab de root ni en el de www-data (¿systemd o /etc/cron.d?): comprobar quién lo ejecuta"
+    echo "   INFO (H-1): no se ve ninguna línea activa de schedule:run (¿systemd o sin permiso para leer los crontab?): comprobar quién lo ejecuta"
   fi
   echo "   siguiente, a mano: la primera pasada real: sudo -u www-data php artisan ultron-studio:monitor → 0 y ningún incidente ultron_studio nuevo"
 fi

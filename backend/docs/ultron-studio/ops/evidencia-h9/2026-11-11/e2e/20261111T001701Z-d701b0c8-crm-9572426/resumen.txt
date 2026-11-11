@@ -1,0 +1,5 @@
+E2E H9 (prueba #26) · backend d701b0c8 (d701b0c8113b9d34f5d603ad0cdab3efe4ffcf9a) · CRM 9572426 (95724261393a843cfbac19988bb2640e6eda1bd3) · 2026-11-11T00:30:24Z · 803 s
+arnés (sha256 de ops/h9-e2e: guion, ayudante, barrido, lanzador y plantilla): 7977ab5cca4cf750
+ventana de publicar: sin ventana · reloj del motor (consola): 2026-11-11T15:00:00Z
+194 comprobaciones (182 OK, 12 FALLO)
+hash de resultados (sha256 de las comprobaciones ordenadas: fase, paso, nombre, ok): ae61f0299714bd9998190838261c1f3676b287ff297fe3f117b96111c5bb4e46

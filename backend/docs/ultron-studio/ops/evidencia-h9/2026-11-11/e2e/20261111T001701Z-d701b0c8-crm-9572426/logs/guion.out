@@ -1,0 +1,201 @@
+── humo
+  OK    Ana abre «Campañas automáticas»
+  OK    a: chips del gobierno (encendido, publicar, persona vinculada) — {"gobierno":"toggle_on Gobierno encendido","publicar":"rocket_launch Publicar: ventana abierta","persona":"how_to_reg Persona vinculada","parada":"","cadena":""}
+  OK    a: canal en vivo conectado (SSE) — live
+  OK    Beto abre «Campañas automáticas»
+  OK    b: chips del gobierno (encendido, publicar, persona vinculada) — {"gobierno":"toggle_on Gobierno encendido","publicar":"rocket_launch Publicar: ventana abierta","persona":"how_to_reg Persona vinculada","parada":"","cadena":""}
+  OK    b: canal en vivo conectado (SSE) — live
+  OK    el panel enseña el modo sombra y la constante de envío cerrada
+  OK    GET outreach/status: maestra, sombra, constante cerrada — {"status":200,"config":{"enabled":true,"mode":"shadow","sends":false}}
+── plantillas
+  OK    Ana abre Plantillas
+  OK    Ana ve «Nueva versión de plantilla»
+  OK    Ana crea la plantilla en borrador
+  OK    la plantilla existe en borrador — {"status":"DRAFT","canal":"assisted","finalidad":"commercial"}
+  OK    Ana (autora) no puede aprobar su plantilla (ni botón ni servidor) — {"boton":false,"servidor":{"allowed":false,"code":"four_eyes_required"}}
+  OK    Beto abre Plantillas
+  OK    Beto abre la plantilla de Ana
+  OK    Beto ve «Aprobar»
+  OK    Beto confirma la aprobación
+  OK    la plantilla queda APROBADA por Beto (cuatro ojos por persona) — {"status":"APPROVED","revisor":"Beto Revisor (E2E H9)"}
+── e1
+  OK    Ana ve «Nueva estrategia»
+  OK    Ana crea la estrategia
+  FALLO al crearla, el CRM abre el constructor — {"aviso":["La respuesta del servidor no tiene la forma esperada: el Studio no la usa."],"hallazgo":"H9-E2E-1"}
+  OK    el servidor sí creó la estrategia (aunque el CRM no pudo leer la respuesta) — {"uuid":"36d0a81d-c7ed-4a5c-86aa-b7176ec25c15","clave":"renovacion-7d-001716"}
+  FALLO el detalle trae `draft.content` como objeto o null (lo que exige el CRM) — {"contenido":[],"hallazgo":"H9-E2E-1"}
+  FALLO el constructor abre la estrategia recién creada (borrador vacío) — {"error":"La respuesta del servidor no tiene la forma esperada: el Studio no la usa. Reintentar","hallazgo":"H9-E2E-1"}
+  OK    COSTURA H9-E2E-1: Ana guarda por la API un borrador mínimo {format} (PUT draft, 200) — 200
+  OK    con el borrador mínimo, el constructor abre la estrategia — []
+  OK    la estrategia tiene uuid — 36d0a81d-c7ed-4a5c-86aa-b7176ec25c15
+  OK    la forma en vivo es válida (espejo del servidor, sin texto libre)
+  OK    Ana guarda el borrador
+  OK    el borrador queda guardado — ["check_circle Borrador guardado (revisión 3). close"]
+  OK    Ana valida en el servidor
+  OK    el servidor contesta la validación
+  OK    el servidor: sin bloqueantes y la misma huella que la forma en vivo — {"servidor":"verified Sin bloqueantes · 1 aviso(s) · huella 868326f5bb4dcd10…","enVivo":"868326f5bb4dcd10"}
+  OK    Ana abre «Simular»
+  OK    la pestaña Simulación queda lista
+  OK    la simulación del BORRADOR pasa (sin bloqueantes) con las decisiones esperadas por persona — {"pasa":"si","decisiones":{"p-autorizada":"plan","p-negada":"deny","p-sin-eventos":"deny"},"esperadas":{"p-autorizada":"plan","p-negada":"deny"}}
+  FALLO una persona de prueba sin eventos no se niega por «pidió hablar con alguien» (human_requested_recently) — {"decision":"deny","frase":"p-sin-eventos · block No se contactaría · N6 · Entra en la estrategia No se contacta (N6 · Contexto verificado del contacto). La persona pidió hablar con alguien hace poco: se para y se deriva. Aviso: El presupuesto o el tope del canal es cero. Se deriva a una persona del equipo. Canal assisted:what","recuentosPorMotivo":{"consent_denied":1,"human_requested_recently":1},"hallazgo":"H9-E2E-2"}
+  OK    Ana congela la versión
+  OK    la versión 1 existe y su huella es la de la forma en vivo — {"status":"REVIEW_REQUIRED","huella":"868326f5bb4dcd10","enVivo":"868326f5bb4dcd10"}
+  OK    la pestaña Simulación queda lista
+  OK    la simulación de la VERSIÓN pasa (sin bloqueantes): la puerta de aprobar — {"pasa":"si","decisiones":{"p-autorizada":"plan","p-negada":"deny","p-sin-eventos":"deny"}}
+  OK    Ana (autora) no ve «Aprobar» y el servidor tampoco se lo permite — {"boton":false,"servidor":{"allowed":false,"code":"four_eyes_required"}}
+  OK    Beto abre la versión
+  OK    Beto ve «Aprobar»
+  OK    se abre el diálogo de aprobar
+  OK    Beto confirma la aprobación
+  OK    la versión queda APROBADA por otra persona — {"status":"APPROVED","avisosReconocidos":1,"avisos":["check_circle Versión aprobada. close"]}
+  OK    Beto ve «Publicar en canario»
+  OK    el diálogo enseña la huella que se publica
+  OK    Beto confirma la publicación
+  OK    la cadena tiene la entrada `publish` VERIFICADA con la huella del diálogo y el canario activo
+── e2
+  OK    Ana ve «Nueva estrategia»
+  OK    Ana crea la estrategia
+  FALLO al crearla, el CRM abre el constructor — {"aviso":["La respuesta del servidor no tiene la forma esperada: el Studio no la usa."],"hallazgo":"H9-E2E-1"}
+  OK    el servidor sí creó la estrategia (aunque el CRM no pudo leer la respuesta) — {"uuid":"67bc3236-4a73-423f-96de-735b5b6d7d76","clave":"invitacion-clase-001716"}
+  FALLO el detalle trae `draft.content` como objeto o null (lo que exige el CRM) — {"contenido":[],"hallazgo":"H9-E2E-1"}
+  FALLO el constructor abre la estrategia recién creada (borrador vacío) — {"error":"La respuesta del servidor no tiene la forma esperada: el Studio no la usa. Reintentar","hallazgo":"H9-E2E-1"}
+  OK    COSTURA H9-E2E-1: Ana guarda por la API un borrador mínimo {format} (PUT draft, 200) — 200
+  OK    con el borrador mínimo, el constructor abre la estrategia — []
+  OK    la estrategia tiene uuid — 67bc3236-4a73-423f-96de-735b5b6d7d76
+  OK    la forma en vivo es válida (espejo del servidor, sin texto libre)
+  OK    Ana guarda el borrador
+  OK    el borrador queda guardado — ["check_circle Borrador guardado (revisión 3). close"]
+  OK    Ana valida en el servidor
+  OK    el servidor contesta la validación
+  OK    el servidor: sin bloqueantes y la misma huella que la forma en vivo — {"servidor":"verified Sin bloqueantes · 1 aviso(s) · huella 5761b0c40347f620…","enVivo":"5761b0c40347f620"}
+  OK    Ana abre «Simular»
+  OK    la pestaña Simulación queda lista
+  OK    la simulación del BORRADOR pasa (sin bloqueantes) con las decisiones esperadas por persona — {"pasa":"si","decisiones":{"p-sin-reserva":"plan","p-con-reserva":"exclude"},"esperadas":null}
+  OK    Ana congela la versión
+  OK    la versión 1 existe y su huella es la de la forma en vivo — {"status":"REVIEW_REQUIRED","huella":"5761b0c40347f620","enVivo":"5761b0c40347f620"}
+  OK    la pestaña Simulación queda lista
+  OK    la simulación de la VERSIÓN pasa (sin bloqueantes): la puerta de aprobar — {"pasa":"si","decisiones":{"p-sin-reserva":"plan","p-con-reserva":"exclude"}}
+  OK    Ana (autora) no ve «Aprobar» y el servidor tampoco se lo permite — {"boton":false,"servidor":{"allowed":false,"code":"four_eyes_required"}}
+  OK    Beto abre la versión
+  OK    Beto ve «Aprobar»
+  OK    se abre el diálogo de aprobar
+  OK    Beto confirma la aprobación
+  OK    la versión queda APROBADA por otra persona — {"status":"APPROVED","avisosReconocidos":1,"avisos":["check_circle Versión aprobada. close"]}
+  OK    Beto ve «Publicar en canario»
+  OK    el diálogo enseña la huella que se publica
+  OK    Beto confirma la publicación
+  OK    la cadena tiene la entrada `publish` VERIFICADA con la huella del diálogo y el canario activo
+── e3
+  OK    Ana ve «Nueva estrategia»
+  OK    Ana crea la estrategia
+  FALLO al crearla, el CRM abre el constructor — {"aviso":["La respuesta del servidor no tiene la forma esperada: el Studio no la usa."],"hallazgo":"H9-E2E-1"}
+  OK    el servidor sí creó la estrategia (aunque el CRM no pudo leer la respuesta) — {"uuid":"79819649-d2a4-46ab-b6e4-55b956224d82","clave":"seguimiento-prospectos-001716"}
+  FALLO el detalle trae `draft.content` como objeto o null (lo que exige el CRM) — {"contenido":[],"hallazgo":"H9-E2E-1"}
+  FALLO el constructor abre la estrategia recién creada (borrador vacío) — {"error":"La respuesta del servidor no tiene la forma esperada: el Studio no la usa. Reintentar","hallazgo":"H9-E2E-1"}
+  OK    COSTURA H9-E2E-1: Ana guarda por la API un borrador mínimo {format} (PUT draft, 200) — 200
+  OK    con el borrador mínimo, el constructor abre la estrategia — []
+  OK    la estrategia tiene uuid — 79819649-d2a4-46ab-b6e4-55b956224d82
+  OK    la forma en vivo es válida (espejo del servidor, sin texto libre)
+  OK    Ana guarda el borrador
+  OK    el borrador queda guardado — ["check_circle Borrador guardado (revisión 3). close"]
+  OK    Ana valida en el servidor
+  OK    el servidor contesta la validación
+  OK    el servidor: sin bloqueantes y la misma huella que la forma en vivo — {"servidor":"verified Sin bloqueantes · 1 aviso(s) · huella 52c84f0c8efc2bad…","enVivo":"52c84f0c8efc2bad"}
+  OK    Ana abre «Simular»
+  OK    la pestaña Simulación queda lista
+  OK    la simulación del BORRADOR pasa (sin bloqueantes) con las decisiones esperadas por persona — {"pasa":"si","decisiones":{"l-autorizado":"plan","l-sin-permiso":"deny"},"esperadas":null}
+  OK    Ana congela la versión
+  OK    la versión 1 existe y su huella es la de la forma en vivo — {"status":"REVIEW_REQUIRED","huella":"52c84f0c8efc2bad","enVivo":"52c84f0c8efc2bad"}
+  OK    la pestaña Simulación queda lista
+  OK    la simulación de la VERSIÓN pasa (sin bloqueantes): la puerta de aprobar — {"pasa":"si","decisiones":{"l-autorizado":"plan","l-sin-permiso":"deny"}}
+  OK    Ana (autora) no ve «Aprobar» y el servidor tampoco se lo permite — {"boton":false,"servidor":{"allowed":false,"code":"four_eyes_required"}}
+  OK    Beto abre la versión
+  OK    Beto ve «Aprobar»
+  OK    se abre el diálogo de aprobar
+  OK    Beto confirma la aprobación
+  OK    la versión queda APROBADA por otra persona — {"status":"APPROVED","avisosReconocidos":1,"avisos":["check_circle Versión aprobada. close"]}
+  OK    Beto ve «Publicar en canario»
+  OK    el diálogo enseña la huella que se publica
+  OK    Beto confirma la publicación
+  OK    la cadena tiene la entrada `publish` VERIFICADA con la huella del diálogo y el canario activo
+── consola
+  OK    Ana abre el panel antes de la pasada
+  OK    outreach:sweep por consola sale con 0 — h9-e2e reloj: desfase de 52296 s (solo Carbon en este proceso)
+
+  OK    el canal en vivo entrega al panel abierto los eventos `outreach.runs` de la pasada (sin recargar) — {"antes":0,"despues":4,"temas":{"ready":44,"outreach.runs":4}}
+  OK    S1 (vence en 7, autorizada, canario) queda inscrita en vencimientos — [{"uuid":"49a95305-2936-410e-8d79-ae6883711b06","estrategia":"renovacion-7d-001716","subject_key":"m:1","status":"active","mode":"shadow","part":"canary","persona":"S1"}]
+  OK    S3 (vence en 8) NO entra en vencimientos (ventana de 7)
+  OK    L1 (seguimiento vencido, autorizado) queda inscrito en prospectos — [{"uuid":"397bf74e-6a40-4a9c-aa41-de980a0e9073","estrategia":"seguimiento-prospectos-001716","subject_key":"l:6","status":"active","mode":"shadow","part":"canary","persona":"L1"}]
+  OK    S6 (ya reservó la clase) NO entra en la invitación a clase
+  OK    S2 (autorización denegada): la escalera niega en N1 con `consent_denied` — [{"nivel":"N1","motivos":["consent_denied"]}]
+  OK    L2 (sin autorización expresa): N1 niega `no_consent_for_purpose_channel` — [{"nivel":"N1","motivos":["no_consent_for_purpose_channel"]}]
+  OK    el barrido planifica trabajos en sombra (uno por persona como mucho)
+  OK    outreach:dispatch --inline por consola sale con 0 — h9-e2e reloj: desfase de 53075 s (solo Carbon en este proceso)
+
+  OK    el despacho deja los trabajos SIMULADOS (sombra: canal `simulated`, nada sale)
+  OK    cada trabajo simulado tiene su resultado `not_attempted` (detalle `shadow_mode`) — [{"outcome":"blocked","source":"system","channel":null,"detail_code":null,"n":2},{"outcome":"not_attempted","source":"simulated","channel":"simulated","detail_code":null,"n":4}]
+  OK    las pasadas `sweep` y `dispatch` constan como completadas
+── panel
+  OK    el panel enseña la última pasada de barrido y de despacho
+  OK    la tabla de inscripciones lista las del barrido — {"enDom":8,"enBase":8}
+  OK    la tabla de trabajos enseña los simulados
+  OK    Ana abre la inscripción de S1
+  OK    el detalle de la inscripción se abre
+  OK    la decisión se explica en frases y su traceHash coincide con la base
+── parada
+  OK    Ana ve el botón PARADA GLOBAL
+  OK    la PARADA GLOBAL queda abierta, a nombre de Ana — {"alcance":"global","abierta":{"type":"person","name":"Ana Autora (E2E H9)"},"motivo":"manual"}
+  OK    el panel de Beto, abierto, ve la PARADA GLOBAL sin recargar (canal en vivo `outreach.brakes`) — {"activaEnBeto":true,"eventos":1}
+  OK    con la PARADA GLOBAL el despacho por consola no reclama nada
+  FALLO a quien abrió la parada no se le ofrece soltarla (el botón no aparece) — {"boton":true,"hallazgo":"H9-E2E-3 (menor, UX)"}
+  OK    el servidor rechaza que Ana suelte su propia parada y la parada sigue abierta — {"mensaje":"Nadie suelta un freno que abrió: tiene que soltarlo otra persona, con otra cuenta."}
+  OK    la API rechaza la suelta por la misma persona (403 four_eyes_required) — {"servidor":403,"codigo":"four_eyes_required"}
+  OK    Beto ve «Soltar la parada»
+  OK    Beto suelta la PARADA GLOBAL con nota (otra persona) — {"suelta":true,"por":"Beto Revisor (E2E H9)","nota":true}
+── pausa
+  OK    Beto abre el gobierno de la campaña de prospectos
+  OK    Beto ve «Pausar»
+  OK    la cadena registra la pausa VERIFICADA y la estrategia queda en pausa
+  OK    tras la pausa, la pasada no planifica nada de la campaña pausada — {"codigo":0,"planificados":0}
+── asistido
+  OK    la API vuelve en modo live con el asistido encendido (solo la copia local)
+  OK    tras el reinicio, todos los procesos de la API llevan la valla — {"procesos":17,"conValla":17}
+  OK    preflight: modo live, asistido encendido y constante de envío cerrada — {"modo":"live","asistido":true,"cupo":20,"constante":false}
+  OK    siembra de la fase asistida (una socia nueva que vence en 7 días) — {"ok":true,"phase":"asistido","bogotaToday":"2026-11-11","people":8}
+  OK    outreach:sweep (live) sale con 0 — h9-e2e reloj: desfase de 53226 s (solo Carbon en este proceso)
+
+  OK    S4 queda planificada en live por el canal asistido
+  OK    outreach:dispatch --inline (live) sale con 0 — h9-e2e reloj: desfase de 53523 s (solo Carbon en este proceso)
+
+  OK    el trabajo asistido queda abierto en la bandeja (`started`) — {"uuid":"9ad1d03e-559d-4b66-b017-cb5e8b81ebf0","status":"started","channel":"assisted"}
+  OK    Beto abre la bandeja asistida
+  OK    el trabajo aparece en la bandeja
+  OK    antes de reclamar, la bandeja no enseña la ficha ni el guion (m-2)
+  OK    Beto reclama el trabajo
+  OK    tras reclamar, aparece «Registrar el resultado»
+  OK    quien reclamó ve el guion y el enlace a la ficha — {"guion":true,"ficha":true}
+  OK    Ana no ve el guion, la ficha ni el botón de resultado del trabajo de Beto — {"guion":false,"ficha":false,"reclamar":false,"resultado":false}
+  OK    se abre el formulario del resultado
+  OK    Beto registra el resultado
+  OK    el resultado del personal queda registrado (`answered`, fuente `staff`) y la tarea sale de la bandeja — {"status":"started","outcome":"answered","source":"staff","enLaBandeja":false}
+  OK    la inscripción sigue el mapa de resultados (answered → end_success) — {"status":"completed","last_outcome":"answered"}
+── barrido
+  OK    a · panel: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    a · estrategias: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    a · plantillas: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    a · bandeja: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    a · vinculos: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    a: ningún nombre ni teléfono sintético en las respuestas de la API ni en los eventos SSE — {"cuerposBarridos":389,"eventosSSE":88,"fugas":[]}
+  OK    a: 0 hosts fuera de 127.0.0.1 alcanzados (los intentos mueren en el resolver) — {"peticiones":1673,"intentosFuera":30,"hostsIntentados":["fonts.googleapis.com"],"alcanzadas":[]}
+  OK    a: ninguna respuesta 5xx de la API (salvo 502 dentro del reinicio deliberado de la fase asistida) — {"fuera":[],"durante502DelReinicio":0}
+  OK    a: ningún error de página — []
+  OK    b · panel: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    b · estrategias: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    b · plantillas: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    b · bandeja: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    b · vinculos: ningún nombre ni teléfono sintético en el DOM, el almacenamiento, la URL ni la consola — {"dom":[],"almacenamiento":[],"url":[],"consola":[],"tokenEnDom":false}
+  OK    b: ningún nombre ni teléfono sintético en las respuestas de la API ni en los eventos SSE — {"cuerposBarridos":326,"eventosSSE":59,"fugas":[]}
+  OK    b: 0 hosts fuera de 127.0.0.1 alcanzados (los intentos mueren en el resolver) — {"peticiones":1313,"intentosFuera":23,"hostsIntentados":["fonts.googleapis.com"],"alcanzadas":[]}
+  OK    b: ninguna respuesta 5xx de la API (salvo 502 dentro del reinicio deliberado de la fase asistida) — {"fuera":[],"durante502DelReinicio":0}
+  OK    b: ningún error de página — []
+  → 174/185 OK en 777 s

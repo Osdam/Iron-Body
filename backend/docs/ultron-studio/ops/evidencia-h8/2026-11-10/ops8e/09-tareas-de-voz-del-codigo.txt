@@ -1,0 +1,4 @@
+== OPS8-e · tareas de voz con el monitor encendido, leídas del código (artisan list --raw; sin red: proxy a un puerto cerrado) · 2026-11-10T23:54:34Z
+árbol de trabajo (con el B-T5 de h8-hardening, sin commit): órdenes voice: [voice:doctor voice:hangup voice:prune-rate-limits voice:reconcile voice:webhook-health ] → tareas de voz esperadas: 5
+«producción» del banco (a608450): órdenes voice: [voice:doctor voice:hangup voice:prune-rate-limits voice:reconcile ] → tareas de voz esperadas: 4
+regla (tareas_voz() del mando y del lanzador): 4, o 5 si existe voice:webhook-health

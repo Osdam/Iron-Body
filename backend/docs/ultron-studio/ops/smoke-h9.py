@@ -11,7 +11,8 @@ Comprueba, contra la API desplegada y SIN FILAS POSITIVAS:
   · las 13 rutas de la ejecución (B9-run, /api/admin/ultron-studio/outreach/**, L9-57): sin sesión → 401 y no-store;
     con sesión: `GET status` responde 200 SIEMPRE (observabilidad; la maestra apagada se lee en `data.config.enabled =
     false` y `data.config.mode = off`), con la constante de envío cerrada (`data.config.sendsEnabledInCode = false`),
-    ningún canal hacia personas en vivo y la cabeza de la cadena legible; las OTRAS 12, con la maestra APAGADA (fase 1)
+    ningún canal hacia personas que pueda salir (desde L9-80/L9-81 WhatsApp y la voz están DECLARADOS, `live = true`:
+    implementado no es abierto; los cierra la constante y, en la fase 1, su bandera) y la cabeza de la cadena legible; las OTRAS 12, con la maestra APAGADA (fase 1)
     → 409 `outreach_disabled` en todas (L9-47 y L9-68: la puerta va tras la llave y antes de validar o buscar nada:
     401/403 van antes; 404 y 422 nunca); con la maestra ENCENDIDA (fase 2): las listas → 200, un uuid inventado → 404,
     los POST con un cuerpo vacío → 422 (la PARADA GLOBAL pide motivo: con {} no se abre ningún freno), nunca un 2xx en
@@ -487,7 +488,14 @@ def check_exec_with_session(sm, token):
         sm.check('status: la constante de envío cerrada (data.config.sendsEnabledInCode = false)', cfg.get('sendsEnabledInCode') is False, f'sendsEnabledInCode={json.dumps(cfg.get("sendsEnabledInCode"))}')
         canales = cfg.get('channels') if isinstance(cfg.get('channels'), dict) else {}
         vivos = [k for k in CANALES_PERSONAS if isinstance(canales.get(k), dict) and canales[k].get('live') is True]
-        sm.check('status: ningún canal hacia personas en vivo (whatsapp_template y voice_call con live = false)', bool(canales) and not vivos, ', '.join(vivos) or ('sin channels' if not canales else ''))
+        # OPS9-c: desde L9-80 (W9) y L9-81 (V9) los dos canales automáticos están DECLARADOS en
+        # OutreachSendGate::LIVE_CHANNELS (`live` = su puerta está implementada): implementado no es abierto. Lo que impide
+        # que algo salga hacia una persona es la constante (sendsEnabledInCode = false, arriba) y, en la fase 1, la bandera
+        # de cada canal (abajo). `live` se informa; la comprobación es la de la constante con los dos canales presentes.
+        sm.info('status: canales automáticos declarados (live = puerta implementada; implementado no es abierto, L9-80/L9-81)', ', '.join(vivos) or 'ninguno')
+        sm.check('status: ningún canal hacia personas puede salir (whatsapp_template y voice_call presentes y la constante de envío cerrada)',
+                 bool(canales) and all(isinstance(canales.get(k), dict) for k in CANALES_PERSONAS) and cfg.get('sendsEnabledInCode') is False,
+                 f'declarados: {", ".join(vivos) or "ninguno"} · sendsEnabledInCode={json.dumps(cfg.get("sendsEnabledInCode"))}' if canales else 'sin channels')
         if FASE == '1':
             apagados = {k: (canales[k].get('enabled') if isinstance(canales.get(k), dict) else None) for k in ('assisted',) + CANALES_PERSONAS}
             sm.check('status: canales apagados en la fase 1 (assisted, whatsapp_template, voice_call)', all(v is False for v in apagados.values()), json.dumps(apagados))
