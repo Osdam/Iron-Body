@@ -32,11 +32,39 @@ use Throwable;
  * Un fallo del compilador sale como InvalidArgumentException con el motivo
  * cerrado del compilador en el mensaje (`invalid_governed`, `base_corrupt`…),
  * nunca con texto de los prompts.
+ *
+ * COMPILADOR 2 (reglas S-NNN en WhatsApp, opción A de la auditoría de cierre
+ * §3.2): lo gobernado sale del CONTENIDO entero de la versión: los cuatro
+ * valores de su configuración y las frases prohibidas de sus reglas S-NNN
+ * ({@see StudioRulePhrases}, la semántica de la voz). {@see phrases()} dice,
+ * frase a frase y regla a regla, lo que no cabe en el juego cerrado del
+ * compilador: la vista previa lo enseña y publicar se niega
+ * ({@see CODE_PHRASES_INVALID}); nada se trunca ni se descarta.
  */
 final class StudioPromptBundle
 {
     /** El código del 409 al publicar un paquete que no compila (§B.4). */
     public const CODE_COMPILE_FAILED = 'prompts_compile_failed';
+
+    /**
+     * Compilador 2: el código de la vista previa (`blocking` y
+     * `prompts.error`) y del 409 al publicar cuando las frases prohibidas de
+     * las reglas no caben en los prompts de WhatsApp: más de 12, o alguna
+     * fuera de 3–60 caracteres, sin ninguna letra ni cifra o fuera del juego
+     * cerrado. El detalle va en `prompts.phrases.problems` si son de la
+     * versión que se publica, o en `prompts.carried.problems` si son de la que
+     * se arrastra del resto (y en el `problems` del 409, con su `part`).
+     */
+    public const CODE_PHRASES_INVALID = 'prompts_rule_phrases_invalid';
+
+    /**
+     * El `part` del 409 {@see CODE_PHRASES_INVALID}: de quién son las frases
+     * que no caben. `version`, la versión que se publica; `carried`, la que hoy
+     * rige el resto y cuya parte `/1` esta publicación arrastraría a `/2`.
+     */
+    public const PHRASES_PART_VERSION = 'version';
+
+    public const PHRASES_PART_CARRIED = 'carried';
 
     /** Los modos de la oferta (`UltronPromptOffer::MODE_*`; una prueba los ata). */
     public const MODE_STUDIO = 'studio';
@@ -87,14 +115,28 @@ final class StudioPromptBundle
     }
 
     /**
-     * Los cuatro parámetros gobernados, en el orden en que el compilador aplica
-     * sus parches.
+     * Los cuatro parámetros DEL CATÁLOGO que gobiernan los prompts, en el
+     * orden en que el compilador aplica sus parches (los que pueden salir con
+     * la clase `prompt` en `params`). Las frases de las reglas no son un
+     * parámetro del catálogo: {@see phrasesParameter()}.
      *
      * @return list<string>
      */
     public static function parameters(): array
     {
-        return UltronPromptCompiler::PARAMETERS;
+        return array_values(array_filter(UltronPromptCompiler::PARAMETERS, static fn (string $id): bool => $id !== UltronPromptCompiler::PHRASES));
+    }
+
+    /** Compilador 2: la clave de lo gobernado (y el `param` de su cambio) con las frases de las reglas. */
+    public static function phrasesParameter(): string
+    {
+        return UltronPromptCompiler::PHRASES;
+    }
+
+    /** Compilador 2: cuántas frases caben como mucho en los prompts. */
+    public static function maxPhrases(): int
+    {
+        return UltronPromptCompiler::MAX_PHRASES;
     }
 
     /**
@@ -108,16 +150,22 @@ final class StudioPromptBundle
     }
 
     /**
-     * Los cuatro valores gobernados de una versión, por id, tal como están en
-     * su configuración (completa: el normalizador rellena con la línea base).
+     * Lo gobernado de una versión, por id: los cuatro valores de su
+     * configuración (completa: el normalizador rellena con la línea base) y,
+     * en {@see phrasesParameter()}, las frases prohibidas de sus reglas S-NNN
+     * ({@see StudioRulePhrases}: canónicas, sin repetir y por orden de bytes).
+     * Las frases no se validan aquí: las valida el compilador, y
+     * {@see phrases()} dice cuál no cabe.
      *
-     * @param  array<string,mixed>  $configs
+     * @param  array<string,mixed>  $content  el `content` de la versión
+     * @param  list<string>|null  $phrases  las frases ya calculadas ({@see phrases()}`['list']`), o null para calcularlas
      * @return array<string,mixed>
      *
-     * @throws InvalidArgumentException si falta alguno
+     * @throws InvalidArgumentException si falta alguno de los cuatro
      */
-    public static function governedFrom(array $configs): array
+    public static function governedFrom(array $content, ?array $phrases = null): array
     {
+        $configs = is_array($content['configs'] ?? null) ? $content['configs'] : [];
         $out = [];
         foreach (array_keys(D::GOVERNED) as $id) {
             [$capa, $clave] = explode('.', $id, 2);
@@ -126,25 +174,75 @@ final class StudioPromptBundle
             }
             $out[$id] = $configs[$capa][$clave];
         }
+        $out[UltronPromptCompiler::PHRASES] = $phrases ?? StudioRulePhrases::sorted(StudioRulePhrases::byRule($content));
 
         return $out;
+    }
+
+    /**
+     * Las frases de las reglas S-NNN que entrarían en los prompts de WhatsApp
+     * y lo que no cabe, para la vista previa:
+     *
+     *  - `list`: las frases (canónicas, sin repetir, por orden de bytes), las
+     *    que irían en lo gobernado;
+     *  - `rules`: los códigos de las reglas que las aportan, por orden de bytes
+     *    (los de la clase `prompt`);
+     *  - `max`: el tope ({@see maxPhrases()});
+     *  - `problems`: `{rule, reason, phrase}` por cada frase que no cabe, en
+     *    el orden de las reglas y de sus frases (`reason`: `length`, `charset`,
+     *    `no_text`, `spacing` o `anchor`; `rule` es su código y `phrase`, la frase
+     *    canónica, que es texto de la propia versión), y `{rule: null, reason:
+     *    too_many, phrase: null}` si son más de `max`. Vacía = compilan.
+     *
+     * @param  array<string,mixed>  $content
+     * @return array{list:list<string>,rules:list<string>,max:int,problems:list<array{rule:?string,reason:string,phrase:?string}>}
+     */
+    public static function phrases(array $content): array
+    {
+        $porRegla = StudioRulePhrases::byRule($content);
+        $lista = StudioRulePhrases::sorted($porRegla);
+
+        $problemas = [];
+        $vistos = [];
+        foreach ($porRegla as $regla) {
+            foreach ($regla['phrases'] as $frase) {
+                $motivo = UltronPromptCompiler::phraseViolation($frase);
+                $clave = $regla['code']."\n".$frase;
+                if ($motivo !== null && ! isset($vistos[$clave])) {
+                    $vistos[$clave] = true;
+                    $problemas[] = ['rule' => $regla['code'], 'reason' => $motivo, 'phrase' => $frase];
+                }
+            }
+        }
+        if (count($lista) > UltronPromptCompiler::MAX_PHRASES) {
+            $problemas[] = ['rule' => null, 'reason' => UltronPromptCompiler::PHRASES_TOO_MANY, 'phrase' => null];
+        }
+
+        return [
+            'list' => $lista,
+            'rules' => StudioRulePhrases::codes($porRegla),
+            'max' => UltronPromptCompiler::MAX_PHRASES,
+            'problems' => $problemas,
+        ];
     }
 
     /**
      * El paquete de una versión (§B.3): lo que se firma en su parte `/2` y lo
      * que enseña la vista previa.
      *
-     *  - `governed`: los cuatro valores validados, por orden de bytes.
+     *  - `governed`: los valores validados (los cuatro y las frases), por
+     *    orden de bytes.
      *  - `prompts`: `{base, bundleHash, compiler}`.
      *  - `bytes`: el tamaño del paquete compilado (UTF-8).
      *  - `baseline`: true si es exactamente la línea base (paquete = Legacy).
      *  - `changes`: por parámetro que se aparta de la línea base, en el orden de
      *    aplicación: `{param, value, roles, patches: [{role, operation, anchor,
      *    text}]}`, con los roles en su orden canónico y los parches en el de
-     *    aplicación.
+     *    aplicación. Las frases, si las hay, son el último, con `param` =
+     *    {@see phrasesParameter()} y `value` = la lista.
      *
      * @param  array<string,mixed>  $governed
-     * @return array{governed:array<string,bool|int|string>,prompts:array{base:string,bundleHash:string,compiler:int},bytes:int,baseline:bool,changes:list<array{param:string,value:bool|int|string,roles:list<string>,patches:list<array{role:string,operation:string,anchor:string,text:string}>}>}
+     * @return array{governed:array<string,bool|int|string|list<string>>,prompts:array{base:string,bundleHash:string,compiler:int},bytes:int,baseline:bool,changes:list<array{param:string,value:bool|int|string|list<string>,roles:list<string>,patches:list<array{role:string,operation:string,anchor:string,text:string}>}>}
      *
      * @throws InvalidArgumentException si no compila (el motivo del compilador va en el mensaje)
      */
@@ -248,7 +346,7 @@ final class StudioPromptBundle
      * Los parches agrupados por parámetro, en el orden de aplicación.
      *
      * @param  list<array{parameter:string,value:mixed,role:string,operation:string,anchor:string,text:string}>  $parches
-     * @return list<array{param:string,value:bool|int|string,roles:list<string>,patches:list<array{role:string,operation:string,anchor:string,text:string}>}>
+     * @return list<array{param:string,value:bool|int|string|list<string>,roles:list<string>,patches:list<array{role:string,operation:string,anchor:string,text:string}>}>
      */
     private static function changes(array $parches): array
     {

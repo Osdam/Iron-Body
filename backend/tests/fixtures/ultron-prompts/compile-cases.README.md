@@ -27,6 +27,10 @@ node backend/tests/fixtures/ultron-prompts/tools/verificar-selector.cjs [elegir-
 
 La prueba que lo usa es `tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompileCasesTest.php`. Ejecuta además el `--comprobar` y el verificador del selector, así que necesita Node en el PATH, como E10.
 
+## Compilador 2 (11-11-2026, reglas S-NNN en WhatsApp)
+
+Desde el compilador 2 lo gobernado lleva una quinta clave, `rules.forbiddenPhrases` (las frases que prohíben las reglas S-NNN de la versión; opción A de `plans/cierre/auditoria-a-studio-whatsapp.md` §3.2). Su parche no es texto congelado de §B.3, así que este guion **solo deriva la lista vacía**, que no aplica ningún parche: los 306 casos llevan `"rules.forbiddenPhrases": []` y sus `expect` son **byte a byte los del compilador 1** (comprobado al regenerar: 306/306 iguales; Legacy y `profesional + 200` sin cambios). Se añadieron 4 inválidos (falta la clave —la forma del compilador 1—, nula, texto y objeto). Las listas no vacías las prueba `tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerPhrasesTest.php`; cuando el lead congele su texto en el contrato, este guion puede derivarlas también.
+
 ## Forma
 
 - `contract`, `base`, `compiler`, `roles` (orden canónico), `baseline`, `limits`: el marco, y la prueba lo ata a las constantes publicadas del código.

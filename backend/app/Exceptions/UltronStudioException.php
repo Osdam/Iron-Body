@@ -3,6 +3,7 @@
 namespace App\Exceptions;
 
 use App\Services\UltronStudio\StudioLabConfig;
+use App\Services\UltronStudio\StudioPromptBundle;
 use Illuminate\Http\JsonResponse;
 use RuntimeException;
 
@@ -406,6 +407,37 @@ class UltronStudioException extends RuntimeException
         return new self(
             'Los prompts de ULTRON no se pueden compilar con los valores de esta publicación: no se publica nada. Avisa a quien administra el sistema.',
             'prompts_compile_failed',
+        );
+    }
+
+    /**
+     * Compilador de prompts 2 (reglas S-NNN en WhatsApp): las frases que
+     * prohíben las reglas de la versión no caben en los prompts de WhatsApp.
+     * Nunca se recortan ni se descartan: no se publica nada. `problems` es la
+     * lista de `StudioPromptBundle::phrases()` (`{rule, reason, phrase}`; la
+     * frase es texto de la propia versión, ya validado como texto plano al
+     * crear la regla).
+     *
+     * `part` dice de quién son esas frases (vuelta 2, B-1 de seguridad y
+     * hallazgo 1 del reviewer): `version`, la que se publica; `carried`, la
+     * versión que hoy rige el resto de las conversaciones, cuya parte `/1` esta
+     * publicación convertiría a `/2` con sus frases. Entonces la causa no está
+     * en lo que se publica y el mensaje da la salida.
+     *
+     * @param  list<array<string, mixed>>  $problems
+     * @param  string  $part  `StudioPromptBundle::PHRASES_PART_VERSION` o `StudioPromptBundle::PHRASES_PART_CARRIED`
+     */
+    public static function promptsRulePhrasesInvalid(array $problems, string $part = StudioPromptBundle::PHRASES_PART_VERSION): self
+    {
+        $reglas = 'como mucho 12 frases, de 3 a 60 caracteres, con al menos una letra o una cifra, solo con letras, cifras, espacios y , . ¿ ? ¡ ! -';
+
+        return new self(
+            $part === StudioPromptBundle::PHRASES_PART_CARRIED
+                ? 'No se publica nada, y la causa no está en esta versión: está en la versión que hoy rige el resto de las conversaciones. Esta publicación llevaría su parte a los prompts de WhatsApp con las frases que prohíben sus reglas del Studio, y esas frases no caben: '.$reglas.'. La salida: «Volver a Legacy» antes de publicar; si quieres conservar esas reglas, corrígelas y publica otra versión.'
+                : 'Las frases que prohíben las reglas del Studio de esta versión no caben en los prompts de WhatsApp: '.$reglas.'. No se publica nada: corrige las reglas y crea una versión nueva.',
+            'prompts_rule_phrases_invalid',
+            409,
+            ['problems' => $problems, 'part' => $part === StudioPromptBundle::PHRASES_PART_CARRIED ? StudioPromptBundle::PHRASES_PART_CARRIED : StudioPromptBundle::PHRASES_PART_VERSION],
         );
     }
 

@@ -28,8 +28,19 @@ const ROLES = ['strategist', 'composer', 'critic', 'composer_retry', 'critic_ret
 const NODES = { strategist: 'Strategist', composer: 'Composer', critic: 'Critic Comercial', composer_retry: 'Composer Reintento', critic_retry: 'Critic Comercial 2' };
 const CONTRACT = 'ultron-prompts/1';
 
-/** §B.3 / C3: la línea base («como hoy», M1-4). */
-const BASELINE = { 'persona.tone': 'cercano', 'persona.emojis': true, 'persona.maxChars': 320, 'strategy.goal': 'cita' };
+/**
+ * Compilador 2 (reglas S-NNN en WhatsApp, auditoría de cierre §3.2): lo
+ * gobernado lleva una quinta clave, la lista de frases prohibidas. Su parche NO
+ * está en §B.3 (no es texto congelado del plan): este guion solo deriva la
+ * lista VACÍA, que no aplica ningún parche, así que los 306 casos del contrato
+ * tienen que dar los mismos bytes con el compilador 2 que con el 1. Las frases
+ * no vacías se prueban en PHP (`UltronPromptCompilerPhrasesTest`).
+ */
+const PHRASES = 'rules.forbiddenPhrases';
+const COMPILER = 2;
+
+/** §B.3 / C3: la línea base («como hoy», M1-4), con la lista de frases vacía. */
+const BASELINE = { 'persona.tone': 'cercano', 'persona.emojis': true, 'persona.maxChars': 320, [PHRASES]: [], 'strategy.goal': 'cita' };
 /** §B.3: «Varios parches sobre la misma ancla se aplican en el orden de los parámetros». */
 const PARAMETERS = ['persona.tone', 'persona.emojis', 'persona.maxChars', 'strategy.goal'];
 const TONES = ['cercano', 'profesional', 'entusiasta'];
@@ -202,11 +213,12 @@ function parches(g) {
   return out;
 }
 
-/** ¿Valores válidos según §B.3? (exactamente las cuatro claves, tipos y dominios). */
+/** ¿Valores válidos según §B.3? (exactamente las cuatro claves y la de las frases, VACÍA en este guion; tipos y dominios). */
 function valido(g) {
   if (g === null || typeof g !== 'object' || Array.isArray(g)) return false;
   const claves = Object.keys(g).sort();
-  if (claves.join() !== [...PARAMETERS].sort().join()) return false;
+  if (claves.join() !== [...PARAMETERS, PHRASES].sort().join()) return false;
+  if (!Array.isArray(g[PHRASES]) || g[PHRASES].length !== 0) return false;
   if (!TONES.includes(g['persona.tone']) || !GOALS.includes(g['strategy.goal'])) return false;
   if (typeof g['persona.emojis'] !== 'boolean') return false;
   return Number.isInteger(g['persona.maxChars']) && MAX_CHARS.includes(g['persona.maxChars']);
@@ -230,4 +242,4 @@ function compilar(base, g) {
   return { roles, patches: lista, bundleHash: bundleHash(roles), bytes: total };
 }
 
-module.exports = { BACKEND, REPO, ROLES, NODES, CONTRACT, BASELINE, PARAMETERS, TONES, GOALS, MAX_CHARS, LIMITS, A, T, sha256, bytes, bundleHash, leerBase, comprobarBaseContraFlujo, comprobarTextosContraElPlan, parches, compilar, valido };
+module.exports = { BACKEND, REPO, ROLES, NODES, CONTRACT, PHRASES, COMPILER, BASELINE, PARAMETERS, TONES, GOALS, MAX_CHARS, LIMITS, A, T, sha256, bytes, bundleHash, leerBase, comprobarBaseContraFlujo, comprobarTextosContraElPlan, parches, compilar, valido };

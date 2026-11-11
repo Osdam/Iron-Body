@@ -28,6 +28,11 @@
  *      alterado → hash_mismatch; falta o sobra un rol → shape; uno enorme o
  *      vacío → size; contrato desconocido; oferta legacy → offered_<motivo>; una
  *      excepción → selector_error sin huella. Nunca deja `studio_prompts`.
+ *      Compilador 2: el fixture PHP con frases prohibidas de reglas S-NNN
+ *      (`decide-studio-frases.json`) también sale `studio` con su huella PHP,
+ *      con la línea de frases pegada a su ancla en los cuatro roles que la
+ *      llevan y el resto de bytes igual al de «profesional + 200»; una frase
+ *      alterada en tránsito → hash_mismatch. El flujo no cambia.
  *   G. «Preparar Commit», ejecutado en `vm` junto al de 29de5119 con los mismos
  *      datos: sin negociación, la MISMA salida y sin bloque `prompts`; con
  *      negociación, la misma salida más un bloque `prompts` válido para el
@@ -277,6 +282,28 @@ if (typeof pSel.jsCode === 'string') {
       esLegacy('un rol vacío', vacio, 'size');
       const numero = clon(fx); numero.studio_prompts.roles.critic = 7;
       esLegacy('un rol que no es texto', numero, 'size');
+    }
+
+    // Compilador 2 (reglas S-NNN en WhatsApp): un paquete con frases prohibidas
+    // compilado en PHP. El flujo NO cambia: el selector lo acepta por su huella,
+    // como cualquier otro paquete.
+    const fixtureFrases = path.join(generadoDir, 'fixtures/decide-studio-frases.json');
+    if (check(`fixture PHP con frases presente (${path.relative(REPO, fixtureFrases)})`, fs.existsSync(fixtureFrases))) {
+      const fx = leerJson(fixtureFrases);
+      const o = selector(clon(fx));
+      check('fixture PHP con frases de reglas S-NNN: studio con la huella calculada en PHP', o.ultron_prompts.mode === 'studio' && o.ultron_prompts.bundle_hash === fx.studio_prompts.bundle_hash && iguales(o.ultron_prompts.roles, fx.studio_prompts.roles), o.ultron_prompts.reason);
+      check('fixture PHP con frases: la huella PHP = la de Node', sha256(material(fx.studio_prompts.roles)) === fx.studio_prompts.bundle_hash);
+      const lineas = r => fx.studio_prompts.roles[r].split('\n').filter(l => l.startsWith('FRASES PROHIBIDAS PUBLICADAS: '));
+      check('fixture PHP con frases: una línea de frases en Composer, Reintento y los dos Critic, ninguna en el Strategist',
+        ['composer', 'composer_retry', 'critic', 'critic_retry'].every(r => lineas(r).length === 1) && lineas('strategist').length === 0);
+      check('fixture PHP con frases: va pegada a su ancla (FORMA: en los Composer, naturalness: en los Critic)',
+        ['composer', 'composer_retry'].every(r => { const l = fx.studio_prompts.roles[r].split('\n'); const i = l.findIndex(x => x.startsWith('FORMA:')); return i >= 0 && l[i + 1].startsWith('FRASES PROHIBIDAS PUBLICADAS: '); })
+        && ['critic', 'critic_retry'].every(r => { const l = fx.studio_prompts.roles[r].split('\n'); const i = l.findIndex(x => x.startsWith('naturalness:')); return i >= 0 && l[i + 1].startsWith('FRASES PROHIBIDAS PUBLICADAS: '); }));
+      check('fixture PHP con frases: los demás bytes son los de la oferta sin frases (profesional + 200)', fs.existsSync(fixtureStudio)
+        && ROLES.every(r => fx.studio_prompts.roles[r].split('\n').filter(l => !l.startsWith('FRASES PROHIBIDAS PUBLICADAS: ')).join('\n') === leerJson(fixtureStudio).studio_prompts.roles[r]));
+      const frase = clon(fx);
+      frase.studio_prompts.roles.critic = frase.studio_prompts.roles.critic.replace('"gratis"', '"gratix"');
+      esLegacy('una frase alterada en tránsito', frase, 'hash_mismatch');
     }
 
     esLegacy('contrato desconocido', conOferta({ contract: 'ultron-prompts/2', mode: 'studio' }), 'contract_unknown');

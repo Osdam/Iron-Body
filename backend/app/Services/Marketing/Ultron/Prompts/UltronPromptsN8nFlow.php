@@ -263,11 +263,21 @@ JS;
     }
 
     /**
+     * Las frases del fixture con reglas S-NNN (compilador 2): letras con tilde,
+     * ñ, signos de apertura y un número, para que el SHA-256 en JS del selector
+     * vea UTF-8 de 1, 2 y 3 bytes dentro del parche. Sintéticas, por orden de
+     * bytes como las firma el Studio.
+     */
+    public const FIXTURE_PHRASES = ['2x1', 'gratis', 'te lo regalo', '¿qué esperas?', 'ñapa', 'último día'];
+
+    /**
      * Los fixtures del comprobador: una respuesta de `decide` con `studio`
      * (compilada aquí, en PHP: el comprobador exige que el SHA-256 del selector
-     * dé la misma huella, E3) y una con `legacy`.
+     * dé la misma huella, E3), otra `studio` con las frases de unas reglas
+     * S-NNN (compilador 2; el selector tiene que aceptarla igual) y una con
+     * `legacy`.
      *
-     * @return array{studio:array<string,mixed>,legacy:array<string,mixed>}
+     * @return array{studio:array<string,mixed>,studioPhrases:array<string,mixed>,legacy:array<string,mixed>}
      *
      * @throws UltronPromptException
      */
@@ -276,6 +286,11 @@ JS;
         $paquete = UltronPromptCompiler::compile(array_replace(UltronPromptCompiler::BASELINE, [
             UltronPromptCompiler::TONE => 'profesional',
             UltronPromptCompiler::MAX_CHARS => 200,
+        ]));
+        $conFrases = UltronPromptCompiler::compile(array_replace(UltronPromptCompiler::BASELINE, [
+            UltronPromptCompiler::TONE => 'profesional',
+            UltronPromptCompiler::MAX_CHARS => 200,
+            UltronPromptCompiler::PHRASES => self::FIXTURE_PHRASES,
         ]));
         $comun = [
             'ok' => true,
@@ -294,6 +309,14 @@ JS;
                 'version' => 'f0000000-0000-4000-8000-0000000000f1', 'content_hash' => str_repeat('c', 64),
                 'entry' => 'e0000000-0000-4000-8000-0000000000e1', 'seq' => 7,
                 'roles' => $paquete['roles'],
+            ]],
+            'studioPhrases' => $comun + ['studio_prompts' => [
+                'contract' => UltronPromptBase::CONTRACT, 'mode' => 'studio', 'reason' => null,
+                'base' => UltronPromptBase::ID, 'compiler' => UltronPromptCompiler::VERSION,
+                'bundle_hash' => $conFrases['bundleHash'],
+                'version' => 'f0000000-0000-4000-8000-0000000000f2', 'content_hash' => str_repeat('d', 64),
+                'entry' => 'e0000000-0000-4000-8000-0000000000e2', 'seq' => 8,
+                'roles' => $conFrases['roles'],
             ]],
             'legacy' => $comun + ['studio_prompts' => [
                 'contract' => UltronPromptBase::CONTRACT, 'mode' => 'legacy', 'reason' => 'prompts_off',

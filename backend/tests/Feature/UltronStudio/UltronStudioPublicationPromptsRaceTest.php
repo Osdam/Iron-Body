@@ -216,7 +216,7 @@ class UltronStudioPublicationPromptsRaceTest extends TestCase
     {
         $cabeza = $this->chainHead();
         $parte = D::entry($cabeza->effective_json, $cabeza->uuid, (int) $cabeza->seq)['canary'];
-        $paquete = StudioPromptBundle::compile(StudioPromptBundle::governedFrom($v->fresh()->content['configs']));
+        $paquete = StudioPromptBundle::compile(StudioPromptBundle::governedFrom($v->fresh()->content));
         $this->assertSame($v->uuid, $parte['version']);
         $this->assertSame($paquete['governed'], $parte['governed']);
         $this->assertSame($paquete['prompts'], $parte['prompts']);
@@ -226,7 +226,7 @@ class UltronStudioPublicationPromptsRaceTest extends TestCase
     private function assertDecideOffers(StudioVersion $v): void
     {
         $this->assertSame(['applied', $v->uuid], [app(UltronPublishedConfig::class)->forConversation(self::CANARY_ID)['state'], app(UltronPublishedConfig::class)->forConversation(self::CANARY_ID)['version']]);
-        $paquete = StudioPromptBundle::compile(StudioPromptBundle::governedFrom($v->fresh()->content['configs']));
+        $paquete = StudioPromptBundle::compile(StudioPromptBundle::governedFrom($v->fresh()->content));
         $this->assertSame(['mode' => 'studio', 'version' => $v->uuid, 'bundle_hash' => $paquete['prompts']['bundleHash'], 'reason' => null], $this->offer());
         $this->assertSame(
             ['mode' => 'studio', 'version' => $v->uuid, 'bundleHash' => $paquete['prompts']['bundleHash'], 'reason' => null],

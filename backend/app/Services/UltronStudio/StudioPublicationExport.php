@@ -126,8 +126,8 @@ final class StudioPublicationExport
         $configsPrompts = $configs;
         $configsPrompts['persona']['maxChars'] = 200;
         $clasificacionPrompts = D::classify($configsPrompts, [['code' => 'S-003']], StudioCatalog::baseline()['configs'], $lecturas, StudioCatalog::toArray(), true);
-        $paqueteV1 = StudioPromptBundle::compile(StudioPromptBundle::governedFrom($configsPrompts));
-        $paqueteV0 = StudioPromptBundle::compile(StudioPromptBundle::governedFrom(StudioCatalog::baseline()['configs']));
+        $paqueteV1 = StudioPromptBundle::compile(StudioPromptBundle::governedFrom(['configs' => $configsPrompts]));
+        $paqueteV0 = StudioPromptBundle::compile(StudioPromptBundle::governedFrom(['configs' => StudioCatalog::baseline()['configs']]));
         $hechosPrompts = [
             'key' => StudioEngineReadings::PROMPTS_CANARY,
             'compiled' => $paqueteV1,

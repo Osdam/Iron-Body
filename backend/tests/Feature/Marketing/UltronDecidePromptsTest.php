@@ -176,7 +176,8 @@ class UltronDecidePromptsTest extends TestCase
             '/2 válida' => $this->publicaEntrada('ultron-engine-config/2', self::parteV2(self::VERSION_B, $gobernados), self::parteV2(self::VERSION_A)),
             'firma mala' => $this->publicaEntrada('ultron-engine-config/2', self::parteV2(self::VERSION_B, $gobernados), null, ['signature' => str_repeat('0', 64)]),
             'base cambiada' => $this->publicaEntrada('ultron-engine-config/2', self::parteV2(self::VERSION_B, $gobernados, ['base' => 'n8n-00000000']), null),
-            'compilador cambiado' => $this->publicaEntrada('ultron-engine-config/2', self::parteV2(self::VERSION_B, $gobernados, ['compiler' => 2]), null),
+            // Lo firmado con el compilador 1 (cuatro gobernados, la misma huella) tras subir al 2 (requisito 6 de las reglas S-NNN).
+            'compilador cambiado' => $this->publicaEntrada('ultron-engine-config/2', self::parteV2Compilador1(self::VERSION_B, $gobernados), null),
             'parte nula' => $this->publicaEntrada('ultron-engine-config/1', null, null),
         };
         $motivo = self::esperado($config, $prompts, $conversacion, $cabeza);
@@ -190,7 +191,7 @@ class UltronDecidePromptsTest extends TestCase
         $this->assertIsArray($oferta);
         $this->assertSame(self::CLAVES_DE_LA_OFERTA, array_keys($oferta));
         $this->assertSame([...array_slice(self::CLAVES_DE_HOY, 0, -1), 'studio_prompts', 'superseded'], array_keys($res->json()));
-        $this->assertSame(['ultron-prompts/1', 'n8n-29de5119', 1], [$oferta['contract'], $oferta['base'], $oferta['compiler']]);
+        $this->assertSame(['ultron-prompts/1', 'n8n-29de5119', 2], [$oferta['contract'], $oferta['base'], $oferta['compiler']]);
 
         if ($motivo === 'studio') {
             $paquete = UltronPromptCompiler::compile(array_replace(UltronPromptCompiler::BASELINE, $gobernados));

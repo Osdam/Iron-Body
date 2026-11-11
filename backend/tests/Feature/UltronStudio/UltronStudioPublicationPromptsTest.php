@@ -138,8 +138,9 @@ class UltronStudioPublicationPromptsTest extends TestCase
             array_values(array_filter($vista['params'], static fn (array $p): bool => $p['class'] === 'prompt')),
         );
         $p = $vista['prompts'];
-        $this->assertSame(['key', 'base', 'compiler', 'legacyBundleHash', 'bundleHash', 'shortHash', 'baseline', 'bytes', 'changes', 'carried', 'error'], array_keys($p));
-        $this->assertSame(['canary', 'n8n-29de5119', 1, self::LEGACY_HASH, self::G8_HASH, '702890f7', false, 113672], [$p['key'], $p['base'], $p['compiler'], $p['legacyBundleHash'], $p['bundleHash'], $p['shortHash'], $p['baseline'], $p['bytes']]);
+        $this->assertSame(['key', 'base', 'compiler', 'legacyBundleHash', 'bundleHash', 'shortHash', 'baseline', 'bytes', 'changes', 'carried', 'error', 'phrases'], array_keys($p));
+        $this->assertSame(['canary', 'n8n-29de5119', 2, self::LEGACY_HASH, self::G8_HASH, '702890f7', false, 113672], [$p['key'], $p['base'], $p['compiler'], $p['legacyBundleHash'], $p['bundleHash'], $p['shortHash'], $p['baseline'], $p['bytes']]);
+        $this->assertSame(['list' => [], 'rules' => [], 'max' => 12, 'problems' => []], $p['phrases'], 'sin reglas S-NNN no entra ninguna frase');
         $this->assertSame(['persona.tone', 'persona.maxChars'], array_column($p['changes'], 'param'));
         $this->assertStringStartsWith('REGISTRO PUBLICADO: profesional.', $p['changes'][0]['patches'][0]['text']);
         $this->assertNull($p['carried']);
@@ -151,8 +152,8 @@ class UltronStudioPublicationPromptsTest extends TestCase
         $cabeza = $this->headEntry();
         $this->assertSame(D::CONTRACT_V2, $cabeza['column']);
         $this->assertSame(D::CONTRACT_V2, $cabeza['contract']);
-        $this->assertSame(['persona.emojis' => true, 'persona.maxChars' => 200, 'persona.tone' => 'profesional', 'strategy.goal' => 'cita'], $cabeza['canary']['governed']);
-        $this->assertSame(['base' => 'n8n-29de5119', 'bundleHash' => self::G8_HASH, 'compiler' => 1], $cabeza['canary']['prompts']);
+        $this->assertSame(['persona.emojis' => true, 'persona.maxChars' => 200, 'persona.tone' => 'profesional', 'rules.forbiddenPhrases' => [], 'strategy.goal' => 'cita'], $cabeza['canary']['governed']);
+        $this->assertSame(['base' => 'n8n-29de5119', 'bundleHash' => self::G8_HASH, 'compiler' => 2], $cabeza['canary']['prompts']);
         $this->assertNull($cabeza['rest']);
         $this->assertSame(['nuevo', $vista['previewHash']], ['nuevo', StudioPublication::query()->sole()->acknowledged['previewHash']]);
 
@@ -252,11 +253,12 @@ class UltronStudioPublicationPromptsTest extends TestCase
         $this->assertSame(D::CONTRACT, $this->chainHead()->engine_contract);
 
         $this->promptsOn();
-        $entusiasta = StudioPromptBundle::compile(StudioPromptBundle::governedFrom($v0->content['configs']))['prompts']['bundleHash'];
+        $entusiasta = StudioPromptBundle::compile(StudioPromptBundle::governedFrom($v0->content))['prompts']['bundleHash'];
         $v1 = $this->g8();
         $vista = $this->previewOf($this->pub, $v1->uuid);
         $this->assertTrue($vista['publishable'], json_encode($vista['blocking']));
-        $this->assertSame(['versionUuid' => $v0->uuid, 'label' => $v0->label, 'bundleHash' => $entusiasta, 'shortHash' => substr($entusiasta, 0, 8), 'baseline' => false], $vista['prompts']['carried']);
+        // Vuelta 2 de las reglas S-NNN: `phrases` siempre (aquí V0 no trae reglas que aporten frases: `[]`).
+        $this->assertSame(['versionUuid' => $v0->uuid, 'label' => $v0->label, 'bundleHash' => $entusiasta, 'shortHash' => substr($entusiasta, 0, 8), 'baseline' => false, 'phrases' => []], $vista['prompts']['carried']);
 
         $this->publishAs($this->pub, $v1->uuid)->assertCreated();
         $cabeza = $this->headEntry();

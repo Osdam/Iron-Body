@@ -62,9 +62,10 @@ use UnexpectedValueException;
  *
  * ENMIENDA M-1 (plan de motores §B.4): `ultron-engine-config/2`, aditivo. La
  * misma entrada que `/1` con `contract` = `/2` y, en cada parte no nula, dos
- * claves más: `governed` (los cuatro valores que gobiernan los prompts del
- * motor) y `prompts` (`{base, bundleHash, compiler}`, la huella del paquete
- * compilado). La firma, la huella, la decodificación estricta y el tope son los
+ * claves más: `governed` (los valores que gobiernan los prompts del motor:
+ * cuatro con el compilador 1 y, desde el 2, además las frases prohibidas de
+ * las reglas S-NNN) y `prompts` (`{base, bundleHash, compiler}`, la huella del
+ * paquete compilado). La firma, la huella, la decodificación estricta y el tope son los
  * de `/1`. Volver a Legacy (`{canary: null, rest: null}`) se escribe SIEMPRE en
  * `/1` (R10). El paquete lo compila {@see StudioPromptBundle}; aquí solo se
  * comprueban las formas y los tipos, como el lector del motor. Con la llave de
@@ -94,6 +95,17 @@ final class StudioPublicationDeclaration
         'persona.tone' => 'string',
         'strategy.goal' => 'string',
     ];
+
+    /**
+     * Compilador de prompts 2 (reglas S-NNN en WhatsApp): la quinta clave de
+     * `governed`, una lista de textos con las frases prohibidas de las reglas.
+     * No es un parámetro del catálogo. Una parte firmada con el compilador 1
+     * lleva las cuatro de {@see GOVERNED}; desde el 2, además esta (la regla
+     * del lector del motor; una prueba las ata).
+     */
+    public const GOVERNED_PHRASES = 'rules.forbiddenPhrases';
+
+    public const PHRASES_SINCE_COMPILER = 2;
 
     /** Enmienda M-1 (§B.4): las claves de `prompts` en una parte `/2` y su tipo. */
     public const PROMPTS = [
@@ -202,23 +214,34 @@ final class StudioPublicationDeclaration
      * Enmienda M-1 (§B.4): con `$promptsGoverned` (la llave de prompts del motor
      * encendida), los cuatro {@see GOVERNED} que se apartan de la línea base van
      * a una sexta lista, `prompt`, en vez de a `noEffect` (no se reconocen: la
-     * vista previa enseña su cambio exacto); `intent.fallback` y las reglas
-     * S-NNN siguen en `noEffect`. Sin ella, las cinco listas de siempre, sin la
-     * sexta clave (C-1).
+     * vista previa enseña su cambio exacto); `intent.fallback` sigue en
+     * `noEffect`. Compilador de prompts 2: con la llave, las reglas S-NNN de
+     * `$promptRules` (las que aportan frases prohibidas a los prompts,
+     * `StudioPromptBundle::phrases()['rules']`) van también a `prompt`, como
+     * `rule:S-NNN` y al final; las demás S-NNN siguen en `noEffect`. Sin la
+     * llave, las cinco listas de siempre, sin la sexta clave (C-1), y
+     * `$promptRules` no cuenta.
      *
      * @param  array<string,array<string,mixed>>  $configs  el `configs` de la versión, completo (el normalizador de F rellena con la línea base)
      * @param  list<array<string,mixed>>  $rules  las reglas copiadas en la versión; solo cuenta `code`
      * @param  array<string,array<string,mixed>>  $baseline  `StudioCatalog::baseline()['configs']`
      * @param  array<string,mixed>  $readings  `StudioEngineReadings::read()['params']`: id → `{available:true, value}` o `{available:false}`
      * @param  array<string,mixed>  $catalog  la forma de {@see StudioCatalog::toArray()}; se leen `layers` y `bindings`
+     * @param  list<string>  $promptRules  códigos S-NNN de la versión cuyas frases entran en los prompts
      * @return array{mustMatch:list<array{param:string,versionValue:mixed,engineValue:mixed,ok:bool}>,matches:list<string>,noEffect:list<string>,mismatches:list<array{param:string,versionValue:mixed,engineValue:mixed}>,engineReadingUnavailable:list<string>,prompt?:list<string>}
      *
-     * @throws InvalidArgumentException si el catálogo no casa con el contrato del motor o el contenido no tiene su forma
+     * @throws InvalidArgumentException si el catálogo no casa con el contrato del motor, el contenido no tiene su forma o `$promptRules` nombra una regla que la versión no tiene
      */
-    public static function classify(array $configs, array $rules, array $baseline, array $readings, array $catalog, bool $promptsGoverned = false): array
+    public static function classify(array $configs, array $rules, array $baseline, array $readings, array $catalog, bool $promptsGoverned = false, array $promptRules = []): array
     {
         $parametros = self::parameters($catalog);
         self::assertKnownConfigs($configs, array_column($catalog['layers'], 'id'), $parametros);
+        $codigos = self::studioRuleCodes($rules);
+        foreach ($promptRules as $codigo) {
+            if (! is_string($codigo) || ! in_array($codigo, $codigos, true)) {
+                throw new InvalidArgumentException('promptRules solo nombra reglas S-NNN de la versión.');
+            }
+        }
 
         $mustMatch = [];
         $matches = [];
@@ -263,8 +286,12 @@ final class StudioPublicationDeclaration
             }
         }
 
-        foreach (self::studioRuleCodes($rules) as $codigo) {
-            $noEffect[] = self::RULE_PREFIX.$codigo;
+        foreach ($codigos as $codigo) {
+            if ($promptsGoverned && in_array($codigo, $promptRules, true)) {
+                $prompt[] = self::RULE_PREFIX.$codigo;
+            } else {
+                $noEffect[] = self::RULE_PREFIX.$codigo;
+            }
         }
 
         $clasificacion = [
@@ -1034,29 +1061,50 @@ final class StudioPublicationDeclaration
      * Las dos claves de `/2` con sus claves y tipos exactos (los del lector del
      * motor) y, además, sus valores: los textos, cortos y de ASCII visible; la
      * huella, 64 hexadecimales en minúscula; el compilador, un entero positivo.
-     * Que los valores gobernados compilen lo garantiza quien los compila
+     * Las claves de `governed` dependen del compilador firmado: con el 1, las
+     * cuatro de {@see GOVERNED}; desde el 2, además {@see GOVERNED_PHRASES},
+     * una lista de textos. Que los valores gobernados compilen (también las
+     * frases: cuántas y con qué caracteres) lo garantiza quien los compila
      * ({@see StudioPromptBundle}); el motor vuelve a compilarlos en `decide`.
      *
      * @param  array<string,mixed>  $parte
      */
     private static function assertPrompted(array $parte, string $campo): void
     {
-        foreach (['governed' => self::GOVERNED, 'prompts' => self::PROMPTS] as $clave => $tipos) {
-            if (! self::hasExactKeys($parte[$clave], array_keys($tipos))) {
-                throw new InvalidArgumentException("{$campo}.{$clave} lleva exactamente ".implode(', ', array_keys($tipos)).'.');
-            }
-            foreach ($tipos as $id => $tipo) {
-                if (gettype($parte[$clave][$id]) !== $tipo) {
-                    throw new InvalidArgumentException("{$campo}.{$clave}.{$id} tiene que ser de tipo {$tipo}.");
-                }
-                if ($tipo === 'string' && $id !== 'bundleHash') {
-                    self::assertShortText($parte[$clave][$id], "{$campo}.{$clave}.{$id}");
-                }
-            }
-        }
+        self::assertTypedObject($parte['prompts'], self::PROMPTS, "{$campo}.prompts");
         self::assertHex64($parte['prompts']['bundleHash'], "{$campo}.prompts.bundleHash");
         if ($parte['prompts']['compiler'] < 1) {
             throw new InvalidArgumentException("{$campo}.prompts.compiler tiene que ser un entero positivo.");
+        }
+
+        $conFrases = $parte['prompts']['compiler'] >= self::PHRASES_SINCE_COMPILER;
+        self::assertTypedObject($parte['governed'], $conFrases ? self::GOVERNED + [self::GOVERNED_PHRASES => 'array'] : self::GOVERNED, "{$campo}.governed");
+        if ($conFrases) {
+            $frases = $parte['governed'][self::GOVERNED_PHRASES];
+            if (! array_is_list($frases) || array_filter($frases, static fn (mixed $f): bool => ! is_string($f)) !== []) {
+                throw new InvalidArgumentException("{$campo}.governed.".self::GOVERNED_PHRASES.' tiene que ser una lista de textos.');
+            }
+        }
+    }
+
+    /**
+     * Un objeto con exactamente esas claves y esos tipos; sus textos (salvo
+     * la huella), cortos y de ASCII visible.
+     *
+     * @param  array<string,string>  $tipos  clave → tipo (`gettype`)
+     */
+    private static function assertTypedObject(mixed $valor, array $tipos, string $campo): void
+    {
+        if (! self::hasExactKeys($valor, array_keys($tipos))) {
+            throw new InvalidArgumentException("{$campo} lleva exactamente ".implode(', ', array_keys($tipos)).'.');
+        }
+        foreach ($tipos as $id => $tipo) {
+            if (gettype($valor[$id]) !== $tipo) {
+                throw new InvalidArgumentException("{$campo}.{$id} tiene que ser de tipo {$tipo}.");
+            }
+            if ($tipo === 'string' && $id !== 'bundleHash') {
+                self::assertShortText($valor[$id], "{$campo}.{$id}");
+            }
         }
     }
 

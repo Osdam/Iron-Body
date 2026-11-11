@@ -32,7 +32,7 @@ class UltronPromptsN8nCommandTest extends TestCase
     private const COMPROBADOR = 'docs/ultron-studio/ops/motores/verificar-flujo.cjs';
 
     private const FICHEROS = [
-        'LEEME.md', 'elegir-prompts.js', 'fixtures/decide-legacy.json', 'fixtures/decide-studio.json',
+        'LEEME.md', 'elegir-prompts.js', 'fixtures/decide-legacy.json', 'fixtures/decide-studio-frases.json', 'fixtures/decide-studio.json',
         'flujo-s1.json', 'huellas.json', 'operaciones-mcp.json', 'preparar-commit.js',
     ];
 

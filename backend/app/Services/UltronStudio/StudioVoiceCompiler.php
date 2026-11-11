@@ -198,9 +198,6 @@ final class StudioVoiceCompiler
         'rule_phrase_invalid' => 'Una frase que prohíbe una regla del Studio no puede ir en el prompt de la voz (invisibles, datos de contacto, una dirección web o dinero).',
     ];
 
-    /** El «si» de una regla se pregunta con esta frase de sonda (ver {@see forbiddenPhrases()}). */
-    private const WHEN_PROBE = 'sonda del compilador de voz';
-
     /** El motivo de cada comprobación de texto de la plantilla. */
     private const TEXT_REASONS = [
         StudioVoiceTemplate::TEXT_INVISIBLE => 'text_invisible',
@@ -762,65 +759,27 @@ final class StudioVoiceCompiler
 
     /**
      * Las frases que prohíben (`forbid text contains`) las reglas S-NNN vivas
-     * de la versión cuyo «si» se da en ella, sin repetir y ordenadas. El «si»
-     * se le pregunta a la comprobación del laboratorio (`lab-regla-<código>`
-     * de {@see StudioLabChecks}), que es LA semántica de las frases del Studio
-     * desde G: con una copia de la regla cuya única frase es una sonda, la
-     * prueba sale si y solo si su «si» se cumple. Una copia aquí podría
-     * derivar. `require text` no se aplica, como en el laboratorio.
+     * de la versión cuyo «si» se da en ella, sin repetir y ordenadas. La
+     * semántica (qué reglas, qué frases, cómo se pregunta el «si») vive en
+     * {@see StudioRulePhrases}, la misma que usan los prompts de WhatsApp;
+     * aquí solo se valida cada frase para el prompt de la voz, en el orden de
+     * las reglas, y la primera que no cabe niega la compilación.
      *
      * @param  array<string,mixed>  $content
      * @return list<string>
      */
     private static function forbiddenPhrases(array $content): array
     {
-        $configs = is_array($content['configs'] ?? null) ? $content['configs'] : [];
-        $aristas = is_array($content['definition']['edgeIds'] ?? null) ? $content['definition']['edgeIds'] : [];
-
-        $frases = [];
-        foreach (is_array($content['rules'] ?? null) ? $content['rules'] : [] as $regla) {
-            if (! is_array($regla) || ! is_string($regla['code'] ?? null) || ! str_starts_with($regla['code'], 'S-')
-                || ($regla['status'] ?? null) === StudioRuleCoherence::STATUS_ARCHIVED || ! is_array($regla['conditions'] ?? null)) {
-                continue;
-            }
-            $propias = [];
-            foreach (is_array($regla['conditions']['then'] ?? null) ? $regla['conditions']['then'] : [] as $a) {
-                if (! is_array($a) || ($a['kind'] ?? null) !== 'forbid' || ($a['target'] ?? null) !== 'text' || ($a['op'] ?? null) !== 'contains') {
-                    continue;
-                }
-                foreach (is_array($a['phrases'] ?? null) ? $a['phrases'] : [] as $f) {
-                    if (is_string($f)) {
-                        $propias[] = $f;
-                    }
-                }
-            }
-            if ($propias === []) {
-                continue;
-            }
-
-            $sonda = $regla;
-            $sonda['conditions'] = [
-                'when' => $regla['conditions']['when'] ?? [],
-                'then' => [['kind' => 'forbid', 'target' => 'text', 'op' => 'contains', 'phrases' => [self::WHEN_PROBE]]],
-            ];
-            $hallazgos = StudioLabChecks::check(self::WHEN_PROBE, ['configs' => $configs, 'edgeIds' => $aristas, 'rules' => [$sonda]]);
-            if (! in_array(StudioLabChecks::ID_RULE_PREFIX.$regla['code'], array_column($hallazgos, 'id'), true)) {
-                continue;
-            }
-
-            foreach ($propias as $f) {
-                $f = StudioLabChecks::canonical($f);
+        $porRegla = StudioRulePhrases::byRule($content);
+        foreach ($porRegla as $regla) {
+            foreach ($regla['phrases'] as $f) {
                 if ($f === '' || StudioVoiceTemplate::textViolation($f, allowDiscountWords: true) !== null) {
                     throw self::refusal('rule_phrase_invalid', 'version.content.rules.'.$regla['code']);
                 }
-                $frases[$f] = true;
             }
         }
 
-        $lista = array_map('strval', array_keys($frases));
-        sort($lista, SORT_STRING);
-
-        return $lista;
+        return StudioRulePhrases::sorted($porRegla);
     }
 
     // ── Comprobaciones de forma ─────────────────────────────────────────────

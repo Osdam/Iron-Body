@@ -56,7 +56,7 @@ las dos el smoke sigue SIN FILAS POSITIVAS.
 
 OLA M-1 + PLANTILLAS DE META (SMOKE_EXPECT_M1=1, lo pone deploy-m1-backend.sh; vacía = se comprueba si está y, si no,
 OMITIDO): `GET status` del Studio trae `engine.prompts` con la llave de SMOKE_PROMPTS_KEY (off: `current` legacy con
-`prompts_off`, la base n8n-29de5119, el compilador 1, la huella Legacy y como mucho 20 turnos sin ids ni textos; solo
+`prompts_off`, la base n8n-29de5119, el compilador 2 (desde las frases de las reglas, M1-18), la huella Legacy y como mucho 20 turnos sin ids ni textos; solo
 ese subárbol entra en el barrido de fugas); las 4 rutas de las plantillas de Meta sin sesión → 401; con sesión y las
 estrategias apagadas → 409 strategies_disabled; con las estrategias encendidas y el módulo apagado: `meta/status` → 200
 con `enabled`, `submitEnabled` y `syncEnabled` en false, sin sonda ni envíos, y las otras 3 → 409
@@ -632,8 +632,8 @@ def check_m1_prompts(sm, token):
     sm.bodies.append((f'GET {S}/status · engine.prompts', json.dumps(pr, ensure_ascii=False), pr))
     cur = pr.get('current') if isinstance(pr.get('current'), dict) else {}
     sm.check(f'status: engine.prompts.key = {PROMPTS_KEY}', pr.get('key') == PROMPTS_KEY, f'key={json.dumps(pr.get("key"))}')
-    sm.check(f'status: engine.prompts con la base {PROMPTS_BASE}, el compilador 1 y la huella Legacy {LEGACY_BUNDLE[:8]}…',
-             pr.get('base') == PROMPTS_BASE and pr.get('compiler') == 1 and pr.get('legacyBundleHash') == LEGACY_BUNDLE,
+    sm.check(f'status: engine.prompts con la base {PROMPTS_BASE}, el compilador 2 y la huella Legacy {LEGACY_BUNDLE[:8]}…',
+             pr.get('base') == PROMPTS_BASE and pr.get('compiler') == 2 and pr.get('legacyBundleHash') == LEGACY_BUNDLE,
              f'base={json.dumps(pr.get("base"))} compiler={json.dumps(pr.get("compiler"))} legacy={str(pr.get("legacyBundleHash"))[:8]}')
     if PROMPTS_KEY == 'off':
         sm.check('status: engine.prompts.current con la llave apagada = legacy por prompts_off, sin versión ni huella (decide no ofrece nada)',

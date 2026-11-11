@@ -69,7 +69,7 @@ class UltronPromptsTraceCommandTest extends TestCase
 
         $this->assertSame([], $escrituras, 'solo lectura');
         $this->assertSame(['key', 'studioConfig', 'canaryConfigured', 'base', 'compiler', 'legacyBundleHash', 'current', 'lastTurns'], array_keys($traza));
-        $this->assertSame(['canary', 'canary', true, 'n8n-29de5119', 1, UltronPromptBase::LEGACY_BUNDLE_HASH], [$traza['key'], $traza['studioConfig'], $traza['canaryConfigured'], $traza['base'], $traza['compiler'], $traza['legacyBundleHash']]);
+        $this->assertSame(['canary', 'canary', true, 'n8n-29de5119', 2, UltronPromptBase::LEGACY_BUNDLE_HASH], [$traza['key'], $traza['studioConfig'], $traza['canaryConfigured'], $traza['base'], $traza['compiler'], $traza['legacyBundleHash']]);
         $this->assertSame(['mode' => 'studio', 'version' => self::VERSION_B, 'bundleHash' => $huella, 'reason' => null], $traza['current'], 'la oferta de decide, ahora');
 
         $this->assertCount(3, $traza['lastTurns'], 'solo entrantes de la canaria');

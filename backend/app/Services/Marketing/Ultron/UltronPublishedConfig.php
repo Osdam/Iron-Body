@@ -75,9 +75,11 @@ final class UltronPublishedConfig
 
     /**
      * Enmienda M-1 (plan de motores §B.4): `/1` más, en cada parte no nula,
-     * los cuatro valores gobernados y la huella del paquete de prompts
-     * compilado. Aditivo: el sello `metadata.studio` sale igual con los dos;
-     * solo `Prompts\UltronPromptOffer` lee lo nuevo, por {@see self::partFor()}.
+     * los valores gobernados (cuatro con el compilador 1; con el 2, además las
+     * frases prohibidas de las reglas S-NNN) y la huella del paquete de
+     * prompts compilado. Aditivo: el sello `metadata.studio` sale igual con
+     * los dos; solo `Prompts\UltronPromptOffer` lee lo nuevo, por
+     * {@see self::partFor()}.
      */
     public const CONTRACT_V2 = 'ultron-engine-config/2';
 
@@ -142,6 +144,16 @@ final class UltronPublishedConfig
         'persona.tone' => 'string',
         'strategy.goal' => 'string',
     ];
+
+    /**
+     * `/2` firmada con el compilador 2 o posterior (reglas S-NNN en WhatsApp):
+     * `governed` lleva además esta quinta clave, una LISTA de textos (las
+     * frases prohibidas). Con el compilador 1, exactamente las cuatro de
+     * siempre. Los VALORES (cuántas, qué caracteres) los valida quien compila.
+     */
+    private const GOVERNED_PHRASES = 'rules.forbiddenPhrases';
+
+    private const PHRASES_SINCE_COMPILER = 2;
 
     /** `/2`: la huella del paquete compilado, la base y la versión del compilador. */
     private const PROMPTS = [
@@ -449,7 +461,8 @@ final class UltronPublishedConfig
     /**
      * Una parte es null o un objeto con las claves y los tipos exactos (también
      * los de `declared`). En `/2`, además `governed` y `prompts`, también con
-     * sus claves y tipos exactos (§B.4).
+     * sus claves y tipos exactos (§B.4); las de `governed` dependen del
+     * compilador firmado ({@see self::gobernadoValido()}).
      */
     private static function parteValida(mixed $parte, string $contrato): bool
     {
@@ -460,7 +473,7 @@ final class UltronPublishedConfig
         if (! $parte instanceof stdClass || ! self::clavesExactas($parte, $v2 ? self::PART_KEYS_V2 : self::PART_KEYS)) {
             return false;
         }
-        if ($v2 && (! self::objetoTipado($parte->governed, self::GOVERNED) || ! self::objetoTipado($parte->prompts, self::PROMPTS))) {
+        if ($v2 && (! self::objetoTipado($parte->prompts, self::PROMPTS) || ! self::gobernadoValido($parte->governed, $parte->prompts->compiler))) {
             return false;
         }
         foreach (self::PART_TYPES as $clave => $tipo) {
@@ -585,6 +598,33 @@ final class UltronPublishedConfig
         }
         foreach ($tipos as $clave => $tipo) {
             if (gettype($objeto->{$clave}) !== $tipo) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * `governed` de una parte `/2`, ESTRICTO y ligado al compilador firmado
+     * (ya comprobado entero): con el 1, las cuatro claves de siempre; desde el
+     * 2, esas cuatro y {@see self::GOVERNED_PHRASES}, una lista (no un objeto)
+     * de textos. Una forma de un compilador con otra forma es `malformed`.
+     */
+    private static function gobernadoValido(mixed $governed, int $compilador): bool
+    {
+        if ($compilador < self::PHRASES_SINCE_COMPILER) {
+            return self::objetoTipado($governed, self::GOVERNED);
+        }
+        if (! self::objetoTipado($governed, self::GOVERNED + [self::GOVERNED_PHRASES => 'array'])) {
+            return false;
+        }
+        $frases = $governed->{self::GOVERNED_PHRASES};
+        if (! array_is_list($frases)) {
+            return false;
+        }
+        foreach ($frases as $frase) {
+            if (! is_string($frase)) {
                 return false;
             }
         }

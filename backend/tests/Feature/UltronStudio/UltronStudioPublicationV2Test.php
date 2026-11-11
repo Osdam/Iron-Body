@@ -231,7 +231,8 @@ class UltronStudioPublicationV2Test extends TestCase
     private function compileCase(string $tone, bool $emojis, int $maxChars, string $goal): array
     {
         foreach (self::compile()['cases'] as $c) {
-            if ($c['governed'] === ['persona.emojis' => $emojis, 'persona.maxChars' => $maxChars, 'persona.tone' => $tone, 'strategy.goal' => $goal]) {
+            // Compilador 2: la quinta clave, vacía (los bytes son los del compilador 1).
+            if ($c['governed'] === ['persona.emojis' => $emojis, 'persona.maxChars' => $maxChars, 'persona.tone' => $tone, 'rules.forbiddenPhrases' => [], 'strategy.goal' => $goal]) {
                 return $c;
             }
         }

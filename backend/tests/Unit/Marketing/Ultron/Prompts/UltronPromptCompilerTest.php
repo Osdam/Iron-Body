@@ -46,7 +46,8 @@ class UltronPromptCompilerTest extends TestCase
 
     private const INFORMAR = 'OBJETIVO COMERCIAL PUBLICADO: informar y cualificar. Prioriza understand y recommend; no propongas close ni collect_payment salvo que la persona pida comprar o pagar con palabras.';
 
-    private const BASE = ['persona.emojis' => true, 'persona.maxChars' => 320, 'persona.tone' => 'cercano', 'strategy.goal' => 'cita'];
+    /** La línea base del compilador 2: las cuatro de siempre y ninguna frase (en el orden del contrato). */
+    private const BASE = ['persona.emojis' => true, 'persona.maxChars' => 320, 'persona.tone' => 'cercano', 'rules.forbiddenPhrases' => [], 'strategy.goal' => 'cita'];
 
     private static function maxComposer(int $n): string
     {
@@ -90,12 +91,12 @@ class UltronPromptCompilerTest extends TestCase
         $this->assertSame(Base::LEGACY_BUNDLE_HASH, $paquete['bundleHash']);
         $this->assertSame([], $paquete['patches']);
         $this->assertSame(112216, $paquete['bytes']);
-        $this->assertSame(['contract' => 'ultron-prompts/1', 'base' => 'n8n-29de5119', 'compiler' => 1], array_intersect_key($paquete, array_flip(['contract', 'base', 'compiler'])));
+        $this->assertSame(['contract' => 'ultron-prompts/1', 'base' => 'n8n-29de5119', 'compiler' => 2], array_intersect_key($paquete, array_flip(['contract', 'base', 'compiler'])));
         $this->assertSame(self::BASE, $paquete['governed']);
         $this->assertSame(self::BASE, C::BASELINE);
         $this->assertTrue(C::isBaseline(self::BASE));
         $this->assertSame([], C::changedRoles(self::BASE));
-        $this->assertSame(1, C::VERSION);
+        $this->assertSame(2, C::VERSION, 'la 2 añade las frases de las reglas S-NNN');
         $this->assertSame(['contract', 'base', 'compiler', 'governed', 'roles', 'bundleHash', 'bytes', 'patches'], array_keys($paquete));
         $this->assertSame(Base::ROLES, array_keys($paquete['roles']));
     }
@@ -308,7 +309,7 @@ class UltronPromptCompilerTest extends TestCase
             foreach ([true, false] as $emojis) {
                 for ($n = 160; $n <= 480; $n += 20) {
                     foreach (C::GOALS as $objetivo) {
-                        $p = C::compile(['persona.tone' => $tono, 'persona.emojis' => $emojis, 'persona.maxChars' => $n, 'strategy.goal' => $objetivo]);
+                        $p = C::compile(self::con(['persona.tone' => $tono, 'persona.emojis' => $emojis, 'persona.maxChars' => $n, 'strategy.goal' => $objetivo]));
                         $huellas[$p['bundleHash']] = true;
                         $mayorRol = max($mayorRol, ...array_values(array_map('strlen', $p['roles'])));
                         $mayorPaquete = max($mayorPaquete, $p['bytes']);
@@ -326,13 +327,13 @@ class UltronPromptCompilerTest extends TestCase
 
     public function test_el_orden_de_las_claves_no_cambia_nada(): void
     {
-        $valores = ['persona.tone' => 'entusiasta', 'persona.emojis' => false, 'persona.maxChars' => 260, 'strategy.goal' => 'informar'];
+        $valores = ['persona.tone' => 'entusiasta', 'persona.emojis' => false, 'persona.maxChars' => 260, 'rules.forbiddenPhrases' => ['gratis'], 'strategy.goal' => 'informar'];
         $uno = C::compile($valores);
         $otro = C::compile(array_reverse($valores, true));
 
         $this->assertSame($uno, $otro);
         $this->assertSame(C::compile(self::BASE), C::compile(array_reverse(self::BASE, true)));
-        $this->assertSame(['persona.emojis', 'persona.maxChars', 'persona.tone', 'strategy.goal'], array_keys($uno['governed']), 'orden canónico');
+        $this->assertSame(['persona.emojis', 'persona.maxChars', 'persona.tone', 'rules.forbiddenPhrases', 'strategy.goal'], array_keys($uno['governed']), 'orden canónico');
     }
 
     // ── 6 · Lo que lanza ──────────────────────────────────────────────────────
@@ -415,7 +416,7 @@ class UltronPromptCompilerTest extends TestCase
             foreach ([true, false] as $emojis) {
                 foreach ([160, 480] as $n) {
                     foreach (C::GOALS as $objetivo) {
-                        foreach (C::patches(['persona.tone' => $tono, 'persona.emojis' => $emojis, 'persona.maxChars' => $n, 'strategy.goal' => $objetivo]) as $p) {
+                        foreach (C::patches(self::con(['persona.tone' => $tono, 'persona.emojis' => $emojis, 'persona.maxChars' => $n, 'strategy.goal' => $objetivo])) as $p) {
                             $this->assertLessThanOrEqual(C::MAX_PATCH_BYTES, strlen($p['text']));
                             $this->assertStringNotContainsString("\n", $p['text']);
                             // Ningún texto de parche contiene un ancla: la unicidad se conserva al aplicar en cadena.

@@ -27,6 +27,13 @@ final class UltronPromptException extends RuntimeException
     /** Los valores gobernados no tienen las claves, los tipos o los valores del contrato. */
     public const INVALID_GOVERNED = 'invalid_governed';
 
+    /**
+     * La lista de frases prohibidas (`rules.forbiddenPhrases`, compilador 2)
+     * tiene la forma del contrato pero no su contenido: más de 12 frases, una
+     * fuera del juego de caracteres o de longitud, o sin ordenar o repetida.
+     */
+    public const INVALID_PHRASES = 'invalid_phrases';
+
     /** Un ancla no aparece exactamente una vez en el texto que va a parchear. */
     public const ANCHOR = 'anchor';
 

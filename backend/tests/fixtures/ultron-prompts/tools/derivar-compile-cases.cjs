@@ -35,7 +35,7 @@ const legacy = M.bundleHash(base);
 // Todos los valores válidos: 3 tonos × 2 emojis × 17 maxChars × 3 objetivos = 306.
 const todos = [];
 for (const tone of M.TONES) for (const emojis of [true, false]) for (const maxChars of M.MAX_CHARS) for (const goal of M.GOALS) {
-  todos.push({ 'persona.emojis': emojis, 'persona.maxChars': maxChars, 'persona.tone': tone, 'strategy.goal': goal });
+  todos.push({ 'persona.emojis': emojis, 'persona.maxChars': maxChars, 'persona.tone': tone, [M.PHRASES]: [], 'strategy.goal': goal });
 }
 // Orden del fixture: la línea base, después los de un solo parámetro cambiado y después las combinaciones.
 const orden = (g) => cambiados(g).length;
@@ -103,6 +103,10 @@ const invalidos = [
   ['una clave de más', { ...B, 'persona.extra': 1 }],
   ['clave con otra grafía (persona.maxchars)', { ...sin('persona.maxChars'), 'persona.maxchars': 320 }],
   ['vacío', {}],
+  ['falta rules.forbiddenPhrases (la forma del compilador 1)', sin(M.PHRASES)],
+  ['rules.forbiddenPhrases nulo', con(M.PHRASES, null)],
+  ['rules.forbiddenPhrases como texto ("gratis")', con(M.PHRASES, 'gratis')],
+  ['rules.forbiddenPhrases como objeto con clave', con(M.PHRASES, { frase: 'gratis' })],
 ].map(([name, governed]) => {
   if (M.valido(governed)) throw new Error('el caso inválido «' + name + '» es válido según el guion');
   return { name, governed };
@@ -116,7 +120,7 @@ const fixture = {
   },
   contract: M.CONTRACT,
   base: 'n8n-29de5119',
-  compiler: 1,
+  compiler: M.COMPILER,
   roles: M.ROLES,
   baseline: M.BASELINE,
   baseRoles: huellaDe(base),

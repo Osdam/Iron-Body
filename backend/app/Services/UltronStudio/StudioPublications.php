@@ -80,9 +80,12 @@ use Throwable;
  *    de siempre (las partes `/2` de la cabeza se copian sin sus dos claves);
  *  - volver a Legacy, siempre `/1` (R10);
  *  - publicar: `/2`; la parte que se arrastra del resto, como estaba firmada
- *    si ya era `/2` o compilada desde su versión si era `/1` (y entonces la
- *    vista previa la enseña en `prompts.carried`); si algo no compila, 409
- *    `prompts_compile_failed`: nunca se firma una parte que no compila;
+ *    si ya era `/2` o compilada ENTERA desde su versión si era `/1`, frases de
+ *    sus reglas incluidas (la vista previa la enseña en `prompts.carried`, con
+ *    sus frases en `phrases`); si sus frases no caben, 409
+ *    `prompts_rule_phrases_invalid` con `part: carried` y sus `problems`; si
+ *    otra cosa no compila, 409 `prompts_compile_failed`: nunca se firma una
+ *    parte que no compila ni se arrastra a medias;
  *  - promover y revertir solo MUEVEN partes: `/2` si todas las de la entrada
  *    nueva ya lo eran (las firmó una publicación con su vista previa); si no,
  *    `/1` (la canaria vuelve a los prompts Legacy). Nunca dan efecto a un
@@ -135,8 +138,8 @@ final class StudioPublications
      * siempre.
      */
     public const ENGINE_MESSAGES_PROMPTS = [
-        StudioPublishing::SCOPE_CANARY => 'El motor de ULTRON lee la cadena en la conversación canaria y anota en cada turno la versión publicada. Con la llave de prompts encendida, publicar CAMBIA lo que ULTRON dice en esa conversación: el tono, los emojis, la longitud y el objetivo comercial de la versión entran en sus prompts. «Si no entiende» y las reglas S-NNN siguen sin efecto en WhatsApp.',
-        StudioPublishing::SCOPE_ALL => 'El motor de ULTRON lee la cadena en todas las conversaciones y anota en cada turno la versión publicada. Con la llave de prompts encendida, publicar CAMBIA lo que ULTRON dice, solo en la conversación canaria: el tono, los emojis, la longitud y el objetivo comercial de la versión entran en sus prompts. En las demás conversaciones no cambia nada. «Si no entiende» y las reglas S-NNN siguen sin efecto en WhatsApp.',
+        StudioPublishing::SCOPE_CANARY => 'El motor de ULTRON lee la cadena en la conversación canaria y anota en cada turno la versión publicada. Con la llave de prompts encendida, publicar CAMBIA lo que ULTRON dice en esa conversación: el tono, los emojis, la longitud y el objetivo comercial de la versión entran en sus prompts, y también las frases que prohíben sus reglas S-NNN vivas cuyo «si» se cumple (se le piden al modelo y el Critic las vigila; no es un filtro que bloquee el envío). «Si no entiende» sigue sin efecto en WhatsApp.',
+        StudioPublishing::SCOPE_ALL => 'El motor de ULTRON lee la cadena en todas las conversaciones y anota en cada turno la versión publicada. Con la llave de prompts encendida, publicar CAMBIA lo que ULTRON dice, solo en la conversación canaria: el tono, los emojis, la longitud y el objetivo comercial de la versión entran en sus prompts, y también las frases que prohíben sus reglas S-NNN vivas cuyo «si» se cumple (se le piden al modelo y el Critic las vigila; no es un filtro que bloquee el envío). En las demás conversaciones no cambia nada. «Si no entiende» sigue sin efecto en WhatsApp.',
     ];
 
     /** Enmienda M-1: `effect` de la vista previa. */
@@ -898,7 +901,9 @@ final class StudioPublications
      * compilador, huella, la Legacy, la tabla de cambios con el texto exacto de
      * cada parche y la parte que se arrastra del resto). Los gobernados que se
      * apartan de la línea base salen en `params` con la clase `prompt`; un
-     * paquete que no compila bloquea con `prompts_compile_failed`.
+     * paquete que no compila bloquea con `prompts_compile_failed`, y unas
+     * frases de las reglas que no caben (de la versión o de la parte que se
+     * arrastra), con `prompts_rule_phrases_invalid`.
      *
      * @param  array<string,mixed>  $h
      * @return array<string,mixed>
@@ -974,7 +979,7 @@ final class StudioPublications
         $si($h['revalidation'] === 'blocked', 'revalidation_blocked');
         $si($h['revalidation'] === 'changed', 'revalidation_changed');
         $si(! $lab['ok'], 'lab_verdict_required');
-        $si(($prompts['error'] ?? null) !== null, StudioPromptBundle::CODE_COMPILE_FAILED);
+        $si(($prompts['error'] ?? null) !== null, (string) ($prompts['error'] ?? StudioPromptBundle::CODE_COMPILE_FAILED));
         $si($clasificacion['mismatches'] !== [], D::CODE_ENGINE_VALUE_MISMATCH);
         $si($clasificacion['engineReadingUnavailable'] !== [], D::CODE_ENGINE_READING_UNAVAILABLE);
         $si(! $h['engineCanary'], 'engine_has_no_canary');
@@ -1002,8 +1007,23 @@ final class StudioPublications
      * los prompts enteros: la base es la del repositorio y lo único que cambia
      * son los parches, que salen con su texto exacto.
      *
+     * Compilador 2, al final: `phrases` = `{list, rules, max, problems}`, las
+     * frases de las reglas S-NNN que entran (en la tabla de cambios van como
+     * el parámetro `rules.forbiddenPhrases`), las reglas que las aportan y, si
+     * alguna no cabe, por qué ({@see StudioPromptBundle::phrases()}); con
+     * `problems` no vacío, `error` es `prompts_rule_phrases_invalid`.
+     *
+     * `carried` (vuelta 2: B-1 de seguridad y hallazgo 1 del reviewer), la
+     * parte del resto que la entrada arrastraría, siempre con `phrases`: las
+     * frases que lleva a los prompts (lista ordenada; `[]` si no lleva). Si NO
+     * compila por sus frases, identifica igual la versión, `bundleHash`,
+     * `shortHash` y `baseline` van a null y lleva `problems` (la forma y los
+     * motivos de `phrases.problems`); entonces `error` es
+     * `prompts_rule_phrases_invalid` si la versión que se publica no tenía ya
+     * otro error. `problems` solo sale en ese caso.
+     *
      * @param  array<string,mixed>  $p  los hechos de {@see promptFacts()}
-     * @return array{key:string,base:string,compiler:int,legacyBundleHash:string,bundleHash:?string,shortHash:?string,baseline:?bool,bytes:?int,changes:list<array<string,mixed>>,carried:?array<string,mixed>,error:?string}
+     * @return array{key:string,base:string,compiler:int,legacyBundleHash:string,bundleHash:?string,shortHash:?string,baseline:?bool,bytes:?int,changes:list<array<string,mixed>>,carried:?array<string,mixed>,error:?string,phrases:array{list:list<string>,rules:list<string>,max:int,problems:list<array<string,mixed>>}}
      */
     public static function promptsDto(array $p): array
     {
@@ -1024,10 +1044,12 @@ final class StudioPublications
                 'versionUuid' => $arrastrada['version'],
                 'label' => $arrastrada['label'],
                 'bundleHash' => $arrastrada['bundleHash'],
-                'shortHash' => substr($arrastrada['bundleHash'], 0, 8),
+                'shortHash' => $arrastrada['bundleHash'] === null ? null : substr($arrastrada['bundleHash'], 0, 8),
                 'baseline' => $arrastrada['baseline'],
-            ],
+                'phrases' => $arrastrada['phrases'] ?? [],
+            ] + (($arrastrada['problems'] ?? []) !== [] ? ['problems' => $arrastrada['problems']] : []),
             'error' => $p['error'],
+            'phrases' => $p['phrases'] ?? ['list' => [], 'rules' => [], 'max' => StudioPromptBundle::maxPhrases(), 'problems' => []],
         ];
     }
 
@@ -1099,7 +1121,12 @@ final class StudioPublications
         if (! $h['labGate']['ok']) {
             return UltronStudioException::labVerdictRequired($h['labGate']['latest']);
         }
-        // Enmienda M-1 (§B.4): nunca se firma una parte que no compila.
+        // Enmienda M-1 (§B.4): nunca se firma una parte que no compila. Compilador
+        // 2: unas frases de las reglas que no caben lo dicen con su propio código
+        // y de qué parte son (la versión, o la que se arrastra del resto).
+        if (($h['prompts']['error'] ?? null) === StudioPromptBundle::CODE_PHRASES_INVALID) {
+            return self::phrasesRefusal($h['prompts']);
+        }
         if (($h['prompts']['error'] ?? null) !== null) {
             return UltronStudioException::promptsCompileFailed();
         }
@@ -1128,6 +1155,21 @@ final class StudioPublications
         }
 
         return null;
+    }
+
+    /**
+     * El 409 `prompts_rule_phrases_invalid` de unos hechos de prompts
+     * ({@see promptFacts()}) cuyo error es ese: con los `problems` y el `part`
+     * de la parte cuyas frases no caben (la versión que se publica o la que se
+     * arrastra del resto).
+     *
+     * @param  array<string,mixed>  $p
+     */
+    private static function phrasesRefusal(array $p): UltronStudioException
+    {
+        return ($p['errorPart'] ?? null) === StudioPromptBundle::PHRASES_PART_CARRIED
+            ? UltronStudioException::promptsRulePhrasesInvalid($p['carried']['problems'] ?? [], StudioPromptBundle::PHRASES_PART_CARRIED)
+            : UltronStudioException::promptsRulePhrasesInvalid($p['phrases']['problems'] ?? [], StudioPromptBundle::PHRASES_PART_VERSION);
     }
 
     /**
@@ -1228,7 +1270,9 @@ final class StudioPublications
         $lab = $this->labGate($version);
         // Enmienda M-1: con la llave de prompts del motor encendida, los cuatro
         // gobernados tienen efecto (clase `prompt`) y se publica en `/2`.
+        // Compilador 2: también las reglas S-NNN que aportan frases prohibidas.
         $conPrompts = StudioEngineReadings::promptsKey() === StudioEngineReadings::PROMPTS_CANARY;
+        $frases = $conPrompts ? StudioPromptBundle::phrases($contenido) : null;
 
         $clasificable = true;
         try {
@@ -1239,6 +1283,7 @@ final class StudioPublications
                 $lecturas['params'],
                 StudioCatalog::toArray(),
                 $conPrompts,
+                $frases['rules'] ?? [],
             );
         } catch (InvalidArgumentException) {
             // La forma del contenido no casa con el catálogo actual (un
@@ -1252,7 +1297,7 @@ final class StudioPublications
             $clasificacion = self::unclassified($lecturas['params'], $conPrompts);
         }
 
-        $prompts = $conPrompts ? $this->promptFacts($contenido) : null;
+        $prompts = $frases !== null ? $this->promptFacts($contenido, $frases) : null;
 
         $huella = null;
         if ($clasificable) {
@@ -1523,18 +1568,38 @@ final class StudioPublications
      * entrada arrastraría (la de la cabeza de ahora, si la hay) y si algo no
      * compila. Solo lee.
      *
+     * Compilador 2: `phrases` son las frases de las reglas S-NNN de la versión
+     * ({@see StudioPromptBundle::phrases()}). Si alguna no cabe, no se compila
+     * nada y el error es `prompts_rule_phrases_invalid` (con el detalle en
+     * `phrases.problems`); nunca se compila una lista recortada.
+     *
+     * La parte que se arrastra (vuelta 2): con sus frases (`carried.phrases`);
+     * si son las suyas las que no caben, `carried` identifica la versión con
+     * la huella a null y sus `problems`, y, si la versión que se publica no
+     * tenía ya otro error, el error es `prompts_rule_phrases_invalid` con
+     * `errorPart` = `carried` (`version` cuando son las de la versión).
+     *
      * @param  array<string,mixed>  $contenido
-     * @return array{key:string,compiled:array<string,mixed>|null,carried:array{version:string,label:string,bundleHash:string,baseline:bool}|null,error:string|null}
+     * @param  array{list:list<string>,rules:list<string>,max:int,problems:list<array<string,mixed>>}  $frases
+     * @return array{key:string,compiled:array<string,mixed>|null,carried:array{version:string,label:string,bundleHash:?string,baseline:?bool,phrases:list<string>,problems:list<array<string,mixed>>}|null,phrases:array<string,mixed>,error:string|null,errorPart:string|null}
      */
-    private function promptFacts(array $contenido): array
+    private function promptFacts(array $contenido, array $frases): array
     {
         $error = null;
+        $parteDelError = null;
         $compilado = null;
-        try {
-            $compilado = StudioPromptBundle::compile(StudioPromptBundle::governedFrom(is_array($contenido['configs'] ?? null) ? $contenido['configs'] : []));
-        } catch (InvalidArgumentException $e) {
-            Log::warning('ultron_studio.prompts_compile_failed', ['part' => 'new', 'reason' => StudioPromptBundle::failureReason($e)]);
-            $error = StudioPromptBundle::CODE_COMPILE_FAILED;
+        if ($frases['problems'] !== []) {
+            // Solo los códigos cerrados: las frases son texto del personal.
+            Log::warning('ultron_studio.prompts_compile_failed', ['part' => 'new', 'reason' => 'invalid_phrases', 'problems' => array_values(array_unique(array_column($frases['problems'], 'reason')))]);
+            $error = StudioPromptBundle::CODE_PHRASES_INVALID;
+            $parteDelError = StudioPromptBundle::PHRASES_PART_VERSION;
+        } else {
+            try {
+                $compilado = StudioPromptBundle::compile(StudioPromptBundle::governedFrom($contenido, $frases['list']));
+            } catch (InvalidArgumentException $e) {
+                Log::warning('ultron_studio.prompts_compile_failed', ['part' => 'new', 'reason' => StudioPromptBundle::failureReason($e)]);
+                $error = StudioPromptBundle::CODE_COMPILE_FAILED;
+            }
         }
 
         $arrastrada = null;
@@ -1543,18 +1608,35 @@ final class StudioPublications
         if ($resto !== null) {
             $con = $this->promptedPart($resto);
             if ($con === null) {
-                $error = StudioPromptBundle::CODE_COMPILE_FAILED;
+                $error ??= StudioPromptBundle::CODE_COMPILE_FAILED;
+            } elseif ($con['part'] === null) {
+                // Sus frases no caben: se dice cuáles y de qué versión, y no se
+                // compila ni se arrastra nada a medias.
+                if ($error === null) {
+                    $error = StudioPromptBundle::CODE_PHRASES_INVALID;
+                    $parteDelError = StudioPromptBundle::PHRASES_PART_CARRIED;
+                }
+                $arrastrada = [
+                    'version' => (string) $resto['version'],
+                    'label' => $con['label'],
+                    'bundleHash' => null,
+                    'baseline' => null,
+                    'phrases' => $con['phrases'],
+                    'problems' => $con['problems'],
+                ];
             } else {
                 $arrastrada = [
                     'version' => $con['part']['version'],
                     'label' => $con['label'],
                     'bundleHash' => $con['part']['prompts']['bundleHash'],
                     'baseline' => hash_equals(StudioPromptBundle::legacyBundleHash(), $con['part']['prompts']['bundleHash']),
+                    'phrases' => $con['phrases'],
+                    'problems' => [],
                 ];
             }
         }
 
-        return ['key' => StudioEngineReadings::PROMPTS_CANARY, 'compiled' => $compilado, 'carried' => $arrastrada, 'error' => $error];
+        return ['key' => StudioEngineReadings::PROMPTS_CANARY, 'compiled' => $compilado, 'carried' => $arrastrada, 'phrases' => $frases, 'error' => $error, 'errorPart' => $parteDelError];
     }
 
     /**
@@ -1575,21 +1657,30 @@ final class StudioPublications
     }
 
     /**
-     * Una parte de la cabeza en `/2`, con la etiqueta de su versión: tal cual
-     * si ya lo es (la firmó una publicación con su vista previa); si es `/1`,
-     * con los valores gobernados de su versión y el paquete que compilan, solo
-     * si la versión existe, es íntegra y es la de la parte. Null si no se
-     * puede (queda en el log, con el motivo y sin textos).
+     * Una parte de la cabeza en `/2`, con la etiqueta de su versión y las
+     * frases que lleva a los prompts: tal cual si ya lo es (la firmó una
+     * publicación con su vista previa; las frases, las de su `governed`, `[]`
+     * si se firmó con el compilador 1); si es `/1`, con el contenido ENTERO de
+     * su versión (los valores gobernados y las frases de sus reglas) y el
+     * paquete que compilan, solo si la versión existe, es íntegra y es la de
+     * la parte.
+     *
+     * Si las frases de sus reglas no caben, `part` es null y `problems` dice
+     * cuáles ({@see StudioPromptBundle::phrases()}): no se compila una lista
+     * recortada ni la parte sin sus frases. Null si no se puede por otra causa
+     * (queda en el log, con el motivo y sin textos).
      *
      * @param  array<string,mixed>  $parte
-     * @return array{part:array<string,mixed>,label:string}|null
+     * @return array{part:array<string,mixed>|null,label:string,phrases:list<string>,problems:list<array<string,mixed>>}|null
      */
     private function promptedPart(array $parte): ?array
     {
         $version = StudioVersion::query()->where('uuid', $parte['version'])->first(['id', 'uuid', 'label', 'content', 'content_hash']);
         $etiqueta = (string) ($version?->label ?? 'Versión sin etiqueta');
         if (D::isPartV2($parte)) {
-            return ['part' => $parte, 'label' => $etiqueta];
+            $firmadas = $parte['governed'][StudioPromptBundle::phrasesParameter()] ?? [];
+
+            return ['part' => $parte, 'label' => $etiqueta, 'phrases' => is_array($firmadas) ? array_values(array_filter($firmadas, 'is_string')) : [], 'problems' => []];
         }
 
         if ($version === null || ! StudioVersions::integrityOk($version) || ! hash_equals((string) $version->content_hash, (string) $parte['contentHash'])) {
@@ -1597,15 +1688,23 @@ final class StudioPublications
 
             return null;
         }
+        $contenido = is_array($version->content) ? $version->content : [];
+        $frases = StudioPromptBundle::phrases($contenido);
+        if ($frases['problems'] !== []) {
+            // Solo los códigos cerrados: las frases son texto del personal.
+            Log::warning('ultron_studio.prompts_compile_failed', ['part' => 'carried', 'reason' => 'invalid_phrases', 'problems' => array_values(array_unique(array_column($frases['problems'], 'reason')))]);
+
+            return ['part' => null, 'label' => $etiqueta, 'phrases' => $frases['list'], 'problems' => $frases['problems']];
+        }
         try {
-            $paquete = StudioPromptBundle::compile(StudioPromptBundle::governedFrom($version->content['configs'] ?? []));
+            $paquete = StudioPromptBundle::compile(StudioPromptBundle::governedFrom($contenido, $frases['list']));
         } catch (InvalidArgumentException $e) {
             Log::warning('ultron_studio.prompts_compile_failed', ['part' => 'carried', 'reason' => StudioPromptBundle::failureReason($e)]);
 
             return null;
         }
 
-        return ['part' => D::partV2($parte, $paquete['governed'], $paquete['prompts']), 'label' => $etiqueta];
+        return ['part' => D::partV2($parte, $paquete['governed'], $paquete['prompts']), 'label' => $etiqueta, 'phrases' => $frases['list'], 'problems' => []];
     }
 
     /**
@@ -1614,7 +1713,9 @@ final class StudioPublications
      * `/2`, la parte nueva con el paquete de la vista previa y la del resto
      * como la enseñó la vista previa (`carried`); si la cabeza se movió entre
      * las puertas y la transacción y la parte del resto ya no es esa, 409
-     * `publication_moved`; si no compila, 409 `prompts_compile_failed`.
+     * `publication_moved`; si unas frases no caben, 409
+     * `prompts_rule_phrases_invalid` con su `part`; si otra cosa no compila,
+     * 409 `prompts_compile_failed`.
      *
      * @param  array{canary:array<string,mixed>|null,rest:array<string,mixed>|null}  $nuevas
      * @param  array<string,mixed>|null  $prompts  {@see promptFacts()}
@@ -1624,6 +1725,9 @@ final class StudioPublications
     {
         if ($prompts === null) {
             return [D::CONTRACT, self::asV1($nuevas)];
+        }
+        if ($prompts['error'] === StudioPromptBundle::CODE_PHRASES_INVALID) {
+            throw self::phrasesRefusal($prompts);
         }
         if ($prompts['error'] !== null || $prompts['compiled'] === null || $nuevas['canary'] === null) {
             throw UltronStudioException::promptsCompileFailed();
@@ -1635,6 +1739,11 @@ final class StudioPublications
             $con = $this->promptedPart($nuevas['rest']);
             if ($con === null) {
                 throw UltronStudioException::promptsCompileFailed();
+            }
+            if ($con['part'] === null) {
+                // La cabeza se movió tras las puertas y la parte del resto de
+                // ahora trae frases que no caben: tampoco se firma.
+                throw UltronStudioException::promptsRulePhrasesInvalid($con['problems'], StudioPromptBundle::PHRASES_PART_CARRIED);
             }
             $resto = $con['part'];
         }

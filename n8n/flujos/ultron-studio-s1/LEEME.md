@@ -11,14 +11,14 @@
 | `operaciones-mcp.json` | Las operaciones para `update_workflow` del MCP, en orden: 1 `addNode`, 1 `removeConnection`, 2 `addConnection`, 5 `setNodeParameter` de `/responses` (se reescribe el array entero: el MCP no indexa arrays; `values[1]` va intacto), 1 de `/jsonBody` y 1 de `/jsCode`. **Los nombres de campo de cada operación hay que contrastarlos con el esquema del MCP antes de usarlos**; el contenido (nodos, rutas, valores) es el verificado. |
 | `flujo-s1.json` | El flujo completo esperado tras aplicar las operaciones. **Solo para el comprobador. NUNCA se importa en n8n.** |
 | `huellas.json` | Huellas esperadas (base, Legacy, selector, Preparar Commit, cuerpo de decide, contenidos de sistema, `values[1]`). |
-| `fixtures/decide-studio.json`, `fixtures/decide-legacy.json` | Respuestas sintéticas de `decide` (sin datos de nadie) para ejecutar el selector a mano en la copia. La `studio` es `persona.tone = profesional` + `persona.maxChars = 200`, compilada en PHP. |
+| `fixtures/decide-studio.json`, `fixtures/decide-studio-frases.json`, `fixtures/decide-legacy.json` | Respuestas sintéticas de `decide` (sin datos de nadie) para ejecutar el selector a mano en la copia. La `studio` es `persona.tone = profesional` + `persona.maxChars = 200`, compilada en PHP; la `studio-frases`, lo mismo más seis frases prohibidas de reglas S-NNN sintéticas (compilador 2: el selector la acepta igual, sin cambiar el flujo). |
 
 ## Huellas
 
 - Huella del paquete Legacy (`LEGACY_BUNDLE_HASH`): `3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902`
 - Selector: 118831 bytes, sha256 `456e4d495115cf4b126277773b6f4998530a78635f850eac6b8b7ec4e7350d0f`
 - Preparar Commit: sha256 `fb35df55dbfe6825482baa7f30b4f41050ede24d6eecfc92f23585a9f8fff7ce`
-- Contrato `ultron-prompts/1`, base `n8n-29de5119`, compilador 1, revisión del flujo `S1`
+- Contrato `ultron-prompts/1`, base `n8n-29de5119`, compilador 2, revisión del flujo `S1`
 
 | Rol | Nodo | Bytes | sha256 |
 |---|---|---|---|

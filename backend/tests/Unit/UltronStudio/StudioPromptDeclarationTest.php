@@ -51,6 +51,9 @@ class StudioPromptDeclarationTest extends TestCase
     /** El cambio de aceptación (G8) y su huella de referencia (`api-compilador.md` §4, calculada por B-M). */
     private const G8 = ['persona.emojis' => true, 'persona.maxChars' => 200, 'persona.tone' => 'profesional', 'strategy.goal' => 'cita'];
 
+    /** G8 con el compilador 2: la misma huella (sin frases no hay parche nuevo) y la quinta clave vacía. */
+    private const G8_C2 = ['persona.emojis' => true, 'persona.maxChars' => 200, 'persona.tone' => 'profesional', 'rules.forbiddenPhrases' => [], 'strategy.goal' => 'cita'];
+
     private const G8_HASH = '702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c';
 
     private const LEGACY_HASH = '3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902';
@@ -62,9 +65,16 @@ class StudioPromptDeclarationTest extends TestCase
         return D::part($version, str_repeat('ab', 32), '2026-10-19.1', 12, 7, self::DECLARED);
     }
 
+    /** Una parte `/2` firmada con el compilador 1 (cuatro gobernados): la forma que sigue en la cadena tras subir el compilador. */
     private static function partV2(string $version = self::V, array $governed = self::G8, string $hash = self::G8_HASH): array
     {
         return D::partV2(self::part($version), $governed, ['base' => 'n8n-29de5119', 'bundleHash' => $hash, 'compiler' => 1]);
+    }
+
+    /** Una parte `/2` firmada con el compilador de hoy (2: con las frases). */
+    private static function partActual(string $version = self::V, array $governed = self::G8_C2, string $hash = self::G8_HASH): array
+    {
+        return D::partV2(self::part($version), $governed, ['base' => 'n8n-29de5119', 'bundleHash' => $hash, 'compiler' => 2]);
     }
 
     private static function fixture(): array
@@ -88,18 +98,30 @@ class StudioPromptDeclarationTest extends TestCase
         $this->assertSame(UltronPublishedConfig::CONTRACT_V2, D::CONTRACT_V2);
         $this->assertSame(UltronPublishedConfig::CONTRACTS, D::CONTRACTS);
 
-        $gobernados = UltronPromptCompiler::PARAMETERS;
+        // Compilador 2: los cuatro del catálogo (D::GOVERNED) y la quinta clave, las frases.
+        $this->assertSame(UltronPromptCompiler::PHRASES, D::GOVERNED_PHRASES);
+        $this->assertSame(2, D::PHRASES_SINCE_COMPILER);
+        $this->assertLessThanOrEqual(UltronPromptCompiler::VERSION, D::PHRASES_SINCE_COMPILER);
+        $cuatro = array_values(array_diff(UltronPromptCompiler::PARAMETERS, [UltronPromptCompiler::PHRASES]));
+        $gobernados = $cuatro;
         sort($gobernados, SORT_STRING);
-        $this->assertSame($gobernados, array_keys(D::GOVERNED), 'D::GOVERNED son los cuatro del compilador, por orden de bytes');
-        $this->assertSame(array_keys(UltronPromptCompiler::BASELINE), array_keys(D::GOVERNED));
-        foreach (UltronPromptCompiler::BASELINE as $id => $valor) {
-            $this->assertSame(D::GOVERNED[$id], gettype($valor), $id);
+        $this->assertSame($gobernados, array_keys(D::GOVERNED), 'D::GOVERNED son los cuatro del catálogo que gobierna el compilador, por orden de bytes');
+        $linea = UltronPromptCompiler::BASELINE;
+        $todas = array_keys(D::GOVERNED + [D::GOVERNED_PHRASES => 'array']);
+        sort($todas, SORT_STRING);
+        $this->assertSame(array_keys($linea), $todas, 'la línea base del compilador lleva las cinco claves, por orden de bytes');
+        foreach ($linea as $id => $valor) {
+            $this->assertSame((D::GOVERNED + [D::GOVERNED_PHRASES => 'array'])[$id], gettype($valor), $id);
         }
-        $this->assertSame(UltronPromptCompiler::PARAMETERS, B::parameters());
+        $this->assertSame($cuatro, B::parameters(), 'los parámetros del catálogo, en el orden de aplicación');
+        $this->assertSame(UltronPromptCompiler::PHRASES, B::phrasesParameter());
+        $this->assertSame(12, B::maxPhrases());
         $this->assertSame(UltronPromptBase::ROLES, B::roles());
 
-        // La línea base del catálogo dice de los cuatro lo mismo que el compilador: «como hoy» (G4).
-        $this->assertSame(UltronPromptCompiler::BASELINE, B::governedFrom(StudioCatalog::baseline()['configs']));
+        // La línea base del catálogo dice de los cuatro lo mismo que el compilador: «como hoy» (G4); sin reglas, sin frases.
+        $deLaLinea = B::governedFrom(['configs' => StudioCatalog::baseline()['configs']]);
+        ksort($deLaLinea, SORT_STRING);
+        $this->assertSame(UltronPromptCompiler::BASELINE, $deLaLinea);
 
         $this->assertSame(UltronPromptOffer::KEY_OFF, StudioEngineReadings::PROMPTS_OFF);
         $this->assertSame(UltronPromptOffer::KEY_CANARY, StudioEngineReadings::PROMPTS_CANARY);
@@ -285,15 +307,15 @@ class StudioPromptDeclarationTest extends TestCase
 
     public function test_la_linea_base_es_legacy_y_el_cambio_de_aceptacion_tiene_su_huella(): void
     {
-        $legacy = B::compile(B::governedFrom(StudioCatalog::baseline()['configs']));
+        $legacy = B::compile(B::governedFrom(['configs' => StudioCatalog::baseline()['configs']]));
         $this->assertTrue($legacy['baseline']);
         $this->assertSame([], $legacy['changes']);
-        $this->assertSame(['base' => 'n8n-29de5119', 'bundleHash' => self::LEGACY_HASH, 'compiler' => 1], $legacy['prompts']);
+        $this->assertSame(['base' => 'n8n-29de5119', 'bundleHash' => self::LEGACY_HASH, 'compiler' => 2], $legacy['prompts']);
         $this->assertSame(array_sum(UltronPromptBase::BYTES), $legacy['bytes']);
 
-        $g8 = B::compile(array_reverse(self::G8, true));
+        $g8 = B::compile(array_reverse(self::G8_C2, true));
         $this->assertFalse($g8['baseline']);
-        $this->assertSame(self::G8, $g8['governed']);
+        $this->assertSame(self::G8_C2, $g8['governed']);
         $this->assertSame(self::G8_HASH, $g8['prompts']['bundleHash']);
         $this->assertSame(113672, $g8['bytes']);
         $this->assertSame(['persona.tone', 'persona.maxChars'], array_column($g8['changes'], 'param'));
@@ -303,23 +325,25 @@ class StudioPromptDeclarationTest extends TestCase
         }
         // Los parches son los del compilador, con su texto exacto y en su orden.
         $this->assertSame(
-            array_map(static fn (array $p): array => ['role' => $p['role'], 'operation' => $p['operation'], 'anchor' => $p['anchor'], 'text' => $p['text']], UltronPromptCompiler::patches(self::G8)),
+            array_map(static fn (array $p): array => ['role' => $p['role'], 'operation' => $p['operation'], 'anchor' => $p['anchor'], 'text' => $p['text']], UltronPromptCompiler::patches(self::G8_C2)),
             array_merge(...array_column($g8['changes'], 'patches')),
         );
         $this->assertSame('mas de ~200 caracteres', $g8['changes'][1]['patches'][2]['text']);
 
-        $venta = B::compile(array_replace(self::G8, ['persona.tone' => 'cercano', 'persona.maxChars' => 320, 'strategy.goal' => 'venta']));
+        $venta = B::compile(array_replace(self::G8_C2, ['persona.tone' => 'cercano', 'persona.maxChars' => 320, 'strategy.goal' => 'venta']));
         $this->assertSame([['param' => 'strategy.goal', 'value' => 'venta', 'roles' => ['strategist']]], array_map(static fn (array $c): array => array_diff_key($c, ['patches' => 0]), $venta['changes']));
     }
 
     /** @return iterable<string,array{array<string,mixed>,string}> */
     public static function invalidGoverned(): iterable
     {
-        yield 'tono desconocido' => [array_replace(self::G8, ['persona.tone' => 'serio']), 'invalid_governed'];
-        yield 'maxChars fuera de paso' => [array_replace(self::G8, ['persona.maxChars' => 330]), 'invalid_governed'];
-        yield 'maxChars fuera de rango' => [array_replace(self::G8, ['persona.maxChars' => 500]), 'invalid_governed'];
-        yield 'objetivo desconocido' => [array_replace(self::G8, ['strategy.goal' => 'vender']), 'invalid_governed'];
-        yield 'falta uno' => [array_slice(self::G8, 0, 3, true), 'invalid_governed'];
+        yield 'tono desconocido' => [array_replace(self::G8_C2, ['persona.tone' => 'serio']), 'invalid_governed'];
+        yield 'maxChars fuera de paso' => [array_replace(self::G8_C2, ['persona.maxChars' => 330]), 'invalid_governed'];
+        yield 'maxChars fuera de rango' => [array_replace(self::G8_C2, ['persona.maxChars' => 500]), 'invalid_governed'];
+        yield 'objetivo desconocido' => [array_replace(self::G8_C2, ['strategy.goal' => 'vender']), 'invalid_governed'];
+        yield 'falta uno' => [array_slice(self::G8_C2, 0, 4, true), 'invalid_governed'];
+        yield 'la forma del compilador 1 (sin frases)' => [self::G8, 'invalid_governed'];
+        yield 'una frase con comillas' => [array_replace(self::G8_C2, ['rules.forbiddenPhrases' => ['di "gratis"']]), 'invalid_phrases'];
     }
 
     #[DataProvider('invalidGoverned')]
@@ -340,7 +364,7 @@ class StudioPromptDeclarationTest extends TestCase
         unset($configs['strategy']['goal']);
 
         $this->expectException(InvalidArgumentException::class);
-        B::governedFrom($configs);
+        B::governedFrom(['configs' => $configs]);
     }
 
     // ── La oferta que enseña `status` (§B.5) ────────────────────────────────
@@ -354,25 +378,27 @@ class StudioPromptDeclarationTest extends TestCase
         $canary = StudioPublishing::SCOPE_CANARY;
         $motivo = static fn (array $o): ?string => $o['reason'];
 
-        $this->assertSame('prompts_off', $motivo(B::offer($off, $canary, true, $ok(self::partV2()))));
-        $this->assertSame('prompts_off', $motivo(B::offer('all', $canary, true, $ok(self::partV2()))));
-        $this->assertSame('studio_config_off', $motivo(B::offer($on, StudioPublishing::SCOPE_OFF, true, $ok(self::partV2()))));
-        $this->assertSame('out_of_scope', $motivo(B::offer($on, $canary, false, $ok(self::partV2()))));
+        $this->assertSame('prompts_off', $motivo(B::offer($off, $canary, true, $ok(self::partActual()))));
+        $this->assertSame('prompts_off', $motivo(B::offer('all', $canary, true, $ok(self::partActual()))));
+        $this->assertSame('studio_config_off', $motivo(B::offer($on, StudioPublishing::SCOPE_OFF, true, $ok(self::partActual()))));
+        $this->assertSame('out_of_scope', $motivo(B::offer($on, $canary, false, $ok(self::partActual()))));
         $this->assertSame('no_publication', $motivo(B::offer($on, $canary, true, $sin)));
         $this->assertSame('publication_signature_invalid', $motivo(B::offer($on, $canary, true, ['state' => 'invalid', 'reason' => 'signature_invalid', 'contract' => null, 'part' => null])));
         $this->assertSame('part_legacy', $motivo(B::offer($on, $canary, true, $ok(null))));
         $this->assertSame('declaration_v1', $motivo(B::offer($on, $canary, true, $ok(self::part(), D::CONTRACT))));
-        $base = self::partV2();
+        $base = self::partActual();
         $base['prompts']['base'] = 'n8n-00000000';
         $this->assertSame('base_changed', $motivo(B::offer($on, $canary, true, $ok($base))));
-        $compilador = self::partV2();
-        $compilador['prompts']['compiler'] = 2;
+        // Lo firmado con el compilador 1 (la misma G8, misma huella) cae a Legacy hasta volver a publicar.
+        $this->assertSame('compiler_changed', $motivo(B::offer($on, $canary, true, $ok(self::partV2()))));
+        $compilador = self::partActual();
+        $compilador['prompts']['compiler'] = 3;
         $this->assertSame('compiler_changed', $motivo(B::offer($on, $canary, true, $ok($compilador))));
-        $this->assertSame('error', $motivo(B::offer($on, $canary, true, $ok(self::partV2(governed: array_replace(self::G8, ['persona.tone' => 'serio']))))));
-        $this->assertSame('bundle_mismatch', $motivo(B::offer($on, $canary, true, $ok(self::partV2(hash: self::LEGACY_HASH)))));
+        $this->assertSame('error', $motivo(B::offer($on, $canary, true, $ok(self::partActual(governed: array_replace(self::G8_C2, ['persona.tone' => 'serio']))))));
+        $this->assertSame('bundle_mismatch', $motivo(B::offer($on, $canary, true, $ok(self::partActual(hash: self::LEGACY_HASH)))));
 
-        $this->assertSame(['mode' => 'studio', 'version' => self::V, 'bundleHash' => self::G8_HASH, 'reason' => null], B::offer($on, $canary, true, $ok(self::partV2())));
-        $this->assertSame(['mode' => 'studio', 'version' => self::V, 'bundleHash' => self::G8_HASH, 'reason' => null], B::offer($on, StudioPublishing::SCOPE_ALL, true, $ok(self::partV2())));
+        $this->assertSame(['mode' => 'studio', 'version' => self::V, 'bundleHash' => self::G8_HASH, 'reason' => null], B::offer($on, $canary, true, $ok(self::partActual())));
+        $this->assertSame(['mode' => 'studio', 'version' => self::V, 'bundleHash' => self::G8_HASH, 'reason' => null], B::offer($on, StudioPublishing::SCOPE_ALL, true, $ok(self::partActual())));
         $this->assertSame(['mode' => 'legacy', 'version' => null, 'bundleHash' => null, 'reason' => 'prompts_off'], B::offer($off, $canary, true, $sin));
     }
 }

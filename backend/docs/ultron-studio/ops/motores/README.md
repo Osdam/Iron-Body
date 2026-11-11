@@ -9,7 +9,7 @@ Contrato: `docs/ultron-studio/ULTRON_STUDIO_H5_CONTRACT.md` (Enmienda M-1) y `do
 | Pieza | Qué hace | Dónde |
 |---|---|---|
 | Base | Los cinco prompts del flujo vivo 29de5119, byte a byte (sha256 fijados) | `backend/resources/ultron-prompts/n8n-29de5119/*.txt` |
-| Compilador | Parches anclados por cada valor gobernado; `compile(línea base) = base` | `UltronPromptCompiler` (`VERSION = 1`) |
+| Compilador | Parches anclados por cada valor gobernado; `compile(línea base) = base`. Desde la versión 2 (M1-18), un quinto valor: las frases prohibidas de las reglas S-NNN vivas de la versión, en Composer ×2 tras `FORMA:` y en Critic ×2 tras `naturalness:`; sin frases no hay parche | `UltronPromptCompiler` (`VERSION = 2`) |
 | Oferta | En `decide`, si n8n negocia: los cinco prompts compilados desde la parte publicada, solo si su huella es la firmada; si no, Legacy con motivo | `UltronPromptOffer` |
 | Sello | En el commit: ofrecido (firmado en el token) frente a observado (huella que calcula n8n) → `metadata.studio_prompts` | `UltronPromptStamp` |
 | Llave | `MARKETING_ULTRON_STUDIO_PROMPTS` = `off` (defecto) \| `canary` | `config/marketing.php` |

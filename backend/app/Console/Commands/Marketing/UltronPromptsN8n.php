@@ -22,7 +22,7 @@ use Throwable;
  *   operaciones-mcp.json     las operaciones atómicas para `update_workflow`
  *   flujo-s1.json            el flujo completo esperado (SOLO para el comprobador; nunca se importa)
  *   huellas.json             las huellas esperadas
- *   fixtures/decide-*.json   respuestas sintéticas de `decide` para el comprobador
+ *   fixtures/decide-*.json   respuestas sintéticas de `decide` para el comprobador (studio, studio con frases, legacy)
  *   LEEME.md                 cómo se aplica, se verifica y se revierte
  *
  * Determinista: dos ejecuciones dan los mismos bytes. No toca n8n, ni la red,
@@ -61,6 +61,7 @@ class UltronPromptsN8n extends Command
             'flujo-s1.json' => self::json($s1['flow']),
             'huellas.json' => self::json($s1['hashes']),
             'fixtures/decide-studio.json' => self::json($fixtures['studio']),
+            'fixtures/decide-studio-frases.json' => self::json($fixtures['studioPhrases']),
             'fixtures/decide-legacy.json' => self::json($fixtures['legacy']),
             'LEEME.md' => self::leeme($s1['hashes']),
         ];
@@ -134,7 +135,7 @@ class UltronPromptsN8n extends Command
 | `operaciones-mcp.json` | Las operaciones para `update_workflow` del MCP, en orden: 1 `addNode`, 1 `removeConnection`, 2 `addConnection`, 5 `setNodeParameter` de `/responses` (se reescribe el array entero: el MCP no indexa arrays; `values[1]` va intacto), 1 de `/jsonBody` y 1 de `/jsCode`. **Los nombres de campo de cada operación hay que contrastarlos con el esquema del MCP antes de usarlos**; el contenido (nodos, rutas, valores) es el verificado. |
 | `flujo-s1.json` | El flujo completo esperado tras aplicar las operaciones. **Solo para el comprobador. NUNCA se importa en n8n.** |
 | `huellas.json` | Huellas esperadas (base, Legacy, selector, Preparar Commit, cuerpo de decide, contenidos de sistema, `values[1]`). |
-| `fixtures/decide-studio.json`, `fixtures/decide-legacy.json` | Respuestas sintéticas de `decide` (sin datos de nadie) para ejecutar el selector a mano en la copia. La `studio` es `persona.tone = profesional` + `persona.maxChars = 200`, compilada en PHP. |
+| `fixtures/decide-studio.json`, `fixtures/decide-studio-frases.json`, `fixtures/decide-legacy.json` | Respuestas sintéticas de `decide` (sin datos de nadie) para ejecutar el selector a mano en la copia. La `studio` es `persona.tone = profesional` + `persona.maxChars = 200`, compilada en PHP; la `studio-frases`, lo mismo más seis frases prohibidas de reglas S-NNN sintéticas (compilador 2: el selector la acepta igual, sin cambiar el flujo). |
 
 ## Huellas
 
