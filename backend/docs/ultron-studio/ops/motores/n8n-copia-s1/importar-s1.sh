@@ -43,21 +43,24 @@ RC=$?
 set -e
 docker exec -u root n8n-n8n-1 rm -f /tmp/ultron-s1-import.json
 echo "2. importador (código $RC): $(printf '%s' "$SALIDA" | tail -3 | tr '\n' ' ' | cut -c1-300)"
-[ "$RC" = 0 ] || { echo "IMPORTACIÓN FALLIDA: revisar arriba (el flujo vivo no se toca en ningún caso)"; }
+MAL=0
+[ "$RC" = 0 ] || { echo "✗ IMPORTACIÓN FALLIDA: revisar arriba (el flujo vivo no se toca en ningún caso)"; MAL=$((MAL + 1)); }
 
 # 3. Comprobaciones.
 DESPUES=$(foto_vivo)
 WH_DESPUES=$(q "select method||' '||\"webhookPath\"||' '||\"workflowId\" from webhook_entity where \"webhookPath\"='iron-body-ultron'")
-[ "$ANTES" = "$DESPUES" ] && echo "3. flujo vivo INTACTO (misma versión, mismos nodos y conexiones)" || echo "3. ✗ EL FLUJO VIVO CAMBIÓ: antes [$ANTES] después [$DESPUES]"
-[ "$WH_ANTES" = "$WH_DESPUES" ] && echo "   webhook vivo intacto: $WH_DESPUES" || echo "   ✗ EL WEBHOOK CAMBIÓ: $WH_DESPUES"
+if [ "$ANTES" = "$DESPUES" ]; then echo "3. flujo vivo INTACTO (misma versión, mismos nodos y conexiones)"; else echo "3. ✗ EL FLUJO VIVO CAMBIÓ: antes [$ANTES] después [$DESPUES]"; MAL=$((MAL + 1)); fi
+if [ "$WH_ANTES" = "$WH_DESPUES" ]; then echo "   webhook vivo intacto: $WH_DESPUES"; else echo "   ✗ EL WEBHOOK CAMBIÓ: $WH_DESPUES"; MAL=$((MAL + 1)); fi
 echo "4. flujo nuevo:"
 q "select id, left(name,60), active, coalesce(\"activeVersionId\",'(sin publicar)'), left(\"versionId\",8), json_array_length(nodes), \"isArchived\" from workflow_entity where id='$NUEVO'"
 q "select 'proyecto', sw.\"projectId\", sw.role from shared_workflow sw where sw.\"workflowId\"='$NUEVO'"
 q "select 'ajustes', settings::text from workflow_entity where id='$NUEVO'" | cut -c1-260
 SHA_BD=$(q "select encode(sha256(convert_to(n.nodo->'parameters'->>'jsCode','UTF8')),'hex') from (select json_array_elements(nodes) as nodo from workflow_entity where id='$NUEVO') n where n.nodo->>'name'='Elegir Prompts'")
-[ "$SHA_BD" = "$SHA" ] && echo "   selector en la base: sha256 = el generado (${SHA:0:16}…)" || echo "   ✗ el selector en la base NO es el generado: ${SHA_BD:0:16}… (esperado ${SHA:0:16}…)"
+if [ "$SHA_BD" = "$SHA" ]; then echo "   selector en la base: sha256 = el generado (${SHA:0:16}…)"; else echo "   ✗ el selector en la base NO es el generado: ${SHA_BD:0:16}… (esperado ${SHA:0:16}…)"; MAL=$((MAL + 1)); fi
 q "select 'credenciales por nodo', count(*) from (select json_array_elements(nodes) as nodo from workflow_entity where id='$NUEVO') n where n.nodo->'credentials' is not null"
 q "select 'historial del nuevo', count(*) from workflow_history where \"workflowId\"='$NUEVO'"
 # El flujo nuevo, tal como quedó, para pasarle el comprobador fuera (600; nodos y conexiones con referencias, sin secretos).
 ( umask 077; q "select json_build_object('id', id, 'name', name, 'active', active, 'nodes', nodes, 'connections', connections, 'settings', settings, 'versionId', \"versionId\") from workflow_entity where id='$NUEVO'" > /root/n8n-s1/exportado-de-n8n.json )
 echo "5. exportado a /root/n8n-s1/exportado-de-n8n.json ($(stat -c '%s' /root/n8n-s1/exportado-de-n8n.json) bytes)"
+# M-1 del reviewer: una importación fallida, un flujo vivo movido o un selector distinto NO terminan con 0.
+if [ "$MAL" = 0 ]; then echo "COPIA S1 IMPORTADA Y COMPROBADA"; else echo "COPIA S1 CON $MAL PROBLEMAS: no seguir con la etapa E1 hasta aclararlos"; exit 1; fi

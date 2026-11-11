@@ -125,7 +125,7 @@ while :; do
 done
 echo "3. workers RUNNING: $RUNNING · BACKOFF/FATAL: $MAL (esperado $W_ESPERADOS y 0)"
 [ "$RUNNING" = "$W_ESPERADOS" ] && [ "$MAL" = 0 ] || desvio "workers: $RUNNING RUNNING y $MAL en BACKOFF/FATAL (esperado $W_ESPERADOS y 0)"
-c=$(curl -s -o /dev/null -w '%{http_code}' https://api.ironbodyneiva.cloud/api/admin/ultron-studio/status)
+c=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 https://api.ironbodyneiva.cloud/api/admin/ultron-studio/status) || c=000   # I-1 del reviewer: si curl falla, es un desvío que se dice, no una muerte muda en la etapa 3
 echo "4. status sin token → $c"; [ "$c" = 401 ] || desvio "status sin token respondió $c"
 if sudo -u www-data php artisan ultron-studio:publication-check > /dev/null 2>&1; then echo "5. publication-check: 0 (cuadra)"; else desvio "publication-check no sale con 0: ver «sudo -u www-data php artisan ultron-studio:publication-check»"; fi
 if [ "$DESVIOS" = 0 ]; then   # m-3: la palabra APLICADO solo sale en verde
