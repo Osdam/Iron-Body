@@ -1,0 +1,157 @@
+dashboard
+Inicio
+group
+Miembros
+payments
+Planes
+point_of_sale
+Caja de Gimnasio
+calendar_month
+Clases
+schedule
+Supervisión de empleados y clases
+inventory_2
+Inventario
+fitness_center
+Equipos
+point_of_sale
+Caja de Cafetería
+handshake
+Comisiones
+receipt_long
+Facturación
+monitoring
+Analítica
+file_export
+Exportaciones
+manage_search
+Logs
+exercise
+Ejercicios
+fitness_center
+Rutinas
+badge
+Entrenadores
+campaign
+Mercadeo
+ULTRON Studio
+PREVIEW
+smart_toy
+Campañas automáticas
+local_fire_department
+Esta semana
+monitor_weight
+Evaluaciones
+restaurant
+Nutrición
+support_agent
+Soporte
+shield_person
+Moderación
+notifications_active
+Notificaciones push
+settings
+Configuración
+dns
+Backend Laravel conectado
+ok · 2026-11-11T23:19:48+00:00
+help
+Soporte
+logout
+Salir
+search
+7
+arrow_back
+Studio
+Campañas automáticas (estrategias)
+ULTRON decide a quién, por qué, cuándo y por qué canal; Laravel es la única autoridad y todo nace apagado.
+toggle_on
+Gobierno encendido
+rocket_launch
+Publicar: ventana abierta
+person_off
+Sin persona vinculada
+send_and_archive
+Ningún mensaje ni llamada sale solo mientras el envío automático siga cerrado en el código (OutreachSendGate). Si lo está, y en qué modo está la automatización (apagada, en sombra o en vivo), lo dice el estado del servidor en «Panel».
+monitoring
+Panel
+account_tree
+Estrategias
+architecture
+Constructor
+science
+Simulación
+description
+Plantillas
+verified_user
+Gobierno
+inbox
+Bandeja asistida
+history
+Historial por persona
+badge
+Vínculos de personas
+Plantillas
+refresh
+Releer
+add
+Nueva versión de plantilla
+lock
+Necesitas una persona vinculada a tu cuenta para crear una versión de plantilla: el servidor exige saber qué persona la escribe (cuatro ojos).
+description
+Una plantilla no se edita: se crea su versión siguiente. Las de WhatsApp llevan el texto exacto que aprobó Meta, con marcadores cerrados y la línea para dejar de recibir mensajes (Ley 2300).
+Conexión con Meta: Configurada, sin comprobar con Meta · Graph v25.0 · credencial del CRM
+Sin comprobar en las últimas 24 h. «Comprobar permisos» exige una cuenta con persona vinculada.
+shield_question
+Comprobar permisos
+lock
+Necesitas una persona vinculada a tu cuenta para «Comprobar permisos».
+toggle_on
+Enviar a Meta: encendido
+toggle_on
+Comprobación automática cada 5 min
+Clave
+Canal
+Todos
+Asistida (guion para el personal)
+Voz (finalidad de la llamada)
+WhatsApp (plantilla de Meta)
+Estado en el Studio
+Todos
+Borrador
+Aprobada
+Rechazada
+Retirada
+En Meta (esta página)
+Todas
+Sin enviar
+Enviada o en revisión
+Aprobada por Meta
+Lista para campañas
+Con problemas
+No hay plantillas con esos filtros.
+Crear una versión
+IRON
+IRON
+Copiloto del CRM
+En línea
+remove
+
+Hola, soy IRON. Puedo ayudarte a consultar miembros, membresías, pagos, planes, entrenadores, reservas, reportes y operación del CRM.
+
+Miembros vencidos
+Pagos pendientes
+Nuevos miembros del mes
+Planes activos
+Reservas de hoy
+attach_file
+send
+IRON
+Para moverlo, arrástralo con el ratón o mantenlo pulsado en una pantalla táctil. Con el teclado: Mayúsculas y flechas lo mueven; Mayúsculas e Inicio lo devuelven a su esquina.
+
+--- title ---
+Cerrar sesión
+Minimizar
+Adjuntar imagen
+Enviar
+IRON — Copiloto del CRM. Arrástralo para moverlo.

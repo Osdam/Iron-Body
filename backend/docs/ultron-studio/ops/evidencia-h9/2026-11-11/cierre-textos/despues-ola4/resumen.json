@@ -1,0 +1,86 @@
+{
+ "cuando": "2026-11-11T23:19:17.621Z",
+ "version": {
+  "commit": "85c62d2",
+  "claves": [
+   "commit",
+   "dirty",
+   "builtAt",
+   "inboxV2"
+  ]
+ },
+ "pantallas": [
+  {
+   "nombre": "01-studio",
+   "ruta": "/marketing/ultron-studio",
+   "pinto": true,
+   "caracteres": 5652,
+   "prohibidas": []
+  },
+  {
+   "nombre": "02-laboratorio",
+   "ruta": "/marketing/ultron-studio/laboratorio",
+   "pinto": true,
+   "caracteres": 3026,
+   "prohibidas": []
+  },
+  {
+   "nombre": "03-integraciones-estado",
+   "ruta": "/marketing/ultron-studio/integraciones?pestana=estado",
+   "pinto": true,
+   "caracteres": 2896,
+   "prohibidas": []
+  },
+  {
+   "nombre": "04-integraciones-canarios",
+   "ruta": "/marketing/ultron-studio/integraciones?pestana=canarios",
+   "pinto": true,
+   "caracteres": 2204,
+   "prohibidas": []
+  },
+  {
+   "nombre": "05-voz-estado",
+   "ruta": "/marketing/ultron-studio/voz?pestana=estado",
+   "pinto": true,
+   "caracteres": 8063,
+   "prohibidas": []
+  },
+  {
+   "nombre": "06-voz-publicacion",
+   "ruta": "/marketing/ultron-studio/voz?pestana=publicacion",
+   "pinto": true,
+   "caracteres": 2678,
+   "prohibidas": []
+  },
+  {
+   "nombre": "07-voz-laboratorio",
+   "ruta": "/marketing/ultron-studio/voz?pestana=laboratorio",
+   "pinto": true,
+   "caracteres": 5149,
+   "prohibidas": []
+  },
+  {
+   "nombre": "08-automatizaciones-panel",
+   "ruta": "/marketing/automatizaciones?pestana=panel",
+   "pinto": true,
+   "caracteres": 8197,
+   "prohibidas": []
+  },
+  {
+   "nombre": "09-automatizaciones-estrategias",
+   "ruta": "/marketing/automatizaciones?pestana=estrategias",
+   "pinto": true,
+   "caracteres": 2398,
+   "prohibidas": []
+  },
+  {
+   "nombre": "10-automatizaciones-plantillas",
+   "ruta": "/marketing/automatizaciones?pestana=plantillas",
+   "pinto": true,
+   "caracteres": 3075,
+   "prohibidas": []
+  }
+ ],
+ "prohibidasVistas": [],
+ "errores": []
+}
