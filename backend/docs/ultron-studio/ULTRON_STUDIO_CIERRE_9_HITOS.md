@@ -33,7 +33,7 @@ Etiquetas: **OPERATIVO Y PROBADO** (funciona en producción y hay una prueba rea
 | A · Voz | Publicación canaria de la voz y primera llamada saliente | **BLOQUEADO** | Decisión de Twilio (subcuenta o clave restringida solo de voz), un veredicto del laboratorio dado por otra cuenta y la autorización expresa para esa llamada |
 | A · Voz | Llamadas entrantes | **BLOQUEADO** | La cuenta de Twilio no tiene números propios |
 | A · Voz | Rotar la clave de ElevenLabs que pasó por el chat | **BLOQUEADO** | La genera el propietario en ElevenLabs; el mando de registro ya existe |
-| B · WhatsApp | El Studio compila y ofrece los cinco prompts de ULTRON | **EN INTEGRACIÓN** | Desplegado, llave en `canary`, n8n en la copia S1. Falta el primer turno desde el teléfono canario (tiene que salir `flowRev S1` con la huella de siempre) |
+| B · WhatsApp | El Studio compila y ofrece los cinco prompts de ULTRON; n8n los elige por la copia S1 | **OPERATIVO Y PROBADO** (con los prompts de siempre) | Turno real del propietario el 11-11 15:39 UTC: ejecución 941514 de la copia S1, traza `legacy · no_publication · observada 3f6a5674 S1` (L9-109). Los prompts usados son byte a byte los de antes |
 | B · WhatsApp | Un cambio publicado en el Studio cambia lo que ULTRON responde (**criterio de aceptación**) | **EN INTEGRACIÓN** | Falta E3–E5: publicar en canario una versión con tono «profesional» y 200 caracteres, ver `applied` en un turno real y revertir. Exige dos personas y un veredicto del laboratorio de texto |
 | B · WhatsApp | Gobernar desde el Studio la intención de reserva (`intent.fallback`) y las reglas S-NNN | **NO IMPLEMENTADO** | Declarado en la Enmienda M-1: hoy el Studio gobierna tono, emojis, longitud máxima y objetivo |
 | B · WhatsApp | ULTRON para todos los clientes | **IMPLEMENTADO PERO DESHABILITADO** | Hoy solo la conversación canaria pasa por n8n; abrirlo es una decisión del propietario |
@@ -53,13 +53,13 @@ Etiquetas: **OPERATIVO Y PROBADO** (funciona en producción y hay una prueba rea
 - Backend, batería completa sobre `815b3ee`: 17 381 pruebas, 451 794 aserciones, 632 omitidas (las de PostgreSQL). Un fallo de la línea base (`PricingV2SalesAndPaymentsTest`) y una regresión, corregida y desplegada en `0ee0868` (L9-108). Las 15 guardas estáticas y las pruebas de plantillas, 196 en verde después de la corrección.
 - CRM: batería completa sobre `89a24f9`, 4 184 pruebas con los 16 fallos de la línea base; después, el módulo de plantillas entero en cada cambio (552 pruebas en 18 ficheros en `b07eda5`).
 - Smokes en producción, en el estado de hoy: H9 30 OK · 0 FALLO · 1 OMITIDO; H8 48 OK · 0 FALLO · 3 OMITIDOS.
-- **No probado:** un turno real por la copia S1 de n8n; una plantilla enviada a Meta real; la batería completa del backend sobre `0ee0868` (se corrieron las guardas y el módulo); PostgreSQL para los cambios de la tarde del 11-11.
+- **No probado:** un turno real con una versión PUBLICADA (E3–E5; con los prompts de siempre sí, L9-109); una plantilla enviada a Meta real; la batería completa del backend sobre `0ee0868` (se corrieron las guardas y el módulo); PostgreSQL para los cambios de la tarde del 11-11.
 
 ### 0.4 Lo que falta, y de quién depende
 
 **Del propietario (nadie más puede hacerlo):**
 
-1. **Un mensaje de WhatsApp desde el teléfono canario.** Cierra E1 y E2.
+1. ~~Un mensaje de WhatsApp desde el teléfono canario~~ **Hecho el 11-11 15:39 UTC** (L9-109): E1 y E2, cerradas.
 2. **Dos personas reales con su cuenta.** Con ellas: los vínculos de persona del H9, el veredicto del laboratorio y publicar (E3–E5), aprobar plantillas y aprobar la revisión 3 del perfil de voz.
 3. **E3–E5 desde el CRM**, entre las 07:00 y las 19:00: versión nueva con tono «profesional» y 200 caracteres → la aprueba la otra persona → ejecución y veredicto del laboratorio de texto → publicar en canario (quien publica no es quien la escribió) → dos o tres mensajes desde el teléfono canario → revertir.
 4. **Revisión 3 del perfil «Sofia Medellin»** con las herramientas de consultar planes y horarios, y una sesión del laboratorio hablado con su propia voz.
