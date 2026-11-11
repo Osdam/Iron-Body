@@ -10,8 +10,8 @@
 
 | Pieza | Valor |
 |---|---|
-| API | `2d81221b` desde el 11-11 21:07 UTC (L9-112); `origin/main` va por delante solo con documentos |
-| CRM | `fd02a4c` desde el 11-11 21:10 UTC (L9-112) |
+| API | `e9b3c9e3` desde el 11-11 23:10 UTC: la ola 4 del cierre (`a6bee881` y `f0f8dca1`, L9-113) y, encima, la corrección de Planes de otra sesión; `origin/main` va por delante solo con documentos |
+| CRM | `85c62d2` desde el 11-11 23:16 UTC (L9-113), encima de `881a107` (Planes) |
 | Respaldo de antes de la ola | `/var/backups/ironbody/ultron-studio-m1-20261111-143829` (base, fichero de entorno, cachés) |
 | n8n | atiende la copia «Studio S1» (`QSklqHlsDIxucRfk`); el flujo de siempre (`YspRwsXnqt33NouP`) está despublicado e intacto, como reserva |
 | Motor de WhatsApp | lee la publicación del Studio **solo en la conversación canaria** (`canary`); publicar desde el CRM, abierto; puerta del laboratorio `required` |
@@ -37,7 +37,7 @@ Etiquetas: **OPERATIVO Y PROBADO** (funciona en producción y hay una prueba rea
 | A · Voz | Rotar la clave de ElevenLabs que pasó por el chat | **BLOQUEADO** | La genera el propietario en ElevenLabs; el mando de registro ya existe |
 | B · WhatsApp | El Studio compila y ofrece los cinco prompts de ULTRON; n8n los elige por la copia S1 | **OPERATIVO Y PROBADO** (con los prompts de siempre) | Turno real del propietario el 11-11 15:39 UTC: ejecución 941514 de la copia S1, traza `legacy · no_publication · observada 3f6a5674 S1` (L9-109). Los prompts usados son byte a byte los de antes |
 | B · WhatsApp | Un cambio publicado en el Studio cambia lo que ULTRON responde (**criterio de aceptación**) | **EN INTEGRACIÓN** | Falta E3–E5: publicar en canario una versión con tono «profesional» y 200 caracteres, ver `applied` en un turno real y revertir. Exige dos personas y un veredicto del laboratorio de texto |
-| B · WhatsApp | Gobernar desde el Studio la intención de reserva (`intent.fallback`) y las reglas S-NNN | **NO IMPLEMENTADO** | Declarado en la Enmienda M-1: hoy el Studio gobierna tono, emojis, longitud máxima y objetivo |
+| B · WhatsApp | Las reglas S-NNN con efecto en WhatsApp | **IMPLEMENTADO PERO DESHABILITADO** hasta su primera publicación | Desplegado el 11-11 (M1-18, L9-113): las frases prohibidas de las reglas vivas entran en los prompts de la canaria al publicar. Falta la aprobación del propietario de los dos textos fijos y publicar la primera versión con una regla con frases. `intent.fallback` no aplica en WhatsApp (lo decide el flujo; R-07) y el CRM lo dice |
 | B · WhatsApp | ULTRON para todos los clientes | **IMPLEMENTADO PERO DESHABILITADO** | Hoy solo la conversación canaria pasa por n8n; abrirlo es una decisión del propietario |
 | B · WhatsApp | Alerta automática si n8n aplica algo distinto de lo ofrecido | **EN INTEGRACIÓN** | Desplegada el 11-11 (L9-112): el monitor la comprueba cada 30 minutos y abre el incidente `prompts_drift`. En producción su pasada en seco lee bien; ningún `mismatch` real la ha disparado todavía |
 | C · Autonomía | Motor en sombra | **OPERATIVO Y PROBADO** | Corre cada minuto desde el 11-11; los siete días terminan el 18-11 |
@@ -76,7 +76,7 @@ Etiquetas: **OPERATIVO Y PROBADO** (funciona en producción y hay una prueba rea
 
 **Del tiempo:** los siete días de sombra del H9 terminan el 18-11; el modo asistido no se enciende antes.
 
-**Del equipo técnico:** las reglas S-NNN con efecto en WhatsApp, la sombra del H9 evaluando a toda la audiencia, el barrido completo y los disparadores sin emisor (L9-112, en curso), la opción estructural de E18-9 (el agente en el cuerpo de las herramientas) y la batería completa sobre el commit final. Hechas el 11-11: la sesión del laboratorio con las herramientas (L9-111) y la alerta M1-A (L9-112).
+**Del equipo técnico:** el registro de quejas para la automatización, los cuatro ojos por regla, las pruebas de extremo a extremo de algunos disparadores (I-6) y la opción estructural de E18-9 (el agente en el cuerpo de las herramientas). Hechas y desplegadas el 11-11 (L9-113): las reglas S-NNN con efecto en WhatsApp, la sombra del H9 evaluando a toda la audiencia, el barrido completo y los disparadores sin emisor, con la batería completa de los dos repositorios sobre los commits finales. Hechas el 11-11: la sesión del laboratorio con las herramientas (L9-111) y la alerta M1-A (L9-112).
 
 ### 0.5 Vuelta atrás, de lo último a lo primero
 

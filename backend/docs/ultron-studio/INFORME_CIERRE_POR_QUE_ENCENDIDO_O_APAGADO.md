@@ -1,6 +1,6 @@
 # ULTRON Studio · Por qué cada cosa salía encendida o apagada
 
-**Para:** el propietario. **Fecha:** 11-11-2026 (se actualiza al cierre). **Producción:** API `2d81221b`, CRM `fd02a4c`.
+**Para:** el propietario. **Fecha:** 11-11-2026 (se actualiza al cierre). **Producción:** API `e9b3c9e3`, CRM `85c62d2` (11-11-2026, 23:16 UTC).
 **Cómo leerlo:** cada apartado dice lo que veías, por qué salía así, qué se hizo y cómo queda. Los estados finales usan solo cinco palabras: **OPERATIVO Y PROBADO** · **LISTO PARA ACTIVACIÓN AUTORIZADA** · **EN OBSERVACIÓN** · **BLOQUEADO EXTERNAMENTE** · **INCOMPLETO**. No hay porcentajes.
 
 El detalle técnico, con fichero y línea, está en las tres auditorías de `plans/cierre/` y en las filas L9-111 y L9-112 del contrato del H9.
@@ -34,7 +34,8 @@ Y hay cosas **incompletas de verdad** en el código. Están en el apartado 5, si
 
 | Lo que veías | Por qué | Qué se hizo | Cómo queda |
 |---|---|---|---|
-| Reglas que se pueden crear pero «el motor no las aplica» | Era cierto para WhatsApp: ninguna regla del Studio (S-NNN) llegaba a ningún motor. En la voz, sus frases prohibidas sí entran en el agente compilado | El CRM lo dice ahora con exactitud. Se está construyendo que las frases prohibidas de las reglas entren también en los prompts de WhatsApp de la conversación canaria al publicar | Constructor, coherencia y copia en la versión: **OPERATIVO Y PROBADO** como registro. Efecto en WhatsApp: **INCOMPLETO**, en construcción |
+| Reglas que se pueden crear pero «el motor no las aplica» | Era cierto para WhatsApp: ninguna regla del Studio (S-NNN) llegaba a ningún motor. En la voz, sus frases prohibidas sí entran en el agente compilado | Hecho y desplegado en el servidor el 11-11: las frases que prohíbe una regla viva entran en los prompts de WhatsApp de la conversación canaria al publicar una versión que la copia. Sin tocar n8n; lo ya publicado queda idéntico. Revisado por seguridad (62 entradas hostiles, ninguna se sale de sus comillas) y por un revisor independiente. No es un filtro duro: se le pide al modelo y el revisor automático lo vigila | Constructor, coherencia y copia en la versión: **OPERATIVO Y PROBADO** como registro. Efecto en WhatsApp: **LISTO PARA ACTIVACIÓN AUTORIZADA**. Para encenderlo faltan tu aprobación de las dos frases fijas (apartado 4) y publicar a cuatro ojos la primera versión con una regla con frases |
+| — | Restricción nueva que trae ese efecto: con los prompts del Studio encendidos, una versión con más de 12 frases prohibidas, con una frase de menos de 3 caracteres o sin letras, o con signos como `%`, `$` o comillas, no se puede publicar | El diálogo de publicar dice qué regla y por qué | Por diseño: nada se recorta en silencio |
 
 ### 2.3 Laboratorio de texto
 
@@ -84,8 +85,9 @@ Y hay cosas **incompletas de verdad** en el código. Están en el apartado 5, si
 |---|---|---|---|
 | «La automatización nace apagada» | Texto fijo; en realidad está en sombra desde el 11-11 | El aviso dice el modo real | — |
 | Sombra encendida pero sin resultados | No hay ninguna estrategia publicada. Publicar una exige dos personas vinculadas (hay 0), una plantilla aprobada y una versión aprobada con su simulación | El panel lo dice con el recuento real | Gobierno de estrategias: **OPERATIVO Y PROBADO**. Ejecución en sombra: **LISTO PARA ACTIVACIÓN AUTORIZADA** |
-| — | Aun con una estrategia, la sombra habría negado a todo el que no fuera canario, contra lo que dice el contrato | Corregido y aprobado por seguridad; pendiente de desplegar | En curso |
-| — | El barrido solo miraba a los primeros 500 candidatos; el constructor ofrecía 6 disparadores que nadie emite | En curso | En curso |
+| — | Aun con una estrategia, la sombra habría negado a todo el que no fuera canario, contra lo que dice el contrato | Corregido, aprobado por seguridad (ninguna vía por la que salga algo real hacia quien no es canario) y desplegado el 11-11 | Hecho |
+| — | El barrido solo miraba a los primeros 500 candidatos; el constructor ofrecía 6 disparadores que nadie emite | Corregido y desplegado el 11-11: el barrido recorre toda la audiencia en pasadas sucesivas y esos 6 disparadores ya no se ofrecen | Hecho |
+| — | Nadie registra las quejas como evento: una estrategia no puede excluir a quien se quejó (las quejas por WhatsApp sí detienen la conversación mientras el personal la revisa) | Encontrado en esta revisión; no se inventó un registro | **INCOMPLETO**: hay que resolverlo antes de abrir cualquier envío automático |
 | Asistido | Exige al menos 7 días de sombra sin hallazgos y tu decisión | — | **EN OBSERVACIÓN** (los 7 días no se acortan) |
 | WhatsApp automático «Pendiente de proveedor externo» | No se había enviado nada a Meta: no era Meta quien tenía algo pendiente | Ahora es «condición contractual» mientras no haya una plantilla en revisión | **LISTO PARA ACTIVACIÓN AUTORIZADA** hasta donde llega sin personas; el envío sigue cerrado por la constante |
 | Voz automática | Sale por la voz, así que hereda sus bloqueos | Dicho en el CRM | **BLOQUEADO EXTERNAMENTE** |
@@ -122,6 +124,7 @@ Y hay cosas **incompletas de verdad** en el código. Están en el apartado 5, si
 | 6 | Decidir la base legal del consentimiento de los socios | Estrategias sobre socios (renovación, vencidos, inactivos) | Sin ella, solo prospectos |
 | 7 | Decidir cuándo abrir ULTRON a todas las conversaciones | Que conteste a clientes reales | Una bandera; se cierra igual |
 | 8 | Decidir qué se hace con las copias antiguas del fichero de entorno que guardan secretos en el servidor | Higiene | Se conserva la última hasta verificar |
+| 9 | Aprobar las dos frases fijas que el compilador añade a los prompts cuando una versión trae reglas con frases prohibidas. Al redactor: «FRASES PROHIBIDAS PUBLICADAS: nunca escribas ninguna de estas frases, tampoco con otras mayusculas; si la respuesta parece necesitar una, dilo con otras palabras. Las frases: …». Al revisor: «FRASES PROHIBIDAS PUBLICADAS: si el borrador contiene alguna de estas frases, aunque cambien las mayusculas, verdict fail con naturalness. Las frases: …» | Que las reglas del Studio tengan efecto en WhatsApp | Sin reglas con frases no cambia nada. Se quita volviendo a publicar una versión sin esas reglas o con «Volver a Legacy» |
 
 ---
 
@@ -129,8 +132,8 @@ Y hay cosas **incompletas de verdad** en el código. Están en el apartado 5, si
 
 | Qué | Por qué importa | Estado |
 |---|---|---|
-| Reglas del Studio con efecto en WhatsApp | Hoy son un registro sin efecto en ese canal | En construcción |
-| La sombra evalúa a toda la audiencia; barrido completo; disparadores sin emisor | Sin esto, la sombra no observaría de verdad | En construcción; lo primero ya está aprobado por seguridad |
+| Registro de quejas para la automatización | Sin él, una estrategia no puede excluir a quien se quejó | No implementado; obligatorio antes de abrir envíos automáticos |
+| Cuatro ojos por regla | Hoy los cuatro ojos son por versión: quien escribe una frase prohibida puede aprobar y publicar la versión de otra persona que la copia | Regla de operación mientras tanto: quien escribe la regla no aprueba ni publica |
 | El laboratorio de texto prueba una simulación, no los prompts reales | El veredicto certifica la simulación; la evidencia real es el turno canario | No entra en esta entrega |
 | Prompts gobernados fuera de la conversación canaria | Para que el Studio gobierne todas las conversaciones | No entra en esta entrega |
 | Fuente de consentimiento de los socios | Sin ella no hay estrategias sobre socios | Necesita tu decisión legal y desarrollo |

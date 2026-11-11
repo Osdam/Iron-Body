@@ -299,6 +299,14 @@ bash /root/meta-templates-scope.sh full read
   en n8n): parar en E2 y avisar a security. Desde la alerta M1-A (11-11-2026) el monitor del H7 lo vigila cada 30 minutos y abre el incidente de IRON GUARD `ultron_studio · prompts_drift` (alto), sin frenar nada; a mano: `php artisan ultron-studio:monitor --check=prompts --dry-run --json`. Con la llave de prompts en `off` no vigila (`not_watched`).
   `engine_fallback`: n8n rechazó la oferta (el motivo dice por qué).
 - `all` no existe en esta entrega.
+- **Compilador 2 (M1-18, frases de las reglas S-NNN):** al desplegarlo, cualquier parte publicada con el compilador 1
+  sigue sellándose `applied` pero `decide` ofrece Legacy con `compiler_changed`. Para recuperarla: revertirla y publicar
+  una versión NUEVA con el mismo contenido (una revertida es terminal; promover no recompila). Por eso se despliega sin
+  nada publicado en canario. n8n no se toca. Vuelta atrás del código: ANTES, «Volver a Legacy» en el Studio (obligatorio:
+  el código anterior no sabe componer sobre una cabeza del compilador 2 y sellaría `fallback` en cada turno).
+- **Antes de publicar la primera versión con frases** (condiciones de seguridad): el CRM nuevo desplegado; los dos textos
+  fijos aprobados por el propietario; mirar en la vista previa lo que arrastra el resto; y que quien aprueba y quien
+  publica no sea quien escribió o editó por última vez una regla S-NNN que aporta frases.
 
 ## 6. Ensayo en el banco (antes del día; con la orden del lead)
 
