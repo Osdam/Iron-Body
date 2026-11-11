@@ -59,11 +59,55 @@ use UnexpectedValueException;
  * Una forma inesperada es un error del llamador (el contenido llega normalizado
  * y con su integridad comprobada): InvalidArgumentException, nunca un valor por
  * defecto que parezca bueno.
+ *
+ * ENMIENDA M-1 (plan de motores §B.4): `ultron-engine-config/2`, aditivo. La
+ * misma entrada que `/1` con `contract` = `/2` y, en cada parte no nula, dos
+ * claves más: `governed` (los cuatro valores que gobiernan los prompts del
+ * motor) y `prompts` (`{base, bundleHash, compiler}`, la huella del paquete
+ * compilado). La firma, la huella, la decodificación estricta y el tope son los
+ * de `/1`. Volver a Legacy (`{canary: null, rest: null}`) se escribe SIEMPRE en
+ * `/1` (R10). El paquete lo compila {@see StudioPromptBundle}; aquí solo se
+ * comprueban las formas y los tipos, como el lector del motor. Con la llave de
+ * prompts del motor en `off`, nada de esto se usa: la clasificación, los bytes
+ * y la huella de la vista previa son los de siempre (el fixture congelado
+ * `publication-cases.json` sigue valiendo entero).
  */
 final class StudioPublicationDeclaration
 {
     /** El contrato del motor (`UltronPublishedConfig::CONTRACT`; una prueba los ata). */
     public const CONTRACT = 'ultron-engine-config/1';
+
+    /** Enmienda M-1: `UltronPublishedConfig::CONTRACT_V2` (una prueba los ata). */
+    public const CONTRACT_V2 = 'ultron-engine-config/2';
+
+    /** Los contratos que escribe y lee el Studio. */
+    public const CONTRACTS = [self::CONTRACT, self::CONTRACT_V2];
+
+    /**
+     * Enmienda M-1 (§B.4): los cuatro valores que gobiernan los prompts del
+     * motor, con el tipo de su valor en `governed`, por orden de bytes (el de la
+     * parte firmada). Son los `PARAMETERS` del compilador (una prueba los ata).
+     */
+    public const GOVERNED = [
+        'persona.emojis' => 'boolean',
+        'persona.maxChars' => 'integer',
+        'persona.tone' => 'string',
+        'strategy.goal' => 'string',
+    ];
+
+    /** Enmienda M-1 (§B.4): las claves de `prompts` en una parte `/2` y su tipo. */
+    public const PROMPTS = [
+        'base' => 'string',
+        'bundleHash' => 'string',
+        'compiler' => 'integer',
+    ];
+
+    /**
+     * Enmienda M-1 (§B.4): la clase de los gobernados que se apartan de la
+     * línea base cuando la llave de prompts del motor está encendida. No exige
+     * reconocimiento: la vista previa enseña su cambio exacto.
+     */
+    public const CLASS_PROMPT = 'prompt';
 
     /**
      * Lo más largo que lee el motor, en caracteres
@@ -130,6 +174,9 @@ final class StudioPublicationDeclaration
 
     private const PART_KEYS = ['approvedBy', 'catalogVersion', 'contentHash', 'declared', 'publishedBy', 'version'];
 
+    /** En `/2`, las de `/1` más los gobernados y la huella del paquete (§B.4). */
+    private const PART_KEYS_V2 = [...self::PART_KEYS, 'governed', 'prompts'];
+
     private const UUID = '/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/';
 
     private const HEX64 = '/\A[0-9a-f]{64}\z/';
@@ -152,16 +199,23 @@ final class StudioPublicationDeclaration
      *  - `mismatches`: la lista del 409 `engine_value_mismatch`, `{param, versionValue, engineValue}`.
      *  - `engineReadingUnavailable`: los `must_match` sin lectura (nunca en `mismatches`).
      *
+     * Enmienda M-1 (§B.4): con `$promptsGoverned` (la llave de prompts del motor
+     * encendida), los cuatro {@see GOVERNED} que se apartan de la línea base van
+     * a una sexta lista, `prompt`, en vez de a `noEffect` (no se reconocen: la
+     * vista previa enseña su cambio exacto); `intent.fallback` y las reglas
+     * S-NNN siguen en `noEffect`. Sin ella, las cinco listas de siempre, sin la
+     * sexta clave (C-1).
+     *
      * @param  array<string,array<string,mixed>>  $configs  el `configs` de la versión, completo (el normalizador de F rellena con la línea base)
      * @param  list<array<string,mixed>>  $rules  las reglas copiadas en la versión; solo cuenta `code`
      * @param  array<string,array<string,mixed>>  $baseline  `StudioCatalog::baseline()['configs']`
      * @param  array<string,mixed>  $readings  `StudioEngineReadings::read()['params']`: id → `{available:true, value}` o `{available:false}`
      * @param  array<string,mixed>  $catalog  la forma de {@see StudioCatalog::toArray()}; se leen `layers` y `bindings`
-     * @return array{mustMatch:list<array{param:string,versionValue:mixed,engineValue:mixed,ok:bool}>,matches:list<string>,noEffect:list<string>,mismatches:list<array{param:string,versionValue:mixed,engineValue:mixed}>,engineReadingUnavailable:list<string>}
+     * @return array{mustMatch:list<array{param:string,versionValue:mixed,engineValue:mixed,ok:bool}>,matches:list<string>,noEffect:list<string>,mismatches:list<array{param:string,versionValue:mixed,engineValue:mixed}>,engineReadingUnavailable:list<string>,prompt?:list<string>}
      *
      * @throws InvalidArgumentException si el catálogo no casa con el contrato del motor o el contenido no tiene su forma
      */
-    public static function classify(array $configs, array $rules, array $baseline, array $readings, array $catalog): array
+    public static function classify(array $configs, array $rules, array $baseline, array $readings, array $catalog, bool $promptsGoverned = false): array
     {
         $parametros = self::parameters($catalog);
         self::assertKnownConfigs($configs, array_column($catalog['layers'], 'id'), $parametros);
@@ -171,6 +225,7 @@ final class StudioPublicationDeclaration
         $noEffect = [];
         $mismatches = [];
         $caidas = [];
+        $prompt = [];
 
         foreach ($parametros as $id => $p) {
             $valor = self::valueAt($configs, $p['layer'], $p['key'], 'configs');
@@ -200,7 +255,11 @@ final class StudioPublicationDeclaration
 
             // `fixed` sin valor, `proposal` y `engine_data`: solo lo que se aparta de la línea base.
             if (! self::same($valor, self::valueAt($baseline, $p['layer'], $p['key'], 'baseline'))) {
-                $noEffect[] = $id;
+                if ($promptsGoverned && isset(self::GOVERNED[$id])) {
+                    $prompt[] = $id;
+                } else {
+                    $noEffect[] = $id;
+                }
             }
         }
 
@@ -208,13 +267,15 @@ final class StudioPublicationDeclaration
             $noEffect[] = self::RULE_PREFIX.$codigo;
         }
 
-        return [
+        $clasificacion = [
             'mustMatch' => $mustMatch,
             'matches' => $matches,
             'noEffect' => $noEffect,
             'mismatches' => $mismatches,
             'engineReadingUnavailable' => $caidas,
         ];
+
+        return $promptsGoverned ? $clasificacion + ['prompt' => $prompt] : $clasificacion;
     }
 
     /**
@@ -304,10 +365,18 @@ final class StudioPublicationDeclaration
      * lleva su parte), no el del catálogo con el que se clasifica: ese ya está
      * dentro, en las listas.
      *
+     * Enmienda M-1 (§B.4 y E11): con la llave de prompts encendida, `$prompts`
+     * es lo que se firmaría (`{base, bundleHash, compiler}` de la parte nueva
+     * y, si la entrada arrastra una parte del resto, la suya en `carried`) y
+     * entra en la huella junto con la lista `prompt`: cambiar el paquete cambia
+     * la huella, así que quien publica firma exactamente el que vio. Sin él
+     * (llave en `off`), el objeto de siempre (Q-4).
+     *
      * @param  array<string,mixed>  $classification  la salida de {@see classify()}
      * @param  array{mode:string,latest:string|null}  $labGate
+     * @param  array<string,mixed>|null  $prompts  `{base, bundleHash, compiler, carried}`, o null con la llave en `off`
      */
-    public static function previewHash(string $versionUuid, string $contentHash, string $catalogVersion, array $classification, array $labGate): string
+    public static function previewHash(string $versionUuid, string $contentHash, string $catalogVersion, array $classification, array $labGate, ?array $prompts = null): string
     {
         self::assertUuid($versionUuid, 'versionUuid');
         self::assertHex64($contentHash, 'contentHash');
@@ -318,7 +387,7 @@ final class StudioPublicationDeclaration
             throw new InvalidArgumentException('labGate es exactamente {mode: required|waived, latest: null|approved|rejected|needs_changes|stale_prompts}.');
         }
 
-        return StudioContentHasher::hash([
+        $objeto = [
             'versionUuid' => $versionUuid,
             'contentHash' => $contentHash,
             'catalogVersion' => $catalogVersion,
@@ -326,7 +395,16 @@ final class StudioPublicationDeclaration
             'matches' => self::listOf($classification, 'matches'),
             'noEffect' => self::listOf($classification, 'noEffect'),
             'labGate' => ['mode' => $labGate['mode'], 'latest' => $labGate['latest']],
-        ]);
+        ];
+        if ($prompts !== null) {
+            if (! self::hasExactKeys($prompts, ['base', 'bundleHash', 'carried', 'compiler'])) {
+                throw new InvalidArgumentException('prompts es exactamente {base, bundleHash, carried, compiler}.');
+            }
+            $objeto['prompt'] = self::listOf($classification, 'prompt');
+            $objeto['prompts'] = $prompts;
+        }
+
+        return StudioContentHasher::hash($objeto);
     }
 
     /**
@@ -398,9 +476,57 @@ final class StudioPublicationDeclaration
             'publishedBy' => $publishedBy,
             'version' => $version,
         ];
-        self::assertPart($parte, 'part');
+        self::assertPart($parte, 'part', self::CONTRACT);
 
         return $parte;
+    }
+
+    /**
+     * Enmienda M-1 (§B.4): la parte `/2` de una parte `/1`, con los cuatro
+     * valores gobernados y la huella del paquete que compiló
+     * {@see StudioPromptBundle::compile()} con ellos. Las claves salen ordenadas
+     * por bytes en todos los niveles.
+     *
+     * @param  array<string,mixed>  $part  una parte `/1` ({@see part()}) o `/2` (se sustituyen sus dos claves)
+     * @param  array<string,mixed>  $governed
+     * @param  array<string,mixed>  $prompts  `{base, bundleHash, compiler}`
+     * @return array<string,mixed>
+     *
+     * @throws InvalidArgumentException si algo no tiene la forma que lee el motor
+     */
+    public static function partV2(array $part, array $governed, array $prompts): array
+    {
+        $parte = self::partV1($part);
+        ksort($governed, SORT_STRING);
+        ksort($prompts, SORT_STRING);
+        $parte['governed'] = $governed;
+        $parte['prompts'] = $prompts;
+        ksort($parte, SORT_STRING);
+        self::assertPart($parte, 'part', self::CONTRACT_V2);
+
+        return $parte;
+    }
+
+    /**
+     * La parte `/1` de una parte de cualquiera de los dos contratos: sin
+     * `governed` ni `prompts`. Es lo que se escribe con la llave de prompts en
+     * `off` (lo que declara la parte no cambia).
+     *
+     * @param  array<string,mixed>  $part
+     * @return array<string,mixed>
+     */
+    public static function partV1(array $part): array
+    {
+        unset($part['governed'], $part['prompts']);
+        self::assertPart($part, 'part', self::CONTRACT);
+
+        return $part;
+    }
+
+    /** ¿Es una parte `/2` (lleva `governed` y `prompts`)? */
+    public static function isPartV2(array $part): bool
+    {
+        return array_key_exists('governed', $part) || array_key_exists('prompts', $part);
     }
 
     /**
@@ -468,26 +594,36 @@ final class StudioPublicationDeclaration
      * la barra del contrato. `issuedAt` se escribe en UTC al segundo: cualquier
      * desfase se convierte y las fracciones se truncan.
      *
+     * Enmienda M-1: con `$contract` = `/2`, toda parte no nula es `/2`
+     * ({@see partV2()}) y la entrada no puede ser la de Legacy (`{null, null}`
+     * se escribe siempre en `/1`, R10); con `/1`, toda parte es `/1`.
+     *
      * @param  array<string,mixed>|null  $canary  una parte ({@see part()}) o null
      * @param  array<string,mixed>|null  $rest  una parte o null
      *
      * @throws InvalidArgumentException si algo no es lo que el motor lee
      */
-    public static function effectiveJson(string $entry, int $seq, DateTimeInterface $issuedAt, ?array $canary, ?array $rest): string
+    public static function effectiveJson(string $entry, int $seq, DateTimeInterface $issuedAt, ?array $canary, ?array $rest, string $contract = self::CONTRACT): string
     {
         self::assertUuid($entry, 'entry');
         if ($seq < 1) {
             throw new InvalidArgumentException('seq empieza en 1.');
         }
+        if (! in_array($contract, self::CONTRACTS, true)) {
+            throw new InvalidArgumentException("Contrato desconocido: {$contract}.");
+        }
+        if ($contract === self::CONTRACT_V2 && $canary === null && $rest === null) {
+            throw new InvalidArgumentException('Volver a Legacy se escribe siempre en '.self::CONTRACT.' (R10).');
+        }
         foreach (['canary' => $canary, 'rest' => $rest] as $lado => $parte) {
             if ($parte !== null) {
-                self::assertPart($parte, $lado);
+                self::assertPart($parte, $lado, $contract);
             }
         }
 
         $json = StudioContentHasher::canonicalJson([
             'canary' => $canary,
-            'contract' => self::CONTRACT,
+            'contract' => $contract,
             'entry' => $entry,
             'issuedAt' => self::utc($issuedAt),
             'rest' => $rest,
@@ -514,6 +650,9 @@ final class StudioPublicationDeclaration
      * implementación. Una firma que no son 64 hexadecimales en minúscula (S-4)
      * no se escribe: el motor la leería como `signature_invalid`.
      *
+     * Enmienda M-1: `$contract` es el de la entrada ({@see effectiveJson()}).
+     * La firma es la misma para los dos (§B.4: «firma … los de `/1`»).
+     *
      * @param  array<string,mixed>|null  $canary
      * @param  array<string,mixed>|null  $rest
      * @param  Closure(string): string  $sign
@@ -522,16 +661,16 @@ final class StudioPublicationDeclaration
      * @throws InvalidArgumentException si la entrada no es válida
      * @throws UnexpectedValueException si la firma no tiene la forma del contrato
      */
-    public static function declaration(string $entry, int $seq, DateTimeInterface $issuedAt, ?array $canary, ?array $rest, Closure $sign): array
+    public static function declaration(string $entry, int $seq, DateTimeInterface $issuedAt, ?array $canary, ?array $rest, Closure $sign, string $contract = self::CONTRACT): array
     {
-        $json = self::effectiveJson($entry, $seq, $issuedAt, $canary, $rest);
+        $json = self::effectiveJson($entry, $seq, $issuedAt, $canary, $rest, $contract);
         $firma = $sign($json);
         if (! is_string($firma) || preg_match(self::HEX64, $firma) !== 1) {
             throw new UnexpectedValueException('La firma no tiene la forma del contrato: 64 hexadecimales en minúscula.');
         }
 
         return [
-            'contract' => self::CONTRACT,
+            'contract' => $contract,
             'effectiveJson' => $json,
             'effectiveHash' => self::effectiveHash($json),
             'signature' => $firma,
@@ -547,11 +686,28 @@ final class StudioPublicationDeclaration
      * antes de llamar aquí; aquí se asegura que lo que el Studio va a copiar
      * tiene la forma del contrato.
      *
+     * Enmienda M-1: lee `/1` y `/2` (con las partes de su contrato); el
+     * contrato lo dice {@see entry()}.
+     *
      * @return array{canary:array<string,mixed>|null,rest:array<string,mixed>|null}
      *
-     * @throws InvalidArgumentException si no es una entrada de este contrato o no es la de esa fila
+     * @throws InvalidArgumentException si no es una entrada de estos contratos o no es la de esa fila
      */
     public static function parts(string $effectiveJson, string $entry, int $seq): array
+    {
+        $e = self::entry($effectiveJson, $entry, $seq);
+
+        return ['canary' => $e['canary'], 'rest' => $e['rest']];
+    }
+
+    /**
+     * {@see parts()} con el contrato de la entrada.
+     *
+     * @return array{contract:string,canary:array<string,mixed>|null,rest:array<string,mixed>|null}
+     *
+     * @throws InvalidArgumentException si no es una entrada de estos contratos o no es la de esa fila
+     */
+    public static function entry(string $effectiveJson, string $entry, int $seq): array
     {
         try {
             $e = json_decode($effectiveJson, true, self::JSON_DEPTH, JSON_THROW_ON_ERROR | JSON_BIGINT_AS_STRING);
@@ -559,19 +715,19 @@ final class StudioPublicationDeclaration
             throw new InvalidArgumentException('La entrada no es JSON.', 0, $error);
         }
 
-        if (! self::hasExactKeys($e, self::ENTRY_KEYS) || $e['contract'] !== self::CONTRACT || ! is_string($e['issuedAt'])) {
-            throw new InvalidArgumentException('La entrada no tiene la forma del contrato '.self::CONTRACT.'.');
+        if (! self::hasExactKeys($e, self::ENTRY_KEYS) || ! in_array($e['contract'], self::CONTRACTS, true) || ! is_string($e['issuedAt'])) {
+            throw new InvalidArgumentException('La entrada no tiene la forma de los contratos '.implode(' o ', self::CONTRACTS).'.');
         }
         if (! is_string($e['entry']) || strtolower($e['entry']) !== strtolower($entry) || ! is_int($e['seq']) || $e['seq'] !== $seq) {
             throw new InvalidArgumentException('La entrada no es la de esa fila (entry o seq).');
         }
         foreach (['canary', 'rest'] as $lado) {
             if ($e[$lado] !== null) {
-                self::assertPart($e[$lado], $lado);
+                self::assertPart($e[$lado], $lado, $e['contract']);
             }
         }
 
-        return ['canary' => $e['canary'], 'rest' => $e['rest']];
+        return ['contract' => $e['contract'], 'canary' => $e['canary'], 'rest' => $e['rest']];
     }
 
     /** Un instante en UTC al segundo, `AAAA-MM-DDTHH:MM:SSZ` (fixture E-2): las fracciones se truncan, nunca se redondean. */
@@ -848,10 +1004,20 @@ final class StudioPublicationDeclaration
 
     // ── Validación ──────────────────────────────────────────────────────────
 
-    private static function assertPart(mixed $parte, string $campo): void
+    /**
+     * Una parte con la forma de su contrato: `/1` (6 claves), `/2` (8 claves,
+     * {@see assertPrompted()}) o, sin contrato, cualquiera de las dos (al
+     * componer: la cabeza puede ser de cualquiera, y quien escribe pasa todas
+     * las partes al contrato de la entrada nueva).
+     */
+    private static function assertPart(mixed $parte, string $campo, ?string $contrato = null): void
     {
-        if (! self::hasExactKeys($parte, self::PART_KEYS)) {
-            throw new InvalidArgumentException("{$campo}: una parte lleva exactamente ".implode(', ', self::PART_KEYS).'.');
+        $v2 = $contrato === self::CONTRACT_V2 || ($contrato === null && is_array($parte) && self::isPartV2($parte));
+        if (! self::hasExactKeys($parte, $v2 ? self::PART_KEYS_V2 : self::PART_KEYS)) {
+            throw new InvalidArgumentException("{$campo}: una parte de ".($v2 ? self::CONTRACT_V2 : self::CONTRACT).' lleva exactamente '.implode(', ', $v2 ? self::PART_KEYS_V2 : self::PART_KEYS).'.');
+        }
+        if ($v2) {
+            self::assertPrompted($parte, $campo);
         }
         foreach (['approvedBy', 'publishedBy'] as $clave) {
             if (! is_int($parte[$clave]) || $parte[$clave] < 1) {
@@ -862,6 +1028,36 @@ final class StudioPublicationDeclaration
         self::assertHex64($parte['contentHash'], "{$campo}.contentHash");
         self::assertUuid($parte['version'], "{$campo}.version");
         self::assertDeclared($parte['declared'], "{$campo}.declared");
+    }
+
+    /**
+     * Las dos claves de `/2` con sus claves y tipos exactos (los del lector del
+     * motor) y, además, sus valores: los textos, cortos y de ASCII visible; la
+     * huella, 64 hexadecimales en minúscula; el compilador, un entero positivo.
+     * Que los valores gobernados compilen lo garantiza quien los compila
+     * ({@see StudioPromptBundle}); el motor vuelve a compilarlos en `decide`.
+     *
+     * @param  array<string,mixed>  $parte
+     */
+    private static function assertPrompted(array $parte, string $campo): void
+    {
+        foreach (['governed' => self::GOVERNED, 'prompts' => self::PROMPTS] as $clave => $tipos) {
+            if (! self::hasExactKeys($parte[$clave], array_keys($tipos))) {
+                throw new InvalidArgumentException("{$campo}.{$clave} lleva exactamente ".implode(', ', array_keys($tipos)).'.');
+            }
+            foreach ($tipos as $id => $tipo) {
+                if (gettype($parte[$clave][$id]) !== $tipo) {
+                    throw new InvalidArgumentException("{$campo}.{$clave}.{$id} tiene que ser de tipo {$tipo}.");
+                }
+                if ($tipo === 'string' && $id !== 'bundleHash') {
+                    self::assertShortText($parte[$clave][$id], "{$campo}.{$clave}.{$id}");
+                }
+            }
+        }
+        self::assertHex64($parte['prompts']['bundleHash'], "{$campo}.prompts.bundleHash");
+        if ($parte['prompts']['compiler'] < 1) {
+            throw new InvalidArgumentException("{$campo}.prompts.compiler tiene que ser un entero positivo.");
+        }
     }
 
     private static function assertDeclared(mixed $declarado, string $campo): void

@@ -103,11 +103,19 @@ class UltronStudioEngineReadOnlyTest extends TestCase
     /**
      * Los únicos ficheros del Studio que pueden nombrar clases del motor. Hito
      * 5: `StudioPublications` (la firma del motor, pura) y `StudioCanaryMeasures`
-     * (los recuentos del canario y su acta, de lectura).
+     * (los recuentos del canario y su acta, de lectura). Enmienda M-1 (M1-6):
+     * `StudioPromptBundle`, que nombra SOLO el compilador de prompts, puro.
      */
     private const ENGINE_READERS = [
         'StudioCampaignLinks.php', 'StudioCanaryCoherence.php', 'StudioCanaryMeasures.php', 'StudioEngineReadings.php', 'StudioIntegrationConfig.php',
-        'StudioLabEngineChecks.php', 'StudioMetaCampaigns.php', 'StudioPublications.php', 'StudioRules.php', 'StudioTwilioPanel.php',
+        'StudioLabEngineChecks.php', 'StudioMetaCampaigns.php', 'StudioPromptBundle.php', 'StudioPublications.php', 'StudioRules.php', 'StudioTwilioPanel.php',
+    ];
+
+    /** Enmienda M-1 (M1-6): lo único del motor que el Studio importa para los prompts. */
+    private const PROMPT_COMPILER_CLASSES = [
+        'App\\Services\\Marketing\\Ultron\\Prompts\\UltronPromptBase',
+        'App\\Services\\Marketing\\Ultron\\Prompts\\UltronPromptCompiler',
+        'App\\Services\\Marketing\\Ultron\\Prompts\\UltronPromptException',
     ];
 
     /**
@@ -245,6 +253,18 @@ class UltronStudioEngineReadOnlyTest extends TestCase
             $this->statementsNaming($recuentos, 'Artisan'));
         $this->assertSame('ultron:canary-report', StudioCanaryMeasures::ACTA_COMMAND);
         $this->assertSame([], $this->configWrites($recuentos), 'StudioCanaryMeasures cambia la configuración.');
+
+        // Enmienda M-1 (M1-6): el paquete de prompts nombra del motor SOLO el
+        // compilador y su base (puros) y su excepción; ni una escritura, ni una
+        // fachada, ni configuración, ni el lector de la cadena.
+        $paquete = app_path('Services/UltronStudio/StudioPromptBundle.php');
+        $nombrados = array_values(array_unique($this->engineReferences($paquete)));
+        sort($nombrados);
+        $this->assertSame(self::PROMPT_COMPILER_CLASSES, $nombrados, 'StudioPromptBundle nombra del motor algo que no es el compilador de prompts.');
+        $this->assertSame([], $this->writeCalls($paquete), 'StudioPromptBundle escribe.');
+        $this->assertSame([], $this->forbiddenNames($paquete), 'StudioPromptBundle usa algo que escribe.');
+        $this->assertSame([], $this->configWrites($paquete), 'StudioPromptBundle cambia la configuración.');
+        $this->assertStringNotContainsString('config(', (string) file_get_contents($paquete), 'StudioPromptBundle es puro: las llaves le llegan como argumentos.');
     }
 
     /**

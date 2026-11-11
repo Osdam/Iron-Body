@@ -18,6 +18,12 @@ use Carbon\CarbonImmutable;
  * Vive entre los servicios y no en el comando: los comandos del Studio no
  * nombran nada del veredicto del laboratorio (`UltronStudioLabNoEngineEffectsTest`),
  * y la tabla de errores tiene que nombrar el código de la puerta del laboratorio.
+ *
+ * Enmienda M-1 (plan de motores §B.4 y §D): `effect` y `prompts` en la vista
+ * previa (con la llave de prompts en `off` y encendida), `engine.prompts` en el
+ * bloque del motor (apagada y con una traza `applied`), los vocabularios
+ * nuevos y el 409 `prompts_compile_failed`. Las huellas de los paquetes son
+ * las reales: las calcula el compilador del motor con la base del repositorio.
  */
 final class StudioPublicationExport
 {
@@ -114,6 +120,51 @@ final class StudioPublicationExport
         $aprobada = ['mode' => D::LAB_REQUIRED, 'ok' => true, 'latest' => 'approved'];
         $sinVeredicto = ['mode' => D::LAB_REQUIRED, 'ok' => false, 'latest' => null];
 
+        // Enmienda M-1: la misma V1 con la llave de prompts encendida y el
+        // cambio de aceptación (G8: tono «profesional» y 200 caracteres), sobre
+        // una cabeza que arrastra V0 en el resto (línea base, paquete Legacy).
+        $configsPrompts = $configs;
+        $configsPrompts['persona']['maxChars'] = 200;
+        $clasificacionPrompts = D::classify($configsPrompts, [['code' => 'S-003']], StudioCatalog::baseline()['configs'], $lecturas, StudioCatalog::toArray(), true);
+        $paqueteV1 = StudioPromptBundle::compile(StudioPromptBundle::governedFrom($configsPrompts));
+        $paqueteV0 = StudioPromptBundle::compile(StudioPromptBundle::governedFrom(StudioCatalog::baseline()['configs']));
+        $hechosPrompts = [
+            'key' => StudioEngineReadings::PROMPTS_CANARY,
+            'compiled' => $paqueteV1,
+            'carried' => ['version' => $v0, 'label' => $etiquetaV0, 'bundleHash' => $paqueteV0['prompts']['bundleHash'], 'baseline' => true],
+            'error' => null,
+        ];
+        $huellaPrompts = D::previewHash($v1, $huellaV1, StudioCatalog::VERSION, $clasificacionPrompts, ['mode' => $aprobada['mode'], 'latest' => $aprobada['latest']], [
+            'base' => StudioPromptBundle::base(),
+            'bundleHash' => $paqueteV1['prompts']['bundleHash'],
+            'carried' => ['bundleHash' => $paqueteV0['prompts']['bundleHash'], 'version' => $v0],
+            'compiler' => StudioPromptBundle::compilerVersion(),
+        ]);
+        $vistaPrompts = StudioPublications::previewFrom($v1, $huellaV1, ['configs' => $configsPrompts, 'classification' => $clasificacionPrompts, 'previewHash' => $huellaPrompts, 'prompts' => $hechosPrompts] + $hechos($aprobada, true));
+        $parteV1Prompts = D::partV2($parteV1, $paqueteV1['governed'], $paqueteV1['prompts']);
+        $trazaPrompts = [
+            'key' => StudioEngineReadings::PROMPTS_CANARY,
+            'base' => StudioPromptBundle::base(),
+            'compiler' => StudioPromptBundle::compilerVersion(),
+            'legacyBundleHash' => StudioPromptBundle::legacyBundleHash(),
+            'current' => StudioPromptBundle::offer(StudioEngineReadings::PROMPTS_CANARY, StudioPublishing::SCOPE_CANARY, true, ['state' => 'ok', 'reason' => null, 'contract' => D::CONTRACT_V2, 'part' => $parteV1Prompts]),
+            // Tres turnos de la canaria: antes de publicar (Legacy), con V1
+            // aplicada y después de revertirla. Solo vocabularios y recortes.
+            'lastTurns' => [
+                self::turn('2026-11-03T14:58Z', ['state' => 'legacy', 'version8' => null], ['mode' => 'legacy', 'reason' => 'part_legacy', 'version8' => null, 'bundle8' => null], ['mode' => 'legacy', 'bundle8' => substr(StudioPromptBundle::legacyBundleHash(), 0, 8), 'flowRev' => 'S1'], 'legacy'),
+                self::turn('2026-11-03T15:10Z', ['state' => 'applied', 'version8' => substr($v1, 0, 8)], ['mode' => 'studio', 'reason' => null, 'version8' => substr($v1, 0, 8), 'bundle8' => substr($paqueteV1['prompts']['bundleHash'], 0, 8)], ['mode' => 'studio', 'bundle8' => substr($paqueteV1['prompts']['bundleHash'], 0, 8), 'flowRev' => 'S1'], 'applied'),
+                self::turn('2026-11-04T09:05Z', ['state' => 'legacy', 'version8' => null], ['mode' => 'legacy', 'reason' => 'part_legacy', 'version8' => null, 'bundle8' => null], ['mode' => 'legacy', 'bundle8' => substr(StudioPromptBundle::legacyBundleHash(), 0, 8), 'flowRev' => 'S1'], 'legacy'),
+            ],
+        ];
+        $trazaApagada = [
+            'key' => StudioEngineReadings::PROMPTS_OFF,
+            'base' => StudioPromptBundle::base(),
+            'compiler' => StudioPromptBundle::compilerVersion(),
+            'legacyBundleHash' => StudioPromptBundle::legacyBundleHash(),
+            'current' => StudioPromptBundle::offer(StudioEngineReadings::PROMPTS_OFF, StudioPublishing::SCOPE_CANARY, true, ['state' => 'none', 'reason' => null, 'contract' => null, 'part' => null]),
+            'lastTurns' => [],
+        ];
+
         // La evidencia de V1 en canario: 26 h, cuatro turnos sellados, acta a cero.
         $medidas = static fn (int $turnos): array => [
             'since' => '2026-11-03T15:04:05Z',
@@ -159,6 +210,7 @@ final class StudioPublicationExport
             UltronStudioException::alreadyLegacy(),
             UltronStudioException::publicationMoved(),
             UltronStudioException::publicationHeadInvalid(),
+            UltronStudioException::promptsCompileFailed(),
         ] as $e) {
             $errores[$e->errorCode] = $e->status;
         }
@@ -177,6 +229,16 @@ final class StudioPublicationExport
             'byState' => StudioCanaryEvidence::BY_STATE,
             'evidenceGates' => StudioCanaryEvidence::GATES,
             'actaCounters' => StudioCanaryMeasures::ACTA_COUNTERS,
+            // Enmienda M-1.
+            'contracts' => D::CONTRACTS,
+            'effects' => [StudioPublications::EFFECT_DECLARATION, StudioPublications::EFFECT_PROMPTS],
+            'paramClasses' => ['must_match', 'matches', 'no_effect', D::CLASS_PROMPT],
+            'promptKeys' => [StudioEngineReadings::PROMPTS_OFF, StudioEngineReadings::PROMPTS_CANARY],
+            'promptGoverned' => StudioPromptBundle::parameters(),
+            'promptRoles' => StudioPromptBundle::roles(),
+            'promptModes' => [StudioPromptBundle::MODE_STUDIO, StudioPromptBundle::MODE_LEGACY],
+            'promptTurnsMax' => StudioPublications::PROMPT_TURNS,
+            'engineMessagesPrompts' => StudioPublications::ENGINE_MESSAGES_PROMPTS,
             'errors' => $errores,
             'limits' => [
                 'acknowledgedNoEffectMax' => StudioPublications::MAX_ACKNOWLEDGED,
@@ -195,6 +257,15 @@ final class StudioPublicationExport
                     'activeVersion' => $v0,
                     'message' => StudioPublications::ENGINE_MESSAGES[StudioPublishing::SCOPE_CANARY],
                     'publication' => $estados['applied'],
+                    'prompts' => $trazaApagada,
+                ],
+                // Enmienda M-1: el bloque con la llave de prompts encendida.
+                'enginePrompts' => [
+                    'readsVersions' => StudioPublishing::ENGINE_READS_VERSIONS,
+                    'activeVersion' => $v0,
+                    'message' => StudioPublications::engineMessage(StudioPublishing::SCOPE_CANARY, StudioEngineReadings::PROMPTS_CANARY),
+                    'publication' => $estados['applied'],
+                    'prompts' => $trazaPrompts,
                 ],
                 'publishing' => [
                     'disabled' => StudioPublishing::statusFor(false, StudioPublishing::SCOPE_OFF),
@@ -211,9 +282,24 @@ final class StudioPublicationExport
                 ],
                 'preview' => StudioPublications::previewFrom($v1, $huellaV1, $hechos($aprobada, true)),
                 'previewBlocked' => StudioPublications::previewFrom($v1, $huellaV1, $hechos($sinVeredicto, false)),
+                'previewPrompts' => $vistaPrompts,
                 'evidence' => $evidencia(4),
                 'evidenceInsufficient' => $evidencia(2),
             ],
         ];
+    }
+
+    /**
+     * Un turno de `status.engine.prompts.lastTurns` (la forma de
+     * `StudioCanaryMeasures::promptTurns()`).
+     *
+     * @param  array<string,mixed>|null  $declared
+     * @param  array<string,mixed>|null  $offered
+     * @param  array<string,mixed>|null  $observed
+     * @return array<string,mixed>
+     */
+    private static function turn(string $at, ?array $declared, ?array $offered, ?array $observed, ?string $state): array
+    {
+        return ['at' => $at, 'declared' => $declared, 'offered' => $offered, 'observed' => $observed, 'state' => $state];
     }
 }

@@ -53,6 +53,8 @@ trait PublicationRaceSessions
         'marketing.ultron.payment_links_enabled',
         'marketing.ultron.canary_conversation_id',
         'marketing.ultron.studio_config',
+        // Enmienda M-1: con ella encendida, publicar escribe `/2`.
+        'marketing.ultron.studio_prompts',
         'ultron_studio.publishing_enabled',
         'ultron_studio.publishing.lab_gate',
         'ultron_studio.publishing.window',

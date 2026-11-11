@@ -114,8 +114,17 @@ class ExportStudioFixturesCommandTest extends TestCase
         $this->assertSame(json_decode((string) json_encode(StudioPublicationExport::shapes()), true), $formas, 'lo mismo que el servidor, en el mismo orden');
         $this->assertSame(StudioVersionStatus::lifecycle(), $formas['lifecycle']);
         $this->assertSame(['publish', 'promote', 'rollback', 'legacy'], array_keys($formas['examples']['entries']));
-        $this->assertSame(['versionUuid', 'contentHash', 'previewHash', 'publishable', 'params', 'noEffect', 'requirements', 'blocking'], array_keys($formas['examples']['preview']));
+        // Enmienda M-1: `effect` y `prompts`, siempre, al final.
+        $this->assertSame(['versionUuid', 'contentHash', 'previewHash', 'publishable', 'params', 'noEffect', 'requirements', 'blocking', 'effect', 'prompts'], array_keys($formas['examples']['preview']));
         $this->assertTrue($formas['examples']['preview']['publishable']);
+        $this->assertSame(['declaration', null], [$formas['examples']['preview']['effect'], $formas['examples']['preview']['prompts']]);
+        $this->assertSame('prompts', $formas['examples']['previewPrompts']['effect']);
+        $this->assertSame('702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c', $formas['examples']['previewPrompts']['prompts']['bundleHash'], 'el cambio de aceptación (G8), con la huella real del compilador');
+        $this->assertSame(['key', 'base', 'compiler', 'legacyBundleHash', 'current', 'lastTurns'], array_keys($formas['examples']['engine']['prompts']));
+        $this->assertSame('prompts_off', $formas['examples']['engine']['prompts']['current']['reason']);
+        $this->assertSame('studio', $formas['examples']['enginePrompts']['prompts']['current']['mode']);
+        $this->assertSame(['ultron-engine-config/1', 'ultron-engine-config/2'], $formas['contracts']);
+        $this->assertSame(['must_match', 'matches', 'no_effect', 'prompt'], $formas['paramClasses']);
         $this->assertSame(['publishing_disabled', 'lab_verdict_required'], $formas['examples']['previewBlocked']['blocking']);
 
         // Hito 6: las formas de las integraciones, con los serializadores reales y una APP_KEY sintética.
@@ -140,7 +149,8 @@ class ExportStudioFixturesCommandTest extends TestCase
         $this->assertTrue($formas['examples']['evidence']['passes']);
         $this->assertSame(['turns'], $formas['examples']['evidenceInsufficient']['failing']);
         $this->assertSame(403, $formas['errors']['four_eyes_required']);
-        $this->assertCount(21, $formas['errors'], 'los 19 códigos de §A7, publishing_disabled (de F) y publication_head_invalid');
+        $this->assertCount(22, $formas['errors'], 'los 19 códigos de §A7, publishing_disabled (de F), publication_head_invalid y prompts_compile_failed (Enmienda M-1)');
+        $this->assertSame(409, $formas['errors']['prompts_compile_failed']);
         $this->assertStringContainsString("\n  \"version\": ", self::literal($publicacion, 'BACKEND_PUBLICATION'), 'sangría de dos espacios, como el CRM');
     }
 

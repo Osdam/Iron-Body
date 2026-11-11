@@ -67,6 +67,26 @@ use Throwable;
  * `ultron_studio_*`. Del motor se LEE (las lecturas de
  * {@see StudioEngineReadings}, los recuentos de {@see StudioCanaryMeasures}) y
  * se llama a la firma, que es pura.
+ *
+ * ENMIENDA M-1 (plan de motores §B.4 y §D): la versión publicada GOBIERNA los
+ * prompts del motor en la conversación canaria. Con la llave de prompts del
+ * motor encendida ({@see StudioEngineReadings::promptsKey()}), publicar compila
+ * el paquete de la versión ({@see StudioPromptBundle}) y escribe
+ * `ultron-engine-config/2`: cada parte con sus cuatro valores gobernados y la
+ * huella del paquete. La vista previa enseña el cambio exacto (`prompts`,
+ * `effect = prompts`) y su huella entra en `previewHash`. Las reglas de
+ * escritura:
+ *  - con la llave en `off`, todo como antes: `/1`, la clasificación y la huella
+ *    de siempre (las partes `/2` de la cabeza se copian sin sus dos claves);
+ *  - volver a Legacy, siempre `/1` (R10);
+ *  - publicar: `/2`; la parte que se arrastra del resto, como estaba firmada
+ *    si ya era `/2` o compilada desde su versión si era `/1` (y entonces la
+ *    vista previa la enseña en `prompts.carried`); si algo no compila, 409
+ *    `prompts_compile_failed`: nunca se firma una parte que no compila;
+ *  - promover y revertir solo MUEVEN partes: `/2` si todas las de la entrada
+ *    nueva ya lo eran (las firmó una publicación con su vista previa); si no,
+ *    `/1` (la canaria vuelve a los prompts Legacy). Nunca dan efecto a un
+ *    paquete que nadie vio.
  */
 final class StudioPublications
 {
@@ -101,11 +121,31 @@ final class StudioPublications
 
     public const STATE_FALLBACK = 'fallback';
 
+    /** El mensaje del bloque `engine` con la llave de prompts del motor en `off` (el de siempre). */
     public const ENGINE_MESSAGES = [
         StudioPublishing::SCOPE_OFF => 'El motor de ULTRON no lee la cadena de publicaciones (su llave está apagada): publicar aquí no cambia nada en el agente.',
         StudioPublishing::SCOPE_CANARY => 'El motor de ULTRON lee la cadena en la conversación canaria y anota en cada turno la versión publicada. Publicar no cambia lo que ULTRON dice ni hace.',
         StudioPublishing::SCOPE_ALL => 'El motor de ULTRON lee la cadena en todas las conversaciones y anota en cada turno la versión publicada. Publicar no cambia lo que ULTRON dice ni hace.',
     ];
+
+    /**
+     * Enmienda M-1 (§D): con la llave de prompts del motor encendida, publicar
+     * SÍ cambia lo que ULTRON dice, y solo en la conversación canaria. Con la
+     * llave del sello en `off` el motor no lee nada y el mensaje es el de
+     * siempre.
+     */
+    public const ENGINE_MESSAGES_PROMPTS = [
+        StudioPublishing::SCOPE_CANARY => 'El motor de ULTRON lee la cadena en la conversación canaria y anota en cada turno la versión publicada. Con la llave de prompts encendida, publicar CAMBIA lo que ULTRON dice en esa conversación: el tono, los emojis, la longitud y el objetivo comercial de la versión entran en sus prompts. «Si no entiende» y las reglas S-NNN siguen sin efecto en WhatsApp.',
+        StudioPublishing::SCOPE_ALL => 'El motor de ULTRON lee la cadena en todas las conversaciones y anota en cada turno la versión publicada. Con la llave de prompts encendida, publicar CAMBIA lo que ULTRON dice, solo en la conversación canaria: el tono, los emojis, la longitud y el objetivo comercial de la versión entran en sus prompts. En las demás conversaciones no cambia nada. «Si no entiende» y las reglas S-NNN siguen sin efecto en WhatsApp.',
+    ];
+
+    /** Enmienda M-1: `effect` de la vista previa. */
+    public const EFFECT_DECLARATION = 'declaration';
+
+    public const EFFECT_PROMPTS = 'prompts';
+
+    /** Enmienda M-1 (§D): turnos de la canaria en `status.engine.prompts.lastTurns`. */
+    public const PROMPT_TURNS = 20;
 
     /** Las columnas de una entrada que salen en el historial y en los reintentos (sin el texto firmado). */
     private const COLUMNS = [
@@ -189,6 +229,8 @@ final class StudioPublications
                     // publicación se confirmó después de las puertas).
                     throw $this->otherCanaryExists($version) ? UltronStudioException::canaryInProgress() : $this->raceRefusal($version, 'publicar', [StudioVersionStatus::Approved]);
                 }
+                // Enmienda M-1: `/2` con el paquete que enseñó la vista previa, o `/1`.
+                [$contrato, $nuevas] = $this->promptedForPublish($nuevas, $h['prompts'] ?? null);
 
                 $labGate = array_filter([
                     'mode' => $h['labGate']['mode'],
@@ -197,7 +239,7 @@ final class StudioPublications
                     'promptVersion' => $h['labGate']['promptVersion'],
                 ], static fn (mixed $v): bool => $v !== null);
 
-                $fila = $this->insertEntry(D::ACTION_PUBLISH, $version, $cabeza, $nuevas, $ahora, $access, $clientRequestId, $labGate, $acknowledged, null, $note, null);
+                $fila = $this->insertEntry(D::ACTION_PUBLISH, $version, $cabeza, $nuevas, $ahora, $access, $clientRequestId, $labGate, $acknowledged, null, $note, null, $contrato);
 
                 if (! StudioVersion::transition($version->id, [StudioVersionStatus::Approved->value], [
                     'status' => StudioVersionStatus::Canary->value,
@@ -300,9 +342,10 @@ final class StudioPublications
                 } catch (InvalidArgumentException) {
                     throw $this->raceRefusal($version, 'promover', [StudioVersionStatus::Canary]);
                 }
+                [$contrato, $nuevas] = $this->promptedForMove($nuevas);
 
                 $anterior = StudioVersion::query()->where('status', StudioVersionStatus::Published->value)->first(['id', 'uuid', 'label', 'status', 'content_hash']);
-                $fila = $this->insertEntry(D::ACTION_PROMOTE, $version, $cabeza, $nuevas, $ahora, $access, $clientRequestId, self::notApplicableLabGate(), null, $evidencia['record'], $note, null);
+                $fila = $this->insertEntry(D::ACTION_PROMOTE, $version, $cabeza, $nuevas, $ahora, $access, $clientRequestId, self::notApplicableLabGate(), null, $evidencia['record'], $note, null, $contrato);
 
                 // Primero la que SALE de PUBLISHED, después la que entra.
                 if ($anterior !== null && ! StudioVersion::transition($anterior->id, [StudioVersionStatus::Published->value], [
@@ -400,8 +443,9 @@ final class StudioPublications
                 } catch (InvalidArgumentException) {
                     throw $this->raceRefusal($version, 'revertir', [$estado]);
                 }
+                [$contrato, $nuevas] = $this->promptedForMove($nuevas);
 
-                $fila = $this->insertEntry(D::ACTION_ROLLBACK, $version, $cabeza, $nuevas, $ahora, $access, $clientRequestId, self::notApplicableLabGate(), null, null, $reason, $origen?->id);
+                $fila = $this->insertEntry(D::ACTION_ROLLBACK, $version, $cabeza, $nuevas, $ahora, $access, $clientRequestId, self::notApplicableLabGate(), null, null, $reason, $origen?->id, $contrato);
 
                 // Primero la que sale, después la que vuelve.
                 if (! StudioVersion::transition($version->id, [$estado->value], [
@@ -612,24 +656,99 @@ final class StudioPublications
         $bloque = [
             'readsVersions' => StudioPublishing::ENGINE_READS_VERSIONS,
             'activeVersion' => null,
-            'message' => self::ENGINE_MESSAGES[$alcance],
+            'message' => self::engineMessage($alcance, StudioEngineReadings::promptsKey()),
         ];
 
         try {
             $estado = $this->state();
+            $bloque['activeVersion'] = $estado['rest']['versionUuid'] ?? null;
+            $bloque['publication'] = $estado;
         } catch (Throwable $e) {
             // Tragado a propósito: `GET status` es la puerta del Studio y no
             // puede caerse por una lectura de la cadena. Sin la clave, el CRM no
             // enseña nada de la publicación (nunca un estado inventado).
             Log::warning('ultron_studio.publication_state_unavailable', ['error_class' => class_basename($e)]);
-
-            return $bloque;
         }
 
-        $bloque['activeVersion'] = $estado['rest']['versionUuid'] ?? null;
-        $bloque['publication'] = $estado;
+        try {
+            $bloque['prompts'] = $this->promptsTrace();
+        } catch (Throwable $e) {
+            // Tragado a propósito, por el mismo motivo: sin la clave, el CRM no
+            // enseña la traza de los prompts (nunca una inventada). Al log, solo
+            // la clase (el mensaje puede llevar SQL).
+            Log::warning('ultron_studio.prompts_trace_unavailable', ['error_class' => class_basename($e)]);
+        }
 
         return $bloque;
+    }
+
+    /**
+     * El mensaje del bloque `engine`: el de siempre con la llave de prompts en
+     * `off` (o con el motor sin leer la cadena) y, con ella encendida, el que
+     * dice que publicar cambia lo que ULTRON dice en la canaria (Enmienda M-1).
+     */
+    public static function engineMessage(string $engineScope, string $promptsKey): string
+    {
+        return $promptsKey === StudioEngineReadings::PROMPTS_CANARY && isset(self::ENGINE_MESSAGES_PROMPTS[$engineScope])
+            ? self::ENGINE_MESSAGES_PROMPTS[$engineScope]
+            : self::ENGINE_MESSAGES[$engineScope];
+    }
+
+    /**
+     * `status.engine.prompts` (Enmienda M-1, plan de motores §D): la llave de
+     * prompts del motor, la base y el compilador de este código, la huella
+     * Legacy, la oferta que haría `decide` AHORA a la conversación canaria
+     * (`current`, la misma regla que `UltronPromptOffer`, sobre la cabeza que
+     * verifica el Studio) y los últimos turnos de la canaria
+     * (`lastTurns`, ≤ {@see PROMPT_TURNS}). Sin ids de conversación ni de
+     * mensaje y sin textos. La cabeza solo se lee si la oferta llega a
+     * necesitarla (con las dos llaves encendidas y canario configurado).
+     * Propaga un fallo de lectura.
+     *
+     * @return array{key:string,base:string,compiler:int,legacyBundleHash:string,current:array{mode:string,version:?string,bundleHash:?string,reason:?string},lastTurns:list<array<string,mixed>>}
+     */
+    public function promptsTrace(): array
+    {
+        $llave = StudioEngineReadings::promptsKey();
+        $alcance = StudioPublishing::engineScope();
+        $canario = false;
+        $cabeza = ['state' => 'none', 'reason' => null, 'contract' => null, 'part' => null];
+        if ($llave === StudioEngineReadings::PROMPTS_CANARY && $alcance !== StudioPublishing::SCOPE_OFF) {
+            $lectura = $this->engine->only(['governance.canaryOnly'])['params']['governance.canaryOnly'];
+            $canario = ($lectura['available'] ?? false) === true && ($lectura['value'] ?? null) === true;
+            if ($canario) {
+                $cabeza = self::offerHead($this->head());
+            }
+        }
+
+        return [
+            'key' => $llave,
+            'base' => StudioPromptBundle::base(),
+            'compiler' => StudioPromptBundle::compilerVersion(),
+            'legacyBundleHash' => StudioPromptBundle::legacyBundleHash(),
+            'current' => StudioPromptBundle::offer($llave, $alcance, $canario, $cabeza),
+            'lastTurns' => $this->canary->promptTurns(self::PROMPT_TURNS),
+        ];
+    }
+
+    /**
+     * La cabeza como la lee la oferta: sin entradas, que no verifica (con el
+     * motivo del lector) o verificada, con la parte que rige en la canaria (la
+     * canaria o, si es null, la del resto) y el contrato de la entrada.
+     *
+     * @return array{state:string,reason:?string,contract:?string,part:?array<string,mixed>}
+     */
+    private static function offerHead(?StudioPublication $cabeza): array
+    {
+        if ($cabeza === null) {
+            return ['state' => 'none', 'reason' => null, 'contract' => null, 'part' => null];
+        }
+        $v = self::verification($cabeza);
+        if ($v['parts'] === null) {
+            return ['state' => 'invalid', 'reason' => $v['reason'], 'contract' => null, 'part' => null];
+        }
+
+        return ['state' => 'ok', 'reason' => null, 'contract' => $v['contract'], 'part' => $v['parts']['canary'] ?? $v['parts']['rest']];
     }
 
     /**
@@ -772,6 +891,15 @@ final class StudioPublications
      * vacío. El reconocimiento y la propia `previewHash` no son requisitos:
      * dependen de lo que envíe quien publica.
      *
+     * Enmienda M-1 (§B.4 y §D), al final y siempre presentes: `effect`
+     * (`declaration` con la llave de prompts del motor en `off`: publicar solo
+     * declara; `prompts`: publicar cambia los prompts de la canaria) y `prompts`
+     * (null con `declaration`; si no, el paquete que se firmaría: base,
+     * compilador, huella, la Legacy, la tabla de cambios con el texto exacto de
+     * cada parche y la parte que se arrastra del resto). Los gobernados que se
+     * apartan de la línea base salen en `params` con la clase `prompt`; un
+     * paquete que no compila bloquea con `prompts_compile_failed`.
+     *
      * @param  array<string,mixed>  $h
      * @return array<string,mixed>
      */
@@ -779,12 +907,13 @@ final class StudioPublications
     {
         $clasificacion = $h['classification'];
         $configs = $h['configs'];
+        $prompts = $h['prompts'] ?? null;
         $porParametro = [];
         foreach ($clasificacion['mustMatch'] as $m) {
             $porParametro[$m['param']] = ['class' => 'must_match', 'versionValue' => $m['versionValue'], 'engineValue' => $m['engineValue'], 'ok' => $m['ok']];
         }
-        foreach (['matches' => 'matches', 'noEffect' => 'no_effect'] as $lista => $clase) {
-            foreach ($clasificacion[$lista] as $id) {
+        foreach (['matches' => 'matches', 'noEffect' => 'no_effect', 'prompt' => D::CLASS_PROMPT] as $lista => $clase) {
+            foreach ($clasificacion[$lista] ?? [] as $id) {
                 if (! str_starts_with($id, D::RULE_PREFIX)) {
                     $porParametro[$id] = ['class' => $clase];
                 }
@@ -845,6 +974,7 @@ final class StudioPublications
         $si($h['revalidation'] === 'blocked', 'revalidation_blocked');
         $si($h['revalidation'] === 'changed', 'revalidation_changed');
         $si(! $lab['ok'], 'lab_verdict_required');
+        $si(($prompts['error'] ?? null) !== null, StudioPromptBundle::CODE_COMPILE_FAILED);
         $si($clasificacion['mismatches'] !== [], D::CODE_ENGINE_VALUE_MISMATCH);
         $si($clasificacion['engineReadingUnavailable'] !== [], D::CODE_ENGINE_READING_UNAVAILABLE);
         $si(! $h['engineCanary'], 'engine_has_no_canary');
@@ -861,6 +991,43 @@ final class StudioPublications
             'noEffect' => D::requiredAcknowledgements($clasificacion),
             'requirements' => $requisitos,
             'blocking' => $bloqueos,
+            'effect' => $prompts === null ? self::EFFECT_DECLARATION : self::EFFECT_PROMPTS,
+            'prompts' => $prompts === null ? null : self::promptsDto($prompts),
+        ];
+    }
+
+    /**
+     * El bloque `prompts` de la vista previa (Enmienda M-1, §D): lo que se
+     * firmaría en la parte nueva y lo que enseña el diálogo de publicar. Sin
+     * los prompts enteros: la base es la del repositorio y lo único que cambia
+     * son los parches, que salen con su texto exacto.
+     *
+     * @param  array<string,mixed>  $p  los hechos de {@see promptFacts()}
+     * @return array{key:string,base:string,compiler:int,legacyBundleHash:string,bundleHash:?string,shortHash:?string,baseline:?bool,bytes:?int,changes:list<array<string,mixed>>,carried:?array<string,mixed>,error:?string}
+     */
+    public static function promptsDto(array $p): array
+    {
+        $c = $p['compiled'];
+        $arrastrada = $p['carried'];
+
+        return [
+            'key' => $p['key'],
+            'base' => StudioPromptBundle::base(),
+            'compiler' => StudioPromptBundle::compilerVersion(),
+            'legacyBundleHash' => StudioPromptBundle::legacyBundleHash(),
+            'bundleHash' => $c['prompts']['bundleHash'] ?? null,
+            'shortHash' => isset($c['prompts']['bundleHash']) ? substr($c['prompts']['bundleHash'], 0, 8) : null,
+            'baseline' => $c['baseline'] ?? null,
+            'bytes' => $c['bytes'] ?? null,
+            'changes' => $c['changes'] ?? [],
+            'carried' => $arrastrada === null ? null : [
+                'versionUuid' => $arrastrada['version'],
+                'label' => $arrastrada['label'],
+                'bundleHash' => $arrastrada['bundleHash'],
+                'shortHash' => substr($arrastrada['bundleHash'], 0, 8),
+                'baseline' => $arrastrada['baseline'],
+            ],
+            'error' => $p['error'],
         ];
     }
 
@@ -899,7 +1066,8 @@ final class StudioPublications
      * Los pasos 5–11 de publicar (§A5.1) sobre las puertas calculadas
      * ({@see facts()}), en el orden del texto y del fixture (P-1): estado →
      * integridad → revalidación (bloqueos → avisos cambiados) → laboratorio →
-     * `must_match` (distinto → sin lectura) → reconocimiento exacto →
+     * (Enmienda M-1, solo con la llave de prompts encendida: el paquete
+     * compila) → `must_match` (distinto → sin lectura) → reconocimiento exacto →
      * `previewHash` → canario del motor → freno → otro canario → ventana. El
      * primer rechazo, o null. Las puertas 1–4 (persona, permiso, llaves,
      * reintento, versión y cuatro ojos) y la 12 (la transacción) van antes y
@@ -930,6 +1098,10 @@ final class StudioPublications
         }
         if (! $h['labGate']['ok']) {
             return UltronStudioException::labVerdictRequired($h['labGate']['latest']);
+        }
+        // Enmienda M-1 (§B.4): nunca se firma una parte que no compila.
+        if (($h['prompts']['error'] ?? null) !== null) {
+            return UltronStudioException::promptsCompileFailed();
         }
 
         $rechazo = D::refusal($h['classification'], $acknowledgedNoEffect, $sentPreviewHash, $h['previewHash']);
@@ -1054,6 +1226,9 @@ final class StudioPublications
 
         $lecturas = $this->engine->only(StudioEngineReadings::MUST_MATCH, ['governance.brake']);
         $lab = $this->labGate($version);
+        // Enmienda M-1: con la llave de prompts del motor encendida, los cuatro
+        // gobernados tienen efecto (clase `prompt`) y se publica en `/2`.
+        $conPrompts = StudioEngineReadings::promptsKey() === StudioEngineReadings::PROMPTS_CANARY;
 
         $clasificable = true;
         try {
@@ -1063,6 +1238,7 @@ final class StudioPublications
                 StudioCatalog::baseline()['configs'],
                 $lecturas['params'],
                 StudioCatalog::toArray(),
+                $conPrompts,
             );
         } catch (InvalidArgumentException) {
             // La forma del contenido no casa con el catálogo actual (un
@@ -1073,14 +1249,16 @@ final class StudioPublications
             $clasificable = false;
             $revalidacion = 'blocked';
             $hallazgos = self::withUnreadableFinding($hallazgos);
-            $clasificacion = self::unclassified($lecturas['params']);
+            $clasificacion = self::unclassified($lecturas['params'], $conPrompts);
         }
+
+        $prompts = $conPrompts ? $this->promptFacts($contenido) : null;
 
         $huella = null;
         if ($clasificable) {
             try {
                 $huella = D::previewHash((string) $version->uuid, (string) $version->content_hash, (string) $version->catalog_version, $clasificacion,
-                    ['mode' => $lab['mode'], 'latest' => $lab['latest']]);
+                    ['mode' => $lab['mode'], 'latest' => $lab['latest']], $prompts === null ? null : self::signedPrompts($prompts));
             } catch (InvalidArgumentException) {
                 // Una huella o una versión del catálogo sin la forma del
                 // contrato: solo con la fila alterada, y entonces la integridad
@@ -1110,6 +1288,7 @@ final class StudioPublications
             'otherCanary' => $this->otherCanaryExists($version),
             'window' => ['open' => StudioPublishing::windowOpen(now()), 'label' => $ventana['label'] ?? null],
             'keys' => ['studio' => StudioPublishing::flagEnabled(), 'engine' => StudioPublishing::engineScope()],
+            'prompts' => $prompts,
         ];
     }
 
@@ -1191,7 +1370,7 @@ final class StudioPublications
         }
 
         return is_array($cabeza)
-            && ($cabeza['contract'] ?? null) === D::CONTRACT
+            && in_array($cabeza['contract'] ?? null, D::CONTRACTS, true)
             && ($cabeza['hashOk'] ?? null) === true
             && ($cabeza['signatureOk'] ?? null) === true
             && ($cabeza['parseOk'] ?? null) === true;
@@ -1297,19 +1476,219 @@ final class StudioPublications
      */
     private static function verify(StudioPublication $fila): ?array
     {
+        return self::verification($fila)['parts'];
+    }
+
+    /**
+     * {@see verify()} con el motivo de la primera comprobación que falla, en el
+     * orden y con los nombres del lector del motor (`contract_unknown`,
+     * `hash_mismatch`, `signature_invalid`, `malformed`), y el contrato de la
+     * entrada. Enmienda M-1: lee `/1` y `/2`, y el contrato del texto firmado
+     * tiene que ser el de la columna.
+     *
+     * @return array{reason:?string,contract:?string,parts:array{canary:array<string,mixed>|null,rest:array<string,mixed>|null}|null}
+     */
+    private static function verification(StudioPublication $fila): array
+    {
+        $no = static fn (string $motivo): array => ['reason' => $motivo, 'contract' => null, 'parts' => null];
         $json = $fila->effective_json;
-        if (! is_string($json)
-            || $fila->engine_contract !== D::CONTRACT
-            || ! hash_equals(D::effectiveHash($json), (string) $fila->effective_hash)
-            || ! hash_equals(UltronPublishedConfig::signatureFor($json), (string) $fila->signature)) {
-            return null;
+        $contrato = $fila->engine_contract;
+        if (! in_array($contrato, D::CONTRACTS, true)) {
+            return $no('contract_unknown');
+        }
+        if (! is_string($json) || ! hash_equals(D::effectiveHash($json), (string) $fila->effective_hash)) {
+            return $no('hash_mismatch');
+        }
+        if (! hash_equals(UltronPublishedConfig::signatureFor($json), (string) $fila->signature)) {
+            return $no('signature_invalid');
         }
 
         try {
-            return D::parts($json, (string) $fila->uuid, (int) $fila->seq);
+            $entrada = D::entry($json, (string) $fila->uuid, (int) $fila->seq);
         } catch (InvalidArgumentException) {
+            return $no('malformed');
+        }
+        if ($entrada['contract'] !== $contrato) {
+            return $no('malformed');
+        }
+
+        return ['reason' => null, 'contract' => $contrato, 'parts' => ['canary' => $entrada['canary'], 'rest' => $entrada['rest']]];
+    }
+
+    // ── Los prompts de la entrada (Enmienda M-1) ────────────────────────────
+
+    /**
+     * Lo que miran la vista previa y publicar con la llave de prompts
+     * encendida: el paquete de la versión, el de la parte del resto que la
+     * entrada arrastraría (la de la cabeza de ahora, si la hay) y si algo no
+     * compila. Solo lee.
+     *
+     * @param  array<string,mixed>  $contenido
+     * @return array{key:string,compiled:array<string,mixed>|null,carried:array{version:string,label:string,bundleHash:string,baseline:bool}|null,error:string|null}
+     */
+    private function promptFacts(array $contenido): array
+    {
+        $error = null;
+        $compilado = null;
+        try {
+            $compilado = StudioPromptBundle::compile(StudioPromptBundle::governedFrom(is_array($contenido['configs'] ?? null) ? $contenido['configs'] : []));
+        } catch (InvalidArgumentException $e) {
+            Log::warning('ultron_studio.prompts_compile_failed', ['part' => 'new', 'reason' => StudioPromptBundle::failureReason($e)]);
+            $error = StudioPromptBundle::CODE_COMPILE_FAILED;
+        }
+
+        $arrastrada = null;
+        $cabeza = $this->head();
+        $resto = $cabeza === null ? null : (self::verify($cabeza)['rest'] ?? null);
+        if ($resto !== null) {
+            $con = $this->promptedPart($resto);
+            if ($con === null) {
+                $error = StudioPromptBundle::CODE_COMPILE_FAILED;
+            } else {
+                $arrastrada = [
+                    'version' => $con['part']['version'],
+                    'label' => $con['label'],
+                    'bundleHash' => $con['part']['prompts']['bundleHash'],
+                    'baseline' => hash_equals(StudioPromptBundle::legacyBundleHash(), $con['part']['prompts']['bundleHash']),
+                ];
+            }
+        }
+
+        return ['key' => StudioEngineReadings::PROMPTS_CANARY, 'compiled' => $compilado, 'carried' => $arrastrada, 'error' => $error];
+    }
+
+    /**
+     * Lo que de los prompts entra en `previewHash` (§B.4, E11): lo que se
+     * firmaría en la parte nueva y la parte que se arrastra.
+     *
+     * @param  array<string,mixed>  $p  {@see promptFacts()}
+     * @return array{base:string,bundleHash:?string,carried:array{bundleHash:string,version:string}|null,compiler:int}
+     */
+    private static function signedPrompts(array $p): array
+    {
+        return [
+            'base' => StudioPromptBundle::base(),
+            'bundleHash' => $p['compiled']['prompts']['bundleHash'] ?? null,
+            'carried' => $p['carried'] === null ? null : ['bundleHash' => $p['carried']['bundleHash'], 'version' => $p['carried']['version']],
+            'compiler' => StudioPromptBundle::compilerVersion(),
+        ];
+    }
+
+    /**
+     * Una parte de la cabeza en `/2`, con la etiqueta de su versión: tal cual
+     * si ya lo es (la firmó una publicación con su vista previa); si es `/1`,
+     * con los valores gobernados de su versión y el paquete que compilan, solo
+     * si la versión existe, es íntegra y es la de la parte. Null si no se
+     * puede (queda en el log, con el motivo y sin textos).
+     *
+     * @param  array<string,mixed>  $parte
+     * @return array{part:array<string,mixed>,label:string}|null
+     */
+    private function promptedPart(array $parte): ?array
+    {
+        $version = StudioVersion::query()->where('uuid', $parte['version'])->first(['id', 'uuid', 'label', 'content', 'content_hash']);
+        $etiqueta = (string) ($version?->label ?? 'Versión sin etiqueta');
+        if (D::isPartV2($parte)) {
+            return ['part' => $parte, 'label' => $etiqueta];
+        }
+
+        if ($version === null || ! StudioVersions::integrityOk($version) || ! hash_equals((string) $version->content_hash, (string) $parte['contentHash'])) {
+            Log::warning('ultron_studio.prompts_compile_failed', ['part' => 'carried', 'reason' => 'version_unreadable']);
+
             return null;
         }
+        try {
+            $paquete = StudioPromptBundle::compile(StudioPromptBundle::governedFrom($version->content['configs'] ?? []));
+        } catch (InvalidArgumentException $e) {
+            Log::warning('ultron_studio.prompts_compile_failed', ['part' => 'carried', 'reason' => StudioPromptBundle::failureReason($e)]);
+
+            return null;
+        }
+
+        return ['part' => D::partV2($parte, $paquete['governed'], $paquete['prompts']), 'label' => $etiqueta];
+    }
+
+    /**
+     * Las partes de la entrada nueva de PUBLICAR, en su contrato. Sin
+     * `$prompts` (la llave en `off` al calcular las puertas): `/1`. Con ellos:
+     * `/2`, la parte nueva con el paquete de la vista previa y la del resto
+     * como la enseñó la vista previa (`carried`); si la cabeza se movió entre
+     * las puertas y la transacción y la parte del resto ya no es esa, 409
+     * `publication_moved`; si no compila, 409 `prompts_compile_failed`.
+     *
+     * @param  array{canary:array<string,mixed>|null,rest:array<string,mixed>|null}  $nuevas
+     * @param  array<string,mixed>|null  $prompts  {@see promptFacts()}
+     * @return array{0:string,1:array{canary:array<string,mixed>|null,rest:array<string,mixed>|null}}
+     */
+    private function promptedForPublish(array $nuevas, ?array $prompts): array
+    {
+        if ($prompts === null) {
+            return [D::CONTRACT, self::asV1($nuevas)];
+        }
+        if ($prompts['error'] !== null || $prompts['compiled'] === null || $nuevas['canary'] === null) {
+            throw UltronStudioException::promptsCompileFailed();
+        }
+
+        $canario = D::partV2($nuevas['canary'], $prompts['compiled']['governed'], $prompts['compiled']['prompts']);
+        $resto = null;
+        if ($nuevas['rest'] !== null) {
+            $con = $this->promptedPart($nuevas['rest']);
+            if ($con === null) {
+                throw UltronStudioException::promptsCompileFailed();
+            }
+            $resto = $con['part'];
+        }
+
+        $vista = $prompts['carried'];
+        $ahora = $resto === null ? null : ['version' => $resto['version'], 'bundleHash' => $resto['prompts']['bundleHash']];
+        if (($vista === null) !== ($ahora === null)
+            || ($vista !== null && ($vista['version'] !== $ahora['version'] || ! hash_equals($vista['bundleHash'], $ahora['bundleHash'])))) {
+            throw UltronStudioException::publicationMoved();
+        }
+
+        return [D::CONTRACT_V2, ['canary' => $canario, 'rest' => $resto]];
+    }
+
+    /**
+     * Las partes de la entrada nueva de PROMOVER o REVERTIR, en su contrato:
+     * `/2` solo con la llave de prompts encendida y si todas las partes no
+     * nulas ya eran `/2` (las firmó una publicación con su vista previa); si
+     * no, `/1`. Mover partes nunca da efecto a un paquete que nadie vio: en el
+     * peor caso, la canaria vuelve a los prompts Legacy (`declaration_v1`).
+     *
+     * @param  array{canary:array<string,mixed>|null,rest:array<string,mixed>|null}  $nuevas
+     * @return array{0:string,1:array{canary:array<string,mixed>|null,rest:array<string,mixed>|null}}
+     */
+    private function promptedForMove(array $nuevas): array
+    {
+        $vivas = array_values(array_filter([$nuevas['canary'], $nuevas['rest']], static fn (?array $p): bool => $p !== null));
+        if ($vivas === [] || StudioEngineReadings::promptsKey() !== StudioEngineReadings::PROMPTS_CANARY) {
+            return [D::CONTRACT, self::asV1($nuevas)];
+        }
+        foreach ($vivas as $parte) {
+            if (! D::isPartV2($parte)) {
+                // No es un error: es la regla (§B.4 y la nota de la clase).
+                Log::notice('ultron_studio.publication_written_v1', ['reason' => 'part_without_prompts']);
+
+                return [D::CONTRACT, self::asV1($nuevas)];
+            }
+        }
+
+        return [D::CONTRACT_V2, $nuevas];
+    }
+
+    /**
+     * Las partes en `/1` (sin `governed` ni `prompts`).
+     *
+     * @param  array{canary:array<string,mixed>|null,rest:array<string,mixed>|null}  $partes
+     * @return array{canary:array<string,mixed>|null,rest:array<string,mixed>|null}
+     */
+    private static function asV1(array $partes): array
+    {
+        return [
+            'canary' => $partes['canary'] === null ? null : D::partV1($partes['canary']),
+            'rest' => $partes['rest'] === null ? null : D::partV1($partes['rest']),
+        ];
     }
 
     /** Legacy solo si hay algo que dejar de declarar: sin cabeza, o con las dos partes vacías y verificadas, ya lo está. */
@@ -1326,7 +1705,9 @@ final class StudioPublications
 
     /**
      * Firma e inserta la entrada siguiente a `$cabeza` (`seq` = cabeza + 1).
-     * La firma es la del motor, sobre los bytes exactos del texto.
+     * La firma es la del motor, sobre los bytes exactos del texto. `$contract`
+     * es el de la entrada (Enmienda M-1): `/1` salvo que quien llama haya
+     * pasado todas las partes a `/2`.
      *
      * @param  array{canary:array<string,mixed>|null,rest:array<string,mixed>|null}  $partes
      * @param  array<string,mixed>  $labGate
@@ -1346,10 +1727,11 @@ final class StudioPublications
         ?array $evidence,
         ?string $reason,
         ?int $restores,
+        string $contract = D::CONTRACT,
     ): StudioPublication {
         $entrada = strtolower((string) Str::uuid());
         $seq = ($cabeza !== null ? (int) $cabeza->seq : 0) + 1;
-        $declaracion = D::declaration($entrada, $seq, $ahora, $partes['canary'], $partes['rest'], UltronPublishedConfig::signatureFor(...));
+        $declaracion = D::declaration($entrada, $seq, $ahora, $partes['canary'], $partes['rest'], UltronPublishedConfig::signatureFor(...), $contract);
         $yo = $access->snapshot();
 
         return StudioPublication::query()->forceCreate([
@@ -1593,7 +1975,7 @@ final class StudioPublications
      * @param  array<string,mixed>  $readings
      * @return array{mustMatch:list<array{param:string,versionValue:null,engineValue:mixed,ok:false}>,matches:list<string>,noEffect:list<string>,mismatches:list<array<string,mixed>>,engineReadingUnavailable:list<string>}
      */
-    private static function unclassified(array $readings): array
+    private static function unclassified(array $readings, bool $conPrompts = false): array
     {
         $mustMatch = [];
         foreach (array_keys(D::MUST_MATCH) as $id) {
@@ -1606,7 +1988,9 @@ final class StudioPublications
             ];
         }
 
-        return ['mustMatch' => $mustMatch, 'matches' => [], 'noEffect' => [], 'mismatches' => [], 'engineReadingUnavailable' => []];
+        $clasificacion = ['mustMatch' => $mustMatch, 'matches' => [], 'noEffect' => [], 'mismatches' => [], 'engineReadingUnavailable' => []];
+
+        return $conPrompts ? $clasificacion + ['prompt' => []] : $clasificacion;
     }
 
     /**

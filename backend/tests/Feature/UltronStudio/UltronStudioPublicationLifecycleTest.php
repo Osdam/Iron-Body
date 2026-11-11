@@ -525,7 +525,10 @@ class UltronStudioPublicationLifecycleTest extends TestCase
         $v = $this->approvedVersion($ana, $root, 'Con tono y regla', ['persona' => ['tone' => 'profesional']]);
 
         $vista = $this->previewOf($root, $v->uuid);
-        $this->assertSame(['versionUuid', 'contentHash', 'previewHash', 'publishable', 'params', 'noEffect', 'requirements', 'blocking'], array_keys($vista));
+        // Enmienda M-1 (plan de motores §B.4): `effect` y `prompts`, al final; con
+        // la llave de prompts del motor en `off` (el defecto), solo se declara.
+        $this->assertSame(['versionUuid', 'contentHash', 'previewHash', 'publishable', 'params', 'noEffect', 'requirements', 'blocking', 'effect', 'prompts'], array_keys($vista));
+        $this->assertSame(['declaration', null], [$vista['effect'], $vista['prompts']]);
         $this->assertSame([$v->uuid, $v->content_hash, true, []], [$vista['versionUuid'], $vista['contentHash'], $vista['publishable'], $vista['blocking']]);
         $this->assertSame(['persona.tone', 'rule:S-001'], $vista['noEffect']);
         // Los cuatro must_match, en el orden del catálogo, y nada sin clase.

@@ -88,6 +88,79 @@ final class StudioCanaryMeasures
         ];
     }
 
+    /**
+     * Enmienda M-1 (plan de motores §D): los últimos `$last` turnos de la
+     * conversación canaria (`source_type` del mensaje entrante), del más antiguo
+     * al más reciente, para `status.engine.prompts.lastTurns`. Por turno, el
+     * minuto en UTC, lo declarado (`metadata.studio`: estado y versión
+     * recortada), lo ofrecido y lo observado (`metadata.studio_prompts`) con
+     * versiones y huellas recortadas a 8 caracteres, y el estado del sello. La
+     * misma forma que `ultron:prompt-trace`.
+     *
+     * SIN DATOS DE NADIE: ni el id de la conversación (solo filtra), ni ids de
+     * mensajes o de filas, ni textos, ni el motivo libre de nada: de cada clave
+     * se copia solo un texto corto de ASCII visible (los vocabularios cerrados
+     * del sello) o null. Sin canario configurado, ninguno.
+     *
+     * @return list<array{at:?string,declared:?array{state:?string,version8:?string},offered:?array{mode:?string,reason:?string,version8:?string,bundle8:?string},observed:?array{mode:?string,bundle8:?string,flowRev:?string},state:?string}>
+     */
+    public function promptTurns(int $last): array
+    {
+        $canario = $this->canaryConversation();
+        if ($canario === null || $last < 1) {
+            return [];
+        }
+
+        return MarketingAiAction::query()
+            ->where('conversation_id', $canario)
+            ->where('source_type', UltronSource::INBOUND_MESSAGE)
+            ->orderByDesc('id')
+            ->limit($last)
+            ->get(['id', 'metadata', 'created_at'])
+            ->reverse()
+            ->map(static function (MarketingAiAction $fila): array {
+                $meta = is_array($fila->metadata) ? $fila->metadata : [];
+                $declarada = is_array($meta['studio'] ?? null) ? $meta['studio'] : null;
+                $sello = is_array($meta['studio_prompts'] ?? null) ? $meta['studio_prompts'] : null;
+                $ofrecida = is_array($sello['offered'] ?? null) ? $sello['offered'] : null;
+                $observada = is_array($sello['observed'] ?? null) ? $sello['observed'] : null;
+
+                return [
+                    'at' => $fila->created_at?->copy()->utc()->format('Y-m-d\TH:i\Z'),
+                    'declared' => $declarada === null ? null : [
+                        'state' => self::word($declarada['state'] ?? null),
+                        'version8' => self::short($declarada['version'] ?? null),
+                    ],
+                    'offered' => $ofrecida === null ? null : [
+                        'mode' => self::word($ofrecida['mode'] ?? null),
+                        'reason' => self::word($ofrecida['reason'] ?? null),
+                        'version8' => self::short($ofrecida['version'] ?? null),
+                        'bundle8' => self::short($ofrecida['bundleHash'] ?? null),
+                    ],
+                    'observed' => $observada === null ? null : [
+                        'mode' => self::word($observada['mode'] ?? null),
+                        'bundle8' => self::short($observada['bundleHash'] ?? null),
+                        'flowRev' => self::word($observada['flowRev'] ?? null),
+                    ],
+                    'state' => $sello === null ? null : self::word($sello['state'] ?? null),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /** Los 8 primeros caracteres de un uuid o una huella, solo si son hexadecimales (o guiones). */
+    private static function short(mixed $valor): ?string
+    {
+        return is_string($valor) && preg_match('/\A[0-9a-f-]{8}/', $valor) === 1 ? substr($valor, 0, 8) : null;
+    }
+
+    /** Una palabra de un vocabulario cerrado del sello (`applied`, `S1`, `prompts_off`…): ASCII visible, como mucho 64. */
+    private static function word(mixed $valor): ?string
+    {
+        return is_string($valor) && preg_match('/\A[A-Za-z0-9_.:-]{1,64}\z/', $valor) === 1 ? $valor : null;
+    }
+
     /** El id de la conversación canaria del motor, o null sin canario. No sale de aquí. */
     private function canaryConversation(): ?int
     {

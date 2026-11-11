@@ -35,6 +35,15 @@ class UltronStudioStatusCatalogTest extends TestCase
                 'activeVersion' => null,
                 'message' => 'El motor de ULTRON no lee la cadena de publicaciones (su llave está apagada): publicar aquí no cambia nada en el agente.',
                 'publication' => ['envScope' => 'off', 'head' => null, 'canary' => null, 'rest' => null, 'drift' => [], 'state' => 'off'],
+                // Enmienda M-1 (plan de motores §D): la traza de los prompts, con la llave en `off`.
+                'prompts' => [
+                    'key' => 'off',
+                    'base' => 'n8n-29de5119',
+                    'compiler' => 1,
+                    'legacyBundleHash' => '3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902',
+                    'current' => ['mode' => 'legacy', 'version' => null, 'bundleHash' => null, 'reason' => 'prompts_off'],
+                    'lastTurns' => [],
+                ],
             ])
             ->assertJsonPath('data.publishing', [
                 'available' => false,

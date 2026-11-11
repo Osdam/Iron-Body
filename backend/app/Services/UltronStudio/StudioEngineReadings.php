@@ -80,6 +80,16 @@ final class StudioEngineReadings
 
     public const NOTE = 'Lectura del proceso web. Tras cambiar el entorno, los workers lo ven cuando se reinician.';
 
+    /**
+     * Enmienda M-1 (plan de motores §B.4 y §B.5): la llave de los prompts
+     * gobernados del motor (`marketing.ultron.studio_prompts`), con sus dos
+     * valores. Son los de `UltronPromptOffer::KEY_OFF` y `KEY_CANARY` (una
+     * prueba los ata).
+     */
+    public const PROMPTS_OFF = 'off';
+
+    public const PROMPTS_CANARY = 'canary';
+
     public function __construct(
         private readonly MarketingKnowledgeBaseService $knowledge,
         private readonly UltronPublishedConfig $publishedConfig,
@@ -143,6 +153,26 @@ final class StudioEngineReadings
     public function publication(): array
     {
         return $this->publishedConfig->describe();
+    }
+
+    /**
+     * La llave de los prompts del motor (Enmienda M-1, plan de motores §B.4):
+     * `canary` o `off`, con el MISMO criterio que la oferta de `decide`
+     * (`UltronPromptOffer::key()`: `canary` sin distinguir mayúsculas ni
+     * espacios; cualquier otra cosa, `all` incluido, es `off`). Una prueba
+     * compara las dos.
+     *
+     * Decide qué escribe el Studio al publicar: con `off`, la declaración de
+     * siempre (`ultron-engine-config/1`) y la clasificación de siempre; con
+     * `canary`, la `/2` con los cuatro valores gobernados y la huella del
+     * paquete de prompts compilado. Es configuración del proceso web (con su
+     * caché): no consulta nada y no puede fallar.
+     */
+    public static function promptsKey(): string
+    {
+        $valor = config('marketing.ultron.studio_prompts');
+
+        return is_string($valor) && strtolower(trim($valor)) === self::PROMPTS_CANARY ? self::PROMPTS_CANARY : self::PROMPTS_OFF;
     }
 
     /**

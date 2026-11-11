@@ -1,0 +1,3758 @@
+{
+  "about": {
+    "what": "Entradas ultron-engine-config/2 (Enmienda M-1): bytes, huella y firma; lo que no se escribe; previewHash sin paquete (Q-4); clasificación con la llave de prompts. Derivado de los contratos por un guion del tester, sin el Studio. Ver publication-cases-v2.README.md.",
+    "generator": "tests/fixtures/ultron-studio/tools/derivar-publication-cases-v2.cjs",
+    "sources": [
+      "ULTRON_STUDIO_H5_CONTRACT.md §A4.1, §A4.2, Q-1, Q-4, M1-5, M1-12",
+      "publication-cases.README.md E-1, E-2, S-1..S-4",
+      "ULTRON_STUDIO_F_CONTRACT.md §307",
+      "plans/STUDIO_MOTORES_PLAN.md §B.4",
+      "tests/fixtures/ultron-prompts/compile-cases.json"
+    ]
+  },
+  "contracts": [
+    "ultron-engine-config/1",
+    "ultron-engine-config/2"
+  ],
+  "appKey": "base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+  "governedKeys": [
+    "persona.emojis",
+    "persona.maxChars",
+    "persona.tone",
+    "strategy.goal"
+  ],
+  "effectiveJson": [
+    {
+      "name": "/2 · canaria sola: el cambio de aceptación (profesional + 200), sin resto",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 1,
+        "issuedAt": "2026-11-12T15:04:05Z",
+        "contract": "ultron-engine-config/2",
+        "canary": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": "702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c",
+            "base": "n8n-29de5119"
+          },
+          "governed": {
+            "strategy.goal": "cita",
+            "persona.tone": "profesional",
+            "persona.maxChars": 200,
+            "persona.emojis": true
+          }
+        },
+        "rest": null
+      },
+      "expected": {
+        "effectiveJson": "{\"canary\":{\"approvedBy\":12,\"catalogVersion\":\"2026-10-19.1\",\"contentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"declared\":{\"governance.canaryOnly\":true,\"governance.enabled\":true,\"intent.driver\":\"entorno\",\"rules.paymentLinksEnabled\":false},\"governed\":{\"persona.emojis\":true,\"persona.maxChars\":200,\"persona.tone\":\"profesional\",\"strategy.goal\":\"cita\"},\"prompts\":{\"base\":\"n8n-29de5119\",\"bundleHash\":\"702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c\",\"compiler\":1},\"publishedBy\":7,\"version\":\"22222222-2222-4222-8222-222222222222\"},\"contract\":\"ultron-engine-config/2\",\"entry\":\"eeeeeeee-0000-4000-8000-000000000001\",\"issuedAt\":\"2026-11-12T15:04:05Z\",\"rest\":null,\"seq\":1}",
+        "effectiveHash": "cee6009d5b3575194b313bd4eefd209a387b000d1df3a6884b07b9d30842aa45",
+        "signature": "81b202d3ec0d00f7d56e3168fc09fc204723ae79dc8941039052f32f693f9abe",
+        "signatureWithOwnContractPrefix": "7106579774233acb0d1824f4651048b3c307f0e4b8dfca09e602122ef27b6b55"
+      }
+    },
+    {
+      "name": "/2 · canaria + resto: dos paquetes distintos (entusiasta sin emojis 480 venta | profesional 200)",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000002",
+        "seq": 7,
+        "issuedAt": "2026-11-12T15:04:05Z",
+        "contract": "ultron-engine-config/2",
+        "canary": {
+          "version": "33333333-3333-4333-8333-333333333333",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": "67566f4e95f53e46c1141cc8d79a7848322dc78faa63b3b16d02887cb17e7093",
+            "base": "n8n-29de5119"
+          },
+          "governed": {
+            "strategy.goal": "venta",
+            "persona.tone": "entusiasta",
+            "persona.maxChars": 480,
+            "persona.emojis": false
+          }
+        },
+        "rest": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": "702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c",
+            "base": "n8n-29de5119"
+          },
+          "governed": {
+            "strategy.goal": "cita",
+            "persona.tone": "profesional",
+            "persona.maxChars": 200,
+            "persona.emojis": true
+          }
+        }
+      },
+      "expected": {
+        "effectiveJson": "{\"canary\":{\"approvedBy\":12,\"catalogVersion\":\"2026-10-19.1\",\"contentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"declared\":{\"governance.canaryOnly\":true,\"governance.enabled\":true,\"intent.driver\":\"entorno\",\"rules.paymentLinksEnabled\":false},\"governed\":{\"persona.emojis\":false,\"persona.maxChars\":480,\"persona.tone\":\"entusiasta\",\"strategy.goal\":\"venta\"},\"prompts\":{\"base\":\"n8n-29de5119\",\"bundleHash\":\"67566f4e95f53e46c1141cc8d79a7848322dc78faa63b3b16d02887cb17e7093\",\"compiler\":1},\"publishedBy\":7,\"version\":\"33333333-3333-4333-8333-333333333333\"},\"contract\":\"ultron-engine-config/2\",\"entry\":\"eeeeeeee-0000-4000-8000-000000000002\",\"issuedAt\":\"2026-11-12T15:04:05Z\",\"rest\":{\"approvedBy\":12,\"catalogVersion\":\"2026-10-19.1\",\"contentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"declared\":{\"governance.canaryOnly\":true,\"governance.enabled\":true,\"intent.driver\":\"entorno\",\"rules.paymentLinksEnabled\":false},\"governed\":{\"persona.emojis\":true,\"persona.maxChars\":200,\"persona.tone\":\"profesional\",\"strategy.goal\":\"cita\"},\"prompts\":{\"base\":\"n8n-29de5119\",\"bundleHash\":\"702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c\",\"compiler\":1},\"publishedBy\":7,\"version\":\"22222222-2222-4222-8222-222222222222\"},\"seq\":7}",
+        "effectiveHash": "91323365455c66703c47b9cf6c9fb9cb8500c4f987ed51579fa4f8e805b90dbc",
+        "signature": "c4439a2156a22a773a9d2f7a9241daceec6e7f50ffbb1f250948ef530d91bff3",
+        "signatureWithOwnContractPrefix": "6dfae816e2bedca0bd5b66482bde4c1358b0cb9a496296880eaa515914b5892f"
+      }
+    },
+    {
+      "name": "/2 · resto arrastrado: la línea base compilada desde una versión /1 (huella Legacy, M1-12)",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000002",
+        "seq": 12,
+        "issuedAt": "2026-11-12T15:04:05Z",
+        "contract": "ultron-engine-config/2",
+        "canary": {
+          "version": "44444444-4444-4444-8444-444444444444",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": "46306ce925739eae5bfbe3110f04429ccc680c55fa197cc218a2a4d286311967",
+            "base": "n8n-29de5119"
+          },
+          "governed": {
+            "strategy.goal": "informar",
+            "persona.tone": "profesional",
+            "persona.maxChars": 160,
+            "persona.emojis": false
+          }
+        },
+        "rest": {
+          "version": "00000000-0000-4000-8000-0000000000a0",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": "3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902",
+            "base": "n8n-29de5119"
+          },
+          "governed": {
+            "strategy.goal": "cita",
+            "persona.tone": "cercano",
+            "persona.maxChars": 320,
+            "persona.emojis": true
+          }
+        }
+      },
+      "expected": {
+        "effectiveJson": "{\"canary\":{\"approvedBy\":12,\"catalogVersion\":\"2026-10-19.1\",\"contentHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"declared\":{\"governance.canaryOnly\":true,\"governance.enabled\":true,\"intent.driver\":\"entorno\",\"rules.paymentLinksEnabled\":false},\"governed\":{\"persona.emojis\":false,\"persona.maxChars\":160,\"persona.tone\":\"profesional\",\"strategy.goal\":\"informar\"},\"prompts\":{\"base\":\"n8n-29de5119\",\"bundleHash\":\"46306ce925739eae5bfbe3110f04429ccc680c55fa197cc218a2a4d286311967\",\"compiler\":1},\"publishedBy\":7,\"version\":\"44444444-4444-4444-8444-444444444444\"},\"contract\":\"ultron-engine-config/2\",\"entry\":\"eeeeeeee-0000-4000-8000-000000000002\",\"issuedAt\":\"2026-11-12T15:04:05Z\",\"rest\":{\"approvedBy\":12,\"catalogVersion\":\"2026-10-19.1\",\"contentHash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"declared\":{\"governance.canaryOnly\":true,\"governance.enabled\":true,\"intent.driver\":\"entorno\",\"rules.paymentLinksEnabled\":false},\"governed\":{\"persona.emojis\":true,\"persona.maxChars\":320,\"persona.tone\":\"cercano\",\"strategy.goal\":\"cita\"},\"prompts\":{\"base\":\"n8n-29de5119\",\"bundleHash\":\"3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902\",\"compiler\":1},\"publishedBy\":7,\"version\":\"00000000-0000-4000-8000-0000000000a0\"},\"seq\":12}",
+        "effectiveHash": "424eec523784baec6682aa2a1f4e3742b644800c78c913c0d88e8948bd65277f",
+        "signature": "f226c6d7d7a22c8dbffd9e1e27831eb85039c99014ded339addcb6af9dd2ae81",
+        "signatureWithOwnContractPrefix": "b394bc6d27bafb61edfbd271eeff617e8d69d56b6acdec9fe1c0779c92cd503b"
+      }
+    },
+    {
+      "name": "/2 · promover: la MISMA parte en las dos (Q-3)",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 2,
+        "issuedAt": "2026-11-13T15:04:05Z",
+        "contract": "ultron-engine-config/2",
+        "canary": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": "702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c",
+            "base": "n8n-29de5119"
+          },
+          "governed": {
+            "strategy.goal": "cita",
+            "persona.tone": "profesional",
+            "persona.maxChars": 200,
+            "persona.emojis": true
+          }
+        },
+        "rest": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": "702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c",
+            "base": "n8n-29de5119"
+          },
+          "governed": {
+            "strategy.goal": "cita",
+            "persona.tone": "profesional",
+            "persona.maxChars": 200,
+            "persona.emojis": true
+          }
+        }
+      },
+      "expected": {
+        "effectiveJson": "{\"canary\":{\"approvedBy\":12,\"catalogVersion\":\"2026-10-19.1\",\"contentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"declared\":{\"governance.canaryOnly\":true,\"governance.enabled\":true,\"intent.driver\":\"entorno\",\"rules.paymentLinksEnabled\":false},\"governed\":{\"persona.emojis\":true,\"persona.maxChars\":200,\"persona.tone\":\"profesional\",\"strategy.goal\":\"cita\"},\"prompts\":{\"base\":\"n8n-29de5119\",\"bundleHash\":\"702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c\",\"compiler\":1},\"publishedBy\":7,\"version\":\"22222222-2222-4222-8222-222222222222\"},\"contract\":\"ultron-engine-config/2\",\"entry\":\"eeeeeeee-0000-4000-8000-000000000001\",\"issuedAt\":\"2026-11-13T15:04:05Z\",\"rest\":{\"approvedBy\":12,\"catalogVersion\":\"2026-10-19.1\",\"contentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"declared\":{\"governance.canaryOnly\":true,\"governance.enabled\":true,\"intent.driver\":\"entorno\",\"rules.paymentLinksEnabled\":false},\"governed\":{\"persona.emojis\":true,\"persona.maxChars\":200,\"persona.tone\":\"profesional\",\"strategy.goal\":\"cita\"},\"prompts\":{\"base\":\"n8n-29de5119\",\"bundleHash\":\"702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c\",\"compiler\":1},\"publishedBy\":7,\"version\":\"22222222-2222-4222-8222-222222222222\"},\"seq\":2}",
+        "effectiveHash": "cd4744801df2c3a080f19dddcef8e2bf19f1bdeeb2685b9d10960f122c6d5385",
+        "signature": "00a801790a6f8485bcc7a58e4693e7863a750a43f00c9f0b9afd77a95a084af7",
+        "signatureWithOwnContractPrefix": "df520707010ddad80b05f862d147d05c6d7cc6a59bf7c8baf072569acd95d822"
+      }
+    },
+    {
+      "name": "/2 · revertir conservando el resto: {R, R} con la línea base publicada (E3)",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 3,
+        "issuedAt": "2026-11-13T16:00:00Z",
+        "contract": "ultron-engine-config/2",
+        "canary": {
+          "version": "00000000-0000-4000-8000-0000000000a0",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": "3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902",
+            "base": "n8n-29de5119"
+          },
+          "governed": {
+            "strategy.goal": "cita",
+            "persona.tone": "cercano",
+            "persona.maxChars": 320,
+            "persona.emojis": true
+          }
+        },
+        "rest": {
+          "version": "00000000-0000-4000-8000-0000000000a0",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "0000000000000000000000000000000000000000000000000000000000000000",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": "3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902",
+            "base": "n8n-29de5119"
+          },
+          "governed": {
+            "strategy.goal": "cita",
+            "persona.tone": "cercano",
+            "persona.maxChars": 320,
+            "persona.emojis": true
+          }
+        }
+      },
+      "expected": {
+        "effectiveJson": "{\"canary\":{\"approvedBy\":12,\"catalogVersion\":\"2026-10-19.1\",\"contentHash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"declared\":{\"governance.canaryOnly\":true,\"governance.enabled\":true,\"intent.driver\":\"entorno\",\"rules.paymentLinksEnabled\":false},\"governed\":{\"persona.emojis\":true,\"persona.maxChars\":320,\"persona.tone\":\"cercano\",\"strategy.goal\":\"cita\"},\"prompts\":{\"base\":\"n8n-29de5119\",\"bundleHash\":\"3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902\",\"compiler\":1},\"publishedBy\":7,\"version\":\"00000000-0000-4000-8000-0000000000a0\"},\"contract\":\"ultron-engine-config/2\",\"entry\":\"eeeeeeee-0000-4000-8000-000000000001\",\"issuedAt\":\"2026-11-13T16:00:00Z\",\"rest\":{\"approvedBy\":12,\"catalogVersion\":\"2026-10-19.1\",\"contentHash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"declared\":{\"governance.canaryOnly\":true,\"governance.enabled\":true,\"intent.driver\":\"entorno\",\"rules.paymentLinksEnabled\":false},\"governed\":{\"persona.emojis\":true,\"persona.maxChars\":320,\"persona.tone\":\"cercano\",\"strategy.goal\":\"cita\"},\"prompts\":{\"base\":\"n8n-29de5119\",\"bundleHash\":\"3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902\",\"compiler\":1},\"publishedBy\":7,\"version\":\"00000000-0000-4000-8000-0000000000a0\"},\"seq\":3}",
+        "effectiveHash": "9ac76de1f409c804ac8fc5a774893d8863d1bc521c1bc399d2f0660e2b127344",
+        "signature": "ca17688b1bdb8af0c2330de94dd6afedb1318ca99930a29e0ec9600f037af553",
+        "signatureWithOwnContractPrefix": "5f87bfae79f1ec6e7049f234f0b7a55e57fbfc5b9216328a76072499d470ce39"
+      }
+    },
+    {
+      "name": "/2 · {canary: null, rest: X} (E-5: texto válido que ninguna transición escribe hoy)",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 4,
+        "issuedAt": "2026-11-13T16:00:00Z",
+        "contract": "ultron-engine-config/2",
+        "canary": null,
+        "rest": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": "702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c",
+            "base": "n8n-29de5119"
+          },
+          "governed": {
+            "strategy.goal": "cita",
+            "persona.tone": "profesional",
+            "persona.maxChars": 200,
+            "persona.emojis": true
+          }
+        }
+      },
+      "expected": {
+        "effectiveJson": "{\"canary\":null,\"contract\":\"ultron-engine-config/2\",\"entry\":\"eeeeeeee-0000-4000-8000-000000000001\",\"issuedAt\":\"2026-11-13T16:00:00Z\",\"rest\":{\"approvedBy\":12,\"catalogVersion\":\"2026-10-19.1\",\"contentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"declared\":{\"governance.canaryOnly\":true,\"governance.enabled\":true,\"intent.driver\":\"entorno\",\"rules.paymentLinksEnabled\":false},\"governed\":{\"persona.emojis\":true,\"persona.maxChars\":200,\"persona.tone\":\"profesional\",\"strategy.goal\":\"cita\"},\"prompts\":{\"base\":\"n8n-29de5119\",\"bundleHash\":\"702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c\",\"compiler\":1},\"publishedBy\":7,\"version\":\"22222222-2222-4222-8222-222222222222\"},\"seq\":4}",
+        "effectiveHash": "3efbc73065626820f28d65c689a0af73a0ac38a4781c8d7f4521a042ab352786",
+        "signature": "693099f41cafe5c3be0bb6af951212a3b8b3ad4f18f088fcb001e7bd52b5cedf",
+        "signatureWithOwnContractPrefix": "4a1042c85b45ccc4603d1d7359998077ee412702bfd34a3c69f541ed9304dc4e"
+      }
+    },
+    {
+      "name": "/2 · issuedAt de noche en Bogotá con fracciones: el día UTC siguiente, truncado (E-2)",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 10,
+        "issuedAt": "2026-11-12T21:30:59.999-05:00",
+        "contract": "ultron-engine-config/2",
+        "canary": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": "702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c",
+            "base": "n8n-29de5119"
+          },
+          "governed": {
+            "strategy.goal": "cita",
+            "persona.tone": "profesional",
+            "persona.maxChars": 200,
+            "persona.emojis": true
+          }
+        },
+        "rest": null
+      },
+      "expected": {
+        "effectiveJson": "{\"canary\":{\"approvedBy\":12,\"catalogVersion\":\"2026-10-19.1\",\"contentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"declared\":{\"governance.canaryOnly\":true,\"governance.enabled\":true,\"intent.driver\":\"entorno\",\"rules.paymentLinksEnabled\":false},\"governed\":{\"persona.emojis\":true,\"persona.maxChars\":200,\"persona.tone\":\"profesional\",\"strategy.goal\":\"cita\"},\"prompts\":{\"base\":\"n8n-29de5119\",\"bundleHash\":\"702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c\",\"compiler\":1},\"publishedBy\":7,\"version\":\"22222222-2222-4222-8222-222222222222\"},\"contract\":\"ultron-engine-config/2\",\"entry\":\"eeeeeeee-0000-4000-8000-000000000001\",\"issuedAt\":\"2026-11-13T02:30:59Z\",\"rest\":null,\"seq\":10}",
+        "effectiveHash": "b20d375eac09af750a4c7287d73a0446ec010077ebc02571ffc92943d490fb9c",
+        "signature": "9b53bcd6cd2ae5da3df9b2327af074e4582c3d402c184209df9497c87b43a802",
+        "signatureWithOwnContractPrefix": "c2bf37aa97d16e70790aafac4b0ed13876f3f320e3132dacf2b2bdf702536b4a"
+      }
+    },
+    {
+      "name": "/1 · Legacy {null, null}: siempre /1 (R10)",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 5,
+        "issuedAt": "2026-11-13T17:00:00Z",
+        "contract": "ultron-engine-config/1",
+        "canary": null,
+        "rest": null
+      },
+      "expected": {
+        "effectiveJson": "{\"canary\":null,\"contract\":\"ultron-engine-config/1\",\"entry\":\"eeeeeeee-0000-4000-8000-000000000001\",\"issuedAt\":\"2026-11-13T17:00:00Z\",\"rest\":null,\"seq\":5}",
+        "effectiveHash": "6f895b6c6d932ce48e9e170deb02e579a79526991f499620ddba7ee5efd9437f",
+        "signature": "9df059f17ce9b57642700761fc24d4d02346533997599ef73c1c7722c2e0d597",
+        "signatureWithOwnContractPrefix": null
+      }
+    },
+    {
+      "name": "/1 · una parte /1 sigue escribiéndose en /1 (llave apagada)",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 6,
+        "issuedAt": "2026-11-13T17:00:00Z",
+        "contract": "ultron-engine-config/1",
+        "canary": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12
+        },
+        "rest": null
+      },
+      "expected": {
+        "effectiveJson": "{\"canary\":{\"approvedBy\":12,\"catalogVersion\":\"2026-10-19.1\",\"contentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"declared\":{\"governance.canaryOnly\":true,\"governance.enabled\":true,\"intent.driver\":\"entorno\",\"rules.paymentLinksEnabled\":false},\"publishedBy\":7,\"version\":\"22222222-2222-4222-8222-222222222222\"},\"contract\":\"ultron-engine-config/1\",\"entry\":\"eeeeeeee-0000-4000-8000-000000000001\",\"issuedAt\":\"2026-11-13T17:00:00Z\",\"rest\":null,\"seq\":6}",
+        "effectiveHash": "b1f8bafef386d2f99f82768c9e8468509bfa322023672f6bb65f63eed1111160",
+        "signature": "fe069c9fd5cc40c3fe5f044ae2215a27d8469f401c4ed74c35147d445805949c",
+        "signatureWithOwnContractPrefix": null
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "Legacy en /2 (R10)",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 1,
+        "issuedAt": "2026-11-12T15:04:05Z",
+        "contract": "ultron-engine-config/2",
+        "canary": null,
+        "rest": null
+      }
+    },
+    {
+      "name": "contrato desconocido (/3) con partes /2 válidas",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 1,
+        "issuedAt": "2026-11-12T15:04:05Z",
+        "contract": "ultron-engine-config/3",
+        "canary": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": "702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c",
+            "base": "n8n-29de5119"
+          },
+          "governed": {
+            "strategy.goal": "cita",
+            "persona.tone": "profesional",
+            "persona.maxChars": 200,
+            "persona.emojis": true
+          }
+        },
+        "rest": null
+      }
+    },
+    {
+      "name": "/2 con una parte /1 (sin governed ni prompts)",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 1,
+        "issuedAt": "2026-11-12T15:04:05Z",
+        "contract": "ultron-engine-config/2",
+        "canary": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12
+        },
+        "rest": null
+      }
+    },
+    {
+      "name": "/2 con el resto /1 y la canaria /2",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 1,
+        "issuedAt": "2026-11-12T15:04:05Z",
+        "contract": "ultron-engine-config/2",
+        "canary": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": "702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c",
+            "base": "n8n-29de5119"
+          },
+          "governed": {
+            "strategy.goal": "cita",
+            "persona.tone": "profesional",
+            "persona.maxChars": 200,
+            "persona.emojis": true
+          }
+        },
+        "rest": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12
+        }
+      }
+    },
+    {
+      "name": "/1 con una parte /2",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 1,
+        "issuedAt": "2026-11-12T15:04:05Z",
+        "contract": "ultron-engine-config/1",
+        "canary": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": "702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c",
+            "base": "n8n-29de5119"
+          },
+          "governed": {
+            "strategy.goal": "cita",
+            "persona.tone": "profesional",
+            "persona.maxChars": 200,
+            "persona.emojis": true
+          }
+        },
+        "rest": null
+      }
+    },
+    {
+      "name": "/2 sin governed",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 1,
+        "issuedAt": "2026-11-12T15:04:05Z",
+        "contract": "ultron-engine-config/2",
+        "canary": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": "702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c",
+            "base": "n8n-29de5119"
+          }
+        },
+        "rest": null
+      }
+    },
+    {
+      "name": "/2 sin prompts",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 1,
+        "issuedAt": "2026-11-12T15:04:05Z",
+        "contract": "ultron-engine-config/2",
+        "canary": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "governed": {
+            "strategy.goal": "cita",
+            "persona.tone": "profesional",
+            "persona.maxChars": 200,
+            "persona.emojis": true
+          }
+        },
+        "rest": null
+      }
+    },
+    {
+      "name": "governed sin strategy.goal",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 1,
+        "issuedAt": "2026-11-12T15:04:05Z",
+        "contract": "ultron-engine-config/2",
+        "canary": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": "702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c",
+            "base": "n8n-29de5119"
+          },
+          "governed": {
+            "persona.tone": "profesional",
+            "persona.maxChars": 200,
+            "persona.emojis": true
+          }
+        },
+        "rest": null
+      }
+    },
+    {
+      "name": "governed con una clave de más",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 1,
+        "issuedAt": "2026-11-12T15:04:05Z",
+        "contract": "ultron-engine-config/2",
+        "canary": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": "702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c",
+            "base": "n8n-29de5119"
+          },
+          "governed": {
+            "strategy.goal": "cita",
+            "persona.tone": "profesional",
+            "persona.maxChars": 200,
+            "persona.emojis": true,
+            "persona.extra": 1
+          }
+        },
+        "rest": null
+      }
+    },
+    {
+      "name": "governed con otra grafía (persona.maxchars)",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 1,
+        "issuedAt": "2026-11-12T15:04:05Z",
+        "contract": "ultron-engine-config/2",
+        "canary": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": "702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c",
+            "base": "n8n-29de5119"
+          },
+          "governed": {
+            "strategy.goal": "cita",
+            "persona.tone": "profesional",
+            "persona.emojis": true,
+            "persona.maxchars": 200
+          }
+        },
+        "rest": null
+      }
+    },
+    {
+      "name": "governed.persona.emojis como cadena (\"true\")",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 1,
+        "issuedAt": "2026-11-12T15:04:05Z",
+        "contract": "ultron-engine-config/2",
+        "canary": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": "702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c",
+            "base": "n8n-29de5119"
+          },
+          "governed": {
+            "strategy.goal": "cita",
+            "persona.tone": "profesional",
+            "persona.maxChars": 200,
+            "persona.emojis": "true"
+          }
+        },
+        "rest": null
+      }
+    },
+    {
+      "name": "governed.persona.emojis como entero (1)",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 1,
+        "issuedAt": "2026-11-12T15:04:05Z",
+        "contract": "ultron-engine-config/2",
+        "canary": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": "702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c",
+            "base": "n8n-29de5119"
+          },
+          "governed": {
+            "strategy.goal": "cita",
+            "persona.tone": "profesional",
+            "persona.maxChars": 200,
+            "persona.emojis": 1
+          }
+        },
+        "rest": null
+      }
+    },
+    {
+      "name": "governed.persona.maxChars como cadena (\"200\")",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 1,
+        "issuedAt": "2026-11-12T15:04:05Z",
+        "contract": "ultron-engine-config/2",
+        "canary": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": "702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c",
+            "base": "n8n-29de5119"
+          },
+          "governed": {
+            "strategy.goal": "cita",
+            "persona.tone": "profesional",
+            "persona.maxChars": "200",
+            "persona.emojis": true
+          }
+        },
+        "rest": null
+      }
+    },
+    {
+      "name": "governed.persona.maxChars booleano",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 1,
+        "issuedAt": "2026-11-12T15:04:05Z",
+        "contract": "ultron-engine-config/2",
+        "canary": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": "702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c",
+            "base": "n8n-29de5119"
+          },
+          "governed": {
+            "strategy.goal": "cita",
+            "persona.tone": "profesional",
+            "persona.maxChars": true,
+            "persona.emojis": true
+          }
+        },
+        "rest": null
+      }
+    },
+    {
+      "name": "governed.persona.maxChars nulo",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 1,
+        "issuedAt": "2026-11-12T15:04:05Z",
+        "contract": "ultron-engine-config/2",
+        "canary": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": "702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c",
+            "base": "n8n-29de5119"
+          },
+          "governed": {
+            "strategy.goal": "cita",
+            "persona.tone": "profesional",
+            "persona.maxChars": null,
+            "persona.emojis": true
+          }
+        },
+        "rest": null
+      }
+    },
+    {
+      "name": "governed.persona.tone como entero",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 1,
+        "issuedAt": "2026-11-12T15:04:05Z",
+        "contract": "ultron-engine-config/2",
+        "canary": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": "702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c",
+            "base": "n8n-29de5119"
+          },
+          "governed": {
+            "strategy.goal": "cita",
+            "persona.tone": 1,
+            "persona.maxChars": 200,
+            "persona.emojis": true
+          }
+        },
+        "rest": null
+      }
+    },
+    {
+      "name": "governed.strategy.goal nulo",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 1,
+        "issuedAt": "2026-11-12T15:04:05Z",
+        "contract": "ultron-engine-config/2",
+        "canary": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": "702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c",
+            "base": "n8n-29de5119"
+          },
+          "governed": {
+            "strategy.goal": null,
+            "persona.tone": "profesional",
+            "persona.maxChars": 200,
+            "persona.emojis": true
+          }
+        },
+        "rest": null
+      }
+    },
+    {
+      "name": "governed nulo",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 1,
+        "issuedAt": "2026-11-12T15:04:05Z",
+        "contract": "ultron-engine-config/2",
+        "canary": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": "702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c",
+            "base": "n8n-29de5119"
+          },
+          "governed": null
+        },
+        "rest": null
+      }
+    },
+    {
+      "name": "governed como lista",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 1,
+        "issuedAt": "2026-11-12T15:04:05Z",
+        "contract": "ultron-engine-config/2",
+        "canary": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": "702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c",
+            "base": "n8n-29de5119"
+          },
+          "governed": [
+            true,
+            200,
+            "profesional",
+            "cita"
+          ]
+        },
+        "rest": null
+      }
+    },
+    {
+      "name": "prompts sin bundleHash",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 1,
+        "issuedAt": "2026-11-12T15:04:05Z",
+        "contract": "ultron-engine-config/2",
+        "canary": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "base": "n8n-29de5119"
+          },
+          "governed": {
+            "strategy.goal": "cita",
+            "persona.tone": "profesional",
+            "persona.maxChars": 200,
+            "persona.emojis": true
+          }
+        },
+        "rest": null
+      }
+    },
+    {
+      "name": "prompts con una clave de más",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 1,
+        "issuedAt": "2026-11-12T15:04:05Z",
+        "contract": "ultron-engine-config/2",
+        "canary": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": "702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c",
+            "base": "n8n-29de5119",
+            "version": 1
+          },
+          "governed": {
+            "strategy.goal": "cita",
+            "persona.tone": "profesional",
+            "persona.maxChars": 200,
+            "persona.emojis": true
+          }
+        },
+        "rest": null
+      }
+    },
+    {
+      "name": "prompts.bundleHash de 63 hex",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 1,
+        "issuedAt": "2026-11-12T15:04:05Z",
+        "contract": "ultron-engine-config/2",
+        "canary": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": "02890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c",
+            "base": "n8n-29de5119"
+          },
+          "governed": {
+            "strategy.goal": "cita",
+            "persona.tone": "profesional",
+            "persona.maxChars": 200,
+            "persona.emojis": true
+          }
+        },
+        "rest": null
+      }
+    },
+    {
+      "name": "prompts.bundleHash no hexadecimal",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 1,
+        "issuedAt": "2026-11-12T15:04:05Z",
+        "contract": "ultron-engine-config/2",
+        "canary": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": "gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg",
+            "base": "n8n-29de5119"
+          },
+          "governed": {
+            "strategy.goal": "cita",
+            "persona.tone": "profesional",
+            "persona.maxChars": 200,
+            "persona.emojis": true
+          }
+        },
+        "rest": null
+      }
+    },
+    {
+      "name": "prompts.bundleHash nulo",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 1,
+        "issuedAt": "2026-11-12T15:04:05Z",
+        "contract": "ultron-engine-config/2",
+        "canary": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": null,
+            "base": "n8n-29de5119"
+          },
+          "governed": {
+            "strategy.goal": "cita",
+            "persona.tone": "profesional",
+            "persona.maxChars": 200,
+            "persona.emojis": true
+          }
+        },
+        "rest": null
+      }
+    },
+    {
+      "name": "prompts.compiler como cadena (\"1\")",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 1,
+        "issuedAt": "2026-11-12T15:04:05Z",
+        "contract": "ultron-engine-config/2",
+        "canary": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": "1",
+            "bundleHash": "702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c",
+            "base": "n8n-29de5119"
+          },
+          "governed": {
+            "strategy.goal": "cita",
+            "persona.tone": "profesional",
+            "persona.maxChars": 200,
+            "persona.emojis": true
+          }
+        },
+        "rest": null
+      }
+    },
+    {
+      "name": "prompts.base como entero",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 1,
+        "issuedAt": "2026-11-12T15:04:05Z",
+        "contract": "ultron-engine-config/2",
+        "canary": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": "702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c",
+            "base": 1
+          },
+          "governed": {
+            "strategy.goal": "cita",
+            "persona.tone": "profesional",
+            "persona.maxChars": 200,
+            "persona.emojis": true
+          }
+        },
+        "rest": null
+      }
+    },
+    {
+      "name": "prompts nulo",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 1,
+        "issuedAt": "2026-11-12T15:04:05Z",
+        "contract": "ultron-engine-config/2",
+        "canary": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": null,
+          "governed": {
+            "strategy.goal": "cita",
+            "persona.tone": "profesional",
+            "persona.maxChars": 200,
+            "persona.emojis": true
+          }
+        },
+        "rest": null
+      }
+    },
+    {
+      "name": "prompts como lista",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 1,
+        "issuedAt": "2026-11-12T15:04:05Z",
+        "contract": "ultron-engine-config/2",
+        "canary": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": [
+            "n8n-29de5119",
+            "702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c",
+            1
+          ],
+          "governed": {
+            "strategy.goal": "cita",
+            "persona.tone": "profesional",
+            "persona.maxChars": 200,
+            "persona.emojis": true
+          }
+        },
+        "rest": null
+      }
+    },
+    {
+      "name": "el resto /2 roto aunque la canaria esté bien",
+      "input": {
+        "entry": "eeeeeeee-0000-4000-8000-000000000001",
+        "seq": 1,
+        "issuedAt": "2026-11-12T15:04:05Z",
+        "contract": "ultron-engine-config/2",
+        "canary": {
+          "version": "22222222-2222-4222-8222-222222222222",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": "702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c",
+            "base": "n8n-29de5119"
+          },
+          "governed": {
+            "strategy.goal": "cita",
+            "persona.tone": "profesional",
+            "persona.maxChars": 200,
+            "persona.emojis": true
+          }
+        },
+        "rest": {
+          "version": "33333333-3333-4333-8333-333333333333",
+          "publishedBy": 7,
+          "declared": {
+            "rules.paymentLinksEnabled": false,
+            "intent.driver": "entorno",
+            "governance.enabled": true,
+            "governance.canaryOnly": true
+          },
+          "contentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "catalogVersion": "2026-10-19.1",
+          "approvedBy": 12,
+          "prompts": {
+            "compiler": 1,
+            "bundleHash": "67566f4e95f53e46c1141cc8d79a7848322dc78faa63b3b16d02887cb17e7093",
+            "base": "n8n-29de5119"
+          },
+          "governed": {
+            "strategy.goal": "venta",
+            "persona.maxChars": 480,
+            "persona.emojis": false
+          }
+        }
+      }
+    }
+  ],
+  "previewHash": [
+    {
+      "name": "Q-4 · classify · la línea base frente al motor de hoy (efectivo openai) con las 12 R-xx → los 4 must_match coinciden, 8 coinciden, nada sin efecto · lab required/null",
+      "input": {
+        "versionUuid": "22222222-2222-4222-8222-222222222222",
+        "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "catalogVersion": "2026-10-19.1",
+        "classification": {
+          "mustMatch": [
+            {
+              "param": "intent.driver",
+              "versionValue": "entorno",
+              "engineValue": "openai",
+              "ok": true
+            },
+            {
+              "param": "rules.paymentLinksEnabled",
+              "versionValue": false,
+              "engineValue": false,
+              "ok": true
+            },
+            {
+              "param": "governance.enabled",
+              "versionValue": true,
+              "engineValue": true,
+              "ok": true
+            },
+            {
+              "param": "governance.canaryOnly",
+              "versionValue": true,
+              "engineValue": true,
+              "ok": true
+            }
+          ],
+          "matches": [
+            "knowledge.strictFacts",
+            "context.windowTurns",
+            "memory.useLeadProfile",
+            "strategy.discountsAllowed",
+            "rules.handoffOnlyCorroborated",
+            "integrations.channel",
+            "integrations.appointments",
+            "governance.autoBrake"
+          ],
+          "noEffect": [],
+          "mismatches": [],
+          "engineReadingUnavailable": []
+        },
+        "labGate": {
+          "mode": "required",
+          "latest": null
+        }
+      },
+      "expected": {
+        "previewHash": "913c9d3b5ff4740f922ac8d1986575dc31dd3cba530d077740906de0c078e18a"
+      }
+    },
+    {
+      "name": "Q-4 · classify · driver entorno frente a un efectivo rules → coincide (entorno coincide siempre) · lab waived/null",
+      "input": {
+        "versionUuid": "33333333-3333-4333-8333-333333333333",
+        "contentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "catalogVersion": "2026-10-19.1",
+        "classification": {
+          "mustMatch": [
+            {
+              "param": "intent.driver",
+              "versionValue": "entorno",
+              "engineValue": "rules",
+              "ok": true
+            },
+            {
+              "param": "rules.paymentLinksEnabled",
+              "versionValue": false,
+              "engineValue": false,
+              "ok": true
+            },
+            {
+              "param": "governance.enabled",
+              "versionValue": true,
+              "engineValue": true,
+              "ok": true
+            },
+            {
+              "param": "governance.canaryOnly",
+              "versionValue": true,
+              "engineValue": true,
+              "ok": true
+            }
+          ],
+          "matches": [
+            "knowledge.strictFacts",
+            "context.windowTurns",
+            "memory.useLeadProfile",
+            "strategy.discountsAllowed",
+            "rules.handoffOnlyCorroborated",
+            "integrations.channel",
+            "integrations.appointments",
+            "governance.autoBrake"
+          ],
+          "noEffect": [],
+          "mismatches": [],
+          "engineReadingUnavailable": []
+        },
+        "labGate": {
+          "mode": "waived",
+          "latest": null
+        }
+      },
+      "expected": {
+        "previewHash": "bbd3f4e899f59db912e17b746989079e020ee1880adec894d85cd779f08395fa"
+      }
+    },
+    {
+      "name": "Q-4 · classify · driver entorno frente a un efectivo hermes → coincide · lab required/approved",
+      "input": {
+        "versionUuid": "44444444-4444-4444-8444-444444444444",
+        "contentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "catalogVersion": "2026-10-19.1",
+        "classification": {
+          "mustMatch": [
+            {
+              "param": "intent.driver",
+              "versionValue": "entorno",
+              "engineValue": "hermes",
+              "ok": true
+            },
+            {
+              "param": "rules.paymentLinksEnabled",
+              "versionValue": false,
+              "engineValue": false,
+              "ok": true
+            },
+            {
+              "param": "governance.enabled",
+              "versionValue": true,
+              "engineValue": true,
+              "ok": true
+            },
+            {
+              "param": "governance.canaryOnly",
+              "versionValue": true,
+              "engineValue": true,
+              "ok": true
+            }
+          ],
+          "matches": [
+            "knowledge.strictFacts",
+            "context.windowTurns",
+            "memory.useLeadProfile",
+            "strategy.discountsAllowed",
+            "rules.handoffOnlyCorroborated",
+            "integrations.channel",
+            "integrations.appointments",
+            "governance.autoBrake"
+          ],
+          "noEffect": [],
+          "mismatches": [],
+          "engineReadingUnavailable": []
+        },
+        "labGate": {
+          "mode": "required",
+          "latest": "approved"
+        }
+      },
+      "expected": {
+        "previewHash": "71574230231b5338d8dd841b61cef6b4b84ec43794e722ee107461de14fead42"
+      }
+    },
+    {
+      "name": "Q-4 · classify · driver entorno con la lectura cruda fake → coincide y engineValue sale traducido a rules · lab required/stale_prompts",
+      "input": {
+        "versionUuid": "22222222-2222-4222-8222-222222222222",
+        "contentHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "catalogVersion": "2026-10-19.1",
+        "classification": {
+          "mustMatch": [
+            {
+              "param": "intent.driver",
+              "versionValue": "entorno",
+              "engineValue": "rules",
+              "ok": true
+            },
+            {
+              "param": "rules.paymentLinksEnabled",
+              "versionValue": false,
+              "engineValue": false,
+              "ok": true
+            },
+            {
+              "param": "governance.enabled",
+              "versionValue": true,
+              "engineValue": true,
+              "ok": true
+            },
+            {
+              "param": "governance.canaryOnly",
+              "versionValue": true,
+              "engineValue": true,
+              "ok": true
+            }
+          ],
+          "matches": [
+            "knowledge.strictFacts",
+            "context.windowTurns",
+            "memory.useLeadProfile",
+            "strategy.discountsAllowed",
+            "rules.handoffOnlyCorroborated",
+            "integrations.channel",
+            "integrations.appointments",
+            "governance.autoBrake"
+          ],
+          "noEffect": [],
+          "mismatches": [],
+          "engineReadingUnavailable": []
+        },
+        "labGate": {
+          "mode": "required",
+          "latest": "stale_prompts"
+        }
+      },
+      "expected": {
+        "previewHash": "bfb198cfa45697ed0ef36bdc5c360157c5676478c694a63a33911fc5d5f1c86b"
+      }
+    },
+    {
+      "name": "Q-4 · classify · driver openai explícito frente a openai efectivo → coincide; un must_match nunca va a sin efecto aunque difiera de la línea base · lab required/null",
+      "input": {
+        "versionUuid": "33333333-3333-4333-8333-333333333333",
+        "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "catalogVersion": "2026-10-19.1",
+        "classification": {
+          "mustMatch": [
+            {
+              "param": "intent.driver",
+              "versionValue": "openai",
+              "engineValue": "openai",
+              "ok": true
+            },
+            {
+              "param": "rules.paymentLinksEnabled",
+              "versionValue": false,
+              "engineValue": false,
+              "ok": true
+            },
+            {
+              "param": "governance.enabled",
+              "versionValue": true,
+              "engineValue": true,
+              "ok": true
+            },
+            {
+              "param": "governance.canaryOnly",
+              "versionValue": true,
+              "engineValue": true,
+              "ok": true
+            }
+          ],
+          "matches": [
+            "knowledge.strictFacts",
+            "context.windowTurns",
+            "memory.useLeadProfile",
+            "strategy.discountsAllowed",
+            "rules.handoffOnlyCorroborated",
+            "integrations.channel",
+            "integrations.appointments",
+            "governance.autoBrake"
+          ],
+          "noEffect": [],
+          "mismatches": [],
+          "engineReadingUnavailable": []
+        },
+        "labGate": {
+          "mode": "required",
+          "latest": null
+        }
+      },
+      "expected": {
+        "previewHash": "a77dd14f476ef09fc5334d71888e3e08f0b31ae873f438f8223862245c0c38db"
+      }
+    },
+    {
+      "name": "Q-4 · classify · driver rules explícito frente a la lectura rules → coincide · lab waived/null",
+      "input": {
+        "versionUuid": "44444444-4444-4444-8444-444444444444",
+        "contentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "catalogVersion": "2026-10-19.1",
+        "classification": {
+          "mustMatch": [
+            {
+              "param": "intent.driver",
+              "versionValue": "rules",
+              "engineValue": "rules",
+              "ok": true
+            },
+            {
+              "param": "rules.paymentLinksEnabled",
+              "versionValue": false,
+              "engineValue": false,
+              "ok": true
+            },
+            {
+              "param": "governance.enabled",
+              "versionValue": true,
+              "engineValue": true,
+              "ok": true
+            },
+            {
+              "param": "governance.canaryOnly",
+              "versionValue": true,
+              "engineValue": true,
+              "ok": true
+            }
+          ],
+          "matches": [
+            "knowledge.strictFacts",
+            "context.windowTurns",
+            "memory.useLeadProfile",
+            "strategy.discountsAllowed",
+            "rules.handoffOnlyCorroborated",
+            "integrations.channel",
+            "integrations.appointments",
+            "governance.autoBrake"
+          ],
+          "noEffect": [],
+          "mismatches": [],
+          "engineReadingUnavailable": []
+        },
+        "labGate": {
+          "mode": "waived",
+          "latest": null
+        }
+      },
+      "expected": {
+        "previewHash": "daefec173a2d690f8d9d3e6ce20ff17d4187629d984fb8011a38c3510c7f7ec4"
+      }
+    },
+    {
+      "name": "Q-4 · classify · driver rules explícito frente a la lectura cruda fake → coincide (fake → rules) · lab required/approved",
+      "input": {
+        "versionUuid": "22222222-2222-4222-8222-222222222222",
+        "contentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "catalogVersion": "2026-10-19.1",
+        "classification": {
+          "mustMatch": [
+            {
+              "param": "intent.driver",
+              "versionValue": "rules",
+              "engineValue": "rules",
+              "ok": true
+            },
+            {
+              "param": "rules.paymentLinksEnabled",
+              "versionValue": false,
+              "engineValue": false,
+              "ok": true
+            },
+            {
+              "param": "governance.enabled",
+              "versionValue": true,
+              "engineValue": true,
+              "ok": true
+            },
+            {
+              "param": "governance.canaryOnly",
+              "versionValue": true,
+              "engineValue": true,
+              "ok": true
+            }
+          ],
+          "matches": [
+            "knowledge.strictFacts",
+            "context.windowTurns",
+            "memory.useLeadProfile",
+            "strategy.discountsAllowed",
+            "rules.handoffOnlyCorroborated",
+            "integrations.channel",
+            "integrations.appointments",
+            "governance.autoBrake"
+          ],
+          "noEffect": [],
+          "mismatches": [],
+          "engineReadingUnavailable": []
+        },
+        "labGate": {
+          "mode": "required",
+          "latest": "approved"
+        }
+      },
+      "expected": {
+        "previewHash": "a1e8fefc51218fba1b36074ca3c22a4b37cf6cb358e5a94664f7d8e0ae689d95"
+      }
+    },
+    {
+      "name": "Q-4 · classify · driver openai explícito frente a un efectivo rules → mismatch · lab required/stale_prompts",
+      "input": {
+        "versionUuid": "33333333-3333-4333-8333-333333333333",
+        "contentHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "catalogVersion": "2026-10-19.1",
+        "classification": {
+          "mustMatch": [
+            {
+              "param": "intent.driver",
+              "versionValue": "openai",
+              "engineValue": "rules",
+              "ok": false
+            },
+            {
+              "param": "rules.paymentLinksEnabled",
+              "versionValue": false,
+              "engineValue": false,
+              "ok": true
+            },
+            {
+              "param": "governance.enabled",
+              "versionValue": true,
+              "engineValue": true,
+              "ok": true
+            },
+            {
+              "param": "governance.canaryOnly",
+              "versionValue": true,
+              "engineValue": true,
+              "ok": true
+            }
+          ],
+          "matches": [
+            "knowledge.strictFacts",
+            "context.windowTurns",
+            "memory.useLeadProfile",
+            "strategy.discountsAllowed",
+            "rules.handoffOnlyCorroborated",
+            "integrations.channel",
+            "integrations.appointments",
+            "governance.autoBrake"
+          ],
+          "noEffect": [],
+          "mismatches": [
+            {
+              "param": "intent.driver",
+              "versionValue": "openai",
+              "engineValue": "rules"
+            }
+          ],
+          "engineReadingUnavailable": []
+        },
+        "labGate": {
+          "mode": "required",
+          "latest": "stale_prompts"
+        }
+      },
+      "expected": {
+        "previewHash": "890a186570098fc821f123d1d990a40e56f1eb30b8491813fa9d55403e42f53f"
+      }
+    },
+    {
+      "name": "Q-4 · classify · driver openai explícito frente a la lectura cruda fake → mismatch con engineValue rules · lab required/null",
+      "input": {
+        "versionUuid": "44444444-4444-4444-8444-444444444444",
+        "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "catalogVersion": "2026-10-19.1",
+        "classification": {
+          "mustMatch": [
+            {
+              "param": "intent.driver",
+              "versionValue": "openai",
+              "engineValue": "rules",
+              "ok": false
+            },
+            {
+              "param": "rules.paymentLinksEnabled",
+              "versionValue": false,
+              "engineValue": false,
+              "ok": true
+            },
+            {
+              "param": "governance.enabled",
+              "versionValue": true,
+              "engineValue": true,
+              "ok": true
+            },
+            {
+              "param": "governance.canaryOnly",
+              "versionValue": true,
+              "engineValue": true,
+              "ok": true
+            }
+          ],
+          "matches": [
+            "knowledge.strictFacts",
+            "context.windowTurns",
+            "memory.useLeadProfile",
+            "strategy.discountsAllowed",
+            "rules.handoffOnlyCorroborated",
+            "integrations.channel",
+            "integrations.appointments",
+            "governance.autoBrake"
+          ],
+          "noEffect": [],
+          "mismatches": [
+            {
+              "param": "intent.driver",
+              "versionValue": "openai",
+              "engineValue": "rules"
+            }
+          ],
+          "engineReadingUnavailable": []
+        },
+        "labGate": {
+          "mode": "required",
+          "latest": null
+        }
+      },
+      "expected": {
+        "previewHash": "e0d94411bce2f5f74e305a3a1c63149330b860afc4839536ab06c6ece7401446"
+      }
+    },
+    {
+      "name": "Q-4 · classify · driver hermes explícito frente a openai efectivo → mismatch · lab waived/null",
+      "input": {
+        "versionUuid": "22222222-2222-4222-8222-222222222222",
+        "contentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "catalogVersion": "2026-10-19.1",
+        "classification": {
+          "mustMatch": [
+            {
+              "param": "intent.driver",
+              "versionValue": "hermes",
+              "engineValue": "openai",
+              "ok": false
+            },
+            {
+              "param": "rules.paymentLinksEnabled",
+              "versionValue": false,
+              "engineValue": false,
+              "ok": true
+            },
+            {
+              "param": "governance.enabled",
+              "versionValue": true,
+              "engineValue": true,
+              "ok": true
+            },
+            {
+              "param": "governance.canaryOnly",
+              "versionValue": true,
+              "engineValue": true,
+              "ok": true
+            }
+          ],
+          "matches": [
+            "knowledge.strictFacts",
+            "context.windowTurns",
+            "memory.useLeadProfile",
+            "strategy.discountsAllowed",
+            "rules.handoffOnlyCorroborated",
+            "integrations.channel",
+            "integrations.appointments",
+            "governance.autoBrake"
+          ],
+          "noEffect": [],
+          "mismatches": [
+            {
+              "param": "intent.driver",
+              "versionValue": "hermes",
+              "engineValue": "openai"
+            }
+          ],
+          "engineReadingUnavailable": []
+        },
+        "labGate": {
+          "mode": "waived",
+          "latest": null
+        }
+      },
+      "expected": {
+        "previewHash": "3f3679cca63de84322729241763c4ee0dc6e0d8230576cfeba52d0806ecc470f"
+      }
+    },
+    {
+      "name": "Q-4 · classify · governance.enabled true con ULTRON apagado en el motor → mismatch · lab required/approved",
+      "input": {
+        "versionUuid": "33333333-3333-4333-8333-333333333333",
+        "contentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "catalogVersion": "2026-10-19.1",
+        "classification": {
+          "mustMatch": [
+            {
+              "param": "intent.driver",
+              "versionValue": "entorno",
+              "engineValue": "openai",
+              "ok": true
+            },
+            {
+              "param": "rules.paymentLinksEnabled",
+              "versionValue": false,
+              "engineValue": false,
+              "ok": true
+            },
+            {
+              "param": "governance.enabled",
+              "versionValue": true,
+              "engineValue": false,
+              "ok": false
+            },
+            {
+              "param": "governance.canaryOnly",
+              "versionValue": true,
+              "engineValue": true,
+              "ok": true
+            }
+          ],
+          "matches": [
+            "knowledge.strictFacts",
+            "context.windowTurns",
+            "memory.useLeadProfile",
+            "strategy.discountsAllowed",
+            "rules.handoffOnlyCorroborated",
+            "integrations.channel",
+            "integrations.appointments",
+            "governance.autoBrake"
+          ],
+          "noEffect": [],
+          "mismatches": [
+            {
+              "param": "governance.enabled",
+              "versionValue": true,
+              "engineValue": false
+            }
+          ],
+          "engineReadingUnavailable": []
+        },
+        "labGate": {
+          "mode": "required",
+          "latest": "approved"
+        }
+      },
+      "expected": {
+        "previewHash": "58884df1294e63c145ace0767328d133b0b471f5fce132ce652d4c52f564a019"
+      }
+    },
+    {
+      "name": "Q-4 · classify · governance.enabled false con ULTRON apagado en el motor → coincide (la versión publicable refleja el motor) y no va a sin efecto · lab required/stale_prompts",
+      "input": {
+        "versionUuid": "44444444-4444-4444-8444-444444444444",
+        "contentHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "catalogVersion": "2026-10-19.1",
+        "classification": {
+          "mustMatch": [
+            {
+              "param": "intent.driver",
+              "versionValue": "entorno",
+              "engineValue": "openai",
+              "ok": true
+            },
+            {
+              "param": "rules.paymentLinksEnabled",
+              "versionValue": false,
+              "engineValue": false,
+              "ok": true
+            },
+            {
+              "param": "governance.enabled",
+              "versionValue": false,
+              "engineValue": false,
+              "ok": true
+            },
+            {
+              "param": "governance.canaryOnly",
+              "versionValue": true,
+              "engineValue": true,
+              "ok": true
+            }
+          ],
+          "matches": [
+            "knowledge.strictFacts",
+            "context.windowTurns",
+            "memory.useLeadProfile",
+            "strategy.discountsAllowed",
+            "rules.handoffOnlyCorroborated",
+            "integrations.channel",
+            "integrations.appointments",
+            "governance.autoBrake"
+          ],
+          "noEffect": [],
+          "mismatches": [],
+          "engineReadingUnavailable": []
+        },
+        "labGate": {
+          "mode": "required",
+          "latest": "stale_prompts"
+        }
+      },
+      "expected": {
+        "previewHash": "a02d63effcaf970318221ea9f83053313b175e2e2e74abc5a9361aa7597016cb"
+      }
+    }
+  ],
+  "classifyWithPrompts": [
+    {
+      "name": "classify · la línea base frente al motor de hoy (efectivo openai) con las 12 R-xx → los 4 must_match coinciden, 8 coinciden, nada sin efecto",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "entorno",
+            "engineValue": "openai",
+            "ok": true
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": false,
+            "engineValue": false,
+            "ok": true
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          }
+        ],
+        "matches": [
+          "knowledge.strictFacts",
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "strategy.discountsAllowed",
+          "rules.handoffOnlyCorroborated",
+          "integrations.channel",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "noEffect": [],
+        "mismatches": [],
+        "engineReadingUnavailable": [],
+        "governedOutOfNoEffect": []
+      }
+    },
+    {
+      "name": "classify · driver entorno frente a un efectivo rules → coincide (entorno coincide siempre)",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "entorno",
+            "engineValue": "rules",
+            "ok": true
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": false,
+            "engineValue": false,
+            "ok": true
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          }
+        ],
+        "matches": [
+          "knowledge.strictFacts",
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "strategy.discountsAllowed",
+          "rules.handoffOnlyCorroborated",
+          "integrations.channel",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "noEffect": [],
+        "mismatches": [],
+        "engineReadingUnavailable": [],
+        "governedOutOfNoEffect": []
+      }
+    },
+    {
+      "name": "classify · driver entorno frente a un efectivo hermes → coincide",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "entorno",
+            "engineValue": "hermes",
+            "ok": true
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": false,
+            "engineValue": false,
+            "ok": true
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          }
+        ],
+        "matches": [
+          "knowledge.strictFacts",
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "strategy.discountsAllowed",
+          "rules.handoffOnlyCorroborated",
+          "integrations.channel",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "noEffect": [],
+        "mismatches": [],
+        "engineReadingUnavailable": [],
+        "governedOutOfNoEffect": []
+      }
+    },
+    {
+      "name": "classify · driver entorno con la lectura cruda fake → coincide y engineValue sale traducido a rules",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "entorno",
+            "engineValue": "rules",
+            "ok": true
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": false,
+            "engineValue": false,
+            "ok": true
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          }
+        ],
+        "matches": [
+          "knowledge.strictFacts",
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "strategy.discountsAllowed",
+          "rules.handoffOnlyCorroborated",
+          "integrations.channel",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "noEffect": [],
+        "mismatches": [],
+        "engineReadingUnavailable": [],
+        "governedOutOfNoEffect": []
+      }
+    },
+    {
+      "name": "classify · driver openai explícito frente a openai efectivo → coincide; un must_match nunca va a sin efecto aunque difiera de la línea base",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "openai",
+            "engineValue": "openai",
+            "ok": true
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": false,
+            "engineValue": false,
+            "ok": true
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          }
+        ],
+        "matches": [
+          "knowledge.strictFacts",
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "strategy.discountsAllowed",
+          "rules.handoffOnlyCorroborated",
+          "integrations.channel",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "noEffect": [],
+        "mismatches": [],
+        "engineReadingUnavailable": [],
+        "governedOutOfNoEffect": []
+      }
+    },
+    {
+      "name": "classify · driver rules explícito frente a la lectura rules → coincide",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "rules",
+            "engineValue": "rules",
+            "ok": true
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": false,
+            "engineValue": false,
+            "ok": true
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          }
+        ],
+        "matches": [
+          "knowledge.strictFacts",
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "strategy.discountsAllowed",
+          "rules.handoffOnlyCorroborated",
+          "integrations.channel",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "noEffect": [],
+        "mismatches": [],
+        "engineReadingUnavailable": [],
+        "governedOutOfNoEffect": []
+      }
+    },
+    {
+      "name": "classify · driver rules explícito frente a la lectura cruda fake → coincide (fake → rules)",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "rules",
+            "engineValue": "rules",
+            "ok": true
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": false,
+            "engineValue": false,
+            "ok": true
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          }
+        ],
+        "matches": [
+          "knowledge.strictFacts",
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "strategy.discountsAllowed",
+          "rules.handoffOnlyCorroborated",
+          "integrations.channel",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "noEffect": [],
+        "mismatches": [],
+        "engineReadingUnavailable": [],
+        "governedOutOfNoEffect": []
+      }
+    },
+    {
+      "name": "classify · driver openai explícito frente a un efectivo rules → mismatch",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "openai",
+            "engineValue": "rules",
+            "ok": false
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": false,
+            "engineValue": false,
+            "ok": true
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          }
+        ],
+        "matches": [
+          "knowledge.strictFacts",
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "strategy.discountsAllowed",
+          "rules.handoffOnlyCorroborated",
+          "integrations.channel",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "noEffect": [],
+        "mismatches": [
+          {
+            "param": "intent.driver",
+            "versionValue": "openai",
+            "engineValue": "rules"
+          }
+        ],
+        "engineReadingUnavailable": [],
+        "governedOutOfNoEffect": []
+      }
+    },
+    {
+      "name": "classify · driver openai explícito frente a la lectura cruda fake → mismatch con engineValue rules",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "openai",
+            "engineValue": "rules",
+            "ok": false
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": false,
+            "engineValue": false,
+            "ok": true
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          }
+        ],
+        "matches": [
+          "knowledge.strictFacts",
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "strategy.discountsAllowed",
+          "rules.handoffOnlyCorroborated",
+          "integrations.channel",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "noEffect": [],
+        "mismatches": [
+          {
+            "param": "intent.driver",
+            "versionValue": "openai",
+            "engineValue": "rules"
+          }
+        ],
+        "engineReadingUnavailable": [],
+        "governedOutOfNoEffect": []
+      }
+    },
+    {
+      "name": "classify · driver hermes explícito frente a openai efectivo → mismatch",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "hermes",
+            "engineValue": "openai",
+            "ok": false
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": false,
+            "engineValue": false,
+            "ok": true
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          }
+        ],
+        "matches": [
+          "knowledge.strictFacts",
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "strategy.discountsAllowed",
+          "rules.handoffOnlyCorroborated",
+          "integrations.channel",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "noEffect": [],
+        "mismatches": [
+          {
+            "param": "intent.driver",
+            "versionValue": "hermes",
+            "engineValue": "openai"
+          }
+        ],
+        "engineReadingUnavailable": [],
+        "governedOutOfNoEffect": []
+      }
+    },
+    {
+      "name": "classify · governance.enabled true con ULTRON apagado en el motor → mismatch",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "entorno",
+            "engineValue": "openai",
+            "ok": true
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": false,
+            "engineValue": false,
+            "ok": true
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": false,
+            "ok": false
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          }
+        ],
+        "matches": [
+          "knowledge.strictFacts",
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "strategy.discountsAllowed",
+          "rules.handoffOnlyCorroborated",
+          "integrations.channel",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "noEffect": [],
+        "mismatches": [
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": false
+          }
+        ],
+        "engineReadingUnavailable": [],
+        "governedOutOfNoEffect": []
+      }
+    },
+    {
+      "name": "classify · governance.enabled false con ULTRON apagado en el motor → coincide (la versión publicable refleja el motor) y no va a sin efecto",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "entorno",
+            "engineValue": "openai",
+            "ok": true
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": false,
+            "engineValue": false,
+            "ok": true
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": false,
+            "engineValue": false,
+            "ok": true
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          }
+        ],
+        "matches": [
+          "knowledge.strictFacts",
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "strategy.discountsAllowed",
+          "rules.handoffOnlyCorroborated",
+          "integrations.channel",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "noEffect": [],
+        "mismatches": [],
+        "engineReadingUnavailable": [],
+        "governedOutOfNoEffect": []
+      }
+    },
+    {
+      "name": "classify · paymentLinksEnabled true en la versión con el cobro apagado en el motor → mismatch",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "entorno",
+            "engineValue": "openai",
+            "ok": true
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": true,
+            "engineValue": false,
+            "ok": false
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          }
+        ],
+        "matches": [
+          "knowledge.strictFacts",
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "strategy.discountsAllowed",
+          "rules.handoffOnlyCorroborated",
+          "integrations.channel",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "noEffect": [],
+        "mismatches": [
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": true,
+            "engineValue": false
+          }
+        ],
+        "engineReadingUnavailable": [],
+        "governedOutOfNoEffect": []
+      }
+    },
+    {
+      "name": "classify · paymentLinksEnabled true en la versión y en el motor → coincide",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "entorno",
+            "engineValue": "openai",
+            "ok": true
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          }
+        ],
+        "matches": [
+          "knowledge.strictFacts",
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "strategy.discountsAllowed",
+          "rules.handoffOnlyCorroborated",
+          "integrations.channel",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "noEffect": [],
+        "mismatches": [],
+        "engineReadingUnavailable": [],
+        "governedOutOfNoEffect": []
+      }
+    },
+    {
+      "name": "classify · canaryOnly false en la versión con el canario del motor puesto → mismatch",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "entorno",
+            "engineValue": "openai",
+            "ok": true
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": false,
+            "engineValue": false,
+            "ok": true
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": false,
+            "engineValue": true,
+            "ok": false
+          }
+        ],
+        "matches": [
+          "knowledge.strictFacts",
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "strategy.discountsAllowed",
+          "rules.handoffOnlyCorroborated",
+          "integrations.channel",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "noEffect": [],
+        "mismatches": [
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": false,
+            "engineValue": true
+          }
+        ],
+        "engineReadingUnavailable": [],
+        "governedOutOfNoEffect": []
+      }
+    },
+    {
+      "name": "classify · canaryOnly false en la versión sin canario configurado → coincide",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "entorno",
+            "engineValue": "openai",
+            "ok": true
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": false,
+            "engineValue": false,
+            "ok": true
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": false,
+            "engineValue": false,
+            "ok": true
+          }
+        ],
+        "matches": [
+          "knowledge.strictFacts",
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "strategy.discountsAllowed",
+          "rules.handoffOnlyCorroborated",
+          "integrations.channel",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "noEffect": [],
+        "mismatches": [],
+        "engineReadingUnavailable": [],
+        "governedOutOfNoEffect": []
+      }
+    },
+    {
+      "name": "classify · dos mismatches (governance.enabled e intent.driver) → en el orden del catálogo: intent.driver primero, no el orden del texto de A1",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "openai",
+            "engineValue": "rules",
+            "ok": false
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": false,
+            "engineValue": false,
+            "ok": true
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": false,
+            "ok": false
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          }
+        ],
+        "matches": [
+          "knowledge.strictFacts",
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "strategy.discountsAllowed",
+          "rules.handoffOnlyCorroborated",
+          "integrations.channel",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "noEffect": [],
+        "mismatches": [
+          {
+            "param": "intent.driver",
+            "versionValue": "openai",
+            "engineValue": "rules"
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": false
+          }
+        ],
+        "engineReadingUnavailable": [],
+        "governedOutOfNoEffect": []
+      }
+    },
+    {
+      "name": "classify · los cuatro must_match distintos → los cuatro mismatches, en el orden del catálogo",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "openai",
+            "engineValue": "rules",
+            "ok": false
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": true,
+            "engineValue": false,
+            "ok": false
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": false,
+            "engineValue": true,
+            "ok": false
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": false,
+            "engineValue": true,
+            "ok": false
+          }
+        ],
+        "matches": [
+          "knowledge.strictFacts",
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "strategy.discountsAllowed",
+          "rules.handoffOnlyCorroborated",
+          "integrations.channel",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "noEffect": [],
+        "mismatches": [
+          {
+            "param": "intent.driver",
+            "versionValue": "openai",
+            "engineValue": "rules"
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": true,
+            "engineValue": false
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": false,
+            "engineValue": true
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": false,
+            "engineValue": true
+          }
+        ],
+        "engineReadingUnavailable": [],
+        "governedOutOfNoEffect": []
+      }
+    },
+    {
+      "name": "classify · persona.tone distinto de la línea base → sin efecto",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "entorno",
+            "engineValue": "openai",
+            "ok": true
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": false,
+            "engineValue": false,
+            "ok": true
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          }
+        ],
+        "matches": [
+          "knowledge.strictFacts",
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "strategy.discountsAllowed",
+          "rules.handoffOnlyCorroborated",
+          "integrations.channel",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "noEffect": [],
+        "mismatches": [],
+        "engineReadingUnavailable": [],
+        "governedOutOfNoEffect": [
+          "persona.tone"
+        ]
+      }
+    },
+    {
+      "name": "classify · los cinco proposal distintos de la línea base → sin efecto, en el orden del catálogo",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "entorno",
+            "engineValue": "openai",
+            "ok": true
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": false,
+            "engineValue": false,
+            "ok": true
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          }
+        ],
+        "matches": [
+          "knowledge.strictFacts",
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "strategy.discountsAllowed",
+          "rules.handoffOnlyCorroborated",
+          "integrations.channel",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "noEffect": [
+          "intent.fallback"
+        ],
+        "mismatches": [],
+        "engineReadingUnavailable": [],
+        "governedOutOfNoEffect": [
+          "persona.tone",
+          "persona.emojis",
+          "persona.maxChars",
+          "strategy.goal"
+        ]
+      }
+    },
+    {
+      "name": "classify · offerPriority distinta de la línea base, aunque sea justo la que leen los planes → sin efecto (se compara con la línea base, no con el motor)",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "entorno",
+            "engineValue": "openai",
+            "ok": true
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": false,
+            "engineValue": false,
+            "ok": true
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          }
+        ],
+        "matches": [
+          "knowledge.strictFacts",
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "strategy.discountsAllowed",
+          "rules.handoffOnlyCorroborated",
+          "integrations.channel",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "noEffect": [
+          "strategy.offerPriority"
+        ],
+        "mismatches": [],
+        "engineReadingUnavailable": [],
+        "governedOutOfNoEffect": []
+      }
+    },
+    {
+      "name": "classify · offerPriority igual a la línea base aunque los planes leídos sean otros → sin clase",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "entorno",
+            "engineValue": "openai",
+            "ok": true
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": false,
+            "engineValue": false,
+            "ok": true
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          }
+        ],
+        "matches": [
+          "knowledge.strictFacts",
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "strategy.discountsAllowed",
+          "rules.handoffOnlyCorroborated",
+          "integrations.channel",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "noEffect": [],
+        "mismatches": [],
+        "engineReadingUnavailable": [],
+        "governedOutOfNoEffect": []
+      }
+    },
+    {
+      "name": "classify · las fuentes en otro orden → sin efecto (en una lista el orden cuenta)",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "entorno",
+            "engineValue": "openai",
+            "ok": true
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": false,
+            "engineValue": false,
+            "ok": true
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          }
+        ],
+        "matches": [
+          "knowledge.strictFacts",
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "strategy.discountsAllowed",
+          "rules.handoffOnlyCorroborated",
+          "integrations.channel",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "noEffect": [
+          "knowledge.sources"
+        ],
+        "mismatches": [],
+        "engineReadingUnavailable": [],
+        "governedOutOfNoEffect": []
+      }
+    },
+    {
+      "name": "classify · fixed sin valor distinto (critic y retry apagados) → sin efecto",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "entorno",
+            "engineValue": "openai",
+            "ok": true
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": false,
+            "engineValue": false,
+            "ok": true
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          }
+        ],
+        "matches": [
+          "knowledge.strictFacts",
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "strategy.discountsAllowed",
+          "rules.handoffOnlyCorroborated",
+          "integrations.channel",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "noEffect": [
+          "composer.critic",
+          "composer.retry"
+        ],
+        "mismatches": [],
+        "engineReadingUnavailable": [],
+        "governedOutOfNoEffect": []
+      }
+    },
+    {
+      "name": "classify · fixed con valor y otro valor (strictFacts false, discountsAllowed true) → sin efecto y salen de «coinciden»",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "entorno",
+            "engineValue": "openai",
+            "ok": true
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": false,
+            "engineValue": false,
+            "ok": true
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          }
+        ],
+        "matches": [
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "rules.handoffOnlyCorroborated",
+          "integrations.channel",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "noEffect": [
+          "knowledge.strictFacts",
+          "strategy.discountsAllowed"
+        ],
+        "mismatches": [],
+        "engineReadingUnavailable": [],
+        "governedOutOfNoEffect": []
+      }
+    },
+    {
+      "name": "classify · el resto de fixed con valor cambiados → sin efecto; solo coinciden los que quedan",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "entorno",
+            "engineValue": "openai",
+            "ok": true
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": false,
+            "engineValue": false,
+            "ok": true
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          }
+        ],
+        "matches": [
+          "knowledge.strictFacts",
+          "strategy.discountsAllowed",
+          "integrations.channel"
+        ],
+        "noEffect": [
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "rules.handoffOnlyCorroborated",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "mismatches": [],
+        "engineReadingUnavailable": [],
+        "governedOutOfNoEffect": []
+      }
+    },
+    {
+      "name": "classify · dos S-NNN → rule:S-001 y rule:S-002; las R-xx no tienen clase",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "entorno",
+            "engineValue": "openai",
+            "ok": true
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": false,
+            "engineValue": false,
+            "ok": true
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          }
+        ],
+        "matches": [
+          "knowledge.strictFacts",
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "strategy.discountsAllowed",
+          "rules.handoffOnlyCorroborated",
+          "integrations.channel",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "noEffect": [
+          "rule:S-001",
+          "rule:S-002"
+        ],
+        "mismatches": [],
+        "engineReadingUnavailable": [],
+        "governedOutOfNoEffect": []
+      }
+    },
+    {
+      "name": "classify · S-NNN desordenadas en la entrada → salen por código",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "entorno",
+            "engineValue": "openai",
+            "ok": true
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": false,
+            "engineValue": false,
+            "ok": true
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          }
+        ],
+        "matches": [
+          "knowledge.strictFacts",
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "strategy.discountsAllowed",
+          "rules.handoffOnlyCorroborated",
+          "integrations.channel",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "noEffect": [
+          "rule:S-001",
+          "rule:S-003"
+        ],
+        "mismatches": [],
+        "engineReadingUnavailable": [],
+        "governedOutOfNoEffect": []
+      }
+    },
+    {
+      "name": "classify · parámetros de varias clases y reglas a la vez → los parámetros en el orden del catálogo (sin agrupar por clase) y después las reglas",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "entorno",
+            "engineValue": "openai",
+            "ok": true
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": false,
+            "engineValue": false,
+            "ok": true
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          }
+        ],
+        "matches": [
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "strategy.discountsAllowed",
+          "rules.handoffOnlyCorroborated",
+          "integrations.channel",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "noEffect": [
+          "knowledge.strictFacts",
+          "strategy.offerPriority",
+          "composer.critic",
+          "rule:S-001",
+          "rule:S-002"
+        ],
+        "mismatches": [],
+        "engineReadingUnavailable": [],
+        "governedOutOfNoEffect": [
+          "persona.tone"
+        ]
+      }
+    },
+    {
+      "name": "classify · lectura de governance.enabled no disponible → nunca coincide; va a engineReadingUnavailable y no a mismatches",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "entorno",
+            "engineValue": "openai",
+            "ok": true
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": false,
+            "engineValue": false,
+            "ok": true
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": null,
+            "ok": false
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          }
+        ],
+        "matches": [
+          "knowledge.strictFacts",
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "strategy.discountsAllowed",
+          "rules.handoffOnlyCorroborated",
+          "integrations.channel",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "noEffect": [],
+        "mismatches": [],
+        "engineReadingUnavailable": [
+          "governance.enabled"
+        ],
+        "governedOutOfNoEffect": []
+      }
+    },
+    {
+      "name": "classify · lectura del driver no disponible con la versión en entorno → tampoco coincide (sin lectura no hay nada que dar por bueno)",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "entorno",
+            "engineValue": null,
+            "ok": false
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": false,
+            "engineValue": false,
+            "ok": true
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          }
+        ],
+        "matches": [
+          "knowledge.strictFacts",
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "strategy.discountsAllowed",
+          "rules.handoffOnlyCorroborated",
+          "integrations.channel",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "noEffect": [],
+        "mismatches": [],
+        "engineReadingUnavailable": [
+          "intent.driver"
+        ],
+        "governedOutOfNoEffect": []
+      }
+    },
+    {
+      "name": "classify · lectura de offerPriority no disponible → no cambia nada (no es must_match)",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "entorno",
+            "engineValue": "openai",
+            "ok": true
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": false,
+            "engineValue": false,
+            "ok": true
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          }
+        ],
+        "matches": [
+          "knowledge.strictFacts",
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "strategy.discountsAllowed",
+          "rules.handoffOnlyCorroborated",
+          "integrations.channel",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "noEffect": [],
+        "mismatches": [],
+        "engineReadingUnavailable": [],
+        "governedOutOfNoEffect": []
+      }
+    },
+    {
+      "name": "classify · una lectura no disponible y otra distinta → cada una en su lista",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "entorno",
+            "engineValue": "openai",
+            "ok": true
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": false,
+            "engineValue": null,
+            "ok": false
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": true,
+            "ok": true
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": false,
+            "engineValue": true,
+            "ok": false
+          }
+        ],
+        "matches": [
+          "knowledge.strictFacts",
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "strategy.discountsAllowed",
+          "rules.handoffOnlyCorroborated",
+          "integrations.channel",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "noEffect": [],
+        "mismatches": [
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": false,
+            "engineValue": true
+          }
+        ],
+        "engineReadingUnavailable": [
+          "rules.paymentLinksEnabled"
+        ],
+        "governedOutOfNoEffect": []
+      }
+    },
+    {
+      "name": "classify · las cuatro lecturas no disponibles → ninguna coincide; las cuatro en engineReadingUnavailable, en el orden del catálogo",
+      "expected": {
+        "mustMatch": [
+          {
+            "param": "intent.driver",
+            "versionValue": "entorno",
+            "engineValue": null,
+            "ok": false
+          },
+          {
+            "param": "rules.paymentLinksEnabled",
+            "versionValue": false,
+            "engineValue": null,
+            "ok": false
+          },
+          {
+            "param": "governance.enabled",
+            "versionValue": true,
+            "engineValue": null,
+            "ok": false
+          },
+          {
+            "param": "governance.canaryOnly",
+            "versionValue": true,
+            "engineValue": null,
+            "ok": false
+          }
+        ],
+        "matches": [
+          "knowledge.strictFacts",
+          "context.windowTurns",
+          "memory.useLeadProfile",
+          "strategy.discountsAllowed",
+          "rules.handoffOnlyCorroborated",
+          "integrations.channel",
+          "integrations.appointments",
+          "governance.autoBrake"
+        ],
+        "noEffect": [],
+        "mismatches": [],
+        "engineReadingUnavailable": [
+          "intent.driver",
+          "rules.paymentLinksEnabled",
+          "governance.enabled",
+          "governance.canaryOnly"
+        ],
+        "governedOutOfNoEffect": []
+      }
+    }
+  ]
+}

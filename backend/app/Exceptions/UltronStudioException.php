@@ -395,6 +395,20 @@ class UltronStudioException extends RuntimeException
         );
     }
 
+    /**
+     * Enmienda M-1 (plan de motores §B.4): con la llave de prompts del motor
+     * encendida, el paquete de prompts de la versión (o el de la parte que la
+     * entrada arrastra) no compila con el código de hoy. Nunca se firma una
+     * parte que no compila. Sin el motivo del compilador: va al log.
+     */
+    public static function promptsCompileFailed(): self
+    {
+        return new self(
+            'Los prompts de ULTRON no se pueden compilar con los valores de esta publicación: no se publica nada. Avisa a quien administra el sistema.',
+            'prompts_compile_failed',
+        );
+    }
+
     // ── 422 ─────────────────────────────────────────────────────────────────
 
     /** @param  list<array<string, mixed>>  $findings */
