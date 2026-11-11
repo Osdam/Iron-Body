@@ -1110,7 +1110,7 @@ Es el mismo criterio que D-13 del H5: la forma va antes que las llaves.
   - «Voz»: estado en grande, piezas que faltan, los tres niveles y la política.
 - **Textos obligatorios (literales):**
   - Campañas: «La asociación queda registrada en el Studio. No cambia nada en Meta ni en lo que ULTRON dice o hace.»
-  - Canarios: «Este registro no cambia a quién responde ULTRON: el motor sigue atendiendo solo la conversación canaria configurada en el servidor.»
+  - Canarios: «ULTRON por WhatsApp no lee este registro: a quién responde lo fija la conversación canaria del servidor. La automatización comercial sí: solo los números activos aquí entran en el alcance canario de una estrategia. En la voz, una saliente canaria solo puede llamar a un número de voz activo aquí.» (Enmienda 5)
   - Casilla del registro: «La persona titular de este número aceptó recibir mensajes de prueba (y, si es de voz, llamadas de prueba en el futuro).»
   - Alias: «Usa una función, no el nombre de una persona (p. ej., «Móvil de pruebas 1»).»
   - Voz: «En este hito no se hace ninguna llamada.»
@@ -1452,3 +1452,20 @@ Fuentes: `plans/informes-h6/informe-api.md` (D-14…D-18 y decisiones para el le
 - **O-2 del tester (nota):** con `default_transaction_isolation = repeatable read` en el rol, 7 de las 37 carreras responderían 500 (40001); el rol de producción usa READ COMMITTED (comprobación del runbook antes de la fase 2).
 - **Hallazgo del motor para T-1 (nota, sin cambio):** el validador privado de `usage-trigger` rechazaría los 6 vectores oficiales de Twilio porque `fullUrl()` reordena la consulta; no afecta mientras la URL configurada en Twilio no lleve consulta. Hito 7.
 - **Línea base (tester):** el intermitente de `UltronHandoffHardGuardTest` fue el `decide_token` de 120 s caducado durante la suspensión del equipo; Marketing 4977 OK sobre la rama.
+
+## Enmienda 5 (11-11-2026): qué gobierna el registro de números canarios, por canal (auditoría de cierre, INC-7 · T9 y T10)
+
+**Qué cambia.** El literal de los números canarios de §I10 y dos textos del CRM que decían «sin efecto en el motor» y «la voz no tiene motor en este hito». Eran verdad en el H6; dejaron de serlo con el H8 y el H9, que leen el registro.
+
+**El literal nuevo de §I10** (`TEXTO_CANARIOS` en el CRM; lo copia el E2E `h6-integrations.cjs`):
+
+> ULTRON por WhatsApp no lee este registro: a quién responde lo fija la conversación canaria del servidor. La automatización comercial sí: solo los números activos aquí entran en el alcance canario de una estrategia. En la voz, una saliente canaria solo puede llamar a un número de voz activo aquí.
+
+**Los hechos que lo sostienen** (auditorías A §3.3 y B §4.8):
+- WhatsApp: el canario de ULTRON es `marketing.ultron.canary_conversation_id` del entorno; el registro solo documenta la autorización (`StudioCanaryCoherence`).
+- Automatización comercial (H9): en canario una estrategia solo alcanza a personas con un número **activo** del registro (`CanaryFacts`); en sombra solo se anota.
+- Voz (H8): una saliente canaria solo marca a un número de voz **activo** del registro (`VoiceCanaryDirectory`).
+
+**Textos del CRM alineados:** la clasificación del área pasa a «Registro del Studio (lo leen la automatización comercial y la voz; ULTRON por WhatsApp, no)», y el motivo `no_voice_engine` a «La voz se rige por su propia cadena de publicación (Voz → Publicación), no por las versiones de WhatsApp.»
+
+**Lo que queda sin cambiar, a propósito:** la ayuda del permiso `ultron.canary_manage` (`PermissionCatalog.php:248`, fila de §I7.1), que sigue diciendo «el motor no los lee en este hito». El CRM no la pinta; cambiarla arrastra el fixture `integrations-cases.json`, su generador y `UltronStudioIntegrationsPermissionsTest`. Queda anotada como deuda de texto del servidor.

@@ -1,0 +1,291 @@
+dashboard
+Inicio
+group
+Miembros
+payments
+Planes
+point_of_sale
+Caja de Gimnasio
+calendar_month
+Clases
+schedule
+Supervisión de empleados y clases
+inventory_2
+Inventario
+fitness_center
+Equipos
+point_of_sale
+Caja de Cafetería
+handshake
+Comisiones
+receipt_long
+Facturación
+monitoring
+Analítica
+file_export
+Exportaciones
+manage_search
+Logs
+exercise
+Ejercicios
+fitness_center
+Rutinas
+badge
+Entrenadores
+campaign
+Mercadeo
+ULTRON Studio
+PREVIEW
+smart_toy
+Campañas automáticas
+local_fire_department
+Esta semana
+monitor_weight
+Evaluaciones
+restaurant
+Nutrición
+support_agent
+Soporte
+shield_person
+Moderación
+notifications_active
+Notificaciones push
+settings
+Configuración
+dns
+Backend Laravel conectado
+ok · 2026-11-11T21:10:33+00:00
+help
+Soporte
+logout
+Salir
+search
+4
+arrow_back
+Tablero
+Voz y telefonía
+Una sola autoridad sobre lo que dice y hace la voz: el Studio. El panel de ElevenLabs no es una vía de cambio.
+Fase 2a
+Laboratorio hablado
+pan_tool_alt
+Freno suelto
+sensors
+En vivo
+phone_disabled
+Hoy no se hace ninguna llamada: la constante del código sigue cerrada. Se abre con el commit voice(calls-open) que autorices por escrito para las salientes a canarios (fase 4a, que va antes que la 3: E16-16); las entrantes exigen además un número propio de Twilio.
+settings_input_antenna
+Estado
+record_voice_over
+Perfil de voz
+rocket_launch
+Publicación
+call
+Llamadas
+payments
+Costes y métricas
+contacts
+Contactos
+mic
+Laboratorio hablado
+Estado de activación
+
+Por qué cada función de la voz funciona o no, según lo que dice hoy el servidor: su estado, lo que le falta y quién lo hace.
+
+task_alt
+2
+Disponible y operativa
+power_settings_new
+0
+Configurada y lista para activación
+pause_circle
+0
+Pausada voluntariamente
+gavel
+0
+Bloqueada por condición contractual
+pending
+4
+Pendiente de proveedor externo
+error
+0
+Error técnico real
+Laboratorio hablado
+task_alt
+Disponible y operativa
+
+Funciona: cada sesión gasta minutos del presupuesto del día y su veredicto lo da otra persona.
+
+De dónde sale
+Publicación de voz
+pending
+Pendiente de proveedor externo
+
+Publicar exige el id del número de voz importado en ElevenLabs (ELEVENLABS_AGENT_PHONE_NUMBER_ID), y no lo hay: un número que no sea el de WhatsApp del gimnasio, importado como solo saliente. Lo importas tú en la consola de ElevenLabs y el equipo técnico carga su id con el mando; ElevenLabs no tiene nada pendiente.
+
+Qué más falta (2)
+Llamadas salientes
+pending
+Pendiente de proveedor externo
+
+Falta la credencial restringida de voz de Twilio (una API key solo de voz; se recomienda una subcuenta «Voz», sin coste, con un número que no sea el de WhatsApp del gimnasio). La creas tú en la consola de Twilio y la carga el equipo técnico con el mando; Twilio no tiene nada pendiente y el código no exige subcuenta. Se ve en Estado › Telefonía («Credencial de Twilio de la voz»).
+
+Qué más falta (6)
+Llamadas entrantes
+pending
+Pendiente de proveedor externo
+
+Las entrantes exigen un número propio de Twilio en la (sub)cuenta, importado en ElevenLabs con entrantes, o tu decisión de no tenerlas: el número previsto es un identificador de llamada, solo saliente (E16-16).
+
+info
+El servidor no dice si el número de voz puede recibir llamadas. Se aplica E16-16: la fase 3 exige un número propio de Twilio importado con entrantes.
+
+info
+El servidor no dice si ya decidiste P-7 a P-9 ni si hay visto bueno legal para las entrantes. Se aplica el contrato del H8: esas decisiones van antes de la fase 3.
+
+Qué más falta (7)
+Monitor de voz
+task_alt
+Disponible y operativa
+
+Encendido: vigila cada hora el webhook post-llamada y sus secretos en ElevenLabs, y el techo de gasto del día; si algo no cuadra, echa el freno. Conciliará las llamadas cuando esté la credencial de Twilio de la voz, y el número cuando esté su id importado en ElevenLabs. La última vigilancia del webhook, el 11/11/2026, 4:05 p. m., salió bien. La verificación de ElevenLabs de la telefonía vale hasta el 11/12/2026, 1:46 p. m..
+
+De dónde sale
+Contactos con consentimiento
+pending
+Pendiente de proveedor externo
+
+Antes tienen que funcionar las salientes a canarios (fase 4a): hoy están en «Pendiente de proveedor externo».
+
+info
+El servidor no dice si ya hay visto bueno legal ni tus decisiones de la fase 4b. Se aplica el contrato del H8: la fase 4b exige el visto bueno legal.
+
+Qué más falta (1)
+Qué significa cada estado
+La línea
+link_off
+Cortada: no suena ninguna llamada
+block
+Llamadas en el código
+Cerrado: Cerradas en el código
+La línea se corta aquí
+radio_button_checked
+ElevenLabs
+Deja pasar: ElevenLabs verificado
+block
+Twilio Voice
+Cerrado: Sin configurar: faltan el número y la credencial; todavía no se puede encender
+block
+Publicación de voz
+Cerrado: Ninguna todavía
+radio_button_checked
+Freno
+Deja pasar: Suelto
+block
+Entrantes
+Cerrado: No disponibles: no hay un número propio de Twilio con voz
+block
+Salientes
+Cerrado: Cerradas: esperan un número que no sea el de WhatsApp del gimnasio, la credencial de Twilio de la voz, el commit autorizado que abre las llamadas en el código (voice(calls-open)) y una voz publicada; después, encenderlas con tu autorización escrita
+Telefonía
+Los motivos exactos de una saliente los da la puerta de Laravel al pedirla, en su orden.
+Número de voz
+No configurado
+Credencial de Twilio de la voz (cortar y conciliar)
+Sin configurar
+Alcance
+Entrantes: solo canarios; salientes: solo canarios
+Techos
+0 salientes y 0 entrantes al día; 1 a la vez; 5 min por llamada; US$ 0,00 al día
+Horario
+El legal (de lunes a sábado, sin festivos)
+Destinos de transferencia aprobados
+Canario: sin entrada vigente o ilegibles (ninguna transferencia vale); resto: sin entrada vigente o ilegibles (ninguna transferencia vale)
+Banderas
+toggle_off
+Apagada
+Llamadas en el código
+CALLS_ENABLED_IN_CODE
+toggle_on
+Encendida
+ElevenLabs
+ELEVENLABS_ENABLED
+toggle_off
+Apagada
+Twilio Voice
+TWILIO_VOICE_ENABLED
+toggle_off
+Apagada
+Entrantes
+VOICE_INBOUND_ENABLED
+toggle_off
+Apagada
+Salientes
+VOICE_OUTBOUND_ENABLED
+toggle_on
+Encendida
+Publicar la voz
+ULTRON_STUDIO_VOICE_PUBLISHING_ENABLED
+toggle_on
+Encendida
+Laboratorio hablado
+VOICE_LAB_ENABLED
+toggle_on
+Encendida
+Vigilancia de la voz (deriva y conciliación)
+VOICE_MONITOR_ENABLED
+Las banderas son las del proceso web, con su caché de configuración. Todas empiezan apagadas.
+Publicación vigente
+Todavía no hay ninguna publicación de voz.
+Freno
+front_hand
+El freno se abre solo ante una violación de la guarda, un sello que no cuadra, la deriva del agente, el techo de gasto o una llamada que Laravel no inició. Nunca se suelta solo: lo suelta una persona con una nota.
+Ahora: suelto.
+El freno nunca se ha abierto.
+Lo que puede hacer tu cuenta
+Lo dice el servidor para tu sesión (rol y Configuración → Roles). Solo decide qué botones ves: cada acción la vuelve a autorizar el servidor.
+check_circle
+Sí
+Editar el perfil de voz Editar el perfil de voz, enviarlo a revisión y previsualizar la compilación.
+check_circle
+Sí
+Aprobar o rechazar versiones de otra persona Aprobar o rechazar un perfil de voz ajeno y dar el veredicto del laboratorio hablado ajeno.
+check_circle
+Sí
+Publicar la voz y soltar su freno Publicar, promover, revertir y apagar la voz, y soltar el freno.
+check_circle
+Sí
+Abrir el laboratorio hablado (consume presupuesto) Abrir sesiones del laboratorio hablado (gasta).
+check_circle
+Sí
+Ver el registro de llamadas Ver el registro de llamadas sin datos personales, las métricas y los costes.
+check_circle
+Sí
+Pedir llamadas salientes y colgar Pedir una saliente autorizada y colgar una llamada.
+check_circle
+Sí
+Administrar contactos de voz y su consentimiento Contactos, consentimientos, exclusiones y consultas al RNE.
+IRON
+IRON
+Copiloto del CRM
+En línea
+remove
+
+Hola, soy IRON. Puedo ayudarte a consultar miembros, membresías, pagos, planes, entrenadores, reservas, reportes y operación del CRM.
+
+Miembros vencidos
+Pagos pendientes
+Nuevos miembros del mes
+Planes activos
+Reservas de hoy
+attach_file
+send
+IRON
+Para moverlo, arrástralo con el ratón o mantenlo pulsado en una pantalla táctil. Con el teclado: Mayúsculas y flechas lo mueven; Mayúsculas e Inicio lo devuelven a su esquina.
+
+--- title ---
+Cerrar sesión
+Los cambios llegan por el canal en tiempo real del Studio.
+Minimizar
+Adjuntar imagen
+Enviar
+IRON — Copiloto del CRM. Arrástralo para moverlo.

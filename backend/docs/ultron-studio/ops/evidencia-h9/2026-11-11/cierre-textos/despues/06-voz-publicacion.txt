@@ -1,0 +1,134 @@
+dashboard
+Inicio
+group
+Miembros
+payments
+Planes
+point_of_sale
+Caja de Gimnasio
+calendar_month
+Clases
+schedule
+Supervisión de empleados y clases
+inventory_2
+Inventario
+fitness_center
+Equipos
+point_of_sale
+Caja de Cafetería
+handshake
+Comisiones
+receipt_long
+Facturación
+monitoring
+Analítica
+file_export
+Exportaciones
+manage_search
+Logs
+exercise
+Ejercicios
+fitness_center
+Rutinas
+badge
+Entrenadores
+campaign
+Mercadeo
+ULTRON Studio
+PREVIEW
+smart_toy
+Campañas automáticas
+local_fire_department
+Esta semana
+monitor_weight
+Evaluaciones
+restaurant
+Nutrición
+support_agent
+Soporte
+shield_person
+Moderación
+notifications_active
+Notificaciones push
+settings
+Configuración
+dns
+Backend Laravel conectado
+ok · 2026-11-11T21:10:37+00:00
+help
+Soporte
+logout
+Salir
+search
+4
+arrow_back
+Tablero
+Voz y telefonía
+Una sola autoridad sobre lo que dice y hace la voz: el Studio. El panel de ElevenLabs no es una vía de cambio.
+Fase 2a
+Laboratorio hablado
+pan_tool_alt
+Freno suelto
+sensors
+En vivo
+phone_disabled
+Hoy no se hace ninguna llamada: la constante del código sigue cerrada. Se abre con el commit voice(calls-open) que autorices por escrito para las salientes a canarios (fase 4a, que va antes que la 3: E16-16); las entrantes exigen además un número propio de Twilio.
+settings_input_antenna
+Estado
+record_voice_over
+Perfil de voz
+rocket_launch
+Publicación
+call
+Llamadas
+payments
+Costes y métricas
+contacts
+Contactos
+mic
+Laboratorio hablado
+rocket_launch
+Publicar crea un agente nuevo e inmutable y empieza siempre en el canario. Una llamada sigue con el agente con el que empezó, aunque se publique o se revierta después.
+Lo que rige ahora
+Todavía no hay ninguna publicación de voz.
+Ventana de publicación
+Abierta (07:00–19:00, hora de Bogotá). Revertir y apagar no dependen de ella.
+Puerta del laboratorio
+Obligatoria: hace falta el veredicto aprobado de otra persona sobre la misma compilación.
+Acciones
+Publicar en canario
+info
+Promover al resto: No hay ninguna voz publicada en canario.
+info
+Revertir: No hay nada publicado que revertir.
+info
+Apagar la voz: La voz ya está apagada: ninguna parte tiene agente.
+Evidencia del canario
+No hay parte canario publicada: no hay nada que medir.
+Cadena de voz
+La cadena está vacía.
+IRON
+IRON
+Copiloto del CRM
+En línea
+remove
+
+Hola, soy IRON. Puedo ayudarte a consultar miembros, membresías, pagos, planes, entrenadores, reservas, reportes y operación del CRM.
+
+Miembros vencidos
+Pagos pendientes
+Nuevos miembros del mes
+Planes activos
+Reservas de hoy
+attach_file
+send
+IRON
+Para moverlo, arrástralo con el ratón o mantenlo pulsado en una pantalla táctil. Con el teclado: Mayúsculas y flechas lo mueven; Mayúsculas e Inicio lo devuelven a su esquina.
+
+--- title ---
+Cerrar sesión
+Los cambios llegan por el canal en tiempo real del Studio.
+Minimizar
+Adjuntar imagen
+Enviar
+IRON — Copiloto del CRM. Arrástralo para moverlo.

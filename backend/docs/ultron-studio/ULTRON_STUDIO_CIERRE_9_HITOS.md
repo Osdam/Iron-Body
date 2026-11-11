@@ -10,8 +10,8 @@
 
 | Pieza | Valor |
 |---|---|
-| API | `2687119` (= `origin/main`) |
-| CRM | `b07eda5` (`origin/main` va un commit por delante, `5f2a454`, que solo toca pruebas) |
+| API | `2d81221b` desde el 11-11 21:07 UTC (L9-112); `origin/main` va por delante solo con documentos |
+| CRM | `fd02a4c` desde el 11-11 21:10 UTC (L9-112) |
 | Respaldo de antes de la ola | `/var/backups/ironbody/ultron-studio-m1-20261111-143829` (base, fichero de entorno, cachés) |
 | n8n | atiende la copia «Studio S1» (`QSklqHlsDIxucRfk`); el flujo de siempre (`YspRwsXnqt33NouP`) está despublicado e intacto, como reserva |
 | Motor de WhatsApp | lee la publicación del Studio **solo en la conversación canaria** (`canary`); publicar desde el CRM, abierto; puerta del laboratorio `required` |
@@ -39,7 +39,7 @@ Etiquetas: **OPERATIVO Y PROBADO** (funciona en producción y hay una prueba rea
 | B · WhatsApp | Un cambio publicado en el Studio cambia lo que ULTRON responde (**criterio de aceptación**) | **EN INTEGRACIÓN** | Falta E3–E5: publicar en canario una versión con tono «profesional» y 200 caracteres, ver `applied` en un turno real y revertir. Exige dos personas y un veredicto del laboratorio de texto |
 | B · WhatsApp | Gobernar desde el Studio la intención de reserva (`intent.fallback`) y las reglas S-NNN | **NO IMPLEMENTADO** | Declarado en la Enmienda M-1: hoy el Studio gobierna tono, emojis, longitud máxima y objetivo |
 | B · WhatsApp | ULTRON para todos los clientes | **IMPLEMENTADO PERO DESHABILITADO** | Hoy solo la conversación canaria pasa por n8n; abrirlo es una decisión del propietario |
-| B · WhatsApp | Alerta automática si n8n aplica algo distinto de lo ofrecido | **NO IMPLEMENTADO** | Se mira a mano con `ultron:prompt-trace` tras cada turno de E3–E5 (M1-A) |
+| B · WhatsApp | Alerta automática si n8n aplica algo distinto de lo ofrecido | **EN INTEGRACIÓN** | Desplegada el 11-11 (L9-112): el monitor la comprueba cada 30 minutos y abre el incidente `prompts_drift`. En producción su pasada en seco lee bien; ningún `mismatch` real la ha disparado todavía |
 | C · Autonomía | Motor en sombra | **OPERATIVO Y PROBADO** | Corre cada minuto desde el 11-11; los siete días terminan el 18-11 |
 | C · Autonomía | Modo asistido | **IMPLEMENTADO PERO DESHABILITADO** | No antes del 18-11; cupos a 0 |
 | C · Autonomía | Envíos de WhatsApp y llamadas por estrategia | **IMPLEMENTADO PERO DESHABILITADO** | Las dos constantes del código, cerradas |
@@ -76,7 +76,7 @@ Etiquetas: **OPERATIVO Y PROBADO** (funciona en producción y hay una prueba rea
 
 **Del tiempo:** los siete días de sombra del H9 terminan el 18-11; el modo asistido no se enciende antes.
 
-**Del equipo técnico:** la sesión técnica del laboratorio con las herramientas en cuanto exista la revisión 3 del perfil, la alerta automática M1-A, la opción estructural de E18-9 (el agente en el cuerpo de las herramientas) y la batería completa sobre el commit final.
+**Del equipo técnico:** las reglas S-NNN con efecto en WhatsApp, la sombra del H9 evaluando a toda la audiencia, el barrido completo y los disparadores sin emisor (L9-112, en curso), la opción estructural de E18-9 (el agente en el cuerpo de las herramientas) y la batería completa sobre el commit final. Hechas el 11-11: la sesión del laboratorio con las herramientas (L9-111) y la alerta M1-A (L9-112).
 
 ### 0.5 Vuelta atrás, de lo último a lo primero
 
@@ -93,7 +93,7 @@ Etiquetas: **OPERATIVO Y PROBADO** (funciona en producción y hay una prueba rea
 
 ### 0.6 Veredicto
 
-**No está «listo para ventas» todavía.** Lo construido está desplegado, encendido hasta donde se puede sin el propietario y probado en automático; faltan las pruebas reales que solo él puede hacer (0.4) y los siete días de sombra. Avance sustentado: **construcción y despliegue, completos salvo la alerta M1-A; activación real, a la espera de los puntos 2 a 6**.
+**No está «listo para ventas» todavía.** Lo construido está desplegado, encendido hasta donde se puede sin el propietario y probado en automático; faltan las pruebas reales que solo él puede hacer (0.4) y los siete días de sombra. Lo que está incompleto en el código y lo que espera al propietario, por separado, en las tres auditorías de `plans/cierre/` y en L9-112.
 
 ---
 

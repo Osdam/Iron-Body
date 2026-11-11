@@ -1,0 +1,368 @@
+dashboard
+Inicio
+group
+Miembros
+payments
+Planes
+point_of_sale
+Caja de Gimnasio
+calendar_month
+Clases
+schedule
+Supervisión de empleados y clases
+inventory_2
+Inventario
+fitness_center
+Equipos
+point_of_sale
+Caja de Cafetería
+handshake
+Comisiones
+receipt_long
+Facturación
+monitoring
+Analítica
+file_export
+Exportaciones
+manage_search
+Logs
+exercise
+Ejercicios
+fitness_center
+Rutinas
+badge
+Entrenadores
+campaign
+Mercadeo
+ULTRON Studio
+PREVIEW
+smart_toy
+Campañas automáticas
+local_fire_department
+Esta semana
+monitor_weight
+Evaluaciones
+restaurant
+Nutrición
+support_agent
+Soporte
+shield_person
+Moderación
+notifications_active
+Notificaciones push
+settings
+Configuración
+dns
+Backend Laravel conectado
+ok · 2026-11-11T20:59:34+00:00
+help
+Soporte
+logout
+Salir
+search
+1
+ULTRON STUDIO
+Visual AI Control Platform
+deployed_code
+Mi borrador
+LEGACY_BASELINE_V1 · línea base del código (solo lectura)
+Prueba de aceptación · profesional 200 · Con avisos · espera revisión
+ULTRON Studio - Canario V1 - Pruebas · Aprobada
+edit_note
+BORRADOR
+Motor: lee versiones
+sensors
+En vivo
+sensors
+Motor leído 3:59 p. m.
+inventory_2
+Versiones
+gavel
+Reglas
+history
+Auditoría
+biotech
+Laboratorio
+hub
+Integraciones
+record_voice_over
+Voz y telefonía
+cloud_done
+Guardado hace 102 min · revisión 6
+fact_check
+Validar
+✓
+save
+Guardar borrador
+restart_alt
+Descartar
+library_add
+Crear versión
+science
+Publicar cambia lo que ULTRON dice en la conversación canaria: el tono, los emojis, la longitud y el objetivo comercial de la versión publicada entran en sus prompts; en las demás conversaciones no cambia nada. «Si no entiende» y las reglas S-NNN siguen sin efecto en WhatsApp.
+Declaración vigente
+Legacy: el Studio no declara ninguna versión
+Llave del motor
+Solo la conversación canaria
+Sello
+history_toggle_off
+El motor sella «Legacy»: no rige ninguna versión
+Prompts del motor
+Legacy (no hay ninguna publicación)
+history
+Historial
+timeline
+Turnos de la canaria
+refresh
+LAS DIEZ CAPAS
+
+Pulsa una para centrarla y ver su detalle.
+
+01
+menu_book
+Conocimiento
+02
+face
+Personalidad y tono
+03
+psychology
+Comprensión de intención
+04
+forum
+Contexto de conversación
+05
+memory
+Memoria comercial
+06
+strategy
+Estrategia comercial
+07
+gavel
+Reglas del negocio
+08
+auto_awesome
+Construcción de respuesta
+09
+hub
+Integraciones
+10
+verified_user
+Control y evolución
+CONEXIONES
+Obligatoria (control del motor)
+Opcional
+Mensaje entrante (abre el turno)
+Tras el turno (memoria, vigía)
+Preparando el tablero…
+menu_book
+CAPA 01
+Conocimiento
+
+Lo que el agente puede afirmar: base de conocimiento aprobada, planes (sin precio hasta el commit), clases, horarios y la app.
+
+shield
+Crítica
+gavel
+1 reglas
+Hechos autorizados
+face
+CAPA 02
+Personalidad y tono
+
+La voz: cercanía, registro, saludo según la hora, superlativos permitidos y lo que nunca dice.
+
+shield
+Crítica
+gavel
+1 reglas
+edit
+Cambiada
+Voz
+psychology
+CAPA 03
+Comprensión de intención
+
+Qué quiere la persona: el cerebro legado clasifica (27 intenciones), lo determinista manda, y el Strategist de n8n recibe la decisión base.
+
+shield
+Crítica
+gavel
+2 reglas
+Conversación
+Decisión base
+forum
+CAPA 04
+Contexto de conversación
+
+Continuidad: los últimos 10 mensajes (cifras y URLs redactadas), la memoria del turno, la hora de negocio y la novedad.
+
+shield
+Crítica
+gavel
+1 reglas
+Mensaje entrante
+Conversación
+memory
+CAPA 05
+Memoria comercial
+
+Lo autorizado para dar seguimiento: ficha del prospecto, inteligencia de cliente, hechos de pago y membresía, compromisos.
+
+shield
+Crítica
+gavel
+2 reglas
+Lo enviado
+Pagos
+Perfil y hechos
+strategy
+CAPA 06
+Estrategia comercial
+
+El modelo elige dentro de menús que acota Laravel: fase (18), transiciones legales, plan obligatorio, herramientas permitidas y pistas.
+
+shield
+Crítica
+gavel
+3 reglas
+Decisión base
+Perfil y hechos
+Planes y catálogo
+Estrategia
+gavel
+CAPA 07
+Reglas del negocio
+
+El commit: 28 controles deterministas en orden fijo. Lo que falla antes de persistir no deja huella; después, solo reescribe o sustituye.
+
+shield
+Crítica
+gavel
+8 reglas
+Propuesta
+Interruptores
+Pagos y membresía
+Planes y precio
+Respuesta validada
+Enlace de pago
+auto_awesome
+CAPA 08
+Construcción de respuesta
+
+n8n redacta (Composer) y juzga (Critic, con un reintento); Laravel resuelve marcadores, realinea plan y precio y aplica respaldos.
+
+shield
+Crítica
+gavel
+4 reglas
+Marcadores
+Voz
+Estrategia
+Conversación
+Borrador y veredicto
+hub
+CAPA 09
+Integraciones
+
+Meta (webhook y envío), las puertas de entrada de ULTRON, n8n (decide/commit), Wompi (solo lectura y webhook) y el CRM.
+
+shield
+Crítica
+gavel
+2 reglas
+Respuesta validada
+Enlace de pago
+Interruptores
+Eventos del canal
+verified_user
+CAPA 10
+Control y evolución
+
+Interruptor, pausa, freno, canario, vigía, acta y copias de prompts. No hay versiones publicables ni versión por turno: eso es ULTRON STUDIO.
+
+shield
+Crítica
+gavel
+1 reglas
+Turnos e incidentes
+Interruptores
+remove
+54 %
+add
+fit_screen
+center_focus_strong
+undo
+redo
+restart_alt
+touch_app
+Selecciona una capa o una conexión
+Verás qué la implementa hoy en ULTRON, qué hace el motor de verdad, qué se puede configurar y de qué depende.
+IRON
+IRON
+Copiloto del CRM
+En línea
+remove
+
+Hola, soy IRON. Puedo ayudarte a consultar miembros, membresías, pagos, planes, entrenadores, reservas, reportes y operación del CRM.
+
+Miembros vencidos
+Pagos pendientes
+Nuevos miembros del mes
+Planes activos
+Reservas de hoy
+attach_file
+send
+IRON
+Para moverlo, arrástralo con el ratón o mantenlo pulsado en una pantalla táctil. Con el teclado: Mayúsculas y flechas lo mueven; Mayúsculas e Inicio lo devuelven a su esquina.
+
+--- title ---
+Cerrar sesión
+Qué se ve en el tablero
+El motor de ULTRON lee la cadena en la conversación canaria y anota en cada turno la versión publicada. Con la llave de prompts encendida, publicar CAMBIA lo que ULTRON dice en esa conversación: el tono, los emojis, la longitud y el objetivo comercial de la versión entran en sus prompts. «Si no entiende» y las reglas S-NNN siguen sin efecto en WhatsApp.
+Los cambios llegan por el canal en tiempo real del Studio.
+Lo que lee hoy el servidor del motor (solo lectura): se enseña en el Resumen y la Configuración de cada capa. Lectura del proceso web. Tras cambiar el entorno, los workers lo ven cuando se reinician.
+Copia inmutable del borrador guardado, para revisarla con cuatro ojos.
+Como la línea base
+Distinta de la línea base
+Como la línea base
+Como la línea base
+Como la línea base
+Como la línea base
+Como la línea base
+Como la línea base
+Como la línea base
+Como la línea base
+Hechos autorizados
+Voz
+Conversación
+Decisión base
+Mensaje entrante
+Conversación
+Lo enviado
+Pagos
+Perfil y hechos
+Decisión base
+Perfil y hechos
+Planes y catálogo
+Estrategia
+Propuesta
+Interruptores
+Pagos y membresía
+Planes y precio
+Respuesta validada
+Enlace de pago
+Marcadores
+Voz
+Estrategia
+Conversación
+Borrador y veredicto
+Respuesta validada
+Enlace de pago
+Interruptores
+Eventos del canal
+Turnos e incidentes
+Interruptores
+Minimizar
+Adjuntar imagen
+Enviar
+IRON — Copiloto del CRM. Arrástralo para moverlo.

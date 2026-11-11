@@ -296,7 +296,7 @@ bash /root/meta-templates-scope.sh full read
 - *Vuelta atrás de cualquiera:* «Revertir» o «Volver a Legacy» en el Studio (Legacy siempre se escribe en `/1`); y,
   si hace falta parar del todo, la vuelta atrás de E2.
 - *Qué vigilar:* `mismatch` o `legacy_drift` en la traza (n8n dice haber aplicado otra cosa, o alguien editó Legacy
-  en n8n): parar en E2 y avisar a security (M1-A de la revisión de la API: hoy no hay alerta automática).
+  en n8n): parar en E2 y avisar a security. Desde la alerta M1-A (11-11-2026) el monitor del H7 lo vigila cada 30 minutos y abre el incidente de IRON GUARD `ultron_studio · prompts_drift` (alto), sin frenar nada; a mano: `php artisan ultron-studio:monitor --check=prompts --dry-run --json`. Con la llave de prompts en `off` no vigila (`not_watched`).
   `engine_fallback`: n8n rechazó la oferta (el motivo dice por qué).
 - `all` no existe en esta entrega.
 

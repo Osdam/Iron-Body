@@ -1,0 +1,337 @@
+dashboard
+Inicio
+group
+Miembros
+payments
+Planes
+point_of_sale
+Caja de Gimnasio
+calendar_month
+Clases
+schedule
+Supervisión de empleados y clases
+inventory_2
+Inventario
+fitness_center
+Equipos
+point_of_sale
+Caja de Cafetería
+handshake
+Comisiones
+receipt_long
+Facturación
+monitoring
+Analítica
+file_export
+Exportaciones
+manage_search
+Logs
+exercise
+Ejercicios
+fitness_center
+Rutinas
+badge
+Entrenadores
+campaign
+Mercadeo
+ULTRON Studio
+PREVIEW
+smart_toy
+Campañas automáticas
+local_fire_department
+Esta semana
+monitor_weight
+Evaluaciones
+restaurant
+Nutrición
+support_agent
+Soporte
+shield_person
+Moderación
+notifications_active
+Notificaciones push
+settings
+Configuración
+dns
+Backend Laravel conectado
+ok · 2026-11-11T20:59:58+00:00
+help
+Soporte
+logout
+Salir
+search
+1
+arrow_back
+Studio
+Campañas automáticas (estrategias)
+ULTRON decide a quién, por qué, cuándo y por qué canal; Laravel es la única autoridad y todo nace apagado.
+toggle_on
+Gobierno encendido
+rocket_launch
+Publicar: ventana abierta
+person_off
+Sin persona vinculada
+link
+Cadena: sin publicaciones
+send_and_archive
+Hoy no sale ningún mensaje ni ninguna llamada: el envío automático está cerrado en el código (OutreachSendGate) y la automatización nace apagada. Solo se simula o lo ejecuta una persona.
+monitoring
+Panel
+account_tree
+Estrategias
+architecture
+Constructor
+science
+Simulación
+description
+Plantillas
+verified_user
+Gobierno
+inbox
+Bandeja asistida
+history
+Historial por persona
+badge
+Vínculos de personas
+Estado de activación
+
+Por qué cada parte de las campañas automáticas funciona o no, según lo que dice hoy el servidor: su estado, lo que le falta y quién lo hace.
+
+task_alt
+3
+Disponible y operativa
+power_settings_new
+0
+Configurada y lista para activación
+pause_circle
+0
+Pausada voluntariamente
+gavel
+3
+Bloqueada por condición contractual
+pending
+1
+Pendiente de proveedor externo
+error
+0
+Error técnico real
+Gobierno de estrategias
+task_alt
+Disponible y operativa
+
+Funciona: crea, simula y aprueba estrategias; publica otra persona vinculada (cuatro ojos), entre 07:00–19:00 de Bogotá.
+
+De dónde sale
+Ejecución en sombra
+gavel
+Bloqueada por condición contractual
+
+Ninguna estrategia publicada: falta que otra persona vinculada publique en canario una estrategia aprobada (cuatro ojos).
+
+De dónde sale
+Asistido
+gavel
+Bloqueada por condición contractual
+
+Faltan ≥ 7 días en sombra sin hallazgos (P9-11) y tu decisión P9-12; después, «asistido on --cupo=N» con tu autorización escrita (fase 3).
+
+info
+El servidor no dice cuántos días lleva la sombra ni si ya decidiste P9-12. Se aplica el contrato del H9 (§14, fase 3): ≥ 7 días en sombra sin hallazgos.
+
+De dónde sale
+Canal WhatsApp
+pending
+Pendiente de proveedor externo
+
+Faltan las plantillas de WhatsApp aprobadas por Meta (fase 4): la puerta ya está, pero Meta aprueba cada plantilla antes de que salga.
+
+info
+El servidor no dice si Meta ya aprobó las plantillas de WhatsApp. Se aplica el contrato del H9 (§14, fase 4): plantillas aprobadas por Meta antes de abrir el envío.
+
+Qué más falta (3)
+Canal voz
+gavel
+Bloqueada por condición contractual
+
+Falta abrir el envío automático con el commit outreach(sends-open), con tu autorización escrita y el visto bueno legal.
+
+Qué más falta (2)
+Canal en vivo (SSE)
+task_alt
+Disponible y operativa
+
+Los paneles se actualizan solos cuando algo cambia en el servidor.
+
+De dónde sale
+Programador
+task_alt
+Disponible y operativa
+
+Programa las pasadas de barrido y despacho; todavía no ha terminado ninguna.
+
+De dónde sale
+Qué significa cada estado
+Ejecución
+sensors
+En vivo
+refresh
+Releer
+visibility_off
+Sin datos personales: las personas se nombran por su seudónimo (subjectRef). Aquí no hay teléfonos, nombres, documentos ni textos de mensajes.
+PARADA GLOBAL
+pan_tool_alt
+No hay parada global
+La PARADA GLOBAL detiene la planificación y el despacho en la pasada siguiente (≈ 60 s). Los trabajos pendientes esperan y no salen. Lo que ya está en el proveedor no se puede recoger. La suelta una persona distinta de quien la abrió, con una nota.
+front_hand
+PARADA GLOBAL
+Estado del servidor
+Leyendo el estado…
+toggle_on
+Encendida Automatización comercial (la maestra) COMMERCIAL_AUTOMATION_ENABLED
+toggle_on
+Sombra (todo simulado) Modo COMMERCIAL_AUTOMATION_MODE
+toggle_on
+Sí Activa (encendida y con modo) enabled y mode distinto de off
+toggle_off
+Cerrada Envío automático en el código OutreachSendGate::SENDS_ENABLED_IN_CODE
+toggle_on
+Encendida Programador COMMERCIAL_AUTOMATION_SCHEDULER_ENABLED
+toggle_on
+Encendida Monitor (autoapertura de frenos) COMMERCIAL_AUTOMATION_MONITOR_ENABLED
+toggle_off
+Apagada Clasificador de respuestas (AI9) COMMERCIAL_AUTOMATION_CLASSIFIER_ENABLED
+Canales
+CANAL BANDERA PUEDE SALIR (CÓDIGO) CUPO DIARIO TECHO DIARIO (ΜUS$)
+Asistido Apagada Sí 0 —
+WhatsApp por plantilla Apagada Sí 0 0
+Llamada de voz Apagada Sí — —
+Horario propio
+El de la ley (lunes a sábado, 08:00–19:00)
+Contactos por día y persona
+1
+Contactos por semana y persona
+2
+Horas mínimas entre contactos
+48
+Bloqueo comercial por cartera (días)
+15
+0
+trabajos vivos
+0
+inscripciones abiertas
+0
+en la bandeja asistida
+Frenos ajenos (en lectura)
+Autonomía comercial heredada encendida
+suelto
+Seguimientos heredados activos
+suelto
+Agente de mercadeo en pausa
+suelto
+Freno de ULTRON (abort latch)
+suelto
+Freno de voz
+suelto
+Cadena de publicaciones
+Sin publicaciones todavía.
+Ninguna estrategia publicada: la ejecución no tiene nada que evaluar.
+Fuentes y últimas pasadas
+Eventos comerciales
+Encendidos (COMMERCIAL_EVENTS_ENABLED)
+Cursor commercial_events:shadow
+#287 · 11/11/2026, 3:40 p. m.
+Leído
+11/11/2026, 3:59 p. m.
+PASADA ESTADO EMPEZÓ TERMINÓ RECUENTOS
+Ingesta de eventos completed 11/11/2026, 3:50 p. m. 11/11/2026, 3:50 p. m. cursor_to: 287 · events: 0 · outcomes: 0 · strategies: 0
+Barrido (inscribe y planifica) Nunca ha corrido
+Despacho completed 11/11/2026, 3:59 p. m. 11/11/2026, 3:59 p. m. claimed: 0 · results: []
+Monitor completed 11/11/2026, 3:50 p. m. 11/11/2026, 3:50 p. m. checks: {"chain":0,"drift":0,"optOut":0,"failures":0,"budget":0} · opened: 0
+Conciliación completed 11/11/2026, 3:59 p. m. 11/11/2026, 3:59 p. m. ambiguous: 0 · canceledByChain: 0 · expiredEnrollments: 0 · expiredJobs: 0
+Repetición Nunca ha corrido
+Frenos
+block
+Frenar una estrategia o un canal
+No hay frenos abiertos.
+Métricas
+Modo
+El activo
+Sombra
+En vivo
+Modo Sombra (todo simulado) · día 2026-11-11 (Bogotá) · leído 11/11/2026, 4:00 p. m.
+Negativas de 24 h por nivel
+N1 · 0
+N2 · 0
+N3 · 0
+N4 · 0
+N5 · 0
+N6 · 0
+N7 · 0
+Sin actividad en ese modo.
+Inscripciones
+Estado
+Todos
+Activa
+Esperando
+Completada
+Terminada sin éxito
+Pidió no más contactos
+Derivada a una persona
+Vencida
+Cancelada
+Modo
+Todos
+Sombra
+En vivo
+No hay inscripciones.
+Trabajos
+Estado
+Todos
+Planificado
+Reclamado
+Despachando
+Salió
+Simulado
+No pudo salir
+Ambiguo (se concilia)
+Cancelado
+Vencido
+Canal
+Todos
+Simulado
+Asistido
+WhatsApp por plantilla
+Llamada de voz
+No hay trabajos.
+IRON
+IRON
+Copiloto del CRM
+En línea
+remove
+
+Hola, soy IRON. Puedo ayudarte a consultar miembros, membresías, pagos, planes, entrenadores, reservas, reportes y operación del CRM.
+
+Miembros vencidos
+Pagos pendientes
+Nuevos miembros del mes
+Planes activos
+Reservas de hoy
+attach_file
+send
+IRON
+Para moverlo, arrástralo con el ratón o mantenlo pulsado en una pantalla táctil. Con el teclado: Mayúsculas y flechas lo mueven; Mayúsculas e Inicio lo devuelven a su esquina.
+
+--- title ---
+Cerrar sesión
+Conectado al canal del Studio: los cambios llegan solos y el panel relee lo suyo.
+Seguridad, ley y consentimiento
+Exclusiones y frenos globales
+Versión comercial aprobada
+Configuración del canal
+Estrategia aprobada
+Contexto verificado del contacto
+Instrucciones de la persona
+Minimizar
+Adjuntar imagen
+Enviar
+IRON — Copiloto del CRM. Arrástralo para moverlo.

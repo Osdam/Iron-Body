@@ -114,7 +114,7 @@ sha256sum /root/h9-outreach-scope.sh
 **Lo que el mando no hace:**
 - no toca `COMMERCIAL_EVENTS_*`, `COMMERCIAL_NBA_*` ni `COMMERCIAL_AUTONOMY_*`, ni la voz del H8 (eso es `h8-voice-scope.sh`), ni Meta;
 - no reinicia FPM ni ningún programa de supervisor (`:62-66`);
-- no escribe los precios de WhatsApp (`OUTREACH_WHATSAPP_PRICE_*`) ni los cupos de voz del H9 (§5.1).
+- en `sombra`, `asistido` y `estado` no escribe los precios de WhatsApp (`OUTREACH_WHATSAPP_PRICE_*`) ni los cupos de voz del H9 (§5.1); esos sí los escribe la orden `canal whatsapp on --precio-marketing=… --precio-utilidad=…` (y `canal voz on --cupo=… --reserva=…`), que exige la constante de envíos abierta (corrección del 11-11-2026, auditoría B, I-9).
 
 ### 2.3 Lectura del estado (solo lectura, en cualquier momento)
 
@@ -141,7 +141,7 @@ Fíjate en estas líneas:
 |---|---|---|---|
 | P1 | La fase 1 lleva al menos 24 h estable | La lectura a las 24 h, como en L9-77: workers, 5xx, colas, `outreach_*` a 0 e incidentes | No consta |
 | P2 | Las condiciones de REV9 para la fase 2: TEST9-b (`exercise()` y E2E #26), PERF9, m-9 y H-1 (L9-73) | Los informes de cada paquete | **Abiertas**: ver `ULTRON_STUDIO_H9_COMPLETITUD.md` §3 y §4 |
-| P3 | **H9-E2E-1 corregido y desplegado:** sin eso, una estrategia creada desde el CRM no se puede abrir en el constructor | Crear una estrategia de prueba en el CRM y abrir su constructor | **Abierto** |
+| P3 | **H9-E2E-1 corregido y desplegado:** sin eso, una estrategia creada desde el CRM no se puede abrir en el constructor | Crear una estrategia de prueba en el CRM y abrir su constructor | **Corregido y en producción** (`5758db9c`, antecesor de la API desplegada `2687119`; L9-94). Falta ejercerlo con una estrategia real: hoy hay 0 |
 | P4 | P9-24 decidido: `COMMERCIAL_EVENTS_ENABLED=true`. Sin él, N6 niega a todo el mundo (L9-54) | `GET outreach/status` → `sources.commercialEvents: true` | **Sin procedimiento**: §3.2, paso 4.1 |
 | P5 | P9-17 (horario propio) y P9-18 (topes) decididos | La decisión escrita | Pendiente |
 | P6 | Dos personas reales con cuenta activa e identidad propia | §3.2, paso 4.1b | Falta la segunda persona |

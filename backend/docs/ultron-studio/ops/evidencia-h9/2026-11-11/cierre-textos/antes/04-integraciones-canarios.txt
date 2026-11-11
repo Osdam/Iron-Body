@@ -1,0 +1,127 @@
+dashboard
+Inicio
+group
+Miembros
+payments
+Planes
+point_of_sale
+Caja de Gimnasio
+calendar_month
+Clases
+schedule
+Supervisión de empleados y clases
+inventory_2
+Inventario
+fitness_center
+Equipos
+point_of_sale
+Caja de Cafetería
+handshake
+Comisiones
+receipt_long
+Facturación
+monitoring
+Analítica
+file_export
+Exportaciones
+manage_search
+Logs
+exercise
+Ejercicios
+fitness_center
+Rutinas
+badge
+Entrenadores
+campaign
+Mercadeo
+ULTRON Studio
+PREVIEW
+smart_toy
+Campañas automáticas
+local_fire_department
+Esta semana
+monitor_weight
+Evaluaciones
+restaurant
+Nutrición
+support_agent
+Soporte
+shield_person
+Moderación
+notifications_active
+Notificaciones push
+settings
+Configuración
+dns
+Backend Laravel conectado
+ok · 2026-11-11T20:59:43+00:00
+help
+Soporte
+logout
+Salir
+search
+1
+arrow_back
+Tablero
+Integraciones de ULTRON STUDIO
+Registro del Studio: no cambia lo que ULTRON dice o hace
+hub
+Estado
+campaign
+Campañas de Meta
+phone_iphone
+Números canarios
+sms
+Twilio
+record_voice_over
+Voz
+Frente al canario del motor
+person_search
+El teléfono de la conversación canaria del motor no está en el registro.
+info
+Este registro no cambia a quién responde ULTRON: el motor sigue atendiendo solo la conversación canaria configurada en el servidor.
+Conversación canaria del motor
+Configurada en el servidor
+WhatsApp activos en el registro
+0
+Números
+add_call
+Registrar un número
+Por canal, hasta 3 activos y 10 vivos (sin revocar). Países permitidos: +57.
+Estado
+Vivos (sin revocados)
+Pendientes de autorizar
+Autorizados
+Activos
+Revocados
+Todos
+Canal
+Todos
+WhatsApp
+Voz
+Todavía no hay números registrados.
+
+IRON
+IRON
+Copiloto del CRM
+En línea
+remove
+
+Hola, soy IRON. Puedo ayudarte a consultar miembros, membresías, pagos, planes, entrenadores, reservas, reportes y operación del CRM.
+
+Miembros vencidos
+Pagos pendientes
+Nuevos miembros del mes
+Planes activos
+Reservas de hoy
+attach_file
+send
+IRON
+Para moverlo, arrástralo con el ratón o mantenlo pulsado en una pantalla táctil. Con el teclado: Mayúsculas y flechas lo mueven; Mayúsculas e Inicio lo devuelven a su esquina.
+
+--- title ---
+Cerrar sesión
+Minimizar
+Adjuntar imagen
+Enviar
+IRON — Copiloto del CRM. Arrástralo para moverlo.

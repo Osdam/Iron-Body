@@ -1,0 +1,133 @@
+dashboard
+Inicio
+group
+Miembros
+payments
+Planes
+point_of_sale
+Caja de Gimnasio
+calendar_month
+Clases
+schedule
+Supervisión de empleados y clases
+inventory_2
+Inventario
+fitness_center
+Equipos
+point_of_sale
+Caja de Cafetería
+handshake
+Comisiones
+receipt_long
+Facturación
+monitoring
+Analítica
+file_export
+Exportaciones
+manage_search
+Logs
+exercise
+Ejercicios
+fitness_center
+Rutinas
+badge
+Entrenadores
+campaign
+Mercadeo
+ULTRON Studio
+PREVIEW
+smart_toy
+Campañas automáticas
+local_fire_department
+Esta semana
+monitor_weight
+Evaluaciones
+restaurant
+Nutrición
+support_agent
+Soporte
+shield_person
+Moderación
+notifications_active
+Notificaciones push
+settings
+Configuración
+dns
+Backend Laravel conectado
+ok · 2026-11-11T21:10:46+00:00
+help
+Soporte
+logout
+Salir
+search
+4
+arrow_back
+Studio
+Campañas automáticas (estrategias)
+ULTRON decide a quién, por qué, cuándo y por qué canal; Laravel es la única autoridad y todo nace apagado.
+toggle_on
+Gobierno encendido
+rocket_launch
+Publicar: ventana abierta
+person_off
+Sin persona vinculada
+send_and_archive
+Ningún mensaje ni llamada sale solo mientras el envío automático siga cerrado en el código (OutreachSendGate). Si lo está, y en qué modo está la automatización (apagada, en sombra o en vivo), lo dice el estado del servidor en «Panel».
+monitoring
+Panel
+account_tree
+Estrategias
+architecture
+Constructor
+science
+Simulación
+description
+Plantillas
+verified_user
+Gobierno
+inbox
+Bandeja asistida
+history
+Historial por persona
+badge
+Vínculos de personas
+Estrategias
+refresh
+Releer
+add
+Nueva estrategia
+group
+Cuatro ojos por persona verificada: aprueba, publica y promueve alguien distinto de la autora, y dos cuentas de la misma persona no se aprueban entre sí.
+Finalidad
+Todas
+Comercial
+Cobranza
+Servicio
+Archivadas
+Ocultar
+Mostrar
+No hay estrategias. Crea la primera: nace en borrador y no hace nada hasta que se publique. Congelar, aprobar y publicar exigen persona vinculada; tu cuenta no la tiene.
+IRON
+IRON
+Copiloto del CRM
+En línea
+remove
+
+Hola, soy IRON. Puedo ayudarte a consultar miembros, membresías, pagos, planes, entrenadores, reservas, reportes y operación del CRM.
+
+Miembros vencidos
+Pagos pendientes
+Nuevos miembros del mes
+Planes activos
+Reservas de hoy
+attach_file
+send
+IRON
+Para moverlo, arrástralo con el ratón o mantenlo pulsado en una pantalla táctil. Con el teclado: Mayúsculas y flechas lo mueven; Mayúsculas e Inicio lo devuelven a su esquina.
+
+--- title ---
+Cerrar sesión
+Minimizar
+Adjuntar imagen
+Enviar
+IRON — Copiloto del CRM. Arrástralo para moverlo.

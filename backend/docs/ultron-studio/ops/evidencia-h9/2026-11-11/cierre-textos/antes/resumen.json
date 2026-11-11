@@ -1,0 +1,102 @@
+{
+ "cuando": "2026-11-11T20:59:31.945Z",
+ "version": {
+  "commit": "b07eda5",
+  "claves": [
+   "commit",
+   "dirty",
+   "builtAt",
+   "inboxV2"
+  ]
+ },
+ "pantallas": [
+  {
+   "nombre": "01-studio",
+   "ruta": "/marketing/ultron-studio",
+   "pinto": true,
+   "caracteres": 5530,
+   "prohibidas": []
+  },
+  {
+   "nombre": "02-laboratorio",
+   "ruta": "/marketing/ultron-studio/laboratorio",
+   "pinto": true,
+   "caracteres": 2809,
+   "prohibidas": [
+    "el motor no lee el Studio"
+   ]
+  },
+  {
+   "nombre": "03-integraciones-estado",
+   "ruta": "/marketing/ultron-studio/integraciones?pestana=estado",
+   "pinto": true,
+   "caracteres": 2849,
+   "prohibidas": [
+    "sin efecto en el motor"
+   ]
+  },
+  {
+   "nombre": "04-integraciones-canarios",
+   "ruta": "/marketing/ultron-studio/integraciones?pestana=canarios",
+   "pinto": true,
+   "caracteres": 2039,
+   "prohibidas": []
+  },
+  {
+   "nombre": "05-voz-estado",
+   "ruta": "/marketing/ultron-studio/voz?pestana=estado",
+   "pinto": true,
+   "caracteres": 6884,
+   "prohibidas": []
+  },
+  {
+   "nombre": "06-voz-publicacion",
+   "ruta": "/marketing/ultron-studio/voz?pestana=publicacion",
+   "pinto": true,
+   "caracteres": 2678,
+   "prohibidas": []
+  },
+  {
+   "nombre": "07-voz-laboratorio",
+   "ruta": "/marketing/ultron-studio/voz?pestana=laboratorio",
+   "pinto": true,
+   "caracteres": 5149,
+   "prohibidas": []
+  },
+  {
+   "nombre": "08-automatizaciones-panel",
+   "ruta": "/marketing/automatizaciones?pestana=panel",
+   "pinto": true,
+   "caracteres": 7343,
+   "prohibidas": [
+    "la automatización nace apagada"
+   ]
+  },
+  {
+   "nombre": "09-automatizaciones-estrategias",
+   "ruta": "/marketing/automatizaciones?pestana=estrategias",
+   "pinto": true,
+   "caracteres": 2272,
+   "prohibidas": [
+    "la automatización nace apagada"
+   ]
+  },
+  {
+   "nombre": "10-automatizaciones-plantillas",
+   "ruta": "/marketing/automatizaciones?pestana=plantillas",
+   "pinto": true,
+   "caracteres": 2744,
+   "prohibidas": [
+    "la automatización nace apagada"
+   ]
+  }
+ ],
+ "prohibidasVistas": [
+  "02-laboratorio: «el motor no lee el Studio»",
+  "03-integraciones-estado: «sin efecto en el motor»",
+  "08-automatizaciones-panel: «la automatización nace apagada»",
+  "09-automatizaciones-estrategias: «la automatización nace apagada»",
+  "10-automatizaciones-plantillas: «la automatización nace apagada»"
+ ],
+ "errores": []
+}

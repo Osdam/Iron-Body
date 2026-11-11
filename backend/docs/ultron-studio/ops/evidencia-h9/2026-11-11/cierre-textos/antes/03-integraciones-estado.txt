@@ -1,0 +1,179 @@
+dashboard
+Inicio
+group
+Miembros
+payments
+Planes
+point_of_sale
+Caja de Gimnasio
+calendar_month
+Clases
+schedule
+Supervisión de empleados y clases
+inventory_2
+Inventario
+fitness_center
+Equipos
+point_of_sale
+Caja de Cafetería
+handshake
+Comisiones
+receipt_long
+Facturación
+monitoring
+Analítica
+file_export
+Exportaciones
+manage_search
+Logs
+exercise
+Ejercicios
+fitness_center
+Rutinas
+badge
+Entrenadores
+campaign
+Mercadeo
+ULTRON Studio
+PREVIEW
+smart_toy
+Campañas automáticas
+local_fire_department
+Esta semana
+monitor_weight
+Evaluaciones
+restaurant
+Nutrición
+support_agent
+Soporte
+shield_person
+Moderación
+notifications_active
+Notificaciones push
+settings
+Configuración
+dns
+Backend Laravel conectado
+ok · 2026-11-11T20:59:39+00:00
+help
+Soporte
+logout
+Salir
+search
+1
+arrow_back
+Tablero
+Integraciones de ULTRON STUDIO
+Registro del Studio: no cambia lo que ULTRON dice o hace
+hub
+Estado
+campaign
+Campañas de Meta
+phone_iphone
+Números canarios
+sms
+Twilio
+record_voice_over
+Voz
+Banderas del servidor
+Escrituras de integraciones
+Encendidas
+Comprobación de Twilio
+Encendida
+info
+Las banderas son las del proceso web, con su caché de configuración.
+Áreas
+Meta Ads
+cloud_done
+Conectada en lectura
+Cuentas conectadas
+3
+Última sincronización correcta
+hace 44 min
+Se da por vieja a partir de
+3 h
+Cubre hasta
+2026-11-11
+Sincronización horaria
+Encendida
+Versión de la API de Meta
+v26.0
+Twilio (OTP)
+sms
+Conectada solo para OTP
+Proveedor del OTP
+twilio
+Twilio Verify configurado
+Sí
+Envío de códigos
+Encendido
+Códigos verificados
+5 en 24 h · 54 en 7 días
+Último código verificado
+11/11/2026, 3:58 p. m.
+Gasto estimado de hoy
+US$ 0,546
+Twilio Voice
+link_off
+No configurada
+Twilio Voice
+Apagado
+Número de voz
+Sin configurar
+Números canarios
+fact_check
+Registro del Studio (sin efecto en el motor)
+Activos
+WhatsApp 0 · Voz 0
+Pendientes de autorizar
+0
+Autorizados sin activar
+0
+Frente al canario del motor
+El teléfono de la conversación canaria del motor no está en el registro.
+ElevenLabs (voz)
+cloud_done
+Conectada en lectura
+ELEVENLABS_VERIFIED
+Bandera
+Encendida
+Piezas que faltan
+Ninguna
+Lo que puede hacer tu cuenta
+check_circle
+Sí
+Asociar campañas de Meta
+check_circle
+Sí
+Administrar números canarios
+check_circle
+Sí
+Autorizar números canarios de otra persona
+check_circle
+Sí
+Configuración autorizada y comprobación de Twilio
+Lo decide el servidor con tu rol; cada acción la vuelve a comprobar al pedirla.
+IRON
+IRON
+Copiloto del CRM
+En línea
+remove
+
+Hola, soy IRON. Puedo ayudarte a consultar miembros, membresías, pagos, planes, entrenadores, reservas, reportes y operación del CRM.
+
+Miembros vencidos
+Pagos pendientes
+Nuevos miembros del mes
+Planes activos
+Reservas de hoy
+attach_file
+send
+IRON
+Para moverlo, arrástralo con el ratón o mantenlo pulsado en una pantalla táctil. Con el teclado: Mayúsculas y flechas lo mueven; Mayúsculas e Inicio lo devuelven a su esquina.
+
+--- title ---
+Cerrar sesión
+Minimizar
+Adjuntar imagen
+Enviar
+IRON — Copiloto del CRM. Arrástralo para moverlo.

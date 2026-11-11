@@ -450,7 +450,7 @@ Su etiqueta: «Propuesta del laboratorio: no es un veredicto».
 {"ok":true,"data":{
  "enabled":true,"mode":"openai","configured":true,"reasons":[],
  "model":"…","promptVersion":"2026-10-19.1","catalog":{"version":"2026-10-19.1","scenariosImported":12},
- "fidelity":"Simulación del Studio: un actor de laboratorio interpreta la versión. No es ULTRON: el motor no lee el Studio y sus prompts viven en n8n.",
+ "fidelity":"Simulación del Studio: un modelo de laboratorio, con instrucciones propias, interpreta la versión completa, incluido lo que el WhatsApp real no aplica o aplica solo en parte («Si no entiende» y las reglas S-NNN). No es ULTRON: no usa sus cinco prompts ni su modelo. Cómo responde ULTRON de verdad se comprueba en un turno real de la conversación canaria.",
  "budget":{"timezone":"America/Bogota","day":"2026-10-19","dailyCapMicros":2000000,"spentMicros":53000,"reservedMicros":91000,"remainingMicros":1856000,"runCapMicros":500000,"runsToday":3,"maxRunsPerDay":20},
  "limits":{"maxCasesPerRun":12,"maxLiveScenarios":100,"scenario":{"titleMax":120,"descriptionMax":500,"turnsMax":8,"turnTextMax":600,"criteriaMax":8,"criterionTextMax":240,"ruleRefsMax":5,"maxBytes":16384},"verdictNoteMax":1000},
  "can":{"view":true,"manageScenarios":true,"run":false,"verdict":true}}}
@@ -681,3 +681,18 @@ Fijadas por la capa de datos del CRM (`studio-lab-parse.ts` falla cerrado ante o
 4. **El cliente de una ejecución se elige por su `mode`**, nunca por la configuración vigente: una ejecución `fake` jamás llama a OpenAI aunque el driver cambie a mitad; prueba dedicada (I-4).
 5. Menores: `UltronStudioLabCancelLockTest` no deja sin esquema a la clase siguiente en SQLite (m-2); umbral de desatención por carril para `lab` si la observabilidad lo admite, si no, pendiente de la fase 3 documentado (m-3: un paso largo del laboratorio podría abrir una falsa alarma `queue_unattended`); la frase del aviso de datos personales vive en una sola constante del CRM (m-4).
 6. Lo verificado por el reviewer: diff del motor vacío y las 21 rutas de F/G intactas; SQLite 1185, PG 934; suite completa igual que `origin/main` en el mismo entorno; migraciones con rol sin superusuario (27/24, rollback limpio); permisos y 4 fixtures idénticos al CRM; CRM 739 specs, build limpio, hojas < 8 kB; 24 mutaciones cazadas salvo M16 (cerrada por el punto 4). **Antes de la fase 3** deben estar cerrados los puntos 1–4 (ya en el segundo lote de correcciones).
+
+## Enmienda 7 (11-11-2026): el texto de fidelidad después de la Enmienda M-1 (auditoría de cierre, INC-1 · T6)
+
+**Qué cambia.** El literal `fidelity` de §A7 (`StudioLabRuns::FIDELITY`, que viaja en `lab/status` y en cada ejecución). El anterior decía «No es ULTRON: el motor no lee el Studio y sus prompts viven en n8n», y dejó de ser verdad el 11-11-2026: desde la Enmienda M-1 el motor lee la cadena del Studio y, en la conversación canaria, sus prompts salen de la versión publicada.
+
+**El literal nuevo** (decisión del lead; 354 caracteres):
+
+> Simulación del Studio: un modelo de laboratorio, con instrucciones propias, interpreta la versión completa, incluido lo que el WhatsApp real no aplica o aplica solo en parte («Si no entiende» y las reglas S-NNN). No es ULTRON: no usa sus cinco prompts ni su modelo. Cómo responde ULTRON de verdad se comprueba en un turno real de la conversación canaria.
+
+**Por qué está redactado así.**
+1. Es verdad con la llave de prompts del motor en `canary` y en `off`: no afirma qué hace publicar, que depende de la llave; eso lo dice el CRM según `status.engine.prompts.key`.
+2. Dice lo que el laboratorio sigue siendo: una simulación con instrucciones y modelo propios, que interpreta también lo que el WhatsApp real no aplica («Si no entiende») o aplica solo en parte (las reglas S-NNN). Por eso un veredicto «Aprobada» certifica la simulación, no los cinco prompts de WhatsApp (auditoría A, L4 e INC-5: sigue abierto).
+3. Manda a la evidencia que sí es de ULTRON: el turno real de la conversación canaria («Turnos de la canaria», `ultron:prompt-trace`).
+
+**Lo que no cambia.** El texto se calcula al leer: no se guarda por ejecución, no entra en `resultsHash` y no lo limita ningún validador. Una prueba nueva fija el literal (`UltronStudioLabRunsTest`). En el CRM, la copia de pruebas (`studio-lab-fixtures.testing.ts`) lleva el mismo literal, y la etiqueta «Prompts» de la ficha de la ejecución y del lanzador pasa a «Instrucciones del laboratorio», para que no se confunda con el paquete de prompts del motor.
