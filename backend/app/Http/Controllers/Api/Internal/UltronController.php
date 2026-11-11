@@ -14,6 +14,8 @@ use App\Services\Marketing\MarketingAgentSwitch;
 use App\Services\Marketing\SalesAgentDecisionSchema;
 use App\Services\Marketing\StaffReviewAuthority;
 use App\Services\Marketing\Ultron\CriticContract;
+use App\Services\Marketing\Ultron\Prompts\UltronPromptBase;
+use App\Services\Marketing\Ultron\Prompts\UltronPromptStamp;
 use App\Services\Marketing\Ultron\StrategyContract;
 use App\Services\Marketing\Ultron\UltronCommitException;
 use App\Services\Marketing\Ultron\UltronCommitService;
@@ -130,8 +132,17 @@ class UltronController extends Controller
             ]);
         }
 
+        /*
+         * NEGOCIACIÓN DE LOS PROMPTS (Enmienda M-1, plan de motores §B.5). El
+         * campo es opcional, se lee sin validar y NUNCA produce un 422: un
+         * valor desconocido (o de otro tipo) es «no negociado» y la respuesta y
+         * el token son exactamente los de siempre. Así el n8n de hoy, que no lo
+         * manda, no nota nada, y un n8n nuevo funciona con un backend viejo.
+         */
+        $negociaPrompts = $request->input('prompt_contract') === UltronPromptBase::CONTRACT;
+
         return response()->json(array_merge(
-            $this->decide->decide($conversation, $message),
+            $this->decide->decide($conversation, $message, $negociaPrompts),
             ['superseded' => false],
         ));
     }
@@ -272,6 +283,22 @@ class UltronController extends Controller
             'recovery' => ['nullable', 'array'],
             'recovery.reason' => ['required_with:recovery', 'string', 'max:64', 'regex:/^[A-Za-z0-9_.:-]+$/'],
             'recovery.attempt' => ['nullable', 'integer', 'min:1', 'max:3'],
+
+            /*
+             * LO QUE n8n DICE HABER APLICADO (Enmienda M-1, plan de motores
+             * §B.6). Solo lo manda si `decide` devolvió `studio_prompts`, así que
+             * el n8n de hoy no lo manda nunca. `bundle_hash` es la huella que n8n
+             * CALCULA sobre los cinco textos que acaba de pasar a OpenAI: una
+             * observación, no un eco. Es TRAZA: nada de este commit se ramifica
+             * por este bloque; solo acaba en `metadata.studio_prompts`. Sin
+             * textos: códigos y huellas con la misma forma cerrada que `recovery`.
+             */
+            'prompts' => ['nullable', 'array'],
+            'prompts.mode' => ['required_with:prompts', 'string', Rule::in([UltronPromptStamp::MODE_STUDIO, UltronPromptStamp::MODE_LEGACY])],
+            'prompts.bundle_hash' => ['nullable', 'string', 'regex:/^[0-9a-f]{64}$/'],
+            'prompts.reason' => ['nullable', 'string', 'max:64', 'regex:/^[A-Za-z0-9_.:-]+$/'],
+            'prompts.flow_rev' => ['required_with:prompts', 'string', 'max:32', 'regex:/^[A-Za-z0-9_.:-]+$/'],
+            'prompts.execution_id' => ['nullable', 'string', 'max:64', 'regex:/^[A-Za-z0-9_.:-]+$/'],
         ]);
 
         /*
@@ -396,8 +423,8 @@ class UltronController extends Controller
 
     /**
      * Claves del request que no están en el contrato, en el primer nivel y en
-     * `proposal`/`critic`. Comparar contra lo validado y no contra una lista
-     * escrita a mano evita que las dos se separen.
+     * `proposal`/`critic`/`recovery`/`prompts`. Comparar contra lo validado y
+     * no contra una lista escrita a mano evita que las dos se separen.
      *
      * @return string[]
      */
@@ -405,7 +432,7 @@ class UltronController extends Controller
     {
         $extra = array_keys(array_diff_key($enviado, $validado));
 
-        foreach (['proposal', 'critic', 'recovery'] as $bloque) {
+        foreach (['proposal', 'critic', 'recovery', 'prompts'] as $bloque) {
             if (! is_array($enviado[$bloque] ?? null)) {
                 continue;
             }

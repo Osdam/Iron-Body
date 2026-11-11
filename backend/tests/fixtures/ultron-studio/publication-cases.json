@@ -6192,7 +6192,7 @@
       }
     },
     {
-      "name": "scope · contrato de la fila desconocido (ultron-engine-config/2) con huella y firma buenas → fallback/contract_unknown",
+      "name": "scope · contrato de la fila desconocido (ultron-engine-config/3) con huella y firma buenas → fallback/contract_unknown",
       "kind": "scope",
       "appKey": "base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
       "env": "canary",
@@ -6201,7 +6201,7 @@
       "head": {
         "uuid": "eeeeeeee-0000-4000-8000-000000000001",
         "seq": 1,
-        "engineContract": "ultron-engine-config/2",
+        "engineContract": "ultron-engine-config/3",
         "effectiveJson": "{\"canary\":{\"approvedBy\":12,\"catalogVersion\":\"2026-10-19.1\",\"contentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"declared\":{\"governance.canaryOnly\":true,\"governance.enabled\":true,\"intent.driver\":\"entorno\",\"rules.paymentLinksEnabled\":false},\"publishedBy\":7,\"version\":\"22222222-2222-4222-8222-222222222222\"},\"contract\":\"ultron-engine-config/1\",\"entry\":\"eeeeeeee-0000-4000-8000-000000000001\",\"issuedAt\":\"2026-11-03T15:04:05Z\",\"rest\":null,\"seq\":1}",
         "effectiveHash": "5373bde9f33d2d70c5c309393622dbf931e625a329df56f8b46d1932a7e9e3fe",
         "signature": "9a11776c66eed69538eb7739d23f6a1ed2a535842e2492c2197d7f38e57b9632"
@@ -6232,7 +6232,7 @@
       "head": {
         "uuid": "eeeeeeee-0000-4000-8000-000000000001",
         "seq": 1,
-        "engineContract": "ultron-engine-config/2",
+        "engineContract": "ultron-engine-config/3",
         "effectiveJson": "{\"canary\":{\"approvedBy\":12,\"catalogVersion\":\"2026-10-19.1\",\"contentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"declared\":{\"governance.canaryOnly\":true,\"governance.enabled\":true,\"intent.driver\":\"entorno\",\"rules.paymentLinksEnabled\":false},\"publishedBy\":7,\"version\":\"22222222-2222-4222-8222-222222222222\"},\"contract\":\"ultron-engine-config/1\",\"entry\":\"eeeeeeee-0000-4000-8000-000000000001\",\"issuedAt\":\"2026-11-03T15:04:05Z\",\"rest\":null,\"seq\":1}",
         "effectiveHash": "12bcac3e2af24d9d4891d5703bcc4d3f3489be3e423483375c8b00d77cbb6557",
         "signature": "9a11776c66eed69538eb7739d23f6a1ed2a535842e2492c2197d7f38e57b9632"

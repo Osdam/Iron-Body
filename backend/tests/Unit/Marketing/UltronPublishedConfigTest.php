@@ -436,7 +436,7 @@ class UltronPublishedConfigTest extends TestCase
     public function test_un_contrato_desconocido_no_se_lee(): void
     {
         $this->sinElCheckDelContrato();
-        $fila = $this->publica($this->parte(self::VERSION_B), null, ['engine_contract' => 'ultron-engine-config/2']);
+        $fila = $this->publica($this->parte(self::VERSION_B), null, ['engine_contract' => 'ultron-engine-config/3']);
 
         $this->assertFallback(Lector::CONTRACT_UNKNOWN, (new Lector)->forConversation(self::CANARIO), $fila);
     }

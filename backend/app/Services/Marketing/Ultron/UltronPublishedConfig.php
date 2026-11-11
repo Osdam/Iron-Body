@@ -27,6 +27,9 @@ use Throwable;
  * en el commit, una sentencia `SELECT` de la cabeza (`max(seq)`, por el índice
  * único), y solo con `MARKETING_ULTRON_STUDIO_CONFIG` distinta de `off`.
  * `describe()`, que llama el Studio y no el commit, la lee con cualquier llave.
+ * Desde la Enmienda M-1 (M1-6) la invoca además `decide`, por
+ * `Prompts\UltronPromptOffer` y `partFor()`: la misma sentencia, solo con las
+ * dos llaves encendidas y solo para la conversación canaria.
  *
  * NUNCA LANZA (§A4.3, paso 7). Un turno de ULTRON no puede morir por esto: un
  * 500 del commit no deja fila ni saliente, el vigía lo cuenta como turno mudo y
@@ -64,8 +67,22 @@ final class UltronPublishedConfig
 
     public const ALL = 'all';
 
-    /** El único contrato que sabe leer este motor. Es también el prefijo del texto firmado. */
+    /**
+     * El contrato de la declaración (H5). Es también el prefijo del texto
+     * firmado, para `/1` y para `/2` (§B.4: «firma … los de `/1`»).
+     */
     public const CONTRACT = 'ultron-engine-config/1';
+
+    /**
+     * Enmienda M-1 (plan de motores §B.4): `/1` más, en cada parte no nula,
+     * los cuatro valores gobernados y la huella del paquete de prompts
+     * compilado. Aditivo: el sello `metadata.studio` sale igual con los dos;
+     * solo `Prompts\UltronPromptOffer` lee lo nuevo, por {@see self::partFor()}.
+     */
+    public const CONTRACT_V2 = 'ultron-engine-config/2';
+
+    /** Los contratos que sabe leer este motor. */
+    public const CONTRACTS = [self::CONTRACT, self::CONTRACT_V2];
 
     /** Versión de la forma del sello (`metadata.studio.v`). */
     public const STAMP_VERSION = 1;
@@ -115,6 +132,24 @@ final class UltronPublishedConfig
     /** Las claves exactas de una parte (`canary` o `rest`). */
     private const PART_KEYS = ['approvedBy', 'catalogVersion', 'contentHash', 'declared', 'publishedBy', 'version'];
 
+    /** En `/2`, las de `/1` más los gobernados y la huella del paquete (§B.4). */
+    private const PART_KEYS_V2 = [...self::PART_KEYS, 'governed', 'prompts'];
+
+    /** `/2`: los cuatro valores gobernados y su tipo exacto. */
+    private const GOVERNED = [
+        'persona.emojis' => 'boolean',
+        'persona.maxChars' => 'integer',
+        'persona.tone' => 'string',
+        'strategy.goal' => 'string',
+    ];
+
+    /** `/2`: la huella del paquete compilado, la base y la versión del compilador. */
+    private const PROMPTS = [
+        'base' => 'string',
+        'bundleHash' => 'string',
+        'compiler' => 'integer',
+    ];
+
     /** Los cuatro valores `must_match` (§A1) y su tipo exacto. */
     private const DECLARED = [
         'governance.canaryOnly' => 'boolean',
@@ -149,25 +184,45 @@ final class UltronPublishedConfig
             return null;
         }
 
-        try {
-            $fila = $this->head();
-            if ($fila === null) {
-                return self::stamp($env, self::LEGACY);
-            }
+        return $this->lookup($conversationId, $env)[0];
+    }
 
-            [$motivo, $entrada] = $this->verified($fila);
-            if ($entrada === null) {
-                return $this->fallback($env, $motivo, $fila);
-            }
-
-            return self::resolve($env, $fila, $entrada, $conversationId);
-        } catch (Throwable $e) {
-            return $this->fallback(
-                $env,
-                $e instanceof QueryException && self::tablaInexistente($e) ? self::TABLE_MISSING : self::READ_FAILED,
-                error: $e,
-            );
+    /**
+     * LA PARTE QUE RIGE PARA ESTA CONVERSACIÓN, con lo que `/2` añade (plan de
+     * motores §B.5, paso 4). La misma lectura y la misma resolución que
+     * {@see self::forConversation()} —una sentencia, la misma escalera de
+     * verificación, los mismos motivos—, y además el contrato de la fila y, si
+     * la parte aplicada es `/2`, sus `governed` y `prompts` tal como se
+     * firmaron (los VALORES no se validan aquí: los comprueba quien compila).
+     * La llama solo `Prompts\UltronPromptOffer`, en `decide` (Enmienda M-1, M1-6).
+     *
+     * Null con la llave en `off`: entonces no hay ninguna consulta. Nunca lanza.
+     *
+     * @return array{env:string,state:string,reason:?string,contract:?string,entry:?string,seq:?int,part:?string,version:?string,contentHash:?string,governed:?array<string,mixed>,prompts:?array<string,mixed>}|null
+     */
+    public function partFor(int $conversationId): ?array
+    {
+        $env = self::scope();
+        if ($env === self::OFF) {
+            return null;
         }
+
+        [$sello, $parte, $contrato] = $this->lookup($conversationId, $env, 'decide');
+        $v2 = $sello['state'] === self::APPLIED && $contrato === self::CONTRACT_V2 && $parte instanceof stdClass;
+
+        return [
+            'env' => $sello['env'],
+            'state' => $sello['state'],
+            'reason' => $sello['reason'],
+            'contract' => $contrato,
+            'entry' => $sello['entry'],
+            'seq' => $sello['seq'],
+            'part' => $sello['part'],
+            'version' => $sello['version'],
+            'contentHash' => $sello['contentHash'],
+            'governed' => $v2 ? get_object_vars($parte->governed) : null,
+            'prompts' => $v2 ? get_object_vars($parte->prompts) : null,
+        ];
     }
 
     /**
@@ -206,7 +261,7 @@ final class UltronPublishedConfig
                 'parseOk' => $entrada !== null,
             ];
 
-            if ($contrato === self::CONTRACT && $hashOk && $firmaOk && $entrada !== null) {
+            if (in_array($contrato, self::CONTRACTS, true) && $hashOk && $firmaOk && $entrada !== null) {
                 $parts = [
                     self::PART_CANARY => $entrada->canary !== null,
                     self::PART_REST => $entrada->rest !== null,
@@ -246,8 +301,43 @@ final class UltronPublishedConfig
 
     // ── Lectura ─────────────────────────────────────────────────────────────
 
-    /** `off`, `canary` o `all`. Cualquier otra cosa en la configuración es `off`. */
-    private static function scope(): string
+    /**
+     * La lectura y la resolución, una vez (contrato §A4.3, pasos 2 a 7). Nunca
+     * lanza: cualquier `Throwable` es un sello `fallback`.
+     *
+     * @param  string|null  $via  quién lee, solo para el log (`decide`); el commit no lo dice
+     * @return array{0:array<string,mixed>,1:?stdClass,2:?string} [sello, parte aplicada o null, contrato de la fila verificada o null]
+     */
+    private function lookup(int $conversationId, string $env, ?string $via = null): array
+    {
+        try {
+            $fila = $this->head();
+            if ($fila === null) {
+                return [self::stamp($env, self::LEGACY), null, null];
+            }
+
+            [$motivo, $entrada] = $this->verified($fila);
+            if ($entrada === null) {
+                return [$this->fallback($env, $motivo, $fila, via: $via), null, null];
+            }
+
+            return self::resolve($env, $fila, $entrada, $conversationId);
+        } catch (Throwable $e) {
+            return [$this->fallback(
+                $env,
+                $e instanceof QueryException && self::tablaInexistente($e) ? self::TABLE_MISSING : self::READ_FAILED,
+                error: $e,
+                via: $via,
+            ), null, null];
+        }
+    }
+
+    /**
+     * `off`, `canary` o `all`. Cualquier otra cosa en la configuración es `off`.
+     * Pública desde la Enmienda M-1: `Prompts\UltronPromptOffer` mira la llave
+     * con este mismo criterio antes de pedir nada (§B.5, paso 2).
+     */
+    public static function scope(): string
     {
         $valor = config('marketing.ultron.studio_config');
         $valor = is_string($valor) ? strtolower(trim($valor)) : '';
@@ -279,7 +369,7 @@ final class UltronPublishedConfig
      */
     private function verified(stdClass $fila): array
     {
-        if (($fila->engine_contract ?? null) !== self::CONTRACT) {
+        if (! in_array($fila->engine_contract ?? null, self::CONTRACTS, true)) {
             return [self::CONTRACT_UNKNOWN, null];
         }
         if (! self::hashOk($fila)) {
@@ -341,8 +431,8 @@ final class UltronPublishedConfig
             || ! is_string($entrada->entry)
             || ! is_int($entrada->seq)
             || ! is_string($entrada->issuedAt)
-            || ! self::parteValida($entrada->canary)
-            || ! self::parteValida($entrada->rest)) {
+            || ! self::parteValida($entrada->canary, $entrada->contract)
+            || ! self::parteValida($entrada->rest, $entrada->contract)) {
             return null;
         }
 
@@ -356,13 +446,21 @@ final class UltronPublishedConfig
         return $entrada;
     }
 
-    /** Una parte es null o un objeto con las claves y los tipos exactos (también los de `declared`). */
-    private static function parteValida(mixed $parte): bool
+    /**
+     * Una parte es null o un objeto con las claves y los tipos exactos (también
+     * los de `declared`). En `/2`, además `governed` y `prompts`, también con
+     * sus claves y tipos exactos (§B.4).
+     */
+    private static function parteValida(mixed $parte, string $contrato): bool
     {
         if ($parte === null) {
             return true;
         }
-        if (! $parte instanceof stdClass || ! self::clavesExactas($parte, self::PART_KEYS)) {
+        $v2 = $contrato === self::CONTRACT_V2;
+        if (! $parte instanceof stdClass || ! self::clavesExactas($parte, $v2 ? self::PART_KEYS_V2 : self::PART_KEYS)) {
+            return false;
+        }
+        if ($v2 && (! self::objetoTipado($parte->governed, self::GOVERNED) || ! self::objetoTipado($parte->prompts, self::PROMPTS))) {
             return false;
         }
         foreach (self::PART_TYPES as $clave => $tipo) {
@@ -387,6 +485,8 @@ final class UltronPublishedConfig
      * la canaria recibe `canary` y, si es null, `rest`; las demás, `rest` solo
      * con la llave en `all`. «Es la canaria» es el mismo criterio que la puerta
      * del canario del commit.
+     *
+     * @return array{0:array<string,mixed>,1:?stdClass,2:string} [sello, parte aplicada o null, contrato de la entrada]
      */
     private static function resolve(string $env, stdClass $fila, stdClass $entrada, int $conversationId): array
     {
@@ -397,12 +497,12 @@ final class UltronPublishedConfig
         } elseif ($env === self::ALL) {
             $parte = self::PART_REST;
         } else {
-            return self::stamp($env, self::OUT_OF_SCOPE, $fila);
+            return [self::stamp($env, self::OUT_OF_SCOPE, $fila), null, $entrada->contract];
         }
 
         return $entrada->{$parte} === null
-            ? self::stamp($env, self::LEGACY, $fila)
-            : self::stamp($env, self::APPLIED, $fila, $entrada, $parte);
+            ? [self::stamp($env, self::LEGACY, $fila), null, $entrada->contract]
+            : [self::stamp($env, self::APPLIED, $fila, $entrada, $parte), $entrada->{$parte}, $entrada->contract];
     }
 
     // ── Sello ───────────────────────────────────────────────────────────────
@@ -434,13 +534,14 @@ final class UltronPublishedConfig
         ];
     }
 
-    private function fallback(string $env, string $motivo, ?stdClass $fila = null, ?Throwable $error = null): array
+    private function fallback(string $env, string $motivo, ?stdClass $fila = null, ?Throwable $error = null, ?string $via = null): array
     {
         try {
             ChannelLog::warning('ultron.published_config.fallback', array_filter([
                 'env' => $env,
                 'reason' => $motivo,
                 'error_class' => $error === null ? null : class_basename($error),
+                'via' => $via,
             ], fn ($v) => $v !== null));
         } catch (Throwable) {
             // Tragado a propósito: observar no puede cambiar lo observado, y un
@@ -470,6 +571,25 @@ final class UltronPublishedConfig
         }
 
         return hash_hmac('sha256', self::KEY_LABEL, $clave, true);
+    }
+
+    /**
+     * Un objeto con exactamente esas claves y esos tipos (`gettype`).
+     *
+     * @param  array<string,string>  $tipos  clave → tipo
+     */
+    private static function objetoTipado(mixed $objeto, array $tipos): bool
+    {
+        if (! $objeto instanceof stdClass || ! self::clavesExactas($objeto, array_keys($tipos))) {
+            return false;
+        }
+        foreach ($tipos as $clave => $tipo) {
+            if (gettype($objeto->{$clave}) !== $tipo) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /** @param  list<string>  $claves */

@@ -1,0 +1,3 @@
+# Las bases de los prompts de ULTRON son BYTES EXACTOS (UltronPromptBase verifica
+# su sha256): git no las normaliza, ni de fin de línea ni de ningún otro modo.
+*.txt -text

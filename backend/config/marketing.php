@@ -102,6 +102,25 @@ return [
         'studio_config' => in_array($alcance = strtolower(trim((string) env('MARKETING_ULTRON_STUDIO_CONFIG', 'off'))), ['canary', 'all'], true)
             ? $alcance
             : 'off',
+        /*
+         * LOS PROMPTS GOBERNADOS POR LA VERSIÓN PUBLICADA (Enmienda M-1 del
+         * contrato H5; plan de motores §B.5).
+         *
+         * `off` (el defecto): `decide` no ofrece prompts a nadie y no consulta
+         * nada del Studio; n8n usa sus constantes Legacy, que son la base del
+         * repositorio byte a byte. `canary`: SOLO la conversación canaria del
+         * motor (`canary_conversation_id`) recibe en `decide` los cinco prompts
+         * compilados desde la parte publicada, y solo si su huella cuadra con la
+         * firmada; sin canario configurado, nadie (falla cerrado). Exige además
+         * `studio_config` distinta de `off`: sin sello declarado no hay prompts.
+         *
+         * Cualquier otro valor, `all` incluido, es `off` en esta entrega (sin
+         * distinguir mayúsculas ni espacios alrededor). Lo lee
+         * UltronPromptOffer; va con `config:cache` como la de arriba.
+         */
+        'studio_prompts' => strtolower(trim((string) env('MARKETING_ULTRON_STUDIO_PROMPTS', 'off'))) === 'canary'
+            ? 'canary'
+            : 'off',
     ],
 
     // Seguimientos automáticos (marketing:dispatch-followups).

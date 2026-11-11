@@ -25,6 +25,7 @@ use App\Services\Marketing\SalesGuardrailException;
 use App\Services\Marketing\SalesIntents;
 use App\Services\Marketing\SalesPaymentGuardrailService;
 use App\Services\Marketing\StaffReviewAuthority;
+use App\Services\Marketing\Ultron\Prompts\UltronPromptStamp;
 use App\Services\Marketing\WompiPaymentLinkService;
 use App\Services\Observability\ChannelLog;
 use App\Services\Wompi\PaymentStateMachine as SM;
@@ -359,6 +360,22 @@ class UltronCommitService
         }
 
         /*
+         * EL SELLO DE LOS PROMPTS (Enmienda M-1 del H5; plan de motores §B.6).
+         *
+         * Lo OFRECIDO (lo que `decide` dio a n8n, firmado en el token como `sp`)
+         * frente a lo OBSERVADO (el bloque `prompts` del cuerpo: la huella que n8n
+         * calculó sobre los textos que pasó a OpenAI). Justo después del token,
+         * que es lo que hace fiable lo ofrecido; las filas `blocked` de antes no
+         * lo llevan (no hubo respuesta que observar).
+         *
+         * NO ES UNA PUERTA: nada de lo que sigue se ramifica por él y nunca lanza
+         * (un fallo es `stamp_error`). Sin `sp` ni bloque es null y la fila queda
+         * exactamente como antes. Viaja como argumento hasta `persist()`, igual
+         * que `$studio`: dos commits seguidos no comparten sello.
+         */
+        $studioPrompts = $this->promptStamp($token['extra']['sp'] ?? null, $payload['prompts'] ?? null);
+
+        /*
          * ── 7.ter) LA HORA DE LA VISITA LA DECIDE LARAVEL ─────────────────────
          *
          * Medido en el canario el 2026-10-04: la visita a las 18:00, «Mejor
@@ -377,7 +394,7 @@ class UltronCommitService
          * token, del relevo y de la elegibilidad: no es un salvoconducto.
          */
         if ($horaDeLaVisita = $this->horaDeLaVisita($conversation, $message, $proposal)) {
-            return $this->contestarLaHoraDeLaVisita($conversation, $message, $payload, $currentPhase, $horaDeLaVisita, $studio);
+            return $this->contestarLaHoraDeLaVisita($conversation, $message, $payload, $currentPhase, $horaDeLaVisita, $studio, $studioPrompts);
         }
 
         /*
@@ -394,12 +411,12 @@ class UltronCommitService
          * bloquea exactamente igual que cualquier otro commit.
          */
         if ($rendicion = $this->recoveryReason($payload)) {
-            return $this->handleRecovery($conversation, $message, $payload, $currentPhase, $rendicion, $studio);
+            return $this->handleRecovery($conversation, $message, $payload, $currentPhase, $rendicion, $studio, $studioPrompts);
         }
 
         // ── Camino del critic fallido ─────────────────────────────────────────
         if (CriticContract::isFail($critic)) {
-            return $this->handleCriticFailure($conversation, $message, $payload, $currentPhase, $studio);
+            return $this->handleCriticFailure($conversation, $message, $payload, $currentPhase, $studio, $studioPrompts);
         }
 
         // 8) La propuesta se convierte en el objeto de decisión canónico. Un
@@ -1233,7 +1250,7 @@ class UltronCommitService
             $decision['risk_flags'] = array_values(array_unique(array_merge((array) ($decision['risk_flags'] ?? []), array_map(fn ($s) => 'style:'.$s, $estilo['soft']))));
         }
 
-        $action = $this->persist($conversation, $message, $payload, $decision, $nextState, $plan, $studio, [
+        $action = $this->persist($conversation, $message, $payload, $decision, $nextState, $plan, $studio, $studioPrompts, [
             'source' => 'external_draft',
             /*
              * Si la derivación de este turno la AUTORIZÓ Laravel. Se guarda
@@ -1764,8 +1781,9 @@ class UltronCommitService
         array $payload,
         string $currentPhase,
         ?array $studio,
+        ?array $studioPrompts,
     ): array {
-        return $this->safeFallback($conversation, $message, $payload, $currentPhase, $studio, [
+        return $this->safeFallback($conversation, $message, $payload, $currentPhase, $studio, $studioPrompts, [
             'flag' => 'critic_failed',
             'origin' => 'ultron_curated_fallback',
             'log' => 'ultron.commit.critic_failed',
@@ -1808,6 +1826,7 @@ class UltronCommitService
         string $currentPhase,
         array $rendicion,
         ?array $studio,
+        ?array $studioPrompts,
     ): array {
         ChannelLog::warning('ultron.commit.recovery', [
             'conversation_id' => (int) $conversation->id,
@@ -1816,7 +1835,7 @@ class UltronCommitService
             'attempt' => $rendicion['attempt'],
         ]);
 
-        return $this->safeFallback($conversation, $message, $payload, $currentPhase, $studio, [
+        return $this->safeFallback($conversation, $message, $payload, $currentPhase, $studio, $studioPrompts, [
             'flag' => 'commit_rejected',
             'origin' => 'ultron_recovery_fallback',
             'log' => 'ultron.commit.recovered',
@@ -1833,6 +1852,7 @@ class UltronCommitService
      * ES el discriminante, y ya estaba escrita.
      *
      * @param  array<string,mixed>|null  $studio  el sello de la publicación ({@see UltronPublishedConfig})
+     * @param  array<string,mixed>|null  $studioPrompts  el sello de los prompts ({@see UltronPromptStamp})
      * @param  array{flag:string,origin:string,log:string,metadata:array<string,mixed>}  $causa
      * @return array<string,mixed>
      */
@@ -1842,6 +1862,7 @@ class UltronCommitService
         array $payload,
         string $currentPhase,
         ?array $studio,
+        ?array $studioPrompts,
         array $causa,
     ): array {
         $proposal = (array) ($payload['proposal'] ?? []);
@@ -2035,6 +2056,7 @@ class UltronCommitService
             $currentPhase,
             null,
             $studio,
+            $studioPrompts,
             array_merge(array_filter([
                 'fallback_mode' => $modo,
                 // Evidencia de lo que se descartó, para poder revisarlo. No sale.
@@ -2237,6 +2259,7 @@ class UltronCommitService
         string $currentPhase,
         array $turno,
         ?array $studio,
+        ?array $studioPrompts,
     ): array {
         $proposal = (array) ($payload['proposal'] ?? []);
         $lead = $conversation->lead;
@@ -2256,7 +2279,7 @@ class UltronCommitService
         ];
         $memoriaPrevia = $this->memoryService->load($conversation);
 
-        $action = $this->persist($conversation, $message, $payload, $decision, $currentPhase, null, $studio, array_filter([
+        $action = $this->persist($conversation, $message, $payload, $decision, $currentPhase, null, $studio, $studioPrompts, array_filter([
             'visit_hour' => array_filter([
                 'mode' => $resolver ? 'resolve' : 'ask',
                 'date' => $turno['fecha'],
@@ -2438,10 +2461,50 @@ class UltronCommitService
     }
 
     /**
+     * El sello de los prompts de este turno ({@see UltronPromptStamp}). Nunca
+     * lanza: si calcularlo fallara, `stamp_error`. Los estados que delatan algo
+     * raro —n8n dice haber aplicado otra cosa (`mismatch`) o alguien editó a
+     * mano las constantes Legacy del flujo (`legacy_drift`)— dejan un aviso en
+     * el log: códigos y modos, nunca textos ni huellas completas.
+     *
+     * @return array<string,mixed>|null
+     */
+    private function promptStamp(mixed $sp, mixed $block): ?array
+    {
+        $error = null;
+        try {
+            $sello = UltronPromptStamp::build($sp, $block);
+        } catch (Throwable $e) {
+            $sello = UltronPromptStamp::failed();
+            $error = $e;
+        }
+
+        if ($sello !== null && in_array($sello['state'], [UltronPromptStamp::MISMATCH, UltronPromptStamp::LEGACY_DRIFT, UltronPromptStamp::STAMP_ERROR], true)) {
+            try {
+                ChannelLog::warning('ultron.commit.studio_prompts', array_filter([
+                    'state' => $sello['state'],
+                    'offered_mode' => $sello['offered']['mode'] ?? null,
+                    'observed_mode' => $sello['observed']['mode'] ?? null,
+                    'flow_rev' => $sello['observed']['flowRev'] ?? null,
+                    'error_class' => $error === null ? null : class_basename($error),
+                ], fn ($v) => $v !== null));
+            } catch (Throwable) {
+                // Tragado a propósito: observar no puede cambiar lo observado,
+                // y un log que no se escribe no es motivo para dejar un turno mudo.
+            }
+        }
+
+        return $sello;
+    }
+
+    /**
      * @param  array<string,mixed>|null  $studio  el sello de la publicación del Studio, leído UNA vez
      *                                            al principio del commit ({@see UltronPublishedConfig});
      *                                            null con la llave en `off`. Obligatorio a propósito: un
      *                                            camino nuevo que cree filas tiene que decidir qué sella.
+     * @param  array<string,mixed>|null  $studioPrompts  el sello de los prompts ({@see UltronPromptStamp}),
+     *                                                   calculado tras verificar el token; null antes del
+     *                                                   token o sin nada que sellar. Obligatorio por lo mismo.
      */
     private function persist(
         MarketingConversation $conversation,
@@ -2451,6 +2514,7 @@ class UltronCommitService
         string $nextState,
         ?Plan $plan,
         ?array $studio,
+        ?array $studioPrompts,
         array $extraMetadata = [],
     ): MarketingAiAction {
         $proposal = (array) ($payload['proposal'] ?? []);
@@ -2472,6 +2536,9 @@ class UltronCommitService
             // Contrato H5 §A4.5. Con la llave en `off` es null y el filtro de
             // nulos de abajo lo quita: la fila queda como antes del Hito 5.
             'studio' => $studio,
+            // Enmienda M-1 (§B.6). Sin `sp` en el token ni bloque `prompts` es
+            // null y desaparece igual: la fila queda como hoy.
+            'studio_prompts' => $studioPrompts,
         ], $extraMetadata);
 
         try {
@@ -3861,6 +3928,8 @@ class UltronCommitService
             $this->decide->currentPhase($conversation),
             null,
             $studio,
+            // Antes del token: no hubo respuesta que observar (§B.6).
+            null,
             array_merge(['blocked_reason' => $reason], $extra),
         );
 

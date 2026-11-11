@@ -18,6 +18,7 @@ use App\Services\Marketing\SalesAgentOrchestratorService;
 use App\Services\Marketing\SalesIntents;
 use App\Services\Marketing\SalesPaymentReadinessService;
 use App\Services\Marketing\StaffReviewAuthority;
+use App\Services\Marketing\Ultron\Prompts\UltronPromptOffer;
 
 /**
  * Lo que ULTRON necesita saber para proponer una respuesta, y nada más.
@@ -85,6 +86,7 @@ class UltronDecideService
         private readonly MembershipFactsProvider $membership,
         private readonly HumanHandoffAuthority $handoff = new HumanHandoffAuthority,
         private readonly MarketingAgentSwitch $agentSwitch = new MarketingAgentSwitch,
+        private readonly UltronPromptOffer $promptOffer = new UltronPromptOffer,
     ) {}
 
     /**
@@ -329,9 +331,12 @@ class UltronDecideService
      * El paquete completo. SIN efectos: la llamada al modelo puede ocurrir, la
      * escritura de negocio no.
      *
+     * @param  bool  $negotiatePrompts  n8n pidió `prompt_contract: "ultron-prompts/1"`
+     *                                  (Enmienda M-1, §B.5). Sin negociar, la respuesta
+     *                                  y el token son exactamente los de siempre.
      * @return array<string,mixed>
      */
-    public function decide(MarketingConversation $conversation, MarketingMessage $message): array
+    public function decide(MarketingConversation $conversation, MarketingMessage $message, bool $negotiatePrompts = false): array
     {
         $lead = $conversation->lead;
 
@@ -386,6 +391,16 @@ class UltronDecideService
         $tools = $this->allowedTools((int) $conversation->id);
         $knowledgeVersion = $this->knowledge->version();
 
+        /*
+         * LOS PROMPTS DE LA VERSIÓN PUBLICADA (Enmienda M-1, plan de motores
+         * §B.5), solo si n8n los negoció. La oferta nunca lanza: o los cinco
+         * prompts compilados cuya huella es la firmada al publicar, o Legacy
+         * con su motivo. Lo ofrecido viaja además FIRMADO en el token (`sp`),
+         * para que el commit lo compare con lo que n8n dice haber aplicado.
+         * Sin negociar no se llama: ni una consulta, ni una clave de más.
+         */
+        $prompts = $negotiatePrompts ? $this->promptOffer->forConversation((int) $conversation->id) : null;
+
         $token = $this->tokens->issue(
             (int) $conversation->id,
             (int) $message->id,
@@ -398,7 +413,7 @@ class UltronDecideService
             ['hints' => [
                 'hot_lead_fast_path' => $strategyHints['hot_lead_fast_path'],
                 'lifecycle_mode' => $strategyHints['lifecycle_mode'],
-            ], 'payment_state' => (string) ($payment['state'] ?? 'none')],
+            ], 'payment_state' => (string) ($payment['state'] ?? 'none')] + ($prompts === null ? [] : ['sp' => $prompts['sp']]),
         );
 
         return [
@@ -592,7 +607,7 @@ class UltronDecideService
             'knowledge_version' => $knowledgeVersion,
             'decide_token' => $token['token'],
             'expires_at' => $token['expires_at'],
-        ];
+        ] + ($prompts === null ? [] : ['studio_prompts' => $prompts['response']]);
     }
 
     /**

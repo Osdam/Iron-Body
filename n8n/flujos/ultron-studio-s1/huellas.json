@@ -1,0 +1,52 @@
+{
+    "flowRev": "S1",
+    "workflowId": "YspRwsXnqt33NouP",
+    "sourceVersionId": "29de5119-2e5a-4bc8-a479-60f4fe37c5b3",
+    "contract": "ultron-prompts/1",
+    "base": "n8n-29de5119",
+    "compiler": 1,
+    "legacyBundleHash": "3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902",
+    "baseSha256": {
+        "strategist": "c84387582f581640493545996c7c61ab9a46d11829d740f1319c34b5c50a6917",
+        "composer": "78437378e4a3b7bfba0b407d73b9e165b3a28e1e0555371bf771d0e47780e866",
+        "critic": "180aa6c37257448f24a15e0ba7dafab918693a60cecf19e6b8141471e200c896",
+        "composer_retry": "92d97a04316cf5a6fecb4a70c3f0e573c49d54f881bf6f2733b96524cb279ccd",
+        "critic_retry": "a03940c2f4d0d5f21f3ee49007162b1057106bb619aa162292a22673009315ed"
+    },
+    "baseBytes": {
+        "strategist": 29243,
+        "composer": 27132,
+        "critic": 15583,
+        "composer_retry": 25023,
+        "critic_retry": 15235
+    },
+    "nodes": {
+        "strategist": "Strategist",
+        "composer": "Composer",
+        "critic": "Critic Comercial",
+        "composer_retry": "Composer Reintento",
+        "critic_retry": "Critic Comercial 2"
+    },
+    "selector": {
+        "name": "Elegir Prompts",
+        "id": "5e1ec7a0-0001-4c0d-9a5e-000000000051",
+        "jsCodeSha256": "456e4d495115cf4b126277773b6f4998530a78635f850eac6b8b7ec4e7350d0f",
+        "jsCodeBytes": 118831
+    },
+    "preparaCommitJsCodeSha256": "fb35df55dbfe6825482baa7f30b4f41050ede24d6eecfc92f23585a9f8fff7ce",
+    "decideJsonBody": "={{ JSON.stringify({ conversation_id: $json.conversation_id, message_id: $json.message_id, prompt_contract: \"ultron-prompts/1\" }) }}",
+    "systemContent": {
+        "Strategist": "={{ $('Elegir Prompts').first().json.ultron_prompts.roles.strategist }}",
+        "Composer": "={{ $('Elegir Prompts').first().json.ultron_prompts.roles.composer }}",
+        "Critic Comercial": "={{ $('Elegir Prompts').first().json.ultron_prompts.roles.critic }}",
+        "Composer Reintento": "={{ $('Elegir Prompts').first().json.ultron_prompts.roles.composer_retry }}",
+        "Critic Comercial 2": "={{ $('Elegir Prompts').first().json.ultron_prompts.roles.critic_retry }}"
+    },
+    "userContentSha256": {
+        "Strategist": "07aa382c922c41a2a2b7f497b1c81bfb18a2f318521fce6d532cc786e20c0411",
+        "Composer": "dec722e2ac88314792c4340dade87ae8056f35f94e9b864eda888fdab3720e92",
+        "Critic Comercial": "eb8195f5394c3edff1eefd78721404774b52001d4192c4a88b5965597f3547b1",
+        "Composer Reintento": "3553c4e81ef9a836c5b7f42b35f62a728b0286456fbeb6ec35f22369f3c65e25",
+        "Critic Comercial 2": "daae1b54b95e1933d7b290d4247f0df510f30242ab5f7d70199f2c46eb351219"
+    }
+}

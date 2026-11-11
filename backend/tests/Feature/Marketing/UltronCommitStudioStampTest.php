@@ -440,7 +440,7 @@ class UltronCommitStudioStampTest extends TestCase
                     DB::statement('ALTER TABLE '.self::TABLA.' DROP CONSTRAINT uspub_engine_contract_chk');
                 }
 
-                return $this->inserta($json, ['uuid' => $uuid, 'seq' => $seq, 'engine_contract' => 'ultron-engine-config/2']);
+                return $this->inserta($json, ['uuid' => $uuid, 'seq' => $seq, 'engine_contract' => 'ultron-engine-config/3']);
             })(),
         };
     }

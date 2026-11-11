@@ -1,0 +1,26 @@
+{
+    "ok": true,
+    "commercial_phase": "NEW_LEAD",
+    "allowed_transitions": [
+        "NEW_LEAD",
+        "GOAL_DISCOVERY"
+    ],
+    "allowed_tools": [
+        "staff_review"
+    ],
+    "decide_token": "sintetico.no-firmado",
+    "superseded": false,
+    "studio_prompts": {
+        "contract": "ultron-prompts/1",
+        "mode": "legacy",
+        "reason": "prompts_off",
+        "base": "n8n-29de5119",
+        "compiler": 1,
+        "bundle_hash": null,
+        "version": null,
+        "content_hash": null,
+        "entry": null,
+        "seq": null,
+        "roles": null
+    }
+}

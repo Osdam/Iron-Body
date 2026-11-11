@@ -131,7 +131,7 @@ Tienen que reproducir cada `expected` **exactamente**. Si PHP discrepa, se corri
 - **Cómo se insertan las filas:** una por caso y en la transacción del caso (`DatabaseTransactions` o `RefreshDatabase`). Hay dos motivos:
   - los disparadores de solo inserción impiden limpiarlas con `DELETE`;
   - los `uuid` y `seq` se repiten entre casos (son UNIQUE).
-- **`engineContract = "ultron-engine-config/2"`** (2 casos) no entra en PostgreSQL: el CHECK de dominio lo rechaza. Esos dos casos van en SQLite o por un resolutor puro.
+- **`engineContract = "ultron-engine-config/3"`** (2 casos, `scope/34` y `scope/35`) no entra en PostgreSQL: el CHECK de dominio (`uspub_engine_contract_chk`) solo admite `/1` y, desde la Enmienda M-1 del H5 (`2026_11_16_100001_…`), `/2`. Esos dos casos van en SQLite o por un resolutor puro. Hasta la Enmienda M-1, el contrato desconocido de estos casos era `/2`; pasó a `/3` porque `/2` ya es un contrato válido (huellas y firmas intactas: van sobre `effectiveJson`, no sobre la columna).
 - **`failure`.** El arnés simula el fallo como quiera:
   - `table_missing`: SQLSTATE 42P01 o «no such table»;
   - `read_failed`: cualquier otra excepción de la consulta.

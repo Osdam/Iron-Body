@@ -1,0 +1,6 @@
+# Las bases son bytes exactos del flujo de n8n (sin salto de línea final y con
+# espacios al final de algunas líneas). Un editor que los «arregle» rompe su
+# sha256 y el motor cae a Legacy: aquí no se toca nada.
+[*.txt]
+insert_final_newline = false
+trim_trailing_whitespace = false
