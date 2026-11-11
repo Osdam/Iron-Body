@@ -18,7 +18,7 @@
 # la llave (con la sangría que tuviera; dos espacios si falta), reescrita sobre el mismo fichero para conservar inodo,
 # dueño y modo → el fichero parsea → config:cache como www-data con umask 077; la caché, de www-data, 600 y nunca un
 # enlace (H-5: el chmod, si hace falta, lo hace www-data) → la configuración efectiva es la pedida y lo demás no cambió
-# → schedule:list (su código de salida, aparte: m-1 del reviewer del H7): las 2 tareas del Studio (ultron-studio:monitor
+# → schedule:list (su código de salida, aparte: m-1 del reviewer del H7): las 2 tareas del monitor (ultron-studio:monitor
 # cada 30 min e integrations-snapshot a las 07:10 de Bogotá) aparecen o desaparecen y el total cambia en exactamente 2
 # (26 ↔ 28 en las pruebas y 27 ↔ 29 en el banco: el total depende de las demás banderas del servidor, billing, wompi,
 # coach, bienestar, seguimientos, Meta) → queue:restart (como el mando
@@ -66,21 +66,36 @@ leer_resto() {
   case "$l" in '{"engine_scope"'*) printf '%s\n' "$l" ;; esac
 }
 # El programador por `schedule:list --json`, con su código de salida APARTE (m-1: sin base o sin caché lanza una
-# QueryException sobre cache_locks y la salida vacía no puede pasar por «0 tareas»): «total del_Studio» (entradas y
-# cuántas son ultron-studio:*), «FALLO <código>» o «ILEGIBLE». Su salida de error no se imprime.
+# QueryException sobre cache_locks y la salida vacía no puede pasar por «0 tareas»): «total del_monitor» (entradas y
+# cuántas son las DOS de este monitor), «FALLO <código>» o «ILEGIBLE». Su salida de error no se imprime.
+# 11-11-2026: solo cuentan SUS dos tareas, `ultron-studio:monitor` y `ultron-studio:integrations-snapshot`, las dos SIN
+# argumentos (routes/console.php, bajo ULTRON_STUDIO_MONITOR_ENABLED). Antes contaba cualquier `ultron-studio:*` y veía 1
+# con el monitor apagado: la sincronización de plantillas de Meta (ultron-studio:meta-templates-sync, ola M-1, su propia
+# bandera; como smoke-run-h8.sh:100) y, con el monitor de voz encendido, también vería la verificación semanal de
+# ElevenLabs (`ultron-studio:integrations-snapshot --verify-voice`, de VOICE_MONITOR_ENABLED).
 programadas() {
   local salida rc=0
   salida=$(sudo -u www-data php artisan schedule:list --json 2> /dev/null) || rc=$?
   [ "$rc" = 0 ] || { echo "FALLO $rc"; return 0; }
   printf '%s' "$salida" | python3 -c '
-import json, sys
+import json, re, sys
 try:
     r = json.load(sys.stdin)
     assert isinstance(r, list)
 except Exception:
     print("ILEGIBLE")
     sys.exit(0)
-print(len(r), sum(1 for x in r if "ultron-studio:" in str(x.get("command", ""))))' 2> /dev/null || echo ILEGIBLE
+suyas = [re.compile(r"(?:^|[\s\x27\x22])ultron-studio:" + n + r"[\s\x27\x22]*$") for n in ("monitor", "integrations-snapshot")]
+print(len(r), sum(1 for x in r if any(p.search(str(x.get("command", ""))) for p in suyas)))' 2> /dev/null || echo ILEGIBLE
+}
+# Solo para «estado» (informativo): las otras `ultron-studio:*` del programador, que no son de este monitor y no cuentan.
+otras_del_studio() {
+  sudo -u www-data php artisan schedule:list --json 2> /dev/null | python3 -c '
+import json, re, sys
+suyas = [re.compile(r"(?:^|[\s\x27\x22])ultron-studio:" + n + r"[\s\x27\x22]*$") for n in ("monitor", "integrations-snapshot")]
+c = [str(x.get("command", "")) for x in json.load(sys.stdin)]
+o = sorted(re.sub(r"^.*?(ultron-studio:\S+(?:\s+--\S+)*).*$", r"\1", x) for x in c if "ultron-studio:" in x and not any(p.search(x) for p in suyas))
+print("%d (%s)" % (len(o), ", ".join(o)) if o else "0")' 2> /dev/null || echo '?'
 }
 cuenta_var() { grep -Ec "^[[:space:]]*(export[[:space:]]+)?$1[[:space:]]*=" "$ENVF" || true; }
 # Escribe la clave con la sangría que tuviera la línea (la añade con dos espacios si falta). La sustitución se escribe
@@ -175,7 +190,7 @@ if [ "$VALOR" = estado ]; then
     "FALLO "*) echo "schedule:list NO sale con 0 (código ${PROG0#FALLO }; su salida no se imprime): el programador no se puede leer (¿base o caché?)"; exit 1 ;;
     ILEGIBLE) echo "schedule:list no devolvió la lista JSON de tareas"; exit 1 ;;
   esac
-  echo "schedule:list (total · del Studio): $PROG0 (encendido: 2 del Studio; apagado: 0)"
+  echo "schedule:list (total · del monitor): $PROG0 (encendido: sus 2, ultron-studio:monitor e integrations-snapshot; apagado: 0) · otras ultron-studio:* que no cuentan: $(otras_del_studio)"
   # B-T13 (OPS8-e): la expectativa y si el estado de hoy la confirma; quién ejecuta el programador (B-4); el fichero (C-14).
   EXP=$(leer_expectativa)
   if expectativa_confirmada; then CONF=sí; else CONF="NO (encendido, la primera pasada abriría un incidente: fijar la de la etapa con bash /root/h8-voice-scope.sh expectativa fase1|fase2|llamadas)"; fi
@@ -202,9 +217,9 @@ case "$PROG0" in
   ILEGIBLE) aborta "schedule:list no devolvió la lista JSON de tareas: no se toca nada" ;;
 esac
 case "$PROG0" in
-  *" 0")  [ "$DESDE" = off ] || aborta "el programador no tiene tareas del Studio con el monitor encendido ($PROG0): revisar antes de tocar nada" ;;
-  *" 2")  [ "$DESDE" = on ] || aborta "el programador tiene 2 tareas del Studio con el monitor apagado ($PROG0): revisar antes de tocar nada" ;;
-  *) aborta "el programador no cuadra antes de empezar (total · del Studio: $PROG0)" ;;
+  *" 0")  [ "$DESDE" = off ] || aborta "el programador no tiene las tareas del monitor con el monitor encendido ($PROG0): revisar antes de tocar nada" ;;
+  *" 2")  [ "$DESDE" = on ] || aborta "el programador tiene las 2 tareas del monitor con el monitor apagado ($PROG0): revisar antes de tocar nada" ;;
+  *) aborta "el programador no cuadra antes de empezar (total · del monitor: $PROG0)" ;;
 esac
 RESTO_ANTES=$(leer_resto)
 [ -n "$RESTO_ANTES" ] || aborta "no se pudo leer la configuración del motor, del H5 y del H6 (tinker falló; su salida no se imprime)"
@@ -228,7 +243,7 @@ TS=$(date -u +%Y%m%d-%H%M%S)
 COPIA="/root/env-pre-h7-monitor-$VALOR-$TS"
 install -m 600 -o root -g root "$ENVF" "$COPIA"
 VUELTA="install -m $MODO -o ${DUENO%%:*} -g ${DUENO##*:} $COPIA /var/www/api/backend/.env && cd /var/www/api/backend && sudo -u www-data sh -c 'umask 077; php artisan config:cache -q' && sudo -u www-data chmod 600 bootstrap/cache/config.php && sudo -u www-data php artisan queue:restart -q"
-echo "0. monitor: $DESDE → $VALOR · copia previa del fichero de entorno: $COPIA (600, root) · fichero $DUENO $MODO · programador (total · del Studio): $PROG0"
+echo "0. monitor: $DESDE → $VALOR · copia previa del fichero de entorno: $COPIA (600, root) · fichero $DUENO $MODO · programador (total · del monitor): $PROG0"
 
 set_var "$CLAVE" "$NUEVO_B"
 [ "$(stat -c '%U:%G %a' "$ENVF")" = "$DUENO $MODO" ] || { chown "$DUENO" "$ENVF"; chmod "$MODO" "$ENVF"; echo "   dueño y modo del fichero restaurados a $DUENO $MODO"; }
@@ -261,7 +276,7 @@ PROG=$(programadas)
 case "$PROG" in
   "FALLO "*) desvio "schedule:list no sale con 0 (código ${PROG#FALLO }; su salida no se imprime): no se puede comprobar el programador (m-1)" ;;
   ILEGIBLE) desvio "schedule:list no devolvió la lista JSON de tareas: no se puede comprobar el programador" ;;
-  *) echo "3. programador (total · del Studio): $PROG0 → $PROG (esperado $PROG_ESPERADA: las 2 tareas del Studio $([ "$VALOR" = on ] && echo aparecen || echo desaparecen) y nada más cambia)"
+  *) echo "3. programador (total · del monitor): $PROG0 → $PROG (esperado $PROG_ESPERADA: las 2 tareas del monitor $([ "$VALOR" = on ] && echo aparecen || echo desaparecen) y nada más cambia)"
      [ "$PROG" = "$PROG_ESPERADA" ] || desvio "schedule:list da [$PROG] y se esperaba [$PROG_ESPERADA]" ;;
 esac
 sudo -u www-data php artisan queue:restart -q || desvio "queue:restart no salió con 0"

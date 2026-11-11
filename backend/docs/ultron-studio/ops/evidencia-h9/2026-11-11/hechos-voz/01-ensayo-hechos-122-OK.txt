@@ -1,0 +1,431 @@
+   copias del banco: h8-voice-scope.sh (12 sustituciones: el bloque propio, root, el grupo de 640 y los dos fallos forzados), h7-monitor-scope.sh y el de HEAD (8 cada uno); flock de verdad en $B/bin-hechos
+#### partida: sin hechos en el fichero, la herramienta dice que no los tiene; valla en 0 peticiones
+OK      partida: ninguna línea VOICE_FACTS_* en el fichero sintético
+OK      partida: consultar_horarios dice que no los tiene (lectura independiente)
+      == estado de la voz (configuración efectiva del proceso CLI, la misma caché que el web; sin valores de secretos)
+         código desplegado: HEAD b1959a0 · constante de llamadas: cerrada
+         salientes: no · alcance canary · cupo/día 0 · presupuesto/día 0 US$ · Twilio Voice no
+         entrantes: no · cupo/día 0
+         laboratorio hablado: sí · driver elevenlabs · presupuesto/día 3.00 US$ · por sesión 0 US$ · 300 s · 5 sesiones/día
+         monitor de voz: no · publicar la voz (Studio): no · monitor del H7: no (expectativa: twilio:connected_otp_only,twilio_voice:not_configured,elevenlabs:ELEVENLABS_NOT_CONFIGURED)
+         piezas no secretas: VOICE_WEBHOOK_BASE_URL — · ELEVENLABS_AGENT_PHONE_NUMBER_ID — · TWILIO_VOICE_FROM — · TWILIO_VOICE_ACCOUNT_SID —
+         referencias (ids, no secretos): herramientas — · iniciación — · webhook post-llamada —
+         secretos (solo presencia): ELEVENLABS_API_KEY falta · ELEVENLABS_WEBHOOK_SECRET falta · ELEVENLABS_TOOL_SECRET falta · ELEVENLABS_INITIATION_SECRET falta · TWILIO_VOICE_API_KEY_SID falta · TWILIO_VOICE_API_KEY_SECRET falta · TWILIO_VOICE_SIGNING_TOKEN falta
+         número de voz igual a uno de WhatsApp: no · ElevenLabs según el Studio: ELEVENLABS_NOT_CONFIGURED
+         el número admite entrantes (VOICE_NUMBER_INBOUND_CAPABLE): sin declarar (se trata como «admite»)
+         reserva por saliente (VoiceCostGuard): 0.6105 US$ a un móvil sin transferencia · 1.1220 US$ a un fijo con transferencia
+         contactos de voz (alta y consentimiento, VOICE_CONTACTS_ENABLED, B-T4): no (409 voice_contacts_disabled; revocar, excluir y el RNE siguen)
+         voice:doctor --telefonia (sin red): estado=ELEVENLABS_NOT_CONFIGURED constante=cerrada encendidas=1 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=no importado=no subcuenta=no whatsapp=no proveedor=ELEVENLABS_NOT_CONFIGURED
+         hechos de consultar_horarios (huellas, nunca el texto): sede: vacía · horario: vacía · líneas en el fichero: VOICE_FACTS_SITE 0, VOICE_FACTS_HOURS 0 · la herramienta los dice: no (necesita los dos; dice que no los tiene) (bash $B/root/h8-voice-scope.sh hechos …)
+         programador (total · del Studio · de voz): 33 0 0 (de voz: 5 con el monitor de voz encendido, 0 apagado)
+         workers (RUNNING · BACKOFF/FATAL): 13 0 · ironbody-voice en RUNNING: 0 (lo exige «salientes on»)
+         fichero de entorno: alejodev:staff 640 (C-14: www-data 600 o root:www-data 640)
+         integrations-doctor confirma la expectativa del monitor del H7: sí
+OK      estado: enseña los hechos (huellas) y que la herramienta no los dice  [código 0]
+        bash /root/h8-voice-scope.sh estado
+        bash /root/h8-voice-scope.sh lab on --driver=elevenlabs|fake --presupuesto-dia=USD --presupuesto-sesion=USD [--sesiones-dia=N] [--segundos=N]
+        bash /root/h8-voice-scope.sh lab off
+        bash /root/h8-voice-scope.sh fase 2 set CLAVE=VALOR [CLAVE=VALOR …]      las piezas NO secretas (y VOICE_NUMBER_INBOUND_CAPABLE)
+        bash /root/h8-voice-scope.sh fase 2 secreto <fichero>                    las de Twilio que SÍ son secretas, desde un
+                                                                                  fichero 600 de root (nunca por argumentos)
+        bash /root/h8-voice-scope.sh salientes on --cupo=N --presupuesto=USD    fase 4a: alcance canary, nada más
+        bash /root/h8-voice-scope.sh salientes off                               nivel 0 de D8-20 para las salientes
+        bash /root/h8-voice-scope.sh entrantes on --cupo=N                       fase 3
+        bash /root/h8-voice-scope.sh entrantes off                               nivel 0 de D8-20 para las entrantes
+        bash /root/h8-voice-scope.sh monitor on [--acepta-freno] | off           VOICE_MONITOR_ENABLED (las tareas voice:*: 4, o 5)
+        bash /root/h8-voice-scope.sh publicar on|off                             ULTRON_STUDIO_VOICE_PUBLISHING_ENABLED (E4-1)
+        bash /root/h8-voice-scope.sh expectativa fase1|fase2|llamadas            ULTRON_STUDIO_MONITOR_EXPECT del monitor del H7
+        bash /root/h8-voice-scope.sh contactos on|off                            VOICE_CONTACTS_ENABLED (B-T4: alta de contactos y su consentimiento; fase 4b)
+        bash /root/h8-voice-scope.sh hechos --sede='…' [--horario='…'] [--en-seco]   VOICE_FACTS_SITE / VOICE_FACTS_HOURS (consultar_horarios)
+        bash /root/h8-voice-scope.sh hechos borrar [--en-seco]                   los quita del fichero (la herramienta dice que no los tiene)
+OK      uso: la ayuda enseña las dos órdenes de «hechos»  [código 2]
+#### rechazos de la forma (código 2, sin registro, sin copia, sin tocar el fichero)
+      NO SE APLICA (no se ha tocado nada): la sede: 1 carácter(es) fuera del conjunto admitido (U+0022). Se admiten letras, áéíóúüñ y sus mayúsculas, dígitos, el espacio y . , ; : - # / ( ); nada de comillas, $, \, acento grave, tabuladores ni saltos de línea
+OK      rechazo: comillas dobles  [código 2]
+OK        … el fichero no cambió
+      NO SE APLICA (no se ha tocado nada): la sede: 1 carácter(es) fuera del conjunto admitido (U+0027). Se admiten letras, áéíóúüñ y sus mayúsculas, dígitos, el espacio y . , ; : - # / ( ); nada de comillas, $, \, acento grave, tabuladores ni saltos de línea
+OK      rechazo: comilla simple  [código 2]
+OK        … el fichero no cambió
+      NO SE APLICA (no se ha tocado nada): la sede: 4 carácter(es) fuera del conjunto admitido (U+0024, U+005F, U+007B, U+007D). Se admiten letras, áéíóúüñ y sus mayúsculas, dígitos, el espacio y . , ; : - # / ( ); nada de comillas, $, \, acento grave, tabuladores ni saltos de línea
+OK      rechazo: dólar (interpolación de Dotenv)  [código 2]
+OK        … el fichero no cambió
+      NO SE APLICA (no se ha tocado nada): el horario: 1 carácter(es) fuera del conjunto admitido (U+005C). Se admiten letras, áéíóúüñ y sus mayúsculas, dígitos, el espacio y . , ; : - # / ( ); nada de comillas, $, \, acento grave, tabuladores ni saltos de línea
+OK      rechazo: barra invertida  [código 2]
+OK        … el fichero no cambió
+      NO SE APLICA (no se ha tocado nada): la sede: 1 carácter(es) fuera del conjunto admitido (U+0060). Se admiten letras, áéíóúüñ y sus mayúsculas, dígitos, el espacio y . , ; : - # / ( ); nada de comillas, $, \, acento grave, tabuladores ni saltos de línea
+OK      rechazo: acento grave  [código 2]
+OK        … el fichero no cambió
+      NO SE APLICA (no se ha tocado nada): la sede: 3 carácter(es) fuera del conjunto admitido (U+000A, U+003D, U+005F). Se admiten letras, áéíóúüñ y sus mayúsculas, dígitos, el espacio y . , ; : - # / ( ); nada de comillas, $, \, acento grave, tabuladores ni saltos de línea
+OK      rechazo: salto de línea  [código 2]
+OK        … el fichero no cambió
+      NO SE APLICA (no se ha tocado nada): el horario: 1 carácter(es) fuera del conjunto admitido (U+0009). Se admiten letras, áéíóúüñ y sus mayúsculas, dígitos, el espacio y . , ; : - # / ( ); nada de comillas, $, \, acento grave, tabuladores ni saltos de línea
+OK      rechazo: tabulador  [código 2]
+OK        … el fichero no cambió
+      NO SE APLICA (no se ha tocado nada): la sede vacía: para quitar los hechos, «hechos borrar»
+OK      rechazo: vacío  [código 2]
+OK        … el fichero no cambió
+      NO SE APLICA (no se ha tocado nada): el horario: 301 caracteres (máximo 300)
+OK      rechazo: 301 caracteres  [código 2]
+OK        … el fichero no cambió
+      NO SE APLICA (no se ha tocado nada): la sede: 3 carácter(es) fuera del conjunto admitido (U+003C, U+003E, U+0040). Se admiten letras, áéíóúüñ y sus mayúsculas, dígitos, el espacio y . , ; : - # / ( ); nada de comillas, $, \, acento grave, tabuladores ni saltos de línea
+OK      rechazo: fuera del conjunto (@ y <)  [código 2]
+OK        … el fichero no cambió
+      NO SE APLICA (no se ha tocado nada): la sede: 1 carácter(es) fuera del conjunto admitido (U+1F4AA). Se admiten letras, áéíóúüñ y sus mayúsculas, dígitos, el espacio y . , ; : - # / ( ); nada de comillas, $, \, acento grave, tabuladores ni saltos de línea
+OK      rechazo: emoji  [código 2]
+OK        … el fichero no cambió
+      NO SE APLICA (no se ha tocado nada): la sede: 1 carácter(es) fuera del conjunto admitido (U+0303) · lleva una tilde SUELTA (NFD): escribir la letra compuesta. Se admiten letras, áéíóúüñ y sus mayúsculas, dígitos, el espacio y . , ; : - # / ( ); nada de comillas, $, \, acento grave, tabuladores ni saltos de línea
+OK      rechazo: tilde suelta (NFD)  [código 2]
+OK        … el fichero no cambió
+      NO SE APLICA (no se ha tocado nada): la sede: no es UTF-8 válido
+OK      rechazo: UTF-8 inválido  [código 2]
+OK        … el fichero no cambió
+      NO SE APLICA (no se ha tocado nada): la sede: espacios al principio o al final (la configuración los recorta y no casaría byte a byte)
+OK      rechazo: espacio al principio  [código 2]
+OK        … el fichero no cambió
+      NO SE APLICA (no se ha tocado nada): el horario: env() de Laravel convierte esa palabra (true, false, null, empty) en otra cosa; no es un texto
+OK      rechazo: palabra que env() convierte  [código 2]
+OK        … el fichero no cambió
+      NO SE APLICA (no se ha tocado nada): la sede: parece una URL (los hechos son texto plano, sin URL: .env.example)
+OK      rechazo: URL  [código 2]
+OK        … el fichero no cambió
+      NO SE APLICA (no se ha tocado nada): la sede: 7 o más dígitos seguidos parecen un teléfono (los hechos no llevan teléfonos: .env.example)
+OK      rechazo: teléfono  [código 2]
+OK        … el fichero no cambió
+      NO SE APLICA (no se ha tocado nada): argumento desconocido (no se imprime): hechos --sede='…' [--horario='…'] [--en-seco]  |  hechos borrar [--en-seco]
+OK      rechazo: argumento desconocido  [código 2]
+OK        … el fichero no cambió
+      NO SE APLICA (no se ha tocado nada): hechos --sede='…' [--horario='…'] [--en-seco]  |  hechos borrar [--en-seco]
+OK      rechazo: sin argumentos  [código 2]
+OK        … el fichero no cambió
+      NO SE APLICA (no se ha tocado nada): «hechos borrar» va solo (quita los dos)
+OK      rechazo: borrar con otra opción  [código 2]
+OK        … el fichero no cambió
+      NO SE APLICA (no se ha tocado nada): --sede va una sola vez
+OK      rechazo: opción repetida  [código 2]
+OK        … el fichero no cambió
+      NO SE APLICA (no se ha tocado nada): falta --sede='…' o --horario='…' (o «hechos borrar»)
+OK      rechazo: solo --en-seco, sin nada que fijar  [código 2]
+OK        … el fichero no cambió
+OK      rechazos: ni copias previas ni registros (se niegan antes)  [copias 0 · registros 0]
+#### en seco: las huellas que escribiría, sin copia ni escritura
+      == h8-voice-scope.sh hechos · 2026-11-11T17:07:14Z · registro $B/root/h8-voice-scope-hechos-20261111-170714.log (huellas sha256 y bytes, nunca el texto)
+      == EN SECO (hechos): no se ha tocado nada (ni copia ni escritura). Todas las comprobaciones previas pasan:
+         fichero alejodev:staff 640 · programador 33 0 0 · workers 13 0 · el código lee voice.facts
+         antes (configuración efectiva): sede: vacía · horario: vacía · líneas en el fichero: VOICE_FACTS_SITE 0, VOICE_FACTS_HOURS 0
+         escribiría (en el fichero): sede: 31 bytes, sha256 f219af8ac5fd… · horario: 150 bytes, sha256 d2aa16e9f9cf… · configuración efectiva esperada: sede: 31 bytes, sha256 f219af8ac5fd… · horario: 150 bytes, sha256 d2aa16e9f9cf…
+         comparar estas huellas con las del texto que se quería escribir ANTES de repetir la orden sin --en-seco
+OK      hechos <reales> --en-seco → EN SECO con las huellas de los dos textos  [código 0]
+OK        … el fichero no cambió
+OK        … sin copia previa  [0]
+#### los dos valores REALES (en 640)
+      == h8-voice-scope.sh hechos · 2026-11-11T17:07:17Z · registro $B/root/h8-voice-scope-hechos-20261111-170717.log (huellas sha256 y bytes, nunca el texto)
+      0. hechos · copia previa: $B/root/env-pre-voice-hechos-20261111-170718 (600, alejodev) · fichero alejodev:staff 640 · programador 33 0 0 · workers 13 0
+         antes (configuración efectiva): sede: vacía · horario: vacía · líneas en el fichero: VOICE_FACTS_SITE 0, VOICE_FACTS_HOURS 0
+         pedido (en el fichero): sede: 31 bytes, sha256 f219af8ac5fd… · horario: 150 bytes, sha256 d2aa16e9f9cf…
+         VOICE_FACTS_HOURS añadida
+         VOICE_FACTS_SITE añadida
+      1. escrito: sede: 31 bytes, sha256 f219af8ac5fd… · horario: 150 bytes, sha256 d2aa16e9f9cf… = lo pedido byte a byte (Dotenv) · fichero alejodev:staff 640 · el resto, idéntico a la copia previa
+      2. caché alejodev 600 · configuración efectiva (artisan como alejodev): sede: vacía · horario: vacía → sede: 31 bytes, sha256 f219af8ac5fd… · horario: 150 bytes, sha256 d2aa16e9f9cf… = el argumento byte a byte
+      3. sin cambios: el resto de la voz, el motor, el H4–H7, ElevenLabs y el programador (33 0 0)
+      4. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+      5. admin/voice/status sin token → 401
+      6. local.ERROR en laravel*.log: 0 → 0
+      7. voice:doctor --telefonia (sin red): facts.hoursConfigured=true (esperado true: consultar_horarios dice la sede y el horario)
+         vuelta atrás exacta (el fichero de antes): install -m 640 -o alejodev -g staff $B/root/env-pre-voice-hechos-20261111-170718 $B/api/backend/.env && cd $B/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+         vuelta atrás funcional: bash $B/root/h8-voice-scope.sh hechos borrar (antes no estaban en el fichero: vuelve idéntico byte a byte)
+         la copia previa ($B/root/env-pre-voice-hechos-20261111-170718, 600) lleva secretos: borrarla con shred -u cuando la vuelta exacta ya no haga falta
+      MANDO hechos APLICADO (copia previa: $B/root/env-pre-voice-hechos-20261111-170718; registro: $B/root/h8-voice-scope-hechos-20261111-170717.log)
+OK      hechos --sede=<real> --horario=<real> → APLICADO  [código 0]
+OK        … la vuelta funcional que imprime es «hechos borrar» (antes no estaban)
+OK        … el fichero tiene EXACTAMENTE las dos líneas, entre comillas dobles, con dos espacios
+OK        … config('voice.facts.*') y consultar_horarios dan los dos textos BYTE A BYTE (lectura independiente)
+OK      valores reales: el fichero de entorno sigue en 640 y de alejodev  [640 alejodev]
+      == h8-voice-scope.sh hechos · 2026-11-11T17:07:37Z · registro $B/root/h8-voice-scope-hechos-20261111-170737.log (huellas sha256 y bytes, nunca el texto)
+      == hechos: el fichero y la configuración efectiva ya dicen eso (sede: 31 bytes, sha256 f219af8ac5fd… · horario: 150 bytes, sha256 d2aa16e9f9cf…); nada que escribir
+OK      repetir la misma orden → nada que escribir (idempotente)  [código 0]
+OK        … el fichero no cambió
+OK        … la repetición no hizo copia (una sola, la de la primera)  [1]
+#### tildes, ñ y el límite de 300 caracteres
+OK        (el horario de prueba tiene 300 caracteres y más bytes)
+      == h8-voice-scope.sh hechos · 2026-11-11T17:07:39Z · registro $B/root/h8-voice-scope-hechos-20261111-170739.log (huellas sha256 y bytes, nunca el texto)
+      0. hechos · copia previa: $B/root/env-pre-voice-hechos-20261111-170741 (600, alejodev) · fichero alejodev:staff 640 · programador 33 0 0 · workers 13 0
+         antes (configuración efectiva): sede: 31 bytes, sha256 f219af8ac5fd… · horario: 150 bytes, sha256 d2aa16e9f9cf… · líneas en el fichero: VOICE_FACTS_SITE 1, VOICE_FACTS_HOURS 1
+         pedido (en el fichero): sede: 105 bytes, sha256 a2193d279d47… · horario: 314 bytes, sha256 f85dccd5bebe…
+         VOICE_FACTS_HOURS sustituida
+         VOICE_FACTS_SITE sustituida
+      1. escrito: sede: 105 bytes, sha256 a2193d279d47… · horario: 314 bytes, sha256 f85dccd5bebe… = lo pedido byte a byte (Dotenv) · fichero alejodev:staff 640 · el resto, idéntico a la copia previa
+      2. caché alejodev 600 · configuración efectiva (artisan como alejodev): sede: 31 bytes, sha256 f219af8ac5fd… · horario: 150 bytes, sha256 d2aa16e9f9cf… → sede: 105 bytes, sha256 a2193d279d47… · horario: 314 bytes, sha256 f85dccd5bebe… = el argumento byte a byte
+      3. sin cambios: el resto de la voz, el motor, el H4–H7, ElevenLabs y el programador (33 0 0)
+      4. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+      5. admin/voice/status sin token → 401
+      6. local.ERROR en laravel*.log: 0 → 0
+      7. voice:doctor --telefonia (sin red): facts.hoursConfigured=true (esperado true: consultar_horarios dice la sede y el horario)
+         vuelta atrás exacta (el fichero de antes): install -m 640 -o alejodev -g staff $B/root/env-pre-voice-hechos-20261111-170741 $B/api/backend/.env && cd $B/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+         vuelta atrás funcional: bash $B/root/h8-voice-scope.sh hechos borrar (los quita; antes había líneas de los hechos: para dejar el fichero idéntico, la exacta)
+         la copia previa ($B/root/env-pre-voice-hechos-20261111-170741, 600) lleva secretos: borrarla con shred -u cuando la vuelta exacta ya no haga falta
+      MANDO hechos APLICADO (copia previa: $B/root/env-pre-voice-hechos-20261111-170741; registro: $B/root/h8-voice-scope-hechos-20261111-170739.log)
+OK      hechos con tildes, ñ, ü y 300 caracteres → APLICADO  [código 0]
+OK        … sustituidas en su sitio (no añadidas)
+OK        … config y la herramienta dan los dos textos BYTE A BYTE
+OK      tildes: el fichero de entorno sigue en 640 y de alejodev  [640 alejodev]
+#### fallos forzados a medias (BANCO_FALLA): se restaura solo y se COMPRUEBA
+      == h8-voice-scope.sh hechos · 2026-11-11T17:07:59Z · registro $B/root/h8-voice-scope-hechos-20261111-170759.log (huellas sha256 y bytes, nunca el texto)
+      0. hechos · copia previa: $B/root/env-pre-voice-hechos-20261111-170801 (600, alejodev) · fichero alejodev:staff 640 · programador 33 0 0 · workers 13 0
+         antes (configuración efectiva): sede: 105 bytes, sha256 a2193d279d47… · horario: 314 bytes, sha256 f85dccd5bebe… · líneas en el fichero: VOICE_FACTS_SITE 1, VOICE_FACTS_HOURS 1
+         pedido (en el fichero): sede: 31 bytes, sha256 f219af8ac5fd… · horario: 150 bytes, sha256 d2aa16e9f9cf…
+         VOICE_FACTS_HOURS sustituida
+         VOICE_FACTS_SITE sustituida
+      ABORTA: el fichero, leído por Dotenv, no da lo pedido byte a byte (ilegible; pedido: sede: 31 bytes, sha256 f219af8ac5fd… · horario: 150 bytes, sha256 d2aa16e9f9cf…); se restaura solo
+      FALLO A MEDIAS (etapa 1, código 1; 0 si lo cortó una señal): se restaura el fichero de entorno desde la copia previa
+         fichero de entorno restaurado: idéntico byte a byte a la copia previa, alejodev:staff 640
+         hechos efectivos: los de antes (sede: 105 bytes, sha256 a2193d279d47… · horario: 314 bytes, sha256 f85dccd5bebe…)
+         restaurado y COMPROBADO: el fichero es la copia previa byte a byte y la configuración efectiva es la de antes
+         la copia previa se conserva: $B/root/env-pre-voice-hechos-20261111-170801 (600; lleva secretos: borrarla con shred -u cuando ya no haga falta)
+      MANDO hechos NO APLICADO (fallo a medias; restaurado: sí)
+OK      etapa 1 (el fichero leído por Dotenv no es lo pedido) → código 1, restaurado y COMPROBADO  [código 1]
+OK        … FALLO A MEDIAS (etapa 1)
+OK        … el fichero, idéntico byte a byte al de antes del fallo
+OK      tras el fallo de la etapa 1: el fichero de entorno sigue en 640 y de alejodev  [640 alejodev]
+OK        … la configuración efectiva y la herramienta siguen con los de antes
+      == h8-voice-scope.sh hechos · 2026-11-11T17:08:04Z · registro $B/root/h8-voice-scope-hechos-20261111-170804.log (huellas sha256 y bytes, nunca el texto)
+      0. hechos · copia previa: $B/root/env-pre-voice-hechos-20261111-170805 (600, alejodev) · fichero alejodev:staff 640 · programador 33 0 0 · workers 13 0
+         antes (configuración efectiva): sede: 105 bytes, sha256 a2193d279d47… · horario: 314 bytes, sha256 f85dccd5bebe… · líneas en el fichero: VOICE_FACTS_SITE 1, VOICE_FACTS_HOURS 1
+         pedido (en el fichero): sede: 31 bytes, sha256 f219af8ac5fd… · horario: 150 bytes, sha256 d2aa16e9f9cf…
+         VOICE_FACTS_HOURS sustituida
+         VOICE_FACTS_SITE sustituida
+      1. escrito: sede: 31 bytes, sha256 f219af8ac5fd… · horario: 150 bytes, sha256 d2aa16e9f9cf… = lo pedido byte a byte (Dotenv) · fichero alejodev:staff 640 · el resto, idéntico a la copia previa
+      ABORTA: la configuración efectiva no es la pedida BYTE A BYTE (ilegible; pedida: sede: 31 bytes, sha256 f219af8ac5fd… · horario: 150 bytes, sha256 d2aa16e9f9cf…); se restaura sola
+      FALLO A MEDIAS (etapa 2, código 1; 0 si lo cortó una señal): se restaura el fichero de entorno desde la copia previa
+         fichero de entorno restaurado: idéntico byte a byte a la copia previa, alejodev:staff 640
+         caché regenerada con el fichero de antes (alejodev 600)
+         colas reiniciadas (por si un worker llegó a cargar la caché nueva)
+         hechos efectivos: los de antes (sede: 105 bytes, sha256 a2193d279d47… · horario: 314 bytes, sha256 f85dccd5bebe…)
+         restaurado y COMPROBADO: el fichero es la copia previa byte a byte y la configuración efectiva es la de antes
+         la copia previa se conserva: $B/root/env-pre-voice-hechos-20261111-170805 (600; lleva secretos: borrarla con shred -u cuando ya no haga falta)
+      MANDO hechos NO APLICADO (fallo a medias; restaurado: sí)
+OK      etapa 2 (la configuración efectiva tras la caché no es la pedida) → código 1, caché regenerada, restaurado y COMPROBADO  [código 1]
+OK        … FALLO A MEDIAS (etapa 2) y la caché regenerada con el fichero de antes
+OK        … el fichero, idéntico byte a byte al de antes del fallo
+OK      tras el fallo de la etapa 2: el fichero de entorno sigue en 640 y de alejodev  [640 alejodev]
+OK        … la configuración efectiva y la herramienta siguen con los de antes (la caché nueva se deshizo)
+OK        … las dos copias de los intentos fallidos se conservan (4 en total)  [4]
+#### el cerrojo común ocupado por otro mando (ironbody-env.lock)
+      == h8-voice-scope.sh hechos · 2026-11-11T17:08:09Z · registro $B/root/h8-voice-scope-hechos-20261111-170809.log (huellas sha256 y bytes, nunca el texto)
+      ABORTA: otro mando que escribe el fichero de entorno está en curso: esperar a que termine (no se ha tocado nada)
+OK      con ironbody-env.lock tomado → ABORTA sin tocar nada  [código 1]
+OK        … el fichero no cambió
+OK        … ninguna copia nueva  [4]
+#### borrar: la ida y vuelta vuelve IDÉNTICA al fichero de partida (640)
+      == h8-voice-scope.sh hechos-borrar · 2026-11-11T17:08:10Z · registro $B/root/h8-voice-scope-hechos-borrar-20261111-170810.log (huellas sha256 y bytes, nunca el texto)
+      == EN SECO (hechos-borrar): no se ha tocado nada (ni copia ni escritura). Todas las comprobaciones previas pasan:
+         fichero alejodev:staff 640 · programador 33 0 0 · workers 13 0 · el código lee voice.facts
+         antes (configuración efectiva): sede: 105 bytes, sha256 a2193d279d47… · horario: 314 bytes, sha256 f85dccd5bebe… · líneas en el fichero: VOICE_FACTS_SITE 1, VOICE_FACTS_HOURS 1
+         escribiría (en el fichero): sede: no está en el fichero · horario: no está en el fichero · configuración efectiva esperada: sede: vacía · horario: vacía
+         comparar estas huellas con las del texto que se quería escribir ANTES de repetir la orden sin --en-seco
+OK      hechos borrar --en-seco → EN SECO (los quitaría), sin tocar nada  [código 0]
+OK        … el fichero no cambió
+      == h8-voice-scope.sh hechos-borrar · 2026-11-11T17:08:12Z · registro $B/root/h8-voice-scope-hechos-borrar-20261111-170812.log (huellas sha256 y bytes, nunca el texto)
+      0. hechos-borrar · copia previa: $B/root/env-pre-voice-hechos-borrar-20261111-170814 (600, alejodev) · fichero alejodev:staff 640 · programador 33 0 0 · workers 13 0
+         antes (configuración efectiva): sede: 105 bytes, sha256 a2193d279d47… · horario: 314 bytes, sha256 f85dccd5bebe… · líneas en el fichero: VOICE_FACTS_SITE 1, VOICE_FACTS_HOURS 1
+         pedido (en el fichero): sede: no está en el fichero · horario: no está en el fichero
+         VOICE_FACTS_HOURS quitada
+         VOICE_FACTS_SITE quitada
+      1. escrito: sede: no está en el fichero · horario: no está en el fichero = lo pedido byte a byte (Dotenv) · fichero alejodev:staff 640 · el resto, idéntico a la copia previa
+      2. caché alejodev 600 · configuración efectiva (artisan como alejodev): sede: 105 bytes, sha256 a2193d279d47… · horario: 314 bytes, sha256 f85dccd5bebe… → sede: vacía · horario: vacía = el argumento byte a byte
+      3. sin cambios: el resto de la voz, el motor, el H4–H7, ElevenLabs y el programador (33 0 0)
+      4. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+      5. admin/voice/status sin token → 401
+      6. local.ERROR en laravel*.log: 0 → 0
+      7. voice:doctor --telefonia (sin red): facts.hoursConfigured=false (esperado false: consultar_horarios dice que no los tiene)
+         vuelta atrás exacta (el fichero de antes): install -m 640 -o alejodev -g staff $B/root/env-pre-voice-hechos-borrar-20261111-170814 $B/api/backend/.env && cd $B/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+         para volver a ponerlos: bash $B/root/h8-voice-scope.sh hechos --sede='…' --horario='…' (o la exacta, con la copia)
+         la copia previa ($B/root/env-pre-voice-hechos-borrar-20261111-170814, 600) lleva secretos: borrarla con shred -u cuando la vuelta exacta ya no haga falta
+      MANDO hechos-borrar APLICADO (copia previa: $B/root/env-pre-voice-hechos-borrar-20261111-170814; registro: $B/root/h8-voice-scope-hechos-borrar-20261111-170812.log)
+OK      hechos borrar → APLICADO  [código 0]
+OK        … las dos líneas quitadas
+OK      ida y vuelta (640): el fichero idéntico byte a byte al de partida
+OK      ida y vuelta: el fichero de entorno sigue en 640 y de alejodev  [640 alejodev]
+OK        … consultar_horarios vuelve a decir que no los tiene
+OK        … voice:doctor: facts.hoursConfigured=false
+      == h8-voice-scope.sh hechos-borrar · 2026-11-11T17:08:32Z · registro $B/root/h8-voice-scope-hechos-borrar-20261111-170832.log (huellas sha256 y bytes, nunca el texto)
+      == hechos-borrar: el fichero y la configuración efectiva ya dicen eso (sede: no está en el fichero · horario: no está en el fichero); nada que escribir
+OK      hechos borrar otra vez → nada que escribir  [código 0]
+#### uno solo y después el otro
+      == h8-voice-scope.sh hechos · 2026-11-11T17:08:34Z · registro $B/root/h8-voice-scope-hechos-20261111-170834.log (huellas sha256 y bytes, nunca el texto)
+      0. hechos · copia previa: $B/root/env-pre-voice-hechos-20261111-170836 (600, alejodev) · fichero alejodev:staff 640 · programador 33 0 0 · workers 13 0
+         antes (configuración efectiva): sede: vacía · horario: vacía · líneas en el fichero: VOICE_FACTS_SITE 0, VOICE_FACTS_HOURS 0
+         pedido (en el fichero): sede: 31 bytes, sha256 f219af8ac5fd… · horario: no está en el fichero
+         VOICE_FACTS_SITE añadida
+      1. escrito: sede: 31 bytes, sha256 f219af8ac5fd… · horario: no está en el fichero = lo pedido byte a byte (Dotenv) · fichero alejodev:staff 640 · el resto, idéntico a la copia previa
+      2. caché alejodev 600 · configuración efectiva (artisan como alejodev): sede: vacía · horario: vacía → sede: 31 bytes, sha256 f219af8ac5fd… · horario: vacía = el argumento byte a byte
+      3. sin cambios: el resto de la voz, el motor, el H4–H7, ElevenLabs y el programador (33 0 0)
+      4. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+      5. admin/voice/status sin token → 401
+      6. local.ERROR en laravel*.log: 0 → 0
+      7. voice:doctor --telefonia (sin red): facts.hoursConfigured=false (esperado false: consultar_horarios dice que no los tiene)
+         AVISO: consultar_horarios solo los dice con los DOS puestos; falta el horario (--horario)
+         vuelta atrás exacta (el fichero de antes): install -m 640 -o alejodev -g staff $B/root/env-pre-voice-hechos-20261111-170836 $B/api/backend/.env && cd $B/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+         vuelta atrás funcional: bash $B/root/h8-voice-scope.sh hechos borrar (antes no estaban en el fichero: vuelve idéntico byte a byte)
+         la copia previa ($B/root/env-pre-voice-hechos-20261111-170836, 600) lleva secretos: borrarla con shred -u cuando la vuelta exacta ya no haga falta
+      MANDO hechos APLICADO (copia previa: $B/root/env-pre-voice-hechos-20261111-170836; registro: $B/root/h8-voice-scope-hechos-20261111-170834.log)
+OK      solo --sede → APLICADO con el AVISO de que la herramienta necesita los dos  [código 0]
+OK        … la herramienta sigue diciendo que no los tiene (config: la sede sí, el horario vacío)
+      == h8-voice-scope.sh hechos · 2026-11-11T17:08:55Z · registro $B/root/h8-voice-scope-hechos-20261111-170855.log (huellas sha256 y bytes, nunca el texto)
+      0. hechos · copia previa: $B/root/env-pre-voice-hechos-20261111-170856 (600, alejodev) · fichero alejodev:staff 640 · programador 33 0 0 · workers 13 0
+         antes (configuración efectiva): sede: 31 bytes, sha256 f219af8ac5fd… · horario: vacía · líneas en el fichero: VOICE_FACTS_SITE 1, VOICE_FACTS_HOURS 0
+         pedido (en el fichero): sede: 31 bytes, sha256 f219af8ac5fd… · horario: 150 bytes, sha256 d2aa16e9f9cf…
+         VOICE_FACTS_HOURS añadida
+      1. escrito: sede: 31 bytes, sha256 f219af8ac5fd… · horario: 150 bytes, sha256 d2aa16e9f9cf… = lo pedido byte a byte (Dotenv) · fichero alejodev:staff 640 · el resto, idéntico a la copia previa
+      2. caché alejodev 600 · configuración efectiva (artisan como alejodev): sede: 31 bytes, sha256 f219af8ac5fd… · horario: vacía → sede: 31 bytes, sha256 f219af8ac5fd… · horario: 150 bytes, sha256 d2aa16e9f9cf… = el argumento byte a byte
+      3. sin cambios: el resto de la voz, el motor, el H4–H7, ElevenLabs y el programador (33 0 0)
+      4. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+      5. admin/voice/status sin token → 401
+      6. local.ERROR en laravel*.log: 0 → 0
+      7. voice:doctor --telefonia (sin red): facts.hoursConfigured=true (esperado true: consultar_horarios dice la sede y el horario)
+         vuelta atrás exacta (el fichero de antes): install -m 640 -o alejodev -g staff $B/root/env-pre-voice-hechos-20261111-170856 $B/api/backend/.env && cd $B/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+         vuelta atrás funcional: bash $B/root/h8-voice-scope.sh hechos borrar (los quita; antes había líneas de los hechos: para dejar el fichero idéntico, la exacta)
+         la copia previa ($B/root/env-pre-voice-hechos-20261111-170856, 600) lleva secretos: borrarla con shred -u cuando la vuelta exacta ya no haga falta
+      MANDO hechos APLICADO (copia previa: $B/root/env-pre-voice-hechos-20261111-170856; registro: $B/root/h8-voice-scope-hechos-20261111-170855.log)
+OK      después --horario → APLICADO; ahora la herramienta los dice  [código 0]
+OK        … config y la herramienta dan los dos textos reales BYTE A BYTE
+      == h8-voice-scope.sh hechos-borrar · 2026-11-11T17:09:15Z · registro $B/root/h8-voice-scope-hechos-borrar-20261111-170915.log (huellas sha256 y bytes, nunca el texto)
+      0. hechos-borrar · copia previa: $B/root/env-pre-voice-hechos-borrar-20261111-170917 (600, alejodev) · fichero alejodev:staff 640 · programador 33 0 0 · workers 13 0
+         antes (configuración efectiva): sede: 31 bytes, sha256 f219af8ac5fd… · horario: 150 bytes, sha256 d2aa16e9f9cf… · líneas en el fichero: VOICE_FACTS_SITE 1, VOICE_FACTS_HOURS 1
+         pedido (en el fichero): sede: no está en el fichero · horario: no está en el fichero
+         VOICE_FACTS_HOURS quitada
+         VOICE_FACTS_SITE quitada
+      1. escrito: sede: no está en el fichero · horario: no está en el fichero = lo pedido byte a byte (Dotenv) · fichero alejodev:staff 640 · el resto, idéntico a la copia previa
+      2. caché alejodev 600 · configuración efectiva (artisan como alejodev): sede: 31 bytes, sha256 f219af8ac5fd… · horario: 150 bytes, sha256 d2aa16e9f9cf… → sede: vacía · horario: vacía = el argumento byte a byte
+      3. sin cambios: el resto de la voz, el motor, el H4–H7, ElevenLabs y el programador (33 0 0)
+      4. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+      5. admin/voice/status sin token → 401
+      6. local.ERROR en laravel*.log: 0 → 0
+      7. voice:doctor --telefonia (sin red): facts.hoursConfigured=false (esperado false: consultar_horarios dice que no los tiene)
+         vuelta atrás exacta (el fichero de antes): install -m 640 -o alejodev -g staff $B/root/env-pre-voice-hechos-borrar-20261111-170917 $B/api/backend/.env && cd $B/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+         para volver a ponerlos: bash $B/root/h8-voice-scope.sh hechos --sede='…' --horario='…' (o la exacta, con la copia)
+         la copia previa ($B/root/env-pre-voice-hechos-borrar-20261111-170917, 600) lleva secretos: borrarla con shred -u cuando la vuelta exacta ya no haga falta
+      MANDO hechos-borrar APLICADO (copia previa: $B/root/env-pre-voice-hechos-borrar-20261111-170917; registro: $B/root/h8-voice-scope-hechos-borrar-20261111-170915.log)
+OK      hechos borrar → APLICADO  [código 0]
+OK        … el fichero idéntico byte a byte al de partida
+#### la misma ida y vuelta en 600
+      == h8-voice-scope.sh hechos · 2026-11-11T17:09:35Z · registro $B/root/h8-voice-scope-hechos-20261111-170935.log (huellas sha256 y bytes, nunca el texto)
+      0. hechos · copia previa: $B/root/env-pre-voice-hechos-20261111-170936 (600, alejodev) · fichero alejodev:staff 600 · programador 33 0 0 · workers 13 0
+         antes (configuración efectiva): sede: vacía · horario: vacía · líneas en el fichero: VOICE_FACTS_SITE 0, VOICE_FACTS_HOURS 0
+         pedido (en el fichero): sede: 31 bytes, sha256 f219af8ac5fd… · horario: 150 bytes, sha256 d2aa16e9f9cf…
+         VOICE_FACTS_HOURS añadida
+         VOICE_FACTS_SITE añadida
+      1. escrito: sede: 31 bytes, sha256 f219af8ac5fd… · horario: 150 bytes, sha256 d2aa16e9f9cf… = lo pedido byte a byte (Dotenv) · fichero alejodev:staff 600 · el resto, idéntico a la copia previa
+      2. caché alejodev 600 · configuración efectiva (artisan como alejodev): sede: vacía · horario: vacía → sede: 31 bytes, sha256 f219af8ac5fd… · horario: 150 bytes, sha256 d2aa16e9f9cf… = el argumento byte a byte
+      3. sin cambios: el resto de la voz, el motor, el H4–H7, ElevenLabs y el programador (33 0 0)
+      4. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+      5. admin/voice/status sin token → 401
+      6. local.ERROR en laravel*.log: 0 → 0
+      7. voice:doctor --telefonia (sin red): facts.hoursConfigured=true (esperado true: consultar_horarios dice la sede y el horario)
+         vuelta atrás exacta (el fichero de antes): install -m 600 -o alejodev -g staff $B/root/env-pre-voice-hechos-20261111-170936 $B/api/backend/.env && cd $B/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+         vuelta atrás funcional: bash $B/root/h8-voice-scope.sh hechos borrar (antes no estaban en el fichero: vuelve idéntico byte a byte)
+         la copia previa ($B/root/env-pre-voice-hechos-20261111-170936, 600) lleva secretos: borrarla con shred -u cuando la vuelta exacta ya no haga falta
+      MANDO hechos APLICADO (copia previa: $B/root/env-pre-voice-hechos-20261111-170936; registro: $B/root/h8-voice-scope-hechos-20261111-170935.log)
+OK      hechos <reales> en 600 → APLICADO  [código 0]
+OK      600: el fichero de entorno sigue en 600 y de alejodev  [600 alejodev]
+      == h8-voice-scope.sh hechos-borrar · 2026-11-11T17:09:55Z · registro $B/root/h8-voice-scope-hechos-borrar-20261111-170955.log (huellas sha256 y bytes, nunca el texto)
+      0. hechos-borrar · copia previa: $B/root/env-pre-voice-hechos-borrar-20261111-170956 (600, alejodev) · fichero alejodev:staff 600 · programador 33 0 0 · workers 13 0
+         antes (configuración efectiva): sede: 31 bytes, sha256 f219af8ac5fd… · horario: 150 bytes, sha256 d2aa16e9f9cf… · líneas en el fichero: VOICE_FACTS_SITE 1, VOICE_FACTS_HOURS 1
+         pedido (en el fichero): sede: no está en el fichero · horario: no está en el fichero
+         VOICE_FACTS_HOURS quitada
+         VOICE_FACTS_SITE quitada
+      1. escrito: sede: no está en el fichero · horario: no está en el fichero = lo pedido byte a byte (Dotenv) · fichero alejodev:staff 600 · el resto, idéntico a la copia previa
+      2. caché alejodev 600 · configuración efectiva (artisan como alejodev): sede: 31 bytes, sha256 f219af8ac5fd… · horario: 150 bytes, sha256 d2aa16e9f9cf… → sede: vacía · horario: vacía = el argumento byte a byte
+      3. sin cambios: el resto de la voz, el motor, el H4–H7, ElevenLabs y el programador (33 0 0)
+      4. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+      5. admin/voice/status sin token → 401
+      6. local.ERROR en laravel*.log: 0 → 0
+      7. voice:doctor --telefonia (sin red): facts.hoursConfigured=false (esperado false: consultar_horarios dice que no los tiene)
+         vuelta atrás exacta (el fichero de antes): install -m 600 -o alejodev -g staff $B/root/env-pre-voice-hechos-borrar-20261111-170956 $B/api/backend/.env && cd $B/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+         para volver a ponerlos: bash $B/root/h8-voice-scope.sh hechos --sede='…' --horario='…' (o la exacta, con la copia)
+         la copia previa ($B/root/env-pre-voice-hechos-borrar-20261111-170956, 600) lleva secretos: borrarla con shred -u cuando la vuelta exacta ya no haga falta
+      MANDO hechos-borrar APLICADO (copia previa: $B/root/env-pre-voice-hechos-borrar-20261111-170956; registro: $B/root/h8-voice-scope-hechos-borrar-20261111-170955.log)
+OK      hechos borrar en 600 → APLICADO  [código 0]
+OK      ida y vuelta (600): el fichero idéntico byte a byte al de partida
+OK      ida y vuelta en 600: el fichero de entorno sigue en 600 y de alejodev  [600 alejodev]
+#### las líneas vacías de .env.example ya en el fichero (VOICE_FACTS_SITE= y VOICE_FACTS_HOURS=)
+      == h8-voice-scope.sh hechos · 2026-11-11T17:10:15Z · registro $B/root/h8-voice-scope-hechos-20261111-171015.log (huellas sha256 y bytes, nunca el texto)
+      0. hechos · copia previa: $B/root/env-pre-voice-hechos-20261111-171016 (600, alejodev) · fichero alejodev:staff 640 · programador 33 0 0 · workers 13 0
+         antes (configuración efectiva): sede: vacía · horario: vacía · líneas en el fichero: VOICE_FACTS_SITE 1, VOICE_FACTS_HOURS 1
+         pedido (en el fichero): sede: 31 bytes, sha256 f219af8ac5fd… · horario: 150 bytes, sha256 d2aa16e9f9cf…
+         VOICE_FACTS_HOURS sustituida
+         VOICE_FACTS_SITE sustituida
+      1. escrito: sede: 31 bytes, sha256 f219af8ac5fd… · horario: 150 bytes, sha256 d2aa16e9f9cf… = lo pedido byte a byte (Dotenv) · fichero alejodev:staff 640 · el resto, idéntico a la copia previa
+      2. caché alejodev 600 · configuración efectiva (artisan como alejodev): sede: vacía · horario: vacía → sede: 31 bytes, sha256 f219af8ac5fd… · horario: 150 bytes, sha256 d2aa16e9f9cf… = el argumento byte a byte
+      3. sin cambios: el resto de la voz, el motor, el H4–H7, ElevenLabs y el programador (33 0 0)
+      4. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+      5. admin/voice/status sin token → 401
+      6. local.ERROR en laravel*.log: 0 → 0
+      7. voice:doctor --telefonia (sin red): facts.hoursConfigured=true (esperado true: consultar_horarios dice la sede y el horario)
+         vuelta atrás exacta (el fichero de antes): install -m 640 -o alejodev -g staff $B/root/env-pre-voice-hechos-20261111-171016 $B/api/backend/.env && cd $B/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+         vuelta atrás funcional: bash $B/root/h8-voice-scope.sh hechos borrar (los quita; antes había líneas de los hechos: para dejar el fichero idéntico, la exacta)
+         la copia previa ($B/root/env-pre-voice-hechos-20261111-171016, 600) lleva secretos: borrarla con shred -u cuando la vuelta exacta ya no haga falta
+      MANDO hechos APLICADO (copia previa: $B/root/env-pre-voice-hechos-20261111-171016; registro: $B/root/h8-voice-scope-hechos-20261111-171015.log)
+OK      hechos <reales> con las líneas vacías → APLICADO, sustituidas en su sitio y con su sangría (ninguna)  [código 0]
+OK        … en su sitio y sin sangría (la que tenían)
+OK        … la vuelta funcional avisa de que el fichero tenía líneas (para idéntico, la exacta)
+OK        … config y la herramienta dan los dos textos reales
+OK        … el resto del fichero, igual que antes (también la línea que va DETRÁS)
+OK        la vuelta exacta impresa (install de la copia, config:cache, chmod, queue:restart) sale con 0
+OK        … y deja el fichero idéntico byte a byte al de antes (con sus líneas vacías)
+OK      tras la vuelta exacta: el fichero de entorno sigue en 640 y de alejodev  [640 alejodev]
+OK        … y la herramienta dice que no los tiene
+      == h8-voice-scope.sh hechos-borrar · 2026-11-11T17:10:36Z · registro $B/root/h8-voice-scope-hechos-borrar-20261111-171036.log (huellas sha256 y bytes, nunca el texto)
+      0. hechos-borrar · copia previa: $B/root/env-pre-voice-hechos-borrar-20261111-171038 (600, alejodev) · fichero alejodev:staff 640 · programador 33 0 0 · workers 13 0
+         antes (configuración efectiva): sede: vacía · horario: vacía · líneas en el fichero: VOICE_FACTS_SITE 1, VOICE_FACTS_HOURS 1
+         pedido (en el fichero): sede: no está en el fichero · horario: no está en el fichero
+         VOICE_FACTS_HOURS quitada
+         VOICE_FACTS_SITE quitada
+      1. escrito: sede: no está en el fichero · horario: no está en el fichero = lo pedido byte a byte (Dotenv) · fichero alejodev:staff 640 · el resto, idéntico a la copia previa
+      2. caché alejodev 600 · configuración efectiva (artisan como alejodev): sede: vacía · horario: vacía → sede: vacía · horario: vacía = el argumento byte a byte
+      3. sin cambios: el resto de la voz, el motor, el H4–H7, ElevenLabs y el programador (33 0 0)
+      4. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+      5. admin/voice/status sin token → 401
+      6. local.ERROR en laravel*.log: 0 → 0
+      7. voice:doctor --telefonia (sin red): facts.hoursConfigured=false (esperado false: consultar_horarios dice que no los tiene)
+         vuelta atrás exacta (el fichero de antes): install -m 640 -o alejodev -g staff $B/root/env-pre-voice-hechos-borrar-20261111-171038 $B/api/backend/.env && cd $B/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+         para volver a ponerlos: bash $B/root/h8-voice-scope.sh hechos --sede='…' --horario='…' (o la exacta, con la copia)
+         la copia previa ($B/root/env-pre-voice-hechos-borrar-20261111-171038, 600) lleva secretos: borrarla con shred -u cuando la vuelta exacta ya no haga falta
+      MANDO hechos-borrar APLICADO (copia previa: $B/root/env-pre-voice-hechos-borrar-20261111-171038; registro: $B/root/h8-voice-scope-hechos-borrar-20261111-171036.log)
+OK      hechos borrar con las líneas vacías → APLICADO (las quita: «borrar» = no están)  [código 0]
+OK        … sin líneas VOICE_FACTS_* y el resto igual
+#### estados que no se tocan
+      == h8-voice-scope.sh hechos · 2026-11-11T17:10:56Z · registro $B/root/h8-voice-scope-hechos-20261111-171056.log (huellas sha256 y bytes, nunca el texto)
+      ABORTA: el fichero y la configuración efectiva no dicen lo mismo de los hechos (fichero: sede: 7 bytes, sha256 84ee427eacfb… · horario: no está en el fichero · efectiva: sede: vacía · horario: vacía): falta un config:cache o se tocaron a mano; aclararlo antes (no se ha tocado nada; «hechos borrar» no lo exige)
+OK      fichero y caché no dicen lo mismo (editado a mano sin caché) → fijar ABORTA sin tocar nada  [código 1]
+OK        … el fichero no cambió
+      == h8-voice-scope.sh hechos-borrar · 2026-11-11T17:10:57Z · registro $B/root/h8-voice-scope-hechos-borrar-20261111-171057.log (huellas sha256 y bytes, nunca el texto)
+      0. hechos-borrar · copia previa: $B/root/env-pre-voice-hechos-borrar-20261111-171059 (600, alejodev) · fichero alejodev:staff 640 · programador 33 0 0 · workers 13 0
+         antes (configuración efectiva): sede: vacía · horario: vacía · líneas en el fichero: VOICE_FACTS_SITE 1, VOICE_FACTS_HOURS 0
+         pedido (en el fichero): sede: no está en el fichero · horario: no está en el fichero
+         VOICE_FACTS_HOURS no estaba
+         VOICE_FACTS_SITE quitada
+      1. escrito: sede: no está en el fichero · horario: no está en el fichero = lo pedido byte a byte (Dotenv) · fichero alejodev:staff 640 · el resto, idéntico a la copia previa
+      2. caché alejodev 600 · configuración efectiva (artisan como alejodev): sede: vacía · horario: vacía → sede: vacía · horario: vacía = el argumento byte a byte
+      3. sin cambios: el resto de la voz, el motor, el H4–H7, ElevenLabs y el programador (33 0 0)
+      4. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+      5. admin/voice/status sin token → 401
+      6. local.ERROR en laravel*.log: 0 → 0
+      7. voice:doctor --telefonia (sin red): facts.hoursConfigured=false (esperado false: consultar_horarios dice que no los tiene)
+         vuelta atrás exacta (el fichero de antes): install -m 640 -o alejodev -g staff $B/root/env-pre-voice-hechos-borrar-20261111-171059 $B/api/backend/.env && cd $B/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+         para volver a ponerlos: bash $B/root/h8-voice-scope.sh hechos --sede='…' --horario='…' (o la exacta, con la copia)
+         la copia previa ($B/root/env-pre-voice-hechos-borrar-20261111-171059, 600) lleva secretos: borrarla con shred -u cuando la vuelta exacta ya no haga falta
+      MANDO hechos-borrar APLICADO (copia previa: $B/root/env-pre-voice-hechos-borrar-20261111-171059; registro: $B/root/h8-voice-scope-hechos-borrar-20261111-171057.log)
+OK      … y «hechos borrar» (la vuelta) no se condiciona a eso → APLICADO  [código 0]
+OK        … el fichero vuelve al de partida
+      == h8-voice-scope.sh hechos · 2026-11-11T17:11:17Z · registro $B/root/h8-voice-scope-hechos-20261111-171117.log (huellas sha256 y bytes, nunca el texto)
+      NO SE APLICA (no se ha tocado nada): VOICE_FACTS_HOURS aparece repetida en el fichero de entorno (gana la última): deduplicar antes
+OK      VOICE_FACTS_HOURS repetida → se niega (código 2)  [código 2]
+OK        … el fichero no cambió
+#### cierre
+OK      registros del mando en 600 (20 registros)  [0 fuera de 600]
+OK      copias previas en 600 (13 copias: una por escritura y una por intento fallido)  [0 fuera de 600]
+OK      ningún texto de los hechos en los registros (solo huellas)
+OK      ningún temporal del escritor (.env.h8-voice-hechos-*) en el directorio de la aplicación
+OK      CERO red: la valla no recibió ninguna petición en todo el ensayo  [valla: 0 → 0]
+OK      el banco vuelve a su fichero de entorno de partida y a su modo (600)
+122 OK · 0 FALLO

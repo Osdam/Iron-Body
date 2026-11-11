@@ -66,6 +66,22 @@ en la puerta 1 no existen. Para ensayar igualmente DB9 + OPS9, `todo` hace dos c
 
 Cuando B9-run entregue, `todo` deja de necesitar las dos muletas solo.
 
+## Los hechos de la voz y el recuento del monitor del H7 (`voz-hechos.sh`, 11-11-2026)
+
+Sobre el banco de la ola M-1 (`m1.sh montar → ola → desplegar`), sin cambiar `m1.sh`:
+
+```bash
+B=${XDG_CACHE_HOME:-$HOME/.cache}/ironbody-banco-m1
+bash docs/ultron-studio/ops/banco-h9/voz-hechos.sh "$B" arrancar   # valla :8504 y API en BANCO_HECHOS_PORT (8541)
+bash docs/ultron-studio/ops/banco-h9/voz-hechos.sh "$B" hechos     # h8-voice-scope.sh «hechos» (122 casos)
+bash docs/ultron-studio/ops/banco-h9/voz-hechos.sh "$B" monitor    # h7-monitor-scope.sh con la sincronización de Meta on/off (20)
+bash docs/ultron-studio/ops/banco-h9/voz-hechos.sh "$B" parar
+```
+
+Usa un `flock` DE VERDAD (fcntl sobre el descriptor heredado, en `$B/bin-hechos`), no el sustituto que no bloquea:
+el caso del cerrojo común ocupado sí se ensaya. Informe y resultados: `plans/informes-motores/informe-devops-hechos-voz.md`
+y `evidencia-h9/2026-11-11/hechos-voz/`.
+
 ## Puertos
 
 | Qué | Variable | Por defecto |

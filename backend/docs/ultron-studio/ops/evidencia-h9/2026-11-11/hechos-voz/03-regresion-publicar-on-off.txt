@@ -1,0 +1,33 @@
+== regresión del camino general con el mando definitivo: publicar on → publicar off → el banco restaurado
+0. publicar-on · copia previa: $B/root/env-pre-voice-publicar-on-20261111-171320 (600, alejodev) · fichero alejodev:staff 600 · programador 33 0 0 · workers 13 0 · constante cerrada
+   ULTRON_STUDIO_VOICE_PUBLISHING_ENABLED sustituida
+1. claves escritas (sin valores): ULTRON_STUDIO_VOICE_PUBLISHING_ENABLED · fichero alejodev:staff 600
+2. el fichero parsea · caché: alejodev 600
+3. configuración efectiva, antes → después (sin valores de secretos): publishing: false → true
+   motor, H4–H7 y ElevenLabs (proveedor y Studio) sin cambios
+   el fichero de entorno es la copia previa salvo 1 clave(s) de la orden
+4. programador (total · del Studio · de voz): 33 0 0 → 33 0 0 (esperado 33 0 0)
+5. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+6. admin/voice/status sin token → 401
+7. local.ERROR en laravel*.log: 0 → 0
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_NOT_CONFIGURED constante=cerrada encendidas=1 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=no importado=no subcuenta=no whatsapp=no proveedor=ELEVENLABS_NOT_CONFIGURED
+   vuelta atrás exacta (el fichero de antes): install -m 600 -o alejodev -g staff $B/root/env-pre-voice-publicar-on-20261111-171320 $B/api/backend/.env && cd $B/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+   vuelta atrás funcional: bash $B/root/h8-voice-scope.sh publicar off
+MANDO publicar-on APLICADO (copia previa: $B/root/env-pre-voice-publicar-on-20261111-171320)
+rc=0
+0. publicar-off · copia previa: $B/root/env-pre-voice-publicar-off-20261111-171338 (600, alejodev) · fichero alejodev:staff 600 · programador 33 0 0 · workers 13 0 · constante cerrada
+   ULTRON_STUDIO_VOICE_PUBLISHING_ENABLED sustituida
+1. claves escritas (sin valores): ULTRON_STUDIO_VOICE_PUBLISHING_ENABLED · fichero alejodev:staff 600
+2. el fichero parsea · caché: alejodev 600
+3. configuración efectiva, antes → después (sin valores de secretos): publishing: true → false
+   motor, H4–H7 y ElevenLabs (proveedor y Studio) sin cambios
+   el fichero de entorno es la copia previa salvo 1 clave(s) de la orden
+4. programador (total · del Studio · de voz): 33 0 0 → 33 0 0 (esperado 33 0 0)
+5. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+6. admin/voice/status sin token → 401
+7. local.ERROR en laravel*.log: 0 → 0
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_NOT_CONFIGURED constante=cerrada encendidas=1 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=no importado=no subcuenta=no whatsapp=no proveedor=ELEVENLABS_NOT_CONFIGURED
+   vuelta atrás exacta (el fichero de antes): install -m 600 -o alejodev -g staff $B/root/env-pre-voice-publicar-off-20261111-171338 $B/api/backend/.env && cd $B/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+MANDO publicar-off APLICADO (copia previa: $B/root/env-pre-voice-publicar-off-20261111-171338)
+rc=0
+banco restaurado byte a byte (modo 600)

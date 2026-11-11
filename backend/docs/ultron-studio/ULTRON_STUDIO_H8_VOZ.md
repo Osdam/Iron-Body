@@ -334,7 +334,7 @@ Leídas en `config/voice.php` y `config/ultron_studio.php` (bloque `voice`) y co
 | `VOICE_FREQUENCY_PER_WEEK` | 2 | 1–2 | | [P-11] |
 | `VOICE_FREQUENCY_WEEK` | `rolling` | `rolling` \| `calendar` | | [P-11] |
 | `VOICE_TRANSFER_HOURS_WEEKDAYS`, `VOICE_TRANSFER_HOURS_SATURDAY` | vacías | `HH:MM-HH:MM` | | [P-12]; vacías = nunca se ofrece transferir |
-| `VOICE_FACTS_SITE`, `VOICE_FACTS_HOURS` | vacías | texto plano | | Antes de la fase 3 (hechos de `consultar_horarios`) |
+| `VOICE_FACTS_SITE`, `VOICE_FACTS_HOURS` | vacías | texto plano: letras, áéíóúüñ, dígitos, espacio y `. , ; : - # / ( )`; 1–300; sin URL ni teléfonos | | Antes de la fase 3 (hechos de `consultar_horarios`; dice los dos o ninguno). Solo con `h8-voice-scope.sh hechos --sede='…' --horario='…'` (vuelta: `hechos borrar`), que los escribe entre comillas dobles y comprueba la configuración efectiva byte a byte (`informe-devops-hechos-voz.md`) |
 | `VOICE_RNE_VALIDITY_DAYS` | 0 | 0–365 | | Fase 4b [P-14]; con 0 ninguna consulta vale |
 | `VOICE_LAB_ENABLED` | `false` | booleano | | Fase 2 |
 | `VOICE_LAB_DRIVER` | `fake` | `fake` \| `elevenlabs` | | Fase 2: `elevenlabs` |
