@@ -854,6 +854,42 @@ final class StudioVoiceLabSessions
         return ['agents' => $agentes, 'versions' => $versiones, 'profiles' => $perfiles];
     }
 
+    /** El `call_ref` de la conversación del laboratorio: no es un uuid ni el de ninguna llamada (las herramientas responden `call_not_found`). */
+    public const CONVERSATION_CALL_REF = 'laboratorio';
+
+    /** La etiqueta de versión de la conversación del laboratorio (en las llamadas es «canario · publicación N»). */
+    public const CONVERSATION_VERSION_LABEL = 'laboratorio';
+
+    /**
+     * Las variables dinámicas con las que el NAVEGADOR abre la conversación
+     * del laboratorio (H8, enmienda E18-1 del 11-11-2026). Viajan con la URL
+     * firmada, una sola vez, y el cliente oficial las entrega al abrir.
+     *
+     * En una llamada las entrega Laravel al proveedor (la saliente,
+     * `PlaceOutboundVoiceCall`; la entrante, `InboundGate`). En el laboratorio
+     * no hay llamada, y el proveedor NO usa los valores por defecto del agente
+     * (son valores de prueba de su consola): sin ellas cierra la conversación
+     * con 1008 «Missing required dynamic variables in tools: {'call_ref'}»
+     * (primera sesión real, producción, 11-11-2026). Y con el valor por defecto
+     * `caller_authorized = no` el agente solo diría que no está disponible.
+     *
+     * Se ensaya la llamada SALIENTE a una persona autorizada: lo que el agente
+     * hará en la fase 4a. `call_ref` no es de ninguna llamada: una herramienta
+     * que el agente use en el laboratorio recibe la negativa neutra
+     * (`call_not_found`) y no escribe nada.
+     *
+     * @return array<string, string> exactamente {@see VoiceAgentSpec::VARIABLES}
+     */
+    public static function conversationVariables(): array
+    {
+        return [
+            VoiceAgentSpec::VAR_CALL_DIRECTION => VoiceAgentSpec::DIRECTION_OUTBOUND,
+            VoiceAgentSpec::VAR_CALL_REF => self::CONVERSATION_CALL_REF,
+            VoiceAgentSpec::VAR_CALLER_AUTHORIZED => VoiceAgentSpec::CALLER_AUTHORIZED,
+            VoiceAgentSpec::VAR_VERSION_LABEL => self::CONVERSATION_VERSION_LABEL,
+        ];
+    }
+
     /**
      * SessionDto.
      *
@@ -913,7 +949,7 @@ final class StudioVoiceLabSessions
             'connection' => [
                 'issued' => $s->url_expires_at !== null,
                 'expiresAt' => $s->url_expires_at?->toIso8601String(),
-            ] + ($signedUrl !== null ? ['signedUrl' => $signedUrl] : []),
+            ] + ($signedUrl !== null ? ['signedUrl' => $signedUrl, 'dynamicVariables' => self::conversationVariables()] : []),
             'metrics' => [
                 'durationSeconds' => $s->duration_seconds,
                 // Desde la URL hasta el cierre: la ventana, no lo que se habló.

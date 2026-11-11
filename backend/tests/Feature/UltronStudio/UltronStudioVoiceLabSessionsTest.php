@@ -270,6 +270,11 @@ class UltronStudioVoiceLabSessionsTest extends TestCase
         $this->assertStringStartsWith('wss://127.0.0.1:8096/', $d['connection']['signedUrl']);
         $this->assertTrue($d['connection']['issued']);
         $this->assertEqualsWithDelta(now()->addSeconds(900)->getTimestamp(), Carbon::parse($d['connection']['expiresAt'])->getTimestamp(), 2);
+        // E18-1: las variables de la conversación viajan con la URL firmada (y solo con ella). Sin ellas ElevenLabs cierra
+        // la conversación con 1008 «Missing required dynamic variables in tools» (producción, 11-11-2026); y con
+        // `caller_authorized = no` el agente solo diría que no está disponible.
+        $this->assertSame(['call_direction' => 'saliente', 'call_ref' => 'laboratorio', 'caller_authorized' => 'si', 'version_label' => 'laboratorio'], $d['connection']['dynamicVariables']);
+        $this->assertSame(['issued', 'expiresAt', 'signedUrl', 'dynamicVariables'], array_keys($d['connection']), 'la conexión no lleva nada más');
         // 180 s a 0,10 US$/min.
         $this->assertSame(300000, $d['budget']['reservedMicros']);
         $this->assertSame('deployed', $d['agent']['status']);
@@ -295,6 +300,10 @@ class UltronStudioVoiceLabSessionsTest extends TestCase
         $this->assertSame(180, $cuerpo['conversation_config']['conversation']['max_duration_seconds']);
         $this->assertTrue($cuerpo['platform_settings']['auth']['enable_auth']);
         $this->assertSame(['agent_concurrency_limit' => 1, 'daily_limit' => 1, 'bursting_enabled' => false], $cuerpo['platform_settings']['call_limits']);
+        // Cada variable que el agente declara (en sus textos o en sus herramientas) recibe su valor al abrir: ni una de menos, ni una de más.
+        $declaradas = array_keys($cuerpo['conversation_config']['agent']['dynamic_variables']['dynamic_variable_placeholders']);
+        sort($declaradas);
+        $this->assertSame($declaradas, array_keys($d['connection']['dynamicVariables']));
 
         $agente = DB::table('ultron_studio_voice_agents')->sole();
         $this->assertSame(['lab', 'elevenlabs', 'deployed', $d['agent']['providerAgentId']], [$agente->purpose, $agente->provider, $agente->status, $agente->provider_agent_id]);
@@ -313,6 +322,7 @@ class UltronStudioVoiceLabSessionsTest extends TestCase
         $otra = $this->openSession($tina, $version->uuid, $perfil, $peticion, 0)->assertOk()->assertJsonPath('replayed', true)->json('data');
         $this->assertSame($d['uuid'], $otra['uuid']);
         $this->assertArrayNotHasKey('signedUrl', $otra['connection']);
+        $this->assertArrayNotHasKey('dynamicVariables', $otra['connection'], 'las variables viajan con la URL, una sola vez');
         $this->assertCount($antes, Http::recorded());
         $this->assertSame(1, StudioVoiceLabSession::query()->count());
     }
