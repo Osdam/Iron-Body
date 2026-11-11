@@ -1,6 +1,95 @@
 # ULTRON STUDIO FULL · Cierre de los nueve hitos (fases 5 a 8 del encargo del 10-11-2026)
 
-**Estado del documento:** BORRADOR DEL LEAD, en curso. Las secciones marcadas «⏳» se completan con las cifras finales de los agentes que siguen trabajando (b9-cierre, pm2-voz, sec-cierre, doc9, test-final, ops8-e) y con la regresión final. Nada de lo que aquí figura como «en el árbol» está en commit ni en producción: el encargo exige la autorización del propietario para commit, push, despliegue, cambios de producción y rotaciones.
+**Estado del documento:** la **sección 0 es lo vigente** (11-11-2026, 15:40 UTC). Las secciones 1 a 13 son el borrador del 10-11 y quedan como historia: donde contradigan a la sección 0, manda la sección 0. Los hechos de la sección 0 salen de las filas L9-103 a L9-108 del contrato del H9, de la Enmienda M-1 del contrato del H5 y de la Enmienda 18 del contrato del H8.
+
+---
+
+## 0. Estado vigente (11-11-2026, 15:40 UTC)
+
+### 0.1 Qué hay en producción
+
+| Pieza | Valor |
+|---|---|
+| API | `0ee0868` (= `origin/main`) |
+| CRM | `b07eda5` (= `origin/main`) |
+| Respaldo de antes de la ola | `/var/backups/ironbody/ultron-studio-m1-20261111-143829` (base, fichero de entorno, cachés) |
+| n8n | atiende la copia «Studio S1» (`QSklqHlsDIxucRfk`); el flujo de siempre (`YspRwsXnqt33NouP`) está despublicado e intacto, como reserva |
+| Motor de WhatsApp | lee la publicación del Studio **solo en la conversación canaria** (`canary`); publicar desde el CRM, abierto; puerta del laboratorio `required` |
+| Prompts de WhatsApp | llave en `canary`; sin nada publicado todavía la canaria recibe los de siempre (`legacy · no_publication`) |
+| Plantillas de Meta | `full`: crear, aprobar, enviar a Meta y ver el estado desde el CRM; sincronización cada 5 minutos |
+| Laboratorio hablado | encendido (fase 2a), perfil «Sofia Medellin» revisión 2 |
+| Autonomía comercial (H9) | en **sombra** desde el 11-11 05:23 UTC: decide y registra, no envía nada |
+| Envíos y llamadas automáticos | cerrados por dos constantes del código (`SENDS_ENABLED_IN_CODE` y `CALLS_ENABLED_IN_CODE` en `false`) |
+| OTP por SMS de Twilio, Factus, Wompi, WhatsApp de siempre | sin tocar |
+
+### 0.2 Estado de cada componente
+
+Etiquetas: **OPERATIVO Y PROBADO** (funciona en producción y hay una prueba real que lo demuestra) · **EN INTEGRACIÓN** (desplegado y encendido, falta la prueba real que lo cierra) · **IMPLEMENTADO PERO DESHABILITADO** (construido y probado en automático, apagado a propósito) · **BLOQUEADO** (no puede avanzar sin algo que no es código) · **NO IMPLEMENTADO**.
+
+| Frente | Componente | Etiqueta | Evidencia o qué falta |
+|---|---|---|---|
+| A · Voz | Laboratorio hablado desde el CRM con Sofía | **OPERATIVO Y PROBADO** | Sesión real del 11-11 11:37 UTC: aviso de IA, entiende, responde, se despide y cuelga; 67 s, US$ 0,09 (L9-103; `ops/evidencia-h8/2026-11-11/`) |
+| A · Voz | Que Sofía informe planes y horarios en el laboratorio | **EN INTEGRACIÓN** | Hoy responde «ese dato no te lo puedo confirmar». Faltan dos cosas: el código que deja usar las dos consultas de solo lectura en el laboratorio (E18-8, en curso) y una revisión 3 del perfil con esas herramientas, que crea y aprueba el propietario con otra persona |
+| A · Voz | Publicación canaria de la voz y primera llamada saliente | **BLOQUEADO** | Decisión de Twilio (subcuenta o clave restringida solo de voz), un veredicto del laboratorio dado por otra cuenta y la autorización expresa para esa llamada |
+| A · Voz | Llamadas entrantes | **BLOQUEADO** | La cuenta de Twilio no tiene números propios |
+| A · Voz | Rotar la clave de ElevenLabs que pasó por el chat | **BLOQUEADO** | La genera el propietario en ElevenLabs; el mando de registro ya existe |
+| B · WhatsApp | El Studio compila y ofrece los cinco prompts de ULTRON | **EN INTEGRACIÓN** | Desplegado, llave en `canary`, n8n en la copia S1. Falta el primer turno desde el teléfono canario (tiene que salir `flowRev S1` con la huella de siempre) |
+| B · WhatsApp | Un cambio publicado en el Studio cambia lo que ULTRON responde (**criterio de aceptación**) | **EN INTEGRACIÓN** | Falta E3–E5: publicar en canario una versión con tono «profesional» y 200 caracteres, ver `applied` en un turno real y revertir. Exige dos personas y un veredicto del laboratorio de texto |
+| B · WhatsApp | Gobernar desde el Studio la intención de reserva (`intent.fallback`) y las reglas S-NNN | **NO IMPLEMENTADO** | Declarado en la Enmienda M-1: hoy el Studio gobierna tono, emojis, longitud máxima y objetivo |
+| B · WhatsApp | ULTRON para todos los clientes | **IMPLEMENTADO PERO DESHABILITADO** | Hoy solo la conversación canaria pasa por n8n; abrirlo es una decisión del propietario |
+| B · WhatsApp | Alerta automática si n8n aplica algo distinto de lo ofrecido | **NO IMPLEMENTADO** | Se mira a mano con `ultron:prompt-trace` tras cada turno de E3–E5 (M1-A) |
+| C · Autonomía | Motor en sombra | **OPERATIVO Y PROBADO** | Corre cada minuto desde el 11-11; los siete días terminan el 18-11 |
+| C · Autonomía | Modo asistido | **IMPLEMENTADO PERO DESHABILITADO** | No antes del 18-11; cupos a 0 |
+| C · Autonomía | Envíos de WhatsApp y llamadas por estrategia | **IMPLEMENTADO PERO DESHABILITADO** | Las dos constantes del código, cerradas |
+| C · Autonomía | Vínculos de persona (cuatro ojos reales) | **BLOQUEADO** | 0 vínculos: el propietario dice quiénes son las dos personas |
+| D · Plantillas | Pestaña «Plantillas» del CRM: crear, vista previa de WhatsApp, aprobar con otra persona, enviar a Meta, ver estado | **EN INTEGRACIÓN** | Desplegada y encendida (`full`); probada con el doble de Meta y los smokes. Ninguna plantilla se ha enviado todavía a Meta: falta «Comprobar permisos» y la primera plantilla |
+| D · Plantillas | Que el motor use una plantilla aprobada por Meta | **IMPLEMENTADO PERO DESHABILITADO** | Mismo cierre que los envíos del H9 |
+| E · Infra | Despliegue con respaldo, mandos con vuelta atrás y smokes | **OPERATIVO Y PROBADO** | Dos ensayos en el banco, despliegue sin desvíos, vigilancia de 15 minutos limpia (L9-106, L9-107) |
+| E · Infra | Monitor de integraciones del H7 | **IMPLEMENTADO PERO DESHABILITADO** | Leído el 11-11 con `h7-monitor-scope.sh estado`: apagado. Antes de encenderlo faltan dos pasos de operación: fijar la expectativa de hoy (la del código dice que ElevenLabs no está configurado y ya lo está: la primera pasada abriría un incidente falso) y ajustar el recuento de tareas del Studio del mando, que no conoce la sincronización de plantillas (ve 1 tarea donde espera 0) |
+| E · Infra | Presupuestos de rendimiento del H9 (PERF9) | **NO IMPLEMENTADO** | El smoke los omite y lo dice |
+
+### 0.3 Pruebas de esta ola
+
+- Backend, batería completa sobre `815b3ee`: 17 381 pruebas, 451 794 aserciones, 632 omitidas (las de PostgreSQL). Un fallo de la línea base (`PricingV2SalesAndPaymentsTest`) y una regresión, corregida y desplegada en `0ee0868` (L9-108). Las 15 guardas estáticas y las pruebas de plantillas, 196 en verde después de la corrección.
+- CRM: batería completa sobre `89a24f9`, 4 184 pruebas con los 16 fallos de la línea base; después, el módulo de plantillas entero en cada cambio (552 pruebas en 18 ficheros en `b07eda5`).
+- Smokes en producción, en el estado de hoy: H9 30 OK · 0 FALLO · 1 OMITIDO; H8 48 OK · 0 FALLO · 3 OMITIDOS.
+- **No probado:** un turno real por la copia S1 de n8n; una plantilla enviada a Meta real; la batería completa del backend sobre `0ee0868` (se corrieron las guardas y el módulo); PostgreSQL para los cambios de la tarde del 11-11.
+
+### 0.4 Lo que falta, y de quién depende
+
+**Del propietario (nadie más puede hacerlo):**
+
+1. **Un mensaje de WhatsApp desde el teléfono canario.** Cierra E1 y E2.
+2. **Dos personas reales con su cuenta.** Con ellas: los vínculos de persona del H9, el veredicto del laboratorio y publicar (E3–E5), aprobar plantillas y aprobar la revisión 3 del perfil de voz.
+3. **E3–E5 desde el CRM**, entre las 07:00 y las 19:00: versión nueva con tono «profesional» y 200 caracteres → la aprueba la otra persona → ejecución y veredicto del laboratorio de texto → publicar en canario (quien publica no es quien la escribió) → dos o tres mensajes desde el teléfono canario → revertir.
+4. **Revisión 3 del perfil «Sofia Medellin»** con las herramientas de consultar planes y horarios, y una sesión del laboratorio hablado con su propia voz.
+5. **Twilio:** elegir subcuenta o clave restringida solo de voz, y autorizar por escrito la primera llamada canaria.
+6. **Meta:** confirmar en el Administrador de WhatsApp que la integración puede gestionar plantillas, pulsar «Comprobar permisos» en el CRM y enviar la primera plantilla.
+7. **Rotar la clave de ElevenLabs.**
+8. Decidir si se limpian los 81 ficheros de basura sin seguimiento de `/var/www/api/backend` y la retención de las copias `env-pre-*` de `/root`.
+
+**Del tiempo:** los siete días de sombra del H9 terminan el 18-11; el modo asistido no se enciende antes.
+
+**Del equipo técnico:** E18-8 (en curso), la alerta automática M1-A y la batería completa sobre el commit final.
+
+### 0.5 Vuelta atrás, de lo último a lo primero
+
+| Qué | Orden |
+|---|---|
+| Plantillas de Meta | `bash /root/meta-templates-scope.sh read full` (deja de enviar) · `off read` · de urgencia, `off full` |
+| Llave de prompts | `bash /root/motores-prompts-scope.sh off canary` |
+| Motor y publicar | `bash /root/h5-engine-scope.sh off canary` |
+| n8n | despublicar `QSklqHlsDIxucRfk` y publicar `YspRwsXnqt33NouP` (`ops/motores/n8n-copia-s1/LEEME.md`) |
+| Código | la que imprime `deploy-m1-backend.sh` con el respaldo del día: volver a `728f208` y regenerar cachés; el esquema se queda; nunca `migrate:rollback` |
+| CRM | no hace falta volverlo (tolera la ausencia de los campos nuevos) |
+
+### 0.6 Veredicto
+
+**No está «listo para ventas» todavía.** Lo construido está desplegado, encendido hasta donde se puede sin el propietario y probado en automático; faltan las pruebas reales que solo él puede hacer (0.4) y los siete días de sombra. Avance sustentado: **construcción y despliegue, completos salvo E18-8 y M1-A; activación real, a la espera de los puntos 1 a 6**.
+
+---
+
+**Estado del borrador del 10-11 (historia):** BORRADOR DEL LEAD, en curso. Las secciones marcadas «⏳» se completan con las cifras finales de los agentes que siguen trabajando (b9-cierre, pm2-voz, sec-cierre, doc9, test-final, ops8-e) y con la regresión final. Nada de lo que aquí figura como «en el árbol» está en commit ni en producción: el encargo exige la autorización del propietario para commit, push, despliegue, cambios de producción y rotaciones.
 
 Fuentes: la auditoría de los nueve hitos (`ULTRON_STUDIO_AUDITORIA_9_HITOS.md`, fase 1), el estado real de los proveedores (`ULTRON_STUDIO_PROVEEDORES_ESTADO_REAL.md`, sondas GET del 10-11), la activación por etapas (`ULTRON_STUDIO_ACTIVACION_POR_ETAPAS.md`), la preparación para el plan de pago del H8 (`ULTRON_STUDIO_H8_PREPARACION_PLAN_PAGO.md`), los contratos H8 (Enmienda 17) y H9 (L9-55…L9-83) y los informes de `plans/informes-h8/` y `plans/informes-h9/`.
 
