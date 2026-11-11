@@ -135,60 +135,81 @@ MIG_OLA=$(echo $MIG_OLA)
 # Antes «f f f», después «t t t». Si MIG_OLA cambia, Q_EFECTOS y EFECTOS_DESPUES cambian con ella.
 EFECTOS_ANTES="f f f"
 EFECTOS_DESPUES="t t t"
-# Las zonas propias del Studio (libres dentro de la ola) y lo que no corre en producción (pruebas y docs). A diferencia
-# del cierre del H9, la ejecución (Outreach) NO es zona libre: esta ola solo toca un fichero suyo (en la lista).
-ZONAS_LIBRES="backend/app/Services/UltronStudio/ backend/app/Models/UltronStudio/ backend/app/Http/Controllers/Crm/UltronStudio/
-  backend/app/Console/Commands/UltronStudio/ backend/config/ultron_studio.php backend/routes/ultron-studio.php backend/tests/ backend/docs/"
+# Lo que no corre en producción: pruebas y docs (libres). NADA del código es zona libre en esta ola: la lista de abajo
+# es el `git diff --name-only 728f2085..b1959a05` REAL, fichero a fichero (revisión del lead del 11-11; 56 rutas). Un commit
+# posterior que SOLO toque backend/docs/** o backend/tests/** no la cambia (son zona libre).
+ZONAS_LIBRES="backend/tests/ backend/docs/"
 # Lo que viaja en el repositorio y NADIE ejecuta en el servidor: los artefactos de n8n (S1 generado y el respaldo del flujo
 # vivo que leen el generador y E10). n8n se cambia a mano en la etapa E1, nunca desde aquí. Revisado: sin pinData y con
 # las credenciales solo como referencia (informe-devops-ola.md §2.3).
 ZONAS_INERTES="n8n/flujos/ultron-studio-s1/ n8n/respaldos/20261111-ultron-29de5119/"
-# La LISTA CERRADA y enumerada de lo que esta ola puede cambiar FUERA del Studio (ruta exacta y dueño). Cualquier otro
-# fichero que cambie entre PREVIO y origin/main ABORTA (Legacy fuera de estos, la ejecución salvo el puente de W9, el
-# webhook y el outbox de WhatsApp, rutas de la API, dependencias, las constantes…): si es de otro equipo, se despliega
-# antes por su vía. Las marcadas con «*» SOLO AÑADEN CÓDIGO: las líneas que quitan solo pueden ser comentarios y ninguna
-# con `Schedule::`.
-LISTA_CERRADA='backend/.env.example                                                   ejemplo, no corre: MARKETING_ULTRON_STUDIO_PROMPTS y ULTRON_STUDIO_META_TEMPLATES_* (tester-guardas, be-tpl)
-backend/config/marketing.php                                         * M-1: marketing.ultron.studio_prompts (off | canary) (bm-motor)
-backend/app/Services/Marketing/Ultron/UltronPublishedConfig.php        M-1: el lector acepta /1 y /2, partFor() (bm-motor)
-backend/app/Services/Marketing/Ultron/UltronDecideService.php          M-1: la oferta de prompts si n8n negocia (bm-motor)
-backend/app/Services/Marketing/Ultron/UltronCommitService.php          M-1: el sello metadata.studio_prompts (bm-motor)
-backend/app/Http/Controllers/Api/Internal/UltronController.php         M-1: prompt_contract en decide y el bloque prompts del commit (bm-motor)
-backend/app/Services/Marketing/Ultron/Prompts/UltronPromptBase.php     M-1: la base y sus huellas (bm-motor, nuevo)
-backend/app/Services/Marketing/Ultron/Prompts/UltronPromptCompiler.php M-1: el compilador (bm-motor, nuevo)
-backend/app/Services/Marketing/Ultron/Prompts/UltronPromptException.php M-1 (bm-motor, nuevo)
-backend/app/Services/Marketing/Ultron/Prompts/UltronPromptOffer.php    M-1: la oferta de decide (bm-motor, nuevo)
-backend/app/Services/Marketing/Ultron/Prompts/UltronPromptStamp.php    M-1: el sello (bm-motor, nuevo)
-backend/app/Services/Marketing/Ultron/Prompts/UltronPromptsN8nFlow.php M-1: el generador de S1 (bm-motor, nuevo)
-backend/app/Console/Commands/Marketing/UltronPromptTrace.php           M-1: ultron:prompt-trace, solo lectura (bm-motor, nuevo)
-backend/app/Console/Commands/Marketing/UltronPromptsN8n.php            M-1: ultron:prompts-n8n, NO se ejecuta en producción (bm-motor, nuevo)
-backend/resources/ultron-prompts/.editorconfig                         M-1: la base no se «arregla» (bm-motor, nuevo)
-backend/resources/ultron-prompts/.gitattributes                        M-1: *.txt -text (bm-motor, nuevo)
-backend/resources/ultron-prompts/n8n-29de5119/strategist.txt           M-1: base, sha256 fijado (bm-motor, nuevo)
-backend/resources/ultron-prompts/n8n-29de5119/composer.txt             M-1: base, sha256 fijado (bm-motor, nuevo)
-backend/resources/ultron-prompts/n8n-29de5119/critic.txt               M-1: base, sha256 fijado (bm-motor, nuevo)
-backend/resources/ultron-prompts/n8n-29de5119/composer_retry.txt       M-1: base, sha256 fijado (bm-motor, nuevo)
-backend/resources/ultron-prompts/n8n-29de5119/critic_retry.txt         M-1: base, sha256 fijado (bm-motor, nuevo)
-backend/app/Services/Meta/Templates/WhatsappTemplateClient.php         plantillas: el cliente neutro (be-tpl, nuevo)
-backend/app/Services/Meta/Templates/WhatsappTemplateClientFactory.php  plantillas: en producción siempre graph (be-tpl, nuevo)
-backend/app/Services/Meta/Templates/WhatsappTemplateProbe.php          plantillas: la sonda (be-tpl, nuevo)
-backend/app/Services/Meta/Templates/GraphWhatsappTemplateClient.php    plantillas: Graph v25.0 (be-tpl, nuevo)
-backend/app/Services/Meta/Templates/FakeWhatsappTemplateClient.php     plantillas: el doble, solo local y testing (be-tpl, nuevo)
-backend/app/Services/Meta/Templates/MetaTemplate.php                   plantillas (be-tpl, nuevo)
-backend/app/Services/Meta/Templates/TemplateApiErrors.php              plantillas (be-tpl, nuevo)
-backend/app/Services/Meta/Templates/TemplateApiResult.php              plantillas (be-tpl, nuevo)
-backend/app/Services/Meta/Templates/TemplateRequestGuard.php           plantillas (be-tpl, nuevo)
-backend/app/Services/Outreach/Run/OutreachPublishedStrategies.php      W9: la huella de componentes en metaApproved() (be-tpl, enmienda de W9)
-backend/app/Support/Access/AuthorizationMap.php                      * plantillas: las 4 entradas (be-tpl)
-backend/app/Support/Access/CrmPermission.php                         * plantillas: la llave ultron.meta_templates_submit (be-tpl)
-backend/app/Support/Access/PermissionCatalog.php                       plantillas: etiqueta y ayuda; M-1: la frase de publicar y revertir (be-tpl, bs-studio)
-backend/app/Providers/AppServiceProvider.php                         * plantillas: el limitador ultron-studio-meta (be-tpl)
-backend/app/Exceptions/UltronStudioException.php                     * M-1: 409 prompts_compile_failed (bs-studio)
-backend/routes/console.php                                           * plantillas: el bloque propio de ultron-studio:meta-templates-sync, tras su bandera'
-SOLO_CODIGO_ANADIDO="backend/routes/console.php backend/config/marketing.php backend/app/Support/Access/AuthorizationMap.php
-  backend/app/Support/Access/CrmPermission.php backend/app/Providers/AppServiceProvider.php backend/app/Exceptions/UltronStudioException.php"
-# Prefijos de los commits de la ola (la puerta de verdad es la de ficheros; esto es trazabilidad).
-PREFIJO_OLA='^[a-z]+(/[a-z]+)*\((ultron-studio|ultron-studio-h[5-9]|ultron-studio-m1|ultron-studio-motores|ultron-studio-plantillas)\):'
+# La LISTA CERRADA y enumerada de lo que esta ola puede cambiar (ruta exacta, paquete y commit de la ola). Cualquier otro
+# fichero que cambie entre PREVIO y origin/main ABORTA: si es de otro equipo, se despliega antes por su vía; si es de
+# esta ola, se añade aquí en un commit con su revisión. Las marcadas con «*» SOLO AÑADEN CÓDIGO (configuración, rutas,
+# acceso y piezas compartidas): las líneas que quitan solo pueden ser comentarios y ninguna con `Schedule::`.
+LISTA_CERRADA='backend/.env.example                                                     ejemplo, no corre: MARKETING_ULTRON_STUDIO_PROMPTS y ULTRON_STUDIO_META_TEMPLATES_* (f7a79315)
+backend/config/marketing.php                                           * M-1: marketing.ultron.studio_prompts, off | canary (motor, ab1ae2e4)
+backend/config/ultron_studio.php                                       * plantillas: el bloque meta_templates (0afaa5a9)
+backend/routes/console.php                                             * plantillas: el bloque propio de ultron-studio:meta-templates-sync, tras su bandera (0afaa5a9)
+backend/routes/ultron-studio.php                                       * plantillas: las 4 rutas dentro del grupo del Studio (0afaa5a9)
+backend/app/Providers/AppServiceProvider.php                           * plantillas: el limitador ultron-studio-meta (0afaa5a9, PM-1/PM-2)
+backend/app/Support/Access/AuthorizationMap.php                        * plantillas: las 4 entradas (0afaa5a9)
+backend/app/Support/Access/CrmPermission.php                           * plantillas: la llave ultron.meta_templates_submit (0afaa5a9)
+backend/app/Support/Access/PermissionCatalog.php                         etiquetas y ayudas: publicar, revertir y la llave nueva (f7a79315)
+backend/app/Exceptions/UltronStudioException.php                       * M-1: 409 prompts_compile_failed (Studio, 4445abb7)
+backend/app/Http/Controllers/Api/Internal/UltronController.php           M-1: prompt_contract en decide y el bloque prompts del commit (motor, ab1ae2e4)
+backend/app/Services/Marketing/Ultron/UltronPublishedConfig.php          M-1: el lector de /1 y /2, partFor() (motor, ab1ae2e4)
+backend/app/Services/Marketing/Ultron/UltronDecideService.php            M-1: la oferta de prompts si n8n negocia (motor, ab1ae2e4)
+backend/app/Services/Marketing/Ultron/UltronCommitService.php            M-1: el sello metadata.studio_prompts (motor, ab1ae2e4)
+backend/app/Services/Marketing/Ultron/Prompts/UltronPromptBase.php       M-1: la base y sus huellas (motor, ab1ae2e4, nuevo)
+backend/app/Services/Marketing/Ultron/Prompts/UltronPromptCompiler.php   M-1: el compilador (motor, ab1ae2e4, nuevo)
+backend/app/Services/Marketing/Ultron/Prompts/UltronPromptException.php  M-1 (motor, ab1ae2e4, nuevo)
+backend/app/Services/Marketing/Ultron/Prompts/UltronPromptOffer.php      M-1: la oferta de decide (motor, ab1ae2e4, nuevo)
+backend/app/Services/Marketing/Ultron/Prompts/UltronPromptStamp.php      M-1: el sello (motor, ab1ae2e4, nuevo)
+backend/app/Services/Marketing/Ultron/Prompts/UltronPromptsN8nFlow.php   M-1: el generador de S1 (motor, ab1ae2e4, nuevo)
+backend/app/Console/Commands/Marketing/UltronPromptTrace.php             M-1: ultron:prompt-trace, solo lectura (motor, ab1ae2e4, nuevo)
+backend/app/Console/Commands/Marketing/UltronPromptsN8n.php              M-1: ultron:prompts-n8n, NO se ejecuta en producción (motor, ab1ae2e4, nuevo)
+backend/resources/ultron-prompts/.editorconfig                           M-1: la base no se «arregla» (motor, ab1ae2e4, nuevo)
+backend/resources/ultron-prompts/.gitattributes                          M-1: *.txt -text (motor, ab1ae2e4, nuevo)
+backend/resources/ultron-prompts/n8n-29de5119/strategist.txt             M-1: base, sha256 fijado (motor, ab1ae2e4, nuevo)
+backend/resources/ultron-prompts/n8n-29de5119/composer.txt               M-1: base, sha256 fijado (motor, ab1ae2e4, nuevo)
+backend/resources/ultron-prompts/n8n-29de5119/critic.txt                 M-1: base, sha256 fijado (motor, ab1ae2e4, nuevo)
+backend/resources/ultron-prompts/n8n-29de5119/composer_retry.txt         M-1: base, sha256 fijado (motor, ab1ae2e4, nuevo)
+backend/resources/ultron-prompts/n8n-29de5119/critic_retry.txt           M-1: base, sha256 fijado (motor, ab1ae2e4, nuevo)
+backend/app/Services/UltronStudio/StudioCanaryMeasures.php               M-1: los turnos de la canaria para engine.prompts (Studio, 4445abb7)
+backend/app/Services/UltronStudio/StudioEngineReadings.php               M-1: promptsKey() (Studio, 4445abb7)
+backend/app/Services/UltronStudio/StudioPromptBundle.php                 M-1: el adaptador puro del compilador (Studio, 4445abb7, nuevo)
+backend/app/Services/UltronStudio/StudioPublicationDeclaration.php       M-1: /2, governed y prompts en la declaración (Studio, 4445abb7)
+backend/app/Services/UltronStudio/StudioPublicationExport.php            M-1: vocabularios y ejemplos (Studio, 4445abb7)
+backend/app/Services/UltronStudio/StudioPublications.php                 M-1: publicar /2, la vista previa y engine.prompts (Studio, 4445abb7)
+backend/app/Console/Commands/UltronStudio/MetaTemplatesSyncCommand.php   plantillas: ultron-studio:meta-templates-sync; sale con 1 si Meta falla en toda la pasada (0afaa5a9, nuevo; M-3 en b1959a05)
+backend/app/Console/Commands/UltronStudio/TemplateMetaCheckCommand.php   plantillas: la comparación de componentes (0afaa5a9)
+backend/app/Http/Controllers/Crm/UltronStudio/StudioRouteCount.php       plantillas: 121 → 125 (0afaa5a9)
+backend/app/Http/Controllers/Crm/UltronStudio/UltronStudioMetaTemplateController.php plantillas: las 4 rutas (0afaa5a9, PM-1/PM-2, nuevo)
+backend/app/Http/Controllers/Crm/UltronStudio/UltronStudioStrategyController.php * plantillas (0afaa5a9)
+backend/app/Models/UltronStudio/StudioMetaTemplateSubmission.php         plantillas: el envío, $guarded = [*] (0afaa5a9, nuevo)
+backend/app/Services/UltronStudio/StudioAccess.php                     * plantillas: META_TEMPLATES_SUBMIT (0afaa5a9)
+backend/app/Services/UltronStudio/StudioMessageTemplates.php             plantillas: la huella de componentes y el bloque meta; del teléfono del gimnasio solo phoneLast4 (0afaa5a9; b1959a05)
+backend/app/Services/UltronStudio/StudioMetaTemplates.php                plantillas: el servicio (0afaa5a9, nuevo; M-2 en b1959a05)
+backend/app/Services/UltronStudio/StudioIntegrationsExport.php           el exportador: `classification` sale de la misma fuente que providerClassifications, connected_voice (b1959a05)
+backend/app/Services/UltronStudio/StudioTemplateMetaChecks.php           plantillas: compare() con componentes (0afaa5a9)
+backend/app/Services/Outreach/Run/OutreachPublishedStrategies.php        W9: la huella de componentes en metaApproved() (plantillas, 0afaa5a9)
+backend/app/Services/Meta/Templates/WhatsappTemplateClient.php           plantillas: el cliente neutro (0afaa5a9, nuevo)
+backend/app/Services/Meta/Templates/WhatsappTemplateClientFactory.php    plantillas: en producción siempre graph (0afaa5a9, nuevo)
+backend/app/Services/Meta/Templates/WhatsappTemplateProbe.php            plantillas: la sonda (0afaa5a9, nuevo)
+backend/app/Services/Meta/Templates/GraphWhatsappTemplateClient.php      plantillas: Graph v25.0 (0afaa5a9, PM-1/PM-2, nuevo)
+backend/app/Services/Meta/Templates/FakeWhatsappTemplateClient.php       plantillas: el doble, solo local y testing (0afaa5a9, nuevo)
+backend/app/Services/Meta/Templates/MetaTemplate.php                     plantillas (0afaa5a9, nuevo)
+backend/app/Services/Meta/Templates/TemplateApiErrors.php                plantillas (0afaa5a9, nuevo)
+backend/app/Services/Meta/Templates/TemplateApiResult.php                plantillas (0afaa5a9, nuevo)
+backend/app/Services/Meta/Templates/TemplateRequestGuard.php             plantillas (0afaa5a9, nuevo)'
+SOLO_CODIGO_ANADIDO="backend/config/marketing.php backend/config/ultron_studio.php backend/routes/console.php backend/routes/ultron-studio.php
+  backend/app/Providers/AppServiceProvider.php backend/app/Support/Access/AuthorizationMap.php backend/app/Support/Access/CrmPermission.php
+  backend/app/Exceptions/UltronStudioException.php backend/app/Http/Controllers/Crm/UltronStudio/UltronStudioStrategyController.php
+  backend/app/Services/UltronStudio/StudioAccess.php"
+# Prefijos de los commits de la ola (la puerta de verdad es la de ficheros; esto es trazabilidad). El tipo puede ser
+# compuesto con «/» o «+» (`docs/ops(…)`, `ops+docs(…)`, `test+ops(…)`).
+PREFIJO_OLA='^[a-z]+([/+][a-z]+)*\((ultron-studio|ultron-studio-h[5-9]|ultron-studio-m1|ultron-studio-motores|ultron-studio-plantillas)\):'
 # Las claves nuevas de la ola, explícitas aunque coincidan con el defecto (protección 1: todo nace apagado), con el
 # valor por defecto de backend/.env.example (:298 y :426–:447) salvo URL_HOSTS, que lleva el valor decidido (Q1 de
 # L9-96). Las mueven después los mandos (motores/motores-prompts-scope.sh para la llave de prompts) o una orden escrita.
@@ -553,8 +574,8 @@ if [ -n "$AJENOS" ]; then
     aborta "commits ajenos a la ola entre $BASE y origin/main: ${LISTA% · }. O su dueño los despliega antes por su vía, o el propietario los acepta ahora con --acepta-main=$(echo $AJENOS | tr ' ' ',')"
   fi
 fi
-# La puerta de diff CERRADA: cada fichero que cambie entre PREVIO y origin/main está en una zona del Studio, en pruebas o
-# docs, en la lista de migraciones, en una zona inerte (n8n) o en la LISTA CERRADA; si no, aborta.
+# La puerta de diff CERRADA: cada fichero que cambie entre PREVIO y origin/main está en pruebas o docs, en la lista de
+# migraciones, en una zona inerte (n8n) o en la LISTA CERRADA; si no, aborta.
 PERMITIDOS=$(printf '%s\n' "$LISTA_CERRADA" | awk '{print $1}')
 FUERA=""; EN_LISTA=""; LIBRES=0; INERTES=0
 while IFS=$'\t' read -r st f; do
@@ -575,7 +596,7 @@ for f in $SOLO_CODIGO_ANADIDO; do
   [ "$NO_COMENTARIO" = 0 ] && [ "$CON_SCHEDULE" = 0 ] || aborta "$f quita $NO_COMENTARIO línea(s) de código (o $CON_SCHEDULE con Schedule::) entre $BASE y origin/main: en esta ola solo AÑADE código (las líneas que quita solo pueden ser comentarios)"
 done
 N_LISTA=$(echo $EN_LISTA | wc -w | tr -d ' ')
-echo "   puerta de diff: $LIBRES ficheros en las zonas del Studio, pruebas y docs · $INERTES artefactos de n8n (no se ejecutan) · $N_LISTA de la lista cerrada (fuera del Studio):"
+echo "   puerta de diff: $LIBRES ficheros de pruebas y docs · $INERTES artefactos de n8n (no se ejecutan) · $N_LISTA de la lista cerrada (cada uno con su paquete):"
 for f in $EN_LISTA; do printf '%s\n' "$LISTA_CERRADA" | awk -v f="$f" '$1 == f {$1 = ""; sub(/^ +/, ""); printf "      %s — %s\n", f, $0}'; done
 # Las dos constantes, ANTES del merge, en el commit que se va a desplegar: cerradas (una declaración `= false;` anclada
 # y ninguna `= true`). Ninguno de sus ficheros está en la lista cerrada: la puerta ya habría abortado si cambiaran.
@@ -827,9 +848,9 @@ echo "8. workers (RUNNING · BACKOFF/FATAL), dos lecturas separadas: [$W1] y [$W
 [ "$W1" = "$RUN0 0" ] && [ "$W2" = "$RUN0 0" ] || desvio "workers [$W1] y [$W2] (esperado $RUN0 0 las dos veces)"
 FACT=$(systemctl is-active ironbody-billing-worker 2>/dev/null || true)
 [ "$FACT" = active ] || desvio "ironbody-billing-worker: $FACT"
-echo "9. sanidad:"
+echo "9. sanidad (cada curl con --max-time 20; si falla, 000 y un desvío que se dice, no una muerte muda: M-6 del reviewer):"
 for p in admin/ultron-studio/outreach/status admin/ultron-studio/outreach/brakes admin/ultron-studio/strategies admin/ultron-studio/strategies/catalog admin/ultron-studio/strategies/templates admin/ultron-studio/strategies/templates/meta/status admin/ultron-studio/status; do
-  CAB=$(curl -sI -H 'Accept: application/json' "$API/$p" | tr -d '\r')
+  CAB=$(curl -sI --max-time 20 -H 'Accept: application/json' "$API/$p" | tr -d '\r') || CAB=""
   c=$(printf '%s\n' "$CAB" | awk 'NR == 1 {print $2}')
   cc=$(printf '%s\n' "$CAB" | awk -F': *' 'tolower($1) == "cache-control" {print $2}' | tail -1)
   echo "   HEAD $p sin token → $c · Cache-Control: ${cc:-(ninguna)}"
@@ -838,28 +859,28 @@ for p in admin/ultron-studio/outreach/status admin/ultron-studio/outreach/brakes
 done
 FAKE=00000000-0000-4000-8000-0000000009a9
 for p in strategies/templates/meta/probe "strategies/templates/$FAKE/meta/submit" "strategies/templates/$FAKE/meta/refresh"; do
-  c=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Accept: application/json' -H 'Content-Type: application/json' --data-binary '{}' "$API/admin/ultron-studio/$p")
+  c=$(curl -s --max-time 20 -o /dev/null -w '%{http_code}' -X POST -H 'Accept: application/json' -H 'Content-Type: application/json' --data-binary '{}' "$API/admin/ultron-studio/$p") || c=000
   echo "   POST admin/ultron-studio/${p//$FAKE/<inventado>} sin token → $c (plantillas de Meta)"; [ "$c" = 401 ] || desvio "POST ${p//$FAKE/<inventado>} sin token respondió $c (esperado 401)"
 done
-c=$(curl -s -o /dev/null -w '%{http_code}' -H 'Accept: application/json' "$API/admin/ultron-studio/stream?topics=ledger")
+c=$(curl -s --max-time 20 -o /dev/null -w '%{http_code}' -H 'Accept: application/json' "$API/admin/ultron-studio/stream?topics=ledger") || c=000
 echo "   GET admin/ultron-studio/stream sin vale → $c"; [ "$c" = 401 ] || desvio "el canal SSE sin vale respondió $c (esperado 401)"
-c=$(curl -s -o /dev/null -w '%{http_code}' -H 'Accept: application/json' "$API/admin/stream-ticket?scope=stream")
+c=$(curl -s --max-time 20 -o /dev/null -w '%{http_code}' -H 'Accept: application/json' "$API/admin/stream-ticket?scope=stream") || c=000
 echo "   GET admin/stream-ticket?scope=stream sin sesión → $c"; [ "$c" = 401 ] || desvio "la emisión del vale sin sesión respondió $c (esperado 401)"
 GRANDE=$(python3 -c 'import json; print(json.dumps({"name": "x" * 70000}))')
 for p in admin/ultron-studio/strategies admin/ultron-studio/outreach/brakes admin/ultron-studio/strategies/templates/meta/probe; do
-  R413=$(printf '%s' "$GRANDE" | curl -s -o - -w ' %{http_code}' -X POST -H 'Accept: application/json' -H 'Content-Type: application/json' --data-binary @- "$API/$p" | tail -c 200)
+  R413=$(printf '%s' "$GRANDE" | curl -s --max-time 20 -o - -w ' %{http_code}' -X POST -H 'Accept: application/json' -H 'Content-Type: application/json' --data-binary @- "$API/$p" | tail -c 200) || R413=" 000"
   echo "   POST $p con 70 000 bytes sin token → ${R413##* } $(printf '%s' "$R413" | grep -o '"code":"[a-z_]*"' || true)"
   case "$R413" in *'"code":"payload_too_large"'*' 413') ;; *) desvio "el cuerpo de 70 000 bytes sin sesión a POST $p no dio 413 payload_too_large" ;; esac
 done
 # M-1: decide y commit internos siguen tras la firma HMAC (automation.internal va ANTES del limitador: una petición sin
 # firma da 401 sin gastar el cupo del flujo de n8n).
 for p in internal/marketing/ai/decide internal/marketing/ai/commit; do
-  c=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Accept: application/json' -H 'Content-Type: application/json' --data-binary '{}' "$API/$p")
+  c=$(curl -s --max-time 20 -o /dev/null -w '%{http_code}' -X POST -H 'Accept: application/json' -H 'Content-Type: application/json' --data-binary '{}' "$API/$p") || c=000
   echo "   POST $p sin firma → $c"; [ "$c" = 401 ] || desvio "POST $p sin firma respondió $c (esperado 401)"
 done
-c=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Accept: application/json' "$API/webhooks/twilio/usage-trigger")
+c=$(curl -s --max-time 20 -o /dev/null -w '%{http_code}' -X POST -H 'Accept: application/json' "$API/webhooks/twilio/usage-trigger") || c=000
 echo "   usage-trigger del OTP sin firma → $c (falla cerrada; T-1, intacto)"; [ "$c" = 403 ] || desvio "usage-trigger del OTP sin firma respondió $c (esperado 403)"
-c=$(curl -s -o /dev/null -w '%{http_code}' -H 'Accept: application/json' "$API/admin/voice/status")
+c=$(curl -s --max-time 20 -o /dev/null -w '%{http_code}' -H 'Accept: application/json' "$API/admin/voice/status") || c=000
 echo "   admin/voice/status sin token → $c"; [ "$c" = 401 ] || desvio "admin/voice/status sin token respondió $c (esperado 401)"
 FALLIDAS=$($PSQL -c "SELECT count(*) FROM failed_jobs;")
 echo "   colas fallidas: $FALLIDAS (antes $FALLIDAS_ANTES)"; [ "$FALLIDAS" -le "$FALLIDAS_ANTES" ] || desvio "colas fallidas nuevas durante el despliegue"

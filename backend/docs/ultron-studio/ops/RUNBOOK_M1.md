@@ -57,17 +57,21 @@ tolerar su **presencia**. Se publica con el procedimiento de siempre: `rsync` **
 `index.html`, `version.json` y la lista de ficheros, verificación de que nada desapareció y de que el `main` viejo y
 los `chunk-*.js` viejos siguen sirviendo.
 
-- **Pendiente:** el guion del CRM de ESTA ola (`deploy-m1-crm.sh`, derivado de `deploy-h9-crm-cierre.sh`) necesita
-  los **marcadores** del build nuevo (la pestaña «Plantillas» y la publicación/traza de M-1) y el paso 0 del backend
-  de hoy en lugar del P9-25. Se escribe cuando `crm-fe` entregue (informe, §7).
+- **Guion:** el genérico (decisión del lead, ya usado el 11-11 dos veces):
+  `bash backend/docs/ultron-studio/ops/deploy-crm.sh <CRM> a539690 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body_Front`
+  con `<CRM>` = `3f01c85` (el CRM de la ola, sellado; sobre `89a24f9` lee `phoneLast4`)
+  (build sellado, nada se movió, `origin/main` = el build, respaldo, `rsync` sin `--delete`, verificación pública;
+  termina en `CRM PUBLICADO Y VERIFICADO`). El backend solo exige que `version.json` diga `<CRM>` y que no sea `a539690`.
 - Verificación: `curl -fsS https://ironbodyneiva.cloud/version.json` → el commit del build. Las pestañas abiertas
   recargan solas al navegar (vigilante de versión); recepción y el punto facial: recargarlas a mano.
 
 ### 2.3 El backend, solo comprobaciones (no toca nada)
 
 ```bash
-# desde el Mac, el guion DEL COMMIT QUE SE DESPLIEGA:
-scp backend/docs/ultron-studio/ops/deploy-m1-backend.sh ironbody-vps:/root/ && ssh ironbody-vps 'chmod 700 /root/deploy-m1-backend.sh; sha256sum /root/deploy-m1-backend.sh'
+# desde el Mac, el guion DEL COMMIT QUE SE DESPLIEGA (no el del árbol):
+git fetch -q origin && git show <commit>:backend/docs/ultron-studio/ops/deploy-m1-backend.sh | shasum -a 256
+git show <commit>:backend/docs/ultron-studio/ops/deploy-m1-backend.sh \
+  | ssh ironbody-vps 'umask 077; cat > /root/deploy-m1-backend.sh && chmod 700 /root/deploy-m1-backend.sh && sha256sum /root/deploy-m1-backend.sh'
 # en el servidor:
 bash /root/deploy-m1-backend.sh <commit (7)> "$BK" --crm=<commit del CRM (7)> --solo-comprobar
 ```
@@ -224,12 +228,15 @@ restaura solo el fichero de entorno y la caché (M1-B). Termina en `ALCANCE cana
 Banco nuevo, fuera del repo, con `ops/banco-h9/m1.sh` (usa `montar.sh`, `preparar.sh`, `ensayar.sh` y `sembrar.sh`
 sin cambiarlos). **Commit de partida: `728f2085`** (lo que sirve producción), con el estado de producción escrito en el
 entorno sintético (H9 en sombra con el gobierno, publicar y el canal en vivo; laboratorio hablado 2a). La ola: los
-commits **confirmados** del worktree (con ficheros de la ola sin confirmar, `ola` se niega).
+commits **confirmados** del worktree (con código de la ola sin confirmar, `ola` se niega salvo
+`BANCO_OLA_COMMIT=<sha>`, que ensaya ese commit y dice lo que queda fuera). Base propia del banco (`BANCO_DB`) para
+no borrar la de otro banco.
 
 ```bash
+export BANCO_DB=ultron_studio_banco_h9_m1
 B=${XDG_CACHE_HOME:-$HOME/.cache}/ironbody-banco-m1
 bash backend/docs/ultron-studio/ops/banco-h9/m1.sh "$B" montar
-bash backend/docs/ultron-studio/ops/banco-h9/m1.sh "$B" ola
+BANCO_OLA_COMMIT=<commit de la ola> bash backend/docs/ultron-studio/ops/banco-h9/m1.sh "$B" ola
 bash backend/docs/ultron-studio/ops/banco-h9/m1.sh "$B" crm <commit del CRM de la ola (7)>
 bash backend/docs/ultron-studio/ops/banco-h9/m1.sh "$B" desplegar --crm=<ese commit> --solo-comprobar
 bash backend/docs/ultron-studio/ops/banco-h9/m1.sh "$B" desplegar --crm=<ese commit>
@@ -241,6 +248,16 @@ bash backend/docs/ultron-studio/ops/banco-h9/ensayar.sh "$B" parar && rm -rf "$B
 Lo que el banco **no** prueba: el programador vivo (no hay cron: la tolerancia de `outreach_runs` del smoke no se
 ejercita), ElevenLabs (el smoke del H8 en 2a tiene un FALLO conocido del banco), los usuarios de sistema, `flock`,
 `timeout` y la lectura de n8n (sale «?»), y la sonda de Twilio (apagada en el banco).
+
+**Ensayado el 11-11 dos veces.**
+
+- **Primer ensayo** (13:50–14:06 UTC, `1c8f70bb` y CRM `89a24f9`): pasos 0–11 sin desvíos y mandos 13/13. El smoke del
+  H9 cazó `phoneNumber` en `GET strategies/catalog`; se corrigió en el código (`phoneLast4`).
+- **Segundo ensayo** (14:16–14:31 UTC, `b1959a05` y CRM `3f01c85`, lista cerrada de 56): pasos 0–11 sin desvíos.
+  Smoke del H9: **0 FALLO** (1 OMITIDO de PERF9). Smoke del H8: solo su FALLO conocido del banco (ElevenLabs). Valla
+  sin salidas.
+
+Las órdenes de producción válidas están en `informe-devops-ola.md`, «Segundo ensayo (b1959a05)».
 
 ## 7. Lo que NO es de este runbook
 

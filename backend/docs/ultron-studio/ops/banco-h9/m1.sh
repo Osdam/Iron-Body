@@ -62,13 +62,26 @@ PY
 ola() {
   cargar_banco "$B"
   local sucios esp
-  sucios=$(git -C "$WT" status --porcelain --untracked-files=all -- backend/app backend/config backend/routes backend/database backend/resources backend/bootstrap backend/.env.example n8n backend/docs/ultron-studio/ops | grep -v '/evidencia-' || true)
-  [ -z "$sucios" ] || muere "hay ficheros de la ola sin confirmar en el worktree ($(printf '%s\n' "$sucios" | wc -l | tr -d ' ')): el ensayo es con los commits DEFINITIVOS"
+  sucios=$(git -C "$WT" status --porcelain --untracked-files=all -- backend/app backend/config backend/routes backend/database backend/resources backend/bootstrap backend/.env.example n8n || true)
+  # BANCO_OLA_COMMIT=<sha>: se ensaya ESE commit (el banco lleva commits, no el árbol); lo que esté sin confirmar se dice y
+  # NO entra en el ensayo. Sin ella, con código de la ola sin confirmar, se niega (no se sabría qué se ensaya).
+  if [ -n "${BANCO_OLA_COMMIT:-}" ]; then
+    [ -z "$sucios" ] || echo "   AVISO: código sin confirmar en el worktree que NO entra en este ensayo (se ensaya $BANCO_OLA_COMMIT): $(printf '%s\n' "$sucios" | awk '{print $2}' | tr '\n' ' ')"
+  else
+    [ -z "$sucios" ] || muere "hay ficheros de la ola sin confirmar en el worktree ($(printf '%s\n' "$sucios" | wc -l | tr -d ' ')): el ensayo es con los commits DEFINITIVOS (o BANCO_OLA_COMMIT=<sha> para ensayar uno concreto)"
+  fi
+  # Los smokes se copian del checkout DESPLEGADO (el commit): si están cambiados en el árbol, el banco no probaría estos.
+  # Los guiones de despliegue y de los mandos se copian del árbol (preparar_deploy, preparar_mandos): pueden ir por delante.
+  sucios=$(git -C "$WT" status --porcelain -- 'backend/docs/ultron-studio/ops/smoke-*' 'backend/docs/ultron-studio/ops/perf-h8' 'backend/docs/ultron-studio/ops/perf-h9' || true)
+  [ -z "$sucios" ] || muere "los smokes del árbol no son los del commit ($(printf '%s\n' "$sucios" | tr '\n' ' ')): confirmarlos antes"
+  sucios=$(git -C "$WT" status --porcelain -- backend/docs/ultron-studio/ops | grep -v '/evidencia-' || true)
+  [ -z "$sucios" ] || echo "   AVISO: guiones de ops del árbol por delante del commit (se ensayan ESOS; el lead los confirma después): $(printf '%s\n' "$sucios" | awk '{print $2}' | tr '\n' ' ')"
   git -C "$WT" merge-base --is-ancestor "$PROD" HEAD || muere "HEAD del worktree no contiene $PROD (lo que sirve producción)"
   local rama cabeza
   rama=$(git -C "$WT" rev-parse --abbrev-ref HEAD); cabeza=$(git -C "$WT" rev-parse HEAD)
   ( cd "$B/src" && git fetch -q "$(git -C "$WT" rev-parse --path-format=absolute --git-common-dir)" "$rama" \
-      && [ "$(git rev-parse FETCH_HEAD)" = "$cabeza" ] && git -c advice.detachedHead=false checkout -q -B banco FETCH_HEAD && git branch -q -f main HEAD ) \
+      && [ "$(git rev-parse FETCH_HEAD)" = "$cabeza" ] && git -c advice.detachedHead=false checkout -q -B banco "${BANCO_OLA_COMMIT:-FETCH_HEAD}" \
+      && git merge-base --is-ancestor HEAD FETCH_HEAD && git branch -q -f main HEAD ) \
     || muere "no se pudo traer al origen del banco la rama $rama en $cabeza (¿commits sin confirmar en la rama?)"
   esp=$(git -C "$B/src" rev-parse --short=7 main)
   python3 -I - "$B/banco.env" "$esp" "${PROD:0:7}" <<'PY'
@@ -147,18 +160,25 @@ preparar_mandos() {
   for m in h5-engine-scope.sh:scope motores/motores-prompts-scope.sh:prompts; do
     nombre=$(basename "${m%%:*}")
     copia "$OPS/${m%%:*}" "$B/root/$nombre" "$(python3 -I -c 'import json, sys
-b, me, url, tipo = sys.argv[1:5]
-print(json.dumps([
+b, me, url, tipo, nombre, psql = sys.argv[1:7]
+base = nombre[:-3]
+reglas = [
   ["cd /var/www/api/backend", f"cd {b}/api/backend", 1],
   ["install -m 600 -o root -g root \"$ENVF\" \"$COPIA\"", "install -m 600 \"$ENVF\" \"$COPIA\"", 1],
   [f"COPIA=\"/root/env-pre-{tipo}-", f"COPIA=\"{b}/root/env-pre-{tipo}-", 1],
+  [f"LOG=\"/root/{base}-", f"LOG=\"{b}/root/{base}-", 1],
   ["find /root -maxdepth 1", f"find {b}/root -maxdepth 1", 2],
+  ["/run/lock/", f"{b}/run/", 3],
   ["https://api.ironbodyneiva.cloud/api", url, 1],
   ["= www-data ]", f"= {me} ]", 1],
   ["DESPUES=$(leer)", "DESPUES=$(leer); [ -z \"${BANCO_FALLA:-}\" ] || DESPUES=falla-forzada-del-banco", 1],
-]))' "$B" "$me" "$url" "${m##*:}")"
+]
+if tipo == "prompts":   # MB-8: la lectura del CHECK de la cadena, contra la base del banco
+    reglas.append(["sudo -u postgres psql -X -Atq -d ironbody", psql, 1])
+print(json.dumps(reglas))' "$B" "$me" "$url" "${m##*:}" "$nombre" "psql -X -Atq -h $PG_HOST -p $PG_PORT -U $PG_USER -d $BANCO_DB")"
+    ! grep -nE '(^|[^A-Za-z0-9_./-])/root/|/run/lock/|sudo -u postgres' "$B/root/$nombre" || muere "la copia del banco de $nombre todavía nombra /root, /run/lock o sudo -u postgres: el mando cambió"
   done
-  echo "   copias del banco: h5-engine-scope.sh y motores-prompts-scope.sh (7 sustituciones cada uno; BANCO_FALLA=1 fuerza el fallo en la lectura de después)"
+  echo "   copias del banco: h5-engine-scope.sh (9 sustituciones) y motores-prompts-scope.sh (10: también la lectura del CHECK); registro, copias y cerrojos bajo $B; BANCO_FALLA=1 fuerza el fallo en la lectura de después"
 }
 mando() { ( export PATH="$B/bin-mandos:$PATH" "${RED[@]}"; bash "$B/root/$1" "${@:2}" ); }
 clave_prompts() { ( cd "$B/api/backend" && env "${RED[@]}" php artisan tinker --execute='echo config("marketing.ultron.studio_prompts"), PHP_EOL;' 2>/dev/null | tail -1 ); }

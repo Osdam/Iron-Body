@@ -1,12 +1,169 @@
 # Informe de devops · ola «Enmienda M-1 + plantillas de Meta» (despliegue con todo apagado)
 
-**Autor:** `devops`. **Fecha:** 11-11-2026. **Árbol:** `feat/ultron-studio-h9`, HEAD `9d6b3252`, con el trabajo sin
-commit de otros agentes (no lo he tocado). **Entorno de este trabajo: local, NO producción.** No he ejecutado nada en
-producción ni en el banco; no he hecho commit ni push. He tocado solo `backend/docs/ultron-studio/ops/` y este informe.
+**Autor:** `devops`. **Fecha:** 11-11-2026. **Entorno: local y banco, NUNCA producción.** Sin commit ni push. Solo he
+tocado `backend/docs/ultron-studio/ops/` y este informe.
 
 ---
 
-## Resumen para el lead
+## Resultado del ensayo (11-11, 13:50–14:06 UTC; banco local, NO producción)
+
+> **Superado por el «Segundo ensayo (b1959a05)», al final de este informe:** el FALLO del catálogo está corregido en el
+> código (opción (a), `phoneLast4`) y el segundo ensayo cumple el criterio. Las órdenes de producción válidas son las
+> de esa sección; las de aquí abajo quedan como historia.
+
+**Ensayado:** backend `1c8f70bb` (= origin/main; 6 commits sobre producción `728f208`) y CRM `89a24f9` (sellado),
+con los guiones de ops del árbol de trabajo (`deploy-m1-backend.sh` y `banco-h9/m1.sh` con las correcciones de abajo).
+Banco `~/.cache/ironbody-banco-m1`, base `ultron_studio_banco_h9_m1` en PostgreSQL **14.24** (la versión de
+producción), partida `728f2085` con el estado real escrito en su entorno: H9 en sombra (gobierno, publicar, canal y
+eventos) y laboratorio hablado 2a. Registros en el scratchpad (`01-montar.log` … `06-cierre.log`).
+
+### Veredicto: el despliegue, LIMPIO; los smokes, con 1 FALLO del código de la ola que BLOQUEA producción tal como está
+
+| Paso | Resultado |
+|---|---|
+| `montar` | 0 · 121 rutas, 26 tablas del Studio, **254 tablas** en el volcado (igual que producción) |
+| `ola` (`BANCO_OLA_COMMIT=1c8f70bb`) + respaldo | 0 · origin/main = `1c8f70b` |
+| `desplegar --crm=89a24f9 --solo-comprobar` | **`COMPROBACIONES PREVIAS EN VERDE`** · 6 commits de la ola · 55 ficheros de la lista cerrada, 299 de pruebas y docs, 9 de n8n · esquema `127 141 9 26 51 75 3 8` · efectos `f f f` · contrato `1 t t f` · W9 `15 4 4` · fases H9 2 (sombra) y voz 2a |
+| `desplegar --crm=89a24f9` (completo) | **Pasos 0–11 con 0 desvíos.** Las 3 migraciones aplicadas y registradas en un solo `ironbody-migrate` (59 + 14 + 6 ms; N-1 del reviewer) · `137 153 11 27 51 75 3 8` · efectos `t t t` · 37 funciones, 0 `SECURITY DEFINER` · contrato `1 t t t` · W9 `18 5 6` · envíos `9 10 2`, vacía · `h5_app`: envíos `raw--s`, W9 `ra---s`, el resto igual · rutas `125 34 13 9 4 1 4` · `auth:coverage` vacío · la ola apagada · traza `off legacy prompts_off` · H9, motor, Legacy y H4–H8 **iguales** · programador igual (sin la sincronización de Meta) · 0 trabajos `live` · sanidad 401/`no-store` (también las 4 rutas nuevas), 413 (también la sonda), `decide`/`commit` sin firma 401 · 0 ERROR · el entorno = respaldo salvo las 9 claves |
+| smoke del H9 (fase 2) | 31 OK · **1 FALLO** · 1 OMITIDO (PERF9). El bloque M-1 entero en verde y **0 escrituras** (las 35 tablas iguales) |
+| smoke del H8 (2a) | 47 OK · 1 FALLO · 3 OMITIDOS. El FALLO es el **conocido del banco**: `ruta 45: ElevenLabs en ELEVENLABS_VERIFIED [ELEVENLABS_NOT_CONFIGURED]` (el banco no tiene credenciales de ElevenLabs; L9-94). En producción, ElevenLabs está verificado (L9-100) |
+| `mandos` (E2, su vuelta y la trampa) | **13 OK · 0 FALLO**: E2 aplicada (traza `canary legacy no_publication`, la del plan); fallo forzado a medias → código 1, «FALLO A MEDIAS (etapa 2)», fichero idéntico byte a byte y en 640, «restaurado y COMPROBADO» (MB-3), la llave sigue en `canary`, se conserva solo la copia del fallo; vuelta de E2 con traza `off legacy prompts_off`; ida y vuelta idéntica byte a byte y en 640; registros de los mandos en 600 (MB-5) |
+| `ensayar.sh cierre` (la valla) | 2 OK · **cero red saliente** en todo el ensayo |
+| reanudación (primera pasada) | relanzar el guion sobre un despliegue a medias: «nada que migrar», pasos 0–11 limpios |
+
+**El FALLO que bloquea (código de la ola, no lo he tocado):** `GET strategies/catalog` incumple la regla de cuerpos
+del H6 (`smoke-h6.py:80-87`, `FORBIDDEN_KEYS`: el contrato del H6 prohíbe claves de teléfono en cualquier respuesta del
+Studio):
+
+```
+FALLO   cuerpos (98): sin claves prohibidas del H6 (teléfono, huellas, ids de Meta, textos del proveedor, firmas)  [GET /admin/ultron-studio/strategies/catalog]
+```
+
+- **Dónde:** `backend/app/Services/UltronStudio/StudioMessageTemplates.php:649` (`'phoneNumber' => self::gymPhone()`
+  en `metaCatalog()`, que sirve `UltronStudioStrategyController.php:133` como `data.templates.meta`). Lo introduce
+  `0afaa5a9` (en `728f208` no existe). Comprobado aparte: de las 16 claves de `templates.meta`, `phoneNumber` es la
+  única prohibida y el detector solo marca esa.
+- **En producción saldrá igual:** con `ULTRON_STUDIO_META_TEMPLATES_PHONE_BUTTON=false` el valor es `null`
+  (`StudioMessageTemplates.php:1346-1353`), pero basta la clave. El despliegue terminaría «CON 1 DESVÍO» y el runbook
+  manda volver atrás. Con el botón encendido, el valor (8–15 cifras) caería además en la regla de teléfonos.
+- **El CRM la usa:** `Iron-Body_Front/src/app/modules/commercial-automation/ca-tpl-editor.ts:379`
+  (`catalogo()?.meta?.phoneNumber`), para el botón «Llamar» (Q2 de L9-96).
+- **Dos salidas (decisión tuya con security; no he aplicado ninguna):** (a) **código + CRM**: no publicar el número,
+  sino `phoneLast4` enmascarado `***1234` (la forma que el H6 ya admite: `MASKED_REF`, `smoke-h6.py:76`); el servidor
+  sigue construyendo el payload real; exige un build nuevo del CRM. (b) **excepción de contrato**: el teléfono del
+  gimnasio es público (`legal.privacy_phone`); se exime SOLO `data.templates.meta.phoneNumber` de `GET
+  strategies/catalog` (como ya se exime esa misma ruta de la regla de conversación, `smoke-h9.py:297-301`) y se
+  enmienda el §I2 del contrato del H6; sin tocar código ni CRM. Elegida una, el ensayo del smoke se repite en el
+  banco (4 min).
+
+### Lo que corregí en mis guiones durante el ensayo (fallos míos, no del código)
+
+1. **Lista cerrada = el diff real** `728f2085..1c8f70bb` (lo pediste): 55 rutas exactas con su paquete y commit; zonas
+   libres solo `backend/tests/` y `backend/docs/`; n8n como zona inerte. Comprobado por programa: 55/55, no sobra ni
+   falta ninguna. «Solo añaden» (10): `config/marketing.php`, `config/ultron_studio.php`, `routes/console.php`,
+   `routes/ultron-studio.php`, `AppServiceProvider.php`, `AuthorizationMap.php`, `CrmPermission.php`,
+   `UltronStudioException.php`, `UltronStudioStrategyController.php` y `StudioAccess.php` (0 líneas de código
+   quitadas en las diez).
+2. **M-6 del reviewer:** los 8 `curl` del paso 9 llevan `--max-time 20` y `|| c=000` (`|| CAB=""`, `|| R413=" 000"`).
+   En la primera pasada mi sustitución convirtió `curl -sI` en `curl -s --max-time 20I` (14 desvíos de sanidad, sin
+   tocar nada más); corregido y repetido.
+3. **Prefijos de commit:** `ops+docs(ultron-studio)` y `test+ops(ultron-studio)` salían como «ajenos» (mi patrón
+   solo admitía `/`); ahora `[/+]`.
+4. **`m1.sh`:** el adaptador de los mandos absorbe tus MB-1…MB-8 (registro `/root/*.log` → `$B/root`; cerrojos
+   `/run/lock/*` → `$B/run`; la lectura del CHECK con `sudo -u postgres psql` → la base del banco) y aborta si una
+   copia sigue nombrando `/root`, `/run/lock` o `sudo -u postgres`; la automatización interna sintética (sin ella
+   `decide`/`commit` darían 503); `BANCO_OLA_COMMIT=<sha>` para ensayar un commit concreto aunque haya código sin
+   confirmar en el árbol.
+
+### Código de la ola que cambió en el árbol durante el ensayo (no es mío)
+
+Entre las 13:53 y las 13:58 UTC aparecieron sin confirmar `MetaTemplatesSyncCommand.php` (la orden pasaba a salir con 1
+en `meta_failed`), `StudioMetaTemplates.php` (`createAtMeta` con más argumentos) y `StudioIntegrationsExport.php`; el
+ensayo se hizo con `BANCO_OLA_COMMIT=1c8f70bb`, sin ellos. Al cerrar (≈ 14:10 UTC) ya no estaban: `HEAD` y
+`origin/main` siguen en `1c8f70bb` y el código del árbol es el del commit, así que **el ensayo vale para el código de
+hoy**. Si vuelven y entran en la ola: **`StudioIntegrationsExport.php` NO está en la lista cerrada** (el paso 0
+abortará, que es lo correcto: se añade con su paquete), `ESPERADO` cambia y hay que repetir el banco (`ola` →
+`desplegar --solo-comprobar` → `desplegar`: unos 6 minutos).
+
+### `--crm`: qué exige el despliegue del backend
+
+Solo que `https://ironbodyneiva.cloud/version.json` diga `"commit": "89a24f9"` y que no sea `a539690`. `deploy-crm.sh`
+publica ese `version.json` desde el build sellado (comprobado: `{"commit": "89a24f9", "dirty": false}`; el árbol del
+CRM en `89a24f9` = `origin/main` = el remoto), así que basta.
+
+### Huellas de lo que se copia a `/root` (sha256)
+
+| Fichero | sha256 | Nota |
+|---|---|---|
+| `ops/deploy-m1-backend.sh` | `d057a64ca7615e5ab06e448085f6aa5cdec69a7bbe2ed2b6a78f79377fe34cce` | **El del árbol, sin confirmar**: cambia en cuanto lo confirmes si alguien lo toca; vale el del commit |
+| `ops/h5-engine-scope.sh` | `5e57660ec649cfb45030796398a221150436c94764965df17178eb268d7f803f` | = `1c8f70bb`; para E2, no para el despliegue |
+| `ops/motores/motores-prompts-scope.sh` | `4f7ab187f25cb96b049bcd4e5a7e1da98a01e420d54779ec1dc315b395c6a7c7` | = `1c8f70bb`; para E2 |
+| `ops/motores-schema-check.sql` | `d6bd03e56bc59762e129b5c665451b8301ff2fa5ee89ea0bd71ccb0310324fcb` | opcional, antes y después (database-specialist) |
+
+Los smokes NO se copian a mano: el guion los toma del checkout desplegado. Sus huellas en `1c8f70bb` (las que imprime
+el paso 12): `smoke-run-h9.sh` `6a787b0c8825…`, `smoke-h9.py` `890e38fed07b…`, `smoke-run-h8.sh` `96b55fb65b92…`,
+`smoke-h8.py` `a75c9ab67c72…`.
+
+### Órdenes exactas de producción, en orden (cuando el FALLO del catálogo esté resuelto y con la orden del propietario)
+
+`<E>` = `git rev-parse --short=7 origin/main` del backend tras tu commit y push. Desde el Mac, en la raíz
+`Iron-Body/` del worktree; en el servidor, como root, dentro de `tmux`. **De noche**, sin nadie usando el Studio, el
+laboratorio hablado ni el canal canario.
+
+```bash
+# ── 0 · Mac: el guion y su huella (el del COMMIT que se despliega)
+git fetch -q origin && git show <E>:backend/docs/ultron-studio/ops/deploy-m1-backend.sh | shasum -a 256
+git show <E>:backend/docs/ultron-studio/ops/deploy-m1-backend.sh \
+  | ssh ironbody-vps 'umask 077; cat > /root/deploy-m1-backend.sh && chmod 700 /root/deploy-m1-backend.sh && sha256sum /root/deploy-m1-backend.sh'   # = la de arriba
+
+# ── 1 · servidor: el respaldo (JUSTO antes; < 2 h y el entorno idéntico)
+TS=$(date -u +%Y%m%d-%H%M%S); BK=/var/backups/ironbody/ultron-studio-m1-$TS
+( umask 077; mkdir -p "$BK"
+  git -C /var/www/api rev-parse HEAD > "$BK/api-commit.txt"
+  sudo -u postgres pg_dump -Fc ironbody > "$BK/ironbody.dump"
+  sha256sum "$BK/ironbody.dump" > "$BK/ironbody.dump.sha256"
+  install -m 600 -o root -g root /var/www/api/backend/.env "$BK/env.backup"
+  cp -a /var/www/api/backend/bootstrap/cache "$BK/bootstrap-cache"
+  cp -a /etc/supervisor/conf.d "$BK/supervisor-conf.d" )
+cut -c1-7 "$BK/api-commit.txt"                                                   # 728f208
+pg_restore -l "$BK/ironbody.dump" | grep -c 'TABLE DATA'                        # 254
+stat -c '%a %U %n' "$BK" "$BK"/*; echo "BK=$BK"                                   # 700 · 600 root
+
+# ── 2 · Mac: el CRM (ANTES que el backend)
+bash backend/docs/ultron-studio/ops/deploy-crm.sh 89a24f9 a539690 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body_Front
+#   → «CRM PUBLICADO Y VERIFICADO»; apunta su RESPALDO; recargar a mano recepción y el punto facial
+
+# ── 3 · servidor: el paso 0 (no toca nada)
+bash /root/deploy-m1-backend.sh <E> "$BK" --crm=89a24f9 --solo-comprobar
+#   → «COMPROBACIONES PREVIAS EN VERDE»; fases «H9 2 (sombra) · voz 2a»; workers «14 0»; n8n «el flujo vivo 29de5119»
+
+# ── 4 · servidor: el despliegue (con los smokes; ~5 min)
+bash /root/deploy-m1-backend.sh <E> "$BK" --crm=89a24f9
+#   → «DESPLIEGUE M-1 (BACKEND) COMPLETADO»; si un paso 1–11 falla: la VUELTA ATRÁS que imprime; si solo falla un smoke:
+#     mirar cuál antes de volver (RUNBOOK_M1.md §4, «falsos rojos»)
+# (si se lanzó con --sin-smoke, ≥ 2 min después:)  bash /root/deploy-m1-backend.sh <E> "$BK" --solo-smoke
+
+# ── 5 · servidor: los mandos del commit desplegado a /root (para E2; NO se ejecutan hoy)
+for f in h5-engine-scope.sh motores/motores-prompts-scope.sh; do n=$(basename "$f")
+  [ ! -e "/root/$n" ] || cp -p "/root/$n" "/root/$n.pre-m1-$TS"
+  install -m 700 -o root -g root "/var/www/api/backend/docs/ultron-studio/ops/$f" "/root/$n"; done
+sha256sum /root/h5-engine-scope.sh /root/motores-prompts-scope.sh                   # 5e57660e… · 4f7ab187…
+
+# ── 6 · servidor: vigilancia, 15 min, una lectura por minuto (solo lectura)
+cd /var/www/api/backend; for i in $(seq 1 15); do
+  echo "== $(date -u +%T) · $(supervisorctl status | awk '{print $2}' | sort | uniq -c | tr -s ' ' | tr '\n' ' ')"
+  echo "   5xx en las últimas 2 000 del access.log: $(tail -n 2000 /var/log/nginx/access.log | awk '$9 ~ /^5[0-9][0-9]$/' | wc -l)"
+  sudo -u postgres psql -X -Atq -d ironbody -c "SELECT 'fallidas '||(SELECT count(*) FROM failed_jobs)||' · incidentes '||(SELECT count(*) FROM incidents WHERE source IN ('ultron_studio','outreach','voice'))||' · envíos a Meta '||(SELECT count(*) FROM ultron_studio_meta_template_submissions)||' · entradas /2 '||(SELECT count(*) FROM ultron_studio_publications WHERE engine_contract = 'ultron-engine-config/2')||' · trabajos live '||(SELECT count(*) FROM outreach_jobs WHERE mode = 'live')"
+  echo "   ERROR en laravel*.log (total; no debe crecer): $(cat storage/logs/laravel*.log 2>/dev/null | grep -c 'production.ERROR')"
+  [ $((i % 5)) != 1 ] || sudo -u www-data php artisan ultron:prompt-trace --last=3
+  sleep 60; done
+#   esperado: 14 RUNNING; 0 5xx; fallidas e incidentes como antes; envíos 0; /2 0; live 0; ERROR sin crecer;
+#   traza «off · legacy · prompts_off»; el siguiente turno canario de ULTRON sale con normalidad
+```
+
+---
+
+## Resumen para el lead (de la preparación; vale salvo lo que corrige el «Resultado del ensayo» de arriba)
 
 ### Qué quedó listo
 
@@ -107,21 +264,24 @@ valores del entorno, registro `/root/m1-<fecha>.log` (600) y la vuelta atrás im
 
 ### 2.2 La puerta de diff (cerrada)
 
-- **Zonas libres** (Studio, pruebas y docs): `app/Services/UltronStudio/`, `app/Models/UltronStudio/`,
-  `app/Http/Controllers/Crm/UltronStudio/`, `app/Console/Commands/UltronStudio/`, `config/ultron_studio.php`,
-  `routes/ultron-studio.php`, `tests/`, `docs/`. **Más estrecha que el cierre:** la ejecución (Outreach) ya no es
-  zona libre; esta ola solo toca un fichero suyo.
+*(Rehecha tras la revisión del lead: ver «Resultado del ensayo».)*
+
+- **Zonas libres:** solo `backend/tests/` y `backend/docs/`. Ningún comodín sobre código: la lista cerrada es el
+  `git diff --name-only 728f2085..b1959a05` real, fichero a fichero (56; en el primer ensayo, con `1c8f70bb`, eran 55).
 - **Zonas inertes** (viajan en el repositorio, nadie las ejecuta en el servidor): `n8n/flujos/ultron-studio-s1/` y
   `n8n/respaldos/20261111-ultron-29de5119/`. Sin esto el paso 0 abortaría: la puerta del cierre mira TODO el diff, no
   solo `backend/`.
-- **Lista cerrada** (37 entradas, con su dueño): el motor de M-1 (`UltronPublishedConfig`, `UltronDecideService`,
-  `UltronCommitService`, `UltronController`, `config/marketing.php`, los 6 de `Prompts/`, las 2 órdenes, los 7 de
-  `resources/ultron-prompts/`), el cliente neutro de Meta (9), el puente de W9 (`OutreachPublishedStrategies.php`),
-  acceso (`AuthorizationMap`, `CrmPermission`, `PermissionCatalog`), `AppServiceProvider`, `UltronStudioException`,
-  `routes/console.php` y `.env.example`.
-- **Solo añaden código** (`*`): `routes/console.php`, `config/marketing.php`, `AuthorizationMap.php`,
-  `CrmPermission.php`, `AppServiceProvider.php`, `UltronStudioException.php`. Medido hoy: 0 líneas de código quitadas
-  en los seis.
+- **Lista cerrada** (56 entradas, cada una con su paquete y su commit; la 56.ª, `StudioIntegrationsExport.php`, de `b1959a05`): el motor de M-1 (`ab1ae2e4`: 4 servicios y el
+  controlador interno, los 6 de `Prompts/`, las 2 órdenes, `config/marketing.php` y los 7 de `resources/ultron-prompts/`),
+  el Studio de M-1 (`4445abb7`: 6 servicios y la excepción), las plantillas (`0afaa5a9`: el cliente neutro de Meta (9),
+  el servicio, el modelo, el controlador y la orden, `StudioMessageTemplates`, `StudioTemplateMetaChecks`,
+  `TemplateMetaCheckCommand`, `StudioRouteCount`, `StudioAccess`, `UltronStudioStrategyController`, el puente de W9,
+  acceso, `AppServiceProvider`, `config/ultron_studio.php` y las dos rutas) y `f7a79315` (`.env.example` y
+  `PermissionCatalog`).
+- **Solo añaden código** (`*`, 10): `config/marketing.php`, `config/ultron_studio.php`, `routes/console.php`,
+  `routes/ultron-studio.php`, `AppServiceProvider.php`, `AuthorizationMap.php`, `CrmPermission.php`,
+  `UltronStudioException.php`, `UltronStudioStrategyController.php` y `StudioAccess.php`. Medido sobre
+  `728f2085..1c8f70bb`: 0 líneas de código quitadas en los diez.
 - **Migraciones:** exactamente las tres de la lista, añadidas.
 
 ### 2.3 Los artefactos de n8n que viajan
@@ -292,3 +452,132 @@ del servidor, ni si el programador escribe hoy en `outreach_runs`); el banco; la
 - `ultron:prompts-n8n` escribe en el checkout: no se ejecuta nunca en producción (lo dice el runbook).
 - No ha habido exposición de secretos en este trabajo: no he leído ningún fichero de entorno real ni ejecución de n8n.
   Nada que rotar por mi parte.
+
+---
+
+## Segundo ensayo (b1959a05)
+
+**11-11, 14:16–14:31 UTC. Banco local, NO producción.** Backend `b1959a05`: `1c8f70bb` + el `fix(ultron-studio-h9)` del
+teléfono del gimnasio (opción (a): `phoneLast4`) y los menores M-2, M-3 y M-4b. CRM `3f01c85`, sellado por el lead a
+las 14:23 UTC (`{"commit": "3f01c85", "dirty": false}`). Banco nuevo desde cero (`~/.cache/ironbody-banco-m1`, base
+`ultron_studio_banco_h9_m1`, PostgreSQL 14.24), con partida en `728f2085` y el estado real de producción (H9 en sombra,
+laboratorio hablado 2a). Los smokes se lanzaron después de que terminara el build del CRM. Registros en el scratchpad,
+`ensayo2/01-montar.log` … `06-cierre.log`.
+
+### Veredicto: CUMPLE el criterio
+
+| Paso | Resultado |
+|---|---|
+| `montar` | 0 · 121 rutas · 254 tablas en el volcado |
+| `BANCO_OLA_COMMIT=b1959a05 … ola` + respaldo | 0 · origin/main = `b1959a0`, 7 commits sobre `728f208`. El árbol no tenía código sin confirmar |
+| `desplegar --crm=3f01c85 --solo-comprobar` | **`COMPROBACIONES PREVIAS EN VERDE`** · la puerta: **56** de la lista cerrada (con `StudioIntegrationsExport.php`), 301 de pruebas y docs, 9 de n8n · 7 commits de la ola · esquema `127 141 9 26 51 75 3 8` · fases H9 2 y voz 2a |
+| `desplegar --crm=3f01c85`, pasos 0–11 | **0 desvíos.** Las 3 migraciones en un solo `ironbody-migrate` (39 + 12 + 6 ms) · `137 153 11 27 51 75 3 8` · efectos `t t t` · 37 funciones · contrato `1 t t t` · W9 `18 5 6` · envíos `9 10 2`, vacía · privilegios `raw--s` y `ra---s`, el resto igual · rutas `125 34 13 9 4 1 4` · `auth:coverage` vacío · la ola apagada · traza `off legacy prompts_off` · H9, motor, Legacy y H4–H8 iguales · programador igual · 0 `live` · sanidad completa · 0 ERROR |
+| Smoke del H9 (fase 2) | **32 OK · 0 FALLO · 1 OMITIDO** (los presupuestos de PERF9, conocido) · código 3. Los 8 barridos de fugas de los cuerpos limpios en 98 cuerpos, también `GET strategies/catalog` · el bloque M-1 entero en verde · 0 escrituras en las 35 tablas |
+| Smoke del H8 (2a) | 47 OK · **1 FALLO** · 3 OMITIDOS. El FALLO es solo el conocido del banco: `ruta 45: ElevenLabs en ELEVENLABS_VERIFIED [ELEVENLABS_NOT_CONFIGURED]`. Es además el único desvío que cuenta el despliegue («CON 1 DESVÍOS»). En producción ElevenLabs está verificado (L9-100), así que se espera 0 |
+| Mandos | No se repiten: `h5-engine-scope.sh` y `motores-prompts-scope.sh` no cambian entre `1c8f70bb` y `b1959a05` (diff vacío) y `banco-h9/m1.sh` es el mismo del 13/13 del primer ensayo (sha256 `8f34d674…`) |
+| `ensayar.sh cierre` | 2 OK · cero red saliente |
+
+Las huellas de los smokes que imprime el paso 12 son las mismas que en el primer ensayo: los smokes no cambiaron.
+
+### Lo que cambié en los guiones para este ensayo
+
+- `deploy-m1-backend.sh`: la lista cerrada pasa a ser el diff real `728f2085..b1959a05`, **56 rutas**, comprobado por
+  programa (56/56; no sobra ni falta ninguna). Entra `StudioIntegrationsExport.php`, con su paquete y su commit. Se
+  actualizan las descripciones de `StudioMessageTemplates.php` (`phoneLast4`), `StudioMetaTemplates.php` (M-2) y
+  `MetaTemplatesSyncCommand.php` (M-3). Las 10 marcadas «solo añaden» siguen con 0 líneas de código quitadas. No
+  cambia ninguna cifra del esquema, de las rutas ni de las claves.
+- `banco-h9/m1.sh`: sin cambios desde el primer ensayo.
+
+### El commit extra de docs NO rompe el guion
+
+Comprobado leyendo el guion entero:
+
+- **El commit esperado es solo el argumento.** El guion exige `origin/main` = `<E>` y que `HEAD` llegue a `<E>`
+  tras el merge.
+- **No hay recuento fijo de commits.** El número de «commits de la ola» solo se imprime; un
+  `ops+docs(ultron-studio):` casa con `PREFIJO_OLA` y cuenta como de la ola.
+- **La puerta de ficheros no se mueve.** `backend/docs/**` y `backend/tests/**` son zona libre: un commit que solo
+  toque eso no cambia la lista cerrada (sigue siendo 56).
+- **Lo único fijo que depende de producción** es `PREVIO=728f208` y `CRM_PREVIO=a539690`. Si producción se mueve antes
+  del despliegue, el paso 0 aborta y lo dice.
+
+Dos condiciones que hay que cumplir:
+
+- **Ningún fichero de código** en ese commit extra; si no, aborta por la puerta, que es lo correcto.
+- **El guion que va a `/root` es el del commit que se despliega** (`git show <E>:…`, orden 0 de abajo). La huella del
+  árbol de hoy vale solo si lo confirmas sin tocarlo.
+
+### Huellas (sha256) de lo que va a `/root`, tal como queda en el árbol
+
+| Fichero | sha256 | Cuándo |
+|---|---|---|
+| `ops/deploy-m1-backend.sh` | `d91e779f9aba39a49cdcd7c1841fc5942ab892b4cbc0dc80c9a0bcc9d7f217c8` | el despliegue (orden 0). La de `git show <E>:…` tiene que coincidir |
+| `ops/h5-engine-scope.sh` | `5e57660ec649cfb45030796398a221150436c94764965df17178eb268d7f803f` | después del despliegue, para E2 (orden 5) |
+| `ops/motores/motores-prompts-scope.sh` | `4f7ab187f25cb96b049bcd4e5a7e1da98a01e420d54779ec1dc315b395c6a7c7` | después del despliegue, para E2 (orden 5) |
+| `ops/motores-schema-check.sql` | `d6bd03e56bc59762e129b5c665451b8301ff2fa5ee89ea0bd71ccb0310324fcb` | opcional: antes y después de migrar, por la entrada estándar |
+
+Los smokes no se llevan a mano: el guion los copia del checkout desplegado. Sus huellas, para cotejar con las que
+imprime el paso 12: `smoke-run-h9.sh` `6a787b0c8825…`, `smoke-h9.py` `890e38fed07b…`, `smoke-run-h8.sh`
+`96b55fb65b92…`, `smoke-h8.py` `a75c9ab67c72…`.
+
+### Órdenes exactas de producción (con la orden del propietario; de noche; nadie usando el Studio ni el canal canario)
+
+`<E>` = `git rev-parse --short=7 origin/main` del backend **después** de tu commit de docs y del push (el HEAD de main).
+`<CRM>` = `3f01c85`. El Mac, en la raíz `Iron-Body/` del worktree; el servidor, como root, dentro de `tmux`.
+
+```bash
+# ── 0 · Mac: el guion DEL COMMIT que se despliega, y su huella
+git fetch -q origin && E=$(git rev-parse --short=7 origin/main) && echo "E=$E"
+git show "$E":backend/docs/ultron-studio/ops/deploy-m1-backend.sh | shasum -a 256       # = d91e779f… si no lo tocaste
+git show "$E":backend/docs/ultron-studio/ops/deploy-m1-backend.sh \
+  | ssh ironbody-vps 'umask 077; cat > /root/deploy-m1-backend.sh && chmod 700 /root/deploy-m1-backend.sh && sha256sum /root/deploy-m1-backend.sh'
+
+# ── 1 · servidor: el respaldo (JUSTO antes; < 2 h y el fichero de entorno idéntico)
+TS=$(date -u +%Y%m%d-%H%M%S); BK=/var/backups/ironbody/ultron-studio-m1-$TS
+( umask 077; mkdir -p "$BK"
+  git -C /var/www/api rev-parse HEAD > "$BK/api-commit.txt"
+  sudo -u postgres pg_dump -Fc ironbody > "$BK/ironbody.dump"
+  sha256sum "$BK/ironbody.dump" > "$BK/ironbody.dump.sha256"
+  install -m 600 -o root -g root /var/www/api/backend/.env "$BK/env.backup"
+  cp -a /var/www/api/backend/bootstrap/cache "$BK/bootstrap-cache"
+  cp -a /etc/supervisor/conf.d "$BK/supervisor-conf.d" )
+cut -c1-7 "$BK/api-commit.txt"                                                   # 728f208
+pg_restore -l "$BK/ironbody.dump" | grep -c 'TABLE DATA'                        # 254
+stat -c '%a %U %n' "$BK" "$BK"/*; echo "BK=$BK"                                   # 700 · 600 root
+
+# ── 2 · Mac: el CRM, ANTES que el backend (build sellado en Iron-Body_Front/dist: 3f01c85, dirty false)
+bash backend/docs/ultron-studio/ops/deploy-crm.sh 3f01c85 a539690 /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body_Front
+#   → «CRM PUBLICADO Y VERIFICADO» (anota su RESPALDO); recargar a mano recepción y el punto facial
+
+# ── 3 · servidor: el paso 0 (no toca nada)
+bash /root/deploy-m1-backend.sh <E> "$BK" --crm=3f01c85 --solo-comprobar
+#   → «COMPROBACIONES PREVIAS EN VERDE» · 56 de la lista cerrada · esquema 127 141 9 26 51 75 3 8 · contrato 1 t t f
+#     · W9 15 4 4 · rutas 121 30 13 9 4 1 0 · fases «H9 2 (sombra) · voz 2a» · workers «14 0» · n8n «el flujo vivo 29de5119»
+
+# ── 4 · servidor: el despliegue, con los smokes (~5 min)
+bash /root/deploy-m1-backend.sh <E> "$BK" --crm=3f01c85
+#   → «DESPLIEGUE M-1 (BACKEND) COMPLETADO». Smoke del H9: 0 FALLO (1 OMITIDO de PERF9); smoke del H8: 0 FALLO.
+#     Si falla un paso 1–11: la VUELTA ATRÁS que imprime. Si solo falla un smoke: mirar cuál antes de volver
+#     (RUNBOOK_M1.md §4, «falsos rojos»: outreach_runs en sombra, tráfico real en marketing_messages).
+#   (con --sin-smoke, ≥ 2 min después:)  bash /root/deploy-m1-backend.sh <E> "$BK" --solo-smoke
+
+# ── 5 · servidor: los mandos del commit desplegado a /root (para E2; hoy NO se ejecutan)
+for f in h5-engine-scope.sh motores/motores-prompts-scope.sh; do n=$(basename "$f")
+  [ ! -e "/root/$n" ] || cp -p "/root/$n" "/root/$n.pre-m1-$TS"
+  install -m 700 -o root -g root "/var/www/api/backend/docs/ultron-studio/ops/$f" "/root/$n"; done
+sha256sum /root/h5-engine-scope.sh /root/motores-prompts-scope.sh                   # 5e57660e… · 4f7ab187…
+
+# ── 6 · servidor: vigilancia, 15 min, una lectura por minuto (solo lectura)
+cd /var/www/api/backend; for i in $(seq 1 15); do
+  echo "== $(date -u +%T) · $(supervisorctl status | awk '{print $2}' | sort | uniq -c | tr -s ' ' | tr '\n' ' ')"
+  echo "   5xx en las últimas 2 000 del access.log: $(tail -n 2000 /var/log/nginx/access.log | awk '$9 ~ /^5[0-9][0-9]$/' | wc -l)"
+  sudo -u postgres psql -X -Atq -d ironbody -c "SELECT 'fallidas '||(SELECT count(*) FROM failed_jobs)||' · incidentes '||(SELECT count(*) FROM incidents WHERE source IN ('ultron_studio','outreach','voice'))||' · envíos a Meta '||(SELECT count(*) FROM ultron_studio_meta_template_submissions)||' · entradas /2 '||(SELECT count(*) FROM ultron_studio_publications WHERE engine_contract = 'ultron-engine-config/2')||' · trabajos live '||(SELECT count(*) FROM outreach_jobs WHERE mode = 'live')"
+  echo "   ERROR en laravel*.log (total; no debe crecer): $(cat storage/logs/laravel*.log 2>/dev/null | grep -c 'production.ERROR')"
+  [ $((i % 5)) != 1 ] || sudo -u www-data php artisan ultron:prompt-trace --last=3
+  sleep 60; done
+#   esperado: 14 RUNNING; 0 5xx; fallidas e incidentes como antes; envíos 0; /2 0; live 0; ERROR sin crecer;
+#   traza «off · legacy · prompts_off»; el siguiente turno canario de ULTRON sale con normalidad
+```
+
+**Vuelta atrás:** la imprime el propio guion con el respaldo de ese día (`RUNBOOK_M1.md` §4). Primero el código (a
+`728f208`), luego las cachés; el esquema se queda; nunca `migrate:rollback`. El CRM no hace falta volverlo.
