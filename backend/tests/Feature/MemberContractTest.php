@@ -8,6 +8,7 @@ use App\Models\MemberContract;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
+use TCPDF;
 use Tests\TestCase;
 
 class MemberContractTest extends TestCase
@@ -18,17 +19,41 @@ class MemberContractTest extends TestCase
     {
         parent::setUp();
 
-        // Disco privado falso (temporal, auto-limpiado) sembrado con las
-        // plantillas oficiales reales → NO toca el storage real ni Postgres.
+        // Disco privado falso (temporal, auto-limpiado) sembrado con plantillas
+        // SINTÉTICAS → NO toca el storage real ni Postgres.
+        //
+        // Antes se copiaban aquí los PDF oficiales desde storage/app/private,
+        // que no se versionan (config/contracts.php): en cualquier copia que no
+        // los tuviera, todas las pruebas de esta clase caían en el setUp sin
+        // llegar a probar nada. Lo que verifican es el flujo (borrador, firma,
+        // estampado con FPDI, descarga, auditoría), no el texto legal: basta un
+        // PDF Letter con las páginas que declara la configuración y sin ningún
+        // dato real.
         Storage::fake('local');
-        $real = base_path('storage/app/private/contract_templates/source');
         foreach (['basic_registration', 'workout_registration', 'minor_release'] as $key) {
             Storage::disk('local')->put(
                 "contract_templates/source/{$key}.pdf",
-                file_get_contents("{$real}/{$key}.pdf")
+                $this->plantillaSintetica($key)
             );
         }
         Artisan::call('contracts:install-templates');
+    }
+
+    /** PDF de pruebas con el tamaño y el número de páginas de la plantilla oficial. */
+    private function plantillaSintetica(string $key): string
+    {
+        $paginas = max(1, (int) config("contracts.templates.{$key}.pages"));
+
+        $pdf = new TCPDF('P', 'pt', 'LETTER', true, 'UTF-8', false);
+        $pdf->setPrintHeader(false);
+        $pdf->setPrintFooter(false);
+        $pdf->SetFont('helvetica', '', 10);
+        for ($p = 1; $p <= $paginas; $p++) {
+            $pdf->AddPage();
+            $pdf->Text(36, 36, "PLANTILLA SINTETICA DE PRUEBAS - {$key} - pagina {$p}/{$paginas} - no es un documento oficial");
+        }
+
+        return $pdf->Output("{$key}.pdf", 'S');
     }
 
     private function makeMember(array $attrs = []): Member

@@ -32,6 +32,10 @@ class FiscalReconciliationTest extends TestCase
         config([
             'billing.enabled' => true,
             'billing.base_url' => 'https://api-sandbox.factus.test',
+            // Credenciales FICTICIAS: el token se simula con Http::fake, pero el
+            // gestor exige que existan antes de pedirlo. Sin esto la prueba
+            // dependía del .env de quien la corría (FactusTokenManager::cred()).
+            'billing.credentials' => ['username' => 'u', 'password' => 'p', 'client_id' => 'c', 'client_secret' => 's'],
             'billing.tax_decision_confirmed' => false, // La emisión sigue bloqueada.
             'tax_policy.issuer_vat_responsibility' => '49',
             'tax_policy.issuer_is_vat_responsible' => false,

@@ -42,6 +42,11 @@ class ProductionEmissionGuardTest extends TestCase
             'billing.enabled' => true,
             'billing.env' => 'production',
             'billing.base_url' => 'https://api.factus.com.co',
+            // Credenciales FICTICIAS: el token se simula con Http::fake (y
+            // preventStrayRequests impide cualquier salida real), pero el gestor
+            // exige que existan antes de pedirlo. Sin esto la prueba dependía
+            // del .env de quien la corría (FactusTokenManager::cred()).
+            'billing.credentials' => ['username' => 'u', 'password' => 'p', 'client_id' => 'c', 'client_secret' => 's'],
             // La decisión tributaria se da por confirmada para que lo que se
             // esté probando aquí sean las barreras de ORIGEN, no el bloqueo
             // tributario (que tiene sus propias pruebas).

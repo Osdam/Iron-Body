@@ -33,6 +33,11 @@ class EmissionBlockedTest extends TestCase
         config([
             'billing.enabled' => true,
             'billing.base_url' => 'https://api-sandbox.factus.test',
+            // Credenciales FICTICIAS: el token se simula con Http::fake, pero el
+            // gestor exige que existan antes de pedirlo. Sin ellas, «no salió
+            // ninguna petición» también se cumplía si el bloqueo desaparecía,
+            // porque FactusTokenManager::cred() abortaba antes de cualquier POST.
+            'billing.credentials' => ['username' => 'u', 'password' => 'p', 'client_id' => 'c', 'client_secret' => 's'],
             // La condición bajo prueba: decisión tributaria SIN confirmar.
             'billing.tax_decision_confirmed' => false,
             'tax_policy.issuer_vat_responsibility' => '49',
