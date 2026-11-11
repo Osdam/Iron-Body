@@ -39,11 +39,15 @@ final class OutreachMonitor
     ) {}
 
     /**
+     * Sin `$now`, el reloj de la aplicación (`now()`: el de verdad en
+     * producción y el de `Carbon::setTestNow()` en las pruebas, como las demás
+     * pasadas; TEST9-c H-1), en UTC y al segundo.
+     *
      * @return array<string, mixed> `{enabled, skipped, opened: list<{scope, scopeRef, reason}>, checks: {...}, runId}`
      */
     public function run(?DateTimeInterface $now = null): array
     {
-        $ahora = $now === null ? new DateTimeImmutable('now', new \DateTimeZone('UTC')) : DateTimeImmutable::createFromInterface($now)->setTimezone(new \DateTimeZone('UTC'));
+        $ahora = RelativeTime::utc($now ?? now());
         if (! OutreachConfig::monitorEnabled() || ! OutreachConfig::active()) {
             return ['enabled' => OutreachConfig::monitorEnabled(), 'active' => OutreachConfig::active(), 'skipped' => true, 'opened' => [], 'checks' => [], 'runId' => null];
         }
@@ -170,6 +174,8 @@ final class OutreachMonitor
         $techos = [
             OutreachStop::CHANNELS[1] => ['units' => OutreachConfig::whatsappDailyCap(), 'micros' => OutreachConfig::whatsappDailyBudgetMicros()],
             OutreachStop::CHANNELS[0] => ['units' => OutreachConfig::assistedDailyCap(), 'micros' => 0],
+            // V9 (G-6): la voz, con sus techos CONFIGURADOS (bajarlos por debajo de lo reservado frena el canal).
+            OutreachStop::CHANNELS[2] => ['units' => OutreachConfig::voiceDailyCap(), 'micros' => OutreachConfig::voiceDailyBudgetMicros()],
         ];
         $marcados = 0;
         foreach ($techos as $canal => $techo) {

@@ -4,6 +4,8 @@ namespace App\Services\Outreach\Run;
 
 use App\Models\Incident;
 use App\Services\IronGuard\IncidentRecorder;
+use App\Services\Outreach\Core\DecisionTrace;
+use App\Services\Outreach\Core\FactSnapshot;
 use App\Services\Outreach\Core\RelativeTime;
 use DateTimeImmutable;
 use DateTimeInterface;
@@ -53,7 +55,7 @@ final class OutreachReconciler
         try {
             $r['ambiguous'] = $this->staleToAmbiguous($modo, $ahora);
             $r['expiredJobs'] = $this->expirePlanned($modo, $ahora);
-            $r['canceledByChain'] = $this->cancelOrphanedByChain($modo, $ahora);
+            $r['canceledByChain'] = $this->cancelOrphanedByChain($modo, $ahora, $run);
             $r['expiredEnrollments'] = $this->expireWindows($modo, $ahora);
             $this->runs->complete($run, $ahora, ['ambiguous' => $r['ambiguous'], 'expiredJobs' => $r['expiredJobs'], 'expiredEnrollments' => $r['expiredEnrollments'], 'canceledByChain' => $r['canceledByChain']]);
         } catch (Throwable $e) {
@@ -111,9 +113,10 @@ final class OutreachReconciler
      * monitor frena; el estado se conserva hasta que la cadena vuelva a leerse. Las que tienen un trabajo
      * vivo las cierra el despachador al reclamarlo. La pasada normal solo lee los pares (versión, parte)
      * con inscripciones abiertas (índice `oenr_version_idx`) y trae filas únicamente de los huérfanos.
-     * Con la cadena ilegible por completo la excepción sube y la pasada falla en voz alta.
+     * Con la cadena ilegible por completo la excepción sube y la pasada falla en voz alta. Cada cancelación
+     * deja su decisión `cancel` (N5, con el motivo y esta pasada) para el historial de la persona (REV9 m-9).
      */
-    private function cancelOrphanedByChain(string $modo, DateTimeImmutable $ahora): int
+    private function cancelOrphanedByChain(string $modo, DateTimeImmutable $ahora, int $runId): int
     {
         $vivas = [];
         foreach ($this->bridge->liveStrategies() as $l) {
@@ -146,12 +149,33 @@ final class OutreachReconciler
                 if ($conTrabajoVivo) {
                     continue;
                 }
-                $this->store->closeEnrollment((int) $e->id, 'canceled', $motivo, $ahora);
-                $n++;
+                if ($this->cancelWithDecision($e, $motivo, $ahora, $runId)) {
+                    $n++;
+                }
             }
         }
 
         return $n;
+    }
+
+    /**
+     * Cierra la inscripción `canceled` con su motivo y escribe la decisión
+     * `cancel` (N5) que lo explica, las dos o ninguna, como el despachador
+     * (REV9 m-9: sin ella la persona desaparece de su historial sin
+     * explicación). Si otro proceso ya la cerró, nada.
+     */
+    private function cancelWithDecision(object $e, string $motivo, DateTimeImmutable $ahora, int $runId): bool
+    {
+        return DB::transaction(function () use ($e, $motivo, $ahora, $runId): bool {
+            if (! $this->store->closeEnrollment((int) $e->id, 'canceled', $motivo, $ahora)) {
+                return false;
+            }
+            $vacia = FactSnapshot::fromArray(['facts' => []]);
+            $traza = DecisionTrace::build(['kind' => 'cancel', 'level' => 'N5', 'reasons' => [$motivo], 'retryAt' => null], $vacia, $ahora, [], ['gate' => ['recheck' => 'reconcile']]);
+            $this->store->insertDecision(OutreachStore::sealOf($e), (string) $e->subject_key, (string) $e->subject_ref, 'cancel', 'N5', [$motivo], null, $vacia, $traza, $ahora, $runId, (int) $e->id);
+
+            return true;
+        });
     }
 
     private function expireWindows(string $modo, DateTimeImmutable $ahora): int

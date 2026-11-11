@@ -202,11 +202,11 @@ class UltronStudioVoiceSchemaTest extends TestCase
     ];
 
     /** Todos los del Studio, con el H8: 44 + 24 y 50 + 34 en PG; 32 + 23 en SQLite. */
-    private const PG_STUDIO_TRIGGERS = 123;
+    private const PG_STUDIO_TRIGGERS = 127;  // + W9 4
 
-    private const PG_STUDIO_CHECKS = 137;
+    private const PG_STUDIO_CHECKS = 141;  // + W9 4
 
-    private const SQLITE_STUDIO_TRIGGERS = 108;
+    private const SQLITE_STUDIO_TRIGGERS = 111;  // + W9 3
 
     /** Los parciales de todo el Studio: los 4 de H5/H6 y los 2 de los agentes. */
     private const STUDIO_PARTIAL_INDEXES = ['uscl_one_active', 'uscn_one_live', 'uspb_one_active', 'ussv_one_canary', 'ussv_one_published', 'usv_one_canary', 'usv_one_published', 'usva_one_canary', 'usva_one_rest'];

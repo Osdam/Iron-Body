@@ -264,15 +264,21 @@ class OutreachDispatcherTest extends TestCase
         $this->assertSame(1, DB::table('outreach_jobs')->count(), 'ningún trabajo vivo ni reintento automático');
     }
 
-    public function test_20_las_puertas_de_whatsapp_y_voz_estan_vacias_y_no_tocan_la_red(): void
+    public function test_20_las_puertas_de_whatsapp_y_voz_existen_cerradas_y_no_tocan_la_red(): void
     {
         $p = $this->plannedJob('live');
         $e = DB::table('outreach_enrollments')->first();
         $live = (new OutreachPublishedStrategies)->liveVersion($p['live']['version'], 'canary');
-        foreach ([new WhatsappTemplateChannel, new VoiceStrategyChannel] as $canal) {
+        // W9: la puerta de WhatsApp existe; con la constante cerrada no llama a nada (el mismo código que N4).
+        $whatsapp = (new WhatsappTemplateChannel)->attempt($p['job'], $e, $live, self::utcAt(self::NOW));
+        $this->assertSame('failed_to_start', $whatsapp->status);
+        $this->assertSame('sends_disabled_in_code', $whatsapp->detailCode);
+        // V9 (Enmienda 17, L9-81): la puerta de la voz también existe; con un trabajo que no es de voz se niega por
+        // `channel_mismatch` antes que nada, y no pide nada.
+        foreach ([new VoiceStrategyChannel] as $canal) {
             $intento = $canal->attempt($p['job'], $e, $live, self::utcAt(self::NOW));
             $this->assertSame('failed_to_start', $intento->status, $canal->name());
-            $this->assertSame('channel_not_live', $intento->detailCode);
+            $this->assertSame('channel_mismatch', $intento->detailCode);
         }
         $this->assertFalse((new AssistedChannel)->attempt($p['job'], $e, $live, self::utcAt(self::NOW))->wentOut() === false, 'el asistido en vivo sí sale');
         // Un trabajo de WhatsApp en vivo que llegara al canal: `failed` con `channel_not_live`, resultado y reserva liberada; nunca se duplica.

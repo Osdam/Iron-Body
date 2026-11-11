@@ -301,6 +301,94 @@ final class OutreachPublishedStrategies
         return is_array($c) && is_string($c['script'] ?? null) ? $c['script'] : null;
     }
 
+    // ── W9: la plantilla de WhatsApp y su correspondencia con Meta ─────────
+
+    /**
+     * La plantilla de WhatsApp del SELLO de un trabajo (id + huella), tal como
+     * está guardada en el Studio, solo si sigue APROBADA, es de WhatsApp, es de
+     * esa huella, sus bytes casan con su huella y es de la finalidad de la
+     * estrategia con la categoría que esa finalidad admite (cobranza y
+     * servicio `utility`, comercial `marketing`: D9-6, P9-7); null en
+     * cualquier otro caso (el canal no envía: `template_not_approved`). Nunca
+     * lanza.
+     *
+     * @return array{id: int, uuid: string, hash: string, purpose: string, content: array<string, mixed>}|null
+     */
+    public function approvedWhatsappTemplate(int $templateId, string $hash, string $purpose): ?array
+    {
+        try {
+            $fila = DB::table(OutreachTables::TEMPLATES)->where('id', $templateId)->first(['id', 'uuid', 'channel', 'purpose', 'content_json', 'content_hash', 'status']);
+        } catch (Throwable $e) {
+            Log::error('outreach.bridge.template_unreadable', ['template_id' => $templateId, 'error_class' => $e::class]);
+
+            return null;
+        }
+        if ($fila === null || (string) $fila->channel !== StudioMessageTemplates::CHANNEL_WHATSAPP || (string) $fila->status !== 'APPROVED'
+            || ! hash_equals((string) $fila->content_hash, strtolower($hash))
+            || ! hash_equals(hash('sha256', (string) $fila->content_json), (string) $fila->content_hash)) {
+            return null;
+        }
+        $contenido = json_decode((string) $fila->content_json, true);
+        if (! is_array($contenido) || (string) $fila->purpose !== $purpose
+            || ($contenido['category'] ?? null) !== (StudioMessageTemplates::CATEGORY_BY_PURPOSE[$purpose] ?? null)) {
+            return null;
+        }
+
+        return [
+            'id' => (int) $fila->id, 'uuid' => (string) $fila->uuid, 'hash' => (string) $fila->content_hash,
+            'purpose' => (string) $fila->purpose, 'content' => $contenido,
+        ];
+    }
+
+    /**
+     * ¿Corresponde esta plantilla del Studio a una plantilla APROBADA por Meta?
+     * Manda la ÚLTIMA comprobación registrada de esa plantilla
+     * (`ultron_studio_template_meta_checks`, mayor id): tiene que ser
+     * `APPROVED`, de la MISMA huella del Studio y decir el mismo nombre de
+     * Meta, idioma, categoría y texto (la huella sha256 de `bodyPreview`, el
+     * texto exacto que aprobó Meta). Una pausa, un rechazo o una baja en Meta
+     * posteriores (otra fila) la dejan sin aprobar. Nunca lanza: sin poder
+     * leerla, no (falla cerrado).
+     *
+     * @param  array{id: int, hash: string, content: array<string, mixed>}  $template  {@see approvedWhatsappTemplate()}
+     */
+    public function metaApproved(array $template): bool
+    {
+        try {
+            $f = DB::table(OutreachTables::TEMPLATE_META_CHECKS)->where('template_id', $template['id'])->orderByDesc('id')
+                ->first(['status', 'template_content_hash', 'meta_name', 'language', 'category', 'meta_body_hash']);
+        } catch (Throwable $e) {
+            Log::error('outreach.bridge.meta_check_unreadable', ['template_id' => $template['id'], 'error_class' => $e::class]);
+
+            return false;
+        }
+        $c = $template['content'];
+        if ($f === null || ! is_string($c['bodyPreview'] ?? null)) {
+            return false;
+        }
+
+        return (string) $f->status === 'APPROVED'
+            && hash_equals((string) $f->template_content_hash, $template['hash'])
+            && (string) $f->meta_name === ($c['metaName'] ?? null)
+            && (string) $f->language === ($c['language'] ?? null)
+            && (string) $f->category === ($c['category'] ?? null)
+            && hash_equals((string) $f->meta_body_hash, hash('sha256', $c['bodyPreview']));
+    }
+
+    /**
+     * Las restricciones del código (R-01 importes, R-02 descuentos, R-03 URL,
+     * R-06 promesas) sobre el texto YA COMPUESTO de una plantilla: N3 las mira
+     * al validar y «otra vez al despachar» (D9-7), y los marcadores resueltos
+     * podrían traer lo que la plantilla no traía. Con la ÚNICA implementación
+     * (la del Studio).
+     *
+     * @return list<string>
+     */
+    public static function restrictionViolations(string $text): array
+    {
+        return StudioMessageTemplates::restrictionViolations($text);
+    }
+
     // ── Piezas ──────────────────────────────────────────────────────────────
 
     /**

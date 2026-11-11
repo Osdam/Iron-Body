@@ -68,7 +68,7 @@ class OutreachStopAndGateTest extends TestCase
         foreach (OutreachCatalog::AUTOMATIC_CHANNELS as $canal) {
             $this->assertFalse(OutreachSendGate::automaticSendAllowed($canal), $canal);
             $this->assertFalse(OutreachSendGate::channelFlags($canal)['sendsEnabledInCode']);
-            $this->assertFalse(OutreachSendGate::channelFlags($canal)['channelLive'], 'W9/V9: la puerta no existe el 15-11');
+            $this->assertTrue(OutreachSendGate::channelFlags($canal)['channelLive'], 'W9 y V9 (L9-81): la puerta existe; implementada no es abierta (la constante cierra)');
         }
         $this->assertFalse(OutreachSendGate::automaticSendAllowed('assisted'), 'el asistido no es un envío automático');
         $this->assertTrue(OutreachSendGate::channelFlags('assisted:whatsapp')['channelLive']);

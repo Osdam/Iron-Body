@@ -103,6 +103,44 @@ final class OutreachConfig
         return config('outreach.voice.enabled') === true;
     }
 
+    /** El cupo diario de llamadas de la automatización (0–20; 0 = `budget_zero`). */
+    public static function voiceDailyCap(): int
+    {
+        return self::int('outreach.voice.daily_cap', 0, 0, 20);
+    }
+
+    /** El techo diario de gasto de la voz en MICROS de dólar (0 = sin presupuesto = `budget_zero`). */
+    public static function voiceDailyBudgetMicros(): int
+    {
+        return self::micros(config('outreach.voice.daily_budget_usd'));
+    }
+
+    /** Lo que se reserva por llamada al planificar, en micros (0 = sin reserva: ver {@see voiceBudget()}). */
+    public static function voiceReserveMicros(): int
+    {
+        return self::micros(config('outreach.voice.reserve_usd_per_call'));
+    }
+
+    /**
+     * El presupuesto EFECTIVO de la voz que usan la escalera (N4) y la reserva
+     * del planificador (G-3…G-5 de V9): cupo, techo y reserva por llamada. Sin
+     * reserva por llamada (0) el H9 no puede contar lo que gasta una llamada:
+     * cupo y techo efectivos 0, la escalera niega `budget_zero` y la parcela no
+     * cabe (falla cerrado, protección 12). El monitor compara con los techos
+     * CONFIGURADOS ({@see voiceDailyCap()}, {@see voiceDailyBudgetMicros()}).
+     *
+     * @return array{dailyCap: int, dailyBudgetMicros: int, reserveMicros: int}
+     */
+    public static function voiceBudget(): array
+    {
+        $reserva = self::voiceReserveMicros();
+        if ($reserva <= 0) {
+            return ['dailyCap' => 0, 'dailyBudgetMicros' => 0, 'reserveMicros' => 0];
+        }
+
+        return ['dailyCap' => self::voiceDailyCap(), 'dailyBudgetMicros' => self::voiceDailyBudgetMicros(), 'reserveMicros' => $reserva];
+    }
+
     public static function classifierEnabled(): bool
     {
         return config('outreach.classifier.enabled') === true;

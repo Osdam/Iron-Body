@@ -17,8 +17,9 @@
 | Las claves son las que el mando de OPS9 (`ops/h9-outreach-scope.sh`) lee y
 | escribe (L9-44): `enabled`, `mode`, `scheduler.enabled`, `monitor.enabled`,
 | `assisted.{enabled,daily_cap}`, `whatsapp.{enabled,daily_cap,daily_budget_usd}`,
-| `voice.enabled`, `classifier.enabled` y `own_hours`. Cambiarlas de nombre
-| rompe el mando: se cambian a la vez o no se cambian.
+| `voice.{enabled,daily_cap,daily_budget_usd,reserve_usd_per_call}`,
+| `classifier.enabled` y `own_hours`. Cambiarlas de nombre rompe el mando: se
+| cambian a la vez o no se cambian.
 |
 | Encima de todas estas banderas está la CONSTANTE DE CÓDIGO
 | `App\Services\Outreach\Run\OutreachSendGate::SENDS_ENABLED_IN_CODE = false`
@@ -98,9 +99,16 @@ return [
         'price_utility_usd' => $dolares('OUTREACH_WHATSAPP_PRICE_UTILITY_USD'),
     ],
 
-    // Voz por estrategia (V9, Enmienda 16 del H8): además rigen todas las del H8.
+    // Voz por estrategia (V9, Enmienda 17 del H8, L9-81): además rigen todas las del H8.
     'voice' => [
         'enabled' => filter_var(env('COMMERCIAL_AUTOMATION_VOICE_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        // El cupo diario de llamadas de la automatización (0–20, el recorte de TWILIO_VOICE_DAILY_CALL_CAP del H8). 0 = `budget_zero`.
+        'daily_cap' => $entero('COMMERCIAL_AUTOMATION_VOICE_DAILY_CAP', 0, 0, 20),
+        // El techo diario de gasto en dólares de la voz de la automatización. 0 = `budget_zero`.
+        'daily_budget_usd' => $dolares('COMMERCIAL_AUTOMATION_VOICE_DAILY_BUDGET_USD'),
+        // Lo que se reserva por llamada al planificar (la reserva del H8, VoiceCostGuard, pide ≥ 0,97 US$ con los precios de E16-8).
+        // 0 = sin reserva: el H9 no puede contar lo que gasta una llamada y la voz queda en `budget_zero` (falla cerrado).
+        'reserve_usd_per_call' => $dolares('COMMERCIAL_AUTOMATION_VOICE_RESERVE_USD'),
     ],
 
     // El clasificador de respuestas (AI9): solo frena o deriva. Apagado.

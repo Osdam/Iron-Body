@@ -147,6 +147,8 @@ class OutreachIsolationTest extends TestCase
         'PUBLICATIONS' => ['app/Services/Outreach/Run/OutreachPublishedStrategies.php'],
         'TEMPLATES' => ['app/Services/Outreach/Run/OutreachPublishedStrategies.php'],
         'PERSON_BINDINGS' => ['app/Services/Outreach/Run/OutreachPublishedStrategies.php'],
+        // W9: la correspondencia con Meta, SOLO el puente.
+        'TEMPLATE_META_CHECKS' => ['app/Services/Outreach/Run/OutreachPublishedStrategies.php'],
         'STRATEGIES' => [
             'app/Console/Commands/Outreach/OutreachSuppressSubjectCommand.php',
             'app/Services/Outreach/Run/AssistedQueue.php',
@@ -161,7 +163,7 @@ class OutreachIsolationTest extends TestCase
     ];
 
     /** Un verbo de escritura o de bloqueo pegado a una tabla del Studio en una misma sentencia de la ejecución. */
-    private const STUDIO_WRITE_IN_STATEMENT = '/OutreachTables::(STRATEGIES|VERSIONS|PUBLICATIONS|TEMPLATES|PERSON_BINDINGS)\b[^;]*->(insert|insertGetId|insertOrIgnore|insertUsing|update|updateOrInsert|upsert|delete|truncate|increment|decrement|lockForUpdate|sharedLock)\(/';
+    private const STUDIO_WRITE_IN_STATEMENT = '/OutreachTables::(STRATEGIES|VERSIONS|PUBLICATIONS|TEMPLATES|PERSON_BINDINGS|TEMPLATE_META_CHECKS)\b[^;]*->(insert|insertGetId|insertOrIgnore|insertUsing|update|updateOrInsert|upsert|delete|truncate|increment|decrement|lockForUpdate|sharedLock)\(/';
 
     /** Dónde vive el PHP de la ejecución que puede leer el Studio. */
     private const OUTREACH_ROOTS = ['app/Services/Outreach', 'app/Console/Commands/Outreach', 'app/Jobs/Outreach'];

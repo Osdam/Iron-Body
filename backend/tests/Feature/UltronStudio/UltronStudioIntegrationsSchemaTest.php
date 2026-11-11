@@ -67,17 +67,17 @@ class UltronStudioIntegrationsSchemaTest extends TestCase
      * aplicado: `*_H5` es el esquema sin el H6 (el down() del H6 no toca las
      * guardas del H7, que son de la cadena) y `*_H6`, con él.
      */
-    private const PG_TRIGGERS_H5 = 110;  // F 11 + laboratorio 16 + H5 3 + H7 1 + H8 24 + H9 55
+    private const PG_TRIGGERS_H5 = 114;  // F 11 + laboratorio 16 + H5 3 + H7 1 + H8 24 + H9 55 + W9 4
 
-    private const PG_TRIGGERS_H6 = 123;  // + asociaciones 5, canarios 5, instantáneas 3
+    private const PG_TRIGGERS_H6 = 127;  // + asociaciones 5, canarios 5, instantáneas 3
 
-    private const PG_CHECKS_H5 = 115;    // F 11 + laboratorio 13 + H5 3 + H7 1 + H8 34 + H9 53
+    private const PG_CHECKS_H5 = 119;    // F 11 + laboratorio 13 + H5 3 + H7 1 + H8 34 + H9 53 + W9 4
 
-    private const PG_CHECKS_H6 = 137;    // + 4, 12 y 6 (usae_subject_type_chk se sustituye, no se suma)
+    private const PG_CHECKS_H6 = 141;    // + 4, 12 y 6 (usae_subject_type_chk se sustituye, no se suma)
 
-    private const SQLITE_TRIGGERS_H5 = 98; // F 7 + laboratorio 11 + H5 2 + H7 2 + H8 23 + H9 53
+    private const SQLITE_TRIGGERS_H5 = 101; // F 7 + laboratorio 11 + H5 2 + H7 2 + H8 23 + H9 53 + W9 3
 
-    private const SQLITE_TRIGGERS_H6 = 108; // + 4, 4 y 2
+    private const SQLITE_TRIGGERS_H6 = 111; // + 4, 4 y 2
 
     /** Contrato §I3.1, en orden: columna → [tipo en PG, tipo en SQLite, NULL-able]. */
     private const LINK_COLUMNS = [
@@ -346,7 +346,7 @@ class UltronStudioIntegrationsSchemaTest extends TestCase
             foreach (self::PG_CHECKS as $tabla => $nombres) {
                 $this->assertSame($nombres, $this->checksOn($tabla), $tabla);
             }
-            $this->assertSame(self::PG_TRIGGERS_H6, $this->studioTriggerCount(), 'F 11 + laboratorio 16 + H5 3 + H6 13 + H7 1 + H8 24 + H9 55');
+            $this->assertSame(self::PG_TRIGGERS_H6, $this->studioTriggerCount(), 'F 11 + laboratorio 16 + H5 3 + H6 13 + H7 1 + H8 24 + H9 55 + W9 4');
             $this->assertSame(self::PG_CHECKS_H6, $this->studioCheckCount(), 'F 11 + laboratorio 13 + H5 3 + H6 22 + H7 1 + H8 34 + H9 53');
 
             return;

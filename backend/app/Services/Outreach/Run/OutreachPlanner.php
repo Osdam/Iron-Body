@@ -353,7 +353,7 @@ final class OutreachPlanner
             $huerfana = $live === null ? 'strategy_moved' : $live->orphanReason();
             if ($huerfana !== null) {
                 // La versión ya no está en la cadena (reversión, retirada) o no se puede releer: la inscripción se cancela, nada se reinterpreta (D9-8).
-                $this->cancelEnrollment($e, $huerfana, $ahora);
+                $this->cancelEnrollment($e, $huerfana, 'N5', $ahora);
                 $r['canceled']++;
 
                 continue;
@@ -403,7 +403,7 @@ final class OutreachPlanner
             $aplazadas = array_column($arbitraje['deferred'], 'reason', 'uuid');
             foreach ($grupo as [$e, $live, [$s, $global]]) {
                 if ($s === null || ! $s->resolved()) {
-                    $this->cancelEnrollment($e, 'unknown_subject', $ahora);
+                    $this->cancelEnrollment($e, 'unknown_subject', 'N1', $ahora);
                     $r['canceled']++;
 
                     continue;
@@ -641,8 +641,9 @@ final class OutreachPlanner
             $coste = OutreachConfig::whatsappPriceMicros((string) $categoria);
             $parcelas[] = BudgetReservations::parcel(BudgetReservations::SCOPE_CHANNEL.$canalTrabajo, 1, $coste, OutreachConfig::whatsappDailyCap(), OutreachConfig::whatsappDailyBudgetMicros());
         } elseif ($canalTrabajo === OutreachCatalog::CHANNEL_VOICE_CALL) {
-            // V9: sin tarifa ni cupo propios el 15-11 → techo 0 (la escalera ya negó `budget_zero`; esto es la red).
-            $parcelas[] = BudgetReservations::parcel(BudgetReservations::SCOPE_CHANNEL.$canalTrabajo, 1, 0, 0, 0);
+            // V9 (G-5): la reserva por llamada contra el cupo y el techo de la voz; sin reserva, cupo y techo 0 (la escalera ya negó `budget_zero`; esto es la red).
+            $voz = OutreachConfig::voiceBudget();
+            $parcelas[] = BudgetReservations::parcel(BudgetReservations::SCOPE_CHANNEL.$canalTrabajo, 1, $voz['reserveMicros'], $voz['dailyCap'], $voz['dailyBudgetMicros']);
         }
         $parcelas[] = BudgetReservations::parcel(BudgetReservations::SCOPE_STRATEGY.$live->strategyUuid, 1, 0, $live->limit('contactsPerDay', 1), 0);
         if ($phoneRef !== null) {
@@ -712,9 +713,22 @@ final class OutreachPlanner
         $this->store->insertDecision(OutreachStore::sealOf($e), (string) $e->subject_key, (string) $e->subject_ref, $kind, $level, $reasons, $retryAt, $hechos, $traza, $ahora, null, (int) $e->id);
     }
 
-    private function cancelEnrollment(object $e, string $reason, DateTimeImmutable $ahora): void
+    /**
+     * La inscripción se cierra `canceled` con su motivo Y deja la decisión
+     * `cancel` que lo explica en el historial de la persona, como el
+     * despachador (REV9 m-9): las dos o ninguna. Si otra pasada ya la cerró,
+     * no se escribe nada (la decisión es de quien la cerró).
+     */
+    private function cancelEnrollment(object $e, string $reason, string $level, DateTimeImmutable $ahora): void
     {
-        $this->store->closeEnrollment((int) $e->id, 'canceled', $reason, $ahora);
+        DB::transaction(function () use ($e, $reason, $level, $ahora): void {
+            if (! $this->store->closeEnrollment((int) $e->id, 'canceled', $reason, $ahora)) {
+                return;
+            }
+            $vacia = FactSnapshot::fromArray(['facts' => []]);
+            $traza = DecisionTrace::build(['kind' => 'cancel', 'level' => $level, 'reasons' => [$reason], 'retryAt' => null], $vacia, $ahora, [], ['gate' => ['recheck' => 'plan']]);
+            $this->store->insertDecision(OutreachStore::sealOf($e), (string) $e->subject_key, (string) $e->subject_ref, 'cancel', $level, [$reason], null, $vacia, $traza, $ahora, null, (int) $e->id);
+        });
     }
 
     /** La ventana de la inscripción se acabó sin contacto: `expired` con `no_response` (D9-8 «Durabilidad»). */

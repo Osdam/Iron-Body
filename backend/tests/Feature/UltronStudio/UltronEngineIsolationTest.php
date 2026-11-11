@@ -131,6 +131,8 @@ class UltronEngineIsolationTest extends TestCase
     private const ALLOWED_H9_MIGRATIONS = [
         'database/migrations/2026_11_12_100001_create_ultron_studio_strategy_tables.php',
         'database/migrations/2026_11_12_100002_create_outreach_tables.php',
+        // W9: la correspondencia de las plantillas del Studio con Meta (`ultron_studio_template_meta_checks`).
+        'database/migrations/2026_11_13_200001_create_ultron_studio_template_meta_checks_table.php',
     ];
 
     /**
@@ -185,6 +187,8 @@ class UltronEngineIsolationTest extends TestCase
         "T_CONSTANT_ENCAPSED_STRING 'ultron_studio_strategy_publications'",
         "T_CONSTANT_ENCAPSED_STRING 'ultron_studio_message_templates'",
         "T_CONSTANT_ENCAPSED_STRING 'ultron_studio_person_bindings'",
+        // W9: la lee solo el puente (`metaApproved()`).
+        "T_CONSTANT_ENCAPSED_STRING 'ultron_studio_template_meta_checks'",
     ];
 
     /**

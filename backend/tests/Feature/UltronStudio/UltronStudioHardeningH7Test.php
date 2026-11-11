@@ -70,17 +70,17 @@ class UltronStudioHardeningH7Test extends TestCase
     private const SEQ_MESSAGE = 'ultron_studio: seq empieza en 1 (INSERT en ultron_studio_publications)';
 
     /** Recuentos de todo el Studio (tablas `ultron_studio_%`). */
-    private const PG_TRIGGERS_H6 = 122;  // con el H8 (+24) y el H9 (+55)
+    private const PG_TRIGGERS_H6 = 126;  // con el H8 (+24), el H9 (+55) y W9 (+4)
 
-    private const PG_TRIGGERS_H7 = 123;  // + uspub_chain_next
+    private const PG_TRIGGERS_H7 = 127;  // + uspub_chain_next
 
-    private const PG_CHECKS_H6 = 136;    // con el H8 (+34) y el H9 (+53)
+    private const PG_CHECKS_H6 = 140;    // con el H8 (+34), el H9 (+53) y W9 (+4)
 
-    private const PG_CHECKS_H7 = 137;    // + uspub_seq_chk
+    private const PG_CHECKS_H7 = 141;    // + uspub_seq_chk
 
-    private const SQLITE_TRIGGERS_H6 = 106; // con el H8 (+23) y el H9 (+53)
+    private const SQLITE_TRIGGERS_H6 = 109; // con el H8 (+23), el H9 (+53) y W9 (+3)
 
-    private const SQLITE_TRIGGERS_H7 = 108; // + uspub_chain_next y uspub_seq_min
+    private const SQLITE_TRIGGERS_H7 = 111; // + uspub_chain_next y uspub_seq_min
 
     /** md5 de `pg_get_functiondef` de la función de F: el mismo desde el H5. */
     private const FORBID_MD5 = '4ad748b5f17f09b398f7f641c197d7ee';

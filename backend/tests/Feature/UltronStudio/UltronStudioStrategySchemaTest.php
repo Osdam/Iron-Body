@@ -249,12 +249,12 @@ class UltronStudioStrategySchemaTest extends TestCase
             'usspub_seq_chk', 'usspub_shape_chk', 'usspub_simulation_gate_chk', 'usspub_size_chk'],
     ];
 
-    /** Todo el Studio con el H9: H8 (68 / 84 / 55) + gobierno del H9 (55 / 53 / 53). */
-    private const PG_STUDIO_TRIGGERS = 123;
+    /** Todo el Studio con el H9: H8 (68 / 84 / 55) + gobierno del H9 (55 / 53 / 53) + W9, las comprobaciones de Meta (4 / 4 / 3). */
+    private const PG_STUDIO_TRIGGERS = 127;
 
-    private const PG_STUDIO_CHECKS = 137;
+    private const PG_STUDIO_CHECKS = 141;
 
-    private const SQLITE_STUDIO_TRIGGERS = 108;
+    private const SQLITE_STUDIO_TRIGGERS = 111;
 
     /** Los parciales de todo el Studio: los 6 de H5/H6/H8 y los 3 del H9. */
     private const STUDIO_PARTIAL_INDEXES = ['uscl_one_active', 'uscn_one_live', 'uspb_one_active', 'ussv_one_canary', 'ussv_one_published', 'usv_one_canary', 'usv_one_published',
@@ -401,9 +401,9 @@ class UltronStudioStrategySchemaTest extends TestCase
             }
             $this->assertSame(55, $this->countTriggers(self::GOVERNANCE_TABLES), 'vínculos 8 + estrategias 7 + plantillas 11 + versiones 12 + simulaciones 4 + revisiones 6 + cadena 7');
             $this->assertSame(53, $this->countChecks(self::GOVERNANCE_TABLES), 'vínculos 5 + estrategias 6 + plantillas 12 + versiones 11 + simulaciones 5 + revisiones 4 + cadena 10');
-            $this->assertSame(self::PG_STUDIO_TRIGGERS, $this->countLike('trigger', 'ultron\\_studio\\_%'), 'H8 68 + H9 55');
-            $this->assertSame(self::PG_STUDIO_CHECKS, $this->countLike('check', 'ultron\\_studio\\_%'), 'H8 84 + H9 53 (usae_subject_type_chk se sustituye, no se suma)');
-            $this->assertSame(25, (int) DB::scalar("SELECT count(*) FROM pg_tables WHERE schemaname = 'public' AND tablename LIKE 'ultron\\_studio\\_%'"));
+            $this->assertSame(self::PG_STUDIO_TRIGGERS, $this->countLike('trigger', 'ultron\\_studio\\_%'), 'H8 68 + H9 55 + W9 4');
+            $this->assertSame(self::PG_STUDIO_CHECKS, $this->countLike('check', 'ultron\\_studio\\_%'), 'H8 84 + H9 53 + W9 4 (usae_subject_type_chk se sustituye, no se suma)');
+            $this->assertSame(26, (int) DB::scalar("SELECT count(*) FROM pg_tables WHERE schemaname = 'public' AND tablename LIKE 'ultron\\_studio\\_%'"));  // + W9
             $this->assertSame(0, (int) DB::scalar("SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid WHERE NOT t.tgisinternal AND c.relname = ANY(?::text[]) AND t.tgenabled <> 'O'",
                 ['{'.implode(',', self::GOVERNANCE_TABLES).'}']), 'ninguno apagado');
 
@@ -415,7 +415,7 @@ class UltronStudioStrategySchemaTest extends TestCase
                 $this->triggersOn($tabla), $tabla);
         }
         $this->assertSame(53, $this->countTriggers(self::GOVERNANCE_TABLES), '55 − 7 de TRUNCATE + 5 equivalentes');
-        $this->assertSame(self::SQLITE_STUDIO_TRIGGERS, $this->countLike('trigger', 'ultron_studio_%'), 'H8 55 + H9 53');
+        $this->assertSame(self::SQLITE_STUDIO_TRIGGERS, $this->countLike('trigger', 'ultron_studio_%'), 'H8 55 + H9 53 + W9 3');
     }
 
     public function test_solo_en_postgres_las_funciones_son_propias_invoker_y_la_de_f_no_cambia(): void

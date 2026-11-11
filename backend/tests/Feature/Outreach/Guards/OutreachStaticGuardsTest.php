@@ -45,6 +45,8 @@ class OutreachStaticGuardsTest extends TestCase
         'app/Http/Controllers/Crm/UltronStudio/UltronStudioStrateg*.php', 'app/Http/Controllers/Crm/UltronStudio/UltronStudioStream*.php', 'app/Http/Controllers/Api/Admin/UltronStudio/',
         'app/Models/UltronStudio/StudioStrateg*.php', 'app/Models/UltronStudio/StudioMessageTemplate.php', 'app/Models/UltronStudio/StudioPersonBinding.php',
         'config/outreach.php', 'config/ultron_studio_stream.php',
+        // El registro de lo que aprobó Meta (W9 gancho 4, b9-cierre; L9-88): vive en el Studio y corre en producción.
+        'app/Services/UltronStudio/StudioTemplateMetaChecks.php', 'app/Console/Commands/UltronStudio/TemplateMetaCheckCommand.php',
     ];
 
     private const GATE = 'app/Services/Outreach/Run/OutreachSendGate.php';
@@ -61,6 +63,24 @@ class OutreachStaticGuardsTest extends TestCase
     private const ULTRON_LEGACY_IMPORT = 'App\\Services\\Marketing\\Ultron\\UltronAbortLatch';
 
     private const ULTRON_LEGACY_READER = 'app/Services/Outreach/Facts/OperationalBrakes.php';
+
+    /**
+     * W9 (contrato H9, D9-9.3 «W-B»; D9-2 «Puertas de los canales»): el canal de WhatsApp es el ÚNICO fichero de
+     * `Outreach` que nombra la puerta de Marketing, y solo así: el despachador y el DTO de la plantilla; del
+     * despachador, solo `dispatchWhatsappTemplate` (nunca `dispatchWhatsapp`); el outbox y Meta, nunca.
+     */
+    private const W9_GATE_CALLER = 'app/Services/Outreach/Run/Channels/WhatsappTemplateChannel.php';
+
+    private const W9_GATE_IMPORTS = ['App\\Services\\Marketing\\MarketingMessageDispatcher', 'App\\Services\\Marketing\\OutreachTemplateMessage'];
+
+    /**
+     * V9 (contrato H9, D9-9.4 y D9-2 «en V9, `OutboundGate::requestForStrategy`»; Enmienda 17 del H8, L9-81): el canal
+     * de voz es el ÚNICO fichero de `Outreach` que nombra la puerta de la telefonía, y solo así: de la puerta, una
+     * llamada a `requestForStrategy` y ninguna a `request` (la de las personas). Twilio y ElevenLabs, nunca.
+     */
+    private const V9_GATE_CALLER = 'app/Services/Outreach/Run/Channels/VoiceStrategyChannel.php';
+
+    private const V9_GATE_IMPORTS = ['App\\Services\\Telephony\\OutboundGate'];
 
     /**
      * De fuera de `Outreach`, lo que `Outreach` puede importar (L9-28 y D9-2):
@@ -98,10 +118,16 @@ class OutreachStaticGuardsTest extends TestCase
     {
         $this->assertFalse(OutreachSendGate::SENDS_ENABLED_IN_CODE);
         $this->assertFalse(OutreachSendGate::sendsEnabledInCode());
-        $this->assertSame(['simulated', 'assisted'], OutreachSendGate::LIVE_CHANNELS, 'W9 y V9 añaden sus canales con su enmienda');
+        $this->assertSame(['simulated', 'assisted', 'whatsapp_template', 'voice_call'], OutreachSendGate::LIVE_CHANNELS, 'W9 añade WhatsApp por plantillas y V9 la voz (Enmienda 17 del H8, L9-81)');
 
         $fuente = (string) file_get_contents(base_path(self::GATE));
         $this->assertSame(1, preg_match_all('/public const SENDS_ENABLED_IN_CODE = false;/', $fuente), 'El literal, una vez, con esa forma exacta.');
+        // W9: el doble de la puerta (`sendsEnabledInCode` del canal de WhatsApp y de la entrada de la escalera) es SOLO de las pruebas.
+        foreach ($this->phpFiles(['app', 'routes', 'config', 'database', 'bootstrap']) as $relativa) {
+            $codigo = $this->codeOnly(base_path($relativa));
+            $this->assertSame(0, preg_match_all('/sendsEnabledInCode\s*:/', $codigo), "{$relativa} pasa el doble de la puerta.");
+            $this->assertSame(0, preg_match_all('/new\s+(WhatsappTemplateChannel|LadderInputBuilder)\s*\(\s*[^)\s]/', $codigo), "{$relativa} construye el canal o la escalera con argumentos.");
+        }
         $this->assertSame(0, preg_match_all('/SENDS_ENABLED_IN_CODE\s*=\s*(true|1|\$|self|static|env|config)/i', $fuente), 'La constante no se calcula ni se lee del entorno.');
         $codigo = $this->codeOnly(base_path(self::GATE));
         $this->assertStringContainsString('self::sendsEnabledInCode()', $this->methodBody($codigo, 'automaticSendAllowed'), 'automaticSendAllowed() tiene que exigir la constante.');
@@ -121,8 +147,19 @@ class OutreachStaticGuardsTest extends TestCase
         foreach ($this->h9Files() as $relativa) {
             $vistos++;
             $codigo = $this->codeOnly(base_path($relativa));
-            foreach (self::FORBIDDEN as $prohibido) {
+            // W9: la puerta de Marketing, solo desde su canal y solo por su método de plantillas.
+            $prohibidos = $relativa === self::W9_GATE_CALLER ? array_values(array_diff(self::FORBIDDEN, ['MarketingMessageDispatcher'])) : self::FORBIDDEN;
+            foreach ($prohibidos as $prohibido) {
                 $this->assertStringNotContainsString($prohibido, $codigo, "{$relativa} nombra «{$prohibido}» (protecciones 4, 5, 7 y 8).");
+            }
+            if ($relativa === self::W9_GATE_CALLER) {
+                $this->assertSame(1, preg_match_all('/->dispatchWhatsappTemplate\(/', $codigo), 'De la puerta de Marketing, una llamada: dispatchWhatsappTemplate.');
+                $this->assertSame(0, preg_match_all('/->dispatchWhatsapp\(/', $codigo), 'Nunca el texto libre de la puerta.');
+            }
+            // V9: la puerta de la telefonía, solo desde su canal y solo por la entrada de las estrategias.
+            if ($relativa === self::V9_GATE_CALLER) {
+                $this->assertSame(1, preg_match_all('/->requestForStrategy\(/', $codigo), 'De la puerta de la telefonía, una llamada: requestForStrategy.');
+                $this->assertSame(0, preg_match_all('/->request\(/', $codigo), 'Nunca la puerta de las personas (request).');
             }
             // ULTRON Legacy: solo el cerrojo, solo desde los frenos operativos, solo `engaged()`.
             if (str_contains($codigo, 'Marketing\\Ultron\\')) {
@@ -152,7 +189,7 @@ class OutreachStaticGuardsTest extends TestCase
                         $propio = true;
                     }
                 }
-                if ($propio || in_array($nombre, self::ALLOWED_FOREIGN_IMPORTS, true)) {
+                if ($propio || in_array($nombre, self::ALLOWED_FOREIGN_IMPORTS, true) || ($relativa === self::W9_GATE_CALLER && in_array($nombre, self::W9_GATE_IMPORTS, true)) || ($relativa === self::V9_GATE_CALLER && in_array($nombre, self::V9_GATE_IMPORTS, true))) {
                     continue;
                 }
                 $ajenos[] = "{$relativa}: {$nombre}";

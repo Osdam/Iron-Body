@@ -234,7 +234,10 @@ class H9RollbackTest extends TestCase
         $this->assertSame(self::NOW, (string) $e->ended_at);
         $this->assertNull($e->next_due_at);
         $this->assertSame(0, DB::table('outreach_jobs')->count());
-        $this->assertSame(0, DB::table('outreach_decisions')->where('kind', '<>', 'enroll')->count());
+        // REV9 m-9 (cierre de B9): la cancelación del planificador deja su decisión `cancel` (N5, el motivo) y ninguna otra.
+        $this->assertSame(['cancel'], DB::table('outreach_decisions')->where('kind', '<>', 'enroll')->pluck('kind')->all());
+        $cancelada = DB::table('outreach_decisions')->where('kind', 'cancel')->sole();
+        $this->assertSame(['N5', ['strategy_moved'], (int) $e->id, null], [$cancelada->level, json_decode((string) $cancelada->reasons, true), (int) $cancelada->enrollment_id, $cancelada->job_id]);
         $this->assertSame(0, DB::table('outreach_outcomes')->count());
         $this->assertSame(0, $planner->planDue(now())['due'], 'cerrada: no vuelve a tocar');
     }

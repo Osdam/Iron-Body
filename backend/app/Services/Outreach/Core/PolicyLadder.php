@@ -36,7 +36,10 @@ use InvalidArgumentException;
  *  - N3: la versión comercial aprobada (referencia, catálogo compatible —L9-21—,
  *    enlaces de pago, R-xx, canario).
  *  - N4 (DF-L5, DF-L6): el canal; en SOMBRA la constante, el canal apagado o
- *    sin implementar y los presupuestos son AVISOS.
+ *    sin implementar y los presupuestos son AVISOS. Un canal automático sin
+ *    presupuesto, sin tope o sin COSTE por envío (la tarifa de WhatsApp, la
+ *    reserva por llamada de la voz) es `budget_zero`: lo que costaría no se
+ *    puede contar y no sale (cierre de B9).
  *  - N5 (DF-L7, DF-L11): la estrategia y el horario propio
  *    (`calendar_outside_own_hours`, L9-15; mal configurado no deja hueco:
  *    `deny`); en sombra el alcance canario es aviso.
@@ -390,7 +393,8 @@ final class PolicyLadder
             }
         }
         if ($automatico) {
-            if ($p['dailyBudgetMicros'] <= 0 || $p['channelDailyCap'] <= 0) {
+            // Sin coste por envío (precio de WhatsApp o reserva de la voz en 0) el techo en dólares no frenaría nada: no sale (DF-L6).
+            if ($p['dailyBudgetMicros'] <= 0 || $p['channelDailyCap'] <= 0 || $p['costMicros'] <= 0) {
                 $marcar('budget_zero');
             } else {
                 if ($p['dailyBudgetMicros'] < $p['reservedTodayMicros'] + $p['costMicros']) {

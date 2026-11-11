@@ -22,9 +22,13 @@ use App\Services\Outreach\Core\OutreachCatalog;
  *    ensaya en una copia del banco (como `voice(calls-open)` en el H8).
  *
  * Cada canal lleva además su estado real ({@see channelLive()}): el 15-11
- * solo el asistido está implementado; WhatsApp (W9) y voz (V9) tienen sus
- * puertas VACÍAS y responden `channel_not_live` (aviso en sombra, negativa en
- * vivo). Los cuatro cerrojos independientes de un canal que gasta (protección
+ * solo el asistido estaba implementado; W9 implementa WhatsApp por plantillas
+ * (`WhatsappTemplateChannel`, por la puerta de Marketing) y lo añade aquí, y V9
+ * implementa la voz por estrategia (`VoiceStrategyChannel`, solo por
+ * `OutboundGate::requestForStrategy`; Enmienda 17 del H8, L9-81) y el lead la
+ * declaró. Implementado no es abierto: con esta constante en
+ * `false` WhatsApp sigue negado en vivo (`sends_disabled_in_code`, N4) y su
+ * canal tampoco envía. Los cuatro cerrojos independientes de un canal que gasta (protección
  * 12) son: la bandera, el modo `live` con esta constante, el presupuesto > 0 y
  * la credencial o aprobación externa; esta clase responde por los dos
  * primeros y {@see automaticSendAllowed()} los junta.
@@ -34,8 +38,12 @@ final class OutreachSendGate
     /** PROTECCIÓN 2. Se abre solo con un commit `outreach(sends-open): …`. */
     public const SENDS_ENABLED_IN_CODE = false;
 
-    /** Los canales de trabajo con puerta IMPLEMENTADA el 15-11 (W9 y V9 añaden los suyos). */
-    public const LIVE_CHANNELS = ['simulated', 'assisted'];
+    /**
+     * Los canales de trabajo con puerta IMPLEMENTADA: los del 15-11, WhatsApp por plantillas (W9) y la voz por
+     * estrategia (V9; Enmienda 17 del H8 conforme a D9-9.4, L9-81). Implementada no es abierta: la constante de
+     * arriba, la de la voz del H8 (`VoiceCallPolicy::CALLS_ENABLED_IN_CODE`) y los cupos y presupuestos a 0 cierran.
+     */
+    public const LIVE_CHANNELS = ['simulated', 'assisted', 'whatsapp_template', 'voice_call'];
 
     public static function sendsEnabledInCode(): bool
     {

@@ -59,6 +59,15 @@ Schedule::command('realtime:prune')
     ->withoutOverlapping()
     ->onOneServer();
 
+// ── Vales de un solo uso de los canales en vivo y de las fotos (P9-25, SC-7) ──
+// Borra solo las anotaciones CADUCADAS de los vales (`admin-stream-ticket:*`), sus
+// cubos del limitador y la cuenta de fotos en la caché `database`, que Laravel no
+// purga sola. Un vale vive 60 s. Sin bandera: el vale sirve a todo el CRM (L9-89).
+Schedule::command('admin:prune-stream-tickets')
+    ->everyTenMinutes()
+    ->withoutOverlapping()
+    ->onOneServer();
+
 // Kiosko de personal: salidas olvidadas → incidencia (sin cerrar ni inventar
 // horas) y poda de nonces/tokens caducados. Cada hora: el umbral es de 16 h, el
 // CRM no debe contar como «en jornada» a quien se fue sin marcar.
@@ -448,6 +457,16 @@ if ((bool) config('voice.monitor.enabled', false)) {
         ->withoutOverlapping(10)
         ->onOneServer();
 
+    // La salud del webhook post-llamada (D8-21, decisión f; auditoría B-T5):
+    // dos GET de solo lectura comparan el webhook y los dos secretos registrados
+    // con las referencias de Laravel; si no coinciden, incidente de IRON GUARD
+    // (no echa el freno). Cada hora, en el minuto 5: nunca a la vez que la del
+    // número (minuto 0) ni que la conciliación (10, 20…).
+    Schedule::command('voice:webhook-health')
+        ->hourlyAt(5)
+        ->withoutOverlapping(10)
+        ->onOneServer();
+
     // La purga de los límites de las rutas públicas (PERF8 P8-3, E8-6): borra de la
     // caché database SOLO las claves voice-rl:* CADUCADAS. Local, sin red. Una vez al día.
     Schedule::command('voice:prune-rate-limits')
@@ -470,9 +489,10 @@ if ((bool) config('voice.monitor.enabled', false)) {
 
 // ── Automatización comercial: el planificador del H9 (contrato H9 §9.1, D9-8, D9-14, D9-16; paquete OPS9) ──
 // INERTE por defecto: solo se agenda con sus banderas. Bloque activado en la rama
-// del Hito 9 con los tres nombres confirmados por B9-run (L9-58, L9-60). El mando
-// h9-outreach-scope.sh cuenta 3 tareas con el programador encendido (el monitor va
-// plano y comprueba su propia bandera) y smoke-run-h9.sh exige 0 con él apagado.
+// del Hito 9 con los tres nombres confirmados por B9-run (L9-58, L9-60) y los dos
+// normalizadores de W9 y V9 (L9-81). El mando h9-outreach-scope.sh cuenta 5 tareas
+// con el programador encendido (el monitor va plano y comprueba su propia bandera)
+// y smoke-run-h9.sh exige 0 con él apagado.
 // Es un bloque PROPIO (como el de la voz, E2-6 del H8): nunca dentro del del
 // monitor del Studio. Solo se agenda si COMMERCIAL_AUTOMATION_SCHEDULER_ENABLED=true
 // (y solo `true`, 1, on o yes); el monitor, además, con
@@ -488,6 +508,21 @@ if ((bool) config('outreach.scheduler.enabled', false)) {
     // (L9-18). Diez minutos de cerrojo, no las 24 h por defecto (lección del vigía).
     Schedule::command('outreach:sweep')
         ->everyTenMinutes()
+        ->withoutOverlapping(10)
+        ->onOneServer();
+
+    // Los normalizadores de los canales automáticos (D9-8 etapa 8, D9-10): los
+    // estados de Meta, las respuestas y la palabra de baja de WhatsApp (W9) y el
+    // final de las llamadas de voz por estrategia (V9), convertidos en resultados.
+    // Van antes del despacho: el programador corre en orden las tareas del mismo
+    // minuto. Apagada la maestra salen con 0 sin leer la base y lo dicen (L9-81).
+    Schedule::command('outreach:whatsapp-outcomes')
+        ->everyMinute()
+        ->withoutOverlapping(10)
+        ->onOneServer();
+
+    Schedule::command('outreach:voice-outcomes')
+        ->everyFiveMinutes()
         ->withoutOverlapping(10)
         ->onOneServer();
 

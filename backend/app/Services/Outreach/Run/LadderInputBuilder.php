@@ -6,6 +6,7 @@ use App\Services\Outreach\Core\OutreachCatalog;
 use App\Services\Outreach\Core\RelativeTime;
 use App\Services\Outreach\Facts\CoreProjection;
 use App\Services\Outreach\Facts\SubjectFacts;
+use Closure;
 use DateTimeImmutable;
 
 /**
@@ -32,11 +33,20 @@ use DateTimeImmutable;
  */
 final class LadderInputBuilder
 {
+    /**
+     * `$sendsEnabledInCode` (W9) es SOLO el doble de la puerta para las
+     * pruebas que ensayan el envío con la constante abierta sin girarla (la
+     * vía de la protección 2: nunca en el árbol compartido); null = la
+     * constante de {@see OutreachSendGate}, siempre en producción.
+     *
+     * @param  (Closure(): bool)|null  $sendsEnabledInCode
+     */
     public function __construct(
         private readonly OutreachPublishedStrategies $bridge = new OutreachPublishedStrategies,
         private readonly BudgetReservations $budgets = new BudgetReservations,
         private readonly OutreachStore $store = new OutreachStore,
         private readonly SubjectSuppressions $suppressions = new SubjectSuppressions,
+        private readonly ?Closure $sendsEnabledInCode = null,
     ) {}
 
     /**
@@ -50,6 +60,9 @@ final class LadderInputBuilder
         $medio = OutreachCatalog::mediumOf($stepChannel) ?? OutreachCatalog::MEDIUM_WHATSAPP;
         $canalTrabajo = OutreachSendGate::jobChannelOf($stepChannel);
         $banderas = OutreachSendGate::channelFlags($stepChannel);
+        if ($this->sendsEnabledInCode !== null) {
+            $banderas['sendsEnabledInCode'] = ($this->sendsEnabledInCode)() === true;
+        }
         $dia = (string) ($ctx['budgetDay'] ?? RelativeTime::bogotaDate($now));
         $paso = $live->step((int) ($ctx['stepIndex'] ?? 0)) ?? [];
         $plantilla = $this->bridge->templateState($paso['templates'][$stepChannel] ?? ['uuid' => '', 'hash' => ''], $stepChannel, $live->purpose);
@@ -150,18 +163,25 @@ final class LadderInputBuilder
         return false;
     }
 
-    /** @return array<string, int> */
+    /**
+     * N4: el presupuesto del canal. WhatsApp, por el precio de su categoría;
+     * la voz, por la reserva por llamada con su cupo y su techo EFECTIVOS
+     * ({@see OutreachConfig::voiceBudget()}: sin reserva, 0 → `budget_zero`).
+     *
+     * @return array<string, int>
+     */
     private function budget(LiveStrategy $live, string $canalTrabajo, ?string $categoria, string $dia, string $mode): array
     {
         $canal = $this->budgets->used($dia, $mode, BudgetReservations::SCOPE_CHANNEL.$canalTrabajo);
         $automatico = in_array($canalTrabajo, OutreachCatalog::AUTOMATIC_CHANNELS, true);
         $esWhatsapp = $canalTrabajo === OutreachCatalog::CHANNEL_WHATSAPP_TEMPLATE;
+        $voz = $canalTrabajo === OutreachCatalog::CHANNEL_VOICE_CALL ? OutreachConfig::voiceBudget() : ['dailyCap' => 0, 'dailyBudgetMicros' => 0, 'reserveMicros' => 0];
 
         return [
-            'dailyBudgetMicros' => $esWhatsapp ? OutreachConfig::whatsappDailyBudgetMicros() : 0,
+            'dailyBudgetMicros' => $esWhatsapp ? OutreachConfig::whatsappDailyBudgetMicros() : $voz['dailyBudgetMicros'],
             'reservedTodayMicros' => $automatico ? $canal['micros'] : 0,
-            'costMicros' => $esWhatsapp ? OutreachConfig::whatsappPriceMicros((string) $categoria) : 0,
-            'channelDailyCap' => $esWhatsapp ? OutreachConfig::whatsappDailyCap() : 0,
+            'costMicros' => $esWhatsapp ? OutreachConfig::whatsappPriceMicros((string) $categoria) : $voz['reserveMicros'],
+            'channelDailyCap' => $esWhatsapp ? OutreachConfig::whatsappDailyCap() : $voz['dailyCap'],
             'channelUsedToday' => $automatico ? $canal['units'] : 0,
             'assistedDailyCap' => OutreachConfig::assistedDailyCap(),
             'assistedUsedToday' => $canalTrabajo === 'assisted' ? $canal['units'] : 0,

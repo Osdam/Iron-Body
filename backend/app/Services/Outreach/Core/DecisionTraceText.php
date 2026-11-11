@@ -13,8 +13,12 @@ namespace App\Services\Outreach\Core;
  * avisos y efectos, los motivos de la puerta de inscripción, las anotaciones y
  * veredictos del selector, los 18 resultados, las 6 transiciones, los efectos
  * de los resultados, los motivos de la máquina de seguimientos y los
- * resultados de la cadena. Los textos hablan de reglas, nunca de quién: no
- * llevan datos de la persona.
+ * resultados de la cadena; y los CÓDIGOS DE DETALLE que los canales de W9 y
+ * V9 escriben en trabajos, resultados y decisiones (la puerta de WhatsApp y su
+ * normalizador; la puerta de las salientes del H8 con sus motivos y el
+ * normalizador de llamadas), más las cancelaciones de la ejecución. Los
+ * códigos ABIERTOS del H8 (`create_<x>`, `observe_<x>`) se enseñan tal cual.
+ * Los textos hablan de reglas, nunca de quién: no llevan datos de la persona.
  *
  * EXPORTACIÓN (L9-25): {@see export()} da el diccionario que espeja el CRM
  * (niveles, veredictos, textos, plantillas y reservas de {@see explain()}) y
@@ -27,6 +31,9 @@ final class DecisionTraceText
 
     /** Los `voice_policy:<motivo>` de N4 usan el texto de `voice_policy`. */
     public const VOICE_POLICY_PREFIX = 'voice_policy:';
+
+    /** Los `meta_error_<código>` de WhatsApp (Meta rechazó el mensaje con ese código, W9) usan el texto de `meta_error`. */
+    public const META_ERROR_PREFIX = 'meta_error_';
 
     /**
      * Las plantillas de {@see explain()}, literales (el CRM las rellena igual):
@@ -206,13 +213,90 @@ final class DecisionTraceText
         'signature_mismatch' => 'La firma no cuadra.',
         'seq_gap' => 'Falta un eslabón de la cadena.',
         'chain_broken' => 'La cadena está rota.',
+        // La ejecución: cancelaciones y conciliación (B9-run; REV9 m-9)
+        'strategy_moved' => 'La versión de la estrategia ya no está viva en la publicación (reversión, retirada o promoción): se cancela.',
+        'stale' => 'El trabajo quedó a medias más de 10 minutos: no se sabe si salió y se concilia.',
+        // W9 · WhatsApp por plantillas: el canal, la puerta de WhatsApp y el normalizador de Meta
+        'job_channel_mismatch' => 'El trabajo no es de este canal o no está en vivo.',
+        'mode_not_live' => 'La automatización ya no está en modo en vivo.',
+        'budget_not_reserved' => 'El trabajo no tiene reservados su cupo y su presupuesto del día.',
+        'template_not_approved_by_meta' => 'La plantilla no consta como aprobada por Meta o no corresponde a la del Studio.',
+        'opt_out_word' => 'La persona escribió una palabra de baja por WhatsApp: no se le escribe más.',
+        'reply_pending' => 'La persona respondió a un contacto anterior de esta inscripción: la secuencia se detiene.',
+        'template_marker_unresolvable' => 'Un dato de la plantilla no se puede rellenar con los datos de este momento.',
+        'template_parameter_invalid' => 'Un dato de la plantilla tiene una forma que Meta rechazaría.',
+        'no_proactive_consent' => 'La persona no autorizó que se le escriba primero.',
+        'lead_without_phone' => 'La persona no tiene un teléfono registrado.',
+        'agent_paused' => 'El agente de mercadeo está en pausa.',
+        'no_whatsapp_conversation' => 'La persona no tiene una conversación de WhatsApp en el CRM.',
+        'human_takeover' => 'Una persona del equipo tomó la conversación: el mensaje automático no sale.',
+        'meta_disabled_or_unconfigured' => 'WhatsApp está apagado o sin configurar: el mensaje quedó como simulacro y no llegó a nadie.',
+        'meta_error' => 'Meta rechazó el mensaje (con su código de error).',
+        'meta_failed' => 'Meta informó que el mensaje falló.',
+        'outbox_dead' => 'El mensaje no salió: la cola de envío se rindió sin que Meta lo aceptara.',
+        'dead' => 'El mensaje ya estaba descartado en la cola de envío: no sale.',
+        'template_metadata_invalid' => 'El mensaje guardado no tiene la forma de una plantilla: no sale.',
+        'provider_send_failed' => 'El proveedor no pudo enviar el mensaje.',
+        'gate_refused' => 'La puerta de WhatsApp no lo dejó salir.',
+        'gate_error' => 'La puerta de WhatsApp falló al intentarlo: no salió nada o se concilia.',
+        'already_dispatched' => 'Este trabajo ya había pasado por la puerta: no se envía dos veces.',
+        // V9 · la voz por estrategia: el canal, la puerta de las salientes del H8 (sus motivos) y el normalizador de llamadas
+        'channel_mismatch' => 'El trabajo no es de este canal o no está en vivo.',
+        'voice_call_ref_missing' => 'La puerta de llamadas la aceptó sin devolver la llamada: se concilia.',
+        'voice_gate_error' => 'La puerta de llamadas falló al pedirla: se concilia por el trabajo.',
+        'voice_gate_denied' => 'La puerta de llamadas no la dejó salir.',
+        'outbound_denied' => 'La política de llamadas no la permite.',
+        'outbound_race' => 'Otra llamada al mismo número se pidió a la vez.',
+        'client_request_reused' => 'El identificador del trabajo ya se usó para otra llamada.',
+        'job_uuid_invalid' => 'La petición de llamada no lleva un trabajo válido.',
+        'purpose_key_invalid' => 'La finalidad no admite llamadas.',
+        'subject_invalid' => 'La persona de la llamada no tiene una ficha válida.',
+        'strategy_key_invalid' => 'La clave de la estrategia no tiene forma.',
+        'calls_disabled_in_code' => 'Las llamadas están cerradas en el código.',
+        'outbound_disabled' => 'Las llamadas salientes están apagadas.',
+        'twilio_voice_disabled' => 'La voz del proveedor de telefonía está apagada.',
+        'no_voice_number' => 'No hay número de voz configurado.',
+        'voice_number_is_whatsapp' => 'El número de voz es el de WhatsApp: no se usa para llamar.',
+        'number_unverified' => 'El número de voz no se ha comprobado hace poco.',
+        'number_mismatch' => 'El número que llamaría no es el configurado.',
+        'elevenlabs_not_configured' => 'El agente de voz no está configurado.',
+        'elevenlabs_disabled' => 'El agente de voz está apagado.',
+        'elevenlabs_unverified' => 'El agente de voz no está verificado.',
+        'no_publication' => 'No hay una voz publicada.',
+        'publication_unreadable' => 'No se puede verificar la publicación de la voz.',
+        'agent_drift' => 'El agente desplegado no coincide con la voz publicada.',
+        'source_not_allowed' => 'El origen del número no está permitido para llamar.',
+        'not_an_active_voice_canary' => 'El número no es un canario de voz activo.',
+        'contact_not_authorized' => 'El contacto de voz no está autorizado.',
+        'no_voice_consent' => 'No hay autorización de voz para esta finalidad.',
+        'outside_hours' => 'Fuera del horario de las llamadas.',
+        'holiday' => 'Es festivo: no se llama.',
+        'frequency_exceeded' => 'La persona ya recibió el máximo de llamadas de la semana.',
+        'concurrency_exceeded' => 'Ya hay otra llamada en curso.',
+        'daily_cap_zero' => 'El tope diario de llamadas es cero.',
+        'daily_cap_reached' => 'Se llegó al tope de llamadas de hoy.',
+        'duplicate_request' => 'Esa llamada ya se había pedido.',
+        'no_volver_a_llamar' => 'La persona pidió en la llamada que no se le vuelva a llamar.',
+        'solicitar_humano' => 'La persona pidió en la llamada hablar con alguien del equipo.',
+        'guard_clean' => 'La revisión posterior de la llamada no encontró nada.',
+        'guard_violation' => 'La revisión posterior de la llamada encontró una regla incumplida.',
+        'busy' => 'La línea estaba ocupada.',
+        'call_failed' => 'La llamada falló.',
+        'provider_rejected' => 'El proveedor de telefonía rechazó la llamada.',
+        'hung_up' => 'La llamada se cortó con el corte de emergencia.',
+        'voice_call_absent' => 'La llamada nunca llegó a crearse.',
+        'voice_unknown' => 'La telefonía devolvió un código desconocido.',
+        'job_failed' => 'El proceso que hace la llamada falló.',
+        'job_lost' => 'El proceso que hace la llamada se perdió.',
     ];
 
-    /** El texto de un código (los `voice_policy:<motivo>` usan el de `voice_policy`); null si no existe. */
+    /** El texto de un código (los `voice_policy:<motivo>` usan el de `voice_policy` y los `meta_error_<código>` el de `meta_error`); null si no existe. */
     public static function text(string $code): ?string
     {
         if (str_starts_with($code, self::VOICE_POLICY_PREFIX)) {
             $code = 'voice_policy';
+        } elseif (str_starts_with($code, self::META_ERROR_PREFIX)) {
+            $code = 'meta_error';
         }
 
         return self::TEXTS[$code] ?? null;
@@ -265,7 +349,7 @@ final class DecisionTraceText
      * El diccionario que espeja el CRM (L9-25), con los textos ordenados por
      * código. Es dato puro: lo escribe en disco la herramienta de pruebas.
      *
-     * @return array{format: string, timeZone: string, voicePolicyPrefix: string, levels: array<string,string>, verdicts: array<string,string>, texts: array<string,string>, templates: array<string,string>, fallbacks: array<string,string>}
+     * @return array{format: string, timeZone: string, voicePolicyPrefix: string, metaErrorPrefix: string, levels: array<string,string>, verdicts: array<string,string>, texts: array<string,string>, templates: array<string,string>, fallbacks: array<string,string>}
      */
     public static function export(): array
     {
@@ -276,6 +360,7 @@ final class DecisionTraceText
             'format' => self::FORMAT,
             'timeZone' => RelativeTime::ZONE,
             'voicePolicyPrefix' => self::VOICE_POLICY_PREFIX,
+            'metaErrorPrefix' => self::META_ERROR_PREFIX,
             'levels' => self::LEVELS,
             'verdicts' => self::VERDICTS,
             'texts' => $textos,

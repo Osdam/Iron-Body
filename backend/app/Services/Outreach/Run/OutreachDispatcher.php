@@ -41,10 +41,11 @@ use Throwable;
  *    frenados no entran en la reclamación (sus trabajos esperan igual).
  *  - EJECUTAR ({@see process()}): la pasada entera por trabajo. En sombra el
  *    canal es el simulado (`simulated`, resultado `not_attempted`); en vivo,
- *    el asistido abre la tarea de la bandeja (`started`); WhatsApp y voz son
- *    puertas VACÍAS hasta W9/V9 (`failed_to_start`, `channel_not_live`, la
- *    reserva liberada, resultado `failed`). Un trabajo que se cancela libera su
- *    reserva. Un `ambiguous` no se reintenta: se concilia.
+ *    el asistido abre la tarea de la bandeja (`started`); WhatsApp y voz van
+ *    por sus puertas (W9, V9): lo que no sale es `failed_to_start` con la
+ *    reserva liberada y el resultado `failed`, salvo una condición PASAJERA
+ *    ({@see TRANSIENT_FAILURES}), con la que la inscripción espera. Un trabajo
+ *    que se cancela libera su reserva. Un `ambiguous` no se reintenta: se concilia.
  *
  * Cada reclamación deja su pasada (`outreach_runs`, `dispatch`); los trabajos
  * reclamados y no ejecutados (un proceso muerto) los recoge la conciliación
@@ -54,6 +55,39 @@ final class OutreachDispatcher
 {
     /** Cuánto espera una inscripción cuyo trabajo se canceló por un freno o una carrera (minutos). */
     public const WAIT_MINUTES = 15;
+
+    /**
+     * Los `failed_to_start` de un canal que son una condición PASAJERA que la
+     * escalera también mira y que cambió entre la etapa 6 y la puerta (una
+     * carrera de milisegundos): no son un fallo de la persona ni del canal.
+     * El trabajo queda `failed_to_start` (el grafo no admite otra salida desde
+     * `dispatching`), la reserva se libera y la inscripción ESPERA lo mismo que
+     * con un freno (N2 `waitsForRelease`), sin resultado `failed`: en la
+     * siguiente pasada la escalera decide con lo que vea (W9 gancho 1).
+     *
+     *  - N2: la pausa del agente en la puerta de WhatsApp (`agent_paused`,
+     *    = `marketing_agent_paused`), una persona que tomó la conversación
+     *    (`human_takeover`, = `human_in_control`), el freno de voz del H8
+     *    (`voice_braked`) y la maestra o el modo que dejaron de estar en vivo
+     *    (`mode_not_live` en WhatsApp, `mode_off` en la voz);
+     *  - N4: el canal apagado entre la escalera y la puerta (`channel_disabled`).
+     *
+     * NO están: las constantes de código (`sends_disabled_in_code`,
+     * `channel_not_live`, `calls_disabled_in_code`), que la escalera y el canal
+     * leen del mismo literal en el mismo proceso, y lo que la escalera no ve
+     * (cupos, horario propio y concurrencia del H8…): esperar no los cambia y
+     * repetiría el intento; para eso está el `on.failed` del paso.
+     *
+     * @var array<string, string> código → nivel de la decisión `cancel`
+     */
+    public const TRANSIENT_FAILURES = [
+        'agent_paused' => 'N2',
+        'human_takeover' => 'N2',
+        'voice_braked' => 'N2',
+        'mode_not_live' => 'N2',
+        'mode_off' => 'N2',
+        'channel_disabled' => 'N4',
+    ];
 
     /** @var array<string, OutreachChannel> */
     private array $channels;
@@ -322,6 +356,17 @@ final class OutreachDispatcher
 
                 return 'started';
             case ChannelAttempt::FAILED_TO_START:
+                $nivel = self::TRANSIENT_FAILURES[(string) $intento->detailCode] ?? null;
+                if ($nivel !== null) {
+                    // Pasajera (la escalera la habría visto un instante antes): sin `failed`; la reserva vuelve y la inscripción espera.
+                    DB::transaction(function () use ($trabajo, $e, $uuid, $intento, $nivel, $ahora): void {
+                        $this->release($trabajo, $uuid, $ahora);
+                        $this->decideCancel($trabajo, $e, FactSnapshot::fromArray(['facts' => []]), $ahora, $nivel, [(string) $intento->detailCode], [], ['gate' => ['recheck' => 'channel']]);
+                        $this->store->updateOpenEnrollment((int) $e->id, ['next_due_at' => OutreachStore::sql($ahora->modify('+'.self::WAIT_MINUTES.' minutes'))], $ahora);
+                    });
+
+                    return 'waiting';
+                }
                 $this->release($trabajo, $uuid, $ahora);
                 $this->outcomes->record($e, 'failed', 'system', 'job:'.$trabajo->uuid, $ahora, ['job' => $trabajo, 'detailCode' => $intento->detailCode]);
 

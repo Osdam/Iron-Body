@@ -35,6 +35,9 @@ final class OutreachTables
 
     public const PERSON_BINDINGS = 'ultron_studio_person_bindings';
 
+    /** W9 (`2026_11_13_200001`): la correspondencia de una plantilla del Studio con la aprobada por Meta; la lee solo el puente. */
+    public const TEMPLATE_META_CHECKS = 'ultron_studio_template_meta_checks';
+
     public const IDENTITIES = 'identities';
 
     /** El sello (§5), común a inscripciones, trabajos y decisiones. */

@@ -7,6 +7,9 @@ use App\Models\MarketingLead;
 use App\Models\MarketingMessage;
 use App\Models\MarketingMessageAttachment;
 use App\Services\Meta\MetaAuthService;
+use Closure;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Context;
 
 /**
  * Despacho de mensajes salientes de marketing por WhatsApp, con guardrails y
@@ -187,6 +190,171 @@ class MarketingMessageDispatcher
             // definitivo: quien llama puede decidir si avisar o esperar.
             'will_retry' => $delivery['retryable'],
         ]);
+    }
+
+    // ── Hito 9 · W9: plantillas de la automatización comercial ──────────────
+
+    /**
+     * Una PLANTILLA aprobada de la automatización comercial
+     * (`App\Services\Outreach`, contrato H9 D9-9.3 «W-B»), por ESTA puerta y
+     * con TODAS sus guardas, en el mismo orden que {@see dispatchWhatsapp()},
+     * más la que exige escribir primero:
+     *
+     *  - `canReplyReactively()` (`do_not_contact`) y, nuevo en esta ruta,
+     *    `canContactProactively()` (`no_proactive_consent`: escribir primero
+     *    exige `consent_status = granted`, Ley 1581);
+     *  - el teléfono normalizado (`lead_without_phone`) y el opt-out de los
+     *    leads hermanos por ese número (`do_not_contact_sibling`);
+     *  - la pausa del agente: el remitente es `ai` y la plantilla no es un
+     *    aviso de pago, así que la pausa la retiene (`agent_paused`), aquí y
+     *    en cada reintento del outbox;
+     *  - una conversación de WhatsApp YA existente del lead
+     *    (`no_whatsapp_conversation`): esta ruta nunca crea conversaciones;
+     *  - Meta apagado o sin credenciales: simulacro (`dry_run`), como hoy.
+     *
+     * El mensaje se crea como hoy (`recordOutbound()`: remitente `ai`, la
+     * conversación al día) con `metadata.kind = outreach_template`, la
+     * plantilla y `outreach_job_uuid`, y `correlation_id` = el uuid del
+     * trabajo: un solo id lleva del trabajo al mensaje, a sus reintentos, a
+     * sus estados de Meta y a los registros del canal. Lo entrega el outbox
+     * (su rama de plantillas), con su regla de `meta_message_id`.
+     *
+     * IDEMPOTENTE POR TRABAJO (un trabajo es un intento): bajo un cerrojo por
+     * `$outreachJobUuid` se busca antes de insertar el saliente que ya lleve
+     * esa correlación; si existe, no se crea otro ni se vuelve a entregar
+     * (`replayed: true`): los reintentos son del outbox.
+     *
+     * @return array{ok:bool,sent:bool,dry_run:bool,safe_to_send:bool,message_id:?int,provider_message_id:?string,reason:?string,conversation_id:?int,will_retry:bool,replayed:bool,status:?string,provider_error_code:?int}
+     */
+    public function dispatchWhatsappTemplate(MarketingLead $lead, OutreachTemplateMessage $template, string $outreachJobUuid): array
+    {
+        $base = [
+            'ok' => true, 'sent' => false, 'dry_run' => false, 'safe_to_send' => false,
+            'message_id' => null, 'provider_message_id' => null, 'reason' => null,
+            'conversation_id' => null, 'will_retry' => false, 'replayed' => false,
+            'status' => null, 'provider_error_code' => null,
+        ];
+
+        // La forma del uuid la comprueba la plantilla (metadata()); aquí se usa en minúsculas.
+        $metadata = $template->metadata($outreachJobUuid);
+        $trabajo = $metadata['outreach_job_uuid'];
+
+        if (! $lead->canReplyReactively()) {
+            return array_merge($base, ['reason' => 'do_not_contact']);
+        }
+        if (! $lead->canContactProactively()) {
+            return array_merge($base, ['reason' => 'no_proactive_consent']);
+        }
+
+        $to = $this->normalizePhone($lead->phone);
+        if ($to === null) {
+            return array_merge($base, ['reason' => 'lead_without_phone']);
+        }
+        if ($this->phoneOptedOut($to, (int) $lead->id)) {
+            return array_merge($base, ['reason' => 'do_not_contact_sibling']);
+        }
+        if ($this->agentSwitch->holdsOutbound(MarketingMessage::SENDER_AI, $metadata)) {
+            return array_merge($base, ['reason' => MarketingAgentSwitch::REASON]);
+        }
+
+        $conversation = $this->templateConversation($lead);
+        if ($conversation === null) {
+            return array_merge($base, ['reason' => 'no_whatsapp_conversation']);
+        }
+        $metadata = array_merge($metadata, ['recipient' => $to]);
+
+        return Cache::lock('marketing:outreach-template:'.$trabajo, 30)->block(10, function () use ($base, $template, $trabajo, $conversation, $metadata, $to): array {
+            $previo = MarketingMessage::query()
+                ->where('correlation_id', $trabajo)
+                ->where('direction', MarketingMessage::DIRECTION_OUTBOUND)
+                ->orderBy('id')
+                ->first();
+            if ($previo !== null) {
+                return array_merge($base, [
+                    'replayed' => true,
+                    'sent' => ! empty($previo->meta_message_id),
+                    'dry_run' => $previo->status === WhatsappOutboxService::STATUS_DRY_RUN,
+                    'safe_to_send' => true,
+                    'message_id' => $previo->id,
+                    'provider_message_id' => $previo->meta_message_id,
+                    'conversation_id' => $previo->conversation_id,
+                    'reason' => 'already_dispatched',
+                    'status' => $previo->status,
+                    'provider_error_code' => $previo->last_error_code,
+                ]);
+            }
+
+            return $this->withCorrelation($trabajo, function () use ($base, $template, $conversation, $metadata, $to): array {
+                if (! $this->auth->isConfigured()) {
+                    $message = $this->recordOutbound($conversation, $template->body, WhatsappOutboxService::STATUS_DRY_RUN, null, $metadata);
+
+                    return array_merge($base, [
+                        'dry_run' => true,
+                        'safe_to_send' => true,
+                        'message_id' => $message->id,
+                        'conversation_id' => $conversation->id,
+                        'reason' => 'meta_disabled_or_unconfigured',
+                        'status' => $message->status,
+                    ]);
+                }
+
+                // Como hoy: el mensaje existe ANTES de salir a la red.
+                $message = $this->recordOutbound($conversation, $template->body, WhatsappOutboxService::STATUS_QUEUED, null, $metadata);
+                $delivery = $this->outbox->deliver($message, $to);
+
+                return array_merge($base, [
+                    'sent' => $delivery['sent'],
+                    'safe_to_send' => true,
+                    'message_id' => $message->id,
+                    'provider_message_id' => $delivery['provider_message_id'],
+                    'conversation_id' => $conversation->id,
+                    'reason' => $delivery['reason'],
+                    'will_retry' => $delivery['retryable'],
+                    'status' => $message->status,
+                    'provider_error_code' => $message->last_error_code,
+                ]);
+            });
+        });
+    }
+
+    /**
+     * La conversación de WhatsApp del lead por la que sale una plantilla: la
+     * MISMA regla del dominio que {@see dispatchWhatsapp()} y el entrante
+     * (abierta primero, luego la del último mensaje), pero sin crear ninguna:
+     * la automatización no abre conversaciones por la puerta de atrás.
+     */
+    private function templateConversation(MarketingLead $lead): ?MarketingConversation
+    {
+        return MarketingConversation::query()
+            ->where('lead_id', $lead->id)
+            ->where('channel', 'whatsapp')
+            ->orderByRaw("CASE WHEN status = 'open' THEN 0 ELSE 1 END")
+            ->orderByRaw('CASE WHEN last_message_at IS NULL THEN 1 ELSE 0 END')
+            ->orderByDesc('last_message_at')
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    /**
+     * Ejecuta `$fn` con el `correlation_id` del trabajo en el contexto (el
+     * mensaje lo hereda en `recordOutbound()` y los registros del outbox lo
+     * llevan) y devuelve el que había al salir, aunque `$fn` lance.
+     *
+     * @template T
+     *
+     * @param  Closure(): T  $fn
+     * @return T
+     */
+    private function withCorrelation(string $correlationId, Closure $fn): mixed
+    {
+        $habia = Context::has('correlation_id');
+        $previo = Context::get('correlation_id');
+        Context::add('correlation_id', $correlationId);
+        try {
+            return $fn();
+        } finally {
+            $habia ? Context::add('correlation_id', $previo) : Context::forget('correlation_id');
+        }
     }
 
     /**

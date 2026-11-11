@@ -2,6 +2,7 @@
 
 namespace App\Services\Marketing;
 
+use App\Models\MarketingLead;
 use App\Models\MarketingMessage;
 use App\Models\MarketingMessageAttachment;
 use App\Services\Meta\MetaMediaService;
@@ -39,6 +40,29 @@ class WhatsappOutboxService
 
     /** Meta apagado: se preparó pero no salió. Sigue siendo un éxito de flujo. */
     public const STATUS_DRY_RUN = 'dry_run';
+
+    /**
+     * Hito 9 · W9 (SC-10): por qué un REINTENTO de una plantilla de la
+     * automatización comercial ya no sale (los mismos códigos que la puerta,
+     * {@see MarketingMessageDispatcher::dispatchWhatsappTemplate()}) y cómo lo
+     * lee quien atiende el Inbox.
+     *
+     * @var array<string, array{title: string, message: string}>
+     */
+    public const OUTREACH_TEMPLATE_REFUSALS = [
+        'do_not_contact' => [
+            'title' => 'No se envió: la persona pidió que no le escriban',
+            'message' => 'Este mensaje automático esperaba un reintento y se canceló: el contacto está marcado como «no contactar» o rechazó el tratamiento de sus datos.',
+        ],
+        'no_proactive_consent' => [
+            'title' => 'No se envió: ya no consta la autorización para escribirle primero',
+            'message' => 'Este mensaje automático esperaba un reintento y se canceló: la autorización de la persona ya no está vigente.',
+        ],
+        'do_not_contact_sibling' => [
+            'title' => 'No se envió: este número pidió que no le escriban',
+            'message' => 'Este mensaje automático esperaba un reintento y se canceló: otro registro con el mismo número está marcado como «no contactar».',
+        ],
+    ];
 
     public function __construct(
         private readonly MetaMessagingService $messaging,
@@ -138,6 +162,44 @@ class WhatsappOutboxService
             ];
         }
 
+        /*
+         * Hito 9 · W9 (SC-10): una PLANTILLA de la automatización comercial que
+         * vuelve por un REINTENTO pasa otra vez las guardas de la persona que
+         * pasó al nacer en la puerta (`dispatchWhatsappTemplate`). Entre el
+         * primer intento y el último pasan minutos, y en ese tiempo la persona
+         * pudo retirar su autorización o pedir que no le escriban —ella o una
+         * hermana con su mismo número—. Si ya no se puede, no sale: queda muerta
+         * y visible en el Inbox con su motivo, como en la pausa. Solo plantillas
+         * del H9 y solo reintentos: el texto libre de hoy y el primer intento,
+         * que la puerta acaba de comprobar, no cambian.
+         */
+        $refusal = $this->outreachTemplateRefusal($message, $to);
+        if ($refusal !== null) {
+            $message->forceFill([
+                'status' => self::STATUS_DEAD,
+                // Como en la pausa: no lo paró Meta, y el Inbox enseñaría un fallo anterior de Meta como el motivo.
+                'last_error_code' => null,
+                'last_error_message' => $refusal,
+                'next_attempt_at' => null,
+                'metadata' => array_merge((array) $message->metadata, [
+                    'failure' => ['code' => $refusal] + self::OUTREACH_TEMPLATE_REFUSALS[$refusal],
+                ]),
+            ])->save();
+
+            ChannelLog::info('outbox.cancelled', [
+                'reason' => $refusal,
+                'message_id' => $message->id,
+                'conversation_id' => $message->conversation_id,
+            ]);
+
+            return [
+                'sent' => false,
+                'provider_message_id' => null,
+                'reason' => $refusal,
+                'retryable' => false,
+            ];
+        }
+
         $attempt = (int) $message->send_attempts + 1;
 
         // El intento se registra ANTES de salir a la red. Si el proceso muere
@@ -154,9 +216,14 @@ class WhatsappOutboxService
         // nada, porque el cliente lee "mira esto" y no hay nada que mirar—.
         $attachment = $this->attachmentFor($message);
 
-        $result = $attachment === null
+        // Hito 9 · W9 (contrato H9, D9-9.3): un saliente de PLANTILLA de la
+        // automatización comercial sale como plantilla —también en cada
+        // reintento— y nunca como texto libre.
+        $template = $this->outreachTemplateResult($message, $to);
+
+        $result = $template ?? ($attachment === null
             ? $this->messaging->sendWhatsappText($to, (string) $message->body, $this->quotedIdFor($message))
-            : $this->deliverMedia($message, $attachment, $to);
+            : $this->deliverMedia($message, $attachment, $to));
 
         if ($result['ok'] && $result['message_id'] !== null) {
             $message->forceFill([
@@ -363,6 +430,83 @@ class WhatsappOutboxService
             $caption,
             $attachment->kind === 'document' ? $attachment->original_filename : null,
         );
+    }
+
+    /**
+     * Hito 9 · W9: la rama de PLANTILLAS. null si el mensaje no es una
+     * plantilla de la automatización comercial (todo lo de hoy sigue igual).
+     *
+     * Si lo es, sale por `sendWhatsappTemplate` con la plantilla que guardó
+     * la puerta ({@see OutreachTemplateMessage::fromStored()}). Fuera de la
+     * ventana de 24 h Meta solo admite plantillas aprobadas, y dentro de ella
+     * mandar el texto como libre sería mandar algo que nadie aprobó: si lo
+     * guardado no tiene la forma del contrato, el mensaje NO sale (fallo
+     * definitivo, queda `dead` y visible en el Inbox con su motivo).
+     *
+     * @return array{ok:bool,message_id:?string,http_status:?int,error_code:?int,error_title:?string,error_message:?string,retryable:bool,reason:?string}|null
+     */
+    private function outreachTemplateResult(MarketingMessage $message, string $to): ?array
+    {
+        if (! OutreachTemplateMessage::isTemplate($message->metadata)) {
+            return null;
+        }
+
+        $template = OutreachTemplateMessage::fromStored($message->metadata, $message->body);
+        if ($template === null) {
+            ChannelLog::warning('outbox.template_invalid', ['message_id' => $message->id]);
+
+            return [
+                'ok' => false, 'message_id' => null, 'http_status' => null,
+                'error_code' => null, 'error_title' => 'template_metadata_invalid',
+                'error_message' => 'La plantilla guardada no tiene la forma del contrato: no se envía.',
+                'retryable' => false, 'reason' => 'template_metadata_invalid',
+            ];
+        }
+
+        return $this->messaging->sendWhatsappTemplate($to, $template->name, $template->language, $template->components());
+    }
+
+    /**
+     * Hito 9 · W9 (SC-10): el motivo por el que un REINTENTO de una plantilla
+     * de la automatización comercial ya no puede salir, o null si puede (o si
+     * no es una plantilla del H9, o es su primer intento). Las guardas de la
+     * persona de la puerta, en su orden: `canReplyReactively()`
+     * (`do_not_contact`), `canContactProactively()` (`no_proactive_consent`;
+     * sin prospecto no consta) y la baja de las hermanas con el mismo número
+     * NORMALIZADO, como `MarketingMessageDispatcher::phoneOptedOut()`
+     * (`do_not_contact_sibling`).
+     */
+    private function outreachTemplateRefusal(MarketingMessage $message, string $to): ?string
+    {
+        if (! OutreachTemplateMessage::isTemplate($message->metadata) || (int) $message->send_attempts < 1) {
+            return null;
+        }
+
+        $lead = $message->conversation?->lead;
+        if ($lead === null) {
+            return 'no_proactive_consent';
+        }
+        if (! $lead->canReplyReactively()) {
+            return 'do_not_contact';
+        }
+        if (! $lead->canContactProactively()) {
+            return 'no_proactive_consent';
+        }
+
+        // La misma regla que la puerta: filtrar por la bandera y comparar el número normalizado en PHP.
+        $hermanas = MarketingLead::query()
+            ->where('do_not_contact', true)
+            ->where('id', '!=', $lead->id)
+            ->whereNotNull('phone')
+            ->get(['id', 'phone']);
+        if ($hermanas->isEmpty()) {
+            return null;
+        }
+        $telefonos = app(MarketingMessageDispatcher::class);
+
+        return $hermanas->contains(fn (MarketingLead $hermana): bool => $telefonos->normalizePhone($hermana->phone) === $to)
+            ? 'do_not_contact_sibling'
+            : null;
     }
 
     /**

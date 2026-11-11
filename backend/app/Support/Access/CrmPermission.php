@@ -258,8 +258,9 @@ final class CrmPermission
      * Y ULTRON STUDIO (`ultron`): borradores, versiones y aprobaciones los
      * firma una persona, y el diseño del agente no se le enseña a una
      * automatización (los controladores exigen además una persona).
-     * Y la TELEFONÍA (`telephony`, Hito 8, D8-22): una automatización no
-     * llama ni lee el registro de llamadas.
+     * Y la TELEFONÍA (`telephony`, Hito 8, D8-22): el token compartido no
+     * llama ni lee el registro de llamadas (una estrategia publicada a cuatro
+     * ojos llama solo por su canal y la puerta, Enmienda 17, L9-81).
      * Se compara el PRIMER segmento de la clave: `valuations.view_all` y
      * cualquier `valuations.algo.view` futuro quedan fuera igual.
      */

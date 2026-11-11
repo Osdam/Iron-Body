@@ -101,7 +101,9 @@ final class TraceTextCases
         ], ['perChannel' => [['channel' => 'voice_call', 'verdict' => 'zzz_unknown', 'level' => null, 'reasons' => ['zzz_unknown'], 'retryAt' => null]], 'annotations' => ['zzz_unknown']]);
 
         $texto = [];
-        foreach (['voice_policy', DecisionTraceText::VOICE_POLICY_PREFIX.'outside_window', 'calendar_outside_own_hours', 'daily_contact_limit', 'zzz_unknown'] as $codigo) {
+        foreach (['voice_policy', DecisionTraceText::VOICE_POLICY_PREFIX.'outside_window', 'calendar_outside_own_hours', 'daily_contact_limit', 'zzz_unknown',
+            // W9: el rechazo de Meta con su código usa el texto de `meta_error` (cierre de B9).
+            'meta_error', DecisionTraceText::META_ERROR_PREFIX.'131026'] as $codigo) {
             $texto[] = ['code' => $codigo, 'expected' => DecisionTraceText::text($codigo)];
         }
 
