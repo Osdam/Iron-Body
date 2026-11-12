@@ -1,0 +1,25 @@
+0. producción 306b83e limpia · origin/main 298b855 · 2 commit(s) · ficheros: backend/app/Http/Controllers/Crm/UltronStudio/UltronStudioOutreachAssistedController.php backend/app/Services/Outreach/Run/AssistedQueue.php backend/app/Services/Outreach/Run/OutreachPublishedStrategies.php backend/app/Services/Outreach/Run/SubjectSuppressions.php backend/docs/ultron-studio/INFORME_CIERRE_POR_QUE_ENCENDIDO_O_APAGADO.md backend/docs/ultron-studio/ULTRON_STUDIO_CIERRE_9_HITOS.md backend/docs/ultron-studio/ULTRON_STUDIO_H9_CONTRACT.md backend/docs/ultron-studio/plans/informes-motores/informe-be-bandeja-ronda3.md backend/docs/ultron-studio/plans/informes-motores/informe-fe-bandeja-condiciones.md backend/docs/ultron-studio/plans/informes-motores/informe-fe-bandeja-ronda3.md backend/docs/ultron-studio/plans/informes-motores/informe-reviewer-ola-7.md backend/docs/ultron-studio/plans/informes-motores/informe-security-bandeja-condiciones.md backend/tests/Feature/Outreach/Run/H9AssistedConditionsTest.php backend/tests/Feature/Outreach/Run/H9AssistedOptOutStrategyTest.php backend/tests/Feature/Outreach/Run/OutreachApiTest.php backend/tests/Unit/Outreach/Run/AssistedQueueOptedOutTest.php
+   constante de llamadas (VoiceCallPolicy): cerrada, sin cambios (el fichero no cambia)
+   constante de envíos (OutreachSendGate): cerrada → cerrada
+1. código: HEAD=298b855
+   root 644 backend/app/Http/Controllers/Crm/UltronStudio/UltronStudioOutreachAssistedController.php
+   root 644 backend/app/Services/Outreach/Run/AssistedQueue.php
+   root 644 backend/app/Services/Outreach/Run/OutreachPublishedStrategies.php
+   root 644 backend/app/Services/Outreach/Run/SubjectSuppressions.php
+   root 644 backend/docs/ultron-studio/INFORME_CIERRE_POR_QUE_ENCENDIDO_O_APAGADO.md
+   root 644 backend/docs/ultron-studio/ULTRON_STUDIO_CIERRE_9_HITOS.md
+   root 644 backend/docs/ultron-studio/ULTRON_STUDIO_H9_CONTRACT.md
+   root 644 backend/docs/ultron-studio/plans/informes-motores/informe-be-bandeja-ronda3.md
+   root 644 backend/docs/ultron-studio/plans/informes-motores/informe-fe-bandeja-condiciones.md
+   root 644 backend/docs/ultron-studio/plans/informes-motores/informe-fe-bandeja-ronda3.md
+   root 644 backend/docs/ultron-studio/plans/informes-motores/informe-reviewer-ola-7.md
+   root 644 backend/docs/ultron-studio/plans/informes-motores/informe-security-bandeja-condiciones.md
+   root 644 backend/tests/Feature/Outreach/Run/H9AssistedConditionsTest.php
+   root 644 backend/tests/Feature/Outreach/Run/H9AssistedOptOutStrategyTest.php
+   root 644 backend/tests/Feature/Outreach/Run/OutreachApiTest.php
+   root 644 backend/tests/Unit/Outreach/Run/AssistedQueueOptedOutTest.php
+2. workers RUNNING: 14 → 14 (otros: 0)
+3. admin/voice/status sin token → 401 (esperado 401)
+4. production.ERROR en laravel*.log: 3260 → 3260
+   vuelta atrás: ( cd /var/www/api && umask 022 && git checkout -q --detach 306b83e ) && cd /var/www/api/backend && sudo -u www-data php artisan queue:restart
+CORRECCIÓN DESPLEGADA SIN DESVÍOS

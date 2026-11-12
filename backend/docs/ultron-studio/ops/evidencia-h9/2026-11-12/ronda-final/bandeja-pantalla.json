@@ -1,0 +1,115 @@
+{
+ "pasos": [
+  {
+   "nombre": "CRM publicado: version.json",
+   "ok": true,
+   "dato": {
+    "status": 200,
+    "commit": "eeb4b79",
+    "dirty": false,
+    "builtAt": "2026-11-12T18:11:05.584Z"
+   }
+  },
+  {
+   "nombre": "pantalla: la bandeja carga",
+   "ok": true,
+   "dato": {
+    "titulo": "Bandeja asistida",
+    "vacia": "No hay trabajos asistidos vigentes. El canal asistido se enciende en la fase 3, con su cupo diario.",
+    "filas": 0,
+    "retenidos": null,
+    "tope": null,
+    "sinEventos": null,
+    "noDisponible": null,
+    "error": null,
+    "sinLlave": null,
+    "filtros": [
+     "Todos",
+     "Los míos",
+     "Sin reclamar"
+    ],
+    "releer": true
+   }
+  },
+  {
+   "nombre": "pantalla: la página leyó la bandeja con 200",
+   "ok": true,
+   "dato": [
+    {
+     "filtro": null,
+     "status": 200
+    }
+   ]
+  },
+  {
+   "nombre": "pantalla: vacía, sin aviso de retenidos ni de tope (sombra: 0 trabajos)",
+   "ok": true,
+   "dato": {
+    "vacia": "No hay trabajos asistidos vigentes. El canal asistido se enciende en la fase 3, con su cupo diario."
+   }
+  },
+  {
+   "nombre": "pantalla: al volver a la pestaña relee UNA vez",
+   "ok": true,
+   "dato": {
+    "lecturasNuevas": 1,
+    "visibilityState": "visible"
+   }
+  },
+  {
+   "nombre": "pantalla: no vuelve a releer antes de 15 s",
+   "ok": true,
+   "dato": {
+    "lecturasNuevas": 0
+   }
+  },
+  {
+   "nombre": "pantalla: tras releer sigue igual",
+   "ok": true,
+   "dato": {
+    "vacia": "No hay trabajos asistidos vigentes. El canal asistido se enciende en la fase 3, con su cupo diario."
+   }
+  },
+  {
+   "nombre": "pantalla: filtro mine",
+   "ok": true,
+   "dato": {
+    "lecturas": [
+     {
+      "filtro": "mine",
+      "status": 200
+     }
+    ],
+    "vacia": "No hay trabajos asistidos vigentes con ese filtro. El canal asistido se enciende en la fase 3, con su cupo diario.",
+    "retenidos": null,
+    "tope": null
+   }
+  },
+  {
+   "nombre": "pantalla: filtro unclaimed",
+   "ok": true,
+   "dato": {
+    "lecturas": [
+     {
+      "filtro": "unclaimed",
+      "status": 200
+     }
+    ],
+    "vacia": "No hay trabajos asistidos vigentes con ese filtro. El canal asistido se enciende en la fase 3, con su cupo diario.",
+    "retenidos": null,
+    "tope": null
+   }
+  },
+  {
+   "nombre": "pantalla: ninguna clave interna a la vista",
+   "ok": true,
+   "dato": []
+  },
+  {
+   "nombre": "pantalla: sin errores de página",
+   "ok": true,
+   "dato": []
+  }
+ ],
+ "errores": []
+}

@@ -1,0 +1,24 @@
+== 1. Sello del build
+main nuevo: main-PD4MHE4L.js
+== 2. Nada se movió
+main en producción: main-4MYNK7NG.js
+== 3. Respaldo
+total 36
+drwxr-xr-x  2 root root  4096 Nov 12 18:31 .
+drwx------ 81 root root  4096 Nov 12 18:31 ..
+-rw-r--r--  1 root root 20677 Nov 12 18:31 index.html
+-rw-r--r--  1 root root   104 Nov 12 18:31 version.json
+== 4. Publicar (sin --delete)
+== 5. Verificación pública
+{
+  "commit": "eeb4b79",
+  "dirty": false,
+  "builtAt": "2026-11-12T18:11:05.584Z",
+  "inboxV2": true
+}
+index.html → main-PD4MHE4L.js OK
+main-PD4MHE4L.js       200
+main-4MYNK7NG.js       200
+/marketing/ultron-studio 200
+RESPALDO: /var/backups/ironbody/crm-pre-eeb4b79-20261112-183154
+CRM PUBLICADO Y VERIFICADO

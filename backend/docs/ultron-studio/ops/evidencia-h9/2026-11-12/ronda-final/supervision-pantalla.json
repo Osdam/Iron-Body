@@ -1,0 +1,218 @@
+{
+ "pasos": [
+  {
+   "nombre": "API state",
+   "ok": true,
+   "dato": {
+    "status": "ultron_canary",
+    "enabled": true,
+    "label": "ULTRON responde solo en la conversación de prueba (canario)",
+    "short_label": "ULTRON · solo canario",
+    "legacy_enabled": false,
+    "open": 861,
+    "attended_by_agent": 1,
+    "handled_by_ai": 858,
+    "handled_by_human": 3
+   }
+  },
+  {
+   "nombre": "API activity",
+   "ok": true,
+   "dato": {
+    "filas": 200,
+    "porTipo": [
+     [
+      "decision",
+      129
+     ],
+     [
+      "fact",
+      71
+     ]
+    ],
+    "accionesEnCrudo": [],
+    "resultadosEnCrudo": [],
+    "motivosEnCrudo": [],
+    "acciones": [
+     [
+      "sistema · El agente anterior no analizó el mensaje · Omitida",
+      100
+     ],
+     [
+      "sistema · Llegó un mensaje que el agente no puede leer · Propuesta, sin ejecutar",
+      28
+     ],
+     [
+      "sistema · La membresía venció · Registrado",
+      12
+     ],
+     [
+      "sistema · Primer ingreso al gimnasio · Registrado",
+      11
+     ],
+     [
+      "sistema · Dejó de venir: se detectó inactividad · Registrado",
+      10
+     ],
+     [
+      "sistema · Alcanzó un hito de asistencia · Registrado",
+      9
+     ],
+     [
+      "sistema · Se pidió una factura electrónica · Registrado",
+      9
+     ],
+     [
+      "sistema · Se identificó un prospecto · Registrado",
+      7
+     ],
+     [
+      "sistema · Se activó una membresía · Registrado",
+      6
+     ],
+     [
+      "sistema · La membresía está por vencer · Registrado",
+      5
+     ],
+     [
+      "sistema · Se renovó una membresía · Registrado",
+      2
+     ],
+     [
+      "ia · Preparó una respuesta · Ejecutada",
+      1
+     ]
+    ],
+    "motivosDelSistema": [
+     [
+      "El agente anterior tenía el análisis apagado cuando llegó el mensaje. Hoy no la lleva ningún agente automático: la atiende el equipo.",
+      99
+     ],
+     [
+      "Necesita que lo revise una persona.",
+      20
+     ],
+     [
+      "Es un tipo de mensaje que el agente no puede leer.",
+      8
+     ]
+    ]
+   }
+  },
+  {
+   "nombre": "pantalla: cabecera",
+   "ok": true,
+   "dato": [
+    {
+     "texto": "WhatsApp productivo activo",
+     "clases": "pill tone-ok"
+    },
+    {
+     "texto": "ULTRON · solo canario",
+     "clases": "pill tone-ok"
+    }
+   ]
+  },
+  {
+   "nombre": "pantalla: tarjetas",
+   "ok": true,
+   "dato": [
+    [
+     "Conversaciones abiertas",
+     "861",
+     "756 sin leer"
+    ],
+    [
+     "Las atiende el agente",
+     "1",
+     "858 que nadie del equipo ha tomado"
+    ],
+    [
+     "Las lleva una persona",
+     "3",
+     "0 con la IA pausada"
+    ],
+    [
+     "Necesitan revisión",
+     "315"
+    ],
+    [
+     "Esperando aprobación",
+     "0"
+    ],
+    [
+     "Oportunidades abiertas",
+     "0"
+    ]
+   ]
+  },
+  {
+   "nombre": "pantalla: ficha «Agente»",
+   "ok": true,
+   "dato": [
+    "EstadoULTRON responde solo en la conversación de prueba (canario)",
+    "AutonomíaApagada",
+    "Modelo del agente anteriorgpt-4.1-mini",
+    "Acciones registradas 24 h143",
+    "Fallos 24 h0",
+    "Latencia p95—"
+   ]
+  },
+  {
+   "nombre": "pantalla: ninguna de las frases que eran falsas",
+   "ok": true,
+   "dato": []
+  },
+  {
+   "nombre": "pantalla: pestaña «Actividad»",
+   "ok": true,
+   "dato": null
+  },
+  {
+   "nombre": "pantalla: línea de tiempo",
+   "ok": true,
+   "dato": {
+    "eventos": 60,
+    "accionesEnCrudo": [],
+    "resultadosEnCrudo": [],
+    "motivosEnCrudo": [],
+    "lineas": [
+     [
+      "Sistema · El agente anterior no analizó el mensaje · Omitida",
+      40
+     ],
+     [
+      "Sistema · Llegó un mensaje que el agente no puede leer · Propuesta, sin ejecutar",
+      12
+     ],
+     [
+      "Sistema · Se identificó un prospecto · Registrado",
+      3
+     ],
+     [
+      "Sistema · Alcanzó un hito de asistencia · Registrado",
+      2
+     ],
+     [
+      "Sistema · La membresía está por vencer · Registrado",
+      1
+     ],
+     [
+      "Sistema · Se pidió una factura electrónica · Registrado",
+      1
+     ],
+     [
+      "Sistema · Se activó una membresía · Registrado",
+      1
+     ]
+    ]
+   }
+  },
+  {
+   "nombre": "pantalla: sin errores de página",
+   "ok": true,
+   "dato": []
+  }
+ ],
+ "errores": []
+}

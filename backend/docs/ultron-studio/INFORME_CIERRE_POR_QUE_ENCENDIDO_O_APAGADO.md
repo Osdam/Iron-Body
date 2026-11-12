@@ -1,6 +1,6 @@
 # ULTRON Studio · Por qué cada cosa salía encendida o apagada
 
-**Para:** el propietario. **Fecha:** 11-11-2026, actualizado el 12-11 a las 03:20 UTC (22:20 del 11-11 en Bogotá). **Producción:** API `9a6e3b1c` (12-11-2026, 03:14 UTC), CRM `19b1d8c` (02:37 UTC).
+**Para:** el propietario. **Fecha:** 11-11-2026, actualizado el 12-11 a las 18:35 UTC (13:35 en Bogotá). **Producción:** API `298b855a` (12-11-2026, 18:30 UTC), CRM `eeb4b79` (18:32 UTC).
 **Cómo leerlo:** cada apartado dice lo que veías, por qué salía así, qué se hizo y cómo queda. Los estados finales usan solo cinco palabras: **OPERATIVO Y PROBADO** · **LISTO PARA ACTIVACIÓN AUTORIZADA** · **EN OBSERVACIÓN** · **BLOQUEADO EXTERNAMENTE** · **INCOMPLETO**. No hay porcentajes.
 
 El detalle técnico, con fichero y línea, está en las tres auditorías de `plans/cierre/` y en las filas L9-111 y L9-112 del contrato del H9.
@@ -70,7 +70,11 @@ Revisado por seguridad y por dos revisiones independientes, sin hallazgos bloque
 | Bandeja que salía vacía | Los contactos retenidos ocupaban la página y tapaban los que sí se podían ofrecer | **Desplegado.** La página se llena por detrás de los retenidos y dice cuántos hay retenidos, sin decir de quién |
 | Pruebas de la voz con fechas fijas | Las pruebas de extremo a extremo de las llamadas fallaban desde el 10-11 porque usaban fechas que ya habían pasado | Corregido: calculan sus fechas respecto al día en que corren. No afecta a producción |
 
-Revisado por seguridad y por una revisión independiente, sin bloqueantes. Seguridad encontró dos huecos más del mismo tipo, anteriores a este trabajo, que hay que cerrar antes de abrir ese canal: que la bandeja vuelva a mirar el «no me contacten» que llega después, y que pausar la estrategia también la retenga. Están en curso.
+Revisado por seguridad y por una revisión independiente, sin bloqueantes. Seguridad encontró dos huecos más del mismo tipo, anteriores a este trabajo, que hay que cerrar antes de abrir ese canal: que la bandeja vuelva a mirar el «no me contacten» que llega después, y que pausar la estrategia también la retenga.
+
+**Los dos, hechos y desplegados el mismo 12-11 (servidor a las 13:30 y CRM a las 13:32, hora de Bogotá).** Si una persona pide que no la contacten después de que su contacto salió a la bandeja, o si la estrategia se pausa o se apaga, el contacto se retiene: no se ofrece, y quien ya lo había reclamado deja de ver la ficha y el guion y ve por qué. La bandeja avisa también cuando hay tantos contactos retenidos que puede no estar viendo todos los que sí se pueden ofrecer, y se vuelve a leer sola al regresar a la pestaña. Revisado otra vez por seguridad y por una revisión independiente: apto, sin bloqueantes.
+
+**Queda un caso por cerrar antes de abrir ese canal:** si una persona retira su permiso para recibir llamadas, la bandeja todavía ofrece su contacto asistido por voz. Hoy no puede ocurrir (no hay contactos en vivo) y la corrección está descrita; va en el apartado 5 y en tu lista del apartado 4 (punto 12). **Con esto cierro las rondas de trabajo: lo que queda es tu lista.**
 
 ---
 
@@ -182,6 +186,7 @@ Revisado por seguridad y por una revisión independiente, sin bloqueantes. Segur
 | 9 | Aprobar las dos frases fijas que el compilador añade a los prompts cuando una versión trae reglas con frases prohibidas. Al redactor: «FRASES PROHIBIDAS PUBLICADAS: nunca escribas ninguna de estas frases, tampoco con otras mayusculas; si la respuesta parece necesitar una, dilo con otras palabras. Las frases: …». Al revisor: «FRASES PROHIBIDAS PUBLICADAS: si el borrador contiene alguna de estas frases, aunque cambien las mayusculas, verdict fail con naturalness. Las frases: …» | Que las reglas del Studio tengan efecto en WhatsApp | Sin reglas con frases no cambia nada. Se quita volviendo a publicar una versión sin esas reglas o con «Volver a Legacy» |
 | 10 | Autorizar el endurecimiento del activador de membresías dentro del pago (Wompi y Nequi) y un barrido que reactive los pagos aprobados que se queden sin activar | Que un fallo momentáneo de la base no pueda dejar a alguien cobrado y sin servicio | Es el núcleo de pagos: se haría con sus pruebas en PostgreSQL y revisión de seguridad, como una corrección puntual con vuelta atrás. Hoy el riesgo no se ha materializado |
 | 11 | Autorizar un índice nuevo en la tabla de asistencias (cambio en la base de datos, sin bloquear escrituras) | Que el recuento que se hace en cada entrada al gimnasio no recorra la tabla entera cuando crezca | Hoy la tabla es pequeña (31 451 filas): no urge. Se quita con una orden |
+| 12 | Antes de abrir la bandeja de contactos asistidos con personas reales: (a) autorizar la corrección pendiente (retirar el permiso de llamadas debe retener el contacto por voz); (b) decidir si los frenos que no son de la automatización (el cerrojo de ULTRON, la pausa del agente, el freno de voz) deben retener también esa bandeja; (c) decidir si un contacto por voz se retiene cuando la consulta al registro de excluidos (RNE) está vencida o la persona es menor | Que el equipo no llame a quien no debe cuando ese canal se abra | Hoy no hay contactos en vivo: nada de esto puede ocurrir. Mientras no contestes, el canal asistido no se abre |
 
 ### Decisiones nuevas: quejas, cuatro ojos por regla y consentimiento
 
@@ -214,6 +219,7 @@ Un análisis de arquitectura del 11-11 (`plans/cierre/plan-quejas-consentimiento
 | Clasificador de respuestas | Hace falta cuando haya envíos automáticos con respuesta | No implementado |
 | Eventos especiales del gimnasio y campañas como disparador | Ampliación | No implementado |
 | Supresión de datos de voz: dos flecos | La supresión ya cubre las once tablas de voz. Quedan dos cosas: el enlace de un contacto con su ficha de socio o prospecto no se puede suprimir (se informa), y el borrado de la conversación en ElevenLabs y de la llamada en Twilio es un paso manual sin confirmar | Decidir antes de registrar contactos que no sean canarios |
+| Bandeja de contactos asistidos: el permiso de llamadas retirado | Si una persona retira su permiso para recibir llamadas después de que su contacto salió a la bandeja, la bandeja todavía lo ofrece por voz. El envío automático sí lo niega; la bandeja, aún no | **Pendiente antes de abrir el canal asistido** (apartado 4, punto 12). Hoy no puede ocurrir: no hay contactos en vivo. La corrección está descrita por seguridad (`informe-security-bandeja-ronda3.md`, R3-1) |
 
 ---
 

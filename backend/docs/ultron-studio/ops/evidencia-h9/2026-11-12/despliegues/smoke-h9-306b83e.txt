@@ -1,0 +1,77 @@
+== Smoke del Hito 9 (fase 2) · 2026-11-12T17:34:07Z · https://api.ironbodyneiva.cloud/api
+INFO    presupuestos de rendimiento: sin presupuestos (PERF9 no los ha entregado o no están junto al smoke): OMITIDOS
+OK      configuración del H9 de la fase 2: {"deployed":true,"enabled":true,"mode":"shadow","scheduler":true,"monitor":true,"assisted":false,"whatsapp":false,"voice":false,"classifier":false,"sends":false,"strategies":true,"publishing":true,"stream":true}
+OK      el programador: 53 tareas, 3 del Studio, 5 de voz y 5 de outreach (esperado 5 en la fase 2)
+INFO    órdenes outreach:* desplegadas: outreach:dispatch outreach:monitor outreach:reconcile outreach:replay outreach:stop outreach:suppress-subject outreach:sweep outreach:voice-outcomes outreach:whatsapp-outcomes
+OK      ultron:prompt-trace con la llave de prompts en canary: canary legacy no_publication
+INFO    canario del motor configurado: sí (su id no se imprime)
+INFO    centinela exacto: 22 huellas saladas de secretos del servidor
+OK      27 tablas ultron_studio_* y 8 outreach_* en la base
+cuenta 32 activa como Super Admin
+== Smoke del Hito 9 (fase 2) · superadmin · https://api.ironbodyneiva.cloud/api
+OK      login de la cuenta de smoke  [HTTP 200]
+OK      GET ultron-studio/outreach/status → 200 con data.config (OutreachConfig::status)  [HTTP 200]
+OK      status: data.config.mode «shadow» (fase 2)  [mode="shadow"]
+OK      status: data.config.enabled true (COMMERCIAL_AUTOMATION_ENABLED, fase 2)  [enabled=true]
+OK      status: la constante de envío cerrada (data.config.sendsEnabledInCode = false)  [sendsEnabledInCode=false]
+INFO    status: canales automáticos declarados (live = puerta implementada; implementado no es abierto, L9-80/L9-81)  [whatsapp_template, voice_call]
+OK      status: ningún canal hacia personas puede salir (whatsapp_template y voice_call presentes y la constante de envío cerrada)  [declarados: whatsapp_template, voice_call · sendsEnabledInCode=false]
+INFO    status: frenos abiertos (data.brakes.open)  [0]
+OK      status: la cabeza de la cadena de estrategias verifica (data.chain.head.verified; sin nada publicado, verifica)  [{"verified": true, "result": null, "seq": null}]
+OK      las otras 12 rutas de la ejecución con sesión y la maestra encendida: listas 200, inventados 404, cuerpos vacíos 422 (el freno global pide motivo: no se abre ninguno), nunca un 2xx en un POST
+INFO    gobierno de las estrategias (ULTRON_STUDIO_STRATEGIES_ENABLED)  [encendido]
+INFO    publicar/promover/reanudar (ULTRON_STUDIO_STRATEGIES_PUBLISHING_ENABLED), según el catálogo  [encendido]
+OK      las otras 29 rutas del gobierno con sesión: lecturas 200, inventados 404, cuerpos vacíos 422, publicar/promover/reanudar sin aplicar nada (404/409/422)
+INFO    GET strategies (fase 2: puede haber estrategias del canario)  [HTTP 200 · total None]
+        (sin respuesta de GET /admin/ultron-studio/stream?ticket=<tique>&topics=ledger: TimeoutError)
+INFO    canal SSE encendido: abre y emite (cortado a los 4 s; el smoke no lo lee)
+OK      status: engine.prompts.key = canary  [key="canary"]
+OK      status: engine.prompts con la base n8n-29de5119, el compilador 2 y la huella Legacy 3f6a5674…  [base="n8n-29de5119" compiler=2 legacy=3f6a5674]
+INFO    status: engine.prompts.current (llave en canary)  [{"mode": "legacy", "reason": "no_publication"}]
+OK      status: engine.prompts.lastTurns ≤ 20 y cada turno solo {at, declared, offered, observed, state} (sin ids ni textos)  [20 turnos]
+OK      GET strategies/templates/meta/status → 200 (responde también con el módulo apagado)  [HTTP 200]
+OK      meta/status: el módulo en «full» (enabled, syncEnabled, submitEnabled = true, true, true)  [{"enabled": true, "syncEnabled": true, "submitEnabled": true}]
+INFO    meta/status: la última sonda y los envíos (informativo con SMOKE_EXPECT_META_TEMPLATES=full)  [lastProbe=null submissions={"SENDING": 0, "SUBMITTED": 0, "FAILED": 0, "UNKNOWN": 0}]
+INFO    meta/status (informativo, sin secretos)  [{"driver": "graph", "graphVersion": "v25.0", "configured": true, "configurationProblem": null, "credentialSource": "database", "metaEnabled": true}]
+INFO    POST strategies/templates/meta/probe  [no se toca con el módulo en «full»: hablaría con Meta]
+INFO    POST strategies/templates/<inventado>/meta/refresh  [no se toca con el módulo en «full»: la puerta de la persona dejaría en el libro el intento denegado de la cuenta del smoke]
+OK      enviar (cuerpo vacío: 422 antes del servicio) de las plantillas de Meta con sesión → 403/404/409/422 (nada sale hacia Meta, ninguna fila)
+OMITIDO presupuestos de rendimiento  [sin fichero de PERF9 (ops/perf-h9/presupuestos-h9.json, copiado como presupuestos-h9.json junto al smoke; SMOKE_BUDGETS=…): D9-16 queda sin medir en este smoke]
+OK      las 30 rutas del gobierno sin sesión → 401 (10 GET y 20 POST/PUT)
+OK      las 13 rutas de la ejecución sin sesión → 401
+OK      GET ultron-studio/stream sin tique → 401 (o 409 si la bandera va antes del tique)  [HTTP 401 admin_token_required]
+OK      las 4 rutas de las plantillas de Meta sin sesión → 401
+OK      cuerpos (96): sin claves prohibidas del H6 (teléfono, huellas, ids de Meta, textos del proveedor, firmas)
+OK      cuerpos (96): sin claves propias del H9 (subject_key, member_id, documento, correo, cuerpo de mensaje; solo subjectRef, P9-9)
+OK      cuerpos (96): cada secreto solo como presencia, origen, huella de 8 hex o referencia corta
+OK      cuerpos (96): sin credenciales, sin APP_KEY y sin rutas del servidor
+OK      cuerpos (96): sin teléfonos ni ids de Meta (10 cifras o más)
+OK      cuerpos (96): ninguna clave nombra una conversación
+OK      cuerpos (96): ninguno lleva el id de la conversación canaria
+OK      cuerpos (96): ninguno contiene un secreto del servidor (centinela exacto, 22 huellas saladas)
+OK      Cache-Control «no-store, private» en las 97 respuestas de /api/admin
+OK      limitador: ninguna respuesta 429  [0 respuestas 429]
+OK      ninguna respuesta 5xx  [0 respuestas 5xx]
+RESUMEN (superadmin): 30 OK · 0 FALLO · 1 OMITIDO
+== Base, registros y red (solo lectura)
+OK      ninguna fila nueva de ultron_studio_* ni de outreach_* nombra a la cuenta 32
+OK      recuento exacto de las 35 tablas (27 del Studio y 8 de outreach) igual antes y después: ninguna escritura, ningún freno, ninguna inscripción
+OK      incidentes de IRON GUARD (ultron_studio y outreach; filas · ocurrencias): 0 0, los mismos
+OK      colas (outreach* / whatsapp+voice+marketing): 0/0, las mismas
+OK      laravel*.log: ningún ERROR durante el smoke
+INFO    vigía de red: 0 sockets distintos de PHP hacia las IP de Meta, ElevenLabs o Twilio durante el smoke (débil: una CDN comparte IP; lo estricto es la base)
+== Sombra: una pasada del barrido y del despacho (sin envíos)
+        Barrido     : 0 estrategia(s)
+OK      outreach:sweep salió con 0
+OK      outreach:dispatch --inline salió con 0
+OK      sin envíos: marketing_messages, voice_calls y voice_call_events iguales [marketing_messages=7819 voice_call_events=0 voice_calls=0]
+OK      trabajos outreach_jobs en modo live: 0
+OK      colas (outreach* / whatsapp+voice+marketing) sin trabajos nuevos: 0/0
+OK      las 27 tablas del Studio iguales tras la pasada (la ejecución no escribe en el gobierno)
+OK      ningún ERROR en la pasada en sombra
+INFO    outreach_* tras la pasada (informativo: la sombra sí escribe pasadas, inscripciones, decisiones y trabajos simulados): outreach_brakes=0 outreach_budget_counters=0 outreach_cursors=1 outreach_decisions=0 outreach_enrollments=0 outreach_jobs=0 outreach_outcomes=0 outreach_runs=4820 
+cuenta 32 en reposo: inactiva, Super Admin, sesiones borradas: 1
+OK      token tras desactivar → 403
+OK      sesiones de la cuenta tras el smoke: 0
+SMOKE H9: código de salida 3
+salida del smoke: 3

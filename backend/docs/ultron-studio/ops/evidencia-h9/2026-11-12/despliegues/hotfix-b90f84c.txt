@@ -1,0 +1,34 @@
+0. producción 5f803db limpia · origin/main b90f84c · 10 commit(s) · ficheros: backend/app/Console/Commands/ScanCommercialFacts.php backend/app/Http/Controllers/Api/Admin/SupervisionController.php backend/app/Services/Commercial/SupervisionService.php backend/app/Services/Outreach/Run/AssistedQueue.php backend/app/Services/UltronStudio/StudioStrategySimulations.php backend/app/Services/UltronStudio/StudioStrategySimulator.php backend/docs/iron-ia/ops/deploy-contexto-entrenador.sh backend/docs/ultron-studio/ops/RUNBOOK_PRIMERA_LLAMADA.md backend/docs/ultron-studio/ops/apertura-llamadas/0001-T-3287769b.patch backend/docs/ultron-studio/ops/apertura-llamadas/0002-T2-216b0f1b.patch backend/docs/ultron-studio/ops/apertura-llamadas/0003-T3-33ba6299.patch backend/docs/ultron-studio/ops/apertura-llamadas/README.md backend/docs/ultron-studio/ops/h8-e2e.sh backend/docs/ultron-studio/ops/hotfix-backend.sh backend/docs/ultron-studio/ops/v9-abierta.sh backend/docs/ultron-studio/plans/informes-motores/informe-be-bandeja-quejas.md backend/docs/ultron-studio/plans/informes-motores/informe-devops-apertura-arneses.md backend/docs/ultron-studio/plans/informes-motores/informe-reviewer-ola-6.md backend/docs/ultron-studio/plans/informes-motores/informe-security-bandeja.md backend/docs/ultron-studio/plans/informes-motores/informe-tester-voz-abierta.md backend/tests/Feature/Commercial/ScanCommercialFactsCeilingTest.php backend/tests/Feature/Commercial/SupervisionActivityLabelsTest.php backend/tests/Feature/Commercial/SupervisionStateTruthTest.php backend/tests/Feature/Outreach/Run/H9AssistedComplaintTest.php backend/tests/Feature/UltronStudio/Strategies/UltronStudioStrategyComplaintSimulationTest.php
+   constante de llamadas (VoiceCallPolicy): cerrada, sin cambios (el fichero no cambia)
+   constante de envíos (OutreachSendGate): cerrada → cerrada
+1. código: HEAD=b90f84c
+   root 644 backend/app/Console/Commands/ScanCommercialFacts.php
+   root 644 backend/app/Http/Controllers/Api/Admin/SupervisionController.php
+   root 644 backend/app/Services/Commercial/SupervisionService.php
+   root 644 backend/app/Services/Outreach/Run/AssistedQueue.php
+   root 644 backend/app/Services/UltronStudio/StudioStrategySimulations.php
+   root 644 backend/app/Services/UltronStudio/StudioStrategySimulator.php
+   root 644 backend/docs/iron-ia/ops/deploy-contexto-entrenador.sh
+   root 644 backend/docs/ultron-studio/ops/RUNBOOK_PRIMERA_LLAMADA.md
+   root 644 backend/docs/ultron-studio/ops/apertura-llamadas/0001-T-3287769b.patch
+   root 644 backend/docs/ultron-studio/ops/apertura-llamadas/0002-T2-216b0f1b.patch
+   root 644 backend/docs/ultron-studio/ops/apertura-llamadas/0003-T3-33ba6299.patch
+   root 644 backend/docs/ultron-studio/ops/apertura-llamadas/README.md
+   root 644 backend/docs/ultron-studio/ops/h8-e2e.sh
+   root 644 backend/docs/ultron-studio/ops/hotfix-backend.sh
+   root 755 backend/docs/ultron-studio/ops/v9-abierta.sh
+   root 644 backend/docs/ultron-studio/plans/informes-motores/informe-be-bandeja-quejas.md
+   root 644 backend/docs/ultron-studio/plans/informes-motores/informe-devops-apertura-arneses.md
+   root 644 backend/docs/ultron-studio/plans/informes-motores/informe-reviewer-ola-6.md
+   root 644 backend/docs/ultron-studio/plans/informes-motores/informe-security-bandeja.md
+   root 644 backend/docs/ultron-studio/plans/informes-motores/informe-tester-voz-abierta.md
+   root 644 backend/tests/Feature/Commercial/ScanCommercialFactsCeilingTest.php
+   root 644 backend/tests/Feature/Commercial/SupervisionActivityLabelsTest.php
+   root 644 backend/tests/Feature/Commercial/SupervisionStateTruthTest.php
+   root 644 backend/tests/Feature/Outreach/Run/H9AssistedComplaintTest.php
+   root 644 backend/tests/Feature/UltronStudio/Strategies/UltronStudioStrategyComplaintSimulationTest.php
+2. workers RUNNING: 14 → 14 (otros: 0)
+3. admin/voice/status sin token → 401 (esperado 401)
+4. production.ERROR en laravel*.log: 3260 → 3260
+   vuelta atrás: ( cd /var/www/api && umask 022 && git checkout -q --detach 5f803db ) && cd /var/www/api/backend && sudo -u www-data php artisan queue:restart
+CORRECCIÓN DESPLEGADA SIN DESVÍOS

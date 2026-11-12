@@ -1,0 +1,24 @@
+== 1. Sello del build
+main nuevo: main-4MYNK7NG.js
+== 2. Nada se movió
+main en producción: main-MXKZL6O5.js
+== 3. Respaldo
+total 36
+drwxr-xr-x  2 root root  4096 Nov 12 17:52 .
+drwx------ 80 root root  4096 Nov 12 17:52 ..
+-rw-r--r--  1 root root 20677 Nov 12 17:52 index.html
+-rw-r--r--  1 root root   104 Nov 12 17:52 version.json
+== 4. Publicar (sin --delete)
+== 5. Verificación pública
+{
+  "commit": "b10d593",
+  "dirty": false,
+  "builtAt": "2026-11-12T17:45:53.321Z",
+  "inboxV2": true
+}
+index.html → main-4MYNK7NG.js OK
+main-4MYNK7NG.js       200
+main-MXKZL6O5.js       200
+/marketing/ultron-studio 200
+RESPALDO: /var/backups/ironbody/crm-pre-b10d593-20261112-175250
+CRM PUBLICADO Y VERIFICADO
