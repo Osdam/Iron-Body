@@ -57,8 +57,16 @@ class CommercialEventRecorder
     /**
      * Registra un hecho y, si el motor está encendido, encola su evaluación.
      *
+     * El sujeto puede llegar ya resuelto (array) o como un cierre que lo
+     * resuelve. Si resolverlo exige consultar la base —`CommercialSubjectResolver`
+     * lo hace—, hay que pasar el CIERRE: así la consulta corre dentro del punto
+     * de guardado ({@see self::isolated()}) y su fallo tampoco puede dejar
+     * abortada la transacción de quien llama (I-1, parte 1c). Un sujeto que no
+     * se puede resolver es un registro fallido como cualquier otro:
+     * `commercial.event.record_failed` y `null`.
+     *
      * @param  string  $event  una de CommercialVocabulary::EVENTS
-     * @param  array{lead?:?MarketingLead,member?:?Member,lead_id?:?int,member_id?:?int,opportunity_id?:?int}  $subject
+     * @param  array{lead?:?MarketingLead,member?:?Member,lead_id?:?int,member_id?:?int,opportunity_id?:?int}|\Closure(): array{lead?:?MarketingLead,member?:?Member,lead_id?:?int,member_id?:?int,opportunity_id?:?int}  $subject
      * @param  string|null  $dedupeKey  identidad del HECHO. Sin ella no hay
      *                                  protección contra el doble registro.
      * @return CommercialEvent|null null si no se registró (duplicado, evento
@@ -66,7 +74,7 @@ class CommercialEventRecorder
      */
     public function record(
         string $event,
-        array $subject,
+        array|\Closure $subject,
         array $payload = [],
         ?string $dedupeKey = null,
         ?Carbon $occurredAt = null,
@@ -87,7 +95,7 @@ class CommercialEventRecorder
 
     private function doRecord(
         string $event,
-        array $subject,
+        array|\Closure $subject,
         array $payload,
         ?string $dedupeKey,
         ?Carbon $occurredAt,
@@ -100,24 +108,35 @@ class CommercialEventRecorder
             return null;
         }
 
-        $leadId = $subject['lead_id'] ?? ($subject['lead'] ?? null)?->id;
-        $memberId = $subject['member_id'] ?? ($subject['member'] ?? null)?->id;
-
-        // Un hecho sin sujeto no es accionable: no hay a quién escribirle.
-        if ($leadId === null && $memberId === null) {
+        // Un hecho sin sujeto no es accionable: no hay a quién escribirle. Con
+        // el sujeto ya resuelto se sabe sin tocar la base, como siempre.
+        if (is_array($subject) && $this->subjectIds($subject) === null) {
             return null;
         }
 
-        $key = $dedupeKey !== null
-            ? $this->normalizeKey($event, $dedupeKey)
-            // Sin clave explícita cada llamada es un hecho nuevo. Se permite
-            // porque hay hechos genuinamente irrepetibles (una queja dicha en
-            // una conversación), pero quien llama debería dar una clave siempre
-            // que el hecho tenga identidad propia.
-            : $event.':'.Str::uuid()->toString();
+        $ids = null;
 
         try {
-            $record = $this->isolated(function () use ($key, $leadId, $memberId, $subject, $event, $payload, $occurredAt): ?CommercialEvent {
+            $record = $this->isolated(function () use ($subject, $event, $payload, $dedupeKey, $occurredAt, &$ids): ?CommercialEvent {
+                // El sujeto se resuelve AQUÍ, dentro del punto de guardado: si
+                // resolverlo consulta la base y falla, la transacción de quien
+                // llama vuelve a su estado igual que con un INSERT fallido.
+                $ids = $this->subjectIds($subject instanceof \Closure ? $subject() : $subject);
+
+                if ($ids === null) {
+                    return null;
+                }
+
+                [$leadId, $memberId, $opportunityId] = $ids;
+
+                $key = $dedupeKey !== null
+                    ? $this->normalizeKey($event, $dedupeKey)
+                    // Sin clave explícita cada llamada es un hecho nuevo. Se
+                    // permite porque hay hechos genuinamente irrepetibles (una
+                    // queja dicha en una conversación), pero quien llama debería
+                    // dar una clave siempre que el hecho tenga identidad propia.
+                    : $event.':'.Str::uuid()->toString();
+
                 // Camino rápido: el hecho ya estaba registrado. Es lo NORMAL —la
                 // reconciliación de Wompi revisa los pagos en vuelo cada cinco
                 // minutos— así que no es un error ni merece ruido en el log.
@@ -128,7 +147,7 @@ class CommercialEventRecorder
                 return CommercialEvent::create([
                     'marketing_lead_id' => $leadId,
                     'member_id' => $memberId,
-                    'commercial_opportunity_id' => $subject['opportunity_id'] ?? null,
+                    'commercial_opportunity_id' => $opportunityId,
                     'event' => $event,
                     'dedupe_key' => $key,
                     'payload' => $this->sanitize($payload),
@@ -157,13 +176,32 @@ class CommercialEventRecorder
         ChannelLog::info('commercial.event.recorded', [
             'event' => $event,
             'commercial_event_id' => $record->id,
-            'lead_id' => $leadId,
-            'member_id' => $memberId,
+            'lead_id' => $ids[0],
+            'member_id' => $ids[1],
         ]);
 
         $this->queueEvaluation($record);
 
         return $record;
+    }
+
+    /**
+     * Los identificadores de un sujeto ya resuelto, o null si no hay a quién
+     * escribirle.
+     *
+     * @param  array{lead?:?MarketingLead,member?:?Member,lead_id?:?int,member_id?:?int,opportunity_id?:?int}  $subject
+     * @return array{0: ?int, 1: ?int, 2: ?int}|null lead, socio y oportunidad
+     */
+    private function subjectIds(array $subject): ?array
+    {
+        $leadId = $subject['lead_id'] ?? ($subject['lead'] ?? null)?->id;
+        $memberId = $subject['member_id'] ?? ($subject['member'] ?? null)?->id;
+
+        if ($leadId === null && $memberId === null) {
+            return null;
+        }
+
+        return [$leadId, $memberId, $subject['opportunity_id'] ?? null];
     }
 
     /**

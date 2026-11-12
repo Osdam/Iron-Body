@@ -46,11 +46,10 @@ class MarketingAppointmentCommercialObserver
 
     private function emit(MarketingAppointment $appointment, string $event, string $keySuffix): void
     {
-        $subject = $this->resolver->fromLead($appointment->marketing_lead_id);
-
         $this->recorder->record(
             event: $event,
-            subject: $subject,
+            // Como cierre: se resuelve dentro del punto de guardado del registrador.
+            subject: fn (): array => $this->resolver->fromLead($appointment->marketing_lead_id),
             payload: [
                 'type' => $appointment->type,
                 'scheduled_at' => $appointment->scheduled_at?->toIso8601String(),

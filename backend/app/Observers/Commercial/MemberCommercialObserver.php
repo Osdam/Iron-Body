@@ -42,7 +42,8 @@ class MemberCommercialObserver
 
         $this->recorder->record(
             event: V::EV_APP_LINKED,
-            subject: $this->resolver->fromMember($member->id),
+            // Como cierre: se resuelve dentro del punto de guardado del registrador.
+            subject: fn (): array => $this->resolver->fromMember($member->id),
             payload: ['user_id' => $member->user_id],
             dedupeKey: "member:{$member->id}:app_linked",
         );

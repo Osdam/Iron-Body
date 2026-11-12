@@ -6,6 +6,7 @@ use App\Models\Attendance;
 use App\Services\Commercial\CommercialEventRecorder;
 use App\Services\Commercial\CommercialSubjectResolver;
 use App\Services\Commercial\CommercialVocabulary as V;
+use App\Services\Observability\ChannelLog;
 
 /**
  * Venir al gimnasio, que es la única prueba de que el producto se está usando.
@@ -44,7 +45,21 @@ class AttendanceCommercialObserver
             return;
         }
 
-        $count = $this->entriesFor((int) $attendance->member_id);
+        // El recuento corre DENTRO de la transacción de quien registra la
+        // entrada. Si falla, vuelve a un punto de guardado del registrador antes
+        // de tragarse: tragarlo sin más dejaría esa transacción abortada en
+        // PostgreSQL (25P02) y su COMMIT respondería ROLLBACK (I-1, parte 1c).
+        try {
+            $count = $this->recorder->isolated(fn (): int => $this->entriesFor((int) $attendance->member_id));
+        } catch (\Throwable $e) {
+            ChannelLog::error('commercial.event.record_failed', [
+                'event' => V::EV_FIRST_CHECKIN.'|'.V::EV_ATTENDANCE_MILESTONE,
+                'exception' => class_basename($e),
+                'message' => $e->getMessage(),
+            ]);
+
+            return;
+        }
 
         if ($count === 1) {
             $this->emit($attendance, V::EV_FIRST_CHECKIN, 'first', ['visits' => 1]);
@@ -75,7 +90,8 @@ class AttendanceCommercialObserver
     {
         $this->recorder->record(
             event: $event,
-            subject: $this->resolver->fromMember((int) $attendance->member_id),
+            // Como cierre: se resuelve dentro del punto de guardado del registrador.
+            subject: fn (): array => $this->resolver->fromMember((int) $attendance->member_id),
             payload: $payload,
             // Se ancla al MIEMBRO y al hito, no a la fila de asistencia: si dos
             // lectores del torniquete registran la misma entrada, el hito sigue

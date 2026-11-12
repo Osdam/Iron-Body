@@ -62,7 +62,8 @@ class MembershipCommercialObserver
 
         $this->recorder->record(
             event: $isRenewal ? V::EV_MEMBERSHIP_RENEWED : V::EV_MEMBERSHIP_ACTIVATED,
-            subject: $this->resolver->fromUser($user->id),
+            // Como cierre: se resuelve dentro del punto de guardado del registrador.
+            subject: fn (): array => $this->resolver->fromUser($user->id),
             payload: [
                 'plan' => $user->plan,
                 'previous_end_date' => $previous?->toDateString(),

@@ -11,6 +11,9 @@ use App\Models\PaymentTransaction;
 use App\Models\User;
 use App\Services\Commercial\CommercialEventRecorder;
 use App\Services\Commercial\CommercialVocabulary as V;
+use App\Services\Payments\NequiPushPaymentService;
+use App\Services\Wompi\PaymentStateMachine;
+use App\Services\Wompi\WompiTransactionService;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Support\Facades\Context;
@@ -61,6 +64,9 @@ class CommercialEventRecorderPostgresTest extends TestCase
     /** @var list<int> */
     private array $invoices = [];
 
+    /** @var list<int> */
+    private array $plans = [];
+
     /** @var list<array{level: string, message: string, context: array<string, mixed>}> */
     private array $logs = [];
 
@@ -107,6 +113,10 @@ class CommercialEventRecorderPostgresTest extends TestCase
             while (DB::transactionLevel() > 0) {
                 DB::rollBack();
             }
+            // Una transacción abierta con SQL directo (1c, MENOR 1): Laravel no la cuenta.
+            if ($this->isPostgres() && DB::connection()->getPdo()->inTransaction()) {
+                DB::connection()->getPdo()->exec('ROLLBACK');
+            }
             if ($this->isPostgres()) {
                 DB::statement('RESET lock_timeout');
                 DB::statement('RESET deadlock_timeout');
@@ -116,6 +126,13 @@ class CommercialEventRecorderPostgresTest extends TestCase
             DB::table('commercial_events')->delete();
             DB::table('payment_transactions')->whereIn('id', $this->transactions)->delete();
             DB::table('electronic_invoices')->whereIn('id', $this->invoices)->delete();
+            if ($this->user !== null) {
+                // Lo que deja la activación de un pago de la prueba (1c): el pago legado y su factura.
+                $pagos = DB::table('payments')->where('user_id', $this->user->id)->pluck('id')->all();
+                DB::table('electronic_invoices')->where('source_type', Payment::class)->whereIn('source_id', $pagos)->delete();
+                DB::table('payments')->whereIn('id', $pagos)->delete();
+            }
+            DB::table('plans')->whereIn('id', $this->plans)->delete();
             if ($this->member !== null) {
                 DB::table('members')->where('id', $this->member->id)->delete();
             }
@@ -436,6 +453,179 @@ class CommercialEventRecorderPostgresTest extends TestCase
 
         pg_query($this->rival(), 'ROLLBACK');
         $this->assertSame('siguiente sentencia', $this->committedInvoice($invoice->id));
+    }
+
+    // ── (1c) El sujeto se resuelve dentro de la protección ─────────────────
+
+    /**
+     * Un pago aprobado que compra un plan, del usuario de la prueba. Sin
+     * `member_id` en el pago: así el observador del PAGO no consulta nada, y lo
+     * único que lee `marketing_leads` es el resolver de los observadores que
+     * corren DENTRO de la activación (membresía y factura).
+     */
+    private function paymentForPlan(string $provider, ?int $durationDays): PaymentTransaction
+    {
+        $planId = null;
+        if ($durationDays !== null) {
+            $planId = (int) DB::table('plans')->insertGetId([
+                'name' => 'Plan 1c '.uniqid(), 'price' => 80000, 'duration_days' => $durationDays, 'active' => true,
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+            $this->plans[] = $planId;
+        }
+        $tx = PaymentTransaction::create([
+            'reference' => 'REF-1C-'.uniqid(), 'idempotency_key' => 'idem-1c-'.uniqid(),
+            'member_id' => null, 'user_id' => $this->user->id, 'plan_id' => $planId,
+            'amount' => 80000, 'currency' => 'COP', 'status' => 'pending', 'provider' => $provider,
+        ]);
+        $this->transactions[] = $tx->id;
+
+        return $tx;
+    }
+
+    /**
+     * Otra sesión tiene `marketing_leads` con ACCESS EXCLUSIVE (un ALTER durante
+     * un despliegue): la lectura del lead del socio en `CommercialSubjectResolver`
+     * cae por `lock_timeout`. No se bloquea `members`: entonces fallaría también
+     * el `UPDATE members` propio del activador, que es otro asunto (§1c.5).
+     */
+    private function resolverReadFails(): void
+    {
+        $this->assertNotFalse(pg_query($this->rival(), 'BEGIN'));
+        $this->assertNotFalse(pg_query($this->rival(), 'LOCK TABLE marketing_leads IN ACCESS EXCLUSIVE MODE'));
+        DB::statement("SET lock_timeout = '300ms'");
+    }
+
+    private function committedMembershipEnd(): ?string
+    {
+        return $this->scalar($this->monitor(), 'select membership_end_date from users where id = $1', [$this->user->id]);
+    }
+
+    /**
+     * La cadena del IMPORTANTE 1 del reviewer: `transitionTo()` → `activate()` →
+     * `MembershipPeriod::apply()` (su propio `DB::transaction` anidado) →
+     * `$user->save()` → `MembershipCommercialObserver` → resolver.
+     *
+     * Con el código anterior el resolver lanzaba DENTRO del nivel anidado de
+     * `MembershipPeriod`: Laravel volvía a su punto de guardado (un
+     * `lock_timeout` no es un error «de concurrencia»), `activate()` se tragaba
+     * la excepción y el pago quedaba aprobado SIN membresía, en silencio y sin
+     * reintento (la activación solo corre al ENTRAR en approved).
+     */
+    public function test_por_wompi_si_la_lectura_del_resolver_falla_el_pago_queda_aprobado_y_la_membresia_aplicada(): void
+    {
+        $this->onlyPostgres('LOCK TABLE y lock_timeout no existen en SQLite.');
+        $tx = $this->paymentForPlan('wompi', 30);
+        $this->assertNull($this->committedMembershipEnd());
+        $this->resolverReadFails();
+
+        WompiTransactionService::make()->transitionTo($tx, PaymentStateMachine::APPROVED, [], gatewayConfirmed: true);
+
+        pg_query($this->rival(), 'ROLLBACK');
+        $this->assertSame('approved', $this->committedStatus($tx));
+        $this->assertNotNull($this->committedMembershipEnd(), 'la membresía no se aplicó');
+        $this->assertSame(
+            $this->committedMembershipEnd(),
+            $this->scalar($this->monitor(), 'select period_end from payments where reference = $1', [$tx->reference]),
+            'el periodo del pago legado es el de la membresía',
+        );
+        $this->assertSame(0, (int) $this->scalar($this->monitor(), "select count(*) from commercial_events where event like 'membership_%'"));
+        $this->assertNotSame([], $this->logged('commercial.event.record_failed'));
+    }
+
+    /**
+     * El resolver del observador de la factura que encola el activador
+     * (`InvoicingService::enqueue()`, con su propio `catch (Throwable)`). Sin
+     * plan: la membresía no se toca y el primer resolver que lee es el de la
+     * factura. Con el código anterior el `firstOrCreate` de la factura
+     * (`createOrFirst`, con su punto de guardado de Laravel) volvía atrás, el
+     * `catch` se lo tragaba y el pago quedaba aprobado SIN factura, en silencio.
+     */
+    public function test_por_wompi_si_la_lectura_del_resolver_de_la_factura_falla_el_pago_queda_aprobado(): void
+    {
+        $this->onlyPostgres('LOCK TABLE y lock_timeout no existen en SQLite.');
+        $tx = $this->paymentForPlan('wompi', null);
+        $this->resolverReadFails();
+
+        WompiTransactionService::make()->transitionTo($tx, PaymentStateMachine::APPROVED, [], gatewayConfirmed: true);
+
+        pg_query($this->rival(), 'ROLLBACK');
+        $this->assertSame('approved', $this->committedStatus($tx));
+        $this->assertSame(1, (int) $this->scalar($this->monitor(),
+            'select count(*) from electronic_invoices i join payments p on p.id = i.source_id where p.reference = $1 and i.source_type = $2',
+            [$tx->reference, Payment::class]), 'la factura pendiente se encoló');
+    }
+
+    /**
+     * Lo mismo por Nequi (`NequiPushPaymentService::transition()`), el camino
+     * que no tiene ninguna sentencia propia después de activar. Con el código
+     * anterior: aprobado y sin factura, como por Wompi. `transition()` es
+     * protegida; se llega por una subclase de la prueba que solo la expone.
+     */
+    public function test_por_nequi_si_la_lectura_del_resolver_de_la_factura_falla_el_pago_queda_aprobado(): void
+    {
+        $this->onlyPostgres('LOCK TABLE y lock_timeout no existen en SQLite.');
+        $tx = $this->paymentForPlan('nequi', null);
+        $this->resolverReadFails();
+        $nequi = new class(new PaymentStateMachine, []) extends NequiPushPaymentService
+        {
+            public function approve(PaymentTransaction $tx): PaymentTransaction
+            {
+                return $this->transition($tx, PaymentTransaction::STATUS_APPROVED);
+            }
+        };
+
+        $nequi->approve($tx);   // no lanza
+
+        pg_query($this->rival(), 'ROLLBACK');
+        $this->assertSame('approved', $this->committedStatus($tx), 'el COMMIT se tragó la aprobación del pago');
+        $this->assertSame(1, (int) $this->scalar($this->monitor(),
+            'select count(*) from electronic_invoices i join payments p on p.id = i.source_id where p.reference = $1 and i.source_type = $2',
+            [$tx->reference, Payment::class]), 'la factura pendiente se encoló');
+    }
+
+    /**
+     * El resolver del observador del PAGO (`fromMember`): pago con socio y sin
+     * plan. Con el código anterior la excepción salía por `$fresh->save()` de
+     * `transitionTo()`: el pago no se aprobaba y la petición acababa en error
+     * (ruidoso, con reintento de Wompi o de la reconciliación).
+     */
+    public function test_por_wompi_con_socio_si_la_lectura_del_resolver_del_pago_falla_el_pago_queda_aprobado(): void
+    {
+        $this->onlyPostgres('LOCK TABLE y lock_timeout no existen en SQLite.');
+        $tx = $this->paymentForPlan('wompi', null);
+        $tx->forceFill(['member_id' => $this->member->id])->save();
+        $this->resolverReadFails();
+
+        WompiTransactionService::make()->transitionTo($tx, PaymentStateMachine::APPROVED, [], gatewayConfirmed: true);
+
+        pg_query($this->rival(), 'ROLLBACK');
+        $this->assertSame('approved', $this->committedStatus($tx));
+        $this->assertSame(0, $this->committedEvents('payment_approved:tx:'.$tx->id.':approved'), 'el hecho se pierde (queda en el log); el pago no');
+        $this->assertNotSame([], array_filter($this->logged('commercial.event.record_failed'), fn (array $l): bool => $l['context']['event'] === V::EV_PAYMENT_APPROVED));
+    }
+
+    /**
+     * (1c, MENOR 1 del reviewer) Una transacción abierta con SQL directo:
+     * Laravel no la cuenta (`transactionLevel() === 0`), `PDO::inTransaction()`
+     * sí (en pdo_pgsql lee el estado real de libpq).
+     */
+    public function test_una_transaccion_abierta_por_fuera_de_laravel_tambien_queda_protegida(): void
+    {
+        $this->onlyPostgres('en SQLite una sentencia que falla no aborta la transacción, y PHP 8.3 no ve un BEGIN directo.');
+        $pdo = DB::connection()->getPdo();
+        $pdo->exec('BEGIN');
+        $this->assertSame(0, DB::transactionLevel());
+        Context::add('correlation_id', 'no-es-un-uuid');
+
+        DB::table('members')->where('id', $this->member->id)->update(['full_name' => 'Escrito por quien llama']);
+        $hecho = app(CommercialEventRecorder::class)->record(V::EV_PAYMENT_APPROVED, ['member' => $this->member], [], 'tx:raw-begin:approved');
+        DB::table('members')->where('id', $this->member->id)->update(['phone' => '3000000000']);   // sigue sana
+        $pdo->exec('COMMIT');
+
+        $this->assertNull($hecho);
+        $this->assertSame('Escrito por quien llama', $this->scalar($this->monitor(), 'select full_name from members where id = $1', [$this->member->id]));
+        $this->assertSame('3000000000', $this->scalar($this->monitor(), 'select phone from members where id = $1', [$this->member->id]));
     }
 
     // ── (c) Sin transacción abierta, todo igual que hoy ─────────────────────

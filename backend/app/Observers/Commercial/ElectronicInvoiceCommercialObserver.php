@@ -65,15 +65,12 @@ class ElectronicInvoiceCommercialObserver
 
     private function emit(ElectronicInvoice $invoice, string $event, string $keySuffix): void
     {
-        $subject = $this->subjectFor($invoice);
-
-        if ($subject['member_id'] === null && $subject['lead_id'] === null) {
-            return; // factura de mostrador sin ficha: no hay a quién escribir
-        }
-
         $this->recorder->record(
             event: $event,
-            subject: $subject,
+            // Como cierre: la búsqueda del origen y la del socio corren dentro del
+            // punto de guardado del registrador. Una factura de mostrador sin ficha
+            // resuelve un sujeto vacío y no se registra nada, como antes.
+            subject: fn (): array => $this->subjectFor($invoice),
             payload: [
                 'full_number' => $invoice->full_number,
                 'total' => $invoice->total,

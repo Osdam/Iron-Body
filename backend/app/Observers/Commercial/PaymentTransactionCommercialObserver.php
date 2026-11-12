@@ -80,11 +80,11 @@ class PaymentTransactionCommercialObserver
 
     private function record(string $event, PaymentTransaction $tx, string $keySuffix): void
     {
-        $subject = $this->resolver->fromMember($tx->member_id);
-
         $this->recorder->record(
             event: $event,
-            subject: $subject,
+            // Como cierre: el registrador lo resuelve dentro de su punto de
+            // guardado, así que un fallo al consultar tampoco aborta el cobro.
+            subject: fn (): array => $this->resolver->fromMember($tx->member_id),
             payload: [
                 'reference' => $tx->reference,
                 'plan_id' => $tx->plan_id,

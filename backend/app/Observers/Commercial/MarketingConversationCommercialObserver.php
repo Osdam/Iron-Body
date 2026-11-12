@@ -36,11 +36,10 @@ class MarketingConversationCommercialObserver
             return;
         }
 
-        $subject = $this->resolver->fromLead($conversation->lead_id);
-
         $this->recorder->record(
             event: V::EV_HUMAN_REQUESTED,
-            subject: $subject + ['opportunity_id' => null],
+            // Como cierre: se resuelve dentro del punto de guardado del registrador.
+            subject: fn (): array => $this->resolver->fromLead($conversation->lead_id) + ['opportunity_id' => null],
             payload: [
                 'source' => $conversation->human_takeover_source,
                 'conversation_id' => $conversation->id,

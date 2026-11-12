@@ -2,10 +2,17 @@
 
 namespace Tests\Feature\Commercial;
 
+use App\Models\Attendance;
 use App\Models\CommercialEvent;
 use App\Models\ElectronicInvoice;
+use App\Models\MarketingAppointment;
+use App\Models\MarketingConversation;
+use App\Models\MarketingLead;
 use App\Models\Member;
+use App\Models\PaymentTransaction;
+use App\Models\User;
 use App\Services\Commercial\CommercialEventRecorder;
+use App\Services\Commercial\CommercialSubjectResolver;
 use App\Services\Commercial\CommercialVocabulary as V;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -13,6 +20,7 @@ use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -243,6 +251,190 @@ class CommercialEventRecorderContainmentTest extends TestCase
         $this->assertNull($malo);
         $this->assertInstanceOf(CommercialEvent::class, $bueno);
         $this->assertSame(['payment_approved:tx:b:approved'], CommercialEvent::query()->pluck('dedupe_key')->all());
+    }
+
+    /**
+     * (1c, MENOR 2 del reviewer) En el camino feliz el punto de guardado se
+     * LIBERA: después de un `record()` con éxito ya no existe. Se comprueba
+     * dentro de un punto de guardado de la propia prueba, porque en PostgreSQL
+     * el error «no existe» abortaría la transacción.
+     */
+    public function test_en_el_camino_feliz_el_punto_de_guardado_se_libera(): void
+    {
+        $socio = $this->member();
+
+        DB::transaction(function () use ($socio): void {
+            $this->assertInstanceOf(CommercialEvent::class, $this->recorder->record(V::EV_PAYMENT_APPROVED, ['member_id' => $socio->id], [], 'tx:release:approved'));
+            $this->assertNull($this->recorder->record(V::EV_PAYMENT_APPROVED, ['member_id' => $socio->id], [], 'tx:release:approved'), 'el duplicado también');
+
+            $pdo = DB::connection()->getPdo();
+            $pdo->exec('SAVEPOINT prueba_release');
+            try {
+                $pdo->exec('ROLLBACK TO SAVEPOINT commercial_event_record');
+                $this->fail('el punto de guardado del registrador sigue vivo: no se liberó');
+            } catch (\PDOException $e) {
+                $this->assertMatchesRegularExpression('/savepoint/i', $e->getMessage());
+            }
+            $pdo->exec('ROLLBACK TO SAVEPOINT prueba_release');
+            $pdo->exec('RELEASE SAVEPOINT prueba_release');
+            $this->member('5050505050');   // sigue sana
+        });
+
+        $this->assertSame(1, CommercialEvent::query()->count());
+    }
+
+    /**
+     * (1c) El sujeto como CIERRE se resuelve dentro del punto de guardado: si
+     * resolverlo falla, `null`, `commercial.event.record_failed` y la transacción
+     * de quien llama sigue sana. Aquí falla en los dos motores (una tabla que no
+     * existe); el bloqueo real de `marketing_leads` vive en la prueba de PG.
+     */
+    public function test_un_sujeto_que_no_se_puede_resolver_no_rompe_la_transaccion_de_quien_llama(): void
+    {
+        [$hecho, $socio] = DB::transaction(function (): array {
+            $socio = $this->member();
+            $hecho = $this->recorder->record(V::EV_PAYMENT_APPROVED, function () use ($socio): array {
+                DB::table('tabla_que_no_existe_1c')->where('id', $socio->id)->value('id');
+
+                return ['member_id' => $socio->id];
+            }, [], 'tx:closure:approved');
+            $this->member('6060606060');   // sigue sana (en PG, sin el punto de guardado: 25P02)
+
+            return [$hecho, $socio];
+        });
+
+        $this->assertNull($hecho);
+        $this->assertTrue(Member::query()->whereKey($socio->id)->exists());
+        $this->assertSame(0, CommercialEvent::query()->count());
+        $this->assertSame(['error'], $this->logged('commercial.event.record_failed'));
+
+        // Y el cierre que SÍ resuelve registra como un array.
+        $ok = DB::transaction(fn () => $this->recorder->record(V::EV_PAYMENT_APPROVED, fn (): array => ['member_id' => $socio->id], [], 'tx:closure-ok:approved'));
+        $this->assertSame($socio->id, $ok->member_id);
+    }
+
+    /**
+     * (1c) La consulta PROPIA del observador de asistencias (`entriesFor()`, el
+     * recuento de visitas que decide si es la primera o un hito) corre dentro de
+     * la transacción de quien registra la entrada y va también por `isolated()`.
+     *
+     * Un recuento que falla de verdad no se puede provocar sin dobles (el INSERT
+     * de la asistencia ya tiene la tabla). Se provoca un error REAL del servidor
+     * justo antes del recuento, en la misma conexión: en PostgreSQL deja la
+     * transacción abortada exactamente igual que si fallara el recuento.
+     */
+    public function test_un_recuento_de_visitas_que_falla_no_rompe_la_transaccion_de_la_asistencia(): void
+    {
+        DB::connection()->beforeExecuting(function (string $sql): void {
+            if (str_contains($sql, 'count(distinct date(captured_at))')) {
+                DB::connection()->getPdo()->exec('select * from tabla_que_no_existe_1c_asistencias');
+            }
+        });
+
+        [$asistencia, $socio] = DB::transaction(function (): array {
+            $socio = $this->member();
+            $usuario = User::query()->create(['name' => 'Socio 1c', 'email' => 'socio-1c-'.uniqid().'@iron.test', 'password' => 'x']);
+            $asistencia = Attendance::query()->create([
+                'user_id' => $usuario->id, 'member_id' => $socio->id, 'action' => 'entry', 'source' => 'manual', 'captured_at' => now(),
+            ]);
+            $this->member('7070707070');   // sigue sana (en PG, sin el punto de guardado: 25P02)
+
+            return [$asistencia, $socio];
+        });
+
+        $this->assertTrue(Attendance::query()->whereKey($asistencia->id)->exists(), 'la asistencia queda');
+        $this->assertSame(0, CommercialEvent::query()->count(), 'sin recuento no se decide el hecho: no se registra nada');
+        $fallos = array_values(array_filter($this->logs, fn (array $l): bool => $l['message'] === 'commercial.event.record_failed'));
+        $this->assertCount(1, $fallos);
+        $this->assertSame(V::EV_FIRST_CHECKIN.'|'.V::EV_ATTENDANCE_MILESTONE, $fallos[0]['context']['event']);
+    }
+
+    /** @return array<string, array{0: string, 1: string}> */
+    public static function observadoresQueResuelvenSujeto(): array
+    {
+        return [
+            'pago' => ['pago', V::EV_PAYMENT_APPROVED],
+            'membresía' => ['membresia', V::EV_MEMBERSHIP_ACTIVATED],
+            'ficha enlazada' => ['ficha', V::EV_APP_LINKED],
+            'cita' => ['cita', V::EV_APPOINTMENT_CREATED],
+            'conversación' => ['conversacion', V::EV_HUMAN_REQUESTED],
+            'asistencia' => ['asistencia', V::EV_FIRST_CHECKIN],
+            'factura' => ['factura', V::EV_INVOICE_REQUESTED],
+        ];
+    }
+
+    /**
+     * (1c) Los observadores pasan el sujeto como CIERRE: si resolverlo falla, el
+     * fallo se queda dentro de `record()` (log `record_failed`, nada registrado)
+     * y no sale por el `save()` de quien escribe. Antes salía: el resolver
+     * corría en el observador, fuera de la protección. Aquí el resolver falla con
+     * una excepción de PHP (un doble), así que esto fija DÓNDE se resuelve; que
+     * un fallo de la BASE no deje abortada la transacción lo fijan las pruebas
+     * de PostgreSQL de la cadena de pagos.
+     */
+    #[DataProvider('observadoresQueResuelvenSujeto')]
+    public function test_si_el_resolver_falla_el_observador_no_lanza_y_no_registra(string $caso, string $evento): void
+    {
+        $lead = MarketingLead::create([
+            'channel' => 'whatsapp', 'source' => 'inbound', 'meta_user_id' => '573150000001',
+            'phone' => '3150000001', 'name' => 'Prospecto 1c', 'status' => MarketingLead::STATUS_NEW,
+        ]);
+        $usuario = User::create(['name' => 'Usuario 1c', 'email' => 'u1c-'.uniqid().'@iron.test', 'password' => 'x']);
+        $socio = $this->member();
+        $pago = PaymentTransaction::create([
+            'reference' => 'REF-1C-'.uniqid(), 'idempotency_key' => 'idem-1c-'.uniqid(), 'member_id' => $socio->id,
+            'user_id' => $usuario->id, 'amount' => 80000, 'currency' => 'COP', 'status' => 'pending', 'provider' => 'wompi',
+        ]);
+        $conversacion = MarketingConversation::create([
+            'lead_id' => $lead->id, 'channel' => 'whatsapp', 'status' => 'open', 'ai_enabled' => true, 'human_takeover' => false,
+        ]);
+        $sinApp = $this->member('8080808080');
+
+        $this->app->instance(CommercialSubjectResolver::class, new class extends CommercialSubjectResolver
+        {
+            public function fromMember(?int $memberId): array
+            {
+                throw new \RuntimeException('base caída (resolver)');
+            }
+
+            public function fromLead(?int $leadId): array
+            {
+                throw new \RuntimeException('base caída (resolver)');
+            }
+
+            public function fromUser(?int $userId): array
+            {
+                throw new \RuntimeException('base caída (resolver)');
+            }
+        });
+
+        DB::transaction(function () use ($caso, $lead, $usuario, $socio, $pago, $conversacion, $sinApp): void {
+            match ($caso) {
+                'pago' => $pago->update(['status' => 'approved']),
+                'membresia' => $usuario->update(['membership_end_date' => now()->addDays(30)->toDateString()]),
+                'ficha' => $sinApp->update(['user_id' => $usuario->id]),
+                'cita' => MarketingAppointment::create([
+                    'marketing_lead_id' => $lead->id, 'type' => MarketingAppointment::TYPE_VISIT, 'title' => 'Visita 1c',
+                    'status' => MarketingAppointment::STATUS_SCHEDULED, 'source' => MarketingAppointment::SOURCE_CRM,
+                    'scheduled_at' => now()->addDay(),
+                ]),
+                'conversacion' => $conversacion->update(['human_takeover' => true, 'human_takeover_source' => 'customer_request']),
+                'asistencia' => Attendance::query()->create([
+                    'user_id' => $usuario->id, 'member_id' => $socio->id, 'action' => 'entry', 'source' => 'manual', 'captured_at' => now(),
+                ]),
+                'factura' => ElectronicInvoice::create([
+                    'source_type' => PaymentTransaction::class, 'source_id' => $pago->id, 'type' => 'invoice',
+                    'status' => 'pending', 'full_number' => 'IBFE-1C', 'total' => '80000.00',
+                ]),
+            };
+            $this->member('9090909090');   // la transacción de quien escribe sigue
+        });
+
+        $this->assertSame(0, CommercialEvent::query()->where('event', $evento)->count());
+        $fallos = array_values(array_filter($this->logs, fn (array $l): bool => $l['message'] === 'commercial.event.record_failed'));
+        $this->assertCount(1, $fallos);
+        $this->assertSame($evento, $fallos[0]['context']['event']);
+        $this->assertSame('RuntimeException', $fallos[0]['context']['exception']);
     }
 
     /**
