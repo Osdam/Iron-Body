@@ -190,7 +190,7 @@ No tocar ningún fichero de E2E en `T` fue deliberado: el arnés es de devops y 
 
 ## 7. Procedimiento para el lead el día de la apertura
 
-`T` = **`3287769b`** y, detrás, `T2` = **`216b0f1b`** (la condición I-1 de la revisión; ver la nota del lead al final). Los dos están en la rama local `prep/voice-calls-open-tests`, worktree `_worktrees/ultron-voz-abierta/Iron-Body`, encima de `X'` = `e61ef7a2`, que NUNCA se sube. Los worktrees comparten el almacén de objetos: `3287769b` y `216b0f1b` son visibles desde cualquier árbol del mismo repo sin `fetch` [C: es el mismo `.git` común]. Copia en el repositorio, por si la rama local se pierde: `ops/apertura-llamadas/` (dos parches y su README). *(Corregido por el lead tras la revisión, I-3c: aquí se citaba por error `803cd016`, la primera versión de `T`, que no se usa.)*
+`T` = **`3287769b`** y, detrás, `T2` = **`216b0f1b`** (la condición I-1 de la revisión) y `T3` = **`33ba6299`** (sus menores; ver la nota del lead al final). Los tres están en la rama local `prep/voice-calls-open-tests`, worktree `_worktrees/ultron-voz-abierta/Iron-Body`, encima de `X'` = `e61ef7a2`, que NUNCA se sube. Los worktrees comparten el almacén de objetos: `3287769b`, `216b0f1b` y `33ba6299` son visibles desde cualquier árbol del mismo repo sin `fetch` [C: es el mismo `.git` común]. Copia en el repositorio, por si la rama local se pierde: `ops/apertura-llamadas/` (tres parches y su README). *(Corregido por el lead tras la revisión, I-3c: aquí se citaba por error `803cd016`, la primera versión de `T`, que no se usa.)*
 
 **Antes del día** (sin tocar `main`):
 1. Veredicto del reviewer sobre `T` (y de security si lo pide: la copia cerrada carga código de `app/` transformado en memoria).
@@ -203,9 +203,9 @@ No tocar ningún fichero de E2E en `T` fue deliberado: el arnés es de devops y 
 git rev-parse HEAD origin/main                   # los dos, el mismo commit
 git log -1 --format='%H %s'                      # tiene que ser X: «voice(calls-open): …»
 git show --stat --format= HEAD                   # 1 fichero, backend/app/Services/Voice/VoiceCallPolicy.php, 1+ 1-
-git cherry-pick 3287769b 216b0f1b                # T y T2, en orden (o los rehechos del paso 2)
-git range-diff 3287769b^..216b0f1b HEAD~2..HEAD  # «1: 3287769b = 1: <nuevo>» y «2: 216b0f1b = 2: <nuevo>»: los mismos parches
-git diff --name-only HEAD~2 HEAD | grep -v '^backend/tests/' ; echo "fuera de tests/: $?"  # tiene que imprimir 1 (nada fuera)
+git cherry-pick 3287769b 216b0f1b 33ba6299       # T, T2 y T3, en orden (o los rehechos del paso 2)
+git range-diff 3287769b^..33ba6299 HEAD~3..HEAD  # «=» en las tres líneas: los mismos parches
+git diff --name-only HEAD~3 HEAD | grep -v '^backend/tests/' ; echo "fuera de tests/: $?"  # tiene que imprimir 1 (nada fuera)
 git log -1 --format=%s -- backend/app/Services/Voice/VoiceCallPolicy.php                   # sigue siendo X (h8-voice-scope.sh lo exige)
 cd backend
 # Los 21 ficheros de §1 y las 3 pruebas de la copia cerrada, uno por línea, en `docs/ultron-studio/ops/apertura-llamadas/bateria-rapida.txt` (lead, I-3d).
@@ -304,7 +304,9 @@ M13–M17 son el argumento a favor de la copia cerrada: son cambios **invisibles
 - **M-1, también en `T2`:** `ClosedPolicyCopy::load()` exige las dos líneas antes de cargar cada copia.
 - **I-3 (a–d), hecha en los documentos:** el paso 9 de `ops/RUNBOOK_PRIMERA_LLAMADA.md` lleva el procedimiento completo, y el §7 de este informe quedó corregido en su sitio (árbol limpio con `HEAD == origin/main`, los dos commits, y la lista de la batería rápida en `ops/apertura-llamadas/bateria-rapida.txt`, con la orden probada tal cual).
 - **M-4, hecha:** la enmienda del H8 propuesta en §4.3 dice ya seis clases.
-- **Copia en el repositorio:** `ops/apertura-llamadas/` guarda `T` y `T2` como parches, por si la rama local se pierde. Comprobado con un índice temporal: aplicados sobre `e61ef7a2` dan el mismo árbol que `216b0f1b` (`87a64d29bf9c`).
-- **El día de la apertura se aplican los dos, en orden:** `git cherry-pick 3287769b 216b0f1b`. `803cd016` es la primera versión de `T`: no se usa.
-- **Sin hacer, anotado:** I-2 y H-1 (enmendar `v9-abierta.sh` y `h8-e2e.sh`, que mueren con la apertura en la punta), I-4 (dejar escrito cómo se reabre tras una vuelta atrás de nivel 4), M-2 (que el recorrido de lectores incluya a quien llama a `decide(`), M-3 (tres docblocks y una línea del README del fixture, de la primera versión) y M-5 (el nombre de una prueba fuera de `T`).
+- **Copia en el repositorio:** `ops/apertura-llamadas/` guarda `T`, `T2` y `T3` como parches, por si la rama local se pierde. Comprobado con un índice temporal: aplicados sobre `e61ef7a2` dan el mismo árbol que `33ba6299`.
+- **M-2, M-3 y M-5, hechas por el lead** en un tercer commit de la rama local: **`33ba6299`** (`T3`). El recorrido de lectores exige ahora la lista exacta de quienes llaman a `VoiceCallPolicy::decide(` (un llamador nuevo sin copia cerrada pone la prueba en rojo: comprobado con un fichero de prueba); tres docblocks y la línea del README del fixture dicen lo que hay; y el docblock de `UltronStudioVoiceOutboundOnlyTest` ya no dice «con la constante cerrada». La batería rápida sigue en `OK (624 tests)` y el comprobador del fixture en `RESULTADO: OK`.
+- **I-2, H-1 e I-4, hechas por devops** (`informe-devops-apertura-arneses.md`): los dos arneses funcionan con la apertura en la punta y el camino de la reapertura está en la sección E del runbook.
+- **El día de la apertura se aplican los tres, en orden:** `git cherry-pick 3287769b 216b0f1b 33ba6299`. `803cd016` es la primera versión de `T`: no se usa.
+- **Sin hacer, anotado:** que un reviewer vuelva a mirar `T2` y `T3`; y, del informe de devops, las fechas fijas de las pruebas E2E con arnés, que ya son pasado (§2.4 de su informe).
 - **Ramas locales que sobran** (su borrado necesita la autorización del propietario): `prep/voice-calls-open-tests-v1`, `tmp/solo-t-c4` y `tmp/solo-t2-c4`.

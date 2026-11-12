@@ -1,7 +1,7 @@
 From 216b0f1b09f8cb6170cf8cd6c4e23bbe2cb9aef6 Mon Sep 17 00:00:00 2001
 From: Alejandro <alejandro@gmail.com>
 Date: Wed, 11 Nov 2026 22:44:45 -0500
-Subject: [PATCH 2/2] =?UTF-8?q?test(voice):=20la=20llamada=20aceptada=20se?=
+Subject: [PATCH 2/3] =?UTF-8?q?test(voice):=20la=20llamada=20aceptada=20se?=
  =?UTF-8?q?=20encola=20UNA=20sola=20vez,=20y=20la=20copia=20cerrada=20exig?=
  =?UTF-8?q?e=20sus=20dos=20l=C3=ADneas=20al=20cargarse=20(C-4,=20tras=20la?=
  =?UTF-8?q?=20revisi=C3=B3n)?=

@@ -1,0 +1,157 @@
+From 33ba62993c1530a375fc472ae6779d2f6036ae6c Mon Sep 17 00:00:00 2001
+From: Alejandro <alejandro@gmail.com>
+Date: Thu, 12 Nov 2026 00:18:41 -0500
+Subject: [PATCH 3/3] =?UTF-8?q?test(voice):=20quien=20llama=20a=20la=20pol?=
+ =?UTF-8?q?=C3=ADtica=20del=20H6=20tambi=C3=A9n=20necesita=20su=20copia=20?=
+ =?UTF-8?q?cerrada,=20y=20los=20comentarios=20dicen=20lo=20que=20hay=20(C-?=
+ =?UTF-8?q?4,=20menores=20de=20la=20revisi=C3=B3n)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Menores M-2, M-3 y M-5 de la revisión de `T` (informe-reviewer-voz-abierta.md).
+Solo `tests/`; ninguna aserción se afloja.
+
+- M-2: el recorrido «todo lector que decide tiene su copia cerrada» solo veía
+  el literal `VoiceCallPolicy::CALLS_ENABLED_IN_CODE`. Un decisor nuevo que la
+  leyera a través de `VoiceCallPolicy::decide(` no quedaba obligado a tener
+  copia. Ahora la lista de quienes llaman a la política es exacta
+  (`OutboundPolicy`, que tiene copia, y `StudioIntegrations`, que solo pinta el
+  panel) y el único sin copia tiene que ser el panel. Un llamador nuevo pone la
+  prueba en rojo (comprobado con un fichero de prueba).
+- M-3: tres docblocks y una línea del README del fixture decían que el estado
+  cerrado solo lo recorría la copia del E2E; ahora lo prueban además
+  `ElevenLabsClosedCopyTest` y `PlaceOutboundVoiceCallClosedCopyTest`, y la
+  copia cambia dos líneas, no una.
+- M-5: el docblock de `UltronStudioVoiceOutboundOnlyTest` decía «con la
+  constante de llamadas cerrada»; la prueba vale en los dos estados.
+
+Con la constante abierta: la batería rápida, 624 pruebas en verde.
+
+Va detrás de `216b0f1b`: el día de la apertura se aplican los tres, en orden.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01X8FX3k99KGLKfgiKShUNUF
+---
+ .../Telephony/PlaceOutboundVoiceCallTest.php  |  5 +++--
+ .../UltronStudioVoiceOutboundOnlyTest.php     |  6 +++++-
+ .../Voice/ElevenLabsAgentDeployerTest.php     |  3 ++-
+ .../Unit/Voice/ElevenLabsCallStarterTest.php  |  1 +
+ .../Voice/VoiceCallPolicyClosedCopyTest.php   | 19 +++++++++++++++----
+ .../integrations-cases.README.md              |  2 +-
+ 6 files changed, 27 insertions(+), 9 deletions(-)
+
+diff --git a/backend/tests/Feature/Telephony/PlaceOutboundVoiceCallTest.php b/backend/tests/Feature/Telephony/PlaceOutboundVoiceCallTest.php
+index cfc439d4..c36827fc 100644
+--- a/backend/tests/Feature/Telephony/PlaceOutboundVoiceCallTest.php
++++ b/backend/tests/Feature/Telephony/PlaceOutboundVoiceCallTest.php
+@@ -28,8 +28,9 @@
+  * salientes apagadas cancela con `outbound_disabled` sin llegar al iniciador
+  * y libera la reserva; se prueba de punta a punta. El job con todo en regla
+  * (marca una vez, con lo sellado) lo recorre `PlaceOutboundVoiceCallRecheckTest`;
+- * con la constante cerrada (cancela por ella antes de nada) solo la copia
+- * cerrada del E2E. Aquí se prueban además, por separado, el CUERPO de la
++ * con la constante cerrada (cancela por ella antes de nada),
++ * `PlaceOutboundVoiceCallClosedCopyTest` con la copia cerrada en proceso y la
++ * copia cerrada del E2E. Aquí se prueban además, por separado, el CUERPO de la
+  * petición (contra las aserciones del fixture) y el MAPEO de cada resultado
+  * del iniciador a la fila, el evento y la reserva.
+  */
+diff --git a/backend/tests/Feature/UltronStudio/UltronStudioVoiceOutboundOnlyTest.php b/backend/tests/Feature/UltronStudio/UltronStudioVoiceOutboundOnlyTest.php
+index 5052477c..d7a1a41d 100644
+--- a/backend/tests/Feature/UltronStudio/UltronStudioVoiceOutboundOnlyTest.php
++++ b/backend/tests/Feature/UltronStudio/UltronStudioVoiceOutboundOnlyTest.php
+@@ -221,7 +221,11 @@ public function assignNumber(string $providerNumberId, ?string $agentId): VoiceD
+         $this->assertSame([], $this->fake->callsOf('assign'), 'ni asignar ni compensar');
+     }
+ 
+-    /** Con el adaptador real de ElevenLabs (contra `Http::fake`) y la constante de llamadas cerrada: publica sin ninguna petición al número. */
++    /**
++     * Con el adaptador real de ElevenLabs (contra `Http::fake`), en modo solo saliente: publica sin ninguna petición
++     * al número. Vale con la constante de llamadas en sus dos estados, porque `StudioVoicePublishing::pointNumber()`
++     * corta antes de llegar al desplegador; el día de la apertura es lo que importa: solo saliente + abierta → ningún PATCH.
++     */
+     public function test_con_el_adaptador_real_publica_sin_pedir_nada_al_numero(): void
+     {
+         $this->outboundOnly();
+diff --git a/backend/tests/Unit/Voice/ElevenLabsAgentDeployerTest.php b/backend/tests/Unit/Voice/ElevenLabsAgentDeployerTest.php
+index c668e5f3..09f0a885 100644
+--- a/backend/tests/Unit/Voice/ElevenLabsAgentDeployerTest.php
++++ b/backend/tests/Unit/Voice/ElevenLabsAgentDeployerTest.php
+@@ -30,7 +30,8 @@
+  *    abiertas en el código (C-4, `voice(calls-open)`), UN PATCH con ese
+  *    agente, y solo vale si el proveedor devuelve el número con ESE agente;
+  *    sin la bandera, nada sale. Dejarlo sin agente, también un PATCH. (Lo
+- *    cerrado, `not_attempted` por `calls_disabled_in_code` sin red, lo recorre
++ *    cerrado, `not_attempted` por `calls_disabled_in_code` sin red, lo prueba
++ *    `ElevenLabsClosedCopyTest` con la copia cerrada en proceso y lo recorre
+  *    la copia cerrada del E2E.)
+  *  - Ni la clave ni un cuerpo salen en un resultado.
+  */
+diff --git a/backend/tests/Unit/Voice/ElevenLabsCallStarterTest.php b/backend/tests/Unit/Voice/ElevenLabsCallStarterTest.php
+index cd8f8bb5..67952ace 100644
+--- a/backend/tests/Unit/Voice/ElevenLabsCallStarterTest.php
++++ b/backend/tests/Unit/Voice/ElevenLabsCallStarterTest.php
+@@ -29,6 +29,7 @@
+  *
+  * El estado cerrado (la vuelta atrás: `not_attempted` por
+  * `calls_disabled_in_code` sin red) no se alcanza desde el árbol abierto: lo
++ * prueba `ElevenLabsClosedCopyTest` con la copia cerrada en proceso y lo
+  * recorre la copia cerrada del E2E (`H8E2ECerradaTest`, con el arnés).
+  */
+ class ElevenLabsCallStarterTest extends TestCase
+diff --git a/backend/tests/Unit/Voice/VoiceCallPolicyClosedCopyTest.php b/backend/tests/Unit/Voice/VoiceCallPolicyClosedCopyTest.php
+index cd0d9dd1..fe4c7874 100644
+--- a/backend/tests/Unit/Voice/VoiceCallPolicyClosedCopyTest.php
++++ b/backend/tests/Unit/Voice/VoiceCallPolicyClosedCopyTest.php
+@@ -110,19 +110,30 @@ public function test_la_copia_es_la_politica_real_con_solo_la_constante_cerrada(
+             $this->assertCount(2, ClosedPolicyCopy::changedLines($lector), "{$lector}: la clase y el use de VoiceCallPolicy; nada más");
+             $this->assertMatchesRegularExpression('/VoiceCallPolicy::(CALLS_ENABLED_IN_CODE|decide\()/', ClosedPolicyCopy::original($lector), "{$lector} lee la constante (o la política del H6) por el alias");
+         }
+-        // Todo lo que lee la constante para DECIDIR tiene su copia (el doctor y el estado solo la dicen).
+-        $lectoresDelArbol = [];
++        // Todo lo que lee la constante para DECIDIR tiene su copia (el doctor y el estado solo la dicen). Quien decide A
++        // TRAVÉS de la política del H6 (`VoiceCallPolicy::decide(`) la lee igual, sin nombrarla (revisión de `T`, M-2).
++        $lectoresDelArbol = $llamanALaPolitica = [];
+         foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(ClosedPolicyCopy::backend().'/app', \FilesystemIterator::SKIP_DOTS)) as $fichero) {
+             $codigo = (string) file_get_contents((string) $fichero);
+-            if (! str_contains($codigo, 'CALLS_ENABLED_IN_CODE')) {
++            if (! str_contains($codigo, 'CALLS_ENABLED_IN_CODE') && ! str_contains($codigo, 'VoiceCallPolicy::decide(')) {
+                 continue;
+             }
+             $sinComentarios = implode('', array_map(static fn ($t): string => is_array($t) ? (in_array($t[0], [T_COMMENT, T_DOC_COMMENT], true) ? '' : $t[1]) : $t, token_get_all($codigo)));
++            $relativa = substr((string) $fichero, strlen(ClosedPolicyCopy::backend()) + 1);
+             if (str_contains($sinComentarios, 'VoiceCallPolicy::CALLS_ENABLED_IN_CODE')) {
+-                $lectoresDelArbol[] = substr((string) $fichero, strlen(ClosedPolicyCopy::backend()) + 1);
++                $lectoresDelArbol[] = $relativa;
++            }
++            if (str_contains($sinComentarios, 'VoiceCallPolicy::decide(')) {
++                $llamanALaPolitica[] = $relativa;
+             }
+         }
+         sort($lectoresDelArbol);
++        sort($llamanALaPolitica);
++        // `OutboundPolicy` decide la saliente y tiene su copia; `StudioIntegrations` solo pinta el estado del panel del H6.
++        $this->assertSame(['app/Services/Telephony/OutboundPolicy.php', 'app/Services/UltronStudio/StudioIntegrations.php'], $llamanALaPolitica,
++            'quien llama a la política del H6 necesita su copia cerrada (o decir por qué no)');
++        $this->assertSame(['app/Services/UltronStudio/StudioIntegrations.php'], array_values(array_diff($llamanALaPolitica, array_keys(ClosedPolicyCopy::COPIES))),
++            'el único que llama a la política sin copia cerrada es el panel del Studio, que no decide ninguna llamada');
+         $this->assertSame(['app/Console/Commands/Voice/VoiceDoctorCommand.php', 'app/Jobs/Voice/PlaceOutboundVoiceCall.php', 'app/Services/Telephony/InboundPolicy.php',
+             'app/Services/Telephony/VoiceTelephonyStatus.php', 'app/Services/Voice/ElevenLabs/ElevenLabsAgentDeployer.php', 'app/Services/Voice/ElevenLabs/ElevenLabsCallStarter.php'],
+             $lectoresDelArbol, 'un lector nuevo de la constante necesita su copia cerrada (o decir por qué no)');
+diff --git a/backend/tests/fixtures/ultron-studio/integrations-cases.README.md b/backend/tests/fixtures/ultron-studio/integrations-cases.README.md
+index b1773f63..cc5008a0 100644
+--- a/backend/tests/fixtures/ultron-studio/integrations-cases.README.md
++++ b/backend/tests/fixtures/ultron-studio/integrations-cases.README.md
+@@ -349,7 +349,7 @@ ### Voz (`voiceDoctor`, `voiceVerify`, `voiceCallPolicy`)
+ - permitidos: «todo listo: permitida (la constante abierta)» (antes «todo listo salvo la constante del código», el único renombrado), «ElevenLabs verificado no añade nada» y «cupo diario 1»;
+ - el resto, los mismos motivos que antes sin el primero; los 6 `context`, sin cambios;
+ - el conjunto cerrado `closedSets.voiceCallPolicyReasons` sigue empezando por `calls_disabled_in_code` (la clase no cambia sus `REASONS`);
+-- el estado CERRADO, que es el destino de la vuelta atrás, no se pierde: `tests/Unit/Voice/VoiceCallPolicyClosedCopyTest.php` carga una copia de la política con la constante cerrada (la única línea que cambia) y le exige estos 18 casos con `calls_disabled_in_code` delante y `allowed = false`;
++- el estado CERRADO, que es el destino de la vuelta atrás, no se pierde: `tests/Unit/Voice/VoiceCallPolicyClosedCopyTest.php` carga una copia de la política con la constante cerrada (cambian dos líneas: la constante y el nombre de la clase) y le exige estos 18 casos con `calls_disabled_in_code` delante y `allowed = false`;
+ - el comprobador independiente deriva la constante abierta y suma la variante `voiceCallPolicy:closed_constant` (la política cerrada): cae en los 18 casos `decide`. Total, 117 variantes.
+ 
+ Es una enmienda del fixture del contrato del H6 (Enmienda 2: «este fichero solo cambia con una enmienda»); el texto propuesto está en `docs/ultron-studio/plans/informes-motores/informe-tester-voz-abierta.md`. Volver al estado cerrado es `git revert` de ese commit: el generador y el fixture vuelven byte a byte.
+-- 
+2.50.1 (Apple Git-155)
+

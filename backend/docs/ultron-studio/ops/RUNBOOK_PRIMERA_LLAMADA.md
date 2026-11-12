@@ -178,7 +178,7 @@ bash /root/h8-voice-scope.sh estado
 
 El procedimiento completo está en el informe de devops, C-4 (opción recomendada). En resumen:
 
-**Antes, sin tocar `main` (las pruebas de la apertura ya están preparadas y revisadas):** son DOS commits de la rama local `prep/voice-calls-open-tests` (worktree `_worktrees/ultron-voz-abierta/Iron-Body`; no está en el remoto; copia como parches en `ops/apertura-llamadas/`): **`3287769b`** (`T`) y **`216b0f1b`** (`T2`, la condición I-1 de la revisión). Solo tocan `backend/tests/`. Informes: `plans/informes-motores/informe-tester-voz-abierta.md` e `informe-reviewer-voz-abierta.md` (aprobado con condiciones, sin bloqueantes). No usar `803cd016` ni las ramas `…-v1` y `tmp/solo-t*`: son versiones anteriores.
+**Antes, sin tocar `main` (las pruebas de la apertura ya están preparadas y revisadas):** son TRES commits de la rama local `prep/voice-calls-open-tests` (worktree `_worktrees/ultron-voz-abierta/Iron-Body`; no está en el remoto; copia como parches en `ops/apertura-llamadas/`): **`3287769b`** (`T`), **`216b0f1b`** (`T2`, la condición I-1 de la revisión) y **`33ba6299`** (`T3`, sus menores M-2, M-3 y M-5: comentarios y un recorrido más estricto). Solo tocan `backend/tests/`. Informes: `plans/informes-motores/informe-tester-voz-abierta.md` e `informe-reviewer-voz-abierta.md` (aprobado con condiciones, sin bloqueantes). No usar `803cd016` ni las ramas `…-v1` y `tmp/solo-t*`: son versiones anteriores.
 
 **Precondiciones del tramo (revisión, I-4), la víspera:**
 - Producción tiene que estar en la punta de `origin/main` salvo documentación: el modo 4a exige que entre lo desplegado y `origin/main` solo haya documentación y el commit de la apertura (`deploy-h8-backend-fase1.sh:400-409`), y cada commit de documentación sin desplegar viaja solo si se acepta uno a uno con `--acepta-main` (`:491-492`). Si `main` lleva pruebas o código sin desplegar, se despliega antes con `ops/hotfix-backend.sh`, **antes de subir la apertura**:
@@ -212,9 +212,9 @@ El procedimiento completo está en el informe de devops, C-4 (opción recomendad
 4. **Solo con «COMPLETADO»: las pruebas de la apertura.** En un árbol LIMPIO (no el compartido con los agentes):
    ```bash
    git fetch origin && git rev-parse HEAD origin/main      # las dos, el commit de la apertura
-   git cherry-pick 3287769b 216b0f1b                       # si hay conflicto: git cherry-pick --abort y rehacer las pruebas; NO resolver a mano
-   git range-diff 3287769b^..216b0f1b HEAD~2..HEAD         # todo «=»
-   git show --name-only --format= HEAD~1 HEAD | grep -v '^backend/tests/'   # vacío: nada fuera de las pruebas
+   git cherry-pick 3287769b 216b0f1b 33ba6299              # si hay conflicto: git cherry-pick --abort y rehacer las pruebas; NO resolver a mano
+   git range-diff 3287769b^..33ba6299 HEAD~3..HEAD         # todo «=» (tres líneas)
+   git show --name-only --format= HEAD~2 HEAD~1 HEAD | grep -v '^backend/tests/'   # vacío: nada fuera de las pruebas
    cd backend
    xargs nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging < docs/ultron-studio/ops/apertura-llamadas/bateria-rapida.txt   # OK (624 tests): la batería rápida
    nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging tests/Unit/Voice tests/Unit/Telephony tests/Feature/Voice tests/Feature/Telephony
@@ -223,7 +223,7 @@ El procedimiento completo está en el informe de devops, C-4 (opción recomendad
    ```
    `tests/Unit/Twilio` va en la segunda batería porque lee el fixture de paridad que cambia `T` (§5.2 del tester). *(Añadido por devops el 12-11; faltaba.)*
    En verde (salvo la línea base conocida), push a `main` con la orden del propietario. `main` está en rojo solo entre los dos push.
-   `git cherry-pick 3287769b 216b0f1b` y el `range-diff` («=» en los dos) están ensayados en local sobre `4277f128` + documentación + una apertura simulada: limpios (informe de devops del 12-11, §3).
+   `git cherry-pick 3287769b 216b0f1b` y el `range-diff` («=» en los dos) están ensayados en local sobre `4277f128` + documentación + una apertura simulada: limpios (informe de devops del 12-11, §3). Con `T3` añadido después, el lead lo repitió en un banco local sobre `5d0a63c8` + una apertura simulada: el `cherry-pick` de los tres, limpio; `range-diff`, «=» en los tres; nada fuera de `tests/`; y las cuatro reversiones (E.2) dejan el árbol idéntico al de antes de la apertura.
    Pueden ir después (no cambian lo que se permite): los comentarios de `app/` que quedan falsos (nunca en `VoiceCallPolicy.php` mientras esté abierta); y que el CRM reexporte `backend-integrations.testing.ts` (3 líneas). `ops/h8-e2e.sh` y `ops/v9-abierta.sh` ya están enmendados (12-11): aceptan la fuente con la constante cerrada o abierta, y `h8-e2e.sh` construye la copia CERRADA girando la línea al revés, así que `H8E2ECerradaTest` sigue corriendo con la apertura en la punta.
 
 - **Tiene que imprimir:** «DESPLIEGUE H8 FASE 4a (voice(calls-open) <commit>, autorización «AUT-VOZ-1») COMPLETADO». Después, `estado` con «constante de llamadas: abierta».
@@ -325,7 +325,7 @@ CRM → Integraciones → Canarios, canal voz: P registra su teléfono con su co
 
 **Fecha:** 12-11-2026. **Autor:** devops. No se ha ejecutado en producción. Ensayado en local solo con git: copias de banco de `hotfix-backend.sh` (la de HEAD y la enmendada) y los tramos LITERALES de `deploy-h8-backend-fase1.sh` y `deploy-h9-backend-cierre.sh`, sobre la historia real con commits simulados (informe `plans/informes-motores/informe-devops-apertura-arneses.md`, §3).
 
-**Notación:** `X` = el commit `voice(calls-open)` desplegado con la 4a; `T'` y `T2'` = las pruebas aplicadas encima (paso 9.4); `BK` = el respaldo de esa 4a (su `api-commit.txt` es el commit de antes de `X`); `C` = el commit que confirma `hotfix-backend.sh` enmendado (12-11). Las órdenes del Mac van desde la raíz `Iron-Body/`, en un árbol limpio con `git fetch origin` hecho.
+**Notación:** `X` = el commit `voice(calls-open)` desplegado con la 4a; `T'`, `T2'` y `T3'` = las pruebas aplicadas encima (paso 9.4); `BK` = el respaldo de esa 4a (su `api-commit.txt` es el commit de antes de `X`); `C` = el commit que confirma `hotfix-backend.sh` enmendado (12-11). Las órdenes del Mac van desde la raíz `Iron-Body/`, en un árbol limpio con `git fetch origin` hecho.
 
 **La regla que fija todo lo de abajo:** la apertura solo la despliega `deploy-h8-backend-fase1.sh --fase=4a`, y la 4a exige exactamente UN commit `voice(calls-open):` entre lo desplegado y `origin/main` (`:384-385`) y, antes de él, solo documentación (`:400-409`). Las reversiones se llaman `Revert "voice(calls-open): …"` y no cuentan como apertura. Por eso, después de una vuelta atrás, producción tiene que pasar por la punta CERRADA (que ya contiene `X` y su reversión) antes de reabrir.
 
@@ -341,7 +341,7 @@ git show "$C:backend/docs/ultron-studio/ops/hotfix-backend.sh" | ssh ironbody-vp
 ssh ironbody-vps 'bash /root/h8-voice-scope.sh estado'    # «constante de llamadas: abierta»
 ```
 - **Tiene que imprimir:** «constante de llamadas (VoiceCallPolicy): abierta, sin cambios (el fichero no cambia)» y «CORRECCIÓN DESPLEGADA SIN DESVÍOS».
-- `T'` y `T2'` (solo `tests/`) viajan con el primer arreglo: entran en la lista.
+- `T'`, `T2'` y `T3'` (solo `tests/`) viajan con el primer arreglo: entran en la lista.
 - **Se niega sin tocar nada:**
   - si el diff neto cambia `VoiceCallPolicy.php` en algo que no sea cerrarla: abrirla, o tocar otra línea, aunque sea el comentario de `:10`;
   - si toca migraciones, rutas, configuración o dependencias;
@@ -372,9 +372,9 @@ bash /root/h8-voice-scope.sh estado           # «constante de llamadas: cerrada
 - **Se niega sin tocar nada** si el fichero no está en la lista o si el cierre toca otra línea del fichero.
 - **Vuelta atrás:** la que imprime vuelve a abrir la constante: solo con E.4.
 
-**En el repo, en los dos casos** (con la orden del propietario). En un árbol limpio con `HEAD == origin/main`, las tres reversiones en un solo push:
+**En el repo, en los dos casos** (con la orden del propietario). En un árbol limpio con `HEAD == origin/main`, las cuatro reversiones en un solo push:
 ```bash
-git revert --no-edit <T2'> <T'> <X>      # en ese orden: tres commits «Revert "…"»; si hay conflicto, git revert --abort y avisar
+git revert --no-edit <T3'> <T2'> <T'> <X>   # en ese orden: cuatro commits «Revert "…"»; si hay conflicto, git revert --abort y avisar
 git diff --name-only <X>^ HEAD -- backend/app backend/tests   # (a) vacío · (b) solo lo de los arreglos de E.1
 cd backend
 grep -v ClosedCopy docs/ultron-studio/ops/apertura-llamadas/bateria-rapida.txt | xargs nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging   # los 21 ficheros, cerrados: OK (614 tests el 11-11)
@@ -384,7 +384,7 @@ python3 -I tests/fixtures/ultron-studio/tools/integrations-cases-check.py   # RE
 # en verde (salvo la línea base conocida): push con la orden del propietario
 ```
 - Las tres pruebas `*ClosedCopy*` las añadió `T`: en el árbol cerrado no existen.
-- Ensayado: las tres reversiones salen limpias, y en (a) el árbol queda idéntico al de `BK` (§3.3, A0 y A').
+- Ensayado por devops con `T'` y `T2'` (tres reversiones limpias, y en (a) el árbol queda idéntico al de `BK`: §3.3, A0 y A'), y por el lead con `T3'` añadido (cuatro reversiones limpias y el árbol idéntico al de antes de la apertura).
 
 ### E.3 · L (con la orden del propietario) · Producción a la punta cerrada (después de E.2 a)
 
@@ -407,7 +407,7 @@ Hace falta una autorización escrita nueva, citada en el commit nuevo. Que valga
 4. Commit nuevo `voice(calls-open): …`: una línea encima de la punta, que cite la autorización nueva. Push con la orden.
 5. `deploy-h8-backend-fase1.sh <commit> $BK --fase=4a --autorizacion=<la nueva> [--acepta-main=…] --solo-comprobar`, y sin `--solo-comprobar`.
    - **Tiene que imprimir:** «COMPROBACIONES PREVIAS EN VERDE · MODO 4a» y después «DESPLIEGUE H8 FASE 4a (…) COMPLETADO».
-6. Las pruebas de la apertura, como en el paso 9.4: `git cherry-pick 3287769b 216b0f1b` (o las rehechas), `range-diff`, las baterías y el push.
+6. Las pruebas de la apertura, como en el paso 9.4: `git cherry-pick 3287769b 216b0f1b 33ba6299` (o las rehechas), `range-diff`, las baterías y el push.
    - Ensayado: el `cherry-pick` sale limpio sobre la apertura nueva y el `range-diff` da «=» (§3, A5).
 - **Vuelta atrás:** E.2.
 
