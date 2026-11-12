@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\Commercial\CommercialEventRecorder;
 use App\Services\Commercial\CommercialSubjectResolver;
 use App\Services\Commercial\CommercialVocabulary as V;
+use App\Services\MembershipService;
 use App\Services\Observability\ChannelLog;
 use App\Services\Wompi\PaymentStateMachine as SM;
 use Illuminate\Console\Command;
@@ -26,6 +27,14 @@ use Illuminate\Support\Carbon;
  * Este comando es la mirada periódica que los detecta. Corre cada hora y es
  * idempotente por construcción: cada hecho lleva una clave con su fecha, así
  * que veinticuatro pasadas al día producen un evento, no veinticuatro.
+ *
+ * EL DÍA ES EL DEL GIMNASIO ({@see Member::BUSINESS_TZ}), no el del servidor.
+ * La aplicación corre en UTC y este comando, cada hora en punto UTC: con
+ * `Carbon::today()` el «hoy» cambiaba a las 19:00 de Bogotá, y la primera
+ * pasada de cada día UTC abría la ventana de renovación con un día de más,
+ * daba por vencida una membresía que aún valía hasta la medianoche local y
+ * movía la semana de la inactividad el domingo a las 19:00 (informe del
+ * tester I-6, D-1 y A-1). Las claves de deduplicación conservan su forma.
  */
 class ScanCommercialFacts extends Command
 {
@@ -79,7 +88,7 @@ class ScanCommercialFacts extends Command
     private function scanRenewalWindow(int $limit, bool $dry): int
     {
         $days = (int) config('commercial.thresholds.renewal_window_days', 10);
-        $today = Carbon::today();
+        $today = self::gymToday();
         $horizon = $today->copy()->addDays($days);
 
         $users = User::query()
@@ -90,7 +99,9 @@ class ScanCommercialFacts extends Command
 
         $n = 0;
         foreach ($users as $user) {
-            $endsAt = Carbon::parse($user->membership_end_date);
+            // A medianoche del gimnasio, como `$today`: los días que faltan
+            // son días enteros de Bogotá.
+            $endsAt = Carbon::parse($user->membership_end_date, Member::BUSINESS_TZ)->startOfDay();
 
             $n += $this->emit(
                 $dry,
@@ -109,10 +120,16 @@ class ScanCommercialFacts extends Command
         return $n;
     }
 
-    /** Membresías que vencieron ayer: el primer día sin acceso. */
+    /**
+     * Membresías que vencieron ayer: el primer día sin acceso.
+     *
+     * «Ayer» del gimnasio: la membresía vale hasta el final de su último día
+     * de Bogotá ({@see MembershipService::endsAt()}), así que el hecho no
+     * puede llegar antes de esa medianoche local.
+     */
     private function scanExpired(int $limit, bool $dry): int
     {
-        $yesterday = Carbon::yesterday();
+        $yesterday = self::gymToday()->subDay();
 
         $users = User::query()
             ->whereNotNull('membership_end_date')
@@ -148,12 +165,13 @@ class ScanCommercialFacts extends Command
     private function scanInactivity(int $limit, bool $dry): int
     {
         $days = (int) config('commercial.thresholds.at_risk_days', 14);
-        $cutoff = Carbon::today()->subDays($days);
+        $today = self::gymToday();
+        $cutoff = $today->copy()->subDays($days);
 
         $members = Member::query()
             ->whereNotNull('user_id')
             ->whereHas('user', fn ($q) => $q->whereNotNull('membership_end_date')
-                ->whereDate('membership_end_date', '>=', Carbon::today()->toDateString()))
+                ->whereDate('membership_end_date', '>=', $today->toDateString()))
             ->limit($limit)
             ->get(['id', 'user_id']);
 
@@ -181,11 +199,11 @@ class ScanCommercialFacts extends Command
                 $this->resolver->fromMember($member->id),
                 [
                     'last_attendance_at' => $last->toIso8601String(),
-                    'days_inactive' => $last->diffInDays(Carbon::today()),
+                    'days_inactive' => $last->diffInDays($today),
                 ],
                 // Semanal: si sigue sin venir, el motor vuelve a mirarlo, pero
                 // no todos los días.
-                "inactive:{$member->id}:".Carbon::today()->format('o-\WW'),
+                "inactive:{$member->id}:".$today->format('o-\WW'),
             );
         }
 
@@ -227,11 +245,17 @@ class ScanCommercialFacts extends Command
                     'abandoned_for_hours' => (int) $tx->created_at->diffInHours(now()),
                     'abandoned' => true,
                 ],
-                "tx:{$tx->id}:abandoned:".now()->format('Y-m-d'),
+                "tx:{$tx->id}:abandoned:".self::gymToday()->format('Y-m-d'),
             );
         }
 
         return $n;
+    }
+
+    /** Medianoche de hoy en el gimnasio (lo que antes era `Carbon::today()` en UTC). */
+    private static function gymToday(): Carbon
+    {
+        return Carbon::today(Member::BUSINESS_TZ);
     }
 
     /** @param array{lead_id:?int,member_id:?int} $subject */
