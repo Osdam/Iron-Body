@@ -60,6 +60,18 @@ Revisado por seguridad y por dos revisiones independientes, sin hallazgos bloque
 
 **Otra línea de trabajo desplegó entre medias** (Iron IA: el contexto del entrenador llega a la rutina y a la guía; producción pasó por `5f803dbd`). No comparte ningún fichero con ULTRON; las dos quedaron integradas y probadas juntas.
 
+**Por la tarde del 12-11 (servidor a las 12:33 y CRM a las 12:52, hora de Bogotá): la bandeja de contactos asistidos, lista para el día que se abra.** Hoy nadie la usa: la automatización está en sombra y no hay contactos en vivo.
+
+| Qué | Qué pasaba | Cómo queda |
+|---|---|---|
+| La queja que llega después de reclamar | Quien ya había reclamado un contacto conservaba el enlace a la ficha y el guion aunque la persona se quejara después | **Desplegado.** El contacto se retiene: la fila sigue en su bandeja para registrar el resultado, sin ficha ni guion, y dice por qué |
+| Frenos | Con la parada global o un freno abierto, la bandeja seguía ofreciendo contactos y dejando reclamarlos | **Desplegado.** No se ofrecen ni se reclaman; lo ya reclamado queda retenido mientras dure el freno. Si los frenos no se pueden leer, no se entrega nada |
+| Plazo del contacto | Un contacto se podía reclamar semanas después de su plazo, con una decisión vieja | **Desplegado.** Pasado el plazo (24 horas) no se ofrece ni se reclama. Es una decisión mía que puedes cambiar |
+| Bandeja que salía vacía | Los contactos retenidos ocupaban la página y tapaban los que sí se podían ofrecer | **Desplegado.** La página se llena por detrás de los retenidos y dice cuántos hay retenidos, sin decir de quién |
+| Pruebas de la voz con fechas fijas | Las pruebas de extremo a extremo de las llamadas fallaban desde el 10-11 porque usaban fechas que ya habían pasado | Corregido: calculan sus fechas respecto al día en que corren. No afecta a producción |
+
+Revisado por seguridad y por una revisión independiente, sin bloqueantes. Seguridad encontró dos huecos más del mismo tipo, anteriores a este trabajo, que hay que cerrar antes de abrir ese canal: que la bandeja vuelva a mirar el «no me contacten» que llega después, y que pausar la estrategia también la retenga. Están en curso.
+
 ---
 
 ## 2. Sección por sección
