@@ -157,3 +157,67 @@ En seco, `emit()` devuelve 1 por cada candidato con ficha (`ScanCommercialFacts.
 - Lo que está bien y no repito: M-5, M-7 y la supervisión ya los revisó security (`informe-security-bandeja.md`). Sus condiciones para el asistido en vivo (R-1, H-1, I-4 y los frenos) siguen abiertas y no son de esta noche.
 - La guarda `OutreachIsolationTest::test_la_puerta_de_diff…` en rojo hasta el push: no la he lanzado (dicho por el lead).
 - Los docs de `4cc17457` y `5d0a63c8`: solo he verificado los parches y las órdenes del runbook que llaman a `hotfix-backend.sh` (P y E con `--short=7`, la lista de ficheros sacada de `git diff --name-only`). No he leído la sección E entera.
+
+## Segunda mirada (12-11-2026, backend `53c187b7`, CRM `d16e26a`)
+
+### Veredicto
+
+| Commit | Veredicto |
+|---|---|
+| Backend `53c187b7` (I-1, m-1, m-2, m-3 y m-4) | **APROBADO**. Queda un caso falso nuevo en la frase de I-1 (I-1b), que no bloquea esta noche y hay que arreglar antes de pasar ULTRON a todas |
+| CRM `d16e26a` (C-1, m-5 y m-7) | **APROBADO** |
+
+**Se puede subir y desplegar esta noche.** La condición C-1 deja de ser obligatoria: con una API anterior, el CRM ya pinta una raya y «sin dato». Aun así, lo natural sigue siendo desplegar primero el backend. m-6 (el alias en `T3`) queda como límite aceptado, de acuerdo.
+
+### Lo que he ejecutado
+
+| Qué | Resultado |
+|---|---|
+| `SupervisionStateTruthTest`, `SupervisionActivityLabelsTest` (SQLite) | `OK (15 tests, 58 assertions)`, `OK (6 tests, 458 assertions)` [C] |
+| CRM `tsc`, `check-literals.mjs`, `ng test` del módulo | salida 0; «literales correctos»; `21 passed` [C] |
+| Réplica de `literalsWritten()` contra `app/` (un guion PHP en mi scratchpad) | ve las 13 escrituras `MarketingAiAction::create([...])`, sin bloques sin cerrar. `action_type`: los 6 de `OTHER_ACTION_TYPES`. `status`: `created`, `executed`, `proposed`, `skipped` [C] |
+| Sonda de I-1 en un clon del backend (ya borrado) | ver I-1b [C] |
+| `estado_vcp`/`estado_osg` sobre `53c187b7` y diff `9a6e3b1c..53c187b7` | llamadas cerrada, envíos cerrada. Ningún fichero prohibido. `53c187b7` toca 2 de `app/`, 2 pruebas y este informe [C] |
+
+### (1) La frase nueva de I-1
+
+**I-1b · Con ULTRON encendido, «Hoy esta conversación la lleva ULTRON» sale también donde ULTRON no responde.** Menor esta noche; importante antes de pasar a `all`. Está en `SupervisionController::decisionReason()`: decide solo por el alcance (`automaticCoverage()`, que lo dice en su docblock) y no mira las barreras de cada conversación.
+- Escenario [C, sonda; el estado de la misma pantalla dice `attended_by_agent = 0` en los dos casos]:
+  - `one` (como producción): el canario **tomado a mano por el equipo** sale «Hoy esta conversación la lleva ULTRON.».
+  - `all`: lo mismo para una conversación **de Instagram**. Las de Instagram y Facebook pasan por el mismo enrutador y dejan la misma fila (`ProcessMetaWebhookEvent.php:333` → `MarketingInboundMessageRouter::route()`) [L].
+  - Por lectura, lo mismo para «no contactar», IA apagada en esa conversación o conversación cerrada [L].
+- Hoy, en canario, solo puede pasar en la conversación del canario, y solo si alguien la toma a mano. Con ULTRON en todas pasaría en cada conversación tomada por el equipo y en cada una de Instagram.
+- Los demás modos dicen la verdad [L]:
+  - `one`, en cualquier otra conversación: «no la lleva ningún agente automático: la atiende el equipo». En producción, ULTRON encendido implica `auto_analyze` apagado.
+  - `none` (`off`, `paused`, `brake`, `ultron_unconfigured`, `ultron_canary_missing`): lo mismo.
+  - `unknown` (y el agente anterior analizando): solo lo que registró la fila, en pasado.
+- Corrección propuesta: en `activity()`, leer de una vez las conversaciones de las filas `auto_analyze_disabled` de la página (un `whereIn` con `with('lead')`, como mucho 200). Decir «la lleva ULTRON» solo si el alcance la incluye **y** `ultronAttends()` da verdadero. Si no, «Hoy ULTRON no la atiende: la atiende el equipo». Añadir los dos casos de la sonda a `SupervisionActivityLabelsTest`.
+- **Exposición:** en `one`, la frase señala cuál es la conversación del canario. No es nuevo: las filas del propio ULTRON en esa conversación ya salían en la misma línea de tiempo, con el mismo permiso (`guardView`), y security lo dio por bueno (`informe-security-bandeja.md`, §2.3) [L]. No sale el id configurado ni nada que el rol no viera ya.
+
+### (2) `countAttendedByUltron()` frente a `ultronAttends()`
+
+- Coinciden: el recuento llama a la misma `ultronAttends()` por cada fila [L].
+- El filtro SQL previo solo descarta lo que esa función también descarta:
+  - `status = open`, `channel = whatsapp` y `ai_enabled = true`.
+  - `(human_takeover = false OR source IS NULL OR source <> 'manual')`, que equivale a «no (toma Y manual)» porque `human_takeover` es `NOT NULL DEFAULT false` (`2026_06_02_000005_…:18`) [L].
+- `canReplyReactively()` es en memoria (`do_not_contact` y `consent_status`, `MarketingLead.php:84-112`) y el prospecto se carga con `with('lead')` por tandas de 500: no hay una consulta por conversación [L].
+- No puede lanzar fuera de `safe()`: se llama solo desde el cierre de `conversationCounters()` [L]. `automaticCoverage()` envuelve `whoResponds()` en su propio `safe()` [L].
+- `SupervisionStateTruthTest::test_con_ultron_en_todas…` fija el caso de m-4 [C].
+
+### (3) `literalsWritten()`: ¿falsos verdes?
+
+- Hoy no hay ninguno: todo lo que escribe el código está en las listas [C, réplica].
+- **Menor (m-3b):** el recorrido solo recoge un literal directo (`'clave' => 'valor'`). Se le escapan tres formas [L]:
+  - (a) un estado nuevo como rama de un ternario o como valor por defecto de `??`. `SalesAgentOrchestratorService.php:209` ya escribe `$autoExecute ? 'executed' : 'proposed'`, y `InternalMarketingController.php:139`, `$data['status'] ?? 'proposed'`.
+  - (b) un `action_type` nuevo escrito con una constante que no esté en `RECOMMENDED_ACTIONS` (hoy `SalesIntents::ACTION_STAFF_REVIEW` sí está).
+  - (c) una escritura con otra forma (`MarketingAiAction::query()->create`, `new MarketingAiAction`, `forceCreate`, `DB::table('marketing_ai_actions')->insert`).
+- El docblock dice «literal», así que ya no promete de más. Pero (a) se puede leer como «un estado literal nuevo», y en un ternario no lo cogería.
+- Corrección, si se quiere: recoger todos los `'[a-z_]+'` de la expresión del valor (hasta la coma de nivel 0); resolver `SalesIntents::X` por reflexión; y comprobar que en `app/` no hay más formas de escribir en `marketing_ai_actions` que `MarketingAiAction::create([`.
+
+### CRM `d16e26a`
+
+- Con una API anterior: «Agente: sin dato», «Sin dato: el servidor no lo informa» y una raya en «Las atiende el agente». Ya no pinta la cifra equivocada [L, C con las pruebas].
+- `ultron_unconfigured` y `ultron_canary_missing` salen en aviso [C].
+- La frase del vacío dice lo que se lee [L].
+- `dash` existe en el componente (`supervision-page.ts:545`) [L].
+- **Nota, sin hallazgo:** con una API anterior y su `enabled` antiguo en verdadero, la píldora sería verde con «sin dato». Desplegando primero el backend no se ve.

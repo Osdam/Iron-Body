@@ -151,12 +151,22 @@ class SupervisionController extends Controller
     /** @param  array{mode: string, conversation: int|null}  $coverage  qué conversaciones lleva hoy un agente automático */
     private function decisionEvents(Carbon $since, int $limit, ?int $conversationId, array $coverage): array
     {
-        return DB::table('marketing_ai_actions')
+        $filas = DB::table('marketing_ai_actions')
             ->where('created_at', '>=', $since)
             ->when($conversationId, fn ($q) => $q->where('conversation_id', $conversationId))
             ->orderByDesc('id')
             ->limit($limit)
-            ->get()
+            ->get();
+
+        // Las conversaciones de las filas «no analizado» que ULTRON PUEDE llevar por su alcance: se mira de una vez si
+        // de verdad las atiende (I-1b de la revisión de la ola 6: la del canario tomada a mano, o una de Instagram).
+        $candidatas = $filas
+            ->filter(fn ($r) => $r->reason === 'auto_analyze_disabled' && $r->conversation_id !== null
+                && ($coverage['mode'] === 'all' || ($coverage['mode'] === 'one' && (int) $r->conversation_id === $coverage['conversation'])))
+            ->map(fn ($r) => (int) $r->conversation_id)->unique()->values()->all();
+        $atiende = $this->supervision->ultronAttendsConversations($candidatas);
+
+        return $filas
             ->map(fn ($r) => [
                 'at' => $r->created_at,
                 'kind' => 'decision',
@@ -169,7 +179,7 @@ class SupervisionController extends Controller
                 // el razonamiento del modelo. Los códigos conocidos salen en
                 // español; un texto libre (lo que escribió una persona al
                 // tomar la conversación) sale tal cual.
-                'reason' => $this->decisionReason($r, $coverage),
+                'reason' => $this->decisionReason($r, $coverage, $atiende),
                 'confidence' => $r->confidence,
                 'result' => $this->resultLabel($r->status),
                 'result_code' => $r->status,
@@ -696,19 +706,21 @@ class SupervisionController extends Controller
      * lo que la fila registra, en pasado, y añade quién lleva HOY esa conversación cuando se sabe.
      *
      * @param  array{mode: string, conversation: int|null}  $coverage
+     * @param  array<int, bool>  $attends  por conversación al alcance de ULTRON: ¿la atiende ahora mismo?
      */
-    private function decisionReason(object $r, array $coverage): ?string
+    private function decisionReason(object $r, array $coverage, array $attends): ?string
     {
         $texto = $this->reasonLabel($r->reason);
-        if ($r->reason !== 'auto_analyze_disabled') {
+        if ($r->reason !== 'auto_analyze_disabled' || $r->conversation_id === null) {
             return $texto;
         }
-        $laLlevaUltron = $coverage['mode'] === 'all'
-            || ($coverage['mode'] === 'one' && $r->conversation_id !== null && (int) $r->conversation_id === $coverage['conversation']);
+        $alAlcance = $coverage['mode'] === 'all' || ($coverage['mode'] === 'one' && (int) $r->conversation_id === $coverage['conversation']);
 
         return match (true) {
-            $laLlevaUltron => $texto.' Hoy esta conversación la lleva ULTRON.',
-            in_array($coverage['mode'], ['one', 'none'], true) => $texto.' Hoy no la lleva ningún agente automático: la atiende el equipo.',
+            $alAlcance && ($attends[(int) $r->conversation_id] ?? false) => $texto.' Hoy esta conversación la lleva ULTRON.',
+            // Al alcance de ULTRON, pero con una barrera de la conversación: tomada a mano, de otro canal, «no contactar»…
+            $alAlcance => $texto.' Hoy ULTRON no la atiende: la atiende el equipo.',
+            in_array($coverage['mode'], ['all', 'one', 'none'], true) => $texto.' Hoy no la lleva ningún agente automático: la atiende el equipo.',
             default => $texto,
         };
     }

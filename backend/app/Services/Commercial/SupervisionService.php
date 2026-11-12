@@ -155,6 +155,27 @@ class SupervisionService
     }
 
     /**
+     * ¿Atiende ULTRON cada una de estas conversaciones ahora mismo? Una sola lectura para todas, con las barreras de
+     * {@see ultronAttends()}. Para la línea de tiempo: el alcance dice si ULTRON PUEDE llevar una conversación; esto,
+     * si la lleva (no la de Instagram, ni la que tomó una persona a mano, ni la de quien pidió no contactar).
+     *
+     * @param  list<int>  $ids
+     * @return array<int, bool>
+     */
+    public function ultronAttendsConversations(array $ids): array
+    {
+        if ($ids === []) {
+            return [];
+        }
+
+        return $this->safe(
+            fn () => MarketingConversation::query()->with('lead')->whereIn('id', $ids)->get()
+                ->mapWithKeys(fn (MarketingConversation $c): array => [(int) $c->id => $this->ultronAttends($c)])->all(),
+            [],
+        );
+    }
+
+    /**
      * Qué conversaciones lleva hoy un agente automático, para la línea de tiempo: todas (`all`), solo la del canario
      * (`one`), ninguna (`none`) o no se sabe (`unknown`: el agente anterior, o el estado sin leer). Es el alcance de
      * ULTRON, no cada barrera de cada conversación.

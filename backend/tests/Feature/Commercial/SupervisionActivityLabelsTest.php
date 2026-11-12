@@ -185,8 +185,19 @@ class SupervisionActivityLabelsTest extends TestCase
         config()->set('marketing.ultron.canary_conversation_id', (int) $this->conversation->id);
         $this->assertSame([$ultron, $equipo], [$fila($this->conversation->id)['reason'], $fila($otra->id)['reason']], 'en canario: una la lleva ULTRON y la otra, el equipo');
 
+        // I-1b: al alcance de ULTRON no es «la lleva ULTRON». El canario tomado A MANO por el equipo no lo atiende.
+        $noAtiende = $base.' Hoy ULTRON no la atiende: la atiende el equipo.';
+        $this->conversation->forceFill(['human_takeover' => true, 'human_takeover_source' => 'manual'])->save();
+        $this->assertSame([$noAtiende, $equipo], [$fila($this->conversation->id)['reason'], $fila($otra->id)['reason']], 'el canario tomado a mano');
+        $this->conversation->forceFill(['human_takeover' => false, 'human_takeover_source' => null])->save();
+
         config()->set('marketing.ultron.canary_conversation_id', null);
         $this->assertSame([$ultron, $ultron], [$fila($this->conversation->id)['reason'], $fila($otra->id)['reason']], 'ULTRON en todas');
+
+        // Y con ULTRON en todas, una de Instagram deja la misma fila y ULTRON no la atiende.
+        $otra->forceFill(['channel' => 'instagram'])->save();
+        $this->assertSame([$ultron, $noAtiende], [$fila($this->conversation->id)['reason'], $fila($otra->id)['reason']], 'una de Instagram');
+        $otra->forceFill(['channel' => 'whatsapp'])->save();
 
         // Con el agente anterior analizando no se afirma nada de hoy: solo lo que la fila registra.
         config()->set('marketing.ultron.enabled', false);
