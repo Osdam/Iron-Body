@@ -117,6 +117,32 @@ class SupervisionStateTruthTest extends TestCase
         $this->assertSame(0, $this->state()['conversations']['attended_by_agent'], 'ULTRON solo atiende WhatsApp');
     }
 
+    /**
+     * Con ULTRON en todas, las mismas barreras (m-4 de la revisión de la ola 6): `handled_by_ai` contaba de más las
+     * de Instagram y las de quien pidió no contactar, y de menos las que escaló el propio agente.
+     */
+    public function test_con_ultron_en_todas_el_recuento_tambien_sigue_las_barreras_del_emisor(): void
+    {
+        $this->configure(ultron: true);
+        $this->assertSame(4, $this->state()['conversations']['attended_by_agent'], 'las cuatro de WhatsApp con la IA permitida');
+
+        $this->canario->forceFill(['channel' => 'instagram'])->save();                                            // ULTRON no la atiende
+        $noContactar = MarketingLead::create([
+            'channel' => 'whatsapp', 'source' => 'inbound', 'meta_user_id' => '573150000089', 'phone' => '3150000089',
+            'name' => 'Pidió no contactar', 'status' => MarketingLead::STATUS_NEW,
+        ]);
+        $noContactar->forceFill(['do_not_contact' => true])->save();
+        $c = MarketingConversation::create(['lead_id' => $noContactar->id, 'channel' => 'whatsapp', 'status' => 'open']);
+        $c->forceFill(['ai_enabled' => true, 'human_takeover' => false])->save();                                 // tampoco
+        $escalada = $this->conversation(['human_takeover' => true, 'human_takeover_source' => 'agent_escalation']);   // esta sí
+
+        $s = $this->state();
+
+        $this->assertSame(4, $s['conversations']['attended_by_agent'], 'tres de las de antes más la que escaló el propio agente');
+        $this->assertSame(5, $s['conversations']['handled_by_ai'], 'la cuenta antigua: incluye Instagram y a quien pidió no contactar, y no la escalada');
+        $this->assertNotNull($escalada->id);
+    }
+
     /** Un canario que no es una conversación no deja pasar a nadie: la pantalla no puede decir que ULTRON responde. */
     public function test_un_canario_que_no_existe_o_sin_conexion_no_dice_que_responde(): void
     {

@@ -111,15 +111,13 @@ class SupervisionService
     }
 
     /**
-     * ¿Atiende ULTRON la conversación del canario ahora mismo? Las mismas barreras de conversación que su emisor
+     * ¿Atiende ULTRON esta conversación ahora mismo? Las mismas barreras de conversación que su emisor
      * (`UltronEventEmitter::ineligibleReason()`): abierta, de WhatsApp, con un prospecto al que se le puede responder
      * (ni «no contactar» ni consentimiento denegado), con la IA permitida y sin que una persona la haya tomado A MANO
      * (una toma que hizo el propio agente no lo deja mudo).
      */
-    private function canaryIsAttended(): bool
+    private function ultronAttends(?MarketingConversation $c): bool
     {
-        $c = MarketingConversation::query()->with('lead')->find((int) config('marketing.ultron.canary_conversation_id'));
-
         return $c !== null
             && $c->status === 'open'
             && $c->channel === 'whatsapp'
@@ -127,6 +125,52 @@ class SupervisionService
             && $c->lead->canReplyReactively()
             && (bool) $c->ai_enabled
             && ! ($c->human_takeover && $c->human_takeover_source === 'manual');
+    }
+
+    private function canaryIsAttended(): bool
+    {
+        return $this->ultronAttends(
+            MarketingConversation::query()->with('lead')->find((int) config('marketing.ultron.canary_conversation_id')),
+        );
+    }
+
+    /**
+     * Con ULTRON en todas: cuántas abiertas atiende, con las mismas barreras. `handled_by_ai` contaba de más (las de
+     * Instagram y las de quien pidió no contactar) y de menos (las que escaló el propio agente): m-4 de la revisión
+     * de la ola 6. La base descarta lo que puede; el consentimiento lo decide el modelo, que es quien lo sabe.
+     */
+    private function countAttendedByUltron(): int
+    {
+        $n = 0;
+        MarketingConversation::query()->with('lead')
+            ->where('status', 'open')->where('channel', 'whatsapp')->where('ai_enabled', true)
+            ->where(fn ($q) => $q->where('human_takeover', false)->orWhereNull('human_takeover_source')->orWhere('human_takeover_source', '<>', 'manual'))
+            ->chunkById(500, function ($trozo) use (&$n): void {
+                foreach ($trozo as $c) {
+                    $n += $this->ultronAttends($c) ? 1 : 0;
+                }
+            });
+
+        return $n;
+    }
+
+    /**
+     * Qué conversaciones lleva hoy un agente automático, para la línea de tiempo: todas (`all`), solo la del canario
+     * (`one`), ninguna (`none`) o no se sabe (`unknown`: el agente anterior, o el estado sin leer). Es el alcance de
+     * ULTRON, no cada barrera de cada conversación.
+     *
+     * @return array{mode: string, conversation: int|null}
+     */
+    public function automaticCoverage(): array
+    {
+        $quien = $this->safe(fn () => $this->whoResponds(), self::WHO_UNKNOWN);
+
+        return match ($quien['status']) {
+            'ultron_all' => ['mode' => 'all', 'conversation' => null],
+            'ultron_canary' => ['mode' => 'one', 'conversation' => (int) config('marketing.ultron.canary_conversation_id')],
+            'off', 'paused', 'brake', 'ultron_unconfigured', 'ultron_canary_missing' => ['mode' => 'none', 'conversation' => null],
+            default => ['mode' => 'unknown', 'conversation' => null],
+        };
     }
 
     /**
@@ -303,8 +347,10 @@ class SupervisionService
                 ->first();
 
             $atiende = match ($quien['status']) {
-                'ultron_all', 'legacy_auto' => (int) ($row->by_ai ?? 0),
+                'ultron_all' => $this->countAttendedByUltron(),
                 'ultron_canary' => $this->canaryIsAttended() ? 1 : 0,
+                // El agente anterior no está en uso: se deja su aproximación de siempre (las que nadie ha tomado).
+                'legacy_auto' => (int) ($row->by_ai ?? 0),
                 default => 0,
             };
 

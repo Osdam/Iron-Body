@@ -107,7 +107,7 @@ class SupervisionController extends Controller
 
         $events = collect()
             ->merge($this->toolEvents($since, $limit, $conversationId))
-            ->merge($this->decisionEvents($since, $limit, $conversationId))
+            ->merge($this->decisionEvents($since, $limit, $conversationId, $this->supervision->automaticCoverage()))
             ->merge($this->commercialEvents($since, $limit))
             ->sortByDesc('at')
             ->take($limit)
@@ -148,7 +148,8 @@ class SupervisionController extends Controller
     }
 
     /** @return array<int,array<string,mixed>> */
-    private function decisionEvents(Carbon $since, int $limit, ?int $conversationId): array
+    /** @param  array{mode: string, conversation: int|null}  $coverage  qué conversaciones lleva hoy un agente automático */
+    private function decisionEvents(Carbon $since, int $limit, ?int $conversationId, array $coverage): array
     {
         return DB::table('marketing_ai_actions')
             ->where('created_at', '>=', $since)
@@ -168,7 +169,7 @@ class SupervisionController extends Controller
                 // el razonamiento del modelo. Los códigos conocidos salen en
                 // español; un texto libre (lo que escribió una persona al
                 // tomar la conversación) sale tal cual.
-                'reason' => $this->reasonLabel($r->reason),
+                'reason' => $this->decisionReason($r, $coverage),
                 'confidence' => $r->confidence,
                 'result' => $this->resultLabel($r->status),
                 'result_code' => $r->status,
@@ -612,7 +613,7 @@ class SupervisionController extends Controller
             'blocked_do_not_contact' => 'No respondió: la persona está marcada como «no contactar»',
             'mark_do_not_contact' => 'Marcó a la persona como «no contactar»',
             'register_objection' => 'Registró una objeción',
-            'inbound_skipped' => 'No analizó el mensaje entrante',
+            'inbound_skipped' => 'El agente anterior no analizó el mensaje',
             'unsupported_message' => 'Llegó un mensaje que el agente no puede leer',
             'human_takeover' => 'La conversación pasó a una persona',
             'reactivate' => 'La conversación volvió al agente, con el resumen del traspaso',
@@ -640,7 +641,7 @@ class SupervisionController extends Controller
      */
     private const REASON_LABELS = [
         // Por qué no se analizó o no se pudo leer.
-        'auto_analyze_disabled' => 'El análisis automático del agente está apagado.',
+        'auto_analyze_disabled' => 'El agente anterior tenía el análisis apagado cuando llegó el mensaje.',
         'do_not_contact' => 'La persona está marcada como «no contactar».',
         'skipped_manual_takeover' => 'Una persona tiene tomada la conversación.',
         'unsupported_message_type' => 'Es un tipo de mensaje que el agente no puede leer.',
@@ -653,6 +654,10 @@ class SupervisionController extends Controller
         'payment_or_fraud_claim' => 'Reclamo de pago o posible fraude.',
         'human_requested' => 'Pidió hablar con una persona.',
         'unsafe_content' => 'Contenido que el agente no debe responder.',
+        'forbidden_action_attempt' => 'El agente intentó algo que no tiene permitido.',
+        'unsafe_claim' => 'La respuesta prometía algo que no se puede afirmar.',
+        'escalation' => 'Necesita que lo atienda una persona.',
+        'team_only_operation' => 'Es una operación que solo hace el equipo.',
         'already_paid' => 'Ya había pagado.',
         // Las intenciones del catálogo.
         'pricing_question' => 'Preguntó por los precios.',
@@ -684,6 +689,30 @@ class SupervisionController extends Controller
         'unknown' => 'Intención no identificada.',
     ];
 
+    /**
+     * El motivo de una decisión. Con ULTRON encendido y el análisis local apagado, CADA mensaje de texto deja una
+     * fila «no analizado» del agente anterior, también en la conversación que ULTRON sí atiende: decir solo «el
+     * análisis del agente está apagado» contradecía a la cabecera (I-1 de la revisión de la ola 6). La frase dice
+     * lo que la fila registra, en pasado, y añade quién lleva HOY esa conversación cuando se sabe.
+     *
+     * @param  array{mode: string, conversation: int|null}  $coverage
+     */
+    private function decisionReason(object $r, array $coverage): ?string
+    {
+        $texto = $this->reasonLabel($r->reason);
+        if ($r->reason !== 'auto_analyze_disabled') {
+            return $texto;
+        }
+        $laLlevaUltron = $coverage['mode'] === 'all'
+            || ($coverage['mode'] === 'one' && $r->conversation_id !== null && (int) $r->conversation_id === $coverage['conversation']);
+
+        return match (true) {
+            $laLlevaUltron => $texto.' Hoy esta conversación la lleva ULTRON.',
+            in_array($coverage['mode'], ['one', 'none'], true) => $texto.' Hoy no la lleva ningún agente automático: la atiende el equipo.',
+            default => $texto,
+        };
+    }
+
     private function reasonLabel(mixed $reason): ?string
     {
         if (! is_string($reason) || $reason === '') {
@@ -705,6 +734,7 @@ class SupervisionController extends Controller
             'running' => 'En curso',
             'succeeded' => 'Correcta',
             'rejected' => 'Rechazada',
+            'created' => 'Creada',
             default => is_string($status) && $status !== '' ? $status : null,
         };
     }
