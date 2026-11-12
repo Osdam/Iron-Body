@@ -95,7 +95,7 @@ class UltronStudioLabRunsTest extends TestCase
         $this->assertSame([], $escrituras, 'La estimación escribió.');
         $this->assertSame(['mode', 'model', 'promptVersion', 'cases', 'estimate', 'budget', 'allowed', 'refusal', 'excludedRules'], array_keys($e));
         $this->assertSame(['day', 'dailyCapMicros', 'committedMicros', 'remainingMicros', 'runCapMicros', 'runsToday', 'maxRunsPerDay'], array_keys($e['budget']));
-        $this->assertSame(['openai', 'gpt-lab-pruebas', '2026-10-19.1', 2], [$e['mode'], $e['model'], $e['promptVersion'], $e['cases']]);
+        $this->assertSame(['openai', 'gpt-lab-pruebas', '2026-11-12.1', 2], [$e['mode'], $e['model'], $e['promptVersion'], $e['cases']]);
         $this->assertGreaterThan(0, $e['estimate']['maxMicros']);
         $this->assertLessThanOrEqual($e['estimate']['maxMicros'], $e['estimate']['expectedMicros']);
         $this->assertSame([true, null, []], [$e['allowed'], $e['refusal'], $e['excludedRules']]);

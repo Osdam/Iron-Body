@@ -63,6 +63,36 @@ class StudioLabEngineChecksTest extends TestCase
         $this->assertStringNotContainsString('rechazaría', $h['title'].$h['detail']);
     }
 
+    /**
+     * Enmienda 8 de H4 (`PROMPT_VERSION 2026-11-12.1`): las cuatro conductas que el actor lleva en sus
+     * instrucciones tienen que caber en el filtro real del motor. Si una guarda cambia y empieza a marcar la frase
+     * que se le pide al actor, el laboratorio lo suspendería por obedecer: esta prueba lo dice antes.
+     */
+    public function test_las_conductas_que_se_le_piden_al_actor_pasan_el_filtro_real_del_motor(): void
+    {
+        $e = new E;
+        $sinPeticion = ['paymentState' => 'none', 'handoffRequested' => false];
+        $conPeticion = ['paymentState' => 'none', 'handoffRequested' => true];
+        $conductas = [
+            // a) informar antes de preguntar
+            ['No hay problema. Entrenar por tu cuenta te da libertad de horario; las clases grupales te dan guía y motivación. ¿Cuál se parece más a lo que buscas?', $sinPeticion],
+            // b) el pago que no consta
+            ['Todavía no lo veo registrado. Antes de confirmarlo hay que verificarlo con la pasarela de pagos; puede tardar unos minutos. No hace falta enviar capturas.', $sinPeticion],
+            // c) el traspaso corroborado
+            ['Claro, una persona del equipo continúa la conversación contigo.', $conPeticion],
+            // d) la visita como solicitud
+            ['Con gusto. Tu visita es una solicitud que todavía tiene que confirmar una persona del equipo. ¿A qué hora te gustaría venir mañana?', $sinPeticion],
+        ];
+        foreach ($conductas as [$texto, $hechos]) {
+            $this->assertSame([], self::idsYNiveles($e->check($texto, $hechos)), $texto);
+        }
+
+        // Las mismas situaciones, mal resueltas, siguen marcadas.
+        $this->assertSame(['motor-pago:blocking'], self::idsYNiveles($e->check('Listo, tu pago ya llegó.', $sinPeticion)));
+        $this->assertSame(['motor-machine_reply_unauthorized_handoff:blocking'], self::idsYNiveles($e->check('Te paso con una asesora', $sinPeticion)));
+        $this->assertSame(['motor-cortesia:blocking'], self::idsYNiveles($e->check('Listo, quedaste agendado para mañana a las 6', $sinPeticion)));
+    }
+
     public function test_los_hechos_del_escenario_llegan_a_las_guardas(): void
     {
         $e = new E;
