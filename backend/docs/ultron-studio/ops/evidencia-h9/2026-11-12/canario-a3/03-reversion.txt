@@ -1,0 +1,31 @@
+CIERRE V2 · APARTADO 3 · GATE 3-B, PASO 3 DE 4: REVERSIÓN DE LA VERSIÓN CANARIA
+Verificación en producción, solo lectura, el 12-11-2026 a las 22:56 UTC (17:56 en Bogotá).
+La revirtió el propietario desde el CRM con su cuenta «Desarrolladores»; nadie más intervino.
+
+php artisan ultron-studio:publication-check   (salida 0)
+  Llave del motor: canary · estado: legacy
+  Cabeza: entrada 2 (rollback, 2026-11-12T22:55:36+00:00) · verifica
+  Canario: Legacy
+  Resto: Legacy
+  La publicación vigente cuadra con el motor.
+
+php artisan ultron:prompt-trace --last=4
+  llave de prompts: canary · llave del sello: canary · canario: configurado
+  base n8n-29de5119 · compilador 2 · huella Legacy 3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902
+  decide ofrecería ahora a la canaria: legacy · motivo part_legacy
+  | Minuto (UTC)      | Declarada        | Ofrecida                 | Observada          | Estado  |
+  | 2026-11-11T23:37Z | legacy           | legacy   no_publication  | legacy 3f6a5674 S1 | legacy  |
+  | 2026-11-12T21:52Z | applied 4017639c | studio 4017639c 702890f7 | studio 702890f7 S1 | applied |
+  | 2026-11-12T21:54Z | applied 4017639c | studio 4017639c 702890f7 | studio 702890f7 S1 | applied |
+  | 2026-11-12T21:56Z | applied 4017639c | studio 4017639c 702890f7 | studio 702890f7 S1 | applied |
+  (todavía no hay ningún turno posterior a la reversión)
+
+php artisan ultron:abort
+  FRENO SUELTO. ULTRON funciona según sus interruptores de entorno.
+
+ultron_studio_publications (la cadena, dos filas)
+  id 1 · seq 1 · publish  · versión 4017639c-75bf-4f0a-8461-57479478a532 · contrato ultron-engine-config/2 · effective_hash e292e32e… · signature 48b67c2c…
+        actor #27 «Desarrolladores» (Super Admin) · 2026-11-12T21:45:13 UTC
+  id 2 · seq 2 · rollback · versión 4017639c-75bf-4f0a-8461-57479478a532 · contrato ultron-engine-config/1 · effective_hash b6da794a… · signature 738883ce…
+        previous_publication_id 1 · actor #27 «Desarrolladores» (Super Admin) · 2026-11-12T22:55:36 UTC (5:55 p. m. en Bogotá) · motivo de 246 caracteres
+  La versión queda en estado ROLLED_BACK («Revertida»).
