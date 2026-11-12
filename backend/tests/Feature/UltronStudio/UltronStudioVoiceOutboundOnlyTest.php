@@ -226,7 +226,11 @@ class UltronStudioVoiceOutboundOnlyTest extends TestCase
         $this->assertSame([], $this->fake->callsOf('assign'), 'ni asignar ni compensar');
     }
 
-    /** Con el adaptador real de ElevenLabs (contra `Http::fake`) y la constante de llamadas cerrada: publica sin ninguna petición al número. */
+    /**
+     * Con el adaptador real de ElevenLabs (contra `Http::fake`), en modo solo saliente: publica sin ninguna petición
+     * al número. Vale con la constante de llamadas en sus dos estados, porque `StudioVoicePublishing::pointNumber()`
+     * corta antes de llegar al desplegador; el día de la apertura es lo que importa: solo saliente + abierta → ningún PATCH.
+     */
     public function test_con_el_adaptador_real_publica_sin_pedir_nada_al_numero(): void
     {
         $this->outboundOnly();

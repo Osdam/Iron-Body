@@ -29,6 +29,7 @@ use Tests\Unit\Voice\Support\FreshHttpFake;
  *
  * El estado cerrado (la vuelta atrás: `not_attempted` por
  * `calls_disabled_in_code` sin red) no se alcanza desde el árbol abierto: lo
+ * prueba `ElevenLabsClosedCopyTest` con la copia cerrada en proceso y lo
  * recorre la copia cerrada del E2E (`H8E2ECerradaTest`, con el arnés).
  */
 class ElevenLabsCallStarterTest extends TestCase

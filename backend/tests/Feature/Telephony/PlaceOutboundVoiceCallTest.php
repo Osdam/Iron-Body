@@ -28,8 +28,9 @@ use Tests\TestCase;
  * salientes apagadas cancela con `outbound_disabled` sin llegar al iniciador
  * y libera la reserva; se prueba de punta a punta. El job con todo en regla
  * (marca una vez, con lo sellado) lo recorre `PlaceOutboundVoiceCallRecheckTest`;
- * con la constante cerrada (cancela por ella antes de nada) solo la copia
- * cerrada del E2E. Aquí se prueban además, por separado, el CUERPO de la
+ * con la constante cerrada (cancela por ella antes de nada),
+ * `PlaceOutboundVoiceCallClosedCopyTest` con la copia cerrada en proceso y la
+ * copia cerrada del E2E. Aquí se prueban además, por separado, el CUERPO de la
  * petición (contra las aserciones del fixture) y el MAPEO de cada resultado
  * del iniciador a la fila, el evento y la reserva.
  */

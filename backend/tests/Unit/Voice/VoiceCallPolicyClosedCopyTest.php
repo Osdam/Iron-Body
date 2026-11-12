@@ -110,19 +110,30 @@ class VoiceCallPolicyClosedCopyTest extends TestCase
             $this->assertCount(2, ClosedPolicyCopy::changedLines($lector), "{$lector}: la clase y el use de VoiceCallPolicy; nada más");
             $this->assertMatchesRegularExpression('/VoiceCallPolicy::(CALLS_ENABLED_IN_CODE|decide\()/', ClosedPolicyCopy::original($lector), "{$lector} lee la constante (o la política del H6) por el alias");
         }
-        // Todo lo que lee la constante para DECIDIR tiene su copia (el doctor y el estado solo la dicen).
-        $lectoresDelArbol = [];
+        // Todo lo que lee la constante para DECIDIR tiene su copia (el doctor y el estado solo la dicen). Quien decide A
+        // TRAVÉS de la política del H6 (`VoiceCallPolicy::decide(`) la lee igual, sin nombrarla (revisión de `T`, M-2).
+        $lectoresDelArbol = $llamanALaPolitica = [];
         foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(ClosedPolicyCopy::backend().'/app', \FilesystemIterator::SKIP_DOTS)) as $fichero) {
             $codigo = (string) file_get_contents((string) $fichero);
-            if (! str_contains($codigo, 'CALLS_ENABLED_IN_CODE')) {
+            if (! str_contains($codigo, 'CALLS_ENABLED_IN_CODE') && ! str_contains($codigo, 'VoiceCallPolicy::decide(')) {
                 continue;
             }
             $sinComentarios = implode('', array_map(static fn ($t): string => is_array($t) ? (in_array($t[0], [T_COMMENT, T_DOC_COMMENT], true) ? '' : $t[1]) : $t, token_get_all($codigo)));
+            $relativa = substr((string) $fichero, strlen(ClosedPolicyCopy::backend()) + 1);
             if (str_contains($sinComentarios, 'VoiceCallPolicy::CALLS_ENABLED_IN_CODE')) {
-                $lectoresDelArbol[] = substr((string) $fichero, strlen(ClosedPolicyCopy::backend()) + 1);
+                $lectoresDelArbol[] = $relativa;
+            }
+            if (str_contains($sinComentarios, 'VoiceCallPolicy::decide(')) {
+                $llamanALaPolitica[] = $relativa;
             }
         }
         sort($lectoresDelArbol);
+        sort($llamanALaPolitica);
+        // `OutboundPolicy` decide la saliente y tiene su copia; `StudioIntegrations` solo pinta el estado del panel del H6.
+        $this->assertSame(['app/Services/Telephony/OutboundPolicy.php', 'app/Services/UltronStudio/StudioIntegrations.php'], $llamanALaPolitica,
+            'quien llama a la política del H6 necesita su copia cerrada (o decir por qué no)');
+        $this->assertSame(['app/Services/UltronStudio/StudioIntegrations.php'], array_values(array_diff($llamanALaPolitica, array_keys(ClosedPolicyCopy::COPIES))),
+            'el único que llama a la política sin copia cerrada es el panel del Studio, que no decide ninguna llamada');
         $this->assertSame(['app/Console/Commands/Voice/VoiceDoctorCommand.php', 'app/Jobs/Voice/PlaceOutboundVoiceCall.php', 'app/Services/Telephony/InboundPolicy.php',
             'app/Services/Telephony/VoiceTelephonyStatus.php', 'app/Services/Voice/ElevenLabs/ElevenLabsAgentDeployer.php', 'app/Services/Voice/ElevenLabs/ElevenLabsCallStarter.php'],
             $lectoresDelArbol, 'un lector nuevo de la constante necesita su copia cerrada (o decir por qué no)');

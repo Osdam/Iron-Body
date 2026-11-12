@@ -349,7 +349,7 @@ En PHP eso exige dos cosas (casos «salto de línea al final…» y «dígitos d
 - permitidos: «todo listo: permitida (la constante abierta)» (antes «todo listo salvo la constante del código», el único renombrado), «ElevenLabs verificado no añade nada» y «cupo diario 1»;
 - el resto, los mismos motivos que antes sin el primero; los 6 `context`, sin cambios;
 - el conjunto cerrado `closedSets.voiceCallPolicyReasons` sigue empezando por `calls_disabled_in_code` (la clase no cambia sus `REASONS`);
-- el estado CERRADO, que es el destino de la vuelta atrás, no se pierde: `tests/Unit/Voice/VoiceCallPolicyClosedCopyTest.php` carga una copia de la política con la constante cerrada (la única línea que cambia) y le exige estos 18 casos con `calls_disabled_in_code` delante y `allowed = false`;
+- el estado CERRADO, que es el destino de la vuelta atrás, no se pierde: `tests/Unit/Voice/VoiceCallPolicyClosedCopyTest.php` carga una copia de la política con la constante cerrada (cambian dos líneas: la constante y el nombre de la clase) y le exige estos 18 casos con `calls_disabled_in_code` delante y `allowed = false`;
 - el comprobador independiente deriva la constante abierta y suma la variante `voiceCallPolicy:closed_constant` (la política cerrada): cae en los 18 casos `decide`. Total, 117 variantes.
 
 Es una enmienda del fixture del contrato del H6 (Enmienda 2: «este fichero solo cambia con una enmienda»); el texto propuesto está en `docs/ultron-studio/plans/informes-motores/informe-tester-voz-abierta.md`. Volver al estado cerrado es `git revert` de ese commit: el generador y el fixture vuelven byte a byte.

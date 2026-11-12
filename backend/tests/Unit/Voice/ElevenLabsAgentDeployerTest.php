@@ -30,7 +30,8 @@ use Tests\Unit\Voice\Support\VoiceSpecSamples as M;
  *    abiertas en el código (C-4, `voice(calls-open)`), UN PATCH con ese
  *    agente, y solo vale si el proveedor devuelve el número con ESE agente;
  *    sin la bandera, nada sale. Dejarlo sin agente, también un PATCH. (Lo
- *    cerrado, `not_attempted` por `calls_disabled_in_code` sin red, lo recorre
+ *    cerrado, `not_attempted` por `calls_disabled_in_code` sin red, lo prueba
+ *    `ElevenLabsClosedCopyTest` con la copia cerrada en proceso y lo recorre
  *    la copia cerrada del E2E.)
  *  - Ni la clave ni un cuerpo salen en un resultado.
  */
