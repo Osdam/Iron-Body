@@ -49,7 +49,7 @@ Mandos (en el servidor, como root, con copia previa del entorno y `config:cache`
 
 | # | Paso | Necesita |
 |---|---|---|
-| 3.1 | Primera saliente al canario de voz del propietario desde CRM → Voz → Llamadas (≈ 0,61 US$ reservados por llamada a móvil; ≈ 0,97 US$ con minutos) | **(d)** prueba real + (a) |
+| 3.1 | Primera saliente al canario de voz del propietario desde CRM → Voz → Llamadas. La puerta reserva **siempre** 5 min con un tramo de transferencia a fijo: **0,9605 US$** a un móvil colombiano y **1,1220 US$** a cualquier otro destino (`OutboundGate` → `VoiceCostGuard`, precios del 03-11). `salientes on` exige un presupuesto que cubra el peor caso (hoy, **1.13** o más; C-1). Coste real ≈ 0,12 US$/min (≈ 0,61 los 5 min). Paso a paso: `ops/RUNBOOK_PRIMERA_LLAMADA.md` | **(d)** prueba real + (a) |
 | 3.2 | Verificar: `requested → dialing → active → completed`, post-llamada procesada, coste, `voice:reconcile --dry-run` con `unknown 0`, sin rechazos en el registro de voz | — |
 | 3.3 | Tres llamadas con post-llamada, 24 h sin incidentes, promoción a `rest` (evidencia del canario) | (d) |
 | 3.4 | Contactos con consentimiento (4b): visto bueno legal (D-12), supresión 1581 de voz, consentimientos a cuatro ojos | (b) + (a) |

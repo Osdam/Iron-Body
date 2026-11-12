@@ -42,7 +42,10 @@
 #     VoiceCallPolicy.php empieza por `voice(calls-open):`): las fases 3 y 4a exigen ese commit (protección 2);
 #   · salientes on, además: sin el worker ironbody-voice en RUNNING, sin número, sin número importado, sin la subcuenta
 #     y su key (sin ella no hay corte de emergencia, nivel 0b), con el número de voz igual a uno de WhatsApp, o con un
-#     presupuesto que no cubre ni una llamada (la reserva de VoiceCostGuard::reserveMicros);
+#     presupuesto que no cubre la reserva de la PUERTA para UNA saliente en el peor caso (C-1, 11-11-2026: OutboundGate
+#     reserva SIEMPRE con un tramo de transferencia a fijo, 0,9605 US$ a un móvil colombiano y 1,1220 en cualquier otro
+#     caso con los precios de hoy; las cifras se leen del código desplegado con las funciones de la puerta, y si la
+#     fórmula de la puerta ya no es la que conoce este mando, también se niega);
 #   · entrantes on, con el número declarado «Outbound Only» (VOICE_NUMBER_INBOUND_CAPABLE=false: un caller ID verificado
 #     no recibe llamadas por Twilio);
 #   · lab on --driver=elevenlabs, si falta alguna de las tres referencias (ELEVENLABS_TOOL_SECRET_REF,
@@ -224,6 +227,28 @@ constante() {
                             echo "incoherente (en ejecución true; declaraciones true: $abiertas, false: $cerradas; último commit del fichero: «${asunto:0:60}»)" ;;
     *) echo cerrada ;;
   esac
+}
+# C-1 (11-11-2026): lo que reserva la PUERTA por saliente, leído del código desplegado con SUS funciones (sin red ni
+# escritura) y comparado con el presupuesto pedido con su misma regla (VoiceCostGuard::budgetMicros y ::fits, con 0
+# comprometido). La puerta (OutboundGate::decide) reserva SIEMPRE con un tramo de transferencia a fijo; el tipo de destino
+# solo elige el tramo de la llamada (móvil colombiano +573…, o fijo para cualquier otro y sin número). La puerta decide
+# en dos caminos (decide, el del CRM, y decideForStrategy, el de V9) con la misma fórmula: TODA línea de OutboundGate.php
+# que asigne $precios o $maxima o llame a reserveMicros( o a fits( tiene que ser, literal, la que conoce este mando (y
+# al menos una de cada); si no, las cifras de abajo podrían no ser las de la puerta: «cambiada».
+# Salida: una línea JSON {movil, otro, peor, presupuesto, cabe, segundos, precios} en µUS$, o «cambiada: …», o nada.
+reserva_puerta() { # $1 = el presupuesto ya validado por es_usd (solo dígitos y un punto)
+  local g=app/Services/Telephony/OutboundGate.php par patron l n m
+  [[ "$1" =~ ^[0-9]{1,3}(\.[0-9]{1,2})?$ ]] || return 0
+  for par in '$precios = |$precios = VoiceCostGuard::prices();' \
+             "\$maxima = |\$maxima = (int) config('voice.limits.per_call_max_seconds', 300);" \
+             'VoiceCostGuard::reserveMicros(|$reserva = VoiceCostGuard::reserveMicros($numero === null ? VoiceCostGuard::KIND_LANDLINE : VoiceCostGuard::destinationKind($numero), $maxima, VoiceCostGuard::KIND_LANDLINE, $precios);' \
+             'VoiceCostGuard::fits(|$cabe = VoiceCostGuard::fits(VoiceCostGuard::budgetFromConfig(), VoiceCostGuard::committedMicros($dia), $reserva);'; do
+    patron=${par%%|*}; l=${par#*|}
+    n=$(grep -cF -- "$patron" "$g" 2>/dev/null || true); m=$(grep -cxF -- "        $l" "$g" 2>/dev/null || true)
+    [ "${n:-0}" -ge 1 ] && [ "$n" = "$m" ] || { echo "cambiada: «${patron}» aparece ${n:-0} veces en $g y solo ${m:-0} son la fórmula conocida"; return 0; }
+  done
+  l=$(sudo -u "$WWW" php artisan tinker --execute='$g = App\Services\Telephony\VoiceCostGuard::class; $p = $g::prices(); $s = (int) config("voice.limits.per_call_max_seconds", 300); $m = $g::reserveMicros($g::KIND_MOBILE, $s, $g::KIND_LANDLINE, $p); $o = $g::reserveMicros($g::KIND_LANDLINE, $s, $g::KIND_LANDLINE, $p); $b = $g::budgetMicros("'"$1"'"); echo json_encode(["movil" => $m, "otro" => $o, "peor" => max($m, $o), "presupuesto" => $b, "cabe" => $g::fits($b, 0, max($m, $o)), "segundos" => $s, "precios" => $p["as_of"]]), PHP_EOL;' 2>&1 | tail -1) || true
+  case "$l" in '{"movil":'*) printf '%s\n' "$l" ;; esac
 }
 
 # ── Validación de valores (por forma; ninguno se imprime si es secreto) ──────────────────────────────────────────────
@@ -751,8 +776,20 @@ print(json.dumps(out, sort_keys=True))' "$SECRETOS_FICHERO" 2>&1) || niega "$CAM
       FALTAN=$(printf '%s' "$ANTES" | python3 -I -c 'import json, sys; d = json.load(sys.stdin); print(" ".join(n for n, k in [("TWILIO_VOICE_FROM", "from_last4"), ("ELEVENLABS_AGENT_PHONE_NUMBER_ID", "phone_number_id"), ("TWILIO_VOICE_ACCOUNT_SID", "account_last4"), ("TWILIO_VOICE_API_KEY_SID", "s_twilio_key_sid"), ("TWILIO_VOICE_API_KEY_SECRET", "s_twilio_key_secret"), ("VOICE_WEBHOOK_BASE_URL", "webhook_base")] if not d.get(k)))')
       [ -z "$FALTAN" ] || niega "faltan piezas para las salientes (sin la key de la subcuenta no hay corte de emergencia, nivel 0b): $FALTAN"
       [ "$(campo whatsapp_collision)" = false ] || niega "el número de voz coincide con uno de WhatsApp (protección 6)"
-      CUBRE=$(printf '%s' "$ANTES" | python3 -I -c 'import json, sys; from decimal import Decimal as D; d = json.load(sys.stdin); print("si" if D(sys.argv[1]) * 1000000 >= d["reserve_min_micros"] else "no")' "$PRES")
-      [ "$CUBRE" = si ] || niega "el presupuesto ($PRES US$) no cubre ni la reserva de UNA saliente a un móvil sin transferencia ($(campo reserve_min_micros) µUS$; VoiceCostGuard::reserveMicros): la política diría budget_exhausted"
+      RP=$(reserva_puerta "$PRES")
+      case "$RP" in
+        '{"movil":'*) ;;
+        cambiada:*) niega "la reserva de la puerta ya no es la que conoce este mando (${RP#cambiada: }): sin saber cuánto reserva OutboundGate por saliente no se enciende (C-1: revisar reserva_puerta en el mando contra el código desplegado)" ;;
+        *) niega "no se pudo leer la reserva de la puerta (tinker como $WWW; su salida no se imprime): sin ella no se enciende" ;;
+      esac
+      CUBRE=$(printf '%s' "$RP" | python3 -I -c '
+import json, sys
+d = json.load(sys.stdin)
+u = lambda v: "%.4f" % (v / 1e6)
+minimo = -(-d["peor"] // 10000) / 100   # la reserva del peor caso, redondeada hacia arriba al centavo (la forma de --presupuesto)
+print("%s|reserva de la puerta por saliente (OutboundGate → VoiceCostGuard, %d s con un tramo de transferencia a fijo, SIEMPRE; precios del %s): %s US$ a un móvil colombiano (+573…) · %s US$ a cualquier otro destino · peor caso %s US$ (presupuesto mínimo: %.2f)" % ("si" if d["cabe"] is True else "no", d["segundos"], d["precios"], u(d["movil"]), u(d["otro"]), u(d["peor"]), minimo))' 2>/dev/null || echo 'no|?')
+      [ "${CUBRE%%|*}" = si ] || niega "el presupuesto ($PRES US$) no cubre la reserva de UNA saliente en el peor caso: ${CUBRE#*|}. Con menos, la puerta deniega con budget_exhausted aunque este mando lo encendiera (C-1)"
+      echo "   ${CUBRE#*|}; el presupuesto ($PRES US$) la cubre"
       CAMBIOS=$(json_de VOICE_OUTBOUND_ENABLED=true TWILIO_VOICE_ENABLED=true VOICE_OUTBOUND_SCOPE=canary "TWILIO_VOICE_DAILY_CALL_CAP=$CUPO" "VOICE_DAILY_BUDGET_USD=$PRES")
     else
       [ -z "$PRES" ] || niega "--presupuesto es de las salientes"

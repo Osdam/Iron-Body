@@ -1,0 +1,394 @@
+#### el · banco 3161d3a3 · valla en 0 peticiones · registro $B/logs/ensayo-el-20261112-000337.txt
+#### partida: ELEVENLABS_VERIFIED · Studio ELEVENLABS_VERIFIED · ELEVENLABS_ENABLED True
+OK      partida: ElevenLabs verificado contra el simulador (el estado de producción)  [ELEVENLABS_VERIFIED · ELEVENLABS_VERIFIED]
+#### rechazos (código 1, sin copia y sin tocar nada; el fichero de la clave se queda)
+OK      fichero de la clave vacío → ABORTA  [código 1]
+OK        … el fichero no cambió
+OK      agent_id con forma inválida → ABORTA  [código 1]
+OK      fichero de entorno en 640 → ABORTA (el-verificar exige www-data 600)  [código 1]
+OK      con ironbody-env.lock tomado por otro proceso → ABORTA sin tocar nada  [código 1]
+OK        … el fichero no cambió
+OK        … sin copia previa y el fichero de la clave sigue (para repetir)  [copias 0]
+OK      con h8-voice-scope.lock tomado por otro proceso → ABORTA sin tocar nada  [código 1]
+OK        … el fichero no cambió
+OK        … sin copia previa y el fichero de la clave sigue (para repetir)  [copias 0]
+OK      con h9-outreach-scope.lock tomado por otro proceso → ABORTA sin tocar nada  [código 1]
+OK        … el fichero no cambió
+OK        … sin copia previa y el fichero de la clave sigue (para repetir)  [copias 0]
+#### HEAD (lo de hoy): sin cerrojos, y su fallo deja ElevenLabs sin verificar (y propone apagarlo)
+OK      HEAD con ironbody-env.lock tomado → NO lo mira: escribe y verifica igual  [código 0]
+OK      HEAD con una clave que el simulador rechaza → FALLIDA y propone ELEVENLABS_ENABLED=false  [código 1]
+OK        … HEAD deja puesta la clave que NO verificó, con ELEVENLABS_ENABLED=true (no vuelve a la de antes)  [telefonía ELEVENLABS_VERIFIED · Studio ELEVENLABS_VERIFIED]
+OK        … y la vuelta que propone (ELEVENLABS_ENABLED=false y la caché), aplicada, APAGA el proveedor de la voz (laboratorio incluido)  [telefonía ELEVENLABS_DISABLED]
+OK        (banco devuelto a la partida a mano)
+#### fallos en CADA etapa: vuelta atrás automática y COMPROBADA, sin apagar ElevenLabs
+OK      etapa parsea (forzado) → código 1, restaurado y COMPROBADO  [código 1]
+OK        … dice que ElevenLabs NO se apaga y termina en «VERIFICACIÓN FALLIDA (restaurado: sí)»
+OK        … el fichero, idéntico byte a byte al de antes
+OK        … tras parsea: el fichero de entorno sigue en 600 y de alejodev  [600 alejodev]
+OK        … tras parsea: la caché de configuración es un fichero de alejodev en 600 (lo que en producción es www-data)  [alejodev 600]
+OK        … configuración efectiva la de antes: ELEVENLABS_ENABLED=true, la clave de antes, proveedor y Studio VERIFIED (independiente)  [True · ELEVENLABS_VERIFIED · ELEVENLABS_VERIFIED]
+OK        … una copia previa nueva (600) y ningún temporal .env.tmp-*
+OK        … el fichero de la clave sigue (600) para repetir, y lo avisa
+OK      etapa cache2 (forzado) → código 1, restaurado y COMPROBADO  [código 1]
+OK        … dice que ElevenLabs NO se apaga y termina en «VERIFICACIÓN FALLIDA (restaurado: sí)»
+OK        … el fichero, idéntico byte a byte al de antes
+OK        … tras cache2: el fichero de entorno sigue en 600 y de alejodev  [600 alejodev]
+OK        … tras cache2: la caché de configuración es un fichero de alejodev en 600 (lo que en producción es www-data)  [alejodev 600]
+OK        … configuración efectiva la de antes: ELEVENLABS_ENABLED=true, la clave de antes, proveedor y Studio VERIFIED (independiente)  [True · ELEVENLABS_VERIFIED · ELEVENLABS_VERIFIED]
+OK        … una copia previa nueva (600) y ningún temporal .env.tmp-*
+OK        … el fichero de la clave sigue (600) para repetir, y lo avisa
+OK      etapa bandera (forzado) → código 1, restaurado y COMPROBADO  [código 1]
+OK        … dice que ElevenLabs NO se apaga y termina en «VERIFICACIÓN FALLIDA (restaurado: sí)»
+OK        … el fichero, idéntico byte a byte al de antes
+OK        … tras bandera: el fichero de entorno sigue en 600 y de alejodev  [600 alejodev]
+OK        … tras bandera: la caché de configuración es un fichero de alejodev en 600 (lo que en producción es www-data)  [alejodev 600]
+OK        … configuración efectiva la de antes: ELEVENLABS_ENABLED=true, la clave de antes, proveedor y Studio VERIFIED (independiente)  [True · ELEVENLABS_VERIFIED · ELEVENLABS_VERIFIED]
+OK        … una copia previa nueva (600) y ningún temporal .env.tmp-*
+OK        … el fichero de la clave sigue (600) para repetir, y lo avisa
+OK      etapa cache3 (forzado) → código 1, restaurado y COMPROBADO  [código 1]
+OK        … dice que ElevenLabs NO se apaga y termina en «VERIFICACIÓN FALLIDA (restaurado: sí)»
+OK        … el fichero, idéntico byte a byte al de antes
+OK        … tras cache3: el fichero de entorno sigue en 600 y de alejodev  [600 alejodev]
+OK        … tras cache3: la caché de configuración es un fichero de alejodev en 600 (lo que en producción es www-data)  [alejodev 600]
+OK        … configuración efectiva la de antes: ELEVENLABS_ENABLED=true, la clave de antes, proveedor y Studio VERIFIED (independiente)  [True · ELEVENLABS_VERIFIED · ELEVENLABS_VERIFIED]
+OK        … una copia previa nueva (600) y ningún temporal .env.tmp-*
+OK        … el fichero de la clave sigue (600) para repetir, y lo avisa
+OK      etapa señal (SIGTERM tras la caché con la bandera) → código 143, restaurado y COMPROBADO  [código 143]
+OK        … dice que ElevenLabs NO se apaga y termina en «VERIFICACIÓN FALLIDA (restaurado: sí)»
+OK        … el fichero, idéntico byte a byte al de antes
+OK        … tras senal: el fichero de entorno sigue en 600 y de alejodev  [600 alejodev]
+OK        … tras senal: la caché de configuración es un fichero de alejodev en 600 (lo que en producción es www-data)  [alejodev 600]
+OK        … configuración efectiva la de antes: ELEVENLABS_ENABLED=true, la clave de antes, proveedor y Studio VERIFIED (independiente)  [True · ELEVENLABS_VERIFIED · ELEVENLABS_VERIFIED]
+OK        … una copia previa nueva (600) y ningún temporal .env.tmp-*
+OK        … el fichero de la clave sigue (600) para repetir, y lo avisa
+OK      etapa doctor --verify (clave que el simulador rechaza: 401) → código 1, restaurado y COMPROBADO  [código 1]
+OK        … dice que ElevenLabs NO se apaga y termina en «VERIFICACIÓN FALLIDA (restaurado: sí)»
+OK        … el fichero, idéntico byte a byte al de antes
+OK        … tras verify: el fichero de entorno sigue en 600 y de alejodev  [600 alejodev]
+OK        … tras verify: la caché de configuración es un fichero de alejodev en 600 (lo que en producción es www-data)  [alejodev 600]
+OK        … configuración efectiva la de antes: ELEVENLABS_ENABLED=true, la clave de antes, proveedor y Studio VERIFIED (independiente)  [True · ELEVENLABS_VERIFIED · ELEVENLABS_VERIFIED]
+OK        … una copia previa nueva (600) y ningún temporal .env.tmp-*
+OK        … el fichero de la clave que no verificó se destruyó (REV8 m-5)
+#### la restauración que falla: lo dice y da la orden a mano, que se ejecuta
+OK      etapa cache2 con la caché de la vuelta rota → código 1, restauración INCOMPLETA y la orden a mano  [código 1]
+OK        … la orden a mano sale con 0
+OK        … y deja el fichero idéntico al de antes
+OK        … y la configuración efectiva la de antes
+#### casos felices: --solo-clave (la rotación de §4.9) y el modo completo
+OK      el-verificar --solo-clave con la clave nueva → ELEVENLABS VERIFICACIÓN TERMINADA  [código 0]
+OK        … la clave del fichero de entorno es la nueva (huella), y el agente, la región, los tres secretos y la base siguen igual
+OK        … telefonía y Studio ELEVENLABS_VERIFIED con la clave nueva, ELEVENLABS_ENABLED=true y la marca de 30 días RENOVADA  [ELEVENLABS_VERIFIED · ELEVENLABS_VERIFIED · True · marca 2026-11-12T00:03:44Z → 2026-11-12T00:04:20Z]
+OK        … el fichero de la clave destruido; la vuelta impresa es restaurar la copia (no apagar ElevenLabs)
+OK        … tras la rotación: el fichero de entorno sigue en 600 y de alejodev  [600 alejodev]
+OK        … tras la rotación: la caché de configuración es un fichero de alejodev en 600 (lo que en producción es www-data)  [alejodev 600]
+OK        la vuelta impresa tras el éxito (con la clave de antes aún válida) sale con 0
+OK        … y deja el fichero idéntico al de antes de la rotación
+OK        … y la configuración efectiva de la voz la de antes (la marca, renovada, se queda: es de la base, no del fichero)
+OK      el-verificar <agent_id> (modo completo, alta) → TERMINADA  [código 0]
+OK        … TERMINADA y ELEVENLABS_VERIFIED
+#### cierre
+OK      ninguna clave en ninguna salida ni en el registro del ensayo
+OK      copias previas en 600 (9)
+#### cierre común
+OK      CERO red: la valla no recibió ninguna petición en todo el ensayo  [valla: 0 → 0]
+OK      el banco vuelve a su fichero de entorno de partida, su modo (600) y su caché
+86 OK · 0 FALLO (registro: $B/logs/ensayo-el-20261112-000337.txt)
+
+════════ registro detallado (ensayo-el-20261112-000337.txt) ════════
+════ fichero de la clave vacío → ABORTA · código 1
+ABORTA: $B/root/el-clave.txt vacío
+════ agent_id con forma inválida → ABORTA · código 1
+ABORTA: agent_id con forma inválida
+════ fichero de entorno en 640 → ABORTA (el-verificar exige www-data 600) · código 1
+ABORTA: fichero de entorno en alejodev 640
+════ con ironbody-env.lock tomado por otro proceso → ABORTA sin tocar nada · código 1
+ABORTA: otro mando que escribe el fichero de entorno está en curso: esperar a que termine (no se ha tocado nada; $B/root/el-clave.txt sigue en disco)
+════ con h8-voice-scope.lock tomado por otro proceso → ABORTA sin tocar nada · código 1
+ABORTA: otro mando que escribe el fichero de entorno está en curso: esperar a que termine (no se ha tocado nada; $B/root/el-clave.txt sigue en disco)
+════ con h9-outreach-scope.lock tomado por otro proceso → ABORTA sin tocar nada · código 1
+ABORTA: otro mando que escribe el fichero de entorno está en curso: esperar a que termine (no se ha tocado nada; $B/root/el-clave.txt sigue en disco)
+════ HEAD con ironbody-env.lock tomado → NO lo mira: escribe y verifica igual · código 0
+0. partida: ── Voz · ElevenLabs · doctor ── · workers 13/0
+1. modo --solo-clave: se sustituye solo la clave; secretos, agente y región se conservan
+   ELEVENLABS_ENABLED sustituida
+   ELEVENLABS_API_KEY sustituida
+   parsea · permisos alejodev 600
+2. caché alejodev 600 · doctor con la bandera apagada:
+   ── Voz · ElevenLabs · doctor ──
+   Estado     : ELEVENLABS_DISABLED
+   Proveedor  : none
+   Bandera    : apagada (ELEVENLABS_ENABLED)
+   Región     : default
+   Faltan     : ninguna
+   ELEVENLABS_ENABLED=true
+3. doctor --verify (un GET al agente):
+   ── Voz · ElevenLabs · doctor ──
+   Estado     : ELEVENLABS_UNVERIFIED
+   Proveedor  : elevenlabs
+   Bandera    : encendida (ELEVENLABS_ENABLED)
+   Región     : default
+   Faltan     : ninguna
+   Llamadas   : cerradas en el código (la constante de VoiceCallPolicy): ni salientes ni entrantes autorizadas.
+   
+4. instantánea de verificación (integrations-snapshot --verify-voice):
+   meta_ads: sin cambios (huella 7c58544c17ac…)
+   twilio: sin cambios (huella 3cb95ab4a81f…)
+   voice: anotada (huella 5058bb12459c…)
+   Verificación de voz: credenciales válidas; evidencia guardada y marca de la telefonía escrita (30 días).
+5. estado efectivo:
+   {"calls_enabled_in_code":false,"elevenlabs_enabled":true,"has_key":true,"agent_id_set":true,"twilio_voice_enabled":false}
+   workers 13/0 · secret-exposure: OK · ERROR log: 0
+   integrations-doctor (voz): 
+6. fichero de la clave destruido · copia previa: $B/root/env-pre-elevenlabs-20261112-000342 (600 root) · vuelta atrás: ELEVENLABS_ENABLED=false y la caché · modo: solo-clave
+ELEVENLABS VERIFICACIÓN TERMINADA
+════ HEAD con una clave que el simulador rechaza → FALLIDA y propone ELEVENLABS_ENABLED=false · código 1
+0. partida: ── Voz · ElevenLabs · doctor ── · workers 13/0
+1. modo --solo-clave: se sustituye solo la clave; secretos, agente y región se conservan
+   ELEVENLABS_ENABLED sustituida
+   ELEVENLABS_API_KEY sustituida
+   parsea · permisos alejodev 600
+2. caché alejodev 600 · doctor con la bandera apagada:
+   ── Voz · ElevenLabs · doctor ──
+   Estado     : ELEVENLABS_DISABLED
+   Proveedor  : none
+   Bandera    : apagada (ELEVENLABS_ENABLED)
+   Región     : default
+   Faltan     : ninguna
+   ELEVENLABS_ENABLED=true
+3. doctor --verify (un GET al agente):
+   ── Voz · ElevenLabs · doctor ──
+   Estado     : ELEVENLABS_UNVERIFIED
+   Proveedor  : elevenlabs
+   Bandera    : encendida (ELEVENLABS_ENABLED)
+   Región     : default
+   Faltan     : ninguna
+   Llamadas   : cerradas en el código (la constante de VoiceCallPolicy): ni salientes ni entrantes autorizadas.
+   
+ELEVENLABS VERIFICACIÓN FALLIDA (doctor --verify salió con 1): fichero de la clave destruido; la configuración queda SIN verificar. Repetir con un fichero nuevo o volver atrás: ELEVENLABS_ENABLED=false y la caché (copia previa: $B/root/env-pre-elevenlabs-20261112-000351)
+════ etapa parsea (forzado) → código 1, restaurado y COMPROBADO · código 1
+0. partida: ── Voz · ElevenLabs · doctor ── · workers 13/0
+1. modo --solo-clave: se sustituye solo la clave; secretos, agente y región se conservan
+   ELEVENLABS_ENABLED sustituida
+   ELEVENLABS_API_KEY sustituida
+   ✗ el fichero de entorno NO parsea tras escribir (paso 1)
+VUELTA ATRÁS AUTOMÁTICA (fallo a medias, código 1; 0 si lo cortó una señal): se restaura la copia previa y se regenera la caché; ElevenLabs NO se apaga
+   fichero de entorno restaurado: idéntico byte a byte a la copia previa, alejodev:staff 600
+   caché regenerada con el fichero de antes (alejodev 600, legible por alejodev)
+   colas reiniciadas (por si un worker llegó a cargar la configuración intermedia)
+   configuración efectiva de la voz: la de antes (misma huella; ELEVENLABS_ENABLED y la clave, los de antes)
+   restaurado y COMPROBADO: el fichero es la copia previa byte a byte y la configuración efectiva es la de antes
+   AVISO: $B/root/el-clave.txt sigue en disco (600, root): repetir la orden o destruirlo con shred -u
+   la copia previa se conserva: $B/root/env-pre-elevenlabs-20261112-000356 (600; lleva la clave de antes y los secretos: shred -u cuando ya no haga falta)
+ELEVENLABS VERIFICACIÓN FALLIDA (restaurado: sí)
+════ etapa cache2 (forzado) → código 1, restaurado y COMPROBADO · código 1
+0. partida: ── Voz · ElevenLabs · doctor ── · workers 13/0
+1. modo --solo-clave: se sustituye solo la clave; secretos, agente y región se conservan
+   ELEVENLABS_ENABLED sustituida
+   ELEVENLABS_API_KEY sustituida
+   parsea · permisos alejodev 600
+   ✗ config:cache falló o la caché no quedó de alejodev en 600 y legible (paso 2)
+VUELTA ATRÁS AUTOMÁTICA (fallo a medias, código 1; 0 si lo cortó una señal): se restaura la copia previa y se regenera la caché; ElevenLabs NO se apaga
+   fichero de entorno restaurado: idéntico byte a byte a la copia previa, alejodev:staff 600
+   caché regenerada con el fichero de antes (alejodev 600, legible por alejodev)
+   colas reiniciadas (por si un worker llegó a cargar la configuración intermedia)
+   configuración efectiva de la voz: la de antes (misma huella; ELEVENLABS_ENABLED y la clave, los de antes)
+   restaurado y COMPROBADO: el fichero es la copia previa byte a byte y la configuración efectiva es la de antes
+   AVISO: $B/root/el-clave.txt sigue en disco (600, root): repetir la orden o destruirlo con shred -u
+   la copia previa se conserva: $B/root/env-pre-elevenlabs-20261112-000359 (600; lleva la clave de antes y los secretos: shred -u cuando ya no haga falta)
+ELEVENLABS VERIFICACIÓN FALLIDA (restaurado: sí)
+════ etapa bandera (forzado) → código 1, restaurado y COMPROBADO · código 1
+0. partida: ── Voz · ElevenLabs · doctor ── · workers 13/0
+1. modo --solo-clave: se sustituye solo la clave; secretos, agente y región se conservan
+   ELEVENLABS_ENABLED sustituida
+   ELEVENLABS_API_KEY sustituida
+   parsea · permisos alejodev 600
+2. caché alejodev 600 · doctor con la bandera apagada:
+   ── Voz · ElevenLabs · doctor ──
+   Estado     : ELEVENLABS_DISABLED
+   Proveedor  : none
+   Bandera    : apagada (ELEVENLABS_ENABLED)
+   Región     : default
+   Faltan     : ninguna
+   ELEVENLABS_ENABLED=true
+   ✗ no se pudo escribir ELEVENLABS_ENABLED=true (paso 3)
+VUELTA ATRÁS AUTOMÁTICA (fallo a medias, código 1; 0 si lo cortó una señal): se restaura la copia previa y se regenera la caché; ElevenLabs NO se apaga
+   fichero de entorno restaurado: idéntico byte a byte a la copia previa, alejodev:staff 600
+   caché regenerada con el fichero de antes (alejodev 600, legible por alejodev)
+   colas reiniciadas (por si un worker llegó a cargar la configuración intermedia)
+   configuración efectiva de la voz: la de antes (misma huella; ELEVENLABS_ENABLED y la clave, los de antes)
+   restaurado y COMPROBADO: el fichero es la copia previa byte a byte y la configuración efectiva es la de antes
+   AVISO: $B/root/el-clave.txt sigue en disco (600, root): repetir la orden o destruirlo con shred -u
+   la copia previa se conserva: $B/root/env-pre-elevenlabs-20261112-000402 (600; lleva la clave de antes y los secretos: shred -u cuando ya no haga falta)
+ELEVENLABS VERIFICACIÓN FALLIDA (restaurado: sí)
+════ etapa cache3 (forzado) → código 1, restaurado y COMPROBADO · código 1
+0. partida: ── Voz · ElevenLabs · doctor ── · workers 13/0
+1. modo --solo-clave: se sustituye solo la clave; secretos, agente y región se conservan
+   ELEVENLABS_ENABLED sustituida
+   ELEVENLABS_API_KEY sustituida
+   parsea · permisos alejodev 600
+2. caché alejodev 600 · doctor con la bandera apagada:
+   ── Voz · ElevenLabs · doctor ──
+   Estado     : ELEVENLABS_DISABLED
+   Proveedor  : none
+   Bandera    : apagada (ELEVENLABS_ENABLED)
+   Región     : default
+   Faltan     : ninguna
+   ELEVENLABS_ENABLED=true
+   ✗ config:cache falló o la caché no quedó bien con la bandera encendida (paso 3)
+VUELTA ATRÁS AUTOMÁTICA (fallo a medias, código 1; 0 si lo cortó una señal): se restaura la copia previa y se regenera la caché; ElevenLabs NO se apaga
+   fichero de entorno restaurado: idéntico byte a byte a la copia previa, alejodev:staff 600
+   caché regenerada con el fichero de antes (alejodev 600, legible por alejodev)
+   colas reiniciadas (por si un worker llegó a cargar la configuración intermedia)
+   configuración efectiva de la voz: la de antes (misma huella; ELEVENLABS_ENABLED y la clave, los de antes)
+   restaurado y COMPROBADO: el fichero es la copia previa byte a byte y la configuración efectiva es la de antes
+   AVISO: $B/root/el-clave.txt sigue en disco (600, root): repetir la orden o destruirlo con shred -u
+   la copia previa se conserva: $B/root/env-pre-elevenlabs-20261112-000405 (600; lleva la clave de antes y los secretos: shred -u cuando ya no haga falta)
+ELEVENLABS VERIFICACIÓN FALLIDA (restaurado: sí)
+════ etapa señal (SIGTERM tras la caché con la bandera) → código 143, restaurado y COMPROBADO · código 143
+0. partida: ── Voz · ElevenLabs · doctor ── · workers 13/0
+1. modo --solo-clave: se sustituye solo la clave; secretos, agente y región se conservan
+   ELEVENLABS_ENABLED sustituida
+   ELEVENLABS_API_KEY sustituida
+   parsea · permisos alejodev 600
+2. caché alejodev 600 · doctor con la bandera apagada:
+   ── Voz · ElevenLabs · doctor ──
+   Estado     : ELEVENLABS_DISABLED
+   Proveedor  : none
+   Bandera    : apagada (ELEVENLABS_ENABLED)
+   Región     : default
+   Faltan     : ninguna
+   ELEVENLABS_ENABLED=true
+VUELTA ATRÁS AUTOMÁTICA (fallo a medias, código 0; 0 si lo cortó una señal): se restaura la copia previa y se regenera la caché; ElevenLabs NO se apaga
+   fichero de entorno restaurado: idéntico byte a byte a la copia previa, alejodev:staff 600
+   caché regenerada con el fichero de antes (alejodev 600, legible por alejodev)
+   colas reiniciadas (por si un worker llegó a cargar la configuración intermedia)
+   configuración efectiva de la voz: la de antes (misma huella; ELEVENLABS_ENABLED y la clave, los de antes)
+   restaurado y COMPROBADO: el fichero es la copia previa byte a byte y la configuración efectiva es la de antes
+   AVISO: $B/root/el-clave.txt sigue en disco (600, root): repetir la orden o destruirlo con shred -u
+   la copia previa se conserva: $B/root/env-pre-elevenlabs-20261112-000409 (600; lleva la clave de antes y los secretos: shred -u cuando ya no haga falta)
+ELEVENLABS VERIFICACIÓN FALLIDA (restaurado: sí)
+docs/ultron-studio/ops/banco-h9/telefonia-prep.sh: line 381: 53436 Terminated: 15          bash "$B/root/el-verificar.sh" "${@:2}"
+════ etapa doctor --verify (clave que el simulador rechaza: 401) → código 1, restaurado y COMPROBADO · código 1
+0. partida: ── Voz · ElevenLabs · doctor ── · workers 13/0
+1. modo --solo-clave: se sustituye solo la clave; secretos, agente y región se conservan
+   ELEVENLABS_ENABLED sustituida
+   ELEVENLABS_API_KEY sustituida
+   parsea · permisos alejodev 600
+2. caché alejodev 600 · doctor con la bandera apagada:
+   ── Voz · ElevenLabs · doctor ──
+   Estado     : ELEVENLABS_DISABLED
+   Proveedor  : none
+   Bandera    : apagada (ELEVENLABS_ENABLED)
+   Región     : default
+   Faltan     : ninguna
+   ELEVENLABS_ENABLED=true
+3. doctor --verify (un GET al agente):
+   ── Voz · ElevenLabs · doctor ──
+   Estado     : ELEVENLABS_UNVERIFIED
+   Proveedor  : elevenlabs
+   Bandera    : encendida (ELEVENLABS_ENABLED)
+   Región     : default
+   Faltan     : ninguna
+   Llamadas   : cerradas en el código (la constante de VoiceCallPolicy): ni salientes ni entrantes autorizadas.
+   
+   ✗ doctor --verify salió con 1: la clave nueva no verificó; fichero de la clave destruido
+VUELTA ATRÁS AUTOMÁTICA (fallo a medias, código 1; 0 si lo cortó una señal): se restaura la copia previa y se regenera la caché; ElevenLabs NO se apaga
+   fichero de entorno restaurado: idéntico byte a byte a la copia previa, alejodev:staff 600
+   caché regenerada con el fichero de antes (alejodev 600, legible por alejodev)
+   colas reiniciadas (por si un worker llegó a cargar la configuración intermedia)
+   configuración efectiva de la voz: la de antes (misma huella; ELEVENLABS_ENABLED y la clave, los de antes)
+   restaurado y COMPROBADO: el fichero es la copia previa byte a byte y la configuración efectiva es la de antes
+   la copia previa se conserva: $B/root/env-pre-elevenlabs-20261112-000412 (600; lleva la clave de antes y los secretos: shred -u cuando ya no haga falta)
+ELEVENLABS VERIFICACIÓN FALLIDA (restaurado: sí)
+════ etapa cache2 con la caché de la vuelta rota → código 1, restauración INCOMPLETA y la orden a mano · código 1
+0. partida: ── Voz · ElevenLabs · doctor ── · workers 13/0
+1. modo --solo-clave: se sustituye solo la clave; secretos, agente y región se conservan
+   ELEVENLABS_ENABLED sustituida
+   ELEVENLABS_API_KEY sustituida
+   parsea · permisos alejodev 600
+   ✗ config:cache falló o la caché no quedó de alejodev en 600 y legible (paso 2)
+VUELTA ATRÁS AUTOMÁTICA (fallo a medias, código 1; 0 si lo cortó una señal): se restaura la copia previa y se regenera la caché; ElevenLabs NO se apaga
+   fichero de entorno restaurado: idéntico byte a byte a la copia previa, alejodev:staff 600
+   ✗ la caché NO se regeneró bien (config:cache como alejodev, 600, de alejodev y legible)
+   colas reiniciadas (por si un worker llegó a cargar la configuración intermedia)
+   configuración efectiva de la voz: la de antes (misma huella; ELEVENLABS_ENABLED y la clave, los de antes)
+   ✗ restauración INCOMPLETA: vuelta a mano: install -m 600 -o alejodev -g staff $B/root/env-pre-elevenlabs-20261112-000416 $B/api/backend/.env && cd $B/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+   AVISO: $B/root/el-clave.txt sigue en disco (600, root): repetir la orden o destruirlo con shred -u
+   la copia previa se conserva: $B/root/env-pre-elevenlabs-20261112-000416 (600; lleva la clave de antes y los secretos: shred -u cuando ya no haga falta)
+ELEVENLABS VERIFICACIÓN FALLIDA (restaurado: NO)
+════ el-verificar --solo-clave con la clave nueva → ELEVENLABS VERIFICACIÓN TERMINADA · código 0
+0. partida: ── Voz · ElevenLabs · doctor ── · workers 13/0
+1. modo --solo-clave: se sustituye solo la clave; secretos, agente y región se conservan
+   ELEVENLABS_ENABLED sustituida
+   ELEVENLABS_API_KEY sustituida
+   parsea · permisos alejodev 600
+2. caché alejodev 600 · doctor con la bandera apagada:
+   ── Voz · ElevenLabs · doctor ──
+   Estado     : ELEVENLABS_DISABLED
+   Proveedor  : none
+   Bandera    : apagada (ELEVENLABS_ENABLED)
+   Región     : default
+   Faltan     : ninguna
+   ELEVENLABS_ENABLED=true
+3. doctor --verify (un GET al agente):
+   ── Voz · ElevenLabs · doctor ──
+   Estado     : ELEVENLABS_UNVERIFIED
+   Proveedor  : elevenlabs
+   Bandera    : encendida (ELEVENLABS_ENABLED)
+   Región     : default
+   Faltan     : ninguna
+   Llamadas   : cerradas en el código (la constante de VoiceCallPolicy): ni salientes ni entrantes autorizadas.
+   
+4. instantánea de verificación (integrations-snapshot --verify-voice):
+   meta_ads: sin cambios (huella 7c58544c17ac…)
+   twilio: sin cambios (huella 3cb95ab4a81f…)
+   voice: sin cambios (huella 5058bb12459c…)
+   Verificación de voz: credenciales válidas; evidencia guardada y marca de la telefonía escrita (30 días).
+5. estado efectivo:
+   {"calls_enabled_in_code":false,"elevenlabs_enabled":true,"has_key":true,"agent_id_set":true,"twilio_voice_enabled":false}
+   workers 13/0 · secret-exposure: OK · ERROR log: 0
+   integrations-doctor (voz): 
+6. fichero de la clave destruido · copia previa: $B/root/env-pre-elevenlabs-20261112-000418 (600 root) · modo: solo-clave
+   vuelta atrás (solo mientras la clave de antes no esté revocada en la consola): install -m 600 -o alejodev -g staff $B/root/env-pre-elevenlabs-20261112-000418 $B/api/backend/.env && cd $B/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+   después de revocar la de antes, la vuelta es otra clave nueva; la copia previa lleva la de antes: shred -u cuando ya no haga falta
+ELEVENLABS VERIFICACIÓN TERMINADA
+════ el-verificar <agent_id> (modo completo, alta) → TERMINADA · código 0
+0. partida: ── Voz · ElevenLabs · doctor ── · workers 13/0
+   ELEVENLABS_ENABLED sustituida
+   ELEVENLABS_API_KEY sustituida
+   ELEVENLABS_AGENT_ID sustituida
+   ELEVENLABS_WEBHOOK_SECRET sustituida
+   ELEVENLABS_TOOL_SECRET sustituida
+   ELEVENLABS_REGION sustituida
+   parsea · permisos alejodev 600
+2. caché alejodev 600 · doctor con la bandera apagada:
+   ── Voz · ElevenLabs · doctor ──
+   Estado     : ELEVENLABS_DISABLED
+   Proveedor  : none
+   Bandera    : apagada (ELEVENLABS_ENABLED)
+   Región     : default
+   Faltan     : ninguna
+   ELEVENLABS_ENABLED=true
+3. doctor --verify (un GET al agente):
+   ── Voz · ElevenLabs · doctor ──
+   Estado     : ELEVENLABS_UNVERIFIED
+   Proveedor  : elevenlabs
+   Bandera    : encendida (ELEVENLABS_ENABLED)
+   Región     : default
+   Faltan     : ninguna
+   Llamadas   : cerradas en el código (la constante de VoiceCallPolicy): ni salientes ni entrantes autorizadas.
+   
+4. instantánea de verificación (integrations-snapshot --verify-voice):
+   meta_ads: sin cambios (huella 7c58544c17ac…)
+   twilio: sin cambios (huella 3cb95ab4a81f…)
+   voice: anotada (huella 2f99f7112508…)
+   Verificación de voz: credenciales válidas; evidencia guardada y marca de la telefonía escrita (30 días).
+5. estado efectivo:
+   {"calls_enabled_in_code":false,"elevenlabs_enabled":true,"has_key":true,"agent_id_set":true,"twilio_voice_enabled":false}
+   workers 13/0 · secret-exposure: OK · ERROR log: 0
+   integrations-doctor (voz): 
+6. fichero de la clave destruido · copia previa: $B/root/env-pre-elevenlabs-20261112-000431 (600 root) · modo: completo
+   vuelta atrás (solo mientras la clave de antes no esté revocada en la consola): install -m 600 -o alejodev -g staff $B/root/env-pre-elevenlabs-20261112-000431 $B/api/backend/.env && cd $B/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+   después de revocar la de antes, la vuelta es otra clave nueva; la copia previa lleva la de antes: shred -u cuando ya no haga falta
+ELEVENLABS VERIFICACIÓN TERMINADA

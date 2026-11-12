@@ -82,6 +82,36 @@ Usa un `flock` DE VERDAD (fcntl sobre el descriptor heredado, en `$B/bin-hechos`
 el caso del cerrojo común ocupado sí se ensaya. Informe y resultados: `plans/informes-motores/informe-devops-hechos-voz.md`
 y `evidencia-h9/2026-11-11/hechos-voz/`.
 
+## La preparación de la primera llamada (`telefonia-prep.sh`, 11-11-2026)
+
+Ensaya los tres mandos que cambió la preparación de la primera llamada: `h8-voice-scope.sh salientes on` (C-1),
+`el-verificar.sh` (C-3) y `h7-monitor-scope.sh` (`--check=prompts`). Usa un banco PROPIO, montado a partir de la «producción» del banco
+de la ola M-1:
+- una copia de su `api`;
+- una base propia, clonada con `CREATE DATABASE … TEMPLATE`;
+- el código en HEAD del worktree;
+- el simulador de ElevenLabs del H8 (`banco-h8/sim-elevenlabs.cjs`) en 127.0.0.1, con piezas SINTÉTICAS;
+- un `flock` de verdad.
+
+No cambia `m1.sh` ni el banco de origen.
+
+```bash
+B=${XDG_CACHE_HOME:-$HOME/.cache}/ironbody-banco-telefonia
+bash docs/ultron-studio/ops/banco-h9/telefonia-prep.sh "$B" montar     # BANCO_ORIGEN = el banco M-1 (parado)
+bash docs/ultron-studio/ops/banco-h9/telefonia-prep.sh "$B" arrancar   # valla :8574, ElevenLabs simulado :8572, API :8571
+bash docs/ultron-studio/ops/banco-h9/telefonia-prep.sh "$B" voz        # C-1 (54 casos)
+bash docs/ultron-studio/ops/banco-h9/telefonia-prep.sh "$B" el         # C-3 (86 casos)
+bash docs/ultron-studio/ops/banco-h9/telefonia-prep.sh "$B" monitor    # --check=prompts (12 casos)
+bash docs/ultron-studio/ops/banco-h9/telefonia-prep.sh "$B" parar      # o «borrar»: también la base y el directorio
+```
+
+**La constante.** Se abre con un commit `voice(calls-open):` que solo existe en el CLON del banco, nunca en el repo. Se
+vuelve a cerrar con el checkout del runbook.
+
+**Informe y salida íntegra:**
+- `plans/informes-motores/informe-devops-telefonia-prep.md`;
+- `evidencia-h9/2026-11-11/telefonia-prep/`.
+
 ## Puertos
 
 | Qué | Variable | Por defecto |

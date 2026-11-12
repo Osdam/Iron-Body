@@ -289,10 +289,10 @@ echo "5. status sin token → $c"; [ "$c" = 401 ] || desvio "status sin token re
 if [ "$VALOR" = on ]; then
   # Informativo: lo que verá la primera pasada programada (en seco no abre incidentes). Las colas, en la primera pasada
   # real: justo tras queue:restart un carril puede tener cola sin latido unos segundos (como el paso 9 del despliegue).
-  if sudo -u www-data php artisan ultron-studio:monitor --check=publication --check=integrations --dry-run > /dev/null 2>&1; then
-    echo "   INFO: ultron-studio:monitor --dry-run (publicación e integraciones): 0, la primera pasada no debería abrir incidente"
+  if sudo -u www-data php artisan ultron-studio:monitor --check=publication --check=integrations --check=prompts --dry-run > /dev/null 2>&1; then
+    echo "   INFO: ultron-studio:monitor --dry-run (publicación, integraciones y prompts): 0, la primera pasada no debería abrir incidente"
   else
-    echo "   INFO: ultron-studio:monitor --dry-run (publicación e integraciones) NO sale con 0: la primera pasada programada abrirá o sumará un incidente; verlo a mano: sudo -u www-data php artisan ultron-studio:monitor --dry-run"
+    echo "   INFO: ultron-studio:monitor --dry-run (publicación, integraciones y prompts) NO sale con 0: la primera pasada programada abrirá o sumará un incidente; verlo a mano: sudo -u www-data php artisan ultron-studio:monitor --dry-run"
   fi
   # H-1 (informe-devops-h7.md §8) / B-4: lo que importa es el usuario EFECTIVO de schedule:run (quien_programa, arriba).
   if [ "$(como_root)" != 0 ]; then

@@ -1,0 +1,320 @@
+#### voz · banco 3161d3a3 · valla en 0 peticiones · registro $B/logs/ensayo-voz-20261112-000037.txt
+#### partida: constante cerrada, sin piezas de Twilio, salientes apagadas
+OK      salientes on con la constante CERRADA → se niega (la constante va antes que el presupuesto)  [código 2]
+OK        … el fichero no cambió
+#### las piezas de la fase 2 con el mando (sintéticas; el número declarado «Outbound Only», W1/C-5)
+OK      fase 2 secreto <fichero 600> → APLICADO (y el fichero destruido)  [código 0]
+OK      fase 2 set de la cuenta, el número, el id importado, la base y VOICE_NUMBER_INBOUND_CAPABLE=false → APLICADO  [código 0]
+OK      estado: «NO: «Outbound Only» declarado» y la reserva informativa de siempre  [código 0]
+OK      salientes on SIN el worker ironbody-voice (13 programas) → se niega  [código 2]
+OK      estado con la constante abierta (commit voice(calls-open) en el clon) y 14 workers  [código 0]
+#### C-1 · el mando de HEAD (lo instalado hoy) acepta lo que la puerta denegaría
+OK      HEAD: salientes on --presupuesto=0.70 → APLICADO (el defecto: 0.70 ≥ 0.6105 sin transferencia)  [código 0]
+OK        … y la regla de la puerta (VoiceCostGuard::fits con la reserva de OutboundGate a un móvil) NO lo cubre
+OK      HEAD: salientes off → APLICADO (vuelve)  [código 0]
+OK        … ida y vuelta con el de HEAD: el fichero igual al de las piezas salvo VOICE_OUTBOUND_SCOPE=canary
+#### C-1 · el mando del árbol: rechazos con las cifras de la puerta (código 2, sin copia, sin tocar el fichero)
+OK        (a mano, con los precios del 03-11: un móvil con transferencia 960500 µUS$ y otro destino 1122000)  [960500 1122000]
+OK      salientes on --presupuesto=0.61 → se niega con las cifras (0.9605 móvil · 1.1220 otro · mínimo 1.13)  [código 2]
+OK        … el fichero no cambió
+OK      salientes on --presupuesto=0.70 → se niega con las cifras (0.9605 móvil · 1.1220 otro · mínimo 1.13)  [código 2]
+OK        … el fichero no cambió
+OK      salientes on --presupuesto=0.96 → se niega con las cifras (0.9605 móvil · 1.1220 otro · mínimo 1.13)  [código 2]
+OK        … el fichero no cambió
+OK      salientes on --presupuesto=0.97 → se niega con las cifras (0.9605 móvil · 1.1220 otro · mínimo 1.13)  [código 2]
+OK        … el fichero no cambió
+OK      salientes on --presupuesto=1.00 → se niega con las cifras (0.9605 móvil · 1.1220 otro · mínimo 1.13)  [código 2]
+OK        … el fichero no cambió
+OK      salientes on --presupuesto=1.12 → se niega con las cifras (0.9605 móvil · 1.1220 otro · mínimo 1.13)  [código 2]
+OK        … el fichero no cambió
+OK        … ningún rechazo hizo copia previa
+#### C-1 · la fórmula de la puerta cambiada en el código desplegado → se niega (no adivina)
+OK      OutboundGate reserva SIN transferencia en UNO de sus dos caminos (decide) → se niega: la reserva de la puerta ya no es la que conoce el mando  [código 2]
+OK        … el fichero no cambió
+OK        … OutboundGate.php restaurado (el clon sin cambios sin confirmar)
+#### C-1 · casos felices: la frontera 1.13 y el 2.00 de la autorización
+OK      salientes on --presupuesto=1.13 → APLICADO, y dice las cifras  [código 0]
+OK        … imprime «peor caso 1.1220 … el presupuesto (1.13 US$) la cubre»
+OK        … la regla de la puerta, leída aparte, cubre el peor caso con la configuración efectiva
+OK      salientes off → APLICADO  [código 0]
+OK        … ida y vuelta: el fichero igual al de las piezas salvo VOICE_OUTBOUND_SCOPE=canary
+OK      salientes on --cupo=1 --presupuesto=2.00 (la orden autorizada) → APLICADO  [código 0]
+OK      repetirla → nada que escribir (idempotente)  [código 0]
+OK      salientes off → APLICADO  [código 0]
+OK        … ida y vuelta: el fichero igual al de las piezas salvo VOICE_OUTBOUND_SCOPE=canary
+#### fallos forzados tras escribir (paso 1: Dotenv) y tras la caché (paso 3): ABORTA con la vuelta exacta, que se ejecuta
+OK      fallo forzado (parsea) → ABORTA, código 1, con la vuelta impresa  [código 1]
+OK        … la vuelta exacta impresa sale con 0
+OK        … y deja el fichero idéntico byte a byte al de antes
+OK        … tras la vuelta (parsea): el fichero de entorno sigue en 600 y de alejodev  [600 alejodev]
+OK        … tras la vuelta (parsea): la caché de configuración es un fichero de alejodev en 600 (lo que en producción es www-data)  [alejodev 600]
+OK        … la configuración efectiva vuelve a salientes apagadas, cupo 0 y presupuesto 0  [[false,0,"0"]]
+OK      fallo forzado (cache) → ABORTA, código 1, con la vuelta impresa  [código 1]
+OK        … la vuelta exacta impresa sale con 0
+OK        … y deja el fichero idéntico byte a byte al de antes
+OK        … tras la vuelta (cache): el fichero de entorno sigue en 600 y de alejodev  [600 alejodev]
+OK        … tras la vuelta (cache): la caché de configuración es un fichero de alejodev en 600 (lo que en producción es www-data)  [alejodev 600]
+OK        … la configuración efectiva vuelve a salientes apagadas, cupo 0 y presupuesto 0  [[false,0,"0"]]
+#### el cerrojo del mando ocupado por otro proceso
+OK      con h8-voice-scope.lock tomado → ABORTA sin tocar nada  [código 1]
+OK        … el fichero no cambió
+#### cierre: la constante se cierra con la vuelta del runbook (checkout del commit anterior) y el entorno de partida
+OK      constante cerrada otra vez en el clon (checkout del commit de antes)
+#### cierre común
+OK      CERO red: la valla no recibió ninguna petición en todo el ensayo  [valla: 0 → 0]
+OK      el banco vuelve a su fichero de entorno de partida, su modo (600) y su caché
+54 OK · 0 FALLO (registro: $B/logs/ensayo-voz-20261112-000037.txt)
+
+════════ registro detallado (ensayo-voz-20261112-000037.txt) ════════
+════ salientes on con la constante CERRADA → se niega (la constante va antes que el presupuesto) · código 2
+NO SE APLICA (no se ha tocado nada): la constante VoiceCallPolicy::CALLS_ENABLED_IN_CODE está cerrada en el código desplegado: las fases 3 y 4a exigen el commit de una línea `voice(calls-open): …` con la autorización escrita del propietario (protección 2), desplegado antes de este mando
+════ fase 2 secreto <fichero 600> → APLICADO (y el fichero destruido) · código 0
+0. fase2-secreto · copia previa: $B/root/env-pre-voice-fase2-secreto-20261112-000039 (600, alejodev) · fichero alejodev:staff 600 · programador 33 0 0 · workers 13 0 · constante cerrada
+   TWILIO_VOICE_API_KEY_SECRET añadida
+   TWILIO_VOICE_API_KEY_SID añadida
+1. claves escritas (sin valores): TWILIO_VOICE_API_KEY_SID TWILIO_VOICE_API_KEY_SECRET · fichero alejodev:staff 600
+2. el fichero parsea · caché: alejodev 600
+3. configuración efectiva, antes → después (sin valores de secretos): s_twilio_key_secret: false → true · s_twilio_key_sid: false → true
+   motor, H4–H7 y ElevenLabs (proveedor y Studio) sin cambios
+   el fichero de entorno es la copia previa salvo 2 clave(s) de la orden
+4. programador (total · del Studio · de voz): 33 0 0 → 33 0 0 (esperado 33 0 0)
+5. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+6. admin/voice/status sin token → 401
+7. local.ERROR en laravel*.log: 0 → 0
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=1 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=no importado=no subcuenta=no whatsapp=no proveedor=ELEVENLABS_VERIFIED
+   AVISO: la huella de voz del Studio cambió con las piezas: reconocer otra vez la configuración autorizada (CRM → Studio → Integraciones → Voz, o GET/POST integrations/config) antes de seguir; si el monitor del H7 está encendido, su expectativa pasa a ser la de la fase 2 (bash $B/root/h8-voice-scope.sh expectativa fase2)
+   vuelta atrás exacta (el fichero de antes): install -m 600 -o alejodev -g staff $B/root/env-pre-voice-fase2-secreto-20261112-000039 $B/api/backend/.env && cd $B/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+   $B/root/tw-voz.txt destruido (los secretos solo quedan en el fichero de entorno y en la copia previa, las dos 600)
+MANDO fase2-secreto APLICADO (copia previa: $B/root/env-pre-voice-fase2-secreto-20261112-000039)
+════ fase 2 set de la cuenta, el número, el id importado, la base y VOICE_NUMBER_INBOUND_CAPABLE=false → APLICADO · código 0
+0. fase2-set · copia previa: $B/root/env-pre-voice-fase2-set-20261112-000057 (600, alejodev) · fichero alejodev:staff 600 · programador 33 0 0 · workers 13 0 · constante cerrada
+   ELEVENLABS_AGENT_PHONE_NUMBER_ID añadida
+   TWILIO_VOICE_ACCOUNT_SID añadida
+   TWILIO_VOICE_FROM añadida
+   VOICE_NUMBER_INBOUND_CAPABLE añadida
+   VOICE_WEBHOOK_BASE_URL añadida
+1. claves escritas (sin valores): ELEVENLABS_AGENT_PHONE_NUMBER_ID TWILIO_VOICE_ACCOUNT_SID TWILIO_VOICE_FROM VOICE_NUMBER_INBOUND_CAPABLE VOICE_WEBHOOK_BASE_URL · fichero alejodev:staff 600
+2. el fichero parsea · caché: alejodev 600
+3. configuración efectiva, antes → después (sin valores de secretos): account_last4: null → "9c02" · from_last4: null → "0001" · number_inbound_capable: null → false · phone_number_id: null → "phnum_99ee1e148fc227dc" · webhook_base: null → "https://voz.banco-telefonia.test"
+   motor, H4–H7 y ElevenLabs (proveedor y Studio) sin cambios
+   el fichero de entorno es la copia previa salvo 5 clave(s) de la orden
+4. programador (total · del Studio · de voz): 33 0 0 → 33 0 0 (esperado 33 0 0)
+5. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+6. admin/voice/status sin token → 401
+7. local.ERROR en laravel*.log: 0 → 0
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=1 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=si importado=si subcuenta=si whatsapp=no proveedor=ELEVENLABS_VERIFIED
+   AVISO: la huella de voz del Studio cambió con las piezas: reconocer otra vez la configuración autorizada (CRM → Studio → Integraciones → Voz, o GET/POST integrations/config) antes de seguir; si el monitor del H7 está encendido, su expectativa pasa a ser la de la fase 2 (bash $B/root/h8-voice-scope.sh expectativa fase2)
+   vuelta atrás exacta (el fichero de antes): install -m 600 -o alejodev -g staff $B/root/env-pre-voice-fase2-set-20261112-000057 $B/api/backend/.env && cd $B/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+MANDO fase2-set APLICADO (copia previa: $B/root/env-pre-voice-fase2-set-20261112-000057)
+════ estado: «NO: «Outbound Only» declarado» y la reserva informativa de siempre · código 0
+== estado de la voz (configuración efectiva del proceso CLI, la misma caché que el web; sin valores de secretos)
+   código desplegado: HEAD 3161d3a · constante de llamadas: cerrada
+   salientes: no · alcance canary · cupo/día 0 · presupuesto/día 0 US$ · Twilio Voice no
+   entrantes: no · cupo/día 0
+   laboratorio hablado: sí · driver elevenlabs · presupuesto/día 3.00 US$ · por sesión 0 US$ · 300 s · 5 sesiones/día
+   monitor de voz: no · publicar la voz (Studio): no · monitor del H7: no (expectativa: twilio:connected_otp_only,twilio_voice:not_configured,elevenlabs:ELEVENLABS_NOT_CONFIGURED)
+   piezas no secretas: VOICE_WEBHOOK_BASE_URL https://voz.banco-telefonia.test · ELEVENLABS_AGENT_PHONE_NUMBER_ID phnum_99ee1e148fc227dc · TWILIO_VOICE_FROM …0001 · TWILIO_VOICE_ACCOUNT_SID AC…9c02
+   referencias (ids, no secretos): herramientas — · iniciación — · webhook post-llamada —
+   secretos (solo presencia): ELEVENLABS_API_KEY presente · ELEVENLABS_WEBHOOK_SECRET presente · ELEVENLABS_TOOL_SECRET presente · ELEVENLABS_INITIATION_SECRET presente · TWILIO_VOICE_API_KEY_SID presente · TWILIO_VOICE_API_KEY_SECRET presente · TWILIO_VOICE_SIGNING_TOKEN falta
+   número de voz igual a uno de WhatsApp: no · ElevenLabs según el Studio: ELEVENLABS_VERIFIED
+   el número admite entrantes (VOICE_NUMBER_INBOUND_CAPABLE): NO: «Outbound Only» declarado
+   reserva por saliente (VoiceCostGuard): 0.6105 US$ a un móvil sin transferencia · 1.1220 US$ a un fijo con transferencia
+   contactos de voz (alta y consentimiento, VOICE_CONTACTS_ENABLED, B-T4): no (409 voice_contacts_disabled; revocar, excluir y el RNE siguen)
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=1 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=si importado=si subcuenta=si whatsapp=no proveedor=ELEVENLABS_VERIFIED
+   hechos de consultar_horarios (huellas, nunca el texto): sede: vacía · horario: vacía · líneas en el fichero: VOICE_FACTS_SITE 0, VOICE_FACTS_HOURS 0 · la herramienta los dice: no (necesita los dos; dice que no los tiene) (bash $B/root/h8-voice-scope.sh hechos …)
+   programador (total · del Studio · de voz): 33 0 0 (de voz: 5 con el monitor de voz encendido, 0 apagado)
+   workers (RUNNING · BACKOFF/FATAL): 13 0 · ironbody-voice en RUNNING: 0 (lo exige «salientes on»)
+   fichero de entorno: alejodev:staff 600 (C-14: www-data 600 o root:www-data 640)
+   integrations-doctor confirma la expectativa del monitor del H7: NO (con el monitor del H7 encendido abriría un incidente; ver «expectativa»)
+════ salientes on SIN el worker ironbody-voice (13 programas) → se niega · código 2
+NO SE APLICA (no se ha tocado nada): el worker ironbody-voice no está en RUNNING: sin él ninguna saliente sale de la cola voice (instalarlo antes: docs/ops/supervisor/ironbody-voice.conf, con autorización; plan, fase 4a)
+════ estado con la constante abierta (commit voice(calls-open) en el clon) y 14 workers · código 0
+== estado de la voz (configuración efectiva del proceso CLI, la misma caché que el web; sin valores de secretos)
+   código desplegado: HEAD e19241c · constante de llamadas: abierta
+   salientes: no · alcance canary · cupo/día 0 · presupuesto/día 0 US$ · Twilio Voice no
+   entrantes: no · cupo/día 0
+   laboratorio hablado: sí · driver elevenlabs · presupuesto/día 3.00 US$ · por sesión 0 US$ · 300 s · 5 sesiones/día
+   monitor de voz: no · publicar la voz (Studio): no · monitor del H7: no (expectativa: twilio:connected_otp_only,twilio_voice:not_configured,elevenlabs:ELEVENLABS_NOT_CONFIGURED)
+   piezas no secretas: VOICE_WEBHOOK_BASE_URL https://voz.banco-telefonia.test · ELEVENLABS_AGENT_PHONE_NUMBER_ID phnum_99ee1e148fc227dc · TWILIO_VOICE_FROM …0001 · TWILIO_VOICE_ACCOUNT_SID AC…9c02
+   referencias (ids, no secretos): herramientas — · iniciación — · webhook post-llamada —
+   secretos (solo presencia): ELEVENLABS_API_KEY presente · ELEVENLABS_WEBHOOK_SECRET presente · ELEVENLABS_TOOL_SECRET presente · ELEVENLABS_INITIATION_SECRET presente · TWILIO_VOICE_API_KEY_SID presente · TWILIO_VOICE_API_KEY_SECRET presente · TWILIO_VOICE_SIGNING_TOKEN falta
+   número de voz igual a uno de WhatsApp: no · ElevenLabs según el Studio: ELEVENLABS_VERIFIED
+   el número admite entrantes (VOICE_NUMBER_INBOUND_CAPABLE): NO: «Outbound Only» declarado
+   reserva por saliente (VoiceCostGuard): 0.6105 US$ a un móvil sin transferencia · 1.1220 US$ a un fijo con transferencia
+   contactos de voz (alta y consentimiento, VOICE_CONTACTS_ENABLED, B-T4): no (409 voice_contacts_disabled; revocar, excluir y el RNE siguen)
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_UNVERIFIED constante=abierta encendidas=1 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=si importado=si subcuenta=si whatsapp=no proveedor=ELEVENLABS_VERIFIED
+   hechos de consultar_horarios (huellas, nunca el texto): sede: vacía · horario: vacía · líneas en el fichero: VOICE_FACTS_SITE 0, VOICE_FACTS_HOURS 0 · la herramienta los dice: no (necesita los dos; dice que no los tiene) (bash $B/root/h8-voice-scope.sh hechos …)
+   programador (total · del Studio · de voz): 33 0 0 (de voz: 5 con el monitor de voz encendido, 0 apagado)
+   workers (RUNNING · BACKOFF/FATAL): 14 0 · ironbody-voice en RUNNING: 1 (lo exige «salientes on»)
+   fichero de entorno: alejodev:staff 600 (C-14: www-data 600 o root:www-data 640)
+   integrations-doctor confirma la expectativa del monitor del H7: NO (con el monitor del H7 encendido abriría un incidente; ver «expectativa»)
+════ HEAD: salientes on --presupuesto=0.70 → APLICADO (el defecto: 0.70 ≥ 0.6105 sin transferencia) · código 0
+0. salientes-on · copia previa: $B/root/env-pre-voice-salientes-on-20261112-000119 (600, alejodev) · fichero alejodev:staff 600 · programador 33 0 0 · workers 14 0 · constante abierta
+   TWILIO_VOICE_DAILY_CALL_CAP sustituida
+   TWILIO_VOICE_ENABLED sustituida
+   VOICE_DAILY_BUDGET_USD sustituida
+   VOICE_OUTBOUND_ENABLED sustituida
+   VOICE_OUTBOUND_SCOPE añadida
+1. claves escritas (sin valores): TWILIO_VOICE_DAILY_CALL_CAP TWILIO_VOICE_ENABLED VOICE_DAILY_BUDGET_USD VOICE_OUTBOUND_ENABLED VOICE_OUTBOUND_SCOPE · fichero alejodev:staff 600
+2. el fichero parsea · caché: alejodev 600
+3. configuración efectiva, antes → después (sin valores de secretos): budget: "0" → "0.70" · outbound: false → true · outbound_cap: 0 → 1 · twilio_voice: false → true
+   motor, H4–H7 y ElevenLabs (proveedor y Studio) sin cambios
+   el fichero de entorno es la copia previa salvo 5 clave(s) de la orden
+4. programador (total · del Studio · de voz): 33 0 0 → 33 0 0 (esperado 33 0 0)
+5. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [14 0] y [14 0] (esperado 14 0 las dos veces)
+6. admin/voice/status sin token → 401
+7. local.ERROR en laravel*.log: 0 → 0
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_UNVERIFIED constante=abierta encendidas=3 cadena=canary:none,rest:none freno=suelto cupos=1/0/700000 numero=si importado=si subcuenta=si whatsapp=no proveedor=ELEVENLABS_VERIFIED
+   AVISO (H-25, OPS8-d): salientes on/off cambian la huella de voz del Studio (twilioVoice.enabled y dailyCallCap): reconocer otra vez la configuración autorizada (CRM → Studio → Integraciones → Voz) o, con el monitor del H7 encendido, saltará config_drift:voice
+   AVISO: la puerta deniega igualmente sin una publicación de voz en canary, con el freno echado, sin canarios de voz activos o con ElevenLabs sin verificar en la telefonía (E4-6); la primera saliente, a un canario y desde el CRM («Voz y telefonía»)
+   AVISO: el monitor de voz está apagado: sin conciliación no se ven las ambiguas ni las llamadas ajenas (bash $B/root/h8-voice-scope-head.sh monitor on)
+   vuelta atrás exacta (el fichero de antes): install -m 600 -o alejodev -g staff $B/root/env-pre-voice-salientes-on-20261112-000119 $B/api/backend/.env && cd $B/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+   vuelta atrás funcional: bash $B/root/h8-voice-scope-head.sh salientes off
+MANDO salientes-on APLICADO (copia previa: $B/root/env-pre-voice-salientes-on-20261112-000119)
+════ HEAD: salientes off → APLICADO (vuelve) · código 0
+0. salientes-off · copia previa: $B/root/env-pre-voice-salientes-off-20261112-000138 (600, alejodev) · fichero alejodev:staff 600 · programador 33 0 0 · workers 14 0 · constante abierta
+   TWILIO_VOICE_DAILY_CALL_CAP sustituida
+   TWILIO_VOICE_ENABLED sustituida
+   VOICE_DAILY_BUDGET_USD sustituida
+   VOICE_OUTBOUND_ENABLED sustituida
+1. claves escritas (sin valores): TWILIO_VOICE_DAILY_CALL_CAP TWILIO_VOICE_ENABLED VOICE_DAILY_BUDGET_USD VOICE_OUTBOUND_ENABLED · fichero alejodev:staff 600
+2. el fichero parsea · caché: alejodev 600
+3. configuración efectiva, antes → después (sin valores de secretos): budget: "0.70" → "0" · outbound: true → false · outbound_cap: 1 → 0 · twilio_voice: true → false
+   motor, H4–H7 y ElevenLabs (proveedor y Studio) sin cambios
+   el fichero de entorno es la copia previa salvo 4 clave(s) de la orden
+4. programador (total · del Studio · de voz): 33 0 0 → 33 0 0 (esperado 33 0 0)
+5. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [14 0] y [14 0] (esperado 14 0 las dos veces)
+6. admin/voice/status sin token → 401
+7. local.ERROR en laravel*.log: 0 → 0
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_UNVERIFIED constante=abierta encendidas=1 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=si importado=si subcuenta=si whatsapp=no proveedor=ELEVENLABS_VERIFIED
+   AVISO (H-25, OPS8-d): salientes on/off cambian la huella de voz del Studio (twilioVoice.enabled y dailyCallCap): reconocer otra vez la configuración autorizada (CRM → Studio → Integraciones → Voz) o, con el monitor del H7 encendido, saltará config_drift:voice
+   vuelta atrás exacta (el fichero de antes): install -m 600 -o alejodev -g staff $B/root/env-pre-voice-salientes-off-20261112-000138 $B/api/backend/.env && cd $B/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+MANDO salientes-off APLICADO (copia previa: $B/root/env-pre-voice-salientes-off-20261112-000138)
+════ salientes on --presupuesto=0.61 → se niega con las cifras (0.9605 móvil · 1.1220 otro · mínimo 1.13) · código 2
+NO SE APLICA (no se ha tocado nada): el presupuesto (0.61 US$) no cubre la reserva de UNA saliente en el peor caso: reserva de la puerta por saliente (OutboundGate → VoiceCostGuard, 300 s con un tramo de transferencia a fijo, SIEMPRE; precios del 2026-11-03): 0.9605 US$ a un móvil colombiano (+573…) · 1.1220 US$ a cualquier otro destino · peor caso 1.1220 US$ (presupuesto mínimo: 1.13). Con menos, la puerta deniega con budget_exhausted aunque este mando lo encendiera (C-1)
+════ salientes on --presupuesto=0.70 → se niega con las cifras (0.9605 móvil · 1.1220 otro · mínimo 1.13) · código 2
+NO SE APLICA (no se ha tocado nada): el presupuesto (0.70 US$) no cubre la reserva de UNA saliente en el peor caso: reserva de la puerta por saliente (OutboundGate → VoiceCostGuard, 300 s con un tramo de transferencia a fijo, SIEMPRE; precios del 2026-11-03): 0.9605 US$ a un móvil colombiano (+573…) · 1.1220 US$ a cualquier otro destino · peor caso 1.1220 US$ (presupuesto mínimo: 1.13). Con menos, la puerta deniega con budget_exhausted aunque este mando lo encendiera (C-1)
+════ salientes on --presupuesto=0.96 → se niega con las cifras (0.9605 móvil · 1.1220 otro · mínimo 1.13) · código 2
+NO SE APLICA (no se ha tocado nada): el presupuesto (0.96 US$) no cubre la reserva de UNA saliente en el peor caso: reserva de la puerta por saliente (OutboundGate → VoiceCostGuard, 300 s con un tramo de transferencia a fijo, SIEMPRE; precios del 2026-11-03): 0.9605 US$ a un móvil colombiano (+573…) · 1.1220 US$ a cualquier otro destino · peor caso 1.1220 US$ (presupuesto mínimo: 1.13). Con menos, la puerta deniega con budget_exhausted aunque este mando lo encendiera (C-1)
+════ salientes on --presupuesto=0.97 → se niega con las cifras (0.9605 móvil · 1.1220 otro · mínimo 1.13) · código 2
+NO SE APLICA (no se ha tocado nada): el presupuesto (0.97 US$) no cubre la reserva de UNA saliente en el peor caso: reserva de la puerta por saliente (OutboundGate → VoiceCostGuard, 300 s con un tramo de transferencia a fijo, SIEMPRE; precios del 2026-11-03): 0.9605 US$ a un móvil colombiano (+573…) · 1.1220 US$ a cualquier otro destino · peor caso 1.1220 US$ (presupuesto mínimo: 1.13). Con menos, la puerta deniega con budget_exhausted aunque este mando lo encendiera (C-1)
+════ salientes on --presupuesto=1.00 → se niega con las cifras (0.9605 móvil · 1.1220 otro · mínimo 1.13) · código 2
+NO SE APLICA (no se ha tocado nada): el presupuesto (1.00 US$) no cubre la reserva de UNA saliente en el peor caso: reserva de la puerta por saliente (OutboundGate → VoiceCostGuard, 300 s con un tramo de transferencia a fijo, SIEMPRE; precios del 2026-11-03): 0.9605 US$ a un móvil colombiano (+573…) · 1.1220 US$ a cualquier otro destino · peor caso 1.1220 US$ (presupuesto mínimo: 1.13). Con menos, la puerta deniega con budget_exhausted aunque este mando lo encendiera (C-1)
+════ salientes on --presupuesto=1.12 → se niega con las cifras (0.9605 móvil · 1.1220 otro · mínimo 1.13) · código 2
+NO SE APLICA (no se ha tocado nada): el presupuesto (1.12 US$) no cubre la reserva de UNA saliente en el peor caso: reserva de la puerta por saliente (OutboundGate → VoiceCostGuard, 300 s con un tramo de transferencia a fijo, SIEMPRE; precios del 2026-11-03): 0.9605 US$ a un móvil colombiano (+573…) · 1.1220 US$ a cualquier otro destino · peor caso 1.1220 US$ (presupuesto mínimo: 1.13). Con menos, la puerta deniega con budget_exhausted aunque este mando lo encendiera (C-1)
+════ OutboundGate reserva SIN transferencia en UNO de sus dos caminos (decide) → se niega: la reserva de la puerta ya no es la que conoce el mando · código 2
+NO SE APLICA (no se ha tocado nada): la reserva de la puerta ya no es la que conoce este mando («VoiceCostGuard::reserveMicros(» aparece 2 veces en app/Services/Telephony/OutboundGate.php y solo 1 son la fórmula conocida): sin saber cuánto reserva OutboundGate por saliente no se enciende (C-1: revisar reserva_puerta en el mando contra el código desplegado)
+════ salientes on --presupuesto=1.13 → APLICADO, y dice las cifras · código 0
+   reserva de la puerta por saliente (OutboundGate → VoiceCostGuard, 300 s con un tramo de transferencia a fijo, SIEMPRE; precios del 2026-11-03): 0.9605 US$ a un móvil colombiano (+573…) · 1.1220 US$ a cualquier otro destino · peor caso 1.1220 US$ (presupuesto mínimo: 1.13); el presupuesto (1.13 US$) la cubre
+0. salientes-on · copia previa: $B/root/env-pre-voice-salientes-on-20261112-000208 (600, alejodev) · fichero alejodev:staff 600 · programador 33 0 0 · workers 14 0 · constante abierta
+   TWILIO_VOICE_DAILY_CALL_CAP sustituida
+   TWILIO_VOICE_ENABLED sustituida
+   VOICE_DAILY_BUDGET_USD sustituida
+   VOICE_OUTBOUND_ENABLED sustituida
+   VOICE_OUTBOUND_SCOPE añadida
+1. claves escritas (sin valores): TWILIO_VOICE_DAILY_CALL_CAP TWILIO_VOICE_ENABLED VOICE_DAILY_BUDGET_USD VOICE_OUTBOUND_ENABLED VOICE_OUTBOUND_SCOPE · fichero alejodev:staff 600
+2. el fichero parsea · caché: alejodev 600
+3. configuración efectiva, antes → después (sin valores de secretos): budget: "0" → "1.13" · outbound: false → true · outbound_cap: 0 → 1 · twilio_voice: false → true
+   motor, H4–H7 y ElevenLabs (proveedor y Studio) sin cambios
+   el fichero de entorno es la copia previa salvo 5 clave(s) de la orden
+4. programador (total · del Studio · de voz): 33 0 0 → 33 0 0 (esperado 33 0 0)
+5. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [14 0] y [14 0] (esperado 14 0 las dos veces)
+6. admin/voice/status sin token → 401
+7. local.ERROR en laravel*.log: 0 → 0
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_UNVERIFIED constante=abierta encendidas=3 cadena=canary:none,rest:none freno=suelto cupos=1/0/1130000 numero=si importado=si subcuenta=si whatsapp=no proveedor=ELEVENLABS_VERIFIED
+   AVISO (H-25, OPS8-d): salientes on/off cambian la huella de voz del Studio (twilioVoice.enabled y dailyCallCap): reconocer otra vez la configuración autorizada (CRM → Studio → Integraciones → Voz) o, con el monitor del H7 encendido, saltará config_drift:voice
+   AVISO: la puerta deniega igualmente sin una publicación de voz en canary, con el freno echado, sin canarios de voz activos o con ElevenLabs sin verificar en la telefonía (E4-6); la primera saliente, a un canario y desde el CRM («Voz y telefonía»)
+   AVISO: el monitor de voz está apagado: sin conciliación no se ven las ambiguas ni las llamadas ajenas (bash $B/root/h8-voice-scope.sh monitor on)
+   vuelta atrás exacta (el fichero de antes): install -m 600 -o alejodev -g staff $B/root/env-pre-voice-salientes-on-20261112-000208 $B/api/backend/.env && cd $B/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+   vuelta atrás funcional: bash $B/root/h8-voice-scope.sh salientes off
+MANDO salientes-on APLICADO (copia previa: $B/root/env-pre-voice-salientes-on-20261112-000208)
+════ salientes off → APLICADO · código 0
+0. salientes-off · copia previa: $B/root/env-pre-voice-salientes-off-20261112-000227 (600, alejodev) · fichero alejodev:staff 600 · programador 33 0 0 · workers 14 0 · constante abierta
+   TWILIO_VOICE_DAILY_CALL_CAP sustituida
+   TWILIO_VOICE_ENABLED sustituida
+   VOICE_DAILY_BUDGET_USD sustituida
+   VOICE_OUTBOUND_ENABLED sustituida
+1. claves escritas (sin valores): TWILIO_VOICE_DAILY_CALL_CAP TWILIO_VOICE_ENABLED VOICE_DAILY_BUDGET_USD VOICE_OUTBOUND_ENABLED · fichero alejodev:staff 600
+2. el fichero parsea · caché: alejodev 600
+3. configuración efectiva, antes → después (sin valores de secretos): budget: "1.13" → "0" · outbound: true → false · outbound_cap: 1 → 0 · twilio_voice: true → false
+   motor, H4–H7 y ElevenLabs (proveedor y Studio) sin cambios
+   el fichero de entorno es la copia previa salvo 4 clave(s) de la orden
+4. programador (total · del Studio · de voz): 33 0 0 → 33 0 0 (esperado 33 0 0)
+5. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [14 0] y [14 0] (esperado 14 0 las dos veces)
+6. admin/voice/status sin token → 401
+7. local.ERROR en laravel*.log: 0 → 0
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_UNVERIFIED constante=abierta encendidas=1 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=si importado=si subcuenta=si whatsapp=no proveedor=ELEVENLABS_VERIFIED
+   AVISO (H-25, OPS8-d): salientes on/off cambian la huella de voz del Studio (twilioVoice.enabled y dailyCallCap): reconocer otra vez la configuración autorizada (CRM → Studio → Integraciones → Voz) o, con el monitor del H7 encendido, saltará config_drift:voice
+   vuelta atrás exacta (el fichero de antes): install -m 600 -o alejodev -g staff $B/root/env-pre-voice-salientes-off-20261112-000227 $B/api/backend/.env && cd $B/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+MANDO salientes-off APLICADO (copia previa: $B/root/env-pre-voice-salientes-off-20261112-000227)
+════ salientes on --cupo=1 --presupuesto=2.00 (la orden autorizada) → APLICADO · código 0
+   reserva de la puerta por saliente (OutboundGate → VoiceCostGuard, 300 s con un tramo de transferencia a fijo, SIEMPRE; precios del 2026-11-03): 0.9605 US$ a un móvil colombiano (+573…) · 1.1220 US$ a cualquier otro destino · peor caso 1.1220 US$ (presupuesto mínimo: 1.13); el presupuesto (2.00 US$) la cubre
+0. salientes-on · copia previa: $B/root/env-pre-voice-salientes-on-20261112-000246 (600, alejodev) · fichero alejodev:staff 600 · programador 33 0 0 · workers 14 0 · constante abierta
+   TWILIO_VOICE_DAILY_CALL_CAP sustituida
+   TWILIO_VOICE_ENABLED sustituida
+   VOICE_DAILY_BUDGET_USD sustituida
+   VOICE_OUTBOUND_ENABLED sustituida
+   VOICE_OUTBOUND_SCOPE añadida
+1. claves escritas (sin valores): TWILIO_VOICE_DAILY_CALL_CAP TWILIO_VOICE_ENABLED VOICE_DAILY_BUDGET_USD VOICE_OUTBOUND_ENABLED VOICE_OUTBOUND_SCOPE · fichero alejodev:staff 600
+2. el fichero parsea · caché: alejodev 600
+3. configuración efectiva, antes → después (sin valores de secretos): budget: "0" → "2.00" · outbound: false → true · outbound_cap: 0 → 1 · twilio_voice: false → true
+   motor, H4–H7 y ElevenLabs (proveedor y Studio) sin cambios
+   el fichero de entorno es la copia previa salvo 5 clave(s) de la orden
+4. programador (total · del Studio · de voz): 33 0 0 → 33 0 0 (esperado 33 0 0)
+5. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [14 0] y [14 0] (esperado 14 0 las dos veces)
+6. admin/voice/status sin token → 401
+7. local.ERROR en laravel*.log: 0 → 0
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_UNVERIFIED constante=abierta encendidas=3 cadena=canary:none,rest:none freno=suelto cupos=1/0/2000000 numero=si importado=si subcuenta=si whatsapp=no proveedor=ELEVENLABS_VERIFIED
+   AVISO (H-25, OPS8-d): salientes on/off cambian la huella de voz del Studio (twilioVoice.enabled y dailyCallCap): reconocer otra vez la configuración autorizada (CRM → Studio → Integraciones → Voz) o, con el monitor del H7 encendido, saltará config_drift:voice
+   AVISO: la puerta deniega igualmente sin una publicación de voz en canary, con el freno echado, sin canarios de voz activos o con ElevenLabs sin verificar en la telefonía (E4-6); la primera saliente, a un canario y desde el CRM («Voz y telefonía»)
+   AVISO: el monitor de voz está apagado: sin conciliación no se ven las ambiguas ni las llamadas ajenas (bash $B/root/h8-voice-scope.sh monitor on)
+   vuelta atrás exacta (el fichero de antes): install -m 600 -o alejodev -g staff $B/root/env-pre-voice-salientes-on-20261112-000246 $B/api/backend/.env && cd $B/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+   vuelta atrás funcional: bash $B/root/h8-voice-scope.sh salientes off
+MANDO salientes-on APLICADO (copia previa: $B/root/env-pre-voice-salientes-on-20261112-000246)
+════ repetirla → nada que escribir (idempotente) · código 0
+   reserva de la puerta por saliente (OutboundGate → VoiceCostGuard, 300 s con un tramo de transferencia a fijo, SIEMPRE; precios del 2026-11-03): 0.9605 US$ a un móvil colombiano (+573…) · 1.1220 US$ a cualquier otro destino · peor caso 1.1220 US$ (presupuesto mínimo: 1.13); el presupuesto (2.00 US$) la cubre
+== salientes-on: el fichero de entorno ya tiene esos valores (no se imprimen); nada que escribir
+   configuración efectiva: estado=ELEVENLABS_UNVERIFIED constante=abierta encendidas=3 cadena=canary:none,rest:none freno=suelto cupos=1/0/2000000 numero=si importado=si subcuenta=si whatsapp=no proveedor=ELEVENLABS_VERIFIED
+════ salientes off → APLICADO · código 0
+0. salientes-off · copia previa: $B/root/env-pre-voice-salientes-off-20261112-000308 (600, alejodev) · fichero alejodev:staff 600 · programador 33 0 0 · workers 14 0 · constante abierta
+   TWILIO_VOICE_DAILY_CALL_CAP sustituida
+   TWILIO_VOICE_ENABLED sustituida
+   VOICE_DAILY_BUDGET_USD sustituida
+   VOICE_OUTBOUND_ENABLED sustituida
+1. claves escritas (sin valores): TWILIO_VOICE_DAILY_CALL_CAP TWILIO_VOICE_ENABLED VOICE_DAILY_BUDGET_USD VOICE_OUTBOUND_ENABLED · fichero alejodev:staff 600
+2. el fichero parsea · caché: alejodev 600
+3. configuración efectiva, antes → después (sin valores de secretos): budget: "2.00" → "0" · outbound: true → false · outbound_cap: 1 → 0 · twilio_voice: true → false
+   motor, H4–H7 y ElevenLabs (proveedor y Studio) sin cambios
+   el fichero de entorno es la copia previa salvo 4 clave(s) de la orden
+4. programador (total · del Studio · de voz): 33 0 0 → 33 0 0 (esperado 33 0 0)
+5. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [14 0] y [14 0] (esperado 14 0 las dos veces)
+6. admin/voice/status sin token → 401
+7. local.ERROR en laravel*.log: 0 → 0
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_UNVERIFIED constante=abierta encendidas=1 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=si importado=si subcuenta=si whatsapp=no proveedor=ELEVENLABS_VERIFIED
+   AVISO (H-25, OPS8-d): salientes on/off cambian la huella de voz del Studio (twilioVoice.enabled y dailyCallCap): reconocer otra vez la configuración autorizada (CRM → Studio → Integraciones → Voz) o, con el monitor del H7 encendido, saltará config_drift:voice
+   vuelta atrás exacta (el fichero de antes): install -m 600 -o alejodev -g staff $B/root/env-pre-voice-salientes-off-20261112-000308 $B/api/backend/.env && cd $B/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+MANDO salientes-off APLICADO (copia previa: $B/root/env-pre-voice-salientes-off-20261112-000308)
+════ fallo forzado (parsea) → ABORTA, código 1, con la vuelta impresa · código 1
+   reserva de la puerta por saliente (OutboundGate → VoiceCostGuard, 300 s con un tramo de transferencia a fijo, SIEMPRE; precios del 2026-11-03): 0.9605 US$ a un móvil colombiano (+573…) · 1.1220 US$ a cualquier otro destino · peor caso 1.1220 US$ (presupuesto mínimo: 1.13); el presupuesto (2.00 US$) la cubre
+0. salientes-on · copia previa: $B/root/env-pre-voice-salientes-on-20261112-000329 (600, alejodev) · fichero alejodev:staff 600 · programador 33 0 0 · workers 14 0 · constante abierta
+   TWILIO_VOICE_DAILY_CALL_CAP sustituida
+   TWILIO_VOICE_ENABLED sustituida
+   VOICE_DAILY_BUDGET_USD sustituida
+   VOICE_OUTBOUND_ENABLED sustituida
+   VOICE_OUTBOUND_SCOPE añadida
+1. claves escritas (sin valores): TWILIO_VOICE_DAILY_CALL_CAP TWILIO_VOICE_ENABLED VOICE_DAILY_BUDGET_USD VOICE_OUTBOUND_ENABLED VOICE_OUTBOUND_SCOPE · fichero alejodev:staff 600
+ABORTA: el fichero de entorno NO parsea tras escribir. Vuelta: install -m 600 -o alejodev -g staff $B/root/env-pre-voice-salientes-on-20261112-000329 $B/api/backend/.env && cd $B/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+════ fallo forzado (cache) → ABORTA, código 1, con la vuelta impresa · código 1
+   reserva de la puerta por saliente (OutboundGate → VoiceCostGuard, 300 s con un tramo de transferencia a fijo, SIEMPRE; precios del 2026-11-03): 0.9605 US$ a un móvil colombiano (+573…) · 1.1220 US$ a cualquier otro destino · peor caso 1.1220 US$ (presupuesto mínimo: 1.13); el presupuesto (2.00 US$) la cubre
+0. salientes-on · copia previa: $B/root/env-pre-voice-salientes-on-20261112-000333 (600, alejodev) · fichero alejodev:staff 600 · programador 33 0 0 · workers 14 0 · constante abierta
+   TWILIO_VOICE_DAILY_CALL_CAP sustituida
+   TWILIO_VOICE_ENABLED sustituida
+   VOICE_DAILY_BUDGET_USD sustituida
+   VOICE_OUTBOUND_ENABLED sustituida
+   VOICE_OUTBOUND_SCOPE añadida
+1. claves escritas (sin valores): TWILIO_VOICE_DAILY_CALL_CAP TWILIO_VOICE_ENABLED VOICE_DAILY_BUDGET_USD VOICE_OUTBOUND_ENABLED VOICE_OUTBOUND_SCOPE · fichero alejodev:staff 600
+2. el fichero parsea · caché: alejodev 600
+ABORTA: la configuración efectiva no se puede leer tras el cambio (tinker; su salida no se imprime). Vuelta: install -m 600 -o alejodev -g staff $B/root/env-pre-voice-salientes-on-20261112-000333 $B/api/backend/.env && cd $B/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+════ con h8-voice-scope.lock tomado → ABORTA sin tocar nada · código 1
+   reserva de la puerta por saliente (OutboundGate → VoiceCostGuard, 300 s con un tramo de transferencia a fijo, SIEMPRE; precios del 2026-11-03): 0.9605 US$ a un móvil colombiano (+573…) · 1.1220 US$ a cualquier otro destino · peor caso 1.1220 US$ (presupuesto mínimo: 1.13); el presupuesto (2.00 US$) la cubre
+ABORTA: otro mando de la voz está en curso ($B/run/h8-voice-scope.lock)

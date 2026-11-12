@@ -1,0 +1,80 @@
+#### monitor · banco 3161d3a3 · valla en 0 peticiones · registro $B/logs/ensayo-monitor-20261112-000442.txt
+OK      preparación: h8-voice-scope.sh expectativa fase1 (la de producción) → APLICADO  [código 0]
+OK      head: «on off» → APLICADO  [código 0]
+OK        … HEAD: el ensayo informativo es «publicación e integraciones» y el registro del monitor NO trae prompts
+OK      head: «off on» → APLICADO  [código 0]
+OK        … ida y vuelta: el fichero idéntico al de antes de encender
+OK      arbol: «on off» → APLICADO  [código 0]
+OK        … árbol: el ensayo informativo es «publicación, integraciones y prompts»: 0
+OK        … y el registro del monitor (en seco) trae las TRES comprobaciones, prompts incluida (independiente)  ["checks":{"publication":"ok","integrations":"ok","prompts":"ok"}]
+OK      arbol: «off on» → APLICADO  [código 0]
+OK        … ida y vuelta: el fichero idéntico al de antes de encender
+#### cierre común
+OK      CERO red: la valla no recibió ninguna petición en todo el ensayo  [valla: 0 → 0]
+OK      el banco vuelve a su fichero de entorno de partida, su modo (600) y su caché
+12 OK · 0 FALLO (registro: $B/logs/ensayo-monitor-20261112-000442.txt)
+
+════════ registro detallado (ensayo-monitor-20261112-000442.txt) ════════
+════ preparación: h8-voice-scope.sh expectativa fase1 (la de producción) → APLICADO · código 0
+0. expectativa-fase1 · copia previa: $B/root/env-pre-voice-expectativa-fase1-20261112-000445 (600, alejodev) · fichero alejodev:staff 600 · programador 33 0 0 · workers 13 0 · constante cerrada
+   ULTRON_STUDIO_MONITOR_EXPECT añadida
+1. claves escritas (sin valores): ULTRON_STUDIO_MONITOR_EXPECT · fichero alejodev:staff 600
+2. el fichero parsea · caché: alejodev 600
+3. configuración efectiva, antes → después (sin valores de secretos): expect: "twilio:connected_otp_only,twilio_voice:not_configured,elevenlabs:ELEVENLABS_NOT_CONFIGURED" → "twilio:connected_otp_only,twilio_voice:not_configured,elevenlabs:ELEVENLABS_VERIFIED"
+   motor, H4–H7 y ElevenLabs (proveedor y Studio) sin cambios
+   el fichero de entorno es la copia previa salvo 1 clave(s) de la orden
+4. programador (total · del Studio · de voz): 33 0 0 → 33 0 0 (esperado 33 0 0)
+5. workers (RUNNING · BACKOFF/FATAL), dos lecturas: [13 0] y [13 0] (esperado 13 0 las dos veces)
+6. admin/voice/status sin token → 401
+7. local.ERROR en laravel*.log: 0 → 0
+   voice:doctor --telefonia (sin red): estado=ELEVENLABS_UNVERIFIED constante=cerrada encendidas=1 cadena=canary:none,rest:none freno=suelto cupos=0/0/0 numero=no importado=no subcuenta=no whatsapp=no proveedor=ELEVENLABS_VERIFIED
+   vuelta atrás exacta (el fichero de antes): install -m 600 -o alejodev -g staff $B/root/env-pre-voice-expectativa-fase1-20261112-000445 $B/api/backend/.env && cd $B/api/backend && sudo -u alejodev sh -c 'umask 077; php artisan config:cache -q' && sudo -u alejodev chmod 600 bootstrap/cache/config.php && sudo -u alejodev php artisan queue:restart -q
+MANDO expectativa-fase1 APLICADO (copia previa: $B/root/env-pre-voice-expectativa-fase1-20261112-000445)
+════ head: «on off» → APLICADO · código 0
+   expectativa del monitor: twilio:connected_otp_only,twilio_voice:not_configured,elevenlabs:ELEVENLABS_VERIFIED (el estado de hoy la confirma: monitor en seco, integraciones, 0)
+0. monitor: off → on · copia previa del fichero de entorno: $B/root/env-pre-h7-monitor-on-20261112-000504 (600, root) · fichero alejodev:staff 600 · programador (total · del monitor): 33 0
+1. ULTRON_STUDIO_MONITOR_ENABLED=true (fichero alejodev 600)
+2. caché: alejodev 600
+   {"monitor_enabled":true,"monitor_expect_default":false}
+   motor, H4, H5 y H6 sin cambios
+3. programador (total · del monitor): 33 0 → 35 2 (esperado 35 2: las 2 tareas del monitor aparecen y nada más cambia)
+4. workers (RUNNING · BACKOFF/FATAL), dos lecturas separadas: [13 0] y [13 0] (esperado 13 0: 13)
+5. status sin token → 401
+   INFO: ultron-studio:monitor --dry-run (publicación e integraciones): 0, la primera pasada no debería abrir incidente
+   INFO (H-1): no se ve ninguna línea activa de schedule:run (¿systemd o sin permiso para leer los crontab?): comprobar quién lo ejecuta
+   siguiente, a mano: la primera pasada real: sudo -u www-data php artisan ultron-studio:monitor → 0 y ningún incidente ultron_studio nuevo
+MANDO monitor → on APLICADO (copia previa: $B/root/env-pre-h7-monitor-on-20261112-000504)
+════ head: «off on» → APLICADO · código 0
+0. monitor: on → off · copia previa del fichero de entorno: $B/root/env-pre-h7-monitor-off-20261112-000521 (600, root) · fichero alejodev:staff 600 · programador (total · del monitor): 35 2
+1. ULTRON_STUDIO_MONITOR_ENABLED=false (fichero alejodev 600)
+2. caché: alejodev 600
+   {"monitor_enabled":false,"monitor_expect_default":false}
+   motor, H4, H5 y H6 sin cambios
+3. programador (total · del monitor): 35 2 → 33 0 (esperado 33 0: las 2 tareas del monitor desaparecen y nada más cambia)
+4. workers (RUNNING · BACKOFF/FATAL), dos lecturas separadas: [13 0] y [13 0] (esperado 13 0: 13)
+5. status sin token → 401
+MANDO monitor → off APLICADO (copia previa: $B/root/env-pre-h7-monitor-off-20261112-000521)
+════ arbol: «on off» → APLICADO · código 0
+   expectativa del monitor: twilio:connected_otp_only,twilio_voice:not_configured,elevenlabs:ELEVENLABS_VERIFIED (el estado de hoy la confirma: monitor en seco, integraciones, 0)
+0. monitor: off → on · copia previa del fichero de entorno: $B/root/env-pre-h7-monitor-on-20261112-000538 (600, root) · fichero alejodev:staff 600 · programador (total · del monitor): 33 0
+1. ULTRON_STUDIO_MONITOR_ENABLED=true (fichero alejodev 600)
+2. caché: alejodev 600
+   {"monitor_enabled":true,"monitor_expect_default":false}
+   motor, H4, H5 y H6 sin cambios
+3. programador (total · del monitor): 33 0 → 35 2 (esperado 35 2: las 2 tareas del monitor aparecen y nada más cambia)
+4. workers (RUNNING · BACKOFF/FATAL), dos lecturas separadas: [13 0] y [13 0] (esperado 13 0: 13)
+5. status sin token → 401
+   INFO: ultron-studio:monitor --dry-run (publicación, integraciones y prompts): 0, la primera pasada no debería abrir incidente
+   INFO (H-1): no se ve ninguna línea activa de schedule:run (¿systemd o sin permiso para leer los crontab?): comprobar quién lo ejecuta
+   siguiente, a mano: la primera pasada real: sudo -u www-data php artisan ultron-studio:monitor → 0 y ningún incidente ultron_studio nuevo
+MANDO monitor → on APLICADO (copia previa: $B/root/env-pre-h7-monitor-on-20261112-000538)
+════ arbol: «off on» → APLICADO · código 0
+0. monitor: on → off · copia previa del fichero de entorno: $B/root/env-pre-h7-monitor-off-20261112-000554 (600, root) · fichero alejodev:staff 600 · programador (total · del monitor): 35 2
+1. ULTRON_STUDIO_MONITOR_ENABLED=false (fichero alejodev 600)
+2. caché: alejodev 600
+   {"monitor_enabled":false,"monitor_expect_default":false}
+   motor, H4, H5 y H6 sin cambios
+3. programador (total · del monitor): 35 2 → 33 0 (esperado 33 0: las 2 tareas del monitor desaparecen y nada más cambia)
+4. workers (RUNNING · BACKOFF/FATAL), dos lecturas separadas: [13 0] y [13 0] (esperado 13 0: 13)
+5. status sin token → 401
+MANDO monitor → off APLICADO (copia previa: $B/root/env-pre-h7-monitor-off-20261112-000554)
