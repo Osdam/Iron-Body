@@ -64,7 +64,7 @@ class StudioLabEngineChecksTest extends TestCase
     }
 
     /**
-     * Enmienda 8 de H4 (`PROMPT_VERSION 2026-11-12.1`): las cuatro conductas que el actor lleva en sus
+     * Enmienda 8 de H4 (`PROMPT_VERSION 2026-11-12.2`): las cuatro conductas que el actor lleva en sus
      * instrucciones tienen que caber en el filtro real del motor. Si una guarda cambia y empieza a marcar la frase
      * que se le pide al actor, el laboratorio lo suspendería por obedecer: esta prueba lo dice antes.
      */
@@ -79,9 +79,9 @@ class StudioLabEngineChecksTest extends TestCase
             // b) el pago que no consta
             ['Todavía no lo veo registrado. Antes de confirmarlo hay que verificarlo con la pasarela de pagos; puede tardar unos minutos. No hace falta enviar capturas.', $sinPeticion],
             // c) el traspaso corroborado
-            ['Claro, una persona del equipo continúa la conversación contigo.', $conPeticion],
+            ['Claro, ya quedó autorizado: una persona del equipo te atiende en esta conversación. Sigo disponible si necesitas algo más.', $conPeticion],
             // d) la visita como solicitud
-            ['Con gusto. Tu visita es una solicitud que todavía tiene que confirmar una persona del equipo. ¿A qué hora te gustaría venir mañana?', $sinPeticion],
+            ['Puedes venir a conocernos: es una solicitud y la confirma una persona del equipo. ¿A qué hora te gustaría venir mañana?', $sinPeticion],
         ];
         foreach ($conductas as [$texto, $hechos]) {
             $this->assertSame([], self::idsYNiveles($e->check($texto, $hechos)), $texto);
@@ -91,6 +91,10 @@ class StudioLabEngineChecksTest extends TestCase
         $this->assertSame(['motor-pago:blocking'], self::idsYNiveles($e->check('Listo, tu pago ya llegó.', $sinPeticion)));
         $this->assertSame(['motor-machine_reply_unauthorized_handoff:blocking'], self::idsYNiveles($e->check('Te paso con una asesora', $sinPeticion)));
         $this->assertSame(['motor-cortesia:blocking'], self::idsYNiveles($e->check('Listo, quedaste agendado para mañana a las 6', $sinPeticion)));
+        // Y lo que las conductas prohíben prometer: avisar después, dar la solicitud por registrada o anunciar que alguien escribirá.
+        $this->assertSame(['motor-promesa:blocking'], self::idsYNiveles($e->check('Todavía no lo veo registrado. Apenas se refleje te aviso.', $sinPeticion)));
+        $this->assertSame(['motor-promesa:blocking'], self::idsYNiveles($e->check('Listo, queda registrada tu solicitud de visita.', $sinPeticion)));
+        $this->assertSame(['motor-machine_reply_unauthorized_handoff:blocking'], self::idsYNiveles($e->check('Una persona del equipo te va a escribir para confirmar tu visita.', $sinPeticion)));
     }
 
     public function test_los_hechos_del_escenario_llegan_a_las_guardas(): void

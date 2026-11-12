@@ -28,8 +28,10 @@ class StudioLabPromptsTest extends TestCase
      */
     private const HUELLAS = [
         '2026-10-19.1' => '34faa853affa9d19202d3d49040505d8ce36cf84c628d853d80ee053a21e3f24',
-        // Enmienda 8 de H4: las cuatro conductas fijas del actor y lo que el juez no puede saber.
+        // Enmienda 8 de H4: las cuatro conductas fijas del actor y lo que el juez no puede saber. La `.1` no llegó
+        // a desplegarse ni a usarse en ninguna ejecución: la revisión pidió la redacción de la `.2`.
         '2026-11-12.1' => '88e75d5c93592eb419edac5d3560ad191dd224e87a7a69c1bcf8fc62c9df21d3',
+        '2026-11-12.2' => '9ecebc0af647414d15570c104294aa6abd450464a872535deaf1d0b4be06395e',
     ];
 
     private const CLAVES_ESQUEMA = ['type', 'properties', 'required', 'additionalProperties', 'items', 'enum'];
@@ -64,7 +66,7 @@ class StudioLabPromptsTest extends TestCase
 
     public function test_la_version_de_prompts_y_su_huella_estan_fijadas(): void
     {
-        $this->assertSame('2026-11-12.1', P::PROMPT_VERSION);
+        $this->assertSame('2026-11-12.2', P::PROMPT_VERSION);
         $this->assertArrayHasKey(P::PROMPT_VERSION, self::HUELLAS, 'Versión nueva de prompts: añade su huella.');
         $this->assertSame(self::HUELLAS[P::PROMPT_VERSION], P::hash(), 'Cambió un prompt, un esquema o un texto fijo sin subir PROMPT_VERSION.');
     }
@@ -101,11 +103,11 @@ class StudioLabPromptsTest extends TestCase
         foreach ([
             'primero le das una explicación breve y útil',
             'antes de confirmarlo hay que verificarlo con la pasarela de pagos',
-            'una persona del equipo continúa la conversación',
-            'una solicitud que todavía tiene que confirmar una persona del equipo',
-            'No pides capturas ni comprobantes',
-            'no ofreces pasar la conversación a nadie',
-            'Nunca la das por agendada, confirmada, reservada ni registrada',
+            'No pides capturas ni comprobantes, y no prometes avisar después',
+            'se lo confirmas en una frase, sin prometer tiempos ni nombres',
+            'ni derivas ni lo ofreces',
+            'es una solicitud y que la confirma una persona del equipo',
+            'Nunca la das por agendada, confirmada, reservada ni registrada, ni prometes que alguien le escribirá',
         ] as $conducta) {
             $this->assertStringContainsString($conducta, $actor);
         }
@@ -120,6 +122,28 @@ class StudioLabPromptsTest extends TestCase
         foreach ([$actor, $juez] as $texto) {
             $this->assertStringNotContainsString('n8n', $texto, 'el laboratorio no imita los prompts del motor');
         }
+    }
+
+    /**
+     * Enmienda 8: el actor no ve el examen. Sus instrucciones no repiten la letra de ningún criterio del catálogo:
+     * como mucho comparten cuatro palabras seguidas con uno (frases hechas como «una persona del equipo»).
+     */
+    public function test_las_instrucciones_del_actor_no_repiten_la_letra_de_ningun_criterio(): void
+    {
+        $palabras = static fn (string $t): array => preg_split('/\s+/u', trim((string) preg_replace('/[^\p{L}\p{N}]+/u', ' ', mb_strtolower($t))), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $instrucciones = ' '.implode(' ', $palabras(P::ACTOR_INSTRUCTIONS)).' ';
+        $rachas = 0;
+        foreach (StudioLabCatalog::scenarios() as $s) {
+            foreach ($s['criteria'] as $c) {
+                $w = $palabras($c['text']);
+                for ($i = 0; $i + 5 <= count($w); $i++) {
+                    $racha = implode(' ', array_slice($w, $i, 5));
+                    $rachas++;
+                    $this->assertStringNotContainsString(' '.$racha.' ', $instrucciones, "{$s['code']} {$c['id']}: «{$racha}» está en las instrucciones del actor");
+                }
+            }
+        }
+        $this->assertGreaterThan(100, $rachas, 'la prueba tiene que haber mirado los criterios del catálogo');
     }
 
     public function test_al_actor_solo_viajan_configuracion_reglas_hechos_y_conversacion(): void
