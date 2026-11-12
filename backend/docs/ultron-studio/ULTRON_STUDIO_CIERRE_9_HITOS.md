@@ -4,13 +4,13 @@
 
 ---
 
-## 0. Estado vigente (12-11-2026, 02:40 UTC)
+## 0. Estado vigente (12-11-2026, 03:20 UTC)
 
 ### 0.1 Qué hay en producción
 
 | Pieza | Valor |
 |---|---|
-| API | `181075b3` desde el 12-11 02:35 UTC: la primera tanda de la ola 5 (L9-114: el freno por quejas, el día de Bogotá en `commercial:scan`, la protección de los pagos y las facturas frente al registro de hechos y el aviso de reglas), encima de `e9b3c9e3` (ola 4 y la corrección de Planes) |
+| API | `9a6e3b1c` desde el 12-11 03:14 UTC: la segunda tanda de la ola 5 (L9-115: el sujeto del hecho dentro de la protección, `commercial:scan` mira a todos sus candidatos y el observador de facturas deja de lanzar), encima de `181075b3`, la primera tanda (L9-114: el freno por quejas, el día de Bogotá en `commercial:scan`, la protección de los pagos y las facturas frente al registro de hechos y el aviso de reglas), encima de `e9b3c9e3` (ola 4 y la corrección de Planes) |
 | CRM | `19b1d8c` desde el 12-11 02:37 UTC (L9-114), encima de `85c62d2` (L9-113); respaldo `/var/backups/ironbody/crm-pre-19b1d8c-20261112-023719` |
 | Respaldo de antes de la ola | `/var/backups/ironbody/ultron-studio-m1-20261111-143829` (base, fichero de entorno, cachés) |
 | n8n | atiende la copia «Studio S1» (`QSklqHlsDIxucRfk`); el flujo de siempre (`YspRwsXnqt33NouP`) está despublicado e intacto, como reserva |
@@ -42,8 +42,8 @@ Etiquetas: **OPERATIVO Y PROBADO** (funciona en producción y hay una prueba rea
 | B · WhatsApp | Alerta automática si n8n aplica algo distinto de lo ofrecido | **EN INTEGRACIÓN** | Desplegada el 11-11 (L9-112): el monitor la comprueba cada 30 minutos y abre el incidente `prompts_drift`. En producción su pasada en seco lee bien; ningún `mismatch` real la ha disparado todavía |
 | C · Autonomía | Motor en sombra | **OPERATIVO Y PROBADO** | Corre cada minuto desde el 11-11; los siete días terminan el 18-11 |
 | C · Autonomía | Una queja frena el contacto automático | **EN INTEGRACIÓN** | Desplegado el 12-11 (L9-114): emisor, catálogo `.2` y N6 `complaint_recent`. Probado en SQLite y PostgreSQL con las clases reales; en producción, la sonda lo ve activo. Ninguna queja real lo ha ejercitado todavía (0 quejas registradas, 0 estrategias) |
-| C · Autonomía | Hechos del motor comercial en el día de Bogotá | **OPERATIVO Y PROBADO** | Desplegado el 12-11 (L9-114); `commercial:scan --dry-run` en producción: 193 en la ventana de renovación, 4 vencidas, 50 inactivos, 0 enlaces. Falta desplegar que mire a todos los candidatos (`2fc75a1f`) |
-| E · Infra | Registrar un hecho no puede abortar el pago ni la factura (I-1) | **OPERATIVO Y PROBADO** en lo desplegado | Desplegado el 12-11 (L9-114); el rojo con el código anterior, demostrado en PostgreSQL 14 con un pago y una factura reales del modelo. Queda la parte 1c: las lecturas previas al registro en el camino de la membresía de un pago Wompi |
+| C · Autonomía | Hechos del motor comercial en el día de Bogotá | **OPERATIVO Y PROBADO** | Desplegado el 12-11 (L9-114); `commercial:scan --dry-run` en producción: 193 en la ventana de renovación, 4 vencidas, 50 inactivos, 0 enlaces. Desde el 12-11 03:14 UTC mira a todos los candidatos (L9-115) |
+| E · Infra | Registrar un hecho no puede abortar el pago ni la factura (I-1) | **OPERATIVO Y PROBADO** en lo desplegado | Desplegado el 12-11 (L9-114); el rojo con el código anterior, demostrado en PostgreSQL 14 con un pago y una factura reales del modelo. La parte 1c (las lecturas previas al registro) y el fallo del observador de facturas al cambiar de estado, desplegados el 12-11 03:14 UTC (L9-115). Sin corregir, a decisión del propietario: el `catch` de `PaymentMembershipActivator::activate()` dentro de la transacción del pago (`informe-db-comercial.md` §1c.6); en producción no ha dejado ningún pago sin activar |
 | C · Autonomía | Modo asistido | **IMPLEMENTADO PERO DESHABILITADO** | No antes del 18-11; cupos a 0 |
 | C · Autonomía | Envíos de WhatsApp y llamadas por estrategia | **IMPLEMENTADO PERO DESHABILITADO** | Las dos constantes del código, cerradas |
 | C · Autonomía | Vínculos de persona (cuatro ojos reales) | **BLOQUEADO** | 0 vínculos: el propietario dice quiénes son las dos personas |
@@ -61,6 +61,7 @@ Etiquetas: **OPERATIVO Y PROBADO** (funciona en producción y hay una prueba rea
 - Voz, tras E18-8 y E18-9: las 15 guardas estáticas (138), telefonía 477 (137 omitidas, las de PostgreSQL), voz y telefonía unitarias 366 y laboratorio hablado 42, en verde.
 - Baterías completas sobre los commits finales (`6f9d463` y `5f2a454`): backend 17 412 pruebas, 0 regresiones (solo la línea base); CRM 4 184 pruebas, los 16 fallos de la línea base.
 - Ola 5, primera tanda (L9-114): backend, batería completa sobre `181075b3`, 17 663 pruebas y 456 328 aserciones, solo la línea base (las 15 guardas, 138 de 138 tras subir); CRM, batería completa sobre `19b1d8c`, 4 328 pruebas con los 16 fallos de la línea base; PostgreSQL 14 para todo lo nuevo; smoke del H9 en producción tras desplegar, 30 OK · 0 FALLO · 1 OMITIDO; las diez pantallas del CRM real, sin errores ni frases falsas.
+- Ola 5, segunda tanda (L9-115): backend, batería completa sobre `0d4ed88a`, 17 683 pruebas y 456 397 aserciones, solo la línea base; para `9a6e3b1c`, las 15 guardas (138 de 138), las baterías de lo comercial, la emisión de facturas, el ciclo de pagos y la ejecución de la automatización (360) y PostgreSQL 14 (46); smoke del H9 en producción, 30 OK · 0 FALLO · 1 OMITIDO.
 - **No probado:** un turno real con una versión PUBLICADA (E3–E5; con los prompts de siempre sí, L9-109); una plantilla enviada a Meta real; una publicación de voz; una llamada; PostgreSQL para los cambios de la tarde del 11-11.
 - **Hallazgo aparte, sin tocar:** `UltronStudioVoiceLabSessionsTest::test_la_lista_filtra_y_pagina_sin_consultas_por_fila` es intermitente (1 de 40), igual con el código anterior.
 

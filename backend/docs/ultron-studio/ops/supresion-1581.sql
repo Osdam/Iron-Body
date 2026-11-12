@@ -134,6 +134,33 @@
 --     shred -u /root/supresion/<radicado>.tel /root/supresion/<radicado>.vhash
 --   Antes de :dry 0, la pasada en seco tiene que enseñar «voice_contacts por huella de voz · N fila(s)» con N > 0 si la
 --   persona fue contacto: con 0 en todo, la huella está mal calculada (otra APP_KEY, otro formato del número).
+--
+-- LA AUTOMATIZACIÓN COMERCIAL · EL MOTOR Y LO QUE LA IA GUARDA (database-specialist, 12-11-2026; hallazgo I-2 de
+-- plans/informes-motores/informe-security-quejas.md; política y pruebas en plans/informes-motores/informe-db-comercial.md
+-- §3; probado en PostgreSQL 14 por tests/Feature/Commercial/CommercialSuppression1581Test.php). Un TERCER bloque, al final,
+-- en la misma transacción y con la misma :subject (sin ella no hace nada; no hay variables nuevas). La persona: con m:<id>,
+-- el socio y sus prospectos (marketing_leads.member_id); con l:<id>, ese prospecto y, si está enlazado a un socio, el
+-- socio y los demás prospectos de ese socio.
+--   · commercial_events de la persona (member_id, o marketing_lead_id de uno de sus prospectos): se BORRAN. No es de solo
+--     inserción, no tiene disparadores ni CHECK, nada la referencia por clave foránea y borrar el prospecto ya la borra en
+--     cascada; redactarla dejaría poco más que (event, occurred_at), porque la clave de deduplicación y el payload llevan
+--     ids de la persona (socio, usuario, pago, conversación, factura). Sus lectores toleran la ausencia (el planificador del
+--     H9 salta un hecho sin sujeto; el motor, la bandeja y Supervisión leen por persona).
+--   · marketing_ai_actions de sus prospectos: la fila SE QUEDA (su idempotency_key impide que ULTRON repita una decisión;
+--     lead_id es NOT NULL y cae en cascada con el prospecto). `reason` pasa a «[suprimido]» y `metadata` conserva SOLO los
+--     sellos operativos que leen otros procesos (message_id: idempotencia del análisis; studio y studio_prompts: las
+--     mediciones del canario; recovery, outbound y blocked_reason: el vigía de turnos de ULTRON). Lo demás —intent,
+--     temperature, objection, lead_score, main_barrier, staff_review_reason, …: lo que la IA infirió de la persona— se quita.
+--   · ORDEN (security, I-2): primero la BAJA GLOBAL de la persona y después esto. Si tiene complaint_created o
+--     human_requested (los frenos N6 de la escalera, complaint_recent y human_requested_recently), borrarlos levanta el
+--     freno, y la baja que dejó en outreach_outcomes ya no casa con ella tras el bloque del H9 (subject_key → x:<id>). La
+--     baja que sobrevive es marketing_leads.do_not_contact («no contactar» en el CRM; N1 niega con ella). Con frenos y
+--     algún prospecto sin «no contactar»: en seco se avisa («SIN BAJA GLOBAL») y con :dry 0 ABORTA sin tocar nada. Un
+--     socio sin prospecto no la necesita: sin el hecho lead.do_not_contact la escalera ya falla cerrada en N1.
+--   · SE INFORMA y no se toca (recuentos en la salida y en la fila del libro, `commercial_informed`): las filas de la
+--     persona en commercial_opportunities, commercial_segments y commercial_tool_invocations (el motor NBA, apagado).
+--   · Una fila en el libro (scope 'commercial') si borra o redacta algo; la comprobación final (0 hechos de la persona y 0
+--     acciones con texto o claves fuera de la lista) lo deshace todo si no cuadra.
 
 \set ON_ERROR_STOP 1
 \set VERBOSITY terse
@@ -1026,6 +1053,144 @@ BEGIN
         v_cuentas::text, v_despues;
 END
 $supresion_h9$;
+
+-- ══ LA AUTOMATIZACIÓN COMERCIAL · el motor (commercial_events) y lo que la IA guarda (marketing_ai_actions), POR PERSONA (:subject) ══
+-- Corre en la MISMA transacción, después del bloque del H9 (mismo rol dueño, lock_timeout, COMMIT o ROLLBACK). Sin :subject
+-- no hace nada. En seco solo cuenta. Ver la cabecera («LA AUTOMATIZACIÓN COMERCIAL · EL MOTOR…») para la política y el ORDEN.
+DO $supresion_comercial$
+DECLARE
+    v_dry          boolean := current_setting('supresion.dry') IN ('1', 'on', 'true', 'yes');
+    v_owner        text := current_setting('supresion.owner');
+    v_radicado     text := current_setting('supresion.radicado');
+    v_subject      text := current_setting('supresion.subject');
+    -- Los sellos operativos de marketing_ai_actions.metadata que leen otros procesos: lo único que se conserva.
+    v_keep         constant text[] := ARRAY['message_id', 'studio', 'studio_prompts', 'recovery', 'outbound', 'blocked_reason'];
+    -- Los hechos que la escalera lee como freno en N6 (complaint_recent, human_requested_recently).
+    v_frenos       constant text[] := ARRAY['complaint_created', 'human_requested'];
+    v_tabla        text;
+    v_member       bigint;
+    v_lead0        bigint;
+    v_leads        bigint[];
+    v_eventos      bigint := 0;
+    v_con_freno    bigint := 0;
+    v_acciones     bigint := 0;
+    v_sin_baja     bigint := 0;
+    v_n            bigint;
+    v_informed     jsonb := '{}';
+    v_cuentas      jsonb := '{}';
+    v_resto        bigint;
+BEGIN
+    IF v_subject = '' THEN
+        RETURN;
+    END IF;
+    IF current_user <> v_owner THEN
+        RAISE EXCEPTION 'supresión (comercial): se ejecuta con el rol dueño % (current_user es %)', v_owner, current_user USING ERRCODE = '42501';
+    END IF;
+    IF v_subject !~ '^(m|l):[1-9][0-9]{0,18}$' THEN
+        RAISE EXCEPTION 'supresión (comercial): :subject tiene que ser m:<id> o l:<id>' USING ERRCODE = '22023';
+    END IF;
+    IF to_regclass('public.commercial_events') IS NULL OR to_regclass('public.marketing_ai_actions') IS NULL OR to_regclass('public.marketing_leads') IS NULL THEN
+        RAISE EXCEPTION 'supresión (comercial): faltan commercial_events, marketing_ai_actions o marketing_leads en esta base' USING ERRCODE = '42P01';
+    END IF;
+    FOREACH v_tabla IN ARRAY ARRAY['commercial_events', 'marketing_ai_actions'] LOOP
+        IF (SELECT tableowner FROM pg_tables WHERE schemaname = 'public' AND tablename = v_tabla) IS DISTINCT FROM v_owner THEN
+            RAISE EXCEPTION 'supresión (comercial): % no es de % (el rol dueño es otro)', v_tabla, v_owner USING ERRCODE = '42501';
+        END IF;
+    END LOOP;
+
+    -- La persona: el socio y sus prospectos (nunca se imprimen).
+    IF v_subject LIKE 'm:%' THEN
+        v_member := substr(v_subject, 3)::bigint;
+    ELSE
+        v_lead0 := substr(v_subject, 3)::bigint;
+        SELECT member_id INTO v_member FROM public.marketing_leads WHERE id = v_lead0;
+    END IF;
+    v_leads := ARRAY(SELECT id FROM public.marketing_leads WHERE id = v_lead0 OR (v_member IS NOT NULL AND member_id = v_member) ORDER BY id);
+
+    -- ── 1. Inventario (cuántas, nunca cuáles) ──────────────────────────────────────────────────────────────
+    SELECT count(*), count(*) FILTER (WHERE event = ANY (v_frenos)) INTO v_eventos, v_con_freno
+      FROM public.commercial_events WHERE (v_member IS NOT NULL AND member_id = v_member) OR marketing_lead_id = ANY (v_leads);
+    SELECT count(*) INTO v_acciones FROM public.marketing_ai_actions
+     WHERE lead_id = ANY (v_leads)
+       AND ((reason IS NOT NULL AND reason <> '[suprimido]')
+            OR (metadata IS NOT NULL AND (jsonb_typeof(metadata) <> 'object'
+                                          OR EXISTS (SELECT 1 FROM jsonb_object_keys(metadata) AS k WHERE k <> ALL (v_keep)))));
+    SELECT count(*) INTO v_sin_baja FROM public.marketing_leads WHERE id = ANY (v_leads) AND do_not_contact IS NOT TRUE;
+    FOREACH v_tabla IN ARRAY ARRAY['commercial_opportunities', 'commercial_segments', 'commercial_tool_invocations'] LOOP
+        v_n := 0;
+        IF to_regclass('public.' || v_tabla) IS NOT NULL THEN
+            EXECUTE format('SELECT count(*) FROM public.%I WHERE ($1 IS NOT NULL AND member_id = $1) OR marketing_lead_id = ANY ($2)', v_tabla) INTO v_n USING v_member, v_leads;
+        END IF;
+        v_informed := v_informed || jsonb_build_object(v_tabla, v_n);
+    END LOOP;
+    RAISE NOTICE 'Automatización comercial (motor e IA) · radicado % · la persona: % prospecto(s)% · modo: %',
+        v_radicado, coalesce(array_length(v_leads, 1), 0), CASE WHEN v_member IS NULL THEN ', sin socio' ELSE ' y su socio' END,
+        CASE WHEN v_dry THEN 'en seco' ELSE 'redacción' END;
+    RAISE NOTICE '  commercial_events · % hecho(s), % de ellos freno N6 (queja o petición de persona) · %', v_eventos, v_con_freno,
+        CASE WHEN v_dry THEN 'se borrarían' ELSE 'se borran' END;
+    RAISE NOTICE '  marketing_ai_actions · % fila(s) con motivo o metadata de la persona · % (la fila se queda; la metadata conserva solo sus sellos operativos)', v_acciones,
+        CASE WHEN v_dry THEN 'se redactarían' ELSE 'se redactan' END;
+    RAISE NOTICE '  se informa, no se toca: commercial_opportunities % · commercial_segments % · commercial_tool_invocations %',
+        v_informed->>'commercial_opportunities', v_informed->>'commercial_segments', v_informed->>'commercial_tool_invocations';
+    IF v_con_freno > 0 AND v_sin_baja > 0 THEN
+        RAISE NOTICE '  SIN BAJA GLOBAL: % prospecto(s) sin «no contactar»: borrar sus frenos N6 los levantaría. Primero marcar «no contactar» en el CRM, después esta redacción', v_sin_baja;
+    END IF;
+    IF v_dry THEN
+        RAISE NOTICE 'EN SECO (comercial): nada ha cambiado.';
+        RETURN;
+    END IF;
+    IF v_con_freno > 0 AND v_sin_baja > 0 THEN
+        RAISE EXCEPTION 'supresión (comercial): la persona tiene % freno(s) N6 y % prospecto(s) sin «no contactar»: primero la baja global (marcar «no contactar» en el CRM), después esta redacción', v_con_freno, v_sin_baja USING ERRCODE = '55000';
+    END IF;
+    IF v_eventos = 0 AND v_acciones = 0 THEN
+        RAISE NOTICE 'Comercial: nada que borrar ni redactar para esa clave: este bloque no deja fila en el libro.';
+        RETURN;
+    END IF;
+
+    -- ── 2. Borrado y redacción ────────────────────────────────────────────────────────────────────────────
+    DELETE FROM public.commercial_events WHERE (v_member IS NOT NULL AND member_id = v_member) OR marketing_lead_id = ANY (v_leads);
+    GET DIAGNOSTICS v_n = ROW_COUNT;
+    v_cuentas := v_cuentas || jsonb_build_object('commercial_events', v_n);
+    UPDATE public.marketing_ai_actions
+       SET reason = CASE WHEN reason IS NULL THEN NULL ELSE '[suprimido]' END,
+           metadata = CASE
+               WHEN metadata IS NULL THEN NULL
+               WHEN jsonb_typeof(metadata) <> 'object' THEN '{}'::jsonb
+               ELSE (SELECT coalesce(jsonb_object_agg(e.k, e.v), '{}'::jsonb) FROM jsonb_each(metadata) AS e(k, v) WHERE e.k = ANY (v_keep))
+           END
+     WHERE lead_id = ANY (v_leads)
+       AND ((reason IS NOT NULL AND reason <> '[suprimido]')
+            OR (metadata IS NOT NULL AND (jsonb_typeof(metadata) <> 'object'
+                                          OR EXISTS (SELECT 1 FROM jsonb_object_keys(metadata) AS k WHERE k <> ALL (v_keep)))));
+    GET DIAGNOSTICS v_n = ROW_COUNT;
+    v_cuentas := v_cuentas || jsonb_build_object('marketing_ai_actions', v_n);
+
+    -- ── 3. Comprobaciones antes del COMMIT (si una falla, se deshace todo) ─────────────────────────────────
+    SELECT count(*) INTO v_resto FROM public.commercial_events WHERE (v_member IS NOT NULL AND member_id = v_member) OR marketing_lead_id = ANY (v_leads);
+    v_resto := v_resto + (SELECT count(*) FROM public.marketing_ai_actions
+     WHERE lead_id = ANY (v_leads)
+       AND ((reason IS NOT NULL AND reason <> '[suprimido]')
+            OR (metadata IS NOT NULL AND (jsonb_typeof(metadata) <> 'object'
+                                          OR EXISTS (SELECT 1 FROM jsonb_object_keys(metadata) AS k WHERE k <> ALL (v_keep))))));
+    IF v_resto <> 0 THEN
+        RAISE EXCEPTION 'supresión (comercial): tras borrar y redactar quedan % fila(s) de la persona: se deshace todo', v_resto USING ERRCODE = '55000';
+    END IF;
+
+    -- ── 4. El registro: una fila del libro con recuentos y el radicado, nunca la clave ni los ids ──────────
+    INSERT INTO public.ultron_studio_audit_events
+           (event, subject_type, subject_uuid, actor_type, actor_admin_id, actor_name, actor_role, from_status, to_status,
+            content_hash, summary, diff, metadata, ip_address, user_agent, created_at)
+    VALUES ('system.personal_data_redacted', 'system', NULL, 'system', NULL, 'supresion-1581', NULL, NULL, NULL, NULL,
+            left(format('Supresión de datos personales (Ley 1581), radicado %s: automatización comercial (motor e IA), %s hecho(s) borrado(s) y %s acción(es) de la IA redactada(s)',
+                        v_radicado, (v_cuentas->>'commercial_events')::bigint, (v_cuentas->>'marketing_ai_actions')::bigint), 255),
+            NULL,
+            json_build_object('radicado', v_radicado, 'scope', 'commercial', 'fields', v_cuentas::json,
+                              'commercial_informed', v_informed::json, 'kept_metadata_keys', to_json(v_keep),
+                              'tool', 'docs/ultron-studio/ops/supresion-1581.sql'),
+            NULL, NULL, (now() AT TIME ZONE 'UTC'));
+    RAISE NOTICE 'Comercial · borrado y redactado: % · quedan 0 hechos de la persona y 0 acciones con su texto · 1 fila en el libro (system.personal_data_redacted)', v_cuentas::text;
+END
+$supresion_comercial$;
 
 \if :dry
   ROLLBACK;
