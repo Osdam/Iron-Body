@@ -147,6 +147,26 @@ class ScanCommercialFactsCeilingTest extends TestCase
         $this->assertCount(3, $this->keys('inactivity_detected'));
     }
 
+    /**
+     * Solo cuentan las ENTRADAS (revisión de la tanda 2, menor 1 del escáner).
+     * Una salida posterior al corte no convierte a nadie en «viene», y quien
+     * solo tiene salidas no ha empezado: no es inactividad. Si la consulta por
+     * trozo dejara de filtrar `action = 'entry'`, el primero dejaría de salir
+     * y el segundo saldría, sin que ninguna otra prueba lo viera.
+     */
+    public function test_solo_las_entradas_cuentan_una_salida_reciente_no_es_una_visita(): void
+    {
+        $dejoDeVenir = $this->socio('2026-12-31');
+        $this->entry($dejoDeVenir, '2026-10-01 12:00:00');            // su última ENTRADA: hace 48 días
+        $this->exitRow($dejoDeVenir, '2026-11-17 12:00:00');          // una salida de ayer
+        $nuncaEntro = $this->socio('2026-12-31');
+        $this->exitRow($nuncaEntro, '2026-10-01 12:00:00');           // solo una salida, antigua
+
+        $this->scan(500);
+
+        $this->assertSame(["inactivity_detected:inactive:{$dejoDeVenir['member']}:2026-W47"], $this->keys('inactivity_detected'));
+    }
+
     public function test_en_seco_el_techo_tambien_corta_y_no_registra_nada(): void
     {
         for ($i = 0; $i < 5; $i++) {
@@ -201,6 +221,15 @@ class ScanCommercialFactsCeilingTest extends TestCase
     {
         DB::table('attendances')->insert([
             'user_id' => $socio['user'], 'member_id' => $socio['member'], 'action' => 'entry', 'source' => 'manual',
+            'captured_at' => $utc, 'created_at' => $utc, 'updated_at' => $utc,
+        ]);
+    }
+
+    /** @param  array{user: int, member: int}  $socio */
+    private function exitRow(array $socio, string $utc): void
+    {
+        DB::table('attendances')->insert([
+            'user_id' => $socio['user'], 'member_id' => $socio['member'], 'action' => 'exit', 'source' => 'manual',
             'captured_at' => $utc, 'created_at' => $utc, 'updated_at' => $utc,
         ]);
     }
