@@ -5,9 +5,12 @@ namespace App\Services\Outreach\Run;
 use App\Models\Admin;
 use App\Services\Outreach\Core\DecisionTraceText;
 use App\Services\Outreach\Core\OutcomeTable;
+use App\Services\Outreach\Core\OutreachCatalog;
 use App\Services\Outreach\Core\RelativeTime;
 use App\Services\Outreach\Facts\BatchSnapshotBuilder;
 use App\Services\Outreach\Facts\CoreProjection;
+use App\Services\Outreach\Facts\FactSelection;
+use App\Services\Outreach\Facts\SubjectFacts;
 use App\Services\Outreach\Facts\SubjectKey;
 use DateTimeImmutable;
 use Illuminate\Database\Query\Builder;
@@ -31,30 +34,44 @@ use Illuminate\Support\Str;
  * DEL MEDIO.
  *
  * LA BANDEJA VUELVE A MIRAR, AL OFRECER, AL RECLAMAR Y AL ENSEÑAR LO
- * RECLAMADO (M-5, I-1, I-2 e I-3 de security): una inscripción que espera el
- * resultado asistido no se reevalúa, así que lo que cambia después de la
- * salida lo ve la bandeja. Cada trabajo tiene, como mucho, UN motivo de
+ * RECLAMADO (M-5, I-1, I-2, I-3, N-1 y N-2 de security): una inscripción que
+ * espera el resultado asistido no se reevalúa, así que lo que la escalera
+ * negaría HOY por la persona o por la estrategia lo ve la bandeja, con las
+ * MISMAS entradas de la escalera. Cada trabajo tiene, como mucho, UN motivo de
  * retención, por este orden ({@see WITHHELD_REASONS}):
  *  - `brake`: la PARADA GLOBAL, el freno del canal del trabajo o el de su
  *    estrategia, con la misma lectura que N2 ({@see OutreachStop::openScopes()});
- *    si no se pueden leer, la excepción sube (falla cerrado, como el despachador);
- *  - `complaint_recent` / `complaint_unknown`: N6, una queja dentro de la
- *    ventana o sin datos de eventos (falla cerrado), por el lector del despachador;
+ *  - `strategy_stopped`: la (versión, parte) de su inscripción ya no está en
+ *    marcha en la cadena: pausada, apagada, revertida, retirada, archivada o
+ *    ilegible (las entradas de N5, {@see LiveStrategy}; N-2);
+ *  - `opted_out`: una señal de «no contactar» de N1/N2 que se SABE: el
+ *    `do_not_contact` (suyo o de un prospecto con su número), el *opt-out*
+ *    comercial, el consentimiento del medio denegado, la exclusión de voz y la
+ *    supresión del libro ({@see CoreProjection::policyInput()},
+ *    {@see SubjectSuppressions}; N-1);
+ *  - `complaint_recent`: N6, una queja dentro de la ventana;
+ *  - `policy_unknown`: lo de `opted_out` no se puede comprobar (persona sin
+ *    resolver o clave que ya no es de una persona): falla cerrado;
+ *  - `complaint_unknown`: N6 sin datos de eventos (falla cerrado);
  *  - `expired`: el plazo del trabajo (`expires_at <= ahora`, el borde del
  *    despachador) ya pasó: la política se evaluó para ese plazo.
+ * Si algo de eso no se puede LEER (frenos, cadena, foto, libro), la excepción
+ * sube: ningún `catch`, falla cerrado, como el despachador.
  * Un trabajo SIN reclamar con motivo no se ofrece ni se reclama (409
  * `not_in_queue`; el motivo, al registro). Uno YA reclamado se queda para que
  * su reclamante registre el resultado, pero sin `person` ni `script` y con
  * `contactWithheld` = el motivo (solo lo ve quien lo reclamó). No se escribe
  * nada: el trabajo y la inscripción siguen como estaban hasta el resultado o
  * el fin de la ventana. `human_requested` no se mira aquí (L9-66: una derivada
- * a persona sigue viva en la bandeja).
+ * a persona sigue viva en la bandeja). Los frenos ajenos al H9 (cerrojo de
+ * ULTRON, pausa del agente, freno de voz) tampoco: D-3, decisión del propietario.
  *
- * LA PÁGINA SE LLENA (I-4): lo sin reclamar vencido o frenado se descarta en
- * SQL (como la reclamación del despachador); la queja, en PHP, por tandas de
- * {@see SCAN_BATCH} filas (una foto por tanda) hasta llenar `limit` o hasta
- * {@see MAX_SCAN} filas leídas. Cuántos se retuvieron va en `withheld`, sin
- * decir de quién.
+ * LA PÁGINA SE LLENA (I-4): lo sin reclamar vencido, frenado o de una parte
+ * que no está en marcha se descarta en SQL (como la reclamación del
+ * despachador) y se cuenta; lo de la persona, en PHP, por tandas de
+ * {@see SCAN_BATCH} filas (una foto y una consulta de supresión por tanda)
+ * hasta llenar `limit` o hasta {@see MAX_SCAN} filas leídas (`scanCapped`,
+ * m-3). Cuántos se retuvieron va en `withheld`, sin decir de quién.
  */
 final class AssistedQueue
 {
@@ -68,13 +85,22 @@ final class AssistedQueue
     /** Los motivos de retención de un trabajo (`contactWithheld`), en orden de prioridad: una fila lleva uno solo. */
     public const WITHHELD_BRAKE = 'brake';
 
+    public const WITHHELD_STRATEGY_STOPPED = 'strategy_stopped';
+
+    public const WITHHELD_OPTED_OUT = 'opted_out';
+
     public const WITHHELD_COMPLAINT_RECENT = 'complaint_recent';
+
+    public const WITHHELD_POLICY_UNKNOWN = 'policy_unknown';
 
     public const WITHHELD_COMPLAINT_UNKNOWN = 'complaint_unknown';
 
     public const WITHHELD_EXPIRED = 'expired';
 
-    public const WITHHELD_REASONS = [self::WITHHELD_BRAKE, self::WITHHELD_COMPLAINT_RECENT, self::WITHHELD_COMPLAINT_UNKNOWN, self::WITHHELD_EXPIRED];
+    public const WITHHELD_REASONS = [
+        self::WITHHELD_BRAKE, self::WITHHELD_STRATEGY_STOPPED, self::WITHHELD_OPTED_OUT, self::WITHHELD_COMPLAINT_RECENT,
+        self::WITHHELD_POLICY_UNKNOWN, self::WITHHELD_COMPLAINT_UNKNOWN, self::WITHHELD_EXPIRED,
+    ];
 
     /** I-4: las filas que se leen por tanda para llenar una página (una foto de quejas por tanda). */
     public const SCAN_BATCH = self::MAX_PAGE;
@@ -90,12 +116,19 @@ final class AssistedQueue
      */
     public const QUEUE_ENROLLMENT_STATUSES = ['active', 'waiting', 'handed_off'];
 
+    /** Las columnas de una fila de la bandeja (el trabajo y lo que su inscripción y su estrategia deciden). */
+    private const ROW_COLUMNS = [
+        'j.*', 'e.purpose', 'e.uuid as enrollment_uuid', 'e.step_index as enrollment_step', 'e.strategy_version_id as enrollment_version_id',
+        'e.part as enrollment_part', 's.uuid as strategy_uuid', 's.key as strategy_key',
+    ];
+
     public function __construct(
         private readonly OutreachStore $store = new OutreachStore,
         private readonly OutcomeRecorder $outcomes = new OutcomeRecorder,
         private readonly OutreachPublishedStrategies $bridge = new OutreachPublishedStrategies,
         private readonly BatchSnapshotBuilder $snapshots = new BatchSnapshotBuilder,
         private readonly OutreachStop $stop = new OutreachStop,
+        private readonly SubjectSuppressions $suppressions = new SubjectSuppressions,
     ) {}
 
     /**
@@ -111,36 +144,43 @@ final class AssistedQueue
     }
 
     /**
-     * La página de la bandeja ({@see queue()}) y cuántos trabajos SIN reclamar
-     * y no vencidos de esa vista no se ofrecen (`withheld`, I-4): los frenados
-     * (un recuento exacto) y los retenidos por la queja que se encontraron al
-     * llenarla (cota inferior si se llenó o se llegó a {@see MAX_SCAN}). En
-     * `mine` es siempre 0: allí ninguna fila se quita, solo se le retiene el
-     * contacto. Sin decir de quién: un número.
+     * La página de la bandeja ({@see queue()}), cuántos trabajos SIN reclamar
+     * y no vencidos de esa vista no se ofrecen (`withheld`, I-4) y si la
+     * lectura llegó a su tope sin llenar la página (`scanCapped`, m-3: puede
+     * haber trabajo ofrecible detrás de los retenidos). `withheld` suma los
+     * frenados y los de una parte que no está en marcha (un recuento exacto en
+     * SQL) y los retenidos por la persona que se encontraron al llenarla (cota
+     * inferior si se llenó o se llegó a {@see MAX_SCAN}). En `mine` es siempre
+     * 0: allí ninguna fila se quita, solo se le retiene el contacto. Sin decir
+     * de quién: un número.
      *
-     * @return array{items: list<array<string, mixed>>, withheld: int}
+     * @return array{items: list<array<string, mixed>>, withheld: int, scanCapped: bool}
      */
     public function page(Admin $viewer, string $filter = 'all', int $limit = 20): array
     {
         $limite = max(1, min(self::MAX_PAGE, $limit));
         $yo = (int) $viewer->id;
         $ahora = self::now();
-        // I-3: los frenos con la MISMA lectura que N2 (una consulta). Si no se pueden leer, la excepción sube: falla cerrado, como el despachador.
+        // I-3: los frenos con la MISMA lectura que N2 (una consulta), lo primero. Si no se pueden leer, la excepción sube: falla cerrado, como el despachador.
         $abiertos = $this->stop->openScopes();
+        // N-2: la cadena de las estrategias de la vista, una vez por página (antes de leer ninguna fila).
+        $partes = $this->viewParts($yo, $filter);
+        $enMarcha = $this->runningParts(array_map(static fn (object $p): int => (int) $p->strategy_id, $partes));
+        $hayParadas = array_filter($partes, static fn (object $p): bool => ! isset($enMarcha[self::partKey((int) $p->strategy_version_id, (string) $p->part)])) !== [];
         $filas = [];
         $retenidos = 0;
         $leidas = 0;
         $ultima = null;
         while ($leidas < self::MAX_SCAN) {
             $tamano = min(self::SCAN_BATCH, self::MAX_SCAN - $leidas);
-            $tanda = $this->queueRows($yo, $filter, $ahora, $abiertos, $ultima, $tamano);
+            $tanda = $this->queueRows($yo, $filter, $ahora, $abiertos, $enMarcha, $ultima, $tamano);
             if ($tanda === []) {
                 break;
             }
             $leidas += count($tanda);
             $ultima = $tanda[count($tanda) - 1];
             // Se miran lo sin reclamar (¿se ofrece?) y lo de quien mira (¿se le retiene el contacto?); lo de otra persona, no: no es suyo.
-            $motivos = $this->withholdReasons(array_values(array_filter($tanda, static fn (object $j): bool => $j->assisted_claimed_by_admin_id === null || (int) $j->assisted_claimed_by_admin_id === $yo)), $ahora, $abiertos);
+            $motivos = $this->withholdReasons(array_values(array_filter($tanda, static fn (object $j): bool => $j->assisted_claimed_by_admin_id === null || (int) $j->assisted_claimed_by_admin_id === $yo)), $ahora, $abiertos, $enMarcha);
             foreach ($tanda as $j) {
                 $motivo = $motivos[(int) $j->id] ?? null;
                 if ($motivo !== null && $j->assisted_claimed_by_admin_id === null) {
@@ -158,7 +198,12 @@ final class AssistedQueue
             }
         }
 
-        return ['items' => $filas, 'withheld' => $retenidos + $this->brakedCount($yo, $filter, $ahora, $abiertos)];
+        return [
+            'items' => $filas,
+            'withheld' => $retenidos + $this->heldCount($yo, $filter, $ahora, $abiertos, $enMarcha, $hayParadas),
+            // m-3: se leyeron MAX_SCAN filas (todas las tandas llenas) y la página no se llenó.
+            'scanCapped' => $leidas >= self::MAX_SCAN && count($filas) < $limite,
+        ];
     }
 
     /** El detalle de un trabajo de la bandeja (404 si no es asistido en vivo). @return array<string, mixed> */
@@ -169,10 +214,13 @@ final class AssistedQueue
 
     /**
      * Reclamar UNA vez. 404 si no existe; 409 si no está en la bandeja
-     * (`not_in_queue`, también con un motivo de retención: freno, queja
-     * reciente o sin datos de eventos, o plazo vencido) o ya lo reclamó otra
-     * persona (`already_claimed`); idempotente para quien lo reclamó, con el
-     * contacto retenido si ahora hay un motivo (I-1).
+     * (`not_in_queue`, también con cualquier motivo de retención,
+     * {@see WITHHELD_REASONS}), si su inscripción ya se cerró
+     * (`enrollment_closed`, también en la repetición: m-1) o si ya lo reclamó
+     * otra persona (`already_claimed`); idempotente para quien lo reclamó, con
+     * el contacto retenido si ahora hay un motivo (I-1). Si un freno se echa
+     * entre la comprobación y la escritura (m-2), la fila ya reclamada vuelve
+     * sin contacto (`contactWithheld: brake`); no se deshace nada.
      *
      * @return array{job: array<string, mixed>, replayed: bool}
      */
@@ -190,12 +238,16 @@ final class AssistedQueue
         $ahora = self::now();
         if ($trabajo->assisted_claimed_by_admin_id !== null) {
             if ((int) $trabajo->assisted_claimed_by_admin_id === (int) $by->id) {
-                return ['job' => $this->dto($trabajo, (int) $by->id, $this->withholdReasons([$trabajo], $ahora, $abiertos)[(int) $trabajo->id] ?? null), 'replayed' => true];
+                // m-1: la repetición tampoco entrega nada de una inscripción cerrada.
+                $this->requireOpenEnrollment((int) $trabajo->enrollment_id);
+                $motivo = $this->withholdReasons([$trabajo], $ahora, $abiertos, $this->runningParts([(int) $trabajo->strategy_id]))[(int) $trabajo->id] ?? null;
+
+                return ['job' => $this->dto($trabajo, (int) $by->id, $motivo), 'replayed' => true];
             }
             throw OutreachException::conflict('already_claimed', 'Otra persona ya reclamó ese trabajo.');
         }
         $this->requireOpenEnrollment((int) $trabajo->enrollment_id);
-        $this->requireNotWithheld($trabajo, $ahora, $abiertos);
+        $this->requireNotWithheld($trabajo, $ahora, $abiertos, $this->runningParts([(int) $trabajo->strategy_id]));
         $cambiadas = DB::table(OutreachTables::JOBS)->where('id', $trabajo->id)->where('status', 'started')->whereNull('assisted_claimed_by_admin_id')->update([
             'assisted_claimed_by_admin_id' => (int) $by->id,
             'assisted_claimed_by_name' => mb_substr((string) $by->name, 0, 120),
@@ -205,8 +257,10 @@ final class AssistedQueue
         if ($cambiadas !== 1) {
             throw OutreachException::conflict('already_claimed', 'Otra persona ya reclamó ese trabajo.');
         }
+        // m-2: los frenos OTRA VEZ tras escribir (una consulta). Un freno echado entre la lectura y el UPDATE retiene el contacto ya en esta respuesta.
+        $frenado = in_array(true, OutreachStop::ladderBrakes($this->stop->openScopes(), (string) $trabajo->strategy_uuid, (string) $trabajo->channel), true);
 
-        return ['job' => $this->dto($this->assistedJob($jobUuid), (int) $by->id), 'replayed' => false];
+        return ['job' => $this->dto($this->assistedJob($jobUuid), (int) $by->id, $frenado ? self::WITHHELD_BRAKE : null), 'replayed' => false];
     }
 
     /**
@@ -279,15 +333,16 @@ final class AssistedQueue
     }
 
     /**
-     * M-5, I-2 e I-3: un trabajo sin reclamar con un motivo de retención no se reclama. Al CRM, `not_in_queue` (la
-     * bandeja ya no lo ofrece); el motivo, al registro, sin datos personales. La queja conserva la forma de M-5
-     * (`complaint_recent` y `known`: false = sin datos); el freno y el plazo, solo su código.
+     * M-5, I-2, I-3, N-1 y N-2: un trabajo sin reclamar con un motivo de retención no se reclama. Al CRM,
+     * `not_in_queue` (la bandeja ya no lo ofrece); el motivo, al registro, sin datos personales. La queja conserva
+     * la forma de M-5 (`complaint_recent` y `known`: false = sin datos); los demás, solo su código.
      *
      * @param  array{global: bool, channels: list<string>, strategies: list<string>}  $abiertos
+     * @param  array<string, array{0: int, 1: string}>  $enMarcha  {@see runningParts()}
      */
-    private function requireNotWithheld(object $trabajo, DateTimeImmutable $ahora, array $abiertos): void
+    private function requireNotWithheld(object $trabajo, DateTimeImmutable $ahora, array $abiertos, array $enMarcha): void
     {
-        $motivo = $this->withholdReasons([$trabajo], $ahora, $abiertos)[(int) $trabajo->id] ?? null;
+        $motivo = $this->withholdReasons([$trabajo], $ahora, $abiertos, $enMarcha)[(int) $trabajo->id] ?? null;
         if ($motivo === null) {
             return;
         }
@@ -301,28 +356,35 @@ final class AssistedQueue
 
     /**
      * El motivo de retención de cada trabajo (uno, por la prioridad de {@see WITHHELD_REASONS}), o ninguno. El
-     * freno, con la traducción de la escalera ({@see OutreachStop::ladderBrakes()}); la queja, solo de los que no
-     * están frenados (una foto para todos); el plazo, con el borde del despachador (`expires_at <= ahora`).
+     * freno, con la traducción de la escalera ({@see OutreachStop::ladderBrakes()}); la estrategia, con las partes
+     * en marcha leídas una vez ({@see runningParts()}); lo de la persona, solo de los que pasan esas dos (una foto y
+     * una consulta de supresión para todos, {@see personReasons()}); el plazo, con el borde del despachador
+     * (`expires_at <= ahora`).
      *
-     * @param  list<object>  $trabajos  filas con `id`, `subject_key`, `purpose`, `channel`, `strategy_uuid` y `expires_at`
+     * @param  list<object>  $trabajos  filas con `id`, `subject_key`, `purpose`, `channel`, `medium`, `strategy_uuid`,
+     *                                  `enrollment_version_id`, `enrollment_part` y `expires_at`
      * @param  array{global: bool, channels: list<string>, strategies: list<string>}  $abiertos
+     * @param  array<string, array{0: int, 1: string}>  $enMarcha  {@see runningParts()}
      * @return array<int, string> por id de trabajo con motivo
      */
-    private function withholdReasons(array $trabajos, DateTimeImmutable $ahora, array $abiertos): array
+    private function withholdReasons(array $trabajos, DateTimeImmutable $ahora, array $abiertos, array $enMarcha): array
     {
         $motivos = [];
-        $sinFreno = [];
+        $porPersona = [];
         foreach ($trabajos as $j) {
             if (in_array(true, OutreachStop::ladderBrakes($abiertos, (string) $j->strategy_uuid, (string) $j->channel), true)) {
                 $motivos[(int) $j->id] = self::WITHHELD_BRAKE;
+            } elseif (! isset($enMarcha[self::partKey((int) $j->enrollment_version_id, (string) $j->enrollment_part)])) {
+                // N-2: una parte que la cadena no trae en marcha (o que apareció después de leerla): retenida.
+                $motivos[(int) $j->id] = self::WITHHELD_STRATEGY_STOPPED;
             } else {
-                $sinFreno[] = $j;
+                $porPersona[] = $j;
             }
         }
-        $quejas = $this->withheldByComplaint($sinFreno, $ahora);
-        foreach ($sinFreno as $j) {
-            if (isset($quejas[(int) $j->id])) {
-                $motivos[(int) $j->id] = $quejas[(int) $j->id] ? self::WITHHELD_COMPLAINT_RECENT : self::WITHHELD_COMPLAINT_UNKNOWN;
+        $deLaPersona = $this->personReasons($porPersona, $ahora);
+        foreach ($porPersona as $j) {
+            if (isset($deLaPersona[(int) $j->id])) {
+                $motivos[(int) $j->id] = $deLaPersona[(int) $j->id];
             } elseif (OutreachStore::instant($j->expires_at) <= $ahora) {
                 $motivos[(int) $j->id] = self::WITHHELD_EXPIRED;
             }
@@ -332,17 +394,21 @@ final class AssistedQueue
     }
 
     /**
-     * M-5 (N6 `complaint_recent`): ¿se quejó hace poco la persona de cada trabajo? Por el MISMO camino que el
-     * despachador (etapa 6.5): la foto del lote con SOLO `complaint_created` (una consulta a `commercial_events`
-     * para todas, sin política) y {@see LadderInputBuilder::complaintRecently()} con la finalidad de la
-     * inscripción (la ventana y las finalidades de `OutreachConfig`). Se retiene con `true` y con `null` (sin
-     * datos de eventos o persona sin resolver: falla cerrado, como N6). Una clave que ya no es de una persona
-     * (la supresión 1581 la deja en `x:<id>`) no se lee y cuenta como sin datos.
+     * N-1 y M-5: lo que la escalera negaría HOY por la PERSONA de cada trabajo, con UNA foto del lote (la misma
+     * para la queja y la política: {@see personSelection()}) y UNA consulta al libro de supresiones:
+     *  - `opted_out` si se SABE una señal de «no contactar» ({@see optedOut()}, o la supresión global de N2 con la
+     *    clave canónica, como `LadderInputBuilder`);
+     *  - `complaint_recent` si se quejó dentro de la ventana ({@see LadderInputBuilder::complaintRecently()}, el
+     *    lector del despachador, con la finalidad de la inscripción);
+     *  - `policy_unknown` si la política no se puede comprobar (falla cerrado; decir «pidió que no la contacten»
+     *    sin saberlo sería falso);
+     *  - `complaint_unknown` si no hay datos de eventos para la queja (falla cerrado, como N6).
+     * Una clave que ya no es de una persona (la supresión 1581 la deja en `x:<id>`) no se lee: no se sabe nada.
      *
-     * @param  list<object>  $trabajos  filas con `id`, `subject_key` y `purpose`
-     * @return array<int, bool> por id de trabajo retenido: ¿había datos? (true = queja reciente; false = no se sabe)
+     * @param  list<object>  $trabajos  filas con `id`, `subject_key`, `purpose` y `medium`
+     * @return array<int, string> por id de trabajo retenido
      */
-    private function withheldByComplaint(array $trabajos, DateTimeImmutable $ahora): array
+    private function personReasons(array $trabajos, DateTimeImmutable $ahora): array
     {
         if ($trabajos === []) {
             return [];
@@ -351,17 +417,133 @@ final class AssistedQueue
             array_map(static fn (object $j): string => (string) $j->subject_key, $trabajos),
             static fn (string $c): bool => SubjectKey::isValid($c),
         )));
-        $foto = $claves === [] ? null : $this->snapshots->build($claves, $ahora, CoreProjection::selectionFor(['events' => ['complaint_created']], false));
-        $retenidos = [];
+        $foto = $claves === [] ? null : $this->snapshots->build($claves, $ahora, self::personSelection());
+        $politica = [];
+        $preguntas = [];
+        foreach ($trabajos as $j) {
+            $s = $foto?->subject((string) $j->subject_key);
+            $politica[(int) $j->id] = self::optedOut($s, (string) $j->purpose, (string) $j->medium);
+            if ($politica[(int) $j->id] !== true && $s !== null && $s->resolved()) {
+                $preguntas[(int) $j->id] = ['key' => (string) ($s->canonicalKey ?? $s->key), 'purpose' => (string) $j->purpose, 'medium' => (string) $j->medium];
+            }
+        }
+        foreach ($this->suppressions->areSuppressed($preguntas) as $id => $suprimida) {
+            if ($suprimida) {
+                $politica[(int) $id] = true;
+            }
+        }
+        $motivos = [];
         foreach ($trabajos as $j) {
             $s = $foto?->subject((string) $j->subject_key);
             $queja = LadderInputBuilder::complaintRecently($s === null ? null : CoreProjection::snapshot($s)->events, $ahora, (string) $j->purpose);
-            if ($queja !== false) {
-                $retenidos[(int) $j->id] = $queja === true;
+            $motivo = match (true) {
+                $politica[(int) $j->id] === true => self::WITHHELD_OPTED_OUT,
+                $queja === true => self::WITHHELD_COMPLAINT_RECENT,
+                $politica[(int) $j->id] === null => self::WITHHELD_POLICY_UNKNOWN,
+                $queja === null => self::WITHHELD_COMPLAINT_UNKNOWN,
+                default => null,
+            };
+            if ($motivo !== null) {
+                $motivos[(int) $j->id] = $motivo;
             }
         }
 
-        return $retenidos;
+        return $motivos;
+    }
+
+    /**
+     * La foto de la persona para la bandeja: la queja (SOLO `complaint_created`: `human_requested` no retira nada,
+     * L9-66) y las entradas de N1/N2 por persona (`policy`). Los contactos, solo porque
+     * {@see CoreProjection::policyInput()} los exige de una persona resuelta (no se usan). Sin los frenos ajenos
+     * (`global`, D-3) ni hechos de condiciones.
+     */
+    private static function personSelection(): FactSelection
+    {
+        return new FactSelection(facts: [], events: ['complaint_created'], contacts: true, policy: true);
+    }
+
+    /**
+     * N-1: ¿pidió la persona que no la contacten, con la MISMA entrada que N1/N2
+     * ({@see CoreProjection::policyInput()})? `true` si se sabe alguna señal: `do_not_contact` (suyo o de un
+     * prospecto con su número), el *opt-out* comercial con finalidad comercial, el consentimiento del MEDIO del
+     * trabajo denegado o, por voz, la exclusión de voz (el «no volver a llamar» o el RNE). `null` si no se puede
+     * comprobar: sin foto, persona sin resolver (`unknown_subject`), medio fuera del conjunto o un valor
+     * desconocido. Un `true` sabido gana a un desconocido. La supresión del libro la añade {@see personReasons()}.
+     * La escalera da por `denied` también un `lead.consent_denied` que no se sabe (falla cerrado); aquí ese caso es
+     * desconocido (`null`): retiene igual, pero sin decir que lo pidió.
+     */
+    private static function optedOut(?SubjectFacts $s, string $purpose, string $medium): ?bool
+    {
+        if ($s === null || ! $s->resolved() || ! in_array($medium, OutreachCatalog::MEDIUMS, true)) {
+            return null;
+        }
+        $entrada = CoreProjection::policyInput($s, $purpose, null);
+        $senales = [
+            $entrada['optOut']['doNotContact'],
+            $entrada['optOut']['siblingDoNotContact'],
+            $entrada['consent'][$medium] === 'denied' ? $s->policy('lead.consent_denied') : false,
+        ];
+        if ($purpose === OutreachCatalog::PURPOSE_COMMERCIAL) {
+            $senales[] = $entrada['optOut']['commercial'];
+        }
+        if ($medium === OutreachCatalog::MEDIUM_VOICE) {
+            $senales[] = $entrada['voice']['excluded'];
+        }
+        if (in_array(true, $senales, true)) {
+            return true;
+        }
+
+        return in_array(null, $senales, true) ? null : false;
+    }
+
+    /**
+     * N-2: las (versión, parte) EN MARCHA de unas estrategias, tal como está AHORA la cadena
+     * ({@see OutreachPublishedStrategies::liveStrategies()}, solo de esas): la parte viva con `runnable()` (cadena
+     * legible, versión en su estado vivo y contenido releído), sin `paused()` y en `active`. Son las entradas de
+     * N5 (`published`, `paused`, `chainReadable`) de `LadderInputBuilder`. Lo que no está aquí (revertida,
+     * retirada, archivada, apagada, ilegible o versión que no es de la estrategia) no está en marcha.
+     *
+     * @param  list<int>  $strategyIds
+     * @return array<string, array{0: int, 1: string}> clave {@see partKey()} → [versión, parte]
+     */
+    private function runningParts(array $strategyIds): array
+    {
+        $enMarcha = [];
+        foreach ($this->bridge->liveStrategies(array_values(array_unique($strategyIds))) as $l) {
+            if ($l->runnable() && ! $l->paused() && $l->chainStatus === OutreachPublishedStrategies::STATUS_ACTIVE) {
+                $enMarcha[self::partKey($l->versionId, $l->part)] = [$l->versionId, $l->part];
+            }
+        }
+
+        return $enMarcha;
+    }
+
+    private static function partKey(int $versionId, string $part): string
+    {
+        return $versionId.':'.$part;
+    }
+
+    /**
+     * N-2 en SQL: la inscripción es de una parte en marcha (lista blanca; sin ninguna, nada).
+     *
+     * @param  array<string, array{0: int, 1: string}>  $enMarcha
+     */
+    private static function inRunningPart(Builder $w, array $enMarcha): void
+    {
+        if ($enMarcha === []) {
+            $w->whereIn('e.id', []);
+
+            return;
+        }
+        foreach ($enMarcha as [$version, $parte]) {
+            $w->orWhere(static fn (Builder $p) => $p->where('e.strategy_version_id', $version)->where('e.part', $parte));
+        }
+    }
+
+    /** N-2: las (estrategia, versión, parte) distintas de la vista, para leer la cadena una vez. @return list<object> */
+    private function viewParts(int $viewerId, string $filter): array
+    {
+        return $this->queueQuery($viewerId, $filter)->distinct()->get(['j.strategy_id', 'e.strategy_version_id', 'e.part'])->all();
     }
 
     /** La consulta de la bandeja: asistidos, en vivo, `started`, con la inscripción viva y sin resultado del personal, por vista. */
@@ -383,19 +565,24 @@ final class AssistedQueue
     }
 
     /**
-     * Una tanda de la página, después de `$after` por `(expires_at, id)`. I-2 e I-3 en SQL, como la reclamación
-     * del despachador: lo SIN reclamar vencido o frenado no se lee (no se ofrece y no ocupa la página); lo
-     * reclamado sí, para su reclamante.
+     * Una tanda de la página, después de `$after` por `(expires_at, id)`. I-2, I-3 y N-2 en SQL, como la
+     * reclamación del despachador: lo SIN reclamar vencido, frenado o de una parte que no está en marcha no se
+     * lee (no se ofrece y no ocupa la página). Lo reclamado por quien mira, siempre (se le retiene el contacto si
+     * toca); lo reclamado por OTRA persona, solo en plazo (m-8: vencido, sigue en la vista de su reclamante y no
+     * esconde trabajo ofrecible en `all`).
      *
      * @param  array{global: bool, channels: list<string>, strategies: list<string>}  $abiertos
+     * @param  array<string, array{0: int, 1: string}>  $enMarcha  {@see runningParts()}
      * @return list<object>
      */
-    private function queueRows(int $viewerId, string $filter, DateTimeImmutable $ahora, array $abiertos, ?object $after, int $size): array
+    private function queueRows(int $viewerId, string $filter, DateTimeImmutable $ahora, array $abiertos, array $enMarcha, ?object $after, int $size): array
     {
-        $q = $this->queueQuery($viewerId, $filter)->where(function (Builder $w) use ($ahora, $abiertos): void {
-            $w->whereNotNull('j.assisted_claimed_by_admin_id');
+        $q = $this->queueQuery($viewerId, $filter)->where(function (Builder $w) use ($viewerId, $ahora, $abiertos, $enMarcha): void {
+            $w->where('j.assisted_claimed_by_admin_id', $viewerId)
+                ->orWhere(static fn (Builder $ajeno) => $ajeno->whereNotNull('j.assisted_claimed_by_admin_id')
+                    ->where('j.assisted_claimed_by_admin_id', '<>', $viewerId)->where('j.expires_at', '>', OutreachStore::sql($ahora)));
             if (! $abiertos['global']) {
-                $w->orWhere(function (Builder $libre) use ($ahora, $abiertos): void {
+                $w->orWhere(function (Builder $libre) use ($ahora, $abiertos, $enMarcha): void {
                     $libre->whereNull('j.assisted_claimed_by_admin_id')->where('j.expires_at', '>', OutreachStore::sql($ahora));
                     if ($abiertos['channels'] !== []) {
                         $libre->whereNotIn('j.channel', $abiertos['channels']);
@@ -403,6 +590,7 @@ final class AssistedQueue
                     if ($abiertos['strategies'] !== []) {
                         $libre->whereNotIn('s.uuid', $abiertos['strategies']);
                     }
+                    $libre->where(static fn (Builder $p) => self::inRunningPart($p, $enMarcha));
                 });
             }
         });
@@ -411,30 +599,33 @@ final class AssistedQueue
                 ->orWhere(fn (Builder $m) => $m->where('j.expires_at', '=', $after->expires_at)->where('j.id', '>', (int) $after->id)));
         }
 
-        return $q->orderBy('j.expires_at')->orderBy('j.id')->limit($size)
-            ->get(['j.*', 'e.purpose', 'e.uuid as enrollment_uuid', 'e.step_index as enrollment_step', 's.uuid as strategy_uuid', 's.key as strategy_key'])->all();
+        return $q->orderBy('j.expires_at')->orderBy('j.id')->limit($size)->get(self::ROW_COLUMNS)->all();
     }
 
     /**
-     * I-4: los trabajos SIN reclamar y no vencidos de la vista que retiene un freno (un recuento, sin leerlos ni
-     * decir de quién). Sin ningún freno abierto, o en `mine`, 0 sin consultar.
+     * I-4 y N-2: los trabajos SIN reclamar y no vencidos de la vista que retiene un freno o una parte que no
+     * está en marcha (un recuento exacto, sin leerlos ni decir de quién). En `mine`, o sin ningún freno abierto
+     * ni ninguna parte parada en la vista, 0 sin consultar.
      *
      * @param  array{global: bool, channels: list<string>, strategies: list<string>}  $abiertos
+     * @param  array<string, array{0: int, 1: string}>  $enMarcha  {@see runningParts()}
      */
-    private function brakedCount(int $viewerId, string $filter, DateTimeImmutable $ahora, array $abiertos): int
+    private function heldCount(int $viewerId, string $filter, DateTimeImmutable $ahora, array $abiertos, array $enMarcha, bool $hayParadas): int
     {
-        if ($filter === 'mine' || (! $abiertos['global'] && $abiertos['channels'] === [] && $abiertos['strategies'] === [])) {
+        $frenos = $abiertos['global'] || $abiertos['channels'] !== [] || $abiertos['strategies'] !== [];
+        if ($filter === 'mine' || (! $frenos && ! $hayParadas)) {
             return 0;
         }
         $q = $this->queueQuery($viewerId, $filter)->whereNull('j.assisted_claimed_by_admin_id')->where('j.expires_at', '>', OutreachStore::sql($ahora));
         if (! $abiertos['global']) {
-            $q->where(function (Builder $w) use ($abiertos): void {
+            $q->where(function (Builder $w) use ($abiertos, $enMarcha): void {
                 if ($abiertos['channels'] !== []) {
                     $w->orWhereIn('j.channel', $abiertos['channels']);
                 }
                 if ($abiertos['strategies'] !== []) {
                     $w->orWhereIn('s.uuid', $abiertos['strategies']);
                 }
+                $w->orWhereNot(static fn (Builder $p) => self::inRunningPart($p, $enMarcha));
             });
         }
 
@@ -447,7 +638,7 @@ final class AssistedQueue
             ->join(OutreachTables::ENROLLMENTS.' as e', 'e.id', '=', 'j.enrollment_id')
             ->join(OutreachTables::STRATEGIES.' as s', 's.id', '=', 'j.strategy_id')
             ->where('j.uuid', strtolower($jobUuid))->where('j.channel', 'assisted')->where('j.mode', OutreachConfig::MODE_LIVE)
-            ->first(['j.*', 'e.purpose', 'e.uuid as enrollment_uuid', 'e.step_index as enrollment_step', 's.uuid as strategy_uuid', 's.key as strategy_key']);
+            ->first(self::ROW_COLUMNS);
         if ($j === null) {
             throw OutreachException::notFound('job');
         }

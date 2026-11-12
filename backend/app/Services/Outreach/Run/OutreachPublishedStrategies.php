@@ -63,12 +63,22 @@ final class OutreachPublishedStrategies
      * también (con su motivo): quien planifica decide qué hace con ellas
      * (negar, cancelar), y el panel las enseña.
      *
+     * `$strategyIds` las limita a esas estrategias (la bandeja asistida lee solo las de su página, N-2);
+     * null = todas. La cadena se verifica igual: cada entrada contra la anterior GLOBAL.
+     *
+     * @param  list<int>|null  $strategyIds
      * @return list<LiveStrategy>
      */
-    public function liveStrategies(): array
+    public function liveStrategies(?array $strategyIds = null): array
     {
-        $estrategias = DB::table(OutreachTables::STRATEGIES)->whereNull('archived_at')->orderBy('id')
-            ->get(['id', 'uuid', 'key', 'purpose'])->keyBy('id');
+        $consulta = DB::table(OutreachTables::STRATEGIES)->whereNull('archived_at')->orderBy('id');
+        if ($strategyIds !== null) {
+            if ($strategyIds === []) {
+                return [];
+            }
+            $consulta->whereIn('id', array_values(array_unique(array_map('intval', $strategyIds))));
+        }
+        $estrategias = $consulta->get(['id', 'uuid', 'key', 'purpose'])->keyBy('id');
         if ($estrategias->isEmpty()) {
             return [];
         }

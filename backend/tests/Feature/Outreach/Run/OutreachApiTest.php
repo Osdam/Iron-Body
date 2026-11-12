@@ -251,7 +251,7 @@ class OutreachApiTest extends TestCase
         $this->assertSame($uuid, $cola->json('data.0.uuid'));
         $this->assertStringNotContainsString('3001234567', $cola->getContent());
         // I-1/I-4 (aditivo): cada fila lleva `contactWithheld` (null sin retención) y la página, `meta.withheld`.
-        $this->assertSame(['withheld' => 0], $cola->json('meta'));
+        $this->assertSame(['withheld' => 0, 'scanCapped' => false], $cola->json('meta'));
         $this->assertArrayHasKey('contactWithheld', $cola->json('data.0'));
         $this->assertNull($cola->json('data.0.contactWithheld'));
         $this->getJson(self::BASE.'outreach/assisted/queue', $this->adminWithPermissions([OutreachAccess::VIEW]))->assertStatus(403);

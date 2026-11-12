@@ -346,12 +346,15 @@ class H9AssistedConditionsTest extends TestCase
             return PHP_INT_MAX;
         };
 
-        // Reclamar: los frenos, antes de la queja (la decisión) y antes del UPDATE (la escritura); ninguna lectura después.
+        // Reclamar: los frenos, antes de la queja (la decisión) y antes del UPDATE (la escritura); y otra vez DESPUÉS
+        // del UPDATE (m-2 de `informe-security-bandeja-condiciones.md`: un freno echado entre las dos retiene el contacto).
         $cola->claim($gente['ana'], $uuid, (string) Str::uuid());
         $frenos = $primera($sql, '"outreach_brakes"');
         $this->assertLessThan($primera($sql, '"commercial_events"'), $frenos, 'los frenos antes de mirar la queja: '.json_encode($sql));
         $this->assertLessThan($primera($sql, 'update "outreach_jobs"'), $frenos, 'los frenos antes de reclamar');
-        $this->assertCount(1, array_filter($sql, static fn (string $q): bool => str_contains($q, '"outreach_brakes"')), 'una sola lectura de frenos');
+        $lecturas = array_keys(array_filter($sql, static fn (string $q): bool => str_contains($q, '"outreach_brakes"')));
+        $this->assertCount(2, $lecturas, 'una lectura de frenos para decidir y otra tras escribir (m-2)');
+        $this->assertGreaterThan($primera($sql, 'update "outreach_jobs"'), $lecturas[1], 'la segunda, después del UPDATE');
         // La repetición: los frenos antes de decidir si se le retiene el contacto.
         $sql = [];
         $cola->claim($gente['ana'], $uuid, (string) Str::uuid());
@@ -387,7 +390,8 @@ class H9AssistedConditionsTest extends TestCase
         // Con todo eso y un freno: `brake`.
         (new OutreachStop)->open('channel', 'assisted', 'legal_hold', 'Retención legal', $gente['beto'], (string) Str::uuid());
         $this->assertSame('brake', $motivo());
-        $this->assertSame(AssistedQueue::WITHHELD_REASONS, ['brake', 'complaint_recent', 'complaint_unknown', 'expired']);
+        // La lista completa (con `strategy_stopped`, `opted_out` y `policy_unknown`) la fija H9AssistedOptOutStrategyTest.
+        $this->assertSame(AssistedQueue::WITHHELD_REASONS, ['brake', 'strategy_stopped', 'opted_out', 'complaint_recent', 'policy_unknown', 'complaint_unknown', 'expired']);
     }
 
     // ── I-4 · La página que se llena ────────────────────────────────────────
@@ -409,7 +413,7 @@ class H9AssistedConditionsTest extends TestCase
         $toda = $cola->page($gente['ana'], 'all', 50);
         $this->assertCount(4, $toda['items'], 'los 3 sembrados y el del despachador');
         $this->assertSame(55, $toda['withheld']);
-        $this->assertSame(['items' => [], 'withheld' => 0], $cola->page($gente['ana'], 'mine', 50));
+        $this->assertSame(['items' => [], 'withheld' => 0, 'scanCapped' => false], $cola->page($gente['ana'], 'mine', 50));
         $sinPersonas = json_encode($toda);
         foreach ($retenidos as $id) {
             $this->assertStringNotContainsString((string) DB::table('outreach_jobs')->where('id', $id)->value('uuid'), $sinPersonas, 'de los retenidos, solo el número');
@@ -417,7 +421,7 @@ class H9AssistedConditionsTest extends TestCase
 
         // Con el freno de la estrategia, todo lo sin reclamar queda fuera y se cuenta (un recuento en SQL, sin leerlo).
         (new OutreachStop)->open('strategy', $this->vivo['strategyUuid'], 'manual', 'Freno de la estrategia', $gente['ana'], (string) Str::uuid());
-        $this->assertSame(['items' => [], 'withheld' => 59], $cola->page($gente['ana'], 'all', 50));
+        $this->assertSame(['items' => [], 'withheld' => 59, 'scanCapped' => false], $cola->page($gente['ana'], 'all', 50));
     }
 
     public function test_i4_la_lectura_de_una_pagina_tiene_tope_y_no_pasa_de_la_foto_maxima(): void
@@ -432,12 +436,16 @@ class H9AssistedConditionsTest extends TestCase
         });
 
         // Tras MAX_SCAN filas retenidas la lectura para: el trabajo del despachador, detrás, no llega a esta página.
-        $this->assertSame(['items' => [], 'withheld' => AssistedQueue::MAX_SCAN], $cola->page($gente['ana'], 'all', 20));
+        $this->assertSame(['items' => [], 'withheld' => AssistedQueue::MAX_SCAN, 'scanCapped' => true], $cola->page($gente['ana'], 'all', 20));
         $cuenta = static fn (string $tabla): int => count(array_filter($sql, static fn (string $q): bool => str_contains($q, $tabla)));
         $tandas = AssistedQueue::MAX_SCAN / AssistedQueue::SCAN_BATCH;
         // Una lectura de frenos por página; por tanda, una lectura de trabajos y una foto (aquí nadie se resuelve: solo el resolutor de socios).
         $this->assertSame([1, $tandas, $tandas], [$cuenta('"outreach_brakes"'), $cuenta('"enrollment_uuid"'), $cuenta('from "members"')], 'una foto por tanda, nunca una por fila');
-        $this->assertCount(1 + 2 * $tandas, $sql, 'y nada más: '.json_encode($sql));
+        // N-2: la cadena, UNA vez por página (no por tanda): las partes de la vista (1) y `liveStrategies()` de su única
+        // estrategia (9: la estrategia, las 3 de la cadena, la estrategia y la persona de su entrada, las versiones y los 2
+        // dominios del catálogo con que se relee el contenido). La foto de personas sin resolver no lee la política.
+        $this->assertSame(1, $cuenta('select distinct "j"."strategy_id"'));
+        $this->assertCount(1 + (1 + 9) + 2 * $tandas, $sql, 'y nada más: '.json_encode($sql));
         $this->assertLessThanOrEqual(BatchSnapshot::MAX_SUBJECTS, AssistedQueue::MAX_SCAN);
         $this->assertSame(AssistedQueue::MAX_PAGE, AssistedQueue::SCAN_BATCH);
     }
@@ -475,7 +483,8 @@ class H9AssistedConditionsTest extends TestCase
         $this->suppress([(int) $mio['job']->id, (int) $libre['job']->id]);
         $this->assertSame(2, DB::table('outreach_jobs')->where('subject_key', 'like', 'x:%')->count());
 
-        $this->assertSame([null, false, 'complaint_unknown'], self::contact($cola->queue($gente['ana'], 'mine')[0]), 'su reclamante no tiene ni enlace ni guion');
+        // N-1: la clave suprimida no se lee, así que tampoco la política: `policy_unknown` (antes de N-1, `complaint_unknown`).
+        $this->assertSame([null, false, 'policy_unknown'], self::contact($cola->queue($gente['ana'], 'mine')[0]), 'su reclamante no tiene ni enlace ni guion');
         $this->assertSame([], $cola->queue($gente['beto'], 'unclaimed'), 'la clave suprimida no se lee: sin datos, retenido');
         $this->assertClaimWithheld($cola, (string) $libre['job']->uuid, 'persona suprimida');
         $this->assertSame(1, $cola->page($gente['beto'], 'unclaimed')['withheld']);

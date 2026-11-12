@@ -3,6 +3,7 @@
 namespace App\Services\Outreach\Run;
 
 use App\Services\Outreach\Core\OutreachCatalog;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -48,13 +49,54 @@ final class SubjectSuppressions
 
     public function isSuppressed(string $subjectKey, string $purpose, string $medium): bool
     {
-        $filas = DB::table(OutreachTables::OUTCOMES.' as o')
-            ->join(OutreachTables::ENROLLMENTS.' as e', 'e.id', '=', 'o.enrollment_id')
-            ->leftJoin(OutreachTables::JOBS.' as j', 'j.id', '=', 'o.job_id')
+        $filas = self::suppressingRows()
             ->where('o.subject_key', $subjectKey)
-            ->where(static fn ($q) => $q->whereIn('o.outcome', self::SUPPRESSING_OUTCOMES)->orWhere('o.detail_code', self::OPT_OUT_WORD_DETAIL))
             ->limit(200)
             ->get(['o.outcome', 'o.source', 'o.detail_code', 'e.purpose', 'j.channel', 'j.medium']);
+
+        return self::suppresses($filas, $purpose, $medium);
+    }
+
+    /**
+     * {@see isSuppressed()} para VARIAS preguntas con UNA consulta y la misma regla ({@see suppresses()}): la
+     * bandeja asistida la mira por tandas al ofrecer y al reclamar (N-1 de `informe-security-bandeja-condiciones.md`),
+     * sin una consulta por fila. Sin tope de filas: un tope podría dejar fuera justo la que suprime (fallaría
+     * abierto); solo se leen las filas que suprimen, de las personas pedidas.
+     *
+     * @param  array<int|string, array{key: string, purpose: string, medium: string}>  $asks
+     * @return array<int|string, bool> con las mismas claves que `$asks`
+     */
+    public function areSuppressed(array $asks): array
+    {
+        if ($asks === []) {
+            return [];
+        }
+        $claves = array_values(array_unique(array_map(static fn (array $a): string => $a['key'], $asks)));
+        $porClave = [];
+        foreach (self::suppressingRows()->whereIn('o.subject_key', $claves)->orderBy('o.id')
+            ->get(['o.subject_key', 'o.outcome', 'o.source', 'o.detail_code', 'e.purpose', 'j.channel', 'j.medium']) as $f) {
+            $porClave[(string) $f->subject_key][] = $f;
+        }
+
+        return array_map(static fn (array $a): bool => self::suppresses($porClave[$a['key']] ?? [], $a['purpose'], $a['medium']), $asks);
+    }
+
+    /** Las filas del libro que pueden suprimir (sin la persona): `opted_out`, `wrong_person` o una palabra de baja. */
+    private static function suppressingRows(): Builder
+    {
+        return DB::table(OutreachTables::OUTCOMES.' as o')
+            ->join(OutreachTables::ENROLLMENTS.' as e', 'e.id', '=', 'o.enrollment_id')
+            ->leftJoin(OutreachTables::JOBS.' as j', 'j.id', '=', 'o.job_id')
+            ->where(static fn ($q) => $q->whereIn('o.outcome', self::SUPPRESSING_OUTCOMES)->orWhere('o.detail_code', self::OPT_OUT_WORD_DETAIL));
+    }
+
+    /**
+     * LA REGLA, fila a fila, sobre las filas de UNA persona.
+     *
+     * @param  iterable<object>  $filas  con `outcome`, `source`, `detail_code`, `purpose`, `channel` y `medium`
+     */
+    private static function suppresses(iterable $filas, string $purpose, string $medium): bool
+    {
         foreach ($filas as $f) {
             $medio = self::mediumOfJob($f->channel, $f->medium);
             $suMedio = $medio === null || $medio === $medium;

@@ -40,8 +40,9 @@ class UltronStudioOutreachAssistedController extends Controller
         ]);
         $pagina = $queue->page($access->actor, (string) ($data['filter'] ?? 'all'), (int) ($data['limit'] ?? 20));
 
-        // I-4 (aditivo): `meta.withheld` = cuántos trabajos sin reclamar no se ofrecen ahora (freno o queja), sin decir de quién.
-        return response()->json(['ok' => true, 'data' => $pagina['items'], 'meta' => ['withheld' => $pagina['withheld']]]);
+        // I-4 (aditivo): `meta.withheld` = cuántos trabajos sin reclamar no se ofrecen ahora (freno, estrategia parada o algo de la
+        // persona), sin decir de quién; m-3 (aditivo): `meta.scanCapped` = la lectura llegó a su tope sin llenar la página.
+        return response()->json(['ok' => true, 'data' => $pagina['items'], 'meta' => ['withheld' => $pagina['withheld'], 'scanCapped' => $pagina['scanCapped']]]);
     }
 
     /** POST outreach/assisted/{uuid}/claim   {clientRequestId}: una vez; 200 `replayed` para quien ya lo reclamó */
