@@ -13,7 +13,9 @@ use App\Services\MembershipService;
 use App\Services\Observability\ChannelLog;
 use App\Services\Wompi\PaymentStateMachine as SM;
 use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 /**
  * Los hechos que no ocurren: nadie los provoca, hay que ir a buscarlos.
@@ -35,14 +37,28 @@ use Illuminate\Support\Carbon;
  * daba por vencida una membresía que aún valía hasta la medianoche local y
  * movía la semana de la inactividad el domingo a las 19:00 (informe del
  * tester I-6, D-1 y A-1). Las claves de deduplicación conservan su forma.
+ *
+ * CADA FAMILIA VE A TODOS SUS CANDIDATOS. Antes cada una pedía `limit(500)`
+ * sin orden y sin mirar lo ya registrado: con 591 socios vigentes, la
+ * inactividad miraba siempre los mismos 500 (los que devolviera el plan) y el
+ * resto no tenía nunca su hecho. Ahora cada familia recorre a sus candidatos
+ * por id, en trozos ({@see self::walk()}), y `--limit` es un techo de hechos
+ * NUEVOS por familia y pasada, no de sujetos mirados. Ver el docblock de
+ * `walk()` para por qué nadie se queda atrás para siempre.
  */
 class ScanCommercialFacts extends Command
 {
     protected $signature = 'commercial:scan
-                            {--limit=500 : Techo de sujetos por familia, para no barrer la base entera}
+                            {--limit=500 : Techo de hechos NUEVOS por familia y pasada (contra una avalancha); lo que no quepa se registra en la siguiente}
                             {--dry-run : Muestra lo que detectaría sin registrar nada}';
 
     protected $description = 'Detecta vencimientos, inactividad y enlaces de pago abandonados';
+
+    /** Sujetos por trozo del recorrido: acota la memoria, sea cual sea el techo. */
+    private const CHUNK = 500;
+
+    /** @var array<string, true> familias que llegaron al techo con candidatos sin mirar */
+    private array $truncated = [];
 
     public function __construct(
         private readonly CommercialEventRecorder $recorder,
@@ -61,6 +77,9 @@ class ScanCommercialFacts extends Command
 
         $limit = max(1, (int) $this->option('limit'));
         $dry = (bool) $this->option('dry-run');
+        // La instancia de la orden se reutiliza entre llamadas del mismo proceso
+        // (`Artisan::call`, las pruebas): cada pasada empieza sin recortes.
+        $this->truncated = [];
 
         $counts = [
             'renewal_window' => $this->scanRenewalWindow($limit, $dry),
@@ -71,6 +90,16 @@ class ScanCommercialFacts extends Command
 
         foreach ($counts as $family => $n) {
             $this->line(sprintf('  %-18s %d', $family, $n));
+        }
+
+        if ($this->truncated !== []) {
+            $families = array_keys($this->truncated);
+            $this->warn(sprintf(
+                'Techo de %d hechos nuevos alcanzado en: %s. Quedan candidatos sin mirar; la siguiente pasada sigue con ellos (lo ya registrado no cuenta para el techo).',
+                $limit,
+                implode(', ', $families),
+            ));
+            ChannelLog::warning('commercial.scan.truncated', ['families' => $families, 'limit' => $limit, 'dry_run' => $dry]);
         }
 
         ChannelLog::info('commercial.scan.completed', $counts + ['dry_run' => $dry]);
@@ -92,18 +121,16 @@ class ScanCommercialFacts extends Command
         $horizon = $today->copy()->addDays($days);
 
         $users = User::query()
+            ->select(['id', 'plan', 'membership_end_date'])
             ->whereNotNull('membership_end_date')
-            ->whereBetween('membership_end_date', [$today->toDateString(), $horizon->toDateString()])
-            ->limit($limit)
-            ->get(['id', 'plan', 'membership_end_date']);
+            ->whereBetween('membership_end_date', [$today->toDateString(), $horizon->toDateString()]);
 
-        $n = 0;
-        foreach ($users as $user) {
+        return $this->walk('renewal_window', $users, $limit, function (User $user) use ($dry, $today): int {
             // A medianoche del gimnasio, como `$today`: los días que faltan
             // son días enteros de Bogotá.
             $endsAt = Carbon::parse($user->membership_end_date, Member::BUSINESS_TZ)->startOfDay();
 
-            $n += $this->emit(
+            return $this->emit(
                 $dry,
                 V::EV_RENEWAL_WINDOW_OPENED,
                 $this->resolver->fromUser($user->id),
@@ -115,9 +142,7 @@ class ScanCommercialFacts extends Command
                 // Una sola vez por vencimiento, no una por día de la ventana.
                 "renewal:{$user->id}:{$endsAt->toDateString()}",
             );
-        }
-
-        return $n;
+        });
     }
 
     /**
@@ -132,26 +157,20 @@ class ScanCommercialFacts extends Command
         $yesterday = self::gymToday()->subDay();
 
         $users = User::query()
+            ->select(['id', 'plan', 'membership_end_date'])
             ->whereNotNull('membership_end_date')
             // Solo el día siguiente al vencimiento. Barrer todo el histórico
             // convertiría la primera ejecución en una avalancha de eventos
             // sobre gente que se fue hace años.
-            ->whereDate('membership_end_date', $yesterday->toDateString())
-            ->limit($limit)
-            ->get(['id', 'plan', 'membership_end_date']);
+            ->whereDate('membership_end_date', $yesterday->toDateString());
 
-        $n = 0;
-        foreach ($users as $user) {
-            $n += $this->emit(
-                $dry,
-                V::EV_MEMBERSHIP_EXPIRED,
-                $this->resolver->fromUser($user->id),
-                ['plan' => $user->plan, 'expired_at' => $yesterday->toDateString()],
-                "expired:{$user->id}:{$yesterday->toDateString()}",
-            );
-        }
-
-        return $n;
+        return $this->walk('expired', $users, $limit, fn (User $user): int => $this->emit(
+            $dry,
+            V::EV_MEMBERSHIP_EXPIRED,
+            $this->resolver->fromUser($user->id),
+            ['plan' => $user->plan, 'expired_at' => $yesterday->toDateString()],
+            "expired:{$user->id}:{$yesterday->toDateString()}",
+        ));
     }
 
     /**
@@ -169,31 +188,15 @@ class ScanCommercialFacts extends Command
         $cutoff = $today->copy()->subDays($days);
 
         $members = Member::query()
+            ->select(['id', 'user_id'])
             ->whereNotNull('user_id')
             ->whereHas('user', fn ($q) => $q->whereNotNull('membership_end_date')
-                ->whereDate('membership_end_date', '>=', $today->toDateString()))
-            ->limit($limit)
-            ->get(['id', 'user_id']);
+                ->whereDate('membership_end_date', '>=', $today->toDateString()));
 
-        $n = 0;
-        foreach ($members as $member) {
-            $lastEntry = Attendance::query()
-                ->where('member_id', $member->id)
-                ->where('action', 'entry')
-                ->max('captured_at');
+        return $this->walk('inactivity', $members, $limit, function (array $candidate) use ($dry, $today): int {
+            [$member, $last] = $candidate;
 
-            // Sin ninguna visita nunca no es inactividad: es un socio que aún no
-            // ha empezado, y eso se acompaña de otra manera (onboarding).
-            if ($lastEntry === null) {
-                continue;
-            }
-
-            $last = Carbon::parse($lastEntry);
-            if ($last->greaterThan($cutoff)) {
-                continue;
-            }
-
-            $n += $this->emit(
+            return $this->emit(
                 $dry,
                 V::EV_INACTIVITY_DETECTED,
                 $this->resolver->fromMember($member->id),
@@ -205,9 +208,33 @@ class ScanCommercialFacts extends Command
                 // no todos los días.
                 "inactive:{$member->id}:".$today->format('o-\WW'),
             );
-        }
+        }, function (Collection $members) use ($cutoff): iterable {
+            // La última entrada de TODO el trozo en una consulta, no una por
+            // socio (antes, un `max(captured_at)` por socio vigente).
+            $lastEntries = Attendance::query()->toBase()
+                ->whereIn('member_id', $members->pluck('id')->all())
+                ->where('action', 'entry')
+                ->groupBy('member_id')
+                ->selectRaw('member_id, max(captured_at) as last_entry')
+                ->pluck('last_entry', 'member_id');
 
-        return $n;
+            foreach ($members as $member) {
+                $lastEntry = $lastEntries[$member->id] ?? null;
+
+                // Sin ninguna visita nunca no es inactividad: es un socio que aún no
+                // ha empezado, y eso se acompaña de otra manera (onboarding).
+                if ($lastEntry === null) {
+                    continue;
+                }
+
+                $last = Carbon::parse($lastEntry);
+                if ($last->greaterThan($cutoff)) {
+                    continue;
+                }
+
+                yield [$member, $last];
+            }
+        });
     }
 
     /**
@@ -223,31 +250,70 @@ class ScanCommercialFacts extends Command
         $cutoff = now()->subHours($hours);
 
         $transactions = PaymentTransaction::query()
+            ->select(['id', 'member_id', 'plan_id', 'amount', 'reference', 'created_at'])
             ->whereIn('status', [SM::CREATED, SM::PENDING, SM::REQUIRES_ACTION, SM::TOKENIZING])
             ->whereNotNull('checkout_url')
             ->where('created_at', '<=', $cutoff)
             // Un enlace de hace tres semanas ya no se recupera; se ofrece uno
             // nuevo, que es otro objetivo.
-            ->where('created_at', '>=', now()->subDays(7))
-            ->limit($limit)
-            ->get(['id', 'member_id', 'plan_id', 'amount', 'reference', 'created_at']);
+            ->where('created_at', '>=', now()->subDays(7));
 
+        return $this->walk('abandoned_links', $transactions, $limit, fn (PaymentTransaction $tx): int => $this->emit(
+            $dry,
+            V::EV_PAYMENT_PENDING,
+            $this->resolver->fromMember($tx->member_id),
+            [
+                'reference' => $tx->reference,
+                'plan_id' => $tx->plan_id,
+                'amount' => $tx->amount,
+                'abandoned_for_hours' => (int) $tx->created_at->diffInHours(now()),
+                'abandoned' => true,
+            ],
+            "tx:{$tx->id}:abandoned:".self::gymToday()->format('Y-m-d'),
+        ));
+    }
+
+    /**
+     * Recorre TODOS los candidatos de una familia, por id y en trozos de
+     * {@see self::CHUNK}, y para cuando ha registrado `$limit` hechos NUEVOS.
+     *
+     * - Memoria acotada: nunca hay más de un trozo cargado.
+     * - Orden estable (id ascendente), así que dos pasadas ven a los mismos
+     *   candidatos en el mismo orden.
+     * - El techo cuenta lo que `emit()` registra de verdad (1), no lo mirado.
+     *   Lo ya registrado devuelve 0: la clave de deduplicación lleva el hecho
+     *   y su fecha, y el registrador lo para en su lectura previa. Así que la
+     *   pasada siguiente atraviesa lo que ya emitió la anterior sin gastar techo
+     *   y llega a los que no cupieron. Con un conjunto de candidatos estable de
+     *   C sujetos, todos tienen su hecho en ⌈C / limit⌉ pasadas; nadie se queda
+     *   atrás para siempre mientras entren menos de `limit` candidatos nuevos
+     *   por pasada (y si entran más, la orden lo avisa en cada pasada).
+     * - Si para con candidatos sin mirar, la familia queda en `$truncated` y la
+     *   orden lo dice.
+     *
+     * `$filter`, si viene, recibe cada trozo y devuelve (en el mismo orden) los
+     * candidatos que de verdad cuentan; el techo solo se mira antes de emitir.
+     *
+     * @param  \Closure(mixed): int  $emit
+     * @param  (\Closure(Collection): iterable<mixed>)|null  $filter
+     */
+    private function walk(string $family, Builder $query, int $limit, \Closure $emit, ?\Closure $filter = null): int
+    {
         $n = 0;
-        foreach ($transactions as $tx) {
-            $n += $this->emit(
-                $dry,
-                V::EV_PAYMENT_PENDING,
-                $this->resolver->fromMember($tx->member_id),
-                [
-                    'reference' => $tx->reference,
-                    'plan_id' => $tx->plan_id,
-                    'amount' => $tx->amount,
-                    'abandoned_for_hours' => (int) $tx->created_at->diffInHours(now()),
-                    'abandoned' => true,
-                ],
-                "tx:{$tx->id}:abandoned:".self::gymToday()->format('Y-m-d'),
-            );
-        }
+
+        $query->chunkById(self::CHUNK, function (Collection $rows) use (&$n, $family, $limit, $emit, $filter): bool {
+            foreach ($filter !== null ? $filter($rows) : $rows as $candidate) {
+                if ($n >= $limit) {
+                    $this->truncated[$family] = true;
+
+                    return false;
+                }
+
+                $n += $emit($candidate);
+            }
+
+            return true;
+        });
 
         return $n;
     }
