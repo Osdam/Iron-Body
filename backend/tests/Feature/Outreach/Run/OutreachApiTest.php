@@ -250,9 +250,21 @@ class OutreachApiTest extends TestCase
         $this->assertCount(1, $cola->json('data'));
         $this->assertSame($uuid, $cola->json('data.0.uuid'));
         $this->assertStringNotContainsString('3001234567', $cola->getContent());
+        // I-1/I-4 (aditivo): cada fila lleva `contactWithheld` (null sin retención) y la página, `meta.withheld`.
+        $this->assertSame(['withheld' => 0], $cola->json('meta'));
+        $this->assertArrayHasKey('contactWithheld', $cola->json('data.0'));
+        $this->assertNull($cola->json('data.0.contactWithheld'));
         $this->getJson(self::BASE.'outreach/assisted/queue', $this->adminWithPermissions([OutreachAccess::VIEW]))->assertStatus(403);
 
-        $this->postJson(self::BASE."outreach/assisted/{$uuid}/claim", ['clientRequestId' => (string) Str::uuid()], $this->as($gente['ana']))->assertCreated()->assertJsonPath('data.claimedBy.name', 'Ana');
+        $reclamo = $this->postJson(self::BASE."outreach/assisted/{$uuid}/claim", ['clientRequestId' => (string) Str::uuid()], $this->as($gente['ana']))->assertCreated()->assertJsonPath('data.claimedBy.name', 'Ana');
+        $this->assertSame([['kind' => 'member', 'id' => $p['member']['member']], null], [$reclamo->json('data.person'), $reclamo->json('data.contactWithheld')]);
+        // I-1: la queja que llega DESPUÉS de reclamar retiene el contacto en la bandeja y en la repetición; el resultado se registra igual.
+        Carbon::setTestNow(Carbon::parse('2026-11-17 15:20:00', 'UTC'));
+        $this->commercialEvent('complaint_created', '2026-11-17 15:16:00', $p['member']['member']);
+        $mia = $this->getJson(self::BASE.'outreach/assisted/queue?filter=mine', $this->as($gente['ana']))->assertOk()->assertJsonPath('meta.withheld', 0);
+        $this->assertSame([null, null, 'complaint_recent'], [$mia->json('data.0.person'), $mia->json('data.0.script'), $mia->json('data.0.contactWithheld')]);
+        $otra = $this->postJson(self::BASE."outreach/assisted/{$uuid}/claim", ['clientRequestId' => (string) Str::uuid()], $this->as($gente['ana']))->assertOk()->assertJsonPath('meta.replayed', true);
+        $this->assertSame([null, null, 'complaint_recent'], [$otra->json('data.person'), $otra->json('data.script'), $otra->json('data.contactWithheld')]);
         $this->postJson(self::BASE."outreach/assisted/{$uuid}/claim", ['clientRequestId' => (string) Str::uuid()], $this->as($gente['beto']))->assertStatus(409)->assertJsonPath('code', 'already_claimed');
         $this->postJson(self::BASE."outreach/assisted/{$uuid}/outcome", ['clientRequestId' => (string) Str::uuid(), 'outcome' => 'answered'], $this->as($gente['beto']))->assertStatus(403)->assertJsonPath('code', 'not_claimer');
         $this->postJson(self::BASE."outreach/assisted/{$uuid}/outcome", ['clientRequestId' => (string) Str::uuid(), 'outcome' => 'converted'], $this->as($gente['ana']))->assertStatus(422);

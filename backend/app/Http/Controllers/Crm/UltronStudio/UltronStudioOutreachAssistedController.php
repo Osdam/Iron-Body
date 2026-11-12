@@ -38,8 +38,10 @@ class UltronStudioOutreachAssistedController extends Controller
             'filter' => ['sometimes', 'nullable', 'string', Rule::in(['all', 'mine', 'unclaimed'])],
             'limit' => ['sometimes', 'integer', 'min:1', 'max:'.AssistedQueue::MAX_PAGE],
         ]);
+        $pagina = $queue->page($access->actor, (string) ($data['filter'] ?? 'all'), (int) ($data['limit'] ?? 20));
 
-        return response()->json(['ok' => true, 'data' => $queue->queue($access->actor, (string) ($data['filter'] ?? 'all'), (int) ($data['limit'] ?? 20))]);
+        // I-4 (aditivo): `meta.withheld` = cuántos trabajos sin reclamar no se ofrecen ahora (freno o queja), sin decir de quién.
+        return response()->json(['ok' => true, 'data' => $pagina['items'], 'meta' => ['withheld' => $pagina['withheld']]]);
     }
 
     /** POST outreach/assisted/{uuid}/claim   {clientRequestId}: una vez; 200 `replayed` para quien ya lo reclamó */

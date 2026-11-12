@@ -27,11 +27,14 @@ use Tests\TestCase;
  *  - un trabajo asistido de una persona que se quejó después de salir deja de
  *    ofrecerse y NO se puede reclamar (409 `not_in_queue`); sin datos de
  *    eventos, tampoco (falla cerrado, como N6);
- *  - quien YA lo reclamó lo sigue viendo y registra su resultado;
+ *  - quien YA lo reclamó lo sigue viendo y registra su resultado, pero sin
+ *    el enlace a la ficha ni el guion (`contactWithheld`, I-1 de
+ *    `informe-security-bandeja.md`; lo prueba a fondo H9AssistedConditionsTest);
  *  - `human_requested` NO retira nada (L9-66: una derivada a persona sigue
  *    viva en la bandeja);
  *  - la bandeja no escribe: el trabajo y la inscripción quedan como estaban;
- *  - una página lee las quejas con UNA consulta, tenga las filas que tenga.
+ *  - una página lee las quejas con UNA consulta, tenga las filas que tenga
+ *    (también la vista `mine`, que desde I-1 vuelve a mirar lo reclamado).
  *
  * El martes 17-11-2026 a las 10:00 de Bogotá (15:00Z), en vivo, con la fuente
  * de eventos encendida (L9-26), como el resto de B9-run.
@@ -168,10 +171,11 @@ class H9AssistedComplaintTest extends TestCase
         $this->assertSame([], $cola->queue($gente['beto'], 'unclaimed'));
         $this->assertClaimWithheld($cola, (string) $libre['job']->uuid, 'el libre, con queja');
 
-        // Quien ya lo tenía: la repetición idempotente sigue y el resultado se registra (requisito 3).
+        // Quien ya lo tenía: la repetición idempotente sigue y el resultado se registra (requisito 3). Desde I-1, sin el
+        // enlace a la ficha ni el guion: se quejó después de que lo reclamara.
         $this->assertTrue($cola->claim($gente['ana'], (string) $reclamado['job']->uuid, (string) Str::uuid())['replayed']);
         $mio = $cola->queue($gente['ana'], 'mine')[0];
-        $this->assertSame(['kind' => 'member', 'id' => $reclamado['member']['member']], $mio['person'], 'quien reclamó conserva el enlace a la ficha');
+        $this->assertSame([null, null, 'complaint_recent'], [$mio['person'], $mio['script'], $mio['contactWithheld']], 'quien reclamó sigue, con el contacto retenido (I-1)');
         $r = $cola->recordOutcome($gente['ana'], (string) $reclamado['job']->uuid, 'not_interested', (string) Str::uuid());
         $this->assertSame([OutcomeRecorder::RESULT_RECORDED, 'not_interested'], [$r['result'], $r['outcome']]);
         $this->assertSame(1, DB::table('outreach_outcomes')->where('source', 'staff')->count());
@@ -203,7 +207,7 @@ class H9AssistedComplaintTest extends TestCase
         $this->assertFalse($cola->claim($gente['ana'], $uuid, (string) Str::uuid())['replayed']);
     }
 
-    public function test_una_pagina_lee_las_quejas_con_una_sola_consulta_y_la_vista_mine_ninguna(): void
+    public function test_una_pagina_lee_las_quejas_con_una_sola_consulta_tambien_la_vista_mine(): void
     {
         $gente = $this->threePeople();
         $trabajos = $this->startedFor(['3001234561', '3001234562', '3001234563']);
@@ -220,10 +224,10 @@ class H9AssistedComplaintTest extends TestCase
         $this->assertEqualsCanonicalizing([(string) $trabajos[0]['job']->uuid, (string) $trabajos[2]['job']->uuid], $vistos, 'el de la persona con queja no se ofrece');
         $this->assertCount(1, $leidas, 'una consulta a commercial_events por página, no una por fila: '.json_encode($leidas));
 
-        // Lo reclamado no se vuelve a mirar: la vista `mine` no lee quejas.
+        // I-1: lo reclamado también se vuelve a mirar (la queja puede llegar después de reclamar), con una sola consulta.
         $cola->claim($gente['ana'], (string) $trabajos[0]['job']->uuid, (string) Str::uuid());
         $leidas = [];
         $this->assertCount(1, $cola->queue($gente['ana'], 'mine'));
-        $this->assertSame([], $leidas, 'la vista mine no lee quejas');
+        $this->assertCount(1, $leidas, 'la vista mine lee las quejas una vez: '.json_encode($leidas));
     }
 }
