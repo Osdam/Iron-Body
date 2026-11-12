@@ -43,7 +43,13 @@ class ElectronicInvoiceCommercialObserver
             return;
         }
 
-        $event = match ((string) $invoice->status) {
+        // El modelo castea `status` a un enum, y un enum no se convierte con
+        // `(string)`: lanzaba `Error` en CADA cambio de estado y salía por el
+        // `save()` de quien lo cambia (el job de emisión, antes de hablar con
+        // Factus). Se lee su valor.
+        $status = self::statusValue($invoice);
+
+        $event = match ($status) {
             InvoiceStatus::VALIDATED->value,
             InvoiceStatus::CREDIT_NOTE_VALIDATED->value => V::EV_INVOICE_VALIDATED,
 
@@ -60,7 +66,15 @@ class ElectronicInvoiceCommercialObserver
             return;
         }
 
-        $this->emit($invoice, $event, (string) $invoice->status);
+        $this->emit($invoice, $event, $status);
+    }
+
+    /** El estado como texto, venga como enum (el cast del modelo) o como cadena. */
+    private static function statusValue(ElectronicInvoice $invoice): string
+    {
+        $status = $invoice->status;
+
+        return $status instanceof \BackedEnum ? (string) $status->value : (string) $status;
     }
 
     private function emit(ElectronicInvoice $invoice, string $event, string $keySuffix): void
