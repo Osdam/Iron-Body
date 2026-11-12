@@ -3,6 +3,8 @@
 namespace App\Services\Commercial;
 
 use App\Models\CommercialApproval;
+use App\Services\Marketing\MarketingAgentSwitch;
+use App\Services\Marketing\Ultron\UltronAbortLatch;
 use App\Services\Meta\MetaAuthService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -40,17 +42,66 @@ class SupervisionService
     /** @return array<string,mixed> */
     public function state(): array
     {
+        $quien = $this->safe(fn () => $this->whoResponds(), self::WHO_UNKNOWN);
+
         return [
-            'agent' => $this->agentState(),
+            'agent' => $this->agentState($quien),
             'infrastructure' => $this->infrastructureState(),
             'channels' => $this->channelState(),
-            'conversations' => $this->conversationCounters(),
+            'conversations' => $this->conversationCounters($quien),
             'queue' => $this->workCounters(),
         ];
     }
 
-    /** @return array<string,mixed> */
-    private function agentState(): array
+    /** Lo que se dice cuando no se pudo leer el interruptor o el freno: nunca «activo» sin saberlo. */
+    private const WHO_UNKNOWN = [
+        'status' => 'unknown', 'responds' => false,
+        'label' => 'No se pudo leer el estado del agente', 'short' => 'Estado del agente sin leer',
+    ];
+
+    /**
+     * Quién le responde hoy a un cliente de forma automática.
+     *
+     * La pantalla enseñaba el interruptor del agente anterior (`marketing.agent_enabled`) y decía «Apagado» mientras
+     * ULTRON atendía el canario. Aquí manda la misma verdad que en el Inbox ({@see MarketingAgentSwitch::present()})
+     * y en el emisor de ULTRON (`UltronEventEmitter`): ULTRON con su alcance real, su
+     * freno y la pausa global; y, solo si ULTRON no está, el agente anterior, que responde por su cuenta únicamente
+     * con sus tres llaves puestas (`agent_enabled`, `inbound.auto_analyze`, `inbound.auto_execute`).
+     *
+     * @return array{status: string, responds: bool, label: string, short: string}
+     */
+    private function whoResponds(): array
+    {
+        $ultron = (bool) config('marketing.ultron.enabled', false);
+        $analiza = (bool) config('marketing.inbound.auto_analyze', true);
+        $ejecuta = $analiza && (bool) config('marketing.agent_enabled', false) && (bool) config('marketing.inbound.auto_execute', false);
+
+        if (! $ultron && ! $analiza) {
+            return ['status' => 'off', 'responds' => false, 'label' => 'Ningún agente responde automáticamente', 'short' => 'Sin agente automático'];
+        }
+        if (app(MarketingAgentSwitch::class)->isPaused()) {
+            return ['status' => 'paused', 'responds' => false, 'label' => 'Agente en pausa: nada automático responde', 'short' => 'Agente en pausa'];
+        }
+        if ($ultron) {
+            if (app(UltronAbortLatch::class)->engaged()) {
+                return ['status' => 'brake', 'responds' => false, 'label' => 'ULTRON está frenado: no responde hasta que se suelte el freno', 'short' => 'ULTRON frenado'];
+            }
+
+            return config('marketing.ultron.canary_conversation_id') !== null
+                ? ['status' => 'ultron_canary', 'responds' => true, 'label' => 'ULTRON responde solo en la conversación de prueba (canario)', 'short' => 'ULTRON · solo canario']
+                : ['status' => 'ultron_all', 'responds' => true, 'label' => 'ULTRON responde en todas las conversaciones', 'short' => 'ULTRON activo'];
+        }
+
+        return $ejecuta
+            ? ['status' => 'legacy_auto', 'responds' => true, 'label' => 'El agente anterior responde por su cuenta', 'short' => 'Agente anterior activo']
+            : ['status' => 'legacy_propose', 'responds' => false, 'label' => 'El agente anterior solo propone respuestas: no envía nada por su cuenta', 'short' => 'El agente solo propone'];
+    }
+
+    /**
+     * @param  array{status: string, responds: bool, label: string, short: string}  $quien
+     * @return array<string,mixed>
+     */
+    private function agentState(array $quien): array
     {
         $since = now()->subHours(self::ACTIVITY_HOURS);
 
@@ -71,9 +122,13 @@ class SupervisionService
         $failed = (int) ($runs->failed ?? 0);
 
         return [
-            // «Apagado» no es una avería: es la configuración pedida hasta que
-            // se registre el número. La pantalla tiene que decirlo así.
-            'enabled' => (bool) config('marketing.agent_enabled', false),
+            // `enabled` = algo automático le responde hoy a alguien (ver whoResponds()). Antes era el interruptor
+            // del agente anterior, y la pantalla decía «Apagado» con ULTRON atendiendo el canario.
+            'enabled' => $quien['responds'],
+            'status' => $quien['status'],
+            'label' => $quien['label'],
+            'short_label' => $quien['short'],
+            'legacy_enabled' => (bool) config('marketing.agent_enabled', false),
             'autonomy_enabled' => (bool) config('commercial.autonomy_enabled', false),
             'driver' => (string) config('marketing.ai.driver', 'fake'),
             'model' => $this->effectiveModel(),
@@ -194,10 +249,17 @@ class SupervisionService
         ];
     }
 
-    /** @return array<string,int> */
-    private function conversationCounters(): array
+    /**
+     * `handled_by_ai` cuenta las abiertas que nadie del equipo ha tomado y con la IA permitida: NO es «las lleva el
+     * agente». Las que el agente atiende de verdad van en `attended_by_agent`: todas esas si responde en todas, solo
+     * la del canario si ULTRON está en canario, y ninguna si está en pausa, frenado, apagado o solo propone.
+     *
+     * @param  array{status: string, responds: bool, label: string, short: string}  $quien
+     * @return array<string,int>
+     */
+    private function conversationCounters(array $quien): array
     {
-        return $this->safe(function () {
+        return $this->safe(function () use ($quien) {
             $row = DB::table('marketing_conversations')
                 ->where('status', 'open')
                 ->selectRaw('COUNT(*) as open')
@@ -208,8 +270,19 @@ class SupervisionService
                 ->selectRaw('COUNT(CASE WHEN unread_count > 0 THEN 1 END) as unread')
                 ->first();
 
+            $atiende = match ($quien['status']) {
+                'ultron_all', 'legacy_auto' => (int) ($row->by_ai ?? 0),
+                'ultron_canary' => DB::table('marketing_conversations')
+                    ->where('status', 'open')
+                    ->where('id', (int) config('marketing.ultron.canary_conversation_id'))
+                    ->where('ai_enabled', true)->where('human_takeover', false)
+                    ->count(),
+                default => 0,
+            };
+
             return [
                 'open' => (int) ($row->open ?? 0),
+                'attended_by_agent' => $atiende,
                 'handled_by_ai' => (int) ($row->by_ai ?? 0),
                 'handled_by_human' => (int) ($row->by_human ?? 0),
                 'paused' => (int) ($row->paused ?? 0),

@@ -138,8 +138,9 @@ class SupervisionController extends Controller
                 'action' => 'Ejecutó una herramienta',
                 'tool' => $r->tool,
                 'goal' => $r->goal,
-                'result' => $r->status,
-                'reason' => $r->reason,
+                'result' => $this->resultLabel($r->status),
+                'result_code' => $r->status,
+                'reason' => $this->reasonLabel($r->reason),
                 'duration_ms' => $r->duration_ms,
                 'correlation_id' => $r->correlation_id,
                 'error' => $r->error_code,
@@ -158,15 +159,19 @@ class SupervisionController extends Controller
             ->map(fn ($r) => [
                 'at' => $r->created_at,
                 'kind' => 'decision',
-                'actor' => 'ia',
+                'actor' => $this->decisionActor($r->action_type, $this->decodeJson($r->metadata)),
                 'conversation_id' => $r->conversation_id,
                 'lead_id' => $r->lead_id,
                 'action' => $this->decisionLabel($r->action_type),
+                'action_code' => $r->action_type,
                 // `reason` es el motivo OPERATIVO que registró el sistema, no
-                // el razonamiento del modelo.
-                'reason' => $r->reason,
+                // el razonamiento del modelo. Los códigos conocidos salen en
+                // español; un texto libre (lo que escribió una persona al
+                // tomar la conversación) sale tal cual.
+                'reason' => $this->reasonLabel($r->reason),
                 'confidence' => $r->confidence,
-                'result' => $r->status,
+                'result' => $this->resultLabel($r->status),
+                'result_code' => $r->status,
             ])->all();
     }
 
@@ -188,7 +193,9 @@ class SupervisionController extends Controller
                 'actor' => 'sistema',
                 'lead_id' => $r->marketing_lead_id,
                 'action' => $this->factLabel($r->event),
-                'result' => 'ok',
+                'action_code' => $r->event,
+                'result' => 'Registrado',
+                'result_code' => 'ok',
                 'correlation_id' => $r->correlation_id,
             ])->all();
     }
@@ -587,31 +594,152 @@ class SupervisionController extends Controller
         };
     }
 
+    /**
+     * Todo `action_type` que el código escribe en `marketing_ai_actions`: las acciones que puede recomendar el modelo
+     * (`SalesAgentDecisionSchema::RECOMMENDED_ACTIONS`), lo que el enrutador deja sin analizar y lo que hace una
+     * persona desde el CRM. Uno sin etiqueta sale con su clave: `SupervisionActivityLabelsTest` lo impide.
+     */
     private function decisionLabel(?string $type): string
     {
         return match ($type) {
             'reply' => 'Preparó una respuesta',
-            'payment_link' => 'Propuso un enlace de pago',
-            'escalate_human' => 'Pidió que lo atienda una persona',
+            'payment_link', 'generate_payment_link' => 'Propuso un enlace de pago',
+            'payment_link_generated' => 'Generó un enlace de pago',
             'schedule_followup' => 'Programó un seguimiento',
+            'staff_review' => 'Pidió que lo revise el personal',
+            'escalate_human' => 'Pidió que lo atienda una persona',
+            'no_reply' => 'Decidió no responder',
+            'blocked_do_not_contact' => 'No respondió: la persona está marcada como «no contactar»',
+            'mark_do_not_contact' => 'Marcó a la persona como «no contactar»',
+            'register_objection' => 'Registró una objeción',
+            'inbound_skipped' => 'No analizó el mensaje entrante',
+            'unsupported_message' => 'Llegó un mensaje que el agente no puede leer',
+            'human_takeover' => 'La conversación pasó a una persona',
+            'reactivate' => 'La conversación volvió al agente, con el resumen del traspaso',
+            'release_to_ai' => 'La conversación quedó en manos del agente',
             default => (string) ($type ?? 'Decisión'),
         };
     }
 
+    /**
+     * Quién lo hizo. La tabla guarda las decisiones del agente, pero también lo que hace una persona desde el CRM
+     * (`metadata.source = manual`) y lo que el enrutador deja sin analizar: ponerlo todo a nombre del agente es falso.
+     */
+    private function decisionActor(?string $type, mixed $meta): string
+    {
+        if (is_array($meta) && ($meta['source'] ?? null) === 'manual') {
+            return 'empleado';
+        }
+
+        return in_array($type, ['inbound_skipped', 'unsupported_message'], true) ? 'sistema' : 'ia';
+    }
+
+    /**
+     * El motivo operativo, en español. Son códigos cerrados: los del enrutador, los de la revisión del personal y
+     * las intenciones del catálogo (`SalesIntents`). Lo que no esté aquí —un texto libre— sale tal cual.
+     */
+    private const REASON_LABELS = [
+        // Por qué no se analizó o no se pudo leer.
+        'auto_analyze_disabled' => 'El análisis automático del agente está apagado.',
+        'do_not_contact' => 'La persona está marcada como «no contactar».',
+        'skipped_manual_takeover' => 'Una persona tiene tomada la conversación.',
+        'unsupported_message_type' => 'Es un tipo de mensaje que el agente no puede leer.',
+        // Por qué lo tiene que ver una persona.
+        'needs_human_review' => 'Necesita que lo revise una persona.',
+        'critic_failed' => 'La respuesta no pasó la revisión automática.',
+        'staff_review' => 'Necesita que lo revise una persona.',
+        'sensitive_topic' => 'Tema sensible: lo atiende una persona.',
+        'medical_case' => 'Tema médico: lo atiende una persona.',
+        'payment_or_fraud_claim' => 'Reclamo de pago o posible fraude.',
+        'human_requested' => 'Pidió hablar con una persona.',
+        'unsafe_content' => 'Contenido que el agente no debe responder.',
+        'already_paid' => 'Ya había pagado.',
+        // Las intenciones del catálogo.
+        'pricing_question' => 'Preguntó por los precios.',
+        'payment_link_request' => 'Pidió el enlace de pago.',
+        'price_objection' => 'Objeción por el precio.',
+        'time_objection' => 'Objeción por el tiempo.',
+        'delay_objection' => 'Quiere dejarlo para después.',
+        'beginner_fear' => 'Le preocupa ser principiante.',
+        'insecurity_body' => 'Inseguridad con su cuerpo.',
+        'location_question' => 'Preguntó por la ubicación.',
+        'schedule_question' => 'Preguntó por los horarios.',
+        'general_info' => 'Pidió información general.',
+        'goal_fat_loss' => 'Objetivo: bajar grasa.',
+        'goal_muscle_gain' => 'Objetivo: ganar músculo.',
+        'goal_recomposition' => 'Objetivo: recomposición corporal.',
+        'high_intent_close' => 'Quiere inscribirse.',
+        'greeting' => 'Saludo.',
+        'thanks' => 'Agradecimiento.',
+        'goodbye' => 'Despedida.',
+        'not_interested' => 'No le interesa.',
+        'bot_question' => 'Preguntó si habla con un robot.',
+        'human_request' => 'Pidió hablar con una persona.',
+        'complaint' => 'Queja.',
+        'invoice_request' => 'Pidió factura.',
+        'medical_risk_escalation' => 'Tema médico o lesión.',
+        'fraud_or_payment_claim' => 'Reclamo de pago o posible fraude.',
+        'do_not_contact_request' => 'Pidió que no lo contacten.',
+        'spam_or_low_quality' => 'Mensaje sin contenido útil.',
+        'unknown' => 'Intención no identificada.',
+    ];
+
+    private function reasonLabel(mixed $reason): ?string
+    {
+        if (! is_string($reason) || $reason === '') {
+            return null;
+        }
+
+        return self::REASON_LABELS[$reason] ?? $reason;
+    }
+
+    /** El estado de la acción o de la herramienta, en español; uno desconocido sale tal cual. */
+    private function resultLabel(mixed $status): ?string
+    {
+        return match ($status) {
+            'executed' => 'Ejecutada',
+            'proposed' => 'Propuesta, sin ejecutar',
+            'skipped' => 'Omitida',
+            'failed' => 'Falló',
+            'pending' => 'Pendiente',
+            'running' => 'En curso',
+            'succeeded' => 'Correcta',
+            'rejected' => 'Rechazada',
+            default => is_string($status) && $status !== '' ? $status : null,
+        };
+    }
+
+    /** Los 27 hechos de `CommercialVocabulary::EVENTS`. Uno nuevo sin etiqueta sale con su clave: la prueba lo impide. */
     private function factLabel(?string $event): string
     {
         return match ($event) {
             V::EV_LEAD_CREATED => 'Se identificó un prospecto',
             V::EV_LEAD_QUALIFIED => 'El prospecto quedó calificado',
+            V::EV_OFFER_PRESENTED => 'Se presentó una oferta',
             V::EV_PAYMENT_LINK_CREATED => 'Se generó un enlace de pago',
             V::EV_PAYMENT_APPROVED => 'Se aprobó un pago',
+            V::EV_PAYMENT_PENDING => 'Un pago sigue pendiente',
             V::EV_PAYMENT_FAILED => 'Un pago fue rechazado',
+            V::EV_PAYMENT_EXPIRED => 'Un intento de pago venció sin completarse',
             V::EV_MEMBERSHIP_ACTIVATED => 'Se activó una membresía',
             V::EV_MEMBERSHIP_RENEWED => 'Se renovó una membresía',
+            V::EV_FIRST_CHECKIN => 'Primer ingreso al gimnasio',
+            V::EV_ATTENDANCE_MILESTONE => 'Alcanzó un hito de asistencia',
+            V::EV_INACTIVITY_DETECTED => 'Dejó de venir: se detectó inactividad',
+            V::EV_RENEWAL_WINDOW_OPENED => 'La membresía está por vencer',
+            V::EV_MEMBERSHIP_EXPIRED => 'La membresía venció',
             V::EV_APPOINTMENT_CREATED => 'Se creó una cita',
             V::EV_APPOINTMENT_COMPLETED => 'Se completó una cita',
-            V::EV_HUMAN_REQUESTED => 'El cliente pidió hablar con una persona',
+            V::EV_INVOICE_REQUESTED => 'Se pidió una factura electrónica',
+            V::EV_INVOICE_VALIDATED => 'La DIAN aceptó una factura',
+            V::EV_INVOICE_REJECTED => 'La DIAN rechazó una factura',
+            V::EV_APP_LINKED => 'Vinculó la app',
             V::EV_OBJECTION_RAISED => 'El cliente puso una objeción',
+            V::EV_COMPLAINT_CREATED => 'El cliente presentó una queja',
+            V::EV_CUSTOMER_SATISFIED => 'El cliente dijo que está satisfecho',
+            V::EV_REFERRAL_OPPORTUNITY => 'Buen momento para pedir un referido',
+            V::EV_OFFER_REJECTED => 'El cliente rechazó una oferta',
+            V::EV_HUMAN_REQUESTED => 'El cliente pidió hablar con una persona',
             default => (string) ($event ?? 'Hecho comercial'),
         };
     }
