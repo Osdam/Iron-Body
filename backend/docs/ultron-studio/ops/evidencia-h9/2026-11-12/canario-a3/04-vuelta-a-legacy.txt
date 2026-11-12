@@ -1,0 +1,51 @@
+CIERRE V2 · APARTADO 3 · GATE 3-B, PASO 4 DE 4: UN TURNO DESPUÉS DE LA REVERSIÓN
+Verificación en producción, solo lectura, el 12-11-2026 a las 23:00 UTC (18:00 en Bogotá).
+El mensaje lo envió el propietario desde su teléfono canario.
+
+php artisan ultron:prompt-trace --last=5
+  decide ofrecería ahora a la canaria: legacy · motivo part_legacy
+  | Minuto (UTC)      | Declarada        | Ofrecida                 | Observada          | Estado  |
+  | 2026-11-11T23:37Z | legacy           | legacy   no_publication  | legacy 3f6a5674 S1 | legacy  |
+  | 2026-11-12T21:52Z | applied 4017639c | studio 4017639c 702890f7 | studio 702890f7 S1 | applied |
+  | 2026-11-12T21:54Z | applied 4017639c | studio 4017639c 702890f7 | studio 702890f7 S1 | applied |
+  | 2026-11-12T21:56Z | applied 4017639c | studio 4017639c 702890f7 | studio 702890f7 S1 | applied |
+  | 2026-11-12T22:59Z | legacy           | legacy   part_legacy     | legacy 3f6a5674 S1 | legacy  |
+
+php artisan ultron-studio:publication-check   (salida 0)
+  Llave del motor: canary · estado: legacy
+  Cabeza: entrada 2 (rollback, 2026-11-12T22:55:36+00:00) · verifica
+  Canario: Legacy · Resto: Legacy · La publicación vigente cuadra con el motor.
+php artisan ultron:abort
+  FRENO SUELTO.
+
+El turno (marketing_ai_actions y marketing_messages):
+  
+  ================ acción #7692 · 2026-11-12 22:59:03 UTC · reason=goodbye · confianza=0.9000 ================
+  ENTRANTE (21): Gracias, eso era todo
+  SALIENTE (95 caracteres): Perfecto, quedo atento para cuando quieras retomar y avanzar con tu proceso en Iron Body Neiva.
+    intent = "goodbye"
+    origin = "ultron"
+    source = "external_draft"
+    strategy_goal = "resolve_objection"
+    next_best_action = "check_in"
+    previous_phase = "CLOSING"
+    next_phase = "CLOSING"
+    main_barrier = "other"
+    lead_temperature = "COLD"
+    customer_lifecycle = "INTERESTED"
+    reference_resolution = "none"
+    plans_mentioned = 0
+    price_enriched = false
+    knowledge_version = "25:1790052024"
+    risk_flags = []
+    tools_requested = []
+    strategy = {"buying_signal":"none","response_goal":"cerrar cordialmente y dejar puerta abierta para futuras consultas","question_needed":false,"conversation_goal":"close","information_needed":[],"closing_opportunity":false,"payment_opportunity":false,"recommendation_goal":"none","app_support_opportunity":false}
+    strategy_hints = {"lifecycle_mode":"payment_pending","hot_lead_fast_path":false}
+    CRITIC: verdict=pass · score=0.95 · attempt=1 · hard_fail=null
+    CRITIC issues: ["relevance","empathy","naturalness","context_use","pressure_control","next_step","question_discipline","phase_alignment"]
+    CRITIC notes: El mensaje es cordial, natural y adecuado para cerrar la conversación dejando la puerta abierta sin presionar ni repetir información. Podría mejorar ligeramente incluyendo una pregunta abierta final para fomentar un posible reenganche, pero no es obligatorio en esta fase de cierre.
+    studio_prompts: state=legacy · ofrecida= (legacy) · observada=3f6a5674 (legacy, S1, ejecución 966181)
+
+RESULTADO DEL GATE 3-B
+  Publicación, aplicación de la versión, trazabilidad por turno y reversión: funcionan, en producción y con pasos reales del propietario.
+  Aceptación funcional: NO SUPERADA (ver 02-mensajes-y-diagnostico.txt).

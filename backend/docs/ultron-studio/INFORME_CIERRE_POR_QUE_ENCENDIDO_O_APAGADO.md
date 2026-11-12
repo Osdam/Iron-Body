@@ -1,6 +1,6 @@
 # ULTRON Studio · Por qué cada cosa salía encendida o apagada
 
-**Para:** el propietario. **Fecha:** 11-11-2026, actualizado el 12-11 a las 21:17 UTC (16:17 en Bogotá). **Producción:** API `143c91d0` (12-11-2026, 20:54 UTC), CRM `eeb4b79` (18:32 UTC).
+**Para:** el propietario. **Fecha:** 11-11-2026, actualizado el 12-11 a las 23:03 UTC (18:03 en Bogotá). **Producción:** API `143c91d0` (12-11-2026, 20:54 UTC), CRM `eeb4b79` (18:32 UTC).
 **Cómo leerlo:** cada apartado dice lo que veías, por qué salía así, qué se hizo y cómo queda. Los estados finales usan solo cinco palabras: **OPERATIVO Y PROBADO** · **LISTO PARA ACTIVACIÓN AUTORIZADA** · **EN OBSERVACIÓN** · **BLOQUEADO EXTERNAMENTE** · **INCOMPLETO**. No hay porcentajes.
 
 El detalle técnico, con fichero y línea, está en las tres auditorías de `plans/cierre/` y en las filas L9-111 y L9-112 del contrato del H9.
@@ -76,6 +76,21 @@ Revisado por seguridad y por una revisión independiente, sin bloqueantes. Segur
 
 **Queda un caso por cerrar antes de abrir ese canal:** si una persona retira su permiso para recibir llamadas, la bandeja todavía ofrece su contacto asistido por voz. Hoy no puede ocurrir (no hay contactos en vivo) y la corrección está descrita; va en el apartado 5 y en tu lista del apartado 4 (punto 12). **Con esto cierro las rondas de trabajo: lo que queda es tu lista.**
 
+**La tarde del 12-11 (cierre V2, apartado 3): la prueba de aceptación en tu WhatsApp canario.** La hiciste tú, paso a paso, y yo verifiqué cada paso en el servidor.
+
+| Paso | Resultado |
+|---|---|
+| Tu veredicto del laboratorio (4:32 p. m.) | Registrado: «Aprobada», con el caso C-02 reconocido |
+| Publicar la versión en canario (4:45 p. m.) | **Funciona.** La cadena de publicación quedó firmada y tu conversación empezó a recibir los prompts de la versión |
+| Tres mensajes desde tu WhatsApp (4:52, 4:54 y 4:56 p. m.) | **La versión se aplicó en los tres turnos y quedó la traza de cada uno.** Pero en los tres el texto que te llegó fue uno fijo del servidor, no el del modelo |
+| Revertir (5:55 p. m.) y un mensaje más (5:59 p. m.) | **Funciona.** Tu conversación volvió a la configuración de siempre y el turno siguiente lo confirma |
+
+**Por qué la aceptación funcional NO se superó.** ULTRON escribe un borrador y un segundo modelo, el revisor, lo comprueba; si el revisor lo rechaza dos veces, el servidor envía un texto fijo de respaldo. Eso pasó con tus preguntas de planes y precio y de horario, y en el saludo una regla del servidor sustituyó el borrador. Los textos fijos no llevan el tono ni el límite de la versión:
+- a «¿Qué planes tienen y cuánto cuesta la mensualidad?» respondió preguntando tu objetivo, sin dar planes ni precios;
+- la respuesta del horario midió 300 caracteres, con una versión que pedía 200 como máximo.
+
+Hay cuatro causas, todas anteriores a esta prueba: tu conversación canaria lleva desde el 7 de octubre en fase de cierre, con todo ya dicho, y el revisor rechaza la repetición; los dos revisores se contradicen cuando los enlaces de pago están apagados; el modelo no cumple un límite de 200 solo con pedírselo; y los textos de respaldo no los gobierna la versión. **Por decisión tuya, los defectos de planes y precios y del límite de longitud son pendientes bloqueantes: es lo primero que corrijo ahora, y la prueba se repite con una conversación canaria limpia antes de decir que el Studio gobierna WhatsApp.**
+
 ---
 
 ## 2. Sección por sección
@@ -85,7 +100,7 @@ Revisado por seguridad y por una revisión independiente, sin bloqueantes. Segur
 | Lo que veías | Por qué | Qué se hizo | Cómo queda |
 |---|---|---|---|
 | «Publicar» sin efecto; avisos de «el motor de ULTRON no lee versiones del Studio» | Era verdad hasta el 11-11. Ese día se desplegó la Enmienda M-1: la versión publicada gobierna el tono, los emojis, la longitud máxima y el objetivo de los prompts de WhatsApp en la conversación canaria. Los textos no se habían actualizado | Textos corregidos según la llave real del servidor. Aprobar, el aviso tras aprobar y el veredicto dicen qué falta y quién puede hacerlo | Crear, validar, enviar a revisión, aprobar e historial: **OPERATIVO Y PROBADO** |
-| Una versión «aprobada» que no cambiaba nada | La única versión aprobada era idéntica a la línea base: publicarla habría dejado a ULTRON igual. Además, faltaba el veredicto del laboratorio y que la publicara alguien que no la creó | Dejé preparada la versión de prueba «Prueba de aceptación · profesional 200» (tono profesional, 200 caracteres), enviada a revisión, con su ejecución del laboratorio hecha. Su vista previa da la huella esperada, `702890f7` | Publicar en canario y revertir: **LISTO PARA ACTIVACIÓN AUTORIZADA**. Faltan tus tres clics (aprobar, veredicto, publicar) y 2–3 mensajes desde tu teléfono canario |
+| Una versión «aprobada» que no cambiaba nada | La única versión aprobada era idéntica a la línea base: publicarla habría dejado a ULTRON igual. Además, faltaba el veredicto del laboratorio y que la publicara alguien que no la creó | Preparé la versión de prueba «Prueba de aceptación · profesional 200» (tono profesional, 200 caracteres). **El 12-11 hiciste tú cada paso:** veredicto del laboratorio, publicación en canario (4:45 p. m.), tres mensajes desde tu WhatsApp, reversión (5:55 p. m.) y un mensaje más. Yo verifiqué cada uno en el servidor | Publicar en canario, que el motor aplique la versión, la traza de cada turno y revertir: **OPERATIVO Y PROBADO**. Que lo que ULTRON responde refleje la versión: **INCOMPLETO** (apartado 5): la prueba de aceptación NO se superó |
 | «Promover a todas» | Aunque se promueva, en esta entrega los prompts gobernados solo llegan a la conversación canaria | — | **INCOMPLETO** por diseño de esta entrega (apartado 5) |
 
 ### 2.2 Reglas comerciales
@@ -176,7 +191,7 @@ Revisado por seguridad y por una revisión independiente, sin bloqueantes. Segur
 
 | # | Qué | Para qué | Riesgo y vuelta atrás |
 |---|---|---|---|
-| 1 | La versión «Prueba de aceptación · profesional 200» **ya está aprobada** (11-11, 18:36, cuenta «QA ULTRON Revisor»). Faltan, en este orden y de uno en uno: (a) tu veredicto sobre la ejecución nueva del laboratorio (12-11, 3:54 p. m.), con una cuenta que pueda aprobar y no sea la técnica; (b) publicarla en canario con «Desarrolladores» (07:00–19:00); (c) mandar 2–3 mensajes desde tu teléfono canario | Demostrar que lo publicado en el Studio es lo que ULTRON dice | Solo afecta a tu conversación. «Revertir» lo deja como estaba |
+| 1 | ~~Prueba de aceptación en tu WhatsApp canario~~ **Hecha el 12-11, con resultado:** la publicación, la trazabilidad y la reversión funcionan; **la aceptación funcional NO se superó** (apartado 5, primera fila). Se repetirá cuando estén corregidos los dos defectos, con una conversación canaria limpia: entonces te pediré otra vez el veredicto, publicar y los mensajes, de uno en uno | Demostrar que lo publicado en el Studio es lo que ULTRON dice | Solo afecta a tu conversación. «Revertir» lo deja como estaba |
 | 2 | Decir quiénes son las dos personas reales, cada una con su cuenta personal y su ficha en Personal | Vincularlas (una sola orden mía). Sin eso no hay estrategias, plantillas ni comprobación de Meta | Se hace una vez; un vínculo equivocado se revoca desde el CRM |
 | 3 | Registrar tu teléfono como número canario (un Super Admin registra; otro autoriza y activa) | Que el registro documente el canario y sirva a la voz y a la automatización | Se desactiva o se revoca |
 | 4 | En Twilio: un número de origen que no sea el de WhatsApp (verificar otro como identificador de llamada no cuesta) y una clave restringida de voz; importarlo en ElevenLabs como solo saliente | La primera llamada de Sofía a tu canario | Sin coste hasta la llamada. La llamada: 1 al día, tope de US$ 2,00, 5 minutos; texto exacto de la autorización en la auditoría C §3 |
@@ -211,6 +226,7 @@ Un análisis de arquitectura del 11-11 (`plans/cierre/plan-quejas-consentimiento
 | Qué | Por qué importa | Estado |
 |---|---|---|
 | El activador de membresías dentro del pago (núcleo de pagos, anterior a ULTRON) | Si la base falla justo al activar la membresía de un pago por pasarela, el código actual se traga el error: el pago puede quedar aprobado sin membresía, o perderse la aprobación (Nequi), sin reintento. No depende de ULTRON ni del registro de hechos | **Sin tocar: es tu decisión** (apartado 4). En producción no ha pasado; la propuesta es protegerlo igual que el registro y añadir un barrido que reactive lo que falle |
+| **BLOQUEANTE (12-11).** Lo que ULTRON responde no siempre refleja la versión publicada | Cuando el revisor rechaza los dos borradores del modelo, sale un texto fijo del servidor que no lleva el tono ni el límite de longitud de la versión; el de «pregunta de precio» ni siquiera da el precio. Y el modelo no cumple un límite de 200 caracteres solo con pedírselo (4 de 5 borradores lo superaron), lo que lleva más turnos a ese texto fijo | **Pendiente bloqueante de la aceptación del motor.** Es lo primero del apartado 4 del cierre V2; después se repite la prueba real en tu WhatsApp canario con una conversación limpia |
 | Supresión de datos de lo comercial | Si una persona pedía borrar sus datos, el guion de la Ley 1581 no alcanzaba el registro «se quejó» ni los motivos que guarda la IA | **Hecho** la noche del 11-11: el guion ya los cubre y está probado; no se ha ejecutado en producción (solo se usa ante una solicitud real). Exige marcar antes «no contactar», para que al borrar la queja no se levante el freno |
 | Quejas presenciales o por teléfono, y descartar una queja que no lo era | El freno solo ve las quejas que la IA detecta en WhatsApp | Depende de tu decisión (apartado 4, «Decisiones nuevas») |
 | Cuatro ojos por regla | Hoy los cuatro ojos son por versión: quien escribe una frase prohibida puede aprobar y publicar la versión de otra persona que la copia | Regla de operación mientras tanto: quien escribe la regla no aprueba ni publica |

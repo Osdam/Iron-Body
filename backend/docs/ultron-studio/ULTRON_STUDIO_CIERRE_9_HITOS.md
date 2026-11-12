@@ -4,7 +4,7 @@
 
 ---
 
-## 0. Estado vigente (12-11-2026, 21:16 UTC)
+## 0. Estado vigente (12-11-2026, 23:03 UTC)
 
 ### 0.1 Qué hay en producción
 
@@ -15,7 +15,7 @@
 | Respaldo de antes de la ola | `/var/backups/ironbody/ultron-studio-m1-20261111-143829` (base, fichero de entorno, cachés) |
 | n8n | atiende la copia «Studio S1» (`QSklqHlsDIxucRfk`); el flujo de siempre (`YspRwsXnqt33NouP`) está despublicado e intacto, como reserva |
 | Motor de WhatsApp | lee la publicación del Studio **solo en la conversación canaria** (`canary`); publicar desde el CRM, abierto; puerta del laboratorio `required` |
-| Prompts de WhatsApp | llave en `canary`; sin nada publicado todavía la canaria recibe los de siempre (`legacy · no_publication`) |
+| Prompts de WhatsApp | llave en `canary`. La primera publicación del Studio (versión «Prueba de aceptación · profesional 200», 12-11 21:45 UTC) se aplicó en tres turnos reales (`702890f7`) y se revirtió a las 22:55 UTC: la canaria recibe otra vez los de siempre (`legacy · part_legacy`, `3f6a5674`) |
 | Plantillas de Meta | `full`: crear, aprobar, enviar a Meta y ver el estado desde el CRM; sincronización cada 5 minutos |
 | Laboratorio hablado | encendido (fase 2a), perfil «Sofia Medellin» revisión 2; con una sesión abierta atiende las dos consultas de solo lectura (E18-8); la sede y el horario, fijados (E18-10) |
 | Monitor de voz y publicación de voz | **encendidos** el 11-11 18:47 UTC con el mando de voz; publicar exige todavía versión y perfil aprobados, veredicto del laboratorio de otra persona y ventana |
@@ -36,7 +36,8 @@ Etiquetas: **OPERATIVO Y PROBADO** (funciona en producción y hay una prueba rea
 | A · Voz | Llamadas entrantes | **BLOQUEADO** | La cuenta de Twilio no tiene números propios |
 | A · Voz | Rotar la clave de ElevenLabs que pasó por el chat | **BLOQUEADO** | La genera el propietario en ElevenLabs; el mando de registro ya existe |
 | B · WhatsApp | El Studio compila y ofrece los cinco prompts de ULTRON; n8n los elige por la copia S1 | **OPERATIVO Y PROBADO** (con los prompts de siempre) | Turno real del propietario el 11-11 15:39 UTC: ejecución 941514 de la copia S1, traza `legacy · no_publication · observada 3f6a5674 S1` (L9-109). Los prompts usados son byte a byte los de antes |
-| B · WhatsApp | Un cambio publicado en el Studio cambia lo que ULTRON responde (**criterio de aceptación**) | **EN INTEGRACIÓN** | Falta E3–E5: publicar en canario una versión con tono «profesional» y 200 caracteres, ver `applied` en un turno real y revertir. Exige dos personas y un veredicto del laboratorio de texto |
+| B · WhatsApp | Publicar una versión del Studio en la conversación canaria, que el motor la aplique, que quede la traza de cada turno, y revertir | **OPERATIVO Y PROBADO** | Hecho por el propietario el 12-11 (L9-120): publicó a las 21:45 UTC (cadena, entrada 1), tres turnos reales `applied` con `702890f7` por la copia S1, revirtió a las 22:55 UTC (entrada 2) y el turno siguiente volvió a `legacy 3f6a5674`. Evidencia: `ops/evidencia-h9/2026-11-12/canario-a3/` |
+| B · WhatsApp | Un cambio publicado en el Studio cambia lo que ULTRON responde (**criterio de aceptación**) | **EN INTEGRACIÓN · ACEPTACIÓN FUNCIONAL NO SUPERADA (12-11)** | En los tres turnos con la versión aplicada, el texto que recibió la persona fue uno fijo del servidor (el revisor o una política descartaron el borrador del modelo): la pregunta de planes y precio no se respondió y la respuesta del horario midió 300 caracteres con un tope de 200. Pendientes BLOQUEANTES, lo primero del apartado 4 del cierre V2: H4-1, H4-2 y H4-3 de `MATRIZ_CIERRE_V2.md`; después se repite la prueba real con una conversación canaria limpia |
 | B · WhatsApp | Las reglas S-NNN con efecto en WhatsApp | **IMPLEMENTADO PERO DESHABILITADO** hasta su primera publicación | Desplegado el 11-11 (M1-18, L9-113): las frases prohibidas de las reglas vivas entran en los prompts de la canaria al publicar. Falta la aprobación del propietario de los dos textos fijos y publicar la primera versión con una regla con frases. `intent.fallback` no aplica en WhatsApp (lo decide el flujo; R-07) y el CRM lo dice |
 | B · WhatsApp | ULTRON para todos los clientes | **IMPLEMENTADO PERO DESHABILITADO** | Hoy solo la conversación canaria pasa por n8n; abrirlo es una decisión del propietario |
 | B · WhatsApp | Alerta automática si n8n aplica algo distinto de lo ofrecido | **EN INTEGRACIÓN** | Desplegada el 11-11 (L9-112): el monitor la comprueba cada 30 minutos y abre el incidente `prompts_drift`. En producción su pasada en seco lee bien; ningún `mismatch` real la ha disparado todavía |
@@ -66,7 +67,8 @@ Etiquetas: **OPERATIVO Y PROBADO** (funciona en producción y hay una prueba rea
 - Ola 6 (L9-116): backend, batería completa sobre `36e8a472` (17 726 pruebas) y sobre el merge con Iron IA `5fe19905` (17 786 pruebas, 457 667 aserciones), solo la línea base; las 15 guardas, 138 de 138, sobre `b90f84c4`; PostgreSQL 14 para todo lo nuevo; CRM, batería completa sobre `d16e26a`, 4 334 pruebas con los 16 fallos de la línea base; smoke del H9 en producción tras desplegar, 30 OK · 0 FALLO · 1 OMITIDO; y la pantalla de Supervisión en producción, 9 de 9.
 - Ola 7 (L9-117): backend, batería completa sobre `306b83e3`, 17 797 pruebas y 457 956 aserciones, solo la línea base, 0 regresiones; PostgreSQL 14 para lo nuevo; E2E de la voz con el arnés, tres fases en los dos estados de la constante; CRM, batería completa sobre `b10d593`, 4 352 pruebas con los 16 fallos de la línea base (más dos tiempos de espera por carga, que pasan solos); smoke del H9 en producción, 30 OK · 0 FALLO · 1 OMITIDO.
 - Ronda final (L9-118): backend, batería completa sobre `298b855a`, 17 845 pruebas y 458 432 aserciones, solo el fallo de la línea base, 0 regresiones; PostgreSQL 14 para lo nuevo; CRM, batería completa sobre `eeb4b79`, 4 371 pruebas con los 16 fallos de la línea base; smoke del H9 en producción, 30 OK · 0 FALLO · 1 OMITIDO; la bandeja en un navegador real con la cuenta técnica.
-- **No probado:** un turno real con una versión PUBLICADA (E3–E5; con los prompts de siempre sí, L9-109); una plantilla enviada a Meta real; una publicación de voz; una llamada; PostgreSQL para los cambios de la tarde del 11-11.
+- Cierre V2, apartado 3 (L9-119 y L9-120): el laboratorio de texto corregido (batería completa sobre `143c91d0`: 17 847 pruebas, 458 627 aserciones, solo el fallo de la línea base; seis ejecuciones reales) y la prueba canaria con pasos reales del propietario: veredicto, publicación, tres turnos `applied`, reversión y un turno de vuelta en Legacy. Aceptación funcional, NO superada.
+- **No probado:** que el texto que recibe la persona refleje la versión publicada (los tres turnos de la prueba salieron con texto de respaldo); una plantilla enviada a Meta real; una publicación de voz; una llamada; PostgreSQL para los cambios de la tarde del 11-11.
 - **Hallazgo aparte, sin tocar:** `UltronStudioVoiceLabSessionsTest::test_la_lista_filtra_y_pagina_sin_consultas_por_fila` es intermitente (1 de 40), igual con el código anterior.
 
 ### 0.4 Lo que falta, y de quién depende
