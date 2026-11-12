@@ -1,0 +1,169 @@
+dashboard
+Inicio
+group
+Miembros
+payments
+Planes
+point_of_sale
+Caja de Gimnasio
+calendar_month
+Clases
+schedule
+Supervisión de empleados y clases
+inventory_2
+Inventario
+fitness_center
+Equipos
+point_of_sale
+Caja de Cafetería
+handshake
+Comisiones
+receipt_long
+Facturación
+monitoring
+Analítica
+file_export
+Exportaciones
+manage_search
+Logs
+exercise
+Ejercicios
+fitness_center
+Rutinas
+badge
+Entrenadores
+campaign
+Mercadeo
+ULTRON Studio
+PREVIEW
+smart_toy
+Campañas automáticas
+local_fire_department
+Esta semana
+monitor_weight
+Evaluaciones
+restaurant
+Nutrición
+support_agent
+Soporte
+shield_person
+Moderación
+notifications_active
+Notificaciones push
+settings
+Configuración
+dns
+Backend Laravel conectado
+ok · 2026-11-12T02:37:56+00:00
+help
+Soporte
+logout
+Salir
+search
+7
+arrow_back
+Tablero
+Laboratorio de ULTRON STUDIO
+Simulación del Studio · no es ULTRON
+smart_toy
+OpenAI · gpt-6.1-terra
+Presupuesto de hoy mié, 11 de nov, día de Bogotá
+Queda
+US$ 1,8366 de US$ 2,00
+Gastado
+US$ 0,1634
+Reservado
+US$ 0,00
+Ejecuciones
+2 de 20
+Tope por ejecución
+US$ 0,50
+
+Simulación del Studio: un modelo de laboratorio, con instrucciones propias, interpreta la versión completa, incluido lo que el WhatsApp real no aplica o aplica solo en parte («Si no entiende» y las reglas S-NNN). No es ULTRON: no usa sus cinco prompts ni su modelo. Cómo responde ULTRON de verdad se comprueba en un turno real de la conversación canaria.
+
+forum
+Escenarios
+biotech
+Ejecuciones
+Escenarios
+add
+Nuevo escenario
+
+Conversaciones sintéticas con lo que se espera del asesor. Los del catálogo (C-…) vienen del código y son de solo lectura; los del personal (E-…) se escriben aquí.
+
+Activos
+Archivados
+Categoría
+Todas las categorías
+Saludo
+Precio
+Descuento
+Pago
+Derivación
+Cortesía
+Hechos
+Estilo
+Consentimiento
+Membresía
+Otro
+C-01
+Solo saluda
+Saludo, catálogo (solo lectura)
+C-02
+Pregunta directa por el precio
+Precio, catálogo (solo lectura)
+C-03
+Pide descuento o algo gratis
+Descuento, catálogo (solo lectura)
+C-04
+«Ya pagué» sin pago registrado
+Pago, catálogo (solo lectura)
+C-05
+Pide el enlace para pagar
+Pago, catálogo (solo lectura)
+C-06
+Pide hablar con un asesor
+Derivación, catálogo (solo lectura)
+C-07
+Duda sin pedir a nadie
+Derivación, catálogo (solo lectura)
+C-08
+Quiere ir a conocer mañana
+Cortesía, catálogo (solo lectura)
+C-09
+Pregunta el horario del domingo
+Hechos, catálogo (solo lectura)
+C-10
+Lo está pensando
+Estilo, catálogo (solo lectura)
+C-12
+Pregunta hasta cuándo le dura el plan
+Membresía, catálogo (solo lectura)
+forum
+
+Elige un escenario para ver su guion y lo que se espera del asesor.
+
+IRON
+IRON
+Copiloto del CRM
+En línea
+remove
+
+Hola, soy IRON. Puedo ayudarte a consultar miembros, membresías, pagos, planes, entrenadores, reservas, reportes y operación del CRM.
+
+Miembros vencidos
+Pagos pendientes
+Nuevos miembros del mes
+Planes activos
+Reservas de hoy
+attach_file
+send
+IRON
+Para moverlo, arrástralo con el ratón o mantenlo pulsado en una pantalla táctil. Con el teclado: Mayúsculas y flechas lo mueven; Mayúsculas e Inicio lo devuelven a su esquina.
+
+--- title ---
+Cerrar sesión
+Minimizar
+Adjuntar imagen
+Enviar
+IRON — Copiloto del CRM. Arrástralo para moverlo.

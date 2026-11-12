@@ -1,6 +1,6 @@
 # ULTRON Studio · Por qué cada cosa salía encendida o apagada
 
-**Para:** el propietario. **Fecha:** 11-11-2026 (se actualiza al cierre). **Producción:** API `e9b3c9e3`, CRM `85c62d2` (11-11-2026, 23:16 UTC).
+**Para:** el propietario. **Fecha:** 11-11-2026, actualizado el 12-11 a las 02:40 UTC (21:40 del 11-11 en Bogotá). **Producción:** API `181075b3`, CRM `19b1d8c` (12-11-2026, 02:37 UTC).
 **Cómo leerlo:** cada apartado dice lo que veías, por qué salía así, qué se hizo y cómo queda. Los estados finales usan solo cinco palabras: **OPERATIVO Y PROBADO** · **LISTO PARA ACTIVACIÓN AUTORIZADA** · **EN OBSERVACIÓN** · **BLOQUEADO EXTERNAMENTE** · **INCOMPLETO**. No hay porcentajes.
 
 El detalle técnico, con fichero y línea, está en las tres auditorías de `plans/cierre/` y en las filas L9-111 y L9-112 del contrato del H9.
@@ -17,6 +17,26 @@ Lo que veías «apagado» o «suspendido» tenía cuatro causas distintas, y sol
 4. **Hay cerrojos puestos a propósito** que no se abren con una bandera: las llamadas y los envíos automáticos están cerrados por una constante del código, que solo se abre con un commit que cite tu autorización escrita. Eso no es un fallo: es el seguro contra contactar a socios por accidente.
 
 Y hay cosas **incompletas de verdad** en el código. Están en el apartado 5, sin maquillar.
+
+---
+
+## 1 bis. Novedades de la noche del 11-11
+
+Lo que cambió después de escribir este informe. Todo lo que dice «desplegado» está en producción desde las 21:35 (hora de Bogotá) y comprobado allí en solo lectura.
+
+| Qué | Qué pasaba | Cómo queda |
+|---|---|---|
+| Una queja frena el contacto automático | Nadie registraba las quejas: una campaña automática no podía dejar fuera a quien se había quejado | **Desplegado.** Cuando la IA detecta una queja en WhatsApp, esa persona queda fuera de todo contacto automático comercial y de cobranza durante 30 días; los avisos de servicio no se frenan. Ninguna estrategia puede saltárselo y también cuenta en sombra. **EN OBSERVACIÓN**: todavía no ha habido ninguna queja real que lo ejercite |
+| Avisos de renovación y de vencimiento con un día de desfase | El motor contaba «hoy» en hora del servidor (UTC), no en la de Bogotá: el aviso de renovación salía con 11 días en vez de 10 y el de vencimiento, el último día en que la membresía aún valía (medido en producción: 12 avisos de vencimiento adelantados) | **Desplegado y comprobado.** Cuenta el día de Bogotá |
+| Protección de los pagos y las facturas | Desde que el 11-11 se encendió el registro de hechos comerciales, un fallo al guardar ese registro dentro de la transacción de un pago o de una factura podía hacer que el pago aprobado se quedara sin aprobar, o que la factura no se guardara, **sin ningún error**. Lo encontró la revisión de seguridad; poco probable, pero grave | **Desplegado.** El registro ya no puede arrastrar al pago ni a la factura. Demostrado con el código anterior (el pago se perdía) y con el nuevo (queda aprobado). Queda un camino secundario, en corrección esta misma noche (apartado 5) |
+| El escáner de inactividad no miraba a todos | Solo revisaba a 500 socios con membresía vigente y hay 591 | Corregido y confirmado; se despliega en la segunda tanda. Hoy no cambia nada visible: los 50 socios vigentes inactivos ya tienen su aviso de esta semana |
+| Aviso del Studio «Reglas que el motor no aplica» | Era falso desde que las frases prohibidas de las reglas sí llegan a WhatsApp | **Desplegado.** Dice que el motor no evalúa las reglas, pero que sus frases prohibidas sí tienen efecto al publicar |
+| Primera llamada de Sofía | Faltaba el procedimiento paso a paso y dos guiones tenían defectos (uno habría aceptado un presupuesto con el que la llamada se negaba después) | Guiones corregidos y ensayados en un banco local, y lista de comprobación con las autorizaciones que tienes que firmar: `ops/RUNBOOK_PRIMERA_LLAMADA.md`. **Nada instalado en producción.** El presupuesto mínimo para encender las salientes es US$ 1,13 |
+| Pruebas para el día de abrir las llamadas | Al abrir las llamadas cambian 69 casos de prueba | Preparadas en una rama aparte, sin subir. Con las llamadas abiertas en esa copia no apareció ningún defecto que bloquee la apertura |
+| Tu prueba de WhatsApp | — | A las 18:36 se aprobó la versión «Prueba de aceptación · profesional 200» con la cuenta «QA ULTRON Revisor». Faltan el veredicto del laboratorio y publicar en canario (07:00–19:00). Esa aprobación vale para probar el mecanismo; no sustituye una aprobación comercial de otra persona |
+| Fe de erratas | Este informe decía que la supresión de datos (Ley 1581) no cubría las tablas de voz | Sí las cubre desde el 10-11; comprobado de nuevo |
+
+Revisado por seguridad y por dos revisiones independientes, las tres sin hallazgos bloqueantes. Baterías completas: servidor 17 663 pruebas y CRM 4 328, solo con los fallos conocidos de siempre.
 
 ---
 
@@ -87,7 +107,7 @@ Y hay cosas **incompletas de verdad** en el código. Están en el apartado 5, si
 | Sombra encendida pero sin resultados | No hay ninguna estrategia publicada. Publicar una exige dos personas vinculadas (hay 0), una plantilla aprobada y una versión aprobada con su simulación | El panel lo dice con el recuento real | Gobierno de estrategias: **OPERATIVO Y PROBADO**. Ejecución en sombra: **LISTO PARA ACTIVACIÓN AUTORIZADA** |
 | — | Aun con una estrategia, la sombra habría negado a todo el que no fuera canario, contra lo que dice el contrato | Corregido, aprobado por seguridad (ninguna vía por la que salga algo real hacia quien no es canario) y desplegado el 11-11 | Hecho |
 | — | El barrido solo miraba a los primeros 500 candidatos; el constructor ofrecía 6 disparadores que nadie emite | Corregido y desplegado el 11-11: el barrido recorre toda la audiencia en pasadas sucesivas y esos 6 disparadores ya no se ofrecen | Hecho |
-| — | Nadie registra las quejas como evento: una estrategia no puede excluir a quien se quejó (las quejas por WhatsApp sí detienen la conversación mientras el personal la revisa) | Encontrado en esta revisión; no se inventó un registro | **INCOMPLETO**: hay que resolverlo antes de abrir cualquier envío automático |
+| — | Nadie registraba las quejas como evento: una estrategia no podía excluir a quien se quejó | Construido, revisado por seguridad y desplegado el 11-11 por la noche: la queja que detecta la IA frena 30 días el contacto comercial y de cobranza, sin que la estrategia tenga que pedirlo | **EN OBSERVACIÓN**: activo en producción; ninguna queja real lo ha ejercitado todavía |
 | Asistido | Exige al menos 7 días de sombra sin hallazgos y tu decisión | — | **EN OBSERVACIÓN** (los 7 días no se acortan) |
 | WhatsApp automático «Pendiente de proveedor externo» | No se había enviado nada a Meta: no era Meta quien tenía algo pendiente | Ahora es «condición contractual» mientras no haya una plantilla en revisión | **LISTO PARA ACTIVACIÓN AUTORIZADA** hasta donde llega sin personas; el envío sigue cerrado por la constante |
 | Voz automática | Sale por la voz, así que hereda sus bloqueos | Dicho en el CRM | **BLOQUEADO EXTERNAMENTE** |
@@ -108,6 +128,7 @@ Y hay cosas **incompletas de verdad** en el código. Están en el apartado 5, si
 - **Encendido en producción con su mando:** el motor del Studio y sus prompts en canario, las plantillas de Meta, la sede y el horario de Sofía, el monitor de integraciones, el monitor de voz y la publicación de voz. ElevenLabs, verificado hasta el 11-12.
 - **Desplegado:** la Enmienda M-1 y las plantillas, las consultas de Sofía en el laboratorio, la alerta automática de los prompts y los textos veraces del CRM.
 - **Pruebas reales hechas:** tu turno de WhatsApp por la copia nueva del flujo; la sesión hablada con Sofía consultando planes, precios, sede y horario; las lecturas reales de cada integración; las diez pantallas del CRM antes y después.
+- **Desplegado el 11-11 por la noche (21:35 de Bogotá):** el freno por quejas, las fechas del motor en hora de Bogotá, la protección de los pagos y las facturas, y el aviso de reglas. Comprobado en producción en solo lectura, con el smoke de la automatización (30 comprobaciones bien, ninguna mal) y con las diez pantallas del CRM.
 - **Pruebas reales pendientes:** un turno con una versión publicada (tus tres clics), una publicación de voz, una llamada, una plantilla enviada a Meta y una estrategia publicada en sombra.
 
 ---
@@ -116,7 +137,7 @@ Y hay cosas **incompletas de verdad** en el código. Están en el apartado 5, si
 
 | # | Qué | Para qué | Riesgo y vuelta atrás |
 |---|---|---|---|
-| 1 | Con «Desarrolladores»: aprobar la versión «Prueba de aceptación · profesional 200», dar el veredicto «Aprobada» a su ejecución del laboratorio, publicarla en canario (07:00–19:00) y mandar 2–3 mensajes desde tu teléfono canario | Demostrar que lo publicado en el Studio es lo que ULTRON dice | Solo afecta a tu conversación. «Revertir» lo deja como estaba |
+| 1 | La versión «Prueba de aceptación · profesional 200» **ya está aprobada** (11-11, 18:36, cuenta «QA ULTRON Revisor»). Faltan: el veredicto «Aprobada» de su ejecución del laboratorio (con una cuenta que pueda aprobar y no sea la técnica), publicarla en canario con «Desarrolladores» (07:00–19:00) y mandar 2–3 mensajes desde tu teléfono canario | Demostrar que lo publicado en el Studio es lo que ULTRON dice | Solo afecta a tu conversación. «Revertir» lo deja como estaba |
 | 2 | Decir quiénes son las dos personas reales, cada una con su cuenta personal y su ficha en Personal | Vincularlas (una sola orden mía). Sin eso no hay estrategias, plantillas ni comprobación de Meta | Se hace una vez; un vínculo equivocado se revoca desde el CRM |
 | 3 | Registrar tu teléfono como número canario (un Super Admin registra; otro autoriza y activa) | Que el registro documente el canario y sirva a la voz y a la automatización | Se desactiva o se revoca |
 | 4 | En Twilio: un número de origen que no sea el de WhatsApp (verificar otro como identificador de llamada no cuesta) y una clave restringida de voz; importarlo en ElevenLabs como solo saliente | La primera llamada de Sofía a tu canario | Sin coste hasta la llamada. La llamada: 1 al día, tope de US$ 2,00, 5 minutos; texto exacto de la autorización en la auditoría C §3 |
@@ -147,7 +168,9 @@ Un análisis de arquitectura del 11-11 (`plans/cierre/plan-quejas-consentimiento
 
 | Qué | Por qué importa | Estado |
 |---|---|---|
-| Registro de quejas para la automatización | Sin él, una estrategia no puede excluir a quien se quejó | No implementado; obligatorio antes de abrir envíos automáticos |
+| Camino secundario de la protección de pagos | Al activar la membresía de un pago por pasarela, una lectura previa al registro del hecho todavía queda fuera de la protección | En corrección; va en la segunda tanda de esta noche |
+| Supresión de datos de lo comercial | Si una persona pide borrar sus datos, el guion de la Ley 1581 no alcanza todavía el registro «se quejó» ni los motivos que guarda la IA | Encargado; obligatorio antes de abrir envíos automáticos |
+| Quejas presenciales o por teléfono, y descartar una queja que no lo era | El freno solo ve las quejas que la IA detecta en WhatsApp | Depende de tu decisión (apartado 4, «Decisiones nuevas») |
 | Cuatro ojos por regla | Hoy los cuatro ojos son por versión: quien escribe una frase prohibida puede aprobar y publicar la versión de otra persona que la copia | Regla de operación mientras tanto: quien escribe la regla no aprueba ni publica |
 | El laboratorio de texto prueba una simulación, no los prompts reales | El veredicto certifica la simulación; la evidencia real es el turno canario | No entra en esta entrega |
 | Prompts gobernados fuera de la conversación canaria | Para que el Studio gobierne todas las conversaciones | No entra en esta entrega |
