@@ -104,8 +104,13 @@ class ElectronicInvoiceCommercialObserver
             return $empty;
         }
 
+        // La consulta corre DENTRO de la transacción de quien guarda la factura.
+        // Tragarse su fallo no basta: en PostgreSQL dejaría esa transacción
+        // abortada (25P02) y su COMMIT respondería ROLLBACK. El fallo vuelve
+        // antes a un punto de guardado en la conexión de la consulta.
         try {
-            $source = $class::query()->find($invoice->source_id);
+            $query = $class::query();
+            $source = $this->recorder->isolated(fn () => $query->find($invoice->source_id), $query->getConnection());
         } catch (\Throwable) {
             return $empty;
         }

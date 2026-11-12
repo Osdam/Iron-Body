@@ -7,6 +7,7 @@ use App\Models\CommercialEvent;
 use App\Models\MarketingLead;
 use App\Models\Member;
 use App\Services\Observability\ChannelLog;
+use Illuminate\Database\Connection;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Context;
@@ -24,10 +25,21 @@ use Illuminate\Support\Str;
  *
  * Tres propiedades que hay que preservar al tocar este archivo:
  *
- *  1. **Nunca lanza.** Se le llama desde observers que corren DENTRO de la
- *     transacción de un pago. Una excepción aquí abortaría el cobro. Que el
- *     motor comercial se pierda un evento es un problema menor; que un pago se
- *     revierta porque el motor falló es inaceptable.
+ *  1. **Nunca lanza, y nunca deja rota la transacción de quien llama.** Se le
+ *     llama desde observers que corren DENTRO de la transacción de quien
+ *     escribe (un pago, una membresía, una asistencia). Que el motor comercial
+ *     se pierda un hecho es un problema menor; que un pago se revierta, o se
+ *     pierda, porque el motor falló es inaceptable.
+ *
+ *     Capturar la excepción NO basta. En PostgreSQL una sentencia que falla
+ *     deja la transacción entera abortada (25P02) aunque PHP se trague la
+ *     excepción: la siguiente sentencia de quien llama falla, y si no había
+ *     ninguna, `COMMIT` no lanza —el servidor responde ROLLBACK— y el cambio
+ *     de estado del pago se pierde en silencio (I-1, comprobado en PG 14).
+ *     Por eso, con una transacción abierta, todo lo que esta clase manda a la
+ *     base (la lectura previa y el INSERT) va dentro de un punto de guardado
+ *     propio, y cualquier fallo vuelve a él antes de llegar a la captura. Ver
+ *     {@see self::isolated()}.
  *
  *  2. **Idempotente por el hecho, no por el momento.** La clave se construye
  *     con lo que pasó («pago 4821 aprobado»), no con cuándo se observó. El
@@ -39,6 +51,9 @@ use Illuminate\Support\Str;
  */
 class CommercialEventRecorder
 {
+    /** Distinto de los `trans<N>` de Laravel para no pisarse con sus niveles. */
+    private const SAVEPOINT = 'commercial_event_record';
+
     /**
      * Registra un hecho y, si el motor está encendido, encola su evaluación.
      *
@@ -101,33 +116,41 @@ class CommercialEventRecorder
             // que el hecho tenga identidad propia.
             : $event.':'.Str::uuid()->toString();
 
-        // Camino rápido: el hecho ya estaba registrado. Es lo NORMAL —la
-        // reconciliación de Wompi revisa los pagos en vuelo cada cinco minutos—
-        // así que no es un error ni merece ruido en el log.
-        if (CommercialEvent::query()->where('dedupe_key', $key)->exists()) {
-            return null;
-        }
-
         try {
-            $record = CommercialEvent::create([
-                'marketing_lead_id' => $leadId,
-                'member_id' => $memberId,
-                'commercial_opportunity_id' => $subject['opportunity_id'] ?? null,
-                'event' => $event,
-                'dedupe_key' => $key,
-                'payload' => $this->sanitize($payload),
-                'occurred_at' => $occurredAt ?? now(),
-                'correlation_id' => $this->correlationId(),
-            ]);
+            $record = $this->isolated(function () use ($key, $leadId, $memberId, $subject, $event, $payload, $occurredAt): ?CommercialEvent {
+                // Camino rápido: el hecho ya estaba registrado. Es lo NORMAL —la
+                // reconciliación de Wompi revisa los pagos en vuelo cada cinco
+                // minutos— así que no es un error ni merece ruido en el log.
+                if (CommercialEvent::query()->where('dedupe_key', $key)->exists()) {
+                    return null;
+                }
+
+                return CommercialEvent::create([
+                    'marketing_lead_id' => $leadId,
+                    'member_id' => $memberId,
+                    'commercial_opportunity_id' => $subject['opportunity_id'] ?? null,
+                    'event' => $event,
+                    'dedupe_key' => $key,
+                    'payload' => $this->sanitize($payload),
+                    'occurred_at' => $occurredAt ?? now(),
+                    'correlation_id' => $this->correlationId(),
+                ]);
+            });
         } catch (QueryException $e) {
             // Dos procesos vieron el mismo hecho a la vez y ambos pasaron la
             // comprobación anterior. El índice único es el árbitro; el que
             // pierde se calla. Solo se traga la violación de unicidad:
-            // cualquier otro fallo de BD sí es un problema real.
+            // cualquier otro fallo de BD sí es un problema real. Cuando llega
+            // aquí, `isolated()` ya ha devuelto la transacción de quien llama a
+            // su punto de guardado.
             if (! $this->isUniqueViolation($e)) {
                 throw $e;
             }
 
+            return null;
+        }
+
+        if ($record === null) {
             return null;
         }
 
@@ -141,6 +164,75 @@ class CommercialEventRecorder
         $this->queueEvaluation($record);
 
         return $record;
+    }
+
+    /**
+     * Ejecuta el trabajo de la base de forma que un fallo NO pueda dejar
+     * abortada la transacción de quien llama.
+     *
+     * Sin transacción abierta en la conexión del modelo, el trabajo corre tal
+     * cual, como siempre: cada sentencia es su propia transacción y un fallo no
+     * arrastra a nadie (un SAVEPOINT ahí, además, es un error en PostgreSQL).
+     *
+     * Con transacción abierta, el trabajo va dentro de un punto de guardado
+     * PROPIO, con SQL directo y no con `DB::transaction()` anidado:
+     *
+     *  - Laravel 12, ante un interbloqueo (40P01, «deadlock detected») o un
+     *    fallo de serialización (40001) en un nivel anidado, NO hace
+     *    `ROLLBACK TO SAVEPOINT`: baja su contador y lanza `DeadlockException`
+     *    (`ManagesTransactions::handleTransactionException`, pensado para MySQL,
+     *    que revierte la transacción entera). En PostgreSQL la transacción de
+     *    fuera quedaría abortada: justo el fallo que esto evita.
+     *  - Si la vuelta al punto de guardado falla porque se perdió la conexión,
+     *    `rollBack()` de Laravel deja su contador a 0, y las sentencias que
+     *    vinieran después de quien llama se reconectarían y correrían sueltas,
+     *    fuera de su transacción. Con SQL directo el contador no se toca y
+     *    quien llama falla en voz alta en su siguiente sentencia o en su COMMIT.
+     *
+     * El punto de guardado se LIBERA al terminar, no se confirma: el hecho sigue
+     * siendo parte de la transacción de quien llama y se revierte con ella. Por
+     * eso la evaluación se encola fuera de aquí, después, y sigue colgada del
+     * COMMIT de quien llama (`afterCommit`).
+     *
+     * La conexión es, por defecto, la de `CommercialEvent`, no la de por
+     * defecto de la aplicación: el punto de guardado tiene que estar donde
+     * corren las sentencias que protege. Quien proteja una consulta de otro
+     * modelo pasa la conexión de esa consulta.
+     *
+     * Es público para los observadores que, como este registrador, consultan
+     * algo dentro de la transacción de otro y se tragan el fallo
+     * (`ElectronicInvoiceCommercialObserver::subjectFor()`).
+     * No captura nada: devuelve lo que devuelva el trabajo o relanza lo que
+     * lance, ya con la transacción de quien llama devuelta a su estado.
+     *
+     * @template T
+     *
+     * @param  \Closure(): T  $work
+     * @return T
+     */
+    public function isolated(\Closure $work, ?Connection $db = null): mixed
+    {
+        $db ??= (new CommercialEvent)->getConnection();
+
+        if ($db->transactionLevel() === 0 && ! $db->getPdo()->inTransaction()) {
+            return $work();
+        }
+
+        $pdo = $db->getPdo();
+        $pdo->exec('SAVEPOINT '.self::SAVEPOINT);
+
+        try {
+            $result = $work();
+        } catch (\Throwable $e) {
+            $pdo->exec('ROLLBACK TO SAVEPOINT '.self::SAVEPOINT);
+            $pdo->exec('RELEASE SAVEPOINT '.self::SAVEPOINT);
+
+            throw $e;
+        }
+
+        $pdo->exec('RELEASE SAVEPOINT '.self::SAVEPOINT);
+
+        return $result;
     }
 
     /**
