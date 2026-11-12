@@ -265,7 +265,7 @@ class IntegralPlanStrategy
     /**
      * @return array{level: int, min_exercises: int, max_exercises: int, max_sets: int, max_rpe: ?float, fields: array<string,bool>, max_tokens_frame: int, max_tokens_day: int}
      */
-    public function routineSpec(int $level, string $trainingLevel, bool $safety): array
+    public function routineSpec(int $level, string $trainingLevel, bool $safety, ?int $sessionMinutes = null): array
     {
         [$min, $max] = match ($trainingLevel) {
             'avanzado' => [5, 8],
@@ -274,7 +274,20 @@ class IntegralPlanStrategy
         };
         $principiante = $trainingLevel === 'principiante';
 
-        return [
+        // Con minutos indicados por el entrenador, el tope de ejercicios sale
+        // del tiempo que cabe (SessionTimeBudget), nunca por encima del del nivel.
+        $tiempo = [];
+        if ($sessionMinutes !== null) {
+            $max = max(1, min($max, SessionTimeBudget::exerciseCap($sessionMinutes)));
+            $min = min($min, $max);
+            $tiempo = [
+                'session_minutes' => $sessionMinutes,
+                'warmup_minutes' => SessionTimeBudget::warmupMinutes($sessionMinutes),
+                'rest_hint' => SessionTimeBudget::APP_REST_SECONDS,
+            ];
+        }
+
+        return $tiempo + [
             'level' => max(2, min(5, $level)),
             'min_exercises' => $min,
             'max_exercises' => $max,
@@ -355,7 +368,7 @@ class IntegralPlanStrategy
 
         if ($r === 1) {
             $out['routine_v1'] = $this->request(
-                $this->routineV1Prompt(),
+                $this->routineV1Prompt($plan),
                 ['member_brief' => $brief, 'exercise_catalog' => $catalog],
                 $this->routineV1Schema(),
                 1800,
@@ -441,8 +454,17 @@ class IntegralPlanStrategy
             $plan['nutrition_sections'] = $secciones;
         }
 
+        // Lo del entrenador que la rutina sencilla (potencia de rutina 1 con la
+        // de nutrición por encima) también debe respetar. Solo si llegó.
+        if (($brief['days_source'] ?? null) === 'trainer') {
+            $plan['trainer_days'] = (int) $brief['days_available'];
+        }
+        if (($brief['session_minutes'] ?? null) !== null) {
+            $plan['session_minutes'] = (int) $brief['session_minutes'];
+        }
+
         if ($routineLevel >= 2) {
-            $spec = $this->routineSpec($routineLevel, $brief['training_level'], (bool) $brief['safety_mode']);
+            $spec = $this->routineSpec($routineLevel, $brief['training_level'], (bool) $brief['safety_mode'], $brief['session_minutes'] ?? null);
             $plan['routine'] = $spec;
             $division = $this->split((int) $brief['days_available'], $brief['training_level']);
             $plan['routine_days'] = array_map(
@@ -603,6 +625,9 @@ class IntegralPlanStrategy
             '- alternative_exercise_id: otro ejercicio del catálogo que lo sustituya, o null.',
             '- day_objective: el enfoque del día en una frase, máx. 120 caracteres.',
         ];
+        if (isset($spec['session_minutes'])) {
+            $lineas[] = "- La sesión dura como máximo {$spec['session_minutes']} minutos en total (`member_brief.session_minutes`): {$spec['warmup_minutes']} de calentamiento y el resto para los ejercicios, contando series, descansos y cambios de ejercicio. La app del socio cuenta {$spec['rest_hint']} s de descanso entre series. Ajusta el número de ejercicios y de series para que quepa; no lo resuelvas solo en los textos.";
+        }
         if ($spec['fields']['progression']) {
             $lineas[] = '- progression: cómo progresar este ejercicio en las semanas, máx. 120 caracteres.';
         }
@@ -628,15 +653,32 @@ class IntegralPlanStrategy
         TXT;
     }
 
-    private function routineV1Prompt(): string
+    /** @param  array<string,mixed>  $plan  {@see plan()} */
+    private function routineV1Prompt(array $plan = []): string
     {
-        return $this->header()."\n\n".<<<'TXT'
+        $base = $this->header()."\n\n".<<<'TXT'
         TU PARTE: una rutina sencilla. `name`, `objective` y `level`
         (principiante|intermedio|avanzado). Entre 2 y 6 días, y entre 4 y 10
         ejercicios por día, SOLO de `exercise_catalog` con su `id` exacto. No
         repitas un ejercicio en un mismo día. Respeta las lesiones de
         `member_brief.injuries`.
         TXT;
+
+        // Lo que indicó el entrenador manda sobre «entre 2 y 6 días». Sin su
+        // contexto, el prompt es el de siempre.
+        $extra = [];
+        if (isset($plan['trainer_days'])) {
+            $extra[] = "- La rutina tiene EXACTAMENTE {$plan['trainer_days']} días (`member_brief.days_available`), con recuperación entre sesiones exigentes del mismo grupo muscular. `level` es exactamente `member_brief.training_level`.";
+        }
+        if (isset($plan['session_minutes'])) {
+            $min = $plan['session_minutes'];
+            $calentamiento = SessionTimeBudget::warmupMinutes($min);
+            // Techo de 10: es el máximo de esta misma parte («entre 4 y 10»).
+            $tope = min(10, SessionTimeBudget::exerciseCap($min));
+            $extra[] = "- Cada sesión cabe en {$min} minutos (`member_brief.session_minutes`): {$calentamiento} de calentamiento y el resto para series, descansos y cambios de ejercicio; la app del socio cuenta ".SessionTimeBudget::APP_REST_SECONDS." s de descanso entre series. Como guía, no más de {$tope} ejercicios por día.";
+        }
+
+        return $extra === [] ? $base : $base."\n".implode("\n", $extra);
     }
 
     // ── Esquemas (Structured Outputs estricto) ──────────────────────────────

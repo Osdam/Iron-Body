@@ -39,6 +39,9 @@ use Carbon\Carbon;
  */
 class MemberContextAssembler
 {
+    /** Sesiones por semana que el plan sabe estructurar (IntegralPlanStrategy::SPLITS). */
+    public const MAX_PLAN_DAYS = 6;
+
     public function __construct(
         private readonly NutritionGuideService $guides,
         private readonly NutritionGoalCalculatorService $calculator,
@@ -53,7 +56,19 @@ class MemberContextAssembler
      */
     public function for(Member $member): array
     {
-        $assessment = $this->guides->lastAssessmentFor($member);
+        return $this->forAssessment($member, $this->guides->lastAssessmentFor($member));
+    }
+
+    /**
+     * {@see for()} con la valoración YA elegida. El plan integral la elige una
+     * vez al empezar y usa ESA misma instancia para el prompt y para guardar:
+     * si entra otra valoración mientras responde el modelo, el plan no queda
+     * partido entre dos valoraciones.
+     *
+     * @return array<string,mixed>
+     */
+    public function forAssessment(Member $member, ?ProfessionalAssessment $assessment): array
+    {
         $guide = $this->lastPublishedGuideFor($member);
 
         $composition = $this->bodyComposition($member, $assessment, $guide);
@@ -78,6 +93,62 @@ class MemberContextAssembler
                 'guide_at' => optional($guide?->published_at)->toIso8601String(),
             ],
         ];
+    }
+
+    /**
+     * Lo que el entrenador escribió en «Contexto para el plan», encima de lo
+     * que Iron Body ya sabe. SOLO para esta generación: no se escribe en el
+     * perfil del socio ni en su guía (no nace una segunda fuente de verdad).
+     *
+     * Precedencia: lo que el entrenador envía ahora manda sobre el perfil y la
+     * última guía publicada; lo que no envía (la app omite los vacíos) sigue
+     * saliendo de donde salía. Con `$input = []` el contexto es IDÉNTICO al de
+     * antes: las apps hasta la 2.0.9 envían `{}`.
+     *
+     * Las claves nuevas (`training.days_per_week`, `training.session_minutes`,
+     * `trainer_notes.plan_note`) solo existen si llegaron, para que una
+     * petición vacía no cambie ni un byte de lo que ve el modelo.
+     *
+     * @param  array<string,mixed>  $contexto  lo que devolvió {@see for()}
+     * @param  array<string,mixed>  $input  GenerateIntegralPlanRequest::trainerInput()
+     * @return array<string,mixed>
+     */
+    public function withTrainerInput(array $contexto, array $input): array
+    {
+        if ($input === []) {
+            return $contexto;
+        }
+
+        $texto = fn (string $k) => $this->text($input[$k] ?? null);
+
+        if (($v = $texto('objective')) !== null) {
+            $contexto['goal']['objective'] = $v;
+        }
+        if (($v = $this->trainingLevel($input['training_level'] ?? null)) !== null) {
+            $contexto['training']['training_level'] = $v;
+        }
+        if (($v = $texto('injuries')) !== null) {
+            $contexto['training']['injuries'] = $v;
+            $contexto['nutrition_constraints']['injuries'] = $v;
+        }
+        if (($v = $texto('restrictions')) !== null) {
+            $contexto['nutrition_constraints']['restrictions'] = $v;
+        }
+        if (is_int($input['days_per_week'] ?? null)) {
+            $contexto['training']['days_per_week'] = $input['days_per_week'];
+        }
+        if (is_int($input['session_minutes'] ?? null)) {
+            $contexto['training']['session_minutes'] = $input['session_minutes'];
+        }
+        if (($v = $texto('observations')) !== null) {
+            // Aparte de las notas de la valoración: aquellas son de la medición,
+            // esta es del plan de hoy. Las dos llegan; ninguna pisa a la otra.
+            $contexto['trainer_notes']['plan_note'] = $v;
+        }
+
+        $contexto['sources']['trainer_input'] = array_keys($input);
+
+        return $contexto;
     }
 
     /**
@@ -138,8 +209,19 @@ class MemberContextAssembler
             $supuestos[] = 'No consta el nivel de entrenamiento: se planifica como principiante.';
         }
 
+        // Días: lo que el entrenador indica para ESTE plan manda; si no lo
+        // indica, la meta nutricional del socio; si tampoco, un supuesto
+        // DECLARADO. El tope de 6 no es un valor fijo inventado: la división
+        // de la rutina (IntegralPlanStrategy::SPLITS) llega hasta 6 sesiones.
+        $diasEntrenador = $contexto['training']['days_per_week'] ?? null;
         $diasMeta = $meta?->training_days_per_week;
-        if (is_int($diasMeta) && $diasMeta >= 1) {
+        if (is_int($diasEntrenador) && $diasEntrenador >= 1) {
+            $dias = min(self::MAX_PLAN_DAYS, $diasEntrenador);
+            $fuenteDias = 'trainer';
+            if ($diasEntrenador > self::MAX_PLAN_DAYS) {
+                $supuestos[] = "El entrenador indicó {$diasEntrenador} días; el plan admite hasta ".self::MAX_PLAN_DAYS.' sesiones por semana: la rutina usa '.self::MAX_PLAN_DAYS.' y deja un día de descanso.';
+            }
+        } elseif (is_int($diasMeta) && $diasMeta >= 1) {
             $dias = min(6, $diasMeta);
             $fuenteDias = 'nutrition_goal';
             if ($diasMeta > 6) {
@@ -174,12 +256,18 @@ class MemberContextAssembler
                 .'): no se fijan metas de calorías ni se prescribe; es un plan general que debe revisar un profesional de la salud.';
         }
 
+        $minutos = $contexto['training']['session_minutes'] ?? null;
+
         return [
             'objective' => $objetivoTexto,
             'objective_key' => $objetivo,
             'training_level' => $nivel,
             'days_available' => $dias,
             'days_source' => $fuenteDias,
+            'days_requested' => is_int($diasEntrenador) ? $diasEntrenador : null,
+            // Minutos por sesión: solo si el entrenador los indicó. No hay
+            // supuesto: sin dato, la rutina no se recorta por tiempo.
+            'session_minutes' => is_int($minutos) ? $minutos : null,
             'targets' => $metas,
             'restrictions' => $restricciones,
             'restrictions_text' => $restriccionesTexto,
@@ -219,6 +307,7 @@ class MemberContextAssembler
         $senales = $this->lexicon->clinicalSignalsIn(array_merge([
             $contexto['trainer_notes']['observations'] ?? null,
             $contexto['trainer_notes']['recommendations'] ?? null,
+            $contexto['trainer_notes']['plan_note'] ?? null,
             $contexto['training']['injuries'] ?? null,
             $contexto['nutrition_constraints']['restrictions'] ?? null,
             $contexto['goal']['objective_description'] ?? null,

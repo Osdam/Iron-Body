@@ -106,6 +106,20 @@ class IntegralPlanException extends RuntimeException
         );
     }
 
+    /**
+     * El plan no respeta lo que el entrenador indicó para él (días, alergias).
+     * Reintentable, y NO se guarda: un plan de 4 días no se entrega como si
+     * fuera el de 6 que se pidió.
+     */
+    public static function contextMismatch(string $detail): self
+    {
+        return new self(
+            'Iron IA no respetó el contexto del plan: '.$detail.'. Vuelve a intentarlo.',
+            'ai_context_mismatch',
+            retryable: true,
+        );
+    }
+
     /** No hay con qué generar: el gimnasio no tiene ejercicios cargados. */
     public static function emptyCatalog(): self
     {

@@ -39,17 +39,21 @@ class NutritionGuideService
      * copian de ahí: ya las tomó una vez y volver a teclearlas es una fuente de
      * erratas, no de rigor. Lo que el entrenador escriba en el formulario manda
      * sobre lo copiado.
+     *
+     * `$assessment`: la valoración YA elegida por quien llama (el plan integral
+     * la fija al empezar). Si llega, manda sobre `$useLastAssessment`, que
+     * volvería a buscar «la última» en este momento.
      */
-    public function createDraft(Trainer $trainer, Member $member, array $data, bool $useLastAssessment = false): NutritionGuide
+    public function createDraft(Trainer $trainer, Member $member, array $data, bool $useLastAssessment = false, ?ProfessionalAssessment $assessment = null): NutritionGuide
     {
         $desdeValoracion = [];
-        $origen = null;
+        $origen = $assessment;
 
-        if ($useLastAssessment) {
+        if ($origen === null && $useLastAssessment) {
             $origen = $this->lastAssessmentFor($member);
-            if ($origen !== null) {
-                $desdeValoracion = $this->measurementsFrom($origen);
-            }
+        }
+        if ($origen !== null) {
+            $desdeValoracion = $this->measurementsFrom($origen);
         }
 
         $guide = NutritionGuide::create(array_merge(
