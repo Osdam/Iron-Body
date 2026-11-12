@@ -326,7 +326,7 @@ Runbook: «Hito 8», pasos 1–11. Condiciones: REV8 sin bloqueantes; la ascende
 - [ ] La fase 2 verificada y §5.3 hecho; canarios de voz activos (registro del H6).
 - [ ] El lector de la verificación en la telefonía (E4-6) y la salud del webhook automatizada. [PENDIENTE (B8 + SEC8).]
 - [ ] nginx deja pasar 1 MB a la post-llamada (lo dice el smoke en el servidor). [PENDIENTE (OPS8, con autorización).]
-- [ ] La sección de voz de `ops/supresion-1581.sql`. [PENDIENTE (OPS8 + `database-specialist`).]
+- [x] La sección de voz de `ops/supresion-1581.sql`. [HECHO el 10-11-2026 (L9-83): cubre las 11 tablas de la voz; `VoiceSuppression1581Test` en PostgreSQL 14, repetida el 11-11. Abiertos: H-A (el enlace al motor no se puede suprimir) y el borrado en los proveedores.]
 - [ ] `VOICE_FACTS_SITE` y `VOICE_FACTS_HOURS` puestos (lo que dice `consultar_horarios`), **solo con el mando**: `bash /root/h8-voice-scope.sh hechos --sede='…' --horario='…'` (comillas simples en la consola: el `#` de la dirección empezaría un comentario); vuelta atrás `bash /root/h8-voice-scope.sh hechos borrar`. Conjunto cerrado de caracteres (letras, áéíóúüñ, dígitos, espacio y `. , ; : - # / ( )`), hasta 300, sin URL ni teléfonos; comprobado byte a byte en la configuración efectiva. «Hecho» = `estado` dice «la herramienta los dice: sí». Órdenes exactas e informe: `plans/informes-motores/informe-devops-hechos-voz.md`. [PENDIENTE de la orden del propietario.]
 - [ ] El commit `voice(calls-open)` desplegado (una línea, con la autorización escrita citada en el mensaje).
 

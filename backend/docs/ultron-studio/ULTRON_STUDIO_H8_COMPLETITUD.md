@@ -77,7 +77,7 @@ Leyenda: **I+P** implementado y probado con integración real · **I·SR** imple
 | Visto bueno legal; RNE decidido (P-14); P-11, P-13, P-15, P-20 | **PA** | propietario |
 | Publicación promovida a `rest` | **PA** | tras la evidencia de la 4a |
 | `VOICE_OUTBOUND_SCOPE=contacts`, `VOICE_RNE_VALIDITY_DAYS` > 0 | **PA** | con el mando |
-| Supresión de voz de la Ley 1581 (`supresion-1581.sql` ampliado a `voice_*`) | **PD** | OPS8 + `database-specialist` |
+| Supresión de voz de la Ley 1581 (`supresion-1581.sql` ampliado a `voice_*`) | **Hecho** (10-11-2026, L9-83; comprobado de nuevo el 11-11) | `database-specialist`. Abiertos: H-A y el borrado en los proveedores |
 | Ley 2578/2026 (festivo nuevo, demandada) | **PA** | confirmar vigencia (E2-1) |
 
 ## Transversal

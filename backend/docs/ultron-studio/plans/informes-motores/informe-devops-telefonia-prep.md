@@ -117,9 +117,10 @@ Dos copias del backend de HEAD que solo difieren en `VoiceCallPolicy.php:23` (`f
 | Batería | Cerrada | Abierta | Solo con la abierta |
 |---|---|---|---|
 | `tests/Unit/{Voice,Telephony}` + `tests/Feature/{Voice,Telephony,Outreach,UltronStudio}` (3 250 pruebas, 604 omitidas: E2E y PG) | 2 fallos | 53 fallos | **51** |
-| El resto de `tests/Unit` y `tests/Feature` | sin medir | sin medir | **sin medir** |
+| El resto de `tests/Unit` (7 042 pruebas) | 2 fallos | 20 fallos | **18** |
+| El resto de `tests/Feature` (7 301 pruebas, 28 omitidas) | 10 fallos | 10 fallos | **0** |
 
-> **Nota del lead (11-11-2026).** La segunda tanda no llegó a terminar antes de cerrar al agente: la fila de arriba quedó con sus marcadores sin rellenar y aquí se dice. Los 51 casos son, por tanto, un mínimo: quien prepare `T` (§4.4, paso 1) mide el resto de la batería sobre las dos copias antes de dar la lista por cerrada.
+> **Nota del lead (11-11-2026).** La segunda tanda no llegó a terminar antes de cerrar al agente; la terminó el lead con el mismo arnés y las mismas dos copias (`evidencia-h9/2026-11-11/telefonia-prep/05-c4-segunda-tanda.txt`). Resultado: en el resto de `tests/Unit` caen **18 casos más**, todos del mismo método, `Unit/UltronStudio/StudioIntegrationsParityTest::test_voice_call_policy_levels_and_context` (los casos `voiceCallPolicy · decide` del fixture de paridad del H6, `integrations-cases.json`, que el CRM copia en `backend-integrations.testing.ts`); en el resto de `tests/Feature`, **ninguno**. **El total con la constante abierta es de 69 casos: 35 métodos en 21 ficheros.** Los fallos comunes a las dos copias (2 y 10) son del entorno de la copia (sin historia de git ni el directorio `n8n/`) y el de la línea base de siempre (`PricingV2SalesAndPaymentsTest`). Consecuencia para `T`: toca también ese fixture de paridad y, por tanto, su copia generada del CRM.
 
 Los 2 fallos comunes son las dos puertas de diff (`MetaTemplateRoutesTest::test_la_puerta_de_diff_del_whatsapp…` y `OutreachIsolationTest::test_la_puerta_de_diff_de_legacy…`). Fallan igual en las dos copias, que no tienen historia de git [H]. La batería completa en un solo proceso se quedó sin memoria (1 GB) en las dos copias; por eso va en dos tandas.
 

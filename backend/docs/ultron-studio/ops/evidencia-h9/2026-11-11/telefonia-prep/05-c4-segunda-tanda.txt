@@ -1,0 +1,50 @@
+C-4 · segunda tanda (lead, 11-11-2026): el RESTO de la batería sobre las mismas dos copias de HEAD 3161d3a3 del agente de operaciones
+(solo difieren en VoiceCallPolicy::CALLS_ENABLED_IN_CODE), con su mismo arnés (phpunit sin red, SQLite en memoria, 2 GB).
+
+== abierta resto-unit 19:24:03
+Tests: 7042, Assertions: 96216, Failures: 20.
+== cerrada resto-feature 19:24:52
+Tests: 7301, Assertions: 60179, Errors: 1, Failures: 9, PHPUnit Deprecations: 8, Skipped: 28.
+== abierta resto-feature 19:32:54
+Tests: 7301, Assertions: 60179, Errors: 1, Failures: 9, PHPUnit Deprecations: 8, Skipped: 28.
+== comparación resto-unit
+cerrada: 7042 pruebas, 2 fallos · abierta: 7042 pruebas, 20 fallos
+SOLO con la constante abierta (18):
+  Tests\Unit\UltronStudio\StudioIntegrationsParityTest::test_voice_call_policy_levels_and_context with data set "voiceCallPolicy · decide · ElevenLabs apagado"
+  Tests\Unit\UltronStudio\StudioIntegrationsParityTest::test_voice_call_policy_levels_and_context with data set "voiceCallPolicy · decide · ElevenLabs sin configurar"
+  Tests\Unit\UltronStudio\StudioIntegrationsParityTest::test_voice_call_policy_levels_and_context with data set "voiceCallPolicy · decide · ElevenLabs sin verificar"
+  Tests\Unit\UltronStudio\StudioIntegrationsParityTest::test_voice_call_policy_levels_and_context with data set "voiceCallPolicy · decide · ElevenLabs verificado no añade nada"
+  Tests\Unit\UltronStudio\StudioIntegrationsParityTest::test_voice_call_policy_levels_and_context with data set "voiceCallPolicy · decide · Twilio Voice apagado"
+  Tests\Unit\UltronStudio\StudioIntegrationsParityTest::test_voice_call_policy_levels_and_context with data set "voiceCallPolicy · decide · apagado y sin número aunque ElevenLabs esté verificado"
+  Tests\Unit\UltronStudio\StudioIntegrationsParityTest::test_voice_call_policy_levels_and_context with data set "voiceCallPolicy · decide · cupo diario 0"
+  Tests\Unit\UltronStudio\StudioIntegrationsParityTest::test_voice_call_policy_levels_and_context with data set "voiceCallPolicy · decide · cupo diario 1"
+  Tests\Unit\UltronStudio\StudioIntegrationsParityTest::test_voice_call_policy_levels_and_context with data set "voiceCallPolicy · decide · cupo diario negativo"
+  Tests\Unit\UltronStudio\StudioIntegrationsParityTest::test_voice_call_policy_levels_and_context with data set "voiceCallPolicy · decide · el canario de voz no está activo"
+  Tests\Unit\UltronStudio\StudioIntegrationsParityTest::test_voice_call_policy_levels_and_context with data set "voiceCallPolicy · decide · la fuente es marketing_calls (T-7)"
+  Tests\Unit\UltronStudio\StudioIntegrationsParityTest::test_voice_call_policy_levels_and_context with data set "voiceCallPolicy · decide · marketing_calls con todo lo demás listo y el cupo máximo"
+  Tests\Unit\UltronStudio\StudioIntegrationsParityTest::test_voice_call_policy_levels_and_context with data set "voiceCallPolicy · decide · no hay canario de voz registrado"
+  Tests\Unit\UltronStudio\StudioIntegrationsParityTest::test_voice_call_policy_levels_and_context with data set "voiceCallPolicy · decide · otra fuente"
+  Tests\Unit\UltronStudio\StudioIntegrationsParityTest::test_voice_call_policy_levels_and_context with data set "voiceCallPolicy · decide · producción en H6 (el ejemplo del contrato)"
+  Tests\Unit\UltronStudio\StudioIntegrationsParityTest::test_voice_call_policy_levels_and_context with data set "voiceCallPolicy · decide · sin número de voz"
+  Tests\Unit\UltronStudio\StudioIntegrationsParityTest::test_voice_call_policy_levels_and_context with data set "voiceCallPolicy · decide · todo falla a la vez: se acumulan en el orden de REASONS"
+  Tests\Unit\UltronStudio\StudioIntegrationsParityTest::test_voice_call_policy_levels_and_context with data set "voiceCallPolicy · decide · todo listo salvo la constante del código"
+solo con la cerrada (0):
+en las dos (2):
+  Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompileCasesTest::test_el_fixture_es_el_que_sale_hoy_del_contrato
+  Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompileCasesTest::test_el_selector_generado_acepta_lo_que_compila_el_contrato_y_cae_a_legacy_sin_lanzar
+== comparación resto-feature
+cerrada: 7301 pruebas, 10 fallos · abierta: 7301 pruebas, 10 fallos
+SOLO con la constante abierta (0):
+solo con la cerrada (0):
+en las dos (10):
+  Tests\Feature\Billing\PricingV2SalesAndPaymentsTest::test_manual_payment_uses_backend_quote
+  Tests\Feature\Marketing\UltronPromptsN8nCommandTest::test_el_comprobador_falla_si_alguien_edita_el_flujo
+  Tests\Feature\Marketing\UltronPromptsN8nCommandTest::test_el_comprobador_pasa_sobre_el_generado_y_falla_sobre_el_respaldo
+  Tests\Feature\Marketing\UltronPromptsN8nCommandTest::test_el_flujo_generado_solo_difiere_del_respaldo_en_lo_de_b7
+  Tests\Feature\Marketing\UltronPromptsN8nCommandTest::test_el_selector_lleva_la_base_exacta_y_la_huella_legacy
+  Tests\Feature\Marketing\UltronPromptsN8nCommandTest::test_genera_los_ficheros_de_forma_determinista
+  Tests\Feature\Marketing\UltronPromptsN8nCommandTest::test_las_operaciones_tocan_solo_lo_de_b7
+  Tests\Feature\Marketing\UltronPromptsN8nCommandTest::test_lo_que_hay_en_el_repositorio_es_lo_que_genera_hoy
+  Tests\Feature\Marketing\UltronPromptsN8nCommandTest::test_un_respaldo_que_no_es_29de5119_no_genera_nada
+  Tests\Feature\Security\SecretExposureTest::test_git_never_tracks_environment_files_with_secrets
+== FIN 19:41:51

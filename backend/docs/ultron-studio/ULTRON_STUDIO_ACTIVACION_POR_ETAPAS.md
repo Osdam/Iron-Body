@@ -23,7 +23,7 @@ Mandos (en el servidor, como root, con copia previa del entorno y `config:cache`
 | 0.9 | Fase 2 del Hito 6 y el canario de voz del propietario (D-13): registrar el número con consentimiento y que OTRA persona lo autorice y active | `bash /root/h6-integrations-scope.sh …` + CRM → Studio → Integraciones → canarios | (a) + (b) |
 | 0.10 | Worker de voz (duerme hasta la 4a) | `docs/ops/supervisor/ironbody-voice.conf` → `supervisorctl reread/update` (13 → 14) | (a) antes de la etapa 3 |
 | 0.11 | El commit `voice(calls-open):` (una línea: la constante) y su despliegue | lead, con tu orden citada en el commit | (a) antes de la etapa 3 |
-| 0.12 | Supresión 1581 de la voz y CSP del CRM en Report-Only | `ops/supresion-1581-voz.propuesta.sql` (database-specialist) · `ops/nginx-h8-voz.conf.propuesta` | (a) antes de la etapa 6 |
+| 0.12 | Supresión 1581 de la voz y CSP del CRM en Report-Only | La supresión de la voz ya está integrada y probada en `ops/supresion-1581.sql` (L9-83, 10-11-2026; la propuesta `ops/supresion-1581-voz.propuesta.sql` queda como histórico) · `ops/nginx-h8-voz.conf.propuesta` | (a) antes de la etapa 6: solo la CSP |
 
 ## Etapa 1 · Laboratorio hablado
 
