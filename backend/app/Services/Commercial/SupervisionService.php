@@ -3,6 +3,7 @@
 namespace App\Services\Commercial;
 
 use App\Models\CommercialApproval;
+use App\Models\MarketingConversation;
 use App\Services\Marketing\MarketingAgentSwitch;
 use App\Services\Marketing\Ultron\UltronAbortLatch;
 use App\Services\Meta\MetaAuthService;
@@ -87,14 +88,45 @@ class SupervisionService
                 return ['status' => 'brake', 'responds' => false, 'label' => 'ULTRON está frenado: no responde hasta que se suelte el freno', 'short' => 'ULTRON frenado'];
             }
 
-            return config('marketing.ultron.canary_conversation_id') !== null
-                ? ['status' => 'ultron_canary', 'responds' => true, 'label' => 'ULTRON responde solo en la conversación de prueba (canario)', 'short' => 'ULTRON · solo canario']
-                : ['status' => 'ultron_all', 'responds' => true, 'label' => 'ULTRON responde en todas las conversaciones', 'short' => 'ULTRON activo'];
+            // Encendido pero sin conexión con n8n, el trabajo que lleva el turno lo salta (`SendUltronEventToN8n`).
+            if (trim((string) config('marketing.ultron.webhook_url')) === '' || (string) config('automation.webhook_secret') === '') {
+                return ['status' => 'ultron_unconfigured', 'responds' => false, 'label' => 'ULTRON está encendido, pero le falta la conexión con n8n: no responde', 'short' => 'ULTRON sin conexión'];
+            }
+            $canario = config('marketing.ultron.canary_conversation_id');
+            if ($canario === null) {
+                return ['status' => 'ultron_all', 'responds' => true, 'label' => 'ULTRON responde en todas las conversaciones', 'short' => 'ULTRON activo'];
+            }
+            // Un canario que no es una conversación (0, un texto, una que no existe) no deja pasar a nadie: el emisor
+            // compara el id de cada conversación con ese valor. Decir «responde» sería falso.
+            if ((int) $canario <= 0 || ! DB::table('marketing_conversations')->where('id', (int) $canario)->exists()) {
+                return ['status' => 'ultron_canary_missing', 'responds' => false, 'label' => 'ULTRON está en canario, pero su conversación de prueba no existe: no responde a nadie', 'short' => 'Canario mal configurado'];
+            }
+
+            return ['status' => 'ultron_canary', 'responds' => true, 'label' => 'ULTRON responde solo en la conversación de prueba (canario)', 'short' => 'ULTRON · solo canario'];
         }
 
         return $ejecuta
             ? ['status' => 'legacy_auto', 'responds' => true, 'label' => 'El agente anterior responde por su cuenta', 'short' => 'Agente anterior activo']
             : ['status' => 'legacy_propose', 'responds' => false, 'label' => 'El agente anterior solo propone respuestas: no envía nada por su cuenta', 'short' => 'El agente solo propone'];
+    }
+
+    /**
+     * ¿Atiende ULTRON la conversación del canario ahora mismo? Las mismas barreras de conversación que su emisor
+     * (`UltronEventEmitter::ineligibleReason()`): abierta, de WhatsApp, con un prospecto al que se le puede responder
+     * (ni «no contactar» ni consentimiento denegado), con la IA permitida y sin que una persona la haya tomado A MANO
+     * (una toma que hizo el propio agente no lo deja mudo).
+     */
+    private function canaryIsAttended(): bool
+    {
+        $c = MarketingConversation::query()->with('lead')->find((int) config('marketing.ultron.canary_conversation_id'));
+
+        return $c !== null
+            && $c->status === 'open'
+            && $c->channel === 'whatsapp'
+            && $c->lead !== null
+            && $c->lead->canReplyReactively()
+            && (bool) $c->ai_enabled
+            && ! ($c->human_takeover && $c->human_takeover_source === 'manual');
     }
 
     /**
@@ -272,11 +304,7 @@ class SupervisionService
 
             $atiende = match ($quien['status']) {
                 'ultron_all', 'legacy_auto' => (int) ($row->by_ai ?? 0),
-                'ultron_canary' => DB::table('marketing_conversations')
-                    ->where('status', 'open')
-                    ->where('id', (int) config('marketing.ultron.canary_conversation_id'))
-                    ->where('ai_enabled', true)->where('human_takeover', false)
-                    ->count(),
+                'ultron_canary' => $this->canaryIsAttended() ? 1 : 0,
                 default => 0,
             };
 

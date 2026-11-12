@@ -98,6 +98,44 @@ class SupervisionStateTruthTest extends TestCase
         $this->assertSame(['ultron_canary', 0, 3, 2], [$s['agent']['status'], $s['conversations']['attended_by_agent'], $s['conversations']['handled_by_ai'], $s['conversations']['handled_by_human']]);
     }
 
+    /**
+     * Las barreras del emisor de ULTRON, una a una (m-4 de la revisión de seguridad): el prospecto que pidió que no
+     * le escriban no se atiende; una toma que NO es manual (la hizo el propio agente al escalar) no lo deja mudo.
+     */
+    public function test_el_recuento_del_canario_sigue_las_barreras_del_emisor(): void
+    {
+        $this->canario->forceFill(['human_takeover' => true, 'human_takeover_source' => 'agent_escalation'])->save();
+        $this->assertSame(1, $this->state()['conversations']['attended_by_agent'], 'una toma no manual no para a ULTRON');
+
+        $this->canario->forceFill(['human_takeover' => false, 'human_takeover_source' => null])->save();
+        $this->lead->forceFill(['do_not_contact' => true])->save();
+        $this->assertFalse($this->lead->fresh()->canReplyReactively());
+        $this->assertSame(0, $this->state()['conversations']['attended_by_agent'], 'a quien pidió que no le escriban no se le responde');
+
+        $this->lead->forceFill(['do_not_contact' => false])->save();
+        $this->canario->forceFill(['channel' => 'instagram'])->save();
+        $this->assertSame(0, $this->state()['conversations']['attended_by_agent'], 'ULTRON solo atiende WhatsApp');
+    }
+
+    /** Un canario que no es una conversación no deja pasar a nadie: la pantalla no puede decir que ULTRON responde. */
+    public function test_un_canario_que_no_existe_o_sin_conexion_no_dice_que_responde(): void
+    {
+        foreach ([0, 999_999] as $id) {
+            config()->set('marketing.ultron.canary_conversation_id', $id);
+            $s = $this->state();
+            $this->assertSame(['ultron_canary_missing', false, 'Canario mal configurado', 0], [$s['agent']['status'], $s['agent']['enabled'], $s['agent']['short_label'], $s['conversations']['attended_by_agent']], "canario {$id}");
+        }
+
+        $this->configure(ultron: true, canary: true);
+        config()->set('marketing.ultron.webhook_url', '');
+        $s = $this->state();
+        $this->assertSame(['ultron_unconfigured', false, 0], [$s['agent']['status'], $s['agent']['enabled'], $s['conversations']['attended_by_agent']], 'sin la dirección de n8n el turno no sale');
+
+        config()->set('marketing.ultron.webhook_url', 'https://n8n.prueba.test/webhook/ultron');
+        config()->set('automation.webhook_secret', '');
+        $this->assertSame('ultron_unconfigured', $this->state()['agent']['status'], 'sin el secreto, tampoco');
+    }
+
     public function test_el_canario_cerrado_o_con_la_ia_apagada_tampoco_cuenta(): void
     {
         $this->canario->forceFill(['ai_enabled' => false])->save();
@@ -167,6 +205,8 @@ class SupervisionStateTruthTest extends TestCase
     private function configure(bool $ultron = false, bool $canary = false, bool $agent = false, bool $analyze = false, bool $execute = false): void
     {
         config()->set('marketing.ultron.enabled', $ultron);
+        config()->set('marketing.ultron.webhook_url', 'https://n8n.prueba.test/webhook/ultron');
+        config()->set('automation.webhook_secret', 'secreto-de-prueba-no-real');
         config()->set('marketing.ultron.canary_conversation_id', $canary ? (int) $this->canario->id : null);
         config()->set('marketing.agent_enabled', $agent);
         config()->set('marketing.inbound.auto_analyze', $analyze);
