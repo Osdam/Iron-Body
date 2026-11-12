@@ -77,7 +77,7 @@ Y hay cosas **incompletas de verdad** en el código. Están en el apartado 5, si
 | Salientes «Apagadas» | Esperan el número, la clave, el commit autorizado que abre las llamadas, una voz publicada y tu autorización | Camino mínimo y texto de la autorización, escritos (auditoría C §3 y §4.1) | **BLOQUEADO EXTERNAMENTE** |
 | Entrantes «Apagadas» | No existe un número propio de Twilio que pueda recibir llamadas | Dicho en el CRM | **BLOQUEADO EXTERNAMENTE** |
 | Monitor «apagado» | Lo estaba | Encendido el 11-11 tras conciliar en seco. Su primera revisión horaria salió bien y no echó el freno. El CRM dice qué vigila y cómo salió la última vigilancia | **EN OBSERVACIÓN** |
-| Contactos y consentimiento de voz | La supresión de datos (Ley 1581) todavía no cubre las tablas de voz. No hace falta para la llamada a tu canario | — | **INCOMPLETO** (apartado 5) |
+| Contactos y consentimiento de voz | Apagado a propósito hasta el visto bueno legal (Ley 1581, Ley 2300 y Registro de Números Excluidos). No hace falta para la llamada a tu canario. Corrección del 11-11: este informe decía que la supresión de datos no cubría las tablas de voz; sí las cubre desde el 10-11 | Supresión comprobada de nuevo el 11-11 en PostgreSQL (1 prueba, 1 122 comprobaciones) | **BLOQUEADO EXTERNAMENTE** (visto bueno legal); dos flecos en el apartado 5 |
 
 ### 2.8 Automatización comercial (campañas automáticas)
 
@@ -126,6 +126,21 @@ Y hay cosas **incompletas de verdad** en el código. Están en el apartado 5, si
 | 8 | Decidir qué se hace con las copias antiguas del fichero de entorno que guardan secretos en el servidor | Higiene | Se conserva la última hasta verificar |
 | 9 | Aprobar las dos frases fijas que el compilador añade a los prompts cuando una versión trae reglas con frases prohibidas. Al redactor: «FRASES PROHIBIDAS PUBLICADAS: nunca escribas ninguna de estas frases, tampoco con otras mayusculas; si la respuesta parece necesitar una, dilo con otras palabras. Las frases: …». Al revisor: «FRASES PROHIBIDAS PUBLICADAS: si el borrador contiene alguna de estas frases, aunque cambien las mayusculas, verdict fail con naturalness. Las frases: …» | Que las reglas del Studio tengan efecto en WhatsApp | Sin reglas con frases no cambia nada. Se quita volviendo a publicar una versión sin esas reglas o con «Volver a Legacy» |
 
+### Decisiones nuevas: quejas, cuatro ojos por regla y consentimiento
+
+Un análisis de arquitectura del 11-11 (`plans/cierre/plan-quejas-consentimiento-cuatro-ojos.md`) dejó quince preguntas cerradas. Estas son las que cambian lo que se construye esta semana.
+
+| Tema | Pregunta | Lo que se usa mientras no contestes |
+|---|---|---|
+| Quejas | ¿Una queja que detecta la IA en WhatsApp frena el contacto automático aunque nadie la confirme? | Sí: un falso positivo solo silencia |
+| Quejas | ¿Cuántos días frena una queja? | 30 días |
+| Quejas | ¿Frena solo lo comercial o también la cobranza? | Comercial y cobranza; los avisos de servicio, no |
+| Quejas | ¿Se cuentan las quejas anteriores, recuperándolas del historial? | No, hasta que lo digas |
+| Quejas | ¿Quieres un botón en el CRM para registrar quejas presenciales o por teléfono? | No se construye todavía |
+| Cuatro ojos | ¿Aceptas que quien escribió una frase prohibida no pueda aprobar ni publicar ninguna versión que la copie, aunque sea Super Admin? | No se construye hasta tu respuesta; rige la regla de operación |
+| Cuatro ojos | Si las dos únicas personas que revisan escribieron frases, ¿aceptas el bloqueo hasta que haya una tercera o se archive la regla? | Igual |
+| Consentimiento | ¿Cómo se recoge la autorización de los socios para mensajes comerciales, y qué texto exacto firma? | Necesita a tu asesoría legal. La autorización de datos actual no cubre mensajes comerciales por WhatsApp |
+
 ---
 
 ## 5. Lo incompleto de verdad
@@ -139,7 +154,7 @@ Y hay cosas **incompletas de verdad** en el código. Están en el apartado 5, si
 | Fuente de consentimiento de los socios | Sin ella no hay estrategias sobre socios | Necesita tu decisión legal y desarrollo |
 | Clasificador de respuestas | Hace falta cuando haya envíos automáticos con respuesta | No implementado |
 | Eventos especiales del gimnasio y campañas como disparador | Ampliación | No implementado |
-| Supresión de datos en las tablas de voz | Necesaria antes de llamar a contactos que no sean canarios | Propuesta escrita, sin integrar |
+| Supresión de datos de voz: dos flecos | La supresión ya cubre las once tablas de voz. Quedan dos cosas: el enlace de un contacto con su ficha de socio o prospecto no se puede suprimir (se informa), y el borrado de la conversación en ElevenLabs y de la llamada en Twilio es un paso manual sin confirmar | Decidir antes de registrar contactos que no sean canarios |
 
 ---
 
