@@ -1,0 +1,145 @@
+CIERRE V2 · APARTADO 3 · GATE 3-B, PASO 2 DE 4: LOS TRES MENSAJES DESDE EL WHATSAPP CANARIO, Y SU DIAGNÓSTICO
+Verificación en producción, solo lectura, el 12-11-2026 entre las 21:57 y las 22:10 UTC (16:57–17:10 en Bogotá).
+Los mensajes los envió el propietario desde su teléfono canario. La conversación canaria es su conversación de prueba.
+
+=== 1. LA VERSIÓN PUBLICADA SE APLICÓ EN LOS TRES TURNOS ===
+php artisan ultron:prompt-trace --last=6
+  | Minuto (UTC)      | Declarada        | Ofrecida                 | Observada          | Estado    |
+  | 2026-11-11T15:39Z | legacy           | legacy   no_publication  | legacy 3f6a5674 S1 | legacy    |
+  | 2026-11-11T23:37Z | legacy           | legacy   no_publication  | legacy 3f6a5674 S1 | legacy    |
+  | 2026-11-12T21:52Z | applied 4017639c | studio 4017639c 702890f7 | studio 702890f7 S1 | applied   |
+  | 2026-11-12T21:54Z | applied 4017639c | studio 4017639c 702890f7 | studio 702890f7 S1 | applied   |
+  | 2026-11-12T21:56Z | applied 4017639c | studio 4017639c 702890f7 | studio 702890f7 S1 | applied   |
+  Cadena: entrada 1 (publish) verifica; canario = la versión; resto = Legacy; «cuadra con el motor». Freno suelto.
+  Ejecuciones de n8n (flujo S1): 966178, 966179 y 966180, las tres `success`.
+
+=== 2. EN LOS TRES TURNOS, EL TEXTO QUE SALIÓ NO FUE EL DEL MODELO ===
+Leído de `marketing_ai_actions` (la fila de cada turno), de `marketing_messages` y, para el primer intento, de la
+ejecución de n8n (solo los nodos Strategist, Composer, Critic Comercial, Composer Reintento y Critic Comercial 2).
+
+TURNO 1 · 21:52 UTC · «Hola buenas tardes»
+  Estrategia: intent greeting · fase CLOSING · prospecto READY / READY_TO_BUY · strategy_goal collect_payment
+  Borrador del modelo (165 caracteres), con el tono de la versión (de usted):
+    «Bienvenido a Iron Body Neiva, un centro de acondicionamiento físico serio y con ambiente profesional. ¿Le cuento
+     más sobre cómo avanzar con su inscripción o el pago?»
+  Revisor: pass (0,9). PERO la política del servidor lo descartó: policy_violations = ["policy_greeting_sells"]
+    (modo recepción: ante un saludo no se vende; acciones prohibidas: discovery, plan_recommendation, payment, checkout, registration).
+  LO QUE SALIÓ (58 caracteres), texto fijo del servidor (SalesConversationReplyService.php:382):
+    «Hola, aquí seguimos. Cuéntame qué necesitas y te acompaño.»
+
+TURNO 2 · 21:54 UTC · «¿Qué planes tienen y cuánto cuesta la mensualidad?»
+  Estrategia (n8n): intent pricing_question · strategy_goal resolve_objection · recommendation_goal single_plan · plan 8 (Élite)
+    reason: «Cliente pregunta por planes y precio ya entregado antes, se responde con confirmación y seguimiento»
+  Intento 1 del redactor (307 caracteres):
+    «Te confirmo que el plan Élite, que es el que mejor te encaja, tiene un costo mensual de {{PLAN_PRICE}} e incluye acceso
+     total al gimnasio, sesiones funcionales, rutinas guiadas, seguimiento continuo, guía nutricional, y acceso completo a la
+     app con IRON IA. ¿Quieres que te ayude a concretar tu inscripción?»
+  Revisor 1: FAIL (0,3) · repetition, context_use, progressive_disclosure, next_step
+    «…repite información ya dada sobre el plan Élite y su precio… no reconoce que la persona ya preguntó antes… el mensaje es
+     demasiado largo para la fase y no aporta novedad… incluir algún beneficio fresco… ser más conciso y directo…»
+  Intento 2 del redactor (261 caracteres):
+    «Te confirmo que el plan Élite tiene un costo mensual de {{PLAN_PRICE}} e incluye beneficios exclusivos como IRON IA coach
+     completo por texto, voz, imagen y cámara, además de un historial completo de tu progreso. ¿Quieres que te ayude a concretar
+     tu inscripción?»
+  Revisor 2: FAIL (0,3) · relevance, novelty, progressive_disclosure, next_step
+    «…repite beneficios ya entregados… no responde directamente a la pregunta sobre qué planes hay y cuánto cuesta la
+     mensualidad, sino que solo menciona un plan… incluya una breve mención de los planes disponibles y sus precios…»
+  Resultado del commit: reason critic_failed · fallback_mode SAFE_CURATED_REPLY (UltronCommitService.php:1947)
+  LO QUE SALIÓ (125 caracteres), texto fijo de la intención «pregunta de precio» (SalesConversationReplyService.php:53):
+    «Sí, claro. Cuéntame qué buscas —bajar grasa, ganar masa o coger el hábito— y te digo el plan que mejor te encaja y su precio.»
+
+TURNO 3 · 21:56 UTC · «¿Cuál es el horario de  atención entre semana?»
+  Estrategia (n8n): intent schedule_question · strategy_goal collect_payment · conversation_goal close · plan 8
+    response_goal: «Informar horario de atención entre semana y avanzar cierre con plan Élite»
+  Intento 1 del redactor (303 caracteres):
+    «Te confirmo que el horario de atención entre semana es de lunes a viernes de 5:00 a. m. a 10:00 p. m. Por lo que me
+     comentas, lo que mejor te encaja es el plan Élite: acceso total al gimnasio, sesiones funcionales y seguimiento continuo
+     para avanzar en tu proceso. ¿Quieres que te explique cómo empezar?»
+  Revisor 1: FAIL (0,4) · progressive_disclosure, novelty, phase_alignment
+    «El mensaje es demasiado largo para la fase de cierre y no aporta beneficios frescos… la pregunta final sobre cómo empezar no
+     es adecuada en esta fase, donde se espera facilitar el pago o cerrar la venta. Se recomienda acortar… y avanzar con un paso
+     claro hacia el cierre…»
+  Intento 2 del redactor (224 caracteres):
+    «Te confirmo que el horario de atención entre semana es de lunes a viernes de 5:00 a. m. a 10:00 p. m. Para avanzar con el
+     plan Élite, te paso el link para que puedas realizar el pago desde tu celular y comenzar cuanto antes.»
+  Revisor 2: FAIL (0,3) · hard_fail pressure · pressure_control, tool_consistency, customer_fit, progressive_disclosure
+    «El mensaje ofrece un link de pago cuando flags.can_offer_link es false… la persona preguntó solo por el horario…»
+  Resultado del commit: reason critic_failed · fallback_mode SAFE_CURATED_REPLY
+  LO QUE SALIÓ (300 caracteres), texto fijo construido con los horarios cargados:
+    «Claro. Horario general de atencion: Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m.
+     Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m. Este es el horario de apertura del gimnasio, no
+     el horario de las clases. ¿En qué franja te queda mejor entrenar?»
+
+=== 3. EL HISTORIAL DE ESA CONVERSACIÓN (40 turnos con respuesta desde el 07-10) ===
+  #3716 10-07 21:39 · reason=greeting               · intent=greeting             · fase=DISCOVERY    · temp=WARM   · crítico=pass/0.95 intento 2 · MODELO · sale 238 car. · prompts=—
+  #3720 10-07 21:40 · reason=general_info           · intent=general_info         · fase=DISCOVERY    · temp=WARM   · crítico=pass/0.95 intento 1 · MODELO · sale 458 car. · prompts=—
+  #3722 10-07 21:41 · reason=greeting               · intent=greeting             · fase=DISCOVERY    · temp=WARM   · crítico=pass/0.95 intento 1 · MODELO · sale 158 car. · prompts=—
+  #3724 10-07 21:41 · reason=greeting               · intent=greeting             · fase=DISCOVERY    · temp=WARM   · crítico=pass/0.95 intento 1 · MODELO · sale 238 car. · prompts=—
+  #3726 10-07 21:43 · reason=greeting               · intent=greeting             · fase=DISCOVERY    · temp=WARM   · crítico=pass/0.95 intento 2 · MODELO · sale 169 car. · prompts=—
+  #3728 10-07 21:43 · reason=greeting               · intent=greeting             · fase=DISCOVERY    · temp=WARM   · crítico=pass/0.95 intento 2 · MODELO · sale 185 car. · prompts=—
+  #3730 10-07 21:44 · reason=greeting               · intent=greeting             · fase=DISCOVERY    · temp=WARM   · crítico=pass/0.9 intento 1 · MODELO · sale 135 car. · prompts=—
+  #3732 10-07 21:45 · reason=pricing_question       · intent=pricing_question     · fase=DISCOVERY    · temp=HOT    · crítico=pass/0.95 intento 1 · MODELO · sale 339 car. · prompts=—
+  #3734 10-07 21:46 · reason=goal_fat_loss          · intent=goal_fat_loss        · fase=RECOMMENDATION · temp=WARM   · crítico=pass/0.95 intento 1 · MODELO · sale 436 car. · prompts=—
+  #3736 10-07 21:47 · reason=high_intent_close      · intent=high_intent_close    · fase=CLOSING      · temp=READY  · crítico=pass/0.95 intento 1 · MODELO · sale 381 car. · prompts=—
+  #3738 10-07 21:48 · reason=general_info           · intent=general_info         · fase=CLOSING      · temp=READY  · crítico=pass/0.95 intento 1 · MODELO · sale 292 car. · prompts=—
+  #3740 10-07 21:49 · reason=general_info           · intent=general_info         · fase=CLOSING      · temp=READY  · crítico=pass/0.95 intento 1 · MODELO · sale 247 car. · prompts=—
+  #3742 10-07 21:50 · reason=general_info           · intent=general_info         · fase=CLOSING      · temp=READY  · crítico=pass/0.95 intento 1 · MODELO · sale 475 car. · prompts=—
+  #3744 10-07 21:51 · reason=general_info           · intent=general_info         · fase=CLOSING      · temp=READY  · crítico=pass/0.95 intento 1 · MODELO · sale 694 car. · prompts=—
+  #3747 10-07 21:52 · reason=goodbye                · intent=goodbye              · fase=CLOSING      · temp=COLD   · crítico=pass/0.95 intento 1 · MODELO · sale 369 car. · prompts=—
+  #3749 10-07 21:52 · reason=goodbye                · intent=goodbye              · fase=CLOSING      · temp=COLD   · crítico=pass/0.95 intento 1 · MODELO · sale 212 car. · prompts=—
+  #4233 10-11 16:43 · reason=goodbye                · intent=goodbye              · fase=CLOSING      · temp=COLD   · crítico=pass/0.95 intento 1 · MODELO · sale 38 car. · prompts=—
+  #4598 10-14 16:32 · reason=greeting               · intent=greeting             · fase=CLOSING      · temp=READY  · crítico=pass/0.95 intento 1 · MODELO · sale 89 car. · prompts=—
+  #4600 10-14 16:32 · reason=pricing_question       · intent=pricing_question     · fase=CLOSING      · temp=READY  · crítico=pass/0.95 intento 1 · MODELO · sale 328 car. · prompts=—
+  #4602 10-14 16:33 · reason=general_info           · intent=general_info         · fase=CLOSING      · temp=READY  · crítico=pass/0.95 intento 1 · MODELO · sale 647 car. · prompts=—
+  #5010 10-17 14:15 · reason=critic_failed          · intent=unknown              · fase=CLOSING      · temp=—    · crítico=fail/0.3 intento 2 hard=customer_misfit · RESPALDO (SAFE_CURATED_REPLY) · sale 86 car. · borrador descartado 408 · prompts=—
+  #5012 10-17 14:15 · reason=critic_failed          · intent=unknown              · fase=CLOSING      · temp=—    · crítico=fail/0.2 intento 2 · RESPALDO (SAFE_CURATED_REPLY) · sale 58 car. · borrador descartado 202 · prompts=—
+  #5014 10-17 15:18 · reason=general_info           · intent=general_info         · fase=CLOSING      · temp=READY  · crítico=pass/0.95 intento 2 · MODELO · sale 629 car. · prompts=—
+  #5244 10-20 13:56 · reason=general_info           · intent=general_info         · fase=CLOSING      · temp=READY  · crítico=pass/0.9 intento 1 · MODELO · sale 279 car. · prompts=—
+  #5246 10-20 13:57 · reason=general_info           · intent=general_info         · fase=CLOSING      · temp=READY  · crítico=pass/0.95 intento 1 · MODELO · sale 479 car. · prompts=—
+  #5277 10-20 17:33 · reason=critic_failed          · intent=greeting             · fase=CLOSING      · temp=—    · crítico=fail/0.3 intento 2 hard=customer_misfit · RESPALDO (SAFE_CURATED_REPLY) · sale 91 car. · borrador descartado 385 · prompts=—
+  #6317 10-29 20:16 · reason=pricing_question       · intent=pricing_question     · fase=CLOSING      · temp=READY  · crítico=pass/0.95 intento 2 · MODELO · sale 294 car. · prompts=—
+  #6319 10-29 20:17 · reason=critic_failed          · intent=high_intent_close    · fase=CLOSING      · temp=—    · crítico=fail/0.3 intento 2 hard=customer_misfit · RESPALDO (SAFE_CURATED_REPLY) · sale 236 car. · borrador descartado 351 · prompts=—
+  #6324 10-29 20:21 · reason=critic_failed          · intent=payment_link_request · fase=CLOSING      · temp=—    · crítico=fail/0.4 intento 2 · RESPALDO (SAFE_CURATED_REPLY) · sale 58 car. · borrador descartado 288 · prompts=—
+  #6336 10-29 20:57 · reason=high_intent_close      · intent=high_intent_close    · fase=CLOSING      · temp=READY  · crítico=pass/0.95 intento 1 · MODELO · sale 170 car. · prompts=—
+  #6356 10-29 22:06 · reason=high_intent_close      · intent=high_intent_close    · fase=CLOSING      · temp=READY  · crítico=pass/0.95 intento 1 · MODELO · sale 200 car. · prompts=—
+  #7357 11-10 01:40 · reason=high_intent_close      · intent=high_intent_close    · fase=CLOSING      · temp=READY  · crítico=pass/0.95 intento 1 · MODELO · sale 280 car. · prompts=—
+  #7359 11-10 01:40 · reason=high_intent_close      · intent=high_intent_close    · fase=CLOSING      · temp=READY  · crítico=pass/0.95 intento 1 · MODELO · sale 303 car. · prompts=—
+  #7362 11-10 01:41 · reason=high_intent_close      · intent=high_intent_close    · fase=CLOSING      · temp=READY  · crítico=pass/0.95 intento 2 · MODELO · sale 183 car. · prompts=—
+  #7364 11-10 01:42 · reason=critic_failed          · intent=high_intent_close    · fase=CLOSING      · temp=—    · crítico=fail/0.3 intento 2 · RESPALDO (SAFE_CURATED_REPLY) · sale 236 car. · borrador descartado 193 · prompts=—
+  #7479 11-11 15:39 · reason=high_intent_close      · intent=high_intent_close    · fase=CLOSING      · temp=READY  · crítico=pass/0.95 intento 1 · MODELO · sale 639 car. · prompts=legacy
+  #7548 11-11 23:37 · reason=critic_failed          · intent=greeting             · fase=CLOSING      · temp=—    · crítico=fail/0.3 intento 2 · RESPALDO (SAFE_CURATED_REPLY) · sale 74 car. · borrador descartado 262 · prompts=legacy
+  #7678 11-12 21:52 · reason=greeting               · intent=greeting             · fase=CLOSING      · temp=READY  · crítico=pass/0.9 intento 1 · POLITICA ["policy_greeting_sells"] · sale 58 car. · borrador descartado 165 · prompts=applied
+  #7680 11-12 21:54 · reason=critic_failed          · intent=pricing_question     · fase=CLOSING      · temp=—    · crítico=fail/0.3 intento 2 · RESPALDO (SAFE_CURATED_REPLY) · sale 125 car. · borrador descartado 261 · prompts=applied
+  #7682 11-12 21:56 · reason=critic_failed          · intent=schedule_question    · fase=CLOSING      · temp=—    · crítico=fail/0.3 intento 2 hard=pressure · RESPALDO (SAFE_CURATED_REPLY) · sale 300 car. · borrador descartado 224 · prompts=applied
+  RESUMEN: {"modelo":30,"respaldo":9,"politica":1}
+  La conversación está en fase CLOSING con el prospecto READY desde el 07-10-2026 21:47 UTC, y su memoria guarda los
+  precios y beneficios ya entregados. Con los prompts de siempre, 7 de los 17 turnos anteriores (desde el 17-10) también
+  acabaron en SAFE_CURATED_REPLY. De las 30 respuestas del modelo que sí salieron, 21 pasaban de 200 caracteres.
+
+=== 4. CAUSAS (demostradas con lo de arriba) ===
+  C1. El estado de la conversación canaria. En cierre y «lista para comprar», la estrategia es cobrar o cerrar: el redactor mete
+      la inscripción o el pago en cada respuesta, y el revisor rechaza la repetición (ya se le dio precio y beneficios), el
+      desajuste de fase y la presión. No lo introduce la versión publicada: ya pasaba con los prompts de siempre.
+  C2. Los dos revisores se contradicen en fase de cierre con los enlaces de pago apagados (turno 3): el primero pide «facilitar
+      el pago o cerrar la venta»; el reintento anuncia entonces un enlace que el sistema no puede enviar; el segundo lo tumba
+      por presión. Prompts base (`critic.txt`, `critic_retry.txt`), anteriores a esta prueba.
+  C3. El tope de 200. El compilador le pide al redactor «como máximo unos 200 caracteres» (`T_MAX_COMPOSER`) y al revisor que
+      falle lo que pase de ~200 por progressive_disclosure (`T_MAX_CRITIC`). El redactor no lo cumple: 4 de sus 5 borradores de
+      hoy lo superaron (307, 261, 303, 224; solo el saludo, 165, cupo), y los dos revisores citaron la longitud. No hay ninguna
+      medida determinista: ni margen para el redactor ni recorte.
+  C4. Los textos de respaldo son fijos del servidor: no llevan el tono ni el tope de la versión publicada (300 caracteres en el
+      de horarios), y el de «pregunta de precio» no da el precio: pregunta el objetivo.
+
+=== 5. POR COMPONENTE ===
+  Compilador del Studio ...... hizo lo especificado: tono y tope en los cuatro prompts, huella 702890f7. Límite de diseño:
+                               gobierna los prompts, no los textos de respaldo; y no ayuda al modelo a cumplir el tope.
+  Prompts efectivos .......... aplicados en los tres turnos (traza).
+  n8n (copia S1) ............. funcionó: estrategia → redactor → revisor → reintento → revisor → commit. Sin errores.
+  Revisor .................... actuó según su prompt y es quien disparó los respaldos. Defecto: C2.
+  Herramientas comerciales ... no se pidió ninguna para el texto; el redactor anunció un enlace de pago con los enlaces apagados.
+  Servidor (commit) .......... sustituyó los tres textos, como está diseñado. Defecto: C4.
+
+=== 6. CONCLUSIÓN ===
+  DEMOSTRADO: publicación a cuatro ojos, firma y cadena, oferta de los prompts de la versión, aplicación en n8n y traza por turno.
+  NO DEMOSTRADO: que el texto que recibe la persona refleje la versión (tono y longitud). En los tres turnos salió un texto fijo.
+  La aceptación funcional NO se da por superada.
