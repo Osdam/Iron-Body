@@ -385,8 +385,8 @@ final class StudioStrategySimulations
         }
         $usos = self::mergeUses([$condiciones['audience'], $condiciones['exclusions'], $condiciones['success'], ...array_values($condiciones['guards'])]);
         $base = CoreProjection::selectionFor($usos, true);
-        // `human_requested` siempre: N6 lo mira aunque la condición no lo use.
-        $seleccion = new FactSelection($base->facts, array_values(array_unique([...$base->events, 'human_requested'])), $base->contacts, $base->policy, $base->global, $base->transitions);
+        // `human_requested` y `complaint_created` (Q1-3) siempre: N6 los mira aunque la condición no los use.
+        $seleccion = new FactSelection($base->facts, array_values(array_unique([...$base->events, 'complaint_created', 'human_requested'])), $base->contacts, $base->policy, $base->global, $base->transitions);
         $foto = $this->snapshots->build($muestra, $now, $seleccion);
         $personas = [];
         foreach ($muestra as $clave) {

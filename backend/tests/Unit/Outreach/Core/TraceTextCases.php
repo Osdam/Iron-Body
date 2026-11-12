@@ -50,7 +50,7 @@ final class TraceTextCases
             'schedule' => null, 'touches' => 0, 'maxTouches' => 6, 'dailyCap' => 50, 'usedToday' => 0, 'enrollmentWindowEndsAt' => '2026-11-30T05:00:00Z',
             'cooldownUntil' => null, 'stepGuard' => 'true',
         ],
-        'context' => ['success' => 'false', 'audience' => 'true', 'exclusions' => 'false', 'humanRequestedRecently' => false, 'otherPurposeToday' => false, 'lowerPriority' => false],
+        'context' => ['success' => 'false', 'audience' => 'true', 'exclusions' => 'false', 'humanRequestedRecently' => false, 'complaintRecently' => false, 'otherPurposeToday' => false, 'lowerPriority' => false],
         'conversational' => ['callbackAt' => null],
     ];
 
@@ -79,6 +79,7 @@ final class TraceTextCases
             'N5 aplaza: fuera del horario propio (L9-15)' => ['now' => '2026-11-10T13:30:00Z', 'ownHours' => ['weekdays' => [540, 1080], 'saturday' => [540, 780]]],
             'N6 niega y deriva: pidió una persona y tiene cartera vencida' => ['context' => ['humanRequestedRecently' => true], 'receivable' => ['overdueDaysMax' => 60]],
             'N6 cierra: objetivo cumplido' => ['context' => ['success' => 'true']],
+            'N6 sale: se quejó hace poco (Q1-3)' => ['context' => ['complaintRecently' => true]],
             'N7 aplaza: pidió que lo contacten el jueves a las 15:00' => ['conversational' => ['callbackAt' => '2026-11-12T20:00:00Z']],
         ] as $nombre => $parche) {
             $decision = PolicyLadder::decide(array_replace_recursive(self::BASE, $parche));

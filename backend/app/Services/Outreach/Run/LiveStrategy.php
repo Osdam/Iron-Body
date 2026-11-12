@@ -219,7 +219,8 @@ final class LiveStrategy
         }
         $hechos = array_values(array_unique($hechos));
         sort($hechos, SORT_STRING);
-        $eventos = array_values(array_unique([...$eventos, 'human_requested']));
+        // N6 los mira aunque ninguna condición los use: `human_requested` (L9-41) y `complaint_created` (Q1-3, DF-L14).
+        $eventos = array_values(array_unique([...$eventos, 'complaint_created', 'human_requested']));
         sort($eventos, SORT_STRING);
 
         return ['facts' => $hechos, 'events' => $eventos, 'contacts' => $contactos, 'transitions' => $transiciones];

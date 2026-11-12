@@ -48,6 +48,16 @@ final class StudioStrategySimulator
     /** «`human_requested` reciente» (N6): los días que mira la simulación. */
     public const HUMAN_REQUESTED_DAYS = 30;
 
+    /**
+     * «Se quejó hace poco» (N6 `complaint_recent`, Q1-3): los días y las
+     * finalidades que mira la simulación. Los mismos valores por defecto que
+     * la ejecución (`OutreachConfig::complaintDays()` y `complaintPurposes()`):
+     * la simulación es pura y no lee la configuración.
+     */
+    public const COMPLAINT_DAYS = 30;
+
+    public const COMPLAINT_PURPOSES = ['collections', 'commercial'];
+
     /** El umbral del bloqueo comercial por cartera vencida del servidor (P9-7, L9-20: 15 días). */
     public const COLLECTIONS_BLOCK_DAYS = 15;
 
@@ -152,6 +162,7 @@ final class StudioStrategySimulator
         }
         $contexto = EnrollmentGate::context($puerta) + [
             'humanRequestedRecently' => self::humanRequestedRecently($foto, $now),
+            'complaintRecently' => self::complaintRecently($foto, $now, (string) $content['purpose']),
             'otherPurposeToday' => false,
             'lowerPriority' => false,
         ];
@@ -288,6 +299,28 @@ final class StudioStrategySimulator
         }
         foreach ($foto->events as $e) {
             if ($e['key'] === 'human_requested' && RelativeTime::withinLast(RelativeTime::parseInstant($e['at']), $now, self::HUMAN_REQUESTED_DAYS, 'days')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * ¿Se quejó hace poco (Q1-3)? Solo para las finalidades de
+     * {@see COMPLAINT_PURPOSES}; con la fuente de eventos sin datos, no se sabe
+     * (null: la escalera niega en N6, también en la simulación).
+     */
+    public static function complaintRecently(FactSnapshot $foto, DateTimeImmutable $now, string $purpose): ?bool
+    {
+        if (! in_array($purpose, self::COMPLAINT_PURPOSES, true)) {
+            return false;
+        }
+        if ($foto->events === null) {
+            return null;
+        }
+        foreach ($foto->events as $e) {
+            if ($e['key'] === 'complaint_created' && RelativeTime::withinLast(RelativeTime::parseInstant($e['at']), $now, self::COMPLAINT_DAYS, 'days')) {
                 return true;
             }
         }

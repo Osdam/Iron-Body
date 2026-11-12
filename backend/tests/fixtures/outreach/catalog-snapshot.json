@@ -41,9 +41,9 @@
     }
   ],
   "syntheticData": "Ningún dato real: ids, uuids, claves y personas inventados; las personas se nombran por subject_key sintético (m:<id>, l:<id>); sin teléfonos, nombres, documentos ni importes.",
-  "catalogVersion": "outreach-catalog/2026-11-11.1",
-  "catalogHash": "079930a2a391f318ee7812a9b6e6fcce893458987ecbf5a14ec37d0232a86e11",
-  "catalogCanonicalBytes": 28358,
+  "catalogVersion": "outreach-catalog/2026-11-11.2",
+  "catalogHash": "49b7d57e1097d7b930bc58b4816830b139e9042dbb504159f627f4f7bbca39c7",
+  "catalogCanonicalBytes": 28357,
   "hashRule": "catalogHash = sha256(StudioContentHasher::canonicalJson(catalog)). OutreachCatalog::export() tiene que devolver exactamente `catalog` (mismas claves, mismos valores, mismas listas en el mismo orden). Cambiar cualquier dato de `catalog` obliga a subir `version` (D9-3).",
   "exportRules": [
     "Toda lista de claves va ordenada por bytes (eventos, hechos, dominios cerrados, operadores, finalidades, resultados por code), salvo `buckets` (en su orden) y `units` (days, hours, weeks).",
@@ -53,7 +53,7 @@
   ],
   "decisions": {
     "DF-K3": "valuation.outdated sin valoración previa: valuation.days_since_last desconocido → no inscribe (lado seguro).",
-    "DF-K4": "Disparadores: los 27 eventos del vocabulario son legibles en condiciones; human_requested (contrato) y complaint_created (este fixture) no son disparadores. Finalidad: service solo appointment_* e invoice_*; collections solo receivable.overdue; el resto, commercial. Disponibilidad (I-5 de la auditoría de cierre B, 11-11-2026): los que hoy nadie registra en commercial_events (complaint_created, customer_satisfied, objection_raised, offer_presented, offer_rejected, referral_opportunity) van con available = false y triggerable = false, como los de integración (un disparador siempre está disponible): el constructor no los ofrece y una estrategia no los acepta como disparador (trigger_not_allowed); conservan su finalidad posible, siguen legibles en condiciones y no cuentan en la compatibilidad (DF-K6).",
+    "DF-K4": "Disparadores: los 27 eventos del vocabulario son legibles en condiciones; human_requested (contrato) y complaint_created (este fixture) no son disparadores. Finalidad: service solo appointment_* e invoice_*; collections solo receivable.overdue; el resto, commercial. Disponibilidad (I-5 de la auditoría de cierre B, 11-11-2026): los que hoy nadie registra en commercial_events (customer_satisfied, objection_raised, offer_presented, offer_rejected, referral_opportunity; complaint_created tiene emisor desde Q1-2, 11-11-2026, y sigue sin ser disparador) van con available = false y triggerable = false, como los de integración (un disparador siempre está disponible): el constructor no los ofrece y una estrategia no los acepta como disparador (trigger_not_allowed); conservan su finalidad posible, siguen legibles en condiciones y no cuentan en la compatibilidad (DF-K6).",
     "DF-K5": "Claves de ciclo: ce:{commercial_event_id} · exp:{membership_end_date Y-m-d} · inact:{semana ISO del día de Bogotá, «o-\\WW»} · rcv:{receivable_id}:{generación} · tx:{payment_transaction_id} · fu:{marketing_followup_id} · cls:{class_id}:{session_date Y-m-d} (L9-29) · val:{id de la última valoración} · job:{outreach_job_uuid}. Sin el dato (p. ej. membership_end_date nulo) no hay clave y no se inscribe.",
     "DF-K6": "Compatibilidad: una versión es compatible si cada hecho que usa existe en el catálogo vigente y cada evento existe con la misma keyVersion; si no, catalog_incompatible (nivel N3 de la escalera, ratificada por el lead: L9-21) con la lista de lo que falta («fact:<clave>», «event:<clave>» o «event:<clave>@<keyVersion>»), ordenada por bytes. La cadena de versión del catálogo no decide sola (los cambios son aditivos)."
   },
@@ -258,7 +258,7 @@
       },
       {
         "attrs": [],
-        "available": false,
+        "available": true,
         "cadenceMinutes": null,
         "class": "crm_fact",
         "conditionUsable": true,
@@ -2215,7 +2215,7 @@
       "hours",
       "weeks"
     ],
-    "version": "outreach-catalog/2026-11-11.1"
+    "version": "outreach-catalog/2026-11-11.2"
   },
   "annotations": {
     "events": [
@@ -2242,7 +2242,7 @@
       },
       {
         "key": "complaint_created",
-        "note": "No es disparador (DF-K4): una queja no abre un contacto automático; sí se puede leer en condiciones. Sin emisor hoy (I-5): ni el agente de ventas ni nadie lo registra (una queja en WhatsApp deja staff_review_pending en la conversación, que el H9 lee como conversation.human_in_control), así que en una condición vale siempre «no ocurrió».",
+        "note": "No es disparador (DF-K4): una queja no abre un contacto automático; sí se puede leer en condiciones. Emisor (Q1-2, 11-11-2026): MarketingAiActionCommercialObserver, cuando la fila de la IA marca la queja (reason o metadata.intent = complaint); una al día de Bogotá por conversación, sin texto ni teléfono. Además de leerse en condiciones, detiene: N6 complaint_recent (policy-ladder-cases.json, DF-L14).",
         "source": "commercial_events (cursor monótono outreach_cursors; COMMERCIAL_EVENTS_ENABLED apagada = fuente sin datos)"
       },
       {
@@ -2664,7 +2664,7 @@
       "basis": "decision-fixture",
       "decision": "DF-K6",
       "used": {
-        "catalogVersion": "outreach-catalog/2026-11-11.1",
+        "catalogVersion": "outreach-catalog/2026-11-11.2",
         "facts": [
           "membership.days_to_expiry",
           "contact.count"
@@ -2740,7 +2740,7 @@
       "basis": "decision-fixture",
       "decision": "DF-K6",
       "used": {
-        "catalogVersion": "outreach-catalog/2026-11-11.1",
+        "catalogVersion": "outreach-catalog/2026-11-11.2",
         "facts": [],
         "events": [
           {
@@ -2764,7 +2764,7 @@
       "basis": "decision-fixture",
       "decision": "DF-K6",
       "used": {
-        "catalogVersion": "outreach-catalog/2026-11-11.1",
+        "catalogVersion": "outreach-catalog/2026-11-11.2",
         "facts": [
           "subject.vip"
         ],
@@ -2813,7 +2813,7 @@
       "basis": "decision-fixture",
       "decision": "DF-K6",
       "used": {
-        "catalogVersion": "outreach-catalog/2026-11-11.1",
+        "catalogVersion": "outreach-catalog/2026-11-11.2",
         "facts": [
           "consent.commercial.whatsapp"
         ],

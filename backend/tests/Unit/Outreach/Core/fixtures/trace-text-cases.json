@@ -4,8 +4,8 @@
     "contract": "backend/docs/ultron-studio/ULTRON_STUDIO_H9_CONTRACT.md (§8 «Simulación» y «Accesibilidad»; L9-25)",
     "generatedBy": "B9-core: DecisionTraceText::export() y DecisionTraceText::explain() sobre decisiones reales de PolicyLadder y ChannelSelector (backend/tests/Unit/Outreach/Core/tools/export-trace-text-cases.php)",
     "readme": "Lo que FE9 espeja. dictionary: textos por código, niveles, veredictos, plantillas y reservas de explain(). text: text(code) en los casos raros (voice_policy:<motivo> usa el texto de voice_policy; un código desconocido es null). explain: explain(ladder, channel) → frases, en ese orden; solo se leen verdict, level, reasons, retryAt, warnings y effect de la escalera, y perChannel y annotations del selector. retryAt se escribe en Bogotá (dd-mm-aaaa y HH:mm). Entradas sintéticas: sin datos de personas.",
-    "catalogVersion": "outreach-catalog/2026-11-11.1",
-    "dictionaryHash": "e83bce27f06e75269a59c2b68ddda726737b1344d6ec8e64782c07adbd019d37",
+    "catalogVersion": "outreach-catalog/2026-11-11.2",
+    "dictionaryHash": "178ff1f0fc914274b84a75f55c253a8075cab7e9a060a6a974dc92a0647d66b1",
     "dictionary": {
         "format": "outreach-trace-text/1",
         "timeZone": "America/Bogota",
@@ -67,6 +67,7 @@
             "collections_channel_week_rule": "Cobranza: esta semana ya se le contactó por otro medio.",
             "collections_overdue_blocks_commercial": "Tiene cartera vencida (o no se pudo comprobar): no se le hacen ofertas comerciales.",
             "commercial_opt_out": "La persona pidió no recibir ofertas comerciales.",
+            "complaint_recent": "La persona se quejó hace poco: se para el contacto automático.",
             "concurrency_exceeded": "Ya hay otra llamada en curso.",
             "consent_denied": "La persona negó la autorización para este medio.",
             "contact_not_authorized": "El contacto de voz no está autorizado.",
@@ -92,6 +93,7 @@
             "enrollment_final": "La inscripción ya terminó.",
             "enrollment_window_over": "El contacto no cabe en la ventana de la inscripción.",
             "excluded": "Cumple una exclusión.",
+            "exit_complaint": "La inscripción sale por la queja reciente.",
             "exit_converted": "La inscripción cierra como objetivo cumplido.",
             "failed": "Falló el envío.",
             "frequency_exceeded": "La persona ya recibió el máximo de llamadas de la semana.",
@@ -898,6 +900,58 @@
                 "No se contacta (N6 · Contexto verificado del contacto).",
                 "El objetivo ya está cumplido.",
                 "La inscripción cierra como objetivo cumplido."
+            ]
+        },
+        {
+            "name": "N6 sale: se quejó hace poco (Q1-3)",
+            "synthetic": false,
+            "ladder": {
+                "verdict": "deny",
+                "allowed": false,
+                "level": "N6",
+                "reasons": [
+                    "complaint_recent"
+                ],
+                "retryAt": null,
+                "waitsForRelease": false,
+                "effect": "exit_complaint",
+                "levels": [
+                    {
+                        "level": "N1",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N2",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N3",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N4",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N5",
+                        "status": "pass"
+                    },
+                    {
+                        "level": "N6",
+                        "status": "deny"
+                    },
+                    {
+                        "level": "N7",
+                        "status": "not_evaluated"
+                    }
+                ],
+                "warnings": []
+            },
+            "channel": null,
+            "expected": [
+                "No se contacta (N6 · Contexto verificado del contacto).",
+                "La persona se quejó hace poco: se para el contacto automático.",
+                "La inscripción sale por la queja reciente."
             ]
         },
         {

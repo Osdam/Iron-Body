@@ -290,6 +290,7 @@ final class OutreachDispatcher
             'gate' => EnrollmentGate::context($puerta),
             'stepGuard' => $guardaResultado?->label(),
             'humanRequestedRecently' => LadderInputBuilder::humanRequestedRecently($hechos->events, $ahora),
+            'complaintRecently' => LadderInputBuilder::complaintRecently($hechos->events, $ahora, $live->purpose),
             'otherPurposeToday' => $this->otherPurposeToday($e, $trabajo, $ahora),
             'lowerPriority' => false,
             'touches' => (int) $e->touches,
@@ -381,7 +382,8 @@ final class OutreachDispatcher
     /**
      * La escalera o el selector no permiten salir AHORA: el trabajo se cancela
      * con su motivo (una decisión `cancel`) y la inscripción sigue lo que el
-     * motivo manda (aplazar, esperar, convertir, derivar, salir o `blocked`).
+     * motivo manda (aplazar, esperar, convertir, derivar, salir —también por una
+     * queja reciente— o `blocked`).
      *
      * @param  array<string, array<string, mixed>>  $porCanal
      * @param  array<string, mixed>  $primero
@@ -424,6 +426,12 @@ final class OutreachDispatcher
             $this->store->closeEnrollment((int) $e->id, 'handed_off', 'human_requested_recently', $ahora);
 
             return 'handed_off';
+        }
+        if ($efecto === 'exit_complaint') {
+            // DF-L14: se quejó entre planificar y despachar. El trabajo ya está cancelado; la inscripción sale.
+            $this->store->closeEnrollment((int) $e->id, 'exited', 'complaint_recent', $ahora);
+
+            return 'canceled';
         }
         if (in_array('global_suppression', $motivos, true)) {
             // La persona está suprimida (opt-out o número equivocado): la inscripción sale, no espera.

@@ -68,6 +68,35 @@ class StrategyContentAndChainParityTest extends TestCase
         $this->assertSame($caso['expected']['sameContentHash'], $a['contentHash'] === $b['contentHash']);
     }
 
+    /**
+     * Q1-2 (revisión de security de la ola 5): `complaint_created` tiene emisor y está DISPONIBLE, pero una queja nunca
+     * dispara un contacto. Lo rechaza el lector del SERVIDOR, no solo el constructor del CRM, sea cual sea la
+     * finalidad. Los casos del fixture cubren un evento sin emisor y uno que solo detiene (`human_requested`); este,
+     * la clase nueva: disponible y no disparador.
+     */
+    public function test_una_queja_nunca_es_disparador_aunque_el_evento_tenga_emisor(): void
+    {
+        $f = self::fixture('strategy-content-cases');
+        $evento = OutreachCatalog::event('complaint_created');
+        $this->assertSame([true, false], [$evento['available'] ?? null, $evento['triggerable'] ?? null]);
+
+        $vistas = [];
+        foreach ($f['valid'] as $caso) {
+            $entrada = self::input($caso);
+            if (! is_array($entrada) || isset($vistas[$entrada['purpose']])) {
+                continue;
+            }
+            $vistas[$entrada['purpose']] = true;
+            // El caso, tal cual, es válido; con el disparador de la queja y nada más cambiado, deja de serlo.
+            $this->assertSame([], StrategyContent::fromArray($entrada, $f['dynamicDomains'])['errors'], $caso['name']);
+            $entrada['trigger'] = ['event' => 'complaint_created'];
+            $r = StrategyContent::fromArray($entrada, $f['dynamicDomains']);
+            $this->assertContains(['key' => 'content.trigger.event', 'code' => 'trigger_not_allowed'], $r['errors'], $caso['name']);
+            $this->assertNull($r['canonical'], $caso['name']);
+        }
+        $this->assertEqualsCanonicalizing(['collections', 'commercial'], array_keys($vistas), 'las finalidades con casos válidos en el fixture');
+    }
+
     public function test_el_fixture_del_contenido_es_el_del_codigo(): void
     {
         $f = self::fixture('strategy-content-cases');

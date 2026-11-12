@@ -11,6 +11,7 @@ use App\Services\Outreach\Core\PolicyLadder;
 use App\Services\Outreach\Core\RelativeTime;
 use App\Services\Outreach\Facts\CatalogDomains;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 use Throwable;
 
 /**
@@ -25,7 +26,11 @@ use Throwable;
  * SOLO LECTURA: nunca escribe una fila ni toca un trabajo (la pasada
  * `replay` de `outreach_runs` la deja la orden, no este servicio). Si la foto
  * se guardó recortada (`factsTruncated`) o la traza no trae las entradas, lo
- * dice (`not_reproducible`) en vez de fingir.
+ * dice (`not_reproducible`) en vez de fingir; también si la escalera de ahora
+ * rechaza por su forma la entrada guardada: `ladder_input_outdated` si le
+ * falta una clave que ahora se exige (una decisión anterior a una entrada
+ * nueva, como `context.complaintRecently` de Q1-3) y `ladder_input_invalid`
+ * en cualquier otro caso (un tipo que no es: no se disfraza de antigua).
  */
 final class OutreachReplay
 {
@@ -106,7 +111,14 @@ final class OutreachReplay
                 if (! is_array($p['input'] ?? null)) {
                     return ['reason' => 'ladder_input_missing'] + $salida;
                 }
-                $otra = PolicyLadder::decide($p['input']);
+                try {
+                    $otra = PolicyLadder::decide($p['input']);
+                } catch (InvalidArgumentException) {
+                    // Si le falta una clave que la escalera de ahora exige, la entrada se guardó con la forma de una
+                    // escalera anterior: no se puede reevaluar igual. Cualquier otro rechazo (un tipo que no es) es una
+                    // entrada mal formada, y no se disfraza de antigua.
+                    return ['reason' => self::lacksLadderKey($p['input'], PolicyLadder::SPEC) ? 'ladder_input_outdated' : 'ladder_input_invalid'] + $salida;
+                }
                 $igualPorCanal[(string) $canal] = $otra === ($p['output'] ?? null);
                 $salidas[(string) $canal] = $otra;
                 $partes['policy'][$canal] = ['input' => $p['input'], 'output' => $otra];
@@ -135,6 +147,27 @@ final class OutreachReplay
             'replayedHash' => $huella,
             'ladder' => $igualPorCanal,
         ];
+    }
+
+    /**
+     * ¿Le falta a la entrada guardada alguna clave que la escalera de ahora exige ({@see PolicyLadder::SPEC})? Es lo
+     * que distingue una decisión anterior a una entrada nueva de una entrada mal formada.
+     *
+     * @param  array<array-key,mixed>  $input
+     * @param  array<string,mixed>  $spec
+     */
+    private static function lacksLadderKey(array $input, array $spec): bool
+    {
+        foreach ($spec as $clave => $tipo) {
+            if (! array_key_exists($clave, $input)) {
+                return true;
+            }
+            if (is_array($tipo) && is_array($input[$clave]) && self::lacksLadderKey($input[$clave], $tipo)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** Cuántas decisiones hay de una inscripción (para la orden, sin leerlas todas). */

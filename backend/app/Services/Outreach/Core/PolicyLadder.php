@@ -45,9 +45,11 @@ use InvalidArgumentException;
  *  - N5 (DF-L7, DF-L11): la estrategia y el horario propio
  *    (`calendar_outside_own_hours`, L9-15; mal configurado no deja hueco:
  *    `deny`); en sombra el alcance canario es aviso.
- *  - N6 (DF-L8, DF-L12): el contexto, con su efecto (`exit_converted`,
- *    `handoff`, `cancel_context_changed`), y el bloqueo comercial por cartera
- *    vencida (P9-7, L9-20).
+ *  - N6 (DF-L8, DF-L12, DF-L14): el contexto, con su efecto (`exit_converted`,
+ *    `handoff`, `exit_complaint`, `cancel_context_changed`), la queja reciente
+ *    (`complaint_recent`, enmienda aditiva de D9-7 del 11-11-2026: ninguna
+ *    estrategia la quita, niega también en sombra y, sin datos, niega) y el
+ *    bloqueo comercial por cartera vencida (P9-7, L9-20).
  *  - N7 (DF-L9): «llámame luego»: aplaza al primer hueco desde esa hora; si
  *    cae en o después del fin de la ventana, `deny` (`enrollment_window_over`).
  */
@@ -78,7 +80,7 @@ final class PolicyLadder
             'strategy_not_published', 'strategy_paused', 'chain_unreadable', 'canary_scope_mismatch', 'calendar_outside_own_hours',
             'outside_strategy_schedule', 'max_touches_reached', 'strategy_daily_cap', 'enrollment_window_over', 'cooldown_active', 'step_guard_false',
         ],
-        'N6' => ['success_reached', 'context_changed', 'human_requested_recently', 'collections_overdue_blocks_commercial', 'purpose_conflict_today', 'lower_priority'],
+        'N6' => ['success_reached', 'context_changed', 'human_requested_recently', 'complaint_recent', 'collections_overdue_blocks_commercial', 'purpose_conflict_today', 'lower_priority'],
         'N7' => ['callback_scheduled', 'enrollment_window_over'],
     ];
 
@@ -99,7 +101,7 @@ final class PolicyLadder
     /** Anotaciones del selector (N7), no motivos que nieguen. */
     public const N7_ANNOTATIONS = ['preference_applied', 'instruction_ignored_by_policy'];
 
-    public const EFFECTS = ['success_reached' => 'exit_converted', 'context_changed' => 'cancel_context_changed', 'human_requested_recently' => 'handoff'];
+    public const EFFECTS = ['success_reached' => 'exit_converted', 'context_changed' => 'cancel_context_changed', 'human_requested_recently' => 'handoff', 'complaint_recent' => 'exit_complaint'];
 
     public const VOICE_POLICY_PATTERN = '/^[a-z][a-z_]{0,47}$/D';
 
@@ -146,7 +148,7 @@ final class PolicyLadder
             'usedToday' => 'int', 'enrollmentWindowEndsAt' => '?instant', 'cooldownUntil' => '?instant', 'stepGuard' => '?string',
         ],
         'context' => [
-            'success' => 'string', 'audience' => 'string', 'exclusions' => '?string', 'humanRequestedRecently' => '?bool',
+            'success' => 'string', 'audience' => 'string', 'exclusions' => '?string', 'humanRequestedRecently' => '?bool', 'complaintRecently' => '?bool',
             'otherPurposeToday' => 'bool', 'lowerPriority' => 'bool',
         ],
         'conversational' => ['callbackAt' => '?instant'],
@@ -478,6 +480,11 @@ final class PolicyLadder
         }
         if ($x['humanRequestedRecently'] !== false) {
             $motivos[] = 'human_requested_recently';
+        }
+        // DF-L14: la queja reciente. Las finalidades a las que aplica y la ventana las decide quien arma la
+        // entrada (`LadderInputBuilder::complaintRecently()`: false si no aplica); null = sin datos, niega.
+        if ($x['complaintRecently'] !== false) {
+            $motivos[] = 'complaint_recent';
         }
         if ($in['purpose'] === OutreachCatalog::PURPOSE_COMMERCIAL && self::overdueBlocks($in['receivable'], $in['collectionsBlock'])) {
             $motivos[] = 'collections_overdue_blocks_commercial';

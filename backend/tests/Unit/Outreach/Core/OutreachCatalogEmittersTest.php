@@ -22,6 +22,9 @@ use PHPUnit\Framework\TestCase;
  *     comentarios. Dar un emisor a uno de
  *     {@see OutreachCatalog::EVENTS_WITHOUT_EMITTER} exige abrirlo allí y subir
  *     la versión del catálogo; quitarle el último a uno disponible, cerrarlo.
+ *
+ * Q1-2 (11-11-2026): `MarketingAiActionCommercialObserver` entra en la lista
+ * y le da emisor a `complaint_created` (catálogo `outreach-catalog/2026-11-11.2`).
  */
 class OutreachCatalogEmittersTest extends TestCase
 {
@@ -30,6 +33,7 @@ class OutreachCatalogEmittersTest extends TestCase
         'app/Console/Commands/ScanCommercialFacts.php',
         'app/Observers/Commercial/AttendanceCommercialObserver.php',
         'app/Observers/Commercial/ElectronicInvoiceCommercialObserver.php',
+        'app/Observers/Commercial/MarketingAiActionCommercialObserver.php',
         'app/Observers/Commercial/MarketingAppointmentCommercialObserver.php',
         'app/Observers/Commercial/MarketingConversationCommercialObserver.php',
         'app/Observers/Commercial/MarketingLeadCommercialObserver.php',
@@ -90,7 +94,8 @@ class OutreachCatalogEmittersTest extends TestCase
             }
         }
         ksort($emitidos);
-        $this->assertSame(21, count($emitidos), 'los 21 eventos con emisor de la auditoría B (I-5)');
+        $this->assertSame(22, count($emitidos), 'los 21 eventos con emisor de la auditoría B (I-5) y complaint_created (Q1-2)');
+        $this->assertArrayHasKey('complaint_created', $emitidos, 'Q1-2: lo emite MarketingAiActionCommercialObserver');
 
         foreach (OutreachCatalog::CRM_EVENTS as $clave => $finalidades) {
             $this->assertSame(isset($emitidos[$clave]), OutreachCatalog::event($clave)['available'], "{$clave}: available tiene que decir si alguien lo emite");

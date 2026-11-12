@@ -151,10 +151,12 @@ final class DecisionTraceText
         'success_reached' => 'El objetivo ya está cumplido.',
         'context_changed' => 'La persona ya no cumple la audiencia o aparece una exclusión.',
         'human_requested_recently' => 'La persona pidió hablar con alguien hace poco: se para y se deriva.',
+        'complaint_recent' => 'La persona se quejó hace poco: se para el contacto automático.',
         'purpose_conflict_today' => 'Hoy ya hay un contacto de otra finalidad.',
         'lower_priority' => 'Otra estrategia tiene prioridad hoy.',
         'exit_converted' => 'La inscripción cierra como objetivo cumplido.',
         'handoff' => 'Se deriva a una persona del equipo.',
+        'exit_complaint' => 'La inscripción sale por la queja reciente.',
         'cancel_context_changed' => 'Se cancela el trabajo: el contexto cambió.',
         // N7 y anotaciones del selector
         'callback_scheduled' => 'La persona pidió que se le contacte en otro momento.',

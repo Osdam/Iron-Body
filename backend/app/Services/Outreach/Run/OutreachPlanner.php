@@ -234,16 +234,26 @@ final class OutreachPlanner
      * Evalúa candidatos de UNA estrategia (de un barrido o de la ingesta) e
      * inscribe a quien califica. Devuelve los recuentos de la pasada.
      *
+     * Antes de evaluar, cada candidato cae en UN recuento: `candidates` =
+     * `repeated_subject` + `no_cycle_key` + `unknown_subject` +
+     * `already_enrolled` + `open_enrollment` + `cooldown` + `evaluated` (salvo
+     * la inserción que pierde la carrera contra otra pasada, que cuenta en
+     * `evaluated` y en `already_enrolled`). `repeated_subject` es la segunda o
+     * siguiente aparición de la misma persona en la misma página o lote: solo
+     * se evalúa la primera (informe del tester I-6, O-1).
+     *
      * @param  list<Candidate>  $candidates
      * @return array<string, int>
      */
     public function evaluateCandidates(LiveStrategy $live, array $candidates, DateTimeImmutable $now, ?int $runId, string $mode): array
     {
         $r = ['candidates' => count($candidates), 'evaluated' => 0, 'enrolled' => 0, 'not_in_audience' => 0, 'insufficient_facts' => 0, 'excluded' => 0,
-            'success_reached' => 0, 'already_enrolled' => 0, 'open_enrollment' => 0, 'cooldown' => 0, 'daily_enrollment_cap' => 0, 'no_cycle_key' => 0, 'unknown_subject' => 0];
+            'success_reached' => 0, 'already_enrolled' => 0, 'open_enrollment' => 0, 'cooldown' => 0, 'daily_enrollment_cap' => 0, 'no_cycle_key' => 0, 'unknown_subject' => 0, 'repeated_subject' => 0];
         $ciclos = [];
         foreach ($candidates as $c) {
             if (isset($ciclos[$c->subjectKey])) {
+                $r['repeated_subject']++;
+
                 continue;
             }
             $ciclo = OutreachCatalog::cycleKey($c->event, $c->cycleParts, $now);
@@ -435,7 +445,7 @@ final class OutreachPlanner
     /**
      * Etapas 4 y 5 para UNA inscripción ganadora. Devuelve qué pasó:
      * `planned`, `deferred`, `waiting`, `denied`, `converted`, `handed_off`,
-     * `exited`, `collisions`.
+     * `exited` (también por una queja reciente, `complaint_recent`), `collisions`.
      *
      * @param  array{global: bool, channels: list<string>, strategies: list<string>}  $abiertos
      * @param  array<string, mixed>  $arbitraje
@@ -459,6 +469,7 @@ final class OutreachPlanner
             'gate' => EnrollmentGate::context($puerta),
             'stepGuard' => $guardaResultado?->label(),
             'humanRequestedRecently' => LadderInputBuilder::humanRequestedRecently($hechos->events, $ahora),
+            'complaintRecently' => LadderInputBuilder::complaintRecently($hechos->events, $ahora, $live->purpose),
             'otherPurposeToday' => $finalidadDeHoy !== null && $finalidadDeHoy !== $live->purpose,
             'lowerPriority' => false,
             'touches' => (int) $e->touches,
@@ -517,6 +528,13 @@ final class OutreachPlanner
             $this->store->closeEnrollment((int) $e->id, 'handed_off', 'human_requested_recently', $ahora);
 
             return 'handed_off';
+        }
+        if ($efecto === 'exit_complaint') {
+            // DF-L14: se quejó hace poco. La inscripción sale (no espera a que pase la ventana: la secuencia volvería desfasada).
+            $this->decide($e, $live, $hechos, $ahora, 'exit', $primero['level'], $primero['reasons'], null, $condiciones, $partes);
+            $this->store->closeEnrollment((int) $e->id, 'exited', 'complaint_recent', $ahora);
+
+            return 'exited';
         }
         $this->decide($e, $live, $hechos, $ahora, 'deny', $primero['level'], $primero['reasons'], null, $condiciones, $partes);
         if (in_array('global_suppression', $primero['reasons'], true)) {

@@ -41,12 +41,15 @@ use DateTimeInterface;
 final class OutreachCatalog
 {
     /**
-     * `2026-11-11.1` (I-5 de la auditoría de cierre B): los eventos sin emisor
+     * `2026-11-11.2` (Q1-2 del plan de quejas): `complaint_created` tiene
+     * emisor (`MarketingAiActionCommercialObserver`) y pasa a `available`;
+     * sigue sin ser disparador (sin finalidad, DF-K4). Antes, `2026-11-11.1`
+     * (I-5 de la auditoría de cierre B): los eventos sin emisor
      * ({@see EVENTS_WITHOUT_EMITTER}) dejan de estar disponibles como
-     * disparador. Antes, `2026-11-10.2` (L9-29): la clave de ciclo de las clases
-     * es `cls:{class_id}:{session_date}` (keyVersion 2).
+     * disparador; y `2026-11-10.2` (L9-29): la clave de ciclo de las clases es
+     * `cls:{class_id}:{session_date}` (keyVersion 2).
      */
-    public const VERSION = 'outreach-catalog/2026-11-11.1';
+    public const VERSION = 'outreach-catalog/2026-11-11.2';
 
     /** La forma de {@see export()}. */
     public const EXPORT_CONTRACT = 'outreach-catalog-export/1';
@@ -198,8 +201,10 @@ final class OutreachCatalog
      *    nadie los emita.
      *  - `OutreachCatalogEmittersTest` lo ata a los emisores reales: quien le dé
      *    un emisor a uno de ellos lo saca de aquí y sube {@see VERSION}.
+     *    `complaint_created` salió el 11-11-2026 (Q1-2): disponible, nunca
+     *    disparador (no tiene finalidad), y lo lee N6 (`complaint_recent`).
      */
-    public const EVENTS_WITHOUT_EMITTER = ['complaint_created', 'customer_satisfied', 'objection_raised', 'offer_presented', 'offer_rejected', 'referral_opportunity'];
+    public const EVENTS_WITHOUT_EMITTER = ['customer_satisfied', 'objection_raised', 'offer_presented', 'offer_rejected', 'referral_opportunity'];
 
     /** Los eventos del vocabulario que llevan el plan como atributo filtrable (`where`). */
     public const PAYMENT_EVENTS = ['payment_approved', 'payment_expired', 'payment_failed', 'payment_link_created', 'payment_pending'];

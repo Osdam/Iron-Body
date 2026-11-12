@@ -133,8 +133,8 @@
     "value_out_of_range",
     "window_out_of_range"
   ],
-  "catalogVersion": "outreach-catalog/2026-11-11.1",
-  "catalogHash": "079930a2a391f318ee7812a9b6e6fcce893458987ecbf5a14ec37d0232a86e11",
+  "catalogVersion": "outreach-catalog/2026-11-11.2",
+  "catalogHash": "49b7d57e1097d7b930bc58b4816830b139e9042dbb504159f627f4f7bbca39c7",
   "dynamicDomains": {
     "class_types": [
       "boxeo",
@@ -223,7 +223,7 @@
     "DF-E8": "studio: kind version exige uuid (minúscula) y contentHash (64 hex); kind baseline exige catalogVersion (AAAA-MM-DD.N) y catalogHash (64 hex). canary = {channel: whatsapp|voice}.",
     "DF-K1": "membership.expiring_window inscribe si membership.days_to_expiry ∈ [0, daysBefore] (ventana, no el día exacto); daysBefore ∈ [0, 60]: el 0 lo exige #2 de §13.1 (ratificada por el lead: L9-11, D9-3 queda enmendado).",
     "DF-K2": "membership.expired_window exige daysAfterMin ≥ 1 (quien vence hoy no ha vencido) y daysAfterMin ≤ daysAfterMax; los dos extremos cerrados (#3).",
-    "DF-K4": "Disparadores: los 27 eventos del vocabulario son legibles en condiciones; human_requested (contrato) y complaint_created (este fixture) no son disparadores. Finalidad: service solo appointment_* e invoice_*; collections solo receivable.overdue; el resto, commercial. Disponibilidad (I-5 de la auditoría de cierre B, 11-11-2026): los que hoy nadie registra en commercial_events (complaint_created, customer_satisfied, objection_raised, offer_presented, offer_rejected, referral_opportunity) van con available = false y triggerable = false, como los de integración (un disparador siempre está disponible): el constructor no los ofrece y una estrategia no los acepta como disparador (trigger_not_allowed); conservan su finalidad posible, siguen legibles en condiciones y no cuentan en la compatibilidad (DF-K6)."
+    "DF-K4": "Disparadores: los 27 eventos del vocabulario son legibles en condiciones; human_requested (contrato) y complaint_created (este fixture) no son disparadores. Finalidad: service solo appointment_* e invoice_*; collections solo receivable.overdue; el resto, commercial. Disponibilidad (I-5 de la auditoría de cierre B, 11-11-2026): los que hoy nadie registra en commercial_events (customer_satisfied, objection_raised, offer_presented, offer_rejected, referral_opportunity; complaint_created tiene emisor desde Q1-2, 11-11-2026, y sigue sin ser disparador) van con available = false y triggerable = false, como los de integración (un disparador siempre está disponible): el constructor no los ofrece y una estrategia no los acepta como disparador (trigger_not_allowed); conservan su finalidad posible, siguen legibles en condiciones y no cuentan en la compatibilidad (DF-K6)."
   },
   "counts": {
     "valid": 13,

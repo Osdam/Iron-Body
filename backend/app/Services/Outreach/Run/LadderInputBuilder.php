@@ -131,6 +131,7 @@ final class LadderInputBuilder
                 'audience' => (string) ($ctx['gate']['audience'] ?? 'unknown'),
                 'exclusions' => (string) ($ctx['gate']['exclusions'] ?? 'false'),
                 'humanRequestedRecently' => $ctx['humanRequestedRecently'] ?? null,
+                'complaintRecently' => $ctx['complaintRecently'] ?? null,
                 'otherPurposeToday' => (bool) ($ctx['otherPurposeToday'] ?? false),
                 'lowerPriority' => (bool) ($ctx['lowerPriority'] ?? false),
             ],
@@ -156,6 +157,34 @@ final class LadderInputBuilder
         }
         foreach ($events as $e) {
             if (($e['key'] ?? null) === 'human_requested' && RelativeTime::withinLast(RelativeTime::parseInstant((string) $e['at']), $now, OutreachConfig::humanRequestedDays(), 'days')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * ¿Se quejó hace poco (Q1-3, N6 `complaint_recent`, DF-L14)? Un evento
+     * `complaint_created` en los últimos {@see OutreachConfig::complaintDays()}
+     * días de Bogotá (hoy cuenta). Solo para las finalidades de
+     * {@see OutreachConfig::complaintPurposes()}: con otra finalidad, o con la
+     * ventana en 0, la queja no frena (false). Con la fuente de eventos sin
+     * datos, no se sabe (null: N6 niega, el lado seguro, como L9-26).
+     *
+     * @param  list<array{key: string, at: string}>|null  $events
+     */
+    public static function complaintRecently(?array $events, DateTimeImmutable $now, string $purpose): ?bool
+    {
+        $dias = OutreachConfig::complaintDays();
+        if ($dias === 0 || ! in_array($purpose, OutreachConfig::complaintPurposes(), true)) {
+            return false;
+        }
+        if ($events === null) {
+            return null;
+        }
+        foreach ($events as $e) {
+            if (($e['key'] ?? null) === 'complaint_created' && RelativeTime::withinLast(RelativeTime::parseInstant((string) $e['at']), $now, $dias, 'days')) {
                 return true;
             }
         }

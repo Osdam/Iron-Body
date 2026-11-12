@@ -17,8 +17,8 @@ N_ORDER = {
            "no_voice_contact", "voice_policy:*", "budget_zero", "budget_exhausted", "channel_daily_cap", "assisted_capacity_reached"],
     "N5": ["strategy_not_published", "strategy_paused", "chain_unreadable", "canary_scope_mismatch", "calendar_outside_own_hours", "outside_strategy_schedule",
            "max_touches_reached", "strategy_daily_cap", "enrollment_window_over", "cooldown_active", "step_guard_false"],
-    "N6": ["success_reached", "context_changed", "human_requested_recently", "collections_overdue_blocks_commercial", "purpose_conflict_today",
-           "lower_priority"],
+    "N6": ["success_reached", "context_changed", "human_requested_recently", "complaint_recent", "collections_overdue_blocks_commercial",
+           "purpose_conflict_today", "lower_priority"],
     "N7": ["callback_scheduled", "enrollment_window_over"],
 }
 TEMPORAL = {"calendar_outside_legal_hours", "calendar_sunday", "calendar_holiday", "daily_contact_limit", "weekly_contact_limit", "min_hours_between_contacts",
@@ -58,8 +58,8 @@ BASE = {
     "strategy": {"trigger": "membership.expiring_window", "published": True, "paused": False, "chainReadable": True, "part": "rest", "inCanaryScope": True,
                  "schedule": None, "touches": 0, "maxTouches": 6, "dailyCap": 50, "usedToday": 0, "enrollmentWindowEndsAt": bog(2026, 11, 30, 0, 0),
                  "cooldownUntil": None, "stepGuard": "true"},
-    "context": {"success": "false", "audience": "true", "exclusions": "false", "humanRequestedRecently": False, "otherPurposeToday": False,
-                "lowerPriority": False},
+    "context": {"success": "false", "audience": "true", "exclusions": "false", "humanRequestedRecently": False, "complaintRecently": False,
+                "otherPurposeToday": False, "lowerPriority": False},
     "conversational": {"callbackAt": None},
 }
 
@@ -232,6 +232,9 @@ def ladder_ref(x):
         r.append("context_changed")
     if cx["humanRequestedRecently"]:
         r.append("human_requested_recently")
+    # DF-L14: la queja reciente; null (fuente sin datos) niega, como en PolicyLadder (`!== false`).
+    if cx["complaintRecently"] is not False:
+        r.append("complaint_recent")
     rc, cb_ = x["receivable"], x["collectionsBlock"]
     if x["purpose"] == "commercial":
         days = cb_["serverDays"]
@@ -289,7 +292,7 @@ def ladder_ref(x):
     if decided["level"] == "N6":
         rs = decided["reasons"]
         effect = ("exit_converted" if "success_reached" in rs else "handoff" if "human_requested_recently" in rs
-                  else "cancel_context_changed" if "context_changed" in rs else None)
+                  else "cancel_context_changed" if "context_changed" in rs else "exit_complaint" if "complaint_recent" in rs else None)
     return {"verdict": "defer" if decided["temporal"] else "deny", "allowed": False, "level": decided["level"], "reasons": decided["reasons"],
             "retryAt": retry, "waitsForRelease": decided["level"] == "N2", "effect": effect, "levels": levels, "warnings": warnings}
 
@@ -300,6 +303,7 @@ PL = Fixture("policy-ladder-cases.json", header(
      "D9-8 (etapas 4 y 6: la misma escalera al planificar y al despachar; sombra: N4 avisa; los frenos retienen)", "D9-9.5 (asistido: horario, frecuencia y consentimiento del medio)",
      "D9-15 (matriz de consentimiento finalidad × canal; menores; cobranza sin autorización hoy)", "D9-1 (legacy_autonomy_on en live)",
      "D9-11.6 (en sombra se evalúa la audiencia entera: el alcance canario de N3 y N5 es aviso, «would_scope»)",
+     "D9-7 N6, enmienda aditiva del 11-11-2026 (Q1-3 del plan de quejas): complaint_recent, que ninguna estrategia quita y que niega también en sombra",
      "§13.1 #4, #5, #8, #9, #11, #12, #15, #17; §13.2 T16–T22"],
     [SOURCE_CONTRACT,
      {"what": "El calendario y el presupuesto de contacto de N1", "url": "tests/fixtures/outreach/calendar-cases.json y contact-budget-cases.json (este mismo paquete)",
@@ -311,7 +315,7 @@ PL = Fixture("policy-ladder-cases.json", header(
     baseInput=BASE,
     interface={
         "decide": "PolicyLadder::decide(input) → output. `input` es un DTO neutro (baseInput con el patch del caso ya aplicado: viene entero en cada caso); la prueba de B9-core lo traduce a sus clases sin cambiar el caso.",
-        "output": "{verdict: allow|deny|defer, allowed, level: N1..N7|null, reasons (solo los del nivel que decide, en reasonOrder), retryAt (solo defer), waitsForRelease (true si decide N2: el trabajo espera a que se suelte, D9-8), effect (N6: exit_converted | handoff | cancel_context_changed), levels: [{level, status: pass|deny|defer|not_evaluated}], warnings: [{level, reason}] (sombra)}",
+        "output": "{verdict: allow|deny|defer, allowed, level: N1..N7|null, reasons (solo los del nivel que decide, en reasonOrder), retryAt (solo defer), waitsForRelease (true si decide N2: el trabajo espera a que se suelte, D9-8), effect (N6: exit_converted | handoff | exit_complaint | cancel_context_changed), levels: [{level, status: pass|deny|defer|not_evaluated}], warnings: [{level, reason}] (sombra)}",
         "medium": "assisted:whatsapp y whatsapp_template son WhatsApp; assisted:voice y voice_call son voz (D9-9.5: el asistido aplica las reglas de su medio).",
     },
     decisions={
@@ -325,8 +329,9 @@ PL = Fixture("policy-ladder-cases.json", header(
         "DF-L5": "N4 en sombra: sends_disabled_in_code, channel_disabled, channel_not_live, budget_zero, budget_exhausted, channel_daily_cap y assisted_capacity_reached son avisos (D9-8 nombra los tres primeros y «los presupuestos»; channel_not_live se añade para que una estrategia de WhatsApp o voz se pueda simular antes de W9/V9; ratificada por el lead: L9-16). La plantilla sin aprobar o de otra categoría niega igual en sombra.",
         "DF-L6": "N4: sends_disabled_in_code solo en whatsapp_template y voice_call (el asistido sale con la constante cerrada, protección 2); budget_zero = presupuesto o tope del canal en 0 (en el asistido, su tope diario); budget_exhausted si lo reservado + el coste supera el presupuesto; los topes diarios se sueltan a las 00:00 de Bogotá. no_whatsapp_identity y no_voice_contact también en el asistido de su medio.",
         "DF-L7": "El canario en sombra (D9-11.6: «se evalúa la audiencia entera y se anota would_scope»): canary_scope_mismatch de N5 (parte canary y la persona fuera del alcance) y canary_only_declared de N3 (governance.canaryOnly, que toda versión del Studio declara por R-12) son avisos; en vivo, también en el asistido, los dos niegan igual (N3: I-1 de la auditoría de cierre B, aprobada por el lead el 11-11-2026). N5: step_guard_false con la guarda false o unknown (solo true deja pasar); outside_strategy_schedule y cooldown_active aplazan; max_touches_reached y enrollment_window_over niegan.",
-        "DF-L8": "N6: context_changed si la audiencia ya no es true o las exclusiones ya no son false (unknown incluido); effect: success_reached → exit_converted (la inscripción cierra como converted, #4), human_requested_recently → handoff, context_changed → cancel_context_changed (#15). purpose_conflict_today y lower_priority aplazan al día siguiente.",
+        "DF-L8": "N6: context_changed si la audiencia ya no es true o las exclusiones ya no son false (unknown incluido); effect: success_reached → exit_converted (la inscripción cierra como converted, #4), human_requested_recently → handoff, context_changed → cancel_context_changed (#15), complaint_recent → exit_complaint (DF-L14). purpose_conflict_today y lower_priority aplazan al día siguiente.",
         "DF-L9": "N7: una petición de la persona de que la contacten más tarde (callbackAt posterior a now) aplaza al primer hueco legal a partir de esa hora (callback_scheduled); si ese hueco cae en o después del fin de la ventana de la inscripción, deny con enrollment_window_over (D9-7). Una hora ya pasada se ignora. preference_applied e instruction_ignored_by_policy son anotaciones del selector de canal, no motivos que nieguen (channel-selection-cases.json). Ratificada por el lead: L9-24.",
+        "DF-L14": "Queja reciente (Q1-3 del plan de quejas; enmienda aditiva de D9-7 del 11-11-2026, autorizada por el lead): en N6, después de human_requested_recently, complaint_recent niega (permanente) si context.complaintRecently no es false: true = hay un complaint_created en la ventana; null = la fuente de eventos no tiene datos (el lado seguro, como L9-26). Ninguna estrategia lo quita y no es aviso de sombra: en sombra niega igual. effect exit_complaint: la inscripción sale (exited, exit_reason complaint_recent); si también hay success_reached, human_requested_recently o context_changed, manda el efecto del que va antes en reasonOrder. La ventana (días de Bogotá; por defecto la de human_requested, 30; 0 = apagado) y las finalidades (por defecto commercial y collections; service no) las aplica quien arma la entrada (LadderInputBuilder::complaintRecently): con una finalidad a la que no aplica, la entrada llega false. Hasta que el propietario decida D2 y D3.",
         "DF-L10": "N1: subject_minor solo con la marca de menor true; desconocido (lead o socio sin fecha) no se infiere ni se niega (ratificada por el lead: L9-17; la asesoría decide si debe negarse). commercial_opt_out solo con finalidad commercial. voice_excluded y rne_check_missing solo con el medio voz (también el asistido). Consentimiento del medio para la finalidad del caso: none o ausente → no_consent_for_purpose_channel; denied → consent_denied.",
     },
 ))
@@ -551,6 +556,21 @@ LAD("n6", "otra estrategia de más prioridad hoy → lower_priority, defer a ma�
     DEFER("N6", ["lower_priority"], bog(2026, 11, 11, 8, 0)), ref="#5 y #12 de §13.1", basis="decision-fixture", decision="DF-L8")
 LAD("n6", "éxito y persona pedida a la vez: manda el éxito", {"context": {"success": "true", "humanRequestedRecently": True}},
     DENY("N6", ["success_reached", "human_requested_recently"], effect="exit_converted"), ref="D9-7", basis="decision-fixture", decision="DF-L8")
+LAD("n6", "se quejó hace poco → para y la inscripción sale (complaint_recent)", {"context": {"complaintRecently": True}},
+    DENY("N6", ["complaint_recent"], effect="exit_complaint"), ref="D9-7 N6 (enmienda Q1-3)", basis="supuesto-lead", decision="DF-L14")
+LAD("n6", "la fuente de quejas no tiene datos (null) → niega (el lado seguro)", {"context": {"complaintRecently": None}},
+    DENY("N6", ["complaint_recent"], effect="exit_complaint"), ref="D9-7 N6 (enmienda Q1-3), L9-26", basis="supuesto-lead", decision="DF-L14")
+LAD("n6", "cobranza con una queja reciente → niega también (D3: comercial y cobranza)", {"purpose": "collections", "context": {"complaintRecently": True}},
+    DENY("N6", ["complaint_recent"], effect="exit_complaint"), ref="D9-7 N6 (enmienda Q1-3)", basis="supuesto-lead", decision="DF-L14")
+LAD("n6", "pidió una persona y se quejó: los dos motivos y manda el efecto handoff", {"context": {"humanRequestedRecently": True, "complaintRecently": True}},
+    DENY("N6", ["human_requested_recently", "complaint_recent"], effect="handoff"), ref="D9-7 N6 (enmienda Q1-3)", basis="supuesto-lead", decision="DF-L14")
+LAD("n6", "éxito y queja a la vez: manda el éxito", {"context": {"success": "true", "complaintRecently": True}},
+    DENY("N6", ["success_reached", "complaint_recent"], effect="exit_converted"), ref="D9-7 N6 (enmienda Q1-3)", basis="supuesto-lead", decision="DF-L14")
+LAD("n6", "la audiencia dejó de cumplirse y se quejó: manda cancel_context_changed (va antes en reasonOrder)", {"context": {"audience": "false", "complaintRecently": True}},
+    DENY("N6", ["context_changed", "complaint_recent"], effect="cancel_context_changed"), ref="D9-7 N6 (enmienda Q1-3)", basis="supuesto-lead", decision="DF-L14")
+LAD("n6", "comercial con queja y cartera vencida de 60 días: los dos motivos, efecto exit_complaint", {"context": {"complaintRecently": True}, "receivable": {"overdueDaysMax": 60}},
+    DENY("N6", ["complaint_recent", "collections_overdue_blocks_commercial"], effect="exit_complaint"), ref="D9-7 N6 (enmienda Q1-3), L9-20", basis="supuesto-lead",
+    decision="DF-L14")
 
 # ── N7 · instrucciones conversacionales (T22) ───────────────────────────────
 LAD("n7", "«llámame el domingo» → defer al primer hueco legal (lunes 08:00), nunca al domingo", {"conversational": {"callbackAt": bog(2026, 11, 15, 11, 0)}},
@@ -589,6 +609,16 @@ LAD("precedence", "cartera vencida y persona pedida a la vez: decide N6 con los 
     {"receivable": {"overdueDaysMax": 60}, "context": {"humanRequestedRecently": True}},
     DENY("N6", ["human_requested_recently", "collections_overdue_blocks_commercial"], effect="handoff"), ref="D9-7 N6, L9-20", basis="decision-fixture",
     decision="DF-L12")
+LAD("precedence", "se quejó y no tiene autorización: decide N1 y N6 ni se evalúa", {"consent": {"whatsapp": "none"}, "context": {"complaintRecently": True}},
+    DENY("N1", ["no_consent_for_purpose_channel"]), ref="D9-7 («el primer nivel que niega decide»; enmienda Q1-3)", basis="supuesto-lead", decision="DF-L14")
+LAD("precedence", "se quejó un domingo: N1 aplaza al lunes (N6 decidirá entonces)", {"now": bog(2026, 11, 8, 10, 0), "context": {"complaintRecently": True}},
+    DEFER("N1", ["calendar_sunday"], bog(2026, 11, 9, 8, 0)), ref="D9-7 (enmienda Q1-3), #17", basis="supuesto-lead", decision="DF-L14")
+LAD("precedence", "se quejó con la PARADA GLOBAL echada: N2 retiene antes que N6", {"brakes": {"global": True}, "context": {"complaintRecently": True}},
+    DENY("N2", ["outreach_brake_global"], waitsForRelease=True), ref="D9-8 (PARADA GLOBAL; enmienda Q1-3)", basis="supuesto-lead", decision="DF-L14")
+LAD("precedence", "se quejó y pidió que lo llamen ya: N6 niega y N7 ni se evalúa", {"context": {"complaintRecently": True},
+                                                                                  "conversational": {"callbackAt": bog(2026, 11, 10, 11, 0)}},
+    DENY("N6", ["complaint_recent"], effect="exit_complaint"), ref="T22 («ninguna instrucción conversacional levanta una negación de N1–N6»; enmienda Q1-3)",
+    basis="supuesto-lead", decision="DF-L14")
 LAD("precedence", "tope de contactos alcanzado aunque N7 pida otro contacto ya: N5 niega", {"strategy": {"touches": 6},
                                                                                            "conversational": {"callbackAt": bog(2026, 11, 10, 11, 0)}},
     DENY("N5", ["max_touches_reached"]), ref="T20 («aunque N6 o N7 quieran más contactos»)")
@@ -636,3 +666,10 @@ LAD("shadow", "en sombra el freno global retiene igual", deep_merge(SH, {"brakes
     ref="D9-8 (PARADA GLOBAL en las etapas 1, 4 y 6)")
 LAD("shadow", "en sombra el calendario aplaza igual", deep_merge(SH, {"now": bog(2026, 11, 8, 10, 0)}), DEFER("N1", ["calendar_sunday"], bog(2026, 11, 9, 8, 0)),
     ref="D9-8")
+LAD("shadow", "en sombra la queja reciente NIEGA igual que en vivo: no es un aviso", deep_merge(SH, {"context": {"complaintRecently": True}}),
+    DENY("N6", ["complaint_recent"], effect="exit_complaint", warnings=[]), ref="D9-8 («todo lo demás se aplica igual»; enmienda Q1-3)", basis="supuesto-lead",
+    decision="DF-L14")
+LAD("shadow", "en sombra, «solo canario» y fuera del alcance: los avisos de N3 y N5 se anotan y la queja niega en N6",
+    deep_merge(SH, {"studio": {"canaryOnly": True}, "strategy": {"part": "canary", "inCanaryScope": False}, "context": {"complaintRecently": True}}),
+    DENY("N6", ["complaint_recent"], effect="exit_complaint", warnings=[{"level": "N3", "reason": "canary_only_declared"}, {"level": "N5", "reason": "canary_scope_mismatch"}]),
+    ref="D9-11.6, D9-8 (enmienda Q1-3)", basis="supuesto-lead", decision="DF-L14")

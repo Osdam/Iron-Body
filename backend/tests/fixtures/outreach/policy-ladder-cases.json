@@ -9,6 +9,7 @@
     "D9-15 (matriz de consentimiento finalidad × canal; menores; cobranza sin autorización hoy)",
     "D9-1 (legacy_autonomy_on en live)",
     "D9-11.6 (en sombra se evalúa la audiencia entera: el alcance canario de N3 y N5 es aviso, «would_scope»)",
+    "D9-7 N6, enmienda aditiva del 11-11-2026 (Q1-3 del plan de quejas): complaint_recent, que ninguna estrategia quita y que niega también en sombra",
     "§13.1 #4, #5, #8, #9, #11, #12, #15, #17; §13.2 T16–T22"
   ],
   "generatedBy": "tests/fixtures/outreach/tools/build/build.py (python3 -I), con los casos a mano en sec_*.py",
@@ -108,6 +109,7 @@
       "success_reached",
       "context_changed",
       "human_requested_recently",
+      "complaint_recent",
       "collections_overdue_blocks_commercial",
       "purpose_conflict_today",
       "lower_priority"
@@ -257,6 +259,7 @@
       "audience": "true",
       "exclusions": "false",
       "humanRequestedRecently": false,
+      "complaintRecently": false,
       "otherPurposeToday": false,
       "lowerPriority": false
     },
@@ -266,7 +269,7 @@
   },
   "interface": {
     "decide": "PolicyLadder::decide(input) → output. `input` es un DTO neutro (baseInput con el patch del caso ya aplicado: viene entero en cada caso); la prueba de B9-core lo traduce a sus clases sin cambiar el caso.",
-    "output": "{verdict: allow|deny|defer, allowed, level: N1..N7|null, reasons (solo los del nivel que decide, en reasonOrder), retryAt (solo defer), waitsForRelease (true si decide N2: el trabajo espera a que se suelte, D9-8), effect (N6: exit_converted | handoff | cancel_context_changed), levels: [{level, status: pass|deny|defer|not_evaluated}], warnings: [{level, reason}] (sombra)}",
+    "output": "{verdict: allow|deny|defer, allowed, level: N1..N7|null, reasons (solo los del nivel que decide, en reasonOrder), retryAt (solo defer), waitsForRelease (true si decide N2: el trabajo espera a que se suelte, D9-8), effect (N6: exit_converted | handoff | exit_complaint | cancel_context_changed), levels: [{level, status: pass|deny|defer|not_evaluated}], warnings: [{level, reason}] (sombra)}",
     "medium": "assisted:whatsapp y whatsapp_template son WhatsApp; assisted:voice y voice_call son voz (D9-9.5: el asistido aplica las reglas de su medio)."
   },
   "decisions": {
@@ -278,12 +281,13 @@
     "DF-L5": "N4 en sombra: sends_disabled_in_code, channel_disabled, channel_not_live, budget_zero, budget_exhausted, channel_daily_cap y assisted_capacity_reached son avisos (D9-8 nombra los tres primeros y «los presupuestos»; channel_not_live se añade para que una estrategia de WhatsApp o voz se pueda simular antes de W9/V9; ratificada por el lead: L9-16). La plantilla sin aprobar o de otra categoría niega igual en sombra.",
     "DF-L6": "N4: sends_disabled_in_code solo en whatsapp_template y voice_call (el asistido sale con la constante cerrada, protección 2); budget_zero = presupuesto o tope del canal en 0 (en el asistido, su tope diario); budget_exhausted si lo reservado + el coste supera el presupuesto; los topes diarios se sueltan a las 00:00 de Bogotá. no_whatsapp_identity y no_voice_contact también en el asistido de su medio.",
     "DF-L7": "El canario en sombra (D9-11.6: «se evalúa la audiencia entera y se anota would_scope»): canary_scope_mismatch de N5 (parte canary y la persona fuera del alcance) y canary_only_declared de N3 (governance.canaryOnly, que toda versión del Studio declara por R-12) son avisos; en vivo, también en el asistido, los dos niegan igual (N3: I-1 de la auditoría de cierre B, aprobada por el lead el 11-11-2026). N5: step_guard_false con la guarda false o unknown (solo true deja pasar); outside_strategy_schedule y cooldown_active aplazan; max_touches_reached y enrollment_window_over niegan.",
-    "DF-L8": "N6: context_changed si la audiencia ya no es true o las exclusiones ya no son false (unknown incluido); effect: success_reached → exit_converted (la inscripción cierra como converted, #4), human_requested_recently → handoff, context_changed → cancel_context_changed (#15). purpose_conflict_today y lower_priority aplazan al día siguiente.",
+    "DF-L8": "N6: context_changed si la audiencia ya no es true o las exclusiones ya no son false (unknown incluido); effect: success_reached → exit_converted (la inscripción cierra como converted, #4), human_requested_recently → handoff, context_changed → cancel_context_changed (#15), complaint_recent → exit_complaint (DF-L14). purpose_conflict_today y lower_priority aplazan al día siguiente.",
     "DF-L9": "N7: una petición de la persona de que la contacten más tarde (callbackAt posterior a now) aplaza al primer hueco legal a partir de esa hora (callback_scheduled); si ese hueco cae en o después del fin de la ventana de la inscripción, deny con enrollment_window_over (D9-7). Una hora ya pasada se ignora. preference_applied e instruction_ignored_by_policy son anotaciones del selector de canal, no motivos que nieguen (channel-selection-cases.json). Ratificada por el lead: L9-24.",
     "DF-L10": "N1: subject_minor solo con la marca de menor true; desconocido (lead o socio sin fecha) no se infiere ni se niega (ratificada por el lead: L9-17; la asesoría decide si debe negarse). commercial_opt_out solo con finalidad commercial. voice_excluded y rne_check_missing solo con el medio voz (también el asistido). Consentimiento del medio para la finalidad del caso: none o ausente → no_consent_for_purpose_channel; denied → consent_denied.",
     "DF-L11": "Horario propio (L9-15): calendar_outside_own_hours es de N5, entre canary_scope_mismatch y outside_strategy_schedule, y aplaza al primer hueco del horario propio. Fuera de la ley decide N1 (calendar_outside_legal_hours) aunque también se esté fuera del propio. Con el horario propio mal configurado ('invalid') no hay hueco posible: deny sin retryAt.",
     "DF-L12": "Cartera vencida (P9-7, L9-20): en N6, después de human_requested_recently, collections_overdue_blocks_commercial niega (permanente) un contacto con finalidad commercial si receivable.overdueDaysMax > el umbral, o si la fuente de cartera no se pudo leer (receivable.known = false, el lado seguro). Umbral = outreach.collections.commercial_block_days (15 por defecto); la estrategia solo puede bajarlo (limits.commercialBlockOverdueDays: umbral = el menor). «Más de N días»: a los N justos no bloquea. Ni collections ni service se bloquean.",
-    "DF-L13": "catalog_incompatible es de N3 (L9-21), justo después de studio_reference_invalid: la versión usa un hecho o un evento que el catálogo vigente ya no tiene (catalog-snapshot.json §compatibility)."
+    "DF-L13": "catalog_incompatible es de N3 (L9-21), justo después de studio_reference_invalid: la versión usa un hecho o un evento que el catálogo vigente ya no tiene (catalog-snapshot.json §compatibility).",
+    "DF-L14": "Queja reciente (Q1-3 del plan de quejas; enmienda aditiva de D9-7 del 11-11-2026, autorizada por el lead): en N6, después de human_requested_recently, complaint_recent niega (permanente) si context.complaintRecently no es false: true = hay un complaint_created en la ventana; null = la fuente de eventos no tiene datos (el lado seguro, como L9-26). Ninguna estrategia lo quita y no es aviso de sombra: en sombra niega igual. effect exit_complaint: la inscripción sale (exited, exit_reason complaint_recent); si también hay success_reached, human_requested_recently o context_changed, manda el efecto del que va antes en reasonOrder. La ventana (días de Bogotá; por defecto la de human_requested, 30; 0 = apagado) y las finalidades (por defecto commercial y collections; service no) las aplica quien arma la entrada (LadderInputBuilder::complaintRecently): con una finalidad a la que no aplica, la entrada llega false. Hasta que el propietario decida D2 y D3."
   },
   "counts": {
     "n1": 24,
@@ -291,11 +295,11 @@
     "n3": 8,
     "n4": 13,
     "n5": 16,
-    "n6": 17,
+    "n6": 24,
     "n7": 6,
-    "precedence": 9,
-    "shadow": 13,
-    "total": 123
+    "precedence": 13,
+    "shadow": 15,
+    "total": 136
   },
   "n1": [
     {
@@ -408,6 +412,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -569,6 +574,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -732,6 +738,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -895,6 +902,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -1058,6 +1066,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -1221,6 +1230,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -1384,6 +1394,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -1548,6 +1559,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -1713,6 +1725,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -1875,6 +1888,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -2039,6 +2053,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -2204,6 +2219,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -2369,6 +2385,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -2534,6 +2551,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -2699,6 +2717,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -2863,6 +2882,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -3029,6 +3049,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -3194,6 +3215,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -3361,6 +3383,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -3523,6 +3546,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -3689,6 +3713,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -3867,6 +3892,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -4045,6 +4071,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -4226,6 +4253,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -4393,6 +4421,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -4557,6 +4586,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -4721,6 +4751,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -4886,6 +4917,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -5050,6 +5082,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -5214,6 +5247,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -5378,6 +5412,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -5544,6 +5579,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -5706,6 +5742,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -5872,6 +5909,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -6036,6 +6074,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -6200,6 +6239,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -6364,6 +6404,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -6529,6 +6570,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -6694,6 +6736,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -6854,6 +6897,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -7025,6 +7069,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -7193,6 +7238,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -7358,6 +7404,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -7524,6 +7571,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -7692,6 +7740,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -7856,6 +7905,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -8022,6 +8072,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -8189,6 +8240,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -8358,6 +8410,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -8527,6 +8580,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -8698,6 +8752,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -8863,6 +8918,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -9027,6 +9083,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -9192,6 +9249,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -9357,6 +9415,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -9523,6 +9582,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -9700,6 +9760,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -9866,6 +9927,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -10031,6 +10093,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -10203,6 +10266,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -10375,6 +10439,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -10545,6 +10610,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -10711,6 +10777,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -10875,6 +10942,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -11039,6 +11107,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -11204,6 +11273,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -11386,6 +11456,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -11568,6 +11639,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -11731,6 +11803,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -11913,6 +11986,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -12100,6 +12174,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -12264,6 +12339,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -12429,6 +12505,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -12593,6 +12670,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -12758,6 +12836,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -12924,6 +13003,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -13088,6 +13168,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -13253,6 +13334,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -13419,6 +13501,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -13583,6 +13666,7 @@
           "audience": "false",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -13748,6 +13832,7 @@
           "audience": "unknown",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -13912,6 +13997,7 @@
           "audience": "true",
           "exclusions": "true",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -14076,6 +14162,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": true,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -14241,6 +14328,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -14406,6 +14494,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -14572,6 +14661,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -14740,6 +14830,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -14908,6 +14999,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -15073,6 +15165,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -15236,6 +15329,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -15402,6 +15496,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -15566,6 +15661,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -15729,6 +15825,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": true,
           "lowerPriority": false
         },
@@ -15894,6 +15991,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": true
         },
@@ -16060,6 +16158,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": true,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -16078,6 +16177,1179 @@
         "retryAt": null,
         "waitsForRelease": false,
         "effect": "exit_converted",
+        "levels": [
+          {
+            "level": "N1",
+            "status": "pass"
+          },
+          {
+            "level": "N2",
+            "status": "pass"
+          },
+          {
+            "level": "N3",
+            "status": "pass"
+          },
+          {
+            "level": "N4",
+            "status": "pass"
+          },
+          {
+            "level": "N5",
+            "status": "pass"
+          },
+          {
+            "level": "N6",
+            "status": "deny"
+          },
+          {
+            "level": "N7",
+            "status": "not_evaluated"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "name": "n6 · n6 · se quejó hace poco → para y la inscripción sale (complaint_recent)",
+      "kind": "n6",
+      "contractRef": "D9-7 N6 (enmienda Q1-3)",
+      "basis": "supuesto-lead",
+      "decision": "DF-L14",
+      "patch": {
+        "context": {
+          "complaintRecently": true
+        }
+      },
+      "input": {
+        "now": "2026-11-10T15:00:00Z",
+        "purpose": "commercial",
+        "channel": "assisted:whatsapp",
+        "subject": {
+          "known": true,
+          "isMinor": false
+        },
+        "consent": {
+          "voice": "granted",
+          "whatsapp": "granted"
+        },
+        "optOut": {
+          "commercial": false,
+          "doNotContact": false,
+          "siblingDoNotContact": false
+        },
+        "voice": {
+          "excluded": false,
+          "rneOk": true
+        },
+        "history": [],
+        "limits": {
+          "perDay": 1,
+          "perWeek": 2,
+          "minHoursBetween": 48
+        },
+        "ownHours": null,
+        "flags": {
+          "master": true,
+          "mode": "live",
+          "channelEnabled": true,
+          "channelLive": true,
+          "sendsEnabledInCode": false,
+          "legacyAutonomy": false,
+          "legacyFollowupsScheduler": false
+        },
+        "brakes": {
+          "global": false,
+          "channel": false,
+          "strategy": false,
+          "ultronAbortLatch": false,
+          "marketingAgentPaused": false,
+          "voiceBrake": false
+        },
+        "conversation": {
+          "humanInControl": false
+        },
+        "globalSuppression": false,
+        "studio": {
+          "referenceValid": true,
+          "catalogCompatible": true,
+          "paymentLinksEnabled": true,
+          "canaryOnly": false,
+          "templateViolations": []
+        },
+        "receivable": {
+          "known": true,
+          "overdueDaysMax": null
+        },
+        "collectionsBlock": {
+          "serverDays": 15,
+          "strategyDays": null
+        },
+        "step": {
+          "usesPaymentLink": false,
+          "templateApproved": true,
+          "templateCategoryMatches": true
+        },
+        "identity": {
+          "voiceContact": true,
+          "whatsapp": true
+        },
+        "voicePolicyReasons": [],
+        "budget": {
+          "dailyBudgetMicros": 0,
+          "reservedTodayMicros": 0,
+          "costMicros": 0,
+          "channelDailyCap": 0,
+          "channelUsedToday": 0,
+          "assistedDailyCap": 20,
+          "assistedUsedToday": 0
+        },
+        "strategy": {
+          "trigger": "membership.expiring_window",
+          "published": true,
+          "paused": false,
+          "chainReadable": true,
+          "part": "rest",
+          "inCanaryScope": true,
+          "schedule": null,
+          "touches": 0,
+          "maxTouches": 6,
+          "dailyCap": 50,
+          "usedToday": 0,
+          "enrollmentWindowEndsAt": "2026-11-30T05:00:00Z",
+          "cooldownUntil": null,
+          "stepGuard": "true"
+        },
+        "context": {
+          "success": "false",
+          "audience": "true",
+          "exclusions": "false",
+          "humanRequestedRecently": false,
+          "complaintRecently": true,
+          "otherPurposeToday": false,
+          "lowerPriority": false
+        },
+        "conversational": {
+          "callbackAt": null
+        }
+      },
+      "expected": {
+        "verdict": "deny",
+        "allowed": false,
+        "level": "N6",
+        "reasons": [
+          "complaint_recent"
+        ],
+        "retryAt": null,
+        "waitsForRelease": false,
+        "effect": "exit_complaint",
+        "levels": [
+          {
+            "level": "N1",
+            "status": "pass"
+          },
+          {
+            "level": "N2",
+            "status": "pass"
+          },
+          {
+            "level": "N3",
+            "status": "pass"
+          },
+          {
+            "level": "N4",
+            "status": "pass"
+          },
+          {
+            "level": "N5",
+            "status": "pass"
+          },
+          {
+            "level": "N6",
+            "status": "deny"
+          },
+          {
+            "level": "N7",
+            "status": "not_evaluated"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "name": "n6 · n6 · la fuente de quejas no tiene datos (null) → niega (el lado seguro)",
+      "kind": "n6",
+      "contractRef": "D9-7 N6 (enmienda Q1-3), L9-26",
+      "basis": "supuesto-lead",
+      "decision": "DF-L14",
+      "patch": {
+        "context": {
+          "complaintRecently": null
+        }
+      },
+      "input": {
+        "now": "2026-11-10T15:00:00Z",
+        "purpose": "commercial",
+        "channel": "assisted:whatsapp",
+        "subject": {
+          "known": true,
+          "isMinor": false
+        },
+        "consent": {
+          "voice": "granted",
+          "whatsapp": "granted"
+        },
+        "optOut": {
+          "commercial": false,
+          "doNotContact": false,
+          "siblingDoNotContact": false
+        },
+        "voice": {
+          "excluded": false,
+          "rneOk": true
+        },
+        "history": [],
+        "limits": {
+          "perDay": 1,
+          "perWeek": 2,
+          "minHoursBetween": 48
+        },
+        "ownHours": null,
+        "flags": {
+          "master": true,
+          "mode": "live",
+          "channelEnabled": true,
+          "channelLive": true,
+          "sendsEnabledInCode": false,
+          "legacyAutonomy": false,
+          "legacyFollowupsScheduler": false
+        },
+        "brakes": {
+          "global": false,
+          "channel": false,
+          "strategy": false,
+          "ultronAbortLatch": false,
+          "marketingAgentPaused": false,
+          "voiceBrake": false
+        },
+        "conversation": {
+          "humanInControl": false
+        },
+        "globalSuppression": false,
+        "studio": {
+          "referenceValid": true,
+          "catalogCompatible": true,
+          "paymentLinksEnabled": true,
+          "canaryOnly": false,
+          "templateViolations": []
+        },
+        "receivable": {
+          "known": true,
+          "overdueDaysMax": null
+        },
+        "collectionsBlock": {
+          "serverDays": 15,
+          "strategyDays": null
+        },
+        "step": {
+          "usesPaymentLink": false,
+          "templateApproved": true,
+          "templateCategoryMatches": true
+        },
+        "identity": {
+          "voiceContact": true,
+          "whatsapp": true
+        },
+        "voicePolicyReasons": [],
+        "budget": {
+          "dailyBudgetMicros": 0,
+          "reservedTodayMicros": 0,
+          "costMicros": 0,
+          "channelDailyCap": 0,
+          "channelUsedToday": 0,
+          "assistedDailyCap": 20,
+          "assistedUsedToday": 0
+        },
+        "strategy": {
+          "trigger": "membership.expiring_window",
+          "published": true,
+          "paused": false,
+          "chainReadable": true,
+          "part": "rest",
+          "inCanaryScope": true,
+          "schedule": null,
+          "touches": 0,
+          "maxTouches": 6,
+          "dailyCap": 50,
+          "usedToday": 0,
+          "enrollmentWindowEndsAt": "2026-11-30T05:00:00Z",
+          "cooldownUntil": null,
+          "stepGuard": "true"
+        },
+        "context": {
+          "success": "false",
+          "audience": "true",
+          "exclusions": "false",
+          "humanRequestedRecently": false,
+          "complaintRecently": null,
+          "otherPurposeToday": false,
+          "lowerPriority": false
+        },
+        "conversational": {
+          "callbackAt": null
+        }
+      },
+      "expected": {
+        "verdict": "deny",
+        "allowed": false,
+        "level": "N6",
+        "reasons": [
+          "complaint_recent"
+        ],
+        "retryAt": null,
+        "waitsForRelease": false,
+        "effect": "exit_complaint",
+        "levels": [
+          {
+            "level": "N1",
+            "status": "pass"
+          },
+          {
+            "level": "N2",
+            "status": "pass"
+          },
+          {
+            "level": "N3",
+            "status": "pass"
+          },
+          {
+            "level": "N4",
+            "status": "pass"
+          },
+          {
+            "level": "N5",
+            "status": "pass"
+          },
+          {
+            "level": "N6",
+            "status": "deny"
+          },
+          {
+            "level": "N7",
+            "status": "not_evaluated"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "name": "n6 · n6 · cobranza con una queja reciente → niega también (D3: comercial y cobranza)",
+      "kind": "n6",
+      "contractRef": "D9-7 N6 (enmienda Q1-3)",
+      "basis": "supuesto-lead",
+      "decision": "DF-L14",
+      "patch": {
+        "purpose": "collections",
+        "context": {
+          "complaintRecently": true
+        }
+      },
+      "input": {
+        "now": "2026-11-10T15:00:00Z",
+        "purpose": "collections",
+        "channel": "assisted:whatsapp",
+        "subject": {
+          "known": true,
+          "isMinor": false
+        },
+        "consent": {
+          "voice": "granted",
+          "whatsapp": "granted"
+        },
+        "optOut": {
+          "commercial": false,
+          "doNotContact": false,
+          "siblingDoNotContact": false
+        },
+        "voice": {
+          "excluded": false,
+          "rneOk": true
+        },
+        "history": [],
+        "limits": {
+          "perDay": 1,
+          "perWeek": 2,
+          "minHoursBetween": 48
+        },
+        "ownHours": null,
+        "flags": {
+          "master": true,
+          "mode": "live",
+          "channelEnabled": true,
+          "channelLive": true,
+          "sendsEnabledInCode": false,
+          "legacyAutonomy": false,
+          "legacyFollowupsScheduler": false
+        },
+        "brakes": {
+          "global": false,
+          "channel": false,
+          "strategy": false,
+          "ultronAbortLatch": false,
+          "marketingAgentPaused": false,
+          "voiceBrake": false
+        },
+        "conversation": {
+          "humanInControl": false
+        },
+        "globalSuppression": false,
+        "studio": {
+          "referenceValid": true,
+          "catalogCompatible": true,
+          "paymentLinksEnabled": true,
+          "canaryOnly": false,
+          "templateViolations": []
+        },
+        "receivable": {
+          "known": true,
+          "overdueDaysMax": null
+        },
+        "collectionsBlock": {
+          "serverDays": 15,
+          "strategyDays": null
+        },
+        "step": {
+          "usesPaymentLink": false,
+          "templateApproved": true,
+          "templateCategoryMatches": true
+        },
+        "identity": {
+          "voiceContact": true,
+          "whatsapp": true
+        },
+        "voicePolicyReasons": [],
+        "budget": {
+          "dailyBudgetMicros": 0,
+          "reservedTodayMicros": 0,
+          "costMicros": 0,
+          "channelDailyCap": 0,
+          "channelUsedToday": 0,
+          "assistedDailyCap": 20,
+          "assistedUsedToday": 0
+        },
+        "strategy": {
+          "trigger": "membership.expiring_window",
+          "published": true,
+          "paused": false,
+          "chainReadable": true,
+          "part": "rest",
+          "inCanaryScope": true,
+          "schedule": null,
+          "touches": 0,
+          "maxTouches": 6,
+          "dailyCap": 50,
+          "usedToday": 0,
+          "enrollmentWindowEndsAt": "2026-11-30T05:00:00Z",
+          "cooldownUntil": null,
+          "stepGuard": "true"
+        },
+        "context": {
+          "success": "false",
+          "audience": "true",
+          "exclusions": "false",
+          "humanRequestedRecently": false,
+          "complaintRecently": true,
+          "otherPurposeToday": false,
+          "lowerPriority": false
+        },
+        "conversational": {
+          "callbackAt": null
+        }
+      },
+      "expected": {
+        "verdict": "deny",
+        "allowed": false,
+        "level": "N6",
+        "reasons": [
+          "complaint_recent"
+        ],
+        "retryAt": null,
+        "waitsForRelease": false,
+        "effect": "exit_complaint",
+        "levels": [
+          {
+            "level": "N1",
+            "status": "pass"
+          },
+          {
+            "level": "N2",
+            "status": "pass"
+          },
+          {
+            "level": "N3",
+            "status": "pass"
+          },
+          {
+            "level": "N4",
+            "status": "pass"
+          },
+          {
+            "level": "N5",
+            "status": "pass"
+          },
+          {
+            "level": "N6",
+            "status": "deny"
+          },
+          {
+            "level": "N7",
+            "status": "not_evaluated"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "name": "n6 · n6 · pidió una persona y se quejó: los dos motivos y manda el efecto handoff",
+      "kind": "n6",
+      "contractRef": "D9-7 N6 (enmienda Q1-3)",
+      "basis": "supuesto-lead",
+      "decision": "DF-L14",
+      "patch": {
+        "context": {
+          "humanRequestedRecently": true,
+          "complaintRecently": true
+        }
+      },
+      "input": {
+        "now": "2026-11-10T15:00:00Z",
+        "purpose": "commercial",
+        "channel": "assisted:whatsapp",
+        "subject": {
+          "known": true,
+          "isMinor": false
+        },
+        "consent": {
+          "voice": "granted",
+          "whatsapp": "granted"
+        },
+        "optOut": {
+          "commercial": false,
+          "doNotContact": false,
+          "siblingDoNotContact": false
+        },
+        "voice": {
+          "excluded": false,
+          "rneOk": true
+        },
+        "history": [],
+        "limits": {
+          "perDay": 1,
+          "perWeek": 2,
+          "minHoursBetween": 48
+        },
+        "ownHours": null,
+        "flags": {
+          "master": true,
+          "mode": "live",
+          "channelEnabled": true,
+          "channelLive": true,
+          "sendsEnabledInCode": false,
+          "legacyAutonomy": false,
+          "legacyFollowupsScheduler": false
+        },
+        "brakes": {
+          "global": false,
+          "channel": false,
+          "strategy": false,
+          "ultronAbortLatch": false,
+          "marketingAgentPaused": false,
+          "voiceBrake": false
+        },
+        "conversation": {
+          "humanInControl": false
+        },
+        "globalSuppression": false,
+        "studio": {
+          "referenceValid": true,
+          "catalogCompatible": true,
+          "paymentLinksEnabled": true,
+          "canaryOnly": false,
+          "templateViolations": []
+        },
+        "receivable": {
+          "known": true,
+          "overdueDaysMax": null
+        },
+        "collectionsBlock": {
+          "serverDays": 15,
+          "strategyDays": null
+        },
+        "step": {
+          "usesPaymentLink": false,
+          "templateApproved": true,
+          "templateCategoryMatches": true
+        },
+        "identity": {
+          "voiceContact": true,
+          "whatsapp": true
+        },
+        "voicePolicyReasons": [],
+        "budget": {
+          "dailyBudgetMicros": 0,
+          "reservedTodayMicros": 0,
+          "costMicros": 0,
+          "channelDailyCap": 0,
+          "channelUsedToday": 0,
+          "assistedDailyCap": 20,
+          "assistedUsedToday": 0
+        },
+        "strategy": {
+          "trigger": "membership.expiring_window",
+          "published": true,
+          "paused": false,
+          "chainReadable": true,
+          "part": "rest",
+          "inCanaryScope": true,
+          "schedule": null,
+          "touches": 0,
+          "maxTouches": 6,
+          "dailyCap": 50,
+          "usedToday": 0,
+          "enrollmentWindowEndsAt": "2026-11-30T05:00:00Z",
+          "cooldownUntil": null,
+          "stepGuard": "true"
+        },
+        "context": {
+          "success": "false",
+          "audience": "true",
+          "exclusions": "false",
+          "humanRequestedRecently": true,
+          "complaintRecently": true,
+          "otherPurposeToday": false,
+          "lowerPriority": false
+        },
+        "conversational": {
+          "callbackAt": null
+        }
+      },
+      "expected": {
+        "verdict": "deny",
+        "allowed": false,
+        "level": "N6",
+        "reasons": [
+          "human_requested_recently",
+          "complaint_recent"
+        ],
+        "retryAt": null,
+        "waitsForRelease": false,
+        "effect": "handoff",
+        "levels": [
+          {
+            "level": "N1",
+            "status": "pass"
+          },
+          {
+            "level": "N2",
+            "status": "pass"
+          },
+          {
+            "level": "N3",
+            "status": "pass"
+          },
+          {
+            "level": "N4",
+            "status": "pass"
+          },
+          {
+            "level": "N5",
+            "status": "pass"
+          },
+          {
+            "level": "N6",
+            "status": "deny"
+          },
+          {
+            "level": "N7",
+            "status": "not_evaluated"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "name": "n6 · n6 · éxito y queja a la vez: manda el éxito",
+      "kind": "n6",
+      "contractRef": "D9-7 N6 (enmienda Q1-3)",
+      "basis": "supuesto-lead",
+      "decision": "DF-L14",
+      "patch": {
+        "context": {
+          "success": "true",
+          "complaintRecently": true
+        }
+      },
+      "input": {
+        "now": "2026-11-10T15:00:00Z",
+        "purpose": "commercial",
+        "channel": "assisted:whatsapp",
+        "subject": {
+          "known": true,
+          "isMinor": false
+        },
+        "consent": {
+          "voice": "granted",
+          "whatsapp": "granted"
+        },
+        "optOut": {
+          "commercial": false,
+          "doNotContact": false,
+          "siblingDoNotContact": false
+        },
+        "voice": {
+          "excluded": false,
+          "rneOk": true
+        },
+        "history": [],
+        "limits": {
+          "perDay": 1,
+          "perWeek": 2,
+          "minHoursBetween": 48
+        },
+        "ownHours": null,
+        "flags": {
+          "master": true,
+          "mode": "live",
+          "channelEnabled": true,
+          "channelLive": true,
+          "sendsEnabledInCode": false,
+          "legacyAutonomy": false,
+          "legacyFollowupsScheduler": false
+        },
+        "brakes": {
+          "global": false,
+          "channel": false,
+          "strategy": false,
+          "ultronAbortLatch": false,
+          "marketingAgentPaused": false,
+          "voiceBrake": false
+        },
+        "conversation": {
+          "humanInControl": false
+        },
+        "globalSuppression": false,
+        "studio": {
+          "referenceValid": true,
+          "catalogCompatible": true,
+          "paymentLinksEnabled": true,
+          "canaryOnly": false,
+          "templateViolations": []
+        },
+        "receivable": {
+          "known": true,
+          "overdueDaysMax": null
+        },
+        "collectionsBlock": {
+          "serverDays": 15,
+          "strategyDays": null
+        },
+        "step": {
+          "usesPaymentLink": false,
+          "templateApproved": true,
+          "templateCategoryMatches": true
+        },
+        "identity": {
+          "voiceContact": true,
+          "whatsapp": true
+        },
+        "voicePolicyReasons": [],
+        "budget": {
+          "dailyBudgetMicros": 0,
+          "reservedTodayMicros": 0,
+          "costMicros": 0,
+          "channelDailyCap": 0,
+          "channelUsedToday": 0,
+          "assistedDailyCap": 20,
+          "assistedUsedToday": 0
+        },
+        "strategy": {
+          "trigger": "membership.expiring_window",
+          "published": true,
+          "paused": false,
+          "chainReadable": true,
+          "part": "rest",
+          "inCanaryScope": true,
+          "schedule": null,
+          "touches": 0,
+          "maxTouches": 6,
+          "dailyCap": 50,
+          "usedToday": 0,
+          "enrollmentWindowEndsAt": "2026-11-30T05:00:00Z",
+          "cooldownUntil": null,
+          "stepGuard": "true"
+        },
+        "context": {
+          "success": "true",
+          "audience": "true",
+          "exclusions": "false",
+          "humanRequestedRecently": false,
+          "complaintRecently": true,
+          "otherPurposeToday": false,
+          "lowerPriority": false
+        },
+        "conversational": {
+          "callbackAt": null
+        }
+      },
+      "expected": {
+        "verdict": "deny",
+        "allowed": false,
+        "level": "N6",
+        "reasons": [
+          "success_reached",
+          "complaint_recent"
+        ],
+        "retryAt": null,
+        "waitsForRelease": false,
+        "effect": "exit_converted",
+        "levels": [
+          {
+            "level": "N1",
+            "status": "pass"
+          },
+          {
+            "level": "N2",
+            "status": "pass"
+          },
+          {
+            "level": "N3",
+            "status": "pass"
+          },
+          {
+            "level": "N4",
+            "status": "pass"
+          },
+          {
+            "level": "N5",
+            "status": "pass"
+          },
+          {
+            "level": "N6",
+            "status": "deny"
+          },
+          {
+            "level": "N7",
+            "status": "not_evaluated"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "name": "n6 · n6 · la audiencia dejó de cumplirse y se quejó: manda cancel_context_changed (va antes en reasonOrder)",
+      "kind": "n6",
+      "contractRef": "D9-7 N6 (enmienda Q1-3)",
+      "basis": "supuesto-lead",
+      "decision": "DF-L14",
+      "patch": {
+        "context": {
+          "audience": "false",
+          "complaintRecently": true
+        }
+      },
+      "input": {
+        "now": "2026-11-10T15:00:00Z",
+        "purpose": "commercial",
+        "channel": "assisted:whatsapp",
+        "subject": {
+          "known": true,
+          "isMinor": false
+        },
+        "consent": {
+          "voice": "granted",
+          "whatsapp": "granted"
+        },
+        "optOut": {
+          "commercial": false,
+          "doNotContact": false,
+          "siblingDoNotContact": false
+        },
+        "voice": {
+          "excluded": false,
+          "rneOk": true
+        },
+        "history": [],
+        "limits": {
+          "perDay": 1,
+          "perWeek": 2,
+          "minHoursBetween": 48
+        },
+        "ownHours": null,
+        "flags": {
+          "master": true,
+          "mode": "live",
+          "channelEnabled": true,
+          "channelLive": true,
+          "sendsEnabledInCode": false,
+          "legacyAutonomy": false,
+          "legacyFollowupsScheduler": false
+        },
+        "brakes": {
+          "global": false,
+          "channel": false,
+          "strategy": false,
+          "ultronAbortLatch": false,
+          "marketingAgentPaused": false,
+          "voiceBrake": false
+        },
+        "conversation": {
+          "humanInControl": false
+        },
+        "globalSuppression": false,
+        "studio": {
+          "referenceValid": true,
+          "catalogCompatible": true,
+          "paymentLinksEnabled": true,
+          "canaryOnly": false,
+          "templateViolations": []
+        },
+        "receivable": {
+          "known": true,
+          "overdueDaysMax": null
+        },
+        "collectionsBlock": {
+          "serverDays": 15,
+          "strategyDays": null
+        },
+        "step": {
+          "usesPaymentLink": false,
+          "templateApproved": true,
+          "templateCategoryMatches": true
+        },
+        "identity": {
+          "voiceContact": true,
+          "whatsapp": true
+        },
+        "voicePolicyReasons": [],
+        "budget": {
+          "dailyBudgetMicros": 0,
+          "reservedTodayMicros": 0,
+          "costMicros": 0,
+          "channelDailyCap": 0,
+          "channelUsedToday": 0,
+          "assistedDailyCap": 20,
+          "assistedUsedToday": 0
+        },
+        "strategy": {
+          "trigger": "membership.expiring_window",
+          "published": true,
+          "paused": false,
+          "chainReadable": true,
+          "part": "rest",
+          "inCanaryScope": true,
+          "schedule": null,
+          "touches": 0,
+          "maxTouches": 6,
+          "dailyCap": 50,
+          "usedToday": 0,
+          "enrollmentWindowEndsAt": "2026-11-30T05:00:00Z",
+          "cooldownUntil": null,
+          "stepGuard": "true"
+        },
+        "context": {
+          "success": "false",
+          "audience": "false",
+          "exclusions": "false",
+          "humanRequestedRecently": false,
+          "complaintRecently": true,
+          "otherPurposeToday": false,
+          "lowerPriority": false
+        },
+        "conversational": {
+          "callbackAt": null
+        }
+      },
+      "expected": {
+        "verdict": "deny",
+        "allowed": false,
+        "level": "N6",
+        "reasons": [
+          "context_changed",
+          "complaint_recent"
+        ],
+        "retryAt": null,
+        "waitsForRelease": false,
+        "effect": "cancel_context_changed",
+        "levels": [
+          {
+            "level": "N1",
+            "status": "pass"
+          },
+          {
+            "level": "N2",
+            "status": "pass"
+          },
+          {
+            "level": "N3",
+            "status": "pass"
+          },
+          {
+            "level": "N4",
+            "status": "pass"
+          },
+          {
+            "level": "N5",
+            "status": "pass"
+          },
+          {
+            "level": "N6",
+            "status": "deny"
+          },
+          {
+            "level": "N7",
+            "status": "not_evaluated"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "name": "n6 · n6 · comercial con queja y cartera vencida de 60 días: los dos motivos, efecto exit_complaint",
+      "kind": "n6",
+      "contractRef": "D9-7 N6 (enmienda Q1-3), L9-20",
+      "basis": "supuesto-lead",
+      "decision": "DF-L14",
+      "patch": {
+        "context": {
+          "complaintRecently": true
+        },
+        "receivable": {
+          "overdueDaysMax": 60
+        }
+      },
+      "input": {
+        "now": "2026-11-10T15:00:00Z",
+        "purpose": "commercial",
+        "channel": "assisted:whatsapp",
+        "subject": {
+          "known": true,
+          "isMinor": false
+        },
+        "consent": {
+          "voice": "granted",
+          "whatsapp": "granted"
+        },
+        "optOut": {
+          "commercial": false,
+          "doNotContact": false,
+          "siblingDoNotContact": false
+        },
+        "voice": {
+          "excluded": false,
+          "rneOk": true
+        },
+        "history": [],
+        "limits": {
+          "perDay": 1,
+          "perWeek": 2,
+          "minHoursBetween": 48
+        },
+        "ownHours": null,
+        "flags": {
+          "master": true,
+          "mode": "live",
+          "channelEnabled": true,
+          "channelLive": true,
+          "sendsEnabledInCode": false,
+          "legacyAutonomy": false,
+          "legacyFollowupsScheduler": false
+        },
+        "brakes": {
+          "global": false,
+          "channel": false,
+          "strategy": false,
+          "ultronAbortLatch": false,
+          "marketingAgentPaused": false,
+          "voiceBrake": false
+        },
+        "conversation": {
+          "humanInControl": false
+        },
+        "globalSuppression": false,
+        "studio": {
+          "referenceValid": true,
+          "catalogCompatible": true,
+          "paymentLinksEnabled": true,
+          "canaryOnly": false,
+          "templateViolations": []
+        },
+        "receivable": {
+          "known": true,
+          "overdueDaysMax": 60
+        },
+        "collectionsBlock": {
+          "serverDays": 15,
+          "strategyDays": null
+        },
+        "step": {
+          "usesPaymentLink": false,
+          "templateApproved": true,
+          "templateCategoryMatches": true
+        },
+        "identity": {
+          "voiceContact": true,
+          "whatsapp": true
+        },
+        "voicePolicyReasons": [],
+        "budget": {
+          "dailyBudgetMicros": 0,
+          "reservedTodayMicros": 0,
+          "costMicros": 0,
+          "channelDailyCap": 0,
+          "channelUsedToday": 0,
+          "assistedDailyCap": 20,
+          "assistedUsedToday": 0
+        },
+        "strategy": {
+          "trigger": "membership.expiring_window",
+          "published": true,
+          "paused": false,
+          "chainReadable": true,
+          "part": "rest",
+          "inCanaryScope": true,
+          "schedule": null,
+          "touches": 0,
+          "maxTouches": 6,
+          "dailyCap": 50,
+          "usedToday": 0,
+          "enrollmentWindowEndsAt": "2026-11-30T05:00:00Z",
+          "cooldownUntil": null,
+          "stepGuard": "true"
+        },
+        "context": {
+          "success": "false",
+          "audience": "true",
+          "exclusions": "false",
+          "humanRequestedRecently": false,
+          "complaintRecently": true,
+          "otherPurposeToday": false,
+          "lowerPriority": false
+        },
+        "conversational": {
+          "callbackAt": null
+        }
+      },
+      "expected": {
+        "verdict": "deny",
+        "allowed": false,
+        "level": "N6",
+        "reasons": [
+          "complaint_recent",
+          "collections_overdue_blocks_commercial"
+        ],
+        "retryAt": null,
+        "waitsForRelease": false,
+        "effect": "exit_complaint",
         "levels": [
           {
             "level": "N1",
@@ -16228,6 +17500,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -16393,6 +17666,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -16558,6 +17832,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -16723,6 +17998,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -16888,6 +18164,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -17082,6 +18359,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -17251,6 +18529,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -17416,6 +18695,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -17580,6 +18860,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -17747,6 +19028,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -17941,6 +19223,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -18123,6 +19406,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -18291,6 +19575,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": true,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -18309,6 +19594,680 @@
         "retryAt": null,
         "waitsForRelease": false,
         "effect": "handoff",
+        "levels": [
+          {
+            "level": "N1",
+            "status": "pass"
+          },
+          {
+            "level": "N2",
+            "status": "pass"
+          },
+          {
+            "level": "N3",
+            "status": "pass"
+          },
+          {
+            "level": "N4",
+            "status": "pass"
+          },
+          {
+            "level": "N5",
+            "status": "pass"
+          },
+          {
+            "level": "N6",
+            "status": "deny"
+          },
+          {
+            "level": "N7",
+            "status": "not_evaluated"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "name": "precedence · precedence · se quejó y no tiene autorización: decide N1 y N6 ni se evalúa",
+      "kind": "precedence",
+      "contractRef": "D9-7 («el primer nivel que niega decide»; enmienda Q1-3)",
+      "basis": "supuesto-lead",
+      "decision": "DF-L14",
+      "patch": {
+        "consent": {
+          "whatsapp": "none"
+        },
+        "context": {
+          "complaintRecently": true
+        }
+      },
+      "input": {
+        "now": "2026-11-10T15:00:00Z",
+        "purpose": "commercial",
+        "channel": "assisted:whatsapp",
+        "subject": {
+          "known": true,
+          "isMinor": false
+        },
+        "consent": {
+          "voice": "granted",
+          "whatsapp": "none"
+        },
+        "optOut": {
+          "commercial": false,
+          "doNotContact": false,
+          "siblingDoNotContact": false
+        },
+        "voice": {
+          "excluded": false,
+          "rneOk": true
+        },
+        "history": [],
+        "limits": {
+          "perDay": 1,
+          "perWeek": 2,
+          "minHoursBetween": 48
+        },
+        "ownHours": null,
+        "flags": {
+          "master": true,
+          "mode": "live",
+          "channelEnabled": true,
+          "channelLive": true,
+          "sendsEnabledInCode": false,
+          "legacyAutonomy": false,
+          "legacyFollowupsScheduler": false
+        },
+        "brakes": {
+          "global": false,
+          "channel": false,
+          "strategy": false,
+          "ultronAbortLatch": false,
+          "marketingAgentPaused": false,
+          "voiceBrake": false
+        },
+        "conversation": {
+          "humanInControl": false
+        },
+        "globalSuppression": false,
+        "studio": {
+          "referenceValid": true,
+          "catalogCompatible": true,
+          "paymentLinksEnabled": true,
+          "canaryOnly": false,
+          "templateViolations": []
+        },
+        "receivable": {
+          "known": true,
+          "overdueDaysMax": null
+        },
+        "collectionsBlock": {
+          "serverDays": 15,
+          "strategyDays": null
+        },
+        "step": {
+          "usesPaymentLink": false,
+          "templateApproved": true,
+          "templateCategoryMatches": true
+        },
+        "identity": {
+          "voiceContact": true,
+          "whatsapp": true
+        },
+        "voicePolicyReasons": [],
+        "budget": {
+          "dailyBudgetMicros": 0,
+          "reservedTodayMicros": 0,
+          "costMicros": 0,
+          "channelDailyCap": 0,
+          "channelUsedToday": 0,
+          "assistedDailyCap": 20,
+          "assistedUsedToday": 0
+        },
+        "strategy": {
+          "trigger": "membership.expiring_window",
+          "published": true,
+          "paused": false,
+          "chainReadable": true,
+          "part": "rest",
+          "inCanaryScope": true,
+          "schedule": null,
+          "touches": 0,
+          "maxTouches": 6,
+          "dailyCap": 50,
+          "usedToday": 0,
+          "enrollmentWindowEndsAt": "2026-11-30T05:00:00Z",
+          "cooldownUntil": null,
+          "stepGuard": "true"
+        },
+        "context": {
+          "success": "false",
+          "audience": "true",
+          "exclusions": "false",
+          "humanRequestedRecently": false,
+          "complaintRecently": true,
+          "otherPurposeToday": false,
+          "lowerPriority": false
+        },
+        "conversational": {
+          "callbackAt": null
+        }
+      },
+      "expected": {
+        "verdict": "deny",
+        "allowed": false,
+        "level": "N1",
+        "reasons": [
+          "no_consent_for_purpose_channel"
+        ],
+        "retryAt": null,
+        "waitsForRelease": false,
+        "effect": null,
+        "levels": [
+          {
+            "level": "N1",
+            "status": "deny"
+          },
+          {
+            "level": "N2",
+            "status": "not_evaluated"
+          },
+          {
+            "level": "N3",
+            "status": "not_evaluated"
+          },
+          {
+            "level": "N4",
+            "status": "not_evaluated"
+          },
+          {
+            "level": "N5",
+            "status": "not_evaluated"
+          },
+          {
+            "level": "N6",
+            "status": "not_evaluated"
+          },
+          {
+            "level": "N7",
+            "status": "not_evaluated"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "name": "precedence · precedence · se quejó un domingo: N1 aplaza al lunes (N6 decidirá entonces)",
+      "kind": "precedence",
+      "contractRef": "D9-7 (enmienda Q1-3), #17",
+      "basis": "supuesto-lead",
+      "decision": "DF-L14",
+      "patch": {
+        "now": "2026-11-08T15:00:00Z",
+        "context": {
+          "complaintRecently": true
+        }
+      },
+      "input": {
+        "now": "2026-11-08T15:00:00Z",
+        "purpose": "commercial",
+        "channel": "assisted:whatsapp",
+        "subject": {
+          "known": true,
+          "isMinor": false
+        },
+        "consent": {
+          "voice": "granted",
+          "whatsapp": "granted"
+        },
+        "optOut": {
+          "commercial": false,
+          "doNotContact": false,
+          "siblingDoNotContact": false
+        },
+        "voice": {
+          "excluded": false,
+          "rneOk": true
+        },
+        "history": [],
+        "limits": {
+          "perDay": 1,
+          "perWeek": 2,
+          "minHoursBetween": 48
+        },
+        "ownHours": null,
+        "flags": {
+          "master": true,
+          "mode": "live",
+          "channelEnabled": true,
+          "channelLive": true,
+          "sendsEnabledInCode": false,
+          "legacyAutonomy": false,
+          "legacyFollowupsScheduler": false
+        },
+        "brakes": {
+          "global": false,
+          "channel": false,
+          "strategy": false,
+          "ultronAbortLatch": false,
+          "marketingAgentPaused": false,
+          "voiceBrake": false
+        },
+        "conversation": {
+          "humanInControl": false
+        },
+        "globalSuppression": false,
+        "studio": {
+          "referenceValid": true,
+          "catalogCompatible": true,
+          "paymentLinksEnabled": true,
+          "canaryOnly": false,
+          "templateViolations": []
+        },
+        "receivable": {
+          "known": true,
+          "overdueDaysMax": null
+        },
+        "collectionsBlock": {
+          "serverDays": 15,
+          "strategyDays": null
+        },
+        "step": {
+          "usesPaymentLink": false,
+          "templateApproved": true,
+          "templateCategoryMatches": true
+        },
+        "identity": {
+          "voiceContact": true,
+          "whatsapp": true
+        },
+        "voicePolicyReasons": [],
+        "budget": {
+          "dailyBudgetMicros": 0,
+          "reservedTodayMicros": 0,
+          "costMicros": 0,
+          "channelDailyCap": 0,
+          "channelUsedToday": 0,
+          "assistedDailyCap": 20,
+          "assistedUsedToday": 0
+        },
+        "strategy": {
+          "trigger": "membership.expiring_window",
+          "published": true,
+          "paused": false,
+          "chainReadable": true,
+          "part": "rest",
+          "inCanaryScope": true,
+          "schedule": null,
+          "touches": 0,
+          "maxTouches": 6,
+          "dailyCap": 50,
+          "usedToday": 0,
+          "enrollmentWindowEndsAt": "2026-11-30T05:00:00Z",
+          "cooldownUntil": null,
+          "stepGuard": "true"
+        },
+        "context": {
+          "success": "false",
+          "audience": "true",
+          "exclusions": "false",
+          "humanRequestedRecently": false,
+          "complaintRecently": true,
+          "otherPurposeToday": false,
+          "lowerPriority": false
+        },
+        "conversational": {
+          "callbackAt": null
+        }
+      },
+      "expected": {
+        "verdict": "defer",
+        "allowed": false,
+        "level": "N1",
+        "reasons": [
+          "calendar_sunday"
+        ],
+        "retryAt": "2026-11-09T13:00:00Z",
+        "waitsForRelease": false,
+        "effect": null,
+        "levels": [
+          {
+            "level": "N1",
+            "status": "defer"
+          },
+          {
+            "level": "N2",
+            "status": "not_evaluated"
+          },
+          {
+            "level": "N3",
+            "status": "not_evaluated"
+          },
+          {
+            "level": "N4",
+            "status": "not_evaluated"
+          },
+          {
+            "level": "N5",
+            "status": "not_evaluated"
+          },
+          {
+            "level": "N6",
+            "status": "not_evaluated"
+          },
+          {
+            "level": "N7",
+            "status": "not_evaluated"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "name": "precedence · precedence · se quejó con la PARADA GLOBAL echada: N2 retiene antes que N6",
+      "kind": "precedence",
+      "contractRef": "D9-8 (PARADA GLOBAL; enmienda Q1-3)",
+      "basis": "supuesto-lead",
+      "decision": "DF-L14",
+      "patch": {
+        "brakes": {
+          "global": true
+        },
+        "context": {
+          "complaintRecently": true
+        }
+      },
+      "input": {
+        "now": "2026-11-10T15:00:00Z",
+        "purpose": "commercial",
+        "channel": "assisted:whatsapp",
+        "subject": {
+          "known": true,
+          "isMinor": false
+        },
+        "consent": {
+          "voice": "granted",
+          "whatsapp": "granted"
+        },
+        "optOut": {
+          "commercial": false,
+          "doNotContact": false,
+          "siblingDoNotContact": false
+        },
+        "voice": {
+          "excluded": false,
+          "rneOk": true
+        },
+        "history": [],
+        "limits": {
+          "perDay": 1,
+          "perWeek": 2,
+          "minHoursBetween": 48
+        },
+        "ownHours": null,
+        "flags": {
+          "master": true,
+          "mode": "live",
+          "channelEnabled": true,
+          "channelLive": true,
+          "sendsEnabledInCode": false,
+          "legacyAutonomy": false,
+          "legacyFollowupsScheduler": false
+        },
+        "brakes": {
+          "global": true,
+          "channel": false,
+          "strategy": false,
+          "ultronAbortLatch": false,
+          "marketingAgentPaused": false,
+          "voiceBrake": false
+        },
+        "conversation": {
+          "humanInControl": false
+        },
+        "globalSuppression": false,
+        "studio": {
+          "referenceValid": true,
+          "catalogCompatible": true,
+          "paymentLinksEnabled": true,
+          "canaryOnly": false,
+          "templateViolations": []
+        },
+        "receivable": {
+          "known": true,
+          "overdueDaysMax": null
+        },
+        "collectionsBlock": {
+          "serverDays": 15,
+          "strategyDays": null
+        },
+        "step": {
+          "usesPaymentLink": false,
+          "templateApproved": true,
+          "templateCategoryMatches": true
+        },
+        "identity": {
+          "voiceContact": true,
+          "whatsapp": true
+        },
+        "voicePolicyReasons": [],
+        "budget": {
+          "dailyBudgetMicros": 0,
+          "reservedTodayMicros": 0,
+          "costMicros": 0,
+          "channelDailyCap": 0,
+          "channelUsedToday": 0,
+          "assistedDailyCap": 20,
+          "assistedUsedToday": 0
+        },
+        "strategy": {
+          "trigger": "membership.expiring_window",
+          "published": true,
+          "paused": false,
+          "chainReadable": true,
+          "part": "rest",
+          "inCanaryScope": true,
+          "schedule": null,
+          "touches": 0,
+          "maxTouches": 6,
+          "dailyCap": 50,
+          "usedToday": 0,
+          "enrollmentWindowEndsAt": "2026-11-30T05:00:00Z",
+          "cooldownUntil": null,
+          "stepGuard": "true"
+        },
+        "context": {
+          "success": "false",
+          "audience": "true",
+          "exclusions": "false",
+          "humanRequestedRecently": false,
+          "complaintRecently": true,
+          "otherPurposeToday": false,
+          "lowerPriority": false
+        },
+        "conversational": {
+          "callbackAt": null
+        }
+      },
+      "expected": {
+        "verdict": "deny",
+        "allowed": false,
+        "level": "N2",
+        "reasons": [
+          "outreach_brake_global"
+        ],
+        "retryAt": null,
+        "waitsForRelease": true,
+        "effect": null,
+        "levels": [
+          {
+            "level": "N1",
+            "status": "pass"
+          },
+          {
+            "level": "N2",
+            "status": "deny"
+          },
+          {
+            "level": "N3",
+            "status": "not_evaluated"
+          },
+          {
+            "level": "N4",
+            "status": "not_evaluated"
+          },
+          {
+            "level": "N5",
+            "status": "not_evaluated"
+          },
+          {
+            "level": "N6",
+            "status": "not_evaluated"
+          },
+          {
+            "level": "N7",
+            "status": "not_evaluated"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "name": "precedence · precedence · se quejó y pidió que lo llamen ya: N6 niega y N7 ni se evalúa",
+      "kind": "precedence",
+      "contractRef": "T22 («ninguna instrucción conversacional levanta una negación de N1–N6»; enmienda Q1-3)",
+      "basis": "supuesto-lead",
+      "decision": "DF-L14",
+      "patch": {
+        "context": {
+          "complaintRecently": true
+        },
+        "conversational": {
+          "callbackAt": "2026-11-10T16:00:00Z"
+        }
+      },
+      "input": {
+        "now": "2026-11-10T15:00:00Z",
+        "purpose": "commercial",
+        "channel": "assisted:whatsapp",
+        "subject": {
+          "known": true,
+          "isMinor": false
+        },
+        "consent": {
+          "voice": "granted",
+          "whatsapp": "granted"
+        },
+        "optOut": {
+          "commercial": false,
+          "doNotContact": false,
+          "siblingDoNotContact": false
+        },
+        "voice": {
+          "excluded": false,
+          "rneOk": true
+        },
+        "history": [],
+        "limits": {
+          "perDay": 1,
+          "perWeek": 2,
+          "minHoursBetween": 48
+        },
+        "ownHours": null,
+        "flags": {
+          "master": true,
+          "mode": "live",
+          "channelEnabled": true,
+          "channelLive": true,
+          "sendsEnabledInCode": false,
+          "legacyAutonomy": false,
+          "legacyFollowupsScheduler": false
+        },
+        "brakes": {
+          "global": false,
+          "channel": false,
+          "strategy": false,
+          "ultronAbortLatch": false,
+          "marketingAgentPaused": false,
+          "voiceBrake": false
+        },
+        "conversation": {
+          "humanInControl": false
+        },
+        "globalSuppression": false,
+        "studio": {
+          "referenceValid": true,
+          "catalogCompatible": true,
+          "paymentLinksEnabled": true,
+          "canaryOnly": false,
+          "templateViolations": []
+        },
+        "receivable": {
+          "known": true,
+          "overdueDaysMax": null
+        },
+        "collectionsBlock": {
+          "serverDays": 15,
+          "strategyDays": null
+        },
+        "step": {
+          "usesPaymentLink": false,
+          "templateApproved": true,
+          "templateCategoryMatches": true
+        },
+        "identity": {
+          "voiceContact": true,
+          "whatsapp": true
+        },
+        "voicePolicyReasons": [],
+        "budget": {
+          "dailyBudgetMicros": 0,
+          "reservedTodayMicros": 0,
+          "costMicros": 0,
+          "channelDailyCap": 0,
+          "channelUsedToday": 0,
+          "assistedDailyCap": 20,
+          "assistedUsedToday": 0
+        },
+        "strategy": {
+          "trigger": "membership.expiring_window",
+          "published": true,
+          "paused": false,
+          "chainReadable": true,
+          "part": "rest",
+          "inCanaryScope": true,
+          "schedule": null,
+          "touches": 0,
+          "maxTouches": 6,
+          "dailyCap": 50,
+          "usedToday": 0,
+          "enrollmentWindowEndsAt": "2026-11-30T05:00:00Z",
+          "cooldownUntil": null,
+          "stepGuard": "true"
+        },
+        "context": {
+          "success": "false",
+          "audience": "true",
+          "exclusions": "false",
+          "humanRequestedRecently": false,
+          "complaintRecently": true,
+          "otherPurposeToday": false,
+          "lowerPriority": false
+        },
+        "conversational": {
+          "callbackAt": "2026-11-10T16:00:00Z"
+        }
+      },
+      "expected": {
+        "verdict": "deny",
+        "allowed": false,
+        "level": "N6",
+        "reasons": [
+          "complaint_recent"
+        ],
+        "retryAt": null,
+        "waitsForRelease": false,
+        "effect": "exit_complaint",
         "levels": [
           {
             "level": "N1",
@@ -18459,6 +20418,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -18638,6 +20598,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": true
         },
@@ -18809,6 +20770,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -18992,6 +20954,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -19159,6 +21122,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -19328,6 +21292,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -19503,6 +21468,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -19682,6 +21648,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -19864,6 +21831,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -20036,6 +22004,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -20210,6 +22179,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -20382,6 +22352,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -20553,6 +22524,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -20723,6 +22695,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -20888,6 +22861,7 @@
           "audience": "true",
           "exclusions": "false",
           "humanRequestedRecently": false,
+          "complaintRecently": false,
           "otherPurposeToday": false,
           "lowerPriority": false
         },
@@ -20936,6 +22910,360 @@
           }
         ],
         "warnings": []
+      }
+    },
+    {
+      "name": "shadow · shadow · en sombra la queja reciente NIEGA igual que en vivo: no es un aviso",
+      "kind": "shadow",
+      "contractRef": "D9-8 («todo lo demás se aplica igual»; enmienda Q1-3)",
+      "basis": "supuesto-lead",
+      "decision": "DF-L14",
+      "patch": {
+        "flags": {
+          "mode": "shadow"
+        },
+        "context": {
+          "complaintRecently": true
+        }
+      },
+      "input": {
+        "now": "2026-11-10T15:00:00Z",
+        "purpose": "commercial",
+        "channel": "assisted:whatsapp",
+        "subject": {
+          "known": true,
+          "isMinor": false
+        },
+        "consent": {
+          "voice": "granted",
+          "whatsapp": "granted"
+        },
+        "optOut": {
+          "commercial": false,
+          "doNotContact": false,
+          "siblingDoNotContact": false
+        },
+        "voice": {
+          "excluded": false,
+          "rneOk": true
+        },
+        "history": [],
+        "limits": {
+          "perDay": 1,
+          "perWeek": 2,
+          "minHoursBetween": 48
+        },
+        "ownHours": null,
+        "flags": {
+          "master": true,
+          "mode": "shadow",
+          "channelEnabled": true,
+          "channelLive": true,
+          "sendsEnabledInCode": false,
+          "legacyAutonomy": false,
+          "legacyFollowupsScheduler": false
+        },
+        "brakes": {
+          "global": false,
+          "channel": false,
+          "strategy": false,
+          "ultronAbortLatch": false,
+          "marketingAgentPaused": false,
+          "voiceBrake": false
+        },
+        "conversation": {
+          "humanInControl": false
+        },
+        "globalSuppression": false,
+        "studio": {
+          "referenceValid": true,
+          "catalogCompatible": true,
+          "paymentLinksEnabled": true,
+          "canaryOnly": false,
+          "templateViolations": []
+        },
+        "receivable": {
+          "known": true,
+          "overdueDaysMax": null
+        },
+        "collectionsBlock": {
+          "serverDays": 15,
+          "strategyDays": null
+        },
+        "step": {
+          "usesPaymentLink": false,
+          "templateApproved": true,
+          "templateCategoryMatches": true
+        },
+        "identity": {
+          "voiceContact": true,
+          "whatsapp": true
+        },
+        "voicePolicyReasons": [],
+        "budget": {
+          "dailyBudgetMicros": 0,
+          "reservedTodayMicros": 0,
+          "costMicros": 0,
+          "channelDailyCap": 0,
+          "channelUsedToday": 0,
+          "assistedDailyCap": 20,
+          "assistedUsedToday": 0
+        },
+        "strategy": {
+          "trigger": "membership.expiring_window",
+          "published": true,
+          "paused": false,
+          "chainReadable": true,
+          "part": "rest",
+          "inCanaryScope": true,
+          "schedule": null,
+          "touches": 0,
+          "maxTouches": 6,
+          "dailyCap": 50,
+          "usedToday": 0,
+          "enrollmentWindowEndsAt": "2026-11-30T05:00:00Z",
+          "cooldownUntil": null,
+          "stepGuard": "true"
+        },
+        "context": {
+          "success": "false",
+          "audience": "true",
+          "exclusions": "false",
+          "humanRequestedRecently": false,
+          "complaintRecently": true,
+          "otherPurposeToday": false,
+          "lowerPriority": false
+        },
+        "conversational": {
+          "callbackAt": null
+        }
+      },
+      "expected": {
+        "verdict": "deny",
+        "allowed": false,
+        "level": "N6",
+        "reasons": [
+          "complaint_recent"
+        ],
+        "retryAt": null,
+        "waitsForRelease": false,
+        "effect": "exit_complaint",
+        "levels": [
+          {
+            "level": "N1",
+            "status": "pass"
+          },
+          {
+            "level": "N2",
+            "status": "pass"
+          },
+          {
+            "level": "N3",
+            "status": "pass"
+          },
+          {
+            "level": "N4",
+            "status": "pass"
+          },
+          {
+            "level": "N5",
+            "status": "pass"
+          },
+          {
+            "level": "N6",
+            "status": "deny"
+          },
+          {
+            "level": "N7",
+            "status": "not_evaluated"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "name": "shadow · shadow · en sombra, «solo canario» y fuera del alcance: los avisos de N3 y N5 se anotan y la queja niega en N6",
+      "kind": "shadow",
+      "contractRef": "D9-11.6, D9-8 (enmienda Q1-3)",
+      "basis": "supuesto-lead",
+      "decision": "DF-L14",
+      "patch": {
+        "flags": {
+          "mode": "shadow"
+        },
+        "studio": {
+          "canaryOnly": true
+        },
+        "strategy": {
+          "part": "canary",
+          "inCanaryScope": false
+        },
+        "context": {
+          "complaintRecently": true
+        }
+      },
+      "input": {
+        "now": "2026-11-10T15:00:00Z",
+        "purpose": "commercial",
+        "channel": "assisted:whatsapp",
+        "subject": {
+          "known": true,
+          "isMinor": false
+        },
+        "consent": {
+          "voice": "granted",
+          "whatsapp": "granted"
+        },
+        "optOut": {
+          "commercial": false,
+          "doNotContact": false,
+          "siblingDoNotContact": false
+        },
+        "voice": {
+          "excluded": false,
+          "rneOk": true
+        },
+        "history": [],
+        "limits": {
+          "perDay": 1,
+          "perWeek": 2,
+          "minHoursBetween": 48
+        },
+        "ownHours": null,
+        "flags": {
+          "master": true,
+          "mode": "shadow",
+          "channelEnabled": true,
+          "channelLive": true,
+          "sendsEnabledInCode": false,
+          "legacyAutonomy": false,
+          "legacyFollowupsScheduler": false
+        },
+        "brakes": {
+          "global": false,
+          "channel": false,
+          "strategy": false,
+          "ultronAbortLatch": false,
+          "marketingAgentPaused": false,
+          "voiceBrake": false
+        },
+        "conversation": {
+          "humanInControl": false
+        },
+        "globalSuppression": false,
+        "studio": {
+          "referenceValid": true,
+          "catalogCompatible": true,
+          "paymentLinksEnabled": true,
+          "canaryOnly": true,
+          "templateViolations": []
+        },
+        "receivable": {
+          "known": true,
+          "overdueDaysMax": null
+        },
+        "collectionsBlock": {
+          "serverDays": 15,
+          "strategyDays": null
+        },
+        "step": {
+          "usesPaymentLink": false,
+          "templateApproved": true,
+          "templateCategoryMatches": true
+        },
+        "identity": {
+          "voiceContact": true,
+          "whatsapp": true
+        },
+        "voicePolicyReasons": [],
+        "budget": {
+          "dailyBudgetMicros": 0,
+          "reservedTodayMicros": 0,
+          "costMicros": 0,
+          "channelDailyCap": 0,
+          "channelUsedToday": 0,
+          "assistedDailyCap": 20,
+          "assistedUsedToday": 0
+        },
+        "strategy": {
+          "trigger": "membership.expiring_window",
+          "published": true,
+          "paused": false,
+          "chainReadable": true,
+          "part": "canary",
+          "inCanaryScope": false,
+          "schedule": null,
+          "touches": 0,
+          "maxTouches": 6,
+          "dailyCap": 50,
+          "usedToday": 0,
+          "enrollmentWindowEndsAt": "2026-11-30T05:00:00Z",
+          "cooldownUntil": null,
+          "stepGuard": "true"
+        },
+        "context": {
+          "success": "false",
+          "audience": "true",
+          "exclusions": "false",
+          "humanRequestedRecently": false,
+          "complaintRecently": true,
+          "otherPurposeToday": false,
+          "lowerPriority": false
+        },
+        "conversational": {
+          "callbackAt": null
+        }
+      },
+      "expected": {
+        "verdict": "deny",
+        "allowed": false,
+        "level": "N6",
+        "reasons": [
+          "complaint_recent"
+        ],
+        "retryAt": null,
+        "waitsForRelease": false,
+        "effect": "exit_complaint",
+        "levels": [
+          {
+            "level": "N1",
+            "status": "pass"
+          },
+          {
+            "level": "N2",
+            "status": "pass"
+          },
+          {
+            "level": "N3",
+            "status": "pass"
+          },
+          {
+            "level": "N4",
+            "status": "pass"
+          },
+          {
+            "level": "N5",
+            "status": "pass"
+          },
+          {
+            "level": "N6",
+            "status": "deny"
+          },
+          {
+            "level": "N7",
+            "status": "not_evaluated"
+          }
+        ],
+        "warnings": [
+          {
+            "level": "N3",
+            "reason": "canary_only_declared"
+          },
+          {
+            "level": "N5",
+            "reason": "canary_scope_mismatch"
+          }
+        ]
       }
     }
   ]

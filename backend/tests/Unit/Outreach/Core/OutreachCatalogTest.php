@@ -30,6 +30,7 @@ class OutreachCatalogTest extends TestCase
         'outreach-catalog/2026-11-10.1' => '4580c4477ddc86ef14f0c5c7ce494d767caff102e5377d7f10a58e406295fe47',
         'outreach-catalog/2026-11-10.2' => 'ce5fcdab1e1265b70a1e7133b3eeccbd62bb2ab690acfa11a700ad6779a13039',
         'outreach-catalog/2026-11-11.1' => '079930a2a391f318ee7812a9b6e6fcce893458987ecbf5a14ec37d0232a86e11',
+        'outreach-catalog/2026-11-11.2' => '49b7d57e1097d7b930bc58b4816830b139e9042dbb504159f627f4f7bbca39c7',
     ];
 
     public function test_el_export_es_el_catalogo_del_fixture_byte_a_byte(): void
@@ -70,11 +71,15 @@ class OutreachCatalogTest extends TestCase
         $this->assertCount(27, $crm);
         $this->assertSame(['complaint_created', 'customer_satisfied', 'human_requested', 'objection_raised', 'offer_presented', 'offer_rejected', 'referral_opportunity'],
             array_values(array_column(array_filter($crm, static fn (array $e): bool => ! $e['triggerable']), 'key')));
-        // I-5: no están disponibles los tres de integración (W9/V9) y los seis del vocabulario sin emisor; el constructor ofrece
-        // como disparador solo lo disparable Y disponible: 20 del vocabulario (los 21 con emisor menos human_requested) y los 8 periódicos.
+        // I-5: no están disponibles los tres de integración (W9/V9) y los cinco del vocabulario sin emisor (complaint_created
+        // tiene emisor desde Q1-2); el constructor ofrece como disparador solo lo disparable Y disponible: 20 del vocabulario
+        // (los 22 con emisor menos human_requested y complaint_created, que solo detienen) y los 8 periódicos.
         $noDisponibles = array_values(array_column(array_filter($c['events'], static fn (array $e): bool => ! $e['available']), 'key'));
-        $this->assertSame(['complaint_created', 'customer_satisfied', 'integration.inbound_message', 'integration.meta_status', 'integration.voice_call_status',
+        $this->assertSame(['customer_satisfied', 'integration.inbound_message', 'integration.meta_status', 'integration.voice_call_status',
             'objection_raised', 'offer_presented', 'offer_rejected', 'referral_opportunity'], $noDisponibles);
+        // Q1-2: la queja tiene emisor y se puede leer, pero nunca abre un contacto (sin finalidad, DF-K4).
+        $queja = OutreachCatalog::event('complaint_created');
+        $this->assertSame([true, false, [], true], [$queja['available'], $queja['triggerable'], $queja['purposes'], $queja['conditionUsable']]);
         $ofrecidos = array_filter($c['events'], static fn (array $e): bool => $e['triggerable'] && $e['available']);
         $this->assertSame([20, 8], [count(array_filter($ofrecidos, static fn (array $e): bool => $e['class'] === 'crm_fact')), count(array_filter($ofrecidos, static fn (array $e): bool => $e['class'] === 'periodic'))]);
         foreach (OutreachCatalog::EVENTS_WITHOUT_EMITTER as $k) {

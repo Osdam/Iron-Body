@@ -183,6 +183,42 @@ class OutreachPlannerTest extends TestCase
         $this->assertSame(2, DB::table('outreach_runs')->where('kind', 'ingest')->where('status', 'completed')->count());
     }
 
+    public function test_14b_la_segunda_aparicion_de_la_misma_persona_en_un_lote_cuenta_como_repeated_subject_y_no_se_evalua(): void
+    {
+        // Informe del tester I-6, O-1: antes la segunda aparición no caía en ningún recuento (`candidates` 2, evaluados 1).
+        $this->runFlags('shadow');
+        $vivo = $this->liveStrategy($this->validContent($this->assistedTemplate(), [
+            'trigger' => ['event' => 'membership_expired'],
+            'audience' => ['fact' => 'membership.frozen', 'op' => 'eq', 'value' => false],
+            'success' => ['fact' => 'membership.days_to_expiry', 'op' => 'gt', 'value' => 30],
+        ]));
+        $ana = $this->eligibleMember(-1, '3001234567');
+        $beto = $this->eligibleMember(-1, '3001234568');
+        $this->commercialEvent('membership_expired', '2026-11-17 05:00', $ana['member']);
+        $this->commercialEvent('membership_expired', '2026-11-17 05:01', $beto['member']);
+        $this->commercialEvent('membership_expired', '2026-11-17 05:02', $ana['member']);   // la misma persona, en el mismo lote
+        $this->commercialEvent('membership_expired', '2026-11-17 05:03', $ana['member']);
+
+        $r = (new OutreachPlanner)->ingest(now());
+        $this->assertSame(4, $r['events']);
+        $c = $r['strategies'][$vivo['strategyUuid']];
+        $this->assertSame(['candidates' => 4, 'evaluated' => 2, 'enrolled' => 2, 'repeated_subject' => 2], array_intersect_key($c, array_flip(['candidates', 'evaluated', 'enrolled', 'repeated_subject'])));
+        $this->assertSame(
+            $c['candidates'],
+            $c['repeated_subject'] + $c['no_cycle_key'] + $c['unknown_subject'] + $c['already_enrolled'] + $c['open_enrollment'] + $c['cooldown'] + $c['evaluated'],
+            'cada candidato cae en un recuento: '.json_encode($c),
+        );
+        $this->assertEqualsCanonicalizing([$ana['key'], $beto['key']], DB::table('outreach_enrollments')->pluck('subject_key')->all());
+        // Se inscribe la PRIMERA aparición (su ciclo es el del primer evento de Ana).
+        $primero = (int) DB::table('commercial_events')->where('member_id', $ana['member'])->min('id');
+        $this->assertSame('ce:'.$primero, DB::table('outreach_enrollments')->where('subject_key', $ana['key'])->value('cycle_key'));
+
+        // En otro lote ya no es una repetición de la página: es la inscripción abierta de siempre.
+        $this->commercialEvent('membership_expired', '2026-11-17 06:00', $ana['member']);
+        $c = (new OutreachPlanner)->ingest(now())['strategies'][$vivo['strategyUuid']];
+        $this->assertSame(['candidates' => 1, 'open_enrollment' => 1, 'repeated_subject' => 0], array_intersect_key($c, array_flip(['candidates', 'open_enrollment', 'repeated_subject'])));
+    }
+
     // ── Sombra: etapas 3–5 ──────────────────────────────────────────────────
 
     public function test_en_sombra_la_inscripcion_se_planifica_como_un_trabajo_simulado_sin_reserva_y_con_su_decision(): void

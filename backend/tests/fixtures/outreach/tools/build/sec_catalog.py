@@ -6,7 +6,7 @@
 #                    NO entran en la huella del catálogo; las fija policy-ladder-cases.json
 #   compatibility  · casos: una versión de estrategia frente al catálogo vigente (catalog_incompatible)
 #   cycleKeys      · casos: la clave de ciclo de cada disparador (la identidad de la ocurrencia, D9-3 y D9-8 etapa 2)
-CATALOG_VERSION = "outreach-catalog/2026-11-11.1"  # I-5: los eventos sin emisor no están disponibles como disparador (antes, .2 de L9-29: cls:{class_id}:{session_date}, keyVersion 2)
+CATALOG_VERSION = "outreach-catalog/2026-11-11.2"  # Q1-2: complaint_created tiene emisor (available, no disparador). Antes, .1 de I-5: los eventos sin emisor no están disponibles; .2 de L9-29: cls:{class_id}:{session_date}, keyVersion 2
 GRAMMAR = "outreach-conditions/1"
 
 GOALS = ["collect_data", "book_visit", "book_assessment", "close_plan", "collect_payment", "recover_payment_link",
@@ -89,7 +89,8 @@ SERVICE_EVENTS = {"appointment_created": ["commercial", "service"], "appointment
                   "invoice_requested": ["service"], "invoice_validated": ["service"], "invoice_rejected": ["service"]}
 NOT_TRIGGERABLE = {"human_requested", "complaint_created"}
 # I-5 (11-11-2026): los que HOY nadie registra en commercial_events (ni los observadores de app/Observers/Commercial ni commercial:scan).
-NO_EMITTER = {"complaint_created", "customer_satisfied", "objection_raised", "offer_presented", "offer_rejected", "referral_opportunity"}
+# Q1-2 (11-11-2026): complaint_created sale de aquí; lo registra MarketingAiActionCommercialObserver (la queja que marca la IA).
+NO_EMITTER = {"customer_satisfied", "objection_raised", "offer_presented", "offer_rejected", "referral_opportunity"}
 
 EVENTS = []
 for k in VOCAB_EVENTS:
@@ -241,7 +242,7 @@ assert CATALOG_JSON.startswith('{"contactFilters":[{"domain":["voice","whatsapp"
 # ── Anotaciones (documentación; fuera de la huella) ─────────────────────────
 EVENT_NOTES = {
     "human_requested": "Solo puede DETENER (D9-3, D9-7 N6 human_requested_recently): nunca es disparador.",
-    "complaint_created": "No es disparador (DF-K4): una queja no abre un contacto automático; sí se puede leer en condiciones. Sin emisor hoy (I-5): ni el agente de ventas ni nadie lo registra (una queja en WhatsApp deja staff_review_pending en la conversación, que el H9 lee como conversation.human_in_control), así que en una condición vale siempre «no ocurrió».",
+    "complaint_created": "No es disparador (DF-K4): una queja no abre un contacto automático; sí se puede leer en condiciones. Emisor (Q1-2, 11-11-2026): MarketingAiActionCommercialObserver, cuando la fila de la IA marca la queja (reason o metadata.intent = complaint); una al día de Bogotá por conversación, sin texto ni teléfono. Además de leerse en condiciones, detiene: N6 complaint_recent (policy-ladder-cases.json, DF-L14).",
     **{k: "Sin emisor hoy (I-5, 11-11-2026): nadie lo registra en commercial_events. No disponible como disparador (available = false y triggerable = false, DF-K4); en una condición vale siempre «no ocurrió» mientras nadie lo emita."
        for k in ("customer_satisfied", "objection_raised", "offer_presented", "offer_rejected", "referral_opportunity")},
     "class.upcoming_with_capacity": "Una sesión con cupo dentro de withinDays; la clave de ciclo es la sesión (una inscripción por persona y sesión). #7 de §13.1.",
@@ -342,7 +343,7 @@ CS = Fixture("catalog-snapshot.json", header(
         "DF-K1": "membership.expiring_window inscribe si membership.days_to_expiry ∈ [0, daysBefore] (ventana, no el día exacto); daysBefore ∈ [0, 60]: el 0 lo exige #2 de §13.1 (ratificada por el lead: L9-11, D9-3 queda enmendado).",
         "DF-K2": "membership.expired_window exige daysAfterMin ≥ 1 (quien vence hoy no ha vencido) y daysAfterMin ≤ daysAfterMax; los dos extremos cerrados (#3).",
         "DF-K3": "valuation.outdated sin valoración previa: valuation.days_since_last desconocido → no inscribe (lado seguro).",
-        "DF-K4": "Disparadores: los 27 eventos del vocabulario son legibles en condiciones; human_requested (contrato) y complaint_created (este fixture) no son disparadores. Finalidad: service solo appointment_* e invoice_*; collections solo receivable.overdue; el resto, commercial. Disponibilidad (I-5 de la auditoría de cierre B, 11-11-2026): los que hoy nadie registra en commercial_events (complaint_created, customer_satisfied, objection_raised, offer_presented, offer_rejected, referral_opportunity) van con available = false y triggerable = false, como los de integración (un disparador siempre está disponible): el constructor no los ofrece y una estrategia no los acepta como disparador (trigger_not_allowed); conservan su finalidad posible, siguen legibles en condiciones y no cuentan en la compatibilidad (DF-K6).",
+        "DF-K4": "Disparadores: los 27 eventos del vocabulario son legibles en condiciones; human_requested (contrato) y complaint_created (este fixture) no son disparadores. Finalidad: service solo appointment_* e invoice_*; collections solo receivable.overdue; el resto, commercial. Disponibilidad (I-5 de la auditoría de cierre B, 11-11-2026): los que hoy nadie registra en commercial_events (customer_satisfied, objection_raised, offer_presented, offer_rejected, referral_opportunity; complaint_created tiene emisor desde Q1-2, 11-11-2026, y sigue sin ser disparador) van con available = false y triggerable = false, como los de integración (un disparador siempre está disponible): el constructor no los ofrece y una estrategia no los acepta como disparador (trigger_not_allowed); conservan su finalidad posible, siguen legibles en condiciones y no cuentan en la compatibilidad (DF-K6).",
         "DF-K5": "Claves de ciclo: ce:{commercial_event_id} · exp:{membership_end_date Y-m-d} · inact:{semana ISO del día de Bogotá, «o-\\WW»} · rcv:{receivable_id}:{generación} · tx:{payment_transaction_id} · fu:{marketing_followup_id} · cls:{class_id}:{session_date Y-m-d} (L9-29) · val:{id de la última valoración} · job:{outreach_job_uuid}. Sin el dato (p. ej. membership_end_date nulo) no hay clave y no se inscribe.",
         "DF-K6": "Compatibilidad: una versión es compatible si cada hecho que usa existe en el catálogo vigente y cada evento existe con la misma keyVersion; si no, catalog_incompatible (nivel N3 de la escalera, ratificada por el lead: L9-21) con la lista de lo que falta («fact:<clave>», «event:<clave>» o «event:<clave>@<keyVersion>»), ordenada por bytes. La cadena de versión del catálogo no decide sola (los cambios son aditivos).",
         "DF-T1": "(Ratificada por el lead: L9-14.) Tipos de los hechos de D9-4: los recuentos y los días con signo son int; los «días/horas desde lo último» son duration (≥ 0) con los mismos operadores que int y el literal entero en la unidad del hecho; date_relative es un desplazamiento con signo (futuro > 0, pasado < 0) en la unidad del hecho.",

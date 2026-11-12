@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Models\Attendance;
 use App\Models\ElectronicInvoice;
+use App\Models\MarketingAiAction;
 use App\Models\MarketingAppointment;
 use App\Models\MarketingConversation;
 use App\Models\MarketingLead;
@@ -12,6 +13,7 @@ use App\Models\PaymentTransaction;
 use App\Models\User;
 use App\Observers\Commercial\AttendanceCommercialObserver;
 use App\Observers\Commercial\ElectronicInvoiceCommercialObserver;
+use App\Observers\Commercial\MarketingAiActionCommercialObserver;
 use App\Observers\Commercial\MarketingAppointmentCommercialObserver;
 use App\Observers\Commercial\MarketingConversationCommercialObserver;
 use App\Observers\Commercial\MarketingLeadCommercialObserver;
@@ -48,6 +50,7 @@ class CommercialEventServiceProvider extends ServiceProvider
         MarketingLead::class => MarketingLeadCommercialObserver::class,
         MarketingAppointment::class => MarketingAppointmentCommercialObserver::class,
         MarketingConversation::class => MarketingConversationCommercialObserver::class,
+        MarketingAiAction::class => MarketingAiActionCommercialObserver::class,
         Attendance::class => AttendanceCommercialObserver::class,
         ElectronicInvoice::class => ElectronicInvoiceCommercialObserver::class,
     ];

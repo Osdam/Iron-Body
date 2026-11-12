@@ -217,6 +217,50 @@ final class OutreachConfig
         return self::int('outreach.human_requested_days', 30, 1, 365);
     }
 
+    /** Q1-3: los días de la ventana de la queja mientras `outreach.complaint_days` no exista o no valga. */
+    public const COMPLAINT_DAYS_DEFAULT = 30;
+
+    /**
+     * Q1-3 (N6 `complaint_recent`, DF-L14): la ventana de la queja reciente,
+     * en días de Bogotá. {@see COMPLAINT_DAYS_DEFAULT} hasta que el propietario
+     * decida (D2 del plan de quejas); propia, no la de `human_requested`:
+     * acortar una no acorta la otra (M-1 de security).
+     * `outreach.complaint_days` todavía no existe en `config/outreach.php`: si
+     * llega a existir y es un entero de 0 a 365, manda (más de 365 = 365).
+     * SOLO 0 apaga el freno: un negativo, un texto o nada dejan el valor por
+     * defecto (el lado seguro).
+     */
+    public static function complaintDays(): int
+    {
+        $v = config('outreach.complaint_days');
+
+        return is_int($v) && $v >= 0 ? min(365, $v) : self::COMPLAINT_DAYS_DEFAULT;
+    }
+
+    /**
+     * Q1-3 (DF-L14): las finalidades a las que frena una queja. Por defecto,
+     * TODAS las del catálogo menos los recordatorios de servicio (hoy,
+     * cobranza y comercial; D3 del plan): una finalidad nueva nace frenada.
+     * `outreach.complaint_purposes` todavía no existe: si llega a existir,
+     * solo vale una lista de finalidades del catálogo que incluya la
+     * comercial; cualquier otra cosa (vacía, sin la comercial, un nombre mal
+     * escrito, algo que no es una lista de textos) se ignora y queda el valor
+     * por defecto (M-1 de security: ante una mala configuración se frena). El
+     * freno se apaga con `complaint_days = 0`, no vaciando esta lista.
+     *
+     * @return list<string>
+     */
+    public static function complaintPurposes(): array
+    {
+        $v = config('outreach.complaint_purposes');
+        if (is_array($v) && array_is_list($v) && array_filter($v, 'is_string') === $v
+            && array_diff($v, OutreachCatalog::PURPOSES) === [] && in_array(OutreachCatalog::PURPOSE_COMMERCIAL, $v, true)) {
+            return array_values(array_intersect(OutreachCatalog::PURPOSES, $v));
+        }
+
+        return array_values(array_diff(OutreachCatalog::PURPOSES, [OutreachCatalog::PURPOSE_SERVICE]));
+    }
+
     /** @return array{optOutPermille: int, failurePermille: int, minSample: int} */
     public static function monitorThresholds(): array
     {
