@@ -241,9 +241,9 @@ done
 diff "$RUN/cerrada/backend/$POL" "$RUN/abierta/backend/$POL" > "$RUN/giro-constante.diff" || true
 ORIGEN="el commit"; [ -n "$ARBOL_SHA" ] && ORIGEN="el árbol de trabajo sobre HEAD (huella $ARBOL_SHA)"
 if [ "$FUENTE_EN" = cerrada ]; then
-  COPIAS="la fuente trae la constante CERRADA · cerrada: $ORIGEN tal cual · abierta$([ -d "$RUN/salientes/backend" ] && echo ' y salientes'): lo mismo + el giro de UNA línea (false → true)"
+  COPIAS="la fuente trae la constante CERRADA · cerrada: $ORIGEN tal cual · abierta$([ -d "$RUN/salientes/backend" ] && echo ' y salientes' || true): lo mismo + el giro de UNA línea (false → true)"
 else
-  COPIAS="la fuente trae la constante ABIERTA (voice(calls-open)) · abierta$([ -d "$RUN/salientes/backend" ] && echo ' y salientes'): $ORIGEN tal cual · cerrada: lo mismo + el giro de UNA línea al revés (true → false)"
+  COPIAS="la fuente trae la constante ABIERTA (voice(calls-open)) · abierta$([ -d "$RUN/salientes/backend" ] && echo ' y salientes' || true): $ORIGEN tal cual · cerrada: lo mismo + el giro de UNA línea al revés (true → false)"
 fi
 echo "   $COPIAS ($LINEAS líneas cambiadas en el diff: una fuera y una dentro, solo $POL)"
 PRUEBAS_SHA=$(cat "$BE"/tests/Feature/Voice/E2E/*.php | shasum -a 256 | cut -c1-16)

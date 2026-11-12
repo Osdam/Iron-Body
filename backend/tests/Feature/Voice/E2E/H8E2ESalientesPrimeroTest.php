@@ -45,8 +45,6 @@ final class H8E2ESalientesPrimeroTest extends H8StackE2ETestCase
 {
     protected const PHASE = 'salientes';
 
-    private const MARTES_EN_HORARIO = '2026-11-10T10:00:00-05:00';
-
     private const NO_CANARIO = '+573000000099';
 
     private const CONTACTO = '+573000000071';
@@ -56,7 +54,7 @@ final class H8E2ESalientesPrimeroTest extends H8StackE2ETestCase
 
     public function test_0_la_fase_es_la_4a_sin_entrantes_y_los_canarios_de_voz_se_registran(): void
     {
-        $this->must('la constante está ABIERTA en esta copia (el giro de una línea del banco)', VoiceCallPolicy::CALLS_ENABLED_IN_CODE === true, VoiceCallPolicy::CALLS_ENABLED_IN_CODE);
+        $this->must('la constante está ABIERTA en esta copia (la fuente tal cual si viene abierta; girada a true si viene cerrada)', VoiceCallPolicy::CALLS_ENABLED_IN_CODE === true, VoiceCallPolicy::CALLS_ENABLED_IN_CODE);
         $st = $this->telefonia('GET', 'status', 'a');
         $this->check('GET admin/voice/status: entrantes APAGADAS y salientes encendidas con alcance canary', $st->status() === 200 && $st->json('flags.inbound') === false
             && $st->json('flags.outbound') === true && $st->json('scopes.outbound') === 'canary', self::resumen($st, 'flags', 'scopes'));
@@ -147,7 +145,7 @@ final class H8E2ESalientesPrimeroTest extends H8StackE2ETestCase
             $this->must("saliente {$n}: fila requested sellada como la puerta (entrada 1, parte canaria)", ($s['status'] ?? null) === 'requested' && ($s['stampState'] ?? null) === 'applied' && ($s['seq'] ?? null) === 1 && ($s['part'] ?? null) === 'canary', $s);
             $this->ayudante(['despachar', $s['call'], 'voice-e2e']);
             $antes = $this->fotos();
-            $w = $this->workerDeUnTrabajo(self::MARTES_EN_HORARIO);
+            $w = $this->workerDeUnTrabajo(self::instanteDelReloj('martes'));
             $f = $this->fila('SELECT status, provider_conversation_id, provider_call_sid, spec_hash, provider_agent_id FROM voice_calls WHERE uuid = ?', [$s['call']]);
             $this->must("saliente {$n}: el job real marcó (dialing, conversación y SID de Twilio)", $w['code'] === 0 && $f !== null && $f['status'] === 'dialing'
                 && is_string($f['provider_conversation_id']) && preg_match('/^CA[0-9a-f]{32}$/', (string) $f['provider_call_sid']) === 1, ['fila' => $f, 'worker' => mb_substr($w['err'], 0, 200)]);
@@ -307,7 +305,7 @@ final class H8E2ESalientesPrimeroTest extends H8StackE2ETestCase
             $this->check('el consentimiento se revoca después de encolar', in_array($rv->status(), [200, 201], true), self::resumen($rv));
             $this->ayudante(['despachar', $s['call'], 'voice-e2e']);
             $antes = $this->fotos();
-            $w = $this->workerDeUnTrabajo(self::MARTES_EN_HORARIO, self::ENTORNO_4B);
+            $w = $this->workerDeUnTrabajo(self::instanteDelReloj('martes'), self::ENTORNO_4B);
             $fx = $this->fila('SELECT status, policy_reason FROM voice_calls WHERE uuid = ?', [$s['call']]);
             $dx = self::delta($antes['el'], $this->el('stats'));
             $this->check('el JOB (alcance contacts, martes 10:00) la cancela con no_voice_consent, sin petición a ElevenLabs', $w['code'] === 0 && $fx !== null && $fx['status'] === 'canceled'
@@ -357,7 +355,7 @@ final class H8E2ESalientesPrimeroTest extends H8StackE2ETestCase
         $s = $this->ayudante(['saliente', 'canary', $c1, self::uuid(), $ana, '0']);
         $this->ayudante(['despachar', $s['call'], 'voice-e2e']);
         $antes = $this->fotos();
-        $w = $this->workerDeUnTrabajo(self::MARTES_EN_HORARIO);
+        $w = $this->workerDeUnTrabajo(self::instanteDelReloj('martes'));
         $fx = $this->fila('SELECT status, policy_reason FROM voice_calls WHERE uuid = ?', [$s['call']]);
         $this->check('el job tampoco marca al número excluido (canceled excluded, sin petición)', $w['code'] === 0 && $fx['status'] === 'canceled' && $fx['policy_reason'] === 'excluded'
             && ! isset(self::delta($antes['el'], $this->el('stats'))['byRoute']['/v1/convai/twilio/outbound-call']), $fx);
@@ -526,7 +524,7 @@ final class H8E2ESalientesPrimeroTest extends H8StackE2ETestCase
     {
         $s = $this->ayudante(['saliente', 'canary', $canario, self::uuid(), (string) self::ctx()['accounts']['a']['id'], '0']);
         $this->ayudante(['despachar', $s['call'], 'voice-e2e']);
-        $w = $this->workerDeUnTrabajo(self::MARTES_EN_HORARIO);
+        $w = $this->workerDeUnTrabajo(self::instanteDelReloj('martes'));
         $f = $this->fila('SELECT status, provider_conversation_id FROM voice_calls WHERE uuid = ?', [$s['call']]);
         $this->must("saliente {$etiqueta}: marcada (dialing)", $w['code'] === 0 && ($f['status'] ?? null) === 'dialing', $f);
         self::$s['salientesMarcadas'] = (self::$s['salientesMarcadas'] ?? 0) + 1;

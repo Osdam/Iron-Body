@@ -5,10 +5,11 @@ namespace Tests\Feature\Voice\E2E;
 use App\Services\Voice\VoiceCallPolicy;
 
 /**
- * E2E del Hito 8, FASE CERRADA (TEST8-b): la copia del árbol es EXACTAMENTE el commit (`CALLS_ENABLED_IN_CODE =
- * false`) y TODAS las banderas de la voz están encendidas (las de las fases 2 a 4b a la vez, ver
- * `ops/h8-e2e/entorno-banco.ejemplo`). La constante es la única cerradura que queda (protección 2) y tiene que cerrar
- * sola, con la pila real y los simuladores:
+ * E2E del Hito 8, FASE CERRADA (TEST8-b): la copia del árbol con `CALLS_ENABLED_IN_CODE = false` (si la fuente viene
+ * cerrada, EXACTAMENTE el commit; si viene abierta, desde `voice(calls-open)`, el commit con esa única línea girada a
+ * `false` por el arnés, comprobado con diff) y TODAS las banderas de la voz están encendidas (las de las fases 2 a 4b a
+ * la vez, ver `ops/h8-e2e/entorno-banco.ejemplo`). La constante es la única cerradura que queda (protección 2) y tiene
+ * que cerrar sola, con la pila real y los simuladores:
  *  - el gobierno funciona sin ella: perfil, compilación y laboratorio hablado (no llaman a nadie por teléfono);
  *  - publicar despliega un agente INERTE y se detiene antes de asignar el número (`voice_number_not_assigned`,
  *    `not_attempted` por `calls_disabled_in_code`): ningún PATCH al número y la cadena vacía;
@@ -27,7 +28,7 @@ final class H8E2ECerradaTest extends H8StackE2ETestCase
 
     public function test_0_la_copia_es_el_commit_y_los_canarios_de_voz_se_registran_a_cuatro_ojos(): void
     {
-        $this->must('la constante está cerrada en esta copia (el commit tal cual)', VoiceCallPolicy::CALLS_ENABLED_IN_CODE === false, VoiceCallPolicy::CALLS_ENABLED_IN_CODE);
+        $this->must('la constante está cerrada en esta copia (la fuente tal cual si viene cerrada; girada a false si viene abierta)', VoiceCallPolicy::CALLS_ENABLED_IN_CODE === false, VoiceCallPolicy::CALLS_ENABLED_IN_CODE);
         $st = $this->telefonia('GET', 'status', 'a');
         $this->check('GET admin/voice/status: 200 y las banderas encendidas', $st->status() === 200 && $st->json('flags.inbound') === true && $st->json('flags.outbound') === true, self::resumen($st, 'flags'));
         $this->check('GET admin/voice/status: ya no informa flags.publishing (E4-1, E6-10)', ! array_key_exists('publishing', (array) $st->json('flags')), $st->json('flags'));

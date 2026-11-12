@@ -15,8 +15,9 @@ use Tests\TestCase;
  * Base del E2E del Hito 8 con la PILA REAL (TEST8-b; contrato H8, «Orden y puertas», paso 3; Enmienda 6, E6-11).
  *
  * NO ES UNA PRUEBA EN PROCESO: cada paso entra por donde entra la realidad contra una pila levantada por
- * `docs/ultron-studio/ops/h8-e2e.sh` en una COPIA del árbol (la cerrada, idéntica al commit, o la abierta del banco,
- * con `CALLS_ENABLED_IN_CODE = true`, protección 2): el servidor (`artisan serve`), el worker real de la cola `voice`,
+ * `docs/ultron-studio/ops/h8-e2e.sh` en una COPIA del árbol (la cerrada, con `CALLS_ENABLED_IN_CODE = false`, o la
+ * abierta, con `true`: la del estado en que viene la fuente es el commit tal cual y la otra lleva esa única línea girada
+ * por el arnés, comprobado con diff): el servidor (`artisan serve`), el worker real de la cola `voice`,
  * PostgreSQL con el modelo de roles de producción y los simuladores de ElevenLabs y Twilio de OPS8 (`ops/banco-h8/`),
  * con los adaptadores REALES apuntados a ellos (nunca los nulos). Las peticiones son HTTP de verdad con el cliente de
  * Laravel; lo que queda en la base se comprueba con SQL (PDO a la base del banco); lo que vieron los proveedores, con el
@@ -920,5 +921,79 @@ abstract class H8StackE2ETestCase extends TestCase
         $dentro = ($dia <= 5 && $s >= 7 * 3600 && $s < 19 * 3600) || ($dia === 6 && $s >= 8 * 3600 && $s < 15 * 3600);
 
         return ['outsideHours' => ! $dentro, 'holiday' => in_array($local->format('Y-m-d'), $festivos, true)];
+    }
+
+    // ── El reloj desplazado de los workers de UN trabajo ────────────────────
+
+    /**
+     * Lo mínimo que cada instante del reloj desplazado queda por delante del reloj real, en segundos. Una fase dura
+     * minutos, así que el instante calculado al empezar sigue en el futuro en el último despacho; y con más de 5 min el
+     * job nunca reutiliza la observación de deriva que la puerta dejó con el reloj real (caché de 5 min, D8-21).
+     */
+    private const MARGEN_DEL_RELOJ = 3600;
+
+    /** @var array{martes: string, domingo: string, festivo: string}|null */
+    private static ?array $instantesDelReloj = null;
+
+    /**
+     * Un instante del reloj desplazado de los workers de UN trabajo (`ops/h8-e2e/reloj.php`), a las 10:00 de Bogotá:
+     *  - `martes`: el próximo martes en horario legal y no festivo (la saliente completa marca);
+     *  - `domingo`: el próximo domingo que no es festivo (el job cancela con `outside_hours`);
+     *  - `festivo`: el próximo festivo de lunes a sábado, dentro de la franja legal (el job cancela SOLO por `holiday`).
+     * Los elige el oráculo de esta clase ({@see calendarioLegal()}, con el fixture de festivos de TEST8-a), no una fecha
+     * escrita a mano.
+     *
+     * Por qué en el FUTURO y no fijos: el ayudante despacha el trabajo con el reloj REAL (`available_at` = ahora) y la
+     * cola de base de datos solo se lo entrega a un worker cuyo `now()` ya ha llegado (`DatabaseQueue::isAvailable()`:
+     * `available_at <= now`). Con un instante pasado, el worker desplazado no lo ve y la saliente se queda en
+     * `requested`: así caducaron las fechas fijas del 10, el 15 y el 16-11-2026. Se calculan UNA vez por proceso, de modo
+     * que todos los pasos de una fase usan los mismos.
+     *
+     * @param  'martes'|'domingo'|'festivo'  $cual
+     */
+    protected static function instanteDelReloj(string $cual): string
+    {
+        self::$instantesDelReloj ??= self::instantesDelRelojDesde(new \DateTimeImmutable('now'));
+
+        return self::$instantesDelReloj[$cual];
+    }
+
+    /**
+     * El cálculo de {@see instanteDelReloj()} desde un «ahora» dado (sin reloj: solo lee el fixture). Recorre los días de
+     * Bogotá desde el de `$ahora` y se queda, para cada instante, con el primer día cuyas 10:00 caen después de
+     * `$ahora` + {@see MARGEN_DEL_RELOJ} y cumplen lo que pide el paso. Si el fixture de festivos no cubre el año al que
+     * hay que llegar, FALLA y lo dice: sin el fixture, el oráculo no sabe si un día es festivo.
+     *
+     * @return array{martes: string, domingo: string, festivo: string}
+     */
+    protected static function instantesDelRelojDesde(\DateTimeInterface $ahora): array
+    {
+        $fx = json_decode((string) file_get_contents(base_path('tests/fixtures/voice/holidays-co-2026-2028.json')), true, 64, JSON_THROW_ON_ERROR);
+        $limite = \DateTimeImmutable::createFromInterface($ahora)->modify('+'.self::MARGEN_DEL_RELOJ.' seconds');
+        $buscados = [
+            'martes' => static fn (int $dia, array $cal): bool => $dia === 2 && ! $cal['outsideHours'] && ! $cal['holiday'],
+            'domingo' => static fn (int $dia, array $cal): bool => $dia === 7 && $cal['outsideHours'] && ! $cal['holiday'],
+            'festivo' => static fn (int $dia, array $cal): bool => $dia <= 6 && ! $cal['outsideHours'] && $cal['holiday'],
+        ];
+        $hallados = [];
+        $dia = \DateTimeImmutable::createFromInterface($ahora)->setTimezone(new \DateTimeZone('America/Bogota'))->setTime(10, 0);
+        while (count($hallados) < count($buscados)) {
+            if (! isset($fx['years'][$dia->format('Y')])) {
+                self::fail('E2E del H8: el fixture de festivos (tests/fixtures/voice/holidays-co-2026-2028.json) no cubre '.$dia->format('Y')
+                    .' y sin él no se puede elegir el instante del reloj del job ('.implode(', ', array_keys(array_diff_key($buscados, $hallados)))
+                    .'). Hay que ampliar el fixture (D8-15).');
+            }
+            if ($dia > $limite) {
+                $cal = self::calendarioLegal($dia);
+                foreach ($buscados as $cual => $cumple) {
+                    if (! isset($hallados[$cual]) && $cumple((int) $dia->format('N'), $cal)) {
+                        $hallados[$cual] = $dia->format(DATE_ATOM);
+                    }
+                }
+            }
+            $dia = $dia->modify('+1 day');
+        }
+
+        return $hallados;
     }
 }

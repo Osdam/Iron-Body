@@ -28,18 +28,11 @@ final class H8E2EAbiertaTest extends H8StackE2ETestCase
 {
     protected const PHASE = 'abierta';
 
-    /** Instantes del reloj desplazado de los workers de UN trabajo (`ops/h8-e2e/reloj.php`), en Bogotá. */
-    private const MARTES_EN_HORARIO = '2026-11-10T10:00:00-05:00';
-
-    private const DOMINGO = '2026-11-15T10:00:00-05:00';
-
-    private const FESTIVO = '2026-11-16T10:00:00-05:00';
-
     private const NO_CANARIO = '+573000000099';
 
     public function test_0_la_copia_del_banco_tiene_la_constante_abierta_y_los_canarios_de_voz_activos(): void
     {
-        $this->must('la constante está ABIERTA en esta copia (solo en la del banco)', VoiceCallPolicy::CALLS_ENABLED_IN_CODE === true, VoiceCallPolicy::CALLS_ENABLED_IN_CODE);
+        $this->must('la constante está ABIERTA en esta copia (la fuente tal cual si viene abierta; girada a true si viene cerrada)', VoiceCallPolicy::CALLS_ENABLED_IN_CODE === true, VoiceCallPolicy::CALLS_ENABLED_IN_CODE);
         $st = $this->telefonia('GET', 'status', 'a');
         $this->check('GET admin/voice/status: 200, banderas encendidas y sin flags.publishing', $st->status() === 200 && $st->json('flags.inbound') === true && $st->json('flags.outbound') === true
             && ! array_key_exists('publishing', (array) $st->json('flags')), self::resumen($st, 'flags'));
@@ -397,7 +390,7 @@ final class H8E2EAbiertaTest extends H8StackE2ETestCase
         $s2 = $this->ayudante(['saliente', 'canary', $canario, self::uuid(), $ana, '0']);
         $this->ayudante(['despachar', $s2['call'], 'voice-e2e']);
         $antes = $this->fotos();
-        $w = $this->workerDeUnTrabajo(self::MARTES_EN_HORARIO);
+        $w = $this->workerDeUnTrabajo(self::instanteDelReloj('martes'));
         $this->check('el worker de un trabajo (reloj en el martes) sale con 0', $w['code'] === 0, mb_substr($w['err'], 0, 300));
         $f = $this->fila('SELECT status, provider_conversation_id, provider_call_sid, started_at IS NOT NULL AS empezo, voice_publication_seq, provider_agent_id, spec_hash FROM voice_calls WHERE uuid = ?', [$s2['call']]);
         $this->must('la saliente marcó: dialing con la conversación y el SID de Twilio', $f !== null && $f['status'] === 'dialing' && is_string($f['provider_conversation_id']) && preg_match('/^CA[0-9a-f]{32}$/', (string) $f['provider_call_sid']) === 1, $f);
@@ -429,7 +422,7 @@ final class H8E2EAbiertaTest extends H8StackE2ETestCase
         $this->ayudante(['olvidar-deriva', $p['provider']]);
 
         // 4. Canceladas por el job SIN PETICIÓN (TOCTOU, E6-6): domingo, festivo y una exclusión añadida tras encolar.
-        foreach ([[self::DOMINGO, 'outside_hours', null], [self::FESTIVO, 'holiday', null], [self::MARTES_EN_HORARIO, 'excluded', 'exclusion']] as [$instante, $motivo, $antesDeMarcar]) {
+        foreach ([[self::instanteDelReloj('domingo'), 'outside_hours', null], [self::instanteDelReloj('festivo'), 'holiday', null], [self::instanteDelReloj('martes'), 'excluded', 'exclusion']] as [$instante, $motivo, $antesDeMarcar]) {
             $sx = $this->ayudante(['saliente', 'canary', $canario, self::uuid(), $ana, '0']);
             if ($antesDeMarcar === 'exclusion') {
                 $ex = $this->telefonia('POST', 'exclusions', 'a', ['clientRequestId' => self::uuid(), 'number' => self::ctx()['canaries'][1], 'note' => 'Pidió no recibir más llamadas (E2E).']);
