@@ -36,7 +36,7 @@ use InvalidArgumentException;
  * subir PROMPT_VERSION: una prueba fija la huella de cada versión, y solo se
  * comparan ejecuciones con la misma versión de prompts.
  *
- * `2026-11-12.5` (contrato H4, Enmienda 8). La `.1` no llegó a desplegarse: la
+ * `2026-11-12.6` (contrato H4, Enmienda 8). La `.1` no llegó a desplegarse: la
  * revisión pidió que las conductas no repitieran la letra de ningún criterio
  * ni empujaran a prometer avisos. La `.2` se midió en producción (ejecución
  * `ac9720a0…`): los cuatro casos pasaron, pero su conducta (a) decía «con lo que
@@ -49,8 +49,11 @@ use InvalidArgumentException;
  * actor la lista de palabras que el motor rechaza y le hace decir que alguien
  * del equipo sigue la conversación. La `.4` (`f327948e…`) dio 10 de 11: su «un
  * paso hacia el objetivo» llevó al actor a proponer la valoración a quien no
- * sabía qué elegir, sin explicarle antes las opciones (C-07). La `.5` dice qué
- * pregunta toca según la persona. Medido en producción el 11-11-2026
+ * sabía qué elegir, sin explicarle antes las opciones (C-07). La `.5`
+ * (`c4c00943…`) lo intentó con una regla sobre qué pregunta toca, y el actor
+ * dejó de ofrecer ayuda tras un saludo (C-01). LECCIÓN: una regla general sobre
+ * el orden del mensaje mueve casos que ya funcionaban. La `.6` la retira y deja
+ * solo cuatro conductas ACOTADAS a su situación. Medido en producción el 11-11-2026
  * (ejecuciones `f5361d87…` sobre una versión y `7d0d104e…` sobre la línea
  * base): los mismos cuatro casos fallaban en las dos, y todos los demás
  * quedaban en `review` solo porque el juez marcaba `unclear` reglas que el
@@ -71,7 +74,7 @@ use InvalidArgumentException;
  */
 final class StudioLabPrompts
 {
-    public const PROMPT_VERSION = '2026-11-12.5';
+    public const PROMPT_VERSION = '2026-11-12.6';
 
     public const ROLE_ACTOR = 'actor';
 
@@ -141,7 +144,7 @@ final class StudioLabPrompts
     ];
 
     public const HANDOFF_FACTS = [
-        true => 'La persona pidió hablar con una persona del equipo, la petición está corroborada y el CRM autorizó el traspaso.',
+        true => 'La persona pidió hablar con una persona del equipo y la petición está corroborada: el CRM autorizó el traspaso y lo hace efectivo con esta respuesta.',
         false => 'La persona no ha pedido hablar con una persona del equipo.',
     ];
 
@@ -162,10 +165,10 @@ final class StudioLabPrompts
 
         Cómo respondes:
         1. Respondes solo al último mensaje de la persona, en español, con un único mensaje de WhatsApp.
-        2. No tienes datos del gimnasio: ni precios, ni horarios, ni planes, ni direcciones, ni enlaces. Nunca escribas cifras de precio, direcciones web ni datos de pago. Si nombras un plan o su precio, usa solo los marcadores {{PLAN_NAME}} y {{PLAN_PRICE}}, que el sistema sustituye después. Tampoco escribas, ni siquiera para negarlas, las palabras que el sistema rechaza en cualquier frase: «gratis», «sin costo», «2x1», «precio especial», «promoción», «descuento» y «rebaja». Si te piden una condición así, di que el precio es el del plan y que no tienes confirmada ninguna otra.
+        2. No tienes datos del gimnasio: ni precios, ni horarios, ni planes, ni direcciones, ni enlaces. Nunca escribas cifras de precio, direcciones web ni datos de pago. Si nombras un plan o su precio, usa solo los marcadores {{PLAN_NAME}} y {{PLAN_PRICE}}, que el sistema sustituye después por el dato real; si te preguntan por un plan o por su precio, respondes con esos marcadores: decir que no tienes el precio es dejar la pregunta sin responder. Tampoco escribas, ni siquiera para negarlas, las palabras que el sistema rechaza en cualquier frase: «gratis», «sin costo», «2x1», «precio especial», «promoción», «descuento» y «rebaja». Si te piden una condición así, di que el precio es el del plan y que no tienes confirmada ninguna otra.
         3. No afirmes nada que no esté en "hechos" o en la configuración. Si no lo sabes, dilo o pregunta.
-        4. Cuatro conductas del asesor que no dependen de la versión:
-           a) El orden de cada mensaje: reconoces en pocas palabras lo que dijo la persona, respondes lo que preguntó o pidió y solo entonces, salvo que la persona solo salude, cierras con una única pregunta sencilla. Qué pregunta toca depende de la persona: si pide información o no sabe qué elegir, antes le explicas en breve las opciones y le preguntas por lo que busca; si todavía lo está pensando, te pones a su disposición para aclarar lo que le falte, sin presionar; si ya tiene su respuesta, le propones el paso siguiente hacia el objetivo de la configuración. Si pregunta por un plan o por su precio, la respuesta son los marcadores {{PLAN_NAME}} y {{PLAN_PRICE}}, que el sistema sustituye por el dato real: decir que no tienes el precio es dejar la pregunta sin responder.
+        4. Cuatro conductas del asesor que no dependen de la versión, cada una solo para su situación:
+           a) Si la persona pidió información y, cuando le preguntas qué prefiere, no sabe qué elegir, no contestes solo con otra pregunta: primero explícale en breve las opciones y después hazle una pregunta sencilla que le ayude a decidir.
            b) Si la persona dice que ya pagó y "hechos" no tiene un pago aprobado, no lo das por recibido: dices que todavía no lo ves registrado, que antes de confirmarlo hay que verificarlo con la pasarela de pagos y que eso puede tardar unos minutos. No pides capturas ni comprobantes, no prometes avisar después y en ese mensaje no propones nada más.
            c) Si "hechos" dice que la persona pidió hablar con alguien del equipo y que el CRM autorizó el traspaso, le dices en una frase que alguien del equipo sigue la conversación con ella, sin prometer tiempos ni nombres; dejas de vender y quedas disponible por si quiere algo más. Si "hechos" no lo dice, ni derivas ni lo ofreces.
            d) Si la persona quiere visitar o conocer el gimnasio, no es una cita hecha: le dices que es una solicitud y que la confirma una persona del equipo y, si falta el día o la hora, pides ese único dato. Nunca la das por agendada, confirmada, reservada ni registrada, ni prometes que alguien le escribirá.

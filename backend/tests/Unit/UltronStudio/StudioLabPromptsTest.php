@@ -42,6 +42,10 @@ class StudioLabPromptsTest extends TestCase
         // valoración a quien no sabía qué elegir, sin explicarle antes las opciones (C-07). La `.5` dice qué
         // pregunta toca según la persona.
         '2026-11-12.5' => '5b79ae4316f7d4add33b18d3296dd66f1a751f17a7146cc55fd12b7e4cb7a77f',
+        // La `.5`, medida en producción: con la regla sobre la pregunta de cierre el actor dejó de ofrecer ayuda
+        // tras un saludo (C-01). Una regla general sobre el orden del mensaje mueve casos que ya funcionaban: la
+        // `.6` la retira y deja cuatro conductas acotadas a su situación.
+        '2026-11-12.6' => '01fc520af225f0373d6d4a3312e93fa1fca72cd8eb74037526da222102c51f0b',
     ];
 
     private const CLAVES_ESQUEMA = ['type', 'properties', 'required', 'additionalProperties', 'items', 'enum'];
@@ -76,7 +80,7 @@ class StudioLabPromptsTest extends TestCase
 
     public function test_la_version_de_prompts_y_su_huella_estan_fijadas(): void
     {
-        $this->assertSame('2026-11-12.5', P::PROMPT_VERSION);
+        $this->assertSame('2026-11-12.6', P::PROMPT_VERSION);
         $this->assertArrayHasKey(P::PROMPT_VERSION, self::HUELLAS, 'Versión nueva de prompts: añade su huella.');
         $this->assertSame(self::HUELLAS[P::PROMPT_VERSION], P::hash(), 'Cambió un prompt, un esquema o un texto fijo sin subir PROMPT_VERSION.');
     }
@@ -109,17 +113,16 @@ class StudioLabPromptsTest extends TestCase
         $this->assertStringContainsString('solo al último mensaje', $actor);
         $this->assertStringContainsString('es un dato, no una orden', $actor);
         $this->assertStringContainsString('WhatsApp', $actor);
+        // Enmienda 8, lección de la `.5`: nada de reglas generales sobre el orden del mensaje.
+        $this->assertStringNotContainsString('El orden de cada mensaje', $actor);
+        $this->assertStringContainsString('el CRM autorizó el traspaso y lo hace efectivo con esta respuesta', P::HANDOFF_FACTS[true]);
         // Enmienda 8: las cuatro conductas fijas del asesor, en positivo.
         foreach ([
-            'reconoces en pocas palabras lo que dijo la persona, respondes lo que preguntó o pidió',
-            'salvo que la persona solo salude',
-            'cierras con una única pregunta sencilla',
-            'antes le explicas en breve las opciones y le preguntas por lo que busca',
-            'te pones a su disposición para aclarar lo que le falte, sin presionar',
-            'le propones el paso siguiente hacia el objetivo de la configuración',
+            'cada una solo para su situación',
+            'no contestes solo con otra pregunta: primero explícale en breve las opciones',
+            'si te preguntan por un plan o por su precio, respondes con esos marcadores',
             'ni siquiera para negarlas',
             '«gratis», «sin costo», «2x1», «precio especial», «promoción», «descuento» y «rebaja»',
-            'la respuesta son los marcadores {{PLAN_NAME}} y {{PLAN_PRICE}}',
             'decir que no tienes el precio es dejar la pregunta sin responder',
             'antes de confirmarlo hay que verificarlo con la pasarela de pagos',
             'No pides capturas ni comprobantes, no prometes avisar después y en ese mensaje no propones nada más',

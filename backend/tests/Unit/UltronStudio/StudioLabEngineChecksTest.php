@@ -64,7 +64,7 @@ class StudioLabEngineChecksTest extends TestCase
     }
 
     /**
-     * Enmienda 8 de H4 (`PROMPT_VERSION 2026-11-12.5`): las cuatro conductas que el actor lleva en sus
+     * Enmienda 8 de H4 (`PROMPT_VERSION 2026-11-12.6`): las cuatro conductas que el actor lleva en sus
      * instrucciones tienen que caber en el filtro real del motor. Si una guarda cambia y empieza a marcar la frase
      * que se le pide al actor, el laboratorio lo suspendería por obedecer: esta prueba lo dice antes.
      */
