@@ -97,9 +97,12 @@ sudo -u "$WWW" php artisan queue:restart -q
 
 echo "4. comprobaciones después"
 sudo -u "$WWW" php artisan route:list --path=integral-plan/generate 2>/dev/null | grep -q 'integral-plan/generate' || aborta "la ruta no aparece en route:list"
-c=$(curl -s --max-time 20 -o /dev/null -w '%{http_code}' -X POST -H 'Accept: application/json' -H 'Content-Type: application/json' --data-binary '{}' "$API/trainer/members/1/integral-plan/generate") || c=000
-echo "   POST generate sin sesión → $c (esperado 401: ruta viva, sin efectos)"
-[ "$c" = 401 ] || aborta "generate sin sesión respondió $c"
+# En generate el socio se resuelve ANTES que la sesión (route model binding): un id que no
+# existe da 404 y no prueba nada de la autenticación (despliegue del 12-11). La sesión se prueba
+# en una ruta del entrenador sin modelo; generate, con route:list (arriba).
+c=$(curl -s --max-time 20 -o /dev/null -w '%{http_code}' -H 'Accept: application/json' "$API/trainer/exercises") || c=000
+echo "   GET trainer/exercises sin sesión → $c (esperado 401: auth.trainer vivo, sin efectos)"
+[ "$c" = 401 ] || aborta "trainer/exercises sin sesión respondió $c"
 sleep 8
 RUN1=$(supervisorctl status 2>/dev/null | grep -c RUNNING || true)
 NO_RUN1=$(supervisorctl status 2>/dev/null | grep -c -E 'BACKOFF|FATAL' || true)
