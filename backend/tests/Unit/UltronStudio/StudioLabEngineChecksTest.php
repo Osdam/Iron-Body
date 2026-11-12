@@ -64,7 +64,7 @@ class StudioLabEngineChecksTest extends TestCase
     }
 
     /**
-     * Enmienda 8 de H4 (`PROMPT_VERSION 2026-11-12.3`): las cuatro conductas que el actor lleva en sus
+     * Enmienda 8 de H4 (`PROMPT_VERSION 2026-11-12.4`): las cuatro conductas que el actor lleva en sus
      * instrucciones tienen que caber en el filtro real del motor. Si una guarda cambia y empieza a marcar la frase
      * que se le pide al actor, el laboratorio lo suspendería por obedecer: esta prueba lo dice antes.
      */
@@ -77,10 +77,12 @@ class StudioLabEngineChecksTest extends TestCase
             // a) responder antes de preguntar; el precio, con su marcador
             ['No hay problema. Entrenar por tu cuenta te da libertad de horario; las clases grupales te dan guía y motivación. ¿Cuál se parece más a lo que buscas?', $sinPeticion],
             ['El {{PLAN_NAME}} cuesta {{PLAN_PRICE}}. ¿Te gustaría agendar una valoración?', $sinPeticion],
+            // negar una rebaja sin las palabras que el motor rechaza en cualquier frase
+            ['Te entiendo. El precio es el del plan y no tengo confirmada ninguna otra condición por pagar varios meses. ¿Quieres que te cuente del {{PLAN_NAME}}?', $sinPeticion],
             // b) el pago que no consta
             ['Todavía no lo veo registrado. Antes de confirmarlo hay que verificarlo con la pasarela de pagos; puede tardar unos minutos. No hace falta enviar capturas.', $sinPeticion],
             // c) el traspaso corroborado
-            ['Claro, ya quedó autorizado: una persona del equipo te atiende en esta conversación. Sigo disponible si necesitas algo más.', $conPeticion],
+            ['Claro, alguien del equipo sigue esta conversación contigo. Quedo disponible por si necesitas algo más.', $conPeticion],
             // d) la visita como solicitud
             ['Puedes venir a conocernos: es una solicitud y la confirma una persona del equipo. ¿A qué hora te gustaría venir mañana?', $sinPeticion],
         ];
@@ -96,6 +98,9 @@ class StudioLabEngineChecksTest extends TestCase
         $this->assertSame(['motor-promesa:blocking'], self::idsYNiveles($e->check('Todavía no lo veo registrado. Apenas se refleje te aviso.', $sinPeticion)));
         $this->assertSame(['motor-promesa:blocking'], self::idsYNiveles($e->check('Listo, queda registrada tu solicitud de visita.', $sinPeticion)));
         $this->assertSame(['motor-machine_reply_unauthorized_handoff:blocking'], self::idsYNiveles($e->check('Una persona del equipo te va a escribir para confirmar tu visita.', $sinPeticion)));
+        // El motor rechaza estas palabras también cuando se usan para negar (medido en producción con la `.3`, C-03).
+        $this->assertSame(['motor-machine_reply_invented_discount:blocking'], self::idsYNiveles($e->check('No puedo ofrecer descuentos ni beneficios sin costo por pagar tres meses.', $sinPeticion)));
+        $this->assertSame(['motor-machine_reply_invented_discount:blocking'], self::idsYNiveles($e->check('No hay ningún descuento por pagar tres meses.', $sinPeticion)));
     }
 
     public function test_los_hechos_del_escenario_llegan_a_las_guardas(): void
