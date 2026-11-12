@@ -162,6 +162,12 @@ final class ClosedPolicyCopy
             if (class_exists($clase, false)) {
                 continue;
             }
+            // La copia solo puede diferir del original en dos líneas (la clase y la constante, o la clase y su `use`):
+            // se exige AQUÍ, no solo en una prueba, para que valga también cuando una prueba de la copia corre sola.
+            $cambios = count(self::changedLines($relativa));
+            if ($cambios !== 2) {
+                throw new RuntimeException("La copia cerrada de {$relativa} cambia {$cambios} líneas y solo puede cambiar 2.");
+            }
             $fichero = tempnam(sys_get_temp_dir(), 'ib-copia-cerrada-');
             if ($fichero === false) {
                 throw new RuntimeException('Sin fichero temporal para la copia cerrada.');

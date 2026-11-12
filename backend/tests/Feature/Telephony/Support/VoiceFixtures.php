@@ -333,7 +333,11 @@ trait VoiceFixtures
         $this->assertSame([self::MOBILE_RESERVATION_MICROS, $dia], [(int) $fila->reserved_micros, (string) $fila->budget_day], 'la reserva, en el día de Bogotá');
         $this->assertGreaterThanOrEqual(self::MOBILE_RESERVATION_MICROS, VoiceCostGuard::committedMicros($dia), 'la reserva cuenta como comprometida');
         $this->assertSame(['outbound_requested'], VoiceCallEvent::query()->where('call_id', $fila->id)->pluck('kind')->all());
-        Queue::assertPushed(PlaceOutboundVoiceCall::class, static fn (PlaceOutboundVoiceCall $j): bool => $j->callId === (int) $fila->id);
+        // UN job para ESA fila, y en el carril de la voz: dos jobs serían dos intentos de marcar a la misma persona
+        // (revisión de `T`, I-1: una puerta que encolara dos veces dejaba en verde todas las aceptaciones).
+        $this->assertCount(1, Queue::pushed(PlaceOutboundVoiceCall::class, static fn (PlaceOutboundVoiceCall $j): bool => $j->callId === (int) $fila->id
+            && $j->connection === 'voice' && $j->queue === 'voice'), 'UN job para esa fila, en la cola `voice`');
+        $this->assertCount(1, Queue::pushed(PlaceOutboundVoiceCall::class, static fn (PlaceOutboundVoiceCall $j): bool => $j->callId === (int) $fila->id), 'y ninguno más para ella en otra cola');
         $this->assertStringNotContainsString(substr(self::CANARY_PHONE, 1), (string) $r->getContent(), 'la respuesta no lleva el número');
 
         return $fila;

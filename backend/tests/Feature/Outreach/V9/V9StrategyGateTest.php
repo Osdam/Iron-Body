@@ -121,7 +121,11 @@ class V9StrategyGateTest extends TestCase
         $evento = VoiceCallEvent::query()->where('call_id', $fila->id)->sole();
         $this->assertSame(['outbound_requested', 'system', 'Estrategia '.self::KEY], [$evento->kind, $evento->actor_type, $evento->actor_name]);
         $this->assertSame(['strategy', 'commercial', $parte, 960500], [$evento->codes['requester'], $evento->codes['purposeKey'], $evento->codes['part'], $evento->codes['reservedMicros']]);
-        Queue::assertPushed(PlaceOutboundVoiceCall::class, static fn (PlaceOutboundVoiceCall $j): bool => $j->callId === (int) $fila->id);
+        // UN job para ESA fila, y en el carril de la voz: dos jobs serían dos intentos de marcar a la misma persona
+        // (revisión de `T`, I-1: una puerta que encolara dos veces dejaba en verde todas las aceptaciones).
+        $this->assertCount(1, Queue::pushed(PlaceOutboundVoiceCall::class, static fn (PlaceOutboundVoiceCall $j): bool => $j->callId === (int) $fila->id
+            && $j->connection === 'voice' && $j->queue === 'voice'), 'UN job para esa fila, en la cola `voice`');
+        $this->assertCount(1, Queue::pushed(PlaceOutboundVoiceCall::class, static fn (PlaceOutboundVoiceCall $j): bool => $j->callId === (int) $fila->id), 'y ninguno más para ella en otra cola');
         $this->assertStringNotContainsString(substr($m['e164'], 1), (string) json_encode($r['body']), 'la respuesta no lleva el número');
 
         return $fila;
