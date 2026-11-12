@@ -6,9 +6,12 @@ use App\Models\Admin;
 use App\Services\Outreach\Core\DecisionTraceText;
 use App\Services\Outreach\Core\OutcomeTable;
 use App\Services\Outreach\Core\RelativeTime;
+use App\Services\Outreach\Facts\BatchSnapshotBuilder;
+use App\Services\Outreach\Facts\CoreProjection;
 use App\Services\Outreach\Facts\SubjectKey;
 use DateTimeImmutable;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 /**
@@ -25,6 +28,16 @@ use Illuminate\Support\Str;
  * protegen los permisos que ya existen. La persona sigue siendo responsable
  * del contacto real: la política aplicó horario, frecuencia y consentimiento
  * DEL MEDIO.
+ *
+ * LA QUEJA SE VUELVE A MIRAR AL OFRECER Y AL RECLAMAR (M-5 de security; N6
+ * `complaint_recent`): una inscripción que espera el resultado asistido no
+ * se reevalúa, así que una queja posterior a la salida la ve la bandeja. Un
+ * trabajo SIN reclamar de una persona que se quejó dentro de la ventana, o de
+ * la que no hay datos de eventos (falla cerrado, como N6), no se ofrece ni se
+ * reclama (409 `not_in_queue`). Quien ya lo reclamó lo sigue viendo y registra
+ * su resultado. No se escribe nada: el trabajo y la inscripción siguen como
+ * estaban hasta el resultado o el fin de la ventana. `human_requested` no se
+ * mira aquí (L9-66: una derivada a persona sigue viva en la bandeja).
  */
 final class AssistedQueue
 {
@@ -39,6 +52,7 @@ final class AssistedQueue
         private readonly OutreachStore $store = new OutreachStore,
         private readonly OutcomeRecorder $outcomes = new OutcomeRecorder,
         private readonly OutreachPublishedStrategies $bridge = new OutreachPublishedStrategies,
+        private readonly BatchSnapshotBuilder $snapshots = new BatchSnapshotBuilder,
     ) {}
 
     /**
@@ -72,8 +86,14 @@ final class AssistedQueue
             $q->whereNull('j.assisted_claimed_by_admin_id');
         }
 
-        return $q->get(['j.*', 'e.purpose', 'e.uuid as enrollment_uuid', 'e.step_index as enrollment_step', 's.uuid as strategy_uuid', 's.key as strategy_key'])
-            ->map(fn (object $j): array => $this->dto($j, (int) $viewer->id))->all();
+        $filas = $q->get(['j.*', 'e.purpose', 'e.uuid as enrollment_uuid', 'e.step_index as enrollment_step', 's.uuid as strategy_uuid', 's.key as strategy_key'])->all();
+        // M-5: lo SIN reclamar se vuelve a mirar (una foto para toda la página); lo reclamado sigue para quien lo tiene.
+        $retenidos = $this->withheldByComplaint(array_values(array_filter($filas, static fn (object $j): bool => $j->assisted_claimed_by_admin_id === null)), self::now());
+
+        return array_values(array_map(
+            fn (object $j): array => $this->dto($j, (int) $viewer->id),
+            array_filter($filas, static fn (object $j): bool => ! isset($retenidos[(int) $j->id])),
+        ));
     }
 
     /** El detalle de un trabajo de la bandeja (404 si no es asistido en vivo). @return array<string, mixed> */
@@ -84,7 +104,8 @@ final class AssistedQueue
 
     /**
      * Reclamar UNA vez. 404 si no existe; 409 si no está en la bandeja
-     * (`not_in_queue`) o ya lo reclamó otra persona (`already_claimed`);
+     * (`not_in_queue`, también si la persona se quejó hace poco o no hay datos
+     * de eventos: M-5) o ya lo reclamó otra persona (`already_claimed`);
      * idempotente para quien lo reclamó.
      *
      * @return array{job: array<string, mixed>, replayed: bool}
@@ -105,6 +126,7 @@ final class AssistedQueue
             throw OutreachException::conflict('already_claimed', 'Otra persona ya reclamó ese trabajo.');
         }
         $this->requireOpenEnrollment((int) $trabajo->enrollment_id);
+        $this->requireNoRecentComplaint($trabajo);
         $ahora = RelativeTime::utc(now());
         $cambiadas = DB::table(OutreachTables::JOBS)->where('id', $trabajo->id)->where('status', 'started')->whereNull('assisted_claimed_by_admin_id')->update([
             'assisted_claimed_by_admin_id' => (int) $by->id,
@@ -186,6 +208,53 @@ final class AssistedQueue
         if ($e === null || ! in_array((string) $e->status, self::QUEUE_ENROLLMENT_STATUSES, true)) {
             throw OutreachException::conflict('enrollment_closed', 'La inscripción de ese trabajo ya se cerró.');
         }
+    }
+
+    /**
+     * M-5: un trabajo sin reclamar de una persona que se quejó hace poco (o de la que no hay datos de eventos)
+     * no se reclama. Al CRM, `not_in_queue` (la bandeja ya no lo ofrece); el motivo, al registro, sin datos personales.
+     */
+    private function requireNoRecentComplaint(object $trabajo): void
+    {
+        $retenido = $this->withheldByComplaint([$trabajo], self::now());
+        if ($retenido !== []) {
+            Log::warning('outreach.assisted.claim_withheld', ['job' => (string) $trabajo->uuid, 'reason' => 'complaint_recent', 'known' => $retenido[(int) $trabajo->id]]);
+
+            throw OutreachException::conflict('not_in_queue', 'Ese trabajo ya no está en la bandeja.');
+        }
+    }
+
+    /**
+     * M-5 (N6 `complaint_recent`): ¿se quejó hace poco la persona de cada trabajo? Por el MISMO camino que el
+     * despachador (etapa 6.5): la foto del lote con SOLO `complaint_created` (una consulta a `commercial_events`
+     * para todas, sin política) y {@see LadderInputBuilder::complaintRecently()} con la finalidad de la
+     * inscripción (la ventana y las finalidades de `OutreachConfig`). Se retiene con `true` y con `null` (sin
+     * datos de eventos o persona sin resolver: falla cerrado, como N6). Una clave que ya no es de una persona
+     * (la supresión 1581 la deja en `x:<id>`) no se lee y cuenta como sin datos.
+     *
+     * @param  list<object>  $trabajos  filas con `id`, `subject_key` y `purpose`
+     * @return array<int, bool> por id de trabajo retenido: ¿había datos? (true = queja reciente; false = no se sabe)
+     */
+    private function withheldByComplaint(array $trabajos, DateTimeImmutable $ahora): array
+    {
+        if ($trabajos === []) {
+            return [];
+        }
+        $claves = array_values(array_unique(array_filter(
+            array_map(static fn (object $j): string => (string) $j->subject_key, $trabajos),
+            static fn (string $c): bool => SubjectKey::isValid($c),
+        )));
+        $foto = $claves === [] ? null : $this->snapshots->build($claves, $ahora, CoreProjection::selectionFor(['events' => ['complaint_created']], false));
+        $retenidos = [];
+        foreach ($trabajos as $j) {
+            $s = $foto?->subject((string) $j->subject_key);
+            $queja = LadderInputBuilder::complaintRecently($s === null ? null : CoreProjection::snapshot($s)->events, $ahora, (string) $j->purpose);
+            if ($queja !== false) {
+                $retenidos[(int) $j->id] = $queja === true;
+            }
+        }
+
+        return $retenidos;
     }
 
     private function assistedJob(string $jobUuid): object

@@ -15,6 +15,7 @@ use App\Services\Outreach\Core\OutreachCatalog;
 use App\Services\Outreach\Core\PolicyLadder;
 use App\Services\Outreach\Core\RelativeTime;
 use DateTimeImmutable;
+use InvalidArgumentException;
 
 /**
  * LA SIMULACIÓN EXPLICABLE Y REPRODUCIBLE de una estrategia (contrato H9,
@@ -47,16 +48,6 @@ final class StudioStrategySimulator
 
     /** «`human_requested` reciente» (N6): los días que mira la simulación. */
     public const HUMAN_REQUESTED_DAYS = 30;
-
-    /**
-     * «Se quejó hace poco» (N6 `complaint_recent`, Q1-3): los días y las
-     * finalidades que mira la simulación. Los mismos valores por defecto que
-     * la ejecución (`OutreachConfig::complaintDays()` y `complaintPurposes()`):
-     * la simulación es pura y no lee la configuración.
-     */
-    public const COMPLAINT_DAYS = 30;
-
-    public const COMPLAINT_PURPOSES = ['collections', 'commercial'];
 
     /** El umbral del bloqueo comercial por cartera vencida del servidor (P9-7, L9-20: 15 días). */
     public const COLLECTIONS_BLOCK_DAYS = 15;
@@ -96,11 +87,14 @@ final class StudioStrategySimulator
      * @param  array<string,mixed>  $content  el contenido CANÓNICO (validado)
      * @param  array{audience: CanonicalCondition, exclusions: CanonicalCondition|null, success: CanonicalCondition, guards: array<int, CanonicalCondition|null>}  $conditions
      * @param  list<array{ref: string, snapshot: FactSnapshot, person: array<string,mixed>, receivable: array{known: bool|null, overdueDaysMax: int|null}, canary: array<string, bool|null>, phone: array<string,mixed>|null}>  $people
-     * @param  array{studio: array{referenceValid: bool, paymentLinksEnabled: bool, canaryOnly: bool}, templates: array<string, array{approved: bool, categoryMatches: bool, usesPaymentLink: bool, violations: list<string>}>, validation: array{blocking: list<array<string,mixed>>, warnings: list<array<string,mixed>>}, estimatedAudience?: int|null}  $context  `templates` por canal del primer paso
+     * @param  array{studio: array{referenceValid: bool, paymentLinksEnabled: bool, canaryOnly: bool}, templates: array<string, array{approved: bool, categoryMatches: bool, usesPaymentLink: bool, violations: list<string>}>, validation: array{blocking: list<array<string,mixed>>, warnings: list<array<string,mixed>>}, complaint: array{days: int, purposes: list<string>}, estimatedAudience?: int|null}  $context  `templates` por canal del primer paso; `complaint`, la ventana y las finalidades EFECTIVAS de la queja en la ejecución (M-7)
      * @return array{format:string,at:string,contentHash:string,evaluatorVersion:string,catalogVersion:string,people:list<array<string,mixed>>,counts:array<string,mixed>,findings:array{blocking:list<array<string,mixed>>,warnings:list<array<string,mixed>>},sequence:list<array<string,mixed>>,decisionsHash:string}
+     *
+     * @throws InvalidArgumentException sin `complaint` o con una forma que no es la suya (la simulación no cae en un valor por defecto)
      */
     public static function run(array $content, string $contentHash, array $conditions, string $strategyUuid, array $people, DateTimeImmutable $now, array $context): array
     {
+        self::complaintSettings($context['complaint'] ?? null);
         $personas = [];
         foreach ($people as $p) {
             $personas[] = self::person($content, $conditions, $p, $now, $context);
@@ -162,7 +156,7 @@ final class StudioStrategySimulator
         }
         $contexto = EnrollmentGate::context($puerta) + [
             'humanRequestedRecently' => self::humanRequestedRecently($foto, $now),
-            'complaintRecently' => self::complaintRecently($foto, $now, (string) $content['purpose']),
+            'complaintRecently' => self::complaintRecently($foto, $now, (string) $content['purpose'], $context['complaint']),
             'otherPurposeToday' => false,
             'lowerPriority' => false,
         ];
@@ -307,25 +301,54 @@ final class StudioStrategySimulator
     }
 
     /**
-     * ¿Se quejó hace poco (Q1-3)? Solo para las finalidades de
-     * {@see COMPLAINT_PURPOSES}; con la fuente de eventos sin datos, no se sabe
-     * (null: la escalera niega en N6, también en la simulación).
+     * ¿Se quejó hace poco (Q1-3)? La MISMA regla que la ejecución
+     * (`LadderInputBuilder::complaintRecently()`), con la ventana y las
+     * finalidades efectivas que le pasa quien la llama (`$complaint`, de
+     * `OutreachConfig`; M-7 de security): la simulación es pura y no lee la
+     * configuración. Con otra finalidad o con la ventana en 0, la queja no
+     * frena (false); con la fuente de eventos sin datos, no se sabe (null: la
+     * escalera niega en N6, también en la simulación).
+     *
+     * @param  array{days: int, purposes: list<string>}|mixed  $complaint
+     *
+     * @throws InvalidArgumentException sin la ventana o las finalidades, o con otra forma
      */
-    public static function complaintRecently(FactSnapshot $foto, DateTimeImmutable $now, string $purpose): ?bool
+    public static function complaintRecently(FactSnapshot $foto, DateTimeImmutable $now, string $purpose, mixed $complaint): ?bool
     {
-        if (! in_array($purpose, self::COMPLAINT_PURPOSES, true)) {
+        ['days' => $dias, 'purposes' => $finalidades] = self::complaintSettings($complaint);
+        if ($dias === 0 || ! in_array($purpose, $finalidades, true)) {
             return false;
         }
         if ($foto->events === null) {
             return null;
         }
         foreach ($foto->events as $e) {
-            if ($e['key'] === 'complaint_created' && RelativeTime::withinLast(RelativeTime::parseInstant($e['at']), $now, self::COMPLAINT_DAYS, 'days')) {
+            if ($e['key'] === 'complaint_created' && RelativeTime::withinLast(RelativeTime::parseInstant($e['at']), $now, $dias, 'days')) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    /**
+     * La ventana (días ≥ 0) y las finalidades (lista de textos) de la queja que manda quien llama. Sin ellas, o con
+     * otra forma, falla en voz alta: un valor por defecto aquí es justo lo que hacía decir a la simulación otra cosa
+     * que a la ejecución (M-7).
+     *
+     * @return array{days: int, purposes: list<string>}
+     *
+     * @throws InvalidArgumentException
+     */
+    private static function complaintSettings(mixed $complaint): array
+    {
+        $dias = is_array($complaint) ? ($complaint['days'] ?? null) : null;
+        $finalidades = is_array($complaint) ? ($complaint['purposes'] ?? null) : null;
+        if (! is_int($dias) || $dias < 0 || ! is_array($finalidades) || ! array_is_list($finalidades) || array_filter($finalidades, 'is_string') !== $finalidades) {
+            throw new InvalidArgumentException('La simulación necesita la ventana y las finalidades de la queja de la ejecución (complaint.days, complaint.purposes).');
+        }
+
+        return ['days' => $dias, 'purposes' => $finalidades];
     }
 
     /**

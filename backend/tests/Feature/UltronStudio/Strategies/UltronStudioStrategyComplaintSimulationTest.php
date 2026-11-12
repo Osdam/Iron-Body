@@ -2,11 +2,16 @@
 
 namespace Tests\Feature\UltronStudio\Strategies;
 
+use App\Services\Outreach\Core\FactSnapshot;
+use App\Services\Outreach\Core\RelativeTime;
+use App\Services\Outreach\Run\LadderInputBuilder;
 use App\Services\Outreach\Run\OutreachConfig;
 use App\Services\UltronStudio\StudioAccess;
 use App\Services\UltronStudio\StudioStrategies;
+use App\Services\UltronStudio\StudioStrategySimulations;
 use App\Services\UltronStudio\StudioStrategySimulator;
 use App\Services\UltronStudio\StudioStrategyVersions;
+use DateTimeImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Middleware\ThrottleRequests;
@@ -14,14 +19,18 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 use Tests\Feature\Outreach\Facts\Support\FactsWorld;
 use Tests\TestCase;
 
 /**
  * Q1-3 en la SIMULACIÓN del Studio (D9-12): quien se quejó hace poco no sale
  * como contactable tampoco aquí. La simulación es pura y no lee la
- * configuración: sus valores (30 días; comercial y cobranza) son los mismos
- * que los de la ejecución por defecto, y esta prueba los ata.
+ * configuración: la ventana y las finalidades efectivas de la ejecución
+ * (`OutreachConfig::complaintDays()` y `complaintPurposes()`) le llegan por el
+ * contexto que arma `StudioStrategySimulations` (M-7 de security), y estas
+ * pruebas atan la simulación a la ejecución con valores distintos de los de
+ * por defecto.
  */
 class UltronStudioStrategyComplaintSimulationTest extends TestCase
 {
@@ -103,8 +112,122 @@ class UltronStudioStrategyComplaintSimulationTest extends TestCase
 
     public function test_los_valores_de_la_simulacion_son_los_de_la_ejecucion_por_defecto(): void
     {
-        $this->assertSame(OutreachConfig::complaintDays(), StudioStrategySimulator::COMPLAINT_DAYS);
-        $this->assertSame(OutreachConfig::complaintPurposes(), StudioStrategySimulator::COMPLAINT_PURPOSES);
+        // M-7: la queja ya no es una constante de la simulación; la ventana y las finalidades le llegan por el contexto, de `OutreachConfig`.
+        $this->assertSame(['days' => OutreachConfig::complaintDays(), 'purposes' => OutreachConfig::complaintPurposes()], StudioStrategySimulations::complaintContext());
         $this->assertSame(OutreachConfig::humanRequestedDays(), StudioStrategySimulator::HUMAN_REQUESTED_DAYS);
+    }
+
+    /**
+     * M-7 de security: con `outreach.complaint_days` configurado (7, distinto de los 30 por defecto), la simulación
+     * del Studio dice lo mismo que la ejecución. Antes, la de hace 10 días salía negada en la simulación y
+     * contactable en la ejecución; con 0 días (el freno apagado), al revés.
+     */
+    public function test_la_simulacion_usa_la_ventana_configurada_y_dice_lo_mismo_que_la_ejecucion(): void
+    {
+        [$ana, $beto] = $this->bootstrapPair();
+        $t = $this->approvedTemplate($ana, $beto);
+        $s = app(StudioStrategies::class)->create(new StudioAccess($ana), Request::create('/'), (string) Str::uuid(), 'quejas-config', 'Quejas (configuración)', 'commercial', $this->strategyContent($t))['strategy'];
+        $base = ['membership.active' => true, 'membership.days_to_expiry' => 5, 'subject.has_whatsapp_identity' => true, 'subject.is_minor' => false, 'receivable.has_overdue' => false];
+        $ahora = new DateTimeImmutable('2026-11-17T15:00:00Z');
+        $horas = ['ayer' => 24, 'hace3' => 3 * 24, 'hace10' => 10 * 24];
+        $simular = function () use ($s, $ana, $base, $horas): array {
+            $gente = [];
+            foreach ($horas as $ref => $h) {
+                $gente[] = ['ref' => $ref, 'facts' => $base, 'consent' => ['whatsapp' => 'granted'], 'canary' => ['whatsapp' => true], 'events' => [['key' => 'complaint_created', 'hoursAgo' => $h]]];
+            }
+            $r = $this->s9('POST', "strategies/{$s->uuid}/simulations", $ana, ['kind' => 'synthetic', 'at' => '2026-11-17T15:00:00Z', 'people' => $gente])->assertCreated()->json('data');
+
+            return array_column($r['people'], null, 'ref');
+        };
+        $ejecucion = static fn (int $h): ?bool => LadderInputBuilder::complaintRecently([['key' => 'complaint_created', 'at' => RelativeTime::format($ahora->modify("-{$h} hours"))]], $ahora, 'commercial');
+
+        foreach ([7 => ['ayer' => 'deny', 'hace3' => 'deny', 'hace10' => 'plan'], 0 => ['ayer' => 'plan', 'hace3' => 'plan', 'hace10' => 'plan']] as $dias => $esperado) {
+            config(['outreach.complaint_days' => $dias]);
+            $por = $simular();
+            foreach ($horas as $ref => $h) {
+                $this->assertSame($esperado[$ref], $por[$ref]['decision']['kind'], "complaint_days={$dias}, {$ref}");
+                // La simulación y la ejecución, atadas: niega por la queja exactamente cuando la ejecución la ve.
+                $this->assertSame($ejecucion($h) === true, in_array('complaint_recent', $por[$ref]['decision']['reasons'], true), "complaint_days={$dias}, {$ref}: la simulación y la ejecución dicen cosas distintas");
+            }
+        }
+    }
+
+    /**
+     * M-7: las finalidades configuradas (`outreach.complaint_purposes = ['commercial']`, sin la cobranza) también
+     * llegan a la simulación: una estrategia de cobranza deja de frenar por la queja, como en la ejecución.
+     */
+    public function test_la_simulacion_usa_las_finalidades_configuradas(): void
+    {
+        [$ana, $beto] = $this->bootstrapPair();
+        $t = $this->approvedTemplate($ana, $beto, 'assisted', 'collections', ['medium' => 'whatsapp', 'script' => 'Saluda y recuerda con respeto que hay una cuota pendiente; ofrece ayuda para ponerse al día.'], 'guion-cobro');
+        $s = app(StudioStrategies::class)->create(new StudioAccess($ana), Request::create('/'), (string) Str::uuid(), 'quejas-cobro', 'Quejas (cobranza)', 'collections', $this->strategyContent($t, [
+            'goal' => 'collect_payment',
+            'purpose' => 'collections',
+            'trigger' => ['event' => 'receivable.overdue', 'params' => ['daysMin' => 3, 'daysMax' => 30]],
+            'audience' => ['fact' => 'receivable.has_overdue', 'op' => 'eq', 'value' => true],
+            'success' => ['fact' => 'receivable.has_overdue', 'op' => 'eq', 'value' => false],
+        ]))['strategy'];
+        $persona = ['ref' => 'moroso', 'facts' => ['receivable.has_overdue' => true, 'subject.has_whatsapp_identity' => true, 'subject.is_minor' => false],
+            'consent' => ['whatsapp' => 'granted'], 'canary' => ['whatsapp' => true], 'events' => [['key' => 'complaint_created', 'hoursAgo' => 24]]];
+        $simular = fn (): array => $this->s9('POST', "strategies/{$s->uuid}/simulations", $ana, ['kind' => 'synthetic', 'at' => '2026-11-17T15:00:00Z', 'people' => [$persona]])
+            ->assertCreated()->json('data.people.0.decision');
+        $ahora = new DateTimeImmutable('2026-11-17T15:00:00Z');
+        $queja = [['key' => 'complaint_created', 'at' => '2026-11-16T15:00:00Z']];
+
+        // Por defecto la cobranza frena (y N6 llega a evaluarse: la prueba no es vacía).
+        $this->assertTrue(LadderInputBuilder::complaintRecently($queja, $ahora, 'collections'));
+        $this->assertSame(['deny', 'N6', ['complaint_recent']], array_values(array_intersect_key($simular(), array_flip(['kind', 'level', 'reasons']))));
+
+        config(['outreach.complaint_purposes' => ['commercial']]);
+        $this->assertFalse(LadderInputBuilder::complaintRecently($queja, $ahora, 'collections'), 'la ejecución ya no frena la cobranza');
+        $this->assertNotContains('complaint_recent', $simular()['reasons'], 'y la simulación tampoco');
+    }
+
+    /**
+     * M-7, la regla entera: para cada configuración, finalidad y foto de eventos, la simulación (pura, con el
+     * contexto que le pone `StudioStrategySimulations`) y la ejecución (`LadderInputBuilder`) dan el mismo valor.
+     */
+    public function test_la_regla_de_la_queja_de_la_simulacion_es_la_de_la_ejecucion_para_cualquier_configuracion(): void
+    {
+        $ahora = new DateTimeImmutable('2026-11-17T15:00:00Z');
+        $fotos = [
+            'sin datos' => null,
+            'sin quejas' => [],
+            'ayer' => [['key' => 'complaint_created', 'at' => '2026-11-16T15:00:00Z', 'attrs' => []]],
+            'hace 10 días' => [['key' => 'complaint_created', 'at' => '2026-11-07T15:00:00Z', 'attrs' => []]],
+            'otro evento' => [['key' => 'human_requested', 'at' => '2026-11-16T15:00:00Z', 'attrs' => []]],
+        ];
+        $vistos = 0;
+        foreach ([null, 7, 0, 400, -3] as $dias) {
+            foreach ([null, ['commercial'], ['commercial', 'service']] as $finalidades) {
+                config(['outreach.complaint_days' => $dias, 'outreach.complaint_purposes' => $finalidades]);
+                $contexto = StudioStrategySimulations::complaintContext();
+                foreach (['commercial', 'collections', 'service'] as $finalidad) {
+                    foreach ($fotos as $nombre => $eventos) {
+                        $foto = FactSnapshot::fromArray(['facts' => [], 'events' => $eventos]);
+                        $this->assertSame(
+                            LadderInputBuilder::complaintRecently($eventos, $ahora, $finalidad),
+                            StudioStrategySimulator::complaintRecently($foto, $ahora, $finalidad, $contexto),
+                            json_encode(['days' => $dias, 'purposes' => $finalidades, 'purpose' => $finalidad, 'foto' => $nombre]),
+                        );
+                        $vistos++;
+                    }
+                }
+            }
+        }
+        $this->assertSame(5 * 3 * 3 * 5, $vistos);
+    }
+
+    public function test_sin_el_contexto_de_la_queja_la_simulacion_falla_en_voz_alta(): void
+    {
+        $foto = FactSnapshot::fromArray(['facts' => [], 'events' => []]);
+        foreach ([[], ['days' => 30], ['purposes' => ['commercial']], ['days' => '30', 'purposes' => ['commercial']], ['days' => -1, 'purposes' => ['commercial']], ['days' => 30, 'purposes' => 'commercial'], ['days' => 30, 'purposes' => [1]]] as $malo) {
+            try {
+                StudioStrategySimulator::complaintRecently($foto, new DateTimeImmutable('2026-11-17T15:00:00Z'), 'commercial', $malo);
+                $this->fail('Sin el contexto de la queja la simulación no puede caer en un valor por defecto: '.json_encode($malo));
+            } catch (InvalidArgumentException) {
+                $this->addToAssertionCount(1);
+            }
+        }
     }
 }

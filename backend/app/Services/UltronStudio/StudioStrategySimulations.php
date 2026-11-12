@@ -27,6 +27,7 @@ use App\Services\Outreach\Facts\MembershipFacts;
 use App\Services\Outreach\Facts\PaymentFacts;
 use App\Services\Outreach\Facts\ReceivableFacts;
 use App\Services\Outreach\Facts\ValuationFacts;
+use App\Services\Outreach\Run\OutreachConfig;
 use Carbon\CarbonImmutable;
 use DateTimeImmutable;
 use Illuminate\Http\Request;
@@ -107,6 +108,7 @@ final class StudioStrategySimulations
             'studio' => ['referenceValid' => $studio['valid'], 'paymentLinksEnabled' => $studio['paymentLinksEnabled'], 'canaryOnly' => $studio['canaryOnly']],
             'templates' => $plantillas,
             'validation' => ['blocking' => $v['blocking'], 'warnings' => $v['warnings']],
+            'complaint' => self::complaintContext(),
         ];
 
         if ($kind === StudioStrategySimulation::KIND_SYNTHETIC) {
@@ -183,6 +185,18 @@ final class StudioStrategySimulations
             ], array_slice($r['people'], 0, StudioStrategySimulator::MAX_TRACES)),
             'sequence' => $r['sequence'],
         ];
+    }
+
+    /**
+     * M-7 de security: la ventana y las finalidades EFECTIVAS de la queja en la ejecución
+     * (`OutreachConfig::complaintDays()` y `complaintPurposes()`, con sus reglas de valores inválidos), para el
+     * contexto del simulador puro. Así la simulación y la ejecución dicen lo mismo aunque se configuren.
+     *
+     * @return array{days: int, purposes: list<string>}
+     */
+    public static function complaintContext(): array
+    {
+        return ['days' => OutreachConfig::complaintDays(), 'purposes' => OutreachConfig::complaintPurposes()];
     }
 
     // ── Lecturas ────────────────────────────────────────────────────────────
