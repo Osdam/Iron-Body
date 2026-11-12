@@ -38,6 +38,10 @@ class StudioLabPromptsTest extends TestCase
         // La `.3`, medida en producción: el actor negó una rebaja con «sin costo» (el motor rechaza esa palabra en
         // cualquier frase, C-03) y confirmó el traspaso de forma ambigua (C-06). La `.4` lo corrige.
         '2026-11-12.4' => '6c3c6afac462de13f9233d126327f4ad64c770cf3abdfd526f521c53bf433a7b',
+        // La `.4`, medida en producción, dio 10 de 11: su «un paso hacia el objetivo» llevó al actor a proponer la
+        // valoración a quien no sabía qué elegir, sin explicarle antes las opciones (C-07). La `.5` dice qué
+        // pregunta toca según la persona.
+        '2026-11-12.5' => '5b79ae4316f7d4add33b18d3296dd66f1a751f17a7146cc55fd12b7e4cb7a77f',
     ];
 
     private const CLAVES_ESQUEMA = ['type', 'properties', 'required', 'additionalProperties', 'items', 'enum'];
@@ -72,7 +76,7 @@ class StudioLabPromptsTest extends TestCase
 
     public function test_la_version_de_prompts_y_su_huella_estan_fijadas(): void
     {
-        $this->assertSame('2026-11-12.4', P::PROMPT_VERSION);
+        $this->assertSame('2026-11-12.5', P::PROMPT_VERSION);
         $this->assertArrayHasKey(P::PROMPT_VERSION, self::HUELLAS, 'Versión nueva de prompts: añade su huella.');
         $this->assertSame(self::HUELLAS[P::PROMPT_VERSION], P::hash(), 'Cambió un prompt, un esquema o un texto fijo sin subir PROMPT_VERSION.');
     }
@@ -109,13 +113,16 @@ class StudioLabPromptsTest extends TestCase
         foreach ([
             'reconoces en pocas palabras lo que dijo la persona, respondes lo que preguntó o pidió',
             'salvo que la persona solo salude',
-            'antes le das una explicación breve y útil',
+            'cierras con una única pregunta sencilla',
+            'antes le explicas en breve las opciones y le preguntas por lo que busca',
+            'te pones a su disposición para aclarar lo que le falte, sin presionar',
+            'le propones el paso siguiente hacia el objetivo de la configuración',
             'ni siquiera para negarlas',
             '«gratis», «sin costo», «2x1», «precio especial», «promoción», «descuento» y «rebaja»',
             'la respuesta son los marcadores {{PLAN_NAME}} y {{PLAN_PRICE}}',
             'decir que no tienes el precio es dejar la pregunta sin responder',
             'antes de confirmarlo hay que verificarlo con la pasarela de pagos',
-            'No pides capturas ni comprobantes, y no prometes avisar después',
+            'No pides capturas ni comprobantes, no prometes avisar después y en ese mensaje no propones nada más',
             'le dices en una frase que alguien del equipo sigue la conversación con ella, sin prometer tiempos ni nombres',
             'ni derivas ni lo ofreces',
             'es una solicitud y que la confirma una persona del equipo',
