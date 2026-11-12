@@ -14,8 +14,11 @@ use Tests\Unit\Voice\Support\FreshHttpFake;
  * El iniciador de salientes de ElevenLabs (contrato H8, D8-3 y D8-12).
  *
  * LO QUE SE PROTEGE.
- *  - CON LAS LLAMADAS CERRADAS EN EL CÓDIGO NO SALE NADA, aunque la
- *    configuración esté completa y la clase se instancie a mano.
+ *  - CON LAS LLAMADAS ABIERTAS EN EL CÓDIGO (C-4, `voice(calls-open)`) Y LA
+ *    CONFIGURACIÓN COMPLETA sale UNA petición: un POST a la ruta de la
+ *    integración nativa, con la clave solo en `xi-api-key` y el cuerpo puro.
+ *  - Sin la configuración completa (apagado, sin clave o sin región) no sale
+ *    nada (`not_configured`), aunque la clase se instancie a mano.
  *  - El cuerpo (puro): el agente sellado, el número importado, el destino, la
  *    grabación apagada en los dos sitios [P-7], la detección de contestador
  *    que cuelga (el único buzón, [P-10] y E1-8), `user_id = call_ref` y las
@@ -24,8 +27,9 @@ use Tests\Unit\Voice\Support\FreshHttpFake;
  *    nunca un «no se marcó» cuando no se sabe (`ambiguous`).
  *  - Ningún resultado lleva el número.
  *
- * El camino con red (la constante girada) lo prueba el banco en una copia del
- * árbol (TEST8), nunca aquí: la constante no se gira en el árbol compartido.
+ * El estado cerrado (la vuelta atrás: `not_attempted` por
+ * `calls_disabled_in_code` sin red) no se alcanza desde el árbol abierto: lo
+ * recorre la copia cerrada del E2E (`H8E2ECerradaTest`, con el arnés).
  */
 class ElevenLabsCallStarterTest extends TestCase
 {
@@ -42,19 +46,51 @@ class ElevenLabsCallStarterTest extends TestCase
         ], 30, $buzon);
     }
 
-    public function test_con_las_llamadas_cerradas_en_el_codigo_no_sale_nada_aunque_todo_este_configurado(): void
+    /** @param  array<string, mixed>  $cambios */
+    private static function configurado(array $cambios = []): void
     {
-        $this->assertFalse(VoiceCallPolicy::CALLS_ENABLED_IN_CODE, 'esta prueba describe el árbol compartido');
-        config(['voice.elevenlabs' => [
+        config(['voice.elevenlabs' => $cambios + [
             'enabled' => true, 'api_key' => 'xi-centinela', 'agent_id' => 'agent_verify', 'webhook_secret' => 'whsec', 'region' => 'default',
             'agent_phone_number_id' => 'phnum_0001', 'tool_secret' => 't', 'initiation_secret' => 'i', 'base_url' => 'http://127.0.0.1:8096', 'timeout_seconds' => 10,
         ]]);
-        self::freshFake(['*' => Http::response(['success' => true, 'conversation_id' => 'conv_1', 'callSid' => 'CA'.str_repeat('a', 32)], 200)]);
+    }
+
+    public function test_con_las_llamadas_abiertas_en_el_codigo_y_todo_configurado_sale_una_sola_peticion(): void
+    {
+        $this->assertTrue(VoiceCallPolicy::CALLS_ENABLED_IN_CODE, 'esta prueba describe el árbol abierto (voice(calls-open))');
+        self::configurado();
+        $sid = 'CA'.str_repeat('a', 32);
+        self::freshFake(['*' => Http::response(['success' => true, 'conversation_id' => 'conv_1', 'callSid' => $sid], 200)]);
 
         $r = (new ElevenLabsCallStarter)->startOutbound(self::peticion());
 
-        $this->assertSame(['not_attempted', 'calls_disabled_in_code', null, null, null], [$r->outcome, $r->reason, $r->conversationId, $r->callSid, $r->httpStatus]);
-        Http::assertNothingSent();
+        $this->assertSame(['started', null, 'conv_1', $sid, 200], [$r->outcome, $r->reason, $r->conversationId, $r->callSid, $r->httpStatus]);
+        Http::assertSentCount(1);
+        [$peticion] = Http::recorded()[0];
+        $this->assertSame('POST', $peticion->method());
+        $this->assertSame('http://127.0.0.1:8096'.ElevenLabsCallStarter::PATH, $peticion->url());
+        $this->assertSame(['xi-centinela'], $peticion->header('xi-api-key'));
+        $this->assertSame(ElevenLabsCallStarter::requestBody(self::peticion()), $peticion->data(), 'el cuerpo es el puro, sin nada añadido');
+        $this->assertStringNotContainsString('xi-centinela', (string) json_encode($peticion->data()), 'la clave solo en la cabecera');
+        $this->assertStringNotContainsString(self::DESTINO, (string) json_encode($r->toArray()), 'el resultado no lleva el número');
+    }
+
+    public function test_con_las_llamadas_abiertas_sin_la_configuracion_completa_no_sale_nada(): void
+    {
+        foreach ([
+            'apagado (ELEVENLABS_DISABLED)' => ['enabled' => false],
+            'sin clave (ELEVENLABS_NOT_CONFIGURED)' => ['api_key' => null],
+            'sin agente de verificación' => ['agent_id' => null],
+            'región desconocida (sin URL base)' => ['region' => 'marte'],
+        ] as $caso => $cambios) {
+            self::configurado($cambios);
+            self::freshFake(['*' => Http::response(['success' => true, 'conversation_id' => 'conv_1', 'callSid' => 'CA'.str_repeat('a', 32)], 200)]);
+
+            $r = (new ElevenLabsCallStarter)->startOutbound(self::peticion());
+
+            $this->assertSame(['not_attempted', 'not_configured', null, null, null], [$r->outcome, $r->reason, $r->conversationId, $r->callSid, $r->httpStatus], $caso);
+            Http::assertNothingSent();
+        }
     }
 
     public function test_el_cuerpo_de_la_peticion(): void

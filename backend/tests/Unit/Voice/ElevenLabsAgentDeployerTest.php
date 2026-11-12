@@ -26,8 +26,12 @@ use Tests\Unit\Voice\Support\VoiceSpecSamples as M;
  *  - Un fallo a mitad dice en qué paso y qué herramientas quedaron (huérfanas).
  *  - Leer = el agente y sus herramientas (como mucho las del catálogo), y la
  *    proyección observada casa con la compilada si nadie tocó nada.
- *  - Asignar un agente al número abre las entrantes: con las llamadas
- *    cerradas en el código, `not_attempted` sin red. Dejarlo sin agente, sí.
+ *  - Asignar un agente al número abre las entrantes. Con las llamadas
+ *    abiertas en el código (C-4, `voice(calls-open)`), UN PATCH con ese
+ *    agente, y solo vale si el proveedor devuelve el número con ESE agente;
+ *    sin la bandera, nada sale. Dejarlo sin agente, también un PATCH. (Lo
+ *    cerrado, `not_attempted` por `calls_disabled_in_code` sin red, lo recorre
+ *    la copia cerrada del E2E.)
  *  - Ni la clave ni un cuerpo salen en un resultado.
  */
 class ElevenLabsAgentDeployerTest extends TestCase
@@ -231,15 +235,37 @@ class ElevenLabsAgentDeployerTest extends TestCase
         Http::assertNothingSent();
     }
 
-    public function test_asignar_un_agente_esta_cerrado_en_el_codigo_y_quitarlo_no(): void
+    public function test_asignar_un_agente_esta_abierto_en_el_codigo_y_solo_vale_si_el_numero_queda_con_el(): void
     {
-        self::freshFake(['*' => Http::response(['phone_number_id' => 'phnum_0001', 'assigned_agent' => null, 'phone_number' => '+576010000009'], 200)]);
+        self::freshFake(['*' => Http::response(['phone_number_id' => 'phnum_0001', 'assigned_agent' => ['agent_id' => 'agent_new_0001', 'agent_name' => 'x'], 'phone_number' => '+576010000009'], 200)]);
         $d = new ElevenLabsAgentDeployer;
 
         $r = $d->assignNumber('phnum_0001', 'agent_new_0001');
-        $this->assertSame(['not_attempted', 'calls_disabled_in_code'], [$r->outcome, $r->reason]);
-        Http::assertNothingSent();
+        $this->assertSame(['assigned', 'agent_new_0001', null], [$r->outcome, $r->agentId, $r->reason]);
+        Http::assertSentCount(1);
+        [$asigna] = Http::recorded()[0];
+        $this->assertSame('PATCH', $asigna->method());
+        $this->assertSame(self::SIM.'/v1/convai/phone-numbers/phnum_0001', $asigna->url());
+        $this->assertSame(['agent_id' => 'agent_new_0001'], $asigna->data());
+        $this->assertSame([self::CLAVE], $asigna->header('xi-api-key'));
+        $this->assertStringNotContainsString('+576010000009', (string) json_encode($r->toArray()), 'el número del cuerpo no sale');
 
+        // El proveedor devuelve el número sin agente (o con otro): no casa, y no se da por asignado.
+        self::freshFake(['*' => Http::response(['phone_number_id' => 'phnum_0001', 'assigned_agent' => null], 200)]);
+        $r = $d->assignNumber('phnum_0001', 'agent_new_0001');
+        $this->assertSame(['error', 'assignment_mismatch', null], [$r->outcome, $r->reason, $r->agentId]);
+        self::freshFake(['*' => Http::response(['phone_number_id' => 'phnum_0001', 'assigned_agent' => ['agent_id' => 'agent_otro', 'agent_name' => 'x']], 200)]);
+        $r = $d->assignNumber('phnum_0001', 'agent_new_0001');
+        $this->assertSame(['error', 'assignment_mismatch', 'agent_otro'], [$r->outcome, $r->reason, $r->agentId]);
+
+        // Sin la bandera de ElevenLabs no sale nada, tampoco con las llamadas abiertas.
+        $this->configurar(['enabled' => false]);
+        self::freshFake();
+        $this->assertSame(['not_configured', null], [$d->assignNumber('phnum_0001', 'agent_new_0001')->outcome, $d->assignNumber('phnum_0001', 'agent_new_0001')->reason]);
+        Http::assertNothingSent();
+        $this->configurar();
+
+        self::freshFake(['*' => Http::response(['phone_number_id' => 'phnum_0001', 'assigned_agent' => null, 'phone_number' => '+576010000009'], 200)]);
         $r = $d->assignNumber('phnum_0001', null);
         $this->assertSame(['assigned', null, null], [$r->outcome, $r->agentId, $r->reason]);
         Http::assertSentCount(1);

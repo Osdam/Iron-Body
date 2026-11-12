@@ -21,7 +21,6 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use ReflectionMethod;
-use RuntimeException;
 use Tests\Feature\Telephony\Support\VoiceFixtures;
 use Tests\TestCase;
 
@@ -33,10 +32,12 @@ use Tests\TestCase;
  * MISMAS reglas y los mismos motivos que la puerta
  * ({@see OutboundPolicy::targetReasons()}), y cancelando sin petición.
  *
- * En el árbol compartido la constante está cerrada y `run()` no pasa de ella:
- * aquí se recorren los pasos 1–5 que van detrás (`recheckAfterCode`), con todo
- * lo anterior en regla (banderas encendidas EN LA PRUEBA, freno suelto, la
- * entrada sellada vigente y la deriva comprobada en la caché). Sin red.
+ * Aquí se recorren los pasos 1–5 que van detrás de la constante
+ * (`recheckAfterCode`), con todo lo anterior en regla (banderas encendidas EN
+ * LA PRUEBA, freno suelto, la entrada sellada vigente y la deriva comprobada en
+ * la caché). C-4: con las llamadas abiertas en el código, `run()` también pasa
+ * de la constante, y con todo en regla el job marca UNA vez con lo sellado.
+ * Sin red.
  */
 class PlaceOutboundVoiceCallRecheckTest extends TestCase
 {
@@ -114,23 +115,56 @@ class PlaceOutboundVoiceCallRecheckTest extends TestCase
         return [$llamada, $uuid];
     }
 
-    public function test_con_todo_en_regla_no_hay_motivo_y_la_constante_sigue_yendo_primero(): void
+    /** Un iniciador falso que apunta cada petición y responde «iniciada» con los ids que se le den. */
+    private static function iniciador(string $conversacion, string $sid): VoiceCallStarter
+    {
+        return new class($conversacion, $sid) implements VoiceCallStarter
+        {
+            /** @var list<OutboundCallRequest> */
+            public array $peticiones = [];
+
+            public function __construct(private readonly string $conversacion, private readonly string $sid) {}
+
+            public function startOutbound(OutboundCallRequest $request): OutboundCallResult
+            {
+                $this->peticiones[] = $request;
+
+                return new OutboundCallResult('started', null, $this->conversacion, $this->sid, 200);
+            }
+        };
+    }
+
+    public function test_con_todo_en_regla_no_hay_motivo_y_el_job_marca_una_sola_vez_con_lo_sellado(): void
     {
         $canaria = $this->canaryCall();
         $this->assertNull($this->recheck($canaria), 'canario activo, sin exclusión, dentro de la ventana');
+
+        // El job de verdad, con las llamadas abiertas en el código (C-4): pasa todas las cerraduras (DF-G9) y marca UNA vez.
+        $iniciador = self::iniciador('conv_h8fx_0117', 'CA000000000000000000000000a8000117');
+        $this->assertSame('dialing', (new PlaceOutboundVoiceCall((int) $canaria->id))->run($iniciador));
+        $this->assertCount(1, $iniciador->peticiones);
+        [$p] = $iniciador->peticiones;
+        $this->assertSame([self::SEALED_AGENT, self::PHONE_NUMBER_ID, (string) $canaria->call_ref, substr(self::CANARY_PHONE, -4), 'hang_up'],
+            [$p->agentId, $p->phoneNumberRef, $p->callRef, $p->toArray()['toLast4'], $p->voicemailPolicy], 'el agente sellado, el número importado, su call_ref y el destino sellado');
+        $this->assertSame(['si', 'saliente', (string) $canaria->call_ref, 'canario · publicación 1'],
+            [$p->dynamicVariables['caller_authorized'], $p->dynamicVariables['call_direction'], $p->dynamicVariables['call_ref'], $p->dynamicVariables['version_label']]);
+        $fila = VoiceCall::query()->findOrFail($canaria->id);
+        $this->assertSame(['dialing', null, 'conv_h8fx_0117', 'CA000000000000000000000000a8000117'], [$fila->status, $fila->policy_reason, $fila->provider_conversation_id, $fila->provider_call_sid]);
+        $this->assertNotNull($fila->started_at);
+        $this->assertSame(['outbound_started'], VoiceCallEvent::query()->where('call_id', $canaria->id)->pluck('kind')->all());
+        // Un solo intento: la misma fila ya no está `requested` y el job no vuelve a marcar.
+        $this->assertSame('dialing', (new PlaceOutboundVoiceCall((int) $canaria->id))->run($iniciador));
+        $this->assertCount(1, $iniciador->peticiones, 'el job nunca repite');
+
+        // El contacto (alcance `contacts`, parte `rest`): lo mismo, con el agente del resto.
         [$deContacto] = $this->contactCall();
         $this->assertNull($this->recheck($deContacto), 'contacto con consentimiento, RNE vigente, sin exclusión');
-
-        // El job de verdad no pasa de la constante (DF-G9): cancela por ella, sin red.
-        $iniciador = new class implements VoiceCallStarter
-        {
-            public function startOutbound(OutboundCallRequest $request): OutboundCallResult
-            {
-                throw new RuntimeException('no tenía que marcar');
-            }
-        };
-        $this->assertSame('canceled', (new PlaceOutboundVoiceCall((int) $canaria->id))->run($iniciador));
-        $this->assertSame('calls_disabled_in_code', VoiceCall::query()->findOrFail($canaria->id)->policy_reason);
+        $delContacto = self::iniciador('conv_h8fx_0118', 'CA000000000000000000000000a8000118');
+        $this->assertSame('dialing', (new PlaceOutboundVoiceCall((int) $deContacto->id))->run($delContacto));
+        $this->assertCount(1, $delContacto->peticiones);
+        $this->assertSame([self::REST_AGENT, substr(self::CONTACT_PHONE, -4), 'resto · publicación 2'],
+            [$delContacto->peticiones[0]->agentId, $delContacto->peticiones[0]->toArray()['toLast4'], $delContacto->peticiones[0]->dynamicVariables['version_label']]);
+        $this->assertSame('dialing', VoiceCall::query()->findOrFail($deContacto->id)->status);
         Http::assertNothingSent();
     }
 

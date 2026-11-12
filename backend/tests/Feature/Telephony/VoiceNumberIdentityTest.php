@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
+use Illuminate\Testing\TestResponse;
 use ReflectionMethod;
 use Tests\Feature\Telephony\Support\VoiceFixtures;
 use Tests\TestCase;
@@ -149,13 +150,33 @@ class VoiceNumberIdentityTest extends TestCase
         $this->assertTrue(VoiceNumberGuard::collidesForPolicy());
     }
 
-    /** @return list<string> los motivos de la puerta para un canario de voz activo, con las banderas y el presupuesto abiertos */
-    private function motivosDeLaPuerta(string $canario): array
+    /** La petición de una saliente a un canario de voz activo, con las banderas, el cupo y el presupuesto abiertos. */
+    private function puerta(string $canario): TestResponse
     {
         config(['voice.outbound.enabled' => true, 'voice.twilio.enabled' => true, 'voice.twilio.daily_call_cap' => 3, 'voice.limits.daily_budget_usd' => '5']);
 
         return $this->postJson('/api/admin/voice/calls', ['clientRequestId' => (string) Str::uuid(), 'target' => ['kind' => 'canary', 'uuid' => $canario]],
-            $this->adminWithPermissions(['telephony.call_place']))->assertStatus(409)->json('reasons');
+            $this->adminWithPermissions(['telephony.call_place']));
+    }
+
+    /** @return list<string> los motivos con que la puerta NIEGA (409) la saliente al canario, con las banderas y el presupuesto abiertos */
+    private function motivosDeLaPuerta(string $canario): array
+    {
+        $antes = VoiceCall::query()->count();
+        $motivos = $this->puerta($canario)->assertStatus(409)->json('reasons');
+        $this->assertSame($antes, VoiceCall::query()->count(), 'negada: ninguna fila');
+
+        return $motivos;
+    }
+
+    /**
+     * C-4: con las llamadas abiertas en el código, la puerta ACEPTA (202) la saliente al canario: su fila, su reserva, su
+     * evento y el job. Después se libera (como la cancela el job sin petición) para que la siguiente mirada parta de cero.
+     */
+    private function laPuertaAcepta(string $canario): void
+    {
+        $antes = VoiceCall::query()->count();
+        $this->releaseAccepted($this->assertOutboundAccepted($this->puerta($canario), $canario, $antes));
     }
 
     /**
@@ -163,7 +184,8 @@ class VoiceNumberIdentityTest extends TestCase
      * conciliación del número de menos de 2 h que cuadre (`number_unverified`),
      * como `elevenlabs_unverified` sin la marca de E4-6: ninguna saliente sin
      * vigilar el número que de verdad llama. Con la verificación de ElevenLabs
-     * escrita, lo único que queda con una fresca que cuadra es la constante.
+     * escrita y las llamadas abiertas en el código (C-4), una fresca que cuadra
+     * es lo último que faltaba: la puerta acepta.
      */
     public function test_la_puerta_falla_cerrada_sin_una_conciliacion_reciente_del_numero(): void
     {
@@ -171,26 +193,26 @@ class VoiceNumberIdentityTest extends TestCase
         $this->publishVoice();
         VoiceProviderState::recordStudioVerification(true, now());
 
-        // Sin conciliación del número: cerrado.
-        $this->assertSame(['calls_disabled_in_code', 'number_unverified'], $this->motivosDeLaPuerta($canario));
+        // Sin conciliación del número: cerrado, y es lo único que falta.
+        $this->assertSame(['number_unverified'], $this->motivosDeLaPuerta($canario));
 
-        // Una fresca que cuadra: pasa (solo queda la constante del código).
+        // Una fresca que cuadra: pasa.
         $this->provider(self::VOICE_FROM);
         $this->assertSame('ok', $this->reconcile()['result']);
         $this->assertSame('verified', VoiceNumberGuard::policyCheck());
-        $this->assertSame(['calls_disabled_in_code'], $this->motivosDeLaPuerta($canario));
+        $this->laPuertaAcepta($canario);
 
         // A 1 h 59 min sigue valiendo; a 2 h 1 min ya no.
         $this->travelTo(Carbon::parse('2026-11-09 16:59:00', 'UTC'));
         VoiceProviderState::recordStudioVerification(true, now());
-        $this->assertSame(['calls_disabled_in_code'], $this->motivosDeLaPuerta($canario));
+        $this->laPuertaAcepta($canario);
         $this->travelTo(Carbon::parse('2026-11-09 17:01:00', 'UTC'));
-        $this->assertSame(['calls_disabled_in_code', 'number_unverified'], $this->motivosDeLaPuerta($canario));
+        $this->assertSame(['number_unverified'], $this->motivosDeLaPuerta($canario));
 
         // Una fresca que NO cuadra: el importado no es TWILIO_VOICE_FROM → `number_mismatch` (y el freno de la conciliación).
         $this->provider(self::OTRO);
         $this->assertSame('number_mismatch', $this->reconcile()['result']);
-        $this->assertSame(['calls_disabled_in_code', 'number_mismatch', 'voice_braked'], $this->motivosDeLaPuerta($canario));
+        $this->assertSame(['number_mismatch', 'voice_braked'], $this->motivosDeLaPuerta($canario));
     }
 
     /** Decisión del lead: una fresca en la que el importado es de la mensajería → `voice_number_is_whatsapp` por su nombre. */
@@ -202,7 +224,7 @@ class VoiceNumberIdentityTest extends TestCase
         config(['meta.whatsapp_display_phone' => self::VOICE_FROM]);   // el declarado choca: el importado ES el de la mensajería
         $this->provider(self::VOICE_FROM);
         $this->assertSame('number_is_messaging', $this->reconcile()['result']);
-        $this->assertSame(['calls_disabled_in_code', 'voice_number_is_whatsapp', 'voice_braked'], $this->motivosDeLaPuerta($canario));
+        $this->assertSame(['voice_number_is_whatsapp', 'voice_braked'], $this->motivosDeLaPuerta($canario));
     }
 
     /** Lo que responde la recomprobación del job justo antes de marcar (DF-G9, pasos 1–5; la constante cerrada no deja pasar de ella). */
@@ -218,9 +240,10 @@ class VoiceNumberIdentityTest extends TestCase
      * de la configuración. Si el mando cambia `ELEVENLABS_AGENT_PHONE_NUMBER_ID`
      * (solo `config:cache`: la caché sigue con la observación de antes), esa
      * observación ya no vale: la puerta real y el job dicen `number_unverified`,
-     * y el estado y el doctor, el motivo. Con el mismo id, pasa. Es la
-     * reproducción del revisor (`RevStaleNumberObservationTest`), que antes
-     * daba `verified` y solo `calls_disabled_in_code`.
+     * y el estado y el doctor, el motivo. Con el mismo id, pasa (C-4: con las
+     * llamadas abiertas en el código, la puerta acepta). Es la reproducción del
+     * revisor (`RevStaleNumberObservationTest`), que antes daba `verified` y
+     * solo `calls_disabled_in_code`.
      */
     public function test_una_observacion_de_otro_id_de_numero_no_vigila_el_que_llama(): void
     {
@@ -230,12 +253,12 @@ class VoiceNumberIdentityTest extends TestCase
         $this->provider(self::VOICE_FROM);
         $this->assertSame('ok', $this->reconcile()['result']);
         $this->assertSame(['check' => 'verified', 'reason' => null], VoiceNumberGuard::policyVerdict());
-        $this->assertSame(['calls_disabled_in_code'], $this->motivosDeLaPuerta($canario));
+        $this->laPuertaAcepta($canario);
 
         // El mando cambia el id (reimportación, o un id equivocado): la caché guarda la observación del anterior.
         config(['voice.elevenlabs.agent_phone_number_id' => 'phnum_nunca_observado_9999']);
         $this->assertSame(['check' => 'unverified', 'reason' => 'other_number_id'], VoiceNumberGuard::policyVerdict());
-        $this->assertSame(['calls_disabled_in_code', 'number_unverified'], $this->motivosDeLaPuerta($canario), 'la puerta real');
+        $this->assertSame(['number_unverified'], $this->motivosDeLaPuerta($canario), 'la puerta real');
         $numero = $this->getJson('/api/admin/voice/status', $this->adminWithPermissions(['telephony.view']))->assertOk()->json('number');
         // REV8-c (segunda mirada) H-5: el estado no expone el identificador del proveedor; dice si la observación es del número configurado.
         $this->assertSame(['unverified', 'other_number_id', false], [$numero['check'], $numero['checkReason'], $numero['observed']['matchesConfigured']]);
@@ -253,7 +276,7 @@ class VoiceNumberIdentityTest extends TestCase
         config(['voice.elevenlabs.agent_phone_number_id' => ' '.self::PHONE_NUMBER_ID.' ']);
         $this->assertSame(['check' => 'verified', 'reason' => null], VoiceNumberGuard::policyVerdict());
         config(['voice.elevenlabs.agent_phone_number_id' => self::PHONE_NUMBER_ID]);
-        $this->assertSame(['calls_disabled_in_code'], $this->motivosDeLaPuerta($canario));
+        $this->laPuertaAcepta($canario);
 
         // El job, con una saliente ya pedida (después de la puerta: la fila cuenta para la frecuencia y la concurrencia).
         $llamada = $this->voiceCall('outbound', 'requested', ['canary_number_uuid' => $canario, 'remote' => self::CANARY_PHONE]);

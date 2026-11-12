@@ -6,6 +6,7 @@ use App\Models\Voice\VoiceBrakeEntry;
 use App\Models\Voice\VoiceCall;
 use App\Models\Voice\VoiceCallEvent;
 use App\Services\Telephony\VoiceBrake;
+use App\Services\Telephony\VoiceCostGuard;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -18,10 +19,13 @@ use Tests\TestCase;
  * H8, D8-11, D8-16, E1-2; fixture `elevenlabs-webhook-bodies.json`
  * §initiation). Sin red (`Http::preventStrayRequests()`).
  *
- * En el árbol compartido la constante está cerrada: NINGUNA entrante sale
- * autorizada (`calls_disabled_in_code`) y toda iniciación deja su fila
- * `denied` con su sello, su huella y sus 4 dígitos. La vía autorizada la
- * recorre TEST8 en la copia del banco con la constante girada.
+ * C-4: con las llamadas abiertas en el código (`voice(calls-open)`), el
+ * canario de voz activo con todo en regla sale AUTORIZADO (fila `active`, con
+ * su sello, su huella, sus 4 dígitos y la reserva de una entrante), y las
+ * demás cerraduras (el número declarado solo saliente, el sello, el freno, el
+ * llamante…) la siguen negando por su nombre. Toda iniciación deja su fila. La
+ * negativa por `calls_disabled_in_code` (el árbol cerrado) la recorre la copia
+ * cerrada del E2E.
  */
 class VoiceInitiationWebhookTest extends TestCase
 {
@@ -101,16 +105,21 @@ class VoiceInitiationWebhookTest extends TestCase
         $this->assertCleanResponse($this->rawPost(self::URI, 'esto no es JSON', $this->initiationHeaders()), 'no');
     }
 
-    public function test_un_canario_activo_con_la_constante_cerrada_queda_denied_con_su_sello_huella_y_evento(): void
+    public function test_un_canario_activo_con_las_llamadas_abiertas_queda_active_autorizado_con_su_sello_huella_reserva_y_evento(): void
     {
         $canario = $this->activeVoiceCanary();
         $pub = $this->publishVoice();
 
-        $v = $this->assertCleanResponse($this->rawPost(self::URI, $this->body(self::CANARY_PHONE, $this->sid('15')), $this->initiationHeaders()), 'no');
+        $v = $this->assertCleanResponse($this->rawPost(self::URI, $this->body(self::CANARY_PHONE, $this->sid('15')), $this->initiationHeaders()), 'si');
         $this->assertSame('canario · publicación '.$pub['seq'], $v['version_label']);
 
         $fila = VoiceCall::query()->sole();
-        $this->assertSame(['inbound', 'denied', false, 'calls_disabled_in_code'], [$fila->direction, $fila->status, $fila->caller_authorized, $fila->policy_reason]);
+        $this->assertSame(['inbound', 'active', true, null], [$fila->direction, $fila->status, $fila->caller_authorized, $fila->policy_reason]);
+        $this->assertNotNull($fila->started_at, 'autorizada: empieza al iniciarse');
+        // La reserva de una entrante autorizada con los precios por defecto: 300 s y un tramo transferido a un fijo (1,2445 US$),
+        // no el minuto de «línea no disponible» de una denegada (0,1789 US$); y cuenta como comprometida en el día de Bogotá.
+        $this->assertSame(1244500, (int) $fila->reserved_micros);
+        $this->assertSame(1244500, VoiceCostGuard::committedMicros((string) $fila->budget_day));
         $this->assertSame($v['call_ref'], $fila->call_ref);
         $this->assertSame($canario, $fila->canary_number_uuid);
         // La huella y los 4 dígitos del fixture (§initiation), nunca el número.
@@ -121,8 +130,8 @@ class VoiceInitiationWebhookTest extends TestCase
             [$fila->stamp_state, $fila->part, $fila->voice_publication_seq, $fila->provider_agent_id, $fila->spec_hash, $fila->payload_hash, $fila->compiler_version, $fila->studio_version_uuid]);
         $this->assertSame([$this->sid('15'), 'conv_h8fx_0021'], [$fila->provider_call_sid, $fila->provider_conversation_id]);
         $evento = VoiceCallEvent::query()->sole();
-        $this->assertSame(['initiation_received', 'elevenlabs', $this->sid('15'), 'denied'], [$evento->kind, $evento->provider, $evento->provider_event_key, $evento->outcome]);
-        $this->assertSame(['calls_disabled_in_code'], $evento->codes['reasons'], 'el canario activo con todo abierto: solo la constante lo para');
+        $this->assertSame(['initiation_received', 'elevenlabs', $this->sid('15'), 'authorized'], [$evento->kind, $evento->provider, $evento->provider_event_key, $evento->outcome]);
+        $this->assertSame([], $evento->codes['reasons'], 'el canario activo con todo abierto: nada lo para');
         $this->assertFalse(VoiceBrake::isOpen());
         Http::assertNothingSent();
     }
@@ -175,7 +184,8 @@ class VoiceInitiationWebhookTest extends TestCase
 
     /**
      * B8-g (SEC8-c M-2), los dos modos del número. Sin declarar (o declarado
-     * `true`), lo de siempre: al canario activo solo lo para la constante.
+     * `true`), lo de siempre: con las llamadas abiertas en el código (C-4), el
+     * canario activo se atiende.
      * Declarado «Outbound Only» (`VOICE_NUMBER_INBOUND_CAPABLE=false`), la
      * iniciación se deniega SIEMPRE, con las entrantes encendidas, y el primer
      * motivo (el de `policy_reason`) es `number_outbound_only`.
@@ -187,22 +197,27 @@ class VoiceInitiationWebhookTest extends TestCase
         $this->assertTrue(config('voice.inbound.enabled'));
         $motivos = fn (string $sid): array => VoiceCallEvent::query()->where('provider_event_key', $sid)->sole()->codes['reasons'];
 
-        // Sin declarar: lo de siempre.
-        $this->assertCleanResponse($this->rawPost(self::URI, $this->body(self::CANARY_PHONE, $this->sid('31'), 'conv_h8fx_0031'), $this->initiationHeaders()), 'no');
-        $this->assertSame(['calls_disabled_in_code'], $motivos($this->sid('31')));
+        // La entrante atendida cuelga: deja de contar para la concurrencia y la siguiente parte de cero.
+        $cuelga = fn (string $sid): bool => VoiceCall::transition((int) VoiceCall::query()->where('provider_call_sid', $sid)->value('id'), [VoiceCall::STATUS_ACTIVE], VoiceCall::STATUS_COMPLETED, ['ended_at' => now()]);
 
-        // Declarado solo saliente: denegada siempre, y es su primer motivo.
+        // Sin declarar: lo de siempre (con las llamadas abiertas, el canario activo se atiende).
+        $this->assertCleanResponse($this->rawPost(self::URI, $this->body(self::CANARY_PHONE, $this->sid('31'), 'conv_h8fx_0031'), $this->initiationHeaders()), 'si');
+        $this->assertSame([], $motivos($this->sid('31')));
+        $this->assertTrue($cuelga($this->sid('31')));
+
+        // Declarado solo saliente: denegada siempre, y es su primer motivo (y el único: con las llamadas abiertas, nada más la para).
         config(['voice.number.inbound_capable' => false]);
         $this->assertCleanResponse($this->rawPost(self::URI, $this->body(self::CANARY_PHONE, $this->sid('32'), 'conv_h8fx_0032'), $this->initiationHeaders()), 'no');
         $fila = VoiceCall::query()->where('provider_call_sid', $this->sid('32'))->sole();
         $this->assertSame(['denied', false, 'number_outbound_only'], [$fila->status, $fila->caller_authorized, $fila->policy_reason]);
-        $this->assertSame(['number_outbound_only', 'calls_disabled_in_code'], $motivos($this->sid('32')));
+        $this->assertSame(['number_outbound_only'], $motivos($this->sid('32')));
+        $this->assertNull($fila->started_at);
         $this->assertFalse(VoiceBrake::isOpen(), 'con el agente sellado no hay sello roto: solo se deniega');
 
         // Declarado `true`: lo de siempre otra vez.
         config(['voice.number.inbound_capable' => true]);
-        $this->assertCleanResponse($this->rawPost(self::URI, $this->body(self::CANARY_PHONE, $this->sid('33'), 'conv_h8fx_0033'), $this->initiationHeaders()), 'no');
-        $this->assertSame(['calls_disabled_in_code'], $motivos($this->sid('33')));
+        $this->assertCleanResponse($this->rawPost(self::URI, $this->body(self::CANARY_PHONE, $this->sid('33'), 'conv_h8fx_0033'), $this->initiationHeaders()), 'si');
+        $this->assertSame([], $motivos($this->sid('33')));
     }
 
     /**
@@ -219,7 +234,7 @@ class VoiceInitiationWebhookTest extends TestCase
         $this->assertCleanResponse($this->rawPost(self::URI, $this->body(self::CANARY_PHONE, $this->sid('34'), 'conv_h8fx_0034', 'agent_h8fx_viejo_0001'), $this->initiationHeaders()), 'no');
         $fila = VoiceCall::query()->sole();
         $this->assertSame(['denied', false, 'number_outbound_only'], [$fila->status, $fila->caller_authorized, $fila->policy_reason]);
-        $this->assertSame(['number_outbound_only', 'calls_disabled_in_code', 'seal_mismatch'],
+        $this->assertSame(['number_outbound_only', 'seal_mismatch'],
             VoiceCallEvent::query()->where('call_id', $fila->id)->where('kind', 'initiation_received')->sole()->codes['reasons']);
         $this->assertSame(['open', 'seal_mismatch', 'seal:'.$this->sid('34')], [($freno = VoiceBrakeEntry::query()->sole())->kind, $freno->reason, $freno->open_key]);
         $this->assertTrue(VoiceBrake::isOpen());

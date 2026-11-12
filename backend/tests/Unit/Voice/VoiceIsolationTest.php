@@ -13,9 +13,10 @@ use RecursiveIteratorIterator;
  * protecciones 2 y 3). Quien implementa no la toca: si cae, avisa al lead.
  *
  * LO QUE SE PROTEGE.
- *  - `VoiceCallPolicy::CALLS_ENABLED_IN_CODE === false`, literal, una vez, y
- *    declarada solo ahí: nadie la sombrea con otra constante, nadie la lee de
- *    otra clase y nadie la nombra dentro de una cadena (`constant()`).
+ *  - `VoiceCallPolicy::CALLS_ENABLED_IN_CODE === true` (C-4: desde el commit
+ *    `voice(calls-open)`), literal, una vez, y declarada solo ahí: nadie la
+ *    sombrea con otra constante, nadie la lee de otra clase y nadie la nombra
+ *    dentro de una cadena (`constant()`).
  *  - LISTA CERRADA. En `app/Services/Voice/` están los doce ficheros del H6 y,
  *    como mucho, los del contrato del H8 (interfaces, adaptadores de
  *    ElevenLabs, el traductor puro y un nulo por interfaz). `Dto/` admite
@@ -327,11 +328,11 @@ class VoiceIsolationTest extends TestCase
         $this->assertLessThanOrEqual(1, count($firmas), 'TwilioRequestSignature está en dos sitios');
     }
 
-    public function test_las_llamadas_estan_cerradas_en_el_codigo(): void
+    public function test_las_llamadas_estan_abiertas_en_el_codigo(): void
     {
-        $this->assertFalse(VoiceCallPolicy::CALLS_ENABLED_IN_CODE);
+        $this->assertTrue(VoiceCallPolicy::CALLS_ENABLED_IN_CODE);
         $codigo = (string) file_get_contents(self::raiz().'/app/Services/Voice/VoiceCallPolicy.php');
-        $this->assertSame(1, preg_match_all('/public const CALLS_ENABLED_IN_CODE = false;/', $codigo), 'la constante, literal y una sola vez');
+        $this->assertSame(1, preg_match_all('/public const CALLS_ENABLED_IN_CODE = true;/', $codigo), 'la constante, literal y una sola vez');
 
         // H8: nadie la declara otra vez, la lee de otra clase ni la nombra dentro de una cadena.
         $declaraciones = [];

@@ -52,7 +52,7 @@ class VoiceCommandsTest extends TestCase
         $this->publishVoice();
         $this->assertSame(0, Artisan::call('voice:doctor', ['--telefonia' => true]));
         $texto = Artisan::output();
-        foreach (['Voz · telefonía (H8)', 'Constante  : cerrada', 'Cadena     : canary ok · seq 1', 'Cadena     : rest none', 'Freno      : suelto'] as $esperado) {
+        foreach (['Voz · telefonía (H8)', 'Constante  : ABIERTA (la de VoiceCallPolicy: las llamadas en el código)', 'Cadena     : canary ok · seq 1', 'Cadena     : rest none', 'Freno      : suelto'] as $esperado) {
             $this->assertStringContainsString($esperado, $texto);
         }
         $this->assertSame(0, Artisan::call('voice:doctor', ['--telefonia' => true, '--json' => true]));
@@ -70,7 +70,7 @@ class VoiceCommandsTest extends TestCase
         $this->assertSame('no_observation', $json['telefonia']['number']['checkReason']);
         $this->assertStringContainsString('la puerta dice number_unverified', $texto);
         $this->assertNull($json['telefonia']['number']['inboundCapable'], 'sin declarar');
-        $this->assertFalse($json['telefonia']['callsEnabledInCode']);
+        $this->assertTrue($json['telefonia']['callsEnabledInCode']);
         foreach (['xi-centinela', self::INITIATION_SECRET, self::TOOL_SECRET, self::WEBHOOK_SECRET, '+576010000090', '576010000090'] as $s) {
             $this->assertStringNotContainsString($s, $texto.json_encode($json), "la salida lleva «{$s}»");
         }

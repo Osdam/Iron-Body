@@ -15840,7 +15840,7 @@
   ],
   "voiceCallPolicy": [
     {
-      "name": "voiceCallPolicy · decide · todo listo salvo la constante del código",
+      "name": "voiceCallPolicy · decide · todo listo: permitida (la constante abierta)",
       "kind": "decide",
       "context": {
         "twilioVoiceEnabled": true,
@@ -15851,10 +15851,8 @@
         "dailyCap": 5
       },
       "expected": {
-        "allowed": false,
-        "reasons": [
-          "calls_disabled_in_code"
-        ],
+        "allowed": true,
+        "reasons": [],
         "levels": [
           {
             "id": "text_simulation",
@@ -15864,17 +15862,13 @@
           },
           {
             "id": "integration_test",
-            "available": false,
-            "reasons": [
-              "calls_disabled_in_code"
-            ]
+            "available": true,
+            "reasons": []
           },
           {
             "id": "real_call",
-            "available": false,
-            "reasons": [
-              "calls_disabled_in_code"
-            ]
+            "available": true,
+            "reasons": []
           }
         ]
       }
@@ -15893,7 +15887,6 @@
       "expected": {
         "allowed": false,
         "reasons": [
-          "calls_disabled_in_code",
           "twilio_voice_disabled",
           "no_voice_number",
           "elevenlabs_not_configured",
@@ -15911,7 +15904,6 @@
             "id": "integration_test",
             "available": false,
             "reasons": [
-              "calls_disabled_in_code",
               "twilio_voice_disabled",
               "no_voice_number",
               "elevenlabs_not_configured"
@@ -15921,7 +15913,6 @@
             "id": "real_call",
             "available": false,
             "reasons": [
-              "calls_disabled_in_code",
               "twilio_voice_disabled",
               "no_voice_number",
               "elevenlabs_not_configured",
@@ -15946,7 +15937,6 @@
       "expected": {
         "allowed": false,
         "reasons": [
-          "calls_disabled_in_code",
           "twilio_voice_disabled"
         ],
         "levels": [
@@ -15960,7 +15950,6 @@
             "id": "integration_test",
             "available": false,
             "reasons": [
-              "calls_disabled_in_code",
               "twilio_voice_disabled"
             ]
           },
@@ -15968,7 +15957,6 @@
             "id": "real_call",
             "available": false,
             "reasons": [
-              "calls_disabled_in_code",
               "twilio_voice_disabled"
             ]
           }
@@ -15989,7 +15977,6 @@
       "expected": {
         "allowed": false,
         "reasons": [
-          "calls_disabled_in_code",
           "no_voice_number"
         ],
         "levels": [
@@ -16003,7 +15990,6 @@
             "id": "integration_test",
             "available": false,
             "reasons": [
-              "calls_disabled_in_code",
               "no_voice_number"
             ]
           },
@@ -16011,7 +15997,6 @@
             "id": "real_call",
             "available": false,
             "reasons": [
-              "calls_disabled_in_code",
               "no_voice_number"
             ]
           }
@@ -16032,7 +16017,6 @@
       "expected": {
         "allowed": false,
         "reasons": [
-          "calls_disabled_in_code",
           "elevenlabs_not_configured"
         ],
         "levels": [
@@ -16046,7 +16030,6 @@
             "id": "integration_test",
             "available": false,
             "reasons": [
-              "calls_disabled_in_code",
               "elevenlabs_not_configured"
             ]
           },
@@ -16054,7 +16037,6 @@
             "id": "real_call",
             "available": false,
             "reasons": [
-              "calls_disabled_in_code",
               "elevenlabs_not_configured"
             ]
           }
@@ -16075,7 +16057,6 @@
       "expected": {
         "allowed": false,
         "reasons": [
-          "calls_disabled_in_code",
           "elevenlabs_disabled"
         ],
         "levels": [
@@ -16089,7 +16070,6 @@
             "id": "integration_test",
             "available": false,
             "reasons": [
-              "calls_disabled_in_code",
               "elevenlabs_disabled"
             ]
           },
@@ -16097,7 +16077,6 @@
             "id": "real_call",
             "available": false,
             "reasons": [
-              "calls_disabled_in_code",
               "elevenlabs_disabled"
             ]
           }
@@ -16118,7 +16097,6 @@
       "expected": {
         "allowed": false,
         "reasons": [
-          "calls_disabled_in_code",
           "elevenlabs_unverified"
         ],
         "levels": [
@@ -16132,7 +16110,6 @@
             "id": "integration_test",
             "available": false,
             "reasons": [
-              "calls_disabled_in_code",
               "elevenlabs_unverified"
             ]
           },
@@ -16140,7 +16117,6 @@
             "id": "real_call",
             "available": false,
             "reasons": [
-              "calls_disabled_in_code",
               "elevenlabs_unverified"
             ]
           }
@@ -16159,10 +16135,8 @@
         "dailyCap": 5
       },
       "expected": {
-        "allowed": false,
-        "reasons": [
-          "calls_disabled_in_code"
-        ],
+        "allowed": true,
+        "reasons": [],
         "levels": [
           {
             "id": "text_simulation",
@@ -16172,17 +16146,13 @@
           },
           {
             "id": "integration_test",
-            "available": false,
-            "reasons": [
-              "calls_disabled_in_code"
-            ]
+            "available": true,
+            "reasons": []
           },
           {
             "id": "real_call",
-            "available": false,
-            "reasons": [
-              "calls_disabled_in_code"
-            ]
+            "available": true,
+            "reasons": []
           }
         ]
       }
@@ -16201,7 +16171,6 @@
       "expected": {
         "allowed": false,
         "reasons": [
-          "calls_disabled_in_code",
           "not_an_active_voice_canary"
         ],
         "levels": [
@@ -16213,16 +16182,13 @@
           },
           {
             "id": "integration_test",
-            "available": false,
-            "reasons": [
-              "calls_disabled_in_code"
-            ]
+            "available": true,
+            "reasons": []
           },
           {
             "id": "real_call",
             "available": false,
             "reasons": [
-              "calls_disabled_in_code",
               "not_an_active_voice_canary"
             ]
           }
@@ -16243,7 +16209,6 @@
       "expected": {
         "allowed": false,
         "reasons": [
-          "calls_disabled_in_code",
           "not_an_active_voice_canary"
         ],
         "levels": [
@@ -16255,16 +16220,13 @@
           },
           {
             "id": "integration_test",
-            "available": false,
-            "reasons": [
-              "calls_disabled_in_code"
-            ]
+            "available": true,
+            "reasons": []
           },
           {
             "id": "real_call",
             "available": false,
             "reasons": [
-              "calls_disabled_in_code",
               "not_an_active_voice_canary"
             ]
           }
@@ -16285,7 +16247,6 @@
       "expected": {
         "allowed": false,
         "reasons": [
-          "calls_disabled_in_code",
           "source_not_allowed"
         ],
         "levels": [
@@ -16299,7 +16260,6 @@
             "id": "integration_test",
             "available": false,
             "reasons": [
-              "calls_disabled_in_code",
               "source_not_allowed"
             ]
           },
@@ -16307,7 +16267,6 @@
             "id": "real_call",
             "available": false,
             "reasons": [
-              "calls_disabled_in_code",
               "source_not_allowed"
             ]
           }
@@ -16328,7 +16287,6 @@
       "expected": {
         "allowed": false,
         "reasons": [
-          "calls_disabled_in_code",
           "source_not_allowed"
         ],
         "levels": [
@@ -16342,7 +16300,6 @@
             "id": "integration_test",
             "available": false,
             "reasons": [
-              "calls_disabled_in_code",
               "source_not_allowed"
             ]
           },
@@ -16350,7 +16307,6 @@
             "id": "real_call",
             "available": false,
             "reasons": [
-              "calls_disabled_in_code",
               "source_not_allowed"
             ]
           }
@@ -16371,7 +16327,6 @@
       "expected": {
         "allowed": false,
         "reasons": [
-          "calls_disabled_in_code",
           "daily_cap_zero"
         ],
         "levels": [
@@ -16383,16 +16338,13 @@
           },
           {
             "id": "integration_test",
-            "available": false,
-            "reasons": [
-              "calls_disabled_in_code"
-            ]
+            "available": true,
+            "reasons": []
           },
           {
             "id": "real_call",
             "available": false,
             "reasons": [
-              "calls_disabled_in_code",
               "daily_cap_zero"
             ]
           }
@@ -16413,7 +16365,6 @@
       "expected": {
         "allowed": false,
         "reasons": [
-          "calls_disabled_in_code",
           "daily_cap_zero"
         ],
         "levels": [
@@ -16425,16 +16376,13 @@
           },
           {
             "id": "integration_test",
-            "available": false,
-            "reasons": [
-              "calls_disabled_in_code"
-            ]
+            "available": true,
+            "reasons": []
           },
           {
             "id": "real_call",
             "available": false,
             "reasons": [
-              "calls_disabled_in_code",
               "daily_cap_zero"
             ]
           }
@@ -16453,10 +16401,8 @@
         "dailyCap": 1
       },
       "expected": {
-        "allowed": false,
-        "reasons": [
-          "calls_disabled_in_code"
-        ],
+        "allowed": true,
+        "reasons": [],
         "levels": [
           {
             "id": "text_simulation",
@@ -16466,17 +16412,13 @@
           },
           {
             "id": "integration_test",
-            "available": false,
-            "reasons": [
-              "calls_disabled_in_code"
-            ]
+            "available": true,
+            "reasons": []
           },
           {
             "id": "real_call",
-            "available": false,
-            "reasons": [
-              "calls_disabled_in_code"
-            ]
+            "available": true,
+            "reasons": []
           }
         ]
       }
@@ -16495,7 +16437,6 @@
       "expected": {
         "allowed": false,
         "reasons": [
-          "calls_disabled_in_code",
           "twilio_voice_disabled",
           "no_voice_number",
           "elevenlabs_disabled",
@@ -16514,7 +16455,6 @@
             "id": "integration_test",
             "available": false,
             "reasons": [
-              "calls_disabled_in_code",
               "twilio_voice_disabled",
               "no_voice_number",
               "elevenlabs_disabled",
@@ -16525,7 +16465,6 @@
             "id": "real_call",
             "available": false,
             "reasons": [
-              "calls_disabled_in_code",
               "twilio_voice_disabled",
               "no_voice_number",
               "elevenlabs_disabled",
@@ -16551,7 +16490,6 @@
       "expected": {
         "allowed": false,
         "reasons": [
-          "calls_disabled_in_code",
           "source_not_allowed"
         ],
         "levels": [
@@ -16565,7 +16503,6 @@
             "id": "integration_test",
             "available": false,
             "reasons": [
-              "calls_disabled_in_code",
               "source_not_allowed"
             ]
           },
@@ -16573,7 +16510,6 @@
             "id": "real_call",
             "available": false,
             "reasons": [
-              "calls_disabled_in_code",
               "source_not_allowed"
             ]
           }
@@ -16594,7 +16530,6 @@
       "expected": {
         "allowed": false,
         "reasons": [
-          "calls_disabled_in_code",
           "twilio_voice_disabled",
           "no_voice_number"
         ],
@@ -16609,7 +16544,6 @@
             "id": "integration_test",
             "available": false,
             "reasons": [
-              "calls_disabled_in_code",
               "twilio_voice_disabled",
               "no_voice_number"
             ]
@@ -16618,7 +16552,6 @@
             "id": "real_call",
             "available": false,
             "reasons": [
-              "calls_disabled_in_code",
               "twilio_voice_disabled",
               "no_voice_number"
             ]

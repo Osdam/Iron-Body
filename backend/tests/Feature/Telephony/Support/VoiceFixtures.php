@@ -2,15 +2,19 @@
 
 namespace Tests\Feature\Telephony\Support;
 
+use App\Jobs\Voice\PlaceOutboundVoiceCall;
 use App\Models\Admin;
 use App\Models\Plan;
 use App\Models\Voice\VoiceCall;
+use App\Models\Voice\VoiceCallEvent;
+use App\Services\Telephony\VoiceCostGuard;
 use App\Services\Telephony\VoicePhone;
 use App\Services\Telephony\VoicePublishedConfig;
 use App\Services\Voice\Dto\VoiceCanonicalJson;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
@@ -299,6 +303,50 @@ trait VoiceFixtures
         }
 
         return VoiceCall::query()->findOrFail($id);
+    }
+
+    // ── C-4: la puerta de salientes con las llamadas abiertas en el código ──
+
+    /** La reserva de la puerta para un móvil colombiano (+573…) con los precios por defecto: 0,9605 US$ (runbook, paso 10). */
+    protected const MOBILE_RESERVATION_MICROS = 960500;
+
+    /**
+     * C-4 (`voice(calls-open)`): la puerta ACEPTÓ (202) una saliente al canario
+     * `$canario` (el número de `self::CANARY_PHONE`). Exactamente UNA fila nueva:
+     * `requested`, sellada con la parte canaria vigente (su entrada y su
+     * agente), con la huella y los 4 dígitos (nunca el número) y la reserva de
+     * un móvil en el día de Bogotá, que cuenta como comprometida; su evento
+     * `outbound_requested`, y el job en la cola `voice` para ESA fila. Devuelve
+     * la fila.
+     */
+    protected function assertOutboundAccepted(TestResponse $r, string $canario, int $filasAntes, int $seq = 1, string $agente = self::SEALED_AGENT): VoiceCall
+    {
+        $r->assertStatus(202);
+        $this->assertTrue($r->json('ok'));
+        $this->assertSame($filasAntes + 1, VoiceCall::query()->count(), 'la puerta crea UNA fila');
+        $fila = VoiceCall::query()->where('uuid', (string) $r->json('call.uuid'))->sole();
+        $this->assertSame(['outbound', 'requested', 'canary_registry', $canario, null, null],
+            [$fila->direction, $fila->status, $fila->target_source, $fila->canary_number_uuid, $fila->caller_authorized, $fila->policy_reason]);
+        $this->assertSame(['applied', 'canary', $seq, $agente], [$fila->stamp_state, $fila->part, $fila->voice_publication_seq, $fila->provider_agent_id], 'el sello de la parte vigente');
+        $this->assertSame([VoicePhone::hash(self::CANARY_PHONE), substr(self::CANARY_PHONE, -4)], [$fila->remote_hash, $fila->remote_last4]);
+        $dia = now()->setTimezone('America/Bogota')->toDateString();
+        $this->assertSame([self::MOBILE_RESERVATION_MICROS, $dia], [(int) $fila->reserved_micros, (string) $fila->budget_day], 'la reserva, en el día de Bogotá');
+        $this->assertGreaterThanOrEqual(self::MOBILE_RESERVATION_MICROS, VoiceCostGuard::committedMicros($dia), 'la reserva cuenta como comprometida');
+        $this->assertSame(['outbound_requested'], VoiceCallEvent::query()->where('call_id', $fila->id)->pluck('kind')->all());
+        Queue::assertPushed(PlaceOutboundVoiceCall::class, static fn (PlaceOutboundVoiceCall $j): bool => $j->callId === (int) $fila->id);
+        $this->assertStringNotContainsString(substr(self::CANARY_PHONE, 1), (string) $r->getContent(), 'la respuesta no lleva el número');
+
+        return $fila;
+    }
+
+    /**
+     * La saliente aceptada, cancelada como la cancela el job sin petición: deja
+     * de contar para la concurrencia, el cupo, la frecuencia y el presupuesto,
+     * y la siguiente mirada de la puerta parte de cero.
+     */
+    protected function releaseAccepted(VoiceCall $llamada): void
+    {
+        $this->assertTrue(VoiceCall::transition((int) $llamada->id, [VoiceCall::STATUS_REQUESTED], VoiceCall::STATUS_CANCELED, ['policy_reason' => 'outbound_disabled', 'ended_at' => now()]));
     }
 
     /**

@@ -344,6 +344,16 @@ En PHP eso exige dos cosas (casos «salto de línea al final…» y «dígitos d
 - `integration_test` excluye solo `not_an_active_voice_canary` y `daily_cap_zero`.
 - `available` es `false` mientras haya motivos.
 
+**PO-3. La constante abierta (C-4, commit `test(voice)` que va detrás de `voice(calls-open)`).** Los 18 casos `decide` describen `VoiceCallPolicy::CALLS_ENABLED_IN_CODE = true`:
+- ninguno lleva `calls_disabled_in_code`; `allowed` es «sin motivos» y cada nivel está disponible si no le queda ninguno (`real_call` con los de la política; `integration_test` sin los dos que excluye);
+- permitidos: «todo listo: permitida (la constante abierta)» (antes «todo listo salvo la constante del código», el único renombrado), «ElevenLabs verificado no añade nada» y «cupo diario 1»;
+- el resto, los mismos motivos que antes sin el primero; los 6 `context`, sin cambios;
+- el conjunto cerrado `closedSets.voiceCallPolicyReasons` sigue empezando por `calls_disabled_in_code` (la clase no cambia sus `REASONS`);
+- el estado CERRADO, que es el destino de la vuelta atrás, no se pierde: `tests/Unit/Voice/VoiceCallPolicyClosedCopyTest.php` carga una copia de la política con la constante cerrada (la única línea que cambia) y le exige estos 18 casos con `calls_disabled_in_code` delante y `allowed = false`;
+- el comprobador independiente deriva la constante abierta y suma la variante `voiceCallPolicy:closed_constant` (la política cerrada): cae en los 18 casos `decide`. Total, 117 variantes.
+
+Es una enmienda del fixture del contrato del H6 (Enmienda 2: «este fichero solo cambia con una enmienda»); el texto propuesto está en `docs/ultron-studio/plans/informes-motores/informe-tester-voz-abierta.md`. Volver al estado cerrado es `git revert` de ese commit: el generador y el fixture vuelven byte a byte.
+
 **PO-2. El contexto `canary` solo mira filas de voz.**
 
 ### Sonda de Twilio (`twilioProbeSanitize`)

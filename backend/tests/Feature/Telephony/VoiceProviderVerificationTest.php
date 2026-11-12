@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
+use Illuminate\Testing\TestResponse;
 use Tests\Feature\Telephony\Support\VoiceFixtures;
 use Tests\TestCase;
 
@@ -81,16 +82,21 @@ class VoiceProviderVerificationTest extends TestCase
         return [$codigo, json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR)['voice']];
     }
 
-    /** @return list<string> los motivos de la puerta para un canario de voz activo, con todo abierto salvo la constante */
-    private function gateReasons(string $canario): array
+    /** La petición de una saliente a un canario de voz activo, con las banderas, el cupo y el presupuesto abiertos. */
+    private function gate(string $canario): TestResponse
     {
         config([
             'voice.outbound.enabled' => true, 'voice.twilio.enabled' => true, 'voice.twilio.daily_call_cap' => 3, 'voice.limits.daily_budget_usd' => '5',
         ]);
-        $r = $this->postJson('/api/admin/voice/calls', ['clientRequestId' => (string) Str::uuid(), 'target' => ['kind' => 'canary', 'uuid' => $canario]],
-            $this->adminWithPermissions([self::PLACE]))->assertStatus(409);
 
-        return $r->json('reasons');
+        return $this->postJson('/api/admin/voice/calls', ['clientRequestId' => (string) Str::uuid(), 'target' => ['kind' => 'canary', 'uuid' => $canario]],
+            $this->adminWithPermissions([self::PLACE]));
+    }
+
+    /** @return list<string> los motivos de la puerta (409) para un canario de voz activo, con las banderas, el cupo y el presupuesto abiertos */
+    private function gateReasons(string $canario): array
+    {
+        return $this->gate($canario)->assertStatus(409)->json('reasons');
     }
 
     /** La regresión de E4-6: lo que verifica el Studio ya no lo ignora la puerta de salientes. */
@@ -99,7 +105,8 @@ class VoiceProviderVerificationTest extends TestCase
         $canario = $this->activeVoiceCanary();
         $this->publishVoice();
         $this->assertSame(VoiceProviderStatus::STATE_UNVERIFIED, VoiceProviderState::current());
-        $this->assertSame(['calls_disabled_in_code', 'elevenlabs_unverified'], $this->gateReasons($canario), 'sin la verificación, falla cerrado');
+        $this->assertSame(['elevenlabs_unverified'], $this->gateReasons($canario), 'sin la verificación, falla cerrado: es lo único que falta');
+        $this->assertSame(0, VoiceCall::query()->count());
 
         [$codigo, $voz] = $this->verifyVoice();
         $this->assertSame([0, true, 'ok', VoiceProviderState::RECORD_WRITTEN], [$codigo, $voz['verified'], $voz['snapshotOutcome'], $voz['telephonyMark']]);
@@ -107,10 +114,8 @@ class VoiceProviderVerificationTest extends TestCase
         $this->assertSame(VoiceProviderStatus::STATE_VERIFIED, VoiceProviderState::current());
         $this->assertSame(VoiceProviderStatus::STATE_VERIFIED, StudioIntegrations::voiceState(), 'el Studio y la telefonía dicen lo mismo');
 
-        // Solo queda la constante del código (el commit `voice(calls-open)`): la verificación ya no bloquea.
-        $this->assertSame(['calls_disabled_in_code'], $this->gateReasons($canario));
-        $this->assertSame(0, VoiceCall::query()->count());
-        Queue::assertNothingPushed();
+        // Con las llamadas abiertas en el código (`voice(calls-open)`), la verificación era lo último: la puerta acepta.
+        $this->assertOutboundAccepted($this->gate($canario), $canario, 0);
         Http::assertSentCount(1);
     }
 

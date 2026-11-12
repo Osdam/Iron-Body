@@ -882,7 +882,9 @@ def d_voice_policy(c):
         v = c["voiceRows"] + (c["whatsappRows"] if BUG == "voiceCallPolicy:counts_whatsapp" else [])
         return {"canary": "active_voice" if "active" in v else ("not_active" if any(s != "revoked" for s in v) else "not_registered")}
     x = c["context"]
-    rs = ["calls_disabled_in_code"]
+    # C-4: el fixture describe la constante ABIERTA (`CALLS_ENABLED_IN_CODE = true`, commit `voice(calls-open)`). La variante
+    # `closed_constant` es la política con la constante cerrada: tiene que caer en todos los casos `decide`.
+    rs = ["calls_disabled_in_code"] if BUG == "voiceCallPolicy:closed_constant" else []
     if not x["twilioVoiceEnabled"]:
         rs.append("twilio_voice_disabled")
     if not x["twilioVoiceFromConfigured"]:
@@ -1155,7 +1157,7 @@ VARIANTS = [
     "voiceDoctor:region_not_normalized", "voiceDoctor:key_not_trimmed", "voiceDoctor:agent_dollar", "voiceDoctor:provider_always_elevenlabs",
     "voiceDoctor:base_url_in_production", "voiceDoctor:any_ok", "voiceDoctor:le_30d", "voiceVerify:one_format_enough", "voiceVerify:non_object_is_ok",
     "voiceCallPolicy:counts_whatsapp", "voiceCallPolicy:verified_adds", "voiceCallPolicy:negative_only", "voiceCallPolicy:first_only",
-    "voiceCallPolicy:integration_excludes_source",
+    "voiceCallPolicy:integration_excludes_source", "voiceCallPolicy:closed_constant",
     "twilioProbeSanitize:missing_list_is_zero", "twilioProbeSanitize:truncated_gt", "twilioProbeSanitize:caps_truthy",
     "twilioProbeSanitize:keep_friendly_name", "twilioProbeSanitize:keep_unknown_status", "twilioProbeSanitize:degraded_on_account_error",
     "twilioProbeSanitize:last4_from_digits", "twilioProbeSanitize:e164_seven_digits", "twilioProbeSanitize:five_digit_codes",

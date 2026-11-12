@@ -10,6 +10,7 @@ use App\Models\Voice\VoiceExclusion;
 use App\Models\Voice\VoiceRneCheck;
 use App\Services\Telephony\VoiceContacts;
 use App\Services\Telephony\VoiceNumberGuard;
+use App\Services\Telephony\VoiceProviderState;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Carbon;
@@ -24,7 +25,8 @@ use Tests\TestCase;
  * El CRM de la telefonía (`/api/admin/voice/*`; contrato H8, D8-12, D8-18,
  * D8-22, «API»): cada ruta con su llave (401 sin sesión, 403 con el token
  * compartido o sin la llave, y el camino feliz con la llave justa), la puerta
- * de salientes (en el árbol compartido, 409 `calls_disabled_in_code`), el
+ * de salientes (C-4: con las llamadas abiertas en el código, 409 por la
+ * cerradura que falte y 202 con todo en regla), el
  * corte, el registro sin datos personales y los contactos con su
  * consentimiento a CUATRO OJOS (E3-4). Sin red.
  */
@@ -95,10 +97,10 @@ class VoiceCrmRoutesTest extends TestCase
         $this->getJson('/api/admin/voice/status', $admin)->assertOk();
         $this->postJson('/api/admin/voice/calls', ['clientRequestId' => (string) Str::uuid(), 'target' => ['kind' => 'canary', 'uuid' => (string) Str::uuid()]], $admin)->assertStatus(403);
         $this->getJson('/api/admin/voice/contacts', $admin)->assertStatus(403);
-        $this->getJson('/api/admin/voice/status', $this->adminHeaders())->assertOk()->assertJsonPath('callsEnabledInCode', false);
+        $this->getJson('/api/admin/voice/status', $this->adminHeaders())->assertOk()->assertJsonPath('callsEnabledInCode', true);
     }
 
-    public function test_la_puerta_de_salientes_con_todo_abierto_salvo_la_constante_responde_409_sin_crear_nada(): void
+    public function test_la_puerta_de_salientes_sin_la_verificacion_responde_409_sin_crear_nada_y_verificada_acepta_202(): void
     {
         // Lunes 9 de noviembre de 2026 a las 10:00 de Bogotá: dentro del horario legal y sin festivo.
         $this->travelTo(Carbon::parse('2026-11-09T15:00:00Z'));
@@ -111,11 +113,16 @@ class VoiceCrmRoutesTest extends TestCase
         // B8-g: «todo abierto» incluye el número que llama vigilado (una conciliación reciente que cuadra).
         VoiceNumberGuard::rememberObservation(self::PHONE_NUMBER_ID, true, false);
         $cuerpo = ['clientRequestId' => (string) Str::uuid(), 'target' => ['kind' => 'canary', 'uuid' => $canario]];
-        $r = $this->postJson('/api/admin/voice/calls', $cuerpo, $this->adminWithPermissions([self::PLACE]))->assertStatus(409);
-        // La constante cierra las llamadas; VERIFIED no se puede derivar sin la evidencia del Studio (falla cerrado).
-        $this->assertSame(['calls_disabled_in_code', 'elevenlabs_unverified'], $r->json('reasons'));
+        $quien = $this->adminWithPermissions([self::PLACE]);
+        $r = $this->postJson('/api/admin/voice/calls', $cuerpo, $quien)->assertStatus(409);
+        // Con las llamadas abiertas en el código, VERIFIED no se puede derivar sin la evidencia del Studio (falla cerrado): es lo único que falta.
+        $this->assertSame(['elevenlabs_unverified'], $r->json('reasons'));
         $this->assertSame(0, VoiceCall::query()->count());
         Queue::assertNothingPushed();
+
+        // Con la verificación del Studio, todo en regla: 202, una fila `requested` sellada con su reserva, su evento y el job.
+        VoiceProviderState::recordStudioVerification(true, now());
+        $this->assertOutboundAccepted($this->postJson('/api/admin/voice/calls', $cuerpo, $quien), $canario, 0);
         Http::assertNothingSent();
     }
 

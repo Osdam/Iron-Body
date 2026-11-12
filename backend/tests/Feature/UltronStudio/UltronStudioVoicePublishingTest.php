@@ -27,8 +27,9 @@ use Tests\TestCase;
 /**
  * PUBLICAR, PROMOVER, REVERTIR Y APAGAR LA VOZ por la API (contrato H8, D8-7,
  * D8-9, D8-19, D8-20, E2-4, E3-2; S8-b). El despliegue va por un desplegador
- * FALSO que apunta cada llamada (sin red), salvo la última prueba, que usa el
- * adaptador real de ElevenLabs contra `Http::fake`. La cadena que se escribe la
+ * FALSO que apunta cada llamada (sin red), salvo las dos últimas pruebas, que
+ * usan el adaptador real de ElevenLabs contra `Http::fake` con las llamadas
+ * abiertas en el código (C-4). La cadena que se escribe la
  * verifican el Studio y el LECTOR de la telefonía (B8): las dos tienen que
  * aceptarla.
  */
@@ -637,9 +638,16 @@ class UltronStudioVoicePublishingTest extends TestCase
         $this->assertSame(StudioVoicePublishing::derivedRequestId($crid, 'rest'), StudioVoicePublication::query()->where('seq', 4)->value('client_request_id'));
     }
 
-    public function test_con_el_adaptador_real_y_las_llamadas_cerradas_en_el_codigo_despliega_pero_no_asigna_ni_publica(): void
+    /**
+     * El «proveedor» de las dos pruebas con el adaptador real: guarda lo que se
+     * crea y lo devuelve tal cual al leerlo; apunta cada PATCH al número y
+     * responde con el agente que `$quedaCon` decida (el pedido, por defecto).
+     *
+     * @param  (callable(?string): ?string)|null  $quedaCon
+     * @return \ArrayObject<string, mixed> `asignaciones`: list<array{0: string, 1: ?string}> (número, agente pedido)
+     */
+    private function proveedorReal(?callable $quedaCon = null): \ArrayObject
     {
-        // ElevenLabs configurado (`ELEVENLABS_UNVERIFIED`, E1-12) contra un simulador.
         config([
             'voice.elevenlabs.enabled' => true,
             'voice.elevenlabs.api_key' => 'sk_h8s_pruebaCENTINELA0001',
@@ -650,48 +658,96 @@ class UltronStudioVoicePublishingTest extends TestCase
         ]);
         $this->app->forgetInstance(StudioVoicePublishing::class);
         $this->app->forgetInstance(StudioVoiceEvidence::class);
-        [$v, $p] = $this->ready();
-
-        // El «proveedor»: guarda lo que se crea y lo devuelve tal cual al leerlo.
-        $herramientas = [];
-        $agentes = [];
-        Http::fake(function (ClientRequest $req) use (&$herramientas, &$agentes) {
+        $quedaCon ??= static fn (?string $pedido): ?string => $pedido;
+        $estado = new \ArrayObject(['herramientas' => [], 'agentes' => [], 'asignaciones' => []]);
+        Http::fake(function (ClientRequest $req) use ($estado, $quedaCon) {
             $ruta = (string) parse_url($req->url(), PHP_URL_PATH);
             if ($req->method() === 'POST' && $ruta === '/v1/convai/tools') {
-                $id = 'tool_h8s_'.(count($herramientas) + 1);
-                $herramientas[$id] = $req->data()['tool_config'];
+                $id = 'tool_h8s_'.(count($estado['herramientas']) + 1);
+                $estado['herramientas'] = $estado['herramientas'] + [$id => $req->data()['tool_config']];
 
                 return Http::response(['id' => $id]);
             }
             if ($req->method() === 'POST' && $ruta === '/v1/convai/agents/create') {
-                $id = 'agent_h8s_real_'.(count($agentes) + 1);
-                $agentes[$id] = $req->data();
+                $id = 'agent_h8s_real_'.(count($estado['agentes']) + 1);
+                $estado['agentes'] = $estado['agentes'] + [$id => $req->data()];
 
                 return Http::response(['agent_id' => $id]);
             }
             if ($req->method() === 'GET' && str_starts_with($ruta, '/v1/convai/agents/')) {
-                return Http::response($agentes[substr($ruta, strlen('/v1/convai/agents/'))] + ['version_id' => 'ver_1', 'branch_id' => 'br_1']);
+                return Http::response($estado['agentes'][substr($ruta, strlen('/v1/convai/agents/'))] + ['version_id' => 'ver_1', 'branch_id' => 'br_1']);
             }
             if ($req->method() === 'GET' && str_starts_with($ruta, '/v1/convai/tools/')) {
-                return Http::response(['id' => substr($ruta, strlen('/v1/convai/tools/')), 'tool_config' => $herramientas[substr($ruta, strlen('/v1/convai/tools/'))]]);
+                return Http::response(['id' => substr($ruta, strlen('/v1/convai/tools/')), 'tool_config' => $estado['herramientas'][substr($ruta, strlen('/v1/convai/tools/'))]]);
+            }
+            if ($req->method() === 'PATCH' && str_starts_with($ruta, '/v1/convai/phone-numbers/')) {
+                $numero = substr($ruta, strlen('/v1/convai/phone-numbers/'));
+                $pedido = $req->data()['agent_id'] ?? null;
+                $estado['asignaciones'] = [...$estado['asignaciones'], [$numero, $pedido]];
+                $queda = $quedaCon($pedido);
+
+                return Http::response(['phone_number_id' => $numero, 'phone_number' => '+576010000099',
+                    'assigned_agent' => $queda === null ? null : ['agent_id' => $queda, 'agent_name' => 'x']]);
             }
 
             return Http::response(['detail' => 'ruta no esperada'], 599);
         });
 
-        $r = $this->publishVoice($this->pablo, $v, $p)->assertStatus(409);
-        $this->assertSame(['voice_number_not_assigned', 'not_attempted', 'calls_disabled_in_code'], [$r->json('code'), $r->json('outcome'), $r->json('reason')]);
+        return $estado;
+    }
+
+    /** @return list<string> «VERBO host/ruta» de todo lo que salió */
+    private static function salidas(): array
+    {
+        return array_map(static fn (array $par): string => $par[0]->method().' '.parse_url($par[0]->url(), PHP_URL_HOST).parse_url($par[0]->url(), PHP_URL_PATH), Http::recorded()->all());
+    }
+
+    public function test_con_el_adaptador_real_y_las_llamadas_abiertas_despliega_asigna_el_numero_al_agente_nuevo_y_publica(): void
+    {
+        // ElevenLabs configurado (`ELEVENLABS_UNVERIFIED`, E1-12) contra un simulador; C-4: las llamadas abiertas en el código.
+        $estado = $this->proveedorReal();
+        [$v, $p] = $this->ready();
+
+        $r = $this->publishVoice($this->pablo, $v, $p)->assertCreated();
+        $this->assertSame(['assigned', 'assigned'], [$r->json('data.number.action'), $r->json('data.number.outcome')]);
 
         // Se desplegó y se verificó de verdad (la proyección leída es la compilada)…
         $agente = StudioVoiceAgent::query()->where('purpose', 'publication')->sole();
-        $this->assertSame(['deployed', 'agent_h8s_real_1'], [$agente->status, $agente->provider_agent_id]);
-        // …pero nadie tocó el número ni la cadena (la constante del código manda).
-        $this->assertSame(0, StudioVoicePublication::query()->count());
-        $hosts = array_map(static fn (array $par): string => $par[0]->method().' '.parse_url($par[0]->url(), PHP_URL_HOST).parse_url($par[0]->url(), PHP_URL_PATH), Http::recorded()->all());
-        foreach ($hosts as $h) {
+        $this->assertSame(['deployed', 'agent_h8s_real_1', true, false], [$agente->status, $agente->provider_agent_id, $agente->serves_canary, $agente->serves_rest]);
+        $this->assertSame($agente->projection_hash, $agente->observed_hash);
+        // …el número, UN PATCH al agente nuevo…
+        $this->assertSame([[self::NUMBER_ID, 'agent_h8s_real_1']], $estado['asignaciones']);
+        // …y la cadena: la primera entrada, del canario, firmada, que la telefonía acepta con el agente nuevo.
+        $fila = StudioVoicePublication::query()->sole();
+        $this->assertSame([1, 'publish', 'canary'], [$fila->seq, $fila->action, $fila->scope]);
+        $this->assertSame(StudioVoicePublications::VERIFY_OK, StudioVoicePublications::verifyRow(StudioVoicePublications::current('canary')));
+        $leida = VoicePublishedConfig::read();
+        $this->assertSame(['ok', 'agent_h8s_real_1'], [$leida['canary']->status, $leida['canary']->providerAgentId]);
+        foreach (self::salidas() as $h) {
             $this->assertStringContainsString('el.h8s.test', $h);
-            $this->assertStringNotContainsString('phone-numbers', $h, 'con las llamadas cerradas en el código no se asigna el número');
         }
+        $this->assertSame(1, count(array_filter(self::salidas(), static fn (string $h): bool => str_contains($h, 'phone-numbers'))), 'un solo PATCH al número');
+        $this->assertStringNotContainsString('sk_h8s_pruebaCENTINELA0001', $r->getContent());
+        $this->assertStringNotContainsString('agent_h8s_real_1', $r->getContent(), 'el id del proveedor sale enmascarado');
+    }
+
+    /**
+     * La otra cerradura con las llamadas abiertas: la asignación tiene que
+     * CONFIRMARSE. Si el proveedor no deja el número en el agente nuevo, no se
+     * publica (409 `voice_number_not_assigned`) y el número vuelve al que dice
+     * la cadena (vacía: sin agente).
+     */
+    public function test_con_el_adaptador_real_y_las_llamadas_abiertas_si_el_numero_no_queda_en_el_agente_nuevo_no_publica_y_lo_devuelve(): void
+    {
+        $estado = $this->proveedorReal(static fn (?string $pedido): ?string => $pedido === null ? null : 'agent_h8s_ajeno');
+        [$v, $p] = $this->ready();
+
+        $r = $this->publishVoice($this->pablo, $v, $p)->assertStatus(409);
+        $this->assertSame(['voice_number_not_assigned', 'error', 'assignment_mismatch'], [$r->json('code'), $r->json('outcome'), $r->json('reason')]);
+        $this->assertSame([[self::NUMBER_ID, 'agent_h8s_real_1'], [self::NUMBER_ID, null]], $estado['asignaciones'], 'el PATCH al nuevo y la vuelta a la cadena (sin agente)');
+        $this->assertSame(0, StudioVoicePublication::query()->count(), 'nada se publica');
+        $this->assertSame(['deployed', 'agent_h8s_real_1'], [StudioVoiceAgent::query()->where('purpose', 'publication')->sole()->status, StudioVoiceAgent::query()->where('purpose', 'publication')->sole()->provider_agent_id], 'el agente queda desplegado y sin uso');
+        $this->assertSame('none', VoicePublishedConfig::read()['canary']->status);
         $this->assertStringNotContainsString('sk_h8s_pruebaCENTINELA0001', $r->getContent());
     }
 }

@@ -18,18 +18,18 @@ use App\Services\Voice\ElevenLabs\ElevenLabsEventVerifier;
 use DateTimeImmutable;
 use InvalidArgumentException;
 use Tests\TestCase;
+use Tests\Unit\Voice\Support\ClosedPolicyCopy;
 
 /**
  * PARIDAD de la telefonía de B8-b con los fixtures de TEST8-a (contrato H8;
  * `tests/fixtures/voice/*.json`). Cada caso, por su nombre.
  *
- * LA CONSTANTE (protección 2): en el árbol compartido
- * `CALLS_ENABLED_IN_CODE = false`, así que se compara la columna `codeClosed`
- * tal cual. La columna `codeOpen` se comprueba quitando de lo que da la
- * política `calls_disabled_in_code`: las dos políticas ACUMULAN los motivos y
- * ninguno depende de la constante salvo ese (no hay ninguna palanca para
- * «abrirla» aquí; la vía permitida de verdad la recorre TEST8 en una copia del
- * banco con la constante girada).
+ * LA CONSTANTE (protección 2; C-4): desde el commit `voice(calls-open)` el
+ * árbol tiene `CALLS_ENABLED_IN_CODE = true`, así que las clases reales se
+ * comparan con la columna `codeOpen` tal cual, y la columna `codeClosed`, tal
+ * cual también, con una COPIA de las dos políticas en la que lo único distinto
+ * es la constante cerrada ({@see ClosedPolicyCopy}): el destino de la vuelta
+ * atrás sigue probado caso a caso.
  *
  * DIFERENCIAS DECLARADAS (no se doblan casos para que den verde):
  *  - consent: E3-4 (posterior al fixture) exige cuatro ojos también en
@@ -68,15 +68,24 @@ class TelephonyFixtureParityTest extends TestCase
     {
         $casos = self::fixture('policy-tables.json')['inboundPolicy'];
         $this->assertCount(15, $casos);
+        ClosedPolicyCopy::load();
+        /** @var class-string<InboundPolicy> $cerrada */
+        $cerrada = ClosedPolicyCopy::INBOUND;
+        $autorizadas = 0;
         foreach ($casos as $c) {
+            // El árbol (la constante abierta): `codeOpen` tal cual.
             $d = InboundPolicy::decide($c['facts']);
-            $this->assertSame($c['expected']['codeClosed']['reasons'], $d['reasons'], $c['name'].' (codeClosed)');
-            $this->assertSame($c['expected']['codeClosed']['authorized'], $d['authorized'], $c['name']);
-            $this->assertSame($c['expected']['codeClosed']['callerAuthorized'], $d['callerAuthorized'], $c['name']);
-            $abierta = array_values(array_diff($d['reasons'], ['calls_disabled_in_code']));
-            $this->assertSame($c['expected']['codeOpen']['reasons'], $abierta, $c['name'].' (codeOpen)');
-            $this->assertSame($c['expected']['codeOpen']['authorized'], $abierta === [], $c['name'].' (codeOpen)');
+            $this->assertSame($c['expected']['codeOpen']['reasons'], $d['reasons'], $c['name'].' (codeOpen)');
+            $this->assertSame($c['expected']['codeOpen']['authorized'], $d['authorized'], $c['name'].' (codeOpen)');
+            $this->assertSame($c['expected']['codeOpen']['callerAuthorized'], $d['callerAuthorized'], $c['name'].' (codeOpen)');
+            $autorizadas += $d['authorized'] ? 1 : 0;
+            // La copia cerrada (la vuelta atrás): `codeClosed` tal cual.
+            $x = $cerrada::decide($c['facts']);
+            $this->assertSame($c['expected']['codeClosed']['reasons'], $x['reasons'], $c['name'].' (codeClosed)');
+            $this->assertSame($c['expected']['codeClosed']['authorized'], $x['authorized'], $c['name'].' (codeClosed)');
+            $this->assertSame($c['expected']['codeClosed']['callerAuthorized'], $x['callerAuthorized'], $c['name'].' (codeClosed)');
         }
+        $this->assertSame(3, $autorizadas, 'las tres entrantes que el fixture autoriza con la constante abierta');
     }
 
     public function test_inbound_policy_rechaza_un_hecho_fuera_de_su_conjunto(): void
@@ -128,15 +137,24 @@ class TelephonyFixtureParityTest extends TestCase
         $fx = self::fixture('outbound-gate-cases.json');
         $this->assertSame($fx['closedSets']['reasonsInOrder'], OutboundPolicy::REASONS, 'el conjunto cerrado y su orden (D8-12)');
         $this->assertCount(43, $fx['decide']);
+        ClosedPolicyCopy::load();
+        /** @var class-string<OutboundPolicy> $cerrada */
+        $cerrada = ClosedPolicyCopy::OUTBOUND;
+        $permitidas = 0;
         foreach ($fx['decide'] as $c) {
+            // El árbol (la constante abierta): `codeOpen` tal cual.
             $d = OutboundPolicy::decide(self::outboundFacts($c['facts']));
-            $this->assertSame($c['expected']['codeClosed']['reasons'], $d['reasons'], $c['name'].' (codeClosed)');
-            $this->assertSame($c['expected']['codeClosed']['http'], $d['http'], $c['name'].' (HTTP codeClosed)');
-            $abierta = array_values(array_diff($d['reasons'], ['calls_disabled_in_code']));
-            $this->assertSame($c['expected']['codeOpen']['reasons'], $abierta, $c['name'].' (codeOpen)');
-            $this->assertSame($c['expected']['codeOpen']['http'], OutboundPolicy::httpStatus($abierta), $c['name'].' (HTTP codeOpen)');
-            $this->assertSame($c['expected']['codeOpen']['allowed'], $abierta === [], $c['name']);
+            $this->assertSame($c['expected']['codeOpen']['reasons'], $d['reasons'], $c['name'].' (codeOpen)');
+            $this->assertSame($c['expected']['codeOpen']['http'], $d['http'], $c['name'].' (HTTP codeOpen)');
+            $this->assertSame($c['expected']['codeOpen']['allowed'], $d['allowed'], $c['name'].' (codeOpen)');
+            $permitidas += $d['allowed'] ? 1 : 0;
+            // La copia cerrada (la vuelta atrás): `codeClosed` tal cual.
+            $x = $cerrada::decide(self::outboundFacts($c['facts']));
+            $this->assertSame($c['expected']['codeClosed']['reasons'], $x['reasons'], $c['name'].' (codeClosed)');
+            $this->assertSame($c['expected']['codeClosed']['http'], $x['http'], $c['name'].' (HTTP codeClosed)');
+            $this->assertSame($c['expected']['codeClosed']['allowed'], $x['allowed'], $c['name'].' (codeClosed)');
         }
+        $this->assertSame(5, $permitidas, 'las cinco salientes que el fixture permite con la constante abierta');
     }
 
     public function test_la_guarda_del_numero_de_whatsapp_cuadra_con_el_fixture(): void

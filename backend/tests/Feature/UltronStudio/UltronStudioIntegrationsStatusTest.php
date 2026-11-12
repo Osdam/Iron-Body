@@ -184,20 +184,21 @@ class UltronStudioIntegrationsStatusTest extends TestCase
 
         $this->assertSame(['state' => 'ELEVENLABS_NOT_CONFIGURED', 'enabled' => false, 'missing' => ['api_key', 'agent_id', 'webhook_secret'], 'region' => 'default', 'lastVerification' => null], $voz['elevenlabs']);
         $this->assertSame(['enabled' => false, 'fromConfigured' => false, 'dailyCallCap' => 0], $voz['twilioVoice']);
-        $this->assertSame(['allowed' => false, 'reasons' => ['calls_disabled_in_code', 'twilio_voice_disabled', 'no_voice_number', 'elevenlabs_not_configured', 'not_an_active_voice_canary', 'daily_cap_zero']], $voz['policy']);
+        // C-4: con las llamadas abiertas en el código, lo que niega es la configuración (todo apagado por defecto), motivo a motivo.
+        $this->assertSame(['allowed' => false, 'reasons' => ['twilio_voice_disabled', 'no_voice_number', 'elevenlabs_not_configured', 'not_an_active_voice_canary', 'daily_cap_zero']], $voz['policy']);
         $this->assertSame([
             ['id' => 'text_simulation', 'available' => true, 'cost' => 'none', 'where' => 'laboratorio'],
-            ['id' => 'integration_test', 'available' => false, 'reasons' => ['calls_disabled_in_code', 'twilio_voice_disabled', 'no_voice_number', 'elevenlabs_not_configured']],
+            ['id' => 'integration_test', 'available' => false, 'reasons' => ['twilio_voice_disabled', 'no_voice_number', 'elevenlabs_not_configured']],
             ['id' => 'real_call', 'available' => false, 'reasons' => $voz['policy']['reasons']],
         ], $voz['levels']);
 
-        // Un canario de voz activo quita su motivo; las llamadas siguen cerradas en el código.
+        // Un canario de voz activo quita su motivo; lo demás lo sigue cerrando la configuración.
         $this->integrationsFlags(writes: true);
         $this->activeCanary($ana, $root, '+576010000099', 'voice', 'Fijo de recepción');
         $politica = $this->integrations('GET', 'voice', $ana)->json('data.policy');
         $this->assertFalse($politica['allowed']);
         $this->assertNotContains('not_an_active_voice_canary', $politica['reasons']);
-        $this->assertSame('calls_disabled_in_code', $politica['reasons'][0]);
+        $this->assertSame(['twilio_voice_disabled', 'no_voice_number', 'elevenlabs_not_configured', 'daily_cap_zero'], $politica['reasons']);
     }
 
     private function twilioConfigured(): void

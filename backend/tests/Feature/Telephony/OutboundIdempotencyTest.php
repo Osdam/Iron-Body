@@ -95,11 +95,13 @@ class OutboundIdempotencyTest extends TestCase
         $canario = $this->activeVoiceCanary();
         $ana = $this->person(Admin::ROLE_SUPER_ADMIN, 'Ana Nueva');
 
-        // Sin fila previa: la política decide (con la constante cerrada, se deniega) y no se crea nada.
+        // Sin fila previa: la política decide. Con las llamadas abiertas en el código (C-4), la niegan las cerraduras de
+        // la configuración de las pruebas (todo apagado, como producción antes de `salientes on`), y no se crea nada.
         $r = app(OutboundGate::class)->request($ana, OutboundGate::TARGET_CANARY, $canario, (string) Str::uuid());
         $this->assertSame(409, $r['http']);
         $this->assertSame('outbound_denied', $r['body']['code']);
-        $this->assertContains('calls_disabled_in_code', $r['body']['reasons']);
+        $this->assertSame(['outbound_disabled', 'twilio_voice_disabled', 'number_unverified', 'elevenlabs_not_configured', 'daily_cap_zero', 'budget_exhausted'],
+            $r['body']['reasons'], 'los motivos de la política, uno a uno: la petición nueva pasó por ella');
         $this->assertNotContains('duplicate_request', $r['body']['reasons'], 'sin fila previa no hay duplicado');
         $this->assertSame(0, VoiceCall::query()->count());
         Queue::assertNothingPushed();

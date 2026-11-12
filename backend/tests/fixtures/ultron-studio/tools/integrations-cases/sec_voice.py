@@ -115,7 +115,10 @@ VV("sin conexión", {"connectionError": "unreachable"}, "unreachable", None, Non
 VV("tiempo agotado", {"connectionError": "timeout"}, "unreachable", None, None, "unreachable")
 
 # ── VoiceCallPolicy ──
-CDIC = "calls_disabled_in_code"
+# C-4 (commit `test(voice)` detrás de `voice(calls-open)`): con `CALLS_ENABLED_IN_CODE = true` ningún caso lleva
+# `calls_disabled_in_code`, `allowed` es «sin motivos» y cada nivel está disponible si no le queda ninguno. El
+# estado CERRADO (el destino de la vuelta atrás) lo comprueba `tests/Unit/Voice/VoiceCallPolicyClosedCopyTest.php`
+# sobre una copia cerrada de la política: estos mismos casos con `calls_disabled_in_code` delante.
 
 
 def ctx(tv=True, frm=True, ps=VER, canary="active_voice", source="canary_registry", cap=5):
@@ -124,34 +127,34 @@ def ctx(tv=True, frm=True, ps=VER, canary="active_voice", source="canary_registr
 
 def VP(desc, c, reasons, integration):
     levels = [{"id": "text_simulation", "available": True, "cost": "none", "where": "laboratorio"},
-              {"id": "integration_test", "available": False, "reasons": integration},
-              {"id": "real_call", "available": False, "reasons": reasons}]
-    add("voiceCallPolicy", "decide", desc, {"context": c}, {"allowed": False, "reasons": reasons, "levels": levels})
+              {"id": "integration_test", "available": not integration, "reasons": integration},
+              {"id": "real_call", "available": not reasons, "reasons": reasons}]
+    add("voiceCallPolicy", "decide", desc, {"context": c}, {"allowed": not reasons, "reasons": reasons, "levels": levels})
 
 
-VP("todo listo salvo la constante del código", ctx(), [CDIC], [CDIC])
+VP("todo listo: permitida (la constante abierta)", ctx(), [], [])
 VP("producción en H6 (el ejemplo del contrato)", ctx(False, False, NC, "not_registered", "canary_registry", 0),
-   [CDIC, "twilio_voice_disabled", "no_voice_number", "elevenlabs_not_configured", "not_an_active_voice_canary", "daily_cap_zero"],
-   [CDIC, "twilio_voice_disabled", "no_voice_number", "elevenlabs_not_configured"])
-VP("Twilio Voice apagado", ctx(tv=False), [CDIC, "twilio_voice_disabled"], [CDIC, "twilio_voice_disabled"])
-VP("sin número de voz", ctx(frm=False), [CDIC, "no_voice_number"], [CDIC, "no_voice_number"])
-VP("ElevenLabs sin configurar", ctx(ps=NC), [CDIC, "elevenlabs_not_configured"], [CDIC, "elevenlabs_not_configured"])
-VP("ElevenLabs apagado", ctx(ps=DIS), [CDIC, "elevenlabs_disabled"], [CDIC, "elevenlabs_disabled"])
-VP("ElevenLabs sin verificar", ctx(ps=UNV), [CDIC, "elevenlabs_unverified"], [CDIC, "elevenlabs_unverified"])
-VP("ElevenLabs verificado no añade nada", ctx(ps=VER), [CDIC], [CDIC])
-VP("el canario de voz no está activo", ctx(canary="not_active"), [CDIC, "not_an_active_voice_canary"], [CDIC])
-VP("no hay canario de voz registrado", ctx(canary="not_registered"), [CDIC, "not_an_active_voice_canary"], [CDIC])
-VP("la fuente es marketing_calls (T-7)", ctx(source="marketing_calls"), [CDIC, "source_not_allowed"], [CDIC, "source_not_allowed"])
-VP("otra fuente", ctx(source="other"), [CDIC, "source_not_allowed"], [CDIC, "source_not_allowed"])
-VP("cupo diario 0", ctx(cap=0), [CDIC, "daily_cap_zero"], [CDIC])
-VP("cupo diario negativo", ctx(cap=-1), [CDIC, "daily_cap_zero"], [CDIC])
-VP("cupo diario 1", ctx(cap=1), [CDIC], [CDIC])
+   ["twilio_voice_disabled", "no_voice_number", "elevenlabs_not_configured", "not_an_active_voice_canary", "daily_cap_zero"],
+   ["twilio_voice_disabled", "no_voice_number", "elevenlabs_not_configured"])
+VP("Twilio Voice apagado", ctx(tv=False), ["twilio_voice_disabled"], ["twilio_voice_disabled"])
+VP("sin número de voz", ctx(frm=False), ["no_voice_number"], ["no_voice_number"])
+VP("ElevenLabs sin configurar", ctx(ps=NC), ["elevenlabs_not_configured"], ["elevenlabs_not_configured"])
+VP("ElevenLabs apagado", ctx(ps=DIS), ["elevenlabs_disabled"], ["elevenlabs_disabled"])
+VP("ElevenLabs sin verificar", ctx(ps=UNV), ["elevenlabs_unverified"], ["elevenlabs_unverified"])
+VP("ElevenLabs verificado no añade nada", ctx(ps=VER), [], [])
+VP("el canario de voz no está activo", ctx(canary="not_active"), ["not_an_active_voice_canary"], [])
+VP("no hay canario de voz registrado", ctx(canary="not_registered"), ["not_an_active_voice_canary"], [])
+VP("la fuente es marketing_calls (T-7)", ctx(source="marketing_calls"), ["source_not_allowed"], ["source_not_allowed"])
+VP("otra fuente", ctx(source="other"), ["source_not_allowed"], ["source_not_allowed"])
+VP("cupo diario 0", ctx(cap=0), ["daily_cap_zero"], [])
+VP("cupo diario negativo", ctx(cap=-1), ["daily_cap_zero"], [])
+VP("cupo diario 1", ctx(cap=1), [], [])
 VP("todo falla a la vez: se acumulan en el orden de REASONS", ctx(False, False, DIS, "not_active", "marketing_calls", 0),
-   [CDIC, "twilio_voice_disabled", "no_voice_number", "elevenlabs_disabled", "not_an_active_voice_canary", "source_not_allowed", "daily_cap_zero"],
-   [CDIC, "twilio_voice_disabled", "no_voice_number", "elevenlabs_disabled", "source_not_allowed"])
-VP("marketing_calls con todo lo demás listo y el cupo máximo", ctx(source="marketing_calls", cap=20), [CDIC, "source_not_allowed"], [CDIC, "source_not_allowed"])
-VP("apagado y sin número aunque ElevenLabs esté verificado", ctx(tv=False, frm=False), [CDIC, "twilio_voice_disabled", "no_voice_number"],
-   [CDIC, "twilio_voice_disabled", "no_voice_number"])
+   ["twilio_voice_disabled", "no_voice_number", "elevenlabs_disabled", "not_an_active_voice_canary", "source_not_allowed", "daily_cap_zero"],
+   ["twilio_voice_disabled", "no_voice_number", "elevenlabs_disabled", "source_not_allowed"])
+VP("marketing_calls con todo lo demás listo y el cupo máximo", ctx(source="marketing_calls", cap=20), ["source_not_allowed"], ["source_not_allowed"])
+VP("apagado y sin número aunque ElevenLabs esté verificado", ctx(tv=False, frm=False), ["twilio_voice_disabled", "no_voice_number"],
+   ["twilio_voice_disabled", "no_voice_number"])
 
 
 def VC(desc, voice_rows, whatsapp_rows, canary):

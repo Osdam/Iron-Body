@@ -119,8 +119,9 @@ class VoiceDoctorCommandTest extends TestCase
         $this->assertStringContainsString('api_key (ELEVENLABS_API_KEY), agent_id (ELEVENLABS_AGENT_ID), webhook_secret (ELEVENLABS_WEBHOOK_SECRET)', $salida);
         $this->assertStringContainsString('Región     : default', $salida);
         $this->assertStringContainsString('apagada (ELEVENLABS_ENABLED)', $salida);
-        // DOC8 D-11: la línea de las llamadas lee la constante de VoiceCallPolicy (cerrada en el árbol compartido).
-        $this->assertStringContainsString('Llamadas   : cerradas en el código (la constante de VoiceCallPolicy)', $salida);
+        // DOC8 D-11: la línea de las llamadas lee la constante de VoiceCallPolicy (C-4: abierta desde `voice(calls-open)`).
+        $this->assertStringContainsString('Llamadas   : ABIERTAS en el código (la constante de VoiceCallPolicy): cada llamada depende de sus banderas, sus cupos y el freno.', $salida);
+        $this->assertStringNotContainsString('cerradas en el código', $salida);
         Http::assertNothingSent();
     }
 

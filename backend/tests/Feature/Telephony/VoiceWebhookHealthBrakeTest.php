@@ -5,6 +5,7 @@ namespace Tests\Feature\Telephony;
 use App\Models\Admin;
 use App\Models\Incident;
 use App\Models\Voice\VoiceBrakeEntry;
+use App\Models\Voice\VoiceCall;
 use App\Services\Telephony\VoiceBrake;
 use App\Services\Telephony\VoiceNumberGuard;
 use App\Services\Telephony\VoiceProviderState;
@@ -20,6 +21,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
+use Illuminate\Testing\TestResponse;
 use Tests\Feature\Telephony\Support\VoiceFixtures;
 use Tests\TestCase;
 use Tests\Unit\Voice\Support\FreshHttpFake;
@@ -140,10 +142,10 @@ class VoiceWebhookHealthBrakeTest extends TestCase
     }
 
     /**
-     * Un canario de voz activo con todo abierto salvo la constante del código:
-     * publicación, verificación de ElevenLabs y una conciliación del número
-     * fresca que cuadra. Así la puerta solo dice `calls_disabled_in_code`… o eso
-     * más lo que añada el freno.
+     * Un canario de voz activo con todo en regla: publicación, verificación de
+     * ElevenLabs y una conciliación del número fresca que cuadra. Con las
+     * llamadas abiertas en el código (C-4) la puerta lo acepta… salvo lo que
+     * añada el freno.
      */
     private function puertaLista(): string
     {
@@ -157,13 +159,34 @@ class VoiceWebhookHealthBrakeTest extends TestCase
         return $canario;
     }
 
-    /** @return list<string> los motivos de la puerta de salientes para el canario, con las banderas y el presupuesto abiertos */
-    private function motivosDeLaPuerta(string $canario): array
+    /** La petición de una saliente al canario, con las banderas, el cupo y el presupuesto abiertos. */
+    private function puerta(string $canario): TestResponse
     {
         config(['voice.outbound.enabled' => true, 'voice.twilio.enabled' => true, 'voice.twilio.daily_call_cap' => 3, 'voice.limits.daily_budget_usd' => '5']);
 
         return $this->postJson('/api/admin/voice/calls', ['clientRequestId' => (string) Str::uuid(), 'target' => ['kind' => 'canary', 'uuid' => $canario]],
-            $this->adminWithPermissions(['telephony.call_place']))->assertStatus(409)->json('reasons');
+            $this->adminWithPermissions(['telephony.call_place']));
+    }
+
+    /** @return list<string> los motivos con que la puerta de salientes NIEGA (409) al canario, con las banderas y el presupuesto abiertos */
+    private function motivosDeLaPuerta(string $canario): array
+    {
+        $antes = VoiceCall::query()->count();
+        $motivos = $this->puerta($canario)->assertStatus(409)->json('reasons');
+        $this->assertSame($antes, VoiceCall::query()->count(), 'negada: ninguna fila');
+
+        return $motivos;
+    }
+
+    /**
+     * C-4: con las llamadas abiertas en el código y sin freno, la puerta ACEPTA (202) al canario: su fila, su reserva,
+     * su evento y el job. Después se libera (como la cancela el job sin petición) para que la siguiente mirada parta de cero.
+     */
+    private function laPuertaAcepta(string $canario, string $porque): void
+    {
+        $antes = VoiceCall::query()->count();
+        $this->assertFalse(VoiceBrake::isOpen(), $porque);
+        $this->releaseAccepted($this->assertOutboundAccepted($this->puerta($canario), $canario, $antes));
     }
 
     private function assertSinSecretosNiUrls(string $texto, string $donde): void
@@ -179,7 +202,7 @@ class VoiceWebhookHealthBrakeTest extends TestCase
     public function test_webhook_desactivado_por_elevenlabs_echa_el_freno_y_la_puerta_niega_voice_braked(): void
     {
         $canario = $this->puertaLista();
-        $this->assertSame(['calls_disabled_in_code'], $this->motivosDeLaPuerta($canario), 'la línea base: solo la constante del código');
+        $this->laPuertaAcepta($canario, 'la línea base: con todo en regla, la puerta acepta');
 
         // Sano: ni freno ni incidente.
         [$codigo, $r] = $this->salud();
@@ -205,8 +228,8 @@ class VoiceWebhookHealthBrakeTest extends TestCase
         $freno = Incident::query()->where('kind', VoiceBrake::INCIDENT_KIND)->sole();
         $this->assertSame(['voice', Incident::SEVERITY_HIGH, 'webhook_unhealthy', $apertura->uuid], [$freno->source, $freno->severity, $freno->evidence['reason'], $freno->evidence['brake_uuid']]);
 
-        // La puerta de salientes niega por el freno.
-        $this->assertSame(['calls_disabled_in_code', 'voice_braked'], $this->motivosDeLaPuerta($canario));
+        // La puerta de salientes niega por el freno, y solo por él.
+        $this->assertSame(['voice_braked'], $this->motivosDeLaPuerta($canario));
 
         // Sin secretos ni URLs en la orden, el freno, su incidente ni el listado del CRM.
         $lista = $this->studio('GET', 'voice/brakes', $this->root)->assertOk()->json('data');
@@ -226,7 +249,7 @@ class VoiceWebhookHealthBrakeTest extends TestCase
         $this->assertSame(Incident::SEVERITY_MEDIUM, Incident::query()->sole()->severity, 'un solo aviso, medio: el del webhook; ningún incidente del freno');
         $this->assertSame([], self::aperturas());
         $this->assertFalse(VoiceBrake::isOpen());
-        $this->assertSame(['calls_disabled_in_code'], $this->motivosDeLaPuerta($canario), 'la puerta no ve ningún freno');
+        $this->laPuertaAcepta($canario, 'la puerta no ve ningún freno');
 
         Artisan::call('voice:webhook-health');
         $this->assertStringContainsString('Freno de voz: no se echa (solo frena un problema definitivo: ', Artisan::output());
@@ -339,7 +362,7 @@ class VoiceWebhookHealthBrakeTest extends TestCase
         $this->assertSame([$clave], self::aperturas());
         $this->assertSame(1, (int) Incident::query()->where('kind', VoiceBrake::INCIDENT_KIND)->sum('occurrences'));
         $this->assertSame(3, (int) Incident::query()->where('kind', VoiceWebhookHealth::INCIDENT_KIND)->sole()->occurrences, 'el aviso del webhook suma cada pasada');
-        $this->assertSame(['calls_disabled_in_code', 'voice_braked'], $this->motivosDeLaPuerta($canario));
+        $this->assertSame(['voice_braked'], $this->motivosDeLaPuerta($canario));
 
         // Lo suelta una persona por la vía de siempre (la del CRM: «Publicar la voz» y una nota) MIENTRAS una comprobación
         // está en vuelo: esa observación empezó antes de la suelta y no lo vuelve a echar.
@@ -355,7 +378,7 @@ class VoiceWebhookHealthBrakeTest extends TestCase
         $this->assertSame([['webhook_disabled'], false, false], [$r['brake']['problems'], $r['brake']['opened'], $r['brake']['engaged']]);
         $this->assertSame([$clave], self::aperturas());
         $this->assertFalse(VoiceBrake::isOpen());
-        $this->assertSame(['calls_disabled_in_code'], $this->motivosDeLaPuerta($canario));
+        $this->laPuertaAcepta($canario, 'suelto por una persona: la puerta acepta otra vez');
 
         // Una observación POSTERIOR con el mismo problema, sí: la generación siguiente, con su incidente y `rearmOf`.
         $this->travel(5)->minutes();
@@ -365,7 +388,7 @@ class VoiceWebhookHealthBrakeTest extends TestCase
         $segunda = VoiceBrakeEntry::query()->where('open_key', $clave.':r2')->sole();
         $this->assertSame(['where' => 'webhook_health', 'codes' => ['webhook_disabled'], 'incidentId' => $r['incident'], 'rearmOf' => $primera->uuid], $segunda->evidence);
         $this->assertSame(2, (int) Incident::query()->where('kind', VoiceBrake::INCIDENT_KIND)->sum('occurrences'), 'cada apertura avisa');
-        $this->assertSame(['calls_disabled_in_code', 'voice_braked'], $this->motivosDeLaPuerta($canario));
+        $this->assertSame(['voice_braked'], $this->motivosDeLaPuerta($canario));
 
         // Arreglado y suelto: la comprobación siguiente no frena.
         $this->soltar($segunda);
@@ -374,7 +397,7 @@ class VoiceWebhookHealthBrakeTest extends TestCase
         [$codigo, $r] = $this->salud();
         $this->assertSame([0, 'ok', null], [$codigo, $r['state'], $r['brake']]);
         $this->assertFalse(VoiceBrake::isOpen());
-        $this->assertSame(['calls_disabled_in_code'], $this->motivosDeLaPuerta($canario));
+        $this->laPuertaAcepta($canario, 'arreglado y suelto: la puerta acepta');
     }
 
     public function test_en_seco_dice_si_lo_echaria_y_no_escribe_nada(): void

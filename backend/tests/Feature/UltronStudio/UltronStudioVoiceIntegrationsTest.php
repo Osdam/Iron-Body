@@ -60,7 +60,8 @@ class UltronStudioVoiceIntegrationsTest extends TestCase
 
         // Lo del H6, igual que siempre.
         $this->assertSame(['enabled' => false, 'fromConfigured' => false, 'dailyCallCap' => 0], $voz['twilioVoice']);
-        $this->assertSame('calls_disabled_in_code', $voz['policy']['reasons'][0]);
+        // C-4: con las llamadas abiertas en el código, la política la niegan las cerraduras de la configuración, todas apagadas.
+        $this->assertSame(['allowed' => false, 'reasons' => ['twilio_voice_disabled', 'no_voice_number', 'elevenlabs_not_configured', 'not_an_active_voice_canary', 'daily_cap_zero']], $voz['policy']);
         // Lo nuevo, todo apagado por defecto: fase 1, freno suelto, sin publicación.
         $this->assertSame(['id' => '1', 'basis' => 'config'], $voz['phase']);
         $this->assertSame(['id' => 'telephonyState', 'available' => true, 'providerState' => 'ELEVENLABS_NOT_CONFIGURED', 'subaccountReady' => false, 'numberImported' => false,

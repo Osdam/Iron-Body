@@ -5,6 +5,7 @@ namespace Tests\Feature\Telephony;
 use App\Jobs\Voice\PlaceOutboundVoiceCall;
 use App\Models\Voice\VoiceCall;
 use App\Models\Voice\VoiceCallEvent;
+use App\Services\Telephony\VoiceCostGuard;
 use App\Services\Voice\Dto\OutboundCallRequest;
 use App\Services\Voice\Dto\OutboundCallResult;
 use App\Services\Voice\ElevenLabs\ElevenLabsCallStarter;
@@ -22,14 +23,15 @@ use Tests\TestCase;
  * El job de la saliente (contrato H8, D8-9, D8-12, D8-13; fixture
  * `outbound-gate-cases.json` §job). Sin red.
  *
- * EN EL ÁRBOL COMPARTIDO la constante está cerrada: el job cancela con
- * `calls_disabled_in_code` ANTES de mirar nada más (DF-G9) y nunca llega al
- * iniciador; se prueba de punta a punta. Las demás comprobaciones del job
- * (publicación movida, deriva, freno, banderas) van detrás de la constante:
- * las recorre TEST8 en la copia del banco con la constante girada. Aquí se
- * prueban además, por separado, el CUERPO de la petición (contra las
- * aserciones del fixture) y el MAPEO de cada resultado del iniciador a la
- * fila, el evento y la reserva.
+ * C-4: CON LAS LLAMADAS ABIERTAS EN EL CÓDIGO (`voice(calls-open)`), la
+ * primera cerradura que mira el job son las banderas (DF-G9): con las
+ * salientes apagadas cancela con `outbound_disabled` sin llegar al iniciador
+ * y libera la reserva; se prueba de punta a punta. El job con todo en regla
+ * (marca una vez, con lo sellado) lo recorre `PlaceOutboundVoiceCallRecheckTest`;
+ * con la constante cerrada (cancela por ella antes de nada) solo la copia
+ * cerrada del E2E. Aquí se prueban además, por separado, el CUERPO de la
+ * petición (contra las aserciones del fixture) y el MAPEO de cada resultado
+ * del iniciador a la fila, el evento y la reserva.
  */
 class PlaceOutboundVoiceCallTest extends TestCase
 {
@@ -54,9 +56,12 @@ class PlaceOutboundVoiceCallTest extends TestCase
         $this->assertGreaterThan(30, config('queue.connections.voice.retry_after'));
     }
 
-    public function test_con_la_constante_cerrada_cancela_sin_peticion_y_libera_la_reserva(): void
+    public function test_con_las_salientes_apagadas_cancela_sin_peticion_y_libera_la_reserva(): void
     {
+        $this->assertNotTrue(config('voice.outbound.enabled'), 'el mundo de las pruebas: salientes apagadas, como producción antes de `salientes on`');
         $llamada = $this->voiceCall('outbound', 'requested');
+        $dia = (string) $llamada->budget_day;
+        $this->assertSame(610500, VoiceCostGuard::committedMicros($dia), 'la reserva de la fila pedida cuenta');
         $iniciador = new class implements VoiceCallStarter
         {
             public function startOutbound(OutboundCallRequest $request): OutboundCallResult
@@ -66,12 +71,15 @@ class PlaceOutboundVoiceCallTest extends TestCase
         };
         $this->assertSame('canceled', (new PlaceOutboundVoiceCall((int) $llamada->id))->run($iniciador));
         $fila = VoiceCall::query()->findOrFail($llamada->id);
-        $this->assertSame(['canceled', 'calls_disabled_in_code'], [$fila->status, $fila->policy_reason]);
+        $this->assertSame(['canceled', 'outbound_disabled'], [$fila->status, $fila->policy_reason]);
         $this->assertNotNull($fila->ended_at);
+        $this->assertSame(0, VoiceCostGuard::committedMicros($dia), 'cancelada sin petición: la reserva se libera, sin coste');
+        $this->assertSame([], VoiceCallEvent::query()->where('call_id', $llamada->id)->pluck('kind')->all(), 'sin petición no hay evento del proveedor');
         // `handle()` con la fábrica real tampoco sale a la red.
         $otra = $this->voiceCall('outbound', 'requested', ['remote' => '+573000000035']);
         (new PlaceOutboundVoiceCall((int) $otra->id))->handle();
-        $this->assertSame('canceled', VoiceCall::query()->findOrFail($otra->id)->status);
+        $this->assertSame(['canceled', 'outbound_disabled'], [VoiceCall::query()->findOrFail($otra->id)->status, VoiceCall::query()->findOrFail($otra->id)->policy_reason]);
+        $this->assertSame(0, VoiceCostGuard::committedMicros($dia));
         Http::assertNothingSent();
     }
 
