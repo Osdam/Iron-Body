@@ -178,7 +178,13 @@ bash /root/h8-voice-scope.sh estado
 
 El procedimiento completo está en el informe de devops, C-4 (opción recomendada). En resumen:
 
-**Antes, sin tocar `main`:** el commit de pruebas `test(voice): …` ya está preparado y revisado en una rama aparte. Ver C-4.
+**Antes, sin tocar `main` (las pruebas de la apertura ya están preparadas y revisadas):** son DOS commits de la rama local `prep/voice-calls-open-tests` (worktree `_worktrees/ultron-voz-abierta/Iron-Body`; no está en el remoto; copia como parches en `ops/apertura-llamadas/`): **`3287769b`** (`T`) y **`216b0f1b`** (`T2`, la condición I-1 de la revisión). Solo tocan `backend/tests/`. Informes: `plans/informes-motores/informe-tester-voz-abierta.md` e `informe-reviewer-voz-abierta.md` (aprobado con condiciones, sin bloqueantes). No usar `803cd016` ni las ramas `…-v1` y `tmp/solo-t*`: son versiones anteriores.
+
+**Precondiciones del tramo (revisión, I-4), la víspera:**
+- Producción tiene que estar en la punta de `origin/main` salvo documentación: el modo 4a exige que entre lo desplegado y `origin/main` solo haya documentación y el commit de la apertura. Si `main` lleva pruebas o código sin desplegar, se despliega antes con `ops/hotfix-backend.sh`.
+- Repetir la medición con solo la línea abierta sobre la punta real de `main` (el 11-11: 69 casos, 35 métodos, 21 ficheros). Una prueba NUEVA que dependa de la constante no la detecta el `cherry-pick`: la detecta la batería.
+- Las enmiendas de contrato del H6 y del H8 que propone el informe del tester (§4.3), aprobadas; la del H8 habla de seis clases copiadas, no de tres.
+- Después de aplicar las pruebas, el modo 4a no se puede repetir: una vuelta atrás de nivel 4 seguida de una reapertura no tiene camino guionizado. Devops lo deja escrito antes del día.
 
 1. Respaldo nuevo `BK`, con `api-commit.txt` = el commit que sirve producción (plan de despliegue, paso 3).
 2. Commit `voice(calls-open): …` en el repo:
@@ -192,7 +198,20 @@ El procedimiento completo está en el informe de devops, C-4 (opción recomendad
    bash /root/deploy-h8-backend-fase1.sh <commit> $BK --fase=4a --autorizacion=AUT-VOZ-1 [--acepta-main=<commits de solo documentación>] --solo-comprobar
    bash /root/deploy-h8-backend-fase1.sh <commit> $BK --fase=4a --autorizacion=AUT-VOZ-1 [--acepta-main=…]
    ```
-4. **Solo con «COMPLETADO»:** push del commit de pruebas a `main` (C-4).
+4. **Solo con «COMPLETADO»: las pruebas de la apertura.** En un árbol LIMPIO (no el compartido con los agentes):
+   ```bash
+   git fetch origin && git rev-parse HEAD origin/main      # las dos, el commit de la apertura
+   git cherry-pick 3287769b 216b0f1b                       # si hay conflicto: git cherry-pick --abort y rehacer las pruebas; NO resolver a mano
+   git range-diff 3287769b^..216b0f1b HEAD~2..HEAD         # todo «=»
+   git show --name-only --format= HEAD~1 HEAD | grep -v '^backend/tests/'   # vacío: nada fuera de las pruebas
+   cd backend
+   xargs nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging < docs/ultron-studio/ops/apertura-llamadas/bateria-rapida.txt   # OK (624 tests): la batería rápida
+   nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging tests/Unit/Voice tests/Unit/Telephony tests/Feature/Voice tests/Feature/Telephony
+   nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging tests/Feature/Outreach tests/Feature/UltronStudio tests/Unit/UltronStudio tests/Unit/Outreach
+   python3 -I tests/fixtures/ultron-studio/tools/integrations-cases-check.py   # RESULTADO: OK
+   ```
+   En verde (salvo la línea base conocida), push a `main` con la orden del propietario. `main` está en rojo solo entre los dos push.
+   Pueden ir después (no cambian lo que se permite): enmendar `ops/h8-e2e.sh` y `ops/v9-abierta.sh`, que exigen la constante cerrada y mueren con la apertura en la punta; los comentarios de `app/` que quedan falsos (nunca en `VoiceCallPolicy.php` mientras esté abierta); y que el CRM reexporte `backend-integrations.testing.ts` (3 líneas).
 
 - **Tiene que imprimir:** «DESPLIEGUE H8 FASE 4a (voice(calls-open) <commit>, autorización «AUT-VOZ-1») COMPLETADO». Después, `estado` con «constante de llamadas: abierta».
 - **Vuelta atrás:**

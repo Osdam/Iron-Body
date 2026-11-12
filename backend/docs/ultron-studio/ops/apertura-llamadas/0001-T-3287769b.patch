@@ -1,0 +1,2992 @@
+From 3287769b50fdaa96bc4749615c1f3a4e532fce76 Mon Sep 17 00:00:00 2001
+From: Alejandro <alejandro@gmail.com>
+Date: Wed, 11 Nov 2026 21:08:18 -0500
+Subject: [PATCH 1/2] =?UTF-8?q?test(voice):=20las=20pruebas=20de=20la=20co?=
+ =?UTF-8?q?nstante=20describen=20el=20=C3=A1rbol=20con=20las=20llamadas=20?=
+ =?UTF-8?q?abiertas=20(C-4)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Va detrás del commit `voice(calls-open)` (VoiceCallPolicy::CALLS_ENABLED_IN_CODE = true) y
+solo toca tests/: los 35 métodos (69 casos, 21 ficheros) que caían con la constante abierta.
+
+- Las cinco guardas de «el árbol tiene la constante cerrada» pasan a `true`, con la misma
+  forma (VoiceIsolationTest sigue mirando el literal con su expresión regular, una vez).
+- Las que usaban la constante como última cerradura niegan ahora por la cerradura que nombran
+  (publicación, número, verificación, freno, horario, consentimiento, solo saliente…), con la
+  lista exacta de motivos; las de «todo en regla» describen el estado abierto: 202, la fila
+  sellada, la reserva exacta (960 500 µUS$ a un móvil), el evento y el job; la entrante
+  autorizada (1 244 500 µUS$); el job que marca una sola vez con lo sellado; publicar con el
+  adaptador real asigna el número al agente nuevo.
+- El estado cerrado (la vuelta atrás) no se pierde: una copia en memoria con solo la constante
+  cerrada (ClosedPolicyCopy) de todo lo que la lee para decidir —las tres políticas, el job,
+  el iniciador y el desplegador— cuadra con las columnas `codeClosed` de los fixtures de la
+  telefonía, con la tabla cerrada de VoiceCallPolicyTest y con lo que afirmaban antes las
+  pruebas del job, del iniciador y del desplegador.
+- El fixture de paridad del H6 (integrations-cases.json) cambia con su generador en sus 18
+  casos `voiceCallPolicy · decide`; el comprobador independiente suma la variante cerrada.
+
+Informe: docs/ultron-studio/plans/informes-motores/informe-tester-voz-abierta.md
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01X8FX3k99KGLKfgiKShUNUF
+---
+ .../Outreach/V9/V9StrategyGateTest.php        | 123 +++++++++---
+ .../Telephony/OutboundIdempotencyTest.php     |   6 +-
+ .../PlaceOutboundVoiceCallClosedCopyTest.php  | 104 ++++++++++
+ .../PlaceOutboundVoiceCallRecheckTest.php     |  66 +++++--
+ .../Telephony/PlaceOutboundVoiceCallTest.php  |  30 +--
+ .../Telephony/Support/VoiceFixtures.php       |  48 +++++
+ .../Feature/Telephony/VoiceCommandsTest.php   |   4 +-
+ .../Feature/Telephony/VoiceCrmRoutesTest.php  |  19 +-
+ .../Telephony/VoiceInitiationWebhookTest.php  |  51 +++--
+ .../Telephony/VoiceNumberIdentityTest.php     |  59 ++++--
+ .../VoiceProviderVerificationTest.php         |  25 ++-
+ .../Telephony/VoiceWebhookHealthBrakeTest.php |  53 +++--
+ .../UltronStudioIntegrationsStatusTest.php    |   9 +-
+ .../UltronStudioVoiceIntegrationsTest.php     |   3 +-
+ .../UltronStudioVoicePublishingTest.php       | 104 +++++++---
+ .../tests/Feature/Voice/VoiceBoundaryTest.php |  59 ++++--
+ .../Feature/Voice/VoiceDoctorCommandTest.php  |   5 +-
+ .../Telephony/TelephonyFixtureParityTest.php  |  56 ++++--
+ .../Voice/ElevenLabsAgentDeployerTest.php     |  36 +++-
+ .../Unit/Voice/ElevenLabsCallStarterTest.php  |  56 +++++-
+ .../Unit/Voice/ElevenLabsClosedCopyTest.php   |  87 ++++++++
+ .../Unit/Voice/Support/ClosedPolicyCopy.php   | 182 +++++++++++++++++
+ .../Voice/VoiceCallPolicyClosedCopyTest.php   | 187 ++++++++++++++++++
+ .../tests/Unit/Voice/VoiceCallPolicyTest.php  |  72 ++++---
+ .../tests/Unit/Voice/VoiceIsolationTest.php   |  13 +-
+ .../integrations-cases.README.md              |  10 +
+ .../ultron-studio/integrations-cases.json     | 121 +++---------
+ .../tools/integrations-cases-check.py         |   6 +-
+ .../tools/integrations-cases/sec_voice.py     |  53 ++---
+ 29 files changed, 1273 insertions(+), 374 deletions(-)
+ create mode 100644 backend/tests/Feature/Telephony/PlaceOutboundVoiceCallClosedCopyTest.php
+ create mode 100644 backend/tests/Unit/Voice/ElevenLabsClosedCopyTest.php
+ create mode 100644 backend/tests/Unit/Voice/Support/ClosedPolicyCopy.php
+ create mode 100644 backend/tests/Unit/Voice/VoiceCallPolicyClosedCopyTest.php
+
+diff --git a/backend/tests/Feature/Outreach/V9/V9StrategyGateTest.php b/backend/tests/Feature/Outreach/V9/V9StrategyGateTest.php
+index bf041df5..d2942d22 100644
+--- a/backend/tests/Feature/Outreach/V9/V9StrategyGateTest.php
++++ b/backend/tests/Feature/Outreach/V9/V9StrategyGateTest.php
+@@ -4,12 +4,14 @@
+ 
+ use App\Jobs\Voice\PlaceOutboundVoiceCall;
+ use App\Models\Voice\VoiceCall;
++use App\Models\Voice\VoiceCallEvent;
+ use App\Services\Telephony\OutboundGate;
+ use App\Services\Telephony\OutboundPolicy;
+ use App\Services\Telephony\VoiceBrake;
+ use App\Services\Telephony\VoiceNumberGuard;
+ use App\Services\Telephony\VoiceProviderState;
+ use App\Services\Voice\VoiceCallPolicy;
++use App\Support\Privacy\PhoneFingerprint;
+ use Closure;
+ use Illuminate\Foundation\Testing\RefreshDatabase;
+ use Illuminate\Support\Carbon;
+@@ -25,13 +27,17 @@
+ /**
+  * V9 · LA ENTRADA DE LAS ESTRATEGIAS EN LA PUERTA DE SALIENTES DEL H8
+  * (`OutboundGate::requestForStrategy()`; contrato H9, D9-9.4; Enmienda 17 del
+- * H8 propuesta). En el árbol compartido, con `CALLS_ENABLED_IN_CODE = false`:
++ * H8 propuesta). C-4: con las llamadas abiertas en el código
++ * (`CALLS_ENABLED_IN_CODE = true`, el commit `voice(calls-open)`):
+  *
+- *  - con TODO lo demás en regla, la única negativa es la constante del H8 y no
+- *    se crea nada (ni fila, ni evento, ni job);
++ *  - con TODO en regla, la puerta ACEPTA la llamada de la estrategia: UNA fila
++ *    `requested` con el solicitante `strategy` (sin cuenta), el sello de la
++ *    parte que atiende el alcance, la reserva, su evento y el job; y la entrada
++ *    de las personas ve esa fila (los mismos hechos);
+  *  - recorre LA MISMA política que la entrada de las personas: para el mismo
+  *    destino y el mismo mundo, los MISMOS motivos, uno a uno, con cada motivo
+- *    de `OutboundPolicy` que se puede provocar sin una llamada previa;
++ *    de `OutboundPolicy` que se puede provocar sin una llamada previa, y cada
++ *    uno basta para negar sin crear nada;
+  *  - el destino lo elige la puerta: el contacto de voz con consentimiento de
+  *    la persona; cobranza y servicio no tienen consentimiento de voz; nunca un
+  *    canario fuera de la parte canaria de la estrategia ni sin consentimiento;
+@@ -88,27 +94,75 @@ private function assertNadaCreado(): void
+         Queue::assertNotPushed(PlaceOutboundVoiceCall::class);
+     }
+ 
+-    public function test_con_todo_en_regla_la_unica_negativa_es_la_constante_del_h8_y_no_se_crea_nada(): void
++    /**
++     * C-4: la puerta ACEPTÓ (202) la llamada de la estrategia. UNA fila nueva
++     * `requested` del solicitante `strategy` (sin cuenta ni rol, con la
++     * etiqueta de la estrategia y el trabajo como `client_request_id`), con el
++     * destino, el sello de la parte y su agente, la huella y los 4 dígitos
++     * (nunca el número) y la reserva de un móvil (0,9605 US$) en el día de
++     * Bogotá; su evento `outbound_requested` de sistema, y el job para ESA fila.
++     *
++     * @param  array{http: int, body: array<string, mixed>, callId: ?int}  $r
++     * @param  array{e164: string, contact: int}  $m
++     */
++    private function assertAceptada(array $r, array $m, int $filasAntes, string $fuente, string $parte, string $agente, ?string $canario = null): VoiceCall
++    {
++        $this->assertSame([202, true], [$r['http'], $r['body']['ok']]);
++        $this->assertIsInt($r['callId']);
++        $this->assertSame($filasAntes + 1, VoiceCall::query()->count(), 'la puerta crea UNA fila');
++        $fila = VoiceCall::query()->findOrFail($r['callId']);
++        $this->assertSame($fila->uuid, $r['body']['call']['uuid']);
++        $this->assertSame(['outbound', 'requested', $fuente, $fuente === 'voice_contacts' ? $m['contact'] : null, $canario, null, null],
++            [$fila->direction, $fila->status, $fila->target_source, $fila->voice_contact_id, $fila->canary_number_uuid, $fila->caller_authorized, $fila->policy_reason]);
++        $this->assertSame(['strategy', null, 'Estrategia '.self::KEY, null, 1], [$fila->requested_by_type, $fila->requested_by_admin_id, $fila->requested_by_name, $fila->requested_by_role, $fila->attempt]);
++        $this->assertSame(['applied', $parte, $agente], [$fila->stamp_state, $fila->part, $fila->provider_agent_id], 'el sello de la parte que atiende el alcance');
++        $this->assertSame([self::v9Hash($m['e164']), substr($m['e164'], -4)], [$fila->remote_hash, $fila->remote_last4]);
++        $this->assertSame([960500, '2026-11-17'], [(int) $fila->reserved_micros, (string) $fila->budget_day], 'la reserva de un móvil, en el día de Bogotá');
++        $evento = VoiceCallEvent::query()->where('call_id', $fila->id)->sole();
++        $this->assertSame(['outbound_requested', 'system', 'Estrategia '.self::KEY], [$evento->kind, $evento->actor_type, $evento->actor_name]);
++        $this->assertSame(['strategy', 'commercial', $parte, 960500], [$evento->codes['requester'], $evento->codes['purposeKey'], $evento->codes['part'], $evento->codes['reservedMicros']]);
++        Queue::assertPushed(PlaceOutboundVoiceCall::class, static fn (PlaceOutboundVoiceCall $j): bool => $j->callId === (int) $fila->id);
++        $this->assertStringNotContainsString(substr($m['e164'], 1), (string) json_encode($r['body']), 'la respuesta no lleva el número');
++
++        return $fila;
++    }
++
++    /** La llamada aceptada, cancelada como la cancela el job sin petición: deja de contar y la siguiente mirada parte de cero. */
++    private function liberar(VoiceCall $llamada): void
++    {
++        $this->assertTrue(VoiceCall::transition((int) $llamada->id, [VoiceCall::STATUS_REQUESTED], VoiceCall::STATUS_CANCELED, ['policy_reason' => 'outbound_disabled', 'ended_at' => now()]));
++    }
++
++    /** El reloj a otra hora de Bogotá con el número que llama vigilado otra vez (la conciliación vale 2 h): solo cambia el calendario. */
++    private function aLaHora(string $bogota): void
+     {
+-        $this->assertFalse(VoiceCallPolicy::CALLS_ENABLED_IN_CODE, 'el árbol compartido nunca abre la constante del H8');
++        Carbon::setTestNow(Carbon::parse($bogota, 'America/Bogota'));
++        VoiceNumberGuard::rememberObservation(self::V9_PHONE_NUMBER_ID, true, false);
++    }
++
++    public function test_con_todo_en_regla_la_puerta_acepta_la_llamada_de_la_estrategia_y_la_entrada_de_las_personas_la_ve(): void
++    {
++        $this->assertTrue(VoiceCallPolicy::CALLS_ENABLED_IN_CODE, 'el árbol abierto: el commit voice(calls-open) del H8');
+         $this->v9GreenVoice();
+         $m = $this->v9Member();
+ 
+         $r = $this->porEstrategia($m);
+-        $this->assertSame(409, $r['http']);
+-        $this->assertSame('outbound_denied', $r['body']['code']);
+-        $this->assertSame(['calls_disabled_in_code'], $r['body']['reasons'], 'banderas, número, proveedor, cadena, destino, calendario, cupos y presupuesto en regla');
+-        $this->assertNull($r['callId']);
+-        $this->assertSame(['calls_disabled_in_code'], $this->porPersona($m), 'la entrada de las personas dice lo mismo');
+-        $this->assertNadaCreado();
++        $this->assertArrayNotHasKey('reasons', $r['body'], 'banderas, número, proveedor, cadena, destino, calendario, cupos y presupuesto en regla');
++        $this->assertAceptada($r, $m, 0, 'voice_contacts', 'rest', self::V9_REST_AGENT);
++        $this->assertSame(['voice_calls' => 1, 'voice_call_events' => 1], $this->v9VoiceRows());
++
++        // La entrada de las personas, para el mismo contacto, ve esa llamada viva: los mismos hechos, la misma política.
++        $this->assertSame(['frequency_exceeded', 'concurrency_exceeded'], $this->porPersona($m));
++        $this->assertSame(['voice_calls' => 1, 'voice_call_events' => 1], $this->v9VoiceRows(), 'la negada no creó nada');
+         Http::assertNothingSent();
+     }
+ 
+     /**
+      * Cada motivo de `OutboundPolicy` que se puede provocar sin una llamada
+-     * previa, con el resto en regla: la entrada de las estrategias lo da, en el
+-     * orden cerrado, detrás de la constante, y la de las personas da
+-     * EXACTAMENTE los mismos motivos para el mismo contacto.
++     * previa, con el resto en regla: la entrada de las estrategias lo da SOLO
++     * (C-4: con las llamadas abiertas, basta para negar), en el orden cerrado,
++     * y la de las personas da EXACTAMENTE los mismos motivos para el mismo
++     * contacto.
+      *
+      * @return array<string, array{0: string, 1: Closure}>
+      */
+@@ -129,8 +183,8 @@ public static function motivos(): array
+             'freno de voz' => ['voice_braked', static fn (self $t) => VoiceBrake::open('cost_cap', 'cost_cap:v9-prueba', [])],
+             'exclusión del número' => ['excluded', static fn (self $t, array $m) => $t->voiceExclusion($m['contactHash'], 'admin')],
+             'RNE sin vigencia' => ['rne_check_missing', static fn (self $t) => config(['voice.contacts.rne_validity_days' => 0])],
+-            'fuera del horario legal' => ['outside_hours', static fn (self $t) => Carbon::setTestNow(Carbon::parse('2026-11-17 19:30:00', 'America/Bogota'))],
+-            'festivo' => ['holiday', static fn (self $t) => Carbon::setTestNow(Carbon::parse('2026-12-08 10:00:00', 'America/Bogota'))],
++            'fuera del horario legal' => ['outside_hours', static fn (self $t) => $t->aLaHora('2026-11-17 19:30:00')],
++            'festivo' => ['holiday', static fn (self $t) => $t->aLaHora('2026-12-08 10:00:00')],
+             'cupo del día en cero' => ['daily_cap_zero', static fn (self $t) => config(['voice.twilio.daily_call_cap' => 0])],
+             'presupuesto del día agotado' => ['budget_exhausted', static fn (self $t) => config(['voice.limits.daily_budget_usd' => '0.01'])],
+         ];
+@@ -146,7 +200,7 @@ public function test_cada_motivo_de_la_politica_sale_igual_que_en_la_entrada_de_
+         $r = $this->porEstrategia($m);
+         $this->assertSame(409, $r['http'], $motivo);
+         $this->assertContains($motivo, $r['body']['reasons']);
+-        $this->assertSame('calls_disabled_in_code', $r['body']['reasons'][0], 'la constante del H8, la primera');
++        $this->assertSame([$motivo], $r['body']['reasons'], 'solo el motivo provocado: el resto en regla, y la constante abierta no añade nada');
+         $this->assertSame(array_values(array_intersect(OutboundPolicy::REASONS, $r['body']['reasons'])), $r['body']['reasons'], 'en el orden cerrado de OutboundPolicy::REASONS');
+         $this->assertSame($this->porPersona($m), $r['body']['reasons'], "la misma política que la entrada de las personas ({$motivo})");
+         $this->assertNadaCreado();
+@@ -159,7 +213,7 @@ public function test_sin_publicacion_de_voz_no_hay_llamada(): void
+         $m = $this->v9Member();
+ 
+         $r = $this->porEstrategia($m);
+-        $this->assertSame(['calls_disabled_in_code', 'no_publication'], $r['body']['reasons']);
++        $this->assertSame([409, ['no_publication']], [$r['http'], $r['body']['reasons']]);
+         $this->assertSame($this->porPersona($m), $r['body']['reasons']);
+         $this->assertNadaCreado();
+     }
+@@ -172,19 +226,21 @@ public function test_el_destino_lo_elige_la_puerta_y_solo_con_consentimiento_par
+         $sinContacto = $this->expiringMember(self::utcAt(self::NOW), 5);
+         $lead = $this->lead(['member_id' => $sinContacto['member'], 'phone' => '3001239777', 'consent_status' => 'granted']);
+         $r = app(OutboundGate::class)->requestForStrategy((string) Str::uuid(), 'commercial', [$sinContacto['member']], [$lead], false, self::KEY);
+-        $this->assertSame(['calls_disabled_in_code', 'contact_not_authorized', 'no_voice_consent', 'rne_check_missing'], $r['body']['reasons'], 'sin contacto no hay número ni consulta al RNE');
++        $this->assertSame(['contact_not_authorized', 'no_voice_consent', 'rne_check_missing'], $r['body']['reasons'], 'sin contacto no hay número ni consulta al RNE');
+ 
+         // Con contacto y sin consentimiento.
+         $sinConsentimiento = $this->v9Member(consent: false, phone: '3001239002');
+-        $this->assertSame(['calls_disabled_in_code', 'no_voice_consent'], $this->porEstrategia($sinConsentimiento)['body']['reasons']);
++        $this->assertSame(['no_voice_consent'], $this->porEstrategia($sinConsentimiento)['body']['reasons']);
++        $this->assertNadaCreado();
+ 
+-        // Con consentimiento comercial: cobranza y servicio no lo tienen (D9-15).
++        // Con consentimiento comercial: la comercial se acepta (C-4), a ESE contacto; cobranza y servicio no lo tienen (D9-15).
+         $conConsentimiento = $this->v9Member(phone: '3001239003');
+-        $this->assertSame(['calls_disabled_in_code'], $this->porEstrategia($conConsentimiento, 'commercial')['body']['reasons']);
++        $this->liberar($this->assertAceptada($this->porEstrategia($conConsentimiento, 'commercial'), $conConsentimiento, 0, 'voice_contacts', 'rest', self::V9_REST_AGENT));
+         foreach (['collections', 'service'] as $finalidad) {
+-            $this->assertSame(['calls_disabled_in_code', 'no_voice_consent'], $this->porEstrategia($conConsentimiento, $finalidad)['body']['reasons'], $finalidad);
++            $this->assertSame(['no_voice_consent'], $this->porEstrategia($conConsentimiento, $finalidad)['body']['reasons'], $finalidad);
+         }
+-        $this->assertNadaCreado();
++        $this->assertSame(['voice_calls' => 1, 'voice_call_events' => 1], $this->v9VoiceRows(), 'solo la comercial creó su fila; las negadas, nada');
++        Queue::assertPushed(PlaceOutboundVoiceCall::class, 1);
+     }
+ 
+     public function test_nunca_un_canario_fuera_de_la_parte_canaria_ni_sin_consentimiento(): void
+@@ -194,16 +250,19 @@ public function test_nunca_un_canario_fuera_de_la_parte_canaria_ni_sin_consentim
+         $m = $this->v9Member();   // su número es también un canario de voz ACTIVO
+ 
+         // La estrategia en su parte `rest` con el alcance `canary` (4a): el destino es el contacto → la 4a no lo admite.
+-        $this->assertSame(['calls_disabled_in_code', 'not_an_active_voice_canary'], $this->porEstrategia($m, parteCanaria: false)['body']['reasons']);
+-        // En su parte canaria: el canario que es ESE número; solo queda la constante.
+-        $this->assertSame(['calls_disabled_in_code'], $this->porEstrategia($m, parteCanaria: true)['body']['reasons']);
++        $this->assertSame(['not_an_active_voice_canary'], $this->porEstrategia($m, parteCanaria: false)['body']['reasons']);
++        $this->assertNadaCreado();
++        // En su parte canaria: el canario que es ESE número, y la puerta lo acepta (C-4) con la parte canaria.
++        $canario = (string) DB::table('ultron_studio_canary_numbers')->where('channel', 'voice')->where('status', 'active')->where('phone_hash', PhoneFingerprint::of($m['e164']))->value('uuid');
++        $this->assertNotSame('', $canario, 'el canario de voz de ese número');
++        $this->liberar($this->assertAceptada($this->porEstrategia($m, parteCanaria: true), $m, 0, 'canary_registry', 'canary', self::V9_CANARY_AGENT, $canario));
+         // El canario de ese número sin consentimiento de voz de la persona: nunca.
+         $sin = $this->v9Member(consent: false, phone: '3001239004');
+-        $this->assertSame(['calls_disabled_in_code', 'not_an_active_voice_canary'], $this->porEstrategia($sin, parteCanaria: true)['body']['reasons']);
+-        // Fuera del alcance `canary`, la parte canaria sigue llamando al contacto (4b).
++        $this->assertSame(['not_an_active_voice_canary'], $this->porEstrategia($sin, parteCanaria: true)['body']['reasons']);
++        // Fuera del alcance `canary`, la parte canaria sigue llamando al contacto (4b), con la parte `rest`.
+         config(['voice.outbound.scope' => 'contacts']);
+-        $this->assertSame(['calls_disabled_in_code'], $this->porEstrategia($m, parteCanaria: true)['body']['reasons']);
+-        $this->assertNadaCreado();
++        $this->liberar($this->assertAceptada($this->porEstrategia($m, parteCanaria: true), $m, 1, 'voice_contacts', 'rest', self::V9_REST_AGENT));
++        $this->assertSame(['voice_calls' => 2, 'voice_call_events' => 2], $this->v9VoiceRows(), 'solo las dos aceptadas; las negadas, nada');
+     }
+ 
+     public function test_una_peticion_sin_forma_es_422_y_no_toca_nada(): void
+diff --git a/backend/tests/Feature/Telephony/OutboundIdempotencyTest.php b/backend/tests/Feature/Telephony/OutboundIdempotencyTest.php
+index bfa7fb0b..dcd620f6 100644
+--- a/backend/tests/Feature/Telephony/OutboundIdempotencyTest.php
++++ b/backend/tests/Feature/Telephony/OutboundIdempotencyTest.php
+@@ -95,11 +95,13 @@ public function test_una_peticion_nueva_sigue_pasando_por_la_politica(): void
+         $canario = $this->activeVoiceCanary();
+         $ana = $this->person(Admin::ROLE_SUPER_ADMIN, 'Ana Nueva');
+ 
+-        // Sin fila previa: la política decide (con la constante cerrada, se deniega) y no se crea nada.
++        // Sin fila previa: la política decide. Con las llamadas abiertas en el código (C-4), la niegan las cerraduras de
++        // la configuración de las pruebas (todo apagado, como producción antes de `salientes on`), y no se crea nada.
+         $r = app(OutboundGate::class)->request($ana, OutboundGate::TARGET_CANARY, $canario, (string) Str::uuid());
+         $this->assertSame(409, $r['http']);
+         $this->assertSame('outbound_denied', $r['body']['code']);
+-        $this->assertContains('calls_disabled_in_code', $r['body']['reasons']);
++        $this->assertSame(['outbound_disabled', 'twilio_voice_disabled', 'number_unverified', 'elevenlabs_not_configured', 'daily_cap_zero', 'budget_exhausted'],
++            $r['body']['reasons'], 'los motivos de la política, uno a uno: la petición nueva pasó por ella');
+         $this->assertNotContains('duplicate_request', $r['body']['reasons'], 'sin fila previa no hay duplicado');
+         $this->assertSame(0, VoiceCall::query()->count());
+         Queue::assertNothingPushed();
+diff --git a/backend/tests/Feature/Telephony/PlaceOutboundVoiceCallClosedCopyTest.php b/backend/tests/Feature/Telephony/PlaceOutboundVoiceCallClosedCopyTest.php
+new file mode 100644
+index 00000000..86e6a8f8
+--- /dev/null
++++ b/backend/tests/Feature/Telephony/PlaceOutboundVoiceCallClosedCopyTest.php
+@@ -0,0 +1,104 @@
++<?php
++
++namespace Tests\Feature\Telephony;
++
++use App\Jobs\Voice\PlaceOutboundVoiceCall;
++use App\Models\Voice\VoiceCall;
++use App\Models\Voice\VoiceCallEvent;
++use App\Services\Telephony\OutboundGate;
++use App\Services\Telephony\VoiceCostGuard;
++use App\Services\Telephony\VoiceNumberGuard;
++use App\Services\Voice\Dto\OutboundCallRequest;
++use App\Services\Voice\Dto\OutboundCallResult;
++use App\Services\Voice\VoiceCallStarter;
++use Illuminate\Foundation\Testing\RefreshDatabase;
++use Illuminate\Support\Carbon;
++use Illuminate\Support\Facades\Cache;
++use Illuminate\Support\Facades\Http;
++use ReflectionMethod;
++use RuntimeException;
++use Tests\Feature\Telephony\Support\VoiceFixtures;
++use Tests\TestCase;
++use Tests\Unit\Voice\Support\ClosedPolicyCopy;
++
++/**
++ * EL JOB DE LA SALIENTE CON LA CONSTANTE CERRADA, sobre su copia cerrada en
++ * memoria (C-4; {@see ClosedPolicyCopy}): lo que afirmaban
++ * `PlaceOutboundVoiceCallTest` y `PlaceOutboundVoiceCallRecheckTest` antes
++ * del commit `voice(calls-open)`, que es el destino de la vuelta atrás.
++ *
++ * LO QUE SE PROTEGE (DF-G9): cerrado, el job cancela por
++ * `calls_disabled_in_code` ANTES de mirar nada más —aunque todo lo demás esté
++ * en regla, y también con las salientes apagadas—, sin llegar al iniciador,
++ * sin red y liberando la reserva. Con TODO en regla, el job del árbol
++ * (abierto) pasaría (`recheckAfterCode` sin motivo): lo único que cambia es la
++ * constante.
++ */
++class PlaceOutboundVoiceCallClosedCopyTest extends TestCase
++{
++    use RefreshDatabase;
++    use VoiceFixtures;
++
++    protected function setUp(): void
++    {
++        parent::setUp();
++        ClosedPolicyCopy::load();
++        Http::preventStrayRequests();
++        Http::fake();
++        // Un miércoles laborable de Bogotá, dentro de la ventana legal (07:00–19:00).
++        $this->travelTo(Carbon::parse('2026-11-04 10:00:00', 'America/Bogota'));
++    }
++
++    private static function sinMarcar(): VoiceCallStarter
++    {
++        return new class implements VoiceCallStarter
++        {
++            public function startOutbound(OutboundCallRequest $request): OutboundCallResult
++            {
++                throw new RuntimeException('cerrado, el job no tenía que llegar a marcar');
++            }
++        };
++    }
++
++    /** El job cerrado sobre `$llamada`: lo que devuelve `run()` y la fila. */
++    private function cerrado(VoiceCall $llamada): VoiceCall
++    {
++        $clase = ClosedPolicyCopy::JOB;
++        /** @var PlaceOutboundVoiceCall $job */
++        $job = new $clase((int) $llamada->id);
++        $this->assertSame('canceled', $job->run(self::sinMarcar()));
++
++        return VoiceCall::query()->findOrFail($llamada->id);
++    }
++
++    public function test_cerrado_el_job_cancela_por_la_constante_aunque_todo_lo_demas_este_en_regla(): void
++    {
++        $this->voiceWorld(['voice.outbound.enabled' => true, 'voice.twilio.enabled' => true]);
++        $this->publishVoice();
++        Cache::put(OutboundGate::DRIFT_CACHE_PREFIX.self::SEALED_AGENT, false, OutboundGate::DRIFT_CACHE_SECONDS);
++        VoiceNumberGuard::rememberObservation(self::PHONE_NUMBER_ID, true, false);
++        $llamada = $this->voiceCall('outbound', 'requested', ['canary_number_uuid' => $this->activeVoiceCanary(), 'remote' => self::CANARY_PHONE]);
++        $dia = (string) $llamada->budget_day;
++
++        // Todo en regla: el job del árbol (abierto) no encuentra ningún motivo.
++        $this->assertNull((new ReflectionMethod(PlaceOutboundVoiceCall::class, 'recheckAfterCode'))->invoke(new PlaceOutboundVoiceCall((int) $llamada->id), $llamada));
++        $this->assertSame(610500, VoiceCostGuard::committedMicros($dia));
++
++        // El cerrado cancela por la constante, sin petición, y libera la reserva.
++        $fila = $this->cerrado($llamada);
++        $this->assertSame(['canceled', 'calls_disabled_in_code'], [$fila->status, $fila->policy_reason]);
++        $this->assertNotNull($fila->ended_at);
++        $this->assertSame(0, VoiceCostGuard::committedMicros($dia));
++        $this->assertSame([], VoiceCallEvent::query()->where('call_id', $llamada->id)->pluck('kind')->all());
++        Http::assertNothingSent();
++    }
++
++    public function test_cerrado_la_constante_va_antes_que_las_banderas(): void
++    {
++        $this->voiceWorld();
++        $this->assertNotTrue(config('voice.outbound.enabled'));
++        $fila = $this->cerrado($this->voiceCall('outbound', 'requested'));
++        $this->assertSame(['canceled', 'calls_disabled_in_code'], [$fila->status, $fila->policy_reason], 'la constante, la primera (DF-G9), no outbound_disabled');
++        Http::assertNothingSent();
++    }
++}
+diff --git a/backend/tests/Feature/Telephony/PlaceOutboundVoiceCallRecheckTest.php b/backend/tests/Feature/Telephony/PlaceOutboundVoiceCallRecheckTest.php
+index e1bcd7af..a0f296bd 100644
+--- a/backend/tests/Feature/Telephony/PlaceOutboundVoiceCallRecheckTest.php
++++ b/backend/tests/Feature/Telephony/PlaceOutboundVoiceCallRecheckTest.php
+@@ -21,7 +21,6 @@
+ use Illuminate\Support\Facades\Http;
+ use Illuminate\Support\Str;
+ use ReflectionMethod;
+-use RuntimeException;
+ use Tests\Feature\Telephony\Support\VoiceFixtures;
+ use Tests\TestCase;
+ 
+@@ -33,10 +32,12 @@
+  * MISMAS reglas y los mismos motivos que la puerta
+  * ({@see OutboundPolicy::targetReasons()}), y cancelando sin petición.
+  *
+- * En el árbol compartido la constante está cerrada y `run()` no pasa de ella:
+- * aquí se recorren los pasos 1–5 que van detrás (`recheckAfterCode`), con todo
+- * lo anterior en regla (banderas encendidas EN LA PRUEBA, freno suelto, la
+- * entrada sellada vigente y la deriva comprobada en la caché). Sin red.
++ * Aquí se recorren los pasos 1–5 que van detrás de la constante
++ * (`recheckAfterCode`), con todo lo anterior en regla (banderas encendidas EN
++ * LA PRUEBA, freno suelto, la entrada sellada vigente y la deriva comprobada en
++ * la caché). C-4: con las llamadas abiertas en el código, `run()` también pasa
++ * de la constante, y con todo en regla el job marca UNA vez con lo sellado.
++ * Sin red.
+  */
+ class PlaceOutboundVoiceCallRecheckTest extends TestCase
+ {
+@@ -114,23 +115,56 @@ private function contactCall(?Carbon $rneCheckedAt = null): array
+         return [$llamada, $uuid];
+     }
+ 
+-    public function test_con_todo_en_regla_no_hay_motivo_y_la_constante_sigue_yendo_primero(): void
++    /** Un iniciador falso que apunta cada petición y responde «iniciada» con los ids que se le den. */
++    private static function iniciador(string $conversacion, string $sid): VoiceCallStarter
+     {
+-        $canaria = $this->canaryCall();
+-        $this->assertNull($this->recheck($canaria), 'canario activo, sin exclusión, dentro de la ventana');
+-        [$deContacto] = $this->contactCall();
+-        $this->assertNull($this->recheck($deContacto), 'contacto con consentimiento, RNE vigente, sin exclusión');
+-
+-        // El job de verdad no pasa de la constante (DF-G9): cancela por ella, sin red.
+-        $iniciador = new class implements VoiceCallStarter
++        return new class($conversacion, $sid) implements VoiceCallStarter
+         {
++            /** @var list<OutboundCallRequest> */
++            public array $peticiones = [];
++
++            public function __construct(private readonly string $conversacion, private readonly string $sid) {}
++
+             public function startOutbound(OutboundCallRequest $request): OutboundCallResult
+             {
+-                throw new RuntimeException('no tenía que marcar');
++                $this->peticiones[] = $request;
++
++                return new OutboundCallResult('started', null, $this->conversacion, $this->sid, 200);
+             }
+         };
+-        $this->assertSame('canceled', (new PlaceOutboundVoiceCall((int) $canaria->id))->run($iniciador));
+-        $this->assertSame('calls_disabled_in_code', VoiceCall::query()->findOrFail($canaria->id)->policy_reason);
++    }
++
++    public function test_con_todo_en_regla_no_hay_motivo_y_el_job_marca_una_sola_vez_con_lo_sellado(): void
++    {
++        $canaria = $this->canaryCall();
++        $this->assertNull($this->recheck($canaria), 'canario activo, sin exclusión, dentro de la ventana');
++
++        // El job de verdad, con las llamadas abiertas en el código (C-4): pasa todas las cerraduras (DF-G9) y marca UNA vez.
++        $iniciador = self::iniciador('conv_h8fx_0117', 'CA000000000000000000000000a8000117');
++        $this->assertSame('dialing', (new PlaceOutboundVoiceCall((int) $canaria->id))->run($iniciador));
++        $this->assertCount(1, $iniciador->peticiones);
++        [$p] = $iniciador->peticiones;
++        $this->assertSame([self::SEALED_AGENT, self::PHONE_NUMBER_ID, (string) $canaria->call_ref, substr(self::CANARY_PHONE, -4), 'hang_up'],
++            [$p->agentId, $p->phoneNumberRef, $p->callRef, $p->toArray()['toLast4'], $p->voicemailPolicy], 'el agente sellado, el número importado, su call_ref y el destino sellado');
++        $this->assertSame(['si', 'saliente', (string) $canaria->call_ref, 'canario · publicación 1'],
++            [$p->dynamicVariables['caller_authorized'], $p->dynamicVariables['call_direction'], $p->dynamicVariables['call_ref'], $p->dynamicVariables['version_label']]);
++        $fila = VoiceCall::query()->findOrFail($canaria->id);
++        $this->assertSame(['dialing', null, 'conv_h8fx_0117', 'CA000000000000000000000000a8000117'], [$fila->status, $fila->policy_reason, $fila->provider_conversation_id, $fila->provider_call_sid]);
++        $this->assertNotNull($fila->started_at);
++        $this->assertSame(['outbound_started'], VoiceCallEvent::query()->where('call_id', $canaria->id)->pluck('kind')->all());
++        // Un solo intento: la misma fila ya no está `requested` y el job no vuelve a marcar.
++        $this->assertSame('dialing', (new PlaceOutboundVoiceCall((int) $canaria->id))->run($iniciador));
++        $this->assertCount(1, $iniciador->peticiones, 'el job nunca repite');
++
++        // El contacto (alcance `contacts`, parte `rest`): lo mismo, con el agente del resto.
++        [$deContacto] = $this->contactCall();
++        $this->assertNull($this->recheck($deContacto), 'contacto con consentimiento, RNE vigente, sin exclusión');
++        $delContacto = self::iniciador('conv_h8fx_0118', 'CA000000000000000000000000a8000118');
++        $this->assertSame('dialing', (new PlaceOutboundVoiceCall((int) $deContacto->id))->run($delContacto));
++        $this->assertCount(1, $delContacto->peticiones);
++        $this->assertSame([self::REST_AGENT, substr(self::CONTACT_PHONE, -4), 'resto · publicación 2'],
++            [$delContacto->peticiones[0]->agentId, $delContacto->peticiones[0]->toArray()['toLast4'], $delContacto->peticiones[0]->dynamicVariables['version_label']]);
++        $this->assertSame('dialing', VoiceCall::query()->findOrFail($deContacto->id)->status);
+         Http::assertNothingSent();
+     }
+ 
+diff --git a/backend/tests/Feature/Telephony/PlaceOutboundVoiceCallTest.php b/backend/tests/Feature/Telephony/PlaceOutboundVoiceCallTest.php
+index d64b6f6f..cfc439d4 100644
+--- a/backend/tests/Feature/Telephony/PlaceOutboundVoiceCallTest.php
++++ b/backend/tests/Feature/Telephony/PlaceOutboundVoiceCallTest.php
+@@ -5,6 +5,7 @@
+ use App\Jobs\Voice\PlaceOutboundVoiceCall;
+ use App\Models\Voice\VoiceCall;
+ use App\Models\Voice\VoiceCallEvent;
++use App\Services\Telephony\VoiceCostGuard;
+ use App\Services\Voice\Dto\OutboundCallRequest;
+ use App\Services\Voice\Dto\OutboundCallResult;
+ use App\Services\Voice\ElevenLabs\ElevenLabsCallStarter;
+@@ -22,14 +23,15 @@
+  * El job de la saliente (contrato H8, D8-9, D8-12, D8-13; fixture
+  * `outbound-gate-cases.json` §job). Sin red.
+  *
+- * EN EL ÁRBOL COMPARTIDO la constante está cerrada: el job cancela con
+- * `calls_disabled_in_code` ANTES de mirar nada más (DF-G9) y nunca llega al
+- * iniciador; se prueba de punta a punta. Las demás comprobaciones del job
+- * (publicación movida, deriva, freno, banderas) van detrás de la constante:
+- * las recorre TEST8 en la copia del banco con la constante girada. Aquí se
+- * prueban además, por separado, el CUERPO de la petición (contra las
+- * aserciones del fixture) y el MAPEO de cada resultado del iniciador a la
+- * fila, el evento y la reserva.
++ * C-4: CON LAS LLAMADAS ABIERTAS EN EL CÓDIGO (`voice(calls-open)`), la
++ * primera cerradura que mira el job son las banderas (DF-G9): con las
++ * salientes apagadas cancela con `outbound_disabled` sin llegar al iniciador
++ * y libera la reserva; se prueba de punta a punta. El job con todo en regla
++ * (marca una vez, con lo sellado) lo recorre `PlaceOutboundVoiceCallRecheckTest`;
++ * con la constante cerrada (cancela por ella antes de nada) solo la copia
++ * cerrada del E2E. Aquí se prueban además, por separado, el CUERPO de la
++ * petición (contra las aserciones del fixture) y el MAPEO de cada resultado
++ * del iniciador a la fila, el evento y la reserva.
+  */
+ class PlaceOutboundVoiceCallTest extends TestCase
+ {
+@@ -54,9 +56,12 @@ public function test_el_job_es_de_un_intento_en_su_carril_y_con_su_plazo(): void
+         $this->assertGreaterThan(30, config('queue.connections.voice.retry_after'));
+     }
+ 
+-    public function test_con_la_constante_cerrada_cancela_sin_peticion_y_libera_la_reserva(): void
++    public function test_con_las_salientes_apagadas_cancela_sin_peticion_y_libera_la_reserva(): void
+     {
++        $this->assertNotTrue(config('voice.outbound.enabled'), 'el mundo de las pruebas: salientes apagadas, como producción antes de `salientes on`');
+         $llamada = $this->voiceCall('outbound', 'requested');
++        $dia = (string) $llamada->budget_day;
++        $this->assertSame(610500, VoiceCostGuard::committedMicros($dia), 'la reserva de la fila pedida cuenta');
+         $iniciador = new class implements VoiceCallStarter
+         {
+             public function startOutbound(OutboundCallRequest $request): OutboundCallResult
+@@ -66,12 +71,15 @@ public function startOutbound(OutboundCallRequest $request): OutboundCallResult
+         };
+         $this->assertSame('canceled', (new PlaceOutboundVoiceCall((int) $llamada->id))->run($iniciador));
+         $fila = VoiceCall::query()->findOrFail($llamada->id);
+-        $this->assertSame(['canceled', 'calls_disabled_in_code'], [$fila->status, $fila->policy_reason]);
++        $this->assertSame(['canceled', 'outbound_disabled'], [$fila->status, $fila->policy_reason]);
+         $this->assertNotNull($fila->ended_at);
++        $this->assertSame(0, VoiceCostGuard::committedMicros($dia), 'cancelada sin petición: la reserva se libera, sin coste');
++        $this->assertSame([], VoiceCallEvent::query()->where('call_id', $llamada->id)->pluck('kind')->all(), 'sin petición no hay evento del proveedor');
+         // `handle()` con la fábrica real tampoco sale a la red.
+         $otra = $this->voiceCall('outbound', 'requested', ['remote' => '+573000000035']);
+         (new PlaceOutboundVoiceCall((int) $otra->id))->handle();
+-        $this->assertSame('canceled', VoiceCall::query()->findOrFail($otra->id)->status);
++        $this->assertSame(['canceled', 'outbound_disabled'], [VoiceCall::query()->findOrFail($otra->id)->status, VoiceCall::query()->findOrFail($otra->id)->policy_reason]);
++        $this->assertSame(0, VoiceCostGuard::committedMicros($dia));
+         Http::assertNothingSent();
+     }
+ 
+diff --git a/backend/tests/Feature/Telephony/Support/VoiceFixtures.php b/backend/tests/Feature/Telephony/Support/VoiceFixtures.php
+index 8e057fa4..9d9f0ecc 100644
+--- a/backend/tests/Feature/Telephony/Support/VoiceFixtures.php
++++ b/backend/tests/Feature/Telephony/Support/VoiceFixtures.php
+@@ -2,14 +2,18 @@
+ 
+ namespace Tests\Feature\Telephony\Support;
+ 
++use App\Jobs\Voice\PlaceOutboundVoiceCall;
+ use App\Models\Admin;
+ use App\Models\Voice\VoiceCall;
++use App\Models\Voice\VoiceCallEvent;
++use App\Services\Telephony\VoiceCostGuard;
+ use App\Services\Telephony\VoicePhone;
+ use App\Services\Telephony\VoicePublishedConfig;
+ use App\Services\Voice\Dto\VoiceCanonicalJson;
+ use Illuminate\Database\Schema\Blueprint;
+ use Illuminate\Support\Facades\DB;
+ use Illuminate\Support\Facades\Http;
++use Illuminate\Support\Facades\Queue;
+ use Illuminate\Support\Facades\Schema;
+ use Illuminate\Support\Str;
+ use Illuminate\Testing\TestResponse;
+@@ -279,6 +283,50 @@ protected function voiceCall(string $direction, string $status, array $o = []):
+         return VoiceCall::query()->findOrFail($id);
+     }
+ 
++    // ── C-4: la puerta de salientes con las llamadas abiertas en el código ──
++
++    /** La reserva de la puerta para un móvil colombiano (+573…) con los precios por defecto: 0,9605 US$ (runbook, paso 10). */
++    protected const MOBILE_RESERVATION_MICROS = 960500;
++
++    /**
++     * C-4 (`voice(calls-open)`): la puerta ACEPTÓ (202) una saliente al canario
++     * `$canario` (el número de `self::CANARY_PHONE`). Exactamente UNA fila nueva:
++     * `requested`, sellada con la parte canaria vigente (su entrada y su
++     * agente), con la huella y los 4 dígitos (nunca el número) y la reserva de
++     * un móvil en el día de Bogotá, que cuenta como comprometida; su evento
++     * `outbound_requested`, y el job en la cola `voice` para ESA fila. Devuelve
++     * la fila.
++     */
++    protected function assertOutboundAccepted(TestResponse $r, string $canario, int $filasAntes, int $seq = 1, string $agente = self::SEALED_AGENT): VoiceCall
++    {
++        $r->assertStatus(202);
++        $this->assertTrue($r->json('ok'));
++        $this->assertSame($filasAntes + 1, VoiceCall::query()->count(), 'la puerta crea UNA fila');
++        $fila = VoiceCall::query()->where('uuid', (string) $r->json('call.uuid'))->sole();
++        $this->assertSame(['outbound', 'requested', 'canary_registry', $canario, null, null],
++            [$fila->direction, $fila->status, $fila->target_source, $fila->canary_number_uuid, $fila->caller_authorized, $fila->policy_reason]);
++        $this->assertSame(['applied', 'canary', $seq, $agente], [$fila->stamp_state, $fila->part, $fila->voice_publication_seq, $fila->provider_agent_id], 'el sello de la parte vigente');
++        $this->assertSame([VoicePhone::hash(self::CANARY_PHONE), substr(self::CANARY_PHONE, -4)], [$fila->remote_hash, $fila->remote_last4]);
++        $dia = now()->setTimezone('America/Bogota')->toDateString();
++        $this->assertSame([self::MOBILE_RESERVATION_MICROS, $dia], [(int) $fila->reserved_micros, (string) $fila->budget_day], 'la reserva, en el día de Bogotá');
++        $this->assertGreaterThanOrEqual(self::MOBILE_RESERVATION_MICROS, VoiceCostGuard::committedMicros($dia), 'la reserva cuenta como comprometida');
++        $this->assertSame(['outbound_requested'], VoiceCallEvent::query()->where('call_id', $fila->id)->pluck('kind')->all());
++        Queue::assertPushed(PlaceOutboundVoiceCall::class, static fn (PlaceOutboundVoiceCall $j): bool => $j->callId === (int) $fila->id);
++        $this->assertStringNotContainsString(substr(self::CANARY_PHONE, 1), (string) $r->getContent(), 'la respuesta no lleva el número');
++
++        return $fila;
++    }
++
++    /**
++     * La saliente aceptada, cancelada como la cancela el job sin petición: deja
++     * de contar para la concurrencia, el cupo, la frecuencia y el presupuesto,
++     * y la siguiente mirada de la puerta parte de cero.
++     */
++    protected function releaseAccepted(VoiceCall $llamada): void
++    {
++        $this->assertTrue(VoiceCall::transition((int) $llamada->id, [VoiceCall::STATUS_REQUESTED], VoiceCall::STATUS_CANCELED, ['policy_reason' => 'outbound_disabled', 'ended_at' => now()]));
++    }
++
+     /**
+      * Una saliente en curso (`dialing` o `active`) con UN SOLO id del proveedor, el que el job guardó porque fue el
+      * único que devolvió el proveedor (DB8, `vc_provider_binding_chk`: una saliente que marcó lleva al menos uno). Los
+diff --git a/backend/tests/Feature/Telephony/VoiceCommandsTest.php b/backend/tests/Feature/Telephony/VoiceCommandsTest.php
+index fb8a759d..2dde12f4 100644
+--- a/backend/tests/Feature/Telephony/VoiceCommandsTest.php
++++ b/backend/tests/Feature/Telephony/VoiceCommandsTest.php
+@@ -52,7 +52,7 @@ public function test_voice_doctor_telefonia_por_nombre_y_sin_valores(): void
+         $this->publishVoice();
+         $this->assertSame(0, Artisan::call('voice:doctor', ['--telefonia' => true]));
+         $texto = Artisan::output();
+-        foreach (['Voz · telefonía (H8)', 'Constante  : cerrada', 'Cadena     : canary ok · seq 1', 'Cadena     : rest none', 'Freno      : suelto'] as $esperado) {
++        foreach (['Voz · telefonía (H8)', 'Constante  : ABIERTA (la de VoiceCallPolicy: las llamadas en el código)', 'Cadena     : canary ok · seq 1', 'Cadena     : rest none', 'Freno      : suelto'] as $esperado) {
+             $this->assertStringContainsString($esperado, $texto);
+         }
+         $this->assertSame(0, Artisan::call('voice:doctor', ['--telefonia' => true, '--json' => true]));
+@@ -70,7 +70,7 @@ public function test_voice_doctor_telefonia_por_nombre_y_sin_valores(): void
+         $this->assertSame('no_observation', $json['telefonia']['number']['checkReason']);
+         $this->assertStringContainsString('la puerta dice number_unverified', $texto);
+         $this->assertNull($json['telefonia']['number']['inboundCapable'], 'sin declarar');
+-        $this->assertFalse($json['telefonia']['callsEnabledInCode']);
++        $this->assertTrue($json['telefonia']['callsEnabledInCode']);
+         foreach (['xi-centinela', self::INITIATION_SECRET, self::TOOL_SECRET, self::WEBHOOK_SECRET, '+576010000090', '576010000090'] as $s) {
+             $this->assertStringNotContainsString($s, $texto.json_encode($json), "la salida lleva «{$s}»");
+         }
+diff --git a/backend/tests/Feature/Telephony/VoiceCrmRoutesTest.php b/backend/tests/Feature/Telephony/VoiceCrmRoutesTest.php
+index 1e193e8d..e68ecb1c 100644
+--- a/backend/tests/Feature/Telephony/VoiceCrmRoutesTest.php
++++ b/backend/tests/Feature/Telephony/VoiceCrmRoutesTest.php
+@@ -10,6 +10,7 @@
+ use App\Models\Voice\VoiceRneCheck;
+ use App\Services\Telephony\VoiceContacts;
+ use App\Services\Telephony\VoiceNumberGuard;
++use App\Services\Telephony\VoiceProviderState;
+ use Illuminate\Foundation\Testing\RefreshDatabase;
+ use Illuminate\Routing\Middleware\ThrottleRequests;
+ use Illuminate\Support\Carbon;
+@@ -24,7 +25,8 @@
+  * El CRM de la telefonía (`/api/admin/voice/*`; contrato H8, D8-12, D8-18,
+  * D8-22, «API»): cada ruta con su llave (401 sin sesión, 403 con el token
+  * compartido o sin la llave, y el camino feliz con la llave justa), la puerta
+- * de salientes (en el árbol compartido, 409 `calls_disabled_in_code`), el
++ * de salientes (C-4: con las llamadas abiertas en el código, 409 por la
++ * cerradura que falte y 202 con todo en regla), el
+  * corte, el registro sin datos personales y los contactos con su
+  * consentimiento a CUATRO OJOS (E3-4). Sin red.
+  */
+@@ -95,10 +97,10 @@ public function test_el_administrador_por_defecto_ve_el_registro_pero_no_llama_n
+         $this->getJson('/api/admin/voice/status', $admin)->assertOk();
+         $this->postJson('/api/admin/voice/calls', ['clientRequestId' => (string) Str::uuid(), 'target' => ['kind' => 'canary', 'uuid' => (string) Str::uuid()]], $admin)->assertStatus(403);
+         $this->getJson('/api/admin/voice/contacts', $admin)->assertStatus(403);
+-        $this->getJson('/api/admin/voice/status', $this->adminHeaders())->assertOk()->assertJsonPath('callsEnabledInCode', false);
++        $this->getJson('/api/admin/voice/status', $this->adminHeaders())->assertOk()->assertJsonPath('callsEnabledInCode', true);
+     }
+ 
+-    public function test_la_puerta_de_salientes_con_todo_abierto_salvo_la_constante_responde_409_sin_crear_nada(): void
++    public function test_la_puerta_de_salientes_sin_la_verificacion_responde_409_sin_crear_nada_y_verificada_acepta_202(): void
+     {
+         // Lunes 9 de noviembre de 2026 a las 10:00 de Bogotá: dentro del horario legal y sin festivo.
+         $this->travelTo(Carbon::parse('2026-11-09T15:00:00Z'));
+@@ -111,11 +113,16 @@ public function test_la_puerta_de_salientes_con_todo_abierto_salvo_la_constante_
+         // B8-g: «todo abierto» incluye el número que llama vigilado (una conciliación reciente que cuadra).
+         VoiceNumberGuard::rememberObservation(self::PHONE_NUMBER_ID, true, false);
+         $cuerpo = ['clientRequestId' => (string) Str::uuid(), 'target' => ['kind' => 'canary', 'uuid' => $canario]];
+-        $r = $this->postJson('/api/admin/voice/calls', $cuerpo, $this->adminWithPermissions([self::PLACE]))->assertStatus(409);
+-        // La constante cierra las llamadas; VERIFIED no se puede derivar sin la evidencia del Studio (falla cerrado).
+-        $this->assertSame(['calls_disabled_in_code', 'elevenlabs_unverified'], $r->json('reasons'));
++        $quien = $this->adminWithPermissions([self::PLACE]);
++        $r = $this->postJson('/api/admin/voice/calls', $cuerpo, $quien)->assertStatus(409);
++        // Con las llamadas abiertas en el código, VERIFIED no se puede derivar sin la evidencia del Studio (falla cerrado): es lo único que falta.
++        $this->assertSame(['elevenlabs_unverified'], $r->json('reasons'));
+         $this->assertSame(0, VoiceCall::query()->count());
+         Queue::assertNothingPushed();
++
++        // Con la verificación del Studio, todo en regla: 202, una fila `requested` sellada con su reserva, su evento y el job.
++        VoiceProviderState::recordStudioVerification(true, now());
++        $this->assertOutboundAccepted($this->postJson('/api/admin/voice/calls', $cuerpo, $quien), $canario, 0);
+         Http::assertNothingSent();
+     }
+ 
+diff --git a/backend/tests/Feature/Telephony/VoiceInitiationWebhookTest.php b/backend/tests/Feature/Telephony/VoiceInitiationWebhookTest.php
+index a4a27a6f..c1b122f9 100644
+--- a/backend/tests/Feature/Telephony/VoiceInitiationWebhookTest.php
++++ b/backend/tests/Feature/Telephony/VoiceInitiationWebhookTest.php
+@@ -6,6 +6,7 @@
+ use App\Models\Voice\VoiceCall;
+ use App\Models\Voice\VoiceCallEvent;
+ use App\Services\Telephony\VoiceBrake;
++use App\Services\Telephony\VoiceCostGuard;
+ use Illuminate\Foundation\Testing\RefreshDatabase;
+ use Illuminate\Support\Facades\Http;
+ use Illuminate\Support\Str;
+@@ -18,10 +19,13 @@
+  * H8, D8-11, D8-16, E1-2; fixture `elevenlabs-webhook-bodies.json`
+  * §initiation). Sin red (`Http::preventStrayRequests()`).
+  *
+- * En el árbol compartido la constante está cerrada: NINGUNA entrante sale
+- * autorizada (`calls_disabled_in_code`) y toda iniciación deja su fila
+- * `denied` con su sello, su huella y sus 4 dígitos. La vía autorizada la
+- * recorre TEST8 en la copia del banco con la constante girada.
++ * C-4: con las llamadas abiertas en el código (`voice(calls-open)`), el
++ * canario de voz activo con todo en regla sale AUTORIZADO (fila `active`, con
++ * su sello, su huella, sus 4 dígitos y la reserva de una entrante), y las
++ * demás cerraduras (el número declarado solo saliente, el sello, el freno, el
++ * llamante…) la siguen negando por su nombre. Toda iniciación deja su fila. La
++ * negativa por `calls_disabled_in_code` (el árbol cerrado) la recorre la copia
++ * cerrada del E2E.
+  */
+ class VoiceInitiationWebhookTest extends TestCase
+ {
+@@ -101,16 +105,21 @@ public function test_autenticada_pero_mal_formada_se_deniega_explicitamente_sin_
+         $this->assertCleanResponse($this->rawPost(self::URI, 'esto no es JSON', $this->initiationHeaders()), 'no');
+     }
+ 
+-    public function test_un_canario_activo_con_la_constante_cerrada_queda_denied_con_su_sello_huella_y_evento(): void
++    public function test_un_canario_activo_con_las_llamadas_abiertas_queda_active_autorizado_con_su_sello_huella_reserva_y_evento(): void
+     {
+         $canario = $this->activeVoiceCanary();
+         $pub = $this->publishVoice();
+ 
+-        $v = $this->assertCleanResponse($this->rawPost(self::URI, $this->body(self::CANARY_PHONE, $this->sid('15')), $this->initiationHeaders()), 'no');
++        $v = $this->assertCleanResponse($this->rawPost(self::URI, $this->body(self::CANARY_PHONE, $this->sid('15')), $this->initiationHeaders()), 'si');
+         $this->assertSame('canario · publicación '.$pub['seq'], $v['version_label']);
+ 
+         $fila = VoiceCall::query()->sole();
+-        $this->assertSame(['inbound', 'denied', false, 'calls_disabled_in_code'], [$fila->direction, $fila->status, $fila->caller_authorized, $fila->policy_reason]);
++        $this->assertSame(['inbound', 'active', true, null], [$fila->direction, $fila->status, $fila->caller_authorized, $fila->policy_reason]);
++        $this->assertNotNull($fila->started_at, 'autorizada: empieza al iniciarse');
++        // La reserva de una entrante autorizada con los precios por defecto: 300 s y un tramo transferido a un fijo (1,2445 US$),
++        // no el minuto de «línea no disponible» de una denegada (0,1789 US$); y cuenta como comprometida en el día de Bogotá.
++        $this->assertSame(1244500, (int) $fila->reserved_micros);
++        $this->assertSame(1244500, VoiceCostGuard::committedMicros((string) $fila->budget_day));
+         $this->assertSame($v['call_ref'], $fila->call_ref);
+         $this->assertSame($canario, $fila->canary_number_uuid);
+         // La huella y los 4 dígitos del fixture (§initiation), nunca el número.
+@@ -121,8 +130,8 @@ public function test_un_canario_activo_con_la_constante_cerrada_queda_denied_con
+             [$fila->stamp_state, $fila->part, $fila->voice_publication_seq, $fila->provider_agent_id, $fila->spec_hash, $fila->payload_hash, $fila->compiler_version, $fila->studio_version_uuid]);
+         $this->assertSame([$this->sid('15'), 'conv_h8fx_0021'], [$fila->provider_call_sid, $fila->provider_conversation_id]);
+         $evento = VoiceCallEvent::query()->sole();
+-        $this->assertSame(['initiation_received', 'elevenlabs', $this->sid('15'), 'denied'], [$evento->kind, $evento->provider, $evento->provider_event_key, $evento->outcome]);
+-        $this->assertSame(['calls_disabled_in_code'], $evento->codes['reasons'], 'el canario activo con todo abierto: solo la constante lo para');
++        $this->assertSame(['initiation_received', 'elevenlabs', $this->sid('15'), 'authorized'], [$evento->kind, $evento->provider, $evento->provider_event_key, $evento->outcome]);
++        $this->assertSame([], $evento->codes['reasons'], 'el canario activo con todo abierto: nada lo para');
+         $this->assertFalse(VoiceBrake::isOpen());
+         Http::assertNothingSent();
+     }
+@@ -175,7 +184,8 @@ public function test_un_agent_id_que_no_es_el_sellado_abre_el_freno_con_seal_mis
+ 
+     /**
+      * B8-g (SEC8-c M-2), los dos modos del número. Sin declarar (o declarado
+-     * `true`), lo de siempre: al canario activo solo lo para la constante.
++     * `true`), lo de siempre: con las llamadas abiertas en el código (C-4), el
++     * canario activo se atiende.
+      * Declarado «Outbound Only» (`VOICE_NUMBER_INBOUND_CAPABLE=false`), la
+      * iniciación se deniega SIEMPRE, con las entrantes encendidas, y el primer
+      * motivo (el de `policy_reason`) es `number_outbound_only`.
+@@ -187,22 +197,27 @@ public function test_con_el_numero_declarado_solo_saliente_la_iniciacion_deniega
+         $this->assertTrue(config('voice.inbound.enabled'));
+         $motivos = fn (string $sid): array => VoiceCallEvent::query()->where('provider_event_key', $sid)->sole()->codes['reasons'];
+ 
+-        // Sin declarar: lo de siempre.
+-        $this->assertCleanResponse($this->rawPost(self::URI, $this->body(self::CANARY_PHONE, $this->sid('31'), 'conv_h8fx_0031'), $this->initiationHeaders()), 'no');
+-        $this->assertSame(['calls_disabled_in_code'], $motivos($this->sid('31')));
++        // La entrante atendida cuelga: deja de contar para la concurrencia y la siguiente parte de cero.
++        $cuelga = fn (string $sid): bool => VoiceCall::transition((int) VoiceCall::query()->where('provider_call_sid', $sid)->value('id'), [VoiceCall::STATUS_ACTIVE], VoiceCall::STATUS_COMPLETED, ['ended_at' => now()]);
+ 
+-        // Declarado solo saliente: denegada siempre, y es su primer motivo.
++        // Sin declarar: lo de siempre (con las llamadas abiertas, el canario activo se atiende).
++        $this->assertCleanResponse($this->rawPost(self::URI, $this->body(self::CANARY_PHONE, $this->sid('31'), 'conv_h8fx_0031'), $this->initiationHeaders()), 'si');
++        $this->assertSame([], $motivos($this->sid('31')));
++        $this->assertTrue($cuelga($this->sid('31')));
++
++        // Declarado solo saliente: denegada siempre, y es su primer motivo (y el único: con las llamadas abiertas, nada más la para).
+         config(['voice.number.inbound_capable' => false]);
+         $this->assertCleanResponse($this->rawPost(self::URI, $this->body(self::CANARY_PHONE, $this->sid('32'), 'conv_h8fx_0032'), $this->initiationHeaders()), 'no');
+         $fila = VoiceCall::query()->where('provider_call_sid', $this->sid('32'))->sole();
+         $this->assertSame(['denied', false, 'number_outbound_only'], [$fila->status, $fila->caller_authorized, $fila->policy_reason]);
+-        $this->assertSame(['number_outbound_only', 'calls_disabled_in_code'], $motivos($this->sid('32')));
++        $this->assertSame(['number_outbound_only'], $motivos($this->sid('32')));
++        $this->assertNull($fila->started_at);
+         $this->assertFalse(VoiceBrake::isOpen(), 'con el agente sellado no hay sello roto: solo se deniega');
+ 
+         // Declarado `true`: lo de siempre otra vez.
+         config(['voice.number.inbound_capable' => true]);
+-        $this->assertCleanResponse($this->rawPost(self::URI, $this->body(self::CANARY_PHONE, $this->sid('33'), 'conv_h8fx_0033'), $this->initiationHeaders()), 'no');
+-        $this->assertSame(['calls_disabled_in_code'], $motivos($this->sid('33')));
++        $this->assertCleanResponse($this->rawPost(self::URI, $this->body(self::CANARY_PHONE, $this->sid('33'), 'conv_h8fx_0033'), $this->initiationHeaders()), 'si');
++        $this->assertSame([], $motivos($this->sid('33')));
+     }
+ 
+     /**
+@@ -219,7 +234,7 @@ public function test_declarado_solo_saliente_con_un_agente_viejo_en_el_numero_de
+         $this->assertCleanResponse($this->rawPost(self::URI, $this->body(self::CANARY_PHONE, $this->sid('34'), 'conv_h8fx_0034', 'agent_h8fx_viejo_0001'), $this->initiationHeaders()), 'no');
+         $fila = VoiceCall::query()->sole();
+         $this->assertSame(['denied', false, 'number_outbound_only'], [$fila->status, $fila->caller_authorized, $fila->policy_reason]);
+-        $this->assertSame(['number_outbound_only', 'calls_disabled_in_code', 'seal_mismatch'],
++        $this->assertSame(['number_outbound_only', 'seal_mismatch'],
+             VoiceCallEvent::query()->where('call_id', $fila->id)->where('kind', 'initiation_received')->sole()->codes['reasons']);
+         $this->assertSame(['open', 'seal_mismatch', 'seal:'.$this->sid('34')], [($freno = VoiceBrakeEntry::query()->sole())->kind, $freno->reason, $freno->open_key]);
+         $this->assertTrue(VoiceBrake::isOpen());
+diff --git a/backend/tests/Feature/Telephony/VoiceNumberIdentityTest.php b/backend/tests/Feature/Telephony/VoiceNumberIdentityTest.php
+index 2acd8c09..a3ba98c3 100644
+--- a/backend/tests/Feature/Telephony/VoiceNumberIdentityTest.php
++++ b/backend/tests/Feature/Telephony/VoiceNumberIdentityTest.php
+@@ -17,6 +17,7 @@
+ use Illuminate\Support\Facades\Http;
+ use Illuminate\Support\Facades\Queue;
+ use Illuminate\Support\Str;
++use Illuminate\Testing\TestResponse;
+ use ReflectionMethod;
+ use Tests\Feature\Telephony\Support\VoiceFixtures;
+ use Tests\TestCase;
+@@ -149,13 +150,33 @@ public function test_el_numero_importado_de_la_mensajeria_frena_y_la_puerta_lo_d
+         $this->assertTrue(VoiceNumberGuard::collidesForPolicy());
+     }
+ 
+-    /** @return list<string> los motivos de la puerta para un canario de voz activo, con las banderas y el presupuesto abiertos */
+-    private function motivosDeLaPuerta(string $canario): array
++    /** La petición de una saliente a un canario de voz activo, con las banderas, el cupo y el presupuesto abiertos. */
++    private function puerta(string $canario): TestResponse
+     {
+         config(['voice.outbound.enabled' => true, 'voice.twilio.enabled' => true, 'voice.twilio.daily_call_cap' => 3, 'voice.limits.daily_budget_usd' => '5']);
+ 
+         return $this->postJson('/api/admin/voice/calls', ['clientRequestId' => (string) Str::uuid(), 'target' => ['kind' => 'canary', 'uuid' => $canario]],
+-            $this->adminWithPermissions(['telephony.call_place']))->assertStatus(409)->json('reasons');
++            $this->adminWithPermissions(['telephony.call_place']));
++    }
++
++    /** @return list<string> los motivos con que la puerta NIEGA (409) la saliente al canario, con las banderas y el presupuesto abiertos */
++    private function motivosDeLaPuerta(string $canario): array
++    {
++        $antes = VoiceCall::query()->count();
++        $motivos = $this->puerta($canario)->assertStatus(409)->json('reasons');
++        $this->assertSame($antes, VoiceCall::query()->count(), 'negada: ninguna fila');
++
++        return $motivos;
++    }
++
++    /**
++     * C-4: con las llamadas abiertas en el código, la puerta ACEPTA (202) la saliente al canario: su fila, su reserva, su
++     * evento y el job. Después se libera (como la cancela el job sin petición) para que la siguiente mirada parta de cero.
++     */
++    private function laPuertaAcepta(string $canario): void
++    {
++        $antes = VoiceCall::query()->count();
++        $this->releaseAccepted($this->assertOutboundAccepted($this->puerta($canario), $canario, $antes));
+     }
+ 
+     /**
+@@ -163,7 +184,8 @@ private function motivosDeLaPuerta(string $canario): array
+      * conciliación del número de menos de 2 h que cuadre (`number_unverified`),
+      * como `elevenlabs_unverified` sin la marca de E4-6: ninguna saliente sin
+      * vigilar el número que de verdad llama. Con la verificación de ElevenLabs
+-     * escrita, lo único que queda con una fresca que cuadra es la constante.
++     * escrita y las llamadas abiertas en el código (C-4), una fresca que cuadra
++     * es lo último que faltaba: la puerta acepta.
+      */
+     public function test_la_puerta_falla_cerrada_sin_una_conciliacion_reciente_del_numero(): void
+     {
+@@ -171,26 +193,26 @@ public function test_la_puerta_falla_cerrada_sin_una_conciliacion_reciente_del_n
+         $this->publishVoice();
+         VoiceProviderState::recordStudioVerification(true, now());
+ 
+-        // Sin conciliación del número: cerrado.
+-        $this->assertSame(['calls_disabled_in_code', 'number_unverified'], $this->motivosDeLaPuerta($canario));
++        // Sin conciliación del número: cerrado, y es lo único que falta.
++        $this->assertSame(['number_unverified'], $this->motivosDeLaPuerta($canario));
+ 
+-        // Una fresca que cuadra: pasa (solo queda la constante del código).
++        // Una fresca que cuadra: pasa.
+         $this->provider(self::VOICE_FROM);
+         $this->assertSame('ok', $this->reconcile()['result']);
+         $this->assertSame('verified', VoiceNumberGuard::policyCheck());
+-        $this->assertSame(['calls_disabled_in_code'], $this->motivosDeLaPuerta($canario));
++        $this->laPuertaAcepta($canario);
+ 
+         // A 1 h 59 min sigue valiendo; a 2 h 1 min ya no.
+         $this->travelTo(Carbon::parse('2026-11-09 16:59:00', 'UTC'));
+         VoiceProviderState::recordStudioVerification(true, now());
+-        $this->assertSame(['calls_disabled_in_code'], $this->motivosDeLaPuerta($canario));
++        $this->laPuertaAcepta($canario);
+         $this->travelTo(Carbon::parse('2026-11-09 17:01:00', 'UTC'));
+-        $this->assertSame(['calls_disabled_in_code', 'number_unverified'], $this->motivosDeLaPuerta($canario));
++        $this->assertSame(['number_unverified'], $this->motivosDeLaPuerta($canario));
+ 
+         // Una fresca que NO cuadra: el importado no es TWILIO_VOICE_FROM → `number_mismatch` (y el freno de la conciliación).
+         $this->provider(self::OTRO);
+         $this->assertSame('number_mismatch', $this->reconcile()['result']);
+-        $this->assertSame(['calls_disabled_in_code', 'number_mismatch', 'voice_braked'], $this->motivosDeLaPuerta($canario));
++        $this->assertSame(['number_mismatch', 'voice_braked'], $this->motivosDeLaPuerta($canario));
+     }
+ 
+     /** Decisión del lead: una fresca en la que el importado es de la mensajería → `voice_number_is_whatsapp` por su nombre. */
+@@ -202,7 +224,7 @@ public function test_una_conciliacion_fresca_con_el_numero_de_la_mensajeria_lo_d
+         config(['meta.whatsapp_display_phone' => self::VOICE_FROM]);   // el declarado choca: el importado ES el de la mensajería
+         $this->provider(self::VOICE_FROM);
+         $this->assertSame('number_is_messaging', $this->reconcile()['result']);
+-        $this->assertSame(['calls_disabled_in_code', 'voice_number_is_whatsapp', 'voice_braked'], $this->motivosDeLaPuerta($canario));
++        $this->assertSame(['voice_number_is_whatsapp', 'voice_braked'], $this->motivosDeLaPuerta($canario));
+     }
+ 
+     /** Lo que responde la recomprobación del job justo antes de marcar (DF-G9, pasos 1–5; la constante cerrada no deja pasar de ella). */
+@@ -218,9 +240,10 @@ private function recheckDelJob(VoiceCall $llamada): ?string
+      * de la configuración. Si el mando cambia `ELEVENLABS_AGENT_PHONE_NUMBER_ID`
+      * (solo `config:cache`: la caché sigue con la observación de antes), esa
+      * observación ya no vale: la puerta real y el job dicen `number_unverified`,
+-     * y el estado y el doctor, el motivo. Con el mismo id, pasa. Es la
+-     * reproducción del revisor (`RevStaleNumberObservationTest`), que antes
+-     * daba `verified` y solo `calls_disabled_in_code`.
++     * y el estado y el doctor, el motivo. Con el mismo id, pasa (C-4: con las
++     * llamadas abiertas en el código, la puerta acepta). Es la reproducción del
++     * revisor (`RevStaleNumberObservationTest`), que antes daba `verified` y
++     * solo `calls_disabled_in_code`.
+      */
+     public function test_una_observacion_de_otro_id_de_numero_no_vigila_el_que_llama(): void
+     {
+@@ -230,12 +253,12 @@ public function test_una_observacion_de_otro_id_de_numero_no_vigila_el_que_llama
+         $this->provider(self::VOICE_FROM);
+         $this->assertSame('ok', $this->reconcile()['result']);
+         $this->assertSame(['check' => 'verified', 'reason' => null], VoiceNumberGuard::policyVerdict());
+-        $this->assertSame(['calls_disabled_in_code'], $this->motivosDeLaPuerta($canario));
++        $this->laPuertaAcepta($canario);
+ 
+         // El mando cambia el id (reimportación, o un id equivocado): la caché guarda la observación del anterior.
+         config(['voice.elevenlabs.agent_phone_number_id' => 'phnum_nunca_observado_9999']);
+         $this->assertSame(['check' => 'unverified', 'reason' => 'other_number_id'], VoiceNumberGuard::policyVerdict());
+-        $this->assertSame(['calls_disabled_in_code', 'number_unverified'], $this->motivosDeLaPuerta($canario), 'la puerta real');
++        $this->assertSame(['number_unverified'], $this->motivosDeLaPuerta($canario), 'la puerta real');
+         $numero = $this->getJson('/api/admin/voice/status', $this->adminWithPermissions(['telephony.view']))->assertOk()->json('number');
+         // REV8-c (segunda mirada) H-5: el estado no expone el identificador del proveedor; dice si la observación es del número configurado.
+         $this->assertSame(['unverified', 'other_number_id', false], [$numero['check'], $numero['checkReason'], $numero['observed']['matchesConfigured']]);
+@@ -253,7 +276,7 @@ public function test_una_observacion_de_otro_id_de_numero_no_vigila_el_que_llama
+         config(['voice.elevenlabs.agent_phone_number_id' => ' '.self::PHONE_NUMBER_ID.' ']);
+         $this->assertSame(['check' => 'verified', 'reason' => null], VoiceNumberGuard::policyVerdict());
+         config(['voice.elevenlabs.agent_phone_number_id' => self::PHONE_NUMBER_ID]);
+-        $this->assertSame(['calls_disabled_in_code'], $this->motivosDeLaPuerta($canario));
++        $this->laPuertaAcepta($canario);
+ 
+         // El job, con una saliente ya pedida (después de la puerta: la fila cuenta para la frecuencia y la concurrencia).
+         $llamada = $this->voiceCall('outbound', 'requested', ['canary_number_uuid' => $canario, 'remote' => self::CANARY_PHONE]);
+diff --git a/backend/tests/Feature/Telephony/VoiceProviderVerificationTest.php b/backend/tests/Feature/Telephony/VoiceProviderVerificationTest.php
+index 373feefb..775c6a48 100644
+--- a/backend/tests/Feature/Telephony/VoiceProviderVerificationTest.php
++++ b/backend/tests/Feature/Telephony/VoiceProviderVerificationTest.php
+@@ -17,6 +17,7 @@
+ use Illuminate\Support\Facades\Http;
+ use Illuminate\Support\Facades\Queue;
+ use Illuminate\Support\Str;
++use Illuminate\Testing\TestResponse;
+ use Tests\Feature\Telephony\Support\VoiceFixtures;
+ use Tests\TestCase;
+ 
+@@ -81,16 +82,21 @@ private function verifyVoice(): array
+         return [$codigo, json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR)['voice']];
+     }
+ 
+-    /** @return list<string> los motivos de la puerta para un canario de voz activo, con todo abierto salvo la constante */
+-    private function gateReasons(string $canario): array
++    /** La petición de una saliente a un canario de voz activo, con las banderas, el cupo y el presupuesto abiertos. */
++    private function gate(string $canario): TestResponse
+     {
+         config([
+             'voice.outbound.enabled' => true, 'voice.twilio.enabled' => true, 'voice.twilio.daily_call_cap' => 3, 'voice.limits.daily_budget_usd' => '5',
+         ]);
+-        $r = $this->postJson('/api/admin/voice/calls', ['clientRequestId' => (string) Str::uuid(), 'target' => ['kind' => 'canary', 'uuid' => $canario]],
+-            $this->adminWithPermissions([self::PLACE]))->assertStatus(409);
+ 
+-        return $r->json('reasons');
++        return $this->postJson('/api/admin/voice/calls', ['clientRequestId' => (string) Str::uuid(), 'target' => ['kind' => 'canary', 'uuid' => $canario]],
++            $this->adminWithPermissions([self::PLACE]));
++    }
++
++    /** @return list<string> los motivos de la puerta (409) para un canario de voz activo, con las banderas, el cupo y el presupuesto abiertos */
++    private function gateReasons(string $canario): array
++    {
++        return $this->gate($canario)->assertStatus(409)->json('reasons');
+     }
+ 
+     /** La regresión de E4-6: lo que verifica el Studio ya no lo ignora la puerta de salientes. */
+@@ -99,7 +105,8 @@ public function test_la_verificacion_del_studio_quita_elevenlabs_unverified_de_l
+         $canario = $this->activeVoiceCanary();
+         $this->publishVoice();
+         $this->assertSame(VoiceProviderStatus::STATE_UNVERIFIED, VoiceProviderState::current());
+-        $this->assertSame(['calls_disabled_in_code', 'elevenlabs_unverified'], $this->gateReasons($canario), 'sin la verificación, falla cerrado');
++        $this->assertSame(['elevenlabs_unverified'], $this->gateReasons($canario), 'sin la verificación, falla cerrado: es lo único que falta');
++        $this->assertSame(0, VoiceCall::query()->count());
+ 
+         [$codigo, $voz] = $this->verifyVoice();
+         $this->assertSame([0, true, 'ok', VoiceProviderState::RECORD_WRITTEN], [$codigo, $voz['verified'], $voz['snapshotOutcome'], $voz['telephonyMark']]);
+@@ -107,10 +114,8 @@ public function test_la_verificacion_del_studio_quita_elevenlabs_unverified_de_l
+         $this->assertSame(VoiceProviderStatus::STATE_VERIFIED, VoiceProviderState::current());
+         $this->assertSame(VoiceProviderStatus::STATE_VERIFIED, StudioIntegrations::voiceState(), 'el Studio y la telefonía dicen lo mismo');
+ 
+-        // Solo queda la constante del código (el commit `voice(calls-open)`): la verificación ya no bloquea.
+-        $this->assertSame(['calls_disabled_in_code'], $this->gateReasons($canario));
+-        $this->assertSame(0, VoiceCall::query()->count());
+-        Queue::assertNothingPushed();
++        // Con las llamadas abiertas en el código (`voice(calls-open)`), la verificación era lo último: la puerta acepta.
++        $this->assertOutboundAccepted($this->gate($canario), $canario, 0);
+         Http::assertSentCount(1);
+     }
+ 
+diff --git a/backend/tests/Feature/Telephony/VoiceWebhookHealthBrakeTest.php b/backend/tests/Feature/Telephony/VoiceWebhookHealthBrakeTest.php
+index 22a5a412..a776a265 100644
+--- a/backend/tests/Feature/Telephony/VoiceWebhookHealthBrakeTest.php
++++ b/backend/tests/Feature/Telephony/VoiceWebhookHealthBrakeTest.php
+@@ -5,6 +5,7 @@
+ use App\Models\Admin;
+ use App\Models\Incident;
+ use App\Models\Voice\VoiceBrakeEntry;
++use App\Models\Voice\VoiceCall;
+ use App\Services\Telephony\VoiceBrake;
+ use App\Services\Telephony\VoiceNumberGuard;
+ use App\Services\Telephony\VoiceProviderState;
+@@ -20,6 +21,7 @@
+ use Illuminate\Support\Facades\Http;
+ use Illuminate\Support\Facades\Queue;
+ use Illuminate\Support\Str;
++use Illuminate\Testing\TestResponse;
+ use Tests\Feature\Telephony\Support\VoiceFixtures;
+ use Tests\TestCase;
+ use Tests\Unit\Voice\Support\FreshHttpFake;
+@@ -140,10 +142,10 @@ private function soltar(VoiceBrakeEntry $apertura): void
+     }
+ 
+     /**
+-     * Un canario de voz activo con todo abierto salvo la constante del código:
+-     * publicación, verificación de ElevenLabs y una conciliación del número
+-     * fresca que cuadra. Así la puerta solo dice `calls_disabled_in_code`… o eso
+-     * más lo que añada el freno.
++     * Un canario de voz activo con todo en regla: publicación, verificación de
++     * ElevenLabs y una conciliación del número fresca que cuadra. Con las
++     * llamadas abiertas en el código (C-4) la puerta lo acepta… salvo lo que
++     * añada el freno.
+      */
+     private function puertaLista(): string
+     {
+@@ -157,13 +159,34 @@ private function puertaLista(): string
+         return $canario;
+     }
+ 
+-    /** @return list<string> los motivos de la puerta de salientes para el canario, con las banderas y el presupuesto abiertos */
+-    private function motivosDeLaPuerta(string $canario): array
++    /** La petición de una saliente al canario, con las banderas, el cupo y el presupuesto abiertos. */
++    private function puerta(string $canario): TestResponse
+     {
+         config(['voice.outbound.enabled' => true, 'voice.twilio.enabled' => true, 'voice.twilio.daily_call_cap' => 3, 'voice.limits.daily_budget_usd' => '5']);
+ 
+         return $this->postJson('/api/admin/voice/calls', ['clientRequestId' => (string) Str::uuid(), 'target' => ['kind' => 'canary', 'uuid' => $canario]],
+-            $this->adminWithPermissions(['telephony.call_place']))->assertStatus(409)->json('reasons');
++            $this->adminWithPermissions(['telephony.call_place']));
++    }
++
++    /** @return list<string> los motivos con que la puerta de salientes NIEGA (409) al canario, con las banderas y el presupuesto abiertos */
++    private function motivosDeLaPuerta(string $canario): array
++    {
++        $antes = VoiceCall::query()->count();
++        $motivos = $this->puerta($canario)->assertStatus(409)->json('reasons');
++        $this->assertSame($antes, VoiceCall::query()->count(), 'negada: ninguna fila');
++
++        return $motivos;
++    }
++
++    /**
++     * C-4: con las llamadas abiertas en el código y sin freno, la puerta ACEPTA (202) al canario: su fila, su reserva,
++     * su evento y el job. Después se libera (como la cancela el job sin petición) para que la siguiente mirada parta de cero.
++     */
++    private function laPuertaAcepta(string $canario, string $porque): void
++    {
++        $antes = VoiceCall::query()->count();
++        $this->assertFalse(VoiceBrake::isOpen(), $porque);
++        $this->releaseAccepted($this->assertOutboundAccepted($this->puerta($canario), $canario, $antes));
+     }
+ 
+     private function assertSinSecretosNiUrls(string $texto, string $donde): void
+@@ -179,7 +202,7 @@ private function assertSinSecretosNiUrls(string $texto, string $donde): void
+     public function test_webhook_desactivado_por_elevenlabs_echa_el_freno_y_la_puerta_niega_voice_braked(): void
+     {
+         $canario = $this->puertaLista();
+-        $this->assertSame(['calls_disabled_in_code'], $this->motivosDeLaPuerta($canario), 'la línea base: solo la constante del código');
++        $this->laPuertaAcepta($canario, 'la línea base: con todo en regla, la puerta acepta');
+ 
+         // Sano: ni freno ni incidente.
+         [$codigo, $r] = $this->salud();
+@@ -205,8 +228,8 @@ public function test_webhook_desactivado_por_elevenlabs_echa_el_freno_y_la_puert
+         $freno = Incident::query()->where('kind', VoiceBrake::INCIDENT_KIND)->sole();
+         $this->assertSame(['voice', Incident::SEVERITY_HIGH, 'webhook_unhealthy', $apertura->uuid], [$freno->source, $freno->severity, $freno->evidence['reason'], $freno->evidence['brake_uuid']]);
+ 
+-        // La puerta de salientes niega por el freno.
+-        $this->assertSame(['calls_disabled_in_code', 'voice_braked'], $this->motivosDeLaPuerta($canario));
++        // La puerta de salientes niega por el freno, y solo por él.
++        $this->assertSame(['voice_braked'], $this->motivosDeLaPuerta($canario));
+ 
+         // Sin secretos ni URLs en la orden, el freno, su incidente ni el listado del CRM.
+         $lista = $this->studio('GET', 'voice/brakes', $this->root)->assertOk()->json('data');
+@@ -226,7 +249,7 @@ public function test_webhooks_ilegibles_solo_abren_un_incidente_medio_y_ningun_f
+         $this->assertSame(Incident::SEVERITY_MEDIUM, Incident::query()->sole()->severity, 'un solo aviso, medio: el del webhook; ningún incidente del freno');
+         $this->assertSame([], self::aperturas());
+         $this->assertFalse(VoiceBrake::isOpen());
+-        $this->assertSame(['calls_disabled_in_code'], $this->motivosDeLaPuerta($canario), 'la puerta no ve ningún freno');
++        $this->laPuertaAcepta($canario, 'la puerta no ve ningún freno');
+ 
+         Artisan::call('voice:webhook-health');
+         $this->assertStringContainsString('Freno de voz: no se echa (solo frena un problema definitivo: ', Artisan::output());
+@@ -339,7 +362,7 @@ public function test_idempotente_mientras_sigue_echado_lo_suelta_una_persona_y_u
+         $this->assertSame([$clave], self::aperturas());
+         $this->assertSame(1, (int) Incident::query()->where('kind', VoiceBrake::INCIDENT_KIND)->sum('occurrences'));
+         $this->assertSame(3, (int) Incident::query()->where('kind', VoiceWebhookHealth::INCIDENT_KIND)->sole()->occurrences, 'el aviso del webhook suma cada pasada');
+-        $this->assertSame(['calls_disabled_in_code', 'voice_braked'], $this->motivosDeLaPuerta($canario));
++        $this->assertSame(['voice_braked'], $this->motivosDeLaPuerta($canario));
+ 
+         // Lo suelta una persona por la vía de siempre (la del CRM: «Publicar la voz» y una nota) MIENTRAS una comprobación
+         // está en vuelo: esa observación empezó antes de la suelta y no lo vuelve a echar.
+@@ -355,7 +378,7 @@ public function test_idempotente_mientras_sigue_echado_lo_suelta_una_persona_y_u
+         $this->assertSame([['webhook_disabled'], false, false], [$r['brake']['problems'], $r['brake']['opened'], $r['brake']['engaged']]);
+         $this->assertSame([$clave], self::aperturas());
+         $this->assertFalse(VoiceBrake::isOpen());
+-        $this->assertSame(['calls_disabled_in_code'], $this->motivosDeLaPuerta($canario));
++        $this->laPuertaAcepta($canario, 'suelto por una persona: la puerta acepta otra vez');
+ 
+         // Una observación POSTERIOR con el mismo problema, sí: la generación siguiente, con su incidente y `rearmOf`.
+         $this->travel(5)->minutes();
+@@ -365,7 +388,7 @@ public function test_idempotente_mientras_sigue_echado_lo_suelta_una_persona_y_u
+         $segunda = VoiceBrakeEntry::query()->where('open_key', $clave.':r2')->sole();
+         $this->assertSame(['where' => 'webhook_health', 'codes' => ['webhook_disabled'], 'incidentId' => $r['incident'], 'rearmOf' => $primera->uuid], $segunda->evidence);
+         $this->assertSame(2, (int) Incident::query()->where('kind', VoiceBrake::INCIDENT_KIND)->sum('occurrences'), 'cada apertura avisa');
+-        $this->assertSame(['calls_disabled_in_code', 'voice_braked'], $this->motivosDeLaPuerta($canario));
++        $this->assertSame(['voice_braked'], $this->motivosDeLaPuerta($canario));
+ 
+         // Arreglado y suelto: la comprobación siguiente no frena.
+         $this->soltar($segunda);
+@@ -374,7 +397,7 @@ public function test_idempotente_mientras_sigue_echado_lo_suelta_una_persona_y_u
+         [$codigo, $r] = $this->salud();
+         $this->assertSame([0, 'ok', null], [$codigo, $r['state'], $r['brake']]);
+         $this->assertFalse(VoiceBrake::isOpen());
+-        $this->assertSame(['calls_disabled_in_code'], $this->motivosDeLaPuerta($canario));
++        $this->laPuertaAcepta($canario, 'arreglado y suelto: la puerta acepta');
+     }
+ 
+     public function test_en_seco_dice_si_lo_echaria_y_no_escribe_nada(): void
+diff --git a/backend/tests/Feature/UltronStudio/UltronStudioIntegrationsStatusTest.php b/backend/tests/Feature/UltronStudio/UltronStudioIntegrationsStatusTest.php
+index 51c00f1d..1c379ee8 100644
+--- a/backend/tests/Feature/UltronStudio/UltronStudioIntegrationsStatusTest.php
++++ b/backend/tests/Feature/UltronStudio/UltronStudioIntegrationsStatusTest.php
+@@ -184,20 +184,21 @@ public function test_la_voz_sin_llamar_a_nadie_con_la_politica_y_los_tres_nivele
+ 
+         $this->assertSame(['state' => 'ELEVENLABS_NOT_CONFIGURED', 'enabled' => false, 'missing' => ['api_key', 'agent_id', 'webhook_secret'], 'region' => 'default', 'lastVerification' => null], $voz['elevenlabs']);
+         $this->assertSame(['enabled' => false, 'fromConfigured' => false, 'dailyCallCap' => 0], $voz['twilioVoice']);
+-        $this->assertSame(['allowed' => false, 'reasons' => ['calls_disabled_in_code', 'twilio_voice_disabled', 'no_voice_number', 'elevenlabs_not_configured', 'not_an_active_voice_canary', 'daily_cap_zero']], $voz['policy']);
++        // C-4: con las llamadas abiertas en el código, lo que niega es la configuración (todo apagado por defecto), motivo a motivo.
++        $this->assertSame(['allowed' => false, 'reasons' => ['twilio_voice_disabled', 'no_voice_number', 'elevenlabs_not_configured', 'not_an_active_voice_canary', 'daily_cap_zero']], $voz['policy']);
+         $this->assertSame([
+             ['id' => 'text_simulation', 'available' => true, 'cost' => 'none', 'where' => 'laboratorio'],
+-            ['id' => 'integration_test', 'available' => false, 'reasons' => ['calls_disabled_in_code', 'twilio_voice_disabled', 'no_voice_number', 'elevenlabs_not_configured']],
++            ['id' => 'integration_test', 'available' => false, 'reasons' => ['twilio_voice_disabled', 'no_voice_number', 'elevenlabs_not_configured']],
+             ['id' => 'real_call', 'available' => false, 'reasons' => $voz['policy']['reasons']],
+         ], $voz['levels']);
+ 
+-        // Un canario de voz activo quita su motivo; las llamadas siguen cerradas en el código.
++        // Un canario de voz activo quita su motivo; lo demás lo sigue cerrando la configuración.
+         $this->integrationsFlags(writes: true);
+         $this->activeCanary($ana, $root, '+576010000099', 'voice', 'Fijo de recepción');
+         $politica = $this->integrations('GET', 'voice', $ana)->json('data.policy');
+         $this->assertFalse($politica['allowed']);
+         $this->assertNotContains('not_an_active_voice_canary', $politica['reasons']);
+-        $this->assertSame('calls_disabled_in_code', $politica['reasons'][0]);
++        $this->assertSame(['twilio_voice_disabled', 'no_voice_number', 'elevenlabs_not_configured', 'daily_cap_zero'], $politica['reasons']);
+     }
+ 
+     private function twilioConfigured(): void
+diff --git a/backend/tests/Feature/UltronStudio/UltronStudioVoiceIntegrationsTest.php b/backend/tests/Feature/UltronStudio/UltronStudioVoiceIntegrationsTest.php
+index cee01fe8..c7c2cbdb 100644
+--- a/backend/tests/Feature/UltronStudio/UltronStudioVoiceIntegrationsTest.php
++++ b/backend/tests/Feature/UltronStudio/UltronStudioVoiceIntegrationsTest.php
+@@ -60,7 +60,8 @@ public function test_la_ruta_45_suma_el_estado_real_la_fase_el_freno_y_la_public
+ 
+         // Lo del H6, igual que siempre.
+         $this->assertSame(['enabled' => false, 'fromConfigured' => false, 'dailyCallCap' => 0], $voz['twilioVoice']);
+-        $this->assertSame('calls_disabled_in_code', $voz['policy']['reasons'][0]);
++        // C-4: con las llamadas abiertas en el código, la política la niegan las cerraduras de la configuración, todas apagadas.
++        $this->assertSame(['allowed' => false, 'reasons' => ['twilio_voice_disabled', 'no_voice_number', 'elevenlabs_not_configured', 'not_an_active_voice_canary', 'daily_cap_zero']], $voz['policy']);
+         // Lo nuevo, todo apagado por defecto: fase 1, freno suelto, sin publicación.
+         $this->assertSame(['id' => '1', 'basis' => 'config'], $voz['phase']);
+         $this->assertSame(['id' => 'telephonyState', 'available' => true, 'providerState' => 'ELEVENLABS_NOT_CONFIGURED', 'subaccountReady' => false, 'numberImported' => false,
+diff --git a/backend/tests/Feature/UltronStudio/UltronStudioVoicePublishingTest.php b/backend/tests/Feature/UltronStudio/UltronStudioVoicePublishingTest.php
+index 85b36a78..ede8fd61 100644
+--- a/backend/tests/Feature/UltronStudio/UltronStudioVoicePublishingTest.php
++++ b/backend/tests/Feature/UltronStudio/UltronStudioVoicePublishingTest.php
+@@ -27,8 +27,9 @@
+ /**
+  * PUBLICAR, PROMOVER, REVERTIR Y APAGAR LA VOZ por la API (contrato H8, D8-7,
+  * D8-9, D8-19, D8-20, E2-4, E3-2; S8-b). El despliegue va por un desplegador
+- * FALSO que apunta cada llamada (sin red), salvo la última prueba, que usa el
+- * adaptador real de ElevenLabs contra `Http::fake`. La cadena que se escribe la
++ * FALSO que apunta cada llamada (sin red), salvo las dos últimas pruebas, que
++ * usan el adaptador real de ElevenLabs contra `Http::fake` con las llamadas
++ * abiertas en el código (C-4). La cadena que se escribe la
+  * verifican el Studio y el LECTOR de la telefonía (B8): las dos tienen que
+  * aceptarla.
+  */
+@@ -634,9 +635,16 @@ public function test_apagar_deja_una_entrada_sin_agente_por_parte_y_el_numero_si
+         $this->assertSame(StudioVoicePublishing::derivedRequestId($crid, 'rest'), StudioVoicePublication::query()->where('seq', 4)->value('client_request_id'));
+     }
+ 
+-    public function test_con_el_adaptador_real_y_las_llamadas_cerradas_en_el_codigo_despliega_pero_no_asigna_ni_publica(): void
++    /**
++     * El «proveedor» de las dos pruebas con el adaptador real: guarda lo que se
++     * crea y lo devuelve tal cual al leerlo; apunta cada PATCH al número y
++     * responde con el agente que `$quedaCon` decida (el pedido, por defecto).
++     *
++     * @param  (callable(?string): ?string)|null  $quedaCon
++     * @return \ArrayObject<string, mixed> `asignaciones`: list<array{0: string, 1: ?string}> (número, agente pedido)
++     */
++    private function proveedorReal(?callable $quedaCon = null): \ArrayObject
+     {
+-        // ElevenLabs configurado (`ELEVENLABS_UNVERIFIED`, E1-12) contra un simulador.
+         config([
+             'voice.elevenlabs.enabled' => true,
+             'voice.elevenlabs.api_key' => 'sk_h8s_pruebaCENTINELA0001',
+@@ -647,48 +655,96 @@ public function test_con_el_adaptador_real_y_las_llamadas_cerradas_en_el_codigo_
+         ]);
+         $this->app->forgetInstance(StudioVoicePublishing::class);
+         $this->app->forgetInstance(StudioVoiceEvidence::class);
+-        [$v, $p] = $this->ready();
+-
+-        // El «proveedor»: guarda lo que se crea y lo devuelve tal cual al leerlo.
+-        $herramientas = [];
+-        $agentes = [];
+-        Http::fake(function (ClientRequest $req) use (&$herramientas, &$agentes) {
++        $quedaCon ??= static fn (?string $pedido): ?string => $pedido;
++        $estado = new \ArrayObject(['herramientas' => [], 'agentes' => [], 'asignaciones' => []]);
++        Http::fake(function (ClientRequest $req) use ($estado, $quedaCon) {
+             $ruta = (string) parse_url($req->url(), PHP_URL_PATH);
+             if ($req->method() === 'POST' && $ruta === '/v1/convai/tools') {
+-                $id = 'tool_h8s_'.(count($herramientas) + 1);
+-                $herramientas[$id] = $req->data()['tool_config'];
++                $id = 'tool_h8s_'.(count($estado['herramientas']) + 1);
++                $estado['herramientas'] = $estado['herramientas'] + [$id => $req->data()['tool_config']];
+ 
+                 return Http::response(['id' => $id]);
+             }
+             if ($req->method() === 'POST' && $ruta === '/v1/convai/agents/create') {
+-                $id = 'agent_h8s_real_'.(count($agentes) + 1);
+-                $agentes[$id] = $req->data();
++                $id = 'agent_h8s_real_'.(count($estado['agentes']) + 1);
++                $estado['agentes'] = $estado['agentes'] + [$id => $req->data()];
+ 
+                 return Http::response(['agent_id' => $id]);
+             }
+             if ($req->method() === 'GET' && str_starts_with($ruta, '/v1/convai/agents/')) {
+-                return Http::response($agentes[substr($ruta, strlen('/v1/convai/agents/'))] + ['version_id' => 'ver_1', 'branch_id' => 'br_1']);
++                return Http::response($estado['agentes'][substr($ruta, strlen('/v1/convai/agents/'))] + ['version_id' => 'ver_1', 'branch_id' => 'br_1']);
+             }
+             if ($req->method() === 'GET' && str_starts_with($ruta, '/v1/convai/tools/')) {
+-                return Http::response(['id' => substr($ruta, strlen('/v1/convai/tools/')), 'tool_config' => $herramientas[substr($ruta, strlen('/v1/convai/tools/'))]]);
++                return Http::response(['id' => substr($ruta, strlen('/v1/convai/tools/')), 'tool_config' => $estado['herramientas'][substr($ruta, strlen('/v1/convai/tools/'))]]);
++            }
++            if ($req->method() === 'PATCH' && str_starts_with($ruta, '/v1/convai/phone-numbers/')) {
++                $numero = substr($ruta, strlen('/v1/convai/phone-numbers/'));
++                $pedido = $req->data()['agent_id'] ?? null;
++                $estado['asignaciones'] = [...$estado['asignaciones'], [$numero, $pedido]];
++                $queda = $quedaCon($pedido);
++
++                return Http::response(['phone_number_id' => $numero, 'phone_number' => '+576010000099',
++                    'assigned_agent' => $queda === null ? null : ['agent_id' => $queda, 'agent_name' => 'x']]);
+             }
+ 
+             return Http::response(['detail' => 'ruta no esperada'], 599);
+         });
+ 
+-        $r = $this->publishVoice($this->pablo, $v, $p)->assertStatus(409);
+-        $this->assertSame(['voice_number_not_assigned', 'not_attempted', 'calls_disabled_in_code'], [$r->json('code'), $r->json('outcome'), $r->json('reason')]);
++        return $estado;
++    }
++
++    /** @return list<string> «VERBO host/ruta» de todo lo que salió */
++    private static function salidas(): array
++    {
++        return array_map(static fn (array $par): string => $par[0]->method().' '.parse_url($par[0]->url(), PHP_URL_HOST).parse_url($par[0]->url(), PHP_URL_PATH), Http::recorded()->all());
++    }
++
++    public function test_con_el_adaptador_real_y_las_llamadas_abiertas_despliega_asigna_el_numero_al_agente_nuevo_y_publica(): void
++    {
++        // ElevenLabs configurado (`ELEVENLABS_UNVERIFIED`, E1-12) contra un simulador; C-4: las llamadas abiertas en el código.
++        $estado = $this->proveedorReal();
++        [$v, $p] = $this->ready();
++
++        $r = $this->publishVoice($this->pablo, $v, $p)->assertCreated();
++        $this->assertSame(['assigned', 'assigned'], [$r->json('data.number.action'), $r->json('data.number.outcome')]);
+ 
+         // Se desplegó y se verificó de verdad (la proyección leída es la compilada)…
+         $agente = StudioVoiceAgent::query()->where('purpose', 'publication')->sole();
+-        $this->assertSame(['deployed', 'agent_h8s_real_1'], [$agente->status, $agente->provider_agent_id]);
+-        // …pero nadie tocó el número ni la cadena (la constante del código manda).
+-        $this->assertSame(0, StudioVoicePublication::query()->count());
+-        $hosts = array_map(static fn (array $par): string => $par[0]->method().' '.parse_url($par[0]->url(), PHP_URL_HOST).parse_url($par[0]->url(), PHP_URL_PATH), Http::recorded()->all());
+-        foreach ($hosts as $h) {
++        $this->assertSame(['deployed', 'agent_h8s_real_1', true, false], [$agente->status, $agente->provider_agent_id, $agente->serves_canary, $agente->serves_rest]);
++        $this->assertSame($agente->projection_hash, $agente->observed_hash);
++        // …el número, UN PATCH al agente nuevo…
++        $this->assertSame([[self::NUMBER_ID, 'agent_h8s_real_1']], $estado['asignaciones']);
++        // …y la cadena: la primera entrada, del canario, firmada, que la telefonía acepta con el agente nuevo.
++        $fila = StudioVoicePublication::query()->sole();
++        $this->assertSame([1, 'publish', 'canary'], [$fila->seq, $fila->action, $fila->scope]);
++        $this->assertSame(StudioVoicePublications::VERIFY_OK, StudioVoicePublications::verifyRow(StudioVoicePublications::current('canary')));
++        $leida = VoicePublishedConfig::read();
++        $this->assertSame(['ok', 'agent_h8s_real_1'], [$leida['canary']->status, $leida['canary']->providerAgentId]);
++        foreach (self::salidas() as $h) {
+             $this->assertStringContainsString('el.h8s.test', $h);
+-            $this->assertStringNotContainsString('phone-numbers', $h, 'con las llamadas cerradas en el código no se asigna el número');
+         }
++        $this->assertSame(1, count(array_filter(self::salidas(), static fn (string $h): bool => str_contains($h, 'phone-numbers'))), 'un solo PATCH al número');
++        $this->assertStringNotContainsString('sk_h8s_pruebaCENTINELA0001', $r->getContent());
++        $this->assertStringNotContainsString('agent_h8s_real_1', $r->getContent(), 'el id del proveedor sale enmascarado');
++    }
++
++    /**
++     * La otra cerradura con las llamadas abiertas: la asignación tiene que
++     * CONFIRMARSE. Si el proveedor no deja el número en el agente nuevo, no se
++     * publica (409 `voice_number_not_assigned`) y el número vuelve al que dice
++     * la cadena (vacía: sin agente).
++     */
++    public function test_con_el_adaptador_real_y_las_llamadas_abiertas_si_el_numero_no_queda_en_el_agente_nuevo_no_publica_y_lo_devuelve(): void
++    {
++        $estado = $this->proveedorReal(static fn (?string $pedido): ?string => $pedido === null ? null : 'agent_h8s_ajeno');
++        [$v, $p] = $this->ready();
++
++        $r = $this->publishVoice($this->pablo, $v, $p)->assertStatus(409);
++        $this->assertSame(['voice_number_not_assigned', 'error', 'assignment_mismatch'], [$r->json('code'), $r->json('outcome'), $r->json('reason')]);
++        $this->assertSame([[self::NUMBER_ID, 'agent_h8s_real_1'], [self::NUMBER_ID, null]], $estado['asignaciones'], 'el PATCH al nuevo y la vuelta a la cadena (sin agente)');
++        $this->assertSame(0, StudioVoicePublication::query()->count(), 'nada se publica');
++        $this->assertSame(['deployed', 'agent_h8s_real_1'], [StudioVoiceAgent::query()->where('purpose', 'publication')->sole()->status, StudioVoiceAgent::query()->where('purpose', 'publication')->sole()->provider_agent_id], 'el agente queda desplegado y sin uso');
++        $this->assertSame('none', VoicePublishedConfig::read()['canary']->status);
+         $this->assertStringNotContainsString('sk_h8s_pruebaCENTINELA0001', $r->getContent());
+     }
+ }
+diff --git a/backend/tests/Feature/Voice/VoiceBoundaryTest.php b/backend/tests/Feature/Voice/VoiceBoundaryTest.php
+index f2150092..37bdc42b 100644
+--- a/backend/tests/Feature/Voice/VoiceBoundaryTest.php
++++ b/backend/tests/Feature/Voice/VoiceBoundaryTest.php
+@@ -13,6 +13,7 @@
+ use App\Services\Voice\VoiceProviders;
+ use Illuminate\Console\Scheduling\Schedule;
+ use Illuminate\Database\Events\QueryExecuted;
++use Illuminate\Http\Client\Factory as HttpFactory;
+ use Illuminate\Support\Facades\Artisan;
+ use Illuminate\Support\Facades\DB;
+ use Illuminate\Support\Facades\Http;
+@@ -53,12 +54,15 @@
+  *    presupuesto en 0; lo mismo el bloque de voz de `config/ultron_studio.php`
+  *    (con el laboratorio hablado en `fake`).
+  *  - Con la configuración por defecto, ninguna entrada pública del paquete sale
+- *    a la red, y `marketing_calls` nunca es un origen permitido.
++ *    a la red, la política niega por las cerraduras de la configuración (C-4:
++ *    con las llamadas abiertas en el código, ya no por la constante), y
++ *    `marketing_calls` nunca es un origen permitido.
+  *  - CON ELEVENLABS CONFIGURADO, COMO PRODUCCIÓN DESDE EL 03-11 (Enmienda 1,
+  *    E1-12: clave, agente, secretos y `ELEVENLABS_ENABLED=true`, estado
+- *    `ELEVENLABS_UNVERIFIED`/`VERIFIED`): la política sigue cerrada solo por
+- *    `calls_disabled_in_code`, el iniciador de salientes no marca, y ni el
+- *    doctor sin `--verify` ni las entradas públicas salen a la red. Ninguna
++ *    `ELEVENLABS_UNVERIFIED`/`VERIFIED`) Y LAS LLAMADAS ABIERTAS EN EL CÓDIGO
++ *    (C-4): la política del H6 permite un contexto en regla; el iniciador de
++ *    salientes, instanciado a mano, sale UNA vez y solo al host oficial; y ni
++ *    el doctor sin `--verify` ni las entradas públicas salen a la red. Ninguna
+  *    guarda supone `ELEVENLABS_NOT_CONFIGURED` en producción: ese estado es el
+  *    de los valores del código, sin variables.
+  *  - En `production`, la base de ElevenLabs es la oficial aunque haya una
+@@ -337,7 +341,11 @@ public function test_por_defecto_ninguna_entrada_publica_sale_a_la_red(): void
+         $huellas = ElevenLabsVoiceProvider::secretFingerprints('clave-de-huellas');
+         $this->assertArrayHasKey('api_key', $huellas);
+         $this->assertSame([], array_filter($huellas, static fn (?string $h): bool => $h !== null), 'sin secretos, ninguna huella');
+-        $this->assertFalse(VoiceCallPolicy::decide(new VoiceCallContext(true, true, 'ELEVENLABS_VERIFIED', 'active_voice', 'canary_registry', 20))->allowed);
++        // C-4: con las llamadas abiertas en el código, lo que niega por defecto es la configuración (protección 1), motivo a motivo.
++        $porDefecto = VoiceCallPolicy::decide(new VoiceCallContext(config('voice.twilio.enabled') === true, is_string(config('voice.twilio.from')) && config('voice.twilio.from') !== '',
++            VoiceProviders::status()->state, 'not_registered', 'canary_registry', (int) config('voice.twilio.daily_call_cap', 0)));
++        $this->assertSame(['allowed' => false, 'reasons' => ['twilio_voice_disabled', 'no_voice_number', 'elevenlabs_not_configured', 'not_an_active_voice_canary', 'daily_cap_zero']], $porDefecto->toArray());
++        $this->assertTrue(VoiceCallPolicy::decide(new VoiceCallContext(true, true, 'ELEVENLABS_VERIFIED', 'active_voice', 'canary_registry', 20))->allowed, 'un contexto en regla sí se permite: la constante ya no cierra');
+         // `marketing_calls` nunca es un origen permitido (T-7 del H6; el H8 no lo cambia).
+         $this->assertContains('source_not_allowed', VoiceCallPolicy::decide(new VoiceCallContext(true, true, 'ELEVENLABS_VERIFIED', 'active_voice', 'marketing_calls', 20))->reasons);
+         $this->assertSame('missing_signature', ElevenLabsWebhookSignature::verify('{}', null, 'secreto', 1761955200));
+@@ -352,10 +360,13 @@ public function test_por_defecto_ninguna_entrada_publica_sale_a_la_red(): void
+     /**
+      * Enmienda 1, E1-12: producción tiene ElevenLabs configurado y encendido
+      * (la clave, el agente de verificación y los dos secretos del servidor).
+-     * Con eso, la fábrica ya no devuelve los nulos: lo que cierra las llamadas
+-     * es la constante, no la falta de credenciales.
++     * Con eso, la fábrica ya no devuelve los nulos. C-4: con las llamadas
++     * abiertas en el código, la política del H6 ya no cierra un contexto en
++     * regla; el iniciador, instanciado a mano, marca UNA vez y solo contra el
++     * host oficial (la URL base vacía); lo que cierra las llamadas de producción
++     * son las banderas, el cupo y la puerta (`OutboundGate`, el job).
+      */
+-    public function test_con_elevenlabs_configurado_como_en_produccion_ninguna_llamada_sale(): void
++    public function test_con_elevenlabs_configurado_como_en_produccion_el_iniciador_solo_sale_una_vez_al_host_oficial(): void
+     {
+         config([
+             'voice.elevenlabs.enabled' => true,
+@@ -372,26 +383,32 @@ public function test_con_elevenlabs_configurado_como_en_produccion_ninguna_llama
+         $this->assertSame('ELEVENLABS_UNVERIFIED', VoiceProviders::status()->state, 'la configuración de E1-12');
+         $this->assertSame('elevenlabs', VoiceProviders::current()->id());
+ 
+-        // La política, aun con el proveedor VERIFIED: cerrada solo por la constante (protección 2).
++        // La política, con el proveedor VERIFIED y las llamadas abiertas en el código (C-4): un contexto en regla se permite.
+         $decision = VoiceCallPolicy::decide(new VoiceCallContext(true, true, 'ELEVENLABS_VERIFIED', 'active_voice', 'canary_registry', 20));
+-        $this->assertFalse($decision->allowed);
+-        $this->assertSame(['calls_disabled_in_code'], $decision->reasons);
++        $this->assertTrue($decision->allowed);
++        $this->assertSame([], $decision->reasons);
+ 
+-        // El iniciador de salientes de D8-3, con todo configurado, no marca.
++        // El iniciador de salientes de D8-3, con todo configurado y a mano, marca: UNA petición y solo al host oficial.
+         $iniciador = 'App\\Services\\Voice\\ElevenLabs\\ElevenLabsCallStarter';
+         $peticion = 'App\\Services\\Voice\\Dto\\OutboundCallRequest';
+         $spec = 'App\\Services\\Voice\\Dto\\VoiceAgentSpec';
+-        if (class_exists($iniciador) && class_exists($peticion) && class_exists($spec)) {
+-            $ref = '00000000-0000-4000-8000-0000000e1012';
+-            $variables = array_fill_keys($spec::VARIABLES, 'banco');
+-            $variables[$spec::VAR_CALLER_AUTHORIZED] = $spec::CALLER_AUTHORIZED;
+-            $variables[$spec::VAR_CALL_DIRECTION] = $spec::DIRECTION_OUTBOUND;
+-            $variables[$spec::VAR_CALL_REF] = $ref;
+-            $resultado = (new $iniciador)->startOutbound(new $peticion('agent_e112', 'phnum_e112', '+15005550006', $ref, $variables, 30, $spec::VOICEMAIL_POLICIES[0]));
+-            $this->assertSame(['not_attempted', 'calls_disabled_in_code'], [$resultado->outcome, $resultado->reason], 'con ElevenLabs configurado, el iniciador no marca mientras CALLS_ENABLED_IN_CODE sea false');
+-        }
++        $this->assertTrue(class_exists($iniciador) && class_exists($peticion) && class_exists($spec), 'el iniciador del H8 existe');
++        $oficial = ElevenLabsConfig::REGIONS['default'].'/v1/convai/twilio/outbound-call';
++        Http::fake([$oficial => Http::response(['success' => true, 'conversation_id' => 'conv_e112', 'callSid' => 'CA'.str_repeat('e', 32)], 200)]);
++        $ref = '00000000-0000-4000-8000-0000000e1012';
++        $variables = array_fill_keys($spec::VARIABLES, 'banco');
++        $variables[$spec::VAR_CALLER_AUTHORIZED] = $spec::CALLER_AUTHORIZED;
++        $variables[$spec::VAR_CALL_DIRECTION] = $spec::DIRECTION_OUTBOUND;
++        $variables[$spec::VAR_CALL_REF] = $ref;
++        $resultado = (new $iniciador)->startOutbound(new $peticion('agent_e112', 'phnum_e112', '+15005550006', $ref, $variables, 30, $spec::VOICEMAIL_POLICIES[0]));
++        $this->assertSame(['started', 'conv_e112'], [$resultado->outcome, $resultado->conversationId]);
++        Http::assertSentCount(1);
++        Http::assertSent(static fn ($r): bool => $r->method() === 'POST' && $r->url() === $oficial);
+ 
+         // El doctor sin --verify no sale a la red.
++        Http::swap(new HttpFactory);
++        Http::preventStrayRequests();
++        Http::fake([]);
+         foreach ([[], ['--json' => true]] as $opciones) {
+             Artisan::call('voice:doctor', $opciones);
+         }
+diff --git a/backend/tests/Feature/Voice/VoiceDoctorCommandTest.php b/backend/tests/Feature/Voice/VoiceDoctorCommandTest.php
+index e26dda6f..10a1549f 100644
+--- a/backend/tests/Feature/Voice/VoiceDoctorCommandTest.php
++++ b/backend/tests/Feature/Voice/VoiceDoctorCommandTest.php
+@@ -119,8 +119,9 @@ public function test_sin_configuracion_dice_not_configured_por_nombre_sale_0_y_n
+         $this->assertStringContainsString('api_key (ELEVENLABS_API_KEY), agent_id (ELEVENLABS_AGENT_ID), webhook_secret (ELEVENLABS_WEBHOOK_SECRET)', $salida);
+         $this->assertStringContainsString('Región     : default', $salida);
+         $this->assertStringContainsString('apagada (ELEVENLABS_ENABLED)', $salida);
+-        // DOC8 D-11: la línea de las llamadas lee la constante de VoiceCallPolicy (cerrada en el árbol compartido).
+-        $this->assertStringContainsString('Llamadas   : cerradas en el código (la constante de VoiceCallPolicy)', $salida);
++        // DOC8 D-11: la línea de las llamadas lee la constante de VoiceCallPolicy (C-4: abierta desde `voice(calls-open)`).
++        $this->assertStringContainsString('Llamadas   : ABIERTAS en el código (la constante de VoiceCallPolicy): cada llamada depende de sus banderas, sus cupos y el freno.', $salida);
++        $this->assertStringNotContainsString('cerradas en el código', $salida);
+         Http::assertNothingSent();
+     }
+ 
+diff --git a/backend/tests/Unit/Telephony/TelephonyFixtureParityTest.php b/backend/tests/Unit/Telephony/TelephonyFixtureParityTest.php
+index 4841e242..37231ed5 100644
+--- a/backend/tests/Unit/Telephony/TelephonyFixtureParityTest.php
++++ b/backend/tests/Unit/Telephony/TelephonyFixtureParityTest.php
+@@ -18,18 +18,18 @@
+ use DateTimeImmutable;
+ use InvalidArgumentException;
+ use Tests\TestCase;
++use Tests\Unit\Voice\Support\ClosedPolicyCopy;
+ 
+ /**
+  * PARIDAD de la telefonía de B8-b con los fixtures de TEST8-a (contrato H8;
+  * `tests/fixtures/voice/*.json`). Cada caso, por su nombre.
+  *
+- * LA CONSTANTE (protección 2): en el árbol compartido
+- * `CALLS_ENABLED_IN_CODE = false`, así que se compara la columna `codeClosed`
+- * tal cual. La columna `codeOpen` se comprueba quitando de lo que da la
+- * política `calls_disabled_in_code`: las dos políticas ACUMULAN los motivos y
+- * ninguno depende de la constante salvo ese (no hay ninguna palanca para
+- * «abrirla» aquí; la vía permitida de verdad la recorre TEST8 en una copia del
+- * banco con la constante girada).
++ * LA CONSTANTE (protección 2; C-4): desde el commit `voice(calls-open)` el
++ * árbol tiene `CALLS_ENABLED_IN_CODE = true`, así que las clases reales se
++ * comparan con la columna `codeOpen` tal cual, y la columna `codeClosed`, tal
++ * cual también, con una COPIA de las dos políticas en la que lo único distinto
++ * es la constante cerrada ({@see ClosedPolicyCopy}): el destino de la vuelta
++ * atrás sigue probado caso a caso.
+  *
+  * DIFERENCIAS DECLARADAS (no se doblan casos para que den verde):
+  *  - consent: E3-4 (posterior al fixture) exige cuatro ojos también en
+@@ -68,15 +68,24 @@ public function test_inbound_policy_cuadra_con_el_fixture_caso_a_caso(): void
+     {
+         $casos = self::fixture('policy-tables.json')['inboundPolicy'];
+         $this->assertCount(15, $casos);
++        ClosedPolicyCopy::load();
++        /** @var class-string<InboundPolicy> $cerrada */
++        $cerrada = ClosedPolicyCopy::INBOUND;
++        $autorizadas = 0;
+         foreach ($casos as $c) {
++            // El árbol (la constante abierta): `codeOpen` tal cual.
+             $d = InboundPolicy::decide($c['facts']);
+-            $this->assertSame($c['expected']['codeClosed']['reasons'], $d['reasons'], $c['name'].' (codeClosed)');
+-            $this->assertSame($c['expected']['codeClosed']['authorized'], $d['authorized'], $c['name']);
+-            $this->assertSame($c['expected']['codeClosed']['callerAuthorized'], $d['callerAuthorized'], $c['name']);
+-            $abierta = array_values(array_diff($d['reasons'], ['calls_disabled_in_code']));
+-            $this->assertSame($c['expected']['codeOpen']['reasons'], $abierta, $c['name'].' (codeOpen)');
+-            $this->assertSame($c['expected']['codeOpen']['authorized'], $abierta === [], $c['name'].' (codeOpen)');
++            $this->assertSame($c['expected']['codeOpen']['reasons'], $d['reasons'], $c['name'].' (codeOpen)');
++            $this->assertSame($c['expected']['codeOpen']['authorized'], $d['authorized'], $c['name'].' (codeOpen)');
++            $this->assertSame($c['expected']['codeOpen']['callerAuthorized'], $d['callerAuthorized'], $c['name'].' (codeOpen)');
++            $autorizadas += $d['authorized'] ? 1 : 0;
++            // La copia cerrada (la vuelta atrás): `codeClosed` tal cual.
++            $x = $cerrada::decide($c['facts']);
++            $this->assertSame($c['expected']['codeClosed']['reasons'], $x['reasons'], $c['name'].' (codeClosed)');
++            $this->assertSame($c['expected']['codeClosed']['authorized'], $x['authorized'], $c['name'].' (codeClosed)');
++            $this->assertSame($c['expected']['codeClosed']['callerAuthorized'], $x['callerAuthorized'], $c['name'].' (codeClosed)');
+         }
++        $this->assertSame(3, $autorizadas, 'las tres entrantes que el fixture autoriza con la constante abierta');
+     }
+ 
+     public function test_inbound_policy_rechaza_un_hecho_fuera_de_su_conjunto(): void
+@@ -128,15 +137,24 @@ public function test_outbound_policy_cuadra_con_los_43_casos_del_fixture(): void
+         $fx = self::fixture('outbound-gate-cases.json');
+         $this->assertSame($fx['closedSets']['reasonsInOrder'], OutboundPolicy::REASONS, 'el conjunto cerrado y su orden (D8-12)');
+         $this->assertCount(43, $fx['decide']);
++        ClosedPolicyCopy::load();
++        /** @var class-string<OutboundPolicy> $cerrada */
++        $cerrada = ClosedPolicyCopy::OUTBOUND;
++        $permitidas = 0;
+         foreach ($fx['decide'] as $c) {
++            // El árbol (la constante abierta): `codeOpen` tal cual.
+             $d = OutboundPolicy::decide(self::outboundFacts($c['facts']));
+-            $this->assertSame($c['expected']['codeClosed']['reasons'], $d['reasons'], $c['name'].' (codeClosed)');
+-            $this->assertSame($c['expected']['codeClosed']['http'], $d['http'], $c['name'].' (HTTP codeClosed)');
+-            $abierta = array_values(array_diff($d['reasons'], ['calls_disabled_in_code']));
+-            $this->assertSame($c['expected']['codeOpen']['reasons'], $abierta, $c['name'].' (codeOpen)');
+-            $this->assertSame($c['expected']['codeOpen']['http'], OutboundPolicy::httpStatus($abierta), $c['name'].' (HTTP codeOpen)');
+-            $this->assertSame($c['expected']['codeOpen']['allowed'], $abierta === [], $c['name']);
++            $this->assertSame($c['expected']['codeOpen']['reasons'], $d['reasons'], $c['name'].' (codeOpen)');
++            $this->assertSame($c['expected']['codeOpen']['http'], $d['http'], $c['name'].' (HTTP codeOpen)');
++            $this->assertSame($c['expected']['codeOpen']['allowed'], $d['allowed'], $c['name'].' (codeOpen)');
++            $permitidas += $d['allowed'] ? 1 : 0;
++            // La copia cerrada (la vuelta atrás): `codeClosed` tal cual.
++            $x = $cerrada::decide(self::outboundFacts($c['facts']));
++            $this->assertSame($c['expected']['codeClosed']['reasons'], $x['reasons'], $c['name'].' (codeClosed)');
++            $this->assertSame($c['expected']['codeClosed']['http'], $x['http'], $c['name'].' (HTTP codeClosed)');
++            $this->assertSame($c['expected']['codeClosed']['allowed'], $x['allowed'], $c['name'].' (codeClosed)');
+         }
++        $this->assertSame(5, $permitidas, 'las cinco salientes que el fixture permite con la constante abierta');
+     }
+ 
+     public function test_la_guarda_del_numero_de_whatsapp_cuadra_con_el_fixture(): void
+diff --git a/backend/tests/Unit/Voice/ElevenLabsAgentDeployerTest.php b/backend/tests/Unit/Voice/ElevenLabsAgentDeployerTest.php
+index 3e4a4ccb..c668e5f3 100644
+--- a/backend/tests/Unit/Voice/ElevenLabsAgentDeployerTest.php
++++ b/backend/tests/Unit/Voice/ElevenLabsAgentDeployerTest.php
+@@ -26,8 +26,12 @@
+  *  - Un fallo a mitad dice en qué paso y qué herramientas quedaron (huérfanas).
+  *  - Leer = el agente y sus herramientas (como mucho las del catálogo), y la
+  *    proyección observada casa con la compilada si nadie tocó nada.
+- *  - Asignar un agente al número abre las entrantes: con las llamadas
+- *    cerradas en el código, `not_attempted` sin red. Dejarlo sin agente, sí.
++ *  - Asignar un agente al número abre las entrantes. Con las llamadas
++ *    abiertas en el código (C-4, `voice(calls-open)`), UN PATCH con ese
++ *    agente, y solo vale si el proveedor devuelve el número con ESE agente;
++ *    sin la bandera, nada sale. Dejarlo sin agente, también un PATCH. (Lo
++ *    cerrado, `not_attempted` por `calls_disabled_in_code` sin red, lo recorre
++ *    la copia cerrada del E2E.)
+  *  - Ni la clave ni un cuerpo salen en un resultado.
+  */
+ class ElevenLabsAgentDeployerTest extends TestCase
+@@ -231,15 +235,37 @@ public function test_leer_fallos(): void
+         Http::assertNothingSent();
+     }
+ 
+-    public function test_asignar_un_agente_esta_cerrado_en_el_codigo_y_quitarlo_no(): void
++    public function test_asignar_un_agente_esta_abierto_en_el_codigo_y_solo_vale_si_el_numero_queda_con_el(): void
+     {
+-        self::freshFake(['*' => Http::response(['phone_number_id' => 'phnum_0001', 'assigned_agent' => null, 'phone_number' => '+576010000009'], 200)]);
++        self::freshFake(['*' => Http::response(['phone_number_id' => 'phnum_0001', 'assigned_agent' => ['agent_id' => 'agent_new_0001', 'agent_name' => 'x'], 'phone_number' => '+576010000009'], 200)]);
+         $d = new ElevenLabsAgentDeployer;
+ 
+         $r = $d->assignNumber('phnum_0001', 'agent_new_0001');
+-        $this->assertSame(['not_attempted', 'calls_disabled_in_code'], [$r->outcome, $r->reason]);
++        $this->assertSame(['assigned', 'agent_new_0001', null], [$r->outcome, $r->agentId, $r->reason]);
++        Http::assertSentCount(1);
++        [$asigna] = Http::recorded()[0];
++        $this->assertSame('PATCH', $asigna->method());
++        $this->assertSame(self::SIM.'/v1/convai/phone-numbers/phnum_0001', $asigna->url());
++        $this->assertSame(['agent_id' => 'agent_new_0001'], $asigna->data());
++        $this->assertSame([self::CLAVE], $asigna->header('xi-api-key'));
++        $this->assertStringNotContainsString('+576010000009', (string) json_encode($r->toArray()), 'el número del cuerpo no sale');
++
++        // El proveedor devuelve el número sin agente (o con otro): no casa, y no se da por asignado.
++        self::freshFake(['*' => Http::response(['phone_number_id' => 'phnum_0001', 'assigned_agent' => null], 200)]);
++        $r = $d->assignNumber('phnum_0001', 'agent_new_0001');
++        $this->assertSame(['error', 'assignment_mismatch', null], [$r->outcome, $r->reason, $r->agentId]);
++        self::freshFake(['*' => Http::response(['phone_number_id' => 'phnum_0001', 'assigned_agent' => ['agent_id' => 'agent_otro', 'agent_name' => 'x']], 200)]);
++        $r = $d->assignNumber('phnum_0001', 'agent_new_0001');
++        $this->assertSame(['error', 'assignment_mismatch', 'agent_otro'], [$r->outcome, $r->reason, $r->agentId]);
++
++        // Sin la bandera de ElevenLabs no sale nada, tampoco con las llamadas abiertas.
++        $this->configurar(['enabled' => false]);
++        self::freshFake();
++        $this->assertSame(['not_configured', null], [$d->assignNumber('phnum_0001', 'agent_new_0001')->outcome, $d->assignNumber('phnum_0001', 'agent_new_0001')->reason]);
+         Http::assertNothingSent();
++        $this->configurar();
+ 
++        self::freshFake(['*' => Http::response(['phone_number_id' => 'phnum_0001', 'assigned_agent' => null, 'phone_number' => '+576010000009'], 200)]);
+         $r = $d->assignNumber('phnum_0001', null);
+         $this->assertSame(['assigned', null, null], [$r->outcome, $r->agentId, $r->reason]);
+         Http::assertSentCount(1);
+diff --git a/backend/tests/Unit/Voice/ElevenLabsCallStarterTest.php b/backend/tests/Unit/Voice/ElevenLabsCallStarterTest.php
+index f21e35d1..cd8f8bb5 100644
+--- a/backend/tests/Unit/Voice/ElevenLabsCallStarterTest.php
++++ b/backend/tests/Unit/Voice/ElevenLabsCallStarterTest.php
+@@ -14,8 +14,11 @@
+  * El iniciador de salientes de ElevenLabs (contrato H8, D8-3 y D8-12).
+  *
+  * LO QUE SE PROTEGE.
+- *  - CON LAS LLAMADAS CERRADAS EN EL CÓDIGO NO SALE NADA, aunque la
+- *    configuración esté completa y la clase se instancie a mano.
++ *  - CON LAS LLAMADAS ABIERTAS EN EL CÓDIGO (C-4, `voice(calls-open)`) Y LA
++ *    CONFIGURACIÓN COMPLETA sale UNA petición: un POST a la ruta de la
++ *    integración nativa, con la clave solo en `xi-api-key` y el cuerpo puro.
++ *  - Sin la configuración completa (apagado, sin clave o sin región) no sale
++ *    nada (`not_configured`), aunque la clase se instancie a mano.
+  *  - El cuerpo (puro): el agente sellado, el número importado, el destino, la
+  *    grabación apagada en los dos sitios [P-7], la detección de contestador
+  *    que cuelga (el único buzón, [P-10] y E1-8), `user_id = call_ref` y las
+@@ -24,8 +27,9 @@
+  *    nunca un «no se marcó» cuando no se sabe (`ambiguous`).
+  *  - Ningún resultado lleva el número.
+  *
+- * El camino con red (la constante girada) lo prueba el banco en una copia del
+- * árbol (TEST8), nunca aquí: la constante no se gira en el árbol compartido.
++ * El estado cerrado (la vuelta atrás: `not_attempted` por
++ * `calls_disabled_in_code` sin red) no se alcanza desde el árbol abierto: lo
++ * recorre la copia cerrada del E2E (`H8E2ECerradaTest`, con el arnés).
+  */
+ class ElevenLabsCallStarterTest extends TestCase
+ {
+@@ -42,19 +46,51 @@ private static function peticion(string $buzon = 'hang_up'): OutboundCallRequest
+         ], 30, $buzon);
+     }
+ 
+-    public function test_con_las_llamadas_cerradas_en_el_codigo_no_sale_nada_aunque_todo_este_configurado(): void
++    /** @param  array<string, mixed>  $cambios */
++    private static function configurado(array $cambios = []): void
+     {
+-        $this->assertFalse(VoiceCallPolicy::CALLS_ENABLED_IN_CODE, 'esta prueba describe el árbol compartido');
+-        config(['voice.elevenlabs' => [
++        config(['voice.elevenlabs' => $cambios + [
+             'enabled' => true, 'api_key' => 'xi-centinela', 'agent_id' => 'agent_verify', 'webhook_secret' => 'whsec', 'region' => 'default',
+             'agent_phone_number_id' => 'phnum_0001', 'tool_secret' => 't', 'initiation_secret' => 'i', 'base_url' => 'http://127.0.0.1:8096', 'timeout_seconds' => 10,
+         ]]);
+-        self::freshFake(['*' => Http::response(['success' => true, 'conversation_id' => 'conv_1', 'callSid' => 'CA'.str_repeat('a', 32)], 200)]);
++    }
++
++    public function test_con_las_llamadas_abiertas_en_el_codigo_y_todo_configurado_sale_una_sola_peticion(): void
++    {
++        $this->assertTrue(VoiceCallPolicy::CALLS_ENABLED_IN_CODE, 'esta prueba describe el árbol abierto (voice(calls-open))');
++        self::configurado();
++        $sid = 'CA'.str_repeat('a', 32);
++        self::freshFake(['*' => Http::response(['success' => true, 'conversation_id' => 'conv_1', 'callSid' => $sid], 200)]);
+ 
+         $r = (new ElevenLabsCallStarter)->startOutbound(self::peticion());
+ 
+-        $this->assertSame(['not_attempted', 'calls_disabled_in_code', null, null, null], [$r->outcome, $r->reason, $r->conversationId, $r->callSid, $r->httpStatus]);
+-        Http::assertNothingSent();
++        $this->assertSame(['started', null, 'conv_1', $sid, 200], [$r->outcome, $r->reason, $r->conversationId, $r->callSid, $r->httpStatus]);
++        Http::assertSentCount(1);
++        [$peticion] = Http::recorded()[0];
++        $this->assertSame('POST', $peticion->method());
++        $this->assertSame('http://127.0.0.1:8096'.ElevenLabsCallStarter::PATH, $peticion->url());
++        $this->assertSame(['xi-centinela'], $peticion->header('xi-api-key'));
++        $this->assertSame(ElevenLabsCallStarter::requestBody(self::peticion()), $peticion->data(), 'el cuerpo es el puro, sin nada añadido');
++        $this->assertStringNotContainsString('xi-centinela', (string) json_encode($peticion->data()), 'la clave solo en la cabecera');
++        $this->assertStringNotContainsString(self::DESTINO, (string) json_encode($r->toArray()), 'el resultado no lleva el número');
++    }
++
++    public function test_con_las_llamadas_abiertas_sin_la_configuracion_completa_no_sale_nada(): void
++    {
++        foreach ([
++            'apagado (ELEVENLABS_DISABLED)' => ['enabled' => false],
++            'sin clave (ELEVENLABS_NOT_CONFIGURED)' => ['api_key' => null],
++            'sin agente de verificación' => ['agent_id' => null],
++            'región desconocida (sin URL base)' => ['region' => 'marte'],
++        ] as $caso => $cambios) {
++            self::configurado($cambios);
++            self::freshFake(['*' => Http::response(['success' => true, 'conversation_id' => 'conv_1', 'callSid' => 'CA'.str_repeat('a', 32)], 200)]);
++
++            $r = (new ElevenLabsCallStarter)->startOutbound(self::peticion());
++
++            $this->assertSame(['not_attempted', 'not_configured', null, null, null], [$r->outcome, $r->reason, $r->conversationId, $r->callSid, $r->httpStatus], $caso);
++            Http::assertNothingSent();
++        }
+     }
+ 
+     public function test_el_cuerpo_de_la_peticion(): void
+diff --git a/backend/tests/Unit/Voice/ElevenLabsClosedCopyTest.php b/backend/tests/Unit/Voice/ElevenLabsClosedCopyTest.php
+new file mode 100644
+index 00000000..19e41ba3
+--- /dev/null
++++ b/backend/tests/Unit/Voice/ElevenLabsClosedCopyTest.php
+@@ -0,0 +1,87 @@
++<?php
++
++namespace Tests\Unit\Voice;
++
++use App\Services\Voice\Dto\OutboundCallRequest;
++use App\Services\Voice\ElevenLabs\ElevenLabsAgentDeployer;
++use App\Services\Voice\ElevenLabs\ElevenLabsCallStarter;
++use Illuminate\Support\Facades\Http;
++use Tests\TestCase;
++use Tests\Unit\Voice\Support\ClosedPolicyCopy;
++use Tests\Unit\Voice\Support\FreshHttpFake;
++
++/**
++ * EL INICIADOR Y EL DESPLEGADOR CON LA CONSTANTE CERRADA, sobre su copia
++ * cerrada en memoria (C-4; {@see ClosedPolicyCopy}): lo que afirmaban
++ * `ElevenLabsCallStarterTest` y `ElevenLabsAgentDeployerTest` antes del commit
++ * `voice(calls-open)`, que es el destino de la vuelta atrás.
++ *
++ * LO QUE SE PROTEGE.
++ *  - Cerrado, el iniciador NO SALE A LA RED aunque la configuración esté
++ *    completa (`not_attempted`, `calls_disabled_in_code`); con la MISMA
++ *    configuración, el iniciador del árbol (abierto) sí sale: lo único que
++ *    cambia es la constante.
++ *  - Cerrado, asignar un agente al número no sale (`not_attempted`,
++ *    `calls_disabled_in_code`); dejarlo sin agente, sí (un PATCH).
++ */
++class ElevenLabsClosedCopyTest extends TestCase
++{
++    use FreshHttpFake;
++
++    private const SIM = 'http://127.0.0.1:8096';
++
++    private const REF = '9a7c1e2b-3d4f-4a5b-8c6d-7e8f9a0b1c2d';
++
++    protected function setUp(): void
++    {
++        parent::setUp();
++        ClosedPolicyCopy::load();
++        config(['voice.elevenlabs' => [
++            'enabled' => true, 'api_key' => 'xi-centinela-COPIA-0123456789', 'agent_id' => 'agent_verify', 'webhook_secret' => 'whsec', 'region' => 'default',
++            'agent_phone_number_id' => 'phnum_0001', 'tool_secret' => 't', 'initiation_secret' => 'i', 'base_url' => self::SIM, 'timeout_seconds' => 10,
++        ]]);
++    }
++
++    private static function peticion(): OutboundCallRequest
++    {
++        return new OutboundCallRequest('agent_sealed_0001', 'phnum_0001', '+573000000042', self::REF, [
++            'call_direction' => 'saliente', 'call_ref' => self::REF, 'caller_authorized' => 'si', 'version_label' => 'v12',
++        ], 30, 'hang_up');
++    }
++
++    public function test_cerrado_el_iniciador_no_sale_aunque_todo_este_configurado_y_abierto_si(): void
++    {
++        $respuesta = ['*' => Http::response(['success' => true, 'conversation_id' => 'conv_1', 'callSid' => 'CA'.str_repeat('a', 32)], 200)];
++
++        /** @var class-string<ElevenLabsCallStarter> $cerrado */
++        $cerrado = ClosedPolicyCopy::STARTER;
++        self::freshFake($respuesta);
++        $r = (new $cerrado)->startOutbound(self::peticion());
++        $this->assertSame(['not_attempted', 'calls_disabled_in_code', null, null, null], [$r->outcome, $r->reason, $r->conversationId, $r->callSid, $r->httpStatus]);
++        Http::assertNothingSent();
++
++        // La misma configuración y la misma petición con el iniciador del árbol: sale una.
++        self::freshFake($respuesta);
++        $this->assertSame('started', (new ElevenLabsCallStarter)->startOutbound(self::peticion())->outcome);
++        Http::assertSentCount(1);
++    }
++
++    public function test_cerrado_asignar_un_agente_no_sale_y_quitarlo_si(): void
++    {
++        /** @var class-string<ElevenLabsAgentDeployer> $cerrado */
++        $cerrado = ClosedPolicyCopy::DEPLOYER;
++        $d = new $cerrado;
++
++        self::freshFake(['*' => Http::response(['phone_number_id' => 'phnum_0001', 'assigned_agent' => ['agent_id' => 'agent_new_0001', 'agent_name' => 'x']], 200)]);
++        $r = $d->assignNumber('phnum_0001', 'agent_new_0001');
++        $this->assertSame(['not_attempted', 'calls_disabled_in_code'], [$r->outcome, $r->reason]);
++        Http::assertNothingSent();
++
++        self::freshFake(['*' => Http::response(['phone_number_id' => 'phnum_0001', 'assigned_agent' => null], 200)]);
++        $r = $d->assignNumber('phnum_0001', null);
++        $this->assertSame(['assigned', null, null], [$r->outcome, $r->agentId, $r->reason]);
++        Http::assertSentCount(1);
++        [$peticion] = Http::recorded()[0];
++        $this->assertSame(['PATCH', self::SIM.'/v1/convai/phone-numbers/phnum_0001', ['agent_id' => null]], [$peticion->method(), $peticion->url(), $peticion->data()]);
++    }
++}
+diff --git a/backend/tests/Unit/Voice/Support/ClosedPolicyCopy.php b/backend/tests/Unit/Voice/Support/ClosedPolicyCopy.php
+new file mode 100644
+index 00000000..60fb58d2
+--- /dev/null
++++ b/backend/tests/Unit/Voice/Support/ClosedPolicyCopy.php
+@@ -0,0 +1,182 @@
++<?php
++
++namespace Tests\Unit\Voice\Support;
++
++use RuntimeException;
++
++/**
++ * LA COPIA CERRADA DE LOS LECTORES DE LA CONSTANTE, EN EL MISMO PROCESO (C-4).
++ *
++ * Desde el commit `voice(calls-open)` el árbol tiene
++ * `VoiceCallPolicy::CALLS_ENABLED_IN_CODE = true`. El estado cerrado —el
++ * destino de la vuelta atrás— ya no se alcanza desde el árbol: la constante no
++ * es un hecho del contexto, la lee la clase. Como el arnés del E2E
++ * (`docs/ultron-studio/ops/h8-e2e.sh`, que gira la constante en una copia del
++ * árbol y comprueba con `diff` que es lo único que cambia), esto carga una
++ * COPIA, con la constante cerrada y otro nombre de clase, de todo lo que la
++ * lee para decidir:
++ *  - `VoiceCallPolicy`: `= true;` → `= false;` y la clase con el sufijo;
++ *  - las dos políticas de la telefonía (`InboundPolicy`, `OutboundPolicy`), el
++ *    job de la saliente (`PlaceOutboundVoiceCall`), el iniciador
++ *    (`ElevenLabsCallStarter`) y el desplegador (`ElevenLabsAgentDeployer`):
++ *    la clase con el sufijo y su `use` de `VoiceCallPolicy` apuntando a la
++ *    copia cerrada (con alias: el cuerpo no cambia ni una letra).
++ * (El doctor y el estado de la telefonía también la leen, pero solo para
++ * decirla.)
++ *
++ * Cada sustitución tiene que darse EXACTAMENTE una vez y no cambia nada más
++ * (lo comprueba {@see changedLines()}). En un árbol sin la constante abierta
++ * literal no hay copia: cargarla lanza, y su prueba cae como una guarda más.
++ *
++ * No toca `app/` ni escribe en el árbol: el código transformado va a un fichero
++ * temporal del sistema, se carga y se borra.
++ */
++final class ClosedPolicyCopy
++{
++    public const SUFFIX = 'CopiaCerrada';
++
++    public const VOICE = 'App\\Services\\Voice\\VoiceCallPolicy'.self::SUFFIX;
++
++    public const INBOUND = 'App\\Services\\Telephony\\InboundPolicy'.self::SUFFIX;
++
++    public const OUTBOUND = 'App\\Services\\Telephony\\OutboundPolicy'.self::SUFFIX;
++
++    public const JOB = 'App\\Jobs\\Voice\\PlaceOutboundVoiceCall'.self::SUFFIX;
++
++    public const STARTER = 'App\\Services\\Voice\\ElevenLabs\\ElevenLabsCallStarter'.self::SUFFIX;
++
++    public const DEPLOYER = 'App\\Services\\Voice\\ElevenLabs\\ElevenLabsAgentDeployer'.self::SUFFIX;
++
++    /** Fichero → la clase de su copia, en el orden de carga (la política del H6 primero: las demás la usan). */
++    public const COPIES = [
++        'app/Services/Voice/VoiceCallPolicy.php' => self::VOICE,
++        'app/Services/Telephony/InboundPolicy.php' => self::INBOUND,
++        'app/Services/Telephony/OutboundPolicy.php' => self::OUTBOUND,
++        'app/Jobs/Voice/PlaceOutboundVoiceCall.php' => self::JOB,
++        'app/Services/Voice/ElevenLabs/ElevenLabsCallStarter.php' => self::STARTER,
++        'app/Services/Voice/ElevenLabs/ElevenLabsAgentDeployer.php' => self::DEPLOYER,
++    ];
++
++    /** La línea abierta, tal cual la escribe el commit `voice(calls-open)`. */
++    public const OPEN_LINE = 'public const CALLS_ENABLED_IN_CODE = true;';
++
++    public const CLOSED_LINE = 'public const CALLS_ENABLED_IN_CODE = false;';
++
++    /**
++     * Fichero → [lo que se busca (exactamente una vez) → lo que se pone], en el
++     * orden en que se cargan (la de voz primero: las otras dos la usan).
++     *
++     * @return array<string, array<string, string>>
++     */
++    public static function replacements(): array
++    {
++        $usoVoz = "\nuse App\\Services\\Voice\\VoiceCallPolicy;\n";
++        $usoCopia = "\nuse App\\Services\\Voice\\VoiceCallPolicy".self::SUFFIX." as VoiceCallPolicy;\n";
++
++        return [
++            'app/Services/Voice/VoiceCallPolicy.php' => [
++                self::OPEN_LINE => self::CLOSED_LINE,
++                "\nfinal class VoiceCallPolicy\n" => "\nfinal class VoiceCallPolicy".self::SUFFIX."\n",
++            ],
++            'app/Services/Telephony/InboundPolicy.php' => [
++                $usoVoz => $usoCopia,
++                "\nfinal class InboundPolicy\n" => "\nfinal class InboundPolicy".self::SUFFIX."\n",
++            ],
++            'app/Services/Telephony/OutboundPolicy.php' => [
++                $usoVoz => $usoCopia,
++                "\nfinal class OutboundPolicy\n" => "\nfinal class OutboundPolicy".self::SUFFIX."\n",
++            ],
++            'app/Jobs/Voice/PlaceOutboundVoiceCall.php' => [
++                $usoVoz => $usoCopia,
++                "\nclass PlaceOutboundVoiceCall implements " => "\nclass PlaceOutboundVoiceCall".self::SUFFIX.' implements ',
++            ],
++            'app/Services/Voice/ElevenLabs/ElevenLabsCallStarter.php' => [
++                $usoVoz => $usoCopia,
++                "\nfinal class ElevenLabsCallStarter implements " => "\nfinal class ElevenLabsCallStarter".self::SUFFIX.' implements ',
++            ],
++            'app/Services/Voice/ElevenLabs/ElevenLabsAgentDeployer.php' => [
++                $usoVoz => $usoCopia,
++                "\nfinal class ElevenLabsAgentDeployer implements " => "\nfinal class ElevenLabsAgentDeployer".self::SUFFIX.' implements ',
++            ],
++        ];
++    }
++
++    public static function backend(): string
++    {
++        return dirname(__DIR__, 4);
++    }
++
++    /** El fichero real del árbol. */
++    public static function original(string $relativa): string
++    {
++        $codigo = file_get_contents(self::backend().'/'.$relativa);
++        if (! is_string($codigo)) {
++            throw new RuntimeException("No se pudo leer {$relativa}.");
++        }
++
++        return $codigo;
++    }
++
++    /** La copia cerrada de `$relativa`: sus sustituciones, cada una exactamente una vez. */
++    public static function source(string $relativa): string
++    {
++        $codigo = self::original($relativa);
++        foreach (self::replacements()[$relativa] as $busca => $pone) {
++            $veces = substr_count($codigo, $busca);
++            if ($veces !== 1) {
++                throw new RuntimeException("La copia cerrada de {$relativa} exige «".trim($busca)."» exactamente una vez y está {$veces}: sin la constante abierta en el árbol no hay copia cerrada.");
++            }
++            $codigo = str_replace($busca, $pone, $codigo);
++        }
++
++        return $codigo;
++    }
++
++    /**
++     * Las líneas (1-based) en que la copia difiere del original, con las dos
++     * versiones. Mismo número de líneas: las sustituciones no añaden ni quitan.
++     *
++     * @return array<int, array{0: string, 1: string}>
++     */
++    public static function changedLines(string $relativa): array
++    {
++        $antes = explode("\n", self::original($relativa));
++        $despues = explode("\n", self::source($relativa));
++        if (count($antes) !== count($despues)) {
++            throw new RuntimeException("La copia cerrada de {$relativa} cambió el número de líneas.");
++        }
++        $cambios = [];
++        foreach ($antes as $i => $linea) {
++            if ($linea !== $despues[$i]) {
++                $cambios[$i + 1] = [$linea, $despues[$i]];
++            }
++        }
++
++        return $cambios;
++    }
++
++    /** Carga las copias (una vez por proceso). */
++    public static function load(): void
++    {
++        foreach (self::COPIES as $relativa => $clase) {
++            if (class_exists($clase, false)) {
++                continue;
++            }
++            $fichero = tempnam(sys_get_temp_dir(), 'ib-copia-cerrada-');
++            if ($fichero === false) {
++                throw new RuntimeException('Sin fichero temporal para la copia cerrada.');
++            }
++            try {
++                file_put_contents($fichero, self::source($relativa));
++                require $fichero;
++            } finally {
++                if (is_file($fichero)) {
++                    unlink($fichero);
++                }
++            }
++            if (! class_exists($clase, false)) {
++                throw new RuntimeException("La copia cerrada de {$relativa} no declaró {$clase}.");
++            }
++        }
++    }
++}
+diff --git a/backend/tests/Unit/Voice/VoiceCallPolicyClosedCopyTest.php b/backend/tests/Unit/Voice/VoiceCallPolicyClosedCopyTest.php
+new file mode 100644
+index 00000000..cd0d9dd1
+--- /dev/null
++++ b/backend/tests/Unit/Voice/VoiceCallPolicyClosedCopyTest.php
+@@ -0,0 +1,187 @@
++<?php
++
++namespace Tests\Unit\Voice;
++
++use App\Services\Telephony\InboundPolicy;
++use App\Services\Telephony\OutboundPolicy;
++use App\Services\UltronStudio\StudioIntegrations;
++use App\Services\Voice\VoiceCallContext;
++use App\Services\Voice\VoiceCallPolicy;
++use PHPUnit\Framework\TestCase;
++use Tests\Unit\Voice\Support\ClosedPolicyCopy;
++
++/**
++ * EL ESTADO CERRADO, CON LAS LLAMADAS ABIERTAS EN EL ÁRBOL (C-4).
++ *
++ * El commit `voice(calls-open)` gira `CALLS_ENABLED_IN_CODE` y el árbol ya no
++ * puede llegar al estado cerrado, que es justo el destino de la vuelta atrás
++ * (`git revert` de esa línea). Esta prueba lo mantiene vivo sobre una COPIA de
++ * las políticas puras con la constante cerrada ({@see ClosedPolicyCopy}): la
++ * misma clase, línea a línea, salvo la constante y el nombre.
++ *
++ * LO QUE SE PROTEGE.
++ *  - Que la copia es el fichero real con UNA línea de la constante cambiada
++ *    (y el nombre de la clase, y en las de la telefonía el `use`): si alguien
++ *    cambia otra cosa en la política, la copia lo hereda.
++ *  - Que, cerrada, la política del H6 NUNCA permite y dice
++ *    `calls_disabled_in_code` el primero: la tabla de casos que tenía
++ *    `VoiceCallPolicyTest` antes de abrir, literal, y los 18 casos de paridad
++ *    del H6 (`integrations-cases.json`) con ese motivo delante.
++ *  - Que cerrar la constante es exactamente añadir ese motivo: el mismo caso,
++ *    abierto en el árbol y cerrado en la copia, difiere solo en él.
++ *
++ * En un árbol con la constante cerrada (sin `voice(calls-open)`) no hay copia
++ * cerrada que hacer: estas pruebas caen, como las guardas.
++ *
++ * Las políticas de la telefonía (`InboundPolicy`, `OutboundPolicy`) se cruzan
++ * con sus columnas `codeClosed` en `TelephonyFixtureParityTest`; el iniciador y
++ * el desplegador cerrados, en `ElevenLabsClosedCopyTest`; el job cerrado, en
++ * `PlaceOutboundVoiceCallClosedCopyTest`.
++ */
++class VoiceCallPolicyClosedCopyTest extends TestCase
++{
++    protected function setUp(): void
++    {
++        parent::setUp();
++        ClosedPolicyCopy::load();
++    }
++
++    /** @return array<string, array{0: array<string,mixed>, 1: list<string>}> los casos de `VoiceCallPolicyTest` tal cual eran con la constante cerrada (1ef1d72e) */
++    public static function casosCerrados(): array
++    {
++        return [
++            'todo en verde: solo el código lo cierra' => [[], ['calls_disabled_in_code']],
++            'el estado de producción del H6 (§I6.6)' => [
++                ['twilioVoiceEnabled' => false, 'twilioVoiceFromConfigured' => false, 'providerState' => 'ELEVENLABS_NOT_CONFIGURED', 'canary' => 'not_registered', 'dailyCap' => 0],
++                ['calls_disabled_in_code', 'twilio_voice_disabled', 'no_voice_number', 'elevenlabs_not_configured', 'not_an_active_voice_canary', 'daily_cap_zero'],
++            ],
++            'todo en contra' => [
++                ['twilioVoiceEnabled' => false, 'twilioVoiceFromConfigured' => false, 'providerState' => 'ELEVENLABS_NOT_CONFIGURED', 'canary' => 'not_active', 'source' => 'marketing_calls', 'dailyCap' => -1],
++                ['calls_disabled_in_code', 'twilio_voice_disabled', 'no_voice_number', 'elevenlabs_not_configured', 'not_an_active_voice_canary', 'source_not_allowed', 'daily_cap_zero'],
++            ],
++            'ElevenLabs sin configurar' => [['providerState' => 'ELEVENLABS_NOT_CONFIGURED'], ['calls_disabled_in_code', 'elevenlabs_not_configured']],
++            'ElevenLabs apagado' => [['providerState' => 'ELEVENLABS_DISABLED'], ['calls_disabled_in_code', 'elevenlabs_disabled']],
++            'ElevenLabs sin verificar' => [['providerState' => 'ELEVENLABS_UNVERIFIED'], ['calls_disabled_in_code', 'elevenlabs_unverified']],
++            'ElevenLabs verificado no añade nada' => [['providerState' => 'ELEVENLABS_VERIFIED'], ['calls_disabled_in_code']],
++            'Twilio Voice apagado' => [['twilioVoiceEnabled' => false], ['calls_disabled_in_code', 'twilio_voice_disabled']],
++            'sin número de voz' => [['twilioVoiceFromConfigured' => false], ['calls_disabled_in_code', 'no_voice_number']],
++            'canario de voz vivo pero no activo' => [['canary' => 'not_active'], ['calls_disabled_in_code', 'not_an_active_voice_canary']],
++            'sin canario de voz registrado' => [['canary' => 'not_registered'], ['calls_disabled_in_code', 'not_an_active_voice_canary']],
++            'origen marketing_calls (T-7)' => [['source' => 'marketing_calls'], ['calls_disabled_in_code', 'source_not_allowed']],
++            'otro origen' => [['source' => 'other'], ['calls_disabled_in_code', 'source_not_allowed']],
++            'cupo 0' => [['dailyCap' => 0], ['calls_disabled_in_code', 'daily_cap_zero']],
++            'cupo negativo' => [['dailyCap' => -3], ['calls_disabled_in_code', 'daily_cap_zero']],
++            'cupo 1' => [['dailyCap' => 1], ['calls_disabled_in_code']],
++            'cupo 20' => [['dailyCap' => 20], ['calls_disabled_in_code']],
++            'la política no recorta el cupo (lo hace la configuración)' => [['dailyCap' => 21], ['calls_disabled_in_code']],
++            'mezcla: sin verificar, marketing_calls y cupo 0' => [
++                ['providerState' => 'ELEVENLABS_UNVERIFIED', 'source' => 'marketing_calls', 'dailyCap' => 0],
++                ['calls_disabled_in_code', 'elevenlabs_unverified', 'source_not_allowed', 'daily_cap_zero'],
++            ],
++            'mezcla: apagado, sin número y sin canario' => [
++                ['providerState' => 'ELEVENLABS_DISABLED', 'twilioVoiceFromConfigured' => false, 'canary' => 'not_registered'],
++                ['calls_disabled_in_code', 'no_voice_number', 'elevenlabs_disabled', 'not_an_active_voice_canary'],
++            ],
++        ];
++    }
++
++    /** @param  array<string,mixed>  $cambios */
++    private static function contexto(array $cambios = []): VoiceCallContext
++    {
++        $c = $cambios + [
++            'twilioVoiceEnabled' => true, 'twilioVoiceFromConfigured' => true, 'providerState' => 'ELEVENLABS_VERIFIED',
++            'canary' => 'active_voice', 'source' => 'canary_registry', 'dailyCap' => 5,
++        ];
++
++        return new VoiceCallContext($c['twilioVoiceEnabled'], $c['twilioVoiceFromConfigured'], $c['providerState'], $c['canary'], $c['source'], $c['dailyCap']);
++    }
++
++    public function test_la_copia_es_la_politica_real_con_solo_la_constante_cerrada(): void
++    {
++        $voz = 'app/Services/Voice/VoiceCallPolicy.php';
++        $this->assertSame(1, substr_count(ClosedPolicyCopy::original($voz), ClosedPolicyCopy::OPEN_LINE), 'el árbol tiene la constante abierta, literal y una sola vez');
++        $cambios = ClosedPolicyCopy::changedLines($voz);
++        $this->assertCount(2, $cambios, 'la clase y la constante; nada más');
++        $this->assertContains(['final class VoiceCallPolicy', 'final class VoiceCallPolicy'.ClosedPolicyCopy::SUFFIX], $cambios);
++        $this->assertContains(['    '.ClosedPolicyCopy::OPEN_LINE, '    '.ClosedPolicyCopy::CLOSED_LINE], $cambios);
++        $lectores = array_diff(array_keys(ClosedPolicyCopy::COPIES), [$voz]);
++        $this->assertCount(5, $lectores, 'las dos políticas de la telefonía, el job, el iniciador y el desplegador');
++        foreach ($lectores as $lector) {
++            $this->assertCount(2, ClosedPolicyCopy::changedLines($lector), "{$lector}: la clase y el use de VoiceCallPolicy; nada más");
++            $this->assertMatchesRegularExpression('/VoiceCallPolicy::(CALLS_ENABLED_IN_CODE|decide\()/', ClosedPolicyCopy::original($lector), "{$lector} lee la constante (o la política del H6) por el alias");
++        }
++        // Todo lo que lee la constante para DECIDIR tiene su copia (el doctor y el estado solo la dicen).
++        $lectoresDelArbol = [];
++        foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(ClosedPolicyCopy::backend().'/app', \FilesystemIterator::SKIP_DOTS)) as $fichero) {
++            $codigo = (string) file_get_contents((string) $fichero);
++            if (! str_contains($codigo, 'CALLS_ENABLED_IN_CODE')) {
++                continue;
++            }
++            $sinComentarios = implode('', array_map(static fn ($t): string => is_array($t) ? (in_array($t[0], [T_COMMENT, T_DOC_COMMENT], true) ? '' : $t[1]) : $t, token_get_all($codigo)));
++            if (str_contains($sinComentarios, 'VoiceCallPolicy::CALLS_ENABLED_IN_CODE')) {
++                $lectoresDelArbol[] = substr((string) $fichero, strlen(ClosedPolicyCopy::backend()) + 1);
++            }
++        }
++        sort($lectoresDelArbol);
++        $this->assertSame(['app/Console/Commands/Voice/VoiceDoctorCommand.php', 'app/Jobs/Voice/PlaceOutboundVoiceCall.php', 'app/Services/Telephony/InboundPolicy.php',
++            'app/Services/Telephony/VoiceTelephonyStatus.php', 'app/Services/Voice/ElevenLabs/ElevenLabsAgentDeployer.php', 'app/Services/Voice/ElevenLabs/ElevenLabsCallStarter.php'],
++            $lectoresDelArbol, 'un lector nuevo de la constante necesita su copia cerrada (o decir por qué no)');
++
++        $this->assertTrue(VoiceCallPolicy::CALLS_ENABLED_IN_CODE, 'el árbol');
++        $this->assertFalse(constant(ClosedPolicyCopy::VOICE.'::CALLS_ENABLED_IN_CODE'), 'la copia');
++        $this->assertSame(VoiceCallPolicy::REASONS, constant(ClosedPolicyCopy::VOICE.'::REASONS'));
++        $this->assertSame(InboundPolicy::REASONS, constant(ClosedPolicyCopy::INBOUND.'::REASONS'));
++        $this->assertSame(OutboundPolicy::REASONS, constant(ClosedPolicyCopy::OUTBOUND.'::REASONS'));
++    }
++
++    public function test_cerrada_la_politica_nunca_permite_y_dice_la_constante_la_primera(): void
++    {
++        /** @var class-string<VoiceCallPolicy> $cerrada */
++        $cerrada = ClosedPolicyCopy::VOICE;
++        foreach (self::casosCerrados() as $nombre => [$cambios, $motivos]) {
++            $d = $cerrada::decide(self::contexto($cambios));
++            $this->assertSame($motivos, $d->reasons, $nombre);
++            $this->assertFalse($d->allowed, "{$nombre}: cerrada, nunca se permite una llamada");
++            $this->assertSame('calls_disabled_in_code', $d->reasons[0], "{$nombre}: el código lo cierra primero");
++            $this->assertSame(['allowed' => false, 'reasons' => $motivos], $d->toArray(), $nombre);
++        }
++    }
++
++    public function test_cerrar_la_constante_es_exactamente_anadir_su_motivo_delante(): void
++    {
++        $abiertos = array_values(VoiceCallPolicyTest::casos());
++        $cerrados = array_values(self::casosCerrados());
++        $this->assertCount(count($cerrados), $abiertos, 'los mismos casos abiertos y cerrados');
++        foreach ($cerrados as $i => [$cambios, $motivos]) {
++            $this->assertSame($cambios, $abiertos[$i][0], "caso {$i}: el mismo contexto");
++            $this->assertSame($motivos, ['calls_disabled_in_code', ...$abiertos[$i][1]], "caso {$i}: cerrado = abierto con la constante delante");
++            $this->assertSame($abiertos[$i][1], VoiceCallPolicy::decide(self::contexto($cambios))->reasons, "caso {$i}: el árbol da el abierto");
++        }
++    }
++
++    /** Los 18 casos `decide` del fixture de paridad del H6, con la copia cerrada: los mismos motivos con la constante delante, y los niveles nunca disponibles. */
++    public function test_los_casos_de_paridad_del_h6_con_la_copia_cerrada(): void
++    {
++        /** @var class-string<VoiceCallPolicy> $cerrada */
++        $cerrada = ClosedPolicyCopy::VOICE;
++        $fx = json_decode((string) file_get_contents(ClosedPolicyCopy::backend().'/tests/fixtures/ultron-studio/integrations-cases.json'), true, 512, JSON_THROW_ON_ERROR);
++        $vistos = 0;
++        foreach ($fx['voiceCallPolicy'] as $caso) {
++            if ($caso['kind'] !== 'decide') {
++                continue;
++            }
++            $c = $caso['context'];
++            $d = $cerrada::decide(new VoiceCallContext($c['twilioVoiceEnabled'], $c['twilioVoiceFromConfigured'], $c['providerState'], $c['canary'], $c['source'], $c['dailyCap']))->toArray();
++            $motivos = ['calls_disabled_in_code', ...$caso['expected']['reasons']];
++            $this->assertSame(['allowed' => false, 'reasons' => $motivos], $d, $caso['name']);
++            $integracion = array_values(array_filter($caso['expected']['levels'], static fn (array $n): bool => $n['id'] === 'integration_test'))[0]['reasons'];
++            $this->assertSame([
++                ['id' => 'text_simulation', 'available' => true, 'cost' => 'none', 'where' => 'laboratorio'],
++                ['id' => 'integration_test', 'available' => false, 'reasons' => ['calls_disabled_in_code', ...$integracion]],
++                ['id' => 'real_call', 'available' => false, 'reasons' => $motivos],
++            ], StudioIntegrations::voiceLevels($d['reasons']), $caso['name']);
++            $vistos++;
++        }
++        $this->assertSame(18, $vistos);
++    }
++}
+diff --git a/backend/tests/Unit/Voice/VoiceCallPolicyTest.php b/backend/tests/Unit/Voice/VoiceCallPolicyTest.php
+index 2b74834b..f1668f16 100644
+--- a/backend/tests/Unit/Voice/VoiceCallPolicyTest.php
++++ b/backend/tests/Unit/Voice/VoiceCallPolicyTest.php
+@@ -12,11 +12,15 @@
+  * La política de llamadas (contrato H6 §I6.5), con casos escritos a mano desde
+  * el contrato.
+  *
+- * LO QUE SE PROTEGE. Que en este hito NUNCA se permite una llamada y que
+- * `calls_disabled_in_code` sale siempre el primero; que los motivos se
+- * acumulan en el orden de REASONS; que `VERIFIED` no añade motivo; que un
+- * marcador nunca consume `marketing_calls` (T-7); y que un valor fuera de los
+- * conjuntos cerrados no se cuela.
++ * LO QUE SE PROTEGE. Con la constante ABIERTA (el commit `voice(calls-open)`,
++ * C-4): que con todo en regla la llamada se permite y que ningún motivo es
++ * `calls_disabled_in_code`; que cada otra cerradura la sigue negando por su
++ * nombre; que los motivos se acumulan en el orden de REASONS; que `VERIFIED`
++ * no añade motivo; que un marcador nunca consume `marketing_calls` (T-7); y que
++ * un valor fuera de los conjuntos cerrados no se cuela.
++ *
++ * El estado CERRADO (el destino de la vuelta atrás) lo prueba
++ * `VoiceCallPolicyClosedCopyTest` sobre una copia cerrada de esta clase.
+  */
+ class VoiceCallPolicyTest extends TestCase
+ {
+@@ -39,44 +43,44 @@ private static function contexto(array $cambios = []): VoiceCallContext
+     public static function casos(): array
+     {
+         return [
+-            'todo en verde: solo el código lo cierra' => [[], ['calls_disabled_in_code']],
++            'todo en verde: permitida' => [[], []],
+             'el estado de producción del H6 (§I6.6)' => [
+                 ['twilioVoiceEnabled' => false, 'twilioVoiceFromConfigured' => false, 'providerState' => 'ELEVENLABS_NOT_CONFIGURED', 'canary' => 'not_registered', 'dailyCap' => 0],
+-                ['calls_disabled_in_code', 'twilio_voice_disabled', 'no_voice_number', 'elevenlabs_not_configured', 'not_an_active_voice_canary', 'daily_cap_zero'],
++                ['twilio_voice_disabled', 'no_voice_number', 'elevenlabs_not_configured', 'not_an_active_voice_canary', 'daily_cap_zero'],
+             ],
+             'todo en contra' => [
+                 ['twilioVoiceEnabled' => false, 'twilioVoiceFromConfigured' => false, 'providerState' => 'ELEVENLABS_NOT_CONFIGURED', 'canary' => 'not_active', 'source' => 'marketing_calls', 'dailyCap' => -1],
+-                ['calls_disabled_in_code', 'twilio_voice_disabled', 'no_voice_number', 'elevenlabs_not_configured', 'not_an_active_voice_canary', 'source_not_allowed', 'daily_cap_zero'],
++                ['twilio_voice_disabled', 'no_voice_number', 'elevenlabs_not_configured', 'not_an_active_voice_canary', 'source_not_allowed', 'daily_cap_zero'],
+             ],
+-            'ElevenLabs sin configurar' => [['providerState' => 'ELEVENLABS_NOT_CONFIGURED'], ['calls_disabled_in_code', 'elevenlabs_not_configured']],
+-            'ElevenLabs apagado' => [['providerState' => 'ELEVENLABS_DISABLED'], ['calls_disabled_in_code', 'elevenlabs_disabled']],
+-            'ElevenLabs sin verificar' => [['providerState' => 'ELEVENLABS_UNVERIFIED'], ['calls_disabled_in_code', 'elevenlabs_unverified']],
+-            'ElevenLabs verificado no añade nada' => [['providerState' => 'ELEVENLABS_VERIFIED'], ['calls_disabled_in_code']],
+-            'Twilio Voice apagado' => [['twilioVoiceEnabled' => false], ['calls_disabled_in_code', 'twilio_voice_disabled']],
+-            'sin número de voz' => [['twilioVoiceFromConfigured' => false], ['calls_disabled_in_code', 'no_voice_number']],
+-            'canario de voz vivo pero no activo' => [['canary' => 'not_active'], ['calls_disabled_in_code', 'not_an_active_voice_canary']],
+-            'sin canario de voz registrado' => [['canary' => 'not_registered'], ['calls_disabled_in_code', 'not_an_active_voice_canary']],
+-            'origen marketing_calls (T-7)' => [['source' => 'marketing_calls'], ['calls_disabled_in_code', 'source_not_allowed']],
+-            'otro origen' => [['source' => 'other'], ['calls_disabled_in_code', 'source_not_allowed']],
+-            'cupo 0' => [['dailyCap' => 0], ['calls_disabled_in_code', 'daily_cap_zero']],
+-            'cupo negativo' => [['dailyCap' => -3], ['calls_disabled_in_code', 'daily_cap_zero']],
+-            'cupo 1' => [['dailyCap' => 1], ['calls_disabled_in_code']],
+-            'cupo 20' => [['dailyCap' => 20], ['calls_disabled_in_code']],
+-            'la política no recorta el cupo (lo hace la configuración)' => [['dailyCap' => 21], ['calls_disabled_in_code']],
++            'ElevenLabs sin configurar' => [['providerState' => 'ELEVENLABS_NOT_CONFIGURED'], ['elevenlabs_not_configured']],
++            'ElevenLabs apagado' => [['providerState' => 'ELEVENLABS_DISABLED'], ['elevenlabs_disabled']],
++            'ElevenLabs sin verificar' => [['providerState' => 'ELEVENLABS_UNVERIFIED'], ['elevenlabs_unverified']],
++            'ElevenLabs verificado no añade nada' => [['providerState' => 'ELEVENLABS_VERIFIED'], []],
++            'Twilio Voice apagado' => [['twilioVoiceEnabled' => false], ['twilio_voice_disabled']],
++            'sin número de voz' => [['twilioVoiceFromConfigured' => false], ['no_voice_number']],
++            'canario de voz vivo pero no activo' => [['canary' => 'not_active'], ['not_an_active_voice_canary']],
++            'sin canario de voz registrado' => [['canary' => 'not_registered'], ['not_an_active_voice_canary']],
++            'origen marketing_calls (T-7)' => [['source' => 'marketing_calls'], ['source_not_allowed']],
++            'otro origen' => [['source' => 'other'], ['source_not_allowed']],
++            'cupo 0' => [['dailyCap' => 0], ['daily_cap_zero']],
++            'cupo negativo' => [['dailyCap' => -3], ['daily_cap_zero']],
++            'cupo 1' => [['dailyCap' => 1], []],
++            'cupo 20' => [['dailyCap' => 20], []],
++            'la política no recorta el cupo (lo hace la configuración)' => [['dailyCap' => 21], []],
+             'mezcla: sin verificar, marketing_calls y cupo 0' => [
+                 ['providerState' => 'ELEVENLABS_UNVERIFIED', 'source' => 'marketing_calls', 'dailyCap' => 0],
+-                ['calls_disabled_in_code', 'elevenlabs_unverified', 'source_not_allowed', 'daily_cap_zero'],
++                ['elevenlabs_unverified', 'source_not_allowed', 'daily_cap_zero'],
+             ],
+             'mezcla: apagado, sin número y sin canario' => [
+                 ['providerState' => 'ELEVENLABS_DISABLED', 'twilioVoiceFromConfigured' => false, 'canary' => 'not_registered'],
+-                ['calls_disabled_in_code', 'no_voice_number', 'elevenlabs_disabled', 'not_an_active_voice_canary'],
++                ['no_voice_number', 'elevenlabs_disabled', 'not_an_active_voice_canary'],
+             ],
+         ];
+     }
+ 
+-    public function test_la_constante_cierra_las_llamadas_en_el_codigo(): void
++    public function test_la_constante_abre_las_llamadas_en_el_codigo(): void
+     {
+-        $this->assertFalse(Politica::CALLS_ENABLED_IN_CODE);
++        $this->assertTrue(Politica::CALLS_ENABLED_IN_CODE);
+     }
+ 
+     public function test_los_motivos_del_contrato_en_su_orden(): void
+@@ -87,14 +91,20 @@ public function test_los_motivos_del_contrato_en_su_orden(): void
+ 
+     public function test_los_casos_del_contrato(): void
+     {
++        $permitidas = [];
+         foreach (self::casos() as $nombre => [$cambios, $motivos]) {
+             $d = Politica::decide(self::contexto($cambios));
+             $this->assertSame($motivos, $d->reasons, $nombre);
+-            $this->assertFalse($d->allowed, "{$nombre}: en este hito nunca se permite una llamada");
+-            $this->assertSame('calls_disabled_in_code', $d->reasons[0], "{$nombre}: el código lo cierra primero");
+-            $this->assertSame(['allowed' => false, 'reasons' => $motivos], $d->toArray(), $nombre);
++            $this->assertSame($motivos === [], $d->allowed, "{$nombre}: se permite exactamente cuando no queda ningún motivo");
++            $this->assertNotContains('calls_disabled_in_code', $d->reasons, "{$nombre}: con la constante abierta, el código no cierra nada");
++            $this->assertSame(['allowed' => $motivos === [], 'reasons' => $motivos], $d->toArray(), $nombre);
++            if ($d->allowed) {
++                $permitidas[] = $nombre;
++            }
+         }
+         $this->assertGreaterThanOrEqual(16, count(self::casos()), 'el fixture pide al menos 16');
++        // Solo se permite con TODO en regla: Twilio Voice, el número, ElevenLabs VERIFIED, el canario activo, el registro y cupo > 0.
++        $this->assertSame(['todo en verde: permitida', 'ElevenLabs verificado no añade nada', 'cupo 1', 'cupo 20', 'la política no recorta el cupo (lo hace la configuración)'], $permitidas);
+     }
+ 
+     public function test_un_contexto_fuera_de_los_conjuntos_cerrados_no_se_construye(): void
+@@ -138,7 +148,7 @@ public function test_una_decision_incoherente_no_se_construye(): void
+         // Lo que sí puede construirse: un subconjunto ordenado (p. ej., los motivos de un nivel que excluye algunos).
+         $nivel = new VoiceCallDecision(false, ['calls_disabled_in_code', 'twilio_voice_disabled', 'elevenlabs_not_configured']);
+         $this->assertSame(['calls_disabled_in_code', 'twilio_voice_disabled', 'elevenlabs_not_configured'], $nivel->reasons);
+-        $this->assertTrue((new VoiceCallDecision(true, []))->allowed, 'la forma existe aunque hoy decide() no la produzca');
++        $this->assertTrue((new VoiceCallDecision(true, []))->allowed, 'la forma que da decide() con todo en regla');
+     }
+ 
+     public function test_es_pura(): void
+diff --git a/backend/tests/Unit/Voice/VoiceIsolationTest.php b/backend/tests/Unit/Voice/VoiceIsolationTest.php
+index aba23524..2fc7f077 100644
+--- a/backend/tests/Unit/Voice/VoiceIsolationTest.php
++++ b/backend/tests/Unit/Voice/VoiceIsolationTest.php
+@@ -13,9 +13,10 @@
+  * protecciones 2 y 3). Quien implementa no la toca: si cae, avisa al lead.
+  *
+  * LO QUE SE PROTEGE.
+- *  - `VoiceCallPolicy::CALLS_ENABLED_IN_CODE === false`, literal, una vez, y
+- *    declarada solo ahí: nadie la sombrea con otra constante, nadie la lee de
+- *    otra clase y nadie la nombra dentro de una cadena (`constant()`).
++ *  - `VoiceCallPolicy::CALLS_ENABLED_IN_CODE === true` (C-4: desde el commit
++ *    `voice(calls-open)`), literal, una vez, y declarada solo ahí: nadie la
++ *    sombrea con otra constante, nadie la lee de otra clase y nadie la nombra
++ *    dentro de una cadena (`constant()`).
+  *  - LISTA CERRADA. En `app/Services/Voice/` están los doce ficheros del H6 y,
+  *    como mucho, los del contrato del H8 (interfaces, adaptadores de
+  *    ElevenLabs, el traductor puro y un nulo por interfaz). `Dto/` admite
+@@ -327,11 +328,11 @@ public function test_estan_los_ficheros_del_h6_y_ninguno_que_no_nombre_el_contra
+         $this->assertLessThanOrEqual(1, count($firmas), 'TwilioRequestSignature está en dos sitios');
+     }
+ 
+-    public function test_las_llamadas_estan_cerradas_en_el_codigo(): void
++    public function test_las_llamadas_estan_abiertas_en_el_codigo(): void
+     {
+-        $this->assertFalse(VoiceCallPolicy::CALLS_ENABLED_IN_CODE);
++        $this->assertTrue(VoiceCallPolicy::CALLS_ENABLED_IN_CODE);
+         $codigo = (string) file_get_contents(self::raiz().'/app/Services/Voice/VoiceCallPolicy.php');
+-        $this->assertSame(1, preg_match_all('/public const CALLS_ENABLED_IN_CODE = false;/', $codigo), 'la constante, literal y una sola vez');
++        $this->assertSame(1, preg_match_all('/public const CALLS_ENABLED_IN_CODE = true;/', $codigo), 'la constante, literal y una sola vez');
+ 
+         // H8: nadie la declara otra vez, la lee de otra clase ni la nombra dentro de una cadena.
+         $declaraciones = [];
+diff --git a/backend/tests/fixtures/ultron-studio/integrations-cases.README.md b/backend/tests/fixtures/ultron-studio/integrations-cases.README.md
+index 03771d2e..b1773f63 100644
+--- a/backend/tests/fixtures/ultron-studio/integrations-cases.README.md
++++ b/backend/tests/fixtures/ultron-studio/integrations-cases.README.md
+@@ -344,6 +344,16 @@ ### Voz (`voiceDoctor`, `voiceVerify`, `voiceCallPolicy`)
+ - `integration_test` excluye solo `not_an_active_voice_canary` y `daily_cap_zero`.
+ - `available` es `false` mientras haya motivos.
+ 
++**PO-3. La constante abierta (C-4, commit `test(voice)` que va detrás de `voice(calls-open)`).** Los 18 casos `decide` describen `VoiceCallPolicy::CALLS_ENABLED_IN_CODE = true`:
++- ninguno lleva `calls_disabled_in_code`; `allowed` es «sin motivos» y cada nivel está disponible si no le queda ninguno (`real_call` con los de la política; `integration_test` sin los dos que excluye);
++- permitidos: «todo listo: permitida (la constante abierta)» (antes «todo listo salvo la constante del código», el único renombrado), «ElevenLabs verificado no añade nada» y «cupo diario 1»;
++- el resto, los mismos motivos que antes sin el primero; los 6 `context`, sin cambios;
++- el conjunto cerrado `closedSets.voiceCallPolicyReasons` sigue empezando por `calls_disabled_in_code` (la clase no cambia sus `REASONS`);
++- el estado CERRADO, que es el destino de la vuelta atrás, no se pierde: `tests/Unit/Voice/VoiceCallPolicyClosedCopyTest.php` carga una copia de la política con la constante cerrada (la única línea que cambia) y le exige estos 18 casos con `calls_disabled_in_code` delante y `allowed = false`;
++- el comprobador independiente deriva la constante abierta y suma la variante `voiceCallPolicy:closed_constant` (la política cerrada): cae en los 18 casos `decide`. Total, 117 variantes.
++
++Es una enmienda del fixture del contrato del H6 (Enmienda 2: «este fichero solo cambia con una enmienda»); el texto propuesto está en `docs/ultron-studio/plans/informes-motores/informe-tester-voz-abierta.md`. Volver al estado cerrado es `git revert` de ese commit: el generador y el fixture vuelven byte a byte.
++
+ **PO-2. El contexto `canary` solo mira filas de voz.**
+ 
+ ### Sonda de Twilio (`twilioProbeSanitize`)
+diff --git a/backend/tests/fixtures/ultron-studio/integrations-cases.json b/backend/tests/fixtures/ultron-studio/integrations-cases.json
+index 1425717c..6f5c8d3b 100644
+--- a/backend/tests/fixtures/ultron-studio/integrations-cases.json
++++ b/backend/tests/fixtures/ultron-studio/integrations-cases.json
+@@ -15840,7 +15840,7 @@
+   ],
+   "voiceCallPolicy": [
+     {
+-      "name": "voiceCallPolicy · decide · todo listo salvo la constante del código",
++      "name": "voiceCallPolicy · decide · todo listo: permitida (la constante abierta)",
+       "kind": "decide",
+       "context": {
+         "twilioVoiceEnabled": true,
+@@ -15851,10 +15851,8 @@
+         "dailyCap": 5
+       },
+       "expected": {
+-        "allowed": false,
+-        "reasons": [
+-          "calls_disabled_in_code"
+-        ],
++        "allowed": true,
++        "reasons": [],
+         "levels": [
+           {
+             "id": "text_simulation",
+@@ -15864,17 +15862,13 @@
+           },
+           {
+             "id": "integration_test",
+-            "available": false,
+-            "reasons": [
+-              "calls_disabled_in_code"
+-            ]
++            "available": true,
++            "reasons": []
+           },
+           {
+             "id": "real_call",
+-            "available": false,
+-            "reasons": [
+-              "calls_disabled_in_code"
+-            ]
++            "available": true,
++            "reasons": []
+           }
+         ]
+       }
+@@ -15893,7 +15887,6 @@
+       "expected": {
+         "allowed": false,
+         "reasons": [
+-          "calls_disabled_in_code",
+           "twilio_voice_disabled",
+           "no_voice_number",
+           "elevenlabs_not_configured",
+@@ -15911,7 +15904,6 @@
+             "id": "integration_test",
+             "available": false,
+             "reasons": [
+-              "calls_disabled_in_code",
+               "twilio_voice_disabled",
+               "no_voice_number",
+               "elevenlabs_not_configured"
+@@ -15921,7 +15913,6 @@
+             "id": "real_call",
+             "available": false,
+             "reasons": [
+-              "calls_disabled_in_code",
+               "twilio_voice_disabled",
+               "no_voice_number",
+               "elevenlabs_not_configured",
+@@ -15946,7 +15937,6 @@
+       "expected": {
+         "allowed": false,
+         "reasons": [
+-          "calls_disabled_in_code",
+           "twilio_voice_disabled"
+         ],
+         "levels": [
+@@ -15960,7 +15950,6 @@
+             "id": "integration_test",
+             "available": false,
+             "reasons": [
+-              "calls_disabled_in_code",
+               "twilio_voice_disabled"
+             ]
+           },
+@@ -15968,7 +15957,6 @@
+             "id": "real_call",
+             "available": false,
+             "reasons": [
+-              "calls_disabled_in_code",
+               "twilio_voice_disabled"
+             ]
+           }
+@@ -15989,7 +15977,6 @@
+       "expected": {
+         "allowed": false,
+         "reasons": [
+-          "calls_disabled_in_code",
+           "no_voice_number"
+         ],
+         "levels": [
+@@ -16003,7 +15990,6 @@
+             "id": "integration_test",
+             "available": false,
+             "reasons": [
+-              "calls_disabled_in_code",
+               "no_voice_number"
+             ]
+           },
+@@ -16011,7 +15997,6 @@
+             "id": "real_call",
+             "available": false,
+             "reasons": [
+-              "calls_disabled_in_code",
+               "no_voice_number"
+             ]
+           }
+@@ -16032,7 +16017,6 @@
+       "expected": {
+         "allowed": false,
+         "reasons": [
+-          "calls_disabled_in_code",
+           "elevenlabs_not_configured"
+         ],
+         "levels": [
+@@ -16046,7 +16030,6 @@
+             "id": "integration_test",
+             "available": false,
+             "reasons": [
+-              "calls_disabled_in_code",
+               "elevenlabs_not_configured"
+             ]
+           },
+@@ -16054,7 +16037,6 @@
+             "id": "real_call",
+             "available": false,
+             "reasons": [
+-              "calls_disabled_in_code",
+               "elevenlabs_not_configured"
+             ]
+           }
+@@ -16075,7 +16057,6 @@
+       "expected": {
+         "allowed": false,
+         "reasons": [
+-          "calls_disabled_in_code",
+           "elevenlabs_disabled"
+         ],
+         "levels": [
+@@ -16089,7 +16070,6 @@
+             "id": "integration_test",
+             "available": false,
+             "reasons": [
+-              "calls_disabled_in_code",
+               "elevenlabs_disabled"
+             ]
+           },
+@@ -16097,7 +16077,6 @@
+             "id": "real_call",
+             "available": false,
+             "reasons": [
+-              "calls_disabled_in_code",
+               "elevenlabs_disabled"
+             ]
+           }
+@@ -16118,7 +16097,6 @@
+       "expected": {
+         "allowed": false,
+         "reasons": [
+-          "calls_disabled_in_code",
+           "elevenlabs_unverified"
+         ],
+         "levels": [
+@@ -16132,7 +16110,6 @@
+             "id": "integration_test",
+             "available": false,
+             "reasons": [
+-              "calls_disabled_in_code",
+               "elevenlabs_unverified"
+             ]
+           },
+@@ -16140,7 +16117,6 @@
+             "id": "real_call",
+             "available": false,
+             "reasons": [
+-              "calls_disabled_in_code",
+               "elevenlabs_unverified"
+             ]
+           }
+@@ -16159,10 +16135,8 @@
+         "dailyCap": 5
+       },
+       "expected": {
+-        "allowed": false,
+-        "reasons": [
+-          "calls_disabled_in_code"
+-        ],
++        "allowed": true,
++        "reasons": [],
+         "levels": [
+           {
+             "id": "text_simulation",
+@@ -16172,17 +16146,13 @@
+           },
+           {
+             "id": "integration_test",
+-            "available": false,
+-            "reasons": [
+-              "calls_disabled_in_code"
+-            ]
++            "available": true,
++            "reasons": []
+           },
+           {
+             "id": "real_call",
+-            "available": false,
+-            "reasons": [
+-              "calls_disabled_in_code"
+-            ]
++            "available": true,
++            "reasons": []
+           }
+         ]
+       }
+@@ -16201,7 +16171,6 @@
+       "expected": {
+         "allowed": false,
+         "reasons": [
+-          "calls_disabled_in_code",
+           "not_an_active_voice_canary"
+         ],
+         "levels": [
+@@ -16213,16 +16182,13 @@
+           },
+           {
+             "id": "integration_test",
+-            "available": false,
+-            "reasons": [
+-              "calls_disabled_in_code"
+-            ]
++            "available": true,
++            "reasons": []
+           },
+           {
+             "id": "real_call",
+             "available": false,
+             "reasons": [
+-              "calls_disabled_in_code",
+               "not_an_active_voice_canary"
+             ]
+           }
+@@ -16243,7 +16209,6 @@
+       "expected": {
+         "allowed": false,
+         "reasons": [
+-          "calls_disabled_in_code",
+           "not_an_active_voice_canary"
+         ],
+         "levels": [
+@@ -16255,16 +16220,13 @@
+           },
+           {
+             "id": "integration_test",
+-            "available": false,
+-            "reasons": [
+-              "calls_disabled_in_code"
+-            ]
++            "available": true,
++            "reasons": []
+           },
+           {
+             "id": "real_call",
+             "available": false,
+             "reasons": [
+-              "calls_disabled_in_code",
+               "not_an_active_voice_canary"
+             ]
+           }
+@@ -16285,7 +16247,6 @@
+       "expected": {
+         "allowed": false,
+         "reasons": [
+-          "calls_disabled_in_code",
+           "source_not_allowed"
+         ],
+         "levels": [
+@@ -16299,7 +16260,6 @@
+             "id": "integration_test",
+             "available": false,
+             "reasons": [
+-              "calls_disabled_in_code",
+               "source_not_allowed"
+             ]
+           },
+@@ -16307,7 +16267,6 @@
+             "id": "real_call",
+             "available": false,
+             "reasons": [
+-              "calls_disabled_in_code",
+               "source_not_allowed"
+             ]
+           }
+@@ -16328,7 +16287,6 @@
+       "expected": {
+         "allowed": false,
+         "reasons": [
+-          "calls_disabled_in_code",
+           "source_not_allowed"
+         ],
+         "levels": [
+@@ -16342,7 +16300,6 @@
+             "id": "integration_test",
+             "available": false,
+             "reasons": [
+-              "calls_disabled_in_code",
+               "source_not_allowed"
+             ]
+           },
+@@ -16350,7 +16307,6 @@
+             "id": "real_call",
+             "available": false,
+             "reasons": [
+-              "calls_disabled_in_code",
+               "source_not_allowed"
+             ]
+           }
+@@ -16371,7 +16327,6 @@
+       "expected": {
+         "allowed": false,
+         "reasons": [
+-          "calls_disabled_in_code",
+           "daily_cap_zero"
+         ],
+         "levels": [
+@@ -16383,16 +16338,13 @@
+           },
+           {
+             "id": "integration_test",
+-            "available": false,
+-            "reasons": [
+-              "calls_disabled_in_code"
+-            ]
++            "available": true,
++            "reasons": []
+           },
+           {
+             "id": "real_call",
+             "available": false,
+             "reasons": [
+-              "calls_disabled_in_code",
+               "daily_cap_zero"
+             ]
+           }
+@@ -16413,7 +16365,6 @@
+       "expected": {
+         "allowed": false,
+         "reasons": [
+-          "calls_disabled_in_code",
+           "daily_cap_zero"
+         ],
+         "levels": [
+@@ -16425,16 +16376,13 @@
+           },
+           {
+             "id": "integration_test",
+-            "available": false,
+-            "reasons": [
+-              "calls_disabled_in_code"
+-            ]
++            "available": true,
++            "reasons": []
+           },
+           {
+             "id": "real_call",
+             "available": false,
+             "reasons": [
+-              "calls_disabled_in_code",
+               "daily_cap_zero"
+             ]
+           }
+@@ -16453,10 +16401,8 @@
+         "dailyCap": 1
+       },
+       "expected": {
+-        "allowed": false,
+-        "reasons": [
+-          "calls_disabled_in_code"
+-        ],
++        "allowed": true,
++        "reasons": [],
+         "levels": [
+           {
+             "id": "text_simulation",
+@@ -16466,17 +16412,13 @@
+           },
+           {
+             "id": "integration_test",
+-            "available": false,
+-            "reasons": [
+-              "calls_disabled_in_code"
+-            ]
++            "available": true,
++            "reasons": []
+           },
+           {
+             "id": "real_call",
+-            "available": false,
+-            "reasons": [
+-              "calls_disabled_in_code"
+-            ]
++            "available": true,
++            "reasons": []
+           }
+         ]
+       }
+@@ -16495,7 +16437,6 @@
+       "expected": {
+         "allowed": false,
+         "reasons": [
+-          "calls_disabled_in_code",
+           "twilio_voice_disabled",
+           "no_voice_number",
+           "elevenlabs_disabled",
+@@ -16514,7 +16455,6 @@
+             "id": "integration_test",
+             "available": false,
+             "reasons": [
+-              "calls_disabled_in_code",
+               "twilio_voice_disabled",
+               "no_voice_number",
+               "elevenlabs_disabled",
+@@ -16525,7 +16465,6 @@
+             "id": "real_call",
+             "available": false,
+             "reasons": [
+-              "calls_disabled_in_code",
+               "twilio_voice_disabled",
+               "no_voice_number",
+               "elevenlabs_disabled",
+@@ -16551,7 +16490,6 @@
+       "expected": {
+         "allowed": false,
+         "reasons": [
+-          "calls_disabled_in_code",
+           "source_not_allowed"
+         ],
+         "levels": [
+@@ -16565,7 +16503,6 @@
+             "id": "integration_test",
+             "available": false,
+             "reasons": [
+-              "calls_disabled_in_code",
+               "source_not_allowed"
+             ]
+           },
+@@ -16573,7 +16510,6 @@
+             "id": "real_call",
+             "available": false,
+             "reasons": [
+-              "calls_disabled_in_code",
+               "source_not_allowed"
+             ]
+           }
+@@ -16594,7 +16530,6 @@
+       "expected": {
+         "allowed": false,
+         "reasons": [
+-          "calls_disabled_in_code",
+           "twilio_voice_disabled",
+           "no_voice_number"
+         ],
+@@ -16609,7 +16544,6 @@
+             "id": "integration_test",
+             "available": false,
+             "reasons": [
+-              "calls_disabled_in_code",
+               "twilio_voice_disabled",
+               "no_voice_number"
+             ]
+@@ -16618,7 +16552,6 @@
+             "id": "real_call",
+             "available": false,
+             "reasons": [
+-              "calls_disabled_in_code",
+               "twilio_voice_disabled",
+               "no_voice_number"
+             ]
+diff --git a/backend/tests/fixtures/ultron-studio/tools/integrations-cases-check.py b/backend/tests/fixtures/ultron-studio/tools/integrations-cases-check.py
+index fbf83d8b..b0b01ea7 100644
+--- a/backend/tests/fixtures/ultron-studio/tools/integrations-cases-check.py
++++ b/backend/tests/fixtures/ultron-studio/tools/integrations-cases-check.py
+@@ -882,7 +882,9 @@ def d_voice_policy(c):
+         v = c["voiceRows"] + (c["whatsappRows"] if BUG == "voiceCallPolicy:counts_whatsapp" else [])
+         return {"canary": "active_voice" if "active" in v else ("not_active" if any(s != "revoked" for s in v) else "not_registered")}
+     x = c["context"]
+-    rs = ["calls_disabled_in_code"]
++    # C-4: el fixture describe la constante ABIERTA (`CALLS_ENABLED_IN_CODE = true`, commit `voice(calls-open)`). La variante
++    # `closed_constant` es la política con la constante cerrada: tiene que caer en todos los casos `decide`.
++    rs = ["calls_disabled_in_code"] if BUG == "voiceCallPolicy:closed_constant" else []
+     if not x["twilioVoiceEnabled"]:
+         rs.append("twilio_voice_disabled")
+     if not x["twilioVoiceFromConfigured"]:
+@@ -1155,7 +1157,7 @@ VARIANTS = [
+     "voiceDoctor:region_not_normalized", "voiceDoctor:key_not_trimmed", "voiceDoctor:agent_dollar", "voiceDoctor:provider_always_elevenlabs",
+     "voiceDoctor:base_url_in_production", "voiceDoctor:any_ok", "voiceDoctor:le_30d", "voiceVerify:one_format_enough", "voiceVerify:non_object_is_ok",
+     "voiceCallPolicy:counts_whatsapp", "voiceCallPolicy:verified_adds", "voiceCallPolicy:negative_only", "voiceCallPolicy:first_only",
+-    "voiceCallPolicy:integration_excludes_source",
++    "voiceCallPolicy:integration_excludes_source", "voiceCallPolicy:closed_constant",
+     "twilioProbeSanitize:missing_list_is_zero", "twilioProbeSanitize:truncated_gt", "twilioProbeSanitize:caps_truthy",
+     "twilioProbeSanitize:keep_friendly_name", "twilioProbeSanitize:keep_unknown_status", "twilioProbeSanitize:degraded_on_account_error",
+     "twilioProbeSanitize:last4_from_digits", "twilioProbeSanitize:e164_seven_digits", "twilioProbeSanitize:five_digit_codes",
+diff --git a/backend/tests/fixtures/ultron-studio/tools/integrations-cases/sec_voice.py b/backend/tests/fixtures/ultron-studio/tools/integrations-cases/sec_voice.py
+index 8b741446..67be3b2b 100644
+--- a/backend/tests/fixtures/ultron-studio/tools/integrations-cases/sec_voice.py
++++ b/backend/tests/fixtures/ultron-studio/tools/integrations-cases/sec_voice.py
+@@ -115,7 +115,10 @@ VV("sin conexión", {"connectionError": "unreachable"}, "unreachable", None, Non
+ VV("tiempo agotado", {"connectionError": "timeout"}, "unreachable", None, None, "unreachable")
+ 
+ # ── VoiceCallPolicy ──
+-CDIC = "calls_disabled_in_code"
++# C-4 (commit `test(voice)` detrás de `voice(calls-open)`): con `CALLS_ENABLED_IN_CODE = true` ningún caso lleva
++# `calls_disabled_in_code`, `allowed` es «sin motivos» y cada nivel está disponible si no le queda ninguno. El
++# estado CERRADO (el destino de la vuelta atrás) lo comprueba `tests/Unit/Voice/VoiceCallPolicyClosedCopyTest.php`
++# sobre una copia cerrada de la política: estos mismos casos con `calls_disabled_in_code` delante.
+ 
+ 
+ def ctx(tv=True, frm=True, ps=VER, canary="active_voice", source="canary_registry", cap=5):
+@@ -124,34 +127,34 @@ def ctx(tv=True, frm=True, ps=VER, canary="active_voice", source="canary_registr
+ 
+ def VP(desc, c, reasons, integration):
+     levels = [{"id": "text_simulation", "available": True, "cost": "none", "where": "laboratorio"},
+-              {"id": "integration_test", "available": False, "reasons": integration},
+-              {"id": "real_call", "available": False, "reasons": reasons}]
+-    add("voiceCallPolicy", "decide", desc, {"context": c}, {"allowed": False, "reasons": reasons, "levels": levels})
++              {"id": "integration_test", "available": not integration, "reasons": integration},
++              {"id": "real_call", "available": not reasons, "reasons": reasons}]
++    add("voiceCallPolicy", "decide", desc, {"context": c}, {"allowed": not reasons, "reasons": reasons, "levels": levels})
+ 
+ 
+-VP("todo listo salvo la constante del código", ctx(), [CDIC], [CDIC])
++VP("todo listo: permitida (la constante abierta)", ctx(), [], [])
+ VP("producción en H6 (el ejemplo del contrato)", ctx(False, False, NC, "not_registered", "canary_registry", 0),
+-   [CDIC, "twilio_voice_disabled", "no_voice_number", "elevenlabs_not_configured", "not_an_active_voice_canary", "daily_cap_zero"],
+-   [CDIC, "twilio_voice_disabled", "no_voice_number", "elevenlabs_not_configured"])
+-VP("Twilio Voice apagado", ctx(tv=False), [CDIC, "twilio_voice_disabled"], [CDIC, "twilio_voice_disabled"])
+-VP("sin número de voz", ctx(frm=False), [CDIC, "no_voice_number"], [CDIC, "no_voice_number"])
+-VP("ElevenLabs sin configurar", ctx(ps=NC), [CDIC, "elevenlabs_not_configured"], [CDIC, "elevenlabs_not_configured"])
+-VP("ElevenLabs apagado", ctx(ps=DIS), [CDIC, "elevenlabs_disabled"], [CDIC, "elevenlabs_disabled"])
+-VP("ElevenLabs sin verificar", ctx(ps=UNV), [CDIC, "elevenlabs_unverified"], [CDIC, "elevenlabs_unverified"])
+-VP("ElevenLabs verificado no añade nada", ctx(ps=VER), [CDIC], [CDIC])
+-VP("el canario de voz no está activo", ctx(canary="not_active"), [CDIC, "not_an_active_voice_canary"], [CDIC])
+-VP("no hay canario de voz registrado", ctx(canary="not_registered"), [CDIC, "not_an_active_voice_canary"], [CDIC])
+-VP("la fuente es marketing_calls (T-7)", ctx(source="marketing_calls"), [CDIC, "source_not_allowed"], [CDIC, "source_not_allowed"])
+-VP("otra fuente", ctx(source="other"), [CDIC, "source_not_allowed"], [CDIC, "source_not_allowed"])
+-VP("cupo diario 0", ctx(cap=0), [CDIC, "daily_cap_zero"], [CDIC])
+-VP("cupo diario negativo", ctx(cap=-1), [CDIC, "daily_cap_zero"], [CDIC])
+-VP("cupo diario 1", ctx(cap=1), [CDIC], [CDIC])
++   ["twilio_voice_disabled", "no_voice_number", "elevenlabs_not_configured", "not_an_active_voice_canary", "daily_cap_zero"],
++   ["twilio_voice_disabled", "no_voice_number", "elevenlabs_not_configured"])
++VP("Twilio Voice apagado", ctx(tv=False), ["twilio_voice_disabled"], ["twilio_voice_disabled"])
++VP("sin número de voz", ctx(frm=False), ["no_voice_number"], ["no_voice_number"])
++VP("ElevenLabs sin configurar", ctx(ps=NC), ["elevenlabs_not_configured"], ["elevenlabs_not_configured"])
++VP("ElevenLabs apagado", ctx(ps=DIS), ["elevenlabs_disabled"], ["elevenlabs_disabled"])
++VP("ElevenLabs sin verificar", ctx(ps=UNV), ["elevenlabs_unverified"], ["elevenlabs_unverified"])
++VP("ElevenLabs verificado no añade nada", ctx(ps=VER), [], [])
++VP("el canario de voz no está activo", ctx(canary="not_active"), ["not_an_active_voice_canary"], [])
++VP("no hay canario de voz registrado", ctx(canary="not_registered"), ["not_an_active_voice_canary"], [])
++VP("la fuente es marketing_calls (T-7)", ctx(source="marketing_calls"), ["source_not_allowed"], ["source_not_allowed"])
++VP("otra fuente", ctx(source="other"), ["source_not_allowed"], ["source_not_allowed"])
++VP("cupo diario 0", ctx(cap=0), ["daily_cap_zero"], [])
++VP("cupo diario negativo", ctx(cap=-1), ["daily_cap_zero"], [])
++VP("cupo diario 1", ctx(cap=1), [], [])
+ VP("todo falla a la vez: se acumulan en el orden de REASONS", ctx(False, False, DIS, "not_active", "marketing_calls", 0),
+-   [CDIC, "twilio_voice_disabled", "no_voice_number", "elevenlabs_disabled", "not_an_active_voice_canary", "source_not_allowed", "daily_cap_zero"],
+-   [CDIC, "twilio_voice_disabled", "no_voice_number", "elevenlabs_disabled", "source_not_allowed"])
+-VP("marketing_calls con todo lo demás listo y el cupo máximo", ctx(source="marketing_calls", cap=20), [CDIC, "source_not_allowed"], [CDIC, "source_not_allowed"])
+-VP("apagado y sin número aunque ElevenLabs esté verificado", ctx(tv=False, frm=False), [CDIC, "twilio_voice_disabled", "no_voice_number"],
+-   [CDIC, "twilio_voice_disabled", "no_voice_number"])
++   ["twilio_voice_disabled", "no_voice_number", "elevenlabs_disabled", "not_an_active_voice_canary", "source_not_allowed", "daily_cap_zero"],
++   ["twilio_voice_disabled", "no_voice_number", "elevenlabs_disabled", "source_not_allowed"])
++VP("marketing_calls con todo lo demás listo y el cupo máximo", ctx(source="marketing_calls", cap=20), ["source_not_allowed"], ["source_not_allowed"])
++VP("apagado y sin número aunque ElevenLabs esté verificado", ctx(tv=False, frm=False), ["twilio_voice_disabled", "no_voice_number"],
++   ["twilio_voice_disabled", "no_voice_number"])
+ 
+ 
+ def VC(desc, voice_rows, whatsapp_rows, canary):
+-- 
+2.50.1 (Apple Git-155)
+

@@ -109,7 +109,7 @@ Leyenda de «estado cerrado tras `T`»: **CC** = la copia cerrada en proceso, ca
 > Desde el commit `voice(calls-open)` del H8 (`VoiceCallPolicy::CALLS_ENABLED_IN_CODE = true`), §I6.5 deja de decir «En H6, siempre `false`»: `decide()` permite exactamente cuando no hay motivos y `calls_disabled_in_code` ya no sale (sigue en el conjunto cerrado de §I2, el primero, para la vuelta atrás). El ejemplo de §I6.6 pierde su primer motivo. El fixture del contrato `integrations-cases.json` (Enmienda 2) cambia en sus 18 casos `voiceCallPolicy · decide` y solo en ellos, como dice su README (PO-3): los mismos motivos sin `calls_disabled_in_code`, `allowed` y la disponibilidad de los niveles según queden motivos, y «todo listo salvo la constante del código» pasa a «todo listo: permitida (la constante abierta)». El comprobador independiente suma la variante de la política cerrada. El estado cerrado se sigue comprobando caso a caso sobre una copia cerrada de la política (`tests/Unit/Voice/VoiceCallPolicyClosedCopyTest.php`). Vuelta atrás: `git revert` del commit de pruebas y del de la constante, en un solo push, devuelve el fixture y este texto a la Enmienda 2.
 
 **H8, enmienda nueva (protección 2 y su guarda):**
-> La protección 2 se cumple con el commit `voice(calls-open)` (autorizado por escrito, AUT-VOZ-1). Desde él, la guarda estática (`VoiceIsolationTest::test_las_llamadas_estan_abiertas_en_el_codigo`) exige `public const CALLS_ENABLED_IN_CODE = true;` literal y una sola vez, con las mismas reglas de declaración y lectura; el estado cerrado lo prueban la copia cerrada en proceso de las tres políticas puras (`ClosedPolicyCopy`) y `H8E2ECerradaTest` en una copia cerrada del árbol (el arnés construye esa copia girando la línea al revés). «Nunca se gira en el árbol compartido para probar» sigue valiendo en el otro sentido: ninguna prueba cierra la constante en el árbol.
+> La protección 2 se cumple con el commit `voice(calls-open)` (autorizado por escrito, AUT-VOZ-1). Desde él, la guarda estática (`VoiceIsolationTest::test_las_llamadas_estan_abiertas_en_el_codigo`) exige `public const CALLS_ENABLED_IN_CODE = true;` literal y una sola vez, con las mismas reglas de declaración y lectura; el estado cerrado lo prueban la copia cerrada en proceso de las seis clases que leen la constante (las tres políticas puras, el job, el iniciador y el desplegador; `ClosedPolicyCopy`) y `H8E2ECerradaTest` en una copia cerrada del árbol (el arnés construye esa copia girando la línea al revés). «Nunca se gira en el árbol compartido para probar» sigue valiendo en el otro sentido: ninguna prueba cierra la constante en el árbol.
 
 ## 5. Las salidas
 
@@ -190,7 +190,7 @@ No tocar ningún fichero de E2E en `T` fue deliberado: el arnés es de devops y 
 
 ## 7. Procedimiento para el lead el día de la apertura
 
-`T` = **`3287769b`** (rama local `prep/voice-calls-open-tests`, worktree `_worktrees/ultron-voz-abierta/Iron-Body`; encima de `X'` = `e61ef7a2`, que NUNCA se sube). Los worktrees comparten el almacén de objetos: `803cd016` es visible desde cualquier árbol del mismo repo sin `fetch` [C: es el mismo `.git` común].
+`T` = **`3287769b`** y, detrás, `T2` = **`216b0f1b`** (la condición I-1 de la revisión; ver la nota del lead al final). Los dos están en la rama local `prep/voice-calls-open-tests`, worktree `_worktrees/ultron-voz-abierta/Iron-Body`, encima de `X'` = `e61ef7a2`, que NUNCA se sube. Los worktrees comparten el almacén de objetos: `3287769b` y `216b0f1b` son visibles desde cualquier árbol del mismo repo sin `fetch` [C: es el mismo `.git` común]. Copia en el repositorio, por si la rama local se pierde: `ops/apertura-llamadas/` (dos parches y su README). *(Corregido por el lead tras la revisión, I-3c: aquí se citaba por error `803cd016`, la primera versión de `T`, que no se usa.)*
 
 **Antes del día** (sin tocar `main`):
 1. Veredicto del reviewer sobre `T` (y de security si lo pide: la copia cerrada carga código de `app/` transformado en memoria).
@@ -198,16 +198,19 @@ No tocar ningún fichero de E2E en `T` fue deliberado: el arnés es de devops y 
 
 **El día** (paso 9 del runbook, después de «DESPLIEGUE H8 FASE 4a … COMPLETADO»):
 ```bash
-# raíz Iron-Body/, en el árbol donde está `main` con X en la punta
+# raíz Iron-Body/, en un árbol LIMPIO (no el compartido `_worktrees/ultron-h8`, que usan los agentes), tras `git fetch origin`.
+# La rama local `main` de esta máquina está vieja (22-10): no usarla. Lo que cuenta es HEAD == origin/main == X.   (lead, I-3b)
+git rev-parse HEAD origin/main                   # los dos, el mismo commit
 git log -1 --format='%H %s'                      # tiene que ser X: «voice(calls-open): …»
 git show --stat --format= HEAD                   # 1 fichero, backend/app/Services/Voice/VoiceCallPolicy.php, 1+ 1-
-git cherry-pick 3287769b                         # (o el T rebasado del paso 2)
-git range-diff 3287769b^..3287769b HEAD^..HEAD   # «1: 3287769b = 1: <nuevo>»: el mismo parche, sin cambios
-git diff --name-only HEAD^ HEAD | grep -v '^backend/tests/' ; echo "fuera de tests/: $?"   # tiene que imprimir 1 (nada fuera)
+git cherry-pick 3287769b 216b0f1b                # T y T2, en orden (o los rehechos del paso 2)
+git range-diff 3287769b^..216b0f1b HEAD~2..HEAD  # «1: 3287769b = 1: <nuevo>» y «2: 216b0f1b = 2: <nuevo>»: los mismos parches
+git diff --name-only HEAD~2 HEAD | grep -v '^backend/tests/' ; echo "fuera de tests/: $?"  # tiene que imprimir 1 (nada fuera)
 git log -1 --format=%s -- backend/app/Services/Voice/VoiceCallPolicy.php                   # sigue siendo X (h8-voice-scope.sh lo exige)
 cd backend
-nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging <los 21 ficheros de §1> tests/Unit/Voice/VoiceCallPolicyClosedCopyTest.php \
-  tests/Unit/Voice/ElevenLabsClosedCopyTest.php tests/Feature/Telephony/PlaceOutboundVoiceCallClosedCopyTest.php   # 624 OK
+# Los 21 ficheros de §1 y las 3 pruebas de la copia cerrada, uno por línea, en `docs/ultron-studio/ops/apertura-llamadas/bateria-rapida.txt` (lead, I-3d).
+# Con xargs, porque zsh no separa en palabras un `$(…)` sin comillas:
+xargs nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging < docs/ultron-studio/ops/apertura-llamadas/bateria-rapida.txt   # OK (624 tests)
 nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging tests/Unit/Voice tests/Unit/Telephony tests/Feature/Voice tests/Feature/Telephony tests/Feature/Outreach tests/Feature/UltronStudio
 nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging tests/Unit/UltronStudio tests/Unit/Outreach tests/Unit/Twilio
 python3 -I tests/fixtures/ultron-studio/tools/integrations-cases-check.py      # RESULTADO: OK, 117 variantes
@@ -285,3 +288,23 @@ M13–M17 son el argumento a favor de la copia cerrada: son cambios **invisibles
 - El segundo worktree (`_worktrees/ultron-voz-abierta/segundo`) ya está retirado (`git worktree remove`, sin forzar) [C].
 - La base PG `ultron_studio_voz_abierta` queda en el clúster local desechable (como las de las demás tandas).
 - En el scratchpad de la sesión: la copia de mutaciones, las salidas completas de todas las baterías (`out/*.out`, `out/*.fails`), el diff del CRM y los guiones (`run.sh`, `runpg.sh`, `mutar.py`).
+
+---
+
+## Nota del lead (11-11-2026, tras la revisión de `informe-reviewer-voz-abierta.md`)
+
+- **Veredicto del reviewer:** `T` aprobado con condiciones y la copia cerrada en proceso, aceptada con condiciones; ningún bloqueante, tampoco de producto.
+- **I-1 cerrada por el lead** en la misma rama local, como un segundo commit: **`216b0f1b`** (`T2`). Las dos aceptaciones exigen exactamente UN job para la fila, en la conexión y la cola `voice`. Comprobado:
+  - la mutación R6 del reviewer (la puerta encola dos veces) muere ahora en los dos caminos de la puerta (2 y 3 fallos, «UN job para esa fila»);
+  - con la constante abierta, voz y telefonía 901 (también en orden aleatorio, semilla 4242) y V9, paridad y Studio 515, en verde; la batería rápida, `OK (624 tests)`;
+  - con la constante cerrada, las pruebas de `T` siguen cayendo (29 de 51 en cuatro ficheros);
+  - cada prueba de la copia cerrada, sola: 4, 2 y 2 en verde; 0 temporales.
+  
+  **Falta** que un reviewer vuelva a mirar ese diff, como pide su informe (§7, «Antes del día», 1).
+- **M-1, también en `T2`:** `ClosedPolicyCopy::load()` exige las dos líneas antes de cargar cada copia.
+- **I-3 (a–d), hecha en los documentos:** el paso 9 de `ops/RUNBOOK_PRIMERA_LLAMADA.md` lleva el procedimiento completo, y el §7 de este informe quedó corregido en su sitio (árbol limpio con `HEAD == origin/main`, los dos commits, y la lista de la batería rápida en `ops/apertura-llamadas/bateria-rapida.txt`, con la orden probada tal cual).
+- **M-4, hecha:** la enmienda del H8 propuesta en §4.3 dice ya seis clases.
+- **Copia en el repositorio:** `ops/apertura-llamadas/` guarda `T` y `T2` como parches, por si la rama local se pierde. Comprobado con un índice temporal: aplicados sobre `e61ef7a2` dan el mismo árbol que `216b0f1b` (`87a64d29bf9c`).
+- **El día de la apertura se aplican los dos, en orden:** `git cherry-pick 3287769b 216b0f1b`. `803cd016` es la primera versión de `T`: no se usa.
+- **Sin hacer, anotado:** I-2 y H-1 (enmendar `v9-abierta.sh` y `h8-e2e.sh`, que mueren con la apertura en la punta), I-4 (dejar escrito cómo se reabre tras una vuelta atrás de nivel 4), M-2 (que el recorrido de lectores incluya a quien llama a `decide(`), M-3 (tres docblocks y una línea del README del fixture, de la primera versión) y M-5 (el nombre de una prueba fuera de `T`).
+- **Ramas locales que sobran** (su borrado necesita la autorización del propietario): `prep/voice-calls-open-tests-v1`, `tmp/solo-t-c4` y `tmp/solo-t2-c4`.

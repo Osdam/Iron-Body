@@ -1,0 +1,89 @@
+From 216b0f1b09f8cb6170cf8cd6c4e23bbe2cb9aef6 Mon Sep 17 00:00:00 2001
+From: Alejandro <alejandro@gmail.com>
+Date: Wed, 11 Nov 2026 22:44:45 -0500
+Subject: [PATCH 2/2] =?UTF-8?q?test(voice):=20la=20llamada=20aceptada=20se?=
+ =?UTF-8?q?=20encola=20UNA=20sola=20vez,=20y=20la=20copia=20cerrada=20exig?=
+ =?UTF-8?q?e=20sus=20dos=20l=C3=ADneas=20al=20cargarse=20(C-4,=20tras=20la?=
+ =?UTF-8?q?=20revisi=C3=B3n)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Condición I-1 de la revisión de `T` (informe-reviewer-voz-abierta.md): las
+aceptaciones de «todo en regla → se permite» usaban `Queue::assertPushed` con
+un cierre, que pasa con uno o más jobs. Una puerta que encolara dos veces el
+job de la misma fila dejaba en verde todas (mutación R6, viva). Ahora las dos
+(`VoiceFixtures::assertOutboundAccepted` y `V9StrategyGateTest::assertAceptada`)
+exigen exactamente un job para esa fila, en la conexión y la cola `voice`. R6
+muere en los dos caminos de la puerta (línea 193 y 517).
+
+Menor M-1: `ClosedPolicyCopy::load()` exige que la copia difiera del original
+en exactamente dos líneas antes de cargarla, y no solo en una prueba.
+
+Con la constante abierta: voz y telefonía 901 pruebas, V9, paridad y Studio
+515, en verde. Con la constante cerrada, las pruebas de `T` siguen cayendo.
+
+Va detrás de `3287769b`: el día de la apertura se aplican los dos, en orden.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01X8FX3k99KGLKfgiKShUNUF
+---
+ backend/tests/Feature/Outreach/V9/V9StrategyGateTest.php  | 6 +++++-
+ backend/tests/Feature/Telephony/Support/VoiceFixtures.php | 6 +++++-
+ backend/tests/Unit/Voice/Support/ClosedPolicyCopy.php     | 6 ++++++
+ 3 files changed, 16 insertions(+), 2 deletions(-)
+
+diff --git a/backend/tests/Feature/Outreach/V9/V9StrategyGateTest.php b/backend/tests/Feature/Outreach/V9/V9StrategyGateTest.php
+index d2942d22..e2b8e6fa 100644
+--- a/backend/tests/Feature/Outreach/V9/V9StrategyGateTest.php
++++ b/backend/tests/Feature/Outreach/V9/V9StrategyGateTest.php
+@@ -121,7 +121,11 @@ private function assertAceptada(array $r, array $m, int $filasAntes, string $fue
+         $evento = VoiceCallEvent::query()->where('call_id', $fila->id)->sole();
+         $this->assertSame(['outbound_requested', 'system', 'Estrategia '.self::KEY], [$evento->kind, $evento->actor_type, $evento->actor_name]);
+         $this->assertSame(['strategy', 'commercial', $parte, 960500], [$evento->codes['requester'], $evento->codes['purposeKey'], $evento->codes['part'], $evento->codes['reservedMicros']]);
+-        Queue::assertPushed(PlaceOutboundVoiceCall::class, static fn (PlaceOutboundVoiceCall $j): bool => $j->callId === (int) $fila->id);
++        // UN job para ESA fila, y en el carril de la voz: dos jobs serían dos intentos de marcar a la misma persona
++        // (revisión de `T`, I-1: una puerta que encolara dos veces dejaba en verde todas las aceptaciones).
++        $this->assertCount(1, Queue::pushed(PlaceOutboundVoiceCall::class, static fn (PlaceOutboundVoiceCall $j): bool => $j->callId === (int) $fila->id
++            && $j->connection === 'voice' && $j->queue === 'voice'), 'UN job para esa fila, en la cola `voice`');
++        $this->assertCount(1, Queue::pushed(PlaceOutboundVoiceCall::class, static fn (PlaceOutboundVoiceCall $j): bool => $j->callId === (int) $fila->id), 'y ninguno más para ella en otra cola');
+         $this->assertStringNotContainsString(substr($m['e164'], 1), (string) json_encode($r['body']), 'la respuesta no lleva el número');
+ 
+         return $fila;
+diff --git a/backend/tests/Feature/Telephony/Support/VoiceFixtures.php b/backend/tests/Feature/Telephony/Support/VoiceFixtures.php
+index 9d9f0ecc..60959507 100644
+--- a/backend/tests/Feature/Telephony/Support/VoiceFixtures.php
++++ b/backend/tests/Feature/Telephony/Support/VoiceFixtures.php
+@@ -311,7 +311,11 @@ protected function assertOutboundAccepted(TestResponse $r, string $canario, int
+         $this->assertSame([self::MOBILE_RESERVATION_MICROS, $dia], [(int) $fila->reserved_micros, (string) $fila->budget_day], 'la reserva, en el día de Bogotá');
+         $this->assertGreaterThanOrEqual(self::MOBILE_RESERVATION_MICROS, VoiceCostGuard::committedMicros($dia), 'la reserva cuenta como comprometida');
+         $this->assertSame(['outbound_requested'], VoiceCallEvent::query()->where('call_id', $fila->id)->pluck('kind')->all());
+-        Queue::assertPushed(PlaceOutboundVoiceCall::class, static fn (PlaceOutboundVoiceCall $j): bool => $j->callId === (int) $fila->id);
++        // UN job para ESA fila, y en el carril de la voz: dos jobs serían dos intentos de marcar a la misma persona
++        // (revisión de `T`, I-1: una puerta que encolara dos veces dejaba en verde todas las aceptaciones).
++        $this->assertCount(1, Queue::pushed(PlaceOutboundVoiceCall::class, static fn (PlaceOutboundVoiceCall $j): bool => $j->callId === (int) $fila->id
++            && $j->connection === 'voice' && $j->queue === 'voice'), 'UN job para esa fila, en la cola `voice`');
++        $this->assertCount(1, Queue::pushed(PlaceOutboundVoiceCall::class, static fn (PlaceOutboundVoiceCall $j): bool => $j->callId === (int) $fila->id), 'y ninguno más para ella en otra cola');
+         $this->assertStringNotContainsString(substr(self::CANARY_PHONE, 1), (string) $r->getContent(), 'la respuesta no lleva el número');
+ 
+         return $fila;
+diff --git a/backend/tests/Unit/Voice/Support/ClosedPolicyCopy.php b/backend/tests/Unit/Voice/Support/ClosedPolicyCopy.php
+index 60fb58d2..ced216b9 100644
+--- a/backend/tests/Unit/Voice/Support/ClosedPolicyCopy.php
++++ b/backend/tests/Unit/Voice/Support/ClosedPolicyCopy.php
+@@ -162,6 +162,12 @@ public static function load(): void
+             if (class_exists($clase, false)) {
+                 continue;
+             }
++            // La copia solo puede diferir del original en dos líneas (la clase y la constante, o la clase y su `use`):
++            // se exige AQUÍ, no solo en una prueba, para que valga también cuando una prueba de la copia corre sola.
++            $cambios = count(self::changedLines($relativa));
++            if ($cambios !== 2) {
++                throw new RuntimeException("La copia cerrada de {$relativa} cambia {$cambios} líneas y solo puede cambiar 2.");
++            }
+             $fichero = tempnam(sys_get_temp_dir(), 'ib-copia-cerrada-');
+             if ($fichero === false) {
+                 throw new RuntimeException('Sin fichero temporal para la copia cerrada.');
+-- 
+2.50.1 (Apple Git-155)
+
