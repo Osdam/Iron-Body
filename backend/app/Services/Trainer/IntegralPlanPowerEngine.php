@@ -247,7 +247,7 @@ class IntegralPlanPowerEngine
                 'routine_frame' => $this->gate->routineFrame($json, $plan['routine']),
                 'nutrition_core' => $this->core($json, $restricciones),
                 'nutrition_v1' => $this->nutritionV1($json, $restricciones),
-                'routine_v1' => $this->routineV1($json, $nombres),
+                'routine_v1' => $this->routineV1($json, $nombres, $brief),
             };
             $s['issues'] = $g['issues'];
             $s['data'] = $g['data'];
@@ -439,17 +439,24 @@ class IntegralPlanPowerEngine
         return ['issues' => $issues, 'data' => $json];
     }
 
-    /** @return array{issues: list<string>, data: array<string,mixed>} */
-    private function routineV1(array $json, array $nombres): array
+    /**
+     * @param  array<string,mixed>  $brief
+     * @return array{issues: list<string>, data: array<string,mixed>}
+     */
+    private function routineV1(array $json, array $nombres, array $brief = []): array
     {
         $r = is_array($json['routine'] ?? null) ? $json['routine'] : [];
         $validos = 0;
+        $diasConEjercicios = 0;
         foreach ((array) ($r['days'] ?? []) as $d) {
+            $enEsteDia = 0;
             foreach ((array) ($d['exercises'] ?? []) as $e) {
                 if (is_array($e) && is_int($e['exercise_id'] ?? null) && isset($nombres[$e['exercise_id']])) {
                     $validos++;
+                    $enEsteDia++;
                 }
             }
+            $diasConEjercicios += $enEsteDia > 0 ? 1 : 0;
         }
 
         $issues = [];
@@ -458,6 +465,11 @@ class IntegralPlanPowerEngine
         }
         if ($validos === 0) {
             $issues[] = 'La rutina no trae ningún ejercicio del catálogo.';
+        }
+        // Los días que pidió el entrenador son un dato, no una sugerencia: una
+        // rutina con otro número de sesiones se repara, no se entrega.
+        if (($brief['days_source'] ?? null) === 'trainer' && $diasConEjercicios !== (int) $brief['days_available']) {
+            $issues[] = "La rutina trae {$diasConEjercicios} días con ejercicios; el entrenador pidió exactamente {$brief['days_available']}.";
         }
 
         return ['issues' => $issues, 'data' => $json];
@@ -617,10 +629,18 @@ class IntegralPlanPowerEngine
      */
     private function modelBrief(array $contexto, array $brief): array
     {
+        // Lo que el entrenador indicó para este plan solo aparece si llegó:
+        // con `{}` el `member_brief` es el mismo de antes, byte a byte. (Su
+        // observación ya viaja en `trainer_notes.plan_note`.)
+        $delEntrenador = array_filter([
+            'session_minutes' => $brief['session_minutes'] ?? null,
+        ], fn ($v) => $v !== null);
+
         return [
             'objective' => $brief['objective'],
             'training_level' => $brief['training_level'],
             'days_available' => $brief['days_available'],
+        ] + $delEntrenador + [
             'targets' => $brief['targets'],
             'restrictions' => array_column($brief['restrictions'], 'label'),
             'restrictions_text' => $brief['restrictions_text'],
@@ -645,7 +665,11 @@ class IntegralPlanPowerEngine
         return array_intersect_key($brief, array_flip([
             'objective_key', 'training_level', 'days_available', 'days_source', 'targets',
             'restrictions', 'allergies', 'is_minor', 'clinical_signals', 'safety_mode', 'assumptions',
-        ]));
+        ])) + array_filter([
+            // Solo con contexto del entrenador: lo que pidió y lo que se aplicó.
+            'days_requested' => $brief['days_requested'] ?? null,
+            'session_minutes' => $brief['session_minutes'] ?? null,
+        ], fn ($v) => $v !== null);
     }
 
     private function text(mixed $v): ?string

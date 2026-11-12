@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Trainer;
 
 use App\Exceptions\IntegralPlanException;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Trainer\GenerateIntegralPlanRequest;
 use App\Models\Member;
 use App\Models\Routine;
 use App\Models\Trainer;
@@ -31,14 +32,18 @@ class IntegralPlanController extends Controller
      *
      * Devuelve DOS borradores. Nada queda visible para el socio hasta que el
      * entrenador lo revise y lo publique.
+     *
+     * El cuerpo es el contexto de «Contexto para el plan» (las claves de
+     * `PlanContext.toJson()`), todo opcional: las apps hasta la 2.0.9 envían
+     * `{}` y generan exactamente como antes ({@see GenerateIntegralPlanRequest}).
      */
-    public function generate(Request $request, Member $member): JsonResponse
+    public function generate(GenerateIntegralPlanRequest $request, Member $member): JsonResponse
     {
         $trainer = $this->trainer($request);
         $this->assertCanAccess($trainer, $member);
 
         try {
-            $plan = app(IntegralPlanGenerationService::class)->generate($trainer, $member);
+            $plan = app(IntegralPlanGenerationService::class)->generate($trainer, $member, $request->trainerInput());
         } catch (IntegralPlanException $e) {
             // A1: otra generación en curso (409) o tope del entrenador (429).
             // El resto, como siempre: 422 con su código y `retryable`.
