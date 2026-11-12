@@ -235,7 +235,9 @@ class UltronStudioLabRunnerTest extends TestCase
         $this->travelBack();
 
         // El presupuesto: un exceso real (la estimación se quedó corta) deja el día por encima del tope.
-        $this->labOpenAi(['ultron_studio.lab.daily_budget_usd' => '0.010000']);
+        // El tope del ejemplo tiene que quedar justo por encima de la estimación de los dos casos, que crece con las
+        // instrucciones del laboratorio: con `PROMPT_VERSION 2026-11-12.3` ya no cabía en 0,010 US$.
+        $this->labOpenAi(['ultron_studio.lab.daily_budget_usd' => '0.011000']);
         $this->script([['reply' => 'Hola, ¿en qué te ayudo?', 'usage' => [20000, 400]], self::JUDGE_PASS]);
         $d = $this->launch($this->root, ['kind' => 'baseline'], ['C-04', 'C-05'])->assertCreated()->json('data');
         $id = (int) StudioLabRun::query()->where('uuid', $d['uuid'])->value('id');
@@ -250,8 +252,8 @@ class UltronStudioLabRunnerTest extends TestCase
         // Enmienda 4.1: el motivo se reutiliza y el resumen dice qué tope se alcanzó.
         $fin = StudioLabEvent::query()->where('event', 'run.finished')->where('subject_uuid', $d['uuid'])->sole();
         $this->assertSame('La ejecución se detuvo (budget_exhausted): lo comprometido del día superó el tope diario', $fin->summary);
-        $this->assertSame(['kind' => 'daily', 'capMicros' => 10000], $fin->diff['budgetCap']);
-        $this->assertSame(['kind' => 'daily', 'capMicros' => 10000], $run->summary['budgetCap']);
+        $this->assertSame(['kind' => 'daily', 'capMicros' => 11000], $fin->diff['budgetCap']);
+        $this->assertSame(['kind' => 'daily', 'capMicros' => 11000], $run->summary['budgetCap']);
     }
 
     public function test_el_tope_de_la_ejecucion_se_aplica_al_coste_real_y_salta_el_resto(): void

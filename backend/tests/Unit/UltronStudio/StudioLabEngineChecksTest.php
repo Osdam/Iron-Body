@@ -64,7 +64,7 @@ class StudioLabEngineChecksTest extends TestCase
     }
 
     /**
-     * Enmienda 8 de H4 (`PROMPT_VERSION 2026-11-12.2`): las cuatro conductas que el actor lleva en sus
+     * Enmienda 8 de H4 (`PROMPT_VERSION 2026-11-12.3`): las cuatro conductas que el actor lleva en sus
      * instrucciones tienen que caber en el filtro real del motor. Si una guarda cambia y empieza a marcar la frase
      * que se le pide al actor, el laboratorio lo suspendería por obedecer: esta prueba lo dice antes.
      */
@@ -74,8 +74,9 @@ class StudioLabEngineChecksTest extends TestCase
         $sinPeticion = ['paymentState' => 'none', 'handoffRequested' => false];
         $conPeticion = ['paymentState' => 'none', 'handoffRequested' => true];
         $conductas = [
-            // a) informar antes de preguntar
+            // a) responder antes de preguntar; el precio, con su marcador
             ['No hay problema. Entrenar por tu cuenta te da libertad de horario; las clases grupales te dan guía y motivación. ¿Cuál se parece más a lo que buscas?', $sinPeticion],
+            ['El {{PLAN_NAME}} cuesta {{PLAN_PRICE}}. ¿Te gustaría agendar una valoración?', $sinPeticion],
             // b) el pago que no consta
             ['Todavía no lo veo registrado. Antes de confirmarlo hay que verificarlo con la pasarela de pagos; puede tardar unos minutos. No hace falta enviar capturas.', $sinPeticion],
             // c) el traspaso corroborado

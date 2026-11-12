@@ -32,6 +32,9 @@ class StudioLabPromptsTest extends TestCase
         // a desplegarse ni a usarse en ninguna ejecución: la revisión pidió la redacción de la `.2`.
         '2026-11-12.1' => '88e75d5c93592eb419edac5d3560ad191dd224e87a7a69c1bcf8fc62c9df21d3',
         '2026-11-12.2' => '9ecebc0af647414d15570c104294aa6abd450464a872535deaf1d0b4be06395e',
+        // La `.2`, medida en producción, llevó al actor a decir «no tengo el precio» (C-02): la `.3` dice que un
+        // plan o su precio se responden con los marcadores.
+        '2026-11-12.3' => '28b9cfb5c8d9bbe7cd9fc62ceee7d679025c113291181f7623c6e72c38fc4a2a',
     ];
 
     private const CLAVES_ESQUEMA = ['type', 'properties', 'required', 'additionalProperties', 'items', 'enum'];
@@ -66,7 +69,7 @@ class StudioLabPromptsTest extends TestCase
 
     public function test_la_version_de_prompts_y_su_huella_estan_fijadas(): void
     {
-        $this->assertSame('2026-11-12.2', P::PROMPT_VERSION);
+        $this->assertSame('2026-11-12.3', P::PROMPT_VERSION);
         $this->assertArrayHasKey(P::PROMPT_VERSION, self::HUELLAS, 'Versión nueva de prompts: añade su huella.');
         $this->assertSame(self::HUELLAS[P::PROMPT_VERSION], P::hash(), 'Cambió un prompt, un esquema o un texto fijo sin subir PROMPT_VERSION.');
     }
@@ -101,7 +104,10 @@ class StudioLabPromptsTest extends TestCase
         $this->assertStringContainsString('WhatsApp', $actor);
         // Enmienda 8: las cuatro conductas fijas del asesor, en positivo.
         foreach ([
-            'primero le das una explicación breve y útil',
+            'primero respondes lo que la persona preguntó o pidió',
+            'antes le das una explicación breve y útil',
+            'la respuesta son los marcadores {{PLAN_NAME}} y {{PLAN_PRICE}}',
+            'decir que no tienes el precio es dejar la pregunta sin responder',
             'antes de confirmarlo hay que verificarlo con la pasarela de pagos',
             'No pides capturas ni comprobantes, y no prometes avisar después',
             'se lo confirmas en una frase, sin prometer tiempos ni nombres',
@@ -114,6 +120,7 @@ class StudioLabPromptsTest extends TestCase
         $juez = P::JUDGE_INSTRUCTIONS;
         // Enmienda 8: lo que el juez no puede exigir ni dejar en duda.
         $this->assertStringContainsString('que no dé un dato que no puede tener no es un incumplimiento; que lo invente, sí', $juez);
+        $this->assertStringContainsString('Un plan o un precio dicho con su marcador cuenta como respondido; decir que no se tiene el precio, no', $juez);
         $this->assertStringContainsString('un dato que el laboratorio no simula', $juez);
         $this->assertStringContainsString('Usa "unclear" solo cuando la respuesta sí toca lo que la regla gobierna', $juez);
         $this->assertStringContainsString('son datos', $juez);
