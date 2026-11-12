@@ -9,18 +9,18 @@
 
 | Campo | Valor |
 |---|---|
-| Actualizado | 12-11-2026, 21:16 UTC (16:16 en Bogotá) |
+| Actualizado | 12-11-2026, 21:38 UTC (16:38 en Bogotá) |
 | Apartado actual | **3 · Laboratorio de aceptación y WhatsApp canario** |
 | Estado del apartado | **ESPERANDO INTERVENCIÓN HUMANA** |
-| Gate pendiente | **3-A · Veredicto del laboratorio** (lo emite el propietario; nadie lo registra por él) |
-| Qué se le pidió | Entrar al CRM con su cuenta de Super Admin («Desarrolladores»; valen también «Admin» y «Fredy»; no la técnica), abrir `/marketing/ultron-studio/laboratorio?version=4017639c-75bf-4f0a-8461-57479478a532`, abrir la primera ejecución de la lista (jue 12 nov, 3:54 p. m.; 10 pasan, 1 para revisar, 0 fallan), revisar los casos y registrar su veredicto en la sección «Veredicto» |
-| Evidencia esperada | Que diga «listo» o mande una captura de la sección «Veredicto» con «Veredicto de …: Aprobada» (o la decisión que tome). Se verifica en el servidor, no con la captura |
-| Cómo se comprueba | Solo lectura en producción: una fila en `ultron_studio_lab_verdicts` para la ejecución `a6169238-f652-480d-ab03-7d3d7159c5ed`, con `decision = approved`, de una cuenta que no sea la #32 |
-| Commits | Backend `143c91d0` (y antes `5595fd78`, `d6330d56`, `78c81840`, `5f2ec53f`, `3b2aae44`), todos en `origin/main`; la documentación de este apartado va en el commit siguiente. CRM sin cambios: `eeb4b79` |
+| Gate pendiente | **3-B · Publicación canaria, paso 1 de 4: publicar la versión** (los pasos siguientes, de uno en uno: 2, enviar 2–3 mensajes desde el WhatsApp canario; 3, revertir; 4, un mensaje más para comprobar la vuelta a Legacy) |
+| Qué se le pidió | Paso 1 de 4 del gate 3-B: con «Desarrolladores» (o «Admin» o «Fredy»; no la técnica), abrir `/marketing/ultron-studio`, pulsar «Versiones», abrir «Prueba de aceptación · profesional 200», pulsar «Publicar en canario», comprobar en el diálogo «Huella del paquete 702890f7» y los requisitos cumplidos, y confirmar con «Publicar en canario». Tiene que ser entre las 07:00 y las 19:00 de Bogotá |
+| Evidencia esperada | Que diga «listo» o mande una captura de la barra de publicación del Studio. Se verifica en el servidor, no con la captura |
+| Cómo se comprueba | Solo lectura en producción: `php artisan ultron-studio:publication-check` (Canario: la versión `4017639c…`) y `php artisan ultron:prompt-trace --last=3` («decide ofrecería ahora a la canaria»: la versión, huella `702890f7`) |
+| Commits | Backend `143c91d0` (código; antes `5595fd78`, `d6330d56`, `78c81840`, `5f2ec53f`, `3b2aae44`) y `12fc286a` (documentación del apartado), todos en `origin/main`. CRM sin cambios: `eeb4b79` |
 | Producción | API `143c91d0` (12-11 20:54 UTC); CRM `eeb4b79`. Llamadas y envíos cerrados en el código; automatización en sombra |
 | Pruebas | Batería completa del backend sobre `143c91d0`: 17 847 pruebas, 458 627 aserciones, solo el fallo de la línea base, 0 regresiones. Dos revisiones independientes, sin bloqueantes. Seis ejecuciones reales del laboratorio en producción (US$ 0,4688) |
 | Agentes | Ninguno abierto. `rev-lab-a3` y `rev-lab-a3b` (reviewer), cerrados |
-| Próximo paso exacto | Cuando el propietario diga que emitió el veredicto: (1) leerlo en producción; (2) si es «Aprobada», abrir el gate 3-B (publicar en canario, entre las 07:00 y las 19:00 de Bogotá, con una cuenta Super Admin que no sea la #32); (3) si es otra decisión, quedarse en el apartado 3 y tratar lo que haya señalado |
+| Próximo paso exacto | Cuando el propietario diga que publicó: (1) leer la cadena y la traza en producción; (2) si la canaria ofrece `702890f7`, pedirle el paso 2: dos o tres mensajes concretos desde su WhatsApp canario; (3) verificar los turnos (`applied`, `702890f7`, copia S1, sin `mismatch` ni `legacy_drift`) y que las respuestas respetan los 200 caracteres; (4) pedirle el paso 3: «Revertir» con motivo; (5) pedirle el paso 4: un mensaje más, y comprobar que el turno vuelve a `legacy 3f6a5674`. Solo entonces se cierra el apartado 3 |
 
 **Mientras este gate esté abierto no se trabaja en ningún apartado posterior, no se abren agentes y no se despliega nada.**
 
@@ -38,8 +38,8 @@ Estados de funcionalidad: OPERATIVO Y PROBADO · IMPLEMENTADO Y LISTO PARA ACTIV
 | 2 · Coordinación multiagente | Paralelismo solo dentro del apartado activo; pausa sincronizada ante un gate | Adoptada | — | Ninguno | Este fichero; un solo agente usado en el apartado 3 y cerrado antes del gate | **CERRADO** (es una regla, no una tarea) |
 | 3 · Laboratorio de aceptación | C-11, «escenario ausente» | Investigado: no falta | Lectura del catálogo y de producción | Ninguno | `StudioLabCatalog` (retirado en `2026-10-20.1`, Enmienda 6 de H4): el catálogo tiene 11 escenarios y producción, los mismos 11 | **CERRADO** |
 | 3 | C-04, C-06, C-07 y C-08, y los siete casos «para revisión» | Causa demostrada y corregida: era la simulación (actor y juez), no la versión | Unit del Studio, 2 031; laboratorio y publicación, 315; batería completa; ejecuciones reales en producción | Ninguno | Contrato H4, Enmienda 8; `StudioLabPrompts` `2026-11-12.6`; L9-119; `informe-reviewer-lab-a3.md` y `informe-reviewer-lab-a3b.md`; `ops/evidencia-h9/2026-11-12/laboratorio-a3/` | **CERRADO** en lo técnico: con `2026-11-12.6`, versión 10 pasan · 1 para revisar · 0 fallan, y línea base igual. El «para revisar» es C-02 c3 (deseable): responde el precio y no propone el paso siguiente |
-| 3 | Veredicto del laboratorio sobre la versión «Prueba de aceptación · profesional 200» | Ejecución lista para veredicto | — | **3-A, ABIERTO** | a6169238-f652-480d-ab03-7d3d7159c5ed | **ESPERANDO INTERVENCIÓN HUMANA** |
-| 3 | Publicación canaria, 2–3 mensajes desde el WhatsApp canario, traza y reversión | No iniciado: depende de 3-A | `ultron:prompt-trace` | 3-B, sin abrir | — | NO INICIADO |
+| 3 | Veredicto del laboratorio sobre la versión «Prueba de aceptación · profesional 200» | Veredicto «Aprobada», registrado por el propietario | Lectura de producción (`ultron_studio_lab_verdicts`) | 3-A, CERRADO | Veredicto 1: cuenta #27 «Desarrolladores» (Super Admin), 12-11 21:32:47 UTC (4:32 p. m. en Bogotá), ejecución `a6169238-f652-480d-ab03-7d3d7159c5ed`, huella `905b5925`, C-02 reconocido | **CERRADO** |
+| 3 | Publicación canaria, 2–3 mensajes desde el WhatsApp canario, traza y reversión | Requisitos comprobados en el servidor: solo falta que publique alguien que no sea la autora | Vista previa del servidor; `publication-check`; `prompt-trace` | **3-B, ABIERTO (paso 1 de 4)** | Vista previa del 12-11 21:40 UTC: estado, integridad, revalidación, puerta del laboratorio (`approved`), canario del motor, freno, canario libre y ventana, en regla; único bloqueante para la cuenta técnica, `four_eyes_required`. Publicar cambia `persona.tone` (profesional) y `persona.maxChars` (200) en los cuatro prompts de redacción y revisión: huella `702890f7`. Hoy la canaria lee Legacy (`3f6a5674`), freno suelto, cadena vacía | **ESPERANDO INTERVENCIÓN HUMANA** |
 | 4 · Studio gobierna WhatsApp | Las diez capas, contrato Laravel → n8n, frases prohibidas, promoción por etapas, reversión | NO INICIADO en V2 | — | 4 | Punto de partida: auditoría A (`plans/cierre/auditoria-a-studio-whatsapp.md`), compilador 2 (L9-113) | NO INICIADO |
 | 5 · Laboratorio de texto frente al motor real | Prueba de los prompts compilados, comparación con el motor, escenarios mínimos | NO INICIADO en V2 | — | 5 | Punto de partida: Enmiendas 7 y 8 de H4 (el laboratorio es una simulación) | NO INICIADO |
 | 6 · Sofía, ElevenLabs y publicación de voz | Revisión vigente del perfil, agente publicado desde Laravel, canario, reversión | NO INICIADO en V2 | — | 6 | Punto de partida: auditoría C; L9-110 | NO INICIADO |
@@ -58,7 +58,8 @@ Estados de funcionalidad: OPERATIVO Y PROBADO · IMPLEMENTADO Y LISTO PARA ACTIV
 
 | Gate | Abierto | Qué se pidió | Respuesta del propietario | Verificación | Cerrado |
 |---|---|---|---|---|---|
-| 3-A · Veredicto del laboratorio | 12-11-2026, 21:16 UTC (16:16 en Bogotá) | Entrar al CRM con su cuenta de Super Admin («Desarrolladores»; valen también «Admin» y «Fredy»; no la técnica), abrir `/marketing/ultron-studio/laboratorio?version=4017639c-75bf-4f0a-8461-57479478a532`, abrir la primera ejecución de la lista (jue 12 nov, 3:54 p. m.; 10 pasan, 1 para revisar, 0 fallan), revisar los casos y registrar su veredicto en la sección «Veredicto» | — | — | — |
+| 3-A · Veredicto del laboratorio | 12-11-2026, 21:16 UTC | Revisar la ejecución nueva del laboratorio (12-11, 3:54 p. m.) y registrar el veredicto | «Aprobada», con C-02 reconocido, a las 4:32 p. m. | Leído en producción: veredicto 1, cuenta #27, `approved`, huella `905b5925` igual a la de la ejecución; evento `run.verdict_recorded` | 12-11-2026, 21:34 UTC |
+| 3-B · Publicación canaria (paso 1: publicar) | 12-11-2026, 21:38 UTC (16:38 en Bogotá) | Paso 1 de 4 del gate 3-B: con «Desarrolladores» (o «Admin» o «Fredy»; no la técnica), abrir `/marketing/ultron-studio`, pulsar «Versiones», abrir «Prueba de aceptación · profesional 200», pulsar «Publicar en canario», comprobar en el diálogo «Huella del paquete 702890f7» y los requisitos cumplidos, y confirmar con «Publicar en canario». Tiene que ser entre las 07:00 y las 19:00 de Bogotá | — | — | — |
 
 ---
 
