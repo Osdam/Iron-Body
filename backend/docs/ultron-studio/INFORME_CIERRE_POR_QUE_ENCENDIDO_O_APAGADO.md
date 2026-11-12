@@ -41,6 +41,27 @@ Revisado por seguridad y por tres revisiones independientes, sin hallazgos bloqu
 
 ---
 
+## 1 ter. Novedades del 12-11
+
+Lo que cambió después de la noche del 11-11. Un despliegue del servidor y uno del CRM el 12-11 por la mañana (a las 11:09 y a las 11:10, hora de Bogotá). Todo lo que dice «desplegado» está comprobado en producción.
+
+| Qué | Qué pasaba | Cómo queda |
+|---|---|---|
+| Centro de supervisión: «Agente apagado» | La cabecera decía «Agente apagado» mientras ULTRON atendía la conversación de prueba. Miraba el interruptor del agente anterior, que sí está apagado | **Desplegado y comprobado.** Dice quién responde de verdad: hoy, «ULTRON · solo canario». Si alguien lo pausa o lo frena, lo dice; si no se puede leer, dice que no lo sabe |
+| Centro de supervisión: «Las lleva el agente: 855» | Contaba como «del agente» toda conversación abierta que nadie del equipo había tomado. ULTRON atiende una: la de prueba | **Desplegado y comprobado.** «Las atiende el agente: 1», y debajo cuántas no ha tomado nadie del equipo (856) |
+| Centro de supervisión: la línea de tiempo salía en clave | 316 de los 340 hechos comerciales y casi todas las decisiones (3 242 de 3 262 en 30 días) salían con su clave interna en inglés (`renewal_window_opened`, `inbound_skipped`) | **Desplegado y comprobado.** Todo sale en español: «La membresía está por vencer», «Dejó de venir: se detectó inactividad», «El agente anterior no analizó el mensaje»… y cada línea dice quién lo hizo de verdad (el agente, el sistema o una persona del equipo) |
+| Bandeja de contactos asistidos y quejas | Si una persona se quejaba después de que su contacto saliera a la bandeja, alguien del equipo podía reclamarlo y llamarla con una oferta | **Desplegado.** Ese contacto ya no se ofrece ni se puede reclamar. Hoy no hay contactos asistidos en vivo, así que nadie lo ha ejercitado todavía |
+| Simulación de estrategias del Studio | Usaba 30 días fijos para las quejas; si algún día se cambia ese plazo, la simulación habría dicho otra cosa que la ejecución | **Desplegado.** Usa el mismo plazo y las mismas finalidades que la ejecución |
+| Día de abrir las llamadas | El procedimiento tenía huecos: cómo deshacer y volver a abrir, qué desplegar antes, y dos guiones de prueba que dejaban de funcionar con las llamadas abiertas | Procedimiento completo y ensayado en local (`ops/RUNBOOK_PRIMERA_LLAMADA.md`, paso 9 y sección E). Las pruebas de ese día pasaron una revisión independiente de quien las escribió, sin bloqueantes, y están guardadas en el repositorio. **Nada instalado en producción** |
+| Guion de despliegue rápido | Con un descuido en la lista de ficheros podía desplegar la apertura de las llamadas, o la de los envíos comerciales, saltándose sus controles | Corregido y ensayado: se niega a abrir ninguna de las dos |
+| Aviso del escáner comercial en modo de prueba | Decía «hechos nuevos» cuando en modo de prueba cuenta a todos, y dejaba un aviso en el registro de producción | **Desplegado.** Dice lo que cuenta y no avisa en el registro |
+
+Revisado por seguridad y por dos revisiones independientes, sin hallazgos bloqueantes. Baterías completas: servidor 17 786 pruebas y CRM 4 334, solo con los fallos conocidos de siempre.
+
+**Otra línea de trabajo desplegó entre medias** (Iron IA: el contexto del entrenador llega a la rutina y a la guía; producción pasó por `5f803dbd`). No comparte ningún fichero con ULTRON; las dos quedaron integradas y probadas juntas.
+
+---
+
 ## 2. Sección por sección
 
 ### 2.1 Studio · Versiones, aprobación y publicación
