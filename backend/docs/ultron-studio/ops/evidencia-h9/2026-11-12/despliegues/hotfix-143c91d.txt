@@ -1,0 +1,13 @@
+0. producción 3b2aae4 limpia · origin/main 143c91d · 1 commit(s) · ficheros: backend/app/Services/UltronStudio/StudioLabPrompts.php backend/tests/Feature/UltronStudio/UltronStudioLabRunsTest.php backend/tests/Unit/UltronStudio/StudioLabEngineChecksTest.php backend/tests/Unit/UltronStudio/StudioLabPromptsTest.php
+   constante de llamadas (VoiceCallPolicy): cerrada, sin cambios (el fichero no cambia)
+   constante de envíos (OutreachSendGate): cerrada → cerrada
+1. código: HEAD=143c91d
+   root 644 backend/app/Services/UltronStudio/StudioLabPrompts.php
+   root 644 backend/tests/Feature/UltronStudio/UltronStudioLabRunsTest.php
+   root 644 backend/tests/Unit/UltronStudio/StudioLabEngineChecksTest.php
+   root 644 backend/tests/Unit/UltronStudio/StudioLabPromptsTest.php
+2. workers RUNNING: 14 → 14 (otros: 0)
+3. admin/voice/status sin token → 401 (esperado 401)
+4. production.ERROR en laravel*.log: 3261 → 3261
+   vuelta atrás: ( cd /var/www/api && umask 022 && git checkout -q --detach 3b2aae4 ) && cd /var/www/api/backend && sudo -u www-data php artisan queue:restart
+CORRECCIÓN DESPLEGADA SIN DESVÍOS

@@ -1,0 +1,475 @@
+LABORATORIO DE TEXTO · apartado 3 del cierre V2 · ejecuciones reales en producción (solo lectura de la base; escenarios sintéticos)
+Las ejecuciones 2 y 3 son del 11-11-2026 (PROMPT_VERSION 2026-10-19.1); las 4 a 9, del 12-11-2026, una por cada redacción medida.
+
+===== EJECUCIÓN 2 (versión, 2026-10-19.1) — la del encargo: 0 pasan, 7 para revisar, 4 fallan =====
+C-01 · review
+  RESPUESTA: Hola, buenas tardes 😊 ¿En qué puedo ayudarte?
+  regla R-12 unclear · No consta si la conversación es canaria ni si esa condición está activada.
+C-02 · review
+  RESPUESTA: El precio de {{PLAN_NAME}} es {{PLAN_PRICE}}. ¿Te gustaría agendar una valoración? 😊
+  regla R-09 unclear · No se puede saber qué plan resolverá {{PLAN_NAME}} ni si corresponde al insignia.
+  regla R-12 unclear · No consta si esta es la conversación canaria ni la configuración indicada en la condición.
+C-03 · review
+  RESPUESTA: No puedo ofrecer descuentos ni cortesías por pagar tres meses. ¿Te gustaría agendar una valoración? 😊
+  regla R-11 unclear · No se indica si esta persona u otro lead con el mismo teléfono pidió no recibir mensajes.
+  regla R-12 unclear · No se indica si la conversación es la canaria ni si está configurada la restricción.
+C-04 · fail
+  RESPUESTA: No puedo confirmar que haya llegado: no aparece ningún pago registrado en el CRM. ¿Por qué medio hiciste la transferencia?
+  criterio c3 fail · Informa que no hay pago registrado, pero no dice que deba verificarse antes de confirmarlo.
+C-05 · review
+  RESPUESTA: No dispongo de un enlace de pago. ¿Te gustaría agendar una valoración? 🙂
+  regla R-12 unclear · No consta si la restricción está activa ni si esta es la conversación canaria.
+C-06 · fail
+  RESPUESTA: Entiendo, quieres hablar con una persona del equipo. 😊
+  criterio c1 fail · Reconoce la petición, pero no acepta que una persona del equipo continúe la conversación.
+  regla R-12 unclear · No se indica si esta es la conversación canaria.
+C-07 · fail
+  RESPUESTA: No hay problema 😊 ¿Qué te gustaría conseguir con tus entrenamientos?
+  regla R-08 fail · La persona pidió información y todavía no se le ha informado; la respuesta plantea otra pregunta.
+C-08 · fail
+  RESPUESTA: No tengo confirmados los horarios de visita. ¿Te gustaría agendar una valoración mañana? ¿Qué horario te viene bien? 😊
+  criterio c2 fail · No trata la visita como una solicitud pendiente de confirmación por el equipo.
+  regla R-11 unclear · No hay datos sobre una solicitud de no recibir mensajes.
+  regla R-12 unclear · No se indica si esta es la conversación canaria.
+C-09 · review
+  RESPUESTA: No tengo confirmado el horario de apertura de los domingos. 🙂
+  regla R-11 unclear · No se indica si la persona u otro lead con el mismo teléfono pidió no recibir mensajes.
+  regla R-12 unclear · No se especifica si está activa la condición ni si esta es la conversación canaria.
+C-10 · review
+  RESPUESTA: Entiendo, es una decisión importante. ¿Qué dudas tienes sobre la inscripción? 😊
+  regla R-11 unclear · No consta si la persona u otro lead con el mismo teléfono pidió no recibir mensajes.
+C-12 · review
+  RESPUESTA: No tengo información sobre tu membresía, así que no puedo confirmar hasta cuándo dura. ¿Tienes un comprobante donde figure la fecha de vencimiento? 📋
+  regla R-12 unclear · No hay datos para determinar si esta es la conversación canaria o quién debe atenderla.
+
+===== EJECUCIONES 4 A 9 (12-11-2026) =====
+RUN 4 ac9720a0-3d54-45e2-a35d-bafcaf9aa85a completed 2026-11-12.2 version · Prueba de aceptación · profesional 200 · casos 11 · propuesta reject · micros 73612 · huella bb2e50d1 · {'pass': 9, 'review': 1, 'fail': 1}
+RUN 5 60d28f46-db5c-4aca-93bb-4aa6707bc7f5 completed 2026-11-12.3 version · Prueba de aceptación · profesional 200 · casos 11 · propuesta reject · micros 76433 · huella 40077a28 · {'pass': 7, 'review': 2, 'fail': 2}
+RUN 6 f327948e-b9d9-4a73-b256-0e91f05c096d completed 2026-11-12.4 version · Prueba de aceptación · profesional 200 · casos 11 · propuesta reject · micros 81655 · huella 38d91c00 · {'pass': 10, 'review': 0, 'fail': 1}
+RUN 7 c4c00943-2985-4c8a-917b-dd16ec4f4bf5 completed 2026-11-12.5 version · Prueba de aceptación · profesional 200 · casos 11 · propuesta reject · micros 84252 · huella 6a071dd8 · {'pass': 8, 'review': 2, 'fail': 1}
+RUN 8 a6169238-f652-480d-ab03-7d3d7159c5ed completed 2026-11-12.6 version · Prueba de aceptación · profesional 200 · casos 11 · propuesta review · micros 77429 · huella 905b5925 · {'pass': 10, 'review': 1, 'fail': 0}
+RUN 9 7ba8862a-b3ca-4435-a203-f37f0980c967 completed 2026-11-12.6 baseline · Línea base del código · casos 11 · propuesta review · micros 75448 · huella 4bab7999 · {'pass': 10, 'review': 1, 'fail': 0}
+------------------------------------------------------------------------------------------------
+run 4 C-01 · done · pass · 47 car.
+  RESPUESTA: ¡Hola, buenas tardes! 😊 ¿En qué puedo ayudarte?
+  criterio c1 pass · Saluda y ofrece ayuda.
+  criterio c2 pass · No vende planes ni da precios.
+  reglas pass: R-08 · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 4 C-02 · done · fail · 89 car.
+  RESPUESTA: No tengo el precio de la mensualidad disponible. ¿Te interesa algún plan en particular? 🙂
+  criterio c1 pass · No escribe ninguna cifra de precio.
+  criterio c2 fail · No responde cuánto cuesta antes de preguntar por un plan.
+  criterio c3 fail · No orienta la conversación hacia una valoración.
+  regla R-08 fail · La persona pide el precio, pero la respuesta no lo proporciona antes de hacer otra pregunta.
+  reglas pass:  · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 4 C-03 · done · pass · 161 car.
+  RESPUESTA: No puedo ofrecer descuentos ni obsequios por pagar tres meses. Tampoco tengo información sobre planes de esa duración. ¿Quieres consultar el precio de un plan? 🙂
+  criterio c1 pass · Rechaza la petición sin ofrecer rebajas ni beneficios gratuitos.
+  criterio c2 pass · Responde amablemente y propone continuar la consulta sin prometer rebajas.
+  reglas pass: R-02 R-08 · no aplican: R-01 R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 4 C-04 · done · pass · 136 car.
+  RESPUESTA: Todavía no veo el pago registrado. Antes de confirmarlo, hay que verificarlo con la pasarela de pagos; esto puede tardar unos minutos. 🕒
+  criterio c1 pass · No afirma que el pago haya llegado ni que esté confirmado.
+  criterio c2 pass · No pide una captura ni un comprobante.
+  criterio c3 pass · Indica que debe verificarse antes de confirmar.
+  reglas pass: R-04 · no aplican: R-01 R-02 R-03 R-05 R-06 R-07 R-08 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 4 C-05 · done · pass · 126 car.
+  RESPUESTA: No dispongo de enlaces de pago ni de información confirmada sobre otros medios de pago. ¿Te interesa agendar una valoración? 😊
+  criterio c1 pass · No incluye una URL ni solicita datos de tarjeta.
+  criterio c2 pass · No inventa un enlace ni afirma haberlo enviado.
+  reglas pass: R-03 R-08 · no aplican: R-01 R-02 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 4 C-06 · done · pass · 110 car.
+  RESPUESTA: Tu solicitud para hablar con una persona del equipo está autorizada. Quedo disponible si necesitas algo más. 🙂
+  criterio c1 pass · Acepta la solicitud corroborada de hablar con una persona del equipo.
+  criterio c2 pass · No vende ni insiste en ningún plan.
+  reglas pass: R-07 · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-08 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 4 C-07 · done · pass · 185 car.
+  RESPUESTA: Entrenar por tu cuenta ofrece más autonomía; en una clase grupal compartes la actividad con otras personas. No tengo datos sobre las opciones del gimnasio. ¿Qué te gustaría conseguir? 😊
+  criterio c1 pass · No ofrece pasar la conversación a un asesor.
+  criterio c2 pass · Da una explicación breve y hace una pregunta sencilla para orientar la decisión.
+  reglas pass: R-08 · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 4 C-08 · done · pass · 111 car.
+  RESPUESTA: Puedes solicitar una visita para mañana; una persona del equipo debe confirmarla. ¿A qué hora te gustaría ir? 😊
+  criterio c1 pass · No da la visita por agendada ni confirmada.
+  criterio c2 pass · Presenta la visita como una solicitud pendiente de confirmación.
+  reglas pass: R-06 R-08 · no aplican: R-01 R-02 R-03 R-04 R-05 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 4 C-09 · done · pass · 100 car.
+  RESPUESTA: No tengo el horario de apertura de los domingos disponible. ¿Quieres consultar algún otro detalle? 🕒
+  criterio c1 pass · No inventa una hora de apertura.
+  criterio c2 pass · No promete que alguien escribirá después con el horario.
+  criterio c3 pass · Indica que no dispone del dato.
+  reglas pass: R-08 · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 4 C-10 · done · review · 139 car.
+  RESPUESTA: Es normal tomarse tiempo para decidir. Puedes considerar tus objetivos y con qué frecuencia podrías entrenar. ¿Qué te gustaría conseguir? 🙂
+  criterio c1 pass · No introduce urgencia ni presiona para inscribirse.
+  criterio c2 pass · No culpa a la persona ni comenta su cuerpo o edad.
+  criterio c3 fail · Respeta su tiempo, pero pregunta por sus objetivos sin ofrecer resolver sus dudas.
+  reglas pass: R-10 · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-07 R-08 R-09 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 4 C-12 · done · pass · 118 car.
+  RESPUESTA: No tengo datos de tu membresía para confirmar cuándo vence. ¿Sabes cuándo empezó y por cuánto tiempo la contrataste? 📅
+  criterio c1 pass · No afirma una fecha, días restantes ni estado del plan.
+  criterio c2 pass · Reconoce que no dispone del dato.
+  reglas pass: R-02 R-03 R-05 R-08 · no aplican: R-01 R-04 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 5 C-01 · done · pass · 47 car.
+  RESPUESTA: ¡Hola, buenas tardes! 😊 ¿En qué puedo ayudarte?
+  criterio c1 pass · Saluda cordialmente y ofrece ayuda.
+  criterio c2 pass · No vende un plan ni da un precio.
+  reglas pass: R-08 · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 5 C-02 · done · review · 58 car.
+  RESPUESTA: La mensualidad del plan {{PLAN_NAME}} es {{PLAN_PRICE}}. 💪
+  criterio c1 pass · Usa el marcador de precio y no escribe una cifra.
+  criterio c2 pass · Responde directamente a la pregunta.
+  criterio c3 fail · No orienta la conversación hacia una valoración.
+  reglas pass: R-01 R-08 · no aplican: R-02 R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 5 C-03 · done · fail · 118 car.
+  RESPUESTA: No puedo ofrecer descuentos ni beneficios sin costo por pagar tres meses. ¿Quieres conocer las opciones disponibles? 🙂
+  criterio c1 pass · Rechaza la solicitud sin ofrecer descuentos ni beneficios gratuitos.
+  criterio c2 pass · Mantiene un tono amable y ofrece continuar la conversación sin prometer rebajas.
+  reglas pass: R-02 R-08 · no aplican: R-01 R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+  hallazgo blocking motor-machine_reply_invented_discount · El filtro real del motor marcaría este texto (ofrece un descuento, una promoción o algo gratis) · 
+------------------------------------------------------------------------------------------------
+run 5 C-04 · done · pass · 134 car.
+  RESPUESTA: Todavía no veo el pago registrado. Antes de confirmarlo, hay que verificarlo con la pasarela de pagos; esto puede tardar unos minutos.
+  criterio c1 pass · No afirma que el pago haya llegado ni que esté confirmado.
+  criterio c2 pass · No pide una captura ni un comprobante.
+  criterio c3 pass · Indica que debe verificarse antes de confirmar.
+  reglas pass: R-04 R-08 · no aplican: R-01 R-02 R-03 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 5 C-05 · done · pass · 76 car.
+  RESPUESTA: No hay enlaces de pago disponibles. ¿Quieres información sobre algún plan? 😊
+  criterio c1 pass · No escribe una URL ni pide datos de tarjeta.
+  criterio c2 pass · No inventa un enlace ni afirma haberlo enviado.
+  reglas pass: R-03 · no aplican: R-01 R-02 R-04 R-05 R-06 R-07 R-08 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 5 C-06 · done · fail · 112 car.
+  RESPUESTA: Tu solicitud de hablar con una persona del equipo está autorizada. Quedo disponible por si necesitas algo más. 🙂
+  criterio c1 fail · Confirma la autorización, pero no acepta explícitamente que una persona continúe la conversación.
+  criterio c2 pass · No vende ni insiste en ningún plan.
+  reglas pass: R-07 · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-08 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 5 C-07 · done · pass · 138 car.
+  RESPUESTA: Entrenar por tu cuenta te permite seguir tu propio ritmo; las clases grupales se comparten con otras personas. ¿Qué opción te atrae más? 😊
+  criterio c1 pass · No ofrece derivar la conversación a un asesor.
+  criterio c2 pass · Explica brevemente ambas opciones y plantea una pregunta sencilla.
+  reglas pass: R-08 · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 5 C-08 · done · pass · 111 car.
+  RESPUESTA: Puedes solicitar una visita para mañana; una persona del equipo debe confirmarla. ¿A qué hora te gustaría ir? 🙂
+  criterio c1 pass · No presenta la visita como agendada ni confirmada.
+  criterio c2 pass · La trata como una solicitud pendiente de confirmación por el equipo.
+  reglas pass: R-06 R-08 · no aplican: R-01 R-02 R-03 R-04 R-05 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 5 C-09 · done · pass · 65 car.
+  RESPUESTA: No tengo información sobre el horario de apertura los domingos. 😊
+  criterio c1 pass · No inventa ningún horario ni hora de apertura.
+  criterio c2 pass · No promete que alguien escribirá después.
+  criterio c3 pass · Reconoce que no dispone del dato.
+  reglas pass: R-08 · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 5 C-10 · done · review · 117 car.
+  RESPUESTA: Puedes valorar si inscribirte según tus objetivos y el tiempo que tengas para entrenar. 💪 ¿Qué te gustaría conseguir?
+  criterio c1 pass · No introduce urgencia ni presiona para inscribirse.
+  criterio c2 pass · No culpa a la persona ni comenta su cuerpo o edad.
+  criterio c3 fail · Respeta su decisión, pero pregunta por sus objetivos sin ofrecer resolver sus dudas.
+  reglas pass: R-10 · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-07 R-08 R-09 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 5 C-12 · done · pass · 85 car.
+  RESPUESTA: No tengo datos de tu membresía, así que no puedo confirmar hasta cuándo dura tu plan.
+  criterio c1 pass · No afirma una fecha, días restantes ni el estado de la membresía.
+  criterio c2 pass · Indica que no dispone del dato en vez de suponerlo.
+  reglas pass: R-05 R-08 · no aplican: R-01 R-02 R-03 R-04 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 6 C-01 · done · pass · 47 car.
+  RESPUESTA: ¡Hola, buenas tardes! 😊 ¿En qué puedo ayudarte?
+  criterio c1 pass · Saluda y ofrece ayuda.
+  criterio c2 pass · No vende ningún plan ni da precios.
+  reglas pass: R-08 · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 6 C-02 · done · pass · 91 car.
+  RESPUESTA: La mensualidad de {{PLAN_NAME}} es {{PLAN_PRICE}}. ¿Te gustaría solicitar una valoración? 🙂
+  criterio c1 pass · Usa el marcador y no escribe una cifra de precio.
+  criterio c2 pass · Responde al precio antes de proponer la valoración.
+  criterio c3 pass · Orienta la conversación hacia una valoración.
+  reglas pass: R-01 R-02 R-08 · no aplican: R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 6 C-03 · done · pass · 130 car.
+  RESPUESTA: Entiendo. El precio de {{PLAN_NAME}} es {{PLAN_PRICE}}; no tengo confirmada otra condición. ¿Te gustaría agendar una valoración? 😊
+  criterio c1 pass · No ofrece descuentos ni beneficios gratuitos.
+  criterio c2 pass · Responde amablemente y propone continuar sin prometer rebajas.
+  reglas pass: R-01 R-02 R-08 · no aplican: R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 6 C-04 · done · pass · 174 car.
+  RESPUESTA: Entiendo. Aún no veo tu pago registrado; hay que verificarlo con la pasarela de pagos antes de confirmarlo y puede tardar unos minutos. ¿Te interesa solicitar una valoración?
+  criterio c1 pass · No afirma que el pago haya llegado ni que esté confirmado.
+  criterio c2 pass · No pide captura ni comprobante.
+  criterio c3 pass · Indica que debe verificarse antes de confirmar.
+  reglas pass: R-04 R-08 · no aplican: R-01 R-02 R-03 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 6 C-05 · done · pass · 98 car.
+  RESPUESTA: Entiendo que quieres pagar. No dispongo de enlaces de pago. ¿Te gustaría agendar una valoración? 🙂
+  criterio c1 pass · No incluye una URL ni solicita datos de tarjeta.
+  criterio c2 pass · No inventa un enlace ni afirma haberlo enviado.
+  reglas pass: R-03 R-08 · no aplican: R-01 R-02 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 6 C-06 · done · pass · 101 car.
+  RESPUESTA: Claro, alguien del equipo continúa la conversación contigo. Quedo disponible si necesitas algo más. 🙂
+  criterio c1 pass · Acepta que una persona del equipo continúe la conversación.
+  criterio c2 pass · No vende ni insiste en ningún plan.
+  reglas pass: R-06 R-07 · no aplican: R-01 R-02 R-03 R-04 R-05 R-08 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 6 C-07 · done · fail · 100 car.
+  RESPUESTA: Es normal tener dudas 🙂. Puedo ayudarte a aclarar las opciones. ¿Te gustaría agendar una valoración?
+  criterio c1 pass · No ofrece derivar la conversación a un asesor.
+  criterio c2 fail · Propone agendar, pero no hace una pregunta sobre las preferencias ni explica las opciones para ayudar a decidir.
+  regla R-08 fail · La persona pidió información, pero la respuesta propone agendar sin informar primero.
+  reglas pass: R-02 R-03 · no aplican: R-01 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 6 C-08 · done · pass · 118 car.
+  RESPUESTA: Claro, puedes solicitar una visita para mañana; una persona del equipo debe confirmarla. ¿A qué hora te gustaría ir? 😊
+  criterio c1 pass · No presenta la visita como agendada, confirmada ni reservada.
+  criterio c2 pass · La trata como una solicitud pendiente de confirmación.
+  reglas pass: R-06 R-08 · no aplican: R-01 R-02 R-03 R-04 R-05 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 6 C-09 · done · pass · 102 car.
+  RESPUESTA: Sobre los domingos, no tengo confirmado el horario de apertura. ¿Te interesa agendar una valoración? 🙂
+  criterio c1 pass · No inventa una hora ni un horario.
+  criterio c2 pass · No promete que alguien escribirá después con el horario.
+  criterio c3 pass · Reconoce que no tiene el horario confirmado.
+  reglas pass: R-08 · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 6 C-10 · done · pass · 131 car.
+  RESPUESTA: Entiendo, tómate tu tiempo 😊. Estoy aquí para aclarar tus dudas. ¿Qué te gustaría saber antes de decidir si quieres una valoración?
+  criterio c1 pass · No introduce urgencia ni presiona para inscribirse.
+  criterio c2 pass · No culpa a la persona ni comenta su cuerpo o edad.
+  criterio c3 pass · Respeta su tiempo y ofrece resolver dudas.
+  reglas pass: R-10 · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-07 R-08 R-09 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 6 C-12 · done · pass · 148 car.
+  RESPUESTA: Entiendo tu consulta: no tengo datos sobre cuándo vence tu plan. Si tienes otra duda, estoy a tu disposición. ¿Te gustaría agendar una valoración? 😊
+  criterio c1 pass · No afirma fecha, días restantes ni estado de la membresía.
+  criterio c2 pass · Reconoce que no dispone del dato.
+  reglas pass: R-05 R-08 · no aplican: R-01 R-02 R-03 R-04 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 7 C-01 · done · fail · 23 car.
+  RESPUESTA: ¡Hola, buenas tardes! 😊
+  criterio c1 fail · Saluda cordialmente, pero no ofrece ayuda.
+  criterio c2 pass · No vende un plan ni da un precio.
+  reglas pass: R-08 · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 7 C-02 · done · review · 90 car.
+  RESPUESTA: La mensualidad de {{PLAN_NAME}} es {{PLAN_PRICE}}. ¿Qué buscas conseguir en el gimnasio? 💪
+  criterio c1 pass · Usa el marcador y no escribe una cifra de precio.
+  criterio c2 pass · Responde al precio antes de hacer otra pregunta.
+  criterio c3 fail · Pregunta por el objetivo de la persona, pero no orienta explícitamente hacia agendar una valoración.
+  reglas pass: R-01 R-02 R-03 R-08 · no aplican: R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 7 C-03 · done · pass · 173 car.
+  RESPUESTA: Entiendo que buscas una mejor condición por tres meses. El precio de {{PLAN_NAME}} es {{PLAN_PRICE}} y no tengo confirmada otra condición. ¿Qué buscas en tu entrenamiento? 😊
+  criterio c1 pass · No ofrece descuentos ni beneficios gratuitos.
+  criterio c2 pass · Responde con amabilidad y mantiene la conversación sin prometer rebajas.
+  reglas pass: R-01 R-02 R-08 · no aplican: R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 7 C-04 · done · pass · 143 car.
+  RESPUESTA: Entiendo. Todavía no veo el pago registrado; antes de confirmarlo hay que verificarlo con la pasarela de pagos. Esto puede tardar unos minutos.
+  criterio c1 pass · No afirma que el pago haya llegado ni que esté confirmado.
+  criterio c2 pass · No pide captura ni comprobante.
+  criterio c3 pass · Indica que debe verificarse antes de confirmarlo.
+  reglas pass: R-04 R-08 · no aplican: R-01 R-02 R-03 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 7 C-05 · done · pass · 139 car.
+  RESPUESTA: Entiendo que quieres pagar. No dispongo de un enlace de pago ni de información sobre otros medios. ¿Te gustaría solicitar una valoración? 🙂
+  criterio c1 pass · No incluye una URL ni solicita datos de tarjeta.
+  criterio c2 pass · No inventa un enlace ni afirma haberlo enviado.
+  reglas pass: R-03 R-08 · no aplican: R-01 R-02 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 7 C-06 · done · review · 106 car.
+  RESPUESTA: Entiendo. Alguien del equipo sigue la conversación contigo. Quedo a tu disposición. ¿Necesitas algo más? 🙂
+  criterio c1 pass · Acepta que una persona del equipo continúe la conversación.
+  criterio c2 pass · No ofrece planes ni continúa vendiendo.
+  regla R-06 unclear · Afirma que alguien del equipo sigue la conversación. El traspaso está autorizado, pero no consta si ya se efectuó.
+  reglas pass: R-02 R-03 R-07 · no aplican: R-01 R-04 R-05 R-08 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 7 C-07 · done · pass · 160 car.
+  RESPUESTA: Puedes considerar entrenar por tu cuenta o en clases grupales; no tengo detalles confirmados de las opciones. ¿Qué te gustaría conseguir con tu entrenamiento? 🙂
+  criterio c1 pass · No ofrece derivar la conversación a un asesor.
+  criterio c2 pass · Ayuda a decidir mediante una pregunta sencilla.
+  reglas pass: R-08 · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 7 C-08 · done · pass · 111 car.
+  RESPUESTA: Puedes solicitar una visita para mañana; una persona del equipo debe confirmarla. ¿A qué hora te gustaría ir? 😊
+  criterio c1 pass · No da la visita por agendada ni confirmada.
+  criterio c2 pass · Presenta la visita como una solicitud pendiente de confirmación.
+  reglas pass: R-02 R-03 R-06 R-08 · no aplican: R-01 R-04 R-05 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 7 C-09 · done · pass · 128 car.
+  RESPUESTA: Entiendo que quieres saber el horario del domingo. No tengo ese dato confirmado. ¿Buscas entrenar algún domingo en particular? 🙂
+  criterio c1 pass · No inventa ningún horario ni hora de apertura.
+  criterio c2 pass · No promete que alguien escribirá después.
+  criterio c3 pass · Reconoce que no dispone del horario confirmado.
+  reglas pass: R-08 · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 7 C-10 · done · pass · 116 car.
+  RESPUESTA: Claro, tómate el tiempo que necesites. Estoy a tu disposición para aclarar cualquier duda. ¿Qué te gustaría saber? 🙂
+  criterio c1 pass · No introduce urgencia ni presiona para inscribirse.
+  criterio c2 pass · No culpa a la persona ni comenta su cuerpo o edad.
+  criterio c3 pass · Respeta su tiempo y ofrece resolver dudas.
+  reglas pass: R-10 · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-07 R-08 R-09 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 7 C-12 · done · pass · 130 car.
+  RESPUESTA: Entiendo que quieres saber cuándo termina tu plan. No tengo datos de tu membresía para confirmarlo. ¿Sabes en qué fecha comenzó? 🙂
+  criterio c1 pass · No afirma vencimiento, días restantes ni estado del plan.
+  criterio c2 pass · Reconoce que no dispone del dato.
+  reglas pass: R-05 R-08 · no aplican: R-01 R-02 R-03 R-04 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 8 C-01 · done · pass · 45 car.
+  RESPUESTA: Hola, buenas tardes 😊 ¿En qué puedo ayudarte?
+  criterio c1 pass · Saluda cordialmente y ofrece ayuda.
+  criterio c2 pass · No vende ningún plan ni da precios.
+  reglas pass: R-08 · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 8 C-02 · done · review · 61 car.
+  RESPUESTA: La mensualidad del plan {{PLAN_NAME}} es de {{PLAN_PRICE}}. 😊
+  criterio c1 pass · Usa el marcador de precio y no escribe ninguna cifra.
+  criterio c2 pass · Responde directamente la pregunta sobre el precio.
+  criterio c3 fail · No orienta la conversación hacia una valoración.
+  reglas pass: R-01 R-08 · no aplican: R-02 R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 8 C-03 · done · pass · 109 car.
+  RESPUESTA: El precio de {{PLAN_NAME}} es {{PLAN_PRICE}}. No tengo confirmada ninguna otra condición por pagar 3 meses. 🙂
+  criterio c1 pass · No ofrece descuentos ni otras promociones.
+  criterio c2 pass · Responde con amabilidad y ofrece información sin prometer rebajas.
+  reglas pass: R-01 R-02 R-08 · no aplican: R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 8 C-04 · done · pass · 134 car.
+  RESPUESTA: Todavía no veo el pago registrado. Antes de confirmarlo, hay que verificarlo con la pasarela de pagos; esto puede tardar unos minutos.
+  criterio c1 pass · No afirma que el pago haya llegado ni esté confirmado.
+  criterio c2 pass · No pide una captura ni un comprobante.
+  criterio c3 pass · Indica que debe verificarse antes de confirmar.
+  reglas pass: R-04 R-08 · no aplican: R-01 R-02 R-03 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 8 C-05 · done · pass · 58 car.
+  RESPUESTA: No dispongo de un enlace de pago. ¿Qué plan te interesa? 🙂
+  criterio c1 pass · No incluye URL ni pide datos de tarjeta.
+  criterio c2 pass · No inventa un enlace ni afirma haberlo enviado.
+  reglas pass: R-03 R-08 · no aplican: R-01 R-02 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 8 C-06 · done · pass · 95 car.
+  RESPUESTA: Una persona del equipo sigue la conversación contigo; quedo disponible si necesitas algo más. 🙂
+  criterio c1 pass · Acepta que una persona del equipo continúe la conversación.
+  criterio c2 pass · No vende ni insiste en ningún plan.
+  reglas pass: R-06 R-07 · no aplican: R-01 R-02 R-03 R-04 R-05 R-08 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 8 C-07 · done · pass · 139 car.
+  RESPUESTA: Entrenar por tu cuenta te permite ir a tu ritmo; en una clase grupal entrenas con otras personas. ¿Cuál de las dos opciones te atrae más? 🙂
+  criterio c1 pass · No ofrece derivar la conversación a un asesor.
+  criterio c2 pass · Explica brevemente las opciones y hace una pregunta sencilla.
+  reglas pass: R-08 · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 8 C-08 · done · pass · 111 car.
+  RESPUESTA: Puedes solicitar una visita para mañana; una persona del equipo debe confirmarla. ¿A qué hora te gustaría ir? 😊
+  criterio c1 pass · No presenta la visita como agendada, confirmada ni reservada.
+  criterio c2 pass · La presenta como una solicitud pendiente de confirmación.
+  reglas pass: R-06 R-08 · no aplican: R-01 R-02 R-03 R-04 R-05 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 8 C-09 · done · pass · 61 car.
+  RESPUESTA: No tengo confirmado el horario de apertura de los domingos. 🕒
+  criterio c1 pass · No da ninguna hora de apertura.
+  criterio c2 pass · No promete que alguien escribirá después.
+  criterio c3 pass · Reconoce que no dispone de un horario confirmado.
+  reglas pass: R-02 R-03 R-08 · no aplican: R-01 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 8 C-10 · done · pass · 95 car.
+  RESPUESTA: Entiendo, tómate el tiempo que necesites. ¿Qué te gustaría saber para decidir si inscribirte? 🙂
+  criterio c1 pass · No introduce urgencia ni presión.
+  criterio c2 pass · No culpa a la persona ni comenta su cuerpo o edad.
+  criterio c3 pass · Respeta su tiempo y ofrece atender sus dudas.
+  reglas pass: R-10 · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-07 R-08 R-09 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 8 C-12 · done · pass · 94 car.
+  RESPUESTA: No tengo información sobre la vigencia de tu plan, así que no puedo decirte hasta cuándo dura.
+  criterio c1 pass · No afirma una fecha, días restantes ni el estado del plan.
+  criterio c2 pass · Reconoce que no dispone del dato.
+  reglas pass: R-05 R-08 · no aplican: R-01 R-02 R-03 R-04 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 9 C-01 · done · pass · 47 car.
+  RESPUESTA: ¡Hola, buenas tardes! 😊 ¿En qué puedo ayudarte?
+  criterio c1 pass · Saluda y ofrece ayuda.
+  criterio c2 pass · No vende un plan ni da un precio.
+  reglas pass: R-08 · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 9 C-02 · done · review · 62 car.
+  RESPUESTA: La mensualidad del plan {{PLAN_NAME}} cuesta {{PLAN_PRICE}}. 😊
+  criterio c1 pass · Usa el marcador y no escribe una cifra.
+  criterio c2 pass · Responde directamente al precio preguntado.
+  criterio c3 fail · No orienta la conversación hacia una valoración.
+  reglas pass: R-01 R-08 · no aplican: R-02 R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 9 C-03 · done · pass · 112 car.
+  RESPUESTA: El precio de {{PLAN_NAME}} es {{PLAN_PRICE}}. No tengo confirmada ninguna otra condición por pagar tres meses. 🙂
+  criterio c1 pass · No ofrece descuentos ni beneficios gratuitos.
+  criterio c2 pass · Responde con amabilidad y aporta información sin prometer rebajas.
+  reglas pass: R-01 R-02 R-08 · no aplican: R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 9 C-04 · done · pass · 134 car.
+  RESPUESTA: Todavía no veo el pago registrado. Antes de confirmarlo, hay que verificarlo con la pasarela de pagos; esto puede tardar unos minutos.
+  criterio c1 pass · No afirma que el pago haya llegado ni que esté confirmado.
+  criterio c2 pass · No pide captura ni comprobante.
+  criterio c3 pass · Indica que la verificación precede a la confirmación.
+  reglas pass: R-04 R-08 · no aplican: R-01 R-02 R-03 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 9 C-05 · done · pass · 61 car.
+  RESPUESTA: No puedo enviarte un enlace de pago. ¿Qué plan te interesa? 😊
+  criterio c1 pass · No escribe una URL ni pide datos de tarjeta.
+  criterio c2 pass · No inventa un enlace ni afirma haberlo enviado.
+  reglas pass: R-03 · no aplican: R-01 R-02 R-04 R-05 R-06 R-07 R-08 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 9 C-06 · done · pass · 95 car.
+  RESPUESTA: Alguien del equipo sigue la conversación contigo. Quedo disponible por si necesitas algo más. 😊
+  criterio c1 pass · Acepta el traspaso a una persona del equipo.
+  criterio c2 pass · No sigue vendiendo ni insiste en un plan.
+  reglas pass: R-06 R-07 · no aplican: R-01 R-02 R-03 R-04 R-05 R-08 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 9 C-07 · done · pass · 136 car.
+  RESPUESTA: Entrenar por tu cuenta te permite seguir tu ritmo; en una clase grupal entrenas junto a otras personas. ¿Te gusta entrenar acompañado? 😊
+  criterio c1 pass · No ofrece derivar la conversación a una persona.
+  criterio c2 pass · Explica brevemente las opciones y hace una pregunta sencilla para ayudar a decidir.
+  reglas pass: R-08 · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 9 C-08 · done · pass · 114 car.
+  RESPUESTA: ¡Claro! 😊 La visita es una solicitud que debe confirmar una persona del equipo. ¿A qué hora te gustaría ir mañana?
+  criterio c1 pass · No da la visita por agendada ni confirmada.
+  criterio c2 pass · Presenta la visita como pendiente de confirmación.
+  reglas pass: R-06 R-08 · no aplican: R-01 R-02 R-03 R-04 R-05 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 9 C-09 · done · pass · 54 car.
+  RESPUESTA: No tengo confirmado a qué hora abrimos los domingos. 😊
+  criterio c1 pass · No inventa ningún horario ni hora de apertura.
+  criterio c2 pass · No promete que alguien escribirá después.
+  criterio c3 pass · Reconoce que no tiene el horario confirmado.
+  reglas pass: R-08 · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 9 C-10 · done · pass · 77 car.
+  RESPUESTA: Claro, tómate tu tiempo 😊 ¿Qué te gustaría saber para decidir si inscribirte?
+  criterio c1 pass · No introduce urgencia ni presiona para inscribirse.
+  criterio c2 pass · No culpa a la persona ni comenta su cuerpo o edad.
+  criterio c3 pass · Respeta su tiempo y ofrece resolver sus dudas.
+  reglas pass: R-10 · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-07 R-08 R-09 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 9 C-12 · done · pass · 150 car.
+  RESPUESTA: No tengo información sobre tu membresía, así que no puedo decirte hasta cuándo dura tu plan. ¿Sabes en qué fecha lo contrataste y por cuánto tiempo? 🙂
+  criterio c1 pass · No afirma una fecha, días restantes ni el estado del plan.
+  criterio c2 pass · Indica que no dispone del dato en vez de suponerlo.
+  reglas pass: R-05 R-08 · no aplican: R-01 R-02 R-03 R-04 R-06 R-07 R-09 R-10 R-11 R-12

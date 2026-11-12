@@ -1,0 +1,33 @@
+0. producción 298b855 limpia · origin/main d6330d5 · 3 commit(s) · ficheros: backend/app/Services/UltronStudio/StudioLabPrompts.php backend/docs/ultron-studio/INFORME_CIERRE_POR_QUE_ENCENDIDO_O_APAGADO.md backend/docs/ultron-studio/ULTRON_STUDIO_CIERRE_9_HITOS.md backend/docs/ultron-studio/ULTRON_STUDIO_H9_CONTRACT.md backend/docs/ultron-studio/ops/comprobacion-produccion/bandeja-pantalla.cjs backend/docs/ultron-studio/ops/comprobacion-produccion/sonda-bandeja-prod.sh backend/docs/ultron-studio/ops/comprobacion-produccion/supervision-pantalla.cjs backend/docs/ultron-studio/ops/evidencia-h9/2026-11-12/despliegues/deploy-crm-b10d593.txt backend/docs/ultron-studio/ops/evidencia-h9/2026-11-12/despliegues/deploy-crm-d16e26a.txt backend/docs/ultron-studio/ops/evidencia-h9/2026-11-12/despliegues/deploy-crm-eeb4b79.txt backend/docs/ultron-studio/ops/evidencia-h9/2026-11-12/despliegues/hotfix-298b855.txt backend/docs/ultron-studio/ops/evidencia-h9/2026-11-12/despliegues/hotfix-306b83e.txt backend/docs/ultron-studio/ops/evidencia-h9/2026-11-12/despliegues/hotfix-b90f84c.txt backend/docs/ultron-studio/ops/evidencia-h9/2026-11-12/despliegues/smoke-h9-298b855.txt backend/docs/ultron-studio/ops/evidencia-h9/2026-11-12/despliegues/smoke-h9-306b83e.txt backend/docs/ultron-studio/ops/evidencia-h9/2026-11-12/despliegues/smoke-h9-b90f84c.txt backend/docs/ultron-studio/ops/evidencia-h9/2026-11-12/ronda-final/bandeja-asistida.png backend/docs/ultron-studio/ops/evidencia-h9/2026-11-12/ronda-final/bandeja-pantalla.json backend/docs/ultron-studio/ops/evidencia-h9/2026-11-12/ronda-final/supervision-pantalla.json backend/docs/ultron-studio/plans/informes-motores/informe-reviewer-ronda3.md backend/docs/ultron-studio/plans/informes-motores/informe-security-bandeja-ronda3.md backend/tests/Feature/UltronStudio/UltronStudioLabRunsTest.php backend/tests/Unit/UltronStudio/StudioLabEngineChecksTest.php backend/tests/Unit/UltronStudio/StudioLabPromptsTest.php
+   constante de llamadas (VoiceCallPolicy): cerrada, sin cambios (el fichero no cambia)
+   constante de envíos (OutreachSendGate): cerrada → cerrada
+1. código: HEAD=d6330d5
+   root 644 backend/app/Services/UltronStudio/StudioLabPrompts.php
+   root 644 backend/docs/ultron-studio/INFORME_CIERRE_POR_QUE_ENCENDIDO_O_APAGADO.md
+   root 644 backend/docs/ultron-studio/ULTRON_STUDIO_CIERRE_9_HITOS.md
+   root 644 backend/docs/ultron-studio/ULTRON_STUDIO_H9_CONTRACT.md
+   root 644 backend/docs/ultron-studio/ops/comprobacion-produccion/bandeja-pantalla.cjs
+   root 644 backend/docs/ultron-studio/ops/comprobacion-produccion/sonda-bandeja-prod.sh
+   root 644 backend/docs/ultron-studio/ops/comprobacion-produccion/supervision-pantalla.cjs
+   root 644 backend/docs/ultron-studio/ops/evidencia-h9/2026-11-12/despliegues/deploy-crm-b10d593.txt
+   root 644 backend/docs/ultron-studio/ops/evidencia-h9/2026-11-12/despliegues/deploy-crm-d16e26a.txt
+   root 644 backend/docs/ultron-studio/ops/evidencia-h9/2026-11-12/despliegues/deploy-crm-eeb4b79.txt
+   root 644 backend/docs/ultron-studio/ops/evidencia-h9/2026-11-12/despliegues/hotfix-298b855.txt
+   root 644 backend/docs/ultron-studio/ops/evidencia-h9/2026-11-12/despliegues/hotfix-306b83e.txt
+   root 644 backend/docs/ultron-studio/ops/evidencia-h9/2026-11-12/despliegues/hotfix-b90f84c.txt
+   root 644 backend/docs/ultron-studio/ops/evidencia-h9/2026-11-12/despliegues/smoke-h9-298b855.txt
+   root 644 backend/docs/ultron-studio/ops/evidencia-h9/2026-11-12/despliegues/smoke-h9-306b83e.txt
+   root 644 backend/docs/ultron-studio/ops/evidencia-h9/2026-11-12/despliegues/smoke-h9-b90f84c.txt
+   root 644 backend/docs/ultron-studio/ops/evidencia-h9/2026-11-12/ronda-final/bandeja-asistida.png
+   root 644 backend/docs/ultron-studio/ops/evidencia-h9/2026-11-12/ronda-final/bandeja-pantalla.json
+   root 644 backend/docs/ultron-studio/ops/evidencia-h9/2026-11-12/ronda-final/supervision-pantalla.json
+   root 644 backend/docs/ultron-studio/plans/informes-motores/informe-reviewer-ronda3.md
+   root 644 backend/docs/ultron-studio/plans/informes-motores/informe-security-bandeja-ronda3.md
+   root 644 backend/tests/Feature/UltronStudio/UltronStudioLabRunsTest.php
+   root 644 backend/tests/Unit/UltronStudio/StudioLabEngineChecksTest.php
+   root 644 backend/tests/Unit/UltronStudio/StudioLabPromptsTest.php
+2. workers RUNNING: 14 → 14 (otros: 0)
+3. admin/voice/status sin token → 401 (esperado 401)
+4. production.ERROR en laravel*.log: 3260 → 3260
+   vuelta atrás: ( cd /var/www/api && umask 022 && git checkout -q --detach 298b855 ) && cd /var/www/api/backend && sudo -u www-data php artisan queue:restart
+CORRECCIÓN DESPLEGADA SIN DESVÍOS

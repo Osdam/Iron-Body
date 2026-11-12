@@ -1,6 +1,6 @@
 # ULTRON Studio · Por qué cada cosa salía encendida o apagada
 
-**Para:** el propietario. **Fecha:** 11-11-2026, actualizado el 12-11 a las 18:35 UTC (13:35 en Bogotá). **Producción:** API `298b855a` (12-11-2026, 18:30 UTC), CRM `eeb4b79` (18:32 UTC).
+**Para:** el propietario. **Fecha:** 11-11-2026, actualizado el 12-11 a las 21:17 UTC (16:17 en Bogotá). **Producción:** API `143c91d0` (12-11-2026, 20:54 UTC), CRM `eeb4b79` (18:32 UTC).
 **Cómo leerlo:** cada apartado dice lo que veías, por qué salía así, qué se hizo y cómo queda. Los estados finales usan solo cinco palabras: **OPERATIVO Y PROBADO** · **LISTO PARA ACTIVACIÓN AUTORIZADA** · **EN OBSERVACIÓN** · **BLOQUEADO EXTERNAMENTE** · **INCOMPLETO**. No hay porcentajes.
 
 El detalle técnico, con fichero y línea, está en las tres auditorías de `plans/cierre/` y en las filas L9-111 y L9-112 del contrato del H9.
@@ -100,8 +100,9 @@ Revisado por seguridad y por una revisión independiente, sin bloqueantes. Segur
 | Lo que veías | Por qué | Qué se hizo | Cómo queda |
 |---|---|---|---|
 | «Simulación… No es ULTRON: el motor no lee el Studio» | La segunda mitad dejó de ser verdad con M-1 | Texto nuevo del servidor: dice lo que el laboratorio es y manda a la evidencia real, el turno de la conversación canaria | Ejecutar, estimar y coste: **OPERATIVO Y PROBADO** (3 ejecuciones reales; hoy, US$ 0,16) |
-| Ningún veredicto | Lo da una persona que no sea la autora de la versión | Hay una ejecución lista para tu veredicto | **LISTO PARA ACTIVACIÓN AUTORIZADA** |
-| — | El laboratorio prueba una simulación con instrucciones propias, no los cinco prompts reales de WhatsApp. En 11 escenarios fallan 4, los mismos con la versión de prueba y con la línea base | Dicho en el texto | **INCOMPLETO** (apartado 5) |
+| Ningún veredicto | Lo da una persona que no sea la autora de la versión | Hay una ejecución nueva lista para tu veredicto: la del 12-11 a las 3:54 p. m. (10 casos pasan, 1 queda para revisar y ninguno falla). Las anteriores ya no sirven para publicar | **LISTO PARA ACTIVACIÓN AUTORIZADA**: falta tu veredicto |
+| En el laboratorio fallaban 4 de 11 casos y 7 quedaban «para revisar» | No era tu versión: fallaban igual con la versión de prueba y con la línea base. El asesor simulado del laboratorio no conocía cuatro conductas que ULTRON tiene siempre (qué decir de un pago que no aparece, cómo aceptar que siga una persona, que una visita la confirma el equipo y que primero se informa), ni las palabras que el sistema rechaza; y el evaluador marcaba como duda reglas que el laboratorio no puede comprobar. El escenario C-11 no faltaba: se retiró a propósito hace semanas (son 11) | Corregido y desplegado el 12-11, con dos revisiones independientes. Hicieron falta seis redacciones, cada una medida con una ejecución real (coste total: US$ 0,47) | La ejecución nueva: 10 pasan, 1 para revisar y 0 fallan, igual que la línea base. El caso «para revisar» es deseable, no obligatorio: responde el precio y no propone el paso siguiente |
+| — | El laboratorio prueba una simulación con instrucciones propias, no los cinco prompts reales de WhatsApp. En esos casos corregidos, que pasen dice que el asesor simulado se comporta como ULTRON, no que tu versión sea mejor o peor. Y el resultado puede variar un poco de una ejecución a otra | Dicho en el texto | **INCOMPLETO** (apartado 5): probar los prompts reales y hacer las ejecuciones repetibles |
 
 ### 2.4 Integraciones y números canarios
 
@@ -175,7 +176,7 @@ Revisado por seguridad y por una revisión independiente, sin bloqueantes. Segur
 
 | # | Qué | Para qué | Riesgo y vuelta atrás |
 |---|---|---|---|
-| 1 | La versión «Prueba de aceptación · profesional 200» **ya está aprobada** (11-11, 18:36, cuenta «QA ULTRON Revisor»). Faltan: el veredicto «Aprobada» de su ejecución del laboratorio (con una cuenta que pueda aprobar y no sea la técnica), publicarla en canario con «Desarrolladores» (07:00–19:00) y mandar 2–3 mensajes desde tu teléfono canario | Demostrar que lo publicado en el Studio es lo que ULTRON dice | Solo afecta a tu conversación. «Revertir» lo deja como estaba |
+| 1 | La versión «Prueba de aceptación · profesional 200» **ya está aprobada** (11-11, 18:36, cuenta «QA ULTRON Revisor»). Faltan, en este orden y de uno en uno: (a) tu veredicto sobre la ejecución nueva del laboratorio (12-11, 3:54 p. m.), con una cuenta que pueda aprobar y no sea la técnica; (b) publicarla en canario con «Desarrolladores» (07:00–19:00); (c) mandar 2–3 mensajes desde tu teléfono canario | Demostrar que lo publicado en el Studio es lo que ULTRON dice | Solo afecta a tu conversación. «Revertir» lo deja como estaba |
 | 2 | Decir quiénes son las dos personas reales, cada una con su cuenta personal y su ficha en Personal | Vincularlas (una sola orden mía). Sin eso no hay estrategias, plantillas ni comprobación de Meta | Se hace una vez; un vínculo equivocado se revoca desde el CRM |
 | 3 | Registrar tu teléfono como número canario (un Super Admin registra; otro autoriza y activa) | Que el registro documente el canario y sirva a la voz y a la automatización | Se desactiva o se revoca |
 | 4 | En Twilio: un número de origen que no sea el de WhatsApp (verificar otro como identificador de llamada no cuesta) y una clave restringida de voz; importarlo en ElevenLabs como solo saliente | La primera llamada de Sofía a tu canario | Sin coste hasta la llamada. La llamada: 1 al día, tope de US$ 2,00, 5 minutos; texto exacto de la autorización en la auditoría C §3 |
