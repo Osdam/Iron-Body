@@ -6,11 +6,16 @@
 #   bash backend/docs/ultron-studio/ops/h8-e2e.sh [cerrada|abierta|ambas|salientes|todas]   (desde la raíz del worktree; ambas por defecto)
 #
 # Por cada fase, en una COPIA del árbol (`git archive` del commit, fuera del repo; protección 2 del contrato):
-#   cerrada  el código tal cual (CALLS_ENABLED_IN_CODE = false) con TODAS las banderas encendidas: la constante es la
+#   cerrada  el código con CALLS_ENABLED_IN_CODE = false y TODAS las banderas encendidas: la constante es la
 #            única cerradura que queda, y tiene que cerrar sola (publicar se detiene sin asignar el número, las entrantes
 #            dicen «no», las salientes dan 409 y nada sale a la red);
 #   abierta  la copia del banco con la constante en true (el único cambio: se comprueba con diff), y los recorridos
 #            a–h del paso 3 (perfil, laboratorio, publicar, entrantes, evidencia, freno, revertir, apagar y salientes);
+#   La fuente se acepta en los dos estados (I-2/H-1 de la revisión de la apertura): si trae la constante cerrada (una
+#   declaración `= false;` y ninguna `= true;`), la cerrada es la fuente tal cual y abierta/salientes la giran a true; si
+#   trae la abierta (desde `voice(calls-open)`: una `= true;` y ninguna `= false;`), abierta/salientes son la fuente tal
+#   cual y la cerrada la gira al revés, a false. Cualquier otra forma aborta. En los dos casos, entre la cerrada y cada
+#   abierta solo cambia esa línea (se comprueba con diff).
 #   salientes  (TEST8-c, E14-5) la copia del banco como la abierta pero con la configuración de la fase 4a SIN la 3
 #            (`VOICE_INBOUND_ENABLED=false`): salientes primero hasta promover, la parte 4b con una segunda API en
 #            :$H8_E2E_PUERTO_API2 (alcance contacts) y los bloqueos de seguridad de las cuatro rutas públicas.
@@ -188,12 +193,44 @@ fuente
 copia "$RUN/cerrada"
 copia "$RUN/abierta"
 POL=app/Services/Voice/VoiceCallPolicy.php
-grep -c 'public const CALLS_ENABLED_IN_CODE = false;' "$RUN/abierta/backend/$POL" | grep -qx 1 || muere "la constante no está en false exactamente una vez en $POL"
-sed -i '' 's/public const CALLS_ENABLED_IN_CODE = false;/public const CALLS_ENABLED_IN_CODE = true;/' "$RUN/abierta/backend/$POL"
-case " $LISTA " in *" salientes "*)
-  copia "$RUN/salientes"
-  sed -i '' 's/public const CALLS_ENABLED_IN_CODE = false;/public const CALLS_ENABLED_IN_CODE = true;/' "$RUN/salientes/backend/$POL" ;;
+DECL_CERRADA='public const CALLS_ENABLED_IN_CODE = false;'
+DECL_ABIERTA='public const CALLS_ENABLED_IN_CODE = true;'
+# La fuente trae la constante en UNO de los dos estados (I-2/H-1 de la revisión de la apertura, 12-11-2026): o
+# exactamente una declaración cerrada y ninguna abierta (hasta `voice(calls-open)`), o exactamente una abierta y ninguna
+# cerrada (desde ese commit). Cualquier otra forma (ninguna, dos, las dos) aborta. La fuente va tal cual a las copias de
+# su estado, y la otra se hace girando esa línea en el sentido que toque: false → true (abierta y salientes) o
+# true → false (cerrada, la que ejecuta H8E2ECerradaTest).
+N_CERRADA=$(grep -cF "$DECL_CERRADA" "$RUN/fuente/backend/$POL" || true)
+N_ABIERTA=$(grep -cF "$DECL_ABIERTA" "$RUN/fuente/backend/$POL" || true)
+case "$N_CERRADA $N_ABIERTA" in
+  "1 0") FUENTE_EN=cerrada ;;
+  "0 1") FUENTE_EN=abierta ;;
+  *) muere "la constante no está en un solo estado en $POL (declaraciones «= false;»: $N_CERRADA, «= true;»: $N_ABIERTA; se admite exactamente una de las dos y ninguna de la otra)" ;;
 esac
+gira() { # copia estado-final: gira la declaración de la copia (la fuente estaba en el otro estado) y lo comprueba
+  local f="$RUN/$1/backend/$POL"
+  if [ "$2" = abierta ]; then
+    sed -i '' "s/$DECL_CERRADA/$DECL_ABIERTA/" "$f"
+  else
+    sed -i '' "s/$DECL_ABIERTA/$DECL_CERRADA/" "$f"
+  fi
+}
+estado_ok() { # copia estado: la copia tiene exactamente la declaración de ese estado y ninguna del otro
+  local f="$RUN/$1/backend/$POL" c a
+  c=$(grep -cF "$DECL_CERRADA" "$f" || true); a=$(grep -cF "$DECL_ABIERTA" "$f" || true)
+  { [ "$2" = cerrada ] && [ "$c $a" = "1 0" ]; } || { [ "$2" = abierta ] && [ "$c $a" = "0 1" ]; } \
+    || muere "la copia $1 no quedó $2 (declaraciones «= false;»: $c, «= true;»: $a)"
+}
+case " $LISTA " in *" salientes "*) copia "$RUN/salientes" ;; esac
+if [ "$FUENTE_EN" = cerrada ]; then
+  gira abierta abierta
+  [ -d "$RUN/salientes/backend" ] && gira salientes abierta
+else
+  gira cerrada cerrada
+fi
+estado_ok cerrada cerrada
+estado_ok abierta abierta
+[ -d "$RUN/salientes/backend" ] && estado_ok salientes abierta
 for AB in abierta salientes; do
   [ -d "$RUN/$AB/backend" ] || continue
   DIF=$(diff -r -q -x vendor "$RUN/cerrada/backend" "$RUN/$AB/backend" || true)
@@ -203,7 +240,12 @@ for AB in abierta salientes; do
 done
 diff "$RUN/cerrada/backend/$POL" "$RUN/abierta/backend/$POL" > "$RUN/giro-constante.diff" || true
 ORIGEN="el commit"; [ -n "$ARBOL_SHA" ] && ORIGEN="el árbol de trabajo sobre HEAD (huella $ARBOL_SHA)"
-echo "   cerrada: $ORIGEN tal cual · abierta: lo mismo + el giro de UNA línea ($LINEAS líneas cambiadas en el diff: una fuera y una dentro, solo $POL)"
+if [ "$FUENTE_EN" = cerrada ]; then
+  COPIAS="la fuente trae la constante CERRADA · cerrada: $ORIGEN tal cual · abierta$([ -d "$RUN/salientes/backend" ] && echo ' y salientes'): lo mismo + el giro de UNA línea (false → true)"
+else
+  COPIAS="la fuente trae la constante ABIERTA (voice(calls-open)) · abierta$([ -d "$RUN/salientes/backend" ] && echo ' y salientes'): $ORIGEN tal cual · cerrada: lo mismo + el giro de UNA línea al revés (true → false)"
+fi
+echo "   $COPIAS ($LINEAS líneas cambiadas en el diff: una fuera y una dentro, solo $POL)"
 PRUEBAS_SHA=$(cat "$BE"/tests/Feature/Voice/E2E/*.php | shasum -a 256 | cut -c1-16)
 # Los simuladores y la valla, DEL COMMIT como el backend (TEST8-c): OPS8 los cambia en el árbol de trabajo mientras otros
 # corren el E2E, y un simulador a medias tumbaría una pasada sin culpa del código. Se usan los de `$SHA`.
@@ -517,6 +559,7 @@ FALLOS_TOT=$(cat "$RUN"/*/checks-*.jsonl | python3 -I -c 'import json, sys; prin
   echo "E2E H8 · backend $CORTO ($SHA$([ -n "$ARBOL_SHA" ] && echo " + el árbol de trabajo sin confirmar, huella $ARBOL_SHA$([ -n "$FUENTE_DIR" ] && echo ", relanzado desde su copia")")) · $(hora) · $DUR s"
   echo "pruebas del E2E (sha256 de tests/Feature/Voice/E2E/*.php): $PRUEBAS_SHA"
   echo "simuladores y valla de ops/banco-h8 (sha256 de los 4 .cjs, DEL COMMIT ${SHA:0:8}; los del árbol de trabajo: $SIMS_ARBOL): $SIMS_SHA"
+  echo "copias: $COPIAS"
   printf '%s' "$RESUMENES"
   echo "comprobaciones que fallaron: $FALLOS_TOT"
   echo "hash de resultados (sha256 de las comprobaciones ordenadas: fase, paso, nombre, ok): $HASH"

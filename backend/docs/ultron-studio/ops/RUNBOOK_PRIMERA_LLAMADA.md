@@ -181,10 +181,21 @@ El procedimiento completo está en el informe de devops, C-4 (opción recomendad
 **Antes, sin tocar `main` (las pruebas de la apertura ya están preparadas y revisadas):** son DOS commits de la rama local `prep/voice-calls-open-tests` (worktree `_worktrees/ultron-voz-abierta/Iron-Body`; no está en el remoto; copia como parches en `ops/apertura-llamadas/`): **`3287769b`** (`T`) y **`216b0f1b`** (`T2`, la condición I-1 de la revisión). Solo tocan `backend/tests/`. Informes: `plans/informes-motores/informe-tester-voz-abierta.md` e `informe-reviewer-voz-abierta.md` (aprobado con condiciones, sin bloqueantes). No usar `803cd016` ni las ramas `…-v1` y `tmp/solo-t*`: son versiones anteriores.
 
 **Precondiciones del tramo (revisión, I-4), la víspera:**
-- Producción tiene que estar en la punta de `origin/main` salvo documentación: el modo 4a exige que entre lo desplegado y `origin/main` solo haya documentación y el commit de la apertura. Si `main` lleva pruebas o código sin desplegar, se despliega antes con `ops/hotfix-backend.sh`.
+- Producción tiene que estar en la punta de `origin/main` salvo documentación: el modo 4a exige que entre lo desplegado y `origin/main` solo haya documentación y el commit de la apertura (`deploy-h8-backend-fase1.sh:400-409`), y cada commit de documentación sin desplegar viaja solo si se acepta uno a uno con `--acepta-main` (`:491-492`). Si `main` lleva pruebas o código sin desplegar, se despliega antes con `ops/hotfix-backend.sh`, **antes de subir la apertura**:
+  - El 12-11 producción sirve `9a6e3b1` y `origin/main` = `4277f128` trae **dos** pruebas sin desplegar: `tests/Feature/Commercial/CommercialSuppression1581Test.php` (la añade `8c1f092e`, que es un commit `docs/ops` pero no solo documentación) y `tests/Feature/Commercial/ScanCommercialFactsCeilingTest.php` (`d1d6e2b3`). Lo demás es documentación. *(Corregido por devops el 12-11: aquí decía que solo `d1d6e2b3` tocaba `tests/`.)*
+  - L, con la orden del propietario (es un despliegue a producción: no cambia el código que se ejecuta, pero hace `queue:restart`). Desde el Mac, raíz `Iron-Body/`, en un árbol limpio tras `git fetch origin`. `C` = el commit que confirma `hotfix-backend.sh` enmendado (12-11):
+    ```bash
+    P=$(ssh ironbody-vps 'git -C /var/www/api rev-parse --short=7 HEAD')    # hoy 9a6e3b1
+    E=$(git rev-parse --short=7 origin/main)
+    git diff --name-only $P $E | grep -vE '^backend/(app|tests|docs)/|^docs/|^[^/]+\.md$'   # vacío: ni migraciones, ni rutas, ni configuración
+    git show "$C:backend/docs/ultron-studio/ops/hotfix-backend.sh" | ssh ironbody-vps "bash -s -- $P $E $(git diff --name-only $P $E | tr '\n' ' ')"
+    ```
+  - **Tiene que imprimir:** «constante de llamadas (VoiceCallPolicy): cerrada, sin cambios (el fichero no cambia)» y «CORRECCIÓN DESPLEGADA SIN DESVÍOS». **Vuelta atrás:** la línea «vuelta atrás» que imprime.
+  - Desde ahí hasta la 4a, en `main` solo entra documentación (si entra otra cosa, se repite). El respaldo `BK` se hace DESPUÉS (la 4a toma como base su `api-commit.txt` y exige que producción esté en él: `:419-427`).
+  - **Si no se hace:** la 4a aborta sin tocar nada en `:402` («entre … y el commit de la 4a hay cambios fuera de la documentación (backend/tests/Feature/Commercial/…)»), con la apertura ya en `main` (en rojo). La corrección puntual ya no puede llevar esas pruebas: el diff trae la apertura y `hotfix-backend.sh` se niega. Salida: revertir la apertura en el repo (un push) y seguir E.3 y E.4. Ensayado en local: informe `informe-devops-apertura-arneses.md`, §3 (C1, C2, C4).
 - Repetir la medición con solo la línea abierta sobre la punta real de `main` (el 11-11: 69 casos, 35 métodos, 21 ficheros). Una prueba NUEVA que dependa de la constante no la detecta el `cherry-pick`: la detecta la batería.
 - Las enmiendas de contrato del H6 y del H8 que propone el informe del tester (§4.3), aprobadas; la del H8 habla de seis clases copiadas, no de tres.
-- Después de aplicar las pruebas, el modo 4a no se puede repetir: una vuelta atrás de nivel 4 seguida de una reapertura no tiene camino guionizado. Devops lo deja escrito antes del día.
+- Después de aplicar las pruebas, el modo 4a no se puede repetir tal cual: con producción de vuelta en el commit del respaldo, el tramo lleva dos `voice(calls-open):` (`:384-385`) y pruebas (`:403-406`). El camino de la vuelta atrás y la reapertura está en la sección **E. Después de la apertura** (ensayado en local).
 
 1. Respaldo nuevo `BK`, con `api-commit.txt` = el commit que sirve producción (plan de despliegue, paso 3).
 2. Commit `voice(calls-open): …` en el repo:
@@ -207,17 +218,20 @@ El procedimiento completo está en el informe de devops, C-4 (opción recomendad
    cd backend
    xargs nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging < docs/ultron-studio/ops/apertura-llamadas/bateria-rapida.txt   # OK (624 tests): la batería rápida
    nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging tests/Unit/Voice tests/Unit/Telephony tests/Feature/Voice tests/Feature/Telephony
-   nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging tests/Feature/Outreach tests/Feature/UltronStudio tests/Unit/UltronStudio tests/Unit/Outreach
+   nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging tests/Feature/Outreach tests/Feature/UltronStudio tests/Unit/UltronStudio tests/Unit/Outreach tests/Unit/Twilio
    python3 -I tests/fixtures/ultron-studio/tools/integrations-cases-check.py   # RESULTADO: OK
    ```
+   `tests/Unit/Twilio` va en la segunda batería porque lee el fixture de paridad que cambia `T` (§5.2 del tester). *(Añadido por devops el 12-11; faltaba.)*
    En verde (salvo la línea base conocida), push a `main` con la orden del propietario. `main` está en rojo solo entre los dos push.
-   Pueden ir después (no cambian lo que se permite): enmendar `ops/h8-e2e.sh` y `ops/v9-abierta.sh`, que exigen la constante cerrada y mueren con la apertura en la punta; los comentarios de `app/` que quedan falsos (nunca en `VoiceCallPolicy.php` mientras esté abierta); y que el CRM reexporte `backend-integrations.testing.ts` (3 líneas).
+   `git cherry-pick 3287769b 216b0f1b` y el `range-diff` («=» en los dos) están ensayados en local sobre `4277f128` + documentación + una apertura simulada: limpios (informe de devops del 12-11, §3).
+   Pueden ir después (no cambian lo que se permite): los comentarios de `app/` que quedan falsos (nunca en `VoiceCallPolicy.php` mientras esté abierta); y que el CRM reexporte `backend-integrations.testing.ts` (3 líneas). `ops/h8-e2e.sh` y `ops/v9-abierta.sh` ya están enmendados (12-11): aceptan la fuente con la constante cerrada o abierta, y `h8-e2e.sh` construye la copia CERRADA girando la línea al revés, así que `H8E2ECerradaTest` sigue corriendo con la apertura en la punta.
 
 - **Tiene que imprimir:** «DESPLIEGUE H8 FASE 4a (voice(calls-open) <commit>, autorización «AUT-VOZ-1») COMPLETADO». Después, `estado` con «constante de llamadas: abierta».
 - **Vuelta atrás:**
   - nivel 0: `salientes off`;
-  - nivel 4: `( cd /var/www/api && umask 022 && git checkout -q --detach $(cat $BK/api-commit.txt) )`, cachés como www-data y `queue:restart`; en el repo, un commit que revierta las pruebas y la línea (C-4).
-- **Mientras la constante esté abierta**, `deploy-h9-backend-cierre.sh` y `deploy-m1-backend.sh` **se niegan** (exigen la constante cerrada en `origin/main`), y ningún commit puede volver a tocar `VoiceCallPolicy.php`: el mando dejaría de verla «abierta».
+  - nivel 4: `( cd /var/www/api && umask 022 && git checkout -q --detach $(cat $BK/api-commit.txt) )`, cachés como www-data y `queue:restart`, **solo si producción sigue en el commit de la apertura**; si ya pasó una corrección encima, se cierra hacia delante (E.2 b). En el repo, las tres reversiones en un solo push (E.2) y, antes de reabrir o de desplegar cualquier otra cosa, E.3.
+- **Mientras la constante esté abierta**, `deploy-h9-backend-cierre.sh` (`:520-522`) y `deploy-m1-backend.sh` (`:609-611`) **se niegan** (exigen la constante cerrada en `origin/main`), y ningún commit puede volver a tocar `VoiceCallPolicy.php`: el mando dejaría de verla «abierta». Los arreglos de backend van por `hotfix-backend.sh` (E.1), que desde el 12-11 se niega a llevar cualquier cambio de ese fichero salvo cerrarla.
+- **El smoke del H8 con la constante abierta y las salientes apagadas no tiene fase:** `SMOKE_PHASE=1` exige `calls_in_code:false` y `SMOKE_PHASE=4a` exige las salientes, la publicación y Twilio Voice encendidos (`smoke-run-h8.sh:206-213`). Hallazgo sin enmendar (está instalado en `/root`): ver el informe de devops del 12-11, §5.
 
 ### Paso 10 · L (con A2) · Salientes en canario — O
 
@@ -304,3 +318,100 @@ CRM → Integraciones → Canarios, canal voz: P registra su teléfono con su co
 | `voice_number_not_assigned` (al publicar) | Falta `VOICE_NUMBER_INBOUND_CAPABLE=false` (C-5) | Con A0: `salientes off` → `fase 2 set VOICE_NUMBER_INBOUND_CAPABLE=false` → `salientes on …` → reconocer → publicar |
 | La llamada se queda en `requested` | Worker `ironbody-voice` parado | `supervisorctl status`. La fila pasa a `ambiguous` a los 15 min (la conciliación) |
 | Cualquier mando: «otro mando que escribe el fichero de entorno está en curso» | Otro mando en marcha | Esperar a que termine. No se ha tocado nada |
+
+---
+
+## E. Después de la apertura
+
+**Fecha:** 12-11-2026. **Autor:** devops. No se ha ejecutado en producción. Ensayado en local solo con git: copias de banco de `hotfix-backend.sh` (la de HEAD y la enmendada) y los tramos LITERALES de `deploy-h8-backend-fase1.sh` y `deploy-h9-backend-cierre.sh`, sobre la historia real con commits simulados (informe `plans/informes-motores/informe-devops-apertura-arneses.md`, §3).
+
+**Notación:** `X` = el commit `voice(calls-open)` desplegado con la 4a; `T'` y `T2'` = las pruebas aplicadas encima (paso 9.4); `BK` = el respaldo de esa 4a (su `api-commit.txt` es el commit de antes de `X`); `C` = el commit que confirma `hotfix-backend.sh` enmendado (12-11). Las órdenes del Mac van desde la raíz `Iron-Body/`, en un árbol limpio con `git fetch origin` hecho.
+
+**La regla que fija todo lo de abajo:** la apertura solo la despliega `deploy-h8-backend-fase1.sh --fase=4a`, y la 4a exige exactamente UN commit `voice(calls-open):` entre lo desplegado y `origin/main` (`:384-385`) y, antes de él, solo documentación (`:400-409`). Las reversiones se llaman `Revert "voice(calls-open): …"` y no cuentan como apertura. Por eso, después de una vuelta atrás, producción tiene que pasar por la punta CERRADA (que ya contiene `X` y su reversión) antes de reabrir.
+
+### E.1 · L (con la orden del propietario) · Un arreglo de backend con las llamadas abiertas
+
+Para código de `app/`, pruebas y documentación. Nada de migraciones, rutas ni configuración: eso va por un desplegador de ola, y los dos que hay se niegan con la constante abierta (paso 9).
+
+```bash
+P=$(ssh ironbody-vps 'git -C /var/www/api rev-parse --short=7 HEAD')
+E=$(git rev-parse --short=7 origin/main)
+git diff --name-only $P $E                    # revisar la lista: es exactamente la que se pasa
+git show "$C:backend/docs/ultron-studio/ops/hotfix-backend.sh" | ssh ironbody-vps "bash -s -- $P $E $(git diff --name-only $P $E | tr '\n' ' ')"
+ssh ironbody-vps 'bash /root/h8-voice-scope.sh estado'    # «constante de llamadas: abierta»
+```
+- **Tiene que imprimir:** «constante de llamadas (VoiceCallPolicy): abierta, sin cambios (el fichero no cambia)» y «CORRECCIÓN DESPLEGADA SIN DESVÍOS».
+- `T'` y `T2'` (solo `tests/`) viajan con el primer arreglo: entran en la lista.
+- **Se niega sin tocar nada:**
+  - si el diff neto cambia `VoiceCallPolicy.php` en algo que no sea cerrarla: abrirla, o tocar otra línea, aunque sea el comentario de `:10`;
+  - si toca migraciones, rutas, configuración o dependencias;
+  - si toca un fichero que no está en la lista.
+- **Vuelta atrás:** la línea «vuelta atrás» que imprime: el checkout del commit anterior, que también tiene la constante abierta, y `queue:restart`.
+
+### E.2 · L · Cerrar las llamadas en el código (nivel 4)
+
+Siempre antes, el nivel 0: `bash /root/h8-voice-scope.sh salientes off` (y `entrantes off` si se encendieron).
+
+**(a) Producción sigue en `X`** (`git -C /var/www/api rev-parse --short=7 HEAD` = `X`). En el servidor:
+```bash
+( cd /var/www/api && umask 022 && git checkout -q --detach $(cat $BK/api-commit.txt) )
+cd /var/www/api/backend && sudo -u www-data sh -c 'umask 077; php artisan config:cache -q && php artisan route:cache -q' && chmod 600 bootstrap/cache/config.php bootstrap/cache/routes-v7.php && sudo -u www-data php artisan queue:restart
+bash /root/h8-voice-scope.sh estado           # «constante de llamadas: cerrada»
+```
+- **Vuelta atrás:** volver a `X` es reabrir: solo con E.4.
+
+**(b) Producción ya pasó de `X`** (hay un arreglo de E.1 encima): el checkout de `BK` quitaría también esos arreglos. Se cierra hacia delante:
+1. Primero, el repo (abajo).
+2. Después, la corrección puntual con `VoiceCallPolicy.php` en la lista (la misma orden de E.1).
+- **Tiene que imprimir:**
+  - «constante de llamadas (VoiceCallPolicy): abierta → CERRADA»;
+  - «OJO: esa vuelta atrás vuelve a ABRIR la constante…»;
+  - «CORRECCIÓN DESPLEGADA SIN DESVÍOS».
+  
+  Después, `estado`: «constante de llamadas: cerrada».
+- **Se niega sin tocar nada** si el fichero no está en la lista o si el cierre toca otra línea del fichero.
+- **Vuelta atrás:** la que imprime vuelve a abrir la constante: solo con E.4.
+
+**En el repo, en los dos casos** (con la orden del propietario). En un árbol limpio con `HEAD == origin/main`, las tres reversiones en un solo push:
+```bash
+git revert --no-edit <T2'> <T'> <X>      # en ese orden: tres commits «Revert "…"»; si hay conflicto, git revert --abort y avisar
+git diff --name-only <X>^ HEAD -- backend/app backend/tests   # (a) vacío · (b) solo lo de los arreglos de E.1
+cd backend
+grep -v ClosedCopy docs/ultron-studio/ops/apertura-llamadas/bateria-rapida.txt | xargs nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging   # los 21 ficheros, cerrados: OK (614 tests el 11-11)
+nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging tests/Unit/Voice tests/Unit/Telephony tests/Feature/Voice tests/Feature/Telephony
+nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging tests/Feature/Outreach tests/Feature/UltronStudio tests/Unit/UltronStudio tests/Unit/Outreach tests/Unit/Twilio
+python3 -I tests/fixtures/ultron-studio/tools/integrations-cases-check.py   # RESULTADO: OK
+# en verde (salvo la línea base conocida): push con la orden del propietario
+```
+- Las tres pruebas `*ClosedCopy*` las añadió `T`: en el árbol cerrado no existen.
+- Ensayado: las tres reversiones salen limpias, y en (a) el árbol queda idéntico al de `BK` (§3.3, A0 y A').
+
+### E.3 · L (con la orden del propietario) · Producción a la punta cerrada (después de E.2 a)
+
+Tras E.2 a, producción está en el commit de `BK`, que no contiene `X`. Mientras siga ahí:
+- la reapertura aborta en `:384-385` (dos `voice(calls-open):` en el tramo: `X` y la nueva);
+- la ola del H9 aborta en `deploy-h9-backend-cierre.sh:470` (`X`, que producción no tiene, «abre la constante»).
+
+Las dos cosas están ensayadas (§3, A2 y A2b). Se lleva producción a la punta con las reversiones, con la orden de E.1. El diff neto es solo documentación: `X` y `T` se anulan con sus reversiones.
+- **Tiene que imprimir:** «constante de llamadas (VoiceCallPolicy): cerrada, sin cambios (el fichero no cambia)» y «CORRECCIÓN DESPLEGADA SIN DESVÍOS».
+- **Vuelta atrás:** la que imprime: el commit de `BK`, también cerrado.
+
+Tras E.2 b no hace falta: producción ya está en la punta cerrada.
+
+### E.4 · Reabrir
+
+Hace falta una autorización escrita nueva, citada en el commit nuevo. Que valga o no la `AUT-VOZ-1` para una reapertura lo decide el propietario. Es el paso 9 otra vez:
+1. Producción en la punta cerrada (E.3 o E.2 b) y, hasta la apertura, solo documentación en `main`. Si no, aborta en `:402`.
+2. Repetir la medición con solo la línea abierta sobre la punta real (precondiciones del paso 9).
+3. Respaldo `BK` nuevo, con `api-commit.txt` = la punta cerrada desplegada.
+4. Commit nuevo `voice(calls-open): …`: una línea encima de la punta, que cite la autorización nueva. Push con la orden.
+5. `deploy-h8-backend-fase1.sh <commit> $BK --fase=4a --autorizacion=<la nueva> [--acepta-main=…] --solo-comprobar`, y sin `--solo-comprobar`.
+   - **Tiene que imprimir:** «COMPROBACIONES PREVIAS EN VERDE · MODO 4a» y después «DESPLIEGUE H8 FASE 4a (…) COMPLETADO».
+6. Las pruebas de la apertura, como en el paso 9.4: `git cherry-pick 3287769b 216b0f1b` (o las rehechas), `range-diff`, las baterías y el push.
+   - Ensayado: el `cherry-pick` sale limpio sobre la apertura nueva y el `range-diff` da «=» (§3, A5).
+- **Vuelta atrás:** E.2.
+
+### E.5 · Lo que no cambia y lo que queda abierto
+
+- `ops/h8-e2e.sh` y `ops/v9-abierta.sh` corren en los dos estados de la constante. Las fases abiertas del E2E fallan desde el 10-11 15:00 UTC por una fecha fija en sus pruebas, ajena a la apertura. Hallazgo para tester: informe de devops del 12-11, §2.4.
+- **Para la siguiente ola:** `deploy-h9-backend-cierre.sh` y `deploy-m1-backend.sh` se niegan con la constante abierta en `origin/main`. El desplegador de la siguiente ola tiene que admitir «abierta en producción y en `origin/main`, y `VoiceCallPolicy.php` sin cambios». La apertura sigue siendo solo de la 4a.
