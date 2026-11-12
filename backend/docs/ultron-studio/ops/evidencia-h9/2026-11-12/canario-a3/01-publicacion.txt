@@ -1,0 +1,55 @@
+CIERRE V2 · APARTADO 3 · GATE 3-B, PASO 1 DE 4: PUBLICACIÓN EN CANARIO
+Verificación en producción, solo lectura, el 12-11-2026 a las 21:46 UTC (16:46 en Bogotá).
+La publicó el propietario desde el CRM con su cuenta «Desarrolladores»; nadie más intervino.
+
+=== ANTES (12-11 21:36 UTC) ===
+php artisan ultron:abort
+  FRENO SUELTO. ULTRON funciona según sus interruptores de entorno.
+php artisan ultron-studio:publication-check   (salida 0)
+  Llave del motor: canary · estado: legacy
+  Cadena vacía: el motor lee Legacy.
+  Canario: Legacy
+  Resto: Legacy
+  La publicación vigente cuadra con el motor.
+php artisan ultron:prompt-trace --last=3
+  llave de prompts: canary · llave del sello: canary · canario: configurado
+  base n8n-29de5119 · compilador 2 · huella Legacy 3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902
+  decide ofrecería ahora a la canaria: legacy · motivo no_publication
+GET versions/4017639c-…/publication-preview (cuenta técnica, autora de la versión)
+  publicable: false · bloqueantes: ["four_eyes_required"] (solo ese: es la autora)
+  status CUMPLE (APPROVED) · integrity CUMPLE · revalidation CUMPLE · labGate CUMPLE (required, approved)
+  engineCanary CUMPLE · brake CUMPLE · canaryFree CUMPLE · window CUMPLE (07:00–19:00)
+  prompts: key canary · base n8n-29de5119 · compilador 2 · bundleHash 702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c · 113 672 bytes
+  cambios: persona.tone = profesional y persona.maxChars = 200, en composer, critic, composer_retry y critic_retry
+  previewHash febe7d0fa2ff…
+
+=== DESPUÉS (12-11 21:46 UTC) ===
+php artisan ultron-studio:publication-check   (salida 0)
+  Llave del motor: canary · estado: applied
+  Cabeza: entrada 1 (publish, 2026-11-12T21:45:13+00:00) · verifica
+  Canario: «Prueba de aceptación · profesional 200» (4017639c-75bf-4f0a-8461-57479478a532)
+  Resto: Legacy
+  La publicación vigente cuadra con el motor.
+php artisan ultron:prompt-trace --last=3
+  llave de prompts: canary · llave del sello: canary · canario: configurado
+  base n8n-29de5119 · compilador 2 · huella Legacy 3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902
+  decide ofrecería ahora a la canaria: studio · versión 4017639c-75bf-4f0a-8461-57479478a532 · huella 702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c
+  | Minuto (UTC)      | Declarada | Ofrecida                | Observada          | Estado    |
+  | 2026-11-10T01:42Z | —         | —                       | —                  | sin sello |
+  | 2026-11-11T15:39Z | legacy    | legacy   no_publication | legacy 3f6a5674 S1 | legacy    |
+  | 2026-11-11T23:37Z | legacy    | legacy   no_publication | legacy 3f6a5674 S1 | legacy    |
+  (todavía no hay ningún turno con la versión publicada: los turnos son los de antes)
+php artisan ultron:abort
+  FRENO SUELTO. ULTRON funciona según sus interruptores de entorno.
+ultron_studio_publications (la cadena; una sola fila)
+  id 1 · seq 1 · action publish · versión 4017639c-75bf-4f0a-8461-57479478a532 (estado CANARY)
+  engine_contract ultron-engine-config/2 · effective_hash e292e32e… · signature 48b67c2c… · catalog_version 2026-10-19.1
+  lab_gate {mode: required, runUuid: a6169238-f652-480d-ab03-7d3d7159c5ed, verdictId: 1, promptVersion: 2026-11-12.6}
+  acknowledged {noEffect: [], previewHash: febe7d0fa2ff9c0ca1d0cf8babee7ae5ae996c2a6aad99b1276ddfc46a39ae5b}  (la misma vista previa de arriba)
+  actor #27 «Desarrolladores» (Super Admin) · created_at 2026-11-12T21:45:13 UTC (4:45 p. m. en Bogotá) · sin nota
+
+=== LA CONVERSACIÓN CANARIA, ANTES DE LOS MENSAJES DE PRUEBA (sin teléfonos, nombres ni textos) ===
+  status open · channel whatsapp · ai_enabled true · human_takeover false · prospecto: do_not_contact false
+  último mensaje entrante 2026-11-11 23:37:13 UTC · última respuesta 2026-11-11 23:37:28 UTC (15 s después)
+  respuestas anteriores de ULTRON con los prompts de siempre: 74, 639 y 236 caracteres
+  ULTRON: enabled true · enlaces de pago apagados
