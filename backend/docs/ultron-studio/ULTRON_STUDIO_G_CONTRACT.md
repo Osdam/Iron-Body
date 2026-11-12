@@ -230,7 +230,7 @@ El CRM calcula el estado efectivo del gobierno: `enabled ∧ ¬paused ∧ ¬brak
 | `reglas-contradictorias` | blocking | `Reglas que se contradicen` | Pares `<A> ↔ <B> (<etiqueta>)` separados por ` · `; `<B>` es un código o `control «<título>»` | — |
 | `regla-<code>` | **warning** | `<code> no se cumple` | `<descripción> (<etiqueta>: <valor actual>[; …])` | La capa del primer objetivo incumplido; si es una arista, la de su puerto destino |
 | `reglas` | ok | `Las reglas del Studio se cumplen` | `Comprobadas: <códigos separados por ", ">.` | — |
-| `reglas-sin-aplicacion` | warning | `Reglas que el motor no aplica` | `<códigos separados por ", ">: son propuestas del Studio; aprobar no las hace cumplir.` | — |
+| `reglas-sin-aplicacion` | warning | `Reglas que el motor no aplica como reglas` | `<códigos separados por ", ">: son propuestas del Studio; aprobar no las hace cumplir. Solo sus frases prohibidas tienen efecto al publicar: entran en la voz compilada y, con la llave de prompts del servidor, en los prompts de WhatsApp de la conversación canaria.` (Enmienda 3) | — |
 
 - **Qué se evalúa:**
   - Solo las S-NNN vivas.
@@ -603,3 +603,19 @@ El CRM calcula el estado efectivo del gobierno: `enabled ∧ ¬paused ∧ ¬brak
 - **Puerta de despliegue (H-2 del tester):** `tests/Feature/UltronStudio tests/Unit/UltronStudio` en PostgreSQL 14 es paso obligatorio antes de desplegar: solo PG caza la falta del cerrojo de reglas.
 - **Datos personales (B-1 de security, Ley 1581):** aviso fijo en el formulario de reglas y en el editor de condiciones («No escribas datos personales (nombres, teléfonos, correos): las reglas y su historial no se pueden borrar.»); el procedimiento de redacción del libro con el rol dueño queda pendiente del propietario (Hito 7).
 - **Aceptado sin cambio:** B-1 de api-security (≈120 ms por petición con 100 reglas × 3+3 predicados). **Fuera de G (Hito 7):** `no-store` en la API administrativa; la clase de M-2 en otros controladores del CRM; `TrimStrings`/`ConvertEmptyStringsToNull` recorren cuerpos hasta `post_max_size` antes del tope de ruta; caracteres invisibles (U+061C, U+E0000–E007F) en `PlainText` y en la API interna de la base de conocimiento.
+
+## Enmienda 3 (11-11-2026): el aviso `reglas-sin-aplicacion` dice lo que pasa desde el compilador 2
+
+**Qué cambia.** Solo dos literales del aviso `reglas-sin-aplicacion` (§A3) y la frase con la que el laboratorio explica por qué `lab-regla-<S-NNN>` es un aviso. El id, el nivel, cuándo sale y la consecuencia de producto (toda versión con alguna S-NNN queda en `REVIEW_REQUIRED`) no cambian. La decisión 1 sigue en pie: el motor no evalúa las reglas del Studio.
+
+**Por qué.** El texto «Reglas que el motor no aplica … aprobar no las hace cumplir.» era toda la verdad en G. Dejó de serlo en dos pasos: el H8 compila las frases `forbid text contains` de las S-NNN vivas en el agente de voz, y M1-18 del H5 (compilador 2, en producción desde el 11-11-2026) las mete en los prompts de WhatsApp de la conversación canaria al publicar. Quien aprueba una versión reconoce este aviso: tiene que decirle que las frases sí llegan.
+
+| | Antes | Ahora |
+|---|---|---|
+| Título | `Reglas que el motor no aplica` | `Reglas que el motor no aplica como reglas` |
+| Detalle | `<códigos>: son propuestas del Studio; aprobar no las hace cumplir.` | `<códigos>: son propuestas del Studio; aprobar no las hace cumplir. Solo sus frases prohibidas tienen efecto al publicar: entran en la voz compilada y, con la llave de prompts del servidor, en los prompts de WhatsApp de la conversación canaria.` |
+| `lab-regla-<S-NNN>`, final del detalle | `Es un aviso: el motor no aplica las reglas del Studio.` | `Es un aviso: el laboratorio es una simulación. Al publicar la versión, la frase entra como prohibida en la voz compilada y, con la llave de prompts del servidor, en los prompts de WhatsApp de la conversación canaria.` |
+
+**Dónde.** `StudioRuleCoherence.php` y `StudioLabChecks.php`; el fixture de paridad `coherence-cases.json` (los 16 casos de `evaluate` que llevan el aviso; es la enmienda que su README exige para cambiarlo) y su copia generada del CRM; el espejo `studio-rules-coherence.ts` y la etiqueta del libro en `studio-diff-text.ts`. Sustitución literal y contada (guion `texto-reglas-g3.py` del lead): ninguna otra línea cambia.
+
+**Lo que no cambia.** Los avisos ya guardados en versiones anteriores conservan su texto; reconocer el aviso al aprobar va por su id. El texto del aviso no entra en la huella del contenido, ni en la del conjunto de prompts, ni en la de la voz. La frase del laboratorio sí entra en el `results_hash` de cada ejecución, pero esa huella se calcula y se recalcula sobre lo guardado (`StudioLabChecks::check` solo corre al ejecutar): las ejecuciones anteriores conservan su texto y su huella, y su veredicto sigue pudiéndose emitir.

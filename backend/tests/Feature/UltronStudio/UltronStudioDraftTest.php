@@ -310,7 +310,7 @@ class UltronStudioDraftTest extends TestCase
             ->assertJsonPath('data.validation.warnings', ['opcional-E14', 'opcional-E16', 'regla-S-001', 'reglas-sin-aplicacion']);
         $this->assertSame([
             ['id' => 'regla-S-001', 'level' => 'warning', 'title' => 'S-001 no se cumple', 'detail' => 'Mensajes cortos. (Longitud máxima: 320)', 'layer' => 'persona'],
-            ['id' => 'reglas-sin-aplicacion', 'level' => 'warning', 'title' => 'Reglas que el motor no aplica', 'detail' => 'S-001: son propuestas del Studio; aprobar no las hace cumplir.'],
+            ['id' => 'reglas-sin-aplicacion', 'level' => 'warning', 'title' => 'Reglas que el motor no aplica como reglas', 'detail' => 'S-001: son propuestas del Studio; aprobar no las hace cumplir. Solo sus frases prohibidas tienen efecto al publicar: entran en la voz compilada y, con la llave de prompts del servidor, en los prompts de WhatsApp de la conversación canaria.'],
         ], array_slice($r->json('data.validation.findings'), -2));
         // Las del código no dan `regla-R-xx`: las comprueban las restricciones del catálogo.
         $this->assertSame([], array_values(array_filter(array_column($r->json('data.validation.findings'), 'id'), static fn (string $id): bool => str_starts_with($id, 'regla-R-'))));

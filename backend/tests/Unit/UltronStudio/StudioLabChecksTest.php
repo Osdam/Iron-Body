@@ -214,6 +214,14 @@ class StudioLabChecksTest extends TestCase
         $this->assertSame('compra ya', $h[0]['quote']);
         $this->assertSame('La respuesta contiene una frase que prohíbe S-003', $h[0]['title']);
         $this->assertStringContainsString('«compra ya», «sin compromiso»', $h[0]['detail']);
+        // Enmienda 3 de G: el detalle entero, letra por letra (entra en el `results_hash` de la ejecución). Dice por qué
+        // es un aviso y que la frase sí tiene efecto al publicar, en la voz y en los prompts de la canaria.
+        $this->assertSame(
+            'S-003 no deja que el texto contenga «compra ya», «sin compromiso». Es un aviso: el laboratorio es una simulación. '
+            .'Al publicar la versión, la frase entra como prohibida en la voz compilada y, con la llave de prompts del servidor, '
+            .'en los prompts de WhatsApp de la conversación canaria.',
+            $h[0]['detail'],
+        );
 
         // R-02 prohíbe «gratis», pero es del código: no es un hallazgo del Studio.
         $this->assertSame([], K::check('Es gratis', self::target(rules: $reglas)));

@@ -7227,8 +7227,8 @@
         {
           "id": "reglas-sin-aplicacion",
           "level": "warning",
-          "title": "Reglas que el motor no aplica",
-          "detail": "S-001: son propuestas del Studio; aprobar no las hace cumplir."
+          "title": "Reglas que el motor no aplica como reglas",
+          "detail": "S-001: son propuestas del Studio; aprobar no las hace cumplir. Solo sus frases prohibidas tienen efecto al publicar: entran en la voz compilada y, con la llave de prompts del servidor, en los prompts de WhatsApp de la conversación canaria."
         }
       ]
     },
@@ -7358,8 +7358,8 @@
         {
           "id": "reglas-sin-aplicacion",
           "level": "warning",
-          "title": "Reglas que el motor no aplica",
-          "detail": "S-001: son propuestas del Studio; aprobar no las hace cumplir."
+          "title": "Reglas que el motor no aplica como reglas",
+          "detail": "S-001: son propuestas del Studio; aprobar no las hace cumplir. Solo sus frases prohibidas tienen efecto al publicar: entran en la voz compilada y, con la llave de prompts del servidor, en los prompts de WhatsApp de la conversación canaria."
         }
       ]
     },
@@ -7492,8 +7492,8 @@
         {
           "id": "reglas-sin-aplicacion",
           "level": "warning",
-          "title": "Reglas que el motor no aplica",
-          "detail": "S-001: son propuestas del Studio; aprobar no las hace cumplir."
+          "title": "Reglas que el motor no aplica como reglas",
+          "detail": "S-001: son propuestas del Studio; aprobar no las hace cumplir. Solo sus frases prohibidas tienen efecto al publicar: entran en la voz compilada y, con la llave de prompts del servidor, en los prompts de WhatsApp de la conversación canaria."
         }
       ]
     },
@@ -7633,8 +7633,8 @@
         {
           "id": "reglas-sin-aplicacion",
           "level": "warning",
-          "title": "Reglas que el motor no aplica",
-          "detail": "S-001: son propuestas del Studio; aprobar no las hace cumplir."
+          "title": "Reglas que el motor no aplica como reglas",
+          "detail": "S-001: son propuestas del Studio; aprobar no las hace cumplir. Solo sus frases prohibidas tienen efecto al publicar: entran en la voz compilada y, con la llave de prompts del servidor, en los prompts de WhatsApp de la conversación canaria."
         }
       ]
     },
@@ -7810,8 +7810,8 @@
         {
           "id": "reglas-sin-aplicacion",
           "level": "warning",
-          "title": "Reglas que el motor no aplica",
-          "detail": "S-001, S-002: son propuestas del Studio; aprobar no las hace cumplir."
+          "title": "Reglas que el motor no aplica como reglas",
+          "detail": "S-001, S-002: son propuestas del Studio; aprobar no las hace cumplir. Solo sus frases prohibidas tienen efecto al publicar: entran en la voz compilada y, con la llave de prompts del servidor, en los prompts de WhatsApp de la conversación canaria."
         }
       ]
     },
@@ -8014,8 +8014,8 @@
         {
           "id": "reglas-sin-aplicacion",
           "level": "warning",
-          "title": "Reglas que el motor no aplica",
-          "detail": "S-001, S-002, S-003: son propuestas del Studio; aprobar no las hace cumplir."
+          "title": "Reglas que el motor no aplica como reglas",
+          "detail": "S-001, S-002, S-003: son propuestas del Studio; aprobar no las hace cumplir. Solo sus frases prohibidas tienen efecto al publicar: entran en la voz compilada y, con la llave de prompts del servidor, en los prompts de WhatsApp de la conversación canaria."
         }
       ]
     },
@@ -8179,8 +8179,8 @@
         {
           "id": "reglas-sin-aplicacion",
           "level": "warning",
-          "title": "Reglas que el motor no aplica",
-          "detail": "S-001, S-002: son propuestas del Studio; aprobar no las hace cumplir."
+          "title": "Reglas que el motor no aplica como reglas",
+          "detail": "S-001, S-002: son propuestas del Studio; aprobar no las hace cumplir. Solo sus frases prohibidas tienen efecto al publicar: entran en la voz compilada y, con la llave de prompts del servidor, en los prompts de WhatsApp de la conversación canaria."
         }
       ]
     },
@@ -8353,8 +8353,8 @@
         {
           "id": "reglas-sin-aplicacion",
           "level": "warning",
-          "title": "Reglas que el motor no aplica",
-          "detail": "S-001, S-002: son propuestas del Studio; aprobar no las hace cumplir."
+          "title": "Reglas que el motor no aplica como reglas",
+          "detail": "S-001, S-002: son propuestas del Studio; aprobar no las hace cumplir. Solo sus frases prohibidas tienen efecto al publicar: entran en la voz compilada y, con la llave de prompts del servidor, en los prompts de WhatsApp de la conversación canaria."
         }
       ]
     },
@@ -8613,8 +8613,8 @@
         {
           "id": "reglas-sin-aplicacion",
           "level": "warning",
-          "title": "Reglas que el motor no aplica",
-          "detail": "S-001, S-002, S-003, S-004, S-005: son propuestas del Studio; aprobar no las hace cumplir."
+          "title": "Reglas que el motor no aplica como reglas",
+          "detail": "S-001, S-002, S-003, S-004, S-005: son propuestas del Studio; aprobar no las hace cumplir. Solo sus frases prohibidas tienen efecto al publicar: entran en la voz compilada y, con la llave de prompts del servidor, en los prompts de WhatsApp de la conversación canaria."
         }
       ]
     },
@@ -8726,8 +8726,8 @@
         {
           "id": "reglas-sin-aplicacion",
           "level": "warning",
-          "title": "Reglas que el motor no aplica",
-          "detail": "S-001: son propuestas del Studio; aprobar no las hace cumplir."
+          "title": "Reglas que el motor no aplica como reglas",
+          "detail": "S-001: son propuestas del Studio; aprobar no las hace cumplir. Solo sus frases prohibidas tienen efecto al publicar: entran en la voz compilada y, con la llave de prompts del servidor, en los prompts de WhatsApp de la conversación canaria."
         }
       ]
     },
@@ -8886,8 +8886,8 @@
         {
           "id": "reglas-sin-aplicacion",
           "level": "warning",
-          "title": "Reglas que el motor no aplica",
-          "detail": "S-002: son propuestas del Studio; aprobar no las hace cumplir."
+          "title": "Reglas que el motor no aplica como reglas",
+          "detail": "S-002: son propuestas del Studio; aprobar no las hace cumplir. Solo sus frases prohibidas tienen efecto al publicar: entran en la voz compilada y, con la llave de prompts del servidor, en los prompts de WhatsApp de la conversación canaria."
         }
       ]
     },
@@ -9018,8 +9018,8 @@
         {
           "id": "reglas-sin-aplicacion",
           "level": "warning",
-          "title": "Reglas que el motor no aplica",
-          "detail": "S-001: son propuestas del Studio; aprobar no las hace cumplir."
+          "title": "Reglas que el motor no aplica como reglas",
+          "detail": "S-001: son propuestas del Studio; aprobar no las hace cumplir. Solo sus frases prohibidas tienen efecto al publicar: entran en la voz compilada y, con la llave de prompts del servidor, en los prompts de WhatsApp de la conversación canaria."
         }
       ]
     },
@@ -9138,8 +9138,8 @@
         {
           "id": "reglas-sin-aplicacion",
           "level": "warning",
-          "title": "Reglas que el motor no aplica",
-          "detail": "S-001: son propuestas del Studio; aprobar no las hace cumplir."
+          "title": "Reglas que el motor no aplica como reglas",
+          "detail": "S-001: son propuestas del Studio; aprobar no las hace cumplir. Solo sus frases prohibidas tienen efecto al publicar: entran en la voz compilada y, con la llave de prompts del servidor, en los prompts de WhatsApp de la conversación canaria."
         }
       ]
     },
@@ -9364,8 +9364,8 @@
         {
           "id": "reglas-sin-aplicacion",
           "level": "warning",
-          "title": "Reglas que el motor no aplica",
-          "detail": "S-001, S-002, S-003, S-004: son propuestas del Studio; aprobar no las hace cumplir."
+          "title": "Reglas que el motor no aplica como reglas",
+          "detail": "S-001, S-002, S-003, S-004: son propuestas del Studio; aprobar no las hace cumplir. Solo sus frases prohibidas tienen efecto al publicar: entran en la voz compilada y, con la llave de prompts del servidor, en los prompts de WhatsApp de la conversación canaria."
         }
       ]
     },
@@ -9502,8 +9502,8 @@
         {
           "id": "reglas-sin-aplicacion",
           "level": "warning",
-          "title": "Reglas que el motor no aplica",
-          "detail": "S-001: son propuestas del Studio; aprobar no las hace cumplir."
+          "title": "Reglas que el motor no aplica como reglas",
+          "detail": "S-001: son propuestas del Studio; aprobar no las hace cumplir. Solo sus frases prohibidas tienen efecto al publicar: entran en la voz compilada y, con la llave de prompts del servidor, en los prompts de WhatsApp de la conversación canaria."
         }
       ]
     },
@@ -9866,8 +9866,8 @@
         {
           "id": "reglas-sin-aplicacion",
           "level": "warning",
-          "title": "Reglas que el motor no aplica",
-          "detail": "S-001, S-002: son propuestas del Studio; aprobar no las hace cumplir."
+          "title": "Reglas que el motor no aplica como reglas",
+          "detail": "S-001, S-002: son propuestas del Studio; aprobar no las hace cumplir. Solo sus frases prohibidas tienen efecto al publicar: entran en la voz compilada y, con la llave de prompts del servidor, en los prompts de WhatsApp de la conversación canaria."
         }
       ]
     }

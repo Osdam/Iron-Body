@@ -356,7 +356,10 @@ final class StudioRuleCoherence
      * `reglas` y `reglas-sin-aplicacion`. Solo cuentan las reglas del Studio no
      * archivadas; las del código ya se comprueban con las restricciones
      * `config-*` del catálogo. Incumplir una regla del Studio es un AVISO
-     * (decisión 1 del lead): son propuestas que el motor no aplica.
+     * (decisión 1 del lead): son propuestas que el motor no aplica como reglas.
+     * Desde M1-18 (H5) sus frases prohibidas sí tienen efecto al publicar (voz
+     * compilada y prompts de WhatsApp de la canaria): lo dice el detalle de
+     * `reglas-sin-aplicacion` (Enmienda 3 de G).
      *
      * Las reglas se recorren en el orden de `$rules` (las vivas y las copiadas
      * llegan por código). Una versión de formato 1 (F) se valida como en F: sin
@@ -468,7 +471,7 @@ final class StudioRuleCoherence
         }
 
         $codigos = array_map(static fn (array $a): string => $a['code'], $analizadas);
-        $out[] = ['id' => 'reglas-sin-aplicacion', 'level' => 'warning', 'title' => 'Reglas que el motor no aplica', 'detail' => implode(', ', $codigos).': son propuestas del Studio; aprobar no las hace cumplir.'];
+        $out[] = ['id' => 'reglas-sin-aplicacion', 'level' => 'warning', 'title' => 'Reglas que el motor no aplica como reglas', 'detail' => implode(', ', $codigos).': son propuestas del Studio; aprobar no las hace cumplir. Solo sus frases prohibidas tienen efecto al publicar: entran en la voz compilada y, con la llave de prompts del servidor, en los prompts de WhatsApp de la conversación canaria.'];
 
         return $out;
     }

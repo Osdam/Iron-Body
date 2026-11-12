@@ -19,7 +19,9 @@ namespace App\Services\UltronStudio;
  * `lab-regla-<S-NNN>` es la verificación «lab» que G dejó anunciada: las
  * frases de las reglas del Studio solo se pueden comprobar sobre un texto.
  * Es un AVISO, no un bloqueo (decisión 1 de G: el motor no aplica las reglas
- * del Studio). La respuesta se canonicaliza como las frases de G (espacios
+ * del Studio como reglas; desde M1-18 sus frases prohibidas entran al publicar
+ * en la voz compilada y en los prompts de la canaria, y el detalle del aviso lo
+ * dice). La respuesta se canonicaliza como las frases de G (espacios
  * colapsados y minúsculas solo en A–Z y ÁÉÍÓÚÜÑ) y la afirmación solo cuenta
  * si su «si» se da en el objetivo (una variable que el objetivo no tiene, o un
  * «si» que no se cumple, no se comprueba, como en G).
@@ -165,7 +167,7 @@ final class StudioLabChecks
                     self::ID_RULE_PREFIX.$regla['code'],
                     self::LEVEL_WARNING,
                     "La respuesta contiene una frase que prohíbe {$regla['code']}",
-                    "{$regla['code']} no deja que el texto contenga {$lista}. Es un aviso: el motor no aplica las reglas del Studio.",
+                    "{$regla['code']} no deja que el texto contenga {$lista}. Es un aviso: el laboratorio es una simulación. Al publicar la versión, la frase entra como prohibida en la voz compilada y, con la llave de prompts del servidor, en los prompts de WhatsApp de la conversación canaria.",
                     $halladas[0],
                 );
             }

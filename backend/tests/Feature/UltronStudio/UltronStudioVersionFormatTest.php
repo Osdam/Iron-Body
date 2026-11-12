@@ -109,7 +109,7 @@ class UltronStudioVersionFormatTest extends TestCase
         $ultimos = array_slice($v->last_validation['findings'], -2);
         $this->assertSame([
             ['id' => 'regla-S-001', 'level' => 'warning', 'title' => 'S-001 no se cumple', 'detail' => 'Mensajes cortos. (Longitud máxima: 320)', 'layer' => 'persona'],
-            ['id' => 'reglas-sin-aplicacion', 'level' => 'warning', 'title' => 'Reglas que el motor no aplica', 'detail' => 'S-001: son propuestas del Studio; aprobar no las hace cumplir.'],
+            ['id' => 'reglas-sin-aplicacion', 'level' => 'warning', 'title' => 'Reglas que el motor no aplica como reglas', 'detail' => 'S-001: son propuestas del Studio; aprobar no las hace cumplir. Solo sus frases prohibidas tienen efecto al publicar: entran en la voz compilada y, con la llave de prompts del servidor, en los prompts de WhatsApp de la conversación canaria.'],
         ], $ultimos);
 
         // Hay que reconocerlos TODOS al aprobar.

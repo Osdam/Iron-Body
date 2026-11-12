@@ -660,7 +660,7 @@ class StudioRuleCoherenceTest extends TestCase
             ['id' => 'regla-S-001', 'level' => 'warning', 'title' => 'S-001 no se cumple', 'detail' => 'Mensajes cortos. (Longitud máxima: 400)', 'layer' => 'persona'],
             ['id' => 'regla-S-002', 'level' => 'warning', 'title' => 'S-002 no se cumple', 'detail' => 'Tono sobrio. (Tono: Entusiasta; Ofertas priorizadas: (vacío))', 'layer' => 'persona'],
             ['id' => 'regla-S-005', 'level' => 'warning', 'title' => 'S-005 no se cumple', 'detail' => 'Sin cobro, sin enlace. («enlace de pago como mensaje aparte»: presente; Usa emojis: sí)', 'layer' => 'integrations'],
-            ['id' => 'reglas-sin-aplicacion', 'level' => 'warning', 'title' => 'Reglas que el motor no aplica', 'detail' => 'S-001, S-002, S-003, S-004, S-005: son propuestas del Studio; aprobar no las hace cumplir.'],
+            ['id' => 'reglas-sin-aplicacion', 'level' => 'warning', 'title' => 'Reglas que el motor no aplica como reglas', 'detail' => 'S-001, S-002, S-003, S-004, S-005: son propuestas del Studio; aprobar no las hace cumplir. Solo sus frases prohibidas tienen efecto al publicar: entran en la voz compilada y, con la llave de prompts del servidor, en los prompts de WhatsApp de la conversación canaria.'],
         ], R::evaluate($reglas, $def, $configs, self::catalogo()), 'S-003 no se aplica (objetivo = cita); el texto no se evalúa; las R-xx no dan regla-<code>');
 
         // Sin «si», «E14 tiene que faltar» choca con el control del cobro: hay una
@@ -692,7 +692,7 @@ class StudioRuleCoherenceTest extends TestCase
 
         $this->assertSame([
             ['id' => 'reglas', 'level' => 'ok', 'title' => 'Las reglas del Studio se cumplen', 'detail' => 'Comprobadas: S-002.'],
-            ['id' => 'reglas-sin-aplicacion', 'level' => 'warning', 'title' => 'Reglas que el motor no aplica', 'detail' => 'S-002, S-001, S-003: son propuestas del Studio; aprobar no las hace cumplir.'],
+            ['id' => 'reglas-sin-aplicacion', 'level' => 'warning', 'title' => 'Reglas que el motor no aplica como reglas', 'detail' => 'S-002, S-001, S-003: son propuestas del Studio; aprobar no las hace cumplir. Solo sus frases prohibidas tienen efecto al publicar: entran en la voz compilada y, con la llave de prompts del servidor, en los prompts de WhatsApp de la conversación canaria.'],
         ], R::evaluate($reglas, $def, $configs, self::catalogo()), 'S-001 no se aplica (objetivo = cita) y S-003 solo tiene texto: ninguna cuenta como comprobada; las archivadas no cuentan; el orden es el de llegada');
 
         // Solo texto o sin condiciones: no hay `reglas`, solo el aviso.
@@ -730,7 +730,7 @@ class StudioRuleCoherenceTest extends TestCase
             ['id' => 'reglas-contradictorias', 'level' => 'blocking', 'title' => 'Reglas que se contradicen', 'detail' => 'S-003 ↔ S-002 (Longitud máxima) · S-002 ↔ control «Descuentos permitidos» (Puede ofrecer descuentos) · S-002 ↔ R-02 (Puede ofrecer descuentos) · S-002 ↔ R-02 («gratis»)'],
             ['id' => 'regla-S-003', 'level' => 'warning', 'title' => 'S-003 no se cumple', 'detail' => 'Corto. (Longitud máxima: 480)', 'layer' => 'persona'],
             ['id' => 'regla-S-002', 'level' => 'warning', 'title' => 'S-002 no se cumple', 'detail' => 'Descripción de S-002. (Puede ofrecer descuentos: no)', 'layer' => 'strategy'],
-            ['id' => 'reglas-sin-aplicacion', 'level' => 'warning', 'title' => 'Reglas que el motor no aplica', 'detail' => 'S-003, S-001, S-002, S-004: son propuestas del Studio; aprobar no las hace cumplir.'],
+            ['id' => 'reglas-sin-aplicacion', 'level' => 'warning', 'title' => 'Reglas que el motor no aplica como reglas', 'detail' => 'S-003, S-001, S-002, S-004: son propuestas del Studio; aprobar no las hace cumplir. Solo sus frases prohibidas tienen efecto al publicar: entran en la voz compilada y, con la llave de prompts del servidor, en los prompts de WhatsApp de la conversación canaria.'],
         ], R::evaluate($reglas, $def, $configs, self::catalogo()), 'en el orden de llegada; cada par entre reglas del Studio sale una vez, desde la primera; la contradictoria se evalúa igual');
     }
 
