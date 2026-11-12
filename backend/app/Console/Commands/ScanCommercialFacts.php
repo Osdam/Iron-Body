@@ -94,12 +94,23 @@ class ScanCommercialFacts extends Command
 
         if ($this->truncated !== []) {
             $families = array_keys($this->truncated);
-            $this->warn(sprintf(
-                'Techo de %d hechos nuevos alcanzado en: %s. Quedan candidatos sin mirar; la siguiente pasada sigue con ellos (lo ya registrado no cuenta para el techo).',
-                $limit,
-                implode(', ', $families),
-            ));
-            ChannelLog::warning('commercial.scan.truncated', ['families' => $families, 'limit' => $limit, 'dry_run' => $dry]);
+            // En seco no se registra nada, así que cada candidato cuenta para el techo, también el que ya tiene su
+            // hecho: decir «hechos nuevos» y «lo ya registrado no cuenta» sería falso, y una pasada de prueba no es
+            // un recorte real que avisar en el registro de producción (la lanza `h9-outreach-scope.sh`).
+            $this->warn($dry
+                ? sprintf(
+                    'Techo de %d candidatos alcanzado en: %s. En seco cuenta cada candidato, también los que ya tienen su hecho: una pasada real registra solo los nuevos y puede llegar más lejos.',
+                    $limit,
+                    implode(', ', $families),
+                )
+                : sprintf(
+                    'Techo de %d hechos nuevos alcanzado en: %s. Quedan candidatos sin mirar; la siguiente pasada sigue con ellos (lo ya registrado no cuenta para el techo).',
+                    $limit,
+                    implode(', ', $families),
+                ));
+            if (! $dry) {
+                ChannelLog::warning('commercial.scan.truncated', ['families' => $families, 'limit' => $limit, 'dry_run' => false]);
+            }
         }
 
         ChannelLog::info('commercial.scan.completed', $counts + ['dry_run' => $dry]);

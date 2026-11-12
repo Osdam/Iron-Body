@@ -174,10 +174,35 @@ class ScanCommercialFactsCeilingTest extends TestCase
         }
 
         $this->artisan('commercial:scan', ['--limit' => 2, '--dry-run' => true])
-            ->expectsOutputToContain('Techo de 2 hechos nuevos alcanzado en: inactivity')
+            ->expectsOutputToContain('Techo de 2 candidatos alcanzado en: inactivity')
+            ->doesntExpectOutputToContain('hechos nuevos')
             ->assertExitCode(0);
 
         $this->assertSame(0, DB::table('commercial_events')->count());
+        $this->assertSame([], $this->logged('commercial.scan.truncated'), 'una pasada de prueba no es un recorte real: no avisa en el registro');
+    }
+
+    /**
+     * En seco cada candidato gasta techo, también el que ya tiene su hecho (revisión de la tanda 2): por eso el
+     * aviso en seco no puede decir «hechos nuevos» ni «lo ya registrado no cuenta». En real, con todo registrado,
+     * no se alcanza ningún techo.
+     */
+    public function test_en_seco_lo_ya_registrado_tambien_gasta_techo_y_el_aviso_lo_dice(): void
+    {
+        for ($i = 0; $i < 3; $i++) {
+            $this->entry($this->socio('2026-12-31'), '2026-10-01 12:00:00');
+        }
+        $this->scan(500);
+        $this->assertCount(3, $this->keys('inactivity_detected'), 'los tres ya tienen su hecho');
+        $this->logs = [];
+
+        $this->artisan('commercial:scan', ['--limit' => 2])->doesntExpectOutputToContain('Techo de')->assertExitCode(0);
+        $this->artisan('commercial:scan', ['--limit' => 2, '--dry-run' => true])
+            ->expectsOutputToContain('En seco cuenta cada candidato, también los que ya tienen su hecho')
+            ->assertExitCode(0);
+
+        $this->assertCount(3, $this->keys('inactivity_detected'), 'nada nuevo, nada repetido');
+        $this->assertSame([], $this->logged('commercial.scan.truncated'));
     }
 
     // ── Piezas ──────────────────────────────────────────────────────────────
