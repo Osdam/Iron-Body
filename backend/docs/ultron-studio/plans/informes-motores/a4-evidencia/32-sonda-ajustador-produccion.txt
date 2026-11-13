@@ -1,0 +1,10 @@
+# Sonda del ajustador (clase pura UltronReplyFitter) en el servidor de producción ANTES de desplegar, solo lectura, 13-11-2026 15:43 UTC.
+# La clase se cargó desde /tmp con tinker como www-data y se borró después (0 temporales en el servidor).
+# Misma huella que en local (PCRE 10.47): 18e9cc39e64d4964.
+
+servidor: PCRE 10.39 2021-10-29 · PHP 8.3.31 · preg_last_error=0 · HUELLA 18e9cc39e64d4964
+local:    PCRE 10.47 2025-10-21 · PHP 8.3.33 · preg_last_error=0 · HUELLA 18e9cc39e64d4964
+
+Casos: medida con enlaces (44); frases del horario (7); horario a 200, a 160 y «sábados» a 160; abreviatura («Av. La Toma»); negación («Creo que no. Mañana te cuento.»); lista numerada (2 frases);
+borrador con pregunta final (se suelta); muletilla (B-1), condición (S-1) y pregunta con cifra (los tres, null: se descartan); curado médico a 200; ficha por piezas a 200; precio verificado con prioridad; validación del tope.
+Guion: ops/comprobacion-produccion/sonda-ajustador.php

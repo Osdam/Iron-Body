@@ -1,0 +1,82 @@
+# Batería completa del backend sobre 6483b92f (árbol limpio _worktrees/ultron-suite), 13-11-2026, 09:20–10:55 de Bogotá (el equipo estuvo en reposo parte de ese tiempo).
+# cd backend && caffeinate -i nice -n 10 bash bin/suite
+# Resultado: 17 981 pruebas, 460 770 aserciones, 2 fallos: los dos esperados (la línea base de precios y la puerta de diff del H9, que compara con origin/main y vuelve a verde al subir).
+
+inicio 09:20:18
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: backend/phpunit.xml
+
+[B9-facts] solo lectura: 175 sentencias revisadas, 0 escrituras
+[B9-facts] consultas por lote: completa=39 (3 y 45 claves; la primera del proceso, 43), solo membresía=8
+[W9] escrituras del despacho y la normalización: {"marketing_conversations@puerta":2,"marketing_messages@puerta":3,"outreach_enrollments":3,"outreach_jobs":3,"outreach_outcomes":2,"outreach_runs":2}
+[R11] peor caso del contenido canónico: 7222 bytes de 8192
+[TEST9-b] recorrido en sombra: 13 rutas de la ejecución y 9 órdenes (outreach:dispatch, outreach:monitor, outreach:reconcile, outreach:replay, outreach:stop, outreach:suppress-subject, outreach:sweep, outreach:voice-outcomes, outreach:whatsapp-outcomes)
+
+[SEC9-a] aislamiento: 1004 sentencias, 71 escrituras, todas en tablas del H9
+[TEST9-b] recorrido en live: 13 rutas de la ejecución y 9 órdenes (outreach:dispatch, outreach:monitor, outreach:reconcile, outreach:replay, outreach:stop, outreach:suppress-subject, outreach:sweep, outreach:voice-outcomes, outreach:whatsapp-outcomes)
+
+[SEC9-a] aislamiento: 1076 sentencias, 81 escrituras, todas en tablas del H9
+[SEC9-a] aislamiento: 5 sentencias, 1 escrituras, todas en tablas del H9
+
+[TEST9-b] banderas por defecto: 13 rutas de la ejecución y 9 órdenes (outreach:dispatch, outreach:monitor, outreach:reconcile, outreach:replay, outreach:stop, outreach:suppress-subject, outreach:sweep, outreach:voice-outcomes, outreach:whatsapp-outcomes)
+[SEC9-a] lectores de ultron_studio_strategies en la ejecución (L9-51, lista cerrada de 9): OutreachSuppressSubjectCommand.php, AssistedQueue.php, OutcomeRecorder.php, OutreachDispatcher.php, OutreachMonitor.php, OutreachPublishedStrategies.php, OutreachReadModels.php, OutreachReconciler.php, OutreachStop.php
+
+Time: 20:31.210, Memory: 1.86 GB
+
+There were 2 failures:
+
+1) Tests\Feature\Billing\PricingV2SalesAndPaymentsTest::test_manual_payment_uses_backend_quote
+Expected response status code [201] but received 422.
+Failed asserting that 422 is identical to 201.
+
+The following errors occurred during the last request:
+
+{
+    "message": "El plan «Mensual» cuesta 80.000 y el cobro es de 95.200. Ajusta el importe o justifica el cambio con amount_override y override_reason.",
+    "errors": {
+        "amount": [
+            "El plan «Mensual» cuesta 80.000 y el cobro es de 95.200. Ajusta el importe o justifica el cambio con amount_override y override_reason."
+        ]
+    }
+}
+
+backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:26
+backend/tests/Feature/Billing/PricingV2SalesAndPaymentsTest.php:212
+
+2) Tests\Feature\UltronStudio\OutreachIsolationTest::test_la_puerta_de_diff_de_legacy_n8n_otp_y_motor_comercial_esta_vacia_y_la_voz_no_gana_ficheros
+La puerta de diff del H9 no está vacía frente a origin/main (ULTRON Legacy, n8n, OTP o motor comercial tocados):
+backend/app/Services/Marketing/Ultron/Prompts/UltronPromptCompiler.php
+backend/app/Services/Marketing/Ultron/Prompts/UltronPromptOffer.php
+backend/app/Services/Marketing/Ultron/UltronCommitService.php
+backend/app/Services/Marketing/Ultron/UltronReplyFitter.php
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-''
++'backend/app/Services/Marketing/Ultron/Prompts/UltronPromptCompiler.php
++backend/app/Services/Marketing/Ultron/Prompts/UltronPromptOffer.php
++backend/app/Services/Marketing/Ultron/UltronCommitService.php
++backend/app/Services/Marketing/Ultron/UltronReplyFitter.php'
+
+backend/tests/Feature/UltronStudio/OutreachIsolationTest.php:374
+
+FAILURES!
+Tests: 17981, Assertions: 460770, Failures: 2, PHPUnit Deprecations: 8, Skipped: 656.
+
+── rastro ───────────────────────────────────────────────
+  xml: storage/test-results/junit-20261113T142018Z.xml
+  log: storage/test-results/suite-20261113T142018Z.txt
+  fallos (2):
+    · Tests\Feature\Billing\PricingV2SalesAndPaymentsTest::test_manual_payment_uses_backend_quote
+    · Tests\Feature\UltronStudio\OutreachIsolationTest::test_la_puerta_de_diff_de_legacy_n8n_otp_y_motor_comercial_esta_vacia_y_la_voz_no_gana_ficheros
+
+  línea base: 1 tolerados
+  REGRESIONES: 1
+    + Tests\Feature\UltronStudio\OutreachIsolationTest::test_la_puerta_de_diff_de_legacy_n8n_otp_y_motor_comercial_esta_vacia_y_la_voz_no_gana_ficheros
+rc=1
+fin 10:55:36
