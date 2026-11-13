@@ -230,6 +230,11 @@ return [
         'trainer_window_seconds' => (int) env('IRON_AI_PLAN_TRAINER_WINDOW', 600),
         'daily_tokens_budget' => (int) env('IRON_AI_PLAN_DAILY_TOKENS', 3000000),
         'member_daily_generations' => (int) env('IRON_AI_PLAN_MEMBER_DAILY', 10),
+
+        // Organización muscular (docs/iron-ia/ORGANIZACION-MUSCULAR.md): parte
+        // mínima de los ejercicios de cada día que debe ser de sus grupos. 0
+        // desactiva el rechazo (`ai_muscle_mismatch`) sin desplegar.
+        'muscle_min_share' => (float) env('IRON_AI_PLAN_MUSCLE_MIN_SHARE', 0.6),
     ],
 
     // Estimación de costo (USD por 1M tokens). Solo para iron_ai_usage_logs;

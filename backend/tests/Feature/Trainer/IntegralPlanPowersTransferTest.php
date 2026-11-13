@@ -68,10 +68,13 @@ class IntegralPlanPowersTransferTest extends TestCase
         $this->assertSame($this->anualidad->name, $b->refresh()->plan, 'el traspaso deja el plan recibido en users.plan');
 
         $token = $this->trainerFor([$a, $b]);
-        foreach (range(1, 8) as $i) {
+        // Grupos reales: la rutina se comprueba contra el reparto muscular por días.
+        $grupos = ['Piernas', 'Pecho', 'Espalda', 'Hombro', 'Bíceps', 'Tríceps', 'Glúteo', 'Core'];
+        foreach (range(1, 16) as $i) {
+            $g = $grupos[($i - 1) % count($grupos)];
             Exercise::create([
-                'name' => "Ejercicio {$i}", 'local_name' => "Ejercicio {$i}", 'muscle_group' => 'General', 'body_part' => 'General',
-                'equipment' => 'mancuernas', 'difficulty' => 'intermedio', 'target' => 'General',
+                'name' => "Ejercicio {$i}", 'local_name' => "Ejercicio {$i}", 'muscle_group' => $g, 'body_part' => $g,
+                'equipment' => 'mancuernas', 'difficulty' => 'intermedio', 'target' => $g,
                 'video_path' => "videos/t{$i}.mp4", 'provider' => 'local', 'external_id' => "tr-{$i}",
             ]);
         }

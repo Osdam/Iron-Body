@@ -146,9 +146,33 @@ class MemberContextAssembler
             $contexto['trainer_notes']['plan_note'] = $v;
         }
 
-        $contexto['sources']['trainer_input'] = array_keys($input);
+        // Propuesta de recuperación (docs/iron-ia/RECUPERACION-RUTINAS.md): la
+        // pone SOLO el backend, nunca la petición HTTP (GenerateIntegralPlanRequest
+        // deja pasar únicamente las 7 claves del formulario). Los días que lleve
+        // son una propuesta sin confirmar, no lo que dijo el entrenador.
+        $campana = is_string($input[self::RECOVERY_KEY] ?? null) ? trim($input[self::RECOVERY_KEY]) : '';
+        if ($campana !== '') {
+            $contexto['sources']['recovery'] = $campana;
+        }
+
+        $contexto['sources']['trainer_input'] = array_values(array_diff(array_keys($input), [self::RECOVERY_KEY]));
 
         return $contexto;
+    }
+
+    /** Clave interna con la que el backend marca una propuesta de recuperación. */
+    public const RECOVERY_KEY = 'recovery_campaign';
+
+    /**
+     * ¿Los días del plan los pidió quien genera (el entrenador, o una propuesta
+     * de recuperación) en vez de salir de la meta o de un supuesto? Entonces se
+     * cumplen exactos y la rutina sencilla recibe el reparto muscular.
+     *
+     * @param  array<string,mixed>  $brief  {@see planBrief()}
+     */
+    public static function daysFromRequest(array $brief): bool
+    {
+        return in_array($brief['days_source'] ?? null, ['trainer', 'recovery_proposal'], true);
     }
 
     /**
@@ -212,10 +236,18 @@ class MemberContextAssembler
         // Días: lo que el entrenador indica para ESTE plan manda; si no lo
         // indica, la meta nutricional del socio; si tampoco, un supuesto
         // DECLARADO. El tope de 6 no es un valor fijo inventado: la división
-        // de la rutina (IntegralPlanStrategy::SPLITS) llega hasta 6 sesiones.
+        // de la rutina (RoutineMuscleOrganizer::SPLITS) llega hasta 6 sesiones.
         $diasEntrenador = $contexto['training']['days_per_week'] ?? null;
         $diasMeta = $meta?->training_days_per_week;
-        if (is_int($diasEntrenador) && $diasEntrenador >= 1) {
+        $recuperacion = $contexto['sources']['recovery'] ?? null;
+        if (is_int($diasEntrenador) && $diasEntrenador >= 1 && is_string($recuperacion)) {
+            // Propuesta de recuperación: los días NO están confirmados. No se
+            // registran como disponibilidad del socio en ningún sitio; solo
+            // orientan esta propuesta, que el entrenador revisa antes de publicar.
+            $dias = min(self::MAX_PLAN_DAYS, $diasEntrenador);
+            $fuenteDias = 'recovery_proposal';
+            $supuestos[] = "Propuesta de recuperación: se proponen {$dias} días SIN CONFIRMAR. Antes de publicar, confirma con el socio su disponibilidad real, los minutos por sesión, su nivel, lesiones y objetivo.";
+        } elseif (is_int($diasEntrenador) && $diasEntrenador >= 1) {
             $dias = min(self::MAX_PLAN_DAYS, $diasEntrenador);
             $fuenteDias = 'trainer';
             if ($diasEntrenador > self::MAX_PLAN_DAYS) {

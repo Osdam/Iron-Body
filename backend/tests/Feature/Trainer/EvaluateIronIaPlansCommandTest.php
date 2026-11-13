@@ -36,12 +36,18 @@ class EvaluateIronIaPlansCommandTest extends TestCase
             'services.openai.base_url' => 'https://api.openai.com',
             'iron_ai.plan_powers.model' => 'gpt-4.1-mini',
         ]);
-        $nombres = ['Sentadilla goblet', 'Prensa', 'Peso muerto rumano', 'Zancadas', 'Hip thrust', 'Press banca', 'Press inclinado',
-            'Remo con barra', 'Jalón al pecho', 'Press militar', 'Elevaciones laterales', 'Curl de bíceps', 'Tríceps en polea', 'Plancha'];
-        foreach ($nombres as $i => $n) {
+        // Con su grupo muscular real: la rutina se comprueba contra el reparto por días
+        // (RoutineMuscleOrganizer) y un catálogo «General» no se puede repartir.
+        $nombres = ['Sentadilla goblet' => 'Piernas', 'Prensa' => 'Piernas', 'Peso muerto rumano' => 'Femoral', 'Zancadas' => 'Piernas',
+            'Hip thrust' => 'Glúteo', 'Press banca' => 'Pecho', 'Press inclinado' => 'Pecho', 'Remo con barra' => 'Espalda',
+            'Jalón al pecho' => 'Espalda', 'Press militar' => 'Hombro', 'Elevaciones laterales' => 'Hombro', 'Curl de bíceps' => 'Bíceps',
+            'Tríceps en polea' => 'Tríceps', 'Plancha' => 'Core'];
+        $i = 0;
+        foreach ($nombres as $n => $g) {
+            $i++;
             Exercise::create([
-                'name' => $n, 'local_name' => $n, 'muscle_group' => 'General', 'body_part' => 'General',
-                'equipment' => 'mancuernas', 'difficulty' => 'intermedio', 'target' => 'General',
+                'name' => $n, 'local_name' => $n, 'muscle_group' => $g, 'body_part' => $g,
+                'equipment' => 'mancuernas', 'difficulty' => 'intermedio', 'target' => $g,
                 'video_path' => "videos/e{$i}.mp4", 'provider' => 'local', 'external_id' => "ev-{$i}",
             ]);
         }

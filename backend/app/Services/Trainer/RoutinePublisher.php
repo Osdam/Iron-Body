@@ -3,11 +3,13 @@
 namespace App\Services\Trainer;
 
 use App\Exceptions\IntegralPlanException;
+use App\Models\IronIaRecoveryItem;
 use App\Models\Member;
-use App\Services\RealtimeEvents;
 use App\Models\MemberRoutineAssignment;
 use App\Models\Routine;
 use App\Models\Trainer;
+use App\Services\RealtimeEvents;
+use App\Services\Trainer\Recovery\RoutineRecoveryCampaign;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -67,6 +69,12 @@ class RoutinePublisher
                 'status' => 'Retirada',
             ]);
 
+            // Si era una propuesta de recuperación sin publicar, el entrenador la descartó.
+            IronIaRecoveryItem::query()
+                ->where('proposal_routine_id', $routine->getKey())
+                ->where('status', IronIaRecoveryItem::STATUS_PROPOSED)
+                ->update(['status' => IronIaRecoveryItem::STATUS_DISCARDED, 'discarded_at' => now(), 'updated_at' => now()]);
+
             // Solo la ASIGNACIÓN se va: es la fila que decide si el socio la ve.
             MemberRoutineAssignment::where('routine_id', $routine->getKey())->delete();
 
@@ -117,13 +125,15 @@ class RoutinePublisher
             );
         }
 
-        $publicada = DB::transaction(function () use ($routine, $member) {
+        $publicada = DB::transaction(function () use ($routine, $member, $trainer) {
             $routine->update([
                 'is_assigned' => true,
                 'assigned_member_id' => $member->getKey(),
                 'assigned_member_name' => $member->full_name,
                 'status' => 'Activa',
             ]);
+
+            $this->replaceRecoveredOriginal($routine, $trainer);
 
             // `firstOrCreate`: publicar dos veces no duplica la asignación —hay
             // un único (member_id, routine_id)— y no es un error, es alguien
@@ -139,6 +149,60 @@ class RoutinePublisher
         $this->notifyRoutineChanged($member->getKey());
 
         return $publicada;
+    }
+
+    /**
+     * Recuperación de Iron IA (docs/iron-ia/RECUPERACION-RUTINAS.md): publicar una
+     * propuesta la hace la vigente y retira la rutina original que venía a
+     * corregir. Se llama DENTRO de la transacción de {@see publish()}.
+     *
+     * - La fila de la campaña se bloquea: dos publicaciones a la vez de la misma
+     *   propuesta hacen una sola sustitución (la segunda la ve ya publicada).
+     * - El nombre pierde la marca «por confirmar»: la publicación ES la
+     *   confirmación del entrenador, y el socio no debe verla.
+     * - La original se retira con el mismo efecto que {@see retire()}: deja de
+     *   verse en Mis Rutinas, pero la rutina, sus ejercicios, las sesiones y los
+     *   completados que apuntan a ella se quedan. También cuando la generó otro
+     *   entrenador: la propuesta la sustituye por decisión aprobada de la campaña.
+     * - Una rutina que no es una propuesta de recuperación no cambia en nada.
+     */
+    private function replaceRecoveredOriginal(Routine $routine, Trainer $trainer): void
+    {
+        $item = IronIaRecoveryItem::query()
+            ->where('proposal_routine_id', $routine->getKey())
+            ->lockForUpdate()
+            ->first();
+        // «discarded» también: si el entrenador la retiró y luego decide
+        // publicarla, es la misma sustitución (sin la marca y sin la original).
+        if ($item === null || ! in_array($item->status, [IronIaRecoveryItem::STATUS_PROPOSED, IronIaRecoveryItem::STATUS_DISCARDED], true)) {
+            return;
+        }
+
+        // Se quita SOLO la marca: si alguien renombró la rutina, su nombre se respeta.
+        $prefijo = sprintf(RoutineRecoveryCampaign::NAME_PREFIX, (int) $item->proposed_days);
+        if (str_starts_with((string) $routine->name, $prefijo)) {
+            $routine->update(['name' => mb_substr((string) $routine->name, mb_strlen($prefijo))]);
+        }
+
+        $retirada = null;
+        $original = $item->original_routine_id !== null
+            ? Routine::query()->whereKey($item->original_routine_id)->lockForUpdate()->first()
+            : null;
+        if ($original instanceof Routine
+            && (int) $original->member_id === (int) $routine->member_id
+            && ((bool) $original->is_assigned || MemberRoutineAssignment::where('routine_id', $original->getKey())->exists())) {
+            $original->update(['is_assigned' => false, 'status' => 'Retirada']);
+            MemberRoutineAssignment::where('routine_id', $original->getKey())->delete();
+            $retirada = now();
+        }
+
+        $item->forceFill([
+            'status' => IronIaRecoveryItem::STATUS_PUBLISHED,
+            'discarded_at' => null,
+            'published_at' => now(),
+            'published_by_trainer_id' => $trainer->getKey(),
+            'original_retired_at' => $retirada,
+        ])->save();
     }
 
     /**

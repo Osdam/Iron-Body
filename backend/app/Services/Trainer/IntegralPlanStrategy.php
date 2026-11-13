@@ -22,24 +22,13 @@ class IntegralPlanStrategy
 {
     public const PROMPT_VERSION = 'p5';
 
-    /**
-     * Grupo de un ejercicio del catálogo según su `muscle_group` (ES) y su
-     * `target` (EN, del proveedor). Ver ExerciseDbService::BODYPART_ES.
-     */
-    private const MUSCLE_TAGS = [
-        'legs' => ['piernas', 'pierna', 'cuadriceps', 'gluteo', 'gluteos', 'femoral', 'femorales', 'isquio', 'aductor', 'aductores', 'abductor', 'abductores', 'cadera', 'quads', 'glutes', 'hamstrings', 'adductors', 'abductors', 'upper legs'],
-        'calves' => ['pantorrilla', 'pantorrillas', 'gemelo', 'gemelos', 'calves', 'lower legs'],
-        'chest' => ['pecho', 'pectoral', 'pectorales', 'chest', 'pectorals'],
-        'back' => ['espalda', 'dorsal', 'dorsales', 'trapecio', 'lats', 'upper back', 'traps', 'back'],
-        'shoulders' => ['hombro', 'hombros', 'deltoide', 'deltoides', 'shoulders', 'delts'],
-        'biceps' => ['biceps'],
-        'triceps' => ['triceps'],
-        'arms' => ['brazo', 'brazos', 'antebrazo', 'antebrazos', 'upper arms', 'lower arms', 'forearms'],
-        'core' => ['core', 'abdomen', 'abdominal', 'abdominales', 'abs', 'waist', 'oblicuo', 'oblicuos', 'lumbar'],
-        'cardio' => ['cardio', 'cardiovascular system'],
-    ];
+    /** El reparto por días y la clasificación de ejercicios viven en UN sitio. */
+    private readonly RoutineMuscleOrganizer $muscles;
 
-    public function __construct(private readonly PlanSafetyLexicon $lexicon) {}
+    public function __construct(private readonly PlanSafetyLexicon $lexicon, ?RoutineMuscleOrganizer $muscles = null)
+    {
+        $this->muscles = $muscles ?? new RoutineMuscleOrganizer($lexicon);
+    }
 
     public const WEEKDAYS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
@@ -87,19 +76,6 @@ class IntegralPlanStrategy
         ['batido de fruta con avena', ['gluten']],
         ['tamal o envuelto con chocolate', []],
     ];
-
-    /** División de la rutina por días disponibles: [enfoque, grupos, grupos del catálogo]. */
-    private const SPLITS = [
-        1 => [['Cuerpo completo', 'piernas, empuje, tracción y core', ['legs', 'chest', 'back', 'shoulders', 'core']]],
-        2 => [['Cuerpo completo A', 'piernas, empuje y core', ['legs', 'chest', 'shoulders', 'core']], ['Cuerpo completo B', 'cadera, tracción y core', ['legs', 'back', 'biceps', 'core']]],
-        3 => [['Empuje', 'pecho, hombro y tríceps', ['chest', 'shoulders', 'triceps']], ['Pierna y core', 'cuádriceps, glúteo, femoral y core', ['legs', 'calves', 'core']], ['Tracción', 'espalda, bíceps y core', ['back', 'biceps', 'core']]],
-        4 => [['Torso A', 'pecho, espalda y hombro', ['chest', 'back', 'shoulders']], ['Pierna A', 'cuádriceps, glúteo y core', ['legs', 'core']], ['Torso B', 'espalda, pecho y brazos', ['back', 'chest', 'biceps', 'triceps', 'arms']], ['Pierna B', 'femoral, glúteo y pantorrilla', ['legs', 'calves', 'core']]],
-        5 => [['Empuje', 'pecho, hombro y tríceps', ['chest', 'shoulders', 'triceps']], ['Tracción', 'espalda y bíceps', ['back', 'biceps']], ['Pierna', 'cuádriceps, glúteo y femoral', ['legs', 'calves']], ['Torso', 'pecho, espalda y hombro', ['chest', 'back', 'shoulders']], ['Pierna y core', 'glúteo, femoral, pantorrilla y core', ['legs', 'calves', 'core']]],
-        6 => [['Empuje A', 'pecho, hombro y tríceps', ['chest', 'shoulders', 'triceps']], ['Tracción A', 'espalda y bíceps', ['back', 'biceps']], ['Pierna A', 'cuádriceps y glúteo', ['legs', 'core']], ['Empuje B', 'hombro, pecho y tríceps', ['shoulders', 'chest', 'triceps']], ['Tracción B', 'espalda alta y bíceps', ['back', 'biceps', 'arms']], ['Pierna B', 'femoral, glúteo y core', ['legs', 'calves', 'core']]],
-    ];
-
-    /** Principiante con 3 días: cuerpo completo, que es lo que pide su nivel. */
-    private const BEGINNER_3 = [['Cuerpo completo A', 'piernas, empuje y core', ['legs', 'chest', 'shoulders', 'core']], ['Cuerpo completo B', 'cadera, tracción y core', ['legs', 'back', 'biceps', 'core']], ['Cuerpo completo C', 'piernas, empuje, tracción y core', ['legs', 'chest', 'back', 'core']]];
 
     // ── Nutrición ───────────────────────────────────────────────────────────
 
@@ -306,15 +282,14 @@ class IntegralPlanStrategy
         ];
     }
 
-    /** @return list<array{0: string, 1: string, 2: list<string>}> */
+    /**
+     * El reparto por días: {@see RoutineMuscleOrganizer::split()}.
+     *
+     * @return list<array{0: string, 1: string, 2: list<string>}>
+     */
     public function split(int $days, string $trainingLevel): array
     {
-        $days = max(1, min(6, $days));
-        if ($days === 3 && $trainingLevel === 'principiante') {
-            return self::BEGINNER_3;
-        }
-
-        return self::SPLITS[$days];
+        return $this->muscles->split($days, $trainingLevel);
     }
 
     // ── Peticiones ──────────────────────────────────────────────────────────
@@ -456,8 +431,13 @@ class IntegralPlanStrategy
 
         // Lo del entrenador que la rutina sencilla (potencia de rutina 1 con la
         // de nutrición por encima) también debe respetar. Solo si llegó.
-        if (($brief['days_source'] ?? null) === 'trainer') {
+        if (MemberContextAssembler::daysFromRequest($brief)) {
             $plan['trainer_days'] = (int) $brief['days_available'];
+            if ($routineLevel === 1) {
+                // El mismo reparto que los niveles 2–5: se pide en el prompt y
+                // se comprueba después (IntegralPlanGenerationService).
+                $plan['routine_split'] = $this->muscles->dayPlan($plan['trainer_days'], $brief['training_level']);
+            }
         }
         if (($brief['session_minutes'] ?? null) !== null) {
             $plan['session_minutes'] = (int) $brief['session_minutes'];
@@ -466,12 +446,7 @@ class IntegralPlanStrategy
         if ($routineLevel >= 2) {
             $spec = $this->routineSpec($routineLevel, $brief['training_level'], (bool) $brief['safety_mode'], $brief['session_minutes'] ?? null);
             $plan['routine'] = $spec;
-            $division = $this->split((int) $brief['days_available'], $brief['training_level']);
-            $plan['routine_days'] = array_map(
-                fn (array $s, int $i) => ['name' => 'Día '.($i + 1).' · '.$s[0], 'focus' => $s[0], 'muscles' => $s[1], 'tags' => $s[2]],
-                $division,
-                array_keys($division),
-            );
+            $plan['routine_days'] = $this->muscles->dayPlan((int) $brief['days_available'], $brief['training_level']);
         }
 
         return $plan;
@@ -669,6 +644,9 @@ class IntegralPlanStrategy
         $extra = [];
         if (isset($plan['trainer_days'])) {
             $extra[] = "- La rutina tiene EXACTAMENTE {$plan['trainer_days']} días (`member_brief.days_available`), con recuperación entre sesiones exigentes del mismo grupo muscular. `level` es exactamente `member_brief.training_level`.";
+        }
+        if (isset($plan['routine_split'])) {
+            $extra[] = '- '.$this->muscles->promptRule($plan['routine_split']);
         }
         if (isset($plan['session_minutes'])) {
             $min = $plan['session_minutes'];
@@ -918,21 +896,10 @@ class IntegralPlanStrategy
         return array_values(array_intersect_key($catalog, $elegidos));
     }
 
-    /** @return list<string> */
+    /** @return list<string> {@see RoutineMuscleOrganizer::tagsOf()} */
     private function tagsOf(array $exercise): array
     {
-        $texto = ' '.$this->lexicon->normalize(($exercise['muscle_group'] ?? '').' , '.($exercise['target'] ?? '')).' ';
-        $out = [];
-        foreach (self::MUSCLE_TAGS as $tag => $palabras) {
-            foreach ($palabras as $w) {
-                if (preg_match('/(?<![a-z])'.preg_quote($w, '/').'(?![a-z])/', $texto)) {
-                    $out[] = $tag;
-                    break;
-                }
-            }
-        }
-
-        return $out;
+        return $this->muscles->tagsOf($exercise);
     }
 
     /**

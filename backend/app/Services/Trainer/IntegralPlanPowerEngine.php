@@ -468,7 +468,7 @@ class IntegralPlanPowerEngine
         }
         // Los días que pidió el entrenador son un dato, no una sugerencia: una
         // rutina con otro número de sesiones se repara, no se entrega.
-        if (($brief['days_source'] ?? null) === 'trainer' && $diasConEjercicios !== (int) $brief['days_available']) {
+        if (MemberContextAssembler::daysFromRequest($brief) && $diasConEjercicios !== (int) $brief['days_available']) {
             $issues[] = "La rutina trae {$diasConEjercicios} días con ejercicios; el entrenador pidió exactamente {$brief['days_available']}.";
         }
 

@@ -120,6 +120,16 @@ class IntegralPlanException extends RuntimeException
         );
     }
 
+    /** Los días de la rutina no trabajan los grupos musculares que les tocaban (RoutineMuscleOrganizer). */
+    public static function muscleMismatch(string $detail): self
+    {
+        return new self(
+            'Iron IA no repartió bien los grupos musculares: '.$detail.'. Vuelve a intentarlo.',
+            'ai_muscle_mismatch',
+            retryable: true,
+        );
+    }
+
     /** No hay con qué generar: el gimnasio no tiene ejercicios cargados. */
     public static function emptyCatalog(): self
     {

@@ -13,6 +13,7 @@ use App\Models\Trainer;
 use App\Services\IronAiMembershipAccessService;
 use App\Services\Nutrition\Ai\NutritionAiClient;
 use App\Services\Nutrition\Ai\NutritionAiCostGuard;
+use App\Services\Trainer\Recovery\RoutineRecoveryCampaign;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -64,6 +65,7 @@ class IntegralPlanGenerationService
         private readonly PlanSafetyLexicon $lexicon,
         private readonly IntegralPlanTrainerContext $trainerContext,
         private readonly IntegralPlanStrategy $strategy,
+        private readonly RoutineMuscleOrganizer $muscles,
     ) {}
 
     /** Lo que puede durar una generación como mucho (30 s del nivel 1 + guardar), con margen. */
@@ -79,6 +81,51 @@ class IntegralPlanGenerationService
      */
     public function generate(Trainer $trainer, Member $member, array $trainerInput = []): array
     {
+        return $this->runGeneration($trainer, $member, $trainerInput, null);
+    }
+
+    /** Las corridas de recuperación van aparte: no cuentan en el guardián de los entrenadores. */
+    public const RECOVERY_RUN_MODE = NutritionAiCostGuard::INTEGRAL_PLAN_RECOVERY;
+
+    /**
+     * Propuesta de recuperación de una rutina del flujo antiguo
+     * (docs/iron-ia/RECUPERACION-RUTINAS.md). La llama SOLO la campaña del
+     * backend ({@see RoutineRecoveryCampaign}),
+     * nunca una petición de la app.
+     *
+     * Lo que cambia frente a {@see generate()}, y por qué:
+     *  - No pasa por el limitador del entrenador ni por el guardián del día
+     *    (`integral_plan`): es una operación excepcional y no puede gastar los
+     *    cupos con los que el entrenador trabaja. Su corrida queda registrada
+     *    igual, con su modo propio, y la campaña tiene su propio tope de coste.
+     *  - Los días son una PROPUESTA sin confirmar (MemberContextAssembler).
+     *  - La rutina sale con la potencia de rutina del plan del socio, intacta.
+     *    La nutrición no forma parte de la recuperación: se genera al nivel 1 y
+     *    NO se guarda (una guía con «6 días» de actividad haría pasar por real
+     *    una disponibilidad que nadie ha confirmado).
+     *  - Mismo cerrojo por socio: nunca a la vez que una generación del entrenador.
+     *
+     * @return array{guide: null, routine: Routine, run: NutritionAiRun}
+     *
+     * @throws IntegralPlanException
+     */
+    public function generateRecoveryProposal(Trainer $trainer, Member $member, string $campaign, int $days): array
+    {
+        return $this->runGeneration(
+            $trainer,
+            $member,
+            ['days_per_week' => $days, MemberContextAssembler::RECOVERY_KEY => $campaign],
+            $campaign,
+        );
+    }
+
+    /**
+     * @return array{guide: ?NutritionGuide, routine: Routine, run: NutritionAiRun}
+     *
+     * @throws IntegralPlanException
+     */
+    private function runGeneration(Trainer $trainer, Member $member, array $trainerInput, ?string $recovery): array
+    {
         $this->assertEnabled();
 
         // A1: UNA generación a la vez por socio. Dos toques seguidos en la app
@@ -89,13 +136,15 @@ class IntegralPlanGenerationService
         }
 
         try {
-            $this->throttleTrainer($trainer);
+            if ($recovery === null) {
+                $this->throttleTrainer($trainer);
 
-            // Presupuesto PROPIO del plan integral (tokens del día y
-            // generaciones por socio), separado del de nutrición de los socios.
-            $guard = $this->costGuard->checkIntegralPlan($member);
-            if (! ($guard['allowed'] ?? false)) {
-                throw IntegralPlanException::costGuard((string) ($guard['reason'] ?? 'cost_guard'));
+                // Presupuesto PROPIO del plan integral (tokens del día y
+                // generaciones por socio), separado del de nutrición de los socios.
+                $guard = $this->costGuard->checkIntegralPlan($member);
+                if (! ($guard['allowed'] ?? false)) {
+                    throw IntegralPlanException::costGuard((string) ($guard['reason'] ?? 'cost_guard'));
+                }
             }
 
             $catalogo = $this->catalog->forPrompt();
@@ -112,6 +161,10 @@ class IntegralPlanGenerationService
                 $trainerInput,
             );
             $potencias = $this->powersFor($member);
+            if ($recovery !== null) {
+                // La rutina, con su potencia; la nutrición, que no se guarda, al mínimo.
+                $potencias['nutrition'] = 1;
+            }
             $v1 = $potencias['nutrition'] === 1 && $potencias['routine'] === 1;
 
             // A1: la corrida existe ANTES de llamar (cuenta para el guardián
@@ -120,6 +173,7 @@ class IntegralPlanGenerationService
                 $member, $potencias,
                 $v1 ? (string) config('services.openai.model', 'gpt-4.1-mini') : $this->poweredModel(),
                 $v1 ? self::PROMPT_VERSION : IntegralPlanStrategy::PROMPT_VERSION,
+                $recovery === null ? self::RUN_MODE : self::RECOVERY_RUN_MODE,
             );
 
             try {
@@ -187,12 +241,14 @@ class IntegralPlanGenerationService
         $inicio = microtime(true);
 
         if ($nutritionLevel === 1 && $routineLevel === 1) {
-            $llamada = $this->callV1($contexto, $catalogo);
+            $split = is_int($contexto['training']['days_per_week'] ?? null) ? $this->plannedSplit($brief, 1) : null;
+            $llamada = $this->callV1($contexto, $catalogo, $split);
             $latencia = (int) round((microtime(true) - $inicio) * 1000);
             $uso = $this->v1Usage($llamada['respuesta']);
 
             try {
                 $plan = $this->trainerContext->apply($this->validateV1($llamada['respuesta']), $contexto)['plan'];
+                $plan = $this->splitCheck($plan, $split, $catalogo)['plan'];
                 $plan = $this->v1Safety($plan, $contexto);
                 if (($riesgo = $this->riskInPlan($plan)) !== null) {
                     throw IntegralPlanException::malformed("el plan menciona «{$riesgo['found']}», que no se puede recomendar");
@@ -212,6 +268,7 @@ class IntegralPlanGenerationService
         if ($res['status'] === 'ok') {
             try {
                 $res['plan'] = $this->trainerContext->apply($res['plan'], $contexto)['plan'];
+                $res['plan'] = $this->splitCheck($res['plan'], $this->plannedSplit($brief, $routineLevel), $catalogo)['plan'];
             } catch (IntegralPlanException $e) {
                 $res = ['status' => 'invalid', 'error' => $e, 'error_code' => $e->code_, 'plan' => null] + $res;
             }
@@ -246,8 +303,15 @@ class IntegralPlanGenerationService
      */
     private function generateV1(Trainer $trainer, Member $member, array $contexto, array $catalogo, NutritionAiRun $run, ?ProfessionalAssessment $valoracion = null): array
     {
+        // Con días indicados (entrenador o propuesta de recuperación), el nivel 1
+        // pide y comprueba el MISMO reparto muscular que los niveles 2–5. Con
+        // `{}` no se calcula nada: el prompt es el de siempre, byte a byte.
+        $split = is_int($contexto['training']['days_per_week'] ?? null)
+            ? $this->plannedSplit($this->context->planBrief($member, $contexto), 1)
+            : null;
+
         $inicio = microtime(true);
-        $llamada = $this->callV1($contexto, $catalogo);
+        $llamada = $this->callV1($contexto, $catalogo, $split);
         $respuesta = $llamada['respuesta'];
         $hash = $llamada['hash'];
 
@@ -266,6 +330,7 @@ class IntegralPlanGenerationService
             // Lo que indicó el entrenador (días, nivel, minutos, alergias): con `{}`
             // no cambia nada; con contexto, o se cumple o no se guarda.
             ['plan' => $plan, 'report' => $informe] = $this->trainerContext->apply($plan, $contexto);
+            ['plan' => $plan, 'review' => $musculos] = $this->splitCheck($plan, $split, $catalogo);
         } catch (IntegralPlanException $e) {
             // Una respuesta cortada por longitud se guarda tal cual llegó (antes
             // se perdía): es lo único que permite saber qué se estaba pidiendo.
@@ -290,8 +355,8 @@ class IntegralPlanGenerationService
             throw IntegralPlanException::malformed("el plan menciona «{$riesgo['found']}», que no se puede recomendar");
         }
 
-        $resultado = $this->persist($trainer, $member, $plan, $contexto, $run, $valoracion);
-        $this->closeRun($run, $hash, 'ok', null, $informe === null ? $plan : $plan + ['trainer_context' => $informe], $extra);
+        $resultado = $this->persist($trainer, $member, $plan, $contexto, $run, $valoracion, withGuide: ! isset($contexto['sources']['recovery']));
+        $this->closeRun($run, $hash, 'ok', null, $plan + $this->runExtras($informe, $musculos, $contexto), $extra);
 
         return ['run' => $run->fresh()] + $resultado;
     }
@@ -336,9 +401,9 @@ class IntegralPlanGenerationService
      * @param  list<array<string,mixed>>  $catalogo
      * @return array{respuesta: array<string,mixed>, modelo: string, hash: string}
      */
-    private function callV1(array $contexto, array $catalogo): array
+    private function callV1(array $contexto, array $catalogo, ?array $split = null): array
     {
-        $mensajes = $this->messages($contexto, $catalogo);
+        $mensajes = $this->messages($contexto, $catalogo, $split);
 
         $modelo = (string) config('services.openai.model', 'gpt-4.1-mini');
         $hash = hash('sha256', self::PROMPT_VERSION.'|'.json_encode($mensajes));
@@ -399,13 +464,15 @@ class IntegralPlanGenerationService
         // La misma comprobación del contexto del entrenador que en el nivel 1.
         try {
             ['plan' => $plan, 'report' => $informe] = $this->trainerContext->apply($res['plan'], $contexto);
+            // La misma comprobación del reparto muscular que en el nivel 1.
+            ['plan' => $plan, 'review' => $musculos] = $this->splitCheck($plan, $this->plannedSplit($brief, $potencias['routine']), $catalogo);
         } catch (IntegralPlanException $e) {
             $this->closeRun($run, $res['hash'], 'invalid', $e->code_, $res['payload'], $extra);
             throw $e;
         }
 
-        $resultado = $this->persist($trainer, $member, $plan, $contexto, $run, $valoracion);
-        $this->closeRun($run, $res['hash'], 'ok', null, $informe === null ? $res['payload'] : $res['payload'] + ['trainer_context' => $informe], $extra);
+        $resultado = $this->persist($trainer, $member, $plan, $contexto, $run, $valoracion, withGuide: ! isset($contexto['sources']['recovery']));
+        $this->closeRun($run, $res['hash'], 'ok', null, $res['payload'] + $this->runExtras($informe, $musculos, $contexto), $extra);
 
         return ['run' => $run->fresh()] + $resultado;
     }
@@ -418,13 +485,97 @@ class IntegralPlanGenerationService
     // ── Persistencia: la misma para todos los niveles ───────────────────────
 
     /**
+     * El reparto muscular pedido para ESTA generación (RoutineMuscleOrganizer), o
+     * null si no se pide. Rutina por secciones (potencia ≥ 2): siempre, el de su
+     * brief. Rutina sencilla (potencia 1): solo si quien genera indicó los días.
+     *
+     * @param  array<string,mixed>|null  $brief  MemberContextAssembler::planBrief()
+     * @return list<array{name: string, focus: string, muscles: string, tags: list<string>}>|null
+     */
+    private function plannedSplit(?array $brief, int $routinePower): ?array
+    {
+        if ($brief === null || ($routinePower < 2 && ! MemberContextAssembler::daysFromRequest($brief))) {
+            return null;
+        }
+
+        return $this->muscles->dayPlan((int) $brief['days_available'], (string) $brief['training_level']);
+    }
+
+    /**
+     * Comprobación POSTERIOR del reparto muscular (RoutineMuscleOrganizer::review).
+     * Si pasa, cada día se llama como su enfoque («Día 1 · Empuje A»); si no, el
+     * plan no se guarda y la generación se puede reintentar.
+     *
+     * @param  list<array<string,mixed>>  $catalogo
+     * @return array{plan: array<string,mixed>, review: ?array<string,mixed>}
+     *
+     * @throws IntegralPlanException
+     */
+    private function splitCheck(array $plan, ?array $split, array $catalogo): array
+    {
+        if ($split === null) {
+            return ['plan' => $plan, 'review' => null];
+        }
+
+        $porId = [];
+        foreach ($catalogo as $e) {
+            $porId[(int) ($e['id'] ?? 0)] = $e;
+        }
+        $dias = array_values((array) ($plan['routine']['days'] ?? []));
+        $revision = $this->muscles->review($dias, $split, $porId);
+        if (! $revision['ok']) {
+            throw IntegralPlanException::muscleMismatch(implode('; ', $revision['problems']));
+        }
+
+        foreach (array_keys($dias) as $i) {
+            if (isset($split[$i])) {
+                $dias[$i]['name'] = $split[$i]['name'];
+            }
+        }
+        $plan['routine']['days'] = $dias;
+
+        return ['plan' => $plan, 'review' => ['min_share' => $revision['min_share'], 'days' => $revision['days']]];
+    }
+
+    /**
+     * Lo que se añade al plan en el registro de la corrida. Sin contexto, sin
+     * comprobación muscular y sin recuperación, nada: el registro queda como antes.
+     *
+     * @return array<string,mixed>
+     */
+    private function runExtras(?array $informe, ?array $musculos, array $contexto): array
+    {
+        return array_filter([
+            'trainer_context' => $informe,
+            'muscle_review' => $musculos,
+            'recovery' => $contexto['sources']['recovery'] ?? null,
+        ], fn ($v) => $v !== null);
+    }
+
+    /**
      * @param  array<string,mixed>  $plan
      * @param  array<string,mixed>  $contexto
-     * @return array{guide: NutritionGuide, routine: Routine, run: NutritionAiRun, analysis: ?array}
+     * @param  bool  $withGuide  false en una propuesta de recuperación: solo la rutina
+     * @return array{guide: ?NutritionGuide, routine: Routine, run: NutritionAiRun, analysis: ?array}
      */
-    private function persist(Trainer $trainer, Member $member, array $plan, array $contexto, NutritionAiRun $run, ?ProfessionalAssessment $valoracion = null): array
+    private function persist(Trainer $trainer, Member $member, array $plan, array $contexto, NutritionAiRun $run, ?ProfessionalAssessment $valoracion = null, bool $withGuide = true): array
     {
-        return DB::transaction(function () use ($trainer, $member, $plan, $contexto, $run, $valoracion) {
+        return DB::transaction(function () use ($trainer, $member, $plan, $contexto, $run, $valoracion, $withGuide) {
+            if (! $withGuide) {
+                // Propuesta de recuperación: SOLO la rutina (ver generateRecoveryProposal()).
+                return [
+                    'guide' => null,
+                    'routine' => $this->createRoutineDraft(
+                        $trainer,
+                        $member,
+                        $plan['routine'],
+                        $valoracion?->getKey() ?? ((int) ($contexto['sources']['assessment_id'] ?? 0) ?: null),
+                    )->fresh('routineExercises'),
+                    'run' => $run,
+                    'analysis' => $plan['analysis'] ?? null,
+                ];
+            }
+
             // La guía copia las medidas de la MISMA valoración con la que se
             // generó (elegida al empezar), no de «la última» de ahora: si entró
             // otra durante la llamada al modelo, guía y rutina quedarían ancladas
@@ -555,7 +706,7 @@ class IntegralPlanGenerationService
      * @param  list<array<string,mixed>>  $catalogo
      * @return list<array{role:string,content:string}>
      */
-    private function messages(array $contexto, array $catalogo): array
+    private function messages(array $contexto, array $catalogo, ?array $split = null): array
     {
         // Solo lo que influye en el plan. El nombre del socio, su teléfono o su
         // documento no cambian una rutina y no tienen por qué salir del sistema.
@@ -571,7 +722,7 @@ class IntegralPlanGenerationService
         ];
 
         return [
-            ['role' => 'system', 'content' => $this->systemPrompt().$this->trainerRules($contexto)],
+            ['role' => 'system', 'content' => $this->systemPrompt().$this->trainerRules($contexto, $split)],
             ['role' => 'user', 'content' => json_encode([
                 'member' => $util,
                 'exercise_catalog' => $catalogo,
@@ -589,7 +740,7 @@ class IntegralPlanGenerationService
      *
      * @param  array<string,mixed>  $contexto
      */
-    private function trainerRules(array $contexto): string
+    private function trainerRules(array $contexto, ?array $split = null): string
     {
         $recibido = $contexto['sources']['trainer_input'] ?? [];
         if ($recibido === []) {
@@ -604,6 +755,11 @@ class IntegralPlanGenerationService
             $reglas[] = "La rutina tiene EXACTAMENTE {$dias} ".($dias === 1 ? 'día' : 'días').' en `routine.days`, ni uno más ni uno menos'
                 .($t['days_per_week'] > $dias ? " (`training.days_per_week` pide {$t['days_per_week']}; el plan admite hasta {$dias} y deja un día de descanso)" : ' (`training.days_per_week`)')
                 .'. Reparte los grupos musculares para que haya recuperación entre sesiones exigentes del mismo grupo.';
+            if ($split !== null) {
+                // El mismo reparto que los niveles 2–5 (RoutineMuscleOrganizer),
+                // comprobado después en splitCheck().
+                $reglas[] = $this->muscles->promptRule($split);
+            }
         }
         if (is_int($t['session_minutes'] ?? null)) {
             $min = $t['session_minutes'];
@@ -724,12 +880,12 @@ class IntegralPlanGenerationService
      *
      * @param  array{nutrition: int, routine: int}  $potencias
      */
-    private function openRun(Member $member, array $potencias, string $model, string $promptVersion): NutritionAiRun
+    private function openRun(Member $member, array $potencias, string $model, string $promptVersion, string $mode = self::RUN_MODE): NutritionAiRun
     {
         return NutritionAiRun::create([
             'uuid' => (string) Str::uuid(),
             'member_id' => $member->getKey(),
-            'mode' => self::RUN_MODE,
+            'mode' => $mode,
             'provider' => 'openai',
             'model' => $model,
             'status' => 'running',

@@ -2,6 +2,7 @@
 
 namespace Tests\Support;
 
+use App\Services\Trainer\RoutineMuscleOrganizer;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 
@@ -102,6 +103,9 @@ final class FakeIronIaOpenAi
                 }
             }
             unset($d, $e);
+            if (($reparto = self::splitFromSystem($system)) !== null) {
+                $plan['routine']['days'] = self::coherentDays((array) ($user['exercise_catalog'] ?? []), $reparto, 5);
+            }
             if ($this->tweak) {
                 $t = ($this->tweak)('v1', $user, $plan, 1, $system);
                 $plan = is_array($t) ? ($t['content'] ?? $plan) : $plan;
@@ -121,7 +125,7 @@ final class FakeIronIaOpenAi
             'routine_frame' => $this->frame($props),
             'routine_day' => $this->routineDay($user, $system, $props),
             'nutrition_v1' => $this->nutritionV1($user),
-            'routine_v1' => $this->routineV1($user),
+            'routine_v1' => $this->routineV1($user, $system),
             default => [],
         };
 
@@ -520,9 +524,12 @@ final class FakeIronIaOpenAi
         $indice = preg_match('/Día (\d+)/', (string) ($user['day']['name'] ?? ''), $d) ? (int) $d[1] - 1 : 0;
 
         $n = min($max, max($min, $min + 1), count($catalogo));
+        // Primero los ejercicios de los grupos del día, como haría el modelo real
+        // (con catálogos pequeños catalogFor() manda el catálogo entero a cada día).
+        $orden = self::pickForMuscles((array) ($user['exercise_catalog'] ?? []), (string) ($user['day']['muscles'] ?? ''), count($catalogo), $indice * 2);
         $ex = [];
         for ($i = 0; $i < $n; $i++) {
-            $id = $catalogo[($indice * 2 + $i) % count($catalogo)];
+            $id = $orden[$i % count($orden)];
             $e = [
                 'exercise_id' => $id,
                 'sets' => 3,
@@ -572,9 +579,17 @@ final class FakeIronIaOpenAi
         ];
     }
 
-    private function routineV1(array $user): array
+    private function routineV1(array $user, string $system = ''): array
     {
         $ids = array_values(array_column((array) ($user['exercise_catalog'] ?? []), 'id'));
+        if (($reparto = self::splitFromSystem($system)) !== null) {
+            // Siempre 2 días (hay pruebas que cuentan con ello), pero con los
+            // ejercicios del reparto que pide el prompt.
+            return ['routine' => [
+                'name' => 'Rutina base 2 días', 'objective' => 'Acondicionamiento', 'level' => 'principiante',
+                'days' => self::coherentDays((array) ($user['exercise_catalog'] ?? []), array_slice($reparto, 0, 2), 4),
+            ]];
+        }
 
         return ['routine' => [
             'name' => 'Rutina base 2 días',
@@ -585,5 +600,77 @@ final class FakeIronIaOpenAi
                 ['name' => 'Día 2', 'exercises' => array_map(fn ($id) => ['exercise_id' => $id, 'sets' => 3, 'reps' => '12', 'rest_seconds' => 90, 'notes' => ''], array_slice($ids, 4, 4) ?: array_slice($ids, 0, 4))],
             ],
         ]];
+    }
+
+    // ── Reparto muscular: el doble elige como un modelo que lee el prompt ────
+
+    /**
+     * Los grupos de cada día según la regla del prompt
+     * (RoutineMuscleOrganizer::promptRule), o null si el prompt no la trae.
+     *
+     * @return list<string>|null
+     */
+    public static function splitFromSystem(string $system): ?array
+    {
+        if (! preg_match('/Reparte los días EXACTAMENTE en este orden[^:]*:\s*(.+?)\.(?:\n|$)/u', $system, $m)) {
+            return null;
+        }
+        preg_match_all('/Día \d+ · [^(]+\(([^)]+)\)/u', $m[1], $dias);
+
+        return $dias[1] === [] ? null : $dias[1];
+    }
+
+    /**
+     * Ids del catálogo ordenados: primero los de esos grupos, luego el resto.
+     *
+     * @param  list<array<string,mixed>>  $catalogo
+     * @return list<int>
+     */
+    public static function pickForMuscles(array $catalogo, string $grupos, int $n, int $desfase = 0): array
+    {
+        $organizador = app(RoutineMuscleOrganizer::class);
+        $esperados = $organizador->tagsOf(['muscle_group' => $grupos]);
+        foreach (['biceps' => 'arms', 'triceps' => 'arms', 'legs' => 'calves'] as $t => $compatible) {
+            if (in_array($t, $esperados, true)) {
+                $esperados[] = $compatible;
+            }
+        }
+        $dentro = [];
+        $fuera = [];
+        foreach (array_values($catalogo) as $i => $e) {
+            $tags = $organizador->tagsOf($e);
+            if ($esperados !== [] && array_intersect($tags, $esperados) !== []) {
+                $dentro[] = (int) $e['id'];
+            } else {
+                $fuera[] = (int) $e['id'];
+            }
+        }
+        if ($dentro !== []) {
+            $k = $desfase % count($dentro);
+            $dentro = array_merge(array_slice($dentro, $k), array_slice($dentro, 0, $k));
+        }
+
+        return array_slice(array_merge($dentro, $fuera), 0, max(1, $n));
+    }
+
+    /**
+     * Días coherentes con el reparto, sin repetir ejercicio dentro del día.
+     *
+     * @param  list<array<string,mixed>>  $catalogo
+     * @param  list<string>  $reparto  grupos de cada día
+     * @return list<array<string,mixed>>
+     */
+    public static function coherentDays(array $catalogo, array $reparto, int $porDia, array $o = []): array
+    {
+        $dias = [];
+        foreach ($reparto as $i => $grupos) {
+            $ids = self::pickForMuscles($catalogo, $grupos, $porDia, $i);
+            $dias[] = ['name' => 'Día '.($i + 1), 'exercises' => array_map(fn (int $id) => [
+                'exercise_id' => $id, 'sets' => $o['sets'] ?? 3, 'reps' => $o['reps'] ?? '10',
+                'rest_seconds' => $o['rest'] ?? 75, 'notes' => '',
+            ], $ids)];
+        }
+
+        return $dias;
     }
 }

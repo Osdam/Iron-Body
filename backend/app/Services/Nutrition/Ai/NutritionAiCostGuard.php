@@ -19,6 +19,13 @@ class NutritionAiCostGuard
     public const INTEGRAL_PLAN = 'integral_plan';
 
     /**
+     * Propuestas de recuperación de rutinas (docs/iron-ia/RECUPERACION-RUTINAS.md):
+     * una operación excepcional del backend con su propio tope de tokens. No gasta
+     * la cuota de nutrición de los socios ni la del plan integral del día.
+     */
+    public const INTEGRAL_PLAN_RECOVERY = 'integral_plan_recovery';
+
+    /**
      * Presupuesto PROPIO del plan integral (A1), separado del de nutrición de
      * los socios y ponderado por TOKENS: una generación de nivel 5 hace unas
      * 20 llamadas y vale lo que gasta, no «una llamada».
@@ -60,7 +67,7 @@ class NutritionAiCostGuard
             // ({@see checkIntegralPlan()}): no gasta la cuota de nutrición de
             // los socios ni la del día.
             $globalCount = NutritionAiRun::where('created_at', '>=', $todayStart)
-                ->where('mode', '!=', self::INTEGRAL_PLAN)->count();
+                ->whereNotIn('mode', [self::INTEGRAL_PLAN, self::INTEGRAL_PLAN_RECOVERY])->count();
             if ($globalCount >= $globalCap) {
                 return ['allowed' => false, 'reason' => 'daily_cost_guard'];
             }
@@ -69,7 +76,7 @@ class NutritionAiCostGuard
         $userCap = (int) config('nutrition.ai.rate_limit_per_user', 20);
         if ($member && $userCap > 0) {
             $userCount = NutritionAiRun::where('member_id', $member->id)
-                ->where('mode', '!=', self::INTEGRAL_PLAN)
+                ->whereNotIn('mode', [self::INTEGRAL_PLAN, self::INTEGRAL_PLAN_RECOVERY])
                 ->where('created_at', '>=', $todayStart)->count();
             if ($userCount >= $userCap) {
                 return ['allowed' => false, 'reason' => 'rate_limit_per_user'];

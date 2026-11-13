@@ -364,7 +364,11 @@ class AppRoutineController extends Controller
     {
         $member = $request->attributes->get('auth_member');
 
-        if ((int) $routine->member_id !== (int) $member->id || $routine->is_assigned) {
+        // Solo SUS rutinas: las que él creó no llevan entrenador (la misma regla
+        // que el listado custom()). Una rutina profesional retirada o en borrador
+        // —también una propuesta de recuperación de Iron IA— no es suya para
+        // borrar: con ella se irían sus ejercicios y el enlace de las sesiones.
+        if ((int) $routine->member_id !== (int) $member->id || $routine->is_assigned || $routine->trainer_id !== null) {
             return response()->json(['message' => 'No autorizado.'], 403);
         }
 

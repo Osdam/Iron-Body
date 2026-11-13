@@ -115,6 +115,10 @@ class IronIaTrainerContextTest extends TestCase
             ['Zancadas', 'Piernas'], ['Hip thrust', 'Glúteo'], ['Press banca', 'Pecho'], ['Press inclinado mancuernas', 'Pecho'],
             ['Remo con barra', 'Espalda'], ['Jalón al pecho', 'Espalda'], ['Press militar', 'Hombro'], ['Elevaciones laterales', 'Hombro'],
             ['Curl de bíceps', 'Brazos'], ['Extensión de tríceps', 'Brazos'], ['Plancha', 'Core'],
+            // Para que un día de tracción o de empuje de hasta 9 ejercicios tenga de dónde elegir.
+            ['Remo con mancuerna', 'Espalda'], ['Dominadas asistidas', 'Espalda'], ['Pull over en polea', 'Espalda'],
+            ['Curl martillo', 'Bíceps'], ['Curl concentrado', 'Bíceps'], ['Fondos en banco', 'Tríceps'], ['Press francés', 'Tríceps'],
+            ['Sentadilla búlgara', 'Piernas'], ['Extensión de cuádriceps', 'Cuádriceps'], ['Curl femoral', 'Femoral'], ['Elevación de talones', 'Pantorrilla'],
         ];
         foreach ($catalogo as $i => [$n, $g]) {
             Exercise::create([
@@ -176,17 +180,24 @@ class IronIaTrainerContextTest extends TestCase
      */
     private function v1Con(int $dias, array $o = []): callable
     {
-        return function (string $schema, array $user, array $content) use ($dias, $o) {
+        return function (string $schema, array $user, array $content, int $n = 1, string $system = '') use ($dias, $o) {
             if ($schema !== 'v1') {
                 return null;
             }
-            $ids = array_values(array_column((array) ($user['exercise_catalog'] ?? []), 'id'));
+            $catalogo = (array) ($user['exercise_catalog'] ?? []);
+            $ids = array_values(array_column($catalogo, 'id'));
+            // Como el modelo real: si el prompt trae el reparto muscular, cada día
+            // elige primero entre los ejercicios de sus grupos.
+            $reparto = FakeIronIaOpenAi::splitFromSystem($system) ?? [];
             $content['routine']['days'] = [];
             for ($d = 0; $d < $dias; $d++) {
+                $orden = isset($reparto[$d])
+                    ? FakeIronIaOpenAi::pickForMuscles($catalogo, $reparto[$d], count($ids), $d)
+                    : array_map(fn ($k) => $ids[($d * 2 + $k) % count($ids)], range(0, count($ids) - 1));
                 $ejercicios = [];
                 for ($i = 0; $i < ($o['per_day'] ?? 5); $i++) {
                     $ejercicios[] = [
-                        'exercise_id' => $ids[($d * 2 + $i) % count($ids)],
+                        'exercise_id' => $orden[$i % count($orden)],
                         'sets' => $o['sets'] ?? 3, 'reps' => $o['reps'] ?? '10', 'rest_seconds' => $o['rest'] ?? 75, 'notes' => '',
                     ];
                 }
@@ -407,8 +418,8 @@ class IronIaTrainerContextTest extends TestCase
         $llamadas = 0;
         $conMani = $this->v1Con(6, ['meal' => 'Tostadas con mantequilla de maní y banano']);
         $sinMani = $this->v1Con(6, ['meal' => 'Huevos con arepa y fruta']);
-        FakeIronIaOpenAi::install(function (string $schema, array $user, array $content) use (&$llamadas, $conMani, $sinMani) {
-            return (++$llamadas === 1 ? $conMani : $sinMani)($schema, $user, $content);
+        FakeIronIaOpenAi::install(function (...$args) use (&$llamadas, $conMani, $sinMani) {
+            return (++$llamadas === 1 ? $conMani : $sinMani)(...$args);
         });
 
         $r = $this->generate($cuerpo)->assertStatus(422);
@@ -582,15 +593,13 @@ class IronIaTrainerContextTest extends TestCase
     public function test_rutina_sencilla_con_nutricion_por_niveles_respeta_los_dias(): void
     {
         $this->powers(3, 1);
-        FakeIronIaOpenAi::install(function (string $schema, array $user, array $content) {
+        FakeIronIaOpenAi::install(function (string $schema, array $user, array $content, int $n = 1, string $system = '') {
             if ($schema !== 'routine_v1') {
                 return null;
             }
-            $ids = array_values(array_column((array) ($user['exercise_catalog'] ?? []), 'id'));
-            $content['routine']['days'] = array_map(fn ($d) => ['name' => 'Día '.($d + 1), 'exercises' => array_map(
-                fn ($i) => ['exercise_id' => $ids[($d * 2 + $i) % count($ids)], 'sets' => 3, 'reps' => '12', 'rest_seconds' => 75, 'notes' => ''],
-                range(0, 4),
-            )], range(0, 5));
+            $reparto = FakeIronIaOpenAi::splitFromSystem($system);
+            $this->assertNotNull($reparto, 'la rutina sencilla recibe el reparto muscular en el prompt');
+            $content['routine']['days'] = FakeIronIaOpenAi::coherentDays((array) ($user['exercise_catalog'] ?? []), $reparto, 5);
 
             return ['content' => $content];
         });
@@ -599,7 +608,13 @@ class IronIaTrainerContextTest extends TestCase
 
         $rutina = collect($this->sentBodies())->first(fn ($c) => data_get($c, 'response_format.json_schema.name') === 'routine_v1');
         $this->assertStringContainsString('EXACTAMENTE 6 días', $rutina['messages'][0]['content']);
+        $this->assertStringContainsString('Día 1 · Empuje A (pecho, hombro y tríceps)', $rutina['messages'][0]['content']);
         $this->assertSame(6, Routine::firstOrFail()->days_per_week);
+        // Los mismos nombres que los niveles 2–5.
+        $this->assertSame(
+            ['Día 1 · Empuje A', 'Día 2 · Tracción A', 'Día 3 · Pierna A', 'Día 4 · Empuje B', 'Día 5 · Tracción B', 'Día 6 · Pierna B'],
+            array_column(Routine::firstOrFail()->days, 'name'),
+        );
     }
 
     public function test_rutina_sencilla_que_no_trae_los_dias_pedidos_no_se_guarda(): void
@@ -634,7 +649,7 @@ class IronIaTrainerContextTest extends TestCase
     {
         $this->powers(1, 1);
         $nueva = null;
-        FakeIronIaOpenAi::install(function (string $schema, array $user, array $content) use (&$nueva) {
+        FakeIronIaOpenAi::install(function (string $schema, array $user, array $content, int $n = 1, string $system = '') use (&$nueva) {
             // Otro dispositivo envía una valoración MIENTRAS OpenAI responde.
             $nueva ??= ProfessionalAssessment::create([
                 'uuid' => (string) Str::uuid(),
@@ -644,7 +659,7 @@ class IronIaTrainerContextTest extends TestCase
                 'submitted_at' => now()->addMinute(),
             ]);
 
-            return ($this->v1Con(6))($schema, $user, $content);
+            return ($this->v1Con(6))($schema, $user, $content, $n, $system);
         });
 
         $this->generate(self::FORMULARIO)->assertStatus(201);
@@ -654,5 +669,81 @@ class IronIaTrainerContextTest extends TestCase
         $this->assertSame($this->valoracion->id, $guia->source_assessment_id, 'la guía queda en la valoración con la que se generó');
         $this->assertEquals(70, (float) $guia->weight_kg);
         $this->assertNotNull($nueva);
+    }
+
+    // ── Organización muscular (docs/iron-ia/ORGANIZACION-MUSCULAR.md) ───────
+
+    /** Ids de ejercicios de pierna de la petición: un día de pierna para todo. */
+    private static function soloPierna(array $user): array
+    {
+        $piernas = array_values(array_filter((array) ($user['exercise_catalog'] ?? []),
+            fn ($e) => in_array($e['muscle_group'] ?? '', ['Piernas', 'Femoral', 'Glúteo', 'Cuádriceps'], true)));
+
+        return array_column($piernas, 'id');
+    }
+
+    public function test_nivel_1_con_dias_un_reparto_incoherente_no_se_guarda(): void
+    {
+        $this->powers(1, 1);
+        FakeIronIaOpenAi::install(function (string $schema, array $user, array $content) {
+            if ($schema !== 'v1') {
+                return null;
+            }
+            $ids = self::soloPierna($user);
+            $content['routine']['days'] = array_map(fn ($d) => ['name' => 'Día '.($d + 1), 'exercises' => array_map(
+                fn ($i) => ['exercise_id' => $ids[$i % count($ids)], 'sets' => 3, 'reps' => '10', 'rest_seconds' => 75, 'notes' => ''],
+                range(0, 4),
+            )], range(0, 5));
+
+            return ['content' => $content];
+        });
+
+        $r = $this->generate(self::FORMULARIO)->assertStatus(422);
+
+        $r->assertJsonPath('code', 'ai_muscle_mismatch')->assertJsonPath('retryable', true);
+        $this->assertStringContainsString('«Empuje A»', $r->json('message'));
+        $this->assertSame(0, Routine::count());
+        $this->assertSame(0, NutritionGuide::count());
+        $run = NutritionAiRun::sole();
+        $this->assertSame(['invalid', 'ai_muscle_mismatch'], [$run->status, $run->error_code]);
+    }
+
+    public function test_niveles_2_a_5_con_cuerpo_vacio_un_reparto_incoherente_no_se_guarda(): void
+    {
+        $this->powers(3, 3);
+        FakeIronIaOpenAi::install(function (string $schema, array $user, array $content) {
+            if ($schema !== 'routine_day') {
+                return null;
+            }
+            $ids = self::soloPierna($user);
+            foreach ($content['exercises'] as $i => &$e) {
+                $e['exercise_id'] = $ids[$i % count($ids)];
+            }
+
+            return ['content' => $content];
+        });
+
+        $this->generate([])->assertStatus(422)->assertJsonPath('code', 'ai_muscle_mismatch');
+
+        $this->assertSame(0, Routine::count());
+    }
+
+    public function test_el_umbral_a_cero_desactiva_el_rechazo_sin_desplegar(): void
+    {
+        config(['iron_ai.plan_powers.muscle_min_share' => 0.0]);
+        $this->powers(3, 3);
+        FakeIronIaOpenAi::install(function (string $schema, array $user, array $content) {
+            if ($schema !== 'routine_day') {
+                return null;
+            }
+            $ids = self::soloPierna($user);
+            foreach ($content['exercises'] as $i => &$e) {
+                $e['exercise_id'] = $ids[$i % count($ids)];
+            }
+
+            return ['content' => $content];
+        });
+
+        $this->generate([])->assertStatus(201);
     }
 }
