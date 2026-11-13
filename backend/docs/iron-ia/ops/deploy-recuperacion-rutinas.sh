@@ -61,6 +61,9 @@ backend/config/iron_ai.php
 backend/database/migrations/$MIG.php"
 
 aborta() { echo "ABORTA: $*"; exit 1; }
+# ¿Está ya registrada? Se mira la tabla migrations: migrate:status solo enumera los ficheros
+# de database/migrations, y el de esta ola no está ahí hasta el merge (13-11).
+migrada() { ( cd "$B" && sudo -u "$WWW" php artisan tinker --execute="echo Illuminate\Support\Facades\DB::table('migrations')->where('migration', '$MIG')->exists() ? 'si' : 'no';" 2>/dev/null | tail -1 ); }
 cd "$API_DIR"
 
 echo "0. comprobaciones (solo lectura)"
@@ -78,8 +81,8 @@ FUERA=$(comm -23 <(printf '%s\n' "$CAMBIAN" | sed '/^$/d' | sort) <(printf '%s\n
 [ -z "$FUERA" ] || aborta "cambian ficheros que se ejecutan y NO son de esta ola: $(echo $FUERA)"
 NUEVAS=$(git diff --name-only --diff-filter=A HEAD origin/main -- backend/database/migrations)
 [ "$NUEVAS" = "backend/database/migrations/$MIG.php" ] || aborta "migraciones nuevas inesperadas: $(echo $NUEVAS)"
-YA=$(sudo -u "$WWW" php "$B/artisan" migrate:status 2>/dev/null | grep -c "$MIG" || true)
-[ "$YA" = 0 ] || aborta "la migración $MIG ya aparece en migrate:status"
+YA=$(migrada)
+[ "$YA" = no ] || echo "   la migración ya está aplicada: reanudación (no se vuelve a migrar)"
 RUN0=$(supervisorctl status 2>/dev/null | grep -c RUNNING || true)
 NO_RUN0=$(supervisorctl status 2>/dev/null | grep -c -E 'BACKOFF|FATAL|EXITED|STOPPED' || true)
 L0=$(wc -l < "$LOG" 2>/dev/null || echo 0)
@@ -96,9 +99,11 @@ command -v ironbody-migrate >/dev/null || aborta "falta el envoltorio ironbody-m
 mkdir -p "$MIGDIR"
 git show "origin/main:backend/database/migrations/$MIG.php" > "$MIGDIR/$MIG.php"
 chown -R "$WWW:$WWW" "$B/storage/app/deploy"
-ironbody-migrate --path="$MIGDIR" --realpath \
-  || aborta "la migración falló (si es 55P03, lock timeout: no deja restos; repetir)"
-( cd "$B" && sudo -u "$WWW" php artisan migrate:status 2>/dev/null | grep "$MIG" | grep -q Ran ) || aborta "la migración no consta como Ran"
+if [ "$YA" = no ]; then
+  ironbody-migrate --path="$MIGDIR" --realpath \
+    || aborta "la migración falló (si es 55P03, lock timeout: no deja restos; repetir)"
+fi
+[ "$(migrada)" = si ] || aborta "la migración no consta en la tabla migrations"
 # iron_app hereda los privilegios por defecto de iron: compruébalo, no lo supongas. Uno por
 # uno: con varios en la misma llamada, has_table_privilege da true si tiene CUALQUIERA.
 PRIV=$(cd "$B" && sudo -u "$WWW" php artisan tinker --execute="echo json_encode(Illuminate\Support\Facades\DB::selectOne(\"select (has_table_privilege(current_user, 'iron_ia_recovery_items', 'SELECT') and has_table_privilege(current_user, 'iron_ia_recovery_items', 'INSERT') and has_table_privilege(current_user, 'iron_ia_recovery_items', 'UPDATE') and has_table_privilege(current_user, 'iron_ia_recovery_items', 'DELETE')) t, has_sequence_privilege(current_user, 'iron_ia_recovery_items_id_seq', 'USAGE') s\"));" 2>/dev/null | tail -1)
