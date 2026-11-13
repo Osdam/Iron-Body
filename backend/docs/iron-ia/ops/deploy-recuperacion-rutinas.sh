@@ -20,8 +20,10 @@
 #   código:   cd /var/www/api && git checkout --detach "$(cat $BK/api-commit.txt)"
 #             cd backend && sudo -u www-data sh -c 'umask 077; php artisan config:cache -q && php artisan route:cache -q'
 #             sudo -u www-data php artisan queue:restart -q
-#   tabla:    solo si la campaña no ha hecho nada (la tabla es la evidencia):
-#             sudo -u www-data php artisan migrate:rollback --path="$PWD/storage/app/deploy/iron-ia-recuperacion-mig" --realpath --force
+#   tabla:    solo si la campaña no ha hecho nada (la tabla es la evidencia), con el rol dueño:
+#             ironbody-migrate no hace rollback: ( set -a; . /root/.ironbody-owner.env; set +a; cd /var/www/api/backend;
+#             sudo -u www-data env DB_OWNER_USERNAME="$DB_OWNER_USERNAME" DB_OWNER_PASSWORD="$DB_OWNER_PASSWORD" php artisan migrate:rollback
+#             --database=pgsql_owner --path="$PWD/storage/app/deploy/iron-ia-recuperacion-mig" --realpath --force )
 set -euo pipefail
 export LC_ALL=C
 umask 022
@@ -87,12 +89,21 @@ echo "   HEAD $PREVIO → $OBJ · $(printf '%s\n' "$CAMBIAN" | sed '/^$/d' | wc 
 [ "$MODO" != --solo-comprobar ] || { echo "== --solo-comprobar: no se ha tocado nada"; exit 0; }
 
 echo "1. migración SOLA, con el código viejo sirviendo (tabla nueva; no toca ninguna existente)"
+# La aplicación corre como iron_app (solo DML): migra el rol DUEÑO (iron) por el envoltorio
+# ironbody-migrate, que lee su contraseña de /root y no la deja en el .env ni en la caché.
+# (El 13-11 el primer intento migró como iron_app y PostgreSQL lo rechazó con 42501, sin restos.)
+command -v ironbody-migrate >/dev/null || aborta "falta el envoltorio ironbody-migrate"
 mkdir -p "$MIGDIR"
 git show "origin/main:backend/database/migrations/$MIG.php" > "$MIGDIR/$MIG.php"
 chown -R "$WWW:$WWW" "$B/storage/app/deploy"
-( cd "$B" && sudo -u "$WWW" env PGOPTIONS='-c lock_timeout=3s' php artisan migrate --path="$MIGDIR" --realpath --force ) \
+ironbody-migrate --path="$MIGDIR" --realpath \
   || aborta "la migración falló (si es 55P03, lock timeout: no deja restos; repetir)"
 ( cd "$B" && sudo -u "$WWW" php artisan migrate:status 2>/dev/null | grep "$MIG" | grep -q Ran ) || aborta "la migración no consta como Ran"
+# iron_app hereda los privilegios por defecto de iron: compruébalo, no lo supongas. Uno por
+# uno: con varios en la misma llamada, has_table_privilege da true si tiene CUALQUIERA.
+PRIV=$(cd "$B" && sudo -u "$WWW" php artisan tinker --execute="echo json_encode(Illuminate\Support\Facades\DB::selectOne(\"select (has_table_privilege(current_user, 'iron_ia_recovery_items', 'SELECT') and has_table_privilege(current_user, 'iron_ia_recovery_items', 'INSERT') and has_table_privilege(current_user, 'iron_ia_recovery_items', 'UPDATE') and has_table_privilege(current_user, 'iron_ia_recovery_items', 'DELETE')) t, has_sequence_privilege(current_user, 'iron_ia_recovery_items_id_seq', 'USAGE') s\"));" 2>/dev/null | tail -1)
+echo "   privilegios de la aplicación sobre la tabla nueva: $PRIV"
+echo "$PRIV" | grep -q '"t":true' && echo "$PRIV" | grep -q '"s":true' || aborta "iron_app no tiene SELECT/INSERT/UPDATE/DELETE o USAGE de la secuencia en la tabla nueva"
 
 echo "2. código: merge por avance rápido (root, umask 022)"
 MARCA=$(mktemp)
