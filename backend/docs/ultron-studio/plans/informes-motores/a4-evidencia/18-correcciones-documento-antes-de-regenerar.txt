@@ -1,0 +1,46 @@
+# Correcciones F1-F7 · primer verde, antes de regenerar a4-textos-ajustados.md, 12-11-2026 (§13 de informe-backend-a4-bloqueantes.md)
+# Solo falla la prueba del documento; su diff solo AÑADE las dos secciones nuevas (plan día y Trimestre).
+# nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php
+
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/phpunit.xml
+
+...............................................................  63 / 126 ( 50%)
+..............................................................F 126 / 126 (100%)
+
+
+Time: 00:16.225, Memory: 92.50 MB
+
+There was 1 failure:
+
+1) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_los_textos_ajustados_que_aprueba_el_propietario
+los textos cambiaron: regenerar con A4_TEXTOS=escribir y volver a aprobarlos
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+ - **Tope 200** (191) «Claro. Planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
+ - **Tope 160** (133) «Claro. Planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. ¿Sobre cuál amplío la información?»
+ 
++### «¿Cuánto vale el plan día? ¿Qué planes tienen?» (nombra un plan de un día)
++
++- **Hoy (Legacy)** (125) «Sí, claro. Cuéntame qué buscas —bajar grasa, ganar masa o coger el hábito— y te digo el plan que mejor te encaja y su precio.»
++- **Versión aplicada, sin tope (320)** (209) «Claro. Nuestros planes: PLAN DÍA (1 día), $10.000 COP; Plan Valera (un mes), $65.000 COP; Plan Mensual (un mes), $80.000 COP. También hay planes por semana y de varios meses. ¿Sobre cuál amplío la información?»
++- **Tope 200** (160) «Claro. Nuestros planes: PLAN DÍA (1 día), $10.000 COP; Plan Valera (un mes), $65.000 COP; Plan Mensual (un mes), $80.000 COP. ¿Sobre cuál amplío la información?»
++- **Tope 160** (160) «Claro. Nuestros planes: PLAN DÍA (1 día), $10.000 COP; Plan Valera (un mes), $65.000 COP; Plan Mensual (un mes), $80.000 COP. ¿Sobre cuál amplío la información?»
++
++### «¿Y el Trimestre cuánto cuesta? ¿Qué planes tienen?» (nombra un plan de tres meses)
++
++- **Hoy (Legacy)** (125) «Sí, claro. Cuéntame qué buscas —bajar grasa, ganar masa o coger el hábito— y te digo el plan que mejor te encaja y su precio.»
++- **Versión aplicada, sin tope (320)** (225) «Claro. Nuestros planes: Trimestre (tres meses), $210.000 COP; Plan Valera (un mes), $65.000 COP; Plan Mensual (un mes), $80.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
++- **Tope 200** (167) «Claro. Nuestros planes: Trimestre (tres meses), $210.000 COP; Plan Valera (un mes), $65.000 COP; Plan Mensual (un mes), $80.000 COP. ¿Sobre cuál amplío la información?»
++- **Tope 160** (131) «Claro. Nuestros planes: Trimestre (tres meses), $210.000 COP; Plan Valera (un mes), $65.000 COP. ¿Sobre cuál amplío la información?»
++
+ '
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:882
+
+FAILURES!
+Tests: 126, Assertions: 1412, Failures: 1.

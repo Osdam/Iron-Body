@@ -1,0 +1,28 @@
+# Correcciones F1-F7 · mutación M10 (cabecera «Planes de un mes» siempre), 12-11-2026 (§13 de informe-backend-a4-bloqueantes.md)
+# La prueba nueva la pone en rojo. Código restaurado (cmp idéntico).
+# nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging --filter test_un_plan_nombrado_que_no_es_de_un_mes tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php
+
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/phpunit.xml
+
+F                                                                   1 / 1 (100%)
+
+Time: 00:02.237, Memory: 76.50 MB
+
+There was 1 failure:
+
+1) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_un_plan_nombrado_que_no_es_de_un_mes_no_va_bajo_planes_de_un_mes
+200
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Nuestros planes: PLAN DÍA (1 día), $10.000 COP; Plan Valera (un mes), $65.000 COP; Plan Mensual (un mes), $80.000 COP. ¿Sobre cuál amplío la información?'
++'Claro. Planes de un mes: PLAN DÍA (1 día), $10.000 COP; Plan Valera (un mes), $65.000 COP; Plan Mensual (un mes), $80.000 COP. ¿Sobre cuál amplío la información?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:664
+
+FAILURES!
+Tests: 1, Assertions: 3, Failures: 1.

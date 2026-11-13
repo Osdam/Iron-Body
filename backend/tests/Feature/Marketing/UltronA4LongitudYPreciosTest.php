@@ -270,7 +270,8 @@ class UltronA4LongitudYPreciosTest extends TestCase
         Plan::query()->whereBetween('duration_days', [28, 31])->update(['sellable' => false]);
         $this->publica(200);
         $r = $this->criticoCaido(SalesIntents::PRICING_QUESTION, self::PREGUNTA_PRECIOS);
-        $this->assertSame('Claro. Nuestros planes: PLAN DÍA (1 días), $10.000 COP; Plan Semana (7 días), $45.000 COP; Trimestre (tres meses), $210.000 COP. También hay planes de varios meses. ¿Sobre cuál amplío la información?', $r['reply_final']);
+        // F5 (I-4): «1 día», en singular (antes «1 días», que esta prueba fijaba como correcto).
+        $this->assertSame('Claro. Nuestros planes: PLAN DÍA (1 día), $10.000 COP; Plan Semana (7 días), $45.000 COP; Trimestre (tres meses), $210.000 COP. También hay planes de varios meses. ¿Sobre cuál amplío la información?', $r['reply_final']);
     }
 
     public function test_el_plan_que_nombra_la_persona_va_primero(): void
@@ -393,24 +394,59 @@ class UltronA4LongitudYPreciosTest extends TestCase
         $this->assertArrayNotHasKey('policy_violations', $fila->metadata);
     }
 
-    public function test_el_recorte_salta_la_frase_del_precio(): void
+    /**
+     * F1: la frase del precio era la última y no es una pregunta, así que no
+     * se recorta nada (antes se soltaba la del medio, la que describe el
+     * plan): se descarta y sale el respaldo de precios con el Élite primero.
+     */
+    public function test_un_borrador_que_cierra_con_el_precio_no_se_recorta_se_descarta(): void
     {
         $this->publica(160);
         $borrador = 'Claro, te cuento del Élite. Incluye acceso total al gimnasio, sesiones funcionales, rutinas guiadas y seguimiento continuo con guía nutricional. Su valor es {{PLAN_PRICE}} al mes.';
         $r = $this->aprobado(SalesIntents::PRICING_QUESTION, '¿Cuánto cuesta el Élite?', $borrador, 8);
-        $this->assertSame('Claro, te cuento del Élite. Su valor es $180.000 COP al mes.', $r['reply_final']);
+        $this->assertSame('Claro. Planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. ¿Sobre cuál amplío la información?', $r['reply_final']);
+        $this->assertContains(UltronCommitService::VIOLACION_LONGITUD, $this->ultimaAccion()->metadata['policy_violations']);
     }
 
+    /**
+     * Decisión del lead tras F1: la pregunta final que lleva el único precio
+     * del borrador no se suelta (antes de esto salía «El Plan Mensual
+     * incluye…» sin ninguna cifra a quien preguntó cuánto cuesta): se descarta
+     * y sale el respaldo de precios, con el plan nombrado primero.
+     */
+    public function test_la_pregunta_final_con_el_unico_precio_no_se_suelta(): void
+    {
+        $this->publica(200);
+        $borrador = 'El Plan Mensual incluye acceso completo al gimnasio, rutinas guiadas desde la app y una valoración inicial con un entrenador para que empieces con buen pie desde el primer día. ¿Te interesa el Plan Mensual por {{PLAN_PRICE}} al mes?';
+        $r = $this->aprobado(SalesIntents::PRICING_QUESTION, '¿Cuánto cuesta el Plan Mensual?', $borrador, 4);
+
+        $this->assertSame('Claro. Planes de un mes: Plan Mensual, $80.000 COP; Plan Valera, $65.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?', $r['reply_final']);
+        $fila = $this->ultimaAccion();
+        $this->assertContains(UltronCommitService::VIOLACION_LONGITUD, $fila->metadata['policy_violations']);
+        $this->assertEquals(['cap' => 200, 'action' => 'replaced', 'from' => 229, 'to' => UltronReplyFitter::measure($r['reply_final']), 'dropped' => 0], $fila->metadata['length']);
+    }
+
+    /** F1: la pregunta final que va justo antes del bloque de enlaces se suelta; los enlaces se quedan con su salto. */
     public function test_los_enlaces_de_la_app_no_cuentan_y_su_linea_no_se_suelta(): void
     {
         $this->publica(160);
-        $borrador = 'Claro, esta es la app de Iron Body para descargarla en tu celular. Desde ahí creas tu cuenta y pagas tu plan con Nequi, PSE o tarjeta. ¿Te ayudo con algo más?';
+        $borrador = 'Claro, esta es la app de Iron Body para descargarla en tu celular. Desde ahí pagas tu plan con Nequi o PSE. ¿Te ayudo con algo más?';
         $r = $this->aprobado(SalesIntents::GENERAL_INFO, 'Pásame la app', $borrador, null, [SalesIntents::TOOL_APP_LINKS_SEND]);
 
-        $this->assertSame("Claro, esta es la app de Iron Body para descargarla en tu celular.\n\n".MobileAppCatalog::linksInline(), $r['reply_final'], 'los enlaces salen, con su salto');
+        $this->assertSame("Claro, esta es la app de Iron Body para descargarla en tu celular. Desde ahí pagas tu plan con Nequi o PSE.\n\n".MobileAppCatalog::linksInline(), $r['reply_final'], 'sin la pregunta; los enlaces salen, con su salto');
         $this->assertLessThanOrEqual(160, UltronReplyFitter::measure($r['reply_final']));
         $this->assertGreaterThan(160, mb_strlen($r['reply_final']), 'con las URL contadas no cabría: no cuentan');
         $this->assertContains(SalesIntents::TOOL_APP_LINKS_SEND, $r['applied']['tools_executed'], 'y constan como enviados');
+        $this->assertEquals(['cap' => 160, 'action' => 'trimmed', 'from' => 161, 'to' => 137, 'dropped' => 1], $this->ultimaAccion()->metadata['length']);
+
+        // Si sin la pregunta tampoco cabe (164), no se suelta «Desde ahí…»: se descarta, y los enlaces no constan como enviados.
+        $this->nuevaConversacion();
+        $this->publica(160);
+        $largo = 'Claro, esta es la app de Iron Body para descargarla en tu celular. Desde ahí creas tu cuenta y pagas tu plan con Nequi, PSE o tarjeta. ¿Te ayudo con algo más?';
+        $r = $this->aprobado(SalesIntents::GENERAL_INFO, 'Pásame la app', $largo, null, [SalesIntents::TOOL_APP_LINKS_SEND]);
+        $this->assertContains(UltronCommitService::VIOLACION_LONGITUD, $this->ultimaAccion()->metadata['policy_violations']);
+        $this->assertStringNotContainsString('Android:', (string) $r['reply_final']);
+        $this->assertNotContains(SalesIntents::TOOL_APP_LINKS_SEND, $r['applied']['tools_executed']);
     }
 
     public function test_si_no_se_puede_recortar_se_descarta_y_sale_el_respaldo_ajustado(): void
@@ -423,8 +459,10 @@ class UltronA4LongitudYPreciosTest extends TestCase
         $fila = $this->ultimaAccion();
         $this->assertContains('policy_length_exceeded', $fila->metadata['policy_violations']);
         $this->assertStringStartsWith('Te confirmo que el plan Élite', $fila->metadata['policy_discarded_draft']);
-        $this->assertSame('discarded', $fila->metadata['length']['action']);
-        $this->assertSame(UltronReplyFitter::measure(self::PRECIOS_200), $fila->metadata['length']['to']);
+        // m-3: la traza dice que el texto se SUSTITUYÓ, con la medida del borrador y la de lo que salió.
+        $this->assertEquals(['cap' => 200, 'action' => 'replaced', 'from' => UltronReplyFitter::measure(str_replace('{{PLAN_PRICE}}', '$180.000 COP', $borrador)), 'to' => UltronReplyFitter::measure(self::PRECIOS_200), 'dropped' => 0], $fila->metadata['length']);
+        // F3: el turno no cotiza el plan del modelo, enseña varios.
+        $this->assertNull($r['price_source']);
     }
 
     public function test_el_precio_verificado_tiene_prioridad_sobre_el_cuerpo(): void
@@ -433,9 +471,32 @@ class UltronA4LongitudYPreciosTest extends TestCase
         $borrador = 'Sí, el Plan Mensual incluye acceso completo al gimnasio y rutinas guiadas desde la app. Además puedes entrenar en cualquier franja del horario de apertura. ¿Te ayudo con algo más?';
         $r = $this->aprobado(SalesIntents::PRICING_QUESTION, '¿Seguro que el Plan Mensual cuesta eso?', $borrador, 4);
 
-        // D-4 suelta la pregunta (179 → 155) y 13.quater suelta «Además…» para hacerle sitio al precio.
+        // F1: el recorte suelta la pregunta (179 → 155); para el precio ya no se suelta «Además…»: sale la frase del precio sola.
+        $this->assertSame('El precio actual del Plan Mensual es $80.000 COP.', $r['reply_final']);
+        $this->assertEquals(['cap' => 160, 'action' => 'trimmed', 'from' => 179, 'to' => 49, 'dropped' => 3], $this->ultimaAccion()->metadata['length']);
+
+        // Si soltar la pregunta del cuerpo basta, el cuerpo se queda con el precio detrás.
+        $this->nuevaConversacion();
+        $this->publica(160);
+        $corto = 'Sí, el Plan Mensual incluye acceso completo al gimnasio y rutinas guiadas desde la app. ¿Te ayudo con algo más?';
+        $r = $this->aprobado(SalesIntents::PRICING_QUESTION, '¿Seguro que el Plan Mensual cuesta eso?', $corto, 4);
         $this->assertSame('Sí, el Plan Mensual incluye acceso completo al gimnasio y rutinas guiadas desde la app. El precio actual del Plan Mensual es $80.000 COP.', $r['reply_final']);
-        $this->assertEquals(['cap' => 160, 'action' => 'trimmed', 'from' => 179, 'to' => 137, 'dropped' => 2], $this->ultimaAccion()->metadata['length']);
+        $this->assertEquals(['cap' => 160, 'action' => 'trimmed', 'from' => 111, 'to' => 137, 'dropped' => 1], $this->ultimaAccion()->metadata['length']);
+    }
+
+    /** m-8: si ni la frase del precio verificado cabe sola, el cuerpo sale como estaba y queda un aviso. */
+    public function test_si_la_frase_del_precio_no_cabe_ni_sola_el_cuerpo_sale_como_estaba(): void
+    {
+        Plan::query()->whereKey(4)->update(['name' => 'Plan Mensual Integral de Acondicionamiento Físico con Acceso Completo a la Sede y Rutinas Guiadas desde la Aplicación Oficial de Iron Body Neiva']);
+        $this->publica(160);
+        $log = $this->espiaElLog();
+        $cuerpo = 'Sí, ese plan incluye acceso completo al gimnasio y rutinas guiadas desde la app. ¿Te ayudo con algo más?';
+        $r = $this->aprobado(SalesIntents::PRICING_QUESTION, '¿Seguro que cuesta eso?', $cuerpo, 4);
+
+        $this->assertSame($cuerpo, $r['reply_final']);
+        $this->assertArrayNotHasKey('overflow', $this->ultimaAccion()->metadata['length']);
+        $log->shouldHaveReceived('warning')->withArgs(fn (string $e, array $c = []) => $e === 'ultron.commit.verified_price_skipped_cap')->once();
+        $log->shouldNotHaveReceived('error', fn (string $e, array $c = []) => $e === 'ultron.commit.length_cap_overflow');
     }
 
     public function test_la_frase_que_retoma_la_visita_solo_se_anade_si_cabe(): void
@@ -454,6 +515,241 @@ class UltronA4LongitudYPreciosTest extends TestCase
                 $this->assertSame($borrador, $r['reply_final'], 'a 160 no cabe: sale la respuesta sin la cola');
             }
         }
+    }
+
+    // ── Correcciones tras las revisiones de seguridad y del revisor (F1–F7) ──
+
+    /**
+     * B-1 (informe del revisor): los cinco borradores, a 160 y a 200, por el
+     * endpoint. O sale el borrador sin su pregunta, o se descarta y sale el
+     * respaldo ajustado de la intención; NUNCA la apertura sola.
+     *
+     * @return array<string, array{string, string, string, bool, int, ?string}>
+     */
+    public static function borradoresDeB1(): array
+    {
+        $miedo = 'Muchas personas que llegan por primera vez sienten exactamente lo mismo, por eso en Iron Body te acompañamos desde el primer día con una rutina adaptada a tu nivel y un entrenador pendiente de ti. ¿Qué es lo que más te preocupa?';
+        $horario = 'Claro. El horario de atención entre semana es de lunes a viernes de 5:00 a. m. a 10:00 p. m., y los sábados y domingos abrimos de 8:00 a. m. a 2:00 p. m. para que entrenes cuando mejor te quede. ¿Te sirve?';
+        $borradores = [
+            'beginner_fear' => [SalesIntents::BEGINNER_FEAR, 'Nunca he entrenado y me da miedo', 'Te entiendo. '.$miedo, false],
+            'time_objection' => [SalesIntents::TIME_OBJECTION, 'No tengo tiempo', 'Te entiendo perfectamente. Con tres sesiones de cuarenta y cinco minutos a la semana en la franja que mejor te quede, ya puedes ver avances reales en tu proceso sin tener que cambiar toda tu rutina diaria. ¿Qué días tienes más libres?', false],
+            'schedule_question' => [SalesIntents::SCHEDULE_QUESTION, '¿Cuál es el horario de atención entre semana?', $horario, false],
+            'goal_fat_loss' => [SalesIntents::GOAL_FAT_LOSS, 'Quiero bajar de peso', 'Listo. Para bajar de peso lo que mejor funciona es combinar entrenamiento de fuerza con sesiones funcionales tres o cuatro veces por semana, y en Iron Body te armamos la rutina según tu nivel y tu disponibilidad. ¿Ya vienes entrenando?', false],
+            'beginner_fear tras un saludo (R8)' => [SalesIntents::BEGINNER_FEAR, 'Nunca he entrenado y me da miedo', '¡Hola de nuevo! '.$miedo, true],
+        ];
+        $casos = [];
+        foreach ($borradores as $nombre => $b) {
+            foreach ([160, 200] as $tope) {
+                // Solo el horario a 200 cabe sin su pregunta (194): sale recortado. El resto se descarta.
+                $recortado = $b[0] === SalesIntents::SCHEDULE_QUESTION && $tope === 200 ? mb_substr($horario, 0, -mb_strlen(' ¿Te sirve?')) : null;
+                $casos["{$nombre} a {$tope}"] = [...$b, $tope, $recortado];
+            }
+        }
+
+        return $casos;
+    }
+
+    #[DataProvider('borradoresDeB1')]
+    public function test_b1_el_recorte_nunca_deja_solo_la_apertura(string $intent, string $entrante, string $borrador, bool $trasSaludo, int $tope, ?string $recortado): void
+    {
+        $this->publica($tope);
+        if ($trasSaludo) {
+            $this->aprobado(SalesIntents::GREETING, 'Hola', 'Hola, muy buenas tardes. Bienvenido a Iron Body, qué gusto atenderte. Cuéntame, ¿en qué te podemos ayudar hoy?', null);
+        }
+        $r = $this->aprobado($intent, $entrante, $borrador, null);
+        $texto = (string) $r['reply_final'];
+        $fila = $this->ultimaAccion();
+
+        $this->assertNotContains($texto, ['Te entiendo.', 'Te entiendo perfectamente.', 'Listo.', 'Claro.', '¡Hola de nuevo!'], 'nunca la apertura sola');
+        $this->assertLessThanOrEqual($tope, UltronReplyFitter::measure($texto), $texto);
+        $this->assertSame($texto, $this->ultimoSaliente()->body);
+        if ($recortado !== null) {
+            $this->assertSame($recortado, $texto, 'el borrador, sin su pregunta');
+            // assertEquals: `jsonb` (PostgreSQL) no conserva el orden de las claves.
+            $this->assertEquals(['cap' => $tope, 'action' => 'trimmed', 'from' => UltronReplyFitter::measure($borrador), 'to' => UltronReplyFitter::measure($recortado), 'dropped' => 1], $fila->metadata['length']);
+            $this->assertArrayNotHasKey('policy_violations', $fila->metadata);
+
+            return;
+        }
+        $this->assertContains(UltronCommitService::VIOLACION_LONGITUD, $fila->metadata['policy_violations'], 'se descarta');
+        $this->assertStringStartsWith(mb_substr($borrador, 0, 40), $fila->metadata['policy_discarded_draft']);
+        $this->assertSame('replaced', $fila->metadata['length']['action']);
+        if ($intent === SalesIntents::SCHEDULE_QUESTION) {
+            $this->assertSame(self::HORARIO_160, $texto, 'el respaldo del horario, ajustado');
+        } else {
+            $this->assertContains($texto, (new SalesConversationReplyService)->lastResorts($intent), 'el respaldo de la intención');
+        }
+    }
+
+    /**
+     * S-1 (informe de seguridad): la frase que pone la condición va al final y
+     * no se suelta: el borrador se descarta. El ejemplo literal del informe
+     * («Te reservo el cupo…») no llega a esta guarda por el endpoint: lo para
+     * antes la autoridad de promesas («te reservo», 422); está en la prueba
+     * pura del ajustador. Aquí, la misma forma con una condición de horario.
+     */
+    public function test_s1_un_borrador_con_la_condicion_al_final_se_descarta_no_se_recorta(): void
+    {
+        $afirmacion = 'Claro, puedes venir a conocer la sede cuando quieras.';
+        $borrador = $afirmacion.' Ojo: los domingos y festivos solo abrimos de 8:00 a. m. a 2:00 p. m., así que si vienes esos días te conviene llegar temprano para recorrerla con calma.';
+        foreach ([160, 200] as $tope) {
+            $this->nuevaConversacion();
+            $this->publica($tope);
+            $r = $this->aprobado(SalesIntents::LOCATION_QUESTION, '¿Puedo ir a conocer la sede?', $borrador, null);
+
+            $this->assertNotSame($afirmacion, $r['reply_final'], "{$tope}: la afirmación sin su condición no sale");
+            $this->assertContains(UltronCommitService::VIOLACION_LONGITUD, $this->ultimaAccion()->metadata['policy_violations'], (string) $tope);
+            $this->assertContains($r['reply_final'], (new SalesConversationReplyService)->lastResorts(SalesIntents::LOCATION_QUESTION), (string) $tope);
+        }
+    }
+
+    /** F4 (I-3, escenario R2): una lista numerada no se parte tras el número; nunca sale un «3.» colgando. */
+    public function test_r2_una_lista_numerada_sale_entera_o_no_sale(): void
+    {
+        $lista = "Te cuento lo que incluye el Élite:\n1. Acceso total al gimnasio y a todas las máquinas.\n2. Clases grupales funcionales todos los días.\n3. Seguimiento con IRON IA en la app.";
+        $borrador = $lista.' ¿Te animas a empezar esta semana?';
+
+        $this->publica(200);
+        $r = $this->aprobado(SalesIntents::GENERAL_INFO, '¿Qué incluye el Élite?', $borrador, 8);
+        $this->assertSame($lista, $r['reply_final'], 'a 200, la lista entera sin la pregunta');
+
+        $this->nuevaConversacion();
+        $this->publica(160);
+        $r = $this->aprobado(SalesIntents::GENERAL_INFO, '¿Qué incluye el Élite?', $borrador, 8);
+        $this->assertDoesNotMatchRegularExpression('/(^|\s)\d{1,2}\.$/u', (string) $r['reply_final'], 'antes salía «…\n3.»');
+        $this->assertContains(UltronCommitService::VIOLACION_LONGITUD, $this->ultimaAccion()->metadata['policy_violations'], 'a 160 sin la pregunta (171) no cabe: se descarta');
+        $this->assertLessThanOrEqual(160, UltronReplyFitter::measure((string) $r['reply_final']));
+    }
+
+    /**
+     * F2 (I-2, escenario R7): la cortesía se ejecutó (la cita existe) y el
+     * borrador se descarta por longitud: la persona lee el día y la hora que
+     * quedaron registrados, con el acta que Laravel escribe desde la fila.
+     */
+    public function test_r7_la_constancia_de_una_visita_registrada_no_se_pierde(): void
+    {
+        $borrador = 'Listo, ya te dejo anotado. En la primera visita te muestran las máquinas, te arman una rutina de prueba y resuelven tus dudas con un entrenador. Queda registrada tu solicitud de visita para el sábado a las 10:00 a. m. y el equipo la revisará.';
+        $acta = 'Dejé registrada tu solicitud de cortesía para el sábado 14 de noviembre a las 10:00 a. m. El equipo de Iron Body la revisará para tener todo preparado.';
+        foreach ([200, 160] as $tope) {
+            $this->nuevaConversacion();
+            $this->publica($tope);
+            $r = $this->conCortesia($borrador, true);
+
+            $this->assertSame($acta, $r['reply_final'], "{$tope}: el acta de la fila");
+            $this->assertContains(SalesIntents::TOOL_COURTESY_REQUEST, $r['applied']['tools_executed']);
+            $fila = $this->ultimaAccion();
+            $this->assertContains(UltronCommitService::VIOLACION_LONGITUD, $fila->metadata['policy_violations']);
+            $this->assertSame('replaced', $fila->metadata['length']['action']);
+            // La memoria dice lo que salió: la solicitud registrada, ninguna pregunta abierta ni plan cotizado.
+            $memoria = app(ConversationMemoryService::class)->load($this->conversation->fresh());
+            $this->assertSame('requested', $memoria->get('courtesy_request')['status'] ?? null);
+            $this->assertNull($memoria->get('last_agent_question')['text'] ?? null);
+            $this->assertNull($r['price_source']);
+        }
+
+        // Sin la versión aplicada no cambia nada: el borrador sale entero.
+        $this->nuevaConversacion();
+        $r = $this->conCortesia($borrador, false);
+        $this->assertSame($borrador, $r['reply_final']);
+    }
+
+    /** F3 (I-1, escenario R1): el plan del modelo no está en la lista; ni la memoria ni `price_source` lo dan por cotizado. */
+    public function test_r1_la_memoria_no_anota_el_precio_del_plan_del_modelo_si_no_salio(): void
+    {
+        $this->publica(200);
+        $borrador = 'Te confirmo que el Trimestre, que es el que mejor te encaja por todo lo que me has contado hasta ahora, tiene un costo de {{PLAN_PRICE}} e incluye acceso total al gimnasio, sesiones funcionales, rutinas guiadas y seguimiento continuo.';
+        $r = $this->aprobado(SalesIntents::PRICING_QUESTION, self::PREGUNTA_PRECIOS, $borrador, 5);
+
+        $this->assertSame(self::PRECIOS_200, $r['reply_final']);
+        $this->assertNull($r['price_source'], 'antes: {plan_id: 5, price: 210000}');
+        $memoria = app(ConversationMemoryService::class)->load($this->conversation->fresh());
+        $this->assertFalse($memoria->priceDeliveredFor(5), 'el precio del Trimestre no salió');
+        foreach ([3, 4, 8] as $id) {
+            $this->assertTrue($memoria->priceDeliveredFor($id), "el del plan {$id} sí");
+        }
+    }
+
+    /**
+     * F5 (I-4, escenario R3) y la mutación M10: con un plan nombrado que no es
+     * de un mes la cabecera es «Nuestros planes» con duraciones, nunca «Planes
+     * de un mes», y la duración de un día va en singular.
+     */
+    public function test_un_plan_nombrado_que_no_es_de_un_mes_no_va_bajo_planes_de_un_mes(): void
+    {
+        foreach ([200, 160] as $tope) {
+            $this->nuevaConversacion();
+            $this->publica($tope);
+            $r = $this->criticoCaido(SalesIntents::PRICING_QUESTION, '¿Cuánto vale el plan día? ¿Qué planes tienen?');
+            $this->assertSame('Claro. Nuestros planes: PLAN DÍA (1 día), $10.000 COP; Plan Valera (un mes), $65.000 COP; Plan Mensual (un mes), $80.000 COP. ¿Sobre cuál amplío la información?', $r['reply_final'], (string) $tope);
+        }
+
+        $this->nuevaConversacion();
+        $this->publica(200);
+        $r = $this->criticoCaido(SalesIntents::PRICING_QUESTION, '¿Y el Trimestre cuánto cuesta? ¿Qué planes tienen?');
+        $this->assertSame('Claro. Nuestros planes: Trimestre (tres meses), $210.000 COP; Plan Valera (un mes), $65.000 COP; Plan Mensual (un mes), $80.000 COP. ¿Sobre cuál amplío la información?', $r['reply_final']);
+        $this->assertStringNotContainsString('Planes de un mes', $r['reply_final']);
+    }
+
+    /** Mutación M12: en la rama de la política, los precios cuelgan de la versión aplicada, no del tope. */
+    public function test_precios_en_la_rama_de_la_politica_con_la_version_y_sin_tope(): void
+    {
+        $this->publica(320);
+        $r = $this->aprobado(SalesIntents::PRICING_QUESTION, self::PREGUNTA_PRECIOS, '¿Qué te gustaría lograr con tu entrenamiento?', null);
+
+        $this->assertSame(self::PRECIOS_200, $r['reply_final'], 'sin tope, el respaldo de precios entero');
+        $fila = $this->ultimaAccion();
+        $this->assertNotContains(UltronCommitService::VIOLACION_LONGITUD, $fila->metadata['policy_violations']);
+        $this->assertArrayNotHasKey('length', $fila->metadata, 'sin n no se mide');
+        $this->assertNull($r['price_source']);
+    }
+
+    /** F6: el respaldo de precios no nombra un plan rechazado, salvo el que la persona acaba de nombrar; en los dos caminos. */
+    public function test_el_respaldo_de_precios_no_nombra_un_plan_rechazado(): void
+    {
+        $sinValera = 'Claro. Planes de un mes: Plan Mensual, $80.000 COP; Élite, $180.000 COP; PROMO X4, $75.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?';
+
+        // El revisor caído (`safeFallback`).
+        $this->publica(200);
+        app(ConversationMemoryService::class)->recordPlanRejected($this->conversation, 3);
+        $r = $this->criticoCaido(SalesIntents::PRICING_QUESTION, self::PREGUNTA_PRECIOS);
+        $this->assertSame($sinValera, $r['reply_final']);
+
+        // La rama de la política: el borrador se descarta por longitud.
+        $this->nuevaConversacion();
+        $this->publica(200);
+        app(ConversationMemoryService::class)->recordPlanRejected($this->conversation, 3);
+        $r = $this->aprobado(SalesIntents::PRICING_QUESTION, self::PREGUNTA_PRECIOS, 'Te confirmo que el plan Élite, que es el que mejor te encaja por todo lo que me has contado hasta ahora, tiene un costo mensual de {{PLAN_PRICE}} e incluye acceso total al gimnasio, sesiones funcionales, rutinas guiadas y seguimiento continuo.', 8);
+        $this->assertSame($sinValera, $r['reply_final']);
+        $this->assertFalse(app(ConversationMemoryService::class)->load($this->conversation->fresh())->priceDeliveredFor(3));
+
+        // Si la persona vuelve a nombrarlo, lo reabre (la política lo saca de los rechazados): va primero.
+        $this->nuevaConversacion();
+        $this->publica(200);
+        app(ConversationMemoryService::class)->recordPlanRejected($this->conversation, 3);
+        $r = $this->criticoCaido(SalesIntents::PRICING_QUESTION, '¿Y el Plan Valera cuánto cuesta? ¿Qué planes tienen?');
+        $this->assertStringStartsWith('Claro. Planes de un mes: Plan Valera, $65.000 COP;', $r['reply_final']);
+    }
+
+    /** m-5: en «También hay…», 1 día → por día; de 5 a 9 → por semana; 32 o más → de varios meses; el resto no se menciona. */
+    public function test_las_demas_duraciones_solo_se_nombran_si_se_describen_bien(): void
+    {
+        Plan::query()->whereKey(2)->update(['duration_days' => 15]);
+        $this->publica(200);
+        $r = $this->criticoCaido(SalesIntents::PRICING_QUESTION, self::PREGUNTA_PRECIOS);
+        $this->assertSame('Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día y de varios meses. ¿Sobre cuál amplío la información?', $r['reply_final'], 'un plan de 15 días no es «por semana»');
+    }
+
+    /** m-3 (escenario R5): en la rama de la política, si el texto se sustituye, `metadata.length` lo dice. */
+    public function test_la_traza_dice_que_el_texto_se_sustituyo(): void
+    {
+        $this->publica(160);
+        $borrador = 'Bienvenido a Iron Body Neiva, un centro serio y con ambiente profesional. ¿Le cuento más sobre cómo avanzar con su inscripción o el pago?';
+        $r = $this->aprobado(SalesIntents::GREETING, 'Hola buenas tardes', $borrador, null);
+
+        $fila = $this->ultimaAccion();
+        $this->assertNotSame($borrador, $r['reply_final']);
+        $this->assertNotEmpty($fila->metadata['policy_violations']);
+        $this->assertEquals(['cap' => 160, 'action' => 'replaced', 'from' => 137, 'to' => UltronReplyFitter::measure($r['reply_final']), 'dropped' => 0], $fila->metadata['length'], 'antes: action fit, como si hubiera salido el borrador');
     }
 
     // ── D-5 · Un único punto de control antes de enviar ────────────────────
@@ -582,7 +878,14 @@ class UltronA4LongitudYPreciosTest extends TestCase
             $md .= "\n";
         }
         $md .= "## Precios (catálogo de producción)\n\n";
-        foreach (['«¿Qué planes tienen y cuánto cuesta la mensualidad?»' => self::PREGUNTA_PRECIOS, '«¿Y el Élite cuánto cuesta? ¿Qué planes tienen?» (nombra un plan)' => '¿Y el Élite cuánto cuesta? ¿Qué planes tienen?'] as $caso => $texto) {
+        $precios = [
+            '«¿Qué planes tienen y cuánto cuesta la mensualidad?»' => self::PREGUNTA_PRECIOS,
+            '«¿Y el Élite cuánto cuesta? ¿Qué planes tienen?» (nombra un plan)' => '¿Y el Élite cuánto cuesta? ¿Qué planes tienen?',
+            // F5: dos planes nombrados que no son de un mes (cabecera «Nuestros planes», con duraciones).
+            '«¿Cuánto vale el plan día? ¿Qué planes tienen?» (nombra un plan de un día)' => '¿Cuánto vale el plan día? ¿Qué planes tienen?',
+            '«¿Y el Trimestre cuánto cuesta? ¿Qué planes tienen?» (nombra un plan de tres meses)' => '¿Y el Trimestre cuánto cuesta? ¿Qué planes tienen?',
+        ];
+        foreach ($precios as $caso => $texto) {
             $md .= "### {$caso}\n\n";
             foreach ($modos as $nombre => $tope) {
                 $md .= "- **{$nombre}** {$sale($tope, SalesIntents::PRICING_QUESTION, $texto)}\n";
@@ -759,6 +1062,22 @@ class UltronA4LongitudYPreciosTest extends TestCase
 
         // Un 422 también es una salida (la rendición de n8n cuelga de él): se devuelve con su código.
         return $r->status() === 422 ? ['status' => 422, 'error' => $r->json('error') ?? $r->json('code') ?? $r->json()] : $r->assertOk()->json();
+    }
+
+    /**
+     * El turno del escenario R7 del revisor: la persona da el día y la hora,
+     * el revisor aprueba y el modelo pide la cortesía, que Laravel ejecuta.
+     */
+    private function conCortesia(string $borrador, bool $negocia): array
+    {
+        $m = $this->entrante('quiero ir el sábado a las 10 de la mañana');
+        $decide = $this->decide($m, $negocia);
+        $propuesta = array_merge(self::propuesta(SalesIntents::GENERAL_INFO, $borrador, null, [SalesIntents::TOOL_COURTESY_REQUEST]), [
+            'strategy_goal' => 'book_visit', 'next_best_action' => 'offer_appointment', 'courtesy_action' => 'request',
+            'courtesy_date' => '2026-11-14', 'courtesy_time' => '10:00',
+        ]);
+
+        return $this->commit($this->payload($m, $decide['decide_token'], $propuesta, ['verdict' => 'pass', 'attempt' => 1, 'score' => 0.9]))->assertOk()->json();
     }
 
     private function commit(array $payload)

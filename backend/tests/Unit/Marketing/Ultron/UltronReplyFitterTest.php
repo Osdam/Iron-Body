@@ -199,33 +199,119 @@ class UltronReplyFitterTest extends TestCase
         $this->assertSame(93, F::measure((string) F::schedule($honesto, 200, '¿cuál es el horario?')));
     }
 
-    // ── D-4 · El borrador del modelo: se recorta y, si no se puede, se descarta ──
+    // ── D-4 revisada (F1) · El borrador del modelo: solo se suelta su pregunta final ──
 
-    public function test_el_borrador_se_recorta_desde_el_final(): void
+    /**
+     * F1 del lead (cierra B-1 y S-1): el recorte se limita a QUITAR LA
+     * PREGUNTA FINAL. Una frase enunciativa puede ser la que contesta, la que
+     * pone la condición o la que da constancia de una herramienta ejecutada,
+     * y nadie vuelve a mirar el texto recortado: no se suelta ninguna.
+     */
+    public function test_el_borrador_solo_suelta_su_pregunta_final(): void
     {
         $b = 'Primera frase del borrador. Segunda frase con más contenido útil. Tercera frase que sobra un poco. ¿Te cuento algo más?';
-        $r = F::draft($b, 70);
-        $this->assertSame(['text' => 'Primera frase del borrador. Segunda frase con más contenido útil.', 'dropped' => 2], $r);
+        $this->assertSame(119, F::measure($b));
         $this->assertSame(['text' => $b, 'dropped' => 0], F::draft($b, 200), 'si cabe, sale igual');
-    }
+        $this->assertSame(['text' => 'Primera frase del borrador. Segunda frase con más contenido útil. Tercera frase que sobra un poco.', 'dropped' => 1], F::draft($b, 100), 'sin la pregunta (98) cabe');
+        $this->assertNull(F::draft($b, 70), 'sin la pregunta tampoco cabe: no se sueltan frases enunciativas, se descarta');
 
-    public function test_el_recorte_salta_la_frase_con_precio_y_la_que_lleva_url(): void
-    {
-        $b = 'Claro, te cuento. El Élite incluye acceso total, sesiones funcionales y seguimiento. Su valor es $180.000 COP al mes. ¿Te ayudo con algo más?';
-        $r = F::draft($b, 70);
-        $this->assertSame('Claro, te cuento. Su valor es $180.000 COP al mes.', $r['text']);
-        $this->assertSame(2, $r['dropped']);
-
-        $conEnlaces = "Te paso la app para que la descargues. Ahí ves los planes y pagas desde tu celular. ¿Te ayudo con algo más?\n\nAndroid: https://play.google.com/store/apps/details?id=x · iPhone: https://apps.apple.com/app/id1 · Web: https://iron.body/app";
-        $r = F::draft($conEnlaces, 90);
-        $this->assertSame("Te paso la app para que la descargues.\n\nAndroid: https://play.google.com/store/apps/details?id=x · iPhone: https://apps.apple.com/app/id1 · Web: https://iron.body/app", $r['text'], 'la línea de los enlaces se queda, con su salto');
-        $this->assertSame(mb_strlen("Te paso la app para que la descargues.\n\nAndroid:  · iPhone:  · Web: "), F::measure($r['text']), 'el salto y las etiquetas cuentan; las URL no');
-    }
-
-    public function test_si_no_se_puede_recortar_se_descarta(): void
-    {
+        // La última frase no es una pregunta: no se recorta nada (el precio, una condición, una constancia…).
+        $this->assertNull(F::draft('Corta. El precio es $80.000 COP y lo mantenemos así todo el año para todo el mundo que entrena con nosotros.', 60));
+        // Una sola frase, aunque sea una pregunta: es la primera y no se suelta.
+        $this->assertNull(F::draft('¿Quieres que te cuente todo lo que incluye el Élite, desde el acceso total hasta las clases grupales y el seguimiento con tu entrenador?', 120));
         $this->assertNull(F::draft(str_repeat('Una sola frase muy larga ', 12).'.', 160), 'la primera frase no se suelta');
-        $this->assertNull(F::draft('Corta. El precio es $80.000 COP y lo mantenemos así todo el año para todo el mundo que entrena con nosotros.', 60), 'la del precio tampoco');
+        // Solo la ÚLTIMA: una pregunta del medio no se toca aunque soltarla bastara.
+        $this->assertNull(F::draft('Claro, te cuento. ¿Sabías que el Élite incluye seguimiento con tu entrenador? Lo tienes desde el primer día.', 80));
+    }
+
+    /**
+     * Decisión del lead tras F1: una pregunta final con una CIFRA (un precio,
+     * una hora, una fecha) no solo devuelve la pelota, lleva el dato: no se
+     * suelta, y el borrador se descarta.
+     */
+    public function test_una_pregunta_final_con_una_cifra_no_se_suelta(): void
+    {
+        $conPrecio = 'Claro, te cuento del Plan Mensual: incluye acceso completo y rutinas guiadas desde la app. ¿Te interesa el Plan Mensual por $80.000 COP?';
+        $this->assertSame(136, F::measure($conPrecio));
+        $this->assertNull(F::draft($conPrecio, 120), 'sin la pregunta (90) cabría, pero se iría el precio');
+
+        $conHora = 'Listo, la visita de cortesía es para conocer la sede y hacer una rutina de prueba con un entrenador. ¿Te queda bien mañana a las 6 p. m.?';
+        $this->assertNull(F::draft($conHora, 120), 'ni la hora');
+
+        $sinCifras = 'Listo, la visita de cortesía es para conocer la sede y hacer una rutina de prueba con un entrenador. ¿Te queda bien mañana en la tarde?';
+        $this->assertSame(['text' => 'Listo, la visita de cortesía es para conocer la sede y hacer una rutina de prueba con un entrenador.', 'dropped' => 1], F::draft($sinCifras, 120), 'sin cifras, se suelta como siempre');
+
+        // La misma regla en el cuerpo de 13.quater: la pregunta con fecha no se suelta para hacer sitio; sale la frase del precio sola.
+        $cuerpo = 'Sí, el Plan Mensual incluye acceso completo al gimnasio. ¿Lo quieres para empezar el 1 de diciembre?';
+        $precio = 'El precio actual del Plan Mensual es $80.000 COP.';
+        $this->assertSame(['text' => $precio, 'dropped' => 2], F::append($cuerpo, $precio, 120, true));
+    }
+
+    /** Los cinco borradores de B-1 (informe del revisor, por el endpoint): ninguno puede quedar en su apertura. */
+    public function test_los_borradores_de_b1_no_quedan_en_su_apertura(): void
+    {
+        $abren = [
+            'Te entiendo. Muchas personas que llegan por primera vez sienten exactamente lo mismo, por eso en Iron Body te acompañamos desde el primer día con una rutina adaptada a tu nivel y un entrenador pendiente de ti. ¿Qué es lo que más te preocupa?',
+            'Te entiendo perfectamente. Con tres sesiones de cuarenta y cinco minutos a la semana en la franja que mejor te quede, ya puedes ver avances reales en tu proceso sin tener que cambiar toda tu rutina diaria. ¿Qué días tienes más libres?',
+            'Listo. Para bajar de peso lo que mejor funciona es combinar entrenamiento de fuerza con sesiones funcionales tres o cuatro veces por semana, y en Iron Body te armamos la rutina según tu nivel y tu disponibilidad. ¿Ya vienes entrenando?',
+            '¡Hola de nuevo! Muchas personas que llegan por primera vez sienten exactamente lo mismo, por eso en Iron Body te acompañamos desde el primer día con una rutina adaptada a tu nivel y un entrenador pendiente de ti. ¿Qué es lo que más te preocupa?',
+        ];
+        foreach ($abren as $b) {
+            foreach ([160, 200] as $tope) {
+                $this->assertNull(F::draft($b, $tope), "{$tope}: sin la pregunta sigue sin caber → se descarta: {$b}");
+            }
+        }
+
+        $horario = 'Claro. El horario de atención entre semana es de lunes a viernes de 5:00 a. m. a 10:00 p. m., y los sábados y domingos abrimos de 8:00 a. m. a 2:00 p. m. para que entrenes cuando mejor te quede. ¿Te sirve?';
+        $this->assertSame(205, F::measure($horario));
+        $this->assertNull(F::draft($horario, 160));
+        $this->assertSame(['text' => mb_substr($horario, 0, -mb_strlen(' ¿Te sirve?')), 'dropped' => 1], F::draft($horario, 200), 'a 200 cabe sin la pregunta (194)');
+    }
+
+    /** S-1 (informe de seguridad), el ejemplo literal: la frase que pone la condición no se suelta. */
+    public function test_la_frase_que_pone_la_condicion_no_se_suelta(): void
+    {
+        $b = 'Te reservo el cupo para mañana a las 6 p. m. Ojo: todavía no está confirmado hasta que pagues en recepción, porque el equipo valida primero el pago y después aparta el cupo de forma definitiva.';
+        $this->assertNull(F::draft($b, 160), 'antes salía «Te reservo el cupo para mañana a las 6 p. m.»');
+    }
+
+    public function test_el_recorte_salta_la_linea_de_los_enlaces_y_suelta_la_pregunta_de_antes(): void
+    {
+        $conEnlaces = "Te paso la app para que la descargues. Ahí ves los planes y pagas desde tu celular. ¿Te ayudo con algo más?\n\nAndroid: https://play.google.com/store/apps/details?id=x · iPhone: https://apps.apple.com/app/id1 · Web: https://iron.body/app";
+        $this->assertSame(137, F::measure($conEnlaces));
+        $r = F::draft($conEnlaces, 120);
+        $this->assertSame("Te paso la app para que la descargues. Ahí ves los planes y pagas desde tu celular.\n\nAndroid: https://play.google.com/store/apps/details?id=x · iPhone: https://apps.apple.com/app/id1 · Web: https://iron.body/app", $r['text'], 'la línea de los enlaces se queda, con su salto');
+        $this->assertSame(1, $r['dropped']);
+        $this->assertSame(mb_strlen("Te paso la app para que la descargues. Ahí ves los planes y pagas desde tu celular.\n\nAndroid:  · iPhone:  · Web: "), F::measure($r['text']), 'el salto y las etiquetas cuentan; las URL no');
+        $this->assertNull(F::draft($conEnlaces, 90), 'sin la pregunta no cabe: no se suelta «Ahí ves…»');
+
+        // La pregunta con un precio también es la pregunta final: se suelta como cualquier otra.
+        $b = 'Claro, te cuento. El Élite incluye acceso total, sesiones funcionales y seguimiento. Su valor es $180.000 COP al mes. ¿Te ayudo con algo más?';
+        $this->assertSame(['text' => 'Claro, te cuento. El Élite incluye acceso total, sesiones funcionales y seguimiento. Su valor es $180.000 COP al mes.', 'dropped' => 1], F::draft($b, 120));
+        $this->assertNull(F::draft($b, 70), 'antes salía «Claro, te cuento. Su valor es…» soltando la del medio');
+    }
+
+    // ── F4 · Una lista numerada no se parte tras el número ─────────────────
+
+    public function test_una_lista_numerada_no_se_parte_tras_el_numero(): void
+    {
+        $frases = fn (string $t) => array_map(fn (array $f) => $f[0], F::sentences($t));
+
+        // R2 del revisor: antes salía «…\n2. Clases grupales funcionales todos los días.\n3.» a 160.
+        $lista = "Te cuento lo que incluye el Élite:\n1. Acceso total al gimnasio y a todas las máquinas.\n2. Clases grupales funcionales todos los días.\n3. Seguimiento con IRON IA en la app.";
+        $r2 = $lista.' ¿Te animas a empezar esta semana?';
+        $this->assertSame([$lista, '¿Te animas a empezar esta semana?'], $frases($r2));
+        $this->assertNull(F::draft($r2, 160), 'sin la pregunta (171) no cabe: se descarta entera, nunca con un «3.» colgando');
+        $this->assertSame(['text' => $lista, 'dropped' => 1], F::draft($r2, 200));
+
+        // Al inicio del texto y tras un espacio, también.
+        $this->assertSame(['1. Acceso total. 2. Clases grupales.', '¿Te sirve?'], $frases('1. Acceso total. 2. Clases grupales. ¿Te sirve?'));
+        // Una cifra NO es un número de lista: lleva «$», separador de miles o más de dos dígitos.
+        $this->assertSame(['El Mensual cuesta $80.000.', 'Ademas incluye la app.'], $frases('El Mensual cuesta $80.000. Ademas incluye la app.'));
+        $this->assertSame(['El Mensual cuesta 80.000.', 'Ademas incluye la app.'], $frases('El Mensual cuesta 80.000. Ademas incluye la app.'));
+        $this->assertSame(['Son 120.', 'Ademas incluye la app.'], $frases('Son 120. Ademas incluye la app.'));
+        $this->assertSame(['El Mensual cuesta $80.', 'Ademas incluye la app.'], $frases('El Mensual cuesta $80. Ademas incluye la app.'));
+        $this->assertCount(7, F::sentences(self::HORARIO), 'la ficha del horario sigue dando las mismas siete');
     }
 
     // ── 13.ter y 13.quater con tope ─────────────────────────────────────────
@@ -235,14 +321,18 @@ class UltronReplyFitterTest extends TestCase
         $cuerpo = 'Sí, el Plan Mensual incluye acceso completo al gimnasio. También tienes rutinas guiadas en la app. ¿Te ayudo con algo más?';
         $precio = 'El precio actual del Plan Mensual es $80.000 COP.';
 
-        $this->assertSame($cuerpo.' '.$precio, F::append($cuerpo, $precio, 200, true), 'cabe entero');
-        $r = F::append($cuerpo, $precio, 120, true);
-        $this->assertSame('Sí, el Plan Mensual incluye acceso completo al gimnasio. '.$precio, $r);
-        $this->assertSame($precio, F::append($cuerpo, $precio, 60, true), 'si ni así, sale ella sola');
+        $this->assertSame(['text' => $cuerpo.' '.$precio, 'dropped' => 0], F::append($cuerpo, $precio, 200, true), 'cabe entero');
+        // F1: el cuerpo se ajusta con la misma regla: solo su pregunta final.
+        $this->assertSame(['text' => 'Sí, el Plan Mensual incluye acceso completo al gimnasio. También tienes rutinas guiadas en la app. '.$precio, 'dropped' => 1], F::append($cuerpo, $precio, 150, true));
+        // Sin la pregunta tampoco cabe: no se suelta «También…»; sale la frase del precio sola (el cuerpo entero, 3 frases).
+        $this->assertSame(['text' => $precio, 'dropped' => 3], F::append($cuerpo, $precio, 120, true));
+        $this->assertSame(['text' => $precio, 'dropped' => 3], F::append($cuerpo, $precio, 60, true), 'si ni así, sale ella sola');
+        // m-8: si ni la frase del precio sola cabe, null: quien llama deja el cuerpo como estaba.
+        $this->assertNull(F::append($cuerpo, $precio, 40, true));
 
         $visita = '¿Qué día te queda bien para la visita?';
         $this->assertNull(F::append($cuerpo, $visita, 140, false), 'la que retoma la visita solo si cabe');
-        $this->assertSame($cuerpo.' '.$visita, F::append($cuerpo, $visita, 200, false));
+        $this->assertSame(['text' => $cuerpo.' '.$visita, 'dropped' => 0], F::append($cuerpo, $visita, 200, false));
     }
 
     // ── D-6 · El respaldo de precios, por segmentos ─────────────────────────

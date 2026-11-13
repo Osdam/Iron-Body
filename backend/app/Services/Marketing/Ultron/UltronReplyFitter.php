@@ -16,10 +16,19 @@ use App\Services\Marketing\Ultron\Prompts\UltronPromptCompiler;
  * le PIDE el tope al modelo; nadie lo medía.
  *
  * Qué hace: medir, partir en frases enteras y soltar frases enteras por un
- * orden fijado hasta que el texto quepa. NUNCA corta una frase por la mitad y
- * NUNCA reescribe: lo que sale es un recorte de un texto que ya existía. Si no
- * hay forma de que quepa, devuelve null y quien llama decide el siguiente
- * escalón (otro texto, nunca el silencio).
+ * orden fijado hasta que el texto quepa. NUNCA corta una frase por la mitad
+ * (ni tras una abreviatura ni tras el número de una lista) y NUNCA reescribe:
+ * lo que sale es un recorte de un texto que ya existía. Si no hay forma de
+ * que quepa, devuelve null y quien llama decide el siguiente escalón (otro
+ * texto, nunca el silencio).
+ *
+ * Dos reglas, según de quién es el texto. A los textos de Laravel (los
+ * curados, el horario, la ficha, el respaldo de precios) se les sueltan
+ * frases por un orden pensado para cada uno: se sabe qué dice cada frase. Al
+ * borrador del modelo, SOLO SU PREGUNTA FINAL, y no si lleva una cifra (F1 del
+ * lead, tras B-1 y S-1): de una frase enunciativa no se sabe si es la que
+ * contesta, la que pone la condición o la que da constancia de una herramienta
+ * ya ejecutada, y ninguna guarda vuelve a mirar el texto recortado.
  *
  * PURA: sin base de datos, sin `config()`, sin reloj y sin log. Quien llama
  * decide si hay tope (solo con la versión del Studio aplicada y `sp.n` en el
@@ -59,8 +68,20 @@ final class UltronReplyFitter
      */
     private const ABREVIATURA = '/(?:^|[^a-záéíóúñ])(av|avda|cra|kra|cr|cl|cll|dg|diag|tv|transv|nro|num|núm|sr|sra|srta|dr|dra|ing|lic|ed|edif|apto|urb|km|tel|cel|ext|int|mz|of|loc)\.$/iu';
 
-    /** Una frase con una cifra de dinero: con `$` o con «COP» (D-4). */
-    private const PRECIO = '/\$\s?\d|\d\s?cop\b/iu';
+    /**
+     * El número de una lista tampoco termina la frase (F4, hallazgo I-3 del
+     * revisor): «…Élite:\n1. Acceso total…\n2. Clases…\n3. Seguimiento…» se
+     * partía tras «1.», «2.», «3.» y un recorte podía dejar un «3.» colgando.
+     * Uno o dos dígitos y un punto, al inicio del texto o tras un salto de
+     * línea o un espacio. Una cifra NO lo es: «$80.», «80.000.» o «120.» llevan
+     * `$`, separador de miles o más de dos dígitos, y siguen siendo frontera.
+     * El precio de mirar solo eso: «a las 10. Cerramos…» tampoco se parte, que
+     * es el error barato (una frase más larga, no media frase).
+     */
+    private const NUMERO_DE_LISTA = '/(?:^|\s)\d{1,2}\.$/u';
+
+    /** Una cifra cualquiera: un precio, una hora, una fecha (la pregunta que la lleva no se suelta). */
+    private const CIFRA = '/\d/u';
 
     /** Un grupo de días de la ficha del horario, sobre el texto normalizado. */
     private const DIA = '/\b(lunes|martes|miercoles|jueves|viernes|sabados?|domingos?|festivos?)\b/u';
@@ -115,12 +136,12 @@ final class UltronReplyFitter
                 continue;
             }
             $frase = [$trozos[$i], $trozos[$i + 1] ?? ''];
-            // Lo que venía tras una abreviatura se pega al trozo anterior con su mismo separador.
+            // Lo que venía tras una abreviatura o un número de lista se pega al trozo anterior con su mismo separador.
             if ($pendiente !== null) {
                 $frase = [$pendiente[0].$pendiente[1].$frase[0], $frase[1]];
                 $pendiente = null;
             }
-            if ($frase[1] !== '' && preg_match(self::ABREVIATURA, $frase[0]) === 1) {
+            if ($frase[1] !== '' && (preg_match(self::ABREVIATURA, $frase[0]) === 1 || preg_match(self::NUMERO_DE_LISTA, $frase[0]) === 1)) {
                 $pendiente = $frase;
 
                 continue;
@@ -239,14 +260,35 @@ final class UltronReplyFitter
         return self::dropInOrder($frases, $orden, $cap);
     }
 
-    // ── El borrador del modelo (D-4) ────────────────────────────────────────
+    // ── El borrador del modelo (D-4 revisada: F1 del lead) ──────────────────
 
     /**
-     * El borrador aprobado, recortado: se sueltan frases enteras DESDE EL
-     * FINAL hacia atrás hasta que quepa. Nunca la primera, ni una que lleve
-     * una URL (los enlaces que pegó Laravel), ni una que lleve un precio: esas
-     * se saltan y se sigue con la anterior. Null si ni así cabe: entonces el
-     * borrador se descarta (`policy_length_exceeded`).
+     * El borrador aprobado que no cabe: SOLO SE LE QUITA LA PREGUNTA FINAL.
+     *
+     * Se toma la ÚLTIMA frase que no sea el bloque de enlaces (una frase con
+     * URL la pegó Laravel y se queda, con su salto de línea). Si esa frase es
+     * una pregunta, no es la primera del texto y no lleva ninguna cifra, se
+     * suelta; si así cabe, sale sin ella (`dropped` 1). En cualquier otro
+     * caso, null: el borrador se descarta (`policy_length_exceeded`) y entra
+     * por la rama de la política, que pone un texto que sí se sabe qué dice.
+     *
+     * Una pregunta CON CIFRA (decisión del lead) tampoco se suelta: «¿Te
+     * interesa el Plan Mensual por $80.000 COP?» o «¿Te queda bien mañana a
+     * las 6 p. m.?» no solo devuelven la pelota, llevan el dato, y puede ser
+     * el único: el precio a quien preguntó cuánto cuesta, la hora de la
+     * visita. Basta un dígito: mejor descartar una pregunta inocente («¿Ya
+     * entrenas 3 veces por semana?») que mandar una respuesta sin su dato.
+     *
+     * Por qué no se sueltan frases enunciativas (antes: desde el final hasta
+     * que cupiera, salvo la primera, la del precio y la de la URL): una frase
+     * enunciativa puede ser LA QUE CONTESTA (B-1: salían «Te entiendo.»,
+     * «Claro.» o «Listo.» solos), LA QUE PONE LA CONDICIÓN (S-1: «Te reservo el
+     * cupo…» sin «todavía no está confirmado hasta que pagues») o LA QUE DA
+     * CONSTANCIA de una herramienta ya ejecutada (I-2: la visita registrada
+     * sin su día y su hora). Y ninguna guarda vuelve a mirar el texto
+     * recortado: las de hechos y contenido corren antes, sobre el borrador
+     * entero, y el revisor de n8n aprobó ese entero. La pregunta final es la
+     * única frase que se sabe prescindible: devuelve la pelota, no informa.
      *
      * @return array{text:string, dropped:int}|null
      */
@@ -256,44 +298,53 @@ final class UltronReplyFitter
             return ['text' => $text, 'dropped' => 0];
         }
         $frases = self::sentences($text);
-        $quedan = array_fill(0, count($frases), true);
-        $soltadas = 0;
-        for ($i = count($frases) - 1; $i >= 1; $i--) {
-            if (self::protegida($frases[$i][0])) {
-                continue;
-            }
-            $quedan[$i] = false;
-            $soltadas++;
-            $recorte = self::join($frases, $quedan);
-            if (self::fits($recorte, $cap)) {
-                return ['text' => $recorte, 'dropped' => $soltadas];
+        $ultima = null;
+        for ($i = count($frases) - 1; $i >= 0; $i--) {
+            if (preg_match(self::URL, $frases[$i][0]) !== 1) {
+                $ultima = $i;
+                break;
             }
         }
+        if ($ultima === null || $ultima === 0 || ! str_ends_with(trim($frases[$ultima][0]), '?')
+            || preg_match(self::CIFRA, $frases[$ultima][0]) === 1) {
+            return null;
+        }
+        $quedan = array_fill(0, count($frases), true);
+        $quedan[$ultima] = false;
+        $recorte = self::join($frases, $quedan);
 
-        return null;
+        return self::fits($recorte, $cap) ? ['text' => $recorte, 'dropped' => 1] : null;
     }
 
     /**
      * Una frase que Laravel añade al final (13.ter, la que retoma la visita;
-     * 13.quater, el precio verificado) sin romper el tope.
+     * 13.quater, el precio verificado) sin romper el tope. `dropped` = frases
+     * del cuerpo que no salen.
      *
-     * Con prioridad (el precio): se sueltan frases del cuerpo con la regla del
-     * borrador para hacerle sitio y, si ni así, sale ella sola. Sin prioridad
-     * (la visita): solo si cabe; null = no se añade.
+     * Con prioridad (el precio): el cuerpo se ajusta con la MISMA regla que el
+     * borrador —solo su pregunta final, y no si lleva una cifra— para hacerle
+     * sitio; si ni así, sale la frase sola (el cuerpo entero fuera) SI CABE; si
+     * ni ella sola cabe, null y quien llama deja el cuerpo como estaba (m-8).
+     * Sin prioridad (la visita): solo si cabe entero; null = no se añade.
+     *
+     * @return array{text:string, dropped:int}|null
      */
-    public static function append(string $body, string $tail, int $cap, bool $priority): ?string
+    public static function append(string $body, string $tail, int $cap, bool $priority): ?array
     {
         $entero = rtrim($body).' '.$tail;
         if (self::fits($entero, $cap)) {
-            return $entero;
+            return ['text' => $entero, 'dropped' => 0];
         }
         if (! $priority) {
             return null;
         }
         $sitio = $cap - self::measure(' '.$tail);
         $recorte = $sitio > 0 ? self::draft($body, $sitio) : null;
+        if ($recorte !== null) {
+            return ['text' => rtrim($recorte['text']).' '.$tail, 'dropped' => $recorte['dropped']];
+        }
 
-        return $recorte === null ? $tail : rtrim($recorte['text']).' '.$tail;
+        return self::fits($tail, $cap) ? ['text' => $tail, 'dropped' => count(self::sentences($body))] : null;
     }
 
     // ── El respaldo de precios (D-6) ────────────────────────────────────────
@@ -417,10 +468,5 @@ final class UltronReplyFitter
         }
 
         return trim($texto);
-    }
-
-    private static function protegida(string $frase): bool
-    {
-        return preg_match(self::URL, $frase) === 1 || preg_match(self::PRECIO, $frase) === 1;
     }
 }

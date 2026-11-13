@@ -1,0 +1,24 @@
+# Pregunta final con cifra · los dos ficheros de los tiempos agotados, solos, 13-11-2026 (§13.8 de informe-backend-a4-bloqueantes.md)
+# Verdes: los fallos de la 29 eran de carga, no del cambio.
+# nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging tests/Feature/Marketing/UltronPromptsN8nCommandTest.php tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompileCasesTest.php
+
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/phpunit.xml
+
+...............................................................  63 / 655 (  9%)
+............................................................... 126 / 655 ( 19%)
+............................................................... 189 / 655 ( 28%)
+............................................................... 252 / 655 ( 38%)
+............................................................... 315 / 655 ( 48%)
+............................................................... 378 / 655 ( 57%)
+............................................................... 441 / 655 ( 67%)
+............................................................... 504 / 655 ( 76%)
+............................................................... 567 / 655 ( 86%)
+............................................................... 630 / 655 ( 96%)
+.........................                                       655 / 655 (100%)
+
+Time: 00:09.300, Memory: 76.50 MB
+
+OK (655 tests, 4822 assertions)

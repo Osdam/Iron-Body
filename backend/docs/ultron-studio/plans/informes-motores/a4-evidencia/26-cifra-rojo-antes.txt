@@ -1,0 +1,38 @@
+# Pregunta final con cifra · ROJO antes de cambiar draft(), 12-11-2026 (§13 de informe-backend-a4-bloqueantes.md)
+# Las dos pruebas nuevas (pura y por el endpoint) con el código de las correcciones F1-F7.
+# nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php
+
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/phpunit.xml
+
+....................F..........................................  63 / 128 ( 49%)
+...................................F........................... 126 / 128 ( 98%)
+..                                                              128 / 128 (100%)
+
+Time: 00:16.366, Memory: 93.20 MB
+
+There were 2 failures:
+
+1) Tests\Unit\Marketing\Ultron\UltronReplyFitterTest::test_una_pregunta_final_con_una_cifra_no_se_suelta
+sin la pregunta (90) cabría, pero se iría el precio
+Failed asserting that Array &0 [
+    'text' => 'Claro, te cuento del Plan Mensual: incluye acceso completo y rutinas guiadas desde la app.',
+    'dropped' => 1,
+] is null.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php:236
+
+2) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_la_pregunta_final_con_el_unico_precio_no_se_suelta
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Planes de un mes: Plan Mensual, $80.000 COP; Plan Valera, $65.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
++'El Plan Mensual incluye acceso completo al gimnasio, rutinas guiadas desde la app y una valoración inicial con un entrenador para que empieces con buen pie desde el primer día.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:423
+
+FAILURES!
+Tests: 128, Assertions: 1417, Failures: 2.

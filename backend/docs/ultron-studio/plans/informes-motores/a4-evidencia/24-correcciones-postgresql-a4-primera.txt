@@ -1,0 +1,35 @@
+# Correcciones F1-F7 · PostgreSQL 14, primera pasada, 12-11-2026 (§13 de informe-backend-a4-bloqueantes.md)
+# 1 roja DE LA PRUEBA: un assertSame mío sobre metadata.length; jsonb no conserva el orden de las claves. Cambiado a assertEquals.
+# UNIT_DB=ultron_studio_lead_ola5 nice -n 10 bash docs/ultron-studio/ops/pgunit.sh --no-logging tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php
+
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/phpunit.xml
+
+...............................................................  63 / 100 ( 63%)
+..................F..................                           100 / 100 (100%)
+
+Time: 00:37.069, Memory: 94.50 MB
+
+There was 1 failure:
+
+1) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_b1_el_recorte_nunca_deja_solo_la_apertura with data set "schedule_question a 200" ('schedule_question', '¿Cuál es el horario de atenci...emana?', 'Claro. El horario de atención...sirve?', false, 200, 'Claro. El horario de atención...quede.')
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+ Array &0 [
++    'to' => 194,
+     'cap' => 200,
++    'from' => 205,
+     'action' => 'trimmed',
+-    'from' => 205,
+-    'to' => 194,
+     'dropped' => 1,
+ ]
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:550
+
+FAILURES!
+Tests: 100, Assertions: 1169, Failures: 1.

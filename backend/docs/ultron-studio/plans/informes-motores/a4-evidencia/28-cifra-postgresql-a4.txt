@@ -1,0 +1,15 @@
+# Pregunta final con cifra · PostgreSQL 14, A4, 12-11-2026 (§13 de informe-backend-a4-bloqueantes.md)
+# Estado final.
+# UNIT_DB=ultron_studio_lead_ola5 nice -n 10 bash docs/ultron-studio/ops/pgunit.sh --no-logging tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php
+
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/phpunit.xml
+
+...............................................................  63 / 101 ( 62%)
+......................................                          101 / 101 (100%)
+
+Time: 00:36.986, Memory: 94.50 MB
+
+OK (101 tests, 1175 assertions)

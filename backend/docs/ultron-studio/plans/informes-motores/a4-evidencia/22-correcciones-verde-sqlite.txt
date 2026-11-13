@@ -1,0 +1,19 @@
+# Correcciones F1-F7 · VERDE, SQLite, 12-11-2026 (§13 de informe-backend-a4-bloqueantes.md)
+# Ajustador, A4, decide, commit y commit-prompts (repetida tras cambiar el assertSame por jsonb: mismo resultado).
+# nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php tests/Feature/Marketing/UltronDecidePromptsTest.php tests/Feature/Marketing/UltronCommitTest.php tests/Feature/Marketing/UltronCommitPromptsTest.php
+
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/phpunit.xml
+
+...............................................................  63 / 347 ( 18%)
+............................................................... 126 / 347 ( 36%)
+............................................................... 189 / 347 ( 54%)
+............................................................... 252 / 347 ( 72%)
+............................................................... 315 / 347 ( 90%)
+................................                                347 / 347 (100%)
+
+Time: 00:28.521, Memory: 118.50 MB
+
+OK (347 tests, 4283 assertions)

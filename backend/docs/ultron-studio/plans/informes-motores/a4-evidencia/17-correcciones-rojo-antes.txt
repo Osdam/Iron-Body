@@ -1,0 +1,320 @@
+# Correcciones F1-F7 · ROJO antes de tocar app/, 12-11-2026 (§13 de informe-backend-a4-bloqueantes.md)
+# Pruebas nuevas y cambiadas con el código de 50cbd3a6 (git diff --quiet HEAD -- app). 30 rojas de 126.
+# nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php
+
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/phpunit.xml
+
+...................FFFFFF.........F............................  63 / 126 ( 50%)
+.................................FEFFF.FFFFF.FFFFFFFFF.FFF....F 126 / 126 (100%)
+
+
+Time: 00:15.956, Memory: 94.50 MB
+
+There was 1 error:
+
+1) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_los_enlaces_de_la_app_no_cuentan_y_su_linea_no_se_suelta
+ErrorException: Undefined array key "policy_violations"
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Bootstrap/HandleExceptions.php:258
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:429
+
+--
+
+There were 29 failures:
+
+1) Tests\Unit\Marketing\Ultron\UltronReplyFitterTest::test_el_borrador_solo_suelta_su_pregunta_final
+sin la pregunta tampoco cabe: no se sueltan frases enunciativas, se descarta
+Failed asserting that Array &0 [
+    'text' => 'Primera frase del borrador. Segunda frase con más contenido útil.',
+    'dropped' => 2,
+] is null.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php:216
+
+2) Tests\Unit\Marketing\Ultron\UltronReplyFitterTest::test_los_borradores_de_b1_no_quedan_en_su_apertura
+160: sin la pregunta sigue sin caber → se descarta: Te entiendo. Muchas personas que llegan por primera vez sienten exactamente lo mismo, por eso en Iron Body te acompañamos desde el primer día con una rutina adaptada a tu nivel y un entrenador pendiente de ti. ¿Qué es lo que más te preocupa?
+Failed asserting that Array &0 [
+    'text' => 'Te entiendo.',
+    'dropped' => 2,
+] is null.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php:238
+
+3) Tests\Unit\Marketing\Ultron\UltronReplyFitterTest::test_la_frase_que_pone_la_condicion_no_se_suelta
+antes salía «Te reservo el cupo para mañana a las 6 p. m.»
+Failed asserting that Array &0 [
+    'text' => 'Te reservo el cupo para mañana a las 6 p. m.',
+    'dropped' => 1,
+] is null.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php:252
+
+4) Tests\Unit\Marketing\Ultron\UltronReplyFitterTest::test_el_recorte_salta_la_linea_de_los_enlaces_y_suelta_la_pregunta_de_antes
+sin la pregunta no cabe: no se suelta «Ahí ves…»
+Failed asserting that Array &0 [
+    'text' => 'Te paso la app para que la descargues.\n
+\n
+Android: https://play.google.com/store/apps/details?id=x · iPhone: https://apps.apple.com/app/id1 · Web: https://iron.body/app',
+    'dropped' => 2,
+] is null.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php:263
+
+5) Tests\Unit\Marketing\Ultron\UltronReplyFitterTest::test_una_lista_numerada_no_se_parte_tras_el_numero
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+ Array &0 [
+     0 => 'Te cuento lo que incluye el Élite:\n
+-1. Acceso total al gimnasio y a todas las máquinas.\n
+-2. Clases grupales funcionales todos los días.\n
+-3. Seguimiento con IRON IA en la app.',
+-    1 => '¿Te animas a empezar esta semana?',
++1.',
++    1 => 'Acceso total al gimnasio y a todas las máquinas.\n
++2.',
++    2 => 'Clases grupales funcionales todos los días.\n
++3.',
++    3 => 'Seguimiento con IRON IA en la app.',
++    4 => '¿Te animas a empezar esta semana?',
+ ]
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php:280
+
+6) Tests\Unit\Marketing\Ultron\UltronReplyFitterTest::test_la_frase_del_precio_verificado_tiene_prioridad_y_la_de_la_visita_solo_si_cabe
+cabe entero
+Failed asserting that 'Sí, el Plan Mensual incluye acceso completo al gimnasio. También tienes rutinas guiadas en la app. ¿Te ayudo con algo más? El precio actual del Plan Mensual es $80.000 COP.' is identical to Array &0 [
+    'text' => 'Sí, el Plan Mensual incluye acceso completo al gimnasio. También tienes rutinas guiadas en la app. ¿Te ayudo con algo más? El precio actual del Plan Mensual es $80.000 COP.',
+    'dropped' => 0,
+].
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php:301
+
+7) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_sin_planes_de_un_mes_nombra_los_tres_primeros_con_su_duracion
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Nuestros planes: PLAN DÍA (1 día), $10.000 COP; Plan Semana (7 días), $45.000 COP; Trimestre (tres meses), $210.000 COP. También hay planes de varios meses. ¿Sobre cuál amplío la información?'
++'Claro. Nuestros planes: PLAN DÍA (1 días), $10.000 COP; Plan Semana (7 días), $45.000 COP; Trimestre (tres meses), $210.000 COP. También hay planes de varios meses. ¿Sobre cuál amplío la información?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:274
+
+8) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_un_borrador_que_cierra_con_el_precio_no_se_recorta_se_descarta
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. ¿Sobre cuál amplío la información?'
++'Claro, te cuento del Élite. Su valor es $180.000 COP al mes.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:407
+
+9) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_si_no_se_puede_recortar_se_descarta_y_sale_el_respaldo_ajustado
+Failed asserting that two arrays are equal.
+--- Expected
++++ Actual
+@@ @@
+ Array (
+     'cap' => 200
+-    'action' => 'replaced'
++    'action' => 'discarded'
+     'from' => 241
+     'to' => 191
+     'dropped' => 0
+ )
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:445
+
+10) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_el_precio_verificado_tiene_prioridad_sobre_el_cuerpo
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'El precio actual del Plan Mensual es $80.000 COP.'
++'Sí, el Plan Mensual incluye acceso completo al gimnasio y rutinas guiadas desde la app. El precio actual del Plan Mensual es $80.000 COP.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:457
+
+11) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_si_la_frase_del_precio_no_cabe_ni_sola_el_cuerpo_sale_como_estaba
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Sí, ese plan incluye acceso completo al gimnasio y rutinas guiadas desde la app. ¿Te ayudo con algo más?'
++'Con gusto te paso la información de los planes. Dime si empiezas este mes o estás comparando opciones.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:478
+
+12) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_b1_el_recorte_nunca_deja_solo_la_apertura with data set "beginner_fear a 160" ('beginner_fear', 'Nunca he entrenado y me da miedo', 'Te entiendo. Muchas personas ...ocupa?', false, 160, null)
+nunca la apertura sola
+Failed asserting that an array does not contain 'Te entiendo.'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:545
+
+13) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_b1_el_recorte_nunca_deja_solo_la_apertura with data set "beginner_fear a 200" ('beginner_fear', 'Nunca he entrenado y me da miedo', 'Te entiendo. Muchas personas ...ocupa?', false, 200, null)
+nunca la apertura sola
+Failed asserting that an array does not contain 'Te entiendo.'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:545
+
+14) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_b1_el_recorte_nunca_deja_solo_la_apertura with data set "time_objection a 160" ('time_objection', 'No tengo tiempo', 'Te entiendo perfectamente. Co...ibres?', false, 160, null)
+nunca la apertura sola
+Failed asserting that an array does not contain 'Te entiendo perfectamente.'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:545
+
+15) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_b1_el_recorte_nunca_deja_solo_la_apertura with data set "time_objection a 200" ('time_objection', 'No tengo tiempo', 'Te entiendo perfectamente. Co...ibres?', false, 200, null)
+nunca la apertura sola
+Failed asserting that an array does not contain 'Te entiendo perfectamente.'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:545
+
+16) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_b1_el_recorte_nunca_deja_solo_la_apertura with data set "schedule_question a 160" ('schedule_question', '¿Cuál es el horario de atenci...emana?', 'Claro. El horario de atención...sirve?', false, 160, null)
+nunca la apertura sola
+Failed asserting that an array does not contain 'Claro.'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:545
+
+17) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_b1_el_recorte_nunca_deja_solo_la_apertura with data set "goal_fat_loss a 160" ('goal_fat_loss', 'Quiero bajar de peso', 'Listo. Para bajar de peso lo ...nando?', false, 160, null)
+nunca la apertura sola
+Failed asserting that an array does not contain 'Listo.'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:545
+
+18) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_b1_el_recorte_nunca_deja_solo_la_apertura with data set "goal_fat_loss a 200" ('goal_fat_loss', 'Quiero bajar de peso', 'Listo. Para bajar de peso lo ...nando?', false, 200, null)
+nunca la apertura sola
+Failed asserting that an array does not contain 'Listo.'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:545
+
+19) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_b1_el_recorte_nunca_deja_solo_la_apertura with data set "beginner_fear tras un saludo (R8) a 160" ('beginner_fear', 'Nunca he entrenado y me da miedo', '¡Hola de nuevo! Muchas person...ocupa?', true, 160, null)
+nunca la apertura sola
+Failed asserting that an array does not contain '¡Hola de nuevo!'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:545
+
+20) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_b1_el_recorte_nunca_deja_solo_la_apertura with data set "beginner_fear tras un saludo (R8) a 200" ('beginner_fear', 'Nunca he entrenado y me da miedo', '¡Hola de nuevo! Muchas person...ocupa?', true, 200, null)
+nunca la apertura sola
+Failed asserting that an array does not contain '¡Hola de nuevo!'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:545
+
+21) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_s1_un_borrador_con_la_condicion_al_final_se_descarta_no_se_recorta
+160: la afirmación sin su condición no sale
+Failed asserting that two strings are not identical.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:581
+
+22) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_r2_una_lista_numerada_sale_entera_o_no_sale
+antes salía «…\n3.»
+Failed asserting that 'Te cuento lo que incluye el Élite:\n
+1. Acceso total al gimnasio y a todas las máquinas.\n
+2. Clases grupales funcionales todos los días.\n
+3.' does not match PCRE pattern "/(^|\s)\d{1,2}\.$/u".
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:600
+
+23) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_r7_la_constancia_de_una_visita_registrada_no_se_pierde
+200: el acta de la fila
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Dejé registrada tu solicitud de cortesía para el sábado 14 de noviembre a las 10:00 a. m. El equipo de Iron Body la revisará para tener todo preparado.'
++'Listo, ya te dejo anotado. En la primera visita te muestran las máquinas, te arman una rutina de prueba y resuelven tus dudas con un entrenador.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:619
+
+24) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_r1_la_memoria_no_anota_el_precio_del_plan_del_modelo_si_no_salio
+antes: {plan_id: 5, price: 210000}
+Failed asserting that Array &0 [
+    'plan_id' => 5,
+    'price' => 210000,
+    'resolved_at_commit' => true,
+] is null.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:645
+
+25) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_un_plan_nombrado_que_no_es_de_un_mes_no_va_bajo_planes_de_un_mes
+200
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Nuestros planes: PLAN DÍA (1 día), $10.000 COP; Plan Valera (un mes), $65.000 COP; Plan Mensual (un mes), $80.000 COP. ¿Sobre cuál amplío la información?'
++'Claro. Nuestros planes: PLAN DÍA (1 días), $10.000 COP; Plan Valera (un mes), $65.000 COP; Plan Mensual (un mes), $80.000 COP. ¿Sobre cuál amplío la información?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:664
+
+26) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_el_respaldo_de_precios_no_nombra_un_plan_rechazado
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Planes de un mes: Plan Mensual, $80.000 COP; Élite, $180.000 COP; PROMO X4, $75.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
++'Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:696
+
+27) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_las_demas_duraciones_solo_se_nombran_si_se_describen_bien
+un plan de 15 días no es «por semana»
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día y de varios meses. ¿Sobre cuál amplío la información?'
++'Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:720
+
+28) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_la_traza_dice_que_el_texto_se_sustituyo
+antes: action fit, como si hubiera salido el borrador
+Failed asserting that two arrays are equal.
+--- Expected
++++ Actual
+@@ @@
+ Array (
+     'cap' => 160
+-    'action' => 'replaced'
++    'action' => 'fit'
+     'from' => 137
+     'to' => 110
+     'dropped' => 0
+ )
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:733
+
+29) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_los_textos_ajustados_que_aprueba_el_propietario
+los textos cambiaron: regenerar con A4_TEXTOS=escribir y volver a aprobarlos
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+ - **Tope 200** (191) «Claro. Planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
+ - **Tope 160** (133) «Claro. Planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. ¿Sobre cuál amplío la información?»
+ 
++### «¿Cuánto vale el plan día? ¿Qué planes tienen?» (nombra un plan de un día)
++
++- **Hoy (Legacy)** (125) «Sí, claro. Cuéntame qué buscas —bajar grasa, ganar masa o coger el hábito— y te digo el plan que mejor te encaja y su precio.»
++- **Versión aplicada, sin tope (320)** (210) «Claro. Nuestros planes: PLAN DÍA (1 días), $10.000 COP; Plan Valera (un mes), $65.000 COP; Plan Mensual (un mes), $80.000 COP. También hay planes por semana y de varios meses. ¿Sobre cuál amplío la información?»
++- **Tope 200** (161) «Claro. Nuestros planes: PLAN DÍA (1 días), $10.000 COP; Plan Valera (un mes), $65.000 COP; Plan Mensual (un mes), $80.000 COP. ¿Sobre cuál amplío la información?»
++- **Tope 160** (125) «Claro. Nuestros planes: PLAN DÍA (1 días), $10.000 COP; Plan Valera (un mes), $65.000 COP. ¿Sobre cuál amplío la información?»
++
++### «¿Y el Trimestre cuánto cuesta? ¿Qué planes tienen?» (nombra un plan de tres meses)
++
++- **Hoy (Legacy)** (125) «Sí, claro. Cuéntame qué buscas —bajar grasa, ganar masa o coger el hábito— y te digo el plan que mejor te encaja y su precio.»
++- **Versión aplicada, sin tope (320)** (225) «Claro. Nuestros planes: Trimestre (tres meses), $210.000 COP; Plan Valera (un mes), $65.000 COP; Plan Mensual (un mes), $80.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
++- **Tope 200** (167) «Claro. Nuestros planes: Trimestre (tres meses), $210.000 COP; Plan Valera (un mes), $65.000 COP; Plan Mensual (un mes), $80.000 COP. ¿Sobre cuál amplío la información?»
++- **Tope 160** (131) «Claro. Nuestros planes: Trimestre (tres meses), $210.000 COP; Plan Valera (un mes), $65.000 COP. ¿Sobre cuál amplío la información?»
++
+ '
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:882
+
+ERRORS!
+Tests: 126, Assertions: 1260, Errors: 1, Failures: 29.

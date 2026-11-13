@@ -197,7 +197,7 @@ Una sola ejecución de PHPUnit cada vez. Desde `backend/`.
 
 | Qué | Comando | Resultado |
 |---|---|---|
-| **Rojo, con el código de hoy** (antes de tocar `app/`) | `phpunit --no-logging tests/Unit/.../UltronReplyFitterTest.php tests/Feature/.../UltronA4LongitudYPreciosTest.php` | **100 pruebas: 81 errores, 14 fallos, 5 verdes**. Verdes: las 2 de Legacy contra su propia instantánea, las 2 de `do_not_contact` (no hay texto que medir) y la de «`n` no va en la respuesta». `a4-evidencia/01-rojo-antes-del-arreglo.txt` |
+| **Rojo, con el código de hoy** (antes de tocar `app/`) | `phpunit --no-logging tests/Unit/.../UltronReplyFitterTest.php tests/Feature/.../UltronA4LongitudYPreciosTest.php` | **100 pruebas: 81 errores, 14 fallos, 5 verdes**. Verdes: las 2 de Legacy contra su propia instantánea, las 2 de `do_not_contact` (no hay texto que medir) y la de «`n` no va en la respuesta». `a4-evidencia/01-rojo-antes-del-arreglo.txt`. **Corrección (§13):** ese número sobrestima el rojo de comportamiento. Casi todos los errores eran `Class "UltronReplyFitter" not found`. Con la clase disponible, el código anterior deja **38 rojas de 80** (2 errores y 36 fallos), según midió el revisor (`informe-reviewer-a4.md`, «Verificado»); las 42 verdes son casos de la matriz que ya cabían y las dos de Legacy. Ese dato es del revisor: yo no lo volví a medir. |
 | Instantánea de Legacy | `A4_INSTANTANEA=escribir … --filter test_legacy_da_exactamente_la_salida_de_hoy` | Escrita con `3b917bac`, cuando el árbol solo tenía los dos ficheros de prueba nuevos (`git status`). |
 | **Verde, SQLite** | las dos nuevas + `UltronDecidePromptsTest` | **OK (239 pruebas, 3463 aserciones)**. `a4-evidencia/02-verde-despues-sqlite.txt` |
 | Archivo A4 tras `pint` | `UltronA4LongitudYPreciosTest.php` | **OK (79, 943)** |
@@ -357,3 +357,187 @@ En `UltronCommitService` no había ninguna etiqueta H4 (`grep`).
 
 No he vuelto a pasar en esta ronda las suites completas de Marketing y Studio, ni las guardas. El cambio se limita a `UltronReplyFitter`, que solo se ejecuta con tope, y a pruebas nuevas.
 
+
+---
+
+## 13. Correcciones tras las revisiones de seguridad y del revisor
+
+12-11-2026 · sobre `50cbd3a6` (el cambio revisado es `daedbbd8`) · **sin commit**: todo está en el árbol de trabajo.
+Guía: el encargo del lead con las decisiones F1 a F7, que cierran B-1, I-1 a I-4, S-1 y la observación funcional de `security`, y los menores m-1, m-3 (lo barato), m-4, m-5 y m-8.
+Marcas: **[C]** comprobado ejecutando · **[L]** leído en el código · **[S]** supuesto o no comprobado.
+
+### 13.1 Qué cambió (fichero y línea, en el árbol de ahora)
+
+**`app/Services/Marketing/Ultron/UltronReplyFitter.php`**
+
+| Línea | Cambio |
+|---|---|
+| `:18-31` | Docblock de la clase: hay dos reglas, una para los textos de Laravel y otra para el borrador del modelo (solo su pregunta final), y se explica por qué. «Nunca corta una frase por la mitad» incluye ahora el número de una lista. |
+| `:71-81` | `NUMERO_DE_LISTA` (F4): uno o dos dígitos y un punto, al inicio del texto o tras un espacio o un salto de línea. |
+| `:83-84` | `CIFRA` (`/\d/u`): la pregunta final que la lleva no se suelta (decisión del lead tras F1, §13.8). |
+| `:141` | `sentences()`: un trozo que acaba en un número de lista se pega al siguiente, igual que una abreviatura. |
+| `:263-317` | **`draft()` (F1).** Toma la última frase que no sea el bloque de enlaces. Si es una pregunta, no es la primera y **no lleva ninguna cifra**, la suelta y, si así cabe, devuelve `dropped` 1. En cualquier otro caso devuelve null (descarte). El docblock explica B-1, S-1, I-2 y la cifra. |
+| `:319-348` | **`append()`.** Devuelve ahora `{text, dropped}` o null. Con prioridad: el cuerpo se ajusta con la misma regla (solo su pregunta final, y no si lleva cifra). Si ni así cabe, sale la frase sola si cabe (`dropped` = frases del cuerpo). Si ni ella cabe, null (m-8). |
+| — | Fuera: `PRECIO` y `protegida()`. Con la regla nueva no los usa nadie (`grep`). |
+
+**`app/Services/Marketing/Ultron/UltronCommitService.php`**
+
+| Línea | Cambio |
+|---|---|
+| `:1569-1582` | Comentario del recorte con la regla nueva. Sigue antes de `violations()`. |
+| `:1630` | La rama de la política pasa la política entera a `respaldoDePrecios()` (F6). |
+| `:1712-1732` | **F2.** Con tope, el borrador descartado por longitud y la cortesía ejecutada en el turno, la alternativa es el acta de la fila (`CourtesyRequestService::actaDeLaFila()`), ajustada con `curated()` y pasada por el guard. El plan va null. |
+| `:1734-1754` | **m-3:** si el texto se sustituyó, `metadata.length` = `{action: replaced, from: medida del borrador, dropped: 0}`, y `to` lo pone el punto de control. **F3:** si la alternativa es el respaldo de precios, `$plan = null`. |
+| `:1769` | 13.ter con el nuevo contrato de `append()`. Sin cambio de comportamiento. |
+| `:1790-1811` | 13.quater: `dropped` lo da el ajustador, no la diferencia de frases (m-3). Si `append()` devuelve null, el cuerpo sale como estaba y se registra el aviso `ultron.commit.verified_price_skipped_cap` (m-8). |
+| `:2033` | `safeFallback()`: `respaldoDePrecios($this->politicaDePrecios(...))` (F6). |
+| `:3705-3709`, `:3755-3770` | `citaDelTurno()` sale de `conLaFechaDeLaCita()`, sin cambio de comportamiento, para que F2 lea la misma cita. |
+| `:4931-4942` | m-4: los dos docblocks de `respaldoSemantico()` quedan en uno. |
+| `:5066-5085` | m-1: el comentario de `antesDeEnviar()` dice lo que hace. Si no hay último recurso que quepa, sale igualmente un texto (el más corto de los seguros o, si no hay ninguno, el que llegó) con `overflow: true`. |
+| `:5110-5223` | **`respaldoDePrecios(array $policy, ?int $tope)`:** <ul><li>F6: fuera `forbidden_plan_ids`, salvo `hard_required_plan`; también fuera de «También hay…»;</li><li>F5: «1 día» en el respaldo;</li><li>m-5: las duraciones de «También hay…» (1 → por día; de 5 a 9 → por semana; 32 o más → de varios meses; el resto no se menciona).</li></ul> |
+| `:5225-5246` | `planNombradoEn()` → `politicaDePrecios()`: devuelve el `decide()` entero (plan nombrado y rechazados). |
+| `:5248-5262` | F3: el docblock de `conPreciosEntregados()` corregido. |
+
+**Pruebas:** `tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php` y `tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php` (§13.3 y §13.4).
+
+**Documento:** `a4-textos-ajustados.md`, regenerado por su prueba: **+14 líneas, ninguna cambiada**. Son las dos secciones nuevas de §13.5.
+
+**No tocados:**
+- `SalesConversationReplyService.php`, `UltronDraftPlaceholders.php`, `OutboundContentGuard`, `UltronPromptOffer.php` y el compilador;
+- `config/`, rutas, migraciones y n8n;
+- la instantánea `legacy-a4.json` (no se regeneró y sigue en verde).
+
+### 13.2 Hallazgo → corrección → prueba
+
+| Hallazgo | Corrección | Prueba (rojo con `50cbd3a6` → verde) |
+|---|---|---|
+| **B-1** (bloqueante): salían «Te entiendo.», «Claro.», «Listo.» o «¡Hola de nuevo!» solos | F1: el recorte solo quita la pregunta final | <ul><li>`test_b1_el_recorte_nunca_deja_solo_la_apertura`: los 5 borradores × 160 y 200 por el endpoint, 9 rojas de 10;</li><li>`test_los_borradores_de_b1_no_quedan_en_su_apertura` (pura).</li></ul> |
+| **S-1**: la frase de la condición se soltaba | F1 | <ul><li>`test_la_frase_que_pone_la_condicion_no_se_suelta`: el literal del informe, puro;</li><li>`test_s1_un_borrador_con_la_condicion_al_final_se_descarta_no_se_recorta`: por el endpoint (ver §13.6.1).</li></ul> |
+| **I-2**: la visita registrada sin su día y su hora | F1 deja de soltar la constancia, y como el borrador entonces se descarta, F2 pone el acta de la fila | `test_r7_la_constancia_de_una_visita_registrada_no_se_pierde` (R7, a 200 y 160, y Legacy igual) |
+| **I-1**: memoria y `price_source` con el plan del modelo | F3 | `test_r1_la_memoria_no_anota_el_precio_del_plan_del_modelo_si_no_salio` (R1, Trimestre) |
+| **I-3**: «3.» colgando | F4 | <ul><li>`test_una_lista_numerada_no_se_parte_tras_el_numero` (pura, con la lista de R2 y las cifras);</li><li>`test_r2_una_lista_numerada_sale_entera_o_no_sale` (endpoint).</li></ul> |
+| **I-4**: «1 días» y el formato con duraciones sin aprobar | F5 en el respaldo, y dos casos nuevos en el documento | <ul><li>`test_un_plan_nombrado_que_no_es_de_un_mes_no_va_bajo_planes_de_un_mes` (mata M10);</li><li>`test_sin_planes_de_un_mes…` (cambiada);</li><li>la del documento.</li></ul> |
+| **M12** sobrevivía | — (el código era correcto) | `test_precios_en_la_rama_de_la_politica_con_la_version_y_sin_tope`: verde con `50cbd3a6`, roja con la mutación [C] |
+| **Observación de `security`**: planes rechazados | F6, en los dos caminos | `test_el_respaldo_de_precios_no_nombra_un_plan_rechazado` (revisor caído, rama de la política, y el rechazado que se vuelve a nombrar) |
+| **m-1** | Comentario | — |
+| **m-3** (lo barato) | `replaced` en la rama de la política; `dropped` de 13.quater desde el ajustador | <ul><li>`test_la_traza_dice_que_el_texto_se_sustituyo` (R5);</li><li>`test_si_no_se_puede_recortar…` (cambiada).</li></ul> |
+| **m-4** | Un solo docblock | — |
+| **m-5** | Duraciones de «También hay…» | `test_las_demas_duraciones_solo_se_nombran_si_se_describen_bien` (un plan de 15 días) |
+| **m-8** | `append()` null y el cuerpo sale como estaba, con aviso | <ul><li>`test_si_la_frase_del_precio_no_cabe_ni_sola_el_cuerpo_sale_como_estaba` (endpoint, plan de nombre larguísimo);</li><li>la de `append()` (pura).</li></ul> |
+| **Pregunta final con cifra** (decisión del lead, §13.8) | `draft()` no suelta una pregunta con un dígito; `append()` hereda la regla | <ul><li>`test_una_pregunta_final_con_una_cifra_no_se_suelta` (pura: precio, hora, sin cifras y el cuerpo de 13.quater);</li><li>`test_la_pregunta_final_con_el_unico_precio_no_se_suelta` (endpoint, a 200).</li></ul> |
+
+### 13.3 Pruebas nuevas
+
+**Ajustador (puras):**
+- `test_el_borrador_solo_suelta_su_pregunta_final`;
+- `test_los_borradores_de_b1_no_quedan_en_su_apertura`;
+- `test_la_frase_que_pone_la_condicion_no_se_suelta`;
+- `test_el_recorte_salta_la_linea_de_los_enlaces_y_suelta_la_pregunta_de_antes`;
+- `test_una_lista_numerada_no_se_parte_tras_el_numero`;
+- `test_una_pregunta_final_con_una_cifra_no_se_suelta` (§13.8).
+
+**A4 (por el endpoint, con las clases reales):**
+- `test_b1_…` (10 casos);
+- `test_s1_…`;
+- `test_r2_…`;
+- `test_r7_…`;
+- `test_r1_…`;
+- `test_un_plan_nombrado_que_no_es_de_un_mes_…`;
+- `test_precios_en_la_rama_de_la_politica_con_la_version_y_sin_tope`;
+- `test_el_respaldo_de_precios_no_nombra_un_plan_rechazado`;
+- `test_las_demas_duraciones_…`;
+- `test_la_traza_dice_que_el_texto_se_sustituyo`;
+- `test_si_la_frase_del_precio_no_cabe_ni_sola_…`;
+- `test_la_pregunta_final_con_el_unico_precio_no_se_suelta` (§13.8).
+
+### 13.4 Pruebas existentes cambiadas (fijaban el recorte antiguo o el texto con errata)
+
+1. **`UltronReplyFitterTest::test_el_borrador_se_recorta_desde_el_final`** → `test_el_borrador_solo_suelta_su_pregunta_final`. Esperaba soltar 2 frases, una de ellas enunciativa.
+2. **`UltronReplyFitterTest::test_el_recorte_salta_la_frase_con_precio_y_la_que_lleva_url`** → `test_el_recorte_salta_la_linea_de_los_enlaces_y_suelta_la_pregunta_de_antes`. Esperaba «Claro, te cuento. Su valor es…», soltando la del medio.
+3. **`UltronReplyFitterTest::test_si_no_se_puede_recortar_se_descarta`.** Se integra en la 1, con los mismos dos casos.
+4. **`UltronReplyFitterTest::test_la_frase_del_precio_verificado_tiene_prioridad_…`.** Ahora con `{text, dropped}`. A 120 sale la frase del precio sola (antes, el cuerpo sin «También…»). Se añaden 150 (solo la pregunta del cuerpo) y 40 (null, m-8).
+5. **`A4::test_el_recorte_salta_la_frase_del_precio`** → `test_un_borrador_que_cierra_con_el_precio_no_se_recorta_se_descarta`. Antes salía «Claro, te cuento del Élite. Su valor es $180.000 COP al mes.»; ahora sale el respaldo de precios con el Élite primero.
+6. **`A4::test_los_enlaces_de_la_app_no_cuentan_y_su_linea_no_se_suelta`.**
+   - Borrador nuevo (161): la pregunta va justo antes de los enlaces y se suelta; los enlaces se quedan con su salto (137).
+   - El borrador antiguo (164 sin la pregunta) ahora se **descarta**, y la prueba lo fija: los enlaces no constan como enviados (§13.6.2).
+7. **`A4::test_si_no_se_puede_recortar_se_descarta_y_sale_el_respaldo_ajustado`.** `metadata.length` pasa de `discarded` a `replaced` (m-3) con `from` y `to` exactos, y `price_source` null (F3).
+8. **`A4::test_el_precio_verificado_tiene_prioridad_sobre_el_cuerpo`.**
+   - A 160 sale «El precio actual del Plan Mensual es $80.000 COP.», con `{trimmed, from 179, to 49, dropped 3}`. Antes salía el cuerpo sin «Además…» y con el precio detrás.
+   - Se añade el caso en que basta quitar la pregunta del cuerpo (137).
+9. **`A4::test_sin_planes_de_un_mes_nombra_los_tres_primeros_con_su_duracion`.** «(1 días)» pasa a «(1 día)».
+10. **`A4::test_los_textos_ajustados_que_aprueba_el_propietario`.** Dos casos nuevos en el generador (F5); el documento, regenerado.
+
+### 13.5 Números de las pruebas
+
+Desde `backend/`, una ejecución de PHPUnit cada vez.
+
+| Qué | Resultado |
+|---|---|
+| **Rojo**: pruebas nuevas y cambiadas con el código de `50cbd3a6` (`git diff --quiet HEAD -- app` antes de ejecutar). Ajustador + A4 | **126 pruebas: 30 rojas (1 error y 29 fallos)** [C]. Rojas: todas las nuevas y cambiadas, salvo dos verdes a propósito, porque fijan un comportamiento que ya era correcto: M12 y «B-1 horario a 200», que `50cbd3a6` ya recortaba solo por la pregunta. Las 96 restantes, verdes, son las que no cambian, incluida la instantánea de Legacy. `a4-evidencia/17-correcciones-rojo-antes.txt` |
+| **Por qué hace falta F2**: mutación con F1 hecho y el bloque de F2 desactivado | `test_r7_…` **roja**. La rama de la política daba «Con gusto te cuento. ¿Qué te cuento más a fondo: los planes, las clases o cómo empezar?», sin día ni hora [C]. Restaurado (`cmp` idéntico). `a4-evidencia/19-correcciones-mutacion-f2-sin-acta.txt` |
+| Mutación M10 (cabecera «Planes de un mes» siempre) | `test_un_plan_nombrado_…` **roja** [C]. Restaurado (`cmp`). `a4-evidencia/20-correcciones-mutacion-m10.txt` |
+| Mutación M12 (precios de la rama de la política colgando del tope) | `test_precios_en_la_rama_de_la_politica_…` **roja** [C]. Restaurado (`cmp`). `a4-evidencia/21-correcciones-mutacion-m12.txt` |
+| Documento de textos | Regenerado con `A4_TEXTOS=escribir`: **+14 líneas, 0 cambiadas** [C]. Las dos secciones nuevas: «plan día» (Legacy 125; 320: 209; 200: 160; 160: 160) y «Trimestre» (Legacy 125; 320: 225; 200: 167; 160: 131). Antes de regenerar, solo fallaba esa prueba y su diff solo añadía: `a4-evidencia/18-correcciones-documento-antes-de-regenerar.txt` |
+| **Verde, SQLite**: ajustador, A4, `UltronDecidePromptsTest`, `UltronCommitTest` y `UltronCommitPromptsTest` | **OK (347 pruebas, 4 283 aserciones)** [C]. `a4-evidencia/22-correcciones-verde-sqlite.txt` |
+| **Marketing completo, SQLite** (`tests/Feature/Marketing tests/Unit/Marketing`) | **OK (6 160 pruebas, 36 481 aserciones)** [C]. `a4-evidencia/23-correcciones-marketing-sqlite.txt` |
+| **PostgreSQL 14**: A4 (`UNIT_DB=ultron_studio_lead_ola5 … pgunit.sh`) | Primera pasada: 100 pruebas, **1 roja, de la prueba**: un `assertSame` mío sobre `metadata.length`, y `jsonb` no conserva el orden de las claves. Cambiado a `assertEquals`, como las de al lado (`a4-evidencia/24-correcciones-postgresql-a4-primera.txt`). Segunda: **OK (100 pruebas, 1 170 aserciones)** [C] (`a4-evidencia/25-correcciones-postgresql-a4.txt`). |
+| `pint` sobre los 4 ficheros tocados | `passed`, sin cambios [C] |
+
+Las salidas están en `a4-evidencia/`, de la 17 a la 29. Cada una lleva una cabecera con qué es y el comando exacto. Las de la regla de la cifra (26 a 29) están en §13.8. Son salidas de PHPUnit con datos de prueba: borradores inventados, el catálogo de planes y la ficha del gimnasio. Las revisé buscando teléfonos de 10 cifras, correos, `Bearer`, `secret`, `token`, `password`, `wamid` y cadenas de conexión, y no hay ninguna coincidencia [C]. Como en las 01-16, llevan la ruta local del árbol.
+
+### 13.6 Lo que conviene que sepas (consecuencias de F1 tal como está escrita)
+
+1. **El literal de S-1 no llega al recorte por el endpoint.** La autoridad de promesas lo tumba antes («te reservo» → `unsupported_future_action_promise`, 422) [C]. Por eso el literal está en la prueba pura, y la prueba por el endpoint usa la misma forma (afirmación + «Ojo: …» con la condición) con una condición de horario.
+2. **LÍMITE CONOCIDO (no se arregla ahora, decisión del lead):** con tope, un borrador con los enlaces de la app que no cabe ni sin su pregunta se descarta, y los enlaces no salen en ese turno (`skipped/reply_replaced`). Pasa, por ejemplo, con «Pásame la app» a 160 y el borrador de 164.
+   - La herramienta queda `skipped/reply_replaced`, que es lo honesto: la memoria no los da por enviados [C].
+   - Antes se soltaba la frase del medio y los enlaces salían.
+   - Es la regla decidida; lo señalo porque es el camino de la app.
+3. **RESUELTO (§13.8). La pregunta final se soltaba aunque llevara el único precio del borrador.** Al quitar la protección por precio (F1: «si ya no se usa»), un «…¿Te animas con el Élite por $180.000 COP?» perdía la cifra al recortarse.
+   - `violations()` no exige un precio en una respuesta de precios [L], y 13.quater solo lo repone cuando hay duda de precio.
+   - El lead lo cerró: una pregunta final con cifra no se suelta (§13.8). Por el endpoint se midió el caso: antes salía «El Plan Mensual incluye…» sin ninguna cifra [C].
+4. **13.quater con un cuerpo que no se puede ajustar** deja la frase del precio sola: «El precio actual del Plan Mensual es $80.000 COP.». Contesta a la duda, pero se pierde el resto del cuerpo. Es lo que dice F1.
+5. **F2 solo actúa con el descarte por longitud.** Si la cortesía se ejecutó y el borrador cae por otra violación (también en Legacy), la rama de la política sigue como antes. Es anterior a este cambio y no lo toqué.
+6. **F6 también saca los rechazados de «También hay…».** Si la persona rechazó el único plan de un día, no se le dice «también hay planes por día». Decisión mía, por coherencia con «no se nombran». **El lead la acepta: se queda.**
+7. **F4 es conservador.** «…a las 10. Cerramos…» ya no se parte: queda una frase más larga, nunca media frase.
+
+### 13.7 Lo que no pude comprobar
+
+- PostgreSQL solo sobre el fichero A4, como pedía el encargo. `UltronCommitTest` y `UltronCommitPromptsTest` no los pasé en PostgreSQL: allí ya fallaban dos de staff review (§8.1).
+- Las suites del Studio y las guardas no las repetí, como indicaba el encargo. **No hay ficheros nuevos en `app/`**, así que la puerta de diff lista los mismos.
+- Nada contra n8n, producción ni la canaria.
+- **Contrato:** `UltronReplyFitter::append()` cambia su retorno a `{text, dropped}|null`. Es una clase pura y solo la usa el commit (`grep`).
+- **Respuesta a n8n:** `price_source` va null cuando sale el respaldo de precios por la rama de la política (solo con la versión aplicada). n8n no lee esa clave (`grep` en `n8n/`) [C].
+
+Quedan fuera, en la lista de pendientes: S-2, S-3, m-2, m-6, m-9 y el tono de los respaldos.
+
+### 13.8 Último ajuste del lead: una pregunta final con cifra no se suelta
+
+**Decisión del lead.** Una pregunta final que lleve una cifra (cualquier dígito: un precio, una hora, una fecha) no se suelta, y el borrador se descarta (`policy_length_exceeded`): sale el respaldo de su intención. Motivo: «¿Te interesa el Plan Mensual por $80.000 COP?» o «¿Te queda bien mañana a las 6 p. m.?» no solo devuelven la pelota, llevan el dato. Cierra el punto 3 de §13.6.
+
+**Cambio.**
+- `UltronReplyFitter.php`:
+  - `:83-84`: `CIFRA = '/\d/u'`.
+  - `:263-317`: `draft()` devuelve null si la última frase (sin contar el bloque de enlaces) lleva un dígito. El docblock dice por qué y el precio de la regla: una pregunta inocente con un número («¿Ya entrenas 3 veces por semana?») también hace descartar.
+  - `:319-348`: `append()` con prioridad la hereda, porque ajusta el cuerpo con `draft()`.
+- Los comentarios de la cabecera del ajustador y del recorte en el commit (`UltronCommitService.php:1569-1582`) dicen lo mismo.
+
+**Pruebas (rojo → verde).**
+- `UltronReplyFitterTest::test_una_pregunta_final_con_una_cifra_no_se_suelta`, pura:
+  - pregunta con precio → null (sin ella, 90 caracteres, cabría a 120);
+  - pregunta con hora → null;
+  - pregunta sin cifras → se suelta como siempre;
+  - cuerpo de 13.quater cuya pregunta lleva «el 1 de diciembre» → sale la frase del precio sola.
+- `UltronA4LongitudYPreciosTest::test_la_pregunta_final_con_el_unico_precio_no_se_suelta`, por el endpoint, a 200:
+  - borrador de 229 cuya pregunta final lleva el único precio. Sin la regla, salía «El Plan Mensual incluye acceso completo… desde el primer día.» (176), **sin ninguna cifra**, a quien preguntó cuánto cuesta [C].
+  - Ahora: `Claro. Planes de un mes: Plan Mensual, $80.000 COP; Plan Valera, $65.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?`, con `metadata.length` = `{replaced, from 229}` [C].
+- Ninguna prueba existente cambia: ningún borrador de las anteriores lleva una cifra en la pregunta final. El documento de textos no cambia (son textos de Laravel).
+
+| Qué | Resultado |
+|---|---|
+| **Rojo** con el código de §13.1-13.7 (ajustador + A4) | **128 pruebas: 2 fallos**, justo las dos nuevas [C]. `a4-evidencia/26-cifra-rojo-antes.txt` |
+| **Verde, SQLite**: ajustador + A4 | **OK (128 pruebas, 1 422 aserciones)** [C]. La prueba del documento y la instantánea de Legacy, incluidas. `a4-evidencia/27-cifra-verde-sqlite.txt` |
+| **PostgreSQL 14**: A4 | **OK (101 pruebas, 1 175 aserciones)** [C]. `a4-evidencia/28-cifra-postgresql-a4.txt` |
+| **Marketing completo, SQLite**, primera pasada | 6 162 pruebas: **1 error y 1 fallo, los dos tiempos agotados** de procesos node de n8n (`verificar-flujo.cjs` >120 s; el selector `elegir-prompts.js` >20 s), con la máquina cargada (*load* ≈ 8,4). No pasan por el ajustador ni por el commit, y en §13.5 estaban en verde [C]. `a4-evidencia/29-cifra-marketing-sqlite-primera.txt` |
+| Esos dos ficheros, solos | **OK (655 pruebas, 4 822 aserciones)** [C]. `a4-evidencia/30-cifra-n8n-repeticion.txt` |
+| **Marketing completo, SQLite**, segunda pasada | MARKETING_PENDIENTE |
+| `pint --test` sobre los 4 ficheros de código | `passed` [C] |
