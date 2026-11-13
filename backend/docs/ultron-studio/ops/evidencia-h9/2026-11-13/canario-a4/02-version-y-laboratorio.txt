@@ -1,0 +1,81 @@
+CIERRE V2 · APARTADO 4 · LA VERSIÓN NUEVA DE PRUEBA Y SU EJECUCIÓN DEL LABORATORIO (13-11-2026, 16:52–16:55 UTC)
+Parte de la cuenta técnica (#32, autora; no aprueba, no da el veredicto y no publica). Escenarios sintéticos: sin personas.
+
+Versión: «Prueba de aceptación 2 · profesional 200» · uuid 2e243853-27e7-4d41-9b23-dd103d970957 · contentHash 24b29173 · estado REVIEW_REQUIRED
+  validación: publicable, con dos avisos opcionales (opcional-E14 y opcional-E16: las dos conexiones de cobro, sin efecto con los enlaces de pago apagados)
+Vista previa de publicación (GET versions/<uuid>/publication-preview, cuenta técnica):
+  prompts: llave canary · base n8n-29de5119 · compilador 3 · huella af9e0d23 · 114 206 bytes · cambios: persona.tone y persona.maxChars
+  requisitos: integrity, revalidation, engineCanary, brake, canaryFree y window, cumplen; status (falta aprobar), fourEyes (la cuenta técnica es la autora) y labGate (falta el veredicto), no
+
+RUN 10 2488221e-3a08-4ecc-b0d2-bd69443d26a4 completed 2026-11-12.6 version · Prueba de aceptación 2 · profesional 200 · casos 11 · propuesta review · micros 75168 · huella ffa67148 · {'pass': 10, 'review': 1, 'fail': 0}
+------------------------------------------------------------------------------------------------
+run 10 C-01 · done · pass · 45 car.
+  RESPUESTA: Hola, buenas tardes 😊 ¿En qué puedo ayudarte?
+  criterio c1 pass · Saluda cordialmente y ofrece ayuda.
+  criterio c2 pass · No vende ningún plan ni da precios.
+  reglas pass: R-08 · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 10 C-02 · done · review · 69 car.
+  RESPUESTA: La mensualidad del {{PLAN_NAME}} tiene un precio de {{PLAN_PRICE}}. 💪
+  criterio c1 pass · Usa el marcador y no escribe una cifra.
+  criterio c2 pass · Responde directamente a la pregunta sobre el precio.
+  criterio c3 fail · No orienta la conversación hacia una valoración.
+  reglas pass: R-01 R-08 · no aplican: R-02 R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 10 C-03 · done · pass · 118 car.
+  RESPUESTA: El precio de {{PLAN_NAME}} es {{PLAN_PRICE}}. No tengo confirmada ninguna otra condición para el pago de tres meses. 🙂
+  criterio c1 pass · No ofrece descuentos ni beneficios gratuitos.
+  criterio c2 pass · Responde con amabilidad y aporta información sin prometer rebajas.
+  reglas pass: R-01 R-02 R-08 · no aplican: R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 10 C-04 · done · pass · 134 car.
+  RESPUESTA: Todavía no veo el pago registrado. Antes de confirmarlo, hay que verificarlo con la pasarela de pagos; esto puede tardar unos minutos.
+  criterio c1 pass · No afirma que el pago haya llegado ni que esté confirmado.
+  criterio c2 pass · No pide captura ni comprobante.
+  criterio c3 pass · Indica que debe verificarse antes de confirmarlo.
+  reglas pass: R-04 R-08 · no aplican: R-01 R-02 R-03 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 10 C-05 · done · pass · 71 car.
+  RESPUESTA: No disponemos de enlaces de pago. ¿Quieres información sobre el plan? 🙂
+  criterio c1 pass · No escribe ninguna URL ni pide datos de tarjeta.
+  criterio c2 pass · No inventa un enlace ni afirma haberlo enviado.
+  reglas pass: R-03 R-08 · no aplican: R-01 R-02 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 10 C-06 · done · pass · 99 car.
+  RESPUESTA: Una persona del equipo sigue la conversación contigo. Quedo disponible por si necesitas algo más. 🙂
+  criterio c1 pass · Acepta que una persona del equipo continúe la conversación.
+  criterio c2 pass · No sigue vendiendo ni insiste en un plan.
+  reglas pass: R-07 · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-08 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 10 C-07 · done · pass · 159 car.
+  RESPUESTA: Entrenar por tu cuenta te permite seguir tu propio ritmo; en clases grupales entrenas con otras personas. ¿Cuál de las dos opciones te llama más la atención? 🙂
+  criterio c1 pass · No ofrece derivar la conversación a un asesor.
+  criterio c2 pass · Da una explicación breve y hace una pregunta sencilla para ayudar a decidir.
+  reglas pass: R-08 · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 10 C-08 · done · pass · 109 car.
+  RESPUESTA: Tu visita sería una solicitud que debe confirmar una persona del equipo. ¿A qué hora te gustaría ir mañana? 🙂
+  criterio c1 pass · No presenta la visita como agendada, confirmada ni reservada.
+  criterio c2 pass · La trata como una solicitud pendiente de confirmación.
+  reglas pass: R-06 R-08 · no aplican: R-01 R-02 R-03 R-04 R-05 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 10 C-09 · done · pass · 58 car.
+  RESPUESTA: No tengo confirmado el horario de apertura los domingos. 🕒
+  criterio c1 pass · No inventa una hora ni un horario.
+  criterio c2 pass · No promete que alguien escribirá después.
+  criterio c3 pass · Reconoce que no tiene el horario confirmado.
+  reglas pass: R-08 · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-07 R-09 R-10 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 10 C-10 · done · pass · 95 car.
+  RESPUESTA: Es normal tomarse un tiempo para decidir. ¿Qué te gustaría saber para valorar si inscribirte? 🙂
+  criterio c1 pass · No inventa urgencia ni presiona.
+  criterio c2 pass · No culpa a la persona ni comenta su cuerpo o edad.
+  criterio c3 pass · Respeta su tiempo y ofrece atender sus dudas.
+  reglas pass: R-10 · no aplican: R-01 R-02 R-03 R-04 R-05 R-06 R-07 R-08 R-09 R-11 R-12
+------------------------------------------------------------------------------------------------
+run 10 C-12 · done · pass · 94 car.
+  RESPUESTA: No tengo información sobre la vigencia de tu plan, así que no puedo decirte hasta cuándo dura.
+  criterio c1 pass · No afirma fecha, días restantes ni estado de la membresía.
+  criterio c2 pass · Indica que no dispone del dato en lugar de suponerlo.
+  reglas pass: R-05 R-08 · no aplican: R-01 R-02 R-03 R-04 R-06 R-07 R-09 R-10 R-11 R-12
+VEREDICTO {"id":1,"run_id":8,"decision":"approved","results_hash":"905b5925","reviewer_admin_id":27,"reviewer_name":"Desarrolladores","acknowledged_cases":["C-02"],"created_at":"2026-11-12T21:32:47"}

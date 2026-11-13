@@ -72,15 +72,24 @@ async function leerBorrador() {
 
   if (MODO === 'crear') {
     const b = await leerBorrador();
-    if (b.isBaseline !== true) { console.log('PARO: el borrador de la cuenta técnica no es la línea base.'); process.exit(1); }
     const c = JSON.parse(JSON.stringify(b.content));
     if (!c?.configs?.persona) fallo('el borrador no trae configs.persona', { status: 200, json: { data: Object.keys(c || {}) } });
-    console.log('antes · revision:', b.revision, '· persona:', corto(c.configs.persona), '· goal:', c.configs.strategy?.goal);
-    c.configs.persona.tone = TONO;
-    c.configs.persona.maxChars = LONGITUD;
-    const g = await api('PUT', 'draft', { baseRevision: b.revision ?? 0, content: c });
-    if (g.status !== 200) fallo('guardar el borrador', g);
-    const nb = g.json.data;
+    console.log('antes · revision:', b.revision, '· línea base:', b.isBaseline, '· persona:', corto(c.configs.persona), '· goal:', c.configs.strategy?.goal);
+    // La repetición de la prueba (13-11-2026): el borrador de la cuenta técnica ya quedó con los dos valores de la
+    // primera prueba. Si ya los tiene, la versión se crea de esa misma revisión, sin tocar el borrador; si no es la
+    // línea base ni tiene exactamente esos dos valores, se para (otra cosa cambió y hay que mirarla).
+    let nb;
+    if (b.isBaseline === true) {
+      c.configs.persona.tone = TONO;
+      c.configs.persona.maxChars = LONGITUD;
+      const g = await api('PUT', 'draft', { baseRevision: b.revision ?? 0, content: c });
+      if (g.status !== 200) fallo('guardar el borrador', g);
+      nb = g.json.data;
+    } else if (c.configs.persona.tone === TONO && c.configs.persona.maxChars === LONGITUD) {
+      nb = b;
+    } else {
+      console.log('PARO: el borrador de la cuenta técnica no es la línea base ni tiene ya el tono y la longitud de la prueba.'); process.exit(1);
+    }
     console.log('borrador guardado · revision:', nb.revision, '· persona:', corto(nb.content?.configs?.persona), '· hallazgos:', corto(nb.findings ?? nb.validation ?? null, 300));
     const cr = await api('POST', 'versions', { label: ETIQUETA, note: NOTA, draftRevision: nb.revision, clientRequestId: crypto.randomUUID() });
     if (![200, 201].includes(cr.status)) fallo('crear la versión', cr);

@@ -1,0 +1,23 @@
+CIERRE V2 · APARTADO 4 · CANARIO MOVIDO A UNA CONVERSACIÓN LIMPIA (autorizado por el propietario en el gate 4-A, 13-11-2026)
+ops/canaria-limpia.sh aplicar 273 · 13-11-2026, 16:51 UTC (11:51 en Bogotá). Sin teléfonos, nombres ni textos de mensajes.
+
+respaldo del .env y del id anterior: /root/respaldos/canaria-20261113-165106
+creada la conversación #882 (en blanco, NEW_LEAD) y cerrada la #273
+NUEVA=882
+workers tras el reinicio: 14 y, diez segundos después, 14 RUNNING (antes: 14 de 14)
+=== DESPUÉS ===
+variables: MARKETING_ULTRON_CANARY_CONVERSATION_ID=882 (1 línea) · MARKETING_ULTRON_PAYMENT_CANARY_CONVERSATION_ID=882 (1 línea)
+ficheros: www-data:www-data 600 /var/www/api/backend/.env www-data:www-data 600 bootstrap/cache/config.php 
+workers:      14 RUNNING 
+opcache de FPM (validate_timestamps): (sin línea = 1, el valor por defecto)
+configuración en caché: canario=882 · canario de pago=882 · ULTRON encendido
+canaria #882: open · whatsapp · IA sí · relevo humano no · fase NEW_LEAD · 0 mensajes · último - UTC
+conversaciones del mismo prospecto y canal: #2 closed, #19 closed, #223 closed, #225 closed, #236 closed, #237 closed, #252 closed, #254 closed, #261 closed, #273 closed, #882 open
+abiertas: 1
+  Llave del motor: canary · estado: legacy
+  Cabeza: entrada 2 (rollback, 2026-11-12T22:55:36+00:00) · verifica
+  Canario: Legacy
+  Resto: Legacy
+  La publicación vigente cuadra con el motor.
+  FRENO SUELTO. ULTRON funciona según sus interruptores de entorno.
+CANARIO MOVIDO A LA CONVERSACIÓN #882. Vuelta atrás: bash -s -- revertir 882 273   (respaldo: /root/respaldos/canaria-20261113-165106)
