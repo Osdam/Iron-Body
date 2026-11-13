@@ -20,10 +20,10 @@
 #   código:   cd /var/www/api && git checkout --detach "$(cat $BK/api-commit.txt)"
 #             cd backend && sudo -u www-data sh -c 'umask 077; php artisan config:cache -q && php artisan route:cache -q'
 #             sudo -u www-data php artisan queue:restart -q
-#   tabla:    solo si la campaña no ha hecho nada (la tabla es la evidencia), con el rol dueño:
-#             ironbody-migrate no hace rollback: ( set -a; . /root/.ironbody-owner.env; set +a; cd /var/www/api/backend;
-#             sudo -u www-data env DB_OWNER_USERNAME="$DB_OWNER_USERNAME" DB_OWNER_PASSWORD="$DB_OWNER_PASSWORD" php artisan migrate:rollback
-#             --database=pgsql_owner --path="$PWD/storage/app/deploy/iron-ia-recuperacion-mig" --realpath --force )
+#   tabla:    solo si la campaña no ha hecho nada (la tabla es la evidencia). Como postgres, por
+#             autenticación local (peer), sin ninguna contraseña en la línea de órdenes:
+#             sudo -u postgres psql -d ironbody -v ON_ERROR_STOP=1 -c "BEGIN; DROP TABLE iron_ia_recovery_items;
+#             DELETE FROM migrations WHERE migration = '2026_11_17_100001_create_iron_ia_recovery_items_table'; COMMIT;"
 set -euo pipefail
 export LC_ALL=C
 umask 022
@@ -41,7 +41,10 @@ API=https://api.ironbodyneiva.cloud/api
 LOG=$B/storage/logs/laravel.log
 NGX=/var/log/nginx/access.log
 MIG=2026_11_17_100001_create_iron_ia_recovery_items_table
-MIGDIR=$B/storage/app/deploy/iron-ia-recuperacion-mig
+# Fuera de storage/: de root y sin escritura para www-data, que solo necesita leerla. En
+# storage/ (de www-data) alguien con www-data podría cambiarla entre la copia y la
+# ejecución con el rol dueño (revisión de seguridad del 13-11).
+MIGDIR=/var/lib/ironbody-deploy/iron-ia-recuperacion-mig
 
 # Los ÚNICOS ficheros que se ejecutan y pueden cambiar con esta ola.
 LISTA_CERRADA="backend/app/Console/Commands/RecoverIronIaRoutinesCommand.php
@@ -96,9 +99,17 @@ echo "1. migración SOLA, con el código viejo sirviendo (tabla nueva; no toca n
 # ironbody-migrate, que lee su contraseña de /root y no la deja en el .env ni en la caché.
 # (El 13-11 el primer intento migró como iron_app y PostgreSQL lo rechazó con 42501, sin restos.)
 command -v ironbody-migrate >/dev/null || aborta "falta el envoltorio ironbody-migrate"
-mkdir -p "$MIGDIR"
+# Nada más pendiente: con --path solo corre la de esta ola, pero un código que dependiera de
+# otra migración pendiente se rompería al hacer el merge.
+APLICADAS=$( cd "$B" && sudo -u "$WWW" php artisan tinker --execute="echo implode(PHP_EOL, Illuminate\Support\Facades\DB::table('migrations')->pluck('migration')->all());" 2>/dev/null )
+PENDIENTES=$(comm -23 <(git ls-tree --name-only origin/main backend/database/migrations/ | sed -E 's#.*/##; s#\.php$##' | sort) <(printf '%s\n' "$APLICADAS" | sort) | grep -v -x "$MIG" || true)
+[ -z "$PENDIENTES" ] || aborta "hay otras migraciones pendientes: $(echo $PENDIENTES)"
+( umask 022; install -d -o root -g root -m 755 "$(dirname "$MIGDIR")" "$MIGDIR" )
 git show "origin/main:backend/database/migrations/$MIG.php" > "$MIGDIR/$MIG.php"
-chown -R "$WWW:$WWW" "$B/storage/app/deploy"
+chown root:root "$MIGDIR/$MIG.php"; chmod 644 "$MIGDIR/$MIG.php"
+# Justo antes de ejecutarla: lo que hay en disco es lo de git.
+[ "$(sha256sum < "$MIGDIR/$MIG.php")" = "$(git show "origin/main:backend/database/migrations/$MIG.php" | sha256sum)" ] \
+  || aborta "la migración copiada no coincide con git"
 if [ "$YA" = no ]; then
   ironbody-migrate --path="$MIGDIR" --realpath \
     || aborta "la migración falló (si es 55P03, lock timeout: no deja restos; repetir)"
