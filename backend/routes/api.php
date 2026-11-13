@@ -317,6 +317,10 @@ Route::middleware(['trainer.feature:trainer_nutrition_guides_enabled', 'auth.tra
     // Retirar es lo contrario de publicar, no de crear: el mismo permiso.
     Route::post('routines/{routine}/retire', [\App\Http\Controllers\Api\Trainer\IntegralPlanController::class, 'retireRoutine'])
         ->whereNumber('routine')->middleware('trainer.can:routines.assign');
+    // Regenerar una propuesta de recuperación con lo que el entrenador confirmó
+    // con el socio: publica por `routines.assign` y genera, así que las dos llaves.
+    Route::post('routines/{routine}/recovery/regenerate', [\App\Http\Controllers\Api\Trainer\IntegralPlanController::class, 'regenerateRecovery'])
+        ->whereNumber('routine')->middleware(['trainer.can:routines.assign', 'trainer.can:plans.generate']);
 
     // Revisar y corregir el borrador antes de entregarlo. El catálogo es el
     // MISMO que ve Iron IA: un segundo catálogo dejaría al entrenador eligiendo

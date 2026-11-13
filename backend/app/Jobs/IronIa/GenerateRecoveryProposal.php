@@ -13,8 +13,9 @@ use Illuminate\Queue\SerializesModels;
  * Una propuesta de recuperación de Iron IA (docs/iron-ia/RECUPERACION-RUTINAS.md).
  *
  * Por defecto `iron-ia:recover-routines` la ejecuta en el mismo proceso, de una
- * en una: producción no tiene worker para la cola `default`. Con `--queue` se
- * puede mandar a una cola que sí atienda un worker.
+ * en una: producción no tiene worker para la cola `default`. Si se encola, va al
+ * carril `commercial` (trabajo de fondo, sin prisa; su worker sí existe), nunca a
+ * `default`: con `--queue` el comando solo acepta la cola de un carril.
  *
  * Los reintentos NO son del job (un intento): los lleva la fila de la campaña
  * (RoutineRecoveryCampaign::MAX_ATTEMPTS), que es lo que hace idempotente
@@ -34,7 +35,11 @@ class GenerateRecoveryProposal implements ShouldQueue
         public readonly int $originalRoutineId,
         public readonly string $cutoffDate,
         public readonly int $maxTokens = 0,
-    ) {}
+    ) {
+        $lane = (array) config('queue.lanes.commercial');
+        $this->onConnection($lane['connection'] ?? 'commercial');
+        $this->onQueue($lane['queue'] ?? 'commercial');
+    }
 
     /** @return array<string,mixed> */
     public function handle(RoutineRecoveryCampaign $campaign): array

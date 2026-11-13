@@ -1,0 +1,38 @@
+#!/bin/bash
+# Migraciones de Iron Body con el rol DUEÑO de las tablas (iron), sin que su
+# contraseña viva en el .env ni en la caché de configuración (la app corre
+# como iron_app, solo DML). Uso: ironbody-migrate [--pretend] [--step=N] [--path=<dir> --realpath]
+#
+# Copia versionada (sin secretos) de /usr/local/bin/ironbody-migrate (root, 700).
+# Instalación y pruebas: docs/iron-ia/ops/probar-ironbody-migrate.sh.
+#
+# Cómo viajan las credenciales (13-11-2026). Antes iban en la línea de órdenes
+# (`sudo -u www-data env DB_OWNER_PASSWORD=… php artisan migrate`): cualquier
+# usuario las veía con `ps` mientras duraba la migración y sudo las dejaba
+# escritas en /var/log/auth.log y en el journal, porque registra la orden
+# entera. sudo NO sirve para pasarlas: con --preserve-env también las registra
+# («ENV=…», sudo 1.9.9, comprobado). Ahora se exportan SOLO dentro de un
+# subshell con un entorno limpio (como el env_reset de sudo) y se cambia a
+# www-data con setpriv, que no pasa por sudo ni por PAM y no registra nada:
+# no aparecen en ningún argv ni en ningún registro. La caché de configuración
+# se regenera después por sudo, sin ellas.
+set -euo pipefail
+cd /var/www/api/backend
+test -r /root/.ironbody-owner.env || { echo "falta /root/.ironbody-owner.env"; exit 1; }
+sudo -u www-data php artisan config:clear -q
+(
+  set -a; . /root/.ironbody-owner.env; set +a
+  [ -n "${DB_OWNER_USERNAME:-}" ] && [ -n "${DB_OWNER_PASSWORD:-}" ] \
+    || { echo "faltan DB_OWNER_USERNAME o DB_OWNER_PASSWORD en /root/.ironbody-owner.env"; exit 1; }
+  # Entorno limpio: solo lo imprescindible, como el de sudo.
+  for v in $(compgen -e); do
+    case "$v" in LANG|LC_ALL|TERM|DB_OWNER_USERNAME|DB_OWNER_PASSWORD) ;; *) unset "$v" 2>/dev/null || true ;; esac
+  done
+  export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin HOME=/var/www USER=www-data LOGNAME=www-data \
+    PGOPTIONS="-c lock_timeout=5s"
+  exec setpriv --reuid=www-data --regid=www-data --init-groups \
+    php artisan migrate --force --no-interaction --database=pgsql_owner "$@"
+)
+sudo -u www-data php artisan config:cache -q
+chmod 600 bootstrap/cache/config.php
+echo "config cache regenerada ($(stat -c %U:%G bootstrap/cache/config.php)); si cambiaron variables, ejecuta: sudo -u www-data php artisan queue:restart"

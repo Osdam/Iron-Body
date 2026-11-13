@@ -153,15 +153,23 @@ class MemberContextAssembler
         $campana = is_string($input[self::RECOVERY_KEY] ?? null) ? trim($input[self::RECOVERY_KEY]) : '';
         if ($campana !== '') {
             $contexto['sources']['recovery'] = $campana;
+            // Regeneración pedida por el entrenador con lo que confirmó con el
+            // socio: esos días ya NO son una propuesta, son su disponibilidad.
+            if (($input[self::RECOVERY_CONFIRMED_KEY] ?? false) === true) {
+                $contexto['sources']['recovery_confirmed'] = true;
+            }
         }
 
-        $contexto['sources']['trainer_input'] = array_values(array_diff(array_keys($input), [self::RECOVERY_KEY]));
+        $contexto['sources']['trainer_input'] = array_values(array_diff(array_keys($input), [self::RECOVERY_KEY, self::RECOVERY_CONFIRMED_KEY]));
 
         return $contexto;
     }
 
     /** Clave interna con la que el backend marca una propuesta de recuperación. */
     public const RECOVERY_KEY = 'recovery_campaign';
+
+    /** Clave interna: la regeneración lleva lo que el entrenador confirmó con el socio. */
+    public const RECOVERY_CONFIRMED_KEY = 'recovery_confirmed';
 
     /**
      * ¿Los días del plan los pidió quien genera (el entrenador, o una propuesta
@@ -240,7 +248,8 @@ class MemberContextAssembler
         $diasEntrenador = $contexto['training']['days_per_week'] ?? null;
         $diasMeta = $meta?->training_days_per_week;
         $recuperacion = $contexto['sources']['recovery'] ?? null;
-        if (is_int($diasEntrenador) && $diasEntrenador >= 1 && is_string($recuperacion)) {
+        $confirmada = ($contexto['sources']['recovery_confirmed'] ?? false) === true;
+        if (is_int($diasEntrenador) && $diasEntrenador >= 1 && is_string($recuperacion) && ! $confirmada) {
             // Propuesta de recuperación: los días NO están confirmados. No se
             // registran como disponibilidad del socio en ningún sitio; solo
             // orientan esta propuesta, que el entrenador revisa antes de publicar.

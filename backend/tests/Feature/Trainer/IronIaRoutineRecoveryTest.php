@@ -236,6 +236,31 @@ class IronIaRoutineRecoveryTest extends TestCase
         ));
     }
 
+    /**
+     * Lo que el entrenador confirma con el socio para publicar una propuesta
+     * (RECUPERACION-REVISION-CONTRATO.md §2): por defecto, lo que cuadra con ella.
+     */
+    private function confirmar(Routine $p, array $o = []): array
+    {
+        $p->refresh();
+        $nivel = mb_strtolower((string) $p->level);
+        $nivel = match (true) {
+            str_contains($nivel, 'princip') => 'principiante',
+            str_contains($nivel, 'avanz') => 'avanzado',
+            default => 'intermedio',
+        };
+
+        return ['recovery_confirmation' => array_merge([
+            'days_per_week' => (int) $p->days_per_week,
+            'session_minutes' => 180,
+            'training_level' => $nivel,
+            'objective' => 'Perder grasa',
+            'injuries' => 'Ninguna',
+            'availability_confirmed' => true,
+            'muscle_split_reviewed' => true,
+        ], $o)];
+    }
+
     private function propuestaDe(Routine $original): Routine
     {
         $item = IronIaRecoveryItem::where('original_routine_id', $original->id)->firstOrFail();
@@ -555,7 +580,7 @@ class IronIaRoutineRecoveryTest extends TestCase
         $p = $this->propuestaDe($original);
         $base = IronIaRecoveryItem::sole()->proposal_base_name;
 
-        $this->postJson("/api/trainer/routines/{$p->id}/publish", [], $this->asTrainer())->assertOk();
+        $this->postJson("/api/trainer/routines/{$p->id}/publish", $this->confirmar($p, ['session_minutes' => 60]), $this->asTrainer())->assertOk();
 
         $p->refresh();
         $this->assertTrue((bool) $p->is_assigned);
@@ -578,7 +603,13 @@ class IronIaRoutineRecoveryTest extends TestCase
         $this->assertSame([$p->id], $this->rutinasDelSocio($socio));
         $this->assertTrue(MemberRealtimeEvent::where('member_id', $socio->id)->where('type', RealtimeEvents::ROUTINE)->exists());
 
-        // Publicar otra vez no hace una segunda sustitución.
+        // Lo que confirmó queda guardado con la sustitución.
+        $this->assertSame(6, $item->confirmation['days_per_week']);
+        $this->assertSame(60, $item->confirmation['session_minutes']);
+        $this->assertTrue($item->confirmation['availability_confirmed']);
+        $this->assertNotNull($item->confirmed_at);
+
+        // Publicar otra vez (ya no es una propuesta pendiente: sin confirmación) no hace una segunda sustitución.
         $publicada = $item->published_at;
         $this->postJson("/api/trainer/routines/{$p->id}/publish", [], $this->asTrainer())->assertOk();
         $this->assertEquals($publicada, IronIaRecoveryItem::sole()->published_at);
@@ -593,27 +624,28 @@ class IronIaRoutineRecoveryTest extends TestCase
         $this->recuperar(['--execute' => true])->assertExitCode(0);
         $p = $this->propuestaDe($original);
 
-        // Confirmó 4 días con el socio: quita los dos últimos en el editor de siempre.
-        // Las filas van en el orden de los días (así las guarda la generación).
+        // Confirmó 4 días con el socio: quita los dos últimos en el editor de siempre,
+        // como la app: con el `day` que manda el servidor en cada fila.
         $filas = $this->getJson("/api/trainer/routines/{$p->id}", $this->asTrainer())->assertOk()->json('data.exercises');
-        $diaDeCadaFila = [];
-        foreach ((array) $p->days as $i => $d) {
-            foreach ((array) $d['exercises'] as $e) {
-                $diaDeCadaFila[] = [$i, (string) $d['name']];
-            }
-        }
-        $this->assertCount(count($filas), $diaDeCadaFila);
-        $cuerpo = [];
-        foreach ($filas as $k => $e) {
-            [$indice, $dia] = $diaDeCadaFila[$k];
-            if ($indice < 4) {
-                $cuerpo[] = ['id' => $e['id'], 'exercise_id' => $e['exercise_id'], 'sets' => $e['sets'], 'reps' => $e['reps'], 'day' => $dia];
-            }
-        }
+        $nombres = array_map(fn ($d) => (string) $d['name'], (array) $p->days);
+        $this->assertCount(6, $nombres);
+        $this->assertSame(array_sum(array_map(fn ($d) => count((array) $d['exercises']), (array) $p->days)), count($filas));
+        $this->assertNotContains(null, array_column($filas, 'day'), 'cada fila lleva su día');
+        $this->assertSame($nombres, array_values(array_unique(array_column($filas, 'day'))));
+
+        // Guardar sin tocar nada conserva los 6 días (antes quedaba en 1).
+        $tal = array_map(fn ($e) => ['id' => $e['id'], 'exercise_id' => $e['exercise_id'], 'sets' => $e['sets'], 'reps' => $e['reps'], 'day' => $e['day']], $filas);
+        $this->putJson("/api/trainer/routines/{$p->id}/exercises", ['exercises' => $tal], $this->asTrainer())->assertOk();
+        $this->assertSame(6, (int) $p->refresh()->days_per_week);
+
+        $cuerpo = array_values(array_filter($tal, fn ($e) => in_array($e['day'], array_slice($nombres, 0, 4), true)));
         $this->putJson("/api/trainer/routines/{$p->id}/exercises", ['exercises' => $cuerpo], $this->asTrainer())->assertOk();
         $this->assertSame(4, (int) $p->refresh()->days_per_week);
 
-        $this->postJson("/api/trainer/routines/{$p->id}/publish", [], $this->asTrainer())->assertOk();
+        // Con los 6 de la propuesta ya no cuadra; con los 4 confirmados, sí.
+        $this->postJson("/api/trainer/routines/{$p->id}/publish", $this->confirmar($p, ['days_per_week' => 6]), $this->asTrainer())
+            ->assertStatus(422)->assertJsonPath('code', 'recovery_days_mismatch');
+        $this->postJson("/api/trainer/routines/{$p->id}/publish", $this->confirmar($p, ['days_per_week' => 4]), $this->asTrainer())->assertOk();
 
         $this->assertSame(4, (int) $p->refresh()->days_per_week);
         $this->assertSame([$p->id], $this->rutinasDelSocio($socio));
@@ -657,7 +689,7 @@ class IronIaRoutineRecoveryTest extends TestCase
         $original = $this->rutinaIa($socio, 4);
         $this->recuperar(['--execute' => true])->assertExitCode(0);
         $recuperada = $this->propuestaDe($original);
-        $this->postJson("/api/trainer/routines/{$recuperada->id}/publish", [], $this->asTrainer())->assertOk();
+        $this->postJson("/api/trainer/routines/{$recuperada->id}/publish", $this->confirmar($recuperada), $this->asTrainer())->assertOk();
 
         // Nueva valoración y nueva generación con el formulario: nada lo bloquea.
         $valoracion = ProfessionalAssessment::create([
@@ -683,12 +715,14 @@ class IronIaRoutineRecoveryTest extends TestCase
         $socio = $this->socio();
 
         $this->postJson("/api/trainer/members/{$socio->id}/integral-plan/generate",
-            ['days_per_week' => 4, 'recovery_campaign' => 'colada'], $this->asTrainer())->assertStatus(201);
+            ['days_per_week' => 4, 'recovery_campaign' => 'colada', 'recovery_confirmed' => true], $this->asTrainer())->assertStatus(201);
 
         $run = NutritionAiRun::sole();
         $this->assertSame(IntegralPlanGenerationService::RUN_MODE, $run->mode);
         $this->assertArrayNotHasKey('recovery', $run->response_json);
         $this->assertNotContains('recovery_campaign', $run->response_json['trainer_context']['received'] ?? []);
+        $this->assertNotContains('recovery_confirmed', $run->response_json['trainer_context']['received'] ?? []);
+        $this->assertSame(0, IronIaRecoveryItem::count(), 'ninguna fila de campaña');
         $this->assertSame(1, NutritionGuide::count(), 'una generación normal guarda su guía');
     }
 
@@ -703,12 +737,19 @@ class IronIaRoutineRecoveryTest extends TestCase
         $lista = $this->getJson("/api/trainer/members/{$socio->id}/routines", $this->asTrainer())->assertOk()->json('data');
         $claves = array_map(fn ($r) => array_keys($r), $lista);
         $this->assertSame($claves[0], $claves[1], 'la propuesta y la original tienen las mismas claves');
+        // Una sola clave nueva, `recovery`, en todas: null en la original.
         $this->assertSame(
-            ['id', 'name', 'objective', 'level', 'days_per_week', 'status', 'is_assigned', 'published', 'generated_by_ai', 'source_assessment_id', 'exercises_count', 'days'],
+            ['id', 'name', 'objective', 'level', 'days_per_week', 'status', 'is_assigned', 'published', 'generated_by_ai', 'source_assessment_id', 'exercises_count', 'days', 'recovery'],
             $claves[0],
         );
+        $porId = array_column($lista, null, 'id');
+        $this->assertNull($porId[$original->id]['recovery']);
+        $this->assertSame([
+            'campaign' => self::CAMPANA, 'status' => 'proposed', 'needs_confirmation' => true, 'proposed_days' => 6,
+            'original_routine_id' => $original->id, 'original_days' => 4, 'regenerations_left' => 3,
+        ], $porId[$p->id]['recovery']);
 
-        $this->postJson("/api/trainer/routines/{$p->id}/publish", [], $this->asTrainer())->assertOk();
+        $this->postJson("/api/trainer/routines/{$p->id}/publish", $this->confirmar($p), $this->asTrainer())->assertOk();
         $app = $this->getJson('/api/app/routines/assigned', ['Authorization' => 'Bearer '.$socio->access_hash])->assertOk()->json('data.0');
         $this->assertSame($p->id, (int) $app['id']);
         $this->assertArrayHasKey('days', $app);
@@ -737,11 +778,19 @@ class IronIaRoutineRecoveryTest extends TestCase
         FakeIronIaOpenAi::install();
         $original = $this->rutinaIa($this->socio(), 4);
 
-        $this->recuperar(['--execute' => true, '--queue' => 'iron-ia-recovery', '--max-tokens' => 500000])->assertExitCode(0);
+        // Una cola sin carril (sin worker en producción) se rechaza antes de tocar nada.
+        $this->recuperar(['--execute' => true, '--queue' => 'default'])->assertExitCode(2);
+        Queue::assertNothingPushed();
+        $this->assertSame(0, IronIaRecoveryItem::count());
+
+        $this->recuperar(['--execute' => true, '--queue' => 'commercial', '--max-tokens' => 500000])->assertExitCode(0);
 
         Http::assertNothingSent();
-        Queue::assertPushedOn('iron-ia-recovery', GenerateRecoveryProposal::class,
-            fn (GenerateRecoveryProposal $j) => $j->originalRoutineId === $original->id && $j->maxTokens === 500000 && $j->campaign === self::CAMPANA);
+        Queue::assertPushedOn('commercial', GenerateRecoveryProposal::class,
+            fn (GenerateRecoveryProposal $j) => $j->originalRoutineId === $original->id && $j->maxTokens === 500000 && $j->campaign === self::CAMPANA
+                && $j->connection === 'commercial');
+        // Y por defecto el job ya va a su carril, nunca a `default`.
+        $this->assertSame(['commercial', 'commercial'], [(new GenerateRecoveryProposal('x', 1, self::CORTE))->connection, (new GenerateRecoveryProposal('x', 1, self::CORTE))->queue]);
     }
 
     public function test_el_tope_cuenta_tambien_los_intentos_fallidos(): void
@@ -772,7 +821,7 @@ class IronIaRoutineRecoveryTest extends TestCase
         $p = $this->propuestaDe($original);
         $this->postJson("/api/trainer/routines/{$p->id}/retire", [], $this->asTrainer())->assertOk();
 
-        $this->postJson("/api/trainer/routines/{$p->id}/publish", [], $this->asTrainer())->assertOk();
+        $this->postJson("/api/trainer/routines/{$p->id}/publish", $this->confirmar($p), $this->asTrainer())->assertOk();
 
         $this->assertSame(IronIaRecoveryItem::STATUS_PUBLISHED, IronIaRecoveryItem::sole()->status);
         $this->assertStringStartsNotWith('Propuesta:', $p->refresh()->name);
@@ -788,7 +837,7 @@ class IronIaRoutineRecoveryTest extends TestCase
         $p = $this->propuestaDe($original);
         $p->update(['name' => 'Rutina de Ana, 6 días']);
 
-        $this->postJson("/api/trainer/routines/{$p->id}/publish", [], $this->asTrainer())->assertOk();
+        $this->postJson("/api/trainer/routines/{$p->id}/publish", $this->confirmar($p), $this->asTrainer())->assertOk();
 
         $this->assertSame('Rutina de Ana, 6 días', $p->refresh()->name);
     }
@@ -832,7 +881,7 @@ class IronIaRoutineRecoveryTest extends TestCase
         $this->deleteJson("/api/app/routines/{$p->id}", [], $auth)->assertForbidden();
 
         // La original, ya retirada tras publicar: tampoco; su historial se queda.
-        $this->postJson("/api/trainer/routines/{$p->id}/publish", [], $this->asTrainer())->assertOk();
+        $this->postJson("/api/trainer/routines/{$p->id}/publish", $this->confirmar($p), $this->asTrainer())->assertOk();
         $this->deleteJson("/api/app/routines/{$original->id}", [], $auth)->assertForbidden();
         $this->assertTrue(Routine::whereKey($original->id)->exists());
         $this->assertGreaterThan(0, RoutineExercise::where('routine_id', $original->id)->count());
@@ -840,5 +889,278 @@ class IronIaRoutineRecoveryTest extends TestCase
         // La que creó él sí la puede borrar, como siempre.
         $this->deleteJson("/api/app/routines/{$propia->id}", [], $auth)->assertOk();
         $this->assertFalse(Routine::whereKey($propia->id)->exists());
+    }
+
+    // ── Revisión del entrenador antes de publicar (RECUPERACION-REVISION-CONTRATO.md) ──
+
+    /** Nada cambió: la propuesta sigue en borrador y el socio ve su original. */
+    private function nadaPublicado(Member $socio, Routine $original, Routine $p): void
+    {
+        $this->assertFalse((bool) $p->refresh()->is_assigned);
+        $this->assertSame('Activa', $original->refresh()->status);
+        $this->assertSame(IronIaRecoveryItem::STATUS_PROPOSED, IronIaRecoveryItem::sole()->status);
+        $this->assertNull(IronIaRecoveryItem::sole()->confirmation);
+        $this->assertSame([$original->id], $this->rutinasDelSocio($socio));
+    }
+
+    public function test_publicar_una_propuesta_sin_confirmar_no_publica_nada(): void
+    {
+        FakeIronIaOpenAi::install();
+        $socio = $this->socio();
+        $original = $this->rutinaIa($socio, 4);
+        $this->recuperar(['--execute' => true])->assertExitCode(0);
+        $p = $this->propuestaDe($original);
+
+        // La 2.0.10 sin parche publica sin cuerpo: se rechaza con un motivo legible.
+        $this->postJson("/api/trainer/routines/{$p->id}/publish", [], $this->asTrainer())
+            ->assertStatus(422)->assertJsonPath('code', 'recovery_confirmation_required')->assertJsonPath('ok', false);
+        // Mirar los seis días no basta: las dos casillas tienen que estar marcadas.
+        $this->postJson("/api/trainer/routines/{$p->id}/publish", $this->confirmar($p, ['availability_confirmed' => false]), $this->asTrainer())
+            ->assertStatus(422)->assertJsonPath('code', 'recovery_confirmation_required');
+        $this->postJson("/api/trainer/routines/{$p->id}/publish", $this->confirmar($p, ['muscle_split_reviewed' => false]), $this->asTrainer())
+            ->assertStatus(422)->assertJsonPath('code', 'recovery_confirmation_required');
+        // Faltan datos: validación de Laravel.
+        $this->postJson("/api/trainer/routines/{$p->id}/publish", ['recovery_confirmation' => ['days_per_week' => 6]], $this->asTrainer())
+            ->assertStatus(422)->assertJsonValidationErrors(['recovery_confirmation.session_minutes', 'recovery_confirmation.training_level', 'recovery_confirmation.objective', 'recovery_confirmation.injuries']);
+
+        $this->nadaPublicado($socio, $original, $p);
+    }
+
+    public function test_los_dias_el_nivel_y_los_minutos_tienen_que_cuadrar(): void
+    {
+        FakeIronIaOpenAi::install();
+        $socio = $this->socio();
+        $original = $this->rutinaIa($socio, 4);
+        $this->recuperar(['--execute' => true])->assertExitCode(0);
+        $p = $this->propuestaDe($original);
+        $this->assertSame(6, (int) $p->days_per_week);
+
+        $r = $this->postJson("/api/trainer/routines/{$p->id}/publish", $this->confirmar($p, ['days_per_week' => 4]), $this->asTrainer())
+            ->assertStatus(422)->assertJsonPath('code', 'recovery_days_mismatch');
+        $this->assertSame('La rutina tiene 6 días y el socio puede 4: ajústala en el editor o regénerala con 4 días.', $r->json('message'));
+
+        $otro = $this->confirmar($p)['recovery_confirmation']['training_level'] === 'avanzado' ? 'principiante' : 'avanzado';
+        $this->postJson("/api/trainer/routines/{$p->id}/publish", $this->confirmar($p, ['training_level' => $otro]), $this->asTrainer())
+            ->assertStatus(422)->assertJsonPath('code', 'recovery_level_mismatch');
+
+        $r = $this->postJson("/api/trainer/routines/{$p->id}/publish", $this->confirmar($p, ['session_minutes' => 20]), $this->asTrainer())
+            ->assertStatus(422)->assertJsonPath('code', 'recovery_minutes_mismatch');
+        $this->assertStringContainsString('el socio tiene 20', $r->json('message'));
+
+        $this->nadaPublicado($socio, $original, $p);
+
+        // Siete días confirmados caben en una rutina de seis (un día de descanso).
+        $this->postJson("/api/trainer/routines/{$p->id}/publish", $this->confirmar($p, ['days_per_week' => 7]), $this->asTrainer())->assertOk();
+        $this->assertSame(7, IronIaRecoveryItem::sole()->confirmation['days_per_week']);
+        $this->assertSame([$p->id], $this->rutinasDelSocio($socio));
+    }
+
+    public function test_regenerar_con_lo_confirmado_deja_una_propuesta_nueva_para_revisar(): void
+    {
+        FakeIronIaOpenAi::install();
+        $socio = $this->socio();
+        $original = $this->rutinaIa($socio, 4);
+        $this->recuperar(['--execute' => true])->assertExitCode(0);
+        $p = $this->propuestaDe($original);
+        $corridas = NutritionAiRun::count();
+
+        $r = $this->postJson("/api/trainer/routines/{$p->id}/recovery/regenerate", [
+            'days_per_week' => 4, 'session_minutes' => 45, 'training_level' => ' Intermedio ',
+            'objective' => 'Perder  grasa', 'injuries' => 'Rodilla derecha operada', 'observations' => 'Prefiere máquinas',
+        ], $this->asTrainer())->assertStatus(201)->assertJsonPath('ok', true);
+
+        $nueva = Routine::findOrFail($r->json('data.id'));
+        $this->assertNotSame($p->id, $nueva->id);
+        $this->assertSame(4, (int) $nueva->days_per_week);
+        $this->assertStringStartsWith('Propuesta: 4 días por confirmar · ', $nueva->name);
+        $this->assertFalse((bool) $nueva->is_assigned, 'regenerar no publica');
+        $this->assertSame($this->trainer->id, (int) $nueva->trainer_id);
+        $this->assertSame(['campaign' => self::CAMPANA, 'status' => 'proposed', 'needs_confirmation' => true, 'proposed_days' => 4,
+            'original_routine_id' => $original->id, 'original_days' => 4, 'regenerations_left' => 2], $r->json('data.recovery'));
+
+        // La anterior queda retirada, no borrada; la original sigue siendo la del socio.
+        $this->assertSame('Retirada', $p->refresh()->status);
+        $this->assertTrue(Routine::whereKey($p->id)->exists());
+        $this->assertSame([$original->id], $this->rutinasDelSocio($socio));
+
+        // Y ya no se publica por ninguna vía: ni el entrenador, ni la administración, ni se regenera.
+        $this->postJson("/api/trainer/routines/{$p->id}/publish", $this->confirmar($p), $this->asTrainer())
+            ->assertStatus(422)->assertJsonPath('code', 'recovery_superseded');
+        $this->postJson("/api/trainer/routines/{$p->id}/publish", [], $this->asTrainer())
+            ->assertStatus(422)->assertJsonPath('code', 'recovery_superseded');
+        $this->patchJson("/api/routines/{$p->id}/assign", ['assignedMemberId' => $socio->id], $this->adminHeaders())
+            ->assertStatus(422)->assertJsonPath('code', 'recovery_publish_from_trainer');
+        $this->postJson("/api/trainer/routines/{$p->id}/recovery/regenerate", [
+            'days_per_week' => 4, 'session_minutes' => 45, 'training_level' => 'intermedio', 'objective' => 'x', 'injuries' => 'Ninguna',
+        ], $this->asTrainer())->assertNotFound();
+        $this->assertSame([$original->id], $this->rutinasDelSocio($socio));
+        $lista = array_column($this->getJson("/api/trainer/members/{$socio->id}/routines", $this->asTrainer())->assertOk()->json('data'), null, 'id');
+        $this->assertSame('superseded', $lista[$p->id]['recovery']['status']);
+        $this->assertFalse($lista[$p->id]['recovery']['needs_confirmation']);
+        $this->assertSame($nueva->id, $lista[$p->id]['recovery']['replaced_by_routine_id']);
+        $this->assertSame('proposed', $lista[$nueva->id]['recovery']['status']);
+
+        // La corrida va por la campaña, con los días como disponibilidad confirmada.
+        $this->assertSame($corridas + 1, NutritionAiRun::count());
+        $run = NutritionAiRun::latest('id')->first();
+        $this->assertSame(IntegralPlanGenerationService::RECOVERY_RUN_MODE, $run->mode);
+        $this->assertSame(self::CAMPANA, $run->response_json['recovery'] ?? null);
+        $this->assertNotContains('recovery_confirmed', $run->response_json['trainer_context']['received'] ?? []);
+        $this->assertSame((int) $run->id, (int) IronIaRecoveryItem::sole()->run_id);
+
+        // Y se publica con los mismos datos confirmados: la original se retira.
+        $this->postJson("/api/trainer/routines/{$nueva->id}/publish", $this->confirmar($nueva, ['days_per_week' => 4, 'session_minutes' => 180]), $this->asTrainer())->assertOk();
+        $this->assertSame('Retirada', $original->refresh()->status);
+        $this->assertSame([$nueva->id], $this->rutinasDelSocio($socio));
+        $this->assertSame(IronIaRecoveryItem::STATUS_PUBLISHED, IronIaRecoveryItem::sole()->status);
+
+        // Publicada, ya no se regenera.
+        $this->postJson("/api/trainer/routines/{$nueva->id}/recovery/regenerate", [
+            'days_per_week' => 3, 'session_minutes' => 45, 'training_level' => 'intermedio', 'objective' => 'x', 'injuries' => 'Ninguna',
+        ], $this->asTrainer())->assertStatus(422)->assertJsonPath('code', 'recovery_not_pending');
+    }
+
+    public function test_regenerar_tiene_tope_dueno_y_solo_vale_para_propuestas(): void
+    {
+        FakeIronIaOpenAi::install();
+        $socio = $this->socio();
+        $original = $this->rutinaIa($socio, 4);
+        $this->recuperar(['--execute' => true])->assertExitCode(0);
+        $p = $this->propuestaDe($original);
+        $cuerpo = ['days_per_week' => 4, 'session_minutes' => 45, 'training_level' => 'intermedio', 'objective' => 'Salud', 'injuries' => 'Ninguna'];
+
+        // Validación: lo mismo que el formulario, pero obligatorio.
+        $this->postJson("/api/trainer/routines/{$p->id}/recovery/regenerate", ['days_per_week' => 9], $this->asTrainer())
+            ->assertStatus(422)->assertJsonValidationErrors(['days_per_week', 'session_minutes', 'training_level', 'objective', 'injuries']);
+
+        // Una rutina normal no es una propuesta.
+        $this->postJson("/api/trainer/routines/{$original->id}/recovery/regenerate", $cuerpo, $this->asTrainer())->assertNotFound();
+
+        // Otro entrenador no la toca.
+        $p->update(['trainer_id' => Trainer::create(['full_name' => 'Otro', 'document' => 'T-otro', 'status' => 'active'])->id]);
+        $this->postJson("/api/trainer/routines/{$p->id}/recovery/regenerate", $cuerpo, $this->asTrainer())->assertForbidden();
+        $p->update(['trainer_id' => $this->trainer->id]);
+
+        // Sin regeneraciones: 429 y sin llamar al modelo.
+        IronIaRecoveryItem::query()->update(['regenerations' => IronIaRecoveryItem::MAX_REGENERATIONS]);
+        $corridas = NutritionAiRun::count();
+        $this->postJson("/api/trainer/routines/{$p->id}/recovery/regenerate", $cuerpo, $this->asTrainer())
+            ->assertStatus(429)->assertJsonPath('code', 'recovery_regeneration_limit');
+        $this->assertSame($corridas, NutritionAiRun::count());
+        $this->assertSame((int) $p->id, (int) IronIaRecoveryItem::sole()->proposal_routine_id);
+    }
+
+    public function test_un_fallo_al_regenerar_conserva_la_propuesta_anterior(): void
+    {
+        // El modelo responde algo inservible (sin días) solo al regenerar.
+        $fallar = false;
+        FakeIronIaOpenAi::install(function (string $schema, array $user, array $content) use (&$fallar) {
+            if ($fallar) {
+                $content['routine']['days'] = [];
+            }
+
+            return ['content' => $content];
+        });
+        $socio = $this->socio();
+        $original = $this->rutinaIa($socio, 4);
+        $this->recuperar(['--execute' => true])->assertExitCode(0);
+        $p = $this->propuestaDe($original);
+
+        $fallar = true;
+        $r = $this->postJson("/api/trainer/routines/{$p->id}/recovery/regenerate", [
+            'days_per_week' => 4, 'session_minutes' => 45, 'training_level' => 'intermedio', 'objective' => 'Salud', 'injuries' => 'Ninguna',
+        ], $this->asTrainer())->assertStatus(422)->assertJsonPath('ok', false)->assertJsonPath('retryable', true);
+        $this->assertStringStartsWith('ai_', (string) $r->json('code'));
+
+        $item = IronIaRecoveryItem::sole();
+        $this->assertSame((int) $p->id, (int) $item->proposal_routine_id);
+        $this->assertSame(0, (int) $item->regenerations, 'un fallo no gasta una regeneración');
+        $this->assertSame(1, (int) $item->regeneration_attempts, 'pero sí un intento: se paga igual');
+        $this->assertSame(3, $item->toApi()['regenerations_left']);
+        $this->assertNotSame('Retirada', $p->refresh()->status);
+    }
+
+    public function test_repetir_una_regeneracion_que_falla_tiene_tope_de_gasto(): void
+    {
+        // Revisión de seguridad del 13-11: sin tope de intentos, repetir un fallo era gasto sin límite.
+        $fallar = false;
+        FakeIronIaOpenAi::install(function (string $schema, array $user, array $content) use (&$fallar) {
+            if ($fallar) {
+                $content['routine']['days'] = [];
+            }
+
+            return ['content' => $content];
+        });
+        $socio = $this->socio();
+        $original = $this->rutinaIa($socio, 4);
+        $this->recuperar(['--execute' => true])->assertExitCode(0);
+        $p = $this->propuestaDe($original);
+        $cuerpo = ['days_per_week' => 4, 'session_minutes' => 45, 'training_level' => 'intermedio', 'objective' => 'Salud', 'injuries' => 'Ninguna'];
+
+        $fallar = true;
+        for ($i = 1; $i <= IronIaRecoveryItem::MAX_REGENERATION_ATTEMPTS; $i++) {
+            $this->postJson("/api/trainer/routines/{$p->id}/recovery/regenerate", $cuerpo, $this->asTrainer())->assertStatus(422);
+        }
+        $llamadas = count(Http::recorded());
+        $corridas = NutritionAiRun::count();
+
+        // Agotados los intentos: ni fallando ni acertando se vuelve a llamar al modelo.
+        $this->postJson("/api/trainer/routines/{$p->id}/recovery/regenerate", $cuerpo, $this->asTrainer())
+            ->assertStatus(429)->assertJsonPath('code', 'recovery_regeneration_limit');
+        $fallar = false;
+        $this->postJson("/api/trainer/routines/{$p->id}/recovery/regenerate", $cuerpo, $this->asTrainer())
+            ->assertStatus(429)->assertJsonPath('code', 'recovery_regeneration_limit');
+        $this->assertSame($llamadas, count(Http::recorded()));
+        $this->assertSame($corridas, NutritionAiRun::count());
+
+        $item = IronIaRecoveryItem::sole();
+        $this->assertSame(IronIaRecoveryItem::MAX_REGENERATION_ATTEMPTS, (int) $item->regeneration_attempts);
+        $this->assertSame(0, (int) $item->regenerations);
+        $this->assertSame((int) $p->id, (int) $item->proposal_routine_id, 'la propuesta sigue siendo la misma');
+        $this->assertSame(0, $item->toApi()['regenerations_left']);
+
+        // Sigue pudiendo publicarla tal cual (o ajustarla en el editor).
+        $this->postJson("/api/trainer/routines/{$p->id}/publish", $this->confirmar($p), $this->asTrainer())->assertOk();
+    }
+
+    public function test_regenerar_pide_tambien_la_llave_de_generar(): void
+    {
+        FakeIronIaOpenAi::install();
+        $socio = $this->socio();
+        $original = $this->rutinaIa($socio, 4);
+        $this->recuperar(['--execute' => true])->assertExitCode(0);
+        $p = $this->propuestaDe($original);
+
+        // Un rol que publica rutinas pero no genera planes: no regenera (y no llama al modelo).
+        $permisos = config('trainer.permissions');
+        $rol = $this->trainer->role ?? TrainerRole::FLOOR;
+        $permisos[$rol] = array_values(array_diff((array) ($permisos[$rol] ?? []), ['plans.generate']));
+        config(['trainer.permissions' => $permisos]);
+        $llamadas = count(Http::recorded());
+
+        $this->postJson("/api/trainer/routines/{$p->id}/recovery/regenerate", [
+            'days_per_week' => 4, 'session_minutes' => 45, 'training_level' => 'intermedio', 'objective' => 'Salud', 'injuries' => 'Ninguna',
+        ], $this->asTrainer())->assertForbidden();
+        $this->assertSame($llamadas, count(Http::recorded()));
+        $this->assertSame(0, (int) IronIaRecoveryItem::sole()->regeneration_attempts);
+
+        // Publicar (routines.assign) sigue funcionando.
+        $this->postJson("/api/trainer/routines/{$p->id}/publish", $this->confirmar($p), $this->asTrainer())->assertOk();
+    }
+
+    public function test_el_crm_no_publica_una_propuesta_pendiente(): void
+    {
+        FakeIronIaOpenAi::install();
+        $socio = $this->socio();
+        $original = $this->rutinaIa($socio, 4);
+        $this->recuperar(['--execute' => true])->assertExitCode(0);
+        $p = $this->propuestaDe($original);
+
+        $this->patchJson("/api/routines/{$p->id}/assign", ['assignedMemberId' => $socio->id], $this->adminHeaders())
+            ->assertStatus(422)->assertJsonPath('code', 'recovery_publish_from_trainer');
+        $this->nadaPublicado($socio, $original, $p);
+
+        // Una rutina normal se sigue asignando como siempre.
+        $this->patchJson("/api/routines/{$original->id}/assign", ['assignedMemberId' => $socio->id], $this->adminHeaders())->assertOk();
     }
 }

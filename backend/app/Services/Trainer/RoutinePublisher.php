@@ -11,6 +11,7 @@ use App\Models\Trainer;
 use App\Services\RealtimeEvents;
 use App\Services\Trainer\Recovery\RoutineRecoveryCampaign;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * Hace visible una rutina en «Mis Rutinas» del socio.
@@ -64,16 +65,23 @@ class RoutinePublisher
         }
 
         $retirada = DB::transaction(function () use ($routine) {
+            // Orden de bloqueo único en todo el flujo: primero la fila de la
+            // campaña, después la rutina (publish y regenerate hacen lo mismo).
+            // Al revés, publicar y retirar a la vez se interbloqueaban (40P01).
+            $item = IronIaRecoveryItem::query()
+                ->where('proposal_routine_id', $routine->getKey())
+                ->lockForUpdate()
+                ->first();
+
             $routine->update([
                 'is_assigned' => false,
                 'status' => 'Retirada',
             ]);
 
             // Si era una propuesta de recuperación sin publicar, el entrenador la descartó.
-            IronIaRecoveryItem::query()
-                ->where('proposal_routine_id', $routine->getKey())
-                ->where('status', IronIaRecoveryItem::STATUS_PROPOSED)
-                ->update(['status' => IronIaRecoveryItem::STATUS_DISCARDED, 'discarded_at' => now(), 'updated_at' => now()]);
+            if ($item !== null && $item->status === IronIaRecoveryItem::STATUS_PROPOSED) {
+                $item->forceFill(['status' => IronIaRecoveryItem::STATUS_DISCARDED, 'discarded_at' => now()])->save();
+            }
 
             // Solo la ASIGNACIÓN se va: es la fila que decide si el socio la ve.
             MemberRoutineAssignment::where('routine_id', $routine->getKey())->delete();
@@ -89,7 +97,12 @@ class RoutinePublisher
         return $retirada;
     }
 
-    public function publish(Routine $routine, Trainer $trainer): Routine
+    /**
+     * @param  array<string,mixed>|null  $recoveryConfirmation  obligatoria si la rutina es una propuesta
+     *                                                          de recuperación pendiente (RECUPERACION-REVISION-CONTRATO.md §2);
+     *                                                          en cualquier otra rutina se ignora
+     */
+    public function publish(Routine $routine, Trainer $trainer, ?array $recoveryConfirmation = null): Routine
     {
         $member = Member::find($routine->member_id);
 
@@ -125,7 +138,29 @@ class RoutinePublisher
             );
         }
 
-        $publicada = DB::transaction(function () use ($routine, $member, $trainer) {
+        $publicada = DB::transaction(function () use ($routine, $member, $trainer, $recoveryConfirmation) {
+            // La fila de la campaña se bloquea ANTES de tocar nada: si es una
+            // propuesta pendiente, la confirmación se comprueba aquí y, si no
+            // cuadra, la excepción deshace la transacción entera (nada publicado).
+            $item = IronIaRecoveryItem::query()
+                ->where('proposal_routine_id', $routine->getKey())
+                ->lockForUpdate()
+                ->first();
+            if ($item !== null && $item->isPending()) {
+                // Y después la rutina: el editor no puede cambiarla entre la
+                // comprobación y la publicación.
+                $bloqueada = Routine::query()->whereKey($routine->getKey())->lockForUpdate()->firstOrFail();
+                $recoveryConfirmation = $this->assertRecoveryConfirmation($bloqueada, $recoveryConfirmation);
+            }
+            // Una propuesta que el entrenador regeneró quedó sustituida: publicarla
+            // pondría al socio una rutina sin revisar junto a la original.
+            if ($item === null && IronIaRecoveryItem::supersededBy((int) $routine->getKey(), lock: true) !== null) {
+                throw new IntegralPlanException(
+                    'Esta propuesta se sustituyó por otra más reciente al regenerarla: revisa y publica la última.',
+                    'recovery_superseded',
+                );
+            }
+
             $routine->update([
                 'is_assigned' => true,
                 'assigned_member_id' => $member->getKey(),
@@ -133,7 +168,7 @@ class RoutinePublisher
                 'status' => 'Activa',
             ]);
 
-            $this->replaceRecoveredOriginal($routine, $trainer);
+            $this->replaceRecoveredOriginal($routine, $trainer, $item, $recoveryConfirmation);
 
             // `firstOrCreate`: publicar dos veces no duplica la asignación —hay
             // un único (member_id, routine_id)— y no es un error, es alguien
@@ -166,15 +201,11 @@ class RoutinePublisher
      *   entrenador: la propuesta la sustituye por decisión aprobada de la campaña.
      * - Una rutina que no es una propuesta de recuperación no cambia en nada.
      */
-    private function replaceRecoveredOriginal(Routine $routine, Trainer $trainer): void
+    private function replaceRecoveredOriginal(Routine $routine, Trainer $trainer, ?IronIaRecoveryItem $item, ?array $confirmation): void
     {
-        $item = IronIaRecoveryItem::query()
-            ->where('proposal_routine_id', $routine->getKey())
-            ->lockForUpdate()
-            ->first();
         // «discarded» también: si el entrenador la retiró y luego decide
         // publicarla, es la misma sustitución (sin la marca y sin la original).
-        if ($item === null || ! in_array($item->status, [IronIaRecoveryItem::STATUS_PROPOSED, IronIaRecoveryItem::STATUS_DISCARDED], true)) {
+        if ($item === null || ! $item->isPending()) {
             return;
         }
 
@@ -202,7 +233,93 @@ class RoutinePublisher
             'published_at' => now(),
             'published_by_trainer_id' => $trainer->getKey(),
             'original_retired_at' => $retirada,
+            'confirmation' => $confirmation,
+            'confirmed_at' => now(),
         ])->save();
+    }
+
+    /** El nivel en una de las tres formas canónicas, o null si no se reconoce. */
+    private static function canonicalLevel(string $v): ?string
+    {
+        $t = mb_strtolower(Str::ascii($v));
+
+        return match (true) {
+            str_contains($t, 'princip') || str_contains($t, 'inicia') => 'principiante',
+            str_contains($t, 'interm') => 'intermedio',
+            str_contains($t, 'avanz') => 'avanzado',
+            default => null,
+        };
+    }
+
+    /**
+     * Lo que el entrenador confirmó con el socio tiene que cuadrar con la rutina.
+     * Si no, NO se publica: o la ajusta en el editor, o la regenera con lo
+     * confirmado (RECUPERACION-REVISION-CONTRATO.md §2-§3).
+     *
+     * @param  array<string,mixed>|null  $c
+     * @return array<string,mixed> lo que se guarda como confirmación
+     *
+     * @throws IntegralPlanException
+     */
+    private function assertRecoveryConfirmation(Routine $routine, ?array $c): array
+    {
+        if ($c === null || $c === []) {
+            throw new IntegralPlanException(
+                'Es una propuesta de recuperación: antes de publicarla, confirma con el socio sus días reales, los minutos por sesión, su nivel, su objetivo y sus lesiones.',
+                'recovery_confirmation_required',
+            );
+        }
+        if (($c['availability_confirmed'] ?? null) !== true || ($c['muscle_split_reviewed'] ?? null) !== true) {
+            throw new IntegralPlanException(
+                'Falta confirmar que hablaste con el socio de su disponibilidad y que revisaste el reparto muscular, los ejercicios y la recuperación.',
+                'recovery_confirmation_required',
+            );
+        }
+
+        $dias = (int) $routine->days_per_week;
+        $confirmados = (int) $c['days_per_week'];
+        $esperados = min(MemberContextAssembler::MAX_PLAN_DAYS, $confirmados);
+        if ($esperados !== $dias) {
+            throw new IntegralPlanException(
+                "La rutina tiene {$dias} ".($dias === 1 ? 'día' : 'días')." y el socio puede {$confirmados}: ajústala en el editor o regénerala con {$confirmados} ".($confirmados === 1 ? 'día' : 'días').'.',
+                'recovery_days_mismatch',
+            );
+        }
+
+        $nivel = (string) $c['training_level'];
+        // El nivel de la rutina lo escribe el ensamblador (uno de los tres) o el
+        // modelo (texto libre): se compara normalizado y, si no se reconoce, no
+        // se bloquea por él.
+        $nivelRutina = self::canonicalLevel((string) $routine->level);
+        if ($nivelRutina !== null && $nivelRutina !== $nivel) {
+            throw new IntegralPlanException(
+                "La rutina es de nivel {$routine->level} y confirmaste {$nivel}: regénerala con el nivel correcto.",
+                'recovery_level_mismatch',
+            );
+        }
+
+        $minutos = (int) $c['session_minutes'];
+        $peor = 0.0;
+        foreach ((array) $routine->days as $dia) {
+            $peor = max($peor, SessionTimeBudget::estimateMinutes((array) ($dia['exercises'] ?? []), $minutos));
+        }
+        if ($peor > $minutos * SessionTimeBudget::TOLERANCE) {
+            $texto = str_replace('.', ',', (string) round($peor, 1));
+            throw new IntegralPlanException(
+                "Algún día dura unos {$texto} min y el socio tiene {$minutos}: ajusta la rutina en el editor o regénerala con {$minutos} minutos.",
+                'recovery_minutes_mismatch',
+            );
+        }
+
+        return [
+            'days_per_week' => $confirmados,
+            'session_minutes' => $minutos,
+            'training_level' => $nivel,
+            'objective' => (string) $c['objective'],
+            'injuries' => (string) $c['injuries'],
+            'availability_confirmed' => true,
+            'muscle_split_reviewed' => true,
+        ];
     }
 
     /**

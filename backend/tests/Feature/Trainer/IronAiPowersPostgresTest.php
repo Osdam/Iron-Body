@@ -59,7 +59,13 @@ class IronAiPowersPostgresTest extends TestCase
 
     public function test_las_dos_migraciones_se_deshacen_y_se_rehacen(): void
     {
-        Artisan::call('migrate:rollback', ['--step' => 2, '--force' => true]);
+        // Por NOMBRE, no «las dos últimas»: después llegaron otras migraciones
+        // (las de la recuperación de Iron IA) y --step=2 deshacía esas.
+        $suyas = [
+            database_path('migrations/2026_10_30_100001_add_iron_ai_powers_to_membership_ai_capabilities.php'),
+            database_path('migrations/2026_10_30_100002_add_power_usage_to_nutrition_ai_runs.php'),
+        ];
+        Artisan::call('migrate:rollback', ['--path' => $suyas, '--realpath' => true, '--force' => true]);
         $this->assertFalse(Schema::hasColumn('membership_ai_capabilities', 'nutrition_power'));
         $this->assertFalse(Schema::hasColumn('nutrition_ai_runs', 'total_tokens'));
         $this->assertSame(0, (int) DB::selectOne("select count(*) as n from pg_constraint where conname like 'membership_ai_capabilities_%_power_chk'")->n);

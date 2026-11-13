@@ -205,6 +205,148 @@ class RoutineRecoveryCampaign
             ->sum('total_tokens');
     }
 
+    /**
+     * El entrenador regenera la propuesta con lo que confirmó con el socio
+     * (RECUPERACION-REVISION-CONTRATO.md §3): una propuesta nueva en borrador y
+     * la anterior retirada, sin borrarse. Va por la campaña: no gasta los cupos
+     * del entrenador; el tope es MAX_REGENERATIONS por propuesta.
+     *
+     * @param  array<string,mixed>  $confirmed  days_per_week, session_minutes, training_level, objective, injuries[, observations]
+     *
+     * @throws IntegralPlanException
+     */
+    public function regenerate(IronIaRecoveryItem $item, Trainer $trainer, array $confirmed): Routine
+    {
+        if (! $item->isPending()) {
+            throw new IntegralPlanException('Esta propuesta ya está publicada: ya no se regenera.', 'recovery_not_pending');
+        }
+        $member = Member::find($item->member_id);
+        if (! $member instanceof Member) {
+            throw new IntegralPlanException('El socio de esta propuesta ya no existe.', 'routine_without_member');
+        }
+
+        // Reserva ATÓMICA de un intento ANTES de llamar al modelo: la condición y
+        // el incremento van en la misma sentencia, así que dos peticiones a la vez
+        // no pasan las dos con el último intento libre, y un intento que falla
+        // también cuenta (se paga igual).
+        $reservado = IronIaRecoveryItem::query()
+            ->whereKey($item->getKey())
+            ->whereIn('status', [IronIaRecoveryItem::STATUS_PROPOSED, IronIaRecoveryItem::STATUS_DISCARDED])
+            ->where('regenerations', '<', IronIaRecoveryItem::MAX_REGENERATIONS)
+            ->where('regeneration_attempts', '<', IronIaRecoveryItem::MAX_REGENERATION_ATTEMPTS)
+            ->update(['regeneration_attempts' => DB::raw('regeneration_attempts + 1'), 'updated_at' => now()]);
+        if ($reservado === 0) {
+            $item->refresh();
+            if (! $item->isPending()) {
+                throw new IntegralPlanException('Esta propuesta ya está publicada: ya no se regenera.', 'recovery_not_pending');
+            }
+            throw new IntegralPlanException(
+                'Ya no quedan regeneraciones para esta propuesta. Ajústala en el editor o genera un plan nuevo con el formulario.',
+                'recovery_regeneration_limit',
+            );
+        }
+
+        $dias = (int) $confirmed['days_per_week'];
+        // FUERA de cualquier transacción: la llamada al modelo tarda segundos.
+        try {
+            $res = $this->generator->generateRecoveryProposal($trainer, $member, $item->campaign, $dias, $confirmed);
+        } catch (IntegralPlanException $e) {
+            // Otra generación en curso para el socio: no se llamó al modelo, así
+            // que el intento se devuelve (un 409 es reintentable y no se paga).
+            if ($e->code_ === 'generation_in_progress') {
+                IronIaRecoveryItem::query()->whereKey($item->getKey())->where('regeneration_attempts', '>', 0)
+                    ->update(['regeneration_attempts' => DB::raw('regeneration_attempts - 1'), 'updated_at' => now()]);
+            }
+            throw $e;
+        }
+        $nueva = $res['routine'];
+        $run = $res['run'];
+
+        try {
+            $resultado = $this->linkRegenerated($item, $nueva, $run);
+        } catch (Throwable $e) {
+            // La rutina nueva ya existe (la guardó la generación). Si no se pudo
+            // enlazar, se retira y se marca como sustituida: un borrador suelto
+            // se podría publicar por la vía normal, sin confirmación.
+            $nueva->update(['status' => 'Retirada']);
+            DB::transaction(function () use ($item, $nueva) {
+                $fila = IronIaRecoveryItem::query()->whereKey($item->getKey())->lockForUpdate()->first();
+                if ($fila !== null) {
+                    $fila->forceFill(['superseded_routine_ids' => array_values(array_unique([
+                        ...array_map('intval', (array) $fila->superseded_routine_ids), (int) $nueva->id,
+                    ]))])->save();
+                }
+            });
+            throw $e;
+        }
+
+        if ($resultado === null) {
+            $item->refresh();
+            if ($item->isPending()) {
+                throw new IntegralPlanException(
+                    'Otra regeneración simultánea gastó la última: la nueva queda retirada. Revisa la propuesta vigente.',
+                    'recovery_regeneration_limit',
+                );
+            }
+            throw new IntegralPlanException('Esta propuesta se publicó mientras se regeneraba: la nueva queda retirada.', 'recovery_not_pending');
+        }
+
+        return $resultado;
+    }
+
+    /**
+     * Enlaza la propuesta regenerada con la fila (o, si ya no procede, la deja
+     * retirada y sustituida y devuelve null). Orden de bloqueo: la fila y
+     * después las rutinas, como publish y retire.
+     */
+    private function linkRegenerated(IronIaRecoveryItem $item, Routine $nueva, NutritionAiRun $run): ?Routine
+    {
+        return DB::transaction(function () use ($item, $nueva, $run) {
+            $fila = IronIaRecoveryItem::query()->whereKey($item->getKey())->lockForUpdate()->firstOrFail();
+            $sustituidas = array_map('intval', (array) $fila->superseded_routine_ids);
+            // Pendiente y aún con regeneraciones: otra petición simultánea pudo
+            // terminar antes y gastar la última.
+            if (! $fila->isPending() || (int) $fila->regenerations >= IronIaRecoveryItem::MAX_REGENERATIONS) {
+                // Se publicó mientras se regeneraba (o una petición simultánea gastó
+                // la última): la nueva no sustituye a nada, queda retirada y marcada
+                // para que nadie la publique después.
+                $nueva->update(['status' => 'Retirada']);
+                $fila->forceFill(['superseded_routine_ids' => array_values(array_unique([...$sustituidas, (int) $nueva->id]))])->save();
+
+                return null;
+            }
+
+            $anterior = $fila->proposal_routine_id !== null ? Routine::find($fila->proposal_routine_id) : null;
+            if ($anterior instanceof Routine && ! (bool) $anterior->is_assigned) {
+                // Retirada, no borrada: queda en el historial del socio.
+                $anterior->update(['status' => 'Retirada']);
+            }
+            if ($fila->proposal_routine_id !== null) {
+                $sustituidas[] = (int) $fila->proposal_routine_id;
+            }
+
+            $base = (string) $nueva->name;
+            $dias = (int) $nueva->days_per_week;
+            $nueva->update(['name' => mb_substr(sprintf(self::NAME_PREFIX, $dias).$base, 0, 255)]);
+
+            $fila->forceFill([
+                'status' => IronIaRecoveryItem::STATUS_PROPOSED,
+                'proposal_routine_id' => $nueva->id,
+                'proposed_days' => $dias,
+                'run_id' => $run->id,
+                'tokens' => (int) $fila->tokens + (int) $run->total_tokens,
+                'routine_power' => $run->routine_power,
+                'proposal_base_name' => mb_substr($base, 0, 255),
+                'regenerations' => (int) $fila->regenerations + 1,
+                'superseded_routine_ids' => array_values(array_unique($sustituidas)),
+                'proposed_at' => now(),
+                'discarded_at' => null,
+            ])->save();
+
+            return $nueva->fresh();
+        });
+    }
+
     // ── Elegibilidad ────────────────────────────────────────────────────────
 
     /**

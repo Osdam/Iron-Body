@@ -69,7 +69,7 @@ sudo -u www-data php artisan iron-ia:recover-routines recuperacion-2026-11 --exe
 | `--limit=N` | Máximo de propuestas en esta ejecución (por tandas) |
 | `--max-tokens=2000000` | Tope de tokens de **toda** la campaña; al llegar, se para |
 | `--routine=ID` (repetible) | Solo esas rutinas originales |
-| `--queue=COLA` | Mandar cada propuesta a una cola atendida. Por defecto se generan en el mismo proceso, de una en una: producción no tiene worker para `default` |
+| `--queue=COLA` | Mandar cada propuesta a la cola de un carril (`config/queue.php` → `lanes`; p. ej. `commercial`); cualquier otra se rechaza antes de tocar nada. Por defecto se generan en el mismo proceso, de una en una: producción no tiene worker para `default` |
 | `--report=RUTA` | Informe JSON (solo ids). Por defecto, `storage/app/iron-ia/recovery/<campaña>/` |
 
 **Volver a lanzarla es seguro:**
@@ -103,55 +103,45 @@ una propuesta (`days_source: recovery_proposal`), no un dato del socio.
 
 ## Qué hace el entrenador
 
-Antes de publicar, en su portal (Seguimiento → rutinas del socio), confirma con
-el socio la disponibilidad real, los minutos por sesión, el nivel, las lesiones y
-limitaciones, el objetivo, el reparto muscular, los ejercicios y la recuperación.
+Desde el 13-11 (decisión del propietario: opción A) el backend **exige** la
+revisión; el contrato está en `RECUPERACION-REVISION-CONTRATO.md`. En su portal
+(Seguimiento → rutinas del socio, con el parche OTA de la 2.0.10), el entrenador
+abre la propuesta, la revisa y, para publicarla, escribe lo que confirmó con el
+socio: días reales, minutos por sesión, nivel, objetivo y lesiones. Además marca
+dos casillas: «Confirmé la disponibilidad con el socio» y «Revisé el reparto
+muscular, los ejercicios y la recuperación».
 
-- **Si el socio puede menos días,** quita los días sobrantes en el editor de
-  siempre: la frecuencia se recalcula. También puede generar un plan nuevo con
-  los días reales en el formulario (app 2.0.10) y retirar la propuesta.
-- **Si todo está bien,** la publica con el botón de siempre.
+- **Si no cuadra con la rutina** (por ejemplo, 6 días en la propuesta y el socio
+  puede 4), el backend NO publica (`recovery_days_mismatch`, `_level_`,
+  `_minutes_`). Hay dos salidas:
+  - quitar días en el editor de siempre (la frecuencia se recalcula);
+  - **regenerar** con lo confirmado (`POST /trainer/routines/{id}/recovery/regenerate`).
+    Hay hasta 3 regeneraciones, que no gastan sus cupos. La propuesta anterior queda
+    retirada y marcada como sustituida, y ya no se publica por ninguna vía.
+- **Si todo está bien,** la publica: se retira la original y la confirmación
+  queda guardada en la fila.
 - **Si no la quiere,** la retira con el botón de siempre; la fila queda
   `discarded`.
 
-## BLOQUEANTE: la app no deja publicar ni descartar un borrador
+## Lo que bloqueaba la publicación (resuelto en el backend; falta el parche)
 
-Lo encontró la revisión final del 13-11 y está comprobado en el código de la app
-2.0.10 (`568cdc3`); en la 2.0.9 es igual:
+Lo encontró la revisión final del 13-11: la app 2.0.10 (`568cdc3`) no deja
+publicar ni descartar un borrador. En el Seguimiento, toda rutina no publicada
+salía como «Retirada» (`follow_up_sheet.dart:172`). Al abrir un borrador, el
+editor dejaba el plan en `idle` (`integral_assessment_screen.dart:289`).
 
-- En el Seguimiento (`follow_up_sheet.dart:172`), toda rutina no publicada sale
-  como «Retirada». El menú «Retirar» solo aparece en las publicadas (`:181`).
-- Al abrir un borrador, el editor (`integral_assessment_screen.dart:289`) solo
-  cambia la rutina en pantalla y deja el plan en `idle`. El panel muestra
-  «Generar plan con Iron IA», no «Publicar» (`integral_plan_panel.dart:38-44`).
+**Estado al 13-11:**
 
-Un entrenador solo puede publicar justo después de generar. Un borrador creado
-por la campaña quedaría a la vista como «Retirada» y sin forma de publicarlo ni
-de descartarlo.
-
-Por la regla del propietario («si el flujo actual no permite realizar esas
-comprobaciones de manera segura, detén la publicación y documenta lo que
-falta»), **la campaña no se ha ejecutado en producción**. El código está
-desplegado y la simulación funciona.
-
-**Qué falta** (decisión del propietario):
-
-- **Opción A, parche de Shorebird sobre la 2.0.10.** En el Seguimiento, los
-  borradores se muestran como «Borrador», con «Publicar» y «Descartar»; las
-  rutas ya existen y no cambia ningún contrato. Solo llega a quien tenga la
-  2.0.10: los entrenadores y la tableta siguen en la 2.0.9+30.
-- **Opción B, una pantalla en el CRM.** El coordinador revisa, publica o
-  descarta las propuestas llamando a `RoutinePublisher`. No depende de la
-  versión de la app.
-
-**Otras vías de publicación.** El CRM (`Crm/RoutineController::assign`) y
-`Api/RoutineController` asignan sin pasar por `RoutinePublisher`: no retirarían
-la original ni quitarían la marca. Hay que resolverlo junto con la opción que se
-elija.
-
-**Sin confirmación explícita.** Además, la app no tiene un paso que obligue a
-confirmar la disponibilidad antes de publicar: hoy el control es la marca del
-nombre.
+- **Backend:** confirmación obligatoria, regeneración, propuestas sustituidas y
+  bloqueo de las otras vías. El CRM (`Crm/RoutineController::update/assign`) y
+  `PATCH /api/routines/{id}/assign` rechazan una propuesta pendiente o sustituida
+  con `recovery_publish_from_trainer`.
+- **App:** parche OTA de la 2.0.10 (Seguimiento con «Borrador», revisión
+  obligatoria, regenerar o ajustar). Solo llega a quien tenga la 2.0.10: los
+  entrenadores y la tableta que sigan en la 2.0.9+30 verán el 422 con su mensaje
+  si intentan publicar una propuesta.
+- **La campaña sigue sin ejecutarse.** Se ejecutará cuando el flujo de revisión
+  y publicación esté verificado de extremo a extremo y el propietario lo autorice.
 
 ## Al publicar (`RoutinePublisher::publish`)
 

@@ -109,14 +109,20 @@ class IntegralPlanGenerationService
      *
      * @throws IntegralPlanException
      */
-    public function generateRecoveryProposal(Trainer $trainer, Member $member, string $campaign, int $days): array
+    public function generateRecoveryProposal(Trainer $trainer, Member $member, string $campaign, int $days, array $confirmed = []): array
     {
-        return $this->runGeneration(
-            $trainer,
-            $member,
-            ['days_per_week' => $days, MemberContextAssembler::RECOVERY_KEY => $campaign],
-            $campaign,
-        );
+        // Sin `$confirmed`, los días son una propuesta sin confirmar (la campaña).
+        // Con él, es la regeneración que pide el entrenador con lo que confirmó
+        // con el socio (RECUPERACION-REVISION-CONTRATO.md §3): las mismas 7
+        // claves del formulario, ya validadas por el controlador.
+        $input = array_intersect_key($confirmed, array_flip(['objective', 'training_level', 'session_minutes', 'injuries', 'restrictions', 'observations']));
+        $input['days_per_week'] = $days;
+        $input[MemberContextAssembler::RECOVERY_KEY] = $campaign;
+        if ($confirmed !== []) {
+            $input[MemberContextAssembler::RECOVERY_CONFIRMED_KEY] = true;
+        }
+
+        return $this->runGeneration($trainer, $member, $input, $campaign);
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\IronIaRecoveryItem;
 use App\Models\Member;
 use App\Models\MemberRoutineAssignment;
 use App\Models\Routine;
@@ -153,6 +154,13 @@ class RoutineController extends Controller
             $validated['assignedMemberId'] ?? null,
             $validated['assignedMemberName'] ?? null,
         );
+        // Una propuesta de recuperación de Iron IA solo la publica su entrenador.
+        if ($member && IronIaRecoveryItem::blocksDirectPublish((int) $routine->id)) {
+            return response()->json([
+                'message' => IronIaRecoveryItem::DIRECT_PUBLISH_MESSAGE,
+                'code' => 'recovery_publish_from_trainer',
+            ], 422);
+        }
 
         if ($member) {
             $routine->assigned_member_name = $validated['assignedMemberName'] ?? $member->full_name;

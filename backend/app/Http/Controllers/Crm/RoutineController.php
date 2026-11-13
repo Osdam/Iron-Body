@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Crm;
 
 use App\Http\Controllers\Controller;
 use App\Models\Exercise;
+use App\Models\IronIaRecoveryItem;
 use App\Models\Member;
 use App\Models\MemberRoutineAssignment;
 use App\Models\Routine;
@@ -89,6 +90,10 @@ class RoutineController extends Controller
         if ($memberError) {
             return back()->withInput()->withErrors(['member_document' => $memberError]);
         }
+        // Una propuesta de recuperación de Iron IA solo la publica su entrenador.
+        if ($member && IronIaRecoveryItem::blocksDirectPublish((int) $routine->id)) {
+            return back()->withInput()->withErrors(['member_document' => IronIaRecoveryItem::DIRECT_PUBLISH_MESSAGE]);
+        }
 
         $routine->fill($this->mapInput($data));
         if ($member) {
@@ -123,6 +128,9 @@ class RoutineController extends Controller
         $validated = $request->validate([
             'member_id' => 'required|integer|exists:members,id',
         ]);
+        if (IronIaRecoveryItem::blocksDirectPublish((int) $routine->id)) {
+            return redirect()->back()->withErrors(['member_id' => IronIaRecoveryItem::DIRECT_PUBLISH_MESSAGE]);
+        }
 
         MemberRoutineAssignment::firstOrCreate([
             'member_id' => $validated['member_id'],

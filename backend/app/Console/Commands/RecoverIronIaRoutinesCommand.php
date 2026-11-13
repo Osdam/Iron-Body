@@ -54,6 +54,17 @@ class RecoverIronIaRoutinesCommand extends Command
         $ejecutar = (bool) $this->option('execute');
         $solo = array_map('intval', (array) $this->option('routine'));
 
+        // Solo la cola de un carril con worker: `default` no la atiende nadie en producción.
+        $carril = null;
+        if (($cola = (string) $this->option('queue')) !== '') {
+            $carril = collect(config('queue.lanes'))->first(fn ($l) => ($l['queue'] ?? null) === $cola);
+            if ($carril === null) {
+                $this->error("La cola «{$cola}» no es de ningún carril (config/queue.php → lanes): nadie la atendería. No se ha tocado nada.");
+
+                return self::INVALID;
+            }
+        }
+
         $evaluacion = $campaign->evaluate($nombre, $corte);
         $candidatas = array_values(array_filter($evaluacion, fn ($d) => $d['eligible'] && ($solo === [] || in_array($d['routine_id'], $solo, true))));
 
@@ -100,8 +111,8 @@ class RecoverIronIaRoutinesCommand extends Command
 
                 // El tope viaja con el job: cada propuesta lo vuelve a mirar justo antes de gastar.
                 $job = new GenerateRecoveryProposal($nombre, $c['routine_id'], $corte, $tope);
-                if (($cola = (string) $this->option('queue')) !== '') {
-                    dispatch($job)->onQueue($cola);
+                if ($carril !== null) {
+                    dispatch($job->onConnection($carril['connection'] ?? null)->onQueue($carril['queue']));
                     $res = ['routine_id' => $c['routine_id'], 'outcome' => 'queued', 'reason' => $cola];
                 } else {
                     // Aquí mismo y de una en una (sin worker de por medio): el job
