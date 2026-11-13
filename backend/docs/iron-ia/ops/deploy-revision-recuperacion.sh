@@ -149,8 +149,12 @@ sudo -u "$WWW" php artisan route:list --path=recovery/regenerate 2>/dev/null | g
 c=$(curl -s --max-time 20 -o /dev/null -w '%{http_code}' -H 'Accept: application/json' "$API/trainer/exercises") || c=000
 echo "   GET trainer/exercises sin sesión → $c (esperado 401: auth.trainer vivo, sin efectos)"
 [ "$c" = 401 ] || aborta "trainer/exercises sin sesión respondió $c"
-c=$(curl -s --max-time 20 -o /dev/null -w '%{http_code}' -X POST -H 'Accept: application/json' "$API/trainer/routines/0/recovery/regenerate") || c=000
-echo "   POST trainer/routines/0/recovery/regenerate sin sesión → $c (esperado 401, sin efectos)"
+# Con un id que EXISTA: Laravel resuelve la rutina de la URL antes que la sesión del
+# entrenador, así que con un id inexistente (p. ej. 0) da 404 aunque la ruta exista
+# (el 13-11 esta comprobación abortó así, ya desplegado; publish da lo mismo).
+RID=$(sudo -u "$WWW" php artisan tinker --execute="echo App\Models\Routine::min('id');" 2>/dev/null | tail -1)
+c=$(curl -s --max-time 20 -o /dev/null -w '%{http_code}' -X POST -H 'Accept: application/json' "$API/trainer/routines/$RID/recovery/regenerate") || c=000
+echo "   POST trainer/routines/<id existente>/recovery/regenerate sin sesión → $c (esperado 401, sin efectos)"
 [ "$c" = 401 ] || aborta "la ruta nueva sin sesión respondió $c"
 sleep 8
 RUN1=$(supervisorctl status 2>/dev/null | grep -c RUNNING || true)
