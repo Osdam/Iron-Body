@@ -20,6 +20,7 @@ use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -39,7 +40,8 @@ use Tests\TestCase;
  *    con `prompts_rule_phrases_invalid` y el detalle, y publicar es 409 sin
  *    escribir nada;
  *  - el ORDEN DE DESPLIEGUE: lo publicado con el compilador 1 cae a Legacy
- *    (`compiler_changed`) hasta revertirlo y publicar otra versión;
+ *    (`compiler_changed`) hasta revertirlo y publicar otra versión, y desde el
+ *    compilador 3 (Enmienda A4-1) también lo publicado con el 2;
  *  - LA PARTE DEL RESTO QUE SE ARRASTRA (vuelta 2: B-1 de seguridad y
  *    hallazgo 1 del reviewer): una V0 publicada y promovida por la API con la
  *    llave apagada (cabeza `/1`) se compila ENTERA, frases de sus reglas
@@ -56,7 +58,14 @@ class UltronStudioPublicationRulePhrasesTest extends TestCase
     use RefreshDatabase;
     use StudioFixtures;
 
-    private const G8_HASH = '702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c';
+    /** «profesional + 200» con el compilador 3 (compile-cases.json, c074). */
+    private const G8_HASH = 'af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51';
+
+    /** La misma con los compiladores 1 y 2 (la que quedó firmada en la cadena antes del 3). */
+    private const G8_HASH_COMPILADORES_1_Y_2 = '702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c';
+
+    /** Enmienda A4-1: lo que el mensaje del motor dice de la longitud, igual en `canary` y en `all`. */
+    private const LONGITUD_MEDIDA = 'La longitud, además, se mide antes de enviar: a un mensaje que pasa del tope se le quita la pregunta final y, si aun así no cabe, se sustituye por un texto que cabe (con el tope de la línea base, 320, no se mide). «Si no entiende» sigue sin efecto en WhatsApp.';
 
     private const COMPOSER = 'FRASES PROHIBIDAS PUBLICADAS: nunca escribas ninguna de estas frases, tampoco con otras mayusculas; si la respuesta parece necesitar una, dilo con otras palabras. Las frases: ';
 
@@ -181,7 +190,7 @@ class UltronStudioPublicationRulePhrasesTest extends TestCase
             ['role' => 'critic_retry', 'operation' => 'insert_after_line', 'anchor' => 'naturalness:', 'text' => self::CRITIC.$lista],
         ], $frases['patches']);
         $huella = UltronPromptCompiler::compile(array_replace(UltronPromptCompiler::BASELINE, ['persona.tone' => 'profesional', 'persona.maxChars' => 200, UltronPromptCompiler::PHRASES => $esperadas]))['bundleHash'];
-        $this->assertSame([$huella, 2, null], [$p['bundleHash'], $p['compiler'], $p['error']]);
+        $this->assertSame([$huella, 3, null], [$p['bundleHash'], $p['compiler'], $p['error']]);
         $this->assertNotSame(self::G8_HASH, $huella);
 
         // Reconocer las reglas que ya entran en los prompts no vale.
@@ -193,11 +202,11 @@ class UltronStudioPublicationRulePhrasesTest extends TestCase
 
         $this->publishAs($this->pub, $v->uuid)->assertCreated();
 
-        // Lo firmado: `/2`, compilador 2, la quinta clave con las frases.
+        // Lo firmado: `/2`, compilador 3, la quinta clave con las frases.
         $cabeza = $this->headEntry();
         $this->assertSame([D::CONTRACT_V2, D::CONTRACT_V2], [$cabeza['column'], $cabeza['contract']]);
         $this->assertSame(['persona.emojis' => true, 'persona.maxChars' => 200, 'persona.tone' => 'profesional', 'rules.forbiddenPhrases' => $esperadas, 'strategy.goal' => 'cita'], $cabeza['canary']['governed']);
-        $this->assertSame(['base' => 'n8n-29de5119', 'bundleHash' => $huella, 'compiler' => 2], $cabeza['canary']['prompts']);
+        $this->assertSame(['base' => 'n8n-29de5119', 'bundleHash' => $huella, 'compiler' => 3], $cabeza['canary']['prompts']);
 
         // Escritor → lector → oferta de `decide`: la huella de la vista previa y las frases en los prompts.
         $this->assertSame(['applied', $v->uuid], [$this->engineStamp(self::CANARY_ID)['state'], $this->engineStamp(self::CANARY_ID)['version']]);
@@ -209,6 +218,10 @@ class UltronStudioPublicationRulePhrasesTest extends TestCase
         $this->assertSame($this->decideOffer(), $this->statusCurrent());
         $this->assertSame(StudioPublications::ENGINE_MESSAGES_PROMPTS['canary'], $this->studio('GET', 'status', $this->pub)->json('data.engine.message'));
         $this->assertStringContainsString('reglas S-NNN', StudioPublications::ENGINE_MESSAGES_PROMPTS['canary']);
+        foreach (['canary', 'all'] as $alcance) {
+            $this->assertStringEndsWith(' '.self::LONGITUD_MEDIDA, StudioPublications::ENGINE_MESSAGES_PROMPTS[$alcance], "{$alcance}: la longitud medida, justo antes de «Si no entiende»");
+            $this->assertSame(1, substr_count(StudioPublications::ENGINE_MESSAGES_PROMPTS[$alcance], 'se mide antes de enviar'), $alcance);
+        }
 
         // Revertir: la canaria vuelve a Legacy.
         $this->rollbackAs($this->pub, $v->uuid)->assertCreated();
@@ -452,13 +465,24 @@ class UltronStudioPublicationRulePhrasesTest extends TestCase
 
     // ── El orden de despliegue (requisito 6) ────────────────────────────────
 
-    public function test_lo_publicado_con_el_compilador_1_cae_a_legacy_hasta_revertirlo_y_publicar_otra_version(): void
+    /** @return array<string, array{int, array<string,mixed>}> */
+    public static function compiladoresAnteriores(): array
+    {
+        return [
+            'compilador 1 (los cuatro gobernados)' => [1, ['persona.emojis' => true, 'persona.maxChars' => 200, 'persona.tone' => 'profesional', 'strategy.goal' => 'cita']],
+            'compilador 2 (los cinco, sin frases)' => [2, ['persona.emojis' => true, 'persona.maxChars' => 200, 'persona.tone' => 'profesional', 'rules.forbiddenPhrases' => [], 'strategy.goal' => 'cita']],
+        ];
+    }
+
+    /** @param array<string,mixed> $gobernados */
+    #[DataProvider('compiladoresAnteriores')]
+    public function test_lo_publicado_con_un_compilador_anterior_cae_a_legacy_hasta_revertirlo_y_publicar_otra_version(int $compilador, array $gobernados): void
     {
         $this->promptsOn();
         // V1 en canario, publicada ANTES de subir el compilador: su parte `/2` lleva
-        // los cuatro gobernados de entonces y el compilador 1 (la misma huella G8).
+        // los gobernados de entonces, aquel compilador y su huella G8 de entonces.
         $v1 = $this->seededVersion($this->ana, $this->root, $this->contentWith(['persona' => ['tone' => 'profesional', 'maxChars' => 200]]), 'CANARY');
-        $parte = D::partV2($this->partOf($v1), ['persona.emojis' => true, 'persona.maxChars' => 200, 'persona.tone' => 'profesional', 'strategy.goal' => 'cita'], ['base' => 'n8n-29de5119', 'bundleHash' => self::G8_HASH, 'compiler' => 1]);
+        $parte = D::partV2($this->partOf($v1), $gobernados, ['base' => 'n8n-29de5119', 'bundleHash' => self::G8_HASH_COMPILADORES_1_Y_2, 'compiler' => $compilador]);
         $this->seedEntryV2(D::ACTION_PUBLISH, $v1, $parte, null);
 
         // El commit la sigue declarando; `decide` ya no la ofrece.
@@ -469,7 +493,7 @@ class UltronStudioPublicationRulePhrasesTest extends TestCase
         // Revertirla (ROLLED_BACK es terminal) y publicar una versión nueva con el mismo contenido.
         $this->rollbackAs($this->pub, $v1->uuid)->assertCreated();
         $this->assertSame('part_legacy', $this->decideOffer()['reason']);
-        $v2 = $this->g8('La misma, publicada con el compilador 2');
+        $v2 = $this->g8('La misma, publicada con el compilador vigente');
         $this->publishAs($this->pub, $v2->uuid)->assertCreated();
         $this->assertSame(['mode' => 'studio', 'version' => $v2->uuid, 'bundleHash' => self::G8_HASH, 'reason' => null], $this->decideOffer());
     }

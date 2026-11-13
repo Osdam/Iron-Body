@@ -1,0 +1,32 @@
+# Compilador 3 · ROJO del texto definitivo (decisión del lead: se quita la pregunta final), 12-11-2026
+# Las pruebas ya con el texto nuevo; el compilador todavía con el anterior.
+# nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php
+# Solo la lista de fallos y el resumen: los diffs se omiten porque reproducen el texto sustituido.
+
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: backend/phpunit.xml
+
+1) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_los_17_valores_de_max_chars with data set "maxChars=160" (160)
+2) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_los_17_valores_de_max_chars with data set "maxChars=180" (180)
+3) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_los_17_valores_de_max_chars with data set "maxChars=200" (200)
+4) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_los_17_valores_de_max_chars with data set "maxChars=220" (220)
+5) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_los_17_valores_de_max_chars with data set "maxChars=240" (240)
+6) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_los_17_valores_de_max_chars with data set "maxChars=260" (260)
+7) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_los_17_valores_de_max_chars with data set "maxChars=280" (280)
+8) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_los_17_valores_de_max_chars with data set "maxChars=300" (300)
+9) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_los_17_valores_de_max_chars with data set "maxChars=340" (340)
+10) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_los_17_valores_de_max_chars with data set "maxChars=360" (360)
+11) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_los_17_valores_de_max_chars with data set "maxChars=380" (380)
+12) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_los_17_valores_de_max_chars with data set "maxChars=400" (400)
+13) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_los_17_valores_de_max_chars with data set "maxChars=420" (420)
+14) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_los_17_valores_de_max_chars with data set "maxChars=440" (440)
+15) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_los_17_valores_de_max_chars with data set "maxChars=460" (460)
+16) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_los_17_valores_de_max_chars with data set "maxChars=480" (480)
+17) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_el_texto_del_tope_del_redactor_compilado_tal_cual with data set "maxChars=160" (160, 'TOPE DE LONGITUD PUBLICADO: e...pliar.')
+18) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_el_texto_del_tope_del_redactor_compilado_tal_cual with data set "maxChars=200" (200, 'TOPE DE LONGITUD PUBLICADO: e...pliar.')
+19) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_el_texto_del_tope_del_redactor_compilado_tal_cual with data set "maxChars=480" (480, 'TOPE DE LONGITUD PUBLICADO: e...pliar.')
+20) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_el_cambio_de_aceptacion_profesional_y_200
+FAILURES!
+Tests: 57, Assertions: 4841, Failures: 20.

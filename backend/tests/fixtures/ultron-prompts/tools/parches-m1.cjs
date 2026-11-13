@@ -13,6 +13,12 @@
  * `comprobarTextosContraElPlan()` exige que cada uno aparezca literalmente en él.
  *
  * Puro: sin red, sin reloj, sin aleatoriedad. Solo lee la base y el plan.
+ *
+ * Compilador 3 (Enmienda A4-1 del H5, 12-11-2026): el texto de `maxChars` para
+ * el redactor es el del apartado «Compilador 3» de §B.3, con `{M}`, `{P}` y
+ * `{F}` además de `{N}`. Este guion los calcula POR SU CUENTA con las fórmulas
+ * del plan (`margen()`), y comprueba que las fórmulas y la tabla N → M, P, F
+ * están escritas tal cual en §B.3: tres fuentes (el plan, este guion y PHP).
  */
 const fs = require('fs');
 const path = require('path');
@@ -37,7 +43,8 @@ const CONTRACT = 'ultron-prompts/1';
  * no vacías se prueban en PHP (`UltronPromptCompilerPhrasesTest`).
  */
 const PHRASES = 'rules.forbiddenPhrases';
-const COMPILER = 2;
+/** Compilador 3: solo cambia el texto de `maxChars` para el redactor (§B.3, «Compilador 3»). */
+const COMPILER = 3;
 
 /** §B.3 / C3: la línea base («como hoy», M1-4), con la lista de frases vacía. */
 const BASELINE = { 'persona.tone': 'cercano', 'persona.emojis': true, 'persona.maxChars': 320, [PHRASES]: [], 'strategy.goal': 'cita' };
@@ -76,15 +83,34 @@ const T = {
   'tone.entusiasta.critic': 'REGISTRO PUBLICADO: entusiasta. La energia NO es defecto de naturalness; la urgencia o la presion siguen siendo PRESSURE.',
   'emojis.false.composer': 'Sin emojis: ninguno, en ningun mensaje.',
   'emojis.false.critic': 'EMOJIS: la version publicada no usa emojis; si el borrador lleva alguno, verdict fail con naturalness.',
-  'maxChars.composer': 'TOPE DE LONGITUD PUBLICADO: como maximo unos {N} caracteres por mensaje, contando cada marcador como el texto que lo sustituye; tambien la informacion general respeta el tope: si no cabe, da lo esencial y ofrece ampliar.',
+  // Compilador 3 (§B.3, «Compilador 3»): sustituye al del compilador 1–2, que sigue en la tabla de §B.3 como histórico.
+  'maxChars.composer': 'TOPE DE LONGITUD PUBLICADO: el limite es {N} caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos {M} caracteres, que son unas {P} palabras: como mucho {F} frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.',
   'maxChars.critic.replace': 'mas de ~{N} caracteres',
   'maxChars.critic.insert': 'TOPE PUBLICADO: un borrador de mas de ~{N} caracteres falla por progressive_disclosure aunque se haya pedido detalle.',
   'goal.venta.strategist': 'OBJETIVO COMERCIAL PUBLICADO: cerrar membresia. Con senales claras de compra (buying_signal strong, hot_lead_fast_path o READY) prioriza recommend y close sobre ofrecer la visita; el dia de cortesia queda para quien desconfia o quiere conocer antes. Nada de esto autoriza presion, descuentos ni salirse de allowed_transitions.',
   'goal.informar.strategist': 'OBJETIVO COMERCIAL PUBLICADO: informar y cualificar. Prioriza understand y recommend; no propongas close ni collect_payment salvo que la persona pida comprar o pagar con palabras.',
 };
 
-/** Cómo aparece cada texto en el plan (para la comprobación de transcripción). */
-const EN_EL_PLAN = (clave, texto) => (clave === 'maxChars.critic.replace' ? '`' + texto.replace('{N}', 'N') + '`' : '«' + texto.replace('{N}', 'N') + '»');
+/**
+ * Compilador 3, §B.3 «Compilador 3»: el margen del redactor para un tope N, en
+ * enteros. M = el 80 % de N redondeado a la decena por abajo; P = M / 30 por
+ * abajo, por 5; F = (M + 30) / 60 por abajo, y nunca menos de 2.
+ */
+const FORMULAS = ['`M = intdiv(N * 8, 100) * 10`', '`P = intdiv(M, 30) * 5`', '`F = max(2, intdiv(M + 30, 60))`'];
+function margen(n) {
+  const m = Math.floor((n * 8) / 100) * 10;
+  return { M: m, P: Math.floor(m / 30) * 5, F: Math.max(2, Math.floor((m + 30) / 60)) };
+}
+
+/** Un texto con sus marcadores sustituidos: `{N}` y, si los lleva, `{M}`, `{P}` y `{F}` del margen de N. */
+function sustituir(texto, n) {
+  const g = margen(n);
+  return texto.split('{N}').join(String(n)).split('{M}').join(String(g.M)).split('{P}').join(String(g.P)).split('{F}').join(String(g.F));
+}
+
+/** Cómo aparece cada texto en el plan (para la comprobación de transcripción): cada marcador, con su letra. */
+const CON_LETRAS = (texto) => texto.split('{N}').join('N').split('{M}').join('M').split('{P}').join('P').split('{F}').join('F');
+const EN_EL_PLAN = (clave, texto) => (clave === 'maxChars.critic.replace' ? '`' + CON_LETRAS(texto) + '`' : '«' + CON_LETRAS(texto) + '»');
 
 function comprobarTextosContraElPlan() {
   const plan = fs.readFileSync(PLAN, 'utf8');
@@ -100,6 +126,14 @@ function comprobarTextosContraElPlan() {
   }
   if (!b3.includes('`bundleHash = sha256_hex(implode("\\n", ["ultron-prompts/1", "strategist", S, "composer", C, "critic", K, "composer_retry", CR, "critic_retry", KR]))`')) {
     throw new Error('La fórmula de la huella de §B.3 no es la que este guion implementa');
+  }
+  // Compilador 3: las fórmulas del margen y su tabla, tal cual en §B.3 («Compilador 3»).
+  if (!b3.includes('#### Compilador 3') || !b3.includes('`UltronPromptCompiler::VERSION = ' + COMPILER + '`')) throw new Error('§B.3 no tiene el apartado del compilador ' + COMPILER);
+  for (const f of FORMULAS) if (!b3.includes(f)) throw new Error(`La fórmula ${f} no aparece en §B.3: no es la que este guion implementa`);
+  for (const n of MAX_CHARS.filter((x) => x !== 320)) {
+    const g = margen(n);
+    const fila = `| ${n} | ${g.M} | ${g.P} | ${g.F} |`;
+    if (!b3.includes(fila)) throw new Error(`La tabla de §B.3 no tiene la fila «${fila}» que sale de las fórmulas`);
   }
 }
 
@@ -187,7 +221,7 @@ function aplicar(texto, op, ancla, nuevo) {
 function parches(g) {
   const out = [];
   const pon = (parameter, value, roles, op, ancla, clave, n) => {
-    for (const role of roles) out.push({ parameter, value, role, operation: op, anchor: A[ancla].text, textKey: n === undefined ? clave : `${clave}@${n}`, text: T[clave].replace('{N}', String(n)) });
+    for (const role of roles) out.push({ parameter, value, role, operation: op, anchor: A[ancla].text, textKey: n === undefined ? clave : `${clave}@${n}`, text: n === undefined ? T[clave] : sustituir(T[clave], n) });
   };
   const COMPOSERS = ['composer', 'composer_retry'];
   const CRITICS = ['critic', 'critic_retry'];
@@ -242,4 +276,4 @@ function compilar(base, g) {
   return { roles, patches: lista, bundleHash: bundleHash(roles), bytes: total };
 }
 
-module.exports = { BACKEND, REPO, ROLES, NODES, CONTRACT, PHRASES, COMPILER, BASELINE, PARAMETERS, TONES, GOALS, MAX_CHARS, LIMITS, A, T, sha256, bytes, bundleHash, leerBase, comprobarBaseContraFlujo, comprobarTextosContraElPlan, parches, compilar, valido };
+module.exports = { BACKEND, REPO, ROLES, NODES, CONTRACT, PHRASES, COMPILER, BASELINE, PARAMETERS, TONES, GOALS, MAX_CHARS, LIMITS, A, T, margen, sha256, bytes, bundleHash, leerBase, comprobarBaseContraFlujo, comprobarTextosContraElPlan, parches, compilar, valido };

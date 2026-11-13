@@ -18,7 +18,7 @@
 - Huella del paquete Legacy (`LEGACY_BUNDLE_HASH`): `3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902`
 - Selector: 118831 bytes, sha256 `456e4d495115cf4b126277773b6f4998530a78635f850eac6b8b7ec4e7350d0f`
 - Preparar Commit: sha256 `fb35df55dbfe6825482baa7f30b4f41050ede24d6eecfc92f23585a9f8fff7ce`
-- Contrato `ultron-prompts/1`, base `n8n-29de5119`, compilador 2, revisión del flujo `S1`
+- Contrato `ultron-prompts/1`, base `n8n-29de5119`, compilador 3, revisión del flujo `S1`
 
 | Rol | Nodo | Bytes | sha256 |
 |---|---|---|---|

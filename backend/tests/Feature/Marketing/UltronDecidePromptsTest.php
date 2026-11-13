@@ -191,7 +191,7 @@ class UltronDecidePromptsTest extends TestCase
         $this->assertIsArray($oferta);
         $this->assertSame(self::CLAVES_DE_LA_OFERTA, array_keys($oferta));
         $this->assertSame([...array_slice(self::CLAVES_DE_HOY, 0, -1), 'studio_prompts', 'superseded'], array_keys($res->json()));
-        $this->assertSame(['ultron-prompts/1', 'n8n-29de5119', 2], [$oferta['contract'], $oferta['base'], $oferta['compiler']]);
+        $this->assertSame(['ultron-prompts/1', 'n8n-29de5119', 3], [$oferta['contract'], $oferta['base'], $oferta['compiler']], 'el compilador 3 (Enmienda A4-1)');
 
         if ($motivo === 'studio') {
             $paquete = UltronPromptCompiler::compile(array_replace(UltronPromptCompiler::BASELINE, $gobernados));

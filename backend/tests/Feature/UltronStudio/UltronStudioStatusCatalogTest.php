@@ -39,7 +39,7 @@ class UltronStudioStatusCatalogTest extends TestCase
                 'prompts' => [
                     'key' => 'off',
                     'base' => 'n8n-29de5119',
-                    'compiler' => 2,
+                    'compiler' => 3,
                     'legacyBundleHash' => '3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902',
                     'current' => ['mode' => 'legacy', 'version' => null, 'bundleHash' => null, 'reason' => 'prompts_off'],
                     'lastTurns' => [],

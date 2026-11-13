@@ -24,9 +24,37 @@ use ReflectionMethod;
  *  5. Determinismo: el orden de las claves no cambia nada.
  *  6. Los 17 valores de `maxChars`; los valores fuera del contrato lanzan; un
  *     ancla ausente o repetida lanza; los topes.
+ *  7. Compilador 3 (Enmienda A4-1 del H5, cierre V2, apartado 4): el texto del
+ *     tope para el redactor pide un margen (`M`, `P` y `F`, de la tabla de
+ *     abajo escrita a mano desde el plan §B.3, «Compilador 3»); el del Critic
+ *     no cambia y la línea base sigue sin parche.
  */
 class UltronPromptCompilerTest extends TestCase
 {
+    /**
+     * Compilador 3: N → [M, P, F], escrita a mano (plan §B.3, «Compilador 3»):
+     * M = el 80 % de N redondeado a la decena por abajo, P = intdiv(M, 30) · 5
+     * y F = max(2, intdiv(M + 30, 60)). Los 16 topes distintos de 320.
+     */
+    private const MARGEN = [
+        160 => [120, 20, 2],
+        180 => [140, 20, 2],
+        200 => [160, 25, 3],
+        220 => [170, 25, 3],
+        240 => [190, 30, 3],
+        260 => [200, 30, 3],
+        280 => [220, 35, 4],
+        300 => [240, 40, 4],
+        340 => [270, 45, 5],
+        360 => [280, 45, 5],
+        380 => [300, 50, 5],
+        400 => [320, 50, 5],
+        420 => [330, 55, 6],
+        440 => [350, 55, 6],
+        460 => [360, 60, 6],
+        480 => [380, 60, 6],
+    ];
+
     // Los textos aprobados (STUDIO_MOTORES_PLAN.md §B.3, Enmienda M-1, M1-3), a mano.
     private const PRO_COMPOSER = 'REGISTRO PUBLICADO: profesional. Esto manda sobre los ejemplos de arriba: trata a la persona de usted, frases completas y sobrias, sin muletillas coloquiales ("De una", "Listo", "Tranquilo") ni exclamaciones seguidas. Sigue siendo calido; profesional no es frio.';
 
@@ -49,9 +77,12 @@ class UltronPromptCompilerTest extends TestCase
     /** La línea base del compilador 2: las cuatro de siempre y ninguna frase (en el orden del contrato). */
     private const BASE = ['persona.emojis' => true, 'persona.maxChars' => 320, 'persona.tone' => 'cercano', 'rules.forbiddenPhrases' => [], 'strategy.goal' => 'cita'];
 
+    /** Compilador 3: el texto del tope para el redactor, con N y su margen de {@see self::MARGEN}. */
     private static function maxComposer(int $n): string
     {
-        return "TOPE DE LONGITUD PUBLICADO: como maximo unos {$n} caracteres por mensaje, contando cada marcador como el texto que lo sustituye; tambien la informacion general respeta el tope: si no cabe, da lo esencial y ofrece ampliar.";
+        [$m, $p, $f] = self::MARGEN[$n];
+
+        return "TOPE DE LONGITUD PUBLICADO: el limite es {$n} caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos {$m} caracteres, que son unas {$p} palabras: como mucho {$f} frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.";
     }
 
     private static function maxCritic(int $n): string
@@ -91,12 +122,13 @@ class UltronPromptCompilerTest extends TestCase
         $this->assertSame(Base::LEGACY_BUNDLE_HASH, $paquete['bundleHash']);
         $this->assertSame([], $paquete['patches']);
         $this->assertSame(112216, $paquete['bytes']);
-        $this->assertSame(['contract' => 'ultron-prompts/1', 'base' => 'n8n-29de5119', 'compiler' => 2], array_intersect_key($paquete, array_flip(['contract', 'base', 'compiler'])));
+        $this->assertSame(['contract' => 'ultron-prompts/1', 'base' => 'n8n-29de5119', 'compiler' => 3], array_intersect_key($paquete, array_flip(['contract', 'base', 'compiler'])));
         $this->assertSame(self::BASE, $paquete['governed']);
         $this->assertSame(self::BASE, C::BASELINE);
         $this->assertTrue(C::isBaseline(self::BASE));
         $this->assertSame([], C::changedRoles(self::BASE));
-        $this->assertSame(2, C::VERSION, 'la 2 añade las frases de las reglas S-NNN');
+        $this->assertSame(3, C::VERSION, 'la 2 añade las frases de las reglas S-NNN; la 3, el margen del tope para el redactor');
+        $this->assertSame('3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902', $paquete['bundleHash'], 'la huella Legacy, escrita a mano: el compilador 3 no la mueve');
         $this->assertSame(['contract', 'base', 'compiler', 'governed', 'roles', 'bundleHash', 'bytes', 'patches'], array_keys($paquete));
         $this->assertSame(Base::ROLES, array_keys($paquete['roles']));
     }
@@ -249,6 +281,51 @@ class UltronPromptCompilerTest extends TestCase
             $this->assertSame($esperado, str_replace("\n".self::maxCritic($n), '', $r[$rol]), $rol);
         }
         $this->assertSame($base['strategist'], $r['strategist']);
+    }
+
+    // ── 7 · Compilador 3: el margen del redactor ──────────────────────────────
+
+    public function test_el_margen_del_redactor_sale_de_la_tabla_n_m_p_f(): void
+    {
+        $this->assertCount(16, self::MARGEN, 'los 17 topes menos la línea base');
+        foreach (self::MARGEN as $n => [$m, $p, $f]) {
+            $this->assertSame($m, C::composerTargetChars($n), "M de {$n}");
+            $this->assertSame($p, C::composerTargetWords($n), "P de {$n}");
+            $this->assertSame($f, C::composerMaxSentences($n), "F de {$n}");
+            $this->assertLessThan($n, $m, "{$n}: el objetivo queda por debajo del límite");
+            $this->assertSame(0, $m % 10, "{$n}: M es una decena");
+        }
+        // Los ejemplos del encargo, uno por uno.
+        $this->assertSame([160, 120, 140, 380], array_map(C::composerTargetChars(...), [200, 160, 180, 480]));
+        $this->assertSame([25, 20, 60], array_map(C::composerTargetWords(...), [200, 160, 480]));
+        $this->assertSame([3, 2, 6], array_map(C::composerMaxSentences(...), [200, 160, 480]));
+    }
+
+    /** @return array<string, array{int, string}> */
+    public static function textosDelTopeCompilados(): array
+    {
+        return [
+            'maxChars=160' => [160, 'TOPE DE LONGITUD PUBLICADO: el limite es 160 caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos 120 caracteres, que son unas 20 palabras: como mucho 2 frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.'],
+            'maxChars=200' => [200, 'TOPE DE LONGITUD PUBLICADO: el limite es 200 caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos 160 caracteres, que son unas 25 palabras: como mucho 3 frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.'],
+            'maxChars=480' => [480, 'TOPE DE LONGITUD PUBLICADO: el limite es 480 caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos 380 caracteres, que son unas 60 palabras: como mucho 6 frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.'],
+        ];
+    }
+
+    #[DataProvider('textosDelTopeCompilados')]
+    public function test_el_texto_del_tope_del_redactor_compilado_tal_cual(int $n, string $texto): void
+    {
+        $paquete = C::compile(self::con(['persona.maxChars' => $n]));
+
+        foreach (['composer', 'composer_retry'] as $rol) {
+            $this->assertSame($texto, self::lineaTras($paquete['roles'][$rol], 'FORMA:'), $rol);
+        }
+        $this->assertSame(1, preg_match('/\A[\x20-\x7E]+\z/', $texto), 'ASCII imprimible, sin tildes ni saltos, como los demás textos');
+        $this->assertStringNotContainsString('{', $texto, 'ningún marcador sin sustituir');
+        $this->assertLessThanOrEqual(C::MAX_PATCH_BYTES, strlen($texto));
+        // El del Critic no cambia con el compilador 3.
+        foreach (['critic', 'critic_retry'] as $rol) {
+            $this->assertSame(self::maxCritic($n), self::lineaTras($paquete['roles'][$rol], 'progressive_disclosure:'), $rol);
+        }
     }
 
     public function test_dos_inserciones_tras_la_misma_linea_quedan_en_orden_inverso_al_de_aplicacion(): void

@@ -4,7 +4,7 @@
     "sourceVersionId": "29de5119-2e5a-4bc8-a479-60f4fe37c5b3",
     "contract": "ultron-prompts/1",
     "base": "n8n-29de5119",
-    "compiler": 2,
+    "compiler": 3,
     "legacyBundleHash": "3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902",
     "baseSha256": {
         "strategist": "c84387582f581640493545996c7c61ab9a46d11829d740f1319c34b5c50a6917",

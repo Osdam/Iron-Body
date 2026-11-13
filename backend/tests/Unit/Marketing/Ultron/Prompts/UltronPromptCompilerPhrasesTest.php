@@ -35,7 +35,13 @@ class UltronPromptCompilerPhrasesTest extends TestCase
 
     private const CRITIC = 'FRASES PROHIBIDAS PUBLICADAS: si el borrador contiene alguna de estas frases, aunque cambien las mayusculas, verdict fail con naturalness. Las frases: ';
 
-    private const G8_HASH = '702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c';
+    /**
+     * «profesional + 200» con el compilador 3 (compile-cases.json, c074, que deriva
+     * el guion del tester sin PHP). Con los compiladores 1 y 2 era `702890f7…311c`.
+     */
+    private const G8_HASH = 'af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51';
+
+    private const G8_HASH_COMPILADOR_2 = '702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c';
 
     /** La huella de la línea base con dos frases (ejemplo del informe). */
     private const DOS_FRASES_HASH = 'fbd3c91cb9f283519fe7d2ac4daf60323d1151e2599a9cbee39195090e4d8916';
@@ -73,16 +79,18 @@ class UltronPromptCompilerPhrasesTest extends TestCase
         $this->assertSame(Base::LEGACY_BUNDLE_HASH, $base['bundleHash']);
         $this->assertSame([], $base['patches']);
         $this->assertTrue(C::isBaseline(C::BASELINE));
-        $this->assertSame(2, $base['compiler']);
+        $this->assertSame(3, $base['compiler']);
     }
 
-    public function test_la_huella_de_profesional_y_200_no_cambia_con_el_compilador_2(): void
+    public function test_la_huella_de_profesional_y_200_es_la_de_los_textos_del_compilador_3(): void
     {
         $g8 = C::compile(self::con(['persona.tone' => 'profesional', 'persona.maxChars' => 200]));
 
-        // La huella es la de los cinco textos, no la de la versión del compilador.
+        // La huella es la de los cinco textos, no la de la versión del compilador: el 2
+        // no la movió (sin frases no hay parche) y el 3 sí, porque cambia el texto del tope.
         $this->assertSame(self::G8_HASH, $g8['bundleHash']);
-        $this->assertSame(113672, $g8['bytes']);
+        $this->assertNotSame(self::G8_HASH_COMPILADOR_2, $g8['bundleHash']);
+        $this->assertSame(114206, $g8['bytes'], '113 672 con el compilador 2, más 534: dos veces la diferencia del texto del tope (487 − 220)');
         $this->assertNotContains(C::PHRASES, array_column($g8['patches'], 'parameter'));
     }
 

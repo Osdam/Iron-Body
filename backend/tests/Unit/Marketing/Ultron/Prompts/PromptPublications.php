@@ -62,7 +62,8 @@ trait PromptPublications
     /**
      * Una parte `/2` firmada con el compilador 1 (antes de las reglas S-NNN):
      * `governed` con las cuatro claves de entonces y la huella de esos cuatro
-     * valores (la misma que da hoy el compilador 2 sin frases). Es lo que
+     * valores con el compilador de hoy (con `maxChars` ≠ 320, el 1 daba otra:
+     * da igual, `decide` compara el compilador antes que la huella). Es lo que
      * queda en la cadena al subir el compilador: cae a `compiler_changed`.
      *
      * @param  array<string,mixed>  $governed  cambios sobre la línea base

@@ -118,6 +118,37 @@ Fuente de la columna «mando real»: `StudioCatalog::parameterBindings()` (`app/
 - **Versión del compilador:** `UltronPromptCompiler::VERSION = 1`. Cambiar un texto o un ancla obliga a subirla; las publicaciones firmadas con otra versión caen a Legacy en `decide` con motivo `compiler_changed` hasta volver a publicar (seguro, y se ve en la traza).
 - **Pureza:** sin base de datos, sin `config()`, sin reloj, sin log. El Studio lo importa (dirección permitida, como `StudioLabEngineChecks`); el motor no importa nada del Studio. Nombres sin la subcadena `UltronStudio` (la vigila `UltronEngineIsolationTest`).
 
+#### Compilador 3 (Enmienda A4-1 del contrato H5, 12-11-2026)
+
+> Texto pendiente de la aprobación del propietario (HUMAN GATE 4-A del cierre V2): si lo cambia antes del despliegue, se corrige aquí y en el compilador sin subir otra vez la versión, porque el compilador 3 no habrá llegado a producción
+
+- **Por qué.** En la prueba real del 12-11-2026 el redactor superó el tope de 200 en 4 de 5 borradores (307, 261, 303 y 224) con el texto del compilador 1–2, que solo pedía «como maximo unos N caracteres». Desde el cierre V2 (apartado 4) el commit mide el tope antes de enviar: al borrador que se pasa le quita la pregunta final y, si aun así no cabe, lo descarta; este texto se lo dice al redactor y le pide un margen.
+- **Qué cambia.** Solo el texto de `maxChars = N` para Composer y Composer Reintento: **sustituye** al de la tabla de arriba, que se queda escrito como histórico (es el del compilador 1–2). Misma ancla (`FORMA:`), misma operación (`insert_after_line`) y mismo orden. `UltronPromptCompiler::VERSION = 3`.
+- **Texto** (ASCII, sin tildes, una sola línea; `N` = `persona.maxChars` y `M`, `P` y `F` su margen): insertar tras `FORMA:` → «TOPE DE LONGITUD PUBLICADO: el limite es N caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos M caracteres, que son unas P palabras: como mucho F frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.»
+- **Fórmulas** (enteros, sin coma flotante): `M = intdiv(N * 8, 100) * 10` (el 80 % de N redondeado a la decena por abajo); `P = intdiv(M, 30) * 5`; `F = max(2, intdiv(M + 30, 60))`.
+- **Tabla** (los 16 topes distintos de 320):
+
+| N | M | P | F |
+|---|---|---|---|
+| 160 | 120 | 20 | 2 |
+| 180 | 140 | 20 | 2 |
+| 200 | 160 | 25 | 3 |
+| 220 | 170 | 25 | 3 |
+| 240 | 190 | 30 | 3 |
+| 260 | 200 | 30 | 3 |
+| 280 | 220 | 35 | 4 |
+| 300 | 240 | 40 | 4 |
+| 340 | 270 | 45 | 5 |
+| 360 | 280 | 45 | 5 |
+| 380 | 300 | 50 | 5 |
+| 400 | 320 | 50 | 5 |
+| 420 | 330 | 55 | 6 |
+| 440 | 350 | 55 | 6 |
+| 460 | 360 | 60 | 6 |
+| 480 | 380 | 60 | 6 |
+
+- **Lo que no cambia.** Los textos de los Critic (`T_MAX_CRITIC`, «TOPE PUBLICADO: un borrador de mas de ~N caracteres…», y el reemplazo de `mas de ~900 caracteres`), los demás textos, las anclas y el orden. Con 320 no hay parche: `compile(línea base) === base` y la huella Legacy `3f6a5674…c902` siguen igual. Cambian las huellas de todo paquete con `maxChars` ≠ 320 (la de «profesional + 200», `702890f7…311c`, deja de valer). Lo publicado con el compilador 2 cae a Legacy en `decide` (`compiler_changed`) hasta publicar una versión nueva.
+
 ### B.4 Contrato de la publicación `ultron-engine-config/2` (aditivo)
 
 - Misma entrada que `/1` (`ULTRON_STUDIO_H5_CONTRACT.md:111-117`) con `contract: "ultron-engine-config/2"` y cada parte no nula con dos claves más, exactas y tipadas:

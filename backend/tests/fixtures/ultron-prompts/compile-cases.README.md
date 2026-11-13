@@ -31,6 +31,10 @@ La prueba que lo usa es `tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompile
 
 Desde el compilador 2 lo gobernado lleva una quinta clave, `rules.forbiddenPhrases` (las frases que prohíben las reglas S-NNN de la versión; opción A de `plans/cierre/auditoria-a-studio-whatsapp.md` §3.2). Su parche no es texto congelado de §B.3, así que este guion **solo deriva la lista vacía**, que no aplica ningún parche: los 306 casos llevan `"rules.forbiddenPhrases": []` y sus `expect` son **byte a byte los del compilador 1** (comprobado al regenerar: 306/306 iguales; Legacy y `profesional + 200` sin cambios). Se añadieron 4 inválidos (falta la clave —la forma del compilador 1—, nula, texto y objeto). Las listas no vacías las prueba `tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerPhrasesTest.php`; cuando el lead congele su texto en el contrato, este guion puede derivarlas también.
 
+## Compilador 3 (12-11-2026, Enmienda A4-1: el margen del tope para el redactor)
+
+Solo cambia el texto de `maxChars` para Composer y Composer Reintento: el del apartado «Compilador 3» de §B.3 (sustituye al del compilador 1–2, que sigue en la tabla de §B.3 como histórico). Lleva `{M}`, `{P}` y `{F}` además de `{N}`; el guion los calcula **por su cuenta** (`margen()` en `parches-m1.cjs`, con `Math.floor`) y, antes de escribir nada, exige que las tres fórmulas y las 16 filas de la tabla N → M, P, F estén escritas tal cual en §B.3, además del texto (con sus letras). Al regenerar: **288 casos cambian** (los de `maxChars` ≠ 320: 16 × 18) y **18 no** (los de 320, con la línea base: byte a byte los del compilador 2); cambian los 16 textos `maxChars.composer@N` y ningún otro; los 30 inválidos, iguales. Legacy no se mueve; `profesional + 200` pasa de `702890f7…311c` (113 672 B) a `af9e0d23…4d51` (114 206 B).
+
 ## Forma
 
 - `contract`, `base`, `compiler`, `roles` (orden canónico), `baseline`, `limits`: el marco, y la prueba lo ata a las constantes publicadas del código.
@@ -66,5 +70,5 @@ Todas coinciden hoy con el compilador de PHP. Si alguna no es la intención del 
 | | Este guion (Node `crypto`) | Otras fuentes |
 |---|---|---|
 | Huella Legacy | `3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902` | `UltronPromptBase::LEGACY_BUNDLE_HASH`; Python `hashlib` (B-M) |
-| V2 de aceptación (`profesional` + `200`) | `702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c`, 113 672 B, 10 parches | informe de B-M (`api-compilador.md` §4) |
-| Máximos | Rol más grande: 29 570 B (`strategist` con `goal=venta`), con tope de 40 960. Paquete más grande: 114 187 B, con tope de 163 840. Texto de parche más largo: 326 B, con tope de 1 200. Hasta 15 parches por caso | §B.3, «Límites» |
+| V2 de aceptación (`profesional` + `200`), compilador 3 | `af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51`, 114 206 B, 10 parches | `UltronPromptCompiler` de PHP (`UltronPromptCompilerPhrasesTest`); con los compiladores 1 y 2 era `702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c`, 113 672 B (informe de B-M, `api-compilador.md` §4) |
+| Máximos (compilador 3) | Rol más grande: 29 570 B (`strategist` con `goal=venta`), con tope de 40 960. Paquete más grande: 114 721 B, con tope de 163 840. Texto de parche más largo: 487 B (`maxChars.composer`), con tope de 1 200. Hasta 15 parches por caso. Con el compilador 2: 114 187 B y 326 B | §B.3, «Límites» |

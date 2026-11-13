@@ -30,6 +30,13 @@ namespace App\Services\Marketing\Ultron\Prompts;
  * huella. Una lista que no cumple NO se trunca ni se filtra: lanza
  * (`invalid_phrases`) y quien publica se niega.
  *
+ * VERSIÓN 3 (Enmienda A4-1 del H5; cierre V2, apartado 4): el texto del tope
+ * para el redactor ({@see self::T_MAX_COMPOSER}) dice que el límite se mide
+ * antes de enviar y le pide un margen: unos `M` caracteres (el 80 % de `N` a
+ * la decena por abajo), unas `P` palabras y como mucho `F` frases. El del
+ * Critic, las anclas, las operaciones y el orden no cambian, y con 320 sigue
+ * sin haber parche: `compile(línea base)` y la huella Legacy quedan igual.
+ *
  * PARCHES ANCLADOS, NO PLANTILLAS. La base no se edita: cada valor distinto de
  * la línea base aplica parches `{rol, ancla, operación, texto}` donde el ancla
  * es una subcadena que tiene que aparecer EXACTAMENTE UNA VEZ (sensible a
@@ -81,9 +88,13 @@ final class UltronPromptCompiler
      * La versión del compilador (textos, anclas, operaciones y orden). Firmada
      * en `/2`. La 2 añade `rules.forbiddenPhrases`: una publicación firmada con
      * la 1 cae a Legacy en `decide` (`compiler_changed`) hasta volver a
-     * publicarla.
+     * publicarla. La 3 (Enmienda A4-1 del H5, cierre V2, apartado 4) solo
+     * cambia el texto del tope para el redactor ({@see self::T_MAX_COMPOSER}):
+     * le pide un margen por debajo del límite, porque el commit lo mide antes
+     * de enviar. Cambian las huellas de todo paquete con `maxChars` distinto
+     * de 320; la línea base y la huella Legacy, no.
      */
-    public const VERSION = 2;
+    public const VERSION = 3;
 
     /** La base sobre la que compila esta versión. */
     public const BASE = UltronPromptBase::ID;
@@ -200,7 +211,10 @@ final class UltronPromptCompiler
 
     private const A_PRINCIPIO = 'PRINCIPIO:';
 
-    // ── Textos aprobados (plan §B.3, M1-3). `{N}` es el valor de persona.maxChars. ──
+    // ── Textos aprobados (plan §B.3, M1-3). `{N}` es el valor de persona.maxChars;
+    //    `{M}`, `{P}` y `{F}`, su margen para el redactor (compilador 3, §B.3
+    //    «Compilador 3»): {@see self::composerTargetChars()},
+    //    {@see self::composerTargetWords()} y {@see self::composerMaxSentences()}. ──
 
     private const T_TONE_PRO_COMPOSER = 'REGISTRO PUBLICADO: profesional. Esto manda sobre los ejemplos de arriba: trata a la persona de usted, frases completas y sobrias, sin muletillas coloquiales ("De una", "Listo", "Tranquilo") ni exclamaciones seguidas. Sigue siendo calido; profesional no es frio.';
 
@@ -214,7 +228,13 @@ final class UltronPromptCompiler
 
     private const T_EMOJIS_OFF_CRITIC = 'EMOJIS: la version publicada no usa emojis; si el borrador lleva alguno, verdict fail con naturalness.';
 
-    private const T_MAX_COMPOSER = 'TOPE DE LONGITUD PUBLICADO: como maximo unos {N} caracteres por mensaje, contando cada marcador como el texto que lo sustituye; tambien la informacion general respeta el tope: si no cabe, da lo esencial y ofrece ampliar.';
+    /**
+     * Compilador 3. Sustituye al del compilador 1–2 («como maximo unos {N}
+     * caracteres…», que queda escrito como histórico en §B.3): en la prueba
+     * real del 12-11-2026 el redactor superó el tope de 200 en 4 de 5
+     * borradores. Pendiente de la aprobación del propietario (HUMAN GATE 4-A).
+     */
+    private const T_MAX_COMPOSER = 'TOPE DE LONGITUD PUBLICADO: el limite es {N} caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos {M} caracteres, que son unas {P} palabras: como mucho {F} frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.';
 
     private const T_MAX_CRITIC_900 = 'mas de ~{N} caracteres';
 
@@ -465,6 +485,27 @@ final class UltronPromptCompiler
         return array_values(array_filter(UltronPromptBase::ROLES, static fn (string $r): bool => in_array($r, $tocados, true)));
     }
 
+    // ── El margen del redactor (compilador 3; plan §B.3, «Compilador 3») ─────
+    //    Enteros, sin coma flotante: 200 → 160, 25 y 3; 160 → 120, 20 y 2; 480 → 380, 60 y 6.
+
+    /** `{M}`: los caracteres a los que apunta el redactor, el 80 % del tope redondeado a la decena por abajo. */
+    public static function composerTargetChars(int $maxChars): int
+    {
+        return intdiv($maxChars * 8, 100) * 10;
+    }
+
+    /** `{P}`: esos caracteres en palabras, unas seis letras por palabra, de cinco en cinco por abajo. */
+    public static function composerTargetWords(int $maxChars): int
+    {
+        return intdiv(self::composerTargetChars($maxChars), 30) * 5;
+    }
+
+    /** `{F}`: las frases cortas como mucho, una por cada 60 caracteres (redondeando), y nunca menos de dos. */
+    public static function composerMaxSentences(int $maxChars): int
+    {
+        return max(2, intdiv(self::composerTargetChars($maxChars) + 30, 60));
+    }
+
     // ── Piezas ──────────────────────────────────────────────────────────────
 
     /**
@@ -508,9 +549,15 @@ final class UltronPromptCompiler
                     return [];
                 }
                 $n = static fn (string $plantilla): string => str_replace('{N}', (string) $valor, $plantilla);
+                // Compilador 3: el margen sale del valor, no del texto (son cifras: ninguna sustitución pisa a otra).
+                $redactor = str_replace(
+                    ['{M}', '{P}', '{F}'],
+                    [(string) self::composerTargetChars($valor), (string) self::composerTargetWords($valor), (string) self::composerMaxSentences($valor)],
+                    $n(self::T_MAX_COMPOSER),
+                );
 
                 return [
-                    ...$ambos($composers, self::INSERT_AFTER_LINE, self::A_FORMA, $n(self::T_MAX_COMPOSER)),
+                    ...$ambos($composers, self::INSERT_AFTER_LINE, self::A_FORMA, $redactor),
                     ['critic', self::REPLACE, self::A_900, $n(self::T_MAX_CRITIC_900)],
                     ['critic', self::INSERT_AFTER_LINE, self::A_PROGRESSIVE, $n(self::T_MAX_CRITIC)],
                     ['critic_retry', self::REPLACE, self::A_900, $n(self::T_MAX_CRITIC_900)],

@@ -15,7 +15,7 @@
         "mode": "legacy",
         "reason": "prompts_off",
         "base": "n8n-29de5119",
-        "compiler": 2,
+        "compiler": 3,
         "bundle_hash": null,
         "version": null,
         "content_hash": null,
