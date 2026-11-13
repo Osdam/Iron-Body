@@ -1,0 +1,10 @@
+== tests/Feature/Marketing + tests/Unit/Marketing (SQLite), código final
+Time: 02:32.371, Memory: 503.00 MB
+
+OK (6129 tests, 35803 assertions)
+
+== tests/Feature/UltronStudio + tests/Unit/UltronStudio (SQLite), código final
+
+FAILURES!
+Tests: 3767, Assertions: 41596, Failures: 1, Skipped: 277.
+1) Tests\Feature\UltronStudio\OutreachIsolationTest::test_la_puerta_de_diff_de_legacy_n8n_otp_y_motor_comercial_esta_vacia_y_la_voz_no_gana_ficheros

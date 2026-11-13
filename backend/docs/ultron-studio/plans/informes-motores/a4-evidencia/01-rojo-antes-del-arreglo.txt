@@ -1,0 +1,543 @@
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/phpunit.xml
+
+EEEEEEEEEEEEEEEEEEEEEEF.EFFFFFFFFFEEEEEEEEEEEEEEEEEEEEEEEEEEEEE  63 / 100 ( 63%)
+EEEEEEEEEEEEEEEEEEEEE..EEEEFFEFEEFE..                           100 / 100 (100%)
+
+Time: 00:05.762, Memory: 90.50 MB
+
+There were 81 errors:
+
+1) Tests\Unit\Marketing\Ultron\UltronReplyFitterTest::test_se_mide_sin_las_url_y_todo_lo_demas_cuenta
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php:30
+
+2) Tests\Unit\Marketing\Ultron\UltronReplyFitterTest::test_el_tope_firmado_se_valida
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php:40
+
+3) Tests\Unit\Marketing\Ultron\UltronReplyFitterTest::test_parte_en_frases_enteras_y_no_dentro_de_a_m
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php:52
+
+4) Tests\Unit\Marketing\Ultron\UltronReplyFitterTest::test_la_regla_general_sobre_los_textos_de_hoy with data set "payment_link_request" ('payment_link_request', 185, 139)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php:85
+
+5) Tests\Unit\Marketing\Ultron\UltronReplyFitterTest::test_la_regla_general_sobre_los_textos_de_hoy with data set "high_intent_close" ('high_intent_close', 185, 139)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php:85
+
+6) Tests\Unit\Marketing\Ultron\UltronReplyFitterTest::test_la_regla_general_sobre_los_textos_de_hoy with data set "medical_risk_escalation" ('medical_risk_escalation', 151, 151)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php:85
+
+7) Tests\Unit\Marketing\Ultron\UltronReplyFitterTest::test_la_regla_general_sobre_los_textos_de_hoy with data set "invoice_request" ('invoice_request', 125, 125)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php:85
+
+8) Tests\Unit\Marketing\Ultron\UltronReplyFitterTest::test_la_regla_general_sobre_los_textos_de_hoy with data set "fraud_or_payment_claim" ('fraud_or_payment_claim', 195, 132)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php:85
+
+9) Tests\Unit\Marketing\Ultron\UltronReplyFitterTest::test_la_regla_general_sobre_los_textos_de_hoy with data set "goal_recomposition" ('goal_recomposition', 183, 134)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php:85
+
+10) Tests\Unit\Marketing\Ultron\UltronReplyFitterTest::test_la_regla_general_sobre_los_textos_de_hoy with data set "insecurity_body" ('insecurity_body', 162, 112)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php:85
+
+11) Tests\Unit\Marketing\Ultron\UltronReplyFitterTest::test_la_regla_general_sobre_los_textos_de_hoy with data set "general_info" ('general_info', 87, 87)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php:85
+
+12) Tests\Unit\Marketing\Ultron\UltronReplyFitterTest::test_la_pregunta_final_se_suelta_despues_de_las_del_medio
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php:103
+
+13) Tests\Unit\Marketing\Ultron\UltronReplyFitterTest::test_un_texto_que_cabe_sale_igual
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php:111
+
+14) Tests\Unit\Marketing\Ultron\UltronReplyFitterTest::test_horario_entre_semana_a_200_salen_los_cuatro_grupos_sin_pregunta
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php:118
+
+15) Tests\Unit\Marketing\Ultron\UltronReplyFitterTest::test_horario_entre_semana_a_160_salen_laborables_sabados_y_domingos
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php:125
+
+16) Tests\Unit\Marketing\Ultron\UltronReplyFitterTest::test_horario_el_dia_preguntado_es_obligatorio
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php:133
+
+17) Tests\Unit\Marketing\Ultron\UltronReplyFitterTest::test_horario_sin_dias_reconocibles_aplica_la_regla_general
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php:150
+
+18) Tests\Unit\Marketing\Ultron\UltronReplyFitterTest::test_el_borrador_se_recorta_desde_el_final
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php:161
+
+19) Tests\Unit\Marketing\Ultron\UltronReplyFitterTest::test_el_recorte_salta_la_frase_con_precio_y_la_que_lleva_url
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php:169
+
+20) Tests\Unit\Marketing\Ultron\UltronReplyFitterTest::test_si_no_se_puede_recortar_se_descarta
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php:181
+
+21) Tests\Unit\Marketing\Ultron\UltronReplyFitterTest::test_la_frase_del_precio_verificado_tiene_prioridad_y_la_de_la_visita_solo_si_cabe
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php:192
+
+22) Tests\Unit\Marketing\Ultron\UltronReplyFitterTest::test_respaldo_de_precios_suelta_en_el_orden_fijado
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronReplyFitterTest.php:211
+
+23) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_un_n_fuera_de_rango_se_ignora_con_aviso
+Mockery\Exception\InvalidCountException: Method warning(<Any Arguments>) from Mockery_2_Illuminate_Log_LogManager should be called
+ at least 1 times but called 0 times.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/mockery/mockery/library/Mockery/CountValidator/AtLeast.php:42
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/mockery/mockery/library/Mockery/Expectation.php:739
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/mockery/mockery/library/Mockery/ReceivedMethodCalls.php:36
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/mockery/mockery/library/Mockery/VerificationDirector.php:86
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:199
+
+24) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_horario_los_sabados_a_160
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:311
+
+25) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_horario_con_una_ficha_sin_dias_aplica_la_regla_general
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:321
+
+26) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "pricing_question a 160" ('pricing_question', 160)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+27) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "pricing_question a 200" ('pricing_question', 200)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+28) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "payment_link_request a 160" ('payment_link_request', 160)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+29) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "payment_link_request a 200" ('payment_link_request', 200)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+30) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "price_objection a 160" ('price_objection', 160)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+31) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "price_objection a 200" ('price_objection', 200)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+32) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "time_objection a 160" ('time_objection', 160)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+33) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "time_objection a 200" ('time_objection', 200)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+34) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "delay_objection a 160" ('delay_objection', 160)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+35) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "delay_objection a 200" ('delay_objection', 200)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+36) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "beginner_fear a 160" ('beginner_fear', 160)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+37) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "beginner_fear a 200" ('beginner_fear', 200)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+38) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "insecurity_body a 160" ('insecurity_body', 160)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+39) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "insecurity_body a 200" ('insecurity_body', 200)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+40) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "location_question a 160" ('location_question', 160)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+41) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "location_question a 200" ('location_question', 200)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+42) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "schedule_question a 160" ('schedule_question', 160)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+43) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "schedule_question a 200" ('schedule_question', 200)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+44) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "general_info a 160" ('general_info', 160)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+45) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "general_info a 200" ('general_info', 200)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+46) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "goal_fat_loss a 160" ('goal_fat_loss', 160)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+47) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "goal_fat_loss a 200" ('goal_fat_loss', 200)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+48) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "goal_muscle_gain a 160" ('goal_muscle_gain', 160)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+49) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "goal_muscle_gain a 200" ('goal_muscle_gain', 200)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+50) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "goal_recomposition a 160" ('goal_recomposition', 160)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+51) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "goal_recomposition a 200" ('goal_recomposition', 200)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+52) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "high_intent_close a 160" ('high_intent_close', 160)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+53) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "high_intent_close a 200" ('high_intent_close', 200)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+54) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "greeting a 160" ('greeting', 160)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+55) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "greeting a 200" ('greeting', 200)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+56) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "thanks a 160" ('thanks', 160)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+57) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "thanks a 200" ('thanks', 200)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+58) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "goodbye a 160" ('goodbye', 160)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+59) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "goodbye a 200" ('goodbye', 200)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+60) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "not_interested a 160" ('not_interested', 160)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+61) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "not_interested a 200" ('not_interested', 200)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+62) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "bot_question a 160" ('bot_question', 160)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+63) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "bot_question a 200" ('bot_question', 200)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+64) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "human_request a 160" ('human_request', 160)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+65) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "human_request a 200" ('human_request', 200)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+66) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "complaint a 160" ('complaint', 160)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+67) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "complaint a 200" ('complaint', 200)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+68) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "invoice_request a 160" ('invoice_request', 160)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+69) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "invoice_request a 200" ('invoice_request', 200)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+70) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "medical_risk_escalation a 160" ('medical_risk_escalation', 160)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+71) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "medical_risk_escalation a 200" ('medical_risk_escalation', 200)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+72) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "fraud_or_payment_claim a 160" ('fraud_or_payment_claim', 160)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+73) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "fraud_or_payment_claim a 200" ('fraud_or_payment_claim', 200)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+74) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "spam_or_low_quality a 160" ('spam_or_low_quality', 160)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+75) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "spam_or_low_quality a 200" ('spam_or_low_quality', 200)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+76) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "unknown a 160" ('unknown', 160)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+77) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_ningun_respaldo_supera_el_tope with data set "unknown a 200" ('unknown', 200)
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:353
+
+78) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_los_enlaces_de_la_app_no_cuentan_y_su_linea_no_se_suelta
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:391
+
+79) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_el_precio_verificado_tiene_prioridad_sobre_el_cuerpo
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:417
+
+80) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_la_frase_que_retoma_la_visita_solo_se_anade_si_cabe
+Error: Class "App\Services\Marketing\Ultron\UltronReplyFitter" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:428
+
+81) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_el_punto_de_control_cambia_lo_que_no_cabe_por_un_ultimo_recurso_y_lo_anota
+ReflectionException: Method App\Services\Marketing\Ultron\UltronCommitService::antesDeEnviar() does not exist
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:451
+
+--
+
+There were 14 failures:
+
+1) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_el_token_lleva_n_solo_con_studio_y_tope_distinto_de_320
+studio con 200
+Failed asserting that null is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:161
+
+2) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_precios_con_tope_200_nombra_los_tres_de_un_mes_con_su_precio
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
++'Sí, claro. Cuéntame qué buscas —bajar grasa, ganar masa o coger el hábito— y te digo el plan que mejor te encaja y su precio.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:209
+
+3) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_precios_con_tope_160_suelta_la_frase_de_las_demas_duraciones
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. ¿Sobre cuál amplío la información?'
++'Sí, claro. Cuéntame qué buscas —bajar grasa, ganar masa o coger el hábito— y te digo el plan que mejor te encaja y su precio.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:224
+
+4) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_precios_con_studio_sin_tope_sale_entero_y_sin_medida
+D-1: el respaldo de precios cuelga de studio, no del tope
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
++'Sí, claro. Cuéntame qué buscas —bajar grasa, ganar masa o coger el hábito— y te digo el plan que mejor te encaja y su precio.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:231
+
+5) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_la_memoria_dice_lo_que_salio_y_la_pregunta_no_pisa_la_oferta
+precio entregado del plan 3
+Failed asserting that false is true.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:242
+
+6) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_un_plan_con_gratis_en_el_nombre_no_tumba_el_respaldo_de_precios
+Failed asserting that 'Sí, claro. Cuéntame qué buscas —bajar grasa, ganar masa o coger el hábito— y te digo el plan que mejor te encaja y su precio.' [UTF-8](length: 133) contains "Mensual gratis la primera semana, $80.000 COP" [ASCII](length: 45).
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:259
+
+7) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_sin_planes_de_un_mes_nombra_los_tres_primeros_con_su_duracion
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Nuestros planes: PLAN DÍA (1 días), $10.000 COP; Plan Semana (7 días), $45.000 COP; Trimestre (tres meses), $210.000 COP. También hay planes de varios meses. ¿Sobre cuál amplío la información?'
++'Sí, claro. Cuéntame qué buscas —bajar grasa, ganar masa o coger el hábito— y te digo el plan que mejor te encaja y su precio.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:271
+
+8) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_el_plan_que_nombra_la_persona_va_primero
+Failed asserting that 'Sí, claro. Cuéntame qué buscas —bajar grasa, ganar masa o coger el hábito— y te digo el plan que mejor te encaja y su precio.' starts with "Claro. Planes de un mes: Élite, $180.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP.".
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:278
+
+9) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_la_regla_depende_del_orden_del_catalogo
+Failed asserting that 'Sí, claro. Cuéntame qué buscas —bajar grasa, ganar masa o coger el hábito— y te digo el plan que mejor te encaja y su precio.' starts with "Claro. Planes de un mes: PROMO X4, $75.000 COP; Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP.".
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:287
+
+10) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_horario_entre_semana_a_200_y_a_160
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Horario general de atencion: Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m.'
++'Claro. Horario general de atencion: Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m. Este es el horario de apertura del gimnasio, no el horario de las clases. ¿En qué franja te queda mejor entrenar?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:296
+
+11) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_borrador_aprobado_que_se_pasa_se_recorta_desde_el_final
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Te cuento: el Élite tiene un costo mensual de $180.000 COP e incluye acceso total al gimnasio. Además tienes sesiones funcionales, rutinas guiadas y seguimiento continuo con tu entrenador.'
++'Te cuento: el Élite tiene un costo mensual de $180.000 COP e incluye acceso total al gimnasio. Además tienes sesiones funcionales, rutinas guiadas y seguimiento continuo con tu entrenador. ¿Quieres que te cuente cómo empezar?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:370
+
+12) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_el_recorte_salta_la_frase_del_precio
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro, te cuento del Élite. Su valor es $180.000 COP al mes.'
++'Claro, te cuento del Élite. Incluye acceso total al gimnasio, sesiones funcionales, rutinas guiadas y seguimiento continuo con guía nutricional. Su valor es $180.000 COP al mes.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:381
+
+13) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_si_no_se_puede_recortar_se_descarta_y_sale_el_respaldo_ajustado
+el respaldo de precios, por la rama de la política
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
++'Te confirmo que el plan Élite, que es el que mejor te encaja por todo lo que me has contado hasta ahora, tiene un costo mensual de $180.000 COP e incluye acceso total al gimnasio, sesiones funcionales, rutinas guiadas y seguimiento continuo.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:402
+
+14) Tests\Feature\Marketing\UltronA4LongitudYPreciosTest::test_todo_envio_del_commit_pasa_por_el_punto_de_control_salvo_el_del_enlace_de_pago
+$replyFinal | $curado | $texto | $body
+Failed asserting that 0 is identical to 3.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php:441
+
+ERRORS!
+Tests: 100, Assertions: 424, Errors: 81, Failures: 14.

@@ -215,7 +215,8 @@ class UltronDecidePromptsTest extends TestCase
         $token = $res->json('decide_token');
         $this->assertLessThan(1500, strlen($token));
         $sp = self::cargaDelToken($token)['x']['sp'] ?? null;
-        $this->assertSame(['m' => $oferta['mode'], 'r' => $oferta['reason'], 'h' => $oferta['bundle_hash'], 'v' => $oferta['version'], 'c' => $oferta['content_hash'], 'e' => $oferta['entry'], 's' => $oferta['seq']], $sp);
+        // Apartado 4 del cierre V2 (D-2): en `studio` con un tope distinto de la línea base, `n` (aquí 200); Legacy, sin la clave.
+        $this->assertSame(['m' => $oferta['mode'], 'r' => $oferta['reason'], 'h' => $oferta['bundle_hash'], 'v' => $oferta['version'], 'c' => $oferta['content_hash'], 'e' => $oferta['entry'], 's' => $oferta['seq']] + ($oferta['mode'] === 'studio' ? ['n' => 200] : []), $sp);
 
         // Una sentencia sobre la cadena solo si se llegó a leerla (paso 4), y de lectura.
         $leeLaCadena = $prompts === 'canary' && $config !== 'off' && $conversacion === 'canaria';

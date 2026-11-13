@@ -1,0 +1,13 @@
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/phpunit.xml
+
+...............................................................  63 / 242 ( 26%)
+............................................................... 126 / 242 ( 52%)
+............................................................... 189 / 242 ( 78%)
+.....................................................           242 / 242 (100%)
+
+Time: 00:12.150, Memory: 106.50 MB
+
+OK (242 tests, 3522 assertions)

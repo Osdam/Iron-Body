@@ -95,7 +95,7 @@ final class UltronPromptOffer
      * La oferta para esta conversación: lo que va en la respuesta de `decide`
      * (`studio_prompts`) y lo que va firmado en el token (`x.sp`). Nunca lanza.
      *
-     * @return array{response:array{contract:string,mode:string,reason:?string,base:string,compiler:int,bundle_hash:?string,version:?string,content_hash:?string,entry:?string,seq:?int,roles:?array<string,string>},sp:array{m:string,r:?string,h:?string,v:?string,c:?string,e:?string,s:?int}}
+     * @return array{response:array{contract:string,mode:string,reason:?string,base:string,compiler:int,bundle_hash:?string,version:?string,content_hash:?string,entry:?string,seq:?int,roles:?array<string,string>},sp:array{m:string,r:?string,h:?string,v:?string,c:?string,e:?string,s:?int,n?:int}}
      */
     public function forConversation(int $conversationId): array
     {
@@ -186,7 +186,21 @@ final class UltronPromptOffer
             'roles' => $paquete['roles'],
         ];
 
-        return ['response' => $respuesta, 'sp' => self::sp($respuesta)];
+        /*
+         * EL TOPE PUBLICADO, FIRMADO PARA EL COMMIT (apartado 4 del cierre V2,
+         * decisión D-2). El commit mide la respuesta contra lo que se le PIDIÓ
+         * al modelo en este turno, no contra una relectura de la cadena: entre
+         * `decide` y `commit` alguien puede revertir. Solo va si es distinto de
+         * la línea base del compilador (M1-4: la línea base significa «como
+         * hoy»), y solo aquí, en `sp`: la respuesta a n8n no cambia.
+         */
+        $sp = self::sp($respuesta);
+        $tope = $parte['governed'][UltronPromptCompiler::MAX_CHARS] ?? null;
+        if (is_int($tope) && $tope !== UltronPromptCompiler::BASELINE[UltronPromptCompiler::MAX_CHARS]) {
+            $sp['n'] = $tope;
+        }
+
+        return ['response' => $respuesta, 'sp' => $sp];
     }
 
     /**
@@ -229,6 +243,8 @@ final class UltronPromptOffer
     /**
      * Lo que viaja firmado en el token (`x.sp`), con claves cortas: modo,
      * motivo, huella del paquete, versión, huella de contenido, entrada y seq.
+     * En `studio`, `offer()` añade `n` (el tope publicado) si no es el de la
+     * línea base; Legacy nunca lo lleva.
      *
      * @param  array<string,mixed>  $respuesta
      * @return array{m:string,r:?string,h:?string,v:?string,c:?string,e:?string,s:?int}
