@@ -61,6 +61,12 @@ class RoutineDraftEditor
             );
         }
 
+        // Agrupadas por día (en el orden en que aparece cada día y, dentro de él, en
+        // el que llegan): `sort_order` y `routines.days` cuentan lo mismo. Sin esto,
+        // subir un ejercicio por encima del último del día anterior lo dejaba fuera
+        // de su grupo y, al reabrir, el día que se deduce por posición era otro.
+        $limpios = $this->groupedByDay($limpios);
+
         $actualizada = DB::transaction(function () use ($routine, $limpios) {
             $conservadas = [];
 
@@ -188,6 +194,20 @@ class RoutineDraftEditor
      * @param  list<array<string,mixed>>  $exercises
      * @return list<array<string,mixed>>
      */
+    /**
+     * @param  list<array<string,mixed>>  $exercises
+     * @return list<array<string,mixed>>
+     */
+    private function groupedByDay(array $exercises): array
+    {
+        $porDia = [];
+        foreach ($exercises as $e) {
+            $porDia[$e['day'] ?? 'Día 1'][] = $e;
+        }
+
+        return array_merge(...array_values($porDia));
+    }
+
     private function daysFrom(array $exercises): array
     {
         $porDia = [];

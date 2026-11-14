@@ -1163,4 +1163,36 @@ class IronIaRoutineRecoveryTest extends TestCase
         // Una rutina normal se sigue asignando como siempre.
         $this->patchJson("/api/routines/{$original->id}/assign", ['assignedMemberId' => $socio->id], $this->adminHeaders())->assertOk();
     }
+
+    public function test_mover_un_ejercicio_por_encima_del_limite_de_su_dia_no_le_cambia_el_dia(): void
+    {
+        // Revisión del punto F (13-11): el editor sube o baja ejercicios conservando su
+        // `day`. Si uno de «Día 2» queda por encima del último de «Día 1», el orden de las
+        // filas ya no coincidía con la agrupación por días y, al reabrir, el día que manda
+        // el servidor (por posición) era otro.
+        FakeIronIaOpenAi::install();
+        $socio = $this->socio();
+        $original = $this->rutinaIa($socio, 4);
+        $this->recuperar(['--execute' => true])->assertExitCode(0);
+        $p = $this->propuestaDe($original);
+
+        $filas = $this->getJson("/api/trainer/routines/{$p->id}", $this->asTrainer())->assertOk()->json('data.exercises');
+        $diaDe = fn (array $lista) => array_combine(array_column($lista, 'id'), array_column($lista, 'day'));
+        $antes = $diaDe($filas);
+        $nombres = array_values(array_unique(array_column($filas, 'day')));
+
+        // El primero del segundo día sube por encima del último del primero (lo que hace «subir»).
+        $primeroDel2 = array_search($nombres[1], array_column($filas, 'day'), true);
+        $cuerpo = array_map(fn ($e) => ['id' => $e['id'], 'exercise_id' => $e['exercise_id'], 'sets' => $e['sets'], 'reps' => $e['reps'], 'day' => $e['day']], $filas);
+        [$cuerpo[$primeroDel2 - 1], $cuerpo[$primeroDel2]] = [$cuerpo[$primeroDel2], $cuerpo[$primeroDel2 - 1]];
+        $this->putJson("/api/trainer/routines/{$p->id}/exercises", ['exercises' => $cuerpo], $this->asTrainer())->assertOk();
+
+        $despues = $this->getJson("/api/trainer/routines/{$p->id}", $this->asTrainer())->assertOk()->json('data.exercises');
+        $this->assertSame($antes, $diaDe($despues), 'cada ejercicio sigue en su día');
+        $this->assertSame(6, (int) $p->refresh()->days_per_week);
+        // Y guardar otra vez tal cual no lo cambia (antes, el segundo guardado lo fijaba en el día equivocado).
+        $tal = array_map(fn ($e) => ['id' => $e['id'], 'exercise_id' => $e['exercise_id'], 'sets' => $e['sets'], 'reps' => $e['reps'], 'day' => $e['day']], $despues);
+        $this->putJson("/api/trainer/routines/{$p->id}/exercises", ['exercises' => $tal], $this->asTrainer())->assertOk();
+        $this->assertSame($antes, $diaDe($this->getJson("/api/trainer/routines/{$p->id}", $this->asTrainer())->json('data.exercises')));
+    }
 }
