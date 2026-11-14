@@ -86,8 +86,13 @@ echo "3. comprobaciones después"
 c=$(curl -s --max-time 20 -o /dev/null -w '%{http_code}' -H 'Accept: application/json' "$API/trainer/exercises") || c=000
 echo "   GET trainer/exercises sin sesión → $c (esperado 401: auth.trainer vivo, sin efectos)"
 [ "$c" = 401 ] || aborta "trainer/exercises sin sesión respondió $c"
-sleep 8
-RUN1=$(supervisorctl status 2>/dev/null | grep -c RUNNING || true)
+# queue:restart deja que cada worker termine su trabajo: alguno tarda más de 8 s en volver
+# (14-11: 13 de 14 a los 8 s y 14 a los 20 s). Se espera hasta 30 s antes de juzgar.
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  sleep 3
+  RUN1=$(supervisorctl status 2>/dev/null | grep -c RUNNING || true)
+  [ "$RUN1" = "$RUN0" ] && break
+done
 NO_RUN1=$(supervisorctl status 2>/dev/null | grep -c -E 'BACKOFF|FATAL' || true)
 echo "   workers RUNNING $RUN1 (antes $RUN0) · BACKOFF/FATAL $NO_RUN1"
 [ "$RUN1" = "$RUN0" ] && [ "$NO_RUN1" = 0 ] || aborta "los workers no volvieron igual que antes"
