@@ -89,6 +89,29 @@ class RoutineResource extends JsonResource
      * Normaliza la columna JSON `days` a un arreglo estable para la app,
      * enriqueciendo cada ejercicio con la media del catálogo.
      */
+    /**
+     * Etiqueta de la pestaña del día en la app (`Tab(text: d.day)`). Las rutinas de
+     * Iron IA guardan sus días con `name` («Día 1 · Torso A») y sin `day`: la
+     * pestaña salía vacía. Orden: el `day` o `weekday` que traiga (rutinas por
+     * día de la semana, sin cambios); si no, el «Día N» del nombre; si no, el
+     * nombre; si no hay nada, «Día N» por posición. El título no cambia.
+     *
+     * @param  array<string,mixed>  $day
+     */
+    private function dayLabel(array $day, int $i): string
+    {
+        $explicito = trim((string) ($day['day'] ?? $day['weekday'] ?? ''));
+        if ($explicito !== '') {
+            return $explicito;
+        }
+        $nombre = trim((string) ($day['name'] ?? $day['title'] ?? ''));
+        if ($nombre !== '' && preg_match('/^(D[ií]a\s+\d+)\s*·/u', $nombre, $m) === 1) {
+            return $m[1];
+        }
+
+        return $nombre !== '' ? $nombre : 'Día '.($i + 1);
+    }
+
     private function serializeDays(ExerciseCatalogResolver $resolver): array
     {
         if (! is_array($this->days) || empty($this->days)) {
@@ -100,7 +123,7 @@ class RoutineResource extends JsonResource
             $rawExercises = is_array($day['exercises'] ?? null) ? $day['exercises'] : [];
 
             return [
-                'day' => (string) ($day['day'] ?? $day['weekday'] ?? ''),
+                'day' => $this->dayLabel($day, $i),
                 'title' => (string) ($day['title'] ?? $day['name'] ?? ''),
                 'objective' => (string) ($day['objective'] ?? ''),
                 'sort_order' => (int) ($day['sort_order'] ?? $i),
