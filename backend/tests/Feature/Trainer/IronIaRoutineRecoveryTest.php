@@ -27,6 +27,7 @@ use App\Services\Nutrition\Ai\NutritionAiCostGuard;
 use App\Services\RealtimeEvents;
 use App\Services\Trainer\IntegralPlanGenerationService;
 use App\Services\Trainer\Recovery\RoutineRecoveryCampaign;
+use App\Services\Trainer\RoutineMuscleOrganizer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -1194,5 +1195,165 @@ class IronIaRoutineRecoveryTest extends TestCase
         $tal = array_map(fn ($e) => ['id' => $e['id'], 'exercise_id' => $e['exercise_id'], 'sets' => $e['sets'], 'reps' => $e['reps'], 'day' => $e['day']], $despues);
         $this->putJson("/api/trainer/routines/{$p->id}/exercises", ['exercises' => $tal], $this->asTrainer())->assertOk();
         $this->assertSame($antes, $diaDe($this->getJson("/api/trainer/routines/{$p->id}", $this->asTrainer())->json('data.exercises')));
+    }
+
+    // ── «Organizar automáticamente» (punto F; ORGANIZAR-AUTOMATICAMENTE-CONTRATO.md) ──
+
+    /** @return list<array<string,mixed>> la lista del editor tal como la manda la app */
+    private function listaDelEditor(Routine $p): array
+    {
+        return array_map(fn ($e) => ['id' => $e['id'], 'exercise_id' => $e['exercise_id'], 'sets' => $e['sets'], 'reps' => $e['reps'],
+            'weight' => $e['weight'], 'notes' => $e['notes'], 'day' => $e['day']],
+            $this->getJson("/api/trainer/routines/{$p->id}", $this->asTrainer())->assertOk()->json('data.exercises'));
+    }
+
+    public function test_organizar_seis_a_cuatro_dias_es_una_vista_previa_y_luego_se_guarda_y_publica(): void
+    {
+        FakeIronIaOpenAi::install();
+        $socio = $this->socio();
+        $original = $this->rutinaIa($socio, 4);
+        $this->recuperar(['--execute' => true])->assertExitCode(0);
+        $p = $this->propuestaDe($original);
+        $lista = $this->listaDelEditor($p);
+        $diasAntes = $p->fresh()->days;
+        $filasAntes = RoutineExercise::where('routine_id', $p->id)->orderBy('id')->get(['id', 'exercise_id', 'sort_order', 'sets', 'reps'])->toArray();
+
+        $r = $this->postJson("/api/trainer/routines/{$p->id}/organize", ['exercises' => $lista, 'days_per_week' => 4, 'session_minutes' => 60], $this->asTrainer())
+            ->assertOk()->assertJsonPath('ok', true)->assertJsonPath('data.days_per_week', 4)->assertJsonPath('data.changed', true);
+        $data = $r->json('data');
+
+        // Los mismos ejercicios (mismos ids de fila), agrupados por los 4 días del reparto; nada escrito.
+        $nombres = array_column(app(RoutineMuscleOrganizer::class)->dayPlan(4, 'intermedio'), 'name');
+        $this->assertSame($nombres, array_column($data['days'], 'name'));
+        $this->assertEqualsCanonicalizing(array_column($lista, 'id'), array_column($data['exercises'], 'id'));
+        $this->assertSame($nombres, array_values(array_unique(array_column($data['exercises'], 'day'))));
+        $this->assertTrue($data['review']['ok'], json_encode($data['review'], JSON_UNESCAPED_UNICODE));
+        $this->assertGreaterThanOrEqual(0.6, $data['review']['min_share']);
+        $this->assertEquals($diasAntes, $p->fresh()->days, 'organizar no escribe');
+        $this->assertSame($filasAntes, RoutineExercise::where('routine_id', $p->id)->orderBy('id')->get(['id', 'exercise_id', 'sort_order', 'sets', 'reps'])->toArray());
+
+        // El entrenador lo aplica y guarda con el PUT de siempre: 4 días, mismas filas.
+        $cuerpo = array_map(fn ($e) => array_intersect_key($e, array_flip(['id', 'exercise_id', 'sets', 'reps', 'weight', 'notes', 'day'])), $data['exercises']);
+        $this->putJson("/api/trainer/routines/{$p->id}/exercises", ['exercises' => $cuerpo], $this->asTrainer())->assertOk();
+        $this->assertSame(4, (int) $p->refresh()->days_per_week);
+        $this->assertEqualsCanonicalizing(array_column($filasAntes, 'id'), RoutineExercise::where('routine_id', $p->id)->pluck('id')->all());
+
+        // Y se publica con 4 días confirmados, sin pagar una regeneración.
+        $corridas = NutritionAiRun::count();
+        $this->postJson("/api/trainer/routines/{$p->id}/publish", $this->confirmar($p, ['days_per_week' => 4]), $this->asTrainer())->assertOk();
+        $this->assertSame($corridas, NutritionAiRun::count());
+        $this->assertSame([$p->id], $this->rutinasDelSocio($socio));
+
+        // Publicada, ya no se organiza.
+        $this->postJson("/api/trainer/routines/{$p->id}/organize", ['exercises' => $cuerpo, 'days_per_week' => 4], $this->asTrainer())
+            ->assertStatus(422)->assertJsonPath('code', 'routine_published');
+    }
+
+    public function test_organizar_lo_ya_organizado_no_cambia_y_avisa_de_la_duracion(): void
+    {
+        FakeIronIaOpenAi::install();
+        $socio = $this->socio();
+        $original = $this->rutinaIa($socio, 4);
+        $this->recuperar(['--execute' => true])->assertExitCode(0);
+        $p = $this->propuestaDe($original);
+        $lista = $this->listaDelEditor($p);
+
+        $data = $this->postJson("/api/trainer/routines/{$p->id}/organize", ['exercises' => $lista, 'session_minutes' => 20], $this->asTrainer())
+            ->assertOk()->json('data');
+        $this->assertSame(6, $data['days_per_week'], 'por defecto, los días que tiene la lista');
+        $this->assertFalse($data['changed'], 'la propuesta ya viene organizada');
+        $this->assertSame(array_column($lista, 'id'), array_column($data['exercises'], 'id'));
+        $this->assertNotEmpty(array_filter($data['warnings'], fn ($w) => str_contains($w, 'la sesión es de 20')));
+    }
+
+    public function test_organizar_respeta_dueno_catalogo_y_numero_de_dias(): void
+    {
+        FakeIronIaOpenAi::install();
+        $socio = $this->socio();
+        $original = $this->rutinaIa($socio, 4);
+        $this->recuperar(['--execute' => true])->assertExitCode(0);
+        $p = $this->propuestaDe($original);
+        $lista = $this->listaDelEditor($p);
+
+        $this->postJson("/api/trainer/routines/{$p->id}/organize", ['exercises' => array_slice($lista, 0, 2), 'days_per_week' => 4], $this->asTrainer())
+            ->assertStatus(422)->assertJsonPath('code', 'organize_more_days_than_exercises');
+        $malo = $lista;
+        $malo[0]['exercise_id'] = 999999;
+        $this->postJson("/api/trainer/routines/{$p->id}/organize", ['exercises' => $malo], $this->asTrainer())
+            ->assertStatus(422)->assertJsonPath('code', 'invalid_exercise_id');
+        $this->postJson("/api/trainer/routines/{$p->id}/organize", ['exercises' => $lista, 'days_per_week' => 9], $this->asTrainer())
+            ->assertStatus(422)->assertJsonValidationErrors(['days_per_week']);
+
+        // Una publicada (la original) no.
+        $this->postJson("/api/trainer/routines/{$original->id}/organize", ['exercises' => $lista], $this->asTrainer())
+            ->assertStatus(422)->assertJsonPath('code', 'routine_published');
+        // De un socio que ya no es suyo, no.
+        MemberTrainerAssignment::where('member_id', $socio->id)->update(['status' => 'ended', 'ended_at' => now()]);
+        $this->postJson("/api/trainer/routines/{$p->id}/organize", ['exercises' => $lista], $this->asTrainer())
+            ->assertStatus(422)->assertJsonPath('code', 'assignment_inactive');
+        MemberTrainerAssignment::where('member_id', $socio->id)->update(['status' => MemberTrainerAssignment::STATUS_ACTIVE, 'ended_at' => null]);
+        // De otro entrenador, no.
+        $p->update(['trainer_id' => Trainer::create(['full_name' => 'Otro', 'document' => 'T-otro2', 'status' => 'active'])->id]);
+        $this->postJson("/api/trainer/routines/{$p->id}/organize", ['exercises' => $lista], $this->asTrainer())
+            ->assertStatus(422)->assertJsonPath('code', 'routine_not_owned');
+    }
+
+    public function test_organizar_respeta_lo_fijado_y_los_compuestos_por_su_musculo_secundario(): void
+    {
+        // Antes de cualquier petición: el catálogo se carga una vez por petición.
+        $pm = Exercise::create(['name' => 'Peso muerto', 'local_name' => 'Peso muerto', 'muscle_group' => 'Espalda', 'body_part' => 'Espalda',
+            'equipment' => 'barra', 'difficulty' => 'intermedio', 'target' => 'glutes', 'video_path' => 'videos/pm.mp4', 'provider' => 'local', 'external_id' => 'rec-pm']);
+        FakeIronIaOpenAi::install();
+        $socio = $this->socio();
+        $original = $this->rutinaIa($socio, 4);
+        $this->recuperar(['--execute' => true])->assertExitCode(0);
+        $p = $this->propuestaDe($original);
+        $lista = $this->listaDelEditor($p);
+        $dias = array_values(array_unique(array_column($lista, 'day')));
+
+        // Un peso muerto (Espalda + glutes) en el día de pierna B: está bien, no se mueve.
+        $lista[] = ['id' => null, 'exercise_id' => $pm->id, 'sets' => 3, 'reps' => '8', 'weight' => null, 'notes' => null, 'day' => $dias[5]];
+        // Un ejercicio de pierna fijado a mano en el primer día (de empuje): se respeta.
+        $pierna = array_search(true, array_map(fn ($e) => $e['day'] === $dias[2], $lista), true);
+        $lista[$pierna]['day'] = $dias[0];
+        $lista[$pierna]['pinned'] = true;
+
+        $r = $this->postJson("/api/trainer/routines/{$p->id}/organize", ['exercises' => $lista], $this->asTrainer());
+        $this->assertSame(200, $r->status(), (string) $r->getContent());
+        $data = $r->json('data');
+        // La fila añadida (sin id) en Pierna B; el doble del modelo puede haber puesto otro peso muerto en Tracción.
+        $anadido = array_values(array_filter($data['exercises'], fn ($e) => $e['exercise_id'] === $pm->id && $e['id'] === null))[0];
+        $this->assertSame($dias[5], $anadido['day']);
+        $this->assertFalse($anadido['moved'], 'el compuesto cuenta su músculo secundario');
+        $fijado = array_values(array_filter($data['exercises'], fn ($e) => $e['id'] === $lista[$pierna]['id']))[0];
+        $this->assertSame($dias[0], $fijado['day']);
+        $this->assertTrue($fijado['pinned']);
+        $this->assertCount(count($lista), $data['exercises']);
+    }
+
+    public function test_sse_solo_avisa_al_socio_cuando_cambia_lo_que_ve_y_despues_de_confirmar(): void
+    {
+        FakeIronIaOpenAi::install();
+        $socio = $this->socio();
+        $original = $this->rutinaIa($socio, 4);
+        $eventos = fn () => MemberRealtimeEvent::where('member_id', $socio->id)->where('type', RealtimeEvents::ROUTINE)->count();
+        $antes = $eventos();
+
+        // La campaña y regenerar crean borradores invisibles: el socio no recibe nada.
+        $this->recuperar(['--execute' => true])->assertExitCode(0);
+        $p = $this->propuestaDe($original);
+        $this->postJson("/api/trainer/routines/{$p->id}/organize", ['exercises' => $this->listaDelEditor($p), 'days_per_week' => 4], $this->asTrainer())->assertOk();
+        $nueva = $this->postJson("/api/trainer/routines/{$p->id}/recovery/regenerate", [
+            'days_per_week' => 4, 'session_minutes' => 45, 'training_level' => 'intermedio', 'objective' => 'Salud', 'injuries' => 'Ninguna',
+        ], $this->asTrainer())->assertStatus(201)->json('data.id');
+        $this->assertSame($antes, $eventos(), 'ni la campaña, ni organizar, ni regenerar avisan al socio');
+
+        // Una publicación rechazada (la transacción se deshace) no avisa.
+        $this->postJson("/api/trainer/routines/{$nueva}/publish", [], $this->asTrainer())->assertStatus(422);
+        $this->assertSame($antes, $eventos(), 'sin commit no hay aviso');
+
+        // La buena avisa una vez.
+        $this->postJson("/api/trainer/routines/{$nueva}/publish", $this->confirmar(Routine::findOrFail($nueva), ['days_per_week' => 4]), $this->asTrainer())->assertOk();
+        $this->assertSame($antes + 1, $eventos());
     }
 }

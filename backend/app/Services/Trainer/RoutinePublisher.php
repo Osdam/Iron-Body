@@ -239,7 +239,7 @@ class RoutinePublisher
     }
 
     /** El nivel en una de las tres formas canónicas, o null si no se reconoce. */
-    private static function canonicalLevel(string $v): ?string
+    public static function canonicalLevel(string $v): ?string
     {
         $t = mb_strtolower(Str::ascii($v));
 

@@ -129,6 +129,87 @@ class RoutineDraftEditor
     // ── Validación ──────────────────────────────────────────────────────────
 
     /**
+     * «Organizar automáticamente» (punto F; docs/iron-ia/ORGANIZAR-AUTOMATICAMENTE-CONTRATO.md):
+     * VISTA PREVIA del reparto por días de la lista actual del editor con
+     * {@see RoutineMuscleOrganizer::arrange()}. Las mismas guardas y la misma
+     * validación que guardar, y NO escribe nada: se guarda con replaceExercises.
+     *
+     * @param  list<array<string,mixed>>  $exercises  la lista actual del editor (con `pinned` opcional)
+     * @return array<string,mixed> `data` de la respuesta del contrato
+     *
+     * @throws IntegralPlanException
+     */
+    public function previewOrganization(Routine $routine, Trainer $trainer, array $exercises, ?int $days, ?int $sessionMinutes): array
+    {
+        $this->assertEditable($routine, $trainer);
+        $fijados = array_map(fn ($e) => is_array($e) && ($e['pinned'] ?? false) === true, array_values(array_slice($exercises, 0, self::MAX_EXERCISES)));
+        $limpios = $this->sanitize($exercises);
+        if ($limpios === []) {
+            throw new IntegralPlanException('La rutina necesita al menos un ejercicio del catálogo.', 'routine_empty');
+        }
+
+        $organizador = app(RoutineMuscleOrganizer::class);
+        $diasActuales = count(array_unique(array_map(fn ($e) => $e['day'] ?? 'Día 1', $limpios)));
+        $n = max(1, min(6, $days ?? $diasActuales));
+        $nivel = RoutinePublisher::canonicalLevel((string) $routine->level) ?? 'intermedio';
+        $items = array_map(fn ($e, $i) => [
+            'tags' => $organizador->tagsOf(['muscle_group' => $e['muscle_group'], 'target' => $e['target']]),
+            'day' => $e['day'],
+            'pinned' => $fijados[$i] ?? false,
+        ], $limpios, array_keys($limpios));
+
+        try {
+            $reparto = $organizador->arrange($items, $n, $nivel);
+        } catch (\InvalidArgumentException) {
+            throw new IntegralPlanException(
+                "Hay más días ({$n}) que ejercicios (".count($limpios).'): elige menos días o añade ejercicios.',
+                'organize_more_days_than_exercises',
+            );
+        }
+
+        $salida = [];
+        $dias = [];
+        $avisos = [];
+        $catalogo = [];
+        foreach ($reparto['plan'] as $k => $plan) {
+            $delDia = [];
+            foreach ($reparto['days'][$k] as $i) {
+                $e = $limpios[$i];
+                $catalogo[$e['exercise_id']] = ['muscle_group' => $e['muscle_group'], 'target' => $e['target']];
+                $delDia[] = ['exercise_id' => $e['exercise_id'], 'sets' => $e['sets'], 'reps' => $e['reps']];
+                $salida[] = [
+                    'id' => $e['id'], 'exercise_id' => $e['exercise_id'], 'name' => $e['name'], 'muscle_group' => $e['muscle_group'],
+                    'sets' => $e['sets'], 'reps' => $e['reps'], 'weight' => $e['weight'], 'notes' => $e['notes'],
+                    'pinned' => $items[$i]['pinned'], 'day' => $plan['name'], 'previous_day' => $e['day'],
+                    'moved' => $e['day'] !== $plan['name'],
+                    '_index' => $i,
+                ];
+            }
+            $minutos = $delDia === [] ? 0.0 : SessionTimeBudget::estimateMinutes($delDia, $sessionMinutes ?? 60);
+            $dias[] = ['name' => $plan['name'], 'focus' => $plan['focus'], 'muscles' => $plan['muscles'],
+                'exercise_count' => count($delDia), 'estimated_minutes' => $minutos, 'exercises' => $delDia];
+            if ($delDia === []) {
+                $avisos[] = 'El día '.($k + 1)." («{$plan['focus']}») se queda sin ejercicios de {$plan['muscles']}: añade alguno o elige menos días.";
+            } elseif ($sessionMinutes !== null && $minutos > $sessionMinutes * SessionTimeBudget::TOLERANCE) {
+                $texto = str_replace('.', ',', (string) round($minutos, 1));
+                $avisos[] = 'El día '.($k + 1)." («{$plan['focus']}») dura unos {$texto} min y la sesión es de {$sessionMinutes}.";
+            }
+        }
+
+        $revision = $organizador->review($dias, $reparto['plan'], $catalogo);
+        $cambia = array_column($salida, '_index') !== array_keys($limpios) || in_array(true, array_column($salida, 'moved'), true);
+
+        return [
+            'days_per_week' => $n,
+            'days' => array_map(fn ($d) => array_diff_key($d, ['exercises' => true]), $dias),
+            'exercises' => array_map(fn ($e) => array_diff_key($e, ['_index' => true]), $salida),
+            'review' => ['ok' => $revision['ok'], 'min_share' => $revision['min_share'], 'problems' => $revision['problems']],
+            'warnings' => $avisos,
+            'changed' => $cambia,
+        ];
+    }
+
+    /**
      * @param  list<array<string,mixed>>  $in
      * @return list<array<string,mixed>>
      *
@@ -174,6 +255,9 @@ class RoutineDraftEditor
                 'id' => $this->int($e['id'] ?? null),
                 'exercise_id' => (int) $ejercicio->id,
                 'name' => $ejercicio->local_name ?: $ejercicio->name,
+                // Para organizar (no se guardan: replaceExercises elige sus campos).
+                'muscle_group' => $ejercicio->muscle_group ?: $ejercicio->body_part,
+                'target' => $ejercicio->target,
                 'day' => $this->str($e['day'] ?? null, 80),
                 'sets' => $sets,
                 // `reps` es texto en el modelo real: admite «10», «8-10» y

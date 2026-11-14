@@ -65,7 +65,16 @@ Cuerpo:
 - **`exercises`:** vienen agrupados por día, en el orden del reparto. Dentro de cada día se
   conserva el orden relativo que traían. Son exactamente los mismos ejercicios: el mismo
   `id`, para que el PUT actualice cada fila en su sitio.
-- **`moved`:** indica si el ejercicio cambió de día. **`changed`:** con `false`, nada cambia.
+- **`moved`:** vale `previous_day !== day`. Cuenta también un cambio solo de nombre, como de
+  «Día 1» a «Día 1 · Torso A». **`changed`:** con `false`, nada cambia. Organizar dos veces da lo mismo que una.
+- **Criterio:**
+  - Un ejercicio se queda si su día trabaja sus grupos, ya sea directamente, por compatibilidad
+    («brazos» en un día de tríceps) o por su músculo secundario (`target`: el peso muerto,
+    Espalda + glúteo, vale en un día de pierna).
+  - Uno que no cuadra con su día, por ejemplo un accesorio de hombro en un día de tracción, se
+    lleva al día de su grupo, aunque `review()` daba el día por bueno con el 60 %. Para dejarlo
+    donde está, el entrenador lo fija con «Mover a…».
+  - El cardio y los ejercicios sin grupo reconocible se quedan en su día.
 - **`review`:** la misma comprobación que la generación (cuota mínima de 0,6 por día). Es
   informativa: no bloquea.
 - **`warnings`:** avisos de duración, cuando llega `session_minutes`, y de días vacíos.

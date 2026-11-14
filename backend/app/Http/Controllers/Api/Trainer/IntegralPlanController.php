@@ -227,6 +227,50 @@ class IntegralPlanController extends Controller
     }
 
     /**
+     * POST /api/trainer/routines/{routine}/organize — «Organizar automáticamente»:
+     * VISTA PREVIA del reparto por días de la lista actual del editor
+     * (docs/iron-ia/ORGANIZAR-AUTOMATICAMENTE-CONTRATO.md). No escribe nada.
+     */
+    public function organizeRoutine(Request $request, Routine $routine): JsonResponse
+    {
+        $trainer = $this->trainer($request);
+
+        $data = $request->validate([
+            'exercises' => ['required', 'array', 'min:1', 'max:60'],
+            'exercises.*' => ['array'],
+            'exercises.*.id' => ['nullable', 'integer'],
+            'exercises.*.exercise_id' => ['required', 'integer'],
+            'exercises.*.day' => ['nullable', 'string', 'max:80'],
+            'exercises.*.sets' => ['required', 'integer', 'min:1', 'max:10'],
+            'exercises.*.reps' => ['nullable', 'string', 'max:20'],
+            'exercises.*.weight' => ['nullable', 'string', 'max:40'],
+            'exercises.*.notes' => ['nullable', 'string', 'max:500'],
+            'exercises.*.pinned' => ['nullable', 'boolean'],
+            'days_per_week' => ['nullable', 'integer', 'min:1', 'max:6'],
+            'session_minutes' => ['nullable', 'integer', 'min:'.SessionTimeBudget::MIN_SESSION_MINUTES, 'max:'.SessionTimeBudget::MAX_SESSION_MINUTES],
+        ]);
+        $lista = array_map(function (array $e) {
+            $e['pinned'] = filter_var($e['pinned'] ?? false, FILTER_VALIDATE_BOOLEAN);
+
+            return $e;
+        }, $data['exercises']);
+
+        try {
+            $vista = app(RoutineDraftEditor::class)->previewOrganization(
+                $routine,
+                $trainer,
+                $lista,
+                isset($data['days_per_week']) ? (int) $data['days_per_week'] : null,
+                isset($data['session_minutes']) ? (int) $data['session_minutes'] : null,
+            );
+        } catch (IntegralPlanException $e) {
+            return $this->planError($e);
+        }
+
+        return response()->json(['ok' => true, 'data' => $vista]);
+    }
+
+    /**
      * PUT /api/trainer/routines/{routine}/exercises — corregir el borrador.
      *
      * Llega la lista COMPLETA en el orden final. Cada línea puede traer el `id`

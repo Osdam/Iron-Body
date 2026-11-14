@@ -82,6 +82,9 @@ class ExerciseCatalogResolver
             'id', 'name', 'local_name', 'external_id', 'provider', 'equipment',
             'muscle_group', 'body_part', 'gif_url', 'thumbnail_url', 'video_path',
             'media_type', 'playback_speed',
+            // El músculo secundario: sin él, «Organizar automáticamente» clasificaba
+            // un compuesto (peso muerto: Espalda + glutes) solo por su grupo principal.
+            'target',
         ];
 
         foreach (Exercise::query()->get($cols) as $ex) {

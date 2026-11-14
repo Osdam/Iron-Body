@@ -178,6 +178,138 @@ class RoutineMuscleOrganizer
     }
 
     /**
+     * Reparte en días unos ejercicios YA ELEGIDOS («Organizar automáticamente»
+     * del editor del entrenador, punto F; docs/iron-ia/ORGANIZAR-AUTOMATICAMENTE-CONTRATO.md).
+     * Las mismas tablas que la generación: el reparto de {@see dayPlan()}, la
+     * clasificación de {@see tagsOf()} y {@see COMPATIBLE}. No añade ni quita
+     * ejercicios y no llama al modelo: es determinista.
+     *
+     * Reglas, en orden:
+     *  1. Un ejercicio FIJADO se queda en su día si ese día existe en el reparto.
+     *  2. Si ya está en un día que trabaja sus grupos (directamente o por
+     *     {@see COMPATIBLE}, como en review()), se queda: no se mueve lo que está bien.
+     *  3. Si no, va al día menos cargado de los que trabajan sus grupos (o un
+     *     grupo compatible). Un compuesto (varios grupos, contando `target`) vale
+     *     en cualquiera de sus días. Uno cuyos grupos no tiene ningún día (cardio,
+     *     sin clasificar) se queda en su día si es del reparto; si no, al menos
+     *     cargado. Organizar dos veces da lo mismo que una (idempotente).
+     *  4. Un día que quede vacío se rellena SOLO con un ejercicio de sus grupos
+     *     que sobre en otro día (que tenga más de uno); si no hay, queda vacío y
+     *     quien llama avisa: no se pone un ejercicio de pierna en un día de torso.
+     *  5. Dentro de cada día se conserva el orden relativo que traían.
+     *
+     * @param  list<array{tags: list<string>, day: ?string, pinned: bool}>  $items
+     * @return array{plan: list<array{name: string, focus: string, muscles: string, tags: list<string>}>, days: list<list<int>>}
+     *                                                                                                                           `days[k]` = índices de `$items` del día k
+     *
+     * @throws \InvalidArgumentException si hay más días que ejercicios
+     */
+    public function arrange(array $items, int $days, string $trainingLevel): array
+    {
+        $plan = $this->dayPlan($days, $trainingLevel);
+        $n = count($plan);
+        if (count($items) < $n) {
+            throw new \InvalidArgumentException('more_days_than_exercises');
+        }
+
+        $nombres = array_column($plan, 'name');
+        $directos = array_column($plan, 'tags');
+        $ampliados = array_map(function (array $d): array {
+            $t = $d['tags'];
+            foreach ($d['tags'] as $x) {
+                array_push($t, ...(self::COMPATIBLE[$x] ?? []));
+            }
+
+            return array_values(array_unique($t));
+        }, $plan);
+        $candidatos = function (array $tags, array $porDia): array {
+            $out = [];
+            foreach ($porDia as $k => $grupos) {
+                if (array_intersect($tags, $grupos) !== []) {
+                    $out[] = $k;
+                }
+            }
+
+            return $out;
+        };
+
+        $cubos = array_fill(0, $n, []);
+        $fijados = [];
+        foreach ($items as $i => $it) {
+            $k = $it['pinned'] && $it['day'] !== null ? array_search($it['day'], $nombres, true) : false;
+            if ($k !== false) {
+                $cubos[$k][] = $i;
+                $fijados[$i] = true;
+            }
+        }
+        foreach ($items as $i => $it) {
+            if (isset($fijados[$i])) {
+                continue;
+            }
+            $cand = $candidatos($it['tags'], $directos) ?: $candidatos($it['tags'], $ampliados);
+            $actual = $it['day'] !== null ? array_search($it['day'], $nombres, true) : false;
+            // Sin grupo en ningún día (cardio, cuello, sin clasificar): si ya está en un
+            // día del reparto, se queda. Si no, rotaría en cada clic (no idempotente).
+            if ($cand === []) {
+                if ($actual !== false) {
+                    $cubos[$actual][] = $i;
+
+                    continue;
+                }
+                $cand = range(0, $n - 1);
+            }
+            // «Está bien» = su día trabaja sus grupos, directamente o por compatibilidad
+            // (un «brazos» en un día de tríceps): la misma regla que review().
+            if ($actual !== false && array_intersect($it['tags'], $ampliados[$actual]) !== []) {
+                $cubos[$actual][] = $i;
+
+                continue;
+            }
+            $mejor = $cand[0];
+            foreach ($cand as $k) {
+                if (count($cubos[$k]) < count($cubos[$mejor])) {
+                    $mejor = $k;
+                }
+            }
+            $cubos[$mejor][] = $i;
+        }
+
+        // Días vacíos: solo con ejercicios de SUS grupos que sobren en otro día.
+        foreach (array_keys($cubos) as $vacio) {
+            if ($cubos[$vacio] !== []) {
+                continue;
+            }
+            foreach ([$directos, $ampliados] as $porDia) {
+                $donante = null;
+                $elegido = null;
+                foreach ($cubos as $k => $cubo) {
+                    if ($k === $vacio || count($cubo) < 2 || ($donante !== null && count($cubo) <= count($cubos[$donante]))) {
+                        continue;
+                    }
+                    foreach (array_reverse($cubo) as $i) {
+                        if (! isset($fijados[$i]) && array_intersect($items[$i]['tags'], $porDia[$vacio]) !== []) {
+                            [$donante, $elegido] = [$k, $i];
+                            break;
+                        }
+                    }
+                }
+                if ($elegido !== null) {
+                    $cubos[$donante] = array_values(array_diff($cubos[$donante], [$elegido]));
+                    $cubos[$vacio][] = $elegido;
+                    break;
+                }
+            }
+        }
+
+        foreach ($cubos as &$cubo) {
+            sort($cubo);
+        }
+        unset($cubo);
+
+        return ['plan' => $plan, 'days' => $cubos];
+    }
+
+    /**
      * La regla para el prompt: el reparto día a día, en el orden del plan.
      *
      * @param  list<array{name: string, focus: string, muscles: string}>  $planned

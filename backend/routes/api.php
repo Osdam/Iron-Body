@@ -329,6 +329,9 @@ Route::middleware(['trainer.feature:trainer_nutrition_guides_enabled', 'auth.tra
         ->whereNumber('routine')->middleware('trainer.can:routines.assign');
     Route::put('routines/{routine}/exercises', [\App\Http\Controllers\Api\Trainer\IntegralPlanController::class, 'updateRoutineExercises'])
         ->whereNumber('routine')->middleware('trainer.can:routines.assign');
+    // «Organizar automáticamente»: vista previa del reparto por días, sin escribir.
+    Route::post('routines/{routine}/organize', [\App\Http\Controllers\Api\Trainer\IntegralPlanController::class, 'organizeRoutine'])
+        ->whereNumber('routine')->middleware('trainer.can:routines.assign');
     Route::get('exercises', [\App\Http\Controllers\Api\Trainer\IntegralPlanController::class, 'exercises'])
         ->middleware('trainer.can:routines.assign');
 });

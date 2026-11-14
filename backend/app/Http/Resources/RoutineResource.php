@@ -86,10 +86,6 @@ class RoutineResource extends JsonResource
     }
 
     /**
-     * Normaliza la columna JSON `days` a un arreglo estable para la app,
-     * enriqueciendo cada ejercicio con la media del catálogo.
-     */
-    /**
      * Etiqueta de la pestaña del día en la app (`Tab(text: d.day)`). Las rutinas de
      * Iron IA guardan sus días con `name` («Día 1 · Torso A») y sin `day`: la
      * pestaña salía vacía. Orden: el `day` o `weekday` que traiga (rutinas por
@@ -112,6 +108,10 @@ class RoutineResource extends JsonResource
         return $nombre !== '' ? $nombre : 'Día '.($i + 1);
     }
 
+    /**
+     * Normaliza la columna JSON `days` a un arreglo estable para la app,
+     * enriqueciendo cada ejercicio con la media del catálogo.
+     */
     private function serializeDays(ExerciseCatalogResolver $resolver): array
     {
         if (! is_array($this->days) || empty($this->days)) {
