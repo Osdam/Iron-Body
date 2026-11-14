@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Trainer;
 
+use App\Exceptions\IntegralPlanException;
 use App\Models\Exercise;
 use App\Models\IronIaRecoveryItem;
 use App\Models\Member;
@@ -15,9 +16,11 @@ use App\Models\Routine;
 use App\Models\RoutineExercise;
 use App\Models\Trainer;
 use App\Models\User;
+use App\Services\IronAiService;
 use App\Services\Trainer\IntegralPlanGenerationService;
 use App\Services\Trainer\Recovery\RoutineRecoveryCampaign;
 use App\Services\Trainer\RoutineMuscleOrganizer;
+use App\Services\Trainer\RoutinePublisher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -116,6 +119,126 @@ class IronIaRecoveryLiveTest extends TestCase
         $this->assertCount(6, $resultado['propuesta']['dias']);
         $this->assertSame(array_column(app(RoutineMuscleOrganizer::class)->dayPlan(6, $perfil['training_level']), 'name'), array_column($resultado['propuesta']['dias'], 'nombre'));
         $this->assertGreaterThanOrEqual(RoutineMuscleOrganizer::MIN_DAY_SHARE, $resultado['reparto']['min_share']);
+    }
+
+    /** @return array<string, array{0: array{int,int}, 1: array<string,mixed>}> */
+    public static function flujos(): array
+    {
+        return [
+            'Flujo de revisión · rutina 1 · intermedio' => [[1, 1], ['training_level' => 'intermedio']],
+            'Flujo de revisión · plan 5/3 · hombro lesionado' => [[5, 3], ['training_level' => 'intermedio', 'injuries' => 'Molestia en el hombro izquierdo; evitar press por encima de la cabeza.']],
+        ];
+    }
+
+    /**
+     * QA del flujo COMPLETO del entrenador con el modelo real (RECUPERACION-REVISION-CONTRATO.md):
+     * propuesta → publicar sin confirmar (no) → días que no cuadran (no) → regenerar con lo
+     * confirmado → la anterior queda sustituida → publicar → la siguiente generación normal
+     * del entrenador no queda bloqueada → el chat del socio no ve propuestas.
+     */
+    #[DataProvider('flujos')]
+    public function test_flujo_de_revision_real_contra_openai(array $potencias, array $perfil): void
+    {
+        if (getenv('IRON_IA_LIVE') !== '1') {
+            $this->markTestSkipped('E2E real desactivado (IRON_IA_LIVE=1 para ejecutarlo).');
+        }
+        $catalogo = json_decode((string) file_get_contents((string) getenv('IRON_IA_LIVE_CATALOG')), true)['catalog'] ?? [];
+        $this->assertNotEmpty($catalogo, 'falta el catálogo (IRON_IA_LIVE_CATALOG)');
+        config([
+            'trainer.flags.trainer_auth_enabled' => true,
+            'trainer.flags.professional_assessments_enabled' => true,
+            'trainer.flags.trainer_nutrition_guides_enabled' => true,
+            'services.openai.enabled' => true,
+            'services.openai.api_key' => $this->openAiKey(),
+            'services.openai.model' => 'gpt-4.1-mini',
+            'services.openai.base_url' => 'https://api.openai.com',
+            'services.openai.timeout' => 30,
+            'iron_ai.plan_powers.model' => 'gpt-4.1-mini',
+            'iron_ai.plan_powers.deadline_seconds' => 17,
+            'iron_ai.plan_powers.min_repair_seconds' => 6,
+        ]);
+        [$member, $original] = $this->escenario($catalogo, $potencias, $perfil);
+        $trainer = Trainer::findOrFail($original->trainer_id);
+        $campana = app(RoutineRecoveryCampaign::class);
+        $publicador = app(RoutinePublisher::class);
+        $nivel = $perfil['training_level'];
+        $traza = ['caso' => $this->dataName(), 'potencias' => $potencias, 'perfil' => $perfil, 'pasos' => []];
+        $codigo = function (callable $f): ?string {
+            try {
+                $f();
+            } catch (IntegralPlanException $e) {
+                return $e->code_;
+            }
+
+            return null;
+        };
+
+        // 1. La propuesta de la campaña (hasta 3 intentos, como la campaña).
+        for ($i = 1; $i <= RoutineRecoveryCampaign::MAX_ATTEMPTS; $i++) {
+            if ($campana->process('e2e-flujo', $original->id, now()->toDateString())['outcome'] !== 'failed') {
+                break;
+            }
+        }
+        $item = IronIaRecoveryItem::where('original_routine_id', $original->id)->firstOrFail();
+        $this->assertSame(IronIaRecoveryItem::STATUS_PROPOSED, $item->status, (string) $item->error_message);
+        $p6 = Routine::findOrFail($item->proposal_routine_id);
+        $traza['pasos'][] = ['propuesta' => $p6->name, 'dias' => $p6->days_per_week];
+        $this->assertSame(6, (int) $p6->days_per_week);
+
+        // 2. Publicar sin confirmar, y con días que no cuadran: no se publica nada.
+        $sin = $codigo(fn () => $publicador->publish($p6->fresh(), $trainer));
+        $confirmacion = ['days_per_week' => 4, 'session_minutes' => 50, 'training_level' => $nivel, 'objective' => 'Perder grasa',
+            'injuries' => $perfil['injuries'] ?? 'Ninguna', 'availability_confirmed' => true, 'muscle_split_reviewed' => true];
+        $dias = $codigo(fn () => $publicador->publish($p6->fresh(), $trainer, $confirmacion));
+        $traza['pasos'][] = ['publicar_sin_confirmar' => $sin, 'publicar_4_dias_sobre_6' => $dias];
+        $this->assertSame('recovery_confirmation_required', $sin);
+        $this->assertSame('recovery_days_mismatch', $dias);
+        $this->assertFalse((bool) $p6->fresh()->is_assigned);
+
+        // 3. Regenerar con lo confirmado (modelo real): 4 días, reparto muscular correcto.
+        $p4 = null;
+        $errores = [];
+        for ($i = 1; $i <= 3 && $p4 === null; $i++) {
+            try {
+                $p4 = $campana->regenerate($item->fresh(), $trainer, $confirmacion);
+            } catch (IntegralPlanException $e) {
+                $errores[] = $e->code_;
+            }
+        }
+        $this->assertNotNull($p4, 'la regeneración no salió en 3 intentos: '.implode(', ', $errores));
+        $run = NutritionAiRun::findOrFail(IronIaRecoveryItem::findOrFail($item->id)->run_id);
+        $traza['pasos'][] = ['regenerada' => $p4->name, 'dias' => $p4->days_per_week, 'nombres_dias' => array_column((array) $p4->days, 'name'),
+            'reparto' => $run->response_json['muscle_review']['min_share'] ?? null, 'fallos_previos' => $errores, 'tokens' => $run->total_tokens];
+        $this->assertSame(4, (int) $p4->days_per_week);
+        $this->assertSame(array_column(app(RoutineMuscleOrganizer::class)->dayPlan(4, $nivel), 'name'), array_column((array) $p4->days, 'name'));
+        $this->assertGreaterThanOrEqual(RoutineMuscleOrganizer::MIN_DAY_SHARE, $run->response_json['muscle_review']['min_share'] ?? 0);
+        $this->assertSame('Retirada', $p6->fresh()->status);
+        $this->assertSame('recovery_superseded', $codigo(fn () => $publicador->publish($p6->fresh(), $trainer, $confirmacion + ['days_per_week' => 6])));
+
+        // 4. Publicar la regenerada con la confirmación: la original se retira y el historial queda.
+        $publicada = $publicador->publish($p4->fresh(), $trainer, ['session_minutes' => 180] + $confirmacion);
+        $this->assertTrue((bool) $publicada->is_assigned);
+        $this->assertSame('Retirada', $original->fresh()->status);
+        $this->assertTrue(Routine::whereKey($original->id)->exists());
+        $this->assertSame(IronIaRecoveryItem::STATUS_PUBLISHED, $item->fresh()->status);
+        $traza['pasos'][] = ['publicada' => $publicada->name, 'original' => $original->fresh()->status];
+
+        // 5. El chat del socio no ve borradores ni propuestas; sí la publicada.
+        $chat = app(IronAiService::class)->buildUserContext($member->fresh(), null);
+        $this->assertStringNotContainsString('Propuesta:', $chat);
+        $this->assertStringContainsString((string) $publicada->name, $chat);
+
+        // 6. El entrenador sigue generando como siempre (modelo real, sus cupos intactos).
+        $normal = app(IntegralPlanGenerationService::class)->generate($trainer, $member->fresh(), ['days_per_week' => 3, 'session_minutes' => 45]);
+        $traza['pasos'][] = ['generacion_normal' => $normal['routine']->name, 'dias' => $normal['routine']->days_per_week];
+        $this->assertSame(3, (int) $normal['routine']->days_per_week);
+        $this->assertFalse((bool) $normal['routine']->is_assigned, 'la generación normal nace en borrador, como siempre');
+        $traza['tokens_recuperacion'] = (int) NutritionAiRun::where('mode', IntegralPlanGenerationService::RECOVERY_RUN_MODE)->sum('total_tokens');
+        $traza['tokens_total'] = (int) NutritionAiRun::sum('total_tokens');
+
+        if (($out = getenv('IRON_IA_LIVE_OUT')) !== false) {
+            file_put_contents($out, json_encode($traza, JSON_UNESCAPED_UNICODE)."\n", FILE_APPEND);
+        }
     }
 
     private function openAiKey(): string

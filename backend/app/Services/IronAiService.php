@@ -896,8 +896,14 @@ TXT;
             ->limit(5)
             ->get();
 
+        // Las PROPIAS del socio, con el mismo criterio que «Más rutinas» de la app
+        // (AppRoutineController::custom): sin entrenador. Las no asignadas CON
+        // entrenador son borradores, propuestas de recuperación de Iron IA o
+        // rutinas retiradas: el socio no las ve, así que el asistente tampoco
+        // puede ofrecérselas como «disponibles».
         $custom = Routine::where('member_id', $member->id)
             ->where('is_assigned', false)
+            ->whereNull('trainer_id')
             ->with('routineExercises.exercise')
             ->latest('id')
             ->limit(5)
