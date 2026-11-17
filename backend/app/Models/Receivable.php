@@ -381,7 +381,7 @@ class Receivable extends Model
 
         if ($withPayments) {
             $abonos = $this->payments()
-                ->with(['reversedBy:id,name', 'cashShift:id,status,type,closed_at', 'splits'])
+                ->with(['reversedBy:id,name', 'cashShift:id,status,type,closed_at', 'splits', 'reclassification:id,payment_id,receivable_payment_id'])
                 ->orderBy('id')
                 ->get();
             // El número de recibo, de una vez para todos los abonos: uno a uno

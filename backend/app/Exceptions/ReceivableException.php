@@ -131,6 +131,20 @@ class ReceivableException extends RuntimeException
      * la pide cree estar corrigiendo algo, y responderle «hecho» sin haber
      * hecho nada le deja pensando que arregló un saldo que no tocó.
      */
+    /**
+     * El abono es el asiento de una reclasificación: su dinero es el de un cobro
+     * que está anulado. Anularlo sin reconfirmar a la vez aquel cobro lo sacaría
+     * de la caja y dejaría una deuda falsa.
+     */
+    public static function reclassifiedPayment(int $originalPaymentId): self
+    {
+        return new self(
+            "Este abono es el de la reclasificación del cobro #{$originalPaymentId}: su dinero es el de ese cobro, que está anulado. "
+            .'No se anula desde aquí; se corrige con la compensación documentada (anular el mes del piso y reconfirmar el cobro, juntos).',
+            'reclassified_payment',
+        );
+    }
+
     public static function alreadyReversed(): self
     {
         return new self('Este abono ya está anulado.', 'already_reversed');

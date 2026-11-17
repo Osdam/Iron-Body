@@ -483,10 +483,12 @@ class TrainerCommissions
         // administrar la caja (403 closed_shift_requires_manage), y sin esta
         // transacción un mes con dos abonos podía quedar con uno anulado y el
         // otro no.
-        DB::transaction(function () use ($deuda, $motivo, $actor): void {
+        DB::transaction(function () use ($deuda, $motivo, $actor, $compensaReclasificacion): void {
             foreach ($deuda->payments()->get() as $abono) {
                 if ($abono->isApplied()) {
-                    $this->receivables->reverse($abono, $motivo, $actor);
+                    $compensaReclasificacion
+                        ? $this->receivables->reverseReclassificationCompensation($abono, $motivo, $actor)
+                        : $this->receivables->reverse($abono, $motivo, $actor);
                 }
             }
 

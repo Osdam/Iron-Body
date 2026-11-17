@@ -186,6 +186,10 @@ class ReceivablePayment extends Model
                 'status' => ($turno ?? $this->cashShift()->first(['id', 'status']))?->status?->value,
             ],
             'receipt_number' => $receiptNumber ?? (self::receiptNumbersFor([(int) $this->id])[(int) $this->id] ?? null),
+            // El asiento de una reclasificación: el CRM no ofrece anularlo.
+            'reclassified_from_payment_id' => ($this->relationLoaded('reclassification')
+                ? $this->reclassification?->payment_id
+                : PaymentReclassification::query()->where('receivable_payment_id', $this->id)->value('payment_id')),
         ];
     }
 }

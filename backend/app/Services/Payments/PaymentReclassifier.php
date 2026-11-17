@@ -216,6 +216,23 @@ final class PaymentReclassifier
     }
 
     /**
+     * Lo mismo que {@see summary()}, para quien lo lee. El token compartido de
+     * automatizaciones (n8n, ULTRON) no es una persona y no necesita el nombre
+     * de un tercero: se le omite (revisión de seguridad H-4).
+     *
+     * @return array<string, mixed>
+     */
+    public static function summaryFor(PaymentReclassification $r, bool $conPersona): array
+    {
+        $s = self::summary($r);
+        if (! $conPersona) {
+            $s['trainer_name'] = null;
+        }
+
+        return $s;
+    }
+
+    /**
      * La reclasificación de un cobro, si está EN VIGOR: existe su constancia y
      * el cobro sigue anulado. Si se compensara (el abono revertido y el cobro
      * reconfirmado, ver la documentación) el cobro vuelve a ser la venta de un
@@ -491,7 +508,7 @@ final class PaymentReclassifier
             'performed_at' => now(),
             'procedure' => self::procedure(),
             'before_snapshot' => $antes,
-            'after_snapshot' => $despues,
+            'after_snapshot' => $despues + ['executed_by' => self::ejecutor()],
         ]);
         $this->auditarReclasificacion($reclasificacion, $pago, $c);
         $this->grabando = false;
@@ -775,7 +792,13 @@ final class PaymentReclassifier
             'document' => mb_substr((string) $ficha->document_number, 0, 50),
             'phone' => $ficha->phone !== null ? mb_substr((string) $ficha->phone, 0, 30) : null,
             'contract_type' => self::TRAINER_CONTRACT,
-            'status' => 'active',
+            // INACTIVO a propósito: es un entrenador EXTERNO. Su acuerdo de piso
+            // funciona igual (el módulo no exige que esté activo), pero no sale
+            // en el listado público de entrenadores ni puede abrir sesión en el
+            // portal (el login exige un entrenador activo). Si el gimnasio quiere
+            // mostrarlo o darle portal, se activa en Entrenadores (revisiones de
+            // seguridad H-3 y de calidad 5).
+            'status' => 'inactive',
         ]);
         $this->profiles->linkIdentityAndRoles($entrenador, null, self::IDENTITY_SOURCE);
 
@@ -1513,6 +1536,13 @@ final class PaymentReclassifier
         if ($id === null) {
             throw new ReclassificationRejected('received_by_unknown', "No consta quién recibió el dinero del cobro #{$pago->id}: indica --received-by.");
         }
+        // Cuando el cobro dice quién lo registró, el dinero lo recibió esa
+        // persona: --received-by no puede moverlo en silencio a otro cajero en
+        // un turno cerrado (revisión de seguridad H-6).
+        if ($pago->registered_by !== null && (int) $pago->registered_by !== $id) {
+            throw new ReclassificationRejected('received_by_mismatch',
+                "El cobro #{$pago->id} lo registró el administrador #{$pago->registered_by}: --received-by no puede ser otro.");
+        }
         $admin = Admin::query()->find($id)
             ?? throw new ReclassificationRejected('received_by_not_found', "--received-by={$id} no es un administrador.");
 
@@ -1598,6 +1628,38 @@ final class PaymentReclassifier
         return $e instanceof PDOException ? $e : new ReclassificationRejected($codigo, "{$prefijo}: {$e->getMessage()}");
     }
 
+    /**
+     * Quién ejecutó la orden en el servidor, además del actor que la firma:
+     * el usuario del sistema, el que hizo sudo y el equipo. No son datos de
+     * socios (revisión de seguridad H-6).
+     *
+     * @return array{system_user: ?string, sudo_user: ?string, host: ?string}
+     */
+    private static function ejecutor(): array
+    {
+        $usuario = function_exists('posix_geteuid') && function_exists('posix_getpwuid')
+            ? (posix_getpwuid(posix_geteuid())['name'] ?? null)
+            : (get_current_user() ?: null);
+
+        return [
+            'system_user' => $usuario,
+            'sudo_user' => getenv('SUDO_USER') ?: null,
+            'host' => gethostname() ?: null,
+        ];
+    }
+
+    /** ¿Escribe en las tablas de la caché de la aplicación (las de la configuración)? */
+    private static function esEscrituraDeCache(string $sql): bool
+    {
+        $tablas = array_filter([
+            (string) config('cache.stores.database.table', 'cache'),
+            (string) (config('cache.stores.database.lock_table') ?: 'cache_locks'),
+        ]);
+        $alternativas = implode('|', array_map(fn (string $t) => preg_quote($t, '/'), $tablas));
+
+        return preg_match('/^\s*(?:insert\s+into|update|delete\s+from)\s+"?(?:'.$alternativas.')"?[\s(]/i', $sql) === 1;
+    }
+
     /** Anota cada sentencia que escribe mientras `grabando` está encendido. */
     private function escucharEscrituras(): void
     {
@@ -1607,6 +1669,13 @@ final class PaymentReclassifier
         $this->escuchando = true;
 
         DB::listen(function (QueryExecuted $q): void {
+            // La caché de la aplicación (CACHE_STORE=database en producción:
+            // p. ej. los permisos por rol, que caducan cada 300 s) no es un dato
+            // de negocio: que se renueve a mitad del procedimiento no debe
+            // tumbar la lista blanca (revisión de calidad 6).
+            if (self::esEscrituraDeCache($q->sql)) {
+                return;
+            }
             if ($this->grabando && ($firma = DeletedPlanRestorer::writeSignature($q->sql)) !== null) {
                 $this->escrituras[] = ['firma' => $firma, 'sql' => $q->sql, 'bindings' => array_values($q->bindings)];
             }

@@ -56,6 +56,7 @@ MIGDIR=/var/lib/ironbody-deploy/subsanacion-reclasificacion-mig
 # Los ÚNICOS ficheros que se ejecutan y pueden cambiar con esta ola (se rellena con el diff final).
 LISTA_CERRADA="backend/app/Console/Commands/BillingCancelTestRequestsCommand.php
 backend/app/Console/Commands/ReclassifyPaymentToCommissionCommand.php
+backend/app/Exceptions/ReceivableException.php
 backend/app/Http/Controllers/Api/Admin/MemberPaymentHistoryController.php
 backend/app/Http/Controllers/Api/Admin/ReceivableController.php
 backend/app/Http/Controllers/Api/Admin/TrainerCommissionController.php
@@ -63,10 +64,12 @@ backend/app/Http/Controllers/Api/AppPaymentController.php
 backend/app/Http/Controllers/Api/MembershipPlanController.php
 backend/app/Http/Controllers/Api/PaymentController.php
 backend/app/Http/Controllers/Api/PlanController.php
+backend/app/Http/Controllers/Api/TrainerController.php
 backend/app/Http/Controllers/Api/WompiPaymentController.php
 backend/app/Models/Payment.php
 backend/app/Models/PaymentReclassification.php
 backend/app/Models/Plan.php
+backend/app/Models/Receivable.php
 backend/app/Models/ReceivablePayment.php
 backend/app/Models/TrainerCommissionAgreement.php
 backend/app/Models/TrainerCommissionCharge.php
@@ -75,6 +78,7 @@ backend/app/Services/Billing/PendingInvoiceCancellation.php
 backend/app/Services/Caja/CashShiftPdfService.php
 backend/app/Services/Caja/CashShiftReport.php
 backend/app/Services/Caja/ReceiptSourceResolver.php
+backend/app/Services/Caja/ReceivableService.php
 backend/app/Services/Commissions/TrainerCommissions.php
 backend/app/Services/Membership/DeletedPlanRestorer.php
 backend/app/Services/Membership/PlanArchive.php
@@ -83,6 +87,7 @@ backend/app/Services/Payments/PlanUpgrades.php
 backend/app/Services/Payments/ReclassificationRejected.php
 backend/app/Services/Reports/MoneyLedger.php
 backend/app/Services/Subscriptions/MembershipSubscriptionService.php
+backend/app/Services/Wompi/WompiTransactionService.php
 backend/app/Support/Caja/PaymentOrigin.php
 backend/database/migrations/2026_11_18_100001_create_payment_reclassifications_table.php
 backend/database/migrations/2026_11_18_100002_add_counter_sellable_to_plans_table.php
@@ -136,10 +141,12 @@ if [ "$(migrada 2026_11_18_100001_create_payment_reclassifications_table)" = no 
 fi
 for MIG in $MIGS; do [ "$(migrada "$MIG")" = si ] || aborta "$MIG no consta en la tabla migrations"; done
 # iron_app hereda los privilegios por defecto de iron: compruébalo uno por uno.
-PRIV=$(cd "$B" && sudo -u "$WWW" php artisan tinker --execute="echo json_encode(Illuminate\Support\Facades\DB::selectOne(\"select (has_table_privilege(current_user, 'payment_reclassifications', 'SELECT') and has_table_privilege(current_user, 'payment_reclassifications', 'INSERT') and has_table_privilege(current_user, 'payment_reclassifications', 'UPDATE') and has_table_privilege(current_user, 'payment_reclassifications', 'DELETE')) t, has_sequence_privilege(current_user, 'payment_reclassifications_id_seq', 'USAGE') s, (select count(*) from information_schema.columns where table_name='plans' and column_name='counter_sellable') c\"));" 2>/dev/null | tail -1)
+PRIV=$(cd "$B" && sudo -u "$WWW" php artisan tinker --execute="echo json_encode(Illuminate\Support\Facades\DB::selectOne(\"select (has_table_privilege(current_user, 'payment_reclassifications', 'SELECT') and has_table_privilege(current_user, 'payment_reclassifications', 'INSERT')) t, (has_table_privilege(current_user, 'payment_reclassifications', 'UPDATE') or has_table_privilege(current_user, 'payment_reclassifications', 'DELETE') or has_table_privilege(current_user, 'payment_reclassifications', 'TRUNCATE')) m, has_sequence_privilege(current_user, 'payment_reclassifications_id_seq', 'USAGE') s, (select count(*) from information_schema.columns where table_name='plans' and column_name='counter_sellable') c\"));" 2>/dev/null | tail -1)
 echo "   privilegios y columna: $PRIV"
-echo "$PRIV" | grep -q '"t":true' && echo "$PRIV" | grep -q '"s":true' && echo "$PRIV" | grep -q '"c":1' \
-  || aborta "iron_app sin privilegios en payment_reclassifications o falta plans.counter_sellable"
+# La constancia es inmutable también en la base (H-5): la aplicación lee e inserta, y NO puede
+# modificarla, borrarla ni vaciarla.
+echo "$PRIV" | grep -q '"t":true' && echo "$PRIV" | grep -q '"m":false' && echo "$PRIV" | grep -q '"s":true' && echo "$PRIV" | grep -q '"c":1' \
+  || aborta "iron_app: falta SELECT/INSERT, conserva UPDATE/DELETE/TRUNCATE en payment_reclassifications, o falta plans.counter_sellable"
 
 echo "2. código: merge por avance rápido (root, umask 022)"
 MARCA=$(mktemp)
@@ -168,8 +175,14 @@ sudo -u "$WWW" php artisan route:list --path=admin/commissions/follow-up 2>/dev/
 c=$(curl -s --max-time 20 -o /dev/null -w '%{http_code}' -H 'Accept: application/json' "$API/admin/commissions/follow-up") || c=000
 echo "   GET admin/commissions/follow-up sin sesión → $c (esperado 401: protegida, sin efectos)"
 [ "$c" = 401 ] || aborta "admin/commissions/follow-up sin sesión respondió $c"
-sleep 8
-RUN1=$(supervisorctl status 2>/dev/null | grep -c RUNNING || true)
+# queue:restart deja que cada worker termine su trabajo: alguno tarda más de 8 s en volver
+# (14-11: 13 de 14 a los 8 s y 14 a los 20 s; ver docs/iron-ia/ops/deploy-solo-codigo.sh).
+# Se espera hasta 30 s antes de juzgar.
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  sleep 3
+  RUN1=$(supervisorctl status 2>/dev/null | grep -c RUNNING || true)
+  [ "$RUN1" = "$RUN0" ] && break
+done
 NO_RUN1=$(supervisorctl status 2>/dev/null | grep -c -E 'BACKOFF|FATAL' || true)
 echo "   workers RUNNING $RUN1 (antes $RUN0) · BACKOFF/FATAL $NO_RUN1"
 [ "$RUN1" = "$RUN0" ] && [ "$NO_RUN1" = 0 ] || aborta "los workers no volvieron igual que antes"

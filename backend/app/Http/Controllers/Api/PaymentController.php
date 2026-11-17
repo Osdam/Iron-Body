@@ -7,6 +7,7 @@ use App\Enums\CashShiftType;
 use App\Exceptions\CashShiftException;
 use App\Exceptions\CorrectionException;
 use App\Http\Controllers\Controller;
+use App\Models\ReceivablePayment;
 use App\Services\Caja\CashShiftService;
 use App\Services\Caja\CorrectionGuards;
 use App\Services\Caja\PaymentCorrections;
@@ -103,8 +104,9 @@ class PaymentController extends Controller
         $this->applyCrmFilters($query, $request);
 
         $payments = $query->paginate($this->resolvePerPage($request));
+        $conPersona = AdminActor::from($request) !== null;
         $payments->getCollection()->transform(
-            fn (Payment $p) => $this->withReclassification($p->append('invoice_summary')->makeHidden('electronicInvoice'))
+            fn (Payment $p) => $this->withReclassification($p->append('invoice_summary')->makeHidden('electronicInvoice'), $conPersona)
         );
 
         return $payments;
@@ -121,7 +123,7 @@ class PaymentController extends Controller
      *
      * @return array<string, mixed>
      */
-    private function withReclassification(Payment $payment): array
+    private function withReclassification(Payment $payment, bool $conPersona = true): array
     {
         // EN VIGOR, como en caja, historial e informes: si la reclasificación se
         // compensó, el cobro vuelve a ser la venta de un plan y se pinta así.
@@ -129,7 +131,7 @@ class PaymentController extends Controller
         $fila = $payment->makeHidden('reclassification')->toArray();
 
         $fila['reclassified'] = $r !== null;
-        $fila['reclassification'] = $r === null ? null : PaymentReclassifier::summary($r);
+        $fila['reclassification'] = $r === null ? null : PaymentReclassifier::summaryFor($r, $conPersona);
 
         return $fila;
     }
@@ -485,7 +487,7 @@ class PaymentController extends Controller
         // reclasificación sí va para los dos: no lleva motivo ni autor.
         $actor = AdminActor::from($request);
         if ($actor === null) {
-            return $this->withReclassification($cobro);
+            return $this->withReclassification($cobro, false);
         }
 
         return array_merge($this->withReclassification($cobro), [
@@ -969,6 +971,25 @@ class PaymentController extends Controller
             $quita = $nuevo !== null && $nuevo !== 'paid' && $wasPaid;
             $reconfirma = $nuevo === 'paid' && ! $wasPaid;
             $campos = $this->camposDeDinero($payment, $data, $splits);
+
+            // UN COBRO RECLASIFICADO NO SE RECONFIRMA CON SU ABONO TODAVÍA
+            // APLICADO: el mismo dinero contaría dos veces en su turno y en su
+            // día, y la socia recuperaría los días quitados. La compensación
+            // documentada anula primero el mes del piso (revierte el abono) y
+            // luego reconfirma (docs/ops/RECLASIFICACION-DE-COBROS.md §10).
+            if ($reconfirma && ($reclasificacion = PaymentReclassifier::inEffect($payment)) !== null) {
+                $abonoAplicado = $reclasificacion->receivable_payment_id !== null
+                    && ReceivablePayment::query()->whereKey($reclasificacion->receivable_payment_id)
+                        ->where('status', ReceivablePayment::STATUS_APPLIED)->exists();
+                if ($abonoAplicado) {
+                    throw new HttpResponseException(response()->json([
+                        'ok' => false,
+                        'code' => 'reclassified_payment_reconfirm',
+                        'message' => "Este cobro se reclasificó al piso de un entrenador y ese abono sigue aplicado: reconfirmarlo contaría el dinero dos veces. "
+                            .'Primero anula el mes del piso (compensación documentada) y después reconfirma.',
+                    ], 422));
+                }
+            }
 
             // Lo devuelto no cambia de importe, medio ni fecha (M-1): la salida
             // de caja ya restó lo que se cobró, y cambiar la entrada dejaría un

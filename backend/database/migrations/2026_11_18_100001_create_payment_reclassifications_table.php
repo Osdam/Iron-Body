@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -85,6 +86,28 @@ return new class extends Migration
             $table->index('cash_shift_id');
             $table->index('kind');
         });
+
+        // INMUTABLE TAMBIÉN EN LA BASE, no solo en el modelo (revisión de
+        // seguridad H-5). En producción la aplicación corre con un rol que solo
+        // hace DML y la migración con el DUEÑO; los privilegios por defecto le
+        // dan a la aplicación también modificar, borrar y vaciar. Aquí se le
+        // quitan a TODO rol que no sea el dueño (y a PUBLIC), sea cual sea la
+        // conexión con la que se migre: leer e insertar es todo lo que el
+        // procedimiento hace. En SQLite, o si la aplicación ya es la dueña
+        // (entornos locales), no hay nada que quitar.
+        if (DB::connection()->getDriverName() === 'pgsql') {
+            $roles = DB::select(<<<'SQL'
+                select distinct case when a.grantee = 0 then 'PUBLIC' else a.grantee::regrole::text end as rol
+                  from pg_class c, aclexplode(c.relacl) a
+                 where c.oid = 'payment_reclassifications'::regclass
+                   and a.privilege_type in ('UPDATE', 'DELETE', 'TRUNCATE')
+                   and a.grantee <> c.relowner
+                SQL);
+            foreach ($roles as $r) {
+                // `regrole::text` ya entrecomilla el nombre cuando hace falta.
+                DB::statement('REVOKE UPDATE, DELETE, TRUNCATE ON payment_reclassifications FROM '.$r->rol);
+            }
+        }
     }
 
     public function down(): void

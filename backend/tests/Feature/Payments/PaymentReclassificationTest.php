@@ -35,6 +35,7 @@ use App\Support\Access\RolePermissionPolicy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -296,15 +297,17 @@ class PaymentReclassificationTest extends TestCase
         $this->assertSame('2027-11-09', $e['socia']->user->fresh()->membershipEndDate);
         $this->assertSame('Anualidad', $e['socia']->user->fresh()->plan);
 
-        // El entrenador: alta oficial con los datos de su ficha, sin roles, y la
-        // ficha de socio SIN enlazar a la identidad.
+        // El entrenador: alta oficial con los datos de su ficha, sin roles,
+        // INACTIVO (externo: ni listado público ni portal; revisiones H-3 y
+        // calidad 5) y la ficha de socio SIN enlazar a la identidad.
         $entrenador = Trainer::findOrFail($r['created']['trainer_id']);
         $this->assertTrue($r['created']['trainer_created']);
         $this->assertSame('Carlos Entrenador Prueba', $entrenador->full_name);
         $this->assertSame('1075222333', $entrenador->document);
         $this->assertSame('3105550002', $entrenador->phone);
         $this->assertSame('Independiente', $entrenador->contract_type);
-        $this->assertTrue($entrenador->isActive());
+        $this->assertFalse($entrenador->isActive());
+        $this->assertSame('inactive', $entrenador->status);
         $this->assertSame(0, $entrenador->roleAssignments()->count());
         $this->assertNotNull($entrenador->identity_id);
         $this->assertSame('1075222333', $entrenador->identity->document_normalized);
@@ -356,6 +359,9 @@ class PaymentReclassificationTest extends TestCase
         $this->assertSame($c->before_snapshot['day']['not_collected']['cancelled_payments'], $c->after_snapshot['day']['not_collected']['cancelled_payments']);
         $this->assertEquals(['amount' => 50000, 'count' => 1], $c->after_snapshot['day']['not_collected']['reclassified_payments']);
         $this->assertSame($c->before_snapshot['shift']['live'], $c->after_snapshot['shift']['live']);
+        // Quién ejecutó la orden en el servidor, además de quien la firma (H-6).
+        $this->assertSame(['system_user', 'sudo_user', 'host'], array_keys($c->after_snapshot['executed_by']));
+        $this->assertNotEmpty($c->after_snapshot['executed_by']['system_user']);
         $fotos = json_encode([$c->before_snapshot, $c->after_snapshot]);
         foreach (['Olga', 'Carlos', 'Pedro', '52111222', '1075222333', '3105550001', 'Cajero Nueve'] as $personal) {
             $this->assertStringNotContainsString($personal, $fotos, 'las fotos no llevan datos personales');
@@ -451,16 +457,142 @@ class PaymentReclassificationTest extends TestCase
     {
         $e = $this->escenario();
 
-        $r = $this->reclasificar($e, ['--apply' => true, '--received-by' => $this->super->id, '--starts-on' => '2026-11-01']);
+        $r = $this->reclasificar($e, ['--apply' => true, '--received-by' => $this->cajero->id, '--starts-on' => '2026-11-01']);
 
         $this->assertSame(PaymentReclassifier::STATUS_APPLIED, $r['status'], $r['message']);
         $abono = ReceivablePayment::findOrFail($r['created']['receivable_payment_id']);
-        $this->assertSame([$this->super->id, 'Dueña Supervisión'], [(int) $abono->created_by, $abono->created_by_name]);
+        $this->assertSame([$this->cajero->id, 'Cajero Nueve'], [(int) $abono->created_by, $abono->created_by_name]);
         $this->assertSame('2026-11-01', TrainerCommissionAgreement::findOrFail($r['created']['agreement_id'])->starts_on->toDateString());
         $cobro = TrainerCommissionCharge::findOrFail($r['created']['charge_id']);
         $this->assertSame(['2026-11-01', '2026-11-30'], [$cobro->covers_from->toDateString(), $cobro->covers_to->toDateString()]);
         // El dinero sigue fechado cuando entró, aunque el trato empiece antes.
         $this->assertSame('2026-11-07 01:43:00', $abono->created_at->utc()->format('Y-m-d H:i:s'));
+    }
+
+    /**
+     * El dinero lo recibió quien registró el cobro: --received-by no puede
+     * atribuírselo a otro cajero en un turno cerrado (revisión de seguridad H-6).
+     */
+    public function test_received_by_no_puede_ser_otro_que_quien_registro_el_cobro(): void
+    {
+        $e = $this->escenario();
+        $antes = $this->huella();
+
+        $r = $this->reclasificar($e, ['--apply' => true, '--received-by' => $this->super->id]);
+
+        $this->assertSame(PaymentReclassifier::STATUS_REJECTED, $r['status'], json_encode($r));
+        $this->assertSame('received_by_mismatch', $r['problem']['code'], $r['problem']['message']);
+        $this->assertSame($antes, $this->huella(), 'un rechazo no deja ni una fila');
+    }
+
+    /** Si el cobro no dice quién lo registró, hay que decirlo, y vale quien se diga. */
+    public function test_sin_quien_registro_el_cobro_lo_dice_received_by(): void
+    {
+        $e = $this->escenario();
+        DB::table('payments')->where('id', $e['pago']->id)->update(['registered_by' => null, 'registered_by_name' => null]);
+
+        $sin = $this->reclasificar($e, ['--apply' => true]);
+        $this->assertSame('received_by_unknown', $sin['problem']['code'] ?? null, json_encode($sin));
+
+        $r = $this->reclasificar($e, ['--apply' => true, '--received-by' => $this->super->id]);
+        $this->assertSame(PaymentReclassifier::STATUS_APPLIED, $r['status'], $r['message']);
+        $abono = ReceivablePayment::findOrFail($r['created']['receivable_payment_id']);
+        $this->assertSame([$this->super->id, 'Dueña Supervisión'], [(int) $abono->created_by, $abono->created_by_name]);
+    }
+
+    /**
+     * El abono de la reclasificación es el dinero del cobro anulado: anularlo
+     * desde Cuentas por cobrar lo sacaría de la caja y dejaría una deuda falsa
+     * (revisión de calidad 1). El CRM sabe qué abono es y no ofrece el botón.
+     */
+    public function test_el_abono_de_la_reclasificacion_no_se_anula_desde_cuentas_por_cobrar(): void
+    {
+        $e = $this->escenario();
+        $r = $this->reclasificar($e, ['--apply' => true]);
+        $h = $this->actingAsAdmin($this->super);
+        $abonoId = $r['created']['receivable_payment_id'];
+        $turno = $e['turno']->fresh();
+        $vivoAntes = app(CashShiftTotalsService::class)->for($turno);
+        $diaAntes = $this->libroDelDia('2026-11-06')->totals();
+
+        $abonos = $this->getJson("/api/admin/receivables/{$r['created']['receivable_id']}", $h)->assertOk()->json('data.payments');
+        $this->assertSame([[$abonoId, $e['pago']->id]], array_map(fn (array $a) => [$a['id'], $a['reclassified_from_payment_id']], $abonos));
+
+        $this->postJson("/api/admin/receivables/payments/{$abonoId}/reverse",
+            ['reason' => 'Anulación por descuido del abono reclasificado'], $h)
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'reclassified_payment');
+
+        $this->assertSame(ReceivablePayment::STATUS_APPLIED, ReceivablePayment::findOrFail($abonoId)->status);
+        $this->assertSame(Receivable::STATUS_PAID, Receivable::findOrFail($r['created']['receivable_id'])->status);
+        $this->assertSame($vivoAntes, app(CashShiftTotalsService::class)->for($turno->fresh()));
+        $this->assertSame($diaAntes, $this->libroDelDia('2026-11-06')->totals());
+    }
+
+    /**
+     * Reconfirmar el cobro con su abono todavía aplicado contaría el mismo
+     * dinero dos veces y devolvería los días quitados (seguridad H-2, calidad 2).
+     * La compensación documentada anula antes el mes del piso.
+     */
+    public function test_el_cobro_reclasificado_no_se_reconfirma_con_su_abono_aplicado(): void
+    {
+        $e = $this->escenario();
+        $this->reclasificar($e, ['--apply' => true]);
+        $h = $this->actingAsAdmin($this->super);
+        $turno = $e['turno']->fresh();
+        $vivoAntes = app(CashShiftTotalsService::class)->for($turno);
+        $diaAntes = $this->libroDelDia('2026-11-06')->totals();
+
+        $this->patchJson("/api/payments/{$e['pago']->id}",
+            ['status' => 'paid', 'reason' => 'Reconfirmación por descuido del cobro reclasificado'], $h)
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'reclassified_payment_reconfirm');
+
+        $this->assertSame('cancelled', $e['pago']->fresh()->status);
+        $this->assertSame('2027-11-09', $e['socia']->user->fresh()->membershipEndDate, 'no recupera los días quitados');
+        $this->assertSame($vivoAntes, app(CashShiftTotalsService::class)->for($turno->fresh()));
+        $this->assertSame($diaAntes, $this->libroDelDia('2026-11-06')->totals());
+    }
+
+    /**
+     * Externo e inactivo: no sale en el listado público ni entra al portal,
+     * pero el módulo no exige que esté activo y su piso sigue vivo.
+     */
+    public function test_el_entrenador_externo_no_sale_en_el_listado_publico_y_su_piso_sigue_vivo(): void
+    {
+        $e = $this->escenario();
+        $visible = Trainer::create(['full_name' => 'Entrenadora De Planta', 'document' => '99887766', 'status' => 'active']);
+        $r = $this->reclasificar($e, ['--apply' => true]);
+
+        // El listado público da los ids como texto: se compara como texto, y un
+        // entrenador activo SÍ sale (control: la comparación no pasa sola).
+        $publico = collect($this->getJson('/api/trainers')->assertOk()->json('data'))->pluck('id')->all();
+        $this->assertContains((string) $visible->id, $publico);
+        $this->assertNotContains((string) $r['created']['trainer_id'], $publico);
+
+        $fila = collect($this->getJson('/api/admin/commissions/follow-up', $this->actingAsAdmin($this->super))->assertOk()->json('rows'))
+            ->firstWhere('agreement_id', $r['created']['agreement_id']);
+        $this->assertNotNull($fila, 'el acuerdo sigue en el seguimiento');
+        $this->assertSame('al_dia', $fila['due_state'], 'cubre hasta el 05-12: el 17-11 está al día');
+    }
+
+    /**
+     * Producción usa CACHE_STORE=database: la caché (p. ej. la de permisos)
+     * puede renovarse a mitad del procedimiento. Esa escritura no es un dato de
+     * negocio y no debe tumbarlo (revisión de calidad 6). Se fuerza dentro de la
+     * ventana vigilada, al dar de alta al entrenador.
+     */
+    public function test_una_escritura_de_la_cache_no_rompe_la_lista_blanca(): void
+    {
+        config(['cache.default' => 'database']);
+        $e = $this->escenario();
+        Trainer::created(fn () => Cache::put('reclasificacion:prueba', 'escrita', 60));
+
+        $r = $this->reclasificar($e, ['--apply' => true]);
+
+        $this->assertSame(PaymentReclassifier::STATUS_APPLIED, $r['status'], json_encode($r['invariants']).' '.$r['message']);
+        $this->assertSame([], $r['unexpected_writes']);
+        $this->assertSame('escrita', Cache::get('reclasificacion:prueba'), 'la escritura ocurrió dentro de la ventana vigilada');
     }
 
     public function test_reutiliza_el_entrenador_que_ya_existe_con_ese_documento(): void
@@ -906,6 +1038,11 @@ class PaymentReclassificationTest extends TestCase
             'receivable_payment_id' => $r['created']['receivable_payment_id'],
         ], $fila['reclassification']);
         $this->assertFalse(collect($historia['payments'])->firstWhere('id', $e['pagoAnual']->id)['reclassified']);
+        // El token de automatizaciones ve la bandera, sin el nombre de un tercero (H-4).
+        $token = collect($this->getJson("/api/admin/users/{$e['socia']->user_id}/payment-history", $this->sharedTokenHeaders())
+            ->assertOk()->json('payments'))->firstWhere('id', $e['pago']->id);
+        $this->assertTrue($token['reclassified']);
+        $this->assertSame(array_replace($fila['reclassification'], ['trainer_name' => null]), $token['reclassification']);
         // El dinero lo pagó: el total no baja, y se dice cuánto fue reclasificado.
         $this->assertEquals($totalAntes, $historia['summary']['total_paid']);
         $this->assertSame(1, $historia['summary']['reclassified_count']);

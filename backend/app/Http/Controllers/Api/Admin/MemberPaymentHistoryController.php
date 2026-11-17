@@ -13,6 +13,7 @@ use App\Services\Exports\PaymentsExport;
 use App\Services\Membership\MembershipFreeze;
 use App\Services\Payments\MembershipPeriod;
 use App\Services\Payments\PaymentReclassifier;
+use App\Support\Access\AdminActor;
 use App\Support\Caja\PaymentOrigin;
 use App\Support\Members\MembershipFilter;
 use Carbon\CarbonImmutable;
@@ -186,7 +187,9 @@ class MemberPaymentHistoryController extends Controller
             'status_group' => $reclasificacion !== null ? 'reclassified' : $this->statusGroup($p->status),
             // Anulado porque su dinero era otra cosa: lo que pasó a ser.
             'reclassified' => $reclasificacion !== null,
-            'reclassification' => $reclasificacion !== null ? PaymentReclassifier::summary($reclasificacion) : null,
+            'reclassification' => $reclasificacion !== null
+                ? PaymentReclassifier::summaryFor($reclasificacion, AdminActor::from(request()) !== null)
+                : null,
             'paid_at' => ($p->paid_at ?? $p->created_at)?->toIso8601String(),
             'created_at' => $p->created_at?->toIso8601String(),
 

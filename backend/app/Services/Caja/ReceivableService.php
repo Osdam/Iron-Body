@@ -269,20 +269,49 @@ class ReceivableService
     }
 
     /**
+     * Lo enciende SOLO {@see reverseReclassificationCompensation()} y solo
+     * mientras dura su llamada: deja que reverse() anule el abono de una
+     * reclasificación en vigor.
+     */
+    private bool $compensandoReclasificacion = false;
+
+    /**
+     * Paso 1 de la compensación documentada de una reclasificación
+     * (docs/ops/RECLASIFICACION-DE-COBROS.md §10): anula también el abono que
+     * sustituye al cobro reclasificado. Solo lo llama
+     * TrainerCommissions::cancelCharge() cuando la compensación se declara; el
+     * paso 2 (reconfirmar el cobro) va justo después. Es reverse() —mismos
+     * cerrojos, misma transacción— con la guarda de la reclasificación abierta.
+     */
+    public function reverseReclassificationCompensation(ReceivablePayment $payment, string $reason, ?Admin $actor = null): ReceivablePayment
+    {
+        $this->compensandoReclasificacion = true;
+        try {
+            return $this->reverse($payment, $reason, $actor);
+        } finally {
+            $this->compensandoReclasificacion = false;
+        }
+    }
+
+    /**
      * Anula un abono sin borrarlo.
      *
      * El dinero entró y eso no se deshace borrando una fila: se deja constancia
      * de las dos cosas, el abono y su reversa. La cuenta vuelve al estado que
      * le corresponda por su nuevo saldo.
+     *
+     * El abono de una reclasificación EN VIGOR no se anula por aquí (ver
+     * {@see reverseReclassificationCompensation()}).
      */
     public function reverse(ReceivablePayment $payment, string $reason, ?Admin $actor = null): ReceivablePayment
     {
+        $compensaReclasificacion = $this->compensandoReclasificacion;
         $motivo = trim($reason);
         if ($motivo === '') {
             throw ReceivableException::reversalReasonRequired();
         }
 
-        return DB::transaction(function () use ($payment, $motivo, $actor) {
+        return DB::transaction(function () use ($payment, $motivo, $actor, $compensaReclasificacion) {
             // Bajo bloqueo, igual que al abonar: dos supervisores anulando a la
             // vez leerían el mismo estado y lo revertirían dos veces. El
             // segundo espera, relee y se encuentra con que ya está hecho.
@@ -298,6 +327,19 @@ class ReceivableService
 
             if (! $fresco->isApplied()) {
                 throw ReceivableException::alreadyReversed();
+            }
+
+            // EL ABONO DE UNA RECLASIFICACIÓN NO SE ANULA POR DESCUIDO, venga de
+            // Cuentas por cobrar o de anular el mes del piso: su dinero es el de
+            // un cobro que está anulado. Solo el paso 1 de la compensación
+            // documentada lo declara (docs/ops/RECLASIFICACION-DE-COBROS.md §10).
+            $reclasificacion = \App\Models\PaymentReclassification::query()
+                ->where('receivable_payment_id', $fresco->id)
+                ->with('payment:id,status')
+                ->first();
+            if ($reclasificacion !== null && ! $compensaReclasificacion
+                && in_array(strtolower((string) $reclasificacion->payment?->status), ['cancelled', 'canceled'], true)) {
+                throw ReceivableException::reclassifiedPayment((int) $reclasificacion->payment_id);
             }
 
             // Si el turno del abono ya cerró, anularlo es corregir un arqueo

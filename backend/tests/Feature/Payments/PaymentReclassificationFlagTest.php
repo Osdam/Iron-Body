@@ -88,11 +88,15 @@ class PaymentReclassificationFlagTest extends TestCase
         $this->assertArrayHasKey('links', $detalle);
 
         // El token de automatizaciones ve la bandera (no lleva motivo ni autor),
-        // pero sigue sin ver lo que cuelga del cobro.
+        // pero no el nombre del entrenador, que es un tercero (H-4), ni lo que
+        // cuelga del cobro. En el detalle y en el listado.
+        $sinNombre = array_replace($esperado, ['trainer_name' => null]);
         $token = $this->getJson("/api/payments/{$pago->id}", $this->sharedTokenHeaders())->assertOk()->json();
         $this->assertTrue($token['reclassified']);
-        $this->assertSame($esperado, $token['reclassification']);
+        $this->assertSame($sinNombre, $token['reclassification']);
         $this->assertArrayNotHasKey('links', $token);
+        $filasToken = collect($this->getJson('/api/payments', $this->sharedTokenHeaders())->assertOk()->json('data'))->keyBy('id');
+        $this->assertSame($sinNombre, $filasToken[$pago->id]['reclassification']);
 
         // Un cobro normal también lleva las dos claves, a null/false.
         $this->getJson("/api/payments/{$normal->id}", $this->h)->assertOk()
