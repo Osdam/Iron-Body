@@ -29,7 +29,9 @@ use Throwable;
 /**
  * Endpoints Wompi para la app. Flujo:
  *   - El miembro se toma de `auth.member` (NO del body): anti suplantación.
- *   - El monto es autoritativo del backend (Plan::price).
+ *   - El monto es autoritativo del backend (Plan::price). Solo la compra de
+ *     tienda (purpose=store) toma el importe del carrito, y por eso no admite
+ *     plan: con los dos, 422 en `plan_id`.
  *   - Tarjeta: la app envía SOLO el token (PCI). PSE/3DS/DaviPlata completan su
  *     autenticación OFICIAL; nunca se aprueba localmente.
  *   - La activación de membresía ocurre solo por webhook/reconciliación.
@@ -248,7 +250,7 @@ class WompiPaymentController extends Controller
 
     /**
      * Construye el payload de pago con datos del MIEMBRO AUTENTICADO. El plan es
-     * obligatorio salvo compras de tienda (purpose=store).
+     * obligatorio salvo compras de tienda (purpose=store), que no lo llevan.
      */
     private function resolveSubject(Request $request, array $customerOverrides = []): array
     {
@@ -260,6 +262,21 @@ class WompiPaymentController extends Controller
 
         $data = $request->all();
         $isStore = ($data['purpose'] ?? null) === 'store';
+
+        // UNA COMPRA DE TIENDA NO LLEVA PLAN, y si llega uno se rechaza: no se
+        // descarta en silencio. Antes `purpose=store` se saltaba todas las
+        // comprobaciones del plan pero lo conservaba, y al aprobarse el pago se
+        // activaba la membresía de ese plan: uno oculto, inactivo, archivado o
+        // no vendible se compraba por aquí y, con precio 0, al importe que
+        // pusiera el cliente. La app publicada nunca manda los dos juntos
+        // (store_checkout_screen.dart), así que pedir los dos es un cliente que
+        // no es la app o uno roto, y lo honesto es decírselo con un 422.
+        if ($isStore && isset($data['plan_id'])) {
+            throw ValidationException::withMessages([
+                'plan_id' => ['Una compra de la tienda no lleva plan de membresía.'],
+            ]);
+        }
+
         if (! $isStore && empty($data['plan_id'])) {
             throw ValidationException::withMessages([
                 'plan_id' => ['El plan de membresía es obligatorio para procesar el pago.'],

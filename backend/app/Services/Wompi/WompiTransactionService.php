@@ -18,6 +18,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use RuntimeException;
 
 /**
  * Núcleo transaccional de Wompi: creación/idempotencia, transición de estados
@@ -464,7 +465,8 @@ class WompiTransactionService
      *
      * Devuelve null cuando no hay plan asociado (pago libre) o cuando Pricing V2
      * está apagado: en esos casos se cae a authoritativeAmount() y el
-     * comportamiento es idéntico al anterior.
+     * comportamiento es idéntico al anterior. También con un plan inexistente o
+     * de precio 0, y entonces authoritativeAmount() se niega a cobrar.
      *
      * El cliente jamás fija el importe: si envía uno distinto al cotizado, se
      * ignora y se registra la discrepancia.
@@ -505,26 +507,50 @@ class WompiTransactionService
         return $quote;
     }
 
-    /** Monto en pesos (no centavos). Autoritativo desde el plan si aplica. */
+    /**
+     * Monto en pesos (no centavos). Sin plan (compra de tienda) es el del
+     * carrito; con plan, SIEMPRE el del plan.
+     *
+     * Antes, si el plan no existía o costaba 0, se cobraba el `amount` del
+     * cliente, y al aprobarse se activaba la membresía de ese plan igual: un
+     * plan interno de precio 0 se compraba al importe que eligiera quien
+     * llamaba. Ahora un plan sin precio cobrable no se cobra: se lanza antes de
+     * crear la transacción (estamos dentro de la de createOrReuse, que se
+     * deshace), y sin transacción no hay nada que aprobar ni que activar. Las
+     * puertas de cada canal ya rechazan esos planes antes de llegar aquí
+     * (Plan::isSellableInApp, Plan::isSellable): esto es la red por si una
+     * falla.
+     *
+     * @throws RuntimeException si hay plan y no tiene un precio cobrable.
+     */
     public function authoritativeAmount(array $data): float
     {
         $amount = round((float) ($data['amount'] ?? 0), 2);
-        if (! empty($data['plan_id'])) {
-            $plan = Plan::find($data['plan_id']);
-            if ($plan && (float) $plan->price > 0) {
-                $planPrice = round((float) $plan->price, 2);
-                if (abs($planPrice - $amount) > 0.5) {
-                    Log::warning('Wompi: monto recibido != precio del plan; se usa el del plan', [
-                        'plan_id' => $data['plan_id'],
-                        'received' => $amount,
-                        'plan' => $planPrice,
-                    ]);
-                }
-                $amount = $planPrice;
-            }
+        if (empty($data['plan_id'])) {
+            return $amount;
         }
 
-        return $amount;
+        $plan = Plan::find($data['plan_id']);
+        if (! $plan || (float) $plan->price <= 0) {
+            Log::warning('Wompi: cobro con plan sin precio cobrable; no se crea la transacción', [
+                'plan_id' => $data['plan_id'],
+                'plan_exists' => $plan !== null,
+                'received' => $amount,
+            ]);
+
+            throw new RuntimeException('El plan no tiene un precio cobrable: el importe de un plan nunca lo fija el cliente.');
+        }
+
+        $planPrice = round((float) $plan->price, 2);
+        if (abs($planPrice - $amount) > 0.5) {
+            Log::warning('Wompi: monto recibido != precio del plan; se usa el del plan', [
+                'plan_id' => $data['plan_id'],
+                'received' => $amount,
+                'plan' => $planPrice,
+            ]);
+        }
+
+        return $planPrice;
     }
 
     /**

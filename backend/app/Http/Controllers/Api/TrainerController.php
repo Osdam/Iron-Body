@@ -4,12 +4,15 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\TrainerResource;
+use App\Models\PaymentReclassification;
 use App\Models\Trainer;
 use App\Models\TrainerReview;
 use App\Models\TrainerRole;
+use App\Models\ValuationAppointment;
 use App\Services\NotificationService;
 use App\Services\RealtimeEvents;
 use App\Services\Trainer\TrainerProfileService;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -160,24 +163,115 @@ class TrainerController extends Controller
             ->load(['roleAssignments', 'reviews.member:id,full_name']);
     }
 
+    /**
+     * Borra un entrenador SOLO si nada que la base protege cuelga de él. Si
+     * algo lo impide, 409 con el motivo y la alternativa: desactivarlo.
+     *
+     * Lo que lo impide son las llaves RESTRICT, directas o al final de la
+     * cascada de sus acuerdos de piso (comprobado en el catálogo de
+     * PostgreSQL y de SQLite; el resto de llaves hacia `trainers` son CASCADE
+     * o SET NULL):
+     *   · sus valoraciones (`valuation_appointments.trainer_id`);
+     *   · una reclasificación de cobros enlazada a uno de sus acuerdos o a un
+     *     cobro de ellos (`payment_reclassifications.agreement_id` y
+     *     `charge_id`). Es la constancia de una corrección contable y no se
+     *     borra; antes, el borrado en cascada del acuerdo chocaba con ella y
+     *     salía un 500.
+     *
+     * EL AVISO «Entrenador eliminado» SALE DESPUÉS DEL COMMIT, nunca antes.
+     * Antes se emitía antes de borrar, y si el borrado fallaba quedaba un aviso
+     * de algo que seguía existiendo. El modelo en memoria conserva nombre e id,
+     * que es lo único que el aviso necesita. Lo que audita el observador al
+     * borrar (WorkforceProfileObserver: retirada de rostro y PIN) corre dentro
+     * de la transacción, así que tampoco queda si el borrado no se completa.
+     *
+     * Bajo cerrojo de la fila, como PlanController::destroy(): lo que se cree a
+     * la vez apuntando a este entrenador espera a que se decida. Y si algo se
+     * cuela entre la comprobación y el borrado —una reclasificación hecha en
+     * ese instante, o una llave RESTRICT nueva que esto no conozca—, la
+     * violación de llave foránea también responde 409, sin aviso.
+     */
     public function destroy(Trainer $trainer)
     {
-        // Sus valoraciones son historial de socios y la FK no deja borrarlo: se
-        // responde ANTES de avisar, para que no salga «eliminado» de algo que sigue.
-        if (\App\Models\ValuationAppointment::query()->where('trainer_id', $trainer->id)->exists()) {
-            return response()->json([
+        try {
+            $rechazo = DB::transaction(function () use ($trainer): ?JsonResponse {
+                $fila = Trainer::query()->whereKey($trainer->id)->lockForUpdate()->first();
+                if ($fila === null) {
+                    return response()->json(['ok' => false, 'message' => 'El entrenador ya no existe.'], 404);
+                }
+
+                $motivo = $this->deletionBlocker($fila);
+                if ($motivo !== null) {
+                    return response()->json($motivo, 409);
+                }
+
+                $fila->delete();
+
+                // Solo si la transacción se confirma. Sin transacción por fuera
+                // (una petición HTTP) corre justo tras este commit; dentro de
+                // otra, tras el de esa. `notifyTrainerDeleted` no lanza.
+                DB::afterCommit(fn () => app(NotificationService::class)->notifyTrainerDeleted($fila));
+
+                return null;
+            });
+        } catch (QueryException $e) {
+            if (! $this->isForeignKeyViolation($e)) {
+                throw $e;
+            }
+            $rechazo = response()->json([
                 'ok' => false,
-                'code' => 'trainer_has_valuations',
-                'message' => 'Este entrenador tiene valoraciones en la agenda o en su historial. Desactívalo en lugar de eliminarlo.',
+                'code' => 'trainer_has_history',
+                'message' => 'Este entrenador tiene historial que impide eliminarlo. Desactívalo en lugar de eliminarlo.',
             ], 409);
         }
 
-        // Notifica ANTES de borrar para conservar nombre/id (ADITIVO).
-        app(NotificationService::class)->notifyTrainerDeleted($trainer);
+        return $rechazo ?? response()->json(null, 204);
+    }
 
-        $trainer->delete();
+    /**
+     * Por qué no se puede borrar este entrenador, o null si se puede.
+     *
+     * @return array{ok: false, code: string, message: string}|null
+     */
+    private function deletionBlocker(Trainer $trainer): ?array
+    {
+        // Sus valoraciones son historial de socios y la FK no deja borrarlo.
+        if (ValuationAppointment::query()->where('trainer_id', $trainer->id)->exists()) {
+            return [
+                'ok' => false,
+                'code' => 'trainer_has_valuations',
+                'message' => 'Este entrenador tiene valoraciones en la agenda o en su historial. Desactívalo en lugar de eliminarlo.',
+            ];
+        }
 
-        return response()->json(null, 204);
+        // El cobro tiene su propia llave hacia la constancia: se mira también
+        // por ahí, aunque hoy la reclasificación enlace siempre los dos.
+        $reclasificado = PaymentReclassification::query()
+            ->where(fn ($q) => $q
+                ->whereHas('agreement', fn ($a) => $a->where('trainer_id', $trainer->id))
+                ->orWhereHas('charge.agreement', fn ($a) => $a->where('trainer_id', $trainer->id)))
+            ->exists();
+        if ($reclasificado) {
+            return [
+                'ok' => false,
+                'code' => 'trainer_has_reclassifications',
+                'message' => 'Este entrenador tiene un piso que salió de reclasificar un cobro, y esa constancia contable no se borra. '
+                    .'Desactívalo en lugar de eliminarlo.',
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * 23503 es la violación de llave foránea en PostgreSQL. SQLite (la suite)
+     * la reporta como el 23000 genérico de integridad y solo la distingue el
+     * mensaje, igual que Laravel distingue allí las de unicidad.
+     */
+    private function isForeignKeyViolation(QueryException $e): bool
+    {
+        return (string) ($e->errorInfo[0] ?? '') === '23503'
+            || str_contains((string) ($e->errorInfo[2] ?? ''), 'FOREIGN KEY constraint failed');
     }
 
     public function rate(Request $request, Trainer $trainer): JsonResponse
