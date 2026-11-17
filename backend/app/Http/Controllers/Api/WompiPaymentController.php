@@ -265,12 +265,21 @@ class WompiPaymentController extends Controller
                 'plan_id' => ['El plan de membresía es obligatorio para procesar el pago.'],
             ]);
         }
-        // Un plan archivado no se vende por ninguna vía, tampoco por la app
-        // (PlanArchive). Se comprueba al CREAR el cobro: el webhook de uno ya
-        // pagado sigue activando la membresía, porque ese dinero es real.
-        if (! $isStore && is_numeric($data['plan_id']) && ($plan = Plan::query()->find((int) $data['plan_id'])) !== null
-            && $plan->isArchived()) {
-            throw ValidationException::withMessages(['plan_id' => [PlanNotArchived::message($plan)]]);
+        // Desde la app solo se compra lo que la app puede vender: vendible y
+        // visible en ella (Plan::isSellableInApp). Un plan que el negocio no
+        // quiere vender —el de 1 peso, uno contable— se pagaba por aquí aunque
+        // ULTRON y los links ya lo rechazaran.
+        //
+        // Se comprueba al CREAR el cobro: el webhook y la reconciliación de una
+        // transacción ya creada siguen activando la membresía, porque ese
+        // dinero es real. El archivado conserva su mensaje (PlanArchive).
+        if (! $isStore && is_numeric($data['plan_id']) && ($plan = Plan::query()->find((int) $data['plan_id'])) !== null) {
+            if ($plan->isArchived()) {
+                throw ValidationException::withMessages(['plan_id' => [PlanNotArchived::message($plan)]]);
+            }
+            if (! $plan->isSellableInApp()) {
+                throw ValidationException::withMessages(['plan_id' => ['Ese plan no está disponible para comprarlo en la app.']]);
+            }
         }
 
         $user = $this->ensureUserForMember($member);

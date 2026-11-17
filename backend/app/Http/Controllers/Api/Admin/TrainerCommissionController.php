@@ -18,6 +18,7 @@ use App\Rules\PaymentMethodInput;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
 /**
@@ -41,6 +42,44 @@ class TrainerCommissionController extends Controller
         return response()->json($servicio->board($this->period($request)));
     }
 
+    /** Qué estados del seguimiento deja ver cada filtro. Juntos son todos, sin repetir. */
+    private const FOLLOW_UP_FILTERS = [
+        'all' => null,
+        'upcoming' => ['proximo', 'vence_hoy'],
+        'overdue' => ['vencido'],
+        'paid' => ['al_dia'],
+        'unregistered' => ['sin_registrar'],
+        'inactive' => ['inactivo'],
+    ];
+
+    /**
+     * GET /api/admin/commissions/follow-up?window=7&filter=all|upcoming|overdue|paid|unregistered|inactive
+     *
+     * El seguimiento de vencimientos ({@see TrainerCommissions::followUp()}).
+     * Mismo permiso que el panel (`commissions.view`): es leer. El resumen
+     * describe TODOS los acuerdos; el filtro solo recorta las filas, para que
+     * las tarjetas no cambien al filtrar.
+     */
+    public function followUp(Request $request, TrainerCommissions $servicio): JsonResponse
+    {
+        $data = $request->validate([
+            'window' => ['nullable', 'integer', 'min:1', 'max:30'],
+            'filter' => ['nullable', 'string', 'in:'.implode(',', array_keys(self::FOLLOW_UP_FILTERS))],
+        ]);
+
+        $filtro = $data['filter'] ?? 'all';
+        $estados = self::FOLLOW_UP_FILTERS[$filtro];
+        $seguimiento = $servicio->followUp(null, (int) ($data['window'] ?? TrainerCommissions::FOLLOW_UP_WINDOW));
+
+        return response()->json([
+            'filter' => $filtro,
+            'summary' => $seguimiento['summary'],
+            'rows' => $estados === null
+                ? $seguimiento['rows']
+                : array_values(array_filter($seguimiento['rows'], fn (array $f) => in_array($f['due_state'], $estados, true))),
+        ]);
+    }
+
     /** GET /api/admin/commissions/agreements */
     public function index(Request $request): JsonResponse
     {
@@ -58,8 +97,14 @@ class TrainerCommissionController extends Controller
         return response()->json(['data' => $acuerdos]);
     }
 
-    /** POST /api/admin/commissions/agreements */
-    public function store(Request $request): JsonResponse
+    /**
+     * POST /api/admin/commissions/agreements
+     *
+     * Las reglas del alta (duplicado activo, reabrir el terminado, la traza)
+     * viven en TrainerCommissions::createAgreement(): la reclasificación de un
+     * cobro pacta por ahí mismo, y dos copias acabarían discrepando.
+     */
+    public function store(Request $request, TrainerCommissions $servicio): JsonResponse
     {
         $data = $request->validate([
             'trainer_id' => ['required', 'integer', 'exists:trainers,id'],
@@ -84,35 +129,16 @@ class TrainerCommissionController extends Controller
             'notes' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $existente = TrainerCommissionAgreement::query()
-            ->where('trainer_id', $data['trainer_id'])
-            ->where('member_id', $data['member_id'])
-            ->first();
-
-        if ($existente && $existente->active) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'Ya hay un acuerdo vigente entre ese entrenador y ese cliente. Edítalo en vez de crear otro.',
-            ], 422);
+        try {
+            $acuerdo = $servicio->createAgreement(
+                Trainer::query()->findOrFail($data['trainer_id']),
+                Member::query()->findOrFail($data['member_id']),
+                $data,
+                AdminActor::from($request),
+            );
+        } catch (RuntimeException $e) {
+            return response()->json(['ok' => false, 'message' => $e->getMessage()], 422);
         }
-
-        $actor = AdminActor::from($request);
-
-        // Reabrir el que existía en vez de chocar con el índice único: el trato
-        // con esta persona es el mismo, se retomó.
-        $acuerdo = $existente ?: new TrainerCommissionAgreement();
-        $acuerdo->fill(array_merge($data, [
-            'cycle_days' => (int) ($data['cycle_days'] ?? TrainerCommissions::DEFAULT_CYCLE_DAYS),
-            'blocks_app' => (bool) ($data['blocks_app'] ?? false),
-            'active' => true,
-            'ended_at' => null,
-            'ended_by_name' => null,
-            'created_by' => $acuerdo->created_by ?? $actor?->id,
-            'created_by_name' => $acuerdo->created_by_name ?? $actor?->name,
-        ]));
-        $acuerdo->save();
-
-        $this->audit($request, $acuerdo, 'create', 'Pactó el piso de un cliente personalizado');
 
         return response()->json($this->agreementArray($acuerdo->fresh(['trainer', 'member'])), 201);
     }
@@ -130,6 +156,8 @@ class TrainerCommissionController extends Controller
             'notes' => ['nullable', 'string', 'max:255'],
         ]);
 
+        $this->assertCoherentDates($agreement, $data);
+
         // Cambiar el trato NO reescribe lo ya cobrado: cada mes guardó su
         // importe y su pagador. Octubre siguió costando lo que costó.
         $agreement->fill($data)->save();
@@ -137,6 +165,37 @@ class TrainerCommissionController extends Controller
         $this->audit($request, $agreement, 'update', 'Cambió el piso de un cliente personalizado');
 
         return response()->json($this->agreementArray($agreement->fresh(['trainer', 'member'])));
+    }
+
+    /**
+     * UNA FECHA SOLA SE COMPARA CON LA GUARDADA.
+     *
+     * `after_or_equal:starts_on` solo compara cuando llegan las dos: con el fin
+     * solo, da por buena cualquier fecha. Antes daba igual, porque las fechas
+     * no decidían nada; ahora la vigencia decide qué meses se cobran, y un fin
+     * anterior al inicio dejaría el trato sin un solo mes cobrable.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function assertCoherentDates(TrainerCommissionAgreement $acuerdo, array $data): void
+    {
+        $llegaInicio = array_key_exists('starts_on', $data);
+        $llegaFin = array_key_exists('ends_on', $data);
+        // Ninguna, o las dos: entonces ya las comparó la validación.
+        if ($llegaInicio === $llegaFin) {
+            return;
+        }
+
+        // Texto `Y-m-d` contra texto `Y-m-d`: son fechas de calendario.
+        $inicio = $llegaInicio ? $data['starts_on'] : $acuerdo->starts_on?->toDateString();
+        $fin = $llegaFin ? $data['ends_on'] : $acuerdo->ends_on?->toDateString();
+        if ($inicio === null || $fin === null || $fin >= $inicio) {
+            return;
+        }
+
+        throw ValidationException::withMessages($llegaInicio
+            ? ['starts_on' => ['El inicio no puede ser posterior al fin del acuerdo ('.CarbonImmutable::parse($fin)->format('d-m-Y').').']]
+            : ['ends_on' => ['El fin no puede ser anterior al inicio del acuerdo ('.CarbonImmutable::parse($inicio)->format('d-m-Y').').']]);
     }
 
     /**
@@ -263,6 +322,9 @@ class TrainerCommissionController extends Controller
             'target_name' => $charge->agreement?->trainer?->full_name,
             'summary' => 'Corrió el tramo del piso de '.$charge->periodLabel(),
             'metadata' => [
+                // El cobro exacto: un mes puede tener uno anulado y el vigente,
+                // y el histórico tiene que poner la corrección en el suyo.
+                'charge_id' => $charge->id,
                 'period' => $resultado['period'],
                 'covers_from' => $resultado['covers_from'],
                 'covers_to' => $resultado['covers_to'],
@@ -291,10 +353,17 @@ class TrainerCommissionController extends Controller
             // El motivo es obligatorio: una anulación sin explicación es un
             // agujero en el arqueo que nadie puede investigar después.
             'reason' => ['required', 'string', 'min:4', 'max:255'],
+            // Solo la compensación documentada de una reclasificación lo envía.
+            'reclassification_compensation' => ['sometimes', 'boolean'],
         ]);
 
         try {
-            $resultado = $servicio->cancelCharge($charge, $data['reason'], AdminActor::from($request));
+            $resultado = $servicio->cancelCharge(
+                $charge,
+                $data['reason'],
+                AdminActor::from($request),
+                (bool) ($data['reclassification_compensation'] ?? false),
+            );
         } catch (CorrectionException $e) {
             // Turno cerrado sin permiso de administrar la caja: se conservan su
             // 403 y su `code` (closed_shift_requires_manage), no un 422 genérico.

@@ -10,6 +10,7 @@ use App\Models\CashShift;
 use App\Models\Payment;
 use App\Models\Plan;
 use App\Models\User;
+use App\Rules\PlanSellableAtCounter;
 use App\Services\Membership\MembershipFreeze;
 use App\Services\Membership\MembershipTransfers;
 use App\Services\RealtimeEvents;
@@ -306,6 +307,12 @@ class PlanUpgrades
 
         if (! $nuevo->active) {
             return 'Ese plan está inactivo.';
+        }
+
+        // La mejora se cobra en la Caja de Gimnasio: el plan destino tiene que
+        // poder cobrarse ahí, con el mismo mensaje que el cobro normal.
+        if (! $nuevo->isSellableAtCounter()) {
+            return PlanSellableAtCounter::notAtCounterMessage($nuevo);
         }
 
         if ((int) $actual->duration_days <= 0 || (int) $nuevo->duration_days <= 0) {

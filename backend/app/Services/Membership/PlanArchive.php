@@ -17,8 +17,10 @@ use Illuminate\Support\Facades\DB;
  * venderse por cualquier vía y de verse en la app, y sigue existiendo para sus
  * cobros, sus traslados y los socios que lo tienen.
  *
- * QUÉ BANDERAS. `sellable=false` y `visible_in_app=false` siempre. Y también
- * `active=false`, porque `active` NO afecta a quien ya tiene el plan:
+ * QUÉ BANDERAS. Las de cada canal de venta, siempre: `sellable=false`
+ * (comercial y app), `visible_in_app=false` (app) y `counter_sellable=false`
+ * («Se cobra en recepción»). Y también `active=false`, porque `active` NO
+ * afecta a quien ya tiene el plan:
  *   · acceso: MembershipAccess::plansByName() carga todos los planes, sin
  *     filtrar por `active` (MembershipAccess.php:694);
  *   · funciones de la app: Member::resolvedFeatures() y
@@ -29,13 +31,17 @@ use Illuminate\Support\Facades\DB;
  *   · renovación automática: cobra el importe CONGELADO de la suscripción, sin
  *     leer el plan (RecurringBillingService.php:145);
  *   · su membresía en la app sale de `users`, no del catálogo.
- * Donde `active` sí se mira es en lo que VENDE o lleva a alguien a ese plan:
- * mejora (PlanUpgrades.php:303), traslado hacia él
- * (PlanTransferEvaluator.php:107), suscripción nueva
- * (MembershipSubscriptionService.php:83), catálogo de la app
- * (MembershipPlanController.php:15) y la venta comercial (Plan::sellable(),
- * SalesPaymentGuardrailService, CreatePaymentLinkTool, UltronCommitService).
- * Es justo lo que un plan archivado no debe hacer.
+ * Donde `active` sí se mira es en lo que VENDE o lleva a alguien a ese plan,
+ * cada canal con su regla del modelo:
+ *   · mostrador —cobro, plan a plazos y mejora— con Plan::isSellableAtCounter()
+ *     (regla PlanSellableAtCounter, PlanUpgrades::blocker());
+ *   · app —catálogo (MembershipPlanController), Wompi y suscripción nueva
+ *     (MembershipSubscriptionService)— con Plan::isSellableInApp();
+ *   · comercial —Plan::sellable(), SalesPaymentGuardrailService,
+ *     CreatePaymentLinkTool, UltronCommitService— con Plan::isSellable();
+ *   · y el traslado hacia él (PlanTransferEvaluator).
+ * Es justo lo que un plan archivado no debe hacer. Las cuatro reglas lo
+ * rechazan por el archivo aunque alguien tocara una bandera por debajo.
  *
  * Ni archivar ni reactivar tocan socios, cobros, deudas ni facturas.
  *
@@ -65,6 +71,7 @@ class PlanArchive
                 'active' => false,
                 'sellable' => false,
                 'visible_in_app' => false,
+                'counter_sellable' => false,
                 'archived_at' => now(),
                 'archived_by' => AdminActor::id($request),
                 'archive_reason' => $reason,
@@ -77,7 +84,7 @@ class PlanArchive
                 'entity_id' => $p->id,
                 'target_name' => $p->name,
                 'summary' => "Archivó el plan {$p->name}",
-                'changes' => $this->audit->changesOf($p, $antes, ['active', 'sellable', 'visible_in_app']),
+                'changes' => $this->audit->changesOf($p, $antes, ['active', 'sellable', 'visible_in_app', 'counter_sellable']),
                 'metadata' => [
                     'event' => self::EVENT,
                     'operation' => 'archive',
@@ -121,6 +128,8 @@ class PlanArchive
                 'active' => true,
                 'sellable' => true,
                 'visible_in_app' => $visibleInApp ?? true,
+                // Vuelve a la venta por todos los canales, también el mostrador.
+                'counter_sellable' => true,
                 'archived_at' => null,
                 'archived_by' => null,
                 'archive_reason' => null,
@@ -133,7 +142,7 @@ class PlanArchive
                 'entity_id' => $p->id,
                 'target_name' => $p->name,
                 'summary' => "Reactivó el plan {$p->name}",
-                'changes' => $this->audit->changesOf($p, $antes, ['active', 'sellable', 'visible_in_app']),
+                'changes' => $this->audit->changesOf($p, $antes, ['active', 'sellable', 'visible_in_app', 'counter_sellable']),
                 'metadata' => [
                     'event' => self::EVENT,
                     'operation' => 'reactivate',

@@ -214,7 +214,19 @@ class CashShiftPdfService
         }
     }
 
-    /** @param list<array<string,mixed>> $ops */
+    /**
+     * Los cobros y abonos del turno.
+     *
+     * EN PAPEL NUNCA DEBE PARECER UN COBRO DOBLE. La tabla listaba también los
+     * cobros anulados, con su importe y sin decir nada: un cobro anulado y el
+     * abono que lo sustituye (una reclasificación) se leían como dos ingresos.
+     * Ahora todo lo que no es dinero de este turno lleva su estado debajo
+     * —ANULADO, RECLASIFICADO, DEVUELTO…— y el abono de una reclasificación
+     * dice de qué cobro es el mismo dinero. El total del turno no cambia: es
+     * el congelado al cerrar.
+     *
+     * @param  list<array<string,mixed>>  $ops
+     */
     private function tablaCobros(TCPDF $pdf, array $ops): void
     {
         $pdf->SetFont('helvetica', 'B', 9);
@@ -232,7 +244,44 @@ class CashShiftPdfService
             $pdf->Cell(46, 5.5, mb_strimwidth((string) ($p['member'] ?? '—'), 0, 26, '…'), 0, 0, 'L');
             $pdf->Cell(30, 5.5, mb_strimwidth((string) ($p['plan'] ?? '—'), 0, 18, '…'), 0, 0, 'L');
             $pdf->Cell(0, 5.5, $this->dinero($p['total']).'  '.$this->metodo($p['payment_method']), 0, 1, 'R');
+
+            // En su propia línea: en la del importe no cabe sin cortarse.
+            if ($nota = $this->notaDeCobro($p)) {
+                $pdf->SetFont('helvetica', 'B', 8);
+                $pdf->Cell(0, 4.5, $nota, 0, 1, 'R');
+                $pdf->SetFont('helvetica', '', 9);
+            }
         }
+    }
+
+    /**
+     * Lo que hay que leer debajo de un cobro o abono que no suma como ingreso
+     * nuevo, o null si es un cobro normal.
+     *
+     * @param  array<string,mixed>  $p
+     */
+    private function notaDeCobro(array $p): ?string
+    {
+        if (($p['reclassified_from_payment_id'] ?? null) !== null) {
+            return ($p['status'] ?? null) === 'paid'
+                ? 'Reclasificación del cobro #'.$p['reclassified_from_payment_id'].': el mismo dinero, no un cobro nuevo'
+                // Compensada: el abono se anuló y el cobro volvió a contar.
+                : 'ANULADO · no suma (era la reclasificación del cobro #'.$p['reclassified_from_payment_id'].')';
+        }
+        if (! empty($p['reclassified'])) {
+            return 'RECLASIFICADO · no suma: su dinero sigue en este turno como abono';
+        }
+
+        return match (strtolower((string) ($p['status'] ?? ''))) {
+            'paid', 'pagado', 'pagada', 'approved', 'aprobado', 'completed', 'completado', '' => null,
+            'cancelled', 'canceled', 'anulado', 'anulada' => 'ANULADO · no suma',
+            // El abono anulado: el informe lo marca `reversed`.
+            'reversed' => 'ANULADO · no suma',
+            'refunded', 'reembolsado', 'reembolsada' => 'DEVUELTO · entró aquí y salió por una devolución',
+            'failed' => 'FALLIDO · no suma',
+            'pending', 'pendiente' => 'PENDIENTE · no suma',
+            default => mb_strtoupper((string) $p['status']).' · no suma',
+        };
     }
 
     /**

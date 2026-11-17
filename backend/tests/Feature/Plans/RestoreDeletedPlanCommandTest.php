@@ -161,8 +161,10 @@ class RestoreDeletedPlanCommandTest extends TestCase
         // El plan: los valores del snapshot, el mismo id, archivado.
         $fila = (array) DB::table('plans')->where('id', 22)->first();
         $this->assertNotEmpty($fila);
+        // Las banderas de archivo son las de cada canal de venta; desde que el
+        // mostrador tiene la suya («Se cobra en recepción») son cuatro.
         foreach ($this->filaAntesDelBorrado as $columna => $valor) {
-            if (in_array($columna, ['active', 'sellable', 'visible_in_app', 'updated_at', 'archived_at', 'archived_by', 'archive_reason'], true)) {
+            if (in_array($columna, ['active', 'sellable', 'visible_in_app', 'counter_sellable', 'updated_at', 'archived_at', 'archived_by', 'archive_reason'], true)) {
                 continue;
             }
             $this->assertEquals($valor, $fila[$columna], "Columna {$columna} distinta de la que se borró.");
@@ -171,8 +173,10 @@ class RestoreDeletedPlanCommandTest extends TestCase
         $this->assertFalse($plan->active);
         $this->assertFalse($plan->sellable);
         $this->assertFalse($plan->visible_in_app);
+        $this->assertFalse($plan->counter_sellable);
         $this->assertFalse($plan->isSellable());
         $this->assertFalse($plan->isVisibleInApp());
+        $this->assertFalse($plan->isSellableAtCounter());
         // Archivado, con el motivo que pidió el propietario y firmado por quien ejecuta.
         $this->assertTrue($plan->isArchived());
         $this->assertSame((int) $this->super->id, $plan->archived_by);

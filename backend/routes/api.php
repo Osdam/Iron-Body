@@ -120,20 +120,39 @@ Route::middleware('auth.admin')->get('/dashboard', function (Request $request) {
     $puede = fn (string $permiso): bool => $admin !== null
         && \App\Support\Access\CrmPermission::allows($admin, $permiso);
 
-    $estadosPagados = \App\Http\Controllers\Api\PaymentController::PAID_STATUSES;
+    /*
+     * INGRESO TOTAL, con la definición de «Ingresos totales» de Analítica
+     * (ReportsOverviewController::paymentKpis), que es la de CashReceipts:
+     * cobros que entraron y no son el asiento de devengo de un plan a plazos,
+     * más los abonos aplicados, menos lo devuelto.
+     *
+     * Ojo con el vocabulario, que ya costó una corrección: esto sumaba solo el
+     * literal 'paid' y Analítica PAID_STATUSES. Y después seguía sumando
+     * `payments` a secas: el contrato de un plan a plazos contaba entero el día
+     * de la venta y sus abonos nunca. Eran dos «ingreso total» distintos para
+     * el mismo negocio; DashboardRevenueTest comprueba que ahora son uno.
+     */
+    $ingresoTotal = static function (): float {
+        $recibos = app(\App\Services\Caja\CashReceipts::class);
+        // Pagados y devueltos: los dos ENTRARON. Lo devuelto se resta abajo,
+        // con su propia fila de `cash_refunds`, igual que en Analítica.
+        $entraron = [...\App\Http\Controllers\Api\PaymentController::PAID_STATUSES, 'refunded', 'reembolsado', 'reembolsada'];
+
+        $cobros = (float) $recibos->cashPayments()
+            ->whereRaw('LOWER(payments.status) IN ('.implode(', ', array_fill(0, count($entraron), '?')).')', $entraron)
+            ->sum('payments.amount');
+        // Las dos cajas, como Analítica: la portada resume el negocio entero.
+        $abonos = (float) $recibos->appliedInstallments()->sum('receivable_payments.amount');
+        $devuelto = (float) \App\Models\CashRefund::query()->where('refundable_type', Payment::class)->sum('amount');
+
+        return round($cobros + $abonos - $devuelto, 2);
+    };
 
     $cifras = [
         'users' => $puede('members.view') ? User::count() : null,
         'active_plans' => $puede('plans.view') ? Plan::where('active', true)->count() : null,
         'payments' => $puede('payments.view') ? Payment::count() : null,
-        // Ojo con el vocabulario: esto sumaba solo el literal 'paid', mientras
-        // que Analítica suma PAID_STATUSES (paid/pagado/approved/completed…) sin
-        // distinguir mayúsculas. Eran dos «ingreso total» distintos para el mismo
-        // negocio, y la tarjeta del CRM mostraba el más corto de los dos.
-        'revenue' => $puede('reports.view') ? (float) Payment::query()->whereRaw(
-            'LOWER(status) IN ('.implode(', ', array_fill(0, count($estadosPagados), '?')).')',
-            $estadosPagados
-        )->sum('amount') : null,
+        'revenue' => $puede('reports.view') ? $ingresoTotal() : null,
         'classes' => $puede('classes.view') ? MyClass::where('status', 'active')->count() : null,
     ];
 
@@ -1674,6 +1693,10 @@ Route::delete('admin/receivables/{receivable}/due-date', [ReceivableController::
 // caja del GIMNASIO, con sus abonos y su anulación, y por eso aparece en Pagos
 // y en los informes del gimnasio sin tocarlos.
 Route::get('admin/commissions/board',       [\App\Http\Controllers\Api\Admin\TrainerCommissionController::class, 'board']);
+// SEGUIMIENTO DE VENCIMIENTOS: hasta cuándo tiene pagado cada acuerdo y qué
+// hay que reclamar. Solo lee; mismo permiso que el panel (`commissions.view`).
+// Ver docs/ops/VENCIMIENTOS-PERSONALIZADOS.md.
+Route::get('admin/commissions/follow-up',   [\App\Http\Controllers\Api\Admin\TrainerCommissionController::class, 'followUp']);
 Route::get('admin/commissions/members',     [\App\Http\Controllers\Api\Admin\TrainerCommissionController::class, 'members']);
 Route::get('admin/commissions/people',      [\App\Http\Controllers\Api\Admin\TrainerCommissionController::class, 'people']);
 Route::get('admin/commissions/agreements',  [\App\Http\Controllers\Api\Admin\TrainerCommissionController::class, 'index']);

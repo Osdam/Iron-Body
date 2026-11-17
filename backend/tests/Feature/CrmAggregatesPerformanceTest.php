@@ -94,7 +94,10 @@ class CrmAggregatesPerformanceTest extends TestCase
         $response = $this->getJson('/api/admin/payments/stats', $this->adminHeaders())->assertOk();
 
         $this->assertSame(4, $response->json('total_count'));
-        $this->assertSame(190000.0, (float) $response->json('total_amount'));
+        // 100.000 + 50.000 + 30.000: el anulado (10.000) ya no suma. Fallido y
+        // anulado no son dinero (RECLASIFICACION-DE-COBROS.md §5); antes daba
+        // 190.000. Ver DashboardRevenueTest.
+        $this->assertSame(180000.0, (float) $response->json('total_amount'));
         $this->assertSame(150000.0, (float) $response->json('paid_amount'));
         $this->assertSame(2, $response->json('paid_count'));
         $this->assertSame(30000.0, (float) $response->json('pending_amount'));

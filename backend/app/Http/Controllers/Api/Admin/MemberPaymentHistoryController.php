@@ -12,6 +12,7 @@ use App\Services\Caja\CashReceipts;
 use App\Services\Exports\PaymentsExport;
 use App\Services\Membership\MembershipFreeze;
 use App\Services\Payments\MembershipPeriod;
+use App\Services\Payments\PaymentReclassifier;
 use App\Support\Caja\PaymentOrigin;
 use App\Support\Members\MembershipFilter;
 use Carbon\CarbonImmutable;
@@ -29,6 +30,14 @@ use Illuminate\Support\Collection;
  * Todo sale ya calculado en el servidor (estado de la membresía, días, periodo,
  * canal): si el CRM lo dedujera, el perfil podría decir «activa» de alguien a
  * quien Asistencia no deja entrar.
+ *
+ * UN COBRO RECLASIFICADO NO ES UN COBRO FALLIDO. Sale con `reclassified: true`,
+ * su `reclassification` (contrato §5 de docs/ops/RECLASIFICACION-DE-COBROS.md)
+ * y `status_group: 'reclassified'`, no como «Fallido / anulado»: ese dinero lo
+ * pagó la socia y sigue en la caja, solo que era el piso de su entrenador y no
+ * un plan. Por eso CUENTA en `total_paid`, una sola vez (el abono que lo
+ * sustituye no es un cobro de `payments` y no sale aquí), y no cuenta en
+ * `payments_count`, que son cobros de membresía.
  */
 class MemberPaymentHistoryController extends Controller
 {
@@ -39,7 +48,9 @@ class MemberPaymentHistoryController extends Controller
     {
         $pagos = Payment::query()
             ->where('user_id', $user->id)
-            ->with(['plan:id,name,duration_days,active', 'upgradedFrom:id,name', 'splits', 'cashShift'])
+            ->with(['plan:id,name,duration_days,active', 'upgradedFrom:id,name', 'splits', 'cashShift',
+                // Lo que pinta la reclasificación, sin una consulta por fila.
+                'reclassification.charge', 'reclassification.agreement.trainer:id,full_name'])
             ->orderByRaw('COALESCE(paid_at, created_at) DESC')
             ->orderByDesc('id')
             ->limit(self::LIMIT)
@@ -139,9 +150,15 @@ class MemberPaymentHistoryController extends Controller
 
         $porCanal = fn (string $canal) => $cobrados->where('channel', $canal)->count();
 
+        // El dinero de un cobro reclasificado SÍ lo pagó: entra en el total.
+        $reclasificados = $filas->where('status_group', 'reclassified');
+        $dinero += $reclasificados->sum(fn (array $f) => (float) $f['amount']);
+
         return [
             'total_paid' => round($dinero, 2),
             'payments_count' => $cobrados->count(),
+            'reclassified_count' => $reclasificados->count(),
+            'reclassified_amount' => round((float) $reclasificados->sum(fn (array $f) => (float) $f['amount']), 2),
             'via_gym' => $porCanal('gym'),
             'via_app' => $porCanal('app'),
             'via_legacy' => $porCanal('legacy'),
@@ -159,12 +176,17 @@ class MemberPaymentHistoryController extends Controller
         $turno = $p->cashShift;
         $encadenado = $p->starts_on && $p->period_start && $p->period_start->greaterThan($p->starts_on);
 
+        $reclasificacion = PaymentReclassifier::inEffect($p);
+
         return [
             'id' => $p->id,
             'reference' => $p->reference,
             'amount' => (float) $p->amount,
             'status' => $p->status,
-            'status_group' => $this->statusGroup($p->status),
+            'status_group' => $reclasificacion !== null ? 'reclassified' : $this->statusGroup($p->status),
+            // Anulado porque su dinero era otra cosa: lo que pasó a ser.
+            'reclassified' => $reclasificacion !== null,
+            'reclassification' => $reclasificacion !== null ? PaymentReclassifier::summary($reclasificacion) : null,
             'paid_at' => ($p->paid_at ?? $p->created_at)?->toIso8601String(),
             'created_at' => $p->created_at?->toIso8601String(),
 

@@ -20,6 +20,7 @@ use App\Models\Receivable;
 use App\Models\ReceivablePayment;
 use App\Rules\PaymentMethodInput;
 use App\Rules\PlanNotArchived;
+use App\Rules\PlanSellableAtCounter;
 use App\Services\Audit\FinancialAudit;
 use App\Services\Billing\Money;
 use App\Services\Caja\BulkSettlement;
@@ -796,7 +797,9 @@ class ReceivableController extends Controller
     {
         $data = $request->validate([
             'user_id' => ['required', 'integer', 'exists:users,id'],
-            'plan_id' => ['required', 'integer', 'exists:plans,id', new PlanNotArchived],
+            // Archivado, inactivo o sin «Se cobra en recepción»: no se vende
+            // en el mostrador, tampoco a plazos.
+            'plan_id' => ['required', 'integer', 'exists:plans,id', new PlanNotArchived, new PlanSellableAtCounter],
             'first_payment' => ['required', 'numeric', 'min:0.01'],
             // `mixed` se admite como medio porque no es un medio: es la marca
             // de que el abono viene repartido. Exige `splits`, y se comprueba

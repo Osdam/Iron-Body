@@ -79,8 +79,12 @@ class MembershipSubscriptionService
         $memberId = $data['member_id'] ?? null;
         $userId = $data['user_id'] ?? null;
 
+        // La misma puerta que el resto de la app (Plan::isSellableInApp): activo,
+        // sin archivar, vendible, con precio y duración, y visible en la app. Un
+        // plan que no se compra en la app tampoco se suscribe por ella. Las
+        // renovaciones de suscripciones ya vivas no pasan por aquí.
         $plan = ! empty($data['plan_id']) ? Plan::find($data['plan_id']) : null;
-        if (! $plan || ! $plan->active || $plan->isArchived() || (float) $plan->price <= 0 || (int) $plan->duration_days <= 0) {
+        if (! $plan || ! $plan->isSellableInApp()) {
             throw SubscriptionException::invalidPlan();
         }
 

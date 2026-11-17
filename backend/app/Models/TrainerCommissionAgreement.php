@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\DebtorType;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -77,5 +78,50 @@ class TrainerCommissionAgreement extends Model
     public function payerLabel(): string
     {
         return $this->payer === self::PAYER_MEMBER ? 'El cliente' : 'El entrenador';
+    }
+
+    /**
+     * ¿El trato está en vigor en algún día de ese mes?
+     *
+     * Activo y con el mes cruzando `[starts_on, ends_on]`. Una fecha nula es
+     * «sin límite» por ese lado: así nacieron todos los acuerdos, y con las dos
+     * nulas el trato vale cualquier mes, que es lo que el panel hacía antes de
+     * mirar la vigencia.
+     *
+     * Las fechas se comparan como texto `Y-m-d`: son fechas de calendario, no
+     * instantes, y así no entra en juego la zona horaria de nadie.
+     */
+    public function inForceDuring(CarbonImmutable $mes): bool
+    {
+        if (! $this->active) {
+            return false;
+        }
+
+        $primero = $mes->startOfMonth()->toDateString();
+        $ultimo = $mes->endOfMonth()->toDateString();
+
+        $desde = $this->starts_on?->toDateString();
+        $hasta = $this->ends_on?->toDateString();
+
+        return ($desde === null || $desde <= $ultimo)
+            && ($hasta === null || $hasta >= $primero);
+    }
+
+    /**
+     * Desde qué día cubre, por defecto, el cobro de ese mes: el día 1, o el día
+     * en que empezó el trato si empezó a mitad de mes. Cobrar desde el 1 un
+     * trato que empezó el 6 daría por pagados cinco días que no se pactaron.
+     */
+    public function coverageStartFor(CarbonImmutable $mes): CarbonImmutable
+    {
+        $primero = $mes->startOfMonth()->startOfDay();
+
+        if ($this->starts_on === null) {
+            return $primero;
+        }
+
+        $inicio = CarbonImmutable::parse($this->starts_on->toDateString(), $primero->getTimezone())->startOfDay();
+
+        return $inicio->greaterThan($primero) ? $inicio : $primero;
     }
 }

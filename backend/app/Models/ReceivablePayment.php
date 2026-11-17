@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -50,6 +51,12 @@ class ReceivablePayment extends Model
     public function cashShift(): BelongsTo
     {
         return $this->belongsTo(CashShift::class);
+    }
+
+    /** Si este abono es el asiento de una reclasificación (sustituye a un cobro anulado), la constancia. */
+    public function reclassification(): HasOne
+    {
+        return $this->hasOne(PaymentReclassification::class, 'receivable_payment_id');
     }
 
     /** Las partes, cuando el abono se cobró entre varios medios. */

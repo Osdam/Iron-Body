@@ -33,7 +33,8 @@ use Throwable;
  *
  * LO QUE ESCRIBE, y nada más (se comprueba con `DB::listen`):
  *   · el plan, con su id y los valores del snapshot, ARCHIVADO (`active`,
- *     `sellable` y `visible_in_app` en false: ni se vende ni se ve);
+ *     `sellable`, `visible_in_app` y `counter_sellable` en false: ni se vende
+ *     por ningún canal ni se ve);
  *   · un `UPDATE payments SET plan_id` sobre esos ids, con el query builder:
  *     sin observers, facturas, eventos ni tiempo real;
  *   · una traza por cobro y una por el plan, firmadas por una persona.
@@ -54,8 +55,12 @@ class DeletedPlanRestorer
 
     public const EVENT_PAYMENT = 'payment.plan.relinked';
 
-    /** Archivado: el plan existe para la historia, no para venderse ni enseñarse. */
-    public const ARCHIVED = ['active' => false, 'sellable' => false, 'visible_in_app' => false];
+    /**
+     * Archivado: el plan existe para la historia, no para venderse ni
+     * enseñarse. Las mismas banderas que pone PlanArchive, la del mostrador
+     * incluida: `counter_sellable` nace en `true` y aquí se apaga.
+     */
+    public const ARCHIVED = ['active' => false, 'sellable' => false, 'visible_in_app' => false, 'counter_sellable' => false];
 
     /**
      * Lo que se compara antes y después, entero. `payments` aparte: su

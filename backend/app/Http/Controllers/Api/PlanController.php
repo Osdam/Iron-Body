@@ -79,6 +79,12 @@ class PlanController extends Controller
 
         return array_merge($plan->toArray(), [
             'access' => $plan->accessRules()->toArray(),
+            // Explícito y no solo en toArray(): un plan recién creado no trae
+            // cargada la columna hasta que se relee, y nace en `true`.
+            'counter_sellable' => (bool) ($plan->counter_sellable ?? true),
+            // Lo que de verdad decide el mostrador (activo, sin archivar y con
+            // la bandera), calculado aquí para que el CRM no lo reinterprete.
+            'sellable_at_counter' => $plan->isSellableAtCounter(),
             'is_archived' => $plan->isArchived(),
             'archived_by_name' => $admin ? $plan->archiver?->name : null,
             'archive_reason' => $admin ? $plan->archive_reason : null,
@@ -221,7 +227,9 @@ class PlanController extends Controller
 
             // Un plan archivado no vuelve a la venta ni a la app por la edición:
             // eso es «Reactivar», que comprueba que se pueda vender y lo audita.
-            if ($plan->isArchived() && (($data['active'] ?? false) || ($data['visible_in_app'] ?? false))) {
+            // Por ninguno de los canales: ni comercial ni mostrador.
+            if ($plan->isArchived() && (($data['active'] ?? false) || ($data['visible_in_app'] ?? false)
+                || ($data['sellable'] ?? false) || ($data['counter_sellable'] ?? false))) {
                 throw PlanArchiveException::archivedEdit();
             }
 
@@ -244,8 +252,10 @@ class PlanController extends Controller
                     $plan,
                     $previoPlan,
                     // Un cambio de precio o de vigencia sin el antes y el después
-                    // obliga a reconstruirlo a mano. No son datos personales.
-                    ['price', 'duration_days', 'active', 'tier', 'access_mode', 'entry_credits', 'visible_in_app'],
+                    // obliga a reconstruirlo a mano. No son datos personales. Por
+                    // dónde se vende, tampoco: abrir o cerrar un canal es precio.
+                    ['price', 'duration_days', 'active', 'tier', 'access_mode', 'entry_credits', 'visible_in_app',
+                        'sellable', 'counter_sellable'],
                 ),
                 'metadata' => $this->eventMetadata($plan, 'plan.updated') + ['price' => (string) $plan->price],
             ]);
@@ -840,6 +850,15 @@ class PlanController extends Controller
             // Visible en la app del socio. Independiente de `active`: un plan
             // puede seguir cobrándose en caja sin anunciarse en el teléfono.
             'visible_in_app' => ['sometimes', 'boolean'],
+            // CANALES DE VENTA. La ruta ya exige `plans.manage` (AuthorizationMap):
+            // decidir por dónde se vende un plan es gestionar el catálogo.
+            //   `sellable`          se ofrece fuera: ULTRON, links y app.
+            //   `counter_sellable`  «Se cobra en recepción»: cobro, plan a
+            //                       plazos y mejora en la Caja de Gimnasio.
+            // Son independientes a propósito: el plan 24 (1 peso) no se ofrece
+            // fuera y recepción lo cobra cada semana.
+            'sellable' => ['sometimes', 'boolean'],
+            'counter_sellable' => ['sometimes', 'boolean'],
             'features' => ['sometimes', 'nullable', 'array'],
             'features.*' => ['boolean'],
         ]);

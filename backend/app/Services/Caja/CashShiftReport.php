@@ -3,12 +3,15 @@
 namespace App\Services\Caja;
 
 use App\Enums\CashShiftType;
+use App\Enums\DebtorType;
 use App\Models\AuditLog;
 use App\Models\CashRefund;
 use App\Models\CashShift;
 use App\Models\Payment;
-use App\Models\ReceivablePayment;
+use App\Models\PaymentReclassification;
 use App\Models\ProductSale;
+use App\Models\ReceivablePayment;
+use App\Services\Payments\PaymentReclassifier;
 
 /**
  * El informe de un turno de caja: lo que se ve en pantalla y lo que va al PDF.
@@ -27,6 +30,13 @@ use App\Models\ProductSale;
  *
  * Las operaciones vinculadas por `cash_shift_id` se adjuntan como DETALLE que
  * explica esos totales, nunca como su origen.
+ *
+ * UNA RECLASIFICACIÓN NO ES UN COBRO DOBLE. Cuando un cobro se reclasifica
+ * (docs/ops/RECLASIFICACION-DE-COBROS.md) el turno lista el cobro ANULADO con
+ * `reclassified: true` y el abono que lo sustituye con
+ * `reclassified_from_payment_id`: el mismo dinero, contado una vez. La
+ * corrección sale además en `post_close_corrections` con `type:
+ * 'reclassification'`, y el contraste sigue cuadrando con el cierre firmado.
  */
 class CashShiftReport
 {
@@ -111,7 +121,7 @@ class CashShiftReport
             return [];
         }
 
-        return AuditLog::query()
+        $trazas = AuditLog::query()
             ->where('created_at', '>', $shift->closed_at)
             ->whereIn('action', ['status', 'update', 'refund'])
             ->where(function ($q) use ($porEntidad): void {
@@ -131,6 +141,59 @@ class CashShiftReport
                 'actor_name' => $l->actor_name,
                 'reason' => $l->metadata['reason'] ?? null,
                 'changes' => $l->changes,
+            ])
+            ->all();
+
+        // Por orden de cuándo se hicieron: la anulación del cobro y su
+        // reclasificación son la misma corrección y deben leerse juntas.
+        return collect(array_merge($trazas, $this->reclasificaciones($shift)))
+            ->sortBy('at')
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Las reclasificaciones de cobros de este turno (contrato §5).
+     *
+     * Van como entradas propias, `type: 'reclassification'`, con lo que hace
+     * falta para casar el cobro anulado con el abono que lo sustituye. Llevan
+     * además `at`, `summary`, `actor_name` y `reason` —los campos de las demás
+     * correcciones— para que quien pinte la lista sin conocer el tipo (el PDF,
+     * una versión anterior del CRM) diga algo cierto en vez de una línea vacía.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function reclasificaciones(CashShift $shift): array
+    {
+        return PaymentReclassification::query()
+            ->where('cash_shift_id', $shift->id)
+            ->orderBy('id')
+            ->get()
+            ->map(fn (PaymentReclassification $r) => [
+                'type' => 'reclassification',
+                'id' => 'reclassification-'.$r->id,
+                'reclassification_id' => $r->id,
+                'kind' => $r->kind,
+                'payment_id' => $r->payment_id,
+                'receivable_payment_id' => $r->receivable_payment_id,
+                'amount' => (float) $r->amount,
+                'economic_at' => optional($r->economic_at)->toIso8601String(),
+                'performed_at' => optional($r->performed_at)->toIso8601String(),
+                'performed_by_name' => $r->performed_by_name,
+                'reason' => $r->reason,
+                // Los de cualquier otra corrección, para quien no conozca el tipo.
+                'at' => optional($r->performed_at)->toIso8601String(),
+                'action' => 'reclassification',
+                'entity' => 'pago',
+                'entity_id' => (string) $r->payment_id,
+                'summary' => sprintf(
+                    '%s: el cobro #%d se anuló y su dinero sigue en este turno como el abono #%s (sin recibo nuevo)',
+                    $r->label(),
+                    $r->payment_id,
+                    $r->receivable_payment_id ?? '—',
+                ),
+                'actor_name' => $r->performed_by_name,
+                'changes' => null,
             ])
             ->all();
     }
@@ -217,7 +280,7 @@ class CashShiftReport
     {
         $cobros = Payment::query()
             ->where('cash_shift_id', $shift->id)
-            ->with(['user:id,name', 'plan:id,name', 'upgradedFrom:id,name'])
+            ->with(['user:id,name', 'plan:id,name', 'upgradedFrom:id,name', 'reclassification:id,payment_id'])
             ->orderBy('id')
             ->get()
             ->map(fn (Payment $p) => [
@@ -236,6 +299,9 @@ class CashShiftReport
                 'payment_method' => $p->method,
                 'status' => $p->status,
                 'total' => (float) $p->amount,
+                // Anulado porque su dinero era otra cosa (p. ej. el piso de un
+                // entrenador): sigue en este turno, como el abono que lo sustituye.
+                'reclassified' => PaymentReclassifier::inEffect($p) !== null,
             ])
             ->all();
 
@@ -259,22 +325,46 @@ class CashShiftReport
      * canceladas: esconderlos dejaría un hueco inexplicable. El estado va en la
      * fila, y el contraste solo cuenta los que siguen siendo dinero.
      *
+     * QUIÉN PAGÓ ES EL DEUDOR, NO EL CAJERO. La columna «socio» caía al nombre
+     * de quien registró el abono: la deuda se leía sin `member_id`, así que su
+     * socio nunca resolvía, y cuando el deudor era un entrenador o alguien del
+     * personal tampoco había ficha de socio. Ahora sale el deudor —socio por
+     * su ficha; entrenador o personal por su directorio—, igual que en la vista
+     * de recibos del turno (ShiftReceipts). Los deudores que no son socio se
+     * resuelven de una vez para todo el turno, no uno por fila.
+     *
      * @return list<array<string, mixed>>
      */
     private function abonos(CashShift $shift): array
     {
-        return ReceivablePayment::query()
+        $abonos = ReceivablePayment::query()
             ->where('cash_shift_id', $shift->id)
-            ->with(['receivable:id,concept,debtor_type', 'receivable.member:id,full_name'])
+            // member_id hace falta para que la relación con el socio resuelva.
+            ->with([
+                'receivable:id,concept,debtor_type,debtor_id,member_id',
+                'receivable.member:id,full_name',
+                'reclassification:id,payment_id,receivable_payment_id',
+            ])
             ->orderBy('id')
-            ->get()
+            ->get();
+
+        $otros = $abonos
+            ->map(fn (ReceivablePayment $a) => $a->receivable)
+            ->filter(fn ($deuda) => $deuda !== null && $deuda->member === null
+                && $deuda->debtor_type !== null && $deuda->debtor_id !== null)
+            ->map(fn ($deuda) => [$deuda->debtor_type, (int) $deuda->debtor_id])
+            ->values()
+            ->all();
+        $fichas = $otros === [] ? [] : app(DebtorDirectory::class)->resolveMany($otros);
+
+        return $abonos
             ->map(fn (ReceivablePayment $a) => [
                 'id' => 'abono-'.$a->id,
                 'source_type' => 'receivable_payment',
                 'source_id' => $a->id,
                 'reference' => null,
                 'at' => optional($a->created_at)->toIso8601String(),
-                'member' => $a->receivable?->member?->full_name ?? $a->created_by_name,
+                'member' => $this->deudor($a, $fichas),
                 // El concepto de la deuda es lo que explica el apunte meses
                 // después: «Piso de entrenador · Carlos → Olga · octubre».
                 'plan' => $a->receivable?->concept,
@@ -283,8 +373,32 @@ class CashShiftReport
                 // aplicado tiene que contar, y uno revertido no.
                 'status' => $a->isApplied() ? 'paid' : 'reversed',
                 'total' => (float) $a->amount,
+                // Es el asiento de una reclasificación: el MISMO dinero que el
+                // cobro anulado de esa id, no uno nuevo.
+                'reclassified_from_payment_id' => $a->reclassification?->payment_id,
             ])
             ->all();
+    }
+
+    /**
+     * El nombre de quien debía: su ficha de socio o, si no es socio, la de su
+     * directorio. Null si ya no existe; nunca el nombre del cajero.
+     *
+     * @param  array<string, array<string, mixed>>  $fichas  de DebtorDirectory::resolveMany
+     */
+    private function deudor(ReceivablePayment $a, array $fichas): ?string
+    {
+        $deuda = $a->receivable;
+        if ($deuda === null) {
+            return null;
+        }
+        if ($deuda->member !== null) {
+            return $deuda->member->full_name;
+        }
+
+        $tipo = $deuda->debtor_type instanceof DebtorType ? $deuda->debtor_type->value : $deuda->debtor_type;
+
+        return $fichas[$tipo.':'.$deuda->debtor_id]['name'] ?? null;
     }
 
     /**

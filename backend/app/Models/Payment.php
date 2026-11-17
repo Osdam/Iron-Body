@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * Pago registrado en la tabla `payments` (fuente de verdad del CRM).
@@ -215,6 +216,12 @@ class Payment extends Model
             'registered_by_name' => $actor->name,
             'registered_by_role' => $actor->role,
         ];
+    }
+
+    /** Si este cobro se reclasificó (era otra cosa: p. ej. el piso de un entrenador), la constancia. */
+    public function reclassification(): HasOne
+    {
+        return $this->hasOne(PaymentReclassification::class, 'payment_id');
     }
 
     /** Partes del cobro cuando se pagó con varios medios. Vacío si fue uno solo. */

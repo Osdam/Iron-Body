@@ -44,6 +44,8 @@ class Plan extends Model
         'active',
         'sellable',
         'visible_in_app',
+        // «Se cobra en recepción». Ver la migración add_counter_sellable_to_plans_table.
+        'counter_sellable',
         'features',
         // Facturación electrónica (aditivo).
         'tax_rate_id',
@@ -63,6 +65,7 @@ class Plan extends Model
         'active' => 'boolean',
         'sellable' => 'boolean',
         'visible_in_app' => 'boolean',
+        'counter_sellable' => 'boolean',
         'sort_order' => 'integer',
         'features' => 'array',
         'entry_credits' => 'integer',
@@ -269,7 +272,8 @@ class Plan extends Model
     }
 
     /**
-     * Qué puede cotizarse, recomendarse y cobrarse a alguien de fuera.
+     * Qué puede cotizarse, recomendarse y cobrarse a alguien de fuera: el canal
+     * COMERCIAL (ULTRON, links de pago) y la base del canal de la app.
      *
      * Es UNA sola definición a propósito. Antes cada sitio comercial repetía
      * `where('active', true)` y con eso alcanzaba a planes que nadie quiere
@@ -277,14 +281,23 @@ class Plan extends Model
      * del asesor, y habrían acabado en un WhatsApp real o en un cobro.
      *
      * Las cuatro condiciones dicen cosas distintas:
-     *  - `active`: el sistema lo usa (informes, app del socio, punto de venta);
-     *  - `sellable`: el negocio quiere venderlo;
+     *  - `active`: el sistema lo usa. Inactivo no se vende por NINGUNA vía,
+     *    tampoco en el mostrador;
+     *  - `sellable`: el negocio quiere ofrecerlo fuera. NO gobierna el
+     *    mostrador: recepción cobra cada semana el plan 24 («PLAN SEPTIEMBRE»,
+     *    1 peso), que no es vendible. Eso lo decide `counter_sellable`;
      *  - precio > 0: si no se puede cobrar, no es una oferta;
      *  - duración > 0: si no da acceso durante un tiempo, tampoco.
      *
      * Las dos últimas son la red por si alguien reactiva un plan interno sin
      * darse cuenta: la bandera puede equivocarse, pero un plan de precio cero
      * sigue sin ser vendible.
+     *
+     * Cada canal pregunta lo suyo, y solo lo suyo:
+     *  - comercial (ULTRON, links): esto;
+     *  - app (catálogo, Wompi, suscripciones): esto y además que se enseñe en
+     *    la app ({@see isSellableInApp()});
+     *  - mostrador (cobro, plan a plazos, mejora): {@see isSellableAtCounter()}.
      */
     public function scopeSellable($query)
     {
@@ -317,5 +330,53 @@ class Plan extends Model
             && ! $this->isArchived()
             && (float) $this->price > 0
             && (int) $this->duration_days > 0;
+    }
+
+    /**
+     * ¿Se cobra en la Caja de Gimnasio? Cobro de mostrador, plan a plazos y
+     * mejora de plan.
+     *
+     * Activo, sin archivar y marcado «Se cobra en recepción». NO mira
+     * `sellable`, el precio ni la duración, y es a propósito: recepción cobra
+     * planes que no se ofrecen fuera —el plan 24, de 1 peso— y planes de cero
+     * días, que no dan vigencia y siguen cobrándose (ZeroDurationPlanTest).
+     *
+     * `counter_sellable` nulo cuenta como SÍ: es el valor por defecto de la
+     * columna, y un plan recién creado y aún no releído no lo trae cargado.
+     */
+    public function isSellableAtCounter(): bool
+    {
+        return (bool) $this->active
+            && ! $this->isArchived()
+            && (bool) ($this->counter_sellable ?? true);
+    }
+
+    /** La misma regla, en SQL. */
+    public function scopeSellableAtCounter($query)
+    {
+        return $query->where('active', true)
+            ->whereNull('archived_at')
+            ->where('counter_sellable', true);
+    }
+
+    /**
+     * ¿Se puede comprar desde la app? Catálogo, Wompi y suscripciones.
+     *
+     * Vendible y visible en la app, las dos cosas. El catálogo y la pasarela
+     * solo miraban `active` y el archivo, así que un plan que el negocio no
+     * quiere vender —el de 1 peso, uno contable— se podía pagar por Wompi desde
+     * el teléfono aunque ULTRON y los links ya lo rechazaran.
+     */
+    public function isSellableInApp(): bool
+    {
+        return $this->isSellable() && $this->isVisibleInApp();
+    }
+
+    /** La misma regla, en SQL. */
+    public function scopeSellableInApp($query)
+    {
+        return $query->sellable()
+            // Nulo cuenta como visible, igual que en isVisibleInApp().
+            ->where(fn ($q) => $q->where('visible_in_app', true)->orWhereNull('visible_in_app'));
     }
 }

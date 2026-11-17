@@ -5,6 +5,7 @@ namespace App\Services\Caja;
 use App\Enums\CashShiftType;
 use App\Exceptions\ReceiptException;
 use App\Models\Payment;
+use App\Models\PaymentReclassification;
 use App\Models\ProductSale;
 use App\Models\Receipt;
 use App\Models\ReceiptSource;
@@ -26,7 +27,11 @@ use Illuminate\Support\Collection;
  *    dinero, y su dinero llega —y se imprime— como abono. Ver CashReceipts.
  *  · product_sales: cobradas (`paid`/`delivered`) o entregadas a crédito
  *    (`credit`, que se imprime como comprobante de entrega con su saldo).
- *  · receivable_payments: abonos APLICADOS. Uno revertido ya no es dinero.
+ *  · receivable_payments: abonos APLICADOS. Uno revertido ya no es dinero. Y
+ *    tampoco se imprime el abono que es el ASIENTO DE UNA RECLASIFICACIÓN
+ *    (`payment_reclassifications`): ese dinero entró como un cobro que ya
+ *    entregó su tirilla, y una segunda diría que entró dos veces. Ver
+ *    docs/ops/RECLASIFICACION-DE-COBROS.md.
  *
  * La pasarela, las automatizaciones y la migración NO se imprimen: no pasaron
  * por un mostrador, y una tirilla de un pago de Wompi de las tres de la mañana
@@ -57,12 +62,24 @@ final class ReceiptSourceResolver
 
     public const REASON_REVERSED = 'reversed';
 
+    /** El abono sustituye a un cobro reclasificado: ese dinero ya tiene comprobante. */
+    public const REASON_RECLASSIFIED = 'reclassified';
+
     /**
      * Patrón del identificador de cada abono de un «cobrar todo»: el
      * BulkSettlement deriva `"{peticion}:{deuda}"` del id del barrido. Es lo que
      * permite reconocer, después, qué abonos se cobraron JUNTOS.
      */
     private const BULK_REQUEST_PATTERN = '/^(.+):(\d+)$/';
+
+    /**
+     * Las reclasificaciones de cada turno, por id de abono, leídas UNA vez por
+     * turno: la vista de recibos de un turno pregunta abono por abono y no
+     * puede pagar una consulta por cada uno.
+     *
+     * @var array<int, array<int, PaymentReclassification>>
+     */
+    private array $reclasificadasPorTurno = [];
 
     /**
      * Resuelve lo que pide el CRM en recibos ya existentes y candidatos a crear.
@@ -113,7 +130,10 @@ final class ReceiptSourceResolver
         };
     }
 
-    // ── Elegibilidad (sin consultas: sirve también para pintar un turno) ────
+    // ── Elegibilidad (sirve también para pintar un turno) ───────────────────
+    //
+    // Sin consultas para cobros y ventas. Un abono hace como mucho UNA por
+    // turno —la de sus reclasificaciones—, sea cual sea el número de abonos.
 
     /**
      * Por qué este cobro NO es imprimible, o null si lo es.
@@ -184,7 +204,43 @@ final class ReceiptSourceResolver
             return $this->why(self::REASON_NO_SHIFT, 'Este abono no pertenece a ningún turno de caja.');
         }
 
+        // EL MISMO DINERO NO SACA DOS TIRILLAS. Este abono es el asiento con el
+        // que se reclasificó un cobro que ya había entrado (y que normalmente ya
+        // entregó su recibo): imprimirlo diría que ese dinero entró dos veces.
+        if ($reclasificacion = $this->reclassificationOf($abono)) {
+            $recibo = $reclasificacion->originalReceipt?->number;
+
+            return $this->why(self::REASON_RECLASSIFIED, $recibo !== null
+                ? "Este dinero ya tiene comprobante: {$recibo} (cobro #{$reclasificacion->payment_id} reclasificado)."
+                : "Este abono es la reclasificación del cobro #{$reclasificacion->payment_id}: ese dinero ya entró y no lleva un comprobante nuevo.");
+        }
+
         return null;
+    }
+
+    /**
+     * La reclasificación de la que este abono es el asiento, si lo es.
+     *
+     * Si quien llama ya cargó la relación, se usa. Si no, se leen de una vez
+     * las de SU turno (el abono de una reclasificación vive siempre en el turno
+     * del cobro que sustituye, que es el `cash_shift_id` de la constancia).
+     */
+    private function reclassificationOf(ReceivablePayment $abono): ?PaymentReclassification
+    {
+        if ($abono->relationLoaded('reclassification')) {
+            return $abono->reclassification;
+        }
+
+        $turno = (int) $abono->cash_shift_id;
+        $this->reclasificadasPorTurno[$turno] ??= PaymentReclassification::query()
+            ->where('cash_shift_id', $turno)
+            ->whereNotNull('receivable_payment_id')
+            ->with('originalReceipt:id,number')
+            ->get(['id', 'payment_id', 'receivable_payment_id', 'original_receipt_id', 'cash_shift_id'])
+            ->keyBy('receivable_payment_id')
+            ->all();
+
+        return $this->reclasificadasPorTurno[$turno][(int) $abono->id] ?? null;
     }
 
     // ── Por tipo ────────────────────────────────────────────────────────────

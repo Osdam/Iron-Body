@@ -441,7 +441,7 @@ final class MoneyLedger
     private function installmentRows(int $limit): Collection
     {
         return $this->installments()
-            ->with(['receivable.member.user:id,name,document'])
+            ->with(['receivable.member.user:id,name,document', 'reclassification:id,payment_id,receivable_payment_id'])
             ->orderByDesc('receivable_payments.created_at')
             ->limit($limit)
             ->get(['receivable_payments.*'])
@@ -472,6 +472,9 @@ final class MoneyLedger
                     'status' => $a->status,
                     'period_start' => null,
                     'period_end' => null,
+                    // El asiento de una reclasificación: el mismo dinero que ese
+                    // cobro, que sale anulado. No es un ingreso nuevo.
+                    'reclassified_from_payment_id' => $a->reclassification?->payment_id,
                 ];
             });
     }
@@ -523,12 +526,22 @@ final class MoneyLedger
      * que uno con 7.700.000 limpios, y quien revisa la caja necesita ver los dos
      * números.
      *
+     * UN COBRO RECLASIFICADO NO ES DINERO QUE NO ENTRÓ. Se anuló porque su
+     * dinero era otra cosa —el piso de un entrenador—, y ese dinero SÍ entró:
+     * sigue en su turno y en los ingresos, como el abono que lo sustituye.
+     * Contarlo en `cancelled_payments` lo daba por perdido. Sale aparte, en
+     * `reclassified_payments`, para que la corrección se vea y no se esconda.
+     * Ver docs/ops/RECLASIFICACION-DE-COBROS.md.
+     *
      * @return array<string, mixed>
      */
     public function reversals(): array
     {
         [$desde, $hasta] = $this->range->utcBounds();
         $fallidos = PaymentController::FAILED_STATUSES;
+        $reclasificado = fn ($q) => $q->select(DB::raw(1))
+            ->from('payment_reclassifications')
+            ->whereColumn('payment_reclassifications.payment_id', 'payments.id');
 
         $devueltos = Payment::query()
             ->whereRaw('LOWER(status) = ?', ['refunded'])
@@ -536,6 +549,15 @@ final class MoneyLedger
             ->selectRaw('COALESCE(SUM(amount), 0) as suma, COUNT(*) as n')->first();
 
         $anulados = Payment::query()
+            ->whereRaw('LOWER(status) IN ('.ReportSql::marks($fallidos).')', $fallidos)
+            ->whereRaw(self::PAYMENT_DATE.' BETWEEN ? AND ?', [$desde, $hasta])
+            ->whereNotExists($reclasificado)
+            ->selectRaw('COALESCE(SUM(amount), 0) as suma, COUNT(*) as n')->first();
+
+        // Por la fecha en que ENTRÓ el dinero, como los demás cobros. Solo los
+        // que siguen anulados: uno compensado vuelve a ser la venta de un plan.
+        $reclasificados = Payment::query()
+            ->whereExists($reclasificado)
             ->whereRaw('LOWER(status) IN ('.ReportSql::marks($fallidos).')', $fallidos)
             ->whereRaw(self::PAYMENT_DATE.' BETWEEN ? AND ?', [$desde, $hasta])
             ->selectRaw('COALESCE(SUM(amount), 0) as suma, COUNT(*) as n')->first();
@@ -559,6 +581,8 @@ final class MoneyLedger
         return [
             'refunded' => ['amount' => round((float) $devueltos->suma, 2), 'count' => (int) $devueltos->n],
             'cancelled_payments' => ['amount' => round((float) $anulados->suma, 2), 'count' => (int) $anulados->n],
+            // Informativo: SÍ entró, y ya está en los ingresos como abono.
+            'reclassified_payments' => ['amount' => round((float) $reclasificados->suma, 2), 'count' => (int) $reclasificados->n],
             'reversed_installments' => ['amount' => round((float) $abonosAnulados->suma, 2), 'count' => (int) $abonosAnulados->n],
             'cancelled_sales' => ['amount' => round((float) $ventasAnuladas->suma, 2), 'count' => (int) $ventasAnuladas->n],
             'refunds' => ['amount' => round((float) $devoluciones->suma, 2), 'count' => (int) $devoluciones->n],

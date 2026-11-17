@@ -10,13 +10,16 @@ class MembershipPlanController extends Controller
 {
     public function index(): JsonResponse
     {
+        // El catálogo es lo que se puede COMPRAR en la app (Plan::isSellableInApp):
+        // vendible y visible. Enseñar un plan que luego Wompi rechaza sería una
+        // trampa; antes no la había porque Wompi tampoco lo rechazaba, y así se
+        // cobraban planes que el negocio no vende.
+        //
+        // Oculto en la app NO es lo mismo que inactivo: el plan se sigue
+        // cobrando en el mostrador, pero el socio no lo ve en su teléfono.
+        // Ver la migración de `visible_in_app`.
         $plans = Plan::query()
-            ->where('active', true)
-            ->whereNull('archived_at')
-            // Oculto en la app NO es lo mismo que inactivo: el plan se sigue
-            // cobrando en el mostrador, pero el socio no lo ve en su teléfono.
-            // Ver la migración de `visible_in_app`.
-            ->where(fn ($q) => $q->where('visible_in_app', true)->orWhereNull('visible_in_app'))
+            ->sellableInApp()
             ->orderBy('sort_order')
             ->orderBy('price')
             ->get()
@@ -31,9 +34,10 @@ class MembershipPlanController extends Controller
 
     public function show(Plan $plan): JsonResponse
     {
-        // Mismo criterio que el listado: si no se enseña, tampoco se abre por
-        // su enlace directo. Un 404 y no un 403: para la app ese plan no existe.
-        if (! $plan->isVisibleInApp()) {
+        // Mismo criterio que el listado: si no se puede comprar en la app,
+        // tampoco se abre por su enlace directo. Un 404 y no un 403: para la
+        // app ese plan no existe.
+        if (! $plan->isSellableInApp()) {
             abort(404);
         }
 

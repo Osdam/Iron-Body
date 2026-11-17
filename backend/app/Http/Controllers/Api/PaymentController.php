@@ -27,6 +27,7 @@ use App\Models\User;
 use App\Rules\DeliverableInvoiceEmail;
 use App\Rules\PaymentMethodInput;
 use App\Rules\PlanNotArchived;
+use App\Rules\PlanSellableAtCounter;
 use App\Services\Billing\InvoiceEmail;
 use App\Services\Billing\InvoicingService;
 use App\Services\Billing\Money;
@@ -34,6 +35,7 @@ use App\Services\Billing\PriceQuote;
 use App\Services\Billing\PricingException;
 use App\Services\Billing\PricingService;
 use App\Services\Payments\MembershipPeriod;
+use App\Services\Payments\PaymentReclassifier;
 use App\Services\Payments\PaymentSplits;
 use Carbon\Carbon;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -80,18 +82,56 @@ class PaymentController extends Controller
         'refunded' => ['refunded', 'reembolsado', 'reembolsada'],
     ];
 
+    /**
+     * Lo que necesita la bandera de reclasificación, cargado por adelantado:
+     * una consulta por nivel para toda la página, nunca una por fila. Sin las
+     * cifras de antes y después ni el motivo, que no viajan en un listado.
+     */
+    private const RECLASSIFICATION_RELATIONS = [
+        'reclassification:id,payment_id,kind,economic_at,performed_at,agreement_id,charge_id,receivable_payment_id',
+        'reclassification.agreement:id,trainer_id',
+        'reclassification.agreement.trainer:id,full_name',
+        'reclassification.charge:id,period',
+    ];
+
     public function index(Request $request)
     {
-        $query = Payment::query()->with(['user:id,name,email', 'plan:id,name,active', 'electronicInvoice', 'splits'])->latest();
+        $query = Payment::query()
+            ->with(['user:id,name,email', 'plan:id,name,active', 'electronicInvoice', 'splits', ...self::RECLASSIFICATION_RELATIONS])
+            ->latest();
 
         $this->applyCrmFilters($query, $request);
 
         $payments = $query->paginate($this->resolvePerPage($request));
         $payments->getCollection()->transform(
-            fn (Payment $p) => $p->append('invoice_summary')->makeHidden('electronicInvoice')
+            fn (Payment $p) => $this->withReclassification($p->append('invoice_summary')->makeHidden('electronicInvoice'))
         );
 
         return $payments;
+    }
+
+    /**
+     * El cobro como lo pinta el CRM, con la bandera de reclasificación.
+     *
+     * Un cobro reclasificado queda ANULADO y, sin esto, en Pagos se lee como
+     * cualquier anulación: parece dinero que se devolvió o que nunca entró,
+     * cuando entró y se registró de nuevo como lo que era (p. ej. el piso de un
+     * entrenador). La relación se oculta del volcado y se escribe con su forma
+     * pública, siempre presente (null si no se reclasificó).
+     *
+     * @return array<string, mixed>
+     */
+    private function withReclassification(Payment $payment): array
+    {
+        // EN VIGOR, como en caja, historial e informes: si la reclasificación se
+        // compensó, el cobro vuelve a ser la venta de un plan y se pinta así.
+        $r = PaymentReclassifier::inEffect($payment);
+        $fila = $payment->makeHidden('reclassification')->toArray();
+
+        $fila['reclassified'] = $r !== null;
+        $fila['reclassification'] = $r === null ? null : PaymentReclassifier::summary($r);
+
+        return $fila;
     }
 
     /**
@@ -117,16 +157,23 @@ class PaymentController extends Controller
             .$this->statusPlaceholders($statuses).') THEN amount ELSE 0 END), 0)';
         $countWhen = fn (array $statuses) => 'COUNT(CASE WHEN LOWER(status) IN ('
             .$this->statusPlaceholders($statuses).') THEN 1 END)';
+        // FALLIDO Y ANULADO NO SON DINERO: uno nunca entró y el otro se
+        // deshizo. «Total recaudado» los sumaba igual, y al anular un cobro para
+        // registrarlo como lo que era (una reclasificación) el mismo dinero
+        // salía dos veces: el cobro anulado y el abono que lo sustituye.
+        $sumUnless = fn (array $statuses) => 'COALESCE(SUM(CASE WHEN LOWER(status) IN ('
+            .$this->statusPlaceholders($statuses).') THEN 0 ELSE amount END), 0)';
 
         $row = $query->selectRaw(
             'COUNT(*) as total_count,'
-            .' COALESCE(SUM(amount), 0) as total_amount,'
+            .' '.$sumUnless(self::FAILED_STATUSES).' as total_amount,'
             .' '.$sumWhen(self::PAID_STATUSES).' as paid_amount,'
             .' '.$countWhen(self::PAID_STATUSES).' as paid_count,'
             .' '.$sumWhen(self::PENDING_STATUSES).' as pending_amount,'
             .' '.$countWhen(self::PENDING_STATUSES).' as pending_count,'
             .' '.$countWhen(self::FAILED_STATUSES).' as failed_count',
             array_merge(
+                self::FAILED_STATUSES,
                 self::PAID_STATUSES,
                 self::PAID_STATUSES,
                 self::PENDING_STATUSES,
@@ -427,19 +474,21 @@ class PaymentController extends Controller
             'plan:id,name,active',
             'electronicInvoice',
             'splits',
+            ...self::RECLASSIFICATION_RELATIONS,
         ])->append('invoice_summary')->makeHidden('electronicInvoice');
 
         // Lo que cuelga del cobro: deuda, turno, factura, recibos, devoluciones
         // y posibles duplicados. Se AÑADE al cuerpo de siempre, y SOLO para una
         // persona: lleva motivos, autores y referencias externas de las
         // devoluciones, y el token compartido de automatizaciones (que tiene
-        // `payments.view` por ser lectura) no lee nada de eso.
+        // `payments.view` por ser lectura) no lee nada de eso. La bandera de
+        // reclasificación sí va para los dos: no lleva motivo ni autor.
         $actor = AdminActor::from($request);
         if ($actor === null) {
-            return $cobro->toArray();
+            return $this->withReclassification($cobro);
         }
 
-        return array_merge($cobro->toArray(), [
+        return array_merge($this->withReclassification($cobro), [
             'links' => app(PaymentCorrections::class)->links($payment, $actor),
         ]);
     }
@@ -493,8 +542,10 @@ class PaymentController extends Controller
     {
         $data = $request->validate([
             'user_id' => 'required|exists:users,id',
-            // Un plan archivado no se vende (PlanArchive): ni en mostrador.
-            'plan_id' => ['nullable', 'exists:plans,id', new PlanNotArchived],
+            // Un plan archivado no se vende (PlanArchive): ni en mostrador. Y
+            // uno inactivo, o sin «Se cobra en recepción», tampoco se cobra
+            // aquí; con un archivado esa segunda regla calla y habla la primera.
+            'plan_id' => ['nullable', 'exists:plans,id', new PlanNotArchived, new PlanSellableAtCounter],
             'amount' => 'required|numeric|min:0',
             'method' => ['nullable', 'string', 'max:80', new PaymentMethodInput(devengoLoDecideElCobro: true)],
             'reference' => 'nullable|string|max:120',

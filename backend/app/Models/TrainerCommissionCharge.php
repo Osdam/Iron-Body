@@ -5,6 +5,7 @@ namespace App\Models;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * El piso de UN MES de un acuerdo.
@@ -45,6 +46,12 @@ class TrainerCommissionCharge extends Model
     public function receivable(): BelongsTo
     {
         return $this->belongsTo(Receivable::class);
+    }
+
+    /** Si este mes se registró reclasificando un cobro que ya había entrado, la constancia. */
+    public function reclassification(): HasOne
+    {
+        return $this->hasOne(PaymentReclassification::class, 'charge_id');
     }
 
     /** «octubre de 2026», como se dice en el mostrador. */

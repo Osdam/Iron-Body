@@ -6,21 +6,38 @@ namespace App\Support\Caja;
  * De dónde nace un `payments`, y si por tanto pertenece a una caja física.
  *
  * NO es una heurística sobre el texto de `method`: es una clasificación por
- * PUNTO DE ENTRADA del código. Solo existen tres sitios en todo el backend que
- * crean filas en `payments` (verificado sobre app/ y database/):
+ * PUNTO DE ENTRADA del código. Estos son los sitios del backend que crean filas
+ * en `payments` (verificado sobre app/ y database/ el 17-11-2026):
  *
- *   1. PaymentController::store()                    → COUNTER
- *      POST /api/payments, tras ProtectAdminPaths. Lo ejecuta una persona del
- *      mostrador con sesión de administrador. El dinero cambia de manos allí.
+ *   1. PaymentController::store()                    → COUNTER o AUTOMATION
+ *      POST /api/payments, tras ProtectAdminPaths. Con una persona del
+ *      mostrador con sesión de administrador es COUNTER: el dinero cambia de
+ *      manos allí. Con el token compartido de automatizaciones, que no es
+ *      nadie, es AUTOMATION ({@see forCrmRequest()}).
  *
- *   2. PaymentMembershipActivator::activate()        → GATEWAY
+ *   2. ReceivableController::storePlan()             → COUNTER
+ *      El plan a plazos: el asiento de devengo (`method = receivable`), sin
+ *      turno; el dinero entra por los abonos.
+ *
+ *   3. PlanUpgrades::upgrade()                       → COUNTER
+ *      La diferencia de una mejora de plan, en el turno abierto.
+ *
+ *   4. PaymentMembershipActivator::activate()        → GATEWAY
  *      Llamado por WompiTransactionService (`wompi`) y NequiPushPaymentService
  *      (`nequi`) al confirmarse la transacción. Se dispara por webhook, sin
  *      nadie presente y a cualquier hora.
  *
- *   3. ImportLegacyCrmCommand                        → LEGACY
+ *   5. ImportLegacyCrmCommand                        → LEGACY
  *      Importación del CRM anterior, referencias `MIGR-*` y `method='manual'`.
  *      Comando de consola; no forma parte de la operación diaria.
+ *
+ * QUÉ PLAN se puede cobrar por cada uno no lo decide el origen sino el canal
+ * de venta, con su regla del modelo: las entradas 1 a 3 son la Caja de
+ * Gimnasio y exigen Plan::isSellableAtCounter() (también la automatización,
+ * que entra por la 1); la pasarela cobra lo vendido por la app
+ * (Plan::isSellableInApp()) o por un link comercial (Plan::isSellable()), y se
+ * comprueba al CREAR la transacción o el link: el webhook de una ya pagada
+ * activa siempre, porque ese dinero es real.
  *
  * La regla que se deriva:
  *

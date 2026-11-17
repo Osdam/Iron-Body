@@ -4,9 +4,9 @@ namespace App\Console\Commands;
 
 use App\Models\ElectronicInvoice;
 use App\Services\Billing\PaymentOriginInspector;
+use App\Services\Billing\PendingInvoiceCancellation;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 
 /**
  * Cancela solicitudes de factura originadas en pagos de prueba.
@@ -27,6 +27,10 @@ use Illuminate\Support\Facades\DB;
  *    facturación, y podrían ser válidos para otros fines.
  *  - NO llama a Factus: una solicitud `pending` nunca llegó a la DIAN.
  *  - NO toca documentos ya validados: cancelarlos exigiría nota crédito.
+ *
+ * La cancelación en sí (qué se escribe y en qué bitácora) vive en
+ * {@see PendingInvoiceCancellation}, que también usa la reclasificación de
+ * cobros. Aquí quedan los motivos propios de este comando.
  */
 class BillingCancelTestRequestsCommand extends Command
 {
@@ -45,7 +49,7 @@ class BillingCancelTestRequestsCommand extends Command
     /** Motivo para una venta real cuyo cliente nunca pidió factura. */
     private const MOTIVO_SIN_SOLICITUD = 'La venta no fue creada con solicitud de factura electrónica';
 
-    public function handle(PaymentOriginInspector $inspector): int
+    public function handle(PaymentOriginInspector $inspector, PendingInvoiceCancellation $cancelacion): int
     {
         $dry = (bool) $this->option('dry-run');
         $reason = (string) $this->option('reason');
@@ -76,18 +80,16 @@ class BillingCancelTestRequestsCommand extends Command
             $origin = $inspector->inspect($invoice);
             $status = $this->statusOf($invoice);
 
-            // Solo se cancela lo que nunca llegó a la DIAN.
-            $blocked = match (true) {
-                $status !== 'pending' => "no es pending (es {$status})",
-                filled($invoice->cufe) => 'ya tiene CUFE',
-                filled($invoice->full_number) => 'ya tiene número',
+            // Solo se cancela lo que nunca llegó a la DIAN (estado, CUFE y
+            // número: la regla común, en PendingInvoiceCancellation).
+            $blocked = $cancelacion->blocker($invoice) ?? match (true) {
                 // Una venta REAL que el cliente nunca pidió facturar no se puede
                 // emitir jamás: la barrera la rechazaría siempre. Su solicitud
                 // `pending` no es una emisión en espera, es un registro que no
                 // tiene destino. Requiere --not-requested explícito, y la
                 // condición es verificable en los datos —no un override del
                 // operador—: el origen tiene invoice_requested=false.
-                $this->isNotRequested($invoice) => $this->option('not-requested')
+                $cancelacion->isNotRequested($invoice) => $this->option('not-requested')
                     ? null
                     : 'venta real sin solicitud del cliente: usa --not-requested',
                 ! $origin['is_sandbox'] && ! $origin['is_test_card'] => 'no es de sandbox: requiere decisión manual',
@@ -123,7 +125,14 @@ class BillingCancelTestRequestsCommand extends Command
         }
 
         foreach ($eligible as $invoice) {
-            $this->cancel($invoice, $reason, $actor);
+            // El porqué tiene que ser EXACTO: una venta real sin solicitud no
+            // es un pago de prueba, y una bitácora que lo confunda engaña a
+            // quien audite el documento años después.
+            $cancelacion->cancel($invoice, $reason, $actor, $cancelacion->isNotRequested($invoice)
+                ? 'Origen: venta real cuyo cliente NO solicitó factura electrónica; '
+                  .'sin solicitud expresa la emisión está prohibida y la solicitud no '
+                  .'tiene destino posible.'
+                : 'Origen: pago de prueba (sandbox); no movió dinero y no debe facturarse.');
             $this->line("  #{$invoice->id} cancelada · motivo={$reason} · actor={$actor}");
         }
 
@@ -178,67 +187,8 @@ class BillingCancelTestRequestsCommand extends Command
         return array_values(array_unique($ids));
     }
 
-    /**
-     * ¿El origen económico NO pidió factura?
-     *
-     * Es la única razón por la que una solicitud de una venta real puede
-     * cancelarse sin más trámite: sin solicitud expresa la emisión está
-     * prohibida por diseño, así que la fila nunca podrá convertirse en
-     * documento. Se lee del hecho económico (pago o venta), no de la
-     * transacción de pasarela.
-     */
-    private function isNotRequested(ElectronicInvoice $invoice): bool
-    {
-        $source = $invoice->source;
-
-        return $source !== null && ! (bool) ($source->invoice_requested ?? false);
-    }
-
-    private function cancel(ElectronicInvoice $invoice, string $reason, string $actor): void
-    {
-        DB::transaction(function () use ($invoice, $reason, $actor) {
-            $invoice->forceFill([
-                'status' => 'cancelled',
-                'cancellation_reason' => $reason,
-                'retry_allowed' => false,
-                'cancelled_at' => now(),
-                'cancelled_by' => $actor,
-            ])->save();
-
-            // Bitácora: actor, fecha y motivo, en la tabla que ya existe para
-            // el rastro de cada factura.
-            DB::table('electronic_invoice_logs')->insert([
-                'electronic_invoice_id' => $invoice->id,
-                'action' => 'cancel',
-                'endpoint' => null,
-                'http_status' => null,
-                'result' => 'cancelled',
-                // El porqué tiene que ser EXACTO: una venta real sin solicitud
-                // no es un pago de prueba, y una bitácora que lo confunda
-                // engaña a quien audite el documento años después.
-                'message' => sprintf(
-                    'Solicitud cancelada por %s el %s. Motivo: %s. %s retry_allowed=false. '
-                    .'No se llamó a Factus y no se eliminó ningún registro.',
-                    $actor,
-                    now()->toDateTimeString(),
-                    $reason,
-                    $this->isNotRequested($invoice)
-                        ? 'Origen: venta real cuyo cliente NO solicitó factura electrónica; '
-                          .'sin solicitud expresa la emisión está prohibida y la solicitud no '
-                          .'tiene destino posible.'
-                        : 'Origen: pago de prueba (sandbox); no movió dinero y no debe facturarse.',
-                ),
-                'payload_excerpt' => null,
-                'duration_ms' => null,
-                'created_at' => now(),
-            ]);
-        });
-    }
-
     private function statusOf(ElectronicInvoice $invoice): string
     {
-        $status = $invoice->status;
-
-        return $status instanceof \BackedEnum ? (string) $status->value : (string) $status;
+        return PendingInvoiceCancellation::statusOf($invoice);
     }
 }
