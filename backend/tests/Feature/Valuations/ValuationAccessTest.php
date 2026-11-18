@@ -105,7 +105,9 @@ class ValuationAccessTest extends TestCase
     public function test_todas_las_rutas_de_la_agenda_estan_clasificadas_una_a_una(): void
     {
         $rutas = collect(Route::getRoutes())->filter(fn ($r) => str_starts_with($r->uri(), 'api/admin/valuations'));
-        $this->assertCount(22, $rutas);
+        // 22 de la agenda + 2 de seguimiento (contrato del ciclo §3) + 5 de
+        // solicitudes (CONTRATO_SOLICITUDES_VALORACION.md §3).
+        $this->assertCount(29, $rutas);
         foreach ($rutas as $r) {
             $p = AuthorizationMap::resolve($r);
             $this->assertNotNull($p, AuthorizationMap::routeKey($r));
@@ -133,7 +135,9 @@ class ValuationAccessTest extends TestCase
         $this->postJson('/api/admin/valuations', $this->payload($this->laura, $this->andres, '2026-10-24T09:00:00-05:00'), $h)->assertForbidden();
         $this->postJson("/api/admin/valuations/{$this->deAndres}/cancel", ['expected_version' => 1, 'reason' => 'Prueba de permiso'], $h)->assertForbidden();
         $this->postJson("/api/admin/valuations/{$this->deAndres}/confirm", ['expected_version' => 1], $h)->assertForbidden();
-        $this->getJson('/api/admin/valuations/members/search?q=lau', $h)->assertForbidden();
+        // Buscar socios es leer (CONTRATO_CICLO_VALORACIONES.md §5): antes
+        // exigía `create`; ahora basta ver la agenda (lo usa el Seguimiento).
+        $this->getJson('/api/admin/valuations/members/search?q=lau', $h)->assertOk();
     }
 
     public function test_create_update_cancel_complete_cada_uno_lo_suyo(): void

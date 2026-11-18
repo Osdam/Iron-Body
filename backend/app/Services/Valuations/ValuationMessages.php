@@ -16,6 +16,12 @@ use Carbon\CarbonInterface;
  */
 final class ValuationMessages
 {
+    /** Meses abreviados para la bandeja del CRM («18 nov»). */
+    private const SHORT_MONTHS = [
+        1 => 'ene', 2 => 'feb', 3 => 'mar', 4 => 'abr', 5 => 'may', 6 => 'jun',
+        7 => 'jul', 8 => 'ago', 9 => 'sept', 10 => 'oct', 11 => 'nov', 12 => 'dic',
+    ];
+
     /**
      * Título y mensaje de un aviso. La cita debe traer `member` y `trainer`.
      *
@@ -30,9 +36,11 @@ final class ValuationMessages
         $relativo = ValuationTime::relativeDay($cita->starts_at, $ahora);
 
         return match ($kind) {
+            // Es push desde CONTRATO_SOLICITUDES_VALORACION.md §4: fecha, hora y
+            // el entrenador con su nombre corto («Carlos P.»), como lo enseña la app.
             ValuationReminder::KIND_CONFIRMATION => [
                 'title' => 'Valoración programada',
-                'message' => "Tu valoración en Iron Body quedó programada para el {$dia} a las {$hora} con {$entrenador}.",
+                'message' => self::sentence("Tu valoración en Iron Body quedó programada para el {$dia} a las {$hora} con ".self::trainerShortName($cita->trainer?->full_name)),
             ],
             ValuationReminder::KIND_REMINDER_LONG => [
                 'title' => 'Recordatorio de tu valoración',
@@ -81,6 +89,75 @@ final class ValuationMessages
             'confirmed' => ['title' => 'Valoración confirmada', 'message' => "Valoración confirmada — {$socio} con {$entrenador}, {$dia} a las {$hora}"],
             default => throw new \InvalidArgumentException("Evento desconocido: {$accion}"),
         };
+    }
+
+    /**
+     * El resultado del envío de una valoración profesional, en la bandeja del
+     * CRM (contrato del ciclo §1). Nombres cortos y NINGUNA medida.
+     *
+     *  · `linked`             → «Carlos P. finalizó la valoración de María G. · 18 nov, 10:40 a. m.»
+     *  · `none`               → «… registró la valoración de María G. · 18 nov. No había cita pendiente ese día.»
+     *  · `different_trainer`  → «… · 18 nov. La cita del día era con Ana R.»
+     *  · `ambiguous`          → «… · 18 nov. Había 2 citas ese día.»
+     *
+     * «pendiente» y no el «No había cita ese día» del ejemplo del contrato: la
+     * segunda valoración del mismo día también cae aquí (la cita ya la cerró la
+     * primera), y decir que no había cita sería falso.
+     *
+     * @param  string  $resultado  ValuationAgenda::MATCH_*
+     * @return array{title: string, message: string}
+     */
+    public static function forAssessmentOutcome(
+        string $resultado,
+        CarbonInterface $enviadaEn,
+        ?string $entrenador,
+        ?string $socio,
+        ?string $otroEntrenador = null,
+        int $candidatas = 0,
+    ): array {
+        $quien = self::trainerShortName($entrenador, 'Un entrenador');
+        $deQuien = self::shortName($socio);
+        $dia = self::dayShortMonth($enviadaEn);
+
+        return match ($resultado) {
+            ValuationAgenda::MATCH_LINKED => [
+                'title' => 'Valoración completada',
+                'message' => "{$quien} finalizó la valoración de {$deQuien} · {$dia}, ".ValuationTime::clock($enviadaEn),
+            ],
+            ValuationAgenda::MATCH_NONE => [
+                'title' => 'Valoración realizada sin cita',
+                'message' => "{$quien} registró la valoración de {$deQuien} · {$dia}. No había cita pendiente ese día.",
+            ],
+            ValuationAgenda::MATCH_DIFFERENT_TRAINER => [
+                'title' => 'Valoración por revisar',
+                'message' => self::sentence("{$quien} registró la valoración de {$deQuien} · {$dia}. La cita del día era con ".self::trainerShortName($otroEntrenador, 'otro entrenador')),
+            ],
+            ValuationAgenda::MATCH_AMBIGUOUS => [
+                'title' => 'Valoración por revisar',
+                'message' => "{$quien} registró la valoración de {$deQuien} · {$dia}. Había {$candidatas} citas ese día.",
+            ],
+            default => throw new \InvalidArgumentException("Resultado desconocido: {$resultado}"),
+        };
+    }
+
+    /** Cierra la frase con punto, sin duplicarlo si ya acaba en una inicial («Ana R.»). */
+    private static function sentence(string $texto): string
+    {
+        return str_ends_with($texto, '.') ? $texto : $texto.'.';
+    }
+
+    /** «18 nov», en Bogotá y sin `ext-intl`. */
+    public static function dayShortMonth(CarbonInterface $instante): string
+    {
+        $l = ValuationTime::local($instante);
+
+        return $l->day.' '.self::SHORT_MONTHS[$l->month];
+    }
+
+    /** El entrenador con su nombre corto («Carlos P.»), o `$siNo` si no se resuelve. */
+    public static function trainerShortName(?string $nombre, string $siNo = 'tu entrenador'): string
+    {
+        return trim((string) $nombre) === '' ? $siNo : self::shortName($nombre);
     }
 
     /** «Andrés Pérez» → «Andrés». */

@@ -106,6 +106,16 @@ class FcmService
             });
     }
 
+    /** La ruta interna de la app (`/evaluation`…) de un aviso `action_type=route`, o null. */
+    private function rutaDeAccion(Notification $n): ?string
+    {
+        $url = is_string($n->action_url) ? trim($n->action_url) : '';
+
+        return $n->action_type === 'route' && str_starts_with($url, '/') && ! str_starts_with($url, '//')
+            ? $url
+            : null;
+    }
+
     /** Mensaje HTTP v1: notification (visible app cerrada) + data (ruteo/tap). */
     private function buildMessage(string $token, Notification $n): array
     {
@@ -122,6 +132,10 @@ class FcmService
                 'type' => $n->type,
                 'category' => $category,
                 'action_type' => $n->action_type,
+                // Al tocar la notificación del sistema, la app navega con
+                // `action_route` (CoachNotificationRouter). Sin él, el toque
+                // solo abría la app. Solo rutas internas de la app.
+                'action_route' => $this->rutaDeAccion($n),
                 'priority' => $n->priority,
             ], fn ($v) => $v !== null)),
             'android' => PushChannel::androidBlock($category),

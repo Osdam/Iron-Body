@@ -43,12 +43,17 @@ final class ValuationSettings
             'internal_alert_minutes' => ['required', 'integer', 'min:5', 'max:120'],
             'internal_unattended_enabled' => ['required', 'boolean'],
             'member_app_enabled' => ['required', 'boolean'],
+            // Seguimiento (CONTRATO_CICLO_VALORACIONES.md §3): días entre
+            // valoraciones, o null = sin seguimiento. OPCIONAL: el CRM anterior
+            // no lo envía y su PUT no debe ni fallar ni borrarlo.
+            'follow_up_interval_days' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:365'],
         ];
     }
 
     /**
      * Valida el conjunto ENTERO (todas las claves, con sus rangos y la regla
-     * cruzada corto < largo) y devuelve los valores normalizados.
+     * cruzada corto < largo) y devuelve los valores normalizados. Las de
+     * seguimiento (`FOLLOW_UP_FIELDS`) solo salen si vinieron.
      *
      * @param  array<string,mixed>  $entrada
      * @return array<string,mixed>
@@ -74,6 +79,12 @@ final class ValuationSettings
                 ? filter_var($valor, FILTER_VALIDATE_BOOLEAN)
                 : (int) $valor;
         }
+        // Solo si vino: ausente = se conserva el valor guardado.
+        foreach (ValuationSetting::FOLLOW_UP_FIELDS as $campo) {
+            if (array_key_exists($campo, $datos)) {
+                $out[$campo] = $datos[$campo] === null ? null : (int) $datos[$campo];
+            }
+        }
 
         return $out;
     }
@@ -82,7 +93,7 @@ final class ValuationSettings
     public function present(ValuationSetting $s): array
     {
         $out = [];
-        foreach (ValuationSetting::FIELDS as $campo) {
+        foreach ([...ValuationSetting::FIELDS, ...ValuationSetting::FOLLOW_UP_FIELDS] as $campo) {
             $out[$campo] = $s->getAttribute($campo);
         }
         $out['updated_at'] = $s->updated_at?->copy()->utc()->toIso8601String();

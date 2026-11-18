@@ -657,8 +657,22 @@ final class AuthorizationMap
         'GET api/admin/valuations/slots' => self::VALUATIONS_READ,
         'GET api/admin/valuations/trainers' => self::VALUATIONS_READ,
         'GET api/admin/valuations/members/by-user/{userId}' => self::VALUATIONS_READ,
-        // Buscar socios es el primer paso de agendar.
-        'GET api/admin/valuations/members/search' => 'valuations.create',
+        // Buscar socios: el primer paso de agendar y también de consultar el
+        // seguimiento (CONTRATO_CICLO_VALORACIONES.md §5). Antes `create`.
+        'GET api/admin/valuations/members/search' => self::VALUATIONS_READ,
+        // Seguimiento del socio (§3): leerlo con el alcance de la agenda;
+        // cambiar intervalo, pausa o fecha puntual es editar la agenda.
+        'GET api/admin/valuations/members/{memberId}/follow-up' => self::VALUATIONS_READ,
+        'PUT api/admin/valuations/members/{memberId}/follow-up' => 'valuations.update',
+        // Solicitudes de valoración desde la app
+        // (CONTRATO_SOLICITUDES_VALORACION.md §3): leerlas con el alcance de
+        // la agenda; enlazarlas a una cita es agendar; atenderlas sin cita o
+        // rechazarlas, editar.
+        'GET api/admin/valuations/requests' => self::VALUATIONS_READ,
+        'GET api/admin/valuations/requests/{requestUuid}' => self::VALUATIONS_READ,
+        'POST api/admin/valuations/requests/{requestUuid}/schedule' => 'valuations.create',
+        'POST api/admin/valuations/requests/{requestUuid}/attend' => 'valuations.update',
+        'POST api/admin/valuations/requests/{requestUuid}/reject' => 'valuations.update',
         'POST api/admin/valuations' => 'valuations.create',
         // Mover, cambiar de entrenador o de tipo, y editar notas.
         'PATCH api/admin/valuations/{uuid}' => 'valuations.update',

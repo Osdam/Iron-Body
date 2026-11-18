@@ -4,11 +4,13 @@ namespace App\Services\Valuations;
 
 use App\Models\Member;
 use App\Models\Notification;
+use App\Models\ProfessionalAssessment;
+use App\Models\Trainer;
 use App\Models\ValuationAppointment;
-use App\Models\ValuationReminder;
 use App\Services\NotificationService;
 use App\Support\Access\TrainerMemberScope;
 use Carbon\CarbonInterface;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use LogicException;
 use Throwable;
@@ -25,6 +27,14 @@ use Throwable;
  *    ve la agenda. Sin `member` enlazado: la fila no lleva el documento.
  *
  * Idempotente por `event_key`: reintentar no duplica la fila ni el push.
+ *
+ * TODO aviso al socio de una cita es PUSH (`should_popup`) y abre la pantalla
+ * de Valoración física (`action_type=route`, `action_url=/evaluation`), según
+ * CONTRATO_SOLICITUDES_VALORACION.md §4. La única excepción la decide el
+ * procesador: en horas de silencio, si ya no sirve posponerlo, sale en la app
+ * SIN push (contrato del ciclo §6). Que `should_popup=false` no empuje depende
+ * de `fcm.only_popup` (por defecto true): con FCM_ONLY_POPUP=false,
+ * NotificationService empuja toda notificación de socio.
  */
 final class ValuationNotifier
 {
@@ -32,13 +42,25 @@ final class ValuationNotifier
 
     public const TYPE = 'valuation';
 
+    /** La pantalla de la app que abre el aviso de una cita (Valoración física). */
+    public const MEMBER_ROUTE = '/evaluation';
+
+    /** `source_event` de los avisos del envío de una valoración (contrato del ciclo §1). */
+    public const SOURCE_COMPLETED = 'valuation_completed';
+
+    public const SOURCE_UNLINKED = 'valuation_assessment_unlinked';
+
+    public const SOURCE_REVIEW = 'valuation_assessment_review';
+
     public function __construct(private readonly NotificationService $notifications) {}
 
     /**
      * Aviso al socio. Lanza si no hay socio: el llamante lo registra como
      * omitido, nunca lo «arregla» enviando sin destinatario.
+     *
+     * @param  bool  $conPush  false solo en horas de silencio cuando posponerlo ya no sirve (contrato del ciclo §6)
      */
-    public function toMember(?Member $socio, ValuationAppointment $cita, string $kind, CarbonInterface $ahora): Notification
+    public function toMember(?Member $socio, ValuationAppointment $cita, string $kind, CarbonInterface $ahora, bool $conPush = true): Notification
     {
         if (! $socio instanceof Member || ! $socio->getKey()) {
             throw new LogicException('Aviso de valoración sin socio: no se envía (sería una difusión a todos).');
@@ -51,11 +73,12 @@ final class ValuationNotifier
             'title' => $texto['title'],
             'message' => $texto['message'],
             'priority' => 'medium',
-            'should_popup' => in_array($kind, [
-                ValuationReminder::KIND_REMINDER_LONG,
-                ValuationReminder::KIND_REMINDER_SHORT,
-                ValuationReminder::KIND_CANCELLATION,
-            ], true),
+            'should_popup' => $conPush,
+            // La tabla `notifications` no tiene `action_route`: el destino de
+            // una notificación de socio va en `action_type=route` + `action_url`
+            // (mismo patrón que la valoración profesional, `/assessment`).
+            'action_type' => 'route',
+            'action_url' => self::MEMBER_ROUTE,
             'metadata' => ['source_event' => 'valuation_'.$kind, 'appointment_uuid' => $cita->uuid],
             'event_key' => self::eventKey($cita, $kind),
         ]);
@@ -90,6 +113,90 @@ final class ValuationNotifier
             Log::warning('valuations.internal_event_failed', [
                 'appointment_uuid' => $cita->uuid,
                 'action' => $accion,
+                'error' => $e::class,
+            ]);
+        }
+    }
+
+    /**
+     * El resultado del ENVÍO de una valoración profesional en la bandeja del
+     * CRM (contrato del ciclo §1): `valuation_completed`,
+     * `valuation_assessment_unlinked` o `valuation_assessment_review`.
+     *
+     * Se llama DESPUÉS del commit y nunca rompe el envío (ya confirmado): si
+     * falla, queda en el log sin el contenido. La escritura va en su propia
+     * transacción (o punto de guardado, si hubiera una abierta): en PostgreSQL
+     * un INSERT fallido dentro de una transacción ajena la dejaría abortada.
+     *
+     * Sin medidas ni datos físicos: nombres cortos, fecha y, si hay, la cita.
+     * Una valoración que ya cerró una cita (`already_linked`) no avisa: en el
+     * envío no ocurre, y la conciliación no avisa nunca.
+     *
+     * @param  array{outcome: string, appointment: ValuationAppointment|null, candidates: int}  $emparejamiento  de ValuationAgenda::completeFromAssessment()
+     */
+    public function assessmentOutcome(ProfessionalAssessment $valoracion, array $emparejamiento): void
+    {
+        $resultado = $emparejamiento['outcome'];
+        try {
+            if ($resultado === ValuationAgenda::MATCH_ALREADY_LINKED) {
+                return;
+            }
+
+            $cita = $emparejamiento['appointment'];
+            $socio = Member::query()->withoutGlobalScope(TrainerMemberScope::NAME)->find($valoracion->member_id);
+            $entrenador = Trainer::query()->find($valoracion->trainer_id);
+            $texto = ValuationMessages::forAssessmentOutcome(
+                $resultado,
+                $valoracion->submitted_at,
+                $entrenador?->full_name,
+                $socio?->full_name,
+                $resultado === ValuationAgenda::MATCH_DIFFERENT_TRAINER ? $cita?->trainer()->value('full_name') : null,
+                (int) $emparejamiento['candidates'],
+            );
+
+            $base = [
+                'member_id' => (int) $valoracion->member_id,
+                'assessment_uuid' => $valoracion->uuid,
+            ];
+            [$origen, $accion, $carga, $clave] = match ($resultado) {
+                ValuationAgenda::MATCH_LINKED => [
+                    self::SOURCE_COMPLETED, 'valuation_detail', ['appointment_uuid' => $cita->uuid], 'completed',
+                ],
+                ValuationAgenda::MATCH_NONE => [
+                    self::SOURCE_UNLINKED, 'valuation_member', $base, 'unlinked',
+                ],
+                ValuationAgenda::MATCH_DIFFERENT_TRAINER => [
+                    self::SOURCE_REVIEW, 'valuation_member', $base + ['appointment_uuid' => $cita->uuid, 'reason' => $resultado], 'review',
+                ],
+                ValuationAgenda::MATCH_AMBIGUOUS => [
+                    self::SOURCE_REVIEW, 'valuation_member', $base + ['reason' => $resultado], 'review',
+                ],
+            };
+
+            $metadata = array_filter([
+                'source_event' => $origen,
+                'member_id' => (int) $valoracion->member_id,
+                'trainer_id' => (int) $valoracion->trainer_id,
+                'assessment_uuid' => $valoracion->uuid,
+                'appointment_uuid' => $cita?->uuid,
+                'reason' => $origen === self::SOURCE_REVIEW ? $resultado : null,
+            ], fn ($v) => $v !== null);
+
+            DB::transaction(fn () => $this->notifications->createAdminNotification([
+                'type' => self::TYPE,
+                'title' => $texto['title'],
+                'message' => $texto['message'],
+                'priority' => 'medium',
+                'required_permission' => self::REQUIRED_PERMISSION,
+                'action_type' => $accion,
+                'action_payload' => $carga,
+                'metadata' => $metadata,
+                'event_key' => 'valuation:assessment:'.$valoracion->uuid.':'.$clave,
+            ]));
+        } catch (Throwable $e) {
+            Log::warning('valuations.assessment_notice_failed', [
+                'assessment_uuid' => $valoracion->uuid,
+                'outcome' => $resultado,
                 'error' => $e::class,
             ]);
         }

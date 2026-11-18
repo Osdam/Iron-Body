@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Log;
  *  - Sin entrenador activo → no se crea nada.
  *  - Idempotente por idempotency_key (no duplica por el mismo evento).
  *  - Anti-spam por tipo/miembro/entrenador (ventana 12h, máx 1 por tipo·día).
+ *  - Algunos tipos (ONE_OPEN_PER_MEMBER): una sola tarea abierta por socio.
  *  - Nunca guarda datos sensibles (saneo del payload).
  *  - Trazable: enlaza el automation_event_id de origen.
  */
@@ -27,6 +28,17 @@ class TrainerTaskService
     private const WINDOW_MINUTES = 720; // 12h
 
     private const MAX_PER_TYPE_PER_DAY = 1;
+
+    /**
+     * Tipos con COMO MUCHO UNA tarea abierta (pendiente o vista) por socio: si
+     * ya hay una, no se crea otra, sea del entrenador que sea
+     * (CONTRATO_CICLO_VALORACIONES.md §7). `evaluation.outdated` acumulaba una
+     * por mes y por socio que nadie cerraba (34 pendientes en producción, ni
+     * una vista). Los demás tipos siguen con la ventana anti-spam de siempre.
+     *
+     * @var list<string>
+     */
+    private const ONE_OPEN_PER_MEMBER = ['evaluation.outdated'];
 
     /**
      * Mapa de eventos que SÍ generan tarea para el entrenador → copy seguro.
@@ -188,7 +200,23 @@ class TrainerTaskService
             }
         }
 
-        // 2) Anti-spam: ya hubo una tarea de este tipo para este par recientemente.
+        // 2) Una sola abierta por socio y tipo, para los tipos que lo piden. Se
+        //    responde como duplicado (con la tarea que ya está abierta): para
+        //    quien llama es lo mismo, «ya existe», y el contrato del endpoint
+        //    interno notify-trainer no cambia.
+        if (in_array($type, self::ONE_OPEN_PER_MEMBER, true)) {
+            $abierta = TrainerTask::query()
+                ->where('member_id', $memberId)
+                ->where('type', $type)
+                ->whereIn('status', [TrainerTask::STATUS_PENDING, TrainerTask::STATUS_SEEN])
+                ->orderBy('id')
+                ->first();
+            if ($abierta !== null) {
+                return ['task' => $abierta, 'status' => 'skipped_duplicate'];
+            }
+        }
+
+        // 3) Anti-spam: ya hubo una tarea de este tipo para este par recientemente.
         $recent = TrainerTask::query()
             ->where('trainer_id', $trainerId)
             ->where('member_id', $memberId)

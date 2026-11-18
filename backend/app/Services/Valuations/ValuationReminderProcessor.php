@@ -2,9 +2,12 @@
 
 namespace App\Services\Valuations;
 
+use App\Models\MemberNotificationPreference;
 use App\Models\ValuationAppointment;
 use App\Models\ValuationReminder;
 use App\Support\Access\TrainerMemberScope;
+use App\Support\Notifications\SendingWindow;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -25,9 +28,18 @@ use Throwable;
  *     cita existe, la versión es la misma, el estado admite el aviso, el inicio
  *     sigue en el futuro (recordatorios y aviso interno previo) y el canal del
  *     socio está activo EN LOS AJUSTES DE AHORA. Si no, `skipped` con el motivo.
- *  4. Envía por {@see ValuationNotifier} (idempotente por `event_key`: un
+ *  4. HORARIO DE SILENCIO (contrato del ciclo §6), solo en los avisos al
+ *     socio, que son push: si ahora la ventana del gimnasio está cerrada
+ *     ({@see SendingWindow}, 7–22 en Bogotá) o el socio está en sus horas de
+ *     silencio ({@see MemberNotificationPreference::inQuietHours()}), se busca
+ *     el primer instante en que se cumplan las dos. Si llega ANTES de la hora
+ *     de la cita, el aviso vuelve a `pending` con ese `due_at` (`deferred`, sin
+ *     gastar intento). Si no, sale ya en la app SIN push (`should_popup=false`)
+ *     y queda `accepted` con `last_error = quiet_hours_no_push`. Los avisos
+ *     internos del CRM no cambian.
+ *  5. Envía por {@see ValuationNotifier} (idempotente por `event_key`: un
  *     reproceso no duplica ni la fila ni el push).
- *  5. Correcto → `accepted`. Excepción → `error` y reintento a los 5 y a los
+ *  6. Correcto → `accepted`. Excepción → `error` y reintento a los 5 y a los
  *     15 minutos; al tercer intento, `failed`. Nunca sin fin.
  *
  * El contenido del mensaje no se escribe en el log: solo ids, tipo y clase del
@@ -49,6 +61,21 @@ final class ValuationReminderProcessor
 
     /** Minutos hasta el siguiente intento, según los intentos ya hechos. */
     private const RETRY_AFTER = [1 => 5, 2 => 15];
+
+    /** Pospuesto por horario de silencio: vuelve a la cola con otra hora. */
+    public const DEFERRED = 'deferred';
+
+    /** `last_error` de un aviso pospuesto (pending) y de uno que salió sin push (accepted). */
+    public const QUIET_DEFERRED = 'quiet_hours';
+
+    public const QUIET_NO_PUSH = 'quiet_hours_no_push';
+
+    /**
+     * Saltos como mucho al buscar la siguiente hora permitida (ventana del
+     * gimnasio y silencio del socio se alternan). Si no se encuentra, es que
+     * nunca coinciden (p. ej. silencio de 6 a 23) y el aviso sale sin push.
+     */
+    private const QUIET_MAX_HOPS = 6;
 
     /** Avisos que exigen que la cita siga abierta (programada o confirmada). */
     private const NEED_OPEN = [
@@ -76,10 +103,10 @@ final class ValuationReminderProcessor
         private readonly ValuationSettings $settings,
     ) {}
 
-    /** @return array{recovered: int, exhausted: int, claimed: int, accepted: int, skipped: int, error: int, failed: int} */
+    /** @return array{recovered: int, exhausted: int, claimed: int, accepted: int, skipped: int, error: int, failed: int, deferred: int} */
     public function run(int $limite = self::BATCH): array
     {
-        $resumen = ['recovered' => 0, 'exhausted' => 0, 'claimed' => 0, 'accepted' => 0, 'skipped' => 0, 'error' => 0, 'failed' => 0];
+        $resumen = ['recovered' => 0, 'exhausted' => 0, 'claimed' => 0, 'accepted' => 0, 'skipped' => 0, 'error' => 0, 'failed' => 0, self::DEFERRED => 0];
 
         $resumen['recovered'] = $this->recoverOrphans();
         $resumen['exhausted'] = $this->failExhausted();
@@ -164,7 +191,7 @@ final class ValuationReminderProcessor
         });
     }
 
-    /** 3–5. Un aviso reclamado. Devuelve el estado en que queda. */
+    /** 3–6. Un aviso reclamado. Devuelve el estado en que queda (o `deferred`). */
     public function process(int $id): string
     {
         return DB::transaction(function () use ($id): string {
@@ -193,11 +220,31 @@ final class ValuationReminderProcessor
                 return ValuationReminder::STATUS_SKIPPED;
             }
 
+            $conPush = true;
+            if ($aviso->channel === ValuationReminder::CHANNEL_MEMBER_APP) {
+                $permitido = self::nextAllowedAt(MemberNotificationPreference::forMember((int) $cita->member_id), CarbonImmutable::instance($ahora));
+                if ($permitido === null || ! $permitido->equalTo($ahora)) {
+                    if ($permitido !== null && $permitido->lessThan($cita->starts_at->copy()->utc())) {
+                        // Aún sirve antes de la cita: se pospone. No es un intento
+                        // fallido, así que no gasta de los tres.
+                        $aviso->forceFill([
+                            'status' => ValuationReminder::STATUS_PENDING,
+                            'due_at' => $permitido->utc(),
+                            'attempts' => max(0, (int) $aviso->attempts - 1),
+                            'last_error' => self::QUIET_DEFERRED,
+                        ])->save();
+
+                        return self::DEFERRED;
+                    }
+                    $conPush = false;
+                }
+            }
+
             try {
                 // En su propio savepoint: un fallo al escribir la notificación
                 // no deja abortada la transacción en la que se anota el error.
                 $notificacion = DB::transaction(fn () => $aviso->channel === ValuationReminder::CHANNEL_MEMBER_APP
-                    ? $this->notifier->toMember($cita->member, $cita, $aviso->kind, $ahora)
+                    ? $this->notifier->toMember($cita->member, $cita, $aviso->kind, $ahora, $conPush)
                     : $this->notifier->toCrm($cita, $aviso->kind, $ahora));
             } catch (Throwable $e) {
                 Log::warning('valuations.reminder_failed', [
@@ -228,11 +275,41 @@ final class ValuationReminderProcessor
                 'status' => ValuationReminder::STATUS_ACCEPTED,
                 'provider_ref' => (string) $notificacion->uuid,
                 'processed_at' => $ahora,
-                'last_error' => null,
+                'last_error' => $conPush ? null : self::QUIET_NO_PUSH,
             ])->save();
 
             return ValuationReminder::STATUS_ACCEPTED;
         });
+    }
+
+    /**
+     * El primer instante, desde `$desde`, en que la ventana del gimnasio está
+     * abierta Y el socio no está en sus horas de silencio. `$desde` si ya se
+     * puede; null si en {@see self::QUIET_MAX_HOPS} saltos no coinciden nunca.
+     *
+     * Solo lee {@see SendingWindow} y {@see MemberNotificationPreference}: no
+     * las cambia. Cada salto avanza (las dos devuelven una hora en punto
+     * posterior), así que no hay bucle.
+     */
+    public static function nextAllowedAt(MemberNotificationPreference $prefs, CarbonImmutable $desde): ?CarbonImmutable
+    {
+        $t = $desde;
+        for ($i = 0; $i < self::QUIET_MAX_HOPS; $i++) {
+            if (! SendingWindow::isOpen($t)) {
+                $t = SendingWindow::nextOpening($t);
+
+                continue;
+            }
+            if ($prefs->inQuietHours($t)) {
+                $t = $prefs->nextAllowedAt($t);
+
+                continue;
+            }
+
+            return $t;
+        }
+
+        return null;
     }
 
     /** null = se envía; si no, el motivo por el que se omite. */

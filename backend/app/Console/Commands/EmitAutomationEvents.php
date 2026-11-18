@@ -8,6 +8,7 @@ use App\Models\PhysicalEvaluation;
 use App\Models\RoutineCompletion;
 use App\Models\User;
 use App\Services\AutomationEventService;
+use App\Services\Valuations\ValuationFollowUps;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 
@@ -128,27 +129,23 @@ class EmitAutomationEvents extends Command
                 });
         }
 
-        // ── evaluation.outdated (sin evaluación física en 60+ días) ──────────
+        // ── evaluation.outdated (le toca valoración según su seguimiento) ────
+        // CONTRATO_CICLO_VALORACIONES.md §7 y apéndice «Detector». Antes: todo
+        // socio activo sin evaluación física en 60 días fijos, una vez al mes
+        // (~4.000 eventos al mes, también a quien nunca se valoró). Ahora el
+        // MISMO cálculo que el panel de Seguimiento: membresía vigente,
+        // seguimiento activo, próximo control ≤ hoy y sin cita futura.
+        // Idempotencia por socio Y FECHA DE VENCIMIENTO: un socio vencido da un
+        // evento por vencimiento, no uno al mes. Tipo y forma, los de siempre
+        // (el enrutador de n8n y las tareas del entrenador los leen así).
         if ($want('evaluation.outdated')) {
-            $monthTag = $today->format('Y-m');
-            $cutoff = $today->subDays(60);
-            Member::query()->where('status', Member::STATUS_ACTIVE)->chunkById(200, function ($members) use ($events, $cutoff, $monthTag, &$count) {
-                foreach ($members as $member) {
-                    $last = PhysicalEvaluation::query()
-                        ->where('member_id', $member->id)
-                        ->latest('created_at')
-                        ->value('created_at');
-                    // Si nunca tuvo evaluación o la última es vieja → outdated.
-                    if ($last !== null && CarbonImmutable::parse($last)->greaterThan($cutoff)) {
-                        continue;
-                    }
-                    $events->emit('evaluation.outdated', $member->id, [
-                        'member' => ['id' => $member->id, 'name' => $member->full_name],
-                        'evaluation' => ['has_any' => $last !== null],
-                    ], "evaluation.outdated:{$member->id}:{$monthTag}");
-                    $count++;
-                }
-            });
+            foreach (app(ValuationFollowUps::class)->dueForOutreach() as $vencido) {
+                $events->emit('evaluation.outdated', $vencido['member_id'], [
+                    'member' => ['id' => $vencido['member_id'], 'name' => $vencido['name']],
+                    'evaluation' => ['has_any' => $vencido['has_any']],
+                ], "evaluation.outdated:{$vencido['member_id']}:{$vencido['due_on']}");
+                $count++;
+            }
         }
 
         // ── progress.stalled (sin cambio de peso en las últimas 2 evals) ─────

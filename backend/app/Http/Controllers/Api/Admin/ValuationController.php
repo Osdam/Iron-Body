@@ -19,6 +19,7 @@ use App\Services\Valuations\ValuationSettings;
 use App\Services\Valuations\ValuationTime;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 /**
@@ -47,6 +48,23 @@ class ValuationController extends Controller
 
     /** Rango máximo de la lista en modo calendario. */
     private const MAX_RANGE_DAYS = 62;
+
+    /**
+     * Lo que el buscador de socios iguala a su letra base (contrato del ciclo
+     * §5): á é í ó ú ü ñ y sus mayúsculas. Las mayúsculas van aparte porque el
+     * `LOWER()` de SQLite solo pliega ASCII (y el de PostgreSQL depende del
+     * `LC_CTYPE` de la base).
+     */
+    private const SEARCH_FOLD = [
+        'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n',
+        'Á' => 'a', 'É' => 'e', 'Í' => 'i', 'Ó' => 'o', 'Ú' => 'u', 'Ü' => 'u', 'Ñ' => 'n',
+    ];
+
+    /**
+     * Las marcas combinantes de esas mismas letras escritas descompuestas (NFD:
+     * «a» + U+0301): agudo, diéresis y virgulilla. Se borran.
+     */
+    private const SEARCH_COMBINING = ["\u{0301}", "\u{0308}", "\u{0303}"];
 
     public function __construct(
         private readonly ValuationAgenda $agenda,
@@ -173,7 +191,13 @@ class ValuationController extends Controller
         });
     }
 
-    /** POST /api/admin/valuations — 201 nueva; 200 si es la repetición de la misma. */
+    /**
+     * POST /api/admin/valuations — 201 nueva; 200 si es la repetición de la misma.
+     *
+     * `as_next_follow_up: true` (opcional, contrato del ciclo §4): si el socio
+     * ya tiene una cita abierta futura, 409 `member_has_future_appointment` con
+     * `existing`. Sin el campo, igual que siempre.
+     */
     public function store(Request $request): JsonResponse
     {
         return $this->conPersona($request, function (ValuationAccess $access) use ($request): JsonResponse {
@@ -187,6 +211,7 @@ class ValuationController extends Controller
                 'notes' => ['nullable', 'string', 'max:1000', new PlainText(multiline: true)],
                 'allow_past' => ['nullable', 'boolean'],
                 'past_reason' => ['nullable', 'required_if_accepted:allow_past', 'string', 'min:5', 'max:500', new PlainText(multiline: true)],
+                'as_next_follow_up' => ['nullable', 'boolean'],
             ]);
 
             $r = $this->agenda->create($access, $datos, $request);
@@ -323,19 +348,28 @@ class ValuationController extends Controller
     }
 
     /**
-     * GET /api/admin/valuations/members/search?q= — socios para agendar.
+     * GET /api/admin/valuations/members/search?q= — socios para agendar y para
+     * el seguimiento.
      *
-     * Por nombre o documento con `LOWER(...) LIKE` (no `ilike`: SQLite no lo
-     * tiene). Sin teléfono ni correo, y del documento solo los 4 últimos.
+     * Por nombre o documento con `LIKE` (no `ilike`: SQLite no lo tiene). Sin
+     * mayúsculas ni tildes (contrato del ciclo §5): «Mari» encuentra «María» y
+     * «NUÑEZ», «Núñez»; `q` se normaliza aquí y el nombre en la consulta
+     * ({@see self::foldedColumn()}), sin extensiones. Sin teléfono ni correo, y
+     * del documento solo los 4 últimos.
+     *
+     * Permiso: el del mapa (`valuations.view` o `view_all`) y aquí el ALCANCE de
+     * la agenda, como el resto de lecturas. Antes exigía `valuations.create`.
      */
     public function searchMembers(Request $request): JsonResponse
     {
         return $this->conPersona($request, function (ValuationAccess $access) use ($request): JsonResponse {
-            $access->require(ValuationAccess::CREATE);
-            $access->scopedTrainerId();
+            // Con alcance (cuenta vinculada a un entrenador, con o sin el rol
+            // Entrenador): solo sus socios con asignación activa, la MISMA regla
+            // que la ficha de seguimiento (ValuationFollowUps::memberInScope).
+            $alcance = $access->scopedTrainerId();
             $datos = $this->validar($request, ['q' => ['required', 'string', 'min:2', 'max:80', new PlainText]]);
 
-            $q = mb_strtolower(trim((string) $datos['q']));
+            $q = self::foldSearch(trim((string) $datos['q']));
             if (mb_strlen($q) < 2) {
                 return $this->invalido(['q' => ['Escribe al menos 2 caracteres.']]);
             }
@@ -346,10 +380,15 @@ class ValuationController extends Controller
             $like = '%'.$escapar($q).'%';
             $docLike = '%'.$escapar((string) preg_replace('/[\s.\-]+/', '', $q)).'%';
 
+            $nombre = self::foldedColumn('full_name');
             $socios = Member::query()
                 ->whereNull('anonymized_at')
-                ->where(fn ($w) => $w->whereRaw("LOWER(full_name) LIKE ? ESCAPE '!'", [$like])
+                ->where(fn ($w) => $w->whereRaw("{$nombre} LIKE ? ESCAPE '!'", [$like])
                     ->orWhereRaw("LOWER(document_number) LIKE ? ESCAPE '!'", [$docLike]))
+                ->when($alcance !== null, fn ($w) => $w->whereIn('id', MemberTrainerAssignment::query()
+                    ->select('member_id')
+                    ->where('trainer_id', $alcance)
+                    ->where('status', MemberTrainerAssignment::STATUS_ACTIVE)))
                 ->with(['user:id,membership_end_date'])
                 ->orderBy('full_name')
                 ->orderBy('id')
@@ -381,6 +420,38 @@ class ValuationController extends Controller
                 ];
             })->values()->all()]);
         });
+    }
+
+    /** `q` sin mayúsculas ni tildes, con la misma tabla que {@see self::foldedColumn()}. */
+    private static function foldSearch(string $texto): string
+    {
+        return mb_strtolower(strtr(str_replace(self::SEARCH_COMBINING, '', $texto), self::SEARCH_FOLD));
+    }
+
+    /**
+     * La columna sin mayúsculas ni tildes, en SQL. PostgreSQL: `TRANSLATE` (las
+     * letras de `from` sin pareja en `to`, las marcas combinantes, se borran).
+     * SQLite: una cadena de `REPLACE`. Solo literales de esta clase: ningún dato
+     * del usuario entra en el texto de la consulta.
+     */
+    private static function foldedColumn(string $columna): string
+    {
+        $con = array_keys(self::SEARCH_FOLD);
+        $sin = array_values(self::SEARCH_FOLD);
+
+        if (DB::connection()->getDriverName() === 'pgsql') {
+            return "LOWER(TRANSLATE({$columna}, '".implode('', [...$con, ...self::SEARCH_COMBINING])."', '".implode('', $sin)."'))";
+        }
+
+        $sql = $columna;
+        foreach (self::SEARCH_FOLD as $letra => $base) {
+            $sql = "REPLACE({$sql}, '{$letra}', '{$base}')";
+        }
+        foreach (self::SEARCH_COMBINING as $marca) {
+            $sql = "REPLACE({$sql}, '{$marca}', '')";
+        }
+
+        return "LOWER({$sql})";
     }
 
     /** GET /api/admin/valuations/members/by-user/{userId} → {member_id} o 404. */

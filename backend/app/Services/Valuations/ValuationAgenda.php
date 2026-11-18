@@ -5,6 +5,7 @@ namespace App\Services\Valuations;
 use App\Exceptions\ValuationException;
 use App\Models\Admin;
 use App\Models\Member;
+use App\Models\ProfessionalAssessment;
 use App\Models\Trainer;
 use App\Models\ValuationAppointment;
 use App\Models\ValuationAppointmentEvent;
@@ -17,6 +18,7 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use LogicException;
 
 /**
  * Las ESCRITURAS de la agenda de valoraciones (contrato §3). Solo aquí.
@@ -46,11 +48,41 @@ use Illuminate\Support\Facades\DB;
  * `audit_logs` (AuditTrail: actor, IP, sin datos del socio) y replanifica los
  * avisos en la MISMA transacción. Los avisos inmediatos de la bandeja del CRM
  * salen después de confirmar la transacción y nunca la rompen.
+ *
+ * CIERRE DESDE LA VALORACIÓN (CONTRATO_CICLO_VALORACIONES.md §1–§2). La única
+ * escritura que no hace una persona del CRM: el envío de una valoración
+ * profesional completa la cita del día ({@see self::completeFromAssessment()}),
+ * con la regla de {@see self::matchAssessment()}, que es la MISMA para el envío
+ * y para la conciliación histórica. Cerrojos: valoración → citas (por id).
+ * Ningún camino de la agenda toma cita → valoración, así que no hay ciclo; y no
+ * toma el mutex de entrenador y socio: pasar a un estado final libera el hueco
+ * y no puede crear un solape.
  */
 final class ValuationAgenda
 {
     /** Se puede iniciar desde 15 minutos antes de la hora. */
     public const START_EARLY_MINUTES = 15;
+
+    /** `metadata.source` del evento `completed` que escribe el envío desde la app del entrenador. */
+    public const ORIGIN_TRAINER = 'trainer_assessment';
+
+    /** `metadata.source` del evento `completed` que escribe `valuations:link-assessments --apply`. */
+    public const ORIGIN_RECONCILIATION = 'historical_reconciliation';
+
+    /** Regla §1.3: exactamente una candidata y del mismo entrenador → se completa y se enlaza. */
+    public const MATCH_LINKED = 'linked';
+
+    /** Regla §1.3: ninguna candidata. */
+    public const MATCH_NONE = 'none';
+
+    /** Regla §1.3: dos o más candidatas (no se toca ninguna). */
+    public const MATCH_AMBIGUOUS = 'ambiguous';
+
+    /** Regla §1.3: una candidata de otro entrenador (no se toca). */
+    public const MATCH_DIFFERENT_TRAINER = 'different_trainer';
+
+    /** La valoración ya cerró una cita: nunca cierra dos (índice único parcial, §1.5). */
+    public const MATCH_ALREADY_LINKED = 'already_linked';
 
     /**
      * El cerrojo de las filas de `trainers` y `members` en PostgreSQL. Es un
@@ -91,7 +123,12 @@ final class ValuationAgenda
     // ── Crear ───────────────────────────────────────────────────────────────
 
     /**
-     * @param  array{client_request_id: string, member_id: int, trainer_id: int, type: string, starts_at: string, duration_minutes?: int|null, notes?: string|null, allow_past?: bool|null, past_reason?: string|null}  $datos
+     * `as_next_follow_up` (contrato del ciclo §4): con el socio ya bloqueado, si
+     * tiene una cita abierta FUTURA, 409 `member_has_future_appointment` en vez
+     * de una segunda. La repetición del mismo `client_request_id` se reconoce
+     * ANTES: el doble clic devuelve su propia cita, no un 409.
+     *
+     * @param  array{client_request_id: string, member_id: int, trainer_id: int, type: string, starts_at: string, duration_minutes?: int|null, notes?: string|null, allow_past?: bool|null, past_reason?: string|null, as_next_follow_up?: bool|null}  $datos
      * @return array{appointment: ValuationAppointment, created: bool}
      */
     public function create(ValuationAccess $access, array $datos, Request $request): array
@@ -136,6 +173,13 @@ final class ValuationAgenda
                 // Con el entrenador bloqueado: el otro clic ya terminó o espera.
                 if ($repetida = $this->repeticion($idSolicitud, $access->actor, $firma)) {
                     return ['appointment' => $repetida, 'created' => false];
+                }
+
+                // Con el SOCIO bloqueado: dos «próxima valoración» a la vez (con
+                // entrenadores distintos no comparten otro cerrojo) se ordenan
+                // aquí, y la segunda ve la cita de la primera.
+                if (! empty($datos['as_next_follow_up'])) {
+                    $this->exigirSinCitaFutura($access, $memberId);
                 }
 
                 $this->exigirEntrenadorActivo($trainerId);
@@ -492,6 +536,150 @@ final class ValuationAgenda
         return $r;
     }
 
+    // ── Cierre desde la valoración profesional (contrato del ciclo §1–§2) ───
+
+    /**
+     * La REGLA DE DECISIÓN del contrato del ciclo §1.3, la misma para el envío
+     * y para la conciliación. Solo decide; no escribe.
+     *
+     * Candidatas: citas del MISMO socio, abiertas (`scheduled`, `confirmed`,
+     * `in_progress`), sin valoración enlazada y del MISMO día de Bogotá que
+     * `submitted_at` (vale que el envío sea anterior a la hora de la cita).
+     *
+     *  · 1 candidata del entrenador de la valoración → `linked`;
+     *  · 0 → `none`; ≥ 2 → `ambiguous`; 1 de otro → `different_trainer`.
+     *
+     * Antes de mirar candidatas, una valoración que ya cerró una cita da
+     * `already_linked`: nunca cierra dos (en el envío no ocurre, la valoración
+     * es nueva; en la conciliación hace idempotente la segunda pasada).
+     *
+     * @param  bool  $bloquear  `FOR UPDATE` de las candidatas (dentro de una transacción)
+     * @param  list<int>  $excluir  citas que el llamante ya da por enlazadas (el ensayo del comando, que no escribe)
+     * @return array{outcome: string, appointment: ValuationAppointment|null, candidates: int}
+     */
+    public function matchAssessment(ProfessionalAssessment $valoracion, bool $bloquear = false, array $excluir = []): array
+    {
+        if ($valoracion->submitted_at === null) {
+            throw new LogicException('Solo una valoración enviada puede cerrar una cita.');
+        }
+
+        $enlazada = ValuationAppointment::query()->where('professional_assessment_id', $valoracion->getKey())->first();
+        if ($enlazada !== null) {
+            return ['outcome' => self::MATCH_ALREADY_LINKED, 'appointment' => $enlazada, 'candidates' => 0];
+        }
+
+        [$desde, $hasta] = self::bogotaDay($valoracion->submitted_at);
+        $consulta = ValuationAppointment::query()
+            ->where('member_id', (int) $valoracion->member_id)
+            ->whereIn('status', ValuationAppointment::ACTIVE_STATUSES)
+            ->whereNull('professional_assessment_id')
+            ->where('starts_at', '>=', ValuationAvailability::db($desde))
+            ->where('starts_at', '<', ValuationAvailability::db($hasta))
+            ->when($excluir !== [], fn ($q) => $q->whereNotIn('id', $excluir))
+            ->orderBy('id');
+        if ($bloquear) {
+            $consulta->lockForUpdate();
+        }
+
+        // Bajo el cerrojo, PostgreSQL devuelve la versión vigente de cada fila
+        // y descarta la que dejó de cumplir el filtro mientras esperaba (otra
+        // persona la canceló o la cerró). El filtro se repite aquí por si acaso:
+        // es gratis y no depende del motor.
+        $candidatas = $consulta->get()
+            ->filter(fn (ValuationAppointment $c) => $c->isActive() && $c->professional_assessment_id === null)
+            ->values();
+
+        $n = $candidatas->count();
+        if ($n === 0) {
+            return ['outcome' => self::MATCH_NONE, 'appointment' => null, 'candidates' => 0];
+        }
+        if ($n >= 2) {
+            return ['outcome' => self::MATCH_AMBIGUOUS, 'appointment' => null, 'candidates' => $n];
+        }
+
+        $cita = $candidatas->first();
+
+        return [
+            'outcome' => (int) $cita->trainer_id === (int) $valoracion->trainer_id ? self::MATCH_LINKED : self::MATCH_DIFFERENT_TRAINER,
+            'appointment' => $cita,
+            'candidates' => 1,
+        ];
+    }
+
+    /**
+     * Aplica la regla: si sale `linked`, COMPLETA la cita con la fecha REAL del
+     * envío y la enlaza (§1.4). En cualquier otro caso no toca ninguna cita.
+     *
+     *  · `status=completed`, `completed_at = submitted_at`,
+     *    `professional_assessment_id`, `version+1`; `outcome_by_admin_id` queda
+     *    vacío (la última transición no la hizo ninguna cuenta del CRM);
+     *  · se anulan los avisos que aún podían salir («sin atender» incluido);
+     *  · evento `completed` sin `actor_admin_id`, con el nombre del entrenador y
+     *    `metadata.source` = `$origen`.
+     *
+     * SIN avisos: los de la bandeja los decide quien llama, después del commit
+     * (el envío avisa; la conciliación no). Va DENTRO de la transacción de quien
+     * llama, con las candidatas bloqueadas.
+     *
+     * @param  self::ORIGIN_*  $origen
+     * @return array{outcome: string, appointment: ValuationAppointment|null, candidates: int}
+     */
+    public function completeFromAssessment(ProfessionalAssessment $valoracion, string $origen): array
+    {
+        if (! in_array($origen, [self::ORIGIN_TRAINER, self::ORIGIN_RECONCILIATION], true)) {
+            throw new LogicException("Origen de cierre desconocido: {$origen}");
+        }
+        if (DB::transactionLevel() === 0) {
+            // Sin transacción, el cerrojo de las candidatas se soltaría antes de escribir.
+            throw new LogicException('completeFromAssessment va dentro de una transacción.');
+        }
+
+        $r = $this->matchAssessment($valoracion, bloquear: true);
+        if ($r['outcome'] !== self::MATCH_LINKED) {
+            return $r;
+        }
+
+        /** @var ValuationAppointment $cita */
+        $cita = $r['appointment'];
+        $desde = $cita->status;
+        $cita->forceFill([
+            'status' => ValuationAppointment::STATUS_COMPLETED,
+            'completed_at' => Carbon::instance($valoracion->submitted_at)->utc(),
+            'professional_assessment_id' => (int) $valoracion->getKey(),
+            'outcome_by_admin_id' => null,
+            'version' => (int) $cita->version + 1,
+        ])->save();
+
+        $this->reminders->cancelWaiting($cita);
+
+        $metadata = $origen === self::ORIGIN_TRAINER
+            ? ['source' => $origen, 'assessment_uuid' => $valoracion->uuid, 'trainer_id' => (int) $valoracion->trainer_id]
+            : ['source' => $origen, 'assessment_uuid' => $valoracion->uuid, 'reconciled_at' => Carbon::now()->utc()->toIso8601String()];
+
+        $this->evento($cita, ValuationAppointmentEvent::ACTION_COMPLETED, null, [
+            'actor_name' => Trainer::query()->whereKey($valoracion->trainer_id)->value('full_name'),
+            'from_status' => $desde,
+            'to_status' => $cita->status,
+            'metadata' => $metadata,
+        ]);
+
+        return $r;
+    }
+
+    /**
+     * El día de Bogotá de un instante, como rango UTC `[desde, hasta)`. Sin
+     * `AT TIME ZONE` (solo existe en PostgreSQL): el día se calcula aquí.
+     *
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    public static function bogotaDay(\DateTimeInterface $instante): array
+    {
+        $dia = ValuationTime::local(Carbon::instance($instante))->toDateString();
+        $siguiente = ValuationTime::local(Carbon::instance($instante))->addDay()->toDateString();
+
+        return [ValuationTime::dayStartUtc($dia), ValuationTime::dayStartUtc($siguiente)];
+    }
+
     // ── Lectura con alcance ─────────────────────────────────────────────────
 
     /**
@@ -551,6 +739,36 @@ final class ValuationAgenda
         if ($entrenador === null || ! $entrenador->isActive()) {
             throw ValuationException::trainerInactive();
         }
+    }
+
+    /**
+     * §4: la cita abierta FUTURA del socio (`scheduled`, `confirmed` o
+     * `in_progress` con `starts_at` posterior a ahora), si la hay, es un 409.
+     * Se llama con el socio bloqueado. La cita solo se describe si está en el
+     * alcance de quien pregunta.
+     *
+     * @throws MemberHasFutureAppointmentException
+     */
+    private function exigirSinCitaFutura(ValuationAccess $access, int $memberId): void
+    {
+        $futura = ValuationAppointment::query()
+            ->with('trainer:id,full_name')
+            ->where('member_id', $memberId)
+            ->whereIn('status', ValuationAppointment::ACTIVE_STATUSES)
+            ->where('starts_at', '>', ValuationAvailability::db(Carbon::now()))
+            ->orderBy('starts_at')
+            ->orderBy('id')
+            ->first();
+        if ($futura === null) {
+            return;
+        }
+
+        throw new MemberHasFutureAppointmentException($access->covers($futura) ? [
+            'uuid' => $futura->uuid,
+            'starts_at' => $futura->starts_at->copy()->utc()->toIso8601String(),
+            'trainer' => ['id' => (int) $futura->trainer_id, 'name' => (string) ($futura->trainer?->full_name ?? '')],
+            'status' => $futura->status,
+        ] : null);
     }
 
     private function exigirVersion(ValuationAppointment $cita, int $esperada, ValuationAccess $access): void

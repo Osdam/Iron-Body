@@ -9,6 +9,8 @@ use App\Models\ProfessionalAssessment;
 use App\Models\Trainer;
 use App\Models\TrainerAuditLog;
 use App\Services\NotificationService;
+use App\Services\Valuations\ValuationAgenda;
+use App\Services\Valuations\ValuationNotifier;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -30,6 +32,8 @@ class ProfessionalAssessmentService
     public function __construct(
         private readonly NotificationService $notifications,
         private readonly TrainerAuditService $audit,
+        private readonly ValuationAgenda $agenda,
+        private readonly ValuationNotifier $valuationNotifier,
     ) {}
 
     public function createDraft(Trainer $trainer, Member $member, array $data): ProfessionalAssessment
@@ -66,8 +70,21 @@ class ProfessionalAssessmentService
     }
 
     /**
-     * Envía un borrador: lo vuelve INMUTABLE, notifica al miembro y audita, todo
-     * en una transacción. Idempotente por estado: solo un borrador puede enviarse.
+     * Envía un borrador: lo vuelve INMUTABLE, notifica al miembro, cierra la
+     * cita de valoración del día y audita, todo en una transacción. Idempotente
+     * por estado: solo un borrador puede enviarse.
+     *
+     * CONTRATO_CICLO_VALORACIONES.md §1:
+     *  · `FOR UPDATE` de la valoración y nueva comprobación del borrador: de dos
+     *    envíos a la vez sale UNO; el otro recibe el 409 de siempre (y no copia
+     *    una segunda evaluación física);
+     *  · la cita del mismo socio y del mismo día de Bogotá se completa y se
+     *    enlaza SOLO si es la única candidata y es de este entrenador
+     *    ({@see ValuationAgenda::completeFromAssessment()});
+     *  · DESPUÉS del commit: el aviso a la bandeja del CRM y la señal de tiempo
+     *    real de los entrenadores. Ninguno de los dos puede romper el envío: en
+     *    PostgreSQL un INSERT fallido dentro de la transacción la abortaría
+     *    entera aunque se capturara la excepción.
      */
     public function submit(ProfessionalAssessment $assessment, Trainer $trainer): ProfessionalAssessment
     {
@@ -76,24 +93,45 @@ class ProfessionalAssessmentService
         }
 
         $result = DB::transaction(function () use ($assessment, $trainer) {
-            $assessment->forceFill([
+            // La instancia del route-model binding se leyó sin cerrojo: la de
+            // verdad es la bloqueada. Un segundo envío espera aquí y, al entrar,
+            // ya la ve enviada.
+            $locked = ProfessionalAssessment::query()->whereKey($assessment->getKey())->lockForUpdate()->first();
+            if ($locked === null || ! $locked->isDraft()) {
+                throw AssessmentException::notSubmittable();
+            }
+
+            $locked->forceFill([
                 'status' => ProfessionalAssessment::STATUS_SUBMITTED,
                 'submitted_at' => now(),
             ])->save();
+            // `submitted_at` tal como quedó guardado: es la fecha de cierre de la cita.
+            $locked->refresh();
 
-            $this->notifyMember($assessment, isAmendment: false);
+            $this->notifyMember($locked, isAmendment: false);
 
-            $this->audit->record('assessment.submitted', $trainer, TrainerAuditLog::ACTOR_TRAINER, metadata: [
-                'assessment' => $assessment->uuid,
-                'member_id' => $assessment->member_id,
-                'version' => $assessment->version,
-            ]);
+            $emparejamiento = $this->agenda->completeFromAssessment($locked, ValuationAgenda::ORIGIN_TRAINER);
 
-            // Real-time: refresca el panel de quien atiende a este cliente
-            // (incl. un segundo entrenador del mismo miembro). Best-effort.
-            TrainerRealtimeEvents::assessmentForMember((int) $assessment->member_id);
+            $this->audit->record('assessment.submitted', $trainer, TrainerAuditLog::ACTOR_TRAINER, metadata: array_filter([
+                'assessment' => $locked->uuid,
+                'member_id' => $locked->member_id,
+                'version' => $locked->version,
+                'appointment_uuid' => $emparejamiento['outcome'] === ValuationAgenda::MATCH_LINKED
+                    ? $emparejamiento['appointment']?->uuid
+                    : null,
+                'appointment_match' => $emparejamiento['outcome'],
+            ], fn ($v) => $v !== null));
 
-            return $assessment->refresh();
+            $memberId = (int) $locked->member_id;
+            DB::afterCommit(function () use ($locked, $emparejamiento, $memberId): void {
+                // Nunca lanza (registra en el log): el envío ya está confirmado.
+                $this->valuationNotifier->assessmentOutcome($locked, $emparejamiento);
+                // Real-time: refresca el panel de quien atiende a este cliente
+                // (incl. un segundo entrenador del mismo miembro). Best-effort.
+                TrainerRealtimeEvents::assessmentForMember($memberId);
+            });
+
+            return $locked;
         });
 
         // FUERA de la transacción (best-effort): vuelca las medidas al historial

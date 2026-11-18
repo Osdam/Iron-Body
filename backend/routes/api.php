@@ -789,6 +789,22 @@ Route::middleware('throttle:valuations')->prefix('admin/valuations')->group(func
     Route::get('members/search', [$citas, 'searchMembers']);
     Route::get('members/by-user/{userId}', [$citas, 'memberByUser'])->whereNumber('userId');
 
+    // Seguimiento del socio (CONTRATO_CICLO_VALORACIONES.md §3). Id numérico y
+    // sin route-model binding, como `by-user`: el alcance lo decide
+    // ValuationFollowUpController (fuera de él, 404), no TrainerMemberScope.
+    $seguimiento = \App\Http\Controllers\Api\Admin\ValuationFollowUpController::class;
+    Route::get('members/{memberId}/follow-up', [$seguimiento, 'show'])->whereNumber('memberId');
+    Route::put('members/{memberId}/follow-up', [$seguimiento, 'update'])->whereNumber('memberId');
+
+    // Solicitudes de valoración desde la app (CONTRATO_SOLICITUDES_VALORACION.md
+    // §3). Estáticas: van antes de las rutas `{uuid}` de las citas.
+    $solicitudes = \App\Http\Controllers\Api\Admin\ValuationRequestController::class;
+    Route::get('requests', [$solicitudes, 'index']);
+    Route::get('requests/{requestUuid}', [$solicitudes, 'show'])->whereUuid('requestUuid');
+    Route::post('requests/{requestUuid}/schedule', [$solicitudes, 'schedule'])->whereUuid('requestUuid');
+    Route::post('requests/{requestUuid}/attend', [$solicitudes, 'attend'])->whereUuid('requestUuid');
+    Route::post('requests/{requestUuid}/reject', [$solicitudes, 'reject'])->whereUuid('requestUuid');
+
     Route::get('settings', [$ajustes, 'show']);
     Route::put('settings', [$ajustes, 'update']);
 
@@ -1151,6 +1167,12 @@ Route::middleware('auth.member')->group(function (): void {
     Route::post('app/notifications/read-all',        [AppNotificationController::class, 'readAll']);
     Route::post('app/notifications/{id}/read',       [AppNotificationController::class, 'markRead'])
         ->where('id', '[0-9]+');
+
+    // ── Solicitar valoración (CONTRATO_SOLICITUDES_VALORACION.md §2) ─────────
+    // El socio sale del bearer; nunca se acepta member_id por parámetro.
+    Route::get('app/valuation-requests/current', [\App\Http\Controllers\Api\AppValuationRequestController::class, 'current']);
+    Route::post('app/valuation-requests',        [\App\Http\Controllers\Api\AppValuationRequestController::class, 'store'])
+        ->middleware('throttle:6,1');
 
     // ── Preferencias de notificación ──────────────────────────────────────────
     // El socio sale del bearer; no se acepta member_id por parámetro.

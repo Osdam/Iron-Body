@@ -141,8 +141,10 @@ class ValuationRemindersTest extends TestCase
         $n = $this->alSocio()->sole();
         $this->assertSame($conf->provider_ref, $n->uuid);
         $this->assertSame($this->laura->id, $n->member_id);
-        $this->assertSame('Tu valoración en Iron Body quedó programada para el 24 de octubre a las 9:00 a. m. con Andrés.', $n->message);
-        $this->assertFalse((bool) $n->should_popup);
+        // CONTRATO_SOLICITUDES_VALORACION.md §4: la confirmación es push y
+        // nombra al entrenador con su nombre corto.
+        $this->assertSame('Tu valoración en Iron Body quedó programada para el 24 de octubre a las 9:00 a. m. con Andrés P.', $n->message);
+        $this->assertTrue((bool) $n->should_popup);
         $this->assertSame("valuation:{$u}:confirmation:v1", $n->event_key);
 
         // El largo: el viernes 23 a las 09:00 Bogotá (14:00 UTC).

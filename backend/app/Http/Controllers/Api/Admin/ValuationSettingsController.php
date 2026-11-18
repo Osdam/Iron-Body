@@ -14,7 +14,10 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Ajustes de la agenda de valoraciones (contrato §1 y §4, «Ajustes»).
+ * Ajustes de la agenda de valoraciones (contrato §1 y §4, «Ajustes»), y el
+ * intervalo de seguimiento del gimnasio, `follow_up_interval_days`
+ * (CONTRATO_CICLO_VALORACIONES.md §3): opcional en el PUT, null = sin
+ * seguimiento.
  *
  * Leer: `manage_settings`, o `view` en solo lectura. Escribir: solo
  * `manage_settings` —que el Administrador NO recibe por defecto—, validado
@@ -64,7 +67,7 @@ class ValuationSettingsController extends Controller
                 $this->audit->record($request, [
                     'action' => 'update', 'module' => 'Valoraciones', 'entity' => 'ajustes_valoraciones',
                     'entity_id' => $fila->id, 'summary' => 'Cambió los ajustes de la agenda de valoraciones',
-                    'changes' => $this->audit->changesOf($fila, $previo, ValuationSetting::FIELDS),
+                    'changes' => $this->audit->changesOf($fila, $previo, [...ValuationSetting::FIELDS, ...ValuationSetting::FOLLOW_UP_FIELDS]),
                 ]);
 
                 return $fila;

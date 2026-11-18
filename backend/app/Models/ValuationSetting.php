@@ -21,6 +21,13 @@ class ValuationSetting extends Model
         'internal_alert_minutes', 'internal_unattended_enabled', 'member_app_enabled',
     ];
 
+    /**
+     * Ajustes del seguimiento (CONTRATO_CICLO_VALORACIONES.md §3). Aparte de
+     * FIELDS porque admiten NULL (= el gimnasio no hace seguimiento) y porque el
+     * PUT los acepta OPCIONALES: un CRM anterior que no los envía no los borra.
+     */
+    public const FOLLOW_UP_FIELDS = ['follow_up_interval_days'];
+
     /** Los valores del contrato, por si la fila no existiera. */
     public const DEFAULTS = [
         'default_duration_minutes' => 60,
@@ -38,9 +45,10 @@ class ValuationSetting extends Model
         'internal_alert_minutes' => 15,
         'internal_unattended_enabled' => true,
         'member_app_enabled' => false,
+        'follow_up_interval_days' => 60,
     ];
 
-    protected $fillable = [...self::FIELDS, 'updated_by_admin_id'];
+    protected $fillable = [...self::FIELDS, ...self::FOLLOW_UP_FIELDS, 'updated_by_admin_id'];
 
     protected function casts(): array
     {
@@ -60,6 +68,7 @@ class ValuationSetting extends Model
             'internal_alert_minutes' => 'integer',
             'internal_unattended_enabled' => 'boolean',
             'member_app_enabled' => 'boolean',
+            'follow_up_interval_days' => 'integer',
         ];
     }
 }
