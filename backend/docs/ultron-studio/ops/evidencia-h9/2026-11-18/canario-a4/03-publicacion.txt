@@ -1,0 +1,37 @@
+CIERRE V2 · APARTADO 4 · GATE 4-D: PUBLICACIÓN EN CANARIO DE LA VERSIÓN 2
+Verificación en producción, solo lectura, el 18-11-2026 a las 22:42 UTC (17:42 en Bogotá).
+La publicó el propietario desde el CRM con su cuenta «Desarrolladores»; nadie más intervino.
+
+=== ANTES (18-11, 22:35 UTC) ===
+ultron_studio_versions: 2e243853-27e7-4d41-9b23-dd103d970957 · APPROVED (22:28:37 UTC, aprobada por el propietario)
+ultron_studio_lab_verdicts: id 2 · ejecución 10 (2488221e-…) · approved · cuenta #27 «Desarrolladores» · casos reconocidos ["C-02"] · huella ffa67148 · 22:33:15 UTC
+GET versions/2e243853-…/publication-preview (cuenta técnica, autora): status, integrity, revalidation, labGate, engineCanary, brake, canaryFree y window CUMPLEN; fourEyes no (es la autora)
+  prompts: llave canary · base n8n-29de5119 · compilador 3 · huella af9e0d23 · 114 206 bytes · cambios: persona.tone y persona.maxChars
+php artisan ultron:prompt-trace: decide ofrecería a la canaria legacy · motivo part_legacy (cadena en la entrada 2, rollback del 12-11)
+
+=== DESPUÉS (18-11, 22:42 UTC) ===
+  producción sirve: e861e2c8
+  Llave del motor: canary · estado: applied
+  Cabeza: entrada 3 (publish, 2026-11-18T22:40:35+00:00) · verifica
+  Canario: «Prueba de aceptación 2 · profesional 200» (2e243853-27e7-4d41-9b23-dd103d970957)
+  Resto: Legacy
+  La publicación vigente cuadra con el motor.
+  salida de publication-check: 0
+  ULTRON · prompts del motor (solo lectura)
+    llave de prompts: canary · llave del sello: canary · canario: configurado
+    base n8n-29de5119 · compilador 3 · huella Legacy 3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902
+    decide ofrecería ahora a la canaria: studio · versión 2e243853-27e7-4d41-9b23-dd103d970957 · huella af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51
+  
+    Sin turnos de la canaria que enseñar.
+  FRENO SUELTO. ULTRON funciona según sus interruptores de entorno.
+  workers:      14 RUNNING 
+ultron_studio_publications (la cabeza de la cadena):
+  id 3 · seq 3 · action publish · versión 2e243853-27e7-4d41-9b23-dd103d970957 (estado CANARY)
+  effective_hash 8dee2eb4… · signature 1b0732eb…
+  lab_gate {mode: required, runUuid: 2488221e-3a08-4ecc-b0d2-bd69443d26a4, verdictId: 2, promptVersion: 2026-11-12.6}
+  acknowledged {noEffect: [], previewHash: 0474df708d8f…}
+  actor #27 «Desarrolladores» · created_at 2026-11-18T22:40:35 UTC (5:40 p. m. en Bogotá)
+
+=== LA CONVERSACIÓN CANARIA (#882), ANTES DE LOS MENSAJES DE PRUEBA (sin teléfonos, nombres ni textos) ===
+  status open · fase NEW_LEAD · 2 mensajes entrantes (dos imágenes del 17-11, que ULTRON no procesa: dos filas unsupported_message, sin respuesta) · 0 turnos de ULTRON
+  catálogo comercial que ve el motor hoy: 12 planes vendibles (de un mes, por orden: Plan Valera, Plan Mensual, Élite y PROMO X4); ficha del horario: una línea de 253 caracteres
