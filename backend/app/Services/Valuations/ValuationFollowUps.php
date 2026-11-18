@@ -3,6 +3,7 @@
 namespace App\Services\Valuations;
 
 use App\Exceptions\ValuationException;
+use App\Http\Controllers\Api\Admin\ValuationController;
 use App\Models\Member;
 use App\Models\MemberTrainerAssignment;
 use App\Models\MemberValuationFollowUp;
@@ -732,5 +733,141 @@ final class ValuationFollowUps
     private static function iso(CarbonInterface $instante): string
     {
         return ValuationTime::local($instante)->toIso8601String();
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    //  Bandeja de valoraciones recibidas (CONTRATO_BANDEJA_SEGUIMIENTO.md)
+    // ────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Las valoraciones ENVIADAS por los entrenadores (raíz, submitted|amended),
+     * de la más reciente a la más antigua (`submitted_at`, `id`), paginadas en
+     * la base. Salen aunque no hubiera cita. Sin medidas: el detalle va por el
+     * GET del seguimiento del socio. Un número fijo de consultas por página.
+     *
+     * @return array{data: list<array<string,mixed>>, meta: array<string,int>}
+     */
+    public function recent(ValuationAccess $access, ?string $q, int $page, int $perPage): array
+    {
+        $base = $this->feedQuery($access);
+        $nuevas = (clone $base)->whereNull('pa.admin_reviewed_at')->count();
+
+        if ($q !== null) {
+            $plegado = ValuationController::foldSearch($q);
+            $escapar = fn (string $t) => str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $t);
+            $like = '%'.$escapar($plegado).'%';
+            $docLike = '%'.$escapar((string) preg_replace('/[\s.\-]+/', '', $plegado)).'%';
+            $columna = ValuationController::foldedColumn('m.full_name');
+            $base->where(fn ($w) => $w->whereRaw("{$columna} LIKE ? ESCAPE '!'", [$like])
+                ->orWhereRaw("LOWER(m.document_number) LIKE ? ESCAPE '!'", [$docLike]));
+        }
+
+        $pagina = $base->orderByDesc('pa.submitted_at')->orderByDesc('pa.id')
+            ->select(['pa.id', 'pa.uuid', 'pa.member_id', 'pa.trainer_id', 'pa.submitted_at', 'pa.admin_reviewed_at',
+                'pa.admin_reviewed_by_admin_id', 'm.full_name as member_name', 't.full_name as trainer_name'])
+            ->paginate(max(1, min(50, $perPage)), ['*'], 'page', max(1, $page));
+
+        return [
+            'data' => $this->feedRows($access, collect($pagina->items())),
+            'meta' => [
+                'current_page' => $pagina->currentPage(),
+                'last_page' => $pagina->lastPage(),
+                'per_page' => $pagina->perPage(),
+                'total' => $pagina->total(),
+                'unreviewed' => $nuevas,
+            ],
+        ];
+    }
+
+    /**
+     * Marca una valoración como revisada por administración. Idempotente: si ya
+     * lo estaba, conserva la primera marca. Fuera de alcance o inexistente: 404.
+     * No cambia la valoración ni la cita: es solo el acuse del CRM.
+     *
+     * @return array<string,mixed>
+     */
+    public function markReviewed(ValuationAccess $access, string $assessmentUuid): array
+    {
+        $fila = $this->feedQuery($access)->where('pa.uuid', $assessmentUuid)
+            ->select(['pa.id', 'pa.uuid', 'pa.member_id', 'pa.trainer_id', 'pa.submitted_at', 'pa.admin_reviewed_at',
+                'pa.admin_reviewed_by_admin_id', 'm.full_name as member_name', 't.full_name as trainer_name'])
+            ->first();
+        if ($fila === null) {
+            throw ValuationException::notFound('La valoración');
+        }
+
+        DB::table('professional_assessments')->where('id', $fila->id)->whereNull('admin_reviewed_at')
+            ->update(['admin_reviewed_at' => now(), 'admin_reviewed_by_admin_id' => $access->actor->id]);
+
+        $fresca = $this->feedQuery($access)->where('pa.id', $fila->id)
+            ->select(['pa.id', 'pa.uuid', 'pa.member_id', 'pa.trainer_id', 'pa.submitted_at', 'pa.admin_reviewed_at',
+                'pa.admin_reviewed_by_admin_id', 'm.full_name as member_name', 't.full_name as trainer_name'])
+            ->first();
+
+        return $this->feedRows($access, collect([$fresca]))[0];
+    }
+
+    /** Valoraciones enviadas dentro del alcance de la agenda (misma regla que memberInScope). */
+    private function feedQuery(ValuationAccess $access): \Illuminate\Database\Query\Builder
+    {
+        if (! $access->hasScope()) {
+            throw ValuationException::forbidden();
+        }
+        $alcance = $access->scopedTrainerId();
+
+        return DB::table('professional_assessments as pa')
+            ->join('members as m', 'm.id', '=', 'pa.member_id')
+            ->leftJoin('trainers as t', 't.id', '=', 'pa.trainer_id')
+            ->whereNull('pa.parent_id')
+            ->whereIn('pa.status', self::ASSESSMENT_DONE_STATUSES)
+            ->whereNotNull('pa.submitted_at')
+            ->whereNull('m.anonymized_at')
+            ->when($alcance !== null, fn ($w) => $w->whereIn('pa.member_id', MemberTrainerAssignment::query()
+                ->select('member_id')
+                ->where('trainer_id', $alcance)
+                ->where('status', MemberTrainerAssignment::STATUS_ACTIVE)));
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, object>  $filas
+     * @return list<array<string,mixed>>
+     */
+    private function feedRows(ValuationAccess $access, \Illuminate\Support\Collection $filas): array
+    {
+        if ($filas->isEmpty()) {
+            return [];
+        }
+        $citas = DB::table('valuation_appointments')
+            ->whereIn('professional_assessment_id', $filas->pluck('id')->all())
+            ->get(['professional_assessment_id', 'uuid', 'status'])
+            ->keyBy('professional_assessment_id');
+        $revisores = DB::table('admins')
+            ->whereIn('id', $filas->pluck('admin_reviewed_by_admin_id')->filter()->unique()->all())
+            ->pluck('name', 'id');
+        $estados = $this->snapshots($filas->pluck('member_id')->map(fn ($v) => (int) $v)->all());
+
+        return $filas->map(function ($f) use ($citas, $revisores, $estados, $access): array {
+            $cita = $citas->get($f->id);
+            $e = $estados[(int) $f->member_id] ?? null;
+            $proxima = $e['next_appointment'] ?? null;
+            $proximaVisible = $proxima !== null && $access->coversTrainer((int) $proxima->trainer_id);
+
+            return [
+                'assessment_uuid' => (string) $f->uuid,
+                'member' => ['id' => (int) $f->member_id, 'name' => (string) $f->member_name],
+                'trainer' => $f->trainer_id !== null && $f->trainer_name !== null
+                    ? ['id' => (int) $f->trainer_id, 'name' => (string) $f->trainer_name] : null,
+                'completed_at' => self::iso(Carbon::parse($f->submitted_at, 'UTC')),
+                'appointment' => $cita !== null ? ['uuid' => (string) $cita->uuid, 'status' => (string) $cita->status] : null,
+                'is_new' => $f->admin_reviewed_at === null,
+                'reviewed_at' => $f->admin_reviewed_at !== null ? self::iso(Carbon::parse($f->admin_reviewed_at, 'UTC')) : null,
+                'reviewed_by_name' => $f->admin_reviewed_by_admin_id !== null ? ($revisores[$f->admin_reviewed_by_admin_id] ?? null) : null,
+                'follow_up' => [
+                    'status' => $e['status'] ?? null,
+                    'next_suggested_on' => $e['next_suggested_on'] ?? null,
+                    'next_appointment_starts_at' => $proximaVisible ? self::iso(Carbon::parse($proxima->starts_at, 'UTC')) : null,
+                ],
+            ];
+        })->values()->all();
     }
 }

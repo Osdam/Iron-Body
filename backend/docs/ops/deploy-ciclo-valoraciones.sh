@@ -159,8 +159,10 @@ sudo -u "$WWW" php artisan queue:restart -q
 
 echo "4. comprobaciones después"
 sudo -u "$WWW" php artisan list valuations 2>/dev/null | grep -q 'valuations:link-assessments' || aborta "la orden valuations:link-assessments no aparece"
-for R in 'admin/valuations/requests' 'admin/valuations/members/{member}/follow-up' 'app/valuation-requests/current'; do
-  sudo -u "$WWW" php artisan route:list --path="$R" 2>/dev/null | grep -q "${R%%/\{*}" || aborta "la ruta $R no está registrada"
+# La ruta de seguimiento se declara con {memberId}: se busca el prefijo y el sufijo, no el texto literal.
+RUTAS=$(sudo -u "$WWW" php artisan route:list --path=valuation 2>/dev/null)
+for R in 'api/admin/valuations/requests' 'api/admin/valuations/members/{memberId}/follow-up' 'api/app/valuation-requests/current'; do
+  printf '%s\n' "$RUTAS" | grep -qF "$R" || aborta "la ruta $R no está registrada"
 done
 for U in "admin/valuations/requests" "app/valuation-requests/current"; do
   c=$(curl -s --max-time 20 -o /dev/null -w '%{http_code}' -H 'Accept: application/json' "$API/$U") || c=000

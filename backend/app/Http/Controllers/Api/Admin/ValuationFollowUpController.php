@@ -53,4 +53,35 @@ class ValuationFollowUpController extends Controller
             return response()->json(['ok' => true, 'data' => $this->followUps->update($access, $socio, $datos, $request)]);
         });
     }
+
+    /**
+     * GET /api/admin/valuations/follow-ups/recent?page=&per_page=5&q=
+     * La bandeja de valoraciones recibidas (contrato de la bandeja).
+     */
+    public function recent(Request $request): JsonResponse
+    {
+        return $this->conPersona($request, function (ValuationAccess $access) use ($request): JsonResponse {
+            $datos = $this->validar($request, [
+                'page' => ['nullable', 'integer', 'min:1'],
+                'per_page' => ['nullable', 'integer', 'min:1', 'max:50'],
+                'q' => ['nullable', 'string', 'max:80', new \App\Rules\PlainText],
+            ]);
+            $q = isset($datos['q']) ? trim((string) $datos['q']) : '';
+            if ($q !== '' && mb_strlen($q) < 2) {
+                return $this->invalido(['q' => ['Escribe al menos 2 caracteres.']]);
+            }
+
+            return response()->json(['ok' => true] + $this->followUps->recent(
+                $access, $q === '' ? null : $q, (int) ($datos['page'] ?? 1), (int) ($datos['per_page'] ?? 5),
+            ));
+        });
+    }
+
+    /** POST /api/admin/valuations/follow-ups/{assessmentUuid}/reviewed — idempotente. */
+    public function markReviewed(Request $request, string $assessmentUuid): JsonResponse
+    {
+        return $this->conPersona($request, function (ValuationAccess $access) use ($assessmentUuid): JsonResponse {
+            return response()->json(['ok' => true, 'data' => $this->followUps->markReviewed($access, $assessmentUuid)]);
+        });
+    }
 }

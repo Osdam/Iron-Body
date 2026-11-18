@@ -106,8 +106,9 @@ class ValuationAccessTest extends TestCase
     {
         $rutas = collect(Route::getRoutes())->filter(fn ($r) => str_starts_with($r->uri(), 'api/admin/valuations'));
         // 22 de la agenda + 2 de seguimiento (contrato del ciclo §3) + 5 de
-        // solicitudes (CONTRATO_SOLICITUDES_VALORACION.md §3).
-        $this->assertCount(29, $rutas);
+        // solicitudes (CONTRATO_SOLICITUDES_VALORACION.md §3) + 2 de la bandeja
+        // de recibidas (CONTRATO_BANDEJA_SEGUIMIENTO.md).
+        $this->assertCount(31, $rutas);
         foreach ($rutas as $r) {
             $p = AuthorizationMap::resolve($r);
             $this->assertNotNull($p, AuthorizationMap::routeKey($r));

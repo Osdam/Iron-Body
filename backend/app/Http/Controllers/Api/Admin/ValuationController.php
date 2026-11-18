@@ -423,7 +423,7 @@ class ValuationController extends Controller
     }
 
     /** `q` sin mayúsculas ni tildes, con la misma tabla que {@see self::foldedColumn()}. */
-    private static function foldSearch(string $texto): string
+    public static function foldSearch(string $texto): string
     {
         return mb_strtolower(strtr(str_replace(self::SEARCH_COMBINING, '', $texto), self::SEARCH_FOLD));
     }
@@ -434,7 +434,7 @@ class ValuationController extends Controller
      * SQLite: una cadena de `REPLACE`. Solo literales de esta clase: ningún dato
      * del usuario entra en el texto de la consulta.
      */
-    private static function foldedColumn(string $columna): string
+    public static function foldedColumn(string $columna): string
     {
         $con = array_keys(self::SEARCH_FOLD);
         $sin = array_values(self::SEARCH_FOLD);

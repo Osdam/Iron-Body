@@ -795,6 +795,9 @@ Route::middleware('throttle:valuations')->prefix('admin/valuations')->group(func
     $seguimiento = \App\Http\Controllers\Api\Admin\ValuationFollowUpController::class;
     Route::get('members/{memberId}/follow-up', [$seguimiento, 'show'])->whereNumber('memberId');
     Route::put('members/{memberId}/follow-up', [$seguimiento, 'update'])->whereNumber('memberId');
+    // Bandeja de valoraciones recibidas (docs/agenda-valoraciones/CONTRATO_BANDEJA_SEGUIMIENTO.md).
+    Route::get('follow-ups/recent', [$seguimiento, 'recent']);
+    Route::post('follow-ups/{assessmentUuid}/reviewed', [$seguimiento, 'markReviewed'])->whereUuid('assessmentUuid');
 
     // Solicitudes de valoración desde la app (CONTRATO_SOLICITUDES_VALORACION.md
     // §3). Estáticas: van antes de las rutas `{uuid}` de las citas.
