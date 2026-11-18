@@ -1,0 +1,4 @@
+SELECT extract(hour FROM (starts_at AT TIME ZONE 'UTC') AT TIME ZONE 'America/Bogota')::int AS hora_inicio_bogota, status, count(*) FROM valuation_appointments GROUP BY 1,2 ORDER BY 1,2;
+SELECT r.kind, extract(hour FROM (c.starts_at AT TIME ZONE 'UTC') AT TIME ZONE 'America/Bogota')::int AS hora_cita, extract(hour FROM (r.processed_at AT TIME ZONE 'UTC') AT TIME ZONE 'America/Bogota')::int AS hora_envio, round(extract(epoch FROM (r.processed_at - r.due_at))/60) AS retraso_min
+FROM valuation_reminders r JOIN valuation_appointments c ON c.id=r.appointment_id
+WHERE r.channel='member_app' AND r.status='accepted' AND (extract(hour FROM (r.processed_at AT TIME ZONE 'UTC') AT TIME ZONE 'America/Bogota') < 7 OR extract(hour FROM (r.processed_at AT TIME ZONE 'UTC') AT TIME ZONE 'America/Bogota') >= 21);
