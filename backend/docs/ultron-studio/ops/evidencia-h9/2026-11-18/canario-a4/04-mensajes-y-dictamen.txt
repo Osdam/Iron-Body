@@ -1,0 +1,135 @@
+CIERRE V2 · APARTADO 4 · GATE 4-E: LA SEGUNDA PRUEBA REAL (VERSIÓN 2 PUBLICADA, CONVERSACIÓN CANARIA LIMPIA) Y SU DICTAMEN
+Verificación en producción, solo lectura, el 18-11-2026 a las 22:50 UTC (17:50 en Bogotá).
+Los tres mensajes los envió el propietario desde su teléfono canario, esperando cada respuesta. Los textos son los de su
+conversación de prueba; sin teléfonos ni nombres.
+
+=== 1. LA TRAZA (php artisan ultron:prompt-trace --last=4) ===
+  decide ofrece ahora a la canaria: studio · versión 2e243853-27e7-4d41-9b23-dd103d970957 · huella af9e0d23…4d51
+  | Minuto (UTC)      | Declarada        | Ofrecida                 | Observada          | Estado  |
+  | 2026-11-18T22:44Z | applied 2e243853 | studio 2e243853 af9e0d23 | studio af9e0d23 S1 | applied |
+  | 2026-11-18T22:46Z | applied 2e243853 | studio 2e243853 af9e0d23 | studio af9e0d23 S1 | applied |
+  | 2026-11-18T22:47Z | applied 2e243853 | studio 2e243853 af9e0d23 | studio af9e0d23 S1 | applied |
+  ultron-studio:publication-check (salida 0): estado applied · cabeza entrada 3 (publish) · canario = la versión 2 · resto Legacy · cuadra con el motor
+  production.ERROR desde las 22:40 UTC: 0 · workers: 14 RUNNING
+
+=== 2. LOS TURNOS (ops/comprobacion-produccion/turnos-a4.php) ===
+  conversación canaria: #882 · acciones desde 2026-11-18 22:40:00 UTC: 6
+  
+  ================ acción #8119 · inbound_skipped · 2026-11-18 22:44:11 UTC · estado skipped ================
+  ENTRANTE (0): 
+  SALIENTE (0 caracteres; medida del backend sin URL: 0): 
+    length = null
+    studio (sello de la publicación) = []
+    studio_prompts: state=- · ofrecida: -   · observada: -  flujo - ejecución -
+    plan de la fila: null
+  
+  ================ acción #8120 · reply · 2026-11-18 22:44:22 UTC · estado executed ================
+  ENTRANTE (19): Hola, buenas tardes
+  SALIENTE (118 caracteres; medida del backend sin URL: 118): Buenas tardes, bienvenido a Iron Body Neiva, que gusto atenderle. Cuénteme, ¿qué le gustaría conocer hoy del gimnasio?
+    intent = "greeting"
+    origin = "ultron"
+    source = "external_draft"
+    previous_phase = "NEW_LEAD"
+    next_phase = "NEW_LEAD"
+    tools_requested = []
+    risk_flags = []
+    length = {"to":118,"cap":200,"from":118,"action":"fit","dropped":0}
+    studio (sello de la publicación) = {"seq":3,"part":"canary","state":"applied","reason":null,"version":"2e243853-27e7-4d41-9b23-dd103d970957"}
+    studio_prompts: state=applied · ofrecida: studio 2e243853 af9e0d23 · observada: studio af9e0d23 flujo S1 ejecución 1041018
+    CRITIC: verdict=pass · score=0.95 · attempt=1 · hard_fail=null · issues=["relevance","empathy","naturalness","context_use","next_step","question_discipline","phase_alignment"]
+    strategy = []
+    plan de la fila: null
+  
+  ================ acción #8121 · inbound_skipped · 2026-11-18 22:46:15 UTC · estado skipped ================
+  ENTRANTE (0): 
+  SALIENTE (0 caracteres; medida del backend sin URL: 0): 
+    length = null
+    studio (sello de la publicación) = []
+    studio_prompts: state=- · ofrecida: -   · observada: -  flujo - ejecución -
+    plan de la fila: null
+  
+  ================ acción #8122 · reply · 2026-11-18 22:46:23 UTC · estado executed ================
+  ENTRANTE (50): ¿Qué planes tienen y cuánto cuesta la mensualidad?
+  SALIENTE (158 caracteres; medida del backend sin URL: 158): Claro, el Plan Valera tiene una mensualidad de $65.000 COP y ofrece acceso ilimitado al gimnasio, asesoría semi personalizada y seguimiento en tus ejercicios.
+    intent = "pricing_question"
+    origin = "ultron"
+    source = "external_draft"
+    previous_phase = "NEW_LEAD"
+    next_phase = "DISCOVERY"
+    tools_requested = []
+    risk_flags = []
+    length = {"to":158,"cap":200,"from":215,"action":"trimmed","dropped":1}
+    studio (sello de la publicación) = {"seq":3,"part":"canary","state":"applied","reason":null,"version":"2e243853-27e7-4d41-9b23-dd103d970957"}
+    studio_prompts: state=applied · ofrecida: studio 2e243853 af9e0d23 · observada: studio af9e0d23 flujo S1 ejecución 1041019
+    CRITIC: verdict=pass · score=0.9 · attempt=1 · hard_fail=null · issues=["naturalness","novelty"]
+    strategy = []
+    plan de la fila: null
+  
+  ================ acción #8123 · inbound_skipped · 2026-11-18 22:47:13 UTC · estado skipped ================
+  ENTRANTE (0): 
+  SALIENTE (0 caracteres; medida del backend sin URL: 0): 
+    length = null
+    studio (sello de la publicación) = []
+    studio_prompts: state=- · ofrecida: -   · observada: -  flujo - ejecución -
+    plan de la fila: null
+  
+  ================ acción #8124 · reply · 2026-11-18 22:47:23 UTC · estado executed ================
+  ENTRANTE (45): ¿Cuál es el horario de atención entre semana?
+  SALIENTE (189 caracteres; medida del backend sin URL: 189): Te entiendo, quieres saber el horario entre semana. El gimnasio abre de lunes a viernes de 5:00 a. m. a 10:00 p. m. ¿Quieres que te cuente también sobre las clases o los planes que tenemos?
+    intent = "schedule_question"
+    origin = "ultron"
+    source = "external_draft"
+    previous_phase = "DISCOVERY"
+    next_phase = "DISCOVERY"
+    tools_requested = []
+    risk_flags = []
+    length = {"to":189,"cap":200,"from":189,"action":"fit","dropped":0}
+    studio (sello de la publicación) = {"seq":3,"part":"canary","state":"applied","reason":null,"version":"2e243853-27e7-4d41-9b23-dd103d970957"}
+    studio_prompts: state=applied · ofrecida: studio 2e243853 af9e0d23 · observada: studio af9e0d23 flujo S1 ejecución 1041020
+    CRITIC: verdict=pass · score=0.95 · attempt=1 · hard_fail=null · issues=[]
+    strategy = []
+    plan de la fila: null
+  
+  === El plan que nombra la respuesta comercial, en el catálogo de hoy ===
+  #3 Plan Valera · $65.000 · 30 días · activo sí · vendible sí · beneficios: ["Acceso ilimitado al gimnasio","Zona de pesas y maquinaria","Asesoría semi personalizada con entrenador de planta","Seguimiento en ejecución de ejercicios","Valoración inicial","Acceso básico completo a la app"]
+
+  Las tres filas «inbound_skipped» son contabilidad del enrutador (motivo auto_analyze_disabled: el agente anterior no analiza
+  ese entrante porque lo atiende ULTRON); no son turnos.
+
+=== 3. EL BORRADOR DEL TURNO 2 EN n8n (ejecución 1041019, nodos «Composer» y «Critic Comercial») ===
+  Borrador del redactor (con el precio como marcador):
+    «Claro, el Plan Valera tiene una mensualidad de {{PLAN_PRICE}} y ofrece acceso ilimitado al gimnasio, asesoría semi
+    personalizada y seguimiento en tus ejercicios. ¿Me cuenta si ya ha entrenado antes o es su primera vez?»
+  Con el precio puesto mide 215: el backend le quitó la pregunta final y salió con 158 (metadata.length: trimmed, dropped 1).
+  Revisor: pass · 0,9 · intento 1 · issues [naturalness, novelty] (no menciona el registro).
+
+=== 4. LA MEMORIA DESPUÉS DE LA PRUEBA (marketing_conversations #882) ===
+  fase DISCOVERY · precios entregados: plan 3 (22:46:24 UTC, mensaje saliente del turno 2) · planes tratados: [3]
+  última pregunta del agente: la del turno 3, que es la que salió (la pregunta retirada del turno 2 no consta: la memoria dice lo que se envió)
+
+=== 5. DICTAMEN ===
+  Lo que pedía comprobar el propietario:
+   1. Los tres turnos usaron la huella af9e0d23: SÍ (ofrecida y observada, por la copia S1; ejecuciones 1041018 a 1041020).
+   2. La versión 2 se aplicó de verdad: SÍ (sello applied, entrada 3, parte canary, en las tres filas).
+   3. Los mensajes respetaron el tope medido por el backend: SÍ. Tope 200; medidas 118 (cabía), 158 (el borrador medía 215 y se
+      le quitó la pregunta final) y 189 (cabía).
+   4. Origen de los textos: los TRES son del modelo (source external_draft, revisor pass al primer intento). Ningún texto de respaldo.
+   5. Datos comerciales: ninguno inventado. Plan Valera es el plan 3 del catálogo, vendible, de 30 días, a $65.000; los tres
+      beneficios que nombra están en su ficha («Acceso ilimitado al gimnasio», «Asesoría semi personalizada con entrenador de
+      planta», «Seguimiento en ejecución de ejercicios»). El horario coincide con la ficha (lunes a viernes, 5:00 a. m. a 10:00 p. m.).
+      Sin errores en el registro ni regresiones observadas.
+
+  BLOQUEANTES DE LA ACEPTACIÓN DEL MOTOR (decisión del propietario del 12-11): RESUELTOS Y PROBADOS.
+   · H4-2 (responder a planes y precios): la respuesta da un plan y su precio del catálogo.
+   · H4-1 y H4-3 (el límite de 200): ningún mensaje lo supera; lo mide y lo cumple el backend.
+
+  OBSERVACIONES DEL PROPIETARIO, CONFIRMADAS, QUE NO SE DAN POR BUENAS (siguen dentro del apartado 4):
+   · H4-9, el tono: la versión es «profesional» (de usted). El saludo salió de usted; la respuesta de precios mezcló («tus
+     ejercicios», y la pregunta retirada iba de usted); la del horario salió entera de tú. El revisor aprobó las tres. El tono se
+     le pide al modelo y nada lo comprueba de forma determinista.
+   · H4-10, un solo plan: a «¿Qué planes tienen…?» el modelo contesta con un plan (su estrategia elige uno; hoy, Plan Valera, el
+     primero de un mes por orden del catálogo). La lista de hasta tres planes con precio solo sale como respaldo.
+   · H4-8, el catálogo: si «la mensualidad» que ULTRON cotiza debe ser Plan Valera ($65.000) o Plan Mensual ($80.000) lo decide el
+     propietario con el orden del catálogo o el plan recomendado.
+
+  La versión 2 SIGUE PUBLICADA EN CANARIO, sin revertir ni promover, por instrucción del propietario.
