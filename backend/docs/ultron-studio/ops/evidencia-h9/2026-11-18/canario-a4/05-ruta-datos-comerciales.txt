@@ -1,0 +1,48 @@
+CIERRE V2 · APARTADO 4 · LA RUTA REAL DE LOS DATOS COMERCIALES DE ULTRON EN WHATSAPP (aclaración arquitectónica del propietario, 18-11-2026)
+Medido en producción, solo lectura, el 18-11-2026 a las 23:20 UTC (18:20 en Bogotá), con ops/comprobacion-produccion/ruta-datos-comerciales.php.
+Lee el catálogo del CRM en ese momento y llama por reflexión a dos métodos privados que solo leen. Sin personas ni mensajes.
+
+1. Catálogo que lee el motor ahora (Plan::sellable(), tabla plans del CRM): 12 planes
+   #25 PLAN DÍA · 1 días · $10.000 · actualizado en el CRM 2026-11-07 19:38 UTC
+   #2 Plan Semana · 7 días · $45.000 · actualizado en el CRM 2026-11-03 17:22 UTC
+   #3 Plan Valera · 30 días · $65.000 · actualizado en el CRM 2026-10-15 00:29 UTC
+   #4 Plan Mensual · 30 días · $80.000 · actualizado en el CRM 2026-11-03 17:21 UTC
+   #5 Trimestre · 90 días · $210.000 · actualizado en el CRM 2026-11-11 20:29 UTC
+   #6 Semestre · 180 días · $390.000 · actualizado en el CRM 2026-09-23 02:10 UTC
+   #7 Anualidad · 365 días · $624.000 · actualizado en el CRM 2026-10-31 17:30 UTC
+   #8 Élite · 30 días · $180.000 · actualizado en el CRM 2026-10-08 23:20 UTC
+   #9 Pro · 90 días · $499.000 · actualizado en el CRM 2026-09-23 02:10 UTC
+   #10 Prime · 180 días · $950.000 · actualizado en el CRM 2026-11-03 17:28 UTC
+   #11 Evolution · 365 días · $1.800.000 · actualizado en el CRM 2026-11-03 17:26 UTC
+   #14 PROMO X4 · 30 días · $75.000 · actualizado en el CRM 2026-10-07 14:16 UTC
+
+2. Lo que decide le pasa al modelo (active_plans): 12 planes · claves del primero: ["id","name","duration_days","benefits","tier","is_recommended","access_classes","has_discount"]
+   ¿alguno lleva la clave price?: NO
+   default_plan_id (el que se cotiza ante «¿cuánto vale la mensualidad?»): #3 Plan Valera (sort_order 2, recomendado no)
+   planes de un mes por orden del catálogo: ["Plan Valera (#3)","Plan Mensual (#4)","Élite (#8)","PROMO X4 (#14)"]
+
+3. Lista determinista que armaría el commit AHORA con ese catálogo (tope sin tope):
+   texto (191): Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?
+   esqueleto que ve el guard: Claro. Planes de un mes: {{PLAN_NAME}}, {{PLAN_PRICE}}; {{PLAN_NAME}}, {{PLAN_PRICE}}; {{PLAN_NAME}}, {{PLAN_PRICE}}. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?
+
+3. Lista determinista que armaría el commit AHORA con ese catálogo (tope 200):
+   texto (191): Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?
+
+3. Lista determinista que armaría el commit AHORA con ese catálogo (tope 160):
+   texto (133): Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. ¿Sobre cuál amplío la información?
+
+LECTURA DEL CÓDIGO (rama main, 60cbde68)
+  · n8n → POST /api/internal/marketing/ai/decide y …/ai/commit (routes/marketing.php:90-91, UltronController).
+  · decide lee el catálogo en CADA turno: MarketingKnowledgeBaseService::activePlans() = Plan::sellable() (activo, vendible, sin
+    archivar, precio > 0, duración > 0), con el recomendado primero y después sort_order (MarketingKnowledgeBaseService.php:125).
+  · Al modelo le llega SIN precio (UltronDecideService::plansWithoutPrice(), :469) y con default_plan_id =
+    defaultMonthlyPlan() (:520): el primer plan vendible de 28 a 31 días por sort_order.
+  · El modelo no escribe cifras: usa {{PLAN_NAME}}, {{PLAN_PRICE}} y {{PLAN_DURATION}}, y el commit los sustituye con Plan::price
+    de ese momento (UltronDraftPlaceholders). Un marcador se resuelve contra UN plan: por eso un borrador solo cita un precio.
+  · La lista determinista (UltronCommitService::respaldoDePrecios()) se arma en el commit con ese mismo catálogo.
+  · En los cinco prompts base y en lo que se ejecuta en n8n no hay ningún nombre ni precio de plan (grep: 0). En el código del motor
+    los nombres de plan solo aparecen en comentarios.
+
+UN CAMBIO REAL DEL CATÁLOGO QUE YA SE REFLEJÓ SIN TOCAR PROMPTS
+  El 12-11 el motor veía 13 planes vendibles, entre ellos «INGRESO EMPLEADOS» ($1). El 18-11 ve 12: otra línea de trabajo separó
+  en el CRM el canal de mostrador del comercial y ese plan dejó de ser vendible por ULTRON. Nadie editó un prompt ni el motor.
