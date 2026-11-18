@@ -124,8 +124,14 @@ class BandejaRecientesTest extends TestCase
         $nombres = array_column(array_column($this->getJson(self::URL.'?per_page=50', $andres)->assertOk()->json('data'), 'member'), 'name');
         $this->assertSame(['Rosa Vela', 'Eva Díaz', 'Ana Núñez', 'María González'], $nombres, 'solo sus socios asignados');
 
-        $ajena = \App\Models\ProfessionalAssessment::query()->where('member_id', $this->socios[1]->id)->value('uuid');
-        $this->postJson('/api/admin/valuations/follow-ups/'.$ajena.'/reviewed', [], $andres)->assertNotFound();
+        // Un entrenador vinculado no marca «Revisada» ni las suyas: es el acuse de administración.
+        $suya = \App\Models\ProfessionalAssessment::query()->where('member_id', $this->socios[0]->id)->value('uuid');
+        $this->postJson('/api/admin/valuations/follow-ups/'.$suya.'/reviewed', [], $andres)->assertForbidden();
+        $this->assertNull(DB::table('professional_assessments')->where('uuid', $suya)->value('admin_reviewed_at'));
+        // Ni con permiso de editar: sigue siendo una cuenta con alcance (otra entrenadora, su socio).
+        $deSofia = \App\Models\ProfessionalAssessment::query()->where('member_id', $this->socios[1]->id)->value('uuid');
+        $conUpdate = $this->h($this->staffWith([ValuationAccess::VIEW, ValuationAccess::UPDATE], $this->sofia));
+        $this->postJson('/api/admin/valuations/follow-ups/'.$deSofia.'/reviewed', [], $conUpdate)->assertForbidden();
 
         $this->getJson(self::URL, $this->sharedTokenHeaders())->assertForbidden();
         $this->getJson(self::URL, $this->h($this->staffWith([])))->assertForbidden();

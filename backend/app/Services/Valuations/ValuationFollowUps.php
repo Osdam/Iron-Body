@@ -788,6 +788,11 @@ final class ValuationFollowUps
      */
     public function markReviewed(ValuationAccess $access, string $assessmentUuid): array
     {
+        // El acuse es de administración: una cuenta con alcance de entrenador
+        // no puede quitarle el «Nueva» (lo exige también el mapa: view_all).
+        if (! $access->viewsAll() || $access->scopedTrainerId() !== null) {
+            throw ValuationException::forbidden('Marcar como revisada es de administración (ver toda la agenda).');
+        }
         $fila = $this->feedQuery($access)->where('pa.uuid', $assessmentUuid)
             ->select(['pa.id', 'pa.uuid', 'pa.member_id', 'pa.trainer_id', 'pa.submitted_at', 'pa.admin_reviewed_at',
                 'pa.admin_reviewed_by_admin_id', 'm.full_name as member_name', 't.full_name as trainer_name'])

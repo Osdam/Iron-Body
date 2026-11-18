@@ -665,7 +665,8 @@ final class AuthorizationMap
         'GET api/admin/valuations/members/{memberId}/follow-up' => self::VALUATIONS_READ,
         'PUT api/admin/valuations/members/{memberId}/follow-up' => 'valuations.update',
         'GET api/admin/valuations/follow-ups/recent' => self::VALUATIONS_READ,
-        'POST api/admin/valuations/follow-ups/{assessmentUuid}/reviewed' => self::VALUATIONS_READ,
+        // Marcar «Revisada» es el acuse de ADMINISTRACIÓN: solo quien ve toda la agenda.
+        'POST api/admin/valuations/follow-ups/{assessmentUuid}/reviewed' => 'valuations.view_all',
         // Solicitudes de valoración desde la app
         // (CONTRATO_SOLICITUDES_VALORACION.md §3): leerlas con el alcance de
         // la agenda; enlazarlas a una cita es agendar; atenderlas sin cita o
