@@ -28,6 +28,11 @@ use ReflectionMethod;
  *     tope para el redactor pide un margen (`M`, `P` y `F`, de la tabla de
  *     abajo escrita a mano desde el plan §B.3, «Compilador 3»); el del Critic
  *     no cambia y la línea base sigue sin parche.
+ *  8. Compilador 4 (Enmienda A4-2 del H5, cierre V2, apartado 4; H4-9): los dos
+ *     textos del tono «profesional» (el del redactor manda sobre TODO el prompt
+ *     y da las equivalencias de usted; el del revisor hace FALLAR el tuteo),
+ *     escritos aquí a mano desde el plan §B.3, «Compilador 4». Solo se mueven
+ *     las huellas con `profesional`; Legacy, `cercano` y `entusiasta`, no.
  */
 class UltronPromptCompilerTest extends TestCase
 {
@@ -56,9 +61,11 @@ class UltronPromptCompilerTest extends TestCase
     ];
 
     // Los textos aprobados (STUDIO_MOTORES_PLAN.md §B.3, Enmienda M-1, M1-3), a mano.
-    private const PRO_COMPOSER = 'REGISTRO PUBLICADO: profesional. Esto manda sobre los ejemplos de arriba: trata a la persona de usted, frases completas y sobrias, sin muletillas coloquiales ("De una", "Listo", "Tranquilo") ni exclamaciones seguidas. Sigue siendo calido; profesional no es frio.';
+    // Los dos del tono «profesional» son los del compilador 4 (§B.3, «Compilador 4»,
+    // Enmienda A4-2): sustituyen a los de los compiladores 1 a 3.
+    private const PRO_COMPOSER = 'REGISTRO PUBLICADO: profesional. Esto manda sobre TODO este prompt, tambien sobre los ejemplos de abajo, knowledge_base.tone, suggested_question y approved_brand_copy: trata a la persona de usted en cada frase, sin mezclar. Los ejemplos se dicen de usted: "Te entiendo" es "Le entiendo", "tu objetivo" es "su objetivo", "te paso" es "le paso", "cuentame" es "cuenteme", "quieres" es "quiere". Nunca "te", "tu", "tus", "ti" ni "contigo". Frases completas y sobrias, sin muletillas coloquiales ("De una", "Listo", "Tranquilo") ni exclamaciones seguidas. Sigue siendo calido; profesional no es frio. El backend comprueba el registro antes de enviar y descarta el mensaje que tutee.';
 
-    private const PRO_CRITIC = 'REGISTRO PUBLICADO: profesional. Tratar de usted NO es defecto de naturalness; tutear o usar muletillas coloquiales SI lo es.';
+    private const PRO_CRITIC = 'REGISTRO PUBLICADO: profesional. Tratar de usted NO es defecto. Si el borrador tutea en cualquier frase o mezcla tu y usted ("te", "tu", "tus", "ti", "contigo", "quieres", "puedes", "cuentame", "dime"), verdict fail con naturalness y notes "pasar todo el mensaje a usted". Lo que va entre comillas citando a la persona no cuenta.';
 
     private const ENT_COMPOSER = 'REGISTRO PUBLICADO: entusiasta. Mas energia: celebra lo que la persona quiere lograr y transmite ganas de acompanarla. Sin exagerar, sin prometer resultados y sin urgencia ni presion.';
 
@@ -122,13 +129,13 @@ class UltronPromptCompilerTest extends TestCase
         $this->assertSame(Base::LEGACY_BUNDLE_HASH, $paquete['bundleHash']);
         $this->assertSame([], $paquete['patches']);
         $this->assertSame(112216, $paquete['bytes']);
-        $this->assertSame(['contract' => 'ultron-prompts/1', 'base' => 'n8n-29de5119', 'compiler' => 3], array_intersect_key($paquete, array_flip(['contract', 'base', 'compiler'])));
+        $this->assertSame(['contract' => 'ultron-prompts/1', 'base' => 'n8n-29de5119', 'compiler' => 4], array_intersect_key($paquete, array_flip(['contract', 'base', 'compiler'])));
         $this->assertSame(self::BASE, $paquete['governed']);
         $this->assertSame(self::BASE, C::BASELINE);
         $this->assertTrue(C::isBaseline(self::BASE));
         $this->assertSame([], C::changedRoles(self::BASE));
-        $this->assertSame(3, C::VERSION, 'la 2 añade las frases de las reglas S-NNN; la 3, el margen del tope para el redactor');
-        $this->assertSame('3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902', $paquete['bundleHash'], 'la huella Legacy, escrita a mano: el compilador 3 no la mueve');
+        $this->assertSame(4, C::VERSION, 'la 2 añade las frases de las reglas S-NNN; la 3, el margen del tope para el redactor; la 4, los textos del tono profesional');
+        $this->assertSame('3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902', $paquete['bundleHash'], 'la huella Legacy, escrita a mano: ni el compilador 3 ni el 4 la mueven');
         $this->assertSame(['contract', 'base', 'compiler', 'governed', 'roles', 'bundleHash', 'bytes', 'patches'], array_keys($paquete));
         $this->assertSame(Base::ROLES, array_keys($paquete['roles']));
     }
@@ -350,6 +357,48 @@ class UltronPromptCompilerTest extends TestCase
         $this->assertSame(Base::roles()['strategist'], $paquete['roles']['strategist']);
         $this->assertCount(4 + 6, $paquete['patches'], 'cuatro de tono y seis de longitud');
         $this->assertSame(['persona.tone', 'persona.tone', 'persona.tone', 'persona.tone', 'persona.maxChars', 'persona.maxChars', 'persona.maxChars', 'persona.maxChars', 'persona.maxChars', 'persona.maxChars'], array_column($paquete['patches'], 'parameter'), 'en el orden de los parámetros');
+    }
+
+    // ── 8 · Compilador 4: el registro profesional ────────────────────────────
+
+    public function test_el_texto_del_tono_profesional_compilado_tal_cual(): void
+    {
+        $paquete = C::compile(self::con(['persona.tone' => 'profesional']));
+
+        foreach (['composer', 'composer_retry'] as $rol) {
+            $this->assertSame(self::PRO_COMPOSER, self::lineaTras($paquete['roles'][$rol], 'COMO SUENAS:'), $rol);
+        }
+        foreach (['critic', 'critic_retry'] as $rol) {
+            $this->assertSame(self::PRO_CRITIC, self::lineaTras($paquete['roles'][$rol], 'naturalness:'), $rol);
+        }
+        foreach ([self::PRO_COMPOSER, self::PRO_CRITIC] as $texto) {
+            $this->assertSame(1, preg_match('/\A[\x20-\x7E]+\z/', $texto), 'ASCII imprimible, sin tildes ni saltos, como los demás textos');
+            $this->assertStringNotContainsString('{', $texto, 'ningún marcador');
+            $this->assertLessThanOrEqual(C::MAX_PATCH_BYTES, strlen($texto));
+        }
+        $this->assertSame([678, 329], [strlen(self::PRO_COMPOSER), strlen(self::PRO_CRITIC)], 'los bytes de los dos textos (con 1 200 de tope)');
+        // Lo que el compilador 4 viene a cambiar (H4-9): el del redactor manda sobre TODO el
+        // prompt, no solo sobre «los ejemplos de arriba»; el del revisor hace FALLAR el tuteo
+        // (el reintento de n8n solo sale con verdict fail), no solo lo cuenta en naturalness.
+        $this->assertStringContainsString('Esto manda sobre TODO este prompt, tambien sobre los ejemplos de abajo', self::PRO_COMPOSER);
+        $this->assertStringNotContainsString('los ejemplos de arriba', self::PRO_COMPOSER);
+        $this->assertStringContainsString('verdict fail con naturalness y notes "pasar todo el mensaje a usted"', self::PRO_CRITIC);
+        $this->assertStringNotContainsString('muletillas', self::PRO_CRITIC, 'el revisor no falla por «Tranquilo» o «Listo»: la base lo tiene por muletilla normal fuera de un reclamo');
+    }
+
+    public function test_el_compilador_4_solo_mueve_las_huellas_de_profesional(): void
+    {
+        $huella = static fn (array $cambios): string => C::compile(self::con($cambios))['bundleHash'];
+
+        // Escritas a mano desde compile-cases.json del compilador 3 (c000, c001 y c304): no se mueven.
+        $this->assertSame('3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902', $huella([]), 'Legacy');
+        $this->assertSame('bedc1c5dca22113b065384e0c9867f8d1f5bbe3652227562927cfdee9d20f294', $huella(['persona.maxChars' => 160]), 'cercano · 160');
+        $this->assertSame('7ea13909374e001f7b5e50dd1ab7a26100dc168c20f0918f6d3350b7f7cb3be5', $huella(['persona.tone' => 'entusiasta', 'persona.emojis' => false, 'persona.maxChars' => 480, 'strategy.goal' => 'venta']), 'entusiasta · sin emojis · 480 · venta');
+        // «profesional + 200» (c074): la del compilador 3 deja de valer.
+        $g8 = C::compile(self::con(['persona.tone' => 'profesional', 'persona.maxChars' => 200]));
+        $this->assertSame('7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35', $g8['bundleHash'], 'profesional · 200, compilador 4');
+        $this->assertNotSame('af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51', $g8['bundleHash'], 'la del compilador 3');
+        $this->assertSame(115446, $g8['bytes'], '114 206 con el compilador 3, más 1 240: dos Composer × (678 − 262) y dos Critic × (329 − 125)');
     }
 
     // ── 4 · Anclas únicas; la matriz entera compila ───────────────────────────

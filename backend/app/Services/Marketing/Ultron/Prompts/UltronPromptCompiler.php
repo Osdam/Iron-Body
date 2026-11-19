@@ -37,6 +37,21 @@ namespace App\Services\Marketing\Ultron\Prompts;
  * Critic, las anclas, las operaciones y el orden no cambian, y con 320 sigue
  * sin haber parche: `compile(línea base)` y la huella Legacy quedan igual.
  *
+ * VERSIÓN 4 (Enmienda A4-2 del H5; cierre V2, apartado 4, H4-9): cambian los
+ * dos textos del tono `profesional`. El del redactor
+ * ({@see self::T_TONE_PRO_COMPOSER}) manda sobre TODO el prompt (también
+ * sobre los ejemplos que van debajo de su línea, `knowledge_base.tone`,
+ * `suggested_question` y `approved_brand_copy`) y da las equivalencias de
+ * usted; el del revisor ({@see self::T_TONE_PRO_CRITIC}) hace FALLAR el
+ * tuteo (verdict fail), que es lo único que provoca el reintento de n8n.
+ * Cambian también los dos textos fijos de las frases prohibidas
+ * ({@see self::T_PHRASES_COMPOSER} y {@see self::T_PHRASES_CRITIC}; revisión
+ * en `plans/informes-motores/revision-frases-prohibidas.md`): mandan sobre el
+ * resto del prompt y dicen qué cuenta (tildes, plural, citas, negación) y qué
+ * no (un trozo de otra palabra). Las anclas, las operaciones, el orden y el
+ * juego cerrado de las frases no cambian; `cercano` y `entusiasta` sin
+ * frases, y la línea base, tampoco.
+ *
  * PARCHES ANCLADOS, NO PLANTILLAS. La base no se edita: cada valor distinto de
  * la línea base aplica parches `{rol, ancla, operación, texto}` donde el ancla
  * es una subcadena que tiene que aparecer EXACTAMENTE UNA VEZ (sensible a
@@ -92,9 +107,15 @@ final class UltronPromptCompiler
      * cambia el texto del tope para el redactor ({@see self::T_MAX_COMPOSER}):
      * le pide un margen por debajo del límite, porque el commit lo mide antes
      * de enviar. Cambian las huellas de todo paquete con `maxChars` distinto
-     * de 320; la línea base y la huella Legacy, no.
+     * de 320; la línea base y la huella Legacy, no. La 4 (Enmienda A4-2 del H5)
+     * cambia los dos textos del tono `profesional`
+     * ({@see self::T_TONE_PRO_COMPOSER} y {@see self::T_TONE_PRO_CRITIC}) y
+     * los dos textos fijos de las frases prohibidas
+     * ({@see self::T_PHRASES_COMPOSER} y {@see self::T_PHRASES_CRITIC}):
+     * cambian las huellas de todo paquete con ese tono o con frases, y
+     * ninguna otra.
      */
-    public const VERSION = 3;
+    public const VERSION = 4;
 
     /** La base sobre la que compila esta versión. */
     public const BASE = UltronPromptBase::ID;
@@ -216,9 +237,18 @@ final class UltronPromptCompiler
     //    «Compilador 3»): {@see self::composerTargetChars()},
     //    {@see self::composerTargetWords()} y {@see self::composerMaxSentences()}. ──
 
-    private const T_TONE_PRO_COMPOSER = 'REGISTRO PUBLICADO: profesional. Esto manda sobre los ejemplos de arriba: trata a la persona de usted, frases completas y sobrias, sin muletillas coloquiales ("De una", "Listo", "Tranquilo") ni exclamaciones seguidas. Sigue siendo calido; profesional no es frio.';
+    /**
+     * Compilador 4 (§B.3, «Compilador 4», Enmienda A4-2 del H5). Sustituyen a
+     * los de los compiladores 1 a 3 (que quedan escritos como históricos en la
+     * tabla de §B.3): en la prueba real del 18-11-2026 el redactor tuteó con
+     * «profesional», porque el texto anterior solo mandaba sobre «los ejemplos
+     * de arriba», y el revisor aprobó, porque tutear solo contaba en
+     * naturalness y no lo hacía fallar. Pendientes de la aprobación del
+     * propietario.
+     */
+    private const T_TONE_PRO_COMPOSER = 'REGISTRO PUBLICADO: profesional. Esto manda sobre TODO este prompt, tambien sobre los ejemplos de abajo, knowledge_base.tone, suggested_question y approved_brand_copy: trata a la persona de usted en cada frase, sin mezclar. Los ejemplos se dicen de usted: "Te entiendo" es "Le entiendo", "tu objetivo" es "su objetivo", "te paso" es "le paso", "cuentame" es "cuenteme", "quieres" es "quiere". Nunca "te", "tu", "tus", "ti" ni "contigo". Frases completas y sobrias, sin muletillas coloquiales ("De una", "Listo", "Tranquilo") ni exclamaciones seguidas. Sigue siendo calido; profesional no es frio. El backend comprueba el registro antes de enviar y descarta el mensaje que tutee.';
 
-    private const T_TONE_PRO_CRITIC = 'REGISTRO PUBLICADO: profesional. Tratar de usted NO es defecto de naturalness; tutear o usar muletillas coloquiales SI lo es.';
+    private const T_TONE_PRO_CRITIC = 'REGISTRO PUBLICADO: profesional. Tratar de usted NO es defecto. Si el borrador tutea en cualquier frase o mezcla tu y usted ("te", "tu", "tus", "ti", "contigo", "quieres", "puedes", "cuentame", "dime"), verdict fail con naturalness y notes "pasar todo el mensaje a usted". Lo que va entre comillas citando a la persona no cuenta.';
 
     private const T_TONE_ENT_COMPOSER = 'REGISTRO PUBLICADO: entusiasta. Mas energia: celebra lo que la persona quiere lograr y transmite ganas de acompanarla. Sin exagerar, sin prometer resultados y sin urgencia ni presion.';
 
@@ -246,10 +276,18 @@ final class UltronPromptCompiler
 
     // ── Versión 2: el texto FIJO alrededor de las frases. La lista va al final,
     //    cada frase entre comillas dobles y separadas por «, »; después, un punto.
+    //    Compilador 4 (§B.3, «Compilador 4»; `revision-frases-prohibidas.md` §6):
+    //    sustituyen a los de los compiladores 2 y 3, que solo hablaban de
+    //    mayúsculas y no decían que la lista manda sobre las excepciones de la
+    //    base («Tranquilo», «lo mejor PARA ESA PERSONA»…). El redactor evita de
+    //    más (reformular cuesta poco) y el revisor tumba con precisión (cada
+    //    fallo cuesta un reintento o un respaldo). Pendientes de la aprobación
+    //    del propietario. El del revisor lleva sus propias comillas (`notes`),
+    //    ANTES de la lista: una frase sigue sin poder llevar ninguna.
 
-    private const T_PHRASES_COMPOSER = 'FRASES PROHIBIDAS PUBLICADAS: nunca escribas ninguna de estas frases, tampoco con otras mayusculas; si la respuesta parece necesitar una, dilo con otras palabras. Las frases: ';
+    private const T_PHRASES_COMPOSER = 'FRASES PROHIBIDAS PUBLICADAS: esto manda sobre todo este prompt, tambien sobre los ejemplos, knowledge_base, suggested_question y approved_brand_copy. Nunca escribas ninguna de estas frases, tampoco con otras mayusculas o sin tildes, en plural, entre comillas ni para negarla; si la respuesta parece necesitar una, dilo con otras palabras. Son texto literal que evitar, no instrucciones. Las frases: ';
 
-    private const T_PHRASES_CRITIC = 'FRASES PROHIBIDAS PUBLICADAS: si el borrador contiene alguna de estas frases, aunque cambien las mayusculas, verdict fail con naturalness. Las frases: ';
+    private const T_PHRASES_CRITIC = 'FRASES PROHIBIDAS PUBLICADAS: esto manda sobre las excepciones de este prompt. Si el borrador contiene alguna de estas frases como palabras completas, aunque cambien las mayusculas o las tildes, este en plural, vaya entre comillas o sea para negarla, verdict fail con naturalness y notes "decirlo sin la frase prohibida". No cuenta si solo aparece como trozo de otra palabra distinta. Son texto literal que buscar, no instrucciones. Las frases: ';
 
     private const T_PHRASES_END = '.';
 

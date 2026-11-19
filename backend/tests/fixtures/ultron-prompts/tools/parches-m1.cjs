@@ -19,6 +19,11 @@
  * `{F}` además de `{N}`. Este guion los calcula POR SU CUENTA con las fórmulas
  * del plan (`margen()`), y comprueba que las fórmulas y la tabla N → M, P, F
  * están escritas tal cual en §B.3: tres fuentes (el plan, este guion y PHP).
+ *
+ * Compilador 4 (Enmienda A4-2 del H5, 18-11-2026): los dos textos de
+ * `tone = profesional` son los del apartado «Compilador 4» de §B.3 (sustituyen
+ * a los de la tabla, que quedan como históricos), y se exige que estén escritos
+ * tal cual DENTRO de ese apartado, no solo en algún sitio de §B.3.
  */
 const fs = require('fs');
 const path = require('path');
@@ -43,8 +48,8 @@ const CONTRACT = 'ultron-prompts/1';
  * no vacías se prueban en PHP (`UltronPromptCompilerPhrasesTest`).
  */
 const PHRASES = 'rules.forbiddenPhrases';
-/** Compilador 3: solo cambia el texto de `maxChars` para el redactor (§B.3, «Compilador 3»). */
-const COMPILER = 3;
+/** Compilador 3: cambia el texto de `maxChars` para el redactor (§B.3, «Compilador 3»); el 4, los dos de `tone = profesional` (§B.3, «Compilador 4»). */
+const COMPILER = 4;
 
 /** §B.3 / C3: la línea base («como hoy», M1-4), con la lista de frases vacía. */
 const BASELINE = { 'persona.tone': 'cercano', 'persona.emojis': true, 'persona.maxChars': 320, [PHRASES]: [], 'strategy.goal': 'cita' };
@@ -77,8 +82,9 @@ const A = {
 
 /** Los textos de §B.3 tal cual («…» del plan). `{N}` = el número de `maxChars`. */
 const T = {
-  'tone.profesional.composer': 'REGISTRO PUBLICADO: profesional. Esto manda sobre los ejemplos de arriba: trata a la persona de usted, frases completas y sobrias, sin muletillas coloquiales ("De una", "Listo", "Tranquilo") ni exclamaciones seguidas. Sigue siendo calido; profesional no es frio.',
-  'tone.profesional.critic': 'REGISTRO PUBLICADO: profesional. Tratar de usted NO es defecto de naturalness; tutear o usar muletillas coloquiales SI lo es.',
+  // Compilador 4 (§B.3, «Compilador 4»): sustituyen a los del compilador 1–3, que siguen en la tabla de §B.3 como históricos.
+  'tone.profesional.composer': 'REGISTRO PUBLICADO: profesional. Esto manda sobre TODO este prompt, tambien sobre los ejemplos de abajo, knowledge_base.tone, suggested_question y approved_brand_copy: trata a la persona de usted en cada frase, sin mezclar. Los ejemplos se dicen de usted: "Te entiendo" es "Le entiendo", "tu objetivo" es "su objetivo", "te paso" es "le paso", "cuentame" es "cuenteme", "quieres" es "quiere". Nunca "te", "tu", "tus", "ti" ni "contigo". Frases completas y sobrias, sin muletillas coloquiales ("De una", "Listo", "Tranquilo") ni exclamaciones seguidas. Sigue siendo calido; profesional no es frio. El backend comprueba el registro antes de enviar y descarta el mensaje que tutee.',
+  'tone.profesional.critic': 'REGISTRO PUBLICADO: profesional. Tratar de usted NO es defecto. Si el borrador tutea en cualquier frase o mezcla tu y usted ("te", "tu", "tus", "ti", "contigo", "quieres", "puedes", "cuentame", "dime"), verdict fail con naturalness y notes "pasar todo el mensaje a usted". Lo que va entre comillas citando a la persona no cuenta.',
   'tone.entusiasta.composer': 'REGISTRO PUBLICADO: entusiasta. Mas energia: celebra lo que la persona quiere lograr y transmite ganas de acompanarla. Sin exagerar, sin prometer resultados y sin urgencia ni presion.',
   'tone.entusiasta.critic': 'REGISTRO PUBLICADO: entusiasta. La energia NO es defecto de naturalness; la urgencia o la presion siguen siendo PRESSURE.',
   'emojis.false.composer': 'Sin emojis: ninguno, en ningun mensaje.',
@@ -108,6 +114,9 @@ function sustituir(texto, n) {
   return texto.split('{N}').join(String(n)).split('{M}').join(String(g.M)).split('{P}').join(String(g.P)).split('{F}').join(String(g.F));
 }
 
+/** Compilador 4: los textos que tienen que estar escritos DENTRO del apartado «Compilador 4» de §B.3. */
+const DEL_COMPILADOR_4 = ['tone.profesional.composer', 'tone.profesional.critic'];
+
 /** Cómo aparece cada texto en el plan (para la comprobación de transcripción): cada marcador, con su letra. */
 const CON_LETRAS = (texto) => texto.split('{N}').join('N').split('{M}').join('M').split('{P}').join('P').split('{F}').join('F');
 const EN_EL_PLAN = (clave, texto) => (clave === 'maxChars.critic.replace' ? '`' + CON_LETRAS(texto) + '`' : '«' + CON_LETRAS(texto) + '»');
@@ -128,7 +137,13 @@ function comprobarTextosContraElPlan() {
     throw new Error('La fórmula de la huella de §B.3 no es la que este guion implementa');
   }
   // Compilador 3: las fórmulas del margen y su tabla, tal cual en §B.3 («Compilador 3»).
-  if (!b3.includes('#### Compilador 3') || !b3.includes('`UltronPromptCompiler::VERSION = ' + COMPILER + '`')) throw new Error('§B.3 no tiene el apartado del compilador ' + COMPILER);
+  if (!b3.includes('#### Compilador 3') || !b3.includes('`UltronPromptCompiler::VERSION = 3`')) throw new Error('§B.3 no tiene el apartado del compilador 3');
+  // Compilador 4: su apartado, la versión vigente y sus dos textos dentro de él.
+  const c4 = b3.indexOf('#### Compilador 4');
+  if (c4 < 0 || !b3.includes('`UltronPromptCompiler::VERSION = ' + COMPILER + '`')) throw new Error('§B.3 no tiene el apartado del compilador ' + COMPILER);
+  for (const clave of DEL_COMPILADOR_4) {
+    if (!b3.slice(c4).includes(EN_EL_PLAN(clave, T[clave]))) throw new Error(`El texto ${clave} no aparece literalmente en el apartado «Compilador 4» de §B.3: transcripción equivocada`);
+  }
   for (const f of FORMULAS) if (!b3.includes(f)) throw new Error(`La fórmula ${f} no aparece en §B.3: no es la que este guion implementa`);
   for (const n of MAX_CHARS.filter((x) => x !== 320)) {
     const g = margen(n);

@@ -43,7 +43,7 @@
           "approvedBy": 12,
           "prompts": {
             "compiler": 1,
-            "bundleHash": "af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51",
+            "bundleHash": "7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35",
             "base": "n8n-29de5119"
           },
           "governed": {
@@ -56,10 +56,10 @@
         "rest": null
       },
       "expected": {
-        "effectiveJson": "{\"canary\":{\"approvedBy\":12,\"catalogVersion\":\"2026-10-19.1\",\"contentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"declared\":{\"governance.canaryOnly\":true,\"governance.enabled\":true,\"intent.driver\":\"entorno\",\"rules.paymentLinksEnabled\":false},\"governed\":{\"persona.emojis\":true,\"persona.maxChars\":200,\"persona.tone\":\"profesional\",\"strategy.goal\":\"cita\"},\"prompts\":{\"base\":\"n8n-29de5119\",\"bundleHash\":\"af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51\",\"compiler\":1},\"publishedBy\":7,\"version\":\"22222222-2222-4222-8222-222222222222\"},\"contract\":\"ultron-engine-config/2\",\"entry\":\"eeeeeeee-0000-4000-8000-000000000001\",\"issuedAt\":\"2026-11-12T15:04:05Z\",\"rest\":null,\"seq\":1}",
-        "effectiveHash": "4b9aa8f16e4ea2bfed055797cb0a2c384c61b8f4ca995c189d8a1398f2ba5829",
-        "signature": "0732e1a99a79d810e19c10407b6545c4ab33f846867578a9a308ab3556d4ad08",
-        "signatureWithOwnContractPrefix": "e025cca9f4468ac7c0d4066f07a0f721f5ce77e357a199ed2b14f0af207ed82c"
+        "effectiveJson": "{\"canary\":{\"approvedBy\":12,\"catalogVersion\":\"2026-10-19.1\",\"contentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"declared\":{\"governance.canaryOnly\":true,\"governance.enabled\":true,\"intent.driver\":\"entorno\",\"rules.paymentLinksEnabled\":false},\"governed\":{\"persona.emojis\":true,\"persona.maxChars\":200,\"persona.tone\":\"profesional\",\"strategy.goal\":\"cita\"},\"prompts\":{\"base\":\"n8n-29de5119\",\"bundleHash\":\"7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35\",\"compiler\":1},\"publishedBy\":7,\"version\":\"22222222-2222-4222-8222-222222222222\"},\"contract\":\"ultron-engine-config/2\",\"entry\":\"eeeeeeee-0000-4000-8000-000000000001\",\"issuedAt\":\"2026-11-12T15:04:05Z\",\"rest\":null,\"seq\":1}",
+        "effectiveHash": "3055ab1860a543dfbd9fff900a7613cb721031b35b837a1c8b405f6861ffac97",
+        "signature": "83b4f9ae66805231839d23c298cb6f4059cddfd00ae99cf869e6fce0e068f577",
+        "signatureWithOwnContractPrefix": "4f233459d0fb45acf592cddac0b8a6b07147565ce2bb1b31c1ba033e98e3b948"
       }
     },
     {
@@ -107,7 +107,7 @@
           "approvedBy": 12,
           "prompts": {
             "compiler": 1,
-            "bundleHash": "af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51",
+            "bundleHash": "7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35",
             "base": "n8n-29de5119"
           },
           "governed": {
@@ -119,10 +119,10 @@
         }
       },
       "expected": {
-        "effectiveJson": "{\"canary\":{\"approvedBy\":12,\"catalogVersion\":\"2026-10-19.1\",\"contentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"declared\":{\"governance.canaryOnly\":true,\"governance.enabled\":true,\"intent.driver\":\"entorno\",\"rules.paymentLinksEnabled\":false},\"governed\":{\"persona.emojis\":false,\"persona.maxChars\":480,\"persona.tone\":\"entusiasta\",\"strategy.goal\":\"venta\"},\"prompts\":{\"base\":\"n8n-29de5119\",\"bundleHash\":\"7ea13909374e001f7b5e50dd1ab7a26100dc168c20f0918f6d3350b7f7cb3be5\",\"compiler\":1},\"publishedBy\":7,\"version\":\"33333333-3333-4333-8333-333333333333\"},\"contract\":\"ultron-engine-config/2\",\"entry\":\"eeeeeeee-0000-4000-8000-000000000002\",\"issuedAt\":\"2026-11-12T15:04:05Z\",\"rest\":{\"approvedBy\":12,\"catalogVersion\":\"2026-10-19.1\",\"contentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"declared\":{\"governance.canaryOnly\":true,\"governance.enabled\":true,\"intent.driver\":\"entorno\",\"rules.paymentLinksEnabled\":false},\"governed\":{\"persona.emojis\":true,\"persona.maxChars\":200,\"persona.tone\":\"profesional\",\"strategy.goal\":\"cita\"},\"prompts\":{\"base\":\"n8n-29de5119\",\"bundleHash\":\"af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51\",\"compiler\":1},\"publishedBy\":7,\"version\":\"22222222-2222-4222-8222-222222222222\"},\"seq\":7}",
-        "effectiveHash": "315a34633a1c18b8962c35e904503edd41fc5d9a23295abc0483072b4ffe15c7",
-        "signature": "07120ac578507106d7231011bb492679da2437051d410e6ccaee56f9055d8753",
-        "signatureWithOwnContractPrefix": "0a091579a3a9d735de2c7f1a1c5cd8dd48827e5963fc79ee879737f0a4c45c11"
+        "effectiveJson": "{\"canary\":{\"approvedBy\":12,\"catalogVersion\":\"2026-10-19.1\",\"contentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"declared\":{\"governance.canaryOnly\":true,\"governance.enabled\":true,\"intent.driver\":\"entorno\",\"rules.paymentLinksEnabled\":false},\"governed\":{\"persona.emojis\":false,\"persona.maxChars\":480,\"persona.tone\":\"entusiasta\",\"strategy.goal\":\"venta\"},\"prompts\":{\"base\":\"n8n-29de5119\",\"bundleHash\":\"7ea13909374e001f7b5e50dd1ab7a26100dc168c20f0918f6d3350b7f7cb3be5\",\"compiler\":1},\"publishedBy\":7,\"version\":\"33333333-3333-4333-8333-333333333333\"},\"contract\":\"ultron-engine-config/2\",\"entry\":\"eeeeeeee-0000-4000-8000-000000000002\",\"issuedAt\":\"2026-11-12T15:04:05Z\",\"rest\":{\"approvedBy\":12,\"catalogVersion\":\"2026-10-19.1\",\"contentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"declared\":{\"governance.canaryOnly\":true,\"governance.enabled\":true,\"intent.driver\":\"entorno\",\"rules.paymentLinksEnabled\":false},\"governed\":{\"persona.emojis\":true,\"persona.maxChars\":200,\"persona.tone\":\"profesional\",\"strategy.goal\":\"cita\"},\"prompts\":{\"base\":\"n8n-29de5119\",\"bundleHash\":\"7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35\",\"compiler\":1},\"publishedBy\":7,\"version\":\"22222222-2222-4222-8222-222222222222\"},\"seq\":7}",
+        "effectiveHash": "3046cd1184ea1361bd90ea2981c6f289e3b2a8590c08c6a1c7827a1a0a59f45f",
+        "signature": "a2df52a27513be52f0244f7b25e8c5f4159fb99d79b380a5ece7b34e8095ec90",
+        "signatureWithOwnContractPrefix": "6dbdc3e2c250ab11ca9d486d9aac17a6b650a723f0660f667dd9ef8c0703f9d6"
       }
     },
     {
@@ -146,7 +146,7 @@
           "approvedBy": 12,
           "prompts": {
             "compiler": 1,
-            "bundleHash": "76ad0bf969e187dbfefdd5d9eba5afd72a4cea77361d1437170efb9d2aa2d5c5",
+            "bundleHash": "2a5954a2de47ea38306e5820d3727278f74a441fea9e375eea7da1001d5d78d3",
             "base": "n8n-29de5119"
           },
           "governed": {
@@ -182,10 +182,10 @@
         }
       },
       "expected": {
-        "effectiveJson": "{\"canary\":{\"approvedBy\":12,\"catalogVersion\":\"2026-10-19.1\",\"contentHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"declared\":{\"governance.canaryOnly\":true,\"governance.enabled\":true,\"intent.driver\":\"entorno\",\"rules.paymentLinksEnabled\":false},\"governed\":{\"persona.emojis\":false,\"persona.maxChars\":160,\"persona.tone\":\"profesional\",\"strategy.goal\":\"informar\"},\"prompts\":{\"base\":\"n8n-29de5119\",\"bundleHash\":\"76ad0bf969e187dbfefdd5d9eba5afd72a4cea77361d1437170efb9d2aa2d5c5\",\"compiler\":1},\"publishedBy\":7,\"version\":\"44444444-4444-4444-8444-444444444444\"},\"contract\":\"ultron-engine-config/2\",\"entry\":\"eeeeeeee-0000-4000-8000-000000000002\",\"issuedAt\":\"2026-11-12T15:04:05Z\",\"rest\":{\"approvedBy\":12,\"catalogVersion\":\"2026-10-19.1\",\"contentHash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"declared\":{\"governance.canaryOnly\":true,\"governance.enabled\":true,\"intent.driver\":\"entorno\",\"rules.paymentLinksEnabled\":false},\"governed\":{\"persona.emojis\":true,\"persona.maxChars\":320,\"persona.tone\":\"cercano\",\"strategy.goal\":\"cita\"},\"prompts\":{\"base\":\"n8n-29de5119\",\"bundleHash\":\"3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902\",\"compiler\":1},\"publishedBy\":7,\"version\":\"00000000-0000-4000-8000-0000000000a0\"},\"seq\":12}",
-        "effectiveHash": "cce71a02b4337b24eabe843cbfa0fb0c58289b4a5fd041f987f157d225744114",
-        "signature": "ac23af2d65e424e532e7931a8fd5eec0fbfbe2314543a18dd5f654c94c2c255c",
-        "signatureWithOwnContractPrefix": "08247582798fc0bb72643f227181a8eac2eecd7bbee1f0e0337276e47360e1a6"
+        "effectiveJson": "{\"canary\":{\"approvedBy\":12,\"catalogVersion\":\"2026-10-19.1\",\"contentHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"declared\":{\"governance.canaryOnly\":true,\"governance.enabled\":true,\"intent.driver\":\"entorno\",\"rules.paymentLinksEnabled\":false},\"governed\":{\"persona.emojis\":false,\"persona.maxChars\":160,\"persona.tone\":\"profesional\",\"strategy.goal\":\"informar\"},\"prompts\":{\"base\":\"n8n-29de5119\",\"bundleHash\":\"2a5954a2de47ea38306e5820d3727278f74a441fea9e375eea7da1001d5d78d3\",\"compiler\":1},\"publishedBy\":7,\"version\":\"44444444-4444-4444-8444-444444444444\"},\"contract\":\"ultron-engine-config/2\",\"entry\":\"eeeeeeee-0000-4000-8000-000000000002\",\"issuedAt\":\"2026-11-12T15:04:05Z\",\"rest\":{\"approvedBy\":12,\"catalogVersion\":\"2026-10-19.1\",\"contentHash\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"declared\":{\"governance.canaryOnly\":true,\"governance.enabled\":true,\"intent.driver\":\"entorno\",\"rules.paymentLinksEnabled\":false},\"governed\":{\"persona.emojis\":true,\"persona.maxChars\":320,\"persona.tone\":\"cercano\",\"strategy.goal\":\"cita\"},\"prompts\":{\"base\":\"n8n-29de5119\",\"bundleHash\":\"3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902\",\"compiler\":1},\"publishedBy\":7,\"version\":\"00000000-0000-4000-8000-0000000000a0\"},\"seq\":12}",
+        "effectiveHash": "20492281409791454d2ece323b964f2ff0479171d71e4c05e5d77334537dceb8",
+        "signature": "e3e653f938ca9fa2af5eacc854b20358ef9887e3a546aa248a0768a75e5c87ca",
+        "signatureWithOwnContractPrefix": "ab15e2f67451d83760d5dba018719a9843df4f8df4897521bd47549f5ecd6b7c"
       }
     },
     {
@@ -209,7 +209,7 @@
           "approvedBy": 12,
           "prompts": {
             "compiler": 1,
-            "bundleHash": "af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51",
+            "bundleHash": "7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35",
             "base": "n8n-29de5119"
           },
           "governed": {
@@ -233,7 +233,7 @@
           "approvedBy": 12,
           "prompts": {
             "compiler": 1,
-            "bundleHash": "af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51",
+            "bundleHash": "7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35",
             "base": "n8n-29de5119"
           },
           "governed": {
@@ -245,10 +245,10 @@
         }
       },
       "expected": {
-        "effectiveJson": "{\"canary\":{\"approvedBy\":12,\"catalogVersion\":\"2026-10-19.1\",\"contentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"declared\":{\"governance.canaryOnly\":true,\"governance.enabled\":true,\"intent.driver\":\"entorno\",\"rules.paymentLinksEnabled\":false},\"governed\":{\"persona.emojis\":true,\"persona.maxChars\":200,\"persona.tone\":\"profesional\",\"strategy.goal\":\"cita\"},\"prompts\":{\"base\":\"n8n-29de5119\",\"bundleHash\":\"af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51\",\"compiler\":1},\"publishedBy\":7,\"version\":\"22222222-2222-4222-8222-222222222222\"},\"contract\":\"ultron-engine-config/2\",\"entry\":\"eeeeeeee-0000-4000-8000-000000000001\",\"issuedAt\":\"2026-11-13T15:04:05Z\",\"rest\":{\"approvedBy\":12,\"catalogVersion\":\"2026-10-19.1\",\"contentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"declared\":{\"governance.canaryOnly\":true,\"governance.enabled\":true,\"intent.driver\":\"entorno\",\"rules.paymentLinksEnabled\":false},\"governed\":{\"persona.emojis\":true,\"persona.maxChars\":200,\"persona.tone\":\"profesional\",\"strategy.goal\":\"cita\"},\"prompts\":{\"base\":\"n8n-29de5119\",\"bundleHash\":\"af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51\",\"compiler\":1},\"publishedBy\":7,\"version\":\"22222222-2222-4222-8222-222222222222\"},\"seq\":2}",
-        "effectiveHash": "370916f484031cebcc65d7666fd639e5d05cc10e84c8dbd13d98c59087e84f36",
-        "signature": "68ca5b149ab60864ec7d11e010d7256cf5ce604491264d8bccf60813c8d6eb4a",
-        "signatureWithOwnContractPrefix": "6c04c3a8008b3f4d8f41b374ae95642e370db70b5b96ba31536d8b774e07209c"
+        "effectiveJson": "{\"canary\":{\"approvedBy\":12,\"catalogVersion\":\"2026-10-19.1\",\"contentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"declared\":{\"governance.canaryOnly\":true,\"governance.enabled\":true,\"intent.driver\":\"entorno\",\"rules.paymentLinksEnabled\":false},\"governed\":{\"persona.emojis\":true,\"persona.maxChars\":200,\"persona.tone\":\"profesional\",\"strategy.goal\":\"cita\"},\"prompts\":{\"base\":\"n8n-29de5119\",\"bundleHash\":\"7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35\",\"compiler\":1},\"publishedBy\":7,\"version\":\"22222222-2222-4222-8222-222222222222\"},\"contract\":\"ultron-engine-config/2\",\"entry\":\"eeeeeeee-0000-4000-8000-000000000001\",\"issuedAt\":\"2026-11-13T15:04:05Z\",\"rest\":{\"approvedBy\":12,\"catalogVersion\":\"2026-10-19.1\",\"contentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"declared\":{\"governance.canaryOnly\":true,\"governance.enabled\":true,\"intent.driver\":\"entorno\",\"rules.paymentLinksEnabled\":false},\"governed\":{\"persona.emojis\":true,\"persona.maxChars\":200,\"persona.tone\":\"profesional\",\"strategy.goal\":\"cita\"},\"prompts\":{\"base\":\"n8n-29de5119\",\"bundleHash\":\"7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35\",\"compiler\":1},\"publishedBy\":7,\"version\":\"22222222-2222-4222-8222-222222222222\"},\"seq\":2}",
+        "effectiveHash": "76216354be22242b0951b8d362ad14f6ad820360e8e162b5a4dda2b08f8b5f35",
+        "signature": "33ff8ad1333393c517d8afd763d9548880619ff1dde3f8ae03336237ef285ac7",
+        "signatureWithOwnContractPrefix": "1200fcc9bbe7fb48cf71e12096655da2f4313ffd7220427498d962e41d1889ef"
       }
     },
     {
@@ -336,7 +336,7 @@
           "approvedBy": 12,
           "prompts": {
             "compiler": 1,
-            "bundleHash": "af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51",
+            "bundleHash": "7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35",
             "base": "n8n-29de5119"
           },
           "governed": {
@@ -348,10 +348,10 @@
         }
       },
       "expected": {
-        "effectiveJson": "{\"canary\":null,\"contract\":\"ultron-engine-config/2\",\"entry\":\"eeeeeeee-0000-4000-8000-000000000001\",\"issuedAt\":\"2026-11-13T16:00:00Z\",\"rest\":{\"approvedBy\":12,\"catalogVersion\":\"2026-10-19.1\",\"contentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"declared\":{\"governance.canaryOnly\":true,\"governance.enabled\":true,\"intent.driver\":\"entorno\",\"rules.paymentLinksEnabled\":false},\"governed\":{\"persona.emojis\":true,\"persona.maxChars\":200,\"persona.tone\":\"profesional\",\"strategy.goal\":\"cita\"},\"prompts\":{\"base\":\"n8n-29de5119\",\"bundleHash\":\"af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51\",\"compiler\":1},\"publishedBy\":7,\"version\":\"22222222-2222-4222-8222-222222222222\"},\"seq\":4}",
-        "effectiveHash": "45d58ef471c76da7f2f259355b4eb66d578ca05c83aad66110e361ecf1f4a61e",
-        "signature": "d710b5ef65ef595583992ec8b1d54635d591bcad7a36524f72b21c7cb91f424c",
-        "signatureWithOwnContractPrefix": "7bfd39f2591ecbb80f3da6d6564916a1725e4c3a5148aa700a1b1df94c742118"
+        "effectiveJson": "{\"canary\":null,\"contract\":\"ultron-engine-config/2\",\"entry\":\"eeeeeeee-0000-4000-8000-000000000001\",\"issuedAt\":\"2026-11-13T16:00:00Z\",\"rest\":{\"approvedBy\":12,\"catalogVersion\":\"2026-10-19.1\",\"contentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"declared\":{\"governance.canaryOnly\":true,\"governance.enabled\":true,\"intent.driver\":\"entorno\",\"rules.paymentLinksEnabled\":false},\"governed\":{\"persona.emojis\":true,\"persona.maxChars\":200,\"persona.tone\":\"profesional\",\"strategy.goal\":\"cita\"},\"prompts\":{\"base\":\"n8n-29de5119\",\"bundleHash\":\"7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35\",\"compiler\":1},\"publishedBy\":7,\"version\":\"22222222-2222-4222-8222-222222222222\"},\"seq\":4}",
+        "effectiveHash": "183e4ce94c42edc55b730d9885e1533c57df8a854e4905a8c57c681de8b1b995",
+        "signature": "ea6283a00e870b95c7570ba2f1301b9861141693656806c3f778ecbfeeef0e22",
+        "signatureWithOwnContractPrefix": "023fe7aefa634934fa1a6852be3806d6770ef7929fbd52af36805d5095dbf910"
       }
     },
     {
@@ -375,7 +375,7 @@
           "approvedBy": 12,
           "prompts": {
             "compiler": 1,
-            "bundleHash": "af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51",
+            "bundleHash": "7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35",
             "base": "n8n-29de5119"
           },
           "governed": {
@@ -388,10 +388,10 @@
         "rest": null
       },
       "expected": {
-        "effectiveJson": "{\"canary\":{\"approvedBy\":12,\"catalogVersion\":\"2026-10-19.1\",\"contentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"declared\":{\"governance.canaryOnly\":true,\"governance.enabled\":true,\"intent.driver\":\"entorno\",\"rules.paymentLinksEnabled\":false},\"governed\":{\"persona.emojis\":true,\"persona.maxChars\":200,\"persona.tone\":\"profesional\",\"strategy.goal\":\"cita\"},\"prompts\":{\"base\":\"n8n-29de5119\",\"bundleHash\":\"af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51\",\"compiler\":1},\"publishedBy\":7,\"version\":\"22222222-2222-4222-8222-222222222222\"},\"contract\":\"ultron-engine-config/2\",\"entry\":\"eeeeeeee-0000-4000-8000-000000000001\",\"issuedAt\":\"2026-11-13T02:30:59Z\",\"rest\":null,\"seq\":10}",
-        "effectiveHash": "7eae07611720e76cf5f98c597cbabd32d2cb790c7fc196f115ab98ac20710757",
-        "signature": "414042fad933bf007f72cdec5ceafff240f264a5688c2e4b74d22be65487d8af",
-        "signatureWithOwnContractPrefix": "e24f1c285ebbe400ee2cbec08c4ff1b530dbc327a66d9f147ab073d2f4413876"
+        "effectiveJson": "{\"canary\":{\"approvedBy\":12,\"catalogVersion\":\"2026-10-19.1\",\"contentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"declared\":{\"governance.canaryOnly\":true,\"governance.enabled\":true,\"intent.driver\":\"entorno\",\"rules.paymentLinksEnabled\":false},\"governed\":{\"persona.emojis\":true,\"persona.maxChars\":200,\"persona.tone\":\"profesional\",\"strategy.goal\":\"cita\"},\"prompts\":{\"base\":\"n8n-29de5119\",\"bundleHash\":\"7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35\",\"compiler\":1},\"publishedBy\":7,\"version\":\"22222222-2222-4222-8222-222222222222\"},\"contract\":\"ultron-engine-config/2\",\"entry\":\"eeeeeeee-0000-4000-8000-000000000001\",\"issuedAt\":\"2026-11-13T02:30:59Z\",\"rest\":null,\"seq\":10}",
+        "effectiveHash": "7d57ae5bae09e9966a431ee9dc1dfda61fea2b7a660f67237073391f8a352441",
+        "signature": "b8ebbb44222b002a263213d6085f373ac3c93a07e0c7089f4fb27d0443d5112d",
+        "signatureWithOwnContractPrefix": "f2f4ce3805cf0ba56b092f080d2059b0036558d5eca6c6304541b534c76f3c9a"
       }
     },
     {
@@ -474,7 +474,7 @@
           "approvedBy": 12,
           "prompts": {
             "compiler": 1,
-            "bundleHash": "af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51",
+            "bundleHash": "7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35",
             "base": "n8n-29de5119"
           },
           "governed": {
@@ -531,7 +531,7 @@
           "approvedBy": 12,
           "prompts": {
             "compiler": 1,
-            "bundleHash": "af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51",
+            "bundleHash": "7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35",
             "base": "n8n-29de5119"
           },
           "governed": {
@@ -577,7 +577,7 @@
           "approvedBy": 12,
           "prompts": {
             "compiler": 1,
-            "bundleHash": "af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51",
+            "bundleHash": "7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35",
             "base": "n8n-29de5119"
           },
           "governed": {
@@ -611,7 +611,7 @@
           "approvedBy": 12,
           "prompts": {
             "compiler": 1,
-            "bundleHash": "af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51",
+            "bundleHash": "7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35",
             "base": "n8n-29de5119"
           }
         },
@@ -668,7 +668,7 @@
           "approvedBy": 12,
           "prompts": {
             "compiler": 1,
-            "bundleHash": "af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51",
+            "bundleHash": "7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35",
             "base": "n8n-29de5119"
           },
           "governed": {
@@ -701,7 +701,7 @@
           "approvedBy": 12,
           "prompts": {
             "compiler": 1,
-            "bundleHash": "af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51",
+            "bundleHash": "7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35",
             "base": "n8n-29de5119"
           },
           "governed": {
@@ -736,7 +736,7 @@
           "approvedBy": 12,
           "prompts": {
             "compiler": 1,
-            "bundleHash": "af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51",
+            "bundleHash": "7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35",
             "base": "n8n-29de5119"
           },
           "governed": {
@@ -770,7 +770,7 @@
           "approvedBy": 12,
           "prompts": {
             "compiler": 1,
-            "bundleHash": "af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51",
+            "bundleHash": "7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35",
             "base": "n8n-29de5119"
           },
           "governed": {
@@ -804,7 +804,7 @@
           "approvedBy": 12,
           "prompts": {
             "compiler": 1,
-            "bundleHash": "af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51",
+            "bundleHash": "7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35",
             "base": "n8n-29de5119"
           },
           "governed": {
@@ -838,7 +838,7 @@
           "approvedBy": 12,
           "prompts": {
             "compiler": 1,
-            "bundleHash": "af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51",
+            "bundleHash": "7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35",
             "base": "n8n-29de5119"
           },
           "governed": {
@@ -872,7 +872,7 @@
           "approvedBy": 12,
           "prompts": {
             "compiler": 1,
-            "bundleHash": "af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51",
+            "bundleHash": "7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35",
             "base": "n8n-29de5119"
           },
           "governed": {
@@ -906,7 +906,7 @@
           "approvedBy": 12,
           "prompts": {
             "compiler": 1,
-            "bundleHash": "af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51",
+            "bundleHash": "7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35",
             "base": "n8n-29de5119"
           },
           "governed": {
@@ -940,7 +940,7 @@
           "approvedBy": 12,
           "prompts": {
             "compiler": 1,
-            "bundleHash": "af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51",
+            "bundleHash": "7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35",
             "base": "n8n-29de5119"
           },
           "governed": {
@@ -974,7 +974,7 @@
           "approvedBy": 12,
           "prompts": {
             "compiler": 1,
-            "bundleHash": "af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51",
+            "bundleHash": "7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35",
             "base": "n8n-29de5119"
           },
           "governed": {
@@ -1008,7 +1008,7 @@
           "approvedBy": 12,
           "prompts": {
             "compiler": 1,
-            "bundleHash": "af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51",
+            "bundleHash": "7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35",
             "base": "n8n-29de5119"
           },
           "governed": null
@@ -1037,7 +1037,7 @@
           "approvedBy": 12,
           "prompts": {
             "compiler": 1,
-            "bundleHash": "af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51",
+            "bundleHash": "7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35",
             "base": "n8n-29de5119"
           },
           "governed": [
@@ -1104,7 +1104,7 @@
           "approvedBy": 12,
           "prompts": {
             "compiler": 1,
-            "bundleHash": "af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51",
+            "bundleHash": "7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35",
             "base": "n8n-29de5119",
             "version": 1
           },
@@ -1139,7 +1139,7 @@
           "approvedBy": 12,
           "prompts": {
             "compiler": 1,
-            "bundleHash": "f9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51",
+            "bundleHash": "b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35",
             "base": "n8n-29de5119"
           },
           "governed": {
@@ -1241,7 +1241,7 @@
           "approvedBy": 12,
           "prompts": {
             "compiler": "1",
-            "bundleHash": "af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51",
+            "bundleHash": "7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35",
             "base": "n8n-29de5119"
           },
           "governed": {
@@ -1275,7 +1275,7 @@
           "approvedBy": 12,
           "prompts": {
             "compiler": 1,
-            "bundleHash": "af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51",
+            "bundleHash": "7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35",
             "base": 1
           },
           "governed": {
@@ -1339,7 +1339,7 @@
           "approvedBy": 12,
           "prompts": [
             "n8n-29de5119",
-            "af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51",
+            "7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35",
             1
           ],
           "governed": {
@@ -1373,7 +1373,7 @@
           "approvedBy": 12,
           "prompts": {
             "compiler": 1,
-            "bundleHash": "af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51",
+            "bundleHash": "7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35",
             "base": "n8n-29de5119"
           },
           "governed": {

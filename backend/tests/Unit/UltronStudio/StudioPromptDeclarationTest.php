@@ -55,10 +55,11 @@ class StudioPromptDeclarationTest extends TestCase
     private const G8_C2 = ['persona.emojis' => true, 'persona.maxChars' => 200, 'persona.tone' => 'profesional', 'rules.forbiddenPhrases' => [], 'strategy.goal' => 'cita'];
 
     /**
-     * La huella de G8 con el compilador 3 (compile-cases.json, c074, que deriva el guion del
-     * tester sin PHP). Con los compiladores 1 y 2 era `702890f7…311c` (`api-compilador.md` §4).
+     * La huella de G8 con el compilador 4 (compile-cases.json, c074, que deriva el guion del
+     * tester sin PHP). Con los compiladores 1 y 2 era `702890f7…311c` (`api-compilador.md` §4);
+     * con el 3, `af9e0d23…4d51`.
      */
-    private const G8_HASH = 'af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51';
+    private const G8_HASH = '7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35';
 
     private const LEGACY_HASH = '3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902';
 
@@ -75,10 +76,10 @@ class StudioPromptDeclarationTest extends TestCase
         return D::partV2(self::part($version), $governed, ['base' => 'n8n-29de5119', 'bundleHash' => $hash, 'compiler' => 1]);
     }
 
-    /** Una parte `/2` firmada con el compilador de hoy (3: las cinco claves, como desde el 2). */
+    /** Una parte `/2` firmada con el compilador de hoy (4: las cinco claves, como desde el 2). */
     private static function partActual(string $version = self::V, array $governed = self::G8_C2, string $hash = self::G8_HASH): array
     {
-        return D::partV2(self::part($version), $governed, ['base' => 'n8n-29de5119', 'bundleHash' => $hash, 'compiler' => 3]);
+        return D::partV2(self::part($version), $governed, ['base' => 'n8n-29de5119', 'bundleHash' => $hash, 'compiler' => 4]);
     }
 
     private static function fixture(): array
@@ -314,14 +315,14 @@ class StudioPromptDeclarationTest extends TestCase
         $legacy = B::compile(B::governedFrom(['configs' => StudioCatalog::baseline()['configs']]));
         $this->assertTrue($legacy['baseline']);
         $this->assertSame([], $legacy['changes']);
-        $this->assertSame(['base' => 'n8n-29de5119', 'bundleHash' => self::LEGACY_HASH, 'compiler' => 3], $legacy['prompts']);
+        $this->assertSame(['base' => 'n8n-29de5119', 'bundleHash' => self::LEGACY_HASH, 'compiler' => 4], $legacy['prompts']);
         $this->assertSame(array_sum(UltronPromptBase::BYTES), $legacy['bytes']);
 
         $g8 = B::compile(array_reverse(self::G8_C2, true));
         $this->assertFalse($g8['baseline']);
         $this->assertSame(self::G8_C2, $g8['governed']);
         $this->assertSame(self::G8_HASH, $g8['prompts']['bundleHash']);
-        $this->assertSame(114206, $g8['bytes'], '113 672 con los compiladores 1 y 2; el 3 alarga el texto del tope en los dos Composer');
+        $this->assertSame(115446, $g8['bytes'], '113 672 con los compiladores 1 y 2; 114 206 con el 3, que alarga el texto del tope en los dos Composer; el 4 alarga los dos textos del tono profesional en los cuatro roles');
         $this->assertSame(['persona.tone', 'persona.maxChars'], array_column($g8['changes'], 'param'));
         $this->assertSame(['profesional', 200], array_column($g8['changes'], 'value'));
         foreach ($g8['changes'] as $cambio) {
@@ -393,13 +394,16 @@ class StudioPromptDeclarationTest extends TestCase
         $base = self::partActual();
         $base['prompts']['base'] = 'n8n-00000000';
         $this->assertSame('base_changed', $motivo(B::offer($on, $canary, true, $ok($base))));
-        // Lo firmado con el compilador 1 (cuatro gobernados) o con el 2 (cinco) cae a Legacy hasta volver a publicar.
+        // Lo firmado con el compilador 1 (cuatro gobernados), con el 2 o con el 3 (cinco) cae a Legacy hasta volver a publicar.
         $this->assertSame('compiler_changed', $motivo(B::offer($on, $canary, true, $ok(self::partV2()))));
         $compilador2 = self::partActual(hash: '702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c');
         $compilador2['prompts']['compiler'] = 2;
         $this->assertSame('compiler_changed', $motivo(B::offer($on, $canary, true, $ok($compilador2))));
+        $compilador3 = self::partActual(hash: 'af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51');
+        $compilador3['prompts']['compiler'] = 3;
+        $this->assertSame('compiler_changed', $motivo(B::offer($on, $canary, true, $ok($compilador3))));
         $compilador = self::partActual();
-        $compilador['prompts']['compiler'] = 4;
+        $compilador['prompts']['compiler'] = 5;
         $this->assertSame('compiler_changed', $motivo(B::offer($on, $canary, true, $ok($compilador))));
         $this->assertSame('error', $motivo(B::offer($on, $canary, true, $ok(self::partActual(governed: array_replace(self::G8_C2, ['persona.tone' => 'serio']))))));
         $this->assertSame('bundle_mismatch', $motivo(B::offer($on, $canary, true, $ok(self::partActual(hash: self::LEGACY_HASH)))));

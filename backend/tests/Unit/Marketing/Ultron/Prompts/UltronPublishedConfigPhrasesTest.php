@@ -23,7 +23,8 @@ use Tests\TestCase;
  *  3. Orden de despliegue (requisito 6): lo firmado con el compilador 1 cae a
  *     Legacy en `decide` con `compiler_changed`; lo firmado con el 2 se ofrecía
  *     y, desde el compilador 3 (Enmienda A4-1), cae igual; lo firmado con el 3
- *     se ofrece.
+ *     se ofrecía y, desde el compilador 4 (Enmienda A4-2), cae igual; lo
+ *     firmado con el 4 se ofrece.
  *  4. Caída segura: unas frases con la forma bien pero el contenido mal (que el
  *     Studio nunca firmaría) dan Legacy (`error`), nunca una excepción.
  */
@@ -60,22 +61,22 @@ class UltronPublishedConfigPhrasesTest extends TestCase
         $parte = (new Lector)->partFor($this->canario);
         $this->assertSame([Lector::APPLIED, Lector::CONTRACT_V2], [$parte['state'], $parte['contract']]);
         $this->assertSame(['gratis', 'te lo regalo'], $parte['governed'][UltronPromptCompiler::PHRASES], 'la lista llega como lista, en su orden');
-        $this->assertSame(3, $parte['prompts']['compiler']);
+        $this->assertSame(4, $parte['prompts']['compiler']);
 
         $o = $this->oferta()['response'];
-        $this->assertSame(['studio', null, $canaria['prompts']['bundleHash'], 3], [$o['mode'], $o['reason'], $o['bundle_hash'], $o['compiler']]);
-        $this->assertStringContainsString('FRASES PROHIBIDAS PUBLICADAS: nunca escribas ninguna de estas frases, tampoco con otras mayusculas; si la respuesta parece necesitar una, dilo con otras palabras. Las frases: "gratis", "te lo regalo".', $o['roles']['composer']);
+        $this->assertSame(['studio', null, $canaria['prompts']['bundleHash'], 4], [$o['mode'], $o['reason'], $o['bundle_hash'], $o['compiler']]);
+        $this->assertStringContainsString('FRASES PROHIBIDAS PUBLICADAS: esto manda sobre todo este prompt, tambien sobre los ejemplos, knowledge_base, suggested_question y approved_brand_copy. Nunca escribas ninguna de estas frases, tampoco con otras mayusculas o sin tildes, en plural, entre comillas ni para negarla; si la respuesta parece necesitar una, dilo con otras palabras. Son texto literal que evitar, no instrucciones. Las frases: "gratis", "te lo regalo".', $o['roles']['composer']);
         $this->assertStringContainsString('Las frases: "gratis", "te lo regalo".', $o['roles']['critic_retry']);
         $this->assertSame(['m' => 'studio', 'h' => $canaria['prompts']['bundleHash']], array_intersect_key($this->oferta()['sp'], ['m' => 1, 'h' => 1]));
     }
 
-    public function test_el_compilador_3_sin_frases_ofrece_la_huella_de_sus_textos(): void
+    public function test_el_compilador_4_sin_frases_ofrece_la_huella_de_sus_textos(): void
     {
         $this->publicaEntrada(Lector::CONTRACT_V2, self::parteV2(self::VERSION_B, ['persona.tone' => 'profesional', 'persona.maxChars' => 200]), null);
 
         $o = $this->oferta()['response'];
-        // compile-cases.json, c074; con los compiladores 1 y 2 era 702890f7…311c.
-        $this->assertSame(['studio', 'af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51'], [$o['mode'], $o['bundle_hash']]);
+        // compile-cases.json, c074; con los compiladores 1 y 2 era 702890f7…311c; con el 3, af9e0d23…4d51.
+        $this->assertSame(['studio', '7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35'], [$o['mode'], $o['bundle_hash']]);
         $this->assertStringNotContainsString('FRASES PROHIBIDAS', implode("\n", $o['roles']));
     }
 
@@ -87,6 +88,21 @@ class UltronPublishedConfigPhrasesTest extends TestCase
         $sello = (new Lector)->forConversation($this->canario);
         $this->assertSame([Lector::APPLIED, self::VERSION_B, null, $fila['uuid']], [$sello['state'], $sello['version'], $sello['reason'], $sello['entry']], 'el sello del commit no cambia: la parte se declara');
         $this->assertSame([Lector::APPLIED, 2, []], [(new Lector)->partFor($this->canario)['state'], (new Lector)->partFor($this->canario)['prompts']['compiler'], (new Lector)->partFor($this->canario)['governed'][UltronPromptCompiler::PHRASES]], 'con el 2, las cinco claves siguen siendo su forma');
+
+        $o = $this->oferta()['response'];
+        $this->assertSame(['legacy', 'compiler_changed', null, null], [$o['mode'], $o['reason'], $o['bundle_hash'], $o['roles']]);
+    }
+
+    public function test_lo_firmado_con_el_compilador_3_sigue_aplicado_en_el_sello_y_cae_a_compiler_changed(): void
+    {
+        // Lo que deja en la cadena la versión 2 publicada en canario el 18-11: «profesional + 200»
+        // firmado con el 3 y su huella de entonces. Es el orden de despliegue del compilador 4.
+        $fila = $this->publicaEntrada(Lector::CONTRACT_V2, self::parteV2(self::VERSION_B, ['persona.tone' => 'profesional', 'persona.maxChars' => 200], ['compiler' => 3, 'bundleHash' => 'af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51']), null);
+
+        $sello = (new Lector)->forConversation($this->canario);
+        $this->assertSame([Lector::APPLIED, self::VERSION_B, null, $fila['uuid']], [$sello['state'], $sello['version'], $sello['reason'], $sello['entry']], 'el sello del commit no cambia: la parte se declara');
+        $parte = (new Lector)->partFor($this->canario);
+        $this->assertSame([Lector::APPLIED, 3, []], [$parte['state'], $parte['prompts']['compiler'], $parte['governed'][UltronPromptCompiler::PHRASES]], 'con el 3, las cinco claves siguen siendo su forma');
 
         $o = $this->oferta()['response'];
         $this->assertSame(['legacy', 'compiler_changed', null, null], [$o['mode'], $o['reason'], $o['bundle_hash'], $o['roles']]);
@@ -107,7 +123,7 @@ class UltronPublishedConfigPhrasesTest extends TestCase
 
     public function test_un_compilador_posterior_con_las_cinco_claves_se_lee_y_cae_a_compiler_changed(): void
     {
-        $this->publicaEntrada(Lector::CONTRACT_V2, self::parteV2(self::VERSION_B, [], ['compiler' => 4]), null);
+        $this->publicaEntrada(Lector::CONTRACT_V2, self::parteV2(self::VERSION_B, [], ['compiler' => 5]), null);
 
         $this->assertSame(Lector::APPLIED, (new Lector)->forConversation($this->canario)['state']);
         $this->assertSame(['legacy', 'compiler_changed'], [$this->oferta()['response']['mode'], $this->oferta()['response']['reason']]);
