@@ -1,0 +1,71 @@
+ROJO ANTES del añadido del lead (19-11): el mensaje que es solo «Precios?» o «¿Planes?». app/ sin tocar respecto de la entrega del agente.
+There were 6 failures:
+
+1) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_es_panorama with data set "precios, a secas" ('Precios?')
+Precios?
+Failed asserting that false is true.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:68
+
+2) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_es_panorama with data set "planes, a secas" ('¿Planes?')
+¿Planes?
+Failed asserting that false is true.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:68
+
+3) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_es_panorama with data set "y los planes, a secas" ('¿Y los planes?')
+¿Y los planes?
+Failed asserting that false is true.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:68
+
+4) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_es_panorama with data set "saludo y precios" ('Hola, precios por favor')
+Hola, precios por favor
+Failed asserting that false is true.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:68
+
+5) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_es_panorama with data set "planes y precios" ('Buenas tardes, planes y precios')
+Buenas tardes, planes y precios
+Failed asserting that false is true.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:68
+
+6) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_es_panorama with data set "info planes" ('Info planes')
+Info planes
+Failed asserting that false is true.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:68
+
+FAILURES!
+Tests: 76, Assertions: 76, Failures: 6.
+......FF                                                            8 / 8 (100%)
+
+Time: 00:03.079, Memory: 84.50 MB
+
+There were 2 failures:
+
+1) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g1_i2_las_formas_corrientes_del_panorama_reciben_la_lista with data set "Precios?" ('pricing_question', 'Precios?')
+Precios?
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
++'El Plan Valera cuesta $65.000 COP al mes. ¿Le cuento qué incluye?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1116
+
+2) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g1_i2_las_formas_corrientes_del_panorama_reciben_la_lista with data set "¿Y los planes?" ('general_info', '¿Y los planes?')
+¿Y los planes?
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
++'El Plan Valera cuesta $65.000 COP al mes. ¿Le cuento qué incluye?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1116
+
+FAILURES!
+Tests: 8, Assertions: 36, Failures: 2.

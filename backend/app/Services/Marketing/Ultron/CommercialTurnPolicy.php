@@ -2,6 +2,7 @@
 
 namespace App\Services\Marketing\Ultron;
 
+use App\Services\Marketing\HumanHandoffAuthority;
 use App\Services\Marketing\SalesAgentDecisionSchema;
 use App\Services\Marketing\SalesIntents;
 
@@ -106,17 +107,82 @@ final class CommercialTurnPolicy
     public const VIOLACION_PANORAMA = 'policy_plans_overview';
 
     /**
-     * El panorama de planes pedido con palabras: los planes en PLURAL o lo que
-     * se ofrece en general. Es el subconjunto en plural de
-     * {@see self::PIDE_RECOMENDACION}, más «qué otros hay» (con un plan ya
-     * nombrado, pedir los demás). «La mensualidad» en singular no está: pide
+     * Las únicas intenciones validadas en las que la lista contesta lo que se
+     * pregunta (G1.1 del lead, tras B-1 y S-4): el precio, la información
+     * general, un saludo con pregunta y lo que no se pudo etiquetar. Ninguna
+     * otra, aunque el texto pida los planes: una queja, un pago reclamado,
+     * una lesión, pedir una persona, un «no me interesa», el horario, la
+     * dirección, un objetivo o una objeción tienen su propia respuesta.
+     */
+    public const INTENCIONES_DEL_PANORAMA = [
+        SalesIntents::PRICING_QUESTION, SalesIntents::GENERAL_INFO, SalesIntents::GREETING, SalesIntents::UNKNOWN,
+    ];
+
+    /**
+     * El panorama de planes PEDIDO con una petición (G1.3 del lead, tras B-1 e
+     * I-2), lista cerrada sobre el texto normalizado:
+     *  - qué/cuáles (son los) planes, membresías, precios o tarifas;
+     *  - planes/membresías + tienen, hay, manejan, ofrecen, y al revés
+     *    («¿tienen planes?»); «qué ofrecen»; «qué otros hay» (con un plan ya
+     *    nombrado, pedir los demás);
+     *  - «opciones» SOLO con «de planes / de membresías»: «¿qué opciones de
+     *    pago/horario hay?» no;
+     *  - cuánto valen/cuestan los planes o las membresías; el precio, valor o
+     *    tarifa DE los planes; los precios, las tarifas o los valores en
+     *    plural; info, información o la lista de planes o de precios;
+     *  - «los planes» dentro de una petición de conocerlos (saber, conocer,
+     *    ver, mándame, cuénteme…). «Los planes» dentro de otra frase no basta
+     *    («Me gustaron los planes»);
+     *  - EL MENSAJE ENTERO es solo eso (añadido del lead, 19-11): «Precios?»,
+     *    «¿Planes?», «¿Y los planes?», «Hola, precios por favor», «Info
+     *    planes». Es la forma más corriente por WhatsApp y recibía un solo
+     *    plan. Anclada de principio a fin: saludo y cortesía, el sustantivo en
+     *    plural y nada más («Precios del mensual» y «Precio?» no).
+     * «La mensualidad» y «el precio del Mensual», en singular, no están: piden
      * un plan, y cuál lo decide el catálogo (H4-8).
      */
-    private const PIDE_PANORAMA = '/\b(que|cuales)\s+(planes|membresias|opciones)\b'
+    private const PIDE_PANORAMA = '/\b(que|cuales)\s+(son\s+)?((los|las|sus)\s+)?(planes|membresias|precios|tarifas)\b'
         .'|\b(planes|membresias)\s+(tienen|hay|manejan|ofrecen)\b'
+        .'|\b(tienen|hay|manejan|ofrecen)\s+(planes|membresias)\b'
         .'|\bque\s+ofrecen\b'
-        .'|\b(los|todos\s+los)\s+planes\b'
-        .'|\b(que|cuales)\s+otr[oa]s\s+(planes|membresias|opciones|hay|tienen|manejan|ofrecen)\b/u';
+        .'|\b(que|cuales)\s+otr[oa]s\s+(planes|membresias|hay|tienen|manejan|ofrecen)\b'
+        .'|\bopciones\s+de\s+(planes|membresias)\b'
+        .'|\bcuanto\s+(valen|cuestan|salen)\s+((los|las|sus)\s+)?(planes|membresias)\b'
+        .'|\b(precios?|valor(es)?|tarifas?|costos?)\s+de\s+(los|las|sus)\s+(planes|membresias)\b'
+        .'|\b(los|las|sus)\s+(precios|tarifas|valores)\b'
+        .'|\b(info|informacion|lista|listado)\s+(de|sobre|con)\s+((los|las|sus)\s+)?(planes|membresias|precios|tarifas|valores)\b'
+        .'|\b(saber|conocer|ver|mirar|revisar|consultar|contar|explicar|mostrar|enviar|mandar|pasar'
+        .'|dime|digame|cuentame|cuenteme|contarme|explicame|expliqueme|explicarme|muestrame|muestreme|mostrarme'
+        .'|mandame|mandeme|mandarme|enviame|envieme|enviarme|pasame|paseme|pasarme|regalame|regaleme|compartame|compartirme|indicame|indiqueme)\b'
+        .'[^.!?]{0,25}\b(los|todos\s+los|las|todas\s+las|sus)\s+(planes|membresias)\b'
+        .'|^\W*((hola|buenas|buenos|buen|dias?|tardes?|noches?|por|favor|porfa|porfavor|gracias|info|informacion|y|e|de|sobre|los|las|sus)\W+)*'
+        .'(planes|precios|tarifas|membresias)'
+        .'(\W+(y|e|de|los|las|sus|planes|precios|tarifas|membresias|por|favor|porfa|porfavor|gracias))*\W*$/u';
+
+    /**
+     * Lo que NUNCA es pedir el panorama, aunque el texto nombre los planes
+     * (G1.3, tras B-1 y S-4), lista cerrada: la negación en cualquier punto
+     * del mensaje («no me interesan los planes», «dejen de mandarme los
+     * planes»), el «ya vi / ya conozco / ya me los mandaron» y la petición de
+     * RECOMENDACIÓN («¿cuál de los planes me recomienda?», «¿qué planes me
+     * recomienda?»): ésa la contesta el modelo con un plan, no una lista.
+     */
+    private const NO_PIDE_EL_PANORAMA = '/\b(no|ni|nunca|tampoco|jamas)\b|\bdej(en|a|ar|e|o)\s+de\b'
+        .'|\bya\s+((los|las)\s+)?(vi|vimos|conozco|conocemos|revise|mire|tengo|tenemos)\b'
+        .'|\bya\s+me\s+((los|las)\s+)?(mandaron|enviaron|pasaron|dieron|llegaron)\b'
+        .'|\b(recomiend\w*|recomendar\w*|recomendari\w*|aconsej\w*|me\s+conviene|cual\s+de\s+(los|las|estos|esos|estas|esas)|cual\s+es\s+(el|la)\s+mejor|cual\s+me\s+(sirve|conviene))\b/u';
+
+    /**
+     * OTRO TEMA en el mismo mensaje que la lista no contesta (G1.4, tras
+     * I-3), lo que NO cubren ya {@see self::PREGUNTA_INCIDENTAL} (horario,
+     * dirección), {@see self::HABLA_DE_VISITA} (una visita) ni
+     * {@see HumanHandoffAuthority::peticionDeHumanoEn()} (una persona). Lista
+     * cerrada, cada caso con su prueba: las clases, los medios de pago y una
+     * lesión o un problema de salud.
+     */
+    private const OTRO_TEMA_DEL_PANORAMA = '/\bclases?\b'
+        .'|\b(pag(o|os|ar|a|as|an|ue|uen|uelo|ado)|medios?\s+de\s+pago|tarjetas?|nequi|daviplata|pse|efectivo|transferencias?|link|enlace)\b'
+        .'|\b(lesion\w*|lesione|lastim\w*|duele|dolor\w*|rodilla|espalda|hernia|cirugia|operaron|operacion|fractur\w*|embaraz\w*|medic[oa]s?|enfermedad\w*)\b/u';
 
     /**
      * Un FILTRO sobre los planes: para quién, de qué duración, con qué. La
@@ -926,21 +992,34 @@ final class CommercialTurnPolicy
 
     /**
      * ¿LA PERSONA PIDE EL PANORAMA DE PLANES? (cierre V2, apartado 4, H4-10;
-     * plan del arquitecto §3, decisión P-1 del lead).
+     * plan del arquitecto §3, decisión P-1 del lead; endurecida tras las
+     * revisiones, G1: B-1, S-4, I-2 e I-3).
      *
      * Medido en la prueba real del 18-11: a «¿Qué planes tienen y cuánto
      * cuesta la mensualidad?» el modelo contestó con UN plan. No es un fallo
      * de redacción: un borrador solo puede cotizar el precio de un plan (el
      * marcador se resuelve contra uno), así que esta pregunta la contesta la
      * lista del catálogo. Esto solo la reconoce; qué se exige lo decide el
-     * commit, y solo con la versión del Studio aplicada.
+     * commit, con la versión del Studio aplicada y sin herramientas en el
+     * turno (G1.2, que es del commit).
      *
-     * Es panorama si el texto pide los planes en plural o lo que se ofrece
-     * ({@see self::PIDE_PANORAMA}), y NO lo es si:
-     *  - la persona elige entre opciones ya dadas (`choose_plan`);
-     *  - el turno es de recepción, de memoria o de la visita a medias (tienen
-     *    su propio texto y no se vende en ellos);
-     *  - pide un filtro ({@see self::FILTRO_DE_PLANES}): la lista no lo contesta.
+     * La revisión midió la lista SUSTITUYENDO respuestas correctas («¿qué
+     * opciones de pago tienen?», «no me interesan los planes», «quiero hablar
+     * con un asesor sobre los planes», una queja, una lesión, el horario), y
+     * por eso es panorama solo si se cumplen las tres cosas que son del texto
+     * y de la política:
+     *  1. la intención validada está en {@see self::INTENCIONES_DEL_PANORAMA};
+     *  2. el texto PIDE los planes con una petición ({@see self::PIDE_PANORAMA}),
+     *     no pide un filtro ({@see self::FILTRO_DE_PLANES}) y no los niega, no
+     *     dice que ya los vio ni pide una recomendación
+     *     ({@see self::NO_PIDE_EL_PANORAMA});
+     *  3. no pregunta además otra cosa en el mismo mensaje: el horario o la
+     *     dirección ({@see self::PREGUNTA_INCIDENTAL}), una visita
+     *     ({@see self::HABLA_DE_VISITA}), una persona
+     *     ({@see HumanHandoffAuthority::peticionDeHumanoEn()}), las clases, los
+     *     medios de pago o una lesión ({@see self::OTRO_TEMA_DEL_PANORAMA}).
+     * Y nunca si la persona elige entre opciones ya dadas (`choose_plan`) ni en
+     * un turno de recepción, de memoria o de la visita a medias.
      *
      * Un plan nombrado NO lo excluye si además pide el panorama («¿Cuánto
      * cuesta el Mensual y qué otros hay?»: la lista pone primero el nombrado).
@@ -949,18 +1028,36 @@ final class CommercialTurnPolicy
      *
      * PURA. No cambia {@see self::decide()} ni {@see self::violations()}.
      *
-     * @param  array<string,mixed>  $policy  la del turno ({@see self::decide()})
+     * @param  array<string,mixed>  $policy  la del turno ({@see self::decide()}), con su `intent`
      * @param  array<string,mixed>  $resolution  lo que resolvió {@see ReferenceResolver}
      */
     public static function pideElPanorama(string $inbound, array $policy, array $resolution): bool
     {
-        if (($resolution['type'] ?? null) === ReferenceResolver::CHOOSE_PLAN
+        if (! in_array($policy['intent'] ?? null, self::INTENCIONES_DEL_PANORAMA, true)
+            || ($resolution['type'] ?? null) === ReferenceResolver::CHOOSE_PLAN
             || ($policy['reception_mode'] ?? false) || ($policy['memory_mode'] ?? false) || ($policy['goal_takes_turn'] ?? false)) {
             return false;
         }
         $t = SalesAgentDecisionSchema::normalize($inbound);
 
-        return preg_match(self::PIDE_PANORAMA, $t) === 1 && preg_match(self::FILTRO_DE_PLANES, $t) !== 1;
+        return preg_match(self::PIDE_PANORAMA, $t) === 1
+            && preg_match(self::FILTRO_DE_PLANES, $t) !== 1
+            && preg_match(self::NO_PIDE_EL_PANORAMA, $t) !== 1
+            && ! self::preguntaOtraCosa($inbound, $t);
+    }
+
+    /**
+     * ¿El mensaje pregunta, además de los planes, algo que la lista no
+     * contesta? (G1.4). Reutiliza los detectores que la política ya tiene
+     * antes que escribir otros: horario y dirección, visita y persona; lo
+     * nuevo es la lista cerrada {@see self::OTRO_TEMA_DEL_PANORAMA}.
+     */
+    private static function preguntaOtraCosa(string $inbound, string $normalizado): bool
+    {
+        return preg_match(self::PREGUNTA_INCIDENTAL, $normalizado) === 1
+            || preg_match(self::HABLA_DE_VISITA, $normalizado) === 1
+            || preg_match(self::OTRO_TEMA_DEL_PANORAMA, $normalizado) === 1
+            || (new HumanHandoffAuthority)->peticionDeHumanoEn($inbound) !== null;
     }
 
     /**

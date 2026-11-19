@@ -1615,9 +1615,13 @@ class UltronCommitService
          * sin tono no se mira nada): si el borrador tutea y TODO el tuteo está
          * en su pregunta final, se le quita esa pregunta con la misma regla de
          * la longitud (F1: la última frase que no sea el bloque de enlaces,
-         * pregunta, sin cifras, no la primera) y sale; si no, se descarta
-         * (`policy_register_mismatch`) y entra por la rama de la política, cuyo
-         * respaldo sale de usted. No se reescribe el texto del modelo ni se
+         * pregunta, sin cifras, no la primera) y sale, pero SOLO si quedan al
+         * menos dos frases sin contar el bloque de enlaces (G2 del lead, B-2
+         * del revisor: «Claro. ¿Quieres que te cuente…?» dejaba «Claro.» como
+         * respuesta entera, y «¡Hola, buenas tardes!» paraba la conversación);
+         * si no, se descarta (`policy_register_mismatch`) y entra por la rama
+         * de la política, cuyo respaldo sale de usted. La regla F1 de la
+         * longitud no cambia. No se reescribe el texto del modelo ni se
          * pide otro intento: el reintento es de n8n, cuando su revisor falla.
          * Va después del recorte por longitud y antes de `violations()`, para
          * que la política y la memoria vean lo que va a salir. La traza
@@ -1630,7 +1634,8 @@ class UltronCommitService
             $sinPregunta = $marcas === [] || ($longitud['action'] ?? null) === 'discarded' ? null : UltronReplyFitter::withoutFinalQuestion($replyFinal);
             $registro = ['expected' => 'usted', 'found' => $marcas, 'action' => match (true) {
                 $marcas === [] => 'ok',
-                $sinPregunta !== null && UltronRegisterDetector::tuteo($sinPregunta, $catalogo) === [] => 'trimmed',
+                $sinPregunta !== null && UltronReplyFitter::proseSentenceCount($sinPregunta) >= 2
+                    && UltronRegisterDetector::tuteo($sinPregunta, $catalogo) === [] => 'trimmed',
                 default => 'discarded',
             }];
             if ($registro['action'] === 'trimmed') {
@@ -1691,8 +1696,21 @@ class UltronCommitService
          * «siempre la lista», para reutilizar la rama de la política entera:
          * la traza, el borrador como evidencia, el plan anulado y la memoria
          * de lo que salió.
+         *
+         * Con CUALQUIER versión del Studio, no solo con «profesional» (I-1,
+         * decisión del lead): un solo plan a quien pregunta por todos no
+         * depende del tono. Y nunca en un turno con herramientas (G1.2, tras
+         * S-4 e I-3): si el turno ejecutó o tiene autorizada una cortesía, una
+         * revisión, el no contactar, un relevo, el cobro, los enlaces de la app
+         * o un seguimiento, lo que sale es lo que salía sin la lista, porque la
+         * persona tiene que leer lo que acaba de pasar. La intención, la
+         * petición y el tema único los mira la política
+         * ({@see CommercialTurnPolicy::pideElPanorama()}).
          */
-        $panorama = $turno['studio'] && CommercialTurnPolicy::pideElPanorama((string) $message->body, $policy, $resolution);
+        $conHerramientas = (array) ($decision['tools_requested'] ?? []) !== [] || $handoffAutorizado
+            || $this->executedTools($executed) !== []
+            || ($enlaces['status'] ?? null) === 'executed' || ($cobro['status'] ?? null) === 'inlined';
+        $panorama = $turno['studio'] && ! $conHerramientas && CommercialTurnPolicy::pideElPanorama((string) $message->body, $policy, $resolution);
         if ($panorama && ((string) $sanitized['intent'] === SalesIntents::PRICING_QUESTION
             || CommercialTurnPolicy::preguntaPorPrecio((string) $message->body)
             || count(array_unique(CommercialTurnPolicy::plansNamedIn($replyFinal, $catalogo))) < 2)) {
@@ -1706,8 +1724,13 @@ class UltronCommitService
             $precios = $this->respaldoDePrecios($policy, $turno['tope']);
         }
 
+        $sustituidoPorLaPolitica = false;
         if ($incumple !== []) {
-            $alternativa = $this->respaldoPorIntencion($conversation, (string) $sanitized['intent'], $policy, $turno, $precios, (string) $message->body);
+            $alternativa = $this->respaldoPorIntencion(
+                $conversation, (string) $sanitized['intent'], $policy, $turno, $precios, (string) $message->body,
+                // G3: tras un descarte por REGISTRO, la intención sin respaldo propio recibe su texto curado de usted.
+                in_array(self::VIOLACION_REGISTRO, $incumple, true),
+            );
             if (($policy['reception_mode'] ?? false) || ($policy['memory_mode'] ?? false)) {
                 // Un saludo o un recuerdo no cotizan nada: la memoria dice lo que salió.
                 $plan = null;
@@ -1786,22 +1809,13 @@ class UltronCommitService
             }
 
             /*
-             * LA VISITA YA ESTÁ REGISTRADA: LA PERSONA LEE EL DÍA Y LA HORA (F2 del
-             * lead, hallazgo I-2 del revisor). Si en este turno se ejecutó la
-             * cortesía y el borrador se descarta por longitud, ninguno de los
-             * respaldos de arriba lo cuenta —el de la intención no sabe que la
-             * cita existe— y la persona se quedaba sin la constancia de lo que
-             * acaba de pasar. Sale el acta que Laravel escribe desde la fila (la
-             * misma de `conLaFechaDeLaCita()`), ajustada con la regla de los
-             * curados. Solo con tope: sin versión aplicada no hay descarte por
-             * longitud y nada cambia.
-             */
-            /*
              * La lista del panorama manda sobre los sustitutos de arriba (H4-10,
              * P-1): con el panorama pedido, la persona preguntó por LOS planes,
              * y el sustituto de un plan («El que más recomendamos es…») vuelve
              * a darle uno. La lista ya pone primero el que nombró y deja fuera
-             * los que rechazó.
+             * los que rechazó. Solo llega aquí sin herramientas en el turno
+             * (G1.2): con una cortesía ejecutada no hay lista y el acta de abajo
+             * no compite con ella.
              */
             if ($pideLaLista && $precios !== null
                 && $this->contentGuard->inspect($precios['esqueleto'], MarketingMessage::SENDER_AI, false)['safe']) {
@@ -1809,11 +1823,17 @@ class UltronCommitService
             }
 
             /*
-             * Lo mismo vale para el descarte por el registro (H4-9, decisión de
-             * `backend`): un borrador que tutea pero que acompaña a una
-             * cortesía ya registrada se descarta, y la persona tiene que leer
-             * igual el día y la hora. El acta va de usted; se ajusta al tope
-             * solo si lo hay.
+             * LA VISITA YA ESTÁ REGISTRADA: LA PERSONA LEE EL DÍA Y LA HORA (F2 del
+             * lead, hallazgo I-2 del revisor; m-3). Si en este turno se ejecutó
+             * la cortesía y el borrador se descarta, ninguno de los respaldos de
+             * arriba lo cuenta —el de la intención no sabe que la cita existe— y
+             * la persona se quedaba sin la constancia de lo que acaba de pasar.
+             * Sale el acta que Laravel escribe desde la fila (la misma de
+             * `conLaFechaDeLaCita()`), con «profesional» de usted. Dos descartes
+             * la traen: el de la longitud (solo existe con tope) y el del
+             * registro (H4-9, decisión de `backend`: un borrador que tutea pero
+             * acompaña a una cortesía ya registrada), con tope o sin él. Con
+             * tope, el acta se ajusta con la regla de los curados.
              */
             if ((($turno['tope'] !== null && in_array(self::VIOLACION_LONGITUD, $incumple, true)) || in_array(self::VIOLACION_REGISTRO, $incumple, true))
                 && ($cita = $this->citaDelTurno($executed)) !== null) {
@@ -1827,6 +1847,7 @@ class UltronCommitService
             }
 
             if ($alternativa !== null) {
+                $sustituidoPorLaPolitica = $alternativa !== $replyFinal;
                 // m-3: la traza dice que el texto se SUSTITUYÓ, con la medida del borrador (la de lo que sale la pone el punto de control).
                 if ($longitud !== null && $alternativa !== $replyFinal) {
                     $longitud = ['action' => 'replaced', 'from' => $longitud['from'], 'dropped' => 0];
@@ -1906,6 +1927,26 @@ class UltronCommitService
             }
         }
 
+        /*
+         * LA MEMORIA DICE LO QUE SALIÓ, también tras un descarte (G4 del lead,
+         * I-4 del revisor, R5). Con la versión del Studio, si la rama de la
+         * política sustituyó el borrador y lo que sale no nombra el plan que
+         * cotizaba el modelo, ese plan no salió: ni `plans_discussed` ni
+         * `price_source` lo citan. Se mira el texto FINAL, después de 13.quater,
+         * que puede haber añadido el precio verificado de ese mismo plan (y
+         * entonces sí salió). Medido: «Quiero bajar de peso» con un borrador que
+         * tuteaba y recomendaba el Mensual salió con el texto del objetivo y la
+         * memoria anotaba el Mensual como tratado, a $80.000. Solo para la
+         * memoria y la traza: el enlace de pago aparte (14.bis, apagado) sigue
+         * con el plan del turno, como estaba (S-5, fuera de esta tanda).
+         * Legacy no entra: sin `studio`, idéntico.
+         */
+        $planQueSalio = $plan;
+        if ($turno['studio'] && $sustituidoPorLaPolitica && $plan !== null
+            && ! in_array((int) $plan->id, CommercialTurnPolicy::plansNamedIn($replyFinal, $catalogo), true)) {
+            $planQueSalio = null;
+        }
+
         // 14) Envío por el camino de siempre.
         // La conversación va explícita: la respuesta pertenece al hilo del
         // turno, no al primero que encuentre el despachador.
@@ -1958,7 +1999,7 @@ class UltronCommitService
         // 15) La memoria registra lo que SALIÓ, con el plan y el precio reales.
         if ($outcome !== 'failed') {
             $memoriaFinal = $this->memoryService->recordSentTurn(
-                $conversation->fresh(), $message, $replyFinal, $plan,
+                $conversation->fresh(), $message, $replyFinal, $planQueSalio,
                 (string) $sanitized['intent'], $resolution, $send['message_id'] ?? null,
                 ($decision['recovered_reply'] ?? false) === true,
                 // Con «profesional», la memoria reconoce también las ofertas de usted (H4-9).
@@ -1985,9 +2026,9 @@ class UltronCommitService
             'provider_message_id' => $send['provider_message_id'],
             'commercial_phase' => ['from' => $currentPhase, 'to' => $nextState],
             'reply_final' => $replyFinal,
-            'price_source' => $plan === null ? null : [
-                'plan_id' => (int) $plan->id,
-                'price' => (float) $plan->price,
+            'price_source' => $planQueSalio === null ? null : [
+                'plan_id' => (int) $planQueSalio->id,
+                'price' => (float) $planQueSalio->price,
                 'resolved_at_commit' => true,
             ],
             'applied' => [
@@ -2126,8 +2167,13 @@ class UltronCommitService
          * la prueba real: el revisor tumbó los dos borradores y el texto curado
          * de esta intención pregunta el objetivo sin dar ninguna cifra.
          */
-        // H4-10 (P-1): y a quien pide el panorama de planes, la lista, pregunte o no el precio.
-        $precios = $turno['studio'] && ($intent === SalesIntents::PRICING_QUESTION || $this->pideElPanoramaEnElRespaldo($conversation, (string) $message->body, $intent))
+        // H4-10 (P-1): y a quien pide el panorama de planes, la lista, pregunte o no el precio. Con la
+        // MISMA política del camino normal (G1: la intención, la petición y el tema único) y, como allí,
+        // nunca en un turno con herramientas (G1.2): aquí solo corre el no contactar, y con él no hay lista.
+        $conOptOut = $intent === SalesIntents::DO_NOT_CONTACT_REQUEST
+            || in_array(SalesIntents::TOOL_MARK_DNC, (array) ($proposal['tools_requested'] ?? []), true);
+        $precios = $turno['studio'] && ($intent === SalesIntents::PRICING_QUESTION
+                || (! $conOptOut && $this->pideElPanoramaEnElRespaldo($conversation, (string) $message->body, $intent)))
             ? $this->respaldoDePrecios($this->politicaDePrecios($conversation, (string) $message->body), $turno['tope'])
             : null;
 
@@ -3131,7 +3177,7 @@ class UltronCommitService
      *
      * @return array<string,mixed>|null null cuando no se pidió
      */
-    private function execPaymentLink(MarketingConversation $conversation, MarketingMessage $message, array $decision, ?Plan $plan, string $outcome, ?string $tono = null): ?array
+    private function execPaymentLink(MarketingConversation $conversation, MarketingMessage $message, array $decision, ?Plan $plan, string $outcome, ?string $tono): ?array
     {
         $tool = SalesIntents::TOOL_PAYMENT_LINK_SEND;
 
@@ -3491,7 +3537,7 @@ class UltronCommitService
         MarketingConversation $conversation,
         string $respuesta,
         MarketingAiAction $action,
-        ?string $tono = null,
+        ?string $tono,
     ): string {
         /*
          * Una cita real y TODAVÍA POR VENIR hace verdadera la frase.
@@ -3715,7 +3761,7 @@ class UltronCommitService
         MarketingAiAction $action,
         array $decision,
         ?array $cortesia,
-        ?string $tono = null,
+        ?string $tono,
     ): string {
         $piezas = self::oracionesProtegidas($respuesta);
         $quedan = array_values(array_filter($piezas, fn (string $p): bool => $this->promises->cambioDeVisita($p) === null));
@@ -3806,7 +3852,7 @@ class UltronCommitService
      *
      * @param  array<int,array<string,mixed>>  $ejecutadas
      */
-    private function conLaFechaDeLaCita(string $respuesta, MarketingAiAction $action, array $ejecutadas, ?string $tono = null): string
+    private function conLaFechaDeLaCita(string $respuesta, MarketingAiAction $action, array $ejecutadas, ?string $tono): string
     {
         $cita = $this->citaDelTurno($ejecutadas);
         if ($cita === null) {
@@ -3894,7 +3940,7 @@ class UltronCommitService
         MarketingAiAction $action,
         array $ejecutadas,
         array $decision,
-        ?string $tono = null,
+        ?string $tono,
     ): string {
         $cortesia = collect($ejecutadas)->firstWhere('tool', SalesIntents::TOOL_COURTESY_REQUEST);
         if (($cortesia['status'] ?? null) === 'executed') {
@@ -3986,7 +4032,7 @@ class UltronCommitService
         ?Plan $plan,
         string $respuesta,
         MarketingAiAction $action,
-        ?string $tono = null,
+        ?string $tono,
     ): string {
         if ($this->contentGuard->checkoutDenialIn($respuesta) === null) {
             return $respuesta;
@@ -4142,7 +4188,7 @@ class UltronCommitService
      * sustituir: lo pega Laravel después de todos los guards, igual que el
      * precio y los enlaces de la app.
      */
-    private function conCheckout(string $reply, array $cobro, ?string $tono = null): string
+    private function conCheckout(string $reply, array $cobro, ?string $tono): string
     {
         /*
          * Con el PRECIO dentro. La línea sustituye a un mensaje curado que sí
@@ -4660,7 +4706,7 @@ class UltronCommitService
      * Cumple la política por construcción: los hechos son los mismos que se
      * exigen.
      */
-    private function respuestaConHechos(?int $tope = null, ?string $tono = null): ?string
+    private function respuestaConHechos(?int $tope, ?string $tono): ?string
     {
         /*
          * La apertura y el cierre son de Laravel: con «profesional», de usted
@@ -4713,7 +4759,7 @@ class UltronCommitService
      * @param  string[]  $hechos  la ficha del gimnasio y los nombres de sus clases
      * @param  Plan|null  $plan  el plan de este turno, por si la oración retirada se llevaba su precio
      */
-    private function sinServiciosInventados(MarketingConversation $conversation, string $respuesta, MarketingAiAction $action, array $hechos, ?Plan $plan, ?string $tono = null): string
+    private function sinServiciosInventados(MarketingConversation $conversation, string $respuesta, MarketingAiAction $action, array $hechos, ?Plan $plan, ?string $tono): string
     {
         $ofrecido = $this->loQueOfrecemos($hechos);
         if ($this->style->inventedServiceIn($respuesta, $ofrecido) === null) {
@@ -4822,7 +4868,7 @@ class UltronCommitService
     }
 
     /** La verdad sobre clases cuando el borrador entero era una clase que no existe. */
-    private function loQueSiTenemos(?string $tono = null): string
+    private function loQueSiTenemos(?string $tono): string
     {
         $clases = $this->nombresDeClases();
         if ($clases === []) {
@@ -4874,7 +4920,7 @@ class UltronCommitService
      * otra explicación. Si el mensaje se queda vacío, sale el respaldo de la
      * intención; si sigue habiendo texto, sale lo que queda.
      */
-    private function sinExcusasDePrecio(MarketingConversation $conversation, string $respuesta, MarketingAiAction $action, string $intent, ?string $tono = null): string
+    private function sinExcusasDePrecio(MarketingConversation $conversation, string $respuesta, MarketingAiAction $action, string $intent, ?string $tono): string
     {
         if ($this->style->priceExcuseIn($respuesta) === null) {
             return $respuesta;
@@ -4909,7 +4955,7 @@ class UltronCommitService
         return $limpio;
     }
 
-    private function ultimoRecurso(MarketingConversation $conversation, string $intent, ?int $tope = null, ?string $tono = null): ?string
+    private function ultimoRecurso(MarketingConversation $conversation, string $intent, ?int $tope, ?string $tono): ?string
     {
         $previas = $this->previousMachineReplies($conversation);
         // Con «profesional», cada variante de usted (H4-9, T-4); con cualquier otro tono, las de hoy.
@@ -4962,11 +5008,18 @@ class UltronCommitService
      * precios (D-6) y la de horario, el horario ajustado (plan §3.2), en vez
      * del último recurso, que no contesta a ninguna de las dos.
      *
+     * Tras un descarte por REGISTRO (`$porRegistro`; G3 del lead, punto 9 y
+     * m-7 del revisor): la intención sin un respaldo más específico recibe su
+     * texto curado de usted ({@see textoCuradoTrasElRegistro()}) en vez del
+     * último recurso genérico, que es de usted pero no contesta («Quiero bajar
+     * de peso» → «…¿en qué le ayudo hoy?»). El descarte por longitud sigue
+     * como está desplegado.
+     *
      * @param  array<string,mixed>  $policy
      * @param  array{studio:bool,tope:?int,tono:?string}  $turno
      * @param  array{texto:string,esqueleto:string,planes:array<int,string>,desde:int,soltadas:int}|null  $precios
      */
-    private function respaldoPorIntencion(MarketingConversation $conversation, string $intent, array $policy, array $turno = self::TURNO_LEGACY, ?array $precios = null, string $inbound = ''): ?string
+    private function respaldoPorIntencion(MarketingConversation $conversation, string $intent, array $policy, array $turno, ?array $precios, string $inbound, bool $porRegistro): ?string
     {
         // Toda salida de máquina pasa por el guard, también la de Laravel:
         // por una que no pasaba salieron dos ofertas de traspaso.
@@ -4982,8 +5035,9 @@ class UltronCommitService
         if ($policy['memory_mode'] ?? false) {
             return $seguro($alTope($this->respaldoDeMemoria($conversation, $tono))) ?? $this->ultimoRecurso($conversation, $intent, $tope, $tono);
         }
+        $curado = fn (): ?string => $porRegistro ? $this->textoCuradoTrasElRegistro($conversation, $intent, $policy, $turno, $inbound) : null;
         if ($intent === SalesIntents::GENERAL_INFO) {
-            return $seguro($this->respuestaConHechos($tope, $tono)) ?? $this->ultimoRecurso($conversation, $intent, $tope, $tono);
+            return $seguro($this->respuestaConHechos($tope, $tono)) ?? $curado() ?? $this->ultimoRecurso($conversation, $intent, $tope, $tono);
         }
         if ($precios !== null && $intent === SalesIntents::PRICING_QUESTION
             && $this->contentGuard->inspect($precios['esqueleto'], MarketingMessage::SENDER_AI, false)['safe']) {
@@ -4997,7 +5051,52 @@ class UltronCommitService
             }
         }
 
-        return $this->ultimoRecurso($conversation, $intent, $tope, $tono);
+        return $curado() ?? $this->ultimoRecurso($conversation, $intent, $tope, $tono);
+    }
+
+    /**
+     * EL TEXTO CURADO DE LA INTENCIÓN TRAS UN DESCARTE POR REGISTRO (G3 del
+     * lead). El mismo que arma `safeFallback()` —{@see textoDeLaIntencion()}
+     * sobre `replyFor()`, de usted con «profesional»— y con las MISMAS
+     * comprobaciones que ese camino le hace: ajustado al tope (el horario con
+     * su orden, `schedule`; el resto con la regla de los curados), el guard,
+     * la antirrepetición; y además medido con `violations()`, como el
+     * sustituto de planes. Null si no pasa alguna: entonces, el último recurso.
+     *
+     * Lo que `safeFallback()` hace con este texto y este camino NO hace: en
+     * las cinco intenciones sensibles levanta la marca para el equipo, porque
+     * el texto la promete («lo dejo marcado…»). Aquí la promesa solo sale si
+     * la marca ya está puesta —la pone la revisión que el guardarraíl añade a
+     * toda intención sensible—; si no lo estuviera, null: no se promete lo
+     * que este camino no garantiza.
+     *
+     * @param  array<string,mixed>  $policy
+     * @param  array{studio:bool,tope:?int,tono:?string}  $turno
+     */
+    private function textoCuradoTrasElRegistro(MarketingConversation $conversation, string $intent, array $policy, array $turno, string $inbound): ?string
+    {
+        if (StaffReviewAuthority::motivoDeIntencion($intent) !== null && ! (bool) $conversation->staff_review_pending) {
+            return null;
+        }
+        $texto = self::textoDeLaIntencion($turno['tono'], $intent, $this->replies->replyFor($intent, ['lead' => $conversation->lead, 'channel' => $conversation->channel]));
+        if ($texto === null || trim($texto) === '') {
+            return null;
+        }
+        if ($turno['tope'] !== null) {
+            $texto = $intent === SalesIntents::SCHEDULE_QUESTION
+                ? UltronReplyFitter::schedule($texto, $turno['tope'], $inbound)
+                : UltronReplyFitter::curated($texto, $turno['tope']);
+            if ($texto === null) {
+                return null;
+            }
+        }
+        if (! $this->contentGuard->inspect($texto, MarketingMessage::SENDER_AI, false)['safe']
+            || $this->novelty->nearDuplicateOf($texto, $this->previousMachineReplies($conversation)) !== null
+            || CommercialTurnPolicy::violations($texto, $policy, $this->knowledge->activePlans(), $this->hechosDelGimnasio(), $turno['tono']) !== []) {
+            return null;
+        }
+
+        return $texto;
     }
 
     /**
@@ -5011,7 +5110,7 @@ class UltronCommitService
      * puede cumplir. Sin compromiso, se dice que no hay y se pide el dato.
      * Sin verbos de ofrecimiento.
      */
-    private function respaldoDeMemoria(MarketingConversation $conversation, ?string $tono = null): string
+    private function respaldoDeMemoria(MarketingConversation $conversation, ?string $tono): string
     {
         // Con «profesional», de usted (H4-9, T-4): los cuatro textos son de Laravel, con el día de la fila.
         return (string) UltronFormalReplies::segun($tono, $this->memoriaDeLaVisita($conversation));
@@ -5065,18 +5164,28 @@ class UltronCommitService
      * @param  array{texto:string,esqueleto:string,planes:array<int,string>,desde:int,soltadas:int}|null  $precios  el respaldo de precios, solo con la versión del Studio aplicada (D-6)
      * @param  int|null  $tope  el tope publicado de este turno, si lo hay
      */
-    private function respaldoSemantico(MarketingConversation $conversation, string $inbound, string $intent, ?array $precios = null, ?int $tope = null, ?string $tono = null): ?string
+    private function respaldoSemantico(MarketingConversation $conversation, string $inbound, string $intent, ?array $precios, ?int $tope, ?string $tono): ?string
     {
         if (SalesIntents::isPureGreeting($inbound)) {
             return $this->saludoDeBienvenida($conversation, $tono);
         }
-        // Antes del corte: la pregunta de precio tiene su texto propio, y con la versión aplicada ese texto da los precios.
-        // Los precios solo llegan con la versión aplicada y una pregunta de precios o el panorama de planes (H4-10, P-1).
-        if ($precios !== null) {
+        // Antes del corte: la pregunta de precio tiene su texto propio, y con la versión aplicada ese texto da los precios (D-6).
+        if ($precios !== null && $intent === SalesIntents::PRICING_QUESTION) {
             return $precios['texto'];
         }
         if (in_array($intent, self::RESPALDO_PROPIO, true)) {
             return null;
+        }
+        /*
+         * La lista por PANORAMA va DESPUÉS de esa protección (S-4 de
+         * `security`): una queja, un pago reclamado, una lesión, una factura,
+         * pedir una persona o un «no me interesa» nunca la reciben, aunque el
+         * texto nombre los planes. La política ya los excluye por intención
+         * (G1.1); esto es la segunda red, en el orden que el respaldo semántico
+         * ya tenía para la memoria y la visita.
+         */
+        if ($precios !== null) {
+            return $precios['texto'];
         }
 
         $planes = $this->knowledge->activePlans();
@@ -5142,7 +5251,7 @@ class UltronCommitService
      * variante que no se haya dicho en esta conversación, y si todas se
      * dijeron, la última: repetir un saludo es mejor que un menú.
      */
-    private function saludoDeBienvenida(MarketingConversation $conversation, ?string $tono = null): string
+    private function saludoDeBienvenida(MarketingConversation $conversation, ?string $tono): string
     {
         $franja = (string) (BusinessClock::forPrompt()['greeting'] ?? '');
         // Ya saludamos en esta conversación, o ya hablamos con esta persona en
@@ -5399,13 +5508,19 @@ class UltronCommitService
          * vendible (sin los rechazados) quedan planes de un mes SIN nombrar
          * —porque son más de tres o porque el tope soltó alguno—, «Algunos
          * planes de un mes»; si se nombran todos, «Planes de un mes». El caso
-         * mixto sigue con «Nuestros planes». Se decide sobre lo que sale de
-         * verdad: primero con el encabezado que corresponde a la lista entera y,
-         * si el tope deja alguno sin nombrar, otra vez con el largo, que puede
-         * soltar uno más pero nunca devolver uno soltado.
+         * mixto (o sin planes de un mes), igual (G5 del lead, I-6 del revisor:
+         * «Nuestros planes» presentaba dos o tres de trece como si fueran
+         * todos): «Algunos de nuestros planes» si quedan vendibles sin nombrar,
+         * y «Nuestros planes» solo si los nombra todos (texto nuevo, PENDIENTE
+         * de la aprobación del propietario junto a «Algunos planes de un mes»).
+         * Se decide sobre lo que sale de verdad: primero con el encabezado que
+         * corresponde a la lista entera y, si el tope deja alguno sin nombrar,
+         * otra vez con el largo, que puede soltar uno más pero nunca devolver
+         * uno soltado.
          */
         $deUnMesQueHay = count(array_filter($catalogo, $deUnMes));
-        $encabezadoPara = fn (int $nombrados): string => ! $todosDeUnMes ? 'Claro. Nuestros planes: '
+        $encabezadoPara = fn (int $nombrados): string => ! $todosDeUnMes
+            ? ($nombrados < count($catalogo) ? 'Claro. Algunos de nuestros planes: ' : 'Claro. Nuestros planes: ')
             : ($nombrados < $deUnMesQueHay ? 'Claro. Algunos planes de un mes: ' : 'Claro. Planes de un mes: ');
         $pregunta = '¿Sobre cuál amplío la información?';
         $lista = array_values($items);

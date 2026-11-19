@@ -590,3 +590,160 @@ Regenerado con `A4_TEXTOS=escribir` (`a4-evidencia/52`, el diff). **9 líneas**:
 7. `app/Services/Marketing/Ultron/UltronDecideService.php` (+8)
 
 Sin migraciones, rutas, `config/` ni n8n. **Diff cero** en `SalesConversationReplyService.php`, `SalesObjectionResponderService.php`, `OutboundContentGuard.php`, `CourtesyRequestService.php`, `UltronPromptCompiler.php`, `UltronPromptStamp.php` y los prompts base [C].
+
+---
+
+## 14. Correcciones tras las revisiones (19-11): cierran B-1 y B-2
+
+**Encargo:** `encargo-be-a4g.md`, decisiones G1 a G9 del lead sobre `informe-reviewer-a4b.md` (RECHAZADO, B-1 y B-2) e `informe-security-a4b.md` (S-4 a S-8). Mismo árbol, **sin commit**. Sin una versión del Studio en el turno no cambia ni un byte: las dos instantáneas (`legacy-a4.json`, `legacy-usted.json`) siguen en verde **sin regenerarse**.
+
+### 14.1 Hallazgo → corrección → prueba
+
+| Hallazgo | Corrección (fichero) | Prueba |
+|---|---|---|
+| **B-1** (panorama en entradas que no piden la lista) | G1: la regla de cuatro condiciones (§14.2). `CommercialTurnPolicy::pideElPanorama()` mira la intención, la petición, la negativa, la recomendación y el tema único; el commit, las herramientas del turno. | `CommercialTurnPolicyPanoramaTest` (86, puras: el corpus entero del punto 6 del revisor y los casos de S-4) y, por el endpoint, `test_g1_lo_que_no_pide_la_lista_*` (10 casos × cercano y profesional × camino normal y revisor caído) |
+| **B-2** (el recorte por registro deja una frase de relleno) | G2: `trimmed` solo si, quitada la pregunta final, quedan **al menos dos frases** sin contar el bloque de enlaces y lo que queda no tutea; si no, `discarded`. `UltronReplyFitter::proseSentenceCount()` (nueva, pública y pura); `draft()` y la regla F1 de la longitud, sin cambios. | `test_g2_el_recorte_por_registro_no_deja_una_sola_frase_de_relleno` (los 5 borradores de R3) y `test_g2_con_dos_frases_tras_quitar_la_pregunta_se_sigue_recortando` |
+| **I-1** (cercano/entusiasta sí cambian; M8 sobrevive) | Decisión del lead: el panorama y el encabezado veraz van con **cualquier** versión del Studio. Comentario del commit corregido. | `test_g1_i1_el_panorama_tambien_con_cercano` (camino normal y revisor caído): **mata M8** (salida 70) |
+| **I-2** (formas corrientes del panorama que no lo eran) | `PIDE_PANORAMA` nueva: precios/tarifas/valores en plural, «las membresías», «tienen planes», info/lista de planes o precios. Siguen sin serlo «el precio del Mensual», «¿cuánto cuesta el Mensual?», «la mensualidad» y «¿cuánto cuesta?». | `test_g1_i2_las_formas_corrientes_del_panorama_reciben_la_lista` (6, por el endpoint) y los positivos y negativos puros |
+| **I-3** (la lista se come el horario y la constancia de la visita) | G1.4 (un solo tema) y G1.2 (sin herramientas: con la cortesía ejecutada no hay lista y el acta no compite con ella). | `«el horario y los planes (I-3)»` en el proveedor del endpoint; `test_g1_una_cortesia_recien_registrada_no_recibe_la_lista` (R7) |
+| **I-4** (la memoria cita un plan que no salió) | G4: con `studio`, si la rama de la política sustituyó el borrador y el texto FINAL (tras 13.quater) no nombra el plan del turno, `$planQueSalio = null` para `recordSentTurn()` y `price_source`. | `test_g4_la_memoria_no_cita_un_plan_que_no_salio` (R5) y `test_g4_si_la_alternativa_nombra_el_plan_del_turno_la_memoria_lo_conserva` |
+| **I-5** (puntos de la tabla sin prueba; M15, M22, M23 enviarían tú) | G8: una prueba por el endpoint con el texto EXACTO de usted por punto, y los casos «profesional + tope». | 14 pruebas `test_g8_*` (§14.4); **mueren M15, M22 y M23** (salida 70) |
+| **I-6** (el encabezado mixto presenta una lista parcial como completa) | G5: «Claro. Algunos de nuestros planes: » si la lista mixta no nombra todos los vendibles (sin los rechazados); «Claro. Nuestros planes: » solo si los nombra todos. **Texto nuevo para el propietario.** | `test_g5_el_encabezado_mixto_dice_algunos_si_no_nombra_todos` (R8, a 200 y 160, y el caso «los nombra todos»); `a4-textos-ajustados.md` regenerado (salida 69) |
+| **S-4** (la lista pisa respuestas sensibles, también con el revisor caído) | G1.1 (lista blanca de intenciones) y, en `respaldoSemantico()`, la lista por panorama va **después** de `RESPALDO_PROPIO`; la de `pricing_question` (D-6), antes, como estaba. En `safeFallback()`, sin lista por panorama si corre el no contactar. | Pago reclamado, queja, negativa, agradecimiento, relevo autorizado y cortesía registrada, por el endpoint, en los dos caminos |
+| **S-6** (las comillas ciegan al detector) | G6: lo entrecomillado solo se descarta como cita si **fuera de las comillas quedan más palabras que dentro**; si no, se mira el mensaje entero. Unas comillas sin cerrar no tapan nada (`CITAS` exige la pareja). | `test_si_lo_entrecomillado_es_la_mayor_parte_se_mira_entero` (6), `test_una_cita_corta_dentro_de_un_mensaje_de_usted_sigue_sin_contar`, `test_una_comilla_sin_cerrar_no_se_come_el_resto` |
+| **S-7** (el verbo de oferta de usted casa con la tercera persona) | G7: `VERBO_DE_OFERTA_DE_USTED` exige la construcción al abrir la pregunta: «¿Quiere que le…?», «¿Le gustaría…?», «¿Le interesa…?», «¿Prefiere…?», «¿Desea…?», «¿Le parece…?». | `test_g7_una_oferta_de_usted_solo_con_su_construccion` (8: «¿Sabe qué quiere decir el enlace de pago?» y «¿El equipo desea revisar…?» ya no son ofertas) |
+| **m-1** (falsos negativos de tú) | G9: 13 marcas nuevas en `MARCAS`, cada una con su caso; «ven», «mira», «aprovecha», «recuerda» y «cuenta», no (con su caso negativo de tercera persona). | `test_cada_marca_de_la_lista_cerrada` (+13), `test_lo_que_nunca_marca` (+6) |
+| **m-3** (docblock F2 huérfano y falso) | El docblock va con su código y dice la verdad: el acta sale tras el descarte por longitud (con tope) **y** por registro (con o sin tope). | — (comentario) |
+| **m-4** (docblock de `UltronFormalReplies`) | Nombra la excepción: `not_interested` funde tres frases en dos. | — (comentario) |
+| **m-6** (recomendación y «cómo empezar» solo de tú) | G7: `RECOMIENDA_DE_USTED` («le recomiendo…») y `COMO_EMPEZAR_DE_USTED` («viene con su», «llega y», «se inscribe»), solo con «profesional». | `test_g7_la_recomendacion_y_el_como_empezar_de_usted` (con profesional sí; con cercano, la de hoy; «el plan viene con acceso…» no es cómo empezar) |
+| **m-7** (sin tope, un horario que tutea recibe el último recurso) | G3 (§14.3). | `test_g3_tras_un_descarte_por_registro_sale_el_texto_curado_de_la_intencion` («el horario sin tope») y `test_turno_3_real_sin_tope_sale_el_horario_de_usted` |
+| **m-8** (los `= null` del tono en métodos privados) | Quitados en los 15 métodos privados de `UltronCommitService` que lo tenían (y el `$tope = null` que los precedía en `ultimoRecurso`, `respuestaConHechos` y `respaldoSemantico`, para que PHP no avise de un obligatorio tras un opcional). Todos los llamadores ya lo pasaban. Los públicos de las clases puras conservan su valor por defecto. | La clase carga sin avisos (`error_reporting=-1`) y la batería entera (salidas 71 y 72) |
+| **Punto 9 del revisor** («Quiero bajar de peso» → «…¿en qué le ayudo hoy?») | G3 (§14.3). | R5, miedo de principiante, una objeción y `human_request` con su revisión, por el endpoint |
+
+### 14.2 La regla final del panorama (tal como queda escrita)
+
+La lista por panorama (`policy_plans_overview` en el camino normal y la lista de `respaldoSemantico()` con el revisor caído) sale **solo** con una versión del Studio en el turno (cualquier tono) y si se cumplen las cuatro cosas:
+
+1. **Intención en lista blanca** (`CommercialTurnPolicy::INTENCIONES_DEL_PANORAMA`): `pricing_question`, `general_info`, `greeting`, `unknown`. Ninguna otra.
+2. **Ninguna herramienta en el turno** (es del commit). Camino normal: `$decision['tools_requested'] !== []` (autorizadas tras el menú y el guardarraíl, que añade `staff_review` a toda intención sensible), un relevo autorizado, una herramienta ejecutada, los enlaces de la app pegados o el cobro dentro de la respuesta. Revisor caído: solo corre el no contactar, y con él (por intención o por herramienta) no hay lista.
+3. **El mensaje pide los planes, con una petición** (`PIDE_PANORAMA`, lista cerrada): qué/cuáles (son los) planes, membresías, precios o tarifas; planes/membresías + tienen/hay/manejan/ofrecen y al revés («¿tienen planes?»); «qué ofrecen»; «qué otros hay»; «opciones» **solo** con «de planes / de membresías»; cuánto valen o cuestan los planes o las membresías; el precio, valor o tarifa **de** los planes; los precios, las tarifas o los valores en plural; info, información o la lista de planes o de precios; «los planes» dentro de una petición de conocerlos (saber, conocer, ver, mándame, cuénteme…). **Y no** (`NO_PIDE_EL_PANORAMA`): una negación en cualquier punto del mensaje («no», «ni», «nunca», «tampoco», «jamás», «dejen de»), el «ya vi / ya conozco / ya me los mandaron», ni una petición de recomendación («recomienda», «aconseja», «me conviene», «cuál de los…», «cuál es el mejor»). Tampoco un filtro (`FILTRO_DE_PLANES`, sin cambios), `choose_plan`, ni un turno de recepción, memoria o visita a medias.
+4. **Un solo tema**: si el mensaje pregunta además otra cosa, no es panorama. Detectores reutilizados: `PREGUNTA_INCIDENTAL` (horario, «hasta qué hora», dirección), `HABLA_DE_VISITA` (una visita) y `HumanHandoffAuthority::peticionDeHumanoEn()` (una persona). Lista nueva, cerrada (`OTRO_TEMA_DEL_PANORAMA`): las clases, los medios de pago («pago/pagar/paga…», «medios de pago», tarjeta, Nequi, Daviplata, PSE, efectivo, transferencia, link, enlace) y una lesión o un problema de salud. Cada caso con su prueba.
+
+La lista por **intención de precios** ya desplegada (`pricing_question` con el borrador descartado o el revisor caído, D-6) **no cambia**: «¿Cuál es el horario y cuánto cuestan los planes?» con el revisor caído sigue recibiendo la lista (lo fija la prueba).
+
+Decisiones mías dentro de la regla, a sabiendas de que generan falsos negativos (sale el borrador del modelo, que es lo de antes de P-1): la negación es de **todo el mensaje** («Hola, no sé qué planes tienen» no es panorama); «¿Y los planes?» a secas no lo es (**el lead lo cambió después: sí lo es, §14.11**); `HABLA_DE_VISITA` lleva «hoy», «mañana» y «el día» («¿Qué planes tienen hoy?» no lo es); «pagar» es otro tema («¿Cuánto hay que pagar por los planes?» no lo es).
+
+### 14.3 G3: tras un descarte por registro, el texto curado de la intención
+
+`UltronCommitService::textoCuradoTrasElRegistro()` (nuevo, privado), llamado desde `respaldoPorIntencion()` solo cuando `policy_register_mismatch` está entre las violaciones (`$porRegistro`, parámetro nuevo y obligatorio):
+
+- **Orden:** recepción, memoria, ficha con hechos (`general_info`), lista de precios (`pricing_question`) y horario con tope siguen delante; después de la rama, el plan (`planReply`), la visita a medias (`courtesyReply`), la ficha por `policy_answer_without_fact`, la lista del panorama y el acta de la visita siguen mandando. Solo si nada de eso aplica, el texto curado; si no pasa, el último recurso de hoy.
+- **Las mismas comprobaciones que `safeFallback()`:** `textoDeLaIntencion($tono, $intent, replyFor(...))`, ajustado al tope (el horario con `UltronReplyFitter::schedule()` y su orden; el resto con `curated()`), el guard, la antirrepetición (`NoveltyGuard`) y, además, `violations()` con la política del turno, como el sustituto de planes.
+- **Lo que `safeFallback()` hace y este camino no (lo pediste: «PARA y dímelo»):** con las cinco intenciones sensibles (`StaffReviewAuthority::POR_INTENCION`), el texto curado promete la marca («lo dejo marcado…») y `safeFallback()` **la pone** siempre. El camino normal no la pone por su cuenta. **No paré** porque se puede garantizar sin tocar nada más: el texto curado de esas cinco solo sale si `staff_review_pending` ya está en `true`; si no, null y el último recurso (que no promete nada). Hoy, por el endpoint, la marca **siempre** está puesta en esas cinco (el guardarraíl añade `staff_review` con `needs_staff_review` y la autoridad la concede por intención): lo fija `test_g3_una_intencion_sensible_recibe_su_texto_curado_porque_la_marca_esta_puesta`, y la rama sin marca, que hoy no se alcanza, la fija `test_g3_sin_la_marca_puesta_no_sale_un_texto_que_la_promete` (por reflexión, como la prueba del punto de control). **Si prefieres otra cosa (que el camino normal levante la marca, o que esas cinco se queden con el último recurso), es un cambio de una línea.**
+- **El descarte por longitud no cambia:** `test_g3_el_descarte_por_longitud_no_cambia`.
+
+### 14.4 G8: el texto exacto de usted por punto (todas por el endpoint salvo el desbordamiento)
+
+| Punto | Prueba | Antes de esta ronda |
+|---|---|---|
+| La hora de la visita (M15) | `test_g8_la_hora_de_la_visita_sale_de_usted` | verde (no la fijaba nadie) |
+| `planReply` (M22) | `test_g8_el_plan_que_manda_la_politica_sale_de_usted` | verde |
+| `courtesyReply` (M23) | `test_g8_la_visita_a_medias_sale_de_usted` | verde |
+| `conLaFechaDeLaCita` (M16) | `test_g8_el_acta_que_corrige_la_hora_sale_de_usted_y_el_borrador_no_se_descarta` (exige `register.action = ok`: con la mutación, el acta tutea, el registro descarta y sale solo el acta) | verde |
+| `sinCambioDeVisitaQueNoSeHizo` (M17) | `test_g8_el_cambio_de_visita_que_no_se_hizo_sale_de_usted` | verde |
+| `SIN_ENLACE_PERO_SIN_MENTIR` (M18) | `test_g8_negar_un_cobro_disponible_deja_el_texto_de_usted` (cobro del canario disponible) | verde |
+| `loQueSiTenemos` (M19) | `test_g8_una_clase_inventada_se_retira_y_lo_que_si_hay_sale_de_usted` | verde |
+| `sinConfirmarUnaCortesia…` (M24) | `test_g8_la_confirmacion_que_nadie_dio_sale_de_usted` | verde |
+| Constancia de cortesía (M25) | `test_g8_la_constancia_de_una_cortesia_que_no_se_registro_sale_de_usted` | verde |
+| Profesional + tope: las dos violaciones a la vez | `test_g8_tope_las_dos_violaciones_a_la_vez` | **roja** (G3) |
+| Profesional + tope: el acta tras el registro | `test_g8_tope_el_acta_de_usted_tras_el_registro` (160) | verde |
+| Profesional + tope: 13.ter | `test_g8_tope_la_frase_que_retoma_la_visita` (200) | verde |
+| Profesional + tope: el desbordamiento de `antesDeEnviar()` | `test_g8_tope_el_desbordamiento_sale_con_el_ultimo_recurso_de_usted` (por reflexión, como la prueba existente del punto de control) | verde |
+| Profesional + tope: `sinExcusasDePrecio` | `test_g8_tope_una_excusa_de_precio_sola_deja_el_ultimo_recurso_de_usted` | verde |
+
+Las que estaban verdes fijan comportamiento que ya era correcto y que nada fijaba; su valor es que una mutación las pone rojas (salida 70 para M8, M15, M22 y M23; las demás exigen el texto exacto y `register.action = ok`).
+
+### 14.5 Aserciones existentes cambiadas (y por qué)
+
+1. **`CommercialTurnPolicyPanoramaTest`**
+   - La política de prueba (`POLITICA`) gana `'intent' => general_info`: G1.1 exige la intención. Ninguna aserción se relaja.
+   - «Hola, ¿qué opciones tienen?» pasa de panorama a **no** panorama: G1.3 («opciones» solo con «de planes / de membresías»).
+   - `test_elegir_entre_opciones_dadas_no_es_panorama`: el texto pasa de «De los planes, el primero» a «¿Qué planes tienen? El primero»; la prueba sigue midiendo lo mismo (con `choose_plan` no hay panorama; sin él, sí), pero «los planes» a secas ya no es una petición (G1.3).
+2. **`UltronA4LongitudYPreciosTest`**, 3 literales del encabezado mixto (G5):
+   - `test_sin_planes_de_un_mes_nombra_los_tres_primeros_con_su_duracion` (200): «Algunos de nuestros planes»; el encabezado, 11 caracteres más largo, deja fuera «También hay planes de varios meses.» (el encabezado ya dice que hay más).
+   - `test_un_plan_nombrado_que_no_es_de_un_mes_no_va_bajo_planes_de_un_mes`: a 200, «Algunos de nuestros planes» con los tres; **a 160, el tercero (Plan Mensual) ya no cabe** (antes medía 160 justos); el Trimestre a 200, «Algunos de nuestros planes».
+3. **`UltronA4RegistroYPanoramaTest`**, 2 pruebas:
+   - `test_turno_3_real_sin_tope_sale_el_ultimo_recurso_de_usted` → **`…_sale_el_horario_de_usted`**: G3 y m-7, el horario de usted de la ficha en vez de «Claro, con gusto le ayudo. Cuénteme, ¿en qué le ayudo hoy?».
+   - `test_el_tuteo_solo_en_la_pregunta_final_se_quita_la_pregunta` → **`…_con_una_sola_frase_detras_se_descarta`**: G2. El borrador `SOLO_LA_PREGUNTA` deja UNA frase sin su pregunta, así que ya no se recorta: `discarded`, `[policy_register_mismatch]` y sale `HORARIO_200`. La frase que quedaba era informativa (el horario), y el respaldo es el mismo horario, de la ficha; el recorte con dos frases lo fija la prueba nueva de G2.
+4. **`a4-textos-ajustados.md`**: 6 renglones (salida 69), los de las dos secciones mixtas («plan día» y «Trimestre») × sin tope, 200 y 160. En «plan día» a 160 sale un plan menos (de 3 a 2). Ningún otro texto cambia. `a4-textos-usted.md` **no cambia**.
+
+Ninguna otra prueba existente cambió (salida 68: 1 528 pruebas, 5 rojas, las de arriba).
+
+### 14.6 Números (una ejecución de PHPUnit cada vez, desde `backend/`)
+
+| # | Qué | Resultado |
+|---|---|---|
+| 67 | **Rojo, ANTES** (`app/` intacto: `git diff --quiet HEAD -- app` = 0): las pruebas nuevas y cambiadas (las dos unitarias enteras y `test_g*` del endpoint) | **267 pruebas: 106 rojas** (2 errores: la constante y el método nuevos; 104 fallos) [C]. Una de ellas era **una expectativa mía equivocada**: `test_g4_el_plan_del_modelo_se_conserva…` suponía que el plan del turno era el del modelo, y el commit ya lo realinea al que nombró la persona; la reescribí como `test_g4_si_la_alternativa_nombra_el_plan_del_turno_la_memoria_lo_conserva` (verde antes y después). Rojas de comportamiento: **105**. Las 161 verdes fijan lo que ya era correcto (las de G8, los positivos de panorama que ya lo eran, los negativos que ya lo eran, las comillas sin cerrar…) |
+| 68 | Con el código corregido, **las pruebas existentes sin tocar** (las de la 71) | **1 528 pruebas, 5 rojas**: las cinco de §14.5 (3 de G5 con el documento, 1 de G3, 1 de G2) [C] |
+| 69 | Diff de `a4-textos-ajustados.md` | 6 renglones (§14.5) [C] |
+| 70 | **Mutaciones** M8, M15, M22 y M23 (aplicar → los dos A4 → revertir; diff vacío al final) | **Las cuatro mueren**, cada una con su prueba: M8 → `test_g1_i1_el_panorama_tambien_con_cercano`; M15 → `test_g8_la_hora_de_la_visita_sale_de_usted`; M22 → `test_g8_el_plan_que_manda_la_politica_sale_de_usted`; M23 → `test_g8_la_visita_a_medias_sale_de_usted` [C] |
+| 71 | **FINAL, SQLite**: `tests/Unit/Marketing/Ultron`, los dos A4, `UltronDecidePromptsTest`, `UltronCommitTest`, `UltronCommitPromptsTest` | **OK (1 528 pruebas, 16 395 aserciones)** [C] |
+| 72 | **FINAL, Marketing completo, SQLite** (`tests/Feature/Marketing tests/Unit/Marketing`) | **OK (6 485 pruebas, 38 192 aserciones)** [C] |
+| 73 | **FINAL, PostgreSQL 14** (`UNIT_DB=ultron_studio_lead_ola5`, base desechable local): los dos A4 | **OK (212 pruebas, 2 432 aserciones)** [C] |
+| 74 | **FINAL, guardas** (los 16 ficheros de la 66) | **141 pruebas, 1 roja: la esperada** (`OutreachIsolationTest::test_la_puerta_de_diff…`). Lista **exactamente los mismos 10 ficheros que la 66** (los 9 de producto de la tanda y `UltronPromptCompiler.php`, del compilador 4): esta ronda no añade ninguno a la enmienda [C] |
+| — | `vendor/bin/pint` sobre los 10 ficheros tocados (6 de producto y 4 de prueba) | arregló el orden de los `use` y dos espacios de operador en `UltronA4RegistroYPanoramaTest.php`; después `pint --test`: **passed** [C] |
+
+Legacy: `legacy-a4.json` y `legacy-usted.json` **en verde y sin regenerar** en la 71, la 72 y la 73 (`git diff --quiet HEAD -- tests/fixtures/ultron-a4` = 0) [C].
+
+### 14.7 Textos nuevos o cambiados que aprueba el propietario
+
+1. **«Claro. Algunos de nuestros planes: »** (G5), el encabezado de la lista mixta cuando no nombra todos los vendibles. Va junto a «Claro. Algunos planes de un mes: » (§13), que sigue pendiente. Dónde se ve: `a4-textos-ajustados.md`, secciones «¿Cuánto vale el plan día?…» y «¿Y el Trimestre…?» (salida 69). Si lo rechaza, vuelve «Claro. Nuestros planes: » en `respaldoDePrecios()`: una línea.
+2. **Ningún texto de usted nuevo.** G3 usa, en el camino normal, textos que ya estaban en `a4-textos-usted.md` (el `replyFor` de usted de cada intención, ya pendientes de su aprobación); el documento no cambia. Lo que sí cambia y conviene que sepa: tras un descarte por registro, quien escribe «Quiero bajar de peso», tiene miedo de empezar o pone una objeción lee ese texto de su intención y no «Claro, con gusto le ayudo. Cuénteme, ¿en qué le ayudo hoy?».
+
+### 14.8 Lo que no pude comprobar
+
+- **Nada contra n8n, la canaria ni producción.** Todo es PHPUnit local (SQLite y PostgreSQL 14 desechable).
+- **El PCRE de producción (10.39).** Las expresiones nuevas usan clases explícitas, `\b`, `\s`, `\w` y `/u` (como las que ya había), sin `\p{…}` ni *lookbehind*; no las ejecuté en 10.39 [S].
+- **La rama de G3 sin la marca puesta** no se alcanza por el endpoint (el guardarraíl la pone siempre en las cinco sensibles): la fijo por reflexión, no de punta a punta.
+- **Cuántos turnos reales cambian** con la regla del panorama: los falsos negativos de §14.2 (negación en todo el mensaje, «hoy», «pagar»…) son decisiones conservadoras que dejan salir el borrador del modelo; se miden en la tercera prueba real con `metadata.policy_violations`.
+- **S-5, S-8, m-5**, la extracción de `respaldoDePrecios()`, «total access»/«plan elite» y los beneficios sin guarda determinista: fuera de esta ronda por decisión del lead; no los toqué.
+
+### 14.9 Hallazgos adyacentes (anotados, no arreglados)
+
+1. **La condición del no contactar está escrita tres veces en `safeFallback()`** (`$conOptOut`, nueva, más `$mudoPorDiseno` y `$pideOptOut`, que ya estaban). Unificarla es una limpieza sin efecto; no la hice para no mover código que esta ronda no necesita.
+2. **G2 descarta también una frase única informativa**, no solo el relleno («El gimnasio abre de lunes a viernes…» + «¿Te sirve?»). Con un respaldo de la intención (horario, ficha, texto curado de G3) la persona recibe igualmente la respuesta, pero de Laravel y no del modelo. Es la regla escrita del lead; lo señalo por si en la tercera prueba real se ve demasiado.
+3. **«¿Tienen clases de spinning?» con el borrador descartado recibe la ficha general** (`general_info`), que no habla de clases. Es el respaldo de esa intención desde antes; con clases en el CRM, la ficha las nombra.
+4. **El enlace de pago aparte (14.bis) sigue usando el plan del turno** aunque G4 lo quite de la memoria y de `price_source`. Con los enlaces apagados no tiene efecto; es parte de S-5.
+
+### 14.10 Ficheros tocados en esta ronda
+
+**Producto (6, todos ya en la lista de la tanda; ninguno nuevo):**
+
+| Fichero | +/− | Qué |
+|---|---|---|
+| `app/Services/Marketing/Ultron/UltronCommitService.php` | +170/−55 | G1.2 (herramientas, `:1710`), S-4 en `safeFallback()` (`:2173`) y `respaldoSemantico()` (`:5173`), G2 (`:1637`), G3 (`respaldoPorIntencion()` y `textoCuradoTrasElRegistro()`, `:5076`), G4 (`$planQueSalio`, `:1944`), G5 (`:5523`), m-3 y m-8 |
+| `app/Services/Marketing/Ultron/CommercialTurnPolicy.php` | +106/−18 | G1.1, G1.3 y G1.4: `INTENCIONES_DEL_PANORAMA`, `PIDE_PANORAMA` nueva, `NO_PIDE_EL_PANORAMA`, `OTRO_TEMA_DEL_PANORAMA`, `pideElPanorama()` y `preguntaOtraCosa()`. `decide()` y `violations()`: sin cambios |
+| `app/Services/Marketing/Ultron/UltronRegisterDetector.php` | +18/−2 | G6 (las comillas, `CITAS`) y m-1 (13 marcas) |
+| `app/Services/Marketing/Ultron/ConversationMemoryService.php` | +31/−5 | G7 (S-7) y m-6 |
+| `app/Services/Marketing/Ultron/UltronReplyFitter.php` | +10 | `proseSentenceCount()` (G2); `draft()` y `withoutFinalQuestion()` sin cambios |
+| `app/Services/Marketing/Ultron/UltronFormalReplies.php` | +4/−1 | m-4 (solo el docblock) |
+
+**Diff cero** en `SalesConversationReplyService.php`, `SalesObjectionResponderService.php`, `OutboundContentGuard.php`, `CourtesyRequestService.php`, `UltronPromptOffer.php`, `UltronDecideService.php`, `UltronPromptCompiler.php`, `StrategyContract.php`, los prompts base, `config/`, rutas, migraciones, `n8n/` y las instantáneas [C, `git diff --quiet HEAD`].
+
+**Pruebas y documentos:** `CommercialTurnPolicyPanoramaTest.php` (+107/−7), `UltronRegisterDetectorTest.php` (+58), `UltronA4RegistroYPanoramaTest.php` (+661/−6; 32 métodos `test_g*`), `UltronA4LongitudYPreciosTest.php` (+12/−5), `a4-textos-ajustados.md` (6 renglones) y las salidas `a4-evidencia/67` a `74`.
+
+**Sin migraciones, rutas, `config/` ni variables de entorno.** Vuelta atrás: revertir los 6 ficheros de producto a `6c2f12d0`.
+
+### 14.11 Añadido del lead tras la entrega (19-11): el mensaje que es solo «Precios?» o «¿Planes?»
+
+Al revisar la regla final del panorama (§14.2) el lead vio que faltaba la forma más corriente de pedirlo por WhatsApp: un mensaje que es solo el sustantivo en plural. «Precios?», «¿Planes?» o «Hola, precios por favor» no casaban con ninguna alternativa de `PIDE_PANORAMA` (todas exigen un verbo, un interrogativo o un artículo delante), así que seguían recibiendo el plan único del modelo, que es justo H4-10. Y había una incoherencia: «¿Y los precios?» sí era panorama (por «los precios») y «¿Y los planes?» no.
+
+- **Cambio** (`CommercialTurnPolicy.php`, una alternativa más en `PIDE_PANORAMA`, anclada de principio a fin): el mensaje ENTERO es saludo o cortesía (hola, buenas, buenos días/tardes/noches, por favor, porfa, gracias, info, información, y, de, sobre, los, las, sus), uno de `planes`, `precios`, `tarifas` o `membresias`, y detrás solo más de lo mismo. Nada más cambia: siguen mandando la lista blanca de intenciones, la negación, la recomendación, el filtro, el tema único y, en el commit, las herramientas del turno.
+- **Entran:** «Precios?», «¿Planes?», «¿Y los planes?», «Hola, precios por favor», «Buenas tardes, planes y precios», «Info planes».
+- **Siguen fuera:** «Precios del mensual» (un plan), «Precio?» y «¿Plan?» (singular: un plan, y cuál lo decide el catálogo), «Los planes que vi ayer», «Me gustaron los planes», «Estuve mirando los planes».
+- **Una aserción cambiada, a sabiendas:** `'y los planes, a secas' => ['¿Y los planes?']` pasa del proveedor de lo que NO es panorama al de lo que sí. La regla G1.3 («los planes a secas no basta») era para «los planes» dentro de otra frase; un mensaje que es solo eso es una petición.
+- **Pruebas:** 6 positivos y 4 negativos puros en `CommercialTurnPolicyPanoramaTest`, y 2 por el endpoint en `test_g1_i2_las_formas_corrientes_del_panorama_reciben_la_lista` («Precios?» con `pricing_question` y «¿Y los planes?» con `general_info`: sale la lista de 199 caracteres).
+  - **Rojo antes** (salida 75, con el código de la entrega): 6 de los puros y los 2 del endpoint.
+  - **Verde después** (salida 76): `tests/Unit/Marketing/Ultron`, los dos A4, `UltronDecidePromptsTest`, `UltronCommitTest` y `UltronCommitPromptsTest`, **OK (1 539 pruebas, 16 414 aserciones)**; `pint --test`, passed.
+- **Sin `\p{…}` ni *lookbehind*:** `\W` y `^…$` con `/u`, como el resto de la expresión.
+

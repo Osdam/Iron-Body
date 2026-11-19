@@ -1,0 +1,855 @@
+# 67 · ROJO ANTES (correcciones tras las revisiones): las pruebas nuevas y cambiadas, con app/ intacto (git diff --quiet HEAD -- app = 0)
+# Comando: nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging --filter '/(CommercialTurnPolicyPanoramaTest|UltronRegisterDetectorTest)::|UltronA4RegistroYPanoramaTest::test_g/' tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php
+# 2026-11-19T02:07:56Z
+
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/phpunit.xml
+
+............FFFFFF.FF............................FFFFFFFFFFFFFF  63 / 267 ( 23%)
+FFFFFFFFFFFFFFFFFE............................................. 126 / 267 ( 47%)
+.........................FFFFFFFFFFFFFF.......................F 189 / 267 ( 70%)
+FFFFF...FFFFFFFFFFFFFFFF.FFFFFFFFFFFF.FFFF..FFFFFFE.FFFFF...... 252 / 267 ( 94%)
+F.........F....                                                 267 / 267 (100%)
+
+Time: 00:08.333, Memory: 92.50 MB
+
+There were 2 errors:
+
+1) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_solo_con_las_intenciones_de_la_lista_blanca
+Error: Undefined constant App\Services\Marketing\Ultron\CommercialTurnPolicy::INTENCIONES_DEL_PANORAMA
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:167
+
+2) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g3_sin_la_marca_puesta_no_sale_un_texto_que_la_promete
+ReflectionException: Method App\Services\Marketing\Ultron\UltronCommitService::textoCuradoTrasElRegistro() does not exist
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1230
+
+--
+
+There were 104 failures:
+
+1) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_es_panorama with data set "cuáles son los precios" ('¿Cuáles son los precios?')
+¿Cuáles son los precios?
+Failed asserting that false is true.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:61
+
+2) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_es_panorama with data set "qué precios manejan" ('¿Qué precios manejan?')
+¿Qué precios manejan?
+Failed asserting that false is true.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:61
+
+3) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_es_panorama with data set "info de precios" ('Info de precios')
+Info de precios
+Failed asserting that false is true.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:61
+
+4) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_es_panorama with data set "las tarifas" ('Las tarifas')
+Las tarifas
+Failed asserting that false is true.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:61
+
+5) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_es_panorama with data set "cuánto valen las membresías" ('¿Cuánto valen las membresías?')
+¿Cuánto valen las membresías?
+Failed asserting that false is true.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:61
+
+6) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_es_panorama with data set "tienen planes" ('¿Tienen planes?')
+¿Tienen planes?
+Failed asserting that false is true.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:61
+
+7) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_es_panorama with data set "opciones DE MEMBRESÍAS" ('Quiero ver las opciones de membresías')
+Quiero ver las opciones de membresías
+Failed asserting that false is true.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:61
+
+8) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_es_panorama with data set "la lista de planes" ('Mándame la lista de planes')
+Mándame la lista de planes
+Failed asserting that false is true.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:61
+
+9) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "qué opciones tienen, sin «de planes»" ('Hola, ¿qué opciones tienen?')
+Hola, ¿qué opciones tienen?
+Failed asserting that true is false.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:125
+
+10) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "opciones de pago" ('¿Qué opciones de pago tienen?')
+¿Qué opciones de pago tienen?
+Failed asserting that true is false.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:125
+
+11) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "opciones de horario" ('¿Qué opciones de horario hay?')
+¿Qué opciones de horario hay?
+Failed asserting that true is false.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:125
+
+12) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "opciones para un objetivo" ('¿Qué opciones hay para bajar de peso?')
+¿Qué opciones hay para bajar de peso?
+Failed asserting that true is false.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:125
+
+13) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "los planes sin petición (mirando)" ('Estuve mirando los planes')
+Estuve mirando los planes
+Failed asserting that true is false.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:125
+
+14) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "los planes sin petición (me gustaron)" ('Me gustaron los planes')
+Me gustaron los planes
+Failed asserting that true is false.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:125
+
+15) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "y los planes, a secas" ('¿Y los planes?')
+¿Y los planes?
+Failed asserting that true is false.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:125
+
+16) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "un asesor sobre los planes" ('Quiero hablar con un asesor s...planes')
+Quiero hablar con un asesor sobre los planes
+Failed asserting that true is false.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:125
+
+17) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "pago reclamado (S-4)" ('Ya pagué uno de los planes y ...a nada')
+Ya pagué uno de los planes y no me llega nada
+Failed asserting that true is false.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:125
+
+18) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "queja (S-4)" ('Quiero poner una queja por lo...de más')
+Quiero poner una queja por los planes, me cobraron de más
+Failed asserting that true is false.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:125
+
+19) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "una persona del equipo (S-4)" ('Quiero hablar con una persona...planes')
+Quiero hablar con una persona del equipo sobre los planes
+Failed asserting that true is false.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:125
+
+20) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "no me interesan (B-1)" ('No me interesan los planes, gracias')
+No me interesan los planes, gracias
+Failed asserting that true is false.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:125
+
+21) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "ya vi, no me interesan (S-4)" ('Ya vi los planes, no me interesan')
+Ya vi los planes, no me interesan
+Failed asserting that true is false.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:125
+
+22) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "dejen de mandarme (S-4)" ('Ya no quiero saber nada, deje...planes')
+Ya no quiero saber nada, dejen de mandarme los planes
+Failed asserting that true is false.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:125
+
+23) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "gracias, ya vi (S-4)" ('Gracias, ya vi los planes')
+Gracias, ya vi los planes
+Failed asserting that true is false.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:125
+
+24) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "ya conozco" ('Ya conozco los planes, solo q...aludar')
+Ya conozco los planes, solo quería saludar
+Failed asserting that true is false.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:125
+
+25) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "ya me los mandaron" ('Ya me mandaron los planes')
+Ya me mandaron los planes
+Failed asserting that true is false.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:125
+
+26) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "cuál de los planes me recomienda (B-1)" ('¿Cuál de los planes me recomi... peso?')
+¿Cuál de los planes me recomienda para bajar de peso?
+Failed asserting that true is false.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:125
+
+27) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "ya vi, cuál me recomiendas (B-1)" ('Ya vi los planes, ¿cuál me re...endas?')
+Ya vi los planes, ¿cuál me recomiendas?
+Failed asserting that true is false.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:125
+
+28) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "qué planes me recomienda" ('¿Qué planes me recomienda?')
+¿Qué planes me recomienda?
+Failed asserting that true is false.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:125
+
+29) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_lo_que_no_es_panorama with data set "cuál me conviene de los planes" ('De los planes que tienen, ¿cu...e más?')
+De los planes que tienen, ¿cuál me conviene más?
+Failed asserting that true is false.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:125
+
+30) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_con_otra_pregunta_en_el_mismo_mensaje_no_es_panorama with data set "el horario (PREGUNTA_INCIDENTAL)" ('¿Cuál es el horario y cuánto ...lanes?')
+¿Cuál es el horario y cuánto cuestan los planes?
+Failed asserting that true is false.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:156
+
+31) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_con_otra_pregunta_en_el_mismo_mensaje_no_es_panorama with data set "hasta qué hora (PREGUNTA_INCIDENTAL)" ('¿Qué planes tienen y hasta qu...abren?')
+¿Qué planes tienen y hasta qué hora abren?
+Failed asserting that true is false.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:156
+
+32) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_con_otra_pregunta_en_el_mismo_mensaje_no_es_panorama with data set "la dirección (PREGUNTA_INCIDENTAL)" ('¿Dónde quedan y qué planes tienen?')
+¿Dónde quedan y qué planes tienen?
+Failed asserting that true is false.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:156
+
+33) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_con_otra_pregunta_en_el_mismo_mensaje_no_es_panorama with data set "una visita (HABLA_DE_VISITA, R7)" ('Quiero ir el sábado a las 10 ...ienen?')
+Quiero ir el sábado a las 10 de la mañana. ¿Qué planes tienen?
+Failed asserting that true is false.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:156
+
+34) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_con_otra_pregunta_en_el_mismo_mensaje_no_es_panorama with data set "una persona (HumanHandoffAuthority)" ('¿Qué planes tienen? Quiero ha...asesor')
+¿Qué planes tienen? Quiero hablar con un asesor
+Failed asserting that true is false.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:156
+
+35) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_con_otra_pregunta_en_el_mismo_mensaje_no_es_panorama with data set "las clases" ('¿Qué clases tienen y qué plan...nejan?')
+¿Qué clases tienen y qué planes manejan?
+Failed asserting that true is false.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:156
+
+36) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_con_otra_pregunta_en_el_mismo_mensaje_no_es_panorama with data set "los medios de pago" ('¿Qué planes tienen y cómo se paga?')
+¿Qué planes tienen y cómo se paga?
+Failed asserting that true is false.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:156
+
+37) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_con_otra_pregunta_en_el_mismo_mensaje_no_es_panorama with data set "con tarjeta" ('¿Qué planes tienen? ¿Reciben tarjeta?')
+¿Qué planes tienen? ¿Reciben tarjeta?
+Failed asserting that true is false.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:156
+
+38) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_con_otra_pregunta_en_el_mismo_mensaje_no_es_panorama with data set "una lesión" ('Tengo una lesión de rodilla, ...ienen?')
+Tengo una lesión de rodilla, ¿qué planes tienen?
+Failed asserting that true is false.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:156
+
+39) Tests\Unit\Marketing\Ultron\CommercialTurnPolicyPanoramaTest::test_con_otra_pregunta_en_el_mismo_mensaje_no_es_panorama with data set "un dolor" ('¿Qué planes tienen? Me duele ...spalda')
+¿Qué planes tienen? Me duele la espalda
+Failed asserting that true is false.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/CommercialTurnPolicyPanoramaTest.php:156
+
+40) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "anímate" ('anímate', 'Anímate, el primer día es el ...fícil.')
+Anímate, el primer día es el más difícil.
+Failed asserting that an array contains 'anímate'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:132
+
+41) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "animate" ('animate', 'Animate, el primer dia es el ...ficil.')
+Animate, el primer dia es el mas dificil.
+Failed asserting that an array contains 'animate'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:132
+
+42) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "pásate" ('pásate', 'Pásate por la sede cuando quieras.')
+Pásate por la sede cuando quieras.
+Failed asserting that an array contains 'pásate'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:132
+
+43) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "pasate" ('pasate', 'Pasate por la sede esta semana.')
+Pasate por la sede esta semana.
+Failed asserting that an array contains 'pasate'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:132
+
+44) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "inscríbete" ('inscríbete', 'Inscríbete en recepción con e...mento.')
+Inscríbete en recepción con el documento.
+Failed asserting that an array contains 'inscríbete'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:132
+
+45) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "inscribete" ('inscribete', 'Inscribete en recepcion con e...mento.')
+Inscribete en recepcion con el documento.
+Failed asserting that an array contains 'inscribete'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:132
+
+46) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "acércate" ('acércate', 'Acércate a la recepción y lo vemos.')
+Acércate a la recepción y lo vemos.
+Failed asserting that an array contains 'acércate'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:132
+
+47) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "acercate" ('acercate', 'Acercate a la recepcion y lo vemos.')
+Acercate a la recepcion y lo vemos.
+Failed asserting that an array contains 'acercate'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:132
+
+48) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "estés" ('estés', 'Cuando estés listo, empezamos.')
+Cuando estés listo, empezamos.
+Failed asserting that an array contains 'estés'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:132
+
+49) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "tengas" ('tengas', 'Ven cuando tengas un rato libre.')
+Ven cuando tengas un rato libre.
+Failed asserting that an array contains 'tengas'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:132
+
+50) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "necesites" ('necesites', 'Cuenta conmigo para lo que necesites.')
+Cuenta conmigo para lo que necesites.
+Failed asserting that an array contains 'necesites'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:132
+
+51) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "llegas" ('llegas', 'Cuando llegas, el entrenador ...ecibe.')
+Cuando llegas, el entrenador te recibe.
+Failed asserting that an array contains 'llegas'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:132
+
+52) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_cada_marca_de_la_lista_cerrada with data set "entrenaste" ('entrenaste', '¿Ya entrenaste alguna vez en ...nasio?')
+¿Ya entrenaste alguna vez en un gimnasio?
+Failed asserting that an array contains 'entrenaste'.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:132
+
+53) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_la_lista_es_cerrada_y_sin_repetidos
+cada marca tiene su caso
+Failed asserting that actual size 63 matches expected size 76.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:139
+
+54) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_si_lo_entrecomillado_es_la_mayor_parte_se_mira_entero with data set "el mensaje entero entre comillas rectas (S-6)" ('"Hola, te cuento que tienes a...eres?"', ['te', 'tienes', 'puedes', 'quieras', 'quieres'])
+"Hola, te cuento que tienes acceso y puedes venir cuando quieras. ¿Quieres?"
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+-Array &0 [
+-    0 => 'te',
+-    1 => 'tienes',
+-    2 => 'puedes',
+-    3 => 'quieras',
+-    4 => 'quieres',
+-]
++Array &0 []
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:214
+
+55) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_si_lo_entrecomillado_es_la_mayor_parte_se_mira_entero with data set "casi entero entre comillas (S-6)" ('El "Plan Mensual te da acceso...mbién.', ['te', 'tienes'])
+El "Plan Mensual te da acceso libre y tienes clases; el Valera" también.
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+-Array &0 [
+-    0 => 'te',
+-    1 => 'tienes',
+-]
++Array &0 []
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:214
+
+56) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_si_lo_entrecomillado_es_la_mayor_parte_se_mira_entero with data set "el mensaje entero entre comillas latinas" ('«Claro, te ayudo con eso cuan...eras.»', ['te', 'quieras'])
+«Claro, te ayudo con eso cuando quieras.»
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+-Array &0 [
+-    0 => 'te',
+-    1 => 'quieras',
+-]
++Array &0 []
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:214
+
+57) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_si_lo_entrecomillado_es_la_mayor_parte_se_mira_entero with data set "el mensaje entero entre comillas inglesas" ('“Con gusto te cuento los planes.”', ['te'])
+“Con gusto te cuento los planes.”
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+-Array &0 [
+-    0 => 'te',
+-]
++Array &0 []
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:214
+
+58) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_si_lo_entrecomillado_es_la_mayor_parte_se_mira_entero with data set "la frase de la casa como lema (m-2)" ('Nuestro lema: «te acompañamos...paso».', ['te'])
+Nuestro lema: «te acompañamos en cada paso».
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+-Array &0 [
+-    0 => 'te',
+-]
++Array &0 []
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:214
+
+59) Tests\Unit\Marketing\Ultron\UltronRegisterDetectorTest::test_si_lo_entrecomillado_es_la_mayor_parte_se_mira_entero with data set "mitad y mitad no es «la mayor parte»" ('Sobre "¿tienes clases de yoga...artes.', ['tienes'])
+Sobre "¿tienes clases de yoga?": sí, los martes.
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+-Array &0 [
+-    0 => 'tienes',
+-]
++Array &0 []
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegisterDetectorTest.php:214
+
+60) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g1_lo_que_no_pide_la_lista_recibe_el_borrador_con_cercano_y_con_profesional with data set "opciones de pago (B-1)" ('payment_link_request', '¿Qué opciones de pago tienen?', 'Puede pagar desde la app Iron...a app?', null, [], 'Puede pagar desde la app Iron...a app?')
+cercano: «¿Qué opciones de pago tienen?»
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Puede pagar desde la app Iron Body Workout con Nequi, PSE, tarjeta o Daviplata, o directamente en el gimnasio. ¿Le paso la app?'
++'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:993
+
+61) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g1_lo_que_no_pide_la_lista_recibe_el_borrador_con_cercano_y_con_profesional with data set "la negativa (B-1)" ('not_interested', 'No me interesan los planes, gracias', 'Entendido, no hay problema. S...tamos.', null, [], 'Entendido, no hay problema. S...tamos.')
+cercano: «No me interesan los planes, gracias»
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Entendido, no hay problema. Si más adelante quiere resolver dudas, aquí estamos.'
++'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:993
+
+62) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g1_lo_que_no_pide_la_lista_recibe_el_borrador_con_cercano_y_con_profesional with data set "un asesor (B-1)" ('human_request', 'Quiero hablar con un asesor s...planes', 'Claro, dejo marcada su solici...evise.', null, [['staff_review']], 'Claro, dejo marcada su solici...evise.')
+cercano: «Quiero hablar con un asesor sobre los planes»
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro, dejo marcada su solicitud para que alguien del equipo la revise.'
++'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:993
+
+63) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g1_lo_que_no_pide_la_lista_recibe_el_borrador_con_cercano_y_con_profesional with data set "la recomendación (B-1, R6)" ('goal_fat_loss', '¿Cuál de los planes me recomi... peso?', 'Para bajar de peso le recomie...rcano.', 8, [], 'Para bajar de peso le recomie...rcano.')
+cercano: «¿Cuál de los planes me recomienda para bajar de peso?»
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Para bajar de peso le recomiendo el Élite, porque incluye acompañamiento cercano.'
++'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:993
+
+64) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g1_lo_que_no_pide_la_lista_recibe_el_borrador_con_cercano_y_con_profesional with data set "opciones de horario (B-1)" ('schedule_question', '¿Qué opciones de horario hay?', 'Abrimos de lunes a viernes de... p. m.', null, [], 'Abrimos de lunes a viernes de... p. m.')
+cercano: «¿Qué opciones de horario hay?»
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Abrimos de lunes a viernes de 5:00 a. m. a 10:00 p. m., y sábados y domingos de 8:00 a. m. a 2:00 p. m.'
++'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:993
+
+65) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g1_lo_que_no_pide_la_lista_recibe_el_borrador_con_cercano_y_con_profesional with data set "una lesión y los planes (B-1)" ('medical_risk_escalation', 'Tengo una lesión de rodilla, ...ienen?', 'Gracias por contarlo. Con una... plan.', null, [['staff_review']], 'Gracias por contarlo. Con una... plan.')
+cercano: «Tengo una lesión de rodilla, ¿qué planes tienen?»
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Gracias por contarlo. Con una lesión es mejor que el equipo revise su caso antes de recomendarle un plan.'
++'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:993
+
+66) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g1_lo_que_no_pide_la_lista_recibe_el_borrador_con_cercano_y_con_profesional with data set "el horario y los planes (I-3)" ('pricing_question', '¿Cuál es el horario y cuánto ...lanes?', 'Abrimos de lunes a viernes de...l mes.', 3, [], 'Abrimos de lunes a viernes de...l mes.')
+cercano: «¿Cuál es el horario y cuánto cuestan los planes?»
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Abrimos de lunes a viernes de 5:00 a. m. a 10:00 p. m. El Plan Valera cuesta $65.000 COP al mes.'
++'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:993
+
+67) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g1_lo_que_no_pide_la_lista_recibe_el_borrador_con_cercano_y_con_profesional with data set "un pago reclamado (S-4)" ('fraud_or_payment_claim', 'Ya pagué uno de los planes y ...a nada', 'Entiendo, lo dejo marcado par...idado.', null, [['staff_review']], 'Entiendo, lo dejo marcado par...idado.')
+cercano: «Ya pagué uno de los planes y no me llega nada»
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Entiendo, lo dejo marcado para que el equipo revise su caso de pago con cuidado.'
++'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:993
+
+68) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g1_lo_que_no_pide_la_lista_recibe_el_borrador_con_cercano_y_con_profesional with data set "una queja (S-4)" ('complaint', 'Quiero poner una queja por lo...de más', 'Entiendo. Lo dejo marcado com...quipo.', null, [['staff_review']], 'Entiendo. Lo dejo marcado com...quipo.')
+cercano: «Quiero poner una queja por los planes, me cobraron de más»
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Entiendo. Lo dejo marcado como caso para revisión del equipo.'
++'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:993
+
+69) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g1_lo_que_no_pide_la_lista_recibe_el_borrador_con_cercano_y_con_profesional with data set "el agradecimiento (S-4)" ('thanks', 'Gracias, ya vi los planes', 'Con gusto. Si más adelante qu...ayudo.', null, [], 'Con gusto. Si más adelante qu...ayudo.')
+cercano: «Gracias, ya vi los planes»
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Con gusto. Si más adelante quiere empezar, me escribe y le ayudo.'
++'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:993
+
+70) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g1_lo_que_no_pide_la_lista_tampoco_la_recibe_con_el_revisor_caido with data set "opciones de pago (B-1)" ('payment_link_request', '¿Qué opciones de pago tienen?', 'Puede pagar desde la app Iron...a app?', null, [], 'Puede pagar desde la app Iron...a app?')
+cercano: «¿Qué opciones de pago tienen?» → «Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
+Failed asserting that 'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?' [UTF-8](length: 206) does not contain "planes de un mes" [ASCII](length: 16).
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1012
+
+71) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g1_lo_que_no_pide_la_lista_tampoco_la_recibe_con_el_revisor_caido with data set "la negativa (B-1)" ('not_interested', 'No me interesan los planes, gracias', 'Entendido, no hay problema. S...tamos.', null, [], 'Entendido, no hay problema. S...tamos.')
+cercano: «No me interesan los planes, gracias» → «Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
+Failed asserting that 'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?' [UTF-8](length: 206) does not contain "planes de un mes" [ASCII](length: 16).
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1012
+
+72) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g1_lo_que_no_pide_la_lista_tampoco_la_recibe_con_el_revisor_caido with data set "un asesor (B-1)" ('human_request', 'Quiero hablar con un asesor s...planes', 'Claro, dejo marcada su solici...evise.', null, [['staff_review']], 'Claro, dejo marcada su solici...evise.')
+cercano: «Quiero hablar con un asesor sobre los planes» → «Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
+Failed asserting that 'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?' [UTF-8](length: 206) does not contain "planes de un mes" [ASCII](length: 16).
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1012
+
+73) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g1_lo_que_no_pide_la_lista_tampoco_la_recibe_con_el_revisor_caido with data set "la recomendación (B-1, R6)" ('goal_fat_loss', '¿Cuál de los planes me recomi... peso?', 'Para bajar de peso le recomie...rcano.', 8, [], 'Para bajar de peso le recomie...rcano.')
+cercano: «¿Cuál de los planes me recomienda para bajar de peso?» → «Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
+Failed asserting that 'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?' [UTF-8](length: 206) does not contain "planes de un mes" [ASCII](length: 16).
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1012
+
+74) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g1_lo_que_no_pide_la_lista_tampoco_la_recibe_con_el_revisor_caido with data set "opciones de horario (B-1)" ('schedule_question', '¿Qué opciones de horario hay?', 'Abrimos de lunes a viernes de... p. m.', null, [], 'Abrimos de lunes a viernes de... p. m.')
+cercano: «¿Qué opciones de horario hay?» → «Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
+Failed asserting that 'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?' [UTF-8](length: 206) does not contain "planes de un mes" [ASCII](length: 16).
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1012
+
+75) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g1_lo_que_no_pide_la_lista_tampoco_la_recibe_con_el_revisor_caido with data set "una lesión y los planes (B-1)" ('medical_risk_escalation', 'Tengo una lesión de rodilla, ...ienen?', 'Gracias por contarlo. Con una... plan.', null, [['staff_review']], 'Gracias por contarlo. Con una... plan.')
+cercano: «Tengo una lesión de rodilla, ¿qué planes tienen?» → «Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
+Failed asserting that 'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?' [UTF-8](length: 206) does not contain "planes de un mes" [ASCII](length: 16).
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1012
+
+76) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g1_lo_que_no_pide_la_lista_tampoco_la_recibe_con_el_revisor_caido with data set "un pago reclamado (S-4)" ('fraud_or_payment_claim', 'Ya pagué uno de los planes y ...a nada', 'Entiendo, lo dejo marcado par...idado.', null, [['staff_review']], 'Entiendo, lo dejo marcado par...idado.')
+cercano: «Ya pagué uno de los planes y no me llega nada» → «Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
+Failed asserting that 'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?' [UTF-8](length: 206) does not contain "planes de un mes" [ASCII](length: 16).
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1012
+
+77) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g1_lo_que_no_pide_la_lista_tampoco_la_recibe_con_el_revisor_caido with data set "una queja (S-4)" ('complaint', 'Quiero poner una queja por lo...de más', 'Entiendo. Lo dejo marcado com...quipo.', null, [['staff_review']], 'Entiendo. Lo dejo marcado com...quipo.')
+cercano: «Quiero poner una queja por los planes, me cobraron de más» → «Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
+Failed asserting that 'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?' [UTF-8](length: 206) does not contain "planes de un mes" [ASCII](length: 16).
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1012
+
+78) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g1_lo_que_no_pide_la_lista_tampoco_la_recibe_con_el_revisor_caido with data set "el agradecimiento (S-4)" ('thanks', 'Gracias, ya vi los planes', 'Con gusto. Si más adelante qu...ayudo.', null, [], 'Con gusto. Si más adelante qu...ayudo.')
+cercano: «Gracias, ya vi los planes» → «Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
+Failed asserting that 'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?' [UTF-8](length: 206) does not contain "planes de un mes" [ASCII](length: 16).
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1012
+
+79) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g1_un_relevo_autorizado_no_recibe_la_lista
+cercano
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro, ya dejé su solicitud para que una persona del equipo le atienda por aquí.'
++'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1032
+
+80) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g1_una_cortesia_recien_registrada_no_recibe_la_lista
+cercano
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Listo, quedó registrada su solicitud de visita para el sábado a las 10:00 a. m.; el equipo la revisará. El Plan Valera es una buena opción para empezar.'
++'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1050
+
+81) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g1_con_una_herramienta_en_el_turno_no_hay_lista_por_panorama
+cercano
+Failed asserting that 'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?' starts with "Tenemos el Plan Valera, con acceso total al gimnasio.".
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1068
+
+82) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g1_i2_las_formas_corrientes_del_panorama_reciben_la_lista with data set "¿Cuáles son los precios?" ('pricing_question', '¿Cuáles son los precios?')
+¿Cuáles son los precios?
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
++'El Plan Valera cuesta $65.000 COP al mes. ¿Le cuento qué incluye?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1094
+
+83) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g1_i2_las_formas_corrientes_del_panorama_reciben_la_lista with data set "¿Qué precios manejan?" ('pricing_question', '¿Qué precios manejan?')
+¿Qué precios manejan?
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
++'El Plan Valera cuesta $65.000 COP al mes. ¿Le cuento qué incluye?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1094
+
+84) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g1_i2_las_formas_corrientes_del_panorama_reciben_la_lista with data set "Info de precios" ('pricing_question', 'Info de precios')
+Info de precios
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
++'El Plan Valera cuesta $65.000 COP al mes. ¿Le cuento qué incluye?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1094
+
+85) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g1_i2_las_formas_corrientes_del_panorama_reciben_la_lista with data set "las tarifas" ('pricing_question', 'Las tarifas')
+Las tarifas
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
++'El Plan Valera cuesta $65.000 COP al mes. ¿Le cuento qué incluye?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1094
+
+86) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g1_i2_las_formas_corrientes_del_panorama_reciben_la_lista with data set "¿Cuánto valen las membresías?" ('pricing_question', '¿Cuánto valen las membresías?')
+¿Cuánto valen las membresías?
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
++'El Plan Valera cuesta $65.000 COP al mes. ¿Le cuento qué incluye?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1094
+
+87) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g1_i2_las_formas_corrientes_del_panorama_reciben_la_lista with data set "¿Tienen planes?" ('general_info', '¿Tienen planes?')
+¿Tienen planes?
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Algunos planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP; Élite, $180.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?'
++'El Plan Valera cuesta $65.000 COP al mes. ¿Le cuento qué incluye?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1094
+
+88) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2_el_recorte_por_registro_no_deja_una_sola_frase_de_relleno with data set "clases de spinning" ('general_info', '¿Tienen clases de spinning?', 'Claro. ¿Quieres que te cuente...emana?', true, 'discarded', 'Con gusto le cuento. Iron Bod...pezar?')
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Con gusto le cuento. Iron Body Neiva es un centro de acondicionamiento físico en Neiva. ¿Qué le cuento más a fondo: los planes, las clases o cómo empezar?'
++'Claro.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1148
+
+89) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2_el_recorte_por_registro_no_deja_una_sola_frase_de_relleno with data set "pagar con tarjeta" ('payment_link_request', '¿Puedo pagar con tarjeta?', 'Sí, claro. ¿Quieres que te pa...e ahí?', false, 'discarded', 'El pago lo hace usted mismo d...garla?')
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'El pago lo hace usted mismo desde la app Iron Body Workout: crea su cuenta con su documento y ahí paga con Nequi, PSE, tarjeta o Daviplata. ¿Quiere que le pase la app para descargarla?'
++'Sí, claro.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1148
+
+90) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2_el_recorte_por_registro_no_deja_una_sola_frase_de_relleno with data set "el saludo" ('greeting', 'Hola', '¡Hola, buenas tardes! ¿En qué...r hoy?', false, 'discarded', 'Hola, muy buenas tardes. Bien...r hoy?')
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Hola, muy buenas tardes. Bienvenido a Iron Body, qué gusto atenderle. Cuénteme, ¿en qué le podemos ayudar hoy?'
++'¡Hola, buenas tardes!'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1148
+
+91) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2_el_recorte_por_registro_no_deja_una_sola_frase_de_relleno with data set "el miedo de principiante" ('beginner_fear', 'Nunca he entrenado y me da pena', 'Es muy normal al inicio. ¿Qué...ocupa?', false, 'discarded', 'Es normal sentir pena al inic...hacer?')
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Es normal sentir pena al inicio. A muchas personas les pasa cuando no conocen el ambiente o las máquinas. ¿Qué le preocupa más: venir solo o no saber qué hacer?'
++'Es muy normal al inicio.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1148
+
+92) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g3_tras_un_descarte_por_registro_sale_el_texto_curado_de_la_intencion with data set "un objetivo (R5)" ('goal_fat_loss', 'Quiero bajar de peso', 'Para bajar de peso te recomie...pezar?', [4], 200, 'Muy bien. Para bajar grasa lo... cero?')
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Muy bien. Para bajar grasa lo más importante es empezar con algo que pueda sostener. ¿Ya viene entrenando o empieza desde cero?'
++'Claro, con gusto le ayudo. Cuénteme, ¿en qué le ayudo hoy?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1196
+
+93) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g3_tras_un_descarte_por_registro_sale_el_texto_curado_de_la_intencion with data set "el miedo de principiante" ('beginner_fear', 'Me da miedo empezar, nunca he...mnasio', 'Tranquilo, te entiendo: mucho...ocupa?', [], 200, 'Es normal sentir pena al inic...hacer?')
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Es normal sentir pena al inicio. A muchas personas les pasa cuando no conocen el ambiente o las máquinas. ¿Qué le preocupa más: venir solo o no saber qué hacer?'
++'Claro, con gusto le ayudo. Cuénteme, ¿en qué le ayudo hoy?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1196
+
+94) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g3_tras_un_descarte_por_registro_sale_el_texto_curado_de_la_intencion with data set "una objeción" ('time_objection', 'No tengo tiempo para entrenar', 'Te entiendo, el tiempo es lo ...ibres?', [], 200, 'Le entiendo. A veces la clave...carse?')
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Le entiendo. A veces la clave es armar algo realista, no perfecto. ¿Cuántos días a la semana cree que podría venir sin complicarse?'
++'Claro, con gusto le ayudo. Cuénteme, ¿en qué le ayudo hoy?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1196
+
+95) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g3_tras_un_descarte_por_registro_sale_el_texto_curado_de_la_intencion with data set "pedir una persona, con su revisión ejecutada" ('human_request', 'Quiero hablar con una persona', 'Claro, dejo marcada tu solici...evise.', [['staff_review']], 200, 'Claro, dejo marcada su solici...lanes.')
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro, dejo marcada su solicitud para que alguien del equipo la revise. Igual sigo por aquí si quiere que le ayude con precios, ubicación o planes.'
++'Entiendo, y lo siento. Esto lo revisa una persona del equipo, no yo.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1196
+
+96) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g3_tras_un_descarte_por_registro_sale_el_texto_curado_de_la_intencion with data set "el horario sin tope (m-7)" ('schedule_question', '¿Cuál es el horario de atenci...emana?', 'Te entiendo, quieres saber el...nemos?', [], 320, 'Claro. Horario general de ate...renar?')
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Horario general de atencion: Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m. Este es el horario de apertura del gimnasio, no el horario de las clases. ¿En qué franja le queda mejor entrenar?'
++'Claro, con gusto le ayudo. Cuénteme, ¿en qué le ayudo hoy?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1196
+
+97) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g3_una_intencion_sensible_recibe_su_texto_curado_porque_la_marca_esta_puesta
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Para factura necesito que el equipo confirme los datos correctos para no cometer errores. Le dejo marcada la solicitud de facturación. Si quiere, también puedo ayudarle con información de planes o ubicación.'
++'Entiendo, y lo siento. Esto lo revisa una persona del equipo, no yo.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1214
+
+98) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g4_la_memoria_no_cita_un_plan_que_no_salio
+price_source citaba el plan 4 a $80.000
+Failed asserting that Array &0 [
+    'plan_id' => 4,
+    'price' => 80000,
+    'resolved_at_commit' => true,
+] is null.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1259
+
+99) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g4_el_plan_del_modelo_se_conserva_solo_si_la_alternativa_lo_nombra
+price_source citaba el Valera
+Failed asserting that Array &0 [
+    'plan_id' => 4,
+    'price' => 80000,
+    'resolved_at_commit' => true,
+] is null.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1271
+
+100) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g5_el_encabezado_mixto_dice_algunos_si_no_nombra_todos
+200
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Algunos de nuestros planes: Trimestre (tres meses), $210.000 COP; Plan Valera (un mes), $65.000 COP; Plan Mensual (un mes), $80.000 COP. ¿Sobre cuál amplío la información?'
++'Claro. Nuestros planes: Trimestre (tres meses), $210.000 COP; Plan Valera (un mes), $65.000 COP; Plan Mensual (un mes), $80.000 COP. ¿Sobre cuál amplío la información?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1297
+
+101) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g7_una_oferta_de_usted_solo_con_su_construccion with data set "quiere decir (S-7)" ('¿Sabe qué quiere decir el enl... pago?', null)
+¿Sabe qué quiere decir el enlace de pago?
+Failed asserting that 'send_payment_link' is identical to null.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1337
+
+102) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g7_una_oferta_de_usted_solo_con_su_construccion with data set "el equipo desea (S-7)" ('¿El equipo desea revisar su p... link?', null)
+¿El equipo desea revisar su pago por el link?
+Failed asserting that 'send_payment_link' is identical to null.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1337
+
+103) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g7_la_recomendacion_y_el_como_empezar_de_usted
+Failed asserting that null is identical to Array &0 [
+    0 => 4,
+].
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1347
+
+104) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g8_tope_las_dos_violaciones_a_la_vez
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Muy bien. Para bajar grasa lo más importante es empezar con algo que pueda sostener. ¿Ya viene entrenando o empieza desde cero?'
++'Claro, con gusto le ayudo. Cuénteme, ¿en qué le ayudo hoy?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1483
+
+ERRORS!
+Tests: 267, Assertions: 526, Errors: 2, Failures: 104.

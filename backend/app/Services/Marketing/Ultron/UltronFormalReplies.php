@@ -32,7 +32,10 @@ use App\Services\Marketing\SalesConversationReplyService;
  * LA REGLA DE LAS VARIANTES: la misma frase pasada a usted, sin muletillas
  * («Listo», «Tranquilo», «De una»), con el mismo número de frases y en el
  * mismo orden, para que {@see UltronReplyFitter} las ajuste al tope igual que
- * las originales. Las 36 del plan (§2.3) van tal cual; el resto las redactó
+ * las originales. Una excepción, a propósito (m-4 del revisor): la de
+ * `not_interested` funde «Listo, tranquilo. No hay problema.» en «Entendido,
+ * no hay problema.» (de tres frases a dos, sin perder contenido), porque
+ * «tranquilo» es una muletilla. Las 36 del plan (§2.3) van tal cual; el resto las redactó
  * `backend` con esa regla. Las aprueba el propietario en
  * `plans/informes-motores/a4-textos-usted.md`, que genera y fija una prueba.
  *

@@ -18,6 +18,11 @@ namespace App\Services\Marketing\Ultron;
  *  1. Quita lo que no es la voz de ULTRON: las URL, los marcadores `{{…}}`,
  *     lo que va entre comillas («…», "…", “…»: lo que dijo la persona, citado)
  *     y los nombres de plan del catálogo (un plan puede llamarse «Tu Plan»).
+ *     Las comillas, solo si lo que queda FUERA de ellas es la mayor parte del
+ *     mensaje (más palabras fuera que dentro; G6 del lead, S-6 de `security`
+ *     y m-2 del revisor): un mensaje entero (o casi) entre comillas, o una
+ *     frase de la casa entrecomillada como lema, se mira completo, comillas
+ *     incluidas. Unas comillas sin cerrar no tapan nada.
  *  2. Minúsculas CONSERVANDO las tildes: «estás» es tuteo y «estas» no; por
  *     eso no usa `SalesAgentDecisionSchema::normalize()`, que las quita.
  *  3. Palabras enteras con una clase explícita (`[a-záéíóúñü]+`): el PCRE de
@@ -63,7 +68,15 @@ final class UltronRegisterDetector
         // Propuestas de `backend`, cada una con su caso.
         'has', 'vengas', 'seas', 'puedas', 'quieras', 'sientas', 'crees', 'decides',
         'ayudarte', 'contarte', 'darte', 'orientarte', 'responderte', 'resolverte', 'recomendarte',
+        // m-1 del revisor (G9 del lead): falsos negativos medidos sin «te/tu»; solo formas
+        // que no existen de usted ni en tercera persona («ven», «mira», «aprovecha»,
+        // «recuerda» y «cuenta» NO entran: «ellos ven», «el plan aprovecha»).
+        'anímate', 'animate', 'pásate', 'pasate', 'inscríbete', 'inscribete', 'acércate', 'acercate',
+        'estés', 'tengas', 'necesites', 'llegas', 'entrenaste',
     ];
+
+    /** Lo que va entre comillas (latinas, rectas e inglesas), siempre con su pareja de cierre. */
+    private const CITAS = ['/«[^»]*»/u', '/"[^"]*"/u', '/“[^”]*”/u'];
 
     /** Para quitar un nombre de plan escrito sin tildes («plan dia» por «PLAN DÍA»). */
     private const SIN_TILDES = ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u'];
@@ -77,8 +90,11 @@ final class UltronRegisterDetector
      */
     public static function tuteo(string $texto, array $planes = []): array
     {
-        $t = (string) preg_replace(['#https?://\S+#u', '#\bwww\.\S+#u', '/\{\{[^}]*\}\}/u', '/«[^»]*»/u', '/"[^"]*"/u', '/“[^”]*”/u'], ' ', $texto);
-        $palabras = self::palabras($t);
+        $t = (string) preg_replace(['#https?://\S+#u', '#\bwww\.\S+#u', '/\{\{[^}]*\}\}/u'], ' ', $texto);
+        $sinCitas = (string) preg_replace(self::CITAS, ' ', $t);
+        // La cita se descarta solo si fuera queda la mayor parte del mensaje (G6, S-6): si no, se mira entero.
+        $fuera = count(self::palabras($sinCitas));
+        $palabras = self::palabras($fuera > count(self::palabras($t)) - $fuera ? $sinCitas : $t);
 
         foreach ($planes as $plan) {
             $nombre = self::palabras((string) ($plan['name'] ?? ''));

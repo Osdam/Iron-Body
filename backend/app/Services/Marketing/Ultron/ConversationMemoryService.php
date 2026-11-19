@@ -64,7 +64,31 @@ final class ConversationMemoryService
     /** El verbo que hace de una pregunta una oferta: de tú (siempre) y de usted (solo con «profesional»). */
     private const VERBO_DE_OFERTA = '/\b(quieres|te gustaria|te interesa|prefieres|deseas|te parece)\b/u';
 
-    private const VERBO_DE_OFERTA_DE_USTED = '/\b(quiere|le gustaria|le interesa|prefiere|desea|le parece)\b/u';
+    /**
+     * La oferta de usted es una CONSTRUCCIÓN dirigida a la persona, al abrir la
+     * pregunta (G7 del lead, S-7 de `security`): «¿Quiere que le…?», «¿Le
+     * gustaría…?», «¿Le interesa…?», «¿Prefiere…?», «¿Desea…?», «¿Le
+     * parece…?». La mera presencia del verbo no basta, porque de usted
+     * coincide con la tercera persona: «¿Sabe qué quiere decir el enlace de
+     * pago?» o «¿El equipo desea revisar su pago?» no ofrecen nada, y anotarlas
+     * como oferta de cobro abría la vía rápida de compra a un «sí» posterior.
+     */
+    private const VERBO_DE_OFERTA_DE_USTED = '/^\s*¿?\s*((y|o|entonces|bueno|listo|perfecto|claro)\s*,?\s+)?(usted\s+)?(quiere\s+que\s+le|le\s+gustaria|le\s+interesa|prefiere|desea|le\s+parece)\b/u';
+
+    /** La recomendación que se le hace a la persona: de tú (siempre) y de usted (solo con «profesional»; m-6). */
+    private const RECOMIENDA = '/(te recomiendo|te recomendaria|lo que mejor te (sirve|encaja)|el ideal para ti)/u';
+
+    private const RECOMIENDA_DE_USTED = '/\b(le recomiendo|le recomendaria|lo que mejor le (sirve|encaja)|el ideal para usted)\b/u';
+
+    /**
+     * Cómo empezar, contado: neutro o de tú (siempre) y de usted (solo con
+     * «profesional»; m-6). De usted, solo construcciones dirigidas a la
+     * persona: «viene con SU documento», «llega y…», «se inscribe»; «el plan
+     * viene con acceso…» (tercera persona) no es cómo empezar.
+     */
+    private const COMO_EMPEZAR = '/(para empezar|para iniciar|el primer paso|los pasos|vienes con|llegas y|te inscribes)/u';
+
+    private const COMO_EMPEZAR_DE_USTED = '/\b(viene con su|llega y|se inscribe)\b/u';
 
     public function __construct(
         private readonly MarketingKnowledgeBaseService $knowledge,
@@ -160,7 +184,7 @@ final class ConversationMemoryService
                 }
             }
             $m->discussPlan($plan->id);
-            if (preg_match('/(te recomiendo|te recomendaria|lo que mejor te (sirve|encaja)|el ideal para ti)/u', $reply) === 1) {
+            if (preg_match(self::RECOMIENDA, $reply) === 1 || (UltronFormalReplies::aplica($tono) && preg_match(self::RECOMIENDA_DE_USTED, $reply) === 1)) {
                 $m->recommend([$plan->id], $at);
             }
         }
@@ -195,7 +219,7 @@ final class ConversationMemoryService
         if (preg_match('/\b(\d+|dos|tres|cuatro|cinco|seis)\s+entrenador/u', $reply) === 1) {
             $m->deliverFact('trainers_count', $at, $mid);
         }
-        if (preg_match('/(para empezar|para iniciar|el primer paso|los pasos|vienes con|llegas y|te inscribes)/u', $reply) === 1) {
+        if (preg_match(self::COMO_EMPEZAR, $reply) === 1 || (UltronFormalReplies::aplica($tono) && preg_match(self::COMO_EMPEZAR_DE_USTED, $reply) === 1)) {
             $m->deliverFact('how_to_start', $at, $mid);
         }
         if (isset(self::INTENT_TO_FACT[$intent])) {
@@ -480,8 +504,10 @@ final class ConversationMemoryService
 
     /**
      * La clase de oferta de la última pregunta del agente, o null si no ofrece.
-     * Con `$tono` = «profesional» también las de usted ({@see self::OFERTAS_DE_USTED});
-     * sin él, exactamente como siempre.
+     * Con `$tono` = «profesional» también las de usted ({@see self::OFERTAS_DE_USTED}),
+     * solo si la pregunta abre con una construcción de oferta dirigida a la
+     * persona ({@see self::VERBO_DE_OFERTA_DE_USTED}, G7); sin él, exactamente
+     * como siempre.
      */
     private function offerKindOf(string $question, ?string $tono = null): ?string
     {

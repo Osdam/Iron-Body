@@ -1,0 +1,51 @@
+# 70 · MUTACIONES de G8 (M8, M15, M22 y M23 del revisor): se aplica cada una sobre UltronCommitService.php, se corren los dos A4 y se revierte (cp de la copia limpia; diff vacío comprobado al final)
+# 2026-11-19T02:15:18Z
+aplicada M8
+## M8 · diff aplicado:
+1713c1713
+<         $panorama = $turno['studio'] && ! $conHerramientas && CommercialTurnPolicy::pideElPanorama((string) $message->body, $policy, $resolution);
+---
+>         $panorama = UltronFormalReplies::aplica($turno['tono']) && ! $conHerramientas && CommercialTurnPolicy::pideElPanorama((string) $message->body, $policy, $resolution);
+2176c2176
+<                 || (! $conOptOut && $this->pideElPanoramaEnElRespaldo($conversation, (string) $message->body, $intent)))
+---
+>                 || (UltronFormalReplies::aplica($turno['tono']) && ! $conOptOut && $this->pideElPanoramaEnElRespaldo($conversation, (string) $message->body, $intent)))
+## M8 · Comando: nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php
+1) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g1_i1_el_panorama_tambien_con_cercano
+Tests: 212, Assertions: 2416, Failures: 1.
+## M8 · revertida
+
+aplicada M15
+## M15 · diff aplicado:
+2649c2649
+<         $texto = (string) UltronFormalReplies::segun($delStudio['tono'], $texto);
+---
+>         $texto = (string) $texto;
+## M15 · Comando: nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php
+1) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g8_la_hora_de_la_visita_sale_de_usted
+Tests: 212, Assertions: 2418, Failures: 1.
+## M15 · revertida
+
+aplicada M22
+## M22 · diff aplicado:
+1760c1760
+<                 $dePlanes = UltronFormalReplies::colaSegun($turno['tono'], CommercialTurnPolicy::planReply($policy, $catalogo));
+---
+>                 $dePlanes = CommercialTurnPolicy::planReply($policy, $catalogo);
+## M22 · Comando: nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php
+1) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g8_el_plan_que_manda_la_politica_sale_de_usted
+Tests: 212, Assertions: 2418, Failures: 1.
+## M22 · revertida
+
+aplicada M23
+## M23 · diff aplicado:
+1786c1786
+<                 $deVisita = UltronFormalReplies::segun($turno['tono'], CommercialTurnPolicy::courtesyReply($policy));
+---
+>                 $deVisita = CommercialTurnPolicy::courtesyReply($policy);
+## M23 · Comando: nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php
+1) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g8_la_visita_a_medias_sale_de_usted
+Tests: 212, Assertions: 2418, Failures: 1.
+## M23 · revertida
+
+# Al final: UltronCommitService.php idéntico a la copia limpia (diff vacío)

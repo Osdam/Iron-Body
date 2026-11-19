@@ -109,6 +109,20 @@ class UltronRegisterDetectorTest extends TestCase
             'responderte' => ['responderte', 'No quiero responderte cualquier cosa.'],
             'resolverte' => ['resolverte', 'Una duda que pueda resolverte.'],
             'recomendarte' => ['recomendarte', 'Para recomendarte el plan.'],
+            // m-1 del revisor (G9): falsos negativos de tú sin «te/tu»; solo formas que no existen de usted ni en tercera persona.
+            'anímate' => ['anímate', 'Anímate, el primer día es el más difícil.'],
+            'animate' => ['animate', 'Animate, el primer dia es el mas dificil.'],
+            'pásate' => ['pásate', 'Pásate por la sede cuando quieras.'],
+            'pasate' => ['pasate', 'Pasate por la sede esta semana.'],
+            'inscríbete' => ['inscríbete', 'Inscríbete en recepción con el documento.'],
+            'inscribete' => ['inscribete', 'Inscribete en recepcion con el documento.'],
+            'acércate' => ['acércate', 'Acércate a la recepción y lo vemos.'],
+            'acercate' => ['acercate', 'Acercate a la recepcion y lo vemos.'],
+            'estés' => ['estés', 'Cuando estés listo, empezamos.'],
+            'tengas' => ['tengas', 'Ven cuando tengas un rato libre.'],
+            'necesites' => ['necesites', 'Cuenta conmigo para lo que necesites.'],
+            'llegas' => ['llegas', 'Cuando llegas, el entrenador te recibe.'],
+            'entrenaste' => ['entrenaste', '¿Ya entrenaste alguna vez en un gimnasio?'],
         ];
     }
 
@@ -146,6 +160,13 @@ class UltronRegisterDetectorTest extends TestCase
             'de usted completo' => ['Hola, bienvenido a Iron Body, qué gusto atenderle. Cuénteme, ¿en qué le podemos ayudar hoy?'],
             'de usted con verbos' => ['Si quiere, pregúnteme por una clase; puede venir cuando le quede bien y le ayudo.'],
             'neutro de precios' => ['Claro. Planes de un mes: Plan Valera, $65.000 COP; Plan Mensual, $80.000 COP. ¿Sobre cuál amplío la información?'],
+            // m-1: las que NO se añaden, porque coinciden con la tercera persona o con el usted.
+            'ven (tercera persona)' => ['Ellos ven los resultados en un mes.'],
+            'mira (tercera persona)' => ['El entrenador mira la técnica de cada socio.'],
+            'aprovecha (tercera persona)' => ['El plan aprovecha la franja de la mañana.'],
+            'recuerda (tercera persona)' => ['El equipo recuerda cada visita.'],
+            'cuenta (tercera persona)' => ['La sede cuenta con duchas.'],
+            'de usted con los verbos de m-1' => ['Anímese, pásese por la sede cuando esté listo; inscríbase en recepción cuando tenga un rato y acérquese si necesita algo. Cuando llega, ¿ya entrenó antes?'],
         ];
     }
 
@@ -166,6 +187,43 @@ class UltronRegisterDetectorTest extends TestCase
     public function test_la_cita_no_tapa_lo_que_va_fuera(): void
     {
         $this->assertSame(['te'], D::tuteo('Usted escribió «quieres» y te contesto.'));
+    }
+
+    // ── G6 · S-6 y m-2: las comillas no ciegan al detector ──────────────────
+    //
+    // Umbral: lo entrecomillado solo se descarta como «cita» si FUERA de las
+    // comillas quedan MÁS palabras que dentro (la mayor parte del mensaje). Si
+    // no, se mira el mensaje entero, comillas incluidas.
+
+    /** @return array<string, array{string, list<string>}> */
+    public static function comillasQueNoCiegan(): array
+    {
+        return [
+            'el mensaje entero entre comillas rectas (S-6)' => ['"Hola, te cuento que tienes acceso y puedes venir cuando quieras. ¿Quieres?"', ['te', 'tienes', 'puedes', 'quieras', 'quieres']],
+            'casi entero entre comillas (S-6)' => ['El "Plan Mensual te da acceso libre y tienes clases; el Valera" también.', ['te', 'tienes']],
+            'el mensaje entero entre comillas latinas' => ['«Claro, te ayudo con eso cuando quieras.»', ['te', 'quieras']],
+            'el mensaje entero entre comillas inglesas' => ['“Con gusto te cuento los planes.”', ['te']],
+            'la frase de la casa como lema (m-2)' => ['Nuestro lema: «te acompañamos en cada paso».', ['te']],
+            'mitad y mitad no es «la mayor parte»' => ['Sobre "¿tienes clases de yoga?": sí, los martes.', ['tienes']],
+        ];
+    }
+
+    #[DataProvider('comillasQueNoCiegan')]
+    public function test_si_lo_entrecomillado_es_la_mayor_parte_se_mira_entero(string $texto, array $marcas): void
+    {
+        $this->assertSame($marcas, D::tuteo($texto), $texto);
+    }
+
+    public function test_una_cita_corta_dentro_de_un_mensaje_de_usted_sigue_sin_contar(): void
+    {
+        $this->assertSame([], D::tuteo('Usted me escribió «¿tienes clases de yoga?» y con gusto le confirmo que sí, los martes y jueves a las 7 p. m.'));
+        $this->assertSame([], D::tuteo('Como nos dijo, "quiero algo para mí solo"; para eso le recomiendo empezar con el plan de un mes y una rutina guiada.'));
+    }
+
+    public function test_una_comilla_sin_cerrar_no_se_come_el_resto(): void
+    {
+        $this->assertSame(['te', 'quieres'], D::tuteo('Usted escribió «hola y te cuento lo que quieres saber.'));
+        $this->assertSame(['te'], D::tuteo('Usted escribió "hola" y luego " te cuento todo.'), 'la tercera comilla, sin pareja, no tapa lo que sigue');
     }
 
     public function test_mayusculas_y_tildes(): void

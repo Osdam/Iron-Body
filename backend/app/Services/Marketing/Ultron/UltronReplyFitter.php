@@ -331,6 +331,16 @@ final class UltronReplyFitter
     }
 
     /**
+     * Cuántas frases tiene el texto SIN contar el bloque de enlaces (la frase
+     * que lleva una URL). Lo usa el registro (G2 del lead, B-2 del revisor):
+     * quitar la pregunta final que tutea solo vale si quedan al menos dos.
+     */
+    public static function proseSentenceCount(string $text): int
+    {
+        return count(array_filter(self::sentences($text), fn (array $f) => preg_match(self::URL, $f[0]) !== 1));
+    }
+
+    /**
      * Una frase que Laravel añade al final (13.ter, la que retoma la visita;
      * 13.quater, el precio verificado) sin romper el tope. `dropped` = frases
      * del cuerpo que no salen.

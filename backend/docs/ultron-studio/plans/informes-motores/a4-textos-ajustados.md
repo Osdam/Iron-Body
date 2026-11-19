@@ -237,14 +237,14 @@ Leyenda: «Hoy (Legacy)» es lo que sale sin versión aplicada y no cambia; «Ve
 ### «¿Cuánto vale el plan día? ¿Qué planes tienen?» (nombra un plan de un día)
 
 - **Hoy (Legacy)** (125) «Sí, claro. Cuéntame qué buscas —bajar grasa, ganar masa o coger el hábito— y te digo el plan que mejor te encaja y su precio.»
-- **Versión aplicada, sin tope (320)** (209) «Claro. Nuestros planes: PLAN DÍA (1 día), $10.000 COP; Plan Valera (un mes), $65.000 COP; Plan Mensual (un mes), $80.000 COP. También hay planes por semana y de varios meses. ¿Sobre cuál amplío la información?»
-- **Tope 200** (160) «Claro. Nuestros planes: PLAN DÍA (1 día), $10.000 COP; Plan Valera (un mes), $65.000 COP; Plan Mensual (un mes), $80.000 COP. ¿Sobre cuál amplío la información?»
-- **Tope 160** (160) «Claro. Nuestros planes: PLAN DÍA (1 día), $10.000 COP; Plan Valera (un mes), $65.000 COP; Plan Mensual (un mes), $80.000 COP. ¿Sobre cuál amplío la información?»
+- **Versión aplicada, sin tope (320)** (220) «Claro. Algunos de nuestros planes: PLAN DÍA (1 día), $10.000 COP; Plan Valera (un mes), $65.000 COP; Plan Mensual (un mes), $80.000 COP. También hay planes por semana y de varios meses. ¿Sobre cuál amplío la información?»
+- **Tope 200** (171) «Claro. Algunos de nuestros planes: PLAN DÍA (1 día), $10.000 COP; Plan Valera (un mes), $65.000 COP; Plan Mensual (un mes), $80.000 COP. ¿Sobre cuál amplío la información?»
+- **Tope 160** (135) «Claro. Algunos de nuestros planes: PLAN DÍA (1 día), $10.000 COP; Plan Valera (un mes), $65.000 COP. ¿Sobre cuál amplío la información?»
 
 ### «¿Y el Trimestre cuánto cuesta? ¿Qué planes tienen?» (nombra un plan de tres meses)
 
 - **Hoy (Legacy)** (125) «Sí, claro. Cuéntame qué buscas —bajar grasa, ganar masa o coger el hábito— y te digo el plan que mejor te encaja y su precio.»
-- **Versión aplicada, sin tope (320)** (225) «Claro. Nuestros planes: Trimestre (tres meses), $210.000 COP; Plan Valera (un mes), $65.000 COP; Plan Mensual (un mes), $80.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
-- **Tope 200** (167) «Claro. Nuestros planes: Trimestre (tres meses), $210.000 COP; Plan Valera (un mes), $65.000 COP; Plan Mensual (un mes), $80.000 COP. ¿Sobre cuál amplío la información?»
-- **Tope 160** (131) «Claro. Nuestros planes: Trimestre (tres meses), $210.000 COP; Plan Valera (un mes), $65.000 COP. ¿Sobre cuál amplío la información?»
+- **Versión aplicada, sin tope (320)** (236) «Claro. Algunos de nuestros planes: Trimestre (tres meses), $210.000 COP; Plan Valera (un mes), $65.000 COP; Plan Mensual (un mes), $80.000 COP. También hay planes por día, por semana y de varios meses. ¿Sobre cuál amplío la información?»
+- **Tope 200** (178) «Claro. Algunos de nuestros planes: Trimestre (tres meses), $210.000 COP; Plan Valera (un mes), $65.000 COP; Plan Mensual (un mes), $80.000 COP. ¿Sobre cuál amplío la información?»
+- **Tope 160** (142) «Claro. Algunos de nuestros planes: Trimestre (tres meses), $210.000 COP; Plan Valera (un mes), $65.000 COP. ¿Sobre cuál amplío la información?»
 

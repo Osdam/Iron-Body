@@ -271,7 +271,9 @@ class UltronA4LongitudYPreciosTest extends TestCase
         $this->publica(200);
         $r = $this->criticoCaido(SalesIntents::PRICING_QUESTION, self::PREGUNTA_PRECIOS);
         // F5 (I-4): «1 día», en singular (antes «1 días», que esta prueba fijaba como correcto).
-        $this->assertSame('Claro. Nuestros planes: PLAN DÍA (1 día), $10.000 COP; Plan Semana (7 días), $45.000 COP; Trimestre (tres meses), $210.000 COP. También hay planes de varios meses. ¿Sobre cuál amplío la información?', $r['reply_final']);
+        // G5 (I-6): nombra 3 de 8 vendibles → «Algunos de nuestros planes»; el encabezado, 11 caracteres más
+        // largo, ya no deja sitio a «También hay planes de varios meses.» a 200 (el encabezado ya dice que hay más).
+        $this->assertSame('Claro. Algunos de nuestros planes: PLAN DÍA (1 día), $10.000 COP; Plan Semana (7 días), $45.000 COP; Trimestre (tres meses), $210.000 COP. ¿Sobre cuál amplío la información?', $r['reply_final']);
     }
 
     public function test_el_plan_que_nombra_la_persona_va_primero(): void
@@ -671,8 +673,9 @@ class UltronA4LongitudYPreciosTest extends TestCase
 
     /**
      * F5 (I-4, escenario R3) y la mutación M10: con un plan nombrado que no es
-     * de un mes la cabecera es «Nuestros planes» con duraciones, nunca «Planes
-     * de un mes», y la duración de un día va en singular.
+     * de un mes la cabecera es la mixta con duraciones, nunca «Planes de un
+     * mes», y la duración de un día va en singular. Desde G5 (I-6), «Algunos
+     * de nuestros planes»: se nombran 3 de 13 vendibles.
      */
     public function test_un_plan_nombrado_que_no_es_de_un_mes_no_va_bajo_planes_de_un_mes(): void
     {
@@ -680,13 +683,17 @@ class UltronA4LongitudYPreciosTest extends TestCase
             $this->nuevaConversacion();
             $this->publica($tope);
             $r = $this->criticoCaido(SalesIntents::PRICING_QUESTION, '¿Cuánto vale el plan día? ¿Qué planes tienen?');
-            $this->assertSame('Claro. Nuestros planes: PLAN DÍA (1 día), $10.000 COP; Plan Valera (un mes), $65.000 COP; Plan Mensual (un mes), $80.000 COP. ¿Sobre cuál amplío la información?', $r['reply_final'], (string) $tope);
+            $this->assertSame([
+                200 => 'Claro. Algunos de nuestros planes: PLAN DÍA (1 día), $10.000 COP; Plan Valera (un mes), $65.000 COP; Plan Mensual (un mes), $80.000 COP. ¿Sobre cuál amplío la información?',
+                // G5: con el encabezado largo, a 160 el tercero ya no cabe (antes medía 160 justos).
+                160 => 'Claro. Algunos de nuestros planes: PLAN DÍA (1 día), $10.000 COP; Plan Valera (un mes), $65.000 COP. ¿Sobre cuál amplío la información?',
+            ][$tope], $r['reply_final'], (string) $tope);
         }
 
         $this->nuevaConversacion();
         $this->publica(200);
         $r = $this->criticoCaido(SalesIntents::PRICING_QUESTION, '¿Y el Trimestre cuánto cuesta? ¿Qué planes tienen?');
-        $this->assertSame('Claro. Nuestros planes: Trimestre (tres meses), $210.000 COP; Plan Valera (un mes), $65.000 COP; Plan Mensual (un mes), $80.000 COP. ¿Sobre cuál amplío la información?', $r['reply_final']);
+        $this->assertSame('Claro. Algunos de nuestros planes: Trimestre (tres meses), $210.000 COP; Plan Valera (un mes), $65.000 COP; Plan Mensual (un mes), $80.000 COP. ¿Sobre cuál amplío la información?', $r['reply_final']);
         $this->assertStringNotContainsString('Planes de un mes', $r['reply_final']);
     }
 
