@@ -1,0 +1,77 @@
+BATERÍA COMPLETA DEL BACKEND · árbol limpio (_worktrees/ultron-suite) · commit a6e2005b (el que se va a desplegar) · 19-11-2026 03:30–04:06 UTC
+
+........................................................... 18467 / 18649 ( 99%)
+........................................................... 18526 / 18649 ( 99%)
+........................................................... 18585 / 18649 ( 99%)
+........................................................... 18644 / 18649 ( 99%)
+.....                                                       18649 / 18649 (100%)
+
+Time: 35:10.397, Memory: 1.94 GB
+
+There were 2 failures:
+
+1) Tests\Feature\Billing\PricingV2SalesAndPaymentsTest::test_manual_payment_uses_backend_quote
+Expected response status code [201] but received 422.
+Failed asserting that 422 is identical to 201.
+
+The following errors occurred during the last request:
+
+{
+    "message": "El plan «Mensual» cuesta 80.000 y el cobro es de 95.200. Ajusta el importe o justifica el cambio con amount_override y override_reason.",
+    "errors": {
+        "amount": [
+            "El plan «Mensual» cuesta 80.000 y el cobro es de 95.200. Ajusta el importe o justifica el cambio con amount_override y override_reason."
+        ]
+    }
+}
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-suite/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-suite/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-suite/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:26
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-suite/Iron-Body/backend/tests/Feature/Billing/PricingV2SalesAndPaymentsTest.php:212
+
+2) Tests\Feature\UltronStudio\OutreachIsolationTest::test_la_puerta_de_diff_de_legacy_n8n_otp_y_motor_comercial_esta_vacia_y_la_voz_no_gana_ficheros
+La puerta de diff del H9 no está vacía frente a origin/main (ULTRON Legacy, n8n, OTP o motor comercial tocados):
+backend/app/Services/Marketing/Ultron/CommercialTurnPolicy.php
+backend/app/Services/Marketing/Ultron/ConversationMemoryService.php
+backend/app/Services/Marketing/Ultron/Prompts/UltronPromptCompiler.php
+backend/app/Services/Marketing/Ultron/Prompts/UltronPromptOffer.php
+backend/app/Services/Marketing/Ultron/StrategyContract.php
+backend/app/Services/Marketing/Ultron/UltronCommitService.php
+backend/app/Services/Marketing/Ultron/UltronDecideService.php
+backend/app/Services/Marketing/Ultron/UltronFormalReplies.php
+backend/app/Services/Marketing/Ultron/UltronRegisterDetector.php
+backend/app/Services/Marketing/Ultron/UltronReplyFitter.php
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-''
++'backend/app/Services/Marketing/Ultron/CommercialTurnPolicy.php
++backend/app/Services/Marketing/Ultron/ConversationMemoryService.php
++backend/app/Services/Marketing/Ultron/Prompts/UltronPromptCompiler.php
++backend/app/Services/Marketing/Ultron/Prompts/UltronPromptOffer.php
++backend/app/Services/Marketing/Ultron/StrategyContract.php
++backend/app/Services/Marketing/Ultron/UltronCommitService.php
++backend/app/Services/Marketing/Ultron/UltronDecideService.php
++backend/app/Services/Marketing/Ultron/UltronFormalReplies.php
++backend/app/Services/Marketing/Ultron/UltronRegisterDetector.php
++backend/app/Services/Marketing/Ultron/UltronReplyFitter.php'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-suite/Iron-Body/backend/tests/Feature/UltronStudio/OutreachIsolationTest.php:374
+
+FAILURES!
+Tests: 18649, Assertions: 467338, Failures: 2, PHPUnit Deprecations: 8, Skipped: 667.
+
+── rastro ───────────────────────────────────────────────
+  xml: storage/test-results/junit-20261119T033054Z.xml
+  log: storage/test-results/suite-20261119T033054Z.txt
+  fallos (2):
+    · Tests\Feature\Billing\PricingV2SalesAndPaymentsTest::test_manual_payment_uses_backend_quote
+    · Tests\Feature\UltronStudio\OutreachIsolationTest::test_la_puerta_de_diff_de_legacy_n8n_otp_y_motor_comercial_esta_vacia_y_la_voz_no_gana_ficheros
+
+  línea base: 1 tolerados
+  REGRESIONES: 1
+    + Tests\Feature\UltronStudio\OutreachIsolationTest::test_la_puerta_de_diff_de_legacy_n8n_otp_y_motor_comercial_esta_vacia_y_la_voz_no_gana_ficheros
+código de salida: 1
+fin 23:06:09

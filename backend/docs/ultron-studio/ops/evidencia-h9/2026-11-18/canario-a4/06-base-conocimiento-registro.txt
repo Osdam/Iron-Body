@@ -1,0 +1,41 @@
+ULTRON STUDIO · cierre V2 · apartado 4 · H4-9 (el tono «profesional»)
+¿Tutea la base de conocimiento de producción? SOLO LECTURA · 19-11-2026 01:47 UTC
+Sonda: ops/comprobacion-produccion/registro-base-conocimiento.php, con el detector del commit 8e710104 subido a /tmp y borrado al terminar.
+Producción sirve e861e2c8. Sin personas ni conversaciones; los números largos, enmascarados.
+
+[business_identity] «Quiénes somos» · 66 caracteres · sin tuteo
+[tone] «Tono» · 223 caracteres · sin tuteo
+    Responde como un asesor comercial humano de Iron Body: mensajes cortos para WhatsApp, cálido y claro, sin lenguaje robótico. Haz una pregunta útil cuando falte información y cierra con link solo cuando haya intención clara.
+[payment_policy] «Pagos» · 121 caracteres · sin tuteo
+[membership_policy] «Activación» · 131 caracteres · sin tuteo
+[invoice_policy] «Factura» · 195 caracteres · sin tuteo
+[restrictions] «Restricciones» · 205 caracteres · sin tuteo
+[objections] «Precio alto» · 166 caracteres · sin tuteo
+[faq] «Preguntan por precio» · 80 caracteres · sin tuteo
+[human_escalation] «Cuándo escalar» · 106 caracteres · sin tuteo
+[location] «Sede principal y contacto» · 99 caracteres · sin tuteo
+[schedule] «Horario general de atencion» · 224 caracteres · sin tuteo
+[brand_copy] «Promesa de marca» · 61 caracteres · TUTEA: tu
+[payment_policy] «Cómo se paga» · 395 caracteres · sin tuteo
+[business_identity] «Rol del asesor» · 148 caracteres · sin tuteo
+[payment_policy] «Comprobantes» · 166 caracteres · sin tuteo
+[objections] «Solo estoy mirando» · 104 caracteres · sin tuteo
+[faq] «Preguntan por el link» · 76 caracteres · sin tuteo
+[membership_policy] «Día de cortesía» · 478 caracteres · sin tuteo
+[tone] «Personalidad de Iron Body» · 537 caracteres · sin tuteo
+    Iron Body habla con seguridad y orgullo de lo que es: un gimnasio serio, con equipo profesional y ambiente de gente que va a por sus objetivos. Es cercano y acogedor con quien llega con dudas o sin experiencia, y directo cuando la persona ya sabe lo que quiere. Tiene energía sin gritar, cuida a quien pregunta y no se disculpa por vender: invitar a entrenar es parte de ayudar. Nunca suena a folleto
+[brand_copy] «Cómo se entrena aquí» · 97 caracteres · TUTEA: ti
+[objections] «No tengo tiempo» · 69 caracteres · sin tuteo
+[faq] «Mencionan una lesión» · 72 caracteres · sin tuteo
+[brand_copy] «Aspiración» · 63 caracteres · TUTEA: tu
+[objections] «Quiero pensarlo» · 68 caracteres · sin tuteo
+[faq] «Dicen que ya pagaron» · 81 caracteres · sin tuteo
+piezas activas: 25 · con tuteo: 3
+PCRE 10.39 2021-10-29
+
+LECTURA DEL LEAD
+- 25 piezas activas; tutean 3, las tres frases de marca aprobadas (brand_copy): «Promesa de marca», «Cómo se entrena aquí» y «Aspiración».
+- La ficha del gimnasio (identidad, sede, horario) y las dos piezas de tono NO tutean: los respaldos de Laravel que salen de la ficha no arrastran tuteo del CRM.
+- El tono configurado no pide tutear: pide mensajes cortos, cálidos y claros.
+- Limitación: con «profesional», el asistente no puede usar tal cual esas tres frases de marca (están escritas de tú). Si el propietario las quiere en ese registro, se escribe su variante de usted en la base de conocimiento del CRM; no es código.
+- El detector corrió sin errores con el PCRE 10.39 de producción.

@@ -93,6 +93,21 @@ Hay cuatro causas, todas anteriores a esta prueba: tu conversación canaria llev
 
 ---
 
+## 1 quater. Novedades del 18-11 por la noche (tono y lista de planes)
+
+Nada de esta sección está desplegado: espera tu aprobación.
+
+| Qué | Qué pasaba | Cómo queda |
+|---|---|---|
+| El trato de usted | Con una versión «profesional», ULTRON alternaba entre usted y tú. El tono se le pedía al modelo y nada lo comprobaba | **Hecho y revisado, sin desplegar.** El servidor revisa cada mensaje antes de enviarlo; si tutea, lo descarta y envía un texto de usted que contesta a lo preguntado. El revisor automático rechaza el tuteo para que el modelo lo reescriba |
+| La lista de planes | A «¿Qué planes tienen?» salía un solo plan | **Hecho y revisado, sin desplegar.** Sale una lista de hasta tres planes de un mes con su precio, armada por el servidor con el catálogo del CRM de ese momento. Solo cuando el mensaje pide los planes o los precios y ese es su único tema |
+| De dónde salen los precios | Tu pregunta del 18-11 | Del CRM, en cada mensaje y sin caché. Lo fijan seis pruebas que cambian el catálogo entre un mensaje y el siguiente, y una guarda que falla si alguien escribe un precio o un nombre de plan a mano |
+| Frases prohibidas | Las instrucciones eran imprecisas (tildes, plurales, trozos de palabra) | **Corregidas, sin desplegar.** Falta su prueba real con una versión que publique alguna frase |
+
+Lo que queda abierto: la lista todavía puede salir ante una pregunta sobre una característica de los planes («¿Los planes tienen permanencia?»); hay que afinarlo antes de abrir ULTRON a más conversaciones que la tuya. Los beneficios de cada plan los redacta el modelo a partir de la ficha del CRM, sin una comprobación automática.
+
+---
+
 ## 2. Sección por sección
 
 ### 2.1 Studio · Versiones, aprobación y publicación

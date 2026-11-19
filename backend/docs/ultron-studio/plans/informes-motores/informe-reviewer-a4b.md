@@ -639,3 +639,40 @@ Si se prefiere conservar el recorte, la condición tiene que ser «queda algo qu
 - n8n, la canaria y producción.
 
 **Escenarios y guiones:** R1-R8, H1-H9, B2a-B2m, G3a-G3n, E1-E4 y Legacy; `panorama.php`, `aridad.php` y `mutar.sh`. Todos solo en el scratchpad.
+
+## Confirmación final de B-2 (19-11, commit `a6e2005b`)
+
+**B-2 CERRADO: el cambio pasa a APROBADO CON CONDICIONES (C-1 antes de ampliar más allá de la canaria).**
+
+**Alcance:** solo B-2, sobre `git diff 3eca6206 a6e2005b -- backend/app backend/tests` y el §14.12 de `backend`.
+**Marcas:** **[C]** comprobado ejecutando · **[L]** leído.
+
+> **Cómo ejecuté.** Dos copias en el scratchpad: `a6` (`git archive a6e2005b backend n8n`) y `b3` (la misma, con los 2 ficheros de producto de `3eca6206`). `vendor/` clonado, una clave de aplicación de prueba generada al momento, SQLite en memoria, `nice -n 15` y solo pruebas dirigidas. Mis escenarios van en una clase efímera (`RevisorA4dTest`, con el andamio de `UltronA4RegistroYPanoramaTest` de `a6e2005b`), por `decide` → `commit`, con «profesional» y el revisor de n8n aprobando. Miro `reply_final` y el mensaje saliente: coinciden en todos los turnos.
+
+| # | Qué ejecuté | Qué salió |
+|---|---|---|
+| 1 | Las 7 filas del punto 2 (8 con spinning con y sin la ficha), a 200 y a 320, sin la ficha de producción y con ella: 32 turnos | **Ninguna sale solo con apertura o cortesía** [C]. Las 32 dan `discarded` con `policy_register_mismatch`, y ninguna salida tutea. <br>– Las tres de «Hola»: la bienvenida de usted. <br>– Tarjeta: el texto de pago de usted; a 320, además, «También puede pagar en el gimnasio…». <br>– «Me da pena» y «bajar de peso»: el texto curado de G3. <br>– Spinning: la ficha general. Sin la ficha y a 200, el respaldo de `general_info` de siempre, «Con gusto le cuento. ¿Qué le cuento más a fondo…?» (§14.9.3). <br>Con `3eca6206`, las 32 sacan el relleno de la tabla [C] |
+| 2 | «Mándame la app» con `app_links_send` y «Claro, con gusto. ¿Quieres que te ayude con algo más?», con `payment_link_request` y con `general_info`, a 200 y a 320 | **Vuelve a salir «Claro, con gusto.» con los enlaces** [C]: `trimmed`, y `app_links_send` ejecutada. <br>Con `3eca6206`, se descartaba sin los enlaces [C] |
+| 2b | El cobro del canario dentro de la respuesta («Quiero pagar el Plan Mensual», plan 4), con «Perfecto, con gusto. ¿Quieres…?» y con «Claro. ¿Te ayudo con algo más?», a 200 y a 320 | **Sale la frase, la línea del cobro de usted y el checkout** [C], con `trimmed`. <br>Con `3eca6206`, se descartaba sin el checkout [C] |
+| 3 | Enlaces o cobro con el tú en el cuerpo («…aquí tienes la app…», «Perfecto, te dejo el enlace para que pagues…») | `discarded`: sale el respaldo de usted, sin enlaces ni checkout. Pasa igual con `3eca6206` [C]. Es lo conocido de cualquier descarte, no lo cuento como hallazgo |
+| 4 | R3 (los 5 borradores), a 200 y a 320, con la ficha | **Bien**: el texto que sale es **idéntico** al de `3eca6206` [C]. Solo cambia la traza de «Hola, quisiera información»: de `trimmed` a `discarded`, y sale la misma ficha |
+| 4b | `test_turno_1_real…`, `test_turno_2_real…`, `test_turno_3_real…` (×2), la prueba real del 18-11 | En verde [C]: <br>– el turno 2 recibe la lista; <br>– el turno 3, el horario de usted, a 200 y sin tope; <br>– el turno 1 sale tal cual |
+| 5 | Sin el Studio (token sin `sp` y llave `off`), con `cercano` y con `entusiasta`: las 7 filas, los enlaces y R3c, 40 turnos | **Idénticos byte a byte** entre `3eca6206` y `a6e2005b`, sin `register` [C]. <br>– En verde: `test_legacy_da_exactamente_la_salida_de_hoy` (2 pruebas, 198 aserciones), `test_legacy_*`, `test_sin_studio_*` y `test_cercano_y_entusiasta_*` [C]. <br>– `git diff --quiet 3eca6206 a6e2005b -- backend/tests/fixtures` = 0 [C]. <br>– Todo el cambio va dentro de `if (UltronFormalReplies::aplica(…))` [L] |
+| 6 | Las 27 intenciones con «Claro, con gusto. ¿Quieres que te cuente más?», a 200 y a 320, y 5 intenciones repetidas tres veces en la misma conversación | **Ninguna sale solo con relleno** [C]: cada una con su respaldo de usted (el no contactar, mudo). <br>En la repetición, el respaldo que ya salió no se repite y sale el último recurso, que pregunta («Claro, con gusto le ayudo. Cuénteme, ¿en qué le ayudo hoy?»). Con `3eca6206` salía el relleno las tres veces [C] |
+| — | Las pruebas del propio commit | En `a6`, `g2bis_*`, `g2_*`, los turnos reales, Legacy y los tonos: **27 OK, 344 aserciones** [C]. Contra el producto de `3eca6206`: **12 rojas**, las de la salida 79 [C] |
+
+**Punto 6: no encontré otra forma de que salga solo relleno.** Lo más parecido, que no cuento como hallazgo:
+- **Cuando el modelo pide `app_links_send` sin que la persona pida la app.** Entrada: «Hola», con «¡Hola! Buenas tardes. ¿En qué te puedo ayudar hoy?» y `app_links_send`. Sale «¡Hola! Buenas tardes.» y los enlaces; lo mismo con «¿Tienen clases de spinning?».
+- Es la excepción decidida: hay un bloque de Laravel y los enlaces salen. Con `3eca6206` sale igual [C].
+- En la canaria, un `register.action = trimmed` con un entrante que no pedía la app es este caso.
+
+**Vistos de paso.** Son anteriores a esta ronda: van a pendientes y no bloquean.
+- **El marcador pegado a la pregunta final:** «Claro, con gusto. Aquí tiene la app: {{APP_LINKS}} ¿Quieres que te ayude con algo más?».
+  - F1 no separa la pregunta de la frase de la URL: `withoutFinalQuestion()` devuelve null.
+  - Se descarta, y los enlaces no salen. Con `3eca6206`, igual [C].
+- **El cobro con el tú en el cuerpo:** el descarte deja `payment_link_send` en `tools_executed`, aunque el checkout no sale. Con `3eca6206`, igual [C].
+
+**Notas.**
+- La sonda del lead (`comprobacion-produccion/sonda-registro-y-panorama.php`) ya no llama a `proseSentenceCount()` [L].
+- No verificado: PostgreSQL, `pint` ni la batería completa de Marketing. Me fío de las salidas 81-84 [L].
+- Tampoco n8n, la canaria ni producción.

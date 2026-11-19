@@ -1,0 +1,79 @@
+SONDA DEL REGISTRO Y DEL PANORAMA · LOCAL · commit a6e2005b (el que se va a desplegar) · 19-11-2026 03:32 UTC
+ops/comprobacion-produccion/sonda-registro-y-panorama.php, con los 8 ficheros del commit en un directorio aparte.
+
+PCRE 10.47 2025-10-21 · PHP 8.3.33
+expresiones regulares en las clases nuevas: 55 · no compilan: 0
+avisos de PHP: 0
+borrador 0                                                                     7a01950b24
+borrador 1                                                                     7379d63d76
+borrador 2                                                                     8252a7787e
+borrador 3                                                                     1ef927e62b
+borrador 4                                                                     e1ac00090b
+borrador 5                                                                     4fc09967a0
+borrador 6                                                                     1bcc4c60f2
+borrador 7                                                                     32b931a11e
+borrador 8                                                                     3898335984
+borrador 9                                                                     ea1bead3b6
+borrador 10                                                                    6f06bb21da
+borrador 11                                                                    4096b99c4d
+borrador 12                                                                    869cc71c8e
+borrador 13                                                                    ed8bc5e27c
+borrador 14                                                                    1c37c85519
+borrador 15                                                                    cd9c3aedba
+entrante · ¿Qué planes tienen?                                              da214e1ce0
+entrante · ¿Qué planes tienen y cuánto cuestan?                            6962e36611
+entrante · ¿Qué planes tienen y cuánto cuesta la mensualidad?              6962e36611
+entrante · ¿Cuáles son los precios?                                         6962e36611
+entrante · ¿Qué precios manejan?                                            6962e36611
+entrante · Info de precios                                                    6962e36611
+entrante · Las tarifas                                                        da214e1ce0
+entrante · ¿Cuánto valen las membresías?                                   6962e36611
+entrante · ¿Tienen planes?                                                   da214e1ce0
+entrante · Precios?                                                           6962e36611
+entrante · ¿Planes?                                                          da214e1ce0
+entrante · ¿Y los planes?                                                    da214e1ce0
+entrante · Hola, precios por favor                                            6962e36611
+entrante · Buenas tardes, planes y precios                                    6962e36611
+entrante · Info planes                                                        da214e1ce0
+entrante · Mándame la lista de planes                                        da214e1ce0
+entrante · Quiero conocer los planes y sus precios                            6962e36611
+entrante · ¿Cuánto cuesta el Mensual y qué otros hay?                      6962e36611
+entrante · ¿Cuánto cuesta el Mensual?                                       418fd736de
+entrante · ¿Cuánto cuesta la mensualidad?                                   418fd736de
+entrante · ¿Cuánto cuesta?                                                  418fd736de
+entrante · Precios del mensual                                                418fd736de
+entrante · Precio?                                                            418fd736de
+entrante · ¿Qué planes tienen para estudiantes?                             248f05eca1
+entrante · ¿Qué planes tienen de un mes?                                    248f05eca1
+entrante · ¿Qué opciones de pago tienen?                                    248f05eca1
+entrante · ¿Qué opciones de horario hay?                                    248f05eca1
+entrante · No me interesan los planes, gracias                                248f05eca1
+entrante · Quiero hablar con un asesor sobre los planes                       248f05eca1
+entrante · ¿Cuál de los planes me recomienda para bajar de peso?            248f05eca1
+entrante · Ya vi los planes, ¿cuál me recomiendas?                          248f05eca1
+entrante · Tengo una lesión de rodilla, ¿qué planes tienen?                248f05eca1
+entrante · ¿Cuál es el horario y cuánto cuestan los planes?                418fd736de
+entrante · Quiero ir el sábado a las 10 de la mañana. ¿Qué planes tienen? 248f05eca1
+entrante · ¿Qué planes tienen y cómo se paga?                              248f05eca1
+entrante · ¿Qué clases tienen y qué planes manejan?                        248f05eca1
+entrante · Ya pagué uno de los planes y no me llega nada                     248f05eca1
+entrante · Dejen de mandarme los planes                                       248f05eca1
+entrante · Me gustaron los planes                                             248f05eca1
+entrante · Los planes que vi ayer                                             248f05eca1
+entrante · Hola                                                               248f05eca1
+entrante · Quiero bajar de peso                                               248f05eca1
+oferta · ¿Quiere que le pase la app para descargarla?                        11fbf144bc
+oferta · ¿Quiere que le cuente cómo empezar?                                fc9ff8e3e2
+oferta · ¿Le gustaría que le envíe el enlace de pago?                      125f4397df
+oferta · ¿Desea agendar una visita de cortesía?                             752ee43496
+oferta · ¿Sabe qué quiere decir el enlace de pago?                          95cb9b4f84
+oferta · ¿El equipo desea revisar su caso?                                   95cb9b4f84
+oferta · ¿Quieres que te pase la app para descargarla?                       2d4f0dedf5
+oferta · ¿Le parece si le cuento los planes?                                 11fbf144bc
+laravel 0                                                                      760b1f22d5
+laravel 1                                                                      83b1982090
+laravel 2                                                                      e399bf6a56
+laravel 3                                                                      2a796ff456
+laravel 4                                                                      f88cff9069
+casos: 71 · preg_last_error=0
+HUELLA 85484da3533ddd34
