@@ -1,0 +1,34 @@
+ULTRON STUDIO · cierre V2 · apartado 4 · gate 4-G (aclaración del propietario sobre la arquitectura de respuestas)
+¿Quién escribió cada respuesta de ULTRON? SOLO LECTURA, solo conteos · 19-11-2026 04:19 UTC
+Consulta: ops/comprobacion-produccion/origen-respuestas.sql. Conversaciones canarias (#273 hasta el 13-11 y #882 desde entonces): las únicas que atiende ULTRON.
+
+A · acciones por tipo | 273 | inbound_skipped | 90 | 2026-09-22 | 2026-11-12
+A · acciones por tipo | 273 | no_reply | 3 | 2026-10-20 | 2026-10-29
+A · acciones por tipo | 273 | repeated_reply_recovered | 1 | 2026-10-07 | 2026-10-07
+A · acciones por tipo | 273 | reply | 85 | 2026-09-22 | 2026-11-12
+A · acciones por tipo | 273 | unsupported_message | 15 | 2026-09-26 | 2026-11-11
+A · acciones por tipo | 882 | inbound_skipped | 3 | 2026-11-18 | 2026-11-18
+A · acciones por tipo | 882 | reply | 3 | 2026-11-18 | 2026-11-18
+A · acciones por tipo | 882 | unsupported_message | 2 | 2026-11-17 | 2026-11-17
+C · origen del texto | 273 | 1 texto del modelo, tal cual | 68
+C · origen del texto | 273 | 2 texto del servidor por la política del commit | 3
+C · origen del texto | 273 | 3 respaldo del servidor (revisor falló o caído): SAFE_CURATED_REPLY | 14
+C · origen del texto | 882 | 1 texto del modelo, tal cual | 2
+C · origen del texto | 882 | 1b texto del modelo, sin su pregunta final (tope) | 1
+D · violaciones de política que sustituyeron el borrador | policy_greeting_sells | 2
+D · violaciones de política que sustituyeron el borrador | policy_active_goal_lost | 1
+E · por mes | 2026-09 | 27 | 1 | 4 | 32
+E · por mes | 2026-10 | 36 | 1 | 6 | 43
+E · por mes | 2026-11 | 8 | 1 | 4 | 13
+F · veredicto del revisor | pass | 1 | 59
+F · veredicto del revisor | fail | 2 | 12
+F · veredicto del revisor | pass | 2 | 11
+F · veredicto del revisor | (sin dato) | - | 6
+
+LECTURA DEL LEAD
+- 88 respuestas enviadas entre el 22-09 y el 18-11-2026.
+- 71 (81 %) las escribió el modelo: 70 tal cual y 1 sin su pregunta final (el tope de 200).
+- 14 (16 %) fueron el texto curado del servidor porque el revisor rechazó los dos intentos (SAFE_CURATED_REPLY).
+- 3 (3 %) fueron texto del servidor por la política del commit (2 saludos que vendían, 1 visita a medias perdida).
+- El revisor: 59 aprobadas al primer intento, 11 tras la reescritura, 12 rechazadas dos veces (la reescritura rescató 11 de 23).
+- Son conversaciones de prueba del propietario, no de clientes; ninguna con el compilador 4.
