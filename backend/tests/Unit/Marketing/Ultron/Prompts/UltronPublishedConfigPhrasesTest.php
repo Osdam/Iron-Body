@@ -75,8 +75,9 @@ class UltronPublishedConfigPhrasesTest extends TestCase
         $this->publicaEntrada(Lector::CONTRACT_V2, self::parteV2(self::VERSION_B, ['persona.tone' => 'profesional', 'persona.maxChars' => 200]), null);
 
         $o = $this->oferta()['response'];
-        // compile-cases.json, c074; con los compiladores 1 y 2 era 702890f7…311c; con el 3, af9e0d23…4d51.
-        $this->assertSame(['studio', '7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35'], [$o['mode'], $o['bundle_hash']]);
+        // compile-cases.json, c074; con los compiladores 1 y 2 era 702890f7…311c; con el 3, af9e0d23…4d51;
+        // con el 4 antes del parche del motor de la lista de planes, 7b09b89c…cc35.
+        $this->assertSame(['studio', '26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075'], [$o['mode'], $o['bundle_hash']]);
         $this->assertStringNotContainsString('FRASES PROHIBIDAS', implode("\n", $o['roles']));
     }
 

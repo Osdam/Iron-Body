@@ -31,8 +31,16 @@ use ReflectionMethod;
  *  8. Compilador 4 (Enmienda A4-2 del H5, cierre V2, apartado 4; H4-9): los dos
  *     textos del tono «profesional» (el del redactor manda sobre TODO el prompt
  *     y da las equivalencias de usted; el del revisor hace FALLAR el tuteo),
- *     escritos aquí a mano desde el plan §B.3, «Compilador 4». Solo se mueven
+ *     escritos aquí a mano desde el plan §B.3, «Compilador 4». Solo se movían
  *     las huellas con `profesional`; Legacy, `cercano` y `entusiasta`, no.
+ *  9. Compilador 4, el parche del MOTOR («regenerar antes de sustituir»; plan
+ *     `plan-arquitecto-a4-regenerar.md` §7.1 y §B.3, «Compilador 4»): con
+ *     cualquier valor no base se añaden al final los cuatro de la lista de
+ *     planes (Composer y Reintento tras `FORMA:`, los dos Critic tras
+ *     `progressive_disclosure:`), pegados a su ancla; mueven TODAS las huellas
+ *     no base. La línea base y la huella Legacy, no. Lo fija además
+ *     `UltronPromptEnginePatchTest`; aquí, cada texto de su sitio se lee
+ *     quitando antes la línea del motor ({@see self::sinMotor()}).
  */
 class UltronPromptCompilerTest extends TestCase
 {
@@ -81,6 +89,11 @@ class UltronPromptCompilerTest extends TestCase
 
     private const INFORMAR = 'OBJETIVO COMERCIAL PUBLICADO: informar y cualificar. Prioriza understand y recommend; no propongas close ni collect_payment salvo que la persona pida comprar o pagar con palabras.';
 
+    /** Compilador 4, el parche del motor (§7.1 del plan del arquitecto y §B.3, «Compilador 4»), a mano. */
+    private const MOTOR_COMPOSER = 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. Esto manda sobre las reglas de precios y marcadores de este prompt: nombra al menos dos de esos planes, en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Para decir para quien es cada uno usa solo los benefits de su plan_id en active_plans. Si plans_overview no viene, nada de esto aplica.';
+
+    private const MOTOR_CRITIC = 'LISTA DE PLANES DEL BACKEND: los marcadores PLAN_1, PLAN_2 y PLAN_3 entre dobles llaves los sustituye el backend por el nombre y el precio reales de planes que el mismo eligio. Cuentan como nombre y como marcador de precio de ese plan: un borrador que los usa para dar varios planes con su precio NO esquiva el precio, no es invented_plan ni invented_price, y nombrar dos o tres no es defecto de progressive_disclosure. Lo demas se juzga como siempre.';
+
     /** La línea base del compilador 2: las cuatro de siempre y ninguna frase (en el orden del contrato). */
     private const BASE = ['persona.emojis' => true, 'persona.maxChars' => 320, 'persona.tone' => 'cercano', 'rules.forbiddenPhrases' => [], 'strategy.goal' => 'cita'];
 
@@ -101,6 +114,14 @@ class UltronPromptCompilerTest extends TestCase
     private static function con(array $cambios): array
     {
         return array_replace(self::BASE, $cambios);
+    }
+
+    /** El rol sin la línea del parche del motor (va en todo paquete no base; se comprueba en su prueba). */
+    private static function sinMotor(string $rol, string $texto): string
+    {
+        $linea = str_starts_with($rol, 'composer') ? self::MOTOR_COMPOSER : self::MOTOR_CRITIC;
+
+        return $rol === 'strategist' ? $texto : str_replace("\n".$linea, '', $texto);
     }
 
     /** La línea que sigue a la primera que contiene `$ancla`. */
@@ -162,8 +183,9 @@ class UltronPromptCompilerTest extends TestCase
             'emojis=false' => [['persona.emojis' => false], $cuatro],
             'maxChars=160' => [['persona.maxChars' => 160], $cuatro],
             'maxChars=480' => [['persona.maxChars' => 480], $cuatro],
-            'goal=venta' => [['strategy.goal' => 'venta'], ['strategist']],
-            'goal=informar' => [['strategy.goal' => 'informar'], ['strategist']],
+            // Compilador 4, el parche del motor: un cambio solo del estratega también lleva los cuatro del motor.
+            'goal=venta' => [['strategy.goal' => 'venta'], ['strategist', ...$cuatro]],
+            'goal=informar' => [['strategy.goal' => 'informar'], ['strategist', ...$cuatro]],
         ];
     }
 
@@ -185,9 +207,10 @@ class UltronPromptCompilerTest extends TestCase
                 $this->assertSame($base[$rol], $paquete['roles'][$rol], "{$rol} queda idéntico a la base");
             }
         }
-        foreach ($paquete['patches'] as $parche) {
+        foreach (array_slice($paquete['patches'], 0, -4) as $parche) {
             $this->assertSame(array_key_first($cambio), $parche['parameter'], 'cada parche es del parámetro que cambió');
         }
+        $this->assertSame(array_fill(0, 4, C::ENGINE), array_column(array_slice($paquete['patches'], -4), 'parameter'), 'y al final, los cuatro del motor');
     }
 
     // ── 3 · Los textos aprobados, en su sitio ─────────────────────────────────
@@ -199,12 +222,12 @@ class UltronPromptCompilerTest extends TestCase
 
         foreach (['composer', 'composer_retry'] as $rol) {
             $this->assertSame(self::PRO_COMPOSER, self::lineaTras($r[$rol], 'COMO SUENAS:'), $rol);
-            $this->assertSame(substr_count($base[$rol], "\n") + 1, substr_count($r[$rol], "\n"), "{$rol}: una línea más");
-            $this->assertSame($base[$rol], str_replace("\n".self::PRO_COMPOSER, '', $r[$rol]), "{$rol}: quitando la línea, la base");
+            $this->assertSame(substr_count($base[$rol], "\n") + 2, substr_count($r[$rol], "\n"), "{$rol}: una línea más, y la del motor");
+            $this->assertSame($base[$rol], str_replace("\n".self::PRO_COMPOSER, '', self::sinMotor($rol, $r[$rol])), "{$rol}: quitando la línea (y la del motor), la base");
         }
         foreach (['critic', 'critic_retry'] as $rol) {
             $this->assertSame(self::PRO_CRITIC, self::lineaTras($r[$rol], 'naturalness:'), $rol);
-            $this->assertSame($base[$rol], str_replace("\n".self::PRO_CRITIC, '', $r[$rol]), $rol);
+            $this->assertSame($base[$rol], str_replace("\n".self::PRO_CRITIC, '', self::sinMotor($rol, $r[$rol])), $rol);
         }
     }
 
@@ -215,11 +238,11 @@ class UltronPromptCompilerTest extends TestCase
 
         foreach (['composer', 'composer_retry'] as $rol) {
             $this->assertSame(self::ENT_COMPOSER, self::lineaTras($r[$rol], 'COMO SUENAS:'), $rol);
-            $this->assertSame($base[$rol], str_replace("\n".self::ENT_COMPOSER, '', $r[$rol]), $rol);
+            $this->assertSame($base[$rol], str_replace("\n".self::ENT_COMPOSER, '', self::sinMotor($rol, $r[$rol])), $rol);
         }
         foreach (['critic', 'critic_retry'] as $rol) {
             $this->assertSame(self::ENT_CRITIC, self::lineaTras($r[$rol], 'naturalness:'), $rol);
-            $this->assertSame($base[$rol], str_replace("\n".self::ENT_CRITIC, '', $r[$rol]), $rol);
+            $this->assertSame($base[$rol], str_replace("\n".self::ENT_CRITIC, '', self::sinMotor($rol, $r[$rol])), $rol);
         }
     }
 
@@ -231,12 +254,12 @@ class UltronPromptCompilerTest extends TestCase
         foreach (['composer', 'composer_retry'] as $rol) {
             $this->assertStringNotContainsString(self::EMOJI_BASE, $r[$rol]);
             $this->assertSame(1, substr_count($r[$rol], self::EMOJI_OFF_COMPOSER));
-            $this->assertSame(str_replace(self::EMOJI_BASE, self::EMOJI_OFF_COMPOSER, $base[$rol]), $r[$rol], "{$rol}: solo la sustitución");
-            $this->assertSame(substr_count($base[$rol], "\n"), substr_count($r[$rol], "\n"), "{$rol}: mismas líneas");
+            $this->assertSame(str_replace(self::EMOJI_BASE, self::EMOJI_OFF_COMPOSER, $base[$rol]), self::sinMotor($rol, $r[$rol]), "{$rol}: solo la sustitución (y la línea del motor)");
+            $this->assertSame(substr_count($base[$rol], "\n") + 1, substr_count($r[$rol], "\n"), "{$rol}: mismas líneas más la del motor");
         }
         foreach (['critic', 'critic_retry'] as $rol) {
             $this->assertSame(self::EMOJI_OFF_CRITIC, self::lineaTras($r[$rol], 'naturalness:'), $rol);
-            $this->assertSame($base[$rol], str_replace("\n".self::EMOJI_OFF_CRITIC, '', $r[$rol]), $rol);
+            $this->assertSame($base[$rol], str_replace("\n".self::EMOJI_OFF_CRITIC, '', self::sinMotor($rol, $r[$rol])), $rol);
         }
     }
 
@@ -277,15 +300,18 @@ class UltronPromptCompilerTest extends TestCase
         }
 
         foreach (['composer', 'composer_retry'] as $rol) {
-            $this->assertSame(self::maxComposer($n), self::lineaTras($r[$rol], 'FORMA:'), $rol);
-            $this->assertSame($base[$rol], str_replace("\n".self::maxComposer($n), '', $r[$rol]), $rol);
+            // El del motor va el último: queda pegado a FORMA: y el del tope, justo detrás.
+            $this->assertSame(self::MOTOR_COMPOSER, self::lineaTras($r[$rol], 'FORMA:'), $rol);
+            $this->assertSame(self::maxComposer($n), self::lineaTras($r[$rol], self::MOTOR_COMPOSER), $rol);
+            $this->assertSame($base[$rol], str_replace("\n".self::maxComposer($n), '', self::sinMotor($rol, $r[$rol])), $rol);
         }
         foreach (['critic', 'critic_retry'] as $rol) {
             $this->assertStringNotContainsString('mas de ~900 caracteres', $r[$rol], $rol);
             $this->assertSame(2, substr_count($r[$rol], "mas de ~{$n} caracteres"), "{$rol}: la sustitución y la línea del tope");
-            $this->assertSame(self::maxCritic($n), self::lineaTras($r[$rol], 'progressive_disclosure:'), $rol);
+            $this->assertSame(self::MOTOR_CRITIC, self::lineaTras($r[$rol], 'progressive_disclosure:'), $rol);
+            $this->assertSame(self::maxCritic($n), self::lineaTras($r[$rol], self::MOTOR_CRITIC), $rol);
             $esperado = str_replace('mas de ~900 caracteres', "mas de ~{$n} caracteres", $base[$rol]);
-            $this->assertSame($esperado, str_replace("\n".self::maxCritic($n), '', $r[$rol]), $rol);
+            $this->assertSame($esperado, str_replace("\n".self::maxCritic($n), '', self::sinMotor($rol, $r[$rol])), $rol);
         }
         $this->assertSame($base['strategist'], $r['strategist']);
     }
@@ -324,14 +350,14 @@ class UltronPromptCompilerTest extends TestCase
         $paquete = C::compile(self::con(['persona.maxChars' => $n]));
 
         foreach (['composer', 'composer_retry'] as $rol) {
-            $this->assertSame($texto, self::lineaTras($paquete['roles'][$rol], 'FORMA:'), $rol);
+            $this->assertSame($texto, self::lineaTras($paquete['roles'][$rol], self::MOTOR_COMPOSER), $rol.': tras la línea del motor, que va pegada a FORMA:');
         }
         $this->assertSame(1, preg_match('/\A[\x20-\x7E]+\z/', $texto), 'ASCII imprimible, sin tildes ni saltos, como los demás textos');
         $this->assertStringNotContainsString('{', $texto, 'ningún marcador sin sustituir');
         $this->assertLessThanOrEqual(C::MAX_PATCH_BYTES, strlen($texto));
         // El del Critic no cambia con el compilador 3.
         foreach (['critic', 'critic_retry'] as $rol) {
-            $this->assertSame(self::maxCritic($n), self::lineaTras($paquete['roles'][$rol], 'progressive_disclosure:'), $rol);
+            $this->assertSame(self::maxCritic($n), self::lineaTras($paquete['roles'][$rol], self::MOTOR_CRITIC), $rol);
         }
     }
 
@@ -355,8 +381,8 @@ class UltronPromptCompilerTest extends TestCase
         $this->assertStringContainsString(self::PRO_COMPOSER, $paquete['roles']['composer']);
         $this->assertStringContainsString(self::maxComposer(200), $paquete['roles']['composer']);
         $this->assertSame(Base::roles()['strategist'], $paquete['roles']['strategist']);
-        $this->assertCount(4 + 6, $paquete['patches'], 'cuatro de tono y seis de longitud');
-        $this->assertSame(['persona.tone', 'persona.tone', 'persona.tone', 'persona.tone', 'persona.maxChars', 'persona.maxChars', 'persona.maxChars', 'persona.maxChars', 'persona.maxChars', 'persona.maxChars'], array_column($paquete['patches'], 'parameter'), 'en el orden de los parámetros');
+        $this->assertCount(4 + 6 + 4, $paquete['patches'], 'cuatro de tono, seis de longitud y cuatro del motor');
+        $this->assertSame(['persona.tone', 'persona.tone', 'persona.tone', 'persona.tone', 'persona.maxChars', 'persona.maxChars', 'persona.maxChars', 'persona.maxChars', 'persona.maxChars', 'persona.maxChars', C::ENGINE, C::ENGINE, C::ENGINE, C::ENGINE], array_column($paquete['patches'], 'parameter'), 'en el orden de los parámetros y el del motor al final');
     }
 
     // ── 8 · Compilador 4: el registro profesional ────────────────────────────
@@ -386,19 +412,29 @@ class UltronPromptCompilerTest extends TestCase
         $this->assertStringNotContainsString('muletillas', self::PRO_CRITIC, 'el revisor no falla por «Tranquilo» o «Listo»: la base lo tiene por muletilla normal fuera de un reclamo');
     }
 
-    public function test_el_compilador_4_solo_mueve_las_huellas_de_profesional(): void
+    /**
+     * Antes del parche del motor, el compilador 4 solo movía las huellas de
+     * `profesional` (c001 y c304 seguían con las del 3). Con el parche del
+     * motor se mueven TODAS las no base; Legacy, no. Las de ahora, escritas a
+     * mano desde `compile-cases.json` regenerado (derivado en Node, sin PHP).
+     */
+    public function test_las_huellas_del_compilador_4_con_el_parche_del_motor(): void
     {
         $huella = static fn (array $cambios): string => C::compile(self::con($cambios))['bundleHash'];
 
-        // Escritas a mano desde compile-cases.json del compilador 3 (c000, c001 y c304): no se mueven.
-        $this->assertSame('3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902', $huella([]), 'Legacy');
-        $this->assertSame('bedc1c5dca22113b065384e0c9867f8d1f5bbe3652227562927cfdee9d20f294', $huella(['persona.maxChars' => 160]), 'cercano · 160');
-        $this->assertSame('7ea13909374e001f7b5e50dd1ab7a26100dc168c20f0918f6d3350b7f7cb3be5', $huella(['persona.tone' => 'entusiasta', 'persona.emojis' => false, 'persona.maxChars' => 480, 'strategy.goal' => 'venta']), 'entusiasta · sin emojis · 480 · venta');
-        // «profesional + 200» (c074): la del compilador 3 deja de valer.
+        $this->assertSame('3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902', $huella([]), 'Legacy: no se mueve');
+        $c001 = $huella(['persona.maxChars' => 160]);
+        $this->assertSame('028bc1eda8fa852ff9cd0a268cd30e7be1529088d993259215fe77bfd8b4e585', $c001, 'cercano · 160');
+        $this->assertNotSame('bedc1c5dca22113b065384e0c9867f8d1f5bbe3652227562927cfdee9d20f294', $c001, 'la del compilador 3 y del 4 sin el motor');
+        $c304 = $huella(['persona.tone' => 'entusiasta', 'persona.emojis' => false, 'persona.maxChars' => 480, 'strategy.goal' => 'venta']);
+        $this->assertSame('10417eaa561c9efcad29a2d96d9e6d7daf42dcbf77e803454d3a2521cdf4a21e', $c304, 'entusiasta · sin emojis · 480 · venta');
+        $this->assertNotSame('7ea13909374e001f7b5e50dd1ab7a26100dc168c20f0918f6d3350b7f7cb3be5', $c304);
+        // «profesional + 200» (c074).
         $g8 = C::compile(self::con(['persona.tone' => 'profesional', 'persona.maxChars' => 200]));
-        $this->assertSame('7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35', $g8['bundleHash'], 'profesional · 200, compilador 4');
+        $this->assertSame('26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075', $g8['bundleHash'], 'profesional · 200, compilador 4 con el motor');
+        $this->assertNotSame('7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35', $g8['bundleHash'], 'la del 4 sin el motor');
         $this->assertNotSame('af9e0d23de42368f1cda211b03dc3164ce1a341acc7e6f22abf3d71afbdb4d51', $g8['bundleHash'], 'la del compilador 3');
-        $this->assertSame(115446, $g8['bytes'], '114 206 con el compilador 3, más 1 240: dos Composer × (678 − 262) y dos Critic × (329 − 125)');
+        $this->assertSame(117746, $g8['bytes'], '115 446 sin el motor, más 2 300: dos Composer × (697 + 1) y dos Critic × (451 + 1)');
     }
 
     // ── 4 · Anclas únicas; la matriz entera compila ───────────────────────────
@@ -416,7 +452,7 @@ class UltronPromptCompilerTest extends TestCase
                 }
             }
         }
-        $this->assertSame(4 + 4 + 4 + 6 + 1 + 1, $vistas);
+        $this->assertSame(4 + 4 + 4 + 6 + 1 + 1 + 6 * 4, $vistas, 'y los cuatro del motor en cada uno de los seis paquetes');
 
         // Las dos que §B.3 dice «a principio de línea», lo están.
         foreach (['critic', 'critic_retry'] as $rol) {
@@ -562,6 +598,7 @@ class UltronPromptCompilerTest extends TestCase
     public function test_la_forma_de_un_parche(): void
     {
         $parches = C::patches(self::con(['strategy.goal' => 'venta']));
+        $motor = static fn (string $rol, string $ancla, string $texto): array => ['parameter' => 'engine.plansOverview', 'value' => true, 'role' => $rol, 'operation' => 'insert_after_line', 'anchor' => $ancla, 'text' => $texto];
 
         $this->assertSame([[
             'parameter' => 'strategy.goal',
@@ -570,6 +607,11 @@ class UltronPromptCompilerTest extends TestCase
             'operation' => 'insert_after_line',
             'anchor' => 'PRINCIPIO:',
             'text' => self::VENTA,
-        ]], $parches);
+        ],
+            $motor('composer', 'FORMA:', self::MOTOR_COMPOSER),
+            $motor('composer_retry', 'FORMA:', self::MOTOR_COMPOSER),
+            $motor('critic', 'progressive_disclosure:', self::MOTOR_CRITIC),
+            $motor('critic_retry', 'progressive_disclosure:', self::MOTOR_CRITIC),
+        ], $parches);
     }
 }

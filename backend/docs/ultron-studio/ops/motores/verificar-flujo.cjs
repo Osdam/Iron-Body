@@ -31,7 +31,8 @@
  *      Compilador 2: el fixture PHP con frases prohibidas de reglas S-NNN
  *      (`decide-studio-frases.json`) también sale `studio` con su huella PHP,
  *      con la línea de frases pegada a su ancla en los cuatro roles que la
- *      llevan y el resto de bytes igual al de «profesional + 200»; una frase
+ *      llevan (en los Composer, tras la del parche del motor del compilador 4,
+ *      que va el último) y el resto de bytes igual al de «profesional + 200»; una frase
  *      alterada en tránsito → hash_mismatch. El flujo no cambia.
  *   G. «Preparar Commit», ejecutado en `vm` junto al de 29de5119 con los mismos
  *      datos: sin negociación, la MISMA salida y sin bloque `prompts`; con
@@ -296,8 +297,10 @@ if (typeof pSel.jsCode === 'string') {
       const lineas = r => fx.studio_prompts.roles[r].split('\n').filter(l => l.startsWith('FRASES PROHIBIDAS PUBLICADAS: '));
       check('fixture PHP con frases: una línea de frases en Composer, Reintento y los dos Critic, ninguna en el Strategist',
         ['composer', 'composer_retry', 'critic', 'critic_retry'].every(r => lineas(r).length === 1) && lineas('strategist').length === 0);
-      check('fixture PHP con frases: va pegada a su ancla (FORMA: en los Composer, naturalness: en los Critic)',
-        ['composer', 'composer_retry'].every(r => { const l = fx.studio_prompts.roles[r].split('\n'); const i = l.findIndex(x => x.startsWith('FORMA:')); return i >= 0 && l[i + 1].startsWith('FRASES PROHIBIDAS PUBLICADAS: '); })
+      // Compilador 4, parche del motor («regenerar antes de sustituir»): va el último, así que en los Composer
+      // queda pegado a FORMA: y la línea de frases justo detrás; en los Critic va tras progressive_disclosure:.
+      check('fixture PHP con frases: va pegada a su ancla (FORMA: y la lista de planes del motor en los Composer, naturalness: en los Critic)',
+        ['composer', 'composer_retry'].every(r => { const l = fx.studio_prompts.roles[r].split('\n'); const i = l.findIndex(x => x.startsWith('FORMA:')); return i >= 0 && l[i + 1].startsWith('LISTA DE PLANES DEL BACKEND: ') && l[i + 2].startsWith('FRASES PROHIBIDAS PUBLICADAS: '); })
         && ['critic', 'critic_retry'].every(r => { const l = fx.studio_prompts.roles[r].split('\n'); const i = l.findIndex(x => x.startsWith('naturalness:')); return i >= 0 && l[i + 1].startsWith('FRASES PROHIBIDAS PUBLICADAS: '); }));
       check('fixture PHP con frases: los demás bytes son los de la oferta sin frases (profesional + 200)', fs.existsSync(fixtureStudio)
         && ROLES.every(r => fx.studio_prompts.roles[r].split('\n').filter(l => !l.startsWith('FRASES PROHIBIDAS PUBLICADAS: ')).join('\n') === leerJson(fixtureStudio).studio_prompts.roles[r]));

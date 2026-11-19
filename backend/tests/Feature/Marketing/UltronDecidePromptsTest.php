@@ -217,7 +217,8 @@ class UltronDecidePromptsTest extends TestCase
         $sp = self::cargaDelToken($token)['x']['sp'] ?? null;
         // Apartado 4 del cierre V2 (D-2): en `studio` con un tope distinto de la línea base, `n` (aquí 200); Legacy, sin la clave.
         // Y H4-9 (T-1): con un tono distinto de la línea base, `t` (aquí «profesional»); Legacy, sin la clave.
-        $this->assertSame(['m' => $oferta['mode'], 'r' => $oferta['reason'], 'h' => $oferta['bundle_hash'], 'v' => $oferta['version'], 'c' => $oferta['content_hash'], 'e' => $oferta['entry'], 's' => $oferta['seq']] + ($oferta['mode'] === 'studio' ? ['n' => 200, 't' => 'profesional'] : []), $sp);
+        // Y «regenerar antes de sustituir» (P-3): con el parche del motor de la lista de planes, `o` = 1; Legacy, sin la clave.
+        $this->assertSame(['m' => $oferta['mode'], 'r' => $oferta['reason'], 'h' => $oferta['bundle_hash'], 'v' => $oferta['version'], 'c' => $oferta['content_hash'], 'e' => $oferta['entry'], 's' => $oferta['seq']] + ($oferta['mode'] === 'studio' ? ['n' => 200, 't' => 'profesional', 'o' => 1] : []), $sp);
 
         // Una sentencia sobre la cadena solo si se llegó a leerla (paso 4), y de lectura.
         $leeLaCadena = $prompts === 'canary' && $config !== 'off' && $conversacion === 'canaria';

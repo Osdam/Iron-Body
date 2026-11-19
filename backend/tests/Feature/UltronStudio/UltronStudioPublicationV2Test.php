@@ -96,7 +96,11 @@ class UltronStudioPublicationV2Test extends TestCase
 
         $textos = self::compile()['texts'];
         $esperado = [];
-        foreach ($caso['expect']['patches'] as [$rol, $operacion, $ancla, $clave]) {
+        // Los cuatro del motor (la lista de planes, compilador 4) van los últimos y la vista previa no los enseña:
+        // no son de un parámetro gobernado. La huella de arriba sí los lleva.
+        $delMotor = array_slice($caso['expect']['patches'], -4);
+        $this->assertSame(array_fill(0, 4, 'engine.plansOverview'), array_map(static fn (array $x): string => $textos[$x[3]]['parameter'], $delMotor));
+        foreach (array_slice($caso['expect']['patches'], 0, -4) as [$rol, $operacion, $ancla, $clave]) {
             $esperado[$rol][] = [$operacion, $ancla, $textos[$clave]['text']];
         }
         $obtenido = [];

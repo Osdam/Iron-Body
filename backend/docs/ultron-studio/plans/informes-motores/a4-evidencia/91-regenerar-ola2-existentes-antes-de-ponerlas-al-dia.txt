@@ -1,0 +1,693 @@
+Ola 2, con el compilador y la oferta ya cambiados y los fixtures regenerados, ANTES de poner al día las pruebas existentes (19-11-2026): estas son las aserciones existentes que mueve el parche del motor (todas por huellas, recuentos, orden tras FORMA: o sp.o).
+Hora: 2026-11-19T09:06:06Z
+Comando (desde backend/): nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging tests/Unit/Marketing/Ultron/Prompts tests/Feature/Marketing/UltronDecidePromptsTest.php tests/Feature/Marketing/UltronPromptsN8nCommandTest.php tests/Unit/UltronStudio/StudioPromptDeclarationTest.php tests/Unit/UltronStudio/ExportStudioFixturesCommandTest.php tests/Feature/UltronStudio/UltronStudioPublicationPromptsTest.php tests/Feature/UltronStudio/UltronStudioPublicationRulePhrasesTest.php
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/phpunit.xml
+
+.............................................................   61 / 1107 (  5%)
+.............................................................  122 / 1107 ( 11%)
+.............................................................  183 / 1107 ( 16%)
+.............................................................  244 / 1107 ( 22%)
+.............................................................  305 / 1107 ( 27%)
+.............................................................  366 / 1107 ( 33%)
+.............................................................  427 / 1107 ( 38%)
+.............................................................  488 / 1107 ( 44%)
+.............................................................  549 / 1107 ( 49%)
+.............................................................  610 / 1107 ( 55%)
+....................................................FFF......  671 / 1107 ( 60%)
+...............................................FF....FFFFFFFF  732 / 1107 ( 66%)
+FF.FFFFFFFF.FFFFFFFF.FFF.F.FF...................F............  793 / 1107 ( 71%)
+........................F....................................  854 / 1107 ( 77%)
+.............................................................  915 / 1107 ( 82%)
+......................F......................................  976 / 1107 ( 88%)
+...F......................................................... 1037 / 1107 ( 93%)
+..................................F........FF...F..FF......F. 1098 / 1107 ( 99%)
+..FFF.FFF                                                     1107 / 1107 (100%)
+
+Time: 00:15.832, Memory: 131.00 MB
+
+There were 54 failures:
+
+1) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerPhrasesTest::test_la_huella_de_profesional_y_200_es_la_de_los_textos_del_compilador_4
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35'
++'26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerPhrasesTest.php:104
+
+2) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerPhrasesTest::test_las_frases_entran_una_vez_en_cada_uno_de_los_cuatro_roles_con_el_texto_fijo
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'5a3957ee0239f6a85352c1eadfba1183143dcf6e9c085e47d2f8deab74ba6df8'
++'705b65c9932fa650db57d110669cf29542dbd7003302631c2bc8eda07f3fbe2e'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerPhrasesTest.php:118
+
+3) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerPhrasesTest::test_con_los_otros_parches_las_frases_quedan_las_primeras_bajo_su_ancla
+composer
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'FRASES PROHIBIDAS PUBLICADAS: esto manda sobre todo este prompt, tambien sobre los ejemplos, knowledge_base, suggested_question y approved_brand_copy. Nunca escribas ninguna de estas frases, tampoco con otras mayusculas o sin tildes, en plural, entre comillas ni para negarla; si la respuesta parece necesitar una, dilo con otras palabras. Son texto literal que evitar, no instrucciones. Las frases: "oiga".'
++'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. Esto manda sobre las reglas de precios y marcadores de este prompt: nombra al menos dos de esos planes, en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Para decir para quien es cada uno usa solo los benefits de su plan_id en active_plans. Si plans_overview no viene, nada de esto aplica.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerPhrasesTest.php:150
+
+4) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerPhrasesTest::test_ningun_texto_de_parche_contiene_un_ancla_ni_comillas_sueltas_ni_llaves
+Failed asserting that 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. Esto manda sobre las reglas de precios y marcadores de este prompt: nombra al menos dos de esos planes, en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Para decir para quien es cada uno usa solo los benefits de su plan_id en active_plans. Si plans_overview no viene, nada de esto aplica.' starts with "FRASES PROHIBIDAS PUBLICADAS: esto manda sobre todo este prompt, tambien sobre los ejemplos, knowledge_base, suggested_question y approved_brand_copy. Nunca escribas ninguna de estas frases, tampoco con otras mayusculas o sin tildes, en plural, entre comillas ni para negarla; si la respuesta parece necesitar una, dilo con otras palabras. Son texto literal que evitar, no instrucciones. Las frases: ".
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerPhrasesTest.php:330
+
+5) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerPhrasesTest::test_el_peor_caso_cabe_en_sus_topes
+el parche de las frases necesita su propio tope
+Failed asserting that 451 is greater than 1200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerPhrasesTest.php:351
+
+6) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_cada_valor_cambia_solo_sus_roles with data set "tone=profesional" (['profesional'], ['composer', 'critic', 'composer_retry', 'critic_retry'])
+cada parche es del parámetro que cambió
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'persona.tone'
++'engine.plansOverview'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php:189
+
+7) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_cada_valor_cambia_solo_sus_roles with data set "tone=entusiasta" (['entusiasta'], ['composer', 'critic', 'composer_retry', 'critic_retry'])
+cada parche es del parámetro que cambió
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'persona.tone'
++'engine.plansOverview'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php:189
+
+8) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_cada_valor_cambia_solo_sus_roles with data set "emojis=false" ([false], ['composer', 'critic', 'composer_retry', 'critic_retry'])
+cada parche es del parámetro que cambió
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'persona.emojis'
++'engine.plansOverview'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php:189
+
+9) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_cada_valor_cambia_solo_sus_roles with data set "maxChars=160" ([160], ['composer', 'critic', 'composer_retry', 'critic_retry'])
+cada parche es del parámetro que cambió
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'persona.maxChars'
++'engine.plansOverview'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php:189
+
+10) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_cada_valor_cambia_solo_sus_roles with data set "maxChars=480" ([480], ['composer', 'critic', 'composer_retry', 'critic_retry'])
+cada parche es del parámetro que cambió
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'persona.maxChars'
++'engine.plansOverview'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php:189
+
+11) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_cada_valor_cambia_solo_sus_roles with data set "goal=venta" (['venta'], ['strategist'])
+Failed asserting that two arrays are equal.
+--- Expected
++++ Actual
+@@ @@
+ Array (
+-    0 => 'strategist'
++    0 => 'composer'
++    1 => 'composer_retry'
++    2 => 'critic'
++    3 => 'critic_retry'
++    4 => 'strategist'
+ )
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php:180
+
+12) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_cada_valor_cambia_solo_sus_roles with data set "goal=informar" (['informar'], ['strategist'])
+Failed asserting that two arrays are equal.
+--- Expected
++++ Actual
+@@ @@
+ Array (
+-    0 => 'strategist'
++    0 => 'composer'
++    1 => 'composer_retry'
++    2 => 'critic'
++    3 => 'critic_retry'
++    4 => 'strategist'
+ )
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php:180
+
+13) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_tono_profesional
+composer: una línea más
+Failed asserting that 105 is identical to 104.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php:202
+
+14) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_tono_entusiasta
+composer
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+ COMO SUENAS: con la personalidad de Iron Body que viene en knowledge_base.tone: seguridad, energia, profesionalismo, acompanamiento y experiencia; cercano y acogedor con quien llega con dudas, directo con quien ya sabe lo que quiere. Un asesor comercial experto que conoce el gimnasio y entiende a la persona, no una encuesta ni un catalogo. Espanol colombiano natural: "Listo", "Claro", "De una", "Tranquilo", "Te entiendo". Palabras de la casa: "te acompanamos", "tu proceso", "tu objetivo", "avanzar", "entrenar". Palabras que NO usas: "cliente", "usuario", "siguiente paso", "puedes consultar", "puedes preguntarme por". Las frases de approved_brand_copy son voz de marca que puedes usar tal cual cuando encajen, no solo una lista blanca. NUNCA "parce", "mi rey", "bro" ni apodos. Nada de lenguaje corporativo ni frases de bot ("estoy aqui para ayudarte", "no dudes en consultarme").
+ 
+ FORMA: normalmente 1 a 3 frases (la presentacion de informacion general admite cinco o seis). Como maximo UNA pregunta. Emoji opcional y raro, nunca en temas sensibles. No repitas el saludo si la conversacion ya empezo. No repitas lo que ya dijiste en recent_messages.
++LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. Esto manda sobre las reglas de precios y marcadores de este prompt: nombra al menos dos de esos planes, en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Para decir para quien es cada uno usa solo los benefits de su plan_id en active_plans. Si plans_overview no viene, nada de esto aplica.
+ 
+ RESPONDER MANDA SOBRE PREGUNTAR. Si te hacen una pregunta directa, la respuesta va PRIMERA, y solo despues, si hace falta, UNA pregunta. Contestar una pregunta con otra pregunta es lo que mas molesta a la gente.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php:218
+
+15) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_sin_emojis
+composer: solo la sustitución
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+ COMO SUENAS: con la personalidad de Iron Body que viene en knowledge_base.tone: seguridad, energia, profesionalismo, acompanamiento y experiencia; cercano y acogedor con quien llega con dudas, directo con quien ya sabe lo que quiere. Un asesor comercial experto que conoce el gimnasio y entiende a la persona, no una encuesta ni un catalogo. Espanol colombiano natural: "Listo", "Claro", "De una", "Tranquilo", "Te entiendo". Palabras de la casa: "te acompanamos", "tu proceso", "tu objetivo", "avanzar", "entrenar". Palabras que NO usas: "cliente", "usuario", "siguiente paso", "puedes consultar", "puedes preguntarme por". Las frases de approved_brand_copy son voz de marca que puedes usar tal cual cuando encajen, no solo una lista blanca. NUNCA "parce", "mi rey", "bro" ni apodos. Nada de lenguaje corporativo ni frases de bot ("estoy aqui para ayudarte", "no dudes en consultarme").
+ 
+ FORMA: normalmente 1 a 3 frases (la presentacion de informacion general admite cinco o seis). Como maximo UNA pregunta. Sin emojis: ninguno, en ningun mensaje. No repitas el saludo si la conversacion ya empezo. No repitas lo que ya dijiste en recent_messages.
++LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. Esto manda sobre las reglas de precios y marcadores de este prompt: nombra al menos dos de esos planes, en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Para decir para quien es cada uno usa solo los benefits de su plan_id en active_plans. Si plans_overview no viene, nada de esto aplica.
+ 
+ RESPONDER MANDA SOBRE PREGUNTAR. Si te hacen una pregunta directa, la respuesta va PRIMERA, y solo despues, si hace falta, UNA pregunta. Contestar una pregunta con otra pregunta es lo que mas molesta a la gente.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php:234
+
+16) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_los_17_valores_de_max_chars with data set "maxChars=160" (160)
+composer
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'TOPE DE LONGITUD PUBLICADO: el limite es 160 caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos 120 caracteres, que son unas 20 palabras: como mucho 2 frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.'
++'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. Esto manda sobre las reglas de precios y marcadores de este prompt: nombra al menos dos de esos planes, en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Para decir para quien es cada uno usa solo los benefits de su plan_id en active_plans. Si plans_overview no viene, nada de esto aplica.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php:280
+
+17) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_los_17_valores_de_max_chars with data set "maxChars=180" (180)
+composer
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'TOPE DE LONGITUD PUBLICADO: el limite es 180 caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos 140 caracteres, que son unas 20 palabras: como mucho 2 frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.'
++'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. Esto manda sobre las reglas de precios y marcadores de este prompt: nombra al menos dos de esos planes, en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Para decir para quien es cada uno usa solo los benefits de su plan_id en active_plans. Si plans_overview no viene, nada de esto aplica.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php:280
+
+18) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_los_17_valores_de_max_chars with data set "maxChars=200" (200)
+composer
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'TOPE DE LONGITUD PUBLICADO: el limite es 200 caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos 160 caracteres, que son unas 25 palabras: como mucho 3 frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.'
++'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. Esto manda sobre las reglas de precios y marcadores de este prompt: nombra al menos dos de esos planes, en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Para decir para quien es cada uno usa solo los benefits de su plan_id en active_plans. Si plans_overview no viene, nada de esto aplica.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php:280
+
+19) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_los_17_valores_de_max_chars with data set "maxChars=220" (220)
+composer
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'TOPE DE LONGITUD PUBLICADO: el limite es 220 caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos 170 caracteres, que son unas 25 palabras: como mucho 3 frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.'
++'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. Esto manda sobre las reglas de precios y marcadores de este prompt: nombra al menos dos de esos planes, en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Para decir para quien es cada uno usa solo los benefits de su plan_id en active_plans. Si plans_overview no viene, nada de esto aplica.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php:280
+
+20) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_los_17_valores_de_max_chars with data set "maxChars=240" (240)
+composer
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'TOPE DE LONGITUD PUBLICADO: el limite es 240 caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos 190 caracteres, que son unas 30 palabras: como mucho 3 frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.'
++'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. Esto manda sobre las reglas de precios y marcadores de este prompt: nombra al menos dos de esos planes, en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Para decir para quien es cada uno usa solo los benefits de su plan_id en active_plans. Si plans_overview no viene, nada de esto aplica.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php:280
+
+21) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_los_17_valores_de_max_chars with data set "maxChars=260" (260)
+composer
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'TOPE DE LONGITUD PUBLICADO: el limite es 260 caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos 200 caracteres, que son unas 30 palabras: como mucho 3 frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.'
++'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. Esto manda sobre las reglas de precios y marcadores de este prompt: nombra al menos dos de esos planes, en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Para decir para quien es cada uno usa solo los benefits de su plan_id en active_plans. Si plans_overview no viene, nada de esto aplica.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php:280
+
+22) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_los_17_valores_de_max_chars with data set "maxChars=280" (280)
+composer
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'TOPE DE LONGITUD PUBLICADO: el limite es 280 caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos 220 caracteres, que son unas 35 palabras: como mucho 4 frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.'
++'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. Esto manda sobre las reglas de precios y marcadores de este prompt: nombra al menos dos de esos planes, en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Para decir para quien es cada uno usa solo los benefits de su plan_id en active_plans. Si plans_overview no viene, nada de esto aplica.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php:280
+
+23) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_los_17_valores_de_max_chars with data set "maxChars=300" (300)
+composer
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'TOPE DE LONGITUD PUBLICADO: el limite es 300 caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos 240 caracteres, que son unas 40 palabras: como mucho 4 frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.'
++'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. Esto manda sobre las reglas de precios y marcadores de este prompt: nombra al menos dos de esos planes, en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Para decir para quien es cada uno usa solo los benefits de su plan_id en active_plans. Si plans_overview no viene, nada de esto aplica.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php:280
+
+24) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_los_17_valores_de_max_chars with data set "maxChars=340" (340)
+composer
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'TOPE DE LONGITUD PUBLICADO: el limite es 340 caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos 270 caracteres, que son unas 45 palabras: como mucho 5 frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.'
++'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. Esto manda sobre las reglas de precios y marcadores de este prompt: nombra al menos dos de esos planes, en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Para decir para quien es cada uno usa solo los benefits de su plan_id en active_plans. Si plans_overview no viene, nada de esto aplica.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php:280
+
+25) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_los_17_valores_de_max_chars with data set "maxChars=360" (360)
+composer
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'TOPE DE LONGITUD PUBLICADO: el limite es 360 caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos 280 caracteres, que son unas 45 palabras: como mucho 5 frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.'
++'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. Esto manda sobre las reglas de precios y marcadores de este prompt: nombra al menos dos de esos planes, en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Para decir para quien es cada uno usa solo los benefits de su plan_id en active_plans. Si plans_overview no viene, nada de esto aplica.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php:280
+
+26) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_los_17_valores_de_max_chars with data set "maxChars=380" (380)
+composer
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'TOPE DE LONGITUD PUBLICADO: el limite es 380 caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos 300 caracteres, que son unas 50 palabras: como mucho 5 frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.'
++'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. Esto manda sobre las reglas de precios y marcadores de este prompt: nombra al menos dos de esos planes, en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Para decir para quien es cada uno usa solo los benefits de su plan_id en active_plans. Si plans_overview no viene, nada de esto aplica.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php:280
+
+27) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_los_17_valores_de_max_chars with data set "maxChars=400" (400)
+composer
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'TOPE DE LONGITUD PUBLICADO: el limite es 400 caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos 320 caracteres, que son unas 50 palabras: como mucho 5 frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.'
++'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. Esto manda sobre las reglas de precios y marcadores de este prompt: nombra al menos dos de esos planes, en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Para decir para quien es cada uno usa solo los benefits de su plan_id en active_plans. Si plans_overview no viene, nada de esto aplica.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php:280
+
+28) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_los_17_valores_de_max_chars with data set "maxChars=420" (420)
+composer
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'TOPE DE LONGITUD PUBLICADO: el limite es 420 caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos 330 caracteres, que son unas 55 palabras: como mucho 6 frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.'
++'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. Esto manda sobre las reglas de precios y marcadores de este prompt: nombra al menos dos de esos planes, en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Para decir para quien es cada uno usa solo los benefits de su plan_id en active_plans. Si plans_overview no viene, nada de esto aplica.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php:280
+
+29) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_los_17_valores_de_max_chars with data set "maxChars=440" (440)
+composer
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'TOPE DE LONGITUD PUBLICADO: el limite es 440 caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos 350 caracteres, que son unas 55 palabras: como mucho 6 frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.'
++'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. Esto manda sobre las reglas de precios y marcadores de este prompt: nombra al menos dos de esos planes, en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Para decir para quien es cada uno usa solo los benefits de su plan_id en active_plans. Si plans_overview no viene, nada de esto aplica.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php:280
+
+30) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_los_17_valores_de_max_chars with data set "maxChars=460" (460)
+composer
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'TOPE DE LONGITUD PUBLICADO: el limite es 460 caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos 360 caracteres, que son unas 60 palabras: como mucho 6 frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.'
++'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. Esto manda sobre las reglas de precios y marcadores de este prompt: nombra al menos dos de esos planes, en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Para decir para quien es cada uno usa solo los benefits de su plan_id en active_plans. Si plans_overview no viene, nada de esto aplica.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php:280
+
+31) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_los_17_valores_de_max_chars with data set "maxChars=480" (480)
+composer
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'TOPE DE LONGITUD PUBLICADO: el limite es 480 caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos 380 caracteres, que son unas 60 palabras: como mucho 6 frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.'
++'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. Esto manda sobre las reglas de precios y marcadores de este prompt: nombra al menos dos de esos planes, en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Para decir para quien es cada uno usa solo los benefits de su plan_id en active_plans. Si plans_overview no viene, nada de esto aplica.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php:280
+
+32) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_el_texto_del_tope_del_redactor_compilado_tal_cual with data set "maxChars=160" (160, 'TOPE DE LONGITUD PUBLICADO: e...pliar.')
+composer
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'TOPE DE LONGITUD PUBLICADO: el limite es 160 caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos 120 caracteres, que son unas 20 palabras: como mucho 2 frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.'
++'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. Esto manda sobre las reglas de precios y marcadores de este prompt: nombra al menos dos de esos planes, en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Para decir para quien es cada uno usa solo los benefits de su plan_id en active_plans. Si plans_overview no viene, nada de esto aplica.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php:327
+
+33) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_el_texto_del_tope_del_redactor_compilado_tal_cual with data set "maxChars=200" (200, 'TOPE DE LONGITUD PUBLICADO: e...pliar.')
+composer
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'TOPE DE LONGITUD PUBLICADO: el limite es 200 caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos 160 caracteres, que son unas 25 palabras: como mucho 3 frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.'
++'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. Esto manda sobre las reglas de precios y marcadores de este prompt: nombra al menos dos de esos planes, en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Para decir para quien es cada uno usa solo los benefits de su plan_id en active_plans. Si plans_overview no viene, nada de esto aplica.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php:327
+
+34) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_el_texto_del_tope_del_redactor_compilado_tal_cual with data set "maxChars=480" (480, 'TOPE DE LONGITUD PUBLICADO: e...pliar.')
+composer
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'TOPE DE LONGITUD PUBLICADO: el limite es 480 caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos 380 caracteres, que son unas 60 palabras: como mucho 6 frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.'
++'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. Esto manda sobre las reglas de precios y marcadores de este prompt: nombra al menos dos de esos planes, en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Para decir para quien es cada uno usa solo los benefits de su plan_id en active_plans. Si plans_overview no viene, nada de esto aplica.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php:327
+
+35) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_el_cambio_de_aceptacion_profesional_y_200
+cuatro de tono y seis de longitud
+Failed asserting that actual size 14 matches expected size 10.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php:358
+
+36) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_el_compilador_4_solo_mueve_las_huellas_de_profesional
+cercano · 160
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'bedc1c5dca22113b065384e0c9867f8d1f5bbe3652227562927cfdee9d20f294'
++'028bc1eda8fa852ff9cd0a268cd30e7be1529088d993259215fe77bfd8b4e585'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php:395
+
+37) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_cada_ancla_aparece_exactamente_una_vez_en_su_rol_de_la_base
+Failed asserting that 44 is identical to 20.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php:419
+
+38) Tests\Unit\Marketing\Ultron\Prompts\UltronPromptCompilerTest::test_la_forma_de_un_parche
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+         'anchor' => 'PRINCIPIO:',
+         'text' => 'OBJETIVO COMERCIAL PUBLICADO: cerrar membresia. Con senales claras de compra (buying_signal strong, hot_lead_fast_path o READY) prioriza recommend y close sobre ofrecer la visita; el dia de cortesia queda para quien desconfia o quiere conocer antes. Nada de esto autoriza presion, descuentos ni salirse de allowed_transitions.',
+     ],
++    1 => Array &2 [
++        'parameter' => 'engine.plansOverview',
++        'value' => true,
++        'role' => 'composer',
++        'operation' => 'insert_after_line',
++        'anchor' => 'FORMA:',
++        'text' => 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. Esto manda sobre las reglas de precios y marcadores de este prompt: nombra al menos dos de esos planes, en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Para decir para quien es cada uno usa solo los benefits de su plan_id en active_plans. Si plans_overview no viene, nada de esto aplica.',
++    ],
++    2 => Array &3 [
++        'parameter' => 'engine.plansOverview',
++        'value' => true,
++        'role' => 'composer_retry',
++        'operation' => 'insert_after_line',
++        'anchor' => 'FORMA:',
++        'text' => 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. Esto manda sobre las reglas de precios y marcadores de este prompt: nombra al menos dos de esos planes, en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Para decir para quien es cada uno usa solo los benefits de su plan_id en active_plans. Si plans_overview no viene, nada de esto aplica.',
++    ],
++    3 => Array &4 [
++        'parameter' => 'engine.plansOverview',
++        'value' => true,
++        'role' => 'critic',
++        'operation' => 'insert_after_line',
++        'anchor' => 'progressive_disclosure:',
++        'text' => 'LISTA DE PLANES DEL BACKEND: los marcadores PLAN_1, PLAN_2 y PLAN_3 entre dobles llaves los sustituye el backend por el nombre y el precio reales de planes que el mismo eligio. Cuentan como nombre y como marcador de precio de ese plan: un borrador que los usa para dar varios planes con su precio NO esquiva el precio, no es invented_plan ni invented_price, y nombrar dos o tres no es defecto de progressive_disclosure. Lo demas se juzga como siempre.',
++    ],
++    4 => Array &5 [
++        'parameter' => 'engine.plansOverview',
++        'value' => true,
++        'role' => 'critic_retry',
++        'operation' => 'insert_after_line',
++        'anchor' => 'progressive_disclosure:',
++        'text' => 'LISTA DE PLANES DEL BACKEND: los marcadores PLAN_1, PLAN_2 y PLAN_3 entre dobles llaves los sustituye el backend por el nombre y el precio reales de planes que el mismo eligio. Cuentan como nombre y como marcador de precio de ese plan: un borrador que los usa para dar varios planes con su precio NO esquiva el precio, no es invented_plan ni invented_price, y nombrar dos o tres no es defecto de progressive_disclosure. Lo demas se juzga como siempre.',
++    ],
+ ]
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPromptCompilerTest.php:566
+
+39) Tests\Unit\Marketing\Ultron\Prompts\UltronPublishedConfigPhrasesTest::test_el_compilador_4_sin_frases_ofrece_la_huella_de_sus_textos
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+ Array &0 [
+     0 => 'studio',
+-    1 => '7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35',
++    1 => '26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075',
+ ]
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/Prompts/UltronPublishedConfigPhrasesTest.php:79
+
+40) Tests\Feature\Marketing\UltronDecidePromptsTest::test_la_matriz_de_la_oferta with data set "config=canary · prompts=canary · canaria · /2 válida" ('canary', 'canary', 'canaria', '/2 válida')
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+     's' => 1,
+     'n' => 200,
+     't' => 'profesional',
++    'o' => 1,
+ ]
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronDecidePromptsTest.php:220
+
+41) Tests\Feature\Marketing\UltronDecidePromptsTest::test_la_matriz_de_la_oferta with data set "config=all · prompts=canary · canaria · /2 válida" ('all', 'canary', 'canaria', '/2 válida')
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+     's' => 1,
+     'n' => 200,
+     't' => 'profesional',
++    'o' => 1,
+ ]
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronDecidePromptsTest.php:220
+
+42) Tests\Unit\UltronStudio\StudioPromptDeclarationTest::test_la_linea_base_es_legacy_y_el_cambio_de_aceptacion_tiene_su_huella
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35'
++'26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/UltronStudio/StudioPromptDeclarationTest.php:324
+
+43) Tests\Unit\UltronStudio\StudioPromptDeclarationTest::test_la_oferta_sigue_los_pasos_de_decide_con_sus_motivos
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+ Array &0 [
+-    'mode' => 'studio',
+-    'version' => '6f1c2a9e-1d2b-4c3d-8e4f-5a6b7c8d9e0f',
+-    'bundleHash' => '7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35',
+-    'reason' => null,
++    'mode' => 'legacy',
++    'version' => null,
++    'bundleHash' => null,
++    'reason' => 'bundle_mismatch',
+ ]
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/UltronStudio/StudioPromptDeclarationTest.php:411
+
+44) Tests\Unit\UltronStudio\ExportStudioFixturesCommandTest::test_it_writes_the_six_files_and_creates_the_testing_folder_inside_an_existing_one
+el cambio de aceptación (G8), con la huella real del compilador 4 (con el 1 y el 2, 702890f7…; con el 3, af9e0d23…)
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35'
++'26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/UltronStudio/ExportStudioFixturesCommandTest.php:122
+
+45) Tests\Feature\UltronStudio\UltronStudioPublicationPromptsTest::test_con_la_llave_encendida_se_publica_el_paquete_que_enseno_la_vista_previa_y_el_motor_lo_ofrece
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+     1 => 'n8n-29de5119',
+     2 => 4,
+     3 => '3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902',
+-    4 => '7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35',
+-    5 => '7b09b89c',
++    4 => '26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075',
++    5 => '26d57565',
+     6 => false,
+-    7 => 115446,
++    7 => 117746,
+ ]
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/UltronStudio/UltronStudioPublicationPromptsTest.php:143
+
+46) Tests\Feature\UltronStudio\UltronStudioPublicationPromptsTest::test_la_parte_del_resto_que_no_compila_tampoco_se_firma
+la parte nueva sí compila
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35'
++'26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/UltronStudio/UltronStudioPublicationPromptsTest.php:242
+
+47) Tests\Feature\UltronStudio\UltronStudioPublicationPromptsTest::test_la_parte_que_se_arrastra_se_ensena_y_revertir_la_conserva_en_v2
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+ Array &0 [
+     0 => 'e7f5ef7a-17dd-4a53-90e8-45335aafd712',
+-    1 => '7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35',
++    1 => '26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075',
+ ]
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/UltronStudio/UltronStudioPublicationPromptsTest.php:267
+
+48) Tests\Feature\UltronStudio\UltronStudioPublicationRulePhrasesTest::test_dos_versiones_con_otras_frases_tienen_otra_huella_de_vista_previa
+sin reglas, la huella de siempre
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35'
++'26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/UltronStudio/UltronStudioPublicationRulePhrasesTest.php:241
+
+49) Tests\Feature\UltronStudio\UltronStudioPublicationRulePhrasesTest::test_una_parte_del_resto_v1_cuyas_frases_no_caben_bloquea_con_su_codigo_y_part_carried
+la versión que se publica compila
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+ Array &0 [
+     0 => 'prompts_rule_phrases_invalid',
+-    1 => '7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35',
++    1 => '26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075',
+ ]
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/UltronStudio/UltronStudioPublicationRulePhrasesTest.php:342
+
+50) Tests\Feature\UltronStudio\UltronStudioPublicationRulePhrasesTest::test_la_vista_previa_ensena_las_frases_de_la_parte_que_se_arrastra
+con los textos de las frases del compilador 4 (con los del 2 y el 3, fbd3c91c…)
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'5a3957ee0239f6a85352c1eadfba1183143dcf6e9c085e47d2f8deab74ba6df8'
++'705b65c9932fa650db57d110669cf29542dbd7003302631c2bc8eda07f3fbe2e'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/UltronStudio/UltronStudioPublicationRulePhrasesTest.php:391
+
+51) Tests\Feature\UltronStudio\UltronStudioPublicationRulePhrasesTest::test_publicar_con_la_llave_y_revertir_lleva_a_la_canaria_las_frases_de_la_parte_arrastrada
+mientras W está en canario, la canaria tiene los prompts de W
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+ Array &0 [
+     'mode' => 'studio',
+     'version' => 'aa87e905-756f-4367-9548-f78d4455030d',
+-    'bundleHash' => '7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35',
++    'bundleHash' => '26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075',
+     'reason' => null,
+ ]
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/UltronStudio/UltronStudioPublicationRulePhrasesTest.php:422
+
+52) Tests\Feature\UltronStudio\UltronStudioPublicationRulePhrasesTest::test_lo_publicado_con_un_compilador_anterior_cae_a_legacy_hasta_revertirlo_y_publicar_otra_version with data set "compilador 1 (los cuatro gobernados)" (1, [true, 200, 'profesional', 'cita'], '702890f7d86a27fef027abd672a99...6d311c')
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+ Array &0 [
+     'mode' => 'studio',
+     'version' => '9bf29321-d535-4094-8d4f-5ddfd42b7a5d',
+-    'bundleHash' => '7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35',
++    'bundleHash' => '26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075',
+     'reason' => null,
+ ]
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/UltronStudio/UltronStudioPublicationRulePhrasesTest.php:504
+
+53) Tests\Feature\UltronStudio\UltronStudioPublicationRulePhrasesTest::test_lo_publicado_con_un_compilador_anterior_cae_a_legacy_hasta_revertirlo_y_publicar_otra_version with data set "compilador 2 (los cinco, sin frases)" (2, [true, 200, 'profesional', [], 'cita'], '702890f7d86a27fef027abd672a99...6d311c')
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+ Array &0 [
+     'mode' => 'studio',
+     'version' => '231387a2-d5c3-4a41-bdc9-414d4f616dc3',
+-    'bundleHash' => '7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35',
++    'bundleHash' => '26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075',
+     'reason' => null,
+ ]
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/UltronStudio/UltronStudioPublicationRulePhrasesTest.php:504
+
+54) Tests\Feature\UltronStudio\UltronStudioPublicationRulePhrasesTest::test_lo_publicado_con_un_compilador_anterior_cae_a_legacy_hasta_revertirlo_y_publicar_otra_version with data set "compilador 3 (los cinco, sin frases; la versión 2 del canario)" (3, [true, 200, 'profesional', [], 'cita'], 'af9e0d23de42368f1cda211b03dc3...db4d51')
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+ Array &0 [
+     'mode' => 'studio',
+     'version' => '46089d43-7f60-445e-a361-98b961feee5f',
+-    'bundleHash' => '7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35',
++    'bundleHash' => '26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075',
+     'reason' => null,
+ ]
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/UltronStudio/UltronStudioPublicationRulePhrasesTest.php:504
+
+FAILURES!
+Tests: 1107, Assertions: 23782, Failures: 54.
+Código de salida: 1

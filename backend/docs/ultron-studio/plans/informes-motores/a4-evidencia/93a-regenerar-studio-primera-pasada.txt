@@ -1,0 +1,217 @@
+VERDE FINAL, olas 1 y 2 (19-11-2026): el Studio entero (tests/Feature/UltronStudio tests/Unit/UltronStudio). Se espera UNA roja: la puerta de diff del H9 (OutreachIsolationTest), hasta subir.
+Hora: 2026-11-19T09:14:02Z
+Comando (desde backend/): nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging tests/Feature/UltronStudio tests/Unit/UltronStudio
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/phpunit.xml
+
+.................
+[R11] peor caso del contenido canónico: 7222 bytes de 8192
+............................................   61 / 3769 (  1%)
+.....
+[TEST9-b] recorrido en sombra: 13 rutas de la ejecución y 9 órdenes (outreach:dispatch, outreach:monitor, outreach:reconcile, outreach:replay, outreach:stop, outreach:suppress-subject, outreach:sweep, outreach:voice-outcomes, outreach:whatsapp-outcomes)
+
+[SEC9-a] aislamiento: 1008 sentencias, 71 escrituras, todas en tablas del H9
+.
+[TEST9-b] recorrido en live: 13 rutas de la ejecución y 9 órdenes (outreach:dispatch, outreach:monitor, outreach:reconcile, outreach:replay, outreach:stop, outreach:suppress-subject, outreach:sweep, outreach:voice-outcomes, outreach:whatsapp-outcomes)
+
+[SEC9-a] aislamiento: 1076 sentencias, 81 escrituras, todas en tablas del H9
+.
+[SEC9-a] aislamiento: 5 sentencias, 1 escrituras, todas en tablas del H9
+
+[TEST9-b] banderas por defecto: 13 rutas de la ejecución y 9 órdenes (outreach:dispatch, outreach:monitor, outreach:reconcile, outreach:replay, outreach:stop, outreach:suppress-subject, outreach:sweep, outreach:voice-outcomes, outreach:whatsapp-outcomes)
+.F
+[SEC9-a] lectores de ultron_studio_strategies en la ejecución (L9-51, lista cerrada de 9): OutreachSuppressSubjectCommand.php, AssistedQueue.php, OutcomeRecorder.php, OutreachDispatcher.php, OutreachMonitor.php, OutreachPublishedStrategies.php, OutreachReadModels.php, OutreachReconciler.php, OutreachStop.php
+....................................................  122 / 3769 (  3%)
+.............................................................  183 / 3769 (  4%)
+.S...........SS......................SSSSSS..................  244 / 3769 (  6%)
+..............S.SSS...........................S..............  305 / 3769 (  8%)
+.....................SSSS....................................  366 / 3769 (  9%)
+.............................................................  427 / 3769 ( 11%)
+.............................................................  488 / 3769 ( 12%)
+.............................................................  549 / 3769 ( 14%)
+.............................................................  610 / 3769 ( 16%)
+.............................................................  671 / 3769 ( 17%)
+.............................................................  732 / 3769 ( 19%)
+.............................................................  793 / 3769 ( 21%)
+.......................SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS.  854 / 3769 ( 22%)
+......S....S..SSS...............SSSSSSSS..........S..........  915 / 3769 ( 24%)
+.............................................................  976 / 3769 ( 25%)
+............SSSS...S......................................... 1037 / 3769 ( 27%)
+............................................................. 1098 / 3769 ( 29%)
+...............................................SSS........... 1159 / 3769 ( 30%)
+SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS....................... 1220 / 3769 ( 32%)
+.................SSS.....SS.F.....................SS......... 1281 / 3769 ( 33%)
+........S.................................................... 1342 / 3769 ( 35%)
+............................................................. 1403 / 3769 ( 37%)
+................SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS 1464 / 3769 ( 38%)
+SSSSSSSSSSSSSSSSSSSSSSSSSSSS.SSSS......SSS....S.............. 1525 / 3769 ( 40%)
+..............................SSSS........................... 1586 / 3769 ( 42%)
+...............................................S......S...... 1647 / 3769 ( 43%)
+...............S....SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS 1708 / 3769 ( 45%)
+SSSSSSSSSSSSSSSSSSSSSS.SSS................................... 1769 / 3769 ( 46%)
+............................................................. 1830 / 3769 ( 48%)
+............................................................. 1891 / 3769 ( 50%)
+............................................................. 1952 / 3769 ( 51%)
+............................................................. 2013 / 3769 ( 53%)
+............................................................. 2074 / 3769 ( 55%)
+............................................................. 2135 / 3769 ( 56%)
+............................................................. 2196 / 3769 ( 58%)
+............................................................. 2257 / 3769 ( 59%)
+............................................................. 2318 / 3769 ( 61%)
+............................................................. 2379 / 3769 ( 63%)
+............................................................. 2440 / 3769 ( 64%)
+............................................................. 2501 / 3769 ( 66%)
+............................................................. 2562 / 3769 ( 67%)
+............................................................. 2623 / 3769 ( 69%)
+............................................................. 2684 / 3769 ( 71%)
+............................................................. 2745 / 3769 ( 72%)
+............................................................. 2806 / 3769 ( 74%)
+............................................................. 2867 / 3769 ( 76%)
+............................................................. 2928 / 3769 ( 77%)
+............................................................. 2989 / 3769 ( 79%)
+............................................................. 3050 / 3769 ( 80%)
+............................................................. 3111 / 3769 ( 82%)
+............................................................. 3172 / 3769 ( 84%)
+............................................................. 3233 / 3769 ( 85%)
+............................................................. 3294 / 3769 ( 87%)
+............................................................. 3355 / 3769 ( 89%)
+............................................................. 3416 / 3769 ( 90%)
+............................................................. 3477 / 3769 ( 92%)
+............................................................. 3538 / 3769 ( 93%)
+............................................................. 3599 / 3769 ( 95%)
+............................................................. 3660 / 3769 ( 97%)
+............................................................. 3721 / 3769 ( 98%)
+................................................              3769 / 3769 (100%)
+
+Time: 02:05.648, Memory: 575.00 MB
+
+There were 2 failures:
+
+1) Tests\Feature\UltronStudio\OutreachIsolationTest::test_la_puerta_de_diff_de_legacy_n8n_otp_y_motor_comercial_esta_vacia_y_la_voz_no_gana_ficheros
+La puerta de diff del H9 no está vacía frente a origin/main (ULTRON Legacy, n8n, OTP o motor comercial tocados):
+backend/app/Services/Marketing/Ultron/CommercialTurnPolicy.php
+backend/app/Services/Marketing/Ultron/ConversationMemoryService.php
+backend/app/Services/Marketing/Ultron/Prompts/UltronPromptCompiler.php
+backend/app/Services/Marketing/Ultron/Prompts/UltronPromptOffer.php
+backend/app/Services/Marketing/Ultron/StrategyContract.php
+backend/app/Services/Marketing/Ultron/UltronCommitService.php
+backend/app/Services/Marketing/Ultron/UltronDecideService.php
+backend/app/Services/Marketing/Ultron/UltronDecideToken.php
+backend/app/Services/Marketing/Ultron/UltronFormalReplies.php
+backend/app/Services/Marketing/Ultron/UltronRegisterDetector.php
+backend/app/Services/Marketing/Ultron/UltronReplyFitter.php
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-''
++'backend/app/Services/Marketing/Ultron/CommercialTurnPolicy.php
++backend/app/Services/Marketing/Ultron/ConversationMemoryService.php
++backend/app/Services/Marketing/Ultron/Prompts/UltronPromptCompiler.php
++backend/app/Services/Marketing/Ultron/Prompts/UltronPromptOffer.php
++backend/app/Services/Marketing/Ultron/StrategyContract.php
++backend/app/Services/Marketing/Ultron/UltronCommitService.php
++backend/app/Services/Marketing/Ultron/UltronDecideService.php
++backend/app/Services/Marketing/Ultron/UltronDecideToken.php
++backend/app/Services/Marketing/Ultron/UltronFormalReplies.php
++backend/app/Services/Marketing/Ultron/UltronRegisterDetector.php
++backend/app/Services/Marketing/Ultron/UltronReplyFitter.php'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/UltronStudio/OutreachIsolationTest.php:374
+
+2) Tests\Feature\UltronStudio\UltronStudioPublicationV2Test::test_la_tabla_de_cambios_de_la_vista_previa_son_los_parches_del_contrato
+la vista previa no enseña los parches del contrato
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+             1 => 'FORMA:',
+             2 => 'TOPE DE LONGITUD PUBLICADO: el limite es 200 caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos 160 caracteres, que son unas 25 palabras: como mucho 3 frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.',
+         ],
+-        2 => Array &4 [
+-            0 => 'insert_after_line',
+-            1 => 'FORMA:',
+-            2 => 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. Esto manda sobre las reglas de precios y marcadores de este prompt: nombra al menos dos de esos planes, en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Para decir para quien es cada uno usa solo los benefits de su plan_id en active_plans. Si plans_overview no viene, nada de esto aplica.',
+-        ],
+     ],
+-    'composer_retry' => Array &5 [
+-        0 => Array &6 [
++    'composer_retry' => Array &4 [
++        0 => Array &5 [
+             0 => 'insert_after_line',
+             1 => 'COMO SUENAS:',
+             2 => 'REGISTRO PUBLICADO: profesional. Esto manda sobre TODO este prompt, tambien sobre los ejemplos de abajo, knowledge_base.tone, suggested_question y approved_brand_copy: trata a la persona de usted en cada frase, sin mezclar. Los ejemplos se dicen de usted: "Te entiendo" es "Le entiendo", "tu objetivo" es "su objetivo", "te paso" es "le paso", "cuentame" es "cuenteme", "quieres" es "quiere". Nunca "te", "tu", "tus", "ti" ni "contigo". Frases completas y sobrias, sin muletillas coloquiales ("De una", "Listo", "Tranquilo") ni exclamaciones seguidas. Sigue siendo calido; profesional no es frio. El backend comprueba el registro antes de enviar y descarta el mensaje que tutee.',
+         ],
+-        1 => Array &7 [
++        1 => Array &6 [
+             0 => 'insert_after_line',
+             1 => 'FORMA:',
+             2 => 'TOPE DE LONGITUD PUBLICADO: el limite es 200 caracteres por mensaje y el backend lo mide antes de enviar: al mensaje que se pase se le quita la pregunta final y, si aun asi no cabe, se descarta entero. Escribe unos 160 caracteres, que son unas 25 palabras: como mucho 3 frases cortas, con una sola pregunta. Cuenta cada marcador como el texto que lo sustituye. Tambien la informacion general respeta el tope: da primero lo esencial de lo que se pregunto y, si hace falta, ofrece ampliar.',
+         ],
+-        2 => Array &8 [
+-            0 => 'insert_after_line',
+-            1 => 'FORMA:',
+-            2 => 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. Esto manda sobre las reglas de precios y marcadores de este prompt: nombra al menos dos de esos planes, en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Para decir para quien es cada uno usa solo los benefits de su plan_id en active_plans. Si plans_overview no viene, nada de esto aplica.',
+-        ],
+     ],
+-    'critic' => Array &9 [
+-        0 => Array &10 [
++    'critic' => Array &7 [
++        0 => Array &8 [
+             0 => 'insert_after_line',
+             1 => 'naturalness:',
+             2 => 'REGISTRO PUBLICADO: profesional. Tratar de usted NO es defecto. Si el borrador tutea en cualquier frase o mezcla tu y usted ("te", "tu", "tus", "ti", "contigo", "quieres", "puedes", "cuentame", "dime"), verdict fail con naturalness y notes "pasar todo el mensaje a usted". Lo que va entre comillas citando a la persona no cuenta.',
+         ],
+-        1 => Array &11 [
++        1 => Array &9 [
+             0 => 'replace',
+             1 => 'mas de ~900 caracteres',
+             2 => 'mas de ~200 caracteres',
+         ],
+-        2 => Array &12 [
++        2 => Array &10 [
+             0 => 'insert_after_line',
+             1 => 'progressive_disclosure:',
+             2 => 'TOPE PUBLICADO: un borrador de mas de ~200 caracteres falla por progressive_disclosure aunque se haya pedido detalle.',
+         ],
+-        3 => Array &13 [
+-            0 => 'insert_after_line',
+-            1 => 'progressive_disclosure:',
+-            2 => 'LISTA DE PLANES DEL BACKEND: los marcadores PLAN_1, PLAN_2 y PLAN_3 entre dobles llaves los sustituye el backend por el nombre y el precio reales de planes que el mismo eligio. Cuentan como nombre y como marcador de precio de ese plan: un borrador que los usa para dar varios planes con su precio NO esquiva el precio, no es invented_plan ni invented_price, y nombrar dos o tres no es defecto de progressive_disclosure. Lo demas se juzga como siempre.',
+-        ],
+     ],
+-    'critic_retry' => Array &14 [
+-        0 => Array &15 [
++    'critic_retry' => Array &11 [
++        0 => Array &12 [
+             0 => 'insert_after_line',
+             1 => 'naturalness:',
+             2 => 'REGISTRO PUBLICADO: profesional. Tratar de usted NO es defecto. Si el borrador tutea en cualquier frase o mezcla tu y usted ("te", "tu", "tus", "ti", "contigo", "quieres", "puedes", "cuentame", "dime"), verdict fail con naturalness y notes "pasar todo el mensaje a usted". Lo que va entre comillas citando a la persona no cuenta.',
+         ],
+-        1 => Array &16 [
++        1 => Array &13 [
+             0 => 'replace',
+             1 => 'mas de ~900 caracteres',
+             2 => 'mas de ~200 caracteres',
+         ],
+-        2 => Array &17 [
++        2 => Array &14 [
+             0 => 'insert_after_line',
+             1 => 'progressive_disclosure:',
+             2 => 'TOPE PUBLICADO: un borrador de mas de ~200 caracteres falla por progressive_disclosure aunque se haya pedido detalle.',
+-        ],
+-        3 => Array &18 [
+-            0 => 'insert_after_line',
+-            1 => 'progressive_disclosure:',
+-            2 => 'LISTA DE PLANES DEL BACKEND: los marcadores PLAN_1, PLAN_2 y PLAN_3 entre dobles llaves los sustituye el backend por el nombre y el precio reales de planes que el mismo eligio. Cuentan como nombre y como marcador de precio de ese plan: un borrador que los usa para dar varios planes con su precio NO esquiva el precio, no es invented_plan ni invented_price, y nombrar dos o tres no es defecto de progressive_disclosure. Lo demas se juzga como siempre.',
+         ],
+     ],
+ ]
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/UltronStudio/UltronStudioPublicationV2Test.php:110
+
+FAILURES!
+Tests: 3769, Assertions: 41688, Failures: 2, Skipped: 277.
+Código de salida: 1

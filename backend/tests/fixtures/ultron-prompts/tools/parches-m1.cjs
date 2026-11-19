@@ -24,6 +24,14 @@
  * `tone = profesional` son los del apartado «Compilador 4» de §B.3 (sustituyen
  * a los de la tabla, que quedan como históricos), y se exige que estén escritos
  * tal cual DENTRO de ese apartado, no solo en algún sitio de §B.3.
+ *
+ * Compilador 4, el parche del MOTOR («regenerar antes de sustituir», 19-11-2026;
+ * `plans/informes-motores/plan-arquitecto-a4-regenerar.md` §7.1, y §B.3,
+ * apartado «Compilador 4», «El parche del motor: la lista de planes»): no es de
+ * un parámetro; va AL FINAL y SOLO si ya hay algún parche (con la línea base,
+ * ninguno), a Composer y Composer Reintento tras `FORMA:` y a los dos Critic
+ * tras `progressive_disclosure:`. Sus dos textos también tienen que estar
+ * escritos tal cual DENTRO del apartado «Compilador 4».
  */
 const fs = require('fs');
 const path = require('path');
@@ -55,6 +63,8 @@ const COMPILER = 4;
 const BASELINE = { 'persona.tone': 'cercano', 'persona.emojis': true, 'persona.maxChars': 320, [PHRASES]: [], 'strategy.goal': 'cita' };
 /** §B.3: «Varios parches sobre la misma ancla se aplican en el orden de los parámetros». */
 const PARAMETERS = ['persona.tone', 'persona.emojis', 'persona.maxChars', 'strategy.goal'];
+/** §B.3, «Compilador 4», el parche del motor: no es un parámetro; va el último. */
+const ENGINE = 'engine.plansOverview';
 const TONES = ['cercano', 'profesional', 'entusiasta'];
 const GOALS = ['cita', 'venta', 'informar'];
 /** §B.3: «maxChars = N (160–480, paso 20, ≠ 320)». */
@@ -95,6 +105,9 @@ const T = {
   'maxChars.critic.insert': 'TOPE PUBLICADO: un borrador de mas de ~{N} caracteres falla por progressive_disclosure aunque se haya pedido detalle.',
   'goal.venta.strategist': 'OBJETIVO COMERCIAL PUBLICADO: cerrar membresia. Con senales claras de compra (buying_signal strong, hot_lead_fast_path o READY) prioriza recommend y close sobre ofrecer la visita; el dia de cortesia queda para quien desconfia o quiere conocer antes. Nada de esto autoriza presion, descuentos ni salirse de allowed_transitions.',
   'goal.informar.strategist': 'OBJETIVO COMERCIAL PUBLICADO: informar y cualificar. Prioriza understand y recommend; no propongas close ni collect_payment salvo que la persona pida comprar o pagar con palabras.',
+  // Compilador 4, el parche del motor (§B.3, «Compilador 4», «El parche del motor: la lista de planes»).
+  'engine.plansOverview.composer': 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. Esto manda sobre las reglas de precios y marcadores de este prompt: nombra al menos dos de esos planes, en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Para decir para quien es cada uno usa solo los benefits de su plan_id en active_plans. Si plans_overview no viene, nada de esto aplica.',
+  'engine.plansOverview.critic': 'LISTA DE PLANES DEL BACKEND: los marcadores PLAN_1, PLAN_2 y PLAN_3 entre dobles llaves los sustituye el backend por el nombre y el precio reales de planes que el mismo eligio. Cuentan como nombre y como marcador de precio de ese plan: un borrador que los usa para dar varios planes con su precio NO esquiva el precio, no es invented_plan ni invented_price, y nombrar dos o tres no es defecto de progressive_disclosure. Lo demas se juzga como siempre.',
 };
 
 /**
@@ -115,7 +128,7 @@ function sustituir(texto, n) {
 }
 
 /** Compilador 4: los textos que tienen que estar escritos DENTRO del apartado «Compilador 4» de §B.3. */
-const DEL_COMPILADOR_4 = ['tone.profesional.composer', 'tone.profesional.critic'];
+const DEL_COMPILADOR_4 = ['tone.profesional.composer', 'tone.profesional.critic', 'engine.plansOverview.composer', 'engine.plansOverview.critic'];
 
 /** Cómo aparece cada texto en el plan (para la comprobación de transcripción): cada marcador, con su letra. */
 const CON_LETRAS = (texto) => texto.split('{N}').join('N').split('{M}').join('M').split('{P}').join('P').split('{F}').join('F');
@@ -259,6 +272,11 @@ function parches(g) {
   }
   const goal = g['strategy.goal'];
   if (goal === 'venta' || goal === 'informar') pon('strategy.goal', goal, ['strategist'], 'insert_after_line', 'principio', `goal.${goal}.strategist`);
+  // Compilador 4, el del motor: al final y solo si ya hay alguno (la línea base sigue sin ninguno).
+  if (out.length > 0) {
+    pon(ENGINE, true, COMPOSERS, 'insert_after_line', 'forma', 'engine.plansOverview.composer');
+    pon(ENGINE, true, CRITICS, 'insert_after_line', 'progressive', 'engine.plansOverview.critic');
+  }
   return out;
 }
 
@@ -291,4 +309,4 @@ function compilar(base, g) {
   return { roles, patches: lista, bundleHash: bundleHash(roles), bytes: total };
 }
 
-module.exports = { BACKEND, REPO, ROLES, NODES, CONTRACT, PHRASES, COMPILER, BASELINE, PARAMETERS, TONES, GOALS, MAX_CHARS, LIMITS, A, T, margen, sha256, bytes, bundleHash, leerBase, comprobarBaseContraFlujo, comprobarTextosContraElPlan, parches, compilar, valido };
+module.exports = { BACKEND, REPO, ROLES, NODES, CONTRACT, PHRASES, COMPILER, BASELINE, PARAMETERS, ENGINE, TONES, GOALS, MAX_CHARS, LIMITS, A, T, margen, sha256, bytes, bundleHash, leerBase, comprobarBaseContraFlujo, comprobarTextosContraElPlan, parches, compilar, valido };

@@ -52,6 +52,22 @@ namespace App\Services\Marketing\Ultron\Prompts;
  * juego cerrado de las frases no cambian; `cercano` y `entusiasta` sin
  * frases, y la línea base, tampoco.
  *
+ * EL PARCHE DEL MOTOR (también compilador 4, que no está publicado en ningún
+ * sitio; cierre V2, apartado 4, «regenerar antes de sustituir», plan del
+ * arquitecto `plan-arquitecto-a4-regenerar.md` §3 P-3, cambio 3, y §7.1). La
+ * instrucción de la lista de planes que redacta el modelo con `{{PLAN_1}}` a
+ * `{{PLAN_3}}` ({@see self::T_PLANS_COMPOSER} y {@see self::T_PLANS_CRITIC})
+ * no es de un parámetro gobernado: es del motor ({@see self::ENGINE}), como la
+ * base. Se añade AL FINAL de los parches y SOLO si la versión ya tiene alguno
+ * gobernado: con la línea base no hay ninguno y `compile()` sigue siendo la
+ * base byte a byte con la huella Legacy (M1-4: «línea base = como hoy»). Va al
+ * redactor y a su reintento tras `FORMA:` y a los dos revisores tras
+ * `progressive_disclosure:` (sin él, el revisor tumbaría la lista por «no
+ * lleva el marcador de precio»). Como es el último, queda pegado a su ancla.
+ * Cambian las huellas de TODO paquete no base. La vista previa del Studio no
+ * lo enseña (agrupa por {@see self::PARAMETERS}); la huella que se firma, sí
+ * lo lleva. `UltronPromptOffer` firma `sp.o = 1` cuando el paquete lo trae.
+ *
  * PARCHES ANCLADOS, NO PLANTILLAS. La base no se edita: cada valor distinto de
  * la línea base aplica parches `{rol, ancla, operación, texto}` donde el ancla
  * es una subcadena que tiene que aparecer EXACTAMENTE UNA VEZ (sensible a
@@ -64,7 +80,8 @@ namespace App\Services\Marketing\Ultron\Prompts;
  *  - `replace`: sustituye la subcadena del ancla por el texto.
  *
  * Los parches se aplican uno detrás de otro, en el orden de los parámetros
- * ({@see self::PARAMETERS}: tono, emojis, longitud, objetivo, frases) y,
+ * ({@see self::PARAMETERS}: tono, emojis, longitud, objetivo, frases; y, si
+ * hay alguno, al final el del motor) y,
  * dentro de un parámetro, en el orden de {@see self::patches()}. Cada uno se
  * aplica sobre el resultado del anterior. Consecuencia que hay que saber leer:
  * dos inserciones tras LA MISMA línea quedan en orden inverso al de aplicación
@@ -113,7 +130,11 @@ final class UltronPromptCompiler
      * los dos textos fijos de las frases prohibidas
      * ({@see self::T_PHRASES_COMPOSER} y {@see self::T_PHRASES_CRITIC}):
      * cambian las huellas de todo paquete con ese tono o con frases, y
-     * ninguna otra.
+     * ninguna otra. Antes de publicarse en ningún sitio, el 4 suma además el
+     * parche del motor de la lista de planes ({@see self::ENGINE}; «regenerar
+     * antes de sustituir»): con él cambian las huellas de TODO paquete no
+     * base; la línea base y la huella Legacy, no. No se sube a 5 porque el 4
+     * no ha llegado a producción ni a ninguna publicación.
      */
     public const VERSION = 4;
 
@@ -137,6 +158,14 @@ final class UltronPromptCompiler
 
     /** Los gobernados, en el ORDEN DE APLICACIÓN de sus parches (las frases, las últimas). */
     public const PARAMETERS = [self::TONE, self::EMOJIS, self::MAX_CHARS, self::GOAL, self::PHRASES];
+
+    /**
+     * El parche del MOTOR (compilador 4, «regenerar antes de sustituir»): la
+     * instrucción de la lista de planes. NO es un parámetro gobernado (no está
+     * en {@see self::PARAMETERS} ni en la línea base): va detrás de todos,
+     * solo si hay alguno, con `parameter` = esto y `value` = true.
+     */
+    public const ENGINE = 'engine.plansOverview';
 
     /**
      * La línea base: «como hoy» (M1-4). Con estos valores no hay ni un parche.
@@ -291,6 +320,18 @@ final class UltronPromptCompiler
 
     private const T_PHRASES_END = '.';
 
+    // ── El parche del MOTOR ({@see self::ENGINE}; plan del arquitecto
+    //    `plan-arquitecto-a4-regenerar.md` §7.1, literales; ASCII, sin tildes
+    //    ni llaves, como el resto). Pendientes de la aprobación del propietario
+    //    (gate 4-H). El del revisor existe porque, sin él, `critic.txt` («si le
+    //    preguntaron el PRECIO y el borrador NO lleva el marcador de precio»)
+    //    tumbaría la lista; el revisor no recibe `plans_overview` y su mensaje
+    //    de usuario no se toca. ──
+
+    private const T_PLANS_COMPOSER = 'LISTA DE PLANES DEL BACKEND: si commercial_turn_policy.plans_overview trae planes, la persona pidio los planes o los precios en general y el backend ya eligio cuales mostrar. Esto manda sobre las reglas de precios y marcadores de este prompt: nombra al menos dos de esos planes, en el orden en que vienen, escribiendo por cada uno SOLO su marcador (PLAN_1, PLAN_2 o PLAN_3 entre dobles llaves), que el backend sustituye por el nombre y el precio reales. No escribas sus nombres ni cifras, no uses PLAN_NAME, PLAN_PRICE ni PLAN_DURATION y no repitas un marcador. Para decir para quien es cada uno usa solo los benefits de su plan_id en active_plans. Si plans_overview no viene, nada de esto aplica.';
+
+    private const T_PLANS_CRITIC = 'LISTA DE PLANES DEL BACKEND: los marcadores PLAN_1, PLAN_2 y PLAN_3 entre dobles llaves los sustituye el backend por el nombre y el precio reales de planes que el mismo eligio. Cuentan como nombre y como marcador de precio de ese plan: un borrador que los usa para dar varios planes con su precio NO esquiva el precio, no es invented_plan ni invented_price, y nombrar dos o tres no es defecto de progressive_disclosure. Lo demas se juzga como siempre.';
+
     /** Las anclas, para rechazar una frase que contenga alguna (la unicidad no puede depender de lo que escriba el personal). */
     private const ANCHORS = [self::A_COMO_SUENAS, self::A_FORMA, self::A_EMOJI, self::A_NATURALNESS, self::A_PROGRESSIVE, self::A_900, self::A_PRINCIPIO];
 
@@ -337,7 +378,9 @@ final class UltronPromptCompiler
 
     /**
      * Los parches que aplicaría {@see self::compile()}, en su orden, SIN leer
-     * la base: lo que la vista previa del Studio enseña como «cambio exacto».
+     * la base: los de los parámetros gobernados, que la vista previa del Studio
+     * enseña como «cambio exacto», y, al final, los del motor
+     * ({@see self::ENGINE}), que no enseña (agrupa por {@see self::PARAMETERS}).
      * Con la línea base, `[]`.
      *
      * @param  array<string,mixed>  $governed
@@ -360,6 +403,23 @@ final class UltronPromptCompiler
                 $parches[] = [
                     'parameter' => $parametro,
                     'value' => $valor,
+                    'role' => $rol,
+                    'operation' => $operacion,
+                    'anchor' => $ancla,
+                    'text' => $texto,
+                ];
+            }
+        }
+
+        // El del motor, al final y solo si hay algún parche gobernado: con la línea base, ninguno (M1-4).
+        if ($parches !== []) {
+            foreach (self::enginePatches() as [$rol, $operacion, $ancla, $texto]) {
+                if (strlen($texto) > self::MAX_PATCH_BYTES || str_contains($texto, "\n") || str_contains($texto, "\r")) {
+                    throw new UltronPromptException(UltronPromptException::TOO_LARGE, 'Un parche de '.self::ENGINE.' supera '.self::MAX_PATCH_BYTES.' bytes o tiene saltos de línea.');
+                }
+                $parches[] = [
+                    'parameter' => self::ENGINE,
+                    'value' => true,
                     'role' => $rol,
                     'operation' => $operacion,
                     'anchor' => $ancla,
@@ -623,6 +683,23 @@ final class UltronPromptCompiler
         }
 
         return [];
+    }
+
+    /**
+     * Los parches del motor ({@see self::ENGINE}), en su orden: los dos
+     * redactores tras `FORMA:` y los dos revisores tras
+     * `progressive_disclosure:` (cada ancla, una vez en su rol de la base).
+     *
+     * @return list<array{0:string,1:string,2:string,3:string}> [rol, operación, ancla, texto]
+     */
+    private static function enginePatches(): array
+    {
+        return [
+            ['composer', self::INSERT_AFTER_LINE, self::A_FORMA, self::T_PLANS_COMPOSER],
+            ['composer_retry', self::INSERT_AFTER_LINE, self::A_FORMA, self::T_PLANS_COMPOSER],
+            ['critic', self::INSERT_AFTER_LINE, self::A_PROGRESSIVE, self::T_PLANS_CRITIC],
+            ['critic_retry', self::INSERT_AFTER_LINE, self::A_PROGRESSIVE, self::T_PLANS_CRITIC],
+        ];
     }
 
     /**

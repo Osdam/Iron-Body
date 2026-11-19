@@ -59,8 +59,8 @@ class UltronStudioPublicationRulePhrasesTest extends TestCase
     use RefreshDatabase;
     use StudioFixtures;
 
-    /** «profesional + 200» con el compilador 4 (compile-cases.json, c074). */
-    private const G8_HASH = '7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35';
+    /** «profesional + 200» con el compilador 4 y el parche del motor de la lista de planes (compile-cases.json, c074); sin el motor era `7b09b89c…cc35`. */
+    private const G8_HASH = '26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075';
 
     /** La misma con los compiladores 1 y 2 (la que quedó firmada en la cadena antes del 3). */
     private const G8_HASH_COMPILADORES_1_Y_2 = '702890f7d86a27fef027abd672a99903e64b6661c2d8f8a72a45ddea3d6d311c';
@@ -388,7 +388,7 @@ class UltronStudioPublicationRulePhrasesTest extends TestCase
         // (el ejemplo del informe): las frases entran en `bundleHash` y, con
         // ella, en `previewHash`.
         $conFrases = UltronPromptCompiler::compile(array_replace(UltronPromptCompiler::BASELINE, [UltronPromptCompiler::PHRASES => ['gratis', 'te lo regalo']]))['bundleHash'];
-        $this->assertSame('5a3957ee0239f6a85352c1eadfba1183143dcf6e9c085e47d2f8deab74ba6df8', $conFrases, 'con los textos de las frases del compilador 4 (con los del 2 y el 3, fbd3c91c…)');
+        $this->assertSame('705b65c9932fa650db57d110669cf29542dbd7003302631c2bc8eda07f3fbe2e', $conFrases, 'con los textos de las frases del compilador 4 y su parche del motor (con los del 2 y el 3, fbd3c91c…; con el 4 sin el motor, 5a3957ee…)');
         $this->assertNotSame(UltronPromptBase::LEGACY_BUNDLE_HASH, $conFrases);
         $this->assertSame([
             'versionUuid' => $v0->uuid,

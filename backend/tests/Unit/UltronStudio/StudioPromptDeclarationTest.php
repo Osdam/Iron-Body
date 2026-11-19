@@ -55,11 +55,15 @@ class StudioPromptDeclarationTest extends TestCase
     private const G8_C2 = ['persona.emojis' => true, 'persona.maxChars' => 200, 'persona.tone' => 'profesional', 'rules.forbiddenPhrases' => [], 'strategy.goal' => 'cita'];
 
     /**
-     * La huella de G8 con el compilador 4 (compile-cases.json, c074, que deriva el guion del
-     * tester sin PHP). Con los compiladores 1 y 2 era `702890f7…311c` (`api-compilador.md` §4);
-     * con el 3, `af9e0d23…4d51`.
+     * La huella de G8 con el compilador 4 y el parche del motor de la lista de planes
+     * (compile-cases.json, c074, que deriva el guion del tester sin PHP). Con los compiladores
+     * 1 y 2 era `702890f7…311c` (`api-compilador.md` §4); con el 3, `af9e0d23…4d51`; con el 4
+     * antes del parche del motor, `7b09b89c…cc35`.
      */
-    private const G8_HASH = '7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35';
+    private const G8_HASH = '26d57565894df0fb9885d73be4c4aba818f16529bfb0fe4ae2e4418c5e1b1075';
+
+    /** La de G8 con el compilador 4 antes del parche del motor (nunca publicada en ningún sitio). */
+    private const G8_HASH_SIN_MOTOR = '7b09b89c98d48b01561b9cbc07e048c152c0af6a4ba7f583becd49f8e7e8cc35';
 
     private const LEGACY_HASH = '3f6a5674ad37037f7456d9f84dc8920a0b9f37a9c5e7e90b7d07c3685a86c902';
 
@@ -322,15 +326,19 @@ class StudioPromptDeclarationTest extends TestCase
         $this->assertFalse($g8['baseline']);
         $this->assertSame(self::G8_C2, $g8['governed']);
         $this->assertSame(self::G8_HASH, $g8['prompts']['bundleHash']);
-        $this->assertSame(115446, $g8['bytes'], '113 672 con los compiladores 1 y 2; 114 206 con el 3, que alarga el texto del tope en los dos Composer; el 4 alarga los dos textos del tono profesional en los cuatro roles');
+        $this->assertSame(117746, $g8['bytes'], '113 672 con los compiladores 1 y 2; 114 206 con el 3, que alarga el texto del tope en los dos Composer; 115 446 con el 4, que alarga los dos textos del tono profesional en los cuatro roles; más 2 300 del parche del motor de la lista de planes (que la vista previa no enseña)');
         $this->assertSame(['persona.tone', 'persona.maxChars'], array_column($g8['changes'], 'param'));
         $this->assertSame(['profesional', 200], array_column($g8['changes'], 'value'));
         foreach ($g8['changes'] as $cambio) {
             $this->assertSame(['composer', 'critic', 'composer_retry', 'critic_retry'], $cambio['roles'], 'roles en su orden canónico');
         }
-        // Los parches son los del compilador, con su texto exacto y en su orden.
+        // Los parches son los del compilador, con su texto exacto y en su orden, salvo los cuatro
+        // del motor (la lista de planes, «regenerar antes de sustituir»), que van al final y la
+        // vista previa no enseña: no son de un parámetro gobernado (la huella sí los lleva).
+        $delCompilador = UltronPromptCompiler::patches(self::G8_C2);
+        $this->assertSame(array_fill(0, 4, UltronPromptCompiler::ENGINE), array_column(array_slice($delCompilador, -4), 'parameter'));
         $this->assertSame(
-            array_map(static fn (array $p): array => ['role' => $p['role'], 'operation' => $p['operation'], 'anchor' => $p['anchor'], 'text' => $p['text']], UltronPromptCompiler::patches(self::G8_C2)),
+            array_map(static fn (array $p): array => ['role' => $p['role'], 'operation' => $p['operation'], 'anchor' => $p['anchor'], 'text' => $p['text']], array_slice($delCompilador, 0, -4)),
             array_merge(...array_column($g8['changes'], 'patches')),
         );
         $this->assertSame('mas de ~200 caracteres', $g8['changes'][1]['patches'][2]['text']);
@@ -407,6 +415,8 @@ class StudioPromptDeclarationTest extends TestCase
         $this->assertSame('compiler_changed', $motivo(B::offer($on, $canary, true, $ok($compilador))));
         $this->assertSame('error', $motivo(B::offer($on, $canary, true, $ok(self::partActual(governed: array_replace(self::G8_C2, ['persona.tone' => 'serio']))))));
         $this->assertSame('bundle_mismatch', $motivo(B::offer($on, $canary, true, $ok(self::partActual(hash: self::LEGACY_HASH)))));
+        // El compilador 4 firmado antes del parche del motor (no ocurrió en ningún sitio): misma versión, otra huella.
+        $this->assertSame('bundle_mismatch', $motivo(B::offer($on, $canary, true, $ok(self::partActual(hash: self::G8_HASH_SIN_MOTOR)))));
 
         $this->assertSame(['mode' => 'studio', 'version' => self::V, 'bundleHash' => self::G8_HASH, 'reason' => null], B::offer($on, $canary, true, $ok(self::partActual())));
         $this->assertSame(['mode' => 'studio', 'version' => self::V, 'bundleHash' => self::G8_HASH, 'reason' => null], B::offer($on, StudioPublishing::SCOPE_ALL, true, $ok(self::partActual())));

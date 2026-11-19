@@ -131,6 +131,63 @@ final class UltronDecideToken
         return ['valid' => true, 'reason' => null, 'extra' => is_array($payload['x'] ?? null) ? $payload['x'] : []];
     }
 
+    /**
+     * MIRAR EL TOKEN SIN JUZGAR EL MUNDO (cierre V2, apartado 4, «regenerar
+     * antes de sustituir»; plan del arquitecto `plan-arquitecto-a4-regenerar.md`
+     * §3 P-1, cambio 1). Para la comprobación de solo lectura de un borrador
+     * (`ai/check`, ola 4), que no es quien decide si la propuesta está vieja.
+     *
+     * Comprueba lo mismo que {@see self::verify()} hasta el mensaje, en el
+     * mismo orden y con los mismos motivos: que venga, su forma, la firma, la
+     * caducidad, la conversación y el mensaje (el token ata los dos: sin token
+     * válido para ese par no se mira nada ajeno). NO recalcula la fase, las
+     * transiciones ni la versión del conocimiento: si el mundo cambió, lo
+     * decide el commit (`stale_decision`), como hoy. Devuelve la carga firmada
+     * (`x`) y el instante de emisión (`i`), con el que se calcula el
+     * presupuesto de tiempo sin el reloj de n8n. Un token firmado sin `i`
+     * entero no lo emite nadie: malformado. `verify()` no cambia.
+     *
+     * @return array{valid:bool, reason:?string, extra:array<string,mixed>, issued_at:?int}
+     */
+    public function peek(?string $token, int $conversationId, int $messageId): array
+    {
+        $falla = fn (string $motivo): array => $this->fail($motivo) + ['extra' => [], 'issued_at' => null];
+
+        if ($token === null || trim($token) === '') {
+            return $falla('decide_token_missing');
+        }
+
+        $parts = explode('.', $token);
+        if (count($parts) !== 2) {
+            return $falla('decide_token_malformed');
+        }
+
+        [$body, $signature] = $parts;
+
+        if (! hash_equals($this->sign($body), $signature)) {
+            return $falla('decide_token_bad_signature');
+        }
+
+        $payload = $this->decode($body);
+        if ($payload === null || ! is_int($payload['i'] ?? null)) {
+            return $falla('decide_token_malformed');
+        }
+
+        if ((int) ($payload['e'] ?? 0) < now()->getTimestamp()) {
+            return $falla('decide_token_expired');
+        }
+
+        if ((int) ($payload['c'] ?? 0) !== $conversationId) {
+            return $falla('decide_token_conversation_mismatch');
+        }
+
+        if ((int) ($payload['m'] ?? 0) !== $messageId) {
+            return $falla('decide_token_message_mismatch');
+        }
+
+        return ['valid' => true, 'reason' => null, 'extra' => is_array($payload['x'] ?? null) ? $payload['x'] : [], 'issued_at' => $payload['i']];
+    }
+
     /** @param string[] $transitions */
     private function fingerprint(array $transitions): string
     {

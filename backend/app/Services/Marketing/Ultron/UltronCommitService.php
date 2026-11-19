@@ -5446,22 +5446,12 @@ class UltronCommitService
      */
     private function respaldoDePrecios(array $policy, ?int $tope): ?array
     {
-        $nombrado = ($policy['hard_required_plan'] ?? null) === null ? null : (int) $policy['hard_required_plan'];
-        $rechazados = array_map('intval', (array) ($policy['forbidden_plan_ids'] ?? []));
-        $catalogo = array_values(array_filter(
-            $this->knowledge->activePlans(),
-            fn (array $p) => (int) $p['id'] === $nombrado || ! in_array((int) $p['id'], $rechazados, true),
-        ));
-        $ids = array_map(fn (array $p) => (int) $p['id'], $catalogo);
+        // La selección vive en `UltronPlansOverview` («regenerar antes de sustituir», ola 1): la misma para esta lista y para la del modelo.
+        $activos = $this->knowledge->activePlans();
+        $catalogo = UltronPlansOverview::candidates($policy, $activos);
         $deUnMes = fn (array $p) => (int) $p['duration_days'] >= 28 && (int) $p['duration_days'] <= 31;
-        $hayDeUnMes = array_filter($catalogo, $deUnMes) !== [];
 
-        $elegidos = $nombrado !== null && in_array($nombrado, $ids, true) ? [$nombrado] : [];
-        foreach ($catalogo as $p) {
-            if (count($elegidos) < 3 && ($deUnMes($p) || ! $hayDeUnMes) && ! in_array((int) $p['id'], $elegidos, true)) {
-                $elegidos[] = (int) $p['id'];
-            }
-        }
+        $elegidos = UltronPlansOverview::select($policy, $activos);
         if ($elegidos === []) {
             return null;
         }

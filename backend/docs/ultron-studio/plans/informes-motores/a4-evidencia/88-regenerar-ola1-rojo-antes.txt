@@ -1,0 +1,377 @@
+ROJO ANTES de la ola 1 de «regenerar antes de sustituir» (19-11-2026): app/ igual que HEAD 97b59195 (git diff --quiet HEAD -- app = 0); las seis pruebas nuevas, ya escritas.
+Hora: 2026-11-19T08:54:46Z
+Comando (desde backend/): nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging tests/Unit/Marketing/Ultron/UltronPlansOverviewTest.php tests/Unit/Marketing/Ultron/UltronBenefitAttributionTest.php tests/Unit/Marketing/Ultron/UltronRegenerationNotesTest.php tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php tests/Unit/Marketing/Ultron/UltronDecideTokenPeekTest.php tests/Unit/Marketing/Ultron/UltronRegenerarPiezasPurasTest.php
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/phpunit.xml
+
+EEFEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEFFF                   47 / 47 (100%)
+
+Time: 00:00.373, Memory: 54.50 MB
+
+There were 43 errors:
+
+1) Tests\Unit\Marketing\Ultron\UltronPlansOverviewTest::test_select_es_la_seleccion_de_hoy_en_los_casos_con_nombre
+Error: Class "App\Services\Marketing\Ultron\UltronPlansOverview" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronPlansOverviewTest.php:96
+
+2) Tests\Unit\Marketing\Ultron\UltronPlansOverviewTest::test_select_y_candidates_son_los_de_hoy_sobre_una_matriz_de_catalogos
+Error: Class "App\Services\Marketing\Ultron\UltronPlansOverview" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronPlansOverviewTest.php:149
+
+3) Tests\Unit\Marketing\Ultron\UltronPlansOverviewTest::test_los_marcadores_son_posicionales_y_casan_con_el_patron_de_los_marcadores
+Error: Class "App\Services\Marketing\Ultron\UltronPlansOverview" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronPlansOverviewTest.php:179
+
+4) Tests\Unit\Marketing\Ultron\UltronPlansOverviewTest::test_items_lleva_marcador_id_nombre_y_duracion_sin_precio
+Error: Class "App\Services\Marketing\Ultron\UltronPlansOverview" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronPlansOverviewTest.php:208
+
+5) Tests\Unit\Marketing\Ultron\UltronPlansOverviewTest::test_el_texto_de_cada_plan
+Error: Class "App\Services\Marketing\Ultron\UltronPlansOverview" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronPlansOverviewTest.php:222
+
+6) Tests\Unit\Marketing\Ultron\UltronPlansOverviewTest::test_expand_sustituye_solo_los_marcadores_de_la_lista
+Error: Class "App\Services\Marketing\Ultron\UltronPlansOverview" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronPlansOverviewTest.php:240
+
+7) Tests\Unit\Marketing\Ultron\UltronPlansOverviewTest::test_una_lista_bien_escrita_vale
+Error: Class "App\Services\Marketing\Ultron\UltronPlansOverview" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronPlansOverviewTest.php:269
+
+8) Tests\Unit\Marketing\Ultron\UltronPlansOverviewTest::test_cada_detalle
+Error: Class "App\Services\Marketing\Ultron\UltronPlansOverview" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronPlansOverviewTest.php:281
+
+9) Tests\Unit\Marketing\Ultron\UltronPlansOverviewTest::test_la_precedencia_de_los_detalles
+Error: Class "App\Services\Marketing\Ultron\UltronPlansOverview" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronPlansOverviewTest.php:316
+
+10) Tests\Unit\Marketing\Ultron\UltronBenefitAttributionTest::test_el_beneficio_propio_no_marca
+Error: Class "App\Services\Marketing\Ultron\UltronBenefitAttribution" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronBenefitAttributionTest.php:37
+
+11) Tests\Unit\Marketing\Ultron\UltronBenefitAttributionTest::test_el_beneficio_de_otro_plan_marca_con_su_dueno_y_su_indice
+Error: Class "App\Services\Marketing\Ultron\UltronBenefitAttribution" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronBenefitAttributionTest.php:45
+
+12) Tests\Unit\Marketing\Ultron\UltronBenefitAttributionTest::test_tildes_y_mayusculas_no_cuentan_pero_las_palabras_completas_si
+Error: Class "App\Services\Marketing\Ultron\UltronBenefitAttribution" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronBenefitAttributionTest.php:55
+
+13) Tests\Unit\Marketing\Ultron\UltronBenefitAttributionTest::test_por_la_expansion_de_su_marcador
+Error: Class "App\Services\Marketing\Ultron\UltronBenefitAttribution" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronBenefitAttributionTest.php:63
+
+14) Tests\Unit\Marketing\Ultron\UltronBenefitAttributionTest::test_un_beneficio_compartido_o_contenido_no_marca
+Error: Class "App\Services\Marketing\Ultron\UltronBenefitAttribution" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronBenefitAttributionTest.php:72
+
+15) Tests\Unit\Marketing\Ultron\UltronBenefitAttributionTest::test_las_frases_con_negacion_no_se_miran
+Error: Class "App\Services\Marketing\Ultron\UltronBenefitAttribution" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronBenefitAttributionTest.php:89
+
+16) Tests\Unit\Marketing\Ultron\UltronBenefitAttributionTest::test_los_limites_declarados_no_marcan
+Error: Class "App\Services\Marketing\Ultron\UltronBenefitAttribution" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronBenefitAttributionTest.php:98
+
+17) Tests\Unit\Marketing\Ultron\UltronBenefitAttributionTest::test_varias_frases_y_sin_repetir
+Error: Class "App\Services\Marketing\Ultron\UltronBenefitAttribution" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronBenefitAttributionTest.php:107
+
+18) Tests\Unit\Marketing\Ultron\UltronBenefitAttributionTest::test_un_catalogo_raro_no_rompe
+Error: Class "App\Services\Marketing\Ultron\UltronBenefitAttribution" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronBenefitAttributionTest.php:121
+
+19) Tests\Unit\Marketing\Ultron\UltronRegenerationNotesTest::test_los_codigos_y_los_detalles_son_listas_cerradas
+Error: Class "App\Services\Marketing\Ultron\UltronRegenerationNotes" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegenerationNotesTest.php:50
+
+20) Tests\Unit\Marketing\Ultron\UltronRegenerationNotesTest::test_cada_codigo_da_un_issue_del_vocabulario_del_revisor
+Error: Class "App\Services\Marketing\Ultron\UltronRegenerationNotes" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegenerationNotesTest.php:58
+
+21) Tests\Unit\Marketing\Ultron\UltronRegenerationNotesTest::test_cada_nota_es_la_literal_del_plan
+Error: Class "App\Services\Marketing\Ultron\UltronRegenerationNotes" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegenerationNotesTest.php:72
+
+22) Tests\Unit\Marketing\Ultron\UltronRegenerationNotesTest::test_las_marcas_son_de_la_lista_cerrada_y_como_mucho_cinco
+Error: Class "App\Services\Marketing\Ultron\UltronRegenerationNotes" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegenerationNotesTest.php:85
+
+23) Tests\Unit\Marketing\Ultron\UltronRegenerationNotesTest::test_el_texto_del_catalogo_sin_llaves_y_a_sesenta
+Error: Class "App\Services\Marketing\Ultron\UltronRegenerationNotes" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegenerationNotesTest.php:97
+
+24) Tests\Unit\Marketing\Ultron\UltronRegenerationNotesTest::test_los_parametros_se_exigen_exactos
+Error: Class "App\Services\Marketing\Ultron\UltronRegenerationNotes" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegenerationNotesTest.php:113
+
+25) Tests\Unit\Marketing\Ultron\UltronRegenerationNotesTest::test_ninguna_nota_contiene_llaves
+Error: Class "App\Services\Marketing\Ultron\UltronRegenerationNotes" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegenerationNotesTest.php:141
+
+26) Tests\Unit\Marketing\Ultron\UltronRegenerationNotesTest::test_la_mezcla_va_en_orden_por_notas_enteras_y_a_quinientos
+Error: Class "App\Services\Marketing\Ultron\UltronRegenerationNotes" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegenerationNotesTest.php:153
+
+27) Tests\Unit\Marketing\Ultron\UltronRegenerationNotesTest::test_cada_entrada_declara_los_huecos_de_su_texto
+Error: Class "App\Services\Marketing\Ultron\UltronRegenerationNotes" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegenerationNotesTest.php:171
+
+28) Tests\Unit\Marketing\Ultron\UltronDraftDefectsTest::test_un_borrador_bueno_no_tiene_defectos
+Error: Class "App\Services\Marketing\Ultron\UltronPlansOverview" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:43
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:56
+
+29) Tests\Unit\Marketing\Ultron\UltronDraftDefectsTest::test_sin_version_del_studio_ninguno
+Error: Class "App\Services\Marketing\Ultron\UltronPlansOverview" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:43
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:62
+
+30) Tests\Unit\Marketing\Ultron\UltronDraftDefectsTest::test_el_orden_de_los_cuatro
+Error: Class "App\Services\Marketing\Ultron\UltronPlansOverview" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:43
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:70
+
+31) Tests\Unit\Marketing\Ultron\UltronDraftDefectsTest::test_la_lista_solo_cuando_hay_lista_sin_herramientas_y_se_pide_el_precio_o_faltan_planes
+Error: Class "App\Services\Marketing\Ultron\UltronPlansOverview" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:43
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:82
+
+32) Tests\Unit\Marketing\Ultron\UltronDraftDefectsTest::test_cada_detalle_de_la_lista_con_su_nota
+Error: Class "App\Services\Marketing\Ultron\UltronPlansOverview" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:96
+
+33) Tests\Unit\Marketing\Ultron\UltronDraftDefectsTest::test_no_list
+Error: Class "App\Services\Marketing\Ultron\UltronPlansOverview" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:43
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:115
+
+34) Tests\Unit\Marketing\Ultron\UltronDraftDefectsTest::test_el_tuteo_solo_con_profesional_y_sobre_el_expandido
+Error: Class "App\Services\Marketing\Ultron\UltronPlansOverview" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:43
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:124
+
+35) Tests\Unit\Marketing\Ultron\UltronDraftDefectsTest::test_la_longitud_sobre_el_expandido_con_sus_numeros
+Error: Class "App\Services\Marketing\Ultron\UltronPlansOverview" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:138
+
+36) Tests\Unit\Marketing\Ultron\UltronDraftDefectsTest::test_el_beneficio_con_el_marcador_o_con_el_nombre
+Error: Class "App\Services\Marketing\Ultron\UltronPlansOverview" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:43
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:153
+
+37) Tests\Unit\Marketing\Ultron\UltronDraftDefectsTest::test_el_entrante_con_datos_personales_no_sale_en_las_notas
+Error: Class "App\Services\Marketing\Ultron\UltronPlansOverview" not found
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:43
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDraftDefectsTest.php:165
+
+38) Tests\Unit\Marketing\Ultron\UltronDecideTokenPeekTest::test_devuelve_la_carga_firmada_y_el_instante_de_emision
+Error: Call to undefined method App\Services\Marketing\Ultron\UltronDecideToken::peek()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDecideTokenPeekTest.php:52
+
+39) Tests\Unit\Marketing\Ultron\UltronDecideTokenPeekTest::test_sin_carga_la_carga_es_vacia
+Error: Call to undefined method App\Services\Marketing\Ultron\UltronDecideToken::peek()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDecideTokenPeekTest.php:58
+
+40) Tests\Unit\Marketing\Ultron\UltronDecideTokenPeekTest::test_no_mira_la_fase_ni_las_transiciones_ni_el_conocimiento
+Error: Call to undefined method App\Services\Marketing\Ultron\UltronDecideToken::peek()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDecideTokenPeekTest.php:72
+
+41) Tests\Unit\Marketing\Ultron\UltronDecideTokenPeekTest::test_falla_cerrado_con_su_motivo_y_sin_carga
+Error: Call to undefined method App\Services\Marketing\Ultron\UltronDecideToken::peek()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDecideTokenPeekTest.php:92
+
+42) Tests\Unit\Marketing\Ultron\UltronDecideTokenPeekTest::test_caduca_como_verify
+Error: Call to undefined method App\Services\Marketing\Ultron\UltronDecideToken::peek()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDecideTokenPeekTest.php:100
+
+43) Tests\Unit\Marketing\Ultron\UltronDecideTokenPeekTest::test_un_token_firmado_sin_instante_de_emision_es_malformado
+Error: Call to undefined method App\Services\Marketing\Ultron\UltronDecideToken::peek()
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronDecideTokenPeekTest.php:112
+
+--
+
+There were 4 failures:
+
+1) Tests\Unit\Marketing\Ultron\UltronPlansOverviewTest::test_respaldo_de_precios_llama_a_select_y_no_tiene_otra_seleccion
+Failed asserting that 'private function respaldoDePrecios(array $policy, ?int $tope): ?array\n
+    {\n
+        $nombrado = ($policy['hard_required_plan'] ?? null) === null ? null : (int) $policy['hard_required_plan'];\n
+        $rechazados = array_map('intval', (array) ($policy['forbidden_plan_ids'] ?? []));\n
+        $catalogo = array_values(array_filter(\n
+            $this->knowledge->activePlans(),\n
+            fn (array $p) => (int) $p['id'] === $nombrado || ! in_array((int) $p['id'], $rechazados, true),\n
+        ));\n
+        $ids = array_map(fn (array $p) => (int) $p['id'], $catalogo);\n
+        $deUnMes = fn (array $p) => (int) $p['duration_days'] >= 28 && (int) $p['duration_days'] <= 31;\n
+        $hayDeUnMes = array_filter($catalogo, $deUnMes) !== [];\n
+\n
+        $elegidos = $nombrado !== null && in_array($nombrado, $ids, true) ? [$nombrado] : [];\n
+        foreach ($catalogo as $p) {\n
+            if (count($elegidos) < 3 && ($deUnMes($p) || ! $hayDeUnMes) && ! in_array((int) $p['id'], $elegidos, true)) {\n
+                $elegidos[] = (int) $p['id'];\n
+            }\n
+        }\n
+        if ($elegidos === []) {\n
+            return null;\n
+        }\n
+\n
+        $modelos = Plan::query()->whereIn('id', $elegidos)->get()->keyBy('id');\n
+        $elegidos = array_values(array_filter($elegidos, fn (int $id) => $modelos->has($id)));\n
+        $todosDeUnMes = array_filter($elegidos, fn (int $id) => ! $deUnMes(['duration_days' => (int) $modelos[$id]->duration_days])) === [];\n
+        $duracion = '{{'.UltronDraftPlaceholders::DURATION.'}}';\n
+        /*\n
+         * F5 del lead (I-4): «1 día», no «1 días». Se corrige AQUÍ y no en\n
+         * `UltronDraftPlaceholders::duration()`, que comparte el camino del\n
+         * borrador del modelo (también el de Legacy) y no es de este cambio.\n
+         */\n
+        $duracionDe = fn (Plan $plan): string => (int) $plan->duration_days === 1 ? '1 día' : $this->placeholders->resolve($duracion, $plan);\n
+\n
+        $items = [];\n
+        $esqueleto = [];\n
+        foreach ($elegidos as $id) {\n
+            $plan = $modelos[$id];\n
+            $nombre = trim((string) $plan->name);\n
+            $precio = $this->replies->formatCop((float) $plan->price);\n
+            $items[$id] = $todosDeUnMes ? $nombre.', '.$precio : $nombre.' ('.$duracionDe($plan).'), '.$precio;\n
+            $esqueleto[$id] = $todosDeUnMes ? '{{PLAN_NAME}}, {{PLAN_PRICE}}' : '{{PLAN_NAME}} ({{PLAN_DURATION}}), {{PLAN_PRICE}}';\n
+        }\n
+\n
+        /*\n
+         * Las duraciones que quedan, de los vendibles que no se nombran: ningún\n
+         * plan concreto. Solo las que la frase describe bien (m-5): un día →\n
+         * «por día»; de 5 a 9 días → «por semana»; 32 o más → «de varios\n
+         * meses». Uno de 15 o de 21 días no es «por semana», y uno de un mes\n
+         * ya tiene su cabecera: cualquier otra duración no se menciona.\n
+         */\n
+        $quedan = [];\n
+        foreach ($catalogo as $p) {\n
+            if (in_array((int) $p['id'], $elegidos, true)) {\n
+                continue;\n
+            }\n
+            $d = (int) $p['duration_days'];\n
+            $tipo = match (true) {\n
+                $d === 1 => 0,\n
+                $d >= 5 && $d <= 9 => 1,\n
+                $d >= 32 => 2,\n
+                default => null,\n
+            };\n
+            if ($tipo !== null) {\n
+                $quedan[$tipo] = true;\n
+            }\n
+        }\n
+        $nombres = array_values(array_intersect_key([0 => 'por día', 1 => 'por semana', 2 => 'de varios meses'], $quedan));\n
+        $tambien = $nombres === [] ? null : 'También hay planes '.(count($nombres) === 1 ? $nombres[0] : implode(', ', array_slice($nombres, 0, -1)).' y '.end($nombres)).'.';\n
+\n
+        /*\n
+         * EL ENCABEZADO NO CALLA QUE HAY MÁS (encargo del propietario del\n
+         * 19-11: «sin ocultar información de forma engañosa»; el texto nuevo\n
+         * está PENDIENTE de su aprobación: si lo rechaza, vuelve «Planes de un\n
+         * mes» a secas). Con todos los nombrados de un mes: si en el catálogo\n
+         * vendible (sin los rechazados) quedan planes de un mes SIN nombrar\n
+         * —porque son más de tres o porque el tope soltó alguno—, «Algunos\n
+         * planes de un mes»; si se nombran todos, «Planes de un mes». El caso\n
+         * mixto (o sin planes de un mes), igual (G5 del lead, I-6 del revisor:\n
+         * «Nuestros planes» presentaba dos o tres de trece como si fueran\n
+         * todos): «Algunos de nuestros planes» si quedan vendibles sin nombrar,\n
+         * y «Nuestros planes» solo si los nombra todos (texto nuevo, PENDIENTE\n
+         * de la aprobación del propietario junto a «Algunos planes de un mes»).\n
+         * Se decide sobre lo que sale de verdad: primero con el encabezado que\n
+         * corresponde a la lista entera y, si el tope deja alguno sin nombrar,\n
+         * otra vez con el largo, que puede soltar uno más pero nunca devolver\n
+         * uno soltado.\n
+         */\n
+        $deUnMesQueHay = count(array_filter($catalogo, $deUnMes));\n
+        $encabezadoPara = fn (int $nombrados): string => ! $todosDeUnMes\n
+            ? ($nombrados < count($catalogo) ? 'Claro. Algunos de nuestros planes: ' : 'Claro. Nuestros planes: ')\n
+            : ($nombrados < $deUnMesQueHay ? 'Claro. Algunos planes de un mes: ' : 'Claro. Planes de un mes: ');\n
+        $pregunta = '¿Sobre cuál amplío la información?';\n
+        $lista = array_values($items);\n
+        $deLaListaEntera = $encabezadoPara(count($lista));\n
+        $encabezado = $deLaListaEntera;\n
+        $layout = UltronReplyFitter::pricingLayout($encabezado, $lista, $tambien, $pregunta, $tope);\n
+        if ($layout !== null && $encabezadoPara($layout['items']) !== $encabezado) {\n
+            $encabezado = $encabezadoPara($layout['items']);\n
+            $layout = UltronReplyFitter::pricingLayout($encabezado, $lista, $tambien, $pregunta, $tope);\n
+        }\n
+        if ($layout === null) {\n
+            return null;\n
+        }\n
+        $entero = UltronReplyFitter::pricingLayout($deLaListaEntera, $lista, $tambien, $pregunta, null);\n
+        $soltadas = (count($lista) - $layout['items']) + (int) ($entero['also'] && ! $layout['also']) + (int) ($entero['question'] && ! $layout['question']);\n
+\n
+        return [\n
+            'texto' => UltronReplyFitter::composePricing($encabezado, $lista, $tambien, $pregunta, $layout),\n
+            'esqueleto' => UltronReplyFitter::composePricing($encabezado, array_values($esqueleto), $tambien, $pregunta, $layout),\n
+            'planes' => array_slice($items, 0, $layout['items'], true),\n
+            'desde' => UltronReplyFitter::measure(UltronReplyFitter::composePricing($deLaListaEntera, $lista, $tambien, $pregunta, $entero)),\n
+            'soltadas' => $soltadas,\n
+        ];' [UTF-8](length: 6656) contains "UltronPlansOverview::select($policy, $activos)" [ASCII](length: 46).
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronPlansOverviewTest.php:169
+
+2) Tests\Unit\Marketing\Ultron\UltronRegenerarPiezasPurasTest::test_ninguna_expresion_nueva_lleva_propiedades_unicode
+Failed asserting that file "/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/app/Services/Marketing/Ultron/UltronPlansOverview.php" exists.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegenerarPiezasPurasTest.php:61
+
+3) Tests\Unit\Marketing\Ultron\UltronRegenerarPiezasPurasTest::test_las_piezas_nuevas_son_puras
+Failed asserting that '' [ASCII](length: 0) contains "final class " [ASCII](length: 12).
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegenerarPiezasPurasTest.php:82
+
+4) Tests\Unit\Marketing\Ultron\UltronRegenerarPiezasPurasTest::test_peek_no_mira_el_mundo
+peek() existe
+Failed asserting that false is not false.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Unit/Marketing/Ultron/UltronRegenerarPiezasPurasTest.php:90
+
+ERRORS!
+Tests: 47, Assertions: 29, Errors: 43, Failures: 4, Warnings: 1.
+Código de salida: 2

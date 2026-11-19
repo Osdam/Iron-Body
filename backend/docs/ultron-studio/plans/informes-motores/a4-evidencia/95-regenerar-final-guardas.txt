@@ -1,0 +1,69 @@
+VERDE FINAL, olas 1 y 2 (19-11-2026): las guardas (*Isolation*, *ReadOnly*, *StaticGuards*, SecretExposure*). Se espera UNA roja: la puerta de diff del H9, hasta subir.
+Hora: 2026-11-19T09:22:43Z
+Comando (desde backend/): nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging tests/Feature/Chaos/ChaosLaneIsolationTest.php tests/Feature/Integrations/WhatsappReviewIsolationTest.php tests/Feature/Outreach/Facts/FactsReadOnlyTest.php tests/Feature/Outreach/Guards/OutreachStaticGuardsTest.php tests/Feature/Outreach/W9/WhatsappW9IsolationTest.php tests/Feature/Security/SecretExposureLogFormatsTest.php tests/Feature/Security/SecretExposureTest.php tests/Feature/Security/SecretExposureVoiceKeysTest.php tests/Feature/Telephony/TelephonyIsolationTest.php tests/Feature/UltronStudio/OutreachIsolationTest.php tests/Feature/UltronStudio/UltronEngineIsolationTest.php tests/Feature/UltronStudio/UltronStudioEngineReadOnlyTest.php tests/Unit/Marketing/Ultron/UltronCatalogStaticGuardsTest.php tests/Unit/Twilio/TwilioReadOnlyClientTest.php tests/Unit/UltronStudio/StudioLabIsolationTest.php tests/Unit/Voice/VoiceIsolationTest.php
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/phpunit.xml
+
+...........................
+[B9-facts] solo lectura: 179 sentencias revisadas, 0 escrituras
+.......
+[W9] escrituras del despacho y la normalización: {"marketing_conversations@puerta":2,"marketing_messages@puerta":3,"outreach_enrollments":3,"outreach_jobs":3,"outreach_outcomes":2,"outreach_runs":2}
+.............................  63 / 141 ( 44%)
+................
+[TEST9-b] recorrido en sombra: 13 rutas de la ejecución y 9 órdenes (outreach:dispatch, outreach:monitor, outreach:reconcile, outreach:replay, outreach:stop, outreach:suppress-subject, outreach:sweep, outreach:voice-outcomes, outreach:whatsapp-outcomes)
+
+[SEC9-a] aislamiento: 1004 sentencias, 71 escrituras, todas en tablas del H9
+.
+[TEST9-b] recorrido en live: 13 rutas de la ejecución y 9 órdenes (outreach:dispatch, outreach:monitor, outreach:reconcile, outreach:replay, outreach:stop, outreach:suppress-subject, outreach:sweep, outreach:voice-outcomes, outreach:whatsapp-outcomes)
+
+[SEC9-a] aislamiento: 1076 sentencias, 81 escrituras, todas en tablas del H9
+.
+[SEC9-a] aislamiento: 5 sentencias, 1 escrituras, todas en tablas del H9
+
+[TEST9-b] banderas por defecto: 13 rutas de la ejecución y 9 órdenes (outreach:dispatch, outreach:monitor, outreach:reconcile, outreach:replay, outreach:stop, outreach:suppress-subject, outreach:sweep, outreach:voice-outcomes, outreach:whatsapp-outcomes)
+.F
+[SEC9-a] lectores de ultron_studio_strategies en la ejecución (L9-51, lista cerrada de 9): OutreachSuppressSubjectCommand.php, AssistedQueue.php, OutcomeRecorder.php, OutreachDispatcher.php, OutreachMonitor.php, OutreachPublishedStrategies.php, OutreachReadModels.php, OutreachReconciler.php, OutreachStop.php
+........................................... 126 / 141 ( 89%)
+...............                                                 141 / 141 (100%)
+
+Time: 00:14.854, Memory: 141.00 MB
+
+There was 1 failure:
+
+1) Tests\Feature\UltronStudio\OutreachIsolationTest::test_la_puerta_de_diff_de_legacy_n8n_otp_y_motor_comercial_esta_vacia_y_la_voz_no_gana_ficheros
+La puerta de diff del H9 no está vacía frente a origin/main (ULTRON Legacy, n8n, OTP o motor comercial tocados):
+backend/app/Services/Marketing/Ultron/CommercialTurnPolicy.php
+backend/app/Services/Marketing/Ultron/ConversationMemoryService.php
+backend/app/Services/Marketing/Ultron/Prompts/UltronPromptCompiler.php
+backend/app/Services/Marketing/Ultron/Prompts/UltronPromptOffer.php
+backend/app/Services/Marketing/Ultron/StrategyContract.php
+backend/app/Services/Marketing/Ultron/UltronCommitService.php
+backend/app/Services/Marketing/Ultron/UltronDecideService.php
+backend/app/Services/Marketing/Ultron/UltronDecideToken.php
+backend/app/Services/Marketing/Ultron/UltronFormalReplies.php
+backend/app/Services/Marketing/Ultron/UltronRegisterDetector.php
+backend/app/Services/Marketing/Ultron/UltronReplyFitter.php
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-''
++'backend/app/Services/Marketing/Ultron/CommercialTurnPolicy.php
++backend/app/Services/Marketing/Ultron/ConversationMemoryService.php
++backend/app/Services/Marketing/Ultron/Prompts/UltronPromptCompiler.php
++backend/app/Services/Marketing/Ultron/Prompts/UltronPromptOffer.php
++backend/app/Services/Marketing/Ultron/StrategyContract.php
++backend/app/Services/Marketing/Ultron/UltronCommitService.php
++backend/app/Services/Marketing/Ultron/UltronDecideService.php
++backend/app/Services/Marketing/Ultron/UltronDecideToken.php
++backend/app/Services/Marketing/Ultron/UltronFormalReplies.php
++backend/app/Services/Marketing/Ultron/UltronRegisterDetector.php
++backend/app/Services/Marketing/Ultron/UltronReplyFitter.php'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/UltronStudio/OutreachIsolationTest.php:374
+
+FAILURES!
+Tests: 141, Assertions: 180938, Failures: 1.
+Código de salida: 1

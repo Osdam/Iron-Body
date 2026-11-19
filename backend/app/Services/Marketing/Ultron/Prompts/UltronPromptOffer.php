@@ -95,7 +95,7 @@ final class UltronPromptOffer
      * La oferta para esta conversación: lo que va en la respuesta de `decide`
      * (`studio_prompts`) y lo que va firmado en el token (`x.sp`). Nunca lanza.
      *
-     * @return array{response:array{contract:string,mode:string,reason:?string,base:string,compiler:int,bundle_hash:?string,version:?string,content_hash:?string,entry:?string,seq:?int,roles:?array<string,string>},sp:array{m:string,r:?string,h:?string,v:?string,c:?string,e:?string,s:?int,n?:int,t?:string}}
+     * @return array{response:array{contract:string,mode:string,reason:?string,base:string,compiler:int,bundle_hash:?string,version:?string,content_hash:?string,entry:?string,seq:?int,roles:?array<string,string>},sp:array{m:string,r:?string,h:?string,v:?string,c:?string,e:?string,s:?int,n?:int,t?:string,o?:int}}
      */
     public function forConversation(int $conversationId): array
     {
@@ -212,6 +212,19 @@ final class UltronPromptOffer
             $sp['t'] = $tono;
         }
 
+        /*
+         * LA LISTA DE PLANES, FIRMADA PARA `decide` Y EL COMMIT (apartado 4 del
+         * cierre V2, «regenerar antes de sustituir», P-3 cambio 3). Con la misma
+         * pauta que el tope y el tono: `o = 1` si el paquete que se ofrece lleva
+         * el parche del motor de la lista ({@see UltronPromptCompiler::ENGINE}),
+         * es decir, si al modelo se le dio la instrucción de los marcadores
+         * `{{PLAN_k}}`. Una versión con todos los valores por defecto no lo lleva
+         * (sigue como hoy). Solo aquí, en `sp`: la respuesta a n8n no cambia.
+         */
+        if (in_array(UltronPromptCompiler::ENGINE, array_column($paquete['patches'], 'parameter'), true)) {
+            $sp['o'] = 1;
+        }
+
         return ['response' => $respuesta, 'sp' => $sp];
     }
 
@@ -256,7 +269,8 @@ final class UltronPromptOffer
      * Lo que viaja firmado en el token (`x.sp`), con claves cortas: modo,
      * motivo, huella del paquete, versión, huella de contenido, entrada y seq.
      * En `studio`, `offer()` añade `n` (el tope publicado) y `t` (el tono
-     * publicado) si no son los de la línea base; Legacy nunca los lleva.
+     * publicado) si no son los de la línea base, y `o` (= 1) si el paquete
+     * lleva el parche del motor de la lista de planes; Legacy nunca los lleva.
      *
      * @param  array<string,mixed>  $respuesta
      * @return array{m:string,r:?string,h:?string,v:?string,c:?string,e:?string,s:?int}
