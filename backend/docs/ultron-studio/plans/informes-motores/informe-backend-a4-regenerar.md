@@ -232,3 +232,191 @@ Todas por el parche del motor: huellas, recuentos de parches, la línea que qued
 ### 2.9 Variables, migraciones y configuración
 
 Ninguna. Sin migraciones, sin `config/`, sin rutas, sin variables de entorno.
+
+---
+
+## 3. Ola 3
+
+19-11-2026 · rama `feat/ultron-studio-h9`, HEAD `2d3d02ba` (olas 1 y 2 confirmadas) · **sin commit**: todo está en el árbol de trabajo, nada desplegado, sin producción y sin n8n (ni MCP ni API).
+Guía: el encargo del lead (`encargo-be-r2.md`) y `plan-arquitecto-a4-regenerar.md` §1 (H7, H9, H10, H11, H14), §3 P-3 y P-4, §4.2, §4.3 (traza), §4.4, §6 «Ola 3», §7.3 y §13.
+
+### 3.0 Resumen
+
+- **`decide`** (solo con versión del Studio y `sp.o = 1`): si la persona pide el panorama (`pideElPanorama()` con la política de `decide`) y `UltronPlansOverview::select()` da al menos dos planes, añade `context.commercial_turn_policy.plans_overview` (marcadores, `plan_id`, nombre y duración, **sin precio**) y firma `po` en la carga del token **[C]**.
+- **Marcadores:** `unknown($draft, $n)` admite `PLAN_1`…`PLAN_n` solo con `n > 0`. La llamada de hoy (`n = 0`) es idéntica **[C]**.
+- **`commit`:**
+  - expande la lista **una sola vez**, justo tras el validador y antes de `resolvePlan()`, con `Plan` leído en ese momento;
+  - con una lista válida, `policy_plans_overview` no salta aunque se pregunte el precio; si no vale, salta como hoy y sale la lista fija;
+  - en un turno de cobro la lista no vale (422);
+  - la memoria anota el precio entregado de cada plan con `conPreciosEntregados()`;
+  - con versión del Studio, la violación nueva `policy_benefit_misattributed` entra por la rama de la política;
+  - traza aditiva en `metadata.plans_overview` y `metadata.benefits`.
+- **Invariantes [C]:**
+  - las dos instantáneas Legacy (`legacy-a4.json` y `legacy-usted.json`), en verde y **sin regenerar**;
+  - `UltronA4LongitudYPreciosTest` y `UltronA4RegistroYPanoramaTest`, **sin tocar ni una línea**;
+  - `UltronCatalogStaticGuardsTest`, en verde;
+  - ningún fixture de n8n cambia (lo comprueba `UltronPromptsN8nCommandTest`).
+- **Números:**
+  - rojo antes (97): 31 pruebas, 2 errores y 25 fallos;
+  - verde después: motor 1 673 (98), Marketing 6 597 (99), las A4 en PostgreSQL 257 (100);
+  - guardas: 141, con **una** roja, la esperada (101);
+  - `pint`: `passed`;
+  - siete mutaciones a mano, todas cazadas.
+
+### 3.1 Ficheros tocados
+
+| Fichero | Cambio | Qué |
+|---|---|---|
+| `app/Services/Marketing/Ultron/UltronDecideService.php` | +82/−25 | La política entera se calcula **una vez** en `decide()`: `politicaDelTurno()` pasa a recibirla y solo recorta, igual que antes. `listaDelPanorama()` (nuevo, privado). `po` en la carga del token y `plans_overview` fuera de la lista blanca de la política |
+| `app/Services/Marketing/Ultron/UltronDraftPlaceholders.php` | +25/−2 | `unknown(string $draft, int $planesDeLaLista = 0)` y `allowed(int $n = 0)` (nuevo, público): la lista blanca de siempre y, con lista, `PLAN_1..n`, como mucho 3 |
+| `app/Services/Marketing/Ultron/UltronCommitService.php` | +210/−4 | `VIOLACION_BENEFICIO` (pública) y las constantes de traza `not_sellable` y `money_turn` (privadas). Paso 8.ter: la lista firmada y el turno de cobro antes de `unknown()`. Paso 9.bis: la expansión. La traza en `persist()`. P-4 junto a la longitud y el registro. La regla del panorama. La red del «no vendible». `planQueSalio` y la segunda llamada a `conPreciosEntregados()`. `listaFirmada()` y `listaDelModelo()` (nuevos, privados) |
+| `tests/Feature/Marketing/UltronA4ListaDelModeloTest.php` | nuevo, 773 líneas | 21 métodos, 31 pruebas con los proveedores (§3.6) |
+| `docs/…/a4-evidencia/97` a `101` (y `100a`) | nuevos | Salidas de PHPUnit (§3.7) |
+
+**Sin tocar:**
+- `UltronController.php`, las rutas, `config/` y las migraciones;
+- el compilador, `SalesConversationReplyService`, `SalesObjectionResponderService`, el guard y `CourtesyRequestService`;
+- los prompts base, el CRM y n8n (los tres ficheros que se ejecutan allí y sus fixtures: `git status` limpio en `n8n/`).
+- Las clases puras de las olas 1 y 2 se usan tal cual: `select`, `items`, `item`, `expand`, `verify`, `misattributed`, `MIN_MARKERS` y `MAX_PLANS`, **sin cambiar ni una línea**.
+
+### 3.2 El contrato
+
+**`decide` (respuesta a n8n).** Solo con `sp.m = studio`, `sp.o = 1`, `pideElPanorama()` cierto y al menos 2 planes:
+
+```json
+"commercial_turn_policy": {
+  "intent": "pricing_question", "…": "las 17 claves de siempre, en su orden",
+  "plans_overview": {
+    "plans": [
+      {"marker": "{{PLAN_1}}", "plan_id": 3, "name": "Plan Valera", "duration_days": 30},
+      {"marker": "{{PLAN_2}}", "plan_id": 4, "name": "Plan Mensual", "duration_days": 30},
+      {"marker": "{{PLAN_3}}", "plan_id": 8, "name": "Élite", "duration_days": 30}
+    ],
+    "price_asked": true
+  }
+}
+```
+
+- Sin precio: la prueba exige que no haya `$` ni cifras de dinero en toda la política.
+- Fuera de esos casos, la clave **no aparece** (no viaja con valor `null`).
+- Token, carga firmada `x`: `po: [3, 4, 8]`, detrás de `sp`.
+
+**`commit` (sin cambios en la entrada).**
+
+| Qué | Cuándo | Forma |
+|---|---|---|
+| 422 `unknown_placeholder` | Igual que hoy. Con lista, `PLAN_1..n` ya no son desconocidos | `detail.allowed`: sin lista, **exactamente** `ALLOWED` (lo fijan las pruebas). Con lista, `ALLOWED` + `PLAN_1..n` |
+| `metadata.plans_overview` | Camino normal, si el token trae `po` (y solo con Studio) | `{offered:[id], used:[id], valid:bool, detail:null\|missing\|mixed\|name_written\|not_sellable\|money_turn}` |
+| `metadata.benefits` | Si salta P-4 | `{misattributed:[{plan_id, benefit_plan_id, benefit_index}]}`: el índice, nunca el texto |
+| `metadata.policy_violations` | Rama de la política | Puede llevar `policy_benefit_misattributed` |
+| `price_source` | Si sale la lista del modelo y no nombra el plan del modelo | `null` (decisión 8) |
+
+### 3.3 Dónde quedó la expansión, y por qué
+
+`UltronCommitService.php:664-683` (paso 9.bis): justo después de `if ($sanitized['reply'] === null) throw draft_rejected` y antes de `// 10) … resolvePlan()`, sobre `$sanitized['reply']`. Es el sitio del plan (P-3, cambio 4) y tiene tres razones:
+
+1. **Después del validador:** el validador tira cualquier cifra. El borrador se valida sin precios y la cifra la escribe Laravel, el mismo orden que con `{{PLAN_PRICE}}`.
+2. **Antes de los tres sitios que vuelven a resolver el texto desde `$sanitized['reply']`:** el plan que impone la política, la realineación y la frase del precio. Expandir después de cualquiera de ellos perdería la lista.
+   - Lo fija `test_el_plan_que_fuerza_la_politica_no_pierde_la_lista`: la política fuerza el Élite nombrado y la lista sigue entera.
+   - La mutación M2 (no reasignar `$sanitized['reply']`) tumba 10 pruebas.
+3. **Todo lo de detrás ve el texto final:** estilo, novedad, `violations()`, longitud, registro, P-4 y guardas. La longitud se mide expandida sin código adicional: `metadata.length.from` = la medida del texto expandido, que la prueba compara con `UltronReplyFitter::measure()` y con la del borrador sin expandir.
+
+**Con dos o más nombres y sin `PLAN_PRICE`, la realineación no se activa** **[C]**. Lo afirman dos pruebas: la de tres marcadores sale sin `plan_price_realigned`, y con un plan del modelo fuera de la lista (el Trimestre) tampoco hay realineación y `recommended_plan_id` sigue siendo el suyo.
+
+**El turno de cobro (paso 8.ter, `:528-547`).** Se lee de la **propuesta** (`payment_link_send` en `tools_requested`, o una intención `high_intent_close` o `payment_link_request`), porque `unknown()` va antes del validador. Es seguro: el validador solo puede quitarle a la intención lo de cobro (la cambia a `unknown` o a `greeting`), nunca dárselo.
+
+### 3.4 Decisiones mías (el plan no las fija)
+
+1. **`price_asked`** = intención del turno `pricing_question` **o** `preguntaPorPrecio(entrante)`: dos de las tres condiciones con las que el commit exige la lista (la tercera mira el borrador). **[C]** El clasificador local etiqueta `pricing_question` toda pregunta por «planes» («¿Qué planes tienen?», «Quiero información de los planes»…), así que en la práctica es casi siempre `true`. Sale `false`, por ejemplo, con «¿Qué membresías tienen?» (`unknown`), y lo fija la prueba.
+2. **«Todos los planes siguen vendibles ahora»** lo entiendo como **los que el borrador nombra con su marcador**, no los tres de `po`. Si el modelo usa `PLAN_1` y `PLAN_2` y el tercero deja de venderse, lo que sale es verdad y la IA sigue siendo la autora (condición 1). Si el lead prefiere la lectura literal («todos los de `po`»), es una línea en `listaDelModelo()`.
+3. **Un plan que ya no se vende no se escribe nunca:**
+   - su marcador **no se sustituye**: ni nombre ni precio, tampoco en `policy_discarded_draft`, y lo fija la prueba;
+   - la lista no vale (`not_sellable`) y la violación del panorama se añade **haya panorama o no**. Es la única desviación de «salta como hoy», y la motiva el caso con una herramienta en el turno (prueba propia): sin ella, la regla de hoy no saltaría y el marcador saldría literal;
+   - si la rama de la política no encontrara alternativa (hoy no pasa: `respaldoPorIntencion()` acaba en `ultimoRecurso()`), se fuerza `ultimoRecurso()`.
+   - **Efecto lateral declarado:** con una cortesía ejecutada en ese mismo turno, sale la lista fija en vez de su constancia. Es un caso borde de un caso borde: el plan se archiva en los ~10 s entre `decide` y `commit`, en un turno de panorama con herramienta.
+4. **Detalles de traza nuevos** (`not_sellable`, `money_turn`): son solo de traza, constantes privadas del commit y **no** códigos de reescritura de `UltronRegenerationNotes`, porque no los arregla una reescritura. Sin marcadores, la traza de un turno de cobro dice `valid: false` y `detail: money_turn`. Con marcadores no hay fila: es el 422.
+5. **`used`** = los planes que el borrador nombra con sus marcadores, por orden de aparición y sin repetir, **también el que ya no se vende**. La traza dice qué escribió el modelo.
+6. **`metadata.benefits` lleva además `benefit_plan_id`.** El plan pone `{plan_id, benefit_index}`, pero sin el dueño el índice es ambiguo (es el índice en los `benefits` del *otro* plan). Sigue sin llevar texto.
+7. **P-4 se aplica a todo turno del Studio, con lista o sin ella.** Es lo que dicen el plan (§4.4, §6) y el encargo («solo con versión del Studio»). **Tensión que señalo:** el invariante «con versión del Studio pero sin lista, todo sale como hoy» deja de ser literal cuando el borrador cuelga a un plan el beneficio de otro. Las pruebas existentes no cambian porque su catálogo da a todos los planes el mismo beneficio. Si el lead quiere P-4 solo en turnos con lista, es añadir `&& $lista !== null` en una condición.
+8. **La memoria con la lista del modelo (F3).**
+   - `recordSentTurn()` da por entregado el precio del plan del modelo si ve una cifra en el texto. Con la lista, si el plan del modelo no está en ella (un Trimestre recomendado y tres planes de un mes), anotaba un precio que no salió: el mismo fallo F3 que la lista fija ya corregía.
+   - Por eso la condición de `$planQueSalio` cuenta también «salió la lista del modelo», y lo fija la prueba.
+   - Los precios de la lista los anota una **segunda** llamada a `conPreciosEntregados()`, con `{id → «Nombre ($precio COP)»}`. No mezclo los dos mapas: los dos pueden tener el mismo id con textos distintos, y la función solo anota lo que está de verdad en el texto. Sin lista, la segunda llamada vuelve sin escribir: Legacy, idéntico.
+9. **`po` en el commit:** solo vale con la forma que emite `decide` (lista de 2 a 3 enteros positivos y distintos). Otra forma se ignora con `ultron.commit.plans_overview_invalid`, con el tipo y sin el valor: el turno sale sin lista, igual que un tope o un tono firmados que no valen.
+10. **Una sola consulta** por turno con lista: `Plan::sellable()->whereIn('id', <los que nombra el borrador>)`, con la misma regla que `activePlans()` y `isSellable()`. Ninguna si el borrador no usa marcadores.
+11. **`decide`:** `CommercialTurnPolicy::decide()` se llamaba dentro de `politicaDelTurno()`. Ahora se llama una vez, antes del token, con los mismos argumentos (la memoria no cambia entre el sitio viejo y el nuevo) y el mismo número de lecturas de `activePlans()`. Las instantáneas Legacy, byte a byte, lo confirman **[C]**.
+
+### 3.5 Aserciones existentes cambiadas
+
+**Ninguna.** Tampoco hay ningún fixture regenerado:
+- `tests/fixtures/ultron-a4/*.json`, `a4-textos-*.md` y `n8n/flujos/ultron-studio-s1/**`: `git status` limpio **[C]**;
+- `UltronDecideTest` y `UltronDecidePromptsTest`, sin cambios: sus turnos con política no piden el panorama con `sp.o = 1`.
+
+### 3.6 Pruebas nuevas (`UltronA4ListaDelModeloTest`, por el endpoint, clases reales)
+
+| Prueba | Qué fija |
+|---|---|
+| `decide_ofrece_la_lista_firmada_y_sin_precio_al_panorama` | `plans_overview` exacto, `po = [3,4,8]` firmado, sin cifras, las claves de la política en su orden con `plans_overview` al final; `price_asked` verdadero y falso; el plan nombrado primero (`[8,3,4]`) |
+| `decide_no_ofrece_la_lista_fuera_del_panorama_ni_sin_el_parche_ni_en_legacy` | Saludo, plan a secas, versión con los valores por defecto (sin `o`), Legacy sin negociar y con los prompts apagados, menos de dos planes |
+| `la_lista_del_modelo_con_tres_marcadores…` y `…con_dos_marcadores` | La pregunta real del 18-11: texto expandido con `Plan`, sin `policy_violations`, traza, longitud medida expandida, registro `ok`, memoria con `prices_delivered` = los planes que salieron (sin el Élite cuando no sale) |
+| `el_plan_del_modelo_fuera_de_la_lista_no_cuenta_como_entregado` | Decisión 8: fuera de la lista, `price_source` null y sin precio en memoria; dentro de la lista, se conserva |
+| `el_precio_cambiado_entre_decide_y_commit_sale_el_nuevo` | Precio y nombre cambiados entre los dos: salen los nuevos |
+| `un_plan_que_deja_de_venderse…_da_la_lista_fija_de_ahora` (×3) | No vendible, archivado o precio a cero: la lista fija del catálogo de AHORA (sin el Mensual, con PROMO X4), `not_sellable`, la evidencia sin su precio |
+| `un_plan_que_deja_de_venderse_no_sale_ni_con_herramientas_en_el_turno` | Decisión 3: sin panorama en el commit, igual no sale (ni el nombre, ni `{{`, ni `PLAN_`) |
+| `plan_4_con_tres_ofrecidos…` / `plan_1_sin_lista…` | `unknown_placeholder` con `['PLAN_4']` y sin fila; con dos ofrecidos, `PLAN_3`; sin lista, `PLAN_1` y `allowed` = `ALLOWED` |
+| `un_turno_legacy_con_plan_1_da_422_como_hoy` (×2) | Sin negociar y con los prompts apagados |
+| `una_lista_que_no_vale_da_la_lista_fija` (×5) | Nombre a mano, mezcla con `PLAN_NAME` y con `PLAN_PRICE`, repetido, un solo plan: `policy_plans_overview`, la lista fija y su detalle |
+| `sin_panorama_en_el_commit…` | Con una herramienta en el turno (G1.2) la lista del modelo sale expandida |
+| `en_un_turno_de_cobro_la_lista_no_vale` (×3) / `un_turno_de_cobro_sin_marcadores_deja_la_traza` | Pago, cierre y `payment_link_send`: 422 con `allowed` = `ALLOWED`; sin marcadores, `money_turn` |
+| `el_plan_que_fuerza_la_politica_no_pierde_la_lista` | §3.3, razón 2 |
+| `un_beneficio_de_otro_plan_va_por_la_rama_de_la_politica` | Lista válida y beneficio del Élite colgado al Valera: **solo** `policy_benefit_misattributed`, la lista fija (respaldo de la intención), la traza con índices y sin texto; el mismo beneficio en su plan sale |
+| `el_beneficio_de_otro_plan_con_studio_y_sin_lista_y_en_legacy_nada` | Decisión 7, y Legacy (dos modos) sin violación ni traza |
+| `cercano_y_entusiasta_la_lista_que_tutea_sale` (×2) / `profesional_la_lista_que_tutea_se_descarta…` | Los tres tonos. Con «profesional», la lista que tutea **vale** pero el registro la descarta (`[policy_register_mismatch]`, `found: ['te']`) y sale la lista fija de usted; la de usted sale |
+| `los_marcadores_de_la_lista_solo_valen_con_lista` | `unknown()` con 0, 2, 3 y 9; `PLAN_0`, `PLAN_01` y `plan_1` siempre desconocidos; `allowed()`; `needsPlan()` no cambia |
+
+**Mutaciones a mano** (una por una, deshechas, `cmp` idéntico al final) **[C]**:
+
+| # | Mutación | Pruebas que fallan |
+|---|---|---|
+| M1 | La lista nunca vale | 9 |
+| M2 | No se expande en su sitio | 10 |
+| M3 | El «no vendible» no se fuerza | 1 |
+| M4 | F3 sin la lista | 1 |
+| M5 | Sin la memoria de la lista | 5 |
+| M6 | La lista también vale en el cobro | 4 |
+| M7 | `decide` no mira `sp.o` | 1 |
+
+### 3.7 Números
+
+| # | Qué | Resultado |
+|---|---|---|
+| 97 | La prueba nueva (versión final) con `app/` = HEAD `2d3d02ba` (los tres ficheros guardados, sustituidos por los de HEAD con `git show`, restaurados y comparados con `cmp`) | **ROJO:** 31 pruebas, 2 errores, 25 fallos (pasan las 4 que afirman que algo **no** ocurre) |
+| 98 | Motor: `tests/Unit/Marketing/Ultron`, las tres A4, `UltronDecideTest`, `UltronDecidePromptsTest`, `UltronCommitTest`, `UltronCommitPromptsTest`, `UltronPromptsN8nCommandTest` | **OK (1 673 pruebas, 36 012 aserciones)** |
+| 99 | `tests/Feature/Marketing tests/Unit/Marketing` | **OK (6 597 pruebas, 57 578 aserciones)**: las 6 566 de la ola 2 + las 31 nuevas |
+| 100a | Las tres A4 en PostgreSQL, primera pasada | 257 pruebas, **8 fallos, todos de la prueba nueva y todos por el orden de las claves**: `jsonb` las reordena y yo comparaba la traza con `assertSame`. Corregido en la prueba con `assertMismaTraza()` (`assertSame` tras ordenar las claves de los objetos; las listas, en su orden): no se relaja ni un tipo ni un valor |
+| 100 | Las tres A4 en PostgreSQL (`UNIT_DB=ultron_studio_lead_ola5`, local y desechable) | **OK (257 pruebas, 2 950 aserciones)** |
+| 101 | Guardas: los 16 ficheros de 95 | 141 pruebas, **1 fallo esperado** (`OutreachIsolationTest::test_la_puerta_de_diff…`) |
+| — | `vendor/bin/pint` sobre los 4 PHP tocados | `passed`, sin cambios |
+
+**La puerta de diff del H9** nombra ahora **16** ficheros. HEAD (con las olas 1 y 2 confirmadas) ya tenía 15; esta ola añade **uno**, `UltronDraftPlaceholders.php`; `UltronCommitService.php` y `UltronDecideService.php` ya estaban. Va a la Enmienda A4-3.
+
+### 3.8 Lo que no comprobé
+
+- **[S] Que el modelo use los marcadores y que el revisor no tumbe la lista** (R5): aquí no corre ningún modelo. Que n8n S1 pase `plans_overview` entero al redactor lo dice el plan (H4); no lo he ejecutado en n8n.
+- **La comprobación `ai/check`** (ola 4) **no está hecha**, como pide el encargo. Para su paridad con el commit hay que saber dos cosas:
+  - `UltronDraftDefects` no conoce `not_sellable` (no lo arregla una reescritura): la prueba de paridad tiene que tratarlo como excepción declarada;
+  - la laguna de §1.7 sigue abierta.
+- **La sonda de PCRE:** esta ola no añade ninguna expresión regular (`grep preg_` en el diff: ninguna nueva).
+- Nada contra producción ni contra el n8n en marcha. Las pruebas solo de PostgreSQL fuera de las A4 no las ejecuté.
+- **Para `security` / `api-security-specialist` (filas 2, 3 y 10 de P-8, y el dinero):**
+  - la lista en un turno de cobro (422);
+  - `po` firmado y validado en forma;
+  - el marcador de un plan no vendible, que nunca se escribe;
+  - la traza sin textos.
+- **Casos límite para `tester`:**
+  - un plan que se borra de la tabla (no solo que se archiva) entre `decide` y `commit` cae en `not_sellable` por la misma consulta, pero no tiene prueba propia;
+  - un `po` firmado con forma rara solo se puede fabricar re-firmando el token, y no tiene prueba propia (el aviso está en el código).
+
+### 3.9 Variables, migraciones y configuración
+
+Ninguna. Sin migraciones, sin `config/`, sin rutas y sin variables de entorno.

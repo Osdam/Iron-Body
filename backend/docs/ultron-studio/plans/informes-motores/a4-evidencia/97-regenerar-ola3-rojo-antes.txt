@@ -1,0 +1,292 @@
+ROJO ANTES de la ola 3 de «regenerar antes de sustituir» (19-11-2026): app/ igual que HEAD 2d3d02ba (git diff --quiet HEAD -- app = 0); la prueba nueva, en su versión final.
+Hora: 2026-11-19T10:04:25Z
+Comando (desde backend/): nice -n 10 php -d memory_limit=2G vendor/bin/phpunit --no-logging tests/Feature/Marketing/UltronA4ListaDelModeloTest.php
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/phpunit.xml
+
+E.FFFFFFFFF...FFFFFFFFFEFFFFFFF                                   31 / 31 (100%)
+
+Time: 00:02.687, Memory: 86.50 MB
+
+There were 2 errors:
+
+1) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_decide_ofrece_la_lista_firmada_y_sin_precio_al_panorama
+ErrorException: Undefined array key "plans_overview"
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Bootstrap/HandleExceptions.php:258
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:143
+
+2) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_un_turno_de_cobro_sin_marcadores_deja_la_traza
+ErrorException: Undefined array key "plans_overview"
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Foundation/Bootstrap/HandleExceptions.php:258
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:472
+
+--
+
+There were 25 failures:
+
+1) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_la_lista_del_modelo_con_tres_marcadores_sale_con_los_datos_de_plan
+Expected response status code [200] but received 422.
+Failed asserting that 422 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:750
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:221
+
+2) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_la_lista_del_modelo_con_dos_marcadores
+Expected response status code [200] but received 422.
+Failed asserting that 422 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:750
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:243
+
+3) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_el_plan_del_modelo_fuera_de_la_lista_no_cuenta_como_entregado
+Expected response status code [200] but received 422.
+Failed asserting that 422 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:750
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:257
+
+4) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_el_precio_cambiado_entre_decide_y_commit_sale_el_nuevo
+Expected response status code [200] but received 422.
+Failed asserting that 422 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:281
+
+5) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_un_plan_que_deja_de_venderse_entre_decide_y_commit_da_la_lista_fija_de_ahora with data set "no vendible" ([false])
+Expected response status code [200] but received 422.
+Failed asserting that 422 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:305
+
+6) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_un_plan_que_deja_de_venderse_entre_decide_y_commit_da_la_lista_fija_de_ahora with data set "archivado" (['2026-11-18 22:46:00'])
+Expected response status code [200] but received 422.
+Failed asserting that 422 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:305
+
+7) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_un_plan_que_deja_de_venderse_entre_decide_y_commit_da_la_lista_fija_de_ahora with data set "precio a cero" ([0])
+Expected response status code [200] but received 422.
+Failed asserting that 422 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:305
+
+8) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_un_plan_que_deja_de_venderse_no_sale_ni_con_herramientas_en_el_turno
+Expected response status code [200] but received 422.
+Failed asserting that 422 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:325
+
+9) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_plan_4_con_tres_ofrecidos_es_un_marcador_desconocido
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+ Array &0 [
+-    0 => 'PLAN_4',
++    0 => 'PLAN_1',
++    1 => 'PLAN_2',
++    2 => 'PLAN_4',
+ ]
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/AssertableJsonString.php:243
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:880
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:344
+
+10) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_una_lista_que_no_vale_da_la_lista_fija with data set "el nombre escrito a mano" ('Claro. Tenemos el Plan Valera...eresa?', null, 'name_written')
+Expected response status code [200] but received 422.
+Failed asserting that 422 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:750
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:419
+
+11) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_una_lista_que_no_vale_da_la_lista_fija with data set "mezclada con PLAN_NAME" ('Claro. Tenemos {{PLAN_1}} y {...eresa?', 3, 'mixed')
+Expected response status code [200] but received 422.
+Failed asserting that 422 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:750
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:419
+
+12) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_una_lista_que_no_vale_da_la_lista_fija with data set "mezclada con PLAN_PRICE" ('Claro. Tenemos {{PLAN_1}} y {...eresa?', 3, 'mixed')
+Expected response status code [200] but received 422.
+Failed asserting that 422 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:750
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:419
+
+13) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_una_lista_que_no_vale_da_la_lista_fija with data set "un marcador repetido" ('Claro. Tenemos {{PLAN_1}} y {...eresa?', null, 'mixed')
+Expected response status code [200] but received 422.
+Failed asserting that 422 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:750
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:419
+
+14) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_una_lista_que_no_vale_da_la_lista_fija with data set "un solo plan" ('Claro. Tenemos {{PLAN_1}}, de...eresa?', null, 'missing')
+Expected response status code [200] but received 422.
+Failed asserting that 422 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:750
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:419
+
+15) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_sin_panorama_en_el_commit_la_lista_que_no_vale_sale_como_hoy
+Expected response status code [200] but received 422.
+Failed asserting that 422 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:750
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:433
+
+16) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_en_un_turno_de_cobro_la_lista_no_vale with data set "intención de pago" ('payment_link_request', [])
+decide la ofreció
+Failed asserting that null is identical to Array &0 [
+    0 => 3,
+    1 => 4,
+    2 => 8,
+].
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:457
+
+17) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_en_un_turno_de_cobro_la_lista_no_vale with data set "cierre" ('high_intent_close', [])
+decide la ofreció
+Failed asserting that null is identical to Array &0 [
+    0 => 3,
+    1 => 4,
+    2 => 8,
+].
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:457
+
+18) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_en_un_turno_de_cobro_la_lista_no_vale with data set "el enlace de pago pedido" ('pricing_question', ['payment_link_send'])
+decide la ofreció
+Failed asserting that null is identical to Array &0 [
+    0 => 3,
+    1 => 4,
+    2 => 8,
+].
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:457
+
+19) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_el_plan_que_fuerza_la_politica_no_pierde_la_lista
+Expected response status code [200] but received 422.
+Failed asserting that 422 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:750
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:482
+
+20) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_un_beneficio_de_otro_plan_va_por_la_rama_de_la_politica
+Expected response status code [200] but received 422.
+Failed asserting that 422 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:750
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:498
+
+21) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_el_beneficio_de_otro_plan_con_studio_y_sin_lista_y_en_legacy_nada
+Failed asserting that two strings are not identical.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:524
+
+22) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_cercano_y_entusiasta_la_lista_que_tutea_sale with data set "cercano" ('cercano')
+Expected response status code [200] but received 422.
+Failed asserting that 422 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:750
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:556
+
+23) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_cercano_y_entusiasta_la_lista_que_tutea_sale with data set "entusiasta" ('entusiasta')
+Expected response status code [200] but received 422.
+Failed asserting that 422 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:750
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:556
+
+24) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_profesional_la_lista_que_tutea_se_descarta_como_cualquier_borrador
+Expected response status code [200] but received 422.
+Failed asserting that 422 is identical to 200.
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:45
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:175
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:16
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:750
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:569
+
+25) Tests\Feature\Marketing\UltronA4ListaDelModeloTest::test_los_marcadores_de_la_lista_solo_valen_con_lista
+Failed asserting that two arrays are identical.
+--- Expected
++++ Actual
+@@ @@
+ Array &0 [
+-    0 => 'PLAN_3',
+-    1 => 'PLAN_4',
+-    2 => 'PLAN_0',
+-    3 => 'PLAN_01',
+-    4 => 'plan_1',
+-    5 => 'OTRO',
++    0 => 'PLAN_1',
++    1 => 'PLAN_2',
++    2 => 'PLAN_3',
++    3 => 'PLAN_4',
++    4 => 'PLAN_0',
++    5 => 'PLAN_01',
++    6 => 'plan_1',
++    7 => 'OTRO',
+ ]
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4ListaDelModeloTest.php:594
+
+ERRORS!
+Tests: 31, Assertions: 93, Errors: 2, Failures: 25.

@@ -78,11 +78,34 @@ final class UltronDraftPlaceholders
     /**
      * Los que no reconocemos.
      *
+     * Con la lista de planes del turno («regenerar antes de sustituir», ola
+     * 3; plan del arquitecto §3 P-3, cambio 1), `{{PLAN_1}}` a `{{PLAN_n}}`
+     * también valen: `n` es cuántos planes firmó `decide` en la lista (`po`),
+     * como mucho {@see UltronPlansOverview::MAX_PLANS}. Sin lista (`n` = 0, la
+     * llamada de siempre) o en un turno de cobro (quien llama pasa 0), son
+     * marcadores desconocidos, como cualquier otro inventado. Los sustituye
+     * {@see UltronPlansOverview::expand()}, no {@see self::resolve()}.
+     *
+     * @param  int  $planesDeLaLista  cuántos planes tiene la lista firmada del turno; 0 sin lista
      * @return string[]
      */
-    public function unknown(string $draft): array
+    public function unknown(string $draft, int $planesDeLaLista = 0): array
     {
-        return array_values(array_diff($this->found($draft), self::ALLOWED));
+        return array_values(array_diff($this->found($draft), $this->allowed($planesDeLaLista)));
+    }
+
+    /**
+     * Los marcadores admitidos en un turno con `n` planes en la lista: la
+     * lista blanca de siempre y, solo con lista, `PLAN_1`…`PLAN_n`. Sin lista,
+     * exactamente {@see self::ALLOWED}.
+     *
+     * @return string[]
+     */
+    public function allowed(int $planesDeLaLista = 0): array
+    {
+        $n = min(max($planesDeLaLista, 0), UltronPlansOverview::MAX_PLANS);
+
+        return $n === 0 ? self::ALLOWED : [...self::ALLOWED, ...array_map(fn (int $k): string => 'PLAN_'.$k, range(1, $n))];
     }
 
     /**

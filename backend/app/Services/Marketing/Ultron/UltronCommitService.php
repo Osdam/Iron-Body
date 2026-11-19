@@ -146,6 +146,26 @@ class UltronCommitService
      */
     public const VIOLACION_REGISTRO = 'policy_register_mismatch';
 
+    /**
+     * Una frase que nombra UN plan le atribuye un beneficio del catálogo de
+     * otro plan («regenerar antes de sustituir», P-4; comprobación literal y
+     * por frase, {@see UltronBenefitAttribution}): con versión del Studio,
+     * entra por la rama de la política, como la longitud y el registro.
+     */
+    public const VIOLACION_BENEFICIO = 'policy_benefit_misattributed';
+
+    /**
+     * Traza de la lista que redacta el modelo (`metadata.plans_overview.detail`),
+     * además de los detalles de {@see UltronPlansOverview::verify()}: un plan
+     * que el borrador nombra con su marcador ya no se vende (cambió entre
+     * `decide` y `commit`, H14). No lo arregla una reescritura: lo decide el
+     * commit.
+     */
+    private const LISTA_NO_VENDIBLE = 'not_sellable';
+
+    /** Traza: `decide` ofreció la lista pero el turno es de cobro, y en un turno de cobro la lista no vale (P-3, cambio 5). */
+    private const LISTA_EN_COBRO = 'money_turn';
+
     /** Un turno sin versión del Studio aplicada: ninguna rama del apartado 4 se ejecuta. */
     private const TURNO_LEGACY = ['studio' => false, 'tope' => null, 'tono' => null];
 
@@ -504,13 +524,33 @@ class UltronCommitService
             );
         }
 
-        $placeholdersDesconocidos = $this->placeholders->unknown($draft);
+        /*
+         * 8.ter) LA LISTA DE PLANES DEL TURNO («regenerar antes de sustituir»,
+         * ola 3; plan del arquitecto §3 P-3, cambios 1 y 5). Solo con versión
+         * del Studio: la que `decide` eligió y firmó (`po`) para quien pidió los
+         * planes o los precios en general. Con ella, `{{PLAN_1}}`…`{{PLAN_n}}`
+         * son marcadores válidos; sin ella son desconocidos, como cualquier
+         * marcador inventado (422 → rendición, igual que hoy).
+         *
+         * EN UN TURNO DE COBRO LA LISTA NO VALE: con el enlace de pago pedido o
+         * con una intención de cobro, los marcadores de la lista pasan a
+         * desconocidos. El dinero nunca va pegado a una lista de tres precios.
+         * Se lee de la PROPUESTA porque aquí aún no hay nada validado; la
+         * validación solo puede quitarle a la intención lo de cobro (la cambia
+         * a `unknown` o a `greeting`), nunca dárselo.
+         */
+        $listaOfrecida = $turno['studio'] ? $this->listaFirmada($token['extra']['po'] ?? null, (int) $conversation->id) : [];
+        $cobroPropuesto = in_array(SalesIntents::TOOL_PAYMENT_LINK_SEND, (array) ($proposal['tools_requested'] ?? []), true)
+            || in_array((string) ($proposal['intent'] ?? ''), [SalesIntents::HIGH_INTENT_CLOSE, SalesIntents::PAYMENT_LINK_REQUEST], true);
+        $listaDelTurno = $cobroPropuesto ? [] : $listaOfrecida;
+
+        $placeholdersDesconocidos = $this->placeholders->unknown($draft, count($listaDelTurno));
         if ($placeholdersDesconocidos !== []) {
             throw UltronCommitException::make(
                 'unknown_placeholder',
                 'La respuesta usa marcadores que no existen.',
                 422,
-                ['unknown' => $placeholdersDesconocidos, 'allowed' => UltronDraftPlaceholders::ALLOWED],
+                ['unknown' => $placeholdersDesconocidos, 'allowed' => $this->placeholders->allowed(count($listaDelTurno))],
             );
         }
 
@@ -619,6 +659,28 @@ class UltronCommitService
                 ['risk_flags' => $sanitized['risk_flags']],
             );
         }
+
+        /*
+         * 9.bis) LA LISTA DEL MODELO, EXPANDIDA AQUÍ Y UNA SOLA VEZ (plan del
+         * arquitecto §3 P-3, cambio 4). Cada `{{PLAN_k}}` pasa a «Nombre
+         * ($precio COP)» del plan k de la lista firmada, leído de `Plan` AHORA
+         * (el precio o el nombre pudieron cambiar desde `decide`).
+         *
+         * El sitio no es cosmético. Después del validador, que tira cualquier
+         * cifra: el borrador se valida sin precios y el precio lo escribe
+         * Laravel, como `{{PLAN_PRICE}}`. Y antes de `resolvePlan()` y sobre
+         * `$sanitized['reply']`: los tres sitios que vuelven a resolver el
+         * texto (el plan que impone la política, la realineación y la frase del
+         * precio) parten de ahí, y expandir después de uno de ellos perdería la
+         * lista. Todo lo que viene detrás (estilo, novedad, política, longitud,
+         * registro, guardas) ve el texto que va a salir.
+         */
+        $lista = $listaOfrecida === [] ? null : $this->listaDelModelo($sanitized['reply'], $listaDelTurno, $listaOfrecida);
+        if ($lista !== null) {
+            $sanitized['reply'] = $lista['text'];
+        }
+        // Lo que la memoria anota si la lista sale (P-3, cambio 6): cada plan con su texto expandido.
+        $preciosDeLaLista = ($lista['textos'] ?? []) === [] ? null : ['planes' => $lista['textos']];
 
         // 10) El plan y su precio REAL, leídos ahora.
         $plan = $this->resolvePlan($proposal['recommended_plan_id'] ?? null, $sanitized['reply']);
@@ -1297,6 +1359,8 @@ class UltronCommitService
             'strategy' => StrategyContract::fromProposal($proposal) ?: null,
             'plans_mentioned' => $estilo['plans_mentioned'],
             'plan_price_realigned' => $realineado,
+            // La lista que redacta el modelo, si el token la trae: qué se ofreció, qué usó, si vale y por qué no.
+            'plans_overview' => $lista['trace'] ?? null,
             'strategy_hints' => ['hot_lead_fast_path' => $hints['hot_lead_fast_path'], 'lifecycle_mode' => $hints['lifecycle_mode']],
             'price_enriched' => $plan !== null && $replyFinal !== $sanitized['reply'],
             'reference_resolution' => $resolution['type'],
@@ -1697,6 +1761,30 @@ class UltronCommitService
         }
 
         /*
+         * EL BENEFICIO DE OTRO PLAN («regenerar antes de sustituir», P-4;
+         * decisión L-5 del lead). Solo con versión del Studio: una frase del
+         * texto que va a salir que nombra UN plan y le cuelga, por palabras
+         * completas, un beneficio del catálogo de OTRO plan (de dos palabras o
+         * más, y que ninguno de los suyos contiene ni está contenido en él) entra
+         * por la rama de la política y sale el respaldo de la intención. La
+         * regla es literal y conservadora, con límites declarados
+         * ({@see UltronBenefitAttribution}): no ve paráfrasis ni pronombres. La
+         * traza (`metadata.benefits`) lleva los planes y el ÍNDICE del
+         * beneficio, nunca su texto.
+         */
+        if ($turno['studio'] && ($malAtribuidos = UltronBenefitAttribution::misattributed($replyFinal, $catalogo)) !== []) {
+            $incumple[] = self::VIOLACION_BENEFICIO;
+            ChannelLog::info('ultron.commit.benefit_misattributed', [
+                'conversation_id' => (int) $conversation->id, 'count' => count($malAtribuidos),
+            ]);
+            $meta = is_array($action->metadata) ? $action->metadata : [];
+            $meta['benefits'] = ['misattributed' => array_map(fn (array $b): array => [
+                'plan_id' => $b['plan_id'], 'benefit_plan_id' => $b['benefit_plan_id'], 'benefit_index' => $b['benefit_index'],
+            ], $malAtribuidos)];
+            $action->forceFill(['metadata' => $meta])->save();
+        }
+
+        /*
          * EL PANORAMA DE PLANES (apartado 4 del cierre V2, H4-10, P-1).
          *
          * Medido en la prueba real del 18-11: a «¿Qué planes tienen y cuánto
@@ -1724,9 +1812,28 @@ class UltronCommitService
             || $this->executedTools($executed) !== []
             || ($enlaces['status'] ?? null) === 'executed' || ($cobro['status'] ?? null) === 'inlined';
         $panorama = $turno['studio'] && ! $conHerramientas && CommercialTurnPolicy::pideElPanorama((string) $message->body, $policy, $resolution);
-        if ($panorama && ((string) $sanitized['intent'] === SalesIntents::PRICING_QUESTION
+        /*
+         * Y SI LA LISTA LA REDACTÓ EL MODELO («regenerar antes de sustituir»,
+         * P-3, cambio 7): con una lista VÁLIDA (al menos dos marcadores
+         * distintos de la lista firmada, sin mezclarlos con `PLAN_NAME`,
+         * `PLAN_PRICE` ni `PLAN_DURATION`, sin repetir, sin el nombre escrito a
+         * mano y con todos sus planes vendibles ahora), el panorama ya está
+         * contestado con nombres y precios del catálogo: no salta aunque se
+         * pregunte el precio. Si no vale, salta como hoy y sale la lista fija.
+         */
+        $listaValida = ($lista['trace']['valid'] ?? false) === true;
+        if ($panorama && ! $listaValida && ((string) $sanitized['intent'] === SalesIntents::PRICING_QUESTION
             || CommercialTurnPolicy::preguntaPorPrecio((string) $message->body)
             || count(array_unique(CommercialTurnPolicy::plansNamedIn($replyFinal, $catalogo))) < 2)) {
+            $incumple[] = CommercialTurnPolicy::VIOLACION_PANORAMA;
+        }
+        /*
+         * Un plan de la lista que YA NO SE VENDE no sale nunca, haya panorama o
+         * no (con una herramienta en el turno, por ejemplo): su marcador se dejó
+         * sin sustituir ({@see listaDelModelo()}) y el texto va por la rama de
+         * la política, que da la lista fija del catálogo de ahora.
+         */
+        if (($lista['trace']['detail'] ?? null) === self::LISTA_NO_VENDIBLE && ! in_array(CommercialTurnPolicy::VIOLACION_PANORAMA, $incumple, true)) {
             $incumple[] = CommercialTurnPolicy::VIOLACION_PANORAMA;
         }
         $pideLaLista = in_array(CommercialTurnPolicy::VIOLACION_PANORAMA, $incumple, true);
@@ -1859,6 +1966,11 @@ class UltronCommitService
                 }
             }
 
+            // El borrador con un marcador sin plan vendible no puede salir ni como último recurso de esta rama.
+            if ($alternativa === null && ($lista['trace']['detail'] ?? null) === self::LISTA_NO_VENDIBLE) {
+                $alternativa = $this->ultimoRecurso($conversation, (string) $sanitized['intent'], $turno['tope'], $turno['tono']);
+            }
+
             if ($alternativa !== null) {
                 $sustituidoPorLaPolitica = $alternativa !== $replyFinal;
                 // m-3: la traza dice que el texto se SUSTITUYÓ, con la medida del borrador (la de lo que sale la pone el punto de control).
@@ -1954,8 +2066,15 @@ class UltronCommitService
          * con el plan del turno, como estaba (S-5, fuera de esta tanda).
          * Legacy no entra: sin `studio`, idéntico.
          */
+        /*
+         * Lo mismo cuando sale la lista que redactó el modelo («regenerar antes
+         * de sustituir», P-3, cambio 6): enseña varios planes y no cotiza el
+         * del modelo; si no lo nombra, ese plan no salió, y `recordSentTurn()`
+         * vería las cifras de la lista y le daría por entregado su precio (F3).
+         * Los precios que sí salieron los anota `conPreciosEntregados()`.
+         */
         $planQueSalio = $plan;
-        if ($turno['studio'] && $sustituidoPorLaPolitica && $plan !== null
+        if ($turno['studio'] && ($sustituidoPorLaPolitica || $preciosDeLaLista !== null) && $plan !== null
             && ! in_array((int) $plan->id, CommercialTurnPolicy::plansNamedIn($replyFinal, $catalogo), true)) {
             $planQueSalio = null;
         }
@@ -2019,6 +2138,8 @@ class UltronCommitService
                 $turno['tono'],
             );
             $memoriaFinal = $this->conPreciosEntregados($conversation, $memoriaFinal, $precios, $replyFinal, $send['message_id'] ?? null);
+            // Y los de la lista del modelo, con la misma función: cada «Nombre ($precio COP)» que esté de verdad en lo que salió.
+            $memoriaFinal = $this->conPreciosEntregados($conversation, $memoriaFinal, $preciosDeLaLista, $replyFinal, $send['message_id'] ?? null);
             // 15.bis) Y la ficha del lead aprende lo que vale para la próxima conversación.
             $this->leadProfile->absorb($conversation->fresh(), $message, (string) $sanitized['intent'], $memoriaAlEntrar, $memoriaFinal);
         }
@@ -5415,6 +5536,91 @@ class UltronCommitService
         $action->forceFill(['metadata' => $meta])->save();
 
         return $texto;
+    }
+
+    /**
+     * La lista de planes que firmó `decide` (`po`, en la carga del token), o
+     * vacía. Está firmada, así que nadie la reescribe por el camino; aun así
+     * solo vale con la forma que emite `decide`: de
+     * {@see UltronPlansOverview::MIN_MARKERS} a
+     * {@see UltronPlansOverview::MAX_PLANS} id enteros positivos y distintos,
+     * en lista. Otra forma se ignora con aviso (sin el valor) y el turno sigue
+     * sin lista, como hoy, igual que un tope o un tono firmados que no valen.
+     *
+     * @return list<int>
+     */
+    private function listaFirmada(mixed $po, int $conversationId): array
+    {
+        if ($po === null) {
+            return [];
+        }
+        $valida = is_array($po) && array_is_list($po)
+            && count($po) >= UltronPlansOverview::MIN_MARKERS && count($po) <= UltronPlansOverview::MAX_PLANS
+            && array_filter($po, fn (mixed $id): bool => is_int($id) && $id > 0) === $po
+            && count(array_unique($po)) === count($po);
+        if (! $valida) {
+            ChannelLog::warning('ultron.commit.plans_overview_invalid', [
+                'conversation_id' => $conversationId, 'type' => get_debug_type($po),
+            ]);
+
+            return [];
+        }
+
+        return $po;
+    }
+
+    /**
+     * LA LISTA QUE REDACTÓ EL MODELO, EXPANDIDA Y JUZGADA («regenerar antes de
+     * sustituir», ola 3; plan del arquitecto §3 P-3, cambios 4 y 7, y §4.3).
+     *
+     * Cada `{{PLAN_k}}` del borrador pasa al texto de su plan
+     * ({@see UltronPlansOverview::item()}: «Nombre ($65.000 COP)»), con el
+     * `Plan` leído AHORA y solo si sigue vendible: una sola consulta, de los
+     * planes que el borrador nombra. El marcador de un plan que ya no se vende
+     * NO se sustituye (no se escribe ni su nombre ni su precio) y la lista no
+     * vale (`not_sellable`): el commit la manda por la rama de la política,
+     * haya panorama o no. Si no, «vale» lo dice
+     * {@see UltronPlansOverview::verify()} sobre el borrador SIN expandir: al
+     * menos dos marcadores distintos, sin mezclarlos con `PLAN_NAME`,
+     * `PLAN_PRICE` ni `PLAN_DURATION`, sin repetir y sin el nombre escrito a
+     * mano.
+     *
+     * En un turno de cobro (`$po` vacía con la lista ofrecida) no se expande
+     * nada: un marcador de la lista ya fue un 422 antes de llegar aquí.
+     *
+     * Traza (`metadata.plans_overview`): `offered`, la lista firmada; `used`,
+     * los planes que el borrador nombra con sus marcadores, por orden de
+     * aparición y sin repetir (también el que ya no se vende); `valid`; y
+     * `detail`, null o el motivo. Sin textos.
+     *
+     * @param  list<int>  $po  la lista del turno (vacía en un turno de cobro)
+     * @param  list<int>  $ofrecida  la lista firmada por `decide`
+     * @return array{text:string,textos:array<int,string>,trace:array{offered:list<int>,used:list<int>,valid:bool,detail:?string}}
+     */
+    private function listaDelModelo(string $borrador, array $po, array $ofrecida): array
+    {
+        if ($po === []) {
+            return ['text' => $borrador, 'textos' => [], 'trace' => ['offered' => $ofrecida, 'used' => [], 'valid' => false, 'detail' => self::LISTA_EN_COBRO]];
+        }
+
+        // Qué planes de la lista nombra el borrador: la misma lectura de los marcadores que hace la expansión.
+        $nombra = UltronPlansOverview::expand($borrador, array_fill_keys($po, ''), $po)['used'];
+        $vendibles = $nombra === [] ? collect() : Plan::query()->sellable()->whereIn('id', $nombra)->get()->keyBy('id');
+        $textos = [];
+        foreach ($nombra as $id) {
+            if ($vendibles->has($id)) {
+                $textos[$id] = UltronPlansOverview::item($vendibles->get($id));
+            }
+        }
+        $detalle = count($textos) < count($nombra)
+            ? self::LISTA_NO_VENDIBLE
+            : UltronPlansOverview::verify($borrador, $po, $this->knowledge->activePlans());
+
+        return [
+            'text' => UltronPlansOverview::expand($borrador, $textos, $po)['text'],
+            'textos' => $textos,
+            'trace' => ['offered' => $ofrecida, 'used' => $nombra, 'valid' => $detalle === null, 'detail' => $detalle],
+        ];
     }
 
     /**

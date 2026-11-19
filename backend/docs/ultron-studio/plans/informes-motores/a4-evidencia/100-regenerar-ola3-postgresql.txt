@@ -1,0 +1,17 @@
+VERDE FINAL, ola 3 (19-11-2026): las tres A4 en PostgreSQL 14 local desechable (base ultron_studio_lead_ola5, puerto 55432; nunca producción), con la prueba nueva en su versión final.
+Hora: 2026-11-19T10:00:23Z
+Comando (desde backend/): UNIT_DB=ultron_studio_lead_ola5 nice -n 10 bash docs/ultron-studio/ops/pgunit.sh --no-logging tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php tests/Feature/Marketing/UltronA4ListaDelModeloTest.php
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/phpunit.xml
+
+...............................................................  63 / 257 ( 24%)
+............................................................... 126 / 257 ( 49%)
+............................................................... 189 / 257 ( 73%)
+............................................................... 252 / 257 ( 98%)
+.....                                                           257 / 257 (100%)
+
+Time: 00:55.428, Memory: 112.50 MB
+
+OK (257 tests, 2950 assertions)

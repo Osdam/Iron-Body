@@ -19,6 +19,7 @@ use App\Services\Marketing\SalesIntents;
 use App\Services\Marketing\SalesPaymentReadinessService;
 use App\Services\Marketing\StaffReviewAuthority;
 use App\Services\Marketing\Ultron\Prompts\UltronPromptOffer;
+use App\Services\Marketing\Ultron\Prompts\UltronPromptStamp;
 
 /**
  * Lo que ULTRON necesita saber para proponer una respuesta, y nada más.
@@ -239,25 +240,15 @@ class UltronDecideService
      * gana un campo nuevo —y ya le ha pasado—, no se filtra solo al prompt por
      * el hecho de existir. Aquí entra lo que alguien decidió que entre.
      *
-     * @param  array<string,mixed>  $resolution
+     * Recibe la política ENTERA ({@see CommercialTurnPolicy::decide()}, la
+     * calcula `decide()` una vez): la lista del panorama
+     * ({@see self::listaDelPanorama()}) necesita campos que no viajan.
+     *
+     * @param  array<string,mixed>  $politica
      * @return array<string,mixed>
      */
-    private function politicaDelTurno(
-        string $intent,
-        string $phase,
-        ConversationMemory $memory,
-        array $resolution,
-        string $inbound,
-    ): array {
-        $politica = CommercialTurnPolicy::decide(
-            $intent,
-            $phase,
-            $memory,
-            $this->knowledge->activePlans(),
-            $resolution,
-            $inbound,
-        );
-
+    private function politicaDelTurno(array $politica): array
+    {
         $expuestos = [
             'intent', 'commercial_phase', 'greet_required', 'welcome_required',
             'answer_first', 'required_plan_id', 'allowed_plan_ids',
@@ -278,6 +269,57 @@ class UltronDecideService
         }
 
         return $recorte;
+    }
+
+    /**
+     * LA LISTA DE PLANES QUE REDACTARÁ EL MODELO («regenerar antes de
+     * sustituir», ola 3; plan del arquitecto §3 P-3 y §4.2).
+     *
+     * A «¿qué planes tienen y cuánto cuestan?» el modelo no puede contestar
+     * con un solo marcador de precio (se resuelve contra un plan). Aquí el
+     * servidor ELIGE los planes, con la misma selección que la lista fija
+     * ({@see UltronPlansOverview::select()}), y se los da al modelo con sus
+     * marcadores `{{PLAN_1}}`…`{{PLAN_3}}`, el id, el nombre y la duración,
+     * SIN PRECIO: el nombre ya viaja en `active_plans`, no hay exposición
+     * nueva. Los id, en orden, van firmados en el token (`po`): el commit
+     * sustituye cada marcador por el plan de esa posición, así que el modelo
+     * solo puede nombrar planes que eligió el servidor.
+     *
+     * Solo si se cumplen las tres cosas; si no, null y el turno sale como hoy:
+     *  - la oferta de prompts es del Studio y lleva el parche del motor que
+     *    enseña los marcadores (`sp.o = 1`, {@see UltronPromptOffer}): una
+     *    versión con todos los valores por defecto, Legacy o sin negociar, no;
+     *  - la persona pide los planes o los precios en general, con la política
+     *    de ESTE `decide` ({@see CommercialTurnPolicy::pideElPanorama()});
+     *  - hay al menos dos planes que elegir
+     *    ({@see UltronPlansOverview::MIN_MARKERS}).
+     *
+     * `price_asked`: la intención del turno es de precio o la persona pregunta
+     * un precio con sus palabras (dos de las tres condiciones con las que el
+     * commit exige la lista; la tercera mira el borrador, que aún no existe).
+     *
+     * @param  array<string,mixed>|null  $prompts  la oferta de prompts del turno, o null sin negociar
+     * @param  array<string,mixed>  $politica  la política ENTERA del turno
+     * @param  array<string,mixed>  $resolution
+     * @param  array<int,array<string,mixed>>  $activePlans
+     * @return array{po:list<int>,overview:array{plans:list<array<string,mixed>>,price_asked:bool}}|null
+     */
+    private function listaDelPanorama(?array $prompts, array $politica, array $resolution, array $activePlans, string $intent, string $inbound): ?array
+    {
+        $sp = is_array($prompts['sp'] ?? null) ? $prompts['sp'] : [];
+        if (($sp['m'] ?? null) !== UltronPromptStamp::MODE_STUDIO || ($sp['o'] ?? null) !== 1
+            || ! CommercialTurnPolicy::pideElPanorama($inbound, $politica, $resolution)) {
+            return null;
+        }
+        $po = UltronPlansOverview::select($politica, $activePlans);
+        if (count($po) < UltronPlansOverview::MIN_MARKERS) {
+            return null;
+        }
+
+        return ['po' => $po, 'overview' => [
+            'plans' => UltronPlansOverview::items($po, $activePlans),
+            'price_asked' => $intent === SalesIntents::PRICING_QUESTION || CommercialTurnPolicy::preguntaPorPrecio($inbound),
+        ]];
     }
 
     public function phaseContext(MarketingConversation $conversation, MarketingMessage $message): array
@@ -409,6 +451,17 @@ class UltronDecideService
          */
         $strategyHints = StrategyContract::conElRegistro($strategyHints, $prompts['sp'] ?? null);
 
+        /*
+         * LA POLÍTICA DEL TURNO, una vez: la recortada viaja al redactor
+         * (`commercial_turn_policy`) y la entera decide si este turno lleva la
+         * lista de planes que redacta el modelo, firmada en el token (`po`;
+         * «regenerar antes de sustituir», ola 3). Sin oferta del Studio con el
+         * parche del motor, no hay lista y el turno es el de siempre.
+         */
+        $catalogo = $this->knowledge->activePlans();
+        $politica = CommercialTurnPolicy::decide($intentTurno, $phase, $memory, $catalogo, $resolved, (string) $message->body);
+        $panorama = $this->listaDelPanorama($prompts, $politica, $resolved, $catalogo, $intentTurno, (string) $message->body);
+
         $token = $this->tokens->issue(
             (int) $conversation->id,
             (int) $message->id,
@@ -421,7 +474,9 @@ class UltronDecideService
             ['hints' => [
                 'hot_lead_fast_path' => $strategyHints['hot_lead_fast_path'],
                 'lifecycle_mode' => $strategyHints['lifecycle_mode'],
-            ], 'payment_state' => (string) ($payment['state'] ?? 'none')] + ($prompts === null ? [] : ['sp' => $prompts['sp']]),
+            ], 'payment_state' => (string) ($payment['state'] ?? 'none')] + ($prompts === null ? [] : ['sp' => $prompts['sp']])
+                // La lista que eligió el servidor, firmada: el commit sustituye `{{PLAN_k}}` por el plan k de ESTA lista.
+                + ($panorama === null ? [] : ['po' => $panorama['po']]),
         );
 
         return [
@@ -550,13 +605,15 @@ class UltronDecideService
                  * puede PISAR al plan del modelo, el otro es el complemento de
                  * `allowed_plan_ids`—, y lo que no viaja no se malinterpreta.
                  */
-                'commercial_turn_policy' => $this->politicaDelTurno(
-                    $intentTurno,
-                    $phase,
-                    $memory,
-                    $resolved,
-                    (string) $message->body,
-                ),
+                /*
+                 * Y, solo en un turno del Studio que pide el panorama, la lista
+                 * que el modelo tiene que nombrar con `{{PLAN_1}}`…`{{PLAN_3}}`
+                 * (`plans_overview`, sin precio), FUERA de la lista blanca de
+                 * arriba: es lo único que llega entero al redactor de S1 sin
+                 * tocar n8n (plan del arquitecto §3 P-3, cambio 2).
+                 */
+                'commercial_turn_policy' => $this->politicaDelTurno($politica)
+                    + ($panorama === null ? [] : ['plans_overview' => $panorama['overview']]),
                 /*
                  * CÓMO vender en esta fase. No qué decir.
                  *
