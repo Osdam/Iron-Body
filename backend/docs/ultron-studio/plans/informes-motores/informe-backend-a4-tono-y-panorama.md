@@ -747,3 +747,109 @@ Al revisar la regla final del panorama (§14.2) el lead vio que faltaba la forma
   - **Verde después** (salida 76): `tests/Unit/Marketing/Ultron`, los dos A4, `UltronDecidePromptsTest`, `UltronCommitTest` y `UltronCommitPromptsTest`, **OK (1 539 pruebas, 16 414 aserciones)**; `pint --test`, passed.
 - **Sin `\p{…}` ni *lookbehind*:** `\W` y `^…$` con `/u`, como el resto de la expresión.
 
+
+### 14.12 B-2, segunda corrección (19-11): con «profesional», el borrador que tutea se descarta siempre
+
+**Encargo:** `encargo-be-a4h.md`, decisión G2-bis del lead sobre el apéndice «Comprobación de cierre (19-11, commit `3eca6206`)» de `informe-reviewer-a4b.md` (B-2 sigue abierto). **Sustituye a G2** (§14.1). Mismo árbol, **sin commit**. Sin una versión del Studio, o con `cercano` o `entusiasta`, no cambia nada: el bloque solo corre con «profesional».
+
+#### La regla, tal como queda (`UltronCommitService.php:1608-1665`)
+
+Solo con `tono` = profesional, en la comprobación del registro:
+
+1. **El borrador no tutea** → `ok`, como hoy.
+2. **El borrador tutea y el turno lleva un bloque que pega Laravel** (los enlaces de la app, o el cobro dentro de la respuesta): si **todo** el tuteo está en la pregunta final, se le quita con `UltronReplyFitter::withoutFinalQuestion()` (F1, sin cambios) y sale → `trimmed`, **sin mínimo de frases**: «Claro, con gusto.» más los enlaces es una respuesta completa. Si el tuteo no está solo ahí → `discarded`.
+3. **El borrador tutea y el turno no lleva ese bloque** → `discarded` **siempre**. No hay recorte. Sale el respaldo de usted que ya existía: recepción, memoria, el acta, la lista, la ficha, el texto curado de la intención (G3, §14.3) o el último recurso.
+
+Si la longitud ya lo había descartado, el registro solo mira (como antes). La traza (`metadata.register`) no cambia de forma.
+
+#### La señal: qué usé y por qué es fiable ahí
+
+```php
+$conBloqueDeLaravel = (($enlaces['status'] ?? null) === 'executed' && self::llevaLosEnlaces($replyFinal))
+    || (($cobro['status'] ?? null) === 'inlined' && (string) ($cobro['payment_url'] ?? '') !== '' && str_contains($replyFinal, (string) $cobro['payment_url']));
+```
+
+- **Es la de G1.2** (`$enlaces` ejecutados, `$cobro` dentro), más una condición: **que el bloque siga en el texto que se mira**.
+- **Ya se conoce en ese punto [L]:** `$enlaces` se asigna en `:1408` y los enlaces se pegan en `:1411`; `$cobro`, en `:1459`, y la línea del cobro se pega en `:1474`. Ninguna de las dos variables se vuelve a asignar hasta después del envío (`:1994`). El registro corre en `:1646`.
+- **Por qué no basta el estado de la herramienta:** entre el pegado y el registro corren guardas que reescriben o retiran frases: 13.quater (`:1529`), las de la cortesía, `sinExcusasDePrecio()` y `sinServiciosInventados()` (`:1576`). Si una retira la frase que lleva los enlaces, el estado sigue diciendo `executed` pero el bloque ya no está. El envío ya lo sabe y por eso mira `llevaLosEnlaces()` antes de anotarlos (`:1994`). Medido: con solo el estado (mutación M1, salida 80), «Claro, con gusto. Le paso la app para sus clases de pilates: {{APP_LINKS}}. ¿Quieres…?» sale como **«Claro, con gusto.»** a secas, que es el defecto de B-2 [C].
+- **Cobro:** basta con que la URL del checkout siga en el texto. Con `nego_el_cobro`, el texto entero es el curado de pago de usted: no tutea, y sale `ok` por la regla 1.
+- **G1.2** (`$conHerramientas`, `:1723`) **no cambia**.
+
+#### `UltronReplyFitter::proseSentenceCount()`: quitada
+
+- No la usa nadie en `app/` ni en `tests/`; no tenía pruebas propias.
+- **Ojo, la usa la sonda del lead**, sin seguimiento: `docs/ultron-studio/ops/comprobacion-produccion/sonda-registro-y-panorama.php:131` y `:133`. Con las clases nuevas, esa sonda acaba en «Call to undefined method». **No la toqué** porque no es mía. Basta con quitar esas dos claves de la huella. Así no queda en el producto una función muerta solo para una sonda.
+
+#### Pruebas (todas por el endpoint, `decide` → `commit`, clases reales; `UltronA4RegistroYPanoramaTest`)
+
+| Prueba | Qué fija | Antes (salida 79) |
+|---|---|---|
+| `test_g2bis_un_borrador_que_tutea_sin_enlaces_ni_cobro_se_descarta_siempre` (8 casos) | Las siete filas del apéndice; la de spinning, con y sin la ficha. Profesional a 200 y sin tope (320). Exige `discarded`, `policy_register_mismatch`, el **mensaje saliente** igual al respaldo de usted de su intención, distinto del relleno que salía, sin marcas y sin `fallback_mismatch`. Con `cercano` y `entusiasta`: sin `register` ni violación | **8 rojas** (salía el relleno) |
+| `test_g2bis_con_los_enlaces_de_la_app_se_quita_la_pregunta_y_salen_los_enlaces` | «Mándame la app» con `app_links_send` → `trimmed`, sale «Claro, con gusto.» + `MobileAppCatalog::linksInline()`, constan como enviados. A 200 y a 320 | **roja** (salía el respaldo, sin enlaces) |
+| `test_g2bis_con_el_cobro_dentro_se_quita_la_pregunta_y_sale_el_cobro` | Cobro del canario dentro → `trimmed`, sale «Perfecto, con gusto.» + `LINEA_DEL_COBRO` + `80.000:` + el checkout | **roja** |
+| `test_g2bis_con_los_enlaces_y_el_tuteo_en_el_cuerpo_se_descarta_y_los_enlaces_no_salen` | `discarded`; los enlaces no salen ni constan. Es el comportamiento conocido de cualquier descarte; **se fija tal como es** | verde (ya era así) |
+| `test_g2bis_si_una_guarda_retiro_los_enlaces_antes_del_registro_se_descarta` | La condición «el bloque sigue en el texto» | verde (con G2 ya se descartaba); **muere con M1** |
+
+**Los respaldos que salen.** Son los de siempre, nada nuevo:
+- **«Hola»:** la bienvenida de usted.
+- **Pagar con tarjeta:** el texto de pago de usted. Sin tope, con «También puede pagar en el gimnasio cuando venga.».
+- **Spinning:** la ficha por piezas. Sin la ficha de producción, a 200 solo caben la apertura y la pregunta; sin tope, entra el horario.
+- **«Me da pena»** y **bajar de peso:** el texto curado de G3.
+
+**La prueba real del 18-11 sale como hoy, sin tocarla:**
+- turno 2: la lista (`PRECIOS_200`);
+- turno 3: el horario de usted, a 200 y sin tope;
+- turno 1: de usted, tal cual.
+
+Las cuatro siguen en verde antes y después.
+
+#### Aserciones existentes cambiadas (2, las que anticipó el revisor; ninguna relajada)
+
+1. **`recortesQueDejabanRelleno` › «hola, quisiera información»:** `'trimmed'` → `'discarded'`.
+   - **El texto que sale no cambia:** la ficha de usted.
+   - Antes se recortaba («¡Hola! Con gusto.») y la ficha lo rescataba por `policy_answer_without_fact`. Ahora no hay bloque de Laravel, así que se descarta y sale la misma ficha como respaldo.
+2. **`test_g2_con_dos_frases_tras_quitar_la_pregunta_se_sigue_recortando`** → **`test_g2bis_con_dos_frases_tras_quitar_la_pregunta_tambien_se_descarta_y_sale_el_horario`**.
+   - Antes salía «Claro. El gimnasio abre de lunes a viernes de 5:00 a. m. a 10:00 p. m.» (`trimmed`).
+   - Ahora sale `HORARIO_200` (`discarded`, `[policy_register_mismatch]`): sin bloque no hay recorte.
+   - El respaldo dice lo mismo y además los otros días; la aserción gana `policy_violations` exacta.
+
+#### Números (una ejecución de PHPUnit cada vez, desde `backend/`)
+
+| # | Qué | Resultado |
+|---|---|---|
+| 79 | **Rojo, ANTES**: `app/` igual que `3eca6206` (`git diff --quiet HEAD -- app` = 0), pruebas definitivas. Filtro: `g2`, `g2bis` y los turnos reales | **24 pruebas, 12 rojas**: las 8 filas, enlaces, cobro y las 2 aserciones cambiadas [C]. Las 12 verdes: las 4 filas de R3 que ya se descartaban, el tuteo en el cuerpo con enlaces, la guarda que retira los enlaces, los 4 turnos reales y los dos de la pregunta final con una frase o con cifra |
+| 80 | **Mutaciones** (aplicar → las 24 → revertir; `cmp` = 0 tras cada una) | **Las cuatro mueren** [C]:<br>– **M1** (solo el estado de la herramienta) → la guarda que retira los enlaces;<br>– **M2** (recortar sin exigir el bloque) → 16 rojas, las 8 filas entre ellas;<br>– **M3** (sin la rama del cobro) → el cobro;<br>– **M4** (sin la rama de los enlaces) → los enlaces |
+| 81 | **FINAL, SQLite**: `tests/Unit/Marketing/Ultron`, los dos A4, `UltronDecidePromptsTest`, `UltronCommitTest`, `UltronCommitPromptsTest` | **OK (1 551 pruebas, 16 659 aserciones)** [C]. Son 12 más que la 76: 8 casos de la fila y 4 pruebas sueltas. Repetida sobre el texto final |
+| 82 | **FINAL, Marketing completo, SQLite** (`tests/Feature/Marketing tests/Unit/Marketing`) | **OK (6 508 pruebas, 38 456 aserciones)** [C]. Son 23 más que la 72: 11 del añadido de §14.11 y 12 de esta ronda. Corrió con una frase del docblock del registro aún sin retocar: solo cambia un comentario |
+| 83 | **FINAL, PostgreSQL 14** (`UNIT_DB=ultron_studio_lead_ola5`, base desechable local): los dos A4 | **OK (226 pruebas, 2 687 aserciones)** [C]. Son 14 más que la 73: 2 del añadido de §14.11 y 12 de esta ronda |
+| 84 | `vendor/bin/pint` y `pint --test` sobre los 3 ficheros tocados, con el texto final | **passed**, sin cambios [C] |
+
+**Lo que no cambió [C]:**
+- **Legacy:** `legacy-a4.json` y `legacy-usted.json`, en verde y sin regenerar en la 81, la 82 y la 83 (`git diff --quiet HEAD -- tests/fixtures/ultron-a4` = 0).
+- **Los documentos generados** `a4-textos-ajustados.md` y `a4-textos-usted.md`: diff 0. Ningún texto de Laravel cambia.
+
+#### Ficheros tocados en esta ronda
+
+| Fichero | +/− | Qué |
+|---|---|---|
+| `app/Services/Marketing/Ultron/UltronCommitService.php` | +31/−18 | G2-bis en el bloque del registro (`:1608-1665`): el docblock y `$conBloqueDeLaravel`; fuera, `proseSentenceCount()` |
+| `app/Services/Marketing/Ultron/UltronReplyFitter.php` | −10 | `proseSentenceCount()` quitada; `draft()` y `withoutFinalQuestion()`, sin cambios |
+| `tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php` | +174/−5 | Las 2 aserciones cambiadas, las 5 pruebas nuevas (12 casos) y el `use` de `MobileAppCatalog` |
+| `a4-evidencia/79` a `84` | — | Las salidas de arriba |
+
+**Sin diff en el resto** [C]: `CommercialTurnPolicy`, el detector, `UltronFormalReplies`, el compilador, `config/`, rutas, migraciones, `n8n/` y las instantáneas. Sin variables de entorno. **Vuelta atrás:** devolver los dos ficheros de producto a `3eca6206`.
+
+#### Hallazgos adyacentes (anotados, no arreglados)
+
+1. **Con un descarte, los enlaces pedidos se pierden** (el tuteo en el cuerpo). Es anterior a esta ronda y se fija tal como es. Esta ronda no lo empeora: con enlaces o cobro en el turno, el registro vuelve a lo de antes de G2 (se recorta si el tuteo está solo en la pregunta final).
+2. **`MobileAppCatalog::LINKS_ALREADY_SENT` es de tú** («te los dejé aquí mismo en el chat hace un rato»). Laravel lo pega en el marcador `{{APP_LINKS}}` cuando los enlaces ya salieron hace menos de una hora. Con «profesional», el detector marca ese «te» (`tuteo()` → `['te']`, comprobado con `php -r`): un borrador de usted que lleve el marcador se descartaría por un texto de Laravel. Es un hueco de T-4 y queda fuera de este encargo, que excluye las tablas de usted.
+3. **Spinning sin la ficha de producción, a 200,** recibe «Con gusto le cuento. ¿Qué le cuento más a fondo: los planes, las clases o cómo empezar?»:
+   - no contesta lo de spinning, pero devuelve la pelota con opciones;
+   - es el respaldo de `general_info` desde antes, el mismo caso de §14.9.3.
+4. **Volumen:** con «profesional», todo borrador con tú en la pregunta final y sin enlaces ni cobro sale ahora con el texto de Laravel, no con el del modelo. Conviene medirlo en la canaria con `metadata.register.action = discarded`.
+
+#### Lo que no pude comprobar
+
+- **n8n, la canaria y producción:** nada. Todo es PHPUnit local.
+- **El PCRE 10.39 de producción:** no hay expresiones nuevas; solo `str_contains` y `llevaLosEnlaces()`, que ya existe en `origin/main` (`bc5167cb`).
+- **La sonda del lead con las clases nuevas:** no la ejecuté. Fallaría por `proseSentenceCount()` (ver arriba).

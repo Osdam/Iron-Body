@@ -1,0 +1,54 @@
+MUTACIONES de G2-bis (19-11): cada una se aplica sobre UltronCommitService.php, se ejecutan las 24 pruebas g2/g2bis/turnos de UltronA4RegistroYPanoramaTest y se revierte (cmp con la copia = 0).
+M1: el bloque de enlaces cuenta solo por el estado de la herramienta (sin llevaLosEnlaces): la señal desnuda de G1.2.
+M2: sin el requisito del bloque: se recorta siempre que el tuteo esté en la pregunta final (G2 sin el mínimo de frases).
+M3: sin la rama del cobro.
+M4: sin la rama de los enlaces.
+
+===== M1 =====
+-            $sinPregunta = $marcas === [] || ($longitud['action'] ?? null) === 'discarded' ? null : UltronReplyFitter::withoutFinalQuestion($replyFinal);
++            $conBloqueDeLaravel = (($enlaces['status'] ?? null) === 'executed')
++                || (($cobro['status'] ?? null) === 'inlined' && (string) ($cobro['payment_url'] ?? '') !== '' && str_contains($replyFinal, (string) $cobro['payment_url']));
++            $sinPregunta = $marcas === [] || ! $conBloqueDeLaravel || ($longitud['action'] ?? null) === 'discarded' ? null : UltronReplyFitter::withoutFinalQuestion($replyFinal);
+1) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2bis_si_una_guarda_retiro_los_enlaces_antes_del_registro_se_descarta
+Tests: 24, Assertions: 308, Failures: 1.
+revertida: cmp = 0
+
+===== M2 =====
++            $conBloqueDeLaravel = (($enlaces['status'] ?? null) === 'executed' && self::llevaLosEnlaces($replyFinal))
++                || (($cobro['status'] ?? null) === 'inlined' && (string) ($cobro['payment_url'] ?? '') !== '' && str_contains($replyFinal, (string) $cobro['payment_url']));
+1) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_el_tuteo_solo_en_la_pregunta_final_con_una_sola_frase_detras_se_descarta
+2) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2_el_recorte_por_registro_no_deja_una_sola_frase_de_relleno with data set "clases de spinning" ('general_info', '¿Tienen clases de spinning?', 'Claro. ¿Quieres que te cuente...emana?', true, 'discarded', 'Con gusto le cuento. Iron Bod...pezar?')
+3) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2_el_recorte_por_registro_no_deja_una_sola_frase_de_relleno with data set "pagar con tarjeta" ('payment_link_request', '¿Puedo pagar con tarjeta?', 'Sí, claro. ¿Quieres que te pa...e ahí?', false, 'discarded', 'El pago lo hace usted mismo d...garla?')
+4) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2_el_recorte_por_registro_no_deja_una_sola_frase_de_relleno with data set "el saludo" ('greeting', 'Hola', '¡Hola, buenas tardes! ¿En qué...r hoy?', false, 'discarded', 'Hola, muy buenas tardes. Bien...r hoy?')
+5) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2_el_recorte_por_registro_no_deja_una_sola_frase_de_relleno with data set "el miedo de principiante" ('beginner_fear', 'Nunca he entrenado y me da pena', 'Es muy normal al inicio. ¿Qué...ocupa?', false, 'discarded', 'Es normal sentir pena al inic...hacer?')
+6) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2_el_recorte_por_registro_no_deja_una_sola_frase_de_relleno with data set "hola, quisiera información" ('general_info', 'Hola, quisiera información', '¡Hola! Con gusto. ¿Qué te gus...saber?', true, 'discarded', 'Con gusto le cuento. Iron Bod...pezar?')
+7) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2bis_con_dos_frases_tras_quitar_la_pregunta_tambien_se_descarta_y_sale_el_horario
+8) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2bis_un_borrador_que_tutea_sin_enlaces_ni_cobro_se_descarta_siempre with data set "hola, buenas tardes" ('greeting', 'Hola', '¡Hola! Buenas tardes. ¿En qué...r hoy?', false, '¡Hola! Buenas tardes.', 'Hola, muy buenas tardes. Bien...r hoy?', null)
+9) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2bis_un_borrador_que_tutea_sin_enlaces_ni_cobro_se_descarta_siempre with data set "hola, bienvenido" ('greeting', 'Hola', '¡Hola! Bienvenido a Iron Body...r hoy?', false, '¡Hola! Bienvenido a Iron Body.', 'Hola, muy buenas tardes. Bien...r hoy?', null)
+10) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2bis_un_borrador_que_tutea_sin_enlaces_ni_cobro_se_descarta_siempre with data set "hola, con gusto le atiendo" ('greeting', 'Hola', '¡Hola! Con gusto le atiendo. ...yudar?', false, '¡Hola! Con gusto le atiendo.', 'Hola, muy buenas tardes. Bien...r hoy?', null)
+11) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2bis_un_borrador_que_tutea_sin_enlaces_ni_cobro_se_descarta_siempre with data set "pagar con tarjeta" ('payment_link_request', '¿Puedo pagar con tarjeta?', 'Sí, claro. Con mucho gusto. ¿...e ahí?', false, 'Sí, claro. Con mucho gusto.', 'El pago lo hace usted mismo d...garla?', 'El pago lo hace usted mismo d...garla?')
+12) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2bis_un_borrador_que_tutea_sin_enlaces_ni_cobro_se_descarta_siempre with data set "clases de spinning, sin la ficha" ('general_info', '¿Tienen clases de spinning?', '¡Claro! Con gusto. ¿Quieres q...nemos?', false, '¡Claro! Con gusto.', 'Con gusto le cuento. ¿Qué le ...pezar?', 'Con gusto le cuento. Lunes a ...pezar?')
+13) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2bis_un_borrador_que_tutea_sin_enlaces_ni_cobro_se_descarta_siempre with data set "clases de spinning, con la ficha" ('general_info', '¿Tienen clases de spinning?', '¡Claro! Con gusto. ¿Quieres q...nemos?', true, '¡Claro! Con gusto.', 'Con gusto le cuento. Iron Bod...pezar?', 'Con gusto le cuento. Iron Bod...pezar?')
+14) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2bis_un_borrador_que_tutea_sin_enlaces_ni_cobro_se_descarta_siempre with data set "me da pena" ('beginner_fear', 'Nunca he entrenado y me da pena', 'Claro. Es muy normal. ¿Qué es...ocupa?', false, 'Claro. Es muy normal.', 'Es normal sentir pena al inic...hacer?', null)
+15) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2bis_un_borrador_que_tutea_sin_enlaces_ni_cobro_se_descarta_siempre with data set "bajar de peso" ('goal_fat_loss', 'Quiero bajar de peso', '¡Qué bien! Con gusto. ¿Ya has...antes?', false, '¡Qué bien! Con gusto.', 'Muy bien. Para bajar grasa lo... cero?', null)
+16) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2bis_si_una_guarda_retiro_los_enlaces_antes_del_registro_se_descarta
+Tests: 24, Assertions: 101, Failures: 16.
+revertida: cmp = 0
+
+===== M3 =====
+-            $sinPregunta = $marcas === [] || ($longitud['action'] ?? null) === 'discarded' ? null : UltronReplyFitter::withoutFinalQuestion($replyFinal);
++            $conBloqueDeLaravel = (($enlaces['status'] ?? null) === 'executed' && self::llevaLosEnlaces($replyFinal))
++                || false;
++            $sinPregunta = $marcas === [] || ! $conBloqueDeLaravel || ($longitud['action'] ?? null) === 'discarded' ? null : UltronReplyFitter::withoutFinalQuestion($replyFinal);
+1) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2bis_con_el_cobro_dentro_se_quita_la_pregunta_y_sale_el_cobro
+Tests: 24, Assertions: 309, Failures: 1.
+revertida: cmp = 0
+
+===== M4 =====
+-            $sinPregunta = $marcas === [] || ($longitud['action'] ?? null) === 'discarded' ? null : UltronReplyFitter::withoutFinalQuestion($replyFinal);
++            $conBloqueDeLaravel = false
++                || (($cobro['status'] ?? null) === 'inlined' && (string) ($cobro['payment_url'] ?? '') !== '' && str_contains($replyFinal, (string) $cobro['payment_url']));
++            $sinPregunta = $marcas === [] || ! $conBloqueDeLaravel || ($longitud['action'] ?? null) === 'discarded' ? null : UltronReplyFitter::withoutFinalQuestion($replyFinal);
+1) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2bis_con_los_enlaces_de_la_app_se_quita_la_pregunta_y_salen_los_enlaces
+Tests: 24, Assertions: 302, Failures: 1.
+revertida: cmp = 0

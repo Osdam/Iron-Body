@@ -1612,30 +1612,43 @@ class UltronCommitService
          * (de usted), el revisor de n8n aprobó un horario escrito entero de tú
          * y una respuesta de precios que mezclaba; tutear solo le restaba
          * puntos. Solo con `tono` = profesional (con `cercano`, `entusiasta` o
-         * sin tono no se mira nada): si el borrador tutea y TODO el tuteo está
-         * en su pregunta final, se le quita esa pregunta con la misma regla de
-         * la longitud (F1: la última frase que no sea el bloque de enlaces,
-         * pregunta, sin cifras, no la primera) y sale, pero SOLO si quedan al
-         * menos dos frases sin contar el bloque de enlaces (G2 del lead, B-2
-         * del revisor: «Claro. ¿Quieres que te cuente…?» dejaba «Claro.» como
-         * respuesta entera, y «¡Hola, buenas tardes!» paraba la conversación);
-         * si no, se descarta (`policy_register_mismatch`) y entra por la rama
-         * de la política, cuyo respaldo sale de usted. La regla F1 de la
-         * longitud no cambia. No se reescribe el texto del modelo ni se
-         * pide otro intento: el reintento es de n8n, cuando su revisor falla.
-         * Va después del recorte por longitud y antes de `violations()`, para
-         * que la política y la memoria vean lo que va a salir. La traza
-         * (`metadata.register`) dice qué se esperaba, qué marcas había y qué
-         * se hizo, nunca el texto. Si la longitud ya lo descartó, solo se mira.
+         * sin tono no se mira nada), un borrador que tutea SE DESCARTA SIEMPRE
+         * (`policy_register_mismatch`) y entra por la rama de la política,
+         * cuyo respaldo sale de usted: recepción, memoria, el acta, la lista,
+         * la ficha o el texto curado de la intención (G3).
+         *
+         * Única excepción (G2-bis del lead, B-2 del revisor): el turno lleva
+         * un bloque que pega Laravel —los enlaces de la app o el cobro dentro
+         * de la respuesta— y TODO el tuteo está en la pregunta final. Entonces
+         * se le quita esa pregunta con la regla de la longitud (F1: la última
+         * frase que no sea el bloque, pregunta, sin cifras, no la primera) y
+         * sale, sin mínimo de frases: «Claro, con gusto.» más los enlaces que
+         * la persona pidió es una respuesta completa, y descartarla se lleva
+         * los enlaces. Sin ese bloque no hay recorte: quitada la pregunta, lo
+         * que queda del borrador suele ser solo la apertura o la cortesía
+         * («¡Hola! Buenas tardes.», «Sí, claro. Con mucho gusto.»), que no
+         * contesta y para la conversación. El bloque cuenta si Laravel lo pegó
+         * (`$enlaces` ejecutados, `$cobro` dentro) Y sigue en el texto que se
+         * mira: una guarda pudo retirarlo después de pegarlo (lo mismo que
+         * comprueba el envío con `llevaLosEnlaces()`).
+         *
+         * La regla F1 de la longitud no cambia. No se reescribe el texto del
+         * modelo ni se pide otro intento: el reintento es de n8n, cuando su
+         * revisor falla. Va después del recorte por longitud y antes de
+         * `violations()`, para que la política y la memoria vean lo que va a
+         * salir. La traza (`metadata.register`) dice qué se esperaba, qué
+         * marcas había y qué se hizo, nunca el texto. Si la longitud ya lo
+         * descartó, solo se mira.
          */
         $registro = null;
         if (UltronFormalReplies::aplica($turno['tono'])) {
             $marcas = UltronRegisterDetector::tuteo($replyFinal, $catalogo);
-            $sinPregunta = $marcas === [] || ($longitud['action'] ?? null) === 'discarded' ? null : UltronReplyFitter::withoutFinalQuestion($replyFinal);
+            $conBloqueDeLaravel = (($enlaces['status'] ?? null) === 'executed' && self::llevaLosEnlaces($replyFinal))
+                || (($cobro['status'] ?? null) === 'inlined' && (string) ($cobro['payment_url'] ?? '') !== '' && str_contains($replyFinal, (string) $cobro['payment_url']));
+            $sinPregunta = $marcas === [] || ! $conBloqueDeLaravel || ($longitud['action'] ?? null) === 'discarded' ? null : UltronReplyFitter::withoutFinalQuestion($replyFinal);
             $registro = ['expected' => 'usted', 'found' => $marcas, 'action' => match (true) {
                 $marcas === [] => 'ok',
-                $sinPregunta !== null && UltronReplyFitter::proseSentenceCount($sinPregunta) >= 2
-                    && UltronRegisterDetector::tuteo($sinPregunta, $catalogo) === [] => 'trimmed',
+                $sinPregunta !== null && UltronRegisterDetector::tuteo($sinPregunta, $catalogo) === [] => 'trimmed',
                 default => 'discarded',
             }];
             if ($registro['action'] === 'trimmed') {

@@ -1,0 +1,143 @@
+ROJO ANTES de G2-bis (B-2, segunda corrección, 19-11): app/ igual que 3eca6206 (git diff --quiet HEAD -- app = 0), pruebas ya definitivas. Filtro: las g2/g2bis y los turnos reales de UltronA4RegistroYPanoramaTest.
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/phpunit.xml
+
+..........FFFFFFFFFFF..F                                          24 / 24 (100%)
+
+Time: 00:04.493, Memory: 86.50 MB
+
+There were 12 failures:
+
+1) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2_el_recorte_por_registro_no_deja_una_sola_frase_de_relleno with data set "hola, quisiera información" ('general_info', 'Hola, quisiera información', '¡Hola! Con gusto. ¿Qué te gus...saber?', true, 'discarded', 'Con gusto le cuento. Iron Bod...pezar?')
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'discarded'
++'trimmed'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1172
+
+2) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2bis_con_dos_frases_tras_quitar_la_pregunta_tambien_se_descarta_y_sale_el_horario
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro. Horario general de atencion: Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m.'
++'Claro. El gimnasio abre de lunes a viernes de 5:00 a. m. a 10:00 p. m.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1188
+
+3) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2bis_un_borrador_que_tutea_sin_enlaces_ni_cobro_se_descarta_siempre with data set "hola, buenas tardes" ('greeting', 'Hola', '¡Hola! Buenas tardes. ¿En qué...r hoy?', false, '¡Hola! Buenas tardes.', 'Hola, muy buenas tardes. Bien...r hoy?', null)
+a 200
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Hola, muy buenas tardes. Bienvenido a Iron Body, qué gusto atenderle. Cuénteme, ¿en qué le podemos ayudar hoy?'
++'¡Hola! Buenas tardes.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1243
+
+4) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2bis_un_borrador_que_tutea_sin_enlaces_ni_cobro_se_descarta_siempre with data set "hola, bienvenido" ('greeting', 'Hola', '¡Hola! Bienvenido a Iron Body...r hoy?', false, '¡Hola! Bienvenido a Iron Body.', 'Hola, muy buenas tardes. Bien...r hoy?', null)
+a 200
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Hola, muy buenas tardes. Bienvenido a Iron Body, qué gusto atenderle. Cuénteme, ¿en qué le podemos ayudar hoy?'
++'¡Hola! Bienvenido a Iron Body.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1243
+
+5) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2bis_un_borrador_que_tutea_sin_enlaces_ni_cobro_se_descarta_siempre with data set "hola, con gusto le atiendo" ('greeting', 'Hola', '¡Hola! Con gusto le atiendo. ...yudar?', false, '¡Hola! Con gusto le atiendo.', 'Hola, muy buenas tardes. Bien...r hoy?', null)
+a 200
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Hola, muy buenas tardes. Bienvenido a Iron Body, qué gusto atenderle. Cuénteme, ¿en qué le podemos ayudar hoy?'
++'¡Hola! Con gusto le atiendo.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1243
+
+6) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2bis_un_borrador_que_tutea_sin_enlaces_ni_cobro_se_descarta_siempre with data set "pagar con tarjeta" ('payment_link_request', '¿Puedo pagar con tarjeta?', 'Sí, claro. Con mucho gusto. ¿...e ahí?', false, 'Sí, claro. Con mucho gusto.', 'El pago lo hace usted mismo d...garla?', 'El pago lo hace usted mismo d...garla?')
+a 200
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'El pago lo hace usted mismo desde la app Iron Body Workout: crea su cuenta con su documento y ahí paga con Nequi, PSE, tarjeta o Daviplata. ¿Quiere que le pase la app para descargarla?'
++'Sí, claro. Con mucho gusto.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1243
+
+7) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2bis_un_borrador_que_tutea_sin_enlaces_ni_cobro_se_descarta_siempre with data set "clases de spinning, sin la ficha" ('general_info', '¿Tienen clases de spinning?', '¡Claro! Con gusto. ¿Quieres q...nemos?', false, '¡Claro! Con gusto.', 'Con gusto le cuento. ¿Qué le ...pezar?', 'Con gusto le cuento. Lunes a ...pezar?')
+a 200
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Con gusto le cuento. ¿Qué le cuento más a fondo: los planes, las clases o cómo empezar?'
++'¡Claro! Con gusto.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1243
+
+8) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2bis_un_borrador_que_tutea_sin_enlaces_ni_cobro_se_descarta_siempre with data set "clases de spinning, con la ficha" ('general_info', '¿Tienen clases de spinning?', '¡Claro! Con gusto. ¿Quieres q...nemos?', true, '¡Claro! Con gusto.', 'Con gusto le cuento. Iron Bod...pezar?', 'Con gusto le cuento. Iron Bod...pezar?')
+a 200
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Con gusto le cuento. Iron Body Neiva es un centro de acondicionamiento físico en Neiva. ¿Qué le cuento más a fondo: los planes, las clases o cómo empezar?'
++'¡Claro! Con gusto.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1243
+
+9) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2bis_un_borrador_que_tutea_sin_enlaces_ni_cobro_se_descarta_siempre with data set "me da pena" ('beginner_fear', 'Nunca he entrenado y me da pena', 'Claro. Es muy normal. ¿Qué es...ocupa?', false, 'Claro. Es muy normal.', 'Es normal sentir pena al inic...hacer?', null)
+a 200
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Es normal sentir pena al inicio. A muchas personas les pasa cuando no conocen el ambiente o las máquinas. ¿Qué le preocupa más: venir solo o no saber qué hacer?'
++'Claro. Es muy normal.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1243
+
+10) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2bis_un_borrador_que_tutea_sin_enlaces_ni_cobro_se_descarta_siempre with data set "bajar de peso" ('goal_fat_loss', 'Quiero bajar de peso', '¡Qué bien! Con gusto. ¿Ya has...antes?', false, '¡Qué bien! Con gusto.', 'Muy bien. Para bajar grasa lo... cero?', null)
+a 200
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Muy bien. Para bajar grasa lo más importante es empezar con algo que pueda sostener. ¿Ya viene entrenando o empieza desde cero?'
++'¡Qué bien! Con gusto.'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1243
+
+11) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2bis_con_los_enlaces_de_la_app_se_quita_la_pregunta_y_salen_los_enlaces
+a 200
+Failed asserting that two strings are identical.
+--- Expected
++++ Actual
+@@ @@
+-'Claro, con gusto.
+-
+-Android: https://play.google.com/store/apps/details?id=com.ironbodyneiva.workout · iPhone: https://apps.apple.com/co/app/iron-body-workout/id6792374138 · Web: https://web.ironbodyneiva.cloud'
++'Con gusto le cuento. ¿Qué le cuento más a fondo: los planes, las clases o cómo empezar?'
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1278
+
+12) Tests\Feature\Marketing\UltronA4RegistroYPanoramaTest::test_g2bis_con_el_cobro_dentro_se_quita_la_pregunta_y_sale_el_cobro
+Failed asserting that 'El pago lo hace usted mismo desde la app Iron Body Workout: crea su cuenta con su documento y ahí paga con Nequi, PSE, tarjeta o Daviplata. ¿Quiere que le pase la app para descargarla?' starts with "Perfecto, con gusto.
+
+Este es su enlace de pago seguro por $80.000:
+https://checkout.wompi.co/p/".
+
+/Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php:1346
+
+FAILURES!
+Tests: 24, Assertions: 109, Failures: 12.

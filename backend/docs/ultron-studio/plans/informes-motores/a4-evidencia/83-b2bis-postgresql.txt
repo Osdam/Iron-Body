@@ -1,0 +1,17 @@
+# 83 · FINAL, PostgreSQL 14 (base desechable local ultron_studio_lead_ola5, puerto 55432), tras G2-bis: los dos A4
+# Comando: UNIT_DB=ultron_studio_lead_ola5 nice -n 10 bash docs/ultron-studio/ops/pgunit.sh --no-logging tests/Feature/Marketing/UltronA4LongitudYPreciosTest.php tests/Feature/Marketing/UltronA4RegistroYPanoramaTest.php
+# 2026-11-19T03:25:06Z
+
+PHPUnit 11.5.55 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.3.33
+Configuration: /Users/alejodev/Documents/Dev/IRON_BODY/_worktrees/ultron-h8/Iron-Body/backend/phpunit.xml
+
+...............................................................  63 / 226 ( 27%)
+............................................................... 126 / 226 ( 55%)
+............................................................... 189 / 226 ( 83%)
+.....................................                           226 / 226 (100%)
+
+Time: 01:24.977, Memory: 108.50 MB
+
+OK (226 tests, 2687 assertions)

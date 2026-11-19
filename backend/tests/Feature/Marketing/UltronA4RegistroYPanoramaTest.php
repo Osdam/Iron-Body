@@ -10,6 +10,7 @@ use App\Models\MarketingLead;
 use App\Models\MarketingMessage;
 use App\Models\Plan;
 use App\Services\Marketing\CommercialPhaseMachine as P;
+use App\Services\Marketing\MobileAppCatalog;
 use App\Services\Marketing\SalesAgentDecisionSchema;
 use App\Services\Marketing\SalesConversationReplyService;
 use App\Services\Marketing\SalesIntents;
@@ -1152,8 +1153,8 @@ class UltronA4RegistroYPanoramaTest extends TestCase
                 'Hola, muy buenas tardes. Bienvenido a Iron Body, qué gusto atenderle. Cuénteme, ¿en qué le podemos ayudar hoy?'],
             'el miedo de principiante' => [SalesIntents::BEGINNER_FEAR, 'Nunca he entrenado y me da pena', 'Es muy normal al inicio. ¿Qué es lo que más te preocupa?', false, 'discarded',
                 'Es normal sentir pena al inicio. A muchas personas les pasa cuando no conocen el ambiente o las máquinas. ¿Qué le preocupa más: venir solo o no saber qué hacer?'],
-            // Dos frases tras quitar la pregunta: sigue siendo `trimmed`, y lo rescata la ficha (`policy_answer_without_fact`), ya hoy.
-            'hola, quisiera información' => [SalesIntents::GENERAL_INFO, 'Hola, quisiera información', '¡Hola! Con gusto. ¿Qué te gustaría saber?', true, 'trimmed',
+            // G2-bis: dos frases tras quitar la pregunta ya no bastan; sin enlaces ni cobro se descarta, y sale la ficha (antes, `trimmed` y la rescataba la ficha por `policy_answer_without_fact`).
+            'hola, quisiera información' => [SalesIntents::GENERAL_INFO, 'Hola, quisiera información', '¡Hola! Con gusto. ¿Qué te gustaría saber?', true, 'discarded',
                 'Con gusto le cuento. Iron Body Neiva es un centro de acondicionamiento físico en Neiva. ¿Qué le cuento más a fondo: los planes, las clases o cómo empezar?'],
         ];
     }
@@ -1173,13 +1174,181 @@ class UltronA4RegistroYPanoramaTest extends TestCase
         $this->assertSame([], UltronRegisterDetector::tuteo((string) $r['reply_final']));
     }
 
-    public function test_g2_con_dos_frases_tras_quitar_la_pregunta_se_sigue_recortando(): void
+    /**
+     * G2-bis: con dos frases tras quitar la pregunta, sin enlaces ni cobro, ya
+     * no se recorta: se descarta y sale el horario de la ficha, de usted.
+     * Antes (G2) salía «Claro. El gimnasio abre de lunes a viernes de 5:00 a.
+     * m. a 10:00 p. m.», `trimmed`; el respaldo dice lo mismo y más.
+     */
+    public function test_g2bis_con_dos_frases_tras_quitar_la_pregunta_tambien_se_descarta_y_sale_el_horario(): void
     {
         $this->publica('profesional', 200);
         $r = $this->aprobado(SalesIntents::SCHEDULE_QUESTION, self::REAL_HORARIO_ENTRANTE, 'Claro. El gimnasio abre de lunes a viernes de 5:00 a. m. a 10:00 p. m. ¿Te sirve ese horario?', null);
 
-        $this->assertSame('Claro. El gimnasio abre de lunes a viernes de 5:00 a. m. a 10:00 p. m.', $r['reply_final']);
-        $this->assertSame('trimmed', $this->ultimaAccion()->metadata['register']['action']);
+        $this->assertSame(self::HORARIO_200, $r['reply_final']);
+        $fila = $this->ultimaAccion();
+        $this->assertSame('discarded', $fila->metadata['register']['action']);
+        $this->assertSame([UltronCommitService::VIOLACION_REGISTRO], $fila->metadata['policy_violations']);
+    }
+
+    // ── G2-bis (B-2, segunda corrección): con «profesional», el borrador que tutea se descarta siempre ──
+
+    /**
+     * Las siete filas del punto 2 del apéndice del revisor (19-11, commit
+     * `3eca6206`; la de spinning, con y sin la ficha, como la midió): con G2,
+     * quitada la pregunta que tutea quedaban dos frases y salían, pero las dos
+     * eran apertura o cortesía. Ahora, sin enlaces ni cobro en el turno, el
+     * borrador que tutea se descarta y sale el respaldo de usted de su
+     * intención. [intención, entrante, borrador, ficha, el
+     * relleno que salía con G2, lo que sale a 200, lo que sale sin tope (320)
+     * si es distinto: el mismo respaldo, sin recortar].
+     *
+     * @return array<string, array{string, string, string, bool, string, string, ?string}>
+     */
+    public static function rellenoEnDosFrases(): array
+    {
+        $bienvenida = 'Hola, muy buenas tardes. Bienvenido a Iron Body, qué gusto atenderle. Cuénteme, ¿en qué le podemos ayudar hoy?';
+        $ficha = 'Con gusto le cuento. Iron Body Neiva es un centro de acondicionamiento físico en Neiva. ¿Qué le cuento más a fondo: los planes, las clases o cómo empezar?';
+
+        return [
+            'hola, buenas tardes' => [SalesIntents::GREETING, 'Hola', '¡Hola! Buenas tardes. ¿En qué te puedo ayudar hoy?', false, '¡Hola! Buenas tardes.', $bienvenida, null],
+            'hola, bienvenido' => [SalesIntents::GREETING, 'Hola', '¡Hola! Bienvenido a Iron Body. ¿En qué te puedo ayudar hoy?', false, '¡Hola! Bienvenido a Iron Body.', $bienvenida, null],
+            'hola, con gusto le atiendo' => [SalesIntents::GREETING, 'Hola', '¡Hola! Con gusto le atiendo. ¿En qué te puedo ayudar?', false, '¡Hola! Con gusto le atiendo.', $bienvenida, null],
+            'pagar con tarjeta' => [SalesIntents::PAYMENT_LINK_REQUEST, '¿Puedo pagar con tarjeta?', 'Sí, claro. Con mucho gusto. ¿Quieres que te pase la app para pagar desde ahí?', false, 'Sí, claro. Con mucho gusto.',
+                'El pago lo hace usted mismo desde la app Iron Body Workout: crea su cuenta con su documento y ahí paga con Nequi, PSE, tarjeta o Daviplata. ¿Quiere que le pase la app para descargarla?',
+                'El pago lo hace usted mismo desde la app Iron Body Workout: crea su cuenta con su documento y ahí paga con Nequi, PSE, tarjeta o Daviplata. También puede pagar en el gimnasio cuando venga. ¿Quiere que le pase la app para descargarla?'],
+            'clases de spinning, sin la ficha' => [SalesIntents::GENERAL_INFO, '¿Tienen clases de spinning?', '¡Claro! Con gusto. ¿Quieres que te cuente qué clases tenemos?', false, '¡Claro! Con gusto.',
+                'Con gusto le cuento. ¿Qué le cuento más a fondo: los planes, las clases o cómo empezar?',
+                'Con gusto le cuento. Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m. Este es el horario de apertura del gimnasio, no el horario de las clases. ¿Qué le cuento más a fondo: los planes, las clases o cómo empezar?'],
+            'clases de spinning, con la ficha' => [SalesIntents::GENERAL_INFO, '¿Tienen clases de spinning?', '¡Claro! Con gusto. ¿Quieres que te cuente qué clases tenemos?', true, '¡Claro! Con gusto.', $ficha,
+                'Con gusto le cuento. Iron Body Neiva es un centro de acondicionamiento físico en Neiva. Iron Body Neiva está ubicado en Cl. 24 Sur #33-53, Neiva, Huila. Lunes a viernes de 5:00 a. m. a 10:00 p. m. Sabados de 8:00 a. m. a 2:00 p. m. Domingos de 8:00 a. m. a 2:00 p. m. Festivos de 8:00 a. m. a 2:00 p. m. Este es el horario de apertura del gimnasio, no el horario de las clases. ¿Qué le cuento más a fondo: los planes, las clases o cómo empezar?'],
+            'me da pena' => [SalesIntents::BEGINNER_FEAR, 'Nunca he entrenado y me da pena', 'Claro. Es muy normal. ¿Qué es lo que más te preocupa?', false, 'Claro. Es muy normal.',
+                'Es normal sentir pena al inicio. A muchas personas les pasa cuando no conocen el ambiente o las máquinas. ¿Qué le preocupa más: venir solo o no saber qué hacer?', null],
+            'bajar de peso' => [SalesIntents::GOAL_FAT_LOSS, 'Quiero bajar de peso', '¡Qué bien! Con gusto. ¿Ya has entrenado antes?', false, '¡Qué bien! Con gusto.',
+                'Muy bien. Para bajar grasa lo más importante es empezar con algo que pueda sostener. ¿Ya viene entrenando o empieza desde cero?', null],
+        ];
+    }
+
+    #[DataProvider('rellenoEnDosFrases')]
+    public function test_g2bis_un_borrador_que_tutea_sin_enlaces_ni_cobro_se_descarta_siempre(string $intent, string $texto, string $borrador, bool $ficha, string $relleno, string $sale200, ?string $sinTope): void
+    {
+        if ($ficha) {
+            $this->fichaDeProduccion();
+        }
+        foreach ([200 => $sale200, 320 => $sinTope ?? $sale200] as $tope => $sale) {
+            $this->nuevaConversacion();
+            $this->publica('profesional', $tope);
+            $r = $this->aprobado($intent, $texto, $borrador, null);
+
+            $this->assertSame($sale, $r['reply_final'], "a {$tope}");
+            $this->assertSame($sale, $this->ultimoSaliente()?->body, "a {$tope}: el mensaje que sale");
+            $this->assertNotSame($relleno, $r['reply_final'], "a {$tope}: nunca solo la apertura o la cortesía");
+            $fila = $this->ultimaAccion();
+            $this->assertSame('discarded', $fila->metadata['register']['action'], "a {$tope}");
+            $this->assertContains(UltronCommitService::VIOLACION_REGISTRO, $fila->metadata['policy_violations'], "a {$tope}");
+            $this->assertArrayNotHasKey('fallback_mismatch', $fila->metadata['register'], "a {$tope}: sale de usted, la última red no actúa");
+            $this->assertSame([], UltronRegisterDetector::tuteo((string) $r['reply_final']), "a {$tope}");
+        }
+
+        // Con `cercano` y `entusiasta` el registro no se mira: ni traza ni violación.
+        foreach (['cercano', 'entusiasta'] as $tono) {
+            $this->nuevaConversacion();
+            $this->publica($tono, 200);
+            $this->aprobado($intent, $texto, $borrador, null);
+            $fila = $this->ultimaAccion();
+            $this->assertArrayNotHasKey('register', $fila->metadata, $tono);
+            $this->assertNotContains(UltronCommitService::VIOLACION_REGISTRO, (array) ($fila->metadata['policy_violations'] ?? []), $tono);
+        }
+    }
+
+    /**
+     * La regresión de G2 que vio el revisor: «Mándame la app» con
+     * `app_links_send` y un borrador que tutea solo en su pregunta final. Con
+     * los enlaces que pega Laravel, «una frase + los enlaces» es una respuesta
+     * completa: se quita la pregunta y sale con los enlaces, sin mínimo de
+     * frases. Con G2 se descartaba y la persona se quedaba sin los enlaces.
+     */
+    public function test_g2bis_con_los_enlaces_de_la_app_se_quita_la_pregunta_y_salen_los_enlaces(): void
+    {
+        foreach ([200, 320] as $tope) {
+            $this->nuevaConversacion();
+            $this->publica('profesional', $tope);
+            $r = $this->aprobado(SalesIntents::GENERAL_INFO, 'Mándame la app', 'Claro, con gusto. ¿Quieres que te ayude con algo más?', null, [SalesIntents::TOOL_APP_LINKS_SEND]);
+
+            $this->assertSame("Claro, con gusto.\n\n".MobileAppCatalog::linksInline(), $r['reply_final'], "a {$tope}");
+            $this->assertSame($r['reply_final'], $this->ultimoSaliente()?->body, "a {$tope}: el mensaje que sale");
+            $this->assertContains(SalesIntents::TOOL_APP_LINKS_SEND, $r['applied']['tools_executed'], "a {$tope}: y constan como enviados");
+            $fila = $this->ultimaAccion();
+            $this->assertSame('trimmed', $fila->metadata['register']['action'], "a {$tope}");
+            $this->assertNotContains(UltronCommitService::VIOLACION_REGISTRO, (array) ($fila->metadata['policy_violations'] ?? []), "a {$tope}");
+        }
+    }
+
+    /**
+     * Con los enlaces y el tuteo en el CUERPO no hay recorte posible: se
+     * descarta, y los enlaces no salen ni constan como enviados. Es el
+     * comportamiento conocido de cualquier descarte (anterior a esta ronda);
+     * aquí se fija tal como es.
+     */
+    public function test_g2bis_con_los_enlaces_y_el_tuteo_en_el_cuerpo_se_descarta_y_los_enlaces_no_salen(): void
+    {
+        $this->publica('profesional', 200);
+        $r = $this->aprobado(SalesIntents::GENERAL_INFO, 'Mándame la app', 'Claro, aquí tienes la app para descargarla. ¿Quieres que te ayude con algo más?', null, [SalesIntents::TOOL_APP_LINKS_SEND]);
+
+        $this->assertStringNotContainsString('https://', (string) $r['reply_final']);
+        $this->assertSame([], UltronRegisterDetector::tuteo((string) $r['reply_final']));
+        $this->assertNotContains(SalesIntents::TOOL_APP_LINKS_SEND, $r['applied']['tools_executed']);
+        $fila = $this->ultimaAccion();
+        $this->assertSame('discarded', $fila->metadata['register']['action']);
+        $this->assertContains(UltronCommitService::VIOLACION_REGISTRO, $fila->metadata['policy_violations']);
+    }
+
+    /**
+     * El bloque cuenta si SIGUE en el texto que se mira, no solo si su
+     * herramienta se ejecutó: aquí los enlaces se pegan en el marcador, dentro
+     * de una frase que nombra una clase que no existe, y la guarda de los
+     * servicios inventados retira esa frase (con los enlaces) antes del
+     * registro. Queda «Claro, con gusto.» y la pregunta que tutea: sin el
+     * bloque, se descarta; recortar dejaría solo la cortesía.
+     */
+    public function test_g2bis_si_una_guarda_retiro_los_enlaces_antes_del_registro_se_descarta(): void
+    {
+        $this->publica('profesional', 320);
+        $r = $this->aprobado(SalesIntents::GENERAL_INFO, 'Mándame la app', 'Claro, con gusto. Le paso la app para sus clases de pilates: {{APP_LINKS}}. ¿Quieres que te ayude con algo más?', null, [SalesIntents::TOOL_APP_LINKS_SEND]);
+
+        $this->assertNotSame('Claro, con gusto.', $r['reply_final'], 'nunca solo la cortesía');
+        $this->assertStringNotContainsString('https://', (string) $r['reply_final']);
+        $this->assertSame([], UltronRegisterDetector::tuteo((string) $r['reply_final']));
+        $this->assertNotContains(SalesIntents::TOOL_APP_LINKS_SEND, $r['applied']['tools_executed']);
+        $fila = $this->ultimaAccion();
+        $this->assertSame('discarded', $fila->metadata['register']['action']);
+        $this->assertContains(UltronCommitService::VIOLACION_REGISTRO, $fila->metadata['policy_violations']);
+    }
+
+    /**
+     * Lo mismo con el cobro que pega Laravel dentro de la respuesta (13.ter,
+     * cobro del canario disponible): se quita la pregunta que tutea y sale la
+     * frase con su línea de cobro, de usted, y el enlace.
+     */
+    public function test_g2bis_con_el_cobro_dentro_se_quita_la_pregunta_y_sale_el_cobro(): void
+    {
+        config()->set('wompi.env', 'production');
+        config()->set('wompi.public_key', 'pub_prod_test_key');
+        config()->set('wompi.private_key', 'prv_prod_test_key');
+        config()->set('wompi.integrity_secret', 'integrity_test_secret');
+        config()->set('wompi.events_secret', 'events_test_secret');
+        config()->set('wompi.checkout.base_url', 'https://checkout.wompi.co/p/');
+        config()->set('wompi.checkout.redirect_url', 'https://web.ironbodyneiva.cloud/pago');
+        config()->set('marketing.ultron.payment_canary_conversation_id', $this->conversation->id);
+        $this->publica('profesional', 200);
+        $r = $this->aprobado(SalesIntents::PAYMENT_LINK_REQUEST, 'Quiero pagar el Plan Mensual', 'Perfecto, con gusto. ¿Quieres que te ayude con algo más?', 4, [SalesIntents::TOOL_PAYMENT_LINK_SEND]);
+
+        $this->assertStringStartsWith('Perfecto, con gusto.'.U::LINEA_DEL_COBRO."80.000:\nhttps://checkout.wompi.co/p/", (string) $r['reply_final']);
+        $this->assertSame($r['reply_final'], $this->ultimoSaliente()?->body, 'el mensaje que sale');
+        $this->assertContains(SalesIntents::TOOL_PAYMENT_LINK_SEND, $r['applied']['tools_executed']);
+        $fila = $this->ultimaAccion();
+        $this->assertSame('trimmed', $fila->metadata['register']['action']);
+        $this->assertNotContains(UltronCommitService::VIOLACION_REGISTRO, (array) ($fila->metadata['policy_violations'] ?? []));
     }
 
     /**

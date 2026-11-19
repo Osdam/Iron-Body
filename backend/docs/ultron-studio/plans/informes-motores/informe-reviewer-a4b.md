@@ -440,3 +440,202 @@ Guion sobre `pideElPanorama()` (`CommercialTurnPolicy.php:955`) y, en los casos 
 - R8: el encabezado mixto a 200 y 160.
 
 Guiones: `detector.php`, `panorama.php`, `literales.php`, `ajuste.php`, `base.php` y `mutar.sh`.
+
+---
+
+## Comprobación de cierre (19-11, commit `3eca6206`)
+
+**SIGUE RECHAZADO: B-2 sigue abierto.** Con «profesional», «Hola» y el borrador «¡Hola! Buenas tardes. ¿En qué te puedo ayudar hoy?» sale **«¡Hola! Buenas tardes.»** (`register.action = trimmed`, sin violaciones). «¿Puedo pagar con tarjeta?» con «Sí, claro. Con mucho gusto. ¿Quieres que te pase la app para pagar desde ahí?» sale **«Sí, claro. Con mucho gusto.»**. **B-1 está cerrado en su alcance**, con una condición antes de ampliar más allá de la canaria (C-1).
+
+**Alcance:** solo `git diff 6c2f12d0 3eca6206 -- backend/app backend/tests`, con el §14 del informe de `backend`. No revisé `adb25f6d` ni `6c2f12d0`.
+**Marcas:** **[C]** comprobado ejecutando · **[L]** leído en el código · **[S]** supuesto, sin comprobar.
+
+> **Cómo ejecuté.** `git archive 3eca6206 backend n8n` en dos copias del scratchpad: `new`, y `old` (la misma con los 6 ficheros de producto de `6c2f12d0`). En las dos, `vendor/` clonado, un fichero de entorno con una clave de aplicación de prueba generada al momento (no la real), SQLite en memoria, `nice -n 15` y solo pruebas dirigidas. Mis escenarios van en una clase efímera del scratchpad (`RevisorA4cTest`, con el andamio de `UltronA4RegistroYPanoramaTest`), por `decide` → `commit`.
+
+### Verificado
+
+| Qué | Resultado |
+|---|---|
+| R1 y R6 por el endpoint, con `cercano` y con `profesional` (9 entradas × 2 tonos), y los tres primeros con el revisor caído (× 2 tonos) | **Las 24 salen bien**: el borrador correcto o, con el revisor caído, el texto curado de la intención. Ninguna lista ni `policy_plans_overview` [C] |
+| R2 y las formas del añadido del lead (10 entradas, profesional 200) | **Las 10 reciben la lista** (`PRECIOS_200`), con `price_source = null` [C] |
+| Entradas hostiles contra la regla nueva: 75 por `pideElPanorama()`; 8 por el endpoint × 2 tonos, y 2 de ellas también con el revisor caído | **Las 8 del endpoint reciben la lista** en vez de la respuesta correcta (punto 1) [C] |
+| R3, los cinco borradores | **Los 5 salen bien** [C] |
+| Bordes de G2: 12 borradores | **7 sacan solo relleno** (punto 2). Lo comprobé sobre el mensaje saliente, con tope 200 y 320 [C] |
+| G3 (`textoCuradoTrasElRegistro()`): 14 intenciones con el borrador descartado por registro | Sin promesas falsas (punto 4a) [C] |
+| R5; R7 con borrador de usted y de tú; R8 a 200 y 160 | Correctos [C] |
+| Legacy | **Sin cambios** [C]: <br>– `tests/fixtures/ultron-a4`, igual desde `8e710104`; <br>– las 5 pruebas de Legacy y de «sin studio», en verde (224 aserciones); <br>– mis 7 casos (H1, R1a, R2, B2a, R3b, R5 y una oferta de usted) × 2 modos, idénticos byte a byte entre `6c2f12d0` y `3eca6206` |
+| Rojo previo | Las 38 `test_g1_*`/`test_g2_*` del endpoint, contra el código de `6c2f12d0`: **33 rojas** [C]. Las 5 verdes ya eran correctas: <br>– el «horario + planes» con el revisor caído; <br>– «¿Y los planes?»; <br>– `i1` con cercano; <br>– los dos `trimmed` de G2 |
+| Salida 75 | Quitar la alternativa anclada pone rojas **6 pruebas puras y 2 por el endpoint**: las mismas que la salida 75 [C] |
+| Mutaciones | **M8, M22 y M23 mueren**, cada una con la prueba que dice la salida 70 [C]. M15, leída en la salida 70 [L] |
+| m-8 (los valores por defecto quitados) | Análisis estático de `UltronCommitService` con php-parser: 128 llamadas internas, **0 con aridad incorrecta** [C] |
+| PostgreSQL 14, guardas del H9, `pint`, batería completa de Marketing | **No ejecutados**. Me fío de las salidas 72-74 y 76 [L] |
+
+### 1. ¿B-1 está cerrado? → Sí en su alcance; la lista aún sustituye respuestas en formas más estrechas [C]
+
+**Los escenarios de B-1, R6 y S-4 ya no reciben la lista**, con los dos tonos y con el revisor caído:
+
+| Entrada (intención) | Sale |
+|---|---|
+| «¿Qué opciones de pago tienen?» (`payment_link_request`) | El borrador de los medios de pago. Con el revisor caído, el texto curado del pago |
+| «No me interesan los planes, gracias» (`not_interested`) | «Entendido, no hay problema…». Con el revisor caído, el curado de la negativa |
+| «Quiero hablar con un asesor sobre los planes» (`human_request`, sin herramientas en la propuesta) | El borrador. El guardarraíl añade `staff_review`: se ejecuta y la marca queda puesta. Con el revisor caído, el curado de la derivación |
+| «¿Qué opciones de horario hay?», «¿Qué opciones hay para bajar de peso?» | El borrador |
+| «Tengo una lesión de rodilla, ¿qué planes tienen?» (`medical_risk_escalation`) | El borrador, con `staff_review` |
+| «¿Cuál es el horario y cuánto cuestan los planes?» | El borrador (horario + Valera a $65.000 COP): el horario ya no se pierde |
+| «¿Cuál de los planes me recomienda…?», «Ya vi los planes, ¿cuál me recomiendas?» | La recomendación del Élite |
+
+**R2:** las 10 formas reciben la lista:
+- «¿Cuáles son los precios?», «¿Qué precios manejan?», «¿Cuánto valen las membresías?», «Info de precios por favor»;
+- «Precios?», «Hola, precios por favor»;
+- «¿Tienen planes?», «¿Planes?», «¿Y los planes?», «Info planes».
+
+**Entradas hostiles: la lista TODAVÍA sustituye una respuesta correcta.** Borrador correcto aprobado, con `cercano` y con `profesional`, tope 200:
+
+| # | Entrada (intención) | Por qué casa | Sale |
+|---|---|---|---|
+| H1 | «¿Los planes tienen permanencia?» (`general_info`) | `planes + tienen` | La lista, también con el revisor caído |
+| H4 | «¿Los planes tienen acceso a todas las sedes?» (`general_info`) | `planes + tienen` | La lista |
+| H2 | «¿Los precios incluyen IVA?» (`pricing_question`) | `(los\|las\|sus) precios`, en cualquier frase | La lista |
+| H3 | «¿Los precios van a subir en enero?» (`pricing_question`) | Ídem | La lista |
+| H5 | «¿Qué planes tienen? Tengo asma» (`general_info`) | `OTRO_TEMA_DEL_PANORAMA` no tiene «asma» (ni diabetes, hipertensión, corazón…), y el guardarraíl no añade revisión | La lista, sin la cautela del borrador. También con el revisor caído |
+| H6 | «¿Qué planes tienen? Llámeme al 3001234567» (`general_info`) | `peticionDeHumanoEn()` no ve «llámeme» | La lista: la petición de llamada se pierde |
+| H9 | «¿Qué planes tienen? ¿Abren los festivos?» (`general_info`), con un borrador que nombra un plan | «Festivos» no está en `PREGUNTA_INCIDENTAL` | La lista: la pregunta por los festivos se pierde |
+| H8 | «Gracias por los precios» (`unknown`) | `los precios` | La lista. Con `thanks`, que es la etiqueta esperable, no [S] |
+
+**Por `pideElPanorama()` casan además:**
+- «¿Qué planes tienen sauna / acceso a la piscina?», «¿Tienen planes con permanencia?», «¿Hay planes que incluyan nutricionista?»;
+- «¿Qué planes tienen?» seguido de «¿Se puede llevar acompañante?», «Soy de Bogotá, ¿tienen sede allá?», «¿Y aceptan Sistecrédito?», «Mi hijo de 15 años puede entrar?» o «¿Es seguro?»;
+- «¿Los precios son por persona?», «¿Los precios están en pesos o en dólares?».
+
+**Por qué no lo mantengo como bloqueante para la canaria:**
+- la causa de B-1 está corregida y probada: no había filtro de intención, «opciones» valía para cualquier cosa, y no se excluían la negativa, la derivación, la recomendación ni los turnos con herramientas;
+- todo lo sensible por intención y todo turno con herramientas queda fuera;
+- lo que queda exige una intención de la lista blanca y una de dos formas concretas;
+- el resultado es una pregunta sin contestar, con `policy_plans_overview` en la traza: no ejecuta ninguna acción ni promete nada;
+- la canaria es una sola conversación.
+
+Pero son las dos mismas clases de defecto de B-1: la regla reconoce una frase que no pide la lista, y se pierde otro tema del mismo mensaje. **Por eso es condición antes de ampliar más allá de la canaria (C-1).**
+
+H5 lo paso a **security**, a confirmar: depende de que el modelo etiquete «asma» como `general_info` y no como `medical_risk_escalation`, y eso no lo puedo medir aquí.
+
+### 2. ¿B-2 está cerrado? → **No** [C]
+
+**R3: los cinco borradores salen bien.**
+- «Claro.», «Sí, claro.» y «Es muy normal al inicio.»: `discarded`, y sale el texto curado de la intención.
+- «¡Hola, buenas tardes!»: sale la bienvenida de usted.
+- «¡Hola! Con gusto. ¿Qué te gustaría saber?»: `trimmed`, y lo rescata la ficha por `policy_answer_without_fact`, como antes.
+
+**Pero «al menos dos frases» no basta, y esa regla la sugerí yo.** La apertura del redactor muchas veces tiene **dos frases cortas**. Por el endpoint, con profesional y el revisor aprobando, a 200 y a 320. El mensaje saliente es exactamente esto, sin violaciones:
+
+| Entrante | Borrador | Sale |
+|---|---|---|
+| «Hola» | «¡Hola! Buenas tardes. ¿En qué te puedo ayudar hoy?» | **«¡Hola! Buenas tardes.»** |
+| «Hola» | «¡Hola! Bienvenido a Iron Body. ¿En qué te puedo ayudar hoy?» | **«¡Hola! Bienvenido a Iron Body.»** |
+| «Hola» | «¡Hola! Con gusto le atiendo. ¿En qué te puedo ayudar?» | **«¡Hola! Con gusto le atiendo.»** |
+| «¿Puedo pagar con tarjeta?» | «Sí, claro. Con mucho gusto. ¿Quieres que te pase la app para pagar desde ahí?» | **«Sí, claro. Con mucho gusto.»** |
+| «¿Tienen clases de spinning?» | «¡Claro! Con gusto. ¿Quieres que te cuente qué clases tenemos?» | **«¡Claro! Con gusto.»** (también con la ficha cargada) |
+| «Nunca he entrenado y me da pena» | «Claro. Es muy normal. ¿Qué es lo que más te preocupa?» | **«Claro. Es muy normal.»** |
+| «Quiero bajar de peso» | «¡Qué bien! Con gusto. ¿Ya has entrenado antes?» | **«¡Qué bien! Con gusto.»** |
+
+Ya no sale una respuesta de **una sola frase** de relleno, pero sí una respuesta que es **solo relleno**. Es el defecto de B-2 tal cual: no contesta, y en el saludo deja la conversación parada.
+
+**Bordes que pediste:**
+- **Dos frases, la primera relleno y la segunda informativa:** se recorta y sale bien («Claro. El gimnasio abre… p. m.», prueba de `backend`) [C].
+- **Una sola frase que sí informa:** se descarta.
+  - «Abrimos a las 5:00 a. m. ¿Te sirve ese horario?» → sale el horario de la ficha: bien.
+  - «Sí, tenemos duchas y casilleros… ¿Quieres saber algo más?» → sale la ficha general, que **no** habla de duchas: el dato se pierde. Lo anota `backend` en §14.9.2 [C].
+- **El bloque de enlaces → regresión de G2.** «Mándame la app», con `app_links_send` y el borrador «Claro, con gusto. ¿Quieres que te ayude con algo más?»:
+  - con `6c2f12d0`: `trimmed`, y sale «Claro, con gusto.» con los enlaces de la app;
+  - con `3eca6206`: `discarded`, y sale «El pago lo hace usted mismo desde la app… ¿Quiere que le pase la app para descargarla?», **sin los enlaces que la persona pidió** [C];
+  - la causa: `proseSentenceCount()` no puede contar un bloque que Laravel pega después del registro;
+  - que un descarte pierda los enlaces ya pasaba antes con el tú en el cuerpo, en los dos commits [C]. Lo nuevo es que G2 manda a ese camino un caso que antes salía bien.
+
+**Corrección sugerida** (la regla la decide el lead; la implementa `backend`):
+- Con «profesional», un borrador que tutea se **descarta siempre**.
+- Salvo que el turno lleve enlaces o cobro que pega Laravel: entonces se recorta, porque «frase + enlaces» es una respuesta completa.
+- G3 ya da un texto curado de usted para cada intención, que no existía cuando se diseñó el recorte.
+- Cambian dos aserciones: «hola, quisiera información» pasaría a la ficha y `test_g2_con_dos_frases…`, al horario de la ficha.
+- Las siete filas de arriba y el caso de los enlaces, como pruebas por el endpoint: rojas hoy.
+
+Si se prefiere conservar el recorte, la condición tiene que ser «queda algo que no es apertura ni cortesía», con una lista cerrada y sus casos. Es más frágil.
+
+### 3. I-1 a I-6
+
+| | Estado | Una línea |
+|---|---|---|
+| I-1 | **Corregido** | Decisión del lead: con cualquier versión del Studio. Comentario y mensaje del commit corregidos; hay prueba con cercano y M8 muere [C] |
+| I-2 | **Corregido** | Las 10 formas de R2 reciben la lista [C] |
+| I-3 | **Corregido a medias** | R7, corregido: con la cortesía ejecutada no hay lista; sale el borrador de usted, y si tutea, el acta de usted. «Horario + planes» conserva el horario [C]. Pero otro tema fuera de la lista cerrada se sigue perdiendo (H6, H9) [C] |
+| I-4 | **Corregido** | R5: `plans_discussed = []` y `price_source = null` [C]. `$planQueSalio`, en vez de `$plan = null`, es lo correcto: `$plan` sigue vivo **solo** para el enlace de pago aparte (14.bis, `:1969`), que es S-5 y está apagado [L][S]. Las otras dos lecturas posteriores (memoria y `price_source`) usan `$planQueSalio` [L] |
+| I-5 | **Corregido** | 14 pruebas `test_g8_*`. M22 y M23 mueren [C]; M15, según la salida 70 [L] |
+| I-6 | **Corregido** | R8 a 200 y a 160: «Claro. Algunos de nuestros planes: …» [C]. El texto sigue pendiente del propietario |
+
+### 4. ¿La corrección rompe algo que antes estaba bien?
+
+- **(a) `textoCuradoTrasElRegistro()` no promete lo que no ocurre** [C]. Probé 14 intenciones con un borrador de tú descartado:
+  - **Persona, cobro reclamado, lesión y factura:** salen con `staff_review` ejecutada y `staff_review_pending = true`, así que «lo dejo marcado» es verdad.
+  - **La queja:** no llegó a descartarse, porque el detector no caza «¿Me cuentas…?» (para pendientes).
+  - **El cierre y el pago:** «¿Quiere que le pase la app…?», sin prometer ningún enlace.
+  - **El no contactar:** mudo, con `mark_do_not_contact`.
+  - **La despedida y el agradecimiento:** el texto ya desplegado en `safeFallback()` («Si después quiere empezar o comparar planes…»). Invita, no vende.
+  - Ninguno promete una visita.
+  - **Lo único que G2 sí rompe** es el caso de los enlaces del punto 2.
+- **(b) Sin `studio`, nada cambia** [C]:
+  - las instantáneas no se regeneraron;
+  - pasan con el código nuevo;
+  - mis 14 casos de Legacy dan lo mismo con el código de antes y con el de ahora.
+- **(c) La alternativa anclada (14.11):**
+  - Solo «Gracias por los planes» y «Buenas tardes y gracias por los planes» casan sin pedir nada.
+  - Con `thanks`, que es lo esperable, la lista blanca los deja fuera; con `unknown` o `greeting` reciben la lista [C][S].
+  - El resto de lo que casa sí pide los planes.
+  - Sin riesgo de backtracking catastrófico: las palabras de la lista y `\W+` no se solapan [L].
+
+### 5. Las pruebas nuevas
+
+- **Rojas antes de verdad, y por el endpoint:** 33 de las 38 `test_g1_*`/`test_g2_*` contra `6c2f12d0` [C]. Es coherente con la salida 67 (267 pruebas, 106 rojas, incluidas las puras). La 75 la reproduje con la mutación.
+- **M8, M22 y M23 mueren**, cada una por su prueba [C].
+- **Lo que no cubren:**
+  - las siete filas de relleno en dos frases;
+  - el caso de los enlaces de G2;
+  - las formas hostiles H1-H9.
+- **Matiz:** `noEsPanoramaPorElEndpoint` pone `staff_review` en la propuesta de los casos sensibles, así que esas filas prueban G1.2 (sin herramientas) más que la lista blanca. Mi R1, sin herramientas en la propuesta, confirma que la lista blanca también los cubre [C].
+
+### Bloqueantes
+
+1. **B-2, sigue abierto · `UltronCommitService.php:1637-1638`, con `UltronReplyFitter::proseSentenceCount()`.**
+   - «Al menos dos frases» deja salir respuestas que son solo relleno: «¡Hola! Buenas tardes.», «Sí, claro. Con mucho gusto.».
+   - Además descarta una frase de cortesía que iba con el bloque de la app, y con ella se pierden los enlaces que la persona pidió.
+   - Escenarios y corrección: punto 2.
+   - → **lead** (la regla) y **backend**.
+
+### Condición para ampliar más allá de la canaria (no bloquea la canaria)
+
+- **C-1 · `CommercialTurnPolicy::PIDE_PANORAMA` y `OTRO_TEMA_DEL_PANORAMA`.** Es el residuo de B-1 e I-3 (H1-H9). Corrección:
+  - `planes/membresias + tienen|hay…` y `(los|las|sus) (precios|tarifas|valores)`, solo si no les siguen más palabras (fin del mensaje o de la pregunta) o dentro de una petición, como ya se hizo con «los planes»;
+  - en la segunda red de salud: asma, diabetes, hipertensión/presión, corazón/cardíaco, epilepsia, asfixia;
+  - «llamar», «llámeme» y «llamada» como otro tema;
+  - cada caso, con su prueba.
+  - → **backend**; H5 → **security** (a confirmar).
+
+### Para pendientes (sin desarrollar)
+
+- Falsos negativos del detector vistos de paso: «¿Me cuentas…?» y «Si cambias de opinión, me escribes». «Cambias» y «escribes» solo existen de tú; «cuentas» choca con el sustantivo.
+- El `commit` respondió 422 a dos propuestas; no investigué la causa y no es de este cambio:
+  - «¿Qué planes tienen? Y quiero cancelar el mío», con un borrador que promete la marca;
+  - un borrador con la URL de la app escrita.
+- Un descarte por registro pierde los enlaces de la app pedidos también con el tú en el cuerpo. Es anterior a esta ronda.
+
+### Notas
+
+**Revisado y bien [L]:**
+- G5, G6 (las comillas), G7 y m-6, cubiertos por pruebas que pasan;
+- S-4 en `safeFallback()` y `respaldoSemantico()`: la lista por panorama va después de `RESPALDO_PROPIO`, y con el no contactar no hay lista;
+- los comentarios de m-3 y m-4.
+
+**No verificado:**
+- PostgreSQL 14, las guardas del H9, `pint` y la batería completa de Marketing;
+- la etiqueta que pone el modelo real a H5, H6 y H8;
+- el valor de `payment_links_enabled` en producción;
+- n8n, la canaria y producción.
+
+**Escenarios y guiones:** R1-R8, H1-H9, B2a-B2m, G3a-G3n, E1-E4 y Legacy; `panorama.php`, `aridad.php` y `mutar.sh`. Todos solo en el scratchpad.

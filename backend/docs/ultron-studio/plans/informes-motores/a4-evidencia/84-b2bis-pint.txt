@@ -1,0 +1,6 @@
+PINT sobre los 3 ficheros tocados en G2-bis (19-11), sobre el texto final.
+--- vendor/bin/pint (arregla)
+{"tool":"pint","result":"passed"}
+--- vendor/bin/pint --test (comprueba)
+{"tool":"pint","result":"passed"}
+rc=0
